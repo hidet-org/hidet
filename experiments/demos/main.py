@@ -69,7 +69,7 @@ def demo_test():
     ir_module = naive_scheduler_grid(task)
     ir_module = split_host_device_pass()(ir_module)
     ir_module = flatten_global_tensor()(ir_module)
-    target_dir = './test_task'
+    target_dir = './outs'
     os.makedirs(target_dir, exist_ok=True)
     module = build(ir_module, target_dir)
     A = TensorValue.randn([N, K], 'float32', 'global', seed=1)
