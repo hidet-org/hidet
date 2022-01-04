@@ -1,0 +1,77 @@
+from typing import Union, List
+from collections import defaultdict
+from hidet.ir.expr import Call
+from hidet.ir.func import IRModule, Function
+from hidet.ir.functors import collect
+from hidet.ir.functors import astext
+
+
+class CallGraphNode:
+    def __init__(self, func):
+        self.func = func
+        self.callers = []
+        self.callees = []
+
+    def add_caller(self, caller):
+        if caller not in self.callers:
+            self.callers.append(caller)
+
+    def add_callee(self, callee):
+        if callee not in self.callees:
+            self.callees.append(callee)
+
+
+class CallGraph:
+    def __init__(self, ir_module: IRModule):
+        self.nodes: List[CallGraphNode] = []
+        self.func2node = {}
+
+        self.order: List[CallGraphNode] = []  # topological order
+        self.reversed_order: List[CallGraphNode] = []
+
+        for func in ir_module.functions.values():
+            node = CallGraphNode(func)
+            self.func2node[func] = node
+            self.add_node(node)
+
+        for func in ir_module.functions.values():
+            caller = func
+            for call in collect(func.body, Call):
+                callee = ir_module.lookup(call.func_var.hint)
+                self.add_edge(caller, callee)
+
+        self._init_order()
+
+    def add_node(self, node):
+        if node not in self.nodes:
+            self.nodes.append(node)
+
+    def add_edge(self, caller: Union[Function, CallGraphNode], callee: Union[Function, CallGraphNode]):
+        if isinstance(caller, Function):
+            caller = self.func2node[caller]
+        if isinstance(callee, Function):
+            callee = self.func2node[callee]
+        caller.add_callee(callee)
+        callee.add_caller(caller)
+
+    def _init_order(self):
+        in_degree = defaultdict(int)
+        # do not support recursive calling now
+        for node in self.nodes:
+            for callee in node.callees:
+                in_degree[callee] += 1
+        qu = []
+        for node in self.nodes:
+            if in_degree[node] == 0:
+                qu.append(node)
+        self.order = []
+        while len(qu) > 0:
+            u = qu.pop()
+            self.order.append(u)
+            for callee in u.callees:
+                in_degree[callee] -= 1
+                if in_degree[callee] == 0:
+                    qu.append(callee)
+
+        self.reversed_order = list(reversed(self.order))
+
