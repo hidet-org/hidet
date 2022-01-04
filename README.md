@@ -18,8 +18,8 @@ Currently, a naive task scheduler is implemented in `python/hidet/scheduler/naiv
 
 ## Roadmap
 
--[x] The pipeline: define task, schedule, lower, codegen, build, runtime.
--[ ] Implement advanced decompose rules.
+- [x] The pipeline: define task, schedule, lower, codegen, build, runtime.
+- [ ] Implement advanced decompose rules.
 
 ## Implementation
 A new set of IR, lowering passes, and necessary runtime are implemented in python for fast prototype. 
