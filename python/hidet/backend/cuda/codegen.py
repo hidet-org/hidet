@@ -1,15 +1,14 @@
 from typing import Tuple, Dict
 from collections import defaultdict
-from hidet.core.compute import ReduceCompute, TensorCompute, TensorInput, ScalarInput
-from hidet.core.worker import Grid, Host
+from hidet.ir.task import Grid, Host
 from hidet.ir.func import *
 from hidet.ir.stmt import *
 from hidet.ir.expr import *
+from hidet.ir.dialects.compute import ReduceCompute, TensorCompute, TensorInput, ScalarInput
 from hidet.ir.functors import StmtExprFunctor, TypeFunctor, collect
-from hidet.ir.type import VoidType, PointerType
+from hidet.ir.dialects.lowlevel import VoidType, PointerType, Cast, Dereference
 from hidet.utils.doc import Doc, NewLine, Text, join
 from hidet.backend.call_graph import CallGraph
-from hidet.runtime.module import CompiledFunction, CompiledModule
 
 
 def get_write_params(func: Function):
@@ -80,7 +79,7 @@ class CudaCodegen(StmtExprFunctor, TypeFunctor):
             return self.gen_func(node)
         elif isinstance(node, (Stmt, Expr)):
             return StmtExprFunctor.visit(self, node)
-        elif isinstance(node, Type):
+        elif isinstance(node, BaseType):
             return TypeFunctor.visit(self, node)
         else:
             raise ValueError()

@@ -1,10 +1,11 @@
 from typing import List
-from hidet.core.worker import Grid
-from hidet.ir.type import TensorType, PointerType
+from hidet.ir.task import Grid
+from hidet.ir.type import TensorType
 from hidet.ir.expr import Var, TensorElement, convert
 from hidet.ir.stmt import BufferStoreStmt
 from hidet.ir.func import IRModule, Function
 from hidet.ir.functors import collect, rewrite
+from hidet.ir.dialects.lowlevel import PointerType
 from hidet.transforms import Pass
 
 

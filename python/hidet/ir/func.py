@@ -1,13 +1,13 @@
-from copy import copy
-from typing import Dict, List
-from hidet.ir.type import Type, FuncType
+from typing import Dict, List, Union
+from hidet.ir.node import Node
+from hidet.ir.type import BaseType, FuncType
 from hidet.ir.expr import Var
 from hidet.ir.stmt import Stmt
 
 
-class IRModule:
+class IRModule(Node):
     def __init__(self, funcs):
-        self.functions: Dict[str, Function] = funcs
+        self.functions: Dict[str, Union[Function, FunctionGroup]] = funcs
         self.global_vars: Dict[str, Var] = {}
 
     def include(self, module):
@@ -29,23 +29,26 @@ class IRModule:
         return self.global_vars[name]
 
 
-class Function:
+class FunctionGroup(Node):
+    def __init__(self, group):
+        self.group: List[Function] = group
+
+
+class Function(Node):
     valid_attrs = [
-        'worker',  'symbol_name'
+        'worker'
     ]
     """
     Valid Attrs:
      'worker': one of 'host', 'grid', 'threadblock', 'warp', 'thread'
         the worker to run the function.
-     'symbol_name': str
-        the symbol name used in the source. if not defined, the func name is used.
     """
 
     def __init__(self, name, params, body, ret_type, local_vars, attrs=None):
         self.name = name
         self.params: List[Var] = params
         self.body: Stmt = body
-        self.ret_type: Type = ret_type
+        self.ret_type: BaseType = ret_type
         self.local_vars: List[Var] = local_vars
         self.attrs = attrs if attrs else {}
 

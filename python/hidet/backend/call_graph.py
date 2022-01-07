@@ -3,7 +3,6 @@ from collections import defaultdict
 from hidet.ir.expr import Call
 from hidet.ir.func import IRModule, Function
 from hidet.ir.functors import collect
-from hidet.ir.functors import astext
 
 
 class CallGraphNode:

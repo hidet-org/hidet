@@ -1,6 +1,6 @@
-from typing import Optional, Union
+from typing import Union
 from hidet.ir.stmt import Stmt
-from hidet.core.compute import *
+from hidet.ir.dialects.compute import *
 
 from .base import StmtExprVisitor, StmtExprRewriter
 

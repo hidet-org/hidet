@@ -1,6 +1,8 @@
-from hidet.ir.type import *
-from hidet.ir.expr import *
-from hidet.core.compute import *
+from hidet.ir.type import ScalarType, TensorType
+from hidet.ir.expr import BinaryOp, Add, Sub, Multiply, Div, Mod, FloorDiv, Condition, LessThan, Equal
+from hidet.ir.expr import Var, Axis, Constant, TensorSlice, TensorElement, Call
+from hidet.ir.dialects.compute import ScalarInput, TensorInput, TensorCompute, ReduceCompute
+from hidet.ir.dialects.lowlevel import PointerType, Cast, Dereference
 
 from .base import ExprFunctor
 

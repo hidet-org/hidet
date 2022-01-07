@@ -1,9 +1,10 @@
 from typing import List
 from copy import copy
+from hidet.ir.node import Node
 from hidet.ir.expr import Axis
 
 
-class Stmt:
+class Stmt(Node):
     def copy(self):
         return copy(self)
 

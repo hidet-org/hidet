@@ -1,11 +1,12 @@
 from typing import Optional
 from hidet.ffi import ArgType
-from hidet.ir.type import VoidType, ScalarType, TensorType, PointerType
-from hidet.ir.expr import Var, Call, Cast, Dereference
+from hidet.ir.type import ScalarType, TensorType
+from hidet.ir.expr import Var, Call
 from hidet.ir.stmt import AssertStmt, SeqStmt, EvaluateStmt
 from hidet.ir.func import IRModule, Function
 from hidet.ir.functors import astext
-from hidet.core.worker import Grid, Host
+from hidet.ir.dialects.lowlevel import VoidType, PointerType, Cast, Dereference
+from hidet.ir.task import Grid, Host
 from hidet.transforms import Pass
 
 

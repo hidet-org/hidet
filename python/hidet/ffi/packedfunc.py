@@ -1,11 +1,11 @@
 import ctypes
-import numpy as np
 from pycuda.gpuarray import GPUArray
 
 from .ffi import _LIB
 from ctypes import c_int32, c_void_p, pointer, c_float, cast
 from ctypes import POINTER, Structure
-from hidet.ir.type import ScalarType, TensorType, Type, tensor_type, PointerType
+from hidet.ir.type import ScalarType
+from hidet.ir.dialects.lowlevel import PointerType
 from hidet.runtime.value import Value, ScalarValue, TensorValue
 
 

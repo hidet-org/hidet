@@ -70,6 +70,7 @@ def reduce_sum(expr, axis):
 
 
 def compute(name, shape, fcompute):
+    shape = [convert(v) for v in shape]
     axes = [Axis(s) for s in shape]
     value = convert(fcompute(*axes))
     return TensorCompute(name, shape, axes, value)

@@ -1,7 +1,9 @@
 from hidet.ir.type import *
 from hidet.ir.expr import *
 from hidet.ir.stmt import *
-from hidet.core.compute import *
+from hidet.ir.dialects.compute import *
+from hidet.ir.dialects.lowlevel import *
+from hidet.ir.dialects.pattern import *
 
 
 class ExprFunctor:
@@ -34,10 +36,6 @@ class ExprFunctor:
             res = self.visit_TensorSlice(e)
         elif isinstance(e, TensorElement):
             res = self.visit_TensorElement(e)
-        elif isinstance(e, Cast):
-            res = self.visit_Cast(e)
-        elif isinstance(e, Dereference):
-            res = self.visit_Dereference(e)
         elif isinstance(e, Call):
             res = self.visit_Call(e)
         elif isinstance(e, Axis):
@@ -46,6 +44,12 @@ class ExprFunctor:
             res = self.visit_Var(e)
         elif isinstance(e, Constant):
             res = self.visit_Constant(e)
+        # lowlevel dialect
+        elif isinstance(e, Cast):
+            res = self.visit_Cast(e)
+        elif isinstance(e, Dereference):
+            res = self.visit_Dereference(e)
+        # compute dialect
         elif isinstance(e, ScalarInput):
             res = self.visit_ScalarInput(e)
         elif isinstance(e, TensorInput):
@@ -54,6 +58,15 @@ class ExprFunctor:
             res = self.visit_TensorCompute(e)
         elif isinstance(e, ReduceCompute):
             res = self.visit_ReduceCompute(e)
+        # pattern dialect
+        elif isinstance(e, AnyExpr):
+            res = self.visit_AnyExpr(e)
+        elif isinstance(e, ReduceComputePattern):
+            res = self.visit_ReduceComputePattern(e)
+        elif isinstance(e, TensorComputePattern):
+            res = self.visit_TensorComputePattern(e)
+        elif isinstance(e, ScalarExprPattern):
+            res = self.visit_ScalarExprPattern(e)
         else:
             raise NotImplementedError()
         self.memo[e] = res
@@ -117,6 +130,18 @@ class ExprFunctor:
         raise NotImplementedError()
 
     def visit_ReduceCompute(self, e: ReduceCompute):
+        raise NotImplementedError()
+
+    def visit_AnyExpr(self, e: ReduceComputePattern):
+        raise NotImplementedError()
+
+    def visit_ReduceComputePattern(self, e: ReduceComputePattern):
+        raise NotImplementedError()
+
+    def visit_TensorComputePattern(self, e: TensorComputePattern):
+        raise NotImplementedError()
+
+    def visit_ScalarExprPattern(self, e: ScalarExprPattern):
         raise NotImplementedError()
 
 
@@ -198,6 +223,18 @@ class ExprVisitor(ExprFunctor):
 
     def visit_ReduceCompute(self, e: ReduceCompute):
         self.visit(e.value)
+
+    def visit_AnyExpr(self, e: ReduceComputePattern):
+        pass
+
+    def visit_ReduceComputePattern(self, e: ReduceComputePattern):
+        pass
+
+    def visit_TensorComputePattern(self, e: TensorComputePattern):
+        pass
+
+    def visit_ScalarExprPattern(self, e: ScalarExprPattern):
+        pass
 
 
 class ExprRewriter(ExprFunctor):
@@ -308,6 +345,18 @@ class ExprRewriter(ExprFunctor):
             return e
         else:
             return ReduceCompute(value, axis, e.reduce_type)
+
+    def visit_AnyExpr(self, e: AnyExpr):
+        return e
+
+    def visit_ReduceComputePattern(self, e: ReduceComputePattern):
+        return e
+
+    def visit_TensorComputePattern(self, e: TensorComputePattern):
+        return e
+
+    def visit_ScalarExprPattern(self, e: ScalarExprPattern):
+        return e
 
 
 class StmtFunctor:
@@ -538,7 +587,7 @@ class TypeFunctor:
     def __call__(self, *args, **kwargs):
         return self.visit(*args, **kwargs)
 
-    def visit(self, t: Type):
+    def visit(self, t: BaseType):
         if t in self.memo:
             return self.memo[t]
         if isinstance(t, ScalarType):
@@ -569,4 +618,3 @@ def same(lhs: List, rhs: List):
     if len(lhs) != len(rhs):
         return False
     return all(a is b for a, b in zip(lhs, rhs))
-

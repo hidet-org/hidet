@@ -1,9 +1,11 @@
 from collections import defaultdict
 from hidet.ir.func import IRModule, Function
-from hidet.ir.type import ScalarType, TensorType, Type, VoidType, PointerType
-from hidet.ir.expr import Constant, Axis, Var, Call, TensorElement, TensorSlice, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Dereference, Cast, Div, Sub
+from hidet.ir.type import ScalarType, TensorType, BaseType
+from hidet.ir.expr import Constant, Axis, Var, Call, TensorElement, TensorSlice, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div, Sub
 from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, LetStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt
-from hidet.core.compute import ReduceCompute, TensorCompute, TensorInput, ScalarInput
+from hidet.ir.dialects.compute import ReduceCompute, TensorCompute, TensorInput, ScalarInput
+from hidet.ir.dialects.lowlevel import VoidType, PointerType, Dereference, Cast
+from hidet.ir.dialects.pattern import AnyExpr, ScalarExprPattern, TensorComputePattern, ReduceComputePattern
 from hidet.utils.doc import Doc, NewLine, Text, join
 
 from .base import StmtExprFunctor, TypeFunctor
@@ -37,7 +39,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
         return name
 
     def visit(self, obj):
-        if isinstance(obj, Type):
+        if isinstance(obj, BaseType):
             return TypeFunctor.visit(self, obj)
         elif isinstance(obj, Function):
             return self.visit_Function(obj)
@@ -186,7 +188,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
         return doc
 
     def visit_ScalarType(self, t: ScalarType):
-        return Text('DataType({})'.format(t.name))
+        return Text('ScalarType({})'.format(t.name))
 
     def visit_TensorType(self, t: TensorType):
         return Text('TensorType(') + self(t.scalar_type) + ', [' + join([self(s) for s in t.shape], ", ") + '], ' + t.scope.name + ')'
@@ -197,9 +199,21 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
     def visit_VoidType(self, t: VoidType):
         return Text('VoidType')
 
+    def visit_AnyExpr(self, e: AnyExpr):
+        return Text('AnyExpr')
+
+    def visit_ReduceComputePattern(self, e: ReduceComputePattern):
+        return Text('ReduceComputePattern(allow_dynamic_axis=') + str(e.allow_dynamic_axis) + ')'
+
+    def visit_TensorComputePattern(self, e: TensorComputePattern):
+        return Text('TensorComputePattern(allow_dynamic_axis=') + str(e.allow_dynamic_axis) + ')'
+
+    def visit_ScalarExprPattern(self, e: ScalarExprPattern):
+        return Text('ScalarExprPattern(reduce=') + (self(e.reduce) if e.reduce else str(None)) + ')'
+
 
 def astext(obj) -> str:
-    if isinstance(obj, (Expr, Stmt, Type, Function, IRModule)):
+    if isinstance(obj, (Expr, Stmt, BaseType, Function, IRModule)):
         printer = IRPrinter()
         return str(printer(obj))
     else:

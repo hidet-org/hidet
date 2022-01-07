@@ -2,9 +2,9 @@ import os.path
 import ctypes
 import subprocess
 from subprocess import PIPE
-from hidet.ir.func import IRModule, Function
-from hidet.ir.type import VoidType
-from hidet.core.worker import Host
+from hidet.ir.func import IRModule
+from hidet.ir.task import Host
+from hidet.ir.dialects.lowlevel import VoidType
 from hidet.runtime.module import CompiledModule, CompiledFunction
 from hidet.backend.cuda import codegen
 from hidet.ffi import PackedFunc
@@ -16,7 +16,6 @@ def compile_src_code(src_path, out_lib_path):
     try:
         subprocess.run(command, stderr=PIPE, stdout=PIPE, check=True)
     except subprocess.CalledProcessError as e:
-        print(e)
         print(str(e.stderr))
         raise e
 

@@ -1,13 +1,13 @@
 import os
-from hidet.core.compute import Axis, tensor_input, reduce_sum, compute
-from hidet.core.task import Task
-from hidet.core.worker import Grid
 from hidet.ir.type import tensor_type
+from hidet.ir.task import Task, Grid
 from hidet.ir.functors import astext
-from hidet.scheduler.naive import naive_scheduler_grid
+from hidet.ir.dialects.compute import Axis, tensor_input, reduce_sum, compute
+from hidet.transforms import const_expr_simplifier
 from hidet.backend.cuda import codegen, build
 from hidet.backend.cuda.transforms import split_host_device_pass, flatten_global_tensor
 from hidet.runtime.value import TensorValue
+from hidet.implement import implement
 
 
 def get_task(N=1024, M=1024, K=1024):
@@ -28,19 +28,19 @@ def get_task(N=1024, M=1024, K=1024):
 
 def demo_task():
     task = get_task()
-    module = naive_scheduler_grid(task)
+    module = implement(task)
     print(astext(module))
 
 
 def demo_codegen():
     task = get_task()
-    module = naive_scheduler_grid(task)
+    module = implement(task)
     print(codegen(module))
 
 
 def demo_split():
     task = get_task()
-    ir_module = naive_scheduler_grid(task)
+    ir_module = implement(task)
     ir_module = split_host_device_pass()(ir_module)
     ir_module = flatten_global_tensor()(ir_module)
     # print(astext(ir_module))
@@ -49,7 +49,7 @@ def demo_split():
 
 def demo_build():
     task = get_task()
-    ir_module = naive_scheduler_grid(task)
+    ir_module = implement(task)
     ir_module = split_host_device_pass()(ir_module)
     ir_module = flatten_global_tensor()(ir_module)
     target_dir = './test_task'
@@ -66,9 +66,11 @@ def demo_test():
     M = 2
     K = 2
     task = get_task(N, M, K)
-    ir_module = naive_scheduler_grid(task)
+    ir_module = implement(task)
     ir_module = split_host_device_pass()(ir_module)
     ir_module = flatten_global_tensor()(ir_module)
+    ir_module = const_expr_simplifier()(ir_module)
+    print(ir_module)
     target_dir = './outs'
     os.makedirs(target_dir, exist_ok=True)
     module = build(ir_module, target_dir)
@@ -88,7 +90,10 @@ if __name__ == '__main__':
     #    demo_split()
     #    demo_test()
     #    demo_build()
-    demo_test()
+    # demo_test()
+    # ins = MyClass()
+    # ins.test()
+    pass
 
 """
 TOS: Task-Oriented Scheduling

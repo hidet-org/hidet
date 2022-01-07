@@ -1,5 +1,6 @@
-from hidet.core.compute import TensorInput, ScalarInput, ReduceCompute, TensorCompute
+from hidet.ir import TensorInput, ScalarInput, ReduceCompute, TensorCompute
 from hidet.ir.expr import *
+from hidet.ir.dialects.lowlevel import Cast, Dereference
 from hidet.ir.stmt import ForStmt, BufferStoreStmt, flatten, AssignStmt, SeqStmt
 from hidet.ir.functors import ExprFunctor, infer_type
 
@@ -30,10 +31,16 @@ class LoopExpander(ExprFunctor):
         stmt = merge_stmts([sa, sb])
         return stmt, e.__class__(va, vb)
 
+    def visit_Add(self, e: Add):
+        return self.visit_binary(e)
+
+    def visit_Sub(self, e: Sub):
+        return self.visit_binary(e)
+
     def visit_Multiply(self, e: Multiply):
         return self.visit_binary(e)
 
-    def visit_Add(self, e: Add):
+    def visit_Div(self, e: Div):
         return self.visit_binary(e)
 
     def visit_Mod(self, e: Mod):
@@ -43,6 +50,9 @@ class LoopExpander(ExprFunctor):
         return self.visit_binary(e)
 
     def visit_LessThan(self, e: LessThan):
+        return self.visit_binary(e)
+
+    def visit_Equal(self, e: Equal):
         return self.visit_binary(e)
 
     def visit_TensorSlice(self, e: TensorSlice):
@@ -115,6 +125,14 @@ class LoopExpander(ExprFunctor):
         stmts.append(AssignStmt(acc, e.combine(acc, expr)))
         seq_stmts.append(flatten(stmts))
         return SeqStmt(seq_stmts), acc
+
+    def visit_Cast(self, e: Cast):
+        stmt, expr = self.visit(e.expr)
+        return stmt, Cast(expr, e.target_type)
+
+    def visit_Dereference(self, e: Dereference):
+        stmt, expr = self.visit(e.expr)
+        return stmt, Dereference(expr)
 
 
 def expand_loop(expr, input_map):

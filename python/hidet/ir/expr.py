@@ -1,8 +1,9 @@
 from typing import Optional
-from .type import Type, TensorType, TensorType, ScalarType, Scope, tensor_type, scalar_type
+from .node import Node
+from .type import BaseType, TensorType, TensorType, ScalarType, Scope, tensor_type, scalar_type
 
 
-class Expr:
+class Expr(Node):
     def __add__(self, other):
         return Add(self, other)
 
@@ -125,17 +126,6 @@ class TensorElement(Expr):
         self.indices = [convert(idx) for idx in indices]
 
 
-class Cast(Expr):
-    def __init__(self, expr, target_type):
-        self.expr = expr
-        self.target_type = target_type
-
-
-class Dereference(Expr):
-    def __init__(self, expr):
-        self.expr = expr
-
-
 class Call(Expr):
     def __init__(self, func, args):
         self.func_var: Var = func
@@ -145,13 +135,13 @@ class Call(Expr):
 class Constant(Expr):
     def __init__(self, value, dtype=None):
         self.value = value
-        self.dtype = dtype
+        self.dtype: ScalarType = dtype
 
 
 class Var(Expr):
     id_clock = 0
 
-    def __init__(self, hint: Optional[str], type: Type):
+    def __init__(self, hint: Optional[str], type: BaseType):
         self.hint = hint
         self.type = type
         self.id = self.new_id()

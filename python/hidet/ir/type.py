@@ -1,7 +1,8 @@
 from typing import Sequence, Optional, Union
+from hidet.ir.node import Node
 
 
-class Type:
+class BaseType(Node):
     pass
 
 
@@ -11,13 +12,13 @@ class Scope:
         self.name = name
 
 
-class ScalarType(Type):
+class ScalarType(BaseType):
     def __init__(self, name):
         assert name in ['float32', 'int32', 'bool']
         self.name = name
 
 
-class TensorType(Type):
+class TensorType(BaseType):
     def __init__(self, scope: Optional[Scope], scalar_type: ScalarType, shape, strides=None):
         self.scope: Scope = scope
         self.scalar_type: ScalarType = scalar_type
@@ -35,13 +36,7 @@ class TensorType(Type):
             raise Exception("Can only calculate size of static tensor.")
 
 
-class PointerType(Type):
-    def __init__(self, base_type):
-        super().__init__()
-        self.base_type = base_type
-
-
-class FuncType(Type):
+class FuncType(BaseType):
     def __init__(self, param_types, ret_type):
         self.param_types = param_types
         self.ret_type = ret_type
@@ -49,10 +44,6 @@ class FuncType(Type):
     @staticmethod
     def from_func(func):
         return FuncType([param.type for param in func.params], func.ret_type)
-
-
-class VoidType(Type):
-    pass
 
 
 def scalar_type(type_name):
@@ -73,9 +64,8 @@ def tensor_type(scope, scalar_type, shape, strides=None):
         n = len(shape)
         for i in range(n):
             c = convert(1)
-            for j in range(i+1, n):
+            for j in range(i + 1, n):
                 c = c * shape[j]
             strides.append(c)
     strides = [convert(s) for s in strides]
     return TensorType(scope, scalar_type, shape, strides)
-
