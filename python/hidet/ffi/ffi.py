@@ -23,12 +23,11 @@ def load_library():
     cwd = os.getcwd()
     paths = [os.path.realpath(os.path.join(cwd, path)) for path in paths]
     for path in paths:
-        try:
-            _LIB = ctypes.cdll.LoadLibrary(path)
-        except OSError as e:
-            pass
+        if not os.path.exists(path):
+            continue
+        _LIB = ctypes.cdll.LoadLibrary(path)
     if _LIB is None:
-        raise OSError('Can not load library: \n' + '\n'.join(paths))
+        raise OSError('Can not find library: \n' + '\n'.join(paths))
 
 
 load_library()

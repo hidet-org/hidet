@@ -21,3 +21,7 @@ class Cast(Expr):
 class Dereference(Expr):
     def __init__(self, expr):
         self.expr = expr
+
+
+def pointer_type(base_type):
+    return PointerType(base_type)

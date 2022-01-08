@@ -67,3 +67,15 @@ class ScalarValue(Value):
 
     def __str__(self):
         return str(self.value)
+
+
+def randn(shape, scalar_type, scope, strides=None, seed=0):
+    return TensorValue.randn(shape, scalar_type, scope, strides, seed)
+
+
+def empty(shape, scalar_type, scope, strides=None):
+    return TensorValue.empty(shape, scalar_type, scope, strides)
+
+
+def scalar(value):
+    return ScalarValue.from_python(value)

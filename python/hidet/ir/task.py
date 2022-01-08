@@ -37,9 +37,9 @@ class Host(Worker):
 
 
 class Task(Node):
-    def __init__(self, name, compute, params, params_type, worker):
+    def __init__(self, name, computation, params, params_type, worker):
         self.name: str = name
-        self.compute: ComputeNode = compute
+        self.compute: ComputeNode = computation
         self.params: List[Union[ScalarInput, TensorInput, ComputeNode]] = params
         self.params_type: Dict[Union[ScalarInput, TensorInput, ComputeNode], BaseType] = params_type
         self.worker: Worker = worker

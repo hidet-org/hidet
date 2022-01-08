@@ -1,7 +1,7 @@
 #pragma once
 
 #ifndef DLL
-#define DLL __attribute__((visibility("default")))
+#define DLL extern "C" __attribute__((visibility("default")))
 #endif
 
 enum ArgType {

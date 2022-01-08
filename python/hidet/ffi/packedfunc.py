@@ -8,8 +8,8 @@ from hidet.ir.type import ScalarType
 from hidet.ir.dialects.lowlevel import PointerType
 from hidet.runtime.value import Value, ScalarValue, TensorValue
 
-
 c_int32_p = POINTER(c_int32)
+c_float_p = POINTER(c_float)
 
 
 class ArgType:
@@ -43,10 +43,10 @@ class PackedFunc:
             assert isinstance(self.param_types[idx], ScalarType)
             arg_type = arg.type
             if arg_type.name == 'int32':
-                assert isinstance(self.param_types[idx].name, 'int32')
+                assert self.param_types[idx].name == 'int32'
                 return cast(pointer(c_int32(arg.value)), c_void_p)
             elif arg_type.name == 'float32':
-                assert isinstance(self.param_types[idx].name, 'float32')
+                assert self.param_types[idx].name == 'float32'
                 return cast(pointer(c_float(arg.value)), c_void_p)
             else:
                 raise NotImplementedError()
@@ -84,3 +84,7 @@ class PackedFunc:
     def __call__(self, *args):
         _LIB.CallPackedFunc(self.c_packed_func, self._convert_args(args))
 
+    def profile(self, *args, warmup: int = 1, number: int = 1, repeat: int = 10):
+        results = (c_float * repeat)()
+        _LIB.ProfilePackedFunc(self.c_packed_func, self._convert_args(args), warmup, number, repeat, cast(pointer(results), c_float_p))
+        return [float(v) for v in results]

@@ -21,6 +21,7 @@ def compile_src_code(src_path, out_lib_path):
 
 
 def build(ir_module: IRModule, output_dir) -> CompiledModule:
+    os.makedirs(output_dir, exist_ok=True)
     src_code, func_name_map = codegen(ir_module)
     src_path = os.path.join(output_dir, 'source.cu')
     lib_path = os.path.join(output_dir, 'lib.so')

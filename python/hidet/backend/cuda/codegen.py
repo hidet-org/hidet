@@ -143,15 +143,6 @@ class CudaCodegen(StmtExprFunctor, TypeFunctor):
 
         return doc
 
-    def visit_Stmt(self, e: Stmt, indent: bool, wrap_bracket=False):
-        if isinstance(e, SeqStmt) or wrap_bracket:
-            return Text('{') + self(e).indent() + NewLine() + Text('} ')
-        else:
-            doc = self(e)
-            if indent:
-                doc.indent()
-            return doc
-
     def visit_Add(self, e: Add):
         return Text('(') + self(e.a) + ' + ' + self(e.b) + ')'
 
@@ -225,7 +216,7 @@ class CudaCodegen(StmtExprFunctor, TypeFunctor):
 
     def visit_LetStmt(self, stmt: LetStmt):
         doc = NewLine() + self(stmt.var.type) + ' ' + self.visit(stmt.var) + ' = ' + self.visit(stmt.value) + ';'
-        doc += self.visit_Stmt(stmt.body, False)
+        doc += self(stmt.body)
         return doc
 
     def visit_ForStmt(self, stmt: ForStmt):
@@ -237,15 +228,15 @@ class CudaCodegen(StmtExprFunctor, TypeFunctor):
             cond_doc = self(var < var.min_value + var.extent)
         update_doc = self(var) + ' = ' + self(var + 1)
         doc = NewLine() + Text('for (') + init_doc + '; ' + cond_doc + '; ' + update_doc + ') '
-        doc += self.visit_Stmt(stmt.body, True, True)
+        doc += Text('{') + self(stmt.body).indent() + NewLine() + Text('} ')
         return doc
 
     def visit_IfStmt(self, stmt: IfStmt):
         doc = NewLine() + Text('if ') + self(stmt.cond) + ' '
-        doc += self.visit_Stmt(stmt.then_body, True, True)
+        doc += Text('{') + self(stmt.then_body).indent() + NewLine() + Text('} ')
         if stmt.else_body:
             doc += Text('else ')
-            doc += self.visit_Stmt(stmt.else_body, True, True)
+            doc += Text('{') + self(stmt.else_body).indent() + NewLine() + Text('} ')
         return doc
 
     def visit_AssertStmt(self, stmt: AssertStmt):
