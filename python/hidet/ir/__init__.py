@@ -14,7 +14,7 @@ from .expr import TensorSlice, TensorElement, Call
 from .expr import var, scalar_var, tensor_var, is_one, is_zero
 
 from .stmt import Stmt, EvaluateStmt, BufferStoreStmt, AssignStmt, LetStmt, ForStmt, IfStmt, AssertStmt, SeqStmt
-from .stmt import flatten
+from .stmt import concat_stmts
 
 from .dialects.compute import ScalarInput, TensorInput, TensorCompute, ReduceCompute
 from .dialects.lowlevel import VoidType, PointerType, Cast, Dereference

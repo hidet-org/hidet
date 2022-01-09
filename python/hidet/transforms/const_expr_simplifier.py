@@ -16,5 +16,5 @@ class ConstExprSimplifier(Pass):
             return func
 
 
-def const_expr_simplifier():
+def const_expr_simplifier_pass():
     return ConstExprSimplifier()

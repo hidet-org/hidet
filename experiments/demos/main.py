@@ -1,21 +1,20 @@
 import numpy as np
 import os
 from hidet.ir.type import tensor_type
-from hidet.ir.task import Task, Grid
+from hidet.ir.task import Task, Grid, Host
 from hidet.ir.functors import astext
 from hidet.ir.dialects.compute import Axis, tensor_input, reduce_sum, compute
-from hidet.transforms import const_expr_simplifier
-from hidet.backend.cuda import codegen, build
-from hidet.backend.cuda.transforms import split_host_device_pass, flatten_global_tensor
+from hidet.transforms import const_expr_simplifier_pass, flatten_tensor_pass, generate_packed_func_pass
 from hidet.runtime.value import TensorValue, randn, empty, scalar
 from hidet.implement import implement
 from hidet.nn import matmul
-from hidet.driver import build
-from hidet.baselines.matmul import matmul_ref, matmul_cublas, matmul_opt
+from hidet.baselines.matmul import matmul_ref, matmul_cublas, matmul_opt, matmul_cutlass
+from hidet.backend import codegen, build
+from hidet.testing import verify
 
 
 def get_task(N=1024, M=1024, K=1024):
-    k = Axis(1024)
+    k = Axis(K)
 
     A = tensor_input('A', 'float32', [N, K])
     B = tensor_input('B', 'float32', [K, M])
@@ -45,8 +44,8 @@ def demo_codegen():
 def demo_split():
     task = get_task()
     ir_module = implement(task)
-    ir_module = split_host_device_pass()(ir_module)
-    ir_module = flatten_global_tensor()(ir_module)
+    ir_module = generate_packed_func_pass()(ir_module)
+    ir_module = flatten_tensor_pass()(ir_module)
     # print(astext(ir_module))
     print(codegen(ir_module))
 
@@ -54,15 +53,15 @@ def demo_split():
 def demo_build():
     task = get_task()
     ir_module = implement(task)
-    ir_module = split_host_device_pass()(ir_module)
-    ir_module = flatten_global_tensor()(ir_module)
+    ir_module = generate_packed_func_pass()(ir_module)
+    ir_module = flatten_tensor_pass()(ir_module)
     target_dir = './test_task'
     os.makedirs(target_dir, exist_ok=True)
     module = build(ir_module, target_dir)
     A = TensorValue.empty([1024, 1024], 'float32', 'global')
     B = TensorValue.empty([1024, 1024], 'float32', 'global')
     C = TensorValue.empty([1024, 1024], 'float32', 'global')
-    module['gemm.host'](A, B, C)
+    module['gemm'](A, B, C)
 
 
 def demo_test():
@@ -72,9 +71,9 @@ def demo_test():
     task = get_task(N, M, K)
     ir_module = implement(task)
     print(ir_module)
-    ir_module = split_host_device_pass()(ir_module)
-    ir_module = flatten_global_tensor()(ir_module)
-    ir_module = const_expr_simplifier()(ir_module)
+    ir_module = generate_packed_func_pass()(ir_module)
+    ir_module = flatten_tensor_pass()(ir_module)
+    ir_module = const_expr_simplifier_pass()(ir_module)
     print(ir_module)
     target_dir = './outs'
     os.makedirs(target_dir, exist_ok=True)
@@ -82,7 +81,7 @@ def demo_test():
     A = randn([N, K], 'float32', 'global', seed=1)
     B = randn([K, M], 'float32', 'global', seed=3)
     C = empty([N, M], 'float32', 'global')
-    module['gemm.host'](A, B, C)
+    module['gemm'](A, B, C)
     print(A)
     print(B)
     print(C)
@@ -96,7 +95,7 @@ def demo_matmul():
     A = randn([N, K], 'float32', 'global', seed=1)
     B = randn([K, M], 'float32', 'global', seed=3)
     C = empty([N, M], 'float32', 'global')
-    module['matmul.host'](A, B, C)
+    module['matmul'](A, B, C)
     print(A)
     print(B)
     print(C)
@@ -110,7 +109,7 @@ def demo_profile():
     A = randn([N, K], 'float32', 'global', seed=1)
     B = randn([K, M], 'float32', 'global', seed=3)
     C = empty([N, M], 'float32', 'global')
-    print(module['matmul.host'].profile(A, B, C, repeat=10))
+    print(module['matmul'].profile(A, B, C, repeat=10))
 
 
 def demo_baselines():
@@ -119,19 +118,62 @@ def demo_baselines():
         (1024, 1024, 1024),
         (1600, 768, 2304)
     ]
-    funcs = [
+    baselines = [
         ('Reference', matmul_ref()),
         ('Opt', matmul_opt()),
+        ('cutlas', matmul_cutlass()),
         ('cuBLAS', matmul_cublas())
     ]
+    print('Repeat = {}'.format(repeat))
+    print()
     for N, M, K in workloads:
         A = randn([N, K], 'float32', 'global', seed=1)
         B = randn([K, M], 'float32', 'global', seed=3)
         C = empty([N, M], 'float32', 'global')
         print("Workload (N x M x K): {} x {} x {}".format(N, M, K))
-        for name, func in funcs:
+        for name, func in baselines:
             latencies = func.profile(scalar(N), scalar(M), scalar(K), A, B, C, repeat=repeat)
             print('{:>13}: {:.3f} (std {:.3f}) ms'.format(name, np.mean(latencies), np.std(latencies)))
+
+        module = build(implement(matmul(N, M, K)), output_dir='./outs')
+        latencies = module['matmul'].profile(A, B, C, repeat=repeat)
+        print('{:>13}: {:.3f} (std {:.3f}) ms'.format('hidet', np.mean(latencies), np.std(latencies)))
+
+        print()
+
+
+def demo_host():
+    N, M, K = 2, 2, 2
+    k = Axis(K)
+
+    A = tensor_input('A', 'float32', [N, K])
+    B = tensor_input('B', 'float32', [K, M])
+    C = compute('C', [N, M], lambda i, j: reduce_sum(A[i, k] * B[k, j], axis=k))
+
+    params_type = [
+        tensor_type('global', 'float32', [N, K], [K, 1]),
+        tensor_type('global', 'float32', [K, M], [M, 1]),
+        tensor_type('global', 'float32', [N, M], [M, 1])
+    ]
+    task = Task('gemm', C, [A, B, C], params_type, Host())
+    ir_module = implement(task)
+    module = build(ir_module, output_dir='./outs')
+    A = randn([N, K], 'float32', 'host', seed=1)
+    B = randn([K, M], 'float32', 'host', seed=3)
+    C = empty([N, M], 'float32', 'host')
+    module['gemm'](A, B, C)
+    print(A)
+    print(B)
+    print(C)
+
+
+def demo_verify():
+    N, M, K = 512, 512, 512
+    task = get_task(N, M, K)
+    A = randn([N, K], 'float32', 'host', seed=1)
+    B = randn([K, M], 'float32', 'host', seed=3)
+    C = empty([N, M], 'float32', 'host')
+    verify(task, [A, B, C])
 
 
 if __name__ == '__main__':
@@ -141,7 +183,9 @@ if __name__ == '__main__':
     # demo_build()
     # demo_test()
     # demo_profile()
-    demo_baselines()
+    # demo_baselines()
+    # demo_host()
+    demo_verify()
 
 """
 TOS: Task-Oriented Scheduling

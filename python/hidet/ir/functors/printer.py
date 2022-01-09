@@ -1,17 +1,19 @@
 from collections import defaultdict
+from hidet.ir.node import Node
 from hidet.ir.func import IRModule, Function
 from hidet.ir.type import ScalarType, TensorType, BaseType
 from hidet.ir.expr import Constant, Axis, Var, Call, TensorElement, TensorSlice, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div, Sub
 from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, LetStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt
+from hidet.ir.task import Worker, Host, Grid, ThreadBlock, Warp, Thread
 from hidet.ir.dialects.compute import ReduceCompute, TensorCompute, TensorInput, ScalarInput
 from hidet.ir.dialects.lowlevel import VoidType, PointerType, Dereference, Cast
 from hidet.ir.dialects.pattern import AnyExpr, ScalarExprPattern, TensorComputePattern, ReduceComputePattern
-from hidet.utils.doc import Doc, NewLine, Text, join
+from hidet.utils.doc import Doc, NewLine, Text, doc_join
 
-from .base import StmtExprFunctor, TypeFunctor
+from .base import StmtExprFunctor, TypeFunctor, WorkerFunctor
 
 
-class IRPrinter(StmtExprFunctor, TypeFunctor):
+class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
     def __init__(self):
         super().__init__()
         self.obj_name = {}
@@ -45,8 +47,13 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
             return self.visit_Function(obj)
         elif isinstance(obj, IRModule):
             return self.visit_IRModule(obj)
-        else:
+        elif isinstance(obj, (Expr, Stmt)):
             return StmtExprFunctor.visit(self, obj)
+        elif isinstance(obj, Worker):
+            return WorkerFunctor.visit(self, obj)
+        else:
+            return object.__repr__(obj)
+
 
     def visit_Function(self, func: Function):
         self.obj_name = {}
@@ -59,7 +66,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
         for i in range(len(func.params)):
             param = func.params[i]
             param_docs.append([NewLine(), self(param), ': ', self(param.type)])
-        doc += join(param_docs, Text(', '))
+        doc += doc_join(param_docs, Text(', '))
         doc += ')'
         doc = doc.indent(6)
 
@@ -106,10 +113,10 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
         return Doc()
 
     def visit_TensorElement(self, e: TensorElement):
-        return self(e.base) + '[' + join([self(idx) for idx in e.indices], ', ') + ']'
+        return self(e.base) + '[' + doc_join([self(idx) for idx in e.indices], ', ') + ']'
 
     def visit_Call(self, e: Call):
-        return Text(e.func_var.hint) + '(' + join([self(arg) for arg in e.args], Text(', ')) + ')'
+        return Text(e.func_var.hint) + '(' + doc_join([self(arg) for arg in e.args], Text(', ')) + ')'
 
     def visit_Cast(self, e: Cast):
         return Text('cast(') + self(e.target_type) + ', ' + self(e.expr) + ')'
@@ -148,7 +155,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
     def visit_BufferStoreStmt(self, stmt: BufferStoreStmt):
         doc = NewLine()
         doc += self(stmt.buf)
-        doc += Text('[') + join([self(idx) for idx in stmt.indices], ', ') + ']'
+        doc += Text('[') + doc_join([self(idx) for idx in stmt.indices], ', ') + ']'
         doc += Text(' = ') + self(stmt.value)
         return doc
 
@@ -191,7 +198,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
         return Text('ScalarType({})'.format(t.name))
 
     def visit_TensorType(self, t: TensorType):
-        return Text('TensorType(') + self(t.scalar_type) + ', [' + join([self(s) for s in t.shape], ", ") + '], ' + t.scope.name + ')'
+        return Text('TensorType(') + self(t.scalar_type) + ', [' + doc_join([self(s) for s in t.shape], ", ") + '], ' + t.scope.name + ')'
 
     def visit_PointerType(self, t: PointerType):
         return Text('PointerType(') + self(t.base_type) + ')'
@@ -211,9 +218,27 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
     def visit_ScalarExprPattern(self, e: ScalarExprPattern):
         return Text('ScalarExprPattern(reduce=') + (self(e.reduce) if e.reduce else str(None)) + ')'
 
+    def visit_Host(self, host: Host):
+        return Text('Host')
 
-def astext(obj) -> str:
-    if isinstance(obj, (Expr, Stmt, BaseType, Function, IRModule)):
+    def visit_Grid(self, grid: Grid):
+        grid_dim = self(grid.grid_dim) if grid.grid_dim else 'None'
+        block_dim = self(grid.block_dim) if grid.block_dim else 'None'
+        return Text('Grid(') + grid_dim + ', ' + block_dim + ')'
+
+    def visit_ThreadBlock(self, block: ThreadBlock):
+        block_dim = (self(block.block_dim) if block.block_dim else 'None')
+        return Text('ThreadBlock(') + block_dim + ')'
+
+    def visit_Warp(self, warp: Warp):
+        return Text('Warp')
+
+    def visit_Thread(self, thread: Thread):
+        return Text('Thread')
+
+
+def astext(obj: Node) -> str:
+    if isinstance(obj, Node):
         printer = IRPrinter()
         return str(printer(obj))
     else:

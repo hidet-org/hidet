@@ -8,13 +8,13 @@ class BaseType(Node):
 
 class Scope:
     def __init__(self, name):
-        assert name in ['global', 'shared', 'register']
+        assert name in ['host', 'global', 'shared', 'register']
         self.name = name
 
 
 class ScalarType(BaseType):
     def __init__(self, name):
-        assert name in ['float32', 'int32', 'bool']
+        assert name in ['float32', 'int32', 'bool'], name
         self.name = name
 
 

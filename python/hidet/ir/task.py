@@ -1,5 +1,4 @@
 from typing import Union, Optional, List, Dict
-from hidet.ir.expr import Var
 from hidet.ir.node import Node
 from hidet.ir.dialects.compute import ScalarInput, TensorInput, ComputeNode
 from hidet.ir.type import BaseType

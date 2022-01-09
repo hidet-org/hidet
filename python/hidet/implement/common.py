@@ -1,7 +1,8 @@
+from typing import Mapping, Union
 from hidet.ir import TensorInput, ScalarInput, ReduceCompute, TensorCompute
 from hidet.ir.expr import *
 from hidet.ir.dialects.lowlevel import Cast, Dereference
-from hidet.ir.stmt import ForStmt, BufferStoreStmt, flatten, AssignStmt, SeqStmt
+from hidet.ir.stmt import ForStmt, BufferStoreStmt, concat_stmts, AssignStmt, SeqStmt
 from hidet.ir.functors import ExprFunctor, infer_type
 
 
@@ -104,8 +105,8 @@ class LoopExpander(ExprFunctor):
         if stmt is not None:
             sub_stmts.append(stmt)
         sub_stmts.append(BufferStoreStmt(buf, e.axes, expr))
-        stmts.append(flatten(sub_stmts))
-        return flatten(stmts), buf
+        stmts.append(SeqStmt(sub_stmts))
+        return concat_stmts(stmts), buf
 
     def visit_ReduceCompute(self, e: ReduceCompute):
         if e in self.input_map:
@@ -123,7 +124,7 @@ class LoopExpander(ExprFunctor):
         if stmt:
             stmts.append(stmt)
         stmts.append(AssignStmt(acc, e.combine(acc, expr)))
-        seq_stmts.append(flatten(stmts))
+        seq_stmts.append(concat_stmts(stmts))
         return SeqStmt(seq_stmts), acc
 
     def visit_Cast(self, e: Cast):
@@ -135,7 +136,29 @@ class LoopExpander(ExprFunctor):
         return stmt, Dereference(expr)
 
 
-def expand_loop(expr, input_map):
+def expand_loop(expr: Expr, input_map: Mapping[Union[ScalarInput, TensorInput, Expr], Var]):
+    """
+    Generate statements to calculate the expression.
+
+    The expression may contain TensorCompute and ReduceCompute sub-expressions.
+    After expand, the stmt will not have ScalarInput, TensorInput, TensorCompute and ReduceCompute anymore.
+
+    The returned new_buffer_map is a mapping from ReduceCompute and TensorCompute sub-expressions to
+    new allocated buffers used to finish the computation.
+
+    For example, the following expr:
+    compute([3, 3], (i, j) -> reduce_sum(A[i, k] * B[k, j], axis=k)) where k = axis(3)
+    will be expanded to
+    for i in range(3):
+        for j in range(3):
+            s = 0
+            for k in range(3):
+                s += A[i, k] * B[k, j]
+            C[i, j] = s
+
+    If C is in input_map, then the mapped var is used directly. Otherwise, a new tensor var is created to store the results
+    and returned in new_buffer_map
+    """
     expander = LoopExpander(input_map)
     stmt, value, new_buffer_map = expander.expand(expr)
     return stmt, value, new_buffer_map

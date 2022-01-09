@@ -1,7 +1,7 @@
 from typing import List
 
 
-def join(seq: List, sep):
+def doc_join(seq: List, sep):
     rseq = []
     for i in range(len(seq)):
         if i != 0:

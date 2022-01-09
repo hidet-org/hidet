@@ -1,13 +1,10 @@
 import traceback
-import typing
-from typing import Union, List
+from typing import Type
 import contextlib
-from copy import copy
-from typing import Optional, Dict, List
 from hidet.ir.expr import *
 from hidet.ir.dialects.compute import *
 from hidet.ir.dialects.lowlevel import *
-from hidet.ir.task import Task, Worker, Grid, ThreadBlock, Warp, Thread
+from hidet.ir.task import *
 
 
 class TypePattern(BaseType):
@@ -35,7 +32,7 @@ class ExprPattern(Expr):
 
 class AnyExpr(ExprPattern):
     def __init__(self, type=None):
-        self.type: Optional[typing.Type[Expr]] = type
+        self.type: Optional[Type[Expr]] = type
 
 
 class UnionPattern(Node):
@@ -61,7 +58,7 @@ class ScalarExprPattern(ExprPattern):
 
 class TaskPattern(Node):
     def __init__(self, compute_pattern=None, required_params=None, required_param_types=None,
-                 allow_extra_params=True, allow_tensor_extra_params=False, worker=None):
+                 allow_extra_params=True, allow_tensor_extra_params=True, worker=None):
         self.compute_pattern: Optional[Expr] = compute_pattern
         self.required_params: Optional[List[ComputeNode]] = required_params
         self.required_params_types: Optional[List[BaseType]] = required_param_types
@@ -95,6 +92,7 @@ class PatternMatcher:
             with self.match(pattern, target):
                 pass
         except NotMatchedError as e:
+            # print(traceback.format_exc())
             success = False
         except Exception as e:
             raise e
@@ -114,7 +112,7 @@ class PatternMatcher:
         old = self.matched[pattern]
         try:
             self.matched[pattern] = target
-            if not isinstance(pattern, (ExprPattern, TypePattern, TaskPattern)):
+            if not isinstance(pattern, (ExprPattern, TypePattern, TaskPattern, UnionPattern)):
                 # all pattern except ExprPattern sub-classes instances requires that target with the same type as pattern's
                 self.check_type(pattern, target)
             if isinstance(pattern, Add):
@@ -181,6 +179,8 @@ class PatternMatcher:
                 self.match_TensorTypePattern(pattern, target)
 
             # task related matching
+            elif isinstance(pattern, Host):
+                pass
             elif isinstance(pattern, Grid):
                 self.match_Grid(pattern, target)
             elif isinstance(pattern, ThreadBlock):

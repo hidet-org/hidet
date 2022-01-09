@@ -5,7 +5,7 @@ import operator
 from hidet.ir.node import Node
 from hidet.ir.type import scalar_type
 from hidet.ir.expr import Var, IntVar, Call, convert
-from hidet.ir.stmt import LetStmt, IfStmt, EvaluateStmt, flatten, SeqStmt, BufferStoreStmt
+from hidet.ir.stmt import LetStmt, IfStmt, EvaluateStmt, concat_stmts, SeqStmt, BufferStoreStmt
 from hidet.ir.task import Task, Grid, Thread
 from hidet.ir.func import IRModule, Function
 from hidet.ir.dialects.compute import TensorInput, ScalarInput, TensorCompute
@@ -90,8 +90,8 @@ class CudaGridNaiveImplementer(Implementer):
         inner_stmts.append(BufferStoreStmt(param2arg[task.compute], axes_vars, subtask_ret_var))
         statements.append(inner_stmts)
 
-        body = flatten(statements)
-        func = Function(task.name, func_param_vars, body, VoidType(), [subtask_ret_var], {'worker': Grid(grid_dim, block_dim)})
+        body = concat_stmts(statements)
+        func = Function(task.name + '.grid', func_param_vars, body, VoidType(), [subtask_ret_var], {'worker': Grid(grid_dim, block_dim)})
         module = IRModule({func.name: func})
         module.include(subtask_module)
         return module

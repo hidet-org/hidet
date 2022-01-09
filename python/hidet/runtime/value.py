@@ -39,6 +39,18 @@ class TensorValue(Value):
         else:
             return TensorValue(type, gpuarray.to_gpu(array))
 
+    def to_cuda(self):
+        if isinstance(self.array, GPUArray):
+            return self
+        else:
+            return TensorValue.from_numpy(self.array, 'global')
+
+    def to_cpu(self):
+        if isinstance(self.array, np.ndarray):
+            return self
+        else:
+            return TensorValue.from_numpy(self.to_numpy(), 'host')
+
     def to_numpy(self):
         if isinstance(self.array, GPUArray):
             return self.array.get()
@@ -69,11 +81,11 @@ class ScalarValue(Value):
         return str(self.value)
 
 
-def randn(shape, scalar_type, scope, strides=None, seed=0):
+def randn(shape, scalar_type: str, scope: str, strides=None, seed=0):
     return TensorValue.randn(shape, scalar_type, scope, strides, seed)
 
 
-def empty(shape, scalar_type, scope, strides=None):
+def empty(shape, scalar_type: str, scope: str, strides=None):
     return TensorValue.empty(shape, scalar_type, scope, strides)
 
 

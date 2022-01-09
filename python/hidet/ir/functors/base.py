@@ -1,6 +1,7 @@
 from hidet.ir.type import *
 from hidet.ir.expr import *
 from hidet.ir.stmt import *
+from hidet.ir.task import *
 from hidet.ir.dialects.compute import *
 from hidet.ir.dialects.lowlevel import *
 from hidet.ir.dialects.pattern import *
@@ -611,6 +612,45 @@ class TypeFunctor:
         raise NotImplementedError()
 
     def visit_VoidType(self, t: VoidType):
+        raise NotImplementedError()
+
+
+class WorkerFunctor:
+    def __init__(self):
+        self.memo = {}
+
+    def __call__(self, *args, **kwargs):
+        return self.visit(*args, **kwargs)
+
+    def visit(self, worker: Worker):
+        if worker in self.memo:
+            return self.memo[worker]
+        if isinstance(worker, Host):
+            return self.visit_Host(worker)
+        elif isinstance(worker, Grid):
+            return self.visit_Grid(worker)
+        elif isinstance(worker, ThreadBlock):
+            return self.visit_ThreadBlock(worker)
+        elif isinstance(worker, Warp):
+            return self.visit_Warp(worker)
+        elif isinstance(worker, Thread):
+            return self.visit_Thread(worker)
+        else:
+            raise ValueError()
+
+    def visit_Host(self, host: Host):
+        raise NotImplementedError()
+
+    def visit_Grid(self, grid: Grid):
+        raise NotImplementedError()
+
+    def visit_ThreadBlock(self, block: ThreadBlock):
+        raise NotImplementedError()
+
+    def visit_Warp(self, warp: Warp):
+        raise NotImplementedError()
+
+    def visit_Thread(self, thread: Thread):
         raise NotImplementedError()
 
 

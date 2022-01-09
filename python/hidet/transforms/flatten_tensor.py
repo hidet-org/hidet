@@ -1,9 +1,8 @@
 from typing import List
-from hidet.ir.task import Grid
 from hidet.ir.type import TensorType
-from hidet.ir.expr import Var, TensorElement, convert
+from hidet.ir.expr import Var, TensorElement
 from hidet.ir.stmt import BufferStoreStmt
-from hidet.ir.func import IRModule, Function
+from hidet.ir.func import Function
 from hidet.ir.functors import collect, rewrite
 from hidet.ir.dialects.lowlevel import PointerType
 from hidet.transforms import Pass
@@ -20,23 +19,25 @@ def sum(lst: List):
         return rt
 
 
-class FlattenGlobalTensor(Pass):
+class FlattenTensor(Pass):
     def __init__(self):
-        super().__init__('flatten_global_tensor')
+        super().__init__('flatten_tensor')
 
     def process_func(self, func: Function):
         params = func.params
-        global_params = [p for p in params if isinstance(p.type, TensorType) and p.type.scope.name == 'global']
-        if len(global_params) == 0:
+        # we do not flatten tensors with the shared memory and register scope tensors
+        target_params = [p for p in params if isinstance(p.type, TensorType)
+                         and p.type.scope.name in ['global', 'host']]
+        if len(target_params) == 0:
             return func
-        pointer_params = [Var(p.hint, PointerType(p.type.scalar_type)) for p in global_params]
-        global2pointer = {g: p for g, p in zip(global_params, pointer_params)}
+        pointer_params = [Var(p.hint, PointerType(p.type.scalar_type)) for p in target_params]
+        global2pointer = {g: p for g, p in zip(target_params, pointer_params)}
 
         rmap = {}
         # update BufferStoreStmt
         store_stmts: List[BufferStoreStmt] = collect(func.body, BufferStoreStmt)
         for s in store_stmts:
-            if s.buf not in global_params:
+            if s.buf not in target_params:
                 continue
             param: Var = s.buf
             assert isinstance(param.type, TensorType)
@@ -52,7 +53,7 @@ class FlattenGlobalTensor(Pass):
         # update TensorElement
         element_exprs: List[TensorElement] = collect(func.body, TensorElement)
         for e in element_exprs:
-            if e.base not in global_params:
+            if e.base not in target_params:
                 continue
             param: Var = e.base
             assert isinstance(param.type, TensorType)
@@ -74,5 +75,5 @@ class FlattenGlobalTensor(Pass):
         return new_func
 
 
-def flatten_global_tensor():
-    return FlattenGlobalTensor()
+def flatten_tensor_pass():
+    return FlattenTensor()

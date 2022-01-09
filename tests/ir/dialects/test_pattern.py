@@ -112,7 +112,5 @@ def test_scalar_expr_pattern():
     C = compute('C', [1024, 1024], lambda i, j: reduce_sum(A[i, k] * B[k, j], axis=k))
 
 
-
-
 if __name__ == '__main__':
     pytest.main(__file__)

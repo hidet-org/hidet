@@ -1,5 +1,7 @@
 from typing import Tuple, Dict
 from collections import defaultdict
+
+from hidet.ir.dialects.pattern import ScalarExprPattern, TensorComputePattern, ReduceComputePattern
 from hidet.ir.task import Grid, Host
 from hidet.ir.func import *
 from hidet.ir.stmt import *
@@ -7,29 +9,11 @@ from hidet.ir.expr import *
 from hidet.ir.dialects.compute import ReduceCompute, TensorCompute, TensorInput, ScalarInput
 from hidet.ir.functors import StmtExprFunctor, TypeFunctor, collect
 from hidet.ir.dialects.lowlevel import VoidType, PointerType, Cast, Dereference
-from hidet.utils.doc import Doc, NewLine, Text, join
+from hidet.utils.doc import Doc, NewLine, Text, doc_join
 from hidet.backend.call_graph import CallGraph
 
 
-def get_write_params(func: Function):
-    params = func.params
-    stmts = collect(func.body, (BufferStoreStmt, AssignStmt))
-    write_params = []
-    for param in params:
-        for stmt in stmts:
-            if isinstance(stmt, BufferStoreStmt):
-                if stmt.buf == param:
-                    write_params.append(param)
-                    break
-            else:
-                assert isinstance(stmt, AssignStmt)
-                if stmt.var == param:
-                    write_params.append(param)
-                    break
-    return write_params
-
-
-class CudaCodegen(StmtExprFunctor, TypeFunctor):
+class Codegen(StmtExprFunctor, TypeFunctor):
     def __init__(self):
         super().__init__()
         self.func_name_map = {}
@@ -66,6 +50,24 @@ class CudaCodegen(StmtExprFunctor, TypeFunctor):
         return name
 
     @staticmethod
+    def get_write_params(func: Function):
+        params = func.params
+        stmts = collect(func.body, (BufferStoreStmt, AssignStmt))
+        write_params = []
+        for param in params:
+            for stmt in stmts:
+                if isinstance(stmt, BufferStoreStmt):
+                    if stmt.buf == param:
+                        write_params.append(param)
+                        break
+                else:
+                    assert isinstance(stmt, AssignStmt)
+                    if stmt.var == param:
+                        write_params.append(param)
+                        break
+        return write_params
+
+    @staticmethod
     def canonize_funcname(name: str):
         return name.replace('.', '_')
 
@@ -74,9 +76,9 @@ class CudaCodegen(StmtExprFunctor, TypeFunctor):
 
     def visit(self, node):
         if isinstance(node, IRModule):
-            return self.gen_module(node)
+            return self.visit_IRModule(node)
         elif isinstance(node, Function):
-            return self.gen_func(node)
+            return self.visit_Function(node)
         elif isinstance(node, (Stmt, Expr)):
             return StmtExprFunctor.visit(self, node)
         elif isinstance(node, BaseType):
@@ -84,7 +86,7 @@ class CudaCodegen(StmtExprFunctor, TypeFunctor):
         else:
             raise ValueError()
 
-    def gen_module(self, module: IRModule) -> Doc:
+    def visit_IRModule(self, module: IRModule) -> Doc:
         self.ir_module = module
         doc = Doc()
         doc += Text('#include <cassert>') + NewLine()
@@ -97,7 +99,7 @@ class CudaCodegen(StmtExprFunctor, TypeFunctor):
         doc += NewLine() + '}'
         return doc
 
-    def gen_func(self, func: Function) -> Doc:
+    def visit_Function(self, func: Function) -> Doc:
         self.name_id_clock.clear()
         self.obj_name.clear()
 
@@ -121,7 +123,7 @@ class CudaCodegen(StmtExprFunctor, TypeFunctor):
         # parameters
         doc += '('
         param_docs = []
-        write_params = get_write_params(func)
+        write_params = self.get_write_params(func)
         for i in range(len(func.params)):
             param = func.params[i]
             if param in write_params and isinstance(param.type, ScalarType):
@@ -129,7 +131,7 @@ class CudaCodegen(StmtExprFunctor, TypeFunctor):
             else:
                 ref = Text(' ')
             param_docs.append(self(param.type) + ref + self(param))
-        doc += join(param_docs, Text(', '))
+        doc += doc_join(param_docs, Text(', '))
         doc += ') {'
 
         # locals
@@ -171,7 +173,7 @@ class CudaCodegen(StmtExprFunctor, TypeFunctor):
         return Doc()
 
     def visit_TensorElement(self, e: TensorElement):
-        return self(e.base) + '[' + join([self(idx) for idx in e.indices], ', ') + ']'
+        return self(e.base) + '[' + doc_join([self(idx) for idx in e.indices], ', ') + ']'
 
     def visit_Cast(self, e: Cast):
         return Text('(') + self.visit(e.target_type) + ')' + self(e.expr)
@@ -189,7 +191,7 @@ class CudaCodegen(StmtExprFunctor, TypeFunctor):
             launch_config = Text('<<<') + str(grid_dim) + ',' + str(block_dim) + Text('>>>')
         else:
             launch_config = []
-        param_doc = Text('(') + join([self(arg) for arg in e.args], Text(', ')) + ')'
+        param_doc = Text('(') + doc_join([self(arg) for arg in e.args], Text(', ')) + ')'
         return func_name + launch_config + param_doc
 
     def visit_Var(self, e: Var):
@@ -207,7 +209,7 @@ class CudaCodegen(StmtExprFunctor, TypeFunctor):
     def visit_BufferStoreStmt(self, stmt: BufferStoreStmt):
         doc = NewLine()
         doc += self(stmt.buf)
-        doc += Text('[') + join([self(idx) for idx in stmt.indices], ', ') + ']'
+        doc += Text('[') + doc_join([self(idx) for idx in stmt.indices], ', ') + ']'
         doc += Text(' = ') + self(stmt.value) + ';'
         return doc
 
@@ -256,7 +258,7 @@ class CudaCodegen(StmtExprFunctor, TypeFunctor):
         return Text(scalar_type_map[t.name])
 
     def visit_TensorType(self, t: TensorType):
-        return Text('TensorType(') + self(t.scalar_type) + ', [' + join([self(s) for s in t.shape], ", ") + '], ' + t.scope.name + ')'
+        return Text('TensorType(') + self(t.scalar_type) + ', [' + doc_join([self(s) for s in t.shape], ", ") + '], ' + t.scope.name + ')'
 
     def visit_PointerType(self, t: PointerType):
         return self(t.base_type) + Text('*')
@@ -264,6 +266,7 @@ class CudaCodegen(StmtExprFunctor, TypeFunctor):
     def visit_VoidType(self, t: VoidType):
         return Text('void')
 
+    # the following expressions should not remain to codegen
     def visit_ScalarInput(self, e: ScalarInput):
         raise ValueError()
 
@@ -276,9 +279,21 @@ class CudaCodegen(StmtExprFunctor, TypeFunctor):
     def visit_ReduceCompute(self, e: ReduceCompute):
         raise ValueError()
 
+    def visit_AnyExpr(self, e: ReduceComputePattern):
+        raise ValueError()
+
+    def visit_ReduceComputePattern(self, e: ReduceComputePattern):
+        raise ValueError()
+
+    def visit_TensorComputePattern(self, e: TensorComputePattern):
+        raise ValueError()
+
+    def visit_ScalarExprPattern(self, e: ScalarExprPattern):
+        raise ValueError()
+
 
 def codegen(ir_module: IRModule) -> Tuple[str, Dict[str, str]]:
-    gen = CudaCodegen()
+    gen = Codegen()
     doc = gen(ir_module)
     return str(doc), gen.func_name_map
 

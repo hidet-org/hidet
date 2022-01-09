@@ -73,6 +73,17 @@ class SeqStmt(Stmt):
 
 
 def flatten(stmts):
+    flattened = []
+    for stmt in stmts:
+        if isinstance(stmt, SeqStmt):
+            flattened.extend(flatten(stmt.seq))
+        else:
+            flattened.append(stmt)
+    return flattened
+
+
+def concat_stmts(stmts):
+    # stmts = flatten(stmts)
     body = None
     for stmt in reversed(stmts):
         if body is None:

@@ -18,7 +18,11 @@ class IRModule(Node):
         for name, var in module.global_vars.items():
             self.global_vars[name] = var
 
-    def lookup(self, name):
+    def lookup(self, name_or_var: Union[str, Var]):
+        if isinstance(name_or_var, Var):
+            name = name_or_var.hint
+        else:
+            name = name_or_var
         return self.functions[name]
 
     def lookup_var(self, name):
@@ -36,12 +40,14 @@ class FunctionGroup(Node):
 
 class Function(Node):
     valid_attrs = [
-        'worker'
+        'worker',
+        'packed_func'
     ]
     """
     Valid Attrs:
      'worker': one of 'host', 'grid', 'threadblock', 'warp', 'thread'
         the worker to run the function.
+     'packed_func': the target function that this packed_func has packed
     """
 
     def __init__(self, name, params, body, ret_type, local_vars, attrs=None):
@@ -63,8 +69,6 @@ class Function(Node):
     def get_attr(self, attr_name, default=None):
         if attr_name in self.attrs:
             return self.attrs[attr_name]
-        if default:
-            return default
-        raise AttributeError(f'{attr_name} not found')
+        return default
 
 

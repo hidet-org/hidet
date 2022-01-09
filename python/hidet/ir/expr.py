@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Union
 from .node import Node
 from .type import BaseType, TensorType, TensorType, ScalarType, Scope, tensor_type, scalar_type
 
@@ -179,8 +179,9 @@ def var(hint: str, scope: str = 'global', dtype: str = 'float32', shape=None, st
     return Var(hint, type)
 
 
-def scalar_var(hint: str, dtype: str = 'float32'):
-    return Var(hint, scalar_type(dtype))
+def scalar_var(hint: str, dtype: Union[str, ScalarType] = 'float32'):
+    dtype = dtype if isinstance(dtype, ScalarType) else scalar_type(dtype)
+    return Var(hint, dtype)
 
 
 def tensor_var(hint: str, shape, scope: str = 'global', dtype: str = 'float32', strides=None):
