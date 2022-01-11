@@ -23,6 +23,14 @@ class TensorValue(Value):
         return TensorValue.from_numpy(array, scope)
 
     @staticmethod
+    def zeros(shape, scalar_type, scope, strides=None):
+        array = np.ndarray(shape=shape, dtype=scalar_type, strides=strides)
+        flattened: np.ndarray = array.ravel()
+        for i in range(flattened.size):
+            flattened[i] = 0.0
+        return TensorValue.from_numpy(array, scope)
+
+    @staticmethod
     def randn(shape, scalar_type, scope, strides=None, seed=0):
         array = np.ndarray(shape=shape, dtype=scalar_type, strides=strides)
         flattened: np.ndarray = array.ravel()
@@ -87,6 +95,10 @@ def randn(shape, scalar_type: str, scope: str, strides=None, seed=0):
 
 def empty(shape, scalar_type: str, scope: str, strides=None):
     return TensorValue.empty(shape, scalar_type, scope, strides)
+
+
+def zeros(shape, scalar_type: str, scope: str, strides=None):
+    return TensorValue.zeros(shape, scalar_type, scope, strides)
 
 
 def scalar(value):

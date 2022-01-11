@@ -1,18 +1,18 @@
 import numpy as np
 from hidet.ir.task import Task, Grid, Host
 from hidet.backend import build
-from hidet.implement import implement
+from hidet.implement import implement, random_resolve
 from hidet.runtime.value import ScalarValue, TensorValue
 
 
-def verify(grid_task: Task, dummy_inputs):
+def verify(grid_task: Task, dummy_inputs, grid_implementor=None, host_implementor=None):
     assert isinstance(grid_task.worker, Grid)
     grid_name = grid_task.name
     host_name = grid_name + '_host'
     host_task = Task(host_name, grid_task.compute, grid_task.params, grid_task.params_type, Host())
 
-    grid_module = build(implement(grid_task), './outs/grid')
-    host_module = build(implement(host_task), './outs/host')
+    grid_module = build(random_resolve(implement(grid_task, grid_implementor)), './outs/grid')
+    host_module = build(random_resolve(implement(host_task, host_implementor)), './outs/host')
 
     grid_inputs = []
     host_inputs = []
@@ -33,5 +33,5 @@ def verify(grid_task: Task, dummy_inputs):
         if isinstance(a, ScalarValue):
             continue
         a, b = a.to_numpy(), b.to_numpy()
-        assert(np.allclose(a, b))
+        np.testing.assert_allclose(a, b)
 

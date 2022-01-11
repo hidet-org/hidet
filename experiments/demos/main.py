@@ -1,15 +1,17 @@
 import numpy as np
+import sympy
 import os
 from hidet.ir.type import tensor_type
 from hidet.ir.task import Task, Grid, Host
 from hidet.ir.functors import astext
 from hidet.ir.dialects.compute import Axis, tensor_input, reduce_sum, compute
 from hidet.transforms import const_expr_simplifier_pass, flatten_tensor_pass, generate_packed_func_pass
-from hidet.runtime.value import TensorValue, randn, empty, scalar
+from hidet.runtime.value import TensorValue, randn, empty, scalar, zeros
 from hidet.implement import implement
+from hidet.implement.resolve import random_resolve
 from hidet.nn import matmul
 from hidet.baselines.matmul import matmul_ref, matmul_cublas, matmul_opt, matmul_cutlass
-from hidet.backend import codegen, build
+from hidet.backend import codegen, build, lower
 from hidet.testing import verify
 
 
@@ -25,7 +27,7 @@ def get_task(N=1024, M=1024, K=1024):
         tensor_type('global', 'float32', [K, M], [M, 1]),
         tensor_type('global', 'float32', [N, M], [M, 1])
     ]
-    task = Task('gemm.grid', C, [A, B, C], params_type, Grid())
+    task = Task('gemm', C, [A, B, C], params_type, Grid())
     return task
 
 
@@ -70,14 +72,7 @@ def demo_test():
     K = 2
     task = get_task(N, M, K)
     ir_module = implement(task)
-    print(ir_module)
-    ir_module = generate_packed_func_pass()(ir_module)
-    ir_module = flatten_tensor_pass()(ir_module)
-    ir_module = const_expr_simplifier_pass()(ir_module)
-    print(ir_module)
-    target_dir = './outs'
-    os.makedirs(target_dir, exist_ok=True)
-    module = build(ir_module, target_dir)
+    module = build(ir_module, output_dir='./outs')
     A = randn([N, K], 'float32', 'global', seed=1)
     B = randn([K, M], 'float32', 'global', seed=3)
     C = empty([N, M], 'float32', 'global')
@@ -168,12 +163,57 @@ def demo_host():
 
 
 def demo_verify():
-    N, M, K = 512, 512, 512
-    task = get_task(N, M, K)
-    A = randn([N, K], 'float32', 'host', seed=1)
-    B = randn([K, M], 'float32', 'host', seed=3)
-    C = empty([N, M], 'float32', 'host')
-    verify(task, [A, B, C])
+    for V in [2, 4, 8, 16, 32, 64, 128, 256, 512]:
+        # N, M, K = V + 22, V*2 - 3, V // 2 + 3
+        N, M, K = V, V, V
+        task = matmul(N, M, K)
+        A = randn([N, K], 'float32', 'host', seed=1)
+        B = randn([K, M], 'float32', 'host', seed=3)
+        C = zeros([N, M], 'float32', 'host')
+
+        use_verify = False
+        if use_verify:
+            verify(task, [A, B, C], grid_implementor='cuda_grid_split_implementer')
+        else:
+            task.worker = Grid()
+            grid_module = build(random_resolve(implement(task, impl_name='cuda_grid_split_implementer'), seed=1), f'./outs/grid')
+
+            task.worker = Host()
+            host_module = build(random_resolve(implement(task)), f'./outs/host')
+
+            GA, GB, GC = A.to_cuda(), B.to_cuda(), C.to_cuda()
+            grid_module['matmul'](GA, GB, GC)
+            print(GA)
+            print(GB)
+            print(GC)
+
+            HA, HB, HC = A.to_cpu(), B.to_cpu(), C.to_cpu()
+            host_module['matmul'](HA, HB, HC)
+            print(HC)
+            np.testing.assert_allclose(GC.to_numpy(), HC.to_numpy())
+
+
+def demo_grid_2d_static_implementer():
+    N, M, K = 2, 2, 2
+    ir_module = implement(matmul(N, M, K), impl_name='cuda_grid_split_implementer')
+    ir_module = random_resolve(ir_module)
+    module = build(ir_module, output_dir='./outs')
+
+    A = randn([N, K], 'float32', 'global', seed=1)
+    B = randn([K, M], 'float32', 'global', seed=3)
+    C = empty([N, M], 'float32', 'global')
+    module['matmul'](A, B, C)
+    print(A)
+    print(B)
+    print(C)
+
+
+def demo_sympy():
+    a, b = sympy.symbols('a b')
+    expr = (a + b) * (a + b) - a * a - 2 * a * b - b * b
+    print(expr)
+    print(sympy.simplify(expr), type(sympy.simplify(expr)))
+    print(sympy.simplify(expr) == 0)
 
 
 if __name__ == '__main__':
@@ -186,6 +226,8 @@ if __name__ == '__main__':
     # demo_baselines()
     # demo_host()
     demo_verify()
+    # demo_grid_2d_static_implementer()
+    # demo_sympy()
 
 """
 TOS: Task-Oriented Scheduling

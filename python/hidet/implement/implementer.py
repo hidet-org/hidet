@@ -1,3 +1,4 @@
+from typing import Optional
 from collections import defaultdict
 from typing import Type, Dict, Mapping
 from hidet.ir.task import Task
@@ -32,12 +33,17 @@ def register_impl(name):
     return wrapper
 
 
-def implement(task: Task) -> IRModule:
+def implement(task: Task, impl_name: Optional[str] = None) -> IRModule:
     priorities = sorted(_implementers.keys())
+    messages = {}
     for p in reversed(priorities):
-        for impl in _implementers[p].values():
-            matching = match(impl.task_pattern(), task)
+        for name, impl in _implementers[p].items():
+            if impl_name and impl_name != name:
+                continue
+            matching, msg = match(impl.task_pattern(), task)
+            messages[name] = msg
             if matching:
                 return impl.implement(task, matching)
-    raise NotImplementedError("Can not find matching implementer.")
+    report = "\n".join([f'{name}:\n{msg}' for name, msg in messages.items()])
+    raise NotImplementedError(f"Can not find matching implementer for task {task.name}. Logs: \n\n {report}")
 

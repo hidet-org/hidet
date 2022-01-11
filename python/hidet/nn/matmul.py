@@ -10,7 +10,7 @@ def matmul(N: int, M: int, K: int) -> Task:
     k = Axis(K)
     C = compute('C', [N, M], lambda i, j: reduce_sum(A[i, k] * B[k, j], axis=k))
     return Task(
-        name='matmul.grid',
+        name='matmul',
         computation=C,
         params=[A, B, C],
         params_type=[tensor_type('global', 'float32', [N, K], strides=[K, 1]),
@@ -29,7 +29,7 @@ def generic_matmul() -> Task:
     k = Axis(K)
     C = compute('C', [N, M], lambda i, j: reduce_sum(A[i, k] * B[k, j], axis=k))
     return Task(
-        name='matmul.grid',
+        name='matmul',
         computation=C,
         params=[A, B, C],
         params_type=[tensor_type('global', 'float32', [N, K], strides=[K, 1]),

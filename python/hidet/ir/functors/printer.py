@@ -2,11 +2,11 @@ from collections import defaultdict
 from hidet.ir.node import Node
 from hidet.ir.func import IRModule, Function
 from hidet.ir.type import ScalarType, TensorType, BaseType
-from hidet.ir.expr import Constant, Axis, Var, Call, TensorElement, TensorSlice, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div, Sub
+from hidet.ir.expr import Constant, Axis, Var, Call, TensorElement, TensorSlice, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div, Sub, Not, Or, And
 from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, LetStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt
 from hidet.ir.task import Worker, Host, Grid, ThreadBlock, Warp, Thread
 from hidet.ir.dialects.compute import ReduceCompute, TensorCompute, TensorInput, ScalarInput
-from hidet.ir.dialects.lowlevel import VoidType, PointerType, Dereference, Cast
+from hidet.ir.dialects.lowlevel import VoidType, PointerType, Dereference, Cast, Address
 from hidet.ir.dialects.pattern import AnyExpr, ScalarExprPattern, TensorComputePattern, ReduceComputePattern
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
 
@@ -36,7 +36,10 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
         id = self.class_id_clock[e.__class__]
         class_name = str(e.__class__.__name__)
         class_name = alias[class_name] if class_name in alias else class_name
-        name = class_name + '_' + str(id)
+        if isinstance(e, Var):
+            name = class_name + '_' + str(e.id)
+        else:
+            name = class_name + '_' + str(id)
         self.obj_name[e] = name
         return name
 
@@ -53,7 +56,6 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
             return WorkerFunctor.visit(self, obj)
         else:
             return object.__repr__(obj)
-
 
     def visit_Function(self, func: Function):
         self.obj_name = {}
@@ -106,11 +108,33 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
     def visit_LessThan(self, e: LessThan):
         return Text('(') + self(e.a) + ' < ' + self(e.b) + ')'
 
+    def visit_LessEqual(self, e: LessThan):
+        return Text('(') + self(e.a) + ' <= ' + self(e.b) + ')'
+
     def visit_Equal(self, e: Equal):
         return Text('(') + self(e.a) + ' == ' + self(e.b) + ')'
 
+    def visit_And(self, e: And):
+        return Text('(') + self(e.a) + ' && ' + self(e.b) + ')'
+
+    def visit_Or(self, e: Or):
+        return Text('(') + self(e.a) + ' || ' + self(e.b) + ')'
+
+    def visit_Not(self, e: Not):
+        return Text('!') + self(e.a)
+
     def visit_TensorSlice(self, e: TensorSlice):
-        return Doc()
+        slice_idx = 0
+        base_doc = self(e.base)
+        docs = []
+        for idx in e.indices:
+            if idx:
+                docs.append(self(idx))
+            else:
+                start, end = e.starts[slice_idx], e.ends[slice_idx]
+                docs.append(self(start) + ':' + self(end))
+                slice_idx += 1
+        return base_doc + '[' + doc_join(docs, ', ') + ']'
 
     def visit_TensorElement(self, e: TensorElement):
         return self(e.base) + '[' + doc_join([self(idx) for idx in e.indices], ', ') + ']'
@@ -123,6 +147,9 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
 
     def visit_Dereference(self, e: Dereference):
         return Text('*') + self(e.expr)
+
+    def visit_Address(self, e: Address):
+        return Text('&') + self(e.expr)
 
     def visit_Var(self, e: Var):
         if e.hint:

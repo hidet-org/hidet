@@ -1,5 +1,5 @@
 import traceback
-from typing import Type
+from typing import Type, Tuple
 import contextlib
 from hidet.ir.expr import *
 from hidet.ir.dialects.compute import *
@@ -52,7 +52,8 @@ class TensorComputePattern(ExprPattern):
 
 
 class ScalarExprPattern(ExprPattern):
-    def __init__(self, reduce=None):
+    def __init__(self, allow_reduce=True, reduce=None):
+        self.allow_reduce = allow_reduce
         self.reduce: Optional[ReduceCompute] = reduce
 
 
@@ -88,18 +89,19 @@ class PatternMatcher:
     def __call__(self, pattern, target):
         success = True
         self.matched.clear()
+        msg = "Success"
         try:
             with self.match(pattern, target):
                 pass
         except NotMatchedError as e:
-            # print(traceback.format_exc())
+            msg = str(traceback.format_exc())
             success = False
         except Exception as e:
             raise e
         if success:
-            return self.matched
+            return self.matched, msg
         else:
-            return None
+            return None, msg
 
     @contextlib.contextmanager
     def match(self, pattern: Node, target: Node):
@@ -360,9 +362,9 @@ class PatternMatcher:
             if len(reduce_exprs) > 1:
                 raise NotMatchedError(pattern, target, "more than one reduce, current not supported")
             if len(reduce_exprs) == 1:
-                if pattern.reduce is None:
+                if not pattern.allow_reduce:
                     raise NotMatchedError(pattern, target, "reduce found, but not expect")
-                else:
+                elif pattern.reduce is not None:
                     stack.enter_context(self.match(pattern.reduce, reduce_exprs[0]))
             if len(reduce_exprs) == 0:
                 if pattern.reduce is not None:
@@ -455,6 +457,6 @@ def any_ivar():
     return AnyExpr(IntVar)
 
 
-def match(pattern: Node, target: Node) -> Optional[Dict[Node, Node]]:
+def match(pattern: Node, target: Node) -> Tuple[Optional[Dict[Node, Node]], str]:
     matcher = PatternMatcher()
     return matcher(pattern, target)

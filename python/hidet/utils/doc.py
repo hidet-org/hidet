@@ -67,5 +67,3 @@ class Text(Doc):
     def __init__(self, s):
         super().__init__()
         self.docs.append(s)
-
-

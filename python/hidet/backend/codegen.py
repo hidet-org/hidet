@@ -1,6 +1,4 @@
-from typing import Tuple, Dict
-from collections import defaultdict
-
+from typing import Tuple
 from hidet.ir.dialects.pattern import ScalarExprPattern, TensorComputePattern, ReduceComputePattern
 from hidet.ir.task import Grid, Host
 from hidet.ir.func import *
@@ -8,9 +6,10 @@ from hidet.ir.stmt import *
 from hidet.ir.expr import *
 from hidet.ir.dialects.compute import ReduceCompute, TensorCompute, TensorInput, ScalarInput
 from hidet.ir.functors import StmtExprFunctor, TypeFunctor, collect
-from hidet.ir.dialects.lowlevel import VoidType, PointerType, Cast, Dereference
+from hidet.ir.dialects.lowlevel import VoidType, PointerType, Cast, Dereference, Address
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
-from hidet.backend.call_graph import CallGraph
+from hidet.ir.utils.call_graph import CallGraph
+from hidet.utils.namer import Namer
 
 
 class Codegen(StmtExprFunctor, TypeFunctor):
@@ -18,36 +17,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         super().__init__()
         self.func_name_map = {}
         self.ir_module: Optional[IRModule] = None
-        self.obj_name = {}
-        self.name_id_clock = defaultdict(int)
-
-    def get_obj_name(self, e: Expr, hint):
-        if e in self.obj_name:
-            return self.obj_name
-        if hint:
-            orig_name = hint
-        else:
-            alias = {
-                'ScalarInput': 'scalar',
-                'TensorInput': 'tensor',
-                'Var': 'v',
-                'IntVar': 'iv',
-                'Axis': 'i'
-            }
-            class_name = str(e.__class__.__name__)
-            orig_name = alias[class_name] if class_name in alias else class_name
-
-        if orig_name in self.name_id_clock:
-            name = orig_name
-            while name in self.name_id_clock:
-                self.name_id_clock[orig_name] += 1
-                name = orig_name + '_' + str(self.name_id_clock[orig_name])
-        else:
-            self.name_id_clock[orig_name] = 0
-            name = orig_name
-
-        self.obj_name[e] = name
-        return name
+        self.namer = Namer()
 
     @staticmethod
     def get_write_params(func: Function):
@@ -100,8 +70,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         return doc
 
     def visit_Function(self, func: Function) -> Doc:
-        self.name_id_clock.clear()
-        self.obj_name.clear()
+        self.namer.clear()
 
         doc = NewLine()
 
@@ -166,17 +135,42 @@ class Codegen(StmtExprFunctor, TypeFunctor):
     def visit_LessThan(self, e: LessThan):
         return Text('(') + self(e.a) + ' < ' + self(e.b) + ')'
 
+    def visit_LessEqual(self, e: LessThan):
+        return Text('(') + self(e.a) + ' <= ' + self(e.b) + ')'
+
     def visit_Equal(self, e: Equal):
         return Text('(') + self(e.a) + ' == ' + self(e.b) + ')'
 
+    def visit_And(self, e: And):
+        return Text('(') + self(e.a) + ' && ' + self(e.b) + ')'
+
+    def visit_Or(self, e: Or):
+        return Text('(') + self(e.a) + ' || ' + self(e.b) + ')'
+
+    def visit_Not(self, e: Not):
+        return Text('!') + self(e.a)
+
     def visit_TensorSlice(self, e: TensorSlice):
-        return Doc()
+        slice_idx = 0
+        base_doc = self(e.base)
+        docs = []
+        for idx in e.indices:
+            if idx:
+                docs.append(self(idx))
+            else:
+                start, end = e.starts[slice_idx], e.ends[slice_idx]
+                docs.append(self(start) + ':' + self(end))
+                slice_idx += 1
+        return base_doc + '[' + doc_join(docs, ', ') + ']'
 
     def visit_TensorElement(self, e: TensorElement):
         return self(e.base) + '[' + doc_join([self(idx) for idx in e.indices], ', ') + ']'
 
     def visit_Cast(self, e: Cast):
         return Text('(') + self.visit(e.target_type) + ')' + self(e.expr)
+
+    def visit_Address(self, e: Address):
+        return Text('&') + self.visit(e.expr)
 
     def visit_Dereference(self, e: Dereference):
         return Text('*') + self(e.expr)
@@ -195,10 +189,10 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         return func_name + launch_config + param_doc
 
     def visit_Var(self, e: Var):
-        return Text(self.get_obj_name(e, e.hint))
+        return Text(self.namer.get_name(e))
 
     def visit_Axis(self, e: Axis):
-        return Text(self.get_obj_name(e, e.hint))
+        return Text(self.namer.get_name(e))
 
     def visit_Constant(self, e: Constant):
         return Text(str(e.value))
@@ -222,19 +216,22 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         return doc
 
     def visit_ForStmt(self, stmt: ForStmt):
-        var = stmt.loop_var
-        init_doc = self(var.type) + ' ' + self(var) + ' = ' + self(var.min_value)
-        if isinstance(var.min_value, Constant) and var.min_value.value == 0:
-            cond_doc = self(var < var.extent)
+        v = stmt.loop_var
+        init_doc = self(v.type) + ' ' + self(v) + ' = ' + self(v.min_value)
+        if isinstance(v.min_value, Constant) and v.min_value.value == 0:
+            cond_doc = self(v < v.extent)
         else:
-            cond_doc = self(var < var.min_value + var.extent)
-        update_doc = self(var) + ' = ' + self(var + 1)
+            cond_doc = self(v < v.min_value + v.extent)
+        update_doc = self(v) + ' = ' + self(v + 1)
         doc = NewLine() + Text('for (') + init_doc + '; ' + cond_doc + '; ' + update_doc + ') '
         doc += Text('{') + self(stmt.body).indent() + NewLine() + Text('} ')
         return doc
 
     def visit_IfStmt(self, stmt: IfStmt):
-        doc = NewLine() + Text('if ') + self(stmt.cond) + ' '
+        cond_doc = self(stmt.cond)
+        if not(len(cond_doc.docs) > 0 and isinstance(cond_doc.docs[0], str) and cond_doc.docs[0].startswith('(')):
+            cond_doc = Text('(') + cond_doc + ')'
+        doc = NewLine() + Text('if ') + cond_doc + ' '
         doc += Text('{') + self(stmt.then_body).indent() + NewLine() + Text('} ')
         if stmt.else_body:
             doc += Text('else ')
@@ -296,5 +293,3 @@ def codegen(ir_module: IRModule) -> Tuple[str, Dict[str, str]]:
     gen = Codegen()
     doc = gen(ir_module)
     return str(doc), gen.func_name_map
-
-

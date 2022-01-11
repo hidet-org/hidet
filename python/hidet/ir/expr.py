@@ -2,6 +2,8 @@ from typing import Optional, Union
 from .node import Node
 from .type import BaseType, TensorType, TensorType, ScalarType, Scope, tensor_type, scalar_type
 
+PyScalar = Union[int, float]
+
 
 class Expr(Node):
     def __add__(self, other):
@@ -25,16 +27,23 @@ class Expr(Node):
     def __lt__(self, other):
         return LessThan(self, other)
 
+    def __le__(self, other):
+        return LessEqual(self, other)
+
     def __eq__(self, other):
         return Equal(self, other)
 
     def __getitem__(self, item):
         if not isinstance(item, tuple):
             item = [item]
-        if any(isinstance(v, slice) for v in item):
-            return TensorSlice(self, item)
+        indices = [idx if not isinstance(idx, slice) else None for idx in item]
+        slices = [idx for idx in item if isinstance(idx, slice)]
+        if len(slices) == 0:
+            return TensorElement(self, indices)
         else:
-            return TensorElement(self, item)
+            starts = [s.start for s in slices]
+            ends = [s.stop for s in slices]
+            return TensorSlice(self, indices, starts, ends)
 
     def __hash__(self):
         return object.__hash__(self)
@@ -50,9 +59,16 @@ class BinaryOp(Expr):
         self.b = convert(b)
 
 
-def convert(obj):
+class UnaryOp(Expr):
+    def __init__(self, a):
+        self.a = convert(a)
+
+
+def convert(obj: Union[Expr, PyScalar]) -> Expr:
     if isinstance(obj, Expr):
         return obj
+    elif isinstance(obj, bool):
+        return Constant(obj, ScalarType('bool'))
     elif isinstance(obj, int):
         return Constant(obj, ScalarType('int32'))
     elif isinstance(obj, float):
@@ -70,6 +86,11 @@ class LessThan(Condition, BinaryOp):
         super().__init__(a, b)
 
 
+class LessEqual(Condition, BinaryOp):
+    def __init__(self, a, b):
+        super().__init__(a, b)
+
+
 class Equal(Condition, BinaryOp):
     def __init__(self, a, b):
         super().__init__(a, b)
@@ -80,6 +101,21 @@ class Equal(Condition, BinaryOp):
             return False
         else:
             return True
+
+
+class And(Condition, BinaryOp):
+    def __init__(self, a, b):
+        super().__init__(a, b)
+
+
+class Or(Condition, BinaryOp):
+    def __init__(self, a, b):
+        super().__init__(a, b)
+
+
+class Not(Condition, UnaryOp):
+    def __init__(self, a):
+        super().__init__(a)
 
 
 class Add(BinaryOp):
@@ -138,6 +174,13 @@ class Constant(Expr):
         self.dtype: ScalarType = dtype
 
 
+class IfThenElse(Expr):
+    def __init__(self, cond: Expr, then_expr: Expr, else_expr: Expr):
+        self.cond = cond
+        self.then_expr = then_expr
+        self.else_expr = else_expr
+
+
 class Var(Expr):
     id_clock = 0
 
@@ -157,8 +200,8 @@ class Var(Expr):
 
 
 class Axis(Var):
-    def __init__(self, extent, min_value=0):
-        super().__init__(None, ScalarType('int32'))
+    def __init__(self, extent, min_value=0, hint=None):
+        super().__init__(hint, ScalarType('int32'))
         self.min_value = convert(min_value)
         self.extent = convert(extent)
 
@@ -171,7 +214,7 @@ class IntVar(Var):
         self.extent = extent
 
 
-def var(hint: str, scope: str = 'global', dtype: str = 'float32', shape=None, strides=None):
+def var(hint: str, scope: str = 'global', dtype: str = 'float32', shape=None, strides=None) -> Var:
     if shape is None or len(shape) == 0:
         type = ScalarType(dtype)
     else:
@@ -179,19 +222,30 @@ def var(hint: str, scope: str = 'global', dtype: str = 'float32', shape=None, st
     return Var(hint, type)
 
 
-def scalar_var(hint: str, dtype: Union[str, ScalarType] = 'float32'):
+def scalar_var(hint: str, dtype: Union[str, ScalarType] = 'float32') -> Var:
     dtype = dtype if isinstance(dtype, ScalarType) else scalar_type(dtype)
     return Var(hint, dtype)
 
 
-def tensor_var(hint: str, shape, scope: str = 'global', dtype: str = 'float32', strides=None):
+def tensor_var(hint: str, shape, scope: str = 'global', dtype: str = 'float32', strides=None) -> Var:
     return Var(hint, tensor_type(scope, dtype, shape, strides))
 
 
-def is_one(v: Expr):
+def is_one(v: Expr) -> bool:
     return isinstance(v, Constant) and v.value == 1
 
 
-def is_zero(v: Expr):
+def is_zero(v: Expr) -> bool:
     return isinstance(v, Constant) and v.value == 0
 
+
+def is_true(v: Expr) -> bool:
+    return isinstance(v, Constant) and v.dtype.name == 'bool' and v.value is True
+
+
+def is_false(v: Expr) -> bool:
+    return isinstance(v, Constant) and v.dtype.name == 'bool' and v.value is False
+
+
+def if_then_else(cond: Union[Expr, PyScalar], then_expr: Union[Expr, PyScalar], else_expr: Union[Expr, PyScalar]) -> IfThenElse:
+    return IfThenElse(convert(cond), convert(then_expr), convert(else_expr))

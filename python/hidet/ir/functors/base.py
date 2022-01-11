@@ -31,8 +31,16 @@ class ExprFunctor:
             res = self.visit_FloorDiv(e)
         elif isinstance(e, LessThan):
             res = self.visit_LessThan(e)
+        elif isinstance(e, LessEqual):
+            res = self.visit_LessEqual(e)
         elif isinstance(e, Equal):
             res = self.visit_Equal(e)
+        elif isinstance(e, And):
+            res = self.visit_And(e)
+        elif isinstance(e, Or):
+            res = self.visit_Or(e)
+        elif isinstance(e, Not):
+            res = self.visit_Not(e)
         elif isinstance(e, TensorSlice):
             res = self.visit_TensorSlice(e)
         elif isinstance(e, TensorElement):
@@ -50,6 +58,8 @@ class ExprFunctor:
             res = self.visit_Cast(e)
         elif isinstance(e, Dereference):
             res = self.visit_Dereference(e)
+        elif isinstance(e, Address):
+            res = self.visit_Address(e)
         # compute dialect
         elif isinstance(e, ScalarInput):
             res = self.visit_ScalarInput(e)
@@ -94,7 +104,19 @@ class ExprFunctor:
     def visit_LessThan(self, e: LessThan):
         raise NotImplementedError()
 
+    def visit_LessEqual(self, e: LessThan):
+        raise NotImplementedError()
+
     def visit_Equal(self, e: Equal):
+        raise NotImplementedError()
+
+    def visit_And(self, e: And):
+        raise NotImplementedError()
+
+    def visit_Or(self, e: Or):
+        raise NotImplementedError()
+
+    def visit_Not(self, e: Not):
         raise NotImplementedError()
 
     def visit_TensorSlice(self, e: TensorSlice):
@@ -107,6 +129,9 @@ class ExprFunctor:
         raise NotImplementedError()
 
     def visit_Dereference(self, e: Dereference):
+        raise NotImplementedError()
+
+    def visit_Address(self, e: Address):
         raise NotImplementedError()
 
     def visit_Call(self, e: Call):
@@ -175,9 +200,24 @@ class ExprVisitor(ExprFunctor):
         self.visit(e.a)
         self.visit(e.b)
 
+    def visit_LessEqual(self, e: LessThan):
+        self.visit(e.a)
+        self.visit(e.b)
+
     def visit_Equal(self, e: Equal):
         self.visit(e.a)
         self.visit(e.b)
+
+    def visit_And(self, e: And):
+        self.visit(e.a)
+        self.visit(e.b)
+
+    def visit_Or(self, e: Or):
+        self.visit(e.a)
+        self.visit(e.b)
+
+    def visit_Not(self, e: Not):
+        self.visit(e.a)
 
     def visit_TensorSlice(self, e: TensorSlice):
         self.visit(e.base)
@@ -193,12 +233,6 @@ class ExprVisitor(ExprFunctor):
         for idx in e.indices:
             self.visit(idx)
 
-    def visit_Cast(self, e: Cast):
-        self.visit(e.expr)
-
-    def visit_Dereference(self, e: Dereference):
-        self.visit(e.expr)
-
     def visit_Call(self, e: Call):
         self.visit(e.func_var)
         for arg in e.args:
@@ -213,6 +247,7 @@ class ExprVisitor(ExprFunctor):
     def visit_Constant(self, e: Constant):
         pass
 
+    # compute dialect
     def visit_ScalarInput(self, e: ScalarInput):
         pass
 
@@ -225,6 +260,7 @@ class ExprVisitor(ExprFunctor):
     def visit_ReduceCompute(self, e: ReduceCompute):
         self.visit(e.value)
 
+    # pattern dialect
     def visit_AnyExpr(self, e: ReduceComputePattern):
         pass
 
@@ -236,6 +272,16 @@ class ExprVisitor(ExprFunctor):
 
     def visit_ScalarExprPattern(self, e: ScalarExprPattern):
         pass
+
+    # lowlevel dialect
+    def visit_Cast(self, e: Cast):
+        self.visit(e.expr)
+
+    def visit_Dereference(self, e: Dereference):
+        self.visit(e.expr)
+
+    def visit_Address(self, e: Address):
+        self.visit(e.expr)
 
 
 class ExprRewriter(ExprFunctor):
@@ -271,15 +317,31 @@ class ExprRewriter(ExprFunctor):
     def visit_LessThan(self, e: LessThan):
         return self.visit_Binary(e)
 
+    def visit_LessEqual(self, e: LessThan):
+        return self.visit_Binary(e)
+
     def visit_Equal(self, e: Equal):
         return self.visit_Binary(e)
+
+    def visit_And(self, e: And):
+        return self.visit_Binary(e)
+
+    def visit_Or(self, e: Or):
+        return self.visit_Binary(e)
+
+    def visit_Not(self, e: Not):
+        a = self(e.a)
+        if a is e.a:
+            return e
+        else:
+            return Not(a)
 
     def visit_TensorSlice(self, e: TensorSlice):
         base = self(e.base)
         indices = [self(idx) if idx else None for idx in e.indices]
         starts = [self(v) for v in e.starts]
         ends = [self(v) for v in e.ends]
-        if base is e.base and same(indices, e.indices) and same(starts, e.starts) and same(ends, e.ends):
+        if base is e.base and same_list(indices, e.indices) and same_list(starts, e.starts) and same_list(ends, e.ends):
             return e
         else:
             return TensorSlice(base, indices, starts, ends)
@@ -287,7 +349,7 @@ class ExprRewriter(ExprFunctor):
     def visit_TensorElement(self, e: TensorElement):
         base = self(e.base)
         indices = [self(idx) if idx else None for idx in e.indices]
-        if base is e.base and same(indices, e.indices):
+        if base is e.base and same_list(indices, e.indices):
             return e
         else:
             return TensorElement(base, indices)
@@ -306,10 +368,17 @@ class ExprRewriter(ExprFunctor):
         else:
             return Dereference(expr)
 
+    def visit_Address(self, e: Address):
+        expr = self(e.expr)
+        if expr is e.expr:
+            return e
+        else:
+            return Address(expr)
+
     def visit_Call(self, e: Call):
         func_var = self(e.func_var)
         args = [self(arg) for arg in e.args]
-        if func_var is e.func_var and same(args, e.args):
+        if func_var is e.func_var and same_list(args, e.args):
             return e
         else:
             return Call(func_var, args)
@@ -334,7 +403,7 @@ class ExprRewriter(ExprFunctor):
         value = self(e.value)
         axes = [self(axis) for axis in e.axes]
         shape = [self(s) for s in e.shape]
-        if value is e.value and same(axes, e.axes) and same(shape, e.shape):
+        if value is e.value and same_list(axes, e.axes) and same_list(shape, e.shape):
             return e
         else:
             return TensorCompute(name, shape, axes, value)
@@ -569,6 +638,9 @@ class StmtExprRewriter(ExprRewriter, StmtRewriter):
         ExprRewriter.__init__(self)
         StmtRewriter.__init__(self)
 
+    def __call__(self, *args, **kwargs):
+        return self.visit(*args, **kwargs)
+
     def visit(self, obj):
         if isinstance(obj, Expr):
             return ExprVisitor.visit(self, obj)
@@ -654,7 +726,7 @@ class WorkerFunctor:
         raise NotImplementedError()
 
 
-def same(lhs: List, rhs: List):
+def same_list(lhs: List, rhs: List):
     if len(lhs) != len(rhs):
         return False
     return all(a is b for a, b in zip(lhs, rhs))

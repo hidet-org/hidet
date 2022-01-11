@@ -1,10 +1,10 @@
 from typing import List
 from hidet.ir.type import TensorType
-from hidet.ir.expr import Var, TensorElement
+from hidet.ir.expr import Var, TensorElement, TensorSlice
 from hidet.ir.stmt import BufferStoreStmt
 from hidet.ir.func import Function
 from hidet.ir.functors import collect, rewrite
-from hidet.ir.dialects.lowlevel import PointerType
+from hidet.ir.dialects.lowlevel import PointerType, Address
 from hidet.transforms import Pass
 
 
@@ -65,6 +65,29 @@ class FlattenTensor(Pass):
                 items.append(indices[i] * strides[i])
             global_index = sum(items)
             rmap[e] = TensorElement(global2pointer[param], [global_index])
+
+        # update TensorSlice
+        slice_exprs: List[TensorSlice] = collect(func.body, TensorSlice)
+        for e in slice_exprs:
+            if e.base not in target_params:
+                continue
+            param: Var = e.base
+            assert isinstance(param.type, TensorType)
+            shape = param.type.shape
+            strides = param.type.strides
+
+            indices = []
+            start_idx = 0
+            items = []
+            for i in range(len(e.indices)):
+                if e.indices[i]:
+                    indices.append(e.indices[i])
+                else:
+                    indices.append(e.starts[start_idx])
+                    start_idx += 1
+                items.append(indices[i] * strides[i])
+            global_index = sum(items)
+            rmap[e] = Address(TensorElement(global2pointer[param], [global_index]))
 
         # update other usage of original Tensor var to Pointer var
         rmap.update(global2pointer)

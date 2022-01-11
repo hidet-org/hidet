@@ -1,4 +1,7 @@
+import string
+import random
 import os.path
+import shutil
 import ctypes
 import subprocess
 from subprocess import PIPE
@@ -8,21 +11,48 @@ from hidet.ir.dialects.lowlevel import VoidType
 from hidet.runtime.module import CompiledModule, CompiledFunction
 from hidet.backend import codegen
 from hidet.ffi import PackedFunc
-from hidet.transforms import generate_packed_func_pass, flatten_tensor_pass, const_expr_simplifier_pass
+from hidet.transforms import generate_packed_func_pass, flatten_tensor_pass, const_expr_simplifier_pass, eliminate_dead_device_function_pass
+
+from hidet import utils
+import uuid
+
+import pycuda
 
 
-def compile_src_code(src_path, out_lib_path):
-    # nvcc --ptxas-options=-v --compiler-options '-fPIC' -o mylib.so --shared mykernel.cu
-    command = ['nvcc', '--ptxas-options=-v', "--compiler-options",  "'-fPIC'", '-o',  out_lib_path, '--shared', src_path]
+def compile_src_code(src_path, working_dir=None):
+    src_path = os.path.realpath(src_path)
+    if working_dir is None:
+        working_dir = os.path.join(os.path.dirname(src_path), 'info')
+        os.makedirs(working_dir, exist_ok=True)
+
+    out_lib_path = os.path.join(working_dir, str(uuid.uuid4().hex)[-6:] + 'so')
+    # ''.join(random.choice(string.ascii_lowercase) for _ in range(8)) + '.so'
+    cc = utils.cuda.get_attribute('compute_capacity')
+    cc_code = f'{cc[0]}{cc[1]}'
+    command = ['nvcc',
+               '-keep',
+               '-gencode', f'arch=compute_{cc_code},code=sm_{cc_code}',
+               '--ptxas-options=-v',
+               '--compiler-options', "'-fPIC'",
+               '-o',  out_lib_path,
+               '--shared', src_path]
     try:
-        subprocess.run(command, stderr=PIPE, stdout=PIPE, check=True)
+        subprocess.run(command, stderr=PIPE, stdout=PIPE, check=True, cwd=working_dir)
+        # move source.ptx to be the same directory as source.cu
+        ptx_name = os.path.basename(src_path).replace('.cu', '.ptx')
+        ptx_path = os.path.join(working_dir, ptx_name)
+        dest_ptx_path = os.path.join(os.path.dirname(src_path), ptx_name)
+        os.rename(ptx_path, dest_ptx_path)
+        return out_lib_path
     except subprocess.CalledProcessError as e:
-        print(str(e.stderr))
+        print(' '.join(command))
+        print(e.stderr.decode('utf-8'))
         raise e
 
 
 def lower(ir_module: IRModule) -> IRModule:
     transforms = [
+        eliminate_dead_device_function_pass(),
         generate_packed_func_pass(),
         flatten_tensor_pass(),
         const_expr_simplifier_pass(),
@@ -44,12 +74,11 @@ def build(ir_module: IRModule, output_dir) -> CompiledModule:
 
     # write source code to disk
     src_path = os.path.join(output_dir, 'source.cu')
-    lib_path = os.path.join(output_dir, 'lib.so')
     with open(src_path, 'w') as f:
         f.write(src_code)
 
     # call target compiler to get dynamic library
-    compile_src_code(src_path, lib_path)
+    lib_path = compile_src_code(src_path)
 
     # load dynamic library
     lib = ctypes.CDLL(lib_path)

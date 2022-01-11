@@ -23,7 +23,7 @@ class TensorInput(ComputeNode):
 class TensorCompute(ComputeNode):
     def __init__(self, name, shape, axes, value):
         super().__init__(name)
-        self.shape = shape
+        self.shape = [convert(v) for v in shape]
         self.axes = axes
         self.value = value
 

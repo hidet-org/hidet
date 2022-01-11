@@ -96,10 +96,16 @@ def concat_stmts(stmts):
                 assert stmt.body is not None
         else:
             if isinstance(stmt, IfStmt):
-                assert stmt.then_body is None
-                nstmt = stmt.copy()
-                nstmt.then_body = body
-                body = nstmt
+                if stmt.then_body is None:
+                    nstmt = stmt.copy()
+                    nstmt.then_body = body
+                    body = nstmt
+                elif stmt.else_body is None:
+                    nstmt = stmt.copy()
+                    nstmt.else_body = body
+                    body = nstmt
+                else:
+                    raise ValueError()
             elif isinstance(stmt, LetStmt):
                 assert stmt.body is None
                 nstmt = stmt.copy()

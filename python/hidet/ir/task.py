@@ -2,7 +2,7 @@ from typing import Union, Optional, List, Dict
 from hidet.ir.node import Node
 from hidet.ir.dialects.compute import ScalarInput, TensorInput, ComputeNode
 from hidet.ir.type import BaseType
-from hidet.ir.expr import Expr
+from hidet.ir.expr import Expr, convert
 
 
 class Worker(Node):
@@ -11,13 +11,13 @@ class Worker(Node):
 
 class Grid(Worker):
     def __init__(self, grid_dim=None, block_dim=None):
-        self.grid_dim: Optional[Expr] = grid_dim
-        self.block_dim: Optional[Expr] = block_dim
+        self.grid_dim: Optional[Expr] = convert(grid_dim) if grid_dim else None
+        self.block_dim: Optional[Expr] = convert(block_dim) if block_dim else None
 
 
 class ThreadBlock(Worker):
     def __init__(self, block_dim=None):
-        self.block_dim: Optional[Expr] = block_dim
+        self.block_dim: Optional[Expr] = convert(block_dim) if block_dim else None
 
 
 class Warp(Worker):
