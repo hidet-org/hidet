@@ -1,19 +1,20 @@
 import os
 from hidet.ir.type import tensor_type
+from hidet.ir.expr import var
 from hidet.ir.func import IRModule
 from hidet.ir.task import Task, Grid
-from hidet.ir.dialects.compute import Axis, tensor_input, reduce_sum, compute
+from hidet.ir.dialects.compute import tensor_input, reduce_sum, compute
 from hidet.runtime.value import TensorValue
 from hidet.implement import implement
 from hidet.backend import build
 
 
 def get_task(N=1024, M=1024, K=1024):
-    k = Axis(K)
+    k = var('k')
 
     A = tensor_input('A', 'float32', [N, K])
     B = tensor_input('B', 'float32', [K, M])
-    C = compute('C', [N, M], lambda i, j: reduce_sum(A[i, k] * B[k, j], axis=k))
+    C = compute('C', [N, M], lambda i, j: reduce_sum(A[i, k] * B[k, j], axis=k, shape=[K]))
 
     params_type = [
         tensor_type('global', 'float32', [N, K], [K, 1]),

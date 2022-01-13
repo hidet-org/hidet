@@ -15,8 +15,10 @@ class GeneratePackedFunc(Pass):
         super().__init__('GeneratePackedFunc')
 
     def __call__(self, ir_module: IRModule) -> IRModule:
+        new_ir_module = IRModule()
         packed_funcs = []
         for func in ir_module.functions.values():
+            new_ir_module.add(func.name, func)
             if not isinstance(func.get_attr('worker', None), (Grid, Host)):
                 # only generate packed func for entry function
                 continue
@@ -26,10 +28,9 @@ class GeneratePackedFunc(Pass):
             if any(f.get_attr('packed_func', None) is func for f in ir_module.functions.values()):
                 # the packed function for current function has existed, skip
                 continue
-            packed_funcs.append(self.generate_packed_func(func, ir_module.lookup_var(func.name)))
-        for packed_func in packed_funcs:
-            ir_module.functions[packed_func.name] = packed_func
-        return ir_module
+            packed_func = self.generate_packed_func(func, ir_module.lookup_var(func.name))
+            new_ir_module.add(packed_func.name, packed_func)
+        return new_ir_module
 
     def generate_packed_func(self, func: Function, func_global_var: Var) -> Optional[Function]:
         assert isinstance(func.get_attr('worker'), (Grid, Host))

@@ -3,7 +3,7 @@ import operator
 from hidet.ir.expr import Expr, BinaryOp, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, LessEqual, Equal, Constant, And, Or, Not
 from hidet.ir.expr import is_one, is_zero, is_true, is_false, convert
 from hidet.ir.stmt import Stmt, IfStmt, SeqStmt
-from hidet.ir.functors import StmtExprRewriter
+from hidet.ir.functors import StmtExprRewriter, same_list
 
 
 class Simplifier(StmtExprRewriter):
@@ -29,7 +29,8 @@ class Simplifier(StmtExprRewriter):
             if is_one(b):
                 return a
         elif isinstance(e, Mod):
-            pass
+            if is_one(e.b):
+                return convert(0)
         elif isinstance(e, FloorDiv):
             if is_one(b):
                 return a
@@ -68,7 +69,11 @@ class Simplifier(StmtExprRewriter):
                 Equal: operator.eq
             }
             if e.__class__ in op_dict:
-                return convert(op_dict[e.__class__](a.value, b.value))
+                if a.dtype.name == 'int32' and b.dtype.name == 'int32' and isinstance(e, Div):
+                    # the Div for int32 will use floordiv. Override the native behavior of python
+                    return a.value // b.value
+                else:
+                    return convert(op_dict[e.__class__](a.value, b.value))
             elif isinstance(e, And):
                 return convert(a.value and b.value)
             elif isinstance(e, Or):
@@ -87,17 +92,6 @@ class Simplifier(StmtExprRewriter):
             return e
         else:
             return Not(a)
-
-    def visit_IfStmt(self, stmt: IfStmt):
-        cond = self(stmt.cond)
-        if is_true(cond):
-            return self(stmt.then_body)
-        if is_false(cond):
-            if stmt.else_body:
-                return self(stmt.else_body)
-            else:
-                return SeqStmt([])
-        return IfStmt(cond, self(stmt.then_body), self(stmt.else_body) if stmt.else_body else None)
 
 
 def simplify(node: Union[Stmt, Expr]):

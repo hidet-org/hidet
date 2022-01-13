@@ -2,7 +2,7 @@ from typing import Mapping, Union
 from hidet.ir import TensorInput, ScalarInput, ReduceCompute, TensorCompute
 from hidet.ir.expr import *
 from hidet.ir.dialects.lowlevel import Cast, Dereference
-from hidet.ir.stmt import ForStmt, BufferStoreStmt, concat_stmts, AssignStmt, SeqStmt
+from hidet.ir.stmt import ForStmt, BufferStoreStmt, concat_stmts, AssignStmt, SeqStmt, StmtBuilder
 from hidet.ir.functors import ExprFunctor, infer_type
 
 
@@ -19,18 +19,16 @@ def merge_stmts(stmts):
 class LoopExpander(ExprFunctor):
     def __init__(self, input_map):
         super().__init__()
+        self.sb = StmtBuilder()
         self.input_map = input_map
         self.new_buffer_map = {}
 
     def expand(self, e):
-        stmt, value = self.visit(e)
-        return stmt, value, self.new_buffer_map
+        value = self.visit(e)
+        return self.sb.finish(), value, self.new_buffer_map
 
     def visit_binary(self, e: BinaryOp):
-        sa, va = self.visit(e.a)
-        sb, vb = self.visit(e.b)
-        stmt = merge_stmts([sa, sb])
-        return stmt, e.__class__(va, vb)
+        return e.__class__(self(e.a), self(e.b))
 
     def visit_Add(self, e: Add):
         return self.visit_binary(e)
@@ -57,83 +55,72 @@ class LoopExpander(ExprFunctor):
         return self.visit_binary(e)
 
     def visit_TensorSlice(self, e: TensorSlice):
-        base_stmt, base_expr = self.visit(e.base)
-        return base_stmt, TensorSlice(base_expr, e.slices)
+        return TensorSlice(self(e.base), e.indices, e.starts, e.ends)
 
     def visit_TensorElement(self, e: TensorElement):
-        stmts = []
-        tensor_stmt, tensor_expr = self(e.base)
-        if tensor_stmt:
-            stmts.append(tensor_stmt)
-        idx_exprs = []
-        for idx in e.indices:
-            idx_stmt, idx_expr = self.visit(idx)
-            if idx_stmt:
-                stmts.append(idx_stmt)
-            idx_exprs.append(idx_expr)
-        return merge_stmts(stmts), TensorElement(tensor_expr, idx_exprs)
+        return TensorElement(self(e.base), [self(v) for v in e.indices])
 
     def visit_Call(self, e: Call):
-        return None, Call(e.func_var, [self.visit(arg) for arg in e.args])
+        return Call(e.func_var, [self.visit(arg) for arg in e.args])
 
     def visit_Var(self, e: Var):
-        return None, e
-
-    def visit_Axis(self, e: Axis):
-        return None, e
+        return e
 
     def visit_Constant(self, e: Constant):
-        return None, e
+        return e
 
     def visit_TensorInput(self, e: TensorInput):
-        return None, self.input_map[e]
+        return self.input_map[e]
 
     def visit_ScalarInput(self, e: ScalarInput):
-        return None, self.input_map[e]
+        return self.input_map[e]
 
     def visit_TensorCompute(self, e: TensorCompute):
+        # declare output buffer when needed
         if e in self.input_map:
             buf = self.input_map[e]
         else:
             buf = tensor_var(e.name, e.shape, dtype=infer_type(e.value))
             self.new_buffer_map[e] = buf
-        stmts = []
+
+        # tensor compute loops
         for i in range(len(e.shape)):
-            stmts.append(ForStmt(e.axes[i]))
-        stmt, expr = self.visit(e.value)
-        sub_stmts = []
-        if stmt is not None:
-            sub_stmts.append(stmt)
-        sub_stmts.append(BufferStoreStmt(buf, e.axes, expr))
-        stmts.append(SeqStmt(sub_stmts))
-        return concat_stmts(stmts), buf
+            self.sb.append(ForStmt(e.axes[i], e.shape[i]))
+            self.sb.enter_body()
+
+        # at the inner-most loop body
+        expr = self.visit(e.value)
+        self.sb.append(BufferStoreStmt(buf, e.axes, expr))
+
+        # exit loop scope
+        for i in range(len(e.shape)):
+            self.sb.exit_body()
+
+        return buf
 
     def visit_ReduceCompute(self, e: ReduceCompute):
-        if e in self.input_map:
-            acc = self.input_map[e]
-        else:
-            acc = scalar_var(e.name, infer_type(e.value))
-            self.new_buffer_map[e] = acc
+        # declare accumulator
+        acc = scalar_var(e.name, infer_type(e.value))
+        self.new_buffer_map[e] = acc
 
-        seq_stmts = []
-        seq_stmts.append(AssignStmt(acc, e.init_const()))
+        # init accumulator
+        self.sb.append(AssignStmt(acc, e.init_const()))
 
-        stmts = []
-        stmts.append(ForStmt(e.axis))
-        stmt, expr = self.visit(e.value)
-        if stmt:
-            stmts.append(stmt)
-        stmts.append(AssignStmt(acc, e.combine(acc, expr)))
-        seq_stmts.append(concat_stmts(stmts))
-        return SeqStmt(seq_stmts), acc
+        # reduction loop
+        assert len(e.shape) == 1
+        self.sb.append(ForStmt(e.axis, e.shape[0]))
+
+        with self.sb.for_body():
+            expr = self.visit(e.value)
+            self.sb.append(AssignStmt(acc, e.combine(acc, expr)))
+
+        return acc
 
     def visit_Cast(self, e: Cast):
-        stmt, expr = self.visit(e.expr)
-        return stmt, Cast(expr, e.target_type)
+        return Cast(self(e.expr), e.target_type)
 
     def visit_Dereference(self, e: Dereference):
-        stmt, expr = self.visit(e.expr)
-        return stmt, Dereference(expr)
+        return Dereference(self(e.expr))
 
 
 def expand_loop(expr: Expr, input_map: Mapping[Union[ScalarInput, TensorInput, Expr], Var]):
@@ -157,7 +144,7 @@ def expand_loop(expr: Expr, input_map: Mapping[Union[ScalarInput, TensorInput, E
             C[i, j] = s
 
     If C is in input_map, then the mapped var is used directly. Otherwise, a new tensor var is created to store the results
-    and returned in new_buffer_map
+    and returned in new_buffer_map. We only reuse tensor in input_map.
     """
     expander = LoopExpander(input_map)
     stmt, value, new_buffer_map = expander.expand(expr)

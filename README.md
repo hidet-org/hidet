@@ -1,6 +1,15 @@
 # HIDET: Hierarchical Decomposable Task Scheduler
 
 ## Motivation
+Highly optimized tensor programs are necessary to run deep learning models on various hardware efficiently. 
+There are two kinds of state-of-the-art tensor programs: hand-crafted tensor programs by hardware vendors, and auto-generated tensor programs. 
+The former ones (e.g., cuBLAS, and MKL) are hard to generalize to general workloads (e.g., the fused subgraph in a neural network model) while the later ones (e.g., Ansor, Halide-AutoScheduler) suffer from the limited optimization techniques (e.g., hard to implement software pipeline and use tensor core). 
+To support a wider range of computation workloads while be able to implement wide range of hardware specific optimizations, we propose Hidet, a tensor program generator based on hierarchical decomposable tasks. 
+The input of Hidet is task, that contains the computation definition of the workload, the input specifications (e.g., strides of tensors), and the worker (e.g., a grid, thread block, warp or thread in cuda), and the output is a highly optimized tensor program to fulfill the given task. 
+Hidet allows the hardware experts to provide implementers that implement the given task by either decomposing it into a subtask or writing Hidet low-level program, which allows Hidet to support general workloads while be capable of implementing hardware-specific optimizations.
+
+
+## Method
 The core idea of Hidet is to represent each workload (e.g., convolution, matrix multiplication) into decomposable **task**. Each task contains three components: the computation definition of the target workload, the input specification (e.g., the strides and memory scope of tensor), and the worker that would work on the task (e.g., grid, thread block, warp and thread). Each task can derive subtasks. Given a task, we can define custom decompose rules to implement the task or directly implement it (e.g., for the workload assigned to a thread).
 
 There are several advantages using this abstraction:
@@ -9,8 +18,6 @@ There are several advantages using this abstraction:
 3. This abstraction is platform-agnostic, we can define the CPU workers (e.g., multi-cores, single-thread). But more investigation on effecition CPU (x86, arm) kernels is needed.
 4. The primitive operators (e.g., wmma in cuda) can be described as primitive task and fit into the scheduler easily.
 
-
-## Method
 ### Task
 The definition of a task can be found in `python/hidet/core/task.py`.
 

@@ -26,8 +26,6 @@ class Namer:
                 'ScalarInput': 'scalar',
                 'TensorInput': 'tensor',
                 'Var': 'v',
-                'IntVar': 'iv',
-                'Axis': 'i'
             }
             class_name = str(e.__class__.__name__)
             orig_name = alias[class_name] if class_name in alias else class_name

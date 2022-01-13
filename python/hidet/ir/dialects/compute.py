@@ -1,5 +1,6 @@
+from typing import Union, Sequence
 from hidet.ir.type import ScalarType
-from hidet.ir.expr import Axis, Expr, Constant, convert
+from hidet.ir.expr import Expr, Constant, convert, Var, var
 
 
 class ComputeNode(Expr):
@@ -29,10 +30,11 @@ class TensorCompute(ComputeNode):
 
 
 class ReduceCompute(ComputeNode):
-    def __init__(self, value, axis, reduce_type):
+    def __init__(self, value, shape, axis, reduce_type):
         super().__init__(None)
         self.value = value
         self.axis = axis
+        self.shape = shape
         self.reduce_type = reduce_type
 
     def init_const(self):
@@ -63,15 +65,18 @@ def tensor_input(name, base_type, shape):
     return TensorInput(name, base_type, shape)
 
 
-def reduce_sum(expr, axis):
-    assert isinstance(axis, Axis)
+def reduce_sum(expr, axis, shape: Union[Sequence[Union[int, Expr]], Union[int, Expr]]):
+    assert isinstance(axis, Var)
+    if not isinstance(shape, (tuple, list)):
+        shape = [shape]
+    shape = [convert(v) for v in shape]
     expr = convert(expr)
-    return ReduceCompute(expr, axis, 'sum')
+    return ReduceCompute(expr, shape, axis, 'sum')
 
 
 def compute(name, shape, fcompute):
     shape = [convert(v) for v in shape]
-    axes = [Axis(s) for s in shape]
+    axes = [var() for _ in shape]
     value = convert(fcompute(*axes))
     return TensorCompute(name, shape, axes, value)
 

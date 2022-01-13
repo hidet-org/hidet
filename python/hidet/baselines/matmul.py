@@ -31,6 +31,19 @@ def matmul_ref() -> PackedFunc:
     )
 
 
+def matmul_ref_1d() -> PackedFunc:
+    return PackedFunc(
+        param_types=[
+            scalar_type('int32'),  # N
+            scalar_type('int32'),  # M
+            scalar_type('int32'),  # K
+            pointer_type(scalar_type('float32')),  # A
+            pointer_type(scalar_type('float32')),  # B
+            pointer_type(scalar_type('float32')),  # C
+        ],
+        c_func_pointer=_LIB.MatmulReference1D
+    )
+
 def matmul_cublas() -> PackedFunc:
     return PackedFunc(
         param_types=[

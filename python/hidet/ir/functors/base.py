@@ -47,8 +47,6 @@ class ExprFunctor:
             res = self.visit_TensorElement(e)
         elif isinstance(e, Call):
             res = self.visit_Call(e)
-        elif isinstance(e, Axis):
-            res = self.visit_Axis(e)
         elif isinstance(e, Var):
             res = self.visit_Var(e)
         elif isinstance(e, Constant):
@@ -138,9 +136,6 @@ class ExprFunctor:
         raise NotImplementedError()
 
     def visit_Var(self, e: Var):
-        raise NotImplementedError()
-
-    def visit_Axis(self, e: Axis):
         raise NotImplementedError()
 
     def visit_Constant(self, e: Constant):
@@ -239,9 +234,6 @@ class ExprVisitor(ExprFunctor):
             self.visit(arg)
 
     def visit_Var(self, e: Var):
-        pass
-
-    def visit_Axis(self, e: Axis):
         pass
 
     def visit_Constant(self, e: Constant):
@@ -386,9 +378,6 @@ class ExprRewriter(ExprFunctor):
     def visit_Var(self, e: Var):
         return e
 
-    def visit_Axis(self, e: Axis):
-        return e
-
     def visit_Constant(self, e: Constant):
         return e
 
@@ -411,10 +400,11 @@ class ExprRewriter(ExprFunctor):
     def visit_ReduceCompute(self, e: ReduceCompute):
         value = self(e.value)
         axis = self(e.axis)
-        if value is e.value and axis is e.axis:
+        shape = [self(v) for v in e.shape]
+        if value is e.value and axis is e.axis and same_list(shape, e.shape):
             return e
         else:
-            return ReduceCompute(value, axis, e.reduce_type)
+            return ReduceCompute(value, shape, axis, e.reduce_type)
 
     def visit_AnyExpr(self, e: AnyExpr):
         return e
@@ -512,6 +502,7 @@ class StmtVisitor(StmtFunctor):
 
     def visit_ForStmt(self, stmt: ForStmt):
         self.visit_expr(stmt.loop_var)
+        self.visit_expr(stmt.extent)
         self.visit(stmt.body)
 
     def visit_IfStmt(self, stmt: IfStmt):
@@ -567,11 +558,12 @@ class StmtRewriter(StmtFunctor):
 
     def visit_ForStmt(self, stmt: ForStmt):
         loop_var = self.visit_expr(stmt.loop_var)
+        extent = self.visit_expr(stmt.extent)
         body = self.visit(stmt.body)
         if loop_var is stmt.loop_var and body is stmt.body:
             return stmt
         else:
-            return ForStmt(loop_var, body)
+            return ForStmt(loop_var, extent, body)
 
     def visit_IfStmt(self, stmt: IfStmt):
         cond = self.visit_expr(stmt.cond)

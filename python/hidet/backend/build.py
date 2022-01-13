@@ -19,30 +19,32 @@ import uuid
 import pycuda
 
 
-def compile_src_code(src_path, working_dir=None):
+def compile_src_code(src_path, working_dir=None, keep=True):
     src_path = os.path.realpath(src_path)
     if working_dir is None:
         working_dir = os.path.join(os.path.dirname(src_path), 'info')
         os.makedirs(working_dir, exist_ok=True)
 
-    out_lib_path = os.path.join(working_dir, str(uuid.uuid4().hex)[-6:] + 'so')
-    # ''.join(random.choice(string.ascii_lowercase) for _ in range(8)) + '.so'
+    # use random lib name to avoid the dlopen caching loading the old library
+    out_lib_path = os.path.join(working_dir, str(uuid.uuid4().hex)[-6:] + '.so')
     cc = utils.cuda.get_attribute('compute_capacity')
     cc_code = f'{cc[0]}{cc[1]}'
     command = ['nvcc',
-               '-keep',
+               '-keep' if keep else '--verbose',
                '-gencode', f'arch=compute_{cc_code},code=sm_{cc_code}',
                '--ptxas-options=-v',
                '--compiler-options', "'-fPIC'",
+               '-lineinfo',
                '-o',  out_lib_path,
                '--shared', src_path]
     try:
         subprocess.run(command, stderr=PIPE, stdout=PIPE, check=True, cwd=working_dir)
         # move source.ptx to be the same directory as source.cu
-        ptx_name = os.path.basename(src_path).replace('.cu', '.ptx')
-        ptx_path = os.path.join(working_dir, ptx_name)
-        dest_ptx_path = os.path.join(os.path.dirname(src_path), ptx_name)
-        os.rename(ptx_path, dest_ptx_path)
+        if keep:
+            ptx_name = os.path.basename(src_path).replace('.cu', '.ptx')
+            ptx_path = os.path.join(working_dir, ptx_name)
+            dest_ptx_path = os.path.join(os.path.dirname(src_path), ptx_name)
+            os.rename(ptx_path, dest_ptx_path)
         return out_lib_path
     except subprocess.CalledProcessError as e:
         print(' '.join(command))
@@ -64,7 +66,7 @@ def lower(ir_module: IRModule) -> IRModule:
     return ir_module
 
 
-def build(ir_module: IRModule, output_dir) -> CompiledModule:
+def build(ir_module: IRModule, output_dir, keep=True) -> CompiledModule:
     # lower
     ir_module = lower(ir_module)
 
@@ -78,7 +80,7 @@ def build(ir_module: IRModule, output_dir) -> CompiledModule:
         f.write(src_code)
 
     # call target compiler to get dynamic library
-    lib_path = compile_src_code(src_path)
+    lib_path = compile_src_code(src_path, keep=keep)
 
     # load dynamic library
     lib = ctypes.CDLL(lib_path)

@@ -29,6 +29,11 @@ target_link_libraries(hidet cudart cublas)
 set_target_properties(hidet PROPERTIES
         CUDA_RUNTIME_LIBRARY SHARED
         LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
-        CUDA_ARCHITECTURES "75"
+        CUDA_ARCHITECTURES "86"
         )
+
+# add -lineinfo option to nvcc, allowing us to get the source code from binary
+# do not influence optimization, can be used in nsight compute profiling
+target_compile_options(hidet PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-lineinfo>)
+
 

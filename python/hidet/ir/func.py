@@ -1,20 +1,25 @@
-from typing import Dict, List, Union
+from typing import Dict, List, Union, Optional
 from hidet.ir.node import Node
 from hidet.ir.type import BaseType, FuncType
 from hidet.ir.expr import Var
 from hidet.ir.stmt import Stmt
+from hidet.ir.task import Task
 
 
 class Function(Node):
     valid_attrs = [
         'worker',
-        'packed_func'
+        'packed_func',
+        'label'
     ]
     """
     Valid Attrs:
-     'worker': one of 'host', 'grid', 'threadblock', 'warp', 'thread'
+     'worker': Union[Host, Grid, ThreadBlock, Warp, Thread]
         the worker to run the function.
-     'packed_func': the target function that this packed_func has packed
+     'packed_func': Function
+        the target function that this packed_func has packed
+     'label': str
+        the label of this function when it is in a function group
     """
 
     def __init__(self, name, params, body, ret_type, local_vars, attrs=None):
@@ -50,7 +55,8 @@ class FunctionGroup(Node):
 
 
 class IRModule(Node):
-    def __init__(self, funcs=None):
+    def __init__(self, funcs=None, task=None):
+        self.task: Optional[Task] = task
         self.functions: Dict[str, Union[Function, FunctionGroup]] = funcs if funcs else {}
         self.global_vars: Dict[str, Var] = {}
 

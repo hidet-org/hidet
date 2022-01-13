@@ -6,7 +6,7 @@ from hidet.ir.dialects.pattern import match, AnyExpr, UnionPattern, TensorComput
 
 def check_pairs(pairs):
     for pattern, target, expect in pairs:
-        actual = match(pattern, target)
+        actual, msg = match(pattern, target)
         if expect is None:
             assert actual is None
         else:
@@ -16,7 +16,7 @@ def check_pairs(pairs):
 
 
 def test_normal_expr():
-    a, b, c, d = IntVar('a'), IntVar('b'), IntVar('c'), IntVar('d')
+    a, b, c, d = var('a'), var('b'), var('c'), var('d')
 
     pairs = [
         (Add(a, b), Add(c, d), {a: c, b: d}),
@@ -28,7 +28,7 @@ def test_normal_expr():
 
 
 def test_any_pattern():
-    a, b, c, d = IntVar('a'), IntVar('b'), IntVar('c'), IntVar('d')
+    a, b, c, d = var('a'), var('b'), var('c'), var('d')
     s = Add(a, b)
     m = Multiply(a, b)
     any_expr = AnyExpr()
@@ -46,7 +46,7 @@ def test_any_pattern():
 
 
 def test_union_pattern():
-    a, b, c, d = IntVar('a'), IntVar('b'), IntVar('c'), IntVar('d')
+    a, b, c, d = var('a'), var('b'), var('c'), var('d')
     add_cd = Add(c, d)
     mul_cd = Multiply(c, d)
     union = UnionPattern([Add(a, b), Multiply(a, b), a])
@@ -101,15 +101,6 @@ def test_tensor_compute_pattern():
         (tc4, tgt1, {}), (tc4, tgt2, None), (tc4, tgt3, None), (tc4, tgt4, None),
     ]
     check_pairs(pairs)
-
-
-def test_scalar_expr_pattern():
-    alpha = scalar_input('alpha', 'float32')
-    beta = scalar_input('beta', 'float32')
-    k = Axis(1024)
-    A = tensor_input('A', 'float32', [1024, 1024])
-    B = tensor_input('B', 'float32', [1024, 1024])
-    C = compute('C', [1024, 1024], lambda i, j: reduce_sum(A[i, k] * B[k, j], axis=k))
 
 
 if __name__ == '__main__':

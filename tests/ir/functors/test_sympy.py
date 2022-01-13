@@ -1,10 +1,10 @@
 import pytest
-from hidet.ir.expr import IntVar, convert
+from hidet.ir.expr import convert, var
 from hidet.ir.functors import to_sympy, from_sympy, equal, coefficients
 
 
 def test_equality():
-    a, b, c = IntVar('a'), IntVar('b'), IntVar('c')
+    a, b, c = var('a'), var('b'), var('c')
     pairs = [
         ((a + b) * (a + b), a * a + b * b + a * b * 2, True),
         (a + b * 3 + c, a + c + b / 3, False)
@@ -17,7 +17,7 @@ def test_equality():
 
 
 def test_to_sympy():
-    a, b, c = IntVar('a'), IntVar('b'), IntVar('c')
+    a, b, c = var('a'), var('b'), var('c')
     samples = [
         ((a * b), 'a*b'),
         ((a / 3), 'a/3')
@@ -27,7 +27,7 @@ def test_to_sympy():
 
 
 def test_to_sympy_from_sympy():
-    a, b, c = IntVar('a'), IntVar('b'), IntVar('c')
+    a, b, c = var('a'), var('b'), var('c')
     exprs = [
         a * b + c
     ]
@@ -38,9 +38,9 @@ def test_to_sympy_from_sympy():
 
 
 def test_coefficient():
-    x = IntVar('x')
-    i, j = IntVar('i'), IntVar('j')
-    p, q, r = IntVar('p'), IntVar('q'), IntVar('r')
+    x = var('x')
+    i, j = var('i'), var('j')
+    p, q, r = var('p'), var('q'), var('r')
 
     samples = [
         # bases, polynomial about bases, terms

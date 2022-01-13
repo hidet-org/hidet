@@ -2,8 +2,8 @@ from typing import Mapping, List, Tuple
 
 from hidet.ir.node import Node
 from hidet.ir.type import scalar_type, tensor_type, TensorType
-from hidet.ir.expr import Expr, Var, IntVar, Call, convert, Constant, Axis, TensorElement
-from hidet.ir.stmt import LetStmt, IfStmt, EvaluateStmt, concat_stmts, SeqStmt, BufferStoreStmt, ForStmt
+from hidet.ir.expr import Expr, Var, Call, convert, Constant, TensorElement, And, var
+from hidet.ir.stmt import Stmt, LetStmt, IfStmt, EvaluateStmt, concat_stmts, SeqStmt, BufferStoreStmt, ForStmt
 from hidet.ir.task import Task, Grid, ThreadBlock, Thread
 from hidet.ir.func import IRModule, Function, FunctionGroup
 from hidet.ir.dialects.compute import TensorInput, ScalarInput, TensorCompute, compute, scalar_input
@@ -13,12 +13,12 @@ from hidet.ir.functors import rewrite, infer_type, collect, simplify
 from hidet.implement.implementer import Implementer, implement, register_impl
 
 
-def product(lst: List[Constant]):
+def reduce_product(lst: List[Expr]):
     if len(lst) == 0:
         return convert(1)
-    s = lst[0].value
+    s = lst[0]
     for v in lst[1:]:
-        s = s * v.value
+        s = s * v
     return s
 
 
@@ -41,6 +41,44 @@ class CudaBlockNaiveImplementer(Implementer):
     def task_pattern(self) -> TaskPattern:
         return self.pattern
 
+    @staticmethod
+    def get_block_shape(rank: int, block_size: int):
+        if rank == 1:
+            return [block_size]
+        elif rank == 2:
+            return [block_size // 16, 16]
+        else:
+            shape = [block_size // 16, 16]
+            while rank > 2:
+                shape = [1] + shape
+                rank -= 1
+            return shape
+
+    @staticmethod
+    def block_thread_map(block_shape: List[Expr],
+                         iter_shape: List[Expr],
+                         task_shape: List[Expr]) -> Tuple[List[Stmt], Expr, List[Expr]]:
+        """
+        Map the thread idx to the indices in the shape
+        Returns stmt, cond, task_indices
+        """
+        assert len(iter_shape) == len(task_shape) == len(block_shape)
+        iter_var = var('iter')
+        stmts = [ForStmt(iter_var, reduce_product(iter_shape))]
+        rank = len(block_shape)
+        thread_index = var('threadIdx.x')
+        task_indices = []
+        cond = convert(True)
+        for i in range(rank):
+            thread_idx_value = thread_index / reduce_product(block_shape[i + 1:]) % block_shape[i]
+            iter_idx_value = iter_var / reduce_product(iter_shape[i + 1:]) % iter_shape[i]
+            task_idx_value = iter_idx_value * block_shape[i] + thread_idx_value
+            task_idx = var('task_idx')
+            stmts.append(LetStmt(task_idx, simplify(task_idx_value)))
+            task_indices.append(task_idx)
+            cond = And(cond, task_idx < task_shape[i])
+        return stmts, simplify(cond), task_indices
+
     def get_subtask(self,
                     task: Task,
                     match: Mapping[Node, Node],
@@ -48,7 +86,6 @@ class CudaBlockNaiveImplementer(Implementer):
                     indices: List[Var],
                     func_params: List[Var]) -> Tuple[Task, List[Expr]]:
         param2var = {param: var for param, var in zip(task.params, func_params)}
-        block_dim: Constant = match[self.block_dim]
         computation: TensorCompute = match[self.computation]
         rank: int = len(computation.shape)
         value: Expr = computation.value
@@ -73,26 +110,16 @@ class CudaBlockNaiveImplementer(Implementer):
         computation: TensorCompute = match[self.computation]
 
         rank = len(computation.shape)
-        shape: List[Constant] = computation.shape
 
-        task_size: int = product(computation.shape)
-        block_size = block_dim.value
-        num_rounds = (task_size + block_size - 1) // block_size
-
-        thread_idx = IntVar('threadIdx.x')
-        round_idx = Axis(num_rounds, hint='round_idx')
-        task_idx = IntVar('task_idx')
-
-        stmts = [ForStmt(round_idx),
-                 LetStmt(task_idx, round_idx * block_size + thread_idx),
-                 IfStmt(task_idx < task_size)]
-        indices = [IntVar() for _ in range(rank)]
-        for i in range(rank):
-            stmts.append(LetStmt(indices[i], (task_idx / product(shape[i + 1:])) % shape[i]))
+        task_shape = computation.shape
+        block_shape = self.get_block_shape(rank, block_dim.value)
+        iter_shape = [(a + b - 1) // b for a, b in zip(task_shape, block_shape)]
+        stmts, cond, task_indices = self.block_thread_map(block_shape, iter_shape, task_shape)
+        stmts.append(IfStmt(cond))
 
         subtask_name = f'{task.name}.thread'
         func_params: List[Var] = [Var(param.name, param_type) for param, param_type in zip(task.params, task.params_type)]
-        subtask, args = self.get_subtask(task, match, subtask_name, indices, func_params)
+        subtask, args = self.get_subtask(task, match, subtask_name, task_indices, func_params)
         submodule = implement(subtask)
 
         ir_module = IRModule()
@@ -103,4 +130,3 @@ class CudaBlockNaiveImplementer(Implementer):
         func = Function(task.name, func_params, func_body, VoidType(), [], {'worker': task.worker})
         ir_module.add(task.name, func)
         return ir_module
-

@@ -2,7 +2,7 @@ from typing import Dict, Union, Mapping, Tuple, List
 import sympy as S
 
 from hidet.ir.type import ScalarType, TensorType
-from hidet.ir.expr import Expr, Constant, Axis, Var, FloorDiv, Mod, Div, Multiply, Sub, Add, convert
+from hidet.ir.expr import Expr, Constant, Var, FloorDiv, Mod, Div, Multiply, Sub, Add, convert
 from hidet.ir.dialects.compute import ScalarInput
 from hidet.utils.namer import Namer
 
@@ -15,7 +15,7 @@ class HidetToSympyConverter(ExprFunctor):
         self.namer = Namer()
         self.symbol_h2s: Dict[Expr, str] = {}
 
-    def new_symbol(self, v: Union[Var, Axis, ScalarInput]):
+    def new_symbol(self, v: Union[Var, ScalarInput]):
         if v not in self.symbol_h2s:
             self.symbol_h2s[v] = self.namer.get_name(v)
         return S.Symbol(self.symbol_h2s[v])
@@ -40,9 +40,6 @@ class HidetToSympyConverter(ExprFunctor):
 
     def visit_Var(self, e: Var):
         assert isinstance(e.type, ScalarType) and e.type.name == 'int32'
-        return self.new_symbol(e)
-
-    def visit_Axis(self, e: Axis):
         return self.new_symbol(e)
 
     def visit_Constant(self, e: Constant):

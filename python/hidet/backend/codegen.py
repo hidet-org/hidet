@@ -5,7 +5,7 @@ from hidet.ir.func import *
 from hidet.ir.stmt import *
 from hidet.ir.expr import *
 from hidet.ir.dialects.compute import ReduceCompute, TensorCompute, TensorInput, ScalarInput
-from hidet.ir.functors import StmtExprFunctor, TypeFunctor, collect
+from hidet.ir.functors import StmtExprFunctor, TypeFunctor, collect, simplify
 from hidet.ir.dialects.lowlevel import VoidType, PointerType, Cast, Dereference, Address
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
 from hidet.ir.utils.call_graph import CallGraph
@@ -83,6 +83,12 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         else:
             doc += '__device__ __forceinline__'
         doc += ' void'
+
+        # launch bound for grid worker
+        if isinstance(worker, Grid):
+            block_dim = simplify(worker.block_dim)
+            if isinstance(block_dim, Constant):
+                doc += f' __launch_bounds__({block_dim.value})'
 
         # func name
         canonized_func_name = self.canonize_funcname(func.name)
@@ -191,11 +197,11 @@ class Codegen(StmtExprFunctor, TypeFunctor):
     def visit_Var(self, e: Var):
         return Text(self.namer.get_name(e))
 
-    def visit_Axis(self, e: Axis):
-        return Text(self.namer.get_name(e))
-
     def visit_Constant(self, e: Constant):
-        return Text(str(e.value))
+        if e.dtype.name == 'bool':
+            return Text(str(e.value).lower())
+        else:
+            return Text(str(e.value))
 
     def visit_EvaluateStmt(self, stmt: EvaluateStmt):
         return NewLine() + self(stmt.expr) + ';'
@@ -217,11 +223,8 @@ class Codegen(StmtExprFunctor, TypeFunctor):
 
     def visit_ForStmt(self, stmt: ForStmt):
         v = stmt.loop_var
-        init_doc = self(v.type) + ' ' + self(v) + ' = ' + self(v.min_value)
-        if isinstance(v.min_value, Constant) and v.min_value.value == 0:
-            cond_doc = self(v < v.extent)
-        else:
-            cond_doc = self(v < v.min_value + v.extent)
+        init_doc = self(v.type) + ' ' + self(v) + ' = ' + self(convert(0))
+        cond_doc = self(v < stmt.extent)
         update_doc = self(v) + ' = ' + self(v + 1)
         doc = NewLine() + Text('for (') + init_doc + '; ' + cond_doc + '; ' + update_doc + ') '
         doc += Text('{') + self(stmt.body).indent() + NewLine() + Text('} ')

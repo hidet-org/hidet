@@ -1,4 +1,6 @@
 from typing import Union
+from hidet.ir.expr import Constant
+from hidet.ir.task import Task
 from pycuda.gpuarray import GPUArray
 from pycuda import gpuarray
 import pycuda.autoinit
@@ -103,3 +105,16 @@ def zeros(shape, scalar_type: str, scope: str, strides=None):
 
 def scalar(value):
     return ScalarValue.from_python(value)
+
+
+def dummy_inputs_from_task(task: Task):
+    inputs = []
+    for idx, param_type in enumerate(task.params_type):
+        assert isinstance(param_type, TensorType)
+        assert all(isinstance(s, Constant)for s in param_type.shape)
+        stype = param_type.scalar_type.name
+        scope = param_type.scope.name
+        shape = [int(s) for s in param_type.shape]
+        # strides = [int(s) for s in param_type.strides]
+        inputs.append(randn(shape, stype, scope, seed=idx))
+    return inputs

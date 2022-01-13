@@ -1,3 +1,4 @@
+import string
 from typing import Optional, Union
 from .node import Node
 from .type import BaseType, TensorType, TensorType, ScalarType, Scope, tensor_type, scalar_type
@@ -173,6 +174,12 @@ class Constant(Expr):
         self.value = value
         self.dtype: ScalarType = dtype
 
+    def __int__(self):
+        return int(self.value)
+
+    def __float__(self):
+        return float(self.value)
+
 
 class IfThenElse(Expr):
     def __init__(self, cond: Expr, then_expr: Expr, else_expr: Expr):
@@ -199,27 +206,10 @@ class Var(Expr):
         Var.id_clock = 0
 
 
-class Axis(Var):
-    def __init__(self, extent, min_value=0, hint=None):
-        super().__init__(hint, ScalarType('int32'))
-        self.min_value = convert(min_value)
-        self.extent = convert(extent)
-
-
-class IntVar(Var):
-    def __init__(self, name=None, extent=None, min_value=0):
-        super().__init__(name, ScalarType('int32'))
-        self.name = name
-        self.min_value = min_value
-        self.extent = extent
-
-
-def var(hint: str, scope: str = 'global', dtype: str = 'float32', shape=None, strides=None) -> Var:
-    if shape is None or len(shape) == 0:
-        type = ScalarType(dtype)
-    else:
-        type = TensorType(Scope(scope), ScalarType(dtype), shape, strides)
-    return Var(hint, type)
+def var(hint: str = None):
+    if isinstance(hint, str):
+        assert set(hint) <= set(string.ascii_letters + '_.' + string.digits)
+    return Var(hint, ScalarType('int32'))
 
 
 def scalar_var(hint: str, dtype: Union[str, ScalarType] = 'float32') -> Var:

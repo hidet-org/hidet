@@ -143,8 +143,6 @@ class PatternMatcher:
                 self.match_Dereference(pattern, target)
             elif isinstance(pattern, Call):
                 self.match_Call(pattern, target)
-            elif isinstance(pattern, Axis):
-                self.match_Axis(pattern, target)
             elif isinstance(pattern, Var):
                 self.match_Var(pattern, target)
             elif isinstance(pattern, Constant):
@@ -293,10 +291,6 @@ class PatternMatcher:
         with self.match(pattern.type, target.type):
             pass
 
-    def match_Axis(self, pattern: Axis, target: Axis):
-        with self.match(pattern.min_value, target.min_value), self.match(pattern.extent, target.extent):
-            pass
-
     def match_Constant(self, pattern: Constant, target: Constant):
         self.check_cond(pattern, target, pattern.dtype.name == target.dtype.name)
         if pattern.value is None:
@@ -316,6 +310,8 @@ class PatternMatcher:
     def match_TensorCompute(self, pattern: TensorCompute, target: TensorCompute):
         self.check_cond(pattern, target, len(pattern.shape) == len(target.shape))
         with contextlib.ExitStack() as stack:
+            for a, b in zip(pattern.shape, target.shape):
+                stack.enter_context(self.match(a, b))
             for a, b in zip(pattern.axes, target.axes):
                 stack.enter_context(self.match(a, b))
             stack.enter_context(self.match(pattern.value, target.value))
@@ -453,10 +449,9 @@ def any_const():
     return AnyExpr(Constant)
 
 
-def any_ivar():
-    return AnyExpr(IntVar)
-
-
 def match(pattern: Node, target: Node) -> Tuple[Optional[Dict[Node, Node]], str]:
+    """
+    :return: match, report
+    """
     matcher = PatternMatcher()
     return matcher(pattern, target)

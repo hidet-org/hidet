@@ -18,6 +18,23 @@ static __global__ void gemm_kernel(int M, int N, int K, float alpha, float const
     }
 }
 
+static __global__ void gemm_kernel_1d(int M, int N, int K, float alpha, float const *A, int lda, float const *B, int ldb, float beta, float *C, int ldc) {
+    int block_i = blockDim.x % 16 * 16;
+    int block_j = blockDim.x / 16 * 16;
+    int i = block_i + threadIdx.x % 16;
+    int j = block_j + threadIdx.x / 16;
+
+    if (i < M && j < N) {
+        float accumulator = 0;
+
+        for (int k = 0; k < K; ++k) {
+            accumulator += A[i + k * lda] * B[k + j * ldb];
+        }
+
+        C[i + j * ldc] = alpha * accumulator + beta * C[i + j * ldc];
+    }
+}
+
 
 /// Reference GEMM computation.
 static cudaError_t gemm(int M, int N, int K, float alpha, float const *A, int lda, float const *B, int ldb, float beta, float *C, int ldc) {
@@ -26,6 +43,15 @@ static cudaError_t gemm(int M, int N, int K, float alpha, float const *A, int ld
               (N + block.y - 1) / block.y);
 
     gemm_kernel<<<grid, block>>>(M, N, K, alpha, A, lda, B, ldb, beta, C, ldc);
+
+    return cudaSuccess;
+}
+
+static cudaError_t gemm_1d(int M, int N, int K, float alpha, float const *A, int lda, float const *B, int ldb, float beta, float *C, int ldc) {
+    dim3 block(256);
+    dim3 grid(((N + 15) / 16) * ((M + 15) / 16));
+
+    gemm_kernel_1d<<<grid, block>>>(M, N, K, alpha, A, lda, B, ldb, beta, C, ldc);
 
     return cudaSuccess;
 }
@@ -50,3 +76,26 @@ DLL void MatmulReference(int num_args, int *arg_types, void **args) {
 
     gemm(M, N, K, 1.0f, A, M, B, K, 0.0f, C, M);
 }
+
+/*
+ * params: N, M, K, A, B, C
+ */
+DLL void MatmulReference1D(int num_args, int *arg_types, void **args) {
+    assert(num_args == 6);
+    assert(arg_types[0] == INT32);
+    int M = *static_cast<int *>(args[0]);
+    assert(arg_types[1] == INT32);
+    int N = *static_cast<int *>(args[1]);
+    assert(arg_types[2] == INT32);
+    int K = *static_cast<int *>(args[2]);
+    assert(arg_types[3] == FLOAT32);
+    auto *A = static_cast<float *>(args[3]);
+    assert(arg_types[4] == FLOAT32);
+    auto *B = static_cast<float *>(args[4]);
+    assert(arg_types[5] == FLOAT32);
+    auto *C = static_cast<float *>(args[5]);
+
+    gemm_1d(M, N, K, 1.0f, A, M, B, K, 0.0f, C, M);
+}
+
+

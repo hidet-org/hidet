@@ -6,10 +6,10 @@ class Pass:
         self.name = name
 
     def __call__(self, ir_module: IRModule) -> IRModule:
-        funcs = ir_module.functions
-        for name in funcs:
-            funcs[name] = self.process_func(funcs[name])
-        return ir_module
+        new_ir_module = IRModule()
+        for name in ir_module.functions:
+            new_ir_module.add(name, self.process_func(ir_module.functions[name]))
+        return new_ir_module
 
     def process_func(self, func: Function):
         return func

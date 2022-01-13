@@ -1,7 +1,7 @@
 from typing import List
 from copy import copy
 from hidet.ir.node import Node
-from hidet.ir.expr import Axis
+from hidet.ir.expr import Var
 
 
 class Stmt(Node):
@@ -39,9 +39,10 @@ class LetStmt(Stmt):
 
 
 class ForStmt(Stmt):
-    def __init__(self, loop_var, body=None):
+    def __init__(self, loop_var, extent, body=None):
         super().__init__()
-        self.loop_var: Axis = loop_var
+        self.loop_var: Var = loop_var
+        self.extent = extent
         self.body = body
 
 
@@ -121,3 +122,66 @@ def concat_stmts(stmts):
     return body
 
 
+class StmtBuilder:
+    def __init__(self):
+        self.scope_stack = [[]]
+
+    def __enter__(self):
+        self.enter_body()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.exit_body()
+
+    def for_body(self):
+        assert len(self.scope_stack[-1]) > 0
+        for_stmt = self.scope_stack[-1][-1]
+        assert isinstance(for_stmt, ForStmt)
+        assert for_stmt.body is None
+        return self
+
+    def then_body(self):
+        assert len(self.scope_stack[-1]) > 0
+        if_stmt = self.scope_stack[-1][-1]
+        assert isinstance(if_stmt, IfStmt)
+        assert if_stmt.then_body is None
+        return self
+
+    def else_body(self):
+        assert len(self.scope_stack[-1]) > 0
+        if_stmt = self.scope_stack[-1][-1]
+        assert isinstance(if_stmt, IfStmt)
+        assert if_stmt.then_body is None
+        assert if_stmt.else_body is None
+        return self
+
+    def append(self, stmt: Stmt):
+        if stmt is None:
+            return
+        self.scope_stack[-1].append(stmt)
+
+    def enter_body(self):
+        assert len(self.scope_stack[-1]) > 0
+        last_stmt = self.scope_stack[-1][-1]
+        assert isinstance(last_stmt, (IfStmt, ForStmt, LetStmt))
+        self.scope_stack.append([])
+
+    def exit_body(self):
+        body = SeqStmt(self.scope_stack.pop())
+        assert len(self.scope_stack) > 0
+        last_stmt = self.scope_stack[-1][-1]
+        if isinstance(last_stmt, (LetStmt, ForStmt)):
+            assert last_stmt.body is None
+            last_stmt.body = body
+        elif isinstance(last_stmt, IfStmt):
+            if last_stmt.then_body is None:
+                last_stmt.then_body = body
+            else:
+                assert last_stmt.else_body is None
+                last_stmt.else_body = None
+        else:
+            assert False
+
+    def finish(self):
+        assert len(self.scope_stack) == 1
+        return SeqStmt(self.scope_stack[0])

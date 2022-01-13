@@ -2,7 +2,7 @@ from collections import defaultdict
 from hidet.ir.node import Node
 from hidet.ir.func import IRModule, Function
 from hidet.ir.type import ScalarType, TensorType, BaseType
-from hidet.ir.expr import Constant, Axis, Var, Call, TensorElement, TensorSlice, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div, Sub, Not, Or, And
+from hidet.ir.expr import Constant, Var, Call, TensorElement, TensorSlice, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div, Sub, Not, Or, And
 from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, LetStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt
 from hidet.ir.task import Worker, Host, Grid, ThreadBlock, Warp, Thread
 from hidet.ir.dialects.compute import ReduceCompute, TensorCompute, TensorInput, ScalarInput
@@ -29,8 +29,6 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
             'ScalarInput': 'scalar',
             'TensorInput': 'tensor',
             'Var': 'v',
-            'IntVar': 'iv',
-            'Axis': 'i'
         }
         self.class_id_clock[e.__class__] += 1
         id = self.class_id_clock[e.__class__]
@@ -44,7 +42,17 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
         return name
 
     def visit(self, obj):
-        if isinstance(obj, BaseType):
+        if isinstance(obj, (list, tuple)):
+            return self('[') + doc_join([self(v) for v in obj], ', ') + ']'
+        elif isinstance(obj, dict):
+            return self('{') + doc_join([self(k) + ': ' + self(v) for k, v in obj.items()], ', ') + '}'
+        elif isinstance(obj, str):
+            return Text(obj)
+        elif isinstance(obj, (int, float)):
+            return Text(str(obj))
+        elif obj is None:
+            return Text('None')
+        elif isinstance(obj, BaseType):
             return TypeFunctor.visit(self, obj)
         elif isinstance(obj, Function):
             return self.visit_Function(obj)
@@ -156,12 +164,9 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
             return Text(e.hint)
         return Text(self.get_obj_name(e))
 
-    def visit_Axis(self, e: Axis):
-        if e.hint:
-            return Text(e.hint)
-        return Text(self.get_obj_name(e))
-
     def visit_Constant(self, e: Constant):
+        if e.value is None:
+            return self('Constant(None, type=') + self(e.dtype) + ')'
         return Text(str(e.value))
 
     def visit_ScalarInput(self, e: ScalarInput):
@@ -171,10 +176,10 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
         return Text(self.get_obj_name(e))
 
     def visit_TensorCompute(self, e: TensorCompute):
-        return Doc()
+        return self('TensorCompute(') + self(e.name) + ', ' + self(e.shape) + ', ' + self(e.value) + ')'
 
     def visit_ReduceCompute(self, e: ReduceCompute):
-        return Doc()
+        return self('ReduceCompute(') + (self(e.name) + ', ' if e.name else '') + self(e.shape) + ', ' + self(e.axis) + ', ' + self(e.value) + ')'
 
     def visit_EvaluateStmt(self, stmt: EvaluateStmt):
         return NewLine() + self(stmt.expr)
@@ -196,10 +201,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
 
     def visit_ForStmt(self, stmt: ForStmt):
         var = stmt.loop_var
-        if isinstance(var.min_value, Constant) and var.min_value.value == 0:
-            rng = Text('range(') + self(var.extent) + ')'
-        else:
-            rng = Text('range(') + self(var.min_value) + ', ' + self(var.min_value) + ' + ' + self(var.extent) + ')'
+        rng = Text('range(') + self(stmt.extent) + ')'
         doc = NewLine() + Text('for ') + self(stmt.loop_var) + ' in ' + rng
         doc += self(stmt.body).indent(4)
         return doc
