@@ -60,7 +60,7 @@ class ProductSpace(SearchSpace):
 class AtomSpace(SearchSpace):
     def __init__(self, name, choices):
         super().__init__(name)
-        self.choices = choices
+        self.choices = list(choices)
 
     def __len__(self):
         return len(self.choices)
@@ -73,11 +73,20 @@ class SpaceChoice(Node):
     def __init__(self, name):
         self.name = name
 
+    def __getattr__(self, item):
+        raise NotImplementedError()
+
 
 class UnionChoice(SpaceChoice):
     def __init__(self, name, choice):
         super().__init__(name)
         self.choice = choice
+
+    def __getattr__(self, item):
+        if item == self.choice.name:
+            return self.choice
+        else:
+            raise ValueError()
 
 
 class ProductChoice(SpaceChoice):
@@ -95,4 +104,9 @@ class AtomChoice(SpaceChoice):
     def __init__(self, name, choice):
         super().__init__(name)
         self.choice = choice
+
+    @property
+    def value(self):
+        return self.choice
+
 

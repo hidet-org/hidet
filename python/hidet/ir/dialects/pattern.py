@@ -300,12 +300,14 @@ class PatternMatcher:
             raise NotMatchedError(pattern, target)
 
     def match_ScalarInput(self, pattern: ScalarInput, target: ScalarInput):
-        with self.match(pattern.dtype, target.dtype):
-            pass
+        if pattern.dtype:
+            with self.match(pattern.dtype, target.dtype):
+                pass
 
     def match_TensorInput(self, pattern: TensorInput, target: TensorInput):
-        with self.match(pattern.dtype, target.dtype):
-            pass
+        if pattern.dtype:
+            with self.match(pattern.dtype, target.dtype):
+                pass
 
     def match_TensorCompute(self, pattern: TensorCompute, target: TensorCompute):
         self.check_cond(pattern, target, len(pattern.shape) == len(target.shape))
@@ -317,8 +319,11 @@ class PatternMatcher:
             stack.enter_context(self.match(pattern.value, target.value))
 
     def match_ReduceCompute(self, pattern: ReduceCompute, target: ReduceCompute):
-        with self.match(pattern.axis, target.axis), self.match(pattern.value, target.value):
-            pass
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(self.match(pattern.axis, target.axis))
+            for a, b in zip(pattern.shape, target.shape):
+                stack.enter_context(self.match(a, b))
+            stack.enter_context(self.match(pattern.value, target.value))
 
     def match_AnyPattern(self, pattern: AnyExpr, target: Expr):
         # if pattern.type is None, match anything, otherwise match any expr with specific type
@@ -367,16 +372,19 @@ class PatternMatcher:
                     raise NotMatchedError(pattern, target, "expect reduce, but not found")
 
     def match_ScalarType(self, pattern: ScalarType, target: ScalarType):
-        if pattern.name != target.name:
-            raise NotMatchedError(pattern, target)
+        if pattern.name:
+            if pattern.name != target.name:
+                raise NotMatchedError(pattern, target)
 
     def match_TensorType(self, pattern: TensorType, target: TensorType):
         with contextlib.ExitStack() as stack:
             stack.enter_context(self.match(pattern.scalar_type, target.scalar_type))
-            for a, b in zip(pattern.shape, target.shape):
-                stack.enter_context(self.match(a, b))
-            for a, b in zip(pattern.strides, target.strides):
-                stack.enter_context(self.match(a, b))
+            if pattern.shape:
+                for a, b in zip(pattern.shape, target.shape):
+                    stack.enter_context(self.match(a, b))
+            if pattern.strides:
+                for a, b in zip(pattern.strides, target.strides):
+                    stack.enter_context(self.match(a, b))
             if pattern.scope.name != target.scope.name:
                 raise NotMatchedError(pattern, target)
 
@@ -427,8 +435,9 @@ class PatternMatcher:
                 assert len(pattern.required_params) == len(pattern.required_params_types)
                 for required_param, required_type in zip(pattern.required_params, pattern.required_params_types):
                     matched_param = self.matched[required_param]
-                    assert isinstance(matched_param, (ScalarInput, TensorInput)), "as far as now, we only support specify the param type, not the output type"
-                    stack.enter_context(self.match(matched_param.dtype, required_type))
+                    actual_type = target.params_type[target.params.index(matched_param)]
+                    # assert isinstance(matched_param, (ScalarInput, TensorInput)), "as far as now, we only support specify the param type, not the output type"
+                    stack.enter_context(self.match(required_type, actual_type))
                 matched_params = [self.matched[param] for param in pattern.required_params]
             else:
                 matched_params = []

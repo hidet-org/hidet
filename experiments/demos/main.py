@@ -109,7 +109,6 @@ def demo_profile():
 
 
 def demo_baselines():
-    print("start")
     warmup = 1
     number = 1
     repeat = 10
@@ -133,15 +132,15 @@ def demo_baselines():
         print("Workload (N x M x K): {} x {} x {}".format(N, M, K))
         for name, func in baselines:
             latencies = func.profile(scalar(N), scalar(M), scalar(K), A, B, C, warmup=warmup, number=number, repeat=repeat)
-            print('{:>13}: {:.3f} (std {:.3f}) ms'.format(name, np.mean(latencies), np.std(latencies)))
+            print('{:>20}: {:.3f} (std {:.3f}) ms'.format(name, np.mean(latencies), np.std(latencies)))
 
         module = build(random_resolve(implement(matmul(N, M, K), 'cuda_grid_split_implementer')), output_dir='./outs/static')
         latencies = module['matmul'].profile(A, B, C, repeat=repeat)
-        print('{:>13}: {:.3f} (std {:.3f}) ms'.format('hidet_static', np.mean(latencies), np.std(latencies)))
+        print('{:>20}: {:.3f} (std {:.3f}) ms'.format('hidet_static(rs)', np.mean(latencies), np.std(latencies)))
 
-        module = build(random_resolve(implement(matmul(N, M, K))), output_dir='./outs/naive')
+        module = build(random_resolve(implement(matmul(N, M, K), 'cuda_grid_naive_implementer')), output_dir='./outs/naive')
         latencies = module['matmul'].profile(A, B, C, warmup=warmup, number=number, repeat=repeat)
-        print('{:>13}: {:.3f} (std {:.3f}) ms'.format('hidet_naive', np.mean(latencies), np.std(latencies)))
+        print('{:>20}: {:.3f} (std {:.3f}) ms'.format('hidet_naive', np.mean(latencies), np.std(latencies)))
 
         print()
 
@@ -253,12 +252,12 @@ if __name__ == '__main__':
     # demo_build()
     # demo_test()
     # demo_profile()
-    # demo_baselines()
+    demo_baselines()
     # demo_host()
     # demo_verify()
     # demo_grid_2d_static_implementer()
     # demo_sympy()
-    demo_brute_force_resolver()
+    # demo_brute_force_resolver()
 
 """
 TOS: Task-Oriented Scheduling

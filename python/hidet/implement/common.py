@@ -1,9 +1,11 @@
-from typing import Mapping, Union
+from typing import Mapping
+
 from hidet.ir import TensorInput, ScalarInput, ReduceCompute, TensorCompute
-from hidet.ir.expr import *
+from hidet.ir.builders import StmtBuilder
 from hidet.ir.dialects.lowlevel import Cast, Dereference
-from hidet.ir.stmt import ForStmt, BufferStoreStmt, concat_stmts, AssignStmt, SeqStmt, StmtBuilder
+from hidet.ir.expr import *
 from hidet.ir.functors import ExprFunctor, infer_type
+from hidet.ir.stmt import ForStmt, BufferStoreStmt, AssignStmt, SeqStmt
 
 
 def merge_stmts(stmts):

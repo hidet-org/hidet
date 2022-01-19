@@ -43,9 +43,9 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
 
     def visit(self, obj):
         if isinstance(obj, (list, tuple)):
-            return self('[') + doc_join([self(v) for v in obj], ', ') + ']'
+            return doc_join([self(v) for v in obj], ', ')
         elif isinstance(obj, dict):
-            return self('{') + doc_join([self(k) + ': ' + self(v) for k, v in obj.items()], ', ') + '}'
+            return doc_join([self(k) + ': ' + self(v) for k, v in obj.items()], ', ')
         elif isinstance(obj, str):
             return Text(obj)
         elif isinstance(obj, (int, float)):
@@ -145,10 +145,10 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
         return base_doc + '[' + doc_join(docs, ', ') + ']'
 
     def visit_TensorElement(self, e: TensorElement):
-        return self(e.base) + '[' + doc_join([self(idx) for idx in e.indices], ', ') + ']'
+        return self(e.base) + '[' + self(e.indices) + ']'
 
     def visit_Call(self, e: Call):
-        return Text(e.func_var.hint) + '(' + doc_join([self(arg) for arg in e.args], Text(', ')) + ')'
+        return Text(e.func_var.hint) + '(' + self(e.args) + ')'
 
     def visit_Cast(self, e: Cast):
         return Text('cast(') + self(e.target_type) + ', ' + self(e.expr) + ')'
@@ -187,20 +187,19 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
     def visit_BufferStoreStmt(self, stmt: BufferStoreStmt):
         doc = NewLine()
         doc += self(stmt.buf)
-        doc += Text('[') + doc_join([self(idx) for idx in stmt.indices], ', ') + ']'
-        doc += Text(' = ') + self(stmt.value)
+        doc += '[' + self(stmt.indices) + ']'
+        doc += ' = ' + self(stmt.value)
         return doc
 
     def visit_AssignStmt(self, stmt: AssignStmt):
         return NewLine() + self(stmt.var) + ' = ' + self(stmt.value)
 
     def visit_LetStmt(self, stmt: LetStmt):
-        doc = NewLine() + Text('let ') + self.visit(stmt.var) + ' = ' + self.visit(stmt.value)
+        doc = NewLine() + 'let ' + self.visit(stmt.var) + ' = ' + self.visit(stmt.value)
         doc += self.visit(stmt.body)
         return doc
 
     def visit_ForStmt(self, stmt: ForStmt):
-        var = stmt.loop_var
         rng = Text('range(') + self(stmt.extent) + ')'
         doc = NewLine() + Text('for ') + self(stmt.loop_var) + ' in ' + rng
         doc += self(stmt.body).indent(4)
@@ -227,7 +226,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
         return Text('ScalarType({})'.format(t.name))
 
     def visit_TensorType(self, t: TensorType):
-        return Text('TensorType(') + self(t.scalar_type) + ', [' + doc_join([self(s) for s in t.shape], ", ") + '], ' + t.scope.name + ')'
+        return Text('TensorType(') + self(t.scalar_type) + ', [' + self(t.shape) + '], ' + t.scope.name + ')'
 
     def visit_PointerType(self, t: PointerType):
         return Text('PointerType(') + self(t.base_type) + ')'

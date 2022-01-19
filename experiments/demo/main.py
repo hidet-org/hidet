@@ -1,7 +1,5 @@
-import os
 from hidet.ir.type import tensor_type
 from hidet.ir.expr import var
-from hidet.ir.func import IRModule
 from hidet.ir.task import Task, Grid
 from hidet.ir.dialects.compute import tensor_input, reduce_sum, compute
 from hidet.runtime.value import TensorValue
@@ -21,7 +19,7 @@ def get_task(N=1024, M=1024, K=1024):
         tensor_type('global', 'float32', [K, M], [M, 1]),
         tensor_type('global', 'float32', [N, M], [M, 1])
     ]
-    task = Task('gemm.grid', C, [A, B, C], params_type, Grid())
+    task = Task('gemm', C, [A, B, C], params_type, Grid())
     return task
 
 

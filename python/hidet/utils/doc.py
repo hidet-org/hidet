@@ -49,6 +49,13 @@ class Doc:
         doc += other
         return doc
 
+    def __radd__(self, other):
+        doc = Doc()
+        doc.docs = []
+        doc.append(other)
+        doc.append(self)
+        return doc
+
     def __iadd__(self, other):
         self.append(other)
         return self

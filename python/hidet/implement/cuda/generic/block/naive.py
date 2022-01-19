@@ -22,7 +22,7 @@ def reduce_product(lst: List[Expr]):
     return s
 
 
-@register_impl('cuda_block_naive_implementer')
+# @register_impl('cuda_block_naive_implementer')
 class CudaBlockNaiveImplementer(Implementer):
     def __init__(self):
         self.block_dim = Constant(None, dtype=scalar_type('int32'))

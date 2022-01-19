@@ -10,20 +10,38 @@ class Expr(Node):
     def __add__(self, other):
         return Add(self, other)
 
+    def __radd__(self, other):
+        return Add(other, self)
+
     def __sub__(self, other):
         return Sub(self, other)
+
+    def __rsub__(self, other):
+        return Sub(other, self)
 
     def __mul__(self, other):
         return Multiply(self, other)
 
+    def __rmul__(self, other):
+        return Multiply(other, self)
+
     def __truediv__(self, other):
         return Div(self, other)
+
+    def __rtruediv__(self, other):
+        return Div(other, self)
 
     def __floordiv__(self, other):
         return FloorDiv(self, other)
 
+    def __rfloordiv__(self, other):
+        return FloorDiv(other, self)
+
     def __mod__(self, other):
         return Mod(self, other)
+
+    def __rmod__(self, other):
+        return Mod(other, self)
 
     def __lt__(self, other):
         return LessThan(self, other)

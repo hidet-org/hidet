@@ -1,6 +1,7 @@
 from typing import Dict, List, Union, Optional
 from hidet.ir.node import Node
 from hidet.ir.type import BaseType, FuncType
+from hidet.ir.dialects.lowlevel import VoidType
 from hidet.ir.expr import Var
 from hidet.ir.stmt import Stmt
 from hidet.ir.task import Task
@@ -62,8 +63,14 @@ class IRModule(Node):
 
     def include(self, module):
         for name, func in module.functions.items():
-            assert name not in self.functions
-            self.functions[name] = func
+            if name in self.functions:
+                funcs = [func] if isinstance(func, Function) else list(func.group)
+                if isinstance(self.functions[name], FunctionGroup):
+                    self.functions[name].group.extend(funcs)
+                else:
+                    self.functions[name] = FunctionGroup(name, funcs + [self.functions[name]])
+            else:
+                self.functions[name] = func
 
         for name, var in module.global_vars.items():
             self.global_vars[name] = var
@@ -82,7 +89,22 @@ class IRModule(Node):
             self.global_vars[name] = Var(name, FuncType.from_func(func))
         return self.global_vars[name]
 
-    def add(self, name, func: Union[Function, FunctionGroup], update=False):
-        if name in self.functions and not update:
-            raise KeyError()
-        self.functions[name] = func
+    def add(self, name, func: Union[Function, FunctionGroup]):
+        if name in self.functions:
+            existed_func = self.functions[name]
+            if isinstance(existed_func, FunctionGroup):
+                existed_func.group.append(func)
+            else:
+                self.functions[name] = FunctionGroup(name, group=[existed_func, func])
+        else:
+            self.functions[name] = func
+
+
+"""
+    primitive functions
+"""
+sync_threads_var = Var('__sync_threads', type=FuncType([], VoidType()))
+
+
+def sync_threads() -> Var:
+    return sync_threads_var

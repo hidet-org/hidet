@@ -10,11 +10,7 @@ from hidet.ir.dialects.compute import TensorInput, ScalarInput, TensorCompute, c
 from hidet.ir.dialects.pattern import TaskPattern, TensorComputePattern, ScalarExprPattern
 from hidet.ir.dialects.lowlevel import VoidType, Address
 from hidet.ir.functors import rewrite, infer_type, collect, simplify, coefficients
-from hidet.implement.implementer import Implementer, implement, register_impl
-
-
-class NotSupported(Exception):
-    pass
+from hidet.implement.implementer import Implementer, implement, register_impl, NotSupportedError
 
 
 @register_impl('cuda_grid_split_implementer')
@@ -34,11 +30,11 @@ class CudaGridSplitImplementer(Implementer):
             allow_tensor_extra_params=True,
             worker=Grid(grid_dim=None, block_dim=None)
         )
-        self.split_factors = [4, 8, 16, 32, 48, 64, 96, 128, 192, 256]
-        self.block_dims = [32, 64, 128, 256, 512, 768, 1024]
+        self.split_factors = [16, 32, 48, 64, 96, 128, 192, 256]
+        self.block_dims = [256, 512, 768, 1024]
 
     def priority(self) -> int:
-        return -1  # not finished
+        return 1
 
     def task_pattern(self) -> TaskPattern:
         return self.pattern
@@ -69,19 +65,19 @@ class CudaGridSplitImplementer(Implementer):
             for ti in tensor_inputs:
                 tes = [te for te in tensor_elements if te.base is ti]
                 if len(tes) == 0:
-                    raise NotSupported("do not consider not-used tensor input")
+                    raise NotSupportedError("do not consider not-used tensor input")
                 if len(tes) > 1:
-                    raise NotSupported("do not support multiple access to the same tensor input as far as now")
+                    raise NotSupportedError("do not support multiple access to the same tensor input as far as now")
                 te = tes[0]
                 indices = te.indices
                 arg_indices = []
                 for idx_expr in indices:
                     coeffs = coefficients(idx_expr, axes)
                     if any(sum(order) > 1 for order in coeffs):
-                        raise NotSupported("do not support high order indexing e.g., A[i * i][j], A[i * j][k]")
+                        raise NotSupportedError("do not support high order indexing e.g., A[i * i][j], A[i * j][k]")
                     for order, coeff in coeffs.items():
                         if sum(order) > 0 and any(v not in task.params for v in collect(coeff, [Var, ScalarInput])):
-                            raise NotSupported("The coefficient is dependent on inner var, e.g., A[i * reduce_axis], where reduce_axis is a inner var")
+                            raise NotSupportedError("The coefficient is dependent on inner var, e.g., A[i * reduce_axis], where reduce_axis is a inner var")
                     s = convert(0)
                     for order in coeffs:
                         for i in range(2):
@@ -103,7 +99,7 @@ class CudaGridSplitImplementer(Implementer):
 
             return Task(subtask_name, subtask_compute, subtask_params, subtask_params_type, ThreadBlock(block_dim)), args
 
-        except NotSupported:
+        except NotSupportedError:
             # fallback subtask with block index
             outer_axes_params = [scalar_input('i_o', 'int32'), scalar_input('j_o', 'int32')]
             sub_compute = compute('out', sub_shape, lambda i, j: rewrite(value, {old_axis: inner_axis + outer_axis * factor for old_axis, inner_axis, outer_axis in zip(axes, [i, j], outer_axes_params)}))
