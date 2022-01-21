@@ -13,6 +13,7 @@ from hidet.ir.dialects.pattern import TaskPattern, TensorComputePattern
 from hidet.ir.dialects.lowlevel import VoidType
 from hidet.ir.functors import rewrite, infer_type, collect, simplify
 from hidet.implement.implementer import Implementer, implement, register_impl
+from hidet.ir.primitives import thread_idx, block_idx
 
 
 def reduce_product(lst: List[Expr]):
@@ -56,8 +57,8 @@ class CudaGridNaiveImplementer(Implementer):
         Returns stmt, cond, indices
         Return the stmt to calculate the mapping and the indices where cond protect the indices in the shape
         """
-        block_index: Expr = var('blockIdx.x')
-        thread_index: Expr = var('threadIdx.x')
+        block_index: Expr = block_idx()
+        thread_index: Expr = thread_idx()
         rank = len(task_shape)
         assert len(grid_shape) == rank and len(block_shape) == rank
         task_indices = []
@@ -71,7 +72,7 @@ class CudaGridNaiveImplementer(Implementer):
             stmts.append(LetStmt(task_idx, simplify(task_idx_value)))
             cond = And(cond, task_idx < task_shape[i])
             task_indices.append(task_idx)
-        return stmts, simplify(cond), task_indices, Grid(simplify(reduce_product(grid_shape)), simplify(reduce_product(block_shape)))
+        return stmts, cond, task_indices, Grid(simplify(reduce_product(grid_shape)), simplify(reduce_product(block_shape)))
 
     @staticmethod
     def get_block_shape(rank: int):

@@ -1,22 +1,16 @@
-import string
-import random
-import os.path
-import shutil
 import ctypes
+import os.path
 import subprocess
+import uuid
 from subprocess import PIPE
-from hidet.ir.func import IRModule
-from hidet.ir.task import Host
-from hidet.ir.dialects.lowlevel import VoidType
-from hidet.runtime.module import CompiledModule, CompiledFunction
-from hidet.backend import codegen
-from hidet.ffi import PackedFunc
-from hidet.transforms import generate_packed_func_pass, flatten_tensor_pass, const_expr_simplifier_pass, eliminate_dead_device_function_pass
 
 from hidet import utils
-import uuid
-
-import pycuda
+from hidet.backend import codegen
+from hidet.ffi import PackedFunc
+from hidet.ir.dialects.lowlevel import VoidType
+from hidet.ir.func import IRModule
+from hidet.runtime.module import CompiledModule, CompiledFunction
+from hidet.transforms import lower
 
 
 def compile_src_code(src_path, working_dir=None, keep=True):
@@ -50,20 +44,6 @@ def compile_src_code(src_path, working_dir=None, keep=True):
         print(' '.join(command))
         print(e.stderr.decode('utf-8'))
         raise e
-
-
-def lower(ir_module: IRModule) -> IRModule:
-    transforms = [
-        eliminate_dead_device_function_pass(),
-        generate_packed_func_pass(),
-        flatten_tensor_pass(),
-        const_expr_simplifier_pass(),
-    ]
-
-    for transform in transforms:
-        ir_module = transform(ir_module)
-
-    return ir_module
 
 
 def build(ir_module: IRModule, output_dir, keep=True) -> CompiledModule:

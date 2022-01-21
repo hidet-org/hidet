@@ -2,8 +2,8 @@ from typing import Union
 import operator
 from hidet.ir.expr import Expr, BinaryOp, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, LessEqual, Equal, Constant, And, Or, Not
 from hidet.ir.expr import is_one, is_zero, is_true, is_false, convert
-from hidet.ir.stmt import Stmt, IfStmt, SeqStmt
-from hidet.ir.functors import StmtExprRewriter, same_list
+from hidet.ir.stmt import Stmt, IfStmt, SeqStmt, ForStmt, LetStmt
+from hidet.ir.functors import StmtExprRewriter, same_list, rewrite
 
 
 class Simplifier(StmtExprRewriter):
@@ -93,12 +93,54 @@ class Simplifier(StmtExprRewriter):
         else:
             return Not(a)
 
+    def visit_IfStmt(self, stmt: IfStmt):
+        cond = self.visit_expr(stmt.cond)
+        then_body = self.visit(stmt.then_body)
+        else_body = self.visit(stmt.else_body) if stmt.else_body else None
+        if is_true(cond):
+            return then_body
+        elif is_false(cond):
+            if else_body:
+                return else_body
+            else:
+                return SeqStmt([])
+        else:
+            if cond is stmt.cond and then_body is stmt.then_body and else_body is stmt.else_body:
+                return stmt
+            else:
+                return IfStmt(cond, then_body, else_body)
 
-def simplify(node: Union[Stmt, Expr]):
+    def visit_ForStmt(self, stmt: ForStmt):
+        loop_var = self(stmt.loop_var)
+        extent = self(stmt.extent)
+        body = self(stmt.body)
+        if is_one(extent):
+            return rewrite(stmt.body, {loop_var: convert(0)})
+        else:
+            if loop_var is stmt.loop_var and body is stmt.body:
+                return stmt
+            else:
+                return ForStmt(loop_var, extent, body)
+
+    def visit_LetStmt(self, stmt: LetStmt):
+        var = self.visit_expr(stmt.var)
+        value = self.visit_expr(stmt.value)
+        body = self.visit(stmt.body)
+        if isinstance(value, Constant):
+            return rewrite(body, {var: value})
+        if var is stmt.var and value is stmt.value and body is stmt.body:
+            return stmt
+        else:
+            return LetStmt(var, value, body)
+
+
+def simplify(node: Union[Stmt, Expr], repeat_limit=10):
     simplifier = Simplifier()
-    return simplifier(node)
+    for i in range(repeat_limit):
+        old_node = node
+        node = simplifier(node)
+        if old_node is node:
+            break
+    return node
 
-
-def equal(a: Expr, b: Expr):
-    pass
 

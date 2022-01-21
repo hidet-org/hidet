@@ -51,21 +51,23 @@ class StmtBuilder:
         assert isinstance(last_stmt, (IfStmt, ForStmt, LetStmt))
         self.scope_stack.append([])
 
-    def exit_body(self):
-        body = SeqStmt(self.scope_stack.pop())
-        assert len(self.scope_stack) > 0
-        last_stmt = self.scope_stack[-1][-1]
-        if isinstance(last_stmt, (LetStmt, ForStmt)):
-            assert last_stmt.body is None
-            last_stmt.body = body
-        elif isinstance(last_stmt, IfStmt):
-            if last_stmt.then_body is None:
-                last_stmt.then_body = body
+    def exit_body(self, num_scopes=1):
+        while num_scopes >= 1:
+            num_scopes -= 1
+            body = SeqStmt(self.scope_stack.pop())
+            assert len(self.scope_stack) > 0
+            last_stmt = self.scope_stack[-1][-1]
+            if isinstance(last_stmt, (LetStmt, ForStmt)):
+                assert last_stmt.body is None
+                last_stmt.body = body
+            elif isinstance(last_stmt, IfStmt):
+                if last_stmt.then_body is None:
+                    last_stmt.then_body = body
+                else:
+                    assert last_stmt.else_body is None
+                    last_stmt.else_body = None
             else:
-                assert last_stmt.else_body is None
-                last_stmt.else_body = None
-        else:
-            assert False
+                assert False
 
     def finish(self):
         assert len(self.scope_stack) == 1

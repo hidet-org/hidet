@@ -1,7 +1,7 @@
 from typing import List, Union
 from copy import copy
 from hidet.ir.node import Node
-from hidet.ir.expr import Var, Expr
+from hidet.ir.expr import Var, Expr, convert
 
 
 class Stmt(Node):
@@ -12,29 +12,29 @@ class Stmt(Node):
 class EvaluateStmt(Stmt):
     def __init__(self, expr):
         super().__init__()
-        self.expr = expr
+        self.expr = convert(expr)
 
 
 class BufferStoreStmt(Stmt):
     def __init__(self, buf, indices, value):
         super().__init__()
         self.buf = buf
-        self.indices = indices
-        self.value = value
+        self.indices = convert(indices)
+        self.value = convert(value)
 
 
 class AssignStmt(Stmt):
     def __init__(self, var, value):
         super().__init__()
         self.var = var
-        self.value = value
+        self.value = convert(value)
 
 
 class LetStmt(Stmt):
     def __init__(self, var, value, body=None):
         super().__init__()
         self.var = var
-        self.value = value
+        self.value = convert(value)
         self.body = body
 
 
@@ -42,14 +42,14 @@ class ForStmt(Stmt):
     def __init__(self, loop_var, extent, body=None):
         super().__init__()
         self.loop_var: Var = loop_var
-        self.extent = extent
+        self.extent = convert(extent)
         self.body = body
 
 
 class IfStmt(Stmt):
     def __init__(self, cond, then_body=None, else_body=None):
         super().__init__()
-        self.cond = cond
+        self.cond = convert(cond)
         self.then_body = then_body
         self.else_body = else_body
 
@@ -57,7 +57,7 @@ class IfStmt(Stmt):
 class AssertStmt(Stmt):
     def __init__(self, cond, msg):
         super().__init__()
-        self.cond = cond
+        self.cond = convert(cond)
         self.msg = msg
 
 

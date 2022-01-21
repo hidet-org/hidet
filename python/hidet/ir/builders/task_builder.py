@@ -7,7 +7,7 @@ from hidet.ir.type import BaseType
 
 
 class TaskBuilder:
-    def __init__(self, name: str, worker: Worker, parent_module: IRModule):
+    def __init__(self, name: str, worker: Worker, parent_module: IRModule, impl_name=None):
         self.name = name
         self.computation = None
         self.params = []
@@ -15,6 +15,7 @@ class TaskBuilder:
         self.worker = worker
         self.parent_module = parent_module
         self.func_var = None
+        self.impl_name = impl_name
 
     def __enter__(self):
         return self
@@ -47,6 +48,6 @@ class TaskBuilder:
         assert len(self.params) == len(self.params_type)
         assert self.computation is not None
         task = Task(self.name, self.computation, self.params, self.params_type, self.worker)
-        sub_module = implement(task)
+        sub_module = implement(task, impl_name=self.impl_name)
         self.parent_module.include(sub_module)
         self.func_var = self.parent_module.lookup_var(self.name)

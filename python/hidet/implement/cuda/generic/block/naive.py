@@ -11,6 +11,7 @@ from hidet.ir.dialects.pattern import TaskPattern, TensorComputePattern, ScalarE
 from hidet.ir.dialects.lowlevel import VoidType, Address
 from hidet.ir.functors import rewrite, infer_type, collect, simplify
 from hidet.implement.implementer import Implementer, implement, register_impl
+from hidet.ir.primitives import thread_idx
 
 
 def reduce_product(lst: List[Expr]):
@@ -66,7 +67,7 @@ class CudaBlockNaiveImplementer(Implementer):
         iter_var = var('iter')
         stmts = [ForStmt(iter_var, reduce_product(iter_shape))]
         rank = len(block_shape)
-        thread_index = var('threadIdx.x')
+        thread_index = thread_idx()
         task_indices = []
         cond = convert(True)
         for i in range(rank):
@@ -77,7 +78,7 @@ class CudaBlockNaiveImplementer(Implementer):
             stmts.append(LetStmt(task_idx, simplify(task_idx_value)))
             task_indices.append(task_idx)
             cond = And(cond, task_idx < task_shape[i])
-        return stmts, simplify(cond), task_indices
+        return stmts, cond, task_indices
 
     def get_subtask(self,
                     task: Task,

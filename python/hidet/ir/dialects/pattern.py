@@ -1,6 +1,7 @@
 import traceback
 from typing import Type, Tuple
 import contextlib
+from hidet.ir.type import *
 from hidet.ir.expr import *
 from hidet.ir.dialects.compute import *
 from hidet.ir.dialects.lowlevel import *
@@ -96,8 +97,6 @@ class PatternMatcher:
         except NotMatchedError as e:
             msg = str(traceback.format_exc())
             success = False
-        except Exception as e:
-            raise e
         if success:
             return self.matched, msg
         else:
@@ -110,11 +109,10 @@ class PatternMatcher:
         if self.matched[pattern] is not None and self.matched[pattern] is not target:
             raise NotMatchedError(pattern, target,
                                   "Try to match {} and {}, but the prior one has been matched to another target {}".format(pattern, target, self.matched[pattern]))
-        success = True
         old = self.matched[pattern]
         try:
             self.matched[pattern] = target
-            if not isinstance(pattern, (ExprPattern, TypePattern, TaskPattern, UnionPattern)):
+            if not isinstance(pattern, (ExprPattern, TypePattern, TaskPattern, UnionPattern, Scope)):
                 # all pattern except ExprPattern sub-classes instances requires that target with the same type as pattern's
                 self.check_type(pattern, target)
             if isinstance(pattern, Add):
@@ -168,6 +166,12 @@ class PatternMatcher:
             elif isinstance(pattern, UnionPattern):
                 self.match_UnionPattern(pattern, target)
 
+            # scope related matching
+            elif isinstance(pattern, RegisterScope):
+                self.match_RegisterScope(pattern, target)
+            elif isinstance(pattern, Scope):
+                self.match_Scope(pattern, target)
+
             # type related matching
             elif isinstance(pattern, ScalarType):
                 self.match_ScalarType(pattern, target)
@@ -194,14 +198,9 @@ class PatternMatcher:
             else:
                 raise NotImplementedError(str(type(pattern)))
             yield
-        except Exception as e:
-            success = False
+        except NotMatchedError as e:
+            self.matched[pattern] = old
             raise e
-        finally:
-            if success:
-                return
-            else:
-                self.matched[pattern] = old
 
     @staticmethod
     def check_type(pattern, target, expect_target_type=None):
@@ -292,7 +291,11 @@ class PatternMatcher:
             pass
 
     def match_Constant(self, pattern: Constant, target: Constant):
-        self.check_cond(pattern, target, pattern.dtype.name == target.dtype.name)
+        if pattern.dtype is not None:
+            if target.dtype is None:
+                raise NotMatchedError(pattern, target)
+            with self.match(pattern.dtype, target.dtype):
+                pass
         if pattern.value is None:
             # None matches any const value
             return
@@ -342,6 +345,14 @@ class PatternMatcher:
                 return
         raise NotMatchedError(pattern, target)
 
+    def match_RegisterScope(self, pattern: RegisterScope, target: RegisterScope):
+        # always match
+        pass
+
+    def match_Scope(self, pattern: Scope, target: Scope):
+        if pattern.name is not None and (pattern.name is None or pattern.name != target.name):
+            raise NotMatchedError(pattern, target)
+
     def match_ReduceComputePattern(self, pattern: ReduceComputePattern, target: ReduceCompute):
         self.check_type(pattern, target, ReduceCompute)
         if not pattern.allow_dynamic_axis and \
@@ -380,13 +391,17 @@ class PatternMatcher:
         with contextlib.ExitStack() as stack:
             stack.enter_context(self.match(pattern.scalar_type, target.scalar_type))
             if pattern.shape:
+                if target.shape is None:
+                    raise NotMatchedError(pattern, target)
                 for a, b in zip(pattern.shape, target.shape):
                     stack.enter_context(self.match(a, b))
             if pattern.strides:
+                if target.strides is None:
+                    raise NotMatchedError(pattern, target)
                 for a, b in zip(pattern.strides, target.strides):
                     stack.enter_context(self.match(a, b))
-            if pattern.scope.name != target.scope.name:
-                raise NotMatchedError(pattern, target)
+            if pattern.scope:
+                stack.enter_context(self.match(pattern.scope, target.scope))
 
     def match_ScalarTypePattern(self, pattern: ScalarTypePattern, target: ScalarType):
         self.check_type(pattern, target, ScalarType)

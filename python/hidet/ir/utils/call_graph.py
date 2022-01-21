@@ -3,6 +3,7 @@ from collections import defaultdict
 from hidet.ir.expr import Call
 from hidet.ir.func import IRModule, Function
 from hidet.ir.functors import collect
+from hidet.ir.primitives import is_primitive_function
 
 
 class CallGraphNode:
@@ -25,27 +26,29 @@ class CallGraph:
         self.nodes: List[CallGraphNode] = []
         self.func2node = {}
 
-        self.order: List[CallGraphNode] = []  # topological order
+        self.order: List[CallGraphNode] = []  # topological order, from caller to callee
         self.reversed_order: List[CallGraphNode] = []
 
         for func in ir_module.functions.values():
             node = CallGraphNode(func)
             self.func2node[func] = node
-            self.add_node(node)
+            self._add_node(node)
 
         for func in ir_module.functions.values():
             caller = func
             for call in collect(func.body, Call):
+                if is_primitive_function(call.func_var.hint):
+                    continue
                 callee = ir_module.lookup(call.func_var.hint)
-                self.add_edge(caller, callee)
+                self._add_edge(caller, callee)
 
         self._init_order()
 
-    def add_node(self, node):
+    def _add_node(self, node):
         if node not in self.nodes:
             self.nodes.append(node)
 
-    def add_edge(self, caller: Union[Function, CallGraphNode], callee: Union[Function, CallGraphNode]):
+    def _add_edge(self, caller: Union[Function, CallGraphNode], callee: Union[Function, CallGraphNode]):
         if isinstance(caller, Function):
             caller = self.func2node[caller]
         if isinstance(callee, Function):

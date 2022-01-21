@@ -86,7 +86,13 @@ class IRModule(Node):
         assert name in self.functions
         if name not in self.global_vars:
             func = self.functions[name]
-            self.global_vars[name] = Var(name, FuncType.from_func(func))
+            if isinstance(func, Function):
+                self.global_vars[name] = Var(name, FuncType.from_func(func))
+            elif isinstance(func, FunctionGroup):
+                self.global_vars[name] = Var(name, FuncType.from_func(func.group[0]))
+            else:
+                raise ValueError()
+
         return self.global_vars[name]
 
     def add(self, name, func: Union[Function, FunctionGroup]):
@@ -100,11 +106,3 @@ class IRModule(Node):
             self.functions[name] = func
 
 
-"""
-    primitive functions
-"""
-sync_threads_var = Var('__sync_threads', type=FuncType([], VoidType()))
-
-
-def sync_threads() -> Var:
-    return sync_threads_var

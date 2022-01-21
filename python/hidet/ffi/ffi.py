@@ -11,10 +11,12 @@ def load_library():
     if _LIB:
         return
     paths = ['./libhidet.so',
+             './build-release/lib/libhidet.so',
              '../build-release/lib/libhidet.so',
              '../../build-release/lib/libhidet.so',
              '../../../build-release/lib/libhidet.so',
              '../../../../build-release/lib/libhidet.so',
+             './build/lib/hidet.so',
              '../build/lib/libhidet.so',
              '../../build/lib/libhidet.so',
              '../../../build/lib/libhidet.so',

@@ -17,6 +17,7 @@ class RegisterScope(Scope):
         from hidet.ir.expr import Expr
         super().__init__('register')
         self.global2local: Callable[[Expr, ...], List[Expr, ...]] = global2local
+        # (tid, *local_index) -> global_index
         self.local2global: Callable[[Expr, Expr, ...], List[Expr, ...]] = local2global
         self.local_shape: Tuple[int, ...] = local_shape
 
@@ -37,6 +38,8 @@ class TensorType(BaseType):
             scalar_type = ScalarType(scalar_type)
         if strides:
             strides = [convert(s) for s in strides]
+        if shape:
+            shape = [convert(s) for s in shape]
         self.scope: Scope = scope
         self.scalar_type: ScalarType = scalar_type
         self.shape = shape

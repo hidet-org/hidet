@@ -1,7 +1,7 @@
 from hidet.ir.type import tensor_type
 from hidet.ir.expr import scalar_var, var
 from hidet.ir.dialects.compute import tensor_input, compute, reduce_sum
-from hidet.ir.task import Task, Grid
+from hidet.ir.task import Task, Grid, ThreadBlock
 
 
 def matmul(N: int, M: int, K: int) -> Task:
@@ -19,6 +19,19 @@ def matmul(N: int, M: int, K: int) -> Task:
         worker=Grid()
     )
 
+
+def global2shared(N, M):
+    gmem_in = tensor_input('gmem_in', 'float32', [N, M])
+    smem_out = compute('out', shape=[N, M], fcompute=lambda i, j: gmem_in[i, j])
+
+    return Task(
+        name='global2shared',
+        computation=smem_out,
+        params=[gmem_in, smem_out],
+        params_type=[tensor_type('global', 'float32', [N, M], strides=[M, 1]),
+                     tensor_type('shared', 'float32', [N, M], strides=[1, N])],
+        worker=ThreadBlock(256)
+    )
 
 def generic_matmul() -> Task:
     N = scalar_var('N', 'int32')

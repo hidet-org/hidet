@@ -32,13 +32,13 @@ for num_warps in range(1, 32 + 1):
     for row_major_layout in row_major_layouts:
         for in_m in [1, 4]:
             for in_n in [1, 4]:
-                for out_n in [1, 2]:
-                    for out_m in [1, 2]:
+                for out_n in [1, 2, 4]:
+                    for out_m in [1, 2, 4]:
                         register_task_layout((full_layout(out_n, out_m) * row_major_layout) * full_layout(in_m, in_n))
     for col_major_layout in col_major_layouts:
         for in_m in [1, 4]:
             for in_n in [1, 4]:
-                for out_n in [1, 2]:
-                    for out_m in [1, 2]:
+                for out_n in [1, 2, 4]:
+                    for out_m in [1, 2, 4]:
                         register_task_layout((full_layout(out_n, out_m) * col_major_layout) * full_layout(in_m, in_n))
 

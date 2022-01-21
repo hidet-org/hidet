@@ -11,6 +11,9 @@ from hidet.ir.dialects.pattern import TaskPattern, TensorComputePattern, ScalarE
 from hidet.ir.dialects.lowlevel import VoidType, Address
 from hidet.ir.functors import rewrite, infer_type, collect, simplify, coefficients
 from hidet.implement.implementer import Implementer, implement, register_impl, NotSupportedError
+from hidet.implement.search_space import SpaceChoice, ProductSpace, AtomSpace
+from hidet.ir.builders import FunctionBuilder, StmtBuilder
+from hidet.ir.primitives import block_idx
 
 
 @register_impl('cuda_grid_split_implementer')
@@ -30,8 +33,6 @@ class CudaGridSplitImplementer(Implementer):
             allow_tensor_extra_params=True,
             worker=Grid(grid_dim=None, block_dim=None)
         )
-        self.split_factors = [16, 32, 48, 64, 96, 128, 192, 256]
-        self.block_dims = [256, 512, 768, 1024]
 
     def priority(self) -> int:
         return 1
@@ -118,54 +119,82 @@ class CudaGridSplitImplementer(Implementer):
             return Task(subtask_name, sub_compute, params, params_type, ThreadBlock(block_dim)), args
 
     def implement(self, task: Task, match: Mapping[Node, Node]) -> IRModule:
-        assert isinstance(task.compute, TensorCompute)
+        # space = ProductSpace(
+        #     'space', [
+        #         AtomSpace('factor', [16, 32, 48, 64, 96, 128, 192, 256]),
+        #         AtomSpace('block_size', [256, 512, 1024])
+        #     ]
+        # )
+        space = ProductSpace(
+            'space', [
+                AtomSpace('factor', [128]),
+                AtomSpace('block_size', [256])
+            ]
+        )
+        space_size = len(space)
         ir_module = IRModule(task=task)
-        func_name = f'{task.name}.grid'
-        func_group = FunctionGroup(func_name)
-        for factor in self.split_factors:
-            for block_dim in self.block_dims:
-                n: Constant = match[self.n]
-                m: Constant = match[self.m]
-                blockIdx = var('blockIdx.x')
+        for i in range(space_size):
+            choice = space[i]
+            try:
+                choice_module = self.implement_for_choice(task, match, choice)
+            except NotSupportedError as e:
+                continue
+            else:
+                ir_module.include(choice_module)
+        return ir_module
 
-                func_params: List[Var] = [Var(param.name, param_type) for param, param_type in zip(task.params, task.params_type)]
-                func_body_stmts = []
-                func_local_vars = []
-                n_grid_dim = (n.value + factor - 1) // factor
-                m_grid_dim = (m.value + factor - 1) // factor
-                grid_dim = n_grid_dim * m_grid_dim
+    def implement_for_choice(self, task: Task, match: Mapping[Node, Node], choice: SpaceChoice):
+        assert isinstance(task.compute, TensorCompute)
+        task_n = int(match[self.n])
+        task_m = int(match[self.m])
 
-                n_block_idx = var('n_block_idx')
-                m_block_idx = var('m_block_idx')
-                func_body_stmts.append(LetStmt(n_block_idx, blockIdx / m_grid_dim))
-                func_body_stmts.append(LetStmt(m_block_idx, blockIdx % m_grid_dim))
+        factor = choice.factor.value
+        block_size = choice.block_size.value
+        grid_n = (task_n + factor - 1) // factor
+        grid_m = (task_m + factor - 1) // factor
+        grid_size = grid_n * grid_m
 
-                for i in range(2):
-                    i_cond = [n.value >= factor, n.value % factor > 0]
-                    i_shape = [factor, n.value % factor]
-                    i_cond_expr = [(n_block_idx + 1) * factor <= n, n_block_idx + 1 == n_grid_dim]
-                    for j in range(2):
-                        j_cond = [m.value >= factor, m.value % factor > 0]
-                        j_shape = [factor, m.value % factor]
-                        j_cond_expr = [(m_block_idx + 1) * factor <= m, m_block_idx + 1 == m_grid_dim]
-                        if i_cond[i] and j_cond[j]:
-                            shape = [i_shape[i], j_shape[j]]
-                            subtask_name = f'{task.name}.f{factor}.d{block_dim}.s{shape[0]}x{shape[1]}.block'
-                            subtask, args = self.get_subtask(subtask_name, task, match, factor, shape, block_dim, n_block_idx, m_block_idx, func_params)
-                            submodule = implement(subtask)
-                            ir_module.include(submodule)
-                            cond = convert(True)
-                            if i_cond[1 - i]:
-                                cond = And(cond, i_cond_expr[i])
-                            if j_cond[1 - i]:
-                                cond = And(cond, j_cond_expr[j])
-                            stmts = []
-                            stmts.append(IfStmt(cond))
-                            stmts.append(EvaluateStmt(Call(ir_module.lookup_var(subtask_name), args)))
-                            func_body_stmts.append(concat_stmts(stmts))
-                func_body = concat_stmts(func_body_stmts)
-                func = Function(func_name, func_params, func_body, VoidType(), func_local_vars, {'worker': Grid(convert(grid_dim), convert(block_dim)),
-                                                                                                 'label': f'factor-{factor}-block_dim-{block_dim}'})
-                func_group.append(func)
-        ir_module.add(func_name, func_group)
+        ir_module = IRModule()
+        with FunctionBuilder(task.name + '.grid') as fb:
+            blockIdx = block_idx()
+            fb.extend_params([Var(param.name, param_type) for param, param_type in zip(task.params, task.params_type)])
+            n_block_idx = var('n_block_idx')
+            m_block_idx = var('m_block_idx')
+
+            sb = StmtBuilder()
+            sb.append(LetStmt(n_block_idx, blockIdx / grid_m))
+            sb.enter_body()
+            sb.append(LetStmt(m_block_idx, blockIdx % grid_m))
+            sb.enter_body()
+            for i in range(2):
+                i_cond = [task_n >= factor, task_n % factor > 0]
+                i_shape = [factor, task_n % factor]
+                i_cond_expr = [(n_block_idx + 1) * factor <= task_n, n_block_idx + 1 == grid_n]
+                for j in range(2):
+                    j_cond = [task_m >= factor, task_m % factor > 0]
+                    j_shape = [factor, task_m % factor]
+                    j_cond_expr = [(m_block_idx + 1) * factor <= task_m, m_block_idx + 1 == grid_m]
+                    if i_cond[i] and j_cond[j]:
+                        shape = [i_shape[i], j_shape[j]]
+                        subtask_name = f'{task.name}.f{factor}.bsz{block_size}.s{shape[0]}x{shape[1]}.block'
+                        subtask, args = self.get_subtask(subtask_name, task, match, factor, shape, block_size, n_block_idx, m_block_idx, fb.params)
+                        submodule = implement(subtask)
+                        ir_module.include(submodule)
+                        cond = convert(True)
+                        if i_cond[1 - i]:
+                            cond = And(cond, i_cond_expr[i])
+                        if j_cond[1 - i]:
+                            cond = And(cond, j_cond_expr[j])
+                        sb.append(IfStmt(cond))
+                        with sb.then_body():
+                            sb.append(EvaluateStmt(Call(ir_module.lookup_var(subtask_name), args)))
+
+            sb.exit_body()  # let n_block_idx
+            sb.exit_body()  # let m_block_idx
+            body = sb.finish()
+            fb.set_body(body)
+            fb.extend_attrs({'worker': Grid(convert(grid_size), convert(block_size)),
+                             'label': f'factor-{factor}-block_size-{block_size}'})
+        func = fb.get()
+        ir_module.add(func.name, func)
         return ir_module

@@ -92,8 +92,12 @@ def convert(obj: Union[Expr, PyScalar]) -> Expr:
         return Constant(obj, ScalarType('int32'))
     elif isinstance(obj, float):
         return Constant(obj, ScalarType('float32'))
+    elif isinstance(obj, (tuple, list)):
+        return [convert(v) for v in obj]
+    elif obj is None:
+        return None
     else:
-        raise NotImplementedError()
+        raise NotImplementedError(type(obj))
 
 
 class Condition(Expr):
@@ -190,6 +194,8 @@ class Call(Expr):
 class Constant(Expr):
     def __init__(self, value, dtype=None):
         self.value = value
+        if dtype and isinstance(dtype, str):
+            dtype = ScalarType(dtype)
         self.dtype: ScalarType = dtype
 
     def __int__(self):
@@ -253,6 +259,10 @@ def is_true(v: Expr) -> bool:
 
 def is_false(v: Expr) -> bool:
     return isinstance(v, Constant) and v.dtype.name == 'bool' and v.value is False
+
+
+def is_const_int(v: Expr) -> bool:
+    return isinstance(v, Constant) and v.dtype.name == 'int32'
 
 
 def if_then_else(cond: Union[Expr, PyScalar], then_expr: Union[Expr, PyScalar], else_expr: Union[Expr, PyScalar]) -> IfThenElse:

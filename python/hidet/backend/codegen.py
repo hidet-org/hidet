@@ -10,6 +10,7 @@ from hidet.ir.dialects.lowlevel import VoidType, PointerType, Cast, Dereference,
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
 from hidet.ir.utils.call_graph import CallGraph
 from hidet.utils.namer import Namer
+from hidet.ir.primitives import is_primitive_function, get_primitive_function
 
 
 class Codegen(StmtExprFunctor, TypeFunctor):
@@ -41,6 +42,34 @@ class Codegen(StmtExprFunctor, TypeFunctor):
     def canonize_funcname(name: str):
         return name.replace('.', '_')
 
+    def var_declare(self, v: Var, is_ref=False):
+        v_type = v.type
+        if isinstance(v_type, ScalarType):
+            dtype_doc = self(v_type)
+            name_doc = self(v)
+            if is_ref:
+                name_doc = '&' + name_doc
+            return dtype_doc + ' ' + name_doc
+        elif isinstance(v_type, TensorType):
+            if v_type.scope.name == 'shared':
+                scope_doc = '__shared__ '
+            else:
+                scope_doc = ''
+            dtype_doc = self(v_type.scalar_type)
+            name_doc = self(v)
+            if is_ref:
+                name_doc = '(&' + name_doc + ')'
+            shape_doc = Doc()
+            for s in v_type.shape:
+                shape_doc += '[' + self(s) + ']'
+            return scope_doc + dtype_doc + ' ' + name_doc + shape_doc
+        elif isinstance(v_type, PointerType):
+            base_type_doc = self(v_type.base_type)
+            name_doc = self(v)
+            return base_type_doc + ' *' + name_doc
+        else:
+            assert False
+
     def __call__(self, node) -> Doc:
         return self.visit(node)
 
@@ -53,6 +82,8 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             return StmtExprFunctor.visit(self, node)
         elif isinstance(node, BaseType):
             return TypeFunctor.visit(self, node)
+        elif isinstance(node, (tuple, list)):
+            return doc_join([self(v) for v in node], ', ')
         else:
             raise ValueError()
 
@@ -101,17 +132,22 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         write_params = self.get_write_params(func)
         for i in range(len(func.params)):
             param = func.params[i]
-            if param in write_params and isinstance(param.type, ScalarType):
-                ref = Text(' &')
-            else:
-                ref = Text(' ')
-            param_docs.append(self(param.type) + ref + self(param))
+            is_assigned_scalar = param in write_params and isinstance(param.type, ScalarType)
+            is_register_tensor = isinstance(param.type, TensorType) and param.type.scope.name == 'register'
+            is_ref = is_assigned_scalar or is_register_tensor
+            param_docs.append(self.var_declare(param, is_ref))
         doc += doc_join(param_docs, Text(', '))
         doc += ') {'
 
+        # comments
+        label = func.get_attr('label')
+        if label:
+            doc += (NewLine() + '// label: {}'.format(label)).indent()
+
         # locals
         for local_var in func.local_vars:
-            doc += (NewLine() + self(local_var.type) + ' ' + self(local_var) + ';').indent()
+            doc += (NewLine() + self.var_declare(local_var) + ';').indent()
+            # doc += (NewLine() + self(local_var.type) + ' ' + self(local_var) + ';').indent()
 
         # body
         doc += self(func.body).indent()
@@ -170,19 +206,26 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         return base_doc + '[' + doc_join(docs, ', ') + ']'
 
     def visit_TensorElement(self, e: TensorElement):
-        return self(e.base) + '[' + doc_join([self(idx) for idx in e.indices], ', ') + ']'
+        return self(e.base) + doc_join(['[' + self(idx) + ']' for idx in e.indices], '');
 
     def visit_Cast(self, e: Cast):
         return Text('(') + self.visit(e.target_type) + ')' + self(e.expr)
 
     def visit_Address(self, e: Address):
-        return Text('&') + self.visit(e.expr)
+        return Text('&') + self.visit(e.expr);
 
     def visit_Dereference(self, e: Dereference):
         return Text('*') + self(e.expr)
 
     def visit_Call(self, e: Call):
-        func = self.ir_module.lookup(e.func_var.hint)
+        func_name = e.func_var.hint
+        if is_primitive_function(func_name):
+            v, func_type, func = get_primitive_function(func_name)
+            if func is None:
+                # system function, do not canonize the func name
+                return func_name + (Text('(') + doc_join([self(arg) for arg in e.args], Text(', ')) + ')')
+        else:
+            func = self.ir_module.lookup(func_name)
         worker = func.get_attr('worker')
         func_name = Text(self.canonize_funcname(e.func_var.hint))
         if isinstance(worker, Grid):
@@ -209,7 +252,8 @@ class Codegen(StmtExprFunctor, TypeFunctor):
     def visit_BufferStoreStmt(self, stmt: BufferStoreStmt):
         doc = NewLine()
         doc += self(stmt.buf)
-        doc += Text('[') + doc_join([self(idx) for idx in stmt.indices], ', ') + ']'
+        for idx in stmt.indices:
+            doc += '[' + self(idx) + ']'
         doc += Text(' = ') + self(stmt.value) + ';'
         return doc
 
@@ -217,6 +261,9 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         return NewLine() + self(stmt.var) + ' = ' + self(stmt.value) + ';'
 
     def visit_LetStmt(self, stmt: LetStmt):
+        # let_doc = NewLine() + self(stmt.var.type) + ' ' + self.visit(stmt.var) + ' = ' + self.visit(stmt.value) + ';'
+        # doc = NewLine() + '{' + (let_doc + self(stmt.body)).indent() + NewLine() + '}'
+        # return doc
         doc = NewLine() + self(stmt.var.type) + ' ' + self.visit(stmt.var) + ' = ' + self.visit(stmt.value) + ';'
         doc += self(stmt.body)
         return doc

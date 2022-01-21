@@ -15,7 +15,7 @@ class ScalarInput(ComputeNode):
 
 
 class TensorInput(ComputeNode):
-    def __init__(self, name, dtype, shape=None):
+    def __init__(self, name, dtype=None, shape=None):
         super().__init__(name)
         if dtype and isinstance(dtype, str):
             dtype = ScalarType(dtype)

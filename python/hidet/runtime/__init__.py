@@ -1,5 +1,5 @@
 from . import value
 from . import module
 
-from .value import randn, empty
+from .value import randn, empty, full
 

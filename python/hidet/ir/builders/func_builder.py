@@ -7,14 +7,14 @@ from hidet.ir.stmt import Stmt
 
 
 class FunctionBuilder:
-    def __init__(self, name: str, ret_type=VoidType()):
+    def __init__(self, name: str, ret_type=VoidType(), attrs=None):
         self.name = name
         self.params: List[Var] = []
         self.ret_type = ret_type
         self.local_vars = []
         self.func: Function = None
         self.body: Stmt = None
-        self.attrs: Dict[str] = {}
+        self.attrs: Dict[str] = attrs if attrs else {}
         self.func = None
 
     def __enter__(self):
@@ -36,9 +36,9 @@ class FunctionBuilder:
         self.body = body
 
     def finish(self):
-        assert self.body is not None
         assert self.func is None
         self.func = Function(self.name, self.params, self.body, self.ret_type, self.local_vars, self.attrs)
 
     def get(self) -> Function:
+        assert self.func.body is not None
         return self.func

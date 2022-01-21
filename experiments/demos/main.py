@@ -1,19 +1,22 @@
-import numpy as np
-import sympy
 import os
-from hidet.ir.type import tensor_type
-from hidet.ir.expr import var
-from hidet.ir.task import Task, Grid, Host
-from hidet.ir.functors import astext
-from hidet.ir.dialects.compute import tensor_input, reduce_sum, compute
-from hidet.transforms import const_expr_simplifier_pass, flatten_tensor_pass, generate_packed_func_pass
-from hidet.runtime.value import TensorValue, randn, empty, scalar, zeros
+
+import numpy as np
+import pycuda.driver
+import sympy
+
+from hidet.backend import codegen, build
+from hidet.baselines.matmul import matmul_ref, matmul_cublas, matmul_opt, matmul_cutlass
 from hidet.implement import implement
 from hidet.implement.resolve import random_resolve, brute_force_resolve
+from hidet.ir.dialects.compute import tensor_input, reduce_sum, compute
+from hidet.ir.expr import var
+from hidet.ir.functors import astext
+from hidet.ir.task import Task, Grid, Host
+from hidet.ir.type import tensor_type
 from hidet.nn import matmul
-from hidet.baselines.matmul import matmul_ref, matmul_cublas, matmul_opt, matmul_cutlass, matmul_ref_1d
-from hidet.backend import codegen, build, lower
+from hidet.runtime.value import TensorValue, randn, empty, scalar, zeros, full
 from hidet.testing import verify
+from hidet.transforms import flatten_tensor_pass, generate_packed_func_pass
 
 
 def get_task(N=1024, M=1024, K=1024):
@@ -134,11 +137,12 @@ def demo_baselines():
             latencies = func.profile(scalar(N), scalar(M), scalar(K), A, B, C, warmup=warmup, number=number, repeat=repeat)
             print('{:>20}: {:.3f} (std {:.3f}) ms'.format(name, np.mean(latencies), np.std(latencies)))
 
-        module = build(random_resolve(implement(matmul(N, M, K), 'cuda_grid_split_implementer')), output_dir='./outs/static')
+        # module = build(random_resolve(implement(matmul(N, M, K), 'cuda_grid_split_implementer')), output_dir='./outs/static')
+        module = build(brute_force_resolve(implement(matmul(N, M, K), 'cuda_grid_split_implementer')), output_dir='./outs/static')
         latencies = module['matmul'].profile(A, B, C, repeat=repeat)
         print('{:>20}: {:.3f} (std {:.3f}) ms'.format('hidet_static(rs)', np.mean(latencies), np.std(latencies)))
 
-        module = build(random_resolve(implement(matmul(N, M, K), 'cuda_grid_naive_implementer')), output_dir='./outs/naive')
+        module = build(brute_force_resolve(implement(matmul(N, M, K), 'cuda_grid_naive_implementer')), output_dir='./outs/naive')
         latencies = module['matmul'].profile(A, B, C, warmup=warmup, number=number, repeat=repeat)
         print('{:>20}: {:.3f} (std {:.3f}) ms'.format('hidet_naive', np.mean(latencies), np.std(latencies)))
 
@@ -171,27 +175,41 @@ def demo_host():
 
 
 def demo_verify():
-    for V in [2, 4, 8, 16, 32, 64, 128, 256, 512]:
+    for workload in [(128, 128, 8)]:
         # N, M, K = V + 22, V*2 - 3, V // 2 + 3
-        N, M, K = V, V, V
+        N, M, K = workload
         task = matmul(N, M, K)
-        A = randn([N, K], 'float32', 'host', seed=1)
-        B = randn([K, M], 'float32', 'host', seed=3)
-        C = zeros([N, M], 'float32', 'host')
+        # A = randn([N, K], 'float32', 'host', seed=1)
+        # B = randn([K, M], 'float32', 'host', seed=3)
+        # A = full([N, K], 'float32', 'host', fill_value=1)
+        # B = full([K, M], 'float32', 'host', fill_value=1)
+        # C = zeros([N, M], 'float32', 'host')
+        A = np.full(shape=[N, K], fill_value=0.0, dtype=np.float32, order='C')
+        B = np.full(shape=[K, M], fill_value=0.0, dtype=np.float32, order='C')
+        C = np.full(shape=[N, M], fill_value=0.0, dtype=np.float32, order='C')
+        A[:, 0] = 1.0
+        B[0, :] = 1.0
+        A = TensorValue.from_numpy(A, scope='host')
+        B = TensorValue.from_numpy(B, scope='host')
+        C = TensorValue.from_numpy(C, scope='host')
 
+
+        np.set_printoptions(threshold=128 * 128, linewidth=500)
         use_verify = False
         if use_verify:
             verify(task, [A, B, C], grid_implementor='cuda_grid_split_implementer')
         else:
             task.worker = Grid()
-            # grid_module = build(random_resolve(implement(task, impl_name='cuda_grid_split_implementer'), seed=1), f'./outs/grid')
-            grid_module = build(random_resolve(implement(task, impl_name='cuda_grid_naive_implementer'), seed=1), f'./outs/grid')
+            ir_module = implement(task, impl_name='cuda_grid_split_implementer')
+            grid_module = build(random_resolve(ir_module, seed=1), f'./outs/no_pipe')
+            # grid_module = build(random_resolve(implement(task, impl_name='cuda_grid_naive_implementer'), seed=1), f'./outs/grid')
 
             task.worker = Host()
             host_module = build(random_resolve(implement(task)), f'./outs/host')
 
             GA, GB, GC = A.to_cuda(), B.to_cuda(), C.to_cuda()
             grid_module['matmul'](GA, GB, GC)
+            pycuda.driver.Context.synchronize()
             print(GA)
             print(GB)
             print(GC)
@@ -245,6 +263,15 @@ def demo_brute_force_resolver():
         print(np.mean(module['matmul'].profile(A, B, C, repeat=10)))
 
 
+def demo_efficient_matmul():
+    N, M, K = 1024, 1024, 1024
+    ir_module = random_resolve(implement(matmul(N, M, K), 'cuda_grid_split_implementer'))
+    module = build(ir_module, './outs/no_pipe')
+    # ir_module = lower(ir_module)
+    # code, _ = codegen(ir_module)
+    # print(code)
+
+
 if __name__ == '__main__':
     # demo_task()
     # demo_codegen()
@@ -258,6 +285,8 @@ if __name__ == '__main__':
     # demo_grid_2d_static_implementer()
     # demo_sympy()
     # demo_brute_force_resolver()
+    # demo_efficient_matmul()
+    # demo_verify()
 
 """
 TOS: Task-Oriented Scheduling

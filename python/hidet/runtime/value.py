@@ -42,6 +42,14 @@ class TensorValue(Value):
         return TensorValue.from_numpy(array, scope)
 
     @staticmethod
+    def full(shape, scalar_type, scope, strides=None, fill_value=0):
+        array = np.ndarray(shape=shape, dtype=scalar_type, strides=strides)
+        flattened: np.ndarray = array.ravel()
+        for i in range(flattened.size):
+            flattened[i] = fill_value
+        return TensorValue.from_numpy(array, scope)
+
+    @staticmethod
     def from_numpy(array: np.ndarray, scope):
         type = tensor_type(scope, str(array.dtype), array.shape, array.strides)
         if scope == 'host':
@@ -93,6 +101,10 @@ class ScalarValue(Value):
 
 def randn(shape, scalar_type: str, scope: str, strides=None, seed=0):
     return TensorValue.randn(shape, scalar_type, scope, strides, seed)
+
+
+def full(shape, scalar_type: str, scope: str, strides=None, fill_value=1):
+    return TensorValue.full(shape, scalar_type, scope, strides, fill_value)
 
 
 def empty(shape, scalar_type: str, scope: str, strides=None):

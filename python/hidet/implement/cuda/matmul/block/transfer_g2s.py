@@ -10,8 +10,10 @@ from hidet.ir.func import IRModule
 from hidet.ir.node import Node
 from hidet.ir.task import Task, ThreadBlock
 from hidet.ir.type import scalar_type, TensorType, ScalarType
-from hidet.implement.cuda.layout import get_task_layouts, TaskLayout
+from hidet.implement.cuda.layout import get_task_layouts, TaskLayout, full_layout, row_major_layout
+from hidet.implement.cuda.layout.concrete import WarpLayout4x8
 from hidet.implement.search_space import AtomSpace, SpaceChoice
+from hidet.ir.primitives import thread_idx
 
 
 @register_impl('cuda_block_transfer_g2s_implementer')
@@ -53,12 +55,15 @@ class CudaBlockTransferG2SImplementer(Implementer):
         block_size = int(match[self.block_dim])
         task_m, task_n = [int(match[v]) for v in self.shape]
         space = AtomSpace('layout', choices=get_task_layouts(valid_num_workers=block_size, task_shape=[task_m, task_n]))
+        # todo: use search
+        # space = AtomSpace('layout', choices=[row_major_layout(32, 8) * full_layout(4, 1),
+        #                                      full_layout(1, 4) * row_major_layout(8, 32)])
         space_size = len(space)
         ir_module = IRModule()
         for i in range(space_size):
             try:
                 choice_module = self.implement_for_choice(task, match, space[i])
-            except (NotImplementedError, AssertionError):
+            except (NotImplementedError, AssertionError) as e:
                 continue
             else:
                 ir_module.include(choice_module)
@@ -68,18 +73,19 @@ class CudaBlockTransferG2SImplementer(Implementer):
         task_m, task_n = [int(match[v]) for v in self.shape]
         gmem_dtype = match[self.gmem_dtype]
         smem_dtype = match[self.smem_dtype]
-        layout: TaskLayout = choice.layout.value
+        in_strides = [match[v] for v in self.in_strides]
+        out_strides = [match[v] for v in self.out_strides]
+        layout: TaskLayout = choice.value
         assert tuple(layout.task_shape) == tuple([task_m, task_n])
         with FunctionBuilder(name=task.name) as fb:
             # params
-            gmem = tensor_var('gmem', [task_m, task_n], 'global', dtype=gmem_dtype)
-            smem = tensor_var('smem', [task_m, task_n], 'shared', dtype=smem_dtype)
+            gmem = tensor_var('gmem', [task_m, task_n], 'global', dtype=gmem_dtype, strides=in_strides)
+            smem = tensor_var('smem', [task_m, task_n], 'shared', dtype=smem_dtype, strides=out_strides)
             fb.extend_params([gmem, smem])
 
             # body
             sb = StmtBuilder()
-            thread_idx = var('threadIdx.x')
-            thread_tasks: List[Tuple[Expr, Expr]] = layout.worker2task(thread_idx)
+            thread_tasks: List[Tuple[Expr, Expr]] = layout.worker2task(thread_idx())
             for thread_task in thread_tasks:
                 i, j = thread_task
                 sb.append(BufferStoreStmt(smem, [i, j], TensorElement(gmem, [i, j])))
