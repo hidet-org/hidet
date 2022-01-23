@@ -13,9 +13,9 @@ def matmul(N: int, M: int, K: int) -> Task:
         name='matmul',
         computation=C,
         params=[A, B, C],
-        params_type=[tensor_type('global', 'float32', [N, K], strides=[K, 1]),
-                     tensor_type('global', 'float32', [K, M], strides=[M, 1]),
-                     tensor_type('global', 'float32', [N, M], strides=[M, 1])],
+        params_type=[tensor_type('global', 'float32', [N, K], layout=[K, 1]),
+                     tensor_type('global', 'float32', [K, M], layout=[M, 1]),
+                     tensor_type('global', 'float32', [N, M], layout=[M, 1])],
         worker=Grid()
     )
 
@@ -28,8 +28,8 @@ def global2shared(N, M):
         name='global2shared',
         computation=smem_out,
         params=[gmem_in, smem_out],
-        params_type=[tensor_type('global', 'float32', [N, M], strides=[M, 1]),
-                     tensor_type('shared', 'float32', [N, M], strides=[1, N])],
+        params_type=[tensor_type('global', 'float32', [N, M], layout=[M, 1]),
+                     tensor_type('shared', 'float32', [N, M], layout=[1, N])],
         worker=ThreadBlock(256)
     )
 
@@ -45,9 +45,9 @@ def generic_matmul() -> Task:
         name='matmul',
         computation=C,
         params=[A, B, C],
-        params_type=[tensor_type('global', 'float32', [N, K], strides=[K, 1]),
-                     tensor_type('global', 'float32', [K, M], strides=[M, 1]),
-                     tensor_type('global', 'float32', [N, M], strides=[M, 1])],
+        params_type=[tensor_type('global', 'float32', [N, K], layout=[K, 1]),
+                     tensor_type('global', 'float32', [K, M], layout=[M, 1]),
+                     tensor_type('global', 'float32', [N, M], layout=[M, 1])],
         worker=Grid()
     )
 

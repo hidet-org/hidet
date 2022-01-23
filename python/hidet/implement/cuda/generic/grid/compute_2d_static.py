@@ -109,7 +109,7 @@ class CudaGridSplitImplementer(Implementer):
             other_params = collect(value, (ScalarInput, TensorInput))
             params = outer_axes_params + other_params + [output_param]
             task_ret_type: TensorType = param2type[task.compute]
-            subtask_ret_type: TensorType = tensor_type(task_ret_type.scope, task_ret_type.scalar_type, [factor, factor], task_ret_type.strides)
+            subtask_ret_type: TensorType = tensor_type(task_ret_type.scope, task_ret_type.scalar_type, [factor, factor], task_ret_type.layout)
             params_type = [scalar_type('int32'), scalar_type('int32')] + [param2type[param] for param in other_params] + [subtask_ret_type]
 
             # out_arg = param2var[task.compute][n_block_idx: n_block_idx + sub_shape[0], m_block_idx: m_block_idx + sub_shape[1]]
@@ -185,8 +185,7 @@ class CudaGridSplitImplementer(Implementer):
                             cond = And(cond, i_cond_expr[i])
                         if j_cond[1 - i]:
                             cond = And(cond, j_cond_expr[j])
-                        sb.append(IfStmt(cond))
-                        with sb.then_body():
+                        with sb.if_then(cond):
                             sb.append(EvaluateStmt(Call(ir_module.lookup_var(subtask_name), args)))
 
             sb.exit_body()  # let n_block_idx

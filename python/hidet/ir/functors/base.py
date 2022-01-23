@@ -652,7 +652,7 @@ class TypeFunctor:
     def __call__(self, *args, **kwargs):
         return self.visit(*args, **kwargs)
 
-    def visit(self, t: BaseType):
+    def visit(self, t: TypeNode):
         if t in self.memo:
             return self.memo[t]
         if isinstance(t, ScalarType):

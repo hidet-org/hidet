@@ -80,7 +80,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             return self.visit_Function(node)
         elif isinstance(node, (Stmt, Expr)):
             return StmtExprFunctor.visit(self, node)
-        elif isinstance(node, BaseType):
+        elif isinstance(node, TypeNode):
             return TypeFunctor.visit(self, node)
         elif isinstance(node, (tuple, list)):
             return doc_join([self(v) for v in node], ', ')

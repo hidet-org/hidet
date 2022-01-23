@@ -111,8 +111,12 @@ def demo_profile():
     print(module['matmul'].profile(A, B, C, repeat=10))
 
 
+def print_latencies(name, latencies):
+    print('{:>20}: {:.3f} (std {:.3f}) ms [{}]'.format(name, np.mean(latencies), np.std(latencies), " ".join([f'{v:.3f}' for v in latencies])))
+
+
 def demo_baselines():
-    warmup = 1
+    warmup = 3
     number = 1
     repeat = 10
     workloads = [
@@ -135,16 +139,17 @@ def demo_baselines():
         print("Workload (N x M x K): {} x {} x {}".format(N, M, K))
         for name, func in baselines:
             latencies = func.profile(scalar(N), scalar(M), scalar(K), A, B, C, warmup=warmup, number=number, repeat=repeat)
-            print('{:>20}: {:.3f} (std {:.3f}) ms'.format(name, np.mean(latencies), np.std(latencies)))
+            print_latencies(name, latencies)
 
         # module = build(random_resolve(implement(matmul(N, M, K), 'cuda_grid_split_implementer')), output_dir='./outs/static')
-        module = build(brute_force_resolve(implement(matmul(N, M, K), 'cuda_grid_split_implementer')), output_dir='./outs/static')
-        latencies = module['matmul'].profile(A, B, C, repeat=repeat)
-        print('{:>20}: {:.3f} (std {:.3f}) ms'.format('hidet_static(rs)', np.mean(latencies), np.std(latencies)))
-
-        module = build(brute_force_resolve(implement(matmul(N, M, K), 'cuda_grid_naive_implementer')), output_dir='./outs/naive')
+        module = build(brute_force_resolve(implement(matmul(N, M, K), 'cuda_grid_split_implementer'), warmup=warmup, number=number, repeat=repeat), output_dir='./outs/static')
         latencies = module['matmul'].profile(A, B, C, warmup=warmup, number=number, repeat=repeat)
-        print('{:>20}: {:.3f} (std {:.3f}) ms'.format('hidet_naive', np.mean(latencies), np.std(latencies)))
+        print_latencies('hidet_nopipe', latencies)
+
+        # module = build(random_resolve(implement(matmul(N, M, K), 'cuda_grid_naive_implementer')), output_dir='./outs/naive')
+        module = build(brute_force_resolve(implement(matmul(N, M, K), 'cuda_grid_naive_implementer'), warmup=warmup, number=number, repeat=repeat), output_dir='./outs/naive')
+        latencies = module['matmul'].profile(A, B, C, warmup=warmup, number=number, repeat=repeat)
+        print_latencies('hidet_static', latencies)
 
         print()
 

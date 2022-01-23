@@ -1,53 +1,57 @@
 from typing import Mapping
 
-from hidet.implement.cuda.layout import TaskLayout, row_major_layout, full_layout
 from hidet.implement.implementer import Implementer, register_impl, NotSupportedError
 from hidet.implement.search_space import ProductSpace, AtomSpace, SpaceChoice
 from hidet.ir.builders import TaskBuilder, FunctionBuilder, StmtBuilder
 from hidet.ir.dialects.compute import TensorInput, TensorCompute, compute, ReduceCompute, reduce_sum
 from hidet.ir.dialects.lowlevel import Address
 from hidet.ir.dialects.pattern import TaskPattern, any_const_int
-from hidet.ir.expr import Call, TensorElement, var, tensor_var, convert
+from hidet.ir.expr import Call, TensorElement, var, tensor_var, convert, Var
 from hidet.ir.func import IRModule
+from hidet.ir.layout import TaskLayout, row_major_layout, full_layout
 from hidet.ir.node import Node
-from hidet.ir.stmt import LetStmt, EvaluateStmt, ForStmt
-from hidet.ir.task import Task, ThreadBlock, Warp
-from hidet.ir.type import scalar_type, TensorType, Scope, RegisterScope
 from hidet.ir.primitives import syncthreads, thread_idx
+from hidet.ir.stmt import LetStmt, ForStmt
+from hidet.ir.task import Task, ThreadBlock, Warp
+from hidet.ir.type import scalar_type, TensorType, Scope, LocalLayout, DataLayout
 
 
 class MatmulSetting:
-    def __init__(self, block_layout, block_k, warp_layout, warp_k, regs_a_scope, regs_b_scope, regs_c_scope):
-        self.block_layout: TaskLayout = block_layout
+    def __init__(self, block_k, warp_k, block_layout, warp_layout, a_s2r_layout, b_s2r_layout, ab2c_layout, c_r2g_layout,
+                 regs_a_layout, regs_b_layout, regs_c_layout):
+        # reduction dimensions
         self.block_k = block_k
-        self.warp_layout: TaskLayout = warp_layout
         self.warp_k = warp_k
-        self.regs_a_scope: RegisterScope = regs_a_scope
-        self.regs_b_scope: RegisterScope = regs_b_scope
-        self.regs_c_scope: RegisterScope = regs_c_scope
+        # task layouts
+        self.block_layout: TaskLayout = block_layout
+        self.warp_layout: TaskLayout = warp_layout
+        self.a_s2r_layout: TaskLayout = a_s2r_layout
+        self.b_s2r_layout: TaskLayout = b_s2r_layout
+        self.ab2c_layout: TaskLayout = ab2c_layout
+        self.c_r2g_layout: TaskLayout = c_r2g_layout
+        # data layouts
+        self.regs_a_layout: LocalLayout = regs_a_layout
+        self.regs_b_layout: LocalLayout = regs_b_layout
+        self.regs_c_layout: LocalLayout = regs_c_layout
 
 
 def default_setting():
-    from hidet.implement.cuda.layout.concrete import WarpLayout4x8
-    block_layout = row_major_layout(4, 2)
-    warp_layout = (full_layout(2, 2) * WarpLayout4x8()) * full_layout(4, 4)
-    regs_a_scope = RegisterScope(
-        global2local=(lambda i, j: (i % 4 + (i // 16) * 4, 0)),
-        local2global=(lambda tid, i, j: (i // 4 * 16 + tid // 16 * 8 + tid % 2 * 4 + i % 4, 0)),
-        local_shape=(8, 1)
+    from hidet.ir.layout.concrete import WarpLayout4x8
+    return MatmulSetting(
+        block_k=8,
+        warp_k=1,
+        block_layout=row_major_layout(4, 2),
+        warp_layout=(full_layout(2, 2) * WarpLayout4x8()) * full_layout(4, 4),
+        a_s2r_layout=TaskLayout(num_workers=32, worker2task=(lambda w: [(i // 4 * 16 + w // 16 * 8 + w % 2 * 4 + i % 4, 0) for i in range(8)])),
+        b_s2r_layout=TaskLayout(num_workers=32, worker2task=(lambda w: [(0, j // 4 * 32 + w % 16 // 2 * 4 + j % 4) for j in range(8)])),
+        ab2c_layout=TaskLayout(num_workers=32, worker2task=(lambda w: [(i // 4 * 16 + w // 16 * 8 + w % 2 * 4 + i % 4,
+                                                                        j // 4 * 32 + w % 16 // 2 * 4 + j % 4) for i in range(8) for j in range(8)])),
+        c_r2g_layout=TaskLayout(num_workers=32, worker2task=(lambda w: [(i // 4 * 16 + w // 16 * 8 + w % 2 * 4 + i % 4,
+                                                                         j // 4 * 32 + w % 16 // 2 * 4 + j % 4) for i in range(8) for j in range(8)])),
+        regs_a_layout=LocalLayout(local_size=8, shape=(32, 1), global2local=(lambda i, j: i % 4 + (i // 16) * 4)),
+        regs_b_layout=LocalLayout(local_size=8, shape=(1, 64), global2local=(lambda i, j: j % 4 + (j // 32) * 4)),
+        regs_c_layout=LocalLayout(local_size=8 * 8, shape=(32, 64), global2local=(lambda i, j: ((i // 16 * 4 + i % 4) * 8 + j // 32 * 4 + j % 4)))
     )
-    regs_b_scope = RegisterScope(
-        global2local=(lambda i, j: (0, j % 4 + (j // 32) * 4)),
-        local2global=(lambda tid, i, j: (0, j // 4 * 32 + tid % 16 // 2 * 4 + j % 4)),
-        local_shape=(1, 8)
-    )
-    regs_c_scope = RegisterScope(
-        global2local=(lambda i, j: (i // 16 * 4 + i % 4, j // 32 * 4 + j % 4)),
-        local2global=(lambda tid, i, j: (i // 4 * 16 + tid // 16 * 8 + tid % 2 * 4 + i % 4,
-                                         j // 4 * 32 + tid % 16 // 2 * 4 + j % 4)),
-        local_shape=(8, 8)
-    )
-    return MatmulSetting(block_layout, 8, warp_layout, 1, regs_a_scope, regs_b_scope, regs_c_scope)
 
 
 matmul_settings = [default_setting()]
@@ -64,33 +68,6 @@ class CudaBlockStaticMatmulNopipeImplementer(Implementer):
                 smem -> regs
                 regs -> regs (compute)
             block_sync
-    """
-
-    """
-    TODO:
-    With software pipeline:
-        gmem -> current smem
-        inc gmem
-        sync
-        current smem -> current regs
-        inc smem
-        sync
-        for block_tile_idx in range(task_k / block_k) - 1
-            current gmem -> next smem
-            inc gmem
-            for frag_tile_idx in range(block_k / warp_k)
-                if is last warp tile:
-                    swap smem
-                current smem -> next regs
-                inc smem
-                current regs -> accumulate regs (compute)
-                swap regs
-        for frag_tile_idx in range(block_k / warp_k)
-            if not last warp tile:
-                current smem -> next regs
-            inc smem
-            current regs -> accumulate regs (compute)
-            swap regs
     """
 
     def __init__(self):
@@ -119,12 +96,12 @@ class CudaBlockStaticMatmulNopipeImplementer(Implementer):
                                          value=self.reduce)
 
         # inputs and output types
-        self.A_strides = [any_const_int(), any_const_int()]
-        self.B_strides = [any_const_int(), any_const_int()]
-        self.C_strides = [any_const_int(), any_const_int()]
-        self.A_type = TensorType(Scope('global'), scalar_type('float32'), shape=None, strides=self.A_strides)
-        self.B_type = TensorType(Scope('global'), scalar_type('float32'), shape=None, strides=self.B_strides)
-        self.C_type = TensorType(Scope('global'), scalar_type('float32'), shape=None, strides=self.C_strides)
+        self.A_layout = DataLayout()
+        self.B_layout = DataLayout()
+        self.C_layout = DataLayout()
+        self.A_type = TensorType(Scope('global'), scalar_type('float32'), shape=None, layout=self.A_layout)
+        self.B_type = TensorType(Scope('global'), scalar_type('float32'), shape=None, layout=self.B_layout)
+        self.C_type = TensorType(Scope('global'), scalar_type('float32'), shape=None, layout=self.C_layout)
 
         # pattern
         self.pattern = TaskPattern(
@@ -205,52 +182,52 @@ class CudaBlockStaticMatmulNopipeImplementer(Implementer):
         C_dtype = C_type.scalar_type
 
         # declare inputs and outputs and their types shared by all subtasks
-        smem_A_type = TensorType(scope='shared', scalar_type=A.dtype, strides=[1, task_m])  # column major, TODO: add to search space
-        smem_B_type = TensorType(scope='shared', scalar_type=B.dtype, strides=[task_n, 1])  # row major
+        smem_A_type = TensorType(scope='shared', dtype=A.dtype, shape=[task_m, block_k * warp_k], layout=[1, task_m])  # column major, TODO: add to search space
+        smem_B_type = TensorType(scope='shared', dtype=B.dtype, shape=[block_k * warp_k, task_n], layout=[task_n, 1])  # row major
 
-        regs_A_type = TensorType(scope=setting.regs_a_scope, scalar_type=A_dtype)
-        regs_B_type = TensorType(scope=setting.regs_b_scope, scalar_type=B_dtype)
-        regs_C_type = TensorType(scope=setting.regs_c_scope, scalar_type=C_dtype)
+        regs_A_type = TensorType(scope='register', dtype=A_dtype, shape=[warp_m, warp_k], layout=setting.regs_a_layout)
+        regs_B_type = TensorType(scope='register', dtype=B_dtype, shape=[warp_k, warp_n], layout=setting.regs_b_layout)
+        regs_C_type = TensorType(scope='register', dtype=C_dtype, shape=[warp_m, warp_n], layout=setting.regs_c_layout)
 
         # define subtasks
-        with TaskBuilder(f'{task.name}.c.init.warp', Warp(), ir_module, 'cuda_warp_init_regs_implementer') as c_init:
+        with TaskBuilder(f'{task.name}.c.init.warp', Warp(setting.ab2c_layout), ir_module, 'cuda_warp_fill_value_implementer') as c_init:
             c_init_cmpt = compute('regs_c', shape=[warp_m, warp_n], fcompute=(lambda i, j: convert(0.0)))
             c_init.set_computation(c_init_cmpt)
             c_init.append_param(c_init_cmpt, regs_C_type)
 
-        with TaskBuilder(f'{task.name}.a.g2s.block', ThreadBlock(block_size), ir_module, 'cuda_block_transfer_g2s_implementer') as a_g2s:
+        with TaskBuilder(f'{task.name}.a.g2s.block', ThreadBlock(block_size), ir_module, 'cuda_block_transfer_2d_implementer') as a_g2s:
             gmem_frag_A = TensorInput('gmem_frag_A', A.dtype)
-            gmem_frag_A_type = TensorType('global', A.dtype, strides=A_type.strides)
+            gmem_frag_A_type = TensorType('global', A.dtype, layout=A_type.layout)
             a_g2s_cmpt = compute('smem_A', shape=[block_m * warp_m, block_k * warp_k], fcompute=lambda i, j: gmem_frag_A[i, j])
             a_g2s.set_computation(a_g2s_cmpt)
             a_g2s.append_param(gmem_frag_A, gmem_frag_A_type)
             a_g2s.append_param(a_g2s_cmpt, smem_A_type)
 
-        with TaskBuilder(f'{task.name}.b.g2s.block', ThreadBlock(block_size), ir_module, 'cuda_block_transfer_g2s_implementer') as b_g2s:
+        with TaskBuilder(f'{task.name}.b.g2s.block', ThreadBlock(block_size), ir_module, 'cuda_block_transfer_2d_implementer') as b_g2s:
             gmem_frag_B = TensorInput('gmem_frag_B', B.dtype)
-            gmem_frag_B_type = TensorType('global', B.dtype, strides=B_type.strides)
+            gmem_frag_B_type = TensorType('global', B.dtype, layout=B_type.layout)
             b_g2s_cmpt = compute('smem_B', shape=[block_k * warp_k, block_n * warp_n], fcompute=lambda i, j: gmem_frag_B[i, j])
             b_g2s.set_computation(b_g2s_cmpt)
             b_g2s.append_param(gmem_frag_B, gmem_frag_B_type)
             b_g2s.append_param(b_g2s_cmpt, smem_B_type)
 
-        with TaskBuilder(f'{task.name}.a.s2r.warp', Warp(), ir_module, 'cuda_warp_transfer_s2r_implementer') as a_s2r:
+        with TaskBuilder(f'{task.name}.a.s2r.warp', Warp(setting.a_s2r_layout), ir_module, 'cuda_warp_transfer_2d_implementer') as a_s2r:
             smem_frag_A = TensorInput('smem_frag_A', A.dtype)
-            smem_frag_A_type = TensorType('shared', A.dtype, strides=smem_A_type.strides)
+            smem_frag_A_type = TensorType('shared', A.dtype, layout=smem_A_type.layout)
             a_s2r_cmpt = compute('regs_A', shape=[warp_m, warp_k], fcompute=lambda i, j: smem_frag_A[i, j])
             a_s2r.set_computation(a_s2r_cmpt)
             a_s2r.append_param(smem_frag_A, smem_frag_A_type)
             a_s2r.append_param(a_s2r_cmpt, regs_A_type)
 
-        with TaskBuilder(f'{task.name}.b.s2r.warp', Warp(), ir_module, 'cuda_warp_transfer_s2r_implementer') as b_s2r:
+        with TaskBuilder(f'{task.name}.b.s2r.warp', Warp(setting.b_s2r_layout), ir_module, 'cuda_warp_transfer_2d_implementer') as b_s2r:
             smem_frag_B = TensorInput('smem_frag_B', B.dtype)
-            smem_frag_B_type = TensorType('shared', B.dtype, strides=smem_B_type.strides)
+            smem_frag_B_type = TensorType('shared', B.dtype, layout=smem_B_type.layout)
             b_s2r_cmpt = compute('regs_B', shape=[warp_k, warp_n], fcompute=lambda i, j: smem_frag_B[i, j])
             b_s2r.set_computation(b_s2r_cmpt)
             b_s2r.append_param(smem_frag_B, smem_frag_B_type)
             b_s2r.append_param(b_s2r_cmpt, regs_B_type)
 
-        with TaskBuilder(f'{task.name}.compute.warp', Warp(), ir_module) as ab2c:
+        with TaskBuilder(f'{task.name}.compute.warp', Warp(setting.ab2c_layout), ir_module) as ab2c:
             regs_A_input = TensorInput('regs_A', A.dtype)
             regs_B_input = TensorInput('regs_B', B.dtype)
             axis_k = var('k')
@@ -261,7 +238,7 @@ class CudaBlockStaticMatmulNopipeImplementer(Implementer):
             ab2c.append_param(regs_B_input, regs_B_type)
             ab2c.append_param(ab2c_cmpt, regs_C_type)
 
-        with TaskBuilder(f'{task.name}.r2g.warp', Warp(), ir_module) as c_r2g:
+        with TaskBuilder(f'{task.name}.r2g.warp', Warp(setting.c_r2g_layout), ir_module) as c_r2g:
             regs_C_input = TensorInput('regs_C', C_dtype)
             c_r2g_cmpt = compute('gmem_C', shape=[warp_m, warp_n], fcompute=lambda i, j: regs_C_input[i, j])
             c_r2g.set_computation(c_r2g_cmpt)
@@ -271,50 +248,46 @@ class CudaBlockStaticMatmulNopipeImplementer(Implementer):
         # define function
         with FunctionBuilder(task.name) as fb:
             # declare params
-            gmem_A = tensor_var('A', shape=[task_m, task_k], scope='global', dtype=A_dtype)
-            gmem_B = tensor_var('B', shape=[task_k, task_n], scope='global', dtype=B_dtype)
-            gmem_C = tensor_var('C', shape=[task_m, task_n], scope='global', dtype=C_dtype)
+            gmem_A = Var('A', A_type)
+            gmem_B = Var('B', B_type)
+            gmem_C = Var('C', C_type)
             fb.extend_params([gmem_A, gmem_B, gmem_C])
 
             # declare A, B shared memory
-            smem_A = tensor_var('smem_A', shape=[task_m * block_k, warp_k], scope='shared', dtype=A_dtype, strides=smem_A_type.strides)
-            smem_B = tensor_var('smem_B', shape=[block_k * warp_k, task_n], scope='shared', dtype=B_dtype, strides=smem_B_type.strides)
+            smem_A = Var('smem_A', smem_A_type)
+            smem_B = Var('smem_B', smem_B_type)
             fb.extend_local_vars([smem_A, smem_B])
 
             # declare A, B, C registers
-            regs_A = tensor_var('regs_A', shape=setting.regs_a_scope.local_shape, scope=setting.regs_a_scope, dtype=A_dtype)
-            regs_B = tensor_var('regs_B', shape=setting.regs_b_scope.local_shape, scope=setting.regs_b_scope, dtype=B_dtype)
-            regs_C = tensor_var('regs_C', shape=setting.regs_c_scope.local_shape, scope=setting.regs_c_scope, dtype=C_dtype)
+            regs_A = Var('regs_A', regs_A_type)
+            regs_B = Var('regs_B', regs_B_type)
+            regs_C = Var('regs_C', regs_C_type)
             fb.extend_local_vars([regs_A, regs_B, regs_C])
 
             # function body
             sb = StmtBuilder()
-            warp_idx = var('warp_id')
-            sb.append(LetStmt(warp_idx, thread_idx() // 32))
-            sb.enter_body()
-            sb.append(c_init(regs_C))
-            block_tile_idx = var('block_tile_idx')
-            sb.append(ForStmt(loop_var=block_tile_idx, extent=task_k // (block_k * warp_k)))
-            with sb.for_body():
-                # gmem -> smem
-                sb.append(a_g2s(Address(TensorElement(gmem_A, [0, block_tile_idx * (block_k * warp_k)])), Address(TensorElement(smem_A, [0, 0]))))
-                sb.append(b_g2s(Address(TensorElement(gmem_B, [block_tile_idx * (block_k * warp_k), 0])), Address(TensorElement(smem_B, [0, 0]))))
-                # sync
-                sb.append(Call(syncthreads(), []))
-                warp_tile_idx = var('warp_tile_idx')
-                sb.append(ForStmt(loop_var=warp_tile_idx, extent=block_k))
-                with sb.for_body():
-                    # smem -> regs
-                    sb.append(a_s2r(Address(TensorElement(smem_A, [warp_idx // 2 * 32, warp_tile_idx])), regs_A))
-                    sb.append(b_s2r(Address(TensorElement(smem_B, [warp_tile_idx, warp_idx % 2 * 64])), regs_B))
-                    # compute
-                    sb.append(ab2c(regs_A, regs_B, regs_C))
+            with sb.let('warp_id', thread_idx() // 32) as warp_idx:
+                # init regs c
+                sb += c_init(regs_C)
+                with sb.for_loop('block_k_tile', task_k // (block_k * warp_k)) as block_tile_idx:
+                    # gmem -> smem
+                    sb += a_g2s(Address(gmem_A[0, block_tile_idx * (block_k * warp_k)]), Address(smem_A[0, 0]))
+                    sb += b_g2s(Address(gmem_B[block_tile_idx * (block_k * warp_k), 0]), Address(smem_B[0, 0]))
                     # sync
-                    sb.append(Call(syncthreads(), []))
-            # regs -> gmem
-            sb.append(c_r2g(regs_C, Address(TensorElement(gmem_C, [warp_idx // 2 * 32, warp_idx % 2 * 64]))))
-
-            sb.exit_body()  # end of let warp_id
+                    sb += Call(syncthreads(), [])
+                    with sb.for_loop('warp_k_tile', block_k) as warp_tile_idx:
+                        # smem -> regs
+                        warp_task = block_layout.worker2task(warp_tile_idx)
+                        assert len(warp_task) == 1
+                        warp_i, warp_j = warp_task[0]
+                        sb += a_s2r(Address(smem_A[warp_i * warp_m, warp_tile_idx]), regs_A)
+                        sb += b_s2r(Address(smem_B[warp_tile_idx, warp_j * warp_n]), regs_B)
+                        # compute
+                        sb += ab2c(regs_A, regs_B, regs_C)
+                        # sync
+                    sb += Call(syncthreads(), [])
+                # regs -> gmem
+                sb += c_r2g(regs_C, Address(gmem_C[warp_idx // 2 * 32, warp_idx % 2 * 64]))
             fb.set_body(sb.finish())
 
             # attrs
@@ -323,5 +296,3 @@ class CudaBlockStaticMatmulNopipeImplementer(Implementer):
         func = fb.get()
         ir_module.add(func.name, func)
         return ir_module
-
-

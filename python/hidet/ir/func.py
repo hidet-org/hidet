@@ -1,6 +1,6 @@
 from typing import Dict, List, Union, Optional
 from hidet.ir.node import Node
-from hidet.ir.type import BaseType, FuncType
+from hidet.ir.type import TypeNode, FuncType
 from hidet.ir.dialects.lowlevel import VoidType
 from hidet.ir.expr import Var
 from hidet.ir.stmt import Stmt
@@ -27,7 +27,7 @@ class Function(Node):
         self.name = name
         self.params: List[Var] = params
         self.body: Stmt = body
-        self.ret_type: BaseType = ret_type
+        self.ret_type: TypeNode = ret_type
         self.local_vars: List[Var] = local_vars
         self.attrs = attrs if attrs else {}
 

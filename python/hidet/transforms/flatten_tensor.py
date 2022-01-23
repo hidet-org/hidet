@@ -8,17 +8,7 @@ from hidet.ir.func import Function
 from hidet.ir.functors import collect, rewrite, simplify
 from hidet.ir.dialects.lowlevel import PointerType, Address
 from hidet.transforms import Pass
-
-
-def sum(lst: List):
-    assert len(lst) > 0
-    if len(lst) == 1:
-        return lst[0]
-    else:
-        rt = lst[0] + lst[1]
-        for v in lst[2:]:
-            rt = rt + v
-        return rt
+from hidet.ir.type import StridesLayout, LocalLayout
 
 
 class FlattenTensor(Pass):
@@ -30,11 +20,11 @@ class FlattenTensor(Pass):
         target_tensors = []
         flattened_vars = []
         for param in func.params:
-            if isinstance(param.type, TensorType) and param.type.scope.name in ['global', 'shared', 'host']:
+            if isinstance(param.type, TensorType):
                 target_tensors.append(param)
                 flattened_vars.append(Var(param.hint, PointerType(param.type.scalar_type)))
         for local_var in func.local_vars:
-            if isinstance(local_var.type, TensorType) and local_var.type.scope.name in ['shared']:
+            if isinstance(local_var.type, TensorType):
                 target_tensors.append(local_var)
                 scope = local_var.type.scope
                 dtype = local_var.type.scalar_type
@@ -52,42 +42,37 @@ class FlattenTensor(Pass):
         for e in element_exprs:
             if e.base not in target_tensors:
                 continue
-            param: Var = e.base
-            assert isinstance(param.type, TensorType)
-            shape = param.type.shape
-            strides = param.type.strides
-            indices = e.indices
-            items = []
-            for i in range(len(shape)):
-                items.append(indices[i] * strides[i])
-            global_index = sum(items)
-            rmap[e] = TensorElement(tensor2flattened[param], [global_index])
+            tensor_var: Var = e.base
+            assert isinstance(tensor_var.type, TensorType)
+            global_index = tensor_var.type.layout.serialize(*e.indices)
+            rmap[e] = TensorElement(tensor2flattened[tensor_var], [global_index])
         body = rewrite(body, rmap)
 
         # update TensorSlice
         rmap.clear()
         slice_exprs: List[TensorSlice] = collect(func.body, TensorSlice)
-        for e in slice_exprs:
-            if e.base not in target_tensors:
-                continue
-            param: Var = e.base
-            assert isinstance(param.type, TensorType)
-            shape = param.type.shape
-            strides = param.type.strides
-
-            indices = []
-            start_idx = 0
-            items = []
-            for i in range(len(e.indices)):
-                if e.indices[i]:
-                    indices.append(e.indices[i])
-                else:
-                    indices.append(e.starts[start_idx])
-                    start_idx += 1
-                items.append(indices[i] * strides[i])
-            global_index = sum(items)
-            rmap[e] = Address(TensorElement(tensor2flattened[param], [global_index]))
-        body = rewrite(body, rmap)
+        assert len(slice_exprs) == 0 # deprecated, will remove
+        # for e in slice_exprs:
+        #     if e.base not in target_tensors:
+        #         continue
+        #     tensor_var: Var = e.base
+        #     assert isinstance(tensor_var.type, TensorType)
+        #     shape = tensor_var.type.shape
+        #     strides = tensor_var.type.layout
+        #
+        #     indices = []
+        #     start_idx = 0
+        #     items = []
+        #     for i in range(len(e.indices)):
+        #         if e.indices[i]:
+        #             indices.append(e.indices[i])
+        #         else:
+        #             indices.append(e.starts[start_idx])
+        #             start_idx += 1
+        #         items.append(indices[i] * strides[i])
+        #     global_index = sum(items)
+        #     rmap[e] = Address(TensorElement(tensor2flattened[tensor_var], [global_index]))
+        # body = rewrite(body, rmap)
 
         # update BufferStoreStmt
         rmap.clear()
@@ -95,16 +80,10 @@ class FlattenTensor(Pass):
         for s in store_stmts:
             if s.buf not in target_tensors:
                 continue
-            param: Var = s.buf
-            assert isinstance(param.type, TensorType)
-            shape = param.type.shape
-            strides = param.type.strides
-            indices = s.indices
-            items = []
-            for i in range(len(shape)):
-                items.append(indices[i] * strides[i])
-            global_index = sum(items)
-            rmap[s] = BufferStoreStmt(tensor2flattened[param], [global_index], s.value)
+            tensor_var: Var = s.buf
+            assert isinstance(tensor_var.type, TensorType)
+            global_index = tensor_var.type.layout.serialize(*s.indices)
+            rmap[s] = BufferStoreStmt(tensor2flattened[tensor_var], [global_index], s.value)
         body = rewrite(body, rmap)
 
         # update other usage of original Tensor var to Pointer var

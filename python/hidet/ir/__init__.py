@@ -5,9 +5,10 @@ from . import func
 from . import functors
 from . import builders
 from . import primitives
+from . import layout
 
 from .func import IRModule, Function
-from .type import BaseType, TensorType, ScalarType, FuncType
+from .type import TypeNode, TensorType, ScalarType, FuncType
 from .type import scalar_type, tensor_type
 
 from .expr import Expr, Var, Constant

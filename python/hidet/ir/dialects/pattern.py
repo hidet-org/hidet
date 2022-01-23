@@ -1,6 +1,6 @@
 import traceback
 from typing import Type, Tuple
-import contextlib
+from contextlib import ExitStack
 from hidet.ir.type import *
 from hidet.ir.expr import *
 from hidet.ir.dialects.compute import *
@@ -8,7 +8,12 @@ from hidet.ir.dialects.lowlevel import *
 from hidet.ir.task import *
 
 
-class TypePattern(BaseType):
+class PatternNode(Node):
+    # A pattern can match a series of exprs/types/other node objects
+    pass
+
+
+class TypePattern(TypeNode, PatternNode):
     pass
 
 
@@ -18,27 +23,32 @@ class ScalarTypePattern(TypePattern):
 
 
 class TensorTypePattern(TypePattern):
-    def __init__(self, scope=None, scalar_type=None, rank=None, shape=None, strides=None, allow_dynamic_size=False):
+    def __init__(self, scope=None, scalar_type=None, rank=None, shape=None, layout=None, allow_dynamic_size=False):
         self.rank: Optional[int] = rank
         self.scope: Optional[Union[Scope, List[Scope]]] = scope
         self.scalar_type: Optional[Union[ScalarType, ScalarTypePattern]] = scalar_type
         self.shape: Optional[List[Expr]] = shape
-        self.strides: Optional[List[Expr]] = strides
+        self.layout: Optional[DataLayout] = layout
         self.allow_dynamic_size = allow_dynamic_size
 
 
-class ExprPattern(Expr):
+class ExprPattern(Expr, PatternNode):
     pass
 
 
 class AnyExpr(ExprPattern):
-    def __init__(self, type=None):
-        self.type: Optional[Type[Expr]] = type
+    def __init__(self, cls=None):
+        self.cls: Optional[Type[Expr]] = cls
 
 
-class UnionPattern(Node):
+class UnionPattern(PatternNode):
     def __init__(self, patterns):
         self.patterns: List[Node] = patterns
+
+
+class OptionalPattern(PatternNode):
+    def __init__(self, pattern):
+        self.pattern = pattern
 
 
 class ReduceComputePattern(ExprPattern):
@@ -58,12 +68,12 @@ class ScalarExprPattern(ExprPattern):
         self.reduce: Optional[ReduceCompute] = reduce
 
 
-class TaskPattern(Node):
+class TaskPattern(PatternNode):
     def __init__(self, compute_pattern=None, required_params=None, required_param_types=None,
                  allow_extra_params=True, allow_tensor_extra_params=True, worker=None):
         self.compute_pattern: Optional[Expr] = compute_pattern
         self.required_params: Optional[List[ComputeNode]] = required_params
-        self.required_params_types: Optional[List[BaseType]] = required_param_types
+        self.required_params_types: Optional[List[TypeNode]] = required_param_types
         self.extra_params: Expr = Expr()  # as a handle to reference the unmatched params
         self.allow_extra_params: bool = allow_extra_params
         self.allow_tensor_extra_params: bool = allow_tensor_extra_params
@@ -77,6 +87,59 @@ class NotMatchedError(Exception):
         self.target = target
 
 
+class MatchContext:
+    def __init__(self, matcher: 'PatternMatcher', pattern: Node, target: Node):
+        self.matched = matcher.matched
+        self.dispatch = matcher.match_func_dispatcher
+        self.pattern = pattern
+        self.target = target
+
+    def __enter__(self):
+        if isinstance(self.pattern, list):
+            # we do not cache list pattern because it is un-hashable
+            if not isinstance(self.target, (list, tuple)):
+                raise NotMatchedError(self.pattern, self.target)
+            # noinspection PyArgumentList
+            self.dispatch[self.pattern.__class__](self.pattern, self.target)
+            return
+        if self.pattern is None:
+            # None in pattern matches anything
+            return
+        if self.target is None:
+            if isinstance(self.pattern, OptionalPattern):
+                self.matched[self.pattern] = None
+                return
+            else:
+                msg = 'Expect {} but the target is empty.'.format(self.pattern)
+                raise NotMatchedError(self.pattern, self.target, msg)
+        if self.pattern in self.matched:
+            if self.matched[self.pattern] is not self.target:
+                msg = "Try to match {} and {}, but the prior one has been matched to another target {}".format(self.pattern, self.target, self.matched[self.pattern])
+                raise NotMatchedError(self.pattern, self.target, msg)
+            else:
+                return
+
+        self.matched[self.pattern] = self.target
+        if not isinstance(self.pattern, (PatternNode, list, tuple)):
+            # put all pattern class that allow to accept other classes
+            # list, tuple accept each other
+            PatternMatcher.check_type(self.pattern, self.target)
+        # noinspection PyArgumentList
+        self.dispatch[self.pattern.__class__](self.pattern, self.target)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type == NotMatchedError:
+            # delete the matched target for pattern
+            # do not return True, propagate the exception:
+            #   1. it can be caught by pattern like UnionPattern to try other target,
+            #   2. or, it will be caught by the of PatternMatcher.__call__, indicating failure of matching.
+            if not isinstance(self.pattern, list) and self.pattern is not None:
+                del self.matched[self.pattern]
+
+
+Matchable = Optional[Union[Node, list, tuple]]
+
+
 class PatternMatcher:
     """
     invariant: every time when we enter match(...)
@@ -84,123 +147,70 @@ class PatternMatcher:
         1 if successful, all sub-expressions of pattern have been set in self.matched[...]
         2 if failed, it acted like we have not call this function (we treat self.matched[v] = None and v not in self.matched as the same state)
     """
+
     def __init__(self):
         self.matched: Dict[Node, Optional[Node]] = {}
+        self.match_func_dispatcher = {
+            # expr
+            Add: self.match_Binary,
+            Sub: self.match_Binary,
+            Multiply: self.match_Binary,
+            Div: self.match_Binary,
+            Mod: self.match_Binary,
+            FloorDiv: self.match_Binary,
+            LessThan: self.match_Binary,
+            Equal: self.match_Binary,
+            TensorSlice: self.match_TensorSlice,
+            TensorElement: self.match_TensorElement,
+            Call: self.match_Call,
+            Var: self.match_Var,
+            Constant: self.match_Constant,
+            # compute dialect expr
+            ScalarInput: self.match_ScalarInput,
+            TensorInput: self.match_TensorInput,
+            TensorCompute: self.match_TensorCompute,
+            ReduceCompute: self.match_ReduceCompute,
+            # type
+            ScalarType: self.match_ScalarType,
+            TensorType: self.match_TensorType,
+            # scope
+            Scope: self.match_Scope,
+            # layout
+            TaskLayout: self.always_match,
+            DataLayout: self.match_DataLayout,
+            LocalLayout: self.match_LocalLayout,
+            StridesLayout: self.match_StridesLayout,
+            # worker
+            Host: self.always_match,
+            Grid: self.match_Grid,
+            ThreadBlock: self.match_ThreadBlock,
+            Warp: self.match_Warp,
+            Thread: self.always_match,
+            # patterns
+            TaskPattern: self.match_TaskPattern,
+            AnyExpr: self.match_AnyPattern,
+            ReduceComputePattern: self.match_ReduceComputePattern,
+            TensorComputePattern: self.match_TensorComputePattern,
+            ScalarExprPattern: self.match_ScalarExprPattern,
+            UnionPattern: self.match_UnionPattern,
+            ScalarTypePattern: self.match_ScalarTypePattern,
+            TensorTypePattern: self.match_TensorTypePattern,
+            # python containers
+            list: self.match_Sequence,
+            tuple: self.match_Sequence
+        }
 
     def __call__(self, pattern, target):
-        success = True
         self.matched.clear()
-        msg = "Success"
         try:
             with self.match(pattern, target):
                 pass
+            return self.matched, "Matched"
         except NotMatchedError as e:
-            msg = str(traceback.format_exc())
-            success = False
-        if success:
-            return self.matched, msg
-        else:
-            return None, msg
+            return None, str(traceback.format_exc())
 
-    @contextlib.contextmanager
-    def match(self, pattern: Node, target: Node):
-        if pattern not in self.matched:
-            self.matched[pattern] = None
-        if self.matched[pattern] is not None and self.matched[pattern] is not target:
-            raise NotMatchedError(pattern, target,
-                                  "Try to match {} and {}, but the prior one has been matched to another target {}".format(pattern, target, self.matched[pattern]))
-        old = self.matched[pattern]
-        try:
-            self.matched[pattern] = target
-            if not isinstance(pattern, (ExprPattern, TypePattern, TaskPattern, UnionPattern, Scope)):
-                # all pattern except ExprPattern sub-classes instances requires that target with the same type as pattern's
-                self.check_type(pattern, target)
-            if isinstance(pattern, Add):
-                self.match_Add(pattern, target)
-            elif isinstance(pattern, Sub):
-                self.match_Sub(pattern, target)
-            elif isinstance(pattern, Multiply):
-                self.match_Multiply(pattern, target)
-            elif isinstance(pattern, Div):
-                self.match_Div(pattern, target)
-            elif isinstance(pattern, Mod):
-                self.match_Mod(pattern, target)
-            elif isinstance(pattern, FloorDiv):
-                self.match_FloorDiv(pattern, target)
-            elif isinstance(pattern, LessThan):
-                self.match_LessThan(pattern, target)
-            elif isinstance(pattern, Equal):
-                self.match_Equal(pattern, target)
-            elif isinstance(pattern, TensorSlice):
-                self.match_TensorSlice(pattern, target)
-            elif isinstance(pattern, TensorElement):
-                self.match_TensorElement(pattern, target)
-            elif isinstance(pattern, Cast):
-                self.match_Cast(pattern, target)
-            elif isinstance(pattern, Dereference):
-                self.match_Dereference(pattern, target)
-            elif isinstance(pattern, Call):
-                self.match_Call(pattern, target)
-            elif isinstance(pattern, Var):
-                self.match_Var(pattern, target)
-            elif isinstance(pattern, Constant):
-                self.match_Constant(pattern, target)
-            elif isinstance(pattern, ScalarInput):
-                self.match_ScalarInput(pattern, target)
-            elif isinstance(pattern, TensorInput):
-                self.match_TensorInput(pattern, target)
-            elif isinstance(pattern, TensorCompute):
-                self.match_TensorCompute(pattern, target)
-            elif isinstance(pattern, ReduceCompute):
-                self.match_ReduceCompute(pattern, target)
-            elif isinstance(pattern, AnyExpr):
-                self.match_AnyPattern(pattern, target)
-            elif isinstance(pattern, ReduceComputePattern):
-                self.match_ReduceComputePattern(pattern, target)
-            elif isinstance(pattern, TensorComputePattern):
-                self.match_TensorComputePattern(pattern, target)
-            elif isinstance(pattern, ScalarExprPattern):
-                self.match_ScalarExprPattern(pattern, target)
-
-            # general matching
-            elif isinstance(pattern, UnionPattern):
-                self.match_UnionPattern(pattern, target)
-
-            # scope related matching
-            elif isinstance(pattern, RegisterScope):
-                self.match_RegisterScope(pattern, target)
-            elif isinstance(pattern, Scope):
-                self.match_Scope(pattern, target)
-
-            # type related matching
-            elif isinstance(pattern, ScalarType):
-                self.match_ScalarType(pattern, target)
-            elif isinstance(pattern, TensorType):
-                self.match_TensorType(pattern, target)
-            elif isinstance(pattern, ScalarTypePattern):
-                self.match_ScalarTypePattern(pattern, target)
-            elif isinstance(pattern, TensorTypePattern):
-                self.match_TensorTypePattern(pattern, target)
-
-            # task related matching
-            elif isinstance(pattern, Host):
-                pass
-            elif isinstance(pattern, Grid):
-                self.match_Grid(pattern, target)
-            elif isinstance(pattern, ThreadBlock):
-                self.match_ThreadBlock(pattern, target)
-            elif isinstance(pattern, Warp):
-                pass
-            elif isinstance(pattern, Thread):
-                pass
-            elif isinstance(pattern, TaskPattern):
-                self.match_TaskPattern(pattern, target)
-            else:
-                raise NotImplementedError(str(type(pattern)))
-            yield
-        except NotMatchedError as e:
-            self.matched[pattern] = old
-            raise e
+    def match(self, pattern: Optional[Union[Node, Sequence]], target: Optional[Union[Node, Sequence]]) -> MatchContext:
+        return MatchContext(self, pattern, target)
 
     @staticmethod
     def check_type(pattern, target, expect_target_type=None):
@@ -215,87 +225,39 @@ class PatternMatcher:
         if not cond:
             raise NotMatchedError(pattern, target, message)
 
-    def match_Add(self, pattern: Add, target: Add):
-        with self.match(pattern.a, target.a), self.match(pattern.b, target.b):
-            pass
+    @staticmethod
+    def always_match(pattern, target):
+        pass
 
-    def match_Sub(self, pattern: Sub, target: Sub):
-        with self.match(pattern.a, target.a), self.match(pattern.b, target.b):
-            pass
-
-    def match_Multiply(self, pattern: Multiply, target: Multiply):
-        with self.match(pattern.a, target.a), self.match(pattern.b, target.b):
-            pass
-
-    def match_Div(self, pattern: Div, target: Div):
-        with self.match(pattern.a, target.a), self.match(pattern.b, target.b):
-            pass
-
-    def match_Mod(self, pattern: Mod, target: Mod):
-        with self.match(pattern.a, target.a), self.match(pattern.b, target.b):
-            pass
-
-    def match_FloorDiv(self, pattern: FloorDiv, target: FloorDiv):
-        with self.match(pattern.a, target.a), self.match(pattern.b, target.b):
-            pass
-
-    def match_LessThan(self, pattern: LessThan, target: LessThan):
-        with self.match(pattern.a, target.a), self.match(pattern.b, target.b):
-            pass
-
-    def match_Equal(self, pattern: Equal, target: Equal):
-        with self.match(pattern.a, target.a), self.match(pattern.b, target.b):
-            pass
+    def match_Binary(self, pattern: BinaryOp, target: BinaryOp):
+        with ExitStack() as stack:
+            stack.enter_context(self.match(pattern.a, target.a))
+            stack.enter_context(self.match(pattern.b, target.b))
 
     def match_TensorSlice(self, pattern: TensorSlice, target: TensorSlice):
-        with self.match(pattern.base, target.base):
-            with contextlib.ExitStack() as stack:
-                self.check_cond(pattern, target, len(pattern.indices) == len(target.indices))
-                for a, b in zip(pattern.indices, target.indices):
-                    if a is None and b is None:
-                        continue
-                    if a is None or b is None:
-                        raise NotMatchedError(pattern, target)
-                    stack.enter_context(self.match(a, b))
-                self.check_cond(pattern, target, len(pattern.starts) == len(target.starts))
-                for a, b in zip(pattern.starts, target.starts):
-                    stack.enter_context(self.match(a, b))
-                self.check_cond(pattern, target, len(pattern.ends) == len(target.ends))
-                for a, b in zip(pattern.ends, target.ends):
-                    stack.enter_context(self.match(a, b))
+        with ExitStack() as stack:
+            stack.enter_context(self.match(pattern.base, target.base))
+            stack.enter_context(self.match(pattern.indices, target.indices))
+            stack.enter_context(self.match(pattern.starts, target.starts))
+            stack.enter_context(self.match(pattern.ends, target.ends))
 
     def match_TensorElement(self, pattern: TensorElement, target: TensorElement):
-        with self.match(pattern.base, target.base):
-            with contextlib.ExitStack() as stack:
-                self.check_cond(pattern, target, len(pattern.indices) == len(target.indices))
-                for a, b in zip(pattern.indices, target.indices):
-                    stack.enter_context(self.match(a, b))
-
-    def match_Cast(self, pattern: Cast, target: Cast):
-        with self.match(pattern.expr, target.expr):
-            pass    # todo: check target type
-
-    def match_Dereference(self, pattern: Dereference, target: Dereference):
-        with self.match(pattern.expr, target.expr):
-            pass
+        with ExitStack() as stack:
+            stack.enter_context(self.match(pattern.base, target.base))
+            stack.enter_context(self.match(pattern.indices, target.indices))
 
     def match_Call(self, pattern: Call, target: Call):
-        with self.match(pattern.func_var, target.func_var):
-            with contextlib.ExitStack() as stack:
-                self.check_cond(pattern, target, len(pattern.args) == len(target.args))
-                for a, b in zip(pattern.args, target.args):
-                    stack.enter_context(self.match(a, b))
+        with ExitStack() as stack:
+            stack.enter_context(self.match(pattern.func_var, target.func_var))
+            stack.enter_context(self.match(pattern.args, target.args))
 
     def match_Var(self, pattern: Var, target: Var):
         with self.match(pattern.type, target.type):
             pass
 
     def match_Constant(self, pattern: Constant, target: Constant):
-        if pattern.dtype is not None:
-            if target.dtype is None:
-                raise NotMatchedError(pattern, target)
-            with self.match(pattern.dtype, target.dtype):
-                pass
+        with self.match(pattern.dtype, target.dtype):
+            pass
         if pattern.value is None:
             # None matches any const value
             return
@@ -303,34 +265,43 @@ class PatternMatcher:
             raise NotMatchedError(pattern, target)
 
     def match_ScalarInput(self, pattern: ScalarInput, target: ScalarInput):
-        if pattern.dtype:
-            with self.match(pattern.dtype, target.dtype):
-                pass
+        with ExitStack() as stack:
+            stack.enter_context(self.match(pattern.dtype, target.dtype))
 
     def match_TensorInput(self, pattern: TensorInput, target: TensorInput):
-        if pattern.dtype:
-            with self.match(pattern.dtype, target.dtype):
-                pass
+        with ExitStack() as stack:
+            stack.enter_context(self.match(pattern.dtype, target.dtype))
+            stack.enter_context(self.match(pattern.shape, target.shape))
 
     def match_TensorCompute(self, pattern: TensorCompute, target: TensorCompute):
-        self.check_cond(pattern, target, len(pattern.shape) == len(target.shape))
-        with contextlib.ExitStack() as stack:
-            for a, b in zip(pattern.shape, target.shape):
-                stack.enter_context(self.match(a, b))
-            for a, b in zip(pattern.axes, target.axes):
-                stack.enter_context(self.match(a, b))
+        with ExitStack() as stack:
+            stack.enter_context(self.match(pattern.shape, target.shape))
+            stack.enter_context(self.match(pattern.axes, target.axes))
             stack.enter_context(self.match(pattern.value, target.value))
 
     def match_ReduceCompute(self, pattern: ReduceCompute, target: ReduceCompute):
-        with contextlib.ExitStack() as stack:
+        with ExitStack() as stack:
             stack.enter_context(self.match(pattern.axis, target.axis))
-            for a, b in zip(pattern.shape, target.shape):
-                stack.enter_context(self.match(a, b))
+            stack.enter_context(self.match(pattern.shape, target.shape))
             stack.enter_context(self.match(pattern.value, target.value))
 
-    def match_AnyPattern(self, pattern: AnyExpr, target: Expr):
-        # if pattern.type is None, match anything, otherwise match any expr with specific type
-        if pattern.type and not isinstance(target, pattern.type):
+    @staticmethod
+    def match_DataLayout(pattern, target):
+        if isinstance(target, (StridesLayout, LocalLayout)):
+            pass
+        else:
+            raise NotMatchedError(pattern, target)
+
+    def match_StridesLayout(self, pattern: StridesLayout, target: StridesLayout):
+        pass
+
+    def match_LocalLayout(self, pattern: LocalLayout, target: LocalLayout):
+        pass
+
+    @staticmethod
+    def match_AnyPattern(pattern: AnyExpr, target: Expr):
+        # if pattern.type is None, match any expr, otherwise match any expr with specific type
+        if pattern.cls and not isinstance(target, pattern.cls):
             raise NotMatchedError(pattern, target)
 
     def match_UnionPattern(self, pattern: UnionPattern, target: Node):
@@ -345,11 +316,8 @@ class PatternMatcher:
                 return
         raise NotMatchedError(pattern, target)
 
-    def match_RegisterScope(self, pattern: RegisterScope, target: RegisterScope):
-        # always match
-        pass
-
-    def match_Scope(self, pattern: Scope, target: Scope):
+    @staticmethod
+    def match_Scope(pattern: Scope, target: Scope):
         if pattern.name is not None and (pattern.name is None or pattern.name != target.name):
             raise NotMatchedError(pattern, target)
 
@@ -367,41 +335,30 @@ class PatternMatcher:
             raise NotMatchedError(pattern, target, "does not allow dynamic axis")
 
     def match_ScalarExprPattern(self, pattern: ScalarExprPattern, target: Expr):
-        from hidet.ir.functors import collect
         self.check_cond(pattern, target, not isinstance(target, (TensorCompute, TensorInput)))
-        reduce_exprs = collect(target, ReduceCompute)
-        with contextlib.ExitStack() as stack:
+        from hidet.ir.functors import collect
+        with ExitStack() as stack:
+            reduce_exprs = collect(target, ReduceCompute)
             if len(reduce_exprs) > 1:
                 raise NotMatchedError(pattern, target, "more than one reduce, current not supported")
             if len(reduce_exprs) == 1:
-                if not pattern.allow_reduce:
-                    raise NotMatchedError(pattern, target, "reduce found, but not expect")
-                elif pattern.reduce is not None:
-                    stack.enter_context(self.match(pattern.reduce, reduce_exprs[0]))
+                target_reduce = reduce_exprs[0]
             if len(reduce_exprs) == 0:
-                if pattern.reduce is not None:
-                    raise NotMatchedError(pattern, target, "expect reduce, but not found")
+                target_reduce = None
+            stack.enter_context(self.match(pattern.reduce, target_reduce))
 
-    def match_ScalarType(self, pattern: ScalarType, target: ScalarType):
+    @staticmethod
+    def match_ScalarType(pattern: ScalarType, target: ScalarType):
         if pattern.name:
             if pattern.name != target.name:
                 raise NotMatchedError(pattern, target)
 
     def match_TensorType(self, pattern: TensorType, target: TensorType):
-        with contextlib.ExitStack() as stack:
+        with ExitStack() as stack:
             stack.enter_context(self.match(pattern.scalar_type, target.scalar_type))
-            if pattern.shape:
-                if target.shape is None:
-                    raise NotMatchedError(pattern, target)
-                for a, b in zip(pattern.shape, target.shape):
-                    stack.enter_context(self.match(a, b))
-            if pattern.strides:
-                if target.strides is None:
-                    raise NotMatchedError(pattern, target)
-                for a, b in zip(pattern.strides, target.strides):
-                    stack.enter_context(self.match(a, b))
-            if pattern.scope:
-                stack.enter_context(self.match(pattern.scope, target.scope))
+            stack.enter_context(self.match(pattern.shape, target.shape))
+            stack.enter_context(self.match(pattern.layout, target.layout))
+            stack.enter_context(self.match(pattern.scope, target.scope))
 
     def match_ScalarTypePattern(self, pattern: ScalarTypePattern, target: ScalarType):
         self.check_type(pattern, target, ScalarType)
@@ -410,7 +367,7 @@ class PatternMatcher:
 
     def match_TensorTypePattern(self, pattern: TensorTypePattern, target: TensorType):
         self.check_type(pattern, target, TensorType)
-        with contextlib.ExitStack() as stack:
+        with ExitStack() as stack:
             if pattern.rank is not None and len(target.shape) != pattern.rank:
                 raise NotMatchedError(pattern, target)
             if pattern.scope is not None:
@@ -418,34 +375,30 @@ class PatternMatcher:
                     raise NotMatchedError(pattern, target)
                 if isinstance(pattern.scope, list) and target.scope.name not in [s.name for s in pattern.scope]:
                     raise NotMatchedError(pattern, target)
-            if pattern.scalar_type is not None:
-                stack.enter_context(self.match(pattern.scalar_type, target.scalar_type))
-            if pattern.shape is not None:
-                for a, b in zip(pattern.shape, target.shape):
-                    stack.enter_context(self.match(a, b))
-            if pattern.strides is not None:
-                for a, b in zip(pattern.strides, target.strides):
-                    stack.enter_context(self.match(a, b))
+            stack.enter_context(self.match(pattern.scalar_type, target.scalar_type))
+            stack.enter_context(self.match(pattern.shape, target.shape))
+            stack.enter_context(self.match(pattern.layout, target.layout))
             if not pattern.allow_dynamic_size and any(not isinstance(s, Constant) for s in target.shape):
                 raise NotMatchedError(pattern, target)
 
     def match_Grid(self, pattern: Grid, target: Grid):
-        with contextlib.ExitStack() as stack:
-            if pattern.grid_dim:
-                stack.enter_context(self.match(pattern.grid_dim, target.grid_dim))
-            if pattern.block_dim:
-                stack.enter_context(self.match(pattern.block_dim, target.block_dim))
+        with ExitStack() as stack:
+            stack.enter_context(self.match(pattern.grid_dim, target.grid_dim))
+            stack.enter_context(self.match(pattern.block_dim, target.block_dim))
 
     def match_ThreadBlock(self, pattern: ThreadBlock, target: ThreadBlock):
-        with contextlib.ExitStack() as stack:
-            if pattern.block_dim:
-                stack.enter_context(self.match(pattern.block_dim, target.block_dim))
+        with ExitStack() as stack:
+            stack.enter_context(self.match(pattern.block_dim, target.block_dim))
+            stack.enter_context(self.match(pattern.task_layout, target.task_layout))
+
+    def match_Warp(self, pattern: Warp, target: Warp):
+        with ExitStack() as stack:
+            stack.enter_context(self.match(pattern.task_layout, target.task_layout))
 
     def match_TaskPattern(self, pattern: TaskPattern, target: Task):
         self.check_type(pattern, target, Task)
-        with contextlib.ExitStack() as stack:
-            if pattern.compute_pattern:
-                stack.enter_context(self.match(pattern.compute_pattern, target.compute))
+        with ExitStack() as stack:
+            stack.enter_context(self.match(pattern.compute_pattern, target.compute))
             if pattern.required_params and pattern.required_params_types:
                 assert len(pattern.required_params) == len(pattern.required_params_types)
                 for required_param, required_type in zip(pattern.required_params, pattern.required_params_types):
@@ -461,8 +414,12 @@ class PatternMatcher:
                 raise NotMatchedError(pattern, target, "do not allow extra param(s)")
             if not pattern.allow_tensor_extra_params and any(isinstance(p, TensorInput) for p in extra_params):
                 raise NotMatchedError(pattern, target, "do not allow extra tensor param(s)")
-            if pattern.worker:
-                stack.enter_context(self.match(pattern.worker, target.worker))
+            stack.enter_context(self.match(pattern.worker, target.worker))
+
+    def match_Sequence(self, pattern: Sequence, target: Sequence):
+        with ExitStack() as stack:
+            for a, b in zip(pattern, target):
+                stack.enter_context(self.match(a, b))
 
 
 def any_const_int():

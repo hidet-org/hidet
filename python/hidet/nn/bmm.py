@@ -13,9 +13,9 @@ def bmm(B: int, N: int, M: int, K: int) -> Task:
         name='matmul.grid',
         computation=C,
         params=[A, B, C],
-        params_type=[tensor_type('global', 'float32', [N, K], strides=[K, 1]),
-                     tensor_type('global', 'float32', [K, M], strides=[M, 1]),
-                     tensor_type('global', 'float32', [N, M], strides=[M, 1])],
+        params_type=[tensor_type('global', 'float32', [N, K], layout=[K, 1]),
+                     tensor_type('global', 'float32', [K, M], layout=[M, 1]),
+                     tensor_type('global', 'float32', [N, M], layout=[M, 1])],
         worker=Grid()
     )
 
@@ -33,9 +33,9 @@ def generic_bmm() -> Task:
         name='matmul.grid',
         computation=C,
         params=[A, B, C],
-        params_type=[tensor_type('global', 'float32', [N, K], strides=[K, 1]),
-                     tensor_type('global', 'float32', [K, M], strides=[M, 1]),
-                     tensor_type('global', 'float32', [N, M], strides=[M, 1])],
+        params_type=[tensor_type('global', 'float32', [N, K], layout=[K, 1]),
+                     tensor_type('global', 'float32', [K, M], layout=[M, 1]),
+                     tensor_type('global', 'float32', [N, M], layout=[M, 1])],
         worker=Grid()
     )
 

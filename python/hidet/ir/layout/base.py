@@ -1,17 +1,37 @@
 from typing import Union, Tuple, List, Type, Dict, Optional, Sequence, Iterator, Callable, Iterable
+from hidet.ir.expr import Constant
 from hidet.ir.expr import Expr, var
 
 Int = Union[Expr, int]
+
+
+class DataLayout:
+    pass
+
+
+class StridesLayout(DataLayout):
+    def __init__(self, strides):
+        super().__init__()
+        self.strides: List[Int] = strides
+        self.global2serial: Callable[[Int, ...], Int] = (lambda *indices: sum(v * self.strides[i] for i, v in enumerate(indices)))
+
+
+class LocalLayout(DataLayout):
+    def __init__(self):
+        super().__init__()
+        self.local_size = None
+        self.local2global: Callable[[Int, Int], Sequence[Int]] = None
+        self.global2local: Callable[[Int, ...], Tuple[Int, Int]] = None
 
 
 class TaskLayout:
     registered = []
 
     def __init__(self,
-                 num_workers: int,
-                 task_shape: Tuple[int, ...],
-                 worker2task: Optional[Callable[[Int], List[Tuple[Int, ...]]]],
-                 task2worker: Optional[Callable[[Tuple[Int, ...]], Int]]):
+                 num_workers: int = None,
+                 task_shape: Tuple[int, ...] = None,
+                 worker2task: Optional[Callable[[Int], List[Tuple[Int, ...]]]] = None,
+                 task2worker: Optional[Callable[[Tuple[Int, ...]], Int]] = None):
         self.num_workers: int = num_workers
         self.task_shape: Tuple[int, ...] = task_shape
         self.worker2task: Callable[[Int], List[Sequence[Int, ...]]] = worker2task
@@ -99,7 +119,10 @@ def get_task_layouts(valid_num_workers: Optional[Union[int, Sequence[int]]] = No
                      rank: Optional[int] = None) -> Iterator[TaskLayout]:
     if isinstance(valid_num_workers, int):
         valid_num_workers = [valid_num_workers]
-    for layout in TaskLayout.registered:
+    assert all(isinstance(v, int) for v in valid_num_workers)
+    if task_shape is not None:
+        assert all(isinstance(v, int) for v in task_shape)
+    for idx, layout in enumerate(TaskLayout.registered):
         if valid_num_workers is not None and layout.num_workers not in valid_num_workers:
             continue
         if task_shape is not None:

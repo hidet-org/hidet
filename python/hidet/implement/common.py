@@ -106,15 +106,13 @@ class LoopExpander(ExprFunctor):
         self.new_buffer_map[e] = acc
 
         # init accumulator
-        self.sb.append(AssignStmt(acc, e.init_const()))
+        self.sb += AssignStmt(acc, e.init_const())
 
         # reduction loop
         assert len(e.shape) == 1
-        self.sb.append(ForStmt(e.axis, e.shape[0]))
-
-        with self.sb.for_body():
+        with self.sb.for_loop(e.axis, e.shape[0]):
             expr = self.visit(e.value)
-            self.sb.append(AssignStmt(acc, e.combine(acc, expr)))
+            self.sb += AssignStmt(acc, e.combine(acc, expr))
 
         return acc
 

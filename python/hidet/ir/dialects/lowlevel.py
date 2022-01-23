@@ -1,12 +1,12 @@
-from hidet.ir.type import BaseType
+from hidet.ir.type import TypeNode
 from hidet.ir.expr import Expr
 
 
-class VoidType(BaseType):
+class VoidType(TypeNode):
     pass
 
 
-class PointerType(BaseType):
+class PointerType(TypeNode):
     def __init__(self, base_type):
         super().__init__()
         self.base_type = base_type

@@ -1,7 +1,7 @@
 import string
 from typing import Optional, Union
 from .node import Node
-from .type import BaseType, TensorType, TensorType, ScalarType, Scope, tensor_type, scalar_type
+from .type import TypeNode, TensorType, TensorType, ScalarType, Scope, tensor_type, scalar_type
 
 PyScalar = Union[int, float]
 
@@ -215,7 +215,7 @@ class IfThenElse(Expr):
 class Var(Expr):
     id_clock = 0
 
-    def __init__(self, hint: Optional[str], type: BaseType):
+    def __init__(self, hint: Optional[str], type: TypeNode):
         self.hint = hint
         self.type = type
         self.id = self.new_id()
@@ -241,8 +241,8 @@ def scalar_var(hint: str, dtype: Union[str, ScalarType] = 'float32') -> Var:
     return Var(hint, dtype)
 
 
-def tensor_var(hint: str, shape, scope: str = 'global', dtype: str = 'float32', strides=None) -> Var:
-    return Var(hint, tensor_type(scope, dtype, shape, strides))
+def tensor_var(hint: str, shape, scope: str = 'global', dtype: str = 'float32', layout=None) -> Var:
+    return Var(hint, tensor_type(scope, dtype, shape, layout))
 
 
 def is_one(v: Expr) -> bool:

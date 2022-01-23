@@ -3,7 +3,7 @@ from typing import Sequence
 from hidet.ir.expr import Expr, Var, Call
 from hidet.ir.func import IRModule
 from hidet.ir.task import Task, Worker
-from hidet.ir.type import BaseType
+from hidet.ir.type import TypeNode
 
 
 class TaskBuilder:
@@ -29,12 +29,12 @@ class TaskBuilder:
             self.finish()
         return Call(self.func_var, args)
 
-    def extend_params(self, params: Sequence[Var], types: Sequence[BaseType]):
+    def extend_params(self, params: Sequence[Var], types: Sequence[TypeNode]):
         assert len(params) == len(types)
         self.params.extend(params)
         self.params_type.extend(types)
 
-    def append_param(self, param: Var, param_type: BaseType):
+    def append_param(self, param: Var, param_type: TypeNode):
         self.params.append(param)
         self.params_type.append(param_type)
 

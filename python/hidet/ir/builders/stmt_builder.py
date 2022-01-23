@@ -1,41 +1,55 @@
-from typing import Union
+from typing import Union, Optional
 
 from hidet.ir.stmt import Stmt, ForStmt, IfStmt, LetStmt, EvaluateStmt, SeqStmt
-from hidet.ir.expr import Expr
+from hidet.ir.type import TypeNode, scalar_type, ScalarType
+from hidet.ir.expr import Expr, Var, var
+
+
+class StmtScope:
+    def __init__(self, sb: 'StmtBuilder', ret=None):
+        self.sb = sb
+        self.ret = ret
+
+    def __enter__(self):
+        self.sb.enter_body()
+        return self.ret
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.sb.exit_body()
 
 
 class StmtBuilder:
     def __init__(self):
         self.scope_stack = [[]]
 
-    def __enter__(self):
-        self.enter_body()
+    def __iadd__(self, other: Union[Stmt, Expr]):
+        assert isinstance(other, (Stmt, Expr))
+        self.append(other)
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.exit_body()
+    def let(self, v: Union[str, Var], value) -> StmtScope:
+        if isinstance(v, str):
+            v = var(v)
+        self.append(LetStmt(v, value))
+        return StmtScope(self, v)
 
-    def for_body(self):
-        assert len(self.scope_stack[-1]) > 0
-        for_stmt = self.scope_stack[-1][-1]
-        assert isinstance(for_stmt, ForStmt)
-        assert for_stmt.body is None
-        return self
+    def for_loop(self, v: Union[str, Var], extent: Expr) -> StmtScope:
+        if isinstance(v, str):
+            v = var(v)
+        self.append(ForStmt(v, extent))
+        return StmtScope(self, v)
 
-    def then_body(self):
+    def if_then(self, cond: Expr) -> StmtScope:
+        self.append(IfStmt(cond))
+        return StmtScope(self)
+
+    def otherwise(self) -> StmtScope:
         assert len(self.scope_stack[-1]) > 0
         if_stmt = self.scope_stack[-1][-1]
         assert isinstance(if_stmt, IfStmt)
-        assert if_stmt.then_body is None
-        return self
-
-    def else_body(self):
-        assert len(self.scope_stack[-1]) > 0
-        if_stmt = self.scope_stack[-1][-1]
-        assert isinstance(if_stmt, IfStmt)
-        assert if_stmt.then_body is None
+        assert if_stmt.then_body is not None
         assert if_stmt.else_body is None
-        return self
+        return StmtScope(self)
 
     def append(self, stmt: Union[Stmt, Expr]):
         if stmt is None:

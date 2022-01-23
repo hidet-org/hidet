@@ -1,7 +1,7 @@
 from collections import defaultdict
 from hidet.ir.node import Node
 from hidet.ir.func import IRModule, Function
-from hidet.ir.type import ScalarType, TensorType, BaseType
+from hidet.ir.type import ScalarType, TensorType, TypeNode
 from hidet.ir.expr import Constant, Var, Call, TensorElement, TensorSlice, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div, Sub, Not, Or, And
 from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, LetStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt
 from hidet.ir.task import Worker, Host, Grid, ThreadBlock, Warp, Thread
@@ -52,7 +52,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
             return Text(str(obj))
         elif obj is None:
             return Text('None')
-        elif isinstance(obj, BaseType):
+        elif isinstance(obj, TypeNode):
             return TypeFunctor.visit(self, obj)
         elif isinstance(obj, Function):
             return self.visit_Function(obj)
