@@ -6,12 +6,14 @@ from hidet.ir.dialects.compute import TensorInput, TensorCompute
 from hidet.ir.dialects.pattern import TaskPattern, OptionalPattern
 from hidet.ir.expr import Constant, TensorElement, var, Var
 from hidet.ir.func import IRModule
-from hidet.ir.layout import TaskLayout, get_task_layouts
+from hidet.ir.layout import TaskLayout, get_task_layouts, row_major_layout, full_layout
+from hidet.ir.layout.concrete import WarpLayout4x8
 from hidet.ir.node import Node
 from hidet.ir.primitives import thread_idx
 from hidet.ir.stmt import BufferStoreStmt
 from hidet.ir.task import Task, ThreadBlock
 from hidet.ir.type import scalar_type, TensorType
+from hidet.implement.implementer import NotSupportedError
 
 
 @register_impl('cuda_block_transfer_2d_implementer')
@@ -54,13 +56,22 @@ class CudaBlockTransfer2dImplementer(Implementer):
         if task_layout is not None:
             ir_module.include(self.implement_for_task_layout(task, match, task_layout))
         else:
-            task_layouts = get_task_layouts(valid_num_workers=block_size, task_shape=task_shape)
+            # task_layouts = get_task_layouts(valid_num_workers=block_size, task_shape=task_shape)
+            task_layouts = [
+                row_major_layout(32, 8) * full_layout(4, 1), full_layout(1, 4) * row_major_layout(8, 32)
+            ]
             for task_layout in task_layouts:
-                ir_module.include(self.implement_for_task_layout(task, match, task_layout))
+                try:
+                    ir_module.include(self.implement_for_task_layout(task, match, task_layout))
+                except NotSupportedError:
+                    pass
         return ir_module
 
     def implement_for_task_layout(self, task: Task, match: Mapping[Node, Node], task_layout: TaskLayout) -> IRModule:
         ir_module = IRModule()
+
+        task_shape = [match[v] for v in self.task_shape]
+        self.check(all(int(a) == int(b) for a, b in zip(task_shape, task_layout.task_shape)))
 
         input_type: TensorType = match[self.input_type]
         output_type: TensorType = match[self.output_type]

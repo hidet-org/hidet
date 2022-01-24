@@ -120,7 +120,7 @@ class Simplifier(StmtExprRewriter):
             if loop_var is stmt.loop_var and body is stmt.body:
                 return stmt
             else:
-                return ForStmt(loop_var, extent, body)
+                return ForStmt(loop_var, extent, stmt.unroll, body)
 
     def visit_LetStmt(self, stmt: LetStmt):
         var = self.visit_expr(stmt.var)

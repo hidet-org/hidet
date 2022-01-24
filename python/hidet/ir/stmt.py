@@ -1,7 +1,7 @@
-from typing import List, Union
+from typing import List, Union, Optional
 from copy import copy
 from hidet.ir.node import Node
-from hidet.ir.expr import Var, Expr, convert
+from hidet.ir.expr import Var, Expr, convert, Constant
 
 
 class Stmt(Node):
@@ -39,10 +39,20 @@ class LetStmt(Stmt):
 
 
 class ForStmt(Stmt):
-    def __init__(self, loop_var, extent, body=None):
+    DEFAULT_UNROLL_LIMIT = 32
+
+    def __init__(self, loop_var, extent, unroll: Optional[bool] = None, body=None):
+        from hidet.ir.functors import simplify
         super().__init__()
         self.loop_var: Var = loop_var
-        self.extent = convert(extent)
+        self.extent = simplify(convert(extent))
+        if unroll is None:
+            if isinstance(self.extent, Constant) and self.extent.value <= ForStmt.DEFAULT_UNROLL_LIMIT:
+                self.unroll = True
+            else:
+                self.unroll = None  # leave to the underlying compiler to determine the unroll strategy
+        else:
+            self.unroll = unroll
         self.body = body
 
 
@@ -59,6 +69,12 @@ class AssertStmt(Stmt):
         super().__init__()
         self.cond = convert(cond)
         self.msg = msg
+
+
+class BlackBoxStmt(Stmt):
+    def __init__(self, stmt_str: str):
+        super().__init__()
+        self.stmt_str = stmt_str
 
 
 class SeqStmt(Stmt):

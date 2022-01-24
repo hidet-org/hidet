@@ -13,7 +13,7 @@ from hidet.ir.node import Node
 from hidet.ir.primitives import syncthreads, thread_idx
 from hidet.ir.stmt import LetStmt, ForStmt
 from hidet.ir.task import Task, ThreadBlock, Warp
-from hidet.ir.type import scalar_type, TensorType, Scope, LocalLayout, DataLayout
+from hidet.ir.type import scalar_type, TensorType, Scope, LocalLayout, DataLayout, StridesLayout
 
 
 class MatmulSetting:
@@ -72,30 +72,15 @@ def small_setting():
     )
 
 
-def general_setting(block_k, warp_k, block_layout, warp_layout):
-    from hidet.ir.layout.concrete import WarpLayout4x8
-    assert block_k % 2 == 0
-    warp_layout = WarpLayout4x8()
-    return MatmulSetting(
-        block_k=block_k,
-        warp_k=warp_k,
-        block_layout=block_layout,
-        warp_layout=warp_layout,
-        a_s2r_layout=TaskLayout(num_workers=32, worker2task=(lambda w: [(warp_layout.worker2task(w)[0][0], 0)])),
-        b_s2r_layout=TaskLayout(num_workers=32, worker2task=(lambda w: [(0, warp_layout.worker2task(w)[0][1])])),
-        ab2c_layout=TaskLayout(num_workers=32, worker2task=(lambda w: warp_layout.worker2task(w))),
-        c_r2g_layout=TaskLayout(num_workers=32, worker2task=(lambda w: warp_layout.worker2task(w))),
-        regs_a_layout=LocalLayout(local_size=1, shape=(4, 1), global2local=(lambda i, j: 0)),
-        regs_b_layout=LocalLayout(local_size=1, shape=(1, 8), global2local=(lambda i, j: 0)),
-        regs_c_layout=LocalLayout(local_size=1 * 1, shape=(4, 8), global2local=(lambda i, j: 0))
-    )
+# matmul_settings = [small_setting(), default_setting()]
 
+# matmul_settings = [small_setting()]
 
 matmul_settings = [default_setting()]
 
 
-@register_impl('cuda_block_static_matmul_no_pipe_implementer')
-class CudaBlockStaticMatmulNoPipeImplementer(Implementer):
+@register_impl('cuda_block_static_matmul_soft_pipe_implementer')
+class CudaBlockStaticMatmulSoftPipeImplementer(Implementer):
     def __init__(self):
         # const definition
         self.block_size = any_const_int()
@@ -195,7 +180,6 @@ class CudaBlockStaticMatmulNoPipeImplementer(Implementer):
 
         # other constants
         self.check(block_size % 32 == 0)
-        num_warps = block_size // 32
 
         # task-related variables
         A: TensorInput = match[self.A]
@@ -274,14 +258,36 @@ class CudaBlockStaticMatmulNoPipeImplementer(Implementer):
         # define function
         with FunctionBuilder(task.name) as fb:
             """
-            Without software pipeline:
-                for block_tile_idx in range(task_k / block_k)
-                    gmem -> smem
-                    block_sync
-                    for frag_tile_idx in range(block_k / warp_k)
-                        smem -> regs
-                        regs -> regs (compute)
-                    block_sync
+                assume block_k % task_k == 0 and warp_k % block_k == 0
+                gmem[0] -> smem[0]
+                sync
+                smem[0, 0] -> regs[0]
+                sync
+                for k0 in range(task_k / block_k - 1):
+                    for k1 in range(block_k / warp_k):
+                        if k1 == 0:
+                            smem[k0 % 2, k1+1] -> regs[(k1 + 1) % 2]
+                            gmem[k0 + 1] -> smem[(k0 + 1) % 2]
+                            regs[k1 % 2] -> acc regs
+                        elif 0 < k1 < block_k / warp_k - 1:
+                            smem[k0 % 2, k1+1] -> regs[(k1 + 1) % 2]
+                            regs[k1 % 2] -> acc regs
+                        else k1 == block_k / warp_k - 1:
+                            sync
+                            smem[(k0 + 1) % 2, 0] -> regs[(k1 + 1) % 2]
+                            regs[k1 % 2] -> acc regs
+                k0 = task_k / block_k - 1
+                for k1 in range(block_k / warp_k):
+                    if k1 == 0:
+                        smem[k0 % 2, k1+1] -> regs[(k1 + 1) % 2]
+                        regs[k1 % 2] -> acc regs
+                    elif 0 < k1 < block_k / warp_k - 1:
+                        smem[k0 % 2, k1+1] -> regs[(k1 + 1) % 2]
+                        regs[k1 % 2] -> acc regs
+                    else k1 == block_k / warp_k - 1:
+                        regs[k1 % 2] -> acc regs
+                sync
+                write back
             """
 
             # declare params
@@ -291,38 +297,69 @@ class CudaBlockStaticMatmulNoPipeImplementer(Implementer):
             fb.extend_params([gmem_A, gmem_B, gmem_C])
 
             # declare A, B shared memory
-            smem_A = Var('smem_A', smem_A_type)
-            smem_B = Var('smem_B', smem_B_type)
+            smem_A = Var('smem_A', TensorType('shared', A_dtype, [2] + smem_A_type.shape, StridesLayout.row_major([2]) + smem_A_type.layout))
+            smem_B = Var('smem_B', TensorType('shared', B_dtype, [2] + smem_B_type.shape, StridesLayout.row_major([2]) + smem_B_type.layout))
             fb.extend_local_vars([smem_A, smem_B])
 
             # declare A, B, C registers
-            regs_A = Var('regs_A', regs_A_type)
-            regs_B = Var('regs_B', regs_B_type)
+            regs_A = Var('regs_A', TensorType('register', A_dtype, [2] + regs_A_type.shape, StridesLayout.row_major([2]) + regs_A_type.layout))
+            regs_B = Var('regs_B', TensorType('register', B_dtype, [2] + regs_B_type.shape, StridesLayout.row_major([2]) + regs_B_type.layout))
             regs_C = Var('regs_C', regs_C_type)
             fb.extend_local_vars([regs_A, regs_B, regs_C])
 
             # function body
             sb = StmtBuilder()
+            # init regs c
+            sb += c_init(regs_C)
             with sb.let('warp_id', thread_idx() // 32) as warp_idx:
-                # init regs c
-                sb += c_init(regs_C)
-                with sb.for_loop('block_k_tile', task_k // (block_k * warp_k)) as block_tile_idx:
-                    # gmem -> smem
-                    sb += a_g2s(Address(gmem_A[0, block_tile_idx * (block_k * warp_k)]), Address(smem_A[0, 0]))
-                    sb += b_g2s(Address(gmem_B[block_tile_idx * (block_k * warp_k), 0]), Address(smem_B[0, 0]))
-                    # sync
-                    sb += syncthreads()
-                    with sb.for_loop('warp_k_tile', block_k) as warp_tile_idx:
-                        # smem -> regs
-                        warp_task = block_layout.worker2task(warp_tile_idx)
+                # transfer first tile
+                sb += a_g2s(Address(gmem_A[0, 0]), Address(smem_A[0, 0, 0]))
+                sb += b_g2s(Address(gmem_B[0, 0]), Address(smem_B[0, 0, 0]))
+                sb += syncthreads()
+                sb += a_s2r(Address(smem_A[0, 0, 0]), Address(regs_A[0, 0, 0]))
+                sb += b_s2r(Address(smem_B[0, 0, 0]), Address(regs_B[0, 0, 0]))
+                sb += syncthreads()
+                with sb.for_loop('block_k_tile', task_k // (block_k * warp_k) - 1) as k0:
+                    with sb.for_loop('warp_k_tile', block_k) as k1:
+                        warp_task = block_layout.worker2task(k1)
                         assert len(warp_task) == 1
                         warp_i, warp_j = warp_task[0]
-                        sb += a_s2r(Address(smem_A[warp_i * warp_m, warp_tile_idx]), regs_A)
-                        sb += b_s2r(Address(smem_B[warp_tile_idx, warp_j * warp_n]), regs_B)
-                        # compute
-                        sb += ab2c(regs_A, regs_B, regs_C)
-                        # sync
-                    sb += syncthreads()
+
+                        with sb.if_then(k1 == 0):
+                            assert regs_A_type.layout.serialize(0, 0) == 0, "global index with only 0 must be mapped to 0 in local array"
+                            sb += a_s2r(Address(smem_A[k0 % 2, warp_i * warp_m, k1 + 1]), Address(regs_A[(k1 + 1) % 2, 0, 0]))
+                            sb += b_s2r(Address(smem_B[k0 % 2, k1 + 1, warp_j * warp_n]), Address(regs_B[(k1 + 1) % 2, 0, 0]))
+                            sb += a_g2s(Address(gmem_A[0, (k0 + 1) * (block_k * warp_k)]), Address(smem_A[(k0 + 1) % 2, 0, 0]))
+                            sb += b_g2s(Address(gmem_B[(k0 + 1) * (block_k * warp_k), 0]), Address(smem_B[(k0 + 1) % 2, 0, 0]))
+                            sb += ab2c(Address(regs_A[k1 % 2, 0, 0]), Address(regs_B[k1 % 2, 0, 0]), regs_C)
+                        with sb.otherwise():
+                            with sb.if_then(k1 < (block_k * warp_k - 1)):
+                                sb += a_s2r(Address(smem_A[k0 % 2, warp_i * warp_m, k1 + 1]), Address(regs_A[(k1 + 1) % 2, 0, 0]))
+                                sb += b_s2r(Address(smem_B[k0 % 2, k1 + 1, warp_j * warp_n]), Address(regs_B[(k1 + 1) % 2, 0, 0]))
+                                sb += ab2c(Address(regs_A[k1 % 2, 0, 0]), Address(regs_B[k1 % 2, 0, 0]), regs_C)
+                            with sb.otherwise():
+                                sb += syncthreads()
+                                sb += a_s2r(Address(smem_A[(k0 + 1) % 2, warp_i * warp_m, k1 + 1]), Address(regs_A[(k1 + 1) % 2, 0, 0]))
+                                sb += b_s2r(Address(smem_B[(k0 + 1) % 2, k1 + 1, warp_j * warp_n]), Address(regs_B[(k1 + 1) % 2, 0, 0]))
+                                sb += ab2c(Address(regs_A[k1 % 2, 0, 0]), Address(regs_B[k1 % 2, 0, 0]), regs_C)
+                with sb.let('block_k_tile', task_k // (block_k * warp_k) - 1) as k0:
+                    with sb.for_loop('warp_k_tile', block_k) as k1:
+                        warp_task = block_layout.worker2task(k1)
+                        assert len(warp_task) == 1
+                        warp_i, warp_j = warp_task[0]
+
+                        with sb.if_then(k1 == 0):
+                            sb += a_s2r(Address(smem_A[k0 % 2, warp_i * warp_m, k1 + 1]), Address(regs_A[(k1 + 1) % 2, 0, 0]))
+                            sb += b_s2r(Address(smem_B[k0 % 2, k1 + 1, warp_j * warp_n]), Address(regs_B[(k1 + 1) % 2, 0, 0]))
+                            sb += ab2c(Address(regs_A[k1 % 2, 0, 0]), Address(regs_B[k1 % 2, 0, 0]), regs_C)
+                        with sb.otherwise():
+                            with sb.if_then(k1 < (block_k * warp_k - 1)):
+                                sb += a_s2r(Address(smem_A[k0 % 2, warp_i * warp_m, k1 + 1]), Address(regs_A[(k1 + 1) % 2, 0, 0]))
+                                sb += b_s2r(Address(smem_B[k0 % 2, k1 + 1, warp_j * warp_n]), Address(regs_B[(k1 + 1) % 2, 0, 0]))
+                                sb += ab2c(Address(regs_A[k1 % 2, 0, 0]), Address(regs_B[k1 % 2, 0, 0]), regs_C)
+                            with sb.otherwise():
+                                sb += ab2c(Address(regs_A[k1 % 2, 0, 0]), Address(regs_B[k1 % 2, 0, 0]), regs_C)
+                sb += syncthreads()
                 # regs -> gmem
                 sb += c_r2g(regs_C, Address(gmem_C[warp_idx // 2 * 32, warp_idx % 2 * 64]))
             fb.set_body(sb.finish())

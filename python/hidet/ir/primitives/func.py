@@ -1,5 +1,5 @@
 from typing import Dict, Callable, Set, Union, Optional, Tuple
-from hidet.ir.expr import Var
+from hidet.ir.expr import Var, Call
 from hidet.ir.type import FuncType, ScalarType
 from hidet.ir.func import Function
 from hidet.ir.dialects.lowlevel import VoidType
@@ -35,8 +35,9 @@ def register_primitive_function(name, func_or_ftype: Union[Function, FuncType]):
 register_primitive_function('__syncthreads', FuncType([], VoidType()))
 
 
-def syncthreads() -> Var:
-    return get_primitive_function('__syncthreads')[0]
+def syncthreads() -> Call:
+    func_var = get_primitive_function('__syncthreads')[0]
+    return Call(func_var, [])
 
 
 def thread_idx() -> Var:

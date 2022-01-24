@@ -4,12 +4,12 @@ from hidet.implement.implementer import Implementer, register_impl
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.ir.dialects.compute import TensorInput, TensorCompute, reduce_sum
 from hidet.ir.dialects.pattern import TaskPattern
-from hidet.ir.expr import Constant, var, Var
+from hidet.ir.expr import Constant, var, Var, And
 from hidet.ir.func import IRModule
 from hidet.ir.layout import TaskLayout
 from hidet.ir.node import Node
-from hidet.ir.primitives import thread_idx
-from hidet.ir.stmt import BufferStoreStmt, ForStmt, LetStmt
+from hidet.ir.primitives import thread_idx, block_idx
+from hidet.ir.stmt import BufferStoreStmt, ForStmt, LetStmt, BlackBoxStmt
 from hidet.ir.task import Task, Warp
 from hidet.ir.type import TensorType
 

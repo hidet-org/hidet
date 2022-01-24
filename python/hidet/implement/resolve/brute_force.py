@@ -7,7 +7,7 @@ from hidet.backend import build
 from tqdm import tqdm
 
 
-def brute_force_resolve(ir_module: IRModule, warmup=1, number=1, repeat=10) -> IRModule:
+def brute_force_resolve(ir_module: IRModule, warmup=1, number=1, repeat=10, progress_bar=True) -> IRModule:
     task_name = ir_module.task.name
     max_trials = int(1e6)
 
@@ -41,7 +41,7 @@ def brute_force_resolve(ir_module: IRModule, warmup=1, number=1, repeat=10) -> I
 
     candidates_latency = []
     inputs = dummy_inputs_from_task(ir_module.task)
-    pbar = tqdm(zip(candidates, candidates_label), total=num_trials)
+    pbar = tqdm(zip(candidates, candidates_label), total=num_trials, disable=not progress_bar)
     best_latency = 1e9
     for candidate, label in pbar:
         module = build(candidate, f'./outs/resolve/{label}', keep=False)

@@ -39,7 +39,8 @@ class StridesLayout(DataLayout):
         self.strides: List[Int] = [convert(v) for v in strides]
 
     def __add__(self, other):
-        assert isinstance(other, StridesLayout)
+        if not isinstance(other, StridesLayout):
+            return NotImplemented
         return StridesLayout.combine(self, other)
 
     @staticmethod
@@ -60,7 +61,7 @@ class StridesLayout(DataLayout):
         strides = [None] * rank
         for i in range(rank):
             strides[i] = functools.reduce(operator.mul, nshape[i + 1:], 1)
-        return StridesLayout(strides)
+        return StridesLayout(shape, strides)
 
     @staticmethod
     def combine(lhs: 'StridesLayout', rhs: 'StridesLayout') -> 'StridesLayout':
@@ -88,7 +89,7 @@ class LocalLayout(DataLayout):
     def combine(lhs: DataLayout, rhs: DataLayout) -> 'LocalLayout':
         lhs_rank = len(lhs.shape)
         rhs_rank = len(rhs.shape)
-        shape = lhs.shape + rhs.shape
+        shape = list(lhs.shape) + list(rhs.shape)
         if isinstance(lhs, StridesLayout) and isinstance(rhs, StridesLayout):
             return StridesLayout.combine(lhs, rhs)
         elif isinstance(lhs, StridesLayout) and isinstance(rhs, LocalLayout):
@@ -98,7 +99,7 @@ class LocalLayout(DataLayout):
             rhs_size = functools.reduce(operator.mul, rhs.shape)
             local_size = lhs.local_size * functools.reduce(operator.mul, rhs.shape)
         else:
-            raise ValueError('Can not combine two local layouts.')
+            return NotImplemented
 
         def global2local(*args):
             return lhs.global2local(*args[:lhs_rank]) * rhs_size + rhs.global2local(*args[lhs_rank:])

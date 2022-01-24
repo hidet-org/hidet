@@ -202,6 +202,11 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
     def visit_ForStmt(self, stmt: ForStmt):
         rng = Text('range(') + self(stmt.extent) + ')'
         doc = NewLine() + Text('for ') + self(stmt.loop_var) + ' in ' + rng
+        if stmt.unroll is not None:
+            if stmt.unroll:
+                doc += '[unroll]'
+            else:
+                doc += '[no-unroll]'
         doc += self(stmt.body).indent(4)
         return doc
 

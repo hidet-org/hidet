@@ -91,6 +91,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         self.ir_module = module
         doc = Doc()
         doc += Text('#include <cassert>') + NewLine()
+        doc += Text('#include <cstdio>') + NewLine()
         doc += Text('extern "C" {') + NewLine()
 
         call_graph = CallGraph(module)
@@ -206,13 +207,13 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         return base_doc + '[' + doc_join(docs, ', ') + ']'
 
     def visit_TensorElement(self, e: TensorElement):
-        return self(e.base) + doc_join(['[' + self(idx) + ']' for idx in e.indices], '');
+        return self(e.base) + doc_join(['[' + self(idx) + ']' for idx in e.indices], '')
 
     def visit_Cast(self, e: Cast):
         return Text('(') + self.visit(e.target_type) + ')' + self(e.expr)
 
     def visit_Address(self, e: Address):
-        return Text('&') + self.visit(e.expr);
+        return Text('&') + self.visit(e.expr)
 
     def visit_Dereference(self, e: Dereference):
         return Text('*') + self(e.expr)
@@ -273,7 +274,13 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         init_doc = self(v.type) + ' ' + self(v) + ' = ' + self(convert(0))
         cond_doc = self(v < stmt.extent)
         update_doc = self(v) + ' = ' + self(v + 1)
-        doc = NewLine() + Text('for (') + init_doc + '; ' + cond_doc + '; ' + update_doc + ') '
+        doc = Text('')
+        if stmt.unroll is not None:
+            if stmt.unroll:
+                doc += NewLine() + '#pragma unroll'  # complete unroll
+            else:
+                doc += NewLine() + '#pragma unroll 1'  # prevent from unrolling
+        doc += NewLine() + Text('for (') + init_doc + '; ' + cond_doc + '; ' + update_doc + ') '
         doc += Text('{') + self(stmt.body).indent() + NewLine() + Text('} ')
         return doc
 
@@ -290,6 +297,9 @@ class Codegen(StmtExprFunctor, TypeFunctor):
 
     def visit_AssertStmt(self, stmt: AssertStmt):
         return NewLine() + Text('assert(((void)"') + stmt.msg + '", ' + self(stmt.cond) + '));'
+
+    def visit_BlackBoxStmt(self, stmt: BlackBoxStmt):
+        return NewLine() + stmt.stmt_str
 
     def visit_SeqStmt(self, stmt: SeqStmt):
         doc = Doc()

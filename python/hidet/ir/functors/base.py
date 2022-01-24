@@ -443,6 +443,8 @@ class StmtFunctor:
             res = self.visit_IfStmt(stmt)
         elif isinstance(stmt, AssertStmt):
             res = self.visit_AssertStmt(stmt)
+        elif isinstance(stmt, BlackBoxStmt):
+            res = self.visit_BlackBoxStmt(stmt)
         elif isinstance(stmt, SeqStmt):
             res = self.visit_SeqStmt(stmt)
         else:
@@ -472,6 +474,9 @@ class StmtFunctor:
         raise NotImplementedError()
 
     def visit_AssertStmt(self, stmt: AssertStmt):
+        raise NotImplementedError()
+
+    def visit_BlackBoxStmt(self, stmt: BlackBoxStmt):
         raise NotImplementedError()
 
     def visit_SeqStmt(self, stmt: SeqStmt):
@@ -513,6 +518,9 @@ class StmtVisitor(StmtFunctor):
 
     def visit_AssertStmt(self, stmt: AssertStmt):
         self.visit(stmt.cond)
+
+    def visit_BlackBoxStmt(self, stmt: BlackBoxStmt):
+        pass
 
     def visit_SeqStmt(self, stmt: SeqStmt):
         for s in stmt.seq:
@@ -563,7 +571,7 @@ class StmtRewriter(StmtFunctor):
         if loop_var is stmt.loop_var and body is stmt.body:
             return stmt
         else:
-            return ForStmt(loop_var, extent, body)
+            return ForStmt(loop_var, extent, stmt.unroll, body)
 
     def visit_IfStmt(self, stmt: IfStmt):
         cond = self.visit_expr(stmt.cond)
@@ -580,6 +588,9 @@ class StmtRewriter(StmtFunctor):
             return stmt
         else:
             return AssertStmt(cond, stmt.msg)
+
+    def visit_BlackBoxStmt(self, stmt: BlackBoxStmt):
+        return stmt
 
     def visit_SeqStmt(self, stmt: SeqStmt):
         seq = []

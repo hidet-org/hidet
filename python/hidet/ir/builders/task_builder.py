@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import Sequence, Optional, Union
 
 from hidet.ir.expr import Expr, Var, Call
 from hidet.ir.func import IRModule
@@ -7,7 +7,7 @@ from hidet.ir.type import TypeNode
 
 
 class TaskBuilder:
-    def __init__(self, name: str, worker: Worker, parent_module: IRModule, impl_name=None):
+    def __init__(self, name: str, worker: Worker, parent_module: IRModule, try_first: Optional[Union[str, Sequence[str]]] = None):
         self.name = name
         self.computation = None
         self.params = []
@@ -15,7 +15,12 @@ class TaskBuilder:
         self.worker = worker
         self.parent_module = parent_module
         self.func_var = None
-        self.impl_name = impl_name
+        if try_first:
+            if isinstance(try_first, str):
+                try_first = [try_first]
+            self.try_first = try_first
+        else:
+            self.try_first = []
 
     def __enter__(self):
         return self
@@ -43,11 +48,12 @@ class TaskBuilder:
         self.computation = computation
 
     def finish(self) -> Call:
-        from hidet.implement.implementer import implement
+        from hidet.implement.implementer import implement, impl_context
         assert self.func_var is None
         assert len(self.params) == len(self.params_type)
         assert self.computation is not None
         task = Task(self.name, self.computation, self.params, self.params_type, self.worker)
-        sub_module = implement(task, impl_name=self.impl_name)
+        with impl_context(try_first=self.try_first):
+            sub_module = implement(task)
         self.parent_module.include(sub_module)
         self.func_var = self.parent_module.lookup_var(self.name)

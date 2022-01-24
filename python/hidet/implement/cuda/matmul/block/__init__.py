@@ -1,1 +1,5 @@
 from . import static_matmul_nopipe
+from . import static_matmul_softpipe
+
+from .static_matmul_nopipe import CudaBlockStaticMatmulNoPipeImplementer
+from .static_matmul_softpipe import CudaBlockStaticMatmulSoftPipeImplementer

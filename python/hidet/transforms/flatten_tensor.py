@@ -28,7 +28,10 @@ class FlattenTensor(Pass):
                 target_tensors.append(local_var)
                 scope = local_var.type.scope
                 dtype = local_var.type.scalar_type
-                shape = [int(simplify(functools.reduce(operator.mul, local_var.type.shape)))]
+                if isinstance(local_var.type.layout, LocalLayout):
+                    shape = [int(local_var.type.layout.local_size)]
+                else:
+                    shape = [int(simplify(functools.reduce(operator.mul, local_var.type.shape)))]
                 flattened_vars.append(Var(local_var, TensorType(scope, dtype, shape, [1])))
 
         if len(target_tensors) == 0:

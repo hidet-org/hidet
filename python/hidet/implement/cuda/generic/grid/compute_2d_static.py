@@ -44,7 +44,7 @@ class CudaGridSplitImplementer(Implementer):
                     subtask_name,
                     task: Task,
                     match: Mapping[Node, Node],
-                    factor: int,
+                    block_task: List[int],
                     sub_shape: List[int],
                     block_dim: int,
                     n_block_idx: Var,
@@ -83,7 +83,7 @@ class CudaGridSplitImplementer(Implementer):
                     for order in coeffs:
                         for i in range(2):
                             if order[i] == 1:
-                                s = s + coeffs[order] * outer_axes[i] * factor
+                                s = s + coeffs[order] * outer_axes[i] * block_task[i]
                     arg_indices.append(s)
                 rmap[te] = rewrite(te, {a: b for a, b in zip(axes, subtask_axes)})
                 subtask_param2arg[ti] = Address(TensorElement(param2var[ti], arg_indices))  # update
@@ -95,7 +95,7 @@ class CudaGridSplitImplementer(Implementer):
             param2type[subtask_compute] = param2type[task.compute]
             subtask_params_type = [param2type[param] for param in subtask_params]
 
-            out_arg = Address(TensorElement(param2var[task.compute], [n_block_idx * factor, m_block_idx * factor]))
+            out_arg = Address(TensorElement(param2var[task.compute], [n_block_idx * block_task[0], m_block_idx * block_task[1]]))
             args = [subtask_param2arg[param] for param in input_params] + [out_arg]
 
             return Task(subtask_name, subtask_compute, subtask_params, subtask_params_type, ThreadBlock(block_dim)), args
@@ -103,17 +103,19 @@ class CudaGridSplitImplementer(Implementer):
         except NotSupportedError:
             # fallback subtask with block index
             outer_axes_params = [scalar_input('i_o', 'int32'), scalar_input('j_o', 'int32')]
-            sub_compute = compute('out', sub_shape, lambda i, j: rewrite(value, {old_axis: inner_axis + outer_axis * factor for old_axis, inner_axis, outer_axis in zip(axes, [i, j], outer_axes_params)}))
+            sub_compute = compute('out', sub_shape,
+                                  lambda i, j: rewrite(value, {old_axis: inner_axis + outer_axis * block_task[idx]
+                                                               for idx, old_axis, inner_axis, outer_axis in zip(range(2), axes, [i, j], outer_axes_params)}))
             output_param = sub_compute
 
             other_params = collect(value, (ScalarInput, TensorInput))
             params = outer_axes_params + other_params + [output_param]
             task_ret_type: TensorType = param2type[task.compute]
-            subtask_ret_type: TensorType = tensor_type(task_ret_type.scope, task_ret_type.scalar_type, [factor, factor], task_ret_type.layout)
+            subtask_ret_type: TensorType = tensor_type(task_ret_type.scope, task_ret_type.scalar_type, block_task, task_ret_type.layout)
             params_type = [scalar_type('int32'), scalar_type('int32')] + [param2type[param] for param in other_params] + [subtask_ret_type]
 
             # out_arg = param2var[task.compute][n_block_idx: n_block_idx + sub_shape[0], m_block_idx: m_block_idx + sub_shape[1]]
-            out_arg = Address(TensorElement(param2var[task.compute], [n_block_idx * factor, m_block_idx * factor]))
+            out_arg = Address(TensorElement(param2var[task.compute], [n_block_idx * block_task[0], m_block_idx * block_task[1]]))
             args = [n_block_idx, m_block_idx] + [param2var[param] for param in other_params] + [out_arg]
 
             return Task(subtask_name, sub_compute, params, params_type, ThreadBlock(block_dim)), args
@@ -127,10 +129,16 @@ class CudaGridSplitImplementer(Implementer):
         # )
         space = ProductSpace(
             'space', [
-                AtomSpace('factor', [128]),
+                AtomSpace('block_task', [[128, 128]]),
                 AtomSpace('block_size', [256])
             ]
         )
+        # space = ProductSpace(
+        #     'space', [
+        #         AtomSpace('block_task', [[4, 8]]),
+        #         AtomSpace('block_size', [32])
+        #     ]
+        # )
         space_size = len(space)
         ir_module = IRModule(task=task)
         for i in range(space_size):
@@ -148,10 +156,10 @@ class CudaGridSplitImplementer(Implementer):
         task_n = int(match[self.n])
         task_m = int(match[self.m])
 
-        factor = choice.factor.value
+        block_task = choice.block_task.value
         block_size = choice.block_size.value
-        grid_n = (task_n + factor - 1) // factor
-        grid_m = (task_m + factor - 1) // factor
+        grid_n = (task_n + block_task[0] - 1) // block_task[0]
+        grid_m = (task_m + block_task[1] - 1) // block_task[1]
         grid_size = grid_n * grid_m
 
         ir_module = IRModule()
@@ -167,17 +175,17 @@ class CudaGridSplitImplementer(Implementer):
             sb.append(LetStmt(m_block_idx, blockIdx % grid_m))
             sb.enter_body()
             for i in range(2):
-                i_cond = [task_n >= factor, task_n % factor > 0]
-                i_shape = [factor, task_n % factor]
-                i_cond_expr = [(n_block_idx + 1) * factor <= task_n, n_block_idx + 1 == grid_n]
+                i_cond = [task_n >= block_task[0], task_n % block_task[0] > 0]
+                i_shape = [block_task[0], task_n % block_task[0]]
+                i_cond_expr = [(n_block_idx + 1) * block_task[0] <= task_n, n_block_idx + 1 == grid_n]
                 for j in range(2):
-                    j_cond = [task_m >= factor, task_m % factor > 0]
-                    j_shape = [factor, task_m % factor]
-                    j_cond_expr = [(m_block_idx + 1) * factor <= task_m, m_block_idx + 1 == grid_m]
+                    j_cond = [task_m >= block_task[1], task_m % block_task[1] > 0]
+                    j_shape = [block_task[1], task_m % block_task[1]]
+                    j_cond_expr = [(m_block_idx + 1) * block_task[1] <= task_m, m_block_idx + 1 == grid_m]
                     if i_cond[i] and j_cond[j]:
                         shape = [i_shape[i], j_shape[j]]
-                        subtask_name = f'{task.name}.f{factor}.bsz{block_size}.s{shape[0]}x{shape[1]}.block'
-                        subtask, args = self.get_subtask(subtask_name, task, match, factor, shape, block_size, n_block_idx, m_block_idx, fb.params)
+                        subtask_name = f'{task.name}.bt{block_task[0]}x{block_task[1]}.bsz{block_size}.s{shape[0]}x{shape[1]}.block'
+                        subtask, args = self.get_subtask(subtask_name, task, match, block_task, shape, block_size, n_block_idx, m_block_idx, fb.params)
                         submodule = implement(subtask)
                         ir_module.include(submodule)
                         cond = convert(True)
@@ -193,7 +201,7 @@ class CudaGridSplitImplementer(Implementer):
             body = sb.finish()
             fb.set_body(body)
             fb.extend_attrs({'worker': Grid(convert(grid_size), convert(block_size)),
-                             'label': f'factor-{factor}-block_size-{block_size}'})
+                             'label': f'block_task-{block_task[0]}x{block_task[1]}-block_size-{block_size}'})
         func = fb.get()
         ir_module.add(func.name, func)
         return ir_module

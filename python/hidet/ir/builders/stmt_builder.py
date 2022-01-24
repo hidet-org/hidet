@@ -79,7 +79,7 @@ class StmtBuilder:
                     last_stmt.then_body = body
                 else:
                     assert last_stmt.else_body is None
-                    last_stmt.else_body = None
+                    last_stmt.else_body = body
             else:
                 assert False
 
