@@ -28,10 +28,6 @@ class Implementer:
             raise NotSupportedError(msg)
 
 
-# _implementers: Dict[int, Dict[str, Implementer]] = defaultdict(dict)
-# _implementer2name: Dict[Type[Implementer], str] = {}
-# _implementer_priorities: Dict[str, int] = {}
-#
 _impl_cls2name: Dict[Type[Implementer], str] = {}
 _name2impl: Dict[str, Implementer] = {}
 _name2priority: Dict[str, int] = {}
@@ -43,28 +39,30 @@ class ImplementerContext:
 
     def __init__(self,
                  disabled: Optional[Sequence[Union[str, Type[Implementer]]]] = None,
-                 try_first: Optional[Sequence[Union[str, Type[Implementer]]]] = None):
-        self.disabled: List[str] = self._get_impl_names(disabled)
-        self.try_first: List[str] = self._get_impl_names(try_first)
+                 try_first: Optional[Sequence[Union[str, Type[Implementer]]]] = None,
+                 allowed: Optional[Sequence[Union[str, Type[Implementer]]]] = None):
+        self.disabled: List[str] = self._get_impl_names(disabled, [])
+        self.try_first: List[str] = self._get_impl_names(try_first, [])
+        self.allowed: Optional[List[str]] = self._get_impl_names(allowed, None)  # None means all implementers
 
     def __enter__(self):
         ImplementerContext.contexts.append(self)
+        return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         assert ImplementerContext.contexts[-1] is self
         ImplementerContext.contexts.pop()
 
     @staticmethod
-    def _get_impl_names(impls: Optional[Sequence[Union[str, Type[Implementer]]]]) -> List[str]:
+    def _get_impl_names(impls: Optional[Sequence[Union[str, Type[Implementer]]]], default) -> List[str]:
         if impls is None:
-            impls = []
+            return default
         if not isinstance(impls, (tuple, list)):
             impls = [impls]
         return [impl if isinstance(impl, str) else _impl_cls2name[impl] for impl in impls]
 
 
-# add a fall back context
-ImplementerContext.contexts.append(ImplementerContext())
+ImplementerContext.contexts.append(ImplementerContext())  # fallback context, allow all implementers
 
 
 def register_impl(name):
@@ -85,11 +83,18 @@ def register_impl(name):
 def implement(task: Task) -> IRModule:
     implementers: List[List[str]] = []
     ctx = ImplementerContext.contexts[-1]
-    added = set(ctx.disabled)
+    added = set()
+    if ctx.allowed is None:
+        allowed = set(_name2impl.keys())
+    else:
+        allowed = set(ctx.allowed)
+
+    if ctx.disabled is not None:
+        allowed.difference_update(ctx.disabled)
 
     # 1. try the 'try_first' implementers in order in current implementer context
     for impl_name in ImplementerContext.contexts[-1].try_first:
-        if impl_name not in added:
+        if impl_name not in added and impl_name in allowed:
             implementers.append([impl_name])
             added.add(impl_name)
 
@@ -98,7 +103,7 @@ def implement(task: Task) -> IRModule:
     for p in reversed(priorities):
         priority_impls = []
         for impl_name in _priority2names[p]:
-            if impl_name not in added:
+            if impl_name not in added and impl_name in allowed:
                 priority_impls.append(impl_name)
         if len(priority_impls) > 0:
             implementers.append(priority_impls)
@@ -146,5 +151,6 @@ def implement(task: Task) -> IRModule:
 
 
 def impl_context(disabled: Optional[Sequence[Union[str, Type[Implementer]]]] = None,
-                 try_first: Optional[Sequence[Union[str, Type[Implementer]]]] = None):
-    return ImplementerContext(disabled, try_first)
+                 try_first: Optional[Sequence[Union[str, Type[Implementer]]]] = None,
+                 allowed: Optional[Sequence[Union[str, Type[Implementer]]]] = None):
+    return ImplementerContext(disabled, try_first, allowed)

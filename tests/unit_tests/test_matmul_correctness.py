@@ -4,8 +4,9 @@ import numpy as np
 from hidet.backend import build
 from hidet.baselines.matmul import matmul_ref, matmul_cublas, matmul_opt, matmul_cutlass
 from hidet.implement import implement, impl_context
-from hidet.implement.cuda import CudaBlockStaticMatmulSoftPipeImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaBlockNaiveImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer
-from hidet.implement.cuda import CudaGridSplitImplementer, CudaGridNaiveImplementer
+from hidet.implement.cuda import CudaBlockStaticMatmulSoftPipeImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaBlockNaiveImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer, CudaBlockStaticMatmulSoftPipeLdgImplementer
+from hidet.implement.cuda import CudaGridSplitImplementer, CudaGridNaiveImplementer, CudaWarpTransfer2dImplementer, CudaBlockTransfer2dImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer
+from hidet.implement.cuda import CudaThreadNaiveImplementer
 from hidet.implement.resolve import random_resolve
 from hidet.ir.task import Grid, Host
 from hidet.nn import matmul
@@ -27,16 +28,11 @@ def test_matmul_correctness(use_rand=False):
         ('cuBLAS', matmul_cublas()),
     ]
     hidet_variants = [
-        ('HidetNaive', CudaGridNaiveImplementer,
-         (CudaBlockStaticMatmulNoPipeImplementer, CudaBlockStaticMatmulSoftPipeImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer)),
-        ('HidetBlockNaive', (CudaGridSplitImplementer, CudaBlockNaiveImplementer),
-         (CudaBlockStaticMatmulNoPipeImplementer, CudaBlockStaticMatmulSoftPipeImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer)),
-        ('HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer),
-         (CudaBlockStaticMatmulNoPipeLdgImplementer, CudaBlockStaticMatmulSoftPipeImplementer)),
-        ('HidetNoPipeLdg', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer),
-         (CudaBlockStaticMatmulNoPipeImplementer, CudaBlockStaticMatmulSoftPipeImplementer)),
-        ('HidetSoftPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeImplementer),
-         (CudaBlockStaticMatmulNoPipeImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer))
+        ('HidetNaive', (CudaGridNaiveImplementer, CudaThreadNaiveImplementer)),
+        ('HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaWarpTransfer2dImplementer, CudaBlockTransfer2dImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
+        ('HidetNoPipeLdg', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer, CudaWarpTransfer2dImplementer, CudaBlockTransfer2dImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
+        ('HidetSoftPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeImplementer, CudaWarpTransfer2dImplementer, CudaBlockTransfer2dImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
+        ('HidetSoftPipeLdg', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgImplementer, CudaWarpTransfer2dImplementer, CudaBlockTransfer2dImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
     ]
     for N, M, K in workloads:
         print('Workload {} x {} x {}'.format(N, M, K))
@@ -70,10 +66,10 @@ def test_matmul_correctness(use_rand=False):
             host_module['matmul'](HA, HB, HC)
             np.testing.assert_allclose(GC.to_numpy(), HC.to_numpy())
 
-        for name, try_first, disabled in hidet_variants:
+        for name, allowed in hidet_variants:
             print('Verifying {}'.format(name))
             task.worker = Grid()
-            with impl_context(try_first=try_first, disabled=disabled):
+            with impl_context(allowed=allowed):
                 ir_module = implement(task)
                 grid_module = build(random_resolve(ir_module, seed=1), f'./outs/verify/{name}')
 

@@ -1,0 +1,4 @@
+gitpython
+pycuda
+numpy
+sympy

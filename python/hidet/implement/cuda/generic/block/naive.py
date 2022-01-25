@@ -48,7 +48,7 @@ class CudaBlockNaiveImplementer(Implementer):
         return self.pattern
 
     def implement(self, task: Task, match: Mapping[Node, Node]) -> IRModule:
-        raise NotSupportedError()
+        raise NotSupportedError() # todo: turn on when ready
         block_size = int(match[self.block_size])
         computation: TensorCompute = match[self.computation]
         if match[self.task_layout]:

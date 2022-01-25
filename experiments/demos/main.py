@@ -4,7 +4,8 @@ from hidet.backend import build
 from hidet.baselines.matmul import matmul_ref, matmul_cublas, matmul_opt, matmul_cutlass
 from hidet.implement import implement, impl_context
 from hidet.implement.cuda import CudaBlockStaticMatmulSoftPipeImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaBlockNaiveImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer, CudaBlockStaticMatmulSoftPipeLdgImplementer
-from hidet.implement.cuda import CudaGridSplitImplementer, CudaGridNaiveImplementer
+from hidet.implement.cuda import CudaGridSplitImplementer, CudaGridNaiveImplementer, CudaWarpTransfer2dImplementer, CudaBlockTransfer2dImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer
+from hidet.implement.cuda import CudaThreadNaiveImplementer
 from hidet.implement.resolve import random_resolve, brute_force_resolve
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.ir.type import LocalLayout
@@ -27,11 +28,10 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=True, progr
     # warmup = 0
     # number = 1
     # repeat = 1
-    use_brute_force_resolve = False
+    # use_brute_force_resolve = True
     workloads = [
         (1024, 1024, 1024),
-        # (1600, 768, 2304)
-        # (128, 128, 16),
+        (1664, 768, 2304),
     ]
     baselines = [
         ('Reference', matmul_ref()),
@@ -40,19 +40,11 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=True, progr
         ('cuBLAS', matmul_cublas()),
     ]
     hidet_variants = [
-        ('HidetNaive', CudaGridNaiveImplementer,
-         (CudaBlockStaticMatmulNoPipeImplementer, CudaBlockStaticMatmulSoftPipeImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer)),
-        ('HidetBlockNaive', (CudaGridSplitImplementer, CudaBlockNaiveImplementer),
-         (CudaBlockStaticMatmulNoPipeImplementer, CudaBlockStaticMatmulSoftPipeImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer,
-          CudaBlockStaticMatmulSoftPipeLdgImplementer)),
-        ('HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer),
-         (CudaBlockStaticMatmulNoPipeLdgImplementer, CudaBlockStaticMatmulSoftPipeImplementer)),
-        ('HidetNoPipeLdg', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer),
-         (CudaBlockStaticMatmulNoPipeImplementer, CudaBlockStaticMatmulSoftPipeImplementer)),
-        ('HidetSoftPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeImplementer),
-         (CudaBlockStaticMatmulNoPipeImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer)),
-        ('HidetSoftPipeLdg', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgImplementer),
-         (CudaBlockStaticMatmulNoPipeImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer))
+        ('HidetNaive', (CudaGridNaiveImplementer, CudaThreadNaiveImplementer)),
+        ('HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaWarpTransfer2dImplementer, CudaBlockTransfer2dImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
+        ('HidetNoPipeLdg', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer, CudaWarpTransfer2dImplementer, CudaBlockTransfer2dImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
+        ('HidetSoftPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeImplementer, CudaWarpTransfer2dImplementer, CudaBlockTransfer2dImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
+        ('HidetSoftPipeLdg', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgImplementer, CudaWarpTransfer2dImplementer, CudaBlockTransfer2dImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
     ]
     print('Repeat = {}'.format(repeat))
     print('Brute-force resolver = {}'.format(use_brute_force_resolve))
@@ -66,8 +58,8 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=True, progr
             latencies = func.profile(scalar(N), scalar(M), scalar(K), A, B, C, warmup=warmup, number=number, repeat=repeat)
             print_latencies(name, latencies)
 
-        for name, try_first, disabled in hidet_variants:
-            with impl_context(try_first=try_first, disabled=disabled):
+        for name, allowed in hidet_variants:
+            with impl_context(allowed=allowed) as ctx:
                 ir_module = implement(matmul(N, M, K))
                 if use_brute_force_resolve:
                     ir_module = brute_force_resolve(ir_module, warmup=warmup, number=number, repeat=repeat, progress_bar=progress_bar)
@@ -94,19 +86,11 @@ def verify(use_rand=False):
         ('cuBLAS', matmul_cublas()),
     ]
     hidet_variants = [
-        ('HidetNaive', CudaGridNaiveImplementer,
-         (CudaBlockStaticMatmulNoPipeImplementer, CudaBlockStaticMatmulSoftPipeImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer)),
-        ('HidetBlockNaive', (CudaGridSplitImplementer, CudaBlockNaiveImplementer),
-         (CudaBlockStaticMatmulNoPipeImplementer, CudaBlockStaticMatmulSoftPipeImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer,
-          CudaBlockStaticMatmulSoftPipeLdgImplementer)),
-        ('HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer),
-         (CudaBlockStaticMatmulNoPipeLdgImplementer, CudaBlockStaticMatmulSoftPipeImplementer)),
-        ('HidetNoPipeLdg', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer),
-         (CudaBlockStaticMatmulNoPipeImplementer, CudaBlockStaticMatmulSoftPipeImplementer)),
-        ('HidetSoftPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeImplementer),
-         (CudaBlockStaticMatmulNoPipeImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer)),
-        ('HidetSoftPipeLdg', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgImplementer),
-         (CudaBlockStaticMatmulNoPipeImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer))
+        ('HidetNaive', (CudaGridNaiveImplementer, CudaThreadNaiveImplementer)),
+        ('HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaWarpTransfer2dImplementer, CudaBlockTransfer2dImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
+        ('HidetNoPipeLdg', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer, CudaWarpTransfer2dImplementer, CudaBlockTransfer2dImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
+        ('HidetSoftPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeImplementer, CudaWarpTransfer2dImplementer, CudaBlockTransfer2dImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
+        ('HidetSoftPipeLdg', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgImplementer, CudaWarpTransfer2dImplementer, CudaBlockTransfer2dImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
     ]
     for N, M, K in workloads:
         print('Workload {} x {} x {}'.format(N, M, K))
@@ -140,10 +124,10 @@ def verify(use_rand=False):
             host_module['matmul'](HA, HB, HC)
             np.testing.assert_allclose(GC.to_numpy(), HC.to_numpy())
 
-        for name, try_first, disabled in hidet_variants:
+        for name, allowed in hidet_variants:
             print('Verifying {}'.format(name))
             task.worker = Grid()
-            with impl_context(try_first=try_first, disabled=disabled):
+            with impl_context(allowed=allowed):
                 ir_module = implement(task)
                 grid_module = build(random_resolve(ir_module, seed=1), f'./outs/verify/{name}')
 
@@ -158,56 +142,6 @@ def verify(use_rand=False):
             np.testing.assert_allclose(GC.to_numpy(), HC.to_numpy())
 
 
-def demo_lds128():
-    with FunctionBuilder('test_lds128.grid', attrs={'worker': Grid(grid_dim=1, block_dim=1)}) as fb:
-        # params
-        regs_tensor = tensor_var('regs_tensor', [4], 'register', 'float32', layout=[1])
-        smem_tensor = tensor_var('smem_tensor', [4], 'shared', 'float32', layout=[1])
-        fb.extend_local_vars([regs_tensor, smem_tensor])
-
-        # body
-        sb = StmtBuilder()
-        for i in range(4):
-            sb += BufferStoreStmt(smem_tensor, [i], i)
-        for i in range(4):
-            sb += BufferStoreStmt(regs_tensor, [i], smem_tensor[i])
-        sb += BlackBoxStmt(r'printf("%.2f %.2f %.2f %.2f\n", {}, {}, {}, {});',
-                           regs_tensor[0], regs_tensor[1], regs_tensor[2], regs_tensor[3])
-        fb.set_body(sb.finish())
-
-    func = fb.get()
-    ir_module = IRModule({func.name: func}, task=None)
-    module = build(ir_module, './outs/test_lds128')
-    module['test_lds128']()
-    cuda.device_synchronize()
-
-
-def demo_sts128():
-    with FunctionBuilder('test_sts128.grid', attrs={'worker': Grid(grid_dim=1, block_dim=1)}) as fb:
-        # params
-        regs_tensor = tensor_var('regs_tensor', [4], 'register', 'float32', layout=[1])
-        smem_tensor = tensor_var('smem_tensor', [4], 'shared', 'float32', layout=[1])
-        fb.extend_local_vars([regs_tensor, smem_tensor])
-
-        # body
-        sb = StmtBuilder()
-        for i in range(4):
-            sb += BufferStoreStmt(regs_tensor, [i], i)
-        for i in range(4):
-            sb += BufferStoreStmt(smem_tensor, [i], regs_tensor[i])
-        sb += BlackBoxStmt(r'printf("%.2f %.2f %.2f %.2f\n", {}, {}, {}, {});',
-                           smem_tensor[0], smem_tensor[1], smem_tensor[2], smem_tensor[3])
-        fb.set_body(sb.finish())
-
-    func = fb.get()
-    ir_module = IRModule({func.name: func}, task=None)
-    module = build(ir_module, './outs/test_sts128')
-    module['test_sts128']()
-    cuda.device_synchronize()
-
-
 if __name__ == '__main__':
-    benchmark()
-    # verify()
-    # demo_lds128()
-    # demo_sts128()
+    # benchmark()
+    verify()
