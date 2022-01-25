@@ -1,8 +1,8 @@
 import pytest
 from itertools import product
 
-from hidet.implement.cuda.layout import get_task_layouts, TaskLayout
-from hidet.implement.cuda.layout.generic import RowMajorLayout, ColumnMajorLayout
+from hidet.ir.layout import get_task_layouts, TaskLayout
+from hidet.ir.layout.generic import RowMajorLayout, ColumnMajorLayout
 
 
 def check_layout(layout):
@@ -36,6 +36,7 @@ def test_layout_generators(layout_generator, num_workers, task_shape, rank, expe
         check_layout(layout)
 
 
+@pytest.mark.skip(reason='Take too long time')
 def test_layouts():
     for idx, layout in enumerate(TaskLayout.registered):
         check_layout(layout)

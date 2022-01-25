@@ -44,8 +44,8 @@ class ImplementerContext:
     def __init__(self,
                  disabled: Optional[Sequence[Union[str, Type[Implementer]]]] = None,
                  try_first: Optional[Sequence[Union[str, Type[Implementer]]]] = None):
-        self.disabled: List[str] = [impl if isinstance(impl, str) else _impl_cls2name[impl] for impl in disabled] if disabled else []
-        self.try_first: List[str] = [impl if isinstance(impl, str) else _impl_cls2name[impl] for impl in try_first] if try_first else []
+        self.disabled: List[str] = self._get_impl_names(disabled)
+        self.try_first: List[str] = self._get_impl_names(try_first)
 
     def __enter__(self):
         ImplementerContext.contexts.append(self)
@@ -53,6 +53,14 @@ class ImplementerContext:
     def __exit__(self, exc_type, exc_val, exc_tb):
         assert ImplementerContext.contexts[-1] is self
         ImplementerContext.contexts.pop()
+
+    @staticmethod
+    def _get_impl_names(impls: Optional[Sequence[Union[str, Type[Implementer]]]]) -> List[str]:
+        if impls is None:
+            impls = []
+        if not isinstance(impls, (tuple, list)):
+            impls = [impls]
+        return [impl if isinstance(impl, str) else _impl_cls2name[impl] for impl in impls]
 
 
 # add a fall back context

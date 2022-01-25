@@ -70,6 +70,8 @@ class CudaWarpMmaImplementer(Implementer):
                 for i, j in task_layout.worker2task(lane_id):
                     with sb.for_loop('k', task_k) as k:
                         sb.append(BufferStoreStmt(C, [i, j], C[i, j] + A[i, k] * B[k, j]))
+            # with sb.if_then(thread_idx() == 64):
+            #     sb += BlackBoxStmt(r'printf("%.3f %.3f %.3f\n", A[0], B[0], C[0]);')
             fb.set_body(sb.finish())
         func = fb.get()
         ir_module.add(func.name, func)

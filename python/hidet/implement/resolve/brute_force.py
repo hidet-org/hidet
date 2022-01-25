@@ -43,7 +43,10 @@ def brute_force_resolve(ir_module: IRModule, warmup=1, number=1, repeat=10, prog
     inputs = dummy_inputs_from_task(ir_module.task)
     pbar = tqdm(zip(candidates, candidates_label), total=num_trials, disable=not progress_bar)
     best_latency = 1e9
+    name_limit = 64
     for candidate, label in pbar:
+        if len(label) > name_limit:
+            label = label[:name_limit] + str(hash(name_limit))
         module = build(candidate, f'./outs/resolve/{label}', keep=False)
         latencies = module[task_name].profile(*inputs, warmup=warmup, number=number, repeat=repeat)
         current_latency = float(np.mean(latencies))

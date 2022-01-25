@@ -114,6 +114,11 @@ class LoopExpander(ExprFunctor):
             expr = self.visit(e.value)
             self.sb += AssignStmt(acc, e.combine(acc, expr))
 
+        # if e is in the input buffer, we should write it back
+        if e in self.input_map:
+            input_var = self.input_map[e]
+            self.sb += AssignStmt(input_var, acc)
+
         return acc
 
     def visit_Cast(self, e: Cast):

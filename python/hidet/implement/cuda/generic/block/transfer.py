@@ -49,8 +49,6 @@ class CudaBlockTransfer2dImplementer(Implementer):
         return self.pattern
 
     def implement(self, task: Task, match: Mapping[Node, Node]) -> IRModule:
-        block_size = int(match[self.block_size])
-        task_shape = [int(match[v]) for v in self.task_shape]
         task_layout = match[self.task_layout]
         ir_module = IRModule(task=task)
         if task_layout is not None:

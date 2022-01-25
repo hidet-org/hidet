@@ -91,6 +91,7 @@ def general_setting(block_k, warp_k, block_layout, warp_layout):
     )
 
 
+# matmul_settings = [default_setting(), small_setting()]
 matmul_settings = [default_setting()]
 
 
@@ -314,7 +315,7 @@ class CudaBlockStaticMatmulNoPipeImplementer(Implementer):
                     sb += syncthreads()
                     with sb.for_loop('warp_k_tile', block_k) as warp_tile_idx:
                         # smem -> regs
-                        warp_task = block_layout.worker2task(warp_tile_idx)
+                        warp_task = block_layout.worker2task(warp_idx)
                         assert len(warp_task) == 1
                         warp_i, warp_j = warp_task[0]
                         sb += a_s2r(Address(smem_A[warp_i * warp_m, warp_tile_idx]), regs_A)

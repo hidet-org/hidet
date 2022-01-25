@@ -129,14 +129,14 @@ class CudaGridSplitImplementer(Implementer):
         # )
         space = ProductSpace(
             'space', [
-                AtomSpace('block_task', [[128, 128]]),
-                AtomSpace('block_size', [256])
+                AtomSpace('block_task', [[128, 128], [4, 8]]),
+                AtomSpace('block_size', [256, 32])
             ]
         )
         # space = ProductSpace(
         #     'space', [
         #         AtomSpace('block_task', [[4, 8]]),
-        #         AtomSpace('block_size', [32])
+        #         AtomSpace('block_size', [8])
         #     ]
         # )
         space_size = len(space)

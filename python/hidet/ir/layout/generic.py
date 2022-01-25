@@ -66,6 +66,7 @@ class RowMajorLayout(TaskLayoutGenerator):
             num_workers = reduce(operator.mul, task_shape)
             task_shapes = [task_shape]
         elif task_shape is None:
+            assert rank is not None
             task_shapes = decompose_integer(num_workers, rank)
         else:
             assert num_workers == reduce(operator.mul, task_shape)

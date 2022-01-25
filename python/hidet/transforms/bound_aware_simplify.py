@@ -199,13 +199,12 @@ class BoundAwareSimplifier(StmtExprRewriter):
         worker = func.get_attr('worker')
         self.bound.clear()
         if isinstance(worker, Grid):
-            self.bound[thread_idx()] = BoundInfo(min_value=0, max_value=int(worker.block_dim))
-            self.bound[block_idx()] = BoundInfo(min_value=0, max_value=int(worker.grid_dim))
+            self.bound[thread_idx()] = BoundInfo(min_value=0, max_value=int(worker.block_dim)-1)
+            self.bound[block_idx()] = BoundInfo(min_value=0, max_value=int(worker.grid_dim)-1)
         elif isinstance(worker, ThreadBlock):
-            self.bound[thread_idx()] = BoundInfo(min_value=0, max_value=int(worker.block_dim))
+            self.bound[thread_idx()] = BoundInfo(min_value=0, max_value=int(worker.block_dim)-1)
         elif isinstance(worker, Warp):
-            # for warp worker, it can only get the lane id from thread idx, which is between 0...31
-            self.bound[thread_idx()] = BoundInfo(min_value=0, max_value=32)
+            self.bound[thread_idx()] = BoundInfo(min_value=0, max_value=1023)
             self.bound[block_idx()] = BoundInfo(value=0)
         elif isinstance(worker, Thread):
             self.bound[thread_idx()] = BoundInfo(min_value=0, max_value=0)
@@ -297,6 +296,11 @@ class BoundAwareSimplifier(StmtExprRewriter):
             if is_one(e.b):
                 self.bound[e] = BoundInfo(value=0)
                 return convert(0)
+            a_max = self.get_bound(e.a).possible_max_value()
+            b_val = self.get_bound(e.b).value
+            if a_max is not None and b_val is not None and a_max < b_val:
+                self.bound[e] = self.get_bound(e.a)
+                return a
         elif isinstance(e, FloorDiv):
             if is_one(b):
                 self.bound[e] = self.get_bound(e.a)

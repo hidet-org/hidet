@@ -1,9 +1,10 @@
 import numpy as np
+import argparse
 
 from hidet.backend import build
 from hidet.baselines.matmul import matmul_ref, matmul_cublas, matmul_opt, matmul_cutlass
 from hidet.implement import implement, impl_context
-from hidet.implement.cuda import CudaBlockStaticMatmulSoftPipeImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaBlockNaiveImplementer
+from hidet.implement.cuda import CudaBlockStaticMatmulSoftPipeImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaBlockNaiveImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer
 from hidet.implement.cuda import CudaGridSplitImplementer, CudaGridNaiveImplementer
 from hidet.implement.resolve import random_resolve, brute_force_resolve
 from hidet.nn import matmul
@@ -14,11 +15,7 @@ def print_latencies(name, latencies):
     print('{:>20}: {:.3f} (std {:.3f}) ms [{}]'.format(name, np.mean(latencies), np.std(latencies), " ".join([f'{v:.3f}' for v in latencies])))
 
 
-def benchmark():
-    warmup = 5
-    number = 1
-    repeat = 20
-    use_brute_force_resolve = True
+def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False):
     workloads = [
         (1024, 1024, 1024),
         # (1600, 768, 2304)
@@ -33,6 +30,7 @@ def benchmark():
     hidet_variants = [
         ('HidetNaive', (CudaGridNaiveImplementer, CudaBlockNaiveImplementer)),
         ('HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer)),
+        ('HidetNoPipeLdg', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer)),
         ('HidetSoftPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeImplementer))
     ]
     print('Repeat = {}'.format(repeat))
@@ -60,5 +58,13 @@ def benchmark():
         print()
 
 
+parser = argparse.ArgumentParser('Hidet benchmark script.')
+parser.add_argument('--warmup', type=int, default=5)
+parser.add_argument('--number', type=int, default=1)
+parser.add_argument('--repeat', type=int, default=10)
+parser.add_argument('--resolver', type=str, choices=['random', 'brute'], default='brute')
+
+
 if __name__ == '__main__':
-    benchmark()
+    args = parser.parse_args()
+    benchmark(args.warmup, args.number, args.repeat, args.resolver == 'brute')

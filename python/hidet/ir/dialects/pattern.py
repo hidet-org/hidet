@@ -193,6 +193,7 @@ class PatternMatcher:
             TensorComputePattern: self.match_TensorComputePattern,
             ScalarExprPattern: self.match_ScalarExprPattern,
             UnionPattern: self.match_UnionPattern,
+            OptionalPattern: self.match_OptionalPattern,
             ScalarTypePattern: self.match_ScalarTypePattern,
             TensorTypePattern: self.match_TensorTypePattern,
             # python containers
@@ -315,6 +316,13 @@ class PatternMatcher:
             if success:
                 return
         raise NotMatchedError(pattern, target)
+
+    def match_OptionalPattern(self, pattern: OptionalPattern, target: Node):
+        if target is None:
+            return
+        else:
+            with self.match(pattern.pattern, target):
+                pass
 
     @staticmethod
     def match_Scope(pattern: Scope, target: Scope):
