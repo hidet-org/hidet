@@ -58,6 +58,8 @@ class ExprFunctor:
             res = self.visit_Dereference(e)
         elif isinstance(e, Address):
             res = self.visit_Address(e)
+        elif isinstance(e, Reference):
+            res = self.visit_Reference(e)
         # compute dialect
         elif isinstance(e, ScalarInput):
             res = self.visit_ScalarInput(e)
@@ -130,6 +132,9 @@ class ExprFunctor:
         raise NotImplementedError()
 
     def visit_Address(self, e: Address):
+        raise NotImplementedError()
+
+    def visit_Reference(self, e: Reference):
         raise NotImplementedError()
 
     def visit_Call(self, e: Call):
@@ -275,6 +280,9 @@ class ExprVisitor(ExprFunctor):
     def visit_Address(self, e: Address):
         self.visit(e.expr)
 
+    def visit_Reference(self, e: Reference):
+        self.visit(e.expr)
+
 
 class ExprRewriter(ExprFunctor):
     def rewrite(self, e):
@@ -367,6 +375,13 @@ class ExprRewriter(ExprFunctor):
         else:
             return Address(expr)
 
+    def visit_Reference(self, e: Reference):
+        expr = self(e.expr)
+        if expr is e.expr:
+            return e
+        else:
+            return Reference(expr)
+
     def visit_Call(self, e: Call):
         func_var = self(e.func_var)
         args = [self(arg) for arg in e.args]
@@ -441,6 +456,8 @@ class StmtFunctor:
             res = self.visit_ForStmt(stmt)
         elif isinstance(stmt, IfStmt):
             res = self.visit_IfStmt(stmt)
+        elif isinstance(stmt, AsmStmt):
+            res = self.visit_AsmStmt(stmt)
         elif isinstance(stmt, AssertStmt):
             res = self.visit_AssertStmt(stmt)
         elif isinstance(stmt, BlackBoxStmt):
@@ -453,7 +470,7 @@ class StmtFunctor:
         return res
 
     def visit_expr(self, e: Expr):
-        pass
+        raise NotImplementedError()
 
     def visit_EvaluateStmt(self, stmt: EvaluateStmt):
         raise NotImplementedError()
@@ -476,6 +493,9 @@ class StmtFunctor:
     def visit_AssertStmt(self, stmt: AssertStmt):
         raise NotImplementedError()
 
+    def visit_AsmStmt(self, stmt: AsmStmt):
+        raise NotImplementedError()
+
     def visit_BlackBoxStmt(self, stmt: BlackBoxStmt):
         raise NotImplementedError()
 
@@ -486,6 +506,9 @@ class StmtFunctor:
 class StmtVisitor(StmtFunctor):
     def __init__(self):
         super().__init__()
+
+    def visit_expr(self, e: Expr):
+        pass
 
     def visit_EvaluateStmt(self, stmt: EvaluateStmt):
         self.visit_expr(stmt.expr)
@@ -519,8 +542,15 @@ class StmtVisitor(StmtFunctor):
     def visit_AssertStmt(self, stmt: AssertStmt):
         self.visit(stmt.cond)
 
+    def visit_AsmStmt(self, stmt: AsmStmt):
+        for expr in stmt.input_exprs:
+            self.visit_expr(expr)
+        for expr in stmt.output_exprs:
+            self.visit_expr(expr)
+
     def visit_BlackBoxStmt(self, stmt: BlackBoxStmt):
-        pass
+        for expr in stmt.exprs:
+            self.visit_expr(expr)
 
     def visit_SeqStmt(self, stmt: SeqStmt):
         for s in stmt.seq:
@@ -530,6 +560,9 @@ class StmtVisitor(StmtFunctor):
 class StmtRewriter(StmtFunctor):
     def __init__(self):
         super().__init__()
+
+    def visit_expr(self, e: Expr):
+        return e
 
     def visit_EvaluateStmt(self, stmt: EvaluateStmt):
         e = self.visit_expr(stmt.expr)
@@ -589,8 +622,21 @@ class StmtRewriter(StmtFunctor):
         else:
             return AssertStmt(cond, stmt.msg)
 
+    def visit_AsmStmt(self, stmt: AsmStmt):
+        input_exprs = [self.visit_expr(e) for e in stmt.input_exprs]
+        output_exprs = [self.visit_expr(e) for e in stmt.output_exprs]
+        if same_list(input_exprs, stmt.input_exprs) and same_list(output_exprs, stmt.output_exprs):
+            return stmt
+        else:
+            return AsmStmt(stmt.template_string, list(zip(stmt.output_labels, output_exprs)),
+                           list(zip(stmt.input_labels, input_exprs)), stmt.is_volatile)
+
     def visit_BlackBoxStmt(self, stmt: BlackBoxStmt):
-        return stmt
+        exprs = [self(e) for e in stmt.exprs]
+        if same_list(exprs, stmt.exprs):
+            return stmt
+        else:
+            return BlackBoxStmt(stmt.template_string, *exprs)
 
     def visit_SeqStmt(self, stmt: SeqStmt):
         seq = []
@@ -672,6 +718,8 @@ class TypeFunctor:
             return self.visit_TensorType(t)
         elif isinstance(t, PointerType):
             return self.visit_PointerType(t)
+        elif isinstance(t, ReferenceType):
+            return self.visit_ReferenceType(t)
         elif isinstance(t, VoidType):
             return self.visit_VoidType(t)
         else:
@@ -684,6 +732,9 @@ class TypeFunctor:
         raise NotImplementedError()
 
     def visit_PointerType(self, t: PointerType):
+        raise NotImplementedError()
+
+    def visit_ReferenceType(self, t: ReferenceType):
         raise NotImplementedError()
 
     def visit_VoidType(self, t: VoidType):

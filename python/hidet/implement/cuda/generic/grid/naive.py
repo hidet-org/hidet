@@ -10,7 +10,7 @@ from hidet.ir.task import Task, Grid, Thread
 from hidet.ir.func import IRModule, Function
 from hidet.ir.dialects.compute import TensorInput, ScalarInput, TensorCompute, scalar_input
 from hidet.ir.dialects.pattern import TaskPattern, TensorComputePattern
-from hidet.ir.dialects.lowlevel import VoidType
+from hidet.ir.dialects.lowlevel import VoidType, ReferenceType
 from hidet.ir.functors import rewrite, infer_type, collect, simplify
 from hidet.implement.implementer import Implementer, implement, register_impl
 from hidet.ir.primitives import thread_idx, block_idx
@@ -113,7 +113,7 @@ class CudaGridNaiveImplementer(Implementer):
         subtask_params = collect(subtask_compute, [ScalarInput, TensorInput])
 
         subtask_params += [subtask_compute]
-        param2type[subtask_compute] = infer_type(subtask_compute)
+        param2type[subtask_compute] = ReferenceType(infer_type(subtask_compute))
         param2arg[subtask_compute] = TensorElement(param2arg[task.compute], task_indices)
 
         subtask = Task(subtask_name, subtask_compute, subtask_params, [param2type[p] for p in subtask_params], Thread())

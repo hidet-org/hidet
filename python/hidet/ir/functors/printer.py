@@ -3,7 +3,7 @@ from hidet.ir.node import Node
 from hidet.ir.func import IRModule, Function
 from hidet.ir.type import ScalarType, TensorType, TypeNode
 from hidet.ir.expr import Constant, Var, Call, TensorElement, TensorSlice, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div, Sub, Not, Or, And
-from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, LetStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt
+from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, LetStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt, BlackBoxStmt, AsmStmt
 from hidet.ir.task import Worker, Host, Grid, ThreadBlock, Warp, Thread
 from hidet.ir.dialects.compute import ReduceCompute, TensorCompute, TensorInput, ScalarInput
 from hidet.ir.dialects.lowlevel import VoidType, PointerType, Dereference, Cast, Address
@@ -220,6 +220,26 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
 
     def visit_AssertStmt(self, stmt: AssertStmt):
         return NewLine() + 'assert(' + self(stmt.cond) + ', ' + stmt.msg + ')'
+
+    def visit_AsmStmt(self, stmt: AsmStmt):
+        volatile_doc = 'volatile ' if stmt.is_volatile else ''
+        template_doc = Text(stmt.template_string)
+        output_docs = []
+        for label, expr in zip(stmt.output_labels, stmt.output_exprs):
+            output_docs.append(Text(label) + '(' + self(expr) + ')')
+        input_docs = []
+        for label, expr in zip(stmt.input_labels, stmt.input_exprs):
+            input_docs.append(Text(label) + '(' + self(expr) + ')')
+        return NewLine() + 'asm ' + volatile_doc + '(' + template_doc + ' : ' + doc_join(input_docs, ', ') + ' : ' + doc_join(output_docs, ', ') + ');'
+
+    def visit_BlackBoxStmt(self, stmt: BlackBoxStmt):
+        expr_docs = [str(self(e)) for e in stmt.exprs]
+        stmt_string: str = stmt.template_string.format(*expr_docs)
+        lines = stmt_string.split('\n')
+        doc = Text('')
+        for line in lines:
+            doc += NewLine() + line
+        return doc
 
     def visit_SeqStmt(self, stmt: SeqStmt):
         doc = Doc()

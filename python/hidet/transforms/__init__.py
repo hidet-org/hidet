@@ -4,4 +4,7 @@ from .flatten_tensor import flatten_tensor_pass
 from .generate_packed_func import generate_packed_func_pass
 from .eliminate_dead_device_function import eliminate_dead_device_function_pass
 from .bound_aware_simplify import bound_aware_simplify_pass
+from .vectorize_load_store import vectorize_load_store_pass
+from .import_primitive_functions import import_primitive_functions_pass
+
 from .lower import lower

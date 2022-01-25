@@ -6,7 +6,7 @@ from hidet.ir.stmt import *
 from hidet.ir.expr import *
 from hidet.ir.dialects.compute import ReduceCompute, TensorCompute, TensorInput, ScalarInput
 from hidet.ir.functors import StmtExprFunctor, TypeFunctor, collect, simplify
-from hidet.ir.dialects.lowlevel import VoidType, PointerType, Cast, Dereference, Address
+from hidet.ir.dialects.lowlevel import VoidType, PointerType, Cast, Dereference, Address, ReferenceType, Reference
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
 from hidet.ir.utils.call_graph import CallGraph
 from hidet.utils.namer import Namer
@@ -21,34 +21,34 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         self.namer = Namer()
 
     @staticmethod
-    def get_write_params(func: Function):
-        params = func.params
-        stmts = collect(func.body, (BufferStoreStmt, AssignStmt))
-        write_params = []
-        for param in params:
-            for stmt in stmts:
-                if isinstance(stmt, BufferStoreStmt):
-                    if stmt.buf == param:
-                        write_params.append(param)
-                        break
-                else:
-                    assert isinstance(stmt, AssignStmt)
-                    if stmt.var == param:
-                        write_params.append(param)
-                        break
-        return write_params
-
-    @staticmethod
     def canonize_funcname(name: str):
         return name.replace('.', '_')
 
-    def var_declare(self, v: Var, is_ref=False):
+    def param_declare(self, v: Var):
+        v_type = v.type
+        name_doc = self(v)
+        if isinstance(v_type, ScalarType):
+            dtype_doc = self(v_type)
+            return dtype_doc + ' ' + name_doc
+        elif isinstance(v_type, PointerType):
+            base_type_doc = self(v_type.base_type)
+            return base_type_doc + ' *' + name_doc
+        elif isinstance(v_type, ReferenceType):
+            if isinstance(v_type.base_type, ScalarType):
+                base_type_doc = self(v_type.base_type)
+                return base_type_doc + ' &' + name_doc
+            else:
+                raise NotImplementedError()
+        elif isinstance(v_type, TensorType):
+            raise ValueError('Please lower this ir module by "flatten_tensor" pass before codegen.')
+        else:
+            raise ValueError()
+
+    def local_var_declare(self, v: Var):
         v_type = v.type
         if isinstance(v_type, ScalarType):
             dtype_doc = self(v_type)
             name_doc = self(v)
-            if is_ref:
-                name_doc = '&' + name_doc
             return dtype_doc + ' ' + name_doc
         elif isinstance(v_type, TensorType):
             if v_type.scope.name == 'shared':
@@ -57,8 +57,6 @@ class Codegen(StmtExprFunctor, TypeFunctor):
                 scope_doc = ''
             dtype_doc = self(v_type.scalar_type)
             name_doc = self(v)
-            if is_ref:
-                name_doc = '(&' + name_doc + ')'
             shape_doc = Doc()
             for s in v_type.shape:
                 shape_doc += '[' + self(s) + ']'
@@ -130,13 +128,9 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         # parameters
         doc += '('
         param_docs = []
-        write_params = self.get_write_params(func)
         for i in range(len(func.params)):
             param = func.params[i]
-            is_assigned_scalar = param in write_params and isinstance(param.type, ScalarType)
-            is_register_tensor = isinstance(param.type, TensorType) and param.type.scope.name == 'register'
-            is_ref = is_assigned_scalar or is_register_tensor
-            param_docs.append(self.var_declare(param, is_ref))
+            param_docs.append(self.param_declare(param))
         doc += doc_join(param_docs, Text(', '))
         doc += ') {'
 
@@ -147,7 +141,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
 
         # locals
         for local_var in func.local_vars:
-            doc += (NewLine() + self.var_declare(local_var) + ';').indent()
+            doc += (NewLine() + self.local_var_declare(local_var) + ';').indent()
             # doc += (NewLine() + self(local_var.type) + ' ' + self(local_var) + ';').indent()
 
         # body
@@ -215,18 +209,24 @@ class Codegen(StmtExprFunctor, TypeFunctor):
     def visit_Address(self, e: Address):
         return Text('&') + self.visit(e.expr)
 
+    def visit_Reference(self, e: Reference):
+        raise NotImplementedError()
+
     def visit_Dereference(self, e: Dereference):
         return Text('*') + self(e.expr)
 
     def visit_Call(self, e: Call):
         func_name = e.func_var.hint
-        if is_primitive_function(func_name):
-            v, func_type, func = get_primitive_function(func_name)
-            if func is None:
-                # system function, do not canonize the func name
-                return func_name + (Text('(') + doc_join([self(arg) for arg in e.args], Text(', ')) + ')')
-        else:
+        if func_name in self.ir_module.functions:
+            # first check whether callee is in current ir module
+            # because ir module functions will cover primitive functions
             func = self.ir_module.lookup(func_name)
+        else:
+            assert is_primitive_function(func_name), "Callee {} not found in current ir module, and it is not primitive function."
+            v, func_type, func = get_primitive_function(func_name)
+            assert func is None, "Please use import_primitive_functions pass to import primitive function first"
+            # system-provided function, do not canonize the func name
+            return func_name + (Text('(') + doc_join([self(arg) for arg in e.args], Text(', ')) + ')')
         worker = func.get_attr('worker')
         func_name = Text(self.canonize_funcname(e.func_var.hint))
         if isinstance(worker, Grid):
@@ -298,8 +298,25 @@ class Codegen(StmtExprFunctor, TypeFunctor):
     def visit_AssertStmt(self, stmt: AssertStmt):
         return NewLine() + Text('assert(((void)"') + stmt.msg + '", ' + self(stmt.cond) + '));'
 
+    def visit_AsmStmt(self, stmt: AsmStmt):
+        volatile_doc = 'volatile ' if stmt.is_volatile else ''
+        template_doc = f'"{Text(stmt.template_string)}"'
+        output_docs = []
+        for label, expr in zip(stmt.output_labels, stmt.output_exprs):
+            output_docs.append(Text(f'"{label}"') + '(' + self(expr) + ')')
+        input_docs = []
+        for label, expr in zip(stmt.input_labels, stmt.input_exprs):
+            input_docs.append(Text(f'"{label}"') + '(' + self(expr) + ')')
+        return NewLine() + 'asm ' + volatile_doc + '(' + template_doc + ' : ' + doc_join(output_docs, ', ') + ' : ' + doc_join(input_docs, ', ') + ');'
+
     def visit_BlackBoxStmt(self, stmt: BlackBoxStmt):
-        return NewLine() + stmt.stmt_str
+        expr_docs = [str(self(e)) for e in stmt.exprs]
+        stmt_string: str = stmt.template_string.format(*expr_docs)
+        lines = stmt_string.split('\n')
+        doc = Text('')
+        for line in lines:
+            doc += NewLine() + line
+        return doc
 
     def visit_SeqStmt(self, stmt: SeqStmt):
         doc = Doc()
@@ -319,6 +336,9 @@ class Codegen(StmtExprFunctor, TypeFunctor):
 
     def visit_PointerType(self, t: PointerType):
         return self(t.base_type) + Text('*')
+
+    def visit_ReferenceType(self, t: ReferenceType):
+        raise NotImplementedError()
 
     def visit_VoidType(self, t: VoidType):
         return Text('void')

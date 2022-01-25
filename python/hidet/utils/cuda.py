@@ -28,6 +28,10 @@ def get_attributes(device_no=0):
     return attrs
 
 
+def device_synchronize():
+    pycuda.driver.Context.synchronize()
+
+
 if __name__ == '__main__':
     for k, v in get_attributes().items():
         print("{:>40}: {}".format(k, v))

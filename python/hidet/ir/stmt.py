@@ -1,3 +1,4 @@
+from typing import Sequence, Tuple
 from typing import List, Union, Optional
 from copy import copy
 from hidet.ir.node import Node
@@ -57,7 +58,7 @@ class ForStmt(Stmt):
 
 
 class IfStmt(Stmt):
-    def __init__(self, cond, then_body=None, else_body=None):
+    def __init__(self, cond: Expr, then_body=None, else_body=None):
         super().__init__()
         self.cond = convert(cond)
         self.then_body = then_body
@@ -65,20 +66,36 @@ class IfStmt(Stmt):
 
 
 class AssertStmt(Stmt):
-    def __init__(self, cond, msg):
+    def __init__(self, cond: Expr, msg: str):
         super().__init__()
         self.cond = convert(cond)
         self.msg = msg
 
 
+class AsmStmt(Stmt):
+    def __init__(self,
+                 template_string: str = "",
+                 outputs: Sequence[Tuple[str, Expr]] = (),
+                 inputs: Sequence[Tuple[str, Expr]] = (),
+                 is_volatile=False):
+        self.template_string = template_string
+        self.output_labels = [pr[0] for pr in outputs]
+        self.output_exprs = [pr[1] for pr in outputs]
+        self.input_labels = [pr[0] for pr in inputs]
+        self.input_exprs = [pr[1] for pr in inputs]
+        self.is_volatile = is_volatile
+
+
 class BlackBoxStmt(Stmt):
-    def __init__(self, stmt_str: str):
+    def __init__(self, template_string: str, *exprs: Sequence[Expr]):
         super().__init__()
-        self.stmt_str = stmt_str
+        self.template_string: str = template_string
+        self.exprs: List[Expr] = list(exprs)
+        assert self.template_string.count('{}') == len(exprs)
 
 
 class SeqStmt(Stmt):
-    def __init__(self, seq):
+    def __init__(self, seq: List[Stmt]):
         super().__init__()
         self.seq: List = seq
         for stmt in seq:

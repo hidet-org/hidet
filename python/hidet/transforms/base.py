@@ -14,7 +14,7 @@ class Pass:
             new_ir_module.add(name, self.process_func(ir_module.functions[name]))
         return new_ir_module
 
-    def process_func(self, func: Function):
+    def process_func(self, func: Function) -> Function:
         return func
 
 

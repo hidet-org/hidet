@@ -12,7 +12,7 @@ from hidet.transforms import Pass
 
 class GeneratePackedFunc(Pass):
     def __init__(self):
-        super().__init__('GeneratePackedFunc')
+        super().__init__('generate_packed_func')
 
     def __call__(self, ir_module: IRModule) -> IRModule:
         new_ir_module = IRModule()

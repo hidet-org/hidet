@@ -187,6 +187,7 @@ class TensorElement(Expr):
 
 class Call(Expr):
     def __init__(self, func, args):
+        # todo: use function name (str) directly as the function identity
         self.func_var: Var = func
         self.args = args
 
@@ -230,10 +231,10 @@ class Var(Expr):
         Var.id_clock = 0
 
 
-def var(hint: str = None):
+def var(hint: str = None, dtype='int32'):
     if isinstance(hint, str):
         assert set(hint) <= set(string.ascii_letters + '_.' + string.digits)
-    return Var(hint, ScalarType('int32'))
+    return Var(hint, ScalarType(dtype))
 
 
 def scalar_var(hint: str, dtype: Union[str, ScalarType] = 'float32') -> Var:

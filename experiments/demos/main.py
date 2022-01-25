@@ -1,23 +1,14 @@
-import os
-
 import numpy as np
-import pycuda.driver
-import sympy
 
-from hidet.backend import codegen, build
+from hidet.backend import build
 from hidet.baselines.matmul import matmul_ref, matmul_cublas, matmul_opt, matmul_cutlass
 from hidet.implement import implement, impl_context
+from hidet.implement.cuda import CudaBlockStaticMatmulSoftPipeImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaBlockNaiveImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer, CudaBlockStaticMatmulSoftPipeLdgImplementer
+from hidet.implement.cuda import CudaGridSplitImplementer, CudaGridNaiveImplementer
 from hidet.implement.resolve import random_resolve, brute_force_resolve
-from hidet.ir.dialects.compute import tensor_input, reduce_sum, compute
-from hidet.ir.expr import var
-from hidet.ir.functors import astext
-from hidet.ir.task import Task, Grid, Host
-from hidet.ir.type import tensor_type
+from hidet.ir.task import Grid, Host
 from hidet.nn import matmul
 from hidet.runtime.value import TensorValue, randn, empty, scalar, zeros, full
-from hidet.transforms import flatten_tensor_pass, generate_packed_func_pass
-from hidet.implement.cuda import CudaGridSplitImplementer, CudaGridNaiveImplementer
-from hidet.implement.cuda import CudaBlockStaticMatmulSoftPipeImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaBlockNaiveImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer, CudaBlockStaticMatmulSoftPipeLdgImplementer
 
 
 def print_latencies(name, latencies):
@@ -40,7 +31,8 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=True, progr
         ('HidetNaive', CudaGridNaiveImplementer,
          (CudaBlockStaticMatmulNoPipeImplementer, CudaBlockStaticMatmulSoftPipeImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer)),
         ('HidetBlockNaive', (CudaGridSplitImplementer, CudaBlockNaiveImplementer),
-         (CudaBlockStaticMatmulNoPipeImplementer, CudaBlockStaticMatmulSoftPipeImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer)),
+         (CudaBlockStaticMatmulNoPipeImplementer, CudaBlockStaticMatmulSoftPipeImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer,
+          CudaBlockStaticMatmulSoftPipeLdgImplementer)),
         ('HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer),
          (CudaBlockStaticMatmulNoPipeLdgImplementer, CudaBlockStaticMatmulSoftPipeImplementer)),
         ('HidetNoPipeLdg', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer),
@@ -69,7 +61,7 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=True, progr
                     ir_module = brute_force_resolve(ir_module, warmup=warmup, number=number, repeat=repeat, progress_bar=progress_bar)
                 else:
                     ir_module = random_resolve(ir_module)
-                module = build(ir_module, output_dir=f'./outs/{name}')
+                module = build(ir_module, output_dir=f'./outs/bench/{name}')
                 latencies = module['matmul'].profile(A, B, C, warmup=warmup, number=number, repeat=repeat)
                 print_latencies(name, latencies)
         print()
@@ -93,7 +85,8 @@ def verify(use_rand=False):
         ('HidetNaive', CudaGridNaiveImplementer,
          (CudaBlockStaticMatmulNoPipeImplementer, CudaBlockStaticMatmulSoftPipeImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer)),
         ('HidetBlockNaive', (CudaGridSplitImplementer, CudaBlockNaiveImplementer),
-         (CudaBlockStaticMatmulNoPipeImplementer, CudaBlockStaticMatmulSoftPipeImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer)),
+         (CudaBlockStaticMatmulNoPipeImplementer, CudaBlockStaticMatmulSoftPipeImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer,
+          CudaBlockStaticMatmulSoftPipeLdgImplementer)),
         ('HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer),
          (CudaBlockStaticMatmulNoPipeLdgImplementer, CudaBlockStaticMatmulSoftPipeImplementer)),
         ('HidetNoPipeLdg', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer),
