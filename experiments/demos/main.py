@@ -6,9 +6,17 @@ from hidet.implement import implement, impl_context
 from hidet.implement.cuda import CudaBlockStaticMatmulSoftPipeImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaBlockNaiveImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer, CudaBlockStaticMatmulSoftPipeLdgImplementer
 from hidet.implement.cuda import CudaGridSplitImplementer, CudaGridNaiveImplementer
 from hidet.implement.resolve import random_resolve, brute_force_resolve
-from hidet.ir.task import Grid, Host
+from hidet.ir.builders import FunctionBuilder, StmtBuilder
+from hidet.ir.type import LocalLayout
+from hidet.ir.expr import var, tensor_var
+from hidet.ir.func import IRModule
+from hidet.ir.primitives import lds128, sts128
+from hidet.ir.stmt import BlackBoxStmt, AssignStmt, BufferStoreStmt
+from hidet.ir.task import Grid
+from hidet.ir.task import Host
 from hidet.nn import matmul
 from hidet.runtime.value import TensorValue, randn, empty, scalar, zeros, full
+from hidet.utils import cuda
 
 
 def print_latencies(name, latencies):
@@ -16,6 +24,10 @@ def print_latencies(name, latencies):
 
 
 def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=True, progress_bar=True):
+    # warmup = 0
+    # number = 1
+    # repeat = 1
+    use_brute_force_resolve = False
     workloads = [
         (1024, 1024, 1024),
         # (1600, 768, 2304)
@@ -146,6 +158,56 @@ def verify(use_rand=False):
             np.testing.assert_allclose(GC.to_numpy(), HC.to_numpy())
 
 
+def demo_lds128():
+    with FunctionBuilder('test_lds128.grid', attrs={'worker': Grid(grid_dim=1, block_dim=1)}) as fb:
+        # params
+        regs_tensor = tensor_var('regs_tensor', [4], 'register', 'float32', layout=[1])
+        smem_tensor = tensor_var('smem_tensor', [4], 'shared', 'float32', layout=[1])
+        fb.extend_local_vars([regs_tensor, smem_tensor])
+
+        # body
+        sb = StmtBuilder()
+        for i in range(4):
+            sb += BufferStoreStmt(smem_tensor, [i], i)
+        for i in range(4):
+            sb += BufferStoreStmt(regs_tensor, [i], smem_tensor[i])
+        sb += BlackBoxStmt(r'printf("%.2f %.2f %.2f %.2f\n", {}, {}, {}, {});',
+                           regs_tensor[0], regs_tensor[1], regs_tensor[2], regs_tensor[3])
+        fb.set_body(sb.finish())
+
+    func = fb.get()
+    ir_module = IRModule({func.name: func}, task=None)
+    module = build(ir_module, './outs/test_lds128')
+    module['test_lds128']()
+    cuda.device_synchronize()
+
+
+def demo_sts128():
+    with FunctionBuilder('test_sts128.grid', attrs={'worker': Grid(grid_dim=1, block_dim=1)}) as fb:
+        # params
+        regs_tensor = tensor_var('regs_tensor', [4], 'register', 'float32', layout=[1])
+        smem_tensor = tensor_var('smem_tensor', [4], 'shared', 'float32', layout=[1])
+        fb.extend_local_vars([regs_tensor, smem_tensor])
+
+        # body
+        sb = StmtBuilder()
+        for i in range(4):
+            sb += BufferStoreStmt(regs_tensor, [i], i)
+        for i in range(4):
+            sb += BufferStoreStmt(smem_tensor, [i], regs_tensor[i])
+        sb += BlackBoxStmt(r'printf("%.2f %.2f %.2f %.2f\n", {}, {}, {}, {});',
+                           smem_tensor[0], smem_tensor[1], smem_tensor[2], smem_tensor[3])
+        fb.set_body(sb.finish())
+
+    func = fb.get()
+    ir_module = IRModule({func.name: func}, task=None)
+    module = build(ir_module, './outs/test_sts128')
+    module['test_sts128']()
+    cuda.device_synchronize()
+
+
 if __name__ == '__main__':
     benchmark()
     # verify()
+    # demo_lds128()
+    # demo_sts128()

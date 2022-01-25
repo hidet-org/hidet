@@ -22,7 +22,16 @@ class FlattenTensor(Pass):
         for param in func.params:
             if isinstance(param.type, TensorType):
                 target_tensors.append(param)
-                flattened_vars.append(Var(param.hint, PointerType(param.type.scalar_type)))
+                scope = param.type.scope
+                dtype = param.type.scalar_type
+                if isinstance(param.type.layout, LocalLayout):
+                    shape = [int(param.type.layout.local_size)]
+                elif isinstance(param.type.layout, StridesLayout):
+                    shape = [int(functools.reduce(operator.mul, param.type.layout.shape))]
+                else:
+                    raise NotImplementedError()
+                flattened_vars.append(Var(param, TensorType(scope, dtype, shape, [1])))
+                # flattened_vars.append(Var(param.hint, PointerType(param.type.scalar_type)))
         for local_var in func.local_vars:
             if isinstance(local_var.type, TensorType):
                 target_tensors.append(local_var)

@@ -40,7 +40,17 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             else:
                 raise NotImplementedError()
         elif isinstance(v_type, TensorType):
-            raise ValueError('Please lower this ir module by "flatten_tensor" pass before codegen.')
+            if v_type.scope.name == 'shared':
+                scope_doc = '__shared__ '
+            else:
+                scope_doc = ''
+            dtype_doc = self(v_type.scalar_type)
+            name_doc = self(v)
+            shape_doc = Doc()
+            for s in v_type.shape:
+                shape_doc += '[' + self(s) + ']'
+            return scope_doc + dtype_doc + ' ' + name_doc + shape_doc
+            # raise ValueError('Please lower this ir module by "flatten_tensor" pass before codegen.')
         else:
             raise ValueError()
 
@@ -117,8 +127,13 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         # launch bound for grid worker
         if isinstance(worker, Grid):
             block_dim = simplify(worker.block_dim)
+            if worker.min_blocks:
+                min_blocks = simplify(worker.min_blocks)
+            else:
+                DEFAULT_MIN_BLOCKS = 2  # todo let user specify
+                min_blocks = DEFAULT_MIN_BLOCKS
             if isinstance(block_dim, Constant):
-                doc += f' __launch_bounds__({block_dim.value})'
+                doc += f' __launch_bounds__({block_dim.value}, {min_blocks})'
 
         # func name
         canonized_func_name = self.canonize_funcname(func.name)

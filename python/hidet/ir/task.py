@@ -13,9 +13,10 @@ class Worker(Node):
 
 
 class Grid(Worker):
-    def __init__(self, grid_dim: Optional[Int] = None, block_dim: Optional[Int] = None):
+    def __init__(self, grid_dim: Optional[Int] = None, block_dim: Optional[Int] = None, min_blocks: Optional[Int] = None):
         self.grid_dim: Optional[Expr] = convert(grid_dim) if grid_dim else None
         self.block_dim: Optional[Expr] = convert(block_dim) if block_dim else None
+        self.min_blocks: Optional[Expr] = convert(min_blocks) if min_blocks else None
 
 
 class ThreadBlock(Worker):

@@ -4,7 +4,7 @@ from pycuda.gpuarray import GPUArray
 from .ffi import _LIB
 from ctypes import c_int32, c_void_p, pointer, c_float, cast
 from ctypes import POINTER, Structure
-from hidet.ir.type import ScalarType
+from hidet.ir.type import ScalarType, TensorType
 from hidet.ir.dialects.lowlevel import PointerType
 from hidet.runtime.value import Value, ScalarValue, TensorValue
 
@@ -51,7 +51,7 @@ class PackedFunc:
             else:
                 raise NotImplementedError()
         elif isinstance(arg, TensorValue):
-            assert isinstance(self.param_types[idx], PointerType)
+            assert isinstance(self.param_types[idx], (PointerType, TensorType))
             arg_type = arg.type
             if arg_type.scalar_type.name == 'float32':
                 if isinstance(arg.array, GPUArray):
@@ -71,6 +71,8 @@ class PackedFunc:
         if isinstance(param_type, ScalarType):
             type_name = param_type.name
         elif isinstance(param_type, PointerType):
+            type_name = 'pointer'
+        elif isinstance(param_type, TensorType):
             type_name = 'pointer'
         else:
             raise NotImplementedError()

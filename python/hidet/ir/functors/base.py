@@ -464,6 +464,8 @@ class StmtFunctor:
             res = self.visit_BlackBoxStmt(stmt)
         elif isinstance(stmt, SeqStmt):
             res = self.visit_SeqStmt(stmt)
+        elif isinstance(stmt, Expr):
+            res = self.visit_expr(stmt)
         else:
             raise ValueError()
         self.memo[stmt] = res
@@ -632,7 +634,7 @@ class StmtRewriter(StmtFunctor):
                            list(zip(stmt.input_labels, input_exprs)), stmt.is_volatile)
 
     def visit_BlackBoxStmt(self, stmt: BlackBoxStmt):
-        exprs = [self(e) for e in stmt.exprs]
+        exprs = [self.visit_expr(e) for e in stmt.exprs]
         if same_list(exprs, stmt.exprs):
             return stmt
         else:

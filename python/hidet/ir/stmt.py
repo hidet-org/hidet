@@ -22,6 +22,7 @@ class BufferStoreStmt(Stmt):
         self.buf = buf
         self.indices = convert(indices)
         self.value = convert(value)
+        assert isinstance(self.indices, list)
 
 
 class AssignStmt(Stmt):

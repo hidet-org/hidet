@@ -2,12 +2,12 @@ from typing import List
 
 
 def doc_join(seq: List, sep):
-    rseq = []
+    doc = Doc()
     for i in range(len(seq)):
         if i != 0:
-            rseq.append(sep)
-        rseq.append(seq[i])
-    return rseq
+            doc += sep
+        doc += seq[i]
+    return doc
 
 
 class NewLineToken:
