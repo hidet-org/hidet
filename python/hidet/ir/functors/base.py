@@ -41,8 +41,6 @@ class ExprFunctor:
             res = self.visit_Or(e)
         elif isinstance(e, Not):
             res = self.visit_Not(e)
-        elif isinstance(e, TensorSlice):
-            res = self.visit_TensorSlice(e)
         elif isinstance(e, TensorElement):
             res = self.visit_TensorElement(e)
         elif isinstance(e, Call):
@@ -117,9 +115,6 @@ class ExprFunctor:
         raise NotImplementedError()
 
     def visit_Not(self, e: Not):
-        raise NotImplementedError()
-
-    def visit_TensorSlice(self, e: TensorSlice):
         raise NotImplementedError()
 
     def visit_TensorElement(self, e: TensorElement):
@@ -218,15 +213,6 @@ class ExprVisitor(ExprFunctor):
 
     def visit_Not(self, e: Not):
         self.visit(e.a)
-
-    def visit_TensorSlice(self, e: TensorSlice):
-        self.visit(e.base)
-        for idx in e.indices:
-            if idx:
-                self.visit(idx)
-        for start, end in zip(e.starts, e.ends):
-            self.visit(start)
-            self.visit(end)
 
     def visit_TensorElement(self, e: TensorElement):
         self.visit(e.base)
@@ -335,16 +321,6 @@ class ExprRewriter(ExprFunctor):
             return e
         else:
             return Not(a)
-
-    def visit_TensorSlice(self, e: TensorSlice):
-        base = self(e.base)
-        indices = [self(idx) if idx else None for idx in e.indices]
-        starts = [self(v) for v in e.starts]
-        ends = [self(v) for v in e.ends]
-        if base is e.base and same_list(indices, e.indices) and same_list(starts, e.starts) and same_list(ends, e.ends):
-            return e
-        else:
-            return TensorSlice(base, indices, starts, ends)
 
     def visit_TensorElement(self, e: TensorElement):
         base = self(e.base)

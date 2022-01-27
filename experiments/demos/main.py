@@ -3,21 +3,14 @@ import numpy as np
 from hidet.backend import build
 from hidet.baselines.matmul import matmul_ref, matmul_cublas, matmul_opt, matmul_cutlass
 from hidet.implement import implement, impl_context
-from hidet.implement.cuda import CudaBlockStaticMatmulSoftPipeImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaBlockNaiveImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer, CudaBlockStaticMatmulSoftPipeLdgImplementer
+from hidet.implement.cuda import CudaBlockStaticMatmulSoftPipeImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer, CudaBlockStaticMatmulSoftPipeLdgImplementer
 from hidet.implement.cuda import CudaGridSplitImplementer, CudaGridNaiveImplementer, CudaWarpTransfer2dImplementer, CudaBlockTransfer2dImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer
 from hidet.implement.cuda import CudaThreadNaiveImplementer
 from hidet.implement.resolve import random_resolve, brute_force_resolve
-from hidet.ir.builders import FunctionBuilder, StmtBuilder
-from hidet.ir.type import LocalLayout
-from hidet.ir.expr import var, tensor_var
-from hidet.ir.func import IRModule
-from hidet.ir.primitives import lds128, sts128
-from hidet.ir.stmt import BlackBoxStmt, AssignStmt, BufferStoreStmt
 from hidet.ir.task import Grid
 from hidet.ir.task import Host
 from hidet.nn import matmul
 from hidet.runtime.value import TensorValue, randn, empty, scalar, zeros, full
-from hidet.utils import cuda
 
 
 def print_latencies(name, latencies):

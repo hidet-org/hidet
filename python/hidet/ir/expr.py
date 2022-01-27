@@ -57,12 +57,8 @@ class Expr(Node):
             item = [item]
         indices = [idx if not isinstance(idx, slice) else None for idx in item]
         slices = [idx for idx in item if isinstance(idx, slice)]
-        if len(slices) == 0:
-            return TensorElement(self, indices)
-        else:
-            starts = [s.start for s in slices]
-            ends = [s.stop for s in slices]
-            return TensorSlice(self, indices, starts, ends)
+        assert len(slices) == 0
+        return TensorElement(self, indices)
 
     def __hash__(self):
         return object.__hash__(self)
@@ -169,14 +165,6 @@ class FloorDiv(BinaryOp):
 class Mod(BinaryOp):
     def __init__(self, a, b):
         super().__init__(a, b)
-
-
-class TensorSlice(Expr):
-    def __init__(self, base, indices, starts, ends):
-        self.base = base
-        self.indices = indices
-        self.starts = starts
-        self.ends = ends
 
 
 class TensorElement(Expr):

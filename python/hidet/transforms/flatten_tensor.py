@@ -2,7 +2,7 @@ import functools
 import operator
 from typing import List
 from hidet.ir.type import TensorType
-from hidet.ir.expr import Var, TensorElement, TensorSlice
+from hidet.ir.expr import Var, TensorElement
 from hidet.ir.stmt import BufferStoreStmt
 from hidet.ir.func import Function
 from hidet.ir.functors import collect, rewrite, simplify
@@ -59,32 +59,6 @@ class FlattenTensor(Pass):
             global_index = tensor_var.type.layout.serialize(*e.indices)
             rmap[e] = TensorElement(tensor2flattened[tensor_var], [global_index])
         body = rewrite(body, rmap)
-
-        # update TensorSlice
-        rmap.clear()
-        slice_exprs: List[TensorSlice] = collect(func.body, TensorSlice)
-        assert len(slice_exprs) == 0 # deprecated, will remove
-        # for e in slice_exprs:
-        #     if e.base not in target_tensors:
-        #         continue
-        #     tensor_var: Var = e.base
-        #     assert isinstance(tensor_var.type, TensorType)
-        #     shape = tensor_var.type.shape
-        #     strides = tensor_var.type.layout
-        #
-        #     indices = []
-        #     start_idx = 0
-        #     items = []
-        #     for i in range(len(e.indices)):
-        #         if e.indices[i]:
-        #             indices.append(e.indices[i])
-        #         else:
-        #             indices.append(e.starts[start_idx])
-        #             start_idx += 1
-        #         items.append(indices[i] * strides[i])
-        #     global_index = sum(items)
-        #     rmap[e] = Address(TensorElement(tensor2flattened[tensor_var], [global_index]))
-        # body = rewrite(body, rmap)
 
         # update BufferStoreStmt
         rmap.clear()

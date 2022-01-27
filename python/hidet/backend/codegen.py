@@ -202,19 +202,6 @@ class Codegen(StmtExprFunctor, TypeFunctor):
     def visit_Not(self, e: Not):
         return Text('!') + self(e.a)
 
-    def visit_TensorSlice(self, e: TensorSlice):
-        slice_idx = 0
-        base_doc = self(e.base)
-        docs = []
-        for idx in e.indices:
-            if idx:
-                docs.append(self(idx))
-            else:
-                start, end = e.starts[slice_idx], e.ends[slice_idx]
-                docs.append(self(start) + ':' + self(end))
-                slice_idx += 1
-        return base_doc + '[' + doc_join(docs, ', ') + ']'
-
     def visit_TensorElement(self, e: TensorElement):
         return self(e.base) + doc_join(['[' + self(idx) + ']' for idx in e.indices], '')
 

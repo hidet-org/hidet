@@ -160,7 +160,6 @@ class PatternMatcher:
             FloorDiv: self.match_Binary,
             LessThan: self.match_Binary,
             Equal: self.match_Binary,
-            TensorSlice: self.match_TensorSlice,
             TensorElement: self.match_TensorElement,
             Call: self.match_Call,
             Var: self.match_Var,
@@ -234,13 +233,6 @@ class PatternMatcher:
         with ExitStack() as stack:
             stack.enter_context(self.match(pattern.a, target.a))
             stack.enter_context(self.match(pattern.b, target.b))
-
-    def match_TensorSlice(self, pattern: TensorSlice, target: TensorSlice):
-        with ExitStack() as stack:
-            stack.enter_context(self.match(pattern.base, target.base))
-            stack.enter_context(self.match(pattern.indices, target.indices))
-            stack.enter_context(self.match(pattern.starts, target.starts))
-            stack.enter_context(self.match(pattern.ends, target.ends))
 
     def match_TensorElement(self, pattern: TensorElement, target: TensorElement):
         with ExitStack() as stack:

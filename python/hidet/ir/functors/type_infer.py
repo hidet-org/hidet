@@ -1,6 +1,6 @@
 from hidet.ir.type import ScalarType, TensorType
 from hidet.ir.expr import BinaryOp, Add, Sub, Multiply, Div, Mod, FloorDiv, Condition, LessThan, Equal
-from hidet.ir.expr import Var, Constant, TensorSlice, TensorElement, Call
+from hidet.ir.expr import Var, Constant, TensorElement, Call
 from hidet.ir.dialects.compute import ScalarInput, TensorInput, TensorCompute, ReduceCompute
 from hidet.ir.dialects.lowlevel import PointerType, Cast, Dereference
 
@@ -40,15 +40,6 @@ class TypeInfer(ExprFunctor):
 
     def visit_Equal(self, e: Equal):
         return self.visit_Binary(e)
-
-    def visit_TensorSlice(self, e: TensorSlice):
-        ttype: TensorType = self.visit(e.base)
-        shape = []
-        for start, end in zip(e.starts, e.ends):
-            shape.append(end - start)
-        # todo: make the strides correct
-        rt = TensorType(ttype.scope, ttype.scalar_type, shape, None)
-        return rt
 
     def visit_TensorElement(self, e: TensorElement):
         return self.visit(e.base).scalar_type

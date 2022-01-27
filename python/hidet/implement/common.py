@@ -56,9 +56,6 @@ class LoopExpander(ExprFunctor):
     def visit_Equal(self, e: Equal):
         return self.visit_binary(e)
 
-    def visit_TensorSlice(self, e: TensorSlice):
-        return TensorSlice(self(e.base), e.indices, e.starts, e.ends)
-
     def visit_TensorElement(self, e: TensorElement):
         return TensorElement(self(e.base), [self(v) for v in e.indices])
 

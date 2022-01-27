@@ -2,7 +2,7 @@ from collections import defaultdict
 from hidet.ir.node import Node
 from hidet.ir.func import IRModule, Function
 from hidet.ir.type import ScalarType, TensorType, TypeNode
-from hidet.ir.expr import Constant, Var, Call, TensorElement, TensorSlice, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div, Sub, Not, Or, And
+from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div, Sub, Not, Or, And
 from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, LetStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt, BlackBoxStmt, AsmStmt
 from hidet.ir.task import Worker, Host, Grid, ThreadBlock, Warp, Thread
 from hidet.ir.dialects.compute import ReduceCompute, TensorCompute, TensorInput, ScalarInput
@@ -130,19 +130,6 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
 
     def visit_Not(self, e: Not):
         return Text('!') + self(e.a)
-
-    def visit_TensorSlice(self, e: TensorSlice):
-        slice_idx = 0
-        base_doc = self(e.base)
-        docs = []
-        for idx in e.indices:
-            if idx:
-                docs.append(self(idx))
-            else:
-                start, end = e.starts[slice_idx], e.ends[slice_idx]
-                docs.append(self(start) + ':' + self(end))
-                slice_idx += 1
-        return base_doc + '[' + doc_join(docs, ', ') + ']'
 
     def visit_TensorElement(self, e: TensorElement):
         return self(e.base) + '[' + self(e.indices) + ']'
