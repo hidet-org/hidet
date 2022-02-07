@@ -2,6 +2,7 @@ import functools
 import operator
 from typing import Sequence, Optional, Union, Dict, Tuple, List, Callable
 from hidet.ir.node import Node
+from hidet import ir
 
 
 class TypeNode(Node):
@@ -15,33 +16,76 @@ class Scope:
         self.name = name
 
 
-# data layout
+# typing forward declaration
+Expr = 'Expr'
 Int = Union['Expr', int]
 
 
+# data layout
 class DataLayout:
-    def __init__(self, shape=None, global2local=None):
+    def __init__(self, shape=None, size=None, global2local=None):
         self.shape: List[Int] = shape
+        self.size: Int = size
         self.global2local: Callable[[Int, ...], Int] = global2local
 
-    def serialize(self, *args: Sequence[Int]) -> Int:
-        if self.global2local is None:
-            raise NotImplementedError()
-        else:
-            return self.global2local(*args)
+    def __call__(self, *args: Sequence[Int]):
+        return self.serialize(*args)
+
+    def __add__(self, other):
+        return DataLayout.concat(lhs=self, rhs=other)
+
+    def __mul__(self, other):
+        return DataLayout.product(outer=self, inner=other)
+
+    def serialize(self, *args: Sequence[Int]):
+        assert len(args) == len(self.shape)
+        scalar_index = self.global2local(*args)
+        if isinstance(scalar_index, int) and isinstance(self.size, int):
+            assert scalar_index < self.size
+        return scalar_index
+
+    @staticmethod
+    def product(outer: 'DataLayout', inner: 'DataLayout'):
+        assert len(outer.shape) == len(inner.shape)
+        shape = [a * b for a, b in zip(outer.shape, inner.shape)]
+        size = outer.size * inner.size
+
+        def global2local(*args):
+            lhs_args = [v // b for v, b in zip(args, inner.shape)]
+            rhs_args = [v % b for v, b in zip(args, inner.shape)]
+            return outer.global2local(*lhs_args) * inner.size + inner.global2local(*rhs_args)
+
+        return DataLayout(shape, size, global2local)
+
+    @staticmethod
+    def concat(lhs: 'DataLayout', rhs: 'DataLayout'):
+        shape = list(lhs.shape) + list(rhs.shape)
+        size = lhs.size * rhs.size
+
+        def global2local(*args):
+            lhs_args = args[:len(lhs.shape)]
+            rhs_args = args[len(lhs.shape):]
+            return lhs.global2local(*lhs_args) * rhs.size + rhs.global2local(*rhs_args)
+
+        return DataLayout(shape, size, global2local)
+
+    @staticmethod
+    def local_layout(shape: Sequence[Int]):
+        return DataLayout(shape, size=1, global2local=lambda *args: 0)
 
 
 class StridesLayout(DataLayout):
     def __init__(self, shape, strides):
-        from hidet.ir.expr import convert
         super().__init__(shape=shape,
+                         size=StridesLayout.storage_size(shape, strides),
                          global2local=lambda *indices: sum(v * self.strides[i] for i, v in enumerate(indices)))
-        self.strides: List[Int] = [convert(v) for v in strides]
+        self.strides: List[Int] = strides
 
-    def __add__(self, other):
-        if not isinstance(other, StridesLayout):
-            return NotImplemented
-        return StridesLayout.combine(self, other)
+    @staticmethod
+    def storage_size(shape, strides) -> Expr:
+        # assume the strides are positive, but do not assume the tensor is contiguous.
+        max_index = sum([(a - ir.convert(1)) * b for a, b in zip(shape, strides)]) + 1
+        return ir.functors.simplify(max_index)
 
     @staticmethod
     def row_major(shape: Sequence[Int]) -> 'StridesLayout':
@@ -57,62 +101,28 @@ class StridesLayout(DataLayout):
         rank = len(shape)
         pairs = [(i, p) for i, p in zip(range(rank), perm)]
         pairs = sorted(pairs, key=lambda pr: pr[1])
-        nshape = [shape[pr[0]] for pr in pairs]
+        new_shape = [shape[pr[0]] for pr in pairs]
         strides = [None] * rank
         for i in range(rank):
-            strides[i] = functools.reduce(operator.mul, nshape[i + 1:], 1)
+            strides[i] = functools.reduce(operator.mul, new_shape[i + 1:], 1)
         return StridesLayout(shape, strides)
-
-    @staticmethod
-    def combine(lhs: 'StridesLayout', rhs: 'StridesLayout') -> 'StridesLayout':
-        shape = lhs.shape + rhs.shape
-        rhs_size = functools.reduce(operator.mul, rhs.shape)
-        strides = [v * rhs_size for v in lhs.strides] + rhs.strides
-        return StridesLayout(shape, strides)
-
-
-class LocalLayout(DataLayout):
-    def __init__(self, local_size, shape, global2local):
-        super().__init__(shape, global2local)
-        self.local_size: int = local_size
-
-    def serialize(self, *args: Sequence[Int]) -> Int:
-        return self.global2local(*args)
-
-    def __add__(self, other):
-        return LocalLayout.combine(self, other)
-
-    def __radd__(self, other):
-        return LocalLayout.combine(other, self)
-
-    @staticmethod
-    def combine(lhs: DataLayout, rhs: DataLayout) -> 'LocalLayout':
-        lhs_rank = len(lhs.shape)
-        rhs_rank = len(rhs.shape)
-        shape = list(lhs.shape) + list(rhs.shape)
-        if isinstance(lhs, StridesLayout) and isinstance(rhs, StridesLayout):
-            return StridesLayout.combine(lhs, rhs)
-        elif isinstance(lhs, StridesLayout) and isinstance(rhs, LocalLayout):
-            rhs_size = rhs.local_size
-            local_size = functools.reduce(operator.mul, lhs.shape) * rhs.local_size
-        elif isinstance(lhs, LocalLayout) and isinstance(rhs, StridesLayout):
-            rhs_size = functools.reduce(operator.mul, rhs.shape)
-            local_size = lhs.local_size * functools.reduce(operator.mul, rhs.shape)
-        else:
-            return NotImplemented
-
-        def global2local(*args):
-            return lhs.global2local(*args[:lhs_rank]) * rhs_size + rhs.global2local(*args[lhs_rank:])
-
-        return LocalLayout(local_size, shape, global2local)
 
 
 # scalar type and tensor type
 class ScalarType(TypeNode):
     def __init__(self, name):
         if name:
-            assert name in ['float32', 'int32', 'bool'], name
+            assert name in ['float32', 'int32', 'uint8', 'bool'], name
         self.name = name
+
+    def nbytes(self) -> int:
+        bytes_dict = {
+            'float32': 4,
+            'int32': 4,
+            'uint8': 1,
+            'bool': 1
+        }
+        return bytes_dict[self.name]
 
 
 class TensorType(TypeNode):
@@ -121,7 +131,6 @@ class TensorType(TypeNode):
                  dtype: Optional[Union[ScalarType, str]] = None,
                  shape: Optional[Sequence[Int]] = None,
                  layout: Optional[Union[Sequence[Int], DataLayout]] = None):
-        from hidet.ir.expr import convert
         if isinstance(scope, str):
             scope = Scope(scope)
         if isinstance(dtype, str):
@@ -131,21 +140,14 @@ class TensorType(TypeNode):
                 strides = layout
                 layout = StridesLayout(shape, strides)
         if shape:
-            shape = [convert(s) for s in shape]
+            shape = [ir.convert(s) for s in shape]
         self.scope: Scope = scope
         self.scalar_type: ScalarType = dtype
-        self.shape = shape
-        self.layout = layout
+        self.shape: List[Expr] = shape
+        self.layout: DataLayout = layout
 
-    def nbytes(self):
-        from hidet.ir.expr import convert, Constant
-        from hidet.ir.functors import simplify
-        max_index_expr = sum([(a - 1) * b for a, b in zip(self.shape, self.layout)], convert(0))
-        max_index_value = simplify(max_index_expr)
-        if isinstance(max_index_value, Constant):
-            return max_index_value.value
-        else:
-            raise Exception("Can only calculate size of static tensor.")
+    def storage_bytes(self) -> Expr:
+        return self.layout.size * self.scalar_type.nbytes()
 
 
 class FuncType(TypeNode):

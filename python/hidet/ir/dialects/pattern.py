@@ -177,7 +177,6 @@ class PatternMatcher:
             # layout
             TaskLayout: self.always_match,
             DataLayout: self.match_DataLayout,
-            LocalLayout: self.match_LocalLayout,
             StridesLayout: self.match_StridesLayout,
             # worker
             Host: self.always_match,
@@ -280,15 +279,12 @@ class PatternMatcher:
 
     @staticmethod
     def match_DataLayout(pattern, target):
-        if isinstance(target, (StridesLayout, LocalLayout)):
+        if isinstance(target, (StridesLayout, DataLayout)):
             pass
         else:
             raise NotMatchedError(pattern, target)
 
     def match_StridesLayout(self, pattern: StridesLayout, target: StridesLayout):
-        pass
-
-    def match_LocalLayout(self, pattern: LocalLayout, target: LocalLayout):
         pass
 
     @staticmethod

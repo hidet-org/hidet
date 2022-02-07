@@ -1,5 +1,6 @@
-from hidet.ir.type import TypeNode
-from hidet.ir.expr import Expr, TensorElement, Var
+from typing import Optional, Union, Sequence
+from hidet.ir.type import TypeNode, ScalarType, TensorType, Scope, Int, DataLayout
+from hidet.ir.expr import Expr, TensorElement, Var, Constant
 
 
 class VoidType(TypeNode):
@@ -16,6 +17,15 @@ class ReferenceType(TypeNode):
     def __init__(self, base_type):
         super().__init__()
         self.base_type = base_type
+
+
+class TensorPointerType(TypeNode):
+    def __init__(self,
+                 scope: Optional[Union[Scope, str]] = None,
+                 dtype: Optional[Union[ScalarType, str]] = None,
+                 shape: Optional[Sequence[Int]] = None,
+                 layout: Optional[Union[Sequence[Int], DataLayout]] = None):
+        self.tensor_type: TensorType = TensorType(scope, dtype, shape, layout)
 
 
 class Cast(Expr):

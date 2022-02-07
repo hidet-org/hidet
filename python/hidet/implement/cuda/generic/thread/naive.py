@@ -33,7 +33,7 @@ class CudaThreadNaiveImplementer(Implementer):
         body, val, new_buffer_map = expand_loop(task.compute, input_map)
         # if not isinstance(task.compute, TensorCompute):
         #     body = SeqStmt([body, AssignStmt(input_map[task.compute], val)])
-        func_locals = new_buffer_map.values()
+        func_locals = list(new_buffer_map.values())
         func = Function(task.name, func_param_vars, body, VoidType(), func_locals, {'worker': Thread()})
         module = IRModule({func.name: func})
         return module

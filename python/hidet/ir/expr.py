@@ -206,7 +206,7 @@ class Var(Expr):
 
     def __init__(self, hint: Optional[str], type: TypeNode):
         self.hint = hint
-        self.type = type
+        self.type: TypeNode = type
         self.id = self.new_id()
 
     @staticmethod

@@ -696,6 +696,8 @@ class TypeFunctor:
             return self.visit_TensorType(t)
         elif isinstance(t, PointerType):
             return self.visit_PointerType(t)
+        elif isinstance(t, TensorPointerType):
+            return self.visit_TensorPointerType(t)
         elif isinstance(t, ReferenceType):
             return self.visit_ReferenceType(t)
         elif isinstance(t, VoidType):
@@ -710,6 +712,9 @@ class TypeFunctor:
         raise NotImplementedError()
 
     def visit_PointerType(self, t: PointerType):
+        raise NotImplementedError()
+
+    def visit_TensorPointerType(self, t: TensorPointerType):
         raise NotImplementedError()
 
     def visit_ReferenceType(self, t: ReferenceType):

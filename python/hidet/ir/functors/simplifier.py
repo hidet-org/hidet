@@ -144,3 +144,9 @@ def simplify(node: Union[Stmt, Expr], repeat_limit=10):
     return node
 
 
+def simplify_to_int(node: Union[Stmt, Expr, int], repeat_limit=10) -> int:
+    if isinstance(node, int):
+        return node
+    node = simplify(node, repeat_limit)
+    assert isinstance(node, Constant) and node.dtype.name in ['int32', 'uint8']
+    return node.value

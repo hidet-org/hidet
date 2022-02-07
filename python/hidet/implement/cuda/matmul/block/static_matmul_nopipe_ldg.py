@@ -13,7 +13,7 @@ from hidet.ir.node import Node
 from hidet.ir.primitives import syncthreads, thread_idx
 from hidet.ir.stmt import LetStmt, ForStmt
 from hidet.ir.task import Task, ThreadBlock, Warp
-from hidet.ir.type import scalar_type, TensorType, Scope, LocalLayout, DataLayout
+from hidet.ir.type import scalar_type, TensorType, Scope, DataLayout
 
 
 class MatmulSetting:
@@ -36,11 +36,11 @@ class MatmulSetting:
         self.ab2c_layout: TaskLayout = ab2c_layout
         self.c_r2g_layout: TaskLayout = c_r2g_layout
         # data layouts
-        self.regs_a_layout: LocalLayout = regs_a_layout
-        self.regs_b_layout: LocalLayout = regs_b_layout
-        self.regs_c_layout: LocalLayout = regs_c_layout
-        self.regs_a_ldg_layout: LocalLayout = regs_a_ldg_layout
-        self.regs_b_ldg_layout: LocalLayout = regs_b_ldg_layout
+        self.regs_a_layout: DataLayout = regs_a_layout
+        self.regs_b_layout: DataLayout = regs_b_layout
+        self.regs_c_layout: DataLayout = regs_c_layout
+        self.regs_a_ldg_layout: DataLayout = regs_a_ldg_layout
+        self.regs_b_ldg_layout: DataLayout = regs_b_ldg_layout
 
 
 def default_setting():
@@ -60,11 +60,11 @@ def default_setting():
                                                                         j // 4 * 32 + w % 16 // 2 * 4 + j % 4) for i in range(8) for j in range(8)])),
         c_r2g_layout=TaskLayout(num_workers=32, worker2task=(lambda w: [(i // 4 * 16 + w // 16 * 8 + w % 2 * 4 + i % 4,
                                                                          j // 4 * 32 + w % 16 // 2 * 4 + j % 4) for i in range(8) for j in range(8)])),
-        regs_a_layout=LocalLayout(local_size=8, shape=(32, 1), global2local=(lambda i, j: i % 4 + (i // 16) * 4)),
-        regs_b_layout=LocalLayout(local_size=8, shape=(1, 64), global2local=(lambda i, j: j % 4 + (j // 32) * 4)),
-        regs_c_layout=LocalLayout(local_size=8 * 8, shape=(32, 64), global2local=(lambda i, j: ((i // 16 * 4 + i % 4) * 8 + j // 32 * 4 + j % 4))),
-        regs_a_ldg_layout=LocalLayout(local_size=4, shape=(128, 8), global2local=(lambda i, j: i % 4)),
-        regs_b_ldg_layout=LocalLayout(local_size=4, shape=(8, 128), global2local=(lambda i, j: j // 32))
+        regs_a_layout=DataLayout(size=8, shape=(32, 1), global2local=(lambda i, j: i % 4 + (i // 16) * 4)),
+        regs_b_layout=DataLayout(size=8, shape=(1, 64), global2local=(lambda i, j: j % 4 + (j // 32) * 4)),
+        regs_c_layout=DataLayout(size=8 * 8, shape=(32, 64), global2local=(lambda i, j: ((i // 16 * 4 + i % 4) * 8 + j // 32 * 4 + j % 4))),
+        regs_a_ldg_layout=DataLayout(size=4, shape=(128, 8), global2local=(lambda i, j: i % 4)),
+        regs_b_ldg_layout=DataLayout(size=4, shape=(8, 128), global2local=(lambda i, j: j // 32))
     )
 
 

@@ -5,10 +5,10 @@ from hidet.ir.type import TensorType
 from hidet.ir.expr import Var, TensorElement
 from hidet.ir.stmt import BufferStoreStmt
 from hidet.ir.func import Function
-from hidet.ir.functors import collect, rewrite, simplify
-from hidet.ir.dialects.lowlevel import PointerType, Address
+from hidet.ir.functors import collect, rewrite, simplify, simplify_to_int
+from hidet.ir.dialects.lowlevel import PointerType, Address, TensorPointerType
 from hidet.transforms import Pass
-from hidet.ir.type import StridesLayout, LocalLayout
+from hidet.ir.type import StridesLayout, DataLayout
 
 
 class FlattenTensor(Pass):
@@ -19,29 +19,18 @@ class FlattenTensor(Pass):
         # we do not flatten tensors with the shared memory and register scope tensors
         target_tensors = []
         flattened_vars = []
-        for param in func.params:
-            if isinstance(param.type, TensorType):
-                target_tensors.append(param)
-                scope = param.type.scope
-                dtype = param.type.scalar_type
-                if isinstance(param.type.layout, LocalLayout):
-                    shape = [int(param.type.layout.local_size)]
-                elif isinstance(param.type.layout, StridesLayout):
-                    shape = [int(functools.reduce(operator.mul, param.type.layout.shape))]
+        var2tensor_type = {}
+        for var in func.params + func.local_vars:
+            if isinstance(var.type, (TensorPointerType, TensorType)):
+                target_tensors.append(var)
+                if isinstance(var.type, TensorType):
+                    assert isinstance(var.type.layout, (DataLayout, StridesLayout))
+                    shape = [simplify_to_int(var.type.layout.size)]
+                    var2tensor_type[var] = var.type
+                    flattened_vars.append(Var(var, TensorType(var.type.scope, var.type.scalar_type, shape, [1])))
                 else:
-                    raise NotImplementedError()
-                flattened_vars.append(Var(param, TensorType(scope, dtype, shape, [1])))
-                # flattened_vars.append(Var(param.hint, PointerType(param.type.scalar_type)))
-        for local_var in func.local_vars:
-            if isinstance(local_var.type, TensorType):
-                target_tensors.append(local_var)
-                scope = local_var.type.scope
-                dtype = local_var.type.scalar_type
-                if isinstance(local_var.type.layout, LocalLayout):
-                    shape = [int(local_var.type.layout.local_size)]
-                else:
-                    shape = [int(simplify(functools.reduce(operator.mul, local_var.type.shape)))]
-                flattened_vars.append(Var(local_var, TensorType(scope, dtype, shape, [1])))
+                    var2tensor_type[var] = var.type.tensor_type
+                    flattened_vars.append(var)
 
         if len(target_tensors) == 0:
             return func
@@ -55,8 +44,8 @@ class FlattenTensor(Pass):
             if e.base not in target_tensors:
                 continue
             tensor_var: Var = e.base
-            assert isinstance(tensor_var.type, TensorType)
-            global_index = tensor_var.type.layout.serialize(*e.indices)
+            tensor_type = var2tensor_type[tensor_var]
+            global_index = tensor_type.layout(*e.indices)
             rmap[e] = TensorElement(tensor2flattened[tensor_var], [global_index])
         body = rewrite(body, rmap)
 
@@ -67,8 +56,8 @@ class FlattenTensor(Pass):
             if s.buf not in target_tensors:
                 continue
             tensor_var: Var = s.buf
-            assert isinstance(tensor_var.type, TensorType)
-            global_index = tensor_var.type.layout.serialize(*s.indices)
+            tensor_type = var2tensor_type[tensor_var]
+            global_index = tensor_type.layout(*s.indices)
             rmap[s] = BufferStoreStmt(tensor2flattened[tensor_var], [global_index], s.value)
         body = rewrite(body, rmap)
 

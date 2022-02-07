@@ -13,7 +13,8 @@ from hidet.ir.node import Node
 from hidet.ir.primitives import syncthreads, thread_idx
 from hidet.ir.stmt import LetStmt, ForStmt
 from hidet.ir.task import Task, ThreadBlock, Warp
-from hidet.ir.type import scalar_type, TensorType, Scope, LocalLayout, DataLayout, StridesLayout
+from hidet.ir.type import scalar_type, TensorType, Scope, DataLayout, StridesLayout
+
 
 
 class MatmulSetting:
@@ -30,9 +31,9 @@ class MatmulSetting:
         self.ab2c_layout: TaskLayout = ab2c_layout
         self.c_r2g_layout: TaskLayout = c_r2g_layout
         # data layouts
-        self.regs_a_layout: LocalLayout = regs_a_layout
-        self.regs_b_layout: LocalLayout = regs_b_layout
-        self.regs_c_layout: LocalLayout = regs_c_layout
+        self.regs_a_layout: DataLayout = regs_a_layout
+        self.regs_b_layout: DataLayout = regs_b_layout
+        self.regs_c_layout: DataLayout = regs_c_layout
 
 
 def default_setting():
@@ -48,9 +49,9 @@ def default_setting():
                                                                         j // 4 * 32 + w % 16 // 2 * 4 + j % 4) for i in range(8) for j in range(8)])),
         c_r2g_layout=TaskLayout(num_workers=32, worker2task=(lambda w: [(i // 4 * 16 + w // 16 * 8 + w % 2 * 4 + i % 4,
                                                                          j // 4 * 32 + w % 16 // 2 * 4 + j % 4) for i in range(8) for j in range(8)])),
-        regs_a_layout=LocalLayout(local_size=8, shape=(32, 1), global2local=(lambda i, j: i % 4 + (i // 16) * 4)),
-        regs_b_layout=LocalLayout(local_size=8, shape=(1, 64), global2local=(lambda i, j: j % 4 + (j // 32) * 4)),
-        regs_c_layout=LocalLayout(local_size=8 * 8, shape=(32, 64), global2local=(lambda i, j: ((i // 16 * 4 + i % 4) * 8 + j // 32 * 4 + j % 4)))
+        regs_a_layout=DataLayout(size=8, shape=(32, 1), global2local=(lambda i, j: i % 4 + (i // 16) * 4)),
+        regs_b_layout=DataLayout(size=8, shape=(1, 64), global2local=(lambda i, j: j % 4 + (j // 32) * 4)),
+        regs_c_layout=DataLayout(size=8 * 8, shape=(32, 64), global2local=(lambda i, j: ((i // 16 * 4 + i % 4) * 8 + j // 32 * 4 + j % 4)))
     )
 
 
@@ -66,9 +67,28 @@ def small_setting():
         b_s2r_layout=TaskLayout(num_workers=32, worker2task=(lambda w: [(0, warp_layout.worker2task(w)[0][1])])),
         ab2c_layout=TaskLayout(num_workers=32, worker2task=(lambda w: warp_layout.worker2task(w))),
         c_r2g_layout=TaskLayout(num_workers=32, worker2task=(lambda w: warp_layout.worker2task(w))),
-        regs_a_layout=LocalLayout(local_size=1, shape=(4, 1), global2local=(lambda i, j: 0)),
-        regs_b_layout=LocalLayout(local_size=1, shape=(1, 8), global2local=(lambda i, j: 0)),
-        regs_c_layout=LocalLayout(local_size=1 * 1, shape=(4, 8), global2local=(lambda i, j: 0))
+        regs_a_layout=DataLayout(size=1, shape=(4, 1), global2local=(lambda i, j: 0)),
+        regs_b_layout=DataLayout(size=1, shape=(1, 8), global2local=(lambda i, j: 0)),
+        regs_c_layout=DataLayout(size=1 * 1, shape=(4, 8), global2local=(lambda i, j: 0))
+    )
+
+
+def general_setting(block_k, warp_k, block_layout, warp_layout):
+    from hidet.ir.layout.concrete import WarpLayout4x8
+    assert block_k % 2 == 0
+    warp_layout = WarpLayout4x8()
+    return MatmulSetting(
+        block_k=block_k,
+        warp_k=warp_k,
+        block_layout=block_layout,
+        warp_layout=warp_layout,
+        a_s2r_layout=TaskLayout(num_workers=32, worker2task=(lambda w: [(warp_layout.worker2task(w)[0][0], 0)])),
+        b_s2r_layout=TaskLayout(num_workers=32, worker2task=(lambda w: [(0, warp_layout.worker2task(w)[0][1])])),
+        ab2c_layout=TaskLayout(num_workers=32, worker2task=(lambda w: warp_layout.worker2task(w))),
+        c_r2g_layout=TaskLayout(num_workers=32, worker2task=(lambda w: warp_layout.worker2task(w))),
+        regs_a_layout=DataLayout(size=1, shape=(4, 1), global2local=(lambda i, j: 0)),
+        regs_b_layout=DataLayout(size=1, shape=(1, 8), global2local=(lambda i, j: 0)),
+        regs_c_layout=DataLayout(size=1 * 1, shape=(4, 8), global2local=(lambda i, j: 0))
     )
 
 

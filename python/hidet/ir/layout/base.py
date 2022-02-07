@@ -41,6 +41,20 @@ class TaskLayout:
         assert isinstance(other, TaskLayout)
         return task_layout_compose(self, other)
 
+    def projection(self, *values: List[Optional[int]]) -> 'TaskLayout':
+        assert len(values) == len(self.task_shape)
+
+        def task2worker(*args):
+            return self.task2worker
+
+        def worker2task(w: Int):
+            rank = len(self.task_shape)
+            projected_tasks = []
+            for task in self.worker2task(w):
+                projected_tasks.append(tuple(task[i] if values[i] is None else values[i] for i in range(rank)))
+            return projected_tasks
+        return TaskLayout(self.num_workers, self.task_shape, worker2task, task2worker)
+
     @property
     def expr_text(self):
         from hidet.ir.functors.simplifier import simplify, convert

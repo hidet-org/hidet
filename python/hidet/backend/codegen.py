@@ -6,7 +6,7 @@ from hidet.ir.stmt import *
 from hidet.ir.expr import *
 from hidet.ir.dialects.compute import ReduceCompute, TensorCompute, TensorInput, ScalarInput
 from hidet.ir.functors import StmtExprFunctor, TypeFunctor, collect, simplify
-from hidet.ir.dialects.lowlevel import VoidType, PointerType, Cast, Dereference, Address, ReferenceType, Reference
+from hidet.ir.dialects.lowlevel import VoidType, PointerType, Cast, Dereference, Address, ReferenceType, Reference, TensorPointerType
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
 from hidet.ir.utils.call_graph import CallGraph
 from hidet.utils.namer import Namer
@@ -40,17 +40,12 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             else:
                 raise NotImplementedError()
         elif isinstance(v_type, TensorType):
-            if v_type.scope.name == 'shared':
-                scope_doc = '__shared__ '
-            else:
-                scope_doc = ''
             dtype_doc = self(v_type.scalar_type)
             name_doc = self(v)
             shape_doc = Doc()
             for s in v_type.shape:
                 shape_doc += '[' + self(s) + ']'
-            return scope_doc + dtype_doc + ' ' + name_doc + shape_doc
-            # raise ValueError('Please lower this ir module by "flatten_tensor" pass before codegen.')
+            return dtype_doc + ' ' + name_doc + shape_doc
         else:
             raise ValueError()
 
@@ -75,6 +70,10 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             base_type_doc = self(v_type.base_type)
             name_doc = self(v)
             return base_type_doc + ' *' + name_doc
+        elif isinstance(v_type, TensorPointerType):
+            dtype_doc = self(v_type.tensor_type.scalar_type)
+            name_doc = self(v)
+            return dtype_doc + ' *' + name_doc
         else:
             assert False
 
@@ -100,6 +99,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         doc = Doc()
         doc += Text('#include <cassert>') + NewLine()
         doc += Text('#include <cstdio>') + NewLine()
+        doc += Text('#include <cstdint>') + NewLine()
         doc += Text('extern "C" {') + NewLine()
 
         call_graph = CallGraph(module)
@@ -329,7 +329,8 @@ class Codegen(StmtExprFunctor, TypeFunctor):
     def visit_ScalarType(self, t: ScalarType):
         scalar_type_map = {
             'int32': 'int32_t',
-            'float32': 'float'
+            'float32': 'float',
+            'uint8': 'uint8_t'
         }
         return Text(scalar_type_map[t.name])
 
@@ -339,8 +340,11 @@ class Codegen(StmtExprFunctor, TypeFunctor):
     def visit_PointerType(self, t: PointerType):
         return self(t.base_type) + Text('*')
 
+    def visit_TensorPointerType(self, t: TensorPointerType):
+        raise ValueError()
+
     def visit_ReferenceType(self, t: ReferenceType):
-        raise NotImplementedError()
+        raise ValueError()
 
     def visit_VoidType(self, t: VoidType):
         return Text('void')

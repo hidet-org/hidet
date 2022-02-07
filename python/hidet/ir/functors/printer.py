@@ -6,7 +6,7 @@ from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, Exp
 from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, LetStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt, BlackBoxStmt, AsmStmt
 from hidet.ir.task import Worker, Host, Grid, ThreadBlock, Warp, Thread
 from hidet.ir.dialects.compute import ReduceCompute, TensorCompute, TensorInput, ScalarInput
-from hidet.ir.dialects.lowlevel import VoidType, PointerType, Dereference, Cast, Address
+from hidet.ir.dialects.lowlevel import VoidType, PointerType, Dereference, Cast, Address, ReferenceType, TensorPointerType, Reference
 from hidet.ir.dialects.pattern import AnyExpr, ScalarExprPattern, TensorComputePattern, ReduceComputePattern
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
 
@@ -140,6 +140,9 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
     def visit_Cast(self, e: Cast):
         return Text('cast(') + self(e.target_type) + ', ' + self(e.expr) + ')'
 
+    def visit_Reference(self, e: Reference):
+        return Text('Ref(') + self(e.expr) + ')'
+
     def visit_Dereference(self, e: Dereference):
         return Text('*') + self(e.expr)
 
@@ -242,6 +245,12 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
 
     def visit_PointerType(self, t: PointerType):
         return Text('PointerType(') + self(t.base_type) + ')'
+
+    def visit_TensorPointerType(self, t: TensorPointerType):
+        return Text('TensorPointerType(') + self(t.tensor_type) + ')'
+
+    def visit_ReferenceType(self, t: ReferenceType):
+        return Text('ReferenceType(') + self(t.base_type) + ')'
 
     def visit_VoidType(self, t: VoidType):
         return Text('VoidType')
