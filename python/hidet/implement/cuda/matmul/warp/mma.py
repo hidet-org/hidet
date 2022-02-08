@@ -4,11 +4,11 @@ from hidet.implement.implementer import Implementer, register_impl
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.ir.dialects.compute import TensorInput, TensorCompute, reduce_sum
 from hidet.ir.dialects.pattern import TaskPattern
-from hidet.ir.expr import Constant, var, Var, And
+from hidet.ir.expr import Constant, var, Var, And, conjunction, disjunction
 from hidet.ir.func import IRModule
 from hidet.ir.layout import TaskLayout
 from hidet.ir.node import Node
-from hidet.ir.primitives import thread_idx, block_idx
+from hidet.ir.primitives import thread_idx, block_idx, printf
 from hidet.ir.stmt import BufferStoreStmt, ForStmt, LetStmt, BlackBoxStmt
 from hidet.ir.task import Task, Warp
 from hidet.ir.type import TensorType
@@ -70,8 +70,15 @@ class CudaWarpMmaImplementer(Implementer):
                 for i, j in task_layout.worker2task(lane_id):
                     with sb.for_loop('k', task_k) as k:
                         sb.append(BufferStoreStmt(C, [i, j], C[i, j] + A[i, k] * B[k, j]))
-            # with sb.if_then(thread_idx() == 64):
-            #     sb += BlackBoxStmt(r'printf("%.3f %.3f %.3f\n", A[0], B[0], C[0]);')
+                        # with sb.if_then(conjunction(thread_idx() == 0,
+                        #                             disjunction(
+                        #                                 And(i == 0, j == 0),
+                        #                                 And(i == 0, j == 1),
+                        #                                 And(i == 1, j == 0),
+                        #                                 And(i == 1, j == 1),
+                        #                             ))):
+                        #     sb += printf(r'A[%d, %d] = %f  B[%d, %d] = %f  C[%d, %d] = %f\n', i, k, A[i, k], k, j, B[k, j], i, j, C[i, j])
+                        #     # sb += BlackBoxStmt(r'printf("%.3f %.3f %.3f\n", A[0], B[0], C[0]);')
             fb.set_body(sb.finish())
         func = fb.get()
         ir_module.add(func.name, func)

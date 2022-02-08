@@ -1,5 +1,5 @@
 import string
-from typing import Optional, Union
+from typing import Optional, Union, Sequence
 from .node import Node
 from .type import TypeNode, TensorType, TensorType, ScalarType, Scope, tensor_type, scalar_type
 
@@ -51,6 +51,10 @@ class Expr(Node):
 
     def __eq__(self, other):
         return Equal(self, other)
+
+    def __invert__(self):
+        from hidet.ir.dialects.lowlevel import Address
+        return Address(self)
 
     def __getitem__(self, item):
         if not isinstance(item, tuple):
@@ -256,3 +260,18 @@ def is_const_int(v: Expr) -> bool:
 
 def if_then_else(cond: Union[Expr, PyScalar], then_expr: Union[Expr, PyScalar], else_expr: Union[Expr, PyScalar]) -> IfThenElse:
     return IfThenElse(convert(cond), convert(then_expr), convert(else_expr))
+
+
+def conjunction(*conds: Sequence[Condition]):
+    cond = convert(True)
+    for c in conds:
+        cond = And(cond, c)
+    return cond
+
+
+def disjunction(*conds: Sequence[Condition]):
+    cond = convert(False)
+    for c in conds:
+        cond = Or(cond, c)
+    return cond
+

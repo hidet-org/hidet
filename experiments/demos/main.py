@@ -4,12 +4,12 @@ from hidet.backend import build
 from hidet.baselines.matmul import matmul_ref, matmul_cublas, matmul_opt, matmul_cutlass
 from hidet.implement import implement, impl_context
 from hidet.implement.cuda import CudaBlockStaticMatmulSoftPipeImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer, CudaBlockStaticMatmulSoftPipeLdgImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer
-from hidet.implement.cuda import CudaGridSplitImplementer, CudaGridNaiveImplementer, CudaWarpTransfer2dImplementer, CudaBlockTransfer2dImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer
-from hidet.implement.cuda import CudaThreadNaiveImplementer
+from hidet.implement.cuda import CudaGridSplitImplementer, CudaGridNaiveImplementer, CudaWarpTransfer2dImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer
+from hidet.implement.cuda import CudaThreadNaiveImplementer, CudaBlockNaiveImplementer
 from hidet.implement.resolve import random_resolve, brute_force_resolve
 from hidet.ir.task import Grid
 from hidet.ir.task import Host
-from hidet.nn import matmul
+from hidet.tasks.nn import matmul
 from hidet.runtime.value import TensorValue, randn, empty, scalar, zeros, full
 
 
@@ -21,24 +21,20 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=True, progr
     # warmup = 0
     # number = 1
     # repeat = 1
-    use_brute_force_resolve = False
     workloads = [
         (1024, 1024, 1024),
         # (1664, 768, 2304),
     ]
     baselines = [
-        # ('Reference', matmul_ref()),
-        # ('Opt', matmul_opt()),
-        # ('cutlas', matmul_cutlass()),
-        # ('cuBLAS', matmul_cublas()),
+        ('Reference', matmul_ref()),
+        ('Opt', matmul_opt()),
+        ('cutlas', matmul_cutlass()),
+        ('cuBLAS', matmul_cublas()),
     ]
     hidet_variants = [
-        # ('HidetNaive', (CudaGridNaiveImplementer, CudaThreadNaiveImplementer)),
-        # ('HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaWarpTransfer2dImplementer, CudaBlockTransfer2dImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
-        # ('HidetNoPipeLdg', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer, CudaWarpTransfer2dImplementer, CudaBlockTransfer2dImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
-        # ('HidetSoftPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeImplementer, CudaWarpTransfer2dImplementer, CudaBlockTransfer2dImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
-        # ('HidetSoftPipeLdg', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgImplementer, CudaWarpTransfer2dImplementer, CudaBlockTransfer2dImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
-        ('HidetSoftPipeLdgWb', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer, CudaWarpTransfer2dImplementer, CudaBlockTransfer2dImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
+        ('HidetNaive', (CudaGridNaiveImplementer, CudaThreadNaiveImplementer)),
+        ('HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
+        ('HidetSoftPipeLdgWb', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
     ]
     print('Repeat = {}'.format(repeat))
     print('Brute-force resolver = {}'.format(use_brute_force_resolve))
@@ -65,27 +61,28 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=True, progr
         print()
 
 
-def verify(use_rand=False):
+def verify(use_rand=True):
     np.set_printoptions(threshold=128 * 128, linewidth=500)
+    use_print = True
     workloads = [
+        # (16, 16, 2),
+        # (16, 16, 4),
+        # (128, 128, 16),
         (256, 256, 256),
         # (1600, 768, 2304)
         # (128, 128, 8),
         # (4 * 2, 8 * 2, 8 * 2),
     ]
     baselines = [
-        ('Reference', matmul_ref()),
         ('Opt', matmul_opt()),
-        ('cutlas', matmul_cutlass()),
-        ('cuBLAS', matmul_cublas()),
     ]
     hidet_variants = [
         ('HidetNaive', (CudaGridNaiveImplementer, CudaThreadNaiveImplementer)),
-        # ('HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaWarpTransfer2dImplementer, CudaBlockTransfer2dImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
-        # ('HidetNoPipeLdg', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer, CudaWarpTransfer2dImplementer, CudaBlockTransfer2dImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
-        # ('HidetSoftPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeImplementer, CudaWarpTransfer2dImplementer, CudaBlockTransfer2dImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
-        # ('HidetSoftPipeLdg', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgImplementer, CudaWarpTransfer2dImplementer, CudaBlockTransfer2dImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
-        ('HidetSoftPipeLdgWb', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer, CudaWarpTransfer2dImplementer, CudaBlockTransfer2dImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
+        # ('HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
+        # ('HidetNoPipeLdg', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
+        # ('HidetSoftPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
+        # ('HidetSoftPipeLdg', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
+        ('HidetSoftPipeLdgWb', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
     ]
     for N, M, K in workloads:
         print('Workload {} x {} x {}'.format(N, M, K))
@@ -100,6 +97,10 @@ def verify(use_rand=False):
                 B = np.zeros([K, M], dtype=np.float32)
                 A[0, 0] = 1.0
                 B[0, 0] = 1.0
+                A[0, 1] = 1.0
+                B[1, 0] = 1.0
+                A[1, 1] = 1.0
+                B[1, 1] = 1.0
                 A = TensorValue.from_numpy(A, scope='global')
                 B = TensorValue.from_numpy(B, scope='global')
             else:
@@ -117,7 +118,19 @@ def verify(use_rand=False):
 
             HA, HB, HC = A.to_cpu(), B.to_cpu(), C.to_cpu()
             host_module['matmul'](HA, HB, HC)
-            np.testing.assert_allclose(GC.to_numpy(), HC.to_numpy())
+            try:
+                np.testing.assert_allclose(GC.to_numpy(), HC.to_numpy())
+            except AssertionError as e:
+                if use_print:
+                    print('A:')
+                    print(A)
+                    print('B:')
+                    print(B)
+                    print(f'{name}:')
+                    print(GC)
+                    print(f'host:')
+                    print(HC)
+                raise e
 
         for name, allowed in hidet_variants:
             print('Verifying {}'.format(name))
@@ -134,9 +147,21 @@ def verify(use_rand=False):
 
             HA, HB, HC = A.to_cpu(), B.to_cpu(), C.to_cpu()
             host_module['matmul'](HA, HB, HC)
-            np.testing.assert_allclose(GC.to_numpy(), HC.to_numpy())
+            try:
+                np.testing.assert_allclose(GC.to_numpy(), HC.to_numpy())
+            except AssertionError as e:
+                if use_print:
+                    print('A:')
+                    print(A)
+                    print('B:')
+                    print(B)
+                    print(f'{name}:')
+                    print(GC)
+                    print(f'host:')
+                    print(HC)
+                raise e
 
 
 if __name__ == '__main__':
-    # benchmark()
     verify()
+    benchmark()

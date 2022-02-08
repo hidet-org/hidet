@@ -5,6 +5,7 @@ from hidet.ir.task import Task, Grid
 from hidet.ir.dialects.compute import tensor_input, reduce_sum, compute
 from hidet.runtime.value import TensorValue
 from hidet.implement import implement
+from hidet.implement import random_resolve
 from hidet.backend import build
 
 
@@ -28,6 +29,7 @@ def test_demo():
     N, M, K = 2, 2, 2
     task = get_task(N, M, K)
     ir_module = implement(task)
+    ir_module = random_resolve(ir_module)
     module = build(ir_module, output_dir='./outs')
 
     A = TensorValue.randn([N, K], 'float32', 'global', seed=1)

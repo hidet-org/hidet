@@ -45,7 +45,7 @@ class TaskLayout:
         assert len(values) == len(self.task_shape)
 
         def task2worker(*args):
-            return self.task2worker
+            raise NotImplementedError()
 
         def worker2task(w: Int):
             rank = len(self.task_shape)

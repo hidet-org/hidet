@@ -4,7 +4,7 @@ from . import warp
 from . import thread
 
 from .grid import CudaGridSplitImplementer, CudaGridNaiveImplementer
-from .block import CudaBlockTransfer2dImplementer, CudaBlockNaiveImplementer
+from .block import CudaBlockNaiveImplementer
 from .warp import CudaWarpTransfer2dImplementer, CudaWarpFillValueImplementer
 from .thread import CudaThreadNaiveImplementer
 

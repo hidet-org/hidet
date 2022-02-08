@@ -1,7 +1,7 @@
 from typing import Dict, Callable, Set, Union, Optional, Tuple
 from hidet.ir.type import FuncType, ScalarType
 from hidet.ir.expr import Var, Call
-from hidet.ir.stmt import AsmStmt
+from hidet.ir.stmt import AsmStmt, BlackBoxStmt
 from hidet.ir.func import Function
 from hidet.ir.task import Thread
 from hidet.ir.dialects.lowlevel import VoidType, PointerType, ReferenceType
@@ -86,3 +86,9 @@ def sts128(reg0, reg1, reg2, reg3, smem_addr) -> Call:
         register_primitive_function('sts128', fb.get())
     func_var = get_primitive_function('sts128')[0]
     return Call(func_var, [reg0, reg1, reg2, reg3, smem_addr])
+
+
+def printf(format_string, *args):
+    arg_string = ', '.join(['{}'] * len(args))
+    template_string = f'printf("{format_string}", {arg_string});'
+    return BlackBoxStmt(template_string, *args)

@@ -2,3 +2,6 @@ gitpython
 pycuda
 numpy
 sympy
+
+pytest
+tqdm

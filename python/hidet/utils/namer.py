@@ -1,6 +1,4 @@
 from collections import defaultdict
-from hidet.ir.expr import Expr, Var
-from hidet.ir.dialects.compute import ScalarInput, TensorInput
 
 
 class Namer:
@@ -12,7 +10,9 @@ class Namer:
         self.name_id_clock.clear()
         self.obj_name.clear()
 
-    def get_name(self, e: Expr, hint=None):
+    def get_name(self, e, hint=None):
+        from hidet.ir.expr import Var
+        from hidet.ir.dialects.compute import ScalarInput, TensorInput
         if e in self.obj_name:
             return self.obj_name
         if hint:

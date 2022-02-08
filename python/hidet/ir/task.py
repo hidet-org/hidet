@@ -24,6 +24,10 @@ class ThreadBlock(Worker):
         self.block_dim: Optional[Expr] = convert(block_dim) if block_dim else None
         self.task_layout: Optional[TaskLayout] = task_layout
 
+        if self.block_dim is None and self.task_layout is not None:
+            # infer block size from task layout
+            self.block_dim = convert(self.task_layout.num_workers)
+
 
 class Warp(Worker):
     def __init__(self, task_layout: Optional[TaskLayout] = None):

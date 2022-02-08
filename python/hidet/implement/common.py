@@ -2,20 +2,42 @@ from typing import Mapping
 
 from hidet.ir import TensorInput, ScalarInput, ReduceCompute, TensorCompute
 from hidet.ir.builders import StmtBuilder
+from hidet.ir.dialects.compute import compute
 from hidet.ir.dialects.lowlevel import Cast, Dereference
 from hidet.ir.expr import *
+from hidet.ir.func import IRModule
+from hidet.ir.task import Worker, ThreadBlock, Warp
 from hidet.ir.functors import ExprFunctor, infer_type
 from hidet.ir.stmt import ForStmt, BufferStoreStmt, AssignStmt, SeqStmt
+from hidet.ir.builders import TaskBuilder
 
 
-def merge_stmts(stmts):
-    filtered = [s for s in stmts if s]
-    if len(filtered) == 0:
-        return None
-    elif len(filtered) == 1:
-        return filtered[0]
+def transfer_task(name: str, src_type: TensorType, dst_type: TensorType, worker: Worker, parent_module: IRModule) -> TaskBuilder:
+    if isinstance(worker, (ThreadBlock, Warp)) and worker.task_layout is not None:
+        shape = worker.task_layout.task_shape
     else:
-        return SeqStmt(filtered)
+        shape = dst_type.shape
+
+    with TaskBuilder(name, worker, parent_module) as tb:
+        src = TensorInput('src', dtype=src_type.scalar_type)
+        dst = compute('dst', shape=shape, fcompute=lambda *args: src.__getitem__(args))
+        tb.set_computation(dst)
+        tb.append_param(src, src_type)
+        tb.append_param(dst, dst_type)
+    return tb
+
+
+def init_task(name: str, dst_type: TensorType, init_value: Constant, worker: Worker, parent_module: IRModule) -> TaskBuilder:
+    if isinstance(worker, (ThreadBlock, Warp)) and worker.task_layout is not None:
+        shape = worker.task_layout.task_shape
+    else:
+        shape = dst_type.shape
+
+    with TaskBuilder(name, worker, parent_module) as tb:
+        dst = compute('dst', shape=shape, fcompute=lambda *args: init_value)
+        tb.set_computation(dst)
+        tb.append_param(dst, dst_type)
+    return tb
 
 
 class LoopExpander(ExprFunctor):

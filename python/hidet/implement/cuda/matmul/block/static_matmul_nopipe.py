@@ -17,7 +17,9 @@ from hidet.ir.type import scalar_type, TensorType, Scope, DataLayout
 
 
 class MatmulSetting:
-    def __init__(self, block_k, warp_k, block_layout, warp_layout, a_s2r_layout, b_s2r_layout, ab2c_layout, c_r2g_layout,
+    def __init__(self, block_k, warp_k, block_layout, warp_layout,
+                 a_g2s_layout, b_g2s_layout,
+                 a_s2r_layout, b_s2r_layout, ab2c_layout, c_r2g_layout,
                  regs_a_layout, regs_b_layout, regs_c_layout):
         # reduction dimensions
         self.block_k = block_k
@@ -25,6 +27,8 @@ class MatmulSetting:
         # task layouts
         self.block_layout: TaskLayout = block_layout
         self.warp_layout: TaskLayout = warp_layout
+        self.a_g2s_layout: TaskLayout = a_g2s_layout
+        self.b_g2s_layout: TaskLayout = b_g2s_layout
         self.a_s2r_layout: TaskLayout = a_s2r_layout
         self.b_s2r_layout: TaskLayout = b_s2r_layout
         self.ab2c_layout: TaskLayout = ab2c_layout
@@ -42,6 +46,8 @@ def default_setting():
         warp_k=1,
         block_layout=row_major_layout(4, 2),
         warp_layout=(full_layout(2, 2) * WarpLayout4x8()) * full_layout(4, 4),
+        a_g2s_layout= row_major_layout(32, 8) * full_layout(4, 1),
+        b_g2s_layout=full_layout(1, 4) * row_major_layout(8, 32),
         a_s2r_layout=TaskLayout(num_workers=32, worker2task=(lambda w: [(i // 4 * 16 + w // 16 * 8 + w % 2 * 4 + i % 4, 0) for i in range(8)])),
         b_s2r_layout=TaskLayout(num_workers=32, worker2task=(lambda w: [(0, j // 4 * 32 + w % 16 // 2 * 4 + j % 4) for j in range(8)])),
         ab2c_layout=TaskLayout(num_workers=32, worker2task=(lambda w: [(i // 4 * 16 + w // 16 * 8 + w % 2 * 4 + i % 4,
@@ -222,7 +228,7 @@ class CudaBlockStaticMatmulNoPipeImplementer(Implementer):
             c_init.set_computation(c_init_cmpt)
             c_init.append_param(c_init_cmpt, regs_C_type)
 
-        with TaskBuilder(f'{task.name}.a.g2s.block', ThreadBlock(block_size), ir_module, 'cuda_block_transfer_2d_implementer') as a_g2s:
+        with TaskBuilder(f'{task.name}.a.g2s.block', ThreadBlock(block_size, setting.a_g2s_layout), ir_module, 'cuda_block_transfer_2d_implementer') as a_g2s:
             gmem_frag_A = TensorInput('gmem_frag_A', A.dtype)
             gmem_frag_A_type = TensorType('global', A.dtype, layout=A_type.layout)
             a_g2s_cmpt = compute('smem_A', shape=[block_m * warp_m, block_k * warp_k], fcompute=lambda i, j: gmem_frag_A[i, j])
@@ -230,7 +236,7 @@ class CudaBlockStaticMatmulNoPipeImplementer(Implementer):
             a_g2s.append_param(gmem_frag_A, gmem_frag_A_type)
             a_g2s.append_param(a_g2s_cmpt, smem_A_type)
 
-        with TaskBuilder(f'{task.name}.b.g2s.block', ThreadBlock(block_size), ir_module, 'cuda_block_transfer_2d_implementer') as b_g2s:
+        with TaskBuilder(f'{task.name}.b.g2s.block', ThreadBlock(block_size, setting.b_g2s_layout), ir_module, 'cuda_block_transfer_2d_implementer') as b_g2s:
             gmem_frag_B = TensorInput('gmem_frag_B', B.dtype)
             gmem_frag_B_type = TensorType('global', B.dtype, layout=B_type.layout)
             b_g2s_cmpt = compute('smem_B', shape=[block_k * warp_k, block_n * warp_n], fcompute=lambda i, j: gmem_frag_B[i, j])

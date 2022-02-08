@@ -92,7 +92,8 @@ class BlackBoxStmt(Stmt):
         super().__init__()
         self.template_string: str = template_string
         self.exprs: List[Expr] = list(exprs)
-        assert self.template_string.count('{}') == len(exprs)
+        expect_args_num = self.template_string.count('{}')
+        assert expect_args_num == len(exprs)
 
 
 class SeqStmt(Stmt):
