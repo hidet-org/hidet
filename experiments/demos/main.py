@@ -1,28 +1,37 @@
 import numpy as np
+import ctypes
+import os
 
 from hidet.backend import build
 from hidet.baselines.matmul import matmul_ref, matmul_cublas, matmul_opt, matmul_cutlass
 from hidet.implement import implement, impl_context
-from hidet.implement.cuda import CudaBlockStaticMatmulSoftPipeImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer, CudaBlockStaticMatmulSoftPipeLdgImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer
+from hidet.implement.cuda import CudaBlockStaticMatmulNoPipeImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer
 from hidet.implement.cuda import CudaGridSplitImplementer, CudaGridNaiveImplementer, CudaWarpTransfer2dImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer
 from hidet.implement.cuda import CudaThreadNaiveImplementer, CudaBlockNaiveImplementer
 from hidet.implement.resolve import random_resolve, brute_force_resolve
-from hidet.ir.task import Grid
-from hidet.ir.task import Host
-from hidet.tasks.nn import matmul
+from hidet.ir.func import IRModule
+from hidet.ir.task import Grid, Host
 from hidet.runtime.value import TensorValue, randn, empty, scalar, zeros, full
+from hidet.runtime.module import CompiledModule, CompiledFunction
+from hidet.ir.dialects.lowlevel import VoidType
+from hidet.ffi import PackedFunc
+from hidet.tasks.nn import matmul
+from hidet.backend.build import lower, codegen, compile_src_code
 
 
 def print_latencies(name, latencies):
     print('{:>20}: {:.3f} (std {:.3f}) ms [{}]'.format(name, np.mean(latencies), np.std(latencies), " ".join([f'{v:.3f}' for v in latencies])))
 
 
-def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=True, progress_bar=True):
-    # warmup = 0
-    # number = 1
-    # repeat = 1
+def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, progress_bar=True):
+    use_nsight_compute = True
+    if use_nsight_compute:
+        warmup = 0
+        number = 1
+        repeat = 1
     workloads = [
         (1024, 1024, 1024),
+        (2048, 2304, 768),
         # (1664, 768, 2304),
     ]
     baselines = [
@@ -162,6 +171,32 @@ def verify(use_rand=True):
                 raise e
 
 
+def build_given_src(ir_module: IRModule, src_path, output_dir, keep=True) -> CompiledModule:
+    # lower
+    ir_module = lower(ir_module)
+
+    # codegen
+    os.makedirs(output_dir, exist_ok=True)
+    src_code_not_used, func_name_map = codegen(ir_module)
+
+    # call target compiler to get dynamic library
+    lib_path = compile_src_code(src_path, keep=keep)
+
+    # load dynamic library
+    lib = ctypes.CDLL(lib_path)
+    compiled_funcs = {}
+    for func in ir_module.functions.values():
+        # only load the packed function into python CompiledFunction
+        if func.get_attr('packed_func') is not None:
+            assert isinstance(func.ret_type, VoidType)
+            target_func = ir_module.lookup(func.get_attr('packed_func'))
+            target_func_param_types = [p.type for p in target_func.params]
+            packed_func = PackedFunc(target_func_param_types, lib[func_name_map[func.name]])
+            compiled_funcs[func.name] = CompiledFunction(func.name, func, packed_func)
+
+    return CompiledModule(ir_module, compiled_funcs, None)
+
+
 if __name__ == '__main__':
-    verify()
+    # verify()
     benchmark()

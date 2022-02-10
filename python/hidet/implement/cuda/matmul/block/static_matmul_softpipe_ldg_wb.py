@@ -366,17 +366,13 @@ class CudaBlockStaticMatmulSoftPipeLdgWbImplementer(Implementer):
                         sb += ab2c(~regs_A[k1 % 2, 0, 0], ~regs_B[k1 % 2, 0, 0], regs_C)
                     with sb.otherwise():
                         sb += ab2c(~regs_A[k1 % 2, 0, 0], ~regs_B[k1 % 2, 0, 0], regs_C)
-            sb += syncthreads()
             # regs -> gmem
             with sb.for_loop('i', setting.c_r2s_outer_outer[0]) as i:
                 with sb.for_loop('j', setting.c_r2s_outer_outer[1]) as j:
-                    tp: TensorPointerType = gmem_C_wb.type
-                    idx = simplify_to_int(tp.tensor_type.layout(1, 1, 0, 0))
-                    assert idx != 0
+                    sb += syncthreads()
                     sb += c_r2s(~regs_C_wb[i, j, 0, 0], smem_C)
                     sb += syncthreads()
                     sb += c_s2g(smem_C, ~gmem_C_wb[i, j, 0, 0])
-                    sb += syncthreads()
 
             # set body
             fb.set_body(sb.finish())

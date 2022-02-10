@@ -2,8 +2,9 @@ from hidet.ir.type import tensor_type
 from hidet.ir.expr import var
 from hidet.ir.task import Task, Grid
 from hidet.ir.dialects.compute import tensor_input, reduce_sum, compute
-from hidet.runtime.value import TensorValue
-from hidet.implement import implement
+from hidet.runtime.value import randn, empty
+from hidet.implement import implement, impl_context
+from hidet.implement.cuda import CudaGridNaiveImplementer, CudaThreadNaiveImplementer
 from hidet.backend import build
 
 
@@ -27,11 +28,14 @@ def main():
     N, M, K = 2, 2, 2
     task = get_task(N, M, K)
     ir_module = implement(task)
-    module = build(ir_module, output_dir='./outs')
 
-    A = TensorValue.randn([N, K], 'float32', 'global', seed=1)
-    B = TensorValue.randn([K, M], 'float32', 'global', seed=3)
-    C = TensorValue.empty([N, M], 'float32', 'global')
+    # force hidet to use naive implementers
+    with impl_context(allowed=[CudaGridNaiveImplementer, CudaThreadNaiveImplementer]):
+        module = build(ir_module, output_dir='./outs')
+
+    A = randn([N, K], 'float32', 'global', seed=1)
+    B = randn([K, M], 'float32', 'global', seed=3)
+    C = empty([N, M], 'float32', 'global')
     module['gemm'](A, B, C)
     print(A)
     print(B)
@@ -46,29 +50,33 @@ if __name__ == '__main__':
 ./outs/source.cu
 
 #include <cassert>
+#include <cstdio>
+#include <cstdint>
 extern "C" {
 
-__device__ __forceinline__ void gemm_grid_thread(float* A, int32_t v, float* B, int32_t v_1, float &v_2) {
-  v_2 = 0.0;
-  for (int32_t i = 0; (i < 2); i = (i + 1)) {
-    v_2 = (v_2 + (A[((v * 2) + i)] * B[((i * 2) + v_1)]));
-  } 
-}
-
-__global__ void gemm_grid(float* A, float* B, float* C) {
-  float out;
-  int32_t iv = ((blockIdx.x * 256) + threadIdx.x);
-  int32_t iv_1 = ((iv / 2) % 2);
-  int32_t iv_2 = (iv % 2);
-  if (iv_1 < 2) {
-    if (iv_2 < 2) {
-      gemm_grid_thread(A, iv_1, B, iv_2, out);
-      C[((iv_1 * 2) + iv_2)] = out;
+__device__ __forceinline__ void gemm_bt128x128_bsz256_s2x2_block(float A[4], float B[4], float out[4]) {
+  float v;
+  int32_t i1 = threadIdx.x;
+  #pragma unroll
+  for (int32_t o0 = 0; (o0 < 2); o0 = (o0 + 1)) {
+    if ((o0 < 2) && (i1 < 2)) {
+      v = 0.0;
+      #pragma unroll
+      for (int32_t k = 0; (k < 2); k = (k + 1)) {
+        v = (v + (A[((o0 * 2) + k)] * B[((k * 2) + i1)]));
+      } 
+      out[((o0 * 2) + i1)] = v;
     } 
   } 
 }
 
-__host__ void gemm_host(int32_t num_args, int32_t* arg_types, void** args) {
+__global__ void __launch_bounds__(256, 1) gemm_grid(float A[4], float B[4], float C[4]) {
+  // label: block_task-128x128-block_size-256
+  int32_t n_block_idx = blockIdx.x;
+  gemm_bt128x128_bsz256_s2x2_block(&A[0], &B[0], &C[0]);
+}
+
+__host__ void gemm(int32_t num_args, int32_t *arg_types, void* *args) {
   assert(((void)"expect 3 args", (num_args == 3)));
   assert(((void)"The 0 th arg should be TensorType(ScalarType(float32), [2, 2], global)", (arg_types[0] == 3)));
   assert(((void)"The 1 th arg should be TensorType(ScalarType(float32), [2, 2], global)", (arg_types[1] == 3)));
