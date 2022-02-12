@@ -131,14 +131,7 @@ def verify(use_rand=True):
                 np.testing.assert_allclose(GC.to_numpy(), HC.to_numpy())
             except AssertionError as e:
                 if use_print:
-                    print('A:')
-                    print(A)
-                    print('B:')
-                    print(B)
-                    print(f'{name}:')
-                    print(GC)
-                    print(f'host:')
-                    print(HC)
+                    print('A:\n{}\nB:\n{}\n{}\n{}\nhost:\n{}'.format(A, B, name, GC, HC))
                 raise e
 
         for name, allowed in hidet_variants:
@@ -160,14 +153,7 @@ def verify(use_rand=True):
                 np.testing.assert_allclose(GC.to_numpy(), HC.to_numpy())
             except AssertionError as e:
                 if use_print:
-                    print('A:')
-                    print(A)
-                    print('B:')
-                    print(B)
-                    print(f'{name}:')
-                    print(GC)
-                    print(f'host:')
-                    print(HC)
+                    print('A:\n{}\nB:\n{}\n{}\n{}\nhost:\n{}'.format(A, B, name, GC, HC))
                 raise e
 
 

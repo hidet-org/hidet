@@ -7,7 +7,7 @@ from hidet.ir.dialects.lowlevel import Cast, Dereference
 from hidet.ir.expr import *
 from hidet.ir.func import IRModule
 from hidet.ir.task import Worker, ThreadBlock, Warp
-from hidet.ir.functors import ExprFunctor, infer_type
+from hidet.ir.functors import ExprFunctor, infer_type, rewrite
 from hidet.ir.stmt import ForStmt, BufferStoreStmt, AssignStmt, SeqStmt
 from hidet.ir.builders import TaskBuilder
 
@@ -34,7 +34,7 @@ def init_task(name: str, dst_type: TensorType, init_value: Constant, worker: Wor
         shape = dst_type.shape
 
     with TaskBuilder(name, worker, parent_module) as tb:
-        dst = compute('dst', shape=shape, fcompute=lambda *args: init_value)
+        dst = compute('dst', shape=shape, fcompute=lambda *args: convert(init_value))
         tb.set_computation(dst)
         tb.append_param(dst, dst_type)
     return tb
@@ -111,6 +111,11 @@ class LoopExpander(ExprFunctor):
 
         # at the inner-most loop body
         expr = self.visit(e.value)
+        if e.accumulate:
+            if e.accumulate == 'sum':
+                expr = buf.__getitem__(tuple(e.axes)) + expr
+            else:
+                raise NotImplementedError()
         self.sb.append(BufferStoreStmt(buf, e.axes, expr))
 
         # exit loop scope
@@ -120,25 +125,30 @@ class LoopExpander(ExprFunctor):
         return buf
 
     def visit_ReduceCompute(self, e: ReduceCompute):
-        # declare accumulator
-        acc = scalar_var(e.name, infer_type(e.value))
-        self.new_buffer_map[e] = acc
+        extent = e.shape[0]
+        if isinstance(extent, Constant) and extent.value == 1:
+            value_expr = self.visit(e.value)
+            return rewrite(value_expr, {e.axis: convert(0)})
+        else:
+            # declare accumulator
+            acc = scalar_var(e.name, infer_type(e.value))
+            self.new_buffer_map[e] = acc
 
-        # init accumulator
-        self.sb += AssignStmt(acc, e.init_const())
+            # init accumulator
+            self.sb += AssignStmt(acc, e.init_const())
 
-        # reduction loop
-        assert len(e.shape) == 1
-        with self.sb.for_loop(e.axis, e.shape[0]):
-            expr = self.visit(e.value)
-            self.sb += AssignStmt(acc, e.combine(acc, expr))
+            # reduction loop
+            assert len(e.shape) == 1
+            with self.sb.for_loop(e.axis, e.shape[0]):
+                expr = self.visit(e.value)
+                self.sb += AssignStmt(acc, e.combine(acc, expr))
 
-        # if e is in the input buffer, we should write it back
-        if e in self.input_map:
-            input_var = self.input_map[e]
-            self.sb += AssignStmt(input_var, acc)
+            # if e is in the input buffer, we should write it back
+            if e in self.input_map:
+                input_var = self.input_map[e]
+                self.sb += AssignStmt(input_var, acc)
 
-        return acc
+            return acc
 
     def visit_Cast(self, e: Cast):
         return Cast(self(e.expr), e.target_type)

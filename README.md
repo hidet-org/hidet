@@ -45,6 +45,9 @@ There are several advantages using this abstraction:
    ```
    No error means successful installation.
 
+## Examples
+An example is in `examples/matmul` to show how to define a matrix multiplication kernel using the hidet IR.
+
 ## Usage
 A demo is in this file `experiments/demo/main.py`.
 

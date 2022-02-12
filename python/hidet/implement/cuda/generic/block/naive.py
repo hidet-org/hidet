@@ -86,6 +86,12 @@ class CudaBlockNaiveImplementer(Implementer):
                 stmt, scalar_value, new_var_map = expand_loop(value, input_map=param2var)
                 sb += stmt
                 fb.extend_local_vars(new_var_map.values())  # the local variables required to expand the value.
+                if computation.accumulate == 'sum':
+                    scalar_value = TensorElement(param2var[computation], task_indices) + scalar_value
+                elif computation.accumulate is None:
+                    pass
+                else:
+                    raise NotImplementedError()
                 sb += BufferStoreStmt(param2var[computation], task_indices, scalar_value)
             fb.set_body(sb.finish())
         return IRModule(funcs={task.name: fb.get()}, task=task)

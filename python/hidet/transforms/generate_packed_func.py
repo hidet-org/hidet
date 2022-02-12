@@ -5,7 +5,7 @@ from hidet.ir.expr import Var, Call
 from hidet.ir.stmt import AssertStmt, SeqStmt, EvaluateStmt
 from hidet.ir.func import IRModule, Function
 from hidet.ir.functors import astext
-from hidet.ir.dialects.lowlevel import VoidType, PointerType, Cast, Dereference
+from hidet.ir.dialects.lowlevel import VoidType, PointerType, Cast, Dereference, TensorPointerType
 from hidet.ir.task import Grid, Host
 from hidet.transforms import Pass
 
@@ -55,9 +55,13 @@ class GeneratePackedFunc(Pass):
                 else:
                     raise NotImplementedError()
                 grid_args.append(Dereference(Cast(p_args[idx], PointerType(param.type))))
-            elif isinstance(param.type, TensorType):
+            elif isinstance(param.type, (TensorPointerType, TensorType)):
                 code = ArgType.POINTER
-                grid_args.append(Cast(p_args[idx], PointerType(param.type.scalar_type)))
+                if isinstance(param.type, TensorType):
+                    dtype = param.type.scalar_type
+                else:
+                    dtype = param.type.tensor_type.scalar_type
+                grid_args.append(Cast(p_args[idx], PointerType(dtype)))
             else:
                 raise NotImplementedError()
             packed_body.append(AssertStmt(p_arg_types[idx] == code, "The {} th arg should be {}".format(idx, astext(param.type))))

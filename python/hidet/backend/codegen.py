@@ -30,8 +30,9 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         if isinstance(v_type, ScalarType):
             dtype_doc = self(v_type)
             return dtype_doc + ' ' + name_doc
-        elif isinstance(v_type, PointerType):
-            base_type_doc = self(v_type.base_type)
+        elif isinstance(v_type, (TensorPointerType, PointerType)):
+            dtype = v_type.base_type if isinstance(v_type, PointerType) else v_type.tensor_type.scalar_type
+            base_type_doc = self(dtype)
             return base_type_doc + ' *' + name_doc
         elif isinstance(v_type, ReferenceType):
             if isinstance(v_type.base_type, ScalarType):
@@ -91,6 +92,8 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             return TypeFunctor.visit(self, node)
         elif isinstance(node, (tuple, list)):
             return doc_join([self(v) for v in node], ', ')
+        elif isinstance(node, (int, float, bool)):
+            return self(convert(node))
         else:
             raise ValueError()
 
@@ -130,7 +133,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             if worker.min_blocks:
                 min_blocks = simplify(worker.min_blocks)
             else:
-                DEFAULT_MIN_BLOCKS = 2  # todo let user specify
+                DEFAULT_MIN_BLOCKS = 1  # todo let user specify
                 min_blocks = DEFAULT_MIN_BLOCKS
             if isinstance(block_dim, Constant):
                 doc += f' __launch_bounds__({block_dim.value}, {min_blocks})'

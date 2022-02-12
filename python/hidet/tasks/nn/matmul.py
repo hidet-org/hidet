@@ -4,7 +4,7 @@ from hidet.ir.dialects.compute import tensor_input, compute, reduce_sum
 from hidet.ir.task import Task, Grid, ThreadBlock
 
 
-def matmul(N: int, M: int, K: int) -> Task:
+def matmul(N: int, M: int, K: int, worker=Grid()) -> Task:
     A = tensor_input('A', 'float32', [N, K])
     B = tensor_input('B', 'float32', [K, M])
     k = var('k')
@@ -16,7 +16,7 @@ def matmul(N: int, M: int, K: int) -> Task:
         params_type=[tensor_type('global', 'float32', [N, K], layout=[K, 1]),
                      tensor_type('global', 'float32', [K, M], layout=[M, 1]),
                      tensor_type('global', 'float32', [N, M], layout=[M, 1])],
-        worker=Grid()
+        worker=worker
     )
 
 

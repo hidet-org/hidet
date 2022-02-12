@@ -1,5 +1,4 @@
-from typing import Union, Tuple, List, Type, Dict, Optional, Sequence, Iterator, Callable, Iterable
-from hidet.ir.expr import Constant
+from typing import Union, Tuple, List, Type, Dict, Optional, Sequence, Iterator, Callable, Iterable, Mapping
 from hidet.ir.expr import Expr, var
 
 Int = Union[Expr, int]
@@ -41,9 +40,7 @@ class TaskLayout:
         assert isinstance(other, TaskLayout)
         return task_layout_compose(self, other)
 
-    def projection(self, *values: List[Optional[int]]) -> 'TaskLayout':
-        assert len(values) == len(self.task_shape)
-
+    def projection(self, dim2value: Mapping[int, Int]) -> 'TaskLayout':
         def task2worker(*args):
             raise NotImplementedError()
 
@@ -51,7 +48,7 @@ class TaskLayout:
             rank = len(self.task_shape)
             projected_tasks = []
             for task in self.worker2task(w):
-                projected_tasks.append(tuple(task[i] if values[i] is None else values[i] for i in range(rank)))
+                projected_tasks.append(tuple(dim2value[i] if i in dim2value else task[i] for i in range(rank)))
             return projected_tasks
         return TaskLayout(self.num_workers, self.task_shape, worker2task, task2worker)
 

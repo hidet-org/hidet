@@ -59,8 +59,8 @@ class MatmulSetting:
         self.warp_layout = full_layout(*outer) * atom_layout * full_layout(*inner)
         self.a_g2r_r2s_layout = row_major_layout(block_size // block_k, block_k) * full_layout(block_m // (block_size // block_k), 1)
         self.b_g2r_r2s_layout = full_layout(1, block_n // (block_size // block_k)) * row_major_layout(block_k, block_size // block_k)
-        self.a_s2r_layout: TaskLayout = (self.block_layout * full_layout(outer[0], 1) * atom_layout * full_layout(inner[0], 1)).projection(None, 0)
-        self.b_s2r_layout: TaskLayout = (self.block_layout * full_layout(1, outer[1]) * atom_layout * full_layout(1, inner[1])).projection(0, None)
+        self.a_s2r_layout: TaskLayout = (self.block_layout * full_layout(outer[0], 1) * atom_layout * full_layout(inner[0], 1)).projection({1: 0})
+        self.b_s2r_layout: TaskLayout = (self.block_layout * full_layout(1, outer[1]) * atom_layout * full_layout(1, inner[1])).projection({0: 0})
         self.ab2c_layout = self.block_layout * self.warp_layout
         self.c_r2s_outer_inner = self.get_c_write_back_inner()
         self.c_r2s_s2g_layout = self.block_layout * full_layout(*self.c_r2s_outer_inner) * atom_layout * full_layout(*inner)
@@ -241,8 +241,8 @@ class CudaBlockStaticMatmulSoftPipeLdgWbImplementer(Implementer):
         b_r2s = transfer_task(f'{task.name}.b_r2s.block', src_type=regs_B_ldg_type, dst_type=smem_B_type, worker=ThreadBlock(task_layout=setting.b_g2r_r2s_layout), parent_module=ir_module)
         a_s2r = transfer_task(f'{task.name}.a.s2r.block', src_type=smem_A_type, dst_type=regs_A_type, worker=ThreadBlock(task_layout=setting.a_s2r_layout), parent_module=ir_module)
         b_s2r = transfer_task(f'{task.name}.b.s2r.block', src_type=smem_B_type, dst_type=regs_B_type, worker=ThreadBlock(task_layout=setting.b_s2r_layout), parent_module=ir_module)
-        c_r2s = transfer_task(f'{task.name}.c.r2s.block', src_type=regs_C_wb_type.cut(dims=[0, 1]), dst_type=smem_C_wb_type, worker=ThreadBlock(task_layout=setting.c_r2s_s2g_layout), parent_module=ir_module)
-        c_s2g = transfer_task(f'{task.name}.c.s2g.block', src_type=smem_C_wb_type, dst_type=gmem_C_wb_type.cut(dims=[0, 1]), worker=ThreadBlock(task_layout=setting.c_r2s_s2g_layout), parent_module=ir_module)
+        c_r2s = transfer_task(f'{task.name}.c.r2s.block', src_type=regs_C_wb_type.slice_out(dims=[0, 1]), dst_type=smem_C_wb_type, worker=ThreadBlock(task_layout=setting.c_r2s_s2g_layout), parent_module=ir_module)
+        c_s2g = transfer_task(f'{task.name}.c.s2g.block', src_type=smem_C_wb_type, dst_type=gmem_C_wb_type.slice_out(dims=[0, 1]), worker=ThreadBlock(task_layout=setting.c_r2s_s2g_layout), parent_module=ir_module)
 
         with TaskBuilder(f'{task.name}.compute.warp', Warp(setting.ab2c_layout), ir_module) as ab2c:
             regs_A_input = TensorInput('regs_A', A_dtype)

@@ -15,7 +15,6 @@ class FunctionBuilder:
         self.func: Function = None
         self.body: Stmt = None
         self.attrs: Dict[str] = attrs if attrs else {}
-        self.func = None
 
     def __enter__(self):
         return self

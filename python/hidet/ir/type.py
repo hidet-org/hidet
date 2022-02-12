@@ -60,7 +60,7 @@ class DataLayout:
 
         return DataLayout(shape, self.size, global2local)
 
-    def split(self, dim2factor: Mapping[int, Int]):
+    def split(self, dim2factor: Mapping[int, Int]) -> 'DataLayout':
         """
         3-dimension tensor with shape [a, b, c]
         after split(dim2factor={0: 2, 1: 3}) got
@@ -133,7 +133,7 @@ class DataLayout:
 
         return DataLayout(shape, self.size, global2local)
 
-    def cut(self, dims: Sequence[int]):
+    def slice_out(self, dims: Sequence[int]):
         """
         3-dimension tensor with shape [a, b, c]
         after cut({0, 2}) got
@@ -185,6 +185,14 @@ class DataLayout:
     def local(shape: Sequence[Int]):
         return DataLayout(shape, size=1, global2local=lambda *args: 0)
 
+    @staticmethod
+    def row_major(shape: Sequence[Int]):
+        return StridesLayout.row_major(shape)
+
+    @staticmethod
+    def column_major(shape: Sequence[Int]) -> 'StridesLayout':
+        return StridesLayout.column_major(shape)
+
 
 class StridesLayout(DataLayout):
     def __init__(self, shape, strides):
@@ -211,12 +219,13 @@ class StridesLayout(DataLayout):
     def from_shape(shape: Sequence[Int], perm: Sequence[int]):
         assert len(shape) == len(perm)
         rank = len(shape)
-        pairs = [(i, p) for i, p in zip(range(rank), perm)]
-        pairs = sorted(pairs, key=lambda pr: pr[1])
-        new_shape = [shape[pr[0]] for pr in pairs]
-        strides = [None] * rank
+        tuples = [[i, p, None] for i, p in zip(range(rank), perm)]
+        tuples = sorted(tuples, key=lambda t: t[1])
+        reordered_shape = [shape[t[0]] for t in tuples]
         for i in range(rank):
-            strides[i] = functools.reduce(operator.mul, new_shape[i + 1:], 1)
+            tuples[i][2] = prod(reordered_shape[i+1:])
+        tuples = sorted(tuples, key=lambda t: t[0])
+        strides = [t[2] for t in tuples]
         return StridesLayout(shape, strides)
 
 
@@ -265,8 +274,8 @@ class TensorType(TypeNode):
     def storage_bytes(self) -> Expr:
         return self.layout.size * self.scalar_type.nbytes()
 
-    def cut(self, dims: Sequence[int]) -> 'TensorType':
-        layout = self.layout.cut(dims)
+    def slice_out(self, dims: Sequence[int]) -> 'TensorType':
+        layout = self.layout.slice_out(dims)
         return TensorType(self.scope, self.scalar_type, layout=layout)
 
 
