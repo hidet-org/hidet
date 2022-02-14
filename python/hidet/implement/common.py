@@ -106,8 +106,7 @@ class LoopExpander(ExprFunctor):
 
         # tensor compute loops
         for i in range(len(e.shape)):
-            self.sb.append(ForStmt(e.axes[i], e.shape[i]))
-            self.sb.enter_body()
+            self.sb.enter_body(ForStmt(e.axes[i], e.shape[i]))
 
         # at the inner-most loop body
         expr = self.visit(e.value)

@@ -1,5 +1,5 @@
 from typing import Union
-from hidet.ir.stmt import Stmt
+from hidet.ir.stmt import Stmt, LetStmt, ForStmt
 from hidet.ir.dialects.compute import *
 
 from .base import StmtExprVisitor, StmtExprRewriter
@@ -38,6 +38,32 @@ class SubStmtExprCollector(StmtExprVisitor):
         StmtExprVisitor.visit(self, e)
 
 
+class FreeVarCollector(StmtExprVisitor):
+    def __init__(self):
+        super().__init__()
+        self.defined = set()
+        self.free_vars = set()
+
+    def collect(self, e):
+        self.defined.clear()
+        self.visit(e)
+        return self.free_vars
+
+    def visit_LetStmt(self, stmt: LetStmt):
+        self.defined.add(stmt.var)
+        self.visit(stmt)
+        self.defined.remove(stmt.var)
+
+    def visit_ForStmt(self, stmt: ForStmt):
+        self.defined.add(stmt.loop_var)
+        self.visit(stmt)
+        self.defined.remove(stmt.loop_var)
+
+    def visit_Var(self, e: Var):
+        if e not in self.defined:
+            self.free_vars.add(e)
+
+
 def rewrite(node: Union[Expr, Stmt], rewrite_map):
     rewriter = StmtExprMapRewriter(rewrite_map)
     return rewriter.rewrite(node)
@@ -53,5 +79,10 @@ def collect(node: Union[Expr, Stmt], node_types):
             raise ValueError()
 
     collector = SubStmtExprCollector(node_types)
+    return collector.collect(node)
+
+
+def collect_free_vars(node: Union[Expr, Stmt]):
+    collector = FreeVarCollector()
     return collector.collect(node)
 

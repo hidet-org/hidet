@@ -133,7 +133,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             if worker.min_blocks:
                 min_blocks = simplify(worker.min_blocks)
             else:
-                DEFAULT_MIN_BLOCKS = 1  # todo let user specify
+                DEFAULT_MIN_BLOCKS = 2  # todo let user specify
                 min_blocks = DEFAULT_MIN_BLOCKS
             if isinstance(block_dim, Constant):
                 doc += f' __launch_bounds__({block_dim.value}, {min_blocks})'

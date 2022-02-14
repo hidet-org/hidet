@@ -170,10 +170,8 @@ class CudaGridSplitImplementer(Implementer):
             m_block_idx = var('m_block_idx')
 
             sb = StmtBuilder()
-            sb.append(LetStmt(n_block_idx, blockIdx / grid_m))
-            sb.enter_body()
-            sb.append(LetStmt(m_block_idx, blockIdx % grid_m))
-            sb.enter_body()
+            sb.enter_body(LetStmt(n_block_idx, blockIdx / grid_m))
+            sb.enter_body(LetStmt(m_block_idx, blockIdx % grid_m))
             for i in range(2):
                 i_cond = [task_n >= block_task[0], task_n % block_task[0] > 0]
                 i_shape = [block_task[0], task_n % block_task[0]]

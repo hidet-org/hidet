@@ -44,12 +44,12 @@ class MatmulSetting:
 
 
 def default_setting():
-    from hidet.ir.layout.concrete import WarpLayout4x8
+    middle_layout = TaskLayout(32, (4, 8), lambda w: [(w % 2 + (w // 16) * 2), (w % 16) // 2])
     return MatmulSetting(
         block_k=8,
         warp_k=1,
         block_layout=row_major_layout(4, 2),
-        warp_layout=(full_layout(2, 2) * WarpLayout4x8()) * full_layout(4, 4),
+        warp_layout=(full_layout(2, 2) * middle_layout) * full_layout(4, 4),
         a_s2r_layout=TaskLayout(num_workers=32, worker2task=(lambda w: [(i // 4 * 16 + w // 16 * 8 + w % 2 * 4 + i % 4, 0) for i in range(8)])),
         b_s2r_layout=TaskLayout(num_workers=32, worker2task=(lambda w: [(0, j // 4 * 32 + w % 16 // 2 * 4 + j % 4) for j in range(8)])),
         a_g2r_layout=row_major_layout(32, 8) * full_layout(4, 1),

@@ -54,8 +54,7 @@ class CudaWarpFillValueImplementer(Implementer):
             # body
             sb = StmtBuilder()
             lane_id = var('lane_id')
-            sb.append(LetStmt(lane_id, thread_idx() % 32))
-            sb.enter_body()
+            sb.enter_body(LetStmt(lane_id, thread_idx() % 32))
             for task_index in task_layout.worker2task(lane_id):
                 sb.append(BufferStoreStmt(output_var, task_index, value))
             sb.exit_body()

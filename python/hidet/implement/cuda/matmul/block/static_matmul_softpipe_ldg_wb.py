@@ -26,8 +26,7 @@ class MatmulSetting:
                  outer=(2, 2),
                  atom_layout=TaskLayout(num_workers=32,
                                         task_shape=(4, 8),
-                                        worker2task=lambda w: [(w // 16 * 2 + w % 2, w // 2 % 8)],
-                                        task2worker=lambda i, j: i // 2 * 16 + i % 2 + j * 2),
+                                        worker2task=lambda w: [(w // 16 * 2 + w % 2, w // 2 % 8)]),
                  inner=(4, 4)):
         self.block_k = block_k
         self.warp_k = warp_k
@@ -244,12 +243,12 @@ class CudaBlockStaticMatmulSoftPipeLdgWbImplementer(Implementer):
         c_r2s = transfer_task(f'{task.name}.c.r2s.block', src_type=regs_C_wb_type.slice_out(dims=[0, 1]), dst_type=smem_C_wb_type, worker=ThreadBlock(task_layout=setting.c_r2s_s2g_layout), parent_module=ir_module)
         c_s2g = transfer_task(f'{task.name}.c.s2g.block', src_type=smem_C_wb_type, dst_type=gmem_C_wb_type.slice_out(dims=[0, 1]), worker=ThreadBlock(task_layout=setting.c_r2s_s2g_layout), parent_module=ir_module)
 
-        with TaskBuilder(f'{task.name}.compute.warp', Warp(setting.ab2c_layout), ir_module) as ab2c:
+        with TaskBuilder(f'{task.name}.compute.block', ThreadBlock(task_layout=setting.ab2c_layout), ir_module) as ab2c:
             regs_A_input = TensorInput('regs_A', A_dtype)
             regs_B_input = TensorInput('regs_B', B_dtype)
             axis_k = var('k')
             fcompute = lambda i, j: reduce_sum(regs_A_input[i, axis_k] * regs_B_input[axis_k, j], axis=axis_k, shape=[warp_k])
-            ab2c_cmpt = compute('regs_C', shape=[warp_m, warp_n], fcompute=fcompute)
+            ab2c_cmpt = compute('regs_C', shape=setting.ab2c_layout.task_shape, fcompute=fcompute, accumulate='sum')
             ab2c.set_computation(ab2c_cmpt)
             ab2c.append_param(regs_A_input, regs_A_type)
             ab2c.append_param(regs_B_input, regs_B_type)

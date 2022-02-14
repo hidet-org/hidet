@@ -1,10 +1,52 @@
-from typing import Tuple, List, Optional, Iterable
+from typing import Tuple, List, Optional, Iterable, Union, Sequence, Iterator
 from functools import reduce, partial
 from itertools import product
 import operator
 from sympy.ntheory import divisors
 
-from .base import TaskLayout, TaskLayoutGenerator, Int
+from .task_layout import TaskLayout, Int
+
+
+class TaskLayoutGenerator:
+    registered = []
+
+    def get_layouts(self,
+                    num_workers: Optional[int] = None,
+                    task_shape: Optional[Tuple[int, ...]] = None,
+                    rank: Optional[int] = None) -> Iterable[TaskLayout]:
+        raise NotImplementedError()
+
+
+def register_task_layout(layout: TaskLayout):
+    TaskLayout.registered.append(layout)
+
+
+def register_task_layout_generator(layout_generator: TaskLayoutGenerator):
+    TaskLayoutGenerator.registered.append(layout_generator)
+
+
+def get_task_layouts(valid_num_workers: Optional[Union[int, Sequence[int]]] = None,
+                     task_shape: Optional[Sequence[int]] = None,
+                     rank: Optional[int] = None) -> Iterator[TaskLayout]:
+    if isinstance(valid_num_workers, int):
+        valid_num_workers = [valid_num_workers]
+    assert all(isinstance(v, int) for v in valid_num_workers)
+    if task_shape is not None:
+        assert all(isinstance(v, int) for v in task_shape)
+    for idx, layout in enumerate(TaskLayout.registered):
+        if valid_num_workers is not None and layout.num_workers not in valid_num_workers:
+            continue
+        if task_shape is not None:
+            if tuple(task_shape) != tuple(layout.task_shape):
+                continue
+            if rank is not None and len(task_shape) != rank:
+                continue
+        yield layout
+    for layout_generator in TaskLayoutGenerator.registered:
+        for num_workers in valid_num_workers:
+            layouts = layout_generator.get_layouts(num_workers, task_shape, rank)
+            for layout in layouts:
+                yield layout
 
 
 def decompose_integer(n, num_items):
@@ -39,9 +81,7 @@ class FullLayout(TaskLayoutGenerator):
             return
         if task_shape is None:
             return
-        yield TaskLayout(1, task_shape,
-                         worker2task=partial(cls.worker2task, task_shape=task_shape),
-                         task2worker=partial(cls.task2worker, task_shape=task_shape))
+        yield TaskLayout(1, task_shape, worker2task=partial(cls.worker2task, task_shape=task_shape))
 
     @staticmethod
     def worker2task(worker_index: Int, task_shape: Tuple[int, ...]) -> List[Tuple[Int, ...]]:
@@ -73,9 +113,7 @@ class RowMajorLayout(TaskLayoutGenerator):
             task_shapes = [task_shape]
 
         for task_shape in task_shapes:
-            yield TaskLayout(num_workers, task_shape,
-                             partial(cls.worker2task, task_shape=task_shape),
-                             partial(cls.task2worker, task_shape=task_shape))
+            yield TaskLayout(num_workers, task_shape, partial(cls.worker2task, task_shape=task_shape))
 
     @staticmethod
     def worker2task(worker_index: Int, task_shape: Tuple[Int, ...]) -> List[Tuple[Int, ...]]:
@@ -115,8 +153,7 @@ class ColumnMajorLayout(TaskLayoutGenerator):
 
         for task_shape in task_shapes:
             yield TaskLayout(num_workers, task_shape,
-                             partial(cls.worker2task, task_shape=task_shape),
-                             partial(cls.task2worker, task_shape=task_shape))
+                             partial(cls.worker2task, task_shape=task_shape))
 
     @staticmethod
     def worker2task(worker_index: Int, task_shape) -> List[Tuple[Int, ...]]:
@@ -153,4 +190,3 @@ def col_major_layout(*task_shape) -> TaskLayout:
     layouts = list(ColumnMajorLayout.get_layouts(task_shape=task_shape))
     assert len(layouts) == 1
     return layouts[0]
-

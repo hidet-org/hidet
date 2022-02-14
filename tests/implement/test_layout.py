@@ -20,6 +20,7 @@ def check_layout(layout):
             assert expect_worker == worker_index
 
 
+@pytest.mark.skip(reason='Will remove task2worker mapping in task layout')
 @pytest.mark.parametrize("layout_generator, num_workers, task_shape, rank, expected_layouts",
                          [
                              (RowMajorLayout(), 32, (4, 8), 2, 1),

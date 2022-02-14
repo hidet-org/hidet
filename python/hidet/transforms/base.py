@@ -1,3 +1,4 @@
+from typing import Callable
 from hidet.ir.func import IRModule, Function
 
 
@@ -18,3 +19,14 @@ class Pass:
         return func
 
 
+class FunctionPass(Pass):
+    def __init__(self, name, process_func):
+        super().__init__(name)
+        self.func_pass = process_func
+
+    def process_func(self, func: Function) -> Function:
+        return self.func_pass(func)
+
+
+def function_pass(pass_name, process_func: Callable[[Function], Function]) -> Pass:
+    return FunctionPass(pass_name, process_func)

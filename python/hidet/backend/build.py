@@ -2,6 +2,7 @@ import ctypes
 import os.path
 import subprocess
 import uuid
+import io
 from subprocess import PIPE
 
 from hidet import utils
@@ -13,11 +14,14 @@ from hidet.runtime.module import CompiledModule, CompiledFunction
 from hidet.transforms import lower
 
 
-def compile_src_code(src_path, working_dir=None, keep=True):
-    src_path = os.path.realpath(src_path)
+def compile_src_code(src_path, keep=True, working_dir=None, keep_dir=None):
     if working_dir is None:
         working_dir = os.path.join(os.path.dirname(src_path), 'info')
-        os.makedirs(working_dir, exist_ok=True)
+    if keep_dir is None:
+        keep_dir = os.path.dirname(src_path)
+    src_path, working_dir, keep_dir = [os.path.abspath(path) for path in [src_path, working_dir, keep_dir]]
+    os.makedirs(working_dir, exist_ok=True)
+    os.makedirs(keep_dir, exist_ok=True)
 
     # use random lib name to avoid the dlopen caching loading the old library
     out_lib_path = os.path.join(working_dir, str(uuid.uuid4().hex)[-6:] + '.so')
@@ -32,13 +36,19 @@ def compile_src_code(src_path, working_dir=None, keep=True):
                '-o',  out_lib_path,
                '--shared', src_path]
     try:
-        subprocess.run(command, stderr=PIPE, stdout=PIPE, check=True, cwd=working_dir)
+        result = subprocess.run(command, stderr=PIPE, stdout=PIPE, check=True, cwd=working_dir)
         # move source.ptx to be the same directory as source.cu
         if keep:
+            # move the ptx code to the same directory as source code
             ptx_name = os.path.basename(src_path).replace('.cu', '.ptx')
             ptx_path = os.path.join(working_dir, ptx_name)
-            dest_ptx_path = os.path.join(os.path.dirname(src_path), ptx_name)
+            dest_ptx_path = os.path.join(keep_dir, ptx_name)
             os.rename(ptx_path, dest_ptx_path)
+            # output the compilation log to 'nvcc.stdout' file in the same directory as source code
+            with open(os.path.join(keep_dir, 'nvcc_output.txt'), 'w') as f:
+                f.write("Command: " + " ".join(result.args) + "\n")
+                f.write(result.stdout.decode('utf-8'))
+                f.write(result.stderr.decode('utf-8'))
         return out_lib_path
     except subprocess.CalledProcessError as e:
         print(' '.join(command))

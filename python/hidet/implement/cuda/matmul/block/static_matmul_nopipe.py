@@ -15,6 +15,8 @@ from hidet.ir.stmt import LetStmt, ForStmt
 from hidet.ir.task import Task, ThreadBlock, Warp
 from hidet.ir.type import scalar_type, TensorType, Scope, DataLayout
 
+middle_layout = TaskLayout(32, (4, 8), lambda w: [(w % 2 + (w // 16) * 2), (w % 16) // 2])
+
 
 class MatmulSetting:
     def __init__(self, block_k, warp_k, block_layout, warp_layout,
@@ -40,13 +42,12 @@ class MatmulSetting:
 
 
 def default_setting():
-    from hidet.ir.layout.concrete import WarpLayout4x8
     return MatmulSetting(
         block_k=8,
         warp_k=1,
         block_layout=row_major_layout(4, 2),
-        warp_layout=(full_layout(2, 2) * WarpLayout4x8()) * full_layout(4, 4),
-        a_g2s_layout= row_major_layout(32, 8) * full_layout(4, 1),
+        warp_layout=full_layout(2, 2) * middle_layout * full_layout(4, 4),
+        a_g2s_layout=row_major_layout(32, 8) * full_layout(4, 1),
         b_g2s_layout=full_layout(1, 4) * row_major_layout(8, 32),
         a_s2r_layout=TaskLayout(num_workers=32, worker2task=(lambda w: [(i // 4 * 16 + w // 16 * 8 + w % 2 * 4 + i % 4, 0) for i in range(8)])),
         b_s2r_layout=TaskLayout(num_workers=32, worker2task=(lambda w: [(0, j // 4 * 32 + w % 16 // 2 * 4 + j % 4) for j in range(8)])),
@@ -61,8 +62,7 @@ def default_setting():
 
 
 def small_setting():
-    from hidet.ir.layout.concrete import WarpLayout4x8
-    warp_layout = WarpLayout4x8()
+    warp_layout = middle_layout
     return MatmulSetting(
         block_k=8,
         warp_k=1,
@@ -79,9 +79,8 @@ def small_setting():
 
 
 def general_setting(block_k, warp_k, block_layout, warp_layout):
-    from hidet.ir.layout.concrete import WarpLayout4x8
     assert block_k % 2 == 0
-    warp_layout = WarpLayout4x8()
+    warp_layout = middle_layout
     return MatmulSetting(
         block_k=block_k,
         warp_k=warp_k,

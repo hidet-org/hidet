@@ -75,8 +75,7 @@ class CudaWarpTransfer2dImplementer(Implementer):
             sb = StmtBuilder()
             lane_id = var('lane_id')
             block_tid = thread_idx()
-            sb.append(LetStmt(lane_id, block_tid % 32))
-            sb.enter_body()
+            sb.enter_body(LetStmt(lane_id, block_tid % 32))
             for task_index in task_layout.worker2task(lane_id):
                 sb.append(BufferStoreStmt(output_var, task_index, TensorElement(input_var, task_index)))
             sb.exit_body()

@@ -15,7 +15,7 @@ from hidet.ir.primitives import thread_idx, block_idx
 
 class BoundInfo:
     _max_num_candidates = 1024
-    _max_compute_iters = 10 ** 4
+    _max_compute_iters = 128 * 128
 
     def __init__(self, value=None, candidates=None, min_value=None, max_value=None):
         # three level of bound information:
@@ -183,7 +183,9 @@ class BoundAwareSimplifier(StmtExprRewriter):
         updated = False
         funcs = {}
         for name, func in ir_module.functions.items():
-            assert isinstance(func, Function), "Please resolve first"
+            assert isinstance(func, Function), "Please resolve function group first"
+            self.bound.clear()
+            self.memo.clear()
             new_func = self(func)
             if new_func is not func:
                 updated = True
@@ -197,7 +199,6 @@ class BoundAwareSimplifier(StmtExprRewriter):
 
     def visit_Function(self, func: Function) -> IRModule:
         worker = func.get_attr('worker')
-        self.bound.clear()
         if isinstance(worker, Grid):
             self.bound[thread_idx()] = BoundInfo(min_value=0, max_value=int(worker.block_dim)-1)
             self.bound[block_idx()] = BoundInfo(min_value=0, max_value=int(worker.grid_dim)-1)
@@ -222,11 +223,10 @@ class BoundAwareSimplifier(StmtExprRewriter):
     def visit_LetStmt(self, stmt: LetStmt):
         var = self.visit_expr(stmt.var)
         value = self.visit_expr(stmt.value)
-        if isinstance(value, Constant):
-            body = rewrite(stmt.body, {var: value})
-            return self(body)
+        self.bound[var] = self.get_bound(stmt.value)
+        if isinstance(value, (Constant, Var)):
+            return self.visit(rewrite(stmt.body, {var: value}))
         else:
-            self.bound[var] = self.get_bound(stmt.value)
             body = self.visit(stmt.body)
             if var is stmt.var and value is stmt.value and body is stmt.body:
                 return stmt
@@ -236,11 +236,10 @@ class BoundAwareSimplifier(StmtExprRewriter):
     def visit_ForStmt(self, stmt: ForStmt):
         loop_var = self.visit_expr(stmt.loop_var)
         extent = self.visit_expr(stmt.extent)
+        self.bound[loop_var] = BoundInfo(min_value=0, max_value=(self.get_bound(stmt.extent) - BoundInfo(value=1)).possible_max_value())
         if is_one(extent):
-            body = rewrite(stmt.body, {loop_var: extent})
-            return self(body)
+            return self.visit(rewrite(stmt.body, {loop_var: extent}))
         else:
-            self.bound[loop_var] = BoundInfo(min_value=0, max_value=self.get_bound(stmt.extent).possible_max_value())
             body = self.visit(stmt.body)
             if loop_var is stmt.loop_var and body is stmt.body:
                 return stmt

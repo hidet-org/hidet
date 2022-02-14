@@ -4,8 +4,8 @@ import pytest
 from hidet.backend import build
 from hidet.baselines.matmul import matmul_opt
 from hidet.implement import implement, impl_context
-from hidet.implement.cuda import CudaBlockStaticMatmulSoftPipeImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaBlockNaiveImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer, CudaBlockStaticMatmulSoftPipeLdgImplementer
-from hidet.implement.cuda import CudaGridSplitImplementer, CudaGridNaiveImplementer, CudaWarpTransfer2dImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer
+from hidet.implement.cuda import CudaBlockStaticMatmulNoPipeImplementer, CudaBlockNaiveImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer, CudaBlockStaticMatmulSoftPipeLdgImplementer
+from hidet.implement.cuda import CudaGridSplitImplementer, CudaGridNaiveImplementer, CudaWarpTransfer2dImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer
 from hidet.implement.cuda import CudaThreadNaiveImplementer
 from hidet.implement.resolve import random_resolve
 from hidet.ir.task import Grid, Host
@@ -28,8 +28,8 @@ def test_matmul_correctness(use_rand=True):
         ('HidetNaive', (CudaGridNaiveImplementer, CudaThreadNaiveImplementer)),
         ('HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
         ('HidetNoPipeLdg', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
-        ('HidetSoftPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
         ('HidetSoftPipeLdg', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
+        ('HidetSoftPipeLdgWb', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
     ]
     for N, M, K in workloads:
         print('Workload {} x {} x {}'.format(N, M, K))
