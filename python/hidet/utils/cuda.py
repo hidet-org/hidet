@@ -76,13 +76,13 @@ def reset_gpu_clock():
 
 
 def query_gpu_current_clock() -> int:
-    result = subprocess.run('nvidia-smi --query-gpu=clocks.current.graphics --format=csv,noheader,nounits'.split(),
+    result = subprocess.run('nvidia-smi -i 0 --query-gpu=clocks.current.graphics --format=csv,noheader,nounits'.split(),
                             stdin=PIPE, stdout=PIPE, check=True)
     return int(result.stdout.decode('utf-8'))
 
 
 def query_gpu_max_clock() -> int:
-    result = subprocess.run('nvidia-smi --query-gpu=clocks.max.sm --format=csv,noheader,nounits'.split(),
+    result = subprocess.run('nvidia-smi -i 0 --query-gpu=clocks.max.sm --format=csv,noheader,nounits'.split(),
                             stdin=PIPE, stdout=PIPE, check=True)
     return int(result.stdout.decode('utf-8'))
 
@@ -100,13 +100,13 @@ def reset_memory_clock():
 
 
 def query_memory_current_clock() -> int:
-    result = subprocess.run('nvidia-smi --query-gpu=clocks.current.memory --format=csv,noheader,nounits'.split(),
+    result = subprocess.run('nvidia-smi -i 0 --query-gpu=clocks.current.memory --format=csv,noheader,nounits'.split(),
                             stdin=PIPE, stdout=PIPE, check=True)
     return int(result.stdout.decode('utf-8'))
 
 
 def query_memory_max_clock() -> int:
-    result = subprocess.run('nvidia-smi --query-gpu=clocks.max.memory --format=csv,noheader,nounits'.split(),
+    result = subprocess.run('nvidia-smi -i 0 --query-gpu=clocks.max.memory --format=csv,noheader,nounits'.split(),
                             stdin=PIPE, stdout=PIPE, check=True)
     return int(result.stdout.decode('utf-8'))
 
