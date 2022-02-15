@@ -12,7 +12,7 @@ def load_library():
         return
     paths = ['./libhidet.so',
              './build-release/lib/libhidet.so',
-             './build/lib/hidet.so',
+             './build/lib/libhidet.so',
              ]
     hidet_root = os.path.join(os.path.dirname(__file__), '..', '..', '..')
     paths = [os.path.realpath(os.path.join(hidet_root, path)) for path in paths]
