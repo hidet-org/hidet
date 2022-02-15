@@ -43,12 +43,14 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=True, progr
     short_sha = sha[:7]
     device_name = cuda.get_attribute(cuda.Attr.NAME)
     with contextlib.redirect_stdout(io.StringIO()) as f:
-        print('Repo commit {} ({})'.format(short_sha, sha))
-        print('GPU = {}'.format(device_name))
-        print('Arch = {}'.format(cuda.get_attribute(cuda.Attr.ARCH_NAME)))
-        print('Compute Capacity = {}'.format(cuda.get_attribute(cuda.Attr.COMPUTE_CAPACITY)))
-        print('Warmup/Number/Repeat = {} / {} / {}'.format(warmup, number, repeat))
-        print('Use brute-force resolver = {}'.format(use_brute_force_resolve))
+        print('{:>25}: {} ({})'.format('Repo commit', short_sha, sha))
+        print('{:>25}: {}'.format('GPU', device_name))
+        print('{:>25}: {}'.format('Arch', cuda.get_attribute(cuda.Attr.ARCH_NAME)))
+        print('{:>25}: {}'.format('SM Clock (MHz)', cuda.query_gpu_current_clock()))
+        print('{:>25}: {}'.format('Memory Clock (MHz)', cuda.query_memory_current_clock()))
+        print('{:>25}: {}'.format('Compute Capacity', cuda.get_attribute(cuda.Attr.COMPUTE_CAPACITY)))
+        print('{:>25}: {} / {} / {}'.format('Warmup/Number/Repeat', warmup, number, repeat))
+        print('{:>25}: {}'.format('Brute-force Resolver', use_brute_force_resolve))
         print()
         for N, M, K in workloads:
             A = randn([N, K], 'float32', 'global', seed=1)
@@ -88,4 +90,5 @@ parser.add_argument('--report_dir', type=str, default='./report')
 
 if __name__ == '__main__':
     args = parser.parse_args()
-    benchmark(args.warmup, args.number, args.repeat, args.resolver == 'brute', args.report_dir)
+    with cuda.BenchmarkContext():
+        benchmark(args.warmup, args.number, args.repeat, args.resolver == 'brute', args.report_dir)
