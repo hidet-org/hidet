@@ -2,13 +2,14 @@ from collections import defaultdict
 from hidet.ir.node import Node
 from hidet.ir.func import IRModule, Function
 from hidet.ir.type import ScalarType, TensorType, TypeNode
-from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div, Sub, Not, Or, And
+from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div, Sub, Not, Or, And, Let
 from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, LetStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt, BlackBoxStmt, AsmStmt
 from hidet.ir.task import Worker, Host, Grid, ThreadBlock, Warp, Thread
 from hidet.ir.dialects.compute import ReduceCompute, TensorCompute, TensorInput, ScalarInput
 from hidet.ir.dialects.lowlevel import VoidType, PointerType, Dereference, Cast, Address, ReferenceType, TensorPointerType, Reference
 from hidet.ir.dialects.pattern import AnyExpr, ScalarExprPattern, TensorComputePattern, ReduceComputePattern
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
+from hidet.utils.namer import Namer
 
 from .base import StmtExprFunctor, TypeFunctor, WorkerFunctor
 
@@ -16,30 +17,10 @@ from .base import StmtExprFunctor, TypeFunctor, WorkerFunctor
 class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
     def __init__(self):
         super().__init__()
-        self.obj_name = {}
-        self.class_id_clock = defaultdict(int)
+        self.namer = Namer()
 
     def __call__(self, node):
         return self.visit(node)
-
-    def get_obj_name(self, e: Expr):
-        if e in self.obj_name:
-            return self.obj_name
-        alias = {
-            'ScalarInput': 'scalar',
-            'TensorInput': 'tensor',
-            'Var': 'v',
-        }
-        self.class_id_clock[e.__class__] += 1
-        id = self.class_id_clock[e.__class__]
-        class_name = str(e.__class__.__name__)
-        class_name = alias[class_name] if class_name in alias else class_name
-        if isinstance(e, Var):
-            name = class_name + '_' + str(e.id)
-        else:
-            name = class_name + '_' + str(id)
-        self.obj_name[e] = name
-        return name
 
     def visit(self, obj):
         if isinstance(obj, (list, tuple)):
@@ -66,8 +47,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
             return object.__repr__(obj)
 
     def visit_Function(self, func: Function):
-        self.obj_name = {}
-        self.class_id_clock = defaultdict(int)
+        self.namer.clear()
         doc = Doc()
 
         # parameters
@@ -137,6 +117,9 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
     def visit_Call(self, e: Call):
         return Text(e.func_var.hint) + '(' + self(e.args) + ')'
 
+    def visit_Let(self, e: Let):
+        return Text('let(') + self(e.var) + '=' + self(e.value) + ': ' + self(e.body) + ')'
+
     def visit_Cast(self, e: Cast):
         return Text('cast(') + self(e.target_type) + ', ' + self(e.expr) + ')'
 
@@ -150,9 +133,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
         return Text('&') + self(e.expr)
 
     def visit_Var(self, e: Var):
-        if e.hint:
-            return Text(e.hint)
-        return Text(self.get_obj_name(e))
+        return Text(self.namer.get_name(e))
 
     def visit_Constant(self, e: Constant):
         if e.value is None:
@@ -160,10 +141,10 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
         return Text(str(e.value))
 
     def visit_ScalarInput(self, e: ScalarInput):
-        return Text(self.get_obj_name(e))
+        return self.namer.get_name(e)
 
     def visit_TensorInput(self, e: TensorInput):
-        return Text(self.get_obj_name(e))
+        return self.namer.get_name(e)
 
     def visit_TensorCompute(self, e: TensorCompute):
         return self('TensorCompute(') + self(e.name) + ', ' + self(e.shape) + ', ' + self(e.value) + ')'

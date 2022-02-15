@@ -184,6 +184,13 @@ class Call(Expr):
         self.args = args
 
 
+class Let(Expr):
+    def __init__(self, var, value, body):
+        self.var = var
+        self.value = value
+        self.body = body
+
+
 class Constant(Expr):
     def __init__(self, value, dtype=None):
         self.value = value

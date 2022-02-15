@@ -5,6 +5,16 @@ from hidet.utils import prod
 Int = Union['Expr', int]
 
 
+def is_atom(expr):
+    from hidet.ir import Constant, Var
+    return isinstance(expr, (Constant, Var))
+
+
+def var(hint):
+    from hidet import ir
+    return ir.var(hint)
+
+
 class TaskLayout:
     registered = []
 
@@ -114,6 +124,15 @@ class TaskLayoutExpander:
         from hidet.ir.stmt import LetStmt, ForStmt
         self.stmts: List[Union[LetStmt, ForStmt]] = []
 
+    def variablize(self, e):
+        from hidet.ir import LetStmt
+        if is_atom(e):
+            return e
+        else:
+            v = var('p')
+            self.stmts.append(LetStmt(v, e))
+            return v
+
     def expand(self, w: Int, task_layout: TaskLayout) -> List[Sequence[Int]]:
         vtable = {
             FullTaskLayout: self.expand_full,
@@ -122,21 +141,21 @@ class TaskLayoutExpander:
             ProjectedTaskLayout: self.expand_projected,
             TaskLayout: self.expand_atom,
         }
+        w = self.variablize(w)
         # noinspection PyArgumentList
         return vtable[task_layout.__class__](w, task_layout)
 
     def expand_composed(self, w: Int, layout: ComposedTaskLayout):
         from hidet.ir import var, LetStmt
-        outer_w = var('p')
-        inner_w = var('q')
-        self.stmts.append(LetStmt(outer_w, w // layout.inner.num_workers))
-        self.stmts.append(LetStmt(inner_w, w % layout.inner.num_workers))
+        outer_w = self.variablize(w // layout.inner.num_workers)
+        inner_w = self.variablize(w % layout.inner.num_workers)
         outer_fields = self.expand(outer_w, layout.outer)
         inner_fields = self.expand(inner_w, layout.inner)
         fields = []
         for outer_field in outer_fields:
+            scaled_outer_field = [self.variablize(a * b) for a, b in zip(outer_field, layout.inner.task_shape)]
             for inner_field in inner_fields:
-                fields.append(tuple(a * layout.inner.task_shape[i] + b for i, (a, b) in enumerate(zip(outer_field, inner_field))))
+                fields.append(tuple(a + b for a, b in zip(scaled_outer_field, inner_field)))
         return fields
 
     def expand_projected(self, w: Int, layout: ProjectedTaskLayout):
@@ -147,9 +166,8 @@ class TaskLayoutExpander:
             projected_fields.append(tuple(layout.dim2value[i] if i in layout.dim2value else field[i] for i in range(rank)))
         return projected_fields
 
-    @staticmethod
-    def expand_grid(w: Int, layout: GridTaskLayout):
-        return layout(w)
+    def expand_grid(self, w: Int, layout: GridTaskLayout):
+        return [[self.variablize(v) for v in layout(w)[0]]]
 
     def expand_full(self, w: Int, layout: FullTaskLayout):
         unroll_limit = 1024

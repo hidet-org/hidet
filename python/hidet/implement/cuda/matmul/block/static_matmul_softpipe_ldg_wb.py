@@ -9,12 +9,12 @@ from hidet.ir.dialects.pattern import TaskPattern, any_const_int
 from hidet.ir.functors import simplify, simplify_to_int
 from hidet.ir.expr import Expr, Call, TensorElement, var, tensor_var, convert, Var
 from hidet.ir.func import IRModule
-from hidet.ir.layout import TaskLayout, row_major_layout, full_layout
+from hidet.ir.layout import TaskLayout, row_major_layout, full_layout, DataLayout, StridesLayout
 from hidet.ir.node import Node
 from hidet.ir.primitives import syncthreads, thread_idx
 from hidet.ir.stmt import LetStmt, ForStmt, AssignStmt
 from hidet.ir.task import Task, ThreadBlock, Warp
-from hidet.ir.type import scalar_type, TensorType, Scope, DataLayout, StridesLayout
+from hidet.ir.type import scalar_type, TensorType, Scope
 from hidet.implement.common import transfer_task, init_task
 
 
@@ -62,7 +62,10 @@ class MatmulSetting:
         self.b_s2r_layout: TaskLayout = (self.block_layout * full_layout(1, outer[1]) * atom_layout * full_layout(1, inner[1])).projection({0: 0})
         self.ab2c_layout = self.block_layout * self.warp_layout
         self.c_r2s_outer_inner = self.get_c_write_back_inner()
-        self.c_r2s_s2g_layout = self.block_layout * full_layout(*self.c_r2s_outer_inner) * atom_layout * full_layout(*inner)
+        self.warp_c_wb_layout = full_layout(*self.c_r2s_outer_inner) * atom_layout * full_layout(*inner)
+        assert self.warp_c_wb_layout.task_shape[1] % 32 == 0
+        self.c_r2s_layout = self.block_layout * self.warp_c_wb_layout
+        self.c_s2g_layout = self.block_layout * full_layout(self.warp_c_wb_layout.task_shape[0], self.warp_c_wb_layout.task_shape[1] // warp_size) * row_major_layout(1, warp_size)
         self.c_r2s_outer_outer = [outer[0] // self.c_r2s_outer_inner[0], outer[1] // self.c_r2s_outer_inner[1]]
 
         self.wb_warp_shape = [atom_shape[0] * inner[0] * self.c_r2s_outer_inner[0], atom_shape[1] * inner[1] * self.c_r2s_outer_inner[1]]
@@ -229,7 +232,7 @@ class CudaBlockStaticMatmulSoftPipeLdgWbImplementer(Implementer):
         regs_B_ldg_type = TensorType(scope='register', dtype=B_dtype, layout=setting.regs_b_ldg_layout)
         #                                                                 (M, N) ->     (BM, WM, BN, WN) ->           (BM, OM, IM, BN, ON, IN) ->                       (OM, ON, BM * IM, BN * IN)
         gmem_C_wb_type = TensorType(scope='global', dtype=C_dtype, layout=C_type.layout.split({0: warp_m, 1: warp_n}).split({1: wb_warp_shape[0], 3: wb_warp_shape[1]}).fuse([1, 4, [0, 2], [3, 5]]))
-        smem_C_wb_type = TensorType(scope='shared', dtype=C_dtype, layout=StridesLayout.row_major(setting.c_r2s_s2g_layout.task_shape))
+        smem_C_wb_type = TensorType(scope='shared', dtype=C_dtype, layout=StridesLayout.row_major(setting.block_warps) * StridesLayout.row_major(setting.warp_c_wb_layout.task_shape))
         regs_C_wb_type = TensorType(scope='register', dtype=C_dtype, layout=regs_C_type.layout.split({0: warp_m, 1: warp_n}).split({1: wb_warp_shape[0], 3: wb_warp_shape[1]}).fuse([1, 4, [0, 2], [3, 5]]))
 
         # define subtasks
@@ -240,8 +243,8 @@ class CudaBlockStaticMatmulSoftPipeLdgWbImplementer(Implementer):
         b_r2s = transfer_task(f'{task.name}.b_r2s.block', src_type=regs_B_ldg_type, dst_type=smem_B_type, worker=ThreadBlock(task_layout=setting.b_g2r_r2s_layout), parent_module=ir_module)
         a_s2r = transfer_task(f'{task.name}.a.s2r.block', src_type=smem_A_type, dst_type=regs_A_type, worker=ThreadBlock(task_layout=setting.a_s2r_layout), parent_module=ir_module)
         b_s2r = transfer_task(f'{task.name}.b.s2r.block', src_type=smem_B_type, dst_type=regs_B_type, worker=ThreadBlock(task_layout=setting.b_s2r_layout), parent_module=ir_module)
-        c_r2s = transfer_task(f'{task.name}.c.r2s.block', src_type=regs_C_wb_type.slice_out(dims=[0, 1]), dst_type=smem_C_wb_type, worker=ThreadBlock(task_layout=setting.c_r2s_s2g_layout), parent_module=ir_module)
-        c_s2g = transfer_task(f'{task.name}.c.s2g.block', src_type=smem_C_wb_type, dst_type=gmem_C_wb_type.slice_out(dims=[0, 1]), worker=ThreadBlock(task_layout=setting.c_r2s_s2g_layout), parent_module=ir_module)
+        c_r2s = transfer_task(f'{task.name}.c.r2s.block', src_type=regs_C_wb_type.slice_out(dims=[0, 1]), dst_type=smem_C_wb_type, worker=ThreadBlock(task_layout=setting.c_r2s_layout), parent_module=ir_module)
+        c_s2g = transfer_task(f'{task.name}.c.s2g.block', src_type=smem_C_wb_type, dst_type=gmem_C_wb_type.slice_out(dims=[0, 1]), worker=ThreadBlock(task_layout=setting.c_s2g_layout), parent_module=ir_module)
 
         with TaskBuilder(f'{task.name}.compute.block', ThreadBlock(task_layout=setting.ab2c_layout), ir_module) as ab2c:
             regs_A_input = TensorInput('regs_A', A_dtype)

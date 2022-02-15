@@ -6,7 +6,7 @@ from hidet.ir.expr import Expr, Constant, Var, FloorDiv, Mod, Div, Multiply, Sub
 from hidet.ir.dialects.compute import ScalarInput
 from hidet.utils.namer import Namer
 
-from .base import ExprFunctor
+from hidet.ir.functors.base import ExprFunctor
 
 
 class HidetToSympyConverter(ExprFunctor):

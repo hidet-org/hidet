@@ -6,4 +6,5 @@ from .type_infer import infer_type
 from .util_functors import rewrite, collect, collect_free_vars
 from .printer import astext
 from .simplifier import simplify, simplify_to_int
-from .sympy import to_sympy, from_sympy, equal, coefficients
+from .sympy_utils import to_sympy, from_sympy, equal, coefficients
+from .hasher import ExprHash

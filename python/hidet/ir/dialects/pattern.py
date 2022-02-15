@@ -6,6 +6,7 @@ from hidet.ir.expr import *
 from hidet.ir.dialects.compute import *
 from hidet.ir.dialects.lowlevel import *
 from hidet.ir.task import *
+from hidet.ir.layout import StridesLayout
 
 
 class PatternNode(Node):

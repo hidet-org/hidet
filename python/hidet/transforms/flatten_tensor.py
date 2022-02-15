@@ -8,13 +8,10 @@ from hidet.ir.func import Function
 from hidet.ir.functors import collect, rewrite, simplify, simplify_to_int
 from hidet.ir.dialects.lowlevel import PointerType, Address, TensorPointerType
 from hidet.transforms import Pass
-from hidet.ir.type import StridesLayout, DataLayout
+from hidet.ir.layout import StridesLayout, DataLayout
 
 
-class FlattenTensor(Pass):
-    def __init__(self):
-        super().__init__('flatten_tensor')
-
+class FlattenTensorPass(Pass):
     def process_func(self, func: Function):
         # we do not flatten tensors with the shared memory and register scope tensors
         target_tensors = []
@@ -72,4 +69,4 @@ class FlattenTensor(Pass):
 
 
 def flatten_tensor_pass():
-    return FlattenTensor()
+    return FlattenTensorPass()

@@ -8,12 +8,12 @@ from hidet.ir.dialects.lowlevel import Address
 from hidet.ir.dialects.pattern import TaskPattern, any_const_int
 from hidet.ir.expr import Call, TensorElement, var, tensor_var, convert, Var
 from hidet.ir.func import IRModule
-from hidet.ir.layout import TaskLayout, row_major_layout, full_layout
+from hidet.ir.layout import TaskLayout, row_major_layout, full_layout, DataLayout, StridesLayout
 from hidet.ir.node import Node
 from hidet.ir.primitives import syncthreads, thread_idx
 from hidet.ir.stmt import LetStmt, ForStmt
 from hidet.ir.task import Task, ThreadBlock, Warp
-from hidet.ir.type import scalar_type, TensorType, Scope, DataLayout, StridesLayout
+from hidet.ir.type import scalar_type, TensorType, Scope
 
 
 class MatmulSetting:
@@ -339,7 +339,7 @@ class CudaBlockStaticMatmulSoftPipeLdgImplementer(Implementer):
                     with sb.for_loop('warp_k_tile', block_k) as k1:
 
                         with sb.if_then(k1 == 0):
-                            assert regs_A_type.layout.serialize(0, 0) == 0, "global index with only 0 must be mapped to 0 in local array"
+                            # assert regs_A_type.layout.serialize(0, 0) == 0, "global index with only 0 must be mapped to 0 in local array"
                             sb += a_s2r(Address(smem_A[k0 % 2, warp_i * warp_m, k1 + 1]), Address(regs_A[(k1 + 1) % 2, 0, 0]))
                             sb += b_s2r(Address(smem_B[k0 % 2, k1 + 1, warp_j * warp_n]), Address(regs_B[(k1 + 1) % 2, 0, 0]))
                             sb += a_g2r(Address(gmem_A[0, (k0 + 1) * (block_k * warp_k)]), regs_A_ldg)

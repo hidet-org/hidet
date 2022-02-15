@@ -7,9 +7,10 @@ def lower(ir_module: IRModule) -> IRModule:
         eliminate_dead_device_function_pass(),
         generate_packed_func_pass(),
         flatten_tensor_pass(),
-        # const_expr_simplifier_pass(),    # disable because bound_aware_simplify_pass covers this pass.
+        expand_let_expr_pass(),
         bound_aware_simplify_pass(),
         eliminate_dead_let_stmt_pass(),
+        common_subexpression_elimination_pass(),
         # vectorize_load_store_pass(),     # disable by default, this optimization can be conducted automatically by underlying ptxas assembler.
         import_primitive_functions_pass()
     ]

@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Union, Mapping
 from hidet.ir.stmt import Stmt, LetStmt, ForStmt
 from hidet.ir.dialects.compute import *
 
@@ -64,7 +64,8 @@ class FreeVarCollector(StmtExprVisitor):
             self.free_vars.add(e)
 
 
-def rewrite(node: Union[Expr, Stmt], rewrite_map):
+def rewrite(node: Union[Expr, Stmt], rewrite_map: Mapping[Var, Expr]):
+    assert isinstance(rewrite_map, dict)
     rewriter = StmtExprMapRewriter(rewrite_map)
     return rewriter.rewrite(node)
 

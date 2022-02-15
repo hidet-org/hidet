@@ -1,6 +1,7 @@
 from typing import Optional, Union, Sequence
-from hidet.ir.type import TypeNode, ScalarType, TensorType, Scope, Int, DataLayout
+from hidet.ir.type import TypeNode, ScalarType, TensorType, Scope, Int
 from hidet.ir.expr import Expr, TensorElement, Var, Constant
+from hidet.ir.layout import DataLayout
 
 
 class VoidType(TypeNode):

@@ -45,6 +45,8 @@ class ExprFunctor:
             res = self.visit_TensorElement(e)
         elif isinstance(e, Call):
             res = self.visit_Call(e)
+        elif isinstance(e, Let):
+            res = self.visit_Let(e)
         elif isinstance(e, Var):
             res = self.visit_Var(e)
         elif isinstance(e, Constant):
@@ -135,6 +137,9 @@ class ExprFunctor:
     def visit_Call(self, e: Call):
         raise NotImplementedError()
 
+    def visit_Let(self, e: Let):
+        raise NotImplementedError()
+
     def visit_Var(self, e: Var):
         raise NotImplementedError()
 
@@ -223,6 +228,11 @@ class ExprVisitor(ExprFunctor):
         self.visit(e.func_var)
         for arg in e.args:
             self.visit(arg)
+
+    def visit_Let(self, e: Let):
+        self.visit(e.value)
+        self.visit(e.var)
+        self.visit(e.body)
 
     def visit_Var(self, e: Var):
         pass
@@ -365,6 +375,15 @@ class ExprRewriter(ExprFunctor):
             return e
         else:
             return Call(func_var, args)
+
+    def visit_Let(self, e: Let):
+        value = self(e.value)
+        var = self(e.var)
+        body = self(e.body)
+        if same_list([var, value, body], [e.var, e.value, e.body]):
+            return e
+        else:
+            return Let(var, value, body)
 
     def visit_Var(self, e: Var):
         return e

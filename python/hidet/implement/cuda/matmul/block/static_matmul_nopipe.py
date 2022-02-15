@@ -8,12 +8,12 @@ from hidet.ir.dialects.lowlevel import Address
 from hidet.ir.dialects.pattern import TaskPattern, any_const_int
 from hidet.ir.expr import Call, TensorElement, var, tensor_var, convert, Var
 from hidet.ir.func import IRModule
-from hidet.ir.layout import TaskLayout, row_major_layout, full_layout
+from hidet.ir.layout import TaskLayout, row_major_layout, full_layout, DataLayout
 from hidet.ir.node import Node
 from hidet.ir.primitives import syncthreads, thread_idx
 from hidet.ir.stmt import LetStmt, ForStmt
 from hidet.ir.task import Task, ThreadBlock, Warp
-from hidet.ir.type import scalar_type, TensorType, Scope, DataLayout
+from hidet.ir.type import scalar_type, TensorType, Scope
 
 middle_layout = TaskLayout(32, (4, 8), lambda w: [(w % 2 + (w // 16) * 2), (w % 16) // 2])
 

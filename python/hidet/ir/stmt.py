@@ -39,6 +39,13 @@ class LetStmt(Stmt):
         self.value = convert(value)
         self.body = body
 
+    @staticmethod
+    def concat_let_chain(let_stmts: Sequence['LetStmt'], body: Stmt):
+        for let_stmt in reversed(let_stmts):
+            assert let_stmt.body is None
+            body = LetStmt(let_stmt.var, let_stmt.value, body)
+        return body
+
 
 class ForStmt(Stmt):
     DEFAULT_UNROLL_LIMIT = 32

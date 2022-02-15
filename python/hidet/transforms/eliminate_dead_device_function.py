@@ -7,9 +7,6 @@ from hidet.transforms.base import Pass
 
 
 class EliminateDeadDeviceFunction(Pass):
-    def __init__(self):
-        super().__init__('eliminate_dead_device_function')
-
     def __call__(self, ir_module: IRModule) -> IRModule:
         while True:
             funcs = ir_module.functions

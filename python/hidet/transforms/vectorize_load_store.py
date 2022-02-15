@@ -125,10 +125,7 @@ class StmtVectorizer(StmtRewriter):
             return SeqStmt(new_seq)
 
 
-class VectorizeLoadStore(Pass):
-    def __init__(self):
-        super().__init__('vectorize_load_store')
-
+class VectorizeLoadStorePass(Pass):
     def process_func(self, func: Function) -> Function:
         vectorizer = StmtVectorizer()
         body = vectorizer(func.body)
@@ -139,4 +136,4 @@ class VectorizeLoadStore(Pass):
 
 
 def vectorize_load_store_pass():
-    return VectorizeLoadStore()
+    return VectorizeLoadStorePass()

@@ -1,20 +1,20 @@
-import os
-import contextlib
-
-import numpy as np
-import io
-import git
 import argparse
+import contextlib
+import io
+import os
+
+import git
+import numpy as np
 
 from hidet.backend import build
 from hidet.baselines.matmul import matmul_ref, matmul_cublas, matmul_opt, matmul_cutlass
 from hidet.implement import implement, impl_context
-from hidet.implement.cuda import CudaBlockStaticMatmulSoftPipeImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaBlockNaiveImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer, CudaBlockStaticMatmulSoftPipeLdgImplementer
+from hidet.implement.cuda import CudaBlockStaticMatmulNoPipeImplementer, CudaBlockNaiveImplementer
 from hidet.implement.cuda import CudaGridSplitImplementer, CudaGridNaiveImplementer, CudaWarpTransfer2dImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer
 from hidet.implement.cuda import CudaThreadNaiveImplementer
 from hidet.implement.resolve import random_resolve, brute_force_resolve
-from hidet.tasks.nn import matmul
 from hidet.runtime.value import randn, empty, scalar
+from hidet.tasks.nn import matmul
 from hidet.utils import cuda
 
 

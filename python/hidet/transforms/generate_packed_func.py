@@ -10,10 +10,7 @@ from hidet.ir.task import Grid, Host
 from hidet.transforms import Pass
 
 
-class GeneratePackedFunc(Pass):
-    def __init__(self):
-        super().__init__('generate_packed_func')
-
+class GeneratePackedFuncPass(Pass):
     def __call__(self, ir_module: IRModule) -> IRModule:
         new_ir_module = IRModule()
         packed_funcs = []
@@ -75,4 +72,4 @@ class GeneratePackedFunc(Pass):
 
 
 def generate_packed_func_pass():
-    return GeneratePackedFunc()
+    return GeneratePackedFuncPass()

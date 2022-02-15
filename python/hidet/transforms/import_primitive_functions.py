@@ -6,10 +6,7 @@ from hidet.ir.primitives import is_primitive_function, get_primitive_function
 from hidet.transforms import Pass
 
 
-class ImportPrimitiveFunction(Pass):
-    def __init__(self):
-        super().__init__('import_primitive_function')
-
+class ImportPrimitiveFunctionPass(Pass):
     def process_module(self, ir_module: IRModule) -> IRModule:
         used_primitive_funcs = set()
         for func in ir_module.functions.values():
@@ -36,4 +33,4 @@ class ImportPrimitiveFunction(Pass):
 
 
 def import_primitive_functions_pass() -> Pass:
-    return ImportPrimitiveFunction()
+    return ImportPrimitiveFunctionPass()

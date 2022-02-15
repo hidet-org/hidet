@@ -1,30 +1,22 @@
 import numpy as np
-import ctypes
-import os
 
 from hidet.backend import build
 from hidet.baselines.matmul import matmul_ref, matmul_cublas, matmul_opt, matmul_cutlass
 from hidet.implement import implement, impl_context
-from hidet.implement.cuda import CudaBlockStaticMatmulNoPipeImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer
+from hidet.implement.cuda import CudaBlockStaticMatmulSoftPipeLdgWbImplementer
 from hidet.implement.cuda import CudaGridSplitImplementer, CudaGridNaiveImplementer, CudaWarpTransfer2dImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer
-from hidet.implement.cuda import CudaThreadNaiveImplementer, CudaBlockNaiveImplementer, CudaBlockStaticMatmulSoftPipeLdgImplementer
+from hidet.implement.cuda import CudaThreadNaiveImplementer, CudaBlockNaiveImplementer
 from hidet.implement.resolve import random_resolve, brute_force_resolve
-from hidet.ir.func import IRModule
 from hidet.ir.task import Grid, Host
 from hidet.runtime.value import TensorValue, randn, empty, scalar, zeros, full
-from hidet.runtime.module import CompiledModule, CompiledFunction
-from hidet.ir.dialects.lowlevel import VoidType
-from hidet.ffi import PackedFunc
 from hidet.tasks.nn import matmul
-from hidet.backend.build import lower, codegen, compile_src_code
 
 
 def print_latencies(name, latencies):
     print('{:>20}: {:.3f} (std {:.3f}) ms [{}]'.format(name, np.mean(latencies), np.std(latencies), " ".join([f'{v:.3f}' for v in latencies])))
 
 
-def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, progress_bar=True):
-    use_nsight_compute = False
+def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, progress_bar=True, use_nsight_compute=False):
     if use_nsight_compute:
         warmup = 0
         number = 1
@@ -41,9 +33,9 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, prog
         ('cuBLAS', matmul_cublas()),
     ]
     hidet_variants = [
-        ('HidetNaive', (CudaGridNaiveImplementer, CudaThreadNaiveImplementer)),
-        ('HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
-        ('HidetSoftPipeLdg', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
+        # ('HidetNaive', (CudaGridNaiveImplementer, CudaThreadNaiveImplementer)),
+        # ('HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
+        # ('HidetSoftPipeLdg', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
         ('HidetSoftPipeLdgWb', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
     ]
     print('Repeat = {}'.format(repeat))
@@ -158,5 +150,5 @@ def verify(use_rand=True):
 
 
 if __name__ == '__main__':
-    verify()
-    benchmark()
+    # verify()
+    benchmark(use_nsight_compute=False)

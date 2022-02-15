@@ -139,6 +139,16 @@ class BoundInfo:
         assert isinstance(other, BoundInfo)
         return self.combine(self, other, operator.mod)
 
+    def __str__(self):
+        if self.value is not None:
+            return str(self.value)
+        elif self.candidates is not None:
+            return str(len(self.candidates)) + ': ' + str(self.candidates)
+        elif self.min_value or self.max_value:
+            return f'[{self.min_value}:{self.max_value}]'
+        else:
+            return 'Any'
+
 
 class BoundAwareSimplifier(StmtExprRewriter):
     op_dict = {
@@ -410,9 +420,6 @@ class BoundAwareSimplifier(StmtExprRewriter):
 
 
 class BoundAwareSimplifyPass(Pass):
-    def __init__(self):
-        super().__init__('bound_aware_simplify')
-
     def process_module(self, ir_module: IRModule) -> IRModule:
         simplifier = BoundAwareSimplifier()
         return simplifier(ir_module)
