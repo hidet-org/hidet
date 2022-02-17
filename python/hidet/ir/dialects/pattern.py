@@ -1,5 +1,5 @@
 import traceback
-from typing import Type, Tuple
+from typing import Type, Tuple, Any, ContextManager
 from contextlib import ExitStack
 from hidet.ir.type import *
 from hidet.ir.expr import *
@@ -38,8 +38,9 @@ class ExprPattern(Expr, PatternNode):
 
 
 class AnyExpr(ExprPattern):
-    def __init__(self, cls=None):
+    def __init__(self, cls=None, exclude_cls=None):
         self.cls: Optional[Type[Expr]] = cls
+        self.exclude_cls: Optional[Type[Expr]] = exclude_cls
 
 
 class UnionPattern(PatternNode):
@@ -111,11 +112,11 @@ class MatchContext:
                 self.matched[self.pattern] = None
                 return
             else:
-                msg = 'Expect {} but the target is empty.'.format(self.pattern)
+                msg = 'Expect {} but the target is empty.'.format(type(self.pattern))
                 raise NotMatchedError(self.pattern, self.target, msg)
         if self.pattern in self.matched:
             if self.matched[self.pattern] is not self.target:
-                msg = "Try to match {} and {}, but the prior one has been matched to another target {}".format(self.pattern, self.target, self.matched[self.pattern])
+                msg = "Try to match {} and {}, but the prior one has been matched to another target {}".format(type(self.pattern), type(self.target), type(self.matched[self.pattern]))
                 raise NotMatchedError(self.pattern, self.target, msg)
             else:
                 return
@@ -207,9 +208,10 @@ class PatternMatcher:
                 pass
             return self.matched, "Matched"
         except NotMatchedError as e:
-            return None, str(traceback.format_exc())
+            return None, "Failed"
+            # return None, str(traceback.format_exc())
 
-    def match(self, pattern: Optional[Union[Node, Sequence]], target: Optional[Union[Node, Sequence]]) -> MatchContext:
+    def match(self, pattern: Optional[Union[Node, Sequence]], target: Optional[Union[Node, Sequence]]) -> ContextManager:
         return MatchContext(self, pattern, target)
 
     @staticmethod
@@ -217,8 +219,7 @@ class PatternMatcher:
         if expect_target_type is None:
             expect_target_type = pattern.__class__
         if not isinstance(target, expect_target_type):
-            raise NotMatchedError(pattern, target,
-                                  "Pattern {} expect target {} with type {}, but got type {}".format(pattern, target, expect_target_type, type(target)))
+            raise NotMatchedError(pattern, target, "Pattern expect target with type {}, but got type {}".format(expect_target_type, type(target)))
 
     @staticmethod
     def check_cond(pattern, target, cond, message=""):
@@ -292,6 +293,8 @@ class PatternMatcher:
     def match_AnyPattern(pattern: AnyExpr, target: Expr):
         # if pattern.type is None, match any expr, otherwise match any expr with specific type
         if pattern.cls and not isinstance(target, pattern.cls):
+            raise NotMatchedError(pattern, target)
+        if pattern.exclude_cls and isinstance(target, pattern.exclude_cls):
             raise NotMatchedError(pattern, target)
 
     def match_UnionPattern(self, pattern: UnionPattern, target: Node):
@@ -427,7 +430,7 @@ def any_const():
     return AnyExpr(Constant)
 
 
-def match(pattern: Node, target: Node) -> Tuple[Optional[Dict[Node, Node]], str]:
+def match(pattern: Node, target: Node) -> Tuple[Optional[Dict[Node, Any]], str]:
     """
     :return: match, report
     """

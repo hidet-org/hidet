@@ -14,10 +14,10 @@ from hidet.ir.dialects.compute import compute, TensorInput, reduce_sum
 from hidet.ir.dialects.lowlevel import TensorPointerType
 from hidet.ir.expr import Var, var
 from hidet.ir.func import IRModule
-from hidet.ir.layout import TaskLayout, row_major_layout, full_layout
+from hidet.ir.layout import TaskLayout, row_major_layout, full_layout, DataLayout
 from hidet.ir.primitives import block_idx, syncthreads
 from hidet.ir.task import ThreadBlock, Grid, Host
-from hidet.ir.type import TensorType, DataLayout
+from hidet.ir.type import TensorType
 from hidet.runtime import randn, empty, CompiledFunction
 from hidet.tasks import nn
 from hidet.utils.py import prod
@@ -253,6 +253,7 @@ def main():
     M, N, K = 1024, 1024, 1024
     # Define the kernel
     ir_module = matmul_kernel(M, N, K)
+    # print(ir_module)
     # Build the kernel. The CUDA C code of the kernel can be found at './outs/source.cu'.
     module = build(ir_module, output_dir='./outs')
 

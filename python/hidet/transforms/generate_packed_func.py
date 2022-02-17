@@ -11,9 +11,8 @@ from hidet.transforms import Pass
 
 
 class GeneratePackedFuncPass(Pass):
-    def __call__(self, ir_module: IRModule) -> IRModule:
+    def process_module(self, ir_module: IRModule) -> IRModule:
         new_ir_module = IRModule()
-        packed_funcs = []
         for func in ir_module.functions.values():
             new_ir_module.add(func.name, func)
             if not isinstance(func.get_attr('worker', None), (Grid, Host)):

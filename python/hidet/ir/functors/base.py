@@ -2,6 +2,7 @@ from hidet.ir.type import *
 from hidet.ir.expr import *
 from hidet.ir.stmt import *
 from hidet.ir.task import *
+from hidet.ir.func import *
 from hidet.ir.dialects.compute import *
 from hidet.ir.dialects.lowlevel import *
 from hidet.ir.dialects.pattern import *
@@ -104,7 +105,7 @@ class ExprFunctor:
     def visit_LessThan(self, e: LessThan):
         raise NotImplementedError()
 
-    def visit_LessEqual(self, e: LessThan):
+    def visit_LessEqual(self, e: LessEqual):
         raise NotImplementedError()
 
     def visit_Equal(self, e: Equal):
@@ -158,7 +159,7 @@ class ExprFunctor:
     def visit_ReduceCompute(self, e: ReduceCompute):
         raise NotImplementedError()
 
-    def visit_AnyExpr(self, e: ReduceComputePattern):
+    def visit_AnyExpr(self, e: AnyExpr):
         raise NotImplementedError()
 
     def visit_ReduceComputePattern(self, e: ReduceComputePattern):
@@ -697,6 +698,23 @@ class StmtExprRewriter(ExprRewriter, StmtRewriter):
 
     def visit_expr(self, e: Expr):
         return self.visit(e)
+
+
+class StmtExprRewriterWithBoundAnalyzer(StmtExprRewriter):
+    def __init__(self):
+        from hidet.ir.analyzers import BoundAnalyzer
+        super().__init__()
+        self.analyzer = BoundAnalyzer()
+        self.bound = self.analyzer.bound
+
+    def visit(self, obj):
+        if obj in self.memo:
+            return self.memo[obj]
+        self.analyzer.visit(obj)
+        ret = StmtExprRewriter.visit(self, obj)
+        self.analyzer.visit(ret)
+        self.memo[obj] = ret
+        return ret
 
 
 class TypeFunctor:

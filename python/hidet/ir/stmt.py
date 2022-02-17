@@ -114,6 +114,9 @@ class SeqStmt(Stmt):
         self.seq.append(stmt)
         assert isinstance(stmt, Stmt)
 
+    def append_first(self, stmt):
+        self.seq.insert(0, stmt)
+
 
 def flatten(stmts):
     flattened = []

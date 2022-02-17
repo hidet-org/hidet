@@ -56,10 +56,10 @@ class FunctionGroup(Node):
 
 
 class IRModule(Node):
-    def __init__(self, funcs=None, task=None):
+    def __init__(self, funcs=None, task=None, global_vars=None):
         self.task: Optional[Task] = task
         self.functions: Dict[str, Union[Function, FunctionGroup]] = funcs if funcs else {}
-        self.global_vars: Dict[str, Var] = {}
+        self.global_vars: Dict[str, Var] = global_vars if global_vars else {}
 
     def include(self, module):
         for name, func in module.functions.items():

@@ -1,20 +1,28 @@
 from typing import Callable, List
 from hidet.ir.stmt import Stmt
 from hidet.ir.func import IRModule, Function
+from hidet.utils import Timer
 
 
 class Pass:
-    def __call__(self, ir_module: IRModule) -> IRModule:
-        return self.process_module(ir_module)
+    def __init__(self, name=None):
+        self.name = name if name else self.__class__.__name__
 
-    def name(self) -> str:
-        return self.__class__.name(self)
+    def __call__(self, ir_module: IRModule) -> IRModule:
+        from hidet.utils.py import COLORS
+        with Timer() as timer:
+            ret = self.process_module(ir_module)
+        # print(f'{self.name:>50}: {COLORS.OKGREEN}{timer.elapsed_seconds():.3f}{COLORS.ENDC} secs')
+        return ret
 
     def process_module(self, ir_module: IRModule) -> IRModule:
-        new_ir_module = IRModule()
-        for name in ir_module.functions:
-            new_ir_module.add(name, self.process_func(ir_module.functions[name]))
-        return new_ir_module
+        new_funcs = {}
+        for name, func in ir_module.functions.items():
+            new_funcs[name] = self.process_func(func)
+        if all(new_funcs[name] is ir_module.functions[name] for name in new_funcs):
+            return ir_module
+        else:
+            return IRModule(funcs=new_funcs, task=ir_module.task, global_vars=ir_module.global_vars)
 
     def process_func(self, func: Function) -> Function:
         return func
@@ -22,14 +30,8 @@ class Pass:
 
 class SequencePass(Pass):
     def __init__(self, passes: List[Pass], name=None):
+        super().__init__(name)
         self.passes = passes
-        self._name = name
-
-    def name(self) -> str:
-        if self._name:
-            return self._name
-        else:
-            return Pass.name(self)
 
     def process_module(self, ir_module: IRModule) -> IRModule:
         for p in self.passes:
@@ -42,7 +44,7 @@ class FunctionPass(Pass):
         raise NotImplementedError()
 
 
-class FunctionBodyPass(Pass):
+class FunctionBodyPass(FunctionPass):
     def process_func(self, func: Function) -> Function:
         body = self.process_body(func.body)
         if body is func.body:
@@ -52,3 +54,24 @@ class FunctionBodyPass(Pass):
 
     def process_body(self, stmt: Stmt) -> Stmt:
         raise NotImplementedError()
+
+
+class RepeatFunctionPass(FunctionPass):
+    def __init__(self, passes: List[FunctionPass], repeat_limit=10, name=None):
+        super().__init__(name)
+        assert all(isinstance(p, FunctionPass) for p in passes)
+        self.passes = passes
+        self.repeat_limit = repeat_limit
+
+    def process_func(self, func: Function) -> Function:
+        for i in range(self.repeat_limit):
+            orig_func = func
+            for p in self.passes:
+                func = p.process_func(func)
+            if orig_func is func:
+                # print(f"Exceeded: {i} {self.name} on {func.name}")
+                return func
+        # print(f"Exceeded: {i} {self.name} on {func.name}")
+        return func
+
+

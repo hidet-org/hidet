@@ -65,7 +65,13 @@ class Expr(Node):
         return TensorElement(self, indices)
 
     def __hash__(self):
-        return object.__hash__(self)
+        return id(self)
+
+    def __int__(self):
+        return int(self)
+
+    def __float__(self):
+        return float(self)
 
     def __str__(self):
         from hidet.ir.functors import astext

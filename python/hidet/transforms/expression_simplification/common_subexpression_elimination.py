@@ -1,4 +1,4 @@
-from hidet.transforms.base import FunctionBodyPass, SequencePass
+from hidet.transforms.base import FunctionBodyPass, SequencePass, RepeatFunctionPass
 from hidet.ir.functors import StmtRewriter, StmtExprRewriter, same_list
 from hidet.ir.expr import Expr, Var, Constant, convert
 from hidet.ir.stmt import Stmt, SeqStmt, LetStmt, EvaluateStmt
@@ -37,8 +37,14 @@ class ChainSeqStmtUsingLetStmtRewriter(StmtRewriter):
             if isinstance(s, LetStmt):
                 body = LetStmt(s.var, s.value, SeqStmt([s.body, body]))
             else:
-                body = SeqStmt([s, body])
-        return body
+                if isinstance(body, SeqStmt):
+                    body.append_first(s)
+                else:
+                    body = SeqStmt([s, body])
+        if isinstance(body, SeqStmt) and same_list(body.seq, stmt.seq):
+            return stmt
+        else:
+            return body
 
 
 class ChainSeqStmtUsingLetStmtPass(FunctionBodyPass):
@@ -72,7 +78,8 @@ class CommonSubexpressionEliminationRewriter(StmtExprRewriter):
             value_hash = self.expr_hash(value)
             self.value2var[value_hash] = var
             ret = self(stmt.body)
-            self.value2var.pop(value_hash)
+            if value_hash in self.value2var:
+                self.value2var.pop(value_hash)
             if same_list([var, value, ret], [stmt.var, stmt.value, stmt.body]):
                 return stmt
             else:
@@ -85,9 +92,12 @@ class CommonSubexpressionEliminationPass(FunctionBodyPass):
 
 
 def common_subexpression_elimination_pass():
-    return SequencePass(name='CommonSubExpressionEliminationPassSequence',
-                        passes=[
-                            FlattenSeqStmtPass(),
-                            ChainSeqStmtUsingLetStmtPass(),
-                            CommonSubexpressionEliminationPass(),
-                        ])
+    return RepeatFunctionPass(
+        name='CommonSubExpressionEliminationPassSequence',
+        passes=[
+            FlattenSeqStmtPass(),
+            ChainSeqStmtUsingLetStmtPass(),
+            CommonSubexpressionEliminationPass(),
+        ],
+        repeat_limit=10
+    )

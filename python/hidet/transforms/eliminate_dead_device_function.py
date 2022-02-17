@@ -7,7 +7,7 @@ from hidet.transforms.base import Pass
 
 
 class EliminateDeadDeviceFunction(Pass):
-    def __call__(self, ir_module: IRModule) -> IRModule:
+    def process_module(self, ir_module: IRModule) -> IRModule:
         while True:
             funcs = ir_module.functions
             call_graph = CallGraph(ir_module)
