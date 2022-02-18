@@ -4,6 +4,7 @@ from hidet.ir.expr import Expr, Var, Call
 from hidet.ir.func import IRModule
 from hidet.ir.task import Task, Worker
 from hidet.ir.type import TypeNode
+from hidet.ir.dialects.compute import TensorInput, ScalarInput, TensorCompute, ReduceCompute, ComputeNode
 
 
 class TaskBuilder:
@@ -34,12 +35,12 @@ class TaskBuilder:
             self.finish()
         return Call(self.func_var, args)
 
-    def extend_params(self, params: Sequence[Var], types: Sequence[TypeNode]):
+    def extend_params(self, params: Sequence[ComputeNode], types: Sequence[TypeNode]):
         assert len(params) == len(types)
         self.params.extend(params)
         self.params_type.extend(types)
 
-    def append_param(self, param: Var, param_type: TypeNode):
+    def append_param(self, param: ComputeNode, param_type: TypeNode):
         self.params.append(param)
         self.params_type.append(param_type)
 
@@ -47,7 +48,7 @@ class TaskBuilder:
         assert self.computation is None
         self.computation = computation
 
-    def finish(self) -> Call:
+    def finish(self):
         from hidet.implement.implementer import implement, impl_context
         assert self.func_var is None
         assert len(self.params) == len(self.params_type)

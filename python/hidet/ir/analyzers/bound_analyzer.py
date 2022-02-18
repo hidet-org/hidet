@@ -104,7 +104,7 @@ class BoundInfo:
             return self.value
         elif self.candidates:
             return max(self.candidates)
-        elif self.max_value:
+        elif self.max_value is not None:
             return self.max_value
         else:
             return None
@@ -114,7 +114,7 @@ class BoundInfo:
             return self.value
         elif self.candidates:
             return min(self.candidates)
-        elif self.min_value:
+        elif self.min_value is not None:
             return self.min_value
         else:
             return None
@@ -189,10 +189,10 @@ class BoundAnalyzer(FuncStmtExprVisitor):
             self.bound[block_idx()] = BoundInfo(value=0)
         elif isinstance(worker, Warp):
             # for warp worker, it can only get the lane id from thread idx, which is between 0...31
-            self.bound[thread_idx()] = BoundInfo(min_value=0, max_value=31)
+            self.bound[thread_idx()] = BoundInfo(min_value=0, max_value=1023)
             self.bound[block_idx()] = BoundInfo(value=0)
         elif isinstance(worker, Thread):
-            self.bound[thread_idx()] = BoundInfo(min_value=0, max_value=0)
+            self.bound[thread_idx()] = BoundInfo(min_value=0, max_value=1023)
             self.bound[block_idx()] = BoundInfo(value=0)
         elif isinstance(worker, Host):
             pass
@@ -227,7 +227,10 @@ class BoundAnalyzer(FuncStmtExprVisitor):
 
     def visit_ForStmt(self, stmt: ForStmt):
         self.visit(stmt.extent)
-        self.bound[stmt.loop_var] = BoundInfo(min_value=0, max_value=self.bound[stmt.extent].possible_max_value()) - BoundInfo(value=1)
+        max_val = self.bound[stmt.extent].possible_max_value()
+        if max_val is not None:
+            max_val -= 1
+        self.bound[stmt.loop_var] = BoundInfo(min_value=0, max_value=max_val)
         self.visit(stmt.body)
 
     def visit_Constant(self, e: Constant):

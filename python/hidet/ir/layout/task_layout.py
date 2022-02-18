@@ -24,7 +24,7 @@ class TaskLayout:
                  worker2task: Optional[Callable[[Int], List[Tuple[Int, ...]]]] = None):
         self.num_workers: int = num_workers
         self.task_shape: Tuple[int, ...] = task_shape
-        self.worker2task: Callable[[Int], List[Sequence[Int]]] = worker2task
+        self.worker2task: Callable[[Int], List[Tuple[Int]]] = worker2task
 
     def __call__(self, w: Int) -> List[Tuple[Int, ...]]:
         return self.worker2task(w)
@@ -190,13 +190,13 @@ class TaskLayoutExpander:
         return layout(w)
 
 
-def row_major_layout(*task_shape: Sequence[int]):
+def row_major_layout(*task_shape: int):
     return GridTaskLayout(task_shape, perm=list(range(len(task_shape))))
 
 
-def col_major_layout(*task_shape: Sequence[int]):
+def col_major_layout(*task_shape: int):
     return GridTaskLayout(task_shape, perm=list(reversed(range(len(task_shape)))))
 
 
-def full_layout(*task_shape: Sequence[int]):
+def full_layout(*task_shape: int):
     return FullTaskLayout(task_shape)

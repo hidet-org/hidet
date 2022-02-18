@@ -4,15 +4,12 @@ from hidet.backend import build
 from hidet.baselines.matmul import matmul_ref, matmul_cublas, matmul_opt, matmul_cutlass
 from hidet.implement import implement, impl_context
 from hidet.implement.cuda import CudaBlockStaticMatmulSoftPipeLdgWbImplementer
-from hidet.implement.cuda import CudaGridSplitImplementer, CudaGridNaiveImplementer, CudaWarpTransfer2dImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer
+from hidet.implement.cuda import CudaGridSplitImplementer, CudaGridNaiveImplementer, CudaWarpTransfer2dImplementer, CudaWarpFillValueImplementer, CudaBlockStaticMatmulNoPipeImplementer
 from hidet.implement.cuda import CudaThreadNaiveImplementer, CudaBlockNaiveImplementer
 from hidet.implement.resolve import random_resolve, brute_force_resolve
-from hidet.ir.task import Grid, Host, ThreadBlock
+from hidet.ir.task import Grid, Host
 from hidet.runtime.value import TensorValue, randn, empty, scalar, zeros, full
 from hidet.tasks.nn import matmul
-from hidet.ir.builders import FunctionBuilder, StmtBuilder
-from hidet.ir.primitives import thread_idx
-
 
 
 def print_latencies(name, latencies):
@@ -25,8 +22,9 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, prog
         number = 1
         repeat = 1
     workloads = [
+        # (2, 2, 2),
         (1024, 1024, 1024),
-        (2048, 2304, 768),
+        # (2048, 2304, 768),
         # (1664, 768, 2304),
     ]
     baselines = [
@@ -36,10 +34,9 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, prog
         ('cuBLAS', matmul_cublas()),
     ]
     hidet_variants = [
-        # ('HidetNaive', (CudaGridNaiveImplementer, CudaThreadNaiveImplementer)),
-        # ('HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
-        # ('HidetSoftPipeLdg', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
-        ('HidetSoftPipeLdgWb', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
+        ('HidetNaive', (CudaGridNaiveImplementer, CudaThreadNaiveImplementer)),
+        ('HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpFillValueImplementer)),
+        ('HidetSoftPipeLdgWb', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpFillValueImplementer)),
     ]
     print('Repeat = {}'.format(repeat))
     print('Brute-force resolver = {}'.format(use_brute_force_resolve))
@@ -70,23 +67,16 @@ def verify(use_rand=True):
     np.set_printoptions(threshold=128 * 128, linewidth=500)
     use_print = True
     workloads = [
-        # (16, 16, 2),
-        # (16, 16, 4),
-        # (128, 128, 16),
         (256, 256, 256),
-        # (1600, 768, 2304)
-        # (128, 128, 8),
-        # (4 * 2, 8 * 2, 8 * 2),
+        # (1024, 1024, 1024),
     ]
     baselines = [
         ('Opt', matmul_opt()),
     ]
     hidet_variants = [
         ('HidetNaive', (CudaGridNaiveImplementer, CudaThreadNaiveImplementer)),
-        # ('HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
-        # ('HidetNoPipeLdg', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeLdgImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
-        # ('HidetSoftPipeLdg', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
-        ('HidetSoftPipeLdgWb', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer)),
+        ('HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpFillValueImplementer)),
+        ('HidetSoftPipeLdgWb', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpFillValueImplementer)),
     ]
     for N, M, K in workloads:
         print('Workload {} x {} x {}'.format(N, M, K))
@@ -152,10 +142,23 @@ def verify(use_rand=True):
                 raise e
 
 
+def test_demo():
+    N, M, K = 2, 2, 2
+    task = matmul(N, M, K)
+    ir_module = implement(task)
+    ir_module = random_resolve(ir_module)
+    module = build(ir_module, output_dir='./outs')
+
+    A = TensorValue.randn([N, K], 'float32', 'global', seed=1)
+    B = TensorValue.randn([K, M], 'float32', 'global', seed=3)
+    C = TensorValue.empty([N, M], 'float32', 'global')
+    module['matmul'](A, B, C)
+
+
 if __name__ == '__main__':
     # verify()
     benchmark(use_nsight_compute=False)
-
+    # test_demo()
 
     # from hidet.ir import *
     # from hidet.ir.layout import *

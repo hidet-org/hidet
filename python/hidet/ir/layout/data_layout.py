@@ -2,6 +2,7 @@ from collections import OrderedDict
 from typing import Sequence, Union, List, Callable, Mapping, Dict
 
 from hidet import ir
+from hidet.ir.node import Node
 from hidet.utils import prod
 
 # typing forward declaration
@@ -35,7 +36,7 @@ def concat_let_expr(var2value, body: Expr):
 
 
 # data layout
-class DataLayout:
+class DataLayout(Node):
     def __init__(self, shape=None, size=None, global2local=None):
         self.shape: List[Int] = shape
         self.size: Int = size

@@ -5,3 +5,6 @@ class Node:
 
     def __repr__(self):
         return str(self)
+
+    def __int__(self):
+        raise NotImplementedError()

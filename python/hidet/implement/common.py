@@ -27,7 +27,7 @@ def transfer_task(name: str, src_type: TensorType, dst_type: TensorType, worker:
     return tb
 
 
-def init_task(name: str, dst_type: TensorType, init_value: Constant, worker: Worker, parent_module: IRModule) -> TaskBuilder:
+def init_task(name: str, dst_type: TensorType, init_value: Union[Expr, PyScalar], worker: Worker, parent_module: IRModule) -> TaskBuilder:
     if isinstance(worker, (ThreadBlock, Warp)) and worker.task_layout is not None:
         shape = worker.task_layout.task_shape
     else:

@@ -35,12 +35,12 @@ class StmtBuilder:
         self.append(other)
         return self
 
-    def let(self, v: Union[str, Var], value: Expr) -> StmtScope:
+    def let(self, v: Union[str, Var], value: Union[int, Expr]) -> StmtScope:
         if isinstance(v, str):
             v = var(v)
         return StmtScope(self, stmts=LetStmt(v, value), ret=v)
 
-    def for_loop(self, v: Union[str, Var], extent: Expr) -> StmtScope:
+    def for_loop(self, v: Union[str, Var], extent: Union[int, Expr]) -> StmtScope:
         if isinstance(v, str):
             v = var(v)
         return StmtScope(self, stmts=ForStmt(v, extent), ret=v)

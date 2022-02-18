@@ -1,4 +1,4 @@
-from typing import Mapping, List, Union
+from typing import Mapping, List, Union, Any
 
 from hidet.implement.implementer import Implementer, register_impl, NotSupportedError
 from hidet.implement.search_space import ProductSpace, AtomSpace, SpaceChoice
@@ -179,7 +179,7 @@ class CudaBlockStaticMatmulSoftPipeLdgWbImplementer(Implementer):
             raise NotSupportedError('Can not find a setting to implement task {}'.format(task.name))
         return ir_module
 
-    def implement_for_choice(self, task: Task, match: Mapping[Node, Node], choice: SpaceChoice) -> IRModule:
+    def implement_for_choice(self, task: Task, match: Mapping[Node, Any], choice: SpaceChoice) -> IRModule:
         ir_module = IRModule()
 
         # task-related constants

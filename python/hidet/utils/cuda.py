@@ -127,11 +127,15 @@ def turn_on_persistent_mode():
 
 
 class BenchmarkContext:
+    def __init__(self, clock_ratio=None):
+        if clock_ratio is None:
+            clock_ratio = self.get_bench_ratio()
+        self.clock_ratio = clock_ratio
+
     def __enter__(self):
         # sm clock; to make result more stable (trying to avoid gpu throttle)
-        ratio = self.get_bench_ratio()
         turn_on_persistent_mode()
-        lock_gpu_clock(int(ratio * query_gpu_max_clock()))
+        lock_gpu_clock(int(self.clock_ratio * query_gpu_max_clock()))
         lock_memory_clock(query_memory_max_clock())
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -139,7 +143,7 @@ class BenchmarkContext:
         reset_gpu_clock()
 
     @staticmethod
-    def get_bench_ratio(default=0.8):
+    def get_bench_ratio(default=1.0):
         ratio = os.environ.get('HIDET_BENCH_RATIO')
         if ratio:
             ratio = float(ratio)

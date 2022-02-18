@@ -15,7 +15,9 @@ class BoundAwareSimplifier(RewriterWithBound):
         ret = RewriterWithBound.visit(self, obj)
         if obj in self.bound and not isinstance(obj, Constant) and self.bound[obj].value is not None:
             # a constant expression
-            return convert(self.bound[obj].value)
+            ret = convert(self.bound[obj].value)
+            self.memo[obj] = ret
+            return ret
         return ret
 
     def visit_Add(self, e: Add):
