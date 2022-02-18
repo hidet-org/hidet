@@ -272,6 +272,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         # return doc
         doc = NewLine() + self(stmt.var.type) + ' ' + self.visit(stmt.var) + ' = ' + self.visit(stmt.value) + ';'
         doc += self(stmt.body)
+        # doc += Text('{') + self(stmt.body).indent() + NewLine() + Text('} ')
         return doc
 
     def visit_ForStmt(self, stmt: ForStmt):

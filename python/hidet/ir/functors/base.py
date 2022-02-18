@@ -314,7 +314,7 @@ class ExprRewriter(ExprFunctor):
     def visit_LessThan(self, e: LessThan):
         return self.visit_Binary(e)
 
-    def visit_LessEqual(self, e: LessThan):
+    def visit_LessEqual(self, e: LessEqual):
         return self.visit_Binary(e)
 
     def visit_Equal(self, e: Equal):
@@ -680,6 +680,21 @@ class StmtExprVisitor(ExprVisitor, StmtVisitor):
         return self.visit(e)
 
 
+class FuncStmtExprVisitor(StmtExprVisitor):
+    def visit(self, obj):
+        if isinstance(obj, Expr):
+            return ExprVisitor.visit(self, obj)
+        elif isinstance(obj, Stmt):
+            return StmtVisitor.visit(self, obj)
+        elif isinstance(obj, Function):
+            return self.visit_Function(obj)
+        else:
+            raise ValueError()
+
+    def visit_Function(self, func: Function):
+        self(func.body)
+
+
 class StmtExprRewriter(ExprRewriter, StmtRewriter):
     def __init__(self):
         ExprRewriter.__init__(self)
@@ -700,7 +715,26 @@ class StmtExprRewriter(ExprRewriter, StmtRewriter):
         return self.visit(e)
 
 
-class StmtExprRewriterWithBoundAnalyzer(StmtExprRewriter):
+class FuncStmtExprRewriter(StmtExprRewriter):
+    def visit(self, obj):
+        if isinstance(obj, Expr):
+            return ExprRewriter.visit(self, obj)
+        elif isinstance(obj, Stmt):
+            return StmtRewriter.visit(self, obj)
+        elif isinstance(obj, Function):
+            return self.visit_Function(obj)
+        else:
+            raise ValueError()
+
+    def visit_Function(self, func: Function):
+        body = self(func.body)
+        if body is func.body:
+            return func
+        else:
+            return Function(func.name, func.params, body, func.ret_type, func.local_vars, func.attrs)
+
+
+class BoundAwareRewriter(FuncStmtExprRewriter):
     def __init__(self):
         from hidet.ir.analyzers import BoundAnalyzer
         super().__init__()
@@ -711,10 +745,7 @@ class StmtExprRewriterWithBoundAnalyzer(StmtExprRewriter):
         if obj in self.memo:
             return self.memo[obj]
         self.analyzer.visit(obj)
-        ret = StmtExprRewriter.visit(self, obj)
-        self.analyzer.visit(ret)
-        self.memo[obj] = ret
-        return ret
+        return FuncStmtExprRewriter.visit(self, obj)
 
 
 class TypeFunctor:

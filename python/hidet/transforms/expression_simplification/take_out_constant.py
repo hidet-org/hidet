@@ -1,7 +1,8 @@
 from typing import Union
 import functools
+from collections import defaultdict
 from hidet.transforms.base import RepeatFunctionPass, FunctionPass, FunctionBodyPass
-from hidet.ir.functors import StmtExprRewriterWithBoundAnalyzer
+from hidet.ir.functors import BoundAwareRewriter
 from hidet.ir.expr import Constant, Add, Sub, Multiply, FloorDiv, Mod, Expr
 from hidet.ir.stmt import LetStmt
 from hidet.ir.func import Function
@@ -9,6 +10,7 @@ from hidet.ir.dialects.pattern import AnyExpr, match
 from hidet.ir.functors import rewrite
 from hidet.ir.analyzers import BoundAnalyzer, BoundInfo
 from .bound_aware_simplify import BoundAwareSimplifier
+from .rule_based_simplifier import rule_based_simplify_pass
 from ...ir import Stmt
 
 
@@ -20,7 +22,7 @@ def any_constant():
     return Constant(value=None)
 
 
-class TakeOutConstantRewriter(StmtExprRewriterWithBoundAnalyzer):
+class TakeOutConstantRewriter(BoundAwareRewriter):
     _enumerate_limit = 1024
 
     def __init__(self):
@@ -30,69 +32,22 @@ class TakeOutConstantRewriter(StmtExprRewriterWithBoundAnalyzer):
         self.e1, self.e2 = e1, e2
         self.c1, self.c2 = c1, c2
         self.args = {e1, e2, c1, c2}
-        self.var2value = {}
-        self.patterns = {
-            Add: [
-                ((c1 + e1) + e2, (e1 + e2) + c1),
-                ((e1 + c1) + e2, (e1 + e2) + c1),
-                (e1 + (c1 + e2), (e1 + e2) + c1),
-                (e1 + (e2 + c1), (e1 + e2) + c1),
-                ((c1 - e1) + e2, (e2 - e1) + c1),
-                ((e1 - c1) + e2, (e1 + e2) - c1),
-                (e1 + (c1 - e2), (e1 - e2) + c1),
-                (e1 + (e2 - c1), (e1 + e2) - c1),
-            ],
-            Sub: [
-                ((c1 + e1) - e2, (e1 - e2) + c1),
-                ((e1 + c1) - e2, (e1 - e2) + c1),
-                (e1 - (c1 + e2), (e1 - e2) - c1),
-                (e1 - (e2 + c1), (e1 - e2) - c1),
-                ((c1 - e1) - e2, c1 - (e1 + e2)),
-                ((e1 - c1) - e2, (e1 - e2) - c1),
-                (e1 - (c1 - e2), (e1 + e2) - c1),
-                (e1 - (e2 - c1), (e1 - e2) + c1),
-            ],
-            Multiply: [
-                ((c1 + e1) * c2, c1 * c2 + e1 * c2),
-                ((e1 + c1) * c2, e1 * c2 + c1 * c2),
-                (c1 * (c2 + e1), c1 * c2 + c1 * e1),
-                (c1 * (e1 + c2), c1 * e1 + c1 * c2),
-                ((c1 - e1) * c2, c1 * c2 - e1 * c2),
-                ((e1 - c1) * c2, e1 * c2 - c1 * c2),
-                (c1 * (c2 - e1), c1 * c2 - c1 * e1),
-                (c1 * (e1 - c2), c1 * e1 - c1 * c2),
-            ],
-        }
 
     def visit(self, obj):
         if obj in self.memo:
             return self.memo[obj]
-        ret = StmtExprRewriterWithBoundAnalyzer.visit(self, obj)
-        if isinstance(ret, (Add, Sub, Multiply)):
-            ret = self.post_visit_Add_Sub_Multiply(ret, self.patterns[ret.__class__])
-        elif isinstance(ret, FloorDiv):
-            ret = self.post_visit_FloorDiv(ret)
-        elif isinstance(ret, Mod):
-            ret = self.post_visit_Mod(ret)
-        self.memo[obj] = ret
-        return ret
-
-    def post_visit_Add_Sub_Multiply(self, e: Union[Add, Sub, Multiply], patterns):
-        for pattern, target in patterns:
-            mapping, msg = match(pattern, e)
-            if mapping:
-                mapping = {a: b for a, b in mapping.items() if a in self.args}
-                return rewrite(target, rewrite_map=mapping)
-        return e
+        cur = BoundAwareRewriter.visit(self, obj)
+        if isinstance(cur, FloorDiv):
+            cur = self.post_visit_FloorDiv(cur)
+        elif isinstance(obj, Mod):
+            cur = self.post_visit_Mod(cur)
+        self.memo[obj] = cur
+        return cur
 
     def post_visit_FloorDiv(self, e: FloorDiv):
         e1, c1, c2 = self.e1, self.c1, self.c2
         pattern = (e1 + c1) // c2
-        if e.a in self.var2value:
-            target = FloorDiv(self.var2value[e.a], e.b)
-        else:
-            target = e
-        matching, msg = match(pattern, target)
+        matching, msg = match(pattern, e)
         if matching:
             me1: Expr = matching[e1]
             candidates = self.bound[me1].candidate_set()
@@ -111,11 +66,7 @@ class TakeOutConstantRewriter(StmtExprRewriterWithBoundAnalyzer):
     def post_visit_Mod(self, e: Mod):
         e1, c1, c2 = self.e1, self.c1, self.c2
         pattern = (e1 + c1) % c2
-        if e.a in self.var2value:
-            target = FloorDiv(self.var2value[e.a], e.b)
-        else:
-            target = e
-        matching, msg = match(pattern, target)
+        matching, msg = match(pattern, e)
         if matching:
             me1: Expr = matching[e1]
             candidates = self.bound[me1].candidate_set()
@@ -124,35 +75,29 @@ class TakeOutConstantRewriter(StmtExprRewriterWithBoundAnalyzer):
                 mc2: Constant = matching[c2]
                 vc1, vc2 = mc1.value, mc2.value
                 for x in candidates:
-                    if (x + vc1) % vc2 != x % vc2:
+                    if (x + vc1) % vc2 != x % vc2 + vc1 % vc2:
                         break
                 else:
                     # eligible to simplify
-                    return me1 % mc2
+                    return me1 % mc2 + vc1 % vc2
         return e
 
-    def visit_LetStmt(self, stmt: LetStmt):
-        var = self.visit(stmt.var)
-        value = self.visit(stmt.value)
-        self.var2value[var] = value
-        return StmtExprRewriterWithBoundAnalyzer.visit_LetStmt(self, stmt)
 
-
-class TakeOutConstantPass(FunctionBodyPass):
+class TakeOutConstantPass(FunctionPass):
     def __init__(self):
         super().__init__()
         self.simplifier = BoundAwareSimplifier()
         self.rewriter = TakeOutConstantRewriter()
 
-    def process_body(self, stmt: Stmt) -> Stmt:
-        ret = self.simplifier(self.rewriter(stmt))
-        return ret
+    def process_func(self, func: Function) -> Function:
+        return self.simplifier(self.rewriter(func))
 
 
 def take_out_constant_pass():
     return RepeatFunctionPass(
         name='TakeOutConstantPass',
         passes=[
+            rule_based_simplify_pass(),
             TakeOutConstantPass()
         ],
         repeat_limit=10

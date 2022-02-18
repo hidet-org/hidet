@@ -1,3 +1,4 @@
+import os
 import pycuda.driver
 import pycuda.autoinit
 import subprocess
@@ -64,13 +65,13 @@ def device_synchronize():
 
 
 def lock_gpu_clock(clock: int):
-    command = f'sudo nvidia-smi --lock-gpu-clocks={clock}'
+    command = f'sudo -S nvidia-smi --lock-gpu-clocks={clock}'
     print(f"Running '{command}'...")
     subprocess.run(command.split(), check=True)
 
 
 def reset_gpu_clock():
-    command = 'sudo nvidia-smi --reset-gpu-clocks'
+    command = 'sudo -S nvidia-smi --reset-gpu-clocks'
     print(f"Running '{command}'")
     subprocess.run(command.split(), check=True)
 
@@ -88,13 +89,13 @@ def query_gpu_max_clock() -> int:
 
 
 def lock_memory_clock(clock: int):
-    command = f'sudo nvidia-smi --lock-memory-clocks={clock}'
+    command = f'sudo -S nvidia-smi --lock-memory-clocks={clock}'
     print(f"Running '{command}'...")
     subprocess.run(command.split(), check=True)
 
 
 def reset_memory_clock():
-    command = 'sudo nvidia-smi --reset-memory-clocks'
+    command = 'sudo -S nvidia-smi --reset-memory-clocks'
     print(f"Running '{command}'")
     subprocess.run(command.split(), check=True)
 
@@ -116,18 +117,19 @@ def query_persistent_mode() -> bool:
     return result.returncode == 0
 
 
-def turn_on_persistent_mode() -> int:
+def turn_on_persistent_mode():
     result = subprocess.run('nvidia-smi -pm 1'.split(), stdin=PIPE, stdout=PIPE)
     if result.returncode != 0:
-        # the persistent mode is disabled, use sudo to turn it on, passwd is required from shell
-        command = 'sudo nvidia-smi -pm 1'
+        # the persistent mode is disabled, use sudo -S to turn it on, passwd is required from shell
+        command = 'sudo -S nvidia-smi -pm 1'
         print(f"Running '{command}' to turn on persistent mode...")
         subprocess.run(command.split(), check=True)
 
 
 class BenchmarkContext:
     def __enter__(self):
-        ratio = 0.8  # sm clock; to make result more stable (trying to avoid gpu throttle)
+        # sm clock; to make result more stable (trying to avoid gpu throttle)
+        ratio = self.get_bench_ratio()
         turn_on_persistent_mode()
         lock_gpu_clock(int(ratio * query_gpu_max_clock()))
         lock_memory_clock(query_memory_max_clock())
@@ -135,6 +137,15 @@ class BenchmarkContext:
     def __exit__(self, exc_type, exc_val, exc_tb):
         reset_memory_clock()
         reset_gpu_clock()
+
+    @staticmethod
+    def get_bench_ratio(default=0.8):
+        ratio = os.environ.get('HIDET_BENCH_RATIO')
+        if ratio:
+            ratio = float(ratio)
+        else:
+            ratio = default
+        return min(max(float(ratio), 0.1), 1.0)
 
 
 if __name__ == '__main__':
@@ -152,4 +163,5 @@ if __name__ == '__main__':
     print('out')
     print('current gpu clock:', query_gpu_current_clock())
     print('current memory clock:', query_memory_current_clock())
+    print(BenchmarkContext.get_bench_ratio())
 

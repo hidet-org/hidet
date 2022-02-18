@@ -4,7 +4,7 @@ from hidet.transforms import *
 
 def lower(ir_module: IRModule) -> IRModule:
     transforms = [
-        eliminate_dead_device_function_pass(),
+        # eliminate_dead_device_function_pass(),
         generate_packed_func_pass(),
         flatten_tensor_pass(),
 

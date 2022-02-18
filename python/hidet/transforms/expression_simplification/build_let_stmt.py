@@ -24,8 +24,12 @@ class BuildLetStmtRewriter(StmtExprRewriter):
     def __init__(self):
         super().__init__()
         self.exit_stack_list = []
-        self.exit_stack: contextlib.ExitStack = None
-        self.sb: StmtBuilder = None
+        self.exit_stack: Optional[contextlib.ExitStack] = None
+        self.sb: Optional[StmtBuilder] = None
+
+    def visit(self, obj):
+        self.memo.clear()  # do not cache
+        return StmtExprRewriter.visit(self, obj)
 
     def build(self, stmt):
         self.sb = StmtBuilder()
@@ -37,7 +41,7 @@ class BuildLetStmtRewriter(StmtExprRewriter):
         if isinstance(e, (Add, Sub, Multiply, FloorDiv, Mod)):
             return self.exit_stack.enter_context(self.sb.let('v', StmtExprRewriter.visit_Binary(self, e)))
         else:
-            return e
+            return StmtExprRewriter.visit_Binary(self, e)
 
     def visit_Let(self, e: Let):
         self.exit_stack.enter_context(self.sb.let(e.var, self(e.value)))

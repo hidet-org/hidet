@@ -27,6 +27,13 @@ class FlattenSeqStmtPass(FunctionBodyPass):
         return FlattenSeqStmtRewriter()(stmt)
 
 
+def join_stmt(lhs: Stmt, rhs: Stmt):
+    if isinstance(lhs, LetStmt):
+        return LetStmt(lhs.var, lhs.value, join_stmt(lhs.body, rhs))
+    else:
+        return SeqStmt([lhs, rhs])
+
+
 class ChainSeqStmtUsingLetStmtRewriter(StmtRewriter):
     def visit_SeqStmt(self, stmt: SeqStmt):
         seq = [self(s) for s in stmt.seq]
@@ -34,13 +41,14 @@ class ChainSeqStmtUsingLetStmtRewriter(StmtRewriter):
             return stmt
         body = seq[-1]
         for s in reversed(seq[:-1]):
-            if isinstance(s, LetStmt):
-                body = LetStmt(s.var, s.value, SeqStmt([s.body, body]))
-            else:
-                if isinstance(body, SeqStmt):
-                    body.append_first(s)
-                else:
-                    body = SeqStmt([s, body])
+            body = join_stmt(s, body)
+            # if isinstance(s, LetStmt):
+            #     body = LetStmt(s.var, s.value, SeqStmt([s.body, body]))
+            # else:
+            #     if isinstance(body, SeqStmt):
+            #         body.append_first(s)
+            #     else:
+            #         body = SeqStmt([s, body])
         if isinstance(body, SeqStmt) and same_list(body.seq, stmt.seq):
             return stmt
         else:

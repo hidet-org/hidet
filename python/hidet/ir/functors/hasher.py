@@ -13,7 +13,7 @@ class ExprHash(ExprFunctor, TypeFunctor):
         if isinstance(e, (str, float, int)):
             return HashSum(e)
         elif isinstance(e, (list, tuple)):
-            return HashSum((self(v) for v in e))
+            return HashSum(tuple(self(v) for v in e))
         elif isinstance(e, Expr):
             return ExprFunctor.visit(self, e)
         else:

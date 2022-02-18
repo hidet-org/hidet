@@ -77,6 +77,13 @@ class Expr(Node):
         from hidet.ir.functors import astext
         return str(astext(self))
 
+    def is_const(self):
+        return isinstance(self, Constant)
+
+    def const(self) -> 'Constant':
+        assert isinstance(self, Constant)
+        return self
+
 
 class BinaryOp(Expr):
     def __init__(self, a, b):

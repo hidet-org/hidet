@@ -1,6 +1,6 @@
 from .base import ExprFunctor, ExprVisitor, ExprRewriter
 from .base import StmtFunctor, StmtVisitor, StmtRewriter
-from .base import StmtExprFunctor, StmtExprVisitor, StmtExprRewriter, TypeFunctor, StmtExprRewriterWithBoundAnalyzer
+from .base import StmtExprFunctor, StmtExprVisitor, StmtExprRewriter, TypeFunctor, FuncStmtExprRewriter, FuncStmtExprVisitor, BoundAwareRewriter
 from .base import same_list
 from .type_infer import infer_type
 from .util_functors import rewrite, collect, collect_free_vars

@@ -5,7 +5,7 @@ from typing import Optional, List, Set, Dict, Union, Mapping
 
 from hidet.ir.expr import Expr, Var, Add, Sub, Multiply, FloorDiv, Mod, Constant
 from hidet.ir.func import Function
-from hidet.ir.functors import StmtExprVisitor
+from hidet.ir.functors import FuncStmtExprVisitor
 from hidet.ir.primitives import thread_idx, block_idx
 from hidet.ir.stmt import Stmt, LetStmt, ForStmt
 from hidet.ir.task import Grid, ThreadBlock, Warp, Thread, Host
@@ -13,7 +13,7 @@ from hidet.ir.task import Grid, ThreadBlock, Warp, Thread, Host
 
 class BoundInfo:
     _max_num_candidates = 1024
-    _max_compute_iters = 256
+    _max_compute_iters = 128 * 128
 
     def __init__(self, value=None, candidates=None, min_value=None, max_value=None):
         # three level of bound information:
@@ -161,7 +161,7 @@ class BoundInfo:
             return 'Any'
 
 
-class BoundAnalyzer(StmtExprVisitor):
+class BoundAnalyzer(FuncStmtExprVisitor):
     # we only infer bound based on variables from LetStmt and ForStmt, and the constants.
     # so the local variable with AssignStmt is not used infer bound.
     op_dict = {
@@ -171,18 +171,34 @@ class BoundAnalyzer(StmtExprVisitor):
         FloorDiv: operator.floordiv,
         Mod: operator.mod
     }
-    default_bound = {
-        thread_idx(): BoundInfo(min_value=0, max_value=1023),
-        block_idx(): BoundInfo(min_value=0, max_value=2**31-1)
-    }
 
     def __init__(self, var2bound: Dict[Expr, BoundInfo] = None):
         # please give the bound of external variable such as threadIdx.x using var2bound parameter
         super().__init__()
         self.bound: Dict[Expr, BoundInfo] = defaultdict(BoundInfo)
-        self.bound.update(BoundAnalyzer.default_bound)
         if var2bound:
             self.bound.update(var2bound)
+
+    def visit_Function(self, func: Function):
+        worker = func.get_attr('worker')
+        if isinstance(worker, Grid):
+            self.bound[thread_idx()] = BoundInfo(min_value=0, max_value=int(worker.block_dim)-1)
+            self.bound[block_idx()] = BoundInfo(min_value=0, max_value=int(worker.grid_dim)-1)
+        elif isinstance(worker, ThreadBlock):
+            self.bound[thread_idx()] = BoundInfo(min_value=0, max_value=int(worker.block_dim)-1)
+            self.bound[block_idx()] = BoundInfo(value=0)
+        elif isinstance(worker, Warp):
+            # for warp worker, it can only get the lane id from thread idx, which is between 0...31
+            self.bound[thread_idx()] = BoundInfo(min_value=0, max_value=31)
+            self.bound[block_idx()] = BoundInfo(value=0)
+        elif isinstance(worker, Thread):
+            self.bound[thread_idx()] = BoundInfo(min_value=0, max_value=0)
+            self.bound[block_idx()] = BoundInfo(value=0)
+        elif isinstance(worker, Host):
+            pass
+        else:
+            raise NotImplementedError()
+        self.visit(func.body)
 
     def combine(self, e: Union[Add, Sub, Multiply, FloorDiv, Mod]):
         self.visit(e.a)

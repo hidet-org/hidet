@@ -7,9 +7,12 @@ from hidet.implement.cuda import CudaBlockStaticMatmulSoftPipeLdgWbImplementer
 from hidet.implement.cuda import CudaGridSplitImplementer, CudaGridNaiveImplementer, CudaWarpTransfer2dImplementer, CudaWarpMmaImplementer, CudaWarpFillValueImplementer
 from hidet.implement.cuda import CudaThreadNaiveImplementer, CudaBlockNaiveImplementer
 from hidet.implement.resolve import random_resolve, brute_force_resolve
-from hidet.ir.task import Grid, Host
+from hidet.ir.task import Grid, Host, ThreadBlock
 from hidet.runtime.value import TensorValue, randn, empty, scalar, zeros, full
 from hidet.tasks.nn import matmul
+from hidet.ir.builders import FunctionBuilder, StmtBuilder
+from hidet.ir.primitives import thread_idx
+
 
 
 def print_latencies(name, latencies):
@@ -23,7 +26,7 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, prog
         repeat = 1
     workloads = [
         (1024, 1024, 1024),
-        # (2048, 2304, 768),
+        (2048, 2304, 768),
         # (1664, 768, 2304),
     ]
     baselines = [
@@ -152,3 +155,24 @@ def verify(use_rand=True):
 if __name__ == '__main__':
     # verify()
     benchmark(use_nsight_compute=False)
+
+
+    # from hidet.ir import *
+    # from hidet.ir.layout import *
+    # # ((((((threadIdx.x / 32) / 2) * 16) + (((((threadIdx.x % 32) / 16) * 2) + ((threadIdx.x % 32) % 2)) * 4)) + 3) % 16)
+    # with FunctionBuilder('test', attrs={'worker': ThreadBlock(block_dim=256)}) as fb:
+    #     arr = Var('arr', TensorType(scope='register', dtype='float32', layout=DataLayout.row_major([100])))
+    #     fb.extend_local_vars([arr])
+    #     sb = StmtBuilder()
+    #     with sb.let('v', thread_idx()) as v:
+    #         # sb += BufferStoreStmt(arr, [((((((v // 32) // 2) * 16) + (((((v % 32) // 16) * 2) + ((v % 32) % 2)) * 4)) + 3) % 16)], convert(0.0))
+    #         # sb += BufferStoreStmt(arr, [(((v * 32) + (v % 32)) // 32)], convert(0.0))
+    #         # sb += BufferStoreStmt(arr, [(((v // 64) * 16) // 16)], convert(0.0))
+    #         sb += BufferStoreStmt(arr, [((((((((((v / (32 * 2)) % 4) * 32) + ((0 * 4) + (((((((v % 32) / 1) % 32) / 16) * 2) + ((((v % 32) / 1) % 32) % 2)) * 4))) + 0) / (4 * 4)) % 2) * 2) + ((((((((v / (32 * 1)) % 2) * 64) + ((8 * 4) + ((((((v % 32) / 1) % 32) / 2) % 8) * 4))) + 2) / (4 * 8)) % 2) * 1)) + 0)], convert(0.0))
+    #
+    #     fb.set_body(sb.finish())
+    # ir_module = IRModule()
+    # ir_module.add('test', fb.get())
+    # module = build(ir_module, output_dir='./outs/test')
+    # with open('./outs/test/source.cu', 'r') as f:
+    #     print("\n".join(f.readlines()))

@@ -116,6 +116,11 @@ class MatchContext:
                 raise NotMatchedError(self.pattern, self.target, msg)
         if self.pattern in self.matched:
             if self.matched[self.pattern] is not self.target:
+                # we think the constant with the same value as the same object
+                lhs, rhs = self.matched[self.pattern], self.target
+                if isinstance(lhs, Constant) and isinstance(rhs, Constant):
+                    if lhs.value == rhs.value:
+                        return
                 msg = "Try to match {} and {}, but the prior one has been matched to another target {}".format(type(self.pattern), type(self.target), type(self.matched[self.pattern]))
                 raise NotMatchedError(self.pattern, self.target, msg)
             else:
