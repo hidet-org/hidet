@@ -1,4 +1,4 @@
-from typing import Mapping
+from typing import Mapping, Callable, Any
 
 from hidet.ir import TensorInput, ScalarInput, ReduceCompute, TensorCompute
 from hidet.ir.builders import StmtBuilder
@@ -7,7 +7,7 @@ from hidet.ir.dialects.lowlevel import Cast, Dereference
 from hidet.ir.expr import *
 from hidet.ir.func import IRModule
 from hidet.ir.task import Worker, ThreadBlock, Warp
-from hidet.ir.functors import ExprFunctor, infer_type, rewrite
+from hidet.ir.functors import ExprFunctor, infer_type, rewrite, ExprRewriter
 from hidet.ir.stmt import ForStmt, BufferStoreStmt, AssignStmt, SeqStmt
 from hidet.ir.builders import TaskBuilder
 
@@ -27,6 +27,23 @@ def transfer_task(name: str, src_type: TensorType, dst_type: TensorType, worker:
     return tb
 
 
+def predicated_transfer_task(name: str, cond: Callable, src_type: TensorType, dst_type: TensorType, worker: Worker, parent_module: IRModule, default_value=None) -> TaskBuilder:
+    if default_value is None:
+        default_value = convert(0.0)
+    if isinstance(worker, (ThreadBlock, Warp)) and worker.task_layout is not None:
+        shape = worker.task_layout.task_shape
+    else:
+        shape = dst_type.shape
+
+    with TaskBuilder(name, worker, parent_module) as tb:
+        src = TensorInput('src', dtype=src_type.scalar_type)
+        dst = compute('dst', shape=shape, fcompute=lambda *args: if_then_else(cond(*args), src.__getitem__(args), default_value))
+        tb.set_computation(dst)
+        tb.append_param(src, src_type)
+        tb.append_param(dst, dst_type)
+    return tb
+
+
 def init_task(name: str, dst_type: TensorType, init_value: Union[Expr, PyScalar], worker: Worker, parent_module: IRModule) -> TaskBuilder:
     if isinstance(worker, (ThreadBlock, Warp)) and worker.task_layout is not None:
         shape = worker.task_layout.task_shape
@@ -40,7 +57,7 @@ def init_task(name: str, dst_type: TensorType, init_value: Union[Expr, PyScalar]
     return tb
 
 
-class LoopExpander(ExprFunctor):
+class LoopExpander(ExprRewriter):
     def __init__(self, input_map):
         super().__init__()
         self.sb = StmtBuilder()
@@ -50,45 +67,6 @@ class LoopExpander(ExprFunctor):
     def expand(self, e):
         value = self.visit(e)
         return self.sb.finish(), value, self.new_buffer_map
-
-    def visit_binary(self, e: BinaryOp):
-        return e.__class__(self(e.a), self(e.b))
-
-    def visit_Add(self, e: Add):
-        return self.visit_binary(e)
-
-    def visit_Sub(self, e: Sub):
-        return self.visit_binary(e)
-
-    def visit_Multiply(self, e: Multiply):
-        return self.visit_binary(e)
-
-    def visit_Div(self, e: Div):
-        return self.visit_binary(e)
-
-    def visit_Mod(self, e: Mod):
-        return self.visit_binary(e)
-
-    def visit_FloorDiv(self, e: FloorDiv):
-        return self.visit_binary(e)
-
-    def visit_LessThan(self, e: LessThan):
-        return self.visit_binary(e)
-
-    def visit_Equal(self, e: Equal):
-        return self.visit_binary(e)
-
-    def visit_TensorElement(self, e: TensorElement):
-        return TensorElement(self(e.base), [self(v) for v in e.indices])
-
-    def visit_Call(self, e: Call):
-        return Call(e.func_var, [self.visit(arg) for arg in e.args])
-
-    def visit_Var(self, e: Var):
-        return e
-
-    def visit_Constant(self, e: Constant):
-        return e
 
     def visit_TensorInput(self, e: TensorInput):
         return self.input_map[e]
@@ -148,12 +126,6 @@ class LoopExpander(ExprFunctor):
                 self.sb += AssignStmt(input_var, acc)
 
             return acc
-
-    def visit_Cast(self, e: Cast):
-        return Cast(self(e.expr), e.target_type)
-
-    def visit_Dereference(self, e: Dereference):
-        return Dereference(self(e.expr))
 
 
 def expand_loop(expr: Expr, input_map: Mapping[Union[ScalarInput, TensorInput, Expr], Var]):

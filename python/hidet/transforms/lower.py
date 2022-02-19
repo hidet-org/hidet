@@ -1,5 +1,6 @@
 from hidet.ir.func import IRModule
 from hidet.transforms import *
+from hidet.utils.py import Timer, COLORS
 
 
 def lower(ir_module: IRModule) -> IRModule:
@@ -20,8 +21,10 @@ def lower(ir_module: IRModule) -> IRModule:
         import_primitive_functions_pass()
     ]
 
-    for transform in transforms:
-        ir_module = transform(ir_module)
+    with Timer() as timer:
+        for transform in transforms:
+            ir_module = transform(ir_module)
+    print(f'Compilation time {COLORS.OKGREEN}{timer.elapsed_seconds():.3f}{COLORS.ENDC} seconds')
 
     return ir_module
 

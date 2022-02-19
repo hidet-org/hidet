@@ -1,6 +1,7 @@
 from hidet.ir.dialects.lowlevel import Reference, Address, ReferenceType, TensorPointerType, Dereference, Cast, VoidType, PointerType
-from hidet.ir.expr import Call, TensorElement, Not, Or, And, Constant, Var, Let, Equal, LessThan, FloorDiv, Mod, Div, Multiply, Sub, Add, TensorType, ScalarType, Expr
-from hidet.ir.functors import ExprFunctor, TypeFunctor
+from hidet.ir.node import Node
+from hidet.ir.expr import Call, TensorElement, Not, Or, And, Constant, Var, Let, Equal, LessThan, FloorDiv, Mod, Div, Multiply, Sub, Add, TensorType, ScalarType, Expr, IfThenElse
+from hidet.ir.functors import ExprFunctor, TypeFunctor, NodeFunctor
 from hidet.ir.type import TypeNode
 from hidet.ir.utils.hash_sum import HashSum
 
@@ -10,19 +11,22 @@ class ExprHash(ExprFunctor, TypeFunctor):
         super().__init__()
 
     def visit(self, e):
+        if e in self.memo:
+            return self.memo[e]
         if isinstance(e, (str, float, int)):
-            return HashSum(e)
-        elif isinstance(e, (list, tuple)):
-            return HashSum(tuple(self(v) for v in e))
-        elif isinstance(e, Expr):
-            return ExprFunctor.visit(self, e)
-        elif isinstance(e, TypeNode):
-            return TypeFunctor.visit(self, e)
+            ret = HashSum(e)
+        elif isinstance(e, tuple):
+            ret = HashSum(tuple(self(v) for v in e))
+        elif isinstance(e, (Expr, TypeNode)):
+            ret = NodeFunctor.visit(self, e)
         else:
             # for stmt/func/...
-            return HashSum(e)
+            ret = HashSum(e)
+        self.memo[e] = ret
+        return ret
 
     def hash(self, expr):
+        self.memo.clear()
         return self(expr)
 
     def visit_Var(self, e: Var):
@@ -57,6 +61,9 @@ class ExprHash(ExprFunctor, TypeFunctor):
 
     def visit_Equal(self, e: Equal):
         return (self(e.a) & self(e.b)) + '=='
+
+    def visit_IfThenElse(self, e: IfThenElse):
+        return self(e.cond) + self(e.then_expr) + self(e.else_expr) + '?:'
 
     def visit_And(self, e: And):
         return (self(e.a) & self(e.b)) + '&&'

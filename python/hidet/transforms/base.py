@@ -71,7 +71,7 @@ class RepeatFunctionPass(FunctionPass):
             if orig_func is func:
                 # print(f"Exceeded: {i} {self.name} on {func.name}")
                 return func
-        # print(f"Exceeded: {i} {self.name} on {func.name}")
+        print(f"Exceeded: {i} {self.name} on {func.name}")
         return func
 
 

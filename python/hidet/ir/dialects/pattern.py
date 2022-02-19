@@ -169,6 +169,7 @@ class PatternMatcher:
                 LessThan: PatternMatcher.match_Binary,
                 Equal: PatternMatcher.match_Binary,
                 TensorElement: PatternMatcher.match_TensorElement,
+                IfThenElse: PatternMatcher.match_IfThenElse,
                 Call: PatternMatcher.match_Call,
                 Var: PatternMatcher.match_Var,
                 Constant: PatternMatcher.match_Constant,
@@ -269,6 +270,12 @@ class PatternMatcher:
         with ExitStack() as stack:
             stack.enter_context(self.match(pattern.base, target.base))
             stack.enter_context(self.match(pattern.indices, target.indices))
+
+    def match_IfThenElse(self, pattern: IfThenElse, target: IfThenElse):
+        with ExitStack() as stack:
+            stack.enter_context(self.match(pattern.cond, target.cond))
+            stack.enter_context(self.match(pattern.then_expr, target.then_expr))
+            stack.enter_context(self.match(pattern.else_expr, target.else_expr))
 
     def match_Call(self, pattern: Call, target: Call):
         with ExitStack() as stack:

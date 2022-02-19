@@ -11,7 +11,7 @@ class NodeFunctor:
         if not hasattr(self.__class__, 'dispatch_table'):
             self.setup_dispatch_table()
 
-    def __call__(self, node: Node):
+    def __call__(self, node: Any):
         return self.visit(node)
 
     def visit(self, node: Node):
@@ -59,6 +59,7 @@ class ExprFunctor(NodeFunctor):
             Or: cls.visit_Or,
             Not: cls.visit_Not,
             TensorElement: cls.visit_TensorElement,
+            IfThenElse: cls.visit_IfThenElse,
             Call: cls.visit_Call,
             Let: cls.visit_Let,
             Var: cls.visit_Var,
@@ -114,6 +115,9 @@ class ExprFunctor(NodeFunctor):
         raise NotImplementedError()
 
     def visit_TensorElement(self, e: TensorElement):
+        raise NotImplementedError()
+
+    def visit_IfThenElse(self, e: IfThenElse):
         raise NotImplementedError()
 
     def visit_Cast(self, e: Cast):
@@ -217,6 +221,11 @@ class ExprVisitor(ExprFunctor):
         self.visit(e.base)
         for idx in e.indices:
             self.visit(idx)
+
+    def visit_IfThenElse(self, e: IfThenElse):
+        self.visit(e.cond)
+        self.visit(e.then_expr)
+        self.visit(e.else_expr)
 
     def visit_Call(self, e: Call):
         self.visit(e.func_var)
@@ -333,6 +342,15 @@ class ExprRewriter(ExprFunctor):
             return e
         else:
             return TensorElement(base, indices)
+
+    def visit_IfThenElse(self, e: IfThenElse):
+        cond = self(e.cond)
+        then_expr = self(e.then_expr)
+        else_expr = self(e.else_expr)
+        if cond is e.cond and then_expr is e.then_expr and else_expr is e.else_expr:
+            return e
+        else:
+            return IfThenElse(cond, then_expr, else_expr)
 
     def visit_Cast(self, e: Cast):
         expr = self(e.expr)
@@ -652,16 +670,19 @@ class FuncStmtExprRewriter(StmtExprRewriter):
 
 class BoundAwareRewriter(FuncStmtExprRewriter):
     def __init__(self):
-        from hidet.ir.analyzers import BoundAnalyzer
+        from hidet.ir.analyzers import BoundAnalyzer, BoundInfo
         super().__init__()
         self.analyzer = BoundAnalyzer()
-        self.bound = self.analyzer.bound
+        self.bound: Dict[Expr, BoundInfo] = self.analyzer.bound
 
     def visit(self, obj):
         if obj in self.memo:
             return self.memo[obj]
         self.analyzer.visit(obj)
-        ret = FuncStmtExprRewriter.visit(self, obj)
+        if isinstance(obj, Expr) and self.bound[obj].value is not None:
+            ret = convert(self.bound[obj].value)
+        else:
+            ret = FuncStmtExprRewriter.visit(self, obj)
         return ret
 
 

@@ -3,4 +3,4 @@ from . import cuda
 from . import namer
 from . import py
 
-from .py import prod, Timer
+from .py import prod, Timer, repeat_until_converge

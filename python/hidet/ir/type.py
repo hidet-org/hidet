@@ -1,4 +1,4 @@
-from typing import Sequence, Optional, Union, List
+from typing import Sequence, Optional, Union, List, Tuple
 
 from hidet import ir
 from hidet.ir.node import Node
@@ -42,6 +42,7 @@ class TensorType(TypeNode):
                  dtype: Optional[Union[ScalarType, str]] = None,
                  shape: Optional[Sequence[Int]] = None,
                  layout: Optional[Union[Sequence[Int], 'DataLayout']] = None):
+        from hidet.ir.expr import convert
         from hidet.ir.layout import DataLayout, StridesLayout
         if isinstance(scope, str):
             scope = Scope(scope)
@@ -59,7 +60,7 @@ class TensorType(TypeNode):
 
         self.scope: Scope = scope
         self.scalar_type: ScalarType = dtype
-        self.shape: List[Expr] = shape
+        self.shape: Tuple[Expr] = convert(shape)
         self.layout: DataLayout = layout
 
     def storage_bytes(self) -> Expr:

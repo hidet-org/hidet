@@ -49,6 +49,17 @@ class DictCustomKey(MutableMapping, dict):
         return dict.__setitem__(self, self.hash_func(key), value)
 
 
+def repeat_until_converge(func, obj, limit=None):
+    i = 0
+    while True:
+        i += 1
+        orig_obj = obj
+        obj = func(obj)
+        if obj is orig_obj:
+            return obj
+        if limit is not None and i >= limit:
+            return obj
+
 
 class COLORS:
     HEADER = '\033[95m'

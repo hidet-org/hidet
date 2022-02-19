@@ -1,3 +1,4 @@
+from .base import NodeFunctor
 from .base import ExprFunctor, ExprVisitor, ExprRewriter
 from .base import StmtFunctor, StmtVisitor, StmtRewriter
 from .base import StmtExprFunctor, StmtExprVisitor, StmtExprRewriter, TypeFunctor, FuncStmtExprRewriter, FuncStmtExprVisitor, BoundAwareRewriter

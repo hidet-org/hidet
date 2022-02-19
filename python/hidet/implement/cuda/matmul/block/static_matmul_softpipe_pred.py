@@ -15,7 +15,7 @@ from hidet.ir.primitives import syncthreads, thread_idx
 from hidet.ir.stmt import LetStmt, ForStmt, AssignStmt
 from hidet.ir.task import Task, ThreadBlock, Warp
 from hidet.ir.type import scalar_type, TensorType, Scope
-from hidet.implement.common import transfer_task, init_task
+from hidet.implement.common import transfer_task, init_task, predicated_transfer_task
 
 
 class MatmulSetting:
@@ -110,8 +110,8 @@ matmul_settings = [MatmulSetting()]
 # )]
 
 
-@register_impl('cuda_block_static_matmul_soft_pipe_ldg_wb_implementer')
-class CudaBlockStaticMatmulSoftPipeLdgWbImplementer(Implementer):
+@register_impl('cuda_block_static_matmul_soft_pipe_pred_implementer')
+class CudaBlockStaticMatmulSoftPipePredImplementer(Implementer):
     def __init__(self):
         # const definition
         self.block_size = any_const_int()
@@ -237,8 +237,10 @@ class CudaBlockStaticMatmulSoftPipeLdgWbImplementer(Implementer):
 
         # define subtasks
         c_init = init_task(f'{task.name}.c.init', dst_type=regs_C_type, init_value=convert(0.0), worker=ThreadBlock(task_layout=setting.ab2c_layout), parent_module=ir_module)
-        a_g2r = transfer_task(f'{task.name}.a.g2r.block', src_type=A_type, dst_type=regs_A_ldg_type, worker=ThreadBlock(task_layout=setting.a_g2r_r2s_layout), parent_module=ir_module)
-        b_g2r = transfer_task(f'{task.name}.b.g2r.block', src_type=B_type, dst_type=regs_B_ldg_type, worker=ThreadBlock(task_layout=setting.b_g2r_r2s_layout), parent_module=ir_module)
+        # a_g2r = transfer_task(f'{task.name}.a.g2r.block', src_type=A_type, dst_type=regs_A_ldg_type, worker=ThreadBlock(task_layout=setting.a_g2r_r2s_layout), parent_module=ir_module)
+        # b_g2r = transfer_task(f'{task.name}.b.g2r.block', src_type=B_type, dst_type=regs_B_ldg_type, worker=ThreadBlock(task_layout=setting.b_g2r_r2s_layout), parent_module=ir_module)
+        a_g2r = predicated_transfer_task(f'{task.name}.a.g2r.block', cond=lambda i, j: True, src_type=A_type, dst_type=regs_A_ldg_type, worker=ThreadBlock(task_layout=setting.a_g2r_r2s_layout), parent_module=ir_module)
+        b_g2r = predicated_transfer_task(f'{task.name}.b.g2r.block', cond=lambda i, j: True, src_type=B_type, dst_type=regs_B_ldg_type, worker=ThreadBlock(task_layout=setting.b_g2r_r2s_layout), parent_module=ir_module)
         a_r2s = transfer_task(f'{task.name}.a_r2s.block', src_type=regs_A_ldg_type, dst_type=smem_A_type, worker=ThreadBlock(task_layout=setting.a_g2r_r2s_layout), parent_module=ir_module)
         b_r2s = transfer_task(f'{task.name}.b_r2s.block', src_type=regs_B_ldg_type, dst_type=smem_B_type, worker=ThreadBlock(task_layout=setting.b_g2r_r2s_layout), parent_module=ir_module)
         a_s2r = transfer_task(f'{task.name}.a.s2r.block', src_type=smem_A_type, dst_type=regs_A_type, worker=ThreadBlock(task_layout=setting.a_s2r_layout), parent_module=ir_module)

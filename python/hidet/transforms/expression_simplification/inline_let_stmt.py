@@ -13,7 +13,7 @@ class LetVarRefAnalyzer(StmtExprVisitor):
         self.usage_count = None
         self.var2value = None
 
-    def analyze(self, expr) -> Mapping[Expr, int]:
+    def analyze(self, expr):
         self.usage_count = defaultdict(int)
         self.var2value = {}
         self.visit(expr)
@@ -78,9 +78,12 @@ class InlineNaiveLetStmtPass(FunctionBodyPass):
 
 
 def inline_let_stmt_pass(inline_factor=1, inline_all=False) -> Pass:
-    return RepeatFunctionPass(
-        name='InlineNaiveLetStmtPass',
-        passes=[
-            InlineNaiveLetStmtPass(inline_factor, inline_all)
-        ],
-        repeat_limit=10)
+    if inline_all:
+        return InlineNaiveLetStmtPass(inline_factor, inline_all)
+    else:
+        return RepeatFunctionPass(
+            name='InlineLetStmtPass',
+            passes=[
+                InlineNaiveLetStmtPass(inline_factor, inline_all)
+            ],
+            repeat_limit=10)

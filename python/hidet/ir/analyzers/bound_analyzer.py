@@ -82,11 +82,11 @@ class BoundInfo:
             else:
                 raise NotImplementedError()
 
-    def candidate_set(self) -> Optional[List]:
+    def candidate_set(self):
         if self.value is not None:
             return [self.value]
         elif self.candidates is not None:
-            return list(self.candidates)
+            return self.candidates
         else:
             return None
 

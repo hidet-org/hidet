@@ -1,3 +1,3 @@
 from . import block
 
-from .block import CudaBlockStaticMatmulNoPipeImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer
+from .block import CudaBlockStaticMatmulNoPipeImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer, CudaBlockStaticMatmulSoftPipePredImplementer

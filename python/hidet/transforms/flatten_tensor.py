@@ -24,7 +24,7 @@ class FlattenTensorPass(Pass):
                     assert isinstance(var.type.layout, (DataLayout, StridesLayout))
                     shape = [simplify_to_int(var.type.layout.size)]
                     var2tensor_type[var] = var.type
-                    flattened_vars.append(Var(var, TensorType(var.type.scope, var.type.scalar_type, shape, [1])))
+                    flattened_vars.append(Var(var.hint, TensorType(var.type.scope, var.type.scalar_type, shape, [1])))
                 else:
                     var2tensor_type[var] = var.type.tensor_type
                     flattened_vars.append(var)

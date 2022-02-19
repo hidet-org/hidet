@@ -219,10 +219,10 @@ class Constant(Expr):
 
 
 class IfThenElse(Expr):
-    def __init__(self, cond: Expr, then_expr: Expr, else_expr: Expr):
-        self.cond = cond
-        self.then_expr = then_expr
-        self.else_expr = else_expr
+    def __init__(self, cond: Union[Expr, PyScalar], then_expr: Expr, else_expr: Expr):
+        self.cond = convert(cond)
+        self.then_expr = convert(then_expr)
+        self.else_expr = convert(else_expr)
 
 
 class Var(Expr):

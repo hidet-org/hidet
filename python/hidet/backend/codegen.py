@@ -208,6 +208,9 @@ class Codegen(StmtExprFunctor, TypeFunctor):
     def visit_TensorElement(self, e: TensorElement):
         return self(e.base) + doc_join(['[' + self(idx) + ']' for idx in e.indices], '')
 
+    def visit_IfThenElse(self, e: IfThenElse):
+        return '(' + self(e.cond) + ' ? ' + self(e.then_expr) + ' : ' + self(e.else_expr) + ')'
+
     def visit_Cast(self, e: Cast):
         return Text('(') + self.visit(e.target_type) + ')' + self(e.expr)
 
@@ -242,6 +245,9 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             launch_config = []
         param_doc = Text('(') + doc_join([self(arg) for arg in e.args], Text(', ')) + ')'
         return func_name + launch_config + param_doc
+
+    def visit_Let(self, e: Let):
+        raise ValueError("please run 'expand_let_expr' pass before codegen")
 
     def visit_Var(self, e: Var):
         return Text(self.namer.get_name(e))

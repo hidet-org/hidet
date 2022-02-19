@@ -42,13 +42,6 @@ class ChainSeqStmtUsingLetStmtRewriter(StmtRewriter):
         body = seq[-1]
         for s in reversed(seq[:-1]):
             body = join_stmt(s, body)
-            # if isinstance(s, LetStmt):
-            #     body = LetStmt(s.var, s.value, SeqStmt([s.body, body]))
-            # else:
-            #     if isinstance(body, SeqStmt):
-            #         body.append_first(s)
-            #     else:
-            #         body = SeqStmt([s, body])
         if isinstance(body, SeqStmt) and same_list(body.seq, stmt.seq):
             return stmt
         else:

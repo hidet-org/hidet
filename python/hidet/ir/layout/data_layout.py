@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from typing import Sequence, Union, List, Callable, Mapping, Dict
+from typing import Sequence, Union, List, Callable, Mapping, Dict, Tuple
 
 from hidet import ir
 from hidet.ir.node import Node
@@ -38,7 +38,7 @@ def concat_let_expr(var2value, body: Expr):
 # data layout
 class DataLayout(Node):
     def __init__(self, shape=None, size=None, global2local=None):
-        self.shape: List[Int] = shape
+        self.shape: Tuple[Int] = shape
         self.size: Int = size
         self.global2local: Callable[[Int, ...], Int] = global2local
 

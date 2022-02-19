@@ -2,7 +2,7 @@ from collections import defaultdict
 from hidet.ir.node import Node
 from hidet.ir.func import IRModule, Function
 from hidet.ir.type import ScalarType, TensorType, TypeNode
-from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div, Sub, Not, Or, And, Let
+from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div, Sub, Not, Or, And, Let, IfThenElse
 from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, LetStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt, BlackBoxStmt, AsmStmt
 from hidet.ir.task import Worker, Host, Grid, ThreadBlock, Warp, Thread
 from hidet.ir.dialects.compute import ReduceCompute, TensorCompute, TensorInput, ScalarInput
@@ -113,6 +113,9 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
 
     def visit_TensorElement(self, e: TensorElement):
         return self(e.base) + '[' + self(e.indices) + ']'
+
+    def visit_IfThenElse(self, e: IfThenElse):
+        return '(' + self(e.cond) + ' ? ' + self(e.then_expr) + ' : ' + self(e.else_expr) + ')'
 
     def visit_Call(self, e: Call):
         return Text(e.func_var.hint) + '(' + self(e.args) + ')'
