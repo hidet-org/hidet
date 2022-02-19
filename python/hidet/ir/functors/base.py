@@ -1,3 +1,4 @@
+from typing import Mapping
 from hidet.ir.type import *
 from hidet.ir.expr import *
 from hidet.ir.stmt import *
@@ -6,6 +7,19 @@ from hidet.ir.func import *
 from hidet.ir.dialects.compute import *
 from hidet.ir.dialects.lowlevel import *
 from hidet.ir.dialects.pattern import *
+
+
+class NodeFunctor:
+    def __init__(self):
+        self.dispatch_table = None
+
+    def dispatch(self, node: Node):
+        if self.dispatch_table is None:
+            self.setup_dispatch_table()
+        return self.dispatch_table[node.class_index()]
+
+    def setup_dispatch_table(self, mapping: Mapping[Type['Node'], Any]):
+        raise NotImplementedError()
 
 
 class ExprFunctor:

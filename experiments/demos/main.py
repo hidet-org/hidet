@@ -162,6 +162,8 @@ if __name__ == '__main__':
 
     # from hidet.ir import *
     # from hidet.ir.layout import *
+    # from hidet.ir.primitives import *
+    # from hidet.ir.task import *
     # # ((((((threadIdx.x / 32) / 2) * 16) + (((((threadIdx.x % 32) / 16) * 2) + ((threadIdx.x % 32) % 2)) * 4)) + 3) % 16)
     # with FunctionBuilder('test', attrs={'worker': ThreadBlock(block_dim=256)}) as fb:
     #     arr = Var('arr', TensorType(scope='register', dtype='float32', layout=DataLayout.row_major([100])))
@@ -171,7 +173,8 @@ if __name__ == '__main__':
     #         # sb += BufferStoreStmt(arr, [((((((v // 32) // 2) * 16) + (((((v % 32) // 16) * 2) + ((v % 32) % 2)) * 4)) + 3) % 16)], convert(0.0))
     #         # sb += BufferStoreStmt(arr, [(((v * 32) + (v % 32)) // 32)], convert(0.0))
     #         # sb += BufferStoreStmt(arr, [(((v // 64) * 16) // 16)], convert(0.0))
-    #         sb += BufferStoreStmt(arr, [((((((((((v / (32 * 2)) % 4) * 32) + ((0 * 4) + (((((((v % 32) / 1) % 32) / 16) * 2) + ((((v % 32) / 1) % 32) % 2)) * 4))) + 0) / (4 * 4)) % 2) * 2) + ((((((((v / (32 * 1)) % 2) * 64) + ((8 * 4) + ((((((v % 32) / 1) % 32) / 2) % 8) * 4))) + 2) / (4 * 8)) % 2) * 1)) + 0)], convert(0.0))
+    #         # sb += BufferStoreStmt(arr, [v + (convert(0) + convert(0))], convert(0.0))
+    #         sb += BufferStoreStmt(arr, [((0 + ((0 + ((1 * (v / 8)) * 128)) * 1024)) + (0 * 1))], convert(0.0))
     #
     #     fb.set_body(sb.finish())
     # ir_module = IRModule()

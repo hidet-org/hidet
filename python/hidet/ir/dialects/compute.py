@@ -1,4 +1,4 @@
-from typing import Union, Sequence
+from typing import Union, Sequence, Tuple, Optional
 from hidet.ir.type import ScalarType
 from hidet.ir.expr import Expr, Constant, convert, Var, var
 
@@ -32,19 +32,19 @@ class TensorCompute(ComputeNode):
             - 'sum': dest = dest + value
         """
         super().__init__(name)
-        self.shape = [convert(v) for v in shape]
-        self.axes = axes
-        self.value = value
-        self.accumulate = accumulate
+        self.shape: Tuple[Expr] = convert(shape)
+        self.axes: Tuple[Var] = convert(axes)
+        self.value: Expr = value
+        self.accumulate: Optional[str] = accumulate
 
 
 class ReduceCompute(ComputeNode):
     def __init__(self, value, shape, axis, reduce_type):
         super().__init__(None)
-        self.value = value
-        self.axis = axis
-        self.shape = shape
-        self.reduce_type = reduce_type
+        self.value: Expr = value
+        self.axis: Var = axis
+        self.shape: Tuple[Expr] = convert(shape)
+        self.reduce_type: str = reduce_type
 
     def init_const(self):
         if self.reduce_type == 'sum':

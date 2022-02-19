@@ -37,8 +37,7 @@ class GeneratePackedFuncPass(Pass):
         p_args = Var('args', PointerType(PointerType(VoidType())))
 
         host_params = [p_num_args, p_arg_types, p_args]
-        packed_body = SeqStmt([])
-        packed_body.append(AssertStmt(p_num_args == len(func.params), "expect {} args".format(len(func.params))))
+        packed_body = [AssertStmt(p_num_args == len(func.params), "expect {} args".format(len(func.params)))]
         grid_args = []
         # check parameters
         for idx, param in enumerate(func.params):
@@ -66,7 +65,7 @@ class GeneratePackedFuncPass(Pass):
 
         assert isinstance(func.name, str) and (func.name.endswith('.grid') or func.name.endswith('.host'))
         packed_name = func.name[:-5]
-        packed_func = Function(packed_name, host_params, packed_body, VoidType(), [], {'worker': Host(), 'packed_func': func_global_var})
+        packed_func = Function(packed_name, host_params, SeqStmt(packed_body), VoidType(), [], {'worker': Host(), 'packed_func': func_global_var})
         return packed_func
 
 

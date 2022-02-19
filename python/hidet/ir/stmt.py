@@ -22,7 +22,6 @@ class BufferStoreStmt(Stmt):
         self.buf = buf
         self.indices = convert(indices)
         self.value = convert(value)
-        assert isinstance(self.indices, list)
 
 
 class AssignStmt(Stmt):
@@ -74,7 +73,7 @@ class IfStmt(Stmt):
 
 
 class AssertStmt(Stmt):
-    def __init__(self, cond: Expr, msg: str):
+    def __init__(self, cond: Union[Expr, bool], msg: str):
         super().__init__()
         self.cond = convert(cond)
         self.msg = msg
@@ -98,7 +97,7 @@ class BlackBoxStmt(Stmt):
     def __init__(self, template_string: str, *exprs: Sequence[Expr]):
         super().__init__()
         self.template_string: str = template_string
-        self.exprs: List[Expr] = list(exprs)
+        self.exprs: Tuple[Expr] = convert(exprs)
         expect_args_num = self.template_string.count('{}')
         assert expect_args_num == len(exprs)
 
@@ -106,16 +105,9 @@ class BlackBoxStmt(Stmt):
 class SeqStmt(Stmt):
     def __init__(self, seq: List[Stmt]):
         super().__init__()
-        self.seq: List = seq
+        self.seq: Tuple[Stmt] = tuple(seq)
         for stmt in seq:
             assert isinstance(stmt, Stmt)
-
-    def append(self, stmt):
-        self.seq.append(stmt)
-        assert isinstance(stmt, Stmt)
-
-    def append_first(self, stmt):
-        self.seq.insert(0, stmt)
 
 
 def flatten(stmts):

@@ -1,5 +1,6 @@
+import contextlib
 import traceback
-from typing import Type, Tuple, Any, ContextManager
+from typing import Type, Tuple, Any, ContextManager, Callable
 from contextlib import ExitStack
 from hidet.ir.type import *
 from hidet.ir.expr import *
@@ -89,21 +90,18 @@ class NotMatchedError(Exception):
         self.target = target
 
 
+Matchable = Optional[Union[Node, tuple]]
+
+
 class MatchContext:
     def __init__(self, matcher: 'PatternMatcher', pattern: Node, target: Node):
+        self.matcher = matcher
         self.matched = matcher.matched
-        self.dispatch = matcher.match_func_dispatcher
-        self.pattern = pattern
-        self.target = target
+        self.dispatch = matcher.dispatch_table()
+        self.pattern: Matchable = pattern
+        self.target: Matchable = target
 
     def __enter__(self):
-        if isinstance(self.pattern, list):
-            # we do not cache list pattern because it is un-hashable
-            if not isinstance(self.target, (list, tuple)):
-                raise NotMatchedError(self.pattern, self.target)
-            # noinspection PyArgumentList
-            self.dispatch[self.pattern.__class__](self.pattern, self.target)
-            return
         if self.pattern is None:
             # None in pattern matches anything
             return
@@ -112,8 +110,8 @@ class MatchContext:
                 self.matched[self.pattern] = None
                 return
             else:
-                msg = 'Expect {} but the target is empty.'.format(type(self.pattern))
-                raise NotMatchedError(self.pattern, self.target, msg)
+                raise NotMatchedError(self.pattern, self.target, 'Expect non-None target')
+        assert not isinstance(self.target, list)
         if self.pattern in self.matched:
             if self.matched[self.pattern] is not self.target:
                 # we think the constant with the same value as the same object
@@ -121,30 +119,31 @@ class MatchContext:
                 if isinstance(lhs, Constant) and isinstance(rhs, Constant):
                     if lhs.value == rhs.value:
                         return
-                msg = "Try to match {} and {}, but the prior one has been matched to another target {}".format(type(self.pattern), type(self.target), type(self.matched[self.pattern]))
-                raise NotMatchedError(self.pattern, self.target, msg)
+                raise NotMatchedError(self.pattern, self.target, 'Can not match a pattern to two different targets')
             else:
                 return
 
-        self.matched[self.pattern] = self.target
-        if not isinstance(self.pattern, (PatternNode, list, tuple)):
+        if not isinstance(self.pattern, PatternNode):
             # put all pattern class that allow to accept other classes
-            # list, tuple accept each other
             PatternMatcher.check_type(self.pattern, self.target)
-        # noinspection PyArgumentList
-        self.dispatch[self.pattern.__class__](self.pattern, self.target)
+        try:
+            self.matched[self.pattern] = self.target
+            # noinspection PyArgumentList
+            self.dispatch[self.pattern.__class__](self.matcher, self.pattern, self.target)
+        except NotMatchedError as e:
+            # error from current <pattern, target>
+            del self.matched[self.pattern]
+            raise e
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_type == NotMatchedError:
+            # error from inner <pattern, target>
             # delete the matched target for pattern
             # do not return True, propagate the exception:
             #   1. it can be caught by pattern like UnionPattern to try other target,
             #   2. or, it will be caught by the of PatternMatcher.__call__, indicating failure of matching.
-            if not isinstance(self.pattern, list) and self.pattern is not None:
+            if self.pattern is not None:
                 del self.matched[self.pattern]
-
-
-Matchable = Optional[Union[Node, list, tuple]]
 
 
 class PatternMatcher:
@@ -154,57 +153,64 @@ class PatternMatcher:
         1 if successful, all sub-expressions of pattern have been set in self.matched[...]
         2 if failed, it acted like we have not call this function (we treat self.matched[v] = None and v not in self.matched as the same state)
     """
+    _dispatch_table: Dict[Type[Node], Callable[[Node, Node], None]] = None
+
+    @staticmethod
+    def dispatch_table():
+        if PatternMatcher._dispatch_table is None:
+            PatternMatcher._dispatch_table = {
+                # expr
+                Add: PatternMatcher.match_CommutativeBinary,
+                Sub: PatternMatcher.match_Binary,
+                Multiply: PatternMatcher.match_CommutativeBinary,
+                Div: PatternMatcher.match_Binary,
+                Mod: PatternMatcher.match_Binary,
+                FloorDiv: PatternMatcher.match_Binary,
+                LessThan: PatternMatcher.match_Binary,
+                Equal: PatternMatcher.match_Binary,
+                TensorElement: PatternMatcher.match_TensorElement,
+                Call: PatternMatcher.match_Call,
+                Var: PatternMatcher.match_Var,
+                Constant: PatternMatcher.match_Constant,
+                # compute dialect expr
+                ScalarInput: PatternMatcher.match_ScalarInput,
+                TensorInput: PatternMatcher.match_TensorInput,
+                TensorCompute: PatternMatcher.match_TensorCompute,
+                ReduceCompute: PatternMatcher.match_ReduceCompute,
+                # type
+                ScalarType: PatternMatcher.match_ScalarType,
+                TensorType: PatternMatcher.match_TensorType,
+                # scope
+                Scope: PatternMatcher.match_Scope,
+                # layout
+                TaskLayout: PatternMatcher.always_match,
+                DataLayout: PatternMatcher.match_DataLayout,
+                StridesLayout: PatternMatcher.match_StridesLayout,
+                # worker
+                Host: PatternMatcher.always_match,
+                Grid: PatternMatcher.match_Grid,
+                ThreadBlock: PatternMatcher.match_ThreadBlock,
+                Warp: PatternMatcher.match_Warp,
+                Thread: PatternMatcher.always_match,
+                # patterns
+                TaskPattern: PatternMatcher.match_TaskPattern,
+                AnyExpr: PatternMatcher.match_AnyPattern,
+                ReduceComputePattern: PatternMatcher.match_ReduceComputePattern,
+                TensorComputePattern: PatternMatcher.match_TensorComputePattern,
+                ScalarExprPattern: PatternMatcher.match_ScalarExprPattern,
+                UnionPattern: PatternMatcher.match_UnionPattern,
+                OptionalPattern: PatternMatcher.match_OptionalPattern,
+                ScalarTypePattern: PatternMatcher.match_ScalarTypePattern,
+                TensorTypePattern: PatternMatcher.match_TensorTypePattern,
+                # python containers
+                list: PatternMatcher.match_Sequence,
+                tuple: PatternMatcher.match_Sequence
+            }
+        return PatternMatcher._dispatch_table
 
     def __init__(self):
-        self.matched: Dict[Node, Optional[Node]] = {}
-        self.match_func_dispatcher = {
-            # expr
-            Add: self.match_Binary,
-            Sub: self.match_Binary,
-            Multiply: self.match_Binary,
-            Div: self.match_Binary,
-            Mod: self.match_Binary,
-            FloorDiv: self.match_Binary,
-            LessThan: self.match_Binary,
-            Equal: self.match_Binary,
-            TensorElement: self.match_TensorElement,
-            Call: self.match_Call,
-            Var: self.match_Var,
-            Constant: self.match_Constant,
-            # compute dialect expr
-            ScalarInput: self.match_ScalarInput,
-            TensorInput: self.match_TensorInput,
-            TensorCompute: self.match_TensorCompute,
-            ReduceCompute: self.match_ReduceCompute,
-            # type
-            ScalarType: self.match_ScalarType,
-            TensorType: self.match_TensorType,
-            # scope
-            Scope: self.match_Scope,
-            # layout
-            TaskLayout: self.always_match,
-            DataLayout: self.match_DataLayout,
-            StridesLayout: self.match_StridesLayout,
-            # worker
-            Host: self.always_match,
-            Grid: self.match_Grid,
-            ThreadBlock: self.match_ThreadBlock,
-            Warp: self.match_Warp,
-            Thread: self.always_match,
-            # patterns
-            TaskPattern: self.match_TaskPattern,
-            AnyExpr: self.match_AnyPattern,
-            ReduceComputePattern: self.match_ReduceComputePattern,
-            TensorComputePattern: self.match_TensorComputePattern,
-            ScalarExprPattern: self.match_ScalarExprPattern,
-            UnionPattern: self.match_UnionPattern,
-            OptionalPattern: self.match_OptionalPattern,
-            ScalarTypePattern: self.match_ScalarTypePattern,
-            TensorTypePattern: self.match_TensorTypePattern,
-            # python containers
-            list: self.match_Sequence,
-            tuple: self.match_Sequence
-        }
+        self.matched: Dict[Matchable, Optional[Any]] = {}
+        self.match_result_cache: Dict[Tuple[Matchable, Matchable], bool] = {}
 
     def __call__(self, pattern, target):
         self.matched.clear()
@@ -213,7 +219,7 @@ class PatternMatcher:
                 pass
             return self.matched, "Matched"
         except NotMatchedError as e:
-            return None, "Failed"
+            return None, str(e)
             # return None, str(traceback.format_exc())
 
     def match(self, pattern: Optional[Union[Node, Sequence]], target: Optional[Union[Node, Sequence]]) -> ContextManager:
@@ -226,14 +232,33 @@ class PatternMatcher:
         if not isinstance(target, expect_target_type):
             raise NotMatchedError(pattern, target, "Pattern expect target with type {}, but got type {}".format(expect_target_type, type(target)))
 
-    @staticmethod
-    def check_cond(pattern, target, cond, message=""):
+    def check_cond(self, pattern, target, cond, message=""):
         if not cond:
             raise NotMatchedError(pattern, target, message)
 
-    @staticmethod
-    def always_match(pattern, target):
+    def always_match(self, pattern, target):
         pass
+
+    def match_CommutativeBinary(self, pattern: BinaryOp, target: BinaryOp):
+        # return self.match_Binary(pattern, target)
+        try:
+            with ExitStack() as stack:
+                stack.enter_context(self.match(pattern.a, target.a))
+                stack.enter_context(self.match(pattern.b, target.b))
+        except NotMatchedError:
+            pass
+        else:
+            return
+        try:
+            with ExitStack() as stack:
+                stack.enter_context(self.match(pattern.a, target.b))
+                stack.enter_context(self.match(pattern.b, target.a))
+        except NotMatchedError:
+            pass
+        else:
+            return
+
+        raise NotMatchedError(pattern, target, "Commutative binary op has not matched")
 
     def match_Binary(self, pattern: BinaryOp, target: BinaryOp):
         with ExitStack() as stack:
@@ -284,8 +309,7 @@ class PatternMatcher:
             stack.enter_context(self.match(pattern.shape, target.shape))
             stack.enter_context(self.match(pattern.value, target.value))
 
-    @staticmethod
-    def match_DataLayout(pattern, target):
+    def match_DataLayout(self, pattern, target):
         if isinstance(target, (StridesLayout, DataLayout)):
             pass
         else:
@@ -294,8 +318,7 @@ class PatternMatcher:
     def match_StridesLayout(self, pattern: StridesLayout, target: StridesLayout):
         pass
 
-    @staticmethod
-    def match_AnyPattern(pattern: AnyExpr, target: Expr):
+    def match_AnyPattern(self, pattern: AnyExpr, target: Expr):
         # if pattern.type is None, match any expr, otherwise match any expr with specific type
         if pattern.cls and not isinstance(target, pattern.cls):
             raise NotMatchedError(pattern, target)
@@ -321,8 +344,7 @@ class PatternMatcher:
             with self.match(pattern.pattern, target):
                 pass
 
-    @staticmethod
-    def match_Scope(pattern: Scope, target: Scope):
+    def match_Scope(self, pattern: Scope, target: Scope):
         if pattern.name is not None and (pattern.name is None or pattern.name != target.name):
             raise NotMatchedError(pattern, target)
 
@@ -352,8 +374,7 @@ class PatternMatcher:
                 target_reduce = None
             stack.enter_context(self.match(pattern.reduce, target_reduce))
 
-    @staticmethod
-    def match_ScalarType(pattern: ScalarType, target: ScalarType):
+    def match_ScalarType(self, pattern: ScalarType, target: ScalarType):
         if pattern.name:
             if pattern.name != target.name:
                 raise NotMatchedError(pattern, target)
@@ -407,7 +428,7 @@ class PatternMatcher:
             if pattern.required_params and pattern.required_params_types:
                 assert len(pattern.required_params) == len(pattern.required_params_types)
                 for required_param, required_type in zip(pattern.required_params, pattern.required_params_types):
-                    matched_param = self.matched[required_param]
+                    matched_param: ComputeNode = self.matched[required_param]
                     actual_type = target.params_type[target.params.index(matched_param)]
                     # assert isinstance(matched_param, (ScalarInput, TensorInput)), "as far as now, we only support specify the param type, not the output type"
                     stack.enter_context(self.match(required_type, actual_type))

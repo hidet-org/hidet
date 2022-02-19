@@ -96,7 +96,7 @@ class UnaryOp(Expr):
         self.a = convert(a)
 
 
-def convert(obj: Union[Expr, PyScalar]) -> Expr:
+def convert(obj: Optional[Union[Expr, PyScalar, tuple]]) -> Optional[Union[Expr, tuple]]:
     if isinstance(obj, Expr):
         return obj
     elif isinstance(obj, bool):
@@ -106,7 +106,7 @@ def convert(obj: Union[Expr, PyScalar]) -> Expr:
     elif isinstance(obj, float):
         return Constant(obj, ScalarType('float32'))
     elif isinstance(obj, (tuple, list)):
-        return [convert(v) for v in obj]
+        return tuple([convert(v) for v in obj])
     elif obj is None:
         return None
     else:
@@ -187,14 +187,14 @@ class Mod(BinaryOp):
 class TensorElement(Expr):
     def __init__(self, base, indices):
         self.base = base
-        self.indices = [convert(idx) for idx in indices]
+        self.indices = convert(indices)
 
 
 class Call(Expr):
     def __init__(self, func, args):
         # todo: use function name (str) directly as the function identity
         self.func_var: Var = func
-        self.args = args
+        self.args = convert(args)
 
 
 class Let(Expr):
@@ -209,7 +209,7 @@ class Constant(Expr):
         self.value = value
         if dtype and isinstance(dtype, str):
             dtype = ScalarType(dtype)
-        self.dtype: ScalarType = dtype
+        self.dtype: Optional[ScalarType] = dtype
 
     def __int__(self):
         return int(self.value)
@@ -280,18 +280,4 @@ def is_const_int(v: Expr) -> bool:
 
 def if_then_else(cond: Union[Expr, PyScalar], then_expr: Union[Expr, PyScalar], else_expr: Union[Expr, PyScalar]) -> IfThenElse:
     return IfThenElse(convert(cond), convert(then_expr), convert(else_expr))
-
-
-def conjunction(*conds: Sequence[Condition]):
-    cond = convert(True)
-    for c in conds:
-        cond = And(cond, c)
-    return cond
-
-
-def disjunction(*conds: Sequence[Condition]):
-    cond = convert(False)
-    for c in conds:
-        cond = Or(cond, c)
-    return cond
 

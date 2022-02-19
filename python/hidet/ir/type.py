@@ -13,7 +13,7 @@ class TypeNode(Node):
 
 
 # scope
-class Scope:
+class Scope(Node):
     def __init__(self, name):
         assert name in ['host', 'global', 'shared', 'register']
         self.name = name

@@ -16,9 +16,11 @@ class ExprHash(ExprFunctor, TypeFunctor):
             return HashSum(tuple(self(v) for v in e))
         elif isinstance(e, Expr):
             return ExprFunctor.visit(self, e)
-        else:
-            assert isinstance(e, TypeNode)
+        elif isinstance(e, TypeNode):
             return TypeFunctor.visit(self, e)
+        else:
+            # for stmt/func/...
+            return HashSum(e)
 
     def hash(self, expr):
         return self(expr)

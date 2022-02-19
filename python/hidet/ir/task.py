@@ -49,5 +49,5 @@ class Task(Node):
         self.name: str = name
         self.compute: ComputeNode = computation
         self.params: List[Union[ScalarInput, TensorInput, ComputeNode]] = params
-        self.params_type: Dict[Union[ScalarInput, TensorInput, ComputeNode], TypeNode] = params_type
+        self.params_type: List[TypeNode] = params_type
         self.worker: Worker = worker
