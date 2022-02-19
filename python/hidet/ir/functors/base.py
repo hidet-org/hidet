@@ -1,102 +1,81 @@
 from typing import Mapping
-from hidet.ir.type import *
-from hidet.ir.expr import *
-from hidet.ir.stmt import *
-from hidet.ir.task import *
-from hidet.ir.func import *
-from hidet.ir.dialects.compute import *
-from hidet.ir.dialects.lowlevel import *
+
 from hidet.ir.dialects.pattern import *
+from hidet.ir.func import *
+from hidet.ir.stmt import *
 
 
 class NodeFunctor:
     def __init__(self):
-        self.dispatch_table = None
-
-    def dispatch(self, node: Node):
-        if self.dispatch_table is None:
-            self.setup_dispatch_table()
-        return self.dispatch_table[node.class_index()]
-
-    def setup_dispatch_table(self, mapping: Mapping[Type['Node'], Any]):
-        raise NotImplementedError()
-
-
-class ExprFunctor:
-    def __init__(self):
         self.memo = {}
+        if not hasattr(self.__class__, 'dispatch_table'):
+            self.setup_dispatch_table()
 
-    def __call__(self, *args, **kwargs):
-        return self.visit(*args, **kwargs)
+    def __call__(self, node: Node):
+        return self.visit(node)
 
-    def visit(self, e):
-        if e in self.memo:
-            return self.memo[e]
-        if isinstance(e, Add):
-            res = self.visit_Add(e)
-        elif isinstance(e, Sub):
-            res = self.visit_Sub(e)
-        elif isinstance(e, Multiply):
-            res = self.visit_Multiply(e)
-        elif isinstance(e, Div):
-            res = self.visit_Div(e)
-        elif isinstance(e, Mod):
-            res = self.visit_Mod(e)
-        elif isinstance(e, FloorDiv):
-            res = self.visit_FloorDiv(e)
-        elif isinstance(e, LessThan):
-            res = self.visit_LessThan(e)
-        elif isinstance(e, LessEqual):
-            res = self.visit_LessEqual(e)
-        elif isinstance(e, Equal):
-            res = self.visit_Equal(e)
-        elif isinstance(e, And):
-            res = self.visit_And(e)
-        elif isinstance(e, Or):
-            res = self.visit_Or(e)
-        elif isinstance(e, Not):
-            res = self.visit_Not(e)
-        elif isinstance(e, TensorElement):
-            res = self.visit_TensorElement(e)
-        elif isinstance(e, Call):
-            res = self.visit_Call(e)
-        elif isinstance(e, Let):
-            res = self.visit_Let(e)
-        elif isinstance(e, Var):
-            res = self.visit_Var(e)
-        elif isinstance(e, Constant):
-            res = self.visit_Constant(e)
-        # lowlevel dialect
-        elif isinstance(e, Cast):
-            res = self.visit_Cast(e)
-        elif isinstance(e, Dereference):
-            res = self.visit_Dereference(e)
-        elif isinstance(e, Address):
-            res = self.visit_Address(e)
-        elif isinstance(e, Reference):
-            res = self.visit_Reference(e)
-        # compute dialect
-        elif isinstance(e, ScalarInput):
-            res = self.visit_ScalarInput(e)
-        elif isinstance(e, TensorInput):
-            res = self.visit_TensorInput(e)
-        elif isinstance(e, TensorCompute):
-            res = self.visit_TensorCompute(e)
-        elif isinstance(e, ReduceCompute):
-            res = self.visit_ReduceCompute(e)
-        # pattern dialect
-        elif isinstance(e, AnyExpr):
-            res = self.visit_AnyExpr(e)
-        elif isinstance(e, ReduceComputePattern):
-            res = self.visit_ReduceComputePattern(e)
-        elif isinstance(e, TensorComputePattern):
-            res = self.visit_TensorComputePattern(e)
-        elif isinstance(e, ScalarExprPattern):
-            res = self.visit_ScalarExprPattern(e)
-        else:
-            raise NotImplementedError()
-        self.memo[e] = res
-        return res
+    def visit(self, node: Node):
+        if node in self.memo:
+            return self.memo[node]
+        idx = node.class_index() if node is not None else 0
+        # noinspection PyUnresolvedReferences
+        ret = self.__class__.dispatch_table[idx](self, node)
+        self.memo[node] = ret
+        return ret
+
+    @staticmethod
+    def get_dispatch_mapping(cls) -> Mapping[Type[Node], Any]:
+        return {}
+
+    @classmethod
+    def setup_dispatch_table(cls: Type[Node]):
+        cls_stack: List[type] = [cls]
+        mapping = {}
+        while len(cls_stack) > 0:
+            cur_cls = cls_stack.pop()
+            if hasattr(cur_cls, 'get_dispatch_mapping'):
+                cur_mapping = cur_cls.get_dispatch_mapping(cls)
+                for k, v in cur_mapping.items():
+                    if k not in mapping:
+                        mapping[k] = v
+            cls_stack.extend(cur_cls.__bases__)
+        setattr(cls, 'dispatch_table', Node.dispatch_table(mapping))
+
+
+class ExprFunctor(NodeFunctor):
+    @staticmethod
+    def get_dispatch_mapping(cls) -> Mapping[Type[Node], Any]:
+        return {
+            Add: cls.visit_Add,
+            Sub: cls.visit_Sub,
+            Multiply: cls.visit_Multiply,
+            Div: cls.visit_Div,
+            Mod: cls.visit_Mod,
+            FloorDiv: cls.visit_FloorDiv,
+            LessThan: cls.visit_LessThan,
+            LessEqual: cls.visit_LessEqual,
+            Equal: cls.visit_Equal,
+            And: cls.visit_And,
+            Or: cls.visit_Or,
+            Not: cls.visit_Not,
+            TensorElement: cls.visit_TensorElement,
+            Call: cls.visit_Call,
+            Let: cls.visit_Let,
+            Var: cls.visit_Var,
+            Constant: cls.visit_Constant,
+            Cast: cls.visit_Cast,
+            Dereference: cls.visit_Dereference,
+            Address: cls.visit_Address,
+            Reference: cls.visit_Reference,
+            ScalarInput: cls.visit_ScalarInput,
+            TensorInput: cls.visit_TensorInput,
+            TensorCompute: cls.visit_TensorCompute,
+            ReduceCompute: cls.visit_ReduceCompute,
+            AnyExpr: cls.visit_AnyExpr,
+            ReduceComputePattern: cls.visit_ReduceComputePattern,
+            TensorComputePattern: cls.visit_TensorComputePattern,
+            ScalarExprPattern: cls.visit_ScalarExprPattern,
+        }
 
     def visit_Add(self, e: Add):
         raise NotImplementedError()
@@ -444,42 +423,22 @@ class ExprRewriter(ExprFunctor):
         return e
 
 
-class StmtFunctor:
-    def __init__(self):
-        self.memo = {}
-
-    def __call__(self, *args, **kwargs):
-        return self.visit(*args, **kwargs)
-
-    def visit(self, stmt: Stmt):
-        if stmt in self.memo:
-            return self.memo[stmt]
-        if isinstance(stmt, EvaluateStmt):
-            res = self.visit_EvaluateStmt(stmt)
-        elif isinstance(stmt, BufferStoreStmt):
-            res = self.visit_BufferStoreStmt(stmt)
-        elif isinstance(stmt, AssignStmt):
-            res = self.visit_AssignStmt(stmt)
-        elif isinstance(stmt, LetStmt):
-            res = self.visit_LetStmt(stmt)
-        elif isinstance(stmt, ForStmt):
-            res = self.visit_ForStmt(stmt)
-        elif isinstance(stmt, IfStmt):
-            res = self.visit_IfStmt(stmt)
-        elif isinstance(stmt, AsmStmt):
-            res = self.visit_AsmStmt(stmt)
-        elif isinstance(stmt, AssertStmt):
-            res = self.visit_AssertStmt(stmt)
-        elif isinstance(stmt, BlackBoxStmt):
-            res = self.visit_BlackBoxStmt(stmt)
-        elif isinstance(stmt, SeqStmt):
-            res = self.visit_SeqStmt(stmt)
-        elif isinstance(stmt, Expr):
-            res = self.visit_expr(stmt)
-        else:
-            raise ValueError()
-        self.memo[stmt] = res
-        return res
+class StmtFunctor(NodeFunctor):
+    @staticmethod
+    def get_dispatch_mapping(cls) -> Mapping[Type[Node], Any]:
+        return {
+            EvaluateStmt: cls.visit_EvaluateStmt,
+            BufferStoreStmt: cls.visit_BufferStoreStmt,
+            AssignStmt: cls.visit_AssignStmt,
+            LetStmt: cls.visit_LetStmt,
+            ForStmt: cls.visit_ForStmt,
+            IfStmt: cls.visit_IfStmt,
+            AsmStmt: cls.visit_AsmStmt,
+            AssertStmt: cls.visit_AssertStmt,
+            BlackBoxStmt: cls.visit_BlackBoxStmt,
+            SeqStmt: cls.visit_SeqStmt,
+            Expr: cls.visit_expr,
+        }
 
     def visit_expr(self, e: Expr):
         raise NotImplementedError()
@@ -516,9 +475,6 @@ class StmtFunctor:
 
 
 class StmtVisitor(StmtFunctor):
-    def __init__(self):
-        super().__init__()
-
     def visit_expr(self, e: Expr):
         pass
 
@@ -570,9 +526,6 @@ class StmtVisitor(StmtFunctor):
 
 
 class StmtRewriter(StmtFunctor):
-    def __init__(self):
-        super().__init__()
-
     def visit_expr(self, e: Expr):
         return e
 
@@ -661,84 +614,33 @@ class StmtRewriter(StmtFunctor):
 
 
 class StmtExprFunctor(ExprFunctor, StmtFunctor):
-    def __init__(self):
-        ExprFunctor.__init__(self)
-        StmtFunctor.__init__(self)
-
-    def visit(self, obj):
-        if isinstance(obj, Expr):
-            return ExprFunctor.visit(self, obj)
-        elif isinstance(obj, Stmt):
-            return StmtFunctor.visit(self, obj)
-        else:
-            raise ValueError()
-
     def visit_expr(self, e: Expr):
         return self.visit(e)
 
 
 class StmtExprVisitor(ExprVisitor, StmtVisitor):
-    def __init__(self):
-        ExprVisitor.__init__(self)
-        StmtVisitor.__init__(self)
-
-    def visit(self, obj):
-        if isinstance(obj, Expr):
-            return ExprVisitor.visit(self, obj)
-        elif isinstance(obj, Stmt):
-            return StmtVisitor.visit(self, obj)
-        else:
-            raise ValueError()
-
     def visit_expr(self, e: Expr):
         return self.visit(e)
 
 
 class FuncStmtExprVisitor(StmtExprVisitor):
-    def visit(self, obj):
-        if isinstance(obj, Expr):
-            return ExprVisitor.visit(self, obj)
-        elif isinstance(obj, Stmt):
-            return StmtVisitor.visit(self, obj)
-        elif isinstance(obj, Function):
-            return self.visit_Function(obj)
-        else:
-            raise ValueError()
+    @staticmethod
+    def get_dispatch_mapping(cls) -> Mapping[Type[Node], Any]:
+        return {Function: cls.visit_Function}
 
     def visit_Function(self, func: Function):
         self(func.body)
 
 
 class StmtExprRewriter(ExprRewriter, StmtRewriter):
-    def __init__(self):
-        ExprRewriter.__init__(self)
-        StmtRewriter.__init__(self)
-
-    def __call__(self, *args, **kwargs):
-        return self.visit(*args, **kwargs)
-
-    def visit(self, obj):
-        if isinstance(obj, Expr):
-            return ExprVisitor.visit(self, obj)
-        elif isinstance(obj, Stmt):
-            return StmtVisitor.visit(self, obj)
-        else:
-            raise ValueError()
-
     def visit_expr(self, e: Expr):
         return self.visit(e)
 
 
 class FuncStmtExprRewriter(StmtExprRewriter):
-    def visit(self, obj):
-        if isinstance(obj, Expr):
-            return ExprRewriter.visit(self, obj)
-        elif isinstance(obj, Stmt):
-            return StmtRewriter.visit(self, obj)
-        elif isinstance(obj, Function):
-            return self.visit_Function(obj)
-        else:
-            raise ValueError()
+    @staticmethod
+    def get_dispatch_mapping(cls) -> Mapping[Type[Node], Any]:
+        return {Function: cls.visit_Function}
 
     def visit_Function(self, func: Function):
         body = self(func.body)
@@ -759,33 +661,21 @@ class BoundAwareRewriter(FuncStmtExprRewriter):
         if obj in self.memo:
             return self.memo[obj]
         self.analyzer.visit(obj)
-        return FuncStmtExprRewriter.visit(self, obj)
+        ret = FuncStmtExprRewriter.visit(self, obj)
+        return ret
 
 
-class TypeFunctor:
-    def __init__(self):
-        self.memo = {}
-
-    def __call__(self, *args, **kwargs):
-        return self.visit(*args, **kwargs)
-
-    def visit(self, t: TypeNode):
-        if t in self.memo:
-            return self.memo[t]
-        if isinstance(t, ScalarType):
-            return self.visit_ScalarType(t)
-        elif isinstance(t, TensorType):
-            return self.visit_TensorType(t)
-        elif isinstance(t, PointerType):
-            return self.visit_PointerType(t)
-        elif isinstance(t, TensorPointerType):
-            return self.visit_TensorPointerType(t)
-        elif isinstance(t, ReferenceType):
-            return self.visit_ReferenceType(t)
-        elif isinstance(t, VoidType):
-            return self.visit_VoidType(t)
-        else:
-            raise ValueError()
+class TypeFunctor(NodeFunctor):
+    @staticmethod
+    def get_dispatch_mapping(cls) -> Mapping[Type[Node], Any]:
+        return {
+            ScalarType: cls.visit_ScalarType,
+            TensorType: cls.visit_TensorType,
+            PointerType: cls.visit_PointerType,
+            TensorPointerType: cls.visit_TensorPointerType,
+            ReferenceType: cls.visit_ReferenceType,
+            VoidType: cls.visit_VoidType,
+        }
 
     def visit_ScalarType(self, t: ScalarType):
         raise NotImplementedError()
@@ -806,28 +696,16 @@ class TypeFunctor:
         raise NotImplementedError()
 
 
-class WorkerFunctor:
-    def __init__(self):
-        self.memo = {}
-
-    def __call__(self, *args, **kwargs):
-        return self.visit(*args, **kwargs)
-
-    def visit(self, worker: Worker):
-        if worker in self.memo:
-            return self.memo[worker]
-        if isinstance(worker, Host):
-            return self.visit_Host(worker)
-        elif isinstance(worker, Grid):
-            return self.visit_Grid(worker)
-        elif isinstance(worker, ThreadBlock):
-            return self.visit_ThreadBlock(worker)
-        elif isinstance(worker, Warp):
-            return self.visit_Warp(worker)
-        elif isinstance(worker, Thread):
-            return self.visit_Thread(worker)
-        else:
-            raise ValueError()
+class WorkerFunctor(NodeFunctor):
+    @staticmethod
+    def get_dispatch_mapping(cls) -> Mapping[Type[Node], Any]:
+        return {
+            Host: cls.visit_Host,
+            Grid: cls.visit_Grid,
+            ThreadBlock: cls.visit_ThreadBlock,
+            Warp: cls.visit_Warp,
+            Thread: cls.visit_Thread,
+        }
 
     def visit_Host(self, host: Host):
         raise NotImplementedError()
@@ -845,7 +723,7 @@ class WorkerFunctor:
         raise NotImplementedError()
 
 
-def same_list(lhs: List, rhs: List):
+def same_list(lhs: Sequence, rhs: Sequence):
     if len(lhs) != len(rhs):
         return False
     return all(a is b for a, b in zip(lhs, rhs))

@@ -90,7 +90,8 @@ class TakeOutConstantPass(FunctionPass):
         self.rewriter = TakeOutConstantRewriter()
 
     def process_func(self, func: Function) -> Function:
-        return self.simplifier(self.rewriter(func))
+        func = self.rewriter(func)
+        return self.simplifier(func)
 
 
 def take_out_constant_pass():
