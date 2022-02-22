@@ -173,6 +173,8 @@ class PatternMatcher:
                 Call: PatternMatcher.match_Call,
                 Var: PatternMatcher.match_Var,
                 Constant: PatternMatcher.match_Constant,
+                And: PatternMatcher.match_CommutativeBinary,
+                Or: PatternMatcher.match_CommutativeBinary,
                 # compute dialect expr
                 ScalarInput: PatternMatcher.match_ScalarInput,
                 TensorInput: PatternMatcher.match_TensorInput,

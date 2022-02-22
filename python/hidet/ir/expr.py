@@ -52,6 +52,9 @@ class Expr(Node):
     def __eq__(self, other):
         return Equal(self, other)
 
+    def __ge__(self, other):
+        return LessEqual(other, self)
+
     def __invert__(self):
         from hidet.ir.dialects.lowlevel import Address
         return Address(self)
@@ -143,10 +146,24 @@ class And(Condition, BinaryOp):
     def __init__(self, a, b):
         super().__init__(a, b)
 
+    @staticmethod
+    def join(*conds):
+        cond = convert(True)
+        for c in conds:
+            cond = And(cond, convert(c))
+        return cond
+
 
 class Or(Condition, BinaryOp):
     def __init__(self, a, b):
         super().__init__(a, b)
+
+    @staticmethod
+    def join(*conds):
+        cond = convert(False)
+        for c in conds:
+            cond = Or(cond, convert(c))
+        return cond
 
 
 class Not(Condition, UnaryOp):
@@ -219,7 +236,7 @@ class Constant(Expr):
 
 
 class IfThenElse(Expr):
-    def __init__(self, cond: Union[Expr, PyScalar], then_expr: Expr, else_expr: Expr):
+    def __init__(self, cond: Union[Expr, PyScalar], then_expr: Union[Expr, PyScalar], else_expr: Union[Expr, PyScalar]):
         self.cond = convert(cond)
         self.then_expr = convert(then_expr)
         self.else_expr = convert(else_expr)

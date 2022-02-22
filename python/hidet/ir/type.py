@@ -1,4 +1,4 @@
-from typing import Sequence, Optional, Union, List, Tuple
+from typing import Sequence, Optional, Union, List, Tuple, Mapping
 
 from hidet import ir
 from hidet.ir.node import Node
@@ -68,6 +68,14 @@ class TensorType(TypeNode):
 
     def slice_out(self, dims: Sequence[int]) -> 'TensorType':
         layout = self.layout.slice_out(dims)
+        return TensorType(self.scope, self.scalar_type, layout=layout)
+
+    def split(self, dim2factor: Mapping[int, Int]) -> 'TensorType':
+        layout = self.layout.split(dim2factor)
+        return TensorType(self.scope, self.scalar_type, layout=layout)
+
+    def reorder(self, order: Sequence[int]):
+        layout = self.layout.reorder(order)
         return TensorType(self.scope, self.scalar_type, layout=layout)
 
 

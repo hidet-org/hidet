@@ -16,7 +16,9 @@ class FlattenSeqStmtRewriter(StmtRewriter):
                 new_seq.extend(s.seq)
             else:
                 new_seq.append(s)
-        if same_list(new_seq, stmt.seq):
+        if len(new_seq) == 1:
+            return new_seq[0]
+        elif same_list(new_seq, stmt.seq):
             return stmt
         else:
             return SeqStmt(new_seq)
@@ -90,6 +92,10 @@ class CommonSubexpressionEliminationRewriter(StmtExprRewriter):
 class CommonSubexpressionEliminationPass(FunctionBodyPass):
     def process_body(self, stmt: Stmt) -> Stmt:
         return CommonSubexpressionEliminationRewriter()(stmt)
+
+
+def flatten_seq_stmt_pass():
+    return FlattenSeqStmtPass()
 
 
 def common_subexpression_elimination_pass():

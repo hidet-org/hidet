@@ -11,6 +11,8 @@ class ComputeNode(Expr):
 class ScalarInput(ComputeNode):
     def __init__(self, name, dtype):
         super().__init__(name)
+        if dtype is not None and isinstance(dtype, str):
+            dtype = ScalarType(dtype)
         self.dtype = dtype
 
 
@@ -24,7 +26,7 @@ class TensorInput(ComputeNode):
 
 
 class TensorCompute(ComputeNode):
-    def __init__(self, name, shape, axes, value, accumulate: str = None):
+    def __init__(self, name, shape, axes, value, accumulate: str = None, predicate: Optional[Expr] = None):
         """
         accumulate: Optional[str], choices: 'sum', None
             The accumulate method. Let value be the value of corresponding element in output grid.
@@ -36,6 +38,7 @@ class TensorCompute(ComputeNode):
         self.axes: Tuple[Var] = convert(axes)
         self.value: Expr = value
         self.accumulate: Optional[str] = accumulate
+        self.predicate: Optional[Expr] = predicate
 
 
 class ReduceCompute(ComputeNode):
@@ -83,9 +86,11 @@ def reduce_sum(expr, axis, shape: Union[Sequence[Union[int, Expr]], Union[int, E
     return ReduceCompute(expr, shape, axis, 'sum')
 
 
-def compute(name, shape, fcompute, accumulate=None):
+def compute(name, shape, fcompute, accumulate=None, predicate=None):
     shape = [convert(v) for v in shape]
     axes = [var() for _ in shape]
     value = convert(fcompute(*axes))
-    return TensorCompute(name, shape, axes, value, accumulate)
+    if predicate is not None:
+        predicate = convert(predicate(*axes))
+    return TensorCompute(name, shape, axes, value, accumulate, predicate)
 

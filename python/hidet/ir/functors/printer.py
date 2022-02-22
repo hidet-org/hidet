@@ -3,7 +3,7 @@ from hidet.ir.node import Node
 from hidet.ir.func import IRModule, Function
 from hidet.ir.type import ScalarType, TensorType, TypeNode
 from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div, Sub, Not, Or, And, Let, IfThenElse
-from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, LetStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt, BlackBoxStmt, AsmStmt
+from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, LetStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt, BlackBoxStmt, AsmStmt, ReturnStmt
 from hidet.ir.task import Worker, Host, Grid, ThreadBlock, Warp, Thread
 from hidet.ir.dialects.compute import ReduceCompute, TensorCompute, TensorInput, ScalarInput
 from hidet.ir.dialects.lowlevel import VoidType, PointerType, Dereference, Cast, Address, ReferenceType, TensorPointerType, Reference
@@ -188,9 +188,12 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
         doc = NewLine() + Text('if ') + self(stmt.cond)
         doc += self(stmt.then_body).indent(4)
         if stmt.else_body:
-            doc += Text('else')
+            doc += NewLine() + Text('else')
             doc += self(stmt.else_body).indent(4)
         return doc
+
+    def visit_ReturnStmt(self, stmt: ReturnStmt):
+        return NewLine() + Text('return')
 
     def visit_AssertStmt(self, stmt: AssertStmt):
         return NewLine() + 'assert(' + self(stmt.cond) + ', ' + stmt.msg + ')'

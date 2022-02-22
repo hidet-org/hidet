@@ -11,8 +11,11 @@ class ExprHash(ExprFunctor, TypeFunctor):
         super().__init__()
 
     def visit(self, e):
+        from hidet.ir.dialects.pattern import AnyExpr
         if e in self.memo:
             return self.memo[e]
+        if isinstance(e, AnyExpr):
+            print("BAD")
         if isinstance(e, (str, float, int)):
             ret = HashSum(e)
         elif isinstance(e, tuple):

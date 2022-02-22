@@ -1,6 +1,7 @@
 import argparse
 import contextlib
 import io
+import sys
 import os
 
 import git
@@ -11,7 +12,7 @@ from hidet.baselines.matmul import matmul_ref, matmul_cublas, matmul_opt, matmul
 from hidet.implement import implement, impl_context
 from hidet.implement.cuda import CudaBlockStaticMatmulNoPipeImplementer, CudaBlockNaiveImplementer
 from hidet.implement.cuda import CudaGridSplitImplementer, CudaGridNaiveImplementer, CudaWarpTransfer2dImplementer, CudaWarpFillValueImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer
-from hidet.implement.cuda import CudaThreadNaiveImplementer
+from hidet.implement.cuda import CudaThreadNaiveImplementer, CudaGridStaticMatmulSoftPipePredImplementer
 from hidet.implement.resolve import random_resolve, brute_force_resolve
 from hidet.runtime.value import randn, empty, scalar
 from hidet.tasks.nn import matmul
@@ -26,6 +27,7 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=True, progr
     workloads = [
         (1024, 1024, 1024),
         (2048, 2304, 768),
+        *[(16 * T, 2304, 768) for T in [5, 24, 43, 62, 81, 100, 119, 128]]
     ]
     baselines = [
         ('Reference', matmul_ref()),
@@ -35,8 +37,9 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=True, progr
     ]
     hidet_variants = [
         ('HidetNaive', (CudaGridNaiveImplementer, CudaThreadNaiveImplementer)),
-        ('HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpFillValueImplementer)),
-        ('HidetSoftPipeLdgWb', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpFillValueImplementer)),
+        ('HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer)),
+        ('HidetSoftPipeLdgWb', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer)),
+        ('HidetSoftPipePred', (CudaGridSplitImplementer, CudaGridStaticMatmulSoftPipePredImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer)),
     ]
     repo = git.Repo(search_parent_directories=True)
     sha = repo.head.object.hexsha
@@ -57,18 +60,20 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=True, progr
             B = randn([K, M], 'float32', 'global', seed=3)
             C = empty([N, M], 'float32', 'global')
             print("Workload (N x M x K): {} x {} x {}".format(N, M, K))
+            print("Workload (N x M x K): {} x {} x {}".format(N, M, K), file=sys.stderr)
             for name, func in baselines:
                 latencies = func.profile(scalar(N), scalar(M), scalar(K), A, B, C, warmup=warmup, number=number, repeat=repeat)
                 print_latencies(name, latencies)
 
             for name, allowed in hidet_variants:
+                print(name, file=sys.stderr)
                 with impl_context(allowed=allowed) as ctx:
                     ir_module = implement(matmul(N, M, K))
                     if use_brute_force_resolve:
                         ir_module = brute_force_resolve(ir_module, warmup=warmup, number=number, repeat=repeat, progress_bar=progress_bar)
                     else:
                         ir_module = random_resolve(ir_module)
-                    module = build(ir_module, output_dir=f'./outs/bench/{name}')
+                    module = build(ir_module, output_dir=f'./outs/bench/{name}_{N}x{M}x{K}', verbose=False)
                     latencies = module['matmul'].profile(A, B, C, warmup=warmup, number=number, repeat=repeat)
                     print_latencies(name, latencies)
             print()
@@ -90,5 +95,5 @@ parser.add_argument('--report_dir', type=str, default='./report')
 
 if __name__ == '__main__':
     args = parser.parse_args()
-    with cuda.BenchmarkContext():
-        benchmark(args.warmup, args.number, args.repeat, args.resolver == 'brute', args.report_dir)
+    with cuda.BenchmarkContext(fix_clock=True):
+        benchmark(args.warmup, args.number, args.repeat, args.resolver == 'brute', report_dir=args.report_dir, progress_bar=False)

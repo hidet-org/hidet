@@ -1,4 +1,4 @@
-from typing import Mapping, List, Tuple
+from typing import Mapping, List, Tuple, Any
 from contextlib import ExitStack
 
 from hidet.ir.node import Node
@@ -47,7 +47,7 @@ class CudaBlockNaiveImplementer(Implementer):
     def task_pattern(self) -> TaskPattern:
         return self.pattern
 
-    def implement(self, task: Task, match: Mapping[Node, Node]) -> IRModule:
+    def implement(self, task: Task, match: Mapping[Node, Any]) -> IRModule:
         block_size = int(match[self.block_size])
         computation: TensorCompute = match[self.computation]
         if match[self.task_layout]:
@@ -67,7 +67,7 @@ class CudaBlockNaiveImplementer(Implementer):
                     break
             return ir_module
 
-    def implement_for_given_layout(self, task: Task, match: Mapping[Node, Node], given_layout: TaskLayout):
+    def implement_for_given_layout(self, task: Task, match: Mapping[Node, Any], given_layout: TaskLayout):
         computation: TensorCompute = match[self.computation]
         task_shape = [int(v) for v in computation.shape]
         block_size = int(match[self.block_size])
@@ -80,20 +80,22 @@ class CudaBlockNaiveImplementer(Implementer):
             fb.extend_params(param_vars)
             # body
             sb = StmtBuilder()
-            with sb.for_task_fields(thread_idx(), given_layout) as task_fields:
-                for task_field in task_fields:
-                    rmap = {axis: task_index for axis, task_index in zip(computation.axes, task_field)}
-                    value = rewrite(computation.value, rmap)
+            for task_index in given_layout.worker2task(thread_idx()):
+                rmap = {axis: task_index for axis, task_index in zip(computation.axes, task_index)}
+                value = rewrite(computation.value, rmap)
+                with ExitStack() as stack:
+                    if computation.predicate is not None:
+                        stack.enter_context(sb.if_then(rewrite(computation.predicate, rewrite_map={**param2var, **rmap})))
                     stmt, scalar_value, new_var_map = expand_loop(value, input_map=param2var)
                     sb += stmt
                     fb.extend_local_vars(new_var_map.values())  # the local variables required to expand the value.
                     if computation.accumulate == 'sum':
-                        scalar_value = TensorElement(param2var[computation], task_field) + scalar_value
+                        scalar_value = TensorElement(param2var[computation], task_index) + scalar_value
                     elif computation.accumulate is None:
                         pass
                     else:
                         raise NotImplementedError()
-                    sb += BufferStoreStmt(param2var[computation], task_field, scalar_value)
+                    sb += BufferStoreStmt(param2var[computation], task_index, scalar_value)
             fb.set_body(sb.finish())
         return IRModule(funcs={task.name: fb.get()}, task=task)
 

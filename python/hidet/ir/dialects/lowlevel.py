@@ -32,6 +32,8 @@ class TensorPointerType(TypeNode):
 class Cast(Expr):
     def __init__(self, expr, target_type):
         self.expr = expr
+        if isinstance(target_type, str):
+            target_type = ScalarType(target_type)
         self.target_type = target_type
 
 

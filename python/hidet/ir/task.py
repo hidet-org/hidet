@@ -20,7 +20,7 @@ class Grid(Worker):
 
 
 class ThreadBlock(Worker):
-    def __init__(self, block_dim: Optional[Int] = None, task_layout: Optional[TaskLayout] = None):
+    def __init__(self, block_dim: Optional[Int] = None, task_layout=None):
         self.block_dim: Optional[Expr] = convert(block_dim) if block_dim else None
         self.task_layout: Optional[TaskLayout] = task_layout
 

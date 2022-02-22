@@ -95,7 +95,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         elif isinstance(node, (int, float, bool)):
             return self(convert(node))
         else:
-            raise ValueError()
+            raise ValueError(type(node))
 
     def visit_IRModule(self, module: IRModule) -> Doc:
         self.ir_module = module
@@ -293,7 +293,8 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             else:
                 doc += NewLine() + '#pragma unroll 1'  # prevent from unrolling
         doc += NewLine() + Text('for (') + init_doc + '; ' + cond_doc + '; ' + update_doc + ') '
-        doc += Text('{') + self(stmt.body).indent() + NewLine() + Text('} ')
+        body_doc = self(stmt.body)
+        doc += Text('{') + body_doc.indent() + NewLine() + Text('} ')
         return doc
 
     def visit_IfStmt(self, stmt: IfStmt):
@@ -306,6 +307,9 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             doc += Text('else ')
             doc += Text('{') + self(stmt.else_body).indent() + NewLine() + Text('} ')
         return doc
+
+    def visit_ReturnStmt(self, stmt: ReturnStmt):
+        return NewLine() + 'return;'
 
     def visit_AssertStmt(self, stmt: AssertStmt):
         return NewLine() + Text('assert(((void)"') + stmt.msg + '", ' + self(stmt.cond) + '));'

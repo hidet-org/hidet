@@ -2,11 +2,12 @@ import operator
 from itertools import product
 
 from hidet.ir.dialects.pattern import AnyExpr, match
-from hidet.ir.expr import Add, convert, Sub, Multiply, FloorDiv, Mod, LessThan, LessEqual, Equal, BinaryOp, And, IfThenElse
+from hidet.ir.expr import Add, convert, Sub, Multiply, FloorDiv, Mod, LessThan, LessEqual, Equal, BinaryOp, And, IfThenElse, Or
 from hidet.ir.expr import Constant, Expr
 from hidet.ir.functors import BoundAwareRewriter
 from hidet.ir.functors import StmtExprRewriter
 from hidet.ir.functors import rewrite, ExprHash
+from hidet.ir.dialects.lowlevel import Cast
 from hidet.transforms.base import FunctionPass
 from hidet.utils import prod, repeat_until_converge
 from hidet.utils.py import DictCustomKey
@@ -60,7 +61,7 @@ class ConstExprSimplifier(StmtExprRewriter):
 
 
 class RuleBasedSimplifier(BoundAwareRewriter):
-    _enumerate_limit = 128
+    _enumerate_limit = 256
 
     def __init__(self):
         super().__init__()
@@ -103,17 +104,23 @@ class RuleBasedSimplifier(BoundAwareRewriter):
             # mod
             ((e1 * c1 + e2) % c1, e2 % c1),
             ((e1 % c1) % c1, e1 % c1),
+            # and/or
+            (And(ec1, True), ec1),
+            (And(ec1, False), convert(False)),
+            (Or(ec1, True), convert(True)),
+            (Or(ec1, False), ec1),
             # if then else
             (IfThenElse(True, ec1, ec2), ec1),
             (IfThenElse(False, ec1, ec2), ec2),
+            # comparison
+            # ((e1 + c1) < e2, c1 < Cast(e2, 'int32') - Cast(e1, 'int32')),
         ]
         self.bound_patterns = [
             # ((pattern_args, pattern_func, target_args, target_func)
-            ((e1, c1, c2), (e1, c1, c2), lambda e1, c1, c2: (e1 + c1) // c2, lambda e1, c1, c2: e1 // c2 + c1 // c2),
-            ((e1, c1, c2), (e1, c1, c2), lambda e1, c1, c2: (e1 + c1) % c2, lambda e1, c1, c2: e1 % c2 + c1 % c2),
-            ((e1, e2, c1), (e1, e2, c1), lambda e1, e2, c1: (e1 + e2) // c1, lambda e1, e2, c1: e1 // c1 + e2 // c1),
-            ((e1, e2, c1), (e1, e2, c1), lambda e1, e2, c1: (e1 + e2) % c1, lambda e1, e2, c1: e1 % c1 + e2 % c1),
-            ((e1, c1), (e1,), lambda e1, c1: e1 % c1, lambda e1: e1),
+            ((ec1, ec2, c1), (ec1, ec2, c1), lambda ec1, ec2, c1: (ec1 + ec2) // c1, lambda ec1, ec2, c1: ec1 // c1 + ec2 // c1),
+            ((ec1, ec2, c1), (ec1, ec2, c1), lambda ec1, ec2, c1: (ec1 + ec2) % c1, lambda ec1, ec2, c1: ec1 % c1 + ec2 % c1),
+            ((ec1, c1), (ec1,), lambda ec1, c1: ec1 % c1, lambda ec1: ec1),
+            ((ec1, c1, c2), (ec1, c2), lambda ec1, c1, c2: (ec1 % c1) % c2, lambda ec1, c2: ec1 % c2)
         ]
 
     def apply_rule(self, e):
@@ -152,6 +159,7 @@ class RuleBasedSimplifier(BoundAwareRewriter):
                 else:
                     target = target_func(*target_args)
                     ret = rewrite(target, rewrite_map=mapping)
+                    ret = self.const_expr_simplifier(ret)
                     return ret
         return e
 
@@ -179,24 +187,31 @@ class RuleBasedSimplifier(BoundAwareRewriter):
         ua, ub = self.bound[e.a], self.bound[e.b]
         if ua < ub:
             return convert(True)
+        if ub <= ua:
+            return convert(False)
         return BoundAwareRewriter.visit_LessThan(self, e)
 
     def visit_LessEqual(self, e: LessEqual):
         ua, ub = self.bound[e.a], self.bound[e.b]
         if ua <= ub:
             return convert(True)
+        if ub < ua:
+            return convert(False)
         return BoundAwareRewriter.visit_LessEqual(self, e)
 
     def visit_Equal(self, e: Equal):
         ua, ub = self.bound[e.a], self.bound[e.b]
         if ua <= ub <= ua:
             return convert(True)
+        if ua < ub or ub < ua:
+            return convert(False)
         return BoundAwareRewriter.visit_Equal(self, e)
 
 
 class RuleBasedSimplifyPass(FunctionPass):
     def process_func(self, func: Function) -> Function:
-        return repeat_until_converge(RuleBasedSimplifier(), func)
+        simpifier = RuleBasedSimplifier()
+        return repeat_until_converge(simpifier, func)
 
 
 def rule_based_simplify_pass():

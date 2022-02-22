@@ -50,8 +50,9 @@ class TaskLayout:
 
 class FullTaskLayout(TaskLayout):
     def __init__(self, task_shape: Sequence[int]):
-        super().__init__(num_workers=1, task_shape=task_shape, worker2task=self._worker2task)
+        super().__init__(num_workers=1, task_shape=tuple(task_shape), worker2task=self._worker2task)
 
+    # noinspection PyUnusedLocal
     def _worker2task(self, w):
         ranges = [range(s) for s in self.task_shape]
         return list(itertools.product(*ranges))
@@ -60,13 +61,13 @@ class FullTaskLayout(TaskLayout):
 class GridTaskLayout(TaskLayout):
     def __init__(self, task_shape: Sequence[int], perm: Sequence[int]):
         assert len(task_shape) == len(perm)
-        super().__init__(num_workers=prod(task_shape), task_shape=task_shape, worker2task=lambda w: self._worker2task(w))
+        super().__init__(num_workers=prod(task_shape), task_shape=tuple(task_shape), worker2task=lambda w: self._worker2task(w))
         self.perm = list(perm)
         self.bases = self._get_bases()
 
     def _get_bases(self):
         rank = len(self.perm)
-        bases = [None] * rank
+        bases: List[Optional[int]] = [None] * rank
         s = 1
         for i in reversed(range(rank)):
             j = self.perm.index(i)
@@ -74,21 +75,23 @@ class GridTaskLayout(TaskLayout):
             s *= self.task_shape[j]
         return bases
 
-    def _worker2task(self, w: Int) -> List[Sequence[Int]]:
+    def _worker2task(self, w: Int) -> List[Tuple[Int]]:
         task = []
         for mod, b in zip(self.task_shape, self.bases):
             task.append((w // b) % mod)
-        return [task]
+        return [tuple(task)]
 
 
 class ProjectedTaskLayout(TaskLayout):
     def __init__(self, base: TaskLayout, dim2value: Mapping[int, Int]):
-        super().__init__(num_workers=base.num_workers, task_shape=base.task_shape,
+        assert all(int(v) == 0 for v in dim2value.values())
+        super().__init__(num_workers=base.num_workers,
+                         task_shape=tuple(base.task_shape[i] if i not in dim2value else 1 for i in range(len(base.task_shape))),
                          worker2task=lambda w: self._worker2task(w))
         self.base = base
         self.dim2value = dim2value
 
-    def _worker2task(self, w: Int) -> List[Sequence[Int]]:
+    def _worker2task(self, w: Int) -> List[Tuple[Int]]:
         rank = len(self.task_shape)
         projected_tasks = []
         for task in self.base(w):
@@ -101,13 +104,13 @@ class ComposedTaskLayout(TaskLayout):
         assert len(outer.task_shape) == len(inner.task_shape)
         super().__init__(
             num_workers=outer.num_workers * inner.num_workers,
-            task_shape=[a * b for a, b in zip(outer.task_shape, inner.task_shape)],
+            task_shape=tuple([a * b for a, b in zip(outer.task_shape, inner.task_shape)]),
             worker2task=lambda w: self._worker2task(w)
         )
         self.outer = outer
         self.inner = inner
 
-    def _worker2task(self, worker_index: Int) -> List[Sequence[Int]]:
+    def _worker2task(self, worker_index: Int) -> List[Tuple[Int]]:
         outer_worker_index = worker_index // self.inner.num_workers
         inner_worker_index = worker_index % self.inner.num_workers
         outer_tasks = self.outer.worker2task(outer_worker_index)
@@ -146,7 +149,6 @@ class TaskLayoutExpander:
         return vtable[task_layout.__class__](w, task_layout)
 
     def expand_composed(self, w: Int, layout: ComposedTaskLayout):
-        from hidet.ir import var, LetStmt
         outer_w = self.variablize(w // layout.inner.num_workers)
         inner_w = self.variablize(w % layout.inner.num_workers)
         outer_fields = self.expand(outer_w, layout.outer)

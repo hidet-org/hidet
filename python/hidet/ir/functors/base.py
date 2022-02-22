@@ -451,6 +451,7 @@ class StmtFunctor(NodeFunctor):
             LetStmt: cls.visit_LetStmt,
             ForStmt: cls.visit_ForStmt,
             IfStmt: cls.visit_IfStmt,
+            ReturnStmt: cls.visit_ReturnStmt,
             AsmStmt: cls.visit_AsmStmt,
             AssertStmt: cls.visit_AssertStmt,
             BlackBoxStmt: cls.visit_BlackBoxStmt,
@@ -477,6 +478,9 @@ class StmtFunctor(NodeFunctor):
         raise NotImplementedError()
 
     def visit_IfStmt(self, stmt: IfStmt):
+        raise NotImplementedError()
+
+    def visit_ReturnStmt(self, stmt: ReturnStmt):
         raise NotImplementedError()
 
     def visit_AssertStmt(self, stmt: AssertStmt):
@@ -524,6 +528,9 @@ class StmtVisitor(StmtFunctor):
         self.visit(stmt.then_body)
         if stmt.else_body:
             self.visit(stmt.else_body)
+
+    def visit_ReturnStmt(self, stmt: ReturnStmt):
+        pass
 
     def visit_AssertStmt(self, stmt: AssertStmt):
         self.visit(stmt.cond)
@@ -597,6 +604,9 @@ class StmtRewriter(StmtFunctor):
             return stmt
         else:
             return IfStmt(cond, then_body, else_body)
+
+    def visit_ReturnStmt(self, stmt: ReturnStmt):
+        return stmt
 
     def visit_AssertStmt(self, stmt: AssertStmt):
         cond = self.visit_expr(stmt.cond)

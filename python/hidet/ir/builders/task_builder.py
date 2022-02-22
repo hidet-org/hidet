@@ -27,7 +27,11 @@ class TaskBuilder:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.finish()
+        if exc_type is None:
+            self.finish()
+        else:
+            # there is an exception, propagate it to outer scope
+            pass
 
     def __call__(self, *args):
         assert len(args) == len(self.params)

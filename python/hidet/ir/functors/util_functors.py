@@ -1,8 +1,9 @@
 from typing import Union, Mapping
+from hidet.ir.func import Function
 from hidet.ir.stmt import Stmt, LetStmt, ForStmt
 from hidet.ir.dialects.compute import *
 
-from .base import StmtExprVisitor, StmtExprRewriter
+from .base import StmtExprVisitor, StmtExprRewriter, FuncStmtExprVisitor
 
 
 class StmtExprMapRewriter(StmtExprRewriter):
@@ -19,7 +20,7 @@ class StmtExprMapRewriter(StmtExprRewriter):
         return self.memo[e]
 
 
-class SubStmtExprCollector(StmtExprVisitor):
+class SubStmtExprCollector(FuncStmtExprVisitor):
     def __init__(self, expr_types):
         super().__init__()
         self.expr_types = expr_types
@@ -70,7 +71,7 @@ def rewrite(node: Union[Expr, Stmt], rewrite_map: Mapping[Var, Expr]):
     return rewriter.rewrite(node)
 
 
-def collect(node: Union[Expr, Stmt], node_types):
+def collect(node: Union[Function, Expr, Stmt], node_types):
     if not isinstance(node_types, tuple):
         if isinstance(node_types, list):
             node_types = tuple(node_types)

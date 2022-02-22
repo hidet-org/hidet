@@ -38,10 +38,13 @@ class Doc:
     def indent(self, inc=None):
         if inc is None:
             inc = self.default_indent
+        doc = Doc()
         for token in self.docs:
             if isinstance(token, NewLineToken):
-                token.indent += inc
-        return self
+                doc.docs.append(NewLineToken(indent=token.indent + inc))
+            else:
+                doc.docs.append(token)
+        return doc
 
     def __add__(self, other):
         doc = Doc()

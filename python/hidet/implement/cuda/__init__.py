@@ -2,4 +2,4 @@ from . import generic
 from . import matmul
 
 from .generic import CudaThreadNaiveImplementer, CudaBlockNaiveImplementer, CudaWarpTransfer2dImplementer, CudaGridSplitImplementer, CudaWarpFillValueImplementer, CudaGridNaiveImplementer
-from .matmul import CudaBlockStaticMatmulNoPipeImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer, CudaBlockStaticMatmulSoftPipePredImplementer
+from .matmul import CudaBlockStaticMatmulNoPipeImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer, CudaGridStaticMatmulSoftPipePredImplementer

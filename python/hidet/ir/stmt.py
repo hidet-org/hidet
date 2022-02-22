@@ -31,6 +31,10 @@ class AssignStmt(Stmt):
         self.value = convert(value)
 
 
+class ReturnStmt(Stmt):
+    pass
+
+
 class LetStmt(Stmt):
     def __init__(self, var, value, body=None):
         super().__init__()

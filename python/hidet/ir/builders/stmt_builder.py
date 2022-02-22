@@ -10,7 +10,7 @@ ScopedStmt = Union[IfStmt, LetStmt, ForStmt]
 
 class StmtScope:
     def __init__(self, sb: 'StmtBuilder', stmts: Union[Sequence[ScopedStmt], ScopedStmt], ret=None):
-        if isinstance(stmts, Stmt):
+        if isinstance(stmts, (IfStmt, LetStmt, ForStmt)):
             stmts = [stmts]
         self.sb = sb
         self.stmts = stmts
@@ -40,10 +40,16 @@ class StmtBuilder:
             v = var(v)
         return StmtScope(self, stmts=LetStmt(v, value), ret=v)
 
-    def for_loop(self, v: Union[str, Var], extent: Union[int, Expr]) -> StmtScope:
+    def lets(self, bind_vars: Sequence[Union[str, Var]], values: Sequence[Union[int, Expr]]) -> StmtScope:
+        assert len(bind_vars) == len(values)
+        bind_vars = [var(v) if isinstance(v, str) else v for v in bind_vars]
+        let_stmts = [LetStmt(v, value) for v, value in zip(bind_vars, values)]
+        return StmtScope(self, stmts=let_stmts, ret=bind_vars)
+
+    def for_loop(self, v: Union[str, Var], extent: Union[int, Expr], unroll: Optional[bool] = None) -> StmtScope:
         if isinstance(v, str):
             v = var(v)
-        return StmtScope(self, stmts=ForStmt(v, extent), ret=v)
+        return StmtScope(self, stmts=ForStmt(v, extent, unroll), ret=v)
 
     def if_then(self, cond: Expr) -> StmtScope:
         return StmtScope(self, stmts=[IfStmt(cond)], ret=None)
@@ -56,7 +62,7 @@ class StmtBuilder:
         assert if_stmt.else_body is None
         return StmtScope(self, stmts=if_stmt, ret=None)
 
-    def for_task_fields(self, worker_index: Expr, task_layout: TaskLayout) -> List[Sequence[Expr]]:
+    def for_task_fields(self, worker_index: Expr, task_layout: TaskLayout):
         expander = TaskLayoutExpander()
         fields = expander.expand(worker_index, task_layout)
         return StmtScope(self, stmts=expander.stmts, ret=fields)

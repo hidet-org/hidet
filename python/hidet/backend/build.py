@@ -12,6 +12,7 @@ from hidet.ir.dialects.lowlevel import VoidType
 from hidet.ir.func import IRModule
 from hidet.runtime.module import CompiledModule, CompiledFunction
 from hidet.transforms import lower
+from hidet.utils import Timer, COLORS
 
 
 def compile_src_code(src_path, keep=True, working_dir=None, keep_dir=None):
@@ -56,9 +57,10 @@ def compile_src_code(src_path, keep=True, working_dir=None, keep_dir=None):
         raise e
 
 
-def build(ir_module: IRModule, output_dir, keep=True) -> CompiledModule:
+def build(ir_module: IRModule, output_dir, keep=True, verbose=True) -> CompiledModule:
     # lower
-    ir_module = lower(ir_module)
+    with Timer() as lower_timer:
+        ir_module = lower(ir_module)
 
     # codegen
     os.makedirs(output_dir, exist_ok=True)
@@ -70,8 +72,15 @@ def build(ir_module: IRModule, output_dir, keep=True) -> CompiledModule:
         f.write(src_code)
 
     # call target compiler to get dynamic library
-    lib_path = compile_src_code(src_path, keep=keep)
-
+    with Timer() as target_compile_timer:
+        lib_path = compile_src_code(src_path, keep=keep)
+    if verbose:
+        info = [
+            ('hidet lower time', lower_timer.elapsed_seconds()),
+            ('nvcc compile time', target_compile_timer.elapsed_seconds())
+        ]
+        for name, time in info:
+            print('{:>30} {}{:.3f}{} seconds'.format(name, COLORS.OKGREEN, time, COLORS.ENDC))
     # load dynamic library
     lib = ctypes.CDLL(lib_path)
     compiled_funcs = {}

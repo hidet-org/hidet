@@ -1,8 +1,8 @@
-from typing import Callable, MutableMapping, Iterator
+from typing import Callable, MutableMapping, Iterator, Sequence
 import time
 
 
-def prod(seq: list):
+def prod(seq: Sequence):
     if len(seq) == 0:
         return 1
     else:

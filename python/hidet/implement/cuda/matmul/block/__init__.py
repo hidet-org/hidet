@@ -3,4 +3,3 @@ from . import static_matmul_softpipe_ldg_wb
 
 from .static_matmul_nopipe import CudaBlockStaticMatmulNoPipeImplementer
 from .static_matmul_softpipe_ldg_wb import CudaBlockStaticMatmulSoftPipeLdgWbImplementer
-from .static_matmul_softpipe_pred import CudaBlockStaticMatmulSoftPipePredImplementer

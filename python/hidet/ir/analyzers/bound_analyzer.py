@@ -3,7 +3,7 @@ import operator
 from collections import defaultdict
 from typing import Optional, List, Set, Dict, Union, Mapping
 
-from hidet.ir.expr import Expr, Var, Add, Sub, Multiply, FloorDiv, Mod, Constant
+from hidet.ir.expr import Expr, Var, Add, Sub, Multiply, FloorDiv, Mod, Constant, Div
 from hidet.ir.func import Function
 from hidet.ir.functors import FuncStmtExprVisitor
 from hidet.ir.primitives import thread_idx, block_idx
@@ -48,6 +48,8 @@ class BoundInfo:
     def combine(lhs: 'BoundInfo', rhs: 'BoundInfo', op) -> 'BoundInfo':
         if not lhs.has_determent_range() or not rhs.has_determent_range():
             return BoundInfo()
+        if lhs.is_empty_set() or rhs.is_empty_set():
+            return BoundInfo(candidates={})
 
         lhs_candidates = lhs.candidate_set()
         rhs_candidates = rhs.candidate_set()
@@ -89,6 +91,9 @@ class BoundInfo:
             return self.candidates
         else:
             return None
+
+    def is_empty_set(self):
+        return self.candidates is not None and len(self.candidates) == 0
 
     def has_determent_range(self) -> bool:
         if self.value is not None:
@@ -169,7 +174,8 @@ class BoundAnalyzer(FuncStmtExprVisitor):
         Sub: operator.sub,
         Multiply: operator.mul,
         FloorDiv: operator.floordiv,
-        Mod: operator.mod
+        Mod: operator.mod,
+        Div: operator.floordiv,  # for the node with BoundInfo, we are sure they are integers
     }
 
     def __init__(self, var2bound: Dict[Expr, BoundInfo] = None):
@@ -200,7 +206,7 @@ class BoundAnalyzer(FuncStmtExprVisitor):
             raise NotImplementedError()
         self.visit(func.body)
 
-    def combine(self, e: Union[Add, Sub, Multiply, FloorDiv, Mod]):
+    def combine(self, e: Union[Add, Sub, Multiply, FloorDiv, Mod, Div]):
         self.visit(e.a)
         self.visit(e.b)
         self.bound[e] = BoundAnalyzer.op_dict[e.__class__](self.bound[e.a], self.bound[e.b])
@@ -212,6 +218,9 @@ class BoundAnalyzer(FuncStmtExprVisitor):
         self.combine(e)
 
     def visit_Multiply(self, e: Multiply):
+        self.combine(e)
+
+    def visit_Div(self, e: Div):
         self.combine(e)
 
     def visit_FloorDiv(self, e: FloorDiv):

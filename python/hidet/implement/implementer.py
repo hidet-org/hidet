@@ -1,4 +1,4 @@
-from typing import Optional, Sequence, Union, List
+from typing import Optional, Sequence, Union, List, Any
 from textwrap import indent
 from collections import defaultdict
 from typing import Type, Dict, Mapping
@@ -19,7 +19,7 @@ class Implementer:
     def task_pattern(self) -> TaskPattern:
         raise NotImplementedError()
 
-    def implement(self, task: Task, match: Mapping[Node, Node]) -> IRModule:
+    def implement(self, task: Task, match: Mapping[Node, Any]) -> IRModule:
         raise NotImplementedError()
 
     @staticmethod

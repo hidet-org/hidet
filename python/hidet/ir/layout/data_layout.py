@@ -137,7 +137,7 @@ class DataLayout(Node):
                 item = list(item)
             dims.append(item)
             covered.extend(item)
-            shape.append(prod(item))
+            shape.append(prod([self.shape[i] for i in item]))
         assert len(covered) == len(self.shape) and len(set(covered)) == len(covered), "missing some dimension or duplicated dimension"
 
         def global2local(*args):
@@ -171,7 +171,7 @@ class DataLayout(Node):
                     merged_args.append(args[c])
                     c += 1
             return self.global2local(*merged_args)
-        return DataLayout(shape, self.size, global2local)
+        return DataLayout(shape, self.size, global2local)  # todo: update size
 
     @staticmethod
     def product(outer: 'DataLayout', inner: 'DataLayout'):

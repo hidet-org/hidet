@@ -6,6 +6,9 @@ from .vectorize_load_store import vectorize_load_store_pass
 from .import_primitive_functions import import_primitive_functions_pass
 from .expression_simplification import expression_simplification_pass
 from .simplify_stmt import simplify_stmt_pass
+from .expand_let_expr import expand_let_expr_pass
+from .explicit_unroll_for_stmt import explicit_unroll_for_stmt_pass
+from .expression_simplification.common_subexpression_elimination import flatten_seq_stmt_pass
 
 from .expression_simplification import build_let_stmt_pass
 

@@ -2,7 +2,7 @@ from typing import Mapping, Type, Any, List
 
 
 class Node:
-    _dispatch_index = {0: None}
+    _dispatch_index = {None: 0}
 
     def __str__(self):
         from hidet.ir.functors.printer import astext

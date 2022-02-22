@@ -5,7 +5,7 @@ from hidet.baselines.matmul import matmul_ref, matmul_cublas, matmul_opt, matmul
 from hidet.implement import implement, impl_context
 from hidet.implement.cuda import CudaBlockStaticMatmulSoftPipeLdgWbImplementer
 from hidet.implement.cuda import CudaGridSplitImplementer, CudaGridNaiveImplementer, CudaWarpTransfer2dImplementer, CudaWarpFillValueImplementer, CudaBlockStaticMatmulNoPipeImplementer
-from hidet.implement.cuda import CudaThreadNaiveImplementer, CudaBlockNaiveImplementer, CudaBlockStaticMatmulSoftPipePredImplementer
+from hidet.implement.cuda import CudaThreadNaiveImplementer, CudaBlockNaiveImplementer, CudaGridStaticMatmulSoftPipePredImplementer
 from hidet.implement.resolve import random_resolve, brute_force_resolve
 from hidet.ir.task import Grid, Host, ThreadBlock
 from hidet.ir.type import TensorType
@@ -17,6 +17,7 @@ from hidet.ir.layout import DataLayout
 from hidet.runtime.value import TensorValue, randn, empty, scalar, zeros, full
 from hidet.tasks.nn import matmul
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
+from hidet.utils import cuda
 
 
 def print_latencies(name, latencies):
@@ -30,7 +31,8 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, prog
         repeat = 1
     workloads = [
         # (2, 2, 2),
-        (1024, 1024, 1024),
+        (222, 333, 444),
+        # (1024, 1024, 1024),
         # (2048, 2304, 768),
         # (1664, 768, 2304),
     ]
@@ -41,10 +43,10 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, prog
         ('cuBLAS', matmul_cublas()),
     ]
     hidet_variants = [
-        ('HidetNaive', (CudaGridNaiveImplementer, CudaThreadNaiveImplementer)),
-        # ('HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpFillValueImplementer)),
-        # ('HidetSoftPipeLdgWb', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpFillValueImplementer)),
-        ('HidetSoftPipePred', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipePredImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpFillValueImplementer)),
+        # ('HidetNaive', (CudaGridNaiveImplementer, CudaThreadNaiveImplementer)),
+        # ('HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaBlockNaiveImplementer)),
+        ('HidetSoftPipeLdgWb', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer, CudaBlockNaiveImplementer)),
+        # ('HidetSoftPipePred', (CudaGridStaticMatmulSoftPipePredImplementer, CudaBlockNaiveImplementer)),
     ]
     print('Repeat = {}'.format(repeat))
     print('Brute-force resolver = {}'.format(use_brute_force_resolve))
@@ -65,7 +67,7 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, prog
                     ir_module = brute_force_resolve(ir_module, warmup=warmup, number=number, repeat=repeat, progress_bar=progress_bar)
                 else:
                     ir_module = random_resolve(ir_module)
-                module = build(ir_module, output_dir=f'./outs/bench/{name}')
+                module = build(ir_module, output_dir=f'./outs/bench/{name}_{N}x{M}x{K}')
                 latencies = module['matmul'].profile(A, B, C, warmup=warmup, number=number, repeat=repeat)
                 print_latencies(name, latencies)
         print()
@@ -75,17 +77,37 @@ def verify(use_rand=True):
     np.set_printoptions(threshold=128 * 128, linewidth=500)
     use_print = True
     workloads = [
-        (256, 256, 256),
+        # (127, 127, 127),
+        # (32, 64, 9),
+        # (32, 64, 8),
+        # (1, 1, 1),
+        # (127, 127, 11),
+        # (255, 255, 11),
+        # (257, 257, 11),
+        # (80, 80, 8),
+        # (222, 333, 444),
+        # (127, 132, 2321),
+        # (1227, 132, 2321),
+        # (1, 1032, 2321),
+        # (1, 1032, 321),
+        # (128, 128, 128),
+        # (256, 256, 256),
         # (1024, 1024, 1024),
+
+        # (1296, 2304, 768),
+        # (1296, 128, 768),
+        # (1024, 1024, 1024),
+        # (2048, 2304, 768),
+        *[(16 * T, 2304, 768) for T in [5, 24, 43, 62, 81, 100, 119, 128]]
     ]
     baselines = [
-        ('Opt', matmul_opt()),
+        # ('Opt', matmul_opt()),
     ]
     hidet_variants = [
-        ('HidetNaive', (CudaGridNaiveImplementer, CudaThreadNaiveImplementer)),
-        ('HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpFillValueImplementer)),
-        ('HidetSoftPipeLdgWb', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpFillValueImplementer)),
-        ('HidetSoftPipeLdgWb', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipePredImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpFillValueImplementer)),
+        # ('HidetNaive', (CudaGridNaiveImplementer, CudaThreadNaiveImplementer)),
+        # ('HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaBlockNaiveImplementer)),
+        # ('HidetSoftPipeLdgWb', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer, CudaBlockNaiveImplementer)),
+        ('HidetSoftPipePred', (CudaGridStaticMatmulSoftPipePredImplementer, CudaBlockNaiveImplementer)),
     ]
     for N, M, K in workloads:
         print('Workload {} x {} x {}'.format(N, M, K))
@@ -112,7 +134,6 @@ def verify(use_rand=True):
         C = zeros([N, M], 'float32', 'host')
 
         for name, baseline in baselines:
-            print('Verifying {}'.format(name))
             task.worker = Host()
             host_module = build(random_resolve(implement(task)), f'./outs/verify/host/{name}')
 
@@ -133,19 +154,22 @@ def verify(use_rand=True):
             task.worker = Grid()
             with impl_context(allowed=allowed):
                 ir_module = implement(task)
-                grid_module = build(random_resolve(ir_module, seed=1), f'./outs/verify/{name}')
+                # print(ir_module)
+                grid_module = build(random_resolve(ir_module, seed=1), f'./outs/verify/{name}_{N}x{M}x{K}')
 
             task.worker = Host()
             host_module = build(random_resolve(implement(task)), f'./outs/verify/host/{name}')
 
             GA, GB, GC = A.to_cuda(), B.to_cuda(), C.to_cuda()
             grid_module['matmul'](GA, GB, GC)
+            cuda.device_synchronize()
 
             HA, HB, HC = A.to_cpu(), B.to_cpu(), C.to_cpu()
             host_module['matmul'](HA, HB, HC)
             try:
                 np.testing.assert_allclose(GC.to_numpy(), HC.to_numpy())
             except AssertionError as e:
+                # use_print = False
                 if use_print:
                     print('A:\n{}\nB:\n{}\n{}\n{}\nhost:\n{}'.format(A, B, name, GC, HC))
                 raise e
@@ -157,12 +181,15 @@ def test_custom_func():
         arr = Var('arr', TensorType(scope='register', dtype='float32', layout=DataLayout.row_major([100])))
         fb.extend_local_vars([arr])
         sb = StmtBuilder()
-        with sb.let('v', thread_idx()) as v:
+        # with sb.let('v', thread_idx()) as v:
+        with sb.for_loop('v', extent=128) as v:
             # sb += BufferStoreStmt(arr, [((((((v // 32) // 2) * 16) + (((((v % 32) // 16) * 2) + ((v % 32) % 2)) * 4)) + 3) % 16)], convert(0.0))
             # sb += BufferStoreStmt(arr, [(((v * 32) + (v % 32)) // 32)], convert(0.0))
             # sb += BufferStoreStmt(arr, [(((v // 64) * 16) // 16)], convert(0.0))
             # sb += BufferStoreStmt(arr, [v + (convert(0) + convert(0))], convert(0.0))
-            sb += BufferStoreStmt(arr, [((0 + ((0 + ((1 * (v / 8)) * 128)) * 1024)) + (0 * 1))], convert(0.0))
+            # sb += BufferStoreStmt(arr, [((0 + ((0 + ((1 * (v / 8)) * 128)) * 1024)) + (0 * 1))], convert(0.0))
+            # sb += BufferStoreStmt(arr, [(((((((v % 32) / 16) * 2) + ((v % 32) % 2)) * 4) + ((v / 64) * 16)) % 16)], convert(0.0))
+            sb += BufferStoreStmt(arr, [((thread_idx() % 32) % 2)], convert(0.0))
 
         fb.set_body(sb.finish())
     ir_module = IRModule()
@@ -173,6 +200,6 @@ def test_custom_func():
 
 
 if __name__ == '__main__':
-    # verify()
-    benchmark(use_nsight_compute=False)
-    # test_demo()
+    verify()
+    # benchmark(use_nsight_compute=False)
+    # test_custom_func()
