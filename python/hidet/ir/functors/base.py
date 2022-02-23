@@ -389,8 +389,8 @@ class ExprRewriter(ExprFunctor):
             return Call(func_var, args)
 
     def visit_Let(self, e: Let):
+        var = e.var
         value = self(e.value)
-        var = self(e.var)
         body = self(e.body)
         if same_list([var, value, body], [e.var, e.value, e.body]):
             return e
@@ -579,7 +579,7 @@ class StmtRewriter(StmtFunctor):
             return AssignStmt(var, value)
 
     def visit_LetStmt(self, stmt: LetStmt):
-        var = self.visit_expr(stmt.var)
+        var = stmt.var
         value = self.visit_expr(stmt.value)
         body = self.visit(stmt.body)
         if var is stmt.var and value is stmt.value and body is stmt.body:
@@ -588,7 +588,7 @@ class StmtRewriter(StmtFunctor):
             return LetStmt(var, value, body)
 
     def visit_ForStmt(self, stmt: ForStmt):
-        loop_var = self.visit_expr(stmt.loop_var)
+        loop_var = stmt.loop_var
         extent = self.visit_expr(stmt.extent)
         body = self.visit(stmt.body)
         if loop_var is stmt.loop_var and body is stmt.body:

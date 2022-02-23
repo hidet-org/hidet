@@ -1,4 +1,5 @@
-from typing import Mapping, List, Union, Any
+from typing import Mapping, List, Union, Any, Callable, Sequence
+import contextlib
 
 from hidet.implement.implementer import Implementer, register_impl, NotSupportedError
 from hidet.implement.search_space import ProductSpace, AtomSpace, SpaceChoice
@@ -7,12 +8,12 @@ from hidet.ir.dialects.compute import TensorInput, TensorCompute, compute, Reduc
 from hidet.ir.dialects.lowlevel import Address, TensorPointerType, Cast, PointerType
 from hidet.ir.dialects.pattern import TaskPattern, any_const_int
 from hidet.ir.functors import simplify, simplify_to_int
-from hidet.ir.expr import Expr, Call, TensorElement, var, tensor_var, convert, Var, And, IfThenElse, Or
+from hidet.ir.expr import Expr, Call, TensorElement, var, tensor_var, convert, Var, And, IfThenElse, Or, is_tensor, get_tensor_layout, PyScalar, Condition
 from hidet.ir.func import IRModule
 from hidet.ir.layout import TaskLayout, row_major_layout, full_layout, DataLayout, StridesLayout
 from hidet.ir.node import Node
 from hidet.ir.primitives import syncthreads, thread_idx, block_idx
-from hidet.ir.stmt import LetStmt, ForStmt, AssignStmt, ReturnStmt
+from hidet.ir.stmt import LetStmt, ForStmt, AssignStmt, ReturnStmt, BufferStoreStmt, Stmt
 from hidet.ir.task import Task, ThreadBlock, Warp, Grid
 from hidet.ir.type import scalar_type, TensorType, Scope
 from hidet.implement.common import transfer_task, init_task, transfer_predicated_task, predicated_transfer_task, bounded_transfer_task, transfer_bounded_task
@@ -70,6 +71,7 @@ class MatmulSetting:
         self.outer = outer
         self.atom_layout = atom_layout
         self.inner = inner
+        block_k = block_warps_k * warp_k
         # dependent variables
         warp_m = outer[0] * atom_layout.task_shape[0] * inner[0]
         warp_n = outer[1] * atom_layout.task_shape[1] * inner[1]
@@ -111,8 +113,10 @@ class MatmulSetting:
         self.regs_a_layout = DataLayout.local((block_warps[0], 1)) * StridesLayout.row_major((outer[0], 1)) * DataLayout.local((atom_shape[0], 1)) * StridesLayout.row_major((inner[0], 1))
         self.regs_b_layout = DataLayout.local((1, block_warps[1])) * StridesLayout.row_major((1, outer[1])) * DataLayout.local((1, atom_shape[1])) * StridesLayout.row_major((1, inner[1]))
         self.regs_c_layout = DataLayout.local(block_warps) * StridesLayout.row_major(outer) * DataLayout.local(atom_shape) * StridesLayout.row_major(inner)
-        self.regs_a_ldg_layout = DataLayout(size=block_m * block_warps_k // block_size, shape=(block_m, block_warps_k), global2local=(lambda i, j: i % (block_m // (block_size // block_warps_k))))
-        self.regs_b_ldg_layout = DataLayout(size=block_warps_k * block_n // block_size, shape=(block_warps_k, block_n), global2local=(lambda i, j: j // (block_size // block_warps_k)))
+        # self.regs_a_ldg_layout = DataLayout(size=block_m * block_warps_k // block_size, shape=(block_m, block_warps_k), global2local=(lambda i, j: i % (block_m // (block_size // block_warps_k))))
+        # self.regs_b_ldg_layout = DataLayout(size=block_warps_k * block_n // block_size, shape=(block_warps_k, block_n), global2local=(lambda i, j: j // (block_size // block_warps_k)))
+        self.regs_a_ldg_layout = DataLayout.local((block_size // block_k, block_k)) * DataLayout.row_major((block_m // (block_size // block_k), 1))
+        self.regs_b_ldg_layout = DataLayout.row_major((1, block_n // (block_size // block_k))) * DataLayout.local((block_k, block_size // block_k))
 
     def get_c_write_back_inner(self):
         block_size = self.block_warps[0] * self.block_warps[1] * 32
@@ -280,7 +284,7 @@ class CudaGridStaticMatmulSoftPipePredImplementer(Implementer):
         b_s2r = transfer_task(f'{task.name}.b.s2r', src_type=smem_B_type, dst_type=regs_B_type, worker=ThreadBlock(task_layout=setting.b_s2r_layout), parent_module=ir_module)
         c_r2s = transfer_task(f'{task.name}.c.r2s', src_type=regs_C_wb_type.slice_out(dims=[0, 1]), dst_type=smem_C_wb_type, worker=ThreadBlock(task_layout=setting.c_r2s_layout), parent_module=ir_module)
 
-        c_s2g = bounded_transfer_task(f'{task.name}.c.s2g.block', src_type=smem_C_wb_type, dst_type=gmem_C_wb_type.slice_out(dims=[0, 1, 2, 3]), worker=ThreadBlock(task_layout=setting.c_s2g_layout), parent_module=ir_module)
+        c_s2g = bounded_transfer_task(f'{task.name}.c.s2g', src_type=smem_C_wb_type, dst_type=gmem_C_wb_type.slice_out(dims=[0, 1, 2, 3]), worker=ThreadBlock(task_layout=setting.c_s2g_layout), parent_module=ir_module)
 
         with TaskBuilder(f'{task.name}.compute.block', ThreadBlock(task_layout=setting.ab2c_layout), ir_module) as ab2c:
             regs_A_input = TensorInput('regs_A', A_dtype)
@@ -335,9 +339,11 @@ class CudaGridStaticMatmulSoftPipePredImplementer(Implementer):
             # function body
             with sb.lets(['block_m', 'block_n'], grid_blocks_layout(block_idx())[0]) as (block_m, block_n):
                 # transfer first tile
-                sb += a_g2r_pre(~gmem_A[block_m, 0, 0], regs_A_ldg, task_m - block_m * block_shape[0], first_k_tile)
+                # sb += a_g2r_pre(~gmem_A[block_m, 0, 0], regs_A_ldg, task_m - block_m * block_shape[0], first_k_tile)
+                sb += self.transfer(regs_A_ldg, gmem_A, setting.a_g2r_r2s_layout, f_src_index=lambda i, k: [block_m, i, k], protect_src=True, src_predicate=lambda i, k: k < first_k_tile)
                 sb += a_r2s(regs_A_ldg, smem_A)
-                sb += b_g2r_pre(~gmem_B[block_n, 0, 0], regs_B_ldg, first_k_tile, task_n - block_n * block_shape[1])
+                # sb += b_g2r_pre(~gmem_B[block_n, 0, 0], regs_B_ldg, first_k_tile, task_n - block_n * block_shape[1])
+                sb += self.transfer(regs_B_ldg, gmem_B, setting.b_g2r_r2s_layout, f_src_index=lambda k, j: [block_n, k, j], protect_src=True, src_predicate=lambda k, j: k < first_k_tile)
                 sb += b_r2s(regs_B_ldg, smem_B)
                 sb += syncthreads()
                 sb += a_s2r(~smem_A[0, 0, 0], ~regs_A[0, 0, 0])
@@ -379,22 +385,40 @@ class CudaGridStaticMatmulSoftPipePredImplementer(Implementer):
                         sb += syncthreads()
                         sb += c_r2s(~regs_C_wb[i, j, 0, 0], smem_C)
                         sb += syncthreads()
-                        i_base = block_m * block_shape[0] + i * wb_warp_shape[0]
-                        j_base = block_n * block_shape[1] + j * wb_warp_shape[1]
-                        with sb.if_then(And(i_base < task_m, j_base < task_n)):
-                            i_extent = task_m - i_base
-                            j_extent = task_n - j_base
-                            i_bases = wb_warp_shape[0] * setting.c_r2s_outer_outer[0], wb_warp_shape[0]
-                            j_bases = wb_warp_shape[1] * setting.c_r2s_outer_outer[1], wb_warp_shape[1]
-                            i_max = i_extent // i_bases[0] * i_bases[1] + IfThenElse(i_extent % i_bases[0] >= i_bases[1], i_bases[1], i_extent % i_bases[1])
-                            j_max = j_extent // j_bases[0] * j_bases[1] + IfThenElse(j_extent % j_bases[0] >= j_bases[1], j_bases[1], j_extent % j_bases[1])
-                            sb += c_s2g(smem_C, ~gmem_C_wb[block_m, block_n, i, j, 0, 0], i_max, j_max)
-                        with sb.otherwise():
-                            sb += ReturnStmt()
-
+                        sb += self.transfer(dst=gmem_C_wb, src=smem_C, f_dst_index=lambda ii, jj: [block_m, block_n, i, j, ii, jj], layout=setting.c_s2g_layout, protect_dst=True)
             # set body
             fb.set_body(sb.finish())
 
         func = fb.get()
         ir_module.add(func.name, func)
         return ir_module
+
+    def transfer(self,
+                 dst: Var,
+                 src: Var,
+                 layout: TaskLayout,
+                 worker_idx: Var = thread_idx(),
+                 f_dst_index: Callable[[Any], List[Expr]] = lambda *args: args,
+                 f_src_index: Callable[[Any], List[Expr]] = lambda *args: args,
+                 protect_src: bool = False,
+                 protect_dst: bool = False,
+                 src_predicate: Callable[[Any], Condition] = None,
+                 src_default: Union[Expr, PyScalar] = 0.0,
+                 ) -> Stmt:
+        src_layout: DataLayout = get_tensor_layout(src)
+        dst_layout: DataLayout = get_tensor_layout(dst)
+        sb = StmtBuilder()
+        for task_index in layout(worker_idx):
+            src_index = f_src_index(*task_index)
+            src_cond = convert(True)
+            if protect_src:
+                src_cond = And(src_cond, src_layout.within_bound(src_index))
+            if src_predicate:
+                src_cond = And(src_cond, src_predicate(*task_index))
+            src_value = IfThenElse(src_cond, TensorElement(src, src_index), src_default)
+            with contextlib.ExitStack() as stack:
+                dst_index = f_dst_index(*task_index)
+                if protect_dst:
+                    stack.enter_context(sb.if_then(dst_layout.within_bound(*dst_index)))
+                sb += BufferStoreStmt(dst, dst_index, src_value)
+        return sb.finish()

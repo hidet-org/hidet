@@ -31,8 +31,8 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, prog
         repeat = 1
     workloads = [
         # (2, 2, 2),
-        (222, 333, 444),
-        # (1024, 1024, 1024),
+        # (222, 333, 444),
+        (1024, 1024, 1024),
         # (2048, 2304, 768),
         # (1664, 768, 2304),
     ]
@@ -45,8 +45,8 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, prog
     hidet_variants = [
         # ('HidetNaive', (CudaGridNaiveImplementer, CudaThreadNaiveImplementer)),
         # ('HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaBlockNaiveImplementer)),
-        ('HidetSoftPipeLdgWb', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer, CudaBlockNaiveImplementer)),
-        # ('HidetSoftPipePred', (CudaGridStaticMatmulSoftPipePredImplementer, CudaBlockNaiveImplementer)),
+        # ('HidetSoftPipeLdgWb', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer, CudaBlockNaiveImplementer)),
+        ('HidetSoftPipePred', (CudaGridStaticMatmulSoftPipePredImplementer, CudaBlockNaiveImplementer)),
     ]
     print('Repeat = {}'.format(repeat))
     print('Brute-force resolver = {}'.format(use_brute_force_resolve))
@@ -77,28 +77,16 @@ def verify(use_rand=True):
     np.set_printoptions(threshold=128 * 128, linewidth=500)
     use_print = True
     workloads = [
-        # (127, 127, 127),
-        # (32, 64, 9),
-        # (32, 64, 8),
-        # (1, 1, 1),
-        # (127, 127, 11),
-        # (255, 255, 11),
-        # (257, 257, 11),
-        # (80, 80, 8),
-        # (222, 333, 444),
-        # (127, 132, 2321),
-        # (1227, 132, 2321),
-        # (1, 1032, 2321),
-        # (1, 1032, 321),
+        (1, 1, 9),
         # (128, 128, 128),
         # (256, 256, 256),
+        # (222, 333, 444),
         # (1024, 1024, 1024),
-
         # (1296, 2304, 768),
         # (1296, 128, 768),
         # (1024, 1024, 1024),
         # (2048, 2304, 768),
-        *[(16 * T, 2304, 768) for T in [5, 24, 43, 62, 81, 100, 119, 128]]
+        # *[(16 * T, 2304, 768) for T in [5, 24, 43, 62, 81, 100, 119, 128]]
     ]
     baselines = [
         # ('Opt', matmul_opt()),
@@ -201,5 +189,5 @@ def test_custom_func():
 
 if __name__ == '__main__':
     verify()
-    # benchmark(use_nsight_compute=False)
+    benchmark(use_nsight_compute=False)
     # test_custom_func()

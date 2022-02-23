@@ -11,6 +11,8 @@ def expression_simplification_pass():
         inline_let_stmt_pass(inline_all=True),
         rule_based_simplify_pass(),
 
+        # inline_let_stmt_pass(),
+
         # build_let_stmt_pass(),
         # common_subexpression_elimination_pass(),
         # inline_let_stmt_pass(inline_factor=2)

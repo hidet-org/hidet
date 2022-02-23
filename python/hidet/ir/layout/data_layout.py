@@ -8,6 +8,7 @@ from hidet.utils import prod
 # typing forward declaration
 Expr = 'Expr'
 Int = Union['Expr', int]
+Bool = Union['Expr', bool]
 
 
 def is_atom(expr: Expr):
@@ -15,7 +16,7 @@ def is_atom(expr: Expr):
     return isinstance(expr, (Constant, Var))
 
 
-def variablize(expr_list: List[Expr], var2value: Dict['Var', Expr]) -> List['Var']:
+def variablize(expr_list: Sequence[Expr], var2value: Dict['Var', Expr]) -> List['Var']:
     from hidet.ir import var
     out = []
     for expr in expr_list:
@@ -37,12 +38,11 @@ def concat_let_expr(var2value, body: Expr):
 
 # data layout
 class DataLayout(Node):
-    def __init__(self, shape=None, size=None, global2local=None):
+    def __init__(self, shape=None, size=None):
         self.shape: Tuple[Int] = shape
         self.size: Int = size
-        self.global2local: Callable[[Int, ...], Int] = global2local
 
-    def __call__(self, *args: Sequence[Int]):
+    def __call__(self, *args: Int):
         return self.serialize(*args)
 
     def __add__(self, other):
@@ -51,172 +51,82 @@ class DataLayout(Node):
     def __mul__(self, other):
         return DataLayout.product(outer=self, inner=other)
 
-    def serialize(self, *args: Sequence[Int]):
+    def global2local(self, *args: Int) -> Int:
+        raise NotImplementedError()
+
+    def global2cond(self, *args: Int) -> Bool:
+        raise NotImplementedError()
+
+    def serialize(self, *args: Int):
+        if isinstance(args[0], (tuple, list)) and len(args) == 1:
+            # support usage such as within_bound([1, 2, 3])
+            args = args[0]
         assert len(args) == len(self.shape)
         var2value = OrderedDict()
         arg_vars = variablize(args, var2value)
         scalar_index = self.global2local(*arg_vars)
         scalar_index = concat_let_expr(var2value=var2value, body=scalar_index)
-        if isinstance(scalar_index, int) and isinstance(self.size, int):
-            assert scalar_index < self.size
         return scalar_index
 
-    def tile(self, inner_shape: Sequence[Int]) -> 'DataLayout':
-        assert len(inner_shape) == len(self.shape)
-        assert all(b % a == 0 for a, b in zip(inner_shape, self.shape) if isinstance(a, int) and isinstance(b, int))
-        shape = [b // a for a, b in zip(inner_shape, self.shape)] + inner_shape
+    def within_bound(self, *args: Int):
+        if isinstance(args[0], (tuple, list)) and len(args) == 1:
+            # support usage such as within_bound([1, 2, 3])
+            args = args[0]
+        assert len(args) == len(self.shape)
+        var2value = OrderedDict()
+        arg_vars = variablize(args, var2value)
+        cond = self.global2cond(*arg_vars)
+        cond = concat_let_expr(var2value=var2value, body=cond)
+        return cond
 
-        def global2local(*args):
-            rank = len(inner_shape)
-            assert len(args) == rank * 2
-            outer_args = args[:rank]
-            inner_args = args[rank:]
-            merged_args = [o * inner_shape[r] + i for r, o, i in zip(range(rank), outer_args, inner_args)]
+    def tile(self, inner_shape: Sequence[Int]):
+        return TiledDataLayout(base=self, inner_shape=inner_shape)
 
-            return self.global2local(*merged_args)
-
-        return DataLayout(shape, self.size, global2local)
-
-    def split(self, dim2factor: Mapping[int, Int]) -> 'DataLayout':
-        """
-        3-dimension tensor with shape [a, b, c]
-        after split(dim2factor={0: 2, 1: 3}) got
-        5-dimension tensor with shape [(a + 1) // 2, 2, (b + 2) // 3, 3, c]
-        """
-        shape = []
-        for i, s in enumerate(self.shape):
-            if i in dim2factor:
-                factor = dim2factor[i]
-                outer = (s + factor - 1) // factor
-                shape.extend([outer, factor])
-            else:
-                shape.append(s)
-
-        def global2local(*args):
-            assert len(args) == len(shape)
-            merged_args = []
-            c = 0
-            for i in range(len(self.shape)):
-                if i in dim2factor:
-                    outer_idx = args[c]
-                    inner_idx = args[c+1]
-                    merged_args.append(outer_idx * dim2factor[i] + inner_idx)
-                    c += 2
-                else:
-                    merged_args.append(args[c])
-                    c += 1
-            return self.global2local(*merged_args)
-
-        return DataLayout(shape, self.size, global2local)
+    def split(self, dim2factor: Mapping[int, Int]):
+        return SplitDataLayout(base=self, dim2factor=dim2factor)
 
     def reorder(self, order: Sequence[int]):
-        """
-        3-dimension tensor with shape [a, b, c]
-        after reorder([0, 2, 1]) got
-        3-dimension tensor with shape [a, c, b]
-
-        It is a special case of fuse.
-        """
         return self.fuse(order)
 
     def fuse(self, dim2fuse: Sequence[Union[Sequence[int], int]]):
-        """
-        3-dimension tensor with shape [a, b, c]
-        after fuse([2, [1, 0]]) got
-        3-dimension tensor with shape [c, b * a]
-        (i, j, k) of the result data layout will be mapped to (k, j * I + i) of the original data layout
-        """
-        covered = []
-        shape = []
-        dims = []
-        for i in range(len(dim2fuse)):
-            item = dim2fuse[i]
-            if isinstance(item, int):
-                item = [item]
-            else:
-                item = list(item)
-            dims.append(item)
-            covered.extend(item)
-            shape.append(prod([self.shape[i] for i in item]))
-        assert len(covered) == len(self.shape) and len(set(covered)) == len(covered), "missing some dimension or duplicated dimension"
-
-        def global2local(*args):
-            original_args = [None] * len(self.shape)
-            for i in range(len(shape)):
-                dim_sizes = [self.shape[v] for v in dims[i]]
-                for j, dim in enumerate(dims[i]):
-                    original_args[dim] = args[i] // prod(dim_sizes[j + 1:]) % dim_sizes[j]
-            return self.global2local(*original_args)
-
-        return DataLayout(shape, self.size, global2local)
+        return FusedDataLayout(base=self, dim2fuse=dim2fuse)
 
     def slice_out(self, dims: Sequence[int]):
-        """
-        3-dimension tensor with shape [a, b, c]
-        after cut({0, 2}) got
-        1-dimension tensor with shape [b]
-        """
-        dims = set(dims)
-        assert all(d < len(self.shape) for d in dims)
-        shape = [s for r, s in enumerate(self.shape) if r not in dims]
-
-        def global2local(*args):
-            assert len(args) == len(shape)
-            merged_args = []
-            c = 0
-            for i in range(len(self.shape)):
-                if i in dims:
-                    merged_args.append(0)
-                else:
-                    merged_args.append(args[c])
-                    c += 1
-            return self.global2local(*merged_args)
-        return DataLayout(shape, self.size, global2local)  # todo: update size
+        return SliceOutDataLayout(base=self, dims=dims)
 
     @staticmethod
-    def product(outer: 'DataLayout', inner: 'DataLayout'):
-        assert len(outer.shape) == len(inner.shape)
-        shape = [a * b for a, b in zip(outer.shape, inner.shape)]
-        size = outer.size * inner.size
-
-        def global2local(*args):
-            lhs_args = [v // b for v, b in zip(args, inner.shape)]
-            rhs_args = [v % b for v, b in zip(args, inner.shape)]
-            return outer.global2local(*lhs_args) * inner.size + inner.global2local(*rhs_args)
-
-        return DataLayout(shape, size, global2local)
+    def product(outer, inner):
+        return ProductDataLayout(outer, inner)
 
     @staticmethod
-    def concat(lhs: 'DataLayout', rhs: 'DataLayout'):
-        shape = list(lhs.shape) + list(rhs.shape)
-        size = lhs.size * rhs.size
-
-        def global2local(*args):
-            lhs_args = args[:len(lhs.shape)]
-            rhs_args = args[len(lhs.shape):]
-            return lhs.global2local(*lhs_args) * rhs.size + rhs.global2local(*rhs_args)
-
-        return DataLayout(shape, size, global2local)
+    def concat(lhs, rhs):
+        return ConcatDataLayout(lhs, rhs)
 
     @staticmethod
     def local(shape: Sequence[Int]):
-        return DataLayout(shape, size=1, global2local=lambda *args: 0)
+        return LocalLayout(shape=shape)
 
     @staticmethod
     def row_major(shape: Sequence[Int]):
         return StridesLayout.row_major(shape)
 
     @staticmethod
-    def column_major(shape: Sequence[Int]) -> 'StridesLayout':
+    def column_major(shape: Sequence[Int]):
         return StridesLayout.column_major(shape)
 
 
 class StridesLayout(DataLayout):
     def __init__(self, shape, strides):
         super().__init__(shape=shape,
-                         size=StridesLayout.storage_size(shape, strides),
-                         global2local=lambda *indices: sum(v * self.strides[i] for i, v in enumerate(indices)))
+                         size=StridesLayout.storage_size(shape, strides))
         self.strides: List[Int] = strides
+
+    def global2local(self, *args: Int) -> Int:
+        return sum(v * self.strides[i] for i, v in enumerate(args))
+
+    def global2cond(self, *args: Int) -> Bool:
+        from hidet.ir.expr import And
+        return And.join_list([v < s for s, v in zip(self.shape, args)])
 
     @staticmethod
     def storage_size(shape, strides) -> Expr:
@@ -240,9 +150,195 @@ class StridesLayout(DataLayout):
         tuples = sorted(tuples, key=lambda t: t[1])
         reordered_shape = [shape[t[0]] for t in tuples]
         for i in range(rank):
-            tuples[i][2] = prod(reordered_shape[i+1:])
+            tuples[i][2] = prod(reordered_shape[i + 1:])
         tuples = sorted(tuples, key=lambda t: t[0])
         strides = [t[2] for t in tuples]
         return StridesLayout(shape, strides)
 
+
+class LocalLayout(DataLayout):
+    def __init__(self, shape):
+        super().__init__(shape=shape, size=1)
+
+    def global2local(self, *args: Int) -> Int:
+        return 0
+
+    def global2cond(self, *args: Int) -> Bool:
+        from hidet.ir.expr import And
+        return And.join_list([v < s for s, v in zip(self.shape, args)])
+
+
+class TiledDataLayout(DataLayout):
+    def __init__(self, base: DataLayout, inner_shape: Sequence[Int]):
+        assert len(inner_shape) == len(base.shape)
+        assert all(b % a == 0 for a, b in zip(inner_shape, base.shape) if isinstance(a, int) and isinstance(b, int))
+        self.base = base
+        self.inner_shape = inner_shape
+        super().__init__(shape=[b // a for a, b in zip(inner_shape, self.shape)] + list(inner_shape), size=base.size)
+
+    def base_args(self, *args):
+        outer_args, inner_args = args[:len(args) // 2], args[len(args) // 2:]
+        return [o * factor + i for factor, o, i in zip(self.inner_shape, outer_args, inner_args)]
+
+    def global2local(self, *args):
+        return self.base(*self.base_args(args))
+
+    def global2cond(self, *args):
+        return self.base.within_bound(*self.base_args(args))
+
+
+class SplitDataLayout(DataLayout):
+    """
+    3-dimension tensor with shape [a, b, c]
+    after split(dim2factor={0: 2, 1: 3}) got
+    5-dimension tensor with shape [(a + 1) // 2, 2, (b + 2) // 3, 3, c]
+    """
+
+    def __init__(self, base: DataLayout, dim2factor: Mapping[int, Int]):
+        self.base = base
+        self.dim2factor = dim2factor
+        shape = []
+        for i, s in enumerate(base.shape):
+            if i in dim2factor:
+                factor = dim2factor[i]
+                outer = (s + factor - 1) // factor
+                shape.extend([outer, factor])
+            else:
+                shape.append(s)
+        super().__init__(shape=shape, size=base.size)
+
+    def base_args(self, *args):
+        merged_args = []
+        c = 0
+        for i in range(len(self.base.shape)):
+            if i in self.dim2factor:
+                outer_idx = args[c]
+                inner_idx = args[c + 1]
+                merged_args.append(outer_idx * self.dim2factor[i] + inner_idx)
+                c += 2
+            else:
+                merged_args.append(args[c])
+                c += 1
+        return merged_args
+
+    def global2local(self, *args):
+        return self.base(*self.base_args(*args))
+
+    def global2cond(self, *args: Int) -> Bool:
+        return self.base.within_bound(*self.base_args(*args))
+
+
+class FusedDataLayout(DataLayout):
+    """
+    3-dimension tensor with shape [a, b, c]
+    after fuse([2, [1, 0]]) got
+    3-dimension tensor with shape [c, b * a]
+    (i, j, k) of the result data layout will be mapped to (k, j * I + i) of the original data layout
+    """
+
+    def __init__(self, base: DataLayout, dim2fuse: Sequence[Union[Sequence[int], int]]):
+        self.base = base
+        self.dim2fuse = dim2fuse
+        covered = []
+        shape = []
+        self.dims = []
+        for i in range(len(dim2fuse)):
+            item = dim2fuse[i]
+            if isinstance(item, int):
+                item = [item]
+            else:
+                item = list(item)
+            self.dims.append(item)
+            covered.extend(item)
+            shape.append(prod([base.shape[i] for i in item]))
+        assert len(covered) == len(base.shape) and len(set(covered)) == len(covered), "missing some dimension or duplicated dimension"
+        super().__init__(shape=shape, size=base.size)
+
+    def base_args(self, *args: Int):
+        original_args = [None] * len(self.base.shape)
+        for i in range(len(self.dims)):
+            dim_sizes = [self.base.shape[v] for v in self.dims[i]]
+            for j, dim in enumerate(self.dims[i]):
+                original_args[dim] = args[i] // prod(dim_sizes[j + 1:]) % dim_sizes[j]
+        return original_args
+
+    def global2local(self, *args: Int) -> Int:
+        return self.base(*self.base_args(*args))
+
+    def global2cond(self, *args: Int) -> Bool:
+        return self.base.within_bound(*self.base_args(*args))
+
+
+class SliceOutDataLayout(DataLayout):
+    """
+    3-dimension tensor with shape [a, b, c]
+    after cut({0, 2}) got
+    1-dimension tensor with shape [b]
+    """
+
+    def __init__(self, base: DataLayout, dims: Sequence[int]):
+        assert all(d < len(base.shape) for d in dims)
+        self.base = base
+        self.dims = set(dims)
+        super().__init__(shape=[s for r, s in enumerate(base.shape) if r not in dims],
+                         size=base.size)  # todo: update size
+
+    def base_args(self, *args: Int):
+        merged_args = []
+        c = 0
+        for i in range(len(self.base.shape)):
+            if i in self.dims:
+                merged_args.append(0)
+            else:
+                merged_args.append(args[c])
+                c += 1
+        return merged_args
+
+    def global2local(self, *args: Int) -> Int:
+        return self.base(*self.base_args(*args))
+
+    def global2cond(self, *args: Int) -> Bool:
+        return self.base.within_bound(*self.base_args(*args))
+
+
+class ProductDataLayout(DataLayout):
+    def __init__(self, outer: DataLayout, inner: DataLayout):
+        assert len(outer.shape) == len(inner.shape)
+        super().__init__(
+            shape=[a * b for a, b in zip(outer.shape, inner.shape)],
+            size=outer.size * inner.size
+        )
+        self.outer = outer
+        self.inner = inner
+
+    def global2local(self, *args: Int) -> Int:
+        outer_args = [v // b for v, b in zip(args, self.inner.shape)]
+        inner_args = [v % b for v, b in zip(args, self.inner.shape)]
+        return self.outer(*outer_args) * self.inner.size + self.inner(*inner_args)
+
+    def global2cond(self, *args: Int) -> Bool:
+        from hidet.ir.expr import And
+        outer_args = [v // b for v, b in zip(args, self.inner.shape)]
+        inner_args = [v % b for v, b in zip(args, self.inner.shape)]
+        return And(self.outer.within_bound(*outer_args), self.inner.within_bound(*inner_args))
+
+
+class ConcatDataLayout(DataLayout):
+    def __init__(self, lhs: DataLayout, rhs: DataLayout):
+        super().__init__(
+            shape=list(lhs.shape) + list(rhs.shape),
+            size=lhs.size * rhs.size)
+        self.lhs = lhs
+        self.rhs = rhs
+
+    def global2local(self, *args: Int) -> Int:
+        lhs_args = args[:len(self.lhs.shape)]
+        rhs_args = args[len(self.lhs.shape):]
+        return self.lhs(*lhs_args) * self.rhs.size + self.rhs(*rhs_args)
+
+    def global2cond(self, *args: Int) -> Bool:
+        from hidet.ir.expr import And
+        lhs_args = args[:len(self.lhs.shape)]
+        rhs_args = args[len(self.lhs.shape):]
+        return And(self.lhs.within_bound(*lhs_args), self.rhs.within_bound(*rhs_args))
 

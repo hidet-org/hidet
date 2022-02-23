@@ -153,6 +153,10 @@ class And(Condition, BinaryOp):
             cond = And(cond, convert(c))
         return cond
 
+    @staticmethod
+    def join_list(conds: Sequence[Condition]):
+        return And.join(*conds)
+
 
 class Or(Condition, BinaryOp):
     def __init__(self, a, b):
@@ -217,8 +221,8 @@ class Call(Expr):
 class Let(Expr):
     def __init__(self, var, value, body):
         self.var = var
-        self.value = value
-        self.body = body
+        self.value = convert(value)
+        self.body = convert(body)
 
 
 class Constant(Expr):
@@ -298,3 +302,15 @@ def is_const_int(v: Expr) -> bool:
 def if_then_else(cond: Union[Expr, PyScalar], then_expr: Union[Expr, PyScalar], else_expr: Union[Expr, PyScalar]) -> IfThenElse:
     return IfThenElse(convert(cond), convert(then_expr), convert(else_expr))
 
+
+def is_tensor(v: Expr) -> bool:
+    from hidet.ir.dialects.lowlevel import TensorPointerType
+    if not isinstance(v, Var):
+        return False
+    return isinstance(v.type, (TensorType, TensorPointerType))
+
+
+def get_tensor_layout(v: Expr):
+    from hidet.ir.dialects.lowlevel import TensorPointerType
+    assert isinstance(v, Var) and isinstance(v.type, (TensorType, TensorPointerType))
+    return v.type.layout if isinstance(v.type, TensorType) else v.type.tensor_type.layout

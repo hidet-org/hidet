@@ -1,4 +1,5 @@
 from typing import Union, Mapping
+from hidet.ir.expr import Let
 from hidet.ir.func import Function
 from hidet.ir.stmt import Stmt, LetStmt, ForStmt
 from hidet.ir.dialects.compute import *
@@ -65,6 +66,21 @@ class FreeVarCollector(StmtExprVisitor):
             self.free_vars.add(e)
 
 
+class CloneRewriter(StmtExprRewriter):
+    def clone(self, obj: Union[Stmt, Expr]):
+        return self(obj)
+
+    def visit_LetStmt(self, stmt: LetStmt):
+        v = Var(stmt.var.hint, stmt.var.type)
+        self.memo[stmt.var] = v
+        return LetStmt(v, self(stmt.value), self(stmt.body))
+
+    def visit_Let(self, e: Let):
+        v = Var(e.var.hint, e.var.type)
+        self.memo[e.var] = v
+        return Let(v, self(e.value), self(e.body))
+
+
 def rewrite(node: Union[Expr, Stmt], rewrite_map: Mapping[Var, Expr]):
     assert isinstance(rewrite_map, dict)
     rewriter = StmtExprMapRewriter(rewrite_map)
@@ -84,7 +100,10 @@ def collect(node: Union[Function, Expr, Stmt], node_types):
     return collector.collect(node)
 
 
+def clone(node: Union[Stmt, Expr]) -> Union[Stmt, Expr]:
+    return CloneRewriter()(node)
+
+
 def collect_free_vars(node: Union[Expr, Stmt]):
     collector = FreeVarCollector()
     return collector.collect(node)
-

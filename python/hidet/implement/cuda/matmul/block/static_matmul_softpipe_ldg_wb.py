@@ -74,8 +74,10 @@ class MatmulSetting:
         self.regs_a_layout = DataLayout.local((block_warps[0], 1)) * StridesLayout.row_major((outer[0], 1)) * DataLayout.local((atom_shape[0], 1)) * StridesLayout.row_major((inner[0], 1))
         self.regs_b_layout = DataLayout.local((1, block_warps[1])) * StridesLayout.row_major((1, outer[1])) * DataLayout.local((1, atom_shape[1])) * StridesLayout.row_major((1, inner[1]))
         self.regs_c_layout = DataLayout.local(block_warps) * StridesLayout.row_major(outer) * DataLayout.local(atom_shape) * StridesLayout.row_major(inner)
-        self.regs_a_ldg_layout = DataLayout(size=block_m * block_k // block_size, shape=(block_m, block_k), global2local=(lambda i, j: i % (block_m // (block_size // block_k))))
-        self.regs_b_ldg_layout = DataLayout(size=block_k * block_n // block_size, shape=(block_k, block_n), global2local=(lambda i, j: j // (block_size // block_k)))
+        # self.regs_a_ldg_layout = DataLayout(size=block_m * block_k // block_size, shape=(block_m, block_k), global2local=(lambda i, j: i % (block_m // (block_size // block_k))))
+        # self.regs_b_ldg_layout = DataLayout(size=block_k * block_n // block_size, shape=(block_k, block_n), global2local=(lambda i, j: j // (block_size // block_k)))
+        self.regs_a_ldg_layout = DataLayout.local((block_size // block_k, block_k)) * DataLayout.row_major((block_m // (block_size // block_k), 1))
+        self.regs_b_ldg_layout = DataLayout.row_major((1, block_n // (block_size // block_k))) * DataLayout.local((block_k, block_size // block_k))
 
     def get_c_write_back_inner(self):
         block_size = self.block_warps[0] * self.block_warps[1] * 32

@@ -38,6 +38,7 @@ class ReturnStmt(Stmt):
 class LetStmt(Stmt):
     def __init__(self, var, value, body=None):
         super().__init__()
+        assert isinstance(var, Var)
         self.var = var
         self.value = convert(value)
         self.body = body
