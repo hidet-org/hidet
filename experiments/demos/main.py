@@ -32,17 +32,19 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, prog
     workloads = [
         # (2, 2, 2),
         # (222, 333, 444),
-        (1024, 1024, 1024),
+        # (1024, 1024, 1024),
+        (1024 + 22, 1024 + 33, 1024 + 44),
+        # (1024 + 128, 1024 + 128, 1024 + 48),
         # (2048, 2304, 768),
         # (1664, 768, 2304),
         # (1234, 2345, 1212),
         # *[(16 * T, 2304, 768) for T in [5, 24, 43, 62, 81, 100, 119, 128]]
     ]
     baselines = [
-        ('Reference', matmul_ref()),
+        # ('Reference', matmul_ref()),
         ('Opt', matmul_opt()),
-        ('cutlas', matmul_cutlass()),
-        ('cuBLAS', matmul_cublas()),
+        # ('cutlas', matmul_cutlass()),
+        # ('cuBLAS', matmul_cublas()),
     ]
     hidet_variants = [
         # ('HidetNaive', (CudaGridNaiveImplementer, CudaThreadNaiveImplementer)),
@@ -197,5 +199,5 @@ def test_custom_func():
 
 if __name__ == '__main__':
     # verify()
-    benchmark(use_nsight_compute=False)
+    benchmark(use_nsight_compute=True)
     # test_custom_func()

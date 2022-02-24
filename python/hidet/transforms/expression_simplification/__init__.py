@@ -14,7 +14,6 @@ def expression_simplification_pass():
         simplify_stmt_pass(),
         build_let_stmt_pass(),
         chain_seq_stmt_using_let_stmt_pass(),
-        # inline_let_stmt_pass(inline_factor=-1),
         common_subexpression_elimination_pass(),
-        inline_let_stmt_pass(inline_factor=1)
+        inline_let_stmt_pass(inline_factor=2)
     ])

@@ -77,11 +77,13 @@ class CommonSubexpressionEliminationRewriter(StmtExprRewriter):
     def visit_LetStmt(self, stmt: LetStmt):
         var = stmt.var
         value = self(stmt.value)
-        value_hash = self.expr_hash(value)
 
         if isinstance(value, (Var, Constant)):
-            return self(rewrite(stmt.body, {var: value}))
+            self.expr_hash.memo[var] = self.expr_hash(value)
+            self.memo[var] = value
+            return self(stmt.body)
         else:
+            value_hash = self.expr_hash(value)
             self.value2var[value_hash] = var
             body = self(stmt.body)
             if value_hash in self.value2var:
@@ -105,12 +107,3 @@ def chain_seq_stmt_using_let_stmt_pass():
 
 def common_subexpression_elimination_pass():
     return CommonSubexpressionEliminationPass()
-    # return RepeatFunctionPass(
-    #     name='CommonSubExpressionEliminationPassSequence',
-    #     passes=[
-    #         # FlattenSeqStmtPass(),
-    #         ChainSeqStmtUsingLetStmtPass(),
-    #         # CommonSubexpressionEliminationPass(),
-    #     ],
-    #     repeat_limit=10
-    # )
