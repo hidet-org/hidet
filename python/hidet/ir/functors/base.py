@@ -689,10 +689,11 @@ class BoundAwareRewriter(FuncStmtExprRewriter):
         if obj in self.memo:
             return self.memo[obj]
         self.analyzer.visit(obj)
-        if isinstance(obj, Expr) and self.bound[obj].value is not None:
+        if isinstance(obj, Expr) and not isinstance(obj, Constant) and self.bound[obj].value is not None:
             ret = convert(self.bound[obj].value)
         else:
             ret = FuncStmtExprRewriter.visit(self, obj)
+        self.memo[obj] = ret
         return ret
 
 

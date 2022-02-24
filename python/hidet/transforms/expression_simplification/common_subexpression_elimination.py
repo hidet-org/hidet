@@ -1,7 +1,7 @@
 from hidet.transforms.base import FunctionBodyPass, SequencePass, RepeatFunctionPass
 from hidet.ir.functors import StmtRewriter, StmtExprRewriter, same_list
-from hidet.ir.expr import Expr, Var, Constant, convert
-from hidet.ir.stmt import Stmt, SeqStmt, LetStmt, EvaluateStmt
+from hidet.ir.expr import Expr, Var, Constant, convert, Call
+from hidet.ir.stmt import Stmt, SeqStmt, LetStmt, EvaluateStmt, IfStmt
 from hidet.ir.func import IRModule
 from hidet.ir.functors import ExprHash, rewrite
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
@@ -33,7 +33,9 @@ def join_stmt(lhs: Stmt, rhs: Stmt):
     if isinstance(lhs, LetStmt):
         return LetStmt(lhs.var, lhs.value, join_stmt(lhs.body, rhs))
     else:
-        return SeqStmt([lhs, rhs])
+        lhs_seq = lhs.seq if isinstance(lhs, SeqStmt) else [lhs]
+        rhs_seq = rhs.seq if isinstance(rhs, SeqStmt) else [rhs]
+        return SeqStmt(list(lhs_seq) + list(rhs_seq))
 
 
 class ChainSeqStmtUsingLetStmtRewriter(StmtRewriter):
@@ -73,20 +75,21 @@ class CommonSubexpressionEliminationRewriter(StmtExprRewriter):
         return StmtExprRewriter.visit(self, obj)
 
     def visit_LetStmt(self, stmt: LetStmt):
-        var = self(stmt.var)
+        var = stmt.var
         value = self(stmt.value)
+        value_hash = self.expr_hash(value)
+
         if isinstance(value, (Var, Constant)):
             return self(rewrite(stmt.body, {var: value}))
         else:
-            value_hash = self.expr_hash(value)
             self.value2var[value_hash] = var
-            ret = self(stmt.body)
+            body = self(stmt.body)
             if value_hash in self.value2var:
                 self.value2var.pop(value_hash)
-            if same_list([var, value, ret], [stmt.var, stmt.value, stmt.body]):
+            if same_list([var, value, body], [stmt.var, stmt.value, stmt.body]):
                 return stmt
             else:
-                return LetStmt(var, value, ret)
+                return LetStmt(var, value, body)
 
 
 class CommonSubexpressionEliminationPass(FunctionBodyPass):
@@ -97,14 +100,17 @@ class CommonSubexpressionEliminationPass(FunctionBodyPass):
 def flatten_seq_stmt_pass():
     return FlattenSeqStmtPass()
 
+def chain_seq_stmt_using_let_stmt_pass():
+    return ChainSeqStmtUsingLetStmtPass()
 
 def common_subexpression_elimination_pass():
-    return RepeatFunctionPass(
-        name='CommonSubExpressionEliminationPassSequence',
-        passes=[
-            FlattenSeqStmtPass(),
-            ChainSeqStmtUsingLetStmtPass(),
-            CommonSubexpressionEliminationPass(),
-        ],
-        repeat_limit=10
-    )
+    return CommonSubexpressionEliminationPass()
+    # return RepeatFunctionPass(
+    #     name='CommonSubExpressionEliminationPassSequence',
+    #     passes=[
+    #         # FlattenSeqStmtPass(),
+    #         ChainSeqStmtUsingLetStmtPass(),
+    #         # CommonSubexpressionEliminationPass(),
+    #     ],
+    #     repeat_limit=10
+    # )

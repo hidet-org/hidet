@@ -13,8 +13,6 @@ def lower(ir_module: IRModule) -> IRModule:
 
         expression_simplification_pass(),
 
-        simplify_stmt_pass(),
-        flatten_seq_stmt_pass(),
 
         # vectorize_load_store_pass(),     # disable by default, this optimization can be conducted automatically by underlying ptxas assembler.
         import_primitive_functions_pass()

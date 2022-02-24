@@ -35,6 +35,8 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, prog
         (1024, 1024, 1024),
         # (2048, 2304, 768),
         # (1664, 768, 2304),
+        # (1234, 2345, 1212),
+        # *[(16 * T, 2304, 768) for T in [5, 24, 43, 62, 81, 100, 119, 128]]
     ]
     baselines = [
         ('Reference', matmul_ref()),
@@ -77,9 +79,10 @@ def verify(use_rand=True):
     np.set_printoptions(threshold=128 * 128, linewidth=500)
     use_print = True
     workloads = [
-        (1, 1, 9),
+        # (1, 1, 9),
         # (128, 128, 128),
-        # (256, 256, 256),
+        (256, 256, 256),
+        # (1234, 2345, 1212),
         # (222, 333, 444),
         # (1024, 1024, 1024),
         # (1296, 2304, 768),
@@ -171,23 +174,28 @@ def test_custom_func():
         sb = StmtBuilder()
         # with sb.let('v', thread_idx()) as v:
         with sb.for_loop('v', extent=128) as v:
+            with sb.let('a', 1) as a:
+                with sb.let('b', 2) as b:
+                    sb += BufferStoreStmt(arr, [a + b], convert(0.0))
+            with sb.let('c', 1) as c:
+                sb += BufferStoreStmt(arr, [c], convert(0.0))
             # sb += BufferStoreStmt(arr, [((((((v // 32) // 2) * 16) + (((((v % 32) // 16) * 2) + ((v % 32) % 2)) * 4)) + 3) % 16)], convert(0.0))
             # sb += BufferStoreStmt(arr, [(((v * 32) + (v % 32)) // 32)], convert(0.0))
             # sb += BufferStoreStmt(arr, [(((v // 64) * 16) // 16)], convert(0.0))
             # sb += BufferStoreStmt(arr, [v + (convert(0) + convert(0))], convert(0.0))
             # sb += BufferStoreStmt(arr, [((0 + ((0 + ((1 * (v / 8)) * 128)) * 1024)) + (0 * 1))], convert(0.0))
             # sb += BufferStoreStmt(arr, [(((((((v % 32) / 16) * 2) + ((v % 32) % 2)) * 4) + ((v / 64) * 16)) % 16)], convert(0.0))
-            sb += BufferStoreStmt(arr, [((thread_idx() % 32) % 2)], convert(0.0))
+            # sb += BufferStoreStmt(arr, [((thread_idx() % 32) % 2)], convert(0.0))
 
         fb.set_body(sb.finish())
     ir_module = IRModule()
     ir_module.add('test', fb.get())
     module = build(ir_module, output_dir='./outs/test')
     with open('./outs/test/source.cu', 'r') as f:
-        print("\n".join(f.readlines()))
+        print("".join(f.readlines()))
 
 
 if __name__ == '__main__':
-    verify()
+    # verify()
     benchmark(use_nsight_compute=False)
     # test_custom_func()

@@ -12,7 +12,7 @@ class Pass:
         from hidet.utils.py import COLORS
         with Timer() as timer:
             ret = self.process_module(ir_module)
-        # print(f'{self.name:>50}: {COLORS.OKGREEN}{timer.elapsed_seconds():.3f}{COLORS.ENDC} secs')
+        # print(f'{self.name:>30} {COLORS.OKGREEN}{timer.elapsed_seconds():.3f}{COLORS.ENDC} seconds')
         return ret
 
     def process_module(self, ir_module: IRModule) -> IRModule:

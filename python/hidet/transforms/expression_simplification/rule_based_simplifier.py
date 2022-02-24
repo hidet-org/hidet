@@ -65,7 +65,7 @@ class RuleBasedSimplifier(BoundAwareRewriter):
 
     def __init__(self):
         super().__init__()
-        self.memo = DictCustomKey(hash_func=ExprHash())
+        # self.memo = DictCustomKey(hash_func=ExprHash())
         self.const_expr_simplifier = ConstExprSimplifier()
         e1, e2 = any_expr(allow_const=False), any_expr(allow_const=False)
         c1, c2 = any_constant(), any_constant()
@@ -112,8 +112,6 @@ class RuleBasedSimplifier(BoundAwareRewriter):
             # if then else
             (IfThenElse(True, ec1, ec2), ec1),
             (IfThenElse(False, ec1, ec2), ec2),
-            # comparison
-            # ((e1 + c1) < e2, c1 < Cast(e2, 'int32') - Cast(e1, 'int32')),
         ]
         self.bound_patterns = [
             # ((pattern_args, pattern_func, target_args, target_func)
