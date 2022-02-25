@@ -6,7 +6,7 @@ from hidet.baselines.matmul import matmul_opt
 from hidet.implement import implement, impl_context
 from hidet.implement.cuda import CudaBlockStaticMatmulNoPipeImplementer, CudaBlockNaiveImplementer
 from hidet.implement.cuda import CudaGridSplitImplementer, CudaGridNaiveImplementer, CudaWarpTransfer2dImplementer, CudaWarpFillValueImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer
-from hidet.implement.cuda import CudaThreadNaiveImplementer
+from hidet.implement.cuda import CudaThreadNaiveImplementer, CudaGridStaticMatmulSoftPipePredImplementer
 from hidet.implement.resolve import random_resolve
 from hidet.ir.task import Grid, Host
 from hidet.runtime.value import TensorValue, randn, scalar, zeros, full
@@ -37,6 +37,8 @@ def test_baseline(N, M, K, name, packed_func):
     (256, 256, 256, 'HidetNaive', (CudaGridNaiveImplementer, CudaThreadNaiveImplementer)),
     (256, 256, 256, 'HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpFillValueImplementer)),
     (256, 256, 256, 'HidetSoftPipeLdgWb', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer, CudaWarpFillValueImplementer)),
+    (256, 256, 256, 'HidetSoftPipeGridPred', (CudaGridStaticMatmulSoftPipePredImplementer, CudaBlockNaiveImplementer)),
+    (234, 345, 567, 'HidetSoftPipeGridPred', (CudaGridStaticMatmulSoftPipePredImplementer, CudaBlockNaiveImplementer)),
 ])
 def test_hidet_variant(N, M, K, name, implementers):
     task = matmul(N, M, K)

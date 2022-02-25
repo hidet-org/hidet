@@ -1,7 +1,30 @@
+import os
 from typing import Callable, List
 from hidet.ir.stmt import Stmt
 from hidet.ir.func import IRModule, Function
-from hidet.utils import Timer
+from hidet.utils import Timer, get_next_file_index
+
+class PassContext:
+    stack: List['PassContext'] = []
+
+    def __init__(self, save_lowering_results=False, save_dir=None):
+        if save_lowering_results:
+            assert save_dir is not None
+        self.save_lowering_results = save_lowering_results
+        self.save_dir = save_dir
+
+    @classmethod
+    def current(cls):
+        return cls.stack[-1]
+
+    def __enter__(self):
+        self.stack.append(self)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        assert len(self.stack) > 0 and self.stack[-1] is self
+        self.stack.pop()
+
+PassContext.stack.append(PassContext())
 
 
 class Pass:
@@ -13,6 +36,14 @@ class Pass:
         with Timer() as timer:
             ret = self.process_module(ir_module)
         # print(f'{self.name:>30} {COLORS.OKGREEN}{timer.elapsed_seconds():.3f}{COLORS.ENDC} seconds')
+        ctx = PassContext.current()
+        if ctx.save_lowering_results:
+            os.makedirs(ctx.save_dir, exist_ok=True)
+            idx = get_next_file_index(ctx.save_dir)
+            with open(os.path.join(ctx.save_dir, '{}_{}.text'.format(idx, self.name)), 'w') as f:
+                f.write(str(ret))
+            with open(os.path.join(ctx.save_dir, 'lower_time.txt'), 'a') as f:
+                f.write(f'{self.name:>50} {timer.elapsed_seconds():.3f} seconds\n')
         return ret
 
     def process_module(self, ir_module: IRModule) -> IRModule:

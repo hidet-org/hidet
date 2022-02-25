@@ -11,7 +11,7 @@ from hidet.ffi import PackedFunc
 from hidet.ir.dialects.lowlevel import VoidType
 from hidet.ir.func import IRModule
 from hidet.runtime.module import CompiledModule, CompiledFunction
-from hidet.transforms import lower
+from hidet.transforms import lower, PassContext
 from hidet.utils import Timer, COLORS
 
 
@@ -57,10 +57,11 @@ def compile_src_code(src_path, keep=True, working_dir=None, keep_dir=None):
         raise e
 
 
-def build(ir_module: IRModule, output_dir, keep=True, verbose=True) -> CompiledModule:
+def build(ir_module: IRModule, output_dir, keep_ir=False, keep=True, verbose=True) -> CompiledModule:
     # lower
     with Timer() as lower_timer:
-        ir_module = lower(ir_module)
+        with PassContext(save_lowering_results=keep_ir, save_dir=os.path.join(output_dir, 'ir')):
+            ir_module = lower(ir_module)
 
     # codegen
     os.makedirs(output_dir, exist_ok=True)

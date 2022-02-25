@@ -79,9 +79,10 @@ class CommonSubexpressionEliminationRewriter(StmtExprRewriter):
         value = self(stmt.value)
 
         if isinstance(value, (Var, Constant)):
-            self.expr_hash.memo[var] = self.expr_hash(value)
-            self.memo[var] = value
-            return self(stmt.body)
+            # self.expr_hash.memo[var] = self.expr_hash(value)
+            # self.memo[var] = value
+            # return self(stmt.body)
+            return self(rewrite(stmt.body, {var: value}))
         else:
             value_hash = self.expr_hash(value)
             self.value2var[value_hash] = var

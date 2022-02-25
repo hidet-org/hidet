@@ -3,7 +3,7 @@ from hidet.transforms import *
 from hidet.utils.py import Timer, COLORS
 
 
-def lower(ir_module: IRModule) -> IRModule:
+def lower(ir_module: IRModule, keep_ir=False, out_dir=None) -> IRModule:
     transforms = [
         # eliminate_dead_device_function_pass(),
         generate_packed_func_pass(),

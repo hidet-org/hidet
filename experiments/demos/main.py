@@ -21,10 +21,10 @@ from hidet.utils import cuda
 
 
 def print_latencies(name, latencies):
-    print('{:>20}: {:.3f} (std {:.3f}) ms [{}]'.format(name, np.mean(latencies), np.std(latencies), " ".join([f'{v:.3f}' for v in latencies])))
+    print('{:>20}: {:.3f} (std {:.3f}) ms [{}]'.format(name, np.median(latencies), np.std(latencies), " ".join([f'{v:.3f}' for v in latencies])))
 
 
-def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, progress_bar=True, use_nsight_compute=False):
+def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, progress_bar=True, use_nsight_compute=False, keep_ir=False):
     if use_nsight_compute:
         warmup = 0
         number = 1
@@ -33,12 +33,13 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, prog
         # (2, 2, 2),
         # (222, 333, 444),
         # (1024, 1024, 1024),
-        (1024 + 22, 1024 + 33, 1024 + 44),
+        # (1024 + 22, 1024 + 33, 1024 + 44),
+        # (1296, 2304, 768),
         # (1024 + 128, 1024 + 128, 1024 + 48),
         # (2048, 2304, 768),
         # (1664, 768, 2304),
         # (1234, 2345, 1212),
-        # *[(16 * T, 2304, 768) for T in [5, 24, 43, 62, 81, 100, 119, 128]]
+        *[(16 * T, 2304, 768) for T in [5, 24, 43, 62, 81, 100, 119, 128]]
     ]
     baselines = [
         # ('Reference', matmul_ref()),
@@ -71,7 +72,7 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, prog
                     ir_module = brute_force_resolve(ir_module, warmup=warmup, number=number, repeat=repeat, progress_bar=progress_bar)
                 else:
                     ir_module = random_resolve(ir_module)
-                module = build(ir_module, output_dir=f'./outs/bench/{name}_{N}x{M}x{K}')
+                module = build(ir_module, output_dir=f'./outs/bench/{name}_{N}x{M}x{K}', keep_ir=keep_ir)
                 latencies = module['matmul'].profile(A, B, C, warmup=warmup, number=number, repeat=repeat)
                 print_latencies(name, latencies)
         print()
@@ -83,12 +84,13 @@ def verify(use_rand=True):
     workloads = [
         # (1, 1, 9),
         # (128, 128, 128),
-        (256, 256, 256),
+        # (256, 256, 256),
         # (1234, 2345, 1212),
         # (222, 333, 444),
         # (1024, 1024, 1024),
         # (1296, 2304, 768),
         # (1296, 128, 768),
+        (1296, 2304, 768),
         # (1024, 1024, 1024),
         # (2048, 2304, 768),
         # *[(16 * T, 2304, 768) for T in [5, 24, 43, 62, 81, 100, 119, 128]]
@@ -198,6 +200,6 @@ def test_custom_func():
 
 
 if __name__ == '__main__':
-    # verify()
-    benchmark(use_nsight_compute=True)
+    verify()
+    benchmark(use_nsight_compute=False)
     # test_custom_func()

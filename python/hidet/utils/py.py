@@ -1,4 +1,7 @@
 from typing import Callable, MutableMapping, Iterator, Sequence
+import itertools
+import contextlib
+import os
 import time
 
 
@@ -71,3 +74,13 @@ class COLORS:
     ENDC = '\033[0m'
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
+
+def get_next_file_index(dirname: str) -> int:
+    indices = set()
+    for fname in os.listdir(dirname):
+        parts = fname.split('_')
+        with contextlib.suppress(ValueError):
+            indices.add(int(parts[0]))
+    for idx in itertools.count(0):
+        if idx not in indices:
+            return idx
