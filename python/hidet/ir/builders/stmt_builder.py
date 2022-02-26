@@ -1,16 +1,16 @@
 from typing import Union, Optional, Sequence, List
 
-from hidet.ir.stmt import Stmt, ForStmt, IfStmt, LetStmt, EvaluateStmt, SeqStmt
+from hidet.ir.stmt import Stmt, ForStmt, IfStmt, LetStmt, EvaluateStmt, SeqStmt, SeqLetStmt
 from hidet.ir.type import TypeNode, scalar_type, ScalarType
-from hidet.ir.expr import Expr, Var, var
+from hidet.ir.expr import Expr, Var, var, convert
 from hidet.ir.layout import TaskLayout, TaskLayoutExpander
 
-ScopedStmt = Union[IfStmt, LetStmt, ForStmt]
+ScopedStmt = Union[IfStmt, LetStmt, ForStmt, SeqLetStmt]
 
 
 class StmtScope:
     def __init__(self, sb: 'StmtBuilder', stmts: Union[Sequence[ScopedStmt], ScopedStmt], ret=None):
-        if isinstance(stmts, (IfStmt, LetStmt, ForStmt)):
+        if isinstance(stmts, (IfStmt, LetStmt, ForStmt, SeqLetStmt)):
             stmts = [stmts]
         self.sb = sb
         self.stmts = stmts
@@ -43,8 +43,9 @@ class StmtBuilder:
     def lets(self, bind_vars: Sequence[Union[str, Var]], values: Sequence[Union[int, Expr]]) -> StmtScope:
         assert len(bind_vars) == len(values)
         bind_vars = [var(v) if isinstance(v, str) else v for v in bind_vars]
-        let_stmts = [LetStmt(v, value) for v, value in zip(bind_vars, values)]
-        return StmtScope(self, stmts=let_stmts, ret=bind_vars)
+        bind_values = [convert(value) for value in values]
+        seq_let_stmt = SeqLetStmt(bind_vars, bind_values, body=1)
+        return StmtScope(self, stmts=seq_let_stmt, ret=bind_vars)
 
     def for_loop(self, v: Union[str, Var], extent: Union[int, Expr], unroll: Optional[bool] = None) -> StmtScope:
         if isinstance(v, str):
@@ -83,8 +84,8 @@ class StmtBuilder:
         body = SeqStmt(self.scope_stack.pop())
         assert len(self.scope_stack) > 0
         last_stmt = self.scope_stack[-1][-1]
-        if isinstance(last_stmt, (LetStmt, ForStmt)):
-            assert last_stmt.body is None
+        if isinstance(last_stmt, (LetStmt, ForStmt, SeqLetStmt)):
+            assert last_stmt.body is None or last_stmt.body == 1
             last_stmt.body = body
         elif isinstance(last_stmt, IfStmt):
             if last_stmt.then_body is None:

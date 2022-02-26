@@ -81,7 +81,7 @@ class CloneRewriter(StmtExprRewriter):
         return Let(v, self(e.value), self(e.body))
 
 
-def rewrite(node: Union[Expr, Stmt], rewrite_map: Mapping[Var, Expr]):
+def rewrite(node: Union[Expr, Stmt], rewrite_map: Mapping[Expr, Expr]):
     assert isinstance(rewrite_map, dict)
     rewriter = StmtExprMapRewriter(rewrite_map)
     return rewriter.rewrite(node)

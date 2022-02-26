@@ -2,7 +2,7 @@ from hidet.ir.expr import Constant, convert
 from hidet.ir.stmt import Stmt, ForStmt, SeqStmt
 from hidet.ir.functors import StmtRewriter, rewrite, clone
 from hidet.transforms.base import FunctionBodyPass
-from hidet.transforms.expression_simplification.rule_based_simplifier import ConstExprSimplifier
+from hidet.transforms.rule_based_simplifier import ConstExprSimplifier
 
 
 class ExplicitUnrollForStmtRewriter(StmtRewriter):

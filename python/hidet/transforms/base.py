@@ -1,4 +1,5 @@
 import os
+import contextlib
 from typing import Callable, List
 from hidet.ir.stmt import Stmt
 from hidet.ir.func import IRModule, Function
@@ -10,8 +11,16 @@ class PassContext:
     def __init__(self, save_lowering_results=False, save_dir=None):
         if save_lowering_results:
             assert save_dir is not None
+            if os.path.isdir(save_dir):
+                for fname in os.listdir(save_dir):
+                    if fname == 'lower_time.txt':
+                        os.remove(os.path.join(save_dir, fname))
+                    parts = fname.split('_')
+                    if len(parts) > 0 and parts[0].isdigit() and fname.endswith('.text'):
+                        os.remove(os.path.join(save_dir, fname))
         self.save_lowering_results = save_lowering_results
         self.save_dir = save_dir
+
 
     @classmethod
     def current(cls):

@@ -1,7 +1,7 @@
 from typing import Optional
 from hidet.ffi import ArgType
 from hidet.ir.type import ScalarType, TensorType
-from hidet.ir.expr import Var, Call
+from hidet.ir.expr import Var, Call, Equal
 from hidet.ir.stmt import AssertStmt, SeqStmt, EvaluateStmt
 from hidet.ir.func import IRModule, Function
 from hidet.ir.functors import astext
@@ -37,7 +37,7 @@ class GeneratePackedFuncPass(Pass):
         p_args = Var('args', PointerType(PointerType(VoidType())))
 
         host_params = [p_num_args, p_arg_types, p_args]
-        packed_body = [AssertStmt(p_num_args == len(func.params), "expect {} args".format(len(func.params)))]
+        packed_body = [AssertStmt(Equal(p_num_args, len(func.params)), "expect {} args".format(len(func.params)))]
         grid_args = []
         # check parameters
         for idx, param in enumerate(func.params):

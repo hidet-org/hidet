@@ -1,8 +1,9 @@
+from typing import List
+import multiprocessing
 import ctypes
 import os.path
 import subprocess
 import uuid
-import io
 from subprocess import PIPE
 
 from hidet import utils
@@ -95,3 +96,25 @@ def build(ir_module: IRModule, output_dir, keep_ir=False, keep=True, verbose=Tru
             compiled_funcs[func.name] = CompiledFunction(func.name, func, packed_func)
 
     return CompiledModule(ir_module, compiled_funcs, src_code)
+
+class BuildInstance:
+    def __init__(self, ir_module: IRModule, output_dir, keep_ir=False, keep=True, verbose=True):
+        self.ir_module = ir_module
+        self.output_dir = output_dir
+        self.keep_ir = keep_ir
+        self.keep = keep
+        self.verbose = verbose
+
+    def get(self):
+        return self.ir_module, self.output_dir, self.keep_ir, self.keep, self.verbose
+
+def parallel_build(build_instances: List[BuildInstance], verbose=False) -> List[CompiledModule]:
+    with Timer() as timer:
+        ret = []
+        for ins in build_instances:
+            ret.append(build(*ins.get()))
+        # with multiprocessing.Pool() as pool:
+        #     ret = list(pool.starmap(build, [instance.get() for instance in build_instances]))
+    if verbose:
+        print('parallel build {} modules with {:.3f} seconds'.format(len(build_instances), timer.elapsed_seconds()))
+    return ret

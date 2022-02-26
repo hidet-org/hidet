@@ -1,10 +1,11 @@
 import operator
+from typing import Dict
 from itertools import product
 
 from hidet.ir.dialects.pattern import AnyExpr, match
 from hidet.ir.expr import Add, convert, Sub, Multiply, FloorDiv, Mod, LessThan, LessEqual, Equal, BinaryOp, And, IfThenElse, Or
 from hidet.ir.expr import Constant, Expr
-from hidet.ir.functors import BoundAwareRewriter
+from hidet.ir.functors import FuncStmtExprRewriter
 from hidet.ir.functors import StmtExprRewriter
 from hidet.ir.functors import rewrite, ExprHash
 from hidet.ir.dialects.lowlevel import Cast
@@ -12,6 +13,7 @@ from hidet.transforms.base import FunctionPass
 from hidet.utils import prod, repeat_until_converge
 from hidet.utils.py import DictCustomKey
 from hidet.ir.func import Function
+from hidet.ir.analyzers import BoundAnalyzer, BoundInfo
 
 
 def any_expr(allow_const):
@@ -60,12 +62,13 @@ class ConstExprSimplifier(StmtExprRewriter):
             return e
 
 
-class RuleBasedSimplifier(BoundAwareRewriter):
+class RuleBasedSimplifier(FuncStmtExprRewriter):
     _enumerate_limit = 256
 
     def __init__(self):
         super().__init__()
-        # self.memo = DictCustomKey(hash_func=ExprHash())
+        self.analyzer = BoundAnalyzer()
+        self.bound: Dict[Expr, BoundInfo] = self.analyzer.bound
         self.const_expr_simplifier = ConstExprSimplifier()
         e1, e2 = any_expr(allow_const=False), any_expr(allow_const=False)
         c1, c2 = any_constant(), any_constant()
@@ -130,7 +133,6 @@ class RuleBasedSimplifier(BoundAwareRewriter):
                 # print('apply rule ', pattern, target, 'on', e)
                 mapping = {a: b for a, b in mapping.items() if a in self.args}
                 ret = rewrite(target, rewrite_map=mapping)
-                ret = self.const_expr_simplifier(ret)
                 return ret
         return e
 
@@ -157,19 +159,23 @@ class RuleBasedSimplifier(BoundAwareRewriter):
                 else:
                     target = target_func(*target_args)
                     ret = rewrite(target, rewrite_map=mapping)
-                    ret = self.const_expr_simplifier(ret)
                     return ret
         return e
 
     def visit(self, obj):
         if obj in self.memo:
             return self.memo[obj]
-        cur = BoundAwareRewriter.visit(self, obj)
+        self.analyzer(obj)
+        if obj in self.bound and self.bound[obj].value is not None and not isinstance(obj, Constant):
+            return convert(self.bound[obj].value)
+        cur = FuncStmtExprRewriter.visit(self, obj)
         if isinstance(cur, Expr):
             while True:
                 orig_obj = cur
                 cur = self.apply_rule(cur)
+                cur = self.const_expr_simplifier(cur)
                 cur = self.apply_bound_aware_rule(cur)
+                cur = self.const_expr_simplifier(cur)
                 if orig_obj is cur:
                     break
         self.memo[obj] = cur
@@ -179,7 +185,7 @@ class RuleBasedSimplifier(BoundAwareRewriter):
         ua, ub = self.bound[e.a], self.bound[e.b]
         if ua.is_zero() or ua < ub:
             return self(e.a)
-        return BoundAwareRewriter.visit_Mod(self, e)
+        return FuncStmtExprRewriter.visit_Mod(self, e)
 
     def visit_LessThan(self, e: LessThan):
         ua, ub = self.bound[e.a], self.bound[e.b]
@@ -187,7 +193,7 @@ class RuleBasedSimplifier(BoundAwareRewriter):
             return convert(True)
         if ub <= ua:
             return convert(False)
-        return BoundAwareRewriter.visit_LessThan(self, e)
+        return FuncStmtExprRewriter.visit_LessThan(self, e)
 
     def visit_LessEqual(self, e: LessEqual):
         ua, ub = self.bound[e.a], self.bound[e.b]
@@ -195,7 +201,7 @@ class RuleBasedSimplifier(BoundAwareRewriter):
             return convert(True)
         if ub < ua:
             return convert(False)
-        return BoundAwareRewriter.visit_LessEqual(self, e)
+        return FuncStmtExprRewriter.visit_LessEqual(self, e)
 
     def visit_Equal(self, e: Equal):
         ua, ub = self.bound[e.a], self.bound[e.b]
@@ -203,7 +209,11 @@ class RuleBasedSimplifier(BoundAwareRewriter):
             return convert(True)
         if ua < ub or ub < ua:
             return convert(False)
-        return BoundAwareRewriter.visit_Equal(self, e)
+        return FuncStmtExprRewriter.visit_Equal(self, e)
+
+    def visit_Function(self, func: Function):
+        self.analyzer(func)
+        return FuncStmtExprRewriter.visit_Function(self, func)
 
 
 class RuleBasedSimplifyPass(FunctionPass):

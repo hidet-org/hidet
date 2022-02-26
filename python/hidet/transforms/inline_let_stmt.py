@@ -2,14 +2,14 @@ from typing import Mapping
 from collections import defaultdict
 
 from hidet.ir.expr import Var, Expr, Constant, Mod
-from hidet.ir.functors import StmtExprRewriter, StmtExprVisitor, rewrite
-from hidet.ir.stmt import Stmt, LetStmt
+from hidet.ir.functors import StmtExprRewriter, StmtExprVisitor, rewrite, same_list
+from hidet.ir.stmt import Stmt, LetStmt, SeqLetStmt
 from hidet.transforms import Pass, FunctionBodyPass, RepeatFunctionPass
 
 
 class LetVarRefAnalyzer(StmtExprVisitor):
     def __init__(self):
-        super().__init__()
+        super().__init__(use_memo=False)
         self.usage_count = None
         self.var2value = None
 
@@ -27,6 +27,12 @@ class LetVarRefAnalyzer(StmtExprVisitor):
         self.var2value[stmt.var] = stmt.value
         # do not visit stmt.var because we are counting usage
         self.visit(stmt.value)
+        self.visit(stmt.body)
+
+    def visit_SeqLetStmt(self, stmt: SeqLetStmt):
+        for bind_var, bind_value in zip(stmt.bind_vars, stmt.bind_values):
+            self.var2value[bind_var] = bind_value
+            self.visit(bind_value)
         self.visit(stmt.body)
 
 
@@ -48,9 +54,6 @@ class NaiveLetStmtInlineRewriter(StmtExprRewriter):
         return self.visit(stmt)
 
     def visit_LetStmt(self, stmt: LetStmt):
-        # Inline in the following cases
-        #    case 1 usage count <= inline factor: replace reference var to its value expression
-        #    case 2 value is a Constant or Var
         if self.usage_count[stmt.var] <= self.inline_factor or self.inline_all:  # case 1
             self.memo[stmt.var] = self(stmt.value)
             return self(stmt.body)
@@ -65,6 +68,26 @@ class NaiveLetStmtInlineRewriter(StmtExprRewriter):
             else:
                 return LetStmt(stmt.var, value, body)
 
+    def visit_SeqLetStmt(self, stmt: SeqLetStmt):
+        bind_vars = []
+        bind_values = []
+        for bind_var, bind_value in zip(stmt.bind_vars, stmt.bind_values):
+            updated_value = self(bind_value)
+            if isinstance(updated_value, (Var, Constant)):
+                self.memo[bind_var] = updated_value
+            elif self.usage_count[bind_var] <= self.inline_factor or self.inline_all:
+                self.memo[bind_var] = updated_value
+            else:
+                bind_vars.append(bind_var)
+                bind_values.append(updated_value)
+        body = self(stmt.body)
+        if same_list(bind_vars, stmt.bind_vars) and same_list(bind_values, stmt.bind_values) and body is stmt.body:
+            return stmt
+        else:
+            if len(bind_vars) > 0:
+                return SeqLetStmt(bind_vars, bind_values, body)
+            else:
+                return body
 
 class InlineNaiveLetStmtPass(FunctionBodyPass):
     def __init__(self, inline_factor=1, inline_all=False):

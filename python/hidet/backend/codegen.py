@@ -281,6 +281,14 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         # doc += Text('{') + self(stmt.body).indent() + NewLine() + Text('} ')
         return doc
 
+    def visit_SeqLetStmt(self, stmt: SeqLetStmt):
+        doc = Doc()
+        for bind_var, bind_value in zip(stmt.bind_vars, stmt.bind_values):
+            doc += NewLine() + self(bind_var.type) + ' ' +  self(bind_var) + ' = ' + self(bind_value) + ';'
+        doc += self(stmt.body)
+        return doc
+
+
     def visit_ForStmt(self, stmt: ForStmt):
         v = stmt.loop_var
         init_doc = self(v.type) + ' ' + self(v) + ' = ' + self(convert(0))

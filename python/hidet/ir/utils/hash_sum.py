@@ -7,6 +7,9 @@ class HashSum:
         self.value = hash(obj)
         self.hashed_obj = obj
 
+    def __str__(self):
+        return str(self.value % 107)
+
     def __add__(self, other):
         return HashSum((self.value, other))
 

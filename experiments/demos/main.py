@@ -12,7 +12,7 @@ from hidet.ir.type import TensorType
 from hidet.ir.expr import Var, convert
 from hidet.ir.stmt import BufferStoreStmt
 from hidet.ir.func import IRModule
-from hidet.ir.primitives import thread_idx
+from hidet.ir.primitives import thread_idx, block_idx
 from hidet.ir.layout import DataLayout
 from hidet.runtime.value import TensorValue, randn, empty, scalar, zeros, full
 from hidet.tasks.nn import matmul
@@ -34,12 +34,12 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, prog
         # (222, 333, 444),
         # (1024, 1024, 1024),
         # (1024 + 22, 1024 + 33, 1024 + 44),
-        # (1296, 2304, 768),
+        (1296, 2304, 768),
         # (1024 + 128, 1024 + 128, 1024 + 48),
         # (2048, 2304, 768),
         # (1664, 768, 2304),
         # (1234, 2345, 1212),
-        *[(16 * T, 2304, 768) for T in [5, 24, 43, 62, 81, 100, 119, 128]]
+        # *[(16 * T, 2304, 768) for T in [5, 24, 43, 62, 81, 100, 119, 128]]
     ]
     baselines = [
         # ('Reference', matmul_ref()),
@@ -82,7 +82,7 @@ def verify(use_rand=True):
     np.set_printoptions(threshold=128 * 128, linewidth=500)
     use_print = True
     workloads = [
-        # (1, 1, 9),
+        (1, 1, 1),
         # (128, 128, 128),
         # (256, 256, 256),
         # (1234, 2345, 1212),
@@ -90,7 +90,7 @@ def verify(use_rand=True):
         # (1024, 1024, 1024),
         # (1296, 2304, 768),
         # (1296, 128, 768),
-        (1296, 2304, 768),
+        # (1296, 2304, 768),
         # (1024, 1024, 1024),
         # (2048, 2304, 768),
         # *[(16 * T, 2304, 768) for T in [5, 24, 43, 62, 81, 100, 119, 128]]
@@ -150,7 +150,7 @@ def verify(use_rand=True):
             with impl_context(allowed=allowed):
                 ir_module = implement(task)
                 # print(ir_module)
-                grid_module = build(random_resolve(ir_module, seed=1), f'./outs/verify/{name}_{N}x{M}x{K}')
+                grid_module = build(random_resolve(ir_module, seed=1), f'./outs/verify/{name}_{N}x{M}x{K}', keep_ir=True)
 
             task.worker = Host()
             host_module = build(random_resolve(implement(task)), f'./outs/verify/host/{name}')
@@ -177,24 +177,31 @@ def test_custom_func():
         fb.extend_local_vars([arr])
         sb = StmtBuilder()
         # with sb.let('v', thread_idx()) as v:
-        with sb.for_loop('v', extent=128) as v:
-            with sb.let('a', 1) as a:
-                with sb.let('b', 2) as b:
-                    sb += BufferStoreStmt(arr, [a + b], convert(0.0))
-            with sb.let('c', 1) as c:
-                sb += BufferStoreStmt(arr, [c], convert(0.0))
-            # sb += BufferStoreStmt(arr, [((((((v // 32) // 2) * 16) + (((((v % 32) // 16) * 2) + ((v % 32) % 2)) * 4)) + 3) % 16)], convert(0.0))
-            # sb += BufferStoreStmt(arr, [(((v * 32) + (v % 32)) // 32)], convert(0.0))
-            # sb += BufferStoreStmt(arr, [(((v // 64) * 16) // 16)], convert(0.0))
-            # sb += BufferStoreStmt(arr, [v + (convert(0) + convert(0))], convert(0.0))
-            # sb += BufferStoreStmt(arr, [((0 + ((0 + ((1 * (v / 8)) * 128)) * 1024)) + (0 * 1))], convert(0.0))
-            # sb += BufferStoreStmt(arr, [(((((((v % 32) / 16) * 2) + ((v % 32) % 2)) * 4) + ((v / 64) * 16)) % 16)], convert(0.0))
-            # sb += BufferStoreStmt(arr, [((thread_idx() % 32) % 2)], convert(0.0))
-
+        with sb.for_loop('v', extent=256) as threadIdx:
+            with sb.for_loop('vv', extent=1000) as blockIdx:
+                threadIdx = thread_idx()
+                blockIdx = block_idx()
+                with sb.for_loop('j', extent=2) as j:
+                    # with sb.let('a', 1) as a:
+                    #     with sb.let('b', 2) as b:
+                    #         sb += BufferStoreStmt(arr, [a + b], convert(0.0))
+                    # with sb.let('c', 1) as c:
+                    #     sb += BufferStoreStmt(arr, [c], convert(0.0))
+                    # sb += BufferStoreStmt(arr, [((((((v // 32) // 2) * 16) + (((((v % 32) // 16) * 2) + ((v % 32) % 2)) * 4)) + 3) % 16)], convert(0.0))
+                    # sb += BufferStoreStmt(arr, [(((v * 32) + (v % 32)) // 32)], convert(0.0))
+                    # sb += BufferStoreStmt(arr, [(((v // 64) * 16) // 16)], convert(0.0))
+                    # sb += BufferStoreStmt(arr, [v + (convert(0) + convert(0))], convert(0.0))
+                    # sb += BufferStoreStmt(arr, [((0 + ((0 + ((1 * (v / 8)) * 128)) * 1024)) + (0 * 1))], convert(0.0))
+                    # sb += BufferStoreStmt(arr, [(((((((v % 32) / 16) * 2) + ((v % 32) % 2)) * 4) + ((v / 64) * 16)) % 16)], convert(0.0))
+                    # sb += BufferStoreStmt(arr, [((thread_idx() % 32) % 2)], convert(0.0))
+                    with sb.if_then(((blockIdx / 18) * 32) + ((threadIdx / 64) * 16) < 1296):
+                        sb += BufferStoreStmt(arr, [(((((blockIdx / 18) * 32) + ((threadIdx / 64) * 16)) * 2304) + (((blockIdx % 18) * 128) + ((((threadIdx / 32) % 2) * 64) + ((j * 32) + (threadIdx % 32)))))], arr[(((((threadIdx / 64) * 2) + ((threadIdx / 32) % 2)) * 512) + (threadIdx % 32))])
+                    with sb.if_then(((blockIdx / 18) * 32) + (((threadIdx / 64) * 16) + 1) < 1296):
+                        sb += BufferStoreStmt(arr, [((((((threadIdx / 64) * 16) + ((blockIdx / 18) * 32)) * 2304) + (((blockIdx % 18) * 128) + ((((threadIdx / 32) % 2) * 64) + ((j * 32) + (threadIdx % 32))))) + 2304)], arr[(((threadIdx % 32) + ((((threadIdx / 64) * 2) + ((threadIdx / 32) % 2)) * 512)) + 32)])
         fb.set_body(sb.finish())
     ir_module = IRModule()
     ir_module.add('test', fb.get())
-    module = build(ir_module, output_dir='./outs/test')
+    module = build(ir_module, output_dir='./outs/test', keep_ir=True)
     with open('./outs/test/source.cu', 'r') as f:
         print("".join(f.readlines()))
 

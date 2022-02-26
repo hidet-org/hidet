@@ -6,8 +6,8 @@ from hidet.ir.stmt import *
 
 
 class NodeFunctor:
-    def __init__(self):
-        self.memo = {}
+    def __init__(self, use_memo=True):
+        self.memo = {} if use_memo else None
         if not hasattr(self.__class__, 'dispatch_table'):
             self.setup_dispatch_table()
 
@@ -15,12 +15,13 @@ class NodeFunctor:
         return self.visit(node)
 
     def visit(self, node: Node):
-        if node in self.memo:
+        if self.memo is not None and node in self.memo:
             return self.memo[node]
         idx = node.class_index() if node is not None else 0
         # noinspection PyUnresolvedReferences
         ret = self.__class__.dispatch_table[idx](self, node)
-        self.memo[node] = ret
+        if self.memo is not None:
+            self.memo[node] = ret
         return ret
 
     @staticmethod
@@ -449,6 +450,7 @@ class StmtFunctor(NodeFunctor):
             BufferStoreStmt: cls.visit_BufferStoreStmt,
             AssignStmt: cls.visit_AssignStmt,
             LetStmt: cls.visit_LetStmt,
+            SeqLetStmt: cls.visit_SeqLetStmt,
             ForStmt: cls.visit_ForStmt,
             IfStmt: cls.visit_IfStmt,
             ReturnStmt: cls.visit_ReturnStmt,
@@ -472,6 +474,9 @@ class StmtFunctor(NodeFunctor):
         raise NotImplementedError()
 
     def visit_LetStmt(self, stmt: LetStmt):
+        raise NotImplementedError()
+
+    def visit_SeqLetStmt(self, stmt: SeqLetStmt):
         raise NotImplementedError()
 
     def visit_ForStmt(self, stmt: ForStmt):
@@ -514,8 +519,12 @@ class StmtVisitor(StmtFunctor):
         self.visit_expr(stmt.value)
 
     def visit_LetStmt(self, stmt: LetStmt):
-        self.visit_expr(stmt.var)
         self.visit_expr(stmt.value)
+        self.visit(stmt.body)
+
+    def visit_SeqLetStmt(self, stmt: SeqLetStmt):
+        for bind_var, bind_value in zip(stmt.bind_vars, stmt.bind_values):
+            self.visit_expr(bind_value)
         self.visit(stmt.body)
 
     def visit_ForStmt(self, stmt: ForStmt):
@@ -586,6 +595,14 @@ class StmtRewriter(StmtFunctor):
             return stmt
         else:
             return LetStmt(var, value, body)
+
+    def visit_SeqLetStmt(self, stmt: SeqLetStmt):
+        bind_values = [self.visit_expr(bind_value) for bind_value in stmt.bind_values]
+        body = self.visit(stmt.body)
+        if same_list(bind_values, stmt.bind_values) and body is stmt.body:
+            return stmt
+        else:
+            return SeqLetStmt(stmt.bind_vars, bind_values, body)
 
     def visit_ForStmt(self, stmt: ForStmt):
         loop_var = stmt.loop_var
@@ -678,23 +695,23 @@ class FuncStmtExprRewriter(StmtExprRewriter):
             return Function(func.name, func.params, body, func.ret_type, func.local_vars, func.attrs)
 
 
-class BoundAwareRewriter(FuncStmtExprRewriter):
-    def __init__(self):
-        from hidet.ir.analyzers import BoundAnalyzer, BoundInfo
-        super().__init__()
-        self.analyzer = BoundAnalyzer()
-        self.bound: Dict[Expr, BoundInfo] = self.analyzer.bound
-
-    def visit(self, obj):
-        if obj in self.memo:
-            return self.memo[obj]
-        self.analyzer.visit(obj)
-        if isinstance(obj, Expr) and not isinstance(obj, Constant) and self.bound[obj].value is not None:
-            ret = convert(self.bound[obj].value)
-        else:
-            ret = FuncStmtExprRewriter.visit(self, obj)
-        self.memo[obj] = ret
-        return ret
+# class BoundAwareRewriter(FuncStmtExprRewriter):
+#     def __init__(self):
+#         from hidet.ir.analyzers import BoundAnalyzer, BoundInfo
+#         super().__init__()
+#         self.analyzer = BoundAnalyzer()
+#         self.bound: Dict[Expr, BoundInfo] = self.analyzer.bound
+#
+#     def visit(self, obj):
+#         if obj in self.memo:
+#             return self.memo[obj]
+#         self.analyzer.visit(obj)
+#         if isinstance(obj, Expr) and not isinstance(obj, Constant) and self.bound[obj].value is not None:
+#             ret = convert(self.bound[obj].value)
+#         else:
+#             ret = FuncStmtExprRewriter.visit(self, obj)
+#         self.memo[obj] = ret
+#         return ret
 
 
 class TypeFunctor(NodeFunctor):

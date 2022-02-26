@@ -5,16 +5,25 @@ from hidet.utils.py import Timer, COLORS
 
 def lower(ir_module: IRModule, keep_ir=False, out_dir=None) -> IRModule:
     transforms = [
+        # necessary passes
         # eliminate_dead_device_function_pass(),
         generate_packed_func_pass(),
         flatten_tensor_pass(),
         expand_let_expr_pass(),
+
+
+        # simplification
         # explicit_unroll_for_stmt_pass(),
+        inline_let_stmt_pass(inline_all=True),
+        rule_based_simplify_pass(),
+        simplify_stmt_pass(),
 
-        expression_simplification_pass(),
+        # common sub-expression elimination
+        build_let_stmt_pass(),
+        common_subexpression_elimination_pass(),
+        inline_let_stmt_pass(inline_factor=2),
 
-
-        # vectorize_load_store_pass(),     # disable by default, this optimization can be conducted automatically by underlying ptxas assembler.
+        # necessary pass
         import_primitive_functions_pass()
     ]
 

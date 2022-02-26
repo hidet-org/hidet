@@ -1,7 +1,7 @@
 import contextlib
 from hidet.ir.expr import *
 from hidet.ir.stmt import *
-from hidet.ir.functors import StmtExprRewriter, same_list
+from hidet.ir.functors import StmtExprRewriter, StmtRewriter, same_list
 from hidet.ir.builders import StmtBuilder
 from hidet.transforms.base import FunctionBodyPass
 
@@ -67,9 +67,16 @@ class BuildLetStmtRewriter(StmtExprRewriter):
 
     def visit_LetStmt(self, stmt: LetStmt):
         with StmtContext(self):
-            var = self.visit_expr(stmt.var)
+            var = stmt.var
             value = self.visit_expr(stmt.value)
             with self.sb.let(var, value):
+                self(stmt.body)
+
+    def visit_SeqLetStmt(self, stmt: SeqLetStmt):
+        with StmtContext(self):
+            bind_vars = stmt.bind_vars
+            bind_values = [self(value) for value in stmt.bind_values]
+            with self.sb.lets(bind_vars=bind_vars, values=bind_values):
                 self(stmt.body)
 
     def visit_ForStmt(self, stmt: ForStmt):
@@ -108,10 +115,68 @@ class BuildLetStmtRewriter(StmtExprRewriter):
         for s in stmt.seq:
             self.visit(s)
 
+class SqueezeLetStmtRewriter(StmtRewriter):
+    def visit_LetStmt(self, stmt: LetStmt):
+        cur = StmtRewriter.visit_LetStmt(self, stmt)
+
+        bind_vars = []
+        bind_values = []
+        while isinstance(cur, (LetStmt, SeqLetStmt)):
+            if isinstance(cur, LetStmt):
+                bind_vars.append(cur.var)
+                bind_values.append(cur.value)
+            else:
+                bind_vars.extend(cur.bind_vars)
+                bind_values.extend(cur.bind_values)
+            cur = cur.body
+        return SeqLetStmt(bind_vars, bind_values, cur)
+
+    def visit_SeqLetStmt(self, stmt: SeqLetStmt):
+        cur = StmtRewriter.visit_SeqLetStmt(self, stmt)
+
+        bind_vars = []
+        bind_values = []
+        while isinstance(cur, (LetStmt, SeqLetStmt)):
+            if isinstance(cur, LetStmt):
+                bind_vars.append(cur.var)
+                bind_values.append(cur.value)
+            else:
+                bind_vars.extend(cur.bind_vars)
+                bind_values.extend(cur.bind_values)
+            cur = cur.body
+        if same_list(bind_vars, stmt.bind_vars) and same_list(bind_values, stmt.bind_values) and cur is stmt.body:
+            return stmt
+        else:
+            return SeqLetStmt(bind_vars, bind_values, stmt)
+
+    def visit_SeqStmt(self, stmt: SeqStmt):
+        seq = [self(s) for s in stmt.seq]
+        if len(seq) == 0:
+            return stmt
+        body = seq[-1]
+        for s in reversed(seq[:-1]):
+            body = join_stmt(s, body)
+        if isinstance(body, SeqStmt) and same_list(body.seq, stmt.seq):
+            return stmt
+        else:
+            return body
+
+def join_stmt(lhs: Stmt, rhs: Stmt):
+    if isinstance(lhs, LetStmt):
+        return LetStmt(lhs.var, lhs.value, join_stmt(lhs.body, rhs))
+    elif isinstance(lhs, SeqLetStmt):
+        return SeqLetStmt(lhs.bind_vars, lhs.bind_values, join_stmt(lhs.body, rhs))
+    else:
+        lhs_seq = lhs.seq if isinstance(lhs, SeqStmt) else [lhs]
+        rhs_seq = rhs.seq if isinstance(rhs, SeqStmt) else [rhs]
+        return SeqStmt(list(lhs_seq) + list(rhs_seq))
+
 
 class BuildLetStmtPass(FunctionBodyPass):
     def process_body(self, stmt: Stmt) -> Stmt:
-        return BuildLetStmtRewriter().build(stmt)
+        stmt_builder = BuildLetStmtRewriter()
+        squeezer = SqueezeLetStmtRewriter()
+        return squeezer(stmt_builder.build(stmt))
 
 
 def build_let_stmt_pass():

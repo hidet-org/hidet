@@ -50,6 +50,14 @@ class LetStmt(Stmt):
             body = LetStmt(let_stmt.var, let_stmt.value, body)
         return body
 
+class SeqLetStmt(Stmt):
+    def __init__(self, bind_vars, bind_values, body):
+        assert len(bind_vars) == len(bind_values)
+        assert len(bind_vars) > 0
+        assert body is not None
+        self.bind_vars = bind_vars
+        self.bind_values = bind_values
+        self.body = body
 
 class ForStmt(Stmt):
     DEFAULT_UNROLL_LIMIT = 32

@@ -61,7 +61,7 @@ class FullTaskLayout(TaskLayout):
 class GridTaskLayout(TaskLayout):
     def __init__(self, task_shape: Sequence[int], perm: Sequence[int]):
         assert len(task_shape) == len(perm)
-        super().__init__(num_workers=prod(task_shape), task_shape=tuple(task_shape), worker2task=lambda w: self._worker2task(w))
+        super().__init__(num_workers=prod(task_shape), task_shape=tuple(task_shape), worker2task=self._worker2task)
         self.perm = list(perm)
         self.bases = self._get_bases()
 
@@ -87,7 +87,7 @@ class ProjectedTaskLayout(TaskLayout):
         assert all(int(v) == 0 for v in dim2value.values())
         super().__init__(num_workers=base.num_workers,
                          task_shape=tuple(base.task_shape[i] if i not in dim2value else 1 for i in range(len(base.task_shape))),
-                         worker2task=lambda w: self._worker2task(w))
+                         worker2task=self._worker2task)
         self.base = base
         self.dim2value = dim2value
 
@@ -105,7 +105,7 @@ class ComposedTaskLayout(TaskLayout):
         super().__init__(
             num_workers=outer.num_workers * inner.num_workers,
             task_shape=tuple([a * b for a, b in zip(outer.task_shape, inner.task_shape)]),
-            worker2task=lambda w: self._worker2task(w)
+            worker2task=self._worker2task
         )
         self.outer = outer
         self.inner = inner
