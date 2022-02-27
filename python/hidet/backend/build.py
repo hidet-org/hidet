@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Tuple
 import multiprocessing
 import ctypes
 import os.path
@@ -16,7 +16,7 @@ from hidet.transforms import lower, PassContext
 from hidet.utils import Timer, COLORS
 
 
-def compile_src_code(src_path, keep=True, working_dir=None, keep_dir=None):
+def compile_src_code(src_path, nvcc_keep=True, working_dir=None, keep_dir=None):
     if working_dir is None:
         working_dir = os.path.join(os.path.dirname(src_path), 'info')
     if keep_dir is None:
@@ -27,10 +27,11 @@ def compile_src_code(src_path, keep=True, working_dir=None, keep_dir=None):
 
     # use random lib name to avoid the dlopen caching loading the old library
     out_lib_path = os.path.join(working_dir, str(uuid.uuid4().hex)[-6:] + '.so')
-    cc = utils.cuda.get_attribute('compute_capacity')
+    # cc = utils.cuda.get_attribute('compute_capacity')
+    cc = utils.cuda.get_compute_capability()
     cc_code = f'{cc[0]}{cc[1]}'
     command = ['nvcc',
-               '-keep' if keep else '--verbose',
+               '-keep' if nvcc_keep else '--verbose',
                '-gencode', f'arch=compute_{cc_code},code=sm_{cc_code}',
                '--ptxas-options=-v',
                '--compiler-options', "'-fPIC'",
@@ -40,7 +41,7 @@ def compile_src_code(src_path, keep=True, working_dir=None, keep_dir=None):
     try:
         result = subprocess.run(command, stderr=PIPE, stdout=PIPE, check=True, cwd=working_dir)
         # move source.ptx to be the same directory as source.cu
-        if keep:
+        if nvcc_keep:
             # move the ptx code to the same directory as source code
             ptx_name = os.path.basename(src_path).replace('.cu', '.ptx')
             ptx_path = os.path.join(working_dir, ptx_name)
@@ -58,7 +59,22 @@ def compile_src_code(src_path, keep=True, working_dir=None, keep_dir=None):
         raise e
 
 
-def build(ir_module: IRModule, output_dir, keep_ir=False, keep=True, verbose=True) -> CompiledModule:
+def build(ir_module: IRModule, output_dir, keep_ir=False, nvcc_keep=True, verbose=True) -> CompiledModule:
+    lib_path, ir_module = lower_and_compile(ir_module, output_dir, keep_ir, nvcc_keep, verbose)
+    return load_compiled_module(lib_path=lib_path, lowered_ir_module=ir_module)
+
+class BuildInstance:
+    def __init__(self, ir_module: IRModule, output_dir, keep_ir=False, nvcc_keep=True, verbose=True):
+        self.ir_module = ir_module
+        self.output_dir = output_dir
+        self.keep_ir = keep_ir
+        self.nvcc_keep = nvcc_keep
+        self.verbose = verbose
+
+    def get(self):
+        return self.ir_module, self.output_dir, self.keep_ir, self.nvcc_keep, self.verbose
+
+def lower_and_compile(ir_module: IRModule, output_dir, keep_ir: bool = False, nvcc_keep: bool = False, verbose: bool = False) -> Tuple[str, IRModule]:
     # lower
     with Timer() as lower_timer:
         with PassContext(save_lowering_results=keep_ir, save_dir=os.path.join(output_dir, 'ir')):
@@ -66,7 +82,7 @@ def build(ir_module: IRModule, output_dir, keep_ir=False, keep=True, verbose=Tru
 
     # codegen
     os.makedirs(output_dir, exist_ok=True)
-    src_code, func_name_map = codegen(ir_module)
+    src_code = codegen(ir_module)
 
     # write source code to disk
     src_path = os.path.join(output_dir, 'source.cu')
@@ -75,7 +91,7 @@ def build(ir_module: IRModule, output_dir, keep_ir=False, keep=True, verbose=Tru
 
     # call target compiler to get dynamic library
     with Timer() as target_compile_timer:
-        lib_path = compile_src_code(src_path, keep=keep)
+        lib_path = compile_src_code(src_path, nvcc_keep=nvcc_keep)
     if verbose:
         info = [
             ('hidet lower time', lower_timer.elapsed_seconds()),
@@ -83,38 +99,35 @@ def build(ir_module: IRModule, output_dir, keep_ir=False, keep=True, verbose=Tru
         ]
         for name, time in info:
             print('{:>30} {}{:.3f}{} seconds'.format(name, COLORS.OKGREEN, time, COLORS.ENDC))
+    return lib_path, ir_module
+
+def load_compiled_module(lib_path: str, lowered_ir_module: IRModule) -> CompiledModule:
     # load dynamic library
     lib = ctypes.CDLL(lib_path)
     compiled_funcs = {}
-    for func in ir_module.functions.values():
+    for func in lowered_ir_module.functions.values():
         # only load the packed function into python CompiledFunction
         if func.get_attr('packed_func') is not None:
             assert isinstance(func.ret_type, VoidType)
-            target_func = ir_module.lookup(func.get_attr('packed_func'))
+            target_func = lowered_ir_module.lookup(func.get_attr('packed_func'))
             target_func_param_types = [p.type for p in target_func.params]
-            packed_func = PackedFunc(target_func_param_types, lib[func_name_map[func.name]])
+            packed_func = PackedFunc(target_func_param_types, lib[func.name])
             compiled_funcs[func.name] = CompiledFunction(func.name, func, packed_func)
 
-    return CompiledModule(ir_module, compiled_funcs, src_code)
+    return CompiledModule(lowered_ir_module, compiled_funcs)
 
-class BuildInstance:
-    def __init__(self, ir_module: IRModule, output_dir, keep_ir=False, keep=True, verbose=True):
-        self.ir_module = ir_module
-        self.output_dir = output_dir
-        self.keep_ir = keep_ir
-        self.keep = keep
-        self.verbose = verbose
-
-    def get(self):
-        return self.ir_module, self.output_dir, self.keep_ir, self.keep, self.verbose
-
-def parallel_build(build_instances: List[BuildInstance], verbose=False) -> List[CompiledModule]:
+def batch_build(build_instances: List[BuildInstance], parallel=True, verbose=False) -> List[CompiledModule]:
     with Timer() as timer:
-        ret = []
-        for ins in build_instances:
-            ret.append(build(*ins.get()))
-        # with multiprocessing.Pool() as pool:
-        #     ret = list(pool.starmap(build, [instance.get() for instance in build_instances]))
+        if parallel:
+            # we doing the lower_and_compile in parallel instead of build because we can not transfer ctypes pointer
+            # processes = max(os.cpu_count() // 2, 1)
+            # processes = 1
+            processes = os.cpu_count() - 1
+            with multiprocessing.Pool(processes) as pool:
+                pairs = list(pool.starmap(lower_and_compile, [instance.get() for instance in build_instances]))
+            ret = [load_compiled_module(lib_path, ir_module) for lib_path, ir_module in pairs]
+        else:
+            ret = [build(*ins.get()) for ins in build_instances]
     if verbose:
-        print('parallel build {} modules with {:.3f} seconds'.format(len(build_instances), timer.elapsed_seconds()))
+        print('batch build {} modules within {:.3f} seconds'.format(len(build_instances), timer.elapsed_seconds()))
     return ret

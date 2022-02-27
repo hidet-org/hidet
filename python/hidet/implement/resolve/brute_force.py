@@ -47,7 +47,7 @@ def brute_force_resolve(ir_module: IRModule, warmup=1, number=1, repeat=10, prog
     for candidate, label in pbar:
         if len(label) > name_limit:
             label = label[:name_limit] + str(hash(name_limit))
-        module = build(candidate, f'./outs/resolve/{label}', keep=False, verbose=False)
+        module = build(candidate, f'./outs/resolve/{label}', nvcc_keep=False, verbose=False)
         latencies = module[task_name].profile(*inputs, warmup=warmup, number=number, repeat=repeat)
         current_latency = float(np.mean(latencies))
         best_latency = min(best_latency, current_latency)

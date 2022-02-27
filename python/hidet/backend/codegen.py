@@ -225,6 +225,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
 
     def visit_Call(self, e: Call):
         func_name = e.func_var.hint
+        func_name = func_name.replace('.', '_')
         if func_name in self.ir_module.functions:
             # first check whether callee is in current ir module
             # because ir module functions will cover primitive functions
@@ -397,7 +398,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         raise ValueError()
 
 
-def codegen(ir_module: IRModule) -> Tuple[str, Dict[str, str]]:
+def codegen(ir_module: IRModule) -> str:
     gen = Codegen()
     doc = gen(ir_module)
-    return str(doc), gen.func_name_map
+    return str(doc)

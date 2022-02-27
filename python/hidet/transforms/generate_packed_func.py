@@ -63,7 +63,7 @@ class GeneratePackedFuncPass(Pass):
         # call
         packed_body.append(EvaluateStmt(Call(func_global_var, grid_args)))
 
-        assert isinstance(func.name, str) and (func.name.endswith('.grid') or func.name.endswith('.host'))
+        assert isinstance(func.name, str) and (func.name.endswith('_grid') or func.name.endswith('_host'))
         packed_name = func.name[:-5]
         packed_func = Function(packed_name, host_params, SeqStmt(packed_body), VoidType(), [], {'worker': Host(), 'packed_func': func_global_var})
         return packed_func

@@ -169,7 +169,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
         return NewLine() + self(stmt.var) + ' = ' + self(stmt.value)
 
     def visit_LetStmt(self, stmt: LetStmt):
-        doc = NewLine() + 'let ' + self.visit(stmt.var) + ' = ' + self.visit(stmt.value) + ' [' + str(id(stmt.value)) + ']'
+        doc = NewLine() + 'let ' + self.visit(stmt.var) + ' = ' + self.visit(stmt.value) # + ' [' + str(id(stmt.value)) + ']'
         # doc += self.visit(stmt.body)
         doc += self.visit(stmt.body).indent()
         return doc

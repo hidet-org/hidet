@@ -3,10 +3,9 @@ from hidet.ir.func import Function, IRModule
 
 
 class CompiledModule:
-    def __init__(self, ir_module, funcs, source):
+    def __init__(self, ir_module, funcs):
         self.ir_module: IRModule = ir_module
         self.funcs: Dict[str, CompiledFunction] = funcs
-        self.source: str = source
 
     def __getitem__(self, item: str):
         return self.funcs[item]

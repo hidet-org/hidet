@@ -184,12 +184,12 @@ class CudaBlockStaticMatmulNoPipeImplementer(Implementer):
         # We can decompose different components of the kernel into subtasks. Because transfer task is very common, we can directly create a
         # transfer task by calling transfer_task function. It returns a callable object. We call it to construct the Call node that calls the
         # function that implements the subtask.
-        c_init = init_task(f'{task.name}.init', dst_type=regs_c_type, init_value=0.0, worker=ThreadBlock(task_layout=block_layout), parent_module=ir_module)
-        a_g2s = transfer_task(f'{task.name}.a_g2s', src_type=gmem_a_type, dst_type=smem_a_type, worker=ThreadBlock(task_layout=a_g2s_layout), parent_module=ir_module)
-        b_g2s = transfer_task(f'{task.name}.b_g2s', src_type=gmem_b_type, dst_type=smem_b_type, worker=ThreadBlock(task_layout=b_g2s_layout), parent_module=ir_module)
-        a_s2r = transfer_task(f'{task.name}.a_s2r', src_type=smem_a_type, dst_type=regs_a_type, worker=ThreadBlock(task_layout=a_s2r_layout), parent_module=ir_module)
-        b_s2r = transfer_task(f'{task.name}.b_s2r', src_type=smem_b_type, dst_type=regs_b_type, worker=ThreadBlock(task_layout=b_s2r_layout), parent_module=ir_module)
-        c_r2g = transfer_task(f'{task.name}.c_r2g', src_type=regs_c_type, dst_type=gmem_c_type, worker=ThreadBlock(task_layout=block_layout), parent_module=ir_module)
+        c_init = init_task(f'{task.name}_init', dst_type=regs_c_type, init_value=0.0, worker=ThreadBlock(task_layout=block_layout), parent_module=ir_module)
+        a_g2s = transfer_task(f'{task.name}_a_g2s', src_type=gmem_a_type, dst_type=smem_a_type, worker=ThreadBlock(task_layout=a_g2s_layout), parent_module=ir_module)
+        b_g2s = transfer_task(f'{task.name}_b_g2s', src_type=gmem_b_type, dst_type=smem_b_type, worker=ThreadBlock(task_layout=b_g2s_layout), parent_module=ir_module)
+        a_s2r = transfer_task(f'{task.name}_a_s2r', src_type=smem_a_type, dst_type=regs_a_type, worker=ThreadBlock(task_layout=a_s2r_layout), parent_module=ir_module)
+        b_s2r = transfer_task(f'{task.name}_b_s2r', src_type=smem_b_type, dst_type=regs_b_type, worker=ThreadBlock(task_layout=b_s2r_layout), parent_module=ir_module)
+        c_r2g = transfer_task(f'{task.name}_c_r2g', src_type=regs_c_type, dst_type=gmem_c_type, worker=ThreadBlock(task_layout=block_layout), parent_module=ir_module)
         # If there is not existing short-cut way to create a sub task, we can also use TaskBuilder to create it. In the following lines, we create
         # a subtask that conducts a matrix-multiplication accumulation task: C = C + matmul(A, B). The returned mma is callable like above subtasks.
         with TaskBuilder('mma', ThreadBlock(task_layout=block_layout), ir_module) as mma:

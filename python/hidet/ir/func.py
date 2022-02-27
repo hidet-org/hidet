@@ -23,8 +23,8 @@ class Function(Node):
         the label of this function when it is in a function group
     """
 
-    def __init__(self, name, params, body, ret_type, local_vars, attrs=None):
-        self.name = name
+    def __init__(self, name: str, params, body, ret_type, local_vars, attrs=None):
+        self.name = name.replace('.', '_')
         self.params: List[Var] = params
         self.body: Stmt = body
         self.ret_type: TypeNode = ret_type
@@ -80,10 +80,12 @@ class IRModule(Node):
             name = name_or_var.hint
         else:
             name = name_or_var
+        assert '.' not in name
         return self.functions[name]
 
     def lookup_var(self, name):
-        assert name in self.functions
+        assert '.' not in name
+        assert name in self.functions, (name, self.functions.keys())
         if name not in self.global_vars:
             func = self.functions[name]
             if isinstance(func, Function):

@@ -1,4 +1,5 @@
 import os
+import re
 import pycuda.driver
 import pycuda.autoinit
 import subprocess
@@ -30,6 +31,15 @@ _arch2name = {
     (8, 0): 'Ampere',
     (8, 6): 'Ampere'
 }
+
+def get_compute_capability():
+    # use this function in sub-progress
+    result = subprocess.run(['python', '-c', 'import pycuda.driver; pycuda.driver.init(); print(pycuda.driver.Device(0).compute_capability());'],
+                            stdin=PIPE, stdout=PIPE, check=True)
+    pair = result.stdout.decode('utf-8')
+    # pair is a string like '(8, 6)'
+    major, minor = re.search(r'\((\d*), (\d*)\)', pair).group(1, 2)
+    return int(major), int(minor)
 
 
 def get_attribute(attr_name: str, device_no=0):
@@ -172,4 +182,5 @@ if __name__ == '__main__':
     print('current gpu clock:', query_gpu_current_clock())
     print('current memory clock:', query_memory_current_clock())
     print(BenchmarkContext.get_bench_ratio())
+    print(get_compute_capability())
 

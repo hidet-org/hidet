@@ -1,2 +1,2 @@
 from .codegen import codegen
-from .build import build, lower, parallel_build, BuildInstance
+from .build import build, lower, batch_build, BuildInstance

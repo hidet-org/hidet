@@ -48,9 +48,9 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, prog
         # ('cuBLAS', matmul_cublas()),
     ]
     hidet_variants = [
-        # ('HidetNaive', (CudaGridNaiveImplementer, CudaThreadNaiveImplementer)),
-        # ('HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaBlockNaiveImplementer)),
-        # ('HidetSoftPipeLdgWb', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer, CudaBlockNaiveImplementer)),
+        ('HidetNaive', (CudaGridNaiveImplementer, CudaThreadNaiveImplementer)),
+        ('HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaBlockNaiveImplementer)),
+        ('HidetSoftPipeLdgWb', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer, CudaBlockNaiveImplementer)),
         ('HidetSoftPipePred', (CudaGridStaticMatmulSoftPipePredImplementer, CudaBlockNaiveImplementer)),
     ]
     print('Repeat = {}'.format(repeat))
@@ -207,6 +207,6 @@ def test_custom_func():
 
 
 if __name__ == '__main__':
-    verify()
+    # verify()
     benchmark(use_nsight_compute=False)
     # test_custom_func()

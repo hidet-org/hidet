@@ -106,7 +106,7 @@ class CudaGridNaiveImplementer(Implementer):
         param2arg.update({param: arg for param, arg in zip(index_params, task_indices)})
         param2type.update({param: scalar_type('int32') for param in index_params})
 
-        subtask_name = task.name + '.thread'
+        subtask_name = task.name + '_thread'
 
         subtask_compute = rewrite(task.compute.value, rmap)
 

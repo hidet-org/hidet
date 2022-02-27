@@ -182,7 +182,7 @@ class CudaGridSplitImplementer(Implementer):
                     j_cond_expr = [(m_block_idx + 1) * block_task[1] <= task_m, m_block_idx + 1 == grid_m]
                     if i_cond[i] and j_cond[j]:
                         shape = [i_shape[i], j_shape[j]]
-                        subtask_name = f'{task.name}.bt{block_task[0]}x{block_task[1]}.bsz{block_size}.s{shape[0]}x{shape[1]}.block'
+                        subtask_name = f'{task.name}_bt{block_task[0]}x{block_task[1]}_bsz{block_size}_s{shape[0]}x{shape[1]}_block'
                         subtask, args = self.get_subtask(subtask_name, task, match, block_task, shape, block_size, n_block_idx, m_block_idx, fb.params)
                         submodule = implement(subtask)
                         ir_module.include(submodule)

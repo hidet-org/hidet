@@ -16,9 +16,12 @@ def prod(seq: Sequence):
 
 
 class Timer:
-    def __init__(self):
+    def __init__(self, msg=None, file=None, verbose=True):
         self.start_time = None
         self.end_time = None
+        self.msg = msg
+        self.verbose = verbose
+        self.file = file
 
     def __enter__(self):
         self.start_time = time.time()
@@ -26,6 +29,8 @@ class Timer:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.end_time = time.time()
+        if self.msg is not None and self.verbose:
+            print('{} {:.3f} seconds'.format(self.msg, self.elapsed_seconds()), file=self.file)
 
     def elapsed_seconds(self) -> float:
         return self.end_time - self.start_time

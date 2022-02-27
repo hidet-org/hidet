@@ -249,8 +249,24 @@ class IfThenElse(Expr):
 class Var(Expr):
     id_clock = 0
 
-    def __init__(self, hint: Optional[str], type: TypeNode):
+    def __init__(self, hint: Optional[str], type: TypeNode, name: Optional[str] = None):
+        """
+        A variable may have a hint, name, and id.
+
+        Hint is used to determine the name in codegen. Different vars may have the
+        same hint. If two vars have the same hint such as 'x', the final name would be like 'x1', 'x2'.
+
+        Name is the determined name in the final code. Used by primitive varaibles such as 'threadIdx.x'. No variable should have
+        a same name as primitive objects (including primitive variables and primitive functions).
+
+        Id is used to track the allocation of Var object in python, which is only used to help us to distinguish different Var
+        in python debugger.
+        """
+        from hidet.ir.primitives import is_reserved_name
+        if hint is not None:
+            assert not is_reserved_name(hint)
         self.hint = hint
+        self.name = name
         self.type: TypeNode = type
         self.id = self.new_id()
 

@@ -6,7 +6,7 @@ from typing import Optional, List, Set, Dict, Union, Mapping
 from hidet.ir.expr import Expr, Var, Add, Sub, Multiply, FloorDiv, Mod, Constant, Div
 from hidet.ir.func import Function
 from hidet.ir.functors import FuncStmtExprVisitor
-from hidet.ir.primitives import thread_idx, block_idx
+from hidet.ir.primitives import thread_idx, block_idx, is_primitive_variable, get_primitive_variable
 from hidet.ir.stmt import Stmt, LetStmt, ForStmt, SeqLetStmt
 from hidet.ir.task import Grid, ThreadBlock, Warp, Thread, Host
 
@@ -251,6 +251,12 @@ class BoundAnalyzer(FuncStmtExprVisitor):
     def visit_Constant(self, e: Constant):
         if e.dtype.name == 'int32':
             self.bound[e] = BoundInfo(value=e.value)
+
+    def visit_Var(self, e: Var):
+        if e.name is not None and is_primitive_variable(e.name):
+            prim_var = get_primitive_variable(e.name)
+            if prim_var in self.bound:
+                self.bound[e] = self.bound[prim_var]
 
 
 def infer_bound(node: Union[Function, Stmt, Expr], var2bound: Optional[Mapping[Var, BoundInfo]] = None) -> Dict[Expr, BoundInfo]:

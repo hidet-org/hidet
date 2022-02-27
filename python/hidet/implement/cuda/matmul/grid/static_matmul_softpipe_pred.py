@@ -1,4 +1,5 @@
 from typing import Mapping, List, Union, Any, Callable, Sequence
+import numpy as np
 import contextlib
 
 from hidet.implement.implementer import Implementer, register_impl, NotSupportedError
@@ -17,7 +18,8 @@ from hidet.ir.stmt import LetStmt, ForStmt, AssignStmt, ReturnStmt, BufferStoreS
 from hidet.ir.task import Task, ThreadBlock, Warp, Grid
 from hidet.ir.type import scalar_type, TensorType, Scope
 from hidet.implement.common import transfer_task, init_task, transfer_predicated_task, predicated_transfer_task, bounded_transfer_task, transfer_bounded_task
-from hidet.backend import parallel_build, BuildInstance
+from hidet.backend import batch_build, BuildInstance, build
+from hidet.utils import Timer
 
 """
 pesudo code of matmul with double buffering
@@ -54,6 +56,12 @@ sync
 write back
 """
 
+class CustomTaskLayout(TaskLayout):
+    def __init__(self):
+        super().__init__(num_workers=32, task_shape=(4, 8), worker2task=self._work2task)
+
+    def _work2task(self, w):
+        return [(w // 16 * 2 + w % 2, w // 2 % 8)]
 
 class MatmulSetting:
     def __init__(self,
@@ -61,11 +69,10 @@ class MatmulSetting:
                  warp_k=1,
                  block_warps=(4, 2),
                  outer=(2, 2),
-                 atom_layout=TaskLayout(num_workers=32,
-                                        task_shape=(4, 8),
-                                        worker2task=lambda w: [(w // 16 * 2 + w % 2, w // 2 % 8)]),
+                 atom_layout=CustomTaskLayout(),
                  atom_layout_name='custom_4x8',
-                 inner=(4, 4)):
+                 inner=(4, 4),
+                 min_thread_blocks=2):
         self.block_warps_k = block_warps_k
         self.warp_k = warp_k
         self.block_warps = block_warps
@@ -73,6 +80,7 @@ class MatmulSetting:
         self.atom_layout = atom_layout
         self.inner = inner
         self.atom_layout_name = atom_layout_name
+        self.min_thread_blocks=min_thread_blocks
         block_k = block_warps_k * warp_k
         # dependent variables
         warp_m = outer[0] * atom_layout.task_shape[0] * inner[0]
@@ -117,9 +125,9 @@ class MatmulSetting:
         self.regs_b_ldg_layout = DataLayout.row_major((1, block_n // (block_size // block_k))) * DataLayout.local((block_k, block_size // block_k))
 
     def __str__(self):
-        return 'overall_{}x{}x{}_blcok_warps_{}x{}_outer_{}_{}_middle_{}x{}_inner_{}x{}_warpk_{}_{}'.format(
+        return 'overall_{}x{}x{}_blcok_warps_{}x{}_outer_{}_{}_middle_{}x{}_inner_{}x{}_warpk_{}_atom_{}_min_blocks_{}'.format(
             *self.ab2c_layout.task_shape, self.block_warps_k * self.warp_k, *self.block_warps, *self.outer, *self.atom_layout.task_shape, *self.inner,
-            self.warp_k, self.atom_layout_name
+            self.warp_k, self.atom_layout_name, self.min_thread_blocks
         )
 
     def get_c_write_back_inner(self):
@@ -154,7 +162,8 @@ matmul_settings = [MatmulSetting()]
 atom_layouts = [
     ('row_4x8', TaskLayout.row_major((4, 8))),
     ('col_4x8', TaskLayout.row_major((8, 4))),
-    ('custom_4x8', TaskLayout(num_workers=32, task_shape=(4, 8), worker2task=lambda w: [(w // 16 * 2 + w % 2, w // 2 % 8)])),
+    # ('custom_4x8', TaskLayout(num_workers=32, task_shape=(4, 8), worker2task=lambda w: [(w // 16 * 2 + w % 2, w // 2 % 8)])),
+    ('custom_4x8', CustomTaskLayout()),
 ]
 
 def setup_matmul_settings():
@@ -165,19 +174,21 @@ def setup_matmul_settings():
         for outer_m, outer_n in [[1, 1], [1, 2], [2, 1], [2, 2]]:
             for block_warps_k, warp_k in [[2, 1], [4, 1], [8, 1], [12, 1]]:
                 for block_warps_m, block_warps_n in [[2, 2], [2, 4], [4, 2], [4, 2]]:
-                    for name, atom_layout in atom_layouts:
-                        try:
-                            settings.append(MatmulSetting(
-                                block_warps_k=block_warps_k,
-                                warp_k=warp_k,
-                                block_warps=[block_warps_m, block_warps_n],
-                                outer=[outer_m, outer_n],
-                                atom_layout=atom_layout,
-                                atom_layout_name=name,
-                                inner=[inner_m, inner_n]
-                            ))
-                        except NotSupportedError:
-                            pass
+                    for min_thread_blocks in [1, 2]:
+                        for name, atom_layout in atom_layouts:
+                            try:
+                                settings.append(MatmulSetting(
+                                    block_warps_k=block_warps_k,
+                                    warp_k=warp_k,
+                                    block_warps=[block_warps_m, block_warps_n],
+                                    outer=[outer_m, outer_n],
+                                    atom_layout=atom_layout,
+                                    atom_layout_name=name,
+                                    inner=[inner_m, inner_n],
+                                    min_thread_blocks=min_thread_blocks
+                                ))
+                            except NotSupportedError:
+                                pass
     return settings
 
 
@@ -231,14 +242,31 @@ class CudaGridStaticMatmulSoftPipePredImplementer(Implementer):
         ir_modules = []
         for setting in settings:
             ir_modules.append(self.implement_for_choice(task, match, setting))
-        return self.resolve(ir_modules)
+        return self.resolve(task, match, ir_modules)
 
-    def resolve(self, ir_modules: List[IRModule]) -> IRModule:
-        # build_instances = [BuildInstance(ir_module=ir_module, output_dir='./outs/internal', keep_ir=False, keep=False, verbose=False) for ir_module in ir_modules]
-        # print(len(build_instances))
-        # build_instances = build_instances[:1]
-        # compiled_modules = parallel_build(build_instances, verbose=True)
-        return ir_modules[0]
+    def resolve(self, task, match, ir_modules: List[IRModule]) -> IRModule:
+        from hidet.runtime.value import dummy_inputs_from_task
+        parallel = True
+        task_label = 'matmul_{}x{}x{}'.format(int(match[self.task_m]), int(match[self.task_n]), int(match[self.task_k]))
+        with Timer('Resolving', verbose=False):
+            build_instances = [BuildInstance(ir_module=ir_module, output_dir=f'./outs/resolve/{task_label}/{idx}', keep_ir=False, nvcc_keep=True, verbose=False) for idx, ir_module in enumerate(ir_modules)]
+            compiled_modules = batch_build(build_instances, parallel=parallel, verbose=False)
+            dummy_inputs = dummy_inputs_from_task(task)
+            best_latency = None
+            best_ir_module = None
+            latencies = []
+            for ir_module, compiled_module in zip(ir_modules, compiled_modules):
+                repeat_latency = compiled_module[task.name].profile(*dummy_inputs, warmup=2, number=1, repeat=10)
+                # print(repeat_latency)
+                latency = np.median(repeat_latency)
+                latencies.append(latency)
+                if best_latency is None or best_latency > latency:
+                    best_latency = latency
+                    best_ir_module = ir_module
+            # pairs = [(latency, label) for latency, label in zip(latencies, [ir_module.functions[task.name + '_grid'].attrs['label'] for ir_module in ir_modules])]
+            # for latency, label in sorted(pairs, key=lambda p: p[0]):
+            #     print('{:>120}: {:.3f}'.format(label, latency))
+            return best_ir_module
 
     def implement_for_choice(self, task: Task, match: Mapping[Node, Any], setting: MatmulSetting) -> IRModule:
         ir_module = IRModule()
@@ -293,14 +321,14 @@ class CudaGridStaticMatmulSoftPipePredImplementer(Implementer):
         # define subtasks
         block_k_tiles = (task_k + block_k - 1) // block_k
         first_k_tile = task_k - (block_k_tiles - 1) * block_k
-        c_init = init_task(f'{task.name}.c.init', dst_type=regs_C_type, init_value=convert(0.0), worker=ThreadBlock(task_layout=setting.ab2c_layout), parent_module=ir_module)
-        a_r2s = transfer_task(f'{task.name}.a.r2s', src_type=regs_A_ldg_type, dst_type=smem_A_type, worker=ThreadBlock(task_layout=setting.a_g2r_r2s_layout), parent_module=ir_module)
-        b_r2s = transfer_task(f'{task.name}.b.r2s', src_type=regs_B_ldg_type, dst_type=smem_B_type, worker=ThreadBlock(task_layout=setting.b_g2r_r2s_layout), parent_module=ir_module)
-        a_s2r = transfer_task(f'{task.name}.a.s2r', src_type=smem_A_type, dst_type=regs_A_type, worker=ThreadBlock(task_layout=setting.a_s2r_layout), parent_module=ir_module)
-        b_s2r = transfer_task(f'{task.name}.b.s2r', src_type=smem_B_type, dst_type=regs_B_type, worker=ThreadBlock(task_layout=setting.b_s2r_layout), parent_module=ir_module)
-        c_r2s = transfer_task(f'{task.name}.c.r2s', src_type=regs_C_wb_type.slice_out(dims=[0, 1]), dst_type=smem_C_wb_type, worker=ThreadBlock(task_layout=setting.c_r2s_layout), parent_module=ir_module)
+        c_init = init_task(f'{task.name}_c_init', dst_type=regs_C_type, init_value=convert(0.0), worker=ThreadBlock(task_layout=setting.ab2c_layout), parent_module=ir_module)
+        a_r2s = transfer_task(f'{task.name}_a_r2s', src_type=regs_A_ldg_type, dst_type=smem_A_type, worker=ThreadBlock(task_layout=setting.a_g2r_r2s_layout), parent_module=ir_module)
+        b_r2s = transfer_task(f'{task.name}_b_r2s', src_type=regs_B_ldg_type, dst_type=smem_B_type, worker=ThreadBlock(task_layout=setting.b_g2r_r2s_layout), parent_module=ir_module)
+        a_s2r = transfer_task(f'{task.name}_a_s2r', src_type=smem_A_type, dst_type=regs_A_type, worker=ThreadBlock(task_layout=setting.a_s2r_layout), parent_module=ir_module)
+        b_s2r = transfer_task(f'{task.name}_b_s2r', src_type=smem_B_type, dst_type=regs_B_type, worker=ThreadBlock(task_layout=setting.b_s2r_layout), parent_module=ir_module)
+        c_r2s = transfer_task(f'{task.name}_c_r2s', src_type=regs_C_wb_type.slice_out(dims=[0, 1]), dst_type=smem_C_wb_type, worker=ThreadBlock(task_layout=setting.c_r2s_layout), parent_module=ir_module)
 
-        with TaskBuilder(f'{task.name}.compute.block', ThreadBlock(task_layout=setting.ab2c_layout), ir_module) as ab2c:
+        with TaskBuilder(f'{task.name}_compute_block', ThreadBlock(task_layout=setting.ab2c_layout), ir_module) as ab2c:
             regs_A_input = TensorInput('regs_A', A_dtype)
             regs_B_input = TensorInput('regs_B', B_dtype)
             axis_k = var('k')
@@ -312,7 +340,7 @@ class CudaGridStaticMatmulSoftPipePredImplementer(Implementer):
             ab2c.append_param(ab2c_cmpt, regs_C_type)
 
         # define function
-        with FunctionBuilder(task.name + '.grid', attrs={'worker': Grid(grid_dim=grid_blocks_layout.num_workers, block_dim=block_size),
+        with FunctionBuilder(task.name + '.grid', attrs={'worker': Grid(grid_dim=grid_blocks_layout.num_workers, block_dim=block_size, min_blocks=setting.min_thread_blocks),
                                                          'label': str(setting)}) as fb:
             sb = StmtBuilder()
 
