@@ -530,11 +530,11 @@ DLL void MatmulOpt(int num_args, int *arg_types, void **args) {
     int N = *static_cast<int *>(args[1]);
     assert(arg_types[2] == INT32);
     int K = *static_cast<int *>(args[2]);
-    assert(arg_types[3] == FLOAT32);
+    assert(arg_types[3] == POINTER);
     auto *A = static_cast<float *>(args[3]);
-    assert(arg_types[4] == FLOAT32);
+    assert(arg_types[4] == POINTER);
     auto *B = static_cast<float *>(args[4]);
-    assert(arg_types[5] == FLOAT32);
+    assert(arg_types[5] == POINTER);
     auto *C = static_cast<float *>(args[5]);
 
     sgemm_128x128x8(M, N, K, A, B, C);
