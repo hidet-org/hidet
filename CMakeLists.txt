@@ -7,6 +7,7 @@ set(HIDET_SRCS
         src/hidet/runtime.cpp
         src/hidet/baselines/matmul/reference.cu
         src/hidet/baselines/matmul/cublas.cu
+        src/hidet/baselines/matmul/cublas_tc.cu
         src/hidet/baselines/matmul/cutlass.cu
         src/hidet/baselines/matmul/opt.cu
         )

@@ -57,6 +57,19 @@ def matmul_cublas() -> PackedFunc:
         c_func_pointer=_LIB.MatmulCublas
     )
 
+def matmul_cublas_tensorcore() -> PackedFunc:
+    return PackedFunc(
+        param_types=[
+            scalar_type('int32'),  # N
+            scalar_type('int32'),  # M
+            scalar_type('int32'),  # K
+            pointer_type(scalar_type('float32')),  # A
+            pointer_type(scalar_type('float32')),  # B
+            pointer_type(scalar_type('float32')),  # C
+        ],
+        c_func_pointer=_LIB.MatmulCublasTc
+    )
+
 
 def matmul_cutlass() -> PackedFunc:
     return PackedFunc(

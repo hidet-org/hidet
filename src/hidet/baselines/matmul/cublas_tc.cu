@@ -16,12 +16,12 @@
 static cublasHandle_t cublas_handle = nullptr;
 
 
-static cudaError_t cublas_sgemm(int M, int N, int K, float const *A, float const *B, float *C) {
+static cudaError_t cublas_sgemm_tc(int M, int N, int K, float const *A, float const *B, float *C) {
     if(cublas_handle == nullptr) {
         CUBLAS_CALL(cublasCreate(&cublas_handle));
-        // Force cublas not to use tensor core.
-        // See 'https://docs.nvidia.com/cuda/cublas/index.html#tensorop-restrictions'
-        CUBLAS_CALL(cublasSetMathMode(cublas_handle, CUBLAS_PEDANTIC_MATH));
+        // Allow cublas to use tensor core when avaliable. This is the default behavior of cublas.
+        // see 'https://docs.nvidia.com/cuda/cublas/index.html#tensorop-restrictions'
+        CUBLAS_CALL(cublasSetMathMode(cublas_handle, CUBLAS_DEFAULT_MATH));
     }
     float alpha = 1.0;
     float beta = 0.0;
@@ -34,7 +34,7 @@ static cudaError_t cublas_sgemm(int M, int N, int K, float const *A, float const
 /*
  * params: N, M, K, A, B, C
  */
-DLL void MatmulCublas(int num_args, int *arg_types, void **args) {
+DLL void MatmulCublasTc(int num_args, int *arg_types, void **args) {
     assert(num_args == 6);
     assert(arg_types[0] == INT32);
     int M = *static_cast<int *>(args[0]);
@@ -49,6 +49,6 @@ DLL void MatmulCublas(int num_args, int *arg_types, void **args) {
     assert(arg_types[5] == FLOAT32);
     auto *C = static_cast<float *>(args[5]);
 
-    cublas_sgemm(M, N, K, A, B, C);
+    cublas_sgemm_tc(M, N, K, A, B, C);
 }
 

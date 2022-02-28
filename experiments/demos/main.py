@@ -1,7 +1,7 @@
 import numpy as np
 
 from hidet.backend import build
-from hidet.baselines.matmul import matmul_ref, matmul_cublas, matmul_opt, matmul_cutlass
+from hidet.baselines.matmul import matmul_ref, matmul_cublas, matmul_opt, matmul_cutlass, matmul_cublas_tensorcore
 from hidet.implement import implement, impl_context
 from hidet.implement.cuda import CudaBlockStaticMatmulSoftPipeLdgWbImplementer
 from hidet.implement.cuda import CudaGridSplitImplementer, CudaGridNaiveImplementer, CudaWarpTransfer2dImplementer, CudaWarpFillValueImplementer, CudaBlockStaticMatmulNoPipeImplementer
@@ -44,8 +44,9 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, prog
     baselines = [
         # ('Reference', matmul_ref()),
         ('Opt', matmul_opt()),
-        # ('cutlas', matmul_cutlass()),
-        # ('cuBLAS', matmul_cublas()),
+        ('cutlas', matmul_cutlass()),
+        ('cublas', matmul_cublas()),
+        ('cublas_tc', matmul_cublas_tensorcore()),
     ]
     hidet_variants = [
         ('HidetNaive', (CudaGridNaiveImplementer, CudaThreadNaiveImplementer)),
