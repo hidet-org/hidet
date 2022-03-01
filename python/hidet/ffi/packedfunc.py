@@ -1,3 +1,4 @@
+from typing import Dict, Sequence
 import ctypes
 from pycuda.gpuarray import GPUArray
 
@@ -25,9 +26,10 @@ class CPackedFunc(Structure):
 
 
 class PackedFunc:
-    def __init__(self, param_types, c_func_pointer):
+    def __init__(self, param_types, c_func_pointer, default_args: Dict[int, object] = None):
         self.param_types = param_types
         self.c_func_pointer = c_func_pointer
+        self.default_args = default_args if default_args is not None else {}
 
         n = len(self.param_types)
         num_args = c_int32(n)
@@ -80,8 +82,15 @@ class PackedFunc:
             raise NotImplementedError()
         return type_map[type_name]
 
-    def _convert_args(self, args):
-        n = len(args)
+    def _convert_args(self, orig_args: Sequence):
+        n = len(orig_args) + len(self.default_args)
+        args = []
+        orig_args = list(reversed(orig_args))
+        for i in range(n):
+            if i in self.default_args:
+                args.append(self.default_args[i])
+            else:
+                args.append(orig_args.pop())
         p_args = cast(pointer((ctypes.c_void_p * n)(*[self._convert_arg(idx, arg) for idx, arg in enumerate(args)])), c_void_p)
         return p_args
 

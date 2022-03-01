@@ -44,6 +44,7 @@ def matmul_ref_1d() -> PackedFunc:
         c_func_pointer=_LIB.MatmulReference1D
     )
 
+
 def matmul_cublas() -> PackedFunc:
     return PackedFunc(
         param_types=[

@@ -18,3 +18,7 @@ struct PackedFunc {
     void** func_pointer;
 };
 
+#define INT_ARG(p) (*(int*)(p))
+#define FLOAT_ARG(p) (*(float*)(p))
+
+

@@ -1,4 +1,3 @@
-#include <cassert>
 #include <hidet/runtime.h>
 #include <hidet/packedfunc.h>
 

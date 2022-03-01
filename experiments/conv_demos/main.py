@@ -171,43 +171,7 @@ def verify(use_rand=True):
                 raise e
 
 
-def test_custom_func():
-    # ((((((threadIdx.x / 32) / 2) * 16) + (((((threadIdx.x % 32) / 16) * 2) + ((threadIdx.x % 32) % 2)) * 4)) + 3) % 16)
-    with FunctionBuilder('test', attrs={'worker': ThreadBlock(block_dim=256)}) as fb:
-        arr = Var('arr', TensorType(scope='register', dtype='float32', layout=DataLayout.row_major([100])))
-        fb.extend_local_vars([arr])
-        sb = StmtBuilder()
-        # with sb.let('v', thread_idx()) as v:
-        with sb.for_loop('v', extent=256) as threadIdx:
-            with sb.for_loop('vv', extent=1000) as blockIdx:
-                threadIdx = thread_idx()
-                blockIdx = block_idx()
-                with sb.for_loop('j', extent=2) as j:
-                    # with sb.let('a', 1) as a:
-                    #     with sb.let('b', 2) as b:
-                    #         sb += BufferStoreStmt(arr, [a + b], convert(0.0))
-                    # with sb.let('c', 1) as c:
-                    #     sb += BufferStoreStmt(arr, [c], convert(0.0))
-                    # sb += BufferStoreStmt(arr, [((((((v // 32) // 2) * 16) + (((((v % 32) // 16) * 2) + ((v % 32) % 2)) * 4)) + 3) % 16)], convert(0.0))
-                    # sb += BufferStoreStmt(arr, [(((v * 32) + (v % 32)) // 32)], convert(0.0))
-                    # sb += BufferStoreStmt(arr, [(((v // 64) * 16) // 16)], convert(0.0))
-                    # sb += BufferStoreStmt(arr, [v + (convert(0) + convert(0))], convert(0.0))
-                    # sb += BufferStoreStmt(arr, [((0 + ((0 + ((1 * (v / 8)) * 128)) * 1024)) + (0 * 1))], convert(0.0))
-                    # sb += BufferStoreStmt(arr, [(((((((v % 32) / 16) * 2) + ((v % 32) % 2)) * 4) + ((v / 64) * 16)) % 16)], convert(0.0))
-                    # sb += BufferStoreStmt(arr, [((thread_idx() % 32) % 2)], convert(0.0))
-                    with sb.if_then(((blockIdx / 18) * 32) + ((threadIdx / 64) * 16) < 1296):
-                        sb += BufferStoreStmt(arr, [(((((blockIdx / 18) * 32) + ((threadIdx / 64) * 16)) * 2304) + (((blockIdx % 18) * 128) + ((((threadIdx / 32) % 2) * 64) + ((j * 32) + (threadIdx % 32)))))], arr[(((((threadIdx / 64) * 2) + ((threadIdx / 32) % 2)) * 512) + (threadIdx % 32))])
-                    with sb.if_then(((blockIdx / 18) * 32) + (((threadIdx / 64) * 16) + 1) < 1296):
-                        sb += BufferStoreStmt(arr, [((((((threadIdx / 64) * 16) + ((blockIdx / 18) * 32)) * 2304) + (((blockIdx % 18) * 128) + ((((threadIdx / 32) % 2) * 64) + ((j * 32) + (threadIdx % 32))))) + 2304)], arr[(((threadIdx % 32) + ((((threadIdx / 64) * 2) + ((threadIdx / 32) % 2)) * 512)) + 32)])
-        fb.set_body(sb.finish())
-    ir_module = IRModule()
-    ir_module.add('test', fb.get())
-    module = build(ir_module, output_dir='./outs/test', keep_ir=True)
-    with open('./outs/test/source.cu', 'r') as f:
-        print("".join(f.readlines()))
-
-
 if __name__ == '__main__':
     # verify()
-    benchmark(use_nsight_compute=False)
+    benchmark(use_nsight_compute=True)
     # test_custom_func()

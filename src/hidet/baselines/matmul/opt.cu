@@ -1,6 +1,5 @@
 // Acknowledgement: https://github.com/Yinghan-Li/YHs_Sample/blob/master/cuda/gemm/sgemm.cu
 
-#include <cassert>
 #include <cstdint>
 
 #include <hidet/runtime.h>
