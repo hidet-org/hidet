@@ -209,5 +209,5 @@ def test_custom_func():
 
 if __name__ == '__main__':
     # verify()
-    benchmark(use_nsight_compute=True)
+    benchmark(use_nsight_compute=False)
     # test_custom_func()

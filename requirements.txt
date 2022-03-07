@@ -5,3 +5,6 @@ sympy
 
 pytest
 tqdm
+
+# used to annotate the scope of events in host process, which can be visualized in Nsight System.
+nvtx

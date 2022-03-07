@@ -2,6 +2,15 @@ cmake_minimum_required(VERSION 3.19)
 
 project(hidet C CXX CUDA)
 
+# common configs
+set(CMAKE_C_COMPILER_LAUNCHER ccache)
+set(CMAKE_CXX_COMPILER_LAUNCHER ccache)
+set(CMAKE_CUDA_COMPILER_LAUNCHER ccache)
+
+# submodules
+include(cmake/TVM.cmake)
+
+# config hidet
 if(EXISTS "${CMAKE_BINARY_DIR}/config.cmake")
     include(${CMAKE_BINARY_DIR}/config.cmake)
 else()
@@ -21,6 +30,7 @@ add_library(hidet SHARED
         src/hidet/baselines/matmul/opt.cu
         # conv2d baselines
         src/hidet/baselines/conv2d/cudnn.cpp
+        src/hidet/baselines/conv2d/direct.cu
         src/hidet/baselines/conv2d/reference.cu
         )
 

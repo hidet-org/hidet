@@ -8,7 +8,7 @@ def bmm(B: int, N: int, M: int, K: int) -> Task:
     A = tensor_input('A', 'float32', [B, N, K])
     B = tensor_input('B', 'float32', [B, K, M])
     k = var()
-    C = compute('C', [B, N, M], lambda b, i, j: reduce_sum(A[b, i, k] * B[b, k, j], axis=k, shape=[K]))
+    C = compute('C', [B, N, M], lambda b, i, j: reduce_sum(A[b, i, k] * B[b, k, j], axes=k, shape=[K]))
     return Task(
         name='matmul.grid',
         computation=C,
@@ -28,7 +28,7 @@ def generic_bmm() -> Task:
     A = tensor_input('A', 'float32', [B, N, K])
     B = tensor_input('B', 'float32', [B, K, M])
     k = Axis(K)
-    C = compute('C', [B, N, M], lambda b, i, j: reduce_sum(A[b, i, k] * B[b, k, j], axis=k))
+    C = compute('C', [B, N, M], lambda b, i, j: reduce_sum(A[b, i, k] * B[b, k, j], axes=k))
     return Task(
         name='matmul.grid',
         computation=C,

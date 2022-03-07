@@ -11,6 +11,7 @@ def load_library():
     if _LIB:
         return
     paths = ['./libhidet.so',
+             './build-debug/lib/libhidet.so',
              './build-release/lib/libhidet.so',
              './build/lib/libhidet.so',
              ]
@@ -20,6 +21,7 @@ def load_library():
         if not os.path.exists(path):
             continue
         _LIB = ctypes.cdll.LoadLibrary(path)
+        break
     if _LIB is None:
         raise OSError('Can not find library: \n' + '\n'.join(paths))
 

@@ -7,7 +7,6 @@
 struct CudnnContext {
     cudnnHandle_t handle = nullptr;
     size_t workspace_bytes = 0;
-    void* workspace = nullptr;
     CudnnContext() {
         CUDNN_CALL(cudnnCreate(&handle));
     }
@@ -25,6 +24,8 @@ struct CudnnContext {
         static CudnnContext ctx;
         return &ctx;
     }
+private:
+    void* workspace = nullptr;
 };
 
 struct Conv2dSetting {
@@ -63,6 +64,17 @@ struct Conv2dSetting {
         // only used when this class has only integers
         return std::memcmp(&lhs, &rhs, sizeof(Conv2dSetting)) < 0;
     }
+    void print() const {
+        fprintf(stderr, "input_%dx%dx%dx%d_filter_%d_%d_%d_%d_stride_%d_%d_padding_%d_%d\n",
+                batch_size, in_channels, height, width, out_channels, in_channels, kernel_h, kernel_w, stride_h, stride_w, padding_h, padding_w
+        );
+    }
+    std::string str() const {
+        char buf[2048];
+        sprintf(buf, "input_%dx%dx%dx%d_filter_%d_%d_%d_%d_stride_%d_%d_padding_%d_%d",
+                batch_size, in_channels, height, width, out_channels, in_channels, kernel_h, kernel_w, stride_h, stride_w, padding_h, padding_w);
+        return {buf};
+    }
 };
 
 
@@ -72,9 +84,21 @@ struct Conv2dContext {
     cudnnTensorDescriptor_t x_desc;
     cudnnFilterDescriptor_t w_desc;
     cudnnTensorDescriptor_t y_dest;
+    size_t required_workspace;
+    bool invalid = false;
 };
 
 Conv2dContext create_conv2d_context(const Conv2dSetting &setting) {
+    const char algo_name[][80] = {
+            "CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_GEMM",
+            "CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_PRECOMP_GEMM",
+            "CUDNN_CONVOLUTION_FWD_ALGO_GEMM",
+            "CUDNN_CONVOLUTION_FWD_ALGO_DIRECT",
+            "CUDNN_CONVOLUTION_FWD_ALGO_FFT",
+            "CUDNN_CONVOLUTION_FWD_ALGO_FFT_TILING",
+            "CUDNN_CONVOLUTION_FWD_ALGO_WINOGRAD",
+            "CUDNN_CONVOLUTION_FWD_ALGO_WINOGRAD_NONFUSED",
+    };
     //  assume NCHW format, float32 data type for now
     cudnnTensorFormat_t data_layout = CUDNN_TENSOR_NCHW;
     cudnnDataType_t data_type = CUDNN_DATA_FLOAT;
@@ -92,7 +116,7 @@ Conv2dContext create_conv2d_context(const Conv2dSetting &setting) {
 
     // conv desc
     CUDNN_CALL(cudnnCreateConvolutionDescriptor(&ctx.conv_desc));
-    CUDNN_CALL(cudnnSetConvolution2dDescriptor(ctx.conv_desc, setting.padding_h, setting.padding_w, setting.stride_h, setting.stride_w, 1, 1, CUDNN_CONVOLUTION, data_type));
+    CUDNN_CALL(cudnnSetConvolution2dDescriptor(ctx.conv_desc, setting.padding_h, setting.padding_w, setting.stride_h, setting.stride_w, 1, 1, CUDNN_CROSS_CORRELATION, data_type));
     CUDNN_CALL(cudnnSetConvolutionMathType(ctx.conv_desc, cudnnMathType_t(setting.math_mode)));
 
     // y desc
@@ -114,6 +138,7 @@ Conv2dContext create_conv2d_context(const Conv2dSetting &setting) {
             if(perf_results[i].status == CUDNN_STATUS_SUCCESS && perf_results[i].mathType == setting.math_mode) {
                 found = true;
                 ctx.conv_algo = perf_results[i].algo;
+                break;
             }
         }
         if(!found) {
@@ -124,7 +149,17 @@ Conv2dContext create_conv2d_context(const Conv2dSetting &setting) {
         assert(0 <= setting.algo && setting.algo <= CUDNN_CONVOLUTION_FWD_ALGO_COUNT);
         ctx.conv_algo = cudnnConvolutionFwdAlgo_t(setting.algo);
     }
+//    std::cerr << setting.str() << ": " << algo_name[ctx.conv_algo] << std::endl;
 
+    // get the workspace required by this algorithm
+    cudnnStatus_t status = cudnnGetConvolutionForwardWorkspaceSize(CudnnContext::global()->handle, ctx.x_desc, ctx.w_desc, ctx.conv_desc, ctx.y_dest, ctx.conv_algo, &ctx.required_workspace);
+    if(status == CUDNN_STATUS_NOT_SUPPORTED) {
+        // the algorithm is not supported
+        ctx.required_workspace = 0;
+        ctx.invalid = true;
+    } else {
+        CUDNN_CALL(status);
+    }
     return ctx;
 }
 
@@ -138,11 +173,14 @@ static void cudnn_conv2d(const Conv2dSetting &setting, float *x, float *w, float
         iter = setting2context.find(setting);
     }
     const Conv2dContext &ctx = iter->second;
+    if(ctx.invalid) {
+        return;
+    }
     const float alpha = 1.0;
     const float beta = 0.0;
     auto cudnn_ctx = CudnnContext::global();
     CUDNN_CALL(cudnnConvolutionForward(cudnn_ctx->handle, &alpha, ctx.x_desc, x, ctx.w_desc, w, ctx.conv_desc, ctx.conv_algo,
-                                       cudnn_ctx->workspace, cudnn_ctx->workspace_bytes, &beta, ctx.y_dest, y));
+                                       cudnn_ctx->get_workspace(ctx.required_workspace), ctx.required_workspace, &beta, ctx.y_dest, y));
 }
 
 // params:
@@ -178,4 +216,17 @@ DLL void Conv2dCudnn(int num_args, const int *arg_types, void **args) {
     auto *w = (float*)args[14];
     auto *y = (float*)args[15];
     cudnn_conv2d(setting, x, w, y);
+}
+
+DLL void Conv2DCudnnAvailable(int num_args, const int *arg_types, void **args) {
+    assert(num_args == 13 + 1);
+    for(int i = 0; i < 13 + 1; i++) {
+        assert(arg_types[i] == INT32);
+    }
+
+    Conv2dSetting setting{INT_ARG(args[0]), INT_ARG(args[1]), INT_ARG(args[2]), INT_ARG(args[3]),
+                          INT_ARG(args[4]), INT_ARG(args[5]), INT_ARG(args[6]), INT_ARG(args[7]),
+                          INT_ARG(args[8]), INT_ARG(args[9]), INT_ARG(args[10]), INT_ARG(args[11]), INT_ARG(args[12])};
+    Conv2dContext ctx = create_conv2d_context(setting);
+    INT_ARG(args[13]) = !ctx.invalid;
 }

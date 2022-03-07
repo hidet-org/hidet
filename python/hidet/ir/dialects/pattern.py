@@ -314,7 +314,7 @@ class PatternMatcher:
 
     def match_ReduceCompute(self, pattern: ReduceCompute, target: ReduceCompute):
         with ExitStack() as stack:
-            stack.enter_context(self.match(pattern.axis, target.axis))
+            stack.enter_context(self.match(pattern.axes, target.axes))
             stack.enter_context(self.match(pattern.shape, target.shape))
             stack.enter_context(self.match(pattern.value, target.value))
 
@@ -359,8 +359,7 @@ class PatternMatcher:
 
     def match_ReduceComputePattern(self, pattern: ReduceComputePattern, target: ReduceCompute):
         self.check_type(pattern, target, ReduceCompute)
-        if not pattern.allow_dynamic_axis and \
-                any(not isinstance(v, Constant) for v in [target.axis.min_value, target.axis.extent]):
+        if not pattern.allow_dynamic_axis and any(not isinstance(v, Constant) for v in target.shape):
             raise NotMatchedError(pattern, target, "does not allow dynamic axis in reduce")
 
     def match_TensorComputePattern(self, pattern: TensorComputePattern, target: TensorCompute):

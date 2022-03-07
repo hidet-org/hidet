@@ -141,23 +141,24 @@ class LoopExpander(ExprRewriter):
         return buf
 
     def visit_ReduceCompute(self, e: ReduceCompute):
-        extent = e.shape[0]
-        if isinstance(extent, Constant) and extent.value == 1:
-            value_expr = self.visit(e.value)
-            acc = rewrite(value_expr, {e.axis: convert(0)})
-        else:
-            # declare accumulator
-            acc = scalar_var(e.name, infer_type(e.value))
-            self.new_buffer_map[e] = acc
+        # declare accumulator
+        acc = scalar_var(e.name, infer_type(e.value))
+        self.new_buffer_map[e] = acc
 
-            # init accumulator
-            self.sb += AssignStmt(acc, e.init_const())
+        # init accumulator
+        self.sb += AssignStmt(acc, e.init_const())
 
-            # reduction loop
-            assert len(e.shape) == 1
-            with self.sb.for_loop(e.axis, e.shape[0]):
-                expr = self.visit(e.value)
-                self.sb += AssignStmt(acc, e.combine(acc, expr))
+        # reduction loops
+        for i in range(len(e.shape)):
+            self.sb.enter_body(ForStmt(e.axes[i], e.shape[i]))
+
+        # at the inner-most loop body
+        expr = self.visit(e.value)
+        self.sb += AssignStmt(acc, e.combine(acc, expr))
+
+        # exit loop scope
+        for i in range(len(e.shape)):
+            self.sb.exit_body()
 
         # if e is in the input buffer, we should write it back
         if e in self.input_map:
@@ -165,6 +166,30 @@ class LoopExpander(ExprRewriter):
             self.sb += AssignStmt(input_var, acc)
 
         return acc
+        # extent = e.shape[0]
+        # if isinstance(extent, Constant) and extent.value == 1:
+        #     value_expr = self.visit(e.value)
+        #     acc = rewrite(value_expr, {e.axes: convert(0)})
+        # else:
+        #     # declare accumulator
+        #     acc = scalar_var(e.name, infer_type(e.value))
+        #     self.new_buffer_map[e] = acc
+        #
+        #     # init accumulator
+        #     self.sb += AssignStmt(acc, e.init_const())
+        #
+        #     # reduction loop
+        #     assert len(e.shape) == 1
+        #     with self.sb.for_loop(e.axes, e.shape[0]):
+        #         expr = self.visit(e.value)
+        #         self.sb += AssignStmt(acc, e.combine(acc, expr))
+        #
+        # # if e is in the input buffer, we should write it back
+        # if e in self.input_map:
+        #     input_var = self.input_map[e]
+        #     self.sb += AssignStmt(input_var, acc)
+        #
+        # return acc
 
 
 def expand_loop(expr: Expr, input_map: Mapping[Union[ScalarInput, TensorInput, Expr], Var]):

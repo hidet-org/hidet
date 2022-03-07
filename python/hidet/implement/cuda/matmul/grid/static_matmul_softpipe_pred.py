@@ -56,12 +56,14 @@ sync
 write back
 """
 
+
 class CustomTaskLayout(TaskLayout):
     def __init__(self):
         super().__init__(num_workers=32, task_shape=(4, 8), worker2task=self._work2task)
 
     def _work2task(self, w):
         return [(w // 16 * 2 + w % 2, w // 2 % 8)]
+
 
 class MatmulSetting:
     def __init__(self,
@@ -80,7 +82,7 @@ class MatmulSetting:
         self.atom_layout = atom_layout
         self.inner = inner
         self.atom_layout_name = atom_layout_name
-        self.min_thread_blocks=min_thread_blocks
+        self.min_thread_blocks = min_thread_blocks
         block_k = block_warps_k * warp_k
         # dependent variables
         warp_m = outer[0] * atom_layout.task_shape[0] * inner[0]
@@ -166,6 +168,7 @@ atom_layouts = [
     ('custom_4x8', CustomTaskLayout()),
 ]
 
+
 def setup_matmul_settings():
     # return [MatmulSetting()]
 
@@ -212,7 +215,7 @@ class CudaGridStaticMatmulSoftPipePredImplementer(Implementer):
                                     value=ReduceCompute(
                                         value=A[i, k] * B[k, j],
                                         shape=[self.task_k],
-                                        axis=k,
+                                        axes=[k],
                                         reduce_type=None)
                                     )
 
@@ -332,7 +335,7 @@ class CudaGridStaticMatmulSoftPipePredImplementer(Implementer):
             regs_A_input = TensorInput('regs_A', A_dtype)
             regs_B_input = TensorInput('regs_B', B_dtype)
             axis_k = var('k')
-            fcompute = lambda i, j: reduce_sum(regs_A_input[i, axis_k] * regs_B_input[axis_k, j], axis=axis_k, shape=[warp_k])
+            fcompute = lambda i, j: reduce_sum(regs_A_input[i, axis_k] * regs_B_input[axis_k, j], axes=axis_k, shape=[warp_k])
             ab2c_cmpt = compute('regs_C', shape=setting.ab2c_layout.task_shape, fcompute=fcompute, accumulate='sum')
             ab2c.set_computation(ab2c_cmpt)
             ab2c.append_param(regs_A_input, regs_A_type)

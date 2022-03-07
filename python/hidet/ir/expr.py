@@ -99,7 +99,7 @@ class UnaryOp(Expr):
         self.a = convert(a)
 
 
-def convert(obj: Optional[Union[Expr, PyScalar, tuple]]) -> Optional[Union[Expr, tuple]]:
+def convert(obj: Optional[Union[Expr, PyScalar, tuple, Sequence]]) -> Optional[Union[Expr, tuple]]:
     if isinstance(obj, Expr):
         return obj
     elif isinstance(obj, bool):

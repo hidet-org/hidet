@@ -28,7 +28,10 @@ static __global__ void conv2d_ref_kernel(
             for(int hh = 0; hh < kernel_h; hh++) {
                 for(int ww = 0; ww < kernel_w; ww++) {
                     // acc += in[n, in_c, in_h + hh, in_w + ww] * weight[c, in_c, hh, ww];
-                    acc += A(n, in_c, in_h + hh, in_w + ww) * B(c, in_c, hh, ww);
+//                    printf("n c h w in_c hh ww %d %d %d %d %d %d %d A * B %.1f %.1f\n", n, c, h, w, in_c, hh, ww, A(n, in_c, in_h + hh, in_w + ww), B(c, in_c, hh, ww));
+                    if(!(in_h + hh < 0 || in_h + hh >= height || in_w + ww < 0 || in_w + ww >= width)) {
+                        acc += A(n, in_c, in_h + hh, in_w + ww) * B(c, in_c, hh, ww);
+                    }
                 }
             }
         }

@@ -115,6 +115,17 @@ def zeros(shape, scalar_type: str, scope: str, strides=None):
     return TensorValue.zeros(shape, scalar_type, scope, strides)
 
 
+def from_numpy(np_array, scope='global'):
+    return TensorValue.from_numpy(np_array, scope)
+
+
+def from_list(py_list, scope='global', dtype='float32'):
+    dtype_dict = {
+        'float32': np.float32
+    }
+    return TensorValue.from_numpy(np.array(py_list, dtype=dtype_dict[dtype]), scope)
+
+
 def scalar(value):
     return ScalarValue.from_python(value)
 

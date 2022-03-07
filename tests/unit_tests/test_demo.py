@@ -14,7 +14,7 @@ def get_task(N=1024, M=1024, K=1024):
 
     A = tensor_input('A', 'float32', [N, K])
     B = tensor_input('B', 'float32', [K, M])
-    C = compute('C', [N, M], lambda i, j: reduce_sum(A[i, k] * B[k, j], axis=k, shape=[K]))
+    C = compute('C', [N, M], lambda i, j: reduce_sum(A[i, k] * B[k, j], axes=k, shape=[K]))
 
     params_type = [
         tensor_type('global', 'float32', [N, K], [K, 1]),

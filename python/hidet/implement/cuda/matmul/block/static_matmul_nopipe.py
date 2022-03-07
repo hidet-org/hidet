@@ -39,7 +39,7 @@ class CudaBlockStaticMatmulNoPipeImplementer(Implementer):
         self.value = self.A[self.axis_i, self.axis_k] * self.B[self.axis_k, self.axis_j]
         self.reduce = ReduceCompute(value=self.value,
                                     shape=[self.task_k],
-                                    axis=self.axis_k,
+                                    axes=[self.axis_k],
                                     reduce_type=None)
         self.computation = TensorCompute(name='C',
                                          shape=[self.task_m, self.task_n],
@@ -200,7 +200,7 @@ class CudaBlockStaticMatmulNoPipeImplementer(Implementer):
             k = var('k')
             # Define the computation. This is similar with what Halide and TVM/TE provide. Here accumulate='sum' means
             # we want the computation results to be added into the output tensor instead of assignment.
-            c = compute('regs_C', shape=block_shape, fcompute=lambda i, j: reduce_sum(a[i, k] * b[k, j], axis=k, shape=[warp_k]), accumulate='sum')
+            c = compute('regs_C', shape=block_shape, fcompute=lambda i, j: reduce_sum(a[i, k] * b[k, j], axes=k, shape=[warp_k]), accumulate='sum')
             mma.set_computation(c)
             # Add the parameter types
             mma.append_param(a, regs_a_type)

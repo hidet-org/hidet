@@ -1,6 +1,6 @@
 from typing import Union, Sequence, Tuple, Optional
 from hidet.ir.type import ScalarType
-from hidet.ir.expr import Expr, Constant, convert, Var, var
+from hidet.ir.expr import Expr, Constant, convert, Var, var, And, if_then_else
 
 
 class ComputeNode(Expr):
@@ -24,6 +24,14 @@ class TensorInput(ComputeNode):
         self.dtype: ScalarType = dtype
         self.shape = shape
 
+    def protect_read(self, indices, default_value=0.0):
+        conds = []
+        assert len(indices) == len(self.shape)
+        for index, extent in zip(indices, conds):
+            conds.append(0 <= index)
+            conds.append(index < extent)
+        return if_then_else(And.join(conds), self.__getitem__(indices), default_value)
+
 
 class TensorCompute(ComputeNode):
     def __init__(self, name, shape, axes, value, accumulate: str = None, predicate: Optional[Expr] = None):
@@ -42,12 +50,13 @@ class TensorCompute(ComputeNode):
 
 
 class ReduceCompute(ComputeNode):
-    def __init__(self, value, shape, axis, reduce_type):
+    def __init__(self, value, shape, axes, reduce_type):
         super().__init__(None)
         self.value: Expr = value
-        self.axis: Var = axis
+        self.axes: Tuple[Var] = convert(axes)
         self.shape: Tuple[Expr] = convert(shape)
         self.reduce_type: str = reduce_type
+        assert len(self.axes) == len(self.shape)
 
     def init_const(self):
         if self.reduce_type == 'sum':
@@ -77,13 +86,22 @@ def tensor_input(name, base_type, shape):
     return TensorInput(name, base_type, shape)
 
 
-def reduce_sum(expr, axis, shape: Union[Sequence[Union[int, Expr]], Union[int, Expr]]):
-    assert isinstance(axis, Var)
+def reduce_sum(expr, axes, shape: Union[Sequence[Union[int, Expr]], Union[int, Expr]]):
+    if not isinstance(axes, (tuple, list)):
+        axes = [axes]
+    assert all(isinstance(axis, Var) for axis in axes)
     if not isinstance(shape, (tuple, list)):
         shape = [shape]
     shape = [convert(v) for v in shape]
     expr = convert(expr)
-    return ReduceCompute(expr, shape, axis, 'sum')
+    return ReduceCompute(expr, shape, axes, 'sum')
+
+
+def reduce(shape: Sequence[Union[int, Expr]], fcompute, reduce_type: str):
+    shape = convert(shape)
+    axes = [var() for _ in shape]
+    value = convert(fcompute(*axes))
+    return ReduceCompute(value, shape, axes, reduce_type)
 
 
 def compute(name, shape, fcompute, accumulate=None, predicate=None):
@@ -93,4 +111,3 @@ def compute(name, shape, fcompute, accumulate=None, predicate=None):
     if predicate is not None:
         predicate = convert(predicate(*axes))
     return TensorCompute(name, shape, axes, value, accumulate, predicate)
-

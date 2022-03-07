@@ -19,10 +19,10 @@
     }}
 
 #define CUDNN_CALL(func) {                                          \
-    cudnnStatus_t status = (func);                                  \
-    if(status != CUDNN_STATUS_SUCCESS) {                            \
+    cudnnStatus_t _status = (func);                                 \
+    if(_status != CUDNN_STATUS_SUCCESS) {                           \
         std::cerr << __FILE__ << ": " << __LINE__ << ":"            \
-        << "CUDNN: " << cudnnGetErrorString(status) << std::endl;   \
+        << "CUDNN: " << cudnnGetErrorString(_status) << std::endl;  \
     }}
 
 #ifdef assert

@@ -153,7 +153,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
         return self('TensorCompute(') + self(e.name) + ', ' + self(e.shape) + ', ' + self(e.value) + ')'
 
     def visit_ReduceCompute(self, e: ReduceCompute):
-        return self('ReduceCompute(') + (self(e.name) + ', ' if e.name else '') + self(e.shape) + ', ' + self(e.axis) + ', ' + self(e.value) + ')'
+        return self('ReduceCompute(') + (self(e.name) + ', ' if e.name else '') + self(e.shape) + ', ' + self(e.axes) + ', ' + self(e.value) + ')'
 
     def visit_EvaluateStmt(self, stmt: EvaluateStmt):
         return NewLine() + self(stmt.expr)

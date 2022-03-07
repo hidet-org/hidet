@@ -63,41 +63,41 @@ from hidet.backend import build
 
 
 def get_task(N=1024, M=1024, K=1024):
-   k = var('k')
+    k = var('k')
 
-   A = tensor_input('A', 'float32', [N, K])
-   B = tensor_input('B', 'float32', [K, M])
-   C = compute('C', [N, M], lambda i, j: reduce_sum(A[i, k] * B[k, j], axis=k, shape=[K]))
+    A = tensor_input('A', 'float32', [N, K])
+    B = tensor_input('B', 'float32', [K, M])
+    C = compute('C', [N, M], lambda i, j: reduce_sum(A[i, k] * B[k, j], axes=k, shape=[K]))
 
-   params_type = [
-      tensor_type('global', 'float32', [N, K], [K, 1]),
-      tensor_type('global', 'float32', [K, M], [M, 1]),
-      tensor_type('global', 'float32', [N, M], [M, 1])
-   ]
-   task = Task('gemm', C, [A, B, C], params_type, Grid())
-   return task
+    params_type = [
+        tensor_type('global', 'float32', [N, K], [K, 1]),
+        tensor_type('global', 'float32', [K, M], [M, 1]),
+        tensor_type('global', 'float32', [N, M], [M, 1])
+    ]
+    task = Task('gemm', C, [A, B, C], params_type, Grid())
+    return task
 
 
 def main():
-   N, M, K = 2, 2, 2
-   task = get_task(N, M, K)
-   ir_module = implement(task)
+    N, M, K = 2, 2, 2
+    task = get_task(N, M, K)
+    ir_module = implement(task)
 
-   # force hidet to use naive implementers
-   with impl_context(allowed=[CudaGridNaiveImplementer, CudaThreadNaiveImplementer]):
-      module = build(ir_module, output_dir='./outs')
+    # force hidet to use naive implementers
+    with impl_context(allowed=[CudaGridNaiveImplementer, CudaThreadNaiveImplementer]):
+        module = build(ir_module, output_dir='./outs')
 
-   A = randn([N, K], 'float32', 'global', seed=1)
-   B = randn([K, M], 'float32', 'global', seed=3)
-   C = empty([N, M], 'float32', 'global')
-   module['gemm'](A, B, C)
-   print(A)
-   print(B)
-   print(C)
+    A = randn([N, K], 'float32', 'global', seed=1)
+    B = randn([K, M], 'float32', 'global', seed=3)
+    C = empty([N, M], 'float32', 'global')
+    module['gemm'](A, B, C)
+    print(A)
+    print(B)
+    print(C)
 
 
 if __name__ == '__main__':
-   main()
+    main()
 ```
 
 Run the code with

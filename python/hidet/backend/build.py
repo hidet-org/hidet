@@ -119,11 +119,11 @@ def load_compiled_module(lib_path: str, lowered_ir_module: IRModule) -> Compiled
 def batch_build(build_instances: List[BuildInstance], parallel=True, verbose=False) -> List[CompiledModule]:
     with Timer() as timer:
         if parallel:
-            # we doing the lower_and_compile in parallel instead of build because we can not transfer ctypes pointer
-            # processes = max(os.cpu_count() // 2, 1)
-            # processes = 1
-            processes = os.cpu_count() - 1
-            with multiprocessing.Pool(processes) as pool:
+            # Set the affinity of current process. # Some package such as numpy will change affinity of current process,
+            # which might limit the parallelism of compilation.
+            os.sched_setaffinity(0, range(os.cpu_count()))
+            with multiprocessing.Pool() as pool:
+                # We doing the lower_and_compile in parallel instead of build because we can not transfer ctypes pointer
                 pairs = list(pool.starmap(lower_and_compile, [instance.get() for instance in build_instances]))
             ret = [load_compiled_module(lib_path, ir_module) for lib_path, ir_module in pairs]
         else:

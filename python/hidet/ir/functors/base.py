@@ -422,12 +422,12 @@ class ExprRewriter(ExprFunctor):
 
     def visit_ReduceCompute(self, e: ReduceCompute):
         value = self(e.value)
-        axis = self(e.axis)
+        axes = [self(axis) for axis in e.axes]
         shape = [self(v) for v in e.shape]
-        if value is e.value and axis is e.axis and same_list(shape, e.shape):
+        if value is e.value and same_list(axes, e.axes) and same_list(shape, e.shape):
             return e
         else:
-            return ReduceCompute(value, shape, axis, e.reduce_type)
+            return ReduceCompute(value, shape, axes, e.reduce_type)
 
     def visit_AnyExpr(self, e: AnyExpr):
         return e

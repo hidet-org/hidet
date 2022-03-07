@@ -133,7 +133,7 @@ class CudaBlockStaticMatmulSoftPipeLdgWbImplementer(Implementer):
                                     value=ReduceCompute(
                                         value=A[i, k] * B[k, j],
                                         shape=[self.task_k],
-                                        axis=k,
+                                        axes=[k],
                                         reduce_type=None)
                                     )
 
@@ -252,7 +252,7 @@ class CudaBlockStaticMatmulSoftPipeLdgWbImplementer(Implementer):
             regs_A_input = TensorInput('regs_A', A_dtype)
             regs_B_input = TensorInput('regs_B', B_dtype)
             axis_k = var('k')
-            fcompute = lambda i, j: reduce_sum(regs_A_input[i, axis_k] * regs_B_input[axis_k, j], axis=axis_k, shape=[warp_k])
+            fcompute = lambda i, j: reduce_sum(regs_A_input[i, axis_k] * regs_B_input[axis_k, j], axes=axis_k, shape=[warp_k])
             ab2c_cmpt = compute('regs_C', shape=setting.ab2c_layout.task_shape, fcompute=fcompute, accumulate='sum')
             ab2c.set_computation(ab2c_cmpt)
             ab2c.append_param(regs_A_input, regs_A_type)
