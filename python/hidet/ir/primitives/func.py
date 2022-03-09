@@ -89,6 +89,10 @@ def sts128(reg0, reg1, reg2, reg3, smem_addr) -> Call:
 
 
 def printf(format_string, *args):
+    """
+    usage:
+    printf("%d %d\n", expr_1, expr_2)
+    """
     arg_string = ', '.join(['{}'] * len(args))
     template_string = f'printf("{format_string}", {arg_string});'
     return BlackBoxStmt(template_string, *args)

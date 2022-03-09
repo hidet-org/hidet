@@ -25,6 +25,10 @@ class TaskLayout:
         self.num_workers: int = num_workers
         self.task_shape: Tuple[int, ...] = task_shape
         self.worker2task: Callable[[Int], List[Tuple[Int]]] = worker2task
+        if num_workers is not None:
+            assert isinstance(num_workers, int)
+        if task_shape is not None:
+            assert all(isinstance(s, int) for s in task_shape)
 
     def __call__(self, w: Int) -> List[Tuple[Int, ...]]:
         return self.worker2task(w)

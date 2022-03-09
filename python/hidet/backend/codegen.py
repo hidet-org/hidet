@@ -251,7 +251,15 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         raise ValueError("please run 'expand_let_expr' pass before codegen")
 
     def visit_Var(self, e: Var):
-        return Text(self.namer.get_name(e))
+        cast2int = {
+            'threadIdx.x',
+            'blockIdx.x'
+        }
+        name = self.namer.get_name(e)
+        if name in cast2int:
+            return Text(f'(int){name}')
+        else:
+            return Text(name)
 
     def visit_Constant(self, e: Constant):
         if e.dtype.name == 'bool':

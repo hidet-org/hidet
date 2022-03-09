@@ -27,10 +27,10 @@ class TensorInput(ComputeNode):
     def protect_read(self, indices, default_value=0.0):
         conds = []
         assert len(indices) == len(self.shape)
-        for index, extent in zip(indices, conds):
+        for index, extent in zip(indices, self.shape):
             conds.append(0 <= index)
             conds.append(index < extent)
-        return if_then_else(And.join(conds), self.__getitem__(indices), default_value)
+        return if_then_else(And.join(*conds), self.__getitem__(indices), default_value)
 
 
 class TensorCompute(ComputeNode):
@@ -111,3 +111,7 @@ def compute(name, shape, fcompute, accumulate=None, predicate=None):
     if predicate is not None:
         predicate = convert(predicate(*axes))
     return TensorCompute(name, shape, axes, value, accumulate, predicate)
+
+
+def inline_compute(root: ComputeNode):
+    pass

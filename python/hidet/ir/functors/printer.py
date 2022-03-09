@@ -1,4 +1,5 @@
 from collections import defaultdict
+from typing import Dict, Optional
 from hidet.ir.node import Node
 from hidet.ir.func import IRModule, Function
 from hidet.ir.type import ScalarType, TensorType, TypeNode
@@ -18,6 +19,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
     def __init__(self):
         super().__init__()
         self.namer = Namer()
+        self.ir_module: Optional[IRModule] = None
 
     def __call__(self, node):
         return self.visit(node)
@@ -28,7 +30,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
         elif isinstance(obj, dict):
             return doc_join([self(k) + ': ' + self(v) for k, v in obj.items()], ', ')
         elif isinstance(obj, str):
-            return Text(obj)
+            return Text(obj.replace('\n', '\\n').replace('\t', '\\t'))
         elif isinstance(obj, (int, float)):
             return Text(str(obj))
         elif obj is None:
@@ -71,6 +73,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
 
     def visit_IRModule(self, ir_module: IRModule):
         doc = Doc()
+        self.ir_module = ir_module
         for name, func in ir_module.functions.items():
             doc += ['def ', name, ' ', self(func), NewLine(), NewLine()]
         return doc
@@ -118,7 +121,20 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
         return '(' + self(e.cond) + ' ? ' + self(e.then_expr) + ' : ' + self(e.else_expr) + ')'
 
     def visit_Call(self, e: Call):
-        return Text(e.func_var.hint) + '(' + self(e.args) + ')'
+        doc = Doc()
+        # name
+        doc += e.func_var.hint
+        # launch
+        func_name = e.func_var.hint
+        if self.ir_module and func_name in self.ir_module.functions:
+            func = self.ir_module.functions[func_name]
+            if 'worker' in func.attrs:
+                worker = func.attrs['worker']
+                if isinstance(worker, Grid):
+                    doc += '<<<' + self(worker.grid_dim) + ', ' + self(worker.block_dim) + '>>>'
+        # params
+        doc += '(' + self(e.args) + ')'
+        return doc
 
     def visit_Let(self, e: Let):
         return Text('let(') + self(e.var) + '=' + self(e.value) + ': ' + self(e.body) + ')'
@@ -150,10 +166,21 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
         return self.namer.get_name(e)
 
     def visit_TensorCompute(self, e: TensorCompute):
-        return self('TensorCompute(') + self(e.name) + ', ' + self(e.shape) + ', ' + self(e.value) + ')'
+        items = [
+            self(e.name),
+            'shape=(' + self(e.shape) + ')',
+            'axes=(' + self(e.axes) + ')',
+            'value=' + self(e.value),
+        ]
+        return 'TensorCompute(' + doc_join(items, ', ') + ')'
 
     def visit_ReduceCompute(self, e: ReduceCompute):
-        return self('ReduceCompute(') + (self(e.name) + ', ' if e.name else '') + self(e.shape) + ', ' + self(e.axes) + ', ' + self(e.value) + ')'
+        items = [
+            'shape=(' + self(e.shape) + ')',
+            'axes=(' + self(e.axes) + ')',
+            'value=' + self(e.value),
+        ]
+        return 'ReduceCompute(' + doc_join(items, ', ') + ')'
 
     def visit_EvaluateStmt(self, stmt: EvaluateStmt):
         return NewLine() + self(stmt.expr)
@@ -169,17 +196,17 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
         return NewLine() + self(stmt.var) + ' = ' + self(stmt.value)
 
     def visit_LetStmt(self, stmt: LetStmt):
-        doc = NewLine() + 'let ' + self.visit(stmt.var) + ' = ' + self.visit(stmt.value) # + ' [' + str(id(stmt.value)) + ']'
-        # doc += self.visit(stmt.body)
-        doc += self.visit(stmt.body).indent()
+        doc = NewLine() + 'let ' + self.visit(stmt.var) + ' = ' + self.visit(stmt.value)  # + ' [' + str(id(stmt.value)) + ']'
+        doc += self.visit(stmt.body)
+        # doc += self.visit(stmt.body).indent()
         return doc
 
     def visit_SeqLetStmt(self, stmt: SeqLetStmt):
         doc = Doc()
         for bind_var, bind_value in zip(stmt.bind_vars, stmt.bind_values):
             doc += NewLine() + 'let ' + self(bind_var) + ' = ' + self(bind_value)
-        # doc += self(stmt.body)
-        doc += self(stmt.body).indent()
+        doc += self(stmt.body)
+        # doc += self(stmt.body).indent()
         return doc
 
     def visit_ForStmt(self, stmt: ForStmt):
@@ -288,4 +315,3 @@ def astext(obj: Node) -> str:
         return str(printer(obj))
     else:
         raise ValueError()
-

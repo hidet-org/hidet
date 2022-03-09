@@ -32,6 +32,7 @@ add_library(hidet SHARED
         src/hidet/baselines/conv2d/cudnn.cpp
         src/hidet/baselines/conv2d/direct.cu
         src/hidet/baselines/conv2d/reference.cu
+        src/hidet/baselines/conv2d/implicit_gemm_ref.cu
         )
 
 target_include_directories(hidet PRIVATE

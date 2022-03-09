@@ -89,6 +89,7 @@ class NaiveLetStmtInlineRewriter(StmtExprRewriter):
             else:
                 return body
 
+
 class InlineNaiveLetStmtPass(FunctionBodyPass):
     def __init__(self, inline_factor=1, inline_all=False):
         super().__init__()

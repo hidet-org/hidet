@@ -103,17 +103,18 @@ class BuildLetStmtRewriter(StmtExprRewriter):
         with self.exit_stack:
             input_exprs = [self.visit_expr(e) for e in stmt.input_exprs]
             output_exprs = [self.visit_expr(e) for e in stmt.output_exprs]
-            return AsmStmt(stmt.template_string, list(zip(stmt.output_labels, output_exprs)),
-                           list(zip(stmt.input_labels, input_exprs)), stmt.is_volatile)
+            self.sb += AsmStmt(stmt.template_string, list(zip(stmt.output_labels, output_exprs)),
+                               list(zip(stmt.input_labels, input_exprs)), stmt.is_volatile)
 
     def visit_BlackBoxStmt(self, stmt: BlackBoxStmt):
         with StmtContext(self):
             exprs = [self.visit_expr(e) for e in stmt.exprs]
-            return BlackBoxStmt(stmt.template_string, *exprs)
+            self.sb += BlackBoxStmt(stmt.template_string, *exprs)
 
     def visit_SeqStmt(self, stmt: SeqStmt):
         for s in stmt.seq:
             self.visit(s)
+
 
 class SqueezeLetStmtRewriter(StmtRewriter):
     def visit_LetStmt(self, stmt: LetStmt):
@@ -161,6 +162,7 @@ class SqueezeLetStmtRewriter(StmtRewriter):
         else:
             return body
 
+
 def join_stmt(lhs: Stmt, rhs: Stmt):
     if isinstance(lhs, LetStmt):
         return LetStmt(lhs.var, lhs.value, join_stmt(lhs.body, rhs))
@@ -181,4 +183,3 @@ class BuildLetStmtPass(FunctionBodyPass):
 
 def build_let_stmt_pass():
     return BuildLetStmtPass()
-

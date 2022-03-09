@@ -98,6 +98,28 @@ def conv2d_reference() -> PackedFunc:
     )
 
 
+def conv2d_implicit_gemm_reference() -> PackedFunc:
+    return PackedFunc(
+        param_types=[
+            scalar_type('int32'),  # 0: batch_size
+            scalar_type('int32'),  # 1: in_channels
+            scalar_type('int32'),  # 2: height
+            scalar_type('int32'),  # 3: width
+            scalar_type('int32'),  # 4: out_channels
+            scalar_type('int32'),  # 5: kernel_h
+            scalar_type('int32'),  # 6: kernel_w
+            scalar_type('int32'),  # 7: padding_h
+            scalar_type('int32'),  # 8: padding_w
+            scalar_type('int32'),  # 9: stride_h
+            scalar_type('int32'),  # 10: stride_w
+            pointer_type(scalar_type('float32')),  # 11: x
+            pointer_type(scalar_type('float32')),  # 12: w
+            pointer_type(scalar_type('float32')),  # 13: y
+        ],
+        c_func_pointer=_LIB.Conv2dImplicitGemmReference
+    )
+
+
 def conv2d_torch(batch_size, in_channels, height, width, out_channels, kernel_h, kernel_w, padding_h, padding_w, stride_h, stride_w, x: np.ndarray, w: np.ndarray, y: np.ndarray = None):
     import torch.nn.functional
     y_torch = torch.nn.functional.conv2d(input=torch.from_numpy(x).cuda(), weight=torch.from_numpy(w).cuda(), bias=None, stride=(stride_h, stride_w), padding=(padding_h, padding_w))

@@ -66,9 +66,8 @@ class TensorComputePattern(ExprPattern):
 
 
 class ScalarExprPattern(ExprPattern):
-    def __init__(self, allow_reduce=True, reduce=None):
-        self.allow_reduce = allow_reduce
-        self.reduce: Optional[ReduceCompute] = reduce
+    def __init__(self, exclude_vars=()):
+        self.exclude_vars = exclude_vars
 
 
 class TaskPattern(PatternNode):
@@ -213,7 +212,6 @@ class PatternMatcher:
 
     def __init__(self):
         self.matched: Dict[Matchable, Optional[Any]] = {}
-        self.match_result_cache: Dict[Tuple[Matchable, Matchable], bool] = {}
 
     def __call__(self, pattern, target):
         self.matched.clear()
@@ -370,17 +368,13 @@ class PatternMatcher:
             raise NotMatchedError(pattern, target, "does not allow dynamic axis")
 
     def match_ScalarExprPattern(self, pattern: ScalarExprPattern, target: Expr):
-        self.check_cond(pattern, target, not isinstance(target, (TensorCompute, TensorInput)))
         from hidet.ir.functors import collect
-        with ExitStack() as stack:
-            reduce_exprs = collect(target, ReduceCompute)
-            if len(reduce_exprs) > 1:
-                raise NotMatchedError(pattern, target, "more than one reduce, current not supported")
-            if len(reduce_exprs) == 1:
-                target_reduce = reduce_exprs[0]
-            if len(reduce_exprs) == 0:
-                target_reduce = None
-            stack.enter_context(self.match(pattern.reduce, target_reduce))
+        if len(pattern.exclude_vars) > 0:
+            matched_exclude_vars = [self.matched[v] for v in pattern.exclude_vars if v in self.matched]
+            included_vars = collect(target, Var)
+            for included_var in included_vars:
+                if included_var in matched_exclude_vars:
+                    raise NotMatchedError(pattern, target, "excluded var occurred in target")
 
     def match_ScalarType(self, pattern: ScalarType, target: ScalarType):
         if pattern.name:
@@ -460,8 +454,20 @@ def any_const_int():
     return Constant(None, ScalarType('int32'))
 
 
+def any_const_ints(num=1):
+    return [any_const_int() for _ in range(num)]
+
+
 def any_const():
     return AnyExpr(Constant)
+
+
+def any_scalar_expr(exclude_vars=()):
+    return ScalarExprPattern(exclude_vars)
+
+
+def int_vars(names):
+    return [var(name, dtype='int32') for name in names]
 
 
 def match(pattern: Node, target: Node) -> Tuple[Optional[Dict[Node, Any]], str]:

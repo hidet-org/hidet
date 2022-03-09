@@ -21,7 +21,7 @@ def lower(ir_module: IRModule, keep_ir=False, out_dir=None) -> IRModule:
         # common sub-expression elimination
         build_let_stmt_pass(),
         common_subexpression_elimination_pass(),
-        inline_let_stmt_pass(inline_factor=2),
+        inline_let_stmt_pass(inline_factor=1),
 
         # necessary pass
         import_primitive_functions_pass()

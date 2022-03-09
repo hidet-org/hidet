@@ -60,7 +60,7 @@ class Expr(Node):
         return Address(self)
 
     def __getitem__(self, item):
-        if not isinstance(item, tuple):
+        if not isinstance(item, (tuple, list)):
             item = [item]
         indices = [idx if not isinstance(idx, slice) else None for idx in item]
         slices = [idx for idx in item if isinstance(idx, slice)]

@@ -87,7 +87,7 @@ def rewrite(node: Union[Expr, Stmt], rewrite_map: Mapping[Expr, Expr]):
     return rewriter.rewrite(node)
 
 
-def collect(node: Union[Function, Expr, Stmt], node_types):
+def collect(node: Union[Function, Expr, Stmt], node_types) -> list:
     if not isinstance(node_types, tuple):
         if isinstance(node_types, list):
             node_types = tuple(node_types)
