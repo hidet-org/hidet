@@ -2,7 +2,7 @@ from typing import Union
 import operator
 from hidet.ir.expr import Expr, BinaryOp, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, LessEqual, Equal, Constant, And, Or, Not
 from hidet.ir.expr import is_one, is_zero, is_true, is_false, convert
-from hidet.ir.stmt import Stmt, IfStmt, SeqStmt, ForStmt, LetStmt
+from hidet.ir.stmt import Stmt, IfStmt, SeqStmt, ForStmt
 from hidet.ir.functors import StmtExprRewriter, same_list, rewrite
 
 
@@ -121,17 +121,6 @@ class Simplifier(StmtExprRewriter):
                 return stmt
             else:
                 return ForStmt(loop_var, extent, stmt.unroll, body)
-
-    def visit_LetStmt(self, stmt: LetStmt):
-        var = self.visit_expr(stmt.var)
-        value = self.visit_expr(stmt.value)
-        body = self.visit(stmt.body)
-        if isinstance(value, Constant):
-            return rewrite(body, {var: value})
-        if var is stmt.var and value is stmt.value and body is stmt.body:
-            return stmt
-        else:
-            return LetStmt(var, value, body)
 
 
 def simplify(node: Union[Stmt, Expr], repeat_limit=10):

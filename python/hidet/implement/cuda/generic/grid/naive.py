@@ -5,7 +5,7 @@ import operator
 from hidet.ir.node import Node
 from hidet.ir.type import scalar_type
 from hidet.ir.expr import Expr, Var, Call, convert, And, TensorElement, var
-from hidet.ir.stmt import LetStmt, IfStmt, EvaluateStmt, concat_stmts, SeqStmt, BufferStoreStmt, Stmt
+from hidet.ir.stmt import IfStmt, EvaluateStmt, concat_stmts, SeqStmt, BufferStoreStmt, Stmt, LetStmt
 from hidet.ir.task import Task, Grid, Thread
 from hidet.ir.func import IRModule, Function
 from hidet.ir.dialects.compute import TensorInput, ScalarInput, TensorCompute, scalar_input

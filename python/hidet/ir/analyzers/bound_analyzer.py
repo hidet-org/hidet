@@ -7,7 +7,7 @@ from hidet.ir.expr import Expr, Var, Add, Sub, Multiply, FloorDiv, Mod, Constant
 from hidet.ir.func import Function
 from hidet.ir.functors import FuncStmtExprVisitor
 from hidet.ir.primitives import thread_idx, block_idx, is_primitive_variable, get_primitive_variable
-from hidet.ir.stmt import Stmt, LetStmt, ForStmt, SeqLetStmt
+from hidet.ir.stmt import Stmt, ForStmt, LetStmt
 from hidet.ir.task import Grid, ThreadBlock, Warp, Thread, Host
 
 
@@ -229,12 +229,7 @@ class BoundAnalyzer(FuncStmtExprVisitor):
     def visit_Mod(self, e: Mod):
         self.combine(e)
 
-    def visit_LetStmt(self, stmt: LetStmt):
-        self.visit(stmt.value)
-        self.bound[stmt.var] = self.bound[stmt.value]
-        self.visit(stmt.body)
-
-    def visit_SeqLetStmt(self, stmt: SeqLetStmt):
+    def visit_SeqLetStmt(self, stmt: LetStmt):
         for bind_var, bind_value in zip(stmt.bind_vars, stmt.bind_values):
             self.visit(bind_value)
             self.bound[bind_var] = self.bound[bind_value]

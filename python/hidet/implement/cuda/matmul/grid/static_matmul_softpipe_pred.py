@@ -14,7 +14,7 @@ from hidet.ir.func import IRModule
 from hidet.ir.layout import TaskLayout, row_major_layout, full_layout, DataLayout, StridesLayout
 from hidet.ir.node import Node
 from hidet.ir.primitives import syncthreads, thread_idx, block_idx
-from hidet.ir.stmt import LetStmt, ForStmt, AssignStmt, ReturnStmt, BufferStoreStmt, Stmt
+from hidet.ir.stmt import ForStmt, AssignStmt, ReturnStmt, BufferStoreStmt, Stmt
 from hidet.ir.task import Task, ThreadBlock, Warp, Grid
 from hidet.ir.type import scalar_type, TensorType, Scope
 from hidet.implement.common import transfer_task, init_task, transfer_predicated_task, predicated_transfer_task, bounded_transfer_task, transfer_bounded_task

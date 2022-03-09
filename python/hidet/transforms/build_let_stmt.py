@@ -65,14 +65,7 @@ class BuildLetStmtRewriter(StmtExprRewriter):
         with StmtContext(self):
             self.sb += StmtExprRewriter.visit_AssignStmt(self, stmt)
 
-    def visit_LetStmt(self, stmt: LetStmt):
-        with StmtContext(self):
-            var = stmt.var
-            value = self.visit_expr(stmt.value)
-            with self.sb.let(var, value):
-                self(stmt.body)
-
-    def visit_SeqLetStmt(self, stmt: SeqLetStmt):
+    def visit_SeqLetStmt(self, stmt: LetStmt):
         with StmtContext(self):
             bind_vars = stmt.bind_vars
             bind_values = [self(value) for value in stmt.bind_values]
@@ -117,38 +110,19 @@ class BuildLetStmtRewriter(StmtExprRewriter):
 
 
 class SqueezeLetStmtRewriter(StmtRewriter):
-    def visit_LetStmt(self, stmt: LetStmt):
-        cur = StmtRewriter.visit_LetStmt(self, stmt)
-
-        bind_vars = []
-        bind_values = []
-        while isinstance(cur, (LetStmt, SeqLetStmt)):
-            if isinstance(cur, LetStmt):
-                bind_vars.append(cur.var)
-                bind_values.append(cur.value)
-            else:
-                bind_vars.extend(cur.bind_vars)
-                bind_values.extend(cur.bind_values)
-            cur = cur.body
-        return SeqLetStmt(bind_vars, bind_values, cur)
-
-    def visit_SeqLetStmt(self, stmt: SeqLetStmt):
+    def visit_SeqLetStmt(self, stmt: LetStmt):
         cur = StmtRewriter.visit_SeqLetStmt(self, stmt)
 
         bind_vars = []
         bind_values = []
-        while isinstance(cur, (LetStmt, SeqLetStmt)):
-            if isinstance(cur, LetStmt):
-                bind_vars.append(cur.var)
-                bind_values.append(cur.value)
-            else:
-                bind_vars.extend(cur.bind_vars)
-                bind_values.extend(cur.bind_values)
+        while isinstance(cur, LetStmt):
+            bind_vars.extend(cur.bind_vars)
+            bind_values.extend(cur.bind_values)
             cur = cur.body
         if same_list(bind_vars, stmt.bind_vars) and same_list(bind_values, stmt.bind_values) and cur is stmt.body:
             return stmt
         else:
-            return SeqLetStmt(bind_vars, bind_values, stmt)
+            return LetStmt(bind_vars, bind_values, stmt)
 
     def visit_SeqStmt(self, stmt: SeqStmt):
         seq = [self(s) for s in stmt.seq]
@@ -165,9 +139,7 @@ class SqueezeLetStmtRewriter(StmtRewriter):
 
 def join_stmt(lhs: Stmt, rhs: Stmt):
     if isinstance(lhs, LetStmt):
-        return LetStmt(lhs.var, lhs.value, join_stmt(lhs.body, rhs))
-    elif isinstance(lhs, SeqLetStmt):
-        return SeqLetStmt(lhs.bind_vars, lhs.bind_values, join_stmt(lhs.body, rhs))
+        return LetStmt(lhs.bind_vars, lhs.bind_values, join_stmt(lhs.body, rhs))
     else:
         lhs_seq = lhs.seq if isinstance(lhs, SeqStmt) else [lhs]
         rhs_seq = rhs.seq if isinstance(rhs, SeqStmt) else [rhs]

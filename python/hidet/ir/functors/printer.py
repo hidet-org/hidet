@@ -4,7 +4,7 @@ from hidet.ir.node import Node
 from hidet.ir.func import IRModule, Function
 from hidet.ir.type import ScalarType, TensorType, TypeNode
 from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div, Sub, Not, Or, And, Let, IfThenElse
-from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, LetStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt, BlackBoxStmt, AsmStmt, ReturnStmt, SeqLetStmt
+from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt, BlackBoxStmt, AsmStmt, ReturnStmt, LetStmt
 from hidet.ir.task import Worker, Host, Grid, ThreadBlock, Warp, Thread
 from hidet.ir.dialects.compute import ReduceCompute, TensorCompute, TensorInput, ScalarInput
 from hidet.ir.dialects.lowlevel import VoidType, PointerType, Dereference, Cast, Address, ReferenceType, TensorPointerType, Reference
@@ -195,13 +195,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
     def visit_AssignStmt(self, stmt: AssignStmt):
         return NewLine() + self(stmt.var) + ' = ' + self(stmt.value)
 
-    def visit_LetStmt(self, stmt: LetStmt):
-        doc = NewLine() + 'let ' + self.visit(stmt.var) + ' = ' + self.visit(stmt.value)  # + ' [' + str(id(stmt.value)) + ']'
-        doc += self.visit(stmt.body)
-        # doc += self.visit(stmt.body).indent()
-        return doc
-
-    def visit_SeqLetStmt(self, stmt: SeqLetStmt):
+    def visit_SeqLetStmt(self, stmt: LetStmt):
         doc = Doc()
         for bind_var, bind_value in zip(stmt.bind_vars, stmt.bind_values):
             doc += NewLine() + 'let ' + self(bind_var) + ' = ' + self(bind_value)

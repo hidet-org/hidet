@@ -3,7 +3,7 @@ from typing import Mapping, List, Dict, Union
 from hidet.ir.node import Node
 from hidet.ir.type import scalar_type, tensor_type, TensorType
 from hidet.ir.expr import Expr, Var, Call, And, convert, Constant, TensorElement, var
-from hidet.ir.stmt import LetStmt, IfStmt, EvaluateStmt, concat_stmts, SeqStmt, BufferStoreStmt
+from hidet.ir.stmt import IfStmt, EvaluateStmt, concat_stmts, SeqStmt, BufferStoreStmt, LetStmt
 from hidet.ir.task import Task, Grid, ThreadBlock, Thread
 from hidet.ir.func import IRModule, Function, FunctionGroup
 from hidet.ir.dialects.compute import TensorInput, ScalarInput, TensorCompute, compute, scalar_input

@@ -36,28 +36,18 @@ class ReturnStmt(Stmt):
 
 
 class LetStmt(Stmt):
-    def __init__(self, var, value, body=None):
-        super().__init__()
-        assert isinstance(var, Var)
-        self.var = var
-        self.value = convert(value)
-        self.body = body
-
-    @staticmethod
-    def concat_let_chain(let_stmts: Sequence['LetStmt'], body: Stmt):
-        for let_stmt in reversed(let_stmts):
-            assert let_stmt.body is None
-            body = LetStmt(let_stmt.var, let_stmt.value, body)
-        return body
-
-class SeqLetStmt(Stmt):
-    def __init__(self, bind_vars, bind_values, body):
+    def __init__(self, bind_vars, bind_values, body=None):
+        if not isinstance(bind_vars, (list, tuple)):
+            bind_vars = [bind_vars]
+        if not isinstance(bind_values, (list, tuple)):
+            bind_values = [bind_values]
         assert len(bind_vars) == len(bind_values)
         assert len(bind_vars) > 0
-        assert body is not None
+        bind_values = [convert(bind_value) for bind_value in bind_values]
         self.bind_vars = bind_vars
         self.bind_values = bind_values
         self.body = body
+
 
 class ForStmt(Stmt):
     DEFAULT_UNROLL_LIMIT = 32
@@ -157,12 +147,12 @@ def concat_stmts(stmts):
                     body = nstmt
                 else:
                     raise ValueError()
-            elif isinstance(stmt, LetStmt):
+            elif isinstance(stmt, ForStmt):
                 assert stmt.body is None
                 nstmt = stmt.copy()
                 nstmt.body = body
                 body = nstmt
-            elif isinstance(stmt, ForStmt):
+            elif isinstance(stmt, LetStmt):
                 assert stmt.body is None
                 nstmt = stmt.copy()
                 nstmt.body = body

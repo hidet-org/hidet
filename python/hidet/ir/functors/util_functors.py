@@ -1,7 +1,7 @@
 from typing import Union, Mapping
 from hidet.ir.expr import Let
 from hidet.ir.func import Function
-from hidet.ir.stmt import Stmt, LetStmt, ForStmt
+from hidet.ir.stmt import Stmt, ForStmt, LetStmt
 from hidet.ir.dialects.compute import *
 
 from .base import StmtExprVisitor, StmtExprRewriter, FuncStmtExprVisitor
@@ -51,14 +51,17 @@ class FreeVarCollector(StmtExprVisitor):
         self.visit(e)
         return self.free_vars
 
-    def visit_LetStmt(self, stmt: LetStmt):
-        self.defined.add(stmt.var)
-        self.visit(stmt)
-        self.defined.remove(stmt.var)
+    def visit_SeqLetStmt(self, stmt: LetStmt):
+        for bind_var, bind_value in zip(stmt.bind_vars, stmt.bind_values):
+            self.visit(bind_value)
+            self.defined.add(bind_var)
+        self.visit(stmt.body)
+        for bind_var in stmt.bind_vars:
+            self.defined.remove(bind_var)
 
     def visit_ForStmt(self, stmt: ForStmt):
         self.defined.add(stmt.loop_var)
-        self.visit(stmt)
+        StmtExprVisitor.visit_ForStmt(self, stmt)
         self.defined.remove(stmt.loop_var)
 
     def visit_Var(self, e: Var):
@@ -70,10 +73,14 @@ class CloneRewriter(StmtExprRewriter):
     def clone(self, obj: Union[Stmt, Expr]):
         return self(obj)
 
-    def visit_LetStmt(self, stmt: LetStmt):
-        v = Var(stmt.var.hint, stmt.var.type)
-        self.memo[stmt.var] = v
-        return LetStmt(v, self(stmt.value), self(stmt.body))
+    def visit_SeqLetStmt(self, stmt: LetStmt):
+        bind_vars = []
+        bind_values = []
+        for bind_var, bind_value in zip(stmt.bind_vars, stmt.bind_values):
+            bind_vars.append(Var(bind_var.hint, bind_var.type))
+            self.memo[bind_var] = bind_vars[-1]
+            bind_values.append(self(bind_value))
+        return LetStmt(bind_vars, bind_values, self(stmt.body))
 
     def visit_Let(self, e: Let):
         v = Var(e.var.hint, e.var.type)

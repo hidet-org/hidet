@@ -446,6 +446,8 @@ class PatternMatcher:
 
     def match_Sequence(self, pattern: Sequence, target: Sequence):
         with ExitStack() as stack:
+            if len(pattern) != len(target):
+                raise NotMatchedError(pattern, target, "length does not match")
             for a, b in zip(pattern, target):
                 stack.enter_context(self.match(a, b))
 

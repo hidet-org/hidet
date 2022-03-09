@@ -128,7 +128,7 @@ class ComposedTaskLayout(TaskLayout):
 
 class TaskLayoutExpander:
     def __init__(self):
-        from hidet.ir.stmt import LetStmt, ForStmt
+        from hidet.ir.stmt import ForStmt, LetStmt
         self.stmts: List[Union[LetStmt, ForStmt]] = []
 
     def variablize(self, e):

@@ -12,7 +12,7 @@ from hidet.ir.func import IRModule
 from hidet.ir.layout import TaskLayout, row_major_layout, full_layout, DataLayout, StridesLayout
 from hidet.ir.node import Node
 from hidet.ir.primitives import syncthreads, thread_idx
-from hidet.ir.stmt import LetStmt, ForStmt, AssignStmt
+from hidet.ir.stmt import ForStmt, AssignStmt
 from hidet.ir.task import Task, ThreadBlock, Warp
 from hidet.ir.type import scalar_type, TensorType, Scope
 from hidet.implement.common import transfer_task, init_task

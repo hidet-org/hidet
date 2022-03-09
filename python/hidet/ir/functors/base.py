@@ -449,8 +449,7 @@ class StmtFunctor(NodeFunctor):
             EvaluateStmt: cls.visit_EvaluateStmt,
             BufferStoreStmt: cls.visit_BufferStoreStmt,
             AssignStmt: cls.visit_AssignStmt,
-            LetStmt: cls.visit_LetStmt,
-            SeqLetStmt: cls.visit_SeqLetStmt,
+            LetStmt: cls.visit_SeqLetStmt,
             ForStmt: cls.visit_ForStmt,
             IfStmt: cls.visit_IfStmt,
             ReturnStmt: cls.visit_ReturnStmt,
@@ -473,10 +472,7 @@ class StmtFunctor(NodeFunctor):
     def visit_AssignStmt(self, stmt: AssignStmt):
         raise NotImplementedError()
 
-    def visit_LetStmt(self, stmt: LetStmt):
-        raise NotImplementedError()
-
-    def visit_SeqLetStmt(self, stmt: SeqLetStmt):
+    def visit_SeqLetStmt(self, stmt: LetStmt):
         raise NotImplementedError()
 
     def visit_ForStmt(self, stmt: ForStmt):
@@ -518,17 +514,12 @@ class StmtVisitor(StmtFunctor):
         self.visit_expr(stmt.var)
         self.visit_expr(stmt.value)
 
-    def visit_LetStmt(self, stmt: LetStmt):
-        self.visit_expr(stmt.value)
-        self.visit(stmt.body)
-
-    def visit_SeqLetStmt(self, stmt: SeqLetStmt):
+    def visit_SeqLetStmt(self, stmt: LetStmt):
         for bind_var, bind_value in zip(stmt.bind_vars, stmt.bind_values):
             self.visit_expr(bind_value)
         self.visit(stmt.body)
 
     def visit_ForStmt(self, stmt: ForStmt):
-        self.visit_expr(stmt.loop_var)
         self.visit_expr(stmt.extent)
         self.visit(stmt.body)
 
@@ -587,22 +578,13 @@ class StmtRewriter(StmtFunctor):
         else:
             return AssignStmt(var, value)
 
-    def visit_LetStmt(self, stmt: LetStmt):
-        var = stmt.var
-        value = self.visit_expr(stmt.value)
-        body = self.visit(stmt.body)
-        if var is stmt.var and value is stmt.value and body is stmt.body:
-            return stmt
-        else:
-            return LetStmt(var, value, body)
-
-    def visit_SeqLetStmt(self, stmt: SeqLetStmt):
+    def visit_SeqLetStmt(self, stmt: LetStmt):
         bind_values = [self.visit_expr(bind_value) for bind_value in stmt.bind_values]
         body = self.visit(stmt.body)
         if same_list(bind_values, stmt.bind_values) and body is stmt.body:
             return stmt
         else:
-            return SeqLetStmt(stmt.bind_vars, bind_values, body)
+            return LetStmt(stmt.bind_vars, bind_values, body)
 
     def visit_ForStmt(self, stmt: ForStmt):
         loop_var = stmt.loop_var

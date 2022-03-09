@@ -182,7 +182,7 @@ def verify(keep_ir=True):
         # ConvSetting(batch_size=20, in_channels=20, image_size=20, out_channels=20, kernel=5, stride=2, padding=1),
         # ConvSetting(batch_size=20, in_channels=20, image_size=20, out_channels=20, kernel=7, stride=2, padding=3),
     ]
-    workloads = ConvSetting.resnet50_conv2ds(batch_size=1)
+    workloads = list(ConvSetting.resnet50_conv2ds(batch_size=1).keys())[0:1]
     cudnn_baselines = [
         # ('fma', 'implicit_gemm'),
     ]

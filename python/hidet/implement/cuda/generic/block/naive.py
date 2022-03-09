@@ -4,7 +4,7 @@ from contextlib import ExitStack
 from hidet.ir.node import Node
 from hidet.ir.type import scalar_type, tensor_type, TensorType
 from hidet.ir.expr import Expr, Var, Call, convert, Constant, TensorElement, And, var
-from hidet.ir.stmt import Stmt, LetStmt, IfStmt, EvaluateStmt, concat_stmts, SeqStmt, BufferStoreStmt, ForStmt
+from hidet.ir.stmt import Stmt, IfStmt, EvaluateStmt, concat_stmts, SeqStmt, BufferStoreStmt, ForStmt
 from hidet.ir.task import Task, Grid, ThreadBlock, Thread
 from hidet.ir.func import IRModule, Function, FunctionGroup
 from hidet.ir.dialects.compute import TensorInput, ScalarInput, TensorCompute, compute, scalar_input

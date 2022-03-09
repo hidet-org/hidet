@@ -3,7 +3,7 @@ from contextlib import ExitStack
 from hidet.transforms.base import FunctionBodyPass, SequencePass, RepeatFunctionPass
 from hidet.ir.functors import StmtRewriter, StmtExprRewriter, same_list
 from hidet.ir.expr import Expr, Var, Constant, convert, Call
-from hidet.ir.stmt import Stmt, SeqStmt, LetStmt, EvaluateStmt, IfStmt, SeqLetStmt
+from hidet.ir.stmt import Stmt, SeqStmt, EvaluateStmt, IfStmt, LetStmt
 from hidet.ir.func import IRModule
 from hidet.ir.functors import ExprHash, rewrite
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
@@ -11,9 +11,7 @@ from hidet.ir.builders import FunctionBuilder, StmtBuilder
 
 def join_stmt(lhs: Stmt, rhs: Stmt):
     if isinstance(lhs, LetStmt):
-        return LetStmt(lhs.var, lhs.value, join_stmt(lhs.body, rhs))
-    elif isinstance(lhs, SeqLetStmt):
-        return SeqLetStmt(lhs.bind_vars, lhs.bind_values, join_stmt(lhs.body, rhs))
+        return LetStmt(lhs.bind_vars, lhs.bind_values, join_stmt(lhs.body, rhs))
     else:
         lhs_seq = lhs.seq if isinstance(lhs, SeqStmt) else [lhs]
         rhs_seq = rhs.seq if isinstance(rhs, SeqStmt) else [rhs]
@@ -39,6 +37,7 @@ class ChainSeqStmtUsingLetStmtPass(FunctionBodyPass):
         ret = ChainSeqStmtUsingLetStmtRewriter()(stmt)
         return ret
 
+
 class Value2VarContext(ContextManager):
     def __init__(self, rewriter, value_hash, var):
         self.rewriter = rewriter
@@ -51,6 +50,7 @@ class Value2VarContext(ContextManager):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.rewriter.value2var.pop(self.value_hash)
+
 
 class CommonSubexpressionEliminationRewriter(StmtExprRewriter):
     def __init__(self):
@@ -68,25 +68,7 @@ class CommonSubexpressionEliminationRewriter(StmtExprRewriter):
                 return self.value2var[hash_value]
         return StmtExprRewriter.visit(self, obj)
 
-    def visit_LetStmt(self, stmt: LetStmt):
-        var = stmt.var
-        value = self(stmt.value)
-
-        if isinstance(value, (Var, Constant)):
-            self.expr_hash.memo[var] = self.expr_hash(value)
-            self.replace_var[var] = value
-            ret = self(stmt.body)
-        else:
-            value_hash = self.expr_hash(value)
-            with Value2VarContext(self, value_hash, var):
-                body = self(stmt.body)
-                if same_list([var, value, body], [stmt.var, stmt.value, stmt.body]):
-                    ret = stmt
-                else:
-                    ret = LetStmt(var, value, body)
-        return ret
-
-    def visit_SeqLetStmt(self, stmt: SeqLetStmt):
+    def visit_SeqLetStmt(self, stmt: LetStmt):
         with ExitStack() as stack:
             bind_vars = []
             bind_values = []
@@ -107,8 +89,7 @@ class CommonSubexpressionEliminationRewriter(StmtExprRewriter):
                 if len(bind_vars) == 0:
                     return body
                 else:
-                    return SeqLetStmt(bind_vars, bind_values, body)
-
+                    return LetStmt(bind_vars, bind_values, body)
 
     def visit_Var(self, e: Var):
         if e in self.replace_var:
@@ -121,8 +102,10 @@ class CommonSubexpressionEliminationPass(FunctionBodyPass):
     def process_body(self, stmt: Stmt) -> Stmt:
         return CommonSubexpressionEliminationRewriter()(stmt)
 
+
 def chain_seq_stmt_using_let_stmt_pass():
     return ChainSeqStmtUsingLetStmtPass()
+
 
 def common_subexpression_elimination_pass():
     return CommonSubexpressionEliminationPass()

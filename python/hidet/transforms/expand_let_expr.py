@@ -10,7 +10,14 @@ def wrapper(stmt_visitor):
         self.memo.clear()  # do not cache exprs between different statements, so the let expr will always generate let stmt.
         updated_stmt = stmt_visitor(self, stmt)
         let_stmts = self.stmt_stack.pop()
-        return LetStmt.concat_let_chain(let_stmts, updated_stmt)
+        if len(let_stmts) == 0:
+            return updated_stmt
+        else:
+            bind_vars, bind_values = [], []
+            for let in let_stmts:
+                bind_vars.extend(let.bind_vars)
+                bind_values.extend(let.bind_values)
+            return LetStmt(bind_vars, bind_values, updated_stmt)
 
     return wrapped_visitor
 
@@ -44,11 +51,7 @@ class LetExprExpander(StmtExprRewriter):
         return StmtExprRewriter.visit_AssignStmt(self, stmt)
 
     @wrapper
-    def visit_LetStmt(self, stmt: LetStmt):
-        return StmtExprRewriter.visit_LetStmt(self, stmt)
-
-    @wrapper
-    def visit_SeqLetStmt(self, stmt: SeqLetStmt):
+    def visit_SeqLetStmt(self, stmt: LetStmt):
         return StmtExprRewriter.visit_SeqLetStmt(self, stmt)
 
     @wrapper
