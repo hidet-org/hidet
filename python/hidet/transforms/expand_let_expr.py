@@ -51,8 +51,8 @@ class LetExprExpander(StmtExprRewriter):
         return StmtExprRewriter.visit_AssignStmt(self, stmt)
 
     @wrapper
-    def visit_SeqLetStmt(self, stmt: LetStmt):
-        return StmtExprRewriter.visit_SeqLetStmt(self, stmt)
+    def visit_LetStmt(self, stmt: LetStmt):
+        return StmtExprRewriter.visit_LetStmt(self, stmt)
 
     @wrapper
     def visit_ForStmt(self, stmt: ForStmt):

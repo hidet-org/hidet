@@ -23,7 +23,7 @@ class LetVarRefAnalyzer(StmtExprVisitor):
             self.usage_count[obj] += 1
         return StmtExprVisitor.visit(self, obj)
 
-    def visit_SeqLetStmt(self, stmt: LetStmt):
+    def visit_LetStmt(self, stmt: LetStmt):
         for bind_var, bind_value in zip(stmt.bind_vars, stmt.bind_values):
             self.var2value[bind_var] = bind_value
             self.visit(bind_value)
@@ -60,7 +60,7 @@ class NaiveLetStmtInlineRewriter(StmtExprRewriter):
             return True
         return False
 
-    def visit_SeqLetStmt(self, stmt: LetStmt):
+    def visit_LetStmt(self, stmt: LetStmt):
         bind_vars = []
         bind_values = []
         for bind_var, bind_value in zip(stmt.bind_vars, stmt.bind_values):

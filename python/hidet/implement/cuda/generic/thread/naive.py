@@ -8,6 +8,7 @@ from hidet.ir.func import IRModule, Function
 from hidet.ir.dialects.pattern import TaskPattern
 from hidet.ir.dialects.compute import TensorCompute
 from hidet.ir.dialects.lowlevel import VoidType
+from hidet.ir.primitives import thread_idx, block_idx
 from hidet.implement.implementer import Implementer, register_impl
 from hidet.implement.common import expand_loop
 
@@ -34,7 +35,7 @@ class CudaThreadNaiveImplementer(Implementer):
         # if not isinstance(task.compute, TensorCompute):
         #     body = SeqStmt([body, AssignStmt(input_map[task.compute], val)])
         func_locals = list(new_buffer_map.values())
-        func = Function(task.name, func_param_vars, body, VoidType(), func_locals, {'worker': Thread()})
+        func = Function(task.name, func_param_vars, body, VoidType(), func_locals, [thread_idx(), block_idx()], {'worker': Thread()})
         module = IRModule({func.name: func})
         return module
 

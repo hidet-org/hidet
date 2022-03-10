@@ -5,7 +5,7 @@ from hidet.baselines.matmul import matmul_ref, matmul_cublas, matmul_opt, matmul
 from hidet.implement import implement, impl_context
 from hidet.implement.cuda import CudaBlockStaticMatmulSoftPipeLdgWbImplementer
 from hidet.implement.cuda import CudaGridSplitImplementer, CudaGridNaiveImplementer, CudaWarpTransfer2dImplementer, CudaWarpFillValueImplementer, CudaBlockStaticMatmulNoPipeImplementer
-from hidet.implement.cuda import CudaThreadNaiveImplementer, CudaBlockNaiveImplementer, CudaGridStaticMatmulSoftPipePredImplementer
+from hidet.implement.cuda import CudaThreadNaiveImplementer, CudaBlockNaiveImplementer, CudaGridStaticMatmulSoftPipePredImplementer, CudaGridStaticMatmulImplementer
 from hidet.implement.resolve import random_resolve, brute_force_resolve
 from hidet.ir.task import Grid, Host, ThreadBlock
 from hidet.ir.type import TensorType
@@ -49,10 +49,11 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, prog
         ('cublas_tc', matmul_cublas_tensorcore()),
     ]
     hidet_variants = [
-        ('HidetNaive', (CudaGridNaiveImplementer, CudaThreadNaiveImplementer)),
+        # ('HidetNaive', (CudaGridNaiveImplementer, CudaThreadNaiveImplementer)),
         ('HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaBlockNaiveImplementer)),
-        ('HidetSoftPipeLdgWb', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer, CudaBlockNaiveImplementer)),
-        ('HidetSoftPipePred', (CudaGridStaticMatmulSoftPipePredImplementer, CudaBlockNaiveImplementer)),
+        # ('HidetSoftPipeLdgWb', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer, CudaBlockNaiveImplementer)),
+        # ('HidetSoftPipePred', (CudaGridStaticMatmulSoftPipePredImplementer, CudaBlockNaiveImplementer)),
+        ('HidetMatmul', (CudaGridStaticMatmulImplementer,))
     ]
     print('Repeat = {}'.format(repeat))
     print('Brute-force resolver = {}'.format(use_brute_force_resolve))
@@ -209,5 +210,5 @@ def test_custom_func():
 
 if __name__ == '__main__':
     # verify()
-    benchmark(use_nsight_compute=False)
+    benchmark(use_nsight_compute=True)
     # test_custom_func()

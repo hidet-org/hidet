@@ -64,7 +64,7 @@ class FlattenTensorPass(Pass):
 
         params = [tensor2flattened[p] if p in tensor2flattened else p for p in func.params]
         local_vars = [tensor2flattened[v] if v in tensor2flattened else v for v in func.local_vars]
-        new_func = Function(func.name, params, body, func.ret_type, local_vars, func.attrs)
+        new_func = Function(func.name, params, body, func.ret_type, local_vars, func.extern_vars, func.attrs)
         return new_func
 
 

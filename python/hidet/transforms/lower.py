@@ -1,9 +1,8 @@
 from hidet.ir.func import IRModule
 from hidet.transforms import *
-from hidet.utils.py import Timer, COLORS
 
 
-def lower(ir_module: IRModule, keep_ir=False, out_dir=None) -> IRModule:
+def lower(ir_module: IRModule) -> IRModule:
     transforms = [
         # necessary passes
         # eliminate_dead_device_function_pass(),
@@ -20,6 +19,7 @@ def lower(ir_module: IRModule, keep_ir=False, out_dir=None) -> IRModule:
 
         # common sub-expression elimination
         build_let_stmt_pass(),
+        uplift_let_stmt_pass(),
         common_subexpression_elimination_pass(),
         inline_let_stmt_pass(inline_factor=1),
 

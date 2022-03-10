@@ -283,8 +283,8 @@ def demo_settings():
 
 
 if __name__ == '__main__':
-    verify()
-    # benchmark(use_nsight_compute=False)
+    # verify()
+    benchmark(use_nsight_compute=False)
     # test_custom_func()
     # demo_hidet_conv2d()
     # demo_settings()

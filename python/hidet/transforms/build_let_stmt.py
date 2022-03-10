@@ -22,14 +22,10 @@ class StmtContext:
 
 class BuildLetStmtRewriter(StmtExprRewriter):
     def __init__(self):
-        super().__init__()
+        super().__init__(use_memo=False)
         self.exit_stack_list = []
         self.exit_stack: Optional[contextlib.ExitStack] = None
         self.sb: Optional[StmtBuilder] = None
-
-    def visit(self, obj):
-        self.memo.clear()  # do not cache
-        return StmtExprRewriter.visit(self, obj)
 
     def build(self, stmt):
         self.sb = StmtBuilder()
@@ -65,7 +61,7 @@ class BuildLetStmtRewriter(StmtExprRewriter):
         with StmtContext(self):
             self.sb += StmtExprRewriter.visit_AssignStmt(self, stmt)
 
-    def visit_SeqLetStmt(self, stmt: LetStmt):
+    def visit_LetStmt(self, stmt: LetStmt):
         with StmtContext(self):
             bind_vars = stmt.bind_vars
             bind_values = [self(value) for value in stmt.bind_values]
@@ -76,7 +72,7 @@ class BuildLetStmtRewriter(StmtExprRewriter):
         with StmtContext(self):
             loop_var = self.visit_expr(stmt.loop_var)
             extent = self.visit_expr(stmt.extent)
-            with self.sb.for_loop(loop_var, extent):
+            with self.sb.for_loop(loop_var, extent, unroll=stmt.unroll):
                 self.visit(stmt.body)
 
     def visit_IfStmt(self, stmt: IfStmt):
@@ -110,8 +106,8 @@ class BuildLetStmtRewriter(StmtExprRewriter):
 
 
 class SqueezeLetStmtRewriter(StmtRewriter):
-    def visit_SeqLetStmt(self, stmt: LetStmt):
-        cur = StmtRewriter.visit_SeqLetStmt(self, stmt)
+    def visit_LetStmt(self, stmt: LetStmt):
+        cur = StmtRewriter.visit_LetStmt(self, stmt)
 
         bind_vars = []
         bind_values = []
@@ -122,7 +118,7 @@ class SqueezeLetStmtRewriter(StmtRewriter):
         if same_list(bind_vars, stmt.bind_vars) and same_list(bind_values, stmt.bind_values) and cur is stmt.body:
             return stmt
         else:
-            return LetStmt(bind_vars, bind_values, stmt)
+            return LetStmt(bind_vars, bind_values, cur)
 
     def visit_SeqStmt(self, stmt: SeqStmt):
         seq = [self(s) for s in stmt.seq]

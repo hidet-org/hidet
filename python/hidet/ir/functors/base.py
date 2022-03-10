@@ -449,7 +449,7 @@ class StmtFunctor(NodeFunctor):
             EvaluateStmt: cls.visit_EvaluateStmt,
             BufferStoreStmt: cls.visit_BufferStoreStmt,
             AssignStmt: cls.visit_AssignStmt,
-            LetStmt: cls.visit_SeqLetStmt,
+            LetStmt: cls.visit_LetStmt,
             ForStmt: cls.visit_ForStmt,
             IfStmt: cls.visit_IfStmt,
             ReturnStmt: cls.visit_ReturnStmt,
@@ -472,7 +472,7 @@ class StmtFunctor(NodeFunctor):
     def visit_AssignStmt(self, stmt: AssignStmt):
         raise NotImplementedError()
 
-    def visit_SeqLetStmt(self, stmt: LetStmt):
+    def visit_LetStmt(self, stmt: LetStmt):
         raise NotImplementedError()
 
     def visit_ForStmt(self, stmt: ForStmt):
@@ -514,7 +514,7 @@ class StmtVisitor(StmtFunctor):
         self.visit_expr(stmt.var)
         self.visit_expr(stmt.value)
 
-    def visit_SeqLetStmt(self, stmt: LetStmt):
+    def visit_LetStmt(self, stmt: LetStmt):
         for bind_var, bind_value in zip(stmt.bind_vars, stmt.bind_values):
             self.visit_expr(bind_value)
         self.visit(stmt.body)
@@ -578,7 +578,7 @@ class StmtRewriter(StmtFunctor):
         else:
             return AssignStmt(var, value)
 
-    def visit_SeqLetStmt(self, stmt: LetStmt):
+    def visit_LetStmt(self, stmt: LetStmt):
         bind_values = [self.visit_expr(bind_value) for bind_value in stmt.bind_values]
         body = self.visit(stmt.body)
         if same_list(bind_values, stmt.bind_values) and body is stmt.body:
@@ -674,7 +674,7 @@ class FuncStmtExprRewriter(StmtExprRewriter):
         if body is func.body:
             return func
         else:
-            return Function(func.name, func.params, body, func.ret_type, func.local_vars, func.attrs)
+            return Function(func.name, func.params, body, func.ret_type, func.local_vars, func.extern_vars, func.attrs)
 
 
 # class BoundAwareRewriter(FuncStmtExprRewriter):

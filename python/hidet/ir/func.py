@@ -23,12 +23,13 @@ class Function(Node):
         the label of this function when it is in a function group
     """
 
-    def __init__(self, name: str, params, body, ret_type, local_vars, attrs=None):
+    def __init__(self, name: str, params, body, ret_type, local_vars, extern_vars=None, attrs=None):
         self.name = name.replace('.', '_')
         self.params: List[Var] = params
         self.body: Stmt = body
         self.ret_type: TypeNode = ret_type
         self.local_vars: List[Var] = local_vars
+        self.extern_vars: List[Var] = extern_vars if extern_vars else []
         self.attrs = attrs if attrs else {}
 
         assert all(attr in self.valid_attrs for attr in self.attrs)

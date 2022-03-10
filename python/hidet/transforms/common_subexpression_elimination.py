@@ -68,7 +68,7 @@ class CommonSubexpressionEliminationRewriter(StmtExprRewriter):
                 return self.value2var[hash_value]
         return StmtExprRewriter.visit(self, obj)
 
-    def visit_SeqLetStmt(self, stmt: LetStmt):
+    def visit_LetStmt(self, stmt: LetStmt):
         with ExitStack() as stack:
             bind_vars = []
             bind_values = []

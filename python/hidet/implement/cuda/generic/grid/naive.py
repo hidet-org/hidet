@@ -126,7 +126,7 @@ class CudaGridNaiveImplementer(Implementer):
         statements.append(EvaluateStmt(Call(subtask_module.lookup_var(subtask_func.name), subtask_args)))
 
         body = concat_stmts(statements)
-        func = Function(task.name + '.grid', func_param_vars, body, VoidType(), [], {'worker': worker})
+        func = Function(task.name + '.grid', func_param_vars, body, VoidType(), [], [thread_idx(), block_idx()], {'worker': worker})
         module = IRModule(task=task, funcs={func.name: func})
         module.include(subtask_module)
         return module

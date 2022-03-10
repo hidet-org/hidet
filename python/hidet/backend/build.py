@@ -36,7 +36,7 @@ def compile_src_code(src_path, nvcc_keep=True, working_dir=None, keep_dir=None):
                '--ptxas-options=-v',
                '--compiler-options', "'-fPIC'",
                '-lineinfo',
-               '-o',  out_lib_path,
+               '-o', out_lib_path,
                '--shared', src_path]
     try:
         result = subprocess.run(command, stderr=PIPE, stdout=PIPE, check=True, cwd=working_dir)
@@ -63,6 +63,7 @@ def build(ir_module: IRModule, output_dir, keep_ir=False, nvcc_keep=True, verbos
     lib_path, ir_module = lower_and_compile(ir_module, output_dir, keep_ir, nvcc_keep, verbose)
     return load_compiled_module(lib_path=lib_path, lowered_ir_module=ir_module)
 
+
 class BuildInstance:
     def __init__(self, ir_module: IRModule, output_dir, keep_ir=False, nvcc_keep=True, verbose=True):
         self.ir_module = ir_module
@@ -73,6 +74,7 @@ class BuildInstance:
 
     def get(self):
         return self.ir_module, self.output_dir, self.keep_ir, self.nvcc_keep, self.verbose
+
 
 def lower_and_compile(ir_module: IRModule, output_dir, keep_ir: bool = False, nvcc_keep: bool = False, verbose: bool = False) -> Tuple[str, IRModule]:
     # lower
@@ -101,6 +103,7 @@ def lower_and_compile(ir_module: IRModule, output_dir, keep_ir: bool = False, nv
             print('{:>30} {}{:.3f}{} seconds'.format(name, COLORS.OKGREEN, time, COLORS.ENDC))
     return lib_path, ir_module
 
+
 def load_compiled_module(lib_path: str, lowered_ir_module: IRModule) -> CompiledModule:
     # load dynamic library
     lib = ctypes.CDLL(lib_path)
@@ -116,10 +119,11 @@ def load_compiled_module(lib_path: str, lowered_ir_module: IRModule) -> Compiled
 
     return CompiledModule(lowered_ir_module, compiled_funcs)
 
+
 def batch_build(build_instances: List[BuildInstance], parallel=True, verbose=False) -> List[CompiledModule]:
     with Timer() as timer:
         if parallel:
-            # Set the affinity of current process. # Some package such as numpy will change affinity of current process,
+            # Set the affinity of current process. Some package such as numpy will change affinity of current process,
             # which might limit the parallelism of compilation.
             os.sched_setaffinity(0, range(os.cpu_count()))
             with multiprocessing.Pool() as pool:

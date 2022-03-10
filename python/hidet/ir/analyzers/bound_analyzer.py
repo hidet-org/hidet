@@ -6,7 +6,6 @@ from typing import Optional, List, Set, Dict, Union, Mapping
 from hidet.ir.expr import Expr, Var, Add, Sub, Multiply, FloorDiv, Mod, Constant, Div
 from hidet.ir.func import Function
 from hidet.ir.functors import FuncStmtExprVisitor
-from hidet.ir.primitives import thread_idx, block_idx, is_primitive_variable, get_primitive_variable
 from hidet.ir.stmt import Stmt, ForStmt, LetStmt
 from hidet.ir.task import Grid, ThreadBlock, Warp, Thread, Host
 
@@ -187,23 +186,24 @@ class BoundAnalyzer(FuncStmtExprVisitor):
 
     def visit_Function(self, func: Function):
         worker = func.get_attr('worker')
-        if isinstance(worker, Grid):
-            self.bound[thread_idx()] = BoundInfo(min_value=0, max_value=int(worker.block_dim)-1)
-            self.bound[block_idx()] = BoundInfo(min_value=0, max_value=int(worker.grid_dim)-1)
-        elif isinstance(worker, ThreadBlock):
-            self.bound[thread_idx()] = BoundInfo(min_value=0, max_value=int(worker.block_dim)-1)
-            self.bound[block_idx()] = BoundInfo(value=0)
-        elif isinstance(worker, Warp):
-            # for warp worker, it can only get the lane id from thread idx, which is between 0...31
-            self.bound[thread_idx()] = BoundInfo(min_value=0, max_value=1023)
-            self.bound[block_idx()] = BoundInfo(value=0)
-        elif isinstance(worker, Thread):
-            self.bound[thread_idx()] = BoundInfo(min_value=0, max_value=1023)
-            self.bound[block_idx()] = BoundInfo(value=0)
-        elif isinstance(worker, Host):
-            pass
-        else:
-            raise NotImplementedError()
+        # note: we use the vars in func.extern_vars instead of hidet.ir.primitives.thread_idx for multiprocessing
+        extern_var_map = {var.name: var for var in func.extern_vars}
+        if isinstance(worker, (Grid, ThreadBlock, Warp, Thread)):
+            tid = extern_var_map['threadIdx.x']
+            ctaid = extern_var_map['blockIdx.x']
+            if isinstance(worker, Grid):
+                self.bound[tid] = BoundInfo(min_value=0, max_value=int(worker.block_dim)-1)
+                self.bound[ctaid] = BoundInfo(min_value=0, max_value=int(worker.grid_dim)-1)
+            elif isinstance(worker, ThreadBlock):
+                self.bound[tid] = BoundInfo(min_value=0, max_value=int(worker.block_dim)-1)
+                self.bound[ctaid] = BoundInfo(value=0)
+            elif isinstance(worker, Warp):
+                # for warp worker, it can only get the lane id from thread idx, which is between 0...31
+                self.bound[tid] = BoundInfo(min_value=0, max_value=1023)
+                self.bound[ctaid] = BoundInfo(value=0)
+            elif isinstance(worker, Thread):
+                self.bound[tid] = BoundInfo(min_value=0, max_value=1023)
+                self.bound[ctaid] = BoundInfo(value=0)
         self.visit(func.body)
 
     def combine(self, e: Union[Add, Sub, Multiply, FloorDiv, Mod, Div]):
@@ -229,7 +229,7 @@ class BoundAnalyzer(FuncStmtExprVisitor):
     def visit_Mod(self, e: Mod):
         self.combine(e)
 
-    def visit_SeqLetStmt(self, stmt: LetStmt):
+    def visit_LetStmt(self, stmt: LetStmt):
         for bind_var, bind_value in zip(stmt.bind_vars, stmt.bind_values):
             self.visit(bind_value)
             self.bound[bind_var] = self.bound[bind_value]
@@ -246,12 +246,6 @@ class BoundAnalyzer(FuncStmtExprVisitor):
     def visit_Constant(self, e: Constant):
         if e.dtype.name == 'int32':
             self.bound[e] = BoundInfo(value=e.value)
-
-    def visit_Var(self, e: Var):
-        if e.name is not None and is_primitive_variable(e.name):
-            prim_var = get_primitive_variable(e.name)
-            if prim_var in self.bound:
-                self.bound[e] = self.bound[prim_var]
 
 
 def infer_bound(node: Union[Function, Stmt, Expr], var2bound: Optional[Mapping[Var, BoundInfo]] = None) -> Dict[Expr, BoundInfo]:

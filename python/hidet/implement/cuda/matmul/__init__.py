@@ -2,3 +2,5 @@ from . import block
 
 from .block import CudaBlockStaticMatmulNoPipeImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer
 from .grid import CudaGridStaticMatmulSoftPipePredImplementer
+
+from .static_matmul import CudaGridStaticMatmulImplementer

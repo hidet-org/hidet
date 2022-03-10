@@ -1,4 +1,6 @@
-from typing import Mapping, Any
+from typing import Mapping, Any, List
+import numpy as np
+import contextlib
 
 from hidet.implement.implementer import register_impl, Implementer, NotSupportedError
 from hidet.ir import IRModule
@@ -13,7 +15,8 @@ from hidet.ir.primitives import block_idx, thread_idx, syncthreads, printf
 from hidet.ir.stmt import BufferStoreStmt
 from hidet.ir.task import Task, Grid
 from hidet.ir.type import TensorType
-from hidet.utils import prod
+from hidet.backend import BuildInstance, batch_build
+from hidet.utils import prod, Timer
 
 
 class Schedule:
@@ -60,6 +63,17 @@ class Schedule:
         if not cond:
             raise NotSupportedError(msg)
 
+    @staticmethod
+    def schedules() -> List['Schedule']:
+        ret = []
+        for block_warps in [[2, 2], [2, 4], [4, 2], [4, 4]]:
+            for warp_outer in [[2, 2]]:
+                for warp_middle in [[32, 1], [16, 2], [8, 4], [4, 8], [2, 16], [1, 32]]:
+                    for warp_inner in [[4, 4]]:
+                        with contextlib.suppress(NotSupportedError):
+                            ret.append(Schedule(block_warps, warp_outer, warp_middle, warp_inner))
+        return ret
+
 
 class Pattern:
     def __init__(self):
@@ -105,8 +119,39 @@ class CudaGridStaticConv2dImplicitGemmImplementer(Implementer):
         return self.pattern.task_pattern
 
     def implement(self, task: Task, match: Mapping[Node, Any]) -> IRModule:
-        default_schedule = Schedule()
-        return self.implement_schedule(task, match, default_schedule)
+        search_schedule = True
+        if search_schedule:
+            ir_modules = [self.implement_schedule(task, match, schedule) for schedule in Schedule.schedules()]
+            return self.resolve(task, match, ir_modules)
+        else:
+            default_schedule = Schedule()
+            return self.implement_schedule(task, match, default_schedule)
+
+    def resolve(self, task, match, ir_modules: List[IRModule]) -> IRModule:
+        from hidet.runtime.value import dummy_inputs_from_task
+        parallel = True
+        d: Pattern = pattern2matched(self.pattern, match)
+        n, c, p, q, rc, rx, ry = d.n, d.c, d.p, d.q, d.rc, d.rx, d.ry
+        task_label = 'conv2d_n_{}_c_{}_p_{}_q_{}_rc_{}_rx_{}_ry_{}'.format(n, c, p, q, rc, rx, ry)
+        with Timer('Resolving', verbose=False):
+            build_instances = [BuildInstance(ir_module=ir_module, output_dir=f'./outs/resolve/{task_label}/{idx}', keep_ir=False, nvcc_keep=True, verbose=False) for idx, ir_module in enumerate(ir_modules)]
+            compiled_modules = batch_build(build_instances, parallel=parallel, verbose=False)
+            dummy_inputs = dummy_inputs_from_task(task)
+            best_latency = None
+            best_ir_module = None
+            latencies = []
+            for ir_module, compiled_module in zip(ir_modules, compiled_modules):
+                repeat_latency = compiled_module[task.name].profile(*dummy_inputs, warmup=2, number=1, repeat=10)
+                # print(repeat_latency)
+                latency = np.median(repeat_latency)
+                latencies.append(latency)
+                if best_latency is None or best_latency > latency:
+                    best_latency = latency
+                    best_ir_module = ir_module
+            # pairs = [(latency, label) for latency, label in zip(latencies, [ir_module.functions[task.name + '_grid'].attrs['label'] for ir_module in ir_modules])]
+            # for latency, label in sorted(pairs, key=lambda p: p[0]):
+            #     print('{:>120}: {:.3f}'.format(label, latency))
+            return best_ir_module
 
     def implement_schedule(self, task: Task, match: Mapping[Node, Any], schedule: Schedule) -> IRModule:
         d: Pattern = pattern2matched(self.pattern, match)
@@ -145,7 +190,7 @@ class CudaGridStaticConv2dImplicitGemmImplementer(Implementer):
             for ii, jj in schedule.c_r2g_layout(thread_idx()):
                 sb += BufferStoreStmt(regs_c, [ii, jj], 0.0)
             with sb.lets(['bi', 'bj'], grid_layout(block_idx())[0]) as (bi, bj):
-                with sb.for_loop('bk', block_k_tiles) as bk:
+                with sb.for_loop('bk', block_k_tiles, unroll=False) as bk:
                     # global memory -> shared memory
                     for ii, kk in schedule.a_g2s_layout(thread_idx()):
                         gi = ii + bi * block_shape[0]

@@ -4,7 +4,7 @@ from .base import FunctionBodyPass
 
 
 class SqueezeLetStmtRewriter(StmtRewriter):
-    def visit_SeqLetStmt(self, stmt: LetStmt):
+    def visit_LetStmt(self, stmt: LetStmt):
         bind_vars = []
         bind_values = []
         cur = stmt

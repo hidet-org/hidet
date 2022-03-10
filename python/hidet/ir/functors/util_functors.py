@@ -51,7 +51,7 @@ class FreeVarCollector(StmtExprVisitor):
         self.visit(e)
         return self.free_vars
 
-    def visit_SeqLetStmt(self, stmt: LetStmt):
+    def visit_LetStmt(self, stmt: LetStmt):
         for bind_var, bind_value in zip(stmt.bind_vars, stmt.bind_values):
             self.visit(bind_value)
             self.defined.add(bind_var)
@@ -73,7 +73,7 @@ class CloneRewriter(StmtExprRewriter):
     def clone(self, obj: Union[Stmt, Expr]):
         return self(obj)
 
-    def visit_SeqLetStmt(self, stmt: LetStmt):
+    def visit_LetStmt(self, stmt: LetStmt):
         bind_vars = []
         bind_values = []
         for bind_var, bind_value in zip(stmt.bind_vars, stmt.bind_values):
