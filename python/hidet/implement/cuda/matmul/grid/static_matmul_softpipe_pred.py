@@ -205,8 +205,8 @@ class CudaGridStaticMatmulSoftPipePredImplementer(Implementer):
         self.task_k = any_const_int()
 
         # inputs
-        A = TensorInput('A', dtype=scalar_type('float32'))
-        B = TensorInput('B', dtype=scalar_type('float32'))
+        A = TensorInput('A', dtype=scalar_type('float32'), shape=[None, None])
+        B = TensorInput('B', dtype=scalar_type('float32'), shape=[None, None])
 
         # compute
         i, j, k = var('i'), var('j'), var('k')

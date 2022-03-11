@@ -22,7 +22,8 @@ class FunctionBuilder:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.finish()
+        if exc_type is None:
+            self.finish()
 
     def extend_params(self, params: List[Var]):
         self.params.extend(params)

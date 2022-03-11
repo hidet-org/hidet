@@ -60,6 +60,7 @@ class ExprFunctor(NodeFunctor):
             Or: cls.visit_Or,
             Not: cls.visit_Not,
             TensorElement: cls.visit_TensorElement,
+            TensorSlice: cls.visit_TensorSlice,
             IfThenElse: cls.visit_IfThenElse,
             Call: cls.visit_Call,
             Let: cls.visit_Let,
@@ -116,6 +117,9 @@ class ExprFunctor(NodeFunctor):
         raise NotImplementedError()
 
     def visit_TensorElement(self, e: TensorElement):
+        raise NotImplementedError()
+
+    def visit_TensorSlice(self, e: TensorSlice):
         raise NotImplementedError()
 
     def visit_IfThenElse(self, e: IfThenElse):
@@ -222,6 +226,13 @@ class ExprVisitor(ExprFunctor):
         self.visit(e.base)
         for idx in e.indices:
             self.visit(idx)
+
+    def visit_TensorSlice(self, e: TensorSlice):
+        self.visit(e.base)
+        for idx, start, end in zip(e.starts, e.indices, e.ends):
+            for obj in [idx, start, end]:
+                if obj is not None:
+                    self.visit(obj)
 
     def visit_IfThenElse(self, e: IfThenElse):
         self.visit(e.cond)
@@ -338,11 +349,21 @@ class ExprRewriter(ExprFunctor):
 
     def visit_TensorElement(self, e: TensorElement):
         base = self(e.base)
-        indices = [self(idx) if idx else None for idx in e.indices]
+        indices = [self(idx) if idx is not None else None for idx in e.indices]
         if base is e.base and same_list(indices, e.indices):
             return e
         else:
             return TensorElement(base, indices)
+
+    def visit_TensorSlice(self, e: TensorSlice):
+        base = self(e.base)
+        indices = [self(idx) if idx is not None else None for idx in e.indices]
+        starts = [self(start) if start is not None else None for start in e.starts]
+        ends = [self(end) if end is not None else None for end in e.ends]
+        if base is e.base and same_list(indices, e.indices) and same_list(starts, e.starts) and same_list(ends, e.ends):
+            return e
+        else:
+            return TensorSlice(base, indices, starts, ends)
 
     def visit_IfThenElse(self, e: IfThenElse):
         cond = self(e.cond)

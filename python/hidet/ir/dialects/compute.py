@@ -22,7 +22,7 @@ class TensorInput(ComputeNode):
         if dtype and isinstance(dtype, str):
             dtype = ScalarType(dtype)
         self.dtype: ScalarType = dtype
-        self.shape = shape
+        self.shape = convert(shape)
 
     def protect_read(self, indices, default_value=0.0):
         conds = []

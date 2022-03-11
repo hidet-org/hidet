@@ -16,6 +16,8 @@ class TypeInfer(ExprFunctor):
             return atype
         elif isinstance(e, Condition):
             return ScalarType('bool')
+        else:
+            return ScalarType(name=None)  # unknown
 
     def visit_Add(self, e: Add):
         return self.visit_Binary(e)
@@ -42,7 +44,13 @@ class TypeInfer(ExprFunctor):
         return self.visit_Binary(e)
 
     def visit_TensorElement(self, e: TensorElement):
-        return self.visit(e.base).scalar_type
+        base_type = self.visit(e.base)
+        if isinstance(base_type, TensorType):
+            return base_type.scalar_type
+        elif isinstance(base_type, PointerType):
+            return base_type.base_type
+        else:
+            raise NotImplementedError()
 
     def visit_Call(self, e: Call):
         # todo

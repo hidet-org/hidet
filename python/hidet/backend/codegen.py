@@ -263,9 +263,13 @@ class Codegen(StmtExprFunctor, TypeFunctor):
 
     def visit_Constant(self, e: Constant):
         if e.dtype.name == 'bool':
-            return Text(str(e.value).lower())
+            return Text(f'(bool){e.value}')
+        elif e.dtype.name == 'float32':
+            return Text(f'{e.value}f')
+        elif e.dtype.name == 'int32':
+            return Text(f'{e.value}')
         else:
-            return Text(str(e.value))
+            raise NotImplementedError()
 
     def visit_EvaluateStmt(self, stmt: EvaluateStmt):
         return NewLine() + self(stmt.expr) + ';'

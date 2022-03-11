@@ -44,13 +44,13 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, prog
     baselines = [
         # ('Reference', matmul_ref()),
         ('Opt', matmul_opt()),
-        ('cutlas', matmul_cutlass()),
-        ('cublas', matmul_cublas()),
-        ('cublas_tc', matmul_cublas_tensorcore()),
+        # ('cutlas', matmul_cutlass()),
+        # ('cublas', matmul_cublas()),
+        # ('cublas_tc', matmul_cublas_tensorcore()),
     ]
     hidet_variants = [
         # ('HidetNaive', (CudaGridNaiveImplementer, CudaThreadNaiveImplementer)),
-        ('HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaBlockNaiveImplementer)),
+        # ('HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaBlockNaiveImplementer)),
         # ('HidetSoftPipeLdgWb', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer, CudaBlockNaiveImplementer)),
         # ('HidetSoftPipePred', (CudaGridStaticMatmulSoftPipePredImplementer, CudaBlockNaiveImplementer)),
         ('HidetMatmul', (CudaGridStaticMatmulImplementer,))
@@ -84,13 +84,14 @@ def verify(use_rand=True):
     np.set_printoptions(threshold=128 * 128, linewidth=500)
     use_print = True
     workloads = [
-        (1, 1, 1),
+        # (1, 1, 1),
         # (128, 128, 128),
         # (256, 256, 256),
         # (1234, 2345, 1212),
         # (222, 333, 444),
         # (1024, 1024, 1024),
         # (1296, 2304, 768),
+        (1296, 2304, 768),
         # (1296, 128, 768),
         # (1296, 2304, 768),
         # (1024, 1024, 1024),
@@ -104,7 +105,8 @@ def verify(use_rand=True):
         # ('HidetNaive', (CudaGridNaiveImplementer, CudaThreadNaiveImplementer)),
         # ('HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaBlockNaiveImplementer)),
         # ('HidetSoftPipeLdgWb', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer, CudaBlockNaiveImplementer)),
-        ('HidetSoftPipePred', (CudaGridStaticMatmulSoftPipePredImplementer, CudaBlockNaiveImplementer)),
+        # ('HidetSoftPipePred', (CudaGridStaticMatmulSoftPipePredImplementer, CudaBlockNaiveImplementer)),
+        ('HidetMatmul', (CudaGridStaticMatmulImplementer,))
     ]
     for N, M, K in workloads:
         print('Workload {} x {} x {}'.format(N, M, K))
@@ -209,6 +211,6 @@ def test_custom_func():
 
 
 if __name__ == '__main__':
-    # verify()
-    benchmark(use_nsight_compute=True)
+    verify()
+    benchmark(use_nsight_compute=False)
     # test_custom_func()

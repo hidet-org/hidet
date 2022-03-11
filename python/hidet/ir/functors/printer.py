@@ -3,7 +3,7 @@ from typing import Dict, Optional
 from hidet.ir.node import Node
 from hidet.ir.func import IRModule, Function
 from hidet.ir.type import ScalarType, TensorType, TypeNode
-from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div, Sub, Not, Or, And, Let, IfThenElse
+from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div, Sub, Not, Or, And, Let, IfThenElse, TensorSlice
 from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt, BlackBoxStmt, AsmStmt, ReturnStmt, LetStmt
 from hidet.ir.task import Worker, Host, Grid, ThreadBlock, Warp, Thread
 from hidet.ir.dialects.compute import ReduceCompute, TensorCompute, TensorInput, ScalarInput
@@ -116,6 +116,21 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
 
     def visit_TensorElement(self, e: TensorElement):
         return self(e.base) + '[' + self(e.indices) + ']'
+
+    def visit_TensorSlice(self, e: TensorSlice):
+        subscriptions = []
+        for index, start, end in zip(e.indices, e.starts, e.ends):
+            if index is not None:
+                subscriptions.append(self(index))
+            else:
+                doc = Doc()
+                if start is not None:
+                    doc += self(start)
+                doc += ':'
+                if end is not None:
+                    doc += self(end)
+                subscriptions.append(doc)
+        return self(e.base) + '[' + doc_join(subscriptions, ', ') + ']'
 
     def visit_IfThenElse(self, e: IfThenElse):
         return '(' + self(e.cond) + ' ? ' + self(e.then_expr) + ' : ' + self(e.else_expr) + ')'

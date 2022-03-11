@@ -1,5 +1,5 @@
 import string
-from typing import Optional, Union, Sequence
+from typing import Optional, Union, Sequence, List, Tuple
 from .node import Node
 from .type import TypeNode, TensorType, TensorType, ScalarType, Scope, tensor_type, scalar_type
 
@@ -59,13 +59,31 @@ class Expr(Node):
         from hidet.ir.dialects.lowlevel import Address
         return Address(self)
 
-    def __getitem__(self, item):
-        if not isinstance(item, (tuple, list)):
-            item = [item]
-        indices = [idx if not isinstance(idx, slice) else None for idx in item]
-        slices = [idx for idx in item if isinstance(idx, slice)]
-        assert len(slices) == 0
-        return TensorElement(self, indices)
+    def __getitem__(self, items):
+        if not isinstance(items, (tuple, list)):
+            items = [items]
+        indices = []
+        starts = []
+        ends = []
+        for item in items:
+            if isinstance(item, slice):
+                indices.append(None)
+                starts.append(item.start)
+                ends.append(item.stop)
+                assert item.step is None, "do not support step slice"
+            else:
+                indices.append(item)
+                starts.append(None)
+                ends.append(None)
+        rank = tensor_rank(self)
+        if len(items) < rank or any(i is None for i in indices):
+            while len(indices) < rank:
+                indices.append(None)
+                starts.append(None)
+                ends.append(None)
+            return TensorSlice(base=self, indices=indices, starts=starts, ends=ends)
+        else:
+            return TensorElement(base=self, indices=indices)
 
     def __hash__(self):
         return id(self)
@@ -211,6 +229,21 @@ class TensorElement(Expr):
         self.indices = convert(indices)
 
 
+class TensorSlice(Expr):
+    def __init__(self, base, indices, starts, ends):
+        # a[3, 4:, :5, :] will be represented by
+        # base: a
+        # indices: [3, None, None, None]
+        # starts: [None, 4, None, None]
+        # ends: [None, None, 5, None]
+        self.base = base
+        self.indices: Tuple = convert(indices)
+        self.starts: Tuple = convert(starts)
+        self.ends: Tuple = convert(ends)
+        if self.base is not None:
+            assert len(self.indices) == tensor_rank(base)
+
+
 class Call(Expr):
     def __init__(self, func, args):
         # todo: use function name (str) directly as the function identity
@@ -330,3 +363,25 @@ def get_tensor_layout(v: Expr):
     from hidet.ir.dialects.lowlevel import TensorPointerType
     assert isinstance(v, Var) and isinstance(v.type, (TensorType, TensorPointerType))
     return v.type.layout if isinstance(v.type, TensorType) else v.type.tensor_type.layout
+
+
+def tensor_rank(v: Expr) -> int:
+    from hidet.ir.dialects.compute import TensorCompute, TensorInput
+    from hidet.ir.dialects.lowlevel import TensorPointerType, PointerType
+    if isinstance(v, Var):
+        if isinstance(v.type, TensorType):
+            return len(v.type.shape)
+        elif isinstance(v.type, TensorPointerType):
+            return len(v.type.tensor_type.shape)
+        elif isinstance(v.type, PointerType):
+            return 1
+        else:
+            raise ValueError(v)
+    elif isinstance(v, TensorSlice):
+        return sum([1 if i is None else 0for i in v.indices])
+    elif isinstance(v, TensorInput):
+        return len(v.shape)
+    elif isinstance(v, TensorCompute):
+        return len(v.shape)
+    else:
+        raise ValueError(v)

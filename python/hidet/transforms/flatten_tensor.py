@@ -1,71 +1,138 @@
 import functools
+import inspect
 import operator
-from typing import List
+from typing import List, Union
 from hidet.ir.type import TensorType
-from hidet.ir.expr import Var, TensorElement
+from hidet.ir.expr import Var, TensorElement, TensorSlice
 from hidet.ir.stmt import BufferStoreStmt
 from hidet.ir.func import Function
-from hidet.ir.functors import collect, rewrite, simplify, simplify_to_int
+from hidet.ir.functors import collect, rewrite, simplify, simplify_to_int, FuncStmtExprRewriter
 from hidet.ir.dialects.lowlevel import PointerType, Address, TensorPointerType
 from hidet.transforms import Pass
 from hidet.ir.layout import StridesLayout, DataLayout
 
 
-class FlattenTensorPass(Pass):
-    def process_func(self, func: Function):
-        # we do not flatten tensors with the shared memory and register scope tensors
-        target_tensors = []
-        flattened_vars = []
-        var2tensor_type = {}
+def concat_slices(lhs_indices, lhs_starts, lhs_ends, rhs_indices, rhs_starts=None, rhs_ends=None):
+    if rhs_starts is None:
+        rhs_starts = [None] * len(rhs_indices)
+    if rhs_ends is None:
+        rhs_ends = [None] * len(rhs_indices)
+    assert len(lhs_indices) == len(lhs_starts) == len(lhs_ends)
+    assert len(rhs_indices) == len(rhs_starts) == len(rhs_ends)
+    indices = []
+    starts = []
+    ends = []
+    i = 0
+    for index, start, end in zip(lhs_indices, lhs_starts, lhs_ends):
+        if index is not None:
+            indices.append(index)
+            starts.append(None)
+            ends.append(None)
+        else:
+            assert i < len(rhs_indices)
+            if rhs_indices[i] is not None:
+                indices.append(start + rhs_indices[i] if start else rhs_indices[i])
+                starts.append(None)
+            elif rhs_starts[i] is not None:
+                indices.append(None)
+                starts.append(start + rhs_starts[i] if start else rhs_starts[i])
+            else:
+                indices.append(None)
+                starts.append(None)
+            # we ignore the end because we do not allow tensor-wise op.
+            # end is only used for bound-checking, which is left in future.
+            ends.append(None)
+            i += 1
+    return indices, starts, ends
+
+
+class FlattenTensorSliceRewriter(FuncStmtExprRewriter):
+    # eliminate all TensorSlice
+    # (A[:, 3])[2] will be converted to A[2, 3] and the slice op A[:, 3] will be eliminated.
+    def visit_TensorSlice(self, e: TensorSlice):
+        base = self.visit(e.base)
+        if isinstance(base, TensorSlice):
+            e_indices = [self.visit(i) if i else None for i in e.indices]
+            e_starts = [self.visit(s) if s else None for s in e.starts]
+            e_ends = [self.visit(e) if e else None for e in e.ends]
+            indices, starts, ends = concat_slices(base.indices, base.starts, base.ends, e_indices, e_starts, e_ends)
+            return TensorSlice(base.base, indices, starts, ends)
+        else:
+            return FuncStmtExprRewriter.visit_TensorSlice(self, e)
+
+    def visit_TensorElement(self, e: TensorElement):
+        base = self.visit(e.base)
+        if isinstance(base, TensorSlice):
+            e_indices = [self.visit(idx) for idx in e.indices]
+            indices, starts, ends = concat_slices(base.indices, base.starts, base.ends, e_indices)
+            assert not any(idx is None for idx in indices)
+            return TensorElement(base.base, indices)
+        else:
+            return FuncStmtExprRewriter.visit_TensorElement(self, e)
+
+    def visit_BufferStoreStmt(self, stmt: BufferStoreStmt):
+        base = self.visit(stmt.buf)
+        stmt_indices = [self.visit(idx) for idx in stmt.indices]
+        if isinstance(base, TensorSlice):
+            indices, starts, ends = concat_slices(base.indices, base.starts, base.ends, stmt_indices)
+            assert not any(idx is None for idx in indices)
+            return BufferStoreStmt(base.base, indices, self.visit(stmt.value))
+        else:
+            return FuncStmtExprRewriter.visit_BufferStoreStmt(self, stmt)
+
+
+class FlattenTensorAccessRewriter(FuncStmtExprRewriter):
+    # flatten all high-dimension tensor access
+    # A = int[3, 4]
+    #   TensorElement:  A[2, 1]     ==> A[2 * 4 + 1]
+    # BufferStoreStmt:  A[2, 1] = 3 ==> A[2 * 4 + 1] = 3
+    def visit_Function(self, func: Function):
         for var in func.params + func.local_vars:
-            if isinstance(var.type, (TensorPointerType, TensorType)):
-                target_tensors.append(var)
-                if isinstance(var.type, TensorType):
-                    assert isinstance(var.type.layout, (DataLayout, StridesLayout))
-                    shape = [simplify_to_int(var.type.layout.size)]
-                    var2tensor_type[var] = var.type
-                    flattened_vars.append(Var(var.hint, TensorType(var.type.scope, var.type.scalar_type, shape, [1])))
-                else:
-                    var2tensor_type[var] = var.type.tensor_type
-                    flattened_vars.append(var)
+            if isinstance(var.type, TensorType):
+                size = simplify_to_int(var.type.layout.size)
+                self.memo[var] = Var(var.hint, TensorType(var.type.scope, var.type.scalar_type, [size], [1]))
+            elif isinstance(var.type, TensorPointerType):
+                self.memo[var] = var
+        body = self(func.body)
+        params = [self(p) for p in func.params]
+        local_vars = [self(v) for v in func.local_vars]
+        return Function(func.name, params, body, func.ret_type, local_vars, func.extern_vars, func.attrs)
 
-        if len(target_tensors) == 0:
-            return func
-        tensor2flattened = {t: f for t, f in zip(target_tensors, flattened_vars)}
+    @staticmethod
+    def get_layout(var) -> DataLayout:
+        if isinstance(var.type, TensorType):
+            return var.type.layout
+        elif isinstance(var.type, TensorPointerType):
+            return var.type.tensor_type.layout
+        elif isinstance(var.type, PointerType):
+            return StridesLayout(shape=[0], strides=[1])
+        else:
+            raise NotImplementedError()
 
-        body = func.body
-        rmap = {}
-        # update TensorElement
-        element_exprs: List[TensorElement] = collect(body, TensorElement)
-        for e in element_exprs:
-            if e.base not in target_tensors:
-                continue
-            tensor_var: Var = e.base
-            tensor_type = var2tensor_type[tensor_var]
-            global_index = tensor_type.layout(*e.indices)
-            rmap[e] = TensorElement(tensor2flattened[tensor_var], [global_index])
-        body = rewrite(body, rmap)
+    def visit_TensorElement(self, e: TensorElement):
+        var = self(e.base)
+        indices = [self(i) for i in e.indices]
+        layout = self.get_layout(e.base)
+        global_index = layout(*indices)
+        return TensorElement(var, [global_index])
 
-        # update BufferStoreStmt
-        rmap.clear()
-        store_stmts: List[BufferStoreStmt] = collect(body, BufferStoreStmt)
-        for s in store_stmts:
-            if s.buf not in target_tensors:
-                continue
-            tensor_var: Var = s.buf
-            tensor_type = var2tensor_type[tensor_var]
-            global_index = tensor_type.layout(*s.indices)
-            rmap[s] = BufferStoreStmt(tensor2flattened[tensor_var], [global_index], s.value)
-        body = rewrite(body, rmap)
+    def visit_BufferStoreStmt(self, stmt: BufferStoreStmt):
+        var = self(stmt.buf)
+        indices = [self(i) for i in stmt.indices]
+        value = self(stmt.value)
+        layout = self.get_layout(stmt.buf)
+        global_index = layout(indices)
+        return BufferStoreStmt(var, [global_index], value)
 
-        # update other usage of original Tensor var to Pointer var
-        rmap = tensor2flattened
-        body = rewrite(body, rmap)
+    def visit_TensorSlice(self, e: TensorSlice):
+        raise ValueError('there should not be any tensor slice after flattening tensor slice.')
 
-        params = [tensor2flattened[p] if p in tensor2flattened else p for p in func.params]
-        local_vars = [tensor2flattened[v] if v in tensor2flattened else v for v in func.local_vars]
-        new_func = Function(func.name, params, body, func.ret_type, local_vars, func.extern_vars, func.attrs)
-        return new_func
+
+class FlattenTensorPass(Pass):
+    def process_func(self, func: Function) -> Function:
+        flatten_slice = FlattenTensorSliceRewriter()
+        flatten_access = FlattenTensorAccessRewriter()
+        return flatten_access(flatten_slice(func))
 
 
 def flatten_tensor_pass():

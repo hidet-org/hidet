@@ -110,13 +110,17 @@ class MatchContext:
                 return
             else:
                 raise NotMatchedError(self.pattern, self.target, 'Expect non-None target')
-        assert not isinstance(self.target, list)
+        assert not isinstance(self.target, list), self.target
         if self.pattern in self.matched:
             if self.matched[self.pattern] is not self.target:
                 # we think the constant with the same value as the same object
                 lhs, rhs = self.matched[self.pattern], self.target
                 if isinstance(lhs, Constant) and isinstance(rhs, Constant):
                     if lhs.value == rhs.value:
+                        return
+                if isinstance(lhs, tuple) and isinstance(rhs, tuple):
+                    # something like (None, None) with the same hash
+                    if lhs is not rhs:
                         return
                 raise NotMatchedError(self.pattern, self.target, 'Can not match a pattern to two different targets')
             else:

@@ -29,8 +29,8 @@ class CudaBlockStaticMatmulNoPipeImplementer(Implementer):
         self.task_k = any_const_int()
 
         # inputs
-        self.A = TensorInput('A', dtype=scalar_type('float32'), shape=None)
-        self.B = TensorInput('B', dtype=scalar_type('float32'), shape=None)
+        self.A = TensorInput('A', dtype=scalar_type('float32'), shape=[None, None])
+        self.B = TensorInput('B', dtype=scalar_type('float32'), shape=[None, None])
 
         # compute
         self.axis_i = var('i')
@@ -194,8 +194,8 @@ class CudaBlockStaticMatmulNoPipeImplementer(Implementer):
         # a subtask that conducts a matrix-multiplication accumulation task: C = C + matmul(A, B). The returned mma is callable like above subtasks.
         with TaskBuilder('mma', ThreadBlock(task_layout=block_layout), ir_module) as mma:
             # We declare the inputs of the subtasks.
-            a = TensorInput('regs_A', dtype)
-            b = TensorInput('regs_B', dtype)
+            a = TensorInput('regs_A', dtype, shape=[None, None])
+            b = TensorInput('regs_B', dtype, shape=[None, None])
             # Here k is the reduction axis.
             k = var('k')
             # Define the computation. This is similar with what Halide and TVM/TE provide. Here accumulate='sum' means

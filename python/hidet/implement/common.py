@@ -14,7 +14,7 @@ from hidet.ir.builders import TaskBuilder
 
 def transfer_task(name: str, src_type: TensorType, dst_type: TensorType, worker: Worker, parent_module: IRModule) -> TaskBuilder:
     with TaskBuilder(name, worker, parent_module) as tb:
-        src = TensorInput('src', dtype=src_type.scalar_type)
+        src = TensorInput('src', dtype=src_type.scalar_type, shape=[None] * len(dst_type.shape))
         dst = compute('dst', shape=dst_type.shape, fcompute=lambda *args: src.__getitem__(args))
         tb.set_computation(dst)
         tb.append_param(src, src_type)
@@ -27,7 +27,7 @@ def transfer_predicated_task(name: str, cond: Callable, src_type: TensorType, ds
         default_value = convert(0.0)
 
     with TaskBuilder(name, worker, parent_module) as tb:
-        src = TensorInput('src', dtype=src_type.scalar_type)
+        src = TensorInput('src', dtype=src_type.scalar_type, shape=[None] * len(dst_type.shape))
         dst = compute('dst', shape=dst_type.shape, fcompute=lambda *args: if_then_else(cond(*args), src.__getitem__(args), default_value))
         tb.set_computation(dst)
         tb.append_param(src, src_type)

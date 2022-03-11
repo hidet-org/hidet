@@ -9,7 +9,7 @@ from hidet.ir.dialects.compute import TensorInput, TensorCompute, compute, Reduc
 from hidet.ir.dialects.lowlevel import Address, TensorPointerType, Cast, PointerType
 from hidet.ir.dialects.pattern import TaskPattern, any_const_int
 from hidet.ir.functors import simplify, simplify_to_int
-from hidet.ir.expr import Expr, Call, TensorElement, var, tensor_var, convert, Var, And, IfThenElse, Or, is_tensor, get_tensor_layout, PyScalar, Condition, Equal
+from hidet.ir.expr import Expr, Call, TensorElement, var, tensor_var, convert, Var, And, IfThenElse, Or, is_tensor, get_tensor_layout, PyScalar, Condition, Equal, Constant
 from hidet.ir.func import IRModule
 from hidet.ir.layout import TaskLayout, row_major_layout, full_layout, DataLayout, StridesLayout
 from hidet.ir.node import Node
@@ -22,7 +22,7 @@ from hidet.backend import batch_build, BuildInstance, build
 from hidet.utils import Timer
 
 """
-pesudo code of matmul with double buffering
+pseudo code of matmul with double buffering
 =========
 assume block_k % task_k == 0 and warp_k % block_k == 0
 gmem[0] -> smem[0]
@@ -205,8 +205,8 @@ class CudaGridStaticMatmulImplementer(Implementer):
         self.task_k = any_const_int()
 
         # inputs
-        A = TensorInput('A', dtype=scalar_type('float32'))
-        B = TensorInput('B', dtype=scalar_type('float32'))
+        A = TensorInput('A', dtype=scalar_type('float32'), shape=[None, None])
+        B = TensorInput('B', dtype=scalar_type('float32'), shape=[None, None])
 
         # compute
         i, j, k = var('i'), var('j'), var('k')
@@ -329,23 +329,6 @@ class CudaGridStaticMatmulImplementer(Implementer):
         # define subtasks
         block_k_tiles = (task_k + block_k - 1) // block_k
         first_k_tile = task_k - (block_k_tiles - 1) * block_k
-        c_init = init_task(f'{task.name}_c_init', dst_type=regs_C_type, init_value=convert(0.0), worker=ThreadBlock(task_layout=schedule.ab2c_layout), parent_module=ir_module)
-        a_r2s = transfer_task(f'{task.name}_a_r2s', src_type=regs_A_ldg_type, dst_type=smem_A_type, worker=ThreadBlock(task_layout=schedule.a_g2r_r2s_layout), parent_module=ir_module)
-        b_r2s = transfer_task(f'{task.name}_b_r2s', src_type=regs_B_ldg_type, dst_type=smem_B_type, worker=ThreadBlock(task_layout=schedule.b_g2r_r2s_layout), parent_module=ir_module)
-        a_s2r = transfer_task(f'{task.name}_a_s2r', src_type=smem_A_type, dst_type=regs_A_type, worker=ThreadBlock(task_layout=schedule.a_s2r_layout), parent_module=ir_module)
-        b_s2r = transfer_task(f'{task.name}_b_s2r', src_type=smem_B_type, dst_type=regs_B_type, worker=ThreadBlock(task_layout=schedule.b_s2r_layout), parent_module=ir_module)
-        c_r2s = transfer_task(f'{task.name}_c_r2s', src_type=regs_C_wb_type.slice_out(dims=[0, 1]), dst_type=smem_C_wb_type, worker=ThreadBlock(task_layout=schedule.c_r2s_layout), parent_module=ir_module)
-
-        with TaskBuilder(f'{task.name}_compute_block', ThreadBlock(task_layout=schedule.ab2c_layout), ir_module) as ab2c:
-            regs_A_input = TensorInput('regs_A', A_dtype)
-            regs_B_input = TensorInput('regs_B', B_dtype)
-            axis_k = var('k')
-            fcompute = lambda i, j: reduce_sum(regs_A_input[i, axis_k] * regs_B_input[axis_k, j], axes=axis_k, shape=[warp_k])
-            ab2c_cmpt = compute('regs_C', shape=schedule.ab2c_layout.task_shape, fcompute=fcompute, accumulate='sum')
-            ab2c.set_computation(ab2c_cmpt)
-            ab2c.append_param(regs_A_input, regs_A_type)
-            ab2c.append_param(regs_B_input, regs_B_type)
-            ab2c.append_param(ab2c_cmpt, regs_C_type)
 
         # define function
         with FunctionBuilder(task.name + '.grid', attrs={'worker': Grid(grid_dim=grid_blocks_layout.num_workers, block_dim=block_size, min_blocks=schedule.min_thread_blocks),
@@ -359,8 +342,8 @@ class CudaGridStaticMatmulImplementer(Implementer):
             fb.extend_params([gmem_A, gmem_B, gmem_C])
 
             # declare local variables
-            smem_A_tp = TensorPointerType('shared', A_dtype, layout=StridesLayout.row_major([2]) + smem_A_type.layout)
-            smem_B_tp = TensorPointerType('shared', B_dtype, layout=StridesLayout.row_major([2]) + smem_B_type.layout)
+            smem_A_tp = TensorPointerType('shared', A_dtype, layout=StridesLayout.from_shape([2, block_m, block_k], perm=[0, 2, 1]))
+            smem_B_tp = TensorPointerType('shared', B_dtype, layout=StridesLayout.from_shape([2, block_k, block_m], perm=[0, 1, 2]))
             smem_C_tp = TensorPointerType('shared', C_dtype, layout=smem_C_wb_type.layout)
             smem_A = Var('smem_A', smem_A_tp)
             smem_B = Var('smem_B', smem_B_tp)
@@ -390,48 +373,49 @@ class CudaGridStaticMatmulImplementer(Implementer):
             with sb.lets(['block_m', 'block_n'], grid_blocks_layout(block_idx())[0]) as (block_m, block_n):
                 # transfer first tile
                 sb += self.transfer(dst=regs_A_ldg, src=gmem_A, layout=schedule.a_g2r_r2s_layout, f_src_index=lambda i, k: [block_m, i, k], protect_src=True, src_predicate=lambda i, k: k < first_k_tile)
-                sb += a_r2s(regs_A_ldg, smem_A)
+                sb += self.copy(regs_A_ldg, smem_A[0], layout=schedule.a_g2r_r2s_layout)
                 sb += self.transfer(dst=regs_B_ldg, src=gmem_B, layout=schedule.b_g2r_r2s_layout, f_src_index=lambda k, j: [block_n, k, j], protect_src=True, src_predicate=lambda k, j: k < first_k_tile)
-                sb += b_r2s(regs_B_ldg, smem_B)
+                sb += self.copy(regs_B_ldg, smem_B[0], layout=schedule.b_g2r_r2s_layout)
                 sb += syncthreads()
-                sb += a_s2r(~smem_A[0, 0, 0], ~regs_A[0, 0, 0])
-                sb += b_s2r(~smem_B[0, 0, 0], ~regs_B[0, 0, 0])
+                sb += self.copy(smem_A[0], regs_A[0], schedule.a_s2r_layout)
+                sb += self.copy(smem_B[0], regs_B[0], schedule.b_s2r_layout)
                 sb += syncthreads()
                 # init regs c
-                sb += c_init(regs_C)
+                sb += self.init(regs_C, 0.0, schedule.ab2c_layout)
                 with sb.for_loop('block_k_tile', block_k_tiles - 1) as k0:
                     with sb.for_loop('warp_k_tile', block_k // warp_k) as k1:
                         with sb.if_then(Equal(k1, 0)):
-                            sb += a_s2r(~smem_A[k0 % 2, 0, k1 + 1], ~regs_A[(k1 + 1) % 2, 0, 0])
-                            sb += b_s2r(~smem_B[k0 % 2, k1 + 1, 0], ~regs_B[(k1 + 1) % 2, 0, 0])
+                            sb += self.copy(smem_A[k0 % 2, :, k1 + 1:], regs_A[(k1 + 1) % 2], schedule.a_s2r_layout)
+                            sb += self.copy(smem_B[k0 % 2, k1 + 1:, :], regs_B[(k1 + 1) % 2], schedule.b_s2r_layout)
                             sb += self.transfer(dst=regs_A_ldg, src=gmem_A, layout=schedule.a_g2r_r2s_layout, f_src_index=lambda i, k: [block_m, i, k + k0 * block_k + first_k_tile], protect_src=True)
                             sb += self.transfer(dst=regs_B_ldg, src=gmem_B, layout=schedule.b_g2r_r2s_layout, f_src_index=lambda k, j: [block_n, k + k0 * block_k + first_k_tile, j], protect_src=True)
-                            sb += ab2c(~regs_A[k1 % 2, 0, 0], ~regs_B[k1 % 2, 0, 0], regs_C)
+                            sb += self.mma(regs_A[k1 % 2], regs_B[k1 % 2], regs_C, schedule)
                         with sb.otherwise():
                             with sb.if_then(k1 < (block_k - 1)):
-                                sb += a_s2r(~smem_A[k0 % 2, 0, k1 + 1], ~regs_A[(k1 + 1) % 2, 0, 0])
-                                sb += b_s2r(~smem_B[k0 % 2, k1 + 1, 0], ~regs_B[(k1 + 1) % 2, 0, 0])
-                                sb += ab2c(~regs_A[k1 % 2, 0, 0], ~regs_B[k1 % 2, 0, 0], regs_C)
+                                sb += self.copy(smem_A[k0 % 2, :, k1 + 1:], regs_A[(k1 + 1) % 2], schedule.a_s2r_layout)
+                                sb += self.copy(smem_B[k0 % 2, k1 + 1:, :], regs_B[(k1 + 1) % 2], schedule.b_s2r_layout)
+                                sb += self.mma(regs_A[k1 % 2], regs_B[k1 % 2], regs_C, schedule)
                             with sb.otherwise():
-                                sb += a_r2s(regs_A_ldg, ~smem_A[(k0 + 1) % 2, 0, 0])
-                                sb += b_r2s(regs_B_ldg, ~smem_B[(k0 + 1) % 2, 0, 0])
+                                sb += self.copy(regs_A_ldg, smem_A[(k0 + 1) % 2], layout=schedule.a_g2r_r2s_layout)
+                                sb += self.copy(regs_B_ldg, smem_B[(k0 + 1) % 2], layout=schedule.b_g2r_r2s_layout)
                                 sb += syncthreads()
-                                sb += a_s2r(~smem_A[(k0 + 1) % 2, 0, 0], ~regs_A[(k1 + 1) % 2, 0, 0])
-                                sb += b_s2r(~smem_B[(k0 + 1) % 2, 0, 0], ~regs_B[(k1 + 1) % 2, 0, 0])
-                                sb += ab2c(~regs_A[k1 % 2, 0, 0], ~regs_B[k1 % 2, 0, 0], regs_C)
+                                sb += self.copy(smem_A[(k0 + 1) % 2], regs_A[(k1 + 1) % 2], schedule.a_s2r_layout)
+                                sb += self.copy(smem_B[(k0 + 1) % 2], regs_B[(k1 + 1) % 2], schedule.b_s2r_layout)
+                                sb += self.mma(regs_A[k1 % 2], regs_B[k1 % 2], regs_C, schedule)
                 with sb.let('block_k_tile', block_k_tiles - 1) as k0:
                     with sb.for_loop('warp_k_tile', block_k // warp_k) as k1:
                         with sb.if_then(k1 < block_k - 1):
-                            sb += a_s2r(~smem_A[k0 % 2, 0, k1 + 1], ~regs_A[(k1 + 1) % 2, 0, 0])
-                            sb += b_s2r(~smem_B[k0 % 2, k1 + 1, 0], ~regs_B[(k1 + 1) % 2, 0, 0])
-                            sb += ab2c(~regs_A[k1 % 2, 0, 0], ~regs_B[k1 % 2, 0, 0], regs_C)
+                            sb += self.copy(smem_A[k0 % 2, :, k1 + 1:], regs_A[(k1 + 1) % 2], schedule.a_s2r_layout)
+                            sb += self.copy(smem_B[k0 % 2, k1 + 1:, :], regs_B[(k1 + 1) % 2], schedule.b_s2r_layout)
+                            sb += self.mma(regs_A[k1 % 2], regs_B[k1 % 2], regs_C, schedule)
                         with sb.otherwise():
-                            sb += ab2c(~regs_A[k1 % 2, 0, 0], ~regs_B[k1 % 2, 0, 0], regs_C)
+                            sb += self.mma(regs_A[k1 % 2], regs_B[k1 % 2], regs_C, schedule)
                 # regs -> gmem
                 with sb.for_loop('i', schedule.c_r2s_outer_outer[0]) as i:
                     with sb.for_loop('j', schedule.c_r2s_outer_outer[1]) as j:
                         sb += syncthreads()
-                        sb += c_r2s(~regs_C_wb[i, j, 0, 0], smem_C)
+                        # sb += c_r2s(~regs_C_wb[i, j, 0, 0], smem_C)
+                        sb += self.copy(regs_C_wb[i, j], smem_C, schedule.c_r2s_layout)
                         sb += syncthreads()
                         sb += self.transfer(dst=gmem_C_wb, src=smem_C, f_dst_index=lambda ii, jj: [block_m, block_n, i, j, ii, jj], layout=schedule.c_s2g_layout, protect_dst=True)
             # set body
@@ -440,6 +424,26 @@ class CudaGridStaticMatmulImplementer(Implementer):
         func = fb.get()
         ir_module.add(func.name, func)
         return ir_module
+
+    def init(self, dst, init_value, layout):
+        sb = StmtBuilder()
+        for indices in layout(thread_idx()):
+            sb += BufferStoreStmt(dst, indices, init_value)
+        return sb.finish()
+
+    def copy(self, src, dst, layout):
+        sb = StmtBuilder()
+        for indices in layout(thread_idx()):
+            sb += BufferStoreStmt(dst, indices, src.__getitem__(indices))
+        return sb.finish()
+
+    def mma(self, a, b, c, schedule):
+        layout = schedule.ab2c_layout
+        sb = StmtBuilder()
+        for i, j in layout(thread_idx()):
+            for k in range(schedule.warp_k):
+                sb += BufferStoreStmt(c, [i, j], c[i, j] + a[i, k] * b[k, j])
+        return sb.finish()
 
     def transfer(self,
                  dst: Var,

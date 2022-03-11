@@ -1,7 +1,7 @@
 import contextlib
 from hidet.ir.expr import *
 from hidet.ir.stmt import *
-from hidet.ir.functors import StmtExprRewriter, StmtRewriter, same_list
+from hidet.ir.functors import StmtExprRewriter, StmtRewriter, same_list, TypeInfer
 from hidet.ir.builders import StmtBuilder
 from hidet.transforms.base import FunctionBodyPass
 
@@ -26,6 +26,7 @@ class BuildLetStmtRewriter(StmtExprRewriter):
         self.exit_stack_list = []
         self.exit_stack: Optional[contextlib.ExitStack] = None
         self.sb: Optional[StmtBuilder] = None
+        self.type_infer = TypeInfer()
 
     def build(self, stmt):
         self.sb = StmtBuilder()
@@ -34,7 +35,8 @@ class BuildLetStmtRewriter(StmtExprRewriter):
         return self.sb.finish()
 
     def visit_Binary(self, e: BinaryOp):
-        if isinstance(e, (Add, Sub, Multiply, FloorDiv, Mod)):
+        etype = self.type_infer(e)
+        if isinstance(e, (Add, Sub, Multiply, FloorDiv, Mod)) and (isinstance(etype, ScalarType) and etype.name == 'int32'):
             return self.exit_stack.enter_context(self.sb.let('v', StmtExprRewriter.visit_Binary(self, e)))
         else:
             return StmtExprRewriter.visit_Binary(self, e)
