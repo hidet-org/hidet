@@ -1,10 +1,14 @@
 from hidet.ir.type import ScalarType, TensorType
-from hidet.ir.expr import BinaryOp, Add, Sub, Multiply, Div, Mod, FloorDiv, Condition, LessThan, Equal
+from hidet.ir.expr import BinaryOp, Add, Sub, Multiply, Div, Mod, FloorDiv, Condition, LessThan, Equal, IfThenElse, TensorSlice, Not, Or, And, LessEqual, Let
 from hidet.ir.expr import Var, Constant, TensorElement, Call
 from hidet.ir.dialects.compute import ScalarInput, TensorInput, TensorCompute, ReduceCompute
 from hidet.ir.dialects.lowlevel import PointerType, Cast, Dereference
 
 from .base import ExprFunctor
+
+
+def is_bool(tp):
+    return isinstance(tp, ScalarType) and tp.name == 'bool'
 
 
 class TypeInfer(ExprFunctor):
@@ -43,6 +47,19 @@ class TypeInfer(ExprFunctor):
     def visit_Equal(self, e: Equal):
         return self.visit_Binary(e)
 
+    def visit_LessEqual(self, e: LessEqual):
+        return self.visit_Binary(e)
+
+    def visit_And(self, e: And):
+        return self.visit_Binary(e)
+
+    def visit_Or(self, e: Or):
+        return self.visit_Binary(e)
+
+    def visit_Not(self, e: Not):
+        assert is_bool(self.visit(e.a))
+        return ScalarType('bool')
+
     def visit_TensorElement(self, e: TensorElement):
         base_type = self.visit(e.base)
         if isinstance(base_type, TensorType):
@@ -51,6 +68,22 @@ class TypeInfer(ExprFunctor):
             return base_type.base_type
         else:
             raise NotImplementedError()
+
+    def visit_TensorSlice(self, e: TensorSlice):
+        # todo
+        pass
+
+    def visit_IfThenElse(self, e: IfThenElse):
+        cond_type = self.visit(e.cond)
+        true_type = self.visit(e.then_expr)
+        false_type = self.visit(e.else_expr)
+        assert is_bool(cond_type)
+        assert isinstance(true_type, ScalarType) and isinstance(false_type, ScalarType) and true_type.name == false_type.name
+        return true_type
+
+    def visit_Let(self, e: Let):
+        self.visit(e.value)
+        return self.visit(e.body)
 
     def visit_Call(self, e: Call):
         # todo

@@ -296,11 +296,12 @@ class Var(Expr):
         in python debugger.
         """
         from hidet.ir.primitives import is_reserved_name
+        from hidet.ir.dialects.lowlevel import TensorPointerType
         if hint is not None:
             assert not is_reserved_name(hint)
         self.hint = hint
         self.name = name
-        self.type: TypeNode = type
+        self.type: Union[TypeNode, TensorType, TensorPointerType] = type
         self.id = self.new_id()
 
     @staticmethod

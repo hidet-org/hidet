@@ -43,6 +43,7 @@ def concat_slices(lhs_indices, lhs_starts, lhs_ends, rhs_indices, rhs_starts=Non
             # end is only used for bound-checking, which is left in future.
             ends.append(None)
             i += 1
+    assert i == len(rhs_indices)
     return indices, starts, ends
 
 
