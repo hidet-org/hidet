@@ -332,7 +332,7 @@ class CudaGridStaticMatmulImplementer(Implementer):
 
             # declare local variables
             smem_A = Var('smem_A', TensorPointerType('shared', A_dtype, layout=StridesLayout.from_shape([2, block_m, block_k], perm=[0, 2, 1])))
-            smem_B = Var('smem_B', TensorPointerType('shared', B_dtype, layout=StridesLayout.from_shape([2, block_k, block_m], perm=[0, 1, 2])))
+            smem_B = Var('smem_B', TensorPointerType('shared', B_dtype, layout=StridesLayout.from_shape([2, block_k, block_n], perm=[0, 1, 2])))
             smem_C = Var('smem_C', TensorPointerType('shared', C_dtype, layout=smem_C_wb_type.layout))
             smem_A_bytes = simplify_to_int(smem_A.type.tensor_type.storage_bytes())
             smem_B_bytes = simplify_to_int(smem_B.type.tensor_type.storage_bytes())
