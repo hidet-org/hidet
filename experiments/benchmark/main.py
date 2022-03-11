@@ -1,26 +1,24 @@
 import argparse
 import contextlib
 import io
-import sys
 import os
+import sys
 
 import git
 import numpy as np
 
 from hidet.backend import build
-from hidet.baselines.matmul import matmul_ref, matmul_cublas, matmul_opt, matmul_cutlass, matmul_cublas_tensorcore
+from hidet.baselines.matmul import matmul_cublas, matmul_opt, matmul_cutlass, matmul_cublas_tensorcore
 from hidet.implement import implement, impl_context
-from hidet.implement.cuda import CudaBlockStaticMatmulNoPipeImplementer, CudaBlockNaiveImplementer
-from hidet.implement.cuda import CudaGridSplitImplementer, CudaGridNaiveImplementer, CudaWarpTransfer2dImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer
-from hidet.implement.cuda import CudaThreadNaiveImplementer, CudaGridStaticMatmulSoftPipePredImplementer
+from hidet.implement.cuda import CudaGridStaticMatmulImplementer
 from hidet.implement.resolve import random_resolve, brute_force_resolve
 from hidet.runtime.value import randn, empty, scalar
 from hidet.tasks.nn import matmul
 from hidet.utils import cuda
 
 
-def print_latencies(name, latencies):
-    print('{:>20}: {:.3f} (std {:.3f}) ms [{}]'.format(name, np.median(latencies), np.std(latencies), " ".join([f'{v:.3f}' for v in latencies])))
+def print_latencies(name, latencies, file=None):
+    print('{:>20}: {:.3f} (std {:.3f}) ms [{}]'.format(name, np.median(latencies), np.std(latencies), " ".join([f'{v:.3f}' for v in latencies])), file=file)
 
 
 def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=True, progress_bar=False, report_dir='./report'):
@@ -40,7 +38,8 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=True, progr
         # ('HidetNaive', (CudaGridNaiveImplementer, CudaThreadNaiveImplementer)),
         # ('HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer)),
         # ('HidetSoftPipeLdgWb', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer)),
-        ('HidetSoftPipePred', (CudaGridSplitImplementer, CudaGridStaticMatmulSoftPipePredImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer)),
+        # ('HidetSoftPipePred', (CudaGridSplitImplementer, CudaGridStaticMatmulSoftPipePredImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer)),
+        ('HidetMatmul', (CudaGridStaticMatmulImplementer,)),
     ]
     repo = git.Repo(search_parent_directories=True)
     sha = repo.head.object.hexsha
@@ -65,9 +64,9 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=True, progr
             for name, func in baselines:
                 latencies = func.profile(scalar(N), scalar(M), scalar(K), A, B, C, warmup=warmup, number=number, repeat=repeat)
                 print_latencies(name, latencies)
+                print_latencies(name, latencies, sys.stderr)
 
             for name, allowed in hidet_variants:
-                print(name, file=sys.stderr)
                 with impl_context(allowed=allowed) as ctx:
                     ir_module = implement(matmul(N, M, K))
                     if use_brute_force_resolve:
@@ -77,7 +76,9 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=True, progr
                     module = build(ir_module, output_dir=f'./outs/bench/{name}_{N}x{M}x{K}', verbose=False)
                     latencies = module['matmul'].profile(A, B, C, warmup=warmup, number=number, repeat=repeat)
                     print_latencies(name, latencies)
+                    print_latencies(name, latencies, sys.stderr)
             print()
+            print(file=sys.stderr)
     report = f.getvalue()
     report_name = '{}_{}.report'.format(sha[:7], device_name.replace(' ', '_'))
     os.makedirs(report_dir, exist_ok=True)

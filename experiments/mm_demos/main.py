@@ -34,19 +34,19 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, prog
         # (222, 333, 444),
         # (1024, 1024, 1024),
         # (1024 + 22, 1024 + 33, 1024 + 44),
-        (1296, 2304, 768),
-        (1243, 1211, 1207),
+        # (1296, 2304, 768),
+        # (1243, 1211, 1207),
         # (1024 + 128, 1024 + 128, 1024 + 48),
         # (2048, 2304, 768),
         # (1664, 768, 2304),
         # (1234, 2345, 1212),
-        # *[(16 * T, 2304, 768) for T in [5, 24, 43, 62, 81, 100, 119, 128]]
+        *[(16 * T, 2304, 768) for T in [5, 24, 43, 62, 81, 100, 119, 128]]
     ]
     baselines = [
         # ('Reference', matmul_ref()),
         ('Opt', matmul_opt()),
-        # ('cutlas', matmul_cutlass()),
-        # ('cublas', matmul_cublas()),
+        ('cutlas', matmul_cutlass()),
+        ('cublas', matmul_cublas()),
         # ('cublas_tc', matmul_cublas_tensorcore()),
     ]
     hidet_variants = [
@@ -213,6 +213,6 @@ def test_custom_func():
 
 
 if __name__ == '__main__':
-    verify()
+    # verify()
     benchmark(use_nsight_compute=False)
     # test_custom_func()

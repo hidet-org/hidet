@@ -245,7 +245,7 @@ class CudaGridStaticMatmulImplementer(Implementer):
 
     def implement(self, task: Task, match: Mapping[Node, Node]) -> IRModule:
         # search space
-        settings = setup_matmul_settings(use_default=True)
+        settings = setup_matmul_settings(use_default=False)
         ir_modules = []
         for setting in settings:
             ir_modules.append(self.implement_schedule(task, match, setting))
