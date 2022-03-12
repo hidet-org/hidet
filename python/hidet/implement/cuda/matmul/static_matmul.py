@@ -273,25 +273,28 @@ class CudaGridStaticMatmulImplementer(Implementer):
         from hidet.runtime.value import dummy_inputs_from_task
         parallel = True
         task_label = 'matmul_{}x{}x{}'.format(int(match[self.task_m]), int(match[self.task_n]), int(match[self.task_k]))
-        with Timer('Resolving', verbose=False):
-            build_instances = [BuildInstance(ir_module=ir_module, output_dir=f'./outs/resolve/{task_label}/{idx}', keep_ir=False, nvcc_keep=True, verbose=False) for idx, ir_module in enumerate(ir_modules)]
-            compiled_modules = batch_build(build_instances, parallel=parallel, verbose=False)
-            dummy_inputs = dummy_inputs_from_task(task)
-            best_latency = None
-            best_ir_module = None
-            latencies = []
-            for ir_module, compiled_module in zip(ir_modules, compiled_modules):
-                repeat_latency = compiled_module[task.name].profile(*dummy_inputs, warmup=2, number=1, repeat=10)
-                # print(repeat_latency)
-                latency = np.median(repeat_latency)
-                latencies.append(latency)
-                if best_latency is None or best_latency > latency:
-                    best_latency = latency
-                    best_ir_module = ir_module
-            # pairs = [(latency, label) for latency, label in zip(latencies, [ir_module.functions[task.name + '_grid'].attrs['label'] for ir_module in ir_modules])]
-            # for latency, label in sorted(pairs, key=lambda p: p[0]):
-            #     print('{:>120}: {:.3f}'.format(label, latency))
-            return best_ir_module
+        build_instances = [BuildInstance(ir_module=ir_module,
+                                         output_dir=f'./outs/resolve/{task_label}/{idx}',
+                                         keep_ir=False,
+                                         nvcc_keep=True,
+                                         verbose=False) for idx, ir_module in enumerate(ir_modules)]
+        compiled_modules = batch_build(build_instances, parallel=parallel, verbose=False)
+        dummy_inputs = dummy_inputs_from_task(task)
+        best_latency = None
+        best_ir_module = None
+        latencies = []
+        for ir_module, compiled_module in zip(ir_modules, compiled_modules):
+            repeat_latency = compiled_module[task.name].profile(*dummy_inputs, warmup=2, number=1, repeat=10)
+            # print(repeat_latency)
+            latency = np.median(repeat_latency)
+            latencies.append(latency)
+            if best_latency is None or best_latency > latency:
+                best_latency = latency
+                best_ir_module = ir_module
+        # pairs = [(latency, label) for latency, label in zip(latencies, [ir_module.functions[task.name + '_grid'].attrs['label'] for ir_module in ir_modules])]
+        # for latency, label in sorted(pairs, key=lambda p: p[0]):
+        #     print('{:>120}: {:.3f}'.format(label, latency))
+        return best_ir_module
 
     def implement_schedule(self, task: Task, match: Mapping[Node, Any], schedule: Schedule) -> IRModule:
         ir_module = IRModule()
@@ -357,36 +360,25 @@ class CudaGridStaticMatmulImplementer(Implementer):
                 with sb.for_loop('k0', block_k_tiles - 1) as k0:
                     block_offset_k = k0 * sch.block_k + first_k_tile
                     with sb.for_loop('k1', sch.block_warps_k) as k1:
-                        with sb.if_then(Equal(k1, 0)):
+                        with sb.if_then(Equal(k1, sch.block_warps_k - 1)):
+                            sb += self.copy(regs_A_ldg, smem_A[(k0 + 1) % 2], schedule.a_g2s_layout)
+                            sb += self.copy(regs_B_ldg, smem_B[(k0 + 1) % 2], schedule.b_g2s_layout)
+                            sb += syncthreads()
+                            sb += self.copy(smem_A[(k0 + 1) % 2], regs_A[(k1 + 1) % 2], schedule.a_s2r_layout)
+                            sb += self.copy(smem_B[(k0 + 1) % 2], regs_B[(k1 + 1) % 2], schedule.b_s2r_layout)
+                        with sb.otherwise():
                             sb += self.copy(smem_A[k0 % 2, :, k1 + 1:], regs_A[(k1 + 1) % 2], schedule.a_s2r_layout)
                             sb += self.copy(smem_B[k0 % 2, k1 + 1:, :], regs_B[(k1 + 1) % 2], schedule.b_s2r_layout)
+                        with sb.if_then(Equal(k1, 0)):
                             sb += self.copy(gmem_A[block_offset[0]:, block_offset_k:], regs_A_ldg, schedule.a_g2s_layout, src_predicate=lambda i, _: block_offset[0] + i < task_m)
                             sb += self.copy(gmem_B[block_offset_k:, block_offset[1]:], regs_B_ldg, schedule.b_g2s_layout, src_predicate=lambda _, j: block_offset[1] + j < task_n)
-                            sb += self.mma(regs_A[k1 % 2], regs_B[k1 % 2], regs_C, schedule)
-                        with sb.otherwise():
-                            with sb.if_then(k1 < (sch.block_warps_k - 1)):
-                                sb += self.copy(smem_A[k0 % 2, :, k1 + 1:], regs_A[(k1 + 1) % 2], schedule.a_s2r_layout)
-                                sb += self.copy(smem_B[k0 % 2, k1 + 1:, :], regs_B[(k1 + 1) % 2], schedule.b_s2r_layout)
-                                sb += self.mma(regs_A[k1 % 2], regs_B[k1 % 2], regs_C, schedule)
-                            with sb.otherwise():
-                                sb += self.copy(regs_A_ldg, smem_A[(k0 + 1) % 2], schedule.a_g2s_layout)
-                                sb += self.copy(regs_B_ldg, smem_B[(k0 + 1) % 2], schedule.b_g2s_layout)
-                                sb += syncthreads()
-                                sb += self.copy(smem_A[(k0 + 1) % 2], regs_A[(k1 + 1) % 2], schedule.a_s2r_layout)
-                                sb += self.copy(smem_B[(k0 + 1) % 2], regs_B[(k1 + 1) % 2], schedule.b_s2r_layout)
-                                sb += self.mma(regs_A[k1 % 2], regs_B[k1 % 2], regs_C, schedule)
+                        sb += self.mma(regs_A[k1 % 2], regs_B[k1 % 2], regs_C, schedule)
                 with sb.let('block_k_tile', block_k_tiles - 1) as k0:
                     with sb.for_loop('warp_k_tile', sch.block_warps_k) as k1:
                         with sb.if_then(k1 < sch.block_warps_k - 1):
                             sb += self.copy(smem_A[k0 % 2, :, k1 + 1:], regs_A[(k1 + 1) % 2], schedule.a_s2r_layout)
                             sb += self.copy(smem_B[k0 % 2, k1 + 1:, :], regs_B[(k1 + 1) % 2], schedule.b_s2r_layout)
-                            sb += self.mma(regs_A[k1 % 2], regs_B[k1 % 2], regs_C, schedule)
-                        with sb.otherwise():
-                            sb += self.mma(regs_A[k1 % 2], regs_B[k1 % 2], regs_C, schedule)
-                # regs -> gmem
-                # sb += self.copy(src=regs_C,
-                #                 dst=gmem_C[block_offset[0]:, block_offset[1]:],
-                #                 layout=sch.block_layout, dst_predicate=lambda ii, jj: And.join(block_offset[0] + ii < task_m, block_offset[1] + jj < task_n))
+                        sb += self.mma(regs_A[k1 % 2], regs_B[k1 % 2], regs_C, schedule)
                 with sb.for_loop('i', sch.c_wb_outer[0]) as i:
                     with sb.for_loop('j', sch.c_wb_outer[1]) as j:
                         warp_indices = sch.block_warps_layout(thread_idx() // 32)[0]

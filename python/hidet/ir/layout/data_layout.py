@@ -62,10 +62,11 @@ class DataLayout(Node):
             # support usage such as within_bound([1, 2, 3])
             args = args[0]
         assert len(args) == len(self.shape)
-        var2value = OrderedDict()
-        arg_vars = variablize(args, var2value)
-        scalar_index = self.global2local(*arg_vars)
-        scalar_index = concat_let_expr(var2value=var2value, body=scalar_index)
+        # var2value = OrderedDict()
+        # arg_vars = variablize(args, var2value)
+        # scalar_index = self.global2local(*arg_vars)
+        # scalar_index = concat_let_expr(var2value=var2value, body=scalar_index)
+        scalar_index = self.global2local(*args)
         return scalar_index
 
     def within_bound(self, *args: Int):

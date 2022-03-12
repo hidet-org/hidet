@@ -34,7 +34,7 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, prog
         # (222, 333, 444),
         (1024, 1024, 1024),
         # (1024 + 22, 1024 + 33, 1024 + 44),
-        # (1296, 2304, 768),
+        (1296, 2304, 768),
         # (1243, 1211, 1207),
         # (1024 + 128, 1024 + 128, 1024 + 48),
         # (2048, 2304, 768),
@@ -214,6 +214,6 @@ def test_custom_func():
 
 
 if __name__ == '__main__':
-    verify()
-    benchmark(use_nsight_compute=False)
+    # verify()
+    benchmark(use_nsight_compute=False, keep_ir=False)
     # test_custom_func()

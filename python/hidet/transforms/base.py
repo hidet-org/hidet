@@ -5,12 +5,12 @@ from hidet.ir.stmt import Stmt
 from hidet.ir.func import IRModule, Function
 from hidet.utils import Timer, get_next_file_index
 
+
 class PassContext:
     stack: List['PassContext'] = []
 
     def __init__(self, save_lowering_results=False, save_dir=None):
-        if save_lowering_results:
-            assert save_dir is not None
+        if save_dir and os.path.isdir(save_dir):
             if os.path.isdir(save_dir):
                 for fname in os.listdir(save_dir):
                     if fname == 'lower_time.txt':
@@ -20,7 +20,6 @@ class PassContext:
                         os.remove(os.path.join(save_dir, fname))
         self.save_lowering_results = save_lowering_results
         self.save_dir = save_dir
-
 
     @classmethod
     def current(cls):
@@ -32,6 +31,7 @@ class PassContext:
     def __exit__(self, exc_type, exc_val, exc_tb):
         assert len(self.stack) > 0 and self.stack[-1] is self
         self.stack.pop()
+
 
 PassContext.stack.append(PassContext())
 
@@ -51,6 +51,7 @@ class Pass:
             idx = get_next_file_index(ctx.save_dir)
             with open(os.path.join(ctx.save_dir, '{}_{}.text'.format(idx, self.name)), 'w') as f:
                 f.write(str(ret))
+        if ctx.save_dir and os.path.isdir(ctx.save_dir):
             with open(os.path.join(ctx.save_dir, 'lower_time.txt'), 'a') as f:
                 f.write(f'{self.name:>50} {timer.elapsed_seconds():.3f} seconds\n')
         return ret
@@ -113,5 +114,3 @@ class RepeatFunctionPass(FunctionPass):
                 return func
         print(f"Exceeded: {i} {self.name} on {func.name}")
         return func
-
-

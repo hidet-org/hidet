@@ -59,7 +59,7 @@ class GeneratePackedFuncPass(Pass):
                 grid_args.append(Cast(p_args[idx], PointerType(dtype)))
             else:
                 raise NotImplementedError()
-            packed_body.append(AssertStmt(p_arg_types[idx] == code, "The {} th arg should be {}".format(idx, astext(param.type))))
+            packed_body.append(AssertStmt(Equal(p_arg_types[idx], code), "The {} th arg should be {}".format(idx, astext(param.type))))
         # call
         packed_body.append(EvaluateStmt(Call(func_global_var, grid_args)))
 

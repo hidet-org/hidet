@@ -1,17 +1,18 @@
 import operator
-from typing import Dict
+from typing import Dict, Optional, List
 from itertools import product
 
 from hidet.ir.dialects.pattern import AnyExpr, match
 from hidet.ir.expr import Add, convert, Sub, Multiply, FloorDiv, Mod, LessThan, LessEqual, Equal, BinaryOp, And, IfThenElse, Or
-from hidet.ir.expr import Constant, Expr
+from hidet.ir.expr import Constant, Expr, Var
 from hidet.ir.functors import FuncStmtExprRewriter
-from hidet.ir.functors import StmtExprRewriter
+from hidet.ir.functors import StmtExprRewriter, ExprVisitor
 from hidet.ir.functors import rewrite, ExprHash
 from hidet.ir.dialects.lowlevel import Cast
 from hidet.transforms.base import FunctionPass
 from hidet.utils import prod, repeat_until_converge
 from hidet.utils.py import DictCustomKey
+from hidet.ir.stmt import LetStmt, ForStmt
 from hidet.ir.func import Function
 from hidet.ir.analyzers import BoundAnalyzer, BoundInfo
 
@@ -150,8 +151,15 @@ class RuleBasedSimplifier(FuncStmtExprRewriter):
                     continue
                 if prod([len(can_set) for can_set in arg_candidates.values()]) > self._enumerate_limit:
                     continue
-                sorted_can_sets = [can_set for arg, can_set in sorted(arg_candidates.items(), key=lambda args: pattern_args.index(args[0]))]
-                target_arg_index = [pattern_args.index(arg) for arg in target_args]
+                sorted_can_sets = []
+                for pattern_arg in pattern_args:
+                    sorted_can_sets.append(arg_candidates[pattern_arg])
+                target_arg_index = []
+                for target_arg in target_args:
+                    for i in range(len(pattern_args)):
+                        if pattern_args[i] is target_arg:
+                            target_arg_index.append(i)
+                            break
                 for args in product(*sorted_can_sets):
                     t_args = [args[i] for i in target_arg_index]
                     if pattern_func(*args) != target_func(*t_args):
@@ -212,14 +220,13 @@ class RuleBasedSimplifier(FuncStmtExprRewriter):
         return FuncStmtExprRewriter.visit_Equal(self, e)
 
     def visit_Function(self, func: Function):
-        self.analyzer(func)
         return FuncStmtExprRewriter.visit_Function(self, func)
 
 
 class RuleBasedSimplifyPass(FunctionPass):
     def process_func(self, func: Function) -> Function:
-        simpifier = RuleBasedSimplifier()
-        return repeat_until_converge(simpifier, func)
+        simplifier = RuleBasedSimplifier()
+        return repeat_until_converge(simplifier, func)
 
 
 def rule_based_simplify_pass():

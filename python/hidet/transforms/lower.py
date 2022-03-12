@@ -5,14 +5,12 @@ from hidet.transforms import *
 def lower(ir_module: IRModule) -> IRModule:
     transforms = [
         # necessary passes
-        # eliminate_dead_device_function_pass(),
         generate_packed_func_pass(),
         flatten_tensor_pass(),
         expand_let_expr_pass(),
 
 
         # simplification
-        # explicit_unroll_for_stmt_pass(),
         inline_let_stmt_pass(inline_all=True),
         rule_based_simplify_pass(),
         simplify_stmt_pass(),

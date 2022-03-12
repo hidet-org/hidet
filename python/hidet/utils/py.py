@@ -1,8 +1,11 @@
-from typing import Callable, MutableMapping, Iterator, Sequence
-import itertools
+import cProfile
 import contextlib
+import io
+import itertools
 import os
+import pstats
 import time
+from typing import Callable, MutableMapping, Sequence
 
 
 def prod(seq: Sequence):
@@ -106,3 +109,23 @@ def factor(n):
                 ret.append(n // i)
         i += 1
     return list(sorted(ret))
+
+
+class HidetProfiler:
+    def __init__(self, display_on_exit=True):
+        self.pr = cProfile.Profile()
+        self.display_on_exit = display_on_exit
+
+    def __enter__(self):
+        self.pr.enable()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.pr.disable()
+        if self.display_on_exit:
+            print(self.result())
+
+    def result(self):
+        s = io.StringIO()
+        ps = pstats.Stats(self.pr, stream=s).sort_stats('cumulative')
+        ps.print_stats()
+        return str(s.getvalue())

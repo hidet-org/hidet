@@ -1,13 +1,10 @@
-import functools
-import inspect
-import operator
 from typing import List, Union
 from hidet.ir.type import TensorType
 from hidet.ir.expr import Var, TensorElement, TensorSlice
 from hidet.ir.stmt import BufferStoreStmt
 from hidet.ir.func import Function
-from hidet.ir.functors import collect, rewrite, simplify, simplify_to_int, FuncStmtExprRewriter
-from hidet.ir.dialects.lowlevel import PointerType, Address, TensorPointerType
+from hidet.ir.functors import simplify_to_int, FuncStmtExprRewriter
+from hidet.ir.dialects.lowlevel import PointerType, TensorPointerType
 from hidet.transforms import Pass
 from hidet.ir.layout import StridesLayout, DataLayout
 

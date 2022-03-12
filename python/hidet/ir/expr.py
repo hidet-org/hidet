@@ -49,8 +49,15 @@ class Expr(Node):
     def __le__(self, other):
         return LessEqual(self, other)
 
-    def __eq__(self, other):
-        return Equal(self, other)
+    #
+    # for performance, we should use Equal(e1, e2) to represent equivalence expression
+    #
+    # def __eq__(self, other):
+    #     return Equal(self, other)
+    #
+    # def __hash__(self):
+    #     return id(self)
+    #
 
     def __ge__(self, other):
         return LessEqual(other, self)
@@ -84,9 +91,6 @@ class Expr(Node):
             return TensorSlice(base=self, indices=indices, starts=starts, ends=ends)
         else:
             return TensorElement(base=self, indices=indices)
-
-    def __hash__(self):
-        return id(self)
 
     def __int__(self):
         return int(self)
