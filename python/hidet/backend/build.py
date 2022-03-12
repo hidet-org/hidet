@@ -4,6 +4,7 @@ import ctypes
 import os.path
 import subprocess
 import uuid
+from tqdm import tqdm
 from subprocess import PIPE
 
 from hidet import utils
@@ -120,6 +121,10 @@ def load_compiled_module(lib_path: str, lowered_ir_module: IRModule) -> Compiled
     return CompiledModule(lowered_ir_module, compiled_funcs)
 
 
+def lower_and_compile_job(args):
+    return lower_and_compile(*args)
+
+
 def batch_build(build_instances: List[BuildInstance], parallel=True, verbose=False) -> List[CompiledModule]:
     with Timer() as timer:
         if parallel:
@@ -128,10 +133,17 @@ def batch_build(build_instances: List[BuildInstance], parallel=True, verbose=Fal
             os.sched_setaffinity(0, range(os.cpu_count()))
             with multiprocessing.Pool() as pool:
                 # We doing the lower_and_compile in parallel instead of build because we can not transfer ctypes pointer
-                pairs = list(pool.starmap(lower_and_compile, [instance.get() for instance in build_instances]))
+                pairs = []
+                chunksize = 1
+                total = (len(build_instances) + chunksize - 1) // chunksize
+                for results in tqdm(pool.imap_unordered(lower_and_compile_job, [instance.get() for instance in build_instances], chunksize=chunksize),
+                                    total=total, disable=not verbose, ascii=False):
+                    pairs.append(results)
+                # pairs = list(pool.starmap(lower_and_compile, [instance.get() for instance in build_instances]))
             ret = [load_compiled_module(lib_path, ir_module) for lib_path, ir_module in pairs]
         else:
             ret = [build(*ins.get()) for ins in build_instances]
     if verbose:
-        print('batch build {} modules within {:.3f} seconds'.format(len(build_instances), timer.elapsed_seconds()))
+        print('batch build {} modules within {:.3f} seconds, on average {:.1f} seconds per module'.format(
+            len(build_instances), timer.elapsed_seconds(), len(build_instances) / timer.elapsed_seconds()))
     return ret

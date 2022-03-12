@@ -249,8 +249,8 @@ class CudaBlockStaticMatmulSoftPipeLdgWbImplementer(Implementer):
         c_s2g = transfer_task(f'{task.name}_c_s2g', src_type=smem_C_wb_type, dst_type=gmem_C_wb_type.slice_out(dims=[0, 1]), worker=ThreadBlock(task_layout=setting.c_s2g_layout), parent_module=ir_module)
 
         with TaskBuilder(f'{task.name}_compute_block', ThreadBlock(task_layout=setting.ab2c_layout), ir_module) as ab2c:
-            regs_A_input = TensorInput('regs_A', A_dtype)
-            regs_B_input = TensorInput('regs_B', B_dtype)
+            regs_A_input = TensorInput('regs_A', A_dtype, shape=[None, None])
+            regs_B_input = TensorInput('regs_B', B_dtype, shape=[None, None])
             axis_k = var('k')
             fcompute = lambda i, j: reduce_sum(regs_A_input[i, axis_k] * regs_B_input[axis_k, j], axes=axis_k, shape=[warp_k])
             ab2c_cmpt = compute('regs_C', shape=setting.ab2c_layout.task_shape, fcompute=fcompute, accumulate='sum')

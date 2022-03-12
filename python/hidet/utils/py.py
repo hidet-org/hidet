@@ -80,6 +80,7 @@ class COLORS:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
+
 def get_next_file_index(dirname: str) -> int:
     indices = set()
     for fname in os.listdir(dirname):
@@ -89,3 +90,19 @@ def get_next_file_index(dirname: str) -> int:
     for idx in itertools.count(0):
         if idx not in indices:
             return idx
+
+
+def factor(n):
+    """
+    example:
+    factor(12) => [1, 2, 3, 4, 6, 12]
+    """
+    i = 1
+    ret = []
+    while i * i <= n:
+        if n % i == 0:
+            ret.append(i)
+            if i * i != n:
+                ret.append(n // i)
+        i += 1
+    return list(sorted(ret))

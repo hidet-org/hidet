@@ -1,25 +1,24 @@
-from typing import Mapping, List, Union, Any, Callable, Sequence
-import numpy as np
-import contextlib
+import itertools
+from typing import Mapping, List, Any
 
+import numpy as np
+
+from hidet.backend import batch_build, BuildInstance
 from hidet.implement.implementer import Implementer, register_impl, NotSupportedError
-from hidet.implement.search_space import ProductSpace, AtomSpace, SpaceChoice
-from hidet.ir.builders import TaskBuilder, FunctionBuilder, StmtBuilder
-from hidet.ir.dialects.compute import TensorInput, TensorCompute, compute, ReduceCompute, reduce_sum, ScalarInput
-from hidet.ir.dialects.lowlevel import Address, TensorPointerType, Cast, PointerType
+from hidet.ir.builders import FunctionBuilder, StmtBuilder
+from hidet.ir.dialects.compute import TensorInput, TensorCompute, ReduceCompute
+from hidet.ir.dialects.lowlevel import TensorPointerType, Cast, PointerType
 from hidet.ir.dialects.pattern import TaskPattern, any_const_int
-from hidet.ir.functors import simplify, simplify_to_int
-from hidet.ir.expr import Expr, Call, TensorElement, var, tensor_var, convert, Var, And, IfThenElse, Or, is_tensor, get_tensor_layout, PyScalar, Condition, Equal, Constant, if_then_else
+from hidet.ir.expr import var, Var, And, Equal, if_then_else
 from hidet.ir.func import IRModule
-from hidet.ir.layout import TaskLayout, row_major_layout, full_layout, DataLayout, StridesLayout
+from hidet.ir.functors import simplify_to_int
+from hidet.ir.layout import TaskLayout, row_major_layout, DataLayout, StridesLayout
 from hidet.ir.node import Node
 from hidet.ir.primitives import syncthreads, thread_idx, block_idx
-from hidet.ir.stmt import ForStmt, AssignStmt, ReturnStmt, BufferStoreStmt, Stmt, IfStmt
-from hidet.ir.task import Task, ThreadBlock, Warp, Grid
+from hidet.ir.stmt import AssignStmt, BufferStoreStmt, IfStmt
+from hidet.ir.task import Task, Grid
 from hidet.ir.type import scalar_type, TensorType, Scope
-from hidet.implement.common import transfer_task, init_task, transfer_predicated_task, predicated_transfer_task, bounded_transfer_task, transfer_bounded_task
-from hidet.backend import batch_build, BuildInstance, build
-from hidet.utils import Timer
+from hidet.utils import Timer, cuda, factor, prod
 
 """
 pseudo code of matmul with double buffering
@@ -70,104 +69,119 @@ class Schedule:
                  block_warps_k=8,
                  warp_k=1,
                  block_warps=(4, 2),
-                 outer=(2, 2),
+                 warp_outer=(2, 2),
                  atom_layout=CustomTaskLayout(),
                  atom_layout_name='custom_4x8',
-                 inner=(4, 4),
+                 warp_inner=(4, 4),
                  min_thread_blocks=2):
         self.block_warps_k = block_warps_k
         self.warp_k = warp_k
         self.block_warps = block_warps
-        self.outer = outer
+        self.warp_outer = warp_outer
         self.atom_layout = atom_layout
-        self.inner = inner
+        self.warp_inner = warp_inner
         self.atom_layout_name = atom_layout_name
         self.min_thread_blocks = min_thread_blocks
+
+        # sanity check
+        row_major = TaskLayout.row_major
+        full_layout = TaskLayout.full_layout
+        warp_outer_layout = full_layout(warp_outer)
+        warp_inner_layout = full_layout(warp_inner)
+        warp_layout = warp_outer_layout * atom_layout * warp_inner_layout
+        block_warps_layout = row_major(block_warps)
+        block_layout = block_warps_layout * warp_layout
         block_k = block_warps_k * warp_k
-        # dependent variables
-        warp_m = outer[0] * atom_layout.task_shape[0] * inner[0]
-        warp_n = outer[1] * atom_layout.task_shape[1] * inner[1]
-        block_m = block_warps[0] * warp_m
-        block_n = block_warps[1] * warp_n
         atom_shape = atom_layout.task_shape
-
+        block_shape = block_layout.task_shape
         warp_size = 32
-        num_warps = block_warps[0] * block_warps[1]
-        block_size = num_warps * warp_size
+        block_size = block_layout.num_workers
+        self.check(atom_layout.num_workers == 32, "atom layout should have exactly 32 workers, corresponding to 32 threads in a warp")
+        self.check(block_warps_k % 2 == 0, "double buffering requires that block_k/warp_k is divisible by 2")
+        if block_k <= warp_size:
+            self.check(warp_size % block_k == 0, f"transfer from gmem to smem requires block_k ({block_k}) is divisible by warp_size ({warp_size})")
+            # todo: consider removing the following two constraints by adding bound-checking in source-template
+            self.check(block_shape[0] % (block_size // block_k) == 0 and block_shape[1] % (block_size // block_k) == 0,
+                       f"transfer of matrix A/B from gmem to regs requirement. block_shape ({block_shape}) block_size ({block_size}) block_k ({block_k}) block_size / block_k ({block_size / block_k})")
+        else:
+            self.check(block_k % warp_size == 0, "transfer from gmem to smem requires warp_size is divisible by block_k")
+            raise NotSupportedError("Will support later")
+        max_smem_bytes_per_block = min(cuda.max_smem_bytes_per_sm() // min_thread_blocks, cuda.max_smem_bytes_per_block()) // 128 * 128
+        max_num_regs_per_thread = min(cuda.max_num_regs_per_thread(), cuda.max_num_regs_per_block() // block_size, cuda.max_num_regs_per_sm() // min_thread_blocks // block_size) // 8 * 8
+
+        # derived task layouts
+        self.block_warps_layout = block_warps_layout
+        self.warp_layout = warp_layout
+        self.block_layout = block_layout
+        if block_k <= warp_size:
+            lines = block_size // block_k
+            self.a_g2s_layout = row_major([lines, block_k]) * full_layout([block_shape[0] // lines, 1])
+            self.b_g2s_layout = full_layout([1, block_shape[1] // lines]) * row_major([block_k, lines])
+        else:
+            raise NotSupportedError()
+        self.a_s2r_layout = (self.block_warps_layout * full_layout([warp_outer[0], warp_k]) * atom_layout * full_layout([warp_inner[0], warp_k])).projection({1: 0})
+        self.b_s2r_layout = (self.block_warps_layout * full_layout([warp_k, warp_outer[1]]) * atom_layout * full_layout([warp_k, warp_inner[1]])).projection({0: 0})
+
+        pairs = []
+        for a, b in itertools.product(factor(warp_outer[0]), factor(warp_outer[1])):
+            used_smem_bytes = prod((block_warps_layout * full_layout([a, b]) * atom_layout * warp_inner_layout).task_shape) * 4  # 4 types per float32, todo: update when support other data type
+            if used_smem_bytes > max_smem_bytes_per_block:
+                continue
+            pairs.append((a, b))
+        self.check(len(pairs) > 0, "Can not find a write-back config")
+        pair = max(pairs, key=lambda p: p[0] * p[1])
+        self.c_warp_r2s_layout = full_layout(pair) * atom_layout * warp_inner_layout
+        c_wb_shape = self.c_warp_r2s_layout.task_shape
+        if warp_size <= c_wb_shape[1]:
+            self.check(c_wb_shape[1] % warp_size == 0, f"C write back alignment requirement, warp_size = {warp_size}, c_wb_shape = {c_wb_shape}")
+            self.c_warp_s2g_layout = full_layout([c_wb_shape[0], c_wb_shape[1] // warp_size]) * row_major([1, warp_size])
+        else:
+            self.check(warp_size % c_wb_shape[1] == 0 and c_wb_shape[0] % (warp_size // c_wb_shape[1]), f"C write back alignment requirement, warp_size = {warp_size}, c_wb_shape = {c_wb_shape}")
+            lines = warp_size // c_wb_shape[1]
+            self.c_warp_s2g_layout = full_layout([c_wb_shape[0] // lines, 1]) * row_major([lines, c_wb_shape[1]])
+
+        # derived data layouts
+        local_layout = DataLayout.local
+        row_major = DataLayout.row_major
+        col_major = DataLayout.column_major
+        self.regs_a_layout = local_layout((block_warps[0], 1)) * col_major((warp_outer[0], warp_k)) * local_layout((atom_shape[0], 1)) * row_major((warp_inner[0], 1))
+        self.regs_b_layout = local_layout((1, block_warps[1])) * row_major((warp_k, warp_outer[1])) * local_layout((1, atom_shape[1])) * row_major((1, warp_inner[1]))
+        self.regs_c_layout = local_layout(block_warps) * row_major(warp_outer) * local_layout(atom_shape) * row_major(warp_inner)
+        if block_k <= warp_size:
+            self.regs_a_ldg_layout = local_layout((block_size // block_k, block_k)) * row_major((block_shape[0] // (block_size // block_k), 1))
+            self.regs_b_ldg_layout = row_major((1, block_shape[1] // (block_size // block_k))) * local_layout((block_k, block_size // block_k))
+        else:
+            raise NotSupportedError()
+
+        # derived constants
+        used_num_regs_per_thread = self.regs_a_layout.size + self.regs_b_layout.size + self.regs_c_layout.size + self.regs_a_ldg_layout.size + self.regs_b_ldg_layout.size
+        used_smem_bytes_per_block = (block_shape[0] + block_shape[1]) * block_k * 2 * 4     # 2 for double buffering, 4 for number of bytes per float32
+        self.check(used_num_regs_per_thread <= max_num_regs_per_thread, f"Used number of register ({used_num_regs_per_thread}) exceeded the maximum ({max_num_regs_per_thread})")
+        self.check(used_smem_bytes_per_block <= max_smem_bytes_per_block, f"Used shared memory ({used_smem_bytes_per_block} bytes) exceeded the maximum ({max_smem_bytes_per_block} bytes)")
         self.block_size = block_size
-        self.check(block_warps_k % warp_k == 0 and (block_warps_k // warp_k) % 2 == 0)  # double buffering index requirement
-        # (warp_size % block_warps_k != 0 and block_warps_k % warp_size == 0)  # this is another case we might handle
-        self.check(warp_size % block_warps_k == 0)  # gmem -> regs requirement. block_k candidates: 2, 4, 8, 16, 32
-        self.check(block_m % (block_size // block_warps_k) == 0)  # A: gmem -> regs alignment requirement
-        self.check(block_n % (block_size // block_warps_k) == 0)  # B: gmem -> regs alignment requirement
-        self.check(warp_k == 1)
-
-        # task layouts
-        self.block_layout = row_major_layout(*block_warps)
-        self.warp_layout = full_layout(*outer) * atom_layout * full_layout(*inner)
-        self.a_g2r_r2s_layout = row_major_layout(block_size // block_warps_k, block_warps_k) * full_layout(block_m // (block_size // block_warps_k), 1)
-        self.b_g2r_r2s_layout = full_layout(1, block_n // (block_size // block_warps_k)) * row_major_layout(block_warps_k, block_size // block_warps_k)
-        self.a_s2r_layout: TaskLayout = (self.block_layout * full_layout(outer[0], 1) * atom_layout * full_layout(inner[0], 1)).projection({1: 0})
-        self.b_s2r_layout: TaskLayout = (self.block_layout * full_layout(1, outer[1]) * atom_layout * full_layout(1, inner[1])).projection({0: 0})
-        self.ab2c_layout = self.block_layout * self.warp_layout
-        self.c_r2s_outer_inner = self.get_c_write_back_inner()
-        self.warp_c_wb_layout = full_layout(*self.c_r2s_outer_inner) * atom_layout * full_layout(*inner)
-        self.check(self.warp_c_wb_layout.task_shape[1] % 32 == 0)
-        self.c_r2s_layout = self.block_layout * self.warp_c_wb_layout
-        self.c_s2g_layout = self.block_layout * full_layout(self.warp_c_wb_layout.task_shape[0], self.warp_c_wb_layout.task_shape[1] // warp_size) * row_major_layout(1, warp_size)
-        self.c_s2g_warp_layout = full_layout(self.warp_c_wb_layout.task_shape[0], self.warp_c_wb_layout.task_shape[1] // warp_size) * row_major_layout(1, warp_size)
-        self.c_r2s_outer_outer = [outer[0] // self.c_r2s_outer_inner[0], outer[1] // self.c_r2s_outer_inner[1]]
-
-        self.wb_warp_shape = [atom_shape[0] * inner[0] * self.c_r2s_outer_inner[0], atom_shape[1] * inner[1] * self.c_r2s_outer_inner[1]]
-
-        # regs data layout
-        self.regs_a_layout = DataLayout.local((block_warps[0], 1)) * StridesLayout.row_major((outer[0], 1)) * DataLayout.local((atom_shape[0], 1)) * StridesLayout.row_major((inner[0], 1))
-        self.regs_b_layout = DataLayout.local((1, block_warps[1])) * StridesLayout.row_major((1, outer[1])) * DataLayout.local((1, atom_shape[1])) * StridesLayout.row_major((1, inner[1]))
-        self.regs_c_layout = DataLayout.local(block_warps) * StridesLayout.row_major(outer) * DataLayout.local(atom_shape) * StridesLayout.row_major(inner)
-        self.regs_a_ldg_layout = DataLayout.local((block_size // block_k, block_k)) * DataLayout.row_major((block_m // (block_size // block_k), 1))
-        self.regs_b_ldg_layout = DataLayout.row_major((1, block_n // (block_size // block_k))) * DataLayout.local((block_k, block_size // block_k))
-
-        self.block_shape = self.ab2c_layout.task_shape
+        self.block_shape = block_layout.task_shape
+        self.block_k = block_k
+        self.warp_shape = warp_layout.task_shape
+        self.warp_k = warp_k
+        self.c_wb_outer = [a // b for a, b in zip(warp_outer, pair)]
+        self.c_wb_shape = c_wb_shape
+        self.used_num_regs_per_thread = used_num_regs_per_thread
+        self.used_smem_bytes_per_block = used_smem_bytes_per_block
 
     def __str__(self):
         return 'overall_{}x{}x{}_blcok_warps_{}x{}_outer_{}_{}_middle_{}x{}_inner_{}x{}_warpk_{}_atom_{}_min_blocks_{}'.format(
-            *self.ab2c_layout.task_shape, self.block_warps_k * self.warp_k, *self.block_warps, *self.outer, *self.atom_layout.task_shape, *self.inner,
+            *self.block_layout.task_shape, self.block_warps_k * self.warp_k, *self.block_warps, *self.warp_outer, *self.atom_layout.task_shape, *self.warp_inner,
             self.warp_k, self.atom_layout_name, self.min_thread_blocks
         )
 
-    def get_c_write_back_inner(self):
-        block_size = self.block_warps[0] * self.block_warps[1] * 32
-        block_m = self.block_warps[0] * self.warp_layout.task_shape[0]
-        block_n = self.block_warps[1] * self.warp_layout.task_shape[1]
-        found_regs_size = 0
-        c_r2s_outer_inner = None
-        for a in range(1, self.outer[0] + 1):
-            if self.outer[0] % a != 0:
-                continue
-            for b in range(1, self.outer[1] + 1):
-                if self.outer[1] % b != 0:
-                    continue
-                regs_size = a * b * self.inner[0] * self.inner[1] * block_size
-                smem_size = (block_m + block_n) * self.block_warps_k * 2
-                if regs_size > smem_size:
-                    continue
-                if found_regs_size == 0 or found_regs_size <= regs_size:
-                    found_regs_size = regs_size
-                    c_r2s_outer_inner = [a, b]
-        if found_regs_size == 0:
-            raise NotSupportedError('can not use smem to help write c.')
-        return c_r2s_outer_inner
-
-    def check(self, cond):
+    def check(self, cond, msg: str = ""):
         if not cond:
-            raise NotSupportedError()
+            raise NotSupportedError(msg)
 
 
-matmul_settings = [Schedule()]
 atom_layouts = [
     ('row_4x8', TaskLayout.row_major((4, 8))),
-    ('col_4x8', TaskLayout.row_major((8, 4))),
-    # ('custom_4x8', TaskLayout(num_workers=32, task_shape=(4, 8), worker2task=lambda w: [(w // 16 * 2 + w % 2, w // 2 % 8)])),
+    ('row_8x4', TaskLayout.row_major((8, 4))),
     ('custom_4x8', CustomTaskLayout()),
 ]
 
@@ -179,7 +193,7 @@ def setup_matmul_settings(use_default=False):
         settings = []
         for inner_m, inner_n in [[4, 4], [8, 8], [4, 8], [8, 4]]:
             for outer_m, outer_n in [[1, 1], [1, 2], [2, 1], [2, 2]]:
-                for block_warps_k, warp_k in [[2, 1], [4, 1], [8, 1], [12, 1]]:
+                for block_warps_k, warp_k in [[2, 1], [4, 1], [8, 1], [16, 1]]:
                     for block_warps_m, block_warps_n in [[2, 2], [2, 4], [4, 2], [4, 2]]:
                         for min_thread_blocks in [1, 2]:
                             for name, atom_layout in atom_layouts:
@@ -188,14 +202,15 @@ def setup_matmul_settings(use_default=False):
                                         block_warps_k=block_warps_k,
                                         warp_k=warp_k,
                                         block_warps=[block_warps_m, block_warps_n],
-                                        outer=[outer_m, outer_n],
+                                        warp_outer=[outer_m, outer_n],
                                         atom_layout=atom_layout,
                                         atom_layout_name=name,
-                                        inner=[inner_m, inner_n],
+                                        warp_inner=[inner_m, inner_n],
                                         min_thread_blocks=min_thread_blocks
                                     ))
-                                except NotSupportedError:
-                                    pass
+                                except NotSupportedError as e:
+                                    print(f'inner {(inner_m, inner_n)} atom {atom_layout.task_shape} outer {(outer_m, outer_n)} block_warps {(block_warps_m, block_warps_n)} min_thread_blocks {min_thread_blocks} block_warps_k {block_warps_k}')
+                                    print(e)
         return settings
 
 
@@ -244,8 +259,7 @@ class CudaGridStaticMatmulImplementer(Implementer):
         return self.pattern
 
     def implement(self, task: Task, match: Mapping[Node, Node]) -> IRModule:
-        # search space
-        settings = setup_matmul_settings(use_default=False)
+        settings = setup_matmul_settings(use_default=True)
         ir_modules = []
         for setting in settings:
             ir_modules.append(self.implement_schedule(task, match, setting))
@@ -281,47 +295,21 @@ class CudaGridStaticMatmulImplementer(Implementer):
 
     def implement_schedule(self, task: Task, match: Mapping[Node, Any], schedule: Schedule) -> IRModule:
         ir_module = IRModule()
+        sch = schedule
 
-        # task-related constants
         task_m = int(match[self.task_m])
         task_n = int(match[self.task_n])
         task_k = int(match[self.task_k])
-
-        # space-related constants
-        block_size = schedule.block_size
-        warp_layout: TaskLayout = schedule.warp_layout
-        block_shape = schedule.ab2c_layout.task_shape
-        grid_blocks_layout: TaskLayout = row_major_layout(*[(a + b - 1) // b for a, b in zip([task_m, task_n], block_shape)])
-
-        # block_k = setting.block_k
-
-        block_m, block_n = schedule.ab2c_layout.task_shape
-        warp_m, warp_n = warp_layout.task_shape
-        warp_k = schedule.warp_k
-        block_k = schedule.block_warps_k * warp_k
-
-        wb_warp_shape = schedule.wb_warp_shape
-
-        # task-related variables
-        gmem_c_type: TensorType = match[self.C_type]
-        gmem_c_type = gmem_c_type.split(dim2factor={0: block_shape[0], 1: block_shape[1]}).reorder([0, 2, 1, 3])
-
         A_dtype = match[self.A_type].scalar_type
         B_dtype = match[self.B_type].scalar_type
         C_dtype = match[self.C_type].scalar_type
 
-        #                                                                  (GM, GN, M, N) -> (M, N)    ->     (BM, WM, BN, WN) ->           (BM, OM, IM, BN, ON, IN) ->                       (OM, ON, BM * IM, BN * IN)
-        gmem_C_wb_type = TensorType(scope='global', dtype=C_dtype, layout=gmem_c_type.layout.split({2: warp_m, 3: warp_n}).split({3: wb_warp_shape[0], 5: wb_warp_shape[1]}).fuse([0, 1, 3, 6, [2, 4], [5, 7]]))
-        smem_C_wb_type = TensorType(scope='shared', dtype=C_dtype, layout=StridesLayout.row_major(schedule.block_warps) * StridesLayout.row_major(schedule.warp_c_wb_layout.task_shape))
-        regs_C_wb_type = TensorType(scope='register', dtype=C_dtype, layout=schedule.regs_c_layout.split({0: warp_m, 1: warp_n}).split({1: wb_warp_shape[0], 3: wb_warp_shape[1]}).fuse([1, 4, [0, 2], [3, 5]]))
-
-        # define subtasks
-        block_k_tiles = (task_k + block_k - 1) // block_k
-        first_k_tile = task_k - (block_k_tiles - 1) * block_k
+        grid_blocks_layout: TaskLayout = row_major_layout(*[(a + b - 1) // b for a, b in zip([task_m, task_n], sch.block_shape)])
 
         # define function
-        with FunctionBuilder(task.name + '.grid', attrs={'worker': Grid(grid_dim=grid_blocks_layout.num_workers, block_dim=block_size, min_blocks=schedule.min_thread_blocks),
-                                                         'label': str(schedule)}) as fb:
+        with FunctionBuilder(name=task.name + '.grid',
+                             worker=Grid(grid_dim=grid_blocks_layout.num_workers, block_dim=sch.block_size, min_blocks=sch.min_thread_blocks),
+                             label=str(sch)) as fb:
             sb = StmtBuilder()
 
             # declare params
@@ -331,17 +319,14 @@ class CudaGridStaticMatmulImplementer(Implementer):
             fb.extend_params([gmem_A, gmem_B, gmem_C])
 
             # declare local variables
-            smem_A = Var('smem_A', TensorPointerType('shared', A_dtype, layout=StridesLayout.from_shape([2, block_m, block_k], perm=[0, 2, 1])))
-            smem_B = Var('smem_B', TensorPointerType('shared', B_dtype, layout=StridesLayout.from_shape([2, block_k, block_n], perm=[0, 1, 2])))
-            smem_C = Var('smem_C', TensorPointerType('shared', C_dtype, layout=smem_C_wb_type.layout))
+            smem_A = Var('smem_A', TensorPointerType('shared', A_dtype, layout=StridesLayout.from_shape([2, sch.block_shape[0], sch.block_k], perm=[0, 2, 1])))
+            smem_B = Var('smem_B', TensorPointerType('shared', B_dtype, layout=StridesLayout.from_shape([2, sch.block_k, sch.block_shape[1]], perm=[0, 1, 2])))
+            smem_C = Var('smem_C', TensorPointerType('shared', C_dtype, layout=StridesLayout.row_major((sch.block_warps_layout * sch.c_warp_s2g_layout).task_shape)))
             smem_A_bytes = simplify_to_int(smem_A.type.tensor_type.storage_bytes())
             smem_B_bytes = simplify_to_int(smem_B.type.tensor_type.storage_bytes())
             smem_C_bytes = simplify_to_int(smem_C.type.tensor_type.storage_bytes())
             smem_storage = Var('smem_storage', TensorType('shared', dtype='uint8', shape=[max(smem_A_bytes + smem_B_bytes, smem_C_bytes)], layout=[1]))
             fb.extend_local_vars([smem_A, smem_B, smem_C, smem_storage])
-            gmem_C_wb = Var('gmem_C_wb', TensorPointerType('global', C_dtype, layout=gmem_C_wb_type.layout))
-            fb.extend_local_vars([gmem_C_wb])
-            sb += AssignStmt(gmem_C_wb, gmem_C)
             sb += AssignStmt(smem_A, Cast(~smem_storage[0], PointerType(A_dtype)))
             sb += AssignStmt(smem_B, Cast(~(smem_storage[smem_A_bytes]), PointerType(B_dtype)))
             sb += AssignStmt(smem_C, Cast(~(smem_storage[0]), PointerType(C_dtype)))
@@ -352,67 +337,67 @@ class CudaGridStaticMatmulImplementer(Implementer):
             regs_C = Var('regs_C', TensorType('register', C_dtype, layout=schedule.regs_c_layout))
             regs_A_ldg = Var('regs_A_ldg', TensorType(scope='register', dtype=A_dtype, layout=schedule.regs_a_ldg_layout))
             regs_B_ldg = Var('regs_B_ldg', TensorType(scope='register', dtype=B_dtype, layout=schedule.regs_b_ldg_layout))
-            regs_C_wb = Var('regs_C_wb', TensorPointerType('register', C_dtype, layout=regs_C_wb_type.layout))
-            sb += AssignStmt(regs_C_wb, regs_C)
-            fb.extend_local_vars([regs_A, regs_B, regs_C, regs_A_ldg, regs_B_ldg, regs_C_wb])
+            fb.extend_local_vars([regs_A, regs_B, regs_C, regs_A_ldg, regs_B_ldg])
 
-            with sb.lets(['block_m', 'block_n'], grid_blocks_layout(block_idx())[0]) as (block_m, block_n):
-                offset_m = block_m * block_shape[0]
-                offset_n = block_n * block_shape[1]
+            with sb.lets(['bi', 'bj'], grid_blocks_layout(block_idx())[0]) as (bi, bj):
+                block_k_tiles = (task_k + sch.block_k - 1) // sch.block_k
+                first_k_tile = task_k - (block_k_tiles - 1) * sch.block_k
+                block_offset = [idx * dim for idx, dim in zip([bi, bj], sch.block_shape)]
                 # transfer first tile
-                sb += self.copy(gmem_A[offset_m:, :], regs_A_ldg, schedule.a_g2r_r2s_layout, src_predicate=lambda i, k: And.join(offset_m + i < task_m, k < first_k_tile))
-                sb += self.copy(regs_A_ldg, smem_A[0], layout=schedule.a_g2r_r2s_layout)
-                sb += self.copy(gmem_B[:, offset_n:], regs_B_ldg, schedule.b_g2r_r2s_layout, src_predicate=lambda k, j: And.join(k < first_k_tile, offset_n + j < task_n))
-                sb += self.copy(regs_B_ldg, smem_B[0], layout=schedule.b_g2r_r2s_layout)
+                sb += self.copy(gmem_A[block_offset[0]:, :], regs_A_ldg, schedule.a_g2s_layout, src_predicate=lambda i, k: And.join(block_offset[0] + i < task_m, k < first_k_tile))
+                sb += self.copy(regs_A_ldg, smem_A[0], layout=schedule.a_g2s_layout)
+                sb += self.copy(gmem_B[:, block_offset[1]:], regs_B_ldg, schedule.b_g2s_layout, src_predicate=lambda k, j: And.join(k < first_k_tile, block_offset[1] + j < task_n))
+                sb += self.copy(regs_B_ldg, smem_B[0], layout=schedule.b_g2s_layout)
                 sb += syncthreads()
                 sb += self.copy(smem_A[0], regs_A[0], schedule.a_s2r_layout)
                 sb += self.copy(smem_B[0], regs_B[0], schedule.b_s2r_layout)
                 sb += syncthreads()
                 # init regs c
-                sb += self.init(regs_C, 0.0, schedule.ab2c_layout)
-                with sb.for_loop('block_k_tile', block_k_tiles - 1) as k0:
-                    offset_k = k0 * block_k + first_k_tile
-                    with sb.for_loop('warp_k_tile', block_k // warp_k) as k1:
+                sb += self.init(regs_C, 0.0, schedule.block_layout)
+                with sb.for_loop('k0', block_k_tiles - 1) as k0:
+                    block_offset_k = k0 * sch.block_k + first_k_tile
+                    with sb.for_loop('k1', sch.block_warps_k) as k1:
                         with sb.if_then(Equal(k1, 0)):
                             sb += self.copy(smem_A[k0 % 2, :, k1 + 1:], regs_A[(k1 + 1) % 2], schedule.a_s2r_layout)
                             sb += self.copy(smem_B[k0 % 2, k1 + 1:, :], regs_B[(k1 + 1) % 2], schedule.b_s2r_layout)
-                            sb += self.copy(gmem_A[offset_m:, offset_k:], regs_A_ldg, schedule.a_g2r_r2s_layout, src_predicate=lambda i, _: offset_m + i < task_m)
-                            sb += self.copy(gmem_B[offset_k:, offset_n:], regs_B_ldg, schedule.b_g2r_r2s_layout, src_predicate=lambda _, j: offset_n + j < task_n)
+                            sb += self.copy(gmem_A[block_offset[0]:, block_offset_k:], regs_A_ldg, schedule.a_g2s_layout, src_predicate=lambda i, _: block_offset[0] + i < task_m)
+                            sb += self.copy(gmem_B[block_offset_k:, block_offset[1]:], regs_B_ldg, schedule.b_g2s_layout, src_predicate=lambda _, j: block_offset[1] + j < task_n)
                             sb += self.mma(regs_A[k1 % 2], regs_B[k1 % 2], regs_C, schedule)
                         with sb.otherwise():
-                            with sb.if_then(k1 < (block_k - 1)):
+                            with sb.if_then(k1 < (sch.block_warps_k - 1)):
                                 sb += self.copy(smem_A[k0 % 2, :, k1 + 1:], regs_A[(k1 + 1) % 2], schedule.a_s2r_layout)
                                 sb += self.copy(smem_B[k0 % 2, k1 + 1:, :], regs_B[(k1 + 1) % 2], schedule.b_s2r_layout)
                                 sb += self.mma(regs_A[k1 % 2], regs_B[k1 % 2], regs_C, schedule)
                             with sb.otherwise():
-                                sb += self.copy(regs_A_ldg, smem_A[(k0 + 1) % 2], layout=schedule.a_g2r_r2s_layout)
-                                sb += self.copy(regs_B_ldg, smem_B[(k0 + 1) % 2], layout=schedule.b_g2r_r2s_layout)
+                                sb += self.copy(regs_A_ldg, smem_A[(k0 + 1) % 2], schedule.a_g2s_layout)
+                                sb += self.copy(regs_B_ldg, smem_B[(k0 + 1) % 2], schedule.b_g2s_layout)
                                 sb += syncthreads()
                                 sb += self.copy(smem_A[(k0 + 1) % 2], regs_A[(k1 + 1) % 2], schedule.a_s2r_layout)
                                 sb += self.copy(smem_B[(k0 + 1) % 2], regs_B[(k1 + 1) % 2], schedule.b_s2r_layout)
                                 sb += self.mma(regs_A[k1 % 2], regs_B[k1 % 2], regs_C, schedule)
                 with sb.let('block_k_tile', block_k_tiles - 1) as k0:
-                    with sb.for_loop('warp_k_tile', block_k // warp_k) as k1:
-                        with sb.if_then(k1 < block_k - 1):
+                    with sb.for_loop('warp_k_tile', sch.block_warps_k) as k1:
+                        with sb.if_then(k1 < sch.block_warps_k - 1):
                             sb += self.copy(smem_A[k0 % 2, :, k1 + 1:], regs_A[(k1 + 1) % 2], schedule.a_s2r_layout)
                             sb += self.copy(smem_B[k0 % 2, k1 + 1:, :], regs_B[(k1 + 1) % 2], schedule.b_s2r_layout)
                             sb += self.mma(regs_A[k1 % 2], regs_B[k1 % 2], regs_C, schedule)
                         with sb.otherwise():
                             sb += self.mma(regs_A[k1 % 2], regs_B[k1 % 2], regs_C, schedule)
                 # regs -> gmem
-                with sb.for_loop('i', schedule.c_r2s_outer_outer[0]) as i:
-                    with sb.for_loop('j', schedule.c_r2s_outer_outer[1]) as j:
+                # sb += self.copy(src=regs_C,
+                #                 dst=gmem_C[block_offset[0]:, block_offset[1]:],
+                #                 layout=sch.block_layout, dst_predicate=lambda ii, jj: And.join(block_offset[0] + ii < task_m, block_offset[1] + jj < task_n))
+                with sb.for_loop('i', sch.c_wb_outer[0]) as i:
+                    with sb.for_loop('j', sch.c_wb_outer[1]) as j:
+                        warp_indices = sch.block_warps_layout(thread_idx() // 32)[0]
+                        regs_warp_offset = [wid * wdim + pid * pdim for wid, wdim, pid, pdim in zip(warp_indices, sch.warp_layout.task_shape, [i, j], sch.c_wb_shape)]
+                        smem_warp_offset = [idx * dim for idx, dim in zip(warp_indices, sch.c_wb_shape)]
+                        gmem_warp_offset = [bo + ro for bo, ro in zip(block_offset, regs_warp_offset)]
                         sb += syncthreads()
-                        sb += self.copy(regs_C_wb[i, j], smem_C, schedule.c_r2s_layout)
+                        sb += self.copy(src=regs_C[regs_warp_offset[0]:, regs_warp_offset[1]:], dst=smem_C[smem_warp_offset[0]:, smem_warp_offset[1]:], layout=schedule.c_warp_r2s_layout)
                         sb += syncthreads()
-                        warp_i, warp_j = schedule.block_layout(thread_idx() // 32)[0]
-                        warp_offset_m = warp_i * warp_layout.task_shape[0]
-                        warp_offset_n = warp_j * warp_layout.task_shape[1]
-                        sb += self.copy(smem_C[warp_i * schedule.c_s2g_warp_layout.task_shape[0]:, warp_j * schedule.c_s2g_warp_layout.task_shape[1]:],
-                                        gmem_C[offset_m + warp_offset_m + i * schedule.wb_warp_shape[0]:, offset_n + warp_offset_n + j * schedule.wb_warp_shape[1]:],
-                                        layout=schedule.c_s2g_warp_layout,
-                                        dst_predicate=lambda ii, jj: And.join(offset_m + warp_offset_m + i * schedule.wb_warp_shape[0] + ii < task_m,
-                                                                              offset_n + warp_offset_n + j * schedule.wb_warp_shape[1] + jj < task_n))
+                        sb += self.copy(src=smem_C[smem_warp_offset[0]:, smem_warp_offset[1]:], dst=gmem_C[gmem_warp_offset[0]:, gmem_warp_offset[1]:], layout=schedule.c_warp_s2g_layout,
+                                        dst_predicate=lambda ii, jj: And.join(gmem_warp_offset[0] + ii < task_m, gmem_warp_offset[1] + jj < task_n))
             # set body
             fb.set_body(sb.finish())
 
@@ -439,7 +424,7 @@ class CudaGridStaticMatmulImplementer(Implementer):
         return sb.finish()
 
     def mma(self, a, b, c, schedule):
-        layout = schedule.ab2c_layout
+        layout = schedule.block_layout
         sb = StmtBuilder()
         for i, j in layout(thread_idx()):
             for k in range(schedule.warp_k):

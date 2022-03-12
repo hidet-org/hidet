@@ -32,7 +32,7 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, prog
     workloads = [
         # (2, 2, 2),
         # (222, 333, 444),
-        # (1024, 1024, 1024),
+        (1024, 1024, 1024),
         # (1024 + 22, 1024 + 33, 1024 + 44),
         # (1296, 2304, 768),
         # (1243, 1211, 1207),
@@ -40,7 +40,7 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, prog
         # (2048, 2304, 768),
         # (1664, 768, 2304),
         # (1234, 2345, 1212),
-        *[(16 * T, 2304, 768) for T in [5, 24, 43, 62, 81, 100, 119, 128]]
+        # *[(16 * T, 2304, 768) for T in [5, 24, 43, 62, 81, 100, 119, 128]]
     ]
     baselines = [
         # ('Reference', matmul_ref()),
@@ -91,9 +91,10 @@ def verify(use_rand=True):
         # (1234, 2345, 1212),
         # (222, 333, 444),
         (1024, 1024, 1024),
+        # (128, 128, 16),
         # (1296, 2304, 768),
-        # (1296, 2304, 768),
-        # (1243, 1211, 1207),
+        (1296, 2304, 768),
+        (1243, 1211, 1207),
         # (1296, 128, 768),
         # (1296, 2304, 768),
         # (1024, 1024, 1024),
@@ -213,6 +214,6 @@ def test_custom_func():
 
 
 if __name__ == '__main__':
-    # verify()
+    verify()
     benchmark(use_nsight_compute=False)
     # test_custom_func()

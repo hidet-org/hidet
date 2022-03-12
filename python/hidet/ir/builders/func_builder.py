@@ -1,22 +1,26 @@
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 from hidet.ir.dialects.lowlevel import VoidType
 from hidet.ir.expr import Var
 from hidet.ir.func import Function
 from hidet.ir.stmt import Stmt
-from hidet.ir.task import Grid, ThreadBlock, Warp, Thread
+from hidet.ir.task import Grid, ThreadBlock, Warp, Thread, Worker
 
 
 class FunctionBuilder:
-    def __init__(self, name: str, ret_type=VoidType(), attrs=None):
+    def __init__(self, name: str, worker: Worker = None, label: str = "", ret_type=VoidType(), attrs=None):
         self.name = name
         self.params: List[Var] = []
         self.ret_type = ret_type
         self.local_vars = []
-        self.func: Function = None
-        self.body: Stmt = None
+        self.func: Optional[Function] = None
+        self.body: Optional[Stmt] = None
         self.extern_vars = {}
         self.attrs: Dict[str] = attrs if attrs else {}
+        if 'worker' not in self.attrs:
+            self.attrs['worker'] = worker
+        if 'label' not in self.attrs:
+            self.attrs['label'] = label
 
     def __enter__(self):
         return self

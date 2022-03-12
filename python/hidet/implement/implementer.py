@@ -67,7 +67,8 @@ ImplementerContext.contexts.append(ImplementerContext())  # fallback context, al
 
 def register_impl(name):
     if name in _name2impl:
-        raise KeyError("Implementer has existed.")
+        print(f"Implementer {name} has existed.")
+        return lambda cls: cls
 
     def wrapper(cls: Type[Implementer]):
         impl = cls()

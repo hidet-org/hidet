@@ -1,4 +1,5 @@
 import os
+from functools import lru_cache
 import sys
 import re
 import pycuda.driver
@@ -33,7 +34,88 @@ _arch2name = {
     (8, 6): 'Ampere'
 }
 
+_arch2smem_bytes = {
+    (6, 0): 'Pascal',
+    (6, 1): 'Pascal',
+    (6, 2): 'Pascal',
+    (7, 0): 'Volta',
+    (7, 2): 'Volta',
+    (7, 5): 'Turing',
+    (8, 0): 'Ampere',
+    (8, 6): 'Ampere'
+}
 
+_arch2regs_num = {
+    (6, 0): 'Pascal',
+    (6, 1): 'Pascal',
+    (6, 2): 'Pascal',
+    (7, 0): 'Volta',
+    (7, 2): 'Volta',
+    (7, 5): 'Turing',
+    (8, 0): 'Ampere',
+    (8, 6): 'Ampere'
+}
+
+
+def max_smem_bytes_per_sm(cc=None):
+    if cc is None:
+        cc = get_compute_capability()
+    data = {
+        (6, 0): 64,
+        (6, 1): 96,
+        (6, 2): 64,
+        (7, 0): 96,
+        (7, 2): 96,
+        (7, 5): 64,
+        (8, 0): 164,
+        (8, 6): 100,
+        (8, 7): 164
+    }
+    return data[cc] * 1024
+
+
+def max_smem_bytes_per_block(cc=None):
+    if cc is None:
+        cc = get_compute_capability()
+    data = {
+        (6, 0): 48,
+        (6, 1): 48,
+        (6, 2): 48,
+        (7, 0): 96,
+        (7, 2): 96,
+        (7, 5): 64,
+        (8, 0): 163,
+        (8, 6): 99,
+        (8, 7): 163
+    }
+    return data[cc] * 1024
+
+
+def max_num_regs_per_thread(cc=None):
+    return 255
+
+
+def max_num_regs_per_block(cc=None):
+    if cc is None:
+        cc = get_compute_capability()
+    data = {
+        (6, 0): 64,
+        (6, 1): 64,
+        (6, 2): 32,
+        (7, 0): 64,
+        (7, 2): 64,
+        (7, 5): 64,
+        (8, 0): 64,
+        (8, 6): 64
+    }
+    return data[cc] * 1024
+
+
+def max_num_regs_per_sm(cc=None):
+    return 64 * 1024
+
+
+@lru_cache(maxsize=128)
 def get_compute_capability():
     # use this function in sub-progress
     python_executable = sys.executable

@@ -242,7 +242,7 @@ class CudaGridStaticMatmulSoftPipePredImplementer(Implementer):
 
     def implement(self, task: Task, match: Mapping[Node, Node]) -> IRModule:
         # search space
-        settings = setup_matmul_settings(use_default=True)
+        settings = setup_matmul_settings(use_default=False)
         ir_modules = []
         for setting in settings:
             ir_modules.append(self.implement_for_choice(task, match, setting))
@@ -258,7 +258,7 @@ class CudaGridStaticMatmulSoftPipePredImplementer(Implementer):
         task_label = 'matmul_{}x{}x{}'.format(int(match[self.task_m]), int(match[self.task_n]), int(match[self.task_k]))
         with Timer('Resolving', verbose=False):
             build_instances = [BuildInstance(ir_module=ir_module, output_dir=f'./outs/resolve/{task_label}/{idx}', keep_ir=False, nvcc_keep=True, verbose=False) for idx, ir_module in enumerate(ir_modules)]
-            compiled_modules = batch_build(build_instances, parallel=parallel, verbose=False)
+            compiled_modules = batch_build(build_instances, parallel=parallel, verbose=True)
             dummy_inputs = dummy_inputs_from_task(task)
             best_latency = None
             best_ir_module = None
@@ -337,8 +337,8 @@ class CudaGridStaticMatmulSoftPipePredImplementer(Implementer):
         c_r2s = transfer_task(f'{task.name}_c_r2s', src_type=regs_C_wb_type.slice_out(dims=[0, 1]), dst_type=smem_C_wb_type, worker=ThreadBlock(task_layout=setting.c_r2s_layout), parent_module=ir_module)
 
         with TaskBuilder(f'{task.name}_compute_block', ThreadBlock(task_layout=setting.ab2c_layout), ir_module) as ab2c:
-            regs_A_input = TensorInput('regs_A', A_dtype)
-            regs_B_input = TensorInput('regs_B', B_dtype)
+            regs_A_input = TensorInput('regs_A', A_dtype, shape=[None, None])
+            regs_B_input = TensorInput('regs_B', B_dtype, shape=[None, None])
             axis_k = var('k')
             fcompute = lambda i, j: reduce_sum(regs_A_input[i, axis_k] * regs_B_input[axis_k, j], axes=axis_k, shape=[warp_k])
             ab2c_cmpt = compute('regs_C', shape=setting.ab2c_layout.task_shape, fcompute=fcompute, accumulate='sum')
