@@ -96,3 +96,8 @@ def printf(format_string, *args):
     arg_string = ', '.join(['{}'] * len(args))
     template_string = f'printf("{format_string}", {arg_string});'
     return BlackBoxStmt(template_string, *args)
+
+
+def set_kernel_max_dynamic_smem_bytes(func_var, max_dynamic_smem_bytes):
+    template_string = r'cudaFuncSetAttribute({}, cudaFuncAttributeMaxDynamicSharedMemorySize, {});'
+    return BlackBoxStmt(template_string, func_var, max_dynamic_smem_bytes)

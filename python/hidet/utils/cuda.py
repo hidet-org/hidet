@@ -34,28 +34,6 @@ _arch2name = {
     (8, 6): 'Ampere'
 }
 
-_arch2smem_bytes = {
-    (6, 0): 'Pascal',
-    (6, 1): 'Pascal',
-    (6, 2): 'Pascal',
-    (7, 0): 'Volta',
-    (7, 2): 'Volta',
-    (7, 5): 'Turing',
-    (8, 0): 'Ampere',
-    (8, 6): 'Ampere'
-}
-
-_arch2regs_num = {
-    (6, 0): 'Pascal',
-    (6, 1): 'Pascal',
-    (6, 2): 'Pascal',
-    (7, 0): 'Volta',
-    (7, 2): 'Volta',
-    (7, 5): 'Turing',
-    (8, 0): 'Ampere',
-    (8, 6): 'Ampere'
-}
-
 
 def max_smem_bytes_per_sm(cc=None):
     if cc is None:

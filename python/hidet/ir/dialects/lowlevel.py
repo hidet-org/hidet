@@ -9,9 +9,11 @@ class VoidType(TypeNode):
 
 
 class PointerType(TypeNode):
-    def __init__(self, base_type):
+    def __init__(self, base_type, specifiers: Optional[Sequence[str]] = None, use_bracket: bool = False):
         super().__init__()
         self.base_type = base_type
+        self.specifiers = list(specifiers) if specifiers else []
+        self.use_bracket = use_bracket
 
 
 class ReferenceType(TypeNode):

@@ -8,7 +8,7 @@ import git
 import numpy as np
 
 from hidet.backend import build
-from hidet.baselines.matmul import matmul_cublas, matmul_opt, matmul_cutlass, matmul_cublas_tensorcore
+from hidet.baselines.matmul import matmul_cublas, matmul_opt, matmul_cutlass
 from hidet.implement import implement, impl_context
 from hidet.implement.cuda import CudaGridStaticMatmulImplementer
 from hidet.implement.resolve import random_resolve, brute_force_resolve
@@ -28,17 +28,11 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=True, progr
         *[(16 * T, 2304, 768) for T in [5, 24, 43, 62, 81, 100, 119, 128]]
     ]
     baselines = [
-        # ('Reference', matmul_ref()),
         ('Opt', matmul_opt()),
         ('cutlass', matmul_cutlass()),
         ('cuBLAS', matmul_cublas()),
-        ('cuBLAS (TC)', matmul_cublas_tensorcore()),
     ]
     hidet_variants = [
-        # ('HidetNaive', (CudaGridNaiveImplementer, CudaThreadNaiveImplementer)),
-        # ('HidetNoPipe', (CudaGridSplitImplementer, CudaBlockStaticMatmulNoPipeImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer)),
-        # ('HidetSoftPipeLdgWb', (CudaGridSplitImplementer, CudaBlockStaticMatmulSoftPipeLdgWbImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer)),
-        # ('HidetSoftPipePred', (CudaGridSplitImplementer, CudaGridStaticMatmulSoftPipePredImplementer, CudaWarpTransfer2dImplementer, CudaBlockNaiveImplementer)),
         ('HidetMatmul', (CudaGridStaticMatmulImplementer,)),
     ]
     repo = git.Repo(search_parent_directories=True)

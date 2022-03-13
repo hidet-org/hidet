@@ -155,7 +155,8 @@ class Schedule:
 
         # derived constants
         used_num_regs_per_thread = self.regs_a_layout.size + self.regs_b_layout.size + self.regs_c_layout.size + self.regs_a_ldg_layout.size + self.regs_b_ldg_layout.size
-        used_smem_bytes_per_block = (block_shape[0] + block_shape[1]) * block_k * 2 * 4     # 2 for double buffering, 4 for number of bytes per float32
+        used_smem_bytes_per_block = max((block_shape[0] + block_shape[1]) * block_k * 2 * 4,                    # 2 for double buffering, 4 for number of bytes per float32
+                                        prod((block_warps_layout * self.c_warp_r2s_layout).task_shape) * 4)     # 4 for number of bytes per float32
         self.check(used_num_regs_per_thread <= max_num_regs_per_thread, f"Used number of register ({used_num_regs_per_thread}) exceeded the maximum ({max_num_regs_per_thread})")
         self.check(used_smem_bytes_per_block <= max_smem_bytes_per_block, f"Used shared memory ({used_smem_bytes_per_block} bytes) exceeded the maximum ({max_smem_bytes_per_block} bytes)")
         self.block_size = block_size
@@ -167,6 +168,11 @@ class Schedule:
         self.c_wb_shape = c_wb_shape
         self.used_num_regs_per_thread = used_num_regs_per_thread
         self.used_smem_bytes_per_block = used_smem_bytes_per_block
+        # self.used_smem_bytes_per_block = 2048 * 4
+        # we muse use dynamic shared memory when we use more than 48 KiBytes shared memory
+        # see Appendix 'Compute Capability' in CUDA C Programming Guide <https://docs.nvidia.com/cuda/pdf/CUDA_C_Programming_Guide.pdf>
+        self.use_dynamic_smem = (used_smem_bytes_per_block > 48 * 1024)
+        # self.use_dynamic_smem = False
 
     def __str__(self):
         return 'overall_{}x{}x{}_blcok_warps_{}x{}_outer_{}_{}_middle_{}x{}_inner_{}x{}_warpk_{}_atom_{}_min_blocks_{}'.format(
@@ -188,7 +194,18 @@ atom_layouts = [
 
 def setup_matmul_settings(use_default=False):
     if use_default:
-        return [Schedule()]
+        # return [Schedule()]
+        # label: overall_128x128x2_blcok_warps_2x4_outer_2_2_middle_8x4_inner_4x4_warpk_1_atom_row_8x4_min_blocks_1
+        return [Schedule(
+            block_warps_k=2,
+            warp_k=1,
+            block_warps=(2, 4),
+            warp_outer=(2, 2),
+            atom_layout=atom_layouts[1][1],
+            atom_layout_name='row_8x4',
+            warp_inner=(4, 4),
+            min_thread_blocks=1
+        )]
     else:
         settings = []
         for inner_m, inner_n in [[4, 4], [8, 8], [4, 8], [8, 4]]:
@@ -209,8 +226,9 @@ def setup_matmul_settings(use_default=False):
                                         min_thread_blocks=min_thread_blocks
                                     ))
                                 except NotSupportedError as e:
-                                    print(f'inner {(inner_m, inner_n)} atom {atom_layout.task_shape} outer {(outer_m, outer_n)} block_warps {(block_warps_m, block_warps_n)} min_thread_blocks {min_thread_blocks} block_warps_k {block_warps_k}')
-                                    print(e)
+                                    # print(f'inner {(inner_m, inner_n)} atom {atom_layout.task_shape} outer {(outer_m, outer_n)} block_warps {(block_warps_m, block_warps_n)} min_thread_blocks {min_thread_blocks} block_warps_k {block_warps_k}')
+                                    # print(e)
+                                    pass
         return settings
 
 
@@ -271,14 +289,14 @@ class CudaGridStaticMatmulImplementer(Implementer):
 
     def resolve(self, task, match, ir_modules: List[IRModule]) -> IRModule:
         from hidet.runtime.value import dummy_inputs_from_task
-        parallel = True
+        parallel = False
         task_label = 'matmul_{}x{}x{}'.format(int(match[self.task_m]), int(match[self.task_n]), int(match[self.task_k]))
         build_instances = [BuildInstance(ir_module=ir_module,
                                          output_dir=f'./outs/resolve/{task_label}/{idx}',
                                          keep_ir=False,
                                          nvcc_keep=True,
                                          verbose=False) for idx, ir_module in enumerate(ir_modules)]
-        compiled_modules = batch_build(build_instances, parallel=parallel, verbose=False)
+        compiled_modules = batch_build(build_instances, parallel=parallel, verbose=True)
         dummy_inputs = dummy_inputs_from_task(task)
         best_latency = None
         best_ir_module = None
@@ -311,7 +329,10 @@ class CudaGridStaticMatmulImplementer(Implementer):
 
         # define function
         with FunctionBuilder(name=task.name + '.grid',
-                             worker=Grid(grid_dim=grid_blocks_layout.num_workers, block_dim=sch.block_size, min_blocks=sch.min_thread_blocks),
+                             worker=Grid(grid_dim=grid_blocks_layout.num_workers,
+                                         block_dim=sch.block_size,
+                                         dynamic_smem_bytes=sch.used_smem_bytes_per_block if sch.use_dynamic_smem else 0,
+                                         min_blocks=sch.min_thread_blocks),
                              label=str(sch)) as fb:
             sb = StmtBuilder()
 
@@ -325,10 +346,12 @@ class CudaGridStaticMatmulImplementer(Implementer):
             smem_A = Var('smem_A', TensorPointerType('shared', A_dtype, layout=StridesLayout.from_shape([2, sch.block_shape[0], sch.block_k], perm=[0, 2, 1])))
             smem_B = Var('smem_B', TensorPointerType('shared', B_dtype, layout=StridesLayout.from_shape([2, sch.block_k, sch.block_shape[1]], perm=[0, 1, 2])))
             smem_C = Var('smem_C', TensorPointerType('shared', C_dtype, layout=StridesLayout.row_major((sch.block_warps_layout * sch.c_warp_s2g_layout).task_shape)))
+            if sch.use_dynamic_smem:
+                # 'extern __shared__ uint8_t smem_storage[];' in c code
+                smem_storage = Var('smem_storage', PointerType(base_type=scalar_type('uint8'), specifiers=['extern', '__shared__'], use_bracket=True))
+            else:
+                smem_storage = Var('smem_storage', TensorType('shared', dtype='uint8', shape=[sch.used_smem_bytes_per_block], layout=[1]))
             smem_A_bytes = simplify_to_int(smem_A.type.tensor_type.storage_bytes())
-            smem_B_bytes = simplify_to_int(smem_B.type.tensor_type.storage_bytes())
-            smem_C_bytes = simplify_to_int(smem_C.type.tensor_type.storage_bytes())
-            smem_storage = Var('smem_storage', TensorType('shared', dtype='uint8', shape=[max(smem_A_bytes + smem_B_bytes, smem_C_bytes)], layout=[1]))
             fb.extend_local_vars([smem_A, smem_B, smem_C, smem_storage])
             sb += AssignStmt(smem_A, Cast(~smem_storage[0], PointerType(A_dtype)))
             sb += AssignStmt(smem_B, Cast(~(smem_storage[smem_A_bytes]), PointerType(B_dtype)))

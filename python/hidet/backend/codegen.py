@@ -30,8 +30,16 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         if isinstance(v_type, ScalarType):
             dtype_doc = self(v_type)
             return dtype_doc + ' ' + name_doc
-        elif isinstance(v_type, (TensorPointerType, PointerType)):
-            dtype = v_type.base_type if isinstance(v_type, PointerType) else v_type.tensor_type.scalar_type
+        elif isinstance(v_type, PointerType):
+            attr_doc = doc_join([self(attr) for attr in v_type.specifiers], sep=' ')
+            dtype = v_type.base_type
+            base_type_doc = self(dtype)
+            if v_type.use_bracket:
+                return attr_doc + ' ' + base_type_doc + ' ' + name_doc + '[]'
+            else:
+                return attr_doc + ' ' + base_type_doc + ' *' + name_doc
+        elif isinstance(v_type, TensorPointerType):
+            dtype = v_type.tensor_type.scalar_type
             base_type_doc = self(dtype)
             return base_type_doc + ' *' + name_doc
         elif isinstance(v_type, ReferenceType):
@@ -68,9 +76,13 @@ class Codegen(StmtExprFunctor, TypeFunctor):
                 shape_doc += '[' + self(s) + ']'
             return scope_doc + dtype_doc + ' ' + name_doc + shape_doc
         elif isinstance(v_type, PointerType):
+            attr_doc = doc_join([self(attr) for attr in v_type.specifiers], sep=' ') + ' '
             base_type_doc = self(v_type.base_type)
             name_doc = self(v)
-            return base_type_doc + ' *' + name_doc
+            if v_type.use_bracket:
+                return attr_doc + ' ' + base_type_doc + ' ' + name_doc + '[]'
+            else:
+                return attr_doc + ' ' + base_type_doc + ' *' + name_doc
         elif isinstance(v_type, TensorPointerType):
             dtype_doc = self(v_type.tensor_type.scalar_type)
             name_doc = self(v)
@@ -94,6 +106,8 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             return doc_join([self(v) for v in node], ', ')
         elif isinstance(node, (int, float, bool)):
             return self(convert(node))
+        elif isinstance(node, str):
+            return Text(node)
         else:
             raise ValueError(type(node))
 
@@ -239,9 +253,8 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         worker = func.get_attr('worker')
         func_name = Text(self.canonize_funcname(e.func_var.hint))
         if isinstance(worker, Grid):
-            block_dim = worker.block_dim
-            grid_dim = worker.grid_dim
-            launch_config = Text('<<<') + str(grid_dim) + ',' + str(block_dim) + Text('>>>')
+            configs = [worker.grid_dim, worker.block_dim, worker.dynamic_smem_bytes]
+            launch_config = Text('<<<') + doc_join([self(v) for v in configs], sep=', ') + Text('>>>')
         else:
             launch_config = []
         param_doc = Text('(') + doc_join([self(arg) for arg in e.args], Text(', ')) + ')'

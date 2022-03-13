@@ -13,10 +13,11 @@ class Worker(Node):
 
 
 class Grid(Worker):
-    def __init__(self, grid_dim: Optional[Int] = None, block_dim: Optional[Int] = None, min_blocks: Optional[Int] = None):
-        self.grid_dim: Optional[Expr] = convert(grid_dim) if grid_dim else None
-        self.block_dim: Optional[Expr] = convert(block_dim) if block_dim else None
-        self.min_blocks: Optional[Expr] = convert(min_blocks) if min_blocks else None
+    def __init__(self, grid_dim: Optional[Int] = None, block_dim: Optional[Int] = None, dynamic_smem_bytes: Optional[Int] = 0, min_blocks: Optional[Int] = None):
+        self.grid_dim: Optional[Expr] = convert(grid_dim)
+        self.block_dim: Optional[Expr] = convert(block_dim)
+        self.min_blocks: Optional[Expr] = convert(min_blocks)
+        self.dynamic_smem_bytes: Optional[Expr] = convert(dynamic_smem_bytes)
 
 
 class ThreadBlock(Worker):

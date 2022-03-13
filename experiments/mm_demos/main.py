@@ -1,11 +1,9 @@
 import numpy as np
 
 from hidet.backend import build
-from hidet.baselines.matmul import matmul_ref, matmul_cublas, matmul_opt, matmul_cutlass, matmul_cublas_tensorcore
+from hidet.baselines.matmul import matmul_cublas, matmul_opt, matmul_cutlass, matmul_cublas_tensorcore
 from hidet.implement import implement, impl_context
-from hidet.implement.cuda import CudaBlockStaticMatmulSoftPipeLdgWbImplementer
-from hidet.implement.cuda import CudaGridSplitImplementer, CudaGridNaiveImplementer, CudaWarpTransfer2dImplementer, CudaWarpFillValueImplementer, CudaBlockStaticMatmulNoPipeImplementer
-from hidet.implement.cuda import CudaThreadNaiveImplementer, CudaBlockNaiveImplementer, CudaGridStaticMatmulSoftPipePredImplementer, CudaGridStaticMatmulImplementer
+from hidet.implement.cuda import CudaGridStaticMatmulImplementer
 from hidet.implement.resolve import random_resolve, brute_force_resolve
 from hidet.ir.task import Grid, Host, ThreadBlock
 from hidet.ir.type import TensorType
@@ -81,12 +79,12 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, prog
         print()
 
 
-def verify(use_rand=True):
+def verify(use_rand=True, keep_ir=False):
     np.set_printoptions(threshold=128 * 128, linewidth=500)
     use_print = True
     workloads = [
         # (1, 1, 1),
-        # (128, 128, 128),
+        (1, 1, 1),
         # (256, 256, 256),
         # (1234, 2345, 1212),
         # (222, 333, 444),
@@ -157,7 +155,7 @@ def verify(use_rand=True):
             with impl_context(allowed=allowed):
                 ir_module = implement(task)
                 # print(ir_module)
-                grid_module = build(random_resolve(ir_module, seed=1), f'./outs/verify/{name}_{N}x{M}x{K}', keep_ir=True)
+                grid_module = build(random_resolve(ir_module, seed=1), f'./outs/verify/{name}_{N}x{M}x{K}', keep_ir=keep_ir)
 
             task.worker = Host()
             host_module = build(random_resolve(implement(task)), f'./outs/verify/host/{name}')
@@ -214,6 +212,6 @@ def test_custom_func():
 
 
 if __name__ == '__main__':
-    # verify()
-    benchmark(use_nsight_compute=False, keep_ir=False)
+    verify(keep_ir=False)
+    # benchmark(use_nsight_compute=False, keep_ir=False)
     # test_custom_func()
