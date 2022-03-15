@@ -1,4 +1,5 @@
 import numpy as np
+import time
 import os
 
 from hidet.backend import build
@@ -59,7 +60,7 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, prog
     print('Repeat = {}'.format(repeat))
     print('Brute-force resolver = {}'.format(use_brute_force_resolve))
     print()
-    os.makedirs('./outs/bench')
+    os.makedirs('./outs/bench', exist_ok=True)
     with open('./outs/bench/summary.txt', 'w') as f:
         for N, M, K in workloads:
             A = randn([N, K], 'float32', 'global', seed=1)
@@ -68,6 +69,7 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, prog
             print("Workload (N x M x K): {} x {} x {}".format(N, M, K))
             print("Workload (N x M x K): {} x {} x {}".format(N, M, K), file=f)
             for name, func in baselines:
+                time.sleep(1)
                 latencies = func.profile(scalar(N), scalar(M), scalar(K), A, B, C, warmup=warmup, number=number, repeat=repeat)
                 print_latencies(name, latencies)
                 print_latencies(name, latencies, file=f)

@@ -1,4 +1,5 @@
 import os
+from typing import List
 from functools import lru_cache
 import sys
 import re
@@ -161,6 +162,51 @@ def query_gpu_current_clock() -> int:
     result = subprocess.run('nvidia-smi -i 0 --query-gpu=clocks.current.graphics --format=csv,noheader,nounits'.split(),
                             stdin=PIPE, stdout=PIPE, check=True)
     return int(result.stdout.decode('utf-8'))
+
+
+def query_gpu_temperature() -> int:
+    result = subprocess.run('nvidia-smi -i 0 --query-gpu=temperature.gpu --format=csv,noheader,nounits'.split(),
+                            stdin=PIPE, stdout=PIPE, check=True)
+    return int(result.stdout.decode('utf-8'))
+
+
+def query_clocks_throttle_reason() -> str:
+    result = subprocess.run('nvidia-smi -i 0 --query-gpu=clocks_throttle_reasons.active --format=csv,noheader,nounits'.split(),
+                            stdin=PIPE, stdout=PIPE, check=True)
+    bitmask = int(result.stdout.decode('utf-8').strip(), base=16)
+    # see 'nvidia-smi --help' and 'nvml.h' for more information
+    bit2reason = {
+        1: 'gpu_idle',
+        2: 'app_clock_setting',
+        4: 'sw_power_cap',
+        8: 'hw_slowdown',
+        16: 'sync_boost',
+        32: 'sw_thermal_slowdown',
+        64: 'hw_thermal_slowdown',
+        128: 'hw_power_brake_slowdown',
+        256: 'display_clock_setting',
+    }
+    if bitmask == 0:
+        # clock is as high as possible
+        return result.stdout.decode('utf-8').strip()
+        # return 'no'
+    else:
+        reasons = []
+        for bit, reason in bit2reason.items():
+            if (bitmask & bit) != 0:
+                reasons.append(reason)
+        if len(reasons) == 0:
+            raise NotImplementedError()
+        return "/".join(reasons)
+
+
+def query_gpu_status(names: List[str]):
+    try:
+        result = subprocess.run(f'nvidia-smi -i 0 --query-gpu={",".join(names)} --format=csv,noheader,nounits'.split(),
+                                stdin=PIPE, stdout=PIPE, check=True)
+    except subprocess.CalledProcessError:
+        return None
+    return [int(s.strip()) for s in result.stdout.decode('utf-8').split(',')]
 
 
 def query_gpu_max_clock() -> int:

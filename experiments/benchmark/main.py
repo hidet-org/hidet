@@ -3,6 +3,7 @@ import contextlib
 import io
 import os
 import sys
+import time
 
 import git
 import numpy as np
@@ -17,8 +18,10 @@ from hidet.tasks.nn import matmul
 from hidet.utils import cuda
 
 
-def print_latencies(name, latencies, file=None):
-    print('{:>20}: {:.3f} (std {:.3f}) ms [{}]'.format(name, np.median(latencies), np.std(latencies), " ".join([f'{v:.3f}' for v in latencies])), file=file)
+def print_latencies(name, latencies, sm_clock=None, mem_clock=None, temperature=None, throttle=None, file=None):
+    print('{:>20}: {:.3f} (std {:.3f}) ms [{}] sm_clock {:<4} mem_clock {:<4} temperature {} throttle {}'
+          .format(name, np.median(latencies), np.std(latencies), " ".join([f'{v:.3f}' for v in latencies]), sm_clock, mem_clock, temperature, throttle),
+          file=file)
 
 
 def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=True, progress_bar=False, report_dir='./report'):
@@ -35,7 +38,7 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=True, progr
         ('cuBLAS', matmul_cublas()),
     ]
     hidet_variants = [
-        ('HidetMatmul', (CudaGridStaticMatmulImplementer,)),
+        # ('HidetMatmul', (CudaGridStaticMatmulImplementer,)),
     ]
     repo = git.Repo(search_parent_directories=True)
     sha = repo.head.object.hexsha
@@ -58,9 +61,11 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=True, progr
             print("Workload (N x M x K): {} x {} x {}".format(N, M, K))
             print("Workload (N x M x K): {} x {} x {}".format(N, M, K), file=sys.stderr)
             for name, func in baselines:
+                # time.sleep(1)
+                sm_clock, mem_clock, temperature, throttle = cuda.query_gpu_current_clock(), cuda.query_memory_current_clock(), cuda.query_gpu_temperature(), cuda.query_clocks_throttle_reason()
                 latencies = func.profile(scalar(N), scalar(M), scalar(K), A, B, C, warmup=warmup, number=number, repeat=repeat)
-                print_latencies(name, latencies)
-                print_latencies(name, latencies, sys.stderr)
+                print_latencies(name, latencies, sm_clock, mem_clock, temperature, throttle)
+                print_latencies(name, latencies, sm_clock, mem_clock, temperature, throttle, sys.stderr)
 
             for name, allowed in hidet_variants:
                 with impl_context(allowed=allowed) as ctx:
@@ -70,9 +75,11 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=True, progr
                     else:
                         ir_module = random_resolve(ir_module)
                     module = build(ir_module, output_dir=f'./outs/bench/{name}_{N}x{M}x{K}', verbose=False)
+                    # time.sleep(1)
+                    sm_clock, mem_clock, temperature = cuda.query_gpu_current_clock(), cuda.query_memory_current_clock(), cuda.query_gpu_temperature()
                     latencies = module['matmul'].profile(A, B, C, warmup=warmup, number=number, repeat=repeat)
-                    print_latencies(name, latencies)
-                    print_latencies(name, latencies, sys.stderr)
+                    print_latencies(name, latencies, sm_clock, mem_clock, temperature)
+                    print_latencies(name, latencies, sm_clock, mem_clock, temperature, throttle, sys.stderr)
             print()
             print(file=sys.stderr)
     report = f.getvalue()
@@ -93,5 +100,5 @@ parser.add_argument('--report_dir', type=str, default='./report')
 
 if __name__ == '__main__':
     args = parser.parse_args()
-    with cuda.BenchmarkContext(fix_clock=True):
+    with cuda.BenchmarkContext(fix_clock=False):
         benchmark(args.warmup, args.number, args.repeat, args.resolver == 'brute', report_dir=args.report_dir, progress_bar=False)
