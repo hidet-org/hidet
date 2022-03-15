@@ -1,4 +1,5 @@
 import contextlib
+import psutil
 from typing import List, Tuple
 import multiprocessing
 import ctypes
@@ -129,7 +130,9 @@ def batch_build(build_instances: List[BuildInstance], parallel=True, verbose=Fal
             # which might limit the parallelism of compilation.
             pairs = []
             os.sched_setaffinity(0, range(os.cpu_count()))
-            with multiprocessing.Pool(processes=int(os.cpu_count() * 0.75), maxtasksperchild=1) as pool:
+            mem_for_worker = 2 * 1024 * 1024 * 1024  # 2GiB
+            num_workers = max(int(psutil.virtual_memory().available // mem_for_worker), 1)
+            with multiprocessing.Pool(processes=num_workers, maxtasksperchild=1) as pool:
                 # We doing the lower_and_compile in parallel instead of build because we can not transfer ctypes pointer
                 for results in tqdm(pool.imap(lower_and_compile_job, [instance.get() for instance in build_instances]),
                                     total=len(build_instances), disable=not verbose):
