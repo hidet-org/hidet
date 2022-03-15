@@ -100,5 +100,5 @@ parser.add_argument('--report_dir', type=str, default='./report')
 
 if __name__ == '__main__':
     args = parser.parse_args()
-    with cuda.BenchmarkContext(fix_clock=False):
+    with cuda.BenchmarkContext(fix_clock=True):
         benchmark(args.warmup, args.number, args.repeat, args.resolver == 'brute', report_dir=args.report_dir, progress_bar=False)
