@@ -93,9 +93,11 @@ class Expr(Node):
             return TensorElement(base=self, indices=indices)
 
     def __int__(self):
+        assert isinstance(self, Constant)
         return int(self)
 
     def __float__(self):
+        assert isinstance(self, Constant)
         return float(self)
 
     def __str__(self):

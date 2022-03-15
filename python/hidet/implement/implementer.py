@@ -1,4 +1,4 @@
-from typing import Optional, Sequence, Union, List, Any
+from typing import Optional, Sequence, Union, List, Any, Tuple
 from textwrap import indent
 from collections import defaultdict
 from typing import Type, Dict, Mapping
@@ -6,10 +6,19 @@ from hidet.ir.task import Task
 from hidet.ir.func import IRModule
 from hidet.ir.node import Node
 from hidet.ir.dialects.pattern import TaskPattern, match
+from hidet.utils import TableBuilder
 
 
 class NotSupportedError(Exception):
     pass
+
+
+class Schedule:
+    def keys(self) -> List[Tuple[str, Union[int, float, str]]]:
+        raise NotImplementedError()
+
+    def derived_keys(self) -> List[Tuple[str, Union[int, float, str]]]:
+        raise NotImplementedError()
 
 
 class Implementer:
@@ -21,6 +30,42 @@ class Implementer:
 
     def implement(self, task: Task, match: Mapping[Node, Any]) -> IRModule:
         raise NotImplementedError()
+
+    def resolve(self, task, match, schedules: List[Schedule], ir_modules: List[IRModule], task_label: str, parallel=True, verbose=True) -> IRModule:
+        from hidet.runtime.value import dummy_inputs_from_task
+        from hidet.backend import BuildInstance, batch_build
+        import numpy as np
+        assert len(schedules) == len(ir_modules)
+        if len(ir_modules) == 1:
+            return ir_modules[0]
+        build_instances = [BuildInstance(ir_module=ir_module,
+                                         output_dir=f'./outs/resolve/{task_label}/{idx}',
+                                         keep_ir=False,
+                                         nvcc_keep=False,
+                                         verbose=False) for idx, ir_module in enumerate(ir_modules)]
+        compiled_modules = batch_build(build_instances, parallel=parallel, verbose=verbose)
+        dummy_inputs = dummy_inputs_from_task(task)
+        best_latency = None
+        best_ir_module = None
+        latencies = []
+        for schedule, ir_module, compiled_module in zip(schedules, ir_modules, compiled_modules):
+            repeat_latency = compiled_module[task.name].profile(*dummy_inputs, warmup=2, number=1, repeat=10)
+            latency = float(np.median(repeat_latency))
+            latencies.append(latency)
+            if best_latency is None or best_latency > latency:
+                best_latency = latency
+                best_ir_module = ir_module
+        with TableBuilder(headers=['idx'] + [v[0] for v in (schedules[0].keys() + schedules[0].derived_keys())] + ['latency']) as tb:
+            rows = []
+            for idx, (schedule, latency) in enumerate(zip(schedules, latencies)):
+                row = [idx] + [v[1] for v in schedule.keys() + schedule.derived_keys()] + [latency]
+                rows.append(row)
+            rows = sorted(rows, key=lambda v: v[-1])
+            for row in rows:
+                tb += row
+        with open(f'./outs/resolve/{task_label}/report.txt', 'w') as f:
+            f.write(str(tb))
+        return best_ir_module
 
     @staticmethod
     def check(cond: bool, msg=""):

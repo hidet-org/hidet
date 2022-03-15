@@ -80,7 +80,7 @@ class BuildInstance:
 
 def lower_and_compile(ir_module: IRModule, output_dir, keep_ir: bool = False, nvcc_keep: bool = False, verbose: bool = False) -> Tuple[str, IRModule]:
     # lower
-    with Timer() as lower_timer:
+    with Timer(msg='hidet lower time', verbose=verbose) as lower_timer:
         with PassContext(save_lowering_results=keep_ir, save_dir=os.path.join(output_dir, 'ir')):
             ir_module = lower(ir_module)
 
@@ -94,15 +94,8 @@ def lower_and_compile(ir_module: IRModule, output_dir, keep_ir: bool = False, nv
         f.write(src_code)
 
     # call target compiler to get dynamic library
-    with Timer() as target_compile_timer:
+    with Timer(msg='nvcc lower time', verbose=verbose) as target_compile_timer:
         lib_path = compile_src_code(src_path, nvcc_keep=nvcc_keep)
-    if verbose:
-        info = [
-            ('hidet lower time', lower_timer.elapsed_seconds()),
-            ('nvcc compile time', target_compile_timer.elapsed_seconds())
-        ]
-        for name, time in info:
-            print('{:>30} {}{:.3f}{} seconds'.format(name, COLORS.OKGREEN, time, COLORS.ENDC))
     return lib_path, ir_module
 
 
@@ -136,16 +129,13 @@ def batch_build(build_instances: List[BuildInstance], parallel=True, verbose=Fal
             # which might limit the parallelism of compilation.
             pairs = []
             os.sched_setaffinity(0, range(os.cpu_count()))
-            chunk_size = 50
-            build_instance_chunks = [build_instances[i:i+50] for i in range(0, len(build_instances), chunk_size)]
-            for chunk in tqdm(build_instance_chunks):
-                with multiprocessing.Pool(processes=os.cpu_count(), maxtasksperchild=1) as pool:
-                    # We doing the lower_and_compile in parallel instead of build because we can not transfer ctypes pointer
-                    for results in tqdm(pool.imap_unordered(lower_and_compile_job, [instance.get() for instance in chunk]),
-                                        total=len(chunk), disable=not verbose, ascii=False):
-                        if all(r is not None for r in results):
-                            pairs.append(results)
-                    # pairs = list(pool.starmap(lower_and_compile, [instance.get() for instance in build_instances]))
+            with multiprocessing.Pool(processes=int(os.cpu_count() * 0.75), maxtasksperchild=1) as pool:
+                # We doing the lower_and_compile in parallel instead of build because we can not transfer ctypes pointer
+                for results in tqdm(pool.imap(lower_and_compile_job, [instance.get() for instance in build_instances]),
+                                    total=len(build_instances), disable=not verbose):
+                    if all(r is not None for r in results):
+                        pairs.append(results)
+                # pairs = list(pool.starmap(lower_and_compile, [instance.get() for instance in build_instances]))
             ret = [load_compiled_module(lib_path, ir_module) for lib_path, ir_module in pairs]
         else:
             ret = []
@@ -155,5 +145,5 @@ def batch_build(build_instances: List[BuildInstance], parallel=True, verbose=Fal
             return ret
     if verbose:
         print('batch build {} modules within {:.3f} seconds, on average {:.1f} seconds per module'.format(
-            len(build_instances), timer.elapsed_seconds(), len(build_instances) / timer.elapsed_seconds()))
+            len(build_instances), timer.elapsed_seconds(), timer.elapsed_seconds() / len(build_instances)))
     return ret

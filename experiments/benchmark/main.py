@@ -23,6 +23,8 @@ def print_latencies(name, latencies, file=None):
 
 def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=True, progress_bar=False, report_dir='./report'):
     workloads = [
+        # (80, 2304, 768),
+        # (384, 2304, 768)
         (1024, 1024, 1024),
         (2048, 2304, 768),
         *[(16 * T, 2304, 768) for T in [5, 24, 43, 62, 81, 100, 119, 128]]

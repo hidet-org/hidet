@@ -36,37 +36,45 @@ _arch2name = {
 
 
 def max_smem_bytes_per_sm(cc=None):
-    if cc is None:
-        cc = get_compute_capability()
-    data = {
-        (6, 0): 64,
-        (6, 1): 96,
-        (6, 2): 64,
-        (7, 0): 96,
-        (7, 2): 96,
-        (7, 5): 64,
-        (8, 0): 164,
-        (8, 6): 100,
-        (8, 7): 164
-    }
-    return data[cc] * 1024
+    legacy = True
+    if legacy:
+        return 48 * 1024
+    else:
+        if cc is None:
+            cc = get_compute_capability()
+        data = {
+            (6, 0): 64,
+            (6, 1): 96,
+            (6, 2): 64,
+            (7, 0): 96,
+            (7, 2): 96,
+            (7, 5): 64,
+            (8, 0): 164,
+            (8, 6): 100,
+            (8, 7): 164
+        }
+        return data[cc] * 1024
 
 
 def max_smem_bytes_per_block(cc=None):
-    if cc is None:
-        cc = get_compute_capability()
-    data = {
-        (6, 0): 48,
-        (6, 1): 48,
-        (6, 2): 48,
-        (7, 0): 96,
-        (7, 2): 96,
-        (7, 5): 64,
-        (8, 0): 163,
-        (8, 6): 99,
-        (8, 7): 163
-    }
-    return data[cc] * 1024
+    legacy = True
+    if legacy:
+        return 48 * 1024
+    else:
+        if cc is None:
+            cc = get_compute_capability()
+        data = {
+            (6, 0): 48,
+            (6, 1): 48,
+            (6, 2): 48,
+            (7, 0): 96,
+            (7, 2): 96,
+            (7, 5): 64,
+            (8, 0): 163,
+            (8, 6): 99,
+            (8, 7): 163
+        }
+        return data[cc] * 1024
 
 
 def max_num_regs_per_thread(cc=None):

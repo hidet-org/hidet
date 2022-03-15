@@ -124,6 +124,8 @@ class Simplifier(StmtExprRewriter):
 
 
 def simplify(node: Union[Stmt, Expr], repeat_limit=10):
+    if isinstance(node, (int, float)):
+        return node
     simplifier = Simplifier()
     for i in range(repeat_limit):
         old_node = node

@@ -1,4 +1,5 @@
 import numpy as np
+import os
 
 from hidet.backend import build
 from hidet.baselines.matmul import matmul_cublas, matmul_opt, matmul_cutlass, matmul_cublas_tensorcore
@@ -18,8 +19,8 @@ from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.utils import cuda
 
 
-def print_latencies(name, latencies):
-    print('{:>20}: {:.3f} (std {:.3f}) ms [{}]'.format(name, np.median(latencies), np.std(latencies), " ".join([f'{v:.3f}' for v in latencies])))
+def print_latencies(name, latencies, file=None):
+    print('{:>20}: {:.3f} (std {:.3f}) ms [{}]'.format(name, np.median(latencies), np.std(latencies), " ".join([f'{v:.3f}' for v in latencies])), file=file)
 
 
 def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, progress_bar=True, use_nsight_compute=False, keep_ir=False):
@@ -29,16 +30,17 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, prog
         repeat = 1
     workloads = [
         # (2, 2, 2),
-        # (222, 333, 444),
+        (222, 333, 444),
         (1024, 1024, 1024),
-        # (1024 + 22, 1024 + 33, 1024 + 44),
-        (1296, 2304, 768),
+        (1024 + 22, 1024 + 33, 1024 + 44),
+        # (1296, 2304, 768),
         # (1243, 1211, 1207),
         # (1024 + 128, 1024 + 128, 1024 + 48),
         # (2048, 2304, 768),
         # (1664, 768, 2304),
         # (1234, 2345, 1212),
-        # *[(16 * T, 2304, 768) for T in [5, 24, 43, 62, 81, 100, 119, 128]]
+        *[(16 * T, 2304, 768) for T in [5, 24, 43, 62, 81, 100, 119, 128]],
+        # *[(16 * T, 2304, 768) for T in [5, 81, 128]]
     ]
     baselines = [
         # ('Reference', matmul_ref()),
@@ -57,26 +59,32 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, prog
     print('Repeat = {}'.format(repeat))
     print('Brute-force resolver = {}'.format(use_brute_force_resolve))
     print()
-    for N, M, K in workloads:
-        A = randn([N, K], 'float32', 'global', seed=1)
-        B = randn([K, M], 'float32', 'global', seed=3)
-        C = empty([N, M], 'float32', 'global')
-        print("Workload (N x M x K): {} x {} x {}".format(N, M, K))
-        for name, func in baselines:
-            latencies = func.profile(scalar(N), scalar(M), scalar(K), A, B, C, warmup=warmup, number=number, repeat=repeat)
-            print_latencies(name, latencies)
-
-        for name, allowed in hidet_variants:
-            with impl_context(allowed=allowed) as ctx:
-                ir_module = implement(matmul(N, M, K))
-                if use_brute_force_resolve:
-                    ir_module = brute_force_resolve(ir_module, warmup=warmup, number=number, repeat=repeat, progress_bar=progress_bar)
-                else:
-                    ir_module = random_resolve(ir_module)
-                module = build(ir_module, output_dir=f'./outs/bench/{name}_{N}x{M}x{K}', keep_ir=keep_ir)
-                latencies = module['matmul'].profile(A, B, C, warmup=warmup, number=number, repeat=repeat)
+    os.makedirs('./outs/bench')
+    with open('./outs/bench/summary.txt', 'w') as f:
+        for N, M, K in workloads:
+            A = randn([N, K], 'float32', 'global', seed=1)
+            B = randn([K, M], 'float32', 'global', seed=3)
+            C = empty([N, M], 'float32', 'global')
+            print("Workload (N x M x K): {} x {} x {}".format(N, M, K))
+            print("Workload (N x M x K): {} x {} x {}".format(N, M, K), file=f)
+            for name, func in baselines:
+                latencies = func.profile(scalar(N), scalar(M), scalar(K), A, B, C, warmup=warmup, number=number, repeat=repeat)
                 print_latencies(name, latencies)
-        print()
+                print_latencies(name, latencies, file=f)
+
+            for name, allowed in hidet_variants:
+                with impl_context(allowed=allowed) as ctx:
+                    ir_module = implement(matmul(N, M, K))
+                    if use_brute_force_resolve:
+                        ir_module = brute_force_resolve(ir_module, warmup=warmup, number=number, repeat=repeat, progress_bar=progress_bar)
+                    else:
+                        ir_module = random_resolve(ir_module)
+                    module = build(ir_module, output_dir=f'./outs/bench/{name}_{N}x{M}x{K}', keep_ir=keep_ir)
+                    latencies = module['matmul'].profile(A, B, C, warmup=warmup, number=number, repeat=repeat)
+                    print_latencies(name, latencies)
+                    print_latencies(name, latencies, file=f)
+            print()
+            print(file=f)
 
 
 def verify(use_rand=True, keep_ir=False):
@@ -212,6 +220,6 @@ def test_custom_func():
 
 
 if __name__ == '__main__':
-    verify(keep_ir=False)
-    # benchmark(use_nsight_compute=False, keep_ir=False)
+    # verify(keep_ir=False)
+    benchmark(use_nsight_compute=False, keep_ir=False)
     # test_custom_func()

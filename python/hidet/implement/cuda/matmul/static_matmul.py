@@ -1,10 +1,11 @@
+import contextlib
 import itertools
-from typing import Mapping, List, Any
+from typing import Mapping, List, Any, Tuple, Union
 
 import numpy as np
 
 from hidet.backend import batch_build, BuildInstance
-from hidet.implement.implementer import Implementer, register_impl, NotSupportedError
+from hidet.implement.implementer import Implementer, register_impl, NotSupportedError, Schedule
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.ir.dialects.compute import TensorInput, TensorCompute, ReduceCompute
 from hidet.ir.dialects.lowlevel import TensorPointerType, Cast, PointerType
@@ -64,7 +65,7 @@ class CustomTaskLayout(TaskLayout):
         return [(w // 16 * 2 + w % 2, w // 2 % 8)]
 
 
-class Schedule:
+class MatmulSchedule(Schedule):
     def __init__(self,
                  block_warps_k=8,
                  warp_k=1,
@@ -174,6 +175,28 @@ class Schedule:
         self.use_dynamic_smem = (used_smem_bytes_per_block > 48 * 1024)
         # self.use_dynamic_smem = False
 
+    def keys(self) -> List[Tuple[str, Union[int, float, str]]]:
+        return [
+            ('bwx', self.block_warps[0]),
+            ('bwy', self.block_warps[1]),
+            ('wox', self.warp_outer[0]),
+            ('woy', self.warp_outer[1]),
+            ('atom', self.atom_layout_name),
+            ('wix', self.warp_inner[0]),
+            ('wiy', self.warp_inner[1]),
+            ('bk', self.block_k),
+            ('wk', self.warp_k),
+            ('mtb', self.min_thread_blocks)
+        ]
+
+    def derived_keys(self) -> List[Tuple[str, Union[int, float, str]]]:
+        return [
+            ('bx', self.block_shape[0]),
+            ('by', self.block_shape[1]),
+            ('regs', self.used_num_regs_per_thread),
+            ('smem', self.used_smem_bytes_per_block),
+        ]
+
     def __str__(self):
         return 'overall_{}x{}x{}_blcok_warps_{}x{}_outer_{}_{}_middle_{}x{}_inner_{}x{}_warpk_{}_atom_{}_min_blocks_{}'.format(
             *self.block_layout.task_shape, self.block_warps_k * self.warp_k, *self.block_warps, *self.warp_outer, *self.atom_layout.task_shape, *self.warp_inner,
@@ -184,51 +207,88 @@ class Schedule:
         if not cond:
             raise NotSupportedError(msg)
 
-
-atom_layouts = [
-    ('row_4x8', TaskLayout.row_major((4, 8))),
-    ('row_8x4', TaskLayout.row_major((8, 4))),
-    ('custom_4x8', CustomTaskLayout()),
-]
-
-
-def setup_matmul_settings(use_default=False):
-    if use_default:
-        # return [Schedule()]
-        # label: overall_128x128x2_blcok_warps_2x4_outer_2_2_middle_8x4_inner_4x4_warpk_1_atom_row_8x4_min_blocks_1
-        return [Schedule(
-            block_warps_k=2,
-            warp_k=1,
-            block_warps=(2, 4),
-            warp_outer=(2, 2),
-            atom_layout=atom_layouts[1][1],
-            atom_layout_name='row_8x4',
-            warp_inner=(4, 4),
-            min_thread_blocks=1
-        )]
-    else:
+    @staticmethod
+    def schedules(space_level: int = 0):
         settings = []
-        for inner_m, inner_n in [[4, 4], [8, 8], [4, 8], [8, 4]]:
-            for outer_m, outer_n in [[1, 1], [1, 2], [2, 1], [2, 2]]:
-                for block_warps_k, warp_k in [[2, 1], [4, 1], [8, 1], [16, 1]]:
-                    for block_warps_m, block_warps_n in [[2, 2], [2, 4], [4, 2], [4, 2]]:
-                        for min_thread_blocks in [1, 2]:
-                            for name, atom_layout in atom_layouts:
-                                try:
-                                    settings.append(Schedule(
-                                        block_warps_k=block_warps_k,
-                                        warp_k=warp_k,
-                                        block_warps=[block_warps_m, block_warps_n],
-                                        warp_outer=[outer_m, outer_n],
-                                        atom_layout=atom_layout,
-                                        atom_layout_name=name,
-                                        warp_inner=[inner_m, inner_n],
-                                        min_thread_blocks=min_thread_blocks
-                                    ))
-                                except NotSupportedError as e:
-                                    # print(f'inner {(inner_m, inner_n)} atom {atom_layout.task_shape} outer {(outer_m, outer_n)} block_warps {(block_warps_m, block_warps_n)} min_thread_blocks {min_thread_blocks} block_warps_k {block_warps_k}')
-                                    # print(e)
-                                    pass
+        if space_level == 0:
+            settings.append(MatmulSchedule())
+        elif space_level == 1:
+            tuned_string = """
+                idx    bwx    bwy    wox    woy  atom          wix    wiy    bk    wk    mtb
+                817      4      2      1      2  custom_4x8      8      4     8     1      2   
+                812      2      4      1      2  custom_4x8      8      4     8     1      2   
+                223      4      2      2      2  custom_4x8      4      4     8     1      2   
+                217      2      4      2      2  custom_4x8      4      4     8     1      2   
+                811      2      4      1      2  row_4x8         8      4     8     1      2   
+                214      2      4      2      2  custom_4x8      4      4     8     1      1   
+                619      2      4      2      1  custom_4x8      4      8     8     1      2   
+                404      2      4      2      1  custom_4x8      8      8     8     1      1   
+                807      2      2      1      2  custom_4x8      8      4     8     1      2   
+                229      4      2      2      2  custom_4x8      4      4     8     1      2   
+                741      2      4      1      1  custom_4x8      8      4     8     1      2   
+                226      4      2      2      2  custom_4x8      4      4     8     1      1   
+                739      2      4      1      1  custom_4x8      8      4     8     1      1   
+                352      4      2      1      2  custom_4x8      8      8     8     1      1   
+                822      4      2      1      2  custom_4x8      8      4     8     1      2   
+                345      2      4      1      2  row_8x4         8      8     8     1      1   
+                936      2      4      2      2  custom_4x8      8      4     8     1      1   
+                691      2      4      2      2  row_8x4         4      8     8     1      1   
+                690      2      4      2      2  row_4x8         4      8     8     1      1   
+                757      2      4      1      1  custom_4x8      8      4    16     1      2   
+                342      2      2      1      2  row_8x4         8      8     8     1      2   
+                328      2      2      1      2  custom_4x8      8      8     4     1      2   
+                695      4      2      2      2  custom_4x8      4      8     8     1      1   
+                400      2      2      2      1  row_8x4         8      8     8     1      2   
+                696      4      2      2      2  row_4x8         4      8     8     1      1   
+                269      2      2      1      1  row_8x4         8      8     4     1      2   
+                388      2      4      2      1  row_8x4         8      8     4     1      1   
+                610      2      2      2      1  custom_4x8      4      8     8     1      1   
+                587      2      2      2      1  row_4x8         4      8     4     1      2   
+                351      4      2      1      2  row_8x4         8      8     8     1      1   
+                """
+            lines = tuned_string.split('\n')
+            lines = lines[2:-1]
+            atom_layout_dict = {
+                'row_4x8': TaskLayout.row_major((4, 8)),
+                'row_8x4': TaskLayout.row_major((8, 4)),
+                'custom_4x8': CustomTaskLayout()
+            }
+            for line in lines:
+                _, bwx, bwy, wox, woy, atom, wix, wiy, bk, wk, mtb = line.split()
+                with contextlib.suppress(NotSupportedError):
+                    settings.append(MatmulSchedule(
+                        block_warps_k=int(bk) // int(wk),
+                        warp_k=int(wk),
+                        block_warps=(int(bwx), int(bwy)),
+                        warp_outer=(int(wox), int(woy)),
+                        atom_layout=atom_layout_dict[atom],
+                        atom_layout_name=atom,
+                        warp_inner=(int(wix), int(wiy)),
+                        min_thread_blocks=int(mtb)
+                    ))
+        else:
+            settings = []
+            for inner_m, inner_n in [[4, 4], [8, 8], [4, 8], [8, 4]]:
+                for outer_m, outer_n in [[1, 1], [1, 2], [2, 1], [2, 2]]:
+                    for block_warps_k, warp_k in [[2, 1], [4, 1], [8, 1], [16, 1]]:
+                        for block_warps_m, block_warps_n in [[2, 2], [2, 4], [4, 2], [4, 2]]:
+                            for min_thread_blocks in [1, 2]:
+                                for name, atom_layout in [('row_4x8', TaskLayout.row_major((4, 8))),
+                                                          ('row_8x4', TaskLayout.row_major((8, 4))),
+                                                          ('custom_4x8', CustomTaskLayout())]:
+                                    try:
+                                        settings.append(MatmulSchedule(
+                                            block_warps_k=block_warps_k,
+                                            warp_k=warp_k,
+                                            block_warps=[block_warps_m, block_warps_n],
+                                            warp_outer=[outer_m, outer_n],
+                                            atom_layout=atom_layout,
+                                            atom_layout_name=name,
+                                            warp_inner=[inner_m, inner_n],
+                                            min_thread_blocks=min_thread_blocks
+                                        ))
+                                    except NotSupportedError:
+                                        pass
         return settings
 
 
@@ -277,44 +337,19 @@ class CudaGridStaticMatmulImplementer(Implementer):
         return self.pattern
 
     def implement(self, task: Task, match: Mapping[Node, Node]) -> IRModule:
-        settings = setup_matmul_settings(use_default=True)
+        schedules = MatmulSchedule.schedules(space_level=2)
         ir_modules = []
-        for setting in settings:
-            ir_modules.append(self.implement_schedule(task, match, setting))
-        if len(ir_modules) > 1:
-            return self.resolve(task, match, ir_modules)
-        else:
-            assert len(ir_modules) == 1
-            return ir_modules[0]
+        for schedule in schedules:
+            ir_modules.append(self.implement_schedule(task, match, schedule))
+        return self.resolve(task=task,
+                            match=match,
+                            schedules=schedules,
+                            ir_modules=ir_modules,
+                            task_label='matmul_{}x{}x{}'.format(*[int(match[v]) for v in [self.task_m, self.task_n, self.task_k]]),
+                            parallel=True,
+                            verbose=True)
 
-    def resolve(self, task, match, ir_modules: List[IRModule]) -> IRModule:
-        from hidet.runtime.value import dummy_inputs_from_task
-        parallel = False
-        task_label = 'matmul_{}x{}x{}'.format(int(match[self.task_m]), int(match[self.task_n]), int(match[self.task_k]))
-        build_instances = [BuildInstance(ir_module=ir_module,
-                                         output_dir=f'./outs/resolve/{task_label}/{idx}',
-                                         keep_ir=False,
-                                         nvcc_keep=True,
-                                         verbose=False) for idx, ir_module in enumerate(ir_modules)]
-        compiled_modules = batch_build(build_instances, parallel=parallel, verbose=True)
-        dummy_inputs = dummy_inputs_from_task(task)
-        best_latency = None
-        best_ir_module = None
-        latencies = []
-        for ir_module, compiled_module in zip(ir_modules, compiled_modules):
-            repeat_latency = compiled_module[task.name].profile(*dummy_inputs, warmup=2, number=1, repeat=10)
-            # print(repeat_latency)
-            latency = np.median(repeat_latency)
-            latencies.append(latency)
-            if best_latency is None or best_latency > latency:
-                best_latency = latency
-                best_ir_module = ir_module
-        # pairs = [(latency, label) for latency, label in zip(latencies, [ir_module.functions[task.name + '_grid'].attrs['label'] for ir_module in ir_modules])]
-        # for latency, label in sorted(pairs, key=lambda p: p[0]):
-        #     print('{:>120}: {:.3f}'.format(label, latency))
-        return best_ir_module
-
-    def implement_schedule(self, task: Task, match: Mapping[Node, Any], schedule: Schedule) -> IRModule:
+    def implement_schedule(self, task: Task, match: Mapping[Node, Any], schedule: MatmulSchedule) -> IRModule:
         ir_module = IRModule()
         sch = schedule
 
@@ -445,3 +480,8 @@ class CudaGridStaticMatmulImplementer(Implementer):
             for k in range(schedule.warp_k):
                 sb += BufferStoreStmt(c, [i, j], c[i, j] + a[i, k] * b[k, j])
         return sb.finish()
+
+
+if __name__ == '__main__':
+    schedules = MatmulSchedule.schedules(space_level=1)
+    print(len(schedules))

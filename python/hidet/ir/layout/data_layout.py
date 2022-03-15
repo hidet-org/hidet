@@ -132,7 +132,7 @@ class StridesLayout(DataLayout):
     @staticmethod
     def storage_size(shape, strides) -> Expr:
         # assume the strides are positive, but do not assume the tensor is contiguous.
-        max_index = sum([(a - ir.convert(1)) * b for a, b in zip(shape, strides)]) + 1
+        max_index = sum([(a - 1) * b for a, b in zip(shape, strides)]) + 1
         return ir.functors.simplify(max_index)
 
     @staticmethod
