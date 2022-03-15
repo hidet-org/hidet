@@ -131,7 +131,7 @@ def batch_build(build_instances: List[BuildInstance], parallel=True, verbose=Fal
             pairs = []
             os.sched_setaffinity(0, range(os.cpu_count()))
             mem_for_worker = 2 * 1024 * 1024 * 1024  # 2GiB
-            num_workers = max(int(psutil.virtual_memory().available // mem_for_worker), 1)
+            num_workers = min(max(int(psutil.virtual_memory().available // mem_for_worker), 1), psutil.cpu_count())
             with multiprocessing.Pool(processes=num_workers, maxtasksperchild=1) as pool:
                 # We doing the lower_and_compile in parallel instead of build because we can not transfer ctypes pointer
                 for results in tqdm(pool.imap(lower_and_compile_job, [instance.get() for instance in build_instances]),

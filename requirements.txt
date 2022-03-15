@@ -3,6 +3,12 @@ pycuda
 numpy
 sympy
 
+# used for query available memory
+psutil
+
+# used for print table
+tabulate
+
 pytest
 tqdm
 
