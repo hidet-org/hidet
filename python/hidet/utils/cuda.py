@@ -1,39 +1,11 @@
 import os
-from typing import List
-from functools import lru_cache
-import sys
-import re
-import pycuda.driver
-import pycuda.autoinit
 import subprocess
+from functools import lru_cache
 from subprocess import PIPE
+from typing import List, Optional, Union
 
-
-class Attr:
-    COUNT = 'count'
-    NAME = 'name'
-    TOTAL_MEMORY = 'total_memory'
-    COMPUTE_CAPACITY = 'compute_capacity'
-    ARCH_NAME = 'arch_name'
-
-
-_arch2name = {
-    (2, 0): 'Fermi',
-    (3, 0): 'Kepler',
-    (3, 5): 'Kepler',
-    (3, 7): 'Kepler',
-    (5, 0): 'Maxwell',
-    (5, 2): 'Maxwell',
-    (5, 3): 'Maxwell',
-    (6, 0): 'Pascal',
-    (6, 1): 'Pascal',
-    (6, 2): 'Pascal',
-    (7, 0): 'Volta',
-    (7, 2): 'Volta',
-    (7, 5): 'Turing',
-    (8, 0): 'Ampere',
-    (8, 6): 'Ampere'
-}
+import pycuda.autoinit
+import pycuda.driver
 
 
 def max_smem_bytes_per_sm(cc=None):
@@ -42,7 +14,7 @@ def max_smem_bytes_per_sm(cc=None):
         return 48 * 1024
     else:
         if cc is None:
-            cc = get_compute_capability()
+            cc = query_compute_capability()
         data = {
             (6, 0): 64,
             (6, 1): 96,
@@ -63,7 +35,7 @@ def max_smem_bytes_per_block(cc=None):
         return 48 * 1024
     else:
         if cc is None:
-            cc = get_compute_capability()
+            cc = query_compute_capability()
         data = {
             (6, 0): 48,
             (6, 1): 48,
@@ -78,13 +50,13 @@ def max_smem_bytes_per_block(cc=None):
         return data[cc] * 1024
 
 
-def max_num_regs_per_thread(cc=None):
+def max_num_regs_per_thread():
     return 255
 
 
 def max_num_regs_per_block(cc=None):
     if cc is None:
-        cc = get_compute_capability()
+        cc = query_compute_capability()
     data = {
         (6, 0): 64,
         (6, 1): 64,
@@ -103,50 +75,33 @@ def max_num_regs_per_sm(cc=None):
 
 
 @lru_cache(maxsize=128)
-def get_compute_capability():
-    # use this function in sub-progress
-    python_executable = sys.executable
-    result = subprocess.run([python_executable, '-c', 'import pycuda.driver; pycuda.driver.init(); print(pycuda.driver.Device(0).compute_capability());'],
-                            stdin=PIPE, stdout=PIPE, check=True)
-    pair = result.stdout.decode('utf-8')
-    # pair is a string like '(8, 6)'
-    major, minor = re.search(r'\((\d*), (\d*)\)', pair).group(1, 2)
+def query_compute_capability():
+    major, minor = query_gpu('compute_cap').split('.')
     return int(major), int(minor)
-
-
-def get_attribute(attr_name: str, device_no=0):
-    device = pycuda.driver.Device(device_no)
-    if attr_name == 'count':
-        return device.count()
-    elif attr_name == 'name':
-        return device.name()
-    elif attr_name == 'total_memory':
-        return device.total_memory()
-    elif attr_name == 'compute_capacity':
-        return device.compute_capability()
-    elif attr_name == 'arch_name':
-        return _arch2name[get_attribute(Attr.COMPUTE_CAPACITY)]
-    else:
-        name = attr_name.upper()
-        return device.get_attribute(getattr(pycuda.driver.device_attribute, name))
-
-
-def get_attributes(device_no=0):
-    attr_names = [
-        'count', 'name', 'total_memory', 'compute_capacity', 'arch_name'
-    ]
-    device = pycuda.driver.Device(device_no)
-    attrs = {}
-    attrs.update({name: get_attribute(name) for name in attr_names})
-    attrs.update({str(name).lower(): value for name, value in device.get_attributes().items()})
-    return attrs
 
 
 def device_synchronize():
     pycuda.driver.Context.synchronize()
 
 
-def lock_gpu_clock(clock: int):
+def preferred_gpu_clock():
+    base_clocks = {
+        'NVIDIA GeForce RTX 3070 Laptop GPU': 1560,
+        'Tesla V100-SXM2-16GB': 1312,
+        'Tesla T4': 585,
+    }
+    name = query_gpu('gpu_name')
+    if name not in base_clocks:
+        return base_clocks[name]
+    else:
+        print('running on a new device: {}'.format(name))
+        print('please set the base clock at {}:preferred_gpu_clock()', __file__)
+        return int(query_gpu_max_clock() * 0.8)
+
+
+def lock_gpu_clock(clock: Optional[int] = None):
+    if clock is None:
+        clock = preferred_gpu_clock()
     command = f'sudo -S nvidia-smi --lock-gpu-clocks={clock}'
     print(f"Running '{command}'...")
     subprocess.run(command.split(), check=True)
@@ -159,22 +114,41 @@ def reset_gpu_clock():
 
 
 def query_gpu_current_clock() -> int:
-    result = subprocess.run('nvidia-smi -i 0 --query-gpu=clocks.current.graphics --format=csv,noheader,nounits'.split(),
-                            stdin=PIPE, stdout=PIPE, check=True)
-    return int(result.stdout.decode('utf-8'))
+    return int(query_gpu('clocks.current.graphics'))
 
 
 def query_gpu_temperature() -> int:
-    result = subprocess.run('nvidia-smi -i 0 --query-gpu=temperature.gpu --format=csv,noheader,nounits'.split(),
-                            stdin=PIPE, stdout=PIPE, check=True)
-    return int(result.stdout.decode('utf-8'))
+    return int(query_gpu('temperature.gpu'))
+
+
+def query_name() -> str:
+    return query_gpu('name')
+
+
+def query_arch() -> str:
+    arch2name = {
+        (2, 0): 'Fermi',
+        (3, 0): 'Kepler',
+        (3, 5): 'Kepler',
+        (3, 7): 'Kepler',
+        (5, 0): 'Maxwell',
+        (5, 2): 'Maxwell',
+        (5, 3): 'Maxwell',
+        (6, 0): 'Pascal',
+        (6, 1): 'Pascal',
+        (6, 2): 'Pascal',
+        (7, 0): 'Volta',
+        (7, 2): 'Volta',
+        (7, 5): 'Turing',
+        (8, 0): 'Ampere',
+        (8, 6): 'Ampere'
+    }
+    return arch2name[query_compute_capability()]
 
 
 def query_clocks_throttle_reason() -> str:
-    result = subprocess.run('nvidia-smi -i 0 --query-gpu=clocks_throttle_reasons.active --format=csv,noheader,nounits'.split(),
-                            stdin=PIPE, stdout=PIPE, check=True)
-    bitmask = int(result.stdout.decode('utf-8').strip(), base=16)
     # see 'nvidia-smi --help' and 'nvml.h' for more information
+    bitmask = int(query_gpu('clocks_throttle_reasons.active'), base=16)
     bit2reason = {
         1: 'gpu_idle',
         2: 'app_clock_setting',
@@ -187,9 +161,7 @@ def query_clocks_throttle_reason() -> str:
         256: 'display_clock_setting',
     }
     if bitmask == 0:
-        # clock is as high as possible
-        return result.stdout.decode('utf-8').strip()
-        # return 'no'
+        return 'no'
     else:
         reasons = []
         for bit, reason in bit2reason.items():
@@ -200,19 +172,20 @@ def query_clocks_throttle_reason() -> str:
         return "/".join(reasons)
 
 
-def query_gpu_status(names: List[str]):
-    try:
-        result = subprocess.run(f'nvidia-smi -i 0 --query-gpu={",".join(names)} --format=csv,noheader,nounits'.split(),
-                                stdin=PIPE, stdout=PIPE, check=True)
-    except subprocess.CalledProcessError:
-        return None
-    return [int(s.strip()) for s in result.stdout.decode('utf-8').split(',')]
+def query_gpu(names: Union[List[str], str]):
+    if not isinstance(names, (list, tuple)):
+        names = [names]
+    result = subprocess.run(f'nvidia-smi -i 0 --query-gpu={",".join(names)} --format=csv,noheader,nounits'.split(),
+                            stdin=PIPE, stdout=PIPE, check=True)
+    results = [s.strip() for s in result.stdout.decode('utf-8').split(',')]
+    if len(results) == 1:
+        return results[0]
+    else:
+        return results
 
 
 def query_gpu_max_clock() -> int:
-    result = subprocess.run('nvidia-smi -i 0 --query-gpu=clocks.max.sm --format=csv,noheader,nounits'.split(),
-                            stdin=PIPE, stdout=PIPE, check=True)
-    return int(result.stdout.decode('utf-8'))
+    return int(query_gpu('clocks.max.sm'))
 
 
 def lock_memory_clock(clock: int):
@@ -228,15 +201,11 @@ def reset_memory_clock():
 
 
 def query_memory_current_clock() -> int:
-    result = subprocess.run('nvidia-smi -i 0 --query-gpu=clocks.current.memory --format=csv,noheader,nounits'.split(),
-                            stdin=PIPE, stdout=PIPE, check=True)
-    return int(result.stdout.decode('utf-8'))
+    return int(query_gpu('clocks.current.memory'))
 
 
 def query_memory_max_clock() -> int:
-    result = subprocess.run('nvidia-smi -i 0 --query-gpu=clocks.max.memory --format=csv,noheader,nounits'.split(),
-                            stdin=PIPE, stdout=PIPE, check=True)
-    return int(result.stdout.decode('utf-8'))
+    return int(query_gpu('clocks.max.memory'))
 
 
 def query_persistent_mode() -> bool:
@@ -254,15 +223,14 @@ def turn_on_persistent_mode():
 
 
 class BenchmarkContext:
-    def __init__(self, fix_clock=True, clock_ratio=None):
+    def __init__(self, fix_clock=True):
         self.fix_clock = fix_clock
-        self.clock_ratio = self.get_bench_ratio(clock_ratio)
 
     def __enter__(self):
         if self.fix_clock:
             # sm clock; to make result more stable (trying to avoid gpu throttle)
             turn_on_persistent_mode()
-            lock_gpu_clock(int(self.clock_ratio * query_gpu_max_clock()))
+            lock_gpu_clock()
             lock_memory_clock(query_memory_max_clock())
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -284,19 +252,4 @@ class BenchmarkContext:
 
 
 if __name__ == '__main__':
-    # for k, v in get_attributes().items():
-    #     print("{:>40}: {}".format(k, v))
-    turn_on_persistent_mode()
-    print('max gpu clock:', query_gpu_max_clock())
-    print('max memory clock:', query_memory_max_clock())
-    print('current gpu clock:', query_gpu_current_clock())
-    print('current memory clock:', query_memory_current_clock())
-    with BenchmarkContext():
-        print('in')
-        print('current gpu clock:', query_gpu_current_clock())
-        print('current memory clock:', query_memory_current_clock())
-    print('out')
-    print('current gpu clock:', query_gpu_current_clock())
-    print('current memory clock:', query_memory_current_clock())
-    print(BenchmarkContext.get_bench_ratio())
-    print(get_compute_capability())
+    print(query_compute_capability())

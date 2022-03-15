@@ -31,7 +31,7 @@ def compile_src_code(src_path, nvcc_keep=True, working_dir=None, keep_dir=None):
     # use random lib name to avoid the dlopen caching loading the old library
     out_lib_path = os.path.join(working_dir, str(uuid.uuid4().hex)[-6:] + '.so')
     # cc = utils.cuda.get_attribute('compute_capacity')
-    cc = utils.cuda.get_compute_capability()
+    cc = utils.cuda.query_compute_capability()
     cc_code = f'{cc[0]}{cc[1]}'
     command = ['nvcc',
                '-keep' if nvcc_keep else '--verbose',

@@ -223,5 +223,6 @@ def test_custom_func():
 
 if __name__ == '__main__':
     # verify(keep_ir=False)
-    benchmark(use_nsight_compute=False, keep_ir=False)
+    with cuda.BenchmarkContext(fix_clock=True):
+        benchmark(use_nsight_compute=False, keep_ir=False)
     # test_custom_func()
