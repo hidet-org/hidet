@@ -38,7 +38,7 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=True, progr
         ('cuBLAS', matmul_cublas()),
     ]
     hidet_variants = [
-        ('HidetMatmul', (CudaGridStaticMatmulImplementer,)),
+#        ('HidetMatmul', (CudaGridStaticMatmulImplementer,)),
     ]
     repo = git.Repo(search_parent_directories=True)
     sha = repo.head.object.hexsha
@@ -100,5 +100,5 @@ parser.add_argument('--report_dir', type=str, default='./report')
 
 if __name__ == '__main__':
     args = parser.parse_args()
-    with cuda.BenchmarkContext(fix_clock=True):
+    with cuda.BenchmarkContext(fix_clock=False):
         benchmark(args.warmup, args.number, args.repeat, args.resolver == 'brute', report_dir=args.report_dir, progress_bar=False)

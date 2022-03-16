@@ -87,11 +87,11 @@ def device_synchronize():
 def preferred_gpu_clock():
     base_clocks = {
         'NVIDIA GeForce RTX 3070 Laptop GPU': 1560,
-        'Tesla V100-SXM2-16GB': 1312,
-        'Tesla T4': 585,
+        'Tesla V100-SXM2-16GB': 1530,
+        'Tesla T4': 1250,
     }
     name = query_gpu('gpu_name')
-    if name not in base_clocks:
+    if name in base_clocks:
         return base_clocks[name]
     else:
         print('running on a new device: {}'.format(name))
