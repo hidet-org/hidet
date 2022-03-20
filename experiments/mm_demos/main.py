@@ -1,22 +1,16 @@
-import numpy as np
-import time
 import os
+import time
+
+import numpy as np
 
 from hidet.backend import build
-from hidet.baselines.matmul import matmul_cublas, matmul_opt, matmul_cutlass, matmul_cublas_tensorcore
+from hidet.baselines.matmul import matmul_cublas, matmul_opt, matmul_cutlass
 from hidet.implement import implement, impl_context
 from hidet.implement.cuda import CudaGridStaticMatmulImplementer
 from hidet.implement.resolve import random_resolve, brute_force_resolve
-from hidet.ir.task import Grid, Host, ThreadBlock
-from hidet.ir.type import TensorType
-from hidet.ir.expr import Var, convert
-from hidet.ir.stmt import BufferStoreStmt
-from hidet.ir.func import IRModule
-from hidet.ir.primitives import thread_idx, block_idx
-from hidet.ir.layout import DataLayout
+from hidet.ir.task import Grid, Host
 from hidet.runtime.value import TensorValue, randn, empty, scalar, zeros, full
 from hidet.tasks.nn import matmul
-from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.utils import cuda
 
 
@@ -30,25 +24,16 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, prog
         number = 1
         repeat = 1
     workloads = [
-        # (2, 2, 2),
-        (222, 333, 444),
+        # (222, 333, 444),
         (1024, 1024, 1024),
         (1024 + 22, 1024 + 33, 1024 + 44),
-        # (1296, 2304, 768),
-        # (1243, 1211, 1207),
-        # (1024 + 128, 1024 + 128, 1024 + 48),
-        # (2048, 2304, 768),
-        # (1664, 768, 2304),
-        # (1234, 2345, 1212),
         *[(16 * T, 2304, 768) for T in [5, 24, 43, 62, 81, 100, 119, 128]],
         # *[(16 * T, 2304, 768) for T in [5, 81, 128]]
     ]
     baselines = [
-        # ('Reference', matmul_ref()),
         ('Opt', matmul_opt()),
         ('cutlas', matmul_cutlass()),
         ('cublas', matmul_cublas()),
-        # ('cublas_tc', matmul_cublas_tensorcore()),
     ]
     hidet_variants = [
         # ('HidetNaive', (CudaGridNaiveImplementer, CudaThreadNaiveImplementer)),
@@ -82,6 +67,7 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, prog
                     else:
                         ir_module = random_resolve(ir_module)
                     module = build(ir_module, output_dir=f'./outs/bench/{name}_{N}x{M}x{K}', keep_ir=keep_ir)
+                    time.sleep(1)
                     latencies = module['matmul'].profile(A, B, C, warmup=warmup, number=number, repeat=repeat)
                     print_latencies(name, latencies)
                     print_latencies(name, latencies, file=f)
@@ -185,44 +171,7 @@ def verify(use_rand=True, keep_ir=False):
                 raise e
 
 
-def test_custom_func():
-    # ((((((threadIdx.x / 32) / 2) * 16) + (((((threadIdx.x % 32) / 16) * 2) + ((threadIdx.x % 32) % 2)) * 4)) + 3) % 16)
-    with FunctionBuilder('test', attrs={'worker': ThreadBlock(block_dim=256)}) as fb:
-        arr = Var('arr', TensorType(scope='register', dtype='float32', layout=DataLayout.row_major([100])))
-        fb.extend_local_vars([arr])
-        sb = StmtBuilder()
-        # with sb.let('v', thread_idx()) as v:
-        with sb.for_loop('v', extent=256) as threadIdx:
-            with sb.for_loop('vv', extent=1000) as blockIdx:
-                threadIdx = thread_idx()
-                blockIdx = block_idx()
-                with sb.for_loop('j', extent=2) as j:
-                    # with sb.let('a', 1) as a:
-                    #     with sb.let('b', 2) as b:
-                    #         sb += BufferStoreStmt(arr, [a + b], convert(0.0))
-                    # with sb.let('c', 1) as c:
-                    #     sb += BufferStoreStmt(arr, [c], convert(0.0))
-                    # sb += BufferStoreStmt(arr, [((((((v // 32) // 2) * 16) + (((((v % 32) // 16) * 2) + ((v % 32) % 2)) * 4)) + 3) % 16)], convert(0.0))
-                    # sb += BufferStoreStmt(arr, [(((v * 32) + (v % 32)) // 32)], convert(0.0))
-                    # sb += BufferStoreStmt(arr, [(((v // 64) * 16) // 16)], convert(0.0))
-                    # sb += BufferStoreStmt(arr, [v + (convert(0) + convert(0))], convert(0.0))
-                    # sb += BufferStoreStmt(arr, [((0 + ((0 + ((1 * (v / 8)) * 128)) * 1024)) + (0 * 1))], convert(0.0))
-                    # sb += BufferStoreStmt(arr, [(((((((v % 32) / 16) * 2) + ((v % 32) % 2)) * 4) + ((v / 64) * 16)) % 16)], convert(0.0))
-                    # sb += BufferStoreStmt(arr, [((thread_idx() % 32) % 2)], convert(0.0))
-                    with sb.if_then(((blockIdx / 18) * 32) + ((threadIdx / 64) * 16) < 1296):
-                        sb += BufferStoreStmt(arr, [(((((blockIdx / 18) * 32) + ((threadIdx / 64) * 16)) * 2304) + (((blockIdx % 18) * 128) + ((((threadIdx / 32) % 2) * 64) + ((j * 32) + (threadIdx % 32)))))], arr[(((((threadIdx / 64) * 2) + ((threadIdx / 32) % 2)) * 512) + (threadIdx % 32))])
-                    with sb.if_then(((blockIdx / 18) * 32) + (((threadIdx / 64) * 16) + 1) < 1296):
-                        sb += BufferStoreStmt(arr, [((((((threadIdx / 64) * 16) + ((blockIdx / 18) * 32)) * 2304) + (((blockIdx % 18) * 128) + ((((threadIdx / 32) % 2) * 64) + ((j * 32) + (threadIdx % 32))))) + 2304)], arr[(((threadIdx % 32) + ((((threadIdx / 64) * 2) + ((threadIdx / 32) % 2)) * 512)) + 32)])
-        fb.set_body(sb.finish())
-    ir_module = IRModule()
-    ir_module.add('test', fb.get())
-    module = build(ir_module, output_dir='./outs/test', keep_ir=True)
-    with open('./outs/test/source.cu', 'r') as f:
-        print("".join(f.readlines()))
-
-
 if __name__ == '__main__':
     # verify(keep_ir=False)
-    with cuda.BenchmarkContext(fix_clock=True):
-        benchmark(use_nsight_compute=False, keep_ir=False)
-    # test_custom_func()
+    with cuda.BenchmarkContext(fix_clock=False):
+        benchmark(use_nsight_compute=False, keep_ir=True)

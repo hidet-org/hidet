@@ -23,7 +23,7 @@ class Scope(Node):
 class ScalarType(TypeNode):
     def __init__(self, name):
         if name:
-            assert name in ['float32', 'int32', 'uint8', 'bool'], name
+            assert name in ['float32', 'int32', 'uint8', 'uint32', 'bool'], name
         self.name = name
 
     def nbytes(self) -> int:
@@ -31,6 +31,7 @@ class ScalarType(TypeNode):
             'float32': 4,
             'int32': 4,
             'uint8': 1,
+            'uint32': 4,
             'bool': 1
         }
         return bytes_dict[self.name]

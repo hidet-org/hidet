@@ -3,7 +3,7 @@ from typing import Dict, Optional
 from hidet.ir.node import Node
 from hidet.ir.func import IRModule, Function
 from hidet.ir.type import ScalarType, TensorType, TypeNode
-from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div, Sub, Not, Or, And, Let, IfThenElse, TensorSlice
+from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div, Sub, Not, Or, And, Let, IfThenElse, TensorSlice, RightShift, LeftShift, BitwiseNot, BitwiseOr, BitwiseAnd
 from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt, BlackBoxStmt, AsmStmt, ReturnStmt, LetStmt
 from hidet.ir.task import Worker, Host, Grid, ThreadBlock, Warp, Thread
 from hidet.ir.dialects.compute import ReduceCompute, TensorCompute, TensorInput, ScalarInput
@@ -12,7 +12,7 @@ from hidet.ir.dialects.pattern import AnyExpr, ScalarExprPattern, TensorComputeP
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
 from hidet.utils.namer import Namer
 
-from .base import StmtExprFunctor, TypeFunctor, WorkerFunctor
+from .base import StmtExprFunctor, TypeFunctor, WorkerFunctor, NodeFunctor
 
 
 class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
@@ -33,18 +33,16 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
             return Text(obj.replace('\n', '\\n').replace('\t', '\\t'))
         elif isinstance(obj, (int, float)):
             return Text(str(obj))
-        elif obj is None:
-            return Text('None')
         elif isinstance(obj, TypeNode):
             return TypeFunctor.visit(self, obj)
         elif isinstance(obj, Function):
             return self.visit_Function(obj)
         elif isinstance(obj, IRModule):
             return self.visit_IRModule(obj)
-        elif isinstance(obj, (Expr, Stmt)):
-            return StmtExprFunctor.visit(self, obj)
-        elif isinstance(obj, Worker):
-            return WorkerFunctor.visit(self, obj)
+        elif isinstance(obj, (Expr, Stmt, Worker)):
+            return NodeFunctor.visit(self, obj)
+        elif obj is None:
+            return Text('None')
         else:
             return object.__repr__(obj)
 
@@ -113,6 +111,21 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
 
     def visit_Not(self, e: Not):
         return Text('!') + self(e.a)
+
+    def visit_BitwiseAnd(self, e: BitwiseAnd):
+        return '(' + self(e.a) + ' & ' + self(e.b) + ')'
+
+    def visit_BitwiseOr(self, e: BitwiseOr):
+        return '(' + self(e.a) + ' | ' + self(e.b) + ')'
+
+    def visit_BitwiseNot(self, e: BitwiseNot):
+        return '(~' + self(e.base) + ')'
+
+    def visit_LeftShift(self, e: LeftShift):
+        return '(' + self(e.base) + ' << ' + self(e.cnt) + ')'
+
+    def visit_RightShift(self, e: RightShift):
+        return '(' + self(e.base) + ' >> ' + self(e.cnt) + ')'
 
     def visit_TensorElement(self, e: TensorElement):
         return self(e.base) + '[' + self(e.indices) + ']'

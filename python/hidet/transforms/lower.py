@@ -9,7 +9,6 @@ def lower(ir_module: IRModule) -> IRModule:
         flatten_tensor_pass(),
         expand_let_expr_pass(),
 
-
         # simplification
         inline_let_stmt_pass(inline_all=True),
         rule_based_simplify_pass(),
@@ -20,6 +19,10 @@ def lower(ir_module: IRModule) -> IRModule:
         uplift_let_stmt_pass(),
         common_subexpression_elimination_pass(),
         inline_let_stmt_pass(inline_factor=1),
+
+        # optimization (precompute condition)
+        precompute_condition_pass(),
+
 
         # necessary pass
         import_primitive_functions_pass()

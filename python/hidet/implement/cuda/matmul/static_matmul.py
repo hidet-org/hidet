@@ -73,8 +73,7 @@ class MatmulSchedule(Schedule):
                  warp_outer=(2, 2),
                  atom_layout=CustomTaskLayout(),
                  atom_layout_name='custom_4x8',
-                 warp_inner=(4, 4),
-                 min_thread_blocks=2):
+                 warp_inner=(4, 4)):
         self.block_warps_k = block_warps_k
         self.warp_k = warp_k
         self.block_warps = block_warps
@@ -82,7 +81,6 @@ class MatmulSchedule(Schedule):
         self.atom_layout = atom_layout
         self.warp_inner = warp_inner
         self.atom_layout_name = atom_layout_name
-        self.min_thread_blocks = min_thread_blocks
 
         # sanity check
         row_major = TaskLayout.row_major
@@ -107,10 +105,33 @@ class MatmulSchedule(Schedule):
         else:
             self.check(block_k % warp_size == 0, "transfer from gmem to smem requires warp_size is divisible by block_k")
             raise NotSupportedError("Will support later")
-        max_smem_bytes_per_block = min(cuda.max_smem_bytes_per_sm() // min_thread_blocks, cuda.max_smem_bytes_per_block()) // 128 * 128
-        max_num_regs_per_thread = min(cuda.max_num_regs_per_thread(), cuda.max_num_regs_per_block() // block_size, cuda.max_num_regs_per_sm() // min_thread_blocks // block_size) // 8 * 8
+
+        # derived data layouts
+        local_layout = DataLayout.local
+        row_major = DataLayout.row_major
+        col_major = DataLayout.column_major
+        self.regs_a_layout = local_layout((block_warps[0], 1)) * col_major((warp_outer[0], warp_k)) * local_layout((atom_shape[0], 1)) * row_major((warp_inner[0], 1))
+        self.regs_b_layout = local_layout((1, block_warps[1])) * row_major((warp_k, warp_outer[1])) * local_layout((1, atom_shape[1])) * row_major((1, warp_inner[1]))
+        self.regs_c_layout = local_layout(block_warps) * row_major(warp_outer) * local_layout(atom_shape) * row_major(warp_inner)
+        if block_k <= warp_size:
+            self.regs_a_ldg_layout = local_layout((block_size // block_k, block_k)) * row_major((block_shape[0] // (block_size // block_k), 1))
+            self.regs_b_ldg_layout = row_major((1, block_shape[1] // (block_size // block_k))) * local_layout((block_k, block_size // block_k))
+        else:
+            raise NotSupportedError()
+        reserved_regs = 16
+        used_num_regs_per_thread = self.regs_a_layout.size + self.regs_b_layout.size + self.regs_c_layout.size + self.regs_a_ldg_layout.size + self.regs_b_ldg_layout.size + reserved_regs
+        used_num_regs_per_thread = (used_num_regs_per_thread + 7) // 8 * 8  # the number of registers allocated to each thread is a multiple of 8.
+        self.check(used_num_regs_per_thread <= cuda.max_num_regs_per_thread(),
+                   f'register used {used_num_regs_per_thread} exceeds maximum {cuda.max_num_regs_per_thread()}')
+        self.check(used_num_regs_per_thread * block_size <= cuda.max_num_regs_per_block(),
+                   f'echo block can only have {cuda.max_num_regs_per_block()} registers, but this schedule requires {used_num_regs_per_thread * block_size} registers')
+        resident_blocks = cuda.max_num_regs_per_sm() // (used_num_regs_per_thread * block_size)
+
+        max_smem_bytes_per_block = min(cuda.max_smem_bytes_per_sm() // resident_blocks, cuda.max_smem_bytes_per_block()) // 128 * 128
 
         # derived task layouts
+        row_major = TaskLayout.row_major
+        full_layout = TaskLayout.full_layout
         self.block_warps_layout = block_warps_layout
         self.warp_layout = warp_layout
         self.block_layout = block_layout
@@ -141,24 +162,9 @@ class MatmulSchedule(Schedule):
             lines = warp_size // c_wb_shape[1]
             self.c_warp_s2g_layout = full_layout([c_wb_shape[0] // lines, 1]) * row_major([lines, c_wb_shape[1]])
 
-        # derived data layouts
-        local_layout = DataLayout.local
-        row_major = DataLayout.row_major
-        col_major = DataLayout.column_major
-        self.regs_a_layout = local_layout((block_warps[0], 1)) * col_major((warp_outer[0], warp_k)) * local_layout((atom_shape[0], 1)) * row_major((warp_inner[0], 1))
-        self.regs_b_layout = local_layout((1, block_warps[1])) * row_major((warp_k, warp_outer[1])) * local_layout((1, atom_shape[1])) * row_major((1, warp_inner[1]))
-        self.regs_c_layout = local_layout(block_warps) * row_major(warp_outer) * local_layout(atom_shape) * row_major(warp_inner)
-        if block_k <= warp_size:
-            self.regs_a_ldg_layout = local_layout((block_size // block_k, block_k)) * row_major((block_shape[0] // (block_size // block_k), 1))
-            self.regs_b_ldg_layout = row_major((1, block_shape[1] // (block_size // block_k))) * local_layout((block_k, block_size // block_k))
-        else:
-            raise NotSupportedError()
-
         # derived constants
-        used_num_regs_per_thread = self.regs_a_layout.size + self.regs_b_layout.size + self.regs_c_layout.size + self.regs_a_ldg_layout.size + self.regs_b_ldg_layout.size
         used_smem_bytes_per_block = max((block_shape[0] + block_shape[1]) * block_k * 2 * 4,                    # 2 for double buffering, 4 for number of bytes per float32
                                         prod((block_warps_layout * self.c_warp_r2s_layout).task_shape) * 4)     # 4 for number of bytes per float32
-        self.check(used_num_regs_per_thread <= max_num_regs_per_thread, f"Used number of register ({used_num_regs_per_thread}) exceeded the maximum ({max_num_regs_per_thread})")
         self.check(used_smem_bytes_per_block <= max_smem_bytes_per_block, f"Used shared memory ({used_smem_bytes_per_block} bytes) exceeded the maximum ({max_smem_bytes_per_block} bytes)")
         self.block_size = block_size
         self.block_shape = block_layout.task_shape
@@ -173,6 +179,7 @@ class MatmulSchedule(Schedule):
         # we muse use dynamic shared memory when we use more than 48 KiBytes shared memory
         # see Appendix 'Compute Capability' in CUDA C Programming Guide <https://docs.nvidia.com/cuda/pdf/CUDA_C_Programming_Guide.pdf>
         self.use_dynamic_smem = (used_smem_bytes_per_block > 48 * 1024)
+        self.min_thread_blocks = resident_blocks
         # self.use_dynamic_smem = False
 
     def keys(self) -> List[Tuple[str, Union[int, float, str]]]:
@@ -213,82 +220,25 @@ class MatmulSchedule(Schedule):
         if space_level == 0:
             settings.append(MatmulSchedule())
         elif space_level == 1:
-            tuned_string = """
-                idx    bwx    bwy    wox    woy  atom          wix    wiy    bk    wk    mtb
-                817      4      2      1      2  custom_4x8      8      4     8     1      2   
-                812      2      4      1      2  custom_4x8      8      4     8     1      2   
-                223      4      2      2      2  custom_4x8      4      4     8     1      2   
-                217      2      4      2      2  custom_4x8      4      4     8     1      2   
-                811      2      4      1      2  row_4x8         8      4     8     1      2   
-                214      2      4      2      2  custom_4x8      4      4     8     1      1   
-                619      2      4      2      1  custom_4x8      4      8     8     1      2   
-                404      2      4      2      1  custom_4x8      8      8     8     1      1   
-                807      2      2      1      2  custom_4x8      8      4     8     1      2   
-                229      4      2      2      2  custom_4x8      4      4     8     1      2   
-                741      2      4      1      1  custom_4x8      8      4     8     1      2   
-                226      4      2      2      2  custom_4x8      4      4     8     1      1   
-                739      2      4      1      1  custom_4x8      8      4     8     1      1   
-                352      4      2      1      2  custom_4x8      8      8     8     1      1   
-                822      4      2      1      2  custom_4x8      8      4     8     1      2   
-                345      2      4      1      2  row_8x4         8      8     8     1      1   
-                936      2      4      2      2  custom_4x8      8      4     8     1      1   
-                691      2      4      2      2  row_8x4         4      8     8     1      1   
-                690      2      4      2      2  row_4x8         4      8     8     1      1   
-                757      2      4      1      1  custom_4x8      8      4    16     1      2   
-                342      2      2      1      2  row_8x4         8      8     8     1      2   
-                328      2      2      1      2  custom_4x8      8      8     4     1      2   
-                695      4      2      2      2  custom_4x8      4      8     8     1      1   
-                400      2      2      2      1  row_8x4         8      8     8     1      2   
-                696      4      2      2      2  row_4x8         4      8     8     1      1   
-                269      2      2      1      1  row_8x4         8      8     4     1      2   
-                388      2      4      2      1  row_8x4         8      8     4     1      1   
-                610      2      2      2      1  custom_4x8      4      8     8     1      1   
-                587      2      2      2      1  row_4x8         4      8     4     1      2   
-                351      4      2      1      2  row_8x4         8      8     8     1      1   
-                """
-            lines = tuned_string.split('\n')
-            lines = lines[2:-1]
-            atom_layout_dict = {
-                'row_4x8': TaskLayout.row_major((4, 8)),
-                'row_8x4': TaskLayout.row_major((8, 4)),
-                'custom_4x8': CustomTaskLayout()
-            }
-            for line in lines:
-                _, bwx, bwy, wox, woy, atom, wix, wiy, bk, wk, mtb = line.split()
-                with contextlib.suppress(NotSupportedError):
-                    settings.append(MatmulSchedule(
-                        block_warps_k=int(bk) // int(wk),
-                        warp_k=int(wk),
-                        block_warps=(int(bwx), int(bwy)),
-                        warp_outer=(int(wox), int(woy)),
-                        atom_layout=atom_layout_dict[atom],
-                        atom_layout_name=atom,
-                        warp_inner=(int(wix), int(wiy)),
-                        min_thread_blocks=int(mtb)
-                    ))
-        else:
-            settings = []
-            for inner_m, inner_n in [[4, 4], [8, 8], [4, 8], [8, 4]]:
+            for inner_m, inner_n in [[4, 4], [4, 8], [8, 4]]:
                 for outer_m, outer_n in [[1, 1], [1, 2], [2, 1], [2, 2]]:
-                    for block_warps_k, warp_k in [[2, 1], [4, 1], [8, 1], [16, 1]]:
-                        for block_warps_m, block_warps_n in [[2, 2], [2, 4], [4, 2], [4, 2]]:
-                            for min_thread_blocks in [1, 2]:
-                                for name, atom_layout in [('row_4x8', TaskLayout.row_major((4, 8))),
-                                                          ('row_8x4', TaskLayout.row_major((8, 4))),
-                                                          ('custom_4x8', CustomTaskLayout())]:
-                                    try:
-                                        settings.append(MatmulSchedule(
-                                            block_warps_k=block_warps_k,
-                                            warp_k=warp_k,
-                                            block_warps=[block_warps_m, block_warps_n],
-                                            warp_outer=[outer_m, outer_n],
-                                            atom_layout=atom_layout,
-                                            atom_layout_name=name,
-                                            warp_inner=[inner_m, inner_n],
-                                            min_thread_blocks=min_thread_blocks
-                                        ))
-                                    except NotSupportedError:
-                                        pass
+                    for block_warps_k, warp_k in [[4, 1], [8, 1]]:
+                        for block_warps_m, block_warps_n in [[2, 2], [2, 4], [4, 2]]:
+                            for name, atom_layout in [('row_4x8', TaskLayout.row_major((4, 8))), ('custom_4x8', CustomTaskLayout())]:
+                                try:
+                                    settings.append(MatmulSchedule(
+                                        block_warps_k=block_warps_k,
+                                        warp_k=warp_k,
+                                        block_warps=[block_warps_m, block_warps_n],
+                                        warp_outer=[outer_m, outer_n],
+                                        atom_layout=atom_layout,
+                                        atom_layout_name=name,
+                                        warp_inner=[inner_m, inner_n]
+                                    ))
+                                except NotSupportedError as e:
+                                    pass
+        else:
+            raise NotImplementedError()
         return settings
 
 
@@ -337,7 +287,7 @@ class CudaGridStaticMatmulImplementer(Implementer):
         return self.pattern
 
     def implement(self, task: Task, match: Mapping[Node, Node]) -> IRModule:
-        schedules = MatmulSchedule.schedules(space_level=2)
+        schedules = MatmulSchedule.schedules(space_level=1)
         ir_modules = []
         for schedule in schedules:
             ir_modules.append(self.implement_schedule(task, match, schedule))

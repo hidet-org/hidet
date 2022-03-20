@@ -19,7 +19,10 @@ class NodeFunctor:
             return self.memo[node]
         idx = node.class_index() if node is not None else 0
         # noinspection PyUnresolvedReferences
-        ret = self.__class__.dispatch_table[idx](self, node)
+        dispatch_table = self.__class__.dispatch_table
+        if idx >= len(dispatch_table):
+            raise NotImplementedError('Does not implement dispatch function in "{}" for node "{}"'.format(type(self).__qualname__, type(node).__qualname__))
+        ret = dispatch_table[idx](self, node)
         if self.memo is not None:
             self.memo[node] = ret
         return ret
@@ -59,6 +62,11 @@ class ExprFunctor(NodeFunctor):
             And: cls.visit_And,
             Or: cls.visit_Or,
             Not: cls.visit_Not,
+            BitwiseAnd: cls.visit_BitwiseAnd,
+            BitwiseOr: cls.visit_BitwiseOr,
+            BitwiseNot: cls.visit_BitwiseNot,
+            LeftShift: cls.visit_LeftShift,
+            RightShift: cls.visit_RightShift,
             TensorElement: cls.visit_TensorElement,
             TensorSlice: cls.visit_TensorSlice,
             IfThenElse: cls.visit_IfThenElse,
@@ -114,6 +122,21 @@ class ExprFunctor(NodeFunctor):
         raise NotImplementedError()
 
     def visit_Not(self, e: Not):
+        raise NotImplementedError()
+
+    def visit_BitwiseAnd(self, e: BitwiseAnd):
+        raise NotImplementedError()
+
+    def visit_BitwiseOr(self, e: BitwiseOr):
+        raise NotImplementedError()
+
+    def visit_BitwiseNot(self, e: BitwiseNot):
+        raise NotImplementedError()
+
+    def visit_LeftShift(self, e: LeftShift):
+        raise NotImplementedError()
+
+    def visit_RightShift(self, e: RightShift):
         raise NotImplementedError()
 
     def visit_TensorElement(self, e: TensorElement):
@@ -221,6 +244,25 @@ class ExprVisitor(ExprFunctor):
 
     def visit_Not(self, e: Not):
         self.visit(e.a)
+
+    def visit_BitwiseAnd(self, e: BitwiseAnd):
+        self.visit(e.a)
+        self.visit(e.b)
+
+    def visit_BitwiseOr(self, e: BitwiseOr):
+        self.visit(e.a)
+        self.visit(e.b)
+
+    def visit_BitwiseNot(self, e: BitwiseNot):
+        self.visit(e.base)
+
+    def visit_LeftShift(self, e: LeftShift):
+        self.visit(e.base)
+        self.visit(e.cnt)
+
+    def visit_RightShift(self, e: RightShift):
+        self.visit(e.base)
+        self.visit(e.cnt)
 
     def visit_TensorElement(self, e: TensorElement):
         self.visit(e.base)
@@ -346,6 +388,35 @@ class ExprRewriter(ExprFunctor):
             return e
         else:
             return Not(a)
+
+    def visit_BitwiseAnd(self, e: BitwiseAnd):
+        return self.visit_Binary(e)
+
+    def visit_BitwiseOr(self, e: BitwiseOr):
+        return self.visit_Binary(e)
+
+    def visit_BitwiseNot(self, e: BitwiseNot):
+        base = self.visit(e.base)
+        if base is e.base:
+            return e
+        else:
+            return BitwiseNot(base)
+
+    def visit_LeftShift(self, e: LeftShift):
+        base = self.visit(e.base)
+        cnt = self.visit(e.cnt)
+        if base is e.base and cnt is e.cnt:
+            return e
+        else:
+            return LeftShift(base, cnt)
+
+    def visit_RightShift(self, e: RightShift):
+        base = self.visit(e.base)
+        cnt = self.visit(e.cnt)
+        if base is e.base and cnt is e.cnt:
+            return e
+        else:
+            return RightShift(base, cnt)
 
     def visit_TensorElement(self, e: TensorElement):
         base = self(e.base)
@@ -478,7 +549,6 @@ class StmtFunctor(NodeFunctor):
             AssertStmt: cls.visit_AssertStmt,
             BlackBoxStmt: cls.visit_BlackBoxStmt,
             SeqStmt: cls.visit_SeqStmt,
-            Expr: cls.visit_expr,
         }
 
     def visit_expr(self, e: Expr):

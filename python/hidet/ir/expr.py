@@ -229,6 +229,46 @@ class Mod(BinaryOp):
         super().__init__(a, b)
 
 
+class BitwiseNot(Expr):
+    def __init__(self, base):
+        super().__init__()
+        self.base = base
+
+
+class BitwiseAnd(BinaryOp):
+    def __init__(self, a, b):
+        super().__init__(a, b)
+
+
+class BitwiseOr(BinaryOp):
+    def __init__(self, a, b):
+        super().__init__(a, b)
+
+    @staticmethod
+    def join_list(lst):
+        if len(lst) == 0:
+            return convert(0)
+        else:
+            current = lst[0]
+            for v in lst[1:]:
+                current = BitwiseOr(current, v)
+            return current
+
+
+class LeftShift(Expr):
+    def __init__(self, base, cnt):
+        super().__init__()
+        self.base = convert(base)
+        self.cnt = convert(cnt)
+
+
+class RightShift(Expr):
+    def __init__(self, base, cnt):
+        super().__init__()
+        self.base = base
+        self.cnt = cnt
+
+
 class TensorElement(Expr):
     def __init__(self, base, indices):
         self.base = base
@@ -385,7 +425,7 @@ def tensor_rank(v: Expr) -> int:
         else:
             raise ValueError(v)
     elif isinstance(v, TensorSlice):
-        return sum([1 if i is None else 0for i in v.indices])
+        return sum([1 if i is None else 0 for i in v.indices])
     elif isinstance(v, TensorInput):
         return len(v.shape)
     elif isinstance(v, TensorCompute):

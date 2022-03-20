@@ -14,5 +14,6 @@ from .rule_based_simplifier import rule_based_simplify_pass
 from .simplify_stmt import simplify_stmt_pass
 from .squeeze_let_stmt import squeeze_let_stmt_pass
 from .uplift_let_stmt import uplift_let_stmt_pass
+from .precompute_condition import precompute_condition_pass
 
 from .lower import lower

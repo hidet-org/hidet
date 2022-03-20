@@ -219,6 +219,21 @@ class Codegen(StmtExprFunctor, TypeFunctor):
     def visit_Not(self, e: Not):
         return Text('!') + self(e.a)
 
+    def visit_BitwiseAnd(self, e: BitwiseAnd):
+        return '(' + self(e.a) + ' & ' + self(e.b) + ')'
+
+    def visit_BitwiseOr(self, e: BitwiseOr):
+        return '(' + self(e.a) + ' | ' + self(e.b) + ')'
+
+    def visit_BitwiseNot(self, e: BitwiseNot):
+        return '(~' + self(e.base) + ')'
+
+    def visit_LeftShift(self, e: LeftShift):
+        return '(' + self(e.base) + ' << ' + self(e.cnt) + ')'
+
+    def visit_RightShift(self, e: RightShift):
+        return '(' + self(e.base) + ' >> ' + self(e.cnt) + ')'
+
     def visit_TensorElement(self, e: TensorElement):
         return self(e.base) + doc_join(['[' + self(idx) + ']' for idx in e.indices], '')
 
@@ -276,7 +291,10 @@ class Codegen(StmtExprFunctor, TypeFunctor):
 
     def visit_Constant(self, e: Constant):
         if e.dtype.name == 'bool':
-            return Text(f'(bool){e.value}')
+            if e.value:
+                return Text('true')
+            else:
+                return Text('false')
         elif e.dtype.name == 'float32':
             return Text(f'{e.value}f')
         elif e.dtype.name == 'int32':
@@ -368,7 +386,8 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         scalar_type_map = {
             'int32': 'int32_t',
             'float32': 'float',
-            'uint8': 'uint8_t'
+            'uint8': 'uint8_t',
+            'uint32': 'uint32_t'
         }
         return Text(scalar_type_map[t.name])
 
