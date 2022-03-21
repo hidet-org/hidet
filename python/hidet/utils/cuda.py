@@ -128,9 +128,9 @@ def query_device_name(short=False) -> str:
     full_name = query_gpu('name')
     if short:
         short_name_dict = {
-            'NVIDIA GeForce RTX 3070 Laptop GPU': '3070_Laptop',
-            'Tesla V100-SXM2-16GB': 1530,
-            'Tesla T4': 1250,
+            'NVIDIA GeForce RTX 3070 Laptop GPU': 'RTX3070L',
+            'Tesla V100-SXM2-16GB': 'V100',
+            'Tesla T4': 'T4',
         }
         ret = short_name_dict[full_name] if full_name in short_name_dict else full_name
     else:
