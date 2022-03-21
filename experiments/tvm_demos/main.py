@@ -148,7 +148,7 @@ def get_conv_model(batch_size, in_channels, h, w, out_channels, kernel, padding,
 
 def demo_conv2d():
     ir_module = get_conv_model(1, 3, 224, 224, 64, (7, 7), (3, 3), stride=(2, 2))
-    hidet.utils.tvm_utils.dump_relay_cuda_code(ir_module)
+    hidet.utils.tvm_utils.dump_relay_cuda_code(ir_module, out_dir='./outs')
     graph_module: ExecutorFactoryModule = relay.build(ir_module, target='cuda')
     x = tvm.nd.empty(shape=(1, 3, 224, 224), dtype='float32', device=tvm.cuda())
     w = tvm.nd.empty(shape=(64, 3, 7, 7), dtype='float32', device=tvm.cuda())
@@ -165,6 +165,17 @@ def demo_vthread():
     print(tvm.lower(s, [a, b], simple_mode=True))
 
 
+def demo_softmax():
+    batch_size = 20
+    features = 2000
+    x = relay.var('x', shape=(batch_size, features))
+    y = relay.nn.softmax(x, axis=1)
+    func = relay.Function(params=[x], body=y)
+    ir_module = tvm.ir.IRModule.from_expr(func)
+    hidet.utils.tvm_utils.dump_relay_cuda_code(ir_module, out_dir='./outs/softmax')
+
+
 if __name__ == '__main__':
     # demo_vthread()
-    demo_conv2d_te()
+    # demo_conv2d_te()
+    demo_softmax()

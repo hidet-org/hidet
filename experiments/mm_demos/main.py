@@ -173,5 +173,5 @@ def verify(use_rand=True, keep_ir=False):
 
 if __name__ == '__main__':
     # verify(keep_ir=False)
-    with cuda.BenchmarkContext(fix_clock=False):
+    with cuda.BenchmarkContext(lock_clock=False):
         benchmark(use_nsight_compute=False, keep_ir=True)

@@ -103,7 +103,7 @@ def benchmark(warmup=5, number=1, repeat=10, use_nsight_compute=False, keep_ir=F
         repeat = 1
     workloads = list(ConvSetting.resnet50_conv2ds(batch_size=1).keys()) + list(ConvSetting.resnet50_conv2ds(batch_size=16).keys())
     cudnn_baselines = [
-        ('fma', 'implicit_gemm'),
+        # ('fma', 'implicit_gemm'),
         # ('fma', 'implicit_precomp_gemm'),
         # ('fma', 'gemm'),
         # ('fma', 'direct'),
@@ -118,12 +118,12 @@ def benchmark(warmup=5, number=1, repeat=10, use_nsight_compute=False, keep_ir=F
         # ('reference', conv2d_reference())
     ]
     hidet_variants = [
-        ('hidet_implicit_gemm', (CudaGridStaticConv2dImplicitGemmImplementer,))
+        # ('hidet_implicit_gemm', (CudaGridStaticConv2dImplicitGemmImplementer,))
     ]
     print('Repeat = {}'.format(repeat))
     print()
     # table headers
-    header = ['n', 'c', 'h', 'w', 'oc', 'k', 'p', 's']
+    header = ['n', 'c', 'h', 'w', 'oc', 'k', 'p', 's', 'gm', 'gn', 'gk']
     for math_mode, algo in cudnn_baselines:
         header.extend([f'cudnn_{algo}'])
     for name, _ in packed_baselines:
@@ -137,12 +137,15 @@ def benchmark(warmup=5, number=1, repeat=10, use_nsight_compute=False, keep_ir=F
         ho, wo = setting.output_image_size
         px, py = setting.padding
         sx, sy = setting.stride
+        gm = n * ho * wo
+        gn = co
+        gk = ci * kx * ky
         x = randn([n, ci, hi, wi], 'float32', 'global', seed=1)
         w = randn([co, ci, kx, ky], 'float32', 'global', seed=3)
         y = empty([n, co, ho, wo], 'float32', 'global')
         print("Workload {}".format(setting))
 
-        row = [n, ci, hi, wi, co, f'{kx}x{ky}', f'{px}x{py}', f'{sx}x{sy}']
+        row = [n, ci, hi, wi, co, f'{kx}x{ky}', f'{px}x{py}', f'{sx}x{sy}', gm, gn, gk]
         for math_mode, algo in cudnn_baselines:
             func, predicate = conv2d_cudnn(math_mode, algo), conv2d_cudnn_available(math_mode, algo)
             name = 'cudnn_{}'.format(algo)

@@ -85,6 +85,9 @@ def device_synchronize():
 
 
 def preferred_gpu_clock():
+    use_max = True
+    if use_max:
+        return query_gpu_max_clock()
     base_clocks = {
         'NVIDIA GeForce RTX 3070 Laptop GPU': 1560,
         'Tesla V100-SXM2-16GB': 1530,
@@ -121,8 +124,18 @@ def query_gpu_temperature() -> int:
     return int(query_gpu('temperature.gpu'))
 
 
-def query_name() -> str:
-    return query_gpu('name')
+def query_device_name(short=False) -> str:
+    full_name = query_gpu('name')
+    if short:
+        short_name_dict = {
+            'NVIDIA GeForce RTX 3070 Laptop GPU': '3070_Laptop',
+            'Tesla V100-SXM2-16GB': 1530,
+            'Tesla T4': 1250,
+        }
+        ret = short_name_dict[full_name] if full_name in short_name_dict else full_name
+    else:
+        ret = full_name
+    return ret
 
 
 def query_arch() -> str:
@@ -223,18 +236,18 @@ def turn_on_persistent_mode():
 
 
 class BenchmarkContext:
-    def __init__(self, fix_clock=True):
-        self.fix_clock = fix_clock
+    def __init__(self, lock_clock=True):
+        self.lock_clock = lock_clock
 
     def __enter__(self):
-        if self.fix_clock:
+        if self.lock_clock:
             # sm clock; to make result more stable (trying to avoid gpu throttle)
             turn_on_persistent_mode()
             lock_gpu_clock()
             lock_memory_clock(query_memory_max_clock())
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.fix_clock:
+        if self.lock_clock:
             reset_memory_clock()
             reset_gpu_clock()
 
