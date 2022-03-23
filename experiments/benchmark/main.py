@@ -30,6 +30,17 @@ def get_repo_sha(short=False):
         return sha
 
 
+def get_repo_commit_date() -> str:
+    """
+    return the git head commit time with format 'yyyy-mm-dd-hh-MM' like '2022-03-23-15-13'.
+    """
+    repo = git.Repo(search_parent_directories=True)
+    commit = repo.head
+    committed_date = commit.commit.committed_date
+    dt = datetime.datetime.fromtimestamp(committed_date)
+    return str(dt.strftime('%Y-%m-%d-%H-%M'))
+
+
 def print_latencies(name, latencies):
     print('{:>25}: {:.3f} (std {:.3f}) ms [{}]' .format(name, np.median(latencies), np.std(latencies), " ".join([f'{v:.3f}' for v in latencies])))
 
@@ -61,14 +72,18 @@ def benchmark_matmul(args):
         # (1024, 1024, 5120),
         *[(16 * T, 2304, 768) for T in [5, 24, 43, 62, 81, 100, 119, 128]]
     ]
-    baselines = [
-        ('Opt', matmul_opt()),
-        ('cutlass', matmul_cutlass()),
-        ('cuBLAS', matmul_cublas()),
-    ]
-    hidet_variants = [
-        ('HidetMatmul', (CudaGridStaticMatmulImplementer,)),
-    ]
+    baselines = []
+    hidet_variants = []
+    if 'vendor' in args.kernels:
+        baselines = [
+            ('Opt', matmul_opt()),
+            ('cutlass', matmul_cutlass()),
+            ('cuBLAS', matmul_cublas()),
+        ]
+    if 'hidet' in args.kernels:
+        hidet_variants = [
+            ('HidetMatmul', (CudaGridStaticMatmulImplementer,)),
+        ]
     hidet_func = {}
     for idx, (M, N, K) in enumerate(workloads):
         for name, allowed in hidet_variants:
@@ -117,15 +132,19 @@ def benchmark_matmul(args):
 
 
 def benchmark_conv2d(args):
-    # workloads: List[Conv2dSetting] = list(Conv2dSetting.resnet50_conv2ds(batch_size=1).keys()) + list(Conv2dSetting.resnet50_conv2ds(batch_size=16).keys())
-    workloads: List[Conv2dSetting] = list(Conv2dSetting.resnet50_conv2ds(batch_size=1).keys())[:5]
-    cudnn_baselines = [
-        ('cudnn_implicit_gemm', conv2d_cudnn(algo='implicit_gemm')),
-        ('cudnn_auto', conv2d_cudnn(algo='auto'))
-    ]
-    hidet_variants = [
-        ('hidet_implicit_gemm', (CudaGridStaticConv2dImplicitGemmImplementer,))
-    ]
+    workloads: List[Conv2dSetting] = list(Conv2dSetting.resnet50_conv2ds(batch_size=1).keys()) + list(Conv2dSetting.resnet50_conv2ds(batch_size=16).keys())
+    # workloads: List[Conv2dSetting] = list(Conv2dSetting.resnet50_conv2ds(batch_size=1).keys())[:5]
+    cudnn_baselines = []
+    hidet_variants = []
+    if 'vendor' in args.kernels:
+        cudnn_baselines = [
+            ('cudnn_implicit_gemm', conv2d_cudnn(algo='implicit_gemm')),
+            ('cudnn_auto', conv2d_cudnn(algo='auto'))
+        ]
+    if 'hidet' in args.kernels:
+        hidet_variants = [
+            ('hidet_implicit_gemm', (CudaGridStaticConv2dImplicitGemmImplementer,))
+        ]
     hidet_func = {}
     for idx, setting in enumerate(workloads):
         n, ci, hi, wi = setting.batch_size, setting.in_channels, setting.image_size[0], setting.image_size[1]
@@ -188,13 +207,14 @@ parser.add_argument('--number', type=int, default=5)
 parser.add_argument('--repeat', type=int, default=5)
 parser.add_argument('--no-lock-clock', dest='lock_clock', action='store_false')
 parser.add_argument('--workloads', type=str, nargs='+', default=['matmul', 'conv2d'], choices=['matmul', 'conv2d'])
+parser.add_argument('--kernels', type=str, nargs='+', default=['vendor', 'hidet'], choices=['vendor', 'hidet'])
 # output
 parser.add_argument('--out-dir', type=str, default='./results')
 
 if __name__ == '__main__':
     args = parser.parse_args()
     args.out_dir = os.path.join(args.out_dir,
-                                '{}_{}'.format(str(datetime.date.today()), get_repo_sha(short=True)),
+                                '{}_{}'.format(get_repo_commit_date(), get_repo_sha(short=True)),
                                 cuda.query_device_name(short=True))
     with cuda.BenchmarkContext(lock_clock=args.lock_clock):
         os.makedirs(args.out_dir, exist_ok=True)
