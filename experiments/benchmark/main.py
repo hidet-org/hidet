@@ -168,8 +168,8 @@ parser = argparse.ArgumentParser('Hidet benchmark script.')
 # latency measurement
 parser.add_argument('--cool', type=int, default=10)
 parser.add_argument('--warmup', type=int, default=5)
-parser.add_argument('--number', type=int, default=1)
-parser.add_argument('--repeat', type=int, default=10)
+parser.add_argument('--number', type=int, default=5)
+parser.add_argument('--repeat', type=int, default=5)
 parser.add_argument('--no-lock-clock', dest='lock_clock', action='store_false')
 # output
 parser.add_argument('--out-dir', type=str, default='./results')

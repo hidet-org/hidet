@@ -134,4 +134,4 @@ class PackedFunc:
         results = (c_float * repeat)()
         p_args, ret_arg = self._convert_args(args)
         _LIB.ProfilePackedFunc(self.c_packed_func, p_args, warmup, number, repeat, cast(pointer(results), c_float_p))
-        return [float(v) for v in results]
+        return [float(v) / number for v in results]
