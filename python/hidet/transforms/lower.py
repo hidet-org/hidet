@@ -18,8 +18,8 @@ def lower(ir_module: IRModule) -> IRModule:
         build_let_stmt_pass(),
         uplift_let_stmt_pass(),
         common_subexpression_elimination_pass(),
-        # inline_let_stmt_pass(inline_factor=1),
-        inline_let_stmt_pass(inline_all=True),
+        inline_let_stmt_pass(inline_factor=1),
+        # inline_let_stmt_pass(inline_all=True),
 
         # optimization (precompute condition)
         precompute_condition_pass(),

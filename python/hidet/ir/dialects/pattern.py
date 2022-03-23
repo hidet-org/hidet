@@ -171,6 +171,7 @@ class PatternMatcher:
                 FloorDiv: PatternMatcher.match_Binary,
                 LessThan: PatternMatcher.match_Binary,
                 Equal: PatternMatcher.match_Binary,
+                LessEqual: PatternMatcher.match_Binary,
                 TensorElement: PatternMatcher.match_TensorElement,
                 IfThenElse: PatternMatcher.match_IfThenElse,
                 Call: PatternMatcher.match_Call,

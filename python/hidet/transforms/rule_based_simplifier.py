@@ -95,6 +95,7 @@ class RuleBasedSimplifier(FuncStmtExprRewriter):
             ((e1 - c1) - e2, (e1 - e2) - c1),
             (e1 - (c1 - e2), (e1 + e2) - c1),
             (e1 - (e2 - c1), (e1 - e2) + c1),
+            ((e1 - c1) - c2, e1 - (c1 + c2)),
             # mul
             ((e1 + c1) * c2, c1 * c2 + e1 * c2),
             ((c1 - e1) * c2, c1 * c2 - e1 * c2),
@@ -108,6 +109,11 @@ class RuleBasedSimplifier(FuncStmtExprRewriter):
             # mod
             ((e1 * c1 + e2) % c1, e2 % c1),
             ((e1 % c1) % c1, e1 % c1),
+            # comparison
+            (e1 + c1 < c2, e1 < c2 - c1),
+            (e1 - c1 < c2, e1 < c1 + c2),
+            (c1 <= e1 - c2, c1 + c2 <= e1),
+            (c1 <= e1 + c2, c1 - c2 <= e1),
             # and/or
             (And(ec1, True), ec1),
             (And(ec1, False), convert(False)),

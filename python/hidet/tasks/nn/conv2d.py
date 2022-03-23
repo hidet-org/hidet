@@ -26,7 +26,7 @@ def conv2d(batch_size, in_channels, height, width, out_channels, kernel, padding
         shape=[batch_size, out_channels, out_height, out_width],
         fcompute=lambda n, c, h, w: reduce(
             shape=[in_channels, kernel[0], kernel[1]],
-            fcompute=lambda rc, xx, yy: padded[n, rc, h * stride[0] + xx, w * stride[1] + yy] * weight[c, rc, xx, yy],
+            fcompute=lambda rc, xx, yy: padded[n, rc, h * stride[0] + xx, w * stride[1] + yy] * weight.protect_read(indices=[c, rc, xx, yy], default_value=0.0),
             reduce_type='sum'
         )
     )

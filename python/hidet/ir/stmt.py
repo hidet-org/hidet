@@ -52,18 +52,12 @@ class LetStmt(Stmt):
 class ForStmt(Stmt):
     DEFAULT_UNROLL_LIMIT = 32
 
-    def __init__(self, loop_var, extent, unroll: Optional[bool] = None, body=None):
+    def __init__(self, loop_var, extent, unroll: Optional[Union[int, bool]] = None, body=None):
         from hidet.ir.functors import simplify
         super().__init__()
         self.loop_var: Var = loop_var
         self.extent = simplify(convert(extent))
-        if unroll is None:
-            if isinstance(self.extent, Constant) and self.extent.value <= ForStmt.DEFAULT_UNROLL_LIMIT:
-                self.unroll = True
-            else:
-                self.unroll = None  # leave to the underlying compiler to determine the unroll strategy
-        else:
-            self.unroll = unroll
+        self.unroll = unroll
         self.body = body
 
 

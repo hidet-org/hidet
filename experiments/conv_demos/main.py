@@ -96,14 +96,16 @@ def print_latencies(name, latencies):
     print('{:>40}: {:.3f} (std {:.3f}) ms [{}]'.format(name, np.median(latencies), np.std(latencies), " ".join([f'{v:.3f}' for v in latencies])))
 
 
-def benchmark(warmup=5, number=1, repeat=10, use_nsight_compute=False, keep_ir=False):
+def benchmark(warmup=5, number=1, repeat=10, use_nsight_compute=False, keep_ir=True):
     if use_nsight_compute:
         warmup = 0
         number = 1
         repeat = 1
     workloads = list(ConvSetting.resnet50_conv2ds(batch_size=1).keys()) + list(ConvSetting.resnet50_conv2ds(batch_size=16).keys())
+    # workloads = [workloads[2]]
+    workloads = ConvSetting.resnet50_conv2ds(batch_size=1)
     cudnn_baselines = [
-        # ('fma', 'implicit_gemm'),
+        ('fma', 'implicit_gemm'),
         # ('fma', 'implicit_precomp_gemm'),
         # ('fma', 'gemm'),
         # ('fma', 'direct'),
@@ -111,14 +113,14 @@ def benchmark(warmup=5, number=1, repeat=10, use_nsight_compute=False, keep_ir=F
         # ('fma', 'fft_tiling'),
         # ('fma', 'winograd'),
         # ('fma', 'winograd_nofused'),
-        # ('fma', 'auto')
+        ('fma', 'auto')
     ]
     packed_baselines = [
         # ('reference_implicit_gemm', conv2d_implicit_gemm_reference()),
         # ('reference', conv2d_reference())
     ]
     hidet_variants = [
-        # ('hidet_implicit_gemm', (CudaGridStaticConv2dImplicitGemmImplementer,))
+        ('hidet_implicit_gemm', (CudaGridStaticConv2dImplicitGemmImplementer,))
     ]
     print('Repeat = {}'.format(repeat))
     print()
@@ -180,12 +182,14 @@ def verify(keep_ir=True):
         # ConvSetting(batch_size=1, in_channels=1, image_size=3, out_channels=1, kernel=1, stride=1, padding=0),
         # ConvSetting(batch_size=1, in_channels=2, image_size=1, out_channels=1, kernel=1, stride=1, padding=0),
         # ConvSetting(batch_size=1, in_channels=1, image_size=1, out_channels=1, kernel=3, stride=1, padding=1),
+        # ConvSetting(batch_size=1, in_channels=2, image_size=2, out_channels=1, kernel=3, stride=2, padding=1),
         # ConvSetting(batch_size=20, in_channels=20, image_size=20, out_channels=20, kernel=3, stride=2, padding=1),
         # ConvSetting(batch_size=20, in_channels=20, image_size=20, out_channels=20, kernel=5, stride=2, padding=2),
         # ConvSetting(batch_size=20, in_channels=20, image_size=20, out_channels=20, kernel=5, stride=2, padding=1),
         # ConvSetting(batch_size=20, in_channels=20, image_size=20, out_channels=20, kernel=7, stride=2, padding=3),
     ]
-    workloads = list(ConvSetting.resnet50_conv2ds(batch_size=1).keys())[0:1]
+    # workloads = list(ConvSetting.resnet50_conv2ds(batch_size=1).keys())[0:2]
+    workloads = list(ConvSetting.resnet50_conv2ds(batch_size=1).keys())[:10] + list(ConvSetting.resnet50_conv2ds(batch_size=16).keys())[:10]
     cudnn_baselines = [
         # ('fma', 'implicit_gemm'),
     ]
@@ -287,7 +291,7 @@ def demo_settings():
 
 if __name__ == '__main__':
     # verify()
-    benchmark(use_nsight_compute=False)
+    benchmark(use_nsight_compute=False, keep_ir=False)
     # test_custom_func()
     # demo_hidet_conv2d()
     # demo_settings()

@@ -170,6 +170,7 @@ def demo_softmax():
     features = 2000
     x = relay.var('x', shape=(batch_size, features))
     y = relay.nn.softmax(x, axis=1)
+    # y = relay.nn.fast_softmax(x, axis=1)
     func = relay.Function(params=[x], body=y)
     ir_module = tvm.ir.IRModule.from_expr(func)
     hidet.utils.tvm_utils.dump_relay_cuda_code(ir_module, out_dir='./outs/softmax')

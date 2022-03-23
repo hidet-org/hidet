@@ -19,13 +19,19 @@ def get_primitive_function(name: str) -> Tuple[Var, FuncType, Optional[Function]
     return _primitive_functions[name]
 
 
-def register_primitive_function(name, func_or_ftype: Union[Function, FuncType]):
+def register_primitive_function(name, func_or_ftype: Optional[Union[Function, FuncType]] = None):
     if isinstance(func_or_ftype, Function):
         func = func_or_ftype
         func_type = FuncType.from_func(func)
     elif isinstance(func_or_ftype, FuncType):
         func = None
         func_type = func_or_ftype
+    elif func_or_ftype is None:
+        # currently, we allow to register primitive function without function type
+        # leave the check to underlying compiler
+        # todo: add the check at our level
+        func = None
+        func_type = None
     else:
         raise False
     v = Var(name, func_type)
@@ -73,7 +79,7 @@ def sts128(reg0, reg1, reg2, reg3, smem_addr) -> Call:
             fb.extend_params(regs_vars + [smem_addr_var])
             # body
             body = AsmStmt(
-                r"{" 
+                r"{"
                 r"  .reg.u64 u64addr;"
                 r"  cvta.to.shared.u64 u64addr, %0;"
                 r"  st.shared.v4.f32 [u64addr], {%1, %2, %3, %4};"
@@ -91,11 +97,39 @@ def sts128(reg0, reg1, reg2, reg3, smem_addr) -> Call:
 def printf(format_string, *args):
     """
     usage:
-    printf("%d %d\n", expr_1, expr_2)
+    printf(r"%d %d\n", expr_1, expr_2)
     """
     arg_string = ', '.join(['{}'] * len(args))
     template_string = f'printf("{format_string}", {arg_string});'
     return BlackBoxStmt(template_string, *args)
+
+
+def shfl_sync(mask, var, src_lane, width=32):
+    if '__shfl_sync' not in _primitive_functions:
+        register_primitive_function('__shfl_sync', FuncType([], VoidType()))
+    func_var = get_primitive_function('__shfl_sync')[0]
+    return Call(func_var, [mask, var, src_lane, width])
+
+
+def shfl_up_sync(mask, var, delta, width=32):
+    if '__shfl_up_sync' not in _primitive_functions:
+        register_primitive_function('__shfl_up_sync')
+    func_var = get_primitive_function('__shfl_up_sync')[0]
+    return Call(func_var, [mask, var, delta, width])
+
+
+def shfl_down_sync(mask, var, delta, width=32):
+    if '__shfl_down_sync' not in _primitive_functions:
+        register_primitive_function('__shfl_down_sync')
+    func_var = get_primitive_function('__shfl_down_sync')[0]
+    return Call(func_var, [mask, var, delta, width])
+
+
+def shfl_xor_sync(mask, var, lane_mask, width=32):
+    if '__shfl_down_sync' not in _primitive_functions:
+        register_primitive_function('__shfl_down_sync')
+    func_var = get_primitive_function('__shfl_down_sync')[0]
+    return Call(func_var, [mask, var, lane_mask, width])
 
 
 def set_kernel_max_dynamic_smem_bytes(func_var, max_dynamic_smem_bytes):

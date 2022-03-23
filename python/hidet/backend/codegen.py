@@ -330,10 +330,14 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         update_doc = self(v) + ' = ' + self(v + 1)
         doc = Text('')
         if stmt.unroll is not None:
-            if stmt.unroll:
-                doc += NewLine() + '#pragma unroll'  # complete unroll
+            if isinstance(stmt.unroll, bool):
+                if stmt.unroll:
+                    doc += NewLine() + '#pragma unroll'  # complete unroll
+                else:
+                    doc += NewLine() + '#pragma unroll 1'  # prevent from unrolling
             else:
-                doc += NewLine() + '#pragma unroll 1'  # prevent from unrolling
+                assert isinstance(stmt.unroll, int)
+                doc += NewLine() + '#pragma unroll {}'.format(stmt.unroll)
         doc += NewLine() + Text('for (') + init_doc + '; ' + cond_doc + '; ' + update_doc + ') '
         body_doc = self(stmt.body)
         doc += Text('{') + body_doc.indent() + NewLine() + Text('} ')

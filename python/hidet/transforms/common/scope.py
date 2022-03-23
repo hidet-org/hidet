@@ -15,24 +15,27 @@ class Scope:
     let variable should be defined (with their value).
     """
 
-    def __init__(self, stack, level, parent):
-        self.stack = stack
-        self.level = level
-        self.parent: 'Scope' = parent
+    def __init__(self, stack, scope_stmt):
+        self.stack: 'ScopeStack' = stack
+        self.scope_stmt = scope_stmt
+        self.level = None
+        self.parent: Optional['Scope'] = None
         self.declare_vars: List[Var] = []
         self.defined_vars: List[Var] = []
         self.var2value: Dict[Var, Optional[Expr]] = {}
         self.defined_predicates: List[List[Expr]] = []
         self.predicate_vars: List[Var] = []
 
-    def find_scope_for_expr(self, expr) -> 'Scope':
-        used_vars = collect(expr, Var)
-        levels = [self.stack.var2scope[used_var].level for used_var in used_vars]
-        max_level = max(levels)
-        scope = self
-        while max_level < scope.level:
-            scope = scope.parent
-        return scope
+    def __enter__(self):
+        scopes = self.stack.scopes
+        self.parent = scopes[0] if len(scopes) > 0 else None
+        self.level = len(scopes)
+        scopes.append(self)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        scope = self.stack.scopes.pop()
+        assert scope is self
 
     def declare(self, var: Var):
         # declare a variable at current scope
@@ -41,32 +44,24 @@ class Scope:
         assert var not in self.stack.var2scope
         self.stack.var2scope[var] = self
 
-    def define(self, var: Var, value: Expr, at_current_scope=False):
+    def define(self, var: Var, value: Expr):
         # define a variable at the outer-most scope with given value
         # find the outer-most (with minimal level) scope that contains the used var to define
-        if at_current_scope:
-            scope = self
-        else:
-            scope = self.find_scope_for_expr(value)
-        scope.defined_vars.append(var)
-        scope.var2value[var] = value
+        self.defined_vars.append(var)
+        self.var2value[var] = value
         assert var not in self.stack.var2scope
-        self.stack.var2scope[var] = scope
+        self.stack.var2scope[var] = self
 
-    def define_predicate(self, predicate: Expr, at_current_scope=False) -> Expr:
-        if at_current_scope:
-            scope = self
-        else:
-            scope = self.find_scope_for_expr(predicate)
-        if len(scope.defined_predicates) == 0 or len(scope.defined_predicates[-1]) == 32:
+    def define_predicate(self, predicate: Expr) -> Expr:
+        if len(self.defined_predicates) == 0 or len(self.defined_predicates[-1]) == 32:
             var = Var('p', type=ScalarType('uint32'))
-            scope.defined_predicates.append([])
-            scope.predicate_vars.append(var)
-            self.stack.var2scope[var] = scope
-        scope.defined_predicates[-1].append(predicate)
+            self.defined_predicates.append([])
+            self.predicate_vars.append(var)
+            self.stack.var2scope[var] = self
+        self.defined_predicates[-1].append(predicate)
         # mask = LeftShift(1, len(scope.defined_predicates[-1]) - 1)
-        mask = 1 << (len(scope.defined_predicates[-1]) - 1)
-        return BitwiseAnd(scope.predicate_vars[-1], mask)
+        mask = 1 << (len(self.defined_predicates[-1]) - 1)
+        return BitwiseAnd(self.predicate_vars[-1], mask)
 
     def wrap(self, body):
         # wrap the body with defined variables at current scope
@@ -89,16 +84,14 @@ class ScopeStack:
         self.scopes = []
         self.var2scope: Dict[Var, Scope] = {}
 
-    def __enter__(self) -> Scope:
-        parent = self.scopes[-1] if len(self.scopes) > 0 else None
-        level = len(self.scopes)
-        scope = Scope(self, level, parent)
-        self.scopes.append(scope)
-        return scope
+    def find_scope_for_expr(self, expr) -> 'Scope':
+        used_vars = collect(expr, Var)
+        levels = [self.var2scope[used_var].level for used_var in used_vars]
+        max_level = max(levels)
+        return self.scopes[max_level]
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if exc_type is None:
-            self.scopes.pop()
+    def new_scope(self, scope_stmt=None):
+        return Scope(self, scope_stmt)
 
     def current(self) -> Scope:
         assert len(self.scopes) > 0
@@ -110,11 +103,14 @@ class FuncStmtExprRewriterWithScope(FuncStmtExprRewriter):
         super().__init__(use_memo=use_memo)
         self.scope_stack = ScopeStack()
 
-    def new_scope(self) -> ContextManager[Scope]:
-        return self.scope_stack
+    def new_scope(self, stmt=None) -> ContextManager[Scope]:
+        return self.scope_stack.new_scope(stmt)
+
+    def scope_to_define(self, expr: Expr) -> Scope:
+        return self.scope_stack.find_scope_for_expr(expr)
 
     def visit_Function(self, func: Function):
-        with self.new_scope() as scope:
+        with self.new_scope(None) as scope:
             for extern_var in func.extern_vars:
                 scope.declare(extern_var)
             for param in func.params:
@@ -125,14 +121,16 @@ class FuncStmtExprRewriterWithScope(FuncStmtExprRewriter):
             return Function(func.name, func.params, body, func.ret_type, func.local_vars, func.extern_vars, func.attrs)
 
     def visit_ForStmt(self, stmt: ForStmt):
-        with self.new_scope() as scope:
+        with self.new_scope(stmt) as scope:
             self.visit(stmt.extent)
             scope.declare(stmt.loop_var)
             body = scope.wrap(self.visit(stmt.body))
             return ForStmt(stmt.loop_var, stmt.extent, stmt.unroll, body)
 
     def visit_LetStmt(self, stmt: LetStmt):
-        with self.new_scope() as scope:
+        with self.new_scope(stmt) as scope:
             for var, value in zip(stmt.bind_vars, stmt.bind_values):
-                scope.define(var, self.visit(value), at_current_scope=True)
+                value = self.visit(value)
+                scope_to_define = self.scope_to_define(value)
+                scope_to_define.define(var, value)
             return scope.wrap(self.visit(stmt.body))

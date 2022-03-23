@@ -6,7 +6,7 @@ from .common import FuncStmtExprRewriterWithScope
 
 class UpliftLetStmtRewriter(FuncStmtExprRewriterWithScope):
     def visit_LetStmt(self, stmt: LetStmt):
-        with self.new_scope() as scope:
+        with self.new_scope(stmt) as scope:
             for var, value in zip(stmt.bind_vars, stmt.bind_values):
                 scope.define(var, self.visit(value))
             return scope.wrap(self.visit(stmt.body))
