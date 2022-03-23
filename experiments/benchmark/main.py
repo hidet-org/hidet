@@ -141,6 +141,7 @@ def benchmark_conv2d(args):
         print(str(setting))
         for name, func in cudnn_baselines:
             name = 'cudnn_{}'.format(name)
+            time.sleep(args.cool)
             latencies = func.profile(n, ci, hi, wi, co, kx, ky, px, py, sx, sy, x, w, y, warmup=args.warmup, number=args.number, repeat=args.repeat)
             row.append(np.median(latencies))
             print_latencies(name, latencies)
@@ -150,6 +151,7 @@ def benchmark_conv2d(args):
             with impl_context(allowed=allowed) as ctx:
                 ir_module = implement(conv2d(n, ci, hi, wi, co, (kx, ky), (px, py), (sx, sy)))
                 module = build(ir_module, output_dir=f'./outs/bench/{name}_{setting}', keep_ir=False, verbose=False)
+                time.sleep(args.cool)
                 latencies = module['conv2d'].profile(x, w, y, warmup=args.warmup, number=args.number, repeat=args.repeat)
                 row.append(np.median(latencies))
                 print_latencies(name, latencies)
@@ -164,7 +166,7 @@ def benchmark_conv2d(args):
 
 parser = argparse.ArgumentParser('Hidet benchmark script.')
 # latency measurement
-parser.add_argument('--cool', type=int, default=1)
+parser.add_argument('--cool', type=int, default=10)
 parser.add_argument('--warmup', type=int, default=5)
 parser.add_argument('--number', type=int, default=1)
 parser.add_argument('--repeat', type=int, default=10)
