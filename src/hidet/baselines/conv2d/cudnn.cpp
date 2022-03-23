@@ -1,9 +1,11 @@
 #include <map>
+#include <unordered_map>
 #include <cstring>
 #include <cudnn.h>
 #include <hidet/runtime.h>
 #include <hidet/packedfunc.h>
 #include <hidet/cudnn_common.h>
+#include <time.h>
 
 struct Conv2dSetting {
     int batch_size;
@@ -36,10 +38,22 @@ struct Conv2dSetting {
     // CUDNN_CONVOLUTION_FWD_ALGO_FFT_TILING            = 5,
     // CUDNN_CONVOLUTION_FWD_ALGO_WINOGRAD              = 6,
     // CUDNN_CONVOLUTION_FWD_ALGO_WINOGRAD_NONFUSED     = 7,
-    bool operator<(const Conv2dSetting &rhs) const {
+//    bool operator<(const Conv2dSetting &rhs) const {
+//        const Conv2dSetting &lhs = *this;
+//        // only used when this class has only integers
+//        return std::memcmp(&lhs, &rhs, sizeof(Conv2dSetting)) < 0;
+//    }
+    bool operator==(const Conv2dSetting &rhs) const {
         const Conv2dSetting &lhs = *this;
-        // only used when this class has only integers
-        return std::memcmp(&lhs, &rhs, sizeof(Conv2dSetting)) < 0;
+        int *a = (int*)(&lhs);
+        int *b = (int*)(&rhs);
+        int n = sizeof(Conv2dSetting) / sizeof(int);
+        for(int i = 0; i < n; i++) {
+            if(a[i] != b[i]) {
+                return false;
+            }
+        }
+        return true;
     }
     void print() const {
         fprintf(stderr, "input_%dx%dx%dx%d_filter_%d_%d_%d_%d_stride_%d_%d_padding_%d_%d\n",
@@ -53,6 +67,22 @@ struct Conv2dSetting {
         return {buf};
     }
 };
+namespace std {
+template<>
+struct hash<Conv2dSetting> {
+    std::size_t operator()(const Conv2dSetting &key) const {
+        int n = sizeof(Conv2dSetting) / sizeof(int);
+        int *arr = (int*)(&key);
+        std::size_t cur = 0;
+        for(int i = 0; i < n; i++) {
+            cur = (cur + (324723947 + (unsigned)arr[i])) ^ 93485734985;
+        }
+        return cur;
+    }
+};
+
+}
+
 
 
 struct Conv2dContext {
@@ -143,9 +173,13 @@ Conv2dContext create_conv2d_context(const Conv2dSetting &setting) {
 
 
 static void cudnn_conv2d(const Conv2dSetting &setting, float *x, float *w, float *y) {
-    static std::map<Conv2dSetting, Conv2dContext> setting2context;
+    static std::unordered_map<Conv2dSetting, Conv2dContext> setting2context;
+//    auto start = clock();
     auto iter = setting2context.find(setting);
+//    auto end = clock();
+//    printf("used %ld micro seconds\n", (end - start) * 1000 * 1000 / CLOCKS_PER_SEC);
     if(iter == setting2context.end()) {
+//        printf("create a conv2d context\n");
         setting2context[setting] = create_conv2d_context(setting);
         iter = setting2context.find(setting);
     }

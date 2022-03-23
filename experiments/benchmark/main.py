@@ -69,11 +69,18 @@ def benchmark_matmul(args):
     hidet_variants = [
         ('HidetMatmul', (CudaGridStaticMatmulImplementer,)),
     ]
+    hidet_func = {}
+    for idx, (M, N, K) in enumerate(workloads):
+        for name, allowed in hidet_variants:
+            with impl_context(allowed=allowed):
+                ir_module = implement(matmul(M, N, K))
+                module = build(ir_module, output_dir=f'./outs/bench/{name}_{M}x{N}x{K}', verbose=False)
+                hidet_func[(idx, name)] = module['matmul']
     names = [name for name, _ in baselines] + [name for name, _ in hidet_variants]
     headers = ['M', 'N', 'K', *names, *[name + '_std' for name in names]]
     table = []
     raw_data = {}
-    for M, N, K in workloads:
+    for idx, (M, N, K) in enumerate(workloads):
         workload_key = 'matmul_{}x{}x{}'.format(M, N, K)
         raw_data[workload_key] = {}
         A = randn([M, K], 'float32', 'global', seed=1)
@@ -93,16 +100,14 @@ def benchmark_matmul(args):
             cur += 1
 
         for name, allowed in hidet_variants:
-            with impl_context(allowed=allowed):
-                ir_module = implement(matmul(M, N, K))
-                module = build(ir_module, output_dir=f'./outs/bench/{name}_{M}x{N}x{K}', verbose=False)
-                time.sleep(args.cool)
-                latencies = module['matmul'].profile(A, B, C, warmup=args.warmup, number=args.number, repeat=args.repeat)
-                print_latencies(name, latencies)
-                raw_data[workload_key][name] = latencies
-                row[cur] = float(np.median(latencies))
-                row[cur + len(names)] = float(np.std(latencies))
-                cur += 1
+            func = hidet_func[(idx, name)]
+            time.sleep(args.cool)
+            latencies = func.profile(A, B, C, warmup=args.warmup, number=args.number, repeat=args.repeat)
+            print_latencies(name, latencies)
+            raw_data[workload_key][name] = latencies
+            row[cur] = float(np.median(latencies))
+            row[cur + len(names)] = float(np.std(latencies))
+            cur += 1
         print()
         table.append(row)
     with open(os.path.join(args.out_dir, 'matmul.raw.json'), 'w') as f:
@@ -112,7 +117,8 @@ def benchmark_matmul(args):
 
 
 def benchmark_conv2d(args):
-    workloads: List[Conv2dSetting] = list(Conv2dSetting.resnet50_conv2ds(batch_size=1).keys()) + list(Conv2dSetting.resnet50_conv2ds(batch_size=16).keys())
+    # workloads: List[Conv2dSetting] = list(Conv2dSetting.resnet50_conv2ds(batch_size=1).keys()) + list(Conv2dSetting.resnet50_conv2ds(batch_size=16).keys())
+    workloads: List[Conv2dSetting] = list(Conv2dSetting.resnet50_conv2ds(batch_size=1).keys())[:5]
     cudnn_baselines = [
         ('cudnn_implicit_gemm', conv2d_cudnn(algo='implicit_gemm')),
         ('cudnn_auto', conv2d_cudnn(algo='auto'))
@@ -120,11 +126,24 @@ def benchmark_conv2d(args):
     hidet_variants = [
         ('hidet_implicit_gemm', (CudaGridStaticConv2dImplicitGemmImplementer,))
     ]
+    hidet_func = {}
+    for idx, setting in enumerate(workloads):
+        n, ci, hi, wi = setting.batch_size, setting.in_channels, setting.image_size[0], setting.image_size[1]
+        co, kx, ky = setting.out_channels, setting.kernel[0], setting.kernel[1]
+        px, py = setting.padding
+        sx, sy = setting.stride
+        print(setting)
+        for name, allowed in hidet_variants:
+            with impl_context(allowed=allowed) as ctx:
+                ir_module = implement(conv2d(n, ci, hi, wi, co, (kx, ky), (px, py), (sx, sy)))
+                module = build(ir_module, output_dir=f'./outs/bench/{name}_{setting}', keep_ir=False, verbose=False)
+                hidet_func[(idx, name)] = module['conv2d']
+
     names = [name for name, _ in cudnn_baselines] + [name for name, _ in hidet_variants]
     headers = ['n', 'c', 'h', 'w', 'oc', 'k', 'p', 's', 'gm', 'gn', 'gk'] + names + [name + '_std' for name in names]
     table = []
     raw_data = {}
-    for setting in workloads:
+    for idx, setting in enumerate(workloads):
         n, ci, hi, wi = setting.batch_size, setting.in_channels, setting.image_size[0], setting.image_size[1]
         co, kx, ky = setting.out_channels, setting.kernel[0], setting.kernel[1]
         ho, wo = setting.output_image_size
@@ -147,15 +166,12 @@ def benchmark_conv2d(args):
             print_latencies(name, latencies)
             raw_data[str(setting)][name] = latencies
 
-        for name, allowed in hidet_variants:
-            with impl_context(allowed=allowed) as ctx:
-                ir_module = implement(conv2d(n, ci, hi, wi, co, (kx, ky), (px, py), (sx, sy)))
-                module = build(ir_module, output_dir=f'./outs/bench/{name}_{setting}', keep_ir=False, verbose=False)
-                time.sleep(args.cool)
-                latencies = module['conv2d'].profile(x, w, y, warmup=args.warmup, number=args.number, repeat=args.repeat)
-                row.append(np.median(latencies))
-                print_latencies(name, latencies)
-                raw_data[str(setting)][name] = latencies
+        for name, _ in hidet_variants:
+            func = hidet_func[(idx, name)]
+            latencies = func.profile(x, w, y, warmup=args.warmup, number=args.number, repeat=args.repeat)
+            row.append(np.median(latencies))
+            print_latencies(name, latencies)
+            raw_data[str(setting)][name] = latencies
         print()
         table.append(row)
     with open(os.path.join(args.out_dir, 'conv2d.raw.json'), 'w') as f:
@@ -166,11 +182,12 @@ def benchmark_conv2d(args):
 
 parser = argparse.ArgumentParser('Hidet benchmark script.')
 # latency measurement
-parser.add_argument('--cool', type=int, default=10)
+parser.add_argument('--cool', type=int, default=1)
 parser.add_argument('--warmup', type=int, default=5)
 parser.add_argument('--number', type=int, default=5)
 parser.add_argument('--repeat', type=int, default=5)
 parser.add_argument('--no-lock-clock', dest='lock_clock', action='store_false')
+parser.add_argument('--workloads', type=str, nargs='+', default=['matmul', 'conv2d'], choices=['matmul', 'conv2d'])
 # output
 parser.add_argument('--out-dir', type=str, default='./results')
 
@@ -182,5 +199,9 @@ if __name__ == '__main__':
     with cuda.BenchmarkContext(lock_clock=args.lock_clock):
         os.makedirs(args.out_dir, exist_ok=True)
         print_enviroment(args)
-        benchmark_matmul(args)
-        benchmark_conv2d(args)
+        benchmark_func = {
+            'matmul': benchmark_matmul,
+            'conv2d': benchmark_conv2d,
+        }
+        for workload in args.workloads:
+            benchmark_func[workload](args)
