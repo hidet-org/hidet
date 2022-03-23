@@ -132,6 +132,13 @@ def shfl_xor_sync(mask, var, lane_mask, width=32):
     return Call(func_var, [mask, var, lane_mask, width])
 
 
+def expf(v):
+    if '__expf' not in _primitive_functions:
+        register_primitive_function('__expf')
+    func_var = get_primitive_function('__expf')[0]
+    return Call(func_var, [v])
+
+
 def set_kernel_max_dynamic_smem_bytes(func_var, max_dynamic_smem_bytes):
     template_string = r'cudaFuncSetAttribute({}, cudaFuncAttributeMaxDynamicSharedMemorySize, {});'
     return BlackBoxStmt(template_string, func_var, max_dynamic_smem_bytes)

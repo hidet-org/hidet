@@ -94,5 +94,5 @@ def scalar_type(type_name):
     return ScalarType(type_name)
 
 
-def tensor_type(scope, dtype, shape, layout):
+def tensor_type(scope, dtype, shape=None, layout=None):
     return TensorType(scope, dtype, shape, layout)

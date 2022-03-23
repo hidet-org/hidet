@@ -33,6 +33,8 @@ add_library(hidet SHARED
         src/hidet/baselines/conv2d/direct.cu
         src/hidet/baselines/conv2d/reference.cu
         src/hidet/baselines/conv2d/implicit_gemm_ref.cu
+        # softmax baseline
+        src/hidet/baselines/cudnn_softmax.cpp
         )
 
 target_include_directories(hidet PRIVATE

@@ -18,13 +18,6 @@
         << "CUBLAS: error code " << e << std::endl;             \
     }}
 
-#define CUDNN_CALL(func) {                                          \
-    cudnnStatus_t _status = (func);                                 \
-    if(_status != CUDNN_STATUS_SUCCESS) {                           \
-        std::cerr << __FILE__ << ": " << __LINE__ << ":"            \
-        << "CUDNN: " << cudnnGetErrorString(_status) << std::endl;  \
-    }}
-
 #ifdef assert
 #undef assert
 #endif
