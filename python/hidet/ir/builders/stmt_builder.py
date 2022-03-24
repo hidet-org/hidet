@@ -52,7 +52,7 @@ class StmtBuilder:
             v = var(v)
         return StmtScope(self, stmts=ForStmt(v, extent, unroll), ret=v)
 
-    def if_then(self, cond: Expr) -> StmtScope:
+    def if_then(self, cond: Union[bool, Expr]) -> StmtScope:
         return StmtScope(self, stmts=[IfStmt(cond)], ret=None)
 
     def otherwise(self) -> StmtScope:

@@ -15,6 +15,8 @@ class TypeInfer(ExprFunctor):
     def visit_Binary(self, e: BinaryOp):
         atype: ScalarType = self.visit(e.a)
         btype: ScalarType = self.visit(e.b)
+        if not atype or not btype:
+            return ScalarType(name=None)
         assert atype.name == btype.name
         if isinstance(e, (Add, Sub, Multiply, Div, Mod, FloorDiv)):
             return atype

@@ -8,46 +8,46 @@ from hidet.ir.primitives import expf
 
 
 def softmax(shape: List[int], axis: int):
+    axis = (axis + len(shape)) % len(shape)
     # todo: support other shape
-    assert len(shape) == 2
-    assert axis == 1
-    m, n = shape
-    x = tensor_input('x', 'float32', shape=[m, n])
+    assert len(shape) == 4 and axis == 1
+    m, n, p, q = shape
+    x = tensor_input('x', 'float32', shape=[m, n, p, q])
     mx = compute(
         name='mx',
-        shape=[m],
-        fcompute=lambda i: reduce(
+        shape=[m, p, q],
+        fcompute=lambda i, r, s: reduce(
             shape=[n],
-            fcompute=lambda j: x[i, j],
+            fcompute=lambda j: x[i, j, r, s],
             reduce_type='max'
         )
     )
     e = compute(
         name='e',
-        shape=[m, n],
-        fcompute=lambda i, j: expf(x[i, j] - mx[i])
+        shape=[m, n, p, q],
+        fcompute=lambda i, j, r, s: expf(x[i, j, r, s] - mx[i, r, s])
     )
     se = compute(
         name='se',
-        shape=[m],
-        fcompute=lambda i: reduce(
+        shape=[m, p, q],
+        fcompute=lambda i, r, s: reduce(
             shape=[n],
-            fcompute=lambda j: e[i, m],
+            fcompute=lambda j: e[i, j, r, s],
             reduce_type='sum'
         )
     )
     out = compute(
         name='out',
-        shape=[m, n],
-        fcompute=lambda i, j: e[i, j] / se[i]
+        shape=[m, n, p, q],
+        fcompute=lambda i, j, r, s: e[i, j, r, s] / se[i, r, s]
     )
     return Task(
         name='softmax',
         computation=out,
         params=[x, out],
         params_type=[
-            tensor_type(scope='global', dtype='float32', layout=DataLayout.row_major([m, n])),
-            tensor_type(scope='global', dtype='float32', layout=DataLayout.row_major([m, n]))
+            tensor_type(scope='global', dtype='float32', layout=DataLayout.row_major([m, n, p, q])),
+            tensor_type(scope='global', dtype='float32', layout=DataLayout.row_major([m, n, p, q]))
         ],
         worker=Grid()
     )

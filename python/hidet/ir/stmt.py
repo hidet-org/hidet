@@ -19,6 +19,7 @@ class EvaluateStmt(Stmt):
 class BufferStoreStmt(Stmt):
     def __init__(self, buf, indices, value):
         super().__init__()
+        assert isinstance(indices, (list, tuple))
         self.buf = buf
         self.indices = convert(indices)
         self.value = convert(value)

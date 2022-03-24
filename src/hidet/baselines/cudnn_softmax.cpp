@@ -2,14 +2,25 @@
 #include <hidet/cudnn_common.h>
 #include <hidet/packedfunc.h>
 #include <hidet/runtime.h>
+#include <crt/device_functions.h>
 
 struct SoftmaxWorkload {
-    int m;
     int n;
-    SoftmaxWorkload(int m, int n):m(m), n(n){}
+    int c;
+    int h;
+    int w;
+    SoftmaxWorkload(int n, int c, int h, int w):n(n), c(c), h(h), w(w){}
     bool operator<(const SoftmaxWorkload &rhs) const {
         const SoftmaxWorkload& lhs = *this;
-        return lhs.m < rhs.m || (lhs.m == rhs.m && lhs.n < rhs.n);
+        if(lhs.n != rhs.n)
+            return lhs.n < rhs.n;
+        if(lhs.c != rhs.c)
+            return lhs.c < rhs.c;
+        if(lhs.h != rhs.h)
+            return lhs.h < rhs.h;
+        if(lhs.w != rhs.w)
+            return lhs.w < rhs.w;
+        return false;
     }
 };
 
@@ -21,7 +32,7 @@ struct CudnnSoftmaxContext {
 
     explicit CudnnSoftmaxContext(const SoftmaxWorkload &workload) {
         CUDNN_CALL(cudnnCreateTensorDescriptor(&x_desc));
-        CUDNN_CALL(cudnnSetTensor4dDescriptor(x_desc, CUDNN_TENSOR_NCHW, CUDNN_DATA_FLOAT, workload.m, workload.n, 1, 1));
+        CUDNN_CALL(cudnnSetTensor4dDescriptor(x_desc, CUDNN_TENSOR_NCHW, CUDNN_DATA_FLOAT, workload.n, workload.c, workload.h, workload.w));
         y_desc = x_desc;
     }
 };
@@ -40,17 +51,16 @@ void cudnn_softmax(const SoftmaxWorkload &workload, float* x, float* y) {
 
 // args: m, n, x, y
 DLL void SoftmaxCudnn(int num_args, const int *arg_types, void **args) {
-    assert(num_args == 4);
-    for(int i = 0; i < 2; i++) {
+    assert(num_args == 6);
+    for(int i = 0; i < 4; i++) {
         assert(arg_types[i] == INT32);
     }
-    for(int i = 2; i < 2 + 2; i++) {
+    for(int i = 4; i < 4 + 2; i++) {
         assert(arg_types[i] == POINTER);
     }
 
-    SoftmaxWorkload workload(INT_ARG(args[0]), INT_ARG(args[1]));
-    auto *x = (float*)args[2];
-    auto *y = (float*)args[3];
+    SoftmaxWorkload workload(INT_ARG(args[0]), INT_ARG(args[1]), INT_ARG(args[2]), INT_ARG(args[3]));
+    auto *x = (float*)args[4];
+    auto *y = (float*)args[5];
     cudnn_softmax(workload, x, y);
 }
-

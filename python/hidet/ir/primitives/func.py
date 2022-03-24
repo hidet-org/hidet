@@ -139,6 +139,27 @@ def expf(v):
     return Call(func_var, [v])
 
 
+def active_mask():
+    if '__activemask' not in _primitive_functions:
+        register_primitive_function('__activemask')
+    func_var = get_primitive_function('__activemask')[0]
+    return Call(func_var, [])
+
+
+def cuda_max(a, b):
+    if 'max' not in _primitive_functions:
+        register_primitive_function('max')
+    func_var = get_primitive_function('max')[0]
+    return Call(func_var, [a, b])
+
+
+def cuda_min(a, b):
+    if 'min' not in _primitive_functions:
+        register_primitive_function('min')
+    func_var = get_primitive_function('min')[0]
+    return Call(func_var, [a, b])
+
+
 def set_kernel_max_dynamic_smem_bytes(func_var, max_dynamic_smem_bytes):
     template_string = r'cudaFuncSetAttribute({}, cudaFuncAttributeMaxDynamicSharedMemorySize, {});'
     return BlackBoxStmt(template_string, func_var, max_dynamic_smem_bytes)
