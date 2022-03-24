@@ -2,7 +2,6 @@
 #include <hidet/cudnn_common.h>
 #include <hidet/packedfunc.h>
 #include <hidet/runtime.h>
-#include <crt/device_functions.h>
 
 struct SoftmaxWorkload {
     int n;
@@ -42,8 +41,9 @@ void cudnn_softmax(const SoftmaxWorkload &workload, float* x, float* y) {
     auto iter = workload2ctx.find(workload);
     if(iter == workload2ctx.end()) {
         workload2ctx[workload] = CudnnSoftmaxContext(workload);
+        iter = workload2ctx.find(workload);
     }
-    const auto & ctx = workload2ctx[workload];
+    const auto & ctx = iter->second;
     float alpha = 1.0;
     float beta = 0.0;
     CUDNN_CALL(cudnnSoftmaxForward(CudnnContext::global()->handle, CUDNN_SOFTMAX_ACCURATE, CUDNN_SOFTMAX_MODE_CHANNEL, &alpha, ctx.x_desc, x, &beta, ctx.y_desc, y));

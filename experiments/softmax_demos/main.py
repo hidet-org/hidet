@@ -17,7 +17,7 @@ def print_latencies(name, latencies):
     print('{:>40}: {:.3f} (std {:.3f}) ms [{}]'.format(name, np.median(latencies), np.std(latencies), " ".join([f'{v:.3f}' for v in latencies])))
 
 
-def benchmark(warmup=5, number=1, repeat=10, use_nsight_compute=False, keep_ir=True):
+def benchmark(warmup=5, number=5, repeat=5, use_nsight_compute=False, keep_ir=True):
     if use_nsight_compute:
         warmup = 0
         number = 1
@@ -25,7 +25,7 @@ def benchmark(warmup=5, number=1, repeat=10, use_nsight_compute=False, keep_ir=T
     workloads = [
         (1, 1000, 1, 1),
         (16, 1000, 1, 1),
-        (16, 1000, 16, 16),
+        *[(bs * 12 * seq_length, seq_length, 1, 1) for bs in [1, 8, 16, 32] for seq_length in [128, 512]]
     ]
     cudnn_baselines = [
         ('cudnn_softmax', softmax_cudnn())
@@ -69,6 +69,7 @@ def verify(keep_ir=True):
         (1, 1000, 1, 1),
         (16, 1000, 1, 1),
         (16, 1000, 16, 16),
+        (98304, 512, 1, 1),
     ]
     cudnn_baselines = [
         ('cudnn_softmax', softmax_cudnn())
@@ -105,5 +106,5 @@ def verify(keep_ir=True):
 
 
 if __name__ == '__main__':
-    verify()
+    # verify()
     benchmark(use_nsight_compute=False, keep_ir=True)

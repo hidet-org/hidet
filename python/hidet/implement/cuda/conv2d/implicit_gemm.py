@@ -15,6 +15,7 @@ from hidet.ir.primitives import block_idx, thread_idx, syncthreads, printf
 from hidet.ir.task import Task, Grid
 from hidet.ir.type import TensorType
 from hidet.utils import prod, cuda
+from hidet.implement.common import VirtualTensor
 
 
 class Conv2dSchedule(Schedule):
@@ -125,41 +126,6 @@ def pattern2matched(pattern, match):
 
 def double(layout):
     return DataLayout.row_major([2]) + layout
-
-
-class VirtualTensor:
-    # a virtual tensor map index to a value
-    def __init__(self, fmap):
-        self.fmap = fmap
-
-    def __getitem__(self, item):
-        if not isinstance(item, (list, tuple)):
-            item = [item]
-        if any(isinstance(v, slice) for v in item):
-            starts = []
-            indices = []
-            for v in item:
-                if isinstance(v, slice):
-                    starts.append(v.start if v.start else 0)
-                    indices.append(None)
-                else:
-                    starts.append(None)
-                    indices.append(v)
-
-            def fmap(*slice_indices):
-                assert len(indices) == len([v for v in starts if v is not None])
-                orig_indices = []
-                cur = 0
-                for i in range(len(starts)):
-                    if starts[i] is not None:
-                        orig_indices.append(slice_indices[cur] + starts[i])
-                        cur += 1
-                    else:
-                        orig_indices.append(indices[i])
-                return self.__getitem__(orig_indices)
-            return VirtualTensor(fmap)
-        else:
-            return self.fmap(*item)
 
 
 @register_impl('cuda_grid_static_conv2d_implicit_gemm_implementer')

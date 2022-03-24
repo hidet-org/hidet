@@ -15,6 +15,10 @@ class PatternNode(Node):
     pass
 
 
+class StringPattern(PatternNode):
+    pass
+
+
 class TypePattern(TypeNode, PatternNode):
     pass
 
@@ -162,6 +166,8 @@ class PatternMatcher:
     def dispatch_table():
         if PatternMatcher._dispatch_table is None:
             PatternMatcher._dispatch_table = {
+                # string
+                StringPattern: PatternMatcher.match_StringPattern,
                 # expr
                 Add: PatternMatcher.match_CommutativeBinary,
                 Sub: PatternMatcher.match_Binary,
@@ -245,6 +251,10 @@ class PatternMatcher:
     def always_match(self, pattern, target):
         pass
 
+    def match_StringPattern(self, pattern: StringPattern, target: Any):
+        if not isinstance(target, str):
+            raise NotMatchedError(pattern, target)
+
     def match_CommutativeBinary(self, pattern: BinaryOp, target: BinaryOp):
         # return self.match_Binary(pattern, target)
         try:
@@ -320,6 +330,7 @@ class PatternMatcher:
             stack.enter_context(self.match(pattern.axes, target.axes))
             stack.enter_context(self.match(pattern.shape, target.shape))
             stack.enter_context(self.match(pattern.value, target.value))
+            stack.enter_context(self.match(pattern.reduce_type, target.reduce_type))
 
     def match_DataLayout(self, pattern, target):
         if isinstance(target, (StridesLayout, DataLayout)):

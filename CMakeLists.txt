@@ -35,6 +35,8 @@ add_library(hidet SHARED
         src/hidet/baselines/conv2d/implicit_gemm_ref.cu
         # softmax baseline
         src/hidet/baselines/cudnn_softmax.cpp
+        # pool2d baseline
+        src/hidet/baselines/cudnn_pool2d.cpp
         )
 
 target_include_directories(hidet PRIVATE

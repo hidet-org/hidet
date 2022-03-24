@@ -176,7 +176,18 @@ def demo_softmax():
     hidet.utils.tvm_utils.dump_relay_cuda_code(ir_module, out_dir='./outs/softmax')
 
 
+def demo_pool2d():
+    n, c, h, w = 1, 64, 112, 112
+    x = relay.var('x', shape=(n, c, h, w))
+    y = relay.nn.max_pool2d(x, pool_size=(3, 3), strides=(2, 2), padding=(1, 1))
+    func = relay.Function(params=[x], body=y)
+    ir_module = tvm.ir.IRModule.from_expr(func)
+    hidet.utils.tvm_utils.dump_relay_cuda_code(ir_module, out_dir='./outs/max_pool2d')
+
+
 if __name__ == '__main__':
     # demo_vthread()
     # demo_conv2d_te()
-    demo_softmax()
+    # demo_softmax()
+    demo_pool2d()
+
