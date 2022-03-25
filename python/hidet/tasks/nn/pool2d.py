@@ -15,10 +15,10 @@ def normalize(v, rank=2):
 
 
 def max_pool2d(
-        shape: Tuple[int, int, int, int],
-        kernel: Union[Tuple[int, int], int],
-        strides: Union[Tuple[int, int], int],
-        padding: Union[Tuple[int, int], int]):
+        shape: Sequence[int],
+        kernel: Union[Sequence[int], int],
+        strides: Union[Sequence[int], int],
+        padding: Union[Sequence[int], int]):
     kernel = normalize(kernel)
     strides = normalize(strides)
     padding = normalize(padding)

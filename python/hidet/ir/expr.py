@@ -2,6 +2,7 @@ import string
 from typing import Optional, Union, Sequence, List, Tuple
 from .node import Node
 from .type import TypeNode, TensorType, TensorType, ScalarType, Scope, tensor_type, scalar_type
+from .layout import DataLayout
 
 PyScalar = Union[int, float]
 
@@ -323,6 +324,12 @@ class IfThenElse(Expr):
         self.cond = convert(cond)
         self.then_expr = convert(then_expr)
         self.else_expr = convert(else_expr)
+
+
+class AlterLayout(Expr):
+    def __init__(self, tensor_var, new_layout: DataLayout):
+        self.tensor_var = tensor_var
+        self.new_layout = new_layout
 
 
 class Var(Expr):

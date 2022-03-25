@@ -185,9 +185,24 @@ def demo_pool2d():
     hidet.utils.tvm_utils.dump_relay_cuda_code(ir_module, out_dir='./outs/max_pool2d')
 
 
+def demo_batch_norm():
+    n, c, h, w = 1, 64, 112, 112
+    x = relay.var('x', shape=[n, c, h, w])
+    running_mean = relay.var('running_mean', shape=[c])
+    running_var = relay.var('running_var', shape=[c])
+    beta = relay.var('beta', shape=[c])
+    gamma = relay.var('gamma', shape=[c])
+    y, y1, y2 = relay.nn.batch_norm(x, gamma=gamma, beta=beta, moving_mean=running_mean, moving_var=running_var, axis=1)
+    s = y + relay.reshape(y1, [1, c, 1, 1]) + relay.reshape(y2, [1, c, 1, 1])
+    func = relay.Function(params=[x, running_mean, running_var, beta, gamma], body=s)
+    ir_module = tvm.ir.IRModule.from_expr(func)
+    hidet.utils.tvm_utils.dump_relay_cuda_code(ir_module, out_dir='./outs/bn')
+
+
 if __name__ == '__main__':
     # demo_vthread()
     # demo_conv2d_te()
     # demo_softmax()
-    demo_pool2d()
+    # demo_pool2d()
+    demo_batch_norm()
 

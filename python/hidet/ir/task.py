@@ -52,3 +52,9 @@ class Task(Node):
         self.params: List[Union[ScalarInput, TensorInput, ComputeNode]] = params
         self.params_type: List[TypeNode] = params_type
         self.worker: Worker = worker
+
+    def type_of_param(self, given_param) -> Optional[TypeNode]:
+        for param, param_type in zip(self.params, self.params_type):
+            if given_param is param:
+                return param_type
+        return None

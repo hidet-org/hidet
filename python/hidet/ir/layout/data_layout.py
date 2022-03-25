@@ -109,11 +109,11 @@ class DataLayout(Node):
 
     @staticmethod
     def row_major(shape: Sequence[Int]):
-        return StridesLayout.row_major(shape)
+        return RowMajorLayout(shape)
 
     @staticmethod
     def column_major(shape: Sequence[Int]):
-        return StridesLayout.column_major(shape)
+        return ColumnMajorLayout(shape)
 
 
 class StridesLayout(DataLayout):
@@ -136,15 +136,11 @@ class StridesLayout(DataLayout):
         return ir.functors.simplify(max_index)
 
     @staticmethod
-    def row_major(shape: Sequence[Int]) -> 'StridesLayout':
-        return StridesLayout.from_shape(shape, list(range(len(shape))))
-
-    @staticmethod
-    def column_major(shape: Sequence[Int]) -> 'StridesLayout':
-        return StridesLayout.from_shape(shape, list(reversed(range(len(shape)))))
-
-    @staticmethod
     def from_shape(shape: Sequence[Int], perm: Sequence[int]):
+        return StridesLayout(shape, StridesLayout.shape2strides(shape, perm))
+
+    @staticmethod
+    def shape2strides(shape: Sequence[Int], perm: Sequence[int]):
         assert len(shape) == len(perm)
         rank = len(shape)
         tuples = [[i, p, None] for i, p in zip(range(rank), perm)]
@@ -154,7 +150,17 @@ class StridesLayout(DataLayout):
             tuples[i][2] = prod(reordered_shape[i + 1:])
         tuples = sorted(tuples, key=lambda t: t[0])
         strides = [t[2] for t in tuples]
-        return StridesLayout(shape, strides)
+        return strides
+
+
+class RowMajorLayout(StridesLayout):
+    def __init__(self, shape):
+        super().__init__(shape, StridesLayout.shape2strides(shape, list(range(len(shape)))))
+
+
+class ColumnMajorLayout(StridesLayout):
+    def __init__(self, shape):
+        super().__init__(shape, StridesLayout.shape2strides(shape, list(reversed(range(len(shape))))))
 
 
 class LocalLayout(DataLayout):
