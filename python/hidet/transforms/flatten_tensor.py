@@ -1,6 +1,6 @@
 from typing import List, Union
 from hidet.ir.type import TensorType
-from hidet.ir.expr import Var, TensorElement, TensorSlice
+from hidet.ir.expr import Var, TensorElement, TensorSlice, AlterLayout
 from hidet.ir.stmt import BufferStoreStmt
 from hidet.ir.func import Function
 from hidet.ir.functors import simplify_to_int, FuncStmtExprRewriter
@@ -97,15 +97,17 @@ class FlattenTensorAccessRewriter(FuncStmtExprRewriter):
         return Function(func.name, params, body, func.ret_type, local_vars, func.extern_vars, func.attrs)
 
     @staticmethod
-    def get_layout(var) -> DataLayout:
-        if isinstance(var.type, TensorType):
-            return var.type.layout
-        elif isinstance(var.type, TensorPointerType):
-            return var.type.tensor_type.layout
-        elif isinstance(var.type, PointerType):
-            return StridesLayout(shape=[0], strides=[1])
-        else:
-            raise NotImplementedError()
+    def get_layout(e) -> DataLayout:
+        if isinstance(e, AlterLayout):
+            return e.new_layout
+        elif isinstance(e, Var):
+            if isinstance(e.type, TensorType):
+                return e.type.layout
+            elif isinstance(e.type, TensorPointerType):
+                return e.type.tensor_type.layout
+            elif isinstance(e.type, PointerType):
+                return StridesLayout(shape=[0], strides=[1])
+        raise NotImplementedError()
 
     def visit_TensorElement(self, e: TensorElement):
         var = self(e.base)
@@ -121,6 +123,9 @@ class FlattenTensorAccessRewriter(FuncStmtExprRewriter):
         layout = self.get_layout(stmt.buf)
         global_index = layout(indices)
         return BufferStoreStmt(var, [global_index], value)
+
+    def visit_AlterLayout(self, e: AlterLayout):
+        return e.var
 
     def visit_TensorSlice(self, e: TensorSlice):
         raise ValueError('there should not be any tensor slice after flattening tensor slice.')

@@ -327,9 +327,9 @@ class IfThenElse(Expr):
 
 
 class AlterLayout(Expr):
-    def __init__(self, tensor_var, new_layout: DataLayout):
-        self.tensor_var = tensor_var
-        self.new_layout = new_layout
+    def __init__(self, var, new_layout: DataLayout):
+        self.var: Var = var
+        self.new_layout: DataLayout = new_layout
 
 
 class Var(Expr):
@@ -437,5 +437,7 @@ def tensor_rank(v: Expr) -> int:
         return len(v.shape)
     elif isinstance(v, TensorCompute):
         return len(v.shape)
+    elif isinstance(v, AlterLayout):
+        return len(v.new_layout.shape)
     else:
         raise ValueError(v)

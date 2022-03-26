@@ -1,3 +1,4 @@
+from abc import ABC
 from typing import Mapping
 
 from hidet.ir.dialects.pattern import *
@@ -70,6 +71,7 @@ class ExprFunctor(NodeFunctor):
             TensorElement: cls.visit_TensorElement,
             TensorSlice: cls.visit_TensorSlice,
             IfThenElse: cls.visit_IfThenElse,
+            AlterLayout: cls.visit_AlterLayout,
             Call: cls.visit_Call,
             Let: cls.visit_Let,
             Var: cls.visit_Var,
@@ -146,6 +148,9 @@ class ExprFunctor(NodeFunctor):
         raise NotImplementedError()
 
     def visit_IfThenElse(self, e: IfThenElse):
+        raise NotImplementedError()
+
+    def visit_AlterLayout(self, e: AlterLayout):
         raise NotImplementedError()
 
     def visit_Cast(self, e: Cast):
@@ -280,6 +285,9 @@ class ExprVisitor(ExprFunctor):
         self.visit(e.cond)
         self.visit(e.then_expr)
         self.visit(e.else_expr)
+
+    def visit_AlterLayout(self, e: AlterLayout):
+        self.visit(e.var)
 
     def visit_Call(self, e: Call):
         self.visit(e.func_var)
@@ -444,6 +452,13 @@ class ExprRewriter(ExprFunctor):
             return e
         else:
             return IfThenElse(cond, then_expr, else_expr)
+
+    def visit_AlterLayout(self, e: AlterLayout):
+        var = self(e.var)
+        if var is e.var:
+            return e
+        else:
+            return AlterLayout(var, e.new_layout)
 
     def visit_Cast(self, e: Cast):
         expr = self(e.expr)
@@ -766,25 +781,6 @@ class FuncStmtExprRewriter(StmtExprRewriter):
             return func
         else:
             return Function(func.name, func.params, body, func.ret_type, func.local_vars, func.extern_vars, func.attrs)
-
-
-# class BoundAwareRewriter(FuncStmtExprRewriter):
-#     def __init__(self):
-#         from hidet.ir.analyzers import BoundAnalyzer, BoundInfo
-#         super().__init__()
-#         self.analyzer = BoundAnalyzer()
-#         self.bound: Dict[Expr, BoundInfo] = self.analyzer.bound
-#
-#     def visit(self, obj):
-#         if obj in self.memo:
-#             return self.memo[obj]
-#         self.analyzer.visit(obj)
-#         if isinstance(obj, Expr) and not isinstance(obj, Constant) and self.bound[obj].value is not None:
-#             ret = convert(self.bound[obj].value)
-#         else:
-#             ret = FuncStmtExprRewriter.visit(self, obj)
-#         self.memo[obj] = ret
-#         return ret
 
 
 class TypeFunctor(NodeFunctor):

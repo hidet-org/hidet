@@ -1,4 +1,5 @@
 from typing import List, Optional, Dict
+from collections import OrderedDict
 from hidet.ir.type import TensorType, ScalarType
 from hidet.ir.layout import DataLayout
 from hidet.ir.task import Task
@@ -20,7 +21,7 @@ class Operator:
 
 def convert(v):
     if isinstance(v, float):
-        return Tensor(dtype='float32', shape=[1], name='scalar_const')
+        return Tensor(shape=[1], dtype='float32', name='scalar_const')
     elif isinstance(v, Tensor):
         return v
     else:
@@ -28,7 +29,7 @@ def convert(v):
 
 
 class Tensor:
-    def __init__(self, dtype, shape, layout=None, op=None, index=0, name=None, value=None, init_method=None):
+    def __init__(self, shape, dtype: str, layout=None, op=None, index=0, name=None, value=None, init_method=None):
         self.op: Optional[Operator] = op
         self.index: int = index
         self.dtype: ScalarType = ScalarType(dtype) if isinstance(dtype, str) else dtype
@@ -42,7 +43,7 @@ class Tensor:
 
     @staticmethod
     def from_type(ttype: TensorType, op, index) -> 'Tensor':
-        return Tensor(op, index, ttype.scalar_type, ttype.shape, ttype.layout)
+        return Tensor(shape=ttype.shape, dtype=ttype.scalar_type.name, layout=ttype.layout, op=op, index=index)
 
     def __add__(self, other):
         from .ops import add
@@ -60,28 +61,42 @@ class Tensor:
         from .ops import divide
         return divide(self, convert(other))
 
+    def reshape(self, shape):
+        from .ops import reshape
+        return reshape(self, shape)
+
+    def flatten(self, start_dim=0, end_dim=-1):
+        from .ops import flatten
+        return flatten(self, start_dim, end_dim)
+
+    def rsqrt(self):
+        from .ops import rsqrt
+        return rsqrt(self)
+
 
 class Module:
     def __init__(self):
         self.name = None
-        self.parameters: Dict[str, Tensor] = {}
-        self.submodules: Dict[str, Module] = {}
+        self.parameters: OrderedDict[str, Optional[Tensor]] = OrderedDict()
+        self.submodules: OrderedDict[str, Optional[Module]] = OrderedDict()
 
     def __setattr__(self, key, value):
+        parameters = self.__dict__.get('parameters')
+        submodules = self.__dict__.get('submodules')
         if isinstance(value, Tensor):
             value.name = key
             self.parameters[key] = value
         elif isinstance(value, Module):
             value.name = '{}.{}'.format(self.name, key) if self.name else key
             self.submodules[key] = value
-        elif value is None and (key in self.parameters or key in self.submodules):
+        elif parameters and submodules and value is None and (key in parameters or key in submodules):
             if key in self.parameters:
-                del self.parameters[key]
+                self.parameters[key] = value
             if key in self.submodules:
-                del self.submodules
+                self.submodules[key] = value
         else:
-            super().__setattr__(self, key, value)
-        cnt = sum([1 for collection in [self.parameters, self.submodules, self.__dict__] if key in collection])
+            super().__setattr__(key, value)
+        cnt = sum([1 for collection in [parameters, submodules, self.__dict__] if collection and key in collection])
         assert cnt <= 1, 'duplicated definition of {}'.format(key)
 
     def __getattr__(self, item):
@@ -91,6 +106,8 @@ class Module:
             return self.submodules[item]
         raise AttributeError(item)
 
+    def __call__(self, *args):
+        return self.forward(*args)
+
     def forward(self, *args):
         raise NotImplementedError()
-

@@ -167,6 +167,13 @@ def cuda_sqrt(a):
     return Call(func_var, [a])
 
 
+def cuda_rsqrt(a):
+    if 'rsqrtf' not in _primitive_functions:
+        register_primitive_function('rsqrtf')
+    func_var = get_primitive_function('rsqrtf')[0]
+    return Call(func_var, [a])
+
+
 def set_kernel_max_dynamic_smem_bytes(func_var, max_dynamic_smem_bytes):
     template_string = r'cudaFuncSetAttribute({}, cudaFuncAttributeMaxDynamicSharedMemorySize, {});'
     return BlackBoxStmt(template_string, func_var, max_dynamic_smem_bytes)

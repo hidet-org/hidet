@@ -7,6 +7,7 @@ import pycuda.autoinit
 import numpy as np
 
 from hidet.ir.type import TensorType, ScalarType, tensor_type, scalar_type
+from hidet.utils import prod
 
 
 class Value:
@@ -34,11 +35,13 @@ class TensorValue(Value):
 
     @staticmethod
     def randn(shape, scalar_type, scope, strides=None, seed=0):
-        array = np.ndarray(shape=shape, dtype=scalar_type, strides=strides)
-        flattened: np.ndarray = array.ravel()
-        for i in range(flattened.size):
-            seed = (seed * 5 + 1) % 11
-            flattened[i] = float(seed)
+        np.random.seed(seed)
+        array = (np.random.randn(*shape) % 11).astype(scalar_type)
+        # array = np.ndarray(shape=shape, dtype=scalar_type, strides=strides)
+        # flattened: np.ndarray = array.ravel()
+        # for i in range(flattened.size):
+        #     seed = (seed * 5 + 1) % 11
+        #     flattened[i] = float(seed)
         return TensorValue.from_numpy(array, scope)
 
     @staticmethod
