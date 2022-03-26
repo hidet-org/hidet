@@ -140,7 +140,7 @@ class CudaGridStaticConv2dImplicitGemmImplementer(Implementer):
         return self.pattern.task_pattern
 
     def implement(self, task: Task, match: Mapping[Node, Any]) -> IRModule:
-        search_schedule = True
+        search_schedule = False
         if search_schedule:
             schedules = Conv2dSchedule.schedules()
             ir_modules = [self.implement_schedule(task, match, schedule) for schedule in schedules]

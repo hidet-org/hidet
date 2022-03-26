@@ -215,7 +215,8 @@ class PatternMatcher:
                 OptionalPattern: PatternMatcher.match_OptionalPattern,
                 ScalarTypePattern: PatternMatcher.match_ScalarTypePattern,
                 TensorTypePattern: PatternMatcher.match_TensorTypePattern,
-                # python containers
+                # python containers and types
+                str: PatternMatcher.match_String,
                 list: PatternMatcher.match_Sequence,
                 tuple: PatternMatcher.match_Sequence
             }
@@ -466,6 +467,10 @@ class PatternMatcher:
                 raise NotMatchedError(pattern, target, "length does not match")
             for a, b in zip(pattern, target):
                 stack.enter_context(self.match(a, b))
+
+    def match_String(self, pattern: str, target: str):
+        if pattern != target:
+            raise NotMatchedError(pattern, target)
 
 
 def any_const_int():

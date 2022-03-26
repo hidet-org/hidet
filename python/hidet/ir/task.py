@@ -1,7 +1,7 @@
 from typing import Union, Optional, List, Dict
 from hidet.ir.node import Node
 from hidet.ir.dialects.compute import ScalarInput, TensorInput, ComputeNode
-from hidet.ir.type import TypeNode
+from hidet.ir.type import TypeNode, TensorType
 from hidet.ir.expr import Expr, convert
 from hidet.ir.layout import TaskLayout
 
@@ -53,8 +53,8 @@ class Task(Node):
         self.params_type: List[TypeNode] = params_type
         self.worker: Worker = worker
 
-    def type_of_param(self, given_param) -> Optional[TypeNode]:
+    def type_of_param(self, given_param) -> Union[TypeNode, TensorType]:
         for param, param_type in zip(self.params, self.params_type):
             if given_param is param:
                 return param_type
-        return None
+        raise KeyError()

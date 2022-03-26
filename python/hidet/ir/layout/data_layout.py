@@ -39,7 +39,7 @@ def concat_let_expr(var2value, body: Expr):
 # data layout
 class DataLayout(Node):
     def __init__(self, shape=None, size=None):
-        self.shape: Tuple[Int] = shape
+        self.shape: Tuple[Int] = tuple([int(v) if isinstance(v, ir.Constant) else v for v in shape]) if shape else None
         self.size: Int = size
 
     def __call__(self, *args: Int):

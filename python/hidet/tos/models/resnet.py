@@ -20,6 +20,8 @@ class BasicBlock(nn.Module):
                  skip: Callable[[Any], Any] = None
                  ):
         super().__init__()
+        if skip is None:
+            skip = (lambda v: v)
         self.conv1 = conv3x3(in_channels, channels, stride)
         self.bn1 = nn.BatchNorm2d(channels)
         self.conv2 = conv3x3(channels, channels)
@@ -39,8 +41,8 @@ class Bottleneck(nn.Module):
     def __init__(self,
                  in_channels: int,
                  channels: int,
-                 stride: int = 1,
-                 skip: Callable[[Any], Any] = None
+                 stride: int,
+                 skip: Callable[[Any], Any]
                  ):
         super().__init__()
         expansion = 4
@@ -97,7 +99,7 @@ class ResNet(nn.Module):
                 layers.append(block(self.in_channels, channels, stride, skip))
                 self.in_channels = channels * block.expansion
             else:
-                layers.append(block(self.in_channels, channels))
+                layers.append(block(self.in_channels, channels, stride=1, skip=lambda v: v))
         return nn.Sequential(*layers)
 
     def forward(self, x):

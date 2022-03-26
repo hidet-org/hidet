@@ -1,5 +1,5 @@
 from hidet.ir.type import ScalarType, TensorType
-from hidet.ir.expr import BinaryOp, Add, Sub, Multiply, Div, Mod, FloorDiv, Condition, LessThan, Equal, IfThenElse, TensorSlice, Not, Or, And, LessEqual, Let, RightShift, LeftShift, BitwiseNot, BitwiseOr, BitwiseAnd
+from hidet.ir.expr import BinaryOp, Add, Sub, Multiply, Div, Mod, FloorDiv, Condition, LessThan, Equal, IfThenElse, TensorSlice, Not, Or, And, LessEqual, Let, RightShift, LeftShift, BitwiseNot, BitwiseOr, BitwiseAnd, AlterLayout
 from hidet.ir.expr import Var, Constant, TensorElement, Call
 from hidet.ir.dialects.compute import ScalarInput, TensorInput, TensorCompute, ReduceCompute
 from hidet.ir.dialects.lowlevel import PointerType, Cast, Dereference
@@ -97,6 +97,9 @@ class TypeInfer(ExprFunctor):
         assert is_bool(cond_type)
         assert isinstance(true_type, ScalarType) and isinstance(false_type, ScalarType) and true_type.name == false_type.name
         return true_type
+
+    def visit_AlterLayout(self, e: AlterLayout):
+        return self.visit(e.var)
 
     def visit_Let(self, e: Let):
         self.visit(e.value)

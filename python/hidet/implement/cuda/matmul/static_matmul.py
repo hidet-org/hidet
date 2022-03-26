@@ -287,7 +287,7 @@ class CudaGridStaticMatmulImplementer(Implementer):
         return self.pattern
 
     def implement(self, task: Task, match: Mapping[Node, Node]) -> IRModule:
-        schedules = MatmulSchedule.schedules(space_level=1)
+        schedules = MatmulSchedule.schedules(space_level=0)
         ir_modules = []
         for schedule in schedules:
             ir_modules.append(self.implement_schedule(task, match, schedule))
