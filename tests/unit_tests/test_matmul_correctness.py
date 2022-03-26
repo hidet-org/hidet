@@ -4,8 +4,6 @@ import pytest
 from hidet.backend import build
 from hidet.baselines.matmul import matmul_opt
 from hidet.implement import implement, impl_context
-from hidet.implement.cuda.conv2d import CudaGridStaticConv2dImplicitGemmImplementer
-from hidet.implement.cuda.generic import CudaGridSplitImplementer, CudaGridNaiveImplementer, CudaWarpTransfer2dImplementer, CudaWarpFillValueImplementer, CudaThreadNaiveImplementer
 from hidet.implement.cuda.matmul import CudaGridStaticMatmulImplementer
 from hidet.implement.resolve import random_resolve
 from hidet.ir.task import Grid, Host
@@ -30,11 +28,10 @@ def test_baseline(N, M, K, name, packed_func):
 
     HA, HB, HC = A.to_cpu(), B.to_cpu(), C.to_cpu()
     host_module['matmul'](HA, HB, HC)
-    np.testing.assert_allclose(GC.to_numpy(), HC.to_numpy())
+    np.testing.assert_allclose(GC.to_numpy(), HC.to_numpy(), rtol=1e-5, atol=1e-5)
 
 
 @pytest.mark.parametrize('N,M,K,name,implementers', [
-    (256, 256, 256, 'HidetNaive', (CudaGridNaiveImplementer, CudaThreadNaiveImplementer)),
     (234, 345, 567, 'HidetMatmul', (CudaGridStaticMatmulImplementer,)),
 ])
 def test_hidet_variant(N, M, K, name, implementers):
@@ -56,7 +53,7 @@ def test_hidet_variant(N, M, K, name, implementers):
 
     HA, HB, HC = A.to_cpu(), B.to_cpu(), C.to_cpu()
     host_module['matmul'](HA, HB, HC)
-    np.testing.assert_allclose(GC.to_numpy(), HC.to_numpy())
+    np.testing.assert_allclose(GC.to_numpy(), HC.to_numpy(), rtol=1e-5, atol=1e-5)
 
 
 if __name__ == '__main__':
