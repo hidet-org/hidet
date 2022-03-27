@@ -64,9 +64,10 @@ class ReduceComputePattern(ExprPattern):
 
 
 class TensorComputePattern(ExprPattern):
-    def __init__(self, rank=None, allow_dynamic_axis=True):
+    def __init__(self, rank=None, allow_dynamic_axis=True, value=None):
         self.rank = rank
         self.allow_dynamic_axis = allow_dynamic_axis
+        self.value = value
 
 
 class ScalarExprPattern(ExprPattern):
@@ -383,6 +384,8 @@ class PatternMatcher:
             raise NotMatchedError(pattern, target, "rank does not match")
         if not pattern.allow_dynamic_axis and any(not isinstance(v, Constant) for v in target.shape):
             raise NotMatchedError(pattern, target, "does not allow dynamic axis")
+        with self.match(pattern.value, target.value):
+            pass
 
     def match_ScalarExprPattern(self, pattern: ScalarExprPattern, target: Expr):
         from hidet.ir.functors import collect

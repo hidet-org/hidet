@@ -80,13 +80,17 @@ class BuildInstance:
 
 
 def lower_and_compile(ir_module: IRModule, output_dir, keep_ir: bool = False, nvcc_keep: bool = False, verbose: bool = False) -> Tuple[str, IRModule]:
+    # write task to disk
+    os.makedirs(output_dir, exist_ok=True)
+    with open(os.path.join(output_dir, 'task.txt'), 'w') as f:
+        f.write(str(ir_module.task))
+
     # lower
-    with Timer(msg='hidet lower time', verbose=verbose) as lower_timer:
+    with Timer(msg='hidet lower time', verbose=verbose):
         with PassContext(save_lowering_results=keep_ir, save_dir=os.path.join(output_dir, 'ir')):
             ir_module = lower(ir_module)
 
     # codegen
-    os.makedirs(output_dir, exist_ok=True)
     src_code = codegen(ir_module)
 
     # write source code to disk
@@ -95,7 +99,7 @@ def lower_and_compile(ir_module: IRModule, output_dir, keep_ir: bool = False, nv
         f.write(src_code)
 
     # call target compiler to get dynamic library
-    with Timer(msg='nvcc lower time', verbose=verbose) as target_compile_timer:
+    with Timer(msg='nvcc lower time', verbose=verbose):
         lib_path = compile_src_code(src_path, nvcc_keep=nvcc_keep)
     return lib_path, ir_module
 
@@ -110,7 +114,7 @@ def load_compiled_module(lib_path: str, lowered_ir_module: IRModule) -> Compiled
             assert isinstance(func.ret_type, VoidType)
             target_func = lowered_ir_module.lookup(func.get_attr('packed_func'))
             target_func_param_types = [p.type for p in target_func.params]
-            packed_func = PackedFunc(target_func_param_types, lib[func.name])
+            packed_func = PackedFunc(target_func_param_types, lib['hidet_' + func.name])
             compiled_funcs[func.name] = CompiledFunction(func.name, func, packed_func)
 
     return CompiledModule(lowered_ir_module, compiled_funcs)

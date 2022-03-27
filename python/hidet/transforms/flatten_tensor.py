@@ -1,4 +1,4 @@
-from typing import List, Union
+from typing import List, Union, Callable, Any
 from hidet.ir.type import TensorType
 from hidet.ir.expr import Var, TensorElement, TensorSlice, AlterLayout
 from hidet.ir.stmt import BufferStoreStmt
@@ -97,9 +97,9 @@ class FlattenTensorAccessRewriter(FuncStmtExprRewriter):
         return Function(func.name, params, body, func.ret_type, local_vars, func.extern_vars, func.attrs)
 
     @staticmethod
-    def get_layout(e) -> DataLayout:
+    def get_layout(e) -> Callable[..., Any]:
         if isinstance(e, AlterLayout):
-            return e.new_layout
+            return lambda *indices: FlattenTensorAccessRewriter.get_layout(e.var)(e.layout_map(indices))
         elif isinstance(e, Var):
             if isinstance(e.type, TensorType):
                 return e.type.layout
@@ -125,7 +125,7 @@ class FlattenTensorAccessRewriter(FuncStmtExprRewriter):
         return BufferStoreStmt(var, [global_index], value)
 
     def visit_AlterLayout(self, e: AlterLayout):
-        return e.var
+        return self(e.var)
 
     def visit_TensorSlice(self, e: TensorSlice):
         raise ValueError('there should not be any tensor slice after flattening tensor slice.')

@@ -15,11 +15,20 @@ def copy(src_layout: DataLayout, dst_layout: DataLayout) -> Task:
     else:
         compatible = False
     if compatible:
+        def layout_map(*dst_indices):
+            src_indices = []
+            global_index = dst_layout(*dst_indices)
+            src_shape = src_layout.shape
+            cur = 1
+            for dim in src_shape:
+                src_indices.append(global_index // cur % dim)
+                cur = cur * dim
+            return src_indices
         src = tensor_input('src', 'float32', shape=src_layout.shape)
         dst = compute(
             name='dst',
             shape=dst_layout.shape,
-            fcompute=lambda *indices: AlterLayout(src, dst_layout)[indices]
+            fcompute=lambda *indices: AlterLayout(src, shape=dst_layout.shape, layout_map=layout_map)[indices]
         )
         return Task(
             name='copy',

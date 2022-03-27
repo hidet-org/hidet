@@ -14,7 +14,7 @@ from hidet.ir.primitives.func import set_kernel_max_dynamic_smem_bytes
 
 class GeneratePackedFuncPass(Pass):
     def process_module(self, ir_module: IRModule) -> IRModule:
-        new_ir_module = IRModule()
+        new_ir_module = IRModule(task=ir_module.task)
         for func in ir_module.functions.values():
             new_ir_module.add(func.name, func)
             if not isinstance(func.get_attr('worker', None), (Grid, Host)):

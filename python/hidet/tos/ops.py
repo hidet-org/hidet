@@ -67,7 +67,7 @@ class BinaryElementwiseOp(Operator):
 
 class ReluOp(UnaryElementwiseOp):
     def __init__(self, x):
-        super().__init__(x, op=lambda v: cuda_max(v, 0), name='relu')
+        super().__init__(x, op=lambda v: cuda_max(v, 0.0), name='relu')
 
 
 class SqrtOp(UnaryElementwiseOp):
@@ -87,7 +87,7 @@ class AddOp(BinaryElementwiseOp):
 
 class SubOp(BinaryElementwiseOp):
     def __init__(self, x: Tensor, y: Tensor):
-        super().__init__(x, y, op=lambda a, b: a - b, name='add')
+        super().__init__(x, y, op=lambda a, b: a - b, name='sub')
 
 
 class MultiplyOp(BinaryElementwiseOp):
@@ -191,7 +191,14 @@ def batch_norm_infer(x: Tensor, running_mean: Tensor, running_var: Tensor, epsil
     assert len(running_mean.shape) == 1 and len(running_var.shape) == 1
     assert x.shape[1] == running_mean.shape[0] == running_var.shape[0]
     n, c, h, w = x.shape
+    # running_mean = running_mean.reshape([1, c, 1, 1])
+    # running_var = running_var.reshape([1, c, 1, 1])
+    # return (x - running_mean) * (running_var + epsilon).rsqrt()
     running_mean = running_mean.reshape([1, c, 1, 1])
     running_var = running_var.reshape([1, c, 1, 1])
-    return (x - running_mean) * (running_var + epsilon).rsqrt()
+    center = x - running_mean
+    down = running_var + epsilon
+    rdown = down.rsqrt()
+    return center / rdown
+    # return (x - running_mean) * (running_var + epsilon).rsqrt()
 

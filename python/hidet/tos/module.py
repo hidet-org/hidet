@@ -20,6 +20,10 @@ class Operator:
         self.outputs: List[Tensor] = []
         if self.current_mode == self.imperative_mode:
             self.outputs.extend(imperative_run(task, inputs))
+            print(self.task.name)
+            for input in self.inputs:
+                print(input)
+            print(self.outputs[0])
         elif self.current_mode == self.lazy_mode:
             output = Tensor.from_type(ttype=task.type_of_param(task.compute), op=self, index=0)
             self.outputs.append(output)
@@ -40,7 +44,7 @@ def execution_mode(mode):
 
 def convert(v):
     if isinstance(v, float):
-        return Tensor(shape=[1], dtype='float32', name='scalar_const')
+        return Tensor(shape=[1], dtype='float32', name='scalar_const', value=TensorValue.full(shape=[1], scalar_type='float32', scope='global', fill_value=v))
     elif isinstance(v, Tensor):
         return v
     else:
@@ -48,13 +52,16 @@ def convert(v):
 
 
 class Tensor:
-    def __init__(self, shape, dtype: str, layout=None, op=None, index=0, name=None, value=None, init_method=None):
-        self.op: Optional[Operator] = op
-        self.index: int = index
+    def __init__(self, shape, dtype: str, layout=None, producer=None, index=0, name=None, value=None, init_method=None):
         self.dtype: ScalarType = ScalarType(dtype) if isinstance(dtype, str) else dtype
         self.shape: List[int] = [int(v) for v in shape]
         self.layout: DataLayout = layout if layout else DataLayout.row_major(shape)
         self.name: str = name
+        self.producer: Optional[Operator] = None
+        self.index: Optional[int] = None
+        if Operator.current_mode == Operator.lazy_mode:
+            self.producer = producer
+            self.index = index
         self.attached_value: Optional[TensorValue] = value
         if value is None and init_method is not None:
             assert init_method == 'rand'
@@ -62,7 +69,7 @@ class Tensor:
 
     @staticmethod
     def from_type(ttype: TensorType, op, index) -> 'Tensor':
-        return Tensor(shape=ttype.shape, dtype=ttype.scalar_type.name, layout=ttype.layout, op=op, index=index)
+        return Tensor(shape=ttype.shape, dtype=ttype.scalar_type.name, layout=ttype.layout, producer=op, index=index)
 
     def value(self) -> TensorValue:
         if self.attached_value is not None:
@@ -86,6 +93,12 @@ class Tensor:
     def __truediv__(self, other):
         from .ops import divide
         return divide(self, convert(other))
+
+    def __str__(self):
+        if self.attached_value is None:
+            return 'Tensor(shape={}, dtype={}, attach_value=None)'.format(self.shape, self.dtype.name)
+        else:
+            return 'Tensor(shape={}, dtype={}): \n{}'.format(self.shape, self.dtype.name, self.attached_value)
 
     def reshape(self, shape):
         from .ops import reshape

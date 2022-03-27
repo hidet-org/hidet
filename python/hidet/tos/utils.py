@@ -21,4 +21,4 @@ def imperative_run(task: Task, inputs: List['Tensor']) -> List['Tensor']:
     ir_module = implement(task)
     module = build(ir_module, output_dir=f'./outs/kernels/{kernel_idx}', keep_ir=True)
     module[task.name](*inputs_value, *outputs_value)
-    return [Tensor(shape=ttype.shape, dtype=ttype.scalar_type.name, layout=ttype.layout)]
+    return [Tensor(shape=ttype.shape, dtype=ttype.scalar_type.name, layout=ttype.layout, value=outputs_value[0])]

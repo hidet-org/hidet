@@ -22,7 +22,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
 
     @staticmethod
     def canonize_funcname(name: str):
-        return name.replace('.', '_')
+        return 'hidet_' + name.replace('.', '_')
 
     def param_declare(self, v: Var):
         v_type = v.type
@@ -117,6 +117,9 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         doc += Text('#include <cassert>') + NewLine()
         doc += Text('#include <cstdio>') + NewLine()
         doc += Text('#include <cstdint>') + NewLine()
+        doc += '/*' + NewLine()
+        doc += str(module.task) + NewLine()
+        doc += '*/' + NewLine()
         doc += Text('extern "C" {') + NewLine()
 
         call_graph = CallGraph(module)

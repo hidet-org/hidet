@@ -17,10 +17,8 @@ class FunctionBuilder:
         self.body: Optional[Stmt] = None
         self.extern_vars = {}
         self.attrs: Dict[str] = attrs if attrs else {}
-        if 'worker' not in self.attrs:
-            self.attrs['worker'] = worker
-        if 'label' not in self.attrs:
-            self.attrs['label'] = label
+        self.worker: Worker = worker
+        self.label = label
 
     def __enter__(self):
         return self
@@ -47,6 +45,10 @@ class FunctionBuilder:
     def finish(self):
         from hidet.ir.primitives import block_idx, thread_idx
         assert self.func is None
+        if 'worker' not in self.attrs:
+            self.attrs['worker'] = self.worker
+        if 'label' not in self.attrs:
+            self.attrs['label'] = self.label
         if isinstance(self.attrs['worker'], (Grid, ThreadBlock, Warp, Thread)):
             self.extern_vars = [block_idx(), thread_idx()]
         self.func = Function(self.name, self.params, self.body, self.ret_type, self.local_vars, self.extern_vars, self.attrs)

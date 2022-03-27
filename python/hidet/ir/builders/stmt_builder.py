@@ -63,7 +63,7 @@ class StmtBuilder:
         assert if_stmt.else_body is None
         return StmtScope(self, stmts=if_stmt, ret=None)
 
-    def for_task_fields(self, worker_index: Expr, task_layout: TaskLayout):
+    def for_task(self, worker_index: Expr, task_layout: TaskLayout):
         expander = TaskLayoutExpander()
         fields = expander.expand(worker_index, task_layout)
         return StmtScope(self, stmts=expander.stmts, ret=fields)

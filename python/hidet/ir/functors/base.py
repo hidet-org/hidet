@@ -18,12 +18,17 @@ class NodeFunctor:
     def visit(self, node: Node):
         if self.memo is not None and node in self.memo:
             return self.memo[node]
-        idx = node.class_index() if node is not None else 0
-        # noinspection PyUnresolvedReferences
-        dispatch_table = self.__class__.dispatch_table
-        if idx >= len(dispatch_table):
-            raise NotImplementedError('Does not implement dispatch function in "{}" for node "{}"'.format(type(self).__qualname__, type(node).__qualname__))
-        ret = dispatch_table[idx](self, node)
+        if isinstance(node, Node):
+            idx = node.class_index() if node is not None else 0
+            # noinspection PyUnresolvedReferences
+            dispatch_table = self.__class__.dispatch_table
+            if idx >= len(dispatch_table):
+                raise NotImplementedError('Does not implement dispatch function in "{}" for node "{}"'.format(type(self).__qualname__, type(node).__qualname__))
+            ret = dispatch_table[idx](self, node)
+        elif isinstance(node, tuple):
+            ret = tuple(self.visit(v) for v in node)
+        else:
+            raise NotImplementedError()
         if self.memo is not None:
             self.memo[node] = ret
         return ret
@@ -458,7 +463,7 @@ class ExprRewriter(ExprFunctor):
         if var is e.var:
             return e
         else:
-            return AlterLayout(var, e.new_layout)
+            return AlterLayout(var, e.shape, e.layout_map)
 
     def visit_Cast(self, e: Cast):
         expr = self(e.expr)

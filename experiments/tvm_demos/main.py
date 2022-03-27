@@ -199,10 +199,21 @@ def demo_batch_norm():
     hidet.utils.tvm_utils.dump_relay_cuda_code(ir_module, out_dir='./outs/bn')
 
 
+def demo_rsqrt():
+    batch_size = 20
+    features = 2000
+    x = relay.var('x', shape=(batch_size, features))
+    y = relay.rsqrt(x)
+    func = relay.Function(params=[x], body=y)
+    ir_module = tvm.ir.IRModule.from_expr(func)
+    hidet.utils.tvm_utils.dump_relay_cuda_code(ir_module, out_dir='./outs/rsqrt')
+
+
 if __name__ == '__main__':
     # demo_vthread()
     # demo_conv2d_te()
     # demo_softmax()
     # demo_pool2d()
-    demo_batch_norm()
+    # demo_batch_norm()
+    demo_rsqrt()
 

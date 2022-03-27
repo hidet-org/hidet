@@ -53,6 +53,15 @@ class Task(Node):
         self.params_type: List[TypeNode] = params_type
         self.worker: Worker = worker
 
+    def __str__(self):
+        from hidet.utils.doc import Doc, Text, NewLine
+        body = Doc()
+        body += NewLine() + 'name: ' + self.name
+        body += NewLine() + 'compute: ' + str(self.compute)
+        body += NewLine() + 'params: ' + ', '.join(['{}: {}'.format(param.name, param_type) for param, param_type in zip(self.params, self.params_type)])
+        body += NewLine() + 'worker: ' + str(self.worker)
+        return str('Task(' + body.indent() + NewLine() + ')')
+
     def type_of_param(self, given_param) -> Union[TypeNode, TensorType]:
         for param, param_type in zip(self.params, self.params_type):
             if given_param is param:

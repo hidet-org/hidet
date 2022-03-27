@@ -5,18 +5,20 @@ from hidet.tos import nn
 
 
 def demo_relu():
-    x = Tensor([1, 3, 64, 64], dtype='float32', name='x', init_method='rand')
+    x = Tensor([1, 3, 1, 1], dtype='float32', name='x', init_method='rand')
     relu = nn.Relu()
     y = relu(x)
     print(relu)
+    print(x)
     print(y)
 
 
 def demo_bn():
-    x = Tensor([1, 3, 64, 64], dtype='float32', name='x', init_method='rand')
+    x = Tensor([1, 3, 1, 1], dtype='float32', name='x', init_method='rand')
     bn = nn.BatchNorm2d(num_features=3)
     y = bn(x)
     print(bn)
+    print(x)
     print(y)
 
 

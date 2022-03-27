@@ -166,30 +166,6 @@ class LoopExpander(ExprRewriter):
             self.sb += AssignStmt(input_var, acc)
 
         return acc
-        # extent = e.shape[0]
-        # if isinstance(extent, Constant) and extent.value == 1:
-        #     value_expr = self.visit(e.value)
-        #     acc = rewrite(value_expr, {e.axes: convert(0)})
-        # else:
-        #     # declare accumulator
-        #     acc = scalar_var(e.name, infer_type(e.value))
-        #     self.new_buffer_map[e] = acc
-        #
-        #     # init accumulator
-        #     self.sb += AssignStmt(acc, e.init_const())
-        #
-        #     # reduction loop
-        #     assert len(e.shape) == 1
-        #     with self.sb.for_loop(e.axes, e.shape[0]):
-        #         expr = self.visit(e.value)
-        #         self.sb += AssignStmt(acc, e.combine(acc, expr))
-        #
-        # # if e is in the input buffer, we should write it back
-        # if e in self.input_map:
-        #     input_var = self.input_map[e]
-        #     self.sb += AssignStmt(input_var, acc)
-        #
-        # return acc
 
 
 def expand_loop(expr: Expr, input_map: Mapping[Union[ScalarInput, TensorInput, Expr], Var]):
@@ -200,7 +176,7 @@ def expand_loop(expr: Expr, input_map: Mapping[Union[ScalarInput, TensorInput, E
     After expand, the stmt will not have ScalarInput, TensorInput, TensorCompute and ReduceCompute anymore.
 
     The returned new_buffer_map is a mapping from ReduceCompute and TensorCompute sub-expressions to
-    new allocated buffers used to finish the computation.
+    new allocated buffers used to conduct the computation.
 
     For example, the following expr:
     compute([3, 3], (i, j) -> reduce_sum(A[i, k] * B[k, j], axis=k)) where k = axis(3)

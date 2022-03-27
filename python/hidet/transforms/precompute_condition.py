@@ -10,15 +10,21 @@ class PrecomputeConditionRewriter(FuncStmtExprRewriterWithScope):
     def __init__(self):
         super().__init__(use_memo=False)
 
-    def should_precompute(self, cond) -> bool:
-        scope = self.scope_to_define(cond)
+    @staticmethod
+    def scope_in_loop(scope) -> bool:
         while scope is not None:
             if isinstance(scope.scope_stmt, ForStmt):
-                # the used expressions is defined in a for stmt, we tend to not precompute such
-                # condition
-                return False
+                return True
             scope = scope.parent
-        return True
+        return False
+
+    def should_precompute(self, cond) -> bool:
+        """
+        we only precompute when the following two conditions holds:
+            1. current scope is in a loop.
+            2. the used variables are defined not in any loop
+        """
+        return self.scope_in_loop(self.scope_stack.current()) and not self.scope_in_loop(self.scope_to_define(cond))
 
     def visit_IfStmt(self, stmt: IfStmt):
         if self.should_precompute(stmt.cond):

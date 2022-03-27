@@ -51,14 +51,19 @@ def binary_elementwise(name, x_layout, y_layout, op: Callable[[Any, Any], Any], 
     else:
         assert [a == b for a, b in zip(z_layout.shape, z_shape)]
 
-    def imap(indices):
+    def imap(indices, shape):
         # used to support broadcast
-        return [i if d != 1 else 0 for i, d in zip(indices, z_shape)]
+        pad_dim = len(z_shape) - len(shape)
+        indices = list(indices[pad_dim:])
+        for idx, dim in enumerate(shape):
+            if int(dim) == 1:
+                indices[idx] = 0
+        return indices
 
     z = compute(
         name='z',
         shape=z_shape,
-        fcompute=lambda *indices: op(x[imap(indices)], y[imap(indices)])
+        fcompute=lambda *indices: op(x[imap(indices, x.shape)], y[imap(indices, y.shape)])
     )
     return Task(
         name=name,

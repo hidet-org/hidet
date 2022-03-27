@@ -58,6 +58,8 @@ class FunctionGroup(Node):
 
 class IRModule(Node):
     def __init__(self, funcs=None, task=None, global_vars=None):
+        if funcs:
+            assert isinstance(funcs, dict)
         self.task: Optional[Task] = task
         self.functions: Dict[str, Union[Function, FunctionGroup]] = funcs if funcs else {}
         self.global_vars: Dict[str, Var] = global_vars if global_vars else {}
