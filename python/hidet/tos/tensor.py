@@ -1,5 +1,7 @@
 from typing import List, Optional, Dict, Tuple
+import numpy as np
 from hidet.ir.layout import DataLayout
+from hidet.ir.layout.data_layout import RowMajorLayout, ColumnMajorLayout
 from hidet.runtime import Storage
 from hidet.utils import prod
 from hidet.ffi.cuda_api import CudaAPI
@@ -46,7 +48,14 @@ class Tensor:
         return divide(self, convert(other))
 
     def __str__(self):
-        return 'Tensor(shape={}, dtype={})'.format(self.shape, self.dtype)
+        return "Tensor(shape={}, dtype='{}', device='{}')\n{}".format(
+            self.shape, self.dtype, self.device, str(self.cpu().numpy())
+        )
+
+    def contiguous(self):
+        if isinstance(self.layout, RowMajorLayout):
+            return self
+        return self.reshape(self.shape)
 
     def reshape(self, shape):
         from .ops import reshape
@@ -59,6 +68,34 @@ class Tensor:
     def rsqrt(self):
         from .ops import rsqrt
         return rsqrt(self)
+
+    def cpu(self):
+        if self.device == 'cpu':
+            return self
+        else:
+            if self.trace is None:
+                return Tensor(self.shape, self.dtype, 'cpu', self.storage.cpu(), self.layout)
+            else:
+                # lazy mode related
+                raise NotImplementedError()
+
+    def cuda(self):
+        if self.device == 'cuda':
+            return self
+        else:
+            if self.trace is None:
+                return Tensor(self.shape, self.dtype, 'cuda', self.storage.cuda(), self.layout)
+            else:
+                # lazy mode related
+                raise NotImplementedError()
+
+    def numpy(self) -> np.ndarray:
+        if self.device != 'cpu':
+            raise ValueError('Please use .cpu() to move data from {} to cpu first.'.format(self.device))
+        # convert if this tensor is not in row major layout
+        storage = self.contiguous().storage
+        array = storage.as_array(dtype=self.dtype)
+        return array.reshape(self.shape)
 
 
 def dtype_bytes(dtype: str):

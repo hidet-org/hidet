@@ -38,6 +38,11 @@ class CudaAPI:
     def memset_async(cls, addr: int, num_bytes: int, value: int) -> None:
         return cls._memset_async(addr, num_bytes, value)
 
+    HostToHost = 0
+    HostToDevice = 1
+    DeviceToHost = 2
+    DeviceToDevice = 3
+
     @classmethod
     def memcpy_async(cls, src_addr: int, dst_addr: int, num_bytes: int, kind: int) -> None:
         assert 0 <= kind <= 3
@@ -58,5 +63,3 @@ class CudaAPI:
     @classmethod
     def fill_value(cls, addr: int, num_elements: int, value: float) -> None:
         return cls._fill_value(addr, num_elements, value)
-
-

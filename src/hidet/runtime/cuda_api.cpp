@@ -1,4 +1,5 @@
 #include <cstdint>
+#include <ctime>
 #include <hidet/runtime.h>
 #include <cuda_runtime.h>
 #include <curand.h>
@@ -6,8 +7,9 @@
 struct CurandContext {
     curandGenerator_t generator;
     CurandContext() {
+        unsigned long long seed = time(nullptr) ^ clock();
         CURAND_CALL(curandCreateGenerator(&generator, CURAND_RNG_PSEUDO_DEFAULT));
-        CURAND_CALL(curandSetPseudoRandomGeneratorSeed(generator, 2333ULL));
+        CURAND_CALL(curandSetPseudoRandomGeneratorSeed(generator, seed));
     }
 
     static CurandContext* global() {

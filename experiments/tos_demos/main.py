@@ -7,20 +7,24 @@ from hidet.utils import Timer, cuda
 
 
 def demo_relu():
-    x = empty([1, 3, 1, 1], dtype='float32', device='cuda')
+    x = randn([1, 3, 1, 1], dtype='float32', device='cuda')
     relu = nn.Relu()
     for i in range(2):
         cuda.device_synchronize()
         with Timer(msg=f'relu {i}'):
             y = relu(x)
             cuda.device_synchronize()
+    # print(x.cpu().numpy())
+    # print(y.cpu().numpy())
+    print(x)
+    print(y)
     print(relu)
 
 
 def demo_bn():
     x = randn([1, 3, 64, 64], dtype='float32')
     bn = nn.BatchNorm2d(num_features=3)
-    for i in range(3):
+    for i in range(1):
         with Timer('bn {}'.format(i)):
             y = bn(x)
     print(bn)
@@ -56,11 +60,11 @@ def demo_resnet50():
 
 
 if __name__ == '__main__':
+    demo_relu()
     # demo_bn()
-    # demo_relu()
     # demo_basic_block()
     # demo_bottleneck()
-    demo_resnet50()
+    # demo_resnet50()
     # from hidet.ffi.cuda import malloc_async, free_async
     # a = malloc_async(1000)
     # b = malloc_async(10)
