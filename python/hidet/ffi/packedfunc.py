@@ -45,6 +45,7 @@ class PackedFunc:
         """
         convert arg to a c_void_p
         """
+        from hidet.tos.tensor import Tensor
         if isinstance(arg, int):
             return cast(pointer(c_int32(arg)), c_void_p)
         elif isinstance(arg, float):
@@ -71,6 +72,8 @@ class PackedFunc:
                 return rt
             else:
                 raise NotImplementedError()
+        elif isinstance(arg, Tensor):
+            return cast(arg.storage.addr, c_void_p)
         else:
             raise NotImplementedError()
 

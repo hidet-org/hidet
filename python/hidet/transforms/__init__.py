@@ -1,4 +1,4 @@
-from .base import Pass, FunctionPass, FunctionBodyPass, SequencePass, RepeatFunctionPass, PassContext
+from .base import Pass, FunctionPass, FunctionBodyPass, SequencePass, RepeatFunctionPass, PassContext, pass_context
 from .flatten_tensor import flatten_tensor_pass
 from .generate_packed_func import generate_packed_func_pass
 from .eliminate_dead_device_function import eliminate_dead_device_function_pass

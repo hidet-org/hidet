@@ -1,6 +1,7 @@
 from typing import Union, Sequence, Tuple, Optional
 from hidet.ir.type import ScalarType
 from hidet.ir.expr import Expr, Constant, convert, Var, var, And, if_then_else
+from hidet.utils.info import float_type_min_value
 
 
 class ComputeNode(Expr):
@@ -59,16 +60,29 @@ class ReduceCompute(ComputeNode):
         assert len(self.axes) == len(self.shape)
 
     def init_const(self):
-        if self.reduce_type == 'sum':
-            return Constant(0.0, ScalarType('float32'))
-        else:
-            raise NotImplementedError()
+        init_dict = {
+            'sum': Constant(0.0, ScalarType('float32')),
+            'avg': Constant(0.0, ScalarType('float32')),
+            'max': Constant(float_type_min_value(), ScalarType('float32'))
+        }
+        return init_dict[self.reduce_type]
 
     def combine(self, lhs, rhs):
-        if self.reduce_type == 'sum':
-            return lhs + rhs
-        else:
-            raise NotImplementedError()
+        from hidet.ir.primitives.func import cuda_max
+        func_dict = {
+            'sum': lambda a, b: a + b,
+            'avg': lambda a, b: a + b,
+            'max': lambda a, b: cuda_max(a, b)
+        }
+        return func_dict[self.reduce_type](lhs, rhs)
+
+    def finalize(self, acc, size):
+        func_dict = {
+            'sum': lambda acc, size: acc,
+            'avg': lambda acc, size: acc / size,
+            'max': lambda acc, size: acc
+        }
+        return func_dict[self.reduce_type](acc, size)
 
 
 def scalar_input(name, dtype):
@@ -111,7 +125,3 @@ def compute(name, shape, fcompute, accumulate=None, predicate=None):
     if predicate is not None:
         predicate = convert(predicate(*axes))
     return TensorCompute(name, shape, axes, value, accumulate, predicate)
-
-
-def inline_compute(root: ComputeNode):
-    pass

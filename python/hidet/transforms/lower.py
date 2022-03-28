@@ -33,4 +33,3 @@ def lower(ir_module: IRModule) -> IRModule:
         ir_module = transform(ir_module)
 
     return ir_module
-

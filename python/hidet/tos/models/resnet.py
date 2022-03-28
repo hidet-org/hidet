@@ -16,18 +16,21 @@ class BasicBlock(nn.Module):
     def __init__(self,
                  in_channels: int,
                  channels: int,
-                 stride: int = 1,
-                 skip: Callable[[Any], Any] = None
+                 stride: int = 1
                  ):
         super().__init__()
-        if skip is None:
-            skip = (lambda v: v)
         self.conv1 = conv3x3(in_channels, channels, stride)
         self.bn1 = nn.BatchNorm2d(channels)
         self.conv2 = conv3x3(channels, channels)
         self.bn2 = nn.BatchNorm2d(channels)
         self.relu = nn.Relu()
-        self.skip = skip if skip is not None else (lambda x: x)
+        if in_channels != channels * self.expansion or stride != 1:
+            self.skip = nn.Sequential(
+                conv1x1(in_channels=in_channels, out_channels=channels * self.expansion, stride=stride),
+                nn.BatchNorm2d(channels * self.expansion)
+            )
+        else:
+            self.skip = (lambda x: x)
 
     def forward(self, x):
         out = self.bn2(self.conv2(self.relu(self.bn1(self.conv1(x)))))
@@ -41,8 +44,7 @@ class Bottleneck(nn.Module):
     def __init__(self,
                  in_channels: int,
                  channels: int,
-                 stride: int,
-                 skip: Callable[[Any], Any]
+                 stride: int = 1
                  ):
         super().__init__()
         expansion = 4
@@ -53,7 +55,13 @@ class Bottleneck(nn.Module):
         self.conv3 = conv1x1(channels, channels * expansion)
         self.bn3 = nn.BatchNorm2d(channels * expansion)
         self.relu = nn.Relu()
-        self.skip = skip
+        if in_channels != channels * expansion or stride != 1:
+            self.skip = nn.Sequential(
+                conv1x1(in_channels=in_channels, out_channels=channels * self.expansion, stride=stride),
+                nn.BatchNorm2d(channels * self.expansion)
+            )
+        else:
+            self.skip = (lambda x: x)
 
     def forward(self, x):
         out = self.relu(self.bn1(self.conv1(x)))
@@ -85,21 +93,13 @@ class ResNet(nn.Module):
                    channels: int,
                    blocks: int,
                    stride: int = 1):
-        if stride != 1 or self.in_channels != channels * block.expansion:
-            skip = nn.Sequential(
-                conv1x1(in_channels=self.in_channels, out_channels=channels * block.expansion, stride=stride),
-                nn.BatchNorm2d(channels * block.expansion)
-            )
-        else:
-            skip = (lambda x: x)
-
         layers = []
         for i in range(blocks):
             if i == 0:
-                layers.append(block(self.in_channels, channels, stride, skip))
+                layers.append(block(self.in_channels, channels, stride))
                 self.in_channels = channels * block.expansion
             else:
-                layers.append(block(self.in_channels, channels, stride=1, skip=lambda v: v))
+                layers.append(block(self.in_channels, channels, stride=1))
         return nn.Sequential(*layers)
 
     def forward(self, x):

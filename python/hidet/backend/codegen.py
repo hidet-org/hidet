@@ -439,7 +439,12 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         raise ValueError()
 
 
-def codegen(ir_module: IRModule) -> str:
+def codegen(ir_module: IRModule, src_out_path: Optional[str] = None) -> Optional[str]:
     gen = Codegen()
     doc = gen(ir_module)
-    return str(doc)
+    code = str(doc)
+    if src_out_path is not None:
+        with open(src_out_path, 'w') as f:
+            f.write(code)
+    else:
+        return code

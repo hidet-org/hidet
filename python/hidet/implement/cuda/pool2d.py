@@ -1,22 +1,18 @@
-import contextlib
-import sys
-from typing import Mapping, Any, List, Tuple, Union
+from typing import Mapping, Any, List
 
-from hidet.implement.implementer import register_impl, Implementer, NotSupportedError, Schedule
+from hidet.implement.common import VirtualTensor, pattern2matched
+from hidet.implement.implementer import register_impl, Implementer
 from hidet.ir import IRModule
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.ir.dialects.compute import TensorCompute, ReduceCompute
 from hidet.ir.dialects.pattern import TaskPattern, any_const_ints, any_scalar_expr, int_vars, StringPattern
-from hidet.ir.expr import Var, Constant, And, if_then_else, Equal, scalar_var
-from hidet.ir.stmt import BufferStoreStmt, IfStmt, AssignStmt
+from hidet.ir.expr import Var, scalar_var, convert
 from hidet.ir.functors import rewrite
-from hidet.ir.layout import TaskLayout, DataLayout
+from hidet.ir.layout import TaskLayout
 from hidet.ir.node import Node
-from hidet.ir.primitives import block_idx, thread_idx, syncthreads, printf, cuda_max
+from hidet.ir.primitives import block_idx, thread_idx, cuda_max
+from hidet.ir.stmt import BufferStoreStmt, AssignStmt
 from hidet.ir.task import Task, Grid
-from hidet.ir.type import TensorType
-from hidet.utils import prod, cuda
-from hidet.implement.common import VirtualTensor, pattern2matched
 from hidet.utils.info import float_type_min_value
 
 
@@ -93,7 +89,7 @@ class CudaGridPool2dImplementer(Implementer):
                         with sb.for_loop('ry', md.ry) as ry:
                             sb += AssignStmt(reduce_value, reduce_op(reduce_value, x[n, c, p, q, rx, ry]))
                     if md.reduce_type == 'avg':
-                        sb += AssignStmt(reduce_value, reduce_value / (md.rx * md.ry))
+                        sb += AssignStmt(reduce_value, reduce_value / convert(float(md.rx * md.ry)))
                     sb += BufferStoreStmt(y, [n, c, p, q], reduce_value)
             fb.set_body(sb.finish())
         func = fb.get()

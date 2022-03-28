@@ -1,9 +1,10 @@
-from typing import Union
+from typing import Union, List
 from hidet.ir.expr import Constant
 from hidet.ir.task import Task
+from hidet.ffi.cuda_api import CudaAPI
 from pycuda.gpuarray import GPUArray
 from pycuda import gpuarray
-import pycuda.autoinit
+# import pycuda.autoinit
 import numpy as np
 
 from hidet.ir.type import TensorType, ScalarType, tensor_type, scalar_type
@@ -12,6 +13,23 @@ from hidet.utils import prod
 
 class Value:
     pass
+
+
+class Storage:
+    def __init__(self, addr):
+        self.addr: int = addr
+
+    def __del__(self):
+        raise NotImplementedError()
+
+
+class CudaStorage(Storage):
+    def __init__(self, num_bytes: int):
+        super().__init__(CudaAPI.malloc_async(num_bytes))
+        self.num_bytes = num_bytes
+
+    def __del__(self):
+        CudaAPI.free_async(self.addr)
 
 
 class TensorValue(Value):
@@ -36,7 +54,7 @@ class TensorValue(Value):
     @staticmethod
     def randn(shape, scalar_type, scope, strides=None, seed=0):
         np.random.seed(seed)
-        array = (np.random.randn(*shape) % 11).astype(scalar_type)
+        array = (np.random.randn(*shape) % 2).astype(scalar_type)
         # array = np.ndarray(shape=shape, dtype=scalar_type, strides=strides)
         # flattened: np.ndarray = array.ravel()
         # for i in range(flattened.size):
@@ -59,6 +77,20 @@ class TensorValue(Value):
             return TensorValue(type, array)
         else:
             return TensorValue(type, gpuarray.to_gpu(array))
+
+    @staticmethod
+    def from_type(tensor_type: TensorType):
+        from hidet.ir.layout.data_layout import RowMajorLayout, ColumnMajorLayout
+        if isinstance(tensor_type.layout, RowMajorLayout):
+            order = 'C'
+        elif isinstance(tensor_type.layout, ColumnMajorLayout):
+            order = 'F'
+        else:
+            raise NotImplementedError()
+        array = np.empty(shape=[int(v) for v in tensor_type.shape], dtype=tensor_type.scalar_type.name, order=order)
+        if tensor_type.scope.name == 'global':
+            array = gpuarray.to_gpu(array)
+        return TensorValue(tensor_type, array)
 
     def to_cuda(self):
         if isinstance(self.array, GPUArray):

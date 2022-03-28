@@ -1,3 +1,4 @@
+from typing import List
 import os
 import os.path
 from typing import Optional
@@ -24,6 +25,13 @@ def load_library():
         break
     if _LIB is None:
         raise OSError('Can not find library: \n' + '\n'.join(paths))
+
+
+def get_func(func_name, arg_types: List, restype):
+    func = _LIB[func_name]
+    func.argtypes = arg_types
+    func.restype = restype
+    return func
 
 
 load_library()

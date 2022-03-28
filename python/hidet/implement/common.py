@@ -10,6 +10,7 @@ from hidet.ir.task import Worker, ThreadBlock, Warp
 from hidet.ir.functors import ExprFunctor, infer_type, rewrite, ExprRewriter
 from hidet.ir.stmt import ForStmt, BufferStoreStmt, AssignStmt, SeqStmt
 from hidet.ir.builders import TaskBuilder
+from hidet.utils import prod
 
 
 def transfer_task(name: str, src_type: TensorType, dst_type: TensorType, worker: Worker, parent_module: IRModule) -> TaskBuilder:
@@ -159,6 +160,9 @@ class LoopExpander(ExprRewriter):
         # exit loop scope
         for i in range(len(e.shape)):
             self.sb.exit_body()
+
+        # finalize
+        acc = e.finalize(acc, prod(e.shape))
 
         # if e is in the input buffer, we should write it back
         if e in self.input_map:

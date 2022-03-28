@@ -114,3 +114,8 @@ class RepeatFunctionPass(FunctionPass):
                 return func
         print(f"Exceeded: {i} {self.name} on {func.name}")
         return func
+
+
+def pass_context(opt_level: int = 0, keep_ir=False, keep_ir_dir: str = None):
+    # todo: support different opt_level
+    return PassContext(save_lowering_results=keep_ir, save_dir=keep_ir_dir)

@@ -1,10 +1,7 @@
-import contextlib
 import itertools
 from typing import Mapping, List, Any, Tuple, Union
 
-import numpy as np
 
-from hidet.backend import batch_build, BuildInstance
 from hidet.implement.implementer import Implementer, register_impl, NotSupportedError, Schedule
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.ir.dialects.compute import TensorInput, TensorCompute, ReduceCompute

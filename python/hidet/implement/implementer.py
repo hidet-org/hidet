@@ -1,4 +1,4 @@
-from typing import Optional, Sequence, Union, List, Any, Tuple
+from typing import Optional, Sequence, Union, List, Any, Tuple, ContextManager
 from textwrap import indent
 from collections import defaultdict
 from typing import Type, Dict, Mapping
@@ -82,13 +82,9 @@ _priority2names: Dict[int, List[str]] = defaultdict(list)
 class ImplementerContext:
     contexts: List['ImplementerContext'] = []
 
-    def __init__(self,
-                 disabled: Optional[Sequence[Union[str, Type[Implementer]]]] = None,
-                 try_first: Optional[Sequence[Union[str, Type[Implementer]]]] = None,
-                 allowed: Optional[Sequence[Union[str, Type[Implementer]]]] = None):
-        self.disabled: List[str] = self._get_impl_names(disabled, [])
-        self.try_first: List[str] = self._get_impl_names(try_first, [])
+    def __init__(self, allowed: Optional[Sequence[Union[str, Type[Implementer]]]] = None, space_level=0):
         self.allowed: Optional[List[str]] = self._get_impl_names(allowed, None)  # None means all implementers
+        self.space_level = space_level
 
     def __enter__(self):
         ImplementerContext.contexts.append(self)
@@ -135,16 +131,6 @@ def implement(task: Task) -> IRModule:
     else:
         allowed = set(ctx.allowed)
 
-    if ctx.disabled is not None:
-        allowed.difference_update(ctx.disabled)
-
-    # 1. try the 'try_first' implementers in order in current implementer context
-    for impl_name in ImplementerContext.contexts[-1].try_first:
-        if impl_name not in added and impl_name in allowed:
-            implementers.append([impl_name])
-            added.add(impl_name)
-
-    # 2. if failed, try all implementers except the 'disabled' ones in current context
     priorities = sorted(_name2priority.values())
     for p in reversed(priorities):
         priority_impls = []
@@ -155,7 +141,7 @@ def implement(task: Task) -> IRModule:
             implementers.append(priority_impls)
             added.update(priority_impls)
 
-    # try implementers groups by groups
+    # try implementers groups by groups, the ones with higher priority try first
     match_messages = {}
     impl_messages = {}
     ir_module = IRModule(funcs={}, task=task)
@@ -196,7 +182,20 @@ def implement(task: Task) -> IRModule:
     raise NotSupportedError('\n'.join(lines))
 
 
-def impl_context(disabled: Optional[Sequence[Union[str, Type[Implementer]]]] = None,
-                 try_first: Optional[Sequence[Union[str, Type[Implementer]]]] = None,
-                 allowed: Optional[Sequence[Union[str, Type[Implementer]]]] = None):
-    return ImplementerContext(disabled, try_first, allowed)
+def impl_context(allowed: Optional[Sequence[Union[str, Type[Implementer]]]] = None, space_level=0) -> ContextManager[ImplementerContext]:
+    """
+    Parameters
+    ----------
+    allowed: Optional[Sequence[Union[str, Type[Implementer]]]], default None
+        Specify the allowed implementers. None means all implementers are allowed.
+    space_level: int, default 0
+        Search space level, candidates:
+        0 - Use default schedule, with no search.
+        1 - Search in a small group of schedules. The number of schedules should in range 1 to 32.
+        2 - Exhaustive search in predefined schedule space. The number of schedules can be large (e.g., more than 100 schedules).
+    Returns
+    -------
+    ret: ImplementerContext
+        The implementer context. And be used with 'with' statement in python.
+    """
+    return ImplementerContext(allowed, space_level)

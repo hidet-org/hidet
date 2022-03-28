@@ -1,10 +1,9 @@
 from typing import Sequence, Union, Callable, Any
-from hidet.tos.module import Operator, Tensor
+from hidet.tos.operator import Operator
+from hidet.tos.tensor import Tensor
 from hidet.ir.layout.data_layout import DataLayout, StridesLayout, RowMajorLayout, ColumnMajorLayout
 from hidet.ir.primitives import cuda_max, cuda_sqrt, cuda_rsqrt
-from hidet.ir.dialects.compute import compute
 from hidet import tasks
-from hidet.ir.task import Task
 from hidet.utils import prod
 
 
@@ -92,12 +91,12 @@ class SubOp(BinaryElementwiseOp):
 
 class MultiplyOp(BinaryElementwiseOp):
     def __init__(self, x: Tensor, y: Tensor):
-        super().__init__(x, y, op=lambda a, b: a * b, name='add')
+        super().__init__(x, y, op=lambda a, b: a * b, name='mul')
 
 
 class DivideOp(BinaryElementwiseOp):
     def __init__(self, x: Tensor, y: Tensor):
-        super().__init__(x, y, op=lambda a, b: a / b, name='add')
+        super().__init__(x, y, op=lambda a, b: a / b, name='div')
 
 
 class ReshapeOp(Operator):
@@ -113,6 +112,7 @@ class ReshapeOp(Operator):
 
     @staticmethod
     def normalize_shape(shape, size):
+        # [1, -1, 224, 224] => [1, 3, 224, 224] when size = 1 * 3 * 224 * 224
         cnt = sum([1 for v in shape if v == -1])
         if cnt == 0:
             assert prod(shape) == size
@@ -191,14 +191,7 @@ def batch_norm_infer(x: Tensor, running_mean: Tensor, running_var: Tensor, epsil
     assert len(running_mean.shape) == 1 and len(running_var.shape) == 1
     assert x.shape[1] == running_mean.shape[0] == running_var.shape[0]
     n, c, h, w = x.shape
-    # running_mean = running_mean.reshape([1, c, 1, 1])
-    # running_var = running_var.reshape([1, c, 1, 1])
-    # return (x - running_mean) * (running_var + epsilon).rsqrt()
     running_mean = running_mean.reshape([1, c, 1, 1])
     running_var = running_var.reshape([1, c, 1, 1])
-    center = x - running_mean
-    down = running_var + epsilon
-    rdown = down.rsqrt()
-    return center / rdown
-    # return (x - running_mean) * (running_var + epsilon).rsqrt()
+    return (x - running_mean) * (running_var + epsilon).rsqrt()
 

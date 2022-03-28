@@ -4,8 +4,8 @@ from functools import lru_cache
 from subprocess import PIPE
 from typing import List, Optional, Union
 
-import pycuda.autoinit
-import pycuda.driver
+# import pycuda.autoinit
+# import pycuda.driver
 
 
 def max_smem_bytes_per_sm(cc=None):
@@ -81,7 +81,8 @@ def query_compute_capability():
 
 
 def device_synchronize():
-    pycuda.driver.Context.synchronize()
+    from hidet.ffi.cuda_api import CudaAPI
+    CudaAPI.device_synchronization()
 
 
 def preferred_gpu_clock():

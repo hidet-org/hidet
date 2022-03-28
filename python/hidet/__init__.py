@@ -6,4 +6,6 @@ from . import utils
 from . import tasks
 from . import tos
 
+from .tos import Tensor, Operator, Module
+
 sys.setrecursionlimit(10000)

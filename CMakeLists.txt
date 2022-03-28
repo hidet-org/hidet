@@ -22,7 +22,7 @@ message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
 add_library(hidet SHARED
         src/hidet/packedfunc.cpp
-        src/hidet/runtime.cpp
+        src/hidet/runtime/cuda_api.cpp
         # matmul baselines
         src/hidet/baselines/matmul/reference.cu
         src/hidet/baselines/matmul/cublas.cpp

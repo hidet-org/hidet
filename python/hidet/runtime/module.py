@@ -12,10 +12,9 @@ class CompiledModule:
 
 
 class CompiledFunction:
-    def __init__(self, name, func, packed_func):
+    def __init__(self, name, packed_func):
         from hidet.ffi import PackedFunc
         self.name: str = name
-        self.func: Function = func
         self.packed_func: PackedFunc = packed_func
 
     def __call__(self, *args):
