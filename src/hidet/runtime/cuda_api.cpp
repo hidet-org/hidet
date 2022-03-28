@@ -1,7 +1,20 @@
 #include <cstdint>
 #include <hidet/runtime.h>
 #include <cuda_runtime.h>
+#include <curand.h>
 
+struct CurandContext {
+    curandGenerator_t generator;
+    CurandContext() {
+        CURAND_CALL(curandCreateGenerator(&generator, CURAND_RNG_PSEUDO_DEFAULT));
+        CURAND_CALL(curandSetPseudoRandomGeneratorSeed(generator, 2333ULL));
+    }
+
+    static CurandContext* global() {
+        static CurandContext ctx;
+        return &ctx;
+    }
+};
 
 
 DLL uint64_t hidet_cuda_malloc_async(uint64_t bytes) {
@@ -17,13 +30,15 @@ DLL uint64_t hidet_cuda_malloc_host(uint64_t bytes) {
 }
 
 DLL void hidet_cuda_free_async(uint64_t addr) {
-    void *ptr = reinterpret_cast<void*>(addr);
-    CUDA_CALL(cudaFreeAsync(ptr, nullptr));
+    CUDA_CALL(cudaFreeAsync(reinterpret_cast<void*>(addr), nullptr));
 }
 
 DLL void hidet_cuda_free_host(uint64_t addr) {
-    void *ptr = reinterpret_cast<void*>(addr);
-    CUDA_CALL(cudaFreeHost(ptr));
+    CUDA_CALL(cudaFreeHost(reinterpret_cast<void*>(addr)));
+}
+
+DLL void hidet_cuda_memset_async(uint64_t addr, uint64_t bytes, uint8_t value) {
+    CUDA_CALL(cudaMemsetAsync(reinterpret_cast<void*>(addr), value, bytes, nullptr));
 }
 
 DLL void hidet_cuda_memcpy_async(uint64_t src, uint64_t dst, uint64_t bytes, uint32_t kind) {
@@ -39,4 +54,17 @@ DLL void hidet_cuda_memcpy_async(uint64_t src, uint64_t dst, uint64_t bytes, uin
 
 DLL void hidet_cuda_device_synchronization() {
     CUDA_CALL(cudaDeviceSynchronize());
+}
+
+DLL void hidet_curand_generate_uniform(uint64_t addr, uint64_t size) {
+    CURAND_CALL(curandGenerateUniform(CurandContext::global()->generator, reinterpret_cast<float*>(addr), size));
+}
+
+DLL void hidet_curand_generate_normal(uint64_t addr, uint64_t size, float mean, float stddev) {
+    // This function only support to generate even number of random numbers. We work around this limitation by up round to a multiple of 2.
+    // this usually will not trigger error because the memory allocation on cuda is usually 256 bytes aligned.
+    if(size & 1) {
+        size += 1;
+    }
+    CURAND_CALL(curandGenerateNormal(CurandContext::global()->generator, reinterpret_cast<float*>(addr), size, mean, stddev));
 }

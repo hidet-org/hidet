@@ -1,7 +1,8 @@
 from .module import Module, Tensor
-from .container import Sequential
 from . import ops
 from .common import normalize
+from .container import Sequential
+from .tensor import randn, zeros, ones
 
 
 class Conv2d(Module):
@@ -12,7 +13,7 @@ class Conv2d(Module):
         self.kernel = normalize(kernel_size)
         self.padding = normalize(padding)
         self.stride = normalize(stride)
-        self.weight = Tensor(shape=[out_channels, in_channels, *self.kernel], dtype='float32', init_method='rand')
+        self.weight = randn(shape=[out_channels, in_channels, *self.kernel], dtype='float32')
 
     def extra_str(self) -> str:
         return 'in_channels={}, out_channels={}, kernel_size={}, stride={}, padding={}'.format(self.in_channels, self.out_channels, self.kernel, self.stride, self.padding)
@@ -25,8 +26,8 @@ class BatchNorm2d(Module):
     def __init__(self, num_features, eps=1e-5):
         super().__init__()
         self.eps = eps
-        self.running_mean = Tensor(shape=[num_features], dtype='float32', init_method='rand')
-        self.running_var = Tensor(shape=[num_features], dtype='float32', init_method='rand')
+        self.running_mean = zeros(shape=[num_features])
+        self.running_var = ones(shape=[num_features])
 
     def extra_str(self) -> str:
         return 'eps={}'.format(self.eps)
@@ -40,9 +41,9 @@ class Linear(Module):
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
-        self.weight = Tensor(shape=[in_features, out_features], dtype='float32', init_method='rand')
+        self.weight = randn(shape=[in_features, out_features])
         if bias:
-            self.bias = Tensor(shape=[out_features], dtype='float32', init_method='rand')
+            self.bias = randn(shape=[out_features])
         else:
             self.bias = None
 

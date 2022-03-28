@@ -23,6 +23,7 @@ message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 add_library(hidet SHARED
         src/hidet/packedfunc.cpp
         src/hidet/runtime/cuda_api.cpp
+        src/hidet/runtime/cuda_kernels.cu
         # matmul baselines
         src/hidet/baselines/matmul/reference.cu
         src/hidet/baselines/matmul/cublas.cpp
@@ -54,7 +55,7 @@ if(NOT HIDET_CUDNN_PATH STREQUAL "Auto")
     message(STATUS "Use cuDNN in: ${HIDET_CUDNN_PATH}")
 endif()
 
-target_link_libraries(hidet cudart cublas cudnn)
+target_link_libraries(hidet cudart cublas cudnn curand)
 
 set_target_properties(hidet PROPERTIES
         CUDA_RUNTIME_LIBRARY SHARED

@@ -2,6 +2,7 @@ from typing import List, Optional, Dict, Tuple
 from hidet.ir.layout import DataLayout
 from hidet.runtime import Storage
 from hidet.utils import prod
+from hidet.ffi.cuda_api import CudaAPI
 
 
 def convert(v):
@@ -47,12 +48,6 @@ class Tensor:
     def __str__(self):
         return 'Tensor(shape={}, dtype={})'.format(self.shape, self.dtype)
 
-    def zeros_(self):
-        raise NotImplementedError()
-
-    def full_(self, fill_value):
-        raise NotImplementedError()
-
     def reshape(self, shape):
         from .ops import reshape
         return reshape(self, shape)
@@ -81,11 +76,27 @@ def empty(shape: List[int], dtype: str = 'float32', device: str = 'cuda', layout
 
 def zeros(shape: List[int], dtype: str = 'float32', device: str = 'cuda', layout: Optional[DataLayout] = None) -> Tensor:
     tensor = empty(shape, dtype, device, layout)
-    tensor.zeros_()
+    CudaAPI.memset_async(tensor.storage.addr, tensor.storage.num_bytes, value=0)
     return tensor
+
+
+def ones(shape: List[int], dtype: str = 'float32', device: str = 'cuda', layout: Optional[DataLayout] = None) -> Tensor:
+    return full(shape, 1.0, dtype, device, layout)
 
 
 def full(shape: List[int], fill_value, dtype: str = 'float32', device: str = 'cuda', layout: Optional[DataLayout] = None) -> Tensor:
     tensor = empty(shape, dtype, device, layout)
-    tensor.full_(fill_value)
+    if dtype == 'float32':
+        CudaAPI.fill_value(tensor.storage.addr, tensor.storage.num_bytes, value=fill_value)
+    else:
+        raise NotImplementedError()
+    return tensor
+
+
+def randn(shape: List[int], dtype: str = 'float32', mean: float = 0.0, stddev: float = 1.0, device: str = 'cuda', layout: Optional[DataLayout] = None) -> Tensor:
+    tensor = empty(shape, dtype, device, layout)
+    if dtype == 'float32':
+        CudaAPI.generate_normal(tensor.storage.addr, prod(tensor.shape), mean, stddev)
+    else:
+        raise NotImplementedError()
     return tensor

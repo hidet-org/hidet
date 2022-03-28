@@ -2,8 +2,9 @@ from hidet.ffi.cuda_api import CudaAPI
 
 
 class Storage:
-    def __init__(self, addr):
+    def __init__(self, addr, num_bytes):
         self.addr: int = addr
+        self.num_bytes: int = num_bytes
 
     def __del__(self):
         raise NotImplementedError()
@@ -20,8 +21,7 @@ class Storage:
 
 class CudaStorage(Storage):
     def __init__(self, num_bytes: int):
-        super().__init__(CudaAPI.malloc_async(num_bytes))
-        self.num_bytes = num_bytes
+        super().__init__(CudaAPI.malloc_async(num_bytes), num_bytes)
 
     def __del__(self):
         CudaAPI.free_async(self.addr)
@@ -29,8 +29,7 @@ class CudaStorage(Storage):
 
 class HostStorage(Storage):
     def __init__(self, num_bytes: int):
-        super().__init__(CudaAPI.malloc_host(num_bytes))
-        self.num_bytes = num_bytes
+        super().__init__(CudaAPI.malloc_host(num_bytes), num_bytes)
 
     def __del__(self):
         CudaAPI.free_host(self.addr)

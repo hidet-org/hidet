@@ -1,16 +1,16 @@
-import time
 import torch
-from torch import nn
 from torchvision.models.resnet import resnet50
+from hidet.utils import Timer
+from hidet.ffi.cuda_api import CudaAPI
 
 
 def demo_resnet50():
     model = resnet50()
-    x = torch.rand(128, 3, 224, 224)
-    t1 = time.time()
-    y = model(x)
-    t2 = time.time()
-    print(t2 - t1)
+    x = torch.rand(32, 3, 224, 224)
+    for t in range(3):
+        with Timer(f'torch {t}'):
+            y = model(x)
+            CudaAPI.device_synchronization()
 
 
 if __name__ == '__main__':

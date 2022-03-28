@@ -1,21 +1,10 @@
+#pragma once
+
 #include <iostream>
 #include <map>
 #include <cstring>
 #include <cudnn.h>
-
-#define CUDA_CALL(func) {                                           \
-    cudaError_t e = (func);                                         \
-    if(e != cudaSuccess) {                                          \
-        std::cerr << __FILE__ << ": " << __LINE__ << ":"            \
-        << "CUDA: " << cudaGetErrorString(e) << std::endl;          \
-    }}
-
-#define CUDNN_CALL(func) {                                          \
-    cudnnStatus_t _status = (func);                                 \
-    if(_status != CUDNN_STATUS_SUCCESS) {                           \
-        std::cerr << __FILE__ << ": " << __LINE__ << ":"            \
-        << "CUDNN: " << cudnnGetErrorString(_status) << std::endl;  \
-    }}
+#include <hidet/runtime.h>
 
 
 struct CudnnContext {
