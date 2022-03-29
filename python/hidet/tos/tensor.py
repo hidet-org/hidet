@@ -1,4 +1,5 @@
-from typing import List, Optional, Dict, Tuple
+from typing import List, Optional, Dict, Tuple, Sequence
+import ctypes
 import numpy as np
 from hidet.ir.layout import DataLayout
 from hidet.ir.layout.data_layout import RowMajorLayout, ColumnMajorLayout
@@ -18,7 +19,7 @@ def convert(v):
 
 class Tensor:
     def __init__(self,
-                 shape: List[int],
+                 shape: Sequence[int],
                  dtype: str,
                  device: str,
                  storage: Storage,
@@ -105,23 +106,23 @@ def dtype_bytes(dtype: str):
     return bytes_dict[dtype]
 
 
-def empty(shape: List[int], dtype: str = 'float32', device: str = 'cuda', layout: Optional[DataLayout] = None) -> Tensor:
+def empty(shape: Sequence[int], dtype: str = 'float32', device: str = 'cuda', layout: Optional[DataLayout] = None) -> Tensor:
     num_bytes = prod(shape) * dtype_bytes(dtype)
     storage = Storage.new(device, num_bytes)
     return Tensor(shape, dtype, device, storage, layout)
 
 
-def zeros(shape: List[int], dtype: str = 'float32', device: str = 'cuda', layout: Optional[DataLayout] = None) -> Tensor:
+def zeros(shape: Sequence[int], dtype: str = 'float32', device: str = 'cuda', layout: Optional[DataLayout] = None) -> Tensor:
     tensor = empty(shape, dtype, device, layout)
     CudaAPI.memset_async(tensor.storage.addr, tensor.storage.num_bytes, value=0)
     return tensor
 
 
-def ones(shape: List[int], dtype: str = 'float32', device: str = 'cuda', layout: Optional[DataLayout] = None) -> Tensor:
+def ones(shape: Sequence[int], dtype: str = 'float32', device: str = 'cuda', layout: Optional[DataLayout] = None) -> Tensor:
     return full(shape, 1.0, dtype, device, layout)
 
 
-def full(shape: List[int], fill_value, dtype: str = 'float32', device: str = 'cuda', layout: Optional[DataLayout] = None) -> Tensor:
+def full(shape: Sequence[int], fill_value, dtype: str = 'float32', device: str = 'cuda', layout: Optional[DataLayout] = None) -> Tensor:
     tensor = empty(shape, dtype, device, layout)
     if dtype == 'float32':
         CudaAPI.fill_value(tensor.storage.addr, tensor.storage.num_bytes, value=fill_value)
@@ -130,10 +131,28 @@ def full(shape: List[int], fill_value, dtype: str = 'float32', device: str = 'cu
     return tensor
 
 
-def randn(shape: List[int], dtype: str = 'float32', mean: float = 0.0, stddev: float = 1.0, device: str = 'cuda', layout: Optional[DataLayout] = None) -> Tensor:
+def randn(shape: Sequence[int], dtype: str = 'float32', mean: float = 0.0, stddev: float = 1.0, device: str = 'cuda', layout: Optional[DataLayout] = None) -> Tensor:
     tensor = empty(shape, dtype, device, layout)
     if dtype == 'float32':
         CudaAPI.generate_normal(tensor.storage.addr, prod(tensor.shape), mean, stddev)
     else:
         raise NotImplementedError()
     return tensor
+
+
+def void_pointer_to_uint64(p):
+    ret = ctypes.cast(ctypes.addressof(p), ctypes.POINTER(ctypes.c_uint64)).contents
+    return ret.value
+
+
+def from_numpy(array: np.ndarray) -> Tensor:
+    if array.dtype == np.float32:
+        tensor = empty(shape=array.shape, dtype='float32', device='cpu')
+        CudaAPI.memcpy_async(void_pointer_to_uint64(array.ctypes.data_as(ctypes.c_void_p)),
+                             tensor.storage.addr,
+                             tensor.storage.num_bytes,
+                             CudaAPI.HostToHost)
+        CudaAPI.device_synchronization()
+        return tensor
+    else:
+        raise NotImplementedError('')

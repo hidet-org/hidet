@@ -1,4 +1,4 @@
-from typing import Sequence, Union, Callable, Any
+from typing import Sequence, Union, Callable, Any, List
 from hidet.tos.operator import Operator
 from hidet.tos.tensor import Tensor
 from hidet.ir.layout.data_layout import DataLayout, StridesLayout, RowMajorLayout, ColumnMajorLayout
@@ -52,6 +52,18 @@ class AvgPool2dOp(Operator):
         inputs = [input]
         task = tasks.nn.avg_pool2d(shape=input.shape, kernel=kernel, strides=stride, padding=padding)
         super().__init__(inputs, task)
+
+
+class SoftmaxOp(Operator):
+    def __init__(self,
+                 x: Tensor,
+                 axis: int = 1):
+        super().__init__(inputs=[x], task=tasks.nn.softmax(x.shape, axis))
+
+
+class ReduceMeanOp(Operator):
+    def __init__(self, x: Tensor, dims: List[int], keep_dim: bool = False):
+        super().__init__(inputs=[x], task=tasks.reduce_mean(x.layout, dims, keep_dim))
 
 
 class UnaryElementwiseOp(Operator):
@@ -125,6 +137,16 @@ class ReshapeOp(Operator):
             raise ValueError()
 
 
+class SqueezeOp(Operator):
+    def __init__(self, x: Tensor, dims: List[int]):
+        super().__init__([x], tasks.squeeze(x.layout, dims))
+
+
+class UnsqueezeOp(Operator):
+    def __init__(self, x: Tensor, dims: List[int]):
+        super().__init__([x], tasks.unsqueeze(x.layout, dims))
+
+
 def conv2d(input: Tensor, weight, padding, stride) -> Tensor:
     return Conv2dOp(input, weight, padding, stride).outputs[0]
 
@@ -139,6 +161,10 @@ def max_pool2d(input: Tensor, kernel, stride, padding) -> Tensor:
 
 def avg_pool2d(input: Tensor, kernel, stride, padding) -> Tensor:
     return AvgPool2dOp(input, kernel, stride, padding).outputs[0]
+
+
+def reduce_mean(x: Tensor, dims: List[int], keep_dim: bool = False) -> Tensor:
+    return ReduceMeanOp(x, dims, keep_dim).outputs[0]
 
 
 def relu(input) -> Tensor:
@@ -173,6 +199,14 @@ def reshape(x: Tensor, shape) -> Tensor:
     return ReshapeOp(x, shape).outputs[0]
 
 
+def squeeze(x: Tensor, dims) -> Tensor:
+    return SqueezeOp(x, dims).outputs[0]
+
+
+def unsqueeze(x: Tensor, dims) -> Tensor:
+    return UnsqueezeOp(x, dims).outputs[0]
+
+
 def flatten(x: Tensor, start_dim=0, end_dim=-1) -> Tensor:
     rank = len(x.shape)
     shape = []
@@ -186,6 +220,13 @@ def flatten(x: Tensor, start_dim=0, end_dim=-1) -> Tensor:
     return reshape(x, shape)
 
 
+def softmax(x: Tensor, axis=1) -> Tensor:
+    if len(x.shape) < 4:
+        xx = reshape(x, x.shape + [1] * (4 - len(x.shape)))
+        return SoftmaxOp(xx, axis).outputs[0].reshape(x.shape)
+    return SoftmaxOp(x, axis).outputs[0]
+
+
 def batch_norm_infer(x: Tensor, running_mean: Tensor, running_var: Tensor, epsilon=1e-5, axis=1):
     assert len(x.shape) == 4 and axis == 1
     assert len(running_mean.shape) == 1 and len(running_var.shape) == 1
@@ -194,4 +235,3 @@ def batch_norm_infer(x: Tensor, running_mean: Tensor, running_var: Tensor, epsil
     running_mean = running_mean.reshape([1, c, 1, 1])
     running_var = running_var.reshape([1, c, 1, 1])
     return (x - running_mean) * (running_var + epsilon).rsqrt()
-

@@ -1,10 +1,16 @@
 import os
+import logging
 from hashlib import sha256
 from hidet.implement import impl_context, implement
 from hidet.transforms import lower, pass_context
 from hidet.backend import codegen, compile_source, load_task_func
 from hidet.utils.git_utils import repo_root
+from hidet.utils import COLORS
 from hidet.runtime import CompiledFunction
+
+logger = logging.Logger(__name__)
+logger.setLevel(logging.INFO)
+logger.addHandler(logging.StreamHandler())
 
 
 def build_task(task, space_level, opt_level, use_cache=True, cache_dir=None) -> CompiledFunction:
@@ -22,6 +28,8 @@ def build_task(task, space_level, opt_level, use_cache=True, cache_dir=None) -> 
     # use previously generated library when available
     if use_cache and os.path.exists(lib_path):
         return load_task_func(lib_path, task)
+
+    logger.info("Compiling task {}{}{}...".format(COLORS.OKGREEN, task.name, COLORS.ENDC))
 
     # build from scratch
     os.makedirs(task_dir, exist_ok=True)

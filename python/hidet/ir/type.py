@@ -55,6 +55,8 @@ class TensorType(TypeNode):
             # use shape and strides to define layout
             strides = layout
             layout = StridesLayout(shape, strides)
+        if layout is None and shape is not None and len(shape) > 0 and shape[0] is not None:
+            layout = DataLayout.row_major(shape)
         if shape is None and isinstance(layout, DataLayout):
             # use shape in data layout
             shape = layout.shape
