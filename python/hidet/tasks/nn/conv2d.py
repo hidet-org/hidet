@@ -11,16 +11,27 @@ def tuplize(v):
     return v, v
 
 
+def norm_pad(v):
+    if isinstance(v, int):
+        return [v, v, v, v]
+    elif isinstance(v, (list, tuple)):
+        if len(v) == 2:
+            return [v[0], v[1], v[0], v[1]]
+        elif len(v) == 4:
+            return v
+    raise NotImplementedError()
+
+
 def conv2d(batch_size, in_channels, height, width, out_channels, kernel, padding, stride):
-    kernel, padding, stride = tuplize(kernel), tuplize(padding), tuplize(stride)
+    kernel, padding, stride = tuplize(kernel), norm_pad(padding), tuplize(stride)
     input = tensor_input('input', 'float32', [batch_size, in_channels, height, width])
     weight = tensor_input('weight', 'float32', [out_channels, in_channels, kernel[0], kernel[1]])
     padded = compute(
         name='pad',
-        shape=[batch_size, in_channels, height + 2 * padding[0], weight + 2 * padding[1]],
+        shape=[batch_size, in_channels, height + padding[0] + padding[2], weight + padding[1] + padding[3]],
         fcompute=lambda n, c, h, w: input.protect_read(indices=[n, c, h - padding[0], w - padding[1]], default_value=0.0))
-    out_height = (height + 2 * padding[0] - kernel[0]) // stride[0] + 1
-    out_width = (width + 2 * padding[1] - kernel[1]) // stride[1] + 1
+    out_height = (height + padding[0] + padding[2] - kernel[0]) // stride[0] + 1
+    out_width = (width + padding[1] + padding[3] - kernel[1]) // stride[1] + 1
     output = compute(
         name='out',
         shape=[batch_size, out_channels, out_height, out_width],

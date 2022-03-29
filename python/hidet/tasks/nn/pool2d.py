@@ -14,6 +14,17 @@ def normalize(v, rank=2):
     return v
 
 
+def norm_pad(v):
+    if isinstance(v, int):
+        return [v, v, v, v]
+    elif isinstance(v, (list, tuple)):
+        if len(v) == 2:
+            return [v[0], v[1], v[0], v[1]]
+        elif len(v) == 4:
+            return v
+    raise NotImplementedError()
+
+
 def pool2d(shape: Sequence[int],
            kernel: Union[Sequence[int], int],
            strides: Union[Sequence[int], int],
@@ -22,10 +33,10 @@ def pool2d(shape: Sequence[int],
     assert reduce_type in ['max', 'avg']
     kernel = normalize(kernel)
     strides = normalize(strides)
-    padding = normalize(padding)
+    padding = norm_pad(padding)
     batch_size, channels, height, width = shape
-    out_height = (height + 2 * padding[0] - kernel[0]) // strides[0] + 1
-    out_width = (width + 2 * padding[1] - kernel[1]) // strides[1] + 1
+    out_height = (height + padding[0] + padding[2] - kernel[0]) // strides[0] + 1
+    out_width = (width + padding[1] + padding[3] - kernel[1]) // strides[1] + 1
     x = tensor_input('x', 'float32', shape=[batch_size, channels, height, width])
     pad = compute(
         name='pad',
@@ -59,38 +70,7 @@ def max_pool2d(
         kernel: Union[Sequence[int], int],
         strides: Union[Sequence[int], int],
         padding: Union[Sequence[int], int]):
-    kernel = normalize(kernel)
-    strides = normalize(strides)
-    padding = normalize(padding)
-    batch_size, channels, height, width = shape
-    out_height = (height + 2 * padding[0] - kernel[0]) // strides[0] + 1
-    out_width = (width + 2 * padding[1] - kernel[1]) // strides[1] + 1
-    x = tensor_input('x', 'float32', shape=[batch_size, channels, height, width])
-    pad = compute(
-        name='pad',
-        shape=[batch_size, channels, height + 2 * padding[0], width + 2 * padding[1]],
-        fcompute=lambda n, c, h, w: x.protect_read(indices=[n, c, h - padding[0], w - padding[1]], default_value=float_type_min_value())
-    )
-    y = compute(
-        name='y',
-        shape=[batch_size, channels, out_height, out_width],
-        fcompute=lambda n, c, h, w: reduce(
-            shape=[kernel[0], kernel[1]],
-            fcompute=lambda rx, ry: pad[n, c, h * strides[0] + rx, w * strides[1] + ry],
-            reduce_type='max'
-        )
-    )
-    y = inline_compute(y)
-    return Task(
-        name='max_pool2d',
-        computation=y,
-        params=[x, y],
-        params_type=[
-            tensor_type('global', 'float32', x.shape, layout=DataLayout.row_major(x.shape)),
-            tensor_type('global', 'float32', y.shape, layout=DataLayout.row_major(y.shape)),
-        ],
-        worker=Grid()
-    )
+    return pool2d(shape, kernel, strides, padding, reduce_type='max')
 
 
 def avg_pool2d(
@@ -98,35 +78,4 @@ def avg_pool2d(
         kernel: Union[Sequence[int], int],
         strides: Union[Sequence[int], int],
         padding: Union[Sequence[int], int]):
-    kernel = normalize(kernel)
-    strides = normalize(strides)
-    padding = normalize(padding)
-    batch_size, channels, height, width = shape
-    out_height = (height + 2 * padding[0] - kernel[0]) // strides[0] + 1
-    out_width = (width + 2 * padding[1] - kernel[1]) // strides[1] + 1
-    x = tensor_input('x', 'float32', shape=[batch_size, channels, height, width])
-    pad = compute(
-        name='pad',
-        shape=[batch_size, channels, height + 2 * padding[0], width + 2 * padding[1]],
-        fcompute=lambda n, c, h, w: x.protect_read(indices=[n, c, h - padding[0], w - padding[1]], default_value=float_type_min_value())
-    )
-    y = compute(
-        name='y',
-        shape=[batch_size, channels, out_height, out_width],
-        fcompute=lambda n, c, h, w: reduce(
-            shape=[kernel[0], kernel[1]],
-            fcompute=lambda rx, ry: pad[n, c, h * strides[0] + rx, w * strides[1] + ry],
-            reduce_type='avg'
-        )
-    )
-    y = inline_compute(y)
-    return Task(
-        name='avg_pool2d',
-        computation=y,
-        params=[x, y],
-        params_type=[
-            tensor_type('global', 'float32', x.shape, layout=DataLayout.row_major(x.shape)),
-            tensor_type('global', 'float32', y.shape, layout=DataLayout.row_major(y.shape)),
-        ],
-        worker=Grid()
-    )
+    return pool2d(shape, kernel, strides, padding, reduce_type='avg')

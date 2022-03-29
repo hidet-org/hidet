@@ -1,5 +1,6 @@
 from typing import List, Union
 import onnx
+import onnxruntime
 from onnx import numpy_helper
 from hidet.tos import nn, ops
 from hidet.tos.tensor import Tensor, from_numpy, randn
@@ -19,9 +20,9 @@ class OnnxOperator:
             elif attr.type == 3:  # string
                 v = attr.s.decode('utf-8')
             elif attr.type == 6:  # floats
-                v = attr.floats
+                v = list(attr.floats)
             elif attr.type == 7:  # ints
-                v = attr.ints
+                v = list(attr.ints)
             elif attr.type == 8:  # strings
                 v = [s.decode('utf-8') for s in attr.strings]
             else:
@@ -35,9 +36,8 @@ class OnnxOperator:
 class OnnxConv(OnnxOperator):
     def __init__(self, node: onnx.NodeProto):
         super().__init__(node)
-        padding = self.attrs.get('pads', [0, 0, 0, 0])
-        self.padding = [max(padding[0], padding[2]), max(padding[1], padding[3])]
-        self.strides = [v for v in self.attrs.get('strides')]
+        self.padding = self.attrs.get('pads', [0, 0, 0, 0])
+        self.strides = self.attrs.get('strides')
 
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         output = ops.conv2d(inputs[0], inputs[1], self.padding, self.strides)
@@ -45,7 +45,6 @@ class OnnxConv(OnnxOperator):
             assert len(inputs) == 3
             bias = ops.unsqueeze(inputs[2], [0, 2, 3])
             output = output + bias
-        print(output.shape)
         return [output]
 
 
@@ -57,9 +56,8 @@ class OnnxRelu(OnnxOperator):
 class OnnxMaxPool(OnnxOperator):
     def __init__(self, node: onnx.NodeProto):
         super().__init__(node)
-        padding = self.attrs.get('pads')
         self.kernel_size = list(self.attrs.get('kernel_shape'))
-        self.padding = [max(padding[0], padding[2]), max(padding[1], padding[3])]
+        self.padding = list(self.attrs.get('pads', [0, 0, 0, 0]))
         self.strides = list(self.attrs.get('strides'))
 
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
@@ -69,7 +67,7 @@ class OnnxMaxPool(OnnxOperator):
 class OnnxReduceMean(OnnxOperator):
     def __init__(self, node: onnx.NodeProto):
         super().__init__(node)
-        self.dims = list(self.attrs.get('axes'))
+        self.dims = self.attrs.get('axes')
         self.keep_dim = self.attrs.get('keepdims') == 1
 
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
@@ -172,14 +170,19 @@ def from_onnx(model: Union[str, onnx.ModelProto]) -> nn.Module:
 
 
 def main():
-    model = onnx.load_model('/home/yaoyao/model_zoo/resnet50_v1.onnx')
-    # model = onnx.load_model('/home/yaoyao/model_zoo/resnet50-v2-7.onnx')
-    x = randn([1, 3, 224, 224])
+    model_path = '/home/yaoyao/model_zoo/resnet50_v1.onnx'
+    # model_path = '/home/yaoyao/model_zoo/resnet50-v2-7.onnx'
+    model = onnx.load_model(model_path)
+    onnx.checker.check_model(model)
+    # run use hidet
+    x_hidet = randn([1, 3, 224, 224])
     module = OnnxModule(model)
-    y = module(x)
-    print(module)
-    print(y[0])
-    print(y[1])
+    y_hidet = module(x_hidet)
+    # run use onnx runtime
+    onnx_infer = onnxruntime.InferenceSession(model_path)
+    y_onnx = onnx_infer.run(None, {'input_tensor:0': x_hidet.cpu().numpy()})
+    print(y_hidet[1])
+    print(y_onnx[1])
     # y = module(x)
     # print(type(model))
     # print(dir(model))
