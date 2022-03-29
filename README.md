@@ -56,10 +56,9 @@ from hidet.ir.type import tensor_type
 from hidet.ir.expr import var
 from hidet.ir.task import Task, Grid
 from hidet.ir.dialects.compute import tensor_input, reduce_sum, compute
-from hidet.runtime.value import randn, empty
 from hidet.implement import implement, impl_context
-from hidet.implement.cuda import CudaGridNaiveImplementer, CudaThreadNaiveImplementer
 from hidet.backend import build
+from hidet.tos.tensor import randn, empty
 
 
 def get_task(N=1024, M=1024, K=1024):
@@ -84,12 +83,11 @@ def main():
     ir_module = implement(task)
 
     # force hidet to use naive implementers
-    with impl_context(allowed=[CudaGridNaiveImplementer, CudaThreadNaiveImplementer]):
-        module = build(ir_module, output_dir='./outs')
+    module = build(ir_module, output_dir='./outs')
 
-    A = randn([N, K], 'float32', 'global', seed=1)
-    B = randn([K, M], 'float32', 'global', seed=3)
-    C = empty([N, M], 'float32', 'global')
+    A = randn([N, K], 'float32', device='cuda')
+    B = randn([K, M], 'float32', device='cuda')
+    C = empty([N, M], 'float32', device='cuda')
     module['gemm'](A, B, C)
     print(A)
     print(B)

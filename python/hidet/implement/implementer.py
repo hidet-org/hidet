@@ -32,7 +32,7 @@ class Implementer:
         raise NotImplementedError()
 
     def resolve(self, task, match, schedules: List[Schedule], ir_modules: List[IRModule], task_label: str, parallel=True, verbose=True) -> IRModule:
-        from hidet.runtime.value import dummy_inputs_from_task
+        # from hidet.runtime.value import dummy_inputs_from_task
         from hidet.backend import BuildInstance, batch_build
         import numpy as np
         assert len(schedules) == len(ir_modules)
@@ -104,6 +104,26 @@ class ImplementerContext:
 
 
 ImplementerContext.contexts.append(ImplementerContext())  # fallback context, allow all implementers
+
+
+def dummy_inputs_from_task(task: Task):
+    from hidet.ir.type import TensorType
+    from hidet.ir.expr import Constant
+    from hidet.tos.tensor import randn
+    inputs = []
+    for idx, param_type in enumerate(task.params_type):
+        assert isinstance(param_type, TensorType)
+        assert all(isinstance(s, Constant)for s in param_type.shape)
+        stype = param_type.scalar_type.name
+        scope = param_type.scope.name
+        shape = [int(s) for s in param_type.shape]
+        # strides = [int(s) for s in param_type.strides]
+        scope2device = {
+            'globlal': 'cuda',
+            'host': 'cpu'
+        }
+        inputs.append(randn(shape, stype, device=scope2device[scope]))
+    return inputs
 
 
 def register_impl(name):

@@ -1,6 +1,6 @@
 from typing import List, Optional, Dict
 from hidet.ir.task import Task
-from hidet.runtime import randn, CompiledFunction
+from hidet.runtime import CompiledFunction
 from hidet.driver import build_task
 from hidet.tos.tensor import empty
 

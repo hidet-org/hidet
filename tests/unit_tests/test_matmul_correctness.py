@@ -7,8 +7,8 @@ from hidet.implement import implement, impl_context
 from hidet.implement.cuda.matmul import CudaGridStaticMatmulImplementer
 from hidet.implement.resolve import random_resolve
 from hidet.ir.task import Grid, Host
-from hidet.runtime.value import TensorValue, randn, scalar, zeros, full
 from hidet.tasks.nn import matmul
+from hidet.tos.tensor import randn, zeros
 
 
 @pytest.mark.parametrize('N,M,K,name,packed_func', [
@@ -16,19 +16,19 @@ from hidet.tasks.nn import matmul
 ])
 def test_baseline(N, M, K, name, packed_func):
     task = matmul(N, M, K)
-    A = randn([N, K], 'float32', 'host', seed=1)
-    B = randn([K, M], 'float32', 'host', seed=3)
-    C = zeros([N, M], 'float32', 'host')
+    A = randn([N, K], 'float32', device='cpu')
+    B = randn([K, M], 'float32', device='cpu')
+    C = zeros([N, M], 'float32', device='cpu')
 
     task.worker = Host()
     host_module = build(random_resolve(implement(task)), f'./outs/verify/host/{name}')
 
-    GA, GB, GC = A.to_cuda(), B.to_cuda(), C.to_cuda()
-    packed_func(scalar(N), scalar(M), scalar(K), GA, GB, GC)
+    GA, GB, GC = A.cuda(), B.cuda(), C.cuda()
+    packed_func(N, M, K, GA, GB, GC)
 
-    HA, HB, HC = A.to_cpu(), B.to_cpu(), C.to_cpu()
+    HA, HB, HC = A.cpu(), B.cpu(), C.cpu()
     host_module['matmul'](HA, HB, HC)
-    np.testing.assert_allclose(GC.to_numpy(), HC.to_numpy(), rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose(GC.cpu().numpy(), HC.cpu().numpy(), rtol=1e-5, atol=1e-5)
 
 
 @pytest.mark.parametrize('N,M,K,name,implementers', [
@@ -36,9 +36,9 @@ def test_baseline(N, M, K, name, packed_func):
 ])
 def test_hidet_variant(N, M, K, name, implementers):
     task = matmul(N, M, K)
-    A = randn([N, K], 'float32', 'host', seed=1)
-    B = randn([K, M], 'float32', 'host', seed=3)
-    C = zeros([N, M], 'float32', 'host')
+    A = randn([N, K], 'float32', device='cpu')
+    B = randn([K, M], 'float32', device='cpu')
+    C = zeros([N, M], 'float32', device='cpu')
 
     task.worker = Grid()
     with impl_context(allowed=implementers):
@@ -48,12 +48,12 @@ def test_hidet_variant(N, M, K, name, implementers):
     task.worker = Host()
     host_module = build(random_resolve(implement(task)), f'./outs/verify/host/{name}')
 
-    GA, GB, GC = A.to_cuda(), B.to_cuda(), C.to_cuda()
+    GA, GB, GC = A.cuda(), B.cuda(), C.cuda()
     grid_module['matmul'](GA, GB, GC)
 
-    HA, HB, HC = A.to_cpu(), B.to_cpu(), C.to_cpu()
+    HA, HB, HC = A.cpu(), B.cpu(), C.cpu()
     host_module['matmul'](HA, HB, HC)
-    np.testing.assert_allclose(GC.to_numpy(), HC.to_numpy(), rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose(GC.cpu().numpy(), HC.cpu().numpy(), rtol=1e-5, atol=1e-4)
 
 
 if __name__ == '__main__':

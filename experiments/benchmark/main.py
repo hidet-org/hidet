@@ -15,10 +15,10 @@ from hidet.baselines.conv2d import conv2d_cudnn
 from hidet.implement import implement, impl_context
 from hidet.implement.cuda import CudaGridStaticMatmulImplementer
 from hidet.implement.cuda.conv2d import CudaGridStaticConv2dImplicitGemmImplementer
-from hidet.runtime.value import randn, empty, scalar
 from hidet.tasks.nn import matmul, conv2d
 from hidet.utils import cuda
 from hidet.testing import Conv2dSetting
+from hidet.tos.tensor import randn, empty
 
 
 def get_repo_sha(short=False):
@@ -98,16 +98,16 @@ def benchmark_matmul(args):
     for idx, (M, N, K) in enumerate(workloads):
         workload_key = 'matmul_{}x{}x{}'.format(M, N, K)
         raw_data[workload_key] = {}
-        A = randn([M, K], 'float32', 'global', seed=1)
-        B = randn([K, N], 'float32', 'global', seed=3)
-        C = empty([M, N], 'float32', 'global')
+        A = randn([M, K], 'float32', device='cuda')
+        B = randn([K, N], 'float32', device='cuda')
+        C = empty([M, N], 'float32', device='cuda')
         row: list = [None for _ in range(len(headers))]
         row[:3] = (M, N, K)
         cur = 3
         print(workload_key)
         for name, func in baselines:
             time.sleep(args.cool)
-            latencies = func.profile(scalar(M), scalar(N), scalar(K), A, B, C, warmup=args.warmup, number=args.number, repeat=args.repeat)
+            latencies = func.profile(M, N, K, A, B, C, warmup=args.warmup, number=args.number, repeat=args.repeat)
             print_latencies(name, latencies)
             raw_data[workload_key][name] = latencies
             row[cur] = float(np.median(latencies))
@@ -171,9 +171,9 @@ def benchmark_conv2d(args):
         gm = n * ho * wo
         gn = co
         gk = ci * kx * ky
-        x = randn([n, ci, hi, wi], 'float32', 'global', seed=1)
-        w = randn([co, ci, kx, ky], 'float32', 'global', seed=3)
-        y = empty([n, co, ho, wo], 'float32', 'global')
+        x = randn([n, ci, hi, wi], 'float32', device='cuda')
+        w = randn([co, ci, kx, ky], 'float32', device='cuda')
+        y = empty([n, co, ho, wo], 'float32', device='cuda')
         row = [n, ci, hi, wi, co, f'{kx}x{ky}', f'{px}x{py}', f'{sx}x{sy}', gm, gn, gk]
         raw_data[str(setting)] = {}
         print(str(setting))

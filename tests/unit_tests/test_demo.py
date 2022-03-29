@@ -3,10 +3,10 @@ from hidet.ir.type import tensor_type
 from hidet.ir.expr import var
 from hidet.ir.task import Task, Grid
 from hidet.ir.dialects.compute import tensor_input, reduce_sum, compute
-from hidet.runtime.value import TensorValue
 from hidet.implement import implement
 from hidet.implement import random_resolve
 from hidet.backend import build
+from hidet.tos.tensor import from_numpy, randn, empty
 
 
 def get_task(N=1024, M=1024, K=1024):
@@ -32,9 +32,9 @@ def test_demo():
     ir_module = random_resolve(ir_module)
     module = build(ir_module, output_dir='./outs')
 
-    A = TensorValue.randn([N, K], 'float32', 'global', seed=1)
-    B = TensorValue.randn([K, M], 'float32', 'global', seed=3)
-    C = TensorValue.empty([N, M], 'float32', 'global')
+    A = randn([N, K], 'float32', device='cuda')
+    B = randn([K, M], 'float32', device='cuda')
+    C = empty([N, M], 'float32', device='cuda')
     module['gemm'](A, B, C)
 
 

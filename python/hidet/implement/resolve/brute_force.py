@@ -2,9 +2,9 @@ import random
 import numpy as np
 from itertools import product
 from hidet.ir.func import IRModule, FunctionGroup
-from hidet.runtime.value import dummy_inputs_from_task
 from hidet.backend import build
 from tqdm import tqdm
+from hidet.implement.implementer import dummy_inputs_from_task
 
 
 def brute_force_resolve(ir_module: IRModule, warmup=1, number=1, repeat=10, progress_bar=True) -> IRModule:

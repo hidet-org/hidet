@@ -9,8 +9,8 @@ from hidet.backend import build
 from hidet.baselines.pool2d import max_pool2d_cudnn
 from hidet.implement import implement, impl_context
 from hidet.implement.cuda.pool2d import CudaGridPool2dImplementer
-from hidet.runtime.value import TensorValue, randn, empty, scalar, zeros, full, from_list
 from hidet.tasks.nn import max_pool2d
+from hidet.tos.tensor import zeros, randn
 
 
 def print_latencies(name, latencies):
@@ -43,8 +43,8 @@ def benchmark(warmup=5, number=1, repeat=10, use_nsight_compute=False, keep_ir=T
         n, c, h, w, k, p, s = workload
         oh = (h + 2 * p - k) // s + 1
         ow = (w + 2 * p - k) // s + 1
-        x = randn([n, c, h, w], 'float32', 'global', seed=1)
-        y = zeros([n, c, oh, ow], 'float32', 'global')
+        x = randn([n, c, h, w], 'float32', device='cuda')
+        y = zeros([n, c, oh, ow], 'float32', device='cuda')
         print("Workload {} x {} x {} x {} x {} x {} x {}".format(n, c, h, w, k, p, s))
         row = [n, c, h, w, k, p, s]
         for name, func in cudnn_baselines:
@@ -78,7 +78,7 @@ def verify(keep_ir=True):
         n, c, h, w, k, p, s = workload
         oh = (h + 2 * p - k) // s + 1
         ow = (w + 2 * p - k) // s + 1
-        x = randn([n, c, h, w], 'float32', 'global', seed=1)
+        x = randn([n, c, h, w], 'float32', device='cuda')
         print("Workload {} x {} x {} x {} x {} x {} x {}".format(n, c, h, w, k, p, s))
 
         try:
@@ -91,7 +91,7 @@ def verify(keep_ir=True):
                     ir_module = implement(max_pool2d(shape=(n, c, h, w), kernel=k, strides=s, padding=p))
                     module = build(ir_module, output_dir=f'./outs/verify/{name}_{n}x{c}x{h}x{w}x{k}x{p}x{s}', keep_ir=keep_ir)
                     module['max_pool2d'](x, y2)
-                    np.testing.assert_allclose(y1.to_numpy(), y2.to_numpy())
+                    np.testing.assert_allclose(y1.numpy(), y2.numpy())
 
         except AssertionError as e:
             print('x')

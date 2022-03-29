@@ -18,7 +18,8 @@ from hidet.ir.layout import TaskLayout, row_major_layout, full_layout, DataLayou
 from hidet.ir.primitives import block_idx, syncthreads
 from hidet.ir.task import ThreadBlock, Grid, Host
 from hidet.ir.type import TensorType
-from hidet.runtime import randn, empty, CompiledFunction
+from hidet.runtime import CompiledFunction
+from hidet.tos.tensor import randn, empty
 from hidet.tasks import nn
 from hidet.utils.py import prod
 
@@ -234,9 +235,9 @@ def verify_matmul(func: CompiledFunction, M, N, K):
     """
     Verify the correctness of matrix multiplication function func (assume it is a GPU kernel).
     """
-    A = randn([M, K], 'float32', 'global', seed=1)
-    B = randn([K, N], 'float32', 'global', seed=3)
-    C = empty([M, N], 'float32', 'global')
+    A = randn([M, K], 'float32', device='cuda')
+    B = randn([K, N], 'float32', device='cuda')
+    C = empty([M, N], 'float32', device='cuda')
     func(A, B, C)
 
     ref_C = empty([M, N], 'float32', 'host')
@@ -244,9 +245,9 @@ def verify_matmul(func: CompiledFunction, M, N, K):
     # We use a naive CPU kernel to verify. The code of the CPU kernel can be found in './outs/host/source.cu'
     task = nn.matmul(M, N, K, worker=Host())
     host_module = build(random_resolve(implement(task)), f'./outs/host')
-    host_module['matmul'](A.to_cpu(), B.to_cpu(), ref_C)
+    host_module['matmul'](A.cpu(), B.cpu(), ref_C)
 
-    np.testing.assert_allclose(C.to_numpy(), ref_C.to_numpy(), rtol=0.0, atol=0.0)
+    np.testing.assert_allclose(C.numpy(), ref_C.numpy(), rtol=0.0, atol=0.0)
 
 
 def main():
@@ -258,9 +259,9 @@ def main():
     module = build(ir_module, output_dir='./outs')
 
     # Define matrix A, B, and C.
-    A = randn([M, K], 'float32', 'global', seed=1)
-    B = randn([K, N], 'float32', 'global', seed=3)
-    C = empty([M, N], 'float32', 'global')
+    A = randn([M, K], 'float32', device='cuda')
+    B = randn([K, N], 'float32', device='cuda')
+    C = empty([M, N], 'float32', device='cuda')
     # Get the kernel
     func: CompiledFunction = module['matmul']
     # We can launch the kernel by calling func.

@@ -9,8 +9,8 @@ from hidet.backend import build
 from hidet.baselines.softmax import softmax_cudnn
 from hidet.implement import implement, impl_context
 from hidet.implement.cuda.softmax import CudaGridSoftmaxImplementer
-from hidet.runtime.value import TensorValue, randn, empty, scalar, zeros, full, from_list
 from hidet.tasks.nn import softmax
+from hidet.tos.tensor import randn, zeros
 
 
 def print_latencies(name, latencies):
@@ -40,8 +40,8 @@ def benchmark(warmup=5, number=5, repeat=5, use_nsight_compute=False, keep_ir=Tr
     table = []
     for workload in workloads:
         n, c, h, w = workload
-        x = randn([n, c, h, w], 'float32', 'global', seed=1)
-        y = randn([n, c, h, w], 'float32', 'global', seed=1)
+        x = randn([n, c, h, w], 'float32', device='cuda')
+        y = randn([n, c, h, w], 'float32', device='cuda')
         print("Workload {} x {} x {} x {}".format(n, c, h, w))
         row = [n, c, h, w]
         for name, func in cudnn_baselines:
@@ -79,7 +79,7 @@ def verify(keep_ir=True):
     ]
     for workload in workloads:
         n, c, h, w = workload
-        x = randn([n, c, h, w], 'float32', 'global', seed=1)
+        x = randn([n, c, h, w], 'float32', device='cuda')
         print("Workload {} x {} x {} x {}".format(n, c, h, w))
 
         try:
@@ -89,11 +89,11 @@ def verify(keep_ir=True):
                     task = softmax(shape=[n, c, h, w], axis=1)
                     ir_module = implement(task)
                     module = build(ir_module, output_dir=f'./outs/verify/{name}_{n}x{c}x{h}x{w}', keep_ir=keep_ir)
-                    y1 = zeros([n, c, h, w], 'float32', 'global')
-                    y2 = zeros([n, c, h, w], 'float32', 'global')
+                    y1 = zeros([n, c, h, w], 'float32', device='cuda')
+                    y2 = zeros([n, c, h, w], 'float32', device='cuda')
                     ref(n, c, h, w, x, y1)
                     module['softmax'](x, y2)
-                    np.testing.assert_allclose(y1.to_numpy(), y2.to_numpy(), atol=1e-5, rtol=1e-5)
+                    np.testing.assert_allclose(y1.numpy(), y2.numpy(), atol=1e-5, rtol=1e-5)
 
         except AssertionError as e:
             print('x')

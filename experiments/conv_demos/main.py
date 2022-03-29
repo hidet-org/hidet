@@ -11,10 +11,11 @@ from hidet.implement import implement, impl_context
 from hidet.implement.resolve import random_resolve, brute_force_resolve
 from hidet.implement.cuda.conv2d import CudaGridStaticConv2dImplicitGemmImplementer
 from hidet.ir.task import Grid, Host
-from hidet.runtime.value import TensorValue, randn, empty, scalar, zeros, full, from_list
+# from hidet.runtime.value import randn, empty, scalar, zeros, full, from_list
 from hidet.tasks.nn import matmul, conv2d
 from hidet.utils import cuda, prod
 from hidet.transforms import lower
+from hidet.tos.tensor import randn, empty, zeros, full
 
 
 class ConvSetting:
@@ -142,9 +143,9 @@ def benchmark(warmup=5, number=1, repeat=10, use_nsight_compute=False, keep_ir=T
         gm = n * ho * wo
         gn = co
         gk = ci * kx * ky
-        x = randn([n, ci, hi, wi], 'float32', 'global', seed=1)
-        w = randn([co, ci, kx, ky], 'float32', 'global', seed=3)
-        y = empty([n, co, ho, wo], 'float32', 'global')
+        x = randn([n, ci, hi, wi], 'float32', device='cuda')
+        w = randn([co, ci, kx, ky], 'float32', device='cuda')
+        y = empty([n, co, ho, wo], 'float32', device='cuda')
         print("Workload {}".format(setting))
 
         row = [n, ci, hi, wi, co, f'{kx}x{ky}', f'{px}x{py}', f'{sx}x{sy}', gm, gn, gk]
@@ -226,7 +227,7 @@ def verify(keep_ir=True):
                 y2 = zeros([n, co, ho, wo], 'float32', 'global')
                 ref(n, ci, hi, wi, co, kx, ky, px, py, sx, sy, x, w, y1)
                 func(n, ci, hi, wi, co, kx, ky, px, py, sx, sy, x, w, y2)
-                np.testing.assert_allclose(y1.to_numpy(), y2.to_numpy())
+                np.testing.assert_allclose(y1.numpy(), y2.numpy())
 
             for name, func in packed_func_baselines:
                 print('verifying {}'.format(name))
@@ -234,7 +235,7 @@ def verify(keep_ir=True):
                 y2 = zeros([n, co, ho, wo], 'float32', 'global')
                 ref(n, ci, hi, wi, co, kx, ky, px, py, sx, sy, x, w, y1)
                 func(n, ci, hi, wi, co, kx, ky, px, py, sx, sy, x, w, y2)
-                np.testing.assert_allclose(y1.to_numpy(), y2.to_numpy())
+                np.testing.assert_allclose(y1.numpy(), y2.numpy())
 
             for name, allowed in hidet_variants:
                 with impl_context(allowed=allowed) as ctx:
@@ -246,7 +247,7 @@ def verify(keep_ir=True):
                     y2 = zeros([n, co, ho, wo], 'float32', 'global')
                     ref(n, ci, hi, wi, co, kx, ky, px, py, sx, sy, x, w, y1)
                     module['conv2d'](x, w, y2)
-                    np.testing.assert_allclose(y1.to_numpy(), y2.to_numpy())
+                    np.testing.assert_allclose(y1.numpy(), y2.numpy())
 
         except AssertionError as e:
             print('x')

@@ -1,13 +1,12 @@
-from typing import Dict, Sequence, Union
+from typing import Dict, Sequence, Union, Type
 import ctypes
 from pycuda.gpuarray import GPUArray
 
 from .ffi import _LIB
 from ctypes import c_int32, c_void_p, pointer, c_float, cast, c_bool
 from ctypes import POINTER, Structure
-from hidet.ir.type import ScalarType, TensorType
+from hidet.ir.type import TypeNode, ScalarType, TensorType
 from hidet.ir.dialects.lowlevel import PointerType, TensorPointerType
-from hidet.runtime.value import Value, ScalarValue, TensorValue
 
 c_int32_p = POINTER(c_int32)
 c_float_p = POINTER(c_float)
@@ -41,43 +40,23 @@ class PackedFunc:
         func_pointer = cast(self.c_func_pointer, c_void_p)
         self.c_packed_func = CPackedFunc(num_args, arg_types, func_pointer)
 
-    def _convert_arg(self, idx, arg: Union[Value, int, float]):
+    def _convert_arg(self, param_type, arg: Union[int, float, 'Tensor']):
         """
         convert arg to a c_void_p
         """
         from hidet.tos.tensor import Tensor
         if isinstance(arg, int):
-            return cast(pointer(c_int32(arg)), c_void_p)
+            assert isinstance(param_type, ScalarType)
+            if param_type.name == 'int32':
+                return cast(pointer(c_int32(arg)), c_void_p)
         elif isinstance(arg, float):
-            return cast(pointer(c_float(arg)), c_void_p)
-        elif isinstance(arg, ScalarValue):
-            assert isinstance(self.param_types[idx], ScalarType)
-            arg_type = arg.type
-            if arg_type.name == 'int32':
-                assert self.param_types[idx].name == 'int32'
-                return cast(pointer(c_int32(arg.value)), c_void_p)
-            elif arg_type.name == 'float32':
-                assert self.param_types[idx].name == 'float32'
-                return cast(pointer(c_float(arg.value)), c_void_p)
-            else:
-                raise NotImplementedError()
-        elif isinstance(arg, TensorValue):
-            assert isinstance(self.param_types[idx], (PointerType, TensorPointerType, TensorType))
-            arg_type = arg.type
-            if arg_type.scalar_type.name == 'float32':
-                if isinstance(arg.array, GPUArray):
-                    rt = cast(int(arg.array.gpudata), c_void_p)
-                else:
-                    rt = cast(int(arg.array.__array_interface__['data'][0]), c_void_p)
-                return rt
-            else:
-                raise NotImplementedError()
+            if param_type.name == 'float32':
+                return cast(pointer(c_float(arg)), c_void_p)
         elif isinstance(arg, Tensor):
             return cast(arg.storage.addr, c_void_p)
-        else:
-            raise NotImplementedError()
+        raise NotImplementedError("Call PackedFunc with argument type: '{}' has not been implemented yet.".format(type(arg)))
 
-    def _type_code(self, param_type):
+    def _type_code(self, param_type: Union[Type[bool, int, TypeNode]]):
         type_map = {
             'bool': c_int32(1),
             'int32': c_int32(1),
@@ -88,17 +67,13 @@ class PackedFunc:
             type_name = 'int32'
         elif isinstance(param_type, ScalarType):
             type_name = param_type.name
-        elif isinstance(param_type, PointerType):
-            type_name = 'pointer'
-        elif isinstance(param_type, TensorType):
-            type_name = 'pointer'
-        elif isinstance(param_type, TensorPointerType):
+        elif isinstance(param_type, (PointerType, TensorType, TensorPointerType)):
             type_name = 'pointer'
         else:
             raise NotImplementedError(param_type)
         return type_map[type_name]
 
-    def _convert_args(self, orig_args: Sequence):
+    def _apply_default_args(self, orig_args):
         n = len(orig_args) + len(self.default_args)
         args = []
         orig_args = list(reversed(orig_args))
@@ -107,19 +82,22 @@ class PackedFunc:
                 args.append(self.default_args[i])
             else:
                 args.append(orig_args.pop())
-        assert len(args) == len(self.param_types)
+        return args
 
-        converted_args = [self._convert_arg(idx, arg) for idx, arg in enumerate(args)]
+    def _convert_args(self, args: Sequence):
+        args = self._apply_default_args(args)
+        assert len(args) == len(self.param_types)
+        converted_args = [self._convert_arg(param_type, arg) for param_type, arg in zip(self.param_types, args)]
         if self.ret_type is not None:
             if self.ret_type is bool:
                 ret_arg = c_int32()
             else:
+                # todo: add support for other types when needed
                 raise NotImplementedError()
-            n += 1
             converted_args.append(cast(pointer(ret_arg), c_void_p))
         else:
             ret_arg = None
-        p_args = cast(pointer((ctypes.c_void_p * n)(*converted_args)), c_void_p)
+        p_args = cast(pointer((ctypes.c_void_p * len(converted_args))(*converted_args)), c_void_p)
         return p_args, ret_arg
 
     def __call__(self, *args):

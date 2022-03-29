@@ -115,7 +115,7 @@ def load_compiled_module(lib_path: str, lowered_ir_module: IRModule) -> Compiled
             target_func = lowered_ir_module.lookup(func.get_attr('packed_func'))
             target_func_param_types = [p.type for p in target_func.params]
             packed_func = PackedFunc(target_func_param_types, lib['hidet_' + func.name])
-            compiled_funcs[func.name] = CompiledFunction(func.name, func, packed_func)
+            compiled_funcs[func.name] = CompiledFunction(func.name, packed_func)
 
     return CompiledModule(lowered_ir_module, compiled_funcs)
 

@@ -9,9 +9,10 @@ from hidet.implement import implement, impl_context
 from hidet.implement.cuda import CudaGridStaticMatmulImplementer
 from hidet.implement.resolve import random_resolve, brute_force_resolve
 from hidet.ir.task import Grid, Host
-from hidet.runtime.value import TensorValue, randn, empty, scalar, zeros, full
 from hidet.tasks.nn import matmul
 from hidet.utils import cuda
+from hidet.tos.tensor import from_numpy
+from hidet.tos.tensor import randn, empty, zeros, full
 
 
 def print_latencies(name, latencies, file=None):
@@ -48,14 +49,14 @@ def benchmark(warmup=5, number=1, repeat=10, use_brute_force_resolve=False, prog
     os.makedirs('./outs/bench', exist_ok=True)
     with open('./outs/bench/summary.txt', 'w') as f:
         for N, M, K in workloads:
-            A = randn([N, K], 'float32', 'global', seed=1)
-            B = randn([K, M], 'float32', 'global', seed=3)
-            C = empty([N, M], 'float32', 'global')
+            A = randn([N, K], 'float32', device='cuda')
+            B = randn([K, M], 'float32', device='cuda')
+            C = empty([N, M], 'float32', device='cuda')
             print("Workload (N x M x K): {} x {} x {}".format(N, M, K))
             print("Workload (N x M x K): {} x {} x {}".format(N, M, K), file=f)
             for name, func in baselines:
                 time.sleep(1)
-                latencies = func.profile(scalar(N), scalar(M), scalar(K), A, B, C, warmup=warmup, number=number, repeat=repeat)
+                latencies = func.profile(N, M, K, A, B, C, warmup=warmup, number=number, repeat=repeat)
                 print_latencies(name, latencies)
                 print_latencies(name, latencies, file=f)
 
@@ -109,8 +110,8 @@ def verify(use_rand=True, keep_ir=False):
         print('Workload {} x {} x {}'.format(N, M, K))
         task = matmul(N, M, K)
         if use_rand:
-            A = randn([N, K], 'float32', 'host', seed=1)
-            B = randn([K, M], 'float32', 'host', seed=3)
+            A = randn([N, K], 'float32', device='cpu')
+            B = randn([K, M], 'float32', device='cpu')
         else:
             use_special = True
             if use_special:
@@ -122,8 +123,8 @@ def verify(use_rand=True, keep_ir=False):
                 B[1, 0] = 1.0
                 A[1, 1] = 1.0
                 B[1, 1] = 1.0
-                A = TensorValue.from_numpy(A, scope='global')
-                B = TensorValue.from_numpy(B, scope='global')
+                A = from_numpy(A).cuda()
+                B = from_numpy(B).cuda()
             else:
                 A = full([N, K], 'float32', 'host', fill_value=1)
                 B = full([K, M], 'float32', 'host', fill_value=1)
@@ -133,13 +134,13 @@ def verify(use_rand=True, keep_ir=False):
             task.worker = Host()
             host_module = build(random_resolve(implement(task)), f'./outs/verify/host/{name}')
 
-            GA, GB, GC = A.to_cuda(), B.to_cuda(), C.to_cuda()
-            baseline(scalar(N), scalar(M), scalar(K), GA, GB, GC)
+            GA, GB, GC = A.cuda(), B.cuda(), C.cuda()
+            baseline(N, M, K, GA, GB, GC)
 
-            HA, HB, HC = A.to_cpu(), B.to_cpu(), C.to_cpu()
+            HA, HB, HC = A.cpu(), B.cpu(), C.cpu()
             host_module['matmul'](HA, HB, HC)
             try:
-                np.testing.assert_allclose(GC.to_numpy(), HC.to_numpy())
+                np.testing.assert_allclose(GC.numpy(), HC.numpy())
             except AssertionError as e:
                 if use_print:
                     print('A:\n{}\nB:\n{}\n{}\n{}\nhost:\n{}'.format(A, B, name, GC, HC))
@@ -156,14 +157,14 @@ def verify(use_rand=True, keep_ir=False):
             task.worker = Host()
             host_module = build(random_resolve(implement(task)), f'./outs/verify/host/{name}')
 
-            GA, GB, GC = A.to_cuda(), B.to_cuda(), C.to_cuda()
+            GA, GB, GC = A.cuda(), B.cuda(), C.cuda()
             grid_module['matmul'](GA, GB, GC)
             cuda.device_synchronize()
 
-            HA, HB, HC = A.to_cpu(), B.to_cpu(), C.to_cpu()
+            HA, HB, HC = A.cpu(), B.cpu(), C.cpu()
             host_module['matmul'](HA, HB, HC)
             try:
-                np.testing.assert_allclose(GC.to_numpy(), HC.to_numpy())
+                np.testing.assert_allclose(GC.numpy(), HC.numpy())
             except AssertionError as e:
                 # use_print = False
                 if use_print:
