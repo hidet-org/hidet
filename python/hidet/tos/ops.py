@@ -140,11 +140,31 @@ class ReshapeOp(Operator):
 class SqueezeOp(Operator):
     def __init__(self, x: Tensor, dims: List[int]):
         super().__init__([x], tasks.squeeze(x.layout, dims))
+        self.dims = dims
+
+    def imperative_run(self) -> List[Tensor]:
+        x = self.inputs[0]
+        if isinstance(x.layout, (RowMajorLayout, ColumnMajorLayout)):
+            shape = [int(v) for v in self.task.params[1].shape]
+            layout = x.layout.__class__(shape)
+            return [Tensor(shape=shape, dtype=x.dtype, device=x.device, storage=x.storage, layout=layout, trace=None)]
+        else:
+            return Operator.imperative_run(self)
 
 
 class UnsqueezeOp(Operator):
     def __init__(self, x: Tensor, dims: List[int]):
+        self.dims = dims
         super().__init__([x], tasks.unsqueeze(x.layout, dims))
+
+    def imperative_run(self) -> List[Tensor]:
+        x = self.inputs[0]
+        if isinstance(x.layout, (RowMajorLayout, ColumnMajorLayout)):
+            shape = [int(v) for v in self.task.params[1].shape]
+            layout = x.layout.__class__(shape)
+            return [Tensor(shape=shape, dtype=x.dtype, device=x.device, storage=x.storage, layout=layout, trace=None)]
+        else:
+            return Operator.imperative_run(self)
 
 
 def conv2d(input: Tensor, weight, padding, stride) -> Tensor:
@@ -222,8 +242,9 @@ def flatten(x: Tensor, start_dim=0, end_dim=-1) -> Tensor:
 
 def softmax(x: Tensor, axis=1) -> Tensor:
     if len(x.shape) < 4:
-        xx = reshape(x, x.shape + [1] * (4 - len(x.shape)))
-        return SoftmaxOp(xx, axis).outputs[0].reshape(x.shape)
+        dims = list(range(len(x.shape), 4))
+        xx = unsqueeze(x, dims)
+        return SoftmaxOp(xx, axis).outputs[0].squeeze(dims)
     return SoftmaxOp(x, axis).outputs[0]
 
 
@@ -231,7 +252,6 @@ def batch_norm_infer(x: Tensor, running_mean: Tensor, running_var: Tensor, epsil
     assert len(x.shape) == 4 and axis == 1
     assert len(running_mean.shape) == 1 and len(running_var.shape) == 1
     assert x.shape[1] == running_mean.shape[0] == running_var.shape[0]
-    n, c, h, w = x.shape
-    running_mean = running_mean.reshape([1, c, 1, 1])
-    running_var = running_var.reshape([1, c, 1, 1])
+    running_mean = running_mean.unsqueeze([0, 2, 3])  # [1, c, 1, 1]
+    running_var = running_var.unsqueeze([0, 2, 3])
     return (x - running_mean) * (running_var + epsilon).rsqrt()

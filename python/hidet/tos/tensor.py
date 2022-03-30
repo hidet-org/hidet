@@ -22,7 +22,7 @@ class Tensor:
                  shape: Sequence[int],
                  dtype: str,
                  device: str,
-                 storage: Storage,
+                 storage: Optional[Storage],
                  layout: DataLayout = None,
                  trace: Optional[Tuple['Operator', int]] = None):
         self.shape = [int(v) for v in shape]
@@ -58,9 +58,17 @@ class Tensor:
             return self
         return self.reshape(self.shape)
 
-    def reshape(self, shape):
+    def reshape(self, shape: List[int]):
         from .ops import reshape
         return reshape(self, shape)
+
+    def squeeze(self, dims: List[int]):
+        from .ops import squeeze
+        return squeeze(self, dims)
+
+    def unsqueeze(self, dims: List[int]):
+        from .ops import unsqueeze
+        return unsqueeze(self, dims)
 
     def flatten(self, start_dim=0, end_dim=-1):
         from .ops import flatten

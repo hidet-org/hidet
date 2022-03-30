@@ -1,4 +1,5 @@
 from typing import List, Union
+import numpy as np
 import onnx
 import onnxruntime
 from onnx import numpy_helper
@@ -183,6 +184,12 @@ def main():
     y_onnx = onnx_infer.run(None, {'input_tensor:0': x_hidet.cpu().numpy()})
     print(y_hidet[1])
     print(y_onnx[1])
+    diff: np.ndarray = (y_hidet[1].cpu().numpy() - y_onnx[1]).flatten()
+    from scipy import stats
+    info = stats.describe(diff)
+    print(info.minmax)
+    print(info.mean)
+    print(info.variance)
     # y = module(x)
     # print(type(model))
     # print(dir(model))

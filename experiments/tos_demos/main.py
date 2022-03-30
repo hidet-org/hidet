@@ -48,7 +48,7 @@ def demo_bottleneck():
 
 def demo_resnet50():
     model = resnet.resnet50()
-    x = randn([1, 3, 224, 224], dtype='float32')
+    x = randn([32, 3, 224, 224], dtype='float32')
     for t in range(10):
         cuda.device_synchronize()
         with Timer(f'resnet50 {t}'):
@@ -68,3 +68,4 @@ if __name__ == '__main__':
     # b = malloc_async(10)
     # free_async(a)
     # free_async(b)
+    pass

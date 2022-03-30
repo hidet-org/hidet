@@ -56,7 +56,7 @@ class PackedFunc:
             return cast(arg.storage.addr, c_void_p)
         raise NotImplementedError("Call PackedFunc with argument type: '{}' has not been implemented yet.".format(type(arg)))
 
-    def _type_code(self, param_type: Union[Type[bool, int, TypeNode]]):
+    def _type_code(self, param_type: Union[Type[Union[bool, int, TypeNode]]]):
         type_map = {
             'bool': c_int32(1),
             'int32': c_int32(1),
