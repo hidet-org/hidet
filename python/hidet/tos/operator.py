@@ -14,12 +14,10 @@ class Operator:
 
     task_cache: Dict[str, CompiledFunction] = {}
 
-    def __init__(self, inputs: List[Tensor], task: Task):
+    def __init__(self, inputs: List[Tensor], task: Task, outputs: Optional[List[Tensor]] = None):
         self.inputs: List[Tensor] = inputs
         self.task: Task = task
-        self.outputs: List[Tensor] = []
-        # run
-        self.run()
+        self.outputs: List[Tensor] = outputs if outputs else []
 
     def run(self) -> List[Tensor]:
         if self.current_mode == self.imperative_mode:
@@ -30,7 +28,12 @@ class Operator:
             raise NotImplementedError('coming soon')
         return self.outputs
 
-    def imperative_run(self) -> List[Tensor]:
+    def get_output(self, idx: int):
+        if len(self.outputs) == 0:
+            self.run()
+        return self.outputs[idx]
+
+    def imperative_run(self, inputs: Optional[List[Tensor]] = None) -> List[Tensor]:
         task_string = str(self.task)
         if task_string in self.task_cache:
             func = self.task_cache[task_string]
@@ -39,7 +42,9 @@ class Operator:
             self.task_cache[task_string] = func
         output_type = self.task.type_of_param(self.task.compute)
         outputs = [empty(shape=[int(v) for v in output_type.shape], dtype=output_type.scalar_type.name, layout=output_type.layout)]
-        func(*self.inputs, *outputs)
+        if inputs is None:
+            inputs = self.inputs
+        func(*inputs, *outputs)
         return outputs
 
     def lazy_run(self) -> List[Tensor]:

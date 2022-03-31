@@ -79,12 +79,13 @@ class Argument:
 
 
 class Node:
-    def __init__(self, name, type_name, inputs, outputs, attributes):
+    def __init__(self, name, type_name, inputs, outputs, attributes, description=''):
         self.name: str = name
         self.type_name: str = type_name
         self.inputs: List[Parameter] = inputs
         self.outputs: List[Parameter] = outputs
         self.attributes: List[Attribute] = attributes
+        self.description: str = description
 
     def export(self):
         return {
@@ -94,7 +95,8 @@ class Node:
             },
             'inputs': [param.export() for param in self.inputs],
             'outputs': [param.export() for param in self.outputs],
-            'attributes': [attr.export() for attr in self.attributes]
+            'attributes': [attr.export() for attr in self.attributes],
+            'description': self.description
         }
 
 
@@ -152,7 +154,8 @@ def dump(flow_graph, fp):
             type_name=node_type,
             inputs=[Parameter(str(idx), tensor2argument[tensor]) for idx, tensor in enumerate(node.inputs)],
             outputs=[Parameter(str(idx), tensor2argument[tensor]) for idx, tensor in enumerate(node.outputs)],
-            attributes={}
+            attributes={},
+            description='Task:\n{}'.format(str(node.task))
         ))
     for idx, tensor in enumerate(flow_graph.outputs):
         outputs.append(Parameter('output:{}'.format(idx), tensor2argument[tensor]))

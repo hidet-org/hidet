@@ -112,6 +112,16 @@ def factor(n):
     return list(sorted(ret))
 
 
+def same_list(lhs, rhs):
+    assert isinstance(lhs, (tuple, list)) and isinstance(rhs, (tuple, list))
+    if len(lhs) != len(rhs):
+        return False
+    for l, r in zip(lhs, rhs):
+        if l is not r:
+            return None
+    return True
+
+
 class HidetProfiler:
     def __init__(self, display_on_exit=True):
         self.pr = cProfile.Profile()

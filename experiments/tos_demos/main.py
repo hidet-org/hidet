@@ -4,7 +4,7 @@ import hidet
 from hidet import tos
 from hidet.tos.tensor import empty, randn, symbol
 from hidet.tos.models import resnet
-from hidet.tos import nn, ops
+from hidet.tos import nn, ops, optimize
 from hidet.utils import Timer, cuda, netron
 
 
@@ -66,7 +66,10 @@ def demo_lazy_mode():
     # model = nn.Relu()
     y = model(x)
     graph: hidet.FlowGraph = hidet.trace_from(y)
-    with open('./outs/model.json', 'w') as f:
+    with open('./outs/original.json', 'w') as f:
+        netron.dump(graph, f)
+    graph = optimize(graph)
+    with open('./outs/fold_const.json', 'w') as f:
         netron.dump(graph, f)
 
 

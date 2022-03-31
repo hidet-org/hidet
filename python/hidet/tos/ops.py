@@ -37,9 +37,10 @@ class MaxPool2dOp(Operator):
                  stride: Union[int, Sequence[int]],
                  padding: Union[int, Sequence[int]]
                  ):
-        inputs = [input]
-        task = tasks.nn.max_pool2d(shape=input.shape, kernel=kernel, strides=stride, padding=padding)
-        super().__init__(inputs, task)
+        super().__init__(
+            inputs=[input],
+            task=tasks.nn.max_pool2d(shape=input.shape, kernel=kernel, strides=stride, padding=padding)
+        )
 
 
 class AvgPool2dOp(Operator):
@@ -49,9 +50,10 @@ class AvgPool2dOp(Operator):
                  stride: Union[int, Sequence[int]],
                  padding: Union[int, Sequence[int]]
                  ):
-        inputs = [input]
-        task = tasks.nn.avg_pool2d(shape=input.shape, kernel=kernel, strides=stride, padding=padding)
-        super().__init__(inputs, task)
+        super().__init__(
+            inputs=[input],
+            task=tasks.nn.avg_pool2d(shape=input.shape, kernel=kernel, strides=stride, padding=padding)
+        )
 
 
 class SoftmaxOp(Operator):
@@ -168,63 +170,63 @@ class UnsqueezeOp(Operator):
 
 
 def conv2d(input: Tensor, weight, padding, stride) -> Tensor:
-    return Conv2dOp(input, weight, padding, stride).outputs[0]
+    return Conv2dOp(input, weight, padding, stride).get_output(0)
 
 
 def matmul(a: Tensor, b: Tensor) -> Tensor:
-    return MatmulOp(a, b).outputs[0]
+    return MatmulOp(a, b).get_output(0)
 
 
 def max_pool2d(input: Tensor, kernel, stride, padding) -> Tensor:
-    return MaxPool2dOp(input, kernel, stride, padding).outputs[0]
+    return MaxPool2dOp(input, kernel, stride, padding).get_output(0)
 
 
 def avg_pool2d(input: Tensor, kernel, stride, padding) -> Tensor:
-    return AvgPool2dOp(input, kernel, stride, padding).outputs[0]
+    return AvgPool2dOp(input, kernel, stride, padding).get_output(0)
 
 
 def reduce_mean(x: Tensor, dims: List[int], keep_dim: bool = False) -> Tensor:
-    return ReduceMeanOp(x, dims, keep_dim).outputs[0]
+    return ReduceMeanOp(x, dims, keep_dim).get_output(0)
 
 
 def relu(input) -> Tensor:
-    return ReluOp(input).outputs[0]
+    return ReluOp(input).get_output(0)
 
 
 def add(x: Tensor, y: Tensor) -> Tensor:
-    return AddOp(x, y).outputs[0]
+    return AddOp(x, y).get_output(0)
 
 
 def sub(x: Tensor, y: Tensor) -> Tensor:
-    return SubOp(x, y).outputs[0]
+    return SubOp(x, y).get_output(0)
 
 
 def multiply(x: Tensor, y: Tensor) -> Tensor:
-    return MultiplyOp(x, y).outputs[0]
+    return MultiplyOp(x, y).get_output(0)
 
 
 def divide(x: Tensor, y: Tensor) -> Tensor:
-    return DivideOp(x, y).outputs[0]
+    return DivideOp(x, y).get_output(0)
 
 
 def sqrt(x: Tensor) -> Tensor:
-    return SqrtOp(x).outputs[0]
+    return SqrtOp(x).get_output(0)
 
 
 def rsqrt(x: Tensor) -> Tensor:
-    return RsqrtOp(x).outputs[0]
+    return RsqrtOp(x).get_output(0)
 
 
 def reshape(x: Tensor, shape) -> Tensor:
-    return ReshapeOp(x, shape).outputs[0]
+    return ReshapeOp(x, shape).get_output(0)
 
 
 def squeeze(x: Tensor, dims) -> Tensor:
-    return SqueezeOp(x, dims).outputs[0]
+    return SqueezeOp(x, dims).get_output(0)
 
 
 def unsqueeze(x: Tensor, dims) -> Tensor:
-    return UnsqueezeOp(x, dims).outputs[0]
+    return UnsqueezeOp(x, dims).get_output(0)
 
 
 def flatten(x: Tensor, start_dim=0, end_dim=-1) -> Tensor:
