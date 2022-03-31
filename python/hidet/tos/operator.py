@@ -22,7 +22,6 @@ class Operator:
         self.run()
 
     def run(self) -> List[Tensor]:
-        print('run {}'.format(self.__class__.__name__))
         if self.current_mode == self.imperative_mode:
             self.outputs = self.imperative_run()
         elif self.current_mode == self.lazy_mode:

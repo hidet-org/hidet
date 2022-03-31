@@ -1,4 +1,4 @@
-from typing import List, Optional, Dict, Tuple, Sequence
+from typing import List, Optional, Dict, Tuple, Sequence, Union
 import ctypes
 import numpy as np
 from hidet.ir.layout import DataLayout
@@ -25,12 +25,13 @@ class Tensor:
                  storage: Optional[Storage],
                  layout: DataLayout = None,
                  trace: Optional[Tuple['Operator', int]] = None):
+        from hidet.tos.operator import Operator
         self.shape = [int(v) for v in shape]
         self.dtype = str(dtype)
         self.device = device
         self.storage = storage
         self.layout = layout if layout else DataLayout.row_major(shape)
-        self.trace = trace
+        self.trace: Optional[Tuple[Operator, int]] = trace
 
     def __add__(self, other):
         from .ops import add
@@ -118,6 +119,10 @@ def empty(shape: Sequence[int], dtype: str = 'float32', device: str = 'cuda', la
     num_bytes = prod(shape) * dtype_bytes(dtype)
     storage = Storage.new(device, num_bytes)
     return Tensor(shape, dtype, device, storage, layout)
+
+
+def symbol(shape: Sequence[int], dtype: str = 'float32', device: str = 'cuda', layout: Optional[DataLayout] = None) -> Tensor:
+    return Tensor(shape, dtype, device, None, layout)
 
 
 def zeros(shape: Sequence[int], dtype: str = 'float32', device: str = 'cuda', layout: Optional[DataLayout] = None) -> Tensor:
