@@ -207,6 +207,9 @@ class Codegen(StmtExprFunctor, TypeFunctor):
     def visit_LessThan(self, e: LessThan):
         return Text('(') + self(e.a) + ' < ' + self(e.b) + ')'
 
+    def visit_Neg(self, e: Neg):
+        return '(-' + self(e.a) + ')'
+
     def visit_LessEqual(self, e: LessThan):
         return Text('(') + self(e.a) + ' <= ' + self(e.b) + ')'
 

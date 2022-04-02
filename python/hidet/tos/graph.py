@@ -11,13 +11,23 @@ class FlowGraph:
         self.inputs: Optional[List[Tensor]] = inputs
         self.nodes: Optional[List[Operator]] = nodes
 
-    def __call__(self, *inputs: List[Tensor]) -> List[Tensor]:
+    def __call__(self, *inputs: Tensor) -> List[Tensor]:
         return self.forward(*inputs)
 
-    def forward(self, *inputs: List[Tensor]) -> List[Tensor]:
-        pass
+    def forward(self, *inputs: Tensor) -> List[Tensor]:
+        assert len(inputs) == len(self.inputs)
+        assert all(input.storage is not None for input in inputs), 'Please feed non-symbolic tensor'
+        tmap: Dict[Tensor, Tensor] = {}
+        for st, at in zip(self.inputs, inputs):
+            tmap[st] = at
+        for node in self.nodes:
+            node_inputs = [tmap[st] if st.storage is None else st for st in node.inputs]
+            node_outputs = node.imperative_run(node_inputs)
+            for st, at in zip(node.outputs, node_outputs):
+                tmap[st] = at
+        return [tmap[st] for st in self.outputs]
 
-    def finish(self):
+    def update_nodes(self):
         self.inputs, self.nodes = self._analyze(self.outputs)
         return self
 
@@ -72,5 +82,5 @@ def trace_from(tensor: Union[Tensor, List[Tensor]]) -> FlowGraph:
         outputs = [tensor]
     else:
         outputs = list(tensor)
-    return FlowGraph(outputs).finish()
+    return FlowGraph(outputs).update_nodes()
 

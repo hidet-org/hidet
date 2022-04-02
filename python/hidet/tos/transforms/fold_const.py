@@ -15,7 +15,7 @@ class FoldConstantRewriter(GraphRewriter):
             if same_list(inputs, op.inputs):
                 return op
             else:
-                new_op = Operator(inputs, op.task)
+                new_op = op.__class__(*inputs, **op.attributes)
                 for original, updated in zip(op.outputs, new_op.run()):
                     self.memo[original] = updated
                 return new_op

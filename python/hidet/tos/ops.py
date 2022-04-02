@@ -1,4 +1,5 @@
-from typing import Sequence, Union, Callable, Any, List
+from typing import Sequence, Union, Callable, Any, List, Optional
+from collections import OrderedDict
 from hidet.tos.operator import Operator
 from hidet.tos.tensor import Tensor
 from hidet.ir.layout.data_layout import DataLayout, StridesLayout, RowMajorLayout, ColumnMajorLayout
@@ -20,7 +21,7 @@ class Conv2dOp(Operator):
         out_channels = weight.shape[0]
         kernel = weight.shape[2:]
         task = tasks.nn.conv2d(batch_size, in_channels, height, width, out_channels, kernel, padding, stride)
-        super().__init__(inputs, task)
+        super().__init__(inputs, task, padding=padding, stride=stride)
 
 
 class MatmulOp(Operator):
@@ -39,7 +40,10 @@ class MaxPool2dOp(Operator):
                  ):
         super().__init__(
             inputs=[input],
-            task=tasks.nn.max_pool2d(shape=input.shape, kernel=kernel, strides=stride, padding=padding)
+            task=tasks.nn.max_pool2d(shape=input.shape, kernel=kernel, strides=stride, padding=padding),
+            kernel=kernel,
+            stride=stride,
+            padding=padding
         )
 
 
@@ -52,7 +56,10 @@ class AvgPool2dOp(Operator):
                  ):
         super().__init__(
             inputs=[input],
-            task=tasks.nn.avg_pool2d(shape=input.shape, kernel=kernel, strides=stride, padding=padding)
+            task=tasks.nn.avg_pool2d(shape=input.shape, kernel=kernel, strides=stride, padding=padding),
+            kernel=kernel,
+            stride=stride,
+            padding=padding
         )
 
 
@@ -60,22 +67,37 @@ class SoftmaxOp(Operator):
     def __init__(self,
                  x: Tensor,
                  axis: int = 1):
-        super().__init__(inputs=[x], task=tasks.nn.softmax(x.shape, axis))
+        super().__init__(
+            inputs=[x],
+            task=tasks.nn.softmax(x.shape, axis),
+            axis=axis
+        )
 
 
 class ReduceMeanOp(Operator):
     def __init__(self, x: Tensor, dims: List[int], keep_dim: bool = False):
-        super().__init__(inputs=[x], task=tasks.reduce_mean(x.layout, dims, keep_dim))
+        super().__init__(
+            inputs=[x],
+            task=tasks.reduce_mean(x.layout, dims, keep_dim),
+            dims=dims,
+            keep_dim=keep_dim
+        )
 
 
 class UnaryElementwiseOp(Operator):
     def __init__(self, x: Tensor, op, name: str):
-        super().__init__(inputs=[x], task=tasks.nn.unary_elementwise(name, x.shape, op=op))
+        super().__init__(
+            inputs=[x],
+            task=tasks.nn.unary_elementwise(name, x.shape, op=op)
+        )
 
 
 class BinaryElementwiseOp(Operator):
-    def __init__(self, x: Tensor, y: Tensor, op, name: str, z_layout=None):
-        super().__init__(inputs=[x, y], task=tasks.nn.binary_elementwise(name, x.layout, y.layout, op=op, z_layout=z_layout))
+    def __init__(self, x: Tensor, y: Tensor, op, name: str):
+        super().__init__(
+            inputs=[x, y],
+            task=tasks.nn.binary_elementwise(name, x.layout, y.layout, op=op)
+        )
 
 
 class ReluOp(UnaryElementwiseOp):
@@ -91,6 +113,11 @@ class SqrtOp(UnaryElementwiseOp):
 class RsqrtOp(UnaryElementwiseOp):
     def __init__(self, x):
         super().__init__(x, op=lambda v: cuda_rsqrt(v), name='rsqrt')
+
+
+class NegOp(UnaryElementwiseOp):
+    def __init__(self, x):
+        super().__init__(x, op=lambda v: -v, name='neg')
 
 
 class AddOp(BinaryElementwiseOp):
@@ -122,7 +149,11 @@ class ReshapeOp(Operator):
         else:
             layout = RowMajorLayout(shape=shape)
         task = tasks.copy(src_layout=x.layout, dst_layout=layout)
-        super().__init__([x], task)
+        super().__init__(
+            inputs=[x],
+            task=task,
+            shape=shape
+        )
 
     @staticmethod
     def normalize_shape(shape, size):
@@ -141,11 +172,14 @@ class ReshapeOp(Operator):
 
 class SqueezeOp(Operator):
     def __init__(self, x: Tensor, dims: List[int]):
-        super().__init__([x], tasks.squeeze(x.layout, dims))
-        self.dims = dims
+        super().__init__(
+            inputs=[x],
+            task=tasks.squeeze(x.layout, dims),
+            dims=dims
+        )
 
-    def imperative_run(self) -> List[Tensor]:
-        x = self.inputs[0]
+    def imperative_run(self, inputs: Optional[List[Tensor]] = None) -> List[Tensor]:
+        x = inputs[0] if inputs else self.inputs[0]
         if isinstance(x.layout, (RowMajorLayout, ColumnMajorLayout)):
             shape = [int(v) for v in self.task.params[1].shape]
             layout = x.layout.__class__(shape)
@@ -156,11 +190,14 @@ class SqueezeOp(Operator):
 
 class UnsqueezeOp(Operator):
     def __init__(self, x: Tensor, dims: List[int]):
-        self.dims = dims
-        super().__init__([x], tasks.unsqueeze(x.layout, dims))
+        super().__init__(
+            inputs=[x],
+            task=tasks.unsqueeze(x.layout, dims),
+            dims=dims
+        )
 
-    def imperative_run(self) -> List[Tensor]:
-        x = self.inputs[0]
+    def imperative_run(self, inputs: Optional[List[Tensor]] = None) -> List[Tensor]:
+        x = inputs[0] if inputs else self.inputs[0]
         if isinstance(x.layout, (RowMajorLayout, ColumnMajorLayout)):
             shape = [int(v) for v in self.task.params[1].shape]
             layout = x.layout.__class__(shape)
@@ -215,6 +252,10 @@ def sqrt(x: Tensor) -> Tensor:
 
 def rsqrt(x: Tensor) -> Tensor:
     return RsqrtOp(x).get_output(0)
+
+
+def neg(x: Tensor) -> Tensor:
+    return NegOp(x).get_output(0)
 
 
 def reshape(x: Tensor, shape) -> Tensor:

@@ -8,6 +8,9 @@ PyScalar = Union[int, float]
 
 
 class Expr(Node):
+    def __neg__(self):
+        return Neg(self)
+
     def __add__(self, other):
         return Add(self, other)
 
@@ -196,6 +199,11 @@ class Or(Condition, BinaryOp):
 
 
 class Not(Condition, UnaryOp):
+    def __init__(self, a):
+        super().__init__(a)
+
+
+class Neg(UnaryOp):
     def __init__(self, a):
         super().__init__(a)
 

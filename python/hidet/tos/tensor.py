@@ -33,6 +33,10 @@ class Tensor:
         self.layout = layout if layout else DataLayout.row_major(shape)
         self.trace: Optional[Tuple[Operator, int]] = trace
 
+    def __neg__(self):
+        from .ops import neg
+        return neg(self)
+
     def __add__(self, other):
         from .ops import add
         return add(self, convert(other))
@@ -50,24 +54,31 @@ class Tensor:
         return divide(self, convert(other))
 
     def __str__(self):
-        return "Tensor(shape={}, dtype='{}', device='{}')\n{}".format(
-            self.shape, self.dtype, self.device, str(self.cpu().numpy())
-        )
+        head = "Tensor(shape={}, dtype='{}', device='{}') at {}".format(self.shape, self.dtype, self.device, hex(id(self)))
+        if self.storage:
+            array_str = str(self.cpu().numpy())
+            return '{}\n{}'.format(head, array_str)
+        else:
+            return head + ' with empty storage'
+
+    @property
+    def nbytes(self):
+        return prod(self.shape) * dtype_bytes(self.dtype)
 
     def contiguous(self):
         if isinstance(self.layout, RowMajorLayout):
             return self
         return self.reshape(self.shape)
 
-    def reshape(self, shape: List[int]):
+    def reshape(self, shape: Sequence[int]):
         from .ops import reshape
         return reshape(self, shape)
 
-    def squeeze(self, dims: List[int]):
+    def squeeze(self, dims: Sequence[int]):
         from .ops import squeeze
         return squeeze(self, dims)
 
-    def unsqueeze(self, dims: List[int]):
+    def unsqueeze(self, dims: Sequence[int]):
         from .ops import unsqueeze
         return unsqueeze(self, dims)
 

@@ -59,15 +59,29 @@ def demo_resnet50():
     # print(model)
 
 
+class ExampleModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.const = hidet.empty(shape=[1])
+
+    def forward(self, x):
+        return -(x - self.const)
+
+
 def demo_lazy_mode():
     hidet.lazy_mode()
-    x = symbol([32, 3, 224, 224], dtype='float32')
+    x = symbol([1, 3, 224, 224], dtype='float32')
     model = resnet.Bottleneck(in_channels=3, channels=6, stride=1)
     # model = nn.Relu()
+    # model = resnet.resnet50()
+    # model = ExampleModel()
     y = model(x)
+
+    x = randn([1, 3, 224, 224], dtype='float32')
     graph: hidet.FlowGraph = hidet.trace_from(y)
     with open('./outs/original.json', 'w') as f:
         netron.dump(graph, f)
+
     graph = optimize(graph)
     with open('./outs/fold_const.json', 'w') as f:
         netron.dump(graph, f)

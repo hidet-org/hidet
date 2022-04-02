@@ -46,7 +46,9 @@ class CudaAPI:
     @classmethod
     def memcpy_async(cls, src_addr: int, dst_addr: int, num_bytes: int, kind: int) -> None:
         assert 0 <= kind <= 3
-        return cls._memcpy_async(src_addr, dst_addr, num_bytes, kind)
+        cls._memcpy_async(src_addr, dst_addr, num_bytes, kind)
+        if kind == cls.HostToDevice or kind == cls.DeviceToHost:
+            cls.device_synchronization()
 
     @classmethod
     def device_synchronization(cls) -> None:
