@@ -57,8 +57,10 @@ class Operator:
 
     def get_output(self, idx: int):
         if self.outputs is None:
-            self.run()
-        return self.outputs[idx]
+            outputs = self.run()
+        else:
+            outputs = self.outputs
+        return outputs[idx]
 
     @utils.line_profile()
     def imperative_run(self, inputs: Optional[List[Tensor]] = None) -> List[Tensor]:

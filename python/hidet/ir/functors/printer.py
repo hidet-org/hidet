@@ -318,7 +318,12 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
         return Text('TensorComputePattern(allow_dynamic_axis=') + str(e.allow_dynamic_axis) + ')'
 
     def visit_ScalarExprPattern(self, e: ScalarExprPattern):
-        return Text('ScalarExprPattern(reduce=') + (self(e.reduce) if e.reduce else str(None)) + ')'
+        docs = []
+        if e.base_pattern:
+            docs.append('base_pattern=' + self(e.base_pattern))
+        if len(e.exclude_vars) > 0:
+            docs.append('excluded_vars=' + self(e.exclude_vars))
+        return Text('ScalarExprPattern(') + doc_join(docs, ', ') + ')'
 
     def visit_Host(self, host: Host):
         return Text('Host')

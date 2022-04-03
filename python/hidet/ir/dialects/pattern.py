@@ -71,8 +71,9 @@ class TensorComputePattern(ExprPattern):
 
 
 class ScalarExprPattern(ExprPattern):
-    def __init__(self, exclude_vars=()):
-        self.exclude_vars = exclude_vars
+    def __init__(self, base_pattern=None, exclude_vars=()):
+        self.base_pattern: Optional[Expr] = base_pattern
+        self.exclude_vars: Sequence[Union[Var, TensorInput, ScalarInput]] = exclude_vars
 
 
 class TaskPattern(PatternNode):
@@ -390,11 +391,20 @@ class PatternMatcher:
     def match_ScalarExprPattern(self, pattern: ScalarExprPattern, target: Expr):
         from hidet.ir.functors import collect
         if len(pattern.exclude_vars) > 0:
-            matched_exclude_vars = [self.matched[v] for v in pattern.exclude_vars if v in self.matched]
-            included_vars = collect(target, Var)
-            for included_var in included_vars:
-                if included_var in matched_exclude_vars:
-                    raise NotMatchedError(pattern, target, "excluded var occurred in target")
+            if len(pattern.exclude_vars) > 0:
+                matched_exclude_vars = [self.matched[v] for v in pattern.exclude_vars if v in self.matched]
+                included_vars = collect(target, Var)
+                for included_var in included_vars:
+                    if included_var in matched_exclude_vars:
+                        raise NotMatchedError(pattern, target, "excluded var occurred in target")
+        if pattern.base_pattern is not None:
+            for sub_expr in collect(target, Expr):
+                try:
+                    with self.match(pattern.base_pattern, sub_expr):
+                        return
+                except NotMatchedError:
+                    continue
+            raise NotMatchedError(pattern, target, "can not find a sub expression to match base pattern")
 
     def match_ScalarType(self, pattern: ScalarType, target: ScalarType):
         if pattern.name:
@@ -488,8 +498,9 @@ def any_const():
     return AnyExpr(Constant)
 
 
-def any_scalar_expr(exclude_vars=()):
-    return ScalarExprPattern(exclude_vars)
+def any_scalar_expr(base_pattern: Optional[Expr] = None,
+                    exclude_vars: Sequence[Union[Var, TensorInput, ScalarInput]] = ()):
+    return ScalarExprPattern(base_pattern=base_pattern, exclude_vars=exclude_vars)
 
 
 def int_vars(names):

@@ -98,17 +98,22 @@ class Pattern:
         self.an, self.ac, self.ap, self.aq, self.arc, self.arx, self.ary = int_vars(['an', 'ac', 'ap', 'aq', 'arc', 'arx', 'ary'])
         self.x_expr = any_scalar_expr(exclude_vars=[self.ac])  # can only use [n, rc, p, q, rx, ry]
         self.w_expr = any_scalar_expr(exclude_vars=[self.an, self.ap, self.aq])  # can only use [c, rc, rx, ry]
+        self.reduced_value = ReduceCompute(
+            shape=[self.rc, self.rx, self.ry],
+            axes=[self.arc, self.arx, self.ary],
+            value=self.x_expr * self.w_expr,
+            reduce_type='sum'
+        )
+        self.epilogue = any_scalar_expr(
+            base_pattern=self.reduced_value,
+            exclude_vars=[]
+        )
         self.task_pattern = TaskPattern(
             compute_pattern=TensorCompute(
                 name='out',
                 shape=[self.n, self.c, self.p, self.q],
                 axes=[self.an, self.ac, self.ap, self.aq],
-                value=ReduceCompute(
-                    shape=[self.rc, self.rx, self.ry],
-                    axes=[self.arc, self.arx, self.ary],
-                    value=self.x_expr * self.w_expr,
-                    reduce_type='sum'
-                )
+                value=self.epilogue
             ),
             worker=Grid()
         )
@@ -228,7 +233,16 @@ class CudaGridStaticConv2dImplicitGemmImplementer(Implementer):
                     gi = ii + bi * block_shape[0]
                     gj = jj + bj * block_shape[1]
                     with sb.if_then(And.join(gi < gemm_m, gj < gemm_n)):
-                        sb += BufferStoreStmt(out, [gi // (p * q), gj, (gi // q) % p, gi % q], regs_c[ii, jj])
+                        out_indices = [gi // (p * q), gj, (gi // q) % p, gi % q]
+                        out_value = rewrite(d.epilogue, rewrite_map={
+                            d.an: out_indices[0],
+                            d.ac: out_indices[1],
+                            d.ap: out_indices[2],
+                            d.aq: out_indices[3],
+                            d.reduced_value: regs_c[ii, jj],
+                            **param_map
+                        })
+                        sb += BufferStoreStmt(out, out_indices, out_value)
             fb.set_body(sb.finish())
         func = fb.get()
         return IRModule(funcs={func.name: func}, task=task)

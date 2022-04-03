@@ -33,12 +33,15 @@ class Storage:
 
     @staticmethod
     def new(device: str, num_bytes: int):
-        if device == 'cuda':
-            return CudaStorage(num_bytes)
-        elif device == 'host' or device == 'cpu':
-            return HostStorage(num_bytes)
+        device2storage = {
+            'cuda': CudaStorage,
+            'host': HostStorage,
+            'cpu': HostStorage,
+        }
+        if device in device2storage:
+            return device2storage[device](num_bytes)
         else:
-            raise NotImplementedError()
+            raise ValueError("Unrecognized device '{}', candidates: {}".format(device, list(device2storage)))
 
     def as_array(self, dtype: str = 'float32') -> np.ndarray:
         """

@@ -1,13 +1,11 @@
 from typing import Sequence, Tuple
 from typing import List, Union, Optional
-from copy import copy
 from hidet.ir.node import Node
 from hidet.ir.expr import Var, Expr, convert, Constant
 
 
 class Stmt(Node):
-    def copy(self):
-        return copy(self)
+    pass
 
 
 class EvaluateStmt(Stmt):
@@ -106,52 +104,3 @@ class SeqStmt(Stmt):
         self.seq: Tuple[Stmt] = tuple(seq)
         for stmt in seq:
             assert isinstance(stmt, Stmt)
-
-
-def flatten(stmts):
-    flattened = []
-    for stmt in stmts:
-        if isinstance(stmt, SeqStmt):
-            flattened.extend(flatten(stmt.seq))
-        else:
-            flattened.append(stmt)
-    return flattened
-
-
-def concat_stmts(stmts):
-    # stmts = flatten(stmts)
-    body = None
-    for stmt in reversed(stmts):
-        if body is None:
-            body = stmt
-            if isinstance(stmt, IfStmt):
-                assert stmt.then_body is not None
-            if isinstance(stmt, LetStmt):
-                assert stmt.body is not None
-            if isinstance(stmt, ForStmt):
-                assert stmt.body is not None
-        else:
-            if isinstance(stmt, IfStmt):
-                if stmt.then_body is None:
-                    nstmt = stmt.copy()
-                    nstmt.then_body = body
-                    body = nstmt
-                elif stmt.else_body is None:
-                    nstmt = stmt.copy()
-                    nstmt.else_body = body
-                    body = nstmt
-                else:
-                    raise ValueError()
-            elif isinstance(stmt, ForStmt):
-                assert stmt.body is None
-                nstmt = stmt.copy()
-                nstmt.body = body
-                body = nstmt
-            elif isinstance(stmt, LetStmt):
-                assert stmt.body is None
-                nstmt = stmt.copy()
-                nstmt.body = body
-                body = nstmt
-            else:
-                raise ValueError()
-    return body

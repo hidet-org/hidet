@@ -16,7 +16,6 @@ from .expr import BinaryOp, Condition, LessThan, Equal, Add, Sub, Multiply, Div,
 from .expr import var, scalar_var, tensor_var, is_one, is_zero, convert
 
 from .stmt import Stmt, EvaluateStmt, BufferStoreStmt, AssignStmt, ForStmt, IfStmt, AssertStmt, SeqStmt, LetStmt
-from .stmt import concat_stmts
 
 from .dialects.compute import ScalarInput, TensorInput, TensorCompute, ReduceCompute
 from .dialects.lowlevel import VoidType, PointerType, Cast, Dereference
