@@ -206,6 +206,15 @@ class UnsqueezeOp(Operator):
             return Operator.imperative_run(self)
 
 
+class ConcatOp(Operator):
+    def __init__(self, tensors: List[Tensor], axis: int):
+        super().__init__(
+            inputs=tensors,
+            task=tasks.concat([tensor.layout for tensor in tensors], axis=axis),
+            axis=axis
+        )
+
+
 def conv2d(input: Tensor, weight, padding, stride) -> Tensor:
     return Conv2dOp(input, weight, padding, stride).get_output(0)
 
@@ -268,6 +277,10 @@ def squeeze(x: Tensor, dims) -> Tensor:
 
 def unsqueeze(x: Tensor, dims) -> Tensor:
     return UnsqueezeOp(x, dims).get_output(0)
+
+
+def concat(tensors: List[Tensor], axis: int) -> Tensor:
+    return ConcatOp(tensors, axis).get_output(0)
 
 
 def flatten(x: Tensor, start_dim=0, end_dim=-1) -> Tensor:

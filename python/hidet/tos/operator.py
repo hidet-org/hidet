@@ -4,6 +4,7 @@ from hidet.ir.task import Task
 from hidet.runtime import CompiledFunction
 from hidet.driver import build_task
 from hidet.tos.tensor import empty, Tensor, symbol
+from hidet import utils
 
 
 class Operator:
@@ -59,6 +60,7 @@ class Operator:
             self.run()
         return self.outputs[idx]
 
+    @utils.line_profile()
     def imperative_run(self, inputs: Optional[List[Tensor]] = None) -> List[Tensor]:
         if self.task_func is None:
             task_string = str(self.task)
@@ -76,8 +78,14 @@ class Operator:
         output_type = self.task.type_of_param(self.task.compute)
         return [Tensor(shape=[int(v) for v in output_type.shape], dtype=output_type.scalar_type.name, device='cuda', storage=None, layout=output_type.layout, trace=(self, 0))]
 
-    def clone(self, *new_inputs: List[Tensor]):
-        return self.__class__(*new_inputs, **self.attributes)
+    def clone(self, *new_inputs: Tensor):
+        cls = self.__class__
+        new_op = cls.__new__(cls)
+        new_op.inputs = list(new_inputs)
+        new_op.task = self.task
+        new_op.attributes = self.attributes
+        new_op.outputs = new_op.lazy_run()
+        return new_op
 
 
 def imperative_mode(opt=False):

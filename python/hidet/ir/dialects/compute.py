@@ -85,6 +85,12 @@ class ReduceCompute(ComputeNode):
         return func_dict[self.reduce_type](acc, size)
 
 
+class CustomCompute(ComputeNode):
+    def __init__(self, name):
+        super().__init__(name)
+        self.name = name
+
+
 def scalar_input(name, dtype):
     if isinstance(dtype, str):
         dtype = ScalarType(dtype)
@@ -125,3 +131,7 @@ def compute(name, shape, fcompute, accumulate=None, predicate=None):
     if predicate is not None:
         predicate = convert(predicate(*axes))
     return TensorCompute(name, shape, axes, value, accumulate, predicate)
+
+
+def custom_compute(name):
+    return CustomCompute(name)

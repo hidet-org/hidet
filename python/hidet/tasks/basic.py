@@ -1,5 +1,5 @@
 from typing import List
-from hidet.ir.dialects.compute import tensor_input, compute, reduce
+from hidet.ir.dialects.compute import tensor_input, compute, reduce, custom_compute
 from hidet.ir.layout.data_layout import DataLayout, RowMajorLayout, ColumnMajorLayout
 from hidet.ir.type import tensor_type
 from hidet.ir.expr import AlterLayout
@@ -97,6 +97,7 @@ def reduce_mean(x_layout: DataLayout, dims: List[int], keep_dim=False):
                         p += 1
             assert p == len(indices) and q == len(reduce_indices)
             return x[x_indices]
+
         reduce_shape = [x_shape[i] for i in dims]
         return reduce(shape=reduce_shape, fcompute=reduce_fcompute, reduce_type='avg')
 
@@ -178,4 +179,23 @@ def unsqueeze(x_layout: DataLayout, dims) -> Task:
     )
 
 
-
+def concat(layouts: List[DataLayout], axis: int):
+    shapes = [[int(v) for v in layout.shape] for layout in layouts]
+    n = len(shapes)
+    assert len(shapes) > 0
+    for i in range(1, n):
+        assert len(shapes[0]) == len(shapes[i]), 'all shapes must have the same rank'
+        assert all(a == b for j, (a, b) in enumerate(zip(shapes[0], shapes[i])) if j != axis), 'all tensors must have the same shape except axis dimension'
+    rank = len(shapes[0])
+    out_shape = [shapes[0][i] if i != axis else sum(shapes[j][i] for j in range(n)) for i in range(rank)]
+    input_params = [tensor_input('x{}'.format(i), 'float32', shape) for i, shape in enumerate(shapes)]
+    input_params_type = [tensor_type('global', 'float32', layout=layout) for layout in layouts]
+    params = input_params + [tensor_input('out', 'float32', out_shape)]
+    params_type = input_params_type + [tensor_type('global', 'float32', shape=out_shape)]
+    return Task(
+        name='concat',
+        computation=custom_compute('concat'),
+        params=params,
+        params_type=params_type,
+        worker=Grid()
+    )

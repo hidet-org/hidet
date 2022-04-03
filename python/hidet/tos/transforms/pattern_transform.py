@@ -3,6 +3,7 @@ from collections import defaultdict
 from hidet.tos.graph import FlowGraph, Operator, Tensor
 from hidet.tos.transforms import GraphPass, GraphRewriter, GraphVisitor
 from hidet.tos import ops
+from hidet import utils
 
 from .common import analyze_usage, collect
 
@@ -76,7 +77,7 @@ class OperatorPattern:
             return '{}({})'.format(self.op_cls.__class__[:-2], ', '.join(input_items))
 
 
-def conv2d(x: TensorPattern, w: TensorPattern) -> TensorPattern:
+def conv2d_pattern(x: TensorPattern, w: TensorPattern) -> TensorPattern:
     return OperatorPattern(ops.Conv2dOp, [x, w]).outputs[0]
 
 
@@ -148,7 +149,7 @@ class GraphPattern:
     def source(self) -> TensorPattern:
         raise NotImplementedError()
 
-    def target(self, matched: Dict) -> Optional[TensorPattern]:
+    def target(self, matched: Dict[Union[TensorPattern, OperatorPattern], Union[Tensor, Operator]]) -> Optional[Tensor]:
         raise NotImplementedError()
 
 
@@ -217,7 +218,7 @@ class ConvMultiplyPattern(GraphPattern):
     def __init__(self):
         x = TensorPattern.tensor()
         w, scale = TensorPattern.tensors(2, is_const=True)
-        conv = conv2d(x, w)
+        conv = conv2d_pattern(x, w)
         self.x = x
         self.w = w
         self.scale = scale
@@ -257,10 +258,10 @@ class PatternTransformPass(GraphPass):
     """
     max_applies = 1000
 
+    @utils.line_profile()
     def process_graph(self, graph: FlowGraph) -> FlowGraph:
         fold_const = fold_const_pass()
         for t in range(self.max_applies):
-            print(t)
             updated, graph = self.try_transform(graph)
             graph = fold_const.process_graph(graph)
             if not updated:
@@ -268,6 +269,7 @@ class PatternTransformPass(GraphPass):
         print('Exceeded maximum number of transforms {}, stop early.'.format(self.max_applies))
         return graph
 
+    @utils.line_profile()
     def try_transform(self, graph: FlowGraph) -> Tuple[bool, FlowGraph]:
         patterns: List[GraphPattern] = all_patterns()
         usage: Dict[Tensor, List[Tuple[Optional[Operator], int]]] = analyze_usage(graph)

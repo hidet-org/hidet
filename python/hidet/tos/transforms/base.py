@@ -55,7 +55,7 @@ class GraphRewriter:
 
     def visit(self, obj: Union[FlowGraph, Operator, Tensor, list, tuple]):
         key = obj if not isinstance(obj, list) else id(obj)
-        if self.memo and obj in self.memo:
+        if self.memo is not None and obj in self.memo:
             return self.memo[key]
         if isinstance(obj, FlowGraph):
             ret = self.visit_FlowGraph(obj)
@@ -67,7 +67,7 @@ class GraphRewriter:
             ret = self.visit_Sequence(obj)
         else:
             raise ValueError(type(obj))
-        if self.memo:
+        if self.memo is not None:
             self.memo[key] = ret
         return ret
 

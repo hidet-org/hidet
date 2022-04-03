@@ -112,13 +112,17 @@ def factor(n):
     return list(sorted(ret))
 
 
-def same_list(lhs, rhs):
+def same_list(lhs, rhs, use_equal=False):
     assert isinstance(lhs, (tuple, list)) and isinstance(rhs, (tuple, list))
     if len(lhs) != len(rhs):
         return False
     for l, r in zip(lhs, rhs):
-        if l is not r:
-            return None
+        if use_equal:
+            if l != r:
+                return False
+        else:
+            if l is not r:
+                return False
     return True
 
 
@@ -191,3 +195,8 @@ class TableBuilder:
 
     def extend_header(self, column_names):
         self.headers.extend(column_names)
+
+
+def line_profile():
+    from line_profiler_pycharm import profile
+    return profile
