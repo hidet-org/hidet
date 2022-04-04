@@ -6,6 +6,7 @@ from hidet.tos.tensor import empty, randn, symbol
 from hidet.tos.models import resnet
 from hidet.tos import nn, ops, optimize
 from hidet.utils import Timer, cuda, netron
+from hidet.tos.transforms import ProfileInstrument, SaveGraphInstrument
 
 
 def demo_relu():
@@ -70,7 +71,7 @@ class ExampleModel(nn.Module):
 
 def demo_lazy_mode():
     hidet.lazy_mode()
-    x = symbol([1, 3, 224, 224], dtype='float32')
+    x = symbol([16, 3, 224, 224], dtype='float32')
     # model = nn.Sequential(
     #     resnet.Bottleneck(in_channels=3, channels=16, stride=2),
     #     resnet.Bottleneck(in_channels=64, channels=16, stride=1)
@@ -80,18 +81,26 @@ def demo_lazy_mode():
     # model = ExampleModel()
     y = model(x)
 
-    x = randn([1, 3, 224, 224], dtype='float32')
     graph: hidet.FlowGraph = hidet.trace_from(y)
-    # visitor = hidet.tos.transforms.GraphVisitor()
-    # visitor(graph)
-    # print(len([v for v in visitor.memo if isinstance(v, hidet.tos.graph.Operator)]))
-    # exit(0)
-    with open('./outs/original.json', 'w') as f:
-        netron.dump(graph, f)
+    x = randn([16, 3, 224, 224], dtype='float32')
+    for t in range(10):
+        cuda.device_synchronize()
+        with Timer('optimized'):
+            y = graph(x)
+            cuda.device_synchronize()
+    y = graph(x)
+    with tos.PassContext(instruments=[
+        SaveGraphInstrument(out_dir='./outs/'),
+        ProfileInstrument(log_file='./outs/profile.txt', print_stdout=True)
+    ]):
+        graph = optimize(graph)
 
-    graph = optimize(graph)
-    with open('./outs/fold_const.json', 'w') as f:
-        netron.dump(graph, f)
+    y = graph(x)
+    for t in range(10):
+        cuda.device_synchronize()
+        with Timer('optimized'):
+            y = graph(x)
+            cuda.device_synchronize()
 
 
 if __name__ == '__main__':

@@ -100,10 +100,13 @@ class Node:
         self.description: Union[List[str], str] = description.split('\n')
         self.category = category
         if self.category is None:
-            for cat, ops in self.categories.items():
-                if type_name in ops:
-                    self.category = cat
-                    break
+            if self.type_name.startswith('Fused'):
+                self.category = 'dropout'
+            else:
+                for cat, ops in self.categories.items():
+                    if type_name in ops:
+                        self.category = cat
+                        break
 
     def export(self):
         return {
@@ -150,6 +153,7 @@ def type_string_of(value):
 def dump(flow_graph, fp):
     from hidet import FlowGraph
     assert isinstance(flow_graph, FlowGraph)
+    flow_graph.update_nodes()
     tensor2argument = {}
     node2idx = defaultdict(int)
 
@@ -164,7 +168,7 @@ def dump(flow_graph, fp):
 
     constant_cnt = 0
     for node in flow_graph.nodes:
-        node_type = node.__class__.__name__[:-2]
+        node_type = node.name
         node2idx[node_type] += 1
         node_name = '{}{}'.format(node_type, node2idx[node_type])
         for idx, tensor in enumerate(node.inputs):

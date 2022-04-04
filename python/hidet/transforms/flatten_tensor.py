@@ -107,7 +107,7 @@ class FlattenTensorAccessRewriter(FuncStmtExprRewriter):
                 return e.type.tensor_type.layout
             elif isinstance(e.type, PointerType):
                 return StridesLayout(shape=[0], strides=[1])
-        raise NotImplementedError()
+        raise ValueError("Can not infer layout from '{}'".format(type(e)))
 
     def visit_TensorElement(self, e: TensorElement):
         var = self(e.base)

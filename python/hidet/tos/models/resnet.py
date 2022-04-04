@@ -109,7 +109,7 @@ class ResNet(nn.Module):
         x = self.layer3(x)
         x = self.layer4(x)
         x = self.avg_pool(x)
-        x = x.flatten(start_dim=1)
+        x = x.squeeze(dims=(2, 3))
         x = self.fc(x)
         return x
 

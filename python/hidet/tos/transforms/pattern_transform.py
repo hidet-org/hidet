@@ -1,11 +1,11 @@
 from typing import List, Optional, Dict, Any, Union, Tuple, Type, Set
-from collections import defaultdict
-from hidet.tos.graph import FlowGraph, Operator, Tensor
-from hidet.tos.transforms import GraphPass, GraphRewriter, GraphVisitor
+from hidet.tos.ir.graph import FlowGraph, Operator, Tensor
+from hidet.tos.transforms import GraphPass
 from hidet.tos import ops
 from hidet import utils
+from hidet import tos
 
-from .common import analyze_usage, collect
+from .common import analyze_usage, graph_collect
 
 from .fold_const import fold_const_pass
 
@@ -116,7 +116,7 @@ class PatternMatcher:
             self.match(a, b)
 
     def match_TensorPattern(self, pattern: TensorPattern, target):
-        self.check(isinstance(target, Tensor), "expect target with type 'Tensor', but got '{}'".format(type(target)))
+        self.check(isinstance(target, Tensor), "expect target with type 'Tensor'")
         if pattern.is_const:
             self.check(target.storage is not None, 'requires const tensor')
         if pattern.is_symbolic:
@@ -126,8 +126,9 @@ class PatternMatcher:
             self.check(pattern.trace[1] == target.trace[1])
             self.match(pattern.trace[0], target.trace[0])
 
+    @utils.line_profile()
     def match_OperatorPattern(self, pattern: OperatorPattern, target: Operator):
-        self.check(isinstance(target, pattern.op_cls), "expect target with type 'Operator', but got '{}'".format(type(target)))
+        self.check(isinstance(target, pattern.op_cls), "expect target with type 'Operator'")
         self.check(pattern.op_cls is target.__class__, 'operator cls does not match')
         assert len(pattern.inputs) == len(target.inputs) and len(pattern.outputs) == len(target.outputs)
         for a, b in zip(pattern.inputs, target.inputs):
@@ -137,6 +138,15 @@ class PatternMatcher:
 
 
 def match(pattern, target) -> Optional[Dict]:
+    # short-cut for early stop
+    if pattern.trace is None:
+        if target.trace is not None:
+            return None
+        if (pattern.is_const and target.storage is None) or (pattern.is_symbolic and target.storage is not None):
+            return None
+        return {pattern: target}
+    if pattern.trace and target.trace and pattern.trace[0].op_cls is not target.trace[0].__class__:
+        return None
     matcher = PatternMatcher()
     try:
         matcher.match(pattern, target)
@@ -256,24 +266,25 @@ class PatternTransformPass(GraphPass):
 
     Time complexity of this implementation: O(num_applies * num_operators * num_patterns * pattern_size).
     """
-    max_applies = 1000
+    max_num_transforms = 1000
 
-    @utils.line_profile()
+    # @utils.line_profile()
     def process_graph(self, graph: FlowGraph) -> FlowGraph:
+        graph = tos.ir.functors.clone(graph)
         fold_const = fold_const_pass()
-        for t in range(self.max_applies):
+        for t in range(self.max_num_transforms):
             updated, graph = self.try_transform(graph)
             graph = fold_const.process_graph(graph)
             if not updated:
                 return graph
-        print('Exceeded maximum number of transforms {}, stop early.'.format(self.max_applies))
+        print('Exceeded maximum number of transforms {}, stop early.'.format(self.max_num_transforms))
         return graph
 
-    @utils.line_profile()
+    # @utils.line_profile()
     def try_transform(self, graph: FlowGraph) -> Tuple[bool, FlowGraph]:
         patterns: List[GraphPattern] = all_patterns()
         usage: Dict[Tensor, List[Tuple[Optional[Operator], int]]] = analyze_usage(graph)
-        all_tensors: List[Tensor] = collect(graph, Tensor)
+        all_tensors: List[Tensor] = graph_collect(graph, Tensor)
 
         for actual_tensor in all_tensors:
             for graph_pattern in patterns:

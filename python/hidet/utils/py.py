@@ -31,6 +31,10 @@ class COLORS:
     UNDERLINE = '\033[4m'
 
 
+def green(v, fmt='{}'):
+    return COLORS.OKGREEN + fmt.format(v) + COLORS.ENDC
+
+
 class Timer:
     def __init__(self, msg=None, file=None, verbose=True):
         self.start_time = None

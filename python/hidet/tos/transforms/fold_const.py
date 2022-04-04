@@ -1,5 +1,5 @@
-from hidet.tos.graph import FlowGraph, Operator, Tensor
-from hidet.tos.transforms import GraphPass, GraphRewriter
+from hidet.tos.ir import FlowGraph, Operator, Tensor, GraphRewriter
+from hidet.tos.transforms import GraphPass
 from hidet import utils
 
 

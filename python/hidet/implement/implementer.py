@@ -142,7 +142,7 @@ def register_impl(name):
     return wrapper
 
 
-def implement(task: Task) -> IRModule:
+def resolve_task(task: Task) -> Optional[Implementer]:
     implementers: List[List[str]] = []
     ctx = ImplementerContext.contexts[-1]
     added = set()
@@ -162,44 +162,23 @@ def implement(task: Task) -> IRModule:
             added.update(priority_impls)
 
     # try implementers groups by groups, the ones with higher priority try first
-    match_messages = {}
-    impl_messages = {}
-    ir_module = IRModule(funcs={}, task=task)
     for impls in implementers:
         for impl_name in impls:
             impl = _name2impl[impl_name]
             matching, msg = match(impl.task_pattern(), task)
             if matching:
-                try:
-                    impl_ir_module = impl.implement(task, matching)
-                except NotSupportedError as e:
-                    impl_messages[impl_name] = str(e)
-                else:
-                    if len(impl_ir_module.functions) == 0:
-                        impl_messages[impl_name] = 'Empty ir module returned.'
-                    else:
-                        ir_module.include(impl_ir_module)
-            else:
-                impl_worker_cls = impl.task_pattern().worker.__class__
-                task_worker_cls = task.worker.__class__
-                if impl_worker_cls == task_worker_cls:
-                    match_messages[impl_name] = msg
-        if len(ir_module.functions) != 0:
-            return ir_module
+                return impl
+    return None
 
-    match_report = "\n".join([f'{name}:\n{indent(msg, "    ")}' for name, msg in match_messages.items()])
-    impl_report = "\n".join([f'{name}:\n{indent(msg, "    ")}' for name, msg in impl_messages.items()])
-    lines = ['Can not implement task \'{}\''.format(task.name)]
-    if len(match_messages) > 0:
-        lines.append('Implementers failed to match: {}'.format(str(list(match_messages.keys()))))
-    if len(impl_messages) > 0:
-        lines.append('Implementers matched but failed to implement: {}'.format(str(list(impl_messages.keys()))))
-    if len(match_messages) > 0:
-        lines.append('Detail logs for each implementer failed to match: \n{}'.format(match_report))
-    if len(impl_messages) > 0:
-        lines.append('Detail logs for each implementer matched but failed to implement: \n{}'.format(impl_report))
 
-    raise NotSupportedError('\n'.join(lines))
+def implement(task: Task) -> IRModule:
+    implementer = resolve_task(task)
+    if implementer:
+        matched, msg = match(implementer.task_pattern(), task)
+        assert matched is not None
+        return implementer.implement(task, matched)
+    else:
+        raise NotSupportedError('Can not implement task: \n{}'.format(str(task)))
 
 
 def impl_context(allowed: Optional[Sequence[Union[str, Type[Implementer]]]] = None, space_level=0) -> ContextManager[ImplementerContext]:

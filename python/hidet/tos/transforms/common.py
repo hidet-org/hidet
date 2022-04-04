@@ -1,8 +1,8 @@
 from typing import List, Dict, Union, Tuple, Type, Optional
 from collections import defaultdict
 
-from hidet.tos.graph import FlowGraph, Operator, Tensor
-from hidet.tos.transforms import GraphVisitor
+from hidet.tos.ir.graph import FlowGraph, Operator, Tensor
+from hidet.tos.ir.functors import GraphVisitor
 
 
 class GraphUsageAnalyzer(GraphVisitor):
@@ -27,7 +27,7 @@ class GraphUsageAnalyzer(GraphVisitor):
         GraphVisitor.visit_Operator(self, op)
 
 
-def collect(obj: Union[FlowGraph, Operator, Tensor], cls: Type[Union[Operator, Tensor]]):
+def graph_collect(obj: Union[FlowGraph, Operator, Tensor], cls: Type[Union[Operator, Tensor]]):
     visitor = GraphVisitor()
     visitor.visit(obj)
     return [v for v in visitor.memo if isinstance(v, cls)]

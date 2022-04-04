@@ -83,4 +83,3 @@ def trace_from(tensor: Union[Tensor, List[Tensor]]) -> FlowGraph:
     else:
         outputs = list(tensor)
     return FlowGraph(outputs).update_nodes()
-

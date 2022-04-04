@@ -106,7 +106,8 @@ class Expr(Node):
 
     def __str__(self):
         from hidet.ir.functors import astext
-        return str(astext(self)) + ' at {}'.format(hex(id(self)))
+        # return str(astext(self)) + ' at {}'.format(hex(id(self)))
+        return str(astext(self))
 
     def is_const(self):
         return isinstance(self, Constant)

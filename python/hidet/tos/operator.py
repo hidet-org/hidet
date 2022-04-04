@@ -7,6 +7,10 @@ from hidet.tos.tensor import empty, Tensor, symbol
 from hidet import utils
 
 
+def trim_op_ending(name: str):
+    return name[:-2] if name.endswith('Op') else name
+
+
 class Operator:
     imperative_mode = 1
     imperative_opt_mode = 2
@@ -21,11 +25,14 @@ class Operator:
             inputs: List[Tensor],
             task: Task,
             outputs: Optional[List[Tensor]] = None,
+            name: Optional[str] = None,
             **kwargs):
         self.inputs: List[Tensor] = inputs
         self.task: Task = task
         self.attributes: Dict[str, Any] = kwargs
         self.outputs: Optional[List[Tensor]] = outputs
+        name = name if name else trim_op_ending(self.__class__.__name__)
+        self.name = name
 
         assert all(isinstance(v, Tensor) for v in inputs)
 
@@ -35,10 +42,10 @@ class Operator:
     def __str__(self):
         arguments = ['{}: {}{}'.format(i, t.dtype, t.shape) for i, t in enumerate(self.inputs)]
         attributes = ['{}={}'.format(name, str(value)) for name, value in self.attributes.items()]
-        return '{}({})'.format(self.__class__.__name__[:-2], ', '.join(arguments + attributes))
+        return '{}({})'.format(self.name, ', '.join(arguments + attributes))
 
     def __dir__(self) -> Iterable[str]:
-        return ['task', 'inputs', 'outputs', 'attributes'] + list(self.attributes)
+        return ['task', 'inputs', 'outputs', 'attributes', 'name'] + list(self.attributes)
 
     def __getattr__(self, item):
         if item in self.attributes:
@@ -83,10 +90,12 @@ class Operator:
     def clone(self, *new_inputs: Tensor):
         cls = self.__class__
         new_op = cls.__new__(cls)
+        new_op.name = self.name
         new_op.inputs = list(new_inputs)
         new_op.task = self.task
         new_op.attributes = self.attributes
         new_op.outputs = new_op.lazy_run()
+        new_op.task_func = None
         return new_op
 
 
