@@ -70,3 +70,9 @@ DLL void hidet_curand_generate_normal(uint64_t addr, uint64_t size, float mean, 
     }
     CURAND_CALL(curandGenerateNormal(CurandContext::global()->generator, reinterpret_cast<float*>(addr), size, mean, stddev));
 }
+
+DLL void hidet_cuda_mem_pool_trim_to(uint64_t min_bytes_to_keep) {
+    cudaMemPool_t pool;
+    CUDA_CALL(cudaDeviceGetDefaultMemPool(&pool, 0));
+    CUDA_CALL(cudaMemPoolTrimTo(pool, min_bytes_to_keep));
+}

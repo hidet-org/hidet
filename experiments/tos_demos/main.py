@@ -1,11 +1,15 @@
-from time import time
+import torch
+import time
 
 import hidet
+from hidet.ffi import cuda_api
 from hidet import tos
 from hidet.tos.tensor import empty, randn, symbol
+from hidet.tos import Operator, Tensor
+from hidet.runtime.storage import cuda_pool, Storage
 from hidet.tos.models import resnet
 from hidet.tos import nn, ops, optimize
-from hidet.utils import Timer, cuda, netron
+from hidet.utils import Timer, cuda, netron, nvtx_annotate
 from hidet.tos.transforms import ProfileInstrument, SaveGraphInstrument
 
 
@@ -49,17 +53,6 @@ def demo_bottleneck():
     print(block)
 
 
-def demo_resnet50():
-    model = resnet.resnet50()
-    x = randn([32, 3, 224, 224], dtype='float32')
-    for t in range(10):
-        cuda.device_synchronize()
-        with Timer(f'resnet50 {t}'):
-            y = model(x)
-            cuda.device_synchronize()
-    # print(model)
-
-
 class ExampleModel(nn.Module):
     def __init__(self):
         super().__init__()
@@ -72,35 +65,52 @@ class ExampleModel(nn.Module):
 def demo_lazy_mode():
     hidet.lazy_mode()
     x = symbol([16, 3, 224, 224], dtype='float32')
-    # model = nn.Sequential(
-    #     resnet.Bottleneck(in_channels=3, channels=16, stride=2),
-    #     resnet.Bottleneck(in_channels=64, channels=16, stride=1)
-    # )
-    # model = nn.Relu()
     model = resnet.resnet50()
-    # model = ExampleModel()
+    # model = nn.MaxPool2d(kernel_size=7, stride=2, padding=1)
+    # model = nn.Sequential(
+    #     nn.Conv2d(in_channels=3, out_channels=3, kernel_size=1, padding=0, stride=1),
+    #     nn.Conv2d(in_channels=3, out_channels=3, kernel_size=1, padding=0, stride=1),
+    #     nn.Conv2d(in_channels=3, out_channels=3, kernel_size=1, padding=0, stride=1),
+    # )
     y = model(x)
 
     graph: hidet.FlowGraph = hidet.trace_from(y)
-    x = randn([16, 3, 224, 224], dtype='float32')
-    for t in range(10):
-        cuda.device_synchronize()
-        with Timer('optimized'):
-            y = graph(x)
-            cuda.device_synchronize()
-    y = graph(x)
+    # x = randn([16, 3, 224, 224], dtype='float32')
+    # for t in range(10):
+    #     cuda.device_synchronize()
+    #     with Timer('optimized'):
+    #         y = graph(x)
+    #         cuda.device_synchronize()
+    # y = graph(x)
     with tos.PassContext(instruments=[
         SaveGraphInstrument(out_dir='./outs/'),
         ProfileInstrument(log_file='./outs/profile.txt', print_stdout=True)
     ]):
         graph = optimize(graph)
 
-    y = graph(x)
+    x = randn([16, 3, 224, 224], dtype='float32')
     for t in range(10):
-        cuda.device_synchronize()
-        with Timer('optimized'):
-            y = graph(x)
+        with nvtx_annotate('hidet {}'.format(t)):
             cuda.device_synchronize()
+            with Timer('optimized'):
+                y = graph(x)
+                cuda.device_synchronize()
+
+    print(cuda_pool.active_blocks)
+    cuda_pool.clear()
+
+
+def demo_resnet50():
+    from torchvision.models import resnet50
+    model = resnet50().cuda()
+    model.train(False)
+    x = torch.rand(16, 3, 224, 224).cuda()
+    for t in range(10):
+        with nvtx_annotate('torch {}'.format(t)):
+            torch.cuda.synchronize()
+            with Timer(f'torch {t}'):
+                y = model(x)
+                torch.cuda.synchronize()
 
 
 if __name__ == '__main__':
@@ -110,4 +120,4 @@ if __name__ == '__main__':
     # demo_bottleneck()
     # demo_resnet50()
     demo_lazy_mode()
-    pass
+    demo_resnet50()

@@ -69,7 +69,6 @@ class Operator:
             outputs = self.outputs
         return outputs[idx]
 
-    @utils.line_profile()
     def imperative_run(self, inputs: Optional[List[Tensor]] = None) -> List[Tensor]:
         if self.task_func is None:
             task_string = str(self.task)

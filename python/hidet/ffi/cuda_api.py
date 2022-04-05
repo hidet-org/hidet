@@ -10,6 +10,7 @@ class CudaAPI:
     _free_host = get_func('hidet_cuda_free_host', [c_uint64], None)
     _memset_async = get_func('hidet_cuda_memset_async', [c_uint64, c_uint64, c_uint8], None)
     _memcpy_async = get_func('hidet_cuda_memcpy_async', [c_uint64, c_uint64, c_uint64, c_uint32], None)
+    _mem_pool_trim_to = get_func('hidet_cuda_mem_pool_trim_to', [c_uint64], None)
     # device control
     _device_synchronization = get_func('hidet_cuda_device_synchronization', [], None)
     # random number generation
@@ -51,6 +52,10 @@ class CudaAPI:
             cls.device_synchronization()
 
     @classmethod
+    def mem_pool_trim_to(cls, min_bytes_to_keep: int) -> None:
+        cls._mem_pool_trim_to(min_bytes_to_keep)
+
+    @classmethod
     def device_synchronization(cls) -> None:
         return cls._device_synchronization()
 
@@ -65,3 +70,6 @@ class CudaAPI:
     @classmethod
     def fill_value(cls, addr: int, num_elements: int, value: float) -> None:
         return cls._fill_value(addr, num_elements, value)
+
+
+cuda_api = CudaAPI()

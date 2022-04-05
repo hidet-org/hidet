@@ -1,5 +1,5 @@
 from . import module
 
 from .module import CompiledModule, CompiledFunction
-from .storage import Storage, CudaStorage, HostStorage
+from .storage import Storage
 
