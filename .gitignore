@@ -184,8 +184,14 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 .idea/
 
+# pycharm line profiler result
+**/*.pclprof
+
 outs
 build-release
 
 # nsight compute report
 *.ncu-rep
+
+# cache for kernel binary
+.opcache/
