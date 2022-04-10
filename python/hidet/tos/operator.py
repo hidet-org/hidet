@@ -1,5 +1,5 @@
-from typing import List, Optional, Dict, Any, Iterable
-from collections import OrderedDict
+from typing import List, Optional, Dict, Any, Iterable, Tuple
+from collections import OrderedDict, defaultdict
 from hidet.ir.task import Task
 from hidet.runtime import CompiledFunction
 from hidet.driver import build_task
@@ -13,12 +13,13 @@ def trim_op_ending(name: str):
 
 class Operator:
     imperative_mode = 1
-    imperative_opt_mode = 2
-    lazy_mode = 3
+    lazy_mode = 2
 
     current_mode = imperative_mode
+    current_opt_level = 0
+    current_space_level = 0
 
-    task_cache: Dict[str, CompiledFunction] = {}
+    task_cache: Dict[Tuple[int, int], Dict[str, CompiledFunction]] = defaultdict(dict)
 
     def __init__(
             self,
@@ -72,11 +73,12 @@ class Operator:
     def imperative_run(self, inputs: Optional[List[Tensor]] = None) -> List[Tensor]:
         if self.task_func is None:
             task_string = str(self.task)
-            if task_string in self.task_cache:
-                self.task_func = self.task_cache[task_string]
+            level = (self.current_space_level, self.current_opt_level)
+            if task_string in self.task_cache[level]:
+                self.task_func = self.task_cache[level][task_string]
             else:
-                self.task_func = build_task(self.task, space_level=0, opt_level=0, use_cache=True)
-                self.task_cache[task_string] = self.task_func
+                self.task_func = build_task(self.task, space_level=self.current_space_level, opt_level=self.current_opt_level, use_cache=True)
+                self.task_cache[level][task_string] = self.task_func
         output_type = self.task.type_of_param(self.task.compute)
         outputs = [empty(shape=[int(v) for v in output_type.shape], dtype=output_type.scalar_type.name, layout=output_type.layout)]
         self.task_func(*inputs, *outputs)
@@ -98,10 +100,17 @@ class Operator:
         return new_op
 
 
-def imperative_mode(opt=False):
+def imperative_mode():
     Operator.current_mode = Operator.imperative_mode
 
 
 def lazy_mode():
     Operator.current_mode = Operator.lazy_mode
 
+
+def opt_level(level=0):
+    Operator.current_opt_level = level
+
+
+def space_level(level=0):
+    Operator.current_space_level = level

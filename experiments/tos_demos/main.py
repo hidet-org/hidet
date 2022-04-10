@@ -64,7 +64,7 @@ class ExampleModel(nn.Module):
 
 def demo_lazy_mode():
     hidet.lazy_mode()
-    x = symbol([16, 3, 224, 224], dtype='float32')
+    x = symbol([1, 3, 224, 224], dtype='float32')
     model = resnet.resnet50()
     # model = nn.MaxPool2d(kernel_size=7, stride=2, padding=1)
     # model = nn.Sequential(
@@ -88,6 +88,7 @@ def demo_lazy_mode():
     ]):
         graph = optimize(graph)
 
+    hidet.space_level(2)
     x = randn([16, 3, 224, 224], dtype='float32')
     for t in range(10):
         with nvtx_annotate('hidet {}'.format(t)):
@@ -104,7 +105,7 @@ def demo_resnet50():
     from torchvision.models import resnet50
     model = resnet50().cuda()
     model.train(False)
-    x = torch.rand(16, 3, 224, 224).cuda()
+    x = torch.rand(1, 3, 224, 224).cuda()
     for t in range(10):
         with nvtx_annotate('torch {}'.format(t)):
             torch.cuda.synchronize()

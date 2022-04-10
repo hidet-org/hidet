@@ -94,6 +94,10 @@ class ImplementerContext:
         assert ImplementerContext.contexts[-1] is self
         ImplementerContext.contexts.pop()
 
+    @classmethod
+    def current(cls):
+        return cls.contexts[-1]
+
     @staticmethod
     def _get_impl_names(impls: Optional[Sequence[Union[str, Type[Implementer]]]], default) -> List[str]:
         if impls is None:
@@ -119,7 +123,7 @@ def dummy_inputs_from_task(task: Task):
         shape = [int(s) for s in param_type.shape]
         # strides = [int(s) for s in param_type.strides]
         scope2device = {
-            'globlal': 'cuda',
+            'global': 'cuda',
             'host': 'cpu'
         }
         inputs.append(randn(shape, stype, device=scope2device[scope]))

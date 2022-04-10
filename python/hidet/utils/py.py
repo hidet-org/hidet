@@ -50,10 +50,20 @@ class Timer:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.end_time = time.time()
         if self.msg is not None and self.verbose:
-            print('{} {}{:.3f}{} seconds'.format(self.msg, COLORS.OKGREEN, self.elapsed_seconds(), COLORS.ENDC), file=self.file)
+            print('{} {}'.format(self.msg, green(self.time2str(self.end_time - self.start_time))), file=self.file)
 
     def elapsed_seconds(self) -> float:
         return self.end_time - self.start_time
+
+    def time2str(self, seconds: float) -> str:
+        if seconds < 0.1:
+            return '{:.1f} {}'.format(seconds * 1000, 'ms')
+        elif seconds < 60:
+            return '{:.1f} {}'.format(seconds, 'seconds')
+        elif seconds < 60 * 60:
+            return '{:.1f} {}'.format(seconds / 60, 'minutes')
+        else:
+            return '{:.1f} {}'.format(seconds / 60 / 60, 'hours')
 
 
 class DictCustomKey(MutableMapping, dict):

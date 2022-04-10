@@ -1,14 +1,17 @@
 from typing import List, Union
+import os
 import numpy as np
-import onnx
-import onnxruntime
-from onnx import numpy_helper
 from hidet.tos import nn, ops
 from hidet.tos.tensor import Tensor, from_numpy, randn
 
 
 class OnnxOperator:
-    def __init__(self, node: onnx.NodeProto):
+    def __init__(self, node):
+        """
+        Parameters
+        ----------
+        node: onnx.NodeProto
+        """
         self.node = node
         self.input_names = [name for name in node.input]
         self.output_names = [name for name in node.output]
@@ -35,7 +38,7 @@ class OnnxOperator:
 
 
 class OnnxConv(OnnxOperator):
-    def __init__(self, node: onnx.NodeProto):
+    def __init__(self, node):
         super().__init__(node)
         self.padding = self.attrs.get('pads', [0, 0, 0, 0])
         self.strides = self.attrs.get('strides')
@@ -55,7 +58,7 @@ class OnnxRelu(OnnxOperator):
 
 
 class OnnxMaxPool(OnnxOperator):
-    def __init__(self, node: onnx.NodeProto):
+    def __init__(self, node):
         super().__init__(node)
         self.kernel_size = list(self.attrs.get('kernel_shape'))
         self.padding = list(self.attrs.get('pads', [0, 0, 0, 0]))
@@ -66,7 +69,7 @@ class OnnxMaxPool(OnnxOperator):
 
 
 class OnnxReduceMean(OnnxOperator):
-    def __init__(self, node: onnx.NodeProto):
+    def __init__(self, node):
         super().__init__(node)
         self.dims = self.attrs.get('axes')
         self.keep_dim = self.attrs.get('keepdims') == 1
@@ -76,7 +79,7 @@ class OnnxReduceMean(OnnxOperator):
 
 
 class OnnxSqueezeOp(OnnxOperator):
-    def __init__(self, node: onnx.NodeProto):
+    def __init__(self, node):
         super().__init__(node)
         self.dims = list(self.attrs.get('axes'))
 
@@ -95,7 +98,7 @@ class OnnxMatMul(OnnxOperator):
 
 
 class OnnxSoftmax(OnnxOperator):
-    def __init__(self, node: onnx.NodeProto):
+    def __init__(self, node):
         super().__init__(node)
         self.axis = self.attrs.get('axis')
 
@@ -109,7 +112,7 @@ class OnnxArgMax(OnnxOperator):
         return inputs
 
 
-def dispatch(node: onnx.NodeProto) -> OnnxOperator:
+def dispatch(node) -> OnnxOperator:
     dispatch_table = {
         'Conv': OnnxConv,
         'Relu': OnnxRelu,
@@ -128,8 +131,14 @@ def dispatch(node: onnx.NodeProto) -> OnnxOperator:
 
 
 class OnnxModule(nn.Module):
-    def __init__(self, model: onnx.ModelProto):
+    def __init__(self, model):
+        """
+        Parameters
+        ----------
+        model: onnx.ModelProto
+        """
         super().__init__()
+        import onnx.numpy_helper
         graph = model.graph
         self.name = graph.name
         self.graph = graph
@@ -164,13 +173,31 @@ class OnnxModule(nn.Module):
             return results
 
 
-def from_onnx(model: Union[str, onnx.ModelProto]) -> nn.Module:
+def from_onnx(model: Union[str, 'onnx.ModelProto']) -> nn.Module:
+    """
+    Load an onnx model to hidet.tos.nn.Module.
+
+    Parameters
+    ----------
+    model: Union[str, onnx.ModelProto]
+        The path or model proto of given onnx model.
+
+    Returns
+    -------
+    ret: nn.Module
+        The loaded model.
+    """
+    import onnx
     if isinstance(model, str):
+        model = os.path.expanduser(model)
         model = onnx.load_model(model)
     return OnnxModule(model)
 
 
 def main():
+    from scipy import stats
+    import onnx
+    import onnxruntime
     model_path = '/home/yaoyao/model_zoo/resnet50_v1.onnx'
     # model_path = '/home/yaoyao/model_zoo/resnet50-v2-7.onnx'
     model = onnx.load_model(model_path)
@@ -185,7 +212,6 @@ def main():
     print(y_hidet[1])
     print(y_onnx[1])
     diff: np.ndarray = (y_hidet[1].cpu().numpy() - y_onnx[1]).flatten()
-    from scipy import stats
     info = stats.describe(diff)
     print(info.minmax)
     print(info.mean)

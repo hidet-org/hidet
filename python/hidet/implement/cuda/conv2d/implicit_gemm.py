@@ -1,7 +1,7 @@
 import contextlib
 from typing import Mapping, Any, List, Tuple, Union
 
-from hidet.implement.implementer import register_impl, Implementer, NotSupportedError, Schedule
+from hidet.implement.implementer import register_impl, Implementer, NotSupportedError, Schedule, ImplementerContext
 from hidet.ir import IRModule
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.ir.dialects.compute import TensorCompute, ReduceCompute
@@ -145,17 +145,21 @@ class CudaGridStaticConv2dImplicitGemmImplementer(Implementer):
         return self.pattern.task_pattern
 
     def implement(self, task: Task, match: Mapping[Node, Any]) -> IRModule:
-        search_schedule = False
-        if search_schedule:
+        ctx = ImplementerContext.current()
+        if ctx.space_level == 0:
+            schedules = [Conv2dSchedule()]
+        elif ctx.space_level == 1:
             schedules = Conv2dSchedule.schedules()
-            ir_modules = [self.implement_schedule(task, match, schedule) for schedule in schedules]
-            d: Pattern = pattern2matched(self.pattern, match)
-            n, c, p, q, rc, rx, ry = d.n, d.c, d.p, d.q, d.rc, d.rx, d.ry
-            task_label = 'conv2d_n_{}_c_{}_p_{}_q_{}_rc_{}_rx_{}_ry_{}'.format(n, c, p, q, rc, rx, ry)
+        else:
+            schedules = Conv2dSchedule.schedules()
+        ir_modules = [self.implement_schedule(task, match, schedule) for schedule in schedules]
+        d: Pattern = pattern2matched(self.pattern, match)
+        n, c, p, q, rc, rx, ry = d.n, d.c, d.p, d.q, d.rc, d.rx, d.ry
+        task_label = 'conv2d_n_{}_c_{}_p_{}_q_{}_rc_{}_rx_{}_ry_{}'.format(n, c, p, q, rc, rx, ry)
+        if len(ir_modules) > 1:
             return self.resolve(task, match, schedules, ir_modules, task_label=task_label, parallel=True, verbose=True)
         else:
-            default_schedule = Conv2dSchedule()
-            return self.implement_schedule(task, match, default_schedule)
+            return ir_modules[0]
 
     def implement_schedule(self, task: Task, match: Mapping[Node, Any], schedule: Conv2dSchedule) -> IRModule:
         d: Pattern = pattern2matched(self.pattern, match)

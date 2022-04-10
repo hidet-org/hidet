@@ -179,4 +179,4 @@ def from_numpy(array: np.ndarray) -> Tensor:
         CudaAPI.device_synchronization()
         return tensor
     else:
-        raise NotImplementedError('')
+        raise NotImplementedError("Do not support convert np.ndarray with data type '{}'.".format(array.dtype))
