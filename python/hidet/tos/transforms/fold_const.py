@@ -4,7 +4,6 @@ from hidet import utils
 
 
 class FoldConstantRewriter(GraphRewriter):
-    @utils.line_profile()
     def visit_Operator(self, op: Operator):
         inputs = [self(input) for input in op.inputs]
         if all(input.storage is not None for input in inputs):

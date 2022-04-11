@@ -126,7 +126,6 @@ class PatternMatcher:
             self.check(pattern.trace[1] == target.trace[1])
             self.match(pattern.trace[0], target.trace[0])
 
-    @utils.line_profile()
     def match_OperatorPattern(self, pattern: OperatorPattern, target: Operator):
         self.check(isinstance(target, pattern.op_cls), "expect target with type 'Operator'")
         self.check(pattern.op_cls is target.__class__, 'operator cls does not match')

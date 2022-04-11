@@ -1,8 +1,13 @@
-from typing import List, Union
+from typing import List, Union, Sequence
 import os
 import numpy as np
 from hidet.tos import nn, ops
 from hidet.tos.tensor import Tensor, from_numpy, randn
+from hidet.utils import line_profile
+
+"""
+Please refers to https://github.com/onnx/onnx/blob/main/docs/Operators.md when adding new operators.
+"""
 
 
 class OnnxOperator:
@@ -50,6 +55,20 @@ class OnnxConv(OnnxOperator):
             bias = ops.unsqueeze(inputs[2], [0, 2, 3])
             output = output + bias
         return [output]
+
+
+class OnnxBatchNormalization(OnnxOperator):
+    def __init__(self, node):
+        super().__init__(node)
+        self.epsilon: float = self.attrs.get('epsilon', 1e-5)
+        self.momentum: float = self.attrs.get('momentum', 0.9)
+        self.training_mode: int = self.attrs.get('training_mode', 0)
+        assert self.training_mode == 0, 'BatchNorm in training mode occurs, currently, hidet does not support training.'
+
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        x, scale, bias, running_mean, running_var = inputs
+        y = ops.batch_norm_infer(x, running_mean=running_mean, running_var=running_var, epsilon=self.epsilon, axis=1)
+        return [y * scale.unsqueeze([0, 2, 3]) + bias.unsqueeze([0, 2, 3])]
 
 
 class OnnxRelu(OnnxOperator):
@@ -106,10 +125,58 @@ class OnnxSoftmax(OnnxOperator):
         return [ops.softmax(inputs[0], self.axis)]
 
 
+class OnnxGlobalAveragePool(OnnxOperator):
+    def __init__(self, node):
+        super().__init__(node)
+
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        x, = inputs
+        n, c, h, w = x.shape
+        return [ops.avg_pool2d(x, kernel=(h, w), stride=(1, 1), padding=(0, 0))]
+
+
+class OnnxFlatten(OnnxOperator):
+    def __init__(self, node):
+        super().__init__(node)
+        self.axis = self.attrs.get('axis', 1)
+
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        x = inputs[0]
+        rank = len(x.shape)
+        axis = (self.axis + rank) % rank
+        dims = list(range(rank))
+        return [ops.rearrange(x, plan=[dims[:axis], dims[axis:]])]
+
+
 class OnnxArgMax(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         # todo: support this op
         return inputs
+
+
+class OnnxGemm(OnnxOperator):
+    def __init__(self, node):
+        super().__init__(node)
+        self.alpha = self.attrs.get('alpha', 1.0)
+        self.beta = self.attrs.get('beta', 0.0)
+        self.trans_a = self.attrs.get('transA', 0)
+        self.trans_b = self.attrs.get('transB', 0)
+
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        a, b = inputs[:2]
+        c = inputs[2] if len(inputs) > 2 else None
+
+        if self.trans_a == 1:
+            a = ops.rearrange(a, plan=[[1], [0]])
+        if self.trans_b == 1:
+            b = ops.rearrange(b, plan=[[1], [0]])
+        assert a.shape[1] == b.shape[0]
+        d = ops.matmul(a, b)
+        if self.alpha != 1.0:
+            d = d * self.alpha
+        if c and self.beta != 0.0:
+            d = d + c * self.beta
+        return [d]
 
 
 def dispatch(node) -> OnnxOperator:
@@ -123,6 +190,10 @@ def dispatch(node) -> OnnxOperator:
         'MatMul': OnnxMatMul,
         'Softmax': OnnxSoftmax,
         'ArgMax': OnnxArgMax,
+        'BatchNormalization': OnnxBatchNormalization,
+        'GlobalAveragePool': OnnxGlobalAveragePool,
+        'Flatten': OnnxFlatten,
+        'Gemm': OnnxGemm,
     }
     op_type = node.op_type
     if op_type not in dispatch_table:
@@ -145,7 +216,7 @@ class OnnxModule(nn.Module):
         for param in graph.initializer:
             numpy_array = onnx.numpy_helper.to_array(tensor=param)
             self.parameters[param.name] = from_numpy(numpy_array).cuda()
-        self.input_names = [input.name for input in graph.input]
+        self.input_names = [input.name for input in graph.input if input.name not in self.parameters]
         self.output_names = [output.name for output in graph.output]
         self.operators = [dispatch(node) for node in graph.node]
 
@@ -194,32 +265,3 @@ def from_onnx(model: Union[str, 'onnx.ModelProto']) -> nn.Module:
     return OnnxModule(model)
 
 
-def main():
-    from scipy import stats
-    import onnx
-    import onnxruntime
-    model_path = '/home/yaoyao/model_zoo/resnet50_v1.onnx'
-    # model_path = '/home/yaoyao/model_zoo/resnet50-v2-7.onnx'
-    model = onnx.load_model(model_path)
-    onnx.checker.check_model(model)
-    # run use hidet
-    x_hidet = randn([1, 3, 224, 224])
-    module = OnnxModule(model)
-    y_hidet = module(x_hidet)
-    # run use onnx runtime
-    onnx_infer = onnxruntime.InferenceSession(model_path)
-    y_onnx = onnx_infer.run(None, {'input_tensor:0': x_hidet.cpu().numpy()})
-    print(y_hidet[1])
-    print(y_onnx[1])
-    diff: np.ndarray = (y_hidet[1].cpu().numpy() - y_onnx[1]).flatten()
-    info = stats.describe(diff)
-    print(info.minmax)
-    print(info.mean)
-    print(info.variance)
-    # y = module(x)
-    # print(type(model))
-    # print(dir(model))
-
-
-if __name__ == '__main__':
-    main()

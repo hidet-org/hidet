@@ -57,12 +57,16 @@ class Storage:
         else:
             raise ValueError("Unrecognized device '{}', candidates: {}".format(device, ['cpu', 'cuda']))
 
-    def as_array(self, dtype: str = 'float32') -> np.ndarray:
+    def as_array(self, num_elements: int, dtype: str = 'float32') -> np.ndarray:
         """
         Convert to one-dimension numpy array, sharing the underlying storage.
 
         Parameters
         ----------
+        num_elements: int
+            The number of elements in the array. Because the storage may have a larger allocated memory, we can not
+            infer the desired number of elements.
+
         dtype: str, default 'float32'
             The type of data in this storage.
 
@@ -71,16 +75,16 @@ class Storage:
         ret: numpy.ndarray
             A numpy ndarray with one dimension that share the same data as the storage.
         """
+        dtype2ctype = {
+            'float32': ctypes.c_float
+        }
+
         if self.device != 'cpu':
             raise ValueError('The storage must be cpu storage. Please use .cpu() to convert first.')
-        if dtype == 'float32':
-            assert self.num_bytes % 4 == 0
-            num_elements = self.num_bytes // 4
-            buf = (ctypes.c_float * num_elements).from_address(self.addr)
-            buf._hidet_storage = self  # so this storage will not be freed as long as the buffer not been freed.
-            return np.ctypeslib.as_array(buf)
-        else:
-            raise NotImplementedError()
+        buf = (dtype2ctype[dtype] * num_elements).from_address(self.addr)
+        buf._hidet_storage = self  # so this storage will not be freed as long as the buffer not been freed.
+        assert ctypes.sizeof(buf) <= self.num_bytes, 'Trying to view a storage as a larger array'
+        return np.ctypeslib.as_array(buf)
 
 
 class MemoryPool:
@@ -115,7 +119,6 @@ class MemoryPool:
         self.memory_blocks[storage.num_bytes].append(storage)
         self.reserved_size += storage.num_bytes
         if self.reserved_size > self.max_reserve_size:
-            print('clearing ----------------------------- reserved {}'.format(nbytes2str(self.reserved_size)))
             self.clear()
 
     def clear(self):

@@ -206,6 +206,14 @@ class UnsqueezeOp(Operator):
             return Operator.imperative_run(self)
 
 
+class RearrangeOp(Operator):
+    def __init__(self, x: Tensor, plan: List[List[int]]):
+        super().__init__(
+            inputs=[x],
+            task=tasks.rearrange(x.layout, plan=plan)
+        )
+
+
 class ConcatOp(Operator):
     def __init__(self, tensors: List[Tensor], axis: int):
         super().__init__(
@@ -296,15 +304,19 @@ def flatten(x: Tensor, start_dim=0, end_dim=-1) -> Tensor:
     return reshape(x, shape)
 
 
+def rearrange(x: Tensor, plan: List[List[int]]) -> Tensor:
+    return RearrangeOp(x, plan).get_output(0)
+
+
 def softmax(x: Tensor, axis=1) -> Tensor:
     if len(x.shape) < 4:
         dims = list(range(len(x.shape), 4))
         xx = unsqueeze(x, dims)
-        return SoftmaxOp(xx, axis).outputs[0].squeeze(dims)
-    return SoftmaxOp(x, axis).outputs[0]
+        return SoftmaxOp(xx, axis).get_output(0).squeeze(dims)
+    return SoftmaxOp(x, axis).get_output(0)
 
 
-def batch_norm_infer(x: Tensor, running_mean: Tensor, running_var: Tensor, epsilon=1e-5, axis=1):
+def batch_norm_infer(x: Tensor, running_mean: Tensor, running_var: Tensor, epsilon=1e-5, axis=1) -> Tensor:
     assert len(x.shape) == 4 and axis == 1
     assert len(running_mean.shape) == 1 and len(running_var.shape) == 1
     assert x.shape[1] == running_mean.shape[0] == running_var.shape[0]

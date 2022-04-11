@@ -179,6 +179,65 @@ def unsqueeze(x_layout: DataLayout, dims) -> Task:
     )
 
 
+def index_split(total_index, dim_sizes: List[int]) -> List:
+    bases = [prod(dim_sizes[i + 1:]) for i in range(len(dim_sizes))]
+    return [(total_index // base) % dim for dim, base in zip(dim_sizes, bases)]
+
+
+def rearrange(x_layout: DataLayout, plan: List[List[int]]) -> Task:
+    """
+    Rearrange a tensor. This task is a general task of squeeze, unsqueeze, flatten, and perm.
+
+    Parameters
+    ----------
+    x_layout: DataLayout
+        The data layout of input.
+
+    plan: List[List[int]]
+        The rearrange plan.
+
+    Returns
+    -------
+    ret: Task
+        The task to conduct rearrangement.
+
+    Examples
+    --------
+    squeeze([1, 1, 2, 3], dims=[0, 1]) = rearrange([1, 1, 2, 3], plan=[[2], [3]]) => Tensor([2, 3])
+    unsqueeze([2, 3], dims=[0, 1]) = rearrange([2, 3], plan=[[], [], [0], [1]]) => Tensor([1, 1, 2, 3])
+    flatten([2, 3, 4, 5], start_dim=1, end_dim=2) = rearrange([2, 3, 4, 5], plan=[[0], [1, 2], [3]]) => Tensor([2, 12, 5])
+    """
+    x_shape = [int(v) for v in x_layout.shape]
+    y_shape = [prod([x_shape[i] for i in dims]) for dims in plan]
+    x = tensor_input('x', 'float32', x_shape)
+
+    def fcompute(*y_indices):
+        x_indices = [None for _ in range(len(x_shape))]
+        for i, y_index in enumerate(y_indices):
+            dims = plan[i]
+            if len(dims) == 0:
+                # this dimension has size 1
+                continue
+            else:
+                split_indices = index_split(total_index=y_index, dim_sizes=[x_shape[k] for k in dims])
+                for j, x_index in zip(dims, split_indices):
+                    x_indices[j] = x_index
+        assert all(x_index is not None for x_index in x_indices)
+        return x[x_indices]
+
+    y = compute('y', y_shape, fcompute)
+    return Task(
+        'rearrange',
+        computation=y,
+        params=[x, y],
+        params_type=[
+            tensor_type('global', 'float32', layout=x_layout),
+            tensor_type('global', 'float32', shape=y_shape)
+        ],
+        worker=Grid()
+    )
+
+
 def concat(layouts: List[DataLayout], axis: int):
     shapes = [[int(v) for v in layout.shape] for layout in layouts]
     n = len(shapes)

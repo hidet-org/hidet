@@ -1,3 +1,4 @@
+import os
 import git
 import functools
 import datetime
@@ -58,6 +59,10 @@ def repo_root() -> str:
     """
     repo = git.Repo(search_parent_directories=True)
     return repo.working_dir
+
+
+def get_hidet_cache_dir() -> str:
+    return os.path.join(repo_root(), '.hidet_cache')
 
 
 if __name__ == '__main__':

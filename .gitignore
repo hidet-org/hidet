@@ -194,4 +194,4 @@ build-release
 *.ncu-rep
 
 # cache for kernel binary
-.opcache/
+.hidet_cache/

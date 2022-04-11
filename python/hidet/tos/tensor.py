@@ -115,7 +115,7 @@ class Tensor:
             raise ValueError('Please use .cpu() to move data from {} to cpu first.'.format(self.device))
         # convert if this tensor is not in row major layout
         storage = self.contiguous().storage
-        array = storage.as_array(dtype=self.dtype)
+        array = storage.as_array(num_elements=prod(self.shape), dtype=self.dtype)
         return array.reshape(self.shape)
 
 
