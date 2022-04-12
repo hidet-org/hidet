@@ -69,5 +69,5 @@ def load_task_func(lib_path: str, task: Task) -> CompiledFunction:
     """
     lib = ctypes.CDLL(lib_path)
     func_name = 'hidet_{}'.format(task.name)
-    packed_func = PackedFunc(task.params_type, c_func_pointer=lib[func_name])
+    packed_func = PackedFunc(task.param_types(), c_func_pointer=lib[func_name])
     return CompiledFunction(name=task.name, packed_func=packed_func)

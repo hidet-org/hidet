@@ -1,6 +1,6 @@
 from .base import ExprRewriter, same_list
 from .util_functors import collect, rewrite
-from hidet.ir.dialects.compute import TensorInput, TensorCompute, ScalarInput, ReduceCompute
+from hidet.ir.dialects.compute import TensorInput, TensorCompute, ScalarInput, ReduceCompute, ComputeNode
 from hidet.ir.expr import Var, TensorElement
 
 
@@ -14,6 +14,6 @@ class ComputeInlineRewriter(ExprRewriter):
             return e
 
 
-def inline_compute(expr):
+def inline_compute(expr) -> ComputeNode:
     inliner = ComputeInlineRewriter()
     return inliner(expr)

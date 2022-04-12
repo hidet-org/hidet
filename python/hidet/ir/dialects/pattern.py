@@ -461,7 +461,7 @@ class PatternMatcher:
                 assert len(pattern.required_params) == len(pattern.required_params_types)
                 for required_param, required_type in zip(pattern.required_params, pattern.required_params_types):
                     matched_param: ComputeNode = self.matched[required_param]
-                    actual_type = target.params_type[target.params.index(matched_param)]
+                    actual_type = target.param_types()[target.params.index(matched_param)]
                     # assert isinstance(matched_param, (ScalarInput, TensorInput)), "as far as now, we only support specify the param type, not the output type"
                     stack.enter_context(self.match(required_type, actual_type))
                 matched_params = [self.matched[param] for param in pattern.required_params]

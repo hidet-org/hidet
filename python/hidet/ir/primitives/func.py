@@ -134,7 +134,8 @@ def shfl_xor_sync(mask, var, lane_mask, width=32):
 
 def expf(v):
     if '__expf' not in _primitive_functions:
-        register_primitive_function('__expf')
+        func_type = FuncType(param_types=['float32'], ret_type='float32')
+        register_primitive_function('__expf', func_type)
     func_var = get_primitive_function('__expf')[0]
     return Call(func_var, [v])
 
@@ -148,28 +149,32 @@ def active_mask():
 
 def cuda_max(a, b):
     if 'max' not in _primitive_functions:
-        register_primitive_function('max')
+        func_type = FuncType(type_infer_func=lambda a_tp, b_tp: a_tp)
+        register_primitive_function('max', func_type)
     func_var = get_primitive_function('max')[0]
     return Call(func_var, [a, b])
 
 
 def cuda_min(a, b):
     if 'min' not in _primitive_functions:
-        register_primitive_function('min')
+        func_type = FuncType(type_infer_func=lambda a_tp, b_tp: a_tp)
+        register_primitive_function('min', func_type)
     func_var = get_primitive_function('min')[0]
     return Call(func_var, [a, b])
 
 
 def cuda_sqrt(a):
     if 'sqrtf' not in _primitive_functions:
-        register_primitive_function('sqrtf')
+        func_type = FuncType(param_types=['float32'], ret_type='float32')
+        register_primitive_function('sqrtf', func_type)
     func_var = get_primitive_function('sqrtf')[0]
     return Call(func_var, [a])
 
 
 def cuda_rsqrt(a):
     if 'rsqrtf' not in _primitive_functions:
-        register_primitive_function('rsqrtf')
+        func_type = FuncType(param_types=['float32'], ret_type='float32')
+        register_primitive_function('rsqrtf', func_type)
     func_var = get_primitive_function('rsqrtf')[0]
     return Call(func_var, [a])
 

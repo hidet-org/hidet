@@ -24,12 +24,14 @@ def norm_pad(v):
 
 def conv2d(batch_size, in_channels, height, width, out_channels, kernel, padding, stride):
     kernel, padding, stride = tuplize(kernel), norm_pad(padding), tuplize(stride)
-    input = tensor_input('input', 'float32', [batch_size, in_channels, height, width])
-    weight = tensor_input('weight', 'float32', [out_channels, in_channels, kernel[0], kernel[1]])
+    input = tensor_input('input', 'float32', [batch_size, in_channels, height, width], 'global')
+    weight = tensor_input('weight', 'float32', [out_channels, in_channels, kernel[0], kernel[1]], 'global')
     padded = compute(
         name='pad',
         shape=[batch_size, in_channels, height + padding[0] + padding[2], weight + padding[1] + padding[3]],
-        fcompute=lambda n, c, h, w: input.protect_read(indices=[n, c, h - padding[0], w - padding[1]], default_value=0.0))
+        fcompute=lambda n, c, h, w: input.protect_read(indices=[n, c, h - padding[0], w - padding[1]], default_value=0.0),
+        scope='global'
+    )
     out_height = (height + padding[0] + padding[2] - kernel[0]) // stride[0] + 1
     out_width = (width + padding[1] + padding[3] - kernel[1]) // stride[1] + 1
     output = compute(
@@ -39,17 +41,13 @@ def conv2d(batch_size, in_channels, height, width, out_channels, kernel, padding
             shape=[in_channels, kernel[0], kernel[1]],
             fcompute=lambda rc, xx, yy: padded[n, rc, h * stride[0] + xx, w * stride[1] + yy] * weight.protect_read(indices=[c, rc, xx, yy], default_value=0.0),
             reduce_type='sum'
-        )
+        ),
+        scope='global'
     )
     output = inline_compute(output)
     return Task(
         name='conv2d',
         computation=output,
         params=[input, weight, output],
-        params_type=[
-            tensor_type('global', 'float32', input.shape, layout=DataLayout.row_major(input.shape)),
-            tensor_type('global', 'float32', weight.shape, layout=DataLayout.row_major(weight.shape)),
-            tensor_type('global', 'float32', output.shape, layout=DataLayout.row_major(output.shape))
-        ],
         worker=Grid()
     )

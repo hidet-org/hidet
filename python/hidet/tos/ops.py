@@ -214,11 +214,28 @@ class RearrangeOp(Operator):
         )
 
 
+class CastOp(Operator):
+    def __init__(self, x: Tensor, dtype: str):
+        super().__init__(
+            inputs=[x],
+            task=tasks.cast(x.layout, src_dtype=x.dtype, dst_dtype=dtype)
+        )
+
+
 class ConcatOp(Operator):
     def __init__(self, tensors: List[Tensor], axis: int):
         super().__init__(
             inputs=tensors,
             task=tasks.concat([tensor.layout for tensor in tensors], axis=axis),
+            axis=axis
+        )
+
+
+class TakeOp(Operator):
+    def __init__(self, data: Tensor, indices: Tensor, axis: int):
+        super().__init__(
+            inputs=[data, indices],
+            task=tasks.take(data.layout, indices.layout, axis=axis),
             axis=axis
         )
 
@@ -316,6 +333,10 @@ def softmax(x: Tensor, axis=1) -> Tensor:
     return SoftmaxOp(x, axis).get_output(0)
 
 
+def cast(x: Tensor, dtype: str) -> Tensor:
+    return CastOp(x, dtype).get_output(0)
+
+
 def batch_norm_infer(x: Tensor, running_mean: Tensor, running_var: Tensor, epsilon=1e-5, axis=1) -> Tensor:
     assert len(x.shape) == 4 and axis == 1
     assert len(running_mean.shape) == 1 and len(running_var.shape) == 1
@@ -323,3 +344,7 @@ def batch_norm_infer(x: Tensor, running_mean: Tensor, running_var: Tensor, epsil
     running_mean = running_mean.unsqueeze([0, 2, 3])  # [1, c, 1, 1]
     running_var = running_var.unsqueeze([0, 2, 3])
     return (x - running_mean) * (running_var + epsilon).rsqrt()
+
+
+def take(data: Tensor, indices: Tensor, axis: int = 0) -> Tensor:
+    return TakeOp(data, indices, axis).get_output(0)

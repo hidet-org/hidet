@@ -314,6 +314,14 @@ class Let(Expr):
         self.body = convert(body)
 
 
+class Cast(Expr):
+    def __init__(self, expr, target_type):
+        self.expr = expr
+        if isinstance(target_type, str):
+            target_type = ScalarType(target_type)
+        self.target_type = target_type
+
+
 class Constant(Expr):
     def __init__(self, value, dtype=None):
         self.value = value

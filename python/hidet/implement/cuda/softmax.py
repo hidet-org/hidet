@@ -98,7 +98,7 @@ class CudaGridSoftmaxImplementer(Implementer):
         block_layout = TaskLayout.full_layout([outer]) * TaskLayout.row_major([warp_size])
         with FunctionBuilder(task.name + '_grid', worker=Grid(grid_dim=grid_layout.num_workers, block_dim=block_layout.num_workers), label='softmax') as fb:
             # params
-            params: List[Var] = [Var(param.name, param_type) for param, param_type in zip(task.params, task.params_type)]
+            params: List[Var] = [Var(param.name, param_type) for param, param_type in zip(task.params, task.param_types())]
             fb.extend_params(params)
             x, y = params
 

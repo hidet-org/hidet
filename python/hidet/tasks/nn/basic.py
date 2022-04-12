@@ -8,20 +8,18 @@ from hidet.utils.info import float_type_min_value
 
 
 def unary_elementwise(name, shape: Sequence[int], op: Callable[[Any], Any]):
-    x = tensor_input('x', 'float32', shape=shape)
+    x = tensor_input('x', 'float32', shape=shape, scope='global')
     y = compute(
         name='y',
         shape=shape,
-        fcompute=lambda *indices: op(x.__getitem__(indices))
+        fcompute=lambda *indices: op(x.__getitem__(indices)),
+        scope='global'
     )
+    data_type = y.data_type()
     return Task(
         name=name,
         computation=y,
         params=[x, y],
-        params_type=[
-            tensor_type('global', 'float32', x.shape, layout=DataLayout.row_major(x.shape)),
-            tensor_type('global', 'float32', y.shape, layout=DataLayout.row_major(y.shape)),
-        ],
         worker=Grid()
     )
 
@@ -43,8 +41,8 @@ def broadcast_shape(x_shape, y_shape):
 
 
 def binary_elementwise(name, x_layout, y_layout, op: Callable[[Any, Any], Any], z_layout=None):
-    x = tensor_input('x', 'float32', shape=x_layout.shape)
-    y = tensor_input('y', 'float32', shape=y_layout.shape)
+    x = tensor_input('x', 'float32', shape=x_layout.shape, scope='global', layout=x_layout)
+    y = tensor_input('y', 'float32', shape=y_layout.shape, scope='global', layout=y_layout)
     z_shape = broadcast_shape(x.shape, y.shape)
     if z_layout is None:
         z_layout = DataLayout.row_major(z_shape)
@@ -63,16 +61,12 @@ def binary_elementwise(name, x_layout, y_layout, op: Callable[[Any, Any], Any], 
     z = compute(
         name='z',
         shape=z_shape,
-        fcompute=lambda *indices: op(x[imap(indices, x.shape)], y[imap(indices, y.shape)])
+        fcompute=lambda *indices: op(x[imap(indices, x.shape)], y[imap(indices, y.shape)]),
+        scope='global'
     )
     return Task(
         name=name,
         computation=z,
         params=[x, y, z],
-        params_type=[
-            tensor_type('global', 'float32', x.shape, layout=x_layout),
-            tensor_type('global', 'float32', y.shape, layout=y_layout),
-            tensor_type('global', 'float32', z.shape, layout=z_layout),
-        ],
         worker=Grid()
     )

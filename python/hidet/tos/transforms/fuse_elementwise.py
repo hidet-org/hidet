@@ -83,7 +83,7 @@ class FuseElementwisePass(GraphPass):
             for idx, tensor in enumerate(node.inputs):
                 if tensor in input_tensors:
                     tensor_map[tensor] = node.task.params[idx]
-                    tensor_type_map[tensor] = node.task.params_type[idx]
+                    tensor_type_map[tensor] = node.task.param_types()[idx]
                 node_task_inputs.append(tensor_map[tensor])
             for idx, out_tensor in enumerate(node.outputs):
                 assert len(node.task.params[:-1]) == len(node.inputs) and all(isinstance(v, TensorInput) for v in node.task.params[:-1])
@@ -100,7 +100,6 @@ class FuseElementwisePass(GraphPass):
             name="_".join(sub_names),
             computation=task_outputs[0],
             params=task_inputs + task_outputs,
-            params_type=[tensor_type_map[tensor] for tensor in input_tensors + output_tensors],
             worker=nodes[0].task.worker
         )
         implementer = self.resolve_task(task)

@@ -39,25 +39,12 @@ def softmax(shape: List[int], axis: int):
     out = compute(
         name='out',
         shape=[m, n, p, q],
-        fcompute=lambda i, j, r, s: e[i, j, r, s] / se[i, r, s]
+        fcompute=lambda i, j, r, s: e[i, j, r, s] / se[i, r, s],
+        scope='global'
     )
     return Task(
         name='softmax',
         computation=out,
         params=[x, out],
-        params_type=[
-            tensor_type(scope='global', dtype='float32', layout=DataLayout.row_major([m, n, p, q])),
-            tensor_type(scope='global', dtype='float32', layout=DataLayout.row_major([m, n, p, q]))
-        ],
         worker=Grid()
     )
-
-
-def log_softmax(data_shape, axis):
-    pass
-
-#
-#  task=CustomOp(tensor_pattern, tag='softmax')
-#
-#  pattern CustomOpPattern()
-#

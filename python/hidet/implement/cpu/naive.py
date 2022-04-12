@@ -22,7 +22,7 @@ class CpuNaiveImplementer(Implementer):
         return self.pattern
 
     def implement(self, task: Task, match: Mapping[Node, Node]) -> IRModule:
-        func_param_vars = [Var(param.name, tp) for param, tp in zip(task.params, task.params_type)]
+        func_param_vars = [Var(param.name, tp) for param, tp in zip(task.params, task.param_types())]
         input_map = {p: v for p, v in zip(task.params, func_param_vars)}
         body, _, new_buffer_map = expand_loop(task.compute, input_map)
         func_locals = list(new_buffer_map.values())

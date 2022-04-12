@@ -4,11 +4,10 @@ from itertools import product
 
 from hidet.ir.dialects.pattern import AnyExpr, match
 from hidet.ir.expr import Add, convert, Sub, Multiply, FloorDiv, Mod, LessThan, LessEqual, Equal, BinaryOp, And, IfThenElse, Or
-from hidet.ir.expr import Constant, Expr, Var
+from hidet.ir.expr import Constant, Expr, Var, Cast
 from hidet.ir.functors import FuncStmtExprRewriter
 from hidet.ir.functors import StmtExprRewriter, ExprVisitor
 from hidet.ir.functors import rewrite, ExprHash
-from hidet.ir.dialects.lowlevel import Cast
 from hidet.transforms.base import FunctionPass
 from hidet.utils import prod, repeat_until_converge
 from hidet.utils.py import DictCustomKey

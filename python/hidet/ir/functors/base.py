@@ -544,7 +544,7 @@ class ExprRewriter(ExprFunctor):
         if value is e.value and same_list(axes, e.axes) and same_list(shape, e.shape):
             return e
         else:
-            return TensorCompute(name, shape, axes, value)
+            return TensorCompute(name, shape, axes, value, scope=e.scope, layout=e.layout)
 
     def visit_ReduceCompute(self, e: ReduceCompute):
         value = self(e.value)

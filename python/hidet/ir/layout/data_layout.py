@@ -51,6 +51,9 @@ class DataLayout(Node):
     def __mul__(self, other):
         return DataLayout.product(outer=self, inner=other)
 
+    def const_shape(self) -> List[int]:
+        return [int(v) for v in self.shape]
+
     def global2local(self, *args: Int) -> Int:
         raise NotImplementedError()
 

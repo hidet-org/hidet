@@ -1,12 +1,17 @@
-from typing import Union, Sequence, Tuple, Optional
-from hidet.ir.type import ScalarType
+from typing import Union, Sequence, Tuple, Optional, List
+from hidet.ir.type import ScalarType, TensorType
 from hidet.ir.expr import Expr, Constant, convert, Var, var, And, if_then_else
 from hidet.utils.info import float_type_min_value
+from hidet.ir.layout import DataLayout
 
 
 class ComputeNode(Expr):
     def __init__(self, name):
         self.name = name
+
+    def data_type(self) -> Union[ScalarType, TensorType]:
+        from hidet.ir.functors import infer_type
+        return infer_type(self)
 
 
 class ScalarInput(ComputeNode):
@@ -16,14 +21,22 @@ class ScalarInput(ComputeNode):
             dtype = ScalarType(dtype)
         self.dtype = dtype
 
+    def data_type(self) -> Union[ScalarType, TensorType]:
+        return self.dtype
+
 
 class TensorInput(ComputeNode):
-    def __init__(self, name, dtype=None, shape=None):
+    def __init__(self, name, dtype=None, shape=None, scope: str = None, layout: DataLayout = None):
         super().__init__(name)
         if dtype and isinstance(dtype, str):
             dtype = ScalarType(dtype)
         self.dtype: ScalarType = dtype
-        self.shape = convert(shape)
+        self.shape: Tuple[Union[int, Expr]] = convert(shape)
+        self.scope: str = scope
+        self.layout: DataLayout = layout
+
+    def const_shape(self) -> List[int]:
+        return [int(v) for v in self.shape]
 
     def protect_read(self, indices, default_value=0.0):
         conds = []
@@ -35,7 +48,7 @@ class TensorInput(ComputeNode):
 
 
 class TensorCompute(ComputeNode):
-    def __init__(self, name, shape, axes, value, accumulate: str = None, predicate: Optional[Expr] = None):
+    def __init__(self, name, shape, axes, value, accumulate: str = None, predicate: Optional[Expr] = None, scope: str = None, layout: DataLayout = None):
         """
         accumulate: Optional[str], choices: 'sum', None
             The accumulate method. Let value be the value of corresponding element in output grid.
@@ -48,6 +61,8 @@ class TensorCompute(ComputeNode):
         self.value: Expr = value
         self.accumulate: Optional[str] = accumulate
         self.predicate: Optional[Expr] = predicate
+        self.scope = scope
+        self.layout = layout
 
 
 class ReduceCompute(ComputeNode):
@@ -86,9 +101,10 @@ class ReduceCompute(ComputeNode):
 
 
 class CustomCompute(ComputeNode):
-    def __init__(self, name):
+    def __init__(self, name, data_type: Union[ScalarType, TensorType]):
         super().__init__(name)
         self.name = name
+        self.out_data_type = data_type
 
 
 def scalar_input(name, dtype):
@@ -98,12 +114,8 @@ def scalar_input(name, dtype):
     return ScalarInput(name, dtype)
 
 
-def tensor_input(name, base_type, shape):
-    if isinstance(base_type, str):
-        base_type = ScalarType(base_type)
-    assert isinstance(base_type, ScalarType)
-    shape = [convert(s) for s in shape]
-    return TensorInput(name, base_type, shape)
+def tensor_input(name, base_type, shape, scope=None, layout=None):
+    return TensorInput(name, base_type, shape, scope, layout)
 
 
 def reduce_sum(expr, axes, shape: Union[Sequence[Union[int, Expr]], Union[int, Expr]]):
@@ -124,14 +136,14 @@ def reduce(shape: Sequence[Union[int, Expr]], fcompute, reduce_type: str):
     return ReduceCompute(value, shape, axes, reduce_type)
 
 
-def compute(name, shape, fcompute, accumulate=None, predicate=None):
+def compute(name, shape, fcompute, accumulate=None, predicate=None, scope=None, layout=None):
     shape = [convert(v) for v in shape]
     axes = [var() for _ in shape]
     value = convert(fcompute(*axes))
     if predicate is not None:
         predicate = convert(predicate(*axes))
-    return TensorCompute(name, shape, axes, value, accumulate, predicate)
+    return TensorCompute(name, shape, axes, value, accumulate, predicate, scope, layout)
 
 
-def custom_compute(name):
-    return CustomCompute(name)
+def custom_compute(name, data_type):
+    return CustomCompute(name, data_type)

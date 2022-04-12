@@ -1,2 +1,2 @@
 from . import nn
-from .basic import copy, reduce_mean, squeeze, unsqueeze, concat, rearrange
+from .basic import copy, reduce_mean, squeeze, unsqueeze, concat, rearrange, cast, take

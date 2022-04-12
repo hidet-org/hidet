@@ -37,7 +37,7 @@ def pool2d(shape: Sequence[int],
     batch_size, channels, height, width = shape
     out_height = (height + padding[0] + padding[2] - kernel[0]) // strides[0] + 1
     out_width = (width + padding[1] + padding[3] - kernel[1]) // strides[1] + 1
-    x = tensor_input('x', 'float32', shape=[batch_size, channels, height, width])
+    x = tensor_input('x', 'float32', shape=[batch_size, channels, height, width], scope='global')
     pad = compute(
         name='pad',
         shape=[batch_size, channels, height + 2 * padding[0], width + 2 * padding[1]],
@@ -50,17 +50,14 @@ def pool2d(shape: Sequence[int],
             shape=[kernel[0], kernel[1]],
             fcompute=lambda rx, ry: pad[n, c, h * strides[0] + rx, w * strides[1] + ry],
             reduce_type=reduce_type
-        )
+        ),
+        scope='global'
     )
     y = inline_compute(y)
     return Task(
         name='{}_pool2d'.format(reduce_type),
         computation=y,
         params=[x, y],
-        params_type=[
-            tensor_type('global', 'float32', x.shape, layout=DataLayout.row_major(x.shape)),
-            tensor_type('global', 'float32', y.shape, layout=DataLayout.row_major(y.shape)),
-        ],
         worker=Grid()
     )
 

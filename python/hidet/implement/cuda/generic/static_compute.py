@@ -55,7 +55,7 @@ class CudaStaticComputeImplementer(Implementer):
 
         with FunctionBuilder(name=task.name + '_grid', worker=Grid(num_blocks, block_size), label='generic implementer') as fb:
             # params
-            params = [Var(param.name, param_type) for param, param_type in zip(task.params, task.params_type)]
+            params = [Var(param.name, param_type) for param, param_type in zip(task.params, task.param_types())]
             param_map = {param: var for param, var in zip(task.params, params)}
             fb.extend_params(params)
             scalar_value = rewrite(computation.value, param_map)  # replace TensorInput to function parameter

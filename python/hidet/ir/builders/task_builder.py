@@ -12,16 +12,9 @@ class TaskBuilder:
         self.name = name
         self.computation = None
         self.params = []
-        self.params_type = []
         self.worker = worker
         self.parent_module = parent_module
         self.func_var = None
-        if try_first:
-            if isinstance(try_first, str):
-                try_first = [try_first]
-            self.try_first = try_first
-        else:
-            self.try_first = []
 
     def __enter__(self):
         return self
@@ -39,14 +32,13 @@ class TaskBuilder:
             self.finish()
         return Call(self.func_var, args)
 
-    def extend_params(self, params: Sequence[ComputeNode], types: Sequence[TypeNode]):
-        assert len(params) == len(types)
+    def extend_params(self, params: Sequence[ComputeNode], types: Sequence[TypeNode]=None):
         self.params.extend(params)
-        self.params_type.extend(types)
+        assert types is None
 
-    def append_param(self, param: ComputeNode, param_type: TypeNode):
+    def append_param(self, param: ComputeNode, param_type: TypeNode=None):
         self.params.append(param)
-        self.params_type.append(param_type)
+        assert param_type is None
 
     def set_computation(self, computation: Expr):
         assert self.computation is None
@@ -55,10 +47,9 @@ class TaskBuilder:
     def finish(self):
         from hidet.implement.implementer import implement, impl_context
         assert self.func_var is None
-        assert len(self.params) == len(self.params_type)
         assert self.computation is not None
-        task = Task(self.name, self.computation, self.params, self.params_type, self.worker)
-        with impl_context(try_first=self.try_first):
+        task = Task(self.name, self.computation, self.params, self.worker)
+        with impl_context():
             sub_module = implement(task)
         self.parent_module.include(sub_module)
         self.func_var = self.parent_module.lookup_var(self.name)

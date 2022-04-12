@@ -1,7 +1,7 @@
 from typing import Union, Optional, List, Dict
 from hidet.ir.node import Node
 from hidet.ir.dialects.compute import ScalarInput, TensorInput, ComputeNode
-from hidet.ir.type import TypeNode, TensorType
+from hidet.ir.type import TypeNode, TensorType, ScalarType
 from hidet.ir.expr import Expr, convert
 from hidet.ir.layout import TaskLayout
 
@@ -46,11 +46,10 @@ class Host(Worker):
 
 
 class Task(Node):
-    def __init__(self, name, computation, params, params_type, worker):
+    def __init__(self, name, computation, params, worker):
         self.name: str = name
         self.compute: ComputeNode = computation
         self.params: List[Union[ScalarInput, TensorInput, ComputeNode]] = params
-        self.params_type: List[TypeNode] = params_type
         self.worker: Worker = worker
 
     def __str__(self):
@@ -58,12 +57,15 @@ class Task(Node):
         body = Doc()
         body += NewLine() + 'name: ' + self.name
         body += NewLine() + 'compute: ' + str(self.compute)
-        body += NewLine() + 'params: ' + ', '.join(['{}: {}'.format(param.name, param_type) for param, param_type in zip(self.params, self.params_type)])
+        body += NewLine() + 'params: ' + ', '.join(['{}: {}'.format(param.name, param.data_type()) for param in self.params])
         body += NewLine() + 'worker: ' + str(self.worker)
         return str('Task(' + body.indent() + NewLine() + ')')
 
+    def param_types(self) -> List[Union[ScalarType, TensorType]]:
+        return [param.data_type() for param in self.params]
+
     def type_of_param(self, given_param) -> Union[TypeNode, TensorType]:
-        for param, param_type in zip(self.params, self.params_type):
+        for param, param_type in zip(self.params, self.param_types()):
             if given_param is param:
                 return param_type
         raise KeyError()

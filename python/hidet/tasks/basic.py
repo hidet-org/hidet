@@ -2,7 +2,7 @@ from typing import List
 from hidet.ir.dialects.compute import tensor_input, compute, reduce, custom_compute
 from hidet.ir.layout.data_layout import DataLayout, RowMajorLayout, ColumnMajorLayout
 from hidet.ir.type import tensor_type
-from hidet.ir.expr import AlterLayout
+from hidet.ir.expr import AlterLayout, Cast
 from hidet.ir.task import Task, Grid
 from hidet.utils import prod
 
@@ -26,20 +26,18 @@ def copy(src_layout: DataLayout, dst_layout: DataLayout) -> Task:
                 cur = cur * dim
             return src_indices
 
-        src = tensor_input('src', 'float32', shape=src_layout.shape)
+        src = tensor_input('src', 'float32', shape=src_layout.shape, scope='global', layout=src_layout)
         dst = compute(
             name='dst',
             shape=dst_layout.shape,
-            fcompute=lambda *indices: AlterLayout(src, shape=dst_layout.shape, layout_map=layout_map)[indices]
+            fcompute=lambda *indices: AlterLayout(src, shape=dst_layout.shape, layout_map=layout_map)[indices],
+            scope='global',
+            layout=dst_layout
         )
         return Task(
             name='copy',
             computation=dst,
             params=[src, dst],
-            params_type=[
-                tensor_type('global', 'float32', layout=src_layout),
-                tensor_type('global', 'float32', layout=dst_layout)
-            ],
             worker=Grid()
         )
     else:
@@ -52,20 +50,18 @@ def copy(src_layout: DataLayout, dst_layout: DataLayout) -> Task:
                 cur = cur * dim
             return list(reversed(src_indices))
 
-        src = tensor_input('src', 'float32', shape=src_layout.shape)
+        src = tensor_input('src', 'float32', shape=src_layout.shape, scope='global', layout=src_layout)
         dst = compute(
             name='dst',
             shape=dst_layout.shape,
             fcompute=lambda *indices: src[index_map(indices)],
+            scope='global',
+            layout=dst_layout
         )
         return Task(
             name='copy',
             computation=dst,
             params=[src, dst],
-            params_type=[
-                tensor_type('global', 'float32', layout=src_layout),
-                tensor_type('global', 'float32', layout=dst_layout),
-            ],
             worker=Grid()
         )
 
@@ -79,7 +75,7 @@ def reduce_mean(x_layout: DataLayout, dims: List[int], keep_dim=False):
                 y_shape.append(1)
         else:
             y_shape.append(x_shape[i])
-    x = tensor_input('x', 'float32', x_shape)
+    x = tensor_input('x', 'float32', x_shape, 'global', x_layout)
 
     def fcompute(*indices):
         def reduce_fcompute(*reduce_indices):
@@ -101,15 +97,11 @@ def reduce_mean(x_layout: DataLayout, dims: List[int], keep_dim=False):
         reduce_shape = [x_shape[i] for i in dims]
         return reduce(shape=reduce_shape, fcompute=reduce_fcompute, reduce_type='avg')
 
-    y = compute(name='y', shape=y_shape, fcompute=fcompute)
+    y = compute(name='y', shape=y_shape, fcompute=fcompute, scope='global')
     return Task(
         'reduce_mean',
         computation=y,
         params=[x, y],
-        params_type=[
-            tensor_type('global', 'float32', layout=x_layout),
-            tensor_type('global', 'float32', shape=y_shape)
-        ],
         worker=Grid()
     )
 
@@ -122,7 +114,7 @@ def squeeze(x_layout: DataLayout, dims) -> Task:
             assert x_shape[i] == 1
         else:
             y_shape.append(x_shape[i])
-    x = tensor_input('x', 'float32', shape=x_shape)
+    x = tensor_input('x', 'float32', shape=x_shape, scope='global', layout=x_layout)
 
     def fcompute(*y_indices):
         x_indices = []
@@ -135,15 +127,11 @@ def squeeze(x_layout: DataLayout, dims) -> Task:
                 p += 1
         return x[x_indices]
 
-    y = compute('y', y_shape, fcompute)
+    y = compute('y', y_shape, fcompute, scope='global')
     return Task(
         'squeeze',
         computation=y,
         params=[x, y],
-        params_type=[
-            tensor_type('global', 'float32', layout=x_layout),
-            tensor_type('global', 'float32', shape=y_shape)
-        ],
         worker=Grid()
     )
 
@@ -160,21 +148,17 @@ def unsqueeze(x_layout: DataLayout, dims) -> Task:
             y_shape.append(x_shape[p])
             p += 1
     assert p == len(x_shape)
-    x = tensor_input('x', 'float32', x_shape)
+    x = tensor_input('x', 'float32', x_shape, scope='global', layout=x_layout)
 
     def fcompute(*y_indices):
         x_indices = [axis for i, axis in enumerate(y_indices) if i not in dims]
         return x[x_indices]
 
-    y = compute('y', y_shape, fcompute)
+    y = compute('y', y_shape, fcompute, scope='global')
     return Task(
         'unsqueeze',
         computation=y,
         params=[x, y],
-        params_type=[
-            tensor_type('global', 'float32', layout=x_layout),
-            tensor_type('global', 'float32', shape=y_shape)
-        ],
         worker=Grid()
     )
 
@@ -209,7 +193,7 @@ def rearrange(x_layout: DataLayout, plan: List[List[int]]) -> Task:
     """
     x_shape = [int(v) for v in x_layout.shape]
     y_shape = [prod([x_shape[i] for i in dims]) for dims in plan]
-    x = tensor_input('x', 'float32', x_shape)
+    x = tensor_input('x', 'float32', x_shape, 'global', x_layout)
 
     def fcompute(*y_indices):
         x_indices = [None for _ in range(len(x_shape))]
@@ -225,20 +209,28 @@ def rearrange(x_layout: DataLayout, plan: List[List[int]]) -> Task:
         assert all(x_index is not None for x_index in x_indices)
         return x[x_indices]
 
-    y = compute('y', y_shape, fcompute)
+    y = compute('y', y_shape, fcompute, scope='global')
     return Task(
         'rearrange',
         computation=y,
         params=[x, y],
-        params_type=[
-            tensor_type('global', 'float32', layout=x_layout),
-            tensor_type('global', 'float32', shape=y_shape)
-        ],
         worker=Grid()
     )
 
 
-def concat(layouts: List[DataLayout], axis: int):
+def cast(x_layout: DataLayout, src_dtype: str, dst_dtype: str) -> Task:
+    shape = [int(v) for v in x_layout.shape]
+    x = tensor_input('x', src_dtype, shape, layout=x_layout)
+    y = compute('y', shape, lambda *indices: Cast(x[indices], dst_dtype))
+    return Task(
+        'cast',
+        computation=y,
+        params=[x, y],
+        worker=Grid()
+    )
+
+
+def concat(layouts: List[DataLayout], axis: int) -> Task:
     shapes = [[int(v) for v in layout.shape] for layout in layouts]
     n = len(shapes)
     assert len(shapes) > 0
@@ -247,14 +239,49 @@ def concat(layouts: List[DataLayout], axis: int):
         assert all(a == b for j, (a, b) in enumerate(zip(shapes[0], shapes[i])) if j != axis), 'all tensors must have the same shape except axis dimension'
     rank = len(shapes[0])
     out_shape = [shapes[0][i] if i != axis else sum(shapes[j][i] for j in range(n)) for i in range(rank)]
-    input_params = [tensor_input('x{}'.format(i), 'float32', shape) for i, shape in enumerate(shapes)]
-    input_params_type = [tensor_type('global', 'float32', layout=layout) for layout in layouts]
+    input_params = [tensor_input('x{}'.format(i), 'float32', shape, scope='global', layout=layout) for i, (shape, layout) in enumerate(zip(shapes, layouts))]
     params = input_params + [tensor_input('out', 'float32', out_shape)]
-    params_type = input_params_type + [tensor_type('global', 'float32', shape=out_shape)]
+    out = custom_compute('concat', tensor_type('global', 'float32', shape=out_shape)),
     return Task(
         name='concat',
-        computation=custom_compute('concat'),
+        computation=out,
         params=params,
-        params_type=params_type,
         worker=Grid()
     )
+
+
+def take(data_layout: DataLayout, indices_layout: DataLayout, axis=0) -> Task:
+    data_shape = data_layout.const_shape()
+    indices_shape = indices_layout.const_shape()
+    output_shape = data_shape[:axis] + indices_shape + data_shape[axis + 1:]
+    assert 0 <= axis < len(data_shape)
+
+    data = tensor_input('data', 'float32', data_shape, 'global', data_layout)
+    indices_tensor = tensor_input('indices', 'int64', indices_shape, 'global', indices_layout)
+
+    def fmap(*indices):
+        indices_indices = indices[axis: axis + len(indices_shape)]
+        data_indices = indices[:axis] + (indices_tensor[indices_indices],) + indices[axis + len(indices_shape):]
+        return data[data_indices]
+
+    output = compute(
+        name='output',
+        shape=output_shape,
+        fcompute=lambda *indices: fmap,
+        scope='global'
+    )
+    return Task(
+        name='take',
+        computation=output,
+        params=[data, indices_tensor, output],
+        worker=Grid()
+    )
+
+
+def strided_slice(data_layout: DataLayout, starts: List[int], ends: List[int], axes: List[int] = None, steps: List[int] = None) -> Task:
+    data_shape = data_layout.const_shape()
+    data_rank = len(data_shape)
+    assert len(starts) == len(ends)
+    rank = len(starts)
+    axes = axes if axes else list(range(rank))
+    steps = steps if steps else [1 for _ in range(rank)]

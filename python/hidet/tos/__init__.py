@@ -14,7 +14,7 @@ from .container import Sequential
 from .ir import FlowGraph
 from .transforms import GraphPass, PassContext
 
-from .tensor import randn, empty, zeros, ones, symbol
+from .tensor import randn, empty, zeros, ones, symbol, array
 from .operator import lazy_mode, imperative_mode, space_level, opt_level
 from .ir import trace_from
 from .transforms import optimize

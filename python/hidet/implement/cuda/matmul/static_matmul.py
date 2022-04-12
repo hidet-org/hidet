@@ -5,9 +5,9 @@ from typing import Mapping, List, Any, Tuple, Union
 from hidet.implement.implementer import Implementer, register_impl, NotSupportedError, Schedule
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.ir.dialects.compute import TensorInput, TensorCompute, ReduceCompute
-from hidet.ir.dialects.lowlevel import TensorPointerType, Cast, PointerType
+from hidet.ir.dialects.lowlevel import TensorPointerType, PointerType
 from hidet.ir.dialects.pattern import TaskPattern, any_const_int
-from hidet.ir.expr import var, Var, And, Equal, if_then_else
+from hidet.ir.expr import var, Var, And, Equal, Cast, if_then_else
 from hidet.ir.func import IRModule
 from hidet.ir.functors import simplify_to_int
 from hidet.ir.layout import TaskLayout, row_major_layout, DataLayout, StridesLayout

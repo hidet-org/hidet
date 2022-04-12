@@ -115,7 +115,7 @@ def dummy_inputs_from_task(task: Task):
     from hidet.ir.expr import Constant
     from hidet.tos.tensor import randn
     inputs = []
-    for idx, param_type in enumerate(task.params_type):
+    for idx, param_type in enumerate(task.param_types()):
         assert isinstance(param_type, TensorType)
         assert all(isinstance(s, Constant)for s in param_type.shape)
         stype = param_type.scalar_type.name

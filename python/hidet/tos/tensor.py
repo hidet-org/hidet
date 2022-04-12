@@ -121,7 +121,8 @@ class Tensor:
 
 def dtype_bytes(dtype: str):
     bytes_dict = {
-        'float32': 4
+        'float32': 4,
+        'int64': 8
     }
     return bytes_dict[dtype]
 
@@ -170,13 +171,25 @@ def void_pointer_to_uint64(p):
 
 
 def from_numpy(array: np.ndarray) -> Tensor:
-    if array.dtype == np.float32:
-        tensor = empty(shape=array.shape, dtype='float32', device='cpu')
-        CudaAPI.memcpy_async(void_pointer_to_uint64(array.ctypes.data_as(ctypes.c_void_p)),
-                             tensor.storage.addr,
-                             tensor.storage.num_bytes,
-                             CudaAPI.HostToHost)
-        CudaAPI.device_synchronization()
-        return tensor
-    else:
+    dtype_convert = {
+        np.dtype(np.float32): 'float32',
+        np.dtype(np.int64): 'int64'
+    }
+    if array.dtype not in dtype_convert:
         raise NotImplementedError("Do not support convert np.ndarray with data type '{}'.".format(array.dtype))
+    tensor = empty(shape=array.shape, dtype=dtype_convert[array.dtype], device='cpu')
+    CudaAPI.memcpy_async(void_pointer_to_uint64(array.ctypes.data_as(ctypes.c_void_p)),
+                         tensor.storage.addr,
+                         tensor.storage.num_bytes,
+                         CudaAPI.HostToHost)
+    CudaAPI.device_synchronization()
+    return tensor
+
+
+def array(obj: Union[List, Tuple, np.ndarray, Tensor]) -> Tensor:
+    if isinstance(obj, np.ndarray):
+        return from_numpy(obj)
+    elif isinstance(obj, Tensor):
+        return obj
+    else:
+        return from_numpy(np.array(obj))

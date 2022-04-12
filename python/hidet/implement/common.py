@@ -3,7 +3,7 @@ from typing import Mapping, Callable, Any, Tuple
 from hidet.ir import TensorInput, ScalarInput, ReduceCompute, TensorCompute
 from hidet.ir.builders import StmtBuilder
 from hidet.ir.dialects.compute import compute
-from hidet.ir.dialects.lowlevel import Cast, Dereference
+from hidet.ir.dialects.lowlevel import Dereference
 from hidet.ir.expr import *
 from hidet.ir.func import IRModule
 from hidet.ir.task import Worker, ThreadBlock, Warp

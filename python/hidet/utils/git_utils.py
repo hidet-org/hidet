@@ -61,7 +61,7 @@ def repo_root() -> str:
     return repo.working_dir
 
 
-def get_hidet_cache_dir() -> str:
+def hidet_cache_dir() -> str:
     return os.path.join(repo_root(), '.hidet_cache')
 
 

@@ -1,10 +1,11 @@
-from hidet.ir.type import ScalarType, TensorType
-from hidet.ir.expr import BinaryOp, Add, Sub, Multiply, Div, Mod, FloorDiv, Condition, LessThan, Equal, IfThenElse, TensorSlice, Not, Or, And, LessEqual, Let, RightShift, LeftShift, BitwiseNot, BitwiseOr, BitwiseAnd, AlterLayout
-from hidet.ir.expr import Var, Constant, TensorElement, Call
+from hidet.ir.type import ScalarType, TensorType, FuncType
+from hidet.ir.expr import BinaryOp, Add, Sub, Multiply, Div, Mod, FloorDiv, Condition, LessThan, Equal, IfThenElse, TensorSlice, Not, Or, And, LessEqual, Let, RightShift, LeftShift, BitwiseNot, BitwiseOr, BitwiseAnd, AlterLayout, Neg
+from hidet.ir.expr import Var, Constant, TensorElement, Call, Cast
 from hidet.ir.dialects.compute import ScalarInput, TensorInput, TensorCompute, ReduceCompute
-from hidet.ir.dialects.lowlevel import PointerType, Cast, Dereference
+from hidet.ir.dialects.lowlevel import PointerType, Dereference, Reference, Address
 
 from .base import ExprFunctor
+from ..dialects.pattern import ScalarExprPattern, TensorComputePattern, ReduceComputePattern, AnyExpr
 
 
 def is_bool(tp):
@@ -12,6 +13,15 @@ def is_bool(tp):
 
 
 class TypeInfer(ExprFunctor):
+    def visit_Neg(self, e: Neg):
+        raise NotImplementedError()
+
+    def visit_Address(self, e: Address):
+        raise NotImplementedError()
+
+    def visit_Reference(self, e: Reference):
+        raise NotImplementedError()
+
     def visit_Binary(self, e: BinaryOp):
         atype: ScalarType = self.visit(e.a)
         btype: ScalarType = self.visit(e.b)
@@ -23,6 +33,7 @@ class TypeInfer(ExprFunctor):
         elif isinstance(e, Condition):
             return ScalarType('bool')
         else:
+            raise NotImplementedError()
             return ScalarType(name=None)  # unknown
 
     def visit_Add(self, e: Add):
@@ -87,8 +98,7 @@ class TypeInfer(ExprFunctor):
             raise NotImplementedError()
 
     def visit_TensorSlice(self, e: TensorSlice):
-        # todo
-        pass
+        raise NotImplementedError()
 
     def visit_IfThenElse(self, e: IfThenElse):
         cond_type = self.visit(e.cond)
@@ -106,8 +116,12 @@ class TypeInfer(ExprFunctor):
         return self.visit(e.body)
 
     def visit_Call(self, e: Call):
-        # todo
-        pass
+        func_var = e.func_var
+        func_type = func_var.type
+        if not isinstance(func_type, FuncType):
+            raise ValueError('Type infer failed, expect a function var "{}" but got variable with type "{}"'.format(func_var, func_type))
+        args_type = [self(arg) for arg in e.args]
+        return func_type.ret_type_on(args_type)
 
     def visit_Cast(self, e: Cast):
         return e.target_type
@@ -127,16 +141,29 @@ class TypeInfer(ExprFunctor):
         return e.dtype
 
     def visit_TensorInput(self, e: TensorInput):
-        return TensorType(None, e.dtype, e.shape, None)
+        return TensorType(e.scope, e.dtype, e.shape, e.layout)
 
     def visit_TensorCompute(self, e: TensorCompute):
-        dtype = self.visit(e.value)
-        return TensorType(None, dtype, e.shape, None)
+        return TensorType(e.scope, self(e.value), e.shape, e.layout)
 
     def visit_ReduceCompute(self, e: ReduceCompute):
-        return self.visit(e.value)
+        return self(e.value)
+
+    def visit_AnyExpr(self, e: AnyExpr):
+        raise ValueError('Should not infer type of pattern expression')
+
+    def visit_ReduceComputePattern(self, e: ReduceComputePattern):
+        raise ValueError('Should not infer type of pattern expression')
+
+    def visit_TensorComputePattern(self, e: TensorComputePattern):
+        raise ValueError('Should not infer type of pattern expression')
+
+    def visit_ScalarExprPattern(self, e: ScalarExprPattern):
+        raise ValueError('Should not infer type of pattern expression')
 
 
 def infer_type(expr):
-    inferer = TypeInfer()
-    return inferer.visit(expr)
+    infer = TypeInfer()
+    ret = infer(expr)
+    assert ret is not None
+    return ret

@@ -1,4 +1,4 @@
-from typing import Sequence, Optional, Union, List, Tuple, Mapping
+from typing import Sequence, Optional, Union, List, Tuple, Mapping, Callable
 
 from hidet import ir
 from hidet.ir.node import Node
@@ -82,10 +82,31 @@ class TensorType(TypeNode):
         return TensorType(self.scope, self.scalar_type, layout=layout)
 
 
+TypeLike = Union[str, TypeNode]
+
+
 class FuncType(TypeNode):
-    def __init__(self, param_types, ret_type):
-        self.param_types = param_types
-        self.ret_type = ret_type
+    def __init__(self,
+                 param_types: Optional[List[TypeLike]] = None,
+                 ret_type: Optional[TypeLike] = None,
+                 type_infer_func: Optional[Callable] = None):  # Callable[[a number of TypeNode], TypeNode]
+        self.param_types = [self._convert_type(tp) for tp in param_types] if param_types else None
+        self.ret_type = self._convert_type(ret_type) if ret_type else None
+        self.type_infer_func = type_infer_func
+        assert not all(v is None for v in [ret_type, type_infer_func]), 'Please provide either a static type or a type infer func'
+
+    def ret_type_on(self, arg_types: List[TypeNode]) -> TypeNode:
+        if self.ret_type is not None:
+            # todo: add type checking
+            return self.ret_type
+        else:
+            return self.type_infer_func(*arg_types)
+
+    def _convert_type(self, tp: Union[str, TypeNode]):
+        if isinstance(tp, str):
+            return ScalarType(tp)
+        else:
+            return tp
 
     @staticmethod
     def from_func(func):

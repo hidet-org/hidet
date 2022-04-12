@@ -209,11 +209,21 @@ def demo_rsqrt():
     hidet.utils.tvm_utils.dump_relay_cuda_code(ir_module, out_dir='./outs/rsqrt')
 
 
+def demo_gather():
+    data = relay.var('data', shape=(1234, 567))
+    indices = relay.var('indices', shape=(512,), dtype='int64')
+    gathered = relay.take(data, indices, axis=0)
+    func = relay.Function(params=[data, indices], body=gathered)
+    ir_module = tvm.ir.IRModule.from_expr(func)
+    hidet.utils.tvm_utils.dump_relay_cuda_code(ir_module, out_dir='./outs/take')
+
+
 if __name__ == '__main__':
     # demo_vthread()
     # demo_conv2d_te()
     # demo_softmax()
     # demo_pool2d()
     # demo_batch_norm()
-    demo_rsqrt()
+    # demo_rsqrt()
+    demo_gather()
 

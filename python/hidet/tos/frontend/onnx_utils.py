@@ -1,6 +1,7 @@
-from typing import List, Union, Sequence
+from typing import List, Union, Sequence, Optional
 import os
 import numpy as np
+import hidet
 from hidet.tos import nn, ops
 from hidet.tos.tensor import Tensor, from_numpy, randn
 from hidet.utils import line_profile
@@ -17,6 +18,7 @@ class OnnxOperator:
         ----------
         node: onnx.NodeProto
         """
+        import onnx.numpy_helper
         self.node = node
         self.input_names = [name for name in node.input]
         self.output_names = [name for name in node.output]
@@ -28,6 +30,8 @@ class OnnxOperator:
                 v = attr.i
             elif attr.type == 3:  # string
                 v = attr.s.decode('utf-8')
+            elif attr.type == 4:  # tensor
+                v = from_numpy(onnx.numpy_helper.to_array(tensor=attr.t)).cuda()
             elif attr.type == 6:  # floats
                 v = list(attr.floats)
             elif attr.type == 7:  # ints
@@ -111,6 +115,16 @@ class OnnxAdd(OnnxOperator):
         return [inputs[0] + inputs[1]]
 
 
+class OnnxSub(OnnxOperator):
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        return [inputs[0] - inputs[1]]
+
+
+class OnnxMul(OnnxOperator):
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        return [inputs[0] * inputs[1]]
+
+
 class OnnxMatMul(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         return [ops.matmul(inputs[0], inputs[1])]
@@ -148,6 +162,15 @@ class OnnxFlatten(OnnxOperator):
         return [ops.rearrange(x, plan=[dims[:axis], dims[axis:]])]
 
 
+class OnnxUnsqueeze(OnnxOperator):
+    def __init__(self, node):
+        super().__init__(node)
+        self.axes = self.attrs.get('axes')
+
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        return [ops.unsqueeze(inputs[0], self.axes)]
+
+
 class OnnxArgMax(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         # todo: support this op
@@ -179,6 +202,77 @@ class OnnxGemm(OnnxOperator):
         return [d]
 
 
+class OnnxCast(OnnxOperator):
+    code2dtype = {
+        1: 'float32',
+        2: 'uint8',
+        3: 'int8',
+        4: 'uint16',
+        5: 'int16',
+        6: 'int32',
+        7: 'int64',
+        8: 'string',
+        9: 'bool',
+        10: 'float16',
+        11: 'double',
+        12: 'uint32',
+        13: 'uint64',
+        14: 'complex64',
+        15: 'complex128',
+        16: 'bfloat16',
+    }
+
+    def __init__(self, node):
+        super().__init__(node)
+        self.to = self.attrs.get('to')
+
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        x = inputs[0]
+        dtype = self.code2dtype[self.to]
+        return [ops.cast(x, dtype)]
+
+
+class OnnxShape(OnnxOperator):
+    def __init__(self, node):
+        super().__init__(node)
+        self.start = self.attrs.get('start', 0)
+        self.end: Optional[int] = self.attrs.get('end', None)
+
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        x = inputs[0]
+        rank = len(x.shape)
+        start = self.start + rank if self.start < 0 else self.start
+        if self.end is not None:
+            end = self.end + rank if self.end < 0 else self.end
+        else:
+            end = rank
+        start = max(min(start, rank), 0)
+        end = max(min(end, rank), 0)
+        return [hidet.array(x.shape[start:end]).cuda()]
+
+
+class OnnxConstant(OnnxOperator):
+    def __init__(self, node):
+        super().__init__(node)
+        self.value = self.attrs.get('value')
+        if self.value is None:
+            raise NotImplementedError('Currently, only support Tensor constant in onnx importer')
+
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        assert len(inputs) == 0
+        return [self.value]
+
+
+class OnnxGather(OnnxOperator):
+    def __init__(self, node):
+        super().__init__(node)
+        self.axis = self.attrs.get('axis', 0)
+
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        data, indices = inputs
+        return [ops.take(data, indices, self.axis)]
+
+
 def dispatch(node) -> OnnxOperator:
     dispatch_table = {
         'Conv': OnnxConv,
@@ -187,13 +281,20 @@ def dispatch(node) -> OnnxOperator:
         'ReduceMean': OnnxReduceMean,
         'Squeeze': OnnxSqueezeOp,
         'Add': OnnxAdd,
+        'Sub': OnnxSub,
+        'Mul': OnnxMul,
         'MatMul': OnnxMatMul,
         'Softmax': OnnxSoftmax,
         'ArgMax': OnnxArgMax,
         'BatchNormalization': OnnxBatchNormalization,
         'GlobalAveragePool': OnnxGlobalAveragePool,
         'Flatten': OnnxFlatten,
+        'Unsqueeze': OnnxUnsqueeze,
+        'Cast': OnnxCast,
+        'Constant': OnnxConstant,
+        'Shape': OnnxShape,
         'Gemm': OnnxGemm,
+        'Gather': OnnxGather,
     }
     op_type = node.op_type
     if op_type not in dispatch_table:
@@ -263,5 +364,3 @@ def from_onnx(model: Union[str, 'onnx.ModelProto']) -> nn.Module:
         model = os.path.expanduser(model)
         model = onnx.load_model(model)
     return OnnxModule(model)
-
-

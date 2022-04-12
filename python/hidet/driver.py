@@ -4,7 +4,7 @@ from hashlib import sha256
 from hidet.implement import impl_context, implement
 from hidet.transforms import lower, pass_context
 from hidet.backend import codegen, compile_source, load_task_func
-from hidet.utils import COLORS, get_hidet_cache_dir
+from hidet.utils import COLORS, hidet_cache_dir
 from hidet.runtime import CompiledFunction
 
 logger = logging.Logger(__name__)
@@ -15,7 +15,7 @@ logger.addHandler(logging.StreamHandler())
 def build_task(task, space_level, opt_level, use_cache=True, cache_dir=None) -> CompiledFunction:
     # resolve task dir
     if cache_dir is None:
-        cache_dir = os.path.join(get_hidet_cache_dir(), 'ops')
+        cache_dir = os.path.join(hidet_cache_dir(), 'ops')
     config_str = 'space_{}_opt_{}'.format(space_level, opt_level)
     task_string = str(task)
     # task_hash = format(abs(hash(task_string)), 'x')
@@ -39,7 +39,7 @@ def build_task(task, space_level, opt_level, use_cache=True, cache_dir=None) -> 
         # implement task
         ir_module = implement(task)
         # lower ir module
-        with pass_context(opt_level=opt_level):
+        with pass_context(opt_level=opt_level, keep_ir=False, keep_ir_dir=None):
             ir_module = lower(ir_module)
         # code generation
         codegen(ir_module, src_out_path=src_path)

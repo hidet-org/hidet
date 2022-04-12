@@ -69,7 +69,7 @@ class CudaGridPool2dImplementer(Implementer):
         grid_size = (grid_layout.num_workers + block_size - 1) // block_size
         with FunctionBuilder(task.name + '_grid', worker=Grid(grid_dim=grid_size, block_dim=block_size)) as fb:
             # params
-            params: List[Var] = [Var(param.name, param_type) for param, param_type in zip(task.params, task.params_type)]
+            params: List[Var] = [Var(param.name, param_type) for param, param_type in zip(task.params, task.param_types())]
             fb.extend_params(params)
             param_map = {task_param: func_param for task_param, func_param in zip(task.params, params)}
             x = VirtualTensor(lambda n, c, p, q, rx, ry: rewrite(md.x_expr, {md.an: n, md.ac: c, md.ap: p, md.aq: q, md.arx: rx, md.ary: ry, **param_map}))

@@ -173,7 +173,7 @@ class CudaGridStaticConv2dImplicitGemmImplementer(Implementer):
 
         with FunctionBuilder(f'{task.name}_grid', attrs={'worker': worker}) as fb:
             # params
-            params = [Var(param.name, param_type) for param, param_type in zip(task.params, task.params_type)]
+            params = [Var(param.name, param_type) for param, param_type in zip(task.params, task.param_types())]
             fb.extend_params(params)
             param_map = {task_param: func_param for task_param, func_param in zip(task.params, params)}
             x_expr = rewrite(d.x_expr, param_map)
