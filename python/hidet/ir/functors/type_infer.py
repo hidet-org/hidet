@@ -138,16 +138,16 @@ class TypeInfer(ExprFunctor):
         return e.dtype
 
     def visit_ScalarInput(self, e: ScalarInput):
-        return e.dtype
+        return e.data_type
 
     def visit_TensorInput(self, e: TensorInput):
-        return TensorType(e.scope, e.dtype, e.shape, e.layout)
+        return e.data_type
 
     def visit_TensorCompute(self, e: TensorCompute):
-        return TensorType(e.scope, self(e.value), e.shape, e.layout)
+        return e.data_type
 
     def visit_ReduceCompute(self, e: ReduceCompute):
-        return self(e.value)
+        return e.data_type
 
     def visit_AnyExpr(self, e: AnyExpr):
         raise ValueError('Should not infer type of pattern expression')
@@ -164,6 +164,4 @@ class TypeInfer(ExprFunctor):
 
 def infer_type(expr):
     infer = TypeInfer()
-    ret = infer(expr)
-    assert ret is not None
-    return ret
+    return infer(expr)

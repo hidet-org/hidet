@@ -2,7 +2,7 @@ import pytest
 from hidet.ir.type import tensor_type
 from hidet.ir.expr import var
 from hidet.ir.task import Task, Grid
-from hidet.ir.dialects.compute import tensor_input, reduce_sum, compute
+from hidet.ir.dialects.compute import tensor_input, compute, reduce
 from hidet.implement import implement
 from hidet.implement import random_resolve
 from hidet.backend import build
@@ -14,7 +14,7 @@ def get_task(N=1024, M=1024, K=1024):
 
     A = tensor_input('A', 'float32', [N, K], scope='global')
     B = tensor_input('B', 'float32', [K, M], scope='global')
-    C = compute('C', [N, M], lambda i, j: reduce_sum(A[i, k] * B[k, j], axes=k, shape=[K]), scope='global')
+    C = compute('C', [N, M], lambda i, j: reduce([K], lambda k: A[i, k] * B[k, j], 'sum'), scope='global')
 
     task = Task('gemm', C, [A, B, C], Grid())
     return task

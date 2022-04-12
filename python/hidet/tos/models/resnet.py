@@ -1,4 +1,6 @@
 from typing import Type, Union, List, Callable, Any
+
+import hidet.utils
 from hidet.tos import nn
 
 

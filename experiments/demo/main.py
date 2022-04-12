@@ -1,18 +1,16 @@
 from hidet.ir.type import tensor_type
 from hidet.ir.expr import var
 from hidet.ir.task import Task, Grid
-from hidet.ir.dialects.compute import tensor_input, reduce_sum, compute
+from hidet.ir.dialects.compute import tensor_input, compute, reduce
 from hidet.implement import implement, impl_context
 from hidet.backend import build
 from hidet.tos.tensor import randn, empty
 
 
 def get_task(N=1024, M=1024, K=1024):
-    k = var('k')
-
-    A = tensor_input('A', 'float32', 'global', [N, K])
-    B = tensor_input('B', 'float32', 'global', [K, M])
-    C = compute('C', [N, M], lambda i, j: reduce_sum(A[i, k] * B[k, j], axes=k, shape=[K]), scope='global')
+    A = tensor_input('A', 'float32', [N, K], 'global')
+    B = tensor_input('B', 'float32', [K, M], 'global')
+    C = compute('C', [N, M], lambda i, j: reduce([K], lambda k: A[i, k] * B[k, j], 'sum'), scope='global')
 
     task = Task('gemm', C, [A, B, C], Grid())
     return task

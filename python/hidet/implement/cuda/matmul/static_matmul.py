@@ -15,7 +15,7 @@ from hidet.ir.node import Node
 from hidet.ir.primitives import syncthreads, thread_idx, block_idx
 from hidet.ir.stmt import AssignStmt, BufferStoreStmt, IfStmt
 from hidet.ir.task import Task, Grid
-from hidet.ir.type import scalar_type, TensorType, Scope
+from hidet.ir.type import scalar_type, TensorType, Scope, tensor_type
 from hidet.utils import Timer, cuda, factor, prod
 
 """
@@ -248,31 +248,32 @@ class CudaGridStaticMatmulImplementer(Implementer):
         self.task_k = any_const_int()
 
         # inputs
-        A = TensorInput('A', dtype=scalar_type('float32'), shape=[None, None])
-        B = TensorInput('B', dtype=scalar_type('float32'), shape=[None, None])
+        A = TensorInput('A', TensorType(dtype=scalar_type('float32'), shape=(None, None)))
+        B = TensorInput('B', TensorType(dtype=scalar_type('float32'), shape=(None, None)))
 
         # compute
         i, j, k = var('i'), var('j'), var('k')
-        computation = TensorCompute(name='C',
-                                    shape=[self.task_m, self.task_n],
-                                    axes=[i, j],
-                                    value=ReduceCompute(
-                                        value=A[i, k] * B[k, j],
-                                        shape=[self.task_k],
-                                        axes=[k],
-                                        reduce_type=None)
-                                    )
-
-        # inputs and output types
-        self.A_type = TensorType(Scope('global'), scalar_type('float32'))
-        self.B_type = TensorType(Scope('global'), scalar_type('float32'))
-        self.C_type = TensorType(Scope('global'), scalar_type('float32'))
+        computation = TensorCompute(
+            name='C',
+            shape=[self.task_m, self.task_n],
+            axes=[i, j],
+            value=ReduceCompute(
+                value=A[i, k] * B[k, j],
+                shape=[self.task_k],
+                axes=[k],
+                reduce_type=None,
+                data_type=scalar_type('float32')
+            ),
+            data_type=TensorType(Scope('global'), scalar_type('float32'))
+        )
 
         # pattern
+        self.A = A
+        self.B = B
+        self.C = computation
         self.pattern = TaskPattern(
             compute_pattern=computation,
             required_params=[A, B, computation],
-            required_param_types=[self.A_type, self.B_type, self.C_type],
             allow_tensor_extra_params=False,
             worker=Grid()
         )
@@ -303,9 +304,9 @@ class CudaGridStaticMatmulImplementer(Implementer):
         task_m = int(match[self.task_m])
         task_n = int(match[self.task_n])
         task_k = int(match[self.task_k])
-        A_dtype = match[self.A_type].scalar_type
-        B_dtype = match[self.B_type].scalar_type
-        C_dtype = match[self.C_type].scalar_type
+        A_dtype = match[self.A].data_type.scalar_type
+        B_dtype = match[self.B].data_type.scalar_type
+        C_dtype = match[self.C].data_type.scalar_type
 
         grid_blocks_layout: TaskLayout = row_major_layout(*[(a + b - 1) // b for a, b in zip([task_m, task_n], sch.block_shape)])
 
@@ -319,9 +320,9 @@ class CudaGridStaticMatmulImplementer(Implementer):
             sb = StmtBuilder()
 
             # declare params
-            gmem_A = Var('A', match[self.A_type])
-            gmem_B = Var('B', match[self.B_type])
-            gmem_C = Var('C', match[self.C_type])
+            gmem_A = Var('A', match[self.A].data_type)
+            gmem_B = Var('B', match[self.B].data_type)
+            gmem_C = Var('C', match[self.C].data_type)
             fb.extend_params([gmem_A, gmem_B, gmem_C])
 
             # declare local variables
@@ -332,7 +333,7 @@ class CudaGridStaticMatmulImplementer(Implementer):
                 # 'extern __shared__ uint8_t smem_storage[];' in c code
                 smem_storage = Var('smem_storage', PointerType(base_type=scalar_type('uint8'), specifiers=['extern', '__shared__'], use_bracket=True))
             else:
-                smem_storage = Var('smem_storage', TensorType('shared', dtype='uint8', shape=[sch.used_smem_bytes_per_block], layout=[1]))
+                smem_storage = Var('smem_storage', tensor_type('shared', dtype='uint8', shape=[sch.used_smem_bytes_per_block], layout=[1]))
             smem_A_bytes = simplify_to_int(smem_A.type.tensor_type.storage_bytes())
             fb.extend_local_vars([smem_A, smem_B, smem_C, smem_storage])
             sb += AssignStmt(smem_A, Cast(~smem_storage[0], PointerType(A_dtype)))
@@ -340,11 +341,11 @@ class CudaGridStaticMatmulImplementer(Implementer):
             sb += AssignStmt(smem_C, Cast(~(smem_storage[0]), PointerType(C_dtype)))
 
             # declare A, B, C registers
-            regs_A = Var('regs_A', TensorType('register', A_dtype, layout=StridesLayout.row_major([2]) + schedule.regs_a_layout))
-            regs_B = Var('regs_B', TensorType('register', B_dtype, layout=StridesLayout.row_major([2]) + schedule.regs_b_layout))
-            regs_C = Var('regs_C', TensorType('register', C_dtype, layout=schedule.regs_c_layout))
-            regs_A_ldg = Var('regs_A_ldg', TensorType(scope='register', dtype=A_dtype, layout=schedule.regs_a_ldg_layout))
-            regs_B_ldg = Var('regs_B_ldg', TensorType(scope='register', dtype=B_dtype, layout=schedule.regs_b_ldg_layout))
+            regs_A = Var('regs_A', tensor_type('register', A_dtype, layout=StridesLayout.row_major([2]) + schedule.regs_a_layout))
+            regs_B = Var('regs_B', tensor_type('register', B_dtype, layout=StridesLayout.row_major([2]) + schedule.regs_b_layout))
+            regs_C = Var('regs_C', tensor_type('register', C_dtype, layout=schedule.regs_c_layout))
+            regs_A_ldg = Var('regs_A_ldg', tensor_type(scope='register', dtype=A_dtype, layout=schedule.regs_a_ldg_layout))
+            regs_B_ldg = Var('regs_B_ldg', tensor_type(scope='register', dtype=B_dtype, layout=schedule.regs_b_ldg_layout))
             fb.extend_local_vars([regs_A, regs_B, regs_C, regs_A_ldg, regs_B_ldg])
 
             with sb.lets(['bi', 'bj'], grid_blocks_layout(block_idx())[0]) as (bi, bj):

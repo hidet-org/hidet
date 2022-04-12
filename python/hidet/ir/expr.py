@@ -459,7 +459,7 @@ def tensor_rank(v: Expr) -> int:
     elif isinstance(v, TensorSlice):
         return sum([1 if i is None else 0 for i in v.indices])
     elif isinstance(v, TensorInput):
-        return len(v.shape)
+        return len(v.data_type.shape)
     elif isinstance(v, TensorCompute):
         return len(v.shape)
     elif isinstance(v, AlterLayout):

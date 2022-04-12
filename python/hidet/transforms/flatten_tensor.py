@@ -1,5 +1,5 @@
 from typing import List, Union, Callable, Any
-from hidet.ir.type import TensorType
+from hidet.ir.type import TensorType, tensor_type
 from hidet.ir.expr import Var, TensorElement, TensorSlice, AlterLayout
 from hidet.ir.stmt import BufferStoreStmt
 from hidet.ir.func import Function
@@ -88,7 +88,7 @@ class FlattenTensorAccessRewriter(FuncStmtExprRewriter):
         for var in func.params + func.local_vars:
             if isinstance(var.type, TensorType):
                 size = simplify_to_int(var.type.layout.size)
-                self.memo[var] = Var(var.hint, TensorType(var.type.scope, var.type.scalar_type, [size], [1]))
+                self.memo[var] = Var(var.hint, tensor_type(var.type.scope, var.type.scalar_type, [size], [1]))
             elif isinstance(var.type, TensorPointerType):
                 self.memo[var] = var
         body = self(func.body)

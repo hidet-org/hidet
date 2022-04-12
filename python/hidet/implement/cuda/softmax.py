@@ -3,11 +3,11 @@ import sys
 
 from hidet.implement.implementer import Implementer, register_impl
 from hidet.ir import IRModule
-from hidet.ir.type import tensor_type
+from hidet.ir.type import tensor_type, TensorType, scalar_type
 from hidet.ir.layout import DataLayout, TaskLayout
 from hidet.ir.expr import convert, Constant, Var, scalar_var, if_then_else, tensor_var
 from hidet.ir.stmt import AssignStmt, Stmt, BufferStoreStmt
-from hidet.ir.dialects.compute import tensor_input, compute, reduce
+from hidet.ir.dialects.compute import tensor_input, compute, reduce, TensorInput
 from hidet.ir.dialects.pattern import TaskPattern, any_const_int
 from hidet.ir.primitives import expf, block_idx, thread_idx, cuda_max, active_mask, shfl_down_sync, shfl_sync
 from hidet.ir.node import Node
@@ -32,7 +32,7 @@ class Pattern:
     def __init__(self):
         shape = (any_const_int(), any_const_int(), any_const_int(), any_const_int())
         m, n, p, q = shape
-        x = tensor_input('x', 'float32', shape=[m, n, p, q])
+        x = TensorInput('x', TensorType(shape=(m, n, p, q)))
         mx = compute(
             name='mx',
             shape=[m, p, q],

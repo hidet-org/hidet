@@ -1,5 +1,5 @@
 from typing import Optional, Union, Sequence
-from hidet.ir.type import TypeNode, ScalarType, TensorType, Scope, Int
+from hidet.ir.type import TypeNode, ScalarType, TensorType, Scope, Int, tensor_type
 from hidet.ir.expr import Expr, TensorElement, Var, Constant
 from hidet.ir.layout import DataLayout
 
@@ -28,7 +28,7 @@ class TensorPointerType(TypeNode):
                  dtype: Optional[Union[ScalarType, str]] = None,
                  shape: Optional[Sequence[Int]] = None,
                  layout: Optional[Union[Sequence[Int], DataLayout]] = None):
-        self.tensor_type: TensorType = TensorType(scope, dtype, shape, layout)
+        self.tensor_type: TensorType = tensor_type(scope, dtype, shape, layout)
 
 
 #

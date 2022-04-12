@@ -1,6 +1,6 @@
 import pytest
 from hidet.ir.expr import *
-from hidet.ir.dialects.compute import compute, reduce_sum, scalar_input, tensor_input
+from hidet.ir.dialects.compute import compute
 from hidet.ir.dialects.pattern import match, AnyExpr, UnionPattern, TensorComputePattern, any_const_int
 
 

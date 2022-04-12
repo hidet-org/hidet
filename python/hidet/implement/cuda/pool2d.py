@@ -30,8 +30,10 @@ class Pattern:
                 shape=[self.rx, self.ry],
                 axes=[self.arx, self.ary],
                 value=self.x_expr,
-                reduce_type=self.reduce_type
-            )
+                reduce_type=self.reduce_type,
+                data_type=None,
+            ),
+            data_type=None
         )
         self.task_pattern = TaskPattern(
             compute_pattern=self.y,

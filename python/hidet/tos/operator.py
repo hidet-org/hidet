@@ -1,5 +1,7 @@
 from typing import List, Optional, Dict, Any, Iterable, Tuple
 from collections import OrderedDict, defaultdict
+
+import hidet.utils
 from hidet.ir.task import Task
 from hidet.runtime import CompiledFunction
 from hidet.driver import build_task
@@ -70,6 +72,7 @@ class Operator:
             outputs = self.outputs
         return outputs[idx]
 
+    @hidet.utils.line_profile()
     def imperative_run(self, inputs: Optional[List[Tensor]] = None) -> List[Tensor]:
         if self.task_func is None:
             task_string = str(self.task)
@@ -79,7 +82,7 @@ class Operator:
             else:
                 self.task_func = build_task(self.task, space_level=self.current_space_level, opt_level=self.current_opt_level, use_cache=True)
                 self.task_cache[level][task_string] = self.task_func
-        output_type = self.task.type_of_param(self.task.compute)
+        output_type = self.task.compute.data_type
         outputs = [empty(shape=[int(v) for v in output_type.shape], dtype=output_type.scalar_type.name, layout=output_type.layout)]
         self.task_func(*inputs, *outputs)
         return outputs

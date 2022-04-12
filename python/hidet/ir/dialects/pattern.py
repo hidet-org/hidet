@@ -81,7 +81,6 @@ class TaskPattern(PatternNode):
                  allow_extra_params=True, allow_tensor_extra_params=True, worker=None):
         self.compute_pattern: Optional[Expr] = compute_pattern
         self.required_params: Optional[List[ComputeNode]] = required_params
-        self.required_params_types: Optional[List[TypeNode]] = required_param_types
         self.extra_params: Expr = Expr()  # as a handle to reference the unmatched params
         self.allow_extra_params: bool = allow_extra_params
         self.allow_tensor_extra_params: bool = allow_tensor_extra_params
@@ -315,18 +314,18 @@ class PatternMatcher:
 
     def match_ScalarInput(self, pattern: ScalarInput, target: ScalarInput):
         with ExitStack() as stack:
-            stack.enter_context(self.match(pattern.dtype, target.dtype))
+            stack.enter_context(self.match(pattern.data_type, target.data_type))
 
     def match_TensorInput(self, pattern: TensorInput, target: TensorInput):
         with ExitStack() as stack:
-            stack.enter_context(self.match(pattern.dtype, target.dtype))
-            stack.enter_context(self.match(pattern.shape, target.shape))
+            stack.enter_context(self.match(pattern.data_type, target.data_type))
 
     def match_TensorCompute(self, pattern: TensorCompute, target: TensorCompute):
         with ExitStack() as stack:
             stack.enter_context(self.match(pattern.shape, target.shape))
             stack.enter_context(self.match(pattern.axes, target.axes))
             stack.enter_context(self.match(pattern.value, target.value))
+            stack.enter_context(self.match(pattern.data_type, target.data_type))
 
     def match_ReduceCompute(self, pattern: ReduceCompute, target: ReduceCompute):
         with ExitStack() as stack:
@@ -334,6 +333,7 @@ class PatternMatcher:
             stack.enter_context(self.match(pattern.shape, target.shape))
             stack.enter_context(self.match(pattern.value, target.value))
             stack.enter_context(self.match(pattern.reduce_type, target.reduce_type))
+            stack.enter_context(self.match(pattern.data_type, target.data_type))
 
     def match_DataLayout(self, pattern, target):
         if isinstance(target, (StridesLayout, DataLayout)):
@@ -457,16 +457,7 @@ class PatternMatcher:
         self.check_type(pattern, target, Task)
         with ExitStack() as stack:
             stack.enter_context(self.match(pattern.compute_pattern, target.compute))
-            if pattern.required_params and pattern.required_params_types:
-                assert len(pattern.required_params) == len(pattern.required_params_types)
-                for required_param, required_type in zip(pattern.required_params, pattern.required_params_types):
-                    matched_param: ComputeNode = self.matched[required_param]
-                    actual_type = target.param_types()[target.params.index(matched_param)]
-                    # assert isinstance(matched_param, (ScalarInput, TensorInput)), "as far as now, we only support specify the param type, not the output type"
-                    stack.enter_context(self.match(required_type, actual_type))
-                matched_params = [self.matched[param] for param in pattern.required_params]
-            else:
-                matched_params = []
+            matched_params = [self.matched[param] for param in pattern.required_params] if pattern.required_params else []
             extra_params = [param for param in target.params if param not in matched_params]
             if not pattern.allow_extra_params and len(extra_params) > 0:
                 raise NotMatchedError(pattern, target, "do not allow extra param(s)")

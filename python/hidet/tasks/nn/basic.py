@@ -15,7 +15,6 @@ def unary_elementwise(name, shape: Sequence[int], op: Callable[[Any], Any]):
         fcompute=lambda *indices: op(x.__getitem__(indices)),
         scope='global'
     )
-    data_type = y.data_type()
     return Task(
         name=name,
         computation=y,
@@ -43,7 +42,7 @@ def broadcast_shape(x_shape, y_shape):
 def binary_elementwise(name, x_layout, y_layout, op: Callable[[Any, Any], Any], z_layout=None):
     x = tensor_input('x', 'float32', shape=x_layout.shape, scope='global', layout=x_layout)
     y = tensor_input('y', 'float32', shape=y_layout.shape, scope='global', layout=y_layout)
-    z_shape = broadcast_shape(x.shape, y.shape)
+    z_shape = broadcast_shape(x.data_type.shape, y.data_type.shape)
     if z_layout is None:
         z_layout = DataLayout.row_major(z_shape)
     else:
@@ -61,7 +60,7 @@ def binary_elementwise(name, x_layout, y_layout, op: Callable[[Any, Any], Any], 
     z = compute(
         name='z',
         shape=z_shape,
-        fcompute=lambda *indices: op(x[imap(indices, x.shape)], y[imap(indices, y.shape)]),
+        fcompute=lambda *indices: op(x[imap(indices, x.data_type.shape)], y[imap(indices, y.data_type.shape)]),
         scope='global'
     )
     return Task(

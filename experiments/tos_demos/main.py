@@ -101,17 +101,27 @@ def demo_lazy_mode():
     cuda_pool.clear()
 
 
-def demo_resnet50():
+def demo_torch_resnet50():
     from torchvision.models import resnet50
     model = resnet50().cuda()
     model.train(False)
     x = torch.rand(1, 3, 224, 224).cuda()
     for t in range(10):
-        with nvtx_annotate('torch {}'.format(t)):
+        with nvtx_annotate('torch resnet50 {}'.format(t)):
             torch.cuda.synchronize()
             with Timer(f'torch {t}'):
                 y = model(x)
                 torch.cuda.synchronize()
+
+
+def demo_hidet_resnet50():
+    x = randn([1, 3, 224, 224], dtype='float32')
+    model = resnet.resnet50()
+    for t in range(10):
+        cuda_api.device_synchronization()
+        with Timer('hidet resnet50 {}'.format(t)):
+            y = model(x)
+            cuda_api.device_synchronization()
 
 
 if __name__ == '__main__':
@@ -120,5 +130,6 @@ if __name__ == '__main__':
     # demo_basic_block()
     # demo_bottleneck()
     # demo_resnet50()
-    demo_lazy_mode()
-    demo_resnet50()
+    # demo_lazy_mode()
+    # demo_torch_resnet50()
+    demo_hidet_resnet50()

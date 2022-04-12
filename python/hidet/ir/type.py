@@ -39,31 +39,14 @@ class ScalarType(TypeNode):
 
 class TensorType(TypeNode):
     def __init__(self,
-                 scope: Optional[Union[Scope, str]] = None,
-                 dtype: Optional[Union[ScalarType, str]] = None,
-                 shape: Optional[Sequence[Int]] = None,
-                 layout: Optional[Union[Sequence[Int], 'DataLayout']] = None):
-        from hidet.ir.expr import convert
-        from hidet.ir.layout import DataLayout, StridesLayout
-        if isinstance(scope, str):
-            scope = Scope(scope)
-        if isinstance(dtype, str):
-            dtype = ScalarType(dtype)
-        if shape:
-            shape = [ir.convert(s) for s in shape]
-        if isinstance(layout, (list, tuple)) and shape is not None:
-            # use shape and strides to define layout
-            strides = layout
-            layout = StridesLayout(shape, strides)
-        if layout is None and shape is not None and len(shape) > 0 and shape[0] is not None:
-            layout = DataLayout.row_major(shape)
-        if shape is None and isinstance(layout, DataLayout):
-            # use shape in data layout
-            shape = layout.shape
-
+                 scope: Optional[Scope] = None,
+                 dtype: Optional[ScalarType] = None,
+                 shape: Optional[Tuple[Expr, ...]] = None,
+                 layout: Optional['DataLayout'] = None):
+        from hidet.ir.layout import DataLayout
         self.scope: Scope = scope
         self.scalar_type: ScalarType = dtype
-        self.shape: Tuple[Expr] = convert(shape)
+        self.shape: Tuple[Expr] = shape
         self.layout: DataLayout = layout
 
     def storage_bytes(self) -> Expr:
@@ -71,15 +54,15 @@ class TensorType(TypeNode):
 
     def slice_out(self, dims: Sequence[int]) -> 'TensorType':
         layout = self.layout.slice_out(dims)
-        return TensorType(self.scope, self.scalar_type, layout=layout)
+        return tensor_type(self.scope, self.scalar_type, layout=layout)
 
     def split(self, dim2factor: Mapping[int, Int]) -> 'TensorType':
         layout = self.layout.split(dim2factor)
-        return TensorType(self.scope, self.scalar_type, layout=layout)
+        return tensor_type(self.scope, self.scalar_type, layout=layout)
 
     def reorder(self, order: Sequence[int]):
         layout = self.layout.reorder(order)
-        return TensorType(self.scope, self.scalar_type, layout=layout)
+        return tensor_type(self.scope, self.scalar_type, layout=layout)
 
 
 TypeLike = Union[str, TypeNode]
@@ -118,4 +101,26 @@ def scalar_type(type_name):
 
 
 def tensor_type(scope, dtype, shape=None, layout=None):
+    from hidet.ir.expr import convert, Constant
+    from hidet.ir.layout import DataLayout, StridesLayout
+    if isinstance(scope, str):
+        scope = Scope(scope)
+    if isinstance(dtype, str):
+        dtype = ScalarType(dtype)
+    if shape:
+        shape = [ir.convert(s) for s in shape]
+    if isinstance(layout, (list, tuple)) and shape is not None:
+        # use shape and strides to define layout
+        strides = layout
+        layout = StridesLayout(shape, strides)
+    if layout is None and shape is not None and len(shape) > 0 and shape[0] is not None:
+        if isinstance(shape[0], Constant) and shape[0].value is None:
+            # this is a pattern
+            pass
+        else:
+            layout = DataLayout.row_major(shape)
+    if shape is None and isinstance(layout, DataLayout):
+        # use shape in data layout
+        shape = layout.shape
+    shape = convert(shape)
     return TensorType(scope, dtype, shape, layout)

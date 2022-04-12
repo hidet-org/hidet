@@ -2,25 +2,7 @@ from typing import Union, Sequence
 from ..common import Task, Operator, Tensor, DataLayout, Grid, tensor_input, compute, reduce, inline_compute, tensor_type, input_like
 
 
-def tuplize(v):
-    if isinstance(v, (list, tuple)):
-        return tuple(v)
-    return v, v
-
-
-def norm_pad(v):
-    if isinstance(v, int):
-        return [v, v, v, v]
-    elif isinstance(v, (list, tuple)):
-        if len(v) == 2:
-            return [v[0], v[1], v[0], v[1]]
-        elif len(v) == 4:
-            return v
-    raise NotImplementedError()
-
-
 def conv2d_task(batch_size, in_channels, height, width, out_channels, kernel, padding, stride, input_layout=None, weight_layout=None, output_layout=None):
-    kernel, padding, stride = tuplize(kernel), norm_pad(padding), tuplize(stride)
     input = tensor_input('input', 'float32', [batch_size, in_channels, height, width], scope='global', layout=input_layout)
     weight = tensor_input('weight', 'float32', [out_channels, in_channels, kernel[0], kernel[1]], scope='global', layout=weight_layout)
     padded = compute(
@@ -62,7 +44,25 @@ class Conv2dOp(Operator):
         batch_size, in_channels, height, width = input.shape
         out_channels = weight.shape[0]
         kernel = weight.shape[2:]
-        kernel, padding, stride = tuplize(kernel), norm_pad(padding), tuplize(stride)
+        if isinstance(padding, int):
+            padding = [padding, padding, padding, padding]
+        elif isinstance(padding, (tuple, list)) and len(padding) in [1, 2, 4]:
+            if len(padding) == 1:
+                padding = padding * 4
+            elif len(padding) == 2:
+                padding = [padding[0], padding[1], padding[0], padding[1]]
+        else:
+            raise ValueError('Expect int or (int, int) or (int, int, int, int) as padding, but got {}'.format(padding))
+        if isinstance(stride, int):
+            stride = [stride, stride]
+        elif isinstance(stride, (tuple, list)) and len(stride) in [1, 2]:
+            if len(stride) == 1:
+                stride = stride * 2
+        else:
+            raise ValueError('Expect "stride" as int, (int, int), but got {}'.format(stride))
         task = conv2d_task(batch_size, in_channels, height, width, out_channels, kernel, padding, stride, input.layout, weight.layout)
         super().__init__([input, weight], task, padding=padding, stride=stride)
 
+
+def conv2d(input: Tensor, weight, padding, stride) -> Tensor:
+    return Conv2dOp(input, weight, padding, stride).get_output(0)

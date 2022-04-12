@@ -13,7 +13,7 @@ from hidet.ir.layout import TaskLayout, DataLayout
 from hidet.ir.node import Node
 from hidet.ir.primitives import block_idx, thread_idx, syncthreads, printf
 from hidet.ir.task import Task, Grid
-from hidet.ir.type import TensorType
+from hidet.ir.type import TensorType, tensor_type, scalar_type
 from hidet.utils import prod, cuda
 from hidet.implement.common import VirtualTensor
 
@@ -102,7 +102,8 @@ class Pattern:
             shape=[self.rc, self.rx, self.ry],
             axes=[self.arc, self.arx, self.ary],
             value=self.x_expr * self.w_expr,
-            reduce_type='sum'
+            reduce_type='sum',
+            data_type=scalar_type('float32')
         )
         self.epilogue = any_scalar_expr(
             base_pattern=self.reduced_value,
@@ -113,7 +114,8 @@ class Pattern:
                 name='out',
                 shape=[self.n, self.c, self.p, self.q],
                 axes=[self.an, self.ac, self.ap, self.aq],
-                value=self.epilogue
+                value=self.epilogue,
+                data_type=None
             ),
             worker=Grid()
         )
@@ -182,13 +184,13 @@ class CudaGridStaticConv2dImplicitGemmImplementer(Implementer):
             w = VirtualTensor(lambda k, j: rewrite(w_expr, {d.ac: j, d.arc: k // (rx * ry), d.arx: (k // ry) % rx, d.ary: k % ry}))
 
             # local vars
-            smem_a = Var(hint='smem_a', type=TensorType(scope='shared', dtype='float32', layout=double(schedule.smem_a_layout)))
-            smem_b = Var(hint='smem_b', type=TensorType(scope='shared', dtype='float32', layout=double(schedule.smem_b_layout)))
-            regs_a = Var(hint='regs_a', type=TensorType(scope='register', dtype='float32', layout=double(schedule.regs_a_layout)))
-            regs_b = Var(hint='regs_b', type=TensorType(scope='register', dtype='float32', layout=double(schedule.regs_b_layout)))
-            regs_c = Var(hint='regs_c', type=TensorType(scope='register', dtype='float32', layout=schedule.regs_c_layout))
-            regs_a_ldg = Var(hint='regs_a_ldg', type=TensorType(scope='register', dtype='float32', layout=schedule.regs_a_ldg_layout))
-            regs_b_ldg = Var(hint='regs_b_ldg', type=TensorType(scope='register', dtype='float32', layout=schedule.regs_b_ldg_layout))
+            smem_a = Var(hint='smem_a', type=tensor_type(scope='shared', dtype='float32', layout=double(schedule.smem_a_layout)))
+            smem_b = Var(hint='smem_b', type=tensor_type(scope='shared', dtype='float32', layout=double(schedule.smem_b_layout)))
+            regs_a = Var(hint='regs_a', type=tensor_type(scope='register', dtype='float32', layout=double(schedule.regs_a_layout)))
+            regs_b = Var(hint='regs_b', type=tensor_type(scope='register', dtype='float32', layout=double(schedule.regs_b_layout)))
+            regs_c = Var(hint='regs_c', type=tensor_type(scope='register', dtype='float32', layout=schedule.regs_c_layout))
+            regs_a_ldg = Var(hint='regs_a_ldg', type=tensor_type(scope='register', dtype='float32', layout=schedule.regs_a_ldg_layout))
+            regs_b_ldg = Var(hint='regs_b_ldg', type=tensor_type(scope='register', dtype='float32', layout=schedule.regs_b_ldg_layout))
             fb.extend_local_vars([smem_a, smem_b, regs_a, regs_b, regs_c, regs_a_ldg, regs_b_ldg])
 
             # body

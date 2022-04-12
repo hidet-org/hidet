@@ -55,25 +55,18 @@ A demo is in this file `experiments/demo/main.py`.
 from hidet.ir.type import tensor_type
 from hidet.ir.expr import var
 from hidet.ir.task import Task, Grid
-from hidet.ir.dialects.compute import tensor_input, reduce_sum, compute
+from hidet.ir.dialects.compute import tensor_input, reduce, compute
 from hidet.implement import implement, impl_context
 from hidet.backend import build
 from hidet.tos.tensor import randn, empty
 
 
 def get_task(N=1024, M=1024, K=1024):
-    k = var('k')
+    A = tensor_input('A', 'float32', [N, K], 'global')
+    B = tensor_input('B', 'float32', [K, M], 'global')
+    C = compute('C', [N, M], lambda i, j: reduce([K], lambda k: A[i, k] * B[k, j], 'sum'), scope='global')
 
-    A = tensor_input('A', 'float32', [N, K])
-    B = tensor_input('B', 'float32', [K, M])
-    C = compute('C', [N, M], lambda i, j: reduce_sum(A[i, k] * B[k, j], axes=k, shape=[K]))
-
-    params_type = [
-        tensor_type('global', 'float32', [N, K], [K, 1]),
-        tensor_type('global', 'float32', [K, M], [M, 1]),
-        tensor_type('global', 'float32', [N, M], [M, 1])
-    ]
-    task = Task('gemm', C, [A, B, C], params_type, Grid())
+    task = Task('gemm', C, [A, B, C], Grid())
     return task
 
 
