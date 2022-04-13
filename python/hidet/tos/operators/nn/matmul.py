@@ -15,9 +15,9 @@ def matmul_task(A: TensorInput, B: TensorInput) -> Task:
 
 
 def batched_matmul_task(A: TensorInput, B: TensorInput) -> Task:
-    B, M, K = A.const_shape()
-    B, K, N = B.const_shape()
-    C = compute('C', [B, M, N], lambda b, i, j: reduce([K], lambda k: A[b, i, k] * B[b, k, j], 'sum'), scope='global')
+    BS, M, K = A.const_shape()
+    BS, K, N = B.const_shape()
+    C = compute('C', [BS, M, N], lambda b, i, j: reduce([K], lambda k: A[b, i, k] * B[b, k, j], 'sum'), scope='global')
     return Task(
         name='batched_matmul',
         computation=C,

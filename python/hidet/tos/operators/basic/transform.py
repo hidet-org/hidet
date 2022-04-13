@@ -163,6 +163,41 @@ def strided_slice_task(data: TensorInput, starts: List[Optional[int]], ends: Lis
     )
 
 
+def can_broadcast(src_shape: List[int], dst_shape: List[int]) -> bool:
+    if len(dst_shape) < len(src_shape):
+        return False
+    src_shape = [1 for _ in range(len(dst_shape) - len(src_shape))] + src_shape
+    for a, b in zip(src_shape, dst_shape):
+        if a != 1 and a != b:
+            return False
+    return True
+
+
+def broadcast_task(data: TensorInput, shape: List[int]) -> Task:
+    data_shape = data.const_shape()
+    if not can_broadcast(data_shape, shape):
+        raise ValueError('Can not broadcast a tensor with shape {} to {}'.format(data_shape, shape))
+
+    def fmap(*indices):
+        expanded = len(shape) - len(data_shape)
+        indices = indices[expanded:]
+        indices = [v if data_shape[i] != 1 else 0 for i, v in enumerate(indices)]
+        return data[indices]
+
+    out = compute(
+        'out',
+        shape=shape,
+        fcompute=fmap,
+        scope=data.data_type.scope
+    )
+    return Task(
+        'broadcast',
+        computation=out,
+        params=[data, out],
+        worker=Grid()
+    )
+
+
 class ReshapeOp(Operator):
     def __init__(self, x: Tensor, shape):
         shape = self.normalize_shape(shape, size=prod(x.shape))
@@ -328,6 +363,15 @@ class StridedSliceOp(Operator):
         )
 
 
+class BroadcastOp(Operator):
+    def __init__(self, data: Tensor, shape: List[int]):
+        super().__init__(
+            inputs=[data],
+            task=broadcast_task(input_like(data, 'data'), shape),
+            shape=shape
+        )
+
+
 def reshape(x: Tensor, shape) -> Tensor:
     return ReshapeOp(x, shape).get_output(0)
 
@@ -388,3 +432,8 @@ def take(data: Tensor, indices: Tensor, axis: int = 0) -> Tensor:
 
 def strided_slice(data: Tensor, starts: List[int], ends: List[int], axes: Optional[List[int]] = None, strides: Optional[List[int]] = None) -> Tensor:
     return StridedSliceOp(data, starts, ends, axes, strides).get_output(0)
+
+
+def broadcast(data: Tensor, shape):
+    return BroadcastOp(data, shape).get_output(0)
+

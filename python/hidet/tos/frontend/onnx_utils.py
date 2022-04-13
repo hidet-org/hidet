@@ -164,25 +164,15 @@ class OnnxMatMul(OnnxOperator):
         if len(a.shape) == 2 and len(b.shape) == 2:
             return [ops.matmul(a, b)]
         else:
-            if self.can_squeeze(a.shape) and self.can_squeeze(b.shape):
-                assert isinstance(a, Tensor)
-                c_rank = max(len(a.shape), len(b.shape))
-                a = a.squeeze(range(len(a.shape) - 2)) if len(a.shape) > 2 else a
-                b = b.squeeze(range(len(b.shape) - 2)) if len(b.shape) > 2 else b
-                c = ops.matmul(a, b)
-                if c_rank > len(c.shape):
-                    c = c.unsqueeze(dims=range(c_rank - len(c.shape)))
-                return [c]
-            else:
-                prefix_shape = hidet.tos.operators.basic.arithmatic.broadcast_shape(a.shape[:-2], b.shape[:-2])
-                c_shape = prefix_shape + [a.shape[-2]] + [b.shape[-1]]
-                print('fake batched matmul')
-                return [hidet.empty(c_shape)]
-                # raise NotImplementedError('Matmul with shapes {} and {}'.format(a.shape, b.shape))
-
-    @staticmethod
-    def can_squeeze(shape: List[int]) -> bool:
-        return len(shape) == 2 or (len(shape) > 2 and prod(shape[:-2]) == 1)
+            prefix_shape = hidet.tos.operators.basic.arithmatic.broadcast_shape(a.shape[:-2], b.shape[:-2])
+            a = ops.broadcast(a, prefix_shape + a.shape[-2:])
+            b = ops.broadcast(b, prefix_shape + b.shape[-2:])
+            a = ops.flatten(a, end_dim=-2)  # [B, M, K]
+            b = ops.flatten(b, end_dim=-2)  # [B, K, N]
+            c = ops.batched_matmul(a, b)  # [B, M, N]
+            c_expect_shape = prefix_shape + [a.shape[-2], b.shape[-1]]
+            c = c.reshape(c_expect_shape)
+            return [c]
 
 
 class OnnxSoftmax(OnnxOperator):
@@ -191,8 +181,6 @@ class OnnxSoftmax(OnnxOperator):
         self.axis = self.attrs.get('axis')
 
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
-        # print('fake softmax')
-        # return [randn(inputs[0].shape)]
         return [ops.softmax(inputs[0], self.axis)]
 
 
