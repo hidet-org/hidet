@@ -86,9 +86,10 @@ class ReduceCompute(ComputeNode):
 
 
 class CustomCompute(ComputeNode):
-    def __init__(self, name, params: Optional[List[Union[ComputeNode]]], data_type: Optional[Union[ScalarType, TensorType]], attributes=None):
+    def __init__(self, name, identifier: str, params: Optional[List[Union[ComputeNode]]], data_type: Optional[Union[ScalarType, TensorType]], attributes=None):
         super().__init__(name, data_type)
         self.name: str = name
+        self.identifier: str = identifier
         self.params: Optional[List[Union[ComputeNode]]] = params
         self.attributes: Optional[Dict[str, Any]] = attributes
         if self.attributes is not None:
@@ -126,5 +127,5 @@ def compute(name, shape, fcompute, accumulate=None, scope=None, layout=None):
     return TensorCompute(name, shape, axes, value, data_type, accumulate)
 
 
-def custom_compute(name, params, data_type, attributes=None):
-    return CustomCompute(name, params, data_type, attributes)
+def custom_compute(name, identifier, params, data_type, attributes=None):
+    return CustomCompute(name, identifier, params, data_type, attributes)

@@ -106,28 +106,28 @@ def printf(format_string, *args):
 
 def shfl_sync(mask, var, src_lane, width=32):
     if '__shfl_sync' not in _primitive_functions:
-        register_primitive_function('__shfl_sync', FuncType([], VoidType()))
+        register_primitive_function('__shfl_sync', FuncType(['int32', 'int32', 'int32', 'int32'], 'int32'))
     func_var = get_primitive_function('__shfl_sync')[0]
     return Call(func_var, [mask, var, src_lane, width])
 
 
 def shfl_up_sync(mask, var, delta, width=32):
     if '__shfl_up_sync' not in _primitive_functions:
-        register_primitive_function('__shfl_up_sync')
+        register_primitive_function('__shfl_up_sync', FuncType(['int32', 'int32', 'int32', 'int32'], 'int32'))
     func_var = get_primitive_function('__shfl_up_sync')[0]
     return Call(func_var, [mask, var, delta, width])
 
 
 def shfl_down_sync(mask, var, delta, width=32):
     if '__shfl_down_sync' not in _primitive_functions:
-        register_primitive_function('__shfl_down_sync')
+        register_primitive_function('__shfl_down_sync', FuncType(['int32', 'int32', 'int32', 'int32'], 'int32'))
     func_var = get_primitive_function('__shfl_down_sync')[0]
     return Call(func_var, [mask, var, delta, width])
 
 
 def shfl_xor_sync(mask, var, lane_mask, width=32):
     if '__shfl_down_sync' not in _primitive_functions:
-        register_primitive_function('__shfl_down_sync')
+        register_primitive_function('__shfl_down_sync', FuncType(['int32', 'int32', 'int32', 'int32'], 'int32'))
     func_var = get_primitive_function('__shfl_down_sync')[0]
     return Call(func_var, [mask, var, lane_mask, width])
 
@@ -142,7 +142,7 @@ def expf(v):
 
 def active_mask():
     if '__activemask' not in _primitive_functions:
-        register_primitive_function('__activemask')
+        register_primitive_function('__activemask', FuncType([], 'int32'))
     func_var = get_primitive_function('__activemask')[0]
     return Call(func_var, [])
 

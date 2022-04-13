@@ -241,7 +241,7 @@ def concat(layouts: List[DataLayout], axis: int) -> Task:
     out_shape = [shapes[0][i] if i != axis else sum(shapes[j][i] for j in range(n)) for i in range(rank)]
     input_params = [tensor_input('x{}'.format(i), 'float32', shape, scope='global', layout=layout) for i, (shape, layout) in enumerate(zip(shapes, layouts))]
     params = input_params + [tensor_input('out', 'float32', out_shape)]
-    out = custom_compute('concat', tensor_type('global', 'float32', shape=out_shape)),
+    out = custom_compute('out', 'concat', tensor_type('global', 'float32', shape=out_shape))
     return Task(
         name='concat',
         computation=out,

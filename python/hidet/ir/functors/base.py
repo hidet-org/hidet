@@ -334,6 +334,9 @@ class ExprVisitor(ExprFunctor):
     def visit_ReduceCompute(self, e: ReduceCompute):
         self.visit(e.value)
 
+    def visit_CustomCompute(self, e: CustomCompute):
+        pass
+
     # pattern dialect
     def visit_AnyExpr(self, e: ReduceComputePattern):
         pass
@@ -558,6 +561,9 @@ class ExprRewriter(ExprFunctor):
             return e
         else:
             return ReduceCompute(value, shape, axes, e.reduce_type, e.data_type)
+
+    def visit_CustomCompute(self, e: CustomCompute):
+        return e
 
     def visit_AnyExpr(self, e: AnyExpr):
         return e

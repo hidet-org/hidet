@@ -229,6 +229,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
     def visit_CustomCompute(self, e: CustomCompute):
         items = [
             'name=' + self(e.name),
+            'identifier=' + self(e.identifier),
             'data_type=' + self(e.data_type),
             'params=[' + self(e.params) + ']',
             'attributes={' + self(e.attributes) + '}'

@@ -300,6 +300,8 @@ class PatternMatcher:
             stack.enter_context(self.match(pattern.args, target.args))
 
     def match_Var(self, pattern: Var, target: Var):
+        if isinstance(pattern.type, FuncType):
+            return
         with self.match(pattern.type, target.type):
             pass
 
@@ -337,7 +339,7 @@ class PatternMatcher:
 
     def match_CustomCompute(self, pattern: CustomCompute, target: CustomCompute):
         with ExitStack() as stack:
-            stack.enter_context(self.match(pattern.name, target.name))
+            stack.enter_context(self.match(pattern.identifier, target.identifier))
             stack.enter_context(self.match(pattern.data_type, target.data_type))
             stack.enter_context(self.match(pattern.params, target.params))
             for key, value in pattern.attributes.items():

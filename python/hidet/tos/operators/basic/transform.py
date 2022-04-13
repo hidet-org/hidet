@@ -82,7 +82,8 @@ def concat_task(inputs: List[TensorInput], axis: int) -> Task:
     rank = len(shapes[0])
     out_shape = [shapes[0][i] if i != axis else sum(shapes[j][i] for j in range(n)) for i in range(rank)]
     out = custom_compute(
-        name='concat',
+        name='out',
+        identifier='concat',
         params=inputs,
         data_type=tensor_type('global', inputs[0].data_type.scalar_type, shape=out_shape),
         attributes={'axis': axis}
@@ -255,7 +256,10 @@ class FlattenOp(Operator):
             if i < start_dim or i >= end_dim:
                 plan.append([i])
             else:
-                plan[-1].append(i)
+                if len(plan) == 0:
+                    plan.append([i])
+                else:
+                    plan[-1].append(i)
         super().__init__(
             inputs=[x],
             task=rearrange_task(input_like(x, 'x'), plan=plan),

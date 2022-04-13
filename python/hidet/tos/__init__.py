@@ -3,6 +3,7 @@ from . import operator
 from . import module
 from . import nn
 # from . import ops
+from . import operators
 from . import models
 from . import ir
 from . import frontend

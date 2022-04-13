@@ -85,7 +85,7 @@ class Tensor:
         from .operators import unsqueeze
         return unsqueeze(self, dims)
 
-    def flatten(self, start_dim=0, end_dim=-1):
+    def flatten(self, start_dim=0, end_dim=None):
         from .operators import flatten
         return flatten(self, start_dim, end_dim)
 

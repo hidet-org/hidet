@@ -174,7 +174,11 @@ class OnnxMatMul(OnnxOperator):
                     c = c.unsqueeze(dims=range(c_rank - len(c.shape)))
                 return [c]
             else:
-                raise NotImplementedError('Matmul with shapes {} and {}'.format(a.shape, b.shape))
+                prefix_shape = hidet.tos.operators.basic.arithmatic.broadcast_shape(a.shape[:-2], b.shape[:-2])
+                c_shape = prefix_shape + [a.shape[-2]] + [b.shape[-1]]
+                print('fake batched matmul')
+                return [hidet.empty(c_shape)]
+                # raise NotImplementedError('Matmul with shapes {} and {}'.format(a.shape, b.shape))
 
     @staticmethod
     def can_squeeze(shape: List[int]) -> bool:
@@ -187,6 +191,8 @@ class OnnxSoftmax(OnnxOperator):
         self.axis = self.attrs.get('axis')
 
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        # print('fake softmax')
+        # return [randn(inputs[0].shape)]
         return [ops.softmax(inputs[0], self.axis)]
 
 

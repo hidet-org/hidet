@@ -24,7 +24,8 @@ class Pattern:
     def __init__(self):
         self.axis = any_const_int()
         self.compute = CustomCompute(
-            name='concat',
+            name=None,
+            identifier='concat',
             params=None,
             data_type=None,
             attributes={'axis': self.axis}

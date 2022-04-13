@@ -6,7 +6,7 @@ from . import softmax
 from . import custom
 
 from .generic import CudaStaticComputeImplementer
-from .matmul import CudaGridStaticMatmulImplementer
+from .matmul import CudaGridStaticMatmulImplementer, CudaGridStaticBatchedMatmulImplementer
 from .conv2d import CudaGridStaticConv2dImplicitGemmImplementer
 from .pool2d import CudaGridPool2dImplementer
 from .softmax import CudaGridSoftmaxImplementer
