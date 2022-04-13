@@ -1,7 +1,8 @@
 from typing import List
 import onnx
 from onnx import numpy_helper
-from hidet.tos import nn, ops
+from hidet.tos import nn
+from hidet.tos import operators as ops
 from hidet.tos.tensor import Tensor, from_numpy, randn
 import tvm.relay.frontend.onnx
 

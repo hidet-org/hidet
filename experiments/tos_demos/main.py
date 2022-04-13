@@ -8,7 +8,7 @@ from hidet.tos.tensor import empty, randn, symbol
 from hidet.tos import Operator, Tensor
 from hidet.runtime.storage import cuda_pool, Storage
 from hidet.tos.models import resnet
-from hidet.tos import nn, ops, optimize
+from hidet.tos import nn, optimize
 from hidet.utils import Timer, cuda, netron, nvtx_annotate
 from hidet.tos.transforms import ProfileInstrument, SaveGraphInstrument
 
