@@ -57,23 +57,21 @@ class Operator:
             raise AttributeError(item)
 
     def run(self) -> List[Tensor]:
-        if self.current_mode == self.imperative_mode:
+        if all(t.storage is not None for t in self.inputs):
             return self.imperative_run(self.inputs)
-        elif self.current_mode == self.lazy_mode:
+        else:
             self.outputs = self.lazy_run()
             return self.outputs
-        else:
-            raise NotImplementedError('coming soon')
 
-    def get_output(self, idx: int):
+    def get_output(self, idx: int) -> Tensor:
         if self.outputs is None:
             outputs = self.run()
         else:
             outputs = self.outputs
         return outputs[idx]
 
-    @hidet.utils.line_profile()
-    def imperative_run(self, inputs: Optional[List[Tensor]] = None) -> List[Tensor]:
+    # @hidet.utils.line_profile()
+    def imperative_run(self, inputs: List[Tensor]) -> List[Tensor]:
         if self.task_func is None:
             task_string = str(self.task)
             level = (self.current_space_level, self.current_opt_level)

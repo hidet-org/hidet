@@ -1,3 +1,4 @@
+from typing import List
 from hidet.ir.type import ScalarType, TensorType, FuncType
 from hidet.ir.expr import BinaryOp, Add, Sub, Multiply, Div, Mod, FloorDiv, Condition, LessThan, Equal, IfThenElse, TensorSlice, Not, Or, And, LessEqual, Let, RightShift, LeftShift, BitwiseNot, BitwiseOr, BitwiseAnd, AlterLayout, Neg
 from hidet.ir.expr import Var, Constant, TensorElement, Call, Cast
@@ -10,6 +11,25 @@ from ..dialects.pattern import ScalarExprPattern, TensorComputePattern, ReduceCo
 
 def is_bool(tp):
     return isinstance(tp, ScalarType) and tp.name == 'bool'
+
+
+# def compatible(lhs_dtype: str, rhs_dtype: str):
+#     integers = ['int32', 'int64']
+#     floats = ['float32']
+#     categories = [integers, floats]
+#     for category in categories:
+#         if lhs_dtype in category and rhs_dtype in category:
+#             return True
+#     return False
+#
+
+def upgrade(dtypes: List[str]) -> str:
+    dtype2priority = {
+        'int32': 1,
+        'int64': 2,
+        'float32': 3
+    }
+    return max(dtypes, key=lambda v: dtype2priority[v])
 
 
 class TypeInfer(ExprFunctor):
@@ -27,14 +47,14 @@ class TypeInfer(ExprFunctor):
         btype: ScalarType = self.visit(e.b)
         if not atype or not btype:
             return ScalarType(name=None)
-        assert atype.name == btype.name
+        # if not compatible(atype.name, btype.name):
+        #     raise TypeError("Tyring to: {}({}, {})".format(e.__class__.__name__, atype.name, btype.name))
         if isinstance(e, (Add, Sub, Multiply, Div, Mod, FloorDiv)):
-            return atype
+            return ScalarType(upgrade([atype.name, btype.name]))
         elif isinstance(e, Condition):
             return ScalarType('bool')
         else:
-            raise NotImplementedError()
-            return ScalarType(name=None)  # unknown
+            raise NotImplementedError('Binary op type infer {}'.format(type(e)))
 
     def visit_Add(self, e: Add):
         return self.visit_Binary(e)

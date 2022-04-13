@@ -333,7 +333,7 @@ class CudaGridStaticMatmulImplementer(Implementer):
                 # 'extern __shared__ uint8_t smem_storage[];' in c code
                 smem_storage = Var('smem_storage', PointerType(base_type=scalar_type('uint8'), specifiers=['extern', '__shared__'], use_bracket=True))
             else:
-                smem_storage = Var('smem_storage', tensor_type('shared', dtype='uint8', shape=[sch.used_smem_bytes_per_block], layout=[1]))
+                smem_storage = Var('smem_storage', tensor_type('shared', dtype='uint8', shape=[sch.used_smem_bytes_per_block]))
             smem_A_bytes = simplify_to_int(smem_A.type.tensor_type.storage_bytes())
             fb.extend_local_vars([smem_A, smem_B, smem_C, smem_storage])
             sb += AssignStmt(smem_A, Cast(~smem_storage[0], PointerType(A_dtype)))

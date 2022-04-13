@@ -3,12 +3,12 @@ import sys
 
 from hidet.implement.implementer import Implementer, register_impl
 from hidet.ir import IRModule
-from hidet.ir.type import tensor_type, TensorType, scalar_type
+from hidet.ir.type import tensor_type, TensorType, scalar_type, Scope
 from hidet.ir.layout import DataLayout, TaskLayout
 from hidet.ir.expr import convert, Constant, Var, scalar_var, if_then_else, tensor_var
 from hidet.ir.stmt import AssignStmt, Stmt, BufferStoreStmt
 from hidet.ir.dialects.compute import tensor_input, compute, reduce, TensorInput
-from hidet.ir.dialects.pattern import TaskPattern, any_const_int
+from hidet.ir.dialects.pattern import TaskPattern, any_const_int, compute_pattern, reduce_pattern
 from hidet.ir.primitives import expf, block_idx, thread_idx, cuda_max, active_mask, shfl_down_sync, shfl_sync
 from hidet.ir.node import Node
 from hidet.ir.task import Task, Grid
@@ -33,30 +33,30 @@ class Pattern:
         shape = (any_const_int(), any_const_int(), any_const_int(), any_const_int())
         m, n, p, q = shape
         x = TensorInput('x', TensorType(shape=(m, n, p, q)))
-        mx = compute(
+        mx = compute_pattern(
             name='mx',
             shape=[m, p, q],
-            fcompute=lambda i, r, s: reduce(
+            fcompute=lambda i, r, s: reduce_pattern(
                 shape=[n],
                 fcompute=lambda j: x[i, j, r, s],
                 reduce_type='max'
             )
         )
-        e = compute(
+        e = compute_pattern(
             name='e',
             shape=[m, n, p, q],
-            fcompute=lambda i, j, r, s: expf(x[i, j, r, s] - mx[i, r, s])
+            fcompute=lambda i, j, r, s: expf(x[i, j, r, s] - mx[i, r, s]),
         )
-        se = compute(
+        se = compute_pattern(
             name='se',
             shape=[m, p, q],
-            fcompute=lambda i, r, s: reduce(
+            fcompute=lambda i, r, s: reduce_pattern(
                 shape=[n],
                 fcompute=lambda j: e[i, j, r, s],
                 reduce_type='sum'
             )
         )
-        y = compute(
+        y = compute_pattern(
             name='y',
             shape=[m, n, p, q],
             fcompute=lambda i, j, r, s: e[i, j, r, s] / se[i, r, s]
@@ -64,10 +64,6 @@ class Pattern:
         task_pattern = TaskPattern(
             compute_pattern=y,
             required_params=[x, y],
-            required_param_types=[
-                tensor_type(scope='global', dtype='float32', shape=[None, None, None, None]),
-                tensor_type(scope='global', dtype='float32', shape=[None, None, None, None])
-            ],
             allow_extra_params=False,
             worker=Grid()
         )

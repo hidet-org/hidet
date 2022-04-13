@@ -9,6 +9,7 @@ from hidet.ir.task import Worker, Host, Grid, ThreadBlock, Warp, Thread
 from hidet.ir.dialects.compute import ReduceCompute, TensorCompute, TensorInput, ScalarInput
 from hidet.ir.dialects.lowlevel import VoidType, PointerType, Dereference, Address, ReferenceType, TensorPointerType, Reference
 from hidet.ir.dialects.pattern import AnyExpr, ScalarExprPattern, TensorComputePattern, ReduceComputePattern
+from hidet.ir.layout import RowMajorLayout, ColumnMajorLayout
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
 from hidet.utils.namer import Namer
 
@@ -295,7 +296,16 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
 
     def visit_TensorType(self, t: TensorType):
         assert t.scope is not None
-        return Text('TensorType(') + self(t.scalar_type) + ', [' + self(t.shape) + '], ' + t.scope.name + ')'
+        if isinstance(t.layout, RowMajorLayout):
+            layout = 'row_major'
+        elif isinstance(t.layout, ColumnMajorLayout):
+            layout = 'column_major'
+        elif t.layout is None:
+            layout = 'None'
+        else:
+            layout = t.layout.__class__.__name__
+        items = [self(t.scalar_type), '[' + self(t.shape) + ']', self(t.scope.name), self(layout)]
+        return Text('TensorType(') + doc_join(items, ', ') + ')'
 
     def visit_PointerType(self, t: PointerType):
         return Text('PointerType(') + self(t.base_type) + ')'

@@ -1,5 +1,5 @@
 from typing import Union, Sequence, Tuple, Optional, List
-from hidet.ir.type import ScalarType, TensorType, tensor_type, scalar_type
+from hidet.ir.type import ScalarType, TensorType, Scope, tensor_type, scalar_type
 from hidet.ir.expr import Expr, Constant, convert, Var, var, And, if_then_else
 from hidet.utils.info import float_type_min_value
 from hidet.ir.layout import DataLayout
@@ -45,6 +45,9 @@ class TensorCompute(ComputeNode):
         self.axes: Tuple[Var] = convert(axes)
         self.value: Expr = value
         self.accumulate: Optional[str] = accumulate
+
+    def const_shape(self) -> List[int]:
+        return [int(v) for v in self.data_type.shape]
 
 
 class ReduceCompute(ComputeNode):
@@ -109,10 +112,13 @@ def reduce(shape: Sequence[Union[int, Expr]], fcompute, reduce_type: str):
 
 
 def compute(name, shape, fcompute, accumulate=None, scope=None, layout=None):
+    from hidet.ir.functors import infer_type
     shape = [convert(v) for v in shape]
     axes = [var() for _ in shape]
     value = convert(fcompute(*axes))
-    data_type = tensor_type(scope, dtype='float32', shape=shape, layout=layout)
+    if scope is None:
+        scope = Scope('temp')
+    data_type = tensor_type(scope, dtype=infer_type(value), shape=shape, layout=layout)
     return TensorCompute(name, shape, axes, value, data_type, accumulate)
 
 

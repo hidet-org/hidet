@@ -115,12 +115,16 @@ def demo_torch_resnet50():
 
 
 def demo_hidet_resnet50():
-    x = randn([1, 3, 224, 224], dtype='float32')
+    x = symbol([1, 3, 224, 224], dtype='float32')
     model = resnet.resnet50()
+    y = model(x)
+    graph = hidet.trace_from(y)
+
+    x = randn([1, 3, 224, 224], dtype='float32')
     for t in range(10):
         cuda_api.device_synchronization()
         with Timer('hidet resnet50 {}'.format(t)):
-            y = model(x)
+            y = graph(x)
             cuda_api.device_synchronization()
 
 

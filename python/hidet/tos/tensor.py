@@ -34,32 +34,35 @@ class Tensor:
         self.trace: Optional[Tuple[Operator, int]] = trace
 
     def __neg__(self):
-        from .ops import neg
+        from .operators import neg
         return neg(self)
 
     def __add__(self, other):
-        from .ops import add
+        from .operators import add
         return add(self, convert(other))
 
     def __sub__(self, other):
-        from .ops import sub
+        from .operators import sub
         return sub(self, convert(other))
 
     def __mul__(self, other):
-        from .ops import multiply
+        from .operators import multiply
         return multiply(self, convert(other))
 
     def __truediv__(self, other):
-        from .ops import divide
+        from .operators import divide
         return divide(self, convert(other))
 
     def __str__(self):
-        head = "Tensor(shape={}, dtype='{}', device='{}') at {}".format(self.shape, self.dtype, self.device, hex(id(self)))
+        head = self.signature()
         if self.storage:
             array_str = str(self.cpu().numpy())
             return '{}\n{}'.format(head, array_str)
         else:
             return head + ' with empty storage'
+
+    def signature(self) -> str:
+        return "Tensor(shape={}, dtype='{}', device='{}')".format(self.shape, self.dtype, self.device)
 
     @property
     def nbytes(self):
@@ -71,23 +74,23 @@ class Tensor:
         return self.reshape(self.shape)
 
     def reshape(self, shape: Sequence[int]):
-        from .ops import reshape
+        from .operators import reshape
         return reshape(self, shape)
 
     def squeeze(self, dims: Sequence[int]):
-        from .ops import squeeze
+        from .operators import squeeze
         return squeeze(self, dims)
 
     def unsqueeze(self, dims: Sequence[int]):
-        from .ops import unsqueeze
+        from .operators import unsqueeze
         return unsqueeze(self, dims)
 
     def flatten(self, start_dim=0, end_dim=-1):
-        from .ops import flatten
+        from .operators import flatten
         return flatten(self, start_dim, end_dim)
 
     def rsqrt(self):
-        from .ops import rsqrt
+        from .operators import rsqrt
         return rsqrt(self)
 
     def cpu(self):

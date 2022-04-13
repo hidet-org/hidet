@@ -39,7 +39,7 @@ def concat_let_expr(var2value, body: Expr):
 # data layout
 class DataLayout(Node):
     def __init__(self, shape=None, size=None):
-        self.shape: Tuple[Int] = tuple([int(v) if isinstance(v, ir.Constant) else v for v in shape]) if shape else None
+        self.shape: Tuple[Int] = tuple([int(v) if isinstance(v, ir.Constant) else v for v in shape]) if shape is not None else None
         self.size: Int = size
 
     def __call__(self, *args: Int):
@@ -61,7 +61,7 @@ class DataLayout(Node):
         raise NotImplementedError()
 
     def serialize(self, *args: Int):
-        if isinstance(args[0], (tuple, list)) and len(args) == 1:
+        if len(args) == 1 and isinstance(args[0], (tuple, list)):
             # support usage such as within_bound([1, 2, 3])
             args = args[0]
         assert len(args) == len(self.shape)

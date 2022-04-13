@@ -2,9 +2,10 @@ from typing import List, Union, Sequence, Optional
 import os
 import numpy as np
 import hidet
-from hidet.tos import nn, ops
+from hidet.tos import nn
+from hidet.tos import operators as ops
 from hidet.tos.tensor import Tensor, from_numpy, randn
-from hidet.utils import line_profile
+from hidet.utils import line_profile, prod
 
 """
 Please refers to https://github.com/onnx/onnx/blob/main/docs/Operators.md when adding new operators.
@@ -45,6 +46,10 @@ class OnnxOperator:
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         raise NotImplementedError()
 
+    @staticmethod
+    def tensor2list(tensor: Tensor) -> List:
+        return tensor.cpu().numpy().tolist()
+
 
 class OnnxConv(OnnxOperator):
     def __init__(self, node):
@@ -80,6 +85,33 @@ class OnnxRelu(OnnxOperator):
         return [ops.relu(inputs[0])]
 
 
+class OnnxPow(OnnxOperator):
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        x, y = inputs
+        return [ops.pow(x, y)]
+
+
+class OnnxDiv(OnnxOperator):
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        x, y = inputs
+        return [ops.divide(x, y)]
+
+
+class OnnxSqrt(OnnxOperator):
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        return [ops.sqrt(inputs[0])]
+
+
+class OnnxErf(OnnxOperator):
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        return [ops.erf(inputs[0])]
+
+
+class OnnxTanh(OnnxOperator):
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        return [ops.tanh(inputs[0])]
+
+
 class OnnxMaxPool(OnnxOperator):
     def __init__(self, node):
         super().__init__(node)
@@ -95,7 +127,7 @@ class OnnxReduceMean(OnnxOperator):
     def __init__(self, node):
         super().__init__(node)
         self.dims = self.attrs.get('axes')
-        self.keep_dim = self.attrs.get('keepdims') == 1
+        self.keep_dim = self.attrs.get('keepdims', 1) == 1
 
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         return [ops.reduce_mean(inputs[0], self.dims, self.keep_dim)]
@@ -127,7 +159,23 @@ class OnnxMul(OnnxOperator):
 
 class OnnxMatMul(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
-        return [ops.matmul(inputs[0], inputs[1])]
+        a, b = inputs
+        assert len(a.shape) >= 2 and len(b.shape) >= 2
+        if len(a.shape) == 2 and len(b.shape) == 2:
+            return [ops.matmul(a, b)]
+        else:
+            if self.can_squeeze(a.shape) and self.can_squeeze(b.shape):
+                assert isinstance(a, Tensor)
+                a = a.squeeze(range(len(a.shape) - 2)) if len(a.shape) > 2 else a
+                b = b.squeeze(range(len(b.shape) - 2)) if len(b.shape) > 2 else b
+                return [ops.matmul(a, b)]
+            else:
+                raise NotImplementedError('Matmul with shapes {} and {}'.format(a.shape, b.shape))
+
+    @staticmethod
+    def can_squeeze(shape: List[int]) -> bool:
+        return len(shape) == 2 or (len(shape) > 2 and prod(shape[:-2]) == 1)
+
 
 
 class OnnxSoftmax(OnnxOperator):
@@ -171,10 +219,40 @@ class OnnxUnsqueeze(OnnxOperator):
         return [ops.unsqueeze(inputs[0], self.axes)]
 
 
+class OnnxReshape(OnnxOperator):
+    def __init__(self, node):
+        super().__init__(node)
+        self.allow_zero = self.attrs.get('allowzero', 0)
+
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        x, shape = inputs
+        shape = self.tensor2list(shape)
+        return [ops.reshape(x, shape)]
+
+
+class OnnxTranspose(OnnxOperator):
+    def __init__(self, node):
+        super().__init__(node)
+        self.perm = self.attrs.get('perm', None)
+
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        x = inputs[0]
+        perm = self.perm if self.perm else list(reversed(range(len(x.shape))))
+        return [ops.transpose(x, perm)]
+
+
+class OnnxConcat(OnnxOperator):
+    def __init__(self, node):
+        super().__init__(node)
+        self.axis = self.attrs.get('axis')
+
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        return [ops.concat(inputs, self.axis)]
+
+
 class OnnxArgMax(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
-        # todo: support this op
-        return inputs
+        raise NotImplementedError('ArgMax')
 
 
 class OnnxGemm(OnnxOperator):
@@ -273,10 +351,30 @@ class OnnxGather(OnnxOperator):
         return [ops.take(data, indices, self.axis)]
 
 
+class OnnxSlice(OnnxOperator):
+    def __init__(self, node):
+        super().__init__(node)
+
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        data, starts, ends = inputs[:3]
+        axes = inputs[3] if len(inputs) > 3 else None
+        steps = inputs[4] if len(inputs) > 4 else None
+        starts = self.tensor2list(starts)
+        ends = self.tensor2list(ends)
+        axes = self.tensor2list(axes) if axes else None
+        steps = self.tensor2list(steps) if steps else None
+        return [ops.strided_slice(data, starts, ends, axes, steps)]
+
+
 def dispatch(node) -> OnnxOperator:
     dispatch_table = {
         'Conv': OnnxConv,
         'Relu': OnnxRelu,
+        'Pow': OnnxPow,
+        'Div': OnnxDiv,
+        'Sqrt': OnnxSqrt,
+        'Erf': OnnxErf,
+        'Tanh': OnnxTanh,
         'MaxPool': OnnxMaxPool,
         'ReduceMean': OnnxReduceMean,
         'Squeeze': OnnxSqueezeOp,
@@ -290,11 +388,15 @@ def dispatch(node) -> OnnxOperator:
         'GlobalAveragePool': OnnxGlobalAveragePool,
         'Flatten': OnnxFlatten,
         'Unsqueeze': OnnxUnsqueeze,
+        'Concat': OnnxConcat,
         'Cast': OnnxCast,
         'Constant': OnnxConstant,
+        'Reshape': OnnxReshape,
         'Shape': OnnxShape,
         'Gemm': OnnxGemm,
         'Gather': OnnxGather,
+        'Slice': OnnxSlice,
+        'Transpose': OnnxTranspose,
     }
     op_type = node.op_type
     if op_type not in dispatch_table:
@@ -333,7 +435,9 @@ class OnnxModule(nn.Module):
         # run nodes
         for operator in self.operators:
             inputs = [name2tensor[name] for name in operator.input_names]
+            print('{:>20}: '.format(operator.node.name), end='')
             outputs = operator.run(inputs)
+            print('{}'.format(', '.join(out.signature() for out in outputs)))
             assert len(outputs) == len(operator.output_names)
             for name, tensor in zip(operator.output_names, outputs):
                 name2tensor[name] = tensor
@@ -345,7 +449,7 @@ class OnnxModule(nn.Module):
             return results
 
 
-def from_onnx(model: Union[str, 'onnx.ModelProto']) -> nn.Module:
+def from_onnx(model: Union[str, 'onnx.ModelProto']) -> OnnxModule:
     """
     Load an onnx model to hidet.tos.nn.Module.
 
@@ -356,7 +460,7 @@ def from_onnx(model: Union[str, 'onnx.ModelProto']) -> nn.Module:
 
     Returns
     -------
-    ret: nn.Module
+    ret: OnnxModule
         The loaded model.
     """
     import onnx

@@ -2,7 +2,7 @@ from . import tensor
 from . import operator
 from . import module
 from . import nn
-from . import ops
+# from . import ops
 from . import models
 from . import ir
 from . import frontend

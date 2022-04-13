@@ -8,6 +8,7 @@ from hidet import tasks
 from hidet.utils import prod
 
 
+
 class Conv2dOp(Operator):
     def __init__(self,
                  input: Tensor,
@@ -348,3 +349,7 @@ def batch_norm_infer(x: Tensor, running_mean: Tensor, running_var: Tensor, epsil
 
 def take(data: Tensor, indices: Tensor, axis: int = 0) -> Tensor:
     return TakeOp(data, indices, axis).get_output(0)
+
+
+raise DeprecationWarning('Should not use this module.')
+

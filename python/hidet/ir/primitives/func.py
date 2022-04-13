@@ -179,6 +179,30 @@ def cuda_rsqrt(a):
     return Call(func_var, [a])
 
 
+def cuda_pow(a, b):
+    if 'powf' not in _primitive_functions:
+        func_type = FuncType(param_types=['float32', 'float32'], ret_type='float32')
+        register_primitive_function('powf', func_type)
+    func_var = get_primitive_function('powf')[0]
+    return Call(func_var, [a, b])
+
+
+def cuda_erf(a):
+    if 'erff' not in _primitive_functions:
+        func_type = FuncType(param_types=['float32'], ret_type='float32')
+        register_primitive_function('erff', func_type)
+    func_var = get_primitive_function('erff')[0]
+    return Call(func_var, [a])
+
+
+def cuda_tanh(a):
+    if 'tanhf' not in _primitive_functions:
+        func_type = FuncType(param_types=['float32'], ret_type='float32')
+        register_primitive_function('tanhf', func_type)
+    func_var = get_primitive_function('tanhf')[0]
+    return Call(func_var, [a])
+
+
 def set_kernel_max_dynamic_smem_bytes(func_var, max_dynamic_smem_bytes):
     template_string = r'cudaFuncSetAttribute({}, cudaFuncAttributeMaxDynamicSharedMemorySize, {});'
     return BlackBoxStmt(template_string, func_var, max_dynamic_smem_bytes)

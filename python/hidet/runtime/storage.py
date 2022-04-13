@@ -76,7 +76,8 @@ class Storage:
             A numpy ndarray with one dimension that share the same data as the storage.
         """
         dtype2ctype = {
-            'float32': ctypes.c_float
+            'float32': ctypes.c_float,
+            'int64': ctypes.c_int64
         }
 
         if self.device != 'cpu':

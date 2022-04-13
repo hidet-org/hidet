@@ -77,8 +77,7 @@ class ScalarExprPattern(ExprPattern):
 
 
 class TaskPattern(PatternNode):
-    def __init__(self, compute_pattern=None, required_params=None, required_param_types=None,
-                 allow_extra_params=True, allow_tensor_extra_params=True, worker=None):
+    def __init__(self, compute_pattern=None, required_params=None, allow_extra_params=True, allow_tensor_extra_params=True, worker=None):
         self.compute_pattern: Optional[Expr] = compute_pattern
         self.required_params: Optional[List[ComputeNode]] = required_params
         self.extra_params: Expr = Expr()  # as a handle to reference the unmatched params
@@ -475,6 +474,21 @@ class PatternMatcher:
     def match_String(self, pattern: str, target: str):
         if pattern != target:
             raise NotMatchedError(pattern, target)
+
+
+def compute_pattern(name, shape, fcompute, accumulate=None, scope=None, layout=None):
+    shape = convert(shape)
+    axes = [var() for _ in shape]
+    value = convert(fcompute(*axes))
+    data_type = TensorType(scope, dtype=ScalarType('float32'), shape=shape, layout=layout)
+    return TensorCompute(name, shape, axes, value, data_type, accumulate)
+
+
+def reduce_pattern(shape: Sequence[Union[int, Expr]], fcompute, reduce_type: str):
+    shape = convert(shape)
+    axes = [var() for _ in shape]
+    value = convert(fcompute(*axes))
+    return ReduceCompute(value, shape, axes, reduce_type, scalar_type('float32'))
 
 
 def any_const_int():

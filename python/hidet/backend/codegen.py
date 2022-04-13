@@ -397,7 +397,8 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             'int32': 'int32_t',
             'float32': 'float',
             'uint8': 'uint8_t',
-            'uint32': 'uint32_t'
+            'uint32': 'uint32_t',
+            'int64': 'int64_t'
         }
         return Text(scalar_type_map[t.name])
 

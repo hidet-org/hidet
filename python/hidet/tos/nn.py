@@ -1,5 +1,6 @@
 from .module import Module, Tensor
-from . import ops
+# from . import ops
+from . import operators as ops
 from .common import normalize
 from .container import Sequential
 from .tensor import randn, zeros, ones

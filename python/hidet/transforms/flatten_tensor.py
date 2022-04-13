@@ -88,7 +88,7 @@ class FlattenTensorAccessRewriter(FuncStmtExprRewriter):
         for var in func.params + func.local_vars:
             if isinstance(var.type, TensorType):
                 size = simplify_to_int(var.type.layout.size)
-                self.memo[var] = Var(var.hint, tensor_type(var.type.scope, var.type.scalar_type, [size], [1]))
+                self.memo[var] = Var(var.hint, tensor_type(var.type.scope, var.type.scalar_type, [size], DataLayout.row_major([size])))
             elif isinstance(var.type, TensorPointerType):
                 self.memo[var] = var
         body = self(func.body)

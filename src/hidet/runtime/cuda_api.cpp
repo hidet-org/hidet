@@ -36,7 +36,11 @@ DLL void hidet_cuda_free_async(uint64_t addr) {
 }
 
 DLL void hidet_cuda_free_host(uint64_t addr) {
-    CUDA_CALL(cudaFreeHost(reinterpret_cast<void*>(addr)));
+//    CUDA_CALL(cudaFreeHost(reinterpret_cast<void*>(addr)));
+    auto status = cudaFreeHost(reinterpret_cast<void*>(addr));
+    if(status != cudaSuccess) {
+        fprintf(stderr, "Can not free host memory %p\n", reinterpret_cast<void*>(addr));
+    }
 }
 
 DLL void hidet_cuda_memset_async(uint64_t addr, uint64_t bytes, uint8_t value) {

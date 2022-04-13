@@ -15,7 +15,7 @@ class TypeNode(Node):
 # scope
 class Scope(Node):
     def __init__(self, name):
-        assert name in ['host', 'global', 'shared', 'register']
+        assert name in ['host', 'global', 'shared', 'register', 'temp']
         self.name = name
 
 
@@ -23,7 +23,7 @@ class Scope(Node):
 class ScalarType(TypeNode):
     def __init__(self, name):
         if name:
-            assert name in ['float32', 'int32', 'uint8', 'uint32', 'bool'], name
+            assert name in ['float32', 'int32', 'uint8', 'uint32', 'int64', 'bool'], name
         self.name = name
 
     def nbytes(self) -> int:
@@ -32,6 +32,7 @@ class ScalarType(TypeNode):
             'int32': 4,
             'uint8': 1,
             'uint32': 4,
+            'int64': 8,
             'bool': 1
         }
         return bytes_dict[self.name]
@@ -100,27 +101,51 @@ def scalar_type(type_name):
     return ScalarType(type_name)
 
 
-def tensor_type(scope, dtype, shape=None, layout=None):
+def tensor_type(scope, dtype, shape: Optional[List[Union[int, Expr]]] = None, layout: Optional['DataLayout'] = None):
+    """
+    Construct a tensor type. Shape and layout must be given at least one.
+
+    Parameters
+    ----------
+    scope: str or Scope
+        The scope of the tensor. Scope can be 'host', 'global', 'shared', and 'local'
+
+    dtype: str or ScalarType
+        The scalar type of this tensor.
+
+    shape: Optional[List[Union[int, Expr]]]
+        The shape of the tensor. If not given, the shape in layout will be used.
+
+    layout: Optional[DataLayout]
+        The layout of the tensor. If not given, the row major layout of given shape will
+        be used.
+
+    Returns
+    -------
+    ret: TensorType
+        The constructed tensor type
+    """
     from hidet.ir.expr import convert, Constant
     from hidet.ir.layout import DataLayout, StridesLayout
     if isinstance(scope, str):
         scope = Scope(scope)
+    if not isinstance(scope, Scope):
+        raise ValueError('Tensor type scope expect a "str" or "Scope", but got {}'.format(type(scope)))
     if isinstance(dtype, str):
         dtype = ScalarType(dtype)
-    if shape:
-        shape = [ir.convert(s) for s in shape]
-    if isinstance(layout, (list, tuple)) and shape is not None:
-        # use shape and strides to define layout
-        strides = layout
-        layout = StridesLayout(shape, strides)
-    if layout is None and shape is not None and len(shape) > 0 and shape[0] is not None:
-        if isinstance(shape[0], Constant) and shape[0].value is None:
-            # this is a pattern
-            pass
-        else:
-            layout = DataLayout.row_major(shape)
-    if shape is None and isinstance(layout, DataLayout):
-        # use shape in data layout
+    if not isinstance(dtype, ScalarType):
+        raise ValueError('Scalar type expect a "str" or "ScalarType", but got {}'.format(type(dtype)))
+    if shape is None and layout is None:
+        raise ValueError('Tensor type must give either shape or layout')
+    elif shape is None:
+        assert isinstance(layout, DataLayout)
         shape = layout.shape
+    elif layout is None:
+        layout = DataLayout.row_major([int(v) for v in shape])
+    else:
+        assert isinstance(layout, DataLayout)
+        assert isinstance(shape, (list, tuple))
+        for a, b in zip(shape, layout.shape):
+            assert int(a) == int(b)
     shape = convert(shape)
     return TensorType(scope, dtype, shape, layout)
