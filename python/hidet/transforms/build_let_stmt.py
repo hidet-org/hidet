@@ -90,6 +90,10 @@ class BuildLetStmtRewriter(StmtExprRewriter):
         with StmtContext(self):
             self.sb += StmtExprRewriter.visit_AssertStmt(self, stmt)
 
+    def visit_ReturnStmt(self, stmt: ReturnStmt):
+        with StmtContext(self):
+            self.sb += StmtExprRewriter.visit_ReturnStmt(self, stmt)
+
     def visit_AsmStmt(self, stmt: AsmStmt):
         with self.exit_stack:
             input_exprs = [self.visit_expr(e) for e in stmt.input_exprs]

@@ -1,4 +1,4 @@
-from typing import Union, Optional, List, Dict
+from typing import Union, Optional, List, Dict, Sequence
 from hidet.ir.node import Node
 from hidet.ir.dialects.compute import ScalarInput, TensorInput, ComputeNode
 from hidet.ir.type import TypeNode, TensorType, ScalarType
@@ -13,9 +13,15 @@ class Worker(Node):
 
 
 class Grid(Worker):
-    def __init__(self, grid_dim: Optional[Int] = None, block_dim: Optional[Int] = None, dynamic_smem_bytes: Optional[Int] = 0, min_blocks: Optional[Int] = None):
-        self.grid_dim: Optional[Expr] = convert(grid_dim)
-        self.block_dim: Optional[Expr] = convert(block_dim)
+    def __init__(
+            self,
+            grid_dim: Optional[Union[Int, Expr, Sequence[Int]]] = None,
+            block_dim: Optional[Union[Int, Sequence[Int]]] = None,
+            dynamic_smem_bytes: Optional[Int] = 0,
+            min_blocks: Optional[Int] = None
+    ):
+        self.grid_dim: Optional[Union[Expr, Sequence[Expr]]] = convert(grid_dim)
+        self.block_dim: Optional[Union[Expr, Sequence[Expr]]] = convert(block_dim)
         self.min_blocks: Optional[Expr] = convert(min_blocks)
         self.dynamic_smem_bytes: Optional[Expr] = convert(dynamic_smem_bytes)
 

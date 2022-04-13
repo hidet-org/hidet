@@ -6,7 +6,7 @@ from hidet.ir.type import ScalarType, TensorType, TypeNode
 from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div, Sub, Not, Or, And, Let, IfThenElse, TensorSlice, RightShift, LeftShift, BitwiseNot, BitwiseOr, BitwiseAnd, AlterLayout, Neg, Cast
 from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt, BlackBoxStmt, AsmStmt, ReturnStmt, LetStmt
 from hidet.ir.task import Worker, Host, Grid, ThreadBlock, Warp, Thread
-from hidet.ir.dialects.compute import ReduceCompute, TensorCompute, TensorInput, ScalarInput
+from hidet.ir.dialects.compute import ReduceCompute, TensorCompute, TensorInput, ScalarInput, CustomCompute
 from hidet.ir.dialects.lowlevel import VoidType, PointerType, Dereference, Address, ReferenceType, TensorPointerType, Reference
 from hidet.ir.dialects.pattern import AnyExpr, ScalarExprPattern, TensorComputePattern, ReduceComputePattern
 from hidet.ir.layout import RowMajorLayout, ColumnMajorLayout
@@ -168,7 +168,14 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
             if 'worker' in func.attrs:
                 worker = func.attrs['worker']
                 if isinstance(worker, Grid):
-                    doc += '<<<' + self(worker.grid_dim) + ', ' + self(worker.block_dim) + '>>>'
+                    def dim3_str(dims):
+                        if dims is None:
+                            return 'None'
+                        elif isinstance(dims, (int, Expr)):
+                            return self(dims)
+                        else:
+                            return Text('dim3(') + self(dims) + ')'
+                    doc += '<<<' + dim3_str(worker.grid_dim) + ', ' + dim3_str(worker.block_dim) + '>>>'
         # params
         doc += '(' + self(e.args) + ')'
         return doc
@@ -218,6 +225,15 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
             'value=' + self(e.value),
         ]
         return 'ReduceCompute(' + doc_join(items, ', ') + ')'
+
+    def visit_CustomCompute(self, e: CustomCompute):
+        items = [
+            'name=' + self(e.name),
+            'data_type=' + self(e.data_type),
+            'params=[' + self(e.params) + ']',
+            'attributes={' + self(e.attributes) + '}'
+        ]
+        return 'CustomCompute(' + doc_join(items, ', ') + ')'
 
     def visit_EvaluateStmt(self, stmt: EvaluateStmt):
         return NewLine() + self(stmt.expr)
@@ -340,9 +356,14 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
         return Text('Host')
 
     def visit_Grid(self, grid: Grid):
-        grid_dim = self(grid.grid_dim) if grid.grid_dim else 'None'
-        block_dim = self(grid.block_dim) if grid.block_dim else 'None'
-        return Text('Grid(') + grid_dim + ', ' + block_dim + ')'
+        def dim3_str(dims):
+            if dims is None:
+                return 'None'
+            elif isinstance(dims, (int, Expr)):
+                return self(dims)
+            else:
+                return Text('dim3(') + self(dims) + ')'
+        return Text('Grid(') + dim3_str(grid.grid_dim) + ', ' + dim3_str(grid.block_dim) + ')'
 
     def visit_ThreadBlock(self, block: ThreadBlock):
         block_dim = (self(block.block_dim) if block.block_dim else 'None')

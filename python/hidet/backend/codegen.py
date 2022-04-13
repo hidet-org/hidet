@@ -108,6 +108,8 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             return self(convert(node))
         elif isinstance(node, str):
             return Text(node)
+        elif isinstance(node, Doc):
+            return node
         else:
             raise ValueError(type(node))
 
@@ -274,7 +276,14 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         worker = func.get_attr('worker')
         func_name = Text(self.canonize_funcname(e.func_var.hint))
         if isinstance(worker, Grid):
-            configs = [worker.grid_dim, worker.block_dim, worker.dynamic_smem_bytes]
+            def dim3_str(dims):
+                if dims is None:
+                    return 'None'
+                elif isinstance(dims, (int, Expr)):
+                    return self(dims)
+                else:
+                    return Text('dim3(') + self(dims) + ')'
+            configs = [dim3_str(worker.grid_dim), dim3_str(worker.block_dim), worker.dynamic_smem_bytes]
             launch_config = Text('<<<') + doc_join([self(v) for v in configs], sep=', ') + Text('>>>')
         else:
             launch_config = []

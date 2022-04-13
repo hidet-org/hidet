@@ -90,6 +90,7 @@ class ExprFunctor(NodeFunctor):
             TensorInput: cls.visit_TensorInput,
             TensorCompute: cls.visit_TensorCompute,
             ReduceCompute: cls.visit_ReduceCompute,
+            CustomCompute: cls.visit_CustomCompute,
             AnyExpr: cls.visit_AnyExpr,
             ReduceComputePattern: cls.visit_ReduceComputePattern,
             TensorComputePattern: cls.visit_TensorComputePattern,
@@ -196,6 +197,9 @@ class ExprFunctor(NodeFunctor):
         raise NotImplementedError()
 
     def visit_ReduceCompute(self, e: ReduceCompute):
+        raise NotImplementedError()
+
+    def visit_CustomCompute(self, e: CustomCompute):
         raise NotImplementedError()
 
     def visit_AnyExpr(self, e: AnyExpr):

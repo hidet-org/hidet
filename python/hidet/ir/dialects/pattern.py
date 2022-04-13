@@ -190,6 +190,7 @@ class PatternMatcher:
                 TensorInput: PatternMatcher.match_TensorInput,
                 TensorCompute: PatternMatcher.match_TensorCompute,
                 ReduceCompute: PatternMatcher.match_ReduceCompute,
+                CustomCompute: PatternMatcher.match_CustomCompute,
                 # type
                 ScalarType: PatternMatcher.match_ScalarType,
                 TensorType: PatternMatcher.match_TensorType,
@@ -333,6 +334,16 @@ class PatternMatcher:
             stack.enter_context(self.match(pattern.value, target.value))
             stack.enter_context(self.match(pattern.reduce_type, target.reduce_type))
             stack.enter_context(self.match(pattern.data_type, target.data_type))
+
+    def match_CustomCompute(self, pattern: CustomCompute, target: CustomCompute):
+        with ExitStack() as stack:
+            stack.enter_context(self.match(pattern.name, target.name))
+            stack.enter_context(self.match(pattern.data_type, target.data_type))
+            stack.enter_context(self.match(pattern.params, target.params))
+            for key, value in pattern.attributes.items():
+                if key not in target.attributes:
+                    raise NotMatchedError(pattern, target, 'key {} not found in target CustomCompute'.format(key))
+                stack.enter_context(self.match(value, target.attributes[key]))
 
     def match_DataLayout(self, pattern, target):
         if isinstance(target, (StridesLayout, DataLayout)):

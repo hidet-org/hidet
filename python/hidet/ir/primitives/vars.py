@@ -12,15 +12,17 @@ def attach_pool(var):
     return var
 
 
-def thread_idx() -> Var:
-    name = 'threadIdx.x'
+def thread_idx(dim='x') -> Var:
+    assert dim in ['x', 'y', 'z']
+    name = 'threadIdx.{}'.format(dim)
     if name not in _primitive_variables:
         _primitive_variables[name] = attach_pool(Var(hint=name, type=ScalarType('int32'), name=name))
     return _primitive_variables[name]
 
 
-def block_idx() -> Var:
-    name = 'blockIdx.x'
+def block_idx(dim='x') -> Var:
+    assert dim in ['x', 'y', 'z']
+    name = 'blockIdx.{}'.format(dim)
     if name not in _primitive_variables:
         _primitive_variables[name] = attach_pool(Var(hint=name, type=ScalarType('int32'), name=name))
     return _primitive_variables[name]

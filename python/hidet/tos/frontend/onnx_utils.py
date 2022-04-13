@@ -166,16 +166,19 @@ class OnnxMatMul(OnnxOperator):
         else:
             if self.can_squeeze(a.shape) and self.can_squeeze(b.shape):
                 assert isinstance(a, Tensor)
+                c_rank = max(len(a.shape), len(b.shape))
                 a = a.squeeze(range(len(a.shape) - 2)) if len(a.shape) > 2 else a
                 b = b.squeeze(range(len(b.shape) - 2)) if len(b.shape) > 2 else b
-                return [ops.matmul(a, b)]
+                c = ops.matmul(a, b)
+                if c_rank > len(c.shape):
+                    c = c.unsqueeze(dims=range(c_rank - len(c.shape)))
+                return [c]
             else:
                 raise NotImplementedError('Matmul with shapes {} and {}'.format(a.shape, b.shape))
 
     @staticmethod
     def can_squeeze(shape: List[int]) -> bool:
         return len(shape) == 2 or (len(shape) > 2 and prod(shape[:-2]) == 1)
-
 
 
 class OnnxSoftmax(OnnxOperator):

@@ -15,7 +15,7 @@ class FunctionBuilder:
         self.local_vars = []
         self.func: Optional[Function] = None
         self.body: Optional[Stmt] = None
-        self.extern_vars = {}
+        self.extern_vars = []
         self.attrs: Dict[str] = attrs if attrs else {}
         self.worker: Worker = worker
         self.label = label
@@ -31,7 +31,7 @@ class FunctionBuilder:
         self.params.extend(params)
 
     def extend_extern_vars(self, extern_vars: List[Var]):
-        self.extern_vars.update({var.name: var for var in extern_vars})
+        self.extern_vars.extend(extern_vars)
 
     def extend_local_vars(self, local_vars: List[Var]):
         self.local_vars.extend(local_vars)
@@ -50,7 +50,8 @@ class FunctionBuilder:
         if 'label' not in self.attrs:
             self.attrs['label'] = self.label
         if isinstance(self.attrs['worker'], (Grid, ThreadBlock, Warp, Thread)):
-            self.extern_vars = [block_idx(), thread_idx()]
+            self.extend_extern_vars([block_idx(dim) for dim in ['x', 'y', 'z']])
+            self.extend_extern_vars([thread_idx(dim) for dim in ['x', 'y', 'z']])
         self.func = Function(self.name, self.params, self.body, self.ret_type, self.local_vars, self.extern_vars, self.attrs)
 
     def get(self) -> Function:

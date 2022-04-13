@@ -1,4 +1,4 @@
-from typing import Union, Sequence, Tuple, Optional, List
+from typing import Union, Sequence, Tuple, Optional, List, Dict, Any
 from hidet.ir.type import ScalarType, TensorType, Scope, tensor_type, scalar_type
 from hidet.ir.expr import Expr, Constant, convert, Var, var, And, if_then_else
 from hidet.utils.info import float_type_min_value
@@ -86,10 +86,14 @@ class ReduceCompute(ComputeNode):
 
 
 class CustomCompute(ComputeNode):
-    def __init__(self, name, data_type: Union[ScalarType, TensorType]):
+    def __init__(self, name, params: Optional[List[Union[ComputeNode]]], data_type: Optional[Union[ScalarType, TensorType]], attributes=None):
         super().__init__(name, data_type)
-        self.name = name
-        self.out_data_type = data_type
+        self.name: str = name
+        self.params: Optional[List[Union[ComputeNode]]] = params
+        self.attributes: Optional[Dict[str, Any]] = attributes
+        if self.attributes is not None:
+            assert isinstance(self.attributes, dict)
+            self.attributes = {key: convert(value) for key, value in self.attributes.items()}
 
 
 def scalar_input(name, dtype):
@@ -122,5 +126,5 @@ def compute(name, shape, fcompute, accumulate=None, scope=None, layout=None):
     return TensorCompute(name, shape, axes, value, data_type, accumulate)
 
 
-def custom_compute(name, data_type):
-    return CustomCompute(name, data_type)
+def custom_compute(name, params, data_type, attributes=None):
+    return CustomCompute(name, params, data_type, attributes)

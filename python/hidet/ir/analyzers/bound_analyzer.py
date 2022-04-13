@@ -189,21 +189,18 @@ class BoundAnalyzer(FuncStmtExprVisitor):
         # note: we use the vars in func.extern_vars instead of hidet.ir.primitives.thread_idx for multiprocessing
         extern_var_map = {var.name: var for var in func.extern_vars}
         if isinstance(worker, (Grid, ThreadBlock, Warp, Thread)):
-            tid = extern_var_map['threadIdx.x']
-            ctaid = extern_var_map['blockIdx.x']
+            assert isinstance(worker, (Grid, Host))
             if isinstance(worker, Grid):
-                self.bound[tid] = BoundInfo(min_value=0, max_value=int(worker.block_dim)-1)
-                self.bound[ctaid] = BoundInfo(min_value=0, max_value=int(worker.grid_dim)-1)
-            elif isinstance(worker, ThreadBlock):
-                self.bound[tid] = BoundInfo(min_value=0, max_value=int(worker.block_dim)-1)
-                self.bound[ctaid] = BoundInfo(value=0)
-            elif isinstance(worker, Warp):
-                # for warp worker, it can only get the lane id from thread idx, which is between 0...31
-                self.bound[tid] = BoundInfo(min_value=0, max_value=1023)
-                self.bound[ctaid] = BoundInfo(value=0)
-            elif isinstance(worker, Thread):
-                self.bound[tid] = BoundInfo(min_value=0, max_value=1023)
-                self.bound[ctaid] = BoundInfo(value=0)
+                block_dims = worker.block_dim if isinstance(worker.block_dim, (list, tuple)) else [worker.block_dim]
+                grid_dims = worker.grid_dim if isinstance(worker.grid_dim, (list, tuple)) else [worker.grid_dim]
+                for block_dim, suffix in zip(block_dims, ['x', 'y', 'z']):
+                    self.bound[extern_var_map['threadIdx.{}'.format(suffix)]] = BoundInfo(min_value=0, max_value=int(block_dim) - 1)
+                for grid_dim, suffix in zip(grid_dims, ['x', 'y', 'z']):
+                    self.bound[extern_var_map['blockIdx.{}'.format(suffix)]] = BoundInfo(min_value=0, max_value=int(grid_dim) - 1)
+                # tid = extern_var_map['threadIdx.x']
+                # ctaid = extern_var_map['blockIdx.x']
+                # self.bound[tid] = BoundInfo(min_value=0, max_value=int(worker.block_dim)-1)
+                # self.bound[ctaid] = BoundInfo(min_value=0, max_value=int(worker.grid_dim)-1)
         self.visit(func.body)
 
     def combine(self, e: Union[Add, Sub, Multiply, FloorDiv, Mod, Div]):

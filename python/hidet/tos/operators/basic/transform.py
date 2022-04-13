@@ -81,7 +81,12 @@ def concat_task(inputs: List[TensorInput], axis: int) -> Task:
         assert all(a == b for j, (a, b) in enumerate(zip(shapes[0], shapes[i])) if j != axis), 'all tensors must have the same shape except axis dimension'
     rank = len(shapes[0])
     out_shape = [shapes[0][i] if i != axis else sum(shapes[j][i] for j in range(n)) for i in range(rank)]
-    out = custom_compute('concat', tensor_type('global', inputs[0].data_type.scalar_type, shape=out_shape)),
+    out = custom_compute(
+        name='concat',
+        params=inputs,
+        data_type=tensor_type('global', inputs[0].data_type.scalar_type, shape=out_shape),
+        attributes={'axis': axis}
+    )
     return Task(
         name='concat',
         computation=out,
@@ -173,7 +178,7 @@ class ReshapeOp(Operator):
         cnt = sum([1 for v in shape if v == -1])
         if cnt == 0:
             if prod(shape) != size:
-                raise ValueError('Given shape has different size with input tensor: shape {} and size {}'.format(shape, size))
+                raise ValueError('Reshape: given shape has different size with input tensor: shape {} and size {}'.format(shape, size))
             return shape
         elif cnt == 1:
             remain_size = prod([v for v in shape if v != -1])
