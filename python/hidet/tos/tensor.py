@@ -142,7 +142,7 @@ def symbol(shape: Sequence[int], dtype: str = 'float32', device: str = 'cuda', l
 
 def zeros(shape: Sequence[int], dtype: str = 'float32', device: str = 'cuda', layout: Optional[DataLayout] = None) -> Tensor:
     tensor = empty(shape, dtype, device, layout)
-    CudaAPI.memset_async(tensor.storage.addr, tensor.storage.num_bytes, value=0)
+    CudaAPI.memset_async(tensor.storage.addr, tensor.nbytes, value=0)
     return tensor
 
 
@@ -153,7 +153,7 @@ def ones(shape: Sequence[int], dtype: str = 'float32', device: str = 'cuda', lay
 def full(shape: Sequence[int], fill_value, dtype: str = 'float32', device: str = 'cuda', layout: Optional[DataLayout] = None) -> Tensor:
     tensor = empty(shape, dtype, device, layout)
     if dtype == 'float32':
-        CudaAPI.fill_value(tensor.storage.addr, tensor.storage.num_bytes, value=fill_value)
+        CudaAPI.fill_value(tensor.storage.addr, tensor.nbytes, value=fill_value)
     else:
         raise NotImplementedError()
     return tensor
@@ -162,7 +162,7 @@ def full(shape: Sequence[int], fill_value, dtype: str = 'float32', device: str =
 def randn(shape: Sequence[int], dtype: str = 'float32', mean: float = 0.0, stddev: float = 1.0, device: str = 'cuda', layout: Optional[DataLayout] = None) -> Tensor:
     tensor = empty(shape, dtype, device, layout)
     if dtype == 'float32':
-        CudaAPI.generate_normal(tensor.storage.addr, prod(tensor.shape), mean, stddev)
+        CudaAPI.generate_normal(tensor.storage.addr, num_elements=prod(tensor.shape), mean=mean, stddev=stddev)
     else:
         raise NotImplementedError()
     return tensor
@@ -181,10 +181,10 @@ def from_numpy(array: np.ndarray) -> Tensor:
     if array.dtype not in dtype_convert:
         raise NotImplementedError("Do not support convert np.ndarray with data type '{}'.".format(array.dtype))
     tensor = empty(shape=array.shape, dtype=dtype_convert[array.dtype], device='cpu')
-    CudaAPI.memcpy_async(void_pointer_to_uint64(array.ctypes.data_as(ctypes.c_void_p)),
-                         tensor.storage.addr,
-                         tensor.storage.num_bytes,
-                         CudaAPI.HostToHost)
+    CudaAPI.memcpy_async(src_addr=void_pointer_to_uint64(array.ctypes.data_as(ctypes.c_void_p)),
+                         dst_addr=tensor.storage.addr,
+                         num_bytes=tensor.nbytes,
+                         kind=CudaAPI.HostToHost)
     CudaAPI.device_synchronization()
     return tensor
 

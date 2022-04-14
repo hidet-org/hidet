@@ -1,8 +1,28 @@
 import os
 import numpy as np
 import hidet
+import hidet as hi
 from hidet import tos
 from hidet.utils import hidet_cache_dir
+
+
+def demo_old_resnet50():
+    import onnx
+    import onnxruntime
+    model_path = '/home/yaoyao/model_zoo/resnet50_v1.onnx'
+    # model_path = '/home/yaoyao/model_zoo/resnet50-v2-7.onnx'
+    model = onnx.load_model(model_path)
+    onnx.checker.check_model(model)
+    # run use hidet
+    x_hidet = hi.randn([1, 3, 224, 224])
+    module = hidet.tos.frontend.onnx_utils.OnnxModule(model)
+    y_hidet = module(x_hidet)
+    # run use onnx runtime
+    onnx_infer = onnxruntime.InferenceSession(model_path)
+    y_onnx = onnx_infer.run(None, {'input_tensor:0': x_hidet.cpu().numpy()})
+    print(y_hidet[1])
+    print(y_onnx[1])
+    np.testing.assert_allclose(actual=y_hidet[1].cpu().numpy(), desired=y_onnx[1], rtol=1e-5, atol=1e-5)
 
 
 def demo_resnet50():
@@ -20,10 +40,17 @@ def demo_resnet50():
     model = onnx.load_model(model_path)
     onnx.checker.check_model(model)
     # run use hidet
-    x_hidet = randn([1, 3, 224, 224], device='cuda')
+    # x_hidet = randn([1, 3, 224, 224], device='cuda')
+    x_hidet = hi.zeros([1, 3, 224, 224], device='cuda')
     module = OnnxModule(model)
     y_hidet = module(x_hidet)
     y_hidet = y_hidet.cpu().numpy()
+
+    x_symbol = hi.symbol([1, 3, 224, 224], dtype='float32', device='cuda')
+    y_symbol = module(x_symbol)
+    graph = hi.trace_from(y_symbol)
+    with open('./outs/graph.json', 'w') as f:
+        hi.utils.netron.dump(graph, f)
 
     # run use onnx runtime
     onnx_infer = onnxruntime.InferenceSession(model_path)
@@ -72,5 +99,6 @@ def demo_bert():
 
 
 if __name__ == '__main__':
+    # demo_old_resnet50()
     demo_resnet50()
     # demo_bert()
