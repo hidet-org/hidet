@@ -61,8 +61,14 @@ def repo_root() -> str:
     return repo.working_dir
 
 
-def hidet_cache_dir() -> str:
-    return os.path.join(repo_root(), '.hidet_cache')
+def hidet_cache_dir(category='root') -> str:
+    root = os.path.join(repo_root(), '.hidet_cache')
+    if category == 'root':
+        ret = root
+    else:
+        ret = os.path.join(root, category)
+    os.makedirs(ret, exist_ok=True)
+    return ret
 
 
 if __name__ == '__main__':

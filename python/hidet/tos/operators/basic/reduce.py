@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Union
 
 from ..common import Task, Operator, Tensor, TensorInput, Grid, compute, reduce, input_like, normalize_dim
 
@@ -53,5 +53,7 @@ class ReduceMeanOp(Operator):
         )
 
 
-def reduce_mean(x: Tensor, dims: List[int], keep_dim: bool = False) -> Tensor:
+def reduce_mean(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -> Tensor:
+    if isinstance(dims, int):
+        dims = [dims]
     return ReduceMeanOp(x, dims, keep_dim).get_output(0)

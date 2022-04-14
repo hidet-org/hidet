@@ -7,7 +7,7 @@ def conv2d_task(batch_size, in_channels, height, width, out_channels, kernel, pa
     weight = tensor_input('weight', 'float32', [out_channels, in_channels, kernel[0], kernel[1]], scope='global', layout=weight_layout)
     padded = compute(
         name='pad',
-        shape=[batch_size, in_channels, height + padding[0] + padding[2], weight + padding[1] + padding[3]],
+        shape=[batch_size, in_channels, height + padding[0] + padding[2], width + padding[1] + padding[3]],
         fcompute=lambda n, c, h, w: input.protect_read(indices=[n, c, h - padding[0], w - padding[1]], default_value=0.0))
     out_height = (height + padding[0] + padding[2] - kernel[0]) // stride[0] + 1
     out_width = (width + padding[1] + padding[3] - kernel[1]) // stride[1] + 1

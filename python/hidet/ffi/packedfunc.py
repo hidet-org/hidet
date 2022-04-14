@@ -1,6 +1,5 @@
 from typing import Dict, Sequence, Union, Type
 import ctypes
-from pycuda.gpuarray import GPUArray
 
 from .ffi import _LIB
 from ctypes import c_int32, c_void_p, pointer, c_float, cast, c_bool
@@ -92,8 +91,7 @@ class PackedFunc:
             if self.ret_type is bool:
                 ret_arg = c_int32()
             else:
-                # todo: add support for other types when needed
-                raise NotImplementedError()
+                raise NotImplementedError("Currently do not support return type '{}' in packed function.".format(self.ret_type))
             converted_args.append(cast(pointer(ret_arg), c_void_p))
         else:
             ret_arg = None

@@ -2,7 +2,7 @@ from typing import List
 from hidet.ir.type import ScalarType, TensorType, FuncType
 from hidet.ir.expr import BinaryOp, Add, Sub, Multiply, Div, Mod, FloorDiv, Condition, LessThan, Equal, IfThenElse, TensorSlice, Not, Or, And, LessEqual, Let, RightShift, LeftShift, BitwiseNot, BitwiseOr, BitwiseAnd, AlterLayout, Neg
 from hidet.ir.expr import Var, Constant, TensorElement, Call, Cast
-from hidet.ir.dialects.compute import ScalarInput, TensorInput, TensorCompute, ReduceCompute
+from hidet.ir.dialects.compute import ScalarInput, TensorInput, TensorCompute, ReduceCompute, CustomCompute
 from hidet.ir.dialects.lowlevel import PointerType, Dereference, Reference, Address
 
 from .base import ExprFunctor
@@ -12,16 +12,6 @@ from ..dialects.pattern import ScalarExprPattern, TensorComputePattern, ReduceCo
 def is_bool(tp):
     return isinstance(tp, ScalarType) and tp.name == 'bool'
 
-
-# def compatible(lhs_dtype: str, rhs_dtype: str):
-#     integers = ['int32', 'int64']
-#     floats = ['float32']
-#     categories = [integers, floats]
-#     for category in categories:
-#         if lhs_dtype in category and rhs_dtype in category:
-#             return True
-#     return False
-#
 
 def upgrade(dtypes: List[str]) -> str:
     dtype2priority = {
@@ -33,9 +23,6 @@ def upgrade(dtypes: List[str]) -> str:
 
 
 class TypeInfer(ExprFunctor):
-    def visit_Neg(self, e: Neg):
-        raise NotImplementedError()
-
     def visit_Address(self, e: Address):
         raise NotImplementedError()
 
@@ -55,6 +42,9 @@ class TypeInfer(ExprFunctor):
             return ScalarType('bool')
         else:
             raise NotImplementedError('Binary op type infer {}'.format(type(e)))
+
+    def visit_Neg(self, e: Neg):
+        return self(e.a)
 
     def visit_Add(self, e: Add):
         return self.visit_Binary(e)
@@ -167,6 +157,9 @@ class TypeInfer(ExprFunctor):
         return e.data_type
 
     def visit_ReduceCompute(self, e: ReduceCompute):
+        return e.data_type
+
+    def visit_CustomCompute(self, e: CustomCompute):
         return e.data_type
 
     def visit_AnyExpr(self, e: AnyExpr):

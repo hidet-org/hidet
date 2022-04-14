@@ -286,15 +286,9 @@ class FlattenOp(Operator):
         start_dim = normalize_dim(start_dim, rank)
         end_dim = normalize_dim(end_dim, rank)
         assert 0 <= start_dim < end_dim <= rank
-        plan = []
-        for i, s in enumerate(x.shape):
-            if i < start_dim or i >= end_dim:
-                plan.append([i])
-            else:
-                if len(plan) == 0:
-                    plan.append([i])
-                else:
-                    plan[-1].append(i)
+        dims = list(range(len(x.shape)))
+        plan = [[v] for v in dims[:start_dim]] + [dims[start_dim: end_dim]] + [[v] for v in dims[end_dim:]]
+        print(start_dim, end_dim, plan)
         super().__init__(
             inputs=[x],
             task=rearrange_task(input_like(x, 'x'), plan=plan),

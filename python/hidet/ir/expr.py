@@ -302,7 +302,6 @@ class TensorSlice(Expr):
 
 class Call(Expr):
     def __init__(self, func, args):
-        # todo: use function name (str) directly as the function identity
         self.func_var: Var = func
         self.args = convert(args)
 

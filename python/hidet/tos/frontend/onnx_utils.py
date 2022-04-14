@@ -432,9 +432,9 @@ class OnnxModule(nn.Module):
         # run nodes
         for operator in self.operators:
             inputs = [name2tensor[name] for name in operator.input_names]
-            print('{:>20}: '.format(operator.node.name), end='')
+            # print('{:>20}: '.format(operator.node.name), end='')
             outputs = operator.run(inputs)
-            print('{}'.format(', '.join(out.signature() for out in outputs)))
+            # print('{}'.format(', '.join(out.signature() for out in outputs)))
             assert len(outputs) == len(operator.output_names)
             for name, tensor in zip(operator.output_names, outputs):
                 name2tensor[name] = tensor

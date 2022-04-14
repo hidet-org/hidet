@@ -26,14 +26,8 @@ def register_primitive_function(name, func_or_ftype: Optional[Union[Function, Fu
     elif isinstance(func_or_ftype, FuncType):
         func = None
         func_type = func_or_ftype
-    elif func_or_ftype is None:
-        # currently, we allow to register primitive function without function type
-        # leave the check to underlying compiler
-        # todo: add the check at our level
-        func = None
-        func_type = None
     else:
-        raise False
+        raise ValueError("Register function {} with type {}, expect a Function or FuncType.".format(name, func_or_ftype))
     v = Var(name, func_type)
     assert name not in _primitive_functions
     _primitive_functions[name] = (v, func_type, func)
