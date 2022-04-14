@@ -33,6 +33,7 @@ def demo_resnet50():
     # compare
     np.testing.assert_allclose(actual=y_hidet, desired=y_onnx, rtol=1e-5, atol=1e-5)
 
+
 def demo_bert():
     import onnx
     import onnxruntime

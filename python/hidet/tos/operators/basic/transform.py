@@ -323,6 +323,9 @@ class CastOp(Operator):
 
 class ConcatOp(Operator):
     def __init__(self, tensors: List[Tensor], axis: int):
+        if len(tensors) == 0:
+            raise ValueError('Concat requires at least one tensor, 0 given.')
+        axis = normalize_dim(axis, len(tensors[0].shape))
         super().__init__(
             inputs=tensors,
             task=concat_task([input_like(tensor, 'x{}'.format(idx)) for idx, tensor in enumerate(tensors)], axis=axis),

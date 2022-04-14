@@ -263,7 +263,6 @@ class OnnxGemm(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         a, b = inputs[:2]
         c = inputs[2] if len(inputs) > 2 else None
-
         if self.trans_a == 1:
             a = ops.rearrange(a, plan=[[1], [0]])
         if self.trans_b == 1:

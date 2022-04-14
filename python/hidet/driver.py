@@ -45,7 +45,7 @@ def build_task(task, space_level, opt_level, use_cache=True, cache_dir=None) -> 
         ir_module = implement(task)
         # lower ir module
         # todo: turn off keep_ir after debug
-        with pass_context(opt_level=opt_level, keep_ir=True, keep_ir_dir='./outs/ir'):
+        with pass_context(opt_level=opt_level, keep_ir=False, keep_ir_dir='./outs/ir'):
             ir_module = lower(ir_module)
         # code generation
         codegen(ir_module, src_out_path=src_path)
