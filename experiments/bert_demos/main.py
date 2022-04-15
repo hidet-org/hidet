@@ -100,5 +100,5 @@ def demo_bert():
 
 if __name__ == '__main__':
     # demo_old_resnet50()
-    demo_resnet50()
-    # demo_bert()
+    # demo_resnet50()
+    demo_bert()

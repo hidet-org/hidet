@@ -1,6 +1,7 @@
 from typing import List, Optional, Dict, Tuple, Sequence, Union
 import ctypes
 import numpy as np
+from functools import partial
 from hidet.ir.layout import DataLayout
 from hidet.ir.layout.data_layout import RowMajorLayout, ColumnMajorLayout
 from hidet.runtime import Storage
@@ -166,6 +167,38 @@ def randn(shape: Sequence[int], dtype: str = 'float32', mean: float = 0.0, stdde
     else:
         raise NotImplementedError()
     return tensor
+
+
+def _tensor_like(constructor, data, shape, dtype, device, layout):
+    shape = data.shape if shape is None else shape
+    dtype = data.dtype if dtype is None else dtype
+    device = data.device if device is None else device
+    layout = data.layout if layout is None else layout
+    return constructor(shape, dtype, device, layout)
+
+
+def empty_like(data: Tensor, shape: Optional[Sequence[int]] = None, dtype: Optional[str] = None, device: Optional[str] = None, layout: Optional[DataLayout] = None) -> Tensor:
+    return _tensor_like(empty, data, shape, dtype, device, layout)
+
+
+def symbol_like(data: Tensor, shape: Optional[Sequence[int]] = None, dtype: Optional[str] = None, device: Optional[str] = None, layout: Optional[DataLayout] = None) -> Tensor:
+    return _tensor_like(symbol, data, shape, dtype, device, layout)
+
+
+def zeros_like(data: Tensor, shape: Optional[Sequence[int]] = None, dtype: Optional[str] = None, device: Optional[str] = None, layout: Optional[DataLayout] = None) -> Tensor:
+    return _tensor_like(zeros, data, shape, dtype, device, layout)
+
+
+def ones_like(data: Tensor, shape: Optional[Sequence[int]] = None, dtype: Optional[str] = None, device: Optional[str] = None, layout: Optional[DataLayout] = None) -> Tensor:
+    return _tensor_like(ones, data, shape, dtype, device, layout)
+
+
+def full_like(data: Tensor, fill_value, shape: Optional[Sequence[int]] = None, dtype: Optional[str] = None, device: Optional[str] = None, layout: Optional[DataLayout] = None) -> Tensor:
+    return _tensor_like(partial(full, fill_value=fill_value), data, shape, dtype, device, layout)
+
+
+def randn_like(data: Tensor, shape: Optional[Sequence[int]] = None, dtype: Optional[str] = None, device: Optional[str] = None, layout: Optional[DataLayout] = None) -> Tensor:
+    return _tensor_like(randn, data, shape, dtype, device, layout)
 
 
 def void_pointer_to_uint64(p):

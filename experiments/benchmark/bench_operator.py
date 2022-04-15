@@ -9,67 +9,45 @@ import git
 import numpy as np
 from tabulate import tabulate
 
+import hidet
+import hidet as hi
+from hidet.tos import operators as ops
 from hidet.backend import build
 from hidet.baselines.matmul import matmul_cublas, matmul_opt, matmul_cutlass
 from hidet.baselines.conv2d import conv2d_cudnn
 from hidet.implement import implement, impl_context
 from hidet.implement.cuda import CudaGridStaticMatmulImplementer
 from hidet.implement.cuda.conv2d import CudaGridStaticConv2dImplicitGemmImplementer
-from hidet.tasks.nn import matmul, conv2d
 from hidet.utils import cuda
+from hidet.utils.git_utils import get_repo_commit_date, get_repo_sha
 from hidet.testing import Conv2dSetting
 from hidet.tos.tensor import randn, empty
-
-
-def get_repo_sha(short=False):
-    repo = git.Repo(search_parent_directories=True)
-    sha = repo.head.object.hexsha
-    if short:
-        return sha[:7]
-    else:
-        return sha
-
-
-def get_repo_commit_date() -> str:
-    """
-    return the git head commit time with format 'yyyy-mm-dd-hh-MM' like '2022-03-23-15-13'.
-    """
-    repo = git.Repo(search_parent_directories=True)
-    commit = repo.head
-    committed_date = commit.commit.committed_date
-    dt = datetime.datetime.fromtimestamp(committed_date)
-    return str(dt.strftime('%Y-%m-%d-%H-%M'))
 
 
 def print_latencies(name, latencies):
     print('{:>25}: {:.3f} (std {:.3f}) ms [{}]' .format(name, np.median(latencies), np.std(latencies), " ".join([f'{v:.3f}' for v in latencies])))
 
 
-def print_enviroment(args):
-    with open(os.path.join(args.out_dir, 'env.txt'), 'w') as f:
-        f.write(tabulate(
-            headers=[
-                'Name', 'Value'
-            ],
-            tabular_data=[
-                ['Commit', get_repo_sha()],
-                ['GPU', cuda.query_device_name()],
-                ['Arch', cuda.query_arch()],
-                ['Compute Capacity', cuda.query_compute_capability()],
-                ['Lock Clock', args.lock_clock],
-                ['Current SM Clock (MHz)', cuda.query_gpu_current_clock()],
-                ['Current Memory Clock (MHz)', cuda.query_memory_current_clock()],
-                ['Warmup/Number/Repeat', '{} / {} / {}'.format(args.warmup, args.number, args.repeat)]
-            ]
-        ))
+def enviroment_info(args) -> str:
+    return str(tabulate(
+        headers=[
+            'Name', 'Value'
+        ],
+        tabular_data=[
+            ['Commit', get_repo_sha()],
+            ['GPU', cuda.query_device_name()],
+            ['Arch', cuda.query_arch()],
+            ['Compute Capacity', cuda.query_compute_capability()],
+            ['Lock Clock', args.lock_clock],
+            ['Current SM Clock (MHz)', cuda.query_gpu_current_clock()],
+            ['Current Memory Clock (MHz)', cuda.query_memory_current_clock()],
+            ['Warmup/Number/Repeat', '{} / {} / {}'.format(args.warmup, args.number, args.repeat)]
+        ]
+    ))
 
 
 def benchmark_matmul(args):
     workloads = [
-        # (1024, 1024, 1024),
-        # (5120, 1024, 1024),
-        # (1024, 5120, 1024),
-        # (1024, 1024, 5120),
         *[(16 * T, 2304, 768) for T in [5, 24, 43, 62, 81, 100, 119, 128]]
     ]
     baselines = []
@@ -88,7 +66,12 @@ def benchmark_matmul(args):
     for idx, (M, N, K) in enumerate(workloads):
         for name, allowed in hidet_variants:
             with impl_context(allowed=allowed):
-                ir_module = implement(matmul(M, N, K))
+                a = hi.symbol([M, K], dtype='float32', device='cuda')
+                b = hi.symbol([K, N], dtype='float32', device='cuda')
+                c = ops.matmul(a, b)
+                op = c.trace[0]
+                with impl_context(space_level=args.space):
+                    ir_module = implement(op.task)
                 module = build(ir_module, output_dir=f'./outs/bench/{name}_{M}x{N}x{K}', verbose=False)
                 hidet_func[(idx, name)] = module['matmul']
     names = [name for name, _ in baselines] + [name for name, _ in hidet_variants]
@@ -125,15 +108,18 @@ def benchmark_matmul(args):
             cur += 1
         print()
         table.append(row)
-    with open(os.path.join(args.out_dir, 'matmul.raw.json'), 'w') as f:
+    out_dir = os.path.join(args.out_dir, 'matmul_space{}'.format(args.space))
+    os.makedirs(out_dir, exist_ok=True)
+    with open(os.path.join(out_dir, 'env.txt'), 'w') as f:
+        f.write(enviroment_info(args))
+    with open(os.path.join(args.out_dir, 'raw.json'), 'w') as f:
         json.dump(raw_data, f, indent=2)
-    with open(os.path.join(args.out_dir, 'matmul.summary'), 'w') as f:
+    with open(os.path.join(args.out_dir, 'summary.txt'), 'w') as f:
         f.write(tabulate(table, headers, tablefmt='plain', floatfmt='.3f'))
 
 
 def benchmark_conv2d(args):
     workloads: List[Conv2dSetting] = list(Conv2dSetting.resnet50_conv2ds(batch_size=1).keys()) + list(Conv2dSetting.resnet50_conv2ds(batch_size=16).keys())
-    # workloads: List[Conv2dSetting] = list(Conv2dSetting.resnet50_conv2ds(batch_size=1).keys())[:5]
     cudnn_baselines = []
     hidet_variants = []
     if 'vendor' in args.kernels:
@@ -154,7 +140,12 @@ def benchmark_conv2d(args):
         print(setting)
         for name, allowed in hidet_variants:
             with impl_context(allowed=allowed) as ctx:
-                ir_module = implement(conv2d(n, ci, hi, wi, co, (kx, ky), (px, py), (sx, sy)))
+                x = hidet.symbol([n, ci, hi, wi], dtype='float32', device='cuda')
+                w = hidet.symbol([co, ci, kx, ky], dtype='float32', device='cuda')
+                y = ops.conv2d(x, w, (px, py), (sx, sy))
+                op = y.trace[0]
+                with impl_context(space_level=args.space):
+                    ir_module = implement(op.task)
                 module = build(ir_module, output_dir=f'./outs/bench/{name}_{setting}', keep_ir=False, verbose=False)
                 hidet_func[(idx, name)] = module['conv2d']
 
@@ -193,14 +184,18 @@ def benchmark_conv2d(args):
             raw_data[str(setting)][name] = latencies
         print()
         table.append(row)
-    with open(os.path.join(args.out_dir, 'conv2d.raw.json'), 'w') as f:
+    out_dir = os.path.join(args.out_dir, 'conv2d_space{}'.format(args.space))
+    os.makedirs(out_dir, exist_ok=True)
+    with open(os.path.join(out_dir, 'env.txt'), 'w') as f:
+        f.write(enviroment_info(args))
+    with open(os.path.join(out_dir, 'raw.json'), 'w') as f:
         json.dump(raw_data, f, indent=2)
-    with open(os.path.join(args.out_dir, 'conv2d.summary'), 'w') as f:
+    with open(os.path.join(out_dir, 'summary.txt'), 'w') as f:
         f.write(tabulate(table, headers, tablefmt='plain', floatfmt='.3f'))
 
 
-parser = argparse.ArgumentParser('Hidet benchmark script.')
-# latency measurement
+parser = argparse.ArgumentParser('Hidet operator benchmark script.')
+# latency measurement configs
 parser.add_argument('--cool', type=int, default=1)
 parser.add_argument('--warmup', type=int, default=5)
 parser.add_argument('--number', type=int, default=5)
@@ -208,17 +203,20 @@ parser.add_argument('--repeat', type=int, default=5)
 parser.add_argument('--no-lock-clock', dest='lock_clock', action='store_false')
 parser.add_argument('--workloads', type=str, nargs='+', default=['matmul', 'conv2d'], choices=['matmul', 'conv2d'])
 parser.add_argument('--kernels', type=str, nargs='+', default=['vendor', 'hidet'], choices=['vendor', 'hidet'])
-# output
+# schedule config
+parser.add_argument('--space', type=int, choices=[0, 1, 2], default=0)
+# output config
 parser.add_argument('--out-dir', type=str, default='./results')
 
 if __name__ == '__main__':
     args = parser.parse_args()
+    # e.g., './results/2022-03-23_85e5892/V100/operators/'
     args.out_dir = os.path.join(args.out_dir,
                                 '{}_{}'.format(get_repo_commit_date(), get_repo_sha(short=True)),
-                                cuda.query_device_name(short=True))
+                                cuda.query_device_name(short=True),
+                                'operators')
     with cuda.BenchmarkContext(lock_clock=args.lock_clock):
         os.makedirs(args.out_dir, exist_ok=True)
-        print_enviroment(args)
         benchmark_func = {
             'matmul': benchmark_matmul,
             'conv2d': benchmark_conv2d,

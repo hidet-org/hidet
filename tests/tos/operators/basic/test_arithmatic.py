@@ -82,5 +82,5 @@ def test_neg(shape):
 
 
 if __name__ == '__main__':
-    pytest.main([__name__])
+    pytest.main([__file__])
 

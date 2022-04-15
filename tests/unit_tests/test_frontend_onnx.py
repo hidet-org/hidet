@@ -91,4 +91,4 @@ def test_bert(batch_size=1, seq_length=128):
 
 
 if __name__ == '__main__':
-    pytest.main([__name__])
+    pytest.main([__file__])

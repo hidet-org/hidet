@@ -26,14 +26,15 @@ def get_repo_sha(short=False):
         return sha
 
 
-def get_repo_commit_date(strftime='%Y-%m-%d-%H-%M') -> str:
+def get_repo_commit_date(strftime='%Y-%m-%d') -> str:
     """
     Get the commit date time of current commit (i.e., HEAD).
 
     Parameters
     ----------
-    strftime: str, default '%Y-%m-%d-%H-%M'
-        The format of the date time. The default format will return a date time like '2023-03-24-13-46'.
+    strftime: str, default '%Y-%m-%d'
+        The format of the date time. The default format will return a date time like '2023-03-24'.
+        Others: %H: hour, %M: minutes
 
     Returns
     -------

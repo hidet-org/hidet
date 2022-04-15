@@ -1,12 +1,10 @@
 from typing import List, Optional, Dict, Any, Iterable, Tuple
-from collections import OrderedDict, defaultdict
+from collections import defaultdict
 
-import hidet.utils
 from hidet.ir.task import Task
 from hidet.runtime import CompiledFunction
 from hidet.driver import build_task
-from hidet.tos.tensor import empty, Tensor, symbol
-from hidet import utils
+from hidet.tos.tensor import empty, Tensor
 
 
 def trim_op_ending(name: str):
@@ -14,14 +12,11 @@ def trim_op_ending(name: str):
 
 
 class Operator:
-    imperative_mode = 1
-    lazy_mode = 2
+    _current_opt_level = 0
+    _current_space_level = 0
+    _use_cache = True
 
-    current_mode = imperative_mode
-    current_opt_level = 0
-    current_space_level = 0
-
-    task_cache: Dict[Tuple[int, int], Dict[str, CompiledFunction]] = defaultdict(dict)
+    _task_cache: Dict[Tuple[int, int], Dict[str, CompiledFunction]] = defaultdict(dict)
 
     def __init__(
             self,
@@ -34,8 +29,7 @@ class Operator:
         self.task: Task = task
         self.attributes: Dict[str, Any] = kwargs
         self.outputs: Optional[List[Tensor]] = outputs
-        name = name if name else trim_op_ending(self.__class__.__name__)
-        self.name = name
+        self.name = name if name else trim_op_ending(self.__class__.__name__)
 
         assert all(isinstance(v, Tensor) for v in inputs)
 
@@ -74,12 +68,12 @@ class Operator:
     def imperative_run(self, inputs: List[Tensor]) -> List[Tensor]:
         if self.task_func is None:
             task_string = str(self.task)
-            level = (self.current_space_level, self.current_opt_level)
-            if task_string in self.task_cache[level]:
-                self.task_func = self.task_cache[level][task_string]
+            level = (self._current_space_level, self._current_opt_level)
+            if task_string in self._task_cache[level]:
+                self.task_func = self._task_cache[level][task_string]
             else:
-                self.task_func = build_task(self.task, space_level=self.current_space_level, opt_level=self.current_opt_level, use_cache=True)
-                self.task_cache[level][task_string] = self.task_func
+                self.task_func = build_task(self.task, space_level=self._current_space_level, opt_level=self._current_opt_level, use_cache=self._use_cache)
+                self._task_cache[level][task_string] = self.task_func
         output_type = self.task.compute.data_type
         outputs = [empty(shape=[int(v) for v in output_type.shape], dtype=output_type.scalar_type.name, layout=output_type.layout)]
         self.task_func(*inputs, *outputs)
@@ -101,17 +95,13 @@ class Operator:
         return new_op
 
 
-def imperative_mode():
-    Operator.current_mode = Operator.imperative_mode
-
-
-def lazy_mode():
-    Operator.current_mode = Operator.lazy_mode
-
-
 def opt_level(level=0):
-    Operator.current_opt_level = level
+    Operator._current_opt_level = level
 
 
 def space_level(level=0):
-    Operator.current_space_level = level
+    Operator._current_space_level = level
+
+
+def cache_operator(use_cache=True):
+    Operator._use_cache = use_cache

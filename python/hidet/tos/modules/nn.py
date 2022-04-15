@@ -1,9 +1,8 @@
-from .module import Module, Tensor
-# from . import ops
-from . import operators as ops
-from .common import normalize
-from .container import Sequential
-from .tensor import randn, zeros, ones
+from hidet.tos import operators as ops
+from hidet.tos.common import normalize
+from hidet.tos.module import Module, Tensor
+from hidet.tos.tensor import randn, zeros, ones
+from hidet.tos.modules.container import Sequential
 
 
 class Conv2d(Module):

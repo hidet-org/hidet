@@ -1,8 +1,7 @@
 from . import tensor
 from . import operator
 from . import module
-from . import nn
-# from . import ops
+from . import modules
 from . import operators
 from . import models
 from . import ir
@@ -11,11 +10,11 @@ from . import frontend
 from .tensor import Tensor
 from .operator import Operator
 from .module import Module
-from .container import Sequential
 from .ir import FlowGraph
 from .transforms import GraphPass, PassContext
 
-from .tensor import randn, empty, zeros, ones, symbol, array
-from .operator import lazy_mode, imperative_mode, space_level, opt_level
+from .tensor import array, randn, empty, zeros, ones, symbol, randn_like, empty_like, zeros_like, ones_like, symbol_like
+from .operator import space_level, opt_level
 from .ir import trace_from
 from .transforms import optimize
+from .modules import nn

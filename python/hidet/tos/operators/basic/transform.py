@@ -288,7 +288,6 @@ class FlattenOp(Operator):
         assert 0 <= start_dim < end_dim <= rank
         dims = list(range(len(x.shape)))
         plan = [[v] for v in dims[:start_dim]] + [dims[start_dim: end_dim]] + [[v] for v in dims[end_dim:]]
-        print(start_dim, end_dim, plan)
         super().__init__(
             inputs=[x],
             task=rearrange_task(input_like(x, 'x'), plan=plan),

@@ -2,7 +2,7 @@ from typing import List, Union, Sequence, Optional
 import os
 import numpy as np
 import hidet
-from hidet.tos import nn
+from hidet.tos.modules import nn
 from hidet.tos import operators as ops
 from hidet.tos.tensor import Tensor, from_numpy, randn
 from hidet.utils import line_profile, prod
@@ -411,14 +411,13 @@ class OnnxModule(nn.Module):
         super().__init__()
         import onnx.numpy_helper
         graph = model.graph
-        self.name = graph.name
-        self.graph = graph
+        self.name: str = graph.name
         for param in graph.initializer:
             numpy_array = onnx.numpy_helper.to_array(tensor=param)
             self.parameters[param.name] = from_numpy(numpy_array).cuda()
-        self.input_names = [input.name for input in graph.input if input.name not in self.parameters]
-        self.output_names = [output.name for output in graph.output]
-        self.operators = [dispatch(node) for node in graph.node]
+        self.input_names: List[str] = [input.name for input in graph.input if input.name not in self.parameters]
+        self.output_names: List[str] = [output.name for output in graph.output]
+        self.operators: List[OnnxOperator] = [dispatch(node) for node in graph.node]
 
     def forward(self, *args):
         name2tensor = {}

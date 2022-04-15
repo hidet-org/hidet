@@ -4,7 +4,6 @@ import sys
 import shutil
 import tempfile
 import urllib.parse
-import urllib.parse
 import urllib.request
 from tqdm import tqdm
 
@@ -25,7 +24,7 @@ def download(url: str, file_name: Optional[str] = None, progress: bool = True) -
 def download_url_to_file(url, dst, progress=True):
     # modified based on PyTorch
     file_size = None
-    req = urllib.request.Request(url, headers={"User-Agent": "torch.hub"})
+    req = urllib.request.Request(url, headers={"User-Agent": ""})
     u = urllib.request.urlopen(req)
     meta = u.info()
     if hasattr(meta, 'getheaders'):
