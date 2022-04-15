@@ -14,7 +14,7 @@ def test_lds128():
     with FunctionBuilder('test_lds128.grid', attrs={'worker': Grid(grid_dim=1, block_dim=1)}) as fb:
         # params
         regs = [var(f'reg{i}', 'float32') for i in range(4)]
-        smem_tensor = tensor_var('smem_tensor', [4], 'shared', 'float32', layout=[1])
+        smem_tensor = tensor_var('smem_tensor', [4], 'shared', 'float32')
         fb.extend_local_vars(regs + [smem_tensor])
 
         # body
@@ -37,7 +37,7 @@ def test_sts128():
     with FunctionBuilder('test_sts128.grid', attrs={'worker': Grid(grid_dim=1, block_dim=1)}) as fb:
         # params
         regs = [var(f'reg{i}', 'float32') for i in range(4)]
-        smem_tensor = tensor_var('smem_tensor', [4], 'shared', 'float32', layout=[1])
+        smem_tensor = tensor_var('smem_tensor', [4], 'shared', 'float32')
         fb.extend_local_vars(regs + [smem_tensor])
 
         # body

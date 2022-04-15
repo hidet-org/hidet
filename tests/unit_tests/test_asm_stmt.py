@@ -6,7 +6,7 @@ from hidet.ir.expr import var
 from hidet.ir.func import IRModule
 from hidet.ir.primitives import thread_idx
 from hidet.ir.stmt import AsmStmt, BlackBoxStmt
-from hidet.ir.task import Grid
+from hidet.ir.task import Grid, Task
 
 
 def test_asm_stmt():
@@ -26,7 +26,7 @@ def test_asm_stmt():
                 sb += BlackBoxStmt(r'printf("%d %d %d\n", {}, {}, {});', a, b, c)
         fb.set_body(sb.finish())
     func = fb.get()
-    ir_module = IRModule({func.name: func}, task=None)
+    ir_module = IRModule({func.name: func})
     module = build(ir_module, './outs/demo_asm')
     module['demo_asm']()
 

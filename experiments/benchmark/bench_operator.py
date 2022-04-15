@@ -194,7 +194,7 @@ def benchmark_conv2d(args):
         f.write(tabulate(table, headers, tablefmt='plain', floatfmt='.3f'))
 
 
-parser = argparse.ArgumentParser('Hidet operator benchmark script.')
+parser = argparse.ArgumentParser(description='Hidet operator benchmark script.')
 # latency measurement configs
 parser.add_argument('--cool', type=int, default=1)
 parser.add_argument('--warmup', type=int, default=5)

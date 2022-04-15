@@ -6,7 +6,7 @@ from hidet.ir.layout import DataLayout
 from hidet.ir.layout.data_layout import RowMajorLayout, ColumnMajorLayout
 from hidet.runtime import Storage
 from hidet.utils import prod
-from hidet.ffi.cuda_api import CudaAPI
+from hidet.ffi import cuda_api, cuda_kernels
 
 
 def convert(v):
@@ -143,27 +143,25 @@ def symbol(shape: Sequence[int], dtype: str = 'float32', device: str = 'cuda', l
 
 def zeros(shape: Sequence[int], dtype: str = 'float32', device: str = 'cuda', layout: Optional[DataLayout] = None) -> Tensor:
     tensor = empty(shape, dtype, device, layout)
-    CudaAPI.memset_async(tensor.storage.addr, tensor.nbytes, value=0)
+    cuda_api.memset_async(tensor.storage.addr, tensor.nbytes, value=0)
     return tensor
 
 
 def ones(shape: Sequence[int], dtype: str = 'float32', device: str = 'cuda', layout: Optional[DataLayout] = None) -> Tensor:
-    return full(shape, 1.0, dtype, device, layout)
+    value = {'float32': 1.0, 'int32': 1, 'int64': 1}[dtype]
+    return full(shape, value, dtype, device, layout)
 
 
 def full(shape: Sequence[int], fill_value, dtype: str = 'float32', device: str = 'cuda', layout: Optional[DataLayout] = None) -> Tensor:
     tensor = empty(shape, dtype, device, layout)
-    if dtype == 'float32':
-        CudaAPI.fill_value(tensor.storage.addr, tensor.nbytes, value=fill_value)
-    else:
-        raise NotImplementedError()
+    cuda_kernels.fill_value(tensor.storage.addr, tensor.nbytes, value=fill_value, dtype=dtype)
     return tensor
 
 
 def randn(shape: Sequence[int], dtype: str = 'float32', mean: float = 0.0, stddev: float = 1.0, device: str = 'cuda', layout: Optional[DataLayout] = None) -> Tensor:
     tensor = empty(shape, dtype, device, layout)
     if dtype == 'float32':
-        CudaAPI.generate_normal(tensor.storage.addr, num_elements=prod(tensor.shape), mean=mean, stddev=stddev)
+        cuda_api.generate_normal(tensor.storage.addr, num_elements=prod(tensor.shape), mean=mean, stddev=stddev)
     else:
         raise NotImplementedError()
     return tensor
@@ -214,11 +212,11 @@ def from_numpy(array: np.ndarray) -> Tensor:
     if array.dtype not in dtype_convert:
         raise NotImplementedError("Do not support convert np.ndarray with data type '{}'.".format(array.dtype))
     tensor = empty(shape=array.shape, dtype=dtype_convert[array.dtype], device='cpu')
-    CudaAPI.memcpy_async(src_addr=void_pointer_to_uint64(array.ctypes.data_as(ctypes.c_void_p)),
-                         dst_addr=tensor.storage.addr,
-                         num_bytes=tensor.nbytes,
-                         kind=CudaAPI.HostToHost)
-    CudaAPI.device_synchronization()
+    cuda_api.memcpy_async(src_addr=void_pointer_to_uint64(array.ctypes.data_as(ctypes.c_void_p)),
+                          dst_addr=tensor.storage.addr,
+                          num_bytes=tensor.nbytes,
+                          kind=cuda_api.HostToHost)
+    cuda_api.device_synchronization()
     return tensor
 
 

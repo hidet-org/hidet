@@ -68,7 +68,7 @@ DLL void hidet_curand_generate_uniform(uint64_t addr, uint64_t size) {
 
 DLL void hidet_curand_generate_normal(uint64_t addr, uint64_t size, float mean, float stddev) {
     // This function only support to generate even number of random numbers. We work around this limitation by up round to a multiple of 2.
-    // this usually will not trigger error because the memory allocation on cuda is usually 256 bytes aligned.
+    // this usually will not trigger error because the memory allocation on cuda is 256 bytes aligned.
     if(size & 1) {
         size += 1;
     }

@@ -12,8 +12,8 @@ from hidet.utils import cuda
 def test_lds128():
     with FunctionBuilder('test_lds128.grid', attrs={'worker': Grid(grid_dim=1, block_dim=1)}) as fb:
         # params
-        regs_tensor = tensor_var('regs_tensor', [4], 'register', 'float32', layout=[1])
-        smem_tensor = tensor_var('smem_tensor', [4], 'shared', 'float32', layout=[1])
+        regs_tensor = tensor_var('regs_tensor', [4], 'register', 'float32')
+        smem_tensor = tensor_var('smem_tensor', [4], 'shared', 'float32')
         fb.extend_local_vars([regs_tensor, smem_tensor])
 
         # body
@@ -36,8 +36,8 @@ def test_lds128():
 def test_sts128():
     with FunctionBuilder('test_sts128.grid', attrs={'worker': Grid(grid_dim=1, block_dim=1)}) as fb:
         # params
-        regs_tensor = tensor_var('regs_tensor', [4], 'register', 'float32', layout=[1])
-        smem_tensor = tensor_var('smem_tensor', [4], 'shared', 'float32', layout=[1])
+        regs_tensor = tensor_var('regs_tensor', [4], 'register', 'float32')
+        smem_tensor = tensor_var('smem_tensor', [4], 'shared', 'float32')
         fb.extend_local_vars([regs_tensor, smem_tensor])
 
         # body

@@ -117,7 +117,7 @@ def main(args):
         f.write(summary)
 
 
-parser = argparse.ArgumentParser('Hidet model benchmark script.')
+parser = argparse.ArgumentParser(description='Hidet model benchmark script.')
 
 # general parameters
 parser.add_argument('--model', type=str, choices=['resnet50', 'bert-base-uncased'], required=True,
@@ -128,14 +128,13 @@ parser.add_argument('--space', type=int, choices=[0, 1, 2], default=0,
 parser.add_argument('--mode', type=str, choices=['imperative', 'lazy', 'lazy_opt'], default='lazy',
                     help='The execution mode, can be imperative mode and lazy mode. '
                          'Lazy mode will perform graph-level optimizations.')
-parser.add_argument('--out_dir', type=str, default='./results/')
+parser.add_argument('--out_dir', type=str, default='./results/', help='Output directory.')
 parser.add_argument('--warmup', type=int, default=3, help='Number of warmups.')
 parser.add_argument('--number', type=int, default=5, help='Number of runs per repeat.')
 parser.add_argument('--repeat', type=int, default=5, help='Number of repeats.')
 
 # model agnostic parameters
-parser.add_argument('--bs', type=int, default=1,
-                    help='Batch size.')
+parser.add_argument('--bs', type=int, default=1, help='Batch size.')
 
 # model specific parameters
 # bert

@@ -16,8 +16,6 @@ class CudaAPI:
     # random number generation
     _generate_uniform = get_func('hidet_curand_generate_uniform', [c_uint64, c_uint64], None)
     _generate_normal = get_func('hidet_curand_generate_normal', [c_uint64, c_uint64, c_float, c_float], None)
-    # kernels
-    _fill_value = get_func('hidet_cuda_fill_value', [c_uint64, c_uint64, c_float], None)
 
     @classmethod
     def malloc_async(cls, num_bytes: int) -> int:
@@ -66,10 +64,6 @@ class CudaAPI:
     @classmethod
     def generate_normal(cls, addr: int, num_elements: int, mean: float, stddev: float) -> None:
         return cls._generate_normal(addr, num_elements, mean, stddev)
-
-    @classmethod
-    def fill_value(cls, addr: int, num_elements: int, value: float) -> None:
-        return cls._fill_value(addr, num_elements, value)
 
 
 cuda_api = CudaAPI()
