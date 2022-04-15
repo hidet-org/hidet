@@ -1,9 +1,7 @@
 from typing import List, Optional, Dict, Any, Union, Tuple, Type, Set
 from hidet.tos.ir.graph import FlowGraph, Operator, Tensor
-from hidet.tos.transforms import GraphPass
-# from hidet.tos import ops
+from hidet.tos.transforms import GraphPass, PassContext
 from hidet.tos import operators as ops
-from hidet import utils
 from hidet import tos
 
 from .common import analyze_usage, graph_collect
@@ -156,6 +154,9 @@ def match(pattern, target) -> Optional[Dict]:
 
 
 class GraphPattern:
+    def __init__(self, name):
+        self.name = name
+
     def source(self) -> TensorPattern:
         raise NotImplementedError()
 
@@ -197,7 +198,8 @@ class GraphConstructor:
 
 
 class SimpleGraphPattern(GraphPattern):
-    def __init__(self, source, target):
+    def __init__(self, name, source, target):
+        super().__init__(name)
         self.src = source
         self.tgt = target
 
@@ -209,12 +211,12 @@ class SimpleGraphPattern(GraphPattern):
 
         # (source, target) pattern pairs
         pairs = [
-            [a + x, x + a],
-            [x - a, x + (-a)],
-            [(x + a) * b, x * b + a * b],
-            [(x + a) + (y + b), (x + y) + (a + b)],
+            ['a + x => x + a', a + x, x + a],
+            ['x - a => x + (-a)', x - a, x + (-a)],
+            ['(x + a) * b => x * b + a * b', (x + a) * b, x * b + a * b],
+            ['(x + a) + (y + b) => (x + y) + (a + b)', (x + a) + (y + b), (x + y) + (a + b)],
         ]
-        return [SimpleGraphPattern(src, tgt) for src, tgt in pairs]
+        return [SimpleGraphPattern(name, src, tgt) for name, src, tgt in pairs]
 
     def source(self) -> TensorPattern:
         return self.src
@@ -226,6 +228,7 @@ class SimpleGraphPattern(GraphPattern):
 
 class ConvMultiplyPattern(GraphPattern):
     def __init__(self):
+        super().__init__('conv * a => conv')
         x = TensorPattern.tensor()
         w, scale = TensorPattern.tensors(2, is_const=True)
         conv = conv2d_pattern(x, w)
@@ -305,6 +308,8 @@ class PatternTransformPass(GraphPass):
                 target_tensor = graph_pattern.target(matched)
                 if target_tensor is None:
                     continue
+                if PassContext.current().verbose:
+                    print('Applying transform: {}'.format(graph_pattern.name))
                 for use in usage[actual_tensor]:
                     op, idx = use
                     assert isinstance(idx, int)

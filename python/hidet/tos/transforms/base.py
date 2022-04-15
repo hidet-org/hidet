@@ -69,8 +69,9 @@ class ProfileInstrument(InstrumentContext):
 class PassContext:
     stack: List['PassContext'] = []
 
-    def __init__(self, instruments: Sequence[InstrumentContext] = ()):
+    def __init__(self, instruments: Sequence[InstrumentContext] = (), verbose: bool = False):
         self.instruments: Sequence[InstrumentContext] = instruments
+        self.verbose: bool = verbose
 
     @classmethod
     def current(cls):
@@ -100,6 +101,10 @@ class GraphPass:
         for inst in reversed(ctx.instruments):
             inst.after_pass(self.name, graph)
         return graph
+
+    @staticmethod
+    def current_context() -> PassContext:
+        return PassContext.current()
 
     def process_graph(self, graph: FlowGraph) -> FlowGraph:
         raise NotImplementedError()

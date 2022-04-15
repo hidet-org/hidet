@@ -75,7 +75,7 @@ class GraphRewriter:
         if same_list(outputs, graph.outputs):
             return graph
         else:
-            return FlowGraph(outputs)
+            return FlowGraph(outputs, graph.inputs)
 
     def visit_Operator(self, op: Operator):
         inputs = [self(input) for input in op.inputs]
@@ -105,7 +105,7 @@ class GraphRewriter:
 class GraphCloneRewriter(GraphRewriter):
     def visit_FlowGraph(self, graph: FlowGraph):
         outputs = [self.visit(output) for output in graph.outputs]
-        return FlowGraph(outputs)
+        return FlowGraph(outputs, graph.inputs)
 
     def visit_Operator(self, op: Operator):
         inputs = [self(input) for input in op.inputs]

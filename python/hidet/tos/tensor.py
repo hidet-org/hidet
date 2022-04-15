@@ -69,6 +69,10 @@ class Tensor:
     def nbytes(self):
         return prod(self.shape) * dtype_bytes(self.dtype)
 
+    @property
+    def op(self) -> Optional['Operator']:
+        return self.trace[0] if self.trace else None
+
     def contiguous(self):
         if isinstance(self.layout, RowMajorLayout):
             return self

@@ -1,4 +1,5 @@
 from typing import List, Union, Dict, Set, Optional, Tuple
+import warnings
 import json
 from collections import defaultdict
 from hidet.tos.tensor import Tensor
@@ -28,7 +29,17 @@ class FlowGraph:
         return [tmap[st] for st in self.outputs]
 
     def update_nodes(self):
-        self.inputs, self.nodes = self._analyze(self.outputs)
+        inputs, self.nodes = self._analyze(self.outputs)
+        if self.inputs:
+            if len(inputs) != len(self.inputs):
+                raise ValueError('Found {} symbol inputs, but {} given'.format(len(inputs), len(self.inputs)))
+            if any(a not in self.inputs for a in inputs):
+                raise ValueError('There is a symbol tensor not given in inputs')
+        else:
+            if len(inputs) > 1:
+                warnings.warn('There are {} symbol inputs traced, '
+                              'but the inputs has not given to specify the order.'.format(len(inputs)))
+            self.inputs = inputs
         return self
 
     @staticmethod
@@ -41,45 +52,74 @@ class FlowGraph:
         def find_all_nodes(u: Operator):
             all_nodes.add(u)
             for it in u.inputs:
-                if it.trace is None:
+                if it.op is None:
                     continue
-                v: Operator = it.trace[0]
+                v: Operator = it.op
                 if v not in all_nodes:
                     find_all_nodes(v)
         for ot in outputs:
-            find_all_nodes(ot.trace[0])
+            if ot.trace:
+                find_all_nodes(ot.op)
 
         # topological sort
-        out_degree: Dict[Operator: int] = {u: 0 for u in all_nodes}
+        out_degree: Dict[Operator, int] = {u: 0 for u in all_nodes}
         for u in all_nodes:
             for it in u.inputs:
                 if it.trace is None:
                     continue
                 v = it.trace[0]
                 out_degree[v] += 1
+        for u in outputs:
+            if u.op:
+                out_degree[u.op] += 1
 
-        def topo_sort(u: Operator):
-            nodes.append(u)
-            for it in u.inputs:
-                if it.trace is None:
-                    if it not in inputs and it.storage is None:
+        stack: List[Operator] = []
+        for u in outputs:
+            if u.op:
+                out_degree[u.op] -= 1
+                if out_degree[u.op] == 0:
+                    stack.append(u.op)
+        while len(stack) > 0:
+            op = stack.pop()
+            nodes.append(op)
+            for it in op.inputs:
+                if it.op is None:
+                    if it.storage is None and it not in inputs:
+                        # input
                         inputs.append(it)
-                    continue
-                v: Operator = it.trace[0]
-                out_degree[v] -= 1
-                if out_degree[v] == 0:
-                    topo_sort(v)
-        for ot in outputs:
-            u = ot.trace[0]
-            if u not in nodes:
-                topo_sort(ot.trace[0])
+                else:
+                    out_degree[it.op] -= 1
+                    if out_degree[it.op] == 0:
+                        stack.append(it.op)
         nodes = list(reversed(nodes))
+        assert len(nodes) == len(all_nodes), 'all_nodes {} topo_order {}'.format(len(all_nodes), len(nodes))
         return inputs, nodes
 
 
-def trace_from(tensor: Union[Tensor, List[Tensor]]) -> FlowGraph:
+def trace_from(tensor: Union[Tensor, List[Tensor]], inputs: Optional[Union[Tensor, List[Tensor]]] = None) -> FlowGraph:
+    """
+    Trace the flow graph given the output tensor(s).
+
+    Parameters
+    ----------
+    tensor: Tensor or List[Tensor]
+        The output tensor(s) that we trace from.
+    inputs: Optional, Tensor or List[Tensor]
+        The inputs of the flow graph. When there is only a single symbol tensor in the flow graph, it is
+        optional. When there are multiple inputs, this is required to specify the input order.
+
+    Returns
+    -------
+    ret: FlowGraph
+        The flow graph that outputs the given input tensor(s).
+    """
     if isinstance(tensor, Tensor):
         outputs = [tensor]
     else:
         outputs = list(tensor)
-    return FlowGraph(outputs).update_nodes()
+    if inputs is not None:
+        if isinstance(inputs, Tensor):
+            inputs = [inputs]
+        else:
+            inputs = list(inputs)
+    return FlowGraph(outputs, inputs).update_nodes()

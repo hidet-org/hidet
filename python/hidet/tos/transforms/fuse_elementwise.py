@@ -94,7 +94,7 @@ class FuseElementwisePass(GraphPass):
                 tensor_type_map[out_tensor] = node.task.type_of_param(node.task.compute)
             sub_names.append(node.task.name)
         task_inputs = [tensor_map[tensor] for tensor in input_tensors]
-        task_outputs = [tensor_map[tensor] for tensor in output_tensors]
+        task_outputs: List = [tensor_map[tensor] for tensor in output_tensors]
         task_outputs[0] = functors.inline_compute(task_outputs[0])
         task = Task(
             name="_".join(sub_names),
@@ -114,6 +114,8 @@ class FuseElementwisePass(GraphPass):
         for node in nodes:
             names.append(trim_fuse_head(node.name))
             attributes.update(node.attributes)
+        if GraphPass.current_context().verbose:
+            print('Fuse ' + ' '.join(names))
         return Operator(
             name='Fused' + "".join(names),
             task=task,

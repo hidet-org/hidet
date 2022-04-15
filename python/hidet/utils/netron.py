@@ -58,11 +58,12 @@ class Parameter:
 
 
 class Argument:
-    def __init__(self, name, data_type, shape: Union[str, List[int]], has_initializer=False):
+    def __init__(self, name, data_type, shape: Union[str, List[int]], has_initializer=False, scalar_value=None):
         self.name: str = name
         self.data_type: str = data_type
         self.shape: Union[str, List[int]] = shape
         self.has_initializer: bool = has_initializer
+        self.scalar_value = scalar_value
 
     def export(self):
         ret = {
@@ -75,6 +76,10 @@ class Argument:
         }
         if self.has_initializer:
             ret['initializer'] = {'kind': 'Initializer'}
+            if len(self.shape) == 0 and self.scalar_value is not None:
+                ret['initializer']['value'] = str(self.scalar_value)
+            else:
+                ret['initializer']['value'] = '<>'
         return ret
 
 
@@ -178,7 +183,8 @@ def dump(flow_graph, fp):
                 continue
             name = 'const:{}'.format(constant_cnt)
             constant_cnt += 1
-            tensor2argument[tensor] = Argument(name, data_type=tensor.dtype, shape=tensor.shape, has_initializer=True)
+            scalar_value = str(tensor.cpu().numpy()) if len(tensor.shape) == 0 and tensor.storage else None
+            tensor2argument[tensor] = Argument(name, data_type=tensor.dtype, shape=tensor.shape, has_initializer=True, scalar_value=scalar_value)
         for idx, tensor in enumerate(node.outputs):
             name = '{}:{}'.format(node_name, idx)
             tensor2argument[tensor] = Argument(name, data_type=tensor.dtype, shape=tensor.shape, has_initializer=False)

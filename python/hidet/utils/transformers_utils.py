@@ -28,12 +28,12 @@ def export_transformer_model_as_onnx(model_name='bert-base-uncased', feature='de
     Examples
     --------
     Call export_transformer_model_as_onnx() will download (when needed) the requested model and export it to an onnx model.
-    The function will return './bert-base-uncased.onnx', which can be load by onnx package.
+    The function will return '{output_dir}/bert-base-uncased.onnx', which can be load by onnx package.
     """
     if save_name is None:
         save_name = '{}.onnx'.format(model_name)
     target_path = os.path.join(output_dir, save_name)
-    if os.path.exists(target_path):
+    if skip_exists and os.path.exists(target_path):
         return target_path
     command = '{} -m transformers.onnx --model {} --feature {} {}'.format(sys.executable, model_name, feature, output_dir)
     print("Running '{}'".format(command))

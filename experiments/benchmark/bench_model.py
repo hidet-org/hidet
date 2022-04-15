@@ -76,7 +76,7 @@ def main(args):
     elif args.mode.startswith('lazy'):
         symbol_inputs = [hi.symbol_like(data) for data in inputs]
         outputs = model(*symbol_inputs)
-        graph: hi.FlowGraph = hi.trace_from(outputs)
+        graph: hi.FlowGraph = hi.trace_from(outputs, inputs=symbol_inputs)
         if args.mode == 'lazy_opt':
             graph = hi.tos.transforms.optimize(graph)
         run = lambda: graph(*inputs)
@@ -107,14 +107,18 @@ def main(args):
         json.dump(args.__dict__, f, indent=2)
     with open(os.path.join(out_dir, 'summary.txt'), 'w') as f:
         # model mode space median std
-        summary = '{:>30} {:>12} {} {:.3f} {:.3f}\n'.format(
+        head = '{:>30} {:>12} {:>10} {:>10} {:>10}\n'.format(
+            'Model', 'Mode', 'Space', 'Latency', 'Std'
+        )
+        summary = '{:>30} {:>12} {:10} {:10.3f} {:10.3f}\n'.format(
             args.model,
             args.mode,
             args.space,
             float(np.median(results)),
             float(np.std(results))
         )
-        f.write(summary)
+        print(head + summary)
+        f.write(head + summary)
 
 
 parser = argparse.ArgumentParser(description='Hidet model benchmark script.')

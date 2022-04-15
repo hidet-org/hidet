@@ -48,7 +48,7 @@ class CudaStaticConcatImplementer(Implementer):
         self.pattern = Pattern()
 
     def priority(self) -> int:
-        return 0
+        return 1
 
     def task_pattern(self) -> TaskPattern:
         return self.pattern.task_pattern

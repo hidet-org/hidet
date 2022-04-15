@@ -6,6 +6,10 @@ from hidet.utils import prod
 from hidet.ir.layout import DataLayout, RowMajorLayout, ColumnMajorLayout
 
 
+def same_shape(shape_a: List[int], shape_b: List[int]) -> bool:
+    return len(shape_a) == len(shape_b) and all(a == b for a, b in zip(shape_a, shape_b))
+
+
 def reshape_task(x: TensorInput, shape: List[int]) -> Task:
     assert prod(x.const_shape()) == prod(shape)
     x_layout = x.data_type.layout
@@ -369,6 +373,8 @@ class BroadcastOp(Operator):
 
 
 def reshape(x: Tensor, shape) -> Tensor:
+    if same_shape(x.shape, shape):
+        return x
     return ReshapeOp(x, shape).get_output(0)
 
 
@@ -407,6 +413,10 @@ def unsqueeze(x: Tensor, dims) -> Tensor:
 
 
 def flatten(x: Tensor, start_dim=0, end_dim=None) -> Tensor:
+    start_dim = normalize_dim(start_dim, len(x.shape))
+    end_dim = normalize_dim(end_dim, len(x.shape))
+    if start_dim + 1 == end_dim:
+        return x
     return FlattenOp(x, start_dim, end_dim).get_output(0)
 
 
@@ -431,5 +441,7 @@ def strided_slice(data: Tensor, starts: List[int], ends: List[int], axes: Option
 
 
 def broadcast(data: Tensor, shape):
+    if same_shape(data.shape, shape):
+        return data
     return BroadcastOp(data, shape).get_output(0)
 

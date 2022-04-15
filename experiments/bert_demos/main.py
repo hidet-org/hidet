@@ -1,5 +1,7 @@
 import os
 import numpy as np
+import onnx
+import onnxruntime
 import hidet
 import hidet as hi
 from hidet import tos
@@ -62,10 +64,9 @@ def demo_resnet50():
 
 
 def demo_bert():
-    import onnx
-    import onnxruntime
-    model_name = 'bert-base-uncased'
-    model_path = os.path.join(hidet_cache_dir(), 'onnx/{}.onnx'.format(model_name))
+    model_path = hidet.utils.transformers_utils.export_transformer_model_as_onnx(
+        'bert-base-uncased', feature='default', output_dir=hidet.utils.hidet_cache_dir('onnx')
+    )
 
     batch_size = 1
     seq_length = 128
@@ -96,6 +97,39 @@ def demo_bert():
     last_hidden_state, pooler_output = hidet_outputs
     np.testing.assert_allclose(actual=hidet_outputs[0], desired=onnx_outputs[0], rtol=1e-4, atol=1e-4)
     np.testing.assert_allclose(actual=hidet_outputs[1], desired=onnx_outputs[1], rtol=1e-5, atol=1e-5)
+
+    # hidet lazy
+    inputs = [input_ids, attention_mask, token_type_ids]
+    symbol_inputs = [hi.symbol_like(t) for t in inputs]
+    symbol_outputs = hidet_model(*symbol_inputs)
+    graph = hi.trace_from(symbol_outputs, inputs=symbol_inputs)
+    lazy_outputs = graph(*inputs)
+    lazy_outputs = [output.cpu().numpy() for output in lazy_outputs]
+    with open('./outs/bert.json', 'w') as f:
+        hidet.utils.netron.dump(graph, f)
+    np.testing.assert_allclose(actual=lazy_outputs[0], desired=hidet_outputs[0], rtol=0.0, atol=0.0)
+    np.testing.assert_allclose(actual=lazy_outputs[1], desired=hidet_outputs[1], rtol=0.0, atol=0.0)
+
+    # hidet lazy opt
+    inputs = [input_ids, attention_mask, token_type_ids]
+    symbol_inputs = [hi.symbol_like(t) for t in inputs]
+    symbol_outputs = hidet_model(*symbol_inputs)
+    graph = hi.trace_from(symbol_outputs, inputs=symbol_inputs)
+    with tos.PassContext(
+            instruments=[
+                tos.transforms.ProfileInstrument(
+                    log_file='./outs/lower_time.txt', print_stdout=True
+                )
+            ],
+            verbose=False
+    ):
+        graph = hi.tos.optimize(graph)
+    lazy_outputs = graph(*inputs)
+    lazy_outputs = [output.cpu().numpy() for output in lazy_outputs]
+    with open('./outs/bert_opt.json', 'w') as f:
+        hidet.utils.netron.dump(graph, f)
+    np.testing.assert_allclose(actual=lazy_outputs[0], desired=hidet_outputs[0], rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose(actual=lazy_outputs[1], desired=hidet_outputs[1], rtol=1e-5, atol=1e-5)
 
 
 if __name__ == '__main__':
