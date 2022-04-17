@@ -218,6 +218,14 @@ def demo_gather():
     hidet.utils.tvm_utils.dump_relay_cuda_code(ir_module, out_dir='./outs/take')
 
 
+def demo_variance():
+    data = relay.var('data', shape=(1234, 567))
+    variance = relay.variance(data, axis=1, keepdims=False)
+    func = relay.Function(params=[data], body=variance)
+    ir_module = tvm.ir.IRModule.from_expr(func)
+    hidet.utils.tvm_utils.dump_relay_cuda_code(ir_module, out_dir='./outs/variance')
+
+
 if __name__ == '__main__':
     # demo_vthread()
     # demo_conv2d_te()
@@ -225,5 +233,6 @@ if __name__ == '__main__':
     # demo_pool2d()
     # demo_batch_norm()
     # demo_rsqrt()
-    demo_gather()
+    # demo_gather()
+    demo_variance()
 

@@ -1,6 +1,7 @@
 from ..common import Tensor
-from ..basic.arithmatic import square
-from ..basic.reduce import reduce_mean, reduce_sum
+from ..basic.arithmatic import square, sqrt
+from ..basic.reduce import reduce_mean, reduce_sum, reduce_var
+from hidet.utils import prod
 
 
 def batch_norm_infer(x: Tensor, running_mean: Tensor, running_var: Tensor, epsilon=1e-5, axis=1) -> Tensor:
@@ -12,11 +13,11 @@ def batch_norm_infer(x: Tensor, running_mean: Tensor, running_var: Tensor, epsil
     return (x - running_mean) * (running_var + epsilon).rsqrt()
 
 
-def instance_norm(x: Tensor, epsilon: float) -> Tensor:
+def instance_norm(x: Tensor, epsilon: float = 1e-5) -> Tensor:
     # todo: make it more efficient
     assert len(x.shape) >= 3
     dims = list(range(2, len(x.shape)))
     mean = reduce_mean(x, dims=dims, keep_dim=True)
-    variance = reduce_sum(square(x), dims=dims, keep_dim=True) - square(reduce_sum(x, dims=dims, keep_dim=True))
-    return (x - mean) / (variance + epsilon)
+    variance = reduce_var(x, dims=dims, keep_dim=True)
+    return (x - mean) / sqrt(variance + epsilon)
 

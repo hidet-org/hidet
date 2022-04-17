@@ -1,9 +1,11 @@
 from typing import List, Union
 
 from ..common import Task, Operator, Tensor, TensorInput, Grid, compute, reduce, input_like, normalize_dim
+from hidet.utils import prod
+from .arithmatic import square
 
 
-def reduce_task(x: TensorInput, dims: List[int], keep_dim: bool, reduce_type: str):
+def reduce_task(x: TensorInput, dims: List[int], keep_dim: bool, reduce_type: str) -> Task:
     x_shape = x.const_shape()
     y_shape = []
     for i in range(len(x_shape)):
@@ -42,6 +44,10 @@ def reduce_task(x: TensorInput, dims: List[int], keep_dim: bool, reduce_type: st
     )
 
 
+def reduce_variance_task(x: TensorInput, dims: List[int], keep_dim: bool) -> Task:
+    pass
+
+
 class ReduceMeanOp(Operator):
     def __init__(self, x: Tensor, dims: List[int], keep_dim: bool = False):
         dims = normalize_dim(dims, rank=len(x.shape))
@@ -74,4 +80,10 @@ def reduce_sum(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -
     if isinstance(dims, int):
         dims = [dims]
     return ReduceSumOp(x, dims, keep_dim).get_output(0)
+
+
+def reduce_var(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -> Tensor:
+    # todo: make it more efficient
+    # Var[X] = E[(X - E[X])^2]
+    return reduce_mean(square(x - reduce_mean(x, dims, keep_dim=True)), dims, keep_dim)
 

@@ -4,6 +4,8 @@ import pytest
 
 import hidet as hi
 from hidet.tos import operators as ops
+from hidet.testing.check import check_unary
+from hidet.utils import prod
 
 
 def check_ternary(a_shape, b_shape, c_shape, numpy_op, hidet_op, dtype: Union[str, np.dtype] = np.float32, atol=0.0, rtol=0.0):
@@ -36,17 +38,21 @@ def numpy_batch_norm_2d(data: np.ndarray, running_mean: np.ndarray, running_var:
     return (data - running_mean) * np.reciprocal(np.sqrt(running_var + epsilon))
 
 
+def numpy_instance_norm(data: np.ndarray, epsilon: float = 1e-5) -> np.ndarray:
+    dims = tuple(range(2, len(data.shape)))
+    mean = data.mean(axis=dims, keepdims=True)
+    var = data.var(axis=dims, keepdims=True)
+    return (data - mean) / np.sqrt(var + epsilon)
+
+
 @pytest.mark.parametrize(
     "shape",
     [
-        # [1, 200, 20, 20],
-        [1, 2, 1, 1],
-        [1, 2, 1, 1],
-        [1, 2, 1, 1],
-        [1, 2, 1, 1],
-        # [1, 10, 1, 1],
-        # [1, 128, 32, 32],
-        # [1, 32, 24, 24],
+        [1, 1, 1, 1],
+        [1, 200, 20, 20],
+        [1, 10, 1, 1],
+        [1, 128, 32, 32],
+        [1, 32, 24, 24],
     ]
 )
 def test_batch_norm_2d(shape):
@@ -57,4 +63,16 @@ def test_batch_norm_2d(shape):
                   dtype='float32', atol=1e-5, rtol=1e-5)
 
 
-
+@pytest.mark.parametrize(
+    "shape",
+    [
+        [1, 1, 1, 1],
+        [1, 2, 1, 1],
+        [1, 32, 48],
+        [1, 20, 20, 20],
+        [1, 20, 20, 5, 5],
+        [1, 32, 262144]
+    ]
+)
+def test_instance_norm(shape):
+    check_unary(shape, numpy_op=numpy_instance_norm, hidet_op=ops.instance_norm, atol=1e-4, rtol=1e-4)

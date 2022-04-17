@@ -10,8 +10,12 @@ from hidet.ffi import cuda_api, cuda_kernels
 
 
 def convert(v):
-    if isinstance(v, float):
-        return full(shape=[1], fill_value=v, dtype='float32')
+    if isinstance(v, (float, int)):
+        dtype_map = {
+            float: 'float32',
+            int: 'int64'
+        }
+        return full(shape=[1], fill_value=v, dtype=dtype_map[type(v)])
     elif isinstance(v, Tensor):
         return v
     else:

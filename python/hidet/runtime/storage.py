@@ -144,8 +144,9 @@ class MemoryPool:
                 self.clear()
                 addr = self.storage_device.allocate(allocated)
                 if addr == 0:
-                    raise MemoryError('Can not allocate memory from {} device, allocated {}, free {}, requesting {}.'.format(
+                    raise MemoryError('Can not allocate memory from {} device, total {}, hidet allocated {}, free {}, requesting {}.'.format(
                         self.storage_device.name(),
+                        nbytes2str(self.storage_device.total_memory()),
                         nbytes2str(self.storage_device.allocated_memory()),
                         nbytes2str(self.storage_device.free_memory()),
                         nbytes2str(allocated)

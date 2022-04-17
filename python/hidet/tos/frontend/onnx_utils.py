@@ -8,12 +8,13 @@ from hidet.tos.tensor import Tensor, from_numpy, randn
 from hidet.utils import line_profile, prod
 
 """
-Please refers to https://github.com/onnx/onnx/blob/main/docs/Operators.md when adding new operators.
+Please refers to https://github.com/onnx/onnx/blob/main/docs/Operators.md for operator definition when adding new operators.
+Please refers to https://github.com/onnx/onnx/blob/main/onnx/onnx.proto for proto structure of onnx format.
 """
 
 
 class OnnxOperator:
-    def __init__(self, node):
+    def __init__(self, node, opset: int = 11):
         """
         Parameters
         ----------
@@ -21,6 +22,7 @@ class OnnxOperator:
         """
         import onnx.numpy_helper
         self.node = node
+        self.opset = opset
         self.input_names = [name for name in node.input]
         self.output_names = [name for name in node.output]
         self.attrs = {}
@@ -45,6 +47,50 @@ class OnnxOperator:
 
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         raise NotImplementedError()
+
+    def run_trt(self, inputs: List[Tensor]) -> List[Tensor]:
+        import onnx
+        from onnx.helper import make_value_info, make_tensor_type_proto
+        from onnx import TensorProto
+        import onnxruntime
+        hidet_outputs = self.run(inputs)
+        dtype_map = {
+            'float32': TensorProto.FLOAT,
+            'int64': TensorProto.INT64
+        }
+        inputs_value_info = [
+            make_value_info(
+                name=name,
+                type_proto=make_tensor_type_proto(
+                    elem_type=dtype_map[tensor.dtype],
+                    shape=tensor.shape
+                )
+            ) for name, tensor in zip(self.input_names, inputs)
+        ]
+        outputs_value_info = [
+            make_value_info(
+                name=name,
+                type_proto=make_tensor_type_proto(
+                    elem_type=dtype_map[tensor.dtype],
+                    shape=tensor.shape
+                )
+            ) for name, tensor in zip(self.output_names, hidet_outputs)
+        ]
+        graph = onnx.helper.make_graph(
+            nodes=[self.node],
+            name='test',
+            inputs=inputs_value_info,
+            outputs=outputs_value_info
+        )
+        model = onnx.helper.make_model(graph, opset_imports=[onnx.helper.make_opsetid("", self.opset)])
+        # print(model)
+        onnx.checker.check_model(model)
+        serialized_model = onnx._serialize(model)
+        session = onnxruntime.InferenceSession(serialized_model)
+        outputs = session.run(self.output_names, input_feed={
+            name: tensor.cpu().numpy() for name, tensor in zip(self.input_names, inputs)
+        })
+        return [hidet.array(output).cuda() for output in outputs]
 
     @staticmethod
     def tensor2list(tensor: Tensor) -> Union[List, int, float]:
@@ -397,8 +443,13 @@ class OnnxInstanceNormalization(OnnxOperator):
 
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         x, scale, bias = inputs
-        scale = ops.unsqueeze(x, 0)  # [1, C]
-        bias = ops.unsqueeze(x, 0)  # [1, C]
+        rank = len(x.shape)
+        dims = [0] + list(range(2, rank))
+        scale = ops.unsqueeze(scale, dims)  # [1, C, D1, ...]
+        bias = ops.unsqueeze(bias, dims)  # [1, C, D1, ...]
+        # print(x.shape)
+        # print(scale.shape)
+        # print(bias.shape)
         return [ops.instance_norm(x, self.epsilon) * scale + bias]
 
 
@@ -452,7 +503,7 @@ class OnnxResize(OnnxOperator):
         if target_size is None:
             raise ValueError('Resize operator in onnx must give either scales or sizes.')
         if len(x.shape) == 4:
-            if not(target_size[0] == x.shape[0] and target_size[1] == x.shape[1]):
+            if not (target_size[0] == x.shape[0] and target_size[1] == x.shape[1]):
                 raise ValueError('Unsupported resize on batch and channel dimension.')
             return [ops.resize2d(x, target_size[2:], self.mode, self.coordinate_transformation_mode, self.nearest_mode,
                                  roi, self.cubic_coeff_a, self.exclude_outside, self.extrapolation_value)]
@@ -460,7 +511,7 @@ class OnnxResize(OnnxOperator):
             raise NotImplementedError('Current only support 2d resize, got x {}.'.format(x.shape))
 
 
-def dispatch(node) -> OnnxOperator:
+def dispatch(node, opset: int = 11) -> OnnxOperator:
     dispatch_table = {
         'Conv': OnnxConv,
         'Relu': OnnxRelu,
@@ -516,12 +567,14 @@ class OnnxModule(nn.Module):
         import onnx.numpy_helper
         graph = model.graph
         self.name: str = graph.name
+        self.model = model
         for param in graph.initializer:
             numpy_array = onnx.numpy_helper.to_array(tensor=param)
             self.parameters[param.name] = from_numpy(numpy_array).cuda()
         self.input_names: List[str] = [input.name for input in graph.input if input.name not in self.parameters]
         self.output_names: List[str] = [output.name for output in graph.output]
         self.operators: List[OnnxOperator] = [dispatch(node) for node in graph.node]
+        self.opset = [opset_import.version for opset_import in model.opset_import]
 
     def forward(self, *args):
         name2tensor = {}
@@ -537,6 +590,9 @@ class OnnxModule(nn.Module):
             inputs = [name2tensor[name] for name in operator.input_names]
             # print('{:>20}: '.format(operator.node.name), end='')
             outputs = operator.run(inputs)
+            # outputs_trt = operator.run_trt(inputs)
+            # for a, b in zip(outputs, outputs_trt):
+            #     np.testing.assert_allclose(a.cpu().numpy(), b.cpu().numpy(), atol=1e-3, rtol=1e-3)
             # print('{}'.format(', '.join(out.signature() for out in outputs)))
             assert len(outputs) == len(operator.output_names)
             for name, tensor in zip(operator.output_names, outputs):

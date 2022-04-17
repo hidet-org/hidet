@@ -2,7 +2,7 @@ from . import basic
 from . import nn
 
 from .basic.arithmatic import add, sub, multiply, divide, neg, sqrt, rsqrt, pow, erf, tanh, sin, cos, square
-from .basic.reduce import reduce_mean, reduce_sum
+from .basic.reduce import reduce_mean, reduce_sum, reduce_var
 from .basic.transform import squeeze, unsqueeze, flatten, concat, cast, take, rearrange, strided_slice, reshape, transpose, broadcast, pad
 from .nn.conv import conv2d
 from .nn.matmul import matmul, batched_matmul
