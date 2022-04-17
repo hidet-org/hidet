@@ -3,6 +3,8 @@ import os
 import numpy as np
 import onnx
 import onnxruntime
+from hidet.utils import Timer
+from hidet.ffi import cuda_api
 
 
 def run_onnx():
@@ -38,9 +40,9 @@ def check():
 def main():
     unet_onnx_path = '~/model_zoo/fused_unet_church.onnx'
     model = hidet.tos.frontend.from_onnx(unet_onnx_path)
-    # inputs = [hidet.randn([1, 3, 256, 256], dtype='float32', device='cuda'),
-    #           hidet.randn([1], dtype='float32', device='cuda')]
-    # outputs = model(*inputs)
+    inputs = [hidet.randn([1, 3, 256, 256], dtype='float32', device='cuda'),
+              hidet.randn([1], dtype='float32', device='cuda')]
+    outputs = model(*inputs)
 
     print(hidet.runtime.storage.cuda_pool)
     symbol_inputs = [hidet.symbol([1, 3, 256, 256], dtype='float32', device='cuda'),
@@ -50,8 +52,32 @@ def main():
     os.makedirs('./outs', exist_ok=True)
     with open('./outs/unet.json', 'w') as f:
         hidet.utils.netron.dump(graph, f)
-    # inputs = [hidet.empty_like(input) for input in symbol_inputs]
-    # outputs = graph(*inputs)
+
+    inputs = [hidet.empty_like(input) for input in symbol_inputs]
+    for t in range(10):
+        cuda_api.device_synchronization()
+        with Timer('hidet traced {}'.format(t)):
+            outputs = graph(*inputs)
+            cuda_api.device_synchronization()
+    print(hidet.runtime.storage.cuda_pool)
+
+    with hidet.tos.transforms.PassContext(
+        instruments=[
+            hidet.tos.transforms.ProfileInstrument(print_stdout=True)
+        ],
+        verbose=False
+    ):
+        graph = hidet.tos.optimize(graph)
+    os.makedirs('./outs', exist_ok=True)
+    with open('./outs/unet_opt.json', 'w') as f:
+        hidet.utils.netron.dump(graph, f)
+    for t in range(10):
+        cuda_api.device_synchronization()
+        with Timer('hidet traced opt {}'.format(t)):
+            outputs = graph(*inputs)
+            cuda_api.device_synchronization()
+
+    print(hidet.runtime.storage.cuda_pool)
 
 
 if __name__ == '__main__':

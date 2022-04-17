@@ -56,7 +56,7 @@ class Timer:
         return self.end_time - self.start_time
 
     def time2str(self, seconds: float) -> str:
-        if seconds < 0.1:
+        if seconds < 1:
             return '{:.1f} {}'.format(seconds * 1000, 'ms')
         elif seconds < 60:
             return '{:.1f} {}'.format(seconds, 'seconds')

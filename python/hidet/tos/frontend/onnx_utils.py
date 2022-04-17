@@ -1,4 +1,5 @@
-from typing import List, Union, Sequence, Optional
+from typing import List, Union, Sequence, Optional, Dict
+from collections import defaultdict
 import os
 import numpy as np
 import hidet
@@ -575,6 +576,7 @@ class OnnxModule(nn.Module):
         self.output_names: List[str] = [output.name for output in graph.output]
         self.operators: List[OnnxOperator] = [dispatch(node) for node in graph.node]
         self.opset = [opset_import.version for opset_import in model.opset_import]
+        self.usage_count: Dict[str, int] = self.count_usage()
 
     def forward(self, *args):
         name2tensor = {}
@@ -586,6 +588,7 @@ class OnnxModule(nn.Module):
         for name, input in zip(self.input_names, args):
             name2tensor[name] = input
         # run nodes
+        usage_count = self.usage_count.copy()
         for operator in self.operators:
             inputs = [name2tensor[name] for name in operator.input_names]
             # print('{:>20}: '.format(operator.node.name), end='')
@@ -597,12 +600,26 @@ class OnnxModule(nn.Module):
             assert len(outputs) == len(operator.output_names)
             for name, tensor in zip(operator.output_names, outputs):
                 name2tensor[name] = tensor
+            for name in operator.input_names:
+                usage_count[name] -= 1
+                if usage_count[name] == 0:
+                    # free memory
+                    del name2tensor[name]
         # put outputs
         results = [name2tensor[name] for name in self.output_names]
         if len(results) == 1:
             return results[0]
         else:
             return results
+
+    def count_usage(self):
+        usage_count = defaultdict(int)
+        for op in self.operators:
+            for input_name in op.input_names:
+                usage_count[input_name] += 1
+        for graph_output_name in self.output_names:
+            usage_count[graph_output_name] += 1
+        return usage_count
 
 
 def from_onnx(model: Union[str, 'onnx.ModelProto']) -> OnnxModule:

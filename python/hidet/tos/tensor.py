@@ -134,6 +134,7 @@ class Tensor:
 def dtype_bytes(dtype: str):
     bytes_dict = {
         'float32': 4,
+        'int32': 4,
         'int64': 8
     }
     return bytes_dict[dtype]

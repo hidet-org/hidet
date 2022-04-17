@@ -1,11 +1,12 @@
 import os
 import numpy as np
 import onnx
+from hidet.ffi import cuda_api
 import onnxruntime
 import hidet
 import hidet as hi
 from hidet import tos
-from hidet.utils import hidet_cache_dir
+from hidet.utils import hidet_cache_dir, Timer
 
 
 def demo_old_resnet50():
@@ -69,7 +70,7 @@ def demo_bert():
     )
 
     batch_size = 1
-    seq_length = 128
+    seq_length = 512
     vocab_size = 30522
     input_ids = np.random.randint(0, vocab_size, [batch_size, seq_length], dtype=np.int64)
     attention_mask = np.ones(shape=[batch_size, seq_length], dtype=np.int64)
@@ -116,20 +117,34 @@ def demo_bert():
     symbol_outputs = hidet_model(*symbol_inputs)
     graph = hi.trace_from(symbol_outputs, inputs=symbol_inputs)
     with tos.PassContext(
-            instruments=[
-                tos.transforms.ProfileInstrument(
-                    log_file='./outs/lower_time.txt', print_stdout=True
-                )
-            ],
+            instruments=[tos.transforms.ProfileInstrument(print_stdout=False)],
             verbose=False
     ):
         graph = hi.tos.optimize(graph)
-    lazy_outputs = graph(*inputs)
+    for t in range(10):
+        cuda_api.device_synchronization()
+        with Timer('hidet bert optimized'):
+            lazy_outputs = graph(*inputs)
+            cuda_api.device_synchronization()
     lazy_outputs = [output.cpu().numpy() for output in lazy_outputs]
     with open('./outs/bert_opt.json', 'w') as f:
         hidet.utils.netron.dump(graph, f)
+
+    # tensor rt
+    from hidet.utils.tensorrt_utils import create_engine_from_onnx, engine_inference
+    inputs = {
+        'input_ids': hidet.array(input_ids).cuda(),
+        'attention_mask': hidet.array(attention_mask).cuda(),
+        'token_type_ids': hidet.array(token_type_ids).cuda()
+    }
+    engine = create_engine_from_onnx(model_path, inputs_shape={key: tensor.shape for key, tensor in inputs.items()})
+    trt_outputs = engine_inference(engine, inputs)
+    trt_outputs = [trt_outputs['last_hidden_state'].cpu().numpy(), trt_outputs['pooler_output'].cpu().numpy()]
+
     np.testing.assert_allclose(actual=lazy_outputs[0], desired=hidet_outputs[0], rtol=1e-5, atol=1e-5)
     np.testing.assert_allclose(actual=lazy_outputs[1], desired=hidet_outputs[1], rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose(actual=trt_outputs[0], desired=hidet_outputs[0], rtol=1e-2, atol=1e-2)
+    np.testing.assert_allclose(actual=trt_outputs[1], desired=hidet_outputs[1], rtol=1e-2, atol=1e-2)
 
 
 if __name__ == '__main__':

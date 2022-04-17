@@ -1,6 +1,6 @@
 from typing import List, Dict, Optional, ContextManager
 
-from hidet.ir.type import ScalarType
+from hidet.ir.type import ScalarType, FuncType
 from hidet.ir.expr import Expr, Var, BitwiseAnd, LeftShift, BitwiseOr
 from hidet.ir.functors import collect
 from hidet.ir.stmt import LetStmt, ForStmt
@@ -86,7 +86,7 @@ class ScopeStack:
 
     def find_scope_for_expr(self, expr) -> 'Scope':
         used_vars = collect(expr, Var)
-        levels = [self.var2scope[used_var].level for used_var in used_vars]
+        levels = [self.var2scope[used_var].level for used_var in used_vars if not isinstance(used_var.type, FuncType)]
         max_level = max(levels)
         return self.scopes[max_level]
 

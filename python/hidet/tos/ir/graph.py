@@ -11,25 +11,46 @@ class FlowGraph:
         self.outputs: List[Tensor] = outputs
         self.inputs: Optional[List[Tensor]] = inputs
         self.nodes: Optional[List[Operator]] = nodes
+        self.usage_count: Optional[Dict[Tensor, int]] = None
 
     def __call__(self, *inputs: Tensor) -> List[Tensor]:
         return self.forward(*inputs)
 
     def forward(self, *inputs: Tensor) -> List[Tensor]:
-        assert len(inputs) == len(self.inputs)
-        assert all(input.storage is not None for input in inputs), 'Please feed non-symbolic tensor'
-        tmap: Dict[Tensor, Tensor] = {}
+        if any(v is None for v in [self.inputs, self.nodes, self.usage_count]):
+            self.update_nodes()
+        if len(inputs) != len(self.inputs):
+            raise ValueError('FlowGraph expects {} inputs, but got {}.'.format(len(self.inputs), len(inputs)))
+        for idx, tensor in enumerate(inputs):
+            if tensor.storage is None:
+                raise ValueError('FlowGraph expects all input tensors are non-symbolic, '
+                                 'but the input {} ({}) is a symbol tensor.'.format(idx, tensor.signature()))
+        usage_count = self.usage_count.copy()
+        tensor_map: Dict[Tensor, Tensor] = {}
         for st, at in zip(self.inputs, inputs):
-            tmap[st] = at
+            tensor_map[st] = at
         for node in self.nodes:
-            node_inputs = [tmap[st] if st.storage is None else st for st in node.inputs]
+            # prepare node inputs
+            node_inputs = []
+            for node_input in node.inputs:
+                if node_input.storage is None:
+                    # symbolic input
+                    node_inputs.append(tensor_map[node_input])
+                    usage_count[node_input] -= 1
+                    if usage_count[node_input] == 0:
+                        # free the memory
+                        del tensor_map[node_input]
+                else:
+                    # constant input
+                    node_inputs.append(node_input)
+            # run node
             node_outputs = node.imperative_run(node_inputs)
             for st, at in zip(node.outputs, node_outputs):
-                tmap[st] = at
-        return [tmap[st] for st in self.outputs]
+                tensor_map[st] = at
+        return [tensor_map[st] for st in self.outputs]
 
     def update_nodes(self):
-        inputs, self.nodes = self._analyze(self.outputs)
+        inputs, self.nodes, self.usage_count = self._analyze(self.outputs)
         if self.inputs:
             if len(inputs) != len(self.inputs):
                 raise ValueError('Found {} symbol inputs, but {} given'.format(len(inputs), len(self.inputs)))
@@ -43,7 +64,7 @@ class FlowGraph:
         return self
 
     @staticmethod
-    def _analyze(outputs: List[Tensor]) -> Tuple[List[Tensor], List[Operator]]:
+    def _analyze(outputs: List[Tensor]) -> Tuple[List[Tensor], List[Operator], Dict[Tensor, int]]:
         inputs = []
         nodes: List[Operator] = []
         # find out all nodes
@@ -65,10 +86,9 @@ class FlowGraph:
         out_degree: Dict[Operator, int] = {u: 0 for u in all_nodes}
         for u in all_nodes:
             for it in u.inputs:
-                if it.trace is None:
+                if it.op is None:
                     continue
-                v = it.trace[0]
-                out_degree[v] += 1
+                out_degree[it.op] += 1
         for u in outputs:
             if u.op:
                 out_degree[u.op] += 1
@@ -93,7 +113,16 @@ class FlowGraph:
                         stack.append(it.op)
         nodes = list(reversed(nodes))
         assert len(nodes) == len(all_nodes), 'all_nodes {} topo_order {}'.format(len(all_nodes), len(nodes))
-        return inputs, nodes
+
+        # tensor usage count
+        usage_count: Dict[Tensor, int] = defaultdict(int)
+        for op in all_nodes:
+            for inp in op.inputs:
+                usage_count[inp] += 1
+        for graph_output in outputs:
+            usage_count[graph_output] += 1
+
+        return inputs, nodes, usage_count
 
 
 def trace_from(tensor: Union[Tensor, List[Tensor]], inputs: Optional[Union[Tensor, List[Tensor]]] = None) -> FlowGraph:

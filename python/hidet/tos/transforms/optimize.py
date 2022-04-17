@@ -3,6 +3,7 @@ from .base import PassContext
 from .fold_const import fold_const_pass
 from .pattern_transform import pattern_transform_pass
 from .fuse_elementwise import fuse_elementwise_pass
+from .base import ProfileInstrument, SaveGraphInstrument
 
 # [x] fold_const
 # [ ] fuse_affine

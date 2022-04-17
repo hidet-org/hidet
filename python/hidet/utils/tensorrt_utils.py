@@ -1,7 +1,11 @@
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Tuple
+from hashlib import sha256
 import os
+import time
+import numpy as np
 import tensorrt as trt
 import hidet
+from hidet.ffi import cuda_api
 from hidet import Tensor, randn, empty
 from hidet.utils import hidet_cache_dir
 
@@ -17,7 +21,9 @@ def create_engine_from_onnx(onnx_model_path: str, workspace_bytes: int = 512 << 
     cache_dir = hidet_cache_dir('trt_engine')
     os.makedirs(cache_dir, exist_ok=True)
     model_name = os.path.basename(onnx_model_path).split('.')[0]
-    engine_name = '{}_ws{}.engine'.format(model_name, workspace_bytes // (1 << 20))
+    shape_hash = tuple((name, tuple(shape)) for name, shape in sorted(inputs_shape.items(), key=lambda item: item[0]))
+    shape_hash_suffix = sha256(str(shape_hash).encode()).hexdigest()[:6]
+    engine_name = '{}_ws{}_{}.engine'.format(model_name, workspace_bytes // (1 << 20), shape_hash_suffix)
     engine_path = os.path.join(cache_dir, engine_name)
 
     if os.path.exists(engine_path):
@@ -66,40 +72,83 @@ def create_engine_from_onnx(onnx_model_path: str, workspace_bytes: int = 512 << 
     return engine
 
 
-def engine_inference(engine: trt.ICudaEngine, inputs: List[Tensor]) -> List[Tensor]:
-    dtype_map = {
-        trt.DataType.INT32: 'int32',
-        trt.DataType.FLOAT: 'float32',
-    }
-    print('num bindings: ', engine.num_bindings)
+dtype_map = {
+    trt.DataType.INT32: 'int32',
+    trt.DataType.FLOAT: 'float32',
+}
+
+
+def _prepare_buffer(engine: trt.ICudaEngine, inputs: Dict[str, Tensor]) -> Tuple[Dict[str, Tensor], Dict[str, Tensor], List[int]]:
+    inputs = inputs.copy()
+    outputs = {}
+    buffers = []
     for i in range(engine.num_bindings):
-        print('Binding {}: {} {}'.format(i, engine.get_binding_dtype(i).name, engine.get_binding_name(i)))
-    outputs = []
-    for i in range(engine.num_bindings):
+        name = engine.get_binding_name(i)
         if engine.binding_is_input(i):
             dtype: trt.DataType = engine.get_binding_dtype(i)
-            if dtype != inputs[i].dtype:
-                inputs[i] = hidet.tos.operators.cast(inputs[i], dtype)
+            if name not in inputs:
+                raise ValueError("TensorRT engine requires input '{}', but only received inputs: {}.".format(name, list(inputs.keys())))
+            if dtype != inputs[name].dtype:
+                inputs[name] = hidet.tos.operators.cast(inputs[name], dtype_map[dtype])
+            buffers.append(inputs[name].storage.addr)
         else:
             shape = engine.get_binding_shape(i)
             dtype: trt.DataType = engine.get_binding_dtype(i)
-            outputs.append(hidet.empty(shape, dtype_map[dtype], device='cuda'))
-    buffers = [tensor.storage.addr for tensor in inputs + outputs]
+            output = hidet.empty(shape, dtype_map[dtype], device='cuda')
+            outputs[name] = output
+            buffers.append(output.storage.addr)
+    return inputs, outputs, buffers
+
+
+def engine_inference(engine: trt.ICudaEngine, inputs: Dict[str, Tensor]) -> Dict[str, Tensor]:
+    # prepare inputs and outputs
+    inputs, outputs, buffers = _prepare_buffer(engine, inputs)
+
+    # inference
+    context: trt.IExecutionContext = engine.create_execution_context()
+    context.execute_async_v2(buffers, 0)
+    cuda_api.device_synchronization()
     return outputs
 
 
-def engine_benchmark(engine: trt.ICudaEngine, warmup: int = 3, number: int = 5, repeat: int = 5) -> List[float]:
-    pass
+def engine_benchmark(engine: trt.ICudaEngine, dummy_inputs: Dict[str, Tensor], warmup: int = 3, number: int = 5, repeat: int = 5) -> List[float]:
+    inputs, outputs, buffers = _prepare_buffer(engine, dummy_inputs)
+    context: trt.IExecutionContext = engine.create_execution_context()
+    for i in range(warmup):
+        context.execute_async_v2(buffers, 0)
+        cuda_api.device_synchronization()
+    results = []
+    for i in range(repeat):
+        cuda_api.device_synchronization()
+        start_time = time.time()
+        for j in range(number):
+            context.execute_async_v2(buffers, 0)
+        cuda_api.device_synchronization()
+        end_time = time.time()
+        results.append((end_time - start_time) * 1000 / number)
+    return results
 
 
 if __name__ == '__main__':
     # onnx_model_path = os.path.join(hidet_cache_dir('onnx'), 'resnet50-v1-7.onnx')
     onnx_model_path = os.path.join(hidet_cache_dir('onnx'), 'bert-base-uncased.onnx')
+    batch_size = 1
+    seq_length = 512
+    vocab_size = 30522
+    input_ids = np.random.randint(0, vocab_size, [batch_size, seq_length], dtype=np.int64)
+    attention_mask = np.ones(shape=[batch_size, seq_length], dtype=np.int64)
+    token_type_ids = np.zeros(shape=[batch_size, seq_length], dtype=np.int64)
+
+    # onnx
+    inputs = {
+        'input_ids': hidet.array(input_ids).cuda(),
+        'attention_mask': hidet.array(attention_mask).cuda(),
+        'token_type_ids': hidet.array(token_type_ids).cuda()
+    }
     engine = create_engine_from_onnx(onnx_model_path, inputs_shape={
-        'input_ids': [1, 512],
-        'attention_mask': [1, 512],
-        'token_type_ids': [1, 512]
+        key: tensor.shape for key, tensor in inputs.items()
     })
-    x = randn([1, 3, 224, 224], dtype='float32', device='cuda')
-    outputs = engine_inference(engine, [x])
+    outputs = engine_inference(engine, inputs)
+    results = engine_benchmark(engine, inputs)
+    print(results)
 

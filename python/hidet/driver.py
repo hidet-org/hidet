@@ -19,7 +19,6 @@ def build_task(task, space_level, opt_level, use_cache=True, cache_dir=None) -> 
         cache_dir = os.path.join(hidet_cache_dir(), 'ops')
     config_str = 'space_{}_opt_{}'.format(space_level, opt_level)
     task_string = str(task)
-    # task_hash = format(abs(hash(task_string)), 'x')
     task_hash = sha256(task_string.encode()).hexdigest()[:16]
     task_dir = os.path.join(cache_dir, config_str, task.name, task_hash)
     src_path = os.path.join(task_dir, 'source.cu')
