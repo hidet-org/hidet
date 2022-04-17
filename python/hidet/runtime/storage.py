@@ -1,8 +1,22 @@
 from typing import Callable, Dict, List, Type
+import warnings
 from collections import defaultdict
 import ctypes
 import numpy as np
 from hidet.ffi import cuda_api
+
+
+def nbytes2str(nbytes: int) -> str:
+    if nbytes > 1024 * 1024:
+        size = nbytes // 1024 // 1024
+        unit = 'MiB'
+    elif nbytes > 1024:
+        size = nbytes // 1024
+        unit = 'KiB'
+    else:
+        size = nbytes
+        unit = 'Bytes'
+    return '{} {}'.format(size, unit)
 
 
 class StorageDevice:
@@ -13,6 +27,18 @@ class StorageDevice:
         raise NotImplementedError()
 
     def free(self, addr):
+        raise NotImplementedError()
+
+    def allocated_memory(self) -> int:
+        raise NotImplementedError()
+
+    def peak_allocated_memory(self) -> int:
+        raise NotImplementedError()
+
+    def free_memory(self) -> int:
+        raise NotImplementedError()
+
+    def total_memory(self) -> int:
         raise NotImplementedError()
 
 
@@ -85,7 +111,11 @@ class Storage:
         buf = (dtype2ctype[dtype] * num_elements).from_address(self.addr)
         buf._hidet_storage = self  # so this storage will not be freed as long as the buffer not been freed.
         assert ctypes.sizeof(buf) <= self.num_bytes, 'Trying to view a storage as a larger array'
-        return np.ctypeslib.as_array(buf)
+        with warnings.catch_warnings():
+            # temporarily ignore a warning due to python bug.
+            # See: https://stackoverflow.com/questions/4964101/pep-3118-warning-when-using-ctypes-array-as-numpy-array
+            warnings.simplefilter('ignore')
+            return np.ctypeslib.as_array(buf)
 
 
 class MemoryPool:
@@ -109,6 +139,17 @@ class MemoryPool:
             self.reserved_size -= storage.num_bytes
         else:
             addr = self.storage_device.allocate(allocated)
+            if addr == 0 and allocated != 0:
+                # out of memory
+                self.clear()
+                addr = self.storage_device.allocate(allocated)
+                if addr == 0:
+                    raise MemoryError('Can not allocate memory from {} device, allocated {}, free {}, requesting {}.'.format(
+                        self.storage_device.name(),
+                        nbytes2str(self.storage_device.allocated_memory()),
+                        nbytes2str(self.storage_device.free_memory()),
+                        nbytes2str(allocated)
+                    ))
         return Storage(
             device=self.storage_device.name(),
             addr=addr,
@@ -127,8 +168,29 @@ class MemoryPool:
             for storage in block_list:
                 self.storage_device.free(storage.addr)
                 storage.addr = 0
+        # print('Cleared memory pool, returned {} memory back to {} device'.format(
+        #     nbytes2str(self.reserved_size), self.storage_device.name()
+        # ))
         self.memory_blocks.clear()
         self.reserved_size = 0
+
+    def status(self) -> str:
+        allocated = self.storage_device.allocated_memory()
+        peak_allocated = self.storage_device.peak_allocated_memory()
+        items = [
+            ['Allocated', allocated],
+            ['Peak', peak_allocated],
+            ['Reserved', self.reserved_size],
+            ['Active', allocated - self.reserved_size]
+        ]
+        lines = [
+            'Status of {} memory pool'.format(self.storage_device.name()),
+            *['{:>12}: {}'.format(name, nbytes2str(nbytes)) for name, nbytes in items]
+        ]
+        return '\n'.join(lines)
+
+    def __str__(self):
+        return self.status()
 
     def __del__(self):
         self.clear()
@@ -137,68 +199,82 @@ class MemoryPool:
 class CudaStorageDevice(StorageDevice):
     def __init__(self):
         self.addr2nbytes = {}
-        self.peak_active_memory = 0
-        self.active_memory = 0
+        self._peak_allocated_memory = 0
+        self._allocated_memory = 0
 
     def name(self):
         return 'cuda'
 
     def allocate(self, nbytes):
         addr = cuda_api.malloc_async(nbytes)
-        self.active_memory += nbytes
-        self.peak_active_memory = max(self.peak_active_memory, self.active_memory)
-        # print('allocated {}, active {}, peak {}'.format(
-        #     nbytes2str(nbytes),
-        #     nbytes2str(self.active_memory),
-        #     nbytes2str(self.peak_active_memory)
-        # ))
+        if addr == 0 and nbytes != 0:
+            # out of memory
+            return 0
+        self._allocated_memory += nbytes
+        self._peak_allocated_memory = max(self._peak_allocated_memory, self._allocated_memory)
         self.addr2nbytes[addr] = nbytes
         return addr
 
     def free(self, addr):
-        assert addr in self.addr2nbytes
-        self.active_memory -= self.addr2nbytes[addr]
-        # print('free {}, active {}, peak {}'.format(
-        #     nbytes2str(self.addr2nbytes[addr]),
-        #     nbytes2str(self.active_memory),
-        #     nbytes2str(self.peak_active_memory)
-        # ))
-        del self.addr2nbytes[addr]
         cuda_api.free_async(addr)
+        self._allocated_memory -= self.addr2nbytes.pop(addr)
 
+    def allocated_memory(self) -> int:
+        return self._allocated_memory
 
-def nbytes2str(nbytes: int) -> str:
-    if nbytes > 1024 * 1024:
-        size = nbytes // 1024 // 1024
-        unit = 'MiB'
-    elif nbytes > 1024:
-        size = nbytes // 1024
-        unit = 'KiB'
-    else:
-        size = nbytes
-        unit = 'Bytes'
-    return '{} {}'.format(size, unit)
+    def peak_allocated_memory(self) -> int:
+        return self._peak_allocated_memory
+
+    def free_memory(self) -> int:
+        return cuda_api.mem_info()[0]
+
+    def total_memory(self) -> int:
+        return cuda_api.mem_info()[1]
 
 
 class CpuStorageDevice(StorageDevice):
+    def __init__(self):
+        self.addr2nbytes = {}
+        self._allocated_memory = 0
+        self._peak_allocated_memory = 0
+
     def name(self):
         return 'cpu'
 
     def allocate(self, nbytes):
-        return cuda_api.malloc_host(nbytes)
+        addr = cuda_api.malloc_host(nbytes)
+        if addr == 0 and nbytes != 0:
+            return 0
+        self._allocated_memory += nbytes
+        self._peak_allocated_memory = max(self._peak_allocated_memory, self._allocated_memory)
+        self.addr2nbytes[addr] = nbytes
+        return addr
 
     def free(self, addr):
         cuda_api.free_host(addr)
+        self._allocated_memory -= self.addr2nbytes.pop(addr)
+
+    def allocated_memory(self) -> int:
+        return self._allocated_memory
+
+    def peak_allocated_memory(self) -> int:
+        return self._peak_allocated_memory
+
+    def free_memory(self) -> int:
+        return 0
+
+    def total_memory(self) -> int:
+        return 0
 
 
 cpu_pool = MemoryPool(
     storage_device=CpuStorageDevice(),
-    block_size=1,
-    max_reserve_size=0  # do not reserve
+    block_size=4 * 1024,  # 4 KiB
+    max_reserve_size=128 * 1024 * 1024  # 128 MiB
 )
 
 cuda_pool = MemoryPool(
     storage_device=CudaStorageDevice(),
     block_size=4 * 1024,  # 4 KiB
-    max_reserve_size=3 * 1024 * 1024 * 1024  # 3 GiB
+    max_reserve_size=3 * 1024 * 1024 * 1024  # 5 GiB
 )

@@ -1,8 +1,9 @@
-from typing import List, Callable, Any, Optional
+from typing import List, Callable, Any, Optional, Union
 
 from ..common import Task, Operator, Tensor, TensorInput, Grid, compute, input_like, tensor_input, custom_compute, tensor_type, normalize_dim, normalize_index
 from .arithmatic import unary_elementwise_task
 from hidet.utils import prod
+from hidet.ir.expr import And, if_then_else
 from hidet.ir.layout import DataLayout, RowMajorLayout, ColumnMajorLayout
 
 
@@ -133,14 +134,14 @@ def strided_slice_task(data: TensorInput, starts: List[Optional[int]], ends: Lis
     output_shape = list(data_shape)
     axis2info = {}
     for axis, start, end, stride in zip(axes, starts, ends, strides):
-        dim_size = output_shape[axis]
-        start = normalize_index(start, dim_size, default=0)
-        end = normalize_index(end, dim_size, default=dim_size)
-        if end <= start:
-            raise ValueError('Slice along dim {} with start {} and end {}'.format(axis, start, end))
-        if stride < 0:
-            raise NotImplementedError('Currently only support slice with positive stride')
-        output_shape[axis] = (end - start + stride - 1) // stride
+        if stride == 0:
+            raise NotImplementedError('Stride can not be 0 in slicing: starts {} ends {} axes {} strides {}.'.format(starts, ends, axes, strides))
+        if stride > 0:
+            output_shape[axis] = (end - start + stride - 1) // stride
+        else:
+            output_shape[axis] = (start - end + (-stride) - 1) // (-stride)
+        if output_shape[axis] <= 0:
+            raise NotImplementedError('Slice result can not be: starts {} ends {} axes {} strides {}'.format(starts, ends, axes, strides))
         axis2info[axis] = (start, end, stride)
 
     def fmap(indices):
@@ -202,9 +203,34 @@ def broadcast_task(data: TensorInput, shape: List[int]) -> Task:
     )
 
 
+def const_pad_task(data: TensorInput, pads: List[int], value: float) -> Task:
+    shape = data.const_shape()
+    rank = len(shape)
+    assert rank * 2 == len(pads)
+    out_shape = [a + b + c for a, b, c in zip(pads[:rank], shape, pads[rank:])]
+
+    def fmap(*indices):
+        indices = [idx - beg for idx, beg in zip(indices, pads[:rank])]
+        cond = And.join_list([And(0 <= idx, idx < shape[i]) for i, idx in enumerate(indices)])
+        return if_then_else(cond, data[indices], value)
+
+    out = compute(
+        'out',
+        shape=out_shape,
+        fcompute=fmap,
+        scope=data.data_type.scope
+    )
+    return Task(
+        'pad',
+        computation=out,
+        params=[data, out],
+        worker=Grid()
+    )
+
+
 class ReshapeOp(Operator):
     def __init__(self, x: Tensor, shape):
-        shape = self.normalize_shape(shape, size=prod(x.shape))
+        shape = self.normalize_shape(x.shape, shape)
         task = reshape_task(input_like(x, 'x'), shape)
         super().__init__(
             inputs=[x],
@@ -213,8 +239,15 @@ class ReshapeOp(Operator):
         )
 
     @staticmethod
-    def normalize_shape(shape: List[int], size: int):
-        # [1, -1, 224, 224] => [1, 3, 224, 224] when size = 1 * 3 * 224 * 224
+    def normalize_shape(origin_shape: List[int], shape: List[int]):
+        # [1, 3, 224, 224], [1, -1, 224, 0] => [1, 3, 224, 224]
+        shape = list(shape)
+        for i in range(len(shape)):
+            if shape[i] == 0:
+                if i >= len(origin_shape):
+                    raise ValueError('0 is used outside original shape: origin {} target {}'.format(origin_shape, shape))
+                shape[i] = origin_shape[i]
+        size = prod(origin_shape)
         cnt = sum([1 for v in shape if v == -1])
         if cnt == 0:
             if prod(shape) != size:
@@ -347,11 +380,7 @@ class TakeOp(Operator):
 
 class StridedSliceOp(Operator):
     def __init__(self, data: Tensor, starts: List[int], ends: List[int], axes: Optional[List[int]] = None, strides: Optional[List[int]] = None):
-        assert len(starts) == len(ends)
-        if strides is None:
-            strides = [1 for _ in range(len(starts))]
-        if axes is None:
-            axes = [i for i in range(len(starts))]
+        starts, ends, axes, strides = self.normalize(data.shape, starts, ends, axes, strides)
         task = strided_slice_task(input_like(data, 'data'), starts, ends, axes, strides)
         super().__init__(
             inputs=[data],
@@ -362,6 +391,28 @@ class StridedSliceOp(Operator):
             strides=strides
         )
 
+    @staticmethod
+    def normalize(shape, starts, ends, axes: Optional, strides: Optional):
+        # follow: https://github.com/onnx/onnx/blob/main/docs/Operators.md#slice to normalize
+        rank = len(shape)
+        if axes is None:
+            axes = [i for i in range(len(starts))]
+        axes = normalize_dim(axes, rank)
+        if strides is None:
+            strides = [1 for i in range(len(starts))]
+        shape = [shape[i] for i in axes]
+        assert len(shape) == len(starts) == len(ends) == len(axes) == len(strides)
+        for i in range(len(axes)):
+            starts[i] = starts[i] + shape[i] if starts[i] < 0 else starts[i]
+            ends[i] = ends[i] + shape[i] if ends[i] < 0 else ends[i]
+            if strides[i] > 0:
+                starts[i] = max(0, min(shape[i], starts[i]))
+                ends[i] = max(0, min(shape[i], ends[i]))
+            else:
+                starts[i] = max(0, min(shape[i] - 1, starts[i]))
+                ends[i] = max(-1, min(shape[i] - 1, ends[i]))
+        return starts, ends, axes, strides
+
 
 class BroadcastOp(Operator):
     def __init__(self, data: Tensor, shape: List[int]):
@@ -370,6 +421,25 @@ class BroadcastOp(Operator):
             task=broadcast_task(input_like(data, 'data'), shape),
             shape=shape
         )
+
+
+class PadOp(Operator):
+    def __init__(self, data: Tensor, pads: List[int], mode: str = 'constant', value: float = 0.0):
+        if len(pads) < len(data.shape) * 2:
+            assert len(pads) % 2 == 0, 'The pads must have even number of elements.'
+            half = len(pads) // 2
+            extra = [0 for _ in range(len(data.shape) - half)]
+            pads = pads[:half] + extra + pads[half:] + extra
+        if mode != 'constant':
+            raise NotImplementedError("Padding mode '{}' has not been implemented yet.".format(mode))
+        super().__init__(
+            inputs=[data],
+            task=const_pad_task(input_like(data, 'data'), pads, value),
+            pads=pads,
+            mode=mode,
+            value=value
+        )
+
 
 
 def reshape(x: Tensor, shape) -> Tensor:
@@ -404,11 +474,15 @@ def rearrange(x: Tensor, plan: List[List[int]]) -> Tensor:
     return RearrangeOp(x, plan).get_output(0)
 
 
-def squeeze(x: Tensor, dims) -> Tensor:
+def squeeze(x: Tensor, dims: Union[int, List[int]]) -> Tensor:
+    if isinstance(dims, int):
+        dims = [dims]
     return SqueezeOp(x, dims).get_output(0)
 
 
-def unsqueeze(x: Tensor, dims) -> Tensor:
+def unsqueeze(x: Tensor, dims: Union[int, List[int]]) -> Tensor:
+    if isinstance(dims, int):
+        dims = [dims]
     return UnsqueezeOp(x, dims).get_output(0)
 
 
@@ -440,8 +514,11 @@ def strided_slice(data: Tensor, starts: List[int], ends: List[int], axes: Option
     return StridedSliceOp(data, starts, ends, axes, strides).get_output(0)
 
 
-def broadcast(data: Tensor, shape):
+def broadcast(data: Tensor, shape) -> Tensor:
     if same_shape(data.shape, shape):
         return data
     return BroadcastOp(data, shape).get_output(0)
 
+
+def pad(data: Tensor, pads: List[int], mode: str = 'constant', value: float = 0.0) -> Tensor:
+    return PadOp(data, pads, mode, value).get_output(0)

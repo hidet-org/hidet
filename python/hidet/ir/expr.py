@@ -465,3 +465,8 @@ def tensor_rank(v: Expr) -> int:
         return len(v.shape)
     else:
         raise ValueError(v)
+
+
+def cast(v: Expr, dtype):
+    return Cast(v, dtype)
+

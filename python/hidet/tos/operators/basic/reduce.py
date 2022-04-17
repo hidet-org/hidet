@@ -3,7 +3,7 @@ from typing import List, Union
 from ..common import Task, Operator, Tensor, TensorInput, Grid, compute, reduce, input_like, normalize_dim
 
 
-def reduce_mean_task(x: TensorInput, dims: List[int], keep_dim=False):
+def reduce_task(x: TensorInput, dims: List[int], keep_dim: bool, reduce_type: str):
     x_shape = x.const_shape()
     y_shape = []
     for i in range(len(x_shape)):
@@ -31,7 +31,7 @@ def reduce_mean_task(x: TensorInput, dims: List[int], keep_dim=False):
             return x[x_indices]
 
         reduce_shape = [x_shape[i] for i in dims]
-        return reduce(shape=reduce_shape, fcompute=reduce_fcompute, reduce_type='avg')
+        return reduce(shape=reduce_shape, fcompute=reduce_fcompute, reduce_type=reduce_type)
 
     y = compute(name='y', shape=y_shape, fcompute=fcompute, scope='global')
     return Task(
@@ -47,7 +47,18 @@ class ReduceMeanOp(Operator):
         dims = normalize_dim(dims, rank=len(x.shape))
         super().__init__(
             inputs=[x],
-            task=reduce_mean_task(input_like(x, 'x'), dims, keep_dim),
+            task=reduce_task(input_like(x, 'x'), dims, keep_dim, 'avg'),
+            dims=dims,
+            keep_dim=keep_dim
+        )
+
+
+class ReduceSumOp(Operator):
+    def __init__(self, x: Tensor, dims: List[int], keep_dim: bool = False):
+        dims = normalize_dim(dims, rank=len(x.shape))
+        super().__init__(
+            inputs=[x],
+            task=reduce_task(input_like(x, 'x'), dims, keep_dim, 'sum'),
             dims=dims,
             keep_dim=keep_dim
         )
@@ -57,3 +68,10 @@ def reduce_mean(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) 
     if isinstance(dims, int):
         dims = [dims]
     return ReduceMeanOp(x, dims, keep_dim).get_output(0)
+
+
+def reduce_sum(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -> Tensor:
+    if isinstance(dims, int):
+        dims = [dims]
+    return ReduceSumOp(x, dims, keep_dim).get_output(0)
+

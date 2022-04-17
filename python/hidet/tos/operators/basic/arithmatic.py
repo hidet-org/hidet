@@ -137,6 +137,21 @@ class DivideOp(BinaryElementwiseOp):
         super().__init__(x, y, op=lambda a, b: a / b, name='div')
 
 
+class SinOp(UnaryElementwiseOp):
+    def __init__(self, x: Tensor):
+        super().__init__(x, op=lambda a: primitives.cuda_sin(a), name='sin')
+
+
+class CosOp(UnaryElementwiseOp):
+    def __init__(self, x: Tensor):
+        super().__init__(x, op=lambda a: primitives.cuda_cos(a), name='cos')
+
+
+class SquareOp(UnaryElementwiseOp):
+    def __init__(self, x: Tensor):
+        super().__init__(x, op=lambda a: a * a, name='square')
+
+
 def add(x: Tensor, y: Tensor) -> Tensor:
     return AddOp(x, y).get_output(0)
 
@@ -175,4 +190,16 @@ def rsqrt(x: Tensor) -> Tensor:
 
 def neg(x: Tensor) -> Tensor:
     return NegOp(x).get_output(0)
+
+
+def sin(x: Tensor) -> Tensor:
+    return SinOp(x).get_output(0)
+
+
+def cos(x: Tensor) -> Tensor:
+    return CosOp(x).get_output(0)
+
+
+def square(x: Tensor) -> Tensor:
+    return SquareOp(x).get_output(0)
 

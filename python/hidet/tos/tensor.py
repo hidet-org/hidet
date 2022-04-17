@@ -34,23 +34,23 @@ class Tensor:
         self.layout = layout if layout else DataLayout.row_major(shape)
         self.trace: Optional[Tuple[Operator, int]] = trace
 
-    def __neg__(self):
+    def __neg__(self) -> 'Tensor':
         from .operators import neg
         return neg(self)
 
-    def __add__(self, other):
+    def __add__(self, other) -> 'Tensor':
         from .operators import add
         return add(self, convert(other))
 
-    def __sub__(self, other):
+    def __sub__(self, other) -> 'Tensor':
         from .operators import sub
         return sub(self, convert(other))
 
-    def __mul__(self, other):
+    def __mul__(self, other) -> 'Tensor':
         from .operators import multiply
         return multiply(self, convert(other))
 
-    def __truediv__(self, other):
+    def __truediv__(self, other) -> 'Tensor':
         from .operators import divide
         return divide(self, convert(other))
 

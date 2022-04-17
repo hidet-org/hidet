@@ -1,9 +1,11 @@
-from ctypes import c_uint64, c_uint32, c_float, c_uint8
+from typing import Tuple
+from ctypes import c_uint64, c_uint32, c_float, c_uint8, byref, POINTER
 from hidet.ffi.ffi import get_func
 
 
 class CudaAPI:
     # memory related apis
+    _mem_info = get_func('hidet_cuda_mem_info', [POINTER(c_uint64), POINTER(c_uint64)], None)
     _malloc_async = get_func('hidet_cuda_malloc_async', [c_uint64], c_uint64)
     _malloc_host = get_func('hidet_cuda_malloc_host', [c_uint64], c_uint64)
     _free_async = get_func('hidet_cuda_free_async', [c_uint64], None)
@@ -16,6 +18,13 @@ class CudaAPI:
     # random number generation
     _generate_uniform = get_func('hidet_curand_generate_uniform', [c_uint64, c_uint64], None)
     _generate_normal = get_func('hidet_curand_generate_normal', [c_uint64, c_uint64, c_float, c_float], None)
+
+    @classmethod
+    def mem_info(cls) -> Tuple[int, int]:
+        free_bytes = c_uint64(0)
+        total_bytes = c_uint64(0)
+        cls._mem_info(byref(free_bytes), byref(total_bytes))
+        return free_bytes.value, total_bytes.value
 
     @classmethod
     def malloc_async(cls, num_bytes: int) -> int:

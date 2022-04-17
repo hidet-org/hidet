@@ -4,6 +4,7 @@ from . import backend
 from . import implement
 from . import utils
 from . import tos
+from . import runtime
 
 from .tos import Tensor, Operator, Module, FlowGraph
 

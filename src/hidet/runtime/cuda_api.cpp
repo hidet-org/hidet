@@ -18,10 +18,18 @@ struct CurandContext {
     }
 };
 
+DLL void hidet_cuda_mem_info(uint64_t *free, uint64_t *total) {
+    CUDA_CALL(cudaMemGetInfo(free, total));
+}
 
 DLL uint64_t hidet_cuda_malloc_async(uint64_t bytes) {
     void *ptr;
-    CUDA_CALL(cudaMallocAsync(&ptr, bytes, nullptr));
+    cudaError_t status = cudaMallocAsync(&ptr, bytes, nullptr);
+    if(status == cudaErrorMemoryAllocation) {
+        // out of memory
+        return 0;
+    }
+    CUDA_CALL(status);
     return reinterpret_cast<uint64_t>(ptr);
 }
 
@@ -36,11 +44,11 @@ DLL void hidet_cuda_free_async(uint64_t addr) {
 }
 
 DLL void hidet_cuda_free_host(uint64_t addr) {
-//    CUDA_CALL(cudaFreeHost(reinterpret_cast<void*>(addr)));
-    auto status = cudaFreeHost(reinterpret_cast<void*>(addr));
-    if(status != cudaSuccess) {
-        fprintf(stderr, "Can not free host memory %p\n", reinterpret_cast<void*>(addr));
-    }
+    CUDA_CALL(cudaFreeHost(reinterpret_cast<void*>(addr)));
+//    auto status = cudaFreeHost(reinterpret_cast<void*>(addr));
+//    if(status != cudaSuccess) {
+//        fprintf(stderr, "Can not free host memory %p\n", reinterpret_cast<void*>(addr));
+//    }
 }
 
 DLL void hidet_cuda_memset_async(uint64_t addr, uint64_t bytes, uint8_t value) {

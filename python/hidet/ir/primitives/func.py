@@ -189,6 +189,14 @@ def cuda_erf(a):
     return Call(func_var, [a])
 
 
+def cuda_sin(a):
+    if 'sinf' not in _primitive_functions:
+        func_type = FuncType(param_types=['float32'], ret_type='float32')
+        register_primitive_function('sinf', func_type)
+    func_var = get_primitive_function('sinf')[0]
+    return Call(func_var, [a])
+
+
 def cuda_tanh(a):
     if 'tanhf' not in _primitive_functions:
         func_type = FuncType(param_types=['float32'], ret_type='float32')
@@ -200,3 +208,43 @@ def cuda_tanh(a):
 def set_kernel_max_dynamic_smem_bytes(func_var, max_dynamic_smem_bytes):
     template_string = r'cudaFuncSetAttribute({}, cudaFuncAttributeMaxDynamicSharedMemorySize, {});'
     return BlackBoxStmt(template_string, func_var, max_dynamic_smem_bytes)
+
+
+def cuda_cos(a):
+    if 'cosf' not in _primitive_functions:
+        func_type = FuncType(param_types=['float32'], ret_type='float32')
+        register_primitive_function('cosf', func_type)
+    func_var = get_primitive_function('cosf')[0]
+    return Call(func_var, [a])
+
+
+def cuda_exp(a):
+    if 'expf' not in _primitive_functions:
+        func_type = FuncType(param_types=['float32'], ret_type='float32')
+        register_primitive_function('expf', func_type)
+    func_var = get_primitive_function('expf')[0]
+    return Call(func_var, [a])
+
+
+def cuda_round(a):
+    if 'roundf' not in _primitive_functions:
+        func_type = FuncType(param_types=['float32'], ret_type='float32')
+        register_primitive_function('roundf', func_type)
+    func_var = get_primitive_function('roundf')[0]
+    return Call(func_var, [a])
+
+
+def cuda_ceil(a):
+    if 'ceilf' not in _primitive_functions:
+        func_type = FuncType(param_types=['float32'], ret_type='float32')
+        register_primitive_function('ceilf', func_type)
+    func_var = get_primitive_function('ceilf')[0]
+    return Call(func_var, [a])
+
+
+def cuda_floor(a):
+    if 'floorf' not in _primitive_functions:
+        func_type = FuncType(param_types=['float32'], ret_type='float32')
+        register_primitive_function('floorf', func_type)
+    func_var = get_primitive_function('floorf')[0]
+    return Call(func_var, [a])

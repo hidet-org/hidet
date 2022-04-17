@@ -47,8 +47,20 @@ class OnnxOperator:
         raise NotImplementedError()
 
     @staticmethod
-    def tensor2list(tensor: Tensor) -> List:
+    def tensor2list(tensor: Tensor) -> Union[List, int, float]:
         return tensor.cpu().numpy().tolist()
+
+    @staticmethod
+    def optional_inputs(inputs: List[Tensor], requires: List[bool]) -> List[Union[Tensor, None]]:
+        diff = len(requires) - len(inputs)
+        assert diff >= 0, 'Onnx get {} inputs but expect at most {}.'.format(len(inputs), len(requires))
+        ret: List[Union[Tensor, None]] = []
+        ret += inputs
+        ret += [None for _ in range(diff)]
+        for i, (t, r) in enumerate(zip(ret, requires)):
+            if t is None and r:
+                raise 'The {}th input is required.'.format(i)
+        return ret
 
 
 class OnnxConv(OnnxOperator):
@@ -83,6 +95,16 @@ class OnnxBatchNormalization(OnnxOperator):
 class OnnxRelu(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         return [ops.relu(inputs[0])]
+
+
+class OnnxSin(OnnxOperator):
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        return [ops.sin(inputs[0])]
+
+
+class OnnxCos(OnnxOperator):
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        return [ops.cos(inputs[0])]
 
 
 class OnnxPow(OnnxOperator):
@@ -363,6 +385,81 @@ class OnnxSlice(OnnxOperator):
         return [ops.strided_slice(data, starts, ends, axes, steps)]
 
 
+class OnnxSigmoid(OnnxOperator):
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        return [ops.sigmoid(inputs[0])]
+
+
+class OnnxInstanceNormalization(OnnxOperator):
+    def __init__(self, node):
+        super().__init__(node)
+        self.epsilon = self.attrs.get('epsilon', 1e-5)
+
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        x, scale, bias = inputs
+        scale = ops.unsqueeze(x, 0)  # [1, C]
+        bias = ops.unsqueeze(x, 0)  # [1, C]
+        return [ops.instance_norm(x, self.epsilon) * scale + bias]
+
+
+class OnnxConstantOfShape(OnnxOperator):
+    def __init__(self, node):
+        super().__init__(node)
+        self.value = self.attrs.get('value')
+        if self.value is None:
+            self.value = hidet.zeros([1], dtype='float32')
+
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        shape = inputs[0].cpu().numpy().tolist()
+        assert all(v >= 0 for v in shape)
+        return [ops.broadcast(self.value, shape)]
+
+
+class OnnxPad(OnnxOperator):
+    def __init__(self, node):
+        super().__init__(node)
+        self.mode = self.attrs.get('mode', 'constant')
+
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        data, pads = inputs[:2]
+        value = self.tensor2list(inputs[2]) if len(inputs) > 2 else 0.0
+        pads = self.tensor2list(pads)
+        return [ops.pad(data, pads, self.mode, value)]
+
+
+class OnnxResize(OnnxOperator):
+    def __init__(self, node):
+        super().__init__(node)
+        self.coordinate_transformation_mode = self.attrs.get('coordinate_transformation_mode', 'half_pixel')
+        self.cubic_coeff_a = self.attrs.get('cubic_coeff_a', -0.75)
+        self.exclude_outside = self.attrs.get('exclude_outside', 0)
+        self.extrapolation_value = self.attrs.get('extrapolation_value', 0.0)
+        self.mode = self.attrs.get('mode', 'nearest')
+        self.nearest_mode = self.attrs.get('nearest_mode', 'round_prefer_floor')
+
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        x, roi, scales, sizes = self.optional_inputs(inputs, requires=[True, False, False, False])
+        if roi is not None:
+            roi = self.tensor2list(roi)
+        target_size = None
+        if scales is not None:
+            scales = self.tensor2list(scales)
+            assert len(x.shape) == len(scales)
+            target_size = [int(a * b) for a, b in zip(x.shape, scales)]
+        if sizes is not None:
+            sizes = self.tensor2list(sizes)
+            target_size = [int(v) for v in sizes]
+        if target_size is None:
+            raise ValueError('Resize operator in onnx must give either scales or sizes.')
+        if len(x.shape) == 4:
+            if not(target_size[0] == x.shape[0] and target_size[1] == x.shape[1]):
+                raise ValueError('Unsupported resize on batch and channel dimension.')
+            return [ops.resize2d(x, target_size[2:], self.mode, self.coordinate_transformation_mode, self.nearest_mode,
+                                 roi, self.cubic_coeff_a, self.exclude_outside, self.extrapolation_value)]
+        else:
+            raise NotImplementedError('Current only support 2d resize, got x {}.'.format(x.shape))
+
+
 def dispatch(node) -> OnnxOperator:
     dispatch_table = {
         'Conv': OnnxConv,
@@ -394,6 +491,13 @@ def dispatch(node) -> OnnxOperator:
         'Gather': OnnxGather,
         'Slice': OnnxSlice,
         'Transpose': OnnxTranspose,
+        'Sin': OnnxSin,
+        'Cos': OnnxCos,
+        'Sigmoid': OnnxSigmoid,
+        'InstanceNormalization': OnnxInstanceNormalization,
+        'ConstantOfShape': OnnxConstantOfShape,
+        'Pad': OnnxPad,
+        'Resize': OnnxResize,
     }
     op_type = node.op_type
     if op_type not in dispatch_table:
@@ -463,4 +567,5 @@ def from_onnx(model: Union[str, 'onnx.ModelProto']) -> OnnxModule:
     if isinstance(model, str):
         model = os.path.expanduser(model)
         model = onnx.load_model(model)
+        onnx.checker.check_model(model, full_check=True)
     return OnnxModule(model)
