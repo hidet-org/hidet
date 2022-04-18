@@ -63,7 +63,6 @@ class ExampleModel(nn.Module):
 
 
 def demo_lazy_mode():
-    hidet.lazy_mode()
     x = symbol([1, 3, 224, 224], dtype='float32')
     model = resnet.resnet50()
     # model = nn.MaxPool2d(kernel_size=7, stride=2, padding=1)
@@ -134,6 +133,6 @@ if __name__ == '__main__':
     # demo_basic_block()
     # demo_bottleneck()
     # demo_resnet50()
-    # demo_lazy_mode()
+    demo_lazy_mode()
     # demo_torch_resnet50()
-    demo_hidet_resnet50()
+    # demo_hidet_resnet50()

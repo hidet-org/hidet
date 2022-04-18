@@ -226,6 +226,16 @@ def demo_variance():
     hidet.utils.tvm_utils.dump_relay_cuda_code(ir_module, out_dir='./outs/variance')
 
 
+def demo_reduce_mean():
+    # data = relay.var('data', shape=(1, 55, 131072))
+    data = relay.var('data', shape=(1, 131072, 55))
+    # reduced = relay.mean(data, axis=2, keepdims=True)
+    reduced = relay.mean(data, axis=1, keepdims=True)
+    func = relay.Function(params=[data], body=reduced)
+    ir_module = tvm.ir.IRModule.from_expr(func)
+    hidet.utils.tvm_utils.dump_relay_cuda_code(ir_module, out_dir='./outs/reduce_mean')
+
+
 if __name__ == '__main__':
     # demo_vthread()
     # demo_conv2d_te()
@@ -234,5 +244,6 @@ if __name__ == '__main__':
     # demo_batch_norm()
     # demo_rsqrt()
     # demo_gather()
-    demo_variance()
+    # demo_variance()
+    demo_reduce_mean()
 

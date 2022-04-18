@@ -213,6 +213,7 @@ class SimpleGraphPattern(GraphPattern):
         pairs = [
             ['a + x => x + a', a + x, x + a],
             ['x - a => x + (-a)', x - a, x + (-a)],
+            ['(x + a) + b => x + (a + b)', (x + a) + b, x + (a + b)],
             ['(x + a) * b => x * b + a * b', (x + a) * b, x * b + a * b],
             ['(x + a) + (y + b) => (x + y) + (a + b)', (x + a) + (y + b), (x + y) + (a + b)],
         ]

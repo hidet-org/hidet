@@ -141,9 +141,13 @@ def active_mask():
     return Call(func_var, [])
 
 
+def binary_type_infer(a_tp, b_tp):
+    return a_tp
+
+
 def cuda_max(a, b):
     if 'max' not in _primitive_functions:
-        func_type = FuncType(type_infer_func=lambda a_tp, b_tp: a_tp)
+        func_type = FuncType(type_infer_func=binary_type_infer)
         register_primitive_function('max', func_type)
     func_var = get_primitive_function('max')[0]
     return Call(func_var, [a, b])
@@ -151,7 +155,7 @@ def cuda_max(a, b):
 
 def cuda_min(a, b):
     if 'min' not in _primitive_functions:
-        func_type = FuncType(type_infer_func=lambda a_tp, b_tp: a_tp)
+        func_type = FuncType(type_infer_func=binary_type_infer)
         register_primitive_function('min', func_type)
     func_var = get_primitive_function('min')[0]
     return Call(func_var, [a, b])

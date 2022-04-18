@@ -93,6 +93,8 @@ class Tracer:
         json.dump(self.export(), f)
 
     def clear(self):
+        from hidet.ffi.cuda_api import cuda_api
+        cuda_api.device_synchronization()  # sync cuda events in trace
         self.events.clear()
 
     def turn_on(self, turn_on=True):

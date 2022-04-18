@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional, Tuple
 import json
 from tabulate import tabulate
 import os
@@ -6,6 +6,7 @@ import time
 import numpy as np
 import argparse
 import hidet as hi
+import hidet
 from hidet import Tensor
 from hidet.utils import download, hidet_cache_dir, cuda
 from hidet.utils.git_utils import get_repo_sha, get_repo_commit_date
@@ -46,59 +47,99 @@ def onnx_model(name: str) -> str:
     return model_path
 
 
-def dummy_inputs(args) -> List[Tensor]:
+def dummy_inputs(args) -> Tuple[List[str], List[Tensor]]:
     batch_size = args.bs
     if args.model == 'resnet50':
-        return [hi.randn([batch_size, 3, 224, 224], dtype='float32', device='cuda')]
+        names = ['data']
+        tensors = [hi.randn([batch_size, 3, 224, 224], dtype='float32', device='cuda')]
+        return names, tensors
     elif args.model == 'bert-base-uncased':
         vocab_size = 30522
         seq_length = args.bert_seq_length
         input_ids = hi.array(np.random.randint(0, vocab_size, [batch_size, seq_length], dtype=np.int64))
         attention_mask = hi.ones(shape=[batch_size, seq_length], dtype='int64')
         token_type_ids = hi.zeros(shape=[batch_size, seq_length], dtype='int64')
-        return [input_ids, attention_mask, token_type_ids]
+        names = ['input_ids', 'attention_mask', 'token_type_ids']
+        tensors = [input_ids, attention_mask, token_type_ids]
+        return names, tensors
     else:
         raise NotImplementedError('Model {}.'.format(args.model))
 
 
-def main(args):
-    # load model
-    model_path = onnx_model(args.model)
-    model = hi.tos.frontend.onnx_utils.from_onnx(model_path)
-
-    # prepare inputs
-    inputs = dummy_inputs(args)
-
-    # prepare run function
+def benchmark_run(run_func, warmup, number, repeat) -> List[float]:
     results = []
-    if args.mode == 'imperative':
-        run = lambda: model(*inputs)
-    elif args.mode.startswith('lazy'):
-        symbol_inputs = [hi.symbol_like(data) for data in inputs]
-        outputs = model(*symbol_inputs)
-        graph: hi.FlowGraph = hi.trace_from(outputs, inputs=symbol_inputs)
-        if args.mode == 'lazy_opt':
-            graph = hi.tos.transforms.optimize(graph)
-        run = lambda: graph(*inputs)
-    else:
-        raise NotImplementedError()
-
-    # measure latency
-    warmup, number, repeat = args.warmup, args.number, args.repeat
     for i in range(warmup):
-        run()
+        run_func()
+        cuda_api.device_synchronization()
     for i in range(repeat):
         cuda_api.device_synchronization()
         start_time = time.time()
         for j in range(number):
-            run()
-        end_time = time.time()
+            run_func()
         cuda_api.device_synchronization()
+        end_time = time.time()
         results.append((end_time - start_time) * 1000 / number)
+    return results
+
+
+def bench_hidet(args, out_dir) -> List[float]:
+    onnx_model_path: str = onnx_model(args.model)
+    model = hidet.tos.frontend.onnx_utils.from_onnx(onnx_model_path)
+    input_names, input_tensors = dummy_inputs(args)
+    symbol_inputs = [hi.symbol_like(data) for data in input_tensors]
+    outputs = model(*symbol_inputs)
+    graph: hi.FlowGraph = hi.trace_from(outputs, inputs=symbol_inputs)
+    with hidet.tos.PassContext(instruments=[
+        hidet.tos.transforms.SaveGraphInstrument(out_dir=os.path.join(out_dir, 'ir'))  # dump ir
+    ]):
+        graph = hi.tos.transforms.optimize(graph)
+    hidet.space_level(args.hidet_space)
+
+    # dump trace
+    hidet.utils.tracer.turn_on(True)
+    graph(*input_tensors)
+    hidet.utils.tracer.clear()
+    graph(*input_tensors)
+    trace = hidet.utils.tracer.export()
+    with open(os.path.join(out_dir, 'trace.json'), 'w') as f:
+        json.dump(trace, f)
+    hidet.utils.tracer.turn_on(False)
+
+    return benchmark_run(lambda: graph(*input_tensors), args.warmup, args.number, args.repeat)
+
+
+def bench_trt(args, out_dir) -> List[float]:
+    from hidet.utils.tensorrt_utils import create_engine_from_onnx, engine_benchmark
+    onnx_model_path: str = onnx_model(args.model)
+    input_names, input_tensors = dummy_inputs(args)
+    engine = create_engine_from_onnx(onnx_model_path, inputs_shape={
+        name: tensor.shape for name, tensor in zip(input_names, input_tensors)
+    })
+    results = engine_benchmark(
+        engine=engine,
+        dummy_inputs={name: tensor for name, tensor in zip(input_names, input_tensors)},
+        warmup=args.warmup, number=args.number, repeat=args.repeat
+    )
+    return results
+
+
+def main(args):
+    # output dir
+    if args.exec == 'hidet':
+        out_dir = os.path.join(args.out_dir, '{}_{}_space{}'.format(args.model, args.exec, args.hidet_space))
+    else:
+        out_dir = os.path.join(args.out_dir, '{}_{}'.format(args.model, args.exec))
+    os.makedirs(out_dir, exist_ok=True)
+
+    # bench
+    bench_dict = {
+        'hidet': bench_hidet,
+        'trt': bench_trt
+    }
+    bench_func = bench_dict[args.exec]
+    results = bench_func(args, out_dir)
 
     # write results
-    out_dir = os.path.join(args.out_dir, '{}_space{}_{}'.format(args.model, args.space, args.mode))
-    os.makedirs(out_dir, exist_ok=True)
     with open(os.path.join(out_dir, 'env.txt'), 'w') as f:
         f.write(enviroment_info(args))
     with open(os.path.join(out_dir, 'raw.json'), 'w') as f:
@@ -107,13 +148,14 @@ def main(args):
         json.dump(args.__dict__, f, indent=2)
     with open(os.path.join(out_dir, 'summary.txt'), 'w') as f:
         # model mode space median std
-        head = '{:>30} {:>12} {:>10} {:>10} {:>10}\n'.format(
-            'Model', 'Mode', 'Space', 'Latency', 'Std'
+        head = '{:>10} {:>20} {:>12} {:>10} {:>10} {:>10}\n'.format(
+            'BatchSize', 'Model', 'Executor', 'Space', 'Latency', 'Std'
         )
-        summary = '{:>30} {:>12} {:10} {:10.3f} {:10.3f}\n'.format(
+        summary = '{:>10} {:>20} {:>12} {:10} {:10.3f} {:10.3f}\n'.format(
+            args.bs,
             args.model,
-            args.mode,
-            args.space,
+            args.exec,
+            args.hidet_space,
             float(np.median(results)),
             float(np.std(results))
         )
@@ -126,16 +168,18 @@ parser = argparse.ArgumentParser(description='Hidet model benchmark script.')
 # general parameters
 parser.add_argument('--model', type=str, choices=['resnet50', 'bert-base-uncased'], required=True,
                     help='The model to benchmark.')
-parser.add_argument('--space', type=int, choices=[0, 1, 2], default=0,
-                    help='The space level of each operator in the model. '
-                         'Large space level means longer compilation time and better performance.')
-parser.add_argument('--mode', type=str, choices=['imperative', 'lazy', 'lazy_opt'], default='lazy',
-                    help='The execution mode, can be imperative mode and lazy mode. '
-                         'Lazy mode will perform graph-level optimizations.')
-parser.add_argument('--out_dir', type=str, default='./results/', help='Output directory.')
+parser.add_argument('--exec', type=str, choices=['hidet', 'trt'], default='hidet',
+                    help='Executor.')
+parser.add_argument('--out_dir', type=str, default='./results/',
+                    help='Output directory.')
 parser.add_argument('--warmup', type=int, default=3, help='Number of warmups.')
 parser.add_argument('--number', type=int, default=5, help='Number of runs per repeat.')
 parser.add_argument('--repeat', type=int, default=5, help='Number of repeats.')
+
+# executor parameters
+# hidet executor parameters
+parser.add_argument('--hidet_space', type=int, choices=[0, 1, 2], default=2,
+                    help='The space level of each operator in the model. Large space level means longer compilation time and better performance.')
 
 # model agnostic parameters
 parser.add_argument('--bs', type=int, default=1, help='Batch size.')
