@@ -80,7 +80,27 @@ def main():
     print(hidet.runtime.storage.cuda_pool)
 
 
+def demo_timeline():
+    unet_onnx_path = '~/model_zoo/fused_unet_church.onnx'
+    model = hidet.tos.frontend.from_onnx(unet_onnx_path)
+
+    symbol_inputs = [hidet.symbol([1, 3, 256, 256], dtype='float32', device='cuda'),
+                     hidet.symbol([1], dtype='float32', device='cuda')]
+    symbol_outputs = model(*symbol_inputs)
+    graph = hidet.trace_from(symbol_outputs, symbol_inputs)
+
+    inputs = [hidet.randn([1, 3, 256, 256], dtype='float32', device='cuda'),
+              hidet.randn([1], dtype='float32', device='cuda')]
+    hidet.utils.tracer.clear()
+    hidet.utils.tracer.turn_on()
+    outputs = graph(*inputs)
+    with open('./outs/trace.json', 'w') as f:
+        hidet.utils.tracer.dump(f)
+
+
 if __name__ == '__main__':
     # check()
     # run_onnx()
-    main()
+    # main()
+    demo_timeline()
+

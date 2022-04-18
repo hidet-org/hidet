@@ -4,6 +4,7 @@ import json
 from collections import defaultdict
 from hidet.tos.tensor import Tensor
 from hidet.tos.operator import Operator
+from hidet.utils import tracer
 
 
 class FlowGraph:
@@ -44,7 +45,8 @@ class FlowGraph:
                     # constant input
                     node_inputs.append(node_input)
             # run node
-            node_outputs = node.imperative_run(node_inputs)
+            with tracer.profile(node.name, args=node.attributes):
+                node_outputs = node.imperative_run(node_inputs)
             for st, at in zip(node.outputs, node_outputs):
                 tensor_map[st] = at
         return [tensor_map[st] for st in self.outputs]
