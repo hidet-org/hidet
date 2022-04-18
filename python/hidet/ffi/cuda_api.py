@@ -15,6 +15,11 @@ class CudaAPI:
     _mem_pool_trim_to = get_func('hidet_cuda_mem_pool_trim_to', [c_uint64], None)
     # device control
     _device_synchronization = get_func('hidet_cuda_device_synchronization', [], None)
+    # stream and event
+    _event_create = get_func('hidet_cuda_event_create', [], c_uint64)
+    _event_destroy = get_func('hidet_cuda_event_destroy', [c_uint64], None)
+    _event_elapsed_time = get_func('hidet_cuda_event_elapsed_time', [c_uint64, c_uint64], c_float)
+    _event_record = get_func('hidet_cuda_event_record', [c_uint64, c_uint64], None)
     # random number generation
     _generate_uniform = get_func('hidet_curand_generate_uniform', [c_uint64, c_uint64], None)
     _generate_normal = get_func('hidet_curand_generate_normal', [c_uint64, c_uint64, c_float, c_float], None)
@@ -73,6 +78,22 @@ class CudaAPI:
     @classmethod
     def generate_normal(cls, addr: int, num_elements: int, mean: float, stddev: float) -> None:
         return cls._generate_normal(addr, num_elements, mean, stddev)
+
+    @classmethod
+    def create_event(cls) -> int:
+        return cls._event_create()
+
+    @classmethod
+    def destroy_event(cls, event_handle: int) -> None:
+        return cls._event_destroy(event_handle)
+
+    @classmethod
+    def event_elapsed_time(cls, start_event_handle: int, end_event_handle: int) -> float:
+        return cls._event_elapsed_time(start_event_handle, end_event_handle)
+
+    @classmethod
+    def event_record(cls, event_handle: int, stream_handle: int) -> None:
+        return cls._event_record(event_handle, stream_handle)
 
 
 cuda_api = CudaAPI()

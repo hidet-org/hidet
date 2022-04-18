@@ -45,7 +45,7 @@ class FlowGraph:
                     # constant input
                     node_inputs.append(node_input)
             # run node
-            with tracer.profile(node.name, args=node.attributes):
+            with tracer.profile(node.name, category='op', args=node.attributes, trace_cuda=True):
                 node_outputs = node.imperative_run(node_inputs)
             for st, at in zip(node.outputs, node_outputs):
                 tensor_map[st] = at

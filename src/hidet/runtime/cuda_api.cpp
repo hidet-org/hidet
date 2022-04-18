@@ -88,3 +88,24 @@ DLL void hidet_cuda_mem_pool_trim_to(uint64_t min_bytes_to_keep) {
     CUDA_CALL(cudaDeviceGetDefaultMemPool(&pool, 0));
     CUDA_CALL(cudaMemPoolTrimTo(pool, min_bytes_to_keep));
 }
+
+DLL uint64_t hidet_cuda_event_create() {
+    cudaEvent_t event;
+    CUDA_CALL(cudaEventCreate(&event));
+    return reinterpret_cast<uint64_t>(event);
+}
+
+DLL void hidet_cuda_event_destroy(uint64_t handle) {
+    auto event = reinterpret_cast<cudaEvent_t>(handle);
+    CUDA_CALL(cudaEventDestroy(event));
+}
+
+DLL float hidet_cuda_event_elapsed_time(uint64_t start, uint64_t end) {
+    float latency;
+    CUDA_CALL(cudaEventElapsedTime(&latency, reinterpret_cast<cudaEvent_t>(start), reinterpret_cast<cudaEvent_t>(end)));
+    return latency;
+}
+
+DLL void hidet_cuda_event_record(uint64_t event_handle, uint64_t stream_handle) {
+    CUDA_CALL(cudaEventRecord(reinterpret_cast<cudaEvent_t>(event_handle), reinterpret_cast<cudaStream_t>(stream_handle)));
+}

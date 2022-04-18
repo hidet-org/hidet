@@ -3,7 +3,7 @@ import os
 import numpy as np
 import onnx
 import onnxruntime
-from hidet.utils import Timer
+from hidet.utils import Timer, nvtx_annotate
 from hidet.ffi import cuda_api
 
 
@@ -93,9 +93,15 @@ def demo_timeline():
               hidet.randn([1], dtype='float32', device='cuda')]
     hidet.utils.tracer.clear()
     hidet.utils.tracer.turn_on()
-    outputs = graph(*inputs)
-    with open('./outs/trace.json', 'w') as f:
-        hidet.utils.tracer.dump(f)
+    cnt = 3
+    for t in range(cnt):
+        cuda_api.device_synchronization()
+        with Timer('unit {}'.format(t)):
+            with nvtx_annotate('unet {}'.format(t)):
+                outputs = graph(*inputs)
+            cuda_api.device_synchronization()
+        with open('./outs/trace_{}.json'.format(t), 'w') as f:
+            hidet.utils.tracer.dump(f)
 
 
 if __name__ == '__main__':
