@@ -1,0 +1,115 @@
+{
+  "layers": {
+    "layer_0": {
+      "Name": "{ForeignNode[embeddings.position_embeddings.weight...Tanh_1162]}",
+      "LayerType": "Myelin",
+      "Inputs": [
+        {
+          "Name": "token_type_ids",
+          "Dimensions": [
+            1,
+            128
+          ],
+          "Format/Datatype": "Row major linear Int32"
+        },
+        {
+          "Name": "input_ids",
+          "Dimensions": [
+            1,
+            128
+          ],
+          "Format/Datatype": "Row major linear Int32"
+        },
+        {
+          "Name": "attention_mask",
+          "Dimensions": [
+            1,
+            128
+          ],
+          "Format/Datatype": "Row major linear Int32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "last_hidden_state",
+          "Dimensions": [
+            1,
+            128,
+            768
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        },
+        {
+          "Name": "pooler_output",
+          "Dimensions": [
+            1,
+            768
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "TacticValue": "0x0"
+    }
+  },
+  "engine": {
+    "Layers": [
+      {
+        "Name": "{ForeignNode[embeddings.position_embeddings.weight...Tanh_1162]}",
+        "LayerType": "Myelin",
+        "Inputs": [
+          {
+            "Name": "token_type_ids",
+            "Dimensions": [
+              1,
+              128
+            ],
+            "Format/Datatype": "Row major linear Int32"
+          },
+          {
+            "Name": "input_ids",
+            "Dimensions": [
+              1,
+              128
+            ],
+            "Format/Datatype": "Row major linear Int32"
+          },
+          {
+            "Name": "attention_mask",
+            "Dimensions": [
+              1,
+              128
+            ],
+            "Format/Datatype": "Row major linear Int32"
+          }
+        ],
+        "Outputs": [
+          {
+            "Name": "last_hidden_state",
+            "Dimensions": [
+              1,
+              128,
+              768
+            ],
+            "Format/Datatype": "Row major linear FP32"
+          },
+          {
+            "Name": "pooler_output",
+            "Dimensions": [
+              1,
+              768
+            ],
+            "Format/Datatype": "Row major linear FP32"
+          }
+        ],
+        "TacticValue": "0x0"
+      }
+    ],
+    "Bindings": [
+      "input_ids",
+      "attention_mask",
+      "token_type_ids",
+      "last_hidden_state",
+      "pooler_output"
+    ]
+  }
+}

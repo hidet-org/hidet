@@ -1,0 +1,2 @@
+ BatchSize                Model     Executor      Space    Latency        Std
+         1    bert-base-uncased        hidet          2     19.068      0.131

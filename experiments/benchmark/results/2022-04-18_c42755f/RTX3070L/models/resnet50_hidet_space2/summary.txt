@@ -1,0 +1,2 @@
+ BatchSize                Model     Executor      Space    Latency        Std
+         1             resnet50        hidet          2      6.524      0.087

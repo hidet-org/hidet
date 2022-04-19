@@ -1,0 +1,13 @@
+{
+  "model": "resnet50",
+  "exec": "hidet",
+  "out_dir": "./results/",
+  "warmup": 3,
+  "number": 5,
+  "repeat": 5,
+  "hidet_space": 2,
+  "bs": 1,
+  "bert_seq_length": 128,
+  "bert_hidden_size": 768,
+  "bert_vocab_size": 30522
+}
