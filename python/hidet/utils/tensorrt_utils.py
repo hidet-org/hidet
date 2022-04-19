@@ -1,5 +1,7 @@
 from typing import List, Optional, Dict, Tuple
+from collections import OrderedDict
 from hashlib import sha256
+import json
 import os
 import time
 import numpy as np
@@ -8,6 +10,28 @@ import hidet
 from hidet.ffi import cuda_api
 from hidet import Tensor, randn, empty
 from hidet.utils import hidet_cache_dir
+
+
+class Profiler(trt.IProfiler):
+    def __init__(self):
+        super().__init__()
+        self.layer2latency: Dict[str, float] = OrderedDict()
+
+    def report_layer_time(self, layer_name, ms):
+        self.layer2latency[layer_name] = ms
+
+    def export_trace(self):
+        from hidet.utils.profile_utils import TraceEvent
+        events = []
+        current_time = 0
+        for layer, latency in self.layer2latency.items():
+            events.append(TraceEvent(layer, 'op', 'B', current_time * 1000000, 0, 0, {'name': layer}))
+            current_time += latency
+            events.append(TraceEvent(layer, 'op', 'E', current_time * 1000000, 0, 0, {'name': layer}))
+        return {
+            'traceEvents': [event.export() for event in events],
+            'displayTimeUnit': 'ns'
+        }
 
 
 def milo_bytes(MiB):
@@ -45,6 +69,8 @@ def create_engine_from_onnx(onnx_model_path: str, workspace_bytes: int = 512 << 
         # set configs of the network builder
         config: trt.IBuilderConfig = builder.create_builder_config()
         config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, workspace_bytes)
+        # allow us to inspect the engine, see https://docs.nvidia.com/deeplearning/tensorrt/developer-guide/index.html#engine-inspector
+        config.profiling_verbosity = trt.ProfilingVerbosity.DETAILED
 
         # optimization profiles required by dynamic inputs
         profile: trt.IOptimizationProfile = builder.create_optimization_profile()
@@ -127,6 +153,29 @@ def engine_benchmark(engine: trt.ICudaEngine, dummy_inputs: Dict[str, Tensor], w
         end_time = time.time()
         results.append((end_time - start_time) * 1000 / number)
     return results
+
+
+def engine_inspect(engine: trt.ICudaEngine) -> Dict:
+    inspector: trt.EngineInspector = engine.create_engine_inspector()
+    layer_information = {}
+    for i in range(engine.num_layers):
+        layer_information['layer_{}'.format(i)] = json.loads(str(inspector.get_layer_information(i, trt.LayerInformationFormat.JSON)))
+    engine_information = json.loads(str(inspector.get_engine_information(trt.LayerInformationFormat.JSON)))
+    return {
+        'layers': layer_information,
+        'engine': engine_information
+    }
+
+
+def engine_profiler(engine: trt.ICudaEngine, dummy_inputs: Dict[str, Tensor]) -> Dict:
+    # prepare inputs and outputs
+    inputs, outputs, buffers = _prepare_buffer(engine, dummy_inputs)
+    context: trt.IExecutionContext = engine.create_execution_context()
+    profiler = Profiler()
+    context.profiler = profiler
+    context.execute_v2(buffers)
+    cuda_api.device_synchronization()
+    return profiler.export_trace()
 
 
 if __name__ == '__main__':

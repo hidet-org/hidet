@@ -109,26 +109,39 @@ def bench_hidet(args, out_dir) -> List[float]:
 
 
 def bench_trt(args, out_dir) -> List[float]:
-    from hidet.utils.tensorrt_utils import create_engine_from_onnx, engine_benchmark
+    from hidet.utils.tensorrt_utils import create_engine_from_onnx, engine_benchmark, engine_inspect, engine_profiler
     onnx_model_path: str = onnx_model(args.model)
     input_names, input_tensors = dummy_inputs(args)
     engine = create_engine_from_onnx(onnx_model_path, inputs_shape={
         name: tensor.shape for name, tensor in zip(input_names, input_tensors)
     })
+    dummy_inputs_dict = {name: tensor for name, tensor in zip(input_names, input_tensors)}
     results = engine_benchmark(
         engine=engine,
-        dummy_inputs={name: tensor for name, tensor in zip(input_names, input_tensors)},
+        dummy_inputs=dummy_inputs_dict,
         warmup=args.warmup, number=args.number, repeat=args.repeat
     )
+    with open(os.path.join(out_dir, 'engine_inspect.json'), 'w') as f:
+        json.dump(engine_inspect(engine), f, indent=2)
+    with open(os.path.join(out_dir, 'engine_trace.json'), 'w') as f:
+        json.dump(engine_profiler(engine, dummy_inputs_dict), f, indent=2)
     return results
 
 
-def main(args):
-    # output dir
-    if args.exec == 'hidet':
-        out_dir = os.path.join(args.out_dir, '{}_{}_space{}'.format(args.model, args.exec, args.hidet_space))
+def main(command_line_args: Optional[str] = None):
+    if command_line_args:
+        args = parser.parse_args(command_line_args.strip().split())
     else:
-        out_dir = os.path.join(args.out_dir, '{}_{}'.format(args.model, args.exec))
+        args = parser.parse_args()
+    # output dir
+    out_dir = os.path.join(args.out_dir,
+                           '{}_{}'.format(get_repo_commit_date(), get_repo_sha(short=True)),
+                           cuda.query_device_name(short=True),
+                           'models')
+    if args.exec == 'hidet':
+        out_dir = os.path.join(out_dir, '{}_{}_space{}'.format(args.model, args.exec, args.hidet_space))
+    else:
+        out_dir = os.path.join(out_dir, '{}_{}'.format(args.model, args.exec))
     os.makedirs(out_dir, exist_ok=True)
 
     # bench
@@ -168,7 +181,7 @@ parser = argparse.ArgumentParser(description='Hidet model benchmark script.')
 # general parameters
 parser.add_argument('--model', type=str, choices=['resnet50', 'bert-base-uncased'], required=True,
                     help='The model to benchmark.')
-parser.add_argument('--exec', type=str, choices=['hidet', 'trt'], default='hidet',
+parser.add_argument('--exec', type=str, choices=['hidet', 'trt'], required=True,
                     help='Executor.')
 parser.add_argument('--out_dir', type=str, default='./results/',
                     help='Output directory.')
@@ -190,10 +203,9 @@ parser.add_argument('--bert_seq_length', type=int, default=128, help='Sequence l
 parser.add_argument('--bert_hidden_size', type=int, default=768, help='Hidden size of bert.')
 parser.add_argument('--bert_vocab_size', type=int, default=30522, help='Vocabulary size of bert.')
 
+
 if __name__ == '__main__':
-    args = parser.parse_args()
-    args.out_dir = os.path.join(args.out_dir,
-                                '{}_{}'.format(get_repo_commit_date(), get_repo_sha(short=True)),
-                                cuda.query_device_name(short=True),
-                                'models')
-    main(args)
+    # main()
+    for model in ['resnet50', 'bert-base-uncased']:
+        for exec in ['trt', 'hidet']:
+            main(f'--exec {exec} --model {hidet}')
