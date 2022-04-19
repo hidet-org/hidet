@@ -2,7 +2,7 @@ import itertools
 from typing import Mapping, List, Any, Tuple, Union
 
 
-from hidet.implement.implementer import Implementer, register_impl, NotSupportedError, Schedule
+from hidet.implement.implementer import Implementer, register_impl, NotSupportedError, Schedule, ImplementerContext
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.ir.dialects.compute import TensorInput, TensorCompute, ReduceCompute
 from hidet.ir.dialects.lowlevel import TensorPointerType, PointerType
@@ -216,7 +216,7 @@ class MatmulSchedule(Schedule):
         settings = []
         if space_level == 0:
             settings.append(MatmulSchedule())
-        elif space_level == 1:
+        elif space_level == 1 or space_level == 2:
             for inner_m, inner_n in [[4, 4], [4, 8], [8, 4]]:
                 for outer_m, outer_n in [[1, 1], [1, 2], [2, 1], [2, 2]]:
                     for block_warps_k, warp_k in [[4, 1], [8, 1]]:
@@ -286,7 +286,8 @@ class CudaGridStaticBatchedMatmulImplementer(Implementer):
         return self.pattern
 
     def implement(self, task: Task, match: Mapping[Node, Node]) -> IRModule:
-        schedules = MatmulSchedule.schedules(space_level=0)
+        ctx = ImplementerContext.current()
+        schedules = MatmulSchedule.schedules(space_level=ctx.space_level)
         ir_modules = []
         for schedule in schedules:
             ir_modules.append(self.implement_schedule(task, match, schedule))

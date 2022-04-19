@@ -9,7 +9,7 @@ import tensorrt as trt
 import hidet
 from hidet.ffi import cuda_api
 from hidet import Tensor, randn, empty
-from hidet.utils import hidet_cache_dir
+from hidet.utils import hidet_cache_dir, nvtx_annotate
 
 
 class Profiler(trt.IProfiler):
@@ -140,17 +140,19 @@ def engine_inference(engine: trt.ICudaEngine, inputs: Dict[str, Tensor]) -> Dict
 def engine_benchmark(engine: trt.ICudaEngine, dummy_inputs: Dict[str, Tensor], warmup: int = 3, number: int = 5, repeat: int = 5) -> List[float]:
     inputs, outputs, buffers = _prepare_buffer(engine, dummy_inputs)
     context: trt.IExecutionContext = engine.create_execution_context()
-    for i in range(warmup):
-        context.execute_async_v2(buffers, 0)
-        cuda_api.device_synchronization()
     results = []
-    for i in range(repeat):
-        cuda_api.device_synchronization()
-        start_time = time.time()
-        for j in range(number):
+    with nvtx_annotate('warmup'):
+        for i in range(warmup):
             context.execute_async_v2(buffers, 0)
-        cuda_api.device_synchronization()
-        end_time = time.time()
+            cuda_api.device_synchronization()
+    for i in range(repeat):
+        with nvtx_annotate(f'repeat {i}'):
+            cuda_api.device_synchronization()
+            start_time = time.time()
+            for j in range(number):
+                context.execute_async_v2(buffers, 0)
+            cuda_api.device_synchronization()
+            end_time = time.time()
         results.append((end_time - start_time) * 1000 / number)
     return results
 

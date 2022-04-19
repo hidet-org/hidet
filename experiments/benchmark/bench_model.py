@@ -8,7 +8,7 @@ import argparse
 import hidet as hi
 import hidet
 from hidet import Tensor
-from hidet.utils import download, hidet_cache_dir, cuda
+from hidet.utils import download, hidet_cache_dir, cuda, nvtx_annotate
 from hidet.utils.git_utils import get_repo_sha, get_repo_commit_date
 from hidet.ffi import cuda_api
 
@@ -68,16 +68,18 @@ def dummy_inputs(args) -> Tuple[List[str], List[Tensor]]:
 
 def benchmark_run(run_func, warmup, number, repeat) -> List[float]:
     results = []
-    for i in range(warmup):
-        run_func()
-        cuda_api.device_synchronization()
-    for i in range(repeat):
-        cuda_api.device_synchronization()
-        start_time = time.time()
-        for j in range(number):
+    with nvtx_annotate('warmup'):
+        for i in range(warmup):
             run_func()
-        cuda_api.device_synchronization()
-        end_time = time.time()
+            cuda_api.device_synchronization()
+    for i in range(repeat):
+        with nvtx_annotate(f'repeat {i}'):
+            cuda_api.device_synchronization()
+            start_time = time.time()
+            for j in range(number):
+                run_func()
+            cuda_api.device_synchronization()
+            end_time = time.time()
         results.append((end_time - start_time) * 1000 / number)
     return results
 
@@ -150,7 +152,8 @@ def main(command_line_args: Optional[str] = None):
         'trt': bench_trt
     }
     bench_func = bench_dict[args.exec]
-    results = bench_func(args, out_dir)
+    with nvtx_annotate(message=args.exec):
+        results = bench_func(args, out_dir)
 
     # write results
     with open(os.path.join(out_dir, 'env.txt'), 'w') as f:
@@ -205,7 +208,7 @@ parser.add_argument('--bert_vocab_size', type=int, default=30522, help='Vocabula
 
 
 if __name__ == '__main__':
-    # main()
+    # main('--exec trt --model resnet50 --warmup 0 --number 1 --repeat 1')
     for model in ['resnet50', 'bert-base-uncased']:
         for exec in ['trt', 'hidet']:
-            main(f'--exec {exec} --model {hidet}')
+            main(f'--exec {exec} --model {model}')
