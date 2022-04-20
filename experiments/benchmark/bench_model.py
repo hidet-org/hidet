@@ -188,9 +188,9 @@ parser.add_argument('--exec', type=str, choices=['hidet', 'trt'], required=True,
                     help='Executor.')
 parser.add_argument('--out_dir', type=str, default='./results/',
                     help='Output directory.')
-parser.add_argument('--warmup', type=int, default=3, help='Number of warmups.')
-parser.add_argument('--number', type=int, default=5, help='Number of runs per repeat.')
-parser.add_argument('--repeat', type=int, default=5, help='Number of repeats.')
+parser.add_argument('--warmup', type=int, default=10, help='Number of warmups.')
+parser.add_argument('--number', type=int, default=10, help='Number of runs per repeat.')
+parser.add_argument('--repeat', type=int, default=10, help='Number of repeats.')
 
 # executor parameters
 # hidet executor parameters
@@ -209,6 +209,13 @@ parser.add_argument('--bert_vocab_size', type=int, default=30522, help='Vocabula
 
 if __name__ == '__main__':
     # main('--exec trt --model resnet50 --warmup 0 --number 1 --repeat 1')
-    for model in ['resnet50', 'bert-base-uncased']:
-        for exec in ['trt', 'hidet']:
-            main(f'--exec {exec} --model {model}')
+    # main('--exec trt --model resnet50 --warmup 3 --number 5 --repeat 5')
+    # main('--exec trt --model resnet50 --hidet_space 2 --warmup 3 --number 10 --repeat 10')
+    # main('--exec hidet --model resnet50 --hidet_space 2 --warmup 3 --number 10 --repeat 10')
+    main('--exec hidet --model bert-base-uncased --hidet_space 2 --warmup 3 --number 10 --repeat 10')
+    # for model in ['resnet50', 'bert-base-uncased']:
+    #     for exec in ['trt']:
+    #         main(f'--exec {exec} --model {model} --number 10 --repeat 10')
+    # for model in ['resnet50', 'bert-base-uncased']:
+    #     for exec in ['trt', 'hidet']:
+    #         main(f'--exec {exec} --model {model}')

@@ -45,8 +45,6 @@ class Scope:
         self.stack.var2scope[var] = self
 
     def define(self, var: Var, value: Expr):
-        # define a variable at the outer-most scope with given value
-        # find the outer-most (with minimal level) scope that contains the used var to define
         self.defined_vars.append(var)
         self.var2value[var] = value
         assert var not in self.stack.var2scope
@@ -59,7 +57,6 @@ class Scope:
             self.predicate_vars.append(var)
             self.stack.var2scope[var] = self
         self.defined_predicates[-1].append(predicate)
-        # mask = LeftShift(1, len(scope.defined_predicates[-1]) - 1)
         mask = 1 << (len(self.defined_predicates[-1]) - 1)
         return BitwiseAnd(self.predicate_vars[-1], mask)
 
@@ -130,7 +127,5 @@ class FuncStmtExprRewriterWithScope(FuncStmtExprRewriter):
     def visit_LetStmt(self, stmt: LetStmt):
         with self.new_scope(stmt) as scope:
             for var, value in zip(stmt.bind_vars, stmt.bind_values):
-                value = self.visit(value)
-                scope_to_define = self.scope_to_define(value)
-                scope_to_define.define(var, value)
+                scope.define(var, self.visit(value))
             return scope.wrap(self.visit(stmt.body))

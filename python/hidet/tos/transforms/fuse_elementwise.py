@@ -38,19 +38,28 @@ class FuseElementwisePass(GraphPass):
         nodes = graph_collect(graph, Operator)
         for node in nodes:
             if self.is_elementwise(node):
-                non_const_inputs = [tensor for tensor in node.inputs if tensor.trace is not None]
-                if len(non_const_inputs) != 1:
-                    continue
-                x = non_const_inputs[0]
-                if len(usage[x]) > 1:
-                    continue
-                prior_node = x.trace[0]
-                op = self.fuse_nodes(nodes=[prior_node, node])
-                if op is None:
-                    continue
-                for idx, out_tensor in enumerate(op.outputs):
-                    out_tensor.trace = (op, idx)
-                return True, graph
+                for input_tensor in node.inputs:
+                    if input_tensor.op is None or len(usage[input_tensor]) > 1:
+                        continue
+                    op = self.fuse_nodes(nodes=[input_tensor.op, node])
+                    if op is None:
+                        continue
+                    for idx, out_tensor in enumerate(op.outputs):
+                        out_tensor.trace = (op, idx)
+                    return True, graph
+                # non_const_inputs = [tensor for tensor in node.inputs if tensor.trace is not None]
+                # if len(non_const_inputs) != 1:
+                #     continue
+                # x = non_const_inputs[0]
+                # if len(usage[x]) > 1:
+                #     continue
+                # prior_node = x.trace[0]
+                # op = self.fuse_nodes(nodes=[prior_node, node])
+                # if op is None:
+                #     continue
+                # for idx, out_tensor in enumerate(op.outputs):
+                #     out_tensor.trace = (op, idx)
+                # return True, graph
         return False, graph
 
     def is_elementwise(self, op: Operator) -> bool:
@@ -70,28 +79,32 @@ class FuseElementwisePass(GraphPass):
         for node in nodes:
             all_inputs.extend(node.inputs)
             all_outputs.extend(node.outputs)
-        input_tensors = [tensor for tensor in all_inputs if tensor not in all_outputs]
-        output_tensors = [tensor for tensor in all_outputs if tensor not in all_inputs]
+        input_tensors, output_tensors = [], []
+        for tensor in all_inputs:
+            if tensor not in all_outputs and tensor not in input_tensors:  # not intermediate tensor and not duplicated input
+                input_tensors.append(tensor)
+        for tensor in all_outputs:
+            if tensor not in all_inputs and tensor not in output_tensors:
+                output_tensors.append(tensor)
         if len(output_tensors) > 1:
             return None
         # construct fused task
         tensor_map: Dict[Tensor, Union[TensorInput, TensorCompute]] = {}
-        tensor_type_map: Dict[Tensor, TypeNode] = {}
         sub_names = []
         for node in nodes:
             node_task_inputs: List[Union[TensorInput, TensorCompute]] = []
             for idx, tensor in enumerate(node.inputs):
-                if tensor in input_tensors:
+                if tensor in input_tensors and tensor not in tensor_map:
                     tensor_map[tensor] = node.task.params[idx]
-                    tensor_type_map[tensor] = node.task.param_types()[idx]
+                assert tensor in tensor_map
                 node_task_inputs.append(tensor_map[tensor])
             for idx, out_tensor in enumerate(node.outputs):
+                # node has 0 or more inputs and 1 output
                 assert len(node.task.params[:-1]) == len(node.inputs) and all(isinstance(v, TensorInput) for v in node.task.params[:-1])
                 node_task_output = rewrite(node.task.compute, rewrite_map={
                     task_tensor_input: tensor_map[tensor] for task_tensor_input, tensor in zip(node.task.params[:-1], node.inputs)
                 })
                 tensor_map[out_tensor] = node_task_output
-                tensor_type_map[out_tensor] = node.task.type_of_param(node.task.compute)
             sub_names.append(node.task.name)
         task_inputs = [tensor_map[tensor] for tensor in input_tensors]
         task_outputs: List = [tensor_map[tensor] for tensor in output_tensors]

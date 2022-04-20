@@ -120,6 +120,7 @@ def benchmark_matmul(args):
 
 def benchmark_conv2d(args):
     workloads: List[Conv2dSetting] = list(Conv2dSetting.resnet50_conv2ds(batch_size=1).keys()) + list(Conv2dSetting.resnet50_conv2ds(batch_size=16).keys())
+    workloads: List[Conv2dSetting] = workloads[3:4]
     cudnn_baselines = []
     hidet_variants = []
     if 'vendor' in args.kernels:
@@ -146,7 +147,7 @@ def benchmark_conv2d(args):
                 op = y.trace[0]
                 with impl_context(space_level=args.space):
                     ir_module = implement(op.task)
-                module = build(ir_module, output_dir=f'./outs/bench/{name}_{setting}', keep_ir=False, verbose=False)
+                module = build(ir_module, output_dir=f'./outs/bench/{name}_{setting}', keep_ir=True, verbose=False)
                 hidet_func[(idx, name)] = module['conv2d']
 
     names = [name for name, _ in cudnn_baselines] + [name for name, _ in hidet_variants]
@@ -208,8 +209,12 @@ parser.add_argument('--space', type=int, choices=[0, 1, 2], default=0)
 # output config
 parser.add_argument('--out-dir', type=str, default='./results')
 
-if __name__ == '__main__':
-    args = parser.parse_args()
+
+def main(command_line_args: str = None):
+    if command_line_args is None:
+        args = parser.parse_args()
+    else:
+        args = parser.parse_args(command_line_args.strip().split())
     # e.g., './results/2022-03-23_85e5892/V100/operators/'
     args.out_dir = os.path.join(args.out_dir,
                                 '{}_{}'.format(get_repo_commit_date(), get_repo_sha(short=True)),
@@ -223,3 +228,8 @@ if __name__ == '__main__':
         }
         for workload in args.workloads:
             benchmark_func[workload](args)
+
+
+if __name__ == '__main__':
+    main('--workloads conv2d --kernels hidet --space 0 --no-lock-clock')
+    # main()

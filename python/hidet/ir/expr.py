@@ -97,11 +97,11 @@ class Expr(Node):
             return TensorElement(base=self, indices=indices)
 
     def __int__(self):
-        assert isinstance(self, Constant)
+        assert isinstance(self, Constant), 'Expect a Constant, got {} with type {}'.format(self, type(self))
         return int(self)
 
     def __float__(self):
-        assert isinstance(self, Constant)
+        assert isinstance(self, Constant), 'Expect a Constant, got {} with type {}'.format(self, type(self))
         return float(self)
 
     def __str__(self):

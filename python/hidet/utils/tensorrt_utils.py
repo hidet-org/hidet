@@ -38,7 +38,7 @@ def milo_bytes(MiB):
     return MiB << 20
 
 
-def create_engine_from_onnx(onnx_model_path: str, workspace_bytes: int = 512 << 20, inputs_shape: Optional[Dict[str, List[int]]] = None) -> trt.ICudaEngine:
+def create_engine_from_onnx(onnx_model_path: str, workspace_bytes: int = 512 << 20, inputs_shape: Optional[Dict[str, List[int]]] = None, use_tf32: bool = False, use_fp16: bool = False) -> trt.ICudaEngine:
     logger = trt.Logger(trt.Logger.WARNING)
     builder = trt.Builder(logger)
 
@@ -47,7 +47,7 @@ def create_engine_from_onnx(onnx_model_path: str, workspace_bytes: int = 512 << 
     model_name = os.path.basename(onnx_model_path).split('.')[0]
     shape_hash = tuple((name, tuple(shape)) for name, shape in sorted(inputs_shape.items(), key=lambda item: item[0]))
     shape_hash_suffix = sha256(str(shape_hash).encode()).hexdigest()[:6]
-    engine_name = '{}_ws{}_{}.engine'.format(model_name, workspace_bytes // (1 << 20), shape_hash_suffix)
+    engine_name = '{}{}{}_ws{}_{}.engine'.format(model_name, '_tf32' if use_tf32 else '', '_fp16' if use_fp16 else '', workspace_bytes // (1 << 20), shape_hash_suffix)
     engine_path = os.path.join(cache_dir, engine_name)
 
     if os.path.exists(engine_path):
@@ -71,6 +71,17 @@ def create_engine_from_onnx(onnx_model_path: str, workspace_bytes: int = 512 << 
         config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, workspace_bytes)
         # allow us to inspect the engine, see https://docs.nvidia.com/deeplearning/tensorrt/developer-guide/index.html#engine-inspector
         config.profiling_verbosity = trt.ProfilingVerbosity.DETAILED
+        # whether allow tf32/, see https://docs.nvidia.com/deeplearning/tensorrt/developer-guide/index.html#tf32-inference-c
+        if use_tf32:
+            config.set_flag(trt.BuilderFlag.TF32)
+        else:
+            config.clear_flag(trt.BuilderFlag.TF32)
+        if use_fp16:
+            config.set_flag(trt.BuilderFlag.FP16)
+        else:
+            config.clear_flag(trt.BuilderFlag.FP16)
+        # force to use the precision in network definition, see https://docs.nvidia.com/deeplearning/tensorrt/developer-guide/index.html#layer-level-control
+        config.set_flag(trt.BuilderFlag.OBEY_PRECISION_CONSTRAINTS)
 
         # optimization profiles required by dynamic inputs
         profile: trt.IOptimizationProfile = builder.create_optimization_profile()
