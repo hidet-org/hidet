@@ -124,7 +124,7 @@ class Tensor:
 
     def numpy(self) -> np.ndarray:
         if self.device != 'cpu':
-            raise ValueError('Please use .cpu() to move data from {} to cpu first.'.format(self.device))
+            return self.cpu().numpy()
         # convert if this tensor is not in row major layout
         storage = self.contiguous().storage
         array = storage.as_array(num_elements=prod(self.shape), dtype=self.dtype)

@@ -1,3 +1,4 @@
+from typing import List
 import os
 import git
 import functools
@@ -62,14 +63,19 @@ def repo_root() -> str:
     return repo.working_dir
 
 
-def hidet_cache_dir(category='root') -> str:
+def hidet_cache_dir(category='./') -> str:
     root = os.path.join(repo_root(), '.hidet_cache')
-    if category == 'root':
+    if category == './':
         ret = root
     else:
         ret = os.path.join(root, category)
     os.makedirs(ret, exist_ok=True)
     return ret
+
+
+def hidet_cache_file(*items: str) -> str:
+    root_dir = hidet_cache_dir('./')
+    return os.path.join(root_dir, *items)
 
 
 if __name__ == '__main__':

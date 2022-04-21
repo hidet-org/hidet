@@ -16,7 +16,7 @@ nvtx
 
 # for onnx frontend
 onnx
-onnxruntime
+onnxruntime-gpu
 
 # for tensor rt baseline
 # nvidia-pyindex

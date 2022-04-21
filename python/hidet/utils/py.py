@@ -35,6 +35,13 @@ def green(v, fmt='{}'):
     return COLORS.OKGREEN + fmt.format(v) + COLORS.ENDC
 
 
+def nocolor(s: str) -> str:
+    for name, value in COLORS.__dict__.items():
+        if isinstance(value, str) and value[0] == '\033':
+            s = s.replace(value, '')
+    return s
+
+
 class Timer:
     def __init__(self, msg=None, file=None, verbose=True, stdout=True):
         self.start_time = None
@@ -57,7 +64,7 @@ class Timer:
             if self.file:
                 if isinstance(self.file, str):
                     with open(self.file, 'w') as f:
-                        f.write(msg)
+                        f.write(nocolor(msg))
                 else:
                     self.file.write(msg + '\n')
 

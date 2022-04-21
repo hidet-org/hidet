@@ -114,7 +114,7 @@ def bench_trt(args, out_dir) -> List[float]:
     from hidet.utils.tensorrt_utils import create_engine_from_onnx, engine_benchmark, engine_inspect, engine_profiler
     onnx_model_path: str = onnx_model(args.model)
     input_names, input_tensors = dummy_inputs(args)
-    engine = create_engine_from_onnx(onnx_model_path, inputs_shape={
+    engine = create_engine_from_onnx(onnx_model_path, input_shapes={
         name: tensor.shape for name, tensor in zip(input_names, input_tensors)
     })
     dummy_inputs_dict = {name: tensor for name, tensor in zip(input_names, input_tensors)}
@@ -130,6 +130,40 @@ def bench_trt(args, out_dir) -> List[float]:
     return results
 
 
+def bench_ort(args, out_dir) -> List[float]:
+    from hidet.utils.ort_utils import create_ort_session, ort_benchmark
+    onnx_model_path: str = onnx_model(args.model)
+    input_names, input_tensors = dummy_inputs(args)
+    session = create_ort_session(onnx_model_path)
+    results = ort_benchmark(
+        session,
+        dummy_inputs={name: tensor for name, tensor in zip(input_names, input_tensors)},
+        warmup=args.warmup, number=args.number, repeat=args.repeat
+    )
+    return results
+
+
+def bench_tvm(args, out_dir) -> List[float]:
+    from hidet.utils.tvm_utils import tvm_graph_module_from_onnx, tvm_benchmark
+    onnx_model_path: str = onnx_model(args.model)
+    input_names, input_tensors = dummy_inputs(args)
+    gmod = tvm_graph_module_from_onnx(
+        onnx_model_path=onnx_model_path,
+        input_shapes={
+            name: tensor.shape for name, tensor in zip(input_names, input_tensors)
+        },
+        tune_autotvm=(args.exec == 'autotvm'),
+        tune_ansor=(args.exec == 'ansor'),
+        tune_trial_per_task=args.tvm_trial
+    )
+    results = tvm_benchmark(
+        gmod,
+        dummy_inputs={name: tensor for name, tensor in zip(input_names, input_tensors)},
+        warmup=args.warmup, number=args.number, repeat=args.repeat
+    )
+    return results
+
+
 def main(command_line_args: Optional[str] = None):
     if command_line_args:
         args = parser.parse_args(command_line_args.strip().split())
@@ -140,16 +174,22 @@ def main(command_line_args: Optional[str] = None):
                            '{}_{}'.format(get_repo_commit_date(), get_repo_sha(short=True)),
                            cuda.query_device_name(short=True),
                            'models')
+    exec_name = '{}_{}'.format(args.model, args.exec)
     if args.exec == 'hidet':
-        out_dir = os.path.join(out_dir, '{}_{}_space{}'.format(args.model, args.exec, args.hidet_space))
-    else:
-        out_dir = os.path.join(out_dir, '{}_{}'.format(args.model, args.exec))
+        exec_name += '_space{}'.format(args.hidet_space)
+    elif args.exec in ['autotvm', 'ansor']:
+        exec_name += '_trial{}'.format(args.tvm_trial)
+    out_dir = os.path.join(out_dir, exec_name)
     os.makedirs(out_dir, exist_ok=True)
 
     # bench
     bench_dict = {
         'hidet': bench_hidet,
-        'trt': bench_trt
+        'trt': bench_trt,
+        'ort': bench_ort,
+        'autotvm': bench_tvm,
+        'ansor': bench_tvm,
+        'tvm': bench_tvm
     }
     bench_func = bench_dict[args.exec]
     with nvtx_annotate(message=args.exec):
@@ -184,7 +224,7 @@ parser = argparse.ArgumentParser(description='Hidet model benchmark script.')
 # general parameters
 parser.add_argument('--model', type=str, choices=['resnet50', 'bert-base-uncased'], required=True,
                     help='The model to benchmark.')
-parser.add_argument('--exec', type=str, choices=['hidet', 'trt'], required=True,
+parser.add_argument('--exec', type=str, choices=['hidet', 'trt', 'ort', 'tvm', 'autotvm', 'ansor'], required=True,
                     help='Executor.')
 parser.add_argument('--out_dir', type=str, default='./results/',
                     help='Output directory.')
@@ -196,6 +236,9 @@ parser.add_argument('--repeat', type=int, default=10, help='Number of repeats.')
 # hidet executor parameters
 parser.add_argument('--hidet_space', type=int, choices=[0, 1, 2], default=2,
                     help='The space level of each operator in the model. Large space level means longer compilation time and better performance.')
+# tvm number of trial per task
+parser.add_argument('--tvm_trial', type=int, default=800,
+                    help='Number of trial per task in autotvm and ansor, default 800.')
 
 # model agnostic parameters
 parser.add_argument('--bs', type=int, default=1, help='Batch size.')
@@ -219,5 +262,5 @@ if __name__ == '__main__':
     #     for exec in ['trt']:
     #         main(f'--exec {exec} --model {model} --number 10 --repeat 10')
     for model in ['resnet50', 'bert-base-uncased']:
-        for exec in ['trt', 'hidet']:
+        for exec in ['trt', 'ort', 'tvm', 'hidet']:
             main(f'--exec {exec} --model {model}')
