@@ -11,7 +11,7 @@ import tvm
 import tvm.relay.backend.executor_factory
 from hidet import Tensor
 from hidet.ffi import cuda_api
-from hidet.utils import Timer, hidet_cache_dir
+from hidet.utils import Timer, hidet_cache_dir, hidet_cache_file
 from tvm import relay
 from tvm.contrib import graph_executor
 from tvm.contrib.graph_executor import GraphModule
@@ -35,11 +35,10 @@ def dump_relay_cuda_code(ir_module, out_dir: str = './outs'):
     dump_code(graph_module, out_dir)
 
 
-def autotvm_tune(ir_module: tvm.ir.IRModule, params: Dict[str, tvm.nd.NDArray], out_dir: str, num_trial=1000) -> None:
+def autotvm_tune(ir_module: tvm.ir.IRModule, params: Dict[str, tvm.nd.NDArray], target: tvm.target.Target, out_dir: str, tuner_name='ga', num_trial=1000) -> None:
     from tvm import autotvm
     import tvm.contrib.graph_executor
     lib_path = os.path.join(out_dir, 'lib.so')
-    target = tvm.target.cuda()
 
     log_file = os.path.join(out_dir, 'records.json')
     if not os.path.exists(log_file):
@@ -51,7 +50,12 @@ def autotvm_tune(ir_module: tvm.ir.IRModule, params: Dict[str, tvm.nd.NDArray], 
         temp_log_file = log_file + '.tmp'
         with Timer(msg='AutoTVM tuning of {} tasks'.format(len(tasks)), file=os.path.join(out_dir, 'tuning_time.txt')):
             for task_idx, task in enumerate(tasks):
-                tuner = autotvm.tuner.XGBTuner(task)
+                if tuner_name == 'xgb':
+                    tuner = autotvm.tuner.XGBTuner(task)
+                elif tuner_name == 'ga':
+                    tuner = autotvm.tuner.GATuner(task)
+                else:
+                    raise ValueError(tuner_name)
                 num_trial = min(num_trial, len(task.config_space))
                 tuner.tune(
                     n_trial=num_trial,
@@ -74,11 +78,10 @@ def autotvm_tune(ir_module: tvm.ir.IRModule, params: Dict[str, tvm.nd.NDArray], 
     dump_code(lib, out_dir)
 
 
-def ansor_tune(ir_module: tvm.ir.IRModule, params: Dict[str, tvm.nd.NDArray], out_dir: str, num_trial_per_task=800):
+def ansor_tune(ir_module: tvm.ir.IRModule, params: Dict[str, tvm.nd.NDArray], target: tvm.target.Target, out_dir: str, num_trial_per_task=800):
     from tvm import auto_scheduler
     log_file = os.path.join(out_dir, 'records.json')
     lib_path = os.path.join(out_dir, 'lib.so')
-    target = tvm.target.cuda()
 
     pair = auto_scheduler.extract_tasks(ir_module, params, target)
     tasks: List[auto_scheduler.SearchTask] = pair[0]
@@ -109,8 +112,7 @@ def ansor_tune(ir_module: tvm.ir.IRModule, params: Dict[str, tvm.nd.NDArray], ou
     dump_code(lib, out_dir)
 
 
-def build_ir_module(ir_module: tvm.ir.IRModule, params: Dict[str, tvm.nd.NDArray], out_dir: str):
-    target = tvm.target.cuda()
+def build_ir_module(ir_module: tvm.ir.IRModule, params: Dict[str, tvm.nd.NDArray], target: tvm.target.Target, out_dir: str):
     lib_path = os.path.join(out_dir, 'lib.so')
     with tvm.transform.PassContext(opt_level=3):
         lib = relay.build(ir_module, target, params=params)
@@ -138,12 +140,13 @@ def tvm_graph_module_from_onnx(onnx_model_path: str, input_shapes: Optional[Dict
     if not os.path.exists(lib_path):
         onnx_model = onnx.load_model(onnx_model_path)
         ir_module, params = relay.frontend.from_onnx(onnx_model, input_shapes, dtype='float32')
+        target = tvm.target.cuda(arch='sm_{}{}'.format(*hidet.utils.cuda.query_compute_capability()))
         if tune_autotvm:
-            autotvm_tune(ir_module, params, out_dir, num_trial=tune_trial_per_task)
+            autotvm_tune(ir_module, params, target, out_dir=out_dir, num_trial=tune_trial_per_task)
         elif tune_ansor:
-            ansor_tune(ir_module, params, out_dir, num_trial_per_task=tune_trial_per_task)
+            ansor_tune(ir_module, params, target, out_dir=out_dir, num_trial_per_task=tune_trial_per_task)
         else:
-            build_ir_module(ir_module, params, out_dir)
+            build_ir_module(ir_module, params, target, out_dir=out_dir)
         assert os.path.exists(lib_path), 'Failed to generate lib for model {}.'.format(onnx_model_path)
         with open(os.path.join(out_dir, 'model_info.txt'), 'w') as f:
             lines = [
@@ -189,20 +192,39 @@ def tvm_benchmark(gmod: GraphModule, dummy_inputs: Dict[str, Tensor], warmup=10,
     return results
 
 
+def tvm_commit() -> str:
+    info = tvm.support.libinfo()
+    return info['GIT_COMMIT_HASH']
+
+
 if __name__ == '__main__':
-    onnx_model_path = os.path.join(hidet_cache_dir('onnx'), 'resnet50-v1-7.onnx')
-    dummy_inputs = {
-        'data': hidet.randn([1, 3, 224, 224], device='cuda')
-    }
-    input_shapes = {key: tensor.shape for key, tensor in dummy_inputs.items()}
-    from hidet.tos.frontend import from_onnx
-    hidet_model = from_onnx(onnx_model_path)
-    hidet_output = hidet_model(*dummy_inputs.values())
+    print(tvm_commit())
+    # # onnx_model_path = os.path.join(hidet_cache_dir('onnx'), 'resnet50-v1-7.onnx')
+    # # dummy_inputs = {
+    # #     'data': hidet.randn([1, 3, 224, 224], device='cuda')
+    # # }
+    # onnx_model_path = hidet_cache_file('onnx', 'bert-base-uncased.onnx')
+    # batch_size = 1
+    # seq_length = 512
+    # vocab_size = 30522
+    # input_ids = np.random.randint(0, vocab_size, [batch_size, seq_length], dtype=np.int64)
+    # attention_mask = np.ones(shape=[batch_size, seq_length], dtype=np.int64)
+    # token_type_ids = np.zeros(shape=[batch_size, seq_length], dtype=np.int64)
+    # dummy_inputs = {
+    #     'input_ids': hidet.array(input_ids).cuda(),
+    #     'attention_mask': hidet.array(attention_mask).cuda(),
+    #     'token_type_ids': hidet.array(token_type_ids).cuda()
+    # }
+    # input_shapes = {key: tensor.shape for key, tensor in dummy_inputs.items()}
+    # # from hidet.tos.frontend import from_onnx
+    # # hidet_model = from_onnx(onnx_model_path)
+    # # hidet_output = hidet_model(*dummy_inputs.values())
+    # #
+    # gmod = tvm_graph_module_from_onnx(onnx_model_path, input_shapes)
+    # tvm_output = tvm_inference(gmod, dummy_inputs)[0]
+    #
+    # # np.testing.assert_allclose(actual=hidet_output.cpu().numpy(), desired=tvm_output.cpu().numpy(), rtol=1e-5, atol=1e-5)
+    #
+    # # print(tvm_benchmark(gmod, dummy_inputs))
 
-    gmod = tvm_graph_module_from_onnx(onnx_model_path, input_shapes, tune_ansor=True, tune_trial_per_task=12)
-    tvm_output = tvm_inference(gmod, dummy_inputs)[0]
-
-    np.testing.assert_allclose(actual=hidet_output.cpu().numpy(), desired=tvm_output.cpu().numpy(), rtol=1e-5, atol=1e-5)
-
-    # print(tvm_benchmark(gmod, dummy_inputs))
 

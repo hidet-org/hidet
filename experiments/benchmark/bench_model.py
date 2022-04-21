@@ -262,5 +262,5 @@ if __name__ == '__main__':
     #     for exec in ['trt']:
     #         main(f'--exec {exec} --model {model} --number 10 --repeat 10')
     for model in ['resnet50', 'bert-base-uncased']:
-        for exec in ['trt', 'ort', 'tvm', 'hidet']:
+        for exec in ['trt', 'ort', 'tvm', 'hidet', 'autotvm', 'ansor']:
             main(f'--exec {exec} --model {model}')

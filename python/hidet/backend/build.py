@@ -30,6 +30,7 @@ def compile_src_code(src_path, nvcc_keep=True, working_dir=None, keep_dir=None):
 
     # use random lib name to avoid the dlopen caching loading the old library
     out_lib_path = os.path.join(working_dir, str(uuid.uuid4().hex)[-6:] + '.so')
+    temp_out_lib_path = out_lib_path + '.temp'
     # cc = utils.cuda.get_attribute('compute_capacity')
     cc = utils.cuda.query_compute_capability()
     cc_code = f'{cc[0]}{cc[1]}'
@@ -39,10 +40,13 @@ def compile_src_code(src_path, nvcc_keep=True, working_dir=None, keep_dir=None):
                '--ptxas-options=-v',
                '--compiler-options', "'-fPIC'",
                '-lineinfo',
-               '-o', out_lib_path,
+               '-o', temp_out_lib_path,
                '--shared', src_path]
     try:
         result = subprocess.run(command, stderr=PIPE, stdout=PIPE, check=True, cwd=working_dir)
+        # generate & move make sure that the lib file is not broken in case user uses Ctrl-C to stop the program
+        # when nvcc is working
+        os.rename(temp_out_lib_path, out_lib_path)
         # move source.ptx to be the same directory as source.cu
         if nvcc_keep:
             # move the ptx code to the same directory as source code
