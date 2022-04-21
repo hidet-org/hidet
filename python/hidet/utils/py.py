@@ -36,10 +36,11 @@ def green(v, fmt='{}'):
 
 
 class Timer:
-    def __init__(self, msg=None, file=None, verbose=True):
+    def __init__(self, msg=None, file=None, verbose=True, stdout=True):
         self.start_time = None
         self.end_time = None
         self.msg = msg
+        self.stdout = stdout
         self.verbose = verbose
         self.file = file
 
@@ -50,7 +51,15 @@ class Timer:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.end_time = time.time()
         if self.msg is not None and self.verbose:
-            print('{} {}'.format(self.msg, green(self.time2str(self.end_time - self.start_time))), file=self.file)
+            msg = '{} {}'.format(self.msg, green(self.time2str(self.end_time - self.start_time)))
+            if self.stdout:
+                print(msg)
+            if self.file:
+                if isinstance(self.file, str):
+                    with open(self.file, 'w') as f:
+                        f.write(msg)
+                else:
+                    self.file.write(msg + '\n')
 
     def elapsed_seconds(self) -> float:
         return self.end_time - self.start_time

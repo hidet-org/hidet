@@ -38,14 +38,14 @@ def milo_bytes(MiB):
     return MiB << 20
 
 
-def create_engine_from_onnx(onnx_model_path: str, workspace_bytes: int = 512 << 20, inputs_shape: Optional[Dict[str, List[int]]] = None, use_tf32: bool = False, use_fp16: bool = False) -> trt.ICudaEngine:
+def create_engine_from_onnx(onnx_model_path: str, workspace_bytes: int = 512 << 20, input_shapes: Optional[Dict[str, List[int]]] = None, use_tf32: bool = False, use_fp16: bool = False) -> trt.ICudaEngine:
     logger = trt.Logger(trt.Logger.WARNING)
     builder = trt.Builder(logger)
 
     cache_dir = hidet_cache_dir('trt_engine')
     os.makedirs(cache_dir, exist_ok=True)
     model_name = os.path.basename(onnx_model_path).split('.')[0]
-    shape_hash = tuple((name, tuple(shape)) for name, shape in sorted(inputs_shape.items(), key=lambda item: item[0]))
+    shape_hash = tuple((name, tuple(shape)) for name, shape in sorted(input_shapes.items(), key=lambda item: item[0]))
     shape_hash_suffix = sha256(str(shape_hash).encode()).hexdigest()[:6]
     engine_name = '{}{}{}_ws{}_{}.engine'.format(model_name, '_tf32' if use_tf32 else '', '_fp16' if use_fp16 else '', workspace_bytes // (1 << 20), shape_hash_suffix)
     engine_path = os.path.join(cache_dir, engine_name)
@@ -89,10 +89,10 @@ def create_engine_from_onnx(onnx_model_path: str, workspace_bytes: int = 512 << 
         for i in range(network.num_inputs):
             tensor: trt.ITensor = network.get_input(i)
             if any(v == -1 for v in tensor.shape):
-                if inputs_shape is None or tensor.name not in inputs_shape:
+                if input_shapes is None or tensor.name not in input_shapes:
                     raise Exception("Found dynamic input: {}{}, "
                                     "please specify input_shapes as the target shape.".format(tensor.name, list(tensor.shape)))
-                opt_shape = inputs_shape[tensor.name]
+                opt_shape = input_shapes[tensor.name]
                 profile.set_shape(tensor.name, min=opt_shape, opt=opt_shape, max=opt_shape)
         config.add_optimization_profile(profile)
 
@@ -207,7 +207,7 @@ if __name__ == '__main__':
         'attention_mask': hidet.array(attention_mask).cuda(),
         'token_type_ids': hidet.array(token_type_ids).cuda()
     }
-    engine = create_engine_from_onnx(onnx_model_path, inputs_shape={
+    engine = create_engine_from_onnx(onnx_model_path, input_shapes={
         key: tensor.shape for key, tensor in inputs.items()
     })
     outputs = engine_inference(engine, inputs)

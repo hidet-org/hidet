@@ -2,7 +2,6 @@ from . import doc
 from . import cuda
 from . import namer
 from . import py
-from . import tvm_utils
 from . import netron
 from . import nvtx_utils
 from . import transformers_utils

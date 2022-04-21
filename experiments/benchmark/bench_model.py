@@ -212,10 +212,12 @@ if __name__ == '__main__':
     # main('--exec trt --model resnet50 --warmup 3 --number 5 --repeat 5')
     # main('--exec trt --model resnet50 --hidet_space 2 --warmup 3 --number 10 --repeat 10')
     # main('--exec hidet --model resnet50 --hidet_space 2 --warmup 3 --number 10 --repeat 10')
-    main('--exec hidet --model bert-base-uncased --hidet_space 2 --warmup 3 --number 10 --repeat 10')
+    # main('--exec trt --model bert-base-uncased --hidet_space 2 --warmup 0 --number 1 --repeat 1')
+    # main('--exec trt --model bert-base-uncased --hidet_space 2 --warmup 3 --number 10 --repeat 10')
+    # main('--exec hidet --model bert-base-uncased --hidet_space 2 --warmup 3 --number 10 --repeat 10')
     # for model in ['resnet50', 'bert-base-uncased']:
     #     for exec in ['trt']:
     #         main(f'--exec {exec} --model {model} --number 10 --repeat 10')
-    # for model in ['resnet50', 'bert-base-uncased']:
-    #     for exec in ['trt', 'hidet']:
-    #         main(f'--exec {exec} --model {model}')
+    for model in ['resnet50', 'bert-base-uncased']:
+        for exec in ['trt', 'hidet']:
+            main(f'--exec {exec} --model {model}')
