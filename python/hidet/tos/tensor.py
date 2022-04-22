@@ -74,7 +74,7 @@ class Tensor:
         return prod(self.shape) * dtype_bytes(self.dtype)
 
     @property
-    def op(self) -> Optional['Operator']:
+    def op(self):
         return self.trace[0] if self.trace else None
 
     def contiguous(self):

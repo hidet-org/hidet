@@ -5,6 +5,7 @@ from . import implement
 from . import utils
 from . import tos
 from . import runtime
+from . import driver
 
 from .tos import Tensor, Operator, Module, FlowGraph
 

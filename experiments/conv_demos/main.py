@@ -4,6 +4,8 @@ from typing import Tuple
 import numpy as np
 import nvtx
 
+import hidet.tos.operators
+import hidet
 from hidet.backend import build
 from hidet.baselines.matmul import matmul_ref, matmul_cublas
 from hidet.baselines.conv2d import conv2d_cudnn, conv2d_reference, conv2d_torch, conv2d_cudnn_available, conv2d_implicit_gemm_reference
@@ -12,7 +14,6 @@ from hidet.implement.resolve import random_resolve, brute_force_resolve
 from hidet.implement.cuda.conv2d import CudaGridStaticConv2dImplicitGemmImplementer
 from hidet.ir.task import Grid, Host
 # from hidet.runtime.value import randn, empty, scalar, zeros, full, from_list
-from hidet.tasks.nn import matmul, conv2d
 from hidet.utils import cuda, prod
 from hidet.transforms import lower
 from hidet.tos.tensor import randn, empty, zeros, full
@@ -97,14 +98,18 @@ def print_latencies(name, latencies):
     print('{:>40}: {:.3f} (std {:.3f}) ms [{}]'.format(name, np.median(latencies), np.std(latencies), " ".join([f'{v:.3f}' for v in latencies])))
 
 
-def benchmark(warmup=5, number=1, repeat=10, use_nsight_compute=False, keep_ir=True):
+def benchmark(warmup=10, number=10, repeat=10, use_nsight_compute=False, keep_ir=True, space_level=2):
     if use_nsight_compute:
         warmup = 0
         number = 1
         repeat = 1
-    workloads = list(ConvSetting.resnet50_conv2ds(batch_size=1).keys()) + list(ConvSetting.resnet50_conv2ds(batch_size=16).keys())
+    # workloads = list(ConvSetting.resnet50_conv2ds(batch_size=1).keys()) + list(ConvSetting.resnet50_conv2ds(batch_size=16).keys())
     # workloads = [workloads[2]]
-    workloads = ConvSetting.resnet50_conv2ds(batch_size=1)
+    # workloads = ConvSetting.resnet50_conv2ds(batch_size=1)
+    workloads = [
+        ConvSetting(batch_size=1, in_channels=256, image_size=14, out_channels=256, kernel=3, stride=1, padding=1),
+        ConvSetting(batch_size=1, in_channels=512, image_size=7, out_channels=512, kernel=3, stride=1, padding=1)
+    ]
     cudnn_baselines = [
         ('fma', 'implicit_gemm'),
         # ('fma', 'implicit_precomp_gemm'),
@@ -112,7 +117,7 @@ def benchmark(warmup=5, number=1, repeat=10, use_nsight_compute=False, keep_ir=T
         # ('fma', 'direct'),
         # ('fma', 'fft'),
         # ('fma', 'fft_tiling'),
-        # ('fma', 'winograd'),
+        ('fma', 'winograd'),
         # ('fma', 'winograd_nofused'),
         ('fma', 'auto')
     ]
@@ -166,110 +171,16 @@ def benchmark(warmup=5, number=1, repeat=10, use_nsight_compute=False, keep_ir=T
 
         for name, allowed in hidet_variants:
             with impl_context(allowed=allowed) as ctx:
-                ir_module = implement(conv2d(n, ci, hi, wi, co, (kx, ky), (px, py), (sx, sy)))
-                module = build(ir_module, output_dir=f'./outs/bench/{name}_{setting}', keep_ir=keep_ir)
-                latencies = module['conv2d'].profile(x, w, y, warmup=warmup, number=number, repeat=repeat)
+                yy = hidet.tos.operators.conv2d(hidet.symbol_like(x), w, (px, py), (sx, sy))
+                func = hidet.driver.build_task(yy.op.task, space_level=2, opt_level=2, use_cache=True, cache_dir='./outs')
+                # module = build(ir_module, output_dir=f'./outs/bench/{name}_{setting}', keep_ir=keep_ir)
+                # latencies = module['conv2d'].profile(x, w, y, warmup=warmup, number=number, repeat=repeat)
+                latencies = func.profile(x, w, y, warmup=warmup, number=number, repeat=repeat)
                 row.append(np.median(latencies))
                 print_latencies(name, latencies)
         table.append(row)
         print()
     print(tabulate(table, headers=header, floatfmt='.3f', tablefmt='plain', showindex=True))
-
-
-def verify(keep_ir=True):
-    np.set_printoptions(threshold=128 * 128, linewidth=500)
-    workloads = [
-        # ConvSetting(batch_size=1, in_channels=1, image_size=1, out_channels=1, kernel=1, stride=1, padding=0),
-        # ConvSetting(batch_size=1, in_channels=1, image_size=3, out_channels=1, kernel=1, stride=1, padding=0),
-        # ConvSetting(batch_size=1, in_channels=2, image_size=1, out_channels=1, kernel=1, stride=1, padding=0),
-        # ConvSetting(batch_size=1, in_channels=1, image_size=1, out_channels=1, kernel=3, stride=1, padding=1),
-        # ConvSetting(batch_size=1, in_channels=2, image_size=2, out_channels=1, kernel=3, stride=2, padding=1),
-        # ConvSetting(batch_size=20, in_channels=20, image_size=20, out_channels=20, kernel=3, stride=2, padding=1),
-        # ConvSetting(batch_size=20, in_channels=20, image_size=20, out_channels=20, kernel=5, stride=2, padding=2),
-        # ConvSetting(batch_size=20, in_channels=20, image_size=20, out_channels=20, kernel=5, stride=2, padding=1),
-        # ConvSetting(batch_size=20, in_channels=20, image_size=20, out_channels=20, kernel=7, stride=2, padding=3),
-    ]
-    # workloads = list(ConvSetting.resnet50_conv2ds(batch_size=1).keys())[0:2]
-    workloads = list(ConvSetting.resnet50_conv2ds(batch_size=1).keys())[:10] + list(ConvSetting.resnet50_conv2ds(batch_size=16).keys())[:10]
-    cudnn_baselines = [
-        # ('fma', 'implicit_gemm'),
-    ]
-    packed_func_baselines = [
-        # ('reference', conv2d_reference()),
-        # ('implicit_gemm_reference', conv2d_implicit_gemm_reference())
-    ]
-    hidet_variants = [
-        ('hidet_implicit_gemm', (CudaGridStaticConv2dImplicitGemmImplementer,))
-    ]
-    for setting in workloads:
-        n, ci, hi, wi = setting.batch_size, setting.in_channels, setting.image_size[0], setting.image_size[1]
-        co, kx, ky = setting.out_channels, setting.kernel[0], setting.kernel[1]
-        ho, wo = setting.output_image_size
-        px, py = setting.padding
-        sx, sy = setting.stride
-        x = randn([n, ci, hi, wi], 'float32', 'global', seed=1)
-        # x = full([n, ci, hi, wi], 'float32', 'global', fill_value=1)
-        w = randn([co, ci, kx, ky], 'float32', 'global', seed=3)
-        # w = full([co, ci, kx, ky], 'float32', 'global', fill_value=1)
-        y1 = empty([n, co, ho, wo], 'float32', 'global')
-        y2 = empty([n, co, ho, wo], 'float32', 'global')
-        print("Workload {}".format(setting))
-
-        try:
-            ref = conv2d_reference()
-            for math_mode, algo in cudnn_baselines:
-                func, predicate = conv2d_cudnn(math_mode, algo), conv2d_cudnn_available(math_mode, algo)
-                name = 'cudnn_{}'.format(algo)
-                print('verifying {}'.format(name))
-                if not predicate(n, ci, hi, wi, co, kx, ky, px, py, sx, sy):
-                    continue
-                y1 = zeros([n, co, ho, wo], 'float32', 'global')
-                y2 = zeros([n, co, ho, wo], 'float32', 'global')
-                ref(n, ci, hi, wi, co, kx, ky, px, py, sx, sy, x, w, y1)
-                func(n, ci, hi, wi, co, kx, ky, px, py, sx, sy, x, w, y2)
-                np.testing.assert_allclose(y1.numpy(), y2.numpy())
-
-            for name, func in packed_func_baselines:
-                print('verifying {}'.format(name))
-                y1 = zeros([n, co, ho, wo], 'float32', 'global')
-                y2 = zeros([n, co, ho, wo], 'float32', 'global')
-                ref(n, ci, hi, wi, co, kx, ky, px, py, sx, sy, x, w, y1)
-                func(n, ci, hi, wi, co, kx, ky, px, py, sx, sy, x, w, y2)
-                np.testing.assert_allclose(y1.numpy(), y2.numpy())
-
-            for name, allowed in hidet_variants:
-                with impl_context(allowed=allowed) as ctx:
-                    task = conv2d(n, ci, hi, wi, co, (kx, ky), (px, py), (sx, sy))
-                    print(task.compute)
-                    ir_module = implement(task)
-                    module = build(ir_module, output_dir=f'./outs/verify/{name}_{setting}', keep_ir=keep_ir)
-                    y1 = zeros([n, co, ho, wo], 'float32', 'global')
-                    y2 = zeros([n, co, ho, wo], 'float32', 'global')
-                    ref(n, ci, hi, wi, co, kx, ky, px, py, sx, sy, x, w, y1)
-                    module['conv2d'](x, w, y2)
-                    np.testing.assert_allclose(y1.numpy(), y2.numpy())
-
-        except AssertionError as e:
-            print('x')
-            print(x)
-            print('w')
-            print(w)
-            print('y1')
-            print(y1)
-            print('y2')
-            print(y2)
-            raise e
-
-
-def demo_hidet_conv2d():
-    task = conv2d(batch_size=1, in_channels=3, height=224, width=224, out_channels=64, kernel=7, padding=3, stride=2)
-    implementors = [CudaGridStaticConv2dImplicitGemmImplementer]
-    with impl_context(allowed=implementors) as ctx:
-        # pass
-        ir_module = implement(task)
-        lowered = lower(ir_module)
-        print(lowered)
-    print(task.compute)
 
 
 def demo_settings():
@@ -292,7 +203,7 @@ def demo_settings():
 
 if __name__ == '__main__':
     # verify()
-    benchmark(use_nsight_compute=False, keep_ir=False)
+    benchmark(use_nsight_compute=False, keep_ir=False, space_level=2)
     # test_custom_func()
     # demo_hidet_conv2d()
     # demo_settings()

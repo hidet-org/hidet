@@ -22,6 +22,8 @@ def compile_source(src_path: str, out_lib_path: str, keep_ptx=False) -> None:
     keep_ptx: bool, default False
         Whether to keep the ptx code in the same directory of output library.
     """
+    src_path = os.path.abspath(src_path)
+    out_lib_path = os.path.abspath(out_lib_path)
     cc = cuda.query_compute_capability()
     cc_code = '{}{}'.format(cc[0], cc[1])
     command = ['nvcc',

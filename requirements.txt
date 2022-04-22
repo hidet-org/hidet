@@ -1,3 +1,6 @@
+################################################################################
+# Necessary packages
+################################################################################
 gitpython
 numpy
 sympy
@@ -8,8 +11,38 @@ psutil
 # used for print table
 tabulate
 
+# python tests
 pytest
+
+# show progress bar
 tqdm
 
-# used to annotate the scope of events in host process, which can be visualized in Nsight System.
+# used to annotate the scope of events in host process, which can be visualized
+# in Nsight System.
 nvtx
+
+# for onnx frontend
+onnx
+
+################################################################################
+# Optional packages
+################################################################################
+--extra-index-url https://download.pytorch.org/whl/cu113
+torch
+torchvision
+
+# for language model converting
+transformers
+transformers[onnx]
+
+# for onnx runtime baseline
+onnxruntime-gpu
+
+# for tensor rt baseline
+nvidia-pyindex
+nvidia-tensorrt
+
+# for tvm tuning
+xgboost
+tornado
+cloudpickle

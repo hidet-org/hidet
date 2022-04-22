@@ -68,7 +68,8 @@ def create_engine_from_onnx(onnx_model_path: str, workspace_bytes: int = 512 << 
 
         # set configs of the network builder
         config: trt.IBuilderConfig = builder.create_builder_config()
-        config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, workspace_bytes)
+        # config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, workspace_bytes)
+        config.max_workspace_size = workspace_bytes
         # allow us to inspect the engine, see https://docs.nvidia.com/deeplearning/tensorrt/developer-guide/index.html#engine-inspector
         config.profiling_verbosity = trt.ProfilingVerbosity.DETAILED
         # whether allow tf32/, see https://docs.nvidia.com/deeplearning/tensorrt/developer-guide/index.html#tf32-inference-c
@@ -101,6 +102,9 @@ def create_engine_from_onnx(onnx_model_path: str, workspace_bytes: int = 512 << 
         if not supported:
             raise Exception('Network is not supported by TensorRT.')
         engine: trt.ICudaEngine = builder.build_engine(network, config)
+
+        if engine is None:
+            raise Exception('Can not build network with given config.')
 
         # save engine
         serialized_engine = builder.build_serialized_network(network, config)
