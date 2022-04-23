@@ -27,10 +27,11 @@ def dump_code(graph_factory: tvm.relay.backend.executor_factory.ExecutorFactoryM
         f.write(runtime_cuda_module.get_source())
 
 
-def dump_relay_cuda_code(ir_module, out_dir: str = './outs'):
+def dump_relay_cuda_code(ir_module, params=None, out_dir: str = './outs', opt_level=3):
     import tvm.relay
     import tvm.target
-    graph_module = tvm.relay.build(ir_module, target='cuda', target_host=tvm.target.Target('c'))
+    with tvm.transform.PassContext(opt_level=opt_level):
+        graph_module = tvm.relay.build(ir_module, target='cuda', target_host=tvm.target.Target('c'), params=params)
     # graph_module = tvm.relay.build(ir_module, target='cuda')
     dump_code(graph_module, out_dir)
 
@@ -141,13 +142,8 @@ def tvm_graph_module_from_onnx(onnx_model_path: str, input_shapes: Optional[Dict
         onnx_model = onnx.load_model(onnx_model_path)
         ir_module, params = relay.frontend.from_onnx(onnx_model, input_shapes, dtype='float32')
         target = tvm.target.cuda(arch='sm_{}{}'.format(*hidet.utils.cuda.query_compute_capability()))
-        if tune_autotvm:
-            autotvm_tune(ir_module, params, target, out_dir=out_dir, num_trial=tune_trial_per_task)
-        elif tune_ansor:
-            ansor_tune(ir_module, params, target, out_dir=out_dir, num_trial_per_task=tune_trial_per_task)
-        else:
-            build_ir_module(ir_module, params, target, out_dir=out_dir)
-        assert os.path.exists(lib_path), 'Failed to generate lib for model {}.'.format(onnx_model_path)
+        with open(os.path.join(out_dir, 'relay_model.txt'), 'w') as f:
+            f.write(str(ir_module))
         with open(os.path.join(out_dir, 'model_info.txt'), 'w') as f:
             lines = [
                 'model: {}'.format(onnx_model_path),
@@ -157,6 +153,13 @@ def tvm_graph_module_from_onnx(onnx_model_path: str, input_shapes: Optional[Dict
                 'trial per task: {}'.format(tune_trial_per_task)
             ]
             f.write('\n'.join(lines))
+        if tune_autotvm:
+            autotvm_tune(ir_module, params, target, out_dir=out_dir, num_trial=tune_trial_per_task)
+        elif tune_ansor:
+            ansor_tune(ir_module, params, target, out_dir=out_dir, num_trial_per_task=tune_trial_per_task)
+        else:
+            build_ir_module(ir_module, params, target, out_dir=out_dir)
+        assert os.path.exists(lib_path), 'Failed to generate lib for model {}.'.format(onnx_model_path)
     lib = tvm.runtime.load_module(lib_path)
     device = tvm.cuda()
     gmod = graph_executor.GraphModule(lib['default'](device))

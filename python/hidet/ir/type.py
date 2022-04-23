@@ -1,4 +1,5 @@
 from typing import Sequence, Optional, Union, List, Tuple, Mapping, Callable
+import numpy as np
 
 from hidet import ir
 from hidet.ir.node import Node
@@ -25,6 +26,17 @@ class ScalarType(TypeNode):
         if name:
             assert name in ['float32', 'int32', 'uint8', 'uint32', 'int64', 'bool'], name
         self.name = name
+
+    @staticmethod
+    def from_numpy_dtype(np_dtype):
+        if np_dtype == np.float32:
+            return ScalarType('float32')
+        elif np_dtype == np.int32:
+            return ScalarType('int32')
+        elif np_dtype == np.int64:
+            return ScalarType('int64')
+        else:
+            raise ValueError("Unrecognized numpy data type: '{}'".format(np_dtype))
 
     def nbytes(self) -> int:
         bytes_dict = {

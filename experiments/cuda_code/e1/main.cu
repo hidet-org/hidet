@@ -1,27 +1,3 @@
-//#include <cassert>
-//#include <cuda_runtime.h>
-//#include <cstdio>
-//
-//__global__ void kernel() {
-//    if (threadIdx.x / 2 == 0) {
-//        __syncthreads();
-////        if(threadIdx.x % 2 == 0) {
-//            printf("A");
-////        }
-//    } else {
-////        if(threadIdx.x % 2 == 0) {
-//            printf("B");
-////        }
-//        __syncthreads();
-//    }
-//}
-//
-//int main() {
-//    kernel<<<1, 2>>>();
-//    cudaDeviceSynchronize();
-//}
-//
-
 #include <cuda.h>
 #include <iostream>
 
@@ -70,4 +46,8 @@ int main(int argc, char const *argv[]) {
  *   tid 1 0 ctaid 1 0 physical laneid 1  physical warpid 0
  *   tid 0 1 ctaid 1 0 physical laneid 2  physical warpid 0
  *   tid 1 1 ctaid 1 0 physical laneid 3  physical warpid 0
+ *
+ *  indicates:
+ *  the threadIdx in the same block is mapped to physical warp compactly.
+ *  If we have blockDim.x % 32 != 0 and blockDim.y != 1, we should not use threadIdx.x & 32 to get lane id.
  */

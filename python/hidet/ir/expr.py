@@ -1,4 +1,5 @@
 import string
+import numpy as np
 from typing import Optional, Union, Sequence, List, Tuple
 from .node import Node
 from .type import TypeNode, TensorType, TensorType, ScalarType, Scope, tensor_type, scalar_type
@@ -322,17 +323,20 @@ class Cast(Expr):
 
 
 class Constant(Expr):
-    def __init__(self, value, dtype=None):
-        self.value = value
-        if dtype and isinstance(dtype, str):
-            dtype = ScalarType(dtype)
-        self.dtype: Optional[ScalarType] = dtype
+    def __init__(self, value=None, data_type=None):
+        if data_type and isinstance(data_type, str):
+            data_type = ScalarType(data_type)
+        self.value: Optional[np.ndarray, float, int] = value
+        self.data_type: Optional[Union[ScalarType, TensorType]] = data_type
 
     def __int__(self):
         return int(self.value)
 
     def __float__(self):
         return float(self.value)
+
+    def array(self) -> np.ndarray:
+        return self.value
 
 
 class IfThenElse(Expr):
@@ -415,15 +419,15 @@ def is_zero(v: Expr) -> bool:
 
 
 def is_true(v: Expr) -> bool:
-    return isinstance(v, Constant) and v.dtype.name == 'bool' and v.value is True
+    return isinstance(v, Constant) and v.data_type.name == 'bool' and v.value is True
 
 
 def is_false(v: Expr) -> bool:
-    return isinstance(v, Constant) and v.dtype.name == 'bool' and v.value is False
+    return isinstance(v, Constant) and v.data_type.name == 'bool' and v.value is False
 
 
 def is_const_int(v: Expr) -> bool:
-    return isinstance(v, Constant) and v.dtype.name == 'int32'
+    return isinstance(v, Constant) and v.data_type.name == 'int32'
 
 
 def if_then_else(cond: Union[Expr, PyScalar], then_expr: Union[Expr, PyScalar], else_expr: Union[Expr, PyScalar]) -> IfThenElse:
@@ -463,6 +467,8 @@ def tensor_rank(v: Expr) -> int:
         return len(v.shape)
     elif isinstance(v, AlterLayout):
         return len(v.shape)
+    elif isinstance(v, Constant) and isinstance(v.data_type, TensorType):
+        return len(v.data_type.shape)
     else:
         raise ValueError(v)
 
@@ -470,3 +476,12 @@ def tensor_rank(v: Expr) -> int:
 def cast(v: Expr, dtype):
     return Cast(v, dtype)
 
+
+def const_tensor(value: np.ndarray, data_type=None) -> Constant:
+    if data_type is None:
+        data_type = tensor_type(
+            scope='host',
+            dtype=ScalarType.from_numpy_dtype(value.dtype),
+            shape=list(value.shape)
+        )
+    return Constant(value=value, data_type=data_type)

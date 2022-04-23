@@ -1,4 +1,4 @@
-from .conv import conv2d
+from .conv import conv2d, conv2d_default, conv2d_winograd
 from .matmul import matmul
 from .pool import max_pool2d, avg_pool2d
 from .softmax import softmax

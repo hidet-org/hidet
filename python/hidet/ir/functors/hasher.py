@@ -38,7 +38,7 @@ class ExprHash(ExprFunctor, TypeFunctor):
         return HashSum(e) + e.class_index()
 
     def visit_Constant(self, e: Constant):
-        return HashSum(e.value) + self(e.dtype) + e.class_index()
+        return HashSum(e.value) + self(e.data_type) + e.class_index()
 
     def visit_Add(self, e: Add):
         return (self(e.a) & self(e.b)) + e.class_index()

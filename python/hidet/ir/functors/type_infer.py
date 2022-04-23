@@ -145,7 +145,7 @@ class TypeInfer(ExprFunctor):
         return e.type
 
     def visit_Constant(self, e: Constant):
-        return e.dtype
+        return e.data_type
 
     def visit_ScalarInput(self, e: ScalarInput):
         return e.data_type

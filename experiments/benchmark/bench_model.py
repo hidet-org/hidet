@@ -266,5 +266,6 @@ if __name__ == '__main__':
     #     for exec in ['trt', 'ort', 'tvm', 'hidet', 'autotvm', 'ansor']:
     #         main(f'--exec {exec} --model {model}')
 
-    main('--exec trt --model resnet50 --warmup 1 --number 10 --repeat 10')
-    main('--exec hidet --model resnet50 --warmup 1 --number 10 --repeat 10')
+    main('--exec tvm --model resnet50 --warmup 1 --number 10 --repeat 10')
+    # main('--exec trt --model resnet50 --warmup 1 --number 10 --repeat 10')
+    # main('--exec hidet --model resnet50 --warmup 1 --number 10 --repeat 10')

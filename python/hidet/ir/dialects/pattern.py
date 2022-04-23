@@ -86,6 +86,12 @@ class TaskPattern(PatternNode):
         self.worker: Optional[Worker] = worker
 
 
+class TensorAccessPattern(ExprPattern):
+    def __init__(self, base_pattern=None, indices_pattern=None):
+        self.base_pattern: Optional[Expr] = base_pattern
+        self.indices_pattern: Optional[List[Expr]] = indices_pattern
+
+
 class NotMatchedError(Exception):
     def __init__(self, pattern, target, message=""):
         super().__init__(message)
@@ -216,6 +222,7 @@ class PatternMatcher:
                 OptionalPattern: PatternMatcher.match_OptionalPattern,
                 ScalarTypePattern: PatternMatcher.match_ScalarTypePattern,
                 TensorTypePattern: PatternMatcher.match_TensorTypePattern,
+                TensorAccessPattern: PatternMatcher.match_TensorAccessPattern,
                 # python containers and types
                 str: PatternMatcher.match_String,
                 list: PatternMatcher.match_Sequence,
@@ -306,7 +313,7 @@ class PatternMatcher:
             pass
 
     def match_Constant(self, pattern: Constant, target: Constant):
-        with self.match(pattern.dtype, target.dtype):
+        with self.match(pattern.data_type, target.data_type):
             pass
         if pattern.value is None:
             # None matches any const value
@@ -451,6 +458,22 @@ class PatternMatcher:
             if not pattern.allow_dynamic_size and any(not isinstance(s, Constant) for s in target.shape):
                 raise NotMatchedError(pattern, target)
 
+    def match_TensorAccessPattern(self, pattern: TensorAccessPattern, target: Expr):
+        self.check_type(pattern, target, TensorElement)
+        assert isinstance(target, TensorElement)
+        self.check_cond(pattern, target,
+                        cond=isinstance(target.base, (TensorInput, TensorCompute)),
+                        message='TensorAccessPattern expect the target is a '
+                                'tensor access based on TensorInput or TensorCompute')
+        with ExitStack() as stack:
+            if pattern.base_pattern is not None:
+                stack.enter_context(self.match(pattern.base_pattern, target.base))
+            if pattern.indices_pattern is not None:
+                self.check_cond(pattern, target, cond=len(pattern.indices_pattern) == len(target.indices),
+                                message='TensorAccessPattern expect pattern and target have the same number of indices')
+                for index_pattern, index_expr in zip(pattern.indices_pattern, target.indices):
+                    stack.enter_context(self.match(index_pattern, index_expr))
+
     def match_Grid(self, pattern: Grid, target: Grid):
         with ExitStack() as stack:
             stack.enter_context(self.match(pattern.grid_dim, target.grid_dim))
@@ -519,6 +542,10 @@ def any_const():
 def any_scalar_expr(base_pattern: Optional[Expr] = None,
                     exclude_vars: Sequence[Union[Var, TensorInput, ScalarInput]] = ()):
     return ScalarExprPattern(base_pattern=base_pattern, exclude_vars=exclude_vars)
+
+
+def any_tensor_input() -> TensorInput:
+    return TensorInput(None, None)
 
 
 def int_vars(names):

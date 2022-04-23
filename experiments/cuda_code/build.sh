@@ -1,1 +1,0 @@
-nvcc -lineinfo main.cu

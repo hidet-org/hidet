@@ -43,8 +43,8 @@ class HidetToSympyConverter(ExprFunctor):
         return self.new_symbol(e)
 
     def visit_Constant(self, e: Constant):
-        if isinstance(e.dtype, ScalarType):
-            if e.dtype.name == 'int32':
+        if isinstance(e.data_type, ScalarType):
+            if e.data_type.name == 'int32':
                 return S.Integer(e.value)
         # because we mainly use sympy to analyze the index expression, whose type is integer, we do not support other types
         raise NotImplementedError()
@@ -114,7 +114,7 @@ class SympyToHidetConverter:
         args = [self(v) for v in e.args]
         assert len(args) == 2
         b, e = args
-        assert isinstance(e, Constant) and e.dtype.name == 'int32'
+        assert isinstance(e, Constant) and e.data_type.name == 'int32'
         neg = False
         if e.value < 0:
             neg = True

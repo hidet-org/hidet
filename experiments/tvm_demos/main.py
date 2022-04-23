@@ -1,3 +1,4 @@
+import numpy as np
 import tvm
 import tvm.contrib
 from tvm.relay.backend.executor_factory import ExecutorFactoryModule
@@ -6,6 +7,7 @@ from tvm import relay, tir, te
 from tvm.te import ComputeOp, PlaceholderOp, Schedule
 import hidet
 from hidet.utils.py import prod
+import hidet.utils.tvm_utils
 
 
 def conv2d_nchw_compute(batch, in_channel, in_height, in_width, stride_h, stride_w, padding_h, padding_w, out_channel, kernel_h, kernel_w):
@@ -236,6 +238,20 @@ def demo_reduce_mean():
     hidet.utils.tvm_utils.dump_relay_cuda_code(ir_module, out_dir='./outs/reduce_mean')
 
 
+def demo_winograd_conv2d():
+    x = relay.var('x', shape=(1, 128, 28, 28))
+    # w = relay.var('w', shape=(128, 128, 3, 3))
+    w = relay.const(np.random.randn(128, 128, 3, 3).astype(np.float), dtype='float32')
+    y = relay.nn.conv2d(x, w, strides=1, padding=1, kernel_size=3)
+    func = relay.Function(params=[x], body=y)
+    ir_module = tvm.ir.IRModule.from_expr(func)
+    print(ir_module)
+    hidet.utils.tvm_utils.dump_relay_cuda_code(
+        ir_module=ir_module,
+        out_dir='./outs/winograd'
+    )
+
+
 if __name__ == '__main__':
     # demo_vthread()
     # demo_conv2d_te()
@@ -245,5 +261,6 @@ if __name__ == '__main__':
     # demo_rsqrt()
     # demo_gather()
     # demo_variance()
-    demo_reduce_mean()
+    # demo_reduce_mean()
+    demo_winograd_conv2d()
 

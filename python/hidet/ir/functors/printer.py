@@ -200,7 +200,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
 
     def visit_Constant(self, e: Constant):
         if e.value is None:
-            return self('Constant(None, type=') + self(e.dtype) + ')'
+            return self('Constant(None, type=') + self(e.data_type) + ')'
         return Text(str(e.value))
 
     def visit_ScalarInput(self, e: ScalarInput):

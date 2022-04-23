@@ -1,5 +1,5 @@
 from typing import Union, Sequence
-from ..common import Task, Operator, Tensor, DataLayout, Grid, tensor_input, compute, reduce, inline_compute, tensor_type, input_like
+from hidet.tos.operators.common import Task, Operator, Tensor, DataLayout, Grid, tensor_input, compute, reduce, inline_compute, tensor_type, input_like
 
 
 def conv2d_task(batch_size, in_channels, height, width, out_channels, kernel, padding, stride, input_layout=None, weight_layout=None, output_layout=None):
@@ -64,5 +64,5 @@ class Conv2dOp(Operator):
         super().__init__([input, weight], task, padding=padding, stride=stride)
 
 
-def conv2d(input: Tensor, weight, padding, stride) -> Tensor:
+def conv2d_default(input: Tensor, weight, padding, stride) -> Tensor:
     return Conv2dOp(input, weight, padding, stride).get_output(0)

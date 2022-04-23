@@ -177,10 +177,10 @@ def engine_inspect(engine: trt.ICudaEngine) -> Dict:
     layer_information = {}
     for i in range(engine.num_layers):
         layer_information['layer_{}'.format(i)] = json.loads(str(inspector.get_layer_information(i, trt.LayerInformationFormat.JSON)))
-    engine_information = json.loads(str(inspector.get_engine_information(trt.LayerInformationFormat.JSON)))
+    # engine_information = json.loads(str(inspector.get_engine_information(trt.LayerInformationFormat.JSON)))
     return {
         'layers': layer_information,
-        'engine': engine_information
+        # 'engine': engine_information
     }
 
 

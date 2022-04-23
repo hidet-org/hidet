@@ -1,0 +1,2 @@
+- e1: the threadIdx in the same block is mapped to physical warp compactly. If we have blockDim.x % 32 != 0 and blockDim.y != 1, we should not use threadIdx.x & 32 to get lane id.
+- e2: float multiply and division. Pay attention when you use division.
