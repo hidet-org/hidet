@@ -200,20 +200,15 @@ def conv2d_winograd(x: Tensor, w: Tensor, padding) -> Tensor:
     alpha = [r + m - 1 for r, m in zip(kernel, ms)]
 
     # winograd transform
-    # print(x)
     x = winograd_image_transform(x, padding, kernel, ms)  # [alpha_x, alpha_y, ci, p]
-    # print(x.squeeze([2]).transpose([2, 0, 1]))
-    # exit(0)
     w = winograd_filter_transform(w, ms)                  # [alpha_x, alpha_y, co, ci]
 
     # product
-    x = flatten(x, start_dim=0, end_dim=2)              # [alpha_x * alpha_y, ci, p]
-    w = flatten(w, start_dim=0, end_dim=2)              # [alpha_x * alpha_y, co, ci]
-    y = batched_matmul(w, x)                            # [alpha_x * alpha_y, co, p]
-    y = reshape(y, [alpha[0], alpha[1], y.shape[1], y.shape[2]])          # [alpha_x, alpha_y, co, p]
+    x = flatten(x, start_dim=0, end_dim=2)                          # [alpha_x * alpha_y, ci, p]
+    w = flatten(w, start_dim=0, end_dim=2)                          # [alpha_x * alpha_y, co, ci]
+    y = batched_matmul(w, x)                                        # [alpha_x * alpha_y, co, p]
+    y = reshape(y, [alpha[0], alpha[1], y.shape[1], y.shape[2]])    # [alpha_x, alpha_y, co, p]
 
     # winograd inverse transform
-    # print(y.transpose([2, 3, 0, 1]))
     y = winograd_inverse_transform(y, input_shape, padding, kernel, ms)  # [n, oc, oh, ow]
-    # print(y)
     return y

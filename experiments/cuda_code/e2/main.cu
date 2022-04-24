@@ -1,19 +1,20 @@
 #include <cuda.h>
 
 __global__ void kernel(int n, float *a, float *b) {
-//    auto id = threadIdx.x + blockIdx.x * blockDim.x;
-//    auto stride = blockDim.x * gridDim.x;
+    auto id = threadIdx.x + blockIdx.x * blockDim.x;
+    auto stride = blockDim.x * gridDim.x;
 //    b[0] = a[0] / 0.55f;
-    b[0] = __fdividef(a[0],  0.55f);
-//    for(auto i = id; i < n; i += stride) {
-////        b[i] = a[i] * 3;
-////        b[i] = a[i] * 0.25;
-////        b[i] = a[i] * 0.55;
-////        b[i] = a[i] / 2;
-////        b[i] = a[i] / 4;
-////        b[i] = a[i] / 0.25;
-//        b[i] = a[i] / 0.55;
-//    }
+    for(auto i = id; i < n; i += stride) {
+//        b[i] = a[i] * 3;
+//        b[i] = a[i] * 0.25f;
+//        b[i] = a[i] * 0.55f;
+//        b[i] = a[i] / 2;
+//        b[i] = a[i] / 4;
+//        b[i] = a[i] / 0.25f;
+//        b[i] = a[i] / 0.55f;
+//        b[i] = __fdividef(a[i],  0.55f);
+        b[i] = a[i] * 0.0f;
+    }
 }
 
 int main(int argc, char const *argv[]) {
@@ -36,7 +37,7 @@ int main(int argc, char const *argv[]) {
         b[i] = a[i] / 0.25;
          FMUL R17, R7, 4 ;
         b[i] = a[i] / 0.55;
-
+    a float multiply a 0.0f will not be optimized into zero, might because there is special case such as NaN.
  */
 
 
