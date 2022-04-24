@@ -61,6 +61,10 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
         doc += ')'
         doc = doc.indent(6)
 
+        # const locals
+        for local_var, local_value in func.local_const_vars:
+            doc += (NewLine() + Text('declare ') + self(local_var) + Text(': ') + self(local_var.type) + ' = ' + self(local_value)).indent(4)
+
         # locals
         for local_var in func.local_vars:
             doc += (NewLine() + Text('declare ') + self(local_var) + Text(': ') + self(local_var.type)).indent(4)
@@ -201,7 +205,10 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
     def visit_Constant(self, e: Constant):
         if e.value is None:
             return self('Constant(None, type=') + self(e.data_type) + ')'
-        return Text(str(e.value))
+        if e.is_tensor():
+            return 'ConstTensor({}, {})'.format(e.value.shape, e.data_type)
+        else:
+            return Text(str(e.value))
 
     def visit_ScalarInput(self, e: ScalarInput):
         return self.namer.get_name(e)

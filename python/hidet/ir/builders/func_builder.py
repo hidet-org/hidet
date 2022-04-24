@@ -52,7 +52,8 @@ class FunctionBuilder:
         if isinstance(self.attrs['worker'], (Grid, ThreadBlock, Warp, Thread)):
             self.extend_extern_vars([block_idx(dim) for dim in ['x', 'y', 'z']])
             self.extend_extern_vars([thread_idx(dim) for dim in ['x', 'y', 'z']])
-        self.func = Function(self.name, self.params, self.body, self.ret_type, self.local_vars, self.extern_vars, self.attrs)
+        self.func = Function(self.name, params=self.params, body=self.body, ret_type=self.ret_type, local_vars=self.local_vars,
+                             local_const_vars=[], extern_vars=self.extern_vars, attrs=self.attrs)
 
     def get(self) -> Function:
         assert self.func.body is not None

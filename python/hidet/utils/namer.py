@@ -5,10 +5,17 @@ class Namer:
     def __init__(self):
         self.name_id_clock = defaultdict(int)
         self.obj_name = {}
+        self.clear()
 
     def clear(self):
         self.name_id_clock.clear()
         self.obj_name.clear()
+        # add keywords in target language
+        keywords = [
+            'const'
+        ]
+        for kw in keywords:
+            self.name_id_clock[kw] = 0
 
     def get_name(self, e, hint=None):
         from hidet.ir.expr import Var

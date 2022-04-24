@@ -329,6 +329,12 @@ class Constant(Expr):
         self.value: Optional[np.ndarray, float, int] = value
         self.data_type: Optional[Union[ScalarType, TensorType]] = data_type
 
+    def is_scalar(self) -> bool:
+        return self.data_type and isinstance(self.data_type, ScalarType)
+
+    def is_tensor(self) -> bool:
+        return self.data_type and isinstance(self.data_type, TensorType)
+
     def __int__(self):
         return int(self.value)
 

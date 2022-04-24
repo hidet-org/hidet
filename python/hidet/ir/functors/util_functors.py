@@ -104,7 +104,8 @@ def collect(node: Union[Function, Expr, Stmt], node_types) -> list:
             raise ValueError()
 
     collector = SubStmtExprCollector(node_types)
-    return collector.collect(node)
+    collected = collector.collect(node)
+    return list(set(collected))
 
 
 def clone(node: Union[Stmt, Expr]) -> Union[Stmt, Expr]:

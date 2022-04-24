@@ -98,6 +98,10 @@ class Tensor:
         from .operators import flatten
         return flatten(self, start_dim, end_dim)
 
+    def transpose(self, axes: Optional[Sequence[int]]):
+        from .operators import transpose
+        return transpose(self, axes)
+
     def rsqrt(self):
         from .operators import rsqrt
         return rsqrt(self)

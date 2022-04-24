@@ -26,7 +26,8 @@ class CpuNaiveImplementer(Implementer):
         input_map = {p: v for p, v in zip(task.params, func_param_vars)}
         body, _, new_buffer_map = expand_loop(task.compute, input_map)
         func_locals = list(new_buffer_map.values())
-        func = Function(task.name + '.host', func_param_vars, body, VoidType(), func_locals, [], {'worker': Host()})
+        func = Function(task.name + '.host', params=func_param_vars, body=body, ret_type=VoidType(),
+                        local_vars=func_locals, local_const_vars=[], attrs={'worker': Host()})
         module = IRModule({func.name: func})
         return module
 

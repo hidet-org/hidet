@@ -809,7 +809,8 @@ class FuncStmtExprRewriter(StmtExprRewriter):
         if body is func.body:
             return func
         else:
-            return Function(func.name, func.params, body, func.ret_type, func.local_vars, func.extern_vars, func.attrs)
+            return Function(func.name, params=func.params, body=body, ret_type=func.ret_type, local_vars=func.local_vars,
+                            local_const_vars=func.local_const_vars, extern_vars=func.extern_vars, attrs=func.attrs)
 
 
 class TypeFunctor(NodeFunctor):

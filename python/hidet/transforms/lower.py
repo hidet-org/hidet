@@ -6,6 +6,7 @@ def lower(ir_module: IRModule) -> IRModule:
     transforms = [
         # necessary passes
         generate_packed_func_pass(),
+        normalize_const_tensor_pass(),
         flatten_tensor_pass(),
         expand_let_expr_pass(),
 

@@ -1,10 +1,14 @@
 from typing import Iterable
 from hidet.ir.functors import ExprRewriter
+import numpy as np
 
 
 class HashSum:
     def __init__(self, obj):
-        self.value = hash(obj)
+        if isinstance(obj, np.ndarray):
+            self.value = id(obj)
+        else:
+            self.value = hash(obj)
         self.hashed_obj = obj
 
     def __str__(self):

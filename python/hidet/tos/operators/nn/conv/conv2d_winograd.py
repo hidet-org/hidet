@@ -37,23 +37,25 @@ def winograd_transform_matrices(m: int, r: int) -> Tuple[Constant, Constant, Con
 
 def winograd_image_transform_task(x: TensorInput, padding: List[int], kernel: List[int], ms: List[int]) -> Task:
     assert len(kernel) == 2 and len(padding) == 4 and len(x.const_shape()) == 4
-    rx, ry = kernel
     n, c, h, w = x.const_shape()
-    mx, my = ms                                         # output size per tile
-    oh, ow = h - rx + 1, w - ry + 1                     # output size of image
-    nh, nw = (oh + mx - 1) // mx, (ow + my - 1) // my   # number of tiles on each image dimension
-    p = n * nh * nw                                     # number of tiles per channel
-    alpha_x, alpha_y = mx + rx - 1, my + ry - 1
 
     pad = compute(
         name='pad',
         shape=[n, c, h + padding[0] + padding[2], w + padding[1] + padding[3]],
         fcompute=lambda nn, cc, hh, ww: x.protect_read([nn, cc, hh - padding[0], ww - padding[1]], default_value=0.0),
     )
+
+    n, c, h, w = pad.const_shape()
+    rx, ry = kernel
+    mx, my = ms                                         # output size per tile
+    oh, ow = h - rx + 1, w - ry + 1                     # output size of image
+    nh, nw = (oh + mx - 1) // mx, (ow + my - 1) // my   # number of tiles on each image dimension
+    p = n * nh * nw                                     # number of tiles per channel
+    alpha_x, alpha_y = mx + rx - 1, my + ry - 1
     tile = compute(
         name='tile',
         shape=[c, p, alpha_x, alpha_y],
-        fcompute=lambda cc, pp, ax, ay: pad[p // (nh * nw), c, (p // nw) % nh * mx + ax, p % nh * my + ay]
+        fcompute=lambda cc, pp, ax, ay: pad[pp // (nh * nw), cc, (pp // nw) % nh * mx + ax, pp % nw * my + ay]
     )
     BH = winograd_transform_matrices(mx, rx)[1]
     BW = winograd_transform_matrices(my, ry)[1]
@@ -62,7 +64,7 @@ def winograd_image_transform_task(x: TensorInput, padding: List[int], kernel: Li
         shape=[alpha_x, alpha_y, c, p],
         fcompute=lambda ax, ay, cc, pp: reduce(
             shape=[alpha_x, alpha_y],
-            fcompute=lambda kx, ky: BH[ax, kx] * tile[c, p, kx, ky] * BW[ay, ky],
+            fcompute=lambda kx, ky: BH[ax, kx] * tile[cc, pp, kx, ky] * BW[ay, ky],
             reduce_type='sum'
         )
     )
@@ -80,14 +82,14 @@ def winograd_filter_transform_task(w: TensorInput, ms: List[int]) -> Task:
     oc, c, rx, ry = w.const_shape()
     mx, my = ms
     alpha_x, alpha_y = mx + rx - 1, my + ry - 1
-    GH = winograd_transform_matrices(mx, rx)[1]
-    GW = winograd_transform_matrices(my, ry)[1]
+    GH = winograd_transform_matrices(mx, rx)[0]
+    GW = winograd_transform_matrices(my, ry)[0]
     y = compute(
         name='y',
         shape=[alpha_x, alpha_y, oc, c],
         fcompute=lambda ax, ay, occ, cc: reduce(
             shape=[rx, ry],
-            fcompute=lambda kx, ky: GH[ax, rx] * w[occ, cc, rx, ry] * GW[ky, ay],
+            fcompute=lambda kx, ky: GH[ax, kx] * w[occ, cc, kx, ky] * GW[ay, ky],
             reduce_type='sum'
         )
     )
@@ -116,14 +118,14 @@ def winograd_inverse_transform_task(y: TensorInput, input_shape, padding, kernel
         shape=[mx, my, oc, p],
         fcompute=lambda mxx, myy, occ, pp: reduce(
             shape=[alpha_x, alpha_y],
-            fcompute=lambda kx, ky: AH[mx, kx] * y[kx, ky, occ, pp] * AW[ky, my],
+            fcompute=lambda kx, ky: AH[mxx, kx] * y[kx, ky, occ, pp] * AW[myy, ky],
             reduce_type='sum'
         )
     )
     output = compute(
         name='output',
         shape=[n, oc, oh, ow],
-        fcompute=lambda nn, occ, ohh, oww: inverse[ohh % mx, oww % my, occ, nn * (ohh // mx) * (oww // my)],
+        fcompute=lambda nn, occ, ohh, oww: inverse[ohh % mx, oww % my, occ, nn * (nh * nw) + (ohh // mx) * nw + (oww // my)],
     )
     task = Task(
         name='winograd_inverse_transform',
@@ -187,7 +189,7 @@ def winograd_inverse_transform(y: Tensor, input_shape, padding, kernel, ms) -> T
 
 
 def conv2d_winograd(x: Tensor, w: Tensor, padding) -> Tensor:
-    assert len(x.shape) == 4
+    assert len(x.shape) == 4 and len(w.shape) == 4 and x.shape[1] == w.shape[1]
     r2m = {
         1: 1,
         3: 2
@@ -198,15 +200,20 @@ def conv2d_winograd(x: Tensor, w: Tensor, padding) -> Tensor:
     alpha = [r + m - 1 for r, m in zip(kernel, ms)]
 
     # winograd transform
+    # print(x)
     x = winograd_image_transform(x, padding, kernel, ms)  # [alpha_x, alpha_y, ci, p]
+    # print(x.squeeze([2]).transpose([2, 0, 1]))
+    # exit(0)
     w = winograd_filter_transform(w, ms)                  # [alpha_x, alpha_y, co, ci]
 
     # product
     x = flatten(x, start_dim=0, end_dim=2)              # [alpha_x * alpha_y, ci, p]
     w = flatten(w, start_dim=0, end_dim=2)              # [alpha_x * alpha_y, co, ci]
     y = batched_matmul(w, x)                            # [alpha_x * alpha_y, co, p]
-    y = reshape(y, [alpha[0], alpha[1], 0, 0])          # [alpha_x, alpha_y, co, p]
+    y = reshape(y, [alpha[0], alpha[1], y.shape[1], y.shape[2]])          # [alpha_x, alpha_y, co, p]
 
     # winograd inverse transform
+    # print(y.transpose([2, 3, 0, 1]))
     y = winograd_inverse_transform(y, input_shape, padding, kernel, ms)  # [n, oc, oh, ow]
+    # print(y)
     return y

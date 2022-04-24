@@ -1,6 +1,6 @@
 from typing import List, Union, Callable, Any
 from hidet.ir.type import TensorType, tensor_type
-from hidet.ir.expr import Var, TensorElement, TensorSlice, AlterLayout
+from hidet.ir.expr import Var, TensorElement, TensorSlice, AlterLayout, Constant
 from hidet.ir.stmt import BufferStoreStmt
 from hidet.ir.func import Function
 from hidet.ir.functors import simplify_to_int, FuncStmtExprRewriter
@@ -85,7 +85,8 @@ class FlattenTensorAccessRewriter(FuncStmtExprRewriter):
     #   TensorElement:  A[2, 1]     ==> A[2 * 4 + 1]
     # BufferStoreStmt:  A[2, 1] = 3 ==> A[2 * 4 + 1] = 3
     def visit_Function(self, func: Function):
-        for var in func.params + func.local_vars:
+        const_local_vars = [v for v, _ in func.local_const_vars]
+        for var in func.params + func.local_vars + const_local_vars:
             if isinstance(var.type, TensorType):
                 size = simplify_to_int(var.type.layout.size)
                 self.memo[var] = Var(var.hint, tensor_type(var.type.scope, var.type.scalar_type, [size], DataLayout.row_major([size])))
@@ -94,7 +95,9 @@ class FlattenTensorAccessRewriter(FuncStmtExprRewriter):
         body = self(func.body)
         params = [self(p) for p in func.params]
         local_vars = [self(v) for v in func.local_vars]
-        return Function(func.name, params, body, func.ret_type, local_vars, func.extern_vars, func.attrs)
+        local_const_vars = [(self(v), value) for v, value in func.local_const_vars]
+        return Function(func.name, params, body, func.ret_type, local_vars=local_vars,
+                        local_const_vars=local_const_vars, extern_vars=func.extern_vars, attrs=func.attrs)
 
     @staticmethod
     def get_layout(e) -> Callable[..., Any]:
@@ -107,6 +110,8 @@ class FlattenTensorAccessRewriter(FuncStmtExprRewriter):
                 return e.type.tensor_type.layout
             elif isinstance(e.type, PointerType):
                 return StridesLayout(shape=[0], strides=[1])
+        elif isinstance(e, Constant) and isinstance(e.data_type, TensorType):
+            return e.data_type.layout
         raise ValueError("Can not infer layout from '{}'".format(type(e)))
 
     def visit_TensorElement(self, e: TensorElement):

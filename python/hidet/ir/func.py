@@ -1,8 +1,8 @@
-from typing import Dict, List, Union, Optional
+from typing import Dict, List, Union, Optional, Tuple
 from hidet.ir.node import Node
 from hidet.ir.type import TypeNode, FuncType
 from hidet.ir.dialects.lowlevel import VoidType
-from hidet.ir.expr import Var
+from hidet.ir.expr import Var, Constant
 from hidet.ir.stmt import Stmt
 from hidet.ir.task import Task
 
@@ -23,12 +23,13 @@ class Function(Node):
         the label of this function when it is in a function group
     """
 
-    def __init__(self, name: str, params, body, ret_type, local_vars, extern_vars=None, attrs=None):
+    def __init__(self, name: str, params, body, ret_type, local_vars, local_const_vars=None, extern_vars=None, attrs=None):
         self.name = name.replace('.', '_')
         self.params: List[Var] = params
         self.body: Stmt = body
         self.ret_type: TypeNode = ret_type
         self.local_vars: List[Var] = local_vars
+        self.local_const_vars: List[Tuple[Var, Constant]] = local_const_vars if local_const_vars else []
         self.extern_vars: List[Var] = extern_vars if extern_vars else []
         self.attrs = attrs if attrs else {}
 

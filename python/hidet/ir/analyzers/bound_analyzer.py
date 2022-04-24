@@ -241,7 +241,7 @@ class BoundAnalyzer(FuncStmtExprVisitor):
         self.visit(stmt.body)
 
     def visit_Constant(self, e: Constant):
-        if e.data_type.name == 'int32':
+        if e.is_scalar() and e.data_type.name == 'int32':
             self.bound[e] = BoundInfo(value=e.value)
 
 

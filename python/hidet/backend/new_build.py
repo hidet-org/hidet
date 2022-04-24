@@ -36,7 +36,14 @@ def compile_source(src_path: str, out_lib_path: str, keep_ptx=False) -> None:
                '--shared', src_path]
     try:
         with tempfile.TemporaryDirectory() as working_dir:
-            result = subprocess.run(" ".join(command).split(), stderr=PIPE, stdout=PIPE, check=True, cwd=working_dir)
+            result = subprocess.run(" ".join(command).split(), stderr=PIPE, stdout=PIPE, cwd=working_dir)
+            if result.returncode:
+                message = ''
+                if result.stdout:
+                    message += result.stdout.decode() + '\n'
+                if result.stderr:
+                    message += result.stderr.decode()
+                raise Exception('Failed to compile file "{}":\n\n{}'.format(src_path, message))
             out_lib_dir = os.path.dirname(out_lib_path)
             if keep_ptx:
                 ptx_name = os.path.basename(src_path).replace('.cu', '.ptx')

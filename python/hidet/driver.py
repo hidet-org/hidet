@@ -2,7 +2,7 @@ import os
 import logging
 import hidet
 from hashlib import sha256
-from hidet.implement import impl_context, implement
+from hidet.implement import impl_context, implement, ImplementerContext
 from hidet.transforms import lower, pass_context
 from hidet.backend import codegen, compile_source, load_task_func
 from hidet.utils import COLORS, hidet_cache_dir
@@ -32,11 +32,11 @@ def build_task(task, space_level, opt_level, use_cache=True, cache_dir=None) -> 
 
     # build from scratch
     os.makedirs(task_dir, exist_ok=True)
-    if task.name == 'matmul':
-        allowed = [hidet.implement.cuda.CudaGridStaticMatmulImplementer]
-    else:
-        allowed = None  # allow any matched implementer
-    with impl_context(allowed=allowed, space_level=space_level):
+    # if task.name == 'matmul':
+    #     allowed = [hidet.implement.cuda.CudaGridStaticMatmulImplementer]
+    # else:
+    #     allowed = None  # allow any matched implementer
+    with impl_context(allowed=ImplementerContext.current().allowed, space_level=space_level):
         # write task
         with open(os.path.join(task_dir, 'task.txt'), 'w') as f:
             f.write(task_string)
@@ -44,7 +44,7 @@ def build_task(task, space_level, opt_level, use_cache=True, cache_dir=None) -> 
         ir_module = implement(task)
         # lower ir module
         # todo: turn off keep_ir after debug
-        with pass_context(opt_level=opt_level, keep_ir=False, keep_ir_dir='./outs/ir'):
+        with pass_context(opt_level=opt_level, keep_ir=True, keep_ir_dir='./outs/ir'):
             ir_module = lower(ir_module)
         # code generation
         codegen(ir_module, src_out_path=src_path)

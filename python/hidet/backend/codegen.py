@@ -176,6 +176,10 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         if label:
             doc += (NewLine() + '// label: {}'.format(label)).indent()
 
+        # const locals
+        for const_local_var, const_local_value in func.local_const_vars:
+            doc += (NewLine() + self.local_var_declare(const_local_var) + ' = ' + self(const_local_value) + ';').indent()
+
         # locals
         for local_var in func.local_vars:
             doc += (NewLine() + self.local_var_declare(local_var) + ';').indent()
@@ -304,18 +308,25 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         else:
             return Text(name)
 
-    def visit_Constant(self, e: Constant):
-        if e.data_type.name == 'bool':
-            if e.value:
-                return Text('true')
-            else:
-                return Text('false')
-        elif e.data_type.name == 'float32':
-            return Text(f'{e.value}f')
-        elif e.data_type.name == 'int32':
-            return Text(f'{e.value}')
+    @staticmethod
+    def scalar_literal(value, dtype: str):
+        if dtype == 'bool':
+            return Text('true') if value else Text('false')
+        elif dtype == 'float32':
+            return Text(f'{value}f')
+        elif dtype == 'int32':
+            return Text(f'{value}')
         else:
-            raise NotImplementedError()
+            raise NotImplementedError('Cannot recognize scalar literal {} with dtype {}'.format(value, dtype))
+
+    def visit_Constant(self, e: Constant):
+        if e.is_scalar():
+            return self.scalar_literal(e.value, e.data_type.name)
+        else:
+            assert isinstance(e.data_type, TensorType)
+            dtype = e.data_type.scalar_type.name
+            items = [self.scalar_literal(v, dtype) for v in np.array(e.value).flatten()]
+            return '{' + doc_join(items, ', ') + '}'
 
     def visit_EvaluateStmt(self, stmt: EvaluateStmt):
         return NewLine() + self(stmt.expr) + ';'
