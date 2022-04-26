@@ -1,74 +1,92 @@
-from typing import List
-import onnx
-from onnx import numpy_helper
-from hidet.tos import nn
-from hidet.tos import operators as ops
-from hidet.tos.tensor import Tensor, from_numpy, randn
-import tvm.relay.frontend.onnx
+import pytest
+import numpy as np
+import os
+
+import hidet.utils
+from hidet import randn
+from hidet.tos.frontend.onnx_utils import OnnxModule
+from hidet.utils import download, Timer
 
 
-class OnnxModule(nn.Module):
-    def __init__(self, model: onnx.ModelProto):
-        super().__init__()
-        graph = model.graph
-        self.name = graph.name
-        self.graph = graph
-        for param in graph.initializer:
-            numpy_array = numpy_helper.to_array(tensor=param)
-            self.parameters[param.name] = from_numpy(numpy_array).cuda()
-        self.input_names = [input.name for input in graph.input]
-        self.output_names = [output.name for output in graph.output]
-        self.nodes = [node for node in graph.node]
-
-    def forward(self, *args):
-        name2tensor = {}
-        assert len(args) == len(self.input_names)
-        # parameters
-        for name, param in self.parameters.items():
-            name2tensor[name] = param
-        # inputs
-        for name, input in zip(self.input_names, args):
-            name2tensor[name] = input
-        # run nodes
-        for node in self.nodes:
-            inputs = [name2tensor[name] for name in node.input]
-            outputs = self.run_onnx_op(inputs, node)
-            assert len(outputs) == len(node.output)
-            for name, tensor in zip(node.output, outputs):
-                name2tensor[name] = tensor
-        # put outputs
-        results = [name2tensor[name] for name in self.output_names]
-        if len(results) == 1:
-            return results[0]
-        else:
-            return results
-
-    @staticmethod
-    def run_onnx_op(inputs: List[Tensor], node: onnx.NodeProto) -> List[Tensor]:
-        op_type = node.op_type
-        attr = node.attribute
-        if op_type == 'Conv':
-            assert node.auto_pad == 'NOTSET'
-            padding = node.pads
-            assert len(padding) == 4 and padding[0] == padding[2] and padding[1] == padding[3]
-            padding = [padding[0], padding[1]]
-            stride = node.strides
-            y = ops.conv2d(inputs[0], inputs[1], padding, stride)
-            if len(inputs) == 3:
-                y = y + inputs[3]
-            return y
-        else:
-            raise NotImplementedError('Operator {} from onnx has not been supported yet.'.format(op_type))
+def onnx_installed() -> bool:
+    try:
+        import onnx
+        import onnxruntime
+    except ImportError:
+        return False
 
 
-def main():
-    model = onnx.load_model('/home/yaoyao/model_zoo/resnet50_v1.onnx')
-    x = randn([1, 3, 224, 224])
+def transformers_installed() -> bool:
+    try:
+        import transformers
+        import transformers.onnx
+    except ImportError:
+        return False
+
+
+def demo_resnet50():
+    import onnx
+    import onnxruntime
+    model_path = download(
+        url='https://media.githubusercontent.com/media/onnx/models/main/vision/classification/resnet/model/resnet50-v1-7.onnx',
+        file_name='onnx/resnet50-v1-7.onnx',
+        progress=True)
+    model = onnx.load_model(model_path)
+    onnx.checker.check_model(model)
+    # run use hidet
+    x_hidet = randn([1, 3, 224, 224], device='cuda')
     module = OnnxModule(model)
-    y = module(x)
-    print(type(model))
-    print(dir(model))
+    y_hidet = module(x_hidet)
+    y_hidet = y_hidet.cpu().numpy()
+
+    # run use onnx runtime
+    onnx_infer = onnxruntime.InferenceSession(model_path)
+    y_onnx = onnx_infer.run(None, {'data': x_hidet.cpu().numpy()})
+    y_onnx = y_onnx[0]
+
+    # compare
+    np.testing.assert_allclose(actual=y_hidet, desired=y_onnx, rtol=1e-5, atol=1e-5)
+
+
+def demo_bert(batch_size=1, seq_length=128):
+    import onnx
+    import onnxruntime
+    model_cache_dir = hidet.utils.hidet_cache_dir(category='onnx')
+    os.makedirs(model_cache_dir, exist_ok=True)
+    model_path = hidet.utils.transformers_utils.export_transformer_model_as_onnx(
+        model_name='bert-base-uncased',
+        feature='default',
+        output_dir=model_cache_dir
+    )
+    # inputs: input_ids, attention_mask, token_type_ids
+    # outputs: last_hidden_state, pooler_output
+    onnx.checker.check_model(model_path)
+
+    vocab_size = 30522
+    input_ids = np.random.randint(0, vocab_size, [batch_size, seq_length], dtype=np.int64)
+    attention_mask = np.ones(shape=[batch_size, seq_length], dtype=np.int64)
+    token_type_ids = np.zeros(shape=[batch_size, seq_length], dtype=np.int64)
+
+    # onnx
+    onnx_session = onnxruntime.InferenceSession(model_path)
+    onnx_outputs = onnx_session.run(None, input_feed={
+        'input_ids': input_ids,
+        'attention_mask': attention_mask,
+        'token_type_ids': token_type_ids
+    })
+
+    # hidet
+    hidet_model = hidet.tos.frontend.from_onnx(model_path)
+    input_ids = hidet.array(input_ids).cuda()
+    attention_mask = hidet.array(attention_mask).cuda()
+    token_type_ids = hidet.array(token_type_ids).cuda()
+    hidet_outputs = hidet_model(input_ids, attention_mask, token_type_ids)
+    hidet_outputs = [out.cpu().numpy() for out in hidet_outputs]
+
+    np.testing.assert_allclose(actual=hidet_outputs[0], desired=onnx_outputs[0], rtol=1e-4, atol=1e-4)
+    np.testing.assert_allclose(actual=hidet_outputs[1], desired=onnx_outputs[1], rtol=1e-5, atol=1e-5)
 
 
 if __name__ == '__main__':
-    main()
+    demo_resnet50()
+    demo_bert()

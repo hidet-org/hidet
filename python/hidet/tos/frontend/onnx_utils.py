@@ -233,7 +233,7 @@ class OnnxMatMul(OnnxOperator):
         if len(a.shape) == 2 and len(b.shape) == 2:
             return [ops.matmul(a, b)]
         else:
-            prefix_shape = hidet.tos.operators.basic.arithmatic.broadcast_shape(a.shape[:-2], b.shape[:-2])
+            prefix_shape = hidet.tos.ops.definitions.arithmatic.broadcast_shape(a.shape[:-2], b.shape[:-2])
             a = ops.broadcast(a, prefix_shape + a.shape[-2:])
             b = ops.broadcast(b, prefix_shape + b.shape[-2:])
             a = ops.flatten(a, end_dim=-2)  # [B, M, K]

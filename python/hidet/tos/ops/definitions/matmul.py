@@ -3,20 +3,32 @@ from .utils import Task, Operator, Tensor, TensorInput, compute, reduce, input_l
 
 
 class MatmulTask(Task):
-    def __init__(self, A: TensorInput, B: TensorInput):
-        BS, M, K = A.const_shape()
-        BS, K, N = B.const_shape()
-        C = compute(
-            name='C',
-            shape=[BS, M, N],
-            fcompute=lambda b, i, j: reduce([K], lambda k: A[b, i, k] * B[b, k, j], 'sum'),
+    def __init__(self, a: TensorInput, b: TensorInput):
+        batch_size, m_size, k_size = a.const_shape()
+        batch_size, k_size, n_size = b.const_shape()
+        self.batch_size: int = batch_size
+        self.m_size: int = m_size
+        self.k_size: int = k_size
+        self.n_size: int = n_size
+        c = compute(
+            name='c',
+            shape=[batch_size, m_size, n_size],
+            fcompute=lambda r, i, j: reduce(
+                shape=[k_size],
+                fcompute=lambda k: a[r, i, k] * b[r, k, j],
+                reduce_type='sum'
+            ),
             scope='global'
         )
         super().__init__(
             name='matmul',
-            inputs=[A, B],
-            outputs=[C]
+            inputs=[a, b],
+            outputs=[c]
         )
+
+    def implement_cuda(self) -> IRModule:
+        from hidet.tos.ops.schedules.cuda import batched_matmul_cuda_schedule
+        return batched_matmul_cuda_schedule(self, space_level=0)
 
 
 class MatmulOp(Operator):

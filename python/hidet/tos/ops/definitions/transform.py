@@ -3,7 +3,7 @@ from typing import List, Optional, Union, Sequence
 from hidet.ir.expr import And, if_then_else
 from hidet.ir.layout import DataLayout, RowMajorLayout, ColumnMajorLayout
 from hidet.utils import prod
-from .utils import Task, Operator, Tensor, TensorInput, compute, input_like, custom_compute, tensor_type, normalize_dim
+from .utils import Task, Operator, Tensor, TensorInput, compute, input_like, normalize_dim
 
 
 def same_shape(shape_a: List[int], shape_b: List[int]) -> bool:
@@ -80,19 +80,29 @@ class ConcatTask(Task):
     def __init__(self, inputs: List[TensorInput], axis: int):
         shapes = [t.const_shape() for t in inputs]
         n = len(shapes)
-        assert len(shapes) > 0
+        assert n > 0
         for i in range(1, n):
-            assert len(shapes[0]) == len(shapes[i]), 'all shapes must have the same rank'
-            assert all(a == b for j, (a, b) in enumerate(zip(shapes[0], shapes[i])) if j != axis), 'all tensors must have the same shape except axis dimension'
+            if len(shapes[0]) != len(shapes[i]):
+                raise ValueError('Concat: all shapes must have the same rank, got {}'.format(shapes))
+            if any(a != b for j, (a, b) in enumerate(zip(shapes[0], shapes[i])) if j != axis):
+                raise ValueError('Concat: all tensors must have the same shape except axis dimension, got {}, axis {}'.format(shapes, axis))
         rank = len(shapes[0])
         out_shape = [shapes[0][i] if i != axis else sum(shapes[j][i] for j in range(n)) for i in range(rank)]
-        out = custom_compute(
+
+        def fmap(*indices):
+            pre_sum = [sum([shapes[j][axis] for j in range(i)]) for i in range(n + 1)]
+            value = inputs[-1][indices[:axis] + (indices[axis] - pre_sum[-2],) + indices[axis+1:]]
+            for i, input in reversed(list(zip(range(n-1), inputs[:n-1]))):
+                input_i_value = inputs[i][indices[:axis] + (indices[axis] - pre_sum[i],) + indices[axis+1:]]
+                value = if_then_else(indices[axis] < pre_sum[i + 1], input_i_value, value)
+            return value
+
+        out = compute(
             name='out',
-            identifier='concat',
-            params=inputs,
-            data_type=tensor_type('global', inputs[0].data_type.scalar_type, shape=out_shape),
-            attributes={'axis': axis}
+            shape=out_shape,
+            fcompute=lambda *indices: fmap(*indices)
         )
+
         super().__init__(
             name='concat',
             inputs=inputs,

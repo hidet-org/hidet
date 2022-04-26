@@ -18,9 +18,12 @@ def demo_latency():
 
 def demo_task():
     x = hidet.randn(shape=[3, 4])
-    y = hidet.tos.ops.softmax(x, axis=1)
+    y = hidet.randn(shape=[2, 4])
+    # y = hidet.tos.ops.softmax(x, axis=1)
+    z = hidet.ops.concat([x, y], axis=0)
     print(x)
     print(y)
+    print(z)
 
 
 if __name__ == '__main__':

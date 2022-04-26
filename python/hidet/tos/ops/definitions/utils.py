@@ -5,7 +5,7 @@ from hidet.ir.type import TensorType, tensor_type
 from hidet.ir.task import Grid
 from hidet.tos.task import Task
 from hidet.tos.operator import Operator, Tensor
-from hidet.ir.dialects.compute import TensorInput, tensor_input, compute, reduce, custom_compute
+from hidet.ir.dialects.compute import TensorInput, tensor_input, compute, reduce
 
 from hidet.ir.functors import inline_compute
 

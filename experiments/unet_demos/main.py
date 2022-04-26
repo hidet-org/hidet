@@ -61,23 +61,23 @@ def main():
             cuda_api.device_synchronization()
     print(hidet.runtime.storage.cuda_pool)
 
-    with hidet.tos.transforms.PassContext(
-        instruments=[
-            hidet.tos.transforms.ProfileInstrument(print_stdout=True)
-        ],
-        verbose=False
-    ):
-        graph = hidet.tos.optimize(graph)
-    os.makedirs('./outs', exist_ok=True)
-    with open('./outs/unet_opt.json', 'w') as f:
-        hidet.utils.netron.dump(graph, f)
-    for t in range(10):
-        cuda_api.device_synchronization()
-        with Timer('hidet traced opt {}'.format(t)):
-            outputs = graph(*inputs)
-            cuda_api.device_synchronization()
-
-    print(hidet.runtime.storage.cuda_pool)
+    # with hidet.tos.transforms.PassContext(
+    #     instruments=[
+    #         hidet.tos.transforms.ProfileInstrument(print_stdout=True)
+    #     ],
+    #     verbose=False
+    # ):
+    #     graph = hidet.tos.optimize(graph)
+    # os.makedirs('./outs', exist_ok=True)
+    # with open('./outs/unet_opt.json', 'w') as f:
+    #     hidet.utils.netron.dump(graph, f)
+    # for t in range(10):
+    #     cuda_api.device_synchronization()
+    #     with Timer('hidet traced opt {}'.format(t)):
+    #         outputs = graph(*inputs)
+    #         cuda_api.device_synchronization()
+    #
+    # print(hidet.runtime.storage.cuda_pool)
 
 
 def demo_timeline():
@@ -107,6 +107,6 @@ def demo_timeline():
 if __name__ == '__main__':
     # check()
     # run_onnx()
-    # main()
-    demo_timeline()
+    main()
+    # demo_timeline()
 
