@@ -1,4 +1,4 @@
-from hidet.tos import operators as ops
+from hidet.tos import ops
 from hidet.tos.common import normalize
 from hidet.tos.module import Module, Tensor
 from hidet.tos.tensor import randn, zeros, ones

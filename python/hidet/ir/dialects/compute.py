@@ -59,6 +59,9 @@ class ReduceCompute(ComputeNode):
         self.reduce_type: str = reduce_type
         assert len(self.axes) == len(self.shape)
 
+    def const_shape(self) -> List[int]:
+        return [int(v) for v in self.shape]
+
     def init_const(self):
         init_dict = {
             'sum': Constant(0.0, self.data_type),

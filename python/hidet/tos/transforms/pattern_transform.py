@@ -1,7 +1,7 @@
 from typing import List, Optional, Dict, Any, Union, Tuple, Type, Set
 from hidet.tos.ir.graph import FlowGraph, Operator, Tensor
 from hidet.tos.transforms import GraphPass, PassContext
-from hidet.tos import operators as ops
+from hidet.tos import ops
 from hidet import tos
 
 from .common import analyze_usage, graph_collect
@@ -32,16 +32,16 @@ class TensorPattern:
                 return '{}[{}]'.format(op_str, idx)
 
     def __add__(self, other):
-        return OperatorPattern(ops.basic.arithmatic.AddOp, inputs=[self, other]).outputs[0]
+        return OperatorPattern(ops.defs.arithmatic.AddOp, inputs=[self, other]).outputs[0]
 
     def __sub__(self, other):
-        return OperatorPattern(ops.basic.arithmatic.SubOp, inputs=[self, other]).outputs[0]
+        return OperatorPattern(ops.defs.arithmatic.SubOp, inputs=[self, other]).outputs[0]
 
     def __mul__(self, other):
-        return OperatorPattern(ops.basic.arithmatic.MultiplyOp, inputs=[self, other]).outputs[0]
+        return OperatorPattern(ops.defs.arithmatic.MultiplyOp, inputs=[self, other]).outputs[0]
 
     def __neg__(self):
-        return OperatorPattern(ops.basic.arithmatic.NegOp, inputs=[self]).outputs[0]
+        return OperatorPattern(ops.defs.arithmatic.NegOp, inputs=[self]).outputs[0]
 
     @staticmethod
     def tensor(is_const=False, is_symbolic=False):
@@ -61,12 +61,12 @@ class OperatorPattern:
     def __repr__(self):
         input_items = [str(v) for v in self.inputs]
         unary_ops = {
-            ops.basic.arithmatic.NegOp: '-'
+            ops.defs.arithmatic.NegOp: '-'
         }
         binary_ops = {
-            ops.basic.arithmatic.AddOp: '+',
-            ops.basic.arithmatic.SubOp: '-',
-            ops.basic.arithmatic.MultiplyOp: '*'
+            ops.defs.arithmatic.AddOp: '+',
+            ops.defs.arithmatic.SubOp: '-',
+            ops.defs.arithmatic.MultiplyOp: '*'
         }
         if self.op_cls in unary_ops:
             return '({}{})'.format(unary_ops[self.op_cls], input_items[0])
@@ -77,7 +77,7 @@ class OperatorPattern:
 
 
 def conv2d_pattern(x: TensorPattern, w: TensorPattern) -> TensorPattern:
-    return OperatorPattern(ops.nn.conv.Conv2dOp, [x, w]).outputs[0]
+    return OperatorPattern(ops.defs.conv2d.Conv2dOp, [x, w]).outputs[0]
 
 
 class NotMatchedException(Exception):

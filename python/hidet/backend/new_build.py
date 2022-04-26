@@ -80,3 +80,32 @@ def load_task_func(lib_path: str, task: Task) -> CompiledFunction:
     func_name = 'hidet_{}'.format(task.name)
     packed_func = PackedFunc(task.param_types(), c_func_pointer=lib[func_name])
     return CompiledFunction(name=task.name, packed_func=packed_func)
+
+
+def load_ntask_func(lib_path: str, task) -> CompiledFunction:
+    """
+    Load task's entry function from dynamic linked library.
+
+    Parameters
+    ----------
+    lib_path: str
+        The dynamic library path.
+    task: hidet.tos.task.Task
+        The task that corresponds to the dynamic library.
+
+    Returns
+    -------
+    ret: CompiledFunction
+        The loaded function that can be directly called in python.
+    """
+    try:
+        lib = ctypes.CDLL(lib_path)
+    except OSError as e:
+        print(e)
+        print("Removed the file '{}'".format(lib_path))
+        os.remove(lib_path)
+        exit(0)
+    func_name = 'hidet_{}'.format(task.name)
+    param_types = [param.data_type for param in task.parameters]
+    packed_func = PackedFunc(param_types=param_types, c_func_pointer=lib[func_name])
+    return CompiledFunction(name=task.name, packed_func=packed_func)

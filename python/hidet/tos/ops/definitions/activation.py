@@ -1,7 +1,7 @@
 from hidet.ir.primitives.func import cuda_max, cuda_exp
 
-from ..basic.arithmatic import UnaryElementwiseOp
-from ..common import Tensor
+from .utils import Tensor
+from .arithmatic import UnaryElementwiseOp
 
 
 class ReluOp(UnaryElementwiseOp):

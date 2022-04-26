@@ -1,12 +1,16 @@
-from typing import List, Optional, Dict, Tuple, Sequence, Union
+from __future__ import annotations
+
 import ctypes
-import numpy as np
 from functools import partial
+from typing import List, Optional, Tuple, Sequence, Union
+
+import numpy as np
+
+from hidet.ffi import cuda_api, cuda_kernels
 from hidet.ir.layout import DataLayout
-from hidet.ir.layout.data_layout import RowMajorLayout, ColumnMajorLayout
+from hidet.ir.layout.data_layout import RowMajorLayout
 from hidet.runtime import Storage
 from hidet.utils import prod
-from hidet.ffi import cuda_api, cuda_kernels
 
 
 def convert(v):
@@ -38,24 +42,24 @@ class Tensor:
         self.layout = layout if layout else DataLayout.row_major(shape)
         self.trace: Optional[Tuple[Operator, int]] = trace
 
-    def __neg__(self) -> 'Tensor':
-        from .operators import neg
+    def __neg__(self) -> Tensor:
+        from .ops import neg
         return neg(self)
 
-    def __add__(self, other) -> 'Tensor':
-        from .operators import add
+    def __add__(self, other) -> Tensor:
+        from .ops import add
         return add(self, convert(other))
 
-    def __sub__(self, other) -> 'Tensor':
-        from .operators import sub
+    def __sub__(self, other) -> Tensor:
+        from .ops import sub
         return sub(self, convert(other))
 
-    def __mul__(self, other) -> 'Tensor':
-        from .operators import multiply
+    def __mul__(self, other) -> Tensor:
+        from .ops import multiply
         return multiply(self, convert(other))
 
-    def __truediv__(self, other) -> 'Tensor':
-        from .operators import divide
+    def __truediv__(self, other) -> Tensor:
+        from .ops import divide
         return divide(self, convert(other))
 
     def __str__(self):
@@ -83,27 +87,27 @@ class Tensor:
         return self.reshape(self.shape)
 
     def reshape(self, shape: Sequence[int]):
-        from .operators import reshape
+        from .ops import reshape
         return reshape(self, shape)
 
-    def squeeze(self, dims: Sequence[int]):
-        from .operators import squeeze
+    def squeeze(self, dims: Union[int, Sequence[int]]):
+        from .ops import squeeze
         return squeeze(self, dims)
 
-    def unsqueeze(self, dims: Sequence[int]):
-        from .operators import unsqueeze
+    def unsqueeze(self, dims: Union[int, Sequence[int]]):
+        from .ops import unsqueeze
         return unsqueeze(self, dims)
 
     def flatten(self, start_dim=0, end_dim=None):
-        from .operators import flatten
+        from .ops import flatten
         return flatten(self, start_dim, end_dim)
 
     def transpose(self, axes: Optional[Sequence[int]]):
-        from .operators import transpose
+        from .ops import transpose
         return transpose(self, axes)
 
     def rsqrt(self):
-        from .operators import rsqrt
+        from .ops import rsqrt
         return rsqrt(self)
 
     def cpu(self):

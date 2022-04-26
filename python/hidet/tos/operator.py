@@ -1,4 +1,4 @@
-from typing import List, Optional, Dict, Any, Iterable, Tuple
+from typing import List, Optional, Dict, Any, Iterable, Tuple, Union
 from collections import defaultdict
 
 from hidet.ir.task import Task
@@ -11,6 +11,9 @@ def trim_op_ending(name: str):
     return name[:-2] if name.endswith('Op') else name
 
 
+NTask = 'hidet.tos.task.Task'
+
+
 class Operator:
     _current_opt_level = 0
     _current_space_level = 0
@@ -21,12 +24,12 @@ class Operator:
     def __init__(
             self,
             inputs: List[Tensor],
-            task: Task,
+            task: Union[Task, NTask],
             outputs: Optional[List[Tensor]] = None,
             name: Optional[str] = None,
             **kwargs):
         self.inputs: List[Tensor] = inputs
-        self.task: Task = task
+        self.task: Union[Task, NTask] = task
         self.attributes: Dict[str, Any] = kwargs
         self.outputs: Optional[List[Tensor]] = outputs
         self.name = name if name else trim_op_ending(self.__class__.__name__)
@@ -80,7 +83,7 @@ class Operator:
         return outputs
 
     def lazy_run(self) -> List[Tensor]:
-        output_type = self.task.type_of_param(self.task.compute)
+        output_type = self.task.compute.data_type
         return [Tensor(shape=[int(v) for v in output_type.shape], dtype=output_type.scalar_type.name, device='cuda', storage=None, layout=output_type.layout, trace=(self, 0))]
 
     def clone(self, *new_inputs: Tensor):

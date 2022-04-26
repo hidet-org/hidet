@@ -1,7 +1,9 @@
-from typing import Union, Sequence, Optional, List
-from ..common import Task, Operator, Tensor, DataLayout, TensorInput, Grid, tensor_input, compute, reduce, inline_compute, tensor_type, input_like
+from typing import Optional, List
+
 from hidet.ir.expr import Expr, if_then_else, convert, cast, And
 from hidet.ir.primitives import cuda_round, cuda_floor, cuda_ceil, cuda_max, cuda_min
+from .utils import Task, Operator, Tensor, TensorInput, compute, input_like
+
 
 # Acknowledgement: take TVM resize topi implementation as a reference
 
@@ -56,7 +58,7 @@ def linear_interpolate(a, b, ratio):
     return a * (1.0 - ratio) + b * ratio
 
 
-def resize2d_nchw_task(data: TensorInput, size: List[int], method: str, coordinate_transformation_mode, rounding_method,
+def resize2d_nchw_compute(data: TensorInput, size: List[int], method: str, coordinate_transformation_mode, rounding_method,
                        roi, cubic_alpha, cubic_exclude, extrapolation_value) -> Task:
     image_size = data.const_shape()[2:]
     target_size = size
@@ -94,12 +96,18 @@ def resize2d_nchw_task(data: TensorInput, size: List[int], method: str, coordina
         fcompute=fmap,
         scope=data.data_type.scope
     )
-    return Task(
-        'resize2d',
-        computation=out,
-        params=[data, out],
-        worker=Grid()
-    )
+    return out
+
+
+class Resize2dTask(Task):
+    def __init__(self, data: TensorInput, size: List[int], method: str, coordinate_transformation_mode, rounding_method,
+                 roi, cubic_alpha, cubic_exclude, extrapolation_value):
+        out = resize2d_nchw_compute(data, size, method, coordinate_transformation_mode, rounding_method, roi, cubic_alpha, cubic_exclude, extrapolation_value)
+        super().__init__(
+            name='resize2d',
+            inputs=[data],
+            outputs=[out]
+        )
 
 
 class Resize2dOp(Operator):
@@ -121,8 +129,8 @@ class Resize2dOp(Operator):
 
         super().__init__(
             inputs=[data],
-            task=resize2d_nchw_task(input_like(data, 'data'), size, method, coordinate_transformation_mode, rounding_method,
-                                    roi, cubic_alpha, cubic_exclude, extrapolation_value),
+            task=Resize2dTask(input_like(data, 'data'), size, method, coordinate_transformation_mode, rounding_method,
+                              roi, cubic_alpha, cubic_exclude, extrapolation_value),
             method=method,
             coordinate_transformation_mode=coordinate_transformation_mode,
             rounding_method=rounding_method,

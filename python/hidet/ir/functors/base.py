@@ -28,7 +28,7 @@ class NodeFunctor:
         elif isinstance(node, tuple):
             ret = tuple(self.visit(v) for v in node)
         else:
-            raise NotImplementedError()
+            raise NotImplementedError("Can not dispatch object with type {}".format(type(node)))
         if self.memo is not None:
             self.memo[node] = ret
         return ret

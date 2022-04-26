@@ -2,7 +2,8 @@ from . import tensor
 from . import operator
 from . import module
 from . import modules
-from . import operators
+from . import ops
+from . import task
 from . import models
 from . import ir
 from . import frontend

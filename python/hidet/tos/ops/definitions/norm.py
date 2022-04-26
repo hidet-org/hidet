@@ -1,7 +1,6 @@
-from ..common import Tensor
-from ..basic.arithmatic import square, sqrt
-from ..basic.reduce import reduce_mean, reduce_sum, reduce_var
-from hidet.utils import prod
+from .utils import Tensor
+from .arithmatic import sqrt
+from .reduce import reduce_mean, reduce_var
 
 
 def batch_norm_infer(x: Tensor, running_mean: Tensor, running_var: Tensor, epsilon=1e-5, axis=1) -> Tensor:

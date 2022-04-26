@@ -4,7 +4,7 @@ import os
 import numpy as np
 import hidet
 from hidet.tos.modules import nn
-from hidet.tos import operators as ops
+from hidet.tos import ops
 from hidet.tos.tensor import Tensor, from_numpy, randn
 from hidet.utils import line_profile, prod
 

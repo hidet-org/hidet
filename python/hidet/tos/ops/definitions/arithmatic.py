@@ -1,8 +1,7 @@
 from typing import List, Callable, Any
 
-# from hidet.ir.primitives import cuda_sqrt, cuda_rsqrt
 from hidet.ir import primitives
-from ..common import Task, Operator, Tensor, TensorInput, Grid, compute, input_like
+from .utils import Task, Operator, Tensor, TensorInput, compute, input_like
 
 
 def broadcast_shape(x_shape: List[int], y_shape: List[int]) -> List[int]:
@@ -25,55 +24,55 @@ def broadcast_shape(x_shape: List[int], y_shape: List[int]) -> List[int]:
     return result_shape
 
 
-def unary_elementwise_task(name, x: TensorInput, op: Callable[[Any], Any]):
-    shape = x.const_shape()
-    y = compute(
-        name='y',
-        shape=shape,
-        fcompute=lambda *indices: op(x.__getitem__(indices)),
-        scope='global'
-    )
-    return Task(
-        name=name,
-        computation=y,
-        params=[x, y],
-        worker=Grid()
-    )
+class UnaryElementwiseTask(Task):
+    def __init__(self, name: str, x: TensorInput, op: Callable[[Any], Any]):
+        shape = x.const_shape()
+        y = compute(
+            name='y',
+            shape=shape,
+            fcompute=lambda *indices: op(x.__getitem__(indices)),
+            scope='global'
+        )
+        super().__init__(
+            name=name,
+            inputs=[x],
+            outputs=[y]
+        )
 
 
-def binary_elementwise_task(name, x: TensorInput, y: TensorInput, op: Callable[[Any, Any], Any]):
-    x_shape = x.const_shape()
-    y_shape = y.const_shape()
-    z_shape = broadcast_shape(x_shape, y_shape)
+class BinaryElementwiseTask(Task):
+    def __init__(self, name: str, x: TensorInput, y: TensorInput, op: Callable[[Any, Any], Any]):
+        x_shape = x.const_shape()
+        y_shape = y.const_shape()
+        z_shape = broadcast_shape(x_shape, y_shape)
 
-    def imap(indices, shape):
-        # used to support broadcast
-        pad_dim = len(z_shape) - len(shape)
-        indices = list(indices[pad_dim:])
-        for idx, dim in enumerate(shape):
-            if int(dim) == 1:
-                indices[idx] = 0
-        return indices
+        def imap(indices, shape):
+            # used to support broadcast
+            pad_dim = len(z_shape) - len(shape)
+            indices = list(indices[pad_dim:])
+            for idx, dim in enumerate(shape):
+                if int(dim) == 1:
+                    indices[idx] = 0
+            return indices
 
-    z = compute(
-        name='z',
-        shape=z_shape,
-        fcompute=lambda *indices: op(x[imap(indices, x_shape)], y[imap(indices, y_shape)]),
-        scope='global'
-    )
-    return Task(
-        name=name,
-        computation=z,
-        params=[x, y, z],
-        worker=Grid()
-    )
+        z = compute(
+            name='z',
+            shape=z_shape,
+            fcompute=lambda *indices: op(x[imap(indices, x_shape)], y[imap(indices, y_shape)]),
+            scope='global'
+        )
+        super().__init__(
+            name=name,
+            inputs=[x, y],
+            outputs=[z]
+        )
 
 
 class UnaryElementwiseOp(Operator):
     def __init__(self, x: Tensor, op, name: str):
         super().__init__(
             inputs=[x],
-            task=unary_elementwise_task(name, input_like(x, 'x'), op=op)
+            task=UnaryElementwiseTask(name, input_like(x, 'x'), op=op)
         )
 
 
@@ -81,7 +80,7 @@ class BinaryElementwiseOp(Operator):
     def __init__(self, x: Tensor, y: Tensor, op, name: str):
         super().__init__(
             inputs=[x, y],
-            task=binary_elementwise_task(name, input_like(x, 'x'), input_like(y, 'y'), op=op)
+            task=BinaryElementwiseTask(name, input_like(x, 'x'), input_like(y, 'y'), op=op)
         )
 
 
@@ -202,4 +201,3 @@ def cos(x: Tensor) -> Tensor:
 
 def square(x: Tensor) -> Tensor:
     return SquareOp(x).get_output(0)
-

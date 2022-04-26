@@ -316,7 +316,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
         return doc
 
     def visit_ScalarType(self, t: ScalarType):
-        return Text('ScalarType({})'.format(t.name))
+        return Text('{}'.format(t.name))
 
     def visit_TensorType(self, t: TensorType):
         assert t.scope is not None
