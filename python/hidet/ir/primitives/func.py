@@ -3,7 +3,7 @@ from hidet.ir.type import FuncType, ScalarType
 from hidet.ir.expr import Var, Call
 from hidet.ir.stmt import AsmStmt, BlackBoxStmt
 from hidet.ir.func import Function
-from hidet.ir.task import Thread
+# from hidet.ir.task import Thread
 from hidet.ir.dialects.lowlevel import VoidType, PointerType, ReferenceType
 from hidet.ir.builders import FunctionBuilder
 
@@ -42,7 +42,7 @@ def syncthreads() -> Call:
 
 def lds128(reg0, reg1, reg2, reg3, smem_addr) -> Call:
     if 'lds128' not in _primitive_functions:
-        with FunctionBuilder('lds128', attrs={'worker': Thread()}) as fb:
+        with FunctionBuilder('lds128') as fb:
             # params
             regs_vars = [Var(f'reg{i}', ReferenceType(ScalarType('float32'))) for i in range(4)]
             smem_addr_var = Var('smem_addr', PointerType(ScalarType('float32')))
@@ -66,7 +66,7 @@ def lds128(reg0, reg1, reg2, reg3, smem_addr) -> Call:
 
 def sts128(reg0, reg1, reg2, reg3, smem_addr) -> Call:
     if 'sts128' not in _primitive_functions:
-        with FunctionBuilder('sts128', attrs={'worker': Thread()}) as fb:
+        with FunctionBuilder('sts128') as fb:
             # params
             regs_vars = [Var(f'reg{i}', ReferenceType(ScalarType('float32'))) for i in range(4)]
             smem_addr_var = Var('smem_addr', PointerType(ScalarType('float32')))

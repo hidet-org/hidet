@@ -1,7 +1,7 @@
 import tvm
 from hidet.ir.dialects.compute import ReduceCompute, TensorCompute, TensorInput, ScalarInput
 from hidet.ir.dialects.lowlevel import Reference, Address, ReferenceType, TensorPointerType, Dereference, VoidType, PointerType
-from hidet.ir.dialects.pattern import ScalarExprPattern, TensorComputePattern, ReduceComputePattern, AnyExpr
+# from hidet.ir.dialects.pattern import ScalarExprPattern, TensorComputePattern, ReduceComputePattern, AnyExpr
 from hidet.ir.node import Node
 from hidet.ir.expr import Call, TensorElement, Not, Or, And, Constant, Var, Let, Equal, LessThan, FloorDiv, Mod, Div, Multiply, Sub, Add, TensorType, ScalarType, Expr, IfThenElse, RightShift, LeftShift, BitwiseNot, BitwiseOr, BitwiseAnd, AlterLayout, TensorSlice, Neg, Cast
 from hidet.ir.functors import ExprFunctor, TypeFunctor, NodeFunctor
@@ -155,15 +155,15 @@ class ExprHash(ExprFunctor, TypeFunctor):
     def visit_ReduceCompute(self, e: ReduceCompute):
         return self(e.shape) + self(e.axes) + self(e.value) + self(e.reduce_type) + e.class_index()
 
-    def visit_AnyExpr(self, e: AnyExpr):
-        raise NotImplementedError()
-
-    def visit_ReduceComputePattern(self, e: ReduceComputePattern):
-        raise NotImplementedError()
-
-    def visit_TensorComputePattern(self, e: TensorComputePattern):
-        raise NotImplementedError()
-
-    def visit_ScalarExprPattern(self, e: ScalarExprPattern):
-        raise NotImplementedError()
-
+    # def visit_AnyExpr(self, e: AnyExpr):
+    #     raise NotImplementedError()
+    #
+    # def visit_ReduceComputePattern(self, e: ReduceComputePattern):
+    #     raise NotImplementedError()
+    #
+    # def visit_TensorComputePattern(self, e: TensorComputePattern):
+    #     raise NotImplementedError()
+    #
+    # def visit_ScalarExprPattern(self, e: ScalarExprPattern):
+    #     raise NotImplementedError()
+    #

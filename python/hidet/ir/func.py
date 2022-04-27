@@ -1,30 +1,47 @@
 from typing import Dict, List, Union, Optional, Tuple
 from hidet.ir.node import Node
 from hidet.ir.type import TypeNode, FuncType
-from hidet.ir.dialects.lowlevel import VoidType
 from hidet.ir.expr import Var, Constant
 from hidet.ir.stmt import Stmt
-from hidet.ir.task import Task
 
 
 class Function(Node):
     valid_attrs = [
-        'worker',
+        'kind',
         'packed_func',
-        'label'
+        'label',
+        'kind',
+        'cuda_grid_dim',
+        'cuda_block_dim',
+        'cuda_dynamic_smem_bytes',
+        'cuda_min_blocks'
     ]
     """
     Valid Attrs:
-     'worker': Union[Host, Grid, ThreadBlock, Warp, Thread]
-        the worker to run the function.
-     'packed_func': Function
-        the target function that this packed_func has packed
-     'label': str
-        the label of this function when it is in a function group
+        'kind': str, candidates: 'cuda_device', 'cuda_kernel', 'host_kernel', 'packed_func'
+            the kind of this function. 
+                - 'cuda_device': this is a cuda device function, can only be called by cuda function
+                - 'cuda_kernel': this is a cuda kernel function 
+                - 'host_kernel': this is a cpu kernel function
+                - 'packed_func': this is a packed function that wraps kernel function(s)
+        'cuda_grid_dim': Union[int, List[int]]
+            the grid dimension in cuda launch configuration
+        'cuda_block_dim': Union[int, List[int]]
+            the block dimension in cuda launch configuration
+        'cuda_dynamic_smem_bytes': int
+            the dynamic shared memory in cuda launch configuration
+        'cuda_min_blocks': int
+            the minimal number of thread blocks in launch bound of cuda kernel function
+        'packed_func': Function
+            the target function that this packed_func has packed. valid when attrs['kind'] == 'packed_func'
+        'label': str
+            the label of this function when it is in a function group
     """
 
-    def __init__(self, name: str, params, body, ret_type, local_vars, local_const_vars=None, extern_vars=None, attrs=None):
+    def __init__(self, name: str, params, body, ret_type, kind: str, local_vars, local_const_vars=None, extern_vars=None, attrs=None):
         self.name = name.replace('.', '_')
+        self.kind = kind
+        assert isinstance(kind, str) and kind in ['cuda_device', 'cuda_kernel', 'host_kernel', 'packed_func']
         self.params: List[Var] = params
         self.body: Stmt = body
         self.ret_type: TypeNode = ret_type
@@ -59,6 +76,7 @@ class FunctionGroup(Node):
 
 class IRModule(Node):
     def __init__(self, funcs=None, task=None, global_vars=None):
+        from hidet.ir.task import Task
         if funcs:
             assert isinstance(funcs, dict)
             # assert task is not None, 'Please specify the task'

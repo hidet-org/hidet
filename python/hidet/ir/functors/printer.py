@@ -5,18 +5,18 @@ from hidet.ir.func import IRModule, Function
 from hidet.ir.type import ScalarType, TensorType, TypeNode
 from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div, Sub, Not, Or, And, Let, IfThenElse, TensorSlice, RightShift, LeftShift, BitwiseNot, BitwiseOr, BitwiseAnd, AlterLayout, Neg, Cast
 from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt, BlackBoxStmt, AsmStmt, ReturnStmt, LetStmt
-from hidet.ir.task import Worker, Host, Grid, ThreadBlock, Warp, Thread
+# from hidet.ir.task import Worker, Host, Grid, ThreadBlock, Warp, Thread
 from hidet.ir.dialects.compute import ReduceCompute, TensorCompute, TensorInput, ScalarInput, CustomCompute
 from hidet.ir.dialects.lowlevel import VoidType, PointerType, Dereference, Address, ReferenceType, TensorPointerType, Reference
-from hidet.ir.dialects.pattern import AnyExpr, ScalarExprPattern, TensorComputePattern, ReduceComputePattern
+from hidet.ir.dialects.pattern import AnyExpr  # , ScalarExprPattern, TensorComputePattern, ReduceComputePattern
 from hidet.ir.layout import RowMajorLayout, ColumnMajorLayout
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
 from hidet.utils.namer import Namer
 
-from .base import StmtExprFunctor, TypeFunctor, WorkerFunctor, NodeFunctor
+from .base import StmtExprFunctor, TypeFunctor, NodeFunctor
 
 
-class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
+class IRPrinter(StmtExprFunctor, TypeFunctor):
     def __init__(self):
         super().__init__()
         self.namer = Namer()
@@ -40,7 +40,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
             return self.visit_Function(obj)
         elif isinstance(obj, IRModule):
             return self.visit_IRModule(obj)
-        elif isinstance(obj, (Expr, Stmt, Worker)):
+        elif isinstance(obj, (Expr, Stmt)):
             return NodeFunctor.visit(self, obj)
         elif obj is None:
             return Text('None')
@@ -171,15 +171,16 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
             func = self.ir_module.functions[func_name]
             if 'worker' in func.attrs:
                 worker = func.attrs['worker']
-                if isinstance(worker, Grid):
-                    def dim3_str(dims):
-                        if dims is None:
-                            return 'None'
-                        elif isinstance(dims, (int, Expr)):
-                            return self(dims)
-                        else:
-                            return Text('dim3(') + self(dims) + ')'
-                    doc += '<<<' + dim3_str(worker.grid_dim) + ', ' + dim3_str(worker.block_dim) + '>>>'
+                raise NotImplementedError('kernel launch parameters')
+                # if isinstance(worker, Grid):
+                #     def dim3_str(dims):
+                #         if dims is None:
+                #             return 'None'
+                #         elif isinstance(dims, (int, Expr)):
+                #             return self(dims)
+                #         else:
+                #             return Text('dim3(') + self(dims) + ')'
+                #     doc += '<<<' + dim3_str(worker.grid_dim) + ', ' + dim3_str(worker.block_dim) + '>>>'
         # params
         doc += '(' + self(e.args) + ')'
         return doc
@@ -346,42 +347,42 @@ class IRPrinter(StmtExprFunctor, TypeFunctor, WorkerFunctor):
     def visit_AnyExpr(self, e: AnyExpr):
         return Text('AnyExpr')
 
-    def visit_ReduceComputePattern(self, e: ReduceComputePattern):
-        return Text('ReduceComputePattern(allow_dynamic_axis=') + str(e.allow_dynamic_axis) + ')'
+    # def visit_ReduceComputePattern(self, e: ReduceComputePattern):
+    #     return Text('ReduceComputePattern(allow_dynamic_axis=') + str(e.allow_dynamic_axis) + ')'
+    #
+    # def visit_TensorComputePattern(self, e: TensorComputePattern):
+    #     return Text('TensorComputePattern(allow_dynamic_axis=') + str(e.allow_dynamic_axis) + ')'
+    #
+    # def visit_ScalarExprPattern(self, e: ScalarExprPattern):
+    #     docs = []
+    #     if e.base_pattern:
+    #         docs.append('base_pattern=' + self(e.base_pattern))
+    #     if len(e.exclude_vars) > 0:
+    #         docs.append('excluded_vars=' + self(e.exclude_vars))
+    #     return Text('ScalarExprPattern(') + doc_join(docs, ', ') + ')'
 
-    def visit_TensorComputePattern(self, e: TensorComputePattern):
-        return Text('TensorComputePattern(allow_dynamic_axis=') + str(e.allow_dynamic_axis) + ')'
+    # def visit_Host(self, host: Host):
+    #     return Text('Host')
+    #
+    # def visit_Grid(self, grid: Grid):
+    #     def dim3_str(dims):
+    #         if dims is None:
+    #             return 'None'
+    #         elif isinstance(dims, (int, Expr)):
+    #             return self(dims)
+    #         else:
+    #             return Text('dim3(') + self(dims) + ')'
+    #     return Text('Grid(') + dim3_str(grid.grid_dim) + ', ' + dim3_str(grid.block_dim) + ')'
 
-    def visit_ScalarExprPattern(self, e: ScalarExprPattern):
-        docs = []
-        if e.base_pattern:
-            docs.append('base_pattern=' + self(e.base_pattern))
-        if len(e.exclude_vars) > 0:
-            docs.append('excluded_vars=' + self(e.exclude_vars))
-        return Text('ScalarExprPattern(') + doc_join(docs, ', ') + ')'
-
-    def visit_Host(self, host: Host):
-        return Text('Host')
-
-    def visit_Grid(self, grid: Grid):
-        def dim3_str(dims):
-            if dims is None:
-                return 'None'
-            elif isinstance(dims, (int, Expr)):
-                return self(dims)
-            else:
-                return Text('dim3(') + self(dims) + ')'
-        return Text('Grid(') + dim3_str(grid.grid_dim) + ', ' + dim3_str(grid.block_dim) + ')'
-
-    def visit_ThreadBlock(self, block: ThreadBlock):
-        block_dim = (self(block.block_dim) if block.block_dim else 'None')
-        return Text('ThreadBlock(') + block_dim + ')'
-
-    def visit_Warp(self, warp: Warp):
-        return Text('Warp')
-
-    def visit_Thread(self, thread: Thread):
-        return Text('Thread')
+    # def visit_ThreadBlock(self, block: ThreadBlock):
+    #     block_dim = (self(block.block_dim) if block.block_dim else 'None')
+    #     return Text('ThreadBlock(') + block_dim + ')'
+    #
+    # def visit_Warp(self, warp: Warp):
+    #     return Text('Warp')
+    #
+    # def visit_Thread(self, thread: Thread):
+    #     return Text('Thread')
 
 
 def astext(obj: Node) -> str:

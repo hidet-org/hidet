@@ -1,4 +1,7 @@
 from .conv2d import conv2d, conv2d_gemm, conv2d_winograd
+from .conv2d import conv2d_gemm_image_transform, conv2d_gemm_filter_transform, conv2d_gemm_inverse_transform
+from .conv2d import conv2d_winograd_image_transform, conv2d_winograd_filter_transform, conv2d_winograd_inverse_transform
+
 from .matmul import matmul
 from .pool import max_pool2d, avg_pool2d
 from .softmax import softmax

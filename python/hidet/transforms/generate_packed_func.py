@@ -6,7 +6,7 @@ from hidet.ir.stmt import AssertStmt, SeqStmt, EvaluateStmt
 from hidet.ir.func import IRModule, Function
 from hidet.ir.functors import astext, simplify_to_int
 from hidet.ir.dialects.lowlevel import VoidType, PointerType, Dereference, TensorPointerType
-from hidet.ir.task import Grid, Host
+# from hidet.ir.task import Grid, Host
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.transforms import Pass
 from hidet.ir.primitives.func import set_kernel_max_dynamic_smem_bytes
@@ -17,7 +17,7 @@ class GeneratePackedFuncPass(Pass):
         new_ir_module = IRModule(task=ir_module.task)
         for func in ir_module.functions.values():
             new_ir_module.add(func.name, func)
-            if not isinstance(func.get_attr('worker', None), (Grid, Host)):
+            if func.kind not in ['cuda_kernel', 'host_kernel']:
                 # only generate packed func for entry function
                 continue
             if func.get_attr('packed_func', None) is not None:
@@ -31,12 +31,10 @@ class GeneratePackedFuncPass(Pass):
         return new_ir_module
 
     def generate_packed_func(self, func: Function, func_global_var: Var) -> Function:
-        func_worker = func.get_attr('worker')
-        assert isinstance(func_worker, (Grid, Host))
         assert isinstance(func.ret_type, VoidType)
         assert isinstance(func.name, str) and (func.name.endswith('_grid') or func.name.endswith('_host'))
         packed_name = func.name[:-5]
-        with FunctionBuilder(name=packed_name, worker=Host(), attrs={'packed_func': func_global_var}) as fb:
+        with FunctionBuilder(name=packed_name, kind='packed_func', attrs={'packed_func': func_global_var}) as fb:
             # params
             p_num_args = Var('num_args', ScalarType('int32'))
             p_arg_types = Var('arg_types', PointerType(ScalarType('int32')))
@@ -67,8 +65,8 @@ class GeneratePackedFuncPass(Pass):
                 else:
                     raise NotImplementedError()
                 sb += AssertStmt(Equal(p_arg_types[idx], code), "The {} th arg should be {}".format(idx, astext(param.type)))
-            if isinstance(func_worker, Grid) and simplify_to_int(func_worker.dynamic_smem_bytes) > 48 * 1024:
-                sb += set_kernel_max_dynamic_smem_bytes(func_global_var, func_worker.dynamic_smem_bytes)
+            if func.kind == 'cuda_kernel' and func.get_attr('cuda_dynamic_smem_bytes', 0) > 48 * 1024:
+                sb += set_kernel_max_dynamic_smem_bytes(func_global_var, func.attrs['cuda_dynamic_smem_bytes'])
             sb += Call(func_global_var, func_args)
             fb.set_body(sb.finish())
         return fb.get()

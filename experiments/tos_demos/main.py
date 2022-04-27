@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 import time
 
 import hidet
@@ -126,6 +127,28 @@ def demo_hidet_resnet50():
             y = graph(x)
             cuda_api.device_synchronization()
 
+    with tos.PassContext(instruments=[
+        SaveGraphInstrument(out_dir='./outs/'),
+        ProfileInstrument(log_file='./outs/profile.txt', print_stdout=True),
+    ], verbose=True):
+        graph = optimize(graph)
+
+    x = randn([1, 3, 224, 224], dtype='float32')
+    for t in range(10):
+        cuda_api.device_synchronization()
+        with Timer('hidet resnet50 opt {}'.format(t)):
+            y = graph(x)
+            cuda_api.device_synchronization()
+
+    y1 = model(x)
+    y2 = graph(x)[0]
+    np.testing.assert_allclose(y1.numpy(), y2.numpy())
+
+
+def demo():
+    a = hidet.randn(shape=[4, 4, 256, 256])
+    b = hidet.ops.flatten(a, end_dim=2)
+
 
 if __name__ == '__main__':
     # demo_relu()
@@ -133,6 +156,7 @@ if __name__ == '__main__':
     # demo_basic_block()
     # demo_bottleneck()
     # demo_resnet50()
-    demo_lazy_mode()
+    # demo_lazy_mode()
     # demo_torch_resnet50()
-    # demo_hidet_resnet50()
+    demo_hidet_resnet50()
+    # demo()

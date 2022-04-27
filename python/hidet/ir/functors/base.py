@@ -92,9 +92,9 @@ class ExprFunctor(NodeFunctor):
             ReduceCompute: cls.visit_ReduceCompute,
             CustomCompute: cls.visit_CustomCompute,
             AnyExpr: cls.visit_AnyExpr,
-            ReduceComputePattern: cls.visit_ReduceComputePattern,
-            TensorComputePattern: cls.visit_TensorComputePattern,
-            ScalarExprPattern: cls.visit_ScalarExprPattern,
+            # ReduceComputePattern: cls.visit_ReduceComputePattern,
+            # TensorComputePattern: cls.visit_TensorComputePattern,
+            # ScalarExprPattern: cls.visit_ScalarExprPattern,
         }
 
     def visit_Add(self, e: Add):
@@ -205,15 +205,15 @@ class ExprFunctor(NodeFunctor):
     def visit_AnyExpr(self, e: AnyExpr):
         raise NotImplementedError()
 
-    def visit_ReduceComputePattern(self, e: ReduceComputePattern):
-        raise NotImplementedError()
-
-    def visit_TensorComputePattern(self, e: TensorComputePattern):
-        raise NotImplementedError()
-
-    def visit_ScalarExprPattern(self, e: ScalarExprPattern):
-        raise NotImplementedError()
-
+    # def visit_ReduceComputePattern(self, e: ReduceComputePattern):
+    #     raise NotImplementedError()
+    #
+    # def visit_TensorComputePattern(self, e: TensorComputePattern):
+    #     raise NotImplementedError()
+    #
+    # def visit_ScalarExprPattern(self, e: ScalarExprPattern):
+    #     raise NotImplementedError()
+    #
 
 class ExprVisitor(ExprFunctor):
     def visit_Add(self, e: Add):
@@ -337,18 +337,18 @@ class ExprVisitor(ExprFunctor):
     def visit_CustomCompute(self, e: CustomCompute):
         pass
 
-    # pattern dialect
-    def visit_AnyExpr(self, e: ReduceComputePattern):
-        pass
-
-    def visit_ReduceComputePattern(self, e: ReduceComputePattern):
-        pass
-
-    def visit_TensorComputePattern(self, e: TensorComputePattern):
-        pass
-
-    def visit_ScalarExprPattern(self, e: ScalarExprPattern):
-        pass
+    # # pattern dialect
+    # def visit_AnyExpr(self, e: ReduceComputePattern):
+    #     pass
+    #
+    # def visit_ReduceComputePattern(self, e: ReduceComputePattern):
+    #     pass
+    #
+    # def visit_TensorComputePattern(self, e: TensorComputePattern):
+    #     pass
+    #
+    # def visit_ScalarExprPattern(self, e: ScalarExprPattern):
+    #     pass
 
     # lowlevel dialect
     def visit_Cast(self, e: Cast):
@@ -568,15 +568,15 @@ class ExprRewriter(ExprFunctor):
     def visit_AnyExpr(self, e: AnyExpr):
         return e
 
-    def visit_ReduceComputePattern(self, e: ReduceComputePattern):
-        return e
-
-    def visit_TensorComputePattern(self, e: TensorComputePattern):
-        return e
-
-    def visit_ScalarExprPattern(self, e: ScalarExprPattern):
-        return e
-
+    # def visit_ReduceComputePattern(self, e: ReduceComputePattern):
+    #     return e
+    #
+    # def visit_TensorComputePattern(self, e: TensorComputePattern):
+    #     return e
+    #
+    # def visit_ScalarExprPattern(self, e: ScalarExprPattern):
+    #     return e
+    #
 
 class StmtFunctor(NodeFunctor):
     @staticmethod
@@ -809,7 +809,7 @@ class FuncStmtExprRewriter(StmtExprRewriter):
         if body is func.body:
             return func
         else:
-            return Function(func.name, params=func.params, body=body, ret_type=func.ret_type, local_vars=func.local_vars,
+            return Function(func.name, params=func.params, body=body, ret_type=func.ret_type, kind=func.kind, local_vars=func.local_vars,
                             local_const_vars=func.local_const_vars, extern_vars=func.extern_vars, attrs=func.attrs)
 
 
@@ -844,32 +844,32 @@ class TypeFunctor(NodeFunctor):
         raise NotImplementedError()
 
 
-class WorkerFunctor(NodeFunctor):
-    @staticmethod
-    def get_dispatch_mapping(cls) -> Mapping[Type[Node], Any]:
-        return {
-            Host: cls.visit_Host,
-            Grid: cls.visit_Grid,
-            ThreadBlock: cls.visit_ThreadBlock,
-            Warp: cls.visit_Warp,
-            Thread: cls.visit_Thread,
-        }
-
-    def visit_Host(self, host: Host):
-        raise NotImplementedError()
-
-    def visit_Grid(self, grid: Grid):
-        raise NotImplementedError()
-
-    def visit_ThreadBlock(self, block: ThreadBlock):
-        raise NotImplementedError()
-
-    def visit_Warp(self, warp: Warp):
-        raise NotImplementedError()
-
-    def visit_Thread(self, thread: Thread):
-        raise NotImplementedError()
-
+# class WorkerFunctor(NodeFunctor):
+#     @staticmethod
+#     def get_dispatch_mapping(cls) -> Mapping[Type[Node], Any]:
+#         return {
+#             Host: cls.visit_Host,
+#             Grid: cls.visit_Grid,
+#             ThreadBlock: cls.visit_ThreadBlock,
+#             Warp: cls.visit_Warp,
+#             Thread: cls.visit_Thread,
+#         }
+#
+#     def visit_Host(self, host: Host):
+#         raise NotImplementedError()
+#
+#     def visit_Grid(self, grid: Grid):
+#         raise NotImplementedError()
+#
+#     def visit_ThreadBlock(self, block: ThreadBlock):
+#         raise NotImplementedError()
+#
+#     def visit_Warp(self, warp: Warp):
+#         raise NotImplementedError()
+#
+#     def visit_Thread(self, thread: Thread):
+#         raise NotImplementedError()
+#
 
 def same_list(lhs: Sequence, rhs: Sequence):
     if len(lhs) != len(rhs):

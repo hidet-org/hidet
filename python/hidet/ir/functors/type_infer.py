@@ -6,7 +6,7 @@ from hidet.ir.dialects.compute import ScalarInput, TensorInput, TensorCompute, R
 from hidet.ir.dialects.lowlevel import PointerType, Dereference, Reference, Address
 
 from .base import ExprFunctor
-from ..dialects.pattern import ScalarExprPattern, TensorComputePattern, ReduceComputePattern, AnyExpr
+# from ..dialects.pattern import ScalarExprPattern, TensorComputePattern, ReduceComputePattern, AnyExpr
 
 
 def is_bool(tp):
@@ -162,18 +162,18 @@ class TypeInfer(ExprFunctor):
     def visit_CustomCompute(self, e: CustomCompute):
         return e.data_type
 
-    def visit_AnyExpr(self, e: AnyExpr):
-        raise ValueError('Should not infer type of pattern expression')
-
-    def visit_ReduceComputePattern(self, e: ReduceComputePattern):
-        raise ValueError('Should not infer type of pattern expression')
-
-    def visit_TensorComputePattern(self, e: TensorComputePattern):
-        raise ValueError('Should not infer type of pattern expression')
-
-    def visit_ScalarExprPattern(self, e: ScalarExprPattern):
-        raise ValueError('Should not infer type of pattern expression')
-
+    # def visit_AnyExpr(self, e: AnyExpr):
+    #     raise ValueError('Should not infer type of pattern expression')
+    #
+    # def visit_ReduceComputePattern(self, e: ReduceComputePattern):
+    #     raise ValueError('Should not infer type of pattern expression')
+    #
+    # def visit_TensorComputePattern(self, e: TensorComputePattern):
+    #     raise ValueError('Should not infer type of pattern expression')
+    #
+    # def visit_ScalarExprPattern(self, e: ScalarExprPattern):
+    #     raise ValueError('Should not infer type of pattern expression')
+    #
 
 def infer_type(expr):
     infer = TypeInfer()

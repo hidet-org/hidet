@@ -1,77 +1,106 @@
-from typing import Union, Optional, List, Dict, Sequence
+from __future__ import annotations
+from typing import Dict, List, Union, Optional, Sequence, Type
 from hidet.ir.node import Node
-from hidet.ir.dialects.compute import ScalarInput, TensorInput, ComputeNode
-from hidet.ir.type import TypeNode, TensorType, ScalarType
-from hidet.ir.expr import Expr, convert
-from hidet.ir.layout import TaskLayout
-
-Int = Union[Expr, int]
+from hidet.ir.expr import Expr, Var
+from hidet.ir.func import IRModule
+from hidet.ir.dialects.compute import TensorCompute, TensorInput, ComputeNode
+from hidet.utils.doc import Doc, Text, doc_join, NewLine
 
 
-class Worker(Node):
-    pass
+class Target:
+    _supported_targets = ['cuda', 'cpu']
+
+    def __init__(self, name: str, attrs: List[str]):
+        if name not in self._supported_targets:
+            raise ValueError('Does not support target {}, candidates {}.'.format(name, self._supported_targets))
+        self.name = name
+        self.attrs = attrs
+
+    @staticmethod
+    def from_string(target_string: str) -> Target:
+        items = target_string.split()
+        name, attrs = items[0], items[1:]
+        return Target(name, attrs)
 
 
-class Grid(Worker):
-    def __init__(
-            self,
-            grid_dim: Optional[Union[Int, Expr, Sequence[Int]]] = None,
-            block_dim: Optional[Union[Int, Sequence[Int]]] = None,
-            dynamic_smem_bytes: Optional[Int] = 0,
-            min_blocks: Optional[Int] = None
-    ):
-        self.grid_dim: Optional[Union[Expr, Sequence[Expr]]] = convert(grid_dim)
-        self.block_dim: Optional[Union[Expr, Sequence[Expr]]] = convert(block_dim)
-        self.min_blocks: Optional[Expr] = convert(min_blocks)
-        self.dynamic_smem_bytes: Optional[Expr] = convert(dynamic_smem_bytes)
+class Prologue(Node):
+    def __init__(self, extra_inputs, indices, value):
+        self.extra_inputs: List[TensorInput] = extra_inputs
+        self.indices: List[Var] = indices
+        self.value: Expr = value
 
 
-class ThreadBlock(Worker):
-    def __init__(self, block_dim: Optional[Int] = None, task_layout=None):
-        self.block_dim: Optional[Expr] = convert(block_dim) if block_dim else None
-        self.task_layout: Optional[TaskLayout] = task_layout
-
-        if self.block_dim is None and self.task_layout is not None:
-            # infer block size from task layout
-            self.block_dim = convert(self.task_layout.num_workers)
+class Epilogue(Node):
+    def __init__(self, extra_inputs, indices, value):
+        self.extra_inputs: List[TensorInput] = extra_inputs
+        self.indices: List[Var] = indices
+        self.value: Expr = value
 
 
-class Warp(Worker):
-    def __init__(self, task_layout: Optional[TaskLayout] = None):
-        self.task_layout: Optional[TaskLayout] = task_layout
+class ImplementContext:
+    contexts: List['ImplementContext'] = []
+
+    def __init__(self, space_level=0):
+        self.space_level = space_level
+
+    def __enter__(self):
+        ImplementContext.contexts.append(self)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        assert ImplementContext.contexts[-1] is self
+        ImplementContext.contexts.pop()
+
+    @classmethod
+    def current(cls):
+        return cls.contexts[-1]
 
 
-class Thread(Worker):
-    def __init__(self):
-        pass
-
-
-class Host(Worker):
-    def __init__(self):
-        pass
+ImplementContext.contexts.append(ImplementContext())    # fallback context
 
 
 class Task(Node):
-    def __init__(self, name, computation, params, worker):
-        self.name: str = name
-        self.compute: ComputeNode = computation
-        self.params: List[Union[ScalarInput, TensorInput, ComputeNode]] = params
-        self.worker: Worker = worker
+    def __init__(self, name, inputs, outputs, prologues=None, epilogues=None, parameters=None):
+        self.name = name
+        self.inputs: List[TensorInput] = inputs
+        self.outputs: List[TensorCompute] = outputs
+        self.prologues: Dict[TensorInput, Prologue] = prologues if prologues else {}
+        self.epilogues: Dict[TensorInput, Epilogue] = epilogues if epilogues else {}
+        self.parameters: List[ComputeNode] = parameters if parameters else inputs + outputs
 
     def __str__(self):
-        from hidet.utils.doc import Doc, NewLine
-        body = Doc()
-        body += NewLine() + 'name: ' + self.name
-        body += NewLine() + 'compute: ' + str(self.compute)
-        body += NewLine() + 'params: ' + ', '.join(['{}: {}'.format(param.name, param.data_type) for param in self.params])
-        body += NewLine() + 'worker: ' + str(self.worker)
-        return str('Task(' + body.indent() + NewLine() + ')')
+        lines = [
+            Text('name: ') + self.name,
+            Text('inputs: ') + '[' + doc_join(['{}: {}'.format(v, v.data_type) for v in self.inputs], ', ') + ']',
+            Text('outputs: ') + '[' + doc_join([str(v) for v in self.outputs], ', ') + ']',
+            Text('parameters: ') + '[' + doc_join([v.name for v in self.parameters], ', ') + ']'
+        ]
+        doc = Text('Task(') + doc_join(lines, NewLine()).indent() + ')'
+        return str(doc)
 
-    def param_types(self) -> List[Union[ScalarType, TensorType]]:
-        return [param.data_type for param in self.params]
+    # todo: remove this after refactering
+    @property
+    def compute(self):
+        return self.outputs[0]
 
-    def type_of_param(self, given_param) -> Union[TypeNode, TensorType]:
-        for param, param_type in zip(self.params, self.param_types()):
-            if given_param is param:
-                return param_type
-        raise KeyError()
+    def implement(self, target: Union[Target, str], space_level: int = 0) -> IRModule:
+        if isinstance(target, str):
+            target = Target.from_string(target)
+        if target.name == 'cuda':
+            ret = self.implement_cuda()
+        elif target.name == 'cpu':
+            ret = self.implement_cpu()
+        else:
+            raise ValueError()
+        if not isinstance(ret, IRModule):
+            raise AssertionError('The task implement function should return an IRModule, but got a {}.'.format(type(ret)))
+        return ret
+
+    def implement_cuda(self, space_level: int = 0) -> IRModule:
+        from hidet.tos.ops.schedules import generic_cuda_schedule
+        return generic_cuda_schedule(self, space_level)
+
+    def implement_cpu(self, space_level: int = 0) -> IRModule:
+        from hidet.tos.ops.schedules import generic_cpu_schedule
+        return generic_cpu_schedule(self, space_level)
+

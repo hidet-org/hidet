@@ -1,3 +1,4 @@
+raise ValueError()
 from typing import Optional, Sequence, Union, List, Any, Tuple, ContextManager
 from textwrap import indent
 from collections import defaultdict

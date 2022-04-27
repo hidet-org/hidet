@@ -53,7 +53,7 @@ class SoftmaxTask(Task):
             outputs=[out]
         )
 
-    def implement_cuda(self) -> IRModule:
+    def implement_cuda(self, space_level: int = 0) -> IRModule:
         from hidet.tos.ops.schedules import softmax_cuda_schedule
         return softmax_cuda_schedule(self)
 

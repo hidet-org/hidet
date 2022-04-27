@@ -20,5 +20,5 @@ from .stmt import Stmt, EvaluateStmt, BufferStoreStmt, AssignStmt, ForStmt, IfSt
 from .dialects.compute import ScalarInput, TensorInput, TensorCompute, ReduceCompute
 from .dialects.lowlevel import VoidType, PointerType, Dereference
 
-from .builders import TaskBuilder, FunctionBuilder, StmtBuilder
+from .builders import FunctionBuilder, StmtBuilder
 

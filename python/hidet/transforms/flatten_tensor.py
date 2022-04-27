@@ -96,7 +96,7 @@ class FlattenTensorAccessRewriter(FuncStmtExprRewriter):
         params = [self(p) for p in func.params]
         local_vars = [self(v) for v in func.local_vars]
         local_const_vars = [(self(v), value) for v, value in func.local_const_vars]
-        return Function(func.name, params, body, func.ret_type, local_vars=local_vars,
+        return Function(func.name, params, body, func.ret_type, kind=func.kind, local_vars=local_vars,
                         local_const_vars=local_const_vars, extern_vars=func.extern_vars, attrs=func.attrs)
 
     @staticmethod

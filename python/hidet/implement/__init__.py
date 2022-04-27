@@ -6,3 +6,5 @@ from . import cpu
 
 from .implementer import Implementer, implement, register_impl, impl_context, resolve_task, ImplementerContext
 from .resolve.random import random_resolve
+
+raise ValueError('Disabled')

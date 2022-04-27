@@ -1,11 +1,8 @@
-from typing import Tuple
-from hidet.ir.dialects.pattern import ScalarExprPattern, TensorComputePattern, ReduceComputePattern
-from hidet.ir.task import Grid, Host
 from hidet.ir.func import *
 from hidet.ir.stmt import *
 from hidet.ir.expr import *
 from hidet.ir.dialects.compute import ReduceCompute, TensorCompute, TensorInput, ScalarInput
-from hidet.ir.functors import StmtExprFunctor, TypeFunctor, collect, simplify
+from hidet.ir.functors import StmtExprFunctor, TypeFunctor
 from hidet.ir.dialects.lowlevel import VoidType, PointerType, Dereference, Address, ReferenceType, Reference, TensorPointerType
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
 from hidet.ir.utils.call_graph import CallGraph
@@ -137,25 +134,22 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         doc = NewLine()
 
         # ret
-        worker = func.get_attr('worker')
-        if isinstance(worker, Grid):
+        if func.kind == 'cuda_kernel':
             doc += '__global__'
-        elif isinstance(worker, Host):
-            doc += '__host__'
-        else:
+        elif func.kind == 'cuda_device':
             doc += '__device__ __forceinline__'
+        elif func.kind == 'packed_func' or func.kind == 'host_kernel':
+            doc += '__host__'
         doc += ' void'
 
         # launch bound for grid worker
-        if isinstance(worker, Grid):
-            block_dim = simplify(worker.block_dim)
-            if worker.min_blocks:
-                min_blocks = simplify(worker.min_blocks)
+        if func.kind == 'cuda_kernel':
+            block_dim = func.attrs['cuda_block_dim']
+            if 'cuda_min_blocks' in func.attrs:
+                min_blocks = func.attrs['cuda_min_blocks']
+                doc += f' __launch_bounds__({block_dim}, {min_blocks})'
             else:
-                DEFAULT_MIN_BLOCKS = 2  # todo let user specify
-                min_blocks = DEFAULT_MIN_BLOCKS
-            if isinstance(block_dim, Constant):
-                doc += f' __launch_bounds__({block_dim.value}, {min_blocks})'
+                doc += f' __launch_bounds__({block_dim})'
 
         # func name
         canonized_func_name = self.canonize_funcname(func.name)
@@ -277,17 +271,15 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             assert func is None, "Please use import_primitive_functions pass to import primitive function first"
             # system-provided function, do not canonize the func name
             return func_name + (Text('(') + doc_join([self(arg) for arg in e.args], Text(', ')) + ')')
-        worker = func.get_attr('worker')
         func_name = Text(self.canonize_funcname(e.func_var.hint))
-        if isinstance(worker, Grid):
+        if func.kind == 'cuda_kernel':
             def dim3_str(dims):
-                if dims is None:
-                    return 'None'
-                elif isinstance(dims, (int, Expr)):
+                if isinstance(dims, (int, Expr)):
                     return self(dims)
                 else:
                     return Text('dim3(') + self(dims) + ')'
-            configs = [dim3_str(worker.grid_dim), dim3_str(worker.block_dim), worker.dynamic_smem_bytes]
+
+            configs = [dim3_str(func.attrs['cuda_grid_dim']), dim3_str(func.attrs['cuda_block_dim']), func.attrs.get('cuda_smem_bytes', 0)]
             launch_config = Text('<<<') + doc_join([self(v) for v in configs], sep=', ') + Text('>>>')
         else:
             launch_config = []
@@ -345,7 +337,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
     def visit_LetStmt(self, stmt: LetStmt):
         doc = Doc()
         for bind_var, bind_value in zip(stmt.bind_vars, stmt.bind_values):
-            doc += NewLine() + self(bind_var.type) + ' ' +  self(bind_var) + ' = ' + self(bind_value) + ';'
+            doc += NewLine() + self(bind_var.type) + ' ' + self(bind_var) + ' = ' + self(bind_value) + ';'
         doc += self(stmt.body)
         return doc
 
@@ -371,7 +363,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
 
     def visit_IfStmt(self, stmt: IfStmt):
         cond_doc = self(stmt.cond)
-        if not(len(cond_doc.docs) > 0 and isinstance(cond_doc.docs[0], str) and cond_doc.docs[0].startswith('(')):
+        if not (len(cond_doc.docs) > 0 and isinstance(cond_doc.docs[0], str) and cond_doc.docs[0].startswith('(')):
             cond_doc = Text('(') + cond_doc + ')'
         doc = NewLine() + Text('if ') + cond_doc + ' '
         doc += Text('{') + self(stmt.then_body).indent() + NewLine() + Text('} ')
@@ -448,18 +440,6 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         raise ValueError()
 
     def visit_ReduceCompute(self, e: ReduceCompute):
-        raise ValueError()
-
-    def visit_AnyExpr(self, e: ReduceComputePattern):
-        raise ValueError()
-
-    def visit_ReduceComputePattern(self, e: ReduceComputePattern):
-        raise ValueError()
-
-    def visit_TensorComputePattern(self, e: TensorComputePattern):
-        raise ValueError()
-
-    def visit_ScalarExprPattern(self, e: ScalarExprPattern):
         raise ValueError()
 
 

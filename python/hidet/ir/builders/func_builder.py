@@ -4,12 +4,12 @@ from hidet.ir.dialects.lowlevel import VoidType
 from hidet.ir.expr import Var
 from hidet.ir.func import Function
 from hidet.ir.stmt import Stmt
-from hidet.ir.task import Grid, ThreadBlock, Warp, Thread, Worker
 
 
 class FunctionBuilder:
-    def __init__(self, name: str, worker: Worker = None, label: str = "", ret_type=VoidType(), attrs=None):
+    def __init__(self, name: str, kind: str, label: str = "", ret_type=VoidType(), grid_dim=None, block_dim=None, dynamic_smem_bytes=None, min_blocks=None, attrs=None):
         self.name = name
+        self.kind = kind
         self.params: List[Var] = []
         self.ret_type = ret_type
         self.local_vars = []
@@ -17,8 +17,16 @@ class FunctionBuilder:
         self.body: Optional[Stmt] = None
         self.extern_vars = []
         self.attrs: Dict[str] = attrs if attrs else {}
-        self.worker: Worker = worker
         self.label = label
+
+        if grid_dim:
+            self.attrs['cuda_grid_dim'] = grid_dim
+        if block_dim:
+            self.attrs['cuda_block_dim'] = block_dim
+        if dynamic_smem_bytes:
+            self.attrs['cuda_dynamic_smem_bytes'] = dynamic_smem_bytes
+        if min_blocks:
+            self.attrs['cuda_min_blocks'] = min_blocks
 
     def __enter__(self):
         return self
@@ -45,14 +53,12 @@ class FunctionBuilder:
     def finish(self):
         from hidet.ir.primitives import block_idx, thread_idx
         assert self.func is None
-        if 'worker' not in self.attrs:
-            self.attrs['worker'] = self.worker
         if 'label' not in self.attrs:
             self.attrs['label'] = self.label
-        if isinstance(self.attrs['worker'], (Grid, ThreadBlock, Warp, Thread)):
+        if self.kind in ['cuda_kernel', 'cuda_device']:
             self.extend_extern_vars([block_idx(dim) for dim in ['x', 'y', 'z']])
             self.extend_extern_vars([thread_idx(dim) for dim in ['x', 'y', 'z']])
-        self.func = Function(self.name, params=self.params, body=self.body, ret_type=self.ret_type, local_vars=self.local_vars,
+        self.func = Function(self.name, kind=self.kind, params=self.params, body=self.body, ret_type=self.ret_type, local_vars=self.local_vars,
                              local_const_vars=[], extern_vars=self.extern_vars, attrs=self.attrs)
 
     def get(self) -> Function:

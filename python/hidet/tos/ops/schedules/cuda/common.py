@@ -3,7 +3,7 @@ from hidet.ir.func import IRModule
 from hidet.ir.builders import StmtBuilder
 from hidet.ir.primitives import active_mask, shfl_down_sync, shfl_sync
 from hidet.ir.stmt import AssignStmt, Stmt
-from hidet.tos.task import Task
+from hidet.ir.task import Task
 from hidet.utils import TableBuilder
 
 

@@ -1,83 +1,13 @@
-from typing import List, Optional, Dict, Any, Union, Tuple, Type, Set
+from typing import List, Optional, Dict, Tuple, Set
+
+from functools import lru_cache
+from hidet import tos
 from hidet.tos.ir.graph import FlowGraph, Operator, Tensor
 from hidet.tos.transforms import GraphPass, PassContext
-from hidet.tos import ops
-from hidet import tos
-
 from .common import analyze_usage, graph_collect
-
 from .fold_const import fold_const_pass
-
-
-class TensorPattern:
-    def __init__(self, is_const=False, is_symbolic=False, trace=None):
-        self.is_const: bool = is_const
-        self.is_symbolic: bool = is_symbolic
-        assert not (is_const and is_symbolic), 'Can not be const and symbolic at the same time'
-        self.trace: Optional[Tuple[OperatorPattern, int]] = trace
-
-    def __repr__(self):
-        if self.trace is None:
-            if self.is_const:
-                return 'c'
-            if self.is_symbolic:
-                return 's'
-            return 'v'
-        else:
-            op, idx = self.trace
-            op_str = str(op)
-            if len(op.outputs) == 1:
-                return op_str
-            else:
-                return '{}[{}]'.format(op_str, idx)
-
-    def __add__(self, other):
-        return OperatorPattern(ops.defs.arithmatic.AddOp, inputs=[self, other]).outputs[0]
-
-    def __sub__(self, other):
-        return OperatorPattern(ops.defs.arithmatic.SubOp, inputs=[self, other]).outputs[0]
-
-    def __mul__(self, other):
-        return OperatorPattern(ops.defs.arithmatic.MultiplyOp, inputs=[self, other]).outputs[0]
-
-    def __neg__(self):
-        return OperatorPattern(ops.defs.arithmatic.NegOp, inputs=[self]).outputs[0]
-
-    @staticmethod
-    def tensor(is_const=False, is_symbolic=False):
-        return TensorPattern(is_const, is_symbolic)
-
-    @staticmethod
-    def tensors(num, is_const=False, is_symbolic=False):
-        return [TensorPattern(is_const, is_symbolic) for _ in range(num)]
-
-
-class OperatorPattern:
-    def __init__(self, op_cls, inputs, num_outputs=1):
-        self.op_cls = op_cls
-        self.inputs: List[TensorPattern] = inputs
-        self.outputs = [TensorPattern(is_symbolic=True, trace=(self, idx)) for idx in range(num_outputs)]
-
-    def __repr__(self):
-        input_items = [str(v) for v in self.inputs]
-        unary_ops = {
-            ops.defs.arithmatic.NegOp: '-'
-        }
-        binary_ops = {
-            ops.defs.arithmatic.AddOp: '+',
-            ops.defs.arithmatic.SubOp: '-',
-            ops.defs.arithmatic.MultiplyOp: '*'
-        }
-        if self.op_cls in unary_ops:
-            return '({}{})'.format(unary_ops[self.op_cls], input_items[0])
-        elif self.op_cls in binary_ops:
-            return '({} {} {})'.format(input_items[0], binary_ops[self.op_cls], input_items[1])
-        else:
-            return '{}({})'.format(self.op_cls.__class__[:-2], ', '.join(input_items))
-
-
-def conv2d_pattern(x: TensorPattern, w: TensorPattern) -> TensorPattern:
-    return OperatorPattern(ops.defs.conv2d.Conv2dOp, [x, w]).outputs[0]
+from .pattern_transforms import GraphPattern, TensorPattern, OperatorPattern
+from .pattern_transforms import basic_patterns, conv2d_patterns, matmul_patterns
 
 
 class NotMatchedException(Exception):
@@ -153,111 +83,9 @@ def match(pattern, target) -> Optional[Dict]:
         return None
 
 
-class GraphPattern:
-    def __init__(self, name):
-        self.name = name
-
-    def source(self) -> TensorPattern:
-        raise NotImplementedError()
-
-    def target(self, matched: Dict[Union[TensorPattern, OperatorPattern], Union[Tensor, Operator]]) -> Optional[Tensor]:
-        raise NotImplementedError()
-
-
-class GraphConstructor:
-    def __init__(self, matched):
-        self.memo = {}
-        self.matched = matched
-        self.new_operators = []
-
-    def visit(self, obj: Union[TensorPattern, OperatorPattern]):
-        if obj in self.memo:
-            return self.memo[obj]
-        if isinstance(obj, OperatorPattern):
-            ret = self.visit_OperatorPattern(obj)
-        elif isinstance(obj, TensorPattern):
-            ret = self.visit_TensorPattern(obj)
-        else:
-            raise ValueError()
-        self.memo[obj] = ret
-        return ret
-
-    def visit_TensorPattern(self, t: TensorPattern) -> Tensor:
-        if t.trace is None:
-            # input in pattern
-            return self.matched[t]
-        else:
-            op, idx = t.trace
-            return self.visit(op).get_output(idx)
-
-    def visit_OperatorPattern(self, t: OperatorPattern) -> Operator:
-        inputs = [self.visit(input) for input in t.inputs]
-        op = t.op_cls(*inputs)
-        self.new_operators.append(op)
-        return op
-
-
-class SimpleGraphPattern(GraphPattern):
-    def __init__(self, name, source, target):
-        super().__init__(name)
-        self.src = source
-        self.tgt = target
-
-    @staticmethod
-    def all() -> List[GraphPattern]:
-        # tensors can be used as pattern inputs
-        x, y, z = TensorPattern.tensors(3, is_symbolic=True)  # can not be const
-        a, b, c = TensorPattern.tensors(3, is_const=True)  # can not be symbolic
-
-        # (source, target) pattern pairs
-        pairs = [
-            ['a + x => x + a', a + x, x + a],
-            ['x - a => x + (-a)', x - a, x + (-a)],
-            ['(x + a) + b => x + (a + b)', (x + a) + b, x + (a + b)],
-            ['(x + a) * b => x * b + a * b', (x + a) * b, x * b + a * b],
-            ['(x + a) + (y + b) => (x + y) + (a + b)', (x + a) + (y + b), (x + y) + (a + b)],
-        ]
-        return [SimpleGraphPattern(name, src, tgt) for name, src, tgt in pairs]
-
-    def source(self) -> TensorPattern:
-        return self.src
-
-    def target(self, matched: Dict) -> Optional[TensorPattern]:
-        constructor = GraphConstructor(matched)
-        return constructor.visit(self.tgt)
-
-
-class ConvMultiplyPattern(GraphPattern):
-    def __init__(self):
-        super().__init__('conv * a => conv')
-        x = TensorPattern.tensor()
-        w, scale = TensorPattern.tensors(2, is_const=True)
-        conv = conv2d_pattern(x, w)
-        self.x = x
-        self.w = w
-        self.scale = scale
-        self.conv_op = conv.trace[0]
-        self.src = conv * scale
-
-    def source(self) -> TensorPattern:
-        return self.src
-
-    def target(self, matched: Dict[Union[TensorPattern, OperatorPattern], Union[Tensor, Operator]]) -> Optional[Tensor]:
-        x, w, scale = matched[self.x], matched[self.w], matched[self.scale]
-        conv_attrs = matched[self.conv_op].attributes
-        if not (scale.shape[0] == scale.shape[2] == scale.shape[3] == 1):
-            # we can only fuse the scale on channels
-            return None
-        ww = w * scale.squeeze((0, 2, 3)).unsqueeze((1, 2, 3))
-        return ops.conv2d(x, ww, **conv_attrs)
-
-
+@lru_cache()
 def all_patterns() -> List[GraphPattern]:
-    simple_patterns = SimpleGraphPattern.all()
-    other_patterns = [
-        ConvMultiplyPattern()
-    ]
-    return simple_patterns + other_patterns
+    return basic_patterns() + conv2d_patterns() + matmul_patterns()
 
 
 class PatternTransformPass(GraphPass):
@@ -272,7 +100,6 @@ class PatternTransformPass(GraphPass):
     """
     max_num_transforms = 1000
 
-    # @utils.line_profile()
     def process_graph(self, graph: FlowGraph) -> FlowGraph:
         graph = tos.ir.functors.clone(graph)
         fold_const = fold_const_pass()
@@ -284,7 +111,6 @@ class PatternTransformPass(GraphPass):
         print('Exceeded maximum number of transforms {}, stop early.'.format(self.max_num_transforms))
         return graph
 
-    # @utils.line_profile()
     def try_transform(self, graph: FlowGraph) -> Tuple[bool, FlowGraph]:
         patterns: List[GraphPattern] = all_patterns()
         usage: Dict[Tensor, List[Tuple[Optional[Operator], int]]] = analyze_usage(graph)

@@ -6,7 +6,6 @@ from hidet.ir.expr import scalar_var, if_then_else, tensor_var
 from hidet.ir.layout import TaskLayout
 from hidet.ir.primitives import expf, block_idx, thread_idx, cuda_max
 from hidet.ir.stmt import AssignStmt, BufferStoreStmt
-from hidet.ir.task import Grid
 from hidet.tos.ops.definitions.softmax import SoftmaxTask
 from hidet.tos.ops.schedules.common import params_from_task, inputs_from_task, outputs_from_task, write_output
 from .common import warp_reduce
@@ -28,7 +27,9 @@ def softmax_cuda_schedule(task: SoftmaxTask) -> IRModule:
 
     with FunctionBuilder(
             name=task.name + '_grid',
-            worker=Grid(grid_layout.num_workers, block_layout.num_workers),
+            kind='cuda_kernel',
+            grid_dim=grid_layout.num_workers,
+            block_dim=block_layout.num_workers,
             label='softmax schedule'
     ) as fb:
         # params

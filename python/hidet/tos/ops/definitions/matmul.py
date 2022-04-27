@@ -26,9 +26,9 @@ class MatmulTask(Task):
             outputs=[c]
         )
 
-    def implement_cuda(self) -> IRModule:
+    def implement_cuda(self, space_level: int = 0) -> IRModule:
         from hidet.tos.ops.schedules.cuda import batched_matmul_cuda_schedule
-        return batched_matmul_cuda_schedule(self, space_level=0)
+        return batched_matmul_cuda_schedule(self, space_level=space_level)
 
 
 class MatmulOp(Operator):

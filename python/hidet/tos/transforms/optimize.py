@@ -16,7 +16,7 @@ def optimize(graph: FlowGraph) -> FlowGraph:
     passes = [
         fold_const_pass(),
         pattern_transform_pass(),
-        fuse_elementwise_pass()
+        # fuse_elementwise_pass()
     ]
     ctx = PassContext.current()
     for inst in ctx.instruments:

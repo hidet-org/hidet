@@ -1,13 +1,15 @@
+from typing import Optional, List, Set, Dict, Union, Mapping, Sequence, Tuple
 import itertools
 import operator
 from collections import defaultdict
-from typing import Optional, List, Set, Dict, Union, Mapping
 
 from hidet.ir.expr import Expr, Var, Add, Sub, Multiply, FloorDiv, Mod, Constant, Div
 from hidet.ir.func import Function
 from hidet.ir.functors import FuncStmtExprVisitor
 from hidet.ir.stmt import Stmt, ForStmt, LetStmt
-from hidet.ir.task import Grid, ThreadBlock, Warp, Thread, Host
+
+
+# from hidet.ir.task import Grid, ThreadBlock, Warp, Thread, Host
 
 
 class BoundInfo:
@@ -165,6 +167,16 @@ class BoundInfo:
             return 'Any'
 
 
+def normalize_launch_dims(dims: Union[int, Sequence[int]]) -> Sequence[int]:
+    if isinstance(dims, int):
+        return [dims, dims, dims]
+    else:
+        dims = list(dims)
+        while len(dims) < 3:
+            dims = dims + [1]
+        return dims
+
+
 class BoundAnalyzer(FuncStmtExprVisitor):
     # we only infer bound based on variables from LetStmt and ForStmt, and the constants.
     # so the local variable with AssignStmt is not used infer bound.
@@ -185,22 +197,15 @@ class BoundAnalyzer(FuncStmtExprVisitor):
             self.bound.update(var2bound)
 
     def visit_Function(self, func: Function):
-        worker = func.get_attr('worker')
         # note: we use the vars in func.extern_vars instead of hidet.ir.primitives.thread_idx for multiprocessing
         extern_var_map = {var.name: var for var in func.extern_vars}
-        if isinstance(worker, (Grid, ThreadBlock, Warp, Thread)):
-            assert isinstance(worker, (Grid, Host))
-            if isinstance(worker, Grid):
-                block_dims = worker.block_dim if isinstance(worker.block_dim, (list, tuple)) else [worker.block_dim]
-                grid_dims = worker.grid_dim if isinstance(worker.grid_dim, (list, tuple)) else [worker.grid_dim]
-                for block_dim, suffix in zip(block_dims, ['x', 'y', 'z']):
-                    self.bound[extern_var_map['threadIdx.{}'.format(suffix)]] = BoundInfo(min_value=0, max_value=int(block_dim) - 1)
-                for grid_dim, suffix in zip(grid_dims, ['x', 'y', 'z']):
-                    self.bound[extern_var_map['blockIdx.{}'.format(suffix)]] = BoundInfo(min_value=0, max_value=int(grid_dim) - 1)
-                # tid = extern_var_map['threadIdx.x']
-                # ctaid = extern_var_map['blockIdx.x']
-                # self.bound[tid] = BoundInfo(min_value=0, max_value=int(worker.block_dim)-1)
-                # self.bound[ctaid] = BoundInfo(min_value=0, max_value=int(worker.grid_dim)-1)
+        if func.kind == 'cuda_kernel':
+            block_dims = normalize_launch_dims(func.attrs['cuda_block_dim'])
+            grid_dims = normalize_launch_dims(func.attrs['cuda_grid_dim'])
+            for block_dim, suffix in zip(block_dims, ['x', 'y', 'z']):
+                self.bound[extern_var_map['threadIdx.{}'.format(suffix)]] = BoundInfo(min_value=0, max_value=int(block_dim) - 1)
+            for grid_dim, suffix in zip(grid_dims, ['x', 'y', 'z']):
+                self.bound[extern_var_map['blockIdx.{}'.format(suffix)]] = BoundInfo(min_value=0, max_value=int(grid_dim) - 1)
         self.visit(func.body)
 
     def combine(self, e: Union[Add, Sub, Multiply, FloorDiv, Mod, Div]):

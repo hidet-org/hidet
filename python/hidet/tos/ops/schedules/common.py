@@ -6,8 +6,20 @@ from hidet.ir.builders import StmtBuilder
 from hidet.ir.expr import *
 from hidet.ir.functors import infer_type, ExprRewriter, rewrite
 from hidet.ir.stmt import ForStmt, BufferStoreStmt, AssignStmt
-from hidet.tos.task import Task
+from hidet.ir.task import Task
 from hidet.utils import prod
+
+
+class NotSupportedError(Exception):
+    pass
+
+
+class Schedule:
+    def keys(self) -> List[Tuple[str, Union[int, float, str]]]:
+        raise NotImplementedError()
+
+    def derived_keys(self) -> List[Tuple[str, Union[int, float, str]]]:
+        raise NotImplementedError()
 
 
 class LoopExpander(ExprRewriter):

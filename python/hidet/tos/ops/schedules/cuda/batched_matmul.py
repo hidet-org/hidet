@@ -1,11 +1,8 @@
 import itertools
 from typing import Mapping, List, Any, Tuple, Union
 
-from hidet.implement.implementer import Implementer, register_impl, NotSupportedError, Schedule, ImplementerContext
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
-from hidet.ir.dialects.compute import TensorInput, TensorCompute, ReduceCompute
 from hidet.ir.dialects.lowlevel import TensorPointerType, PointerType
-from hidet.ir.dialects.pattern import TaskPattern, any_const_int
 from hidet.ir.expr import var, Var, And, Equal, Cast, if_then_else
 from hidet.ir.func import IRModule
 from hidet.ir.functors import simplify_to_int
@@ -13,12 +10,12 @@ from hidet.ir.layout import TaskLayout, row_major_layout, DataLayout, StridesLay
 from hidet.ir.node import Node
 from hidet.ir.primitives import syncthreads, thread_idx, block_idx
 from hidet.ir.stmt import AssignStmt, BufferStoreStmt, IfStmt
-from hidet.ir.task import Task, Grid
 from hidet.ir.type import scalar_type, TensorType, Scope, tensor_type
 from hidet.utils import Timer, cuda, factor, prod
 from hidet.tos.ops.definitions.matmul import MatmulTask
 from hidet.tos.ops.schedules.cuda.common import resolve_ir_modules
-from hidet.tos.ops.schedules.common import params_from_task, inputs_from_task, outputs_from_task
+from hidet.tos.ops.schedules.common import params_from_task, inputs_from_task, outputs_from_task, Schedule, NotSupportedError
+
 
 """
 pseudo code of matmul with double buffering
@@ -275,12 +272,14 @@ def batched_matmul_cuda_with_given_schedule(task: MatmulTask, schedule: MatmulSc
     grid_blocks_layout: TaskLayout = TaskLayout.row_major([m_tiles, n_tiles])
 
     # define function
-    with FunctionBuilder(name=task.name + '.grid',
-                         worker=Grid(grid_dim=(grid_blocks_layout.num_workers, batch_size),
-                                     block_dim=sch.block_size,
-                                     dynamic_smem_bytes=sch.used_smem_bytes_per_block if sch.use_dynamic_smem else 0,
-                                     min_blocks=sch.min_thread_blocks),
-                         label=str(sch)) as fb:
+    with FunctionBuilder(
+            name=task.name + '.grid',
+            kind='cuda_kernel',
+            grid_dim=(grid_blocks_layout.num_workers, batch_size),
+            block_dim=sch.block_size,
+            dynamic_smem_bytes=sch.used_smem_bytes_per_block if sch.use_dynamic_smem else 0,
+            min_blocks=sch.min_thread_blocks,
+            label=str(sch)) as fb:
         sb = StmtBuilder()
 
         # declare params

@@ -175,15 +175,15 @@ class WinogradInverseTransformOp(Operator):
         )
 
 
-def winograd_image_transform(x: Tensor, padding, kernel, ms) -> Tensor:
+def conv2d_winograd_image_transform(x: Tensor, padding, kernel, ms) -> Tensor:
     return WinogradImageTransformOp(x, padding, kernel, ms).get_output(0)
 
 
-def winograd_filter_transform(w: Tensor, ms) -> Tensor:
+def conv2d_winograd_filter_transform(w: Tensor, ms) -> Tensor:
     return WinogradFilterTransformOp(w, ms).get_output(0)
 
 
-def winograd_inverse_transform(y: Tensor, input_shape, padding, kernel, ms) -> Tensor:
+def conv2d_winograd_inverse_transform(y: Tensor, input_shape, padding, kernel, ms) -> Tensor:
     return WinogradInverseTransformOp(y, input_shape, padding, kernel, ms).get_output(0)
 
 
@@ -203,8 +203,8 @@ def conv2d_winograd(x: Tensor, w: Tensor, padding) -> Tensor:
     alpha = [r + m - 1 for r, m in zip(kernel, ms)]
 
     # winograd transform
-    x = winograd_image_transform(x, padding, kernel, ms)  # [alpha_x, alpha_y, ci, p]
-    w = winograd_filter_transform(w, ms)                  # [alpha_x, alpha_y, co, ci]
+    x = conv2d_winograd_image_transform(x, padding, kernel, ms)  # [alpha_x, alpha_y, ci, p]
+    w = conv2d_winograd_filter_transform(w, ms)                  # [alpha_x, alpha_y, co, ci]
 
     # product
     x = flatten(x, start_dim=0, end_dim=2)                          # [alpha_x * alpha_y, ci, p]
@@ -213,5 +213,5 @@ def conv2d_winograd(x: Tensor, w: Tensor, padding) -> Tensor:
     y = reshape(y, [alpha[0], alpha[1], y.shape[1], y.shape[2]])    # [alpha_x, alpha_y, co, p]
 
     # winograd inverse transform
-    y = winograd_inverse_transform(y, input_shape, padding, kernel, ms)  # [n, oc, oh, ow]
+    y = conv2d_winograd_inverse_transform(y, input_shape, padding, kernel, ms)  # [n, oc, oh, ow]
     return y

@@ -1,160 +1,88 @@
-import contextlib
-import psutil
-from typing import List, Tuple
-import multiprocessing
 import ctypes
-import os.path
+import os
 import subprocess
-import uuid
-from tqdm import tqdm
+import tempfile
 from subprocess import PIPE
-
-from hidet import utils
-from hidet.backend import codegen
+from hidet.ir.task import Task
+from hidet.runtime import CompiledFunction
 from hidet.ffi import PackedFunc
-from hidet.ir.dialects.lowlevel import VoidType
-from hidet.ir.func import IRModule
-from hidet.runtime.module import CompiledModule, CompiledFunction
-from hidet.transforms import lower, PassContext
-from hidet.utils import Timer, COLORS
+from hidet.utils import cuda
 
 
-def compile_src_code(src_path, nvcc_keep=True, working_dir=None, keep_dir=None):
-    if working_dir is None:
-        working_dir = os.path.join(os.path.dirname(src_path), 'info')
-    if keep_dir is None:
-        keep_dir = os.path.dirname(src_path)
-    src_path, working_dir, keep_dir = [os.path.abspath(path) for path in [src_path, working_dir, keep_dir]]
-    os.makedirs(working_dir, exist_ok=True)
-    os.makedirs(keep_dir, exist_ok=True)
+def compile_source(src_path: str, out_lib_path: str, keep_ptx=False) -> None:
+    """
+    Compile the source code in 'src_path' file and output the library to 'out_lib_path'.
 
-    # use random lib name to avoid the dlopen caching loading the old library
-    out_lib_path = os.path.join(working_dir, str(uuid.uuid4().hex)[-6:] + '.so')
-    temp_out_lib_path = out_lib_path + '.temp'
-    # cc = utils.cuda.get_attribute('compute_capacity')
-    cc = utils.cuda.query_compute_capability()
-    cc_code = f'{cc[0]}{cc[1]}'
+    Parameters
+    ----------
+    src_path: str
+        The path to source code.
+    out_lib_path: str
+        The path to output library.
+    keep_ptx: bool, default False
+        Whether to keep the ptx code in the same directory of output library.
+    """
+    src_path = os.path.abspath(src_path)
+    out_lib_path = os.path.abspath(out_lib_path)
+    cc = cuda.query_compute_capability()
+    cc_code = '{}{}'.format(cc[0], cc[1])
     command = ['nvcc',
-               '-keep' if nvcc_keep else '--verbose',
+               '-keep' if keep_ptx else '',
                '-gencode', f'arch=compute_{cc_code},code=sm_{cc_code}',
                '--ptxas-options=-v',
                '--compiler-options', "'-fPIC'",
                '-lineinfo',
-               '-o', temp_out_lib_path,
+               '-o', out_lib_path,
                '--shared', src_path]
     try:
-        result = subprocess.run(command, stderr=PIPE, stdout=PIPE, check=True, cwd=working_dir)
-        # generate & move make sure that the lib file is not broken in case user uses Ctrl-C to stop the program
-        # when nvcc is working
-        os.rename(temp_out_lib_path, out_lib_path)
-        # move source.ptx to be the same directory as source.cu
-        if nvcc_keep:
-            # move the ptx code to the same directory as source code
-            ptx_name = os.path.basename(src_path).replace('.cu', '.ptx')
-            ptx_path = os.path.join(working_dir, ptx_name)
-            dest_ptx_path = os.path.join(keep_dir, ptx_name)
-            os.rename(ptx_path, dest_ptx_path)
-            # output the compilation log to 'nvcc.stdout' file in the same directory as source code
-            with open(os.path.join(keep_dir, 'nvcc_output.txt'), 'w') as f:
-                f.write("Command: " + " ".join(result.args) + "\n")
+        with tempfile.TemporaryDirectory() as working_dir:
+            result = subprocess.run(" ".join(command).split(), stderr=PIPE, stdout=PIPE, cwd=working_dir)
+            if result.returncode:
+                message = ''
+                if result.stdout:
+                    message += result.stdout.decode() + '\n'
+                if result.stderr:
+                    message += result.stderr.decode()
+                raise Exception('Failed to compile file "{}":\n\n{}'.format(src_path, message))
+            out_lib_dir = os.path.dirname(out_lib_path)
+            if keep_ptx:
+                ptx_name = os.path.basename(src_path).replace('.cu', '.ptx')
+                ptx_path = os.path.join(working_dir, ptx_name)
+                target_ptx_path = os.path.join(out_lib_dir, ptx_name)
+                os.rename(ptx_path, target_ptx_path)
+            with open(os.path.join(out_lib_dir, 'nvcc_log.txt'), 'w') as f:
+                f.write('Command: {}\n'.format(" ".join(result.args)))
                 f.write(result.stdout.decode('utf-8'))
                 f.write(result.stderr.decode('utf-8'))
-        return out_lib_path
     except subprocess.CalledProcessError as e:
         print(' '.join(command))
         print(e.stderr.decode('utf-8'))
         raise e
 
 
-def build(ir_module: IRModule, output_dir, keep_ir=False, nvcc_keep=True, verbose=True) -> CompiledModule:
-    lib_path, ir_module = lower_and_compile(ir_module, output_dir, keep_ir, nvcc_keep, verbose)
-    return load_compiled_module(lib_path=lib_path, lowered_ir_module=ir_module)
+def load_task_func(lib_path: str, task) -> CompiledFunction:
+    """
+    Load task's entry function from dynamic linked library.
 
+    Parameters
+    ----------
+    lib_path: str
+        The dynamic library path.
+    task: hidet.tos.task.Task
+        The task that corresponds to the dynamic library.
 
-class BuildInstance:
-    def __init__(self, ir_module: IRModule, output_dir, keep_ir=False, nvcc_keep=True, verbose=True):
-        self.ir_module = ir_module
-        self.output_dir = output_dir
-        self.keep_ir = keep_ir
-        self.nvcc_keep = nvcc_keep
-        self.verbose = verbose
-
-    def get(self):
-        return self.ir_module, self.output_dir, self.keep_ir, self.nvcc_keep, self.verbose
-
-
-def lower_and_compile(ir_module: IRModule, output_dir, keep_ir: bool = False, nvcc_keep: bool = False, verbose: bool = False) -> Tuple[str, IRModule]:
-    # write task to disk
-    os.makedirs(output_dir, exist_ok=True)
-    with open(os.path.join(output_dir, 'task.txt'), 'w') as f:
-        f.write(str(ir_module.task))
-
-    # lower
-    with Timer(msg='hidet lower time', verbose=verbose):
-        with PassContext(save_lowering_results=keep_ir, save_dir=os.path.join(output_dir, 'ir')):
-            ir_module = lower(ir_module)
-
-    # codegen
-    src_code = codegen(ir_module)
-
-    # write source code to disk
-    src_path = os.path.join(output_dir, 'source.cu')
-    with open(src_path, 'w') as f:
-        f.write(src_code)
-
-    # call target compiler to get dynamic library
-    with Timer(msg='nvcc lower time', verbose=verbose):
-        lib_path = compile_src_code(src_path, nvcc_keep=nvcc_keep)
-    return lib_path, ir_module
-
-
-def load_compiled_module(lib_path: str, lowered_ir_module: IRModule) -> CompiledModule:
-    # load dynamic library
-    lib = ctypes.CDLL(lib_path)
-    compiled_funcs = {}
-    for func in lowered_ir_module.functions.values():
-        # only load the packed function into python CompiledFunction
-        if func.get_attr('packed_func') is not None:
-            assert isinstance(func.ret_type, VoidType)
-            target_func = lowered_ir_module.lookup(func.get_attr('packed_func'))
-            target_func_param_types = [p.type for p in target_func.params]
-            packed_func = PackedFunc(target_func_param_types, lib['hidet_' + func.name])
-            compiled_funcs[func.name] = CompiledFunction(func.name, packed_func)
-
-    return CompiledModule(lowered_ir_module, compiled_funcs)
-
-
-def lower_and_compile_job(args):
+    Returns
+    -------
+    ret: CompiledFunction
+        The loaded function that can be directly called in python.
+    """
     try:
-        return lower_and_compile(*args)
-    except subprocess.CalledProcessError:
-        return None, None
-
-
-def batch_build(build_instances: List[BuildInstance], parallel=True, verbose=False) -> List[CompiledModule]:
-    with Timer() as timer:
-        if parallel:
-            # Set the affinity of current process. Some package such as numpy will change affinity of current process,
-            # which might limit the parallelism of compilation.
-            pairs = []
-            os.sched_setaffinity(0, range(os.cpu_count()))
-            mem_for_worker = 1.5 * 1024 * 1024 * 1024  # 1.5 GiB
-            num_workers = min(max(int(psutil.virtual_memory().available // mem_for_worker), 1), psutil.cpu_count())
-            with multiprocessing.Pool(processes=num_workers, maxtasksperchild=1) as pool:
-                # We doing the lower_and_compile in parallel instead of build because we can not transfer ctypes pointer
-                for results in tqdm(pool.imap(lower_and_compile_job, [instance.get() for instance in build_instances]),
-                                    total=len(build_instances), disable=not verbose):
-                    if all(r is not None for r in results):
-                        pairs.append(results)
-                # pairs = list(pool.starmap(lower_and_compile, [instance.get() for instance in build_instances]))
-            ret = [load_compiled_module(lib_path, ir_module) for lib_path, ir_module in pairs]
-        else:
-            ret = []
-            for ins in tqdm(build_instances):
-                with contextlib.suppress(subprocess.CalledProcessError):
-                    ret.append(build(*ins.get()))
-            return ret
-    if verbose:
-        print('batch build {} modules within {:.3f} seconds, on average {:.1f} seconds per module'.format(
-            len(build_instances), timer.elapsed_seconds(), timer.elapsed_seconds() / len(build_instances)))
-    return ret
+        lib = ctypes.CDLL(lib_path)
+    except OSError as e:
+        print("Removed the file '{}'".format(lib_path))
+        os.remove(lib_path)
+        raise e
+    func_name = 'hidet_{}'.format(task.name)
+    param_types = [param.data_type for param in task.parameters]
+    packed_func = PackedFunc(param_types=param_types, c_func_pointer=lib[func_name])
+    return CompiledFunction(name=task.name, packed_func=packed_func)

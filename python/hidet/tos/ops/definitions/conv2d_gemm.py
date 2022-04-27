@@ -100,7 +100,11 @@ def conv2d_gemm_inverse_transform(gemm_y: Tensor, out_shape: List[int]) -> Tenso
 
 
 def conv2d_gemm(input: Tensor, weight: Tensor, padding, stride) -> Tensor:
-    x = pad(input, normalize_padding(padding))
+    padding = normalize_padding(padding)
+    if tuple(padding) != (0, 0, 0, 0):
+        x = pad(input, padding)
+    else:
+        x = input
     gemm_x = conv2d_gemm_image_transform(x, kernel=weight.shape[2:], stride=stride)
     gemm_w = conv2d_gemm_filter_transform(weight)
     gemm_y = matmul(gemm_x, gemm_w)
