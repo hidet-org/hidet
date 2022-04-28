@@ -76,14 +76,16 @@ class Operator:
             else:
                 self.task_func = build_task(self.task, space_level=self._current_space_level, opt_level=self._current_opt_level, use_cache=self._use_cache)
                 self._task_cache[level][task_string] = self.task_func
-        output_type = self.task.compute.data_type
-        outputs = [empty(shape=[int(v) for v in output_type.shape], dtype=output_type.scalar_type.name, layout=output_type.layout)]
+        assert len(inputs) + len(self.task.outputs) == len(self.task.parameters)
+        output_types = [output.data_type for output in self.task.parameters[-len(self.task.outputs):]]
+        outputs = [empty(shape=type.const_shape(), dtype=type.scalar_type.name, device='cuda', layout=type.layout) for type in output_types]
         self.task_func(*inputs, *outputs)
         return outputs
 
     def lazy_run(self) -> List[Tensor]:
-        output_type = self.task.compute.data_type
-        return [Tensor(shape=[int(v) for v in output_type.shape], dtype=output_type.scalar_type.name, device='cuda', storage=None, layout=output_type.layout, trace=(self, 0))]
+        output_types = [output.data_type for output in self.task.parameters[-len(self.task.outputs):]]
+        outputs = [Tensor(shape=type.const_shape(), dtype=type.scalar_type.name, device='cuda', storage=None, layout=type.layout, trace=(self, i)) for i, type in enumerate(output_types)]
+        return outputs
 
     def clone(self, *new_inputs: Tensor):
         cls = self.__class__

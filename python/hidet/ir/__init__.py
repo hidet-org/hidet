@@ -17,7 +17,7 @@ from .expr import var, scalar_var, tensor_var, is_one, is_zero, convert
 
 from .stmt import Stmt, EvaluateStmt, BufferStoreStmt, AssignStmt, ForStmt, IfStmt, AssertStmt, SeqStmt, LetStmt
 
-from .dialects.compute import ScalarInput, TensorInput, TensorCompute, ReduceCompute
+from .dialects.compute import TensorNode, ScalarNode
 from .dialects.lowlevel import VoidType, PointerType, Dereference
 
 from .builders import FunctionBuilder, StmtBuilder

@@ -4,7 +4,7 @@ from hashlib import sha256
 from hidet.transforms import lower, pass_context
 from hidet.backend import codegen, compile_source, load_task_func
 from hidet.utils import COLORS, hidet_cache_dir
-from hidet.ir.task import Task
+from hidet.ir.task import Task, TaskContext
 
 logger = logging.Logger(__name__)
 logger.setLevel(logging.INFO)
@@ -14,7 +14,7 @@ logger.addHandler(logging.StreamHandler())
 def build_task(task: Task, space_level, opt_level, use_cache=True, cache_dir=None):
     # resolve task dir
     if cache_dir is None:
-        cache_dir = os.path.join(hidet_cache_dir(), 'nops')
+        cache_dir = os.path.join(hidet_cache_dir(), 'ops')
     config_str = 'space_{}_opt_{}'.format(space_level, opt_level)
     task_string = str(task)
     task_hash = sha256(task_string.encode()).hexdigest()[:16]
@@ -30,14 +30,13 @@ def build_task(task: Task, space_level, opt_level, use_cache=True, cache_dir=Non
 
     # build from scratch
     os.makedirs(task_dir, exist_ok=True)
-    # with impl_context(allowed=ImplementerContext.current().allowed, space_level=space_level):
     # write task
     with open(os.path.join(task_dir, 'task.txt'), 'w') as f:
         f.write(task_string)
     # implement task
-    ir_module = task.implement(target='cuda', space_level=space_level)
+    with TaskContext(space_level=space_level, resolve_out_dir=task_dir):
+        ir_module = task.implement(target='cuda')
     # lower ir module
-    # todo: turn off keep_ir after debug
     with pass_context(opt_level=opt_level, keep_ir=True, keep_ir_dir='./outs/ir'):
         ir_module = lower(ir_module)
     # code generation

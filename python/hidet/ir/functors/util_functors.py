@@ -22,9 +22,10 @@ class StmtExprMapRewriter(StmtExprRewriter):
 
 
 class SubStmtExprCollector(FuncStmtExprVisitor):
-    def __init__(self, expr_types):
+    def __init__(self, expr_types, stop_when_found=False):
         super().__init__()
         self.expr_types = expr_types
+        self.stop_when_found = stop_when_found
         self.exprs = []
 
     def collect(self, e):
@@ -37,6 +38,9 @@ class SubStmtExprCollector(FuncStmtExprVisitor):
             return self.memo[e]
         if isinstance(e, self.expr_types):
             self.exprs.append(e)
+            if self.stop_when_found:
+                self.memo[e] = None
+                return
         StmtExprVisitor.visit(self, e)
 
 
@@ -94,7 +98,25 @@ def rewrite(node: Union[Expr, Stmt, tuple], rewrite_map: Mapping[Expr, Expr]):
     return rewriter.rewrite(node)
 
 
-def collect(node: Union[Function, Expr, Stmt], node_types) -> list:
+def collect(node: Union[Function, Expr, Stmt], node_types, stop_when_found=False) -> list:
+    """
+    Collect sub-nodes in given node with specific types.
+
+    Parameters
+    ----------
+    node: Union[Function, Expr, Stmt]
+        The root node to start collecting.
+    node_types: Sequence[Type[Union[Stmt, Expr]]], or Type[Stmt], or Type[Expr]
+        The node types to collect, can be arbitrary subclass of Expr and Stmt
+    stop_when_found: bool
+        When found node of given type, whether to collect the sub-nodes of that node.
+
+    Returns
+    -------
+    ret: List[Node]
+        The collected nodes.
+
+    """
     if not isinstance(node_types, tuple):
         if isinstance(node_types, list):
             node_types = tuple(node_types)
@@ -103,9 +125,9 @@ def collect(node: Union[Function, Expr, Stmt], node_types) -> list:
         else:
             raise ValueError()
 
-    collector = SubStmtExprCollector(node_types)
+    collector = SubStmtExprCollector(node_types, stop_when_found)
     collected = collector.collect(node)
-    return list(set(collected))
+    return collected
 
 
 def clone(node: Union[Stmt, Expr]) -> Union[Stmt, Expr]:

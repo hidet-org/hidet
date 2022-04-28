@@ -11,7 +11,7 @@ def generic_cpu_schedule(task: Task, space_level: int = 0) -> IRModule:
     input_map = {p: v for p, v in zip(task.parameters, func_param_vars)}
     body, _, new_buffer_map = expand_loop(task.outputs[0], input_map)
     func_locals = list(new_buffer_map.values())
-    func = Function(task.name + '.host', params=func_param_vars, body=body, ret_type=VoidType(),
+    func = Function(task.name + '.host', kind='host_kernel', params=func_param_vars, body=body, ret_type=VoidType(),
                     local_vars=func_locals, local_const_vars=[])
     module = IRModule({func.name: func})
     return module

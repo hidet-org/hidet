@@ -1,11 +1,11 @@
 from typing import List, Union
 
 from .arithmatic import square
-from .utils import Task, Operator, Tensor, TensorInput, compute, reduce, input_like, normalize_dim
+from .utils import Task, Operator, Tensor, TensorNode, compute, reduce, input_like, normalize_dim
 
 
 class ReduceTask(Task):
-    def __init__(self, x: TensorInput, dims: List[int], keep_dim: bool, reduce_type: str):
+    def __init__(self, x: TensorNode, dims: List[int], keep_dim: bool, reduce_type: str):
         x_shape = x.const_shape()
         y_shape = []
         for i in range(len(x_shape)):

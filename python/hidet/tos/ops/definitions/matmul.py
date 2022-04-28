@@ -1,9 +1,9 @@
 from hidet.ir.func import IRModule
-from .utils import Task, Operator, Tensor, TensorInput, compute, reduce, input_like
+from .utils import Task, Operator, Tensor, TensorNode, compute, reduce, input_like
 
 
 class MatmulTask(Task):
-    def __init__(self, a: TensorInput, b: TensorInput):
+    def __init__(self, a: TensorNode, b: TensorNode):
         batch_size, m_size, k_size = a.const_shape()
         batch_size, k_size, n_size = b.const_shape()
         self.batch_size: int = batch_size
@@ -26,9 +26,9 @@ class MatmulTask(Task):
             outputs=[c]
         )
 
-    def implement_cuda(self, space_level: int = 0) -> IRModule:
+    def implement_cuda(self) -> IRModule:
         from hidet.tos.ops.schedules.cuda import batched_matmul_cuda_schedule
-        return batched_matmul_cuda_schedule(self, space_level=space_level)
+        return batched_matmul_cuda_schedule(self)
 
 
 class MatmulOp(Operator):
@@ -36,7 +36,7 @@ class MatmulOp(Operator):
         if not (len(a.shape) == len(b.shape) == 3 and a.shape[0] == b.shape[0] and a.shape[2] == b.shape[1]):
             raise ValueError('Matrix multiplication expect tensor A and B with shape [B, M, K] and [B, K, N]' +
                              ', got {} and {}'.format(a.shape, b.shape))
-        task = MatmulTask(input_like(a, 'A'), input_like(b, 'B'))
+        task = MatmulTask(input_like(a, 'a'), input_like(b, 'b'))
         super().__init__([a, b], task)
 
 

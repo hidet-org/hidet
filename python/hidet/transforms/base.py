@@ -9,7 +9,7 @@ from hidet.utils import Timer, get_next_file_index
 class PassContext:
     stack: List['PassContext'] = []
 
-    def __init__(self, save_lowering_results=False, save_dir=None):
+    def __init__(self, save_ir=False, save_dir=None):
         if save_dir and os.path.isdir(save_dir):
             if os.path.isdir(save_dir):
                 for fname in os.listdir(save_dir):
@@ -18,7 +18,7 @@ class PassContext:
                     parts = fname.split('_')
                     if len(parts) > 0 and parts[0].isdigit() and fname.endswith('.text'):
                         os.remove(os.path.join(save_dir, fname))
-        self.save_lowering_results = save_lowering_results
+        self.save_ir = save_ir
         self.save_dir = save_dir
 
     @classmethod
@@ -46,7 +46,7 @@ class Pass:
             ret = self.process_module(ir_module)
         # print(f'{self.name:>30} {COLORS.OKGREEN}{timer.elapsed_seconds():.3f}{COLORS.ENDC} seconds')
         ctx = PassContext.current()
-        if ctx.save_lowering_results:
+        if ctx.save_ir:
             os.makedirs(ctx.save_dir, exist_ok=True)
             idx = get_next_file_index(ctx.save_dir)
             with open(os.path.join(ctx.save_dir, '{}_{}.text'.format(idx, self.name)), 'w') as f:
@@ -119,4 +119,4 @@ class RepeatFunctionPass(FunctionPass):
 
 def pass_context(opt_level: int = 0, keep_ir=False, keep_ir_dir: str = None):
     # todo: support different opt_level
-    return PassContext(save_lowering_results=keep_ir, save_dir=keep_ir_dir)
+    return PassContext(save_ir=keep_ir, save_dir=keep_ir_dir)

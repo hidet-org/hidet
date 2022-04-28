@@ -135,7 +135,7 @@ def simplify(node: Union[Stmt, Expr], repeat_limit=10):
     return node
 
 
-def simplify_to_int(node: Union[Stmt, Expr, int], repeat_limit=10) -> int:
+def simplify_to_int(node: Union[Expr, int], repeat_limit=10) -> int:
     if isinstance(node, int):
         return node
     node = simplify(node, repeat_limit)

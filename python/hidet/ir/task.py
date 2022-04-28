@@ -1,9 +1,9 @@
 from __future__ import annotations
-from typing import Dict, List, Union, Optional, Sequence, Type
+from typing import Dict, List, Union, Optional, Sequence, Type, Tuple
 from hidet.ir.node import Node
 from hidet.ir.expr import Expr, Var
 from hidet.ir.func import IRModule
-from hidet.ir.dialects.compute import TensorCompute, TensorInput, ComputeNode
+from hidet.ir.dialects.compute import TensorNode
 from hidet.utils.doc import Doc, Text, doc_join, NewLine
 
 
@@ -25,65 +25,50 @@ class Target:
 
 class Prologue(Node):
     def __init__(self, extra_inputs, indices, value):
-        self.extra_inputs: List[TensorInput] = extra_inputs
+        self.extra_inputs: List[TensorNode] = extra_inputs
         self.indices: List[Var] = indices
         self.value: Expr = value
 
 
 class Epilogue(Node):
-    def __init__(self, extra_inputs, indices, value):
-        self.extra_inputs: List[TensorInput] = extra_inputs
+    def __init__(self, extra_inputs, indices, orig_value, value, out_indices, out_tensor):
+        self.extra_inputs: List[TensorNode] = extra_inputs
         self.indices: List[Var] = indices
+        self.orig_value: Var = orig_value
         self.value: Expr = value
+        self.out_indices: Optional[List[Expr]] = out_indices
+        self.out_tensor: Optional[TensorNode] = out_tensor
 
 
-class ImplementContext:
-    contexts: List['ImplementContext'] = []
+class TaskContext:
+    contexts = []
 
-    def __init__(self, space_level=0):
+    def __init__(self, space_level: int = 0, resolve_out_dir: str = None):
         self.space_level = space_level
+        self.resolve_out_dir = resolve_out_dir
 
     def __enter__(self):
-        ImplementContext.contexts.append(self)
-        return self
+        self.contexts.append(self)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        assert ImplementContext.contexts[-1] is self
-        ImplementContext.contexts.pop()
+        self.contexts.pop()
 
-    @classmethod
-    def current(cls):
-        return cls.contexts[-1]
-
-
-ImplementContext.contexts.append(ImplementContext())    # fallback context
+    @staticmethod
+    def current() -> TaskContext:
+        return TaskContext.contexts[-1]
 
 
 class Task(Node):
-    def __init__(self, name, inputs, outputs, prologues=None, epilogues=None, parameters=None):
+    def __init__(self, name, inputs, outputs, prologues=None, epilogues=None, parameters=None, reverse_map=None):
         self.name = name
-        self.inputs: List[TensorInput] = inputs
-        self.outputs: List[TensorCompute] = outputs
-        self.prologues: Dict[TensorInput, Prologue] = prologues if prologues else {}
-        self.epilogues: Dict[TensorInput, Epilogue] = epilogues if epilogues else {}
-        self.parameters: List[ComputeNode] = parameters if parameters else inputs + outputs
+        self.inputs: List[TensorNode] = inputs
+        self.outputs: List[TensorNode] = outputs
+        self.prologues: Dict[TensorNode, Prologue] = prologues if prologues else {}
+        self.epilogues: Dict[TensorNode, Epilogue] = epilogues if epilogues else {}
+        self.parameters: List[TensorNode] = parameters if parameters else inputs + outputs
+        self.reverse_map: Optional[Tuple[List[Var], List[Expr]]] = reverse_map
 
-    def __str__(self):
-        lines = [
-            Text('name: ') + self.name,
-            Text('inputs: ') + '[' + doc_join(['{}: {}'.format(v, v.data_type) for v in self.inputs], ', ') + ']',
-            Text('outputs: ') + '[' + doc_join([str(v) for v in self.outputs], ', ') + ']',
-            Text('parameters: ') + '[' + doc_join([v.name for v in self.parameters], ', ') + ']'
-        ]
-        doc = Text('Task(') + doc_join(lines, NewLine()).indent() + ')'
-        return str(doc)
-
-    # todo: remove this after refactering
-    @property
-    def compute(self):
-        return self.outputs[0]
-
-    def implement(self, target: Union[Target, str], space_level: int = 0) -> IRModule:
+    def implement(self, target: Union[Target, str]) -> IRModule:
         if isinstance(target, str):
             target = Target.from_string(target)
         if target.name == 'cuda':
@@ -96,11 +81,11 @@ class Task(Node):
             raise AssertionError('The task implement function should return an IRModule, but got a {}.'.format(type(ret)))
         return ret
 
-    def implement_cuda(self, space_level: int = 0) -> IRModule:
+    def implement_cuda(self) -> IRModule:
         from hidet.tos.ops.schedules import generic_cuda_schedule
-        return generic_cuda_schedule(self, space_level)
+        return generic_cuda_schedule(self)
 
-    def implement_cpu(self, space_level: int = 0) -> IRModule:
+    def implement_cpu(self) -> IRModule:
         from hidet.tos.ops.schedules import generic_cpu_schedule
-        return generic_cpu_schedule(self, space_level)
+        return generic_cpu_schedule(self)
 

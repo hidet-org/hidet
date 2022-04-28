@@ -127,10 +127,13 @@ def demo_hidet_resnet50():
             y = graph(x)
             cuda_api.device_synchronization()
 
-    with tos.PassContext(instruments=[
-        SaveGraphInstrument(out_dir='./outs/'),
-        ProfileInstrument(log_file='./outs/profile.txt', print_stdout=True),
-    ], verbose=True):
+    with tos.PassContext(
+            instruments=[
+                SaveGraphInstrument(out_dir='./outs/'),
+                ProfileInstrument(log_file='./outs/profile.txt', print_stdout=True)
+            ],
+            verbose=True
+    ):
         graph = optimize(graph)
 
     x = randn([1, 3, 224, 224], dtype='float32')

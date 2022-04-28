@@ -1,6 +1,7 @@
 import itertools
 from typing import Mapping, List, Any, Tuple, Union
 
+import os
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.ir.dialects.lowlevel import TensorPointerType, PointerType
 from hidet.ir.expr import var, Var, And, Equal, Cast, if_then_else
@@ -11,9 +12,10 @@ from hidet.ir.node import Node
 from hidet.ir.primitives import syncthreads, thread_idx, block_idx
 from hidet.ir.stmt import AssignStmt, BufferStoreStmt, IfStmt
 from hidet.ir.type import scalar_type, TensorType, Scope, tensor_type
+from hidet.ir.task import Task, TaskContext
 from hidet.utils import Timer, cuda, factor, prod
 from hidet.tos.ops.definitions.matmul import MatmulTask
-from hidet.tos.ops.schedules.cuda.common import resolve_ir_modules
+from hidet.tos.ops.schedules.resolve import resolve_ir_modules
 from hidet.tos.ops.schedules.common import params_from_task, inputs_from_task, outputs_from_task, Schedule, NotSupportedError
 
 
@@ -238,16 +240,18 @@ class MatmulSchedule(Schedule):
         return settings
 
 
-def batched_matmul_cuda_schedule(task: MatmulTask, space_level: int = 0) -> IRModule:
-    schedules = MatmulSchedule.schedules(space_level=space_level)
+def batched_matmul_cuda_schedule(task: MatmulTask) -> IRModule:
+    ctx = TaskContext.current()
+    schedules = MatmulSchedule.schedules(space_level=ctx.space_level)
+    default_resolve_out_dir = os.path.join('./outs/resolve', task.name, 'batched_matmul_{}x{}x{}x{}'.format(task.batch_size, task.m_size, task.k_size, task.n_size))
+    resolve_out_dir = ctx.resolve_out_dir if ctx.resolve_out_dir else default_resolve_out_dir
     ir_modules = []
     for schedule in schedules:
         ir_modules.append(batched_matmul_cuda_with_given_schedule(task, schedule))
     return resolve_ir_modules(
         ir_modules=ir_modules,
         schedules=schedules,
-        task=task,
-        task_label='batched_matmul_{}x{}x{}x{}'.format(task.batch_size, task.m_size, task.k_size, task.n_size),
+        output_dir=resolve_out_dir,
         parallel=True,
         verbose=True
     )

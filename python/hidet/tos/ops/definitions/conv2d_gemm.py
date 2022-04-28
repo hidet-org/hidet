@@ -2,11 +2,11 @@ from typing import List
 
 from .matmul import matmul
 from .transform import pad
-from .utils import Task, Operator, Tensor, compute, input_like, TensorInput, normalize_kernel, normalize_stride, normalize_padding
+from .utils import Task, Operator, Tensor, compute, input_like, TensorNode, normalize_kernel, normalize_stride, normalize_padding
 
 
 class Conv2dGemmImageTransformTask(Task):
-    def __init__(self, x: TensorInput, kernel: List[int], stride: List[int]):
+    def __init__(self, x: TensorNode, kernel: List[int], stride: List[int]):
         n, c, h, w = x.const_shape()
         kx, ky = kernel
         sx, sy = stride
@@ -25,7 +25,7 @@ class Conv2dGemmImageTransformTask(Task):
 
 
 class Conv2dGemmFilterTransformTask(Task):
-    def __init__(self, w: TensorInput):
+    def __init__(self, w: TensorNode):
         oc, c, kx, ky = w.const_shape()
         gemm_w = compute(
             name='gemm_w',
@@ -41,7 +41,7 @@ class Conv2dGemmFilterTransformTask(Task):
 
 
 class Conv2dGemmInverseTransformTask(Task):
-    def __init__(self, gemm_y: TensorInput, out_shape: List[int]):
+    def __init__(self, gemm_y: TensorNode, out_shape: List[int]):
         n, oc, p, q = out_shape
         if tuple(gemm_y.const_shape()) != (n * p * q, oc):
             raise ValueError('Conv2d gemm inverse transform expect input with shape {}, got {}'.format(out_shape, gemm_y.const_shape()))

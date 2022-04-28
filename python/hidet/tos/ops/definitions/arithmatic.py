@@ -1,7 +1,7 @@
 from typing import List, Callable, Any
 
 from hidet.ir import primitives
-from .utils import Task, Operator, Tensor, TensorInput, compute, input_like
+from .utils import Task, Operator, Tensor, TensorNode, compute, input_like
 
 
 def broadcast_shape(x_shape: List[int], y_shape: List[int]) -> List[int]:
@@ -25,7 +25,7 @@ def broadcast_shape(x_shape: List[int], y_shape: List[int]) -> List[int]:
 
 
 class UnaryElementwiseTask(Task):
-    def __init__(self, name: str, x: TensorInput, op: Callable[[Any], Any]):
+    def __init__(self, name: str, x: TensorNode, op: Callable[[Any], Any]):
         shape = x.const_shape()
         y = compute(
             name='y',
@@ -41,7 +41,7 @@ class UnaryElementwiseTask(Task):
 
 
 class BinaryElementwiseTask(Task):
-    def __init__(self, name: str, x: TensorInput, y: TensorInput, op: Callable[[Any, Any], Any]):
+    def __init__(self, name: str, x: TensorNode, y: TensorNode, op: Callable[[Any, Any], Any]):
         x_shape = x.const_shape()
         y_shape = y.const_shape()
         z_shape = broadcast_shape(x_shape, y_shape)

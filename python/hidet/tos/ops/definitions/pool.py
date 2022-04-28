@@ -1,10 +1,10 @@
 from typing import Union, Sequence
 
-from .utils import Task, Operator, Tensor, TensorInput, compute, reduce, inline_compute, input_like, normalize_stride, normalize_kernel, normalize_padding
+from .utils import Task, Operator, Tensor, TensorNode, compute, reduce, inline_compute, input_like, normalize_stride, normalize_kernel, normalize_padding
 
 
 class Pool2dTask(Task):
-    def __init__(self, x: TensorInput, kernel, strides, padding, reduce_type: str):
+    def __init__(self, x: TensorNode, kernel, strides, padding, reduce_type: str):
         assert reduce_type in ['max', 'avg']
         kernel = normalize_kernel(kernel)
         strides = normalize_stride(strides)

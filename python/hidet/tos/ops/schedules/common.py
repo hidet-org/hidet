@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Mapping
 
-from hidet.ir import TensorInput, ScalarInput, ReduceCompute, TensorCompute
+from hidet.ir.dialects.compute import TensorNode, ScalarNode
 from hidet.ir.builders import StmtBuilder
 from hidet.ir.expr import *
 from hidet.ir.functors import infer_type, ExprRewriter, rewrite
@@ -33,61 +33,68 @@ class LoopExpander(ExprRewriter):
         value = self.visit(e)
         return self.sb.finish(), value, self.new_buffer_map
 
-    def visit_TensorInput(self, e: TensorInput):
-        return self.input_map[e]
+    # def visit_TensorInput(self, e: TensorNode):
+    #     return self.input_map[e]
+    #
+    # def visit_ScalarInput(self, e: ScalarNode):
+    #     return self.input_map[e]
+    #
 
-    def visit_ScalarInput(self, e: ScalarInput):
-        return self.input_map[e]
-
-    def visit_TensorCompute(self, e: TensorCompute):
+    def visit_TensorNode(self, e: TensorNode):
+        if e.grid_compute is None:
+            # input tensor
+            return self.input_map[e]
+        grid_compute = e.grid_compute
         # declare output buffer when needed
         if e in self.input_map:
             buf = self.input_map[e]
         else:
-            buf = tensor_var(e.name, e.shape, dtype=infer_type(e.value))
+            buf = Var(e.name, e.data_type)
             self.new_buffer_map[e] = buf
 
+        shape, axes, value = grid_compute.shape, grid_compute.axes, grid_compute.value
         # tensor compute loops
-        for i in range(len(e.shape)):
-            self.sb.enter_body(ForStmt(e.axes[i], e.shape[i]))
+        for i in range(len(shape)):
+            self.sb.enter_body(ForStmt(axes[i], shape[i]))
 
-        # at the inner-most loop body
-        expr = self.visit(e.value)
-        if e.accumulate:
-            if e.accumulate == 'sum':
-                expr = buf.__getitem__(tuple(e.axes)) + expr
-            else:
-                raise NotImplementedError()
-        self.sb.append(BufferStoreStmt(buf, e.axes, expr))
+        # at the innermost loop body
+        expr = self.visit(grid_compute.value)
+        self.sb.append(BufferStoreStmt(buf, axes, expr))
 
         # exit loop scope
-        for i in range(len(e.shape)):
+        for i in range(len(shape)):
             self.sb.exit_body()
 
         return buf
 
-    def visit_ReduceCompute(self, e: ReduceCompute):
+    def visit_ScalarNode(self, e: ScalarNode):
+        if e.reduce_compute is None:
+            # input scalar
+            return self.input_map[e]
+
+        rc = e.reduce_compute
+        shape, axes, value = rc.shape, rc.axes, rc.value
         # declare accumulator
-        acc = scalar_var(e.name, infer_type(e.value))
+        acc = scalar_var(e.name, infer_type(value))
         self.new_buffer_map[e] = acc
 
         # init accumulator
-        self.sb += AssignStmt(acc, e.init_const())
+        self.sb += AssignStmt(acc, rc.init_const(e.data_type.name))
 
         # reduction loops
-        for i in range(len(e.shape)):
-            self.sb.enter_body(ForStmt(e.axes[i], e.shape[i]))
+        for i in range(len(shape)):
+            self.sb.enter_body(ForStmt(axes[i], shape[i]))
 
-        # at the inner-most loop body
-        expr = self.visit(e.value)
-        self.sb += AssignStmt(acc, e.combine(acc, expr))
+        # at the innermost loop body
+        expr = self.visit(value)
+        self.sb += AssignStmt(acc, rc.combine(acc, expr))
 
         # exit loop scope
-        for i in range(len(e.shape)):
+        for i in range(len(shape)):
             self.sb.exit_body()
 
         # finalize
-        acc = e.finalize(acc, prod(e.shape))
+        acc = rc.finalize(acc, prod(shape))
 
         # if e is in the input buffer, we should write it back
         if e in self.input_map:
@@ -97,7 +104,7 @@ class LoopExpander(ExprRewriter):
         return acc
 
 
-def expand_loop(expr: Expr, input_map: Mapping[Union[ScalarInput, TensorInput, Expr], Var]):
+def expand_loop(expr: Expr, input_map: Mapping[Union[ScalarNode, TensorNode], Var]):
     """
     Generate statements to calculate the expression.
 
@@ -135,6 +142,7 @@ class VirtualTensor:
     virtual tensor A = VirtualTensor(fmap=lambda i: 0<=i && i<32 ? A[i] : 0.0);
     Then we can access A[i] and slice A[1:].
     """
+
     def __init__(self, fmap):
         self.fmap = fmap
 
@@ -163,6 +171,7 @@ class VirtualTensor:
                     else:
                         orig_indices.append(indices[i])
                 return self.__getitem__(orig_indices)
+
             return VirtualTensor(fmap)
         else:
             return self.fmap(*item)
@@ -173,6 +182,7 @@ class VirtualTensor:
             if len(actual_indices) != len(indices):
                 raise ValueError('Expect {} number of indices, got {}.'.format(len(indices), len(actual_indices)))
             return rewrite(value, {a: b for a, b in zip(indices, actual_indices)})
+
         return VirtualTensor(fmap)
 
 
@@ -215,4 +225,3 @@ def write_output(buf: Var, indices: List[Var], value: Expr, task: Task, params: 
         return BufferStoreStmt(buf, indices, value)
     else:
         return BufferStoreStmt(buf, indices, value)
-

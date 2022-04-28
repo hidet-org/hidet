@@ -1,7 +1,7 @@
 from hidet.tos.ops.schedules.common import expand_loop
 from hidet.ir import IRModule
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
-from hidet.ir.dialects.compute import TensorCompute
+from hidet.ir.dialects.compute import TensorNode
 from hidet.ir.expr import Var
 from hidet.ir.functors import rewrite
 from hidet.ir.layout import TaskLayout
@@ -11,8 +11,8 @@ from hidet.ir.task import Task
 from hidet.ir.functors import inline_compute
 
 
-def generic_cuda_schedule(task: Task, space_level: int = 0) -> IRModule:
-    computation: TensorCompute = inline_compute(task.outputs[0], reduce_limit=16)
+def generic_cuda_schedule(task: Task) -> IRModule:
+    computation: TensorNode = inline_compute(task.outputs[0], reduce_limit=16)
     block_size = 512
     task_shape = computation.const_shape()
     task_layout = TaskLayout.row_major(task_shape)
@@ -23,8 +23,9 @@ def generic_cuda_schedule(task: Task, space_level: int = 0) -> IRModule:
         params = [Var(param.name, param.data_type) for param in task.parameters]
         param_map = {param: var for param, var in zip(task.parameters, params)}
         fb.extend_params(params)
-        scalar_value = rewrite(computation.value, param_map)  # replace TensorInput to function parameter
-        out = param_map[task.compute]
+        scalar_value = rewrite(computation.grid_compute.value, param_map)  # replace TensorInput to function parameter
+        assert len(task.outputs) == 1
+        out = param_map[task.parameters[-1]]
         # body
         sb = StmtBuilder()
         worker_idx = block_idx() * block_size + thread_idx()
@@ -32,7 +33,7 @@ def generic_cuda_schedule(task: Task, space_level: int = 0) -> IRModule:
             with sb.for_task(worker_index=worker_idx, task_layout=task_layout) as tasks:
                 buffer_map = {}
                 for axes_values in tasks:
-                    remap = {axis: value for axis, value in zip(computation.axes, axes_values)}
+                    remap = {axis: value for axis, value in zip(computation.grid_compute.axes, axes_values)}
                     stmt, value, new_buffer_map = expand_loop(rewrite(scalar_value, remap), input_map=buffer_map)
                     buffer_map.update(new_buffer_map)
                     sb += stmt

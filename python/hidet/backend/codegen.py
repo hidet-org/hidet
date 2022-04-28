@@ -1,7 +1,8 @@
+from hidet.ir.dialects.pattern import AnyExpr
 from hidet.ir.func import *
 from hidet.ir.stmt import *
 from hidet.ir.expr import *
-from hidet.ir.dialects.compute import ReduceCompute, TensorCompute, TensorInput, ScalarInput
+from hidet.ir.dialects.compute import TensorNode, ScalarNode
 from hidet.ir.functors import StmtExprFunctor, TypeFunctor
 from hidet.ir.dialects.lowlevel import VoidType, PointerType, Dereference, Address, ReferenceType, Reference, TensorPointerType
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
@@ -430,17 +431,18 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         return Text('void')
 
     # the following expressions should not remain to codegen
-    def visit_ScalarInput(self, e: ScalarInput):
+    def visit_TensorSlice(self, e: TensorSlice):
         raise ValueError()
 
-    def visit_TensorInput(self, e: TensorInput):
+    def visit_ScalarNode(self, e: ScalarNode):
         raise ValueError()
 
-    def visit_TensorCompute(self, e: TensorCompute):
+    def visit_TensorNode(self, e: TensorNode):
         raise ValueError()
 
-    def visit_ReduceCompute(self, e: ReduceCompute):
+    def visit_AnyExpr(self, e: AnyExpr):
         raise ValueError()
+
 
 
 def codegen(ir_module: IRModule, src_out_path: Optional[str] = None) -> Optional[str]:

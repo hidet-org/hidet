@@ -1,9 +1,10 @@
 import tvm
-from hidet.ir.dialects.compute import ReduceCompute, TensorCompute, TensorInput, ScalarInput
+from hidet.ir.dialects.compute import TensorNode, ScalarNode
 from hidet.ir.dialects.lowlevel import Reference, Address, ReferenceType, TensorPointerType, Dereference, VoidType, PointerType
 # from hidet.ir.dialects.pattern import ScalarExprPattern, TensorComputePattern, ReduceComputePattern, AnyExpr
+from hidet.ir.dialects.pattern import AnyExpr
 from hidet.ir.node import Node
-from hidet.ir.expr import Call, TensorElement, Not, Or, And, Constant, Var, Let, Equal, LessThan, FloorDiv, Mod, Div, Multiply, Sub, Add, TensorType, ScalarType, Expr, IfThenElse, RightShift, LeftShift, BitwiseNot, BitwiseOr, BitwiseAnd, AlterLayout, TensorSlice, Neg, Cast
+from hidet.ir.expr import Call, TensorElement, Not, Or, And, Constant, Var, Let, Equal, LessThan, FloorDiv, Mod, Div, Multiply, Sub, Add, TensorType, ScalarType, Expr, IfThenElse, RightShift, LeftShift, BitwiseNot, BitwiseOr, BitwiseAnd, TensorSlice, Neg, Cast
 from hidet.ir.functors import ExprFunctor, TypeFunctor, NodeFunctor
 from hidet.ir.type import TypeNode
 from hidet.ir.utils.hash_sum import HashSum
@@ -139,31 +140,21 @@ class ExprHash(ExprFunctor, TypeFunctor):
     def visit_TensorSlice(self, e: TensorSlice):
         return self(e.base) + self(e.indices) + self(e.starts) + self(e.ends) + e.class_index()
 
-    def visit_AlterLayout(self, e: AlterLayout):
-        # todo: use explicit way to represent layout_map instead of python function, so that we can hash and serialize.
-        return self(e.var) + self(e.shape) + e.class_index()
+    def visit_ScalarNode(self, e: ScalarNode):
+        if e.reduce_compute:
+            rc = e.reduce_compute
+            return self(rc.axes) + self(rc.value) + self(rc.shape) + e.class_index()
+        else:
+            return HashSum(e) + e.class_index()
 
-    def visit_ScalarInput(self, e: ScalarInput):
-        return self(e)
+    def visit_TensorNode(self, e: TensorNode):
+        if e.grid_compute:
+            rc = e.grid_compute
+            return self(rc.axes) + self(rc.value) + self(rc.shape) + e.class_index()
+        else:
+            return HashSum(e) + e.class_index()
 
-    def visit_TensorInput(self, e: TensorInput):
-        return self(e)
+    def visit_AnyExpr(self, e: AnyExpr):
+        return HashSum(e) + e.class_index()
 
-    def visit_TensorCompute(self, e: TensorCompute):
-        return self(e.shape) + self(e.axes) + self(e.value) + self(e.accumulate) + self(e.predicate) + e.class_index()
 
-    def visit_ReduceCompute(self, e: ReduceCompute):
-        return self(e.shape) + self(e.axes) + self(e.value) + self(e.reduce_type) + e.class_index()
-
-    # def visit_AnyExpr(self, e: AnyExpr):
-    #     raise NotImplementedError()
-    #
-    # def visit_ReduceComputePattern(self, e: ReduceComputePattern):
-    #     raise NotImplementedError()
-    #
-    # def visit_TensorComputePattern(self, e: TensorComputePattern):
-    #     raise NotImplementedError()
-    #
-    # def visit_ScalarExprPattern(self, e: ScalarExprPattern):
-    #     raise NotImplementedError()
-    #

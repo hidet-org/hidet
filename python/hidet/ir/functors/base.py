@@ -15,9 +15,10 @@ class NodeFunctor:
     def __call__(self, node: Any):
         return self.visit(node)
 
-    def visit(self, node: Node):
-        if self.memo is not None and node in self.memo:
-            return self.memo[node]
+    def visit(self, node: Union[Node, tuple, list]):
+        key = id(node) if isinstance(node, list) else node
+        if self.memo is not None and key in self.memo:
+            return self.memo[key]
         if isinstance(node, Node):
             idx = node.class_index() if node is not None else 0
             # noinspection PyUnresolvedReferences
@@ -27,10 +28,12 @@ class NodeFunctor:
             ret = dispatch_table[idx](self, node)
         elif isinstance(node, tuple):
             ret = tuple(self.visit(v) for v in node)
+        elif isinstance(node, list):
+            ret = [self.visit(v) for v in node]
         else:
             raise NotImplementedError("Can not dispatch object with type {}".format(type(node)))
         if self.memo is not None:
-            self.memo[node] = ret
+            self.memo[key] = ret
         return ret
 
     @staticmethod
@@ -77,7 +80,6 @@ class ExprFunctor(NodeFunctor):
             TensorElement: cls.visit_TensorElement,
             TensorSlice: cls.visit_TensorSlice,
             IfThenElse: cls.visit_IfThenElse,
-            AlterLayout: cls.visit_AlterLayout,
             Call: cls.visit_Call,
             Let: cls.visit_Let,
             Var: cls.visit_Var,
@@ -86,15 +88,9 @@ class ExprFunctor(NodeFunctor):
             Dereference: cls.visit_Dereference,
             Address: cls.visit_Address,
             Reference: cls.visit_Reference,
-            ScalarInput: cls.visit_ScalarInput,
-            TensorInput: cls.visit_TensorInput,
-            TensorCompute: cls.visit_TensorCompute,
-            ReduceCompute: cls.visit_ReduceCompute,
-            CustomCompute: cls.visit_CustomCompute,
+            TensorNode: cls.visit_TensorNode,
+            ScalarNode: cls.visit_ScalarNode,
             AnyExpr: cls.visit_AnyExpr,
-            # ReduceComputePattern: cls.visit_ReduceComputePattern,
-            # TensorComputePattern: cls.visit_TensorComputePattern,
-            # ScalarExprPattern: cls.visit_ScalarExprPattern,
         }
 
     def visit_Add(self, e: Add):
@@ -160,9 +156,6 @@ class ExprFunctor(NodeFunctor):
     def visit_IfThenElse(self, e: IfThenElse):
         raise NotImplementedError()
 
-    def visit_AlterLayout(self, e: AlterLayout):
-        raise NotImplementedError()
-
     def visit_Cast(self, e: Cast):
         raise NotImplementedError()
 
@@ -187,33 +180,15 @@ class ExprFunctor(NodeFunctor):
     def visit_Constant(self, e: Constant):
         raise NotImplementedError()
 
-    def visit_ScalarInput(self, e: ScalarInput):
+    def visit_ScalarNode(self, e: ScalarNode):
         raise NotImplementedError()
 
-    def visit_TensorInput(self, e: TensorInput):
-        raise NotImplementedError()
-
-    def visit_TensorCompute(self, e: TensorCompute):
-        raise NotImplementedError()
-
-    def visit_ReduceCompute(self, e: ReduceCompute):
-        raise NotImplementedError()
-
-    def visit_CustomCompute(self, e: CustomCompute):
+    def visit_TensorNode(self, e: TensorNode):
         raise NotImplementedError()
 
     def visit_AnyExpr(self, e: AnyExpr):
         raise NotImplementedError()
 
-    # def visit_ReduceComputePattern(self, e: ReduceComputePattern):
-    #     raise NotImplementedError()
-    #
-    # def visit_TensorComputePattern(self, e: TensorComputePattern):
-    #     raise NotImplementedError()
-    #
-    # def visit_ScalarExprPattern(self, e: ScalarExprPattern):
-    #     raise NotImplementedError()
-    #
 
 class ExprVisitor(ExprFunctor):
     def visit_Add(self, e: Add):
@@ -302,9 +277,6 @@ class ExprVisitor(ExprFunctor):
         self.visit(e.then_expr)
         self.visit(e.else_expr)
 
-    def visit_AlterLayout(self, e: AlterLayout):
-        self.visit(e.var)
-
     def visit_Call(self, e: Call):
         self.visit(e.func_var)
         for arg in e.args:
@@ -322,33 +294,13 @@ class ExprVisitor(ExprFunctor):
         pass
 
     # compute dialect
-    def visit_ScalarInput(self, e: ScalarInput):
-        pass
+    def visit_ScalarNode(self, e: ScalarNode):
+        if e.reduce_compute:
+            self.visit(e.reduce_compute.value)
 
-    def visit_TensorInput(self, e: TensorInput):
-        pass
-
-    def visit_TensorCompute(self, e: TensorCompute):
-        self.visit(e.value)
-
-    def visit_ReduceCompute(self, e: ReduceCompute):
-        self.visit(e.value)
-
-    def visit_CustomCompute(self, e: CustomCompute):
-        pass
-
-    # # pattern dialect
-    # def visit_AnyExpr(self, e: ReduceComputePattern):
-    #     pass
-    #
-    # def visit_ReduceComputePattern(self, e: ReduceComputePattern):
-    #     pass
-    #
-    # def visit_TensorComputePattern(self, e: TensorComputePattern):
-    #     pass
-    #
-    # def visit_ScalarExprPattern(self, e: ScalarExprPattern):
-    #     pass
+    def visit_TensorNode(self, e: TensorNode):
+        if e.grid_compute:
+            self.visit(e.grid_compute.value)
 
     # lowlevel dialect
     def visit_Cast(self, e: Cast):
@@ -362,6 +314,10 @@ class ExprVisitor(ExprFunctor):
 
     def visit_Reference(self, e: Reference):
         self.visit(e.expr)
+
+    def visit_AnyExpr(self, e: AnyExpr):
+        pass
+
 
 
 class ExprRewriter(ExprFunctor):
@@ -479,13 +435,6 @@ class ExprRewriter(ExprFunctor):
         else:
             return IfThenElse(cond, then_expr, else_expr)
 
-    def visit_AlterLayout(self, e: AlterLayout):
-        var = self(e.var)
-        if var is e.var:
-            return e
-        else:
-            return AlterLayout(var, e.shape, e.layout_map)
-
     def visit_Cast(self, e: Cast):
         expr = self(e.expr)
         if expr is e.expr:
@@ -537,46 +486,35 @@ class ExprRewriter(ExprFunctor):
     def visit_Constant(self, e: Constant):
         return e
 
-    def visit_ScalarInput(self, e: ScalarInput):
-        return e
-
-    def visit_TensorInput(self, e: TensorInput):
-        return e
-
-    def visit_TensorCompute(self, e: TensorCompute):
-        name = e.name
-        value = self(e.value)
-        axes = [self(axis) for axis in e.axes]
-        shape = [self(s) for s in e.shape]
-        if value is e.value and same_list(axes, e.axes) and same_list(shape, e.shape):
+    def visit_ScalarNode(self, e: ScalarNode):
+        if e.reduce_compute is None:
             return e
         else:
-            return TensorCompute(name, shape, axes, value, e.data_type)
+            rc = e.reduce_compute
+            axes = self(rc.axes)
+            value = self(rc.value)
+            shape = self(rc.shape)
+            if value is rc.value and same_list(axes, rc.axes) and same_list(shape, rc.shape):
+                return e
+            else:
+                return ScalarNode(e.name, e.data_type, ReduceCompute(shape, axes, value, rc.reduce_type))
 
-    def visit_ReduceCompute(self, e: ReduceCompute):
-        value = self(e.value)
-        axes = [self(axis) for axis in e.axes]
-        shape = [self(v) for v in e.shape]
-        if value is e.value and same_list(axes, e.axes) and same_list(shape, e.shape):
+    def visit_TensorNode(self, e: TensorNode):
+        if e.grid_compute is None:
             return e
         else:
-            return ReduceCompute(value, shape, axes, e.reduce_type, e.data_type)
-
-    def visit_CustomCompute(self, e: CustomCompute):
-        return e
+            gc = e.grid_compute
+            axes = self(gc.axes)
+            value = self(gc.value)
+            shape = self(gc.shape)
+            if value is gc.value and same_list(axes, gc.axes) and same_list(shape, gc.shape):
+                return e
+            else:
+                return TensorNode(e.name, e.data_type, GridCompute(shape, axes, value))
 
     def visit_AnyExpr(self, e: AnyExpr):
         return e
 
-    # def visit_ReduceComputePattern(self, e: ReduceComputePattern):
-    #     return e
-    #
-    # def visit_TensorComputePattern(self, e: TensorComputePattern):
-    #     return e
-    #
-    # def visit_ScalarExprPattern(self, e: ScalarExprPattern):
-    #     return e
-    #
 
 class StmtFunctor(NodeFunctor):
     @staticmethod
@@ -843,33 +781,6 @@ class TypeFunctor(NodeFunctor):
     def visit_VoidType(self, t: VoidType):
         raise NotImplementedError()
 
-
-# class WorkerFunctor(NodeFunctor):
-#     @staticmethod
-#     def get_dispatch_mapping(cls) -> Mapping[Type[Node], Any]:
-#         return {
-#             Host: cls.visit_Host,
-#             Grid: cls.visit_Grid,
-#             ThreadBlock: cls.visit_ThreadBlock,
-#             Warp: cls.visit_Warp,
-#             Thread: cls.visit_Thread,
-#         }
-#
-#     def visit_Host(self, host: Host):
-#         raise NotImplementedError()
-#
-#     def visit_Grid(self, grid: Grid):
-#         raise NotImplementedError()
-#
-#     def visit_ThreadBlock(self, block: ThreadBlock):
-#         raise NotImplementedError()
-#
-#     def visit_Warp(self, warp: Warp):
-#         raise NotImplementedError()
-#
-#     def visit_Thread(self, thread: Thread):
-#         raise NotImplementedError()
-#
 
 def same_list(lhs: Sequence, rhs: Sequence):
     if len(lhs) != len(rhs):

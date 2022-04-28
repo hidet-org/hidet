@@ -2,7 +2,7 @@ from typing import Optional, List
 
 from hidet.ir.expr import Expr, if_then_else, convert, cast, And
 from hidet.ir.primitives import cuda_round, cuda_floor, cuda_ceil, cuda_max, cuda_min
-from .utils import Task, Operator, Tensor, TensorInput, compute, input_like
+from .utils import Task, Operator, Tensor, TensorNode, compute, input_like
 
 
 # Acknowledgement: take TVM resize topi implementation as a reference
@@ -47,7 +47,7 @@ def get_closest_index(x: Expr, rounding_method: str) -> Expr:
     return func_map[rounding_method](x)
 
 
-def get_2d_pixel(data: TensorInput, n, c, h, w) -> Expr:
+def get_2d_pixel(data: TensorNode, n, c, h, w) -> Expr:
     height, width = data.const_shape()[2:]
     h = cuda_max(0, cuda_min(height, h))
     w = cuda_max(0, cuda_min(width, w))
@@ -58,7 +58,7 @@ def linear_interpolate(a, b, ratio):
     return a * (1.0 - ratio) + b * ratio
 
 
-def resize2d_nchw_compute(data: TensorInput, size: List[int], method: str, coordinate_transformation_mode, rounding_method,
+def resize2d_nchw_compute(data: TensorNode, size: List[int], method: str, coordinate_transformation_mode, rounding_method,
                        roi, cubic_alpha, cubic_exclude, extrapolation_value) -> Task:
     image_size = data.const_shape()[2:]
     target_size = size
@@ -100,7 +100,7 @@ def resize2d_nchw_compute(data: TensorInput, size: List[int], method: str, coord
 
 
 class Resize2dTask(Task):
-    def __init__(self, data: TensorInput, size: List[int], method: str, coordinate_transformation_mode, rounding_method,
+    def __init__(self, data: TensorNode, size: List[int], method: str, coordinate_transformation_mode, rounding_method,
                  roi, cubic_alpha, cubic_exclude, extrapolation_value):
         out = resize2d_nchw_compute(data, size, method, coordinate_transformation_mode, rounding_method, roi, cubic_alpha, cubic_exclude, extrapolation_value)
         super().__init__(

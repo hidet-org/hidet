@@ -192,11 +192,11 @@ class PatternMatcher:
                 And: PatternMatcher.match_CommutativeBinary,
                 Or: PatternMatcher.match_CommutativeBinary,
                 # compute dialect expr
-                ScalarInput: PatternMatcher.match_ScalarInput,
-                TensorInput: PatternMatcher.match_TensorInput,
-                TensorCompute: PatternMatcher.match_TensorCompute,
-                ReduceCompute: PatternMatcher.match_ReduceCompute,
-                CustomCompute: PatternMatcher.match_CustomCompute,
+                # ScalarInput: PatternMatcher.match_ScalarInput,
+                # TensorInput: PatternMatcher.match_TensorInput,
+                # TensorCompute: PatternMatcher.match_TensorCompute,
+                # ReduceCompute: PatternMatcher.match_ReduceCompute,
+                # CustomCompute: PatternMatcher.match_CustomCompute,
                 # type
                 ScalarType: PatternMatcher.match_ScalarType,
                 TensorType: PatternMatcher.match_TensorType,
@@ -321,38 +321,38 @@ class PatternMatcher:
         if pattern.value != target.value:
             raise NotMatchedError(pattern, target)
 
-    def match_ScalarInput(self, pattern: ScalarInput, target: ScalarInput):
-        with ExitStack() as stack:
-            stack.enter_context(self.match(pattern.data_type, target.data_type))
-
-    def match_TensorInput(self, pattern: TensorInput, target: TensorInput):
-        with ExitStack() as stack:
-            stack.enter_context(self.match(pattern.data_type, target.data_type))
-
-    def match_TensorCompute(self, pattern: TensorCompute, target: TensorCompute):
-        with ExitStack() as stack:
-            stack.enter_context(self.match(pattern.shape, target.shape))
-            stack.enter_context(self.match(pattern.axes, target.axes))
-            stack.enter_context(self.match(pattern.value, target.value))
-            stack.enter_context(self.match(pattern.data_type, target.data_type))
-
-    def match_ReduceCompute(self, pattern: ReduceCompute, target: ReduceCompute):
-        with ExitStack() as stack:
-            stack.enter_context(self.match(pattern.axes, target.axes))
-            stack.enter_context(self.match(pattern.shape, target.shape))
-            stack.enter_context(self.match(pattern.value, target.value))
-            stack.enter_context(self.match(pattern.reduce_type, target.reduce_type))
-            stack.enter_context(self.match(pattern.data_type, target.data_type))
-
-    def match_CustomCompute(self, pattern: CustomCompute, target: CustomCompute):
-        with ExitStack() as stack:
-            stack.enter_context(self.match(pattern.identifier, target.identifier))
-            stack.enter_context(self.match(pattern.data_type, target.data_type))
-            stack.enter_context(self.match(pattern.params, target.params))
-            for key, value in pattern.attributes.items():
-                if key not in target.attributes:
-                    raise NotMatchedError(pattern, target, 'key {} not found in target CustomCompute'.format(key))
-                stack.enter_context(self.match(value, target.attributes[key]))
+    # def match_ScalarInput(self, pattern: ScalarInput, target: ScalarInput):
+    #     with ExitStack() as stack:
+    #         stack.enter_context(self.match(pattern.data_type, target.data_type))
+    #
+    # def match_TensorInput(self, pattern: TensorInput, target: TensorInput):
+    #     with ExitStack() as stack:
+    #         stack.enter_context(self.match(pattern.data_type, target.data_type))
+    #
+    # def match_TensorCompute(self, pattern: TensorCompute, target: TensorCompute):
+    #     with ExitStack() as stack:
+    #         stack.enter_context(self.match(pattern.shape, target.shape))
+    #         stack.enter_context(self.match(pattern.axes, target.axes))
+    #         stack.enter_context(self.match(pattern.value, target.value))
+    #         stack.enter_context(self.match(pattern.data_type, target.data_type))
+    #
+    # def match_ReduceCompute(self, pattern: ReduceCompute, target: ReduceCompute):
+    #     with ExitStack() as stack:
+    #         stack.enter_context(self.match(pattern.axes, target.axes))
+    #         stack.enter_context(self.match(pattern.shape, target.shape))
+    #         stack.enter_context(self.match(pattern.value, target.value))
+    #         stack.enter_context(self.match(pattern.reduce_type, target.reduce_type))
+    #         stack.enter_context(self.match(pattern.data_type, target.data_type))
+    #
+    # def match_CustomCompute(self, pattern: CustomCompute, target: CustomCompute):
+    #     with ExitStack() as stack:
+    #         stack.enter_context(self.match(pattern.identifier, target.identifier))
+    #         stack.enter_context(self.match(pattern.data_type, target.data_type))
+    #         stack.enter_context(self.match(pattern.params, target.params))
+    #         for key, value in pattern.attributes.items():
+    #             if key not in target.attributes:
+    #                 raise NotMatchedError(pattern, target, 'key {} not found in target CustomCompute'.format(key))
+    #             stack.enter_context(self.match(value, target.attributes[key]))
 
     def match_DataLayout(self, pattern, target):
         if isinstance(target, (StridesLayout, DataLayout)):
@@ -512,13 +512,13 @@ class PatternMatcher:
             raise NotMatchedError(pattern, target)
 
 
-def compute_pattern(name, shape, fcompute, accumulate=None, scope=None, layout=None):
-    shape = convert(shape)
-    axes = [var() for _ in shape]
-    value = convert(fcompute(*axes))
-    data_type = TensorType(scope, dtype=ScalarType('float32'), shape=shape, layout=layout)
-    return TensorCompute(name, shape, axes, value, data_type, accumulate)
-
+# def compute_pattern(name, shape, fcompute, accumulate=None, scope=None, layout=None):
+#     shape = convert(shape)
+#     axes = [var() for _ in shape]
+#     value = convert(fcompute(*axes))
+#     data_type = TensorType(scope, dtype=ScalarType('float32'), shape=shape, layout=layout)
+#     return TensorCompute(name, shape, axes, value, data_type, accumulate)
+#
 
 def reduce_pattern(shape: Sequence[Union[int, Expr]], fcompute, reduce_type: str):
     shape = convert(shape)
@@ -544,8 +544,8 @@ def any_const():
 #     return ScalarExprPattern(base_pattern=base_pattern, exclude_vars=exclude_vars)
 
 
-def any_tensor_input() -> TensorInput:
-    return TensorInput(None, None)
+# def any_tensor_input() -> TensorInput:
+#     return TensorInput(None, None)
 
 
 def int_vars(names):

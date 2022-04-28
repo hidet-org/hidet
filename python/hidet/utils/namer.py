@@ -19,23 +19,22 @@ class Namer:
 
     def get_name(self, e, hint=None):
         from hidet.ir.expr import Var
-        from hidet.ir.dialects.compute import ScalarInput, TensorInput
+        from hidet.ir.dialects.compute import ScalarNode, TensorNode
         if e in self.obj_name:
             return self.obj_name
         if hint:
             orig_name = hint
         elif isinstance(e, Var) and e.hint is not None:
             orig_name = e.hint
-        elif isinstance(e, (ScalarInput, TensorInput)):
+        elif isinstance(e, (ScalarNode, TensorNode)):
             orig_name = e.name
         else:
             alias = {
-                'ScalarInput': 'scalar',
-                'TensorInput': 'tensor',
-                'Var': 'v',
+                ScalarNode: 'scalar',
+                TensorNode: 'tensor',
+                Var: 'v',
             }
-            class_name = str(e.__class__.__name__)
-            orig_name = alias[class_name] if class_name in alias else class_name
+            orig_name = alias[type(e)] if type(e) in alias else type(e).__name__
 
         if orig_name in self.name_id_clock:
             name = orig_name

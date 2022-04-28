@@ -3,7 +3,7 @@ import sympy as S
 
 from hidet.ir.type import ScalarType, TensorType
 from hidet.ir.expr import Expr, Constant, Var, FloorDiv, Mod, Div, Multiply, Sub, Add, convert
-from hidet.ir.dialects.compute import ScalarInput
+from hidet.ir.dialects.compute import ScalarNode
 from hidet.utils.namer import Namer
 
 from hidet.ir.functors.base import ExprFunctor
@@ -174,3 +174,6 @@ def coefficients(expr: Expr, bases: List[Union[Var, ScalarInput]]) -> Dict[Tuple
     for item, s_expr in s_dict.items():
         h_dict[item] = from_sympy(s_expr, smap)
     return h_dict
+
+
+raise ImportError('Revise this module before use.')

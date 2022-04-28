@@ -16,7 +16,7 @@ class TypeNode(Node):
 # scope
 class Scope(Node):
     def __init__(self, name):
-        assert name in ['host', 'global', 'shared', 'register', 'temp']
+        assert name in ['host', 'global', 'shared', 'register', 'unspecified']
         self.name = name
 
 
@@ -76,6 +76,9 @@ class TensorType(TypeNode):
     def reorder(self, order: Sequence[int]):
         layout = self.layout.reorder(order)
         return tensor_type(self.scope, self.scalar_type, layout=layout)
+
+    def const_shape(self) -> List[int]:
+        return [int(v) for v in self.shape]
 
 
 TypeLike = Union[str, TypeNode]

@@ -352,20 +352,6 @@ class IfThenElse(Expr):
         self.else_expr = convert(else_expr)
 
 
-class AlterLayout(Expr):
-    def __init__(self, var, shape, layout_map):
-        """
-        :param shape: shape of new layout
-        :param layout_map: a mapping function from new layout to original layout.
-            For example, if the original layout is a 2-dimensional row major layout: A[i, j] -> i * J + j
-            And the new layout is a 3 dimensional layout. We will have: layout_map(i, j, k) -> (f1(i, j, k), f2(i, j, k)).
-            Thus, A[i, j, k] -> A[f1(i, j, k), f2(i, j, k)] -> f1(i, j, k) * J + f2(i, j, k).
-        """
-        self.var: Var = var
-        self.shape = shape
-        self.layout_map = layout_map
-
-
 class Var(Expr):
     id_clock = 0
 
@@ -454,7 +440,7 @@ def get_tensor_layout(v: Expr):
 
 
 def tensor_rank(v: Expr) -> int:
-    from hidet.ir.dialects.compute import TensorCompute, TensorInput
+    from hidet.ir.dialects.compute import TensorNode
     from hidet.ir.dialects.lowlevel import TensorPointerType, PointerType
     if isinstance(v, Var):
         if isinstance(v.type, TensorType):
@@ -467,12 +453,8 @@ def tensor_rank(v: Expr) -> int:
             raise ValueError(v)
     elif isinstance(v, TensorSlice):
         return sum([1 if i is None else 0 for i in v.indices])
-    elif isinstance(v, TensorInput):
+    elif isinstance(v, TensorNode):
         return len(v.data_type.shape)
-    elif isinstance(v, TensorCompute):
-        return len(v.shape)
-    elif isinstance(v, AlterLayout):
-        return len(v.shape)
     elif isinstance(v, Constant) and isinstance(v.data_type, TensorType):
         return len(v.data_type.shape)
     else:

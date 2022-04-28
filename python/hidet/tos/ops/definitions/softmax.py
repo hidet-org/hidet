@@ -1,10 +1,10 @@
 from hidet.ir.func import IRModule
-from .utils import Task, Operator, Tensor, TensorInput, compute, input_like, normalize_dim, reduce
+from .utils import Task, Operator, Tensor, TensorNode, compute, input_like, normalize_dim, reduce
 from hidet.ir.primitives import expf
 
 
 class SoftmaxTask(Task):
-    def __init__(self, x: TensorInput, axis: int):
+    def __init__(self, x: TensorNode, axis: int):
         self.x_shape = x.const_shape()
         self.axis = axis
 
@@ -53,7 +53,7 @@ class SoftmaxTask(Task):
             outputs=[out]
         )
 
-    def implement_cuda(self, space_level: int = 0) -> IRModule:
+    def implement_cuda(self) -> IRModule:
         from hidet.tos.ops.schedules import softmax_cuda_schedule
         return softmax_cuda_schedule(self)
 

@@ -6,7 +6,7 @@ import numpy as np
 from hidet.ir.expr import const_tensor, Constant
 from .matmul import batched_matmul
 from .transform import flatten, reshape
-from .utils import Tensor, Operator, Task, TensorInput, input_like, compute, reduce, normalize_padding, normalize_kernel
+from .utils import Tensor, Operator, Task, TensorNode, input_like, compute, reduce, normalize_padding, normalize_kernel
 
 """
 Winograd convolution, see <Fast Algorithms for Convolutional Neural Networks> https://arxiv.org/pdf/1509.09308.pdf
@@ -38,7 +38,7 @@ def winograd_transform_matrices(m: int, r: int) -> Tuple[Constant, Constant, Con
 
 
 class Conv2dWinogradImageTransformTask(Task):
-    def __init__(self, x: TensorInput, padding: List[int], kernel: List[int], ms: List[int]):
+    def __init__(self, x: TensorNode, padding: List[int], kernel: List[int], ms: List[int]):
         assert len(kernel) == 2 and len(padding) == 4 and len(x.const_shape()) == 4
         n, c, h, w = x.const_shape()
 
@@ -79,7 +79,7 @@ class Conv2dWinogradImageTransformTask(Task):
 
 
 class Conv2dWinogradFilterTransformTask(Task):
-    def __init__(self, w: TensorInput, ms: List[int]):
+    def __init__(self, w: TensorNode, ms: List[int]):
         assert len(w.const_shape()) == 4
         oc, c, rx, ry = w.const_shape()
         mx, my = ms
@@ -103,7 +103,7 @@ class Conv2dWinogradFilterTransformTask(Task):
 
 
 class Conv2dWinogradInverseTransform(Task):
-    def __init__(self, y: TensorInput, input_shape, padding, kernel, ms):
+    def __init__(self, y: TensorNode, input_shape, padding, kernel, ms):
         assert len(y.const_shape()) == 4
         alpha_x, alpha_y, oc, p = y.const_shape()
         n, c, h, w = input_shape

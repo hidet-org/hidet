@@ -3,7 +3,7 @@ from typing import List, Optional, Union, Sequence
 from hidet.ir.expr import And, if_then_else
 from hidet.ir.layout import DataLayout, RowMajorLayout, ColumnMajorLayout
 from hidet.utils import prod
-from .utils import Task, Operator, Tensor, TensorInput, compute, input_like, normalize_dim
+from .utils import Task, Operator, Tensor, TensorNode, compute, input_like, normalize_dim
 
 
 def same_shape(shape_a: List[int], shape_b: List[int]) -> bool:
@@ -11,7 +11,7 @@ def same_shape(shape_a: List[int], shape_b: List[int]) -> bool:
 
 
 class ReshapeTask(Task):
-    def __init__(self, x: TensorInput, shape: List[int]):
+    def __init__(self, x: TensorNode, shape: List[int]):
         assert prod(x.const_shape()) == prod(shape)
         x_layout = x.data_type.layout
         y_layout = DataLayout.row_major(shape)
@@ -40,7 +40,7 @@ class ReshapeTask(Task):
 
 
 class RearrangeTask(Task):
-    def __init__(self, x: TensorInput, plan: List[List[int]]):
+    def __init__(self, x: TensorNode, plan: List[List[int]]):
         x_shape = x.const_shape()
         y_shape = [prod([x_shape[i] for i in dims]) for dims in plan]
 
@@ -77,7 +77,7 @@ class RearrangeTask(Task):
 
 
 class ConcatTask(Task):
-    def __init__(self, inputs: List[TensorInput], axis: int):
+    def __init__(self, inputs: List[TensorNode], axis: int):
         shapes = [t.const_shape() for t in inputs]
         n = len(shapes)
         assert n > 0
@@ -111,7 +111,7 @@ class ConcatTask(Task):
 
 
 class TakeTask(Task):
-    def __init__(self, data: TensorInput, indices: TensorInput, axis=0):
+    def __init__(self, data: TensorNode, indices: TensorNode, axis=0):
         data_shape = data.const_shape()
         indices_shape = indices.const_shape()
         output_shape = data_shape[:axis] + indices_shape + data_shape[axis + 1:]
@@ -136,7 +136,7 @@ class TakeTask(Task):
 
 
 class StridedSliceTask(Task):
-    def __init__(self, data: TensorInput, starts: List[Optional[int]], ends: List[Optional[int]], axes: List[int], strides: List[int]):
+    def __init__(self, data: TensorNode, starts: List[Optional[int]], ends: List[Optional[int]], axes: List[int], strides: List[int]):
         assert len(starts) == len(ends) == len(axes) == len(strides)
         if len(axes) != len(set(axes)):
             raise ValueError('Duplicated axes in slice, axes: {}'.format(axes))
@@ -188,7 +188,7 @@ def can_broadcast(src_shape: List[int], dst_shape: List[int]) -> bool:
 
 
 class BroadcastTask(Task):
-    def __init__(self, data: TensorInput, shape: List[int]):
+    def __init__(self, data: TensorNode, shape: List[int]):
         data_shape = data.const_shape()
         if not can_broadcast(data_shape, shape):
             raise ValueError('Can not broadcast a tensor with shape {} to {}'.format(data_shape, shape))
@@ -213,7 +213,7 @@ class BroadcastTask(Task):
 
 
 class PadTask(Task):
-    def __init__(self, data: TensorInput, pads: List[int], value: float):
+    def __init__(self, data: TensorNode, pads: List[int], value: float):
         shape = data.const_shape()
         rank = len(shape)
         assert rank * 2 == len(pads)

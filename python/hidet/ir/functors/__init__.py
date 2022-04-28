@@ -7,6 +7,5 @@ from .type_infer import infer_type, TypeInfer
 from .util_functors import rewrite, collect, collect_free_vars, clone
 from .printer import astext
 from .simplifier import simplify, simplify_to_int
-from .sympy_utils import to_sympy, from_sympy, equal, coefficients
 from .hasher import ExprHash
 from .compute_inliner import inline_compute
