@@ -4,7 +4,6 @@ from hidet.ir.node import Node
 from hidet.ir.expr import Expr, Var
 from hidet.ir.func import IRModule
 from hidet.ir.dialects.compute import TensorNode
-from hidet.utils.doc import Doc, Text, doc_join, NewLine
 
 
 class Target:

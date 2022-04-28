@@ -1,7 +1,7 @@
 import os
 import logging
 from hashlib import sha256
-from hidet.transforms import lower, pass_context
+from hidet.transforms import lower, PassContext, SaveIRInstrument
 from hidet.backend import codegen, compile_source, load_task_func
 from hidet.utils import COLORS, hidet_cache_dir
 from hidet.ir.task import Task, TaskContext
@@ -37,7 +37,10 @@ def build_task(task: Task, space_level, opt_level, use_cache=True, cache_dir=Non
     with TaskContext(space_level=space_level, resolve_out_dir=task_dir):
         ir_module = task.implement(target='cuda')
     # lower ir module
-    with pass_context(opt_level=opt_level, keep_ir=True, keep_ir_dir='./outs/ir'):
+    with PassContext(opt_level=opt_level,
+                     instruments=[
+                         SaveIRInstrument(out_dir=os.path.join('./outs/ir', task.name, task_hash))
+                     ]):
         ir_module = lower(ir_module)
     # code generation
     codegen(ir_module, src_out_path=src_path)

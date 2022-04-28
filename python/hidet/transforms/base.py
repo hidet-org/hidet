@@ -1,25 +1,17 @@
-import os
-import contextlib
-from typing import Callable, List
+from typing import List, Optional
 from hidet.ir.stmt import Stmt
 from hidet.ir.func import IRModule, Function
-from hidet.utils import Timer, get_next_file_index
+
+from .instruments import PassInstrument
 
 
 class PassContext:
     stack: List['PassContext'] = []
 
-    def __init__(self, save_ir=False, save_dir=None):
-        if save_dir and os.path.isdir(save_dir):
-            if os.path.isdir(save_dir):
-                for fname in os.listdir(save_dir):
-                    if fname == 'lower_time.txt':
-                        os.remove(os.path.join(save_dir, fname))
-                    parts = fname.split('_')
-                    if len(parts) > 0 and parts[0].isdigit() and fname.endswith('.text'):
-                        os.remove(os.path.join(save_dir, fname))
-        self.save_ir = save_ir
-        self.save_dir = save_dir
+    def __init__(self, opt_level: int = 0, instruments: Optional[List[PassInstrument]] = None, verbose: bool = False):
+        self.opt_level = opt_level
+        self.instruments = instruments
+        self.verbose = verbose
 
     @classmethod
     def current(cls):
@@ -41,20 +33,13 @@ class Pass:
         self.name = name if name else self.__class__.__name__
 
     def __call__(self, ir_module: IRModule) -> IRModule:
-        from hidet.utils.py import COLORS
-        with Timer() as timer:
-            ret = self.process_module(ir_module)
-        # print(f'{self.name:>30} {COLORS.OKGREEN}{timer.elapsed_seconds():.3f}{COLORS.ENDC} seconds')
         ctx = PassContext.current()
-        if ctx.save_ir:
-            os.makedirs(ctx.save_dir, exist_ok=True)
-            idx = get_next_file_index(ctx.save_dir)
-            with open(os.path.join(ctx.save_dir, '{}_{}.text'.format(idx, self.name)), 'w') as f:
-                f.write(str(ret))
-        if ctx.save_dir and os.path.isdir(ctx.save_dir):
-            with open(os.path.join(ctx.save_dir, 'lower_time.txt'), 'a') as f:
-                f.write(f'{self.name:>50} {timer.elapsed_seconds():.3f} seconds\n')
-        return ret
+        for instrument in ctx.instruments:
+            instrument.before_pass(self.name, ir_module)
+        ir_module = self.process_module(ir_module)
+        for instrument in ctx.instruments:
+            instrument.after_pass(self.name, ir_module)
+        return ir_module
 
     def process_module(self, ir_module: IRModule) -> IRModule:
         new_funcs = {}
@@ -111,12 +96,6 @@ class RepeatFunctionPass(FunctionPass):
             for p in self.passes:
                 func = p.process_func(func)
             if orig_func is func:
-                # print(f"Exceeded: {i} {self.name} on {func.name}")
                 return func
         print(f"Exceeded: {i} {self.name} on {func.name}")
         return func
-
-
-def pass_context(opt_level: int = 0, keep_ir=False, keep_ir_dir: str = None):
-    # todo: support different opt_level
-    return PassContext(save_ir=keep_ir, save_dir=keep_ir_dir)

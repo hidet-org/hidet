@@ -1,0 +1,37 @@
+import os
+import time
+from typing import Optional, Dict
+
+from hidet import utils
+from hidet.ir.func import IRModule
+
+from .base import PassInstrument
+
+
+class ProfileInstrument(PassInstrument):
+    def __init__(self, log_file: Optional[str] = None, print_stdout: bool = False):
+        if log_file:
+            dirname = os.path.dirname(log_file)
+            os.makedirs(dirname, exist_ok=True)
+        self.log_file = log_file
+        self.print_stdout = print_stdout
+        self.start_time: Dict[str, float] = {}
+
+    def before_all_passes(self, ir_module: IRModule):
+        if self.log_file:
+            # clear file contents
+            with open(self.log_file, 'w'):
+                pass
+
+    def before_pass(self, pass_name: str, ir_module: IRModule):
+        self.start_time[pass_name] = time.time()
+        if self.print_stdout:
+            print('{:>50} started...'.format(pass_name))
+
+    def after_pass(self, pass_name: str, ir_module: IRModule):
+        elapsed_time = time.time() - self.start_time[pass_name]
+        if self.log_file:
+            with open(self.log_file, 'a') as f:
+                f.write('{:>50} {:.3f} seconds\n'.format(pass_name, elapsed_time))
+        if self.print_stdout:
+            print('{:>50} {} seconds'.format(pass_name, utils.py.green(elapsed_time, '{:.3f}')))

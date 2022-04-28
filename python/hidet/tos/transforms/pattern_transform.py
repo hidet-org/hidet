@@ -6,8 +6,8 @@ from hidet.tos.ir.graph import FlowGraph, Operator, Tensor
 from hidet.tos.transforms import GraphPass, PassContext
 from .common import analyze_usage, graph_collect
 from .fold_const import fold_const_pass
-from .pattern_transforms import GraphPattern, TensorPattern, OperatorPattern
-from .pattern_transforms import basic_patterns, conv2d_patterns, matmul_patterns
+from .graph_patterns import GraphPattern, TensorPattern, OperatorPattern
+from .graph_patterns import basic_patterns, conv2d_patterns, matmul_patterns
 
 
 class NotMatchedException(Exception):

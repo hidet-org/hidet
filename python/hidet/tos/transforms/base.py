@@ -1,81 +1,14 @@
-from typing import Union, List, Optional, Dict, Sequence
-import os
-import time
-from hidet.tos.ir.graph import FlowGraph, Operator, Tensor
-from hidet import utils
+from typing import List, Sequence
 
-
-class InstrumentContext:
-    def before_all_passes(self, graph: FlowGraph):
-        pass
-
-    def before_pass(self, pass_name: str, graph: FlowGraph):
-        pass
-
-    def after_pass(self, pass_name: str, graph: FlowGraph):
-        pass
-
-    def after_all_passes(self, graph: FlowGraph):
-        pass
-
-
-class SaveGraphInstrument(InstrumentContext):
-    def __init__(self, out_dir: str):
-        self.out_dir = out_dir
-        self.index = 0
-        os.makedirs(out_dir, exist_ok=True)
-
-    def before_all_passes(self, graph: FlowGraph):
-        # first clean all json starting with indices
-        for fname in os.listdir(self.out_dir):
-            fpath = os.path.join(self.out_dir, fname)
-            parts = fname.split('_')
-            if os.path.isfile(fpath) and len(parts) > 1 and parts[0].isdigit() and fname.endswith('.json'):
-                os.remove(fpath)
-        with open(os.path.join(self.out_dir, '0_Origin.json'), 'w') as f:
-            utils.netron.dump(graph, f)
-            self.index += 1
-
-    def after_pass(self, pass_name: str, graph: FlowGraph):
-        with open(os.path.join(self.out_dir, '{}_{}.json'.format(self.index, pass_name)), 'w') as f:
-            utils.netron.dump(graph, f)
-            self.index += 1
-
-
-class ProfileInstrument(InstrumentContext):
-    def __init__(self, log_file: Optional[str] = None, print_stdout: bool = False):
-        if log_file:
-            dirname = os.path.dirname(log_file)
-            os.makedirs(dirname, exist_ok=True)
-        self.log_file = log_file
-        self.print_stdout = print_stdout
-        self.start_time: Dict[str, float] = {}
-
-    def before_all_passes(self, graph: FlowGraph):
-        if self.log_file:
-            # clear file contents
-            with open(self.log_file, 'w'):
-                pass
-
-    def before_pass(self, pass_name: str, graph: FlowGraph):
-        self.start_time[pass_name] = time.time()
-        if self.print_stdout:
-            print('{:>50} started...'.format(pass_name))
-
-    def after_pass(self, pass_name: str, graph: FlowGraph):
-        elapsed_time = time.time() - self.start_time[pass_name]
-        if self.log_file:
-            with open(self.log_file, 'a') as f:
-                f.write('{:>50} {:.3f} seconds\n'.format(pass_name, elapsed_time))
-        if self.print_stdout:
-            print('{:>50} {} seconds'.format(pass_name, utils.py.green(elapsed_time, '{:.3f}')))
+from hidet.tos.ir.graph import FlowGraph
+from .instruments import GraphPassInstrument
 
 
 class PassContext:
     stack: List['PassContext'] = []
 
-    def __init__(self, instruments: Sequence[InstrumentContext] = (), verbose: bool = False):
-        self.instruments: Sequence[InstrumentContext] = instruments
+    def __init__(self, instruments: Sequence[GraphPassInstrument] = (), verbose: bool = False):
+        self.instruments: Sequence[GraphPassInstrument] = instruments
         self.verbose: bool = verbose
 
     @classmethod
