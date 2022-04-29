@@ -4,7 +4,7 @@ from functools import lru_cache
 from hidet import tos
 from hidet.tos.ir.graph import FlowGraph, Operator, Tensor
 from hidet.tos.transforms import GraphPass, PassContext
-from .common import analyze_usage, graph_collect
+from hidet.tos.ir.functors import analyze_usage, graph_collect
 from .fold_const import fold_const_pass
 from .graph_patterns import GraphPattern, TensorPattern, OperatorPattern
 from .graph_patterns import basic_patterns, conv2d_patterns, matmul_patterns

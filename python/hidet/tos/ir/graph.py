@@ -147,6 +147,8 @@ def trace_from(tensor: Union[Tensor, List[Tensor]], inputs: Optional[Union[Tenso
         The flow graph that outputs the given input tensor(s).
     """
     if isinstance(tensor, Tensor):
+        if tensor.trace is None:
+            raise ValueError('trace_from expects symbol tensor(s).')
         outputs = [tensor]
     else:
         outputs = list(tensor)

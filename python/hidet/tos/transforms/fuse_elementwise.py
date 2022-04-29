@@ -7,7 +7,7 @@
 # from hidet.tos.ir.graph import FlowGraph, Operator, Tensor
 from hidet.tos.transforms.base import GraphPass
 # from .common import analyze_usage, graph_collect
-# from hidet.ir.dialects.compute import TensorCompute, ReduceCompute, TensorInput
+# from hidet.ir.dialects.compute import TensorNode
 # from hidet.ir import functors
 # from hidet.ir.functors import collect, rewrite
 # from hidet import tos
@@ -47,19 +47,6 @@ from hidet.tos.transforms.base import GraphPass
 #                     for idx, out_tensor in enumerate(op.outputs):
 #                         out_tensor.trace = (op, idx)
 #                     return True, graph
-#                 # non_const_inputs = [tensor for tensor in node.inputs if tensor.trace is not None]
-#                 # if len(non_const_inputs) != 1:
-#                 #     continue
-#                 # x = non_const_inputs[0]
-#                 # if len(usage[x]) > 1:
-#                 #     continue
-#                 # prior_node = x.trace[0]
-#                 # op = self.fuse_nodes(nodes=[prior_node, node])
-#                 # if op is None:
-#                 #     continue
-#                 # for idx, out_tensor in enumerate(op.outputs):
-#                 #     out_tensor.trace = (op, idx)
-#                 # return True, graph
 #         return False, graph
 #
 #     def is_elementwise(self, op: Operator) -> bool:
@@ -146,8 +133,10 @@ from hidet.tos.transforms.base import GraphPass
 #             return impl
 #
 #
+#
+#
 
 
 def fuse_elementwise_pass() -> GraphPass:
     return GraphPass()
-    # return FuseElementwisePass()
+#     # return FuseElementwisePass()

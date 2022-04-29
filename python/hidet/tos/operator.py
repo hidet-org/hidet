@@ -11,9 +11,6 @@ def trim_op_ending(name: str):
     return name[:-2] if name.endswith('Op') else name
 
 
-NTask = 'hidet.tos.task.Task'
-
-
 class Operator:
     _current_opt_level = 0
     _current_space_level = 0
@@ -24,12 +21,12 @@ class Operator:
     def __init__(
             self,
             inputs: List[Tensor],
-            task: Union[Task, NTask],
+            task: Task,
             outputs: Optional[List[Tensor]] = None,
             name: Optional[str] = None,
             **kwargs):
         self.inputs: List[Tensor] = inputs
-        self.task: Union[Task, NTask] = task
+        self.task: Task = task
         self.attributes: Dict[str, Any] = kwargs
         self.outputs: Optional[List[Tensor]] = outputs
         self.name = name if name else trim_op_ending(self.__class__.__name__)

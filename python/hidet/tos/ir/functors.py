@@ -1,4 +1,5 @@
-from typing import Union
+from typing import Union, Type, Dict, List, Tuple, Optional
+from collections import defaultdict
 from hidet.tos.ir.graph import FlowGraph, Operator, Tensor
 from hidet.utils import same_list
 
@@ -123,5 +124,39 @@ class GraphCloneRewriter(GraphRewriter):
             return self.memo[tensor]
 
 
+class GraphUsageAnalyzer(GraphVisitor):
+    def __init__(self):
+        super().__init__()
+        self.usage: Dict[Tensor, List[Tuple[Optional[Operator], int]]] = defaultdict(list)
+
+    def analyze(self, graph: FlowGraph):
+        self.usage = defaultdict(list)
+        self.visit(graph)
+        return self.usage
+
+    def visit_FlowGraph(self, graph: FlowGraph):
+        for idx, output in enumerate(graph.outputs):
+            self(output)
+            self.usage[output].append((None, idx))
+        GraphVisitor.visit_FlowGraph(self, graph)
+
+    def visit_Operator(self, op: Operator):
+        for idx, input in enumerate(op.inputs):
+            self.usage[input].append((op, idx))
+        GraphVisitor.visit_Operator(self, op)
+
+
+def analyze_usage(graph: FlowGraph) -> Dict[Tensor, List[Tuple[Operator, int]]]:
+    analyzer = GraphUsageAnalyzer()
+    return analyzer.analyze(graph)
+
+
 def clone(graph: FlowGraph):
     return GraphCloneRewriter().visit(graph)
+
+
+def graph_collect(obj: Union[FlowGraph, Operator, Tensor], cls: Type[Union[Operator, Tensor]]):
+    visitor = GraphVisitor()
+    visitor.visit(obj)
+    return [v for v in visitor.memo if isinstance(v, cls)]
+

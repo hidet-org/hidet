@@ -8,7 +8,7 @@ from hidet.ir.dialects.compute import TensorNode, ScalarNode
 from hidet.ir.dialects.lowlevel import VoidType, PointerType, Dereference, Address, ReferenceType, TensorPointerType, Reference
 from hidet.ir.dialects.pattern import AnyExpr
 from hidet.ir.layout import RowMajorLayout, ColumnMajorLayout
-from hidet.ir.task import Task, Prologue, Epilogue
+from hidet.ir.task import Task, Prologue, Epilogue, InverseMap
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
 from hidet.utils.namer import Namer
 
@@ -47,6 +47,8 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
             return self.visit_Prologue(obj)
         elif isinstance(obj, Epilogue):
             return self.visit_Epilogue(obj)
+        elif isinstance(obj, InverseMap):
+            return self.visit_InverseMap(obj)
         elif obj is None:
             return Text('None')
         else:
@@ -289,7 +291,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
         else:
             layout = type(t.layout).__name__
         items = [self(t.scalar_type), '[' + self(t.shape) + ']', self(t.scope.name), self(layout)]
-        return Text('TensorType(') + doc_join(items, ', ') + ')'
+        return Text('tensor(') + doc_join(items, ', ') + ')'
 
     def visit_PointerType(self, t: PointerType):
         return Text('PointerType(') + self(t.base_type) + ')'
@@ -309,22 +311,27 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
     def visit_Task(self, e: Task):
         lines = [
             Text('name: ') + e.name,
-            Text('inputs: ') + '[' + doc_join(['{}: {}'.format(v, v.data_type) for v in e.inputs], ', ') + ']',
-            Text('outputs: ') + '[' + doc_join(['{}: {}'.format(v.name, v) for v in e.outputs], NewLine().indent(10)) + ']',
+            Text('inputs: ') + '[' + doc_join(['{}: {}'.format(self.namer.get_name(v), v.data_type) for v in e.inputs], ', ') + ']',
+            Text('outputs: ') + '[' + doc_join(['{}: {}'.format(self.namer.get_name(v), v) for v in e.outputs], NewLine().indent(10)) + ']',
             Text('parameters: ') + '[' + doc_join([v.name for v in e.parameters], ', ') + ']'
         ]
         front_part = doc_join(lines, NewLine())
+        inverse_map_doc = Doc()
         prologue_doc = Doc()
         epilogue_doc = Doc()
+        if e.inverse_map:
+            inverse_map_doc += NewLine() + Text('inverse_map:')
+            for tensor, inverse_map in e.inverse_map.items():
+                inverse_map_doc += (NewLine() + self.namer.get_name(tensor) + ': ' + self(inverse_map)).indent()
         if e.prologues:
-            prologue_doc = Text('prologue:')
+            prologue_doc += NewLine() + Text('prologue:')
             for tensor, prologue in e.prologues.items():
-                prologue_doc += (NewLine() + self(prologue)).indent()
+                prologue_doc += (NewLine() + self.namer.get_name(tensor) + ': ' + self(prologue)).indent()
         if e.epilogues:
-            epilogue_doc = Text('epilogue:')
+            epilogue_doc += NewLine() + Text('epilogue:')
             for tensor, epilogue in e.epilogues.items():
-                epilogue_doc += (NewLine() + self(epilogue)).indent()
-        return Text('Task(') + (NewLine() + front_part + prologue_doc + epilogue_doc).indent() + NewLine() + ')'
+                epilogue_doc += (NewLine() + self.namer.get_name(tensor) + ': ' + self(epilogue)).indent()
+        return Text('Task(') + (NewLine() + front_part + inverse_map_doc + prologue_doc + epilogue_doc).indent() + NewLine() + ')'
 
     def visit_Prologue(self, e: Prologue):
         return 'Prologue((' + self(e.indices) + ') => ' + self(e.value) + ')'
@@ -336,6 +343,9 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
         else:
             ret = ')'
         return ret
+
+    def visit_InverseMap(self, e: InverseMap):
+        return 'InverseMap([' + self(e.axes) + '] => [' + self(e.indices) + '])'
 
     def visit_ScalarNode(self, e: ScalarNode):
         if e.reduce_compute is None:

@@ -1,38 +1,5 @@
-from typing import List, Dict, Union, Tuple, Type, Optional
-from collections import defaultdict
+def concat_op_name(lhs: str, rhs: str) -> str:
+    lhs = lhs[5:] if lhs.startswith('Fused') else lhs
+    rhs = rhs[5:] if rhs.startswith('Fused') else rhs
+    return 'Fused{}{}'.format(lhs, rhs)
 
-from hidet.tos.ir.graph import FlowGraph, Operator, Tensor
-from hidet.tos.ir.functors import GraphVisitor
-
-
-class GraphUsageAnalyzer(GraphVisitor):
-    def __init__(self):
-        super().__init__()
-        self.usage: Dict[Tensor, List[Tuple[Optional[Operator], int]]] = defaultdict(list)
-
-    def analyze(self, graph: FlowGraph):
-        self.usage = defaultdict(list)
-        self.visit(graph)
-        return self.usage
-
-    def visit_FlowGraph(self, graph: FlowGraph):
-        for idx, output in enumerate(graph.outputs):
-            self(output)
-            self.usage[output].append((None, idx))
-        GraphVisitor.visit_FlowGraph(self, graph)
-
-    def visit_Operator(self, op: Operator):
-        for idx, input in enumerate(op.inputs):
-            self.usage[input].append((op, idx))
-        GraphVisitor.visit_Operator(self, op)
-
-
-def graph_collect(obj: Union[FlowGraph, Operator, Tensor], cls: Type[Union[Operator, Tensor]]):
-    visitor = GraphVisitor()
-    visitor.visit(obj)
-    return [v for v in visitor.memo if isinstance(v, cls)]
-
-
-def analyze_usage(graph: FlowGraph) -> Dict[Tensor, List[Tuple[Operator, int]]]:
-    analyzer = GraphUsageAnalyzer()
-    return analyzer.analyze(graph)

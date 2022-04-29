@@ -2,7 +2,7 @@ from typing import Tuple, List, Union, Sequence, Optional
 from hidet.ir.layout import DataLayout
 from hidet.ir.expr import Var
 from hidet.ir.type import TensorType, tensor_type
-from hidet.ir.task import Task
+from hidet.ir.task import Task, InverseMap
 from hidet.tos.operator import Operator, Tensor
 from hidet.ir.dialects.compute import TensorNode, tensor_input, compute, reduce
 

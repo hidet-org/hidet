@@ -1,7 +1,11 @@
 from typing import List, Sequence
+import logging
 
 from hidet.tos.ir.graph import FlowGraph
 from .instruments import GraphPassInstrument
+
+logger = logging.Logger(name='hidet.tos.transforms', level=logging.INFO)
+logger.addHandler(logging.StreamHandler())
 
 
 class PassContext:

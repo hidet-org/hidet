@@ -189,7 +189,7 @@ def _tensor_like(constructor, data, shape, dtype, device, layout):
     dtype = data.dtype if dtype is None else dtype
     device = data.device if device is None else device
     layout = data.layout if layout is None else layout
-    return constructor(shape, dtype, device, layout)
+    return constructor(shape=shape, dtype=dtype, device=device, layout=layout)
 
 
 def empty_like(data: Tensor, shape: Optional[Sequence[int]] = None, dtype: Optional[str] = None, device: Optional[str] = None, layout: Optional[DataLayout] = None) -> Tensor:

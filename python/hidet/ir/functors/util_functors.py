@@ -92,19 +92,19 @@ class CloneRewriter(StmtExprRewriter):
         return Let(v, self(e.value), self(e.body))
 
 
-def rewrite(node: Union[Expr, Stmt, tuple], rewrite_map: Mapping[Expr, Expr]):
+def rewrite(node: Union[Expr, Stmt, tuple], rewrite_map: Mapping[Union[Stmt, Expr], Union[Stmt, Expr]]):
     assert isinstance(rewrite_map, dict)
     rewriter = StmtExprMapRewriter(rewrite_map)
     return rewriter.rewrite(node)
 
 
-def collect(node: Union[Function, Expr, Stmt], node_types, stop_when_found=False) -> list:
+def collect(node: Union[Function, Expr, Stmt, list, tuple], node_types, stop_when_found=False) -> list:
     """
     Collect sub-nodes in given node with specific types.
 
     Parameters
     ----------
-    node: Union[Function, Expr, Stmt]
+    node: Union[Function, Expr, Stmt, list, tuple]
         The root node to start collecting.
     node_types: Sequence[Type[Union[Stmt, Expr]]], or Type[Stmt], or Type[Expr]
         The node types to collect, can be arbitrary subclass of Expr and Stmt
@@ -124,6 +124,8 @@ def collect(node: Union[Function, Expr, Stmt], node_types, stop_when_found=False
             node_types = (node_types,)
         else:
             raise ValueError()
+    if isinstance(node, list):
+        node = tuple(node)
 
     collector = SubStmtExprCollector(node_types, stop_when_found)
     collected = collector.collect(node)

@@ -21,7 +21,7 @@ class Namer:
         from hidet.ir.expr import Var
         from hidet.ir.dialects.compute import ScalarNode, TensorNode
         if e in self.obj_name:
-            return self.obj_name
+            return self.obj_name[e]
         if hint:
             orig_name = hint
         elif isinstance(e, Var) and e.hint is not None:

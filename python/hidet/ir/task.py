@@ -1,9 +1,10 @@
 from __future__ import annotations
-from typing import Dict, List, Union, Optional, Sequence, Type, Tuple
+import inspect
+from typing import Dict, List, Union, Optional, Sequence, Type, Tuple, Callable
 from hidet.ir.node import Node
-from hidet.ir.expr import Expr, Var
+from hidet.ir.expr import Expr, Var, TensorElement, var
 from hidet.ir.func import IRModule
-from hidet.ir.dialects.compute import TensorNode
+from hidet.ir.dialects.compute import TensorNode, ScalarNode
 
 
 class Target:
@@ -35,8 +36,8 @@ class Epilogue(Node):
         self.indices: List[Var] = indices
         self.orig_value: Var = orig_value
         self.value: Expr = value
-        self.out_indices: Optional[List[Expr]] = out_indices
-        self.out_tensor: Optional[TensorNode] = out_tensor
+        self.out_indices: List[Expr] = out_indices
+        self.out_tensor: TensorNode = out_tensor
 
 
 class TaskContext:
@@ -57,15 +58,46 @@ class TaskContext:
         return TaskContext.contexts[-1]
 
 
+class InverseMap:
+    def __init__(self, axes: List[Var], indices: List[Expr]):
+        self.axes: List[Var] = axes
+        self.indices: List[Expr] = indices
+
+    @staticmethod
+    def from_lambda(func, num_args=None) -> InverseMap:
+        num_args = num_args if num_args is not None else func.__code__.co_argcount
+        axes = [var('v') for v in range(num_args)]
+        indices = list(func(*axes))
+        return InverseMap(axes, indices)
+
+    def __add__(self, other) -> InverseMap:
+        from hidet.ir.functors import rewrite
+        if not isinstance(other, InverseMap):
+            raise ValueError('Can not concat InverseMap with {}'.format(type(other)))
+        lhs, rhs = self, other
+        if len(lhs.indices) != len(rhs.axes):
+            raise ValueError('Can not concat InverseMap a and b, '
+                             'where a has {} indices and b has {} axes'.format(len(lhs.indices), len(rhs.axes)))
+        rmap = {a: b for a, b in zip(rhs.axes, lhs.indices)}
+        indices = [rewrite(index_expr, rmap) for index_expr in rhs.indices]
+        return InverseMap(lhs.axes, indices)
+
+
 class Task(Node):
-    def __init__(self, name, inputs, outputs, prologues=None, epilogues=None, parameters=None, reverse_map=None):
+    def __init__(self, name, inputs, outputs, prologues=None, epilogues=None, parameters=None, inverse_map=None):
         self.name = name
         self.inputs: List[TensorNode] = inputs
         self.outputs: List[TensorNode] = outputs
         self.prologues: Dict[TensorNode, Prologue] = prologues if prologues else {}
         self.epilogues: Dict[TensorNode, Epilogue] = epilogues if epilogues else {}
         self.parameters: List[TensorNode] = parameters if parameters else inputs + outputs
-        self.reverse_map: Optional[Tuple[List[Var], List[Expr]]] = reverse_map
+
+        inverse_map = inverse_map if inverse_map else {}
+        self.inverse_map: Dict[TensorNode, InverseMap] = {
+            a: (b if isinstance(b, InverseMap) else InverseMap.from_lambda(b)) for a, b in inverse_map.items()
+        }
+
+        sanity_check(self)
 
     def implement(self, target: Union[Target, str]) -> IRModule:
         if isinstance(target, str):
@@ -88,3 +120,31 @@ class Task(Node):
         from hidet.tos.ops.schedules import generic_cpu_schedule
         return generic_cpu_schedule(self)
 
+
+def is_elementwise(task: Task) -> bool:
+    """
+    A task is elementwise if and only if there is only no reduce compute in the task.
+
+    Parameters
+    ----------
+    task: Task
+        The task to check.
+
+    Returns
+    -------
+    ret: bool
+        Whether the task is elementwise.
+    """
+    from hidet.ir.functors import collect
+    scalar_nodes: List[ScalarNode] = collect(task.outputs, ScalarNode, stop_when_found=False)
+    return all(sn.reduce_compute is None for sn in scalar_nodes)
+
+
+def is_unary_elementwise(task: Task) -> bool:
+    return len(task.inputs) == 1 and len(task.outputs) == 1 and is_elementwise(task)
+
+
+def sanity_check(task: Task):
+    from hidet.ir.functors import collect
+    # todo: check
+    pass

@@ -1,9 +1,9 @@
 from typing import List, Optional, Union, Sequence
 
-from hidet.ir.expr import And, if_then_else
+from hidet.ir.expr import And, if_then_else, convert
 from hidet.ir.layout import DataLayout, RowMajorLayout, ColumnMajorLayout
 from hidet.utils import prod
-from .utils import Task, Operator, Tensor, TensorNode, compute, input_like, normalize_dim
+from .utils import Task, InverseMap, Operator, Tensor, TensorNode, compute, input_like, normalize_dim
 
 
 def same_shape(shape_a: List[int], shape_b: List[int]) -> bool:
@@ -69,10 +69,21 @@ class RearrangeTask(Task):
             return x[x_indices]
 
         y = compute('y', y_shape, fcompute, scope='global')
+
+        def inverse_map(*x_indices):
+            y_indices = []
+            for dims in plan:
+                cnt = convert(0)
+                for dim in dims:
+                    cnt = cnt * x_shape[dim] + x_indices[dim]
+                y_indices.append(cnt)
+            return y_indices
+
         super().__init__(
             name='rearrange',
             inputs=[x],
-            outputs=[y]
+            outputs=[y],
+            inverse_map={x: InverseMap.from_lambda(inverse_map, len(x_shape))}
         )
 
 
@@ -319,7 +330,7 @@ class UnsqueezeOp(Operator):
     def imperative_run(self, inputs: Optional[List[Tensor]] = None) -> List[Tensor]:
         x = inputs[0] if inputs else self.inputs[0]
         if isinstance(x.layout, (RowMajorLayout, ColumnMajorLayout)):
-            shape = self.task.params[1].const_shape()
+            shape = self.task.outputs[0].const_shape()
             layout = x.layout.__class__(shape)
             return [Tensor(shape=shape, dtype=x.dtype, device=x.device, storage=x.storage, layout=layout, trace=None)]
         else:
