@@ -10,6 +10,8 @@ from hidet.ir.stmt import BufferStoreStmt
 from hidet.ir.task import Task
 from hidet.ir.functors import inline_compute
 
+from ..common import params_from_task
+
 
 def generic_cuda_schedule(task: Task) -> IRModule:
     computation: TensorNode = inline_compute(task.outputs[0], reduce_limit=16)
@@ -20,12 +22,12 @@ def generic_cuda_schedule(task: Task) -> IRModule:
 
     with FunctionBuilder(name=task.name + '_grid', grid_dim=num_blocks, block_dim=block_size, kind='cuda_kernel', label='generic implementer') as fb:
         # params
-        params = [Var(param.name, param.data_type) for param in task.parameters]
-        param_map = {param: var for param, var in zip(task.parameters, params)}
+        params = params_from_task(task)
+        param_map = {param: var for param, var in zip(task.inputs + task.outputs, params)}
         fb.extend_params(params)
         scalar_value = rewrite(computation.grid_compute.value, param_map)  # replace TensorInput to function parameter
         assert len(task.outputs) == 1
-        out = param_map[task.parameters[-1]]
+        out = param_map[task.outputs[0]]
         # body
         sb = StmtBuilder()
         worker_idx = block_idx() * block_size + thread_idx()

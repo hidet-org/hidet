@@ -36,7 +36,7 @@ class FuseUnaryElementwise(GraphPass):
                 y = v_op.task.outputs[0]
                 z = rewrite(u_op.task.outputs[0], {u_op.task.inputs[0]: y})
                 if v_op.task.inverse_map and u_op.task.inverse_map:
-                    inverse_map = list(v_op.task.inverse_map.values())[0] + list(u_op.task.inverse_map.values())[0]
+                    inverse_map = {x: list(v_op.task.inverse_map.values())[0] + list(u_op.task.inverse_map.values())[0]}
                 else:
                     inverse_map = None
                 fused_op = Operator(
@@ -49,8 +49,7 @@ class FuseUnaryElementwise(GraphPass):
                     ),
                     outputs=u_op.outputs,
                     name=concat_op_name(v_op.name, u_op.name),
-                    **v_op.attributes,
-                    **u_op.attributes
+                    **{**v_op.attributes, **u_op.attributes},
                 )
                 fused_op.outputs[0].trace = (fused_op, 0)
 

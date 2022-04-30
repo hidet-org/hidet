@@ -102,7 +102,7 @@ class Conv2dWinogradFilterTransformTask(Task):
         )
 
 
-class Conv2dWinogradInverseTransform(Task):
+class Conv2dWinogradInverseTransformTask(Task):
     def __init__(self, y: TensorNode, input_shape, padding, kernel, ms):
         assert len(y.const_shape()) == 4
         alpha_x, alpha_y, oc, p = y.const_shape()
@@ -135,7 +135,7 @@ class Conv2dWinogradInverseTransform(Task):
         )
 
 
-class WinogradImageTransformOp(Operator):
+class Conv2dWinogradImageTransformOp(Operator):
     def __init__(self, x: Tensor, padding, kernel, ms):
         if len(x.shape) != 4:
             raise NotImplementedError('Current only support winograd conv2d')
@@ -151,7 +151,7 @@ class WinogradImageTransformOp(Operator):
         )
 
 
-class WinogradFilterTransformOp(Operator):
+class Conv2dWinogradFilterTransformOp(Operator):
     def __init__(self, w: Tensor, ms):
         assert len(ms) == 2
         super().__init__(
@@ -161,13 +161,13 @@ class WinogradFilterTransformOp(Operator):
         )
 
 
-class WinogradInverseTransformOp(Operator):
+class Conv2dWinogradInverseTransformOp(Operator):
     def __init__(self, y: Tensor, input_shape, padding, kernel, ms):
         padding = normalize_padding(padding, dim=2)
         kernel = normalize_kernel(kernel, dim=2)
         super().__init__(
             inputs=[y],
-            task=Conv2dWinogradInverseTransform(input_like(y, 'y'), input_shape, padding, kernel, ms),
+            task=Conv2dWinogradInverseTransformTask(input_like(y, 'y'), input_shape, padding, kernel, ms),
             input_shape=input_shape,
             padding=padding,
             kernel=kernel,
@@ -176,15 +176,15 @@ class WinogradInverseTransformOp(Operator):
 
 
 def conv2d_winograd_image_transform(x: Tensor, padding, kernel, ms) -> Tensor:
-    return WinogradImageTransformOp(x, padding, kernel, ms).get_output(0)
+    return Conv2dWinogradImageTransformOp(x, padding, kernel, ms).get_output(0)
 
 
 def conv2d_winograd_filter_transform(w: Tensor, ms) -> Tensor:
-    return WinogradFilterTransformOp(w, ms).get_output(0)
+    return Conv2dWinogradFilterTransformOp(w, ms).get_output(0)
 
 
 def conv2d_winograd_inverse_transform(y: Tensor, input_shape, padding, kernel, ms) -> Tensor:
-    return WinogradInverseTransformOp(y, input_shape, padding, kernel, ms).get_output(0)
+    return Conv2dWinogradInverseTransformOp(y, input_shape, padding, kernel, ms).get_output(0)
 
 
 def conv2d_winograd(x: Tensor, w: Tensor, padding) -> Tensor:

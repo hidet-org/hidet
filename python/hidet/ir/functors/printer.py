@@ -313,7 +313,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
             Text('name: ') + e.name,
             Text('inputs: ') + '[' + doc_join(['{}: {}'.format(self.namer.get_name(v), v.data_type) for v in e.inputs], ', ') + ']',
             Text('outputs: ') + '[' + doc_join(['{}: {}'.format(self.namer.get_name(v), v) for v in e.outputs], NewLine().indent(10)) + ']',
-            Text('parameters: ') + '[' + doc_join([v.name for v in e.parameters], ', ') + ']'
+            Text('parameters: ') + '[' + doc_join([self.namer.get_name(v) for v in e.parameters], ', ') + ']'
         ]
         front_part = doc_join(lines, NewLine())
         inverse_map_doc = Doc()

@@ -20,7 +20,7 @@ class Conv2dGemmImageTransformTask(Task):
         super().__init__(
             name='conv2d_gemm_image_transform',
             inputs=[x],
-            outputs=[gemm_x]
+            outputs=[gemm_x],
         )
 
 
@@ -53,7 +53,10 @@ class Conv2dGemmInverseTransformTask(Task):
         super().__init__(
             name='conv2d_gemm_inverse_transform',
             inputs=[gemm_y],
-            outputs=[y]
+            outputs=[y],
+            inverse_map={
+                gemm_y: lambda i, j: [i // (p * q), j, i // q % p, i % q]
+            }
         )
 
 

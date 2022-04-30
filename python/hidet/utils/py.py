@@ -19,6 +19,12 @@ def prod(seq: Sequence):
         return c
 
 
+def strict_zip(a: Sequence, b: Sequence) -> zip:
+    if len(a) != len(b):
+        raise ValueError('Expect two sequence have the same length in zip, got length {} and {}.'.format(len(a), len(b)))
+    return zip(a, b)
+
+
 class COLORS:
     HEADER = '\033[95m'
     OKBLUE = '\033[94m'

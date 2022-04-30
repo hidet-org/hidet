@@ -319,7 +319,6 @@ class ExprVisitor(ExprFunctor):
         pass
 
 
-
 class ExprRewriter(ExprFunctor):
     def rewrite(self, e):
         return self.visit(e)

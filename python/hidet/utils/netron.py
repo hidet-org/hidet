@@ -105,7 +105,8 @@ class Node:
         self.description: Union[List[str], str] = description.split('\n')
         self.category = category
         if self.category is None:
-            if self.type_name.startswith('Fused'):
+            if self.type_name.startswith('Fused') or ' ' in self.type_name:
+                # fused op, use the color of 'dropout'
                 self.category = 'dropout'
             else:
                 for cat, ops in self.categories.items():

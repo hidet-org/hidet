@@ -14,10 +14,10 @@ class FlowGraph:
         self.nodes: Optional[List[Operator]] = nodes
         self.usage_count: Optional[Dict[Tensor, int]] = None
 
-    def __call__(self, *inputs: Tensor) -> List[Tensor]:
+    def __call__(self, *inputs: Tensor) -> Union[List[Tensor], Tensor]:
         return self.forward(*inputs)
 
-    def forward(self, *inputs: Tensor) -> List[Tensor]:
+    def forward(self, *inputs: Tensor) -> Union[List[Tensor], Tensor]:
         if any(v is None for v in [self.inputs, self.nodes, self.usage_count]):
             self.update_nodes()
         if len(inputs) != len(self.inputs):
@@ -51,7 +51,8 @@ class FlowGraph:
                 node_outputs = node.imperative_run(node_inputs)
             for st, at in zip(node.outputs, node_outputs):
                 tensor_map[st] = at
-        return [tensor_map[st] for st in self.outputs]
+        ret = [tensor_map[st] for st in self.outputs]
+        return ret[0] if len(ret) == 1 else ret
 
     def update_nodes(self):
         inputs, self.nodes, self.usage_count = self._analyze(self.outputs)

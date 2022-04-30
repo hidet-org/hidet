@@ -3,7 +3,7 @@ from hidet.ir.expr import Var, TensorElement
 from hidet.ir.stmt import BufferStoreStmt
 from hidet.ir.func import Function, IRModule
 from hidet.ir.dialects.compute import TensorNode
-from hidet.ir.functors import collect, rewrite
+from hidet.ir.functors import collect, rewrite, inline_compute
 from .base import Pass
 
 
@@ -25,11 +25,19 @@ class ApplyPrologueEpiloguePass(Pass):
 
         body = func.body
 
+        # update func parameters
+        rmap = {}
+        for idx, t in enumerate(task.inputs + task.outputs):
+            if t in param2var:
+                rmap[func.params[idx]] = param2var[t]
+        body = rewrite(body, rmap)
+
         # apply prologues
         for input_node, input_var in input2var.items():
             if input_node not in task.prologues:
                 continue
             prologue = task.prologues[input_node]
+            prologue_value = inline_compute(prologue.value, reduce_limit=-1)
 
             # the following collect assumes that there is no nested tensor elements for the same tensor, such as A[A[1, 2], 3]
             tensor_elements: List[TensorElement] = collect(body, TensorElement, stop_when_found=True)
@@ -44,7 +52,7 @@ class ApplyPrologueEpiloguePass(Pass):
                     rmap[extra_input] = param2var[extra_input]
                 for index_var, index_value in zip(prologue.indices, te.indices):
                     rmap[index_var] = index_value
-                prologue_expr = rewrite(prologue.value, rmap)
+                prologue_expr = rewrite(prologue_value, rmap)
                 prologue_rewrite_map[te] = prologue_expr
             body = rewrite(body, prologue_rewrite_map)
 
@@ -59,19 +67,20 @@ class ApplyPrologueEpiloguePass(Pass):
             if any(te.base is output_var for te in tensor_elements):
                 raise NotImplementedError('Currently do not support read from output tensor.')
 
-            buffer_stores: List[TensorElement] = collect(body, BufferStoreStmt, stop_when_found=True)
+            buffer_stores: List[BufferStoreStmt] = collect(body, BufferStoreStmt, stop_when_found=True)
             epilogue_rewrite_map = {}
+            epilogue_value = inline_compute(epilogue.value, reduce_limit=-1)
             for bs in buffer_stores:
-                if bs.base is not output_var:
+                if bs.buf is not output_var:
                     continue
-                rmap = {}
+                rmap = {epilogue.orig_value: bs.value}
                 for extra_input in epilogue.extra_inputs:
                     if extra_input not in param2var:
                         raise ValueError('Epilogue used tensor {} that has not defined in task parameters.'.format(extra_input))
                     rmap[extra_input] = param2var[extra_input]
                 for index_var, index_value in zip(epilogue.indices, bs.indices):
                     rmap[index_var] = index_value
-                epilogue_expr = rewrite(epilogue.value, rmap)
+                epilogue_expr = rewrite(epilogue_value, rmap)
                 if epilogue.out_indices and epilogue.out_tensor:
                     out_index_exprs = [rewrite(out_index_expr, rmap) for out_index_expr in epilogue.out_indices]
                     if epilogue.out_tensor not in param2var:
@@ -79,7 +88,7 @@ class ApplyPrologueEpiloguePass(Pass):
                     out_tensor = param2var[epilogue.out_tensor]
                     epilogue_rewrite_map[bs] = BufferStoreStmt(out_tensor, out_index_exprs, epilogue_expr)
                 else:
-                    epilogue_rewrite_map[bs] = BufferStoreStmt(bs.base, bs.indices, epilogue_expr)
+                    epilogue_rewrite_map[bs] = BufferStoreStmt(bs.buf, bs.indices, epilogue_expr)
             body = rewrite(body, epilogue_rewrite_map)
 
         if body is func.body:

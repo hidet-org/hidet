@@ -302,7 +302,7 @@ class SqueezeOp(Operator):
     def imperative_run(self, inputs: Optional[List[Tensor]] = None) -> List[Tensor]:
         x = inputs[0] if inputs else self.inputs[0]
         if isinstance(x.layout, (RowMajorLayout, ColumnMajorLayout)):
-            shape = self.task.params[1].const_shape()
+            shape = self.task.outputs[0].const_shape()
             layout = x.layout.__class__(shape)
             return [Tensor(shape=shape, dtype=x.dtype, device=x.device, storage=x.storage, layout=layout, trace=None)]
         else:

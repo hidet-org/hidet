@@ -7,7 +7,7 @@ from hidet.ir.layout import TaskLayout
 from hidet.ir.primitives import expf, block_idx, thread_idx, cuda_max
 from hidet.ir.stmt import AssignStmt, BufferStoreStmt
 from hidet.tos.ops.definitions.softmax import SoftmaxTask
-from hidet.tos.ops.schedules.common import params_from_task, inputs_from_task, outputs_from_task, write_output
+from hidet.tos.ops.schedules.common import params_from_task
 from .common import warp_reduce
 
 
@@ -34,8 +34,7 @@ def softmax_cuda_schedule(task: SoftmaxTask) -> IRModule:
     ) as fb:
         # params
         params = params_from_task(task)
-        x = inputs_from_task(task, params)[0]
-        y = outputs_from_task(task, params)[0]
+        x, y = params
         fb.extend_params(params)
 
         # local variables
@@ -68,7 +67,7 @@ def softmax_cuda_schedule(task: SoftmaxTask) -> IRModule:
         # calculate exp(v-max) / sum(exp(vv-max))
         for r, in block_layout.worker2task(thread_idx()):
             with sb.if_then(r < reduce_extent):
-                sb += write_output(y, other_indices[:axis] + (r,) + other_indices[axis:], buf[r] / rv, task, params)
+                sb += BufferStoreStmt(y, other_indices[:axis] + (r,) + other_indices[axis:], buf[r] / rv)
 
         fb.set_body(sb.finish())
     func = fb.get()

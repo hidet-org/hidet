@@ -6,6 +6,7 @@ from .fold_const import fold_const_pass
 from .pattern_transform import pattern_transform_pass
 from .fuse_unary_elementwise import fuse_unary_elementwise_pass
 from .fuse_unary_epilogue import fuse_unary_epilogue_pass
+from .fuse_prologue import fuse_prologue_pass
 
 
 def optimize(graph: FlowGraph) -> FlowGraph:
@@ -13,7 +14,8 @@ def optimize(graph: FlowGraph) -> FlowGraph:
         fold_const_pass(),
         pattern_transform_pass(),
         fuse_unary_elementwise_pass(),
-        fuse_unary_epilogue_pass()
+        fuse_unary_epilogue_pass(),
+        fuse_prologue_pass()
     ]
     ctx = PassContext.current()
     for inst in ctx.instruments:

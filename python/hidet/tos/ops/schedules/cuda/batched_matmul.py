@@ -16,7 +16,7 @@ from hidet.ir.task import Task, TaskContext
 from hidet.utils import Timer, cuda, factor, prod
 from hidet.tos.ops.definitions.matmul import MatmulTask
 from hidet.tos.ops.schedules.resolve import resolve_ir_modules
-from hidet.tos.ops.schedules.common import params_from_task, inputs_from_task, outputs_from_task, Schedule, NotSupportedError
+from hidet.tos.ops.schedules.common import params_from_task, Schedule, NotSupportedError
 
 
 """
@@ -258,8 +258,6 @@ def batched_matmul_cuda_schedule(task: MatmulTask) -> IRModule:
 
 
 def batched_matmul_cuda_with_given_schedule(task: MatmulTask, schedule: MatmulSchedule) -> IRModule:
-    if len(task.epilogues) > 0:
-        raise NotImplementedError()
     ir_module = IRModule(task=task)
     sch = schedule
 
@@ -288,10 +286,7 @@ def batched_matmul_cuda_with_given_schedule(task: MatmulTask, schedule: MatmulSc
 
         # declare params
         params = params_from_task(task)
-        inputs = inputs_from_task(task, params)
-        outputs = outputs_from_task(task, params)
-        gmem_a, gmem_b = inputs
-        gmem_c, = outputs
+        gmem_a, gmem_b, gmem_c = params
         fb.extend_params(params)
 
         # declare local variables

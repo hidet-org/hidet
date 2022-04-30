@@ -1,6 +1,6 @@
 from __future__ import annotations
-import inspect
-from typing import Dict, List, Union, Optional, Sequence, Type, Tuple, Callable
+import copy
+from typing import Dict, List, Union, Optional, Sequence, Type, Tuple, Callable, TypeVar
 from hidet.ir.node import Node
 from hidet.ir.expr import Expr, Var, TensorElement, var
 from hidet.ir.func import IRModule
@@ -60,8 +60,9 @@ class TaskContext:
 
 class InverseMap:
     def __init__(self, axes: List[Var], indices: List[Expr]):
+        from hidet.ir.functors import simplify
         self.axes: List[Var] = axes
-        self.indices: List[Expr] = indices
+        self.indices: List[Expr] = [simplify(e) for e in indices]
 
     @staticmethod
     def from_lambda(func, num_args=None) -> InverseMap:
@@ -81,6 +82,9 @@ class InverseMap:
         rmap = {a: b for a, b in zip(rhs.axes, lhs.indices)}
         indices = [rewrite(index_expr, rmap) for index_expr in rhs.indices]
         return InverseMap(lhs.axes, indices)
+
+
+TaskType = TypeVar('TaskType')
 
 
 class Task(Node):
@@ -119,6 +123,21 @@ class Task(Node):
     def implement_cpu(self) -> IRModule:
         from hidet.tos.ops.schedules import generic_cpu_schedule
         return generic_cpu_schedule(self)
+
+    def copy(self: TaskType) -> TaskType:
+        cls = type(self)
+        task = object.__new__(cls)
+        task.name = self.name
+        task.inputs = self.inputs.copy()
+        task.outputs = self.outputs.copy()
+        task.prologues = self.prologues.copy()
+        task.epilogues = self.epilogues.copy()
+        task.parameters = self.parameters.copy()
+        task.inverse_map = self.inverse_map.copy()
+        for name in self.__dict__:
+            if name not in task.__dict__:
+                task.__dict__[name] = copy.copy(self.__dict__[name])
+        return task
 
 
 def is_elementwise(task: Task) -> bool:

@@ -187,41 +187,45 @@ class VirtualTensor:
 
 
 def params_from_task(task: Task) -> List[Var]:
-    return [Var(param.name, param.data_type) for param in task.parameters]
+    return [Var(param.name, param.data_type) for param in task.inputs + task.outputs]
 
 
-def inputs_from_task(task: Task, params: List[Var]) -> List[Union[VirtualTensor, Var]]:
-    inputs = []
-    param2var = {param: var for param, var in zip(task.parameters, params)}
-    for input in task.inputs:
-        if input in task.prologues:
-            prologue = task.prologues[input]
-            value = rewrite(prologue.value, param2var)
-            inputs.append(VirtualTensor.from_indexed_value(prologue.indices, value))
-        else:
-            assert input in param2var
-            inputs.append(param2var[input])
-    return inputs
-
-
-def outputs_from_task(task: Task, params: List[Var]) -> List[Var]:
-    outputs = []
-    param2var = {param: var for param, var in zip(task.parameters, params)}
-    for output in task.outputs:
-        assert output in param2var
-        outputs.append(param2var[output])
-    return outputs
-
-
-def write_output(buf: Var, indices: List[Var], value: Expr, task: Task, params: List[Var]) -> BufferStoreStmt:
-    param2var = {param: var for param, var in zip(task.parameters, params)}
-    var2param = {var: param for param, var in zip(task.parameters, params)}
-    param = var2param[buf]
-    if param in task.epilogues:
-        epilogue = task.epilogues[param]
-        rmap = param2var
-        rmap.update({a: b for a, b in zip(epilogue.indices, indices)})
-        value = rewrite(epilogue.value, rmap)
-        return BufferStoreStmt(buf, indices, value)
-    else:
-        return BufferStoreStmt(buf, indices, value)
+# def params_from_task(task: Task) -> List[Var]:
+#     return [Var(param.name, param.data_type) for param in task.parameters]
+#
+#
+# def inputs_from_task(task: Task, params: List[Var]) -> List[Union[VirtualTensor, Var]]:
+#     inputs = []
+#     param2var = {param: var for param, var in zip(task.parameters, params)}
+#     for input in task.inputs:
+#         if input in task.prologues:
+#             prologue = task.prologues[input]
+#             value = rewrite(prologue.value, param2var)
+#             inputs.append(VirtualTensor.from_indexed_value(prologue.indices, value))
+#         else:
+#             assert input in param2var
+#             inputs.append(param2var[input])
+#     return inputs
+#
+#
+# def outputs_from_task(task: Task, params: List[Var]) -> List[Var]:
+#     outputs = []
+#     param2var = {param: var for param, var in zip(task.parameters, params)}
+#     for output in task.outputs:
+#         assert output in param2var
+#         outputs.append(param2var[output])
+#     return outputs
+#
+#
+# def write_output(buf: Var, indices: List[Var], value: Expr, task: Task, params: List[Var]) -> BufferStoreStmt:
+#     param2var = {param: var for param, var in zip(task.parameters, params)}
+#     var2param = {var: param for param, var in zip(task.parameters, params)}
+#     param = var2param[buf]
+#     if param in task.epilogues:
+#         epilogue = task.epilogues[param]
+#         rmap = param2var
+#         rmap.update({a: b for a, b in zip(epilogue.indices, indices)})
+#         value = rewrite(epilogue.value, rmap)
+#         return BufferStoreStmt(buf, indices, value)
+#     else:
+#         return BufferStoreStmt(buf, indices, value)

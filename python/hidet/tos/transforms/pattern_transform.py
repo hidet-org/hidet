@@ -7,7 +7,7 @@ from hidet.tos.transforms import GraphPass, PassContext
 from hidet.tos.ir.functors import analyze_usage, graph_collect
 from .fold_const import fold_const_pass
 from .graph_patterns import GraphPattern, TensorPattern, OperatorPattern
-from .graph_patterns import basic_patterns, conv2d_patterns, matmul_patterns
+from .graph_patterns import basic_patterns, conv2d_patterns, matmul_patterns, transform_patterns
 
 
 class NotMatchedException(Exception):
@@ -85,7 +85,7 @@ def match(pattern, target) -> Optional[Dict]:
 
 @lru_cache()
 def all_patterns() -> List[GraphPattern]:
-    return basic_patterns() + conv2d_patterns() + matmul_patterns()
+    return basic_patterns() + conv2d_patterns() + matmul_patterns() + transform_patterns()
 
 
 class PatternTransformPass(GraphPass):

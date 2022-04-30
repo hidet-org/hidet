@@ -4,7 +4,8 @@ from .base import Pass, FunctionPass, FunctionBodyPass, SequencePass, RepeatFunc
 from .instruments import PassInstrument, SaveIRInstrument, ProfileInstrument
 
 from .apply_prologue_epilogue import apply_prologue_epilogue_pass
-from .flatten_tensor import flatten_tensor_pass
+from .flatten_tensor_slice import flatten_tensor_slice_pass
+from .flatten_tensor_index import flatten_tensor_index_pass
 from .generate_packed_func import generate_packed_func_pass
 from .import_primitive_functions import import_primitive_functions_pass
 from .simplify_stmt import simplify_stmt_pass
@@ -24,12 +25,13 @@ from .normalize_const_tensor import normalize_const_tensor_pass
 def lower(ir_module: IRModule) -> IRModule:
     transforms = [
         # necessary pass: apply prologues and epilogues
+        flatten_tensor_slice_pass(),
         apply_prologue_epilogue_pass(),
 
         # necessary passes
         generate_packed_func_pass(),
         normalize_const_tensor_pass(),
-        flatten_tensor_pass(),
+        flatten_tensor_index_pass(),
         expand_let_expr_pass(),
 
         # simplification
@@ -52,7 +54,12 @@ def lower(ir_module: IRModule) -> IRModule:
         import_primitive_functions_pass()
     ]
 
+    ctx = PassContext.current()
+    for instrument in ctx.instruments:
+        instrument.before_all_passes(ir_module)
     for transform in transforms:
         ir_module = transform(ir_module)
+    for instrument in ctx.instruments:
+        instrument.after_all_passes(ir_module)
 
     return ir_module

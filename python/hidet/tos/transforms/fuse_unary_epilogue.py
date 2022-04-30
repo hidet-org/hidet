@@ -22,8 +22,9 @@ class FuseUnaryEpiloguePass(GraphPass):
                 if len(u_op.task.inverse_map) == 0:
                     continue
                 if len(u_op.task.prologues) + len(u_op.task.epilogues) > 0:
+                    # todo: support these cases
                     continue
-                if not is_unary_elementwise(u_op):
+                if not is_unary_elementwise(u_op.task):
                     continue
                 if len(usage[u_op.inputs[0]]) > 1:
                     # intermediate tensor can not be used by other operators.
@@ -95,16 +96,13 @@ class FuseUnaryEpiloguePass(GraphPass):
                 epilogues.update({v_output: epilogue})
                 outputs = v_op.outputs[:out_idx] + [u_op.outputs[0]] + v_op.outputs[out_idx + 1:]
 
+                task = v_task.copy()
+                task.epilogues = epilogues
+                task.parameters = parameters
+
                 fused_op = Operator(
                     inputs=v_op.inputs,
-                    task=Task(
-                        name=v_task.name,
-                        inputs=v_task.inputs,
-                        outputs=v_task.outputs,
-                        prologues=v_task.prologues,
-                        epilogues=epilogues,
-                        parameters=parameters
-                    ),
+                    task=task,
                     outputs=outputs,
                     name=concat_op_name(v_op.name, u_op.name),
                     **v_op.attributes,
@@ -117,7 +115,7 @@ class FuseUnaryEpiloguePass(GraphPass):
                 success = True
 
                 if PassContext.current().verbose:
-                    logger.info('Fused {} => {}'.format([v_op.task.name, u_op.task.name], fused_op.task.name))
+                    logger.info('Fused Epilogue {} => {}'.format([v_op.task.name, u_op.task.name], fused_op.task.name))
 
             if not success:
                 break

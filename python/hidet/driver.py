@@ -1,7 +1,7 @@
 import os
 import logging
 from hashlib import sha256
-from hidet.transforms import lower, PassContext, SaveIRInstrument
+from hidet.transforms import lower, PassContext, SaveIRInstrument, ProfileInstrument
 from hidet.backend import codegen, compile_source, load_task_func
 from hidet.utils import COLORS, hidet_cache_dir
 from hidet.ir.task import Task, TaskContext
@@ -39,7 +39,8 @@ def build_task(task: Task, space_level, opt_level, use_cache=True, cache_dir=Non
     # lower ir module
     with PassContext(opt_level=opt_level,
                      instruments=[
-                         SaveIRInstrument(out_dir=os.path.join('./outs/ir', task.name, task_hash))
+                         SaveIRInstrument(out_dir=os.path.join('./outs/ir', task.name, task_hash)),
+                         ProfileInstrument(log_file=os.path.join('./outs/ir', task.name, task_hash, 'lower_time.txt'))
                      ]):
         ir_module = lower(ir_module)
     # code generation
