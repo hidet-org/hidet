@@ -4,6 +4,7 @@ from hidet.tos import ops
 from hidet.backend import build
 from hidet.tos.tensor import randn, empty, ones, symbol, randn_like
 from hidet.tos.transforms.instruments import SaveGraphInstrument, ProfileInstrument
+from hidet.utils import Timer, cuda
 
 
 def fuse_conv2d_demo():
@@ -39,16 +40,31 @@ def fuse_resnet50():
     with hidet.tos.PassContext(
             instruments=[
                 SaveGraphInstrument('./outs/resnet50/graphs'),
-                ProfileInstrument(log_file='./outs/resnet50/graphs/lower_time.txt')
+                ProfileInstrument(log_file='./outs/resnet50/graphs/lower_time.txt', print_stdout=True)
             ],
-            verbose=True
+            verbose=False
     ):
         opt_graph = hidet.tos.optimize(graph)
 
     dummy_x = randn_like(x)
-    y1 = graph(dummy_x)
-    y2 = opt_graph(dummy_x)
 
+    for t in range(10):
+        cuda.device_synchronize()
+        with Timer('resnet50'):
+            y1 = graph(dummy_x)
+            cuda.device_synchronize()
+
+    hidet.space_level(2)
+
+    for t in range(10):
+        cuda.device_synchronize()
+        with Timer('resnet50 opt'):
+            for t in range(10):
+                y2 = opt_graph(dummy_x)
+            cuda.device_synchronize()
+
+    print(np.any(np.isnan(y1.numpy())))
+    print(np.any(np.isnan(y2.numpy())))
     np.testing.assert_allclose(y1.numpy(), y2.numpy())
 
 

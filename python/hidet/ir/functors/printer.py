@@ -1,4 +1,4 @@
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 from hidet.ir.node import Node
 from hidet.ir.func import IRModule, Function
 from hidet.ir.type import ScalarType, TensorType, TypeNode
@@ -308,12 +308,29 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
     def visit_AnyExpr(self, e: AnyExpr):
         return Text('AnyExpr')
 
+    def print_tensor_nodes(self, nodes: List[TensorNode]) -> Doc:
+        from hidet.ir.functors import collect
+        nodes: List[TensorNode] = collect(nodes, TensorNode)
+        doc = Doc()
+        for node in reversed(nodes):
+            if node.grid_compute is None:
+                doc += NewLine() + node.name + ': ' + self(node.data_type)
+            else:
+                gc = node.grid_compute
+                items = [
+                    '[' + self(gc.shape) + ']',
+                    '(' + self(gc.axes) + ') => ' + self(gc.value),
+                ]
+                doc += NewLine() + node.name + ': ' + 'grid(' + doc_join(items, ', ') + ')'
+        return doc
+
     def visit_Task(self, e: Task):
         lines = [
             Text('name: ') + e.name,
-            Text('inputs: ') + '[' + doc_join(['{}: {}'.format(self.namer.get_name(v), v.data_type) for v in e.inputs], ', ') + ']',
-            Text('outputs: ') + '[' + doc_join(['{}: {}'.format(self.namer.get_name(v), v) for v in e.outputs], NewLine().indent(10)) + ']',
-            Text('parameters: ') + '[' + doc_join([self.namer.get_name(v) for v in e.parameters], ', ') + ']'
+            Text('parameters: ') + (NewLine() + doc_join(['{}: {}'.format(self.namer.get_name(v), self(v.data_type)) for v in e.parameters], NewLine())).indent(),
+            Text('inputs: ') + '[' + doc_join([self.namer.get_name(v) for v in e.inputs], ', ') + ']',
+            Text('outputs: ') + '[' + doc_join([self.namer.get_name(v) for v in e.outputs], ', ') + ']',
+            Text('computations: ') + self.print_tensor_nodes(e.outputs).indent()
         ]
         front_part = doc_join(lines, NewLine())
         inverse_map_doc = Doc()
@@ -360,15 +377,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
             return 'reduce(' + doc_join(items, ', ') + ')'
 
     def visit_TensorNode(self, e: TensorNode):
-        if e.grid_compute is None:
-            return self.namer.get_name(e, e.name)
-        else:
-            gc = e.grid_compute
-            items = [
-                '[' + self(gc.shape) + ']',
-                '(' + self(gc.axes) + ') => ' + self(gc.value),
-            ]
-            return 'grid(' + doc_join(items, ', ') + ')'
+        return self.namer.get_name(e)
 
 
 def astext(obj: Node) -> str:

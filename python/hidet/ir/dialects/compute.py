@@ -121,7 +121,8 @@ def compute(name, shape, fcompute, scope=None, layout=None) -> TensorNode:
     axes = [var() for _ in shape]
     value = convert(fcompute(*axes))
     if scope is None:
-        scope = Scope('unspecified')
+        # todo: automatic determine scope by checking inputs' scope
+        scope = 'global'
     return TensorNode(
         name=name,
         data_type=tensor_type(scope, dtype=infer_type(value), shape=shape, layout=layout),

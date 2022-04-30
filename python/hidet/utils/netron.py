@@ -86,7 +86,7 @@ class Argument:
 class Node:
     # category influence the color in netron
     categories = {
-        'layer': ['Conv2d'],
+        'layer': ['Conv2d', 'Matmul'],
         'constant': [],
         'activation': ['Relu'],
         'pool': ['MaxPool2d', 'AvgPool2d'],
@@ -108,6 +108,8 @@ class Node:
             if self.type_name.startswith('Fused') or ' ' in self.type_name:
                 # fused op, use the color of 'dropout'
                 self.category = 'dropout'
+            elif self.type_name.startswith('Conv2dGemm') or self.type_name.startswith('Conv2dWinograd'):
+                self.category = 'custom'
             else:
                 for cat, ops in self.categories.items():
                     if type_name in ops:

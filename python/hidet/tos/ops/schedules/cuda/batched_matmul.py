@@ -217,7 +217,25 @@ class MatmulSchedule(Schedule):
         settings = []
         if space_level == 0:
             settings.append(MatmulSchedule())
-        elif space_level == 1 or space_level == 2:
+        elif space_level == 1:
+            for inner_m, inner_n in [[4, 4], [4, 8], [8, 4]]:
+                for outer_m, outer_n in [[1, 1], [1, 2], [2, 1], [2, 2]]:
+                    for block_warps_k, warp_k in [[8, 1]]:
+                        for block_warps_m, block_warps_n in [[2, 2], [2, 4], [4, 2]]:
+                            for name, atom_layout in [('row_4x8', TaskLayout.row_major((4, 8)))]:
+                                try:
+                                    settings.append(MatmulSchedule(
+                                        block_warps_k=block_warps_k,
+                                        warp_k=warp_k,
+                                        block_warps=[block_warps_m, block_warps_n],
+                                        warp_outer=[outer_m, outer_n],
+                                        atom_layout=atom_layout,
+                                        atom_layout_name=name,
+                                        warp_inner=[inner_m, inner_n]
+                                    ))
+                                except NotSupportedError as e:
+                                    pass
+        elif space_level == 2:
             for inner_m, inner_n in [[4, 4], [4, 8], [8, 4]]:
                 for outer_m, outer_n in [[1, 1], [1, 2], [2, 1], [2, 2]]:
                     for block_warps_k, warp_k in [[4, 1], [8, 1]]:

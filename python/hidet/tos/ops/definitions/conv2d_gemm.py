@@ -48,7 +48,8 @@ class Conv2dGemmInverseTransformTask(Task):
         y = compute(
             name='y',
             shape=[n, oc, p, q],
-            fcompute=lambda i, j, r, s: gemm_y[i * (p * q) + r * q + s, j]
+            fcompute=lambda i, j, r, s: gemm_y[i * (p * q) + r * q + s, j],
+            scope=gemm_y.data_type.scope
         )
         super().__init__(
             name='conv2d_gemm_inverse_transform',

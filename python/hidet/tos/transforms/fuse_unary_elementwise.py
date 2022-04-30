@@ -3,6 +3,7 @@ from hidet.tos.ir import FlowGraph, Operator
 from hidet.tos.ir.functors import clone, analyze_usage
 from hidet.ir.task import Task, is_unary_elementwise
 from hidet.ir.functors import rewrite
+from hidet.utils import py
 
 from .common import concat_op_name
 
@@ -59,7 +60,7 @@ class FuseUnaryElementwise(GraphPass):
 
                 # log
                 if PassContext.current().verbose:
-                    logger.info('Fused [{}, {}] => {}'.format(v_op.task.name, u_op.task.name, fused_op.task.name))
+                    logger.info('Fused elementwise {} {}'.format(py.color_text(v_op.name, idx=1), py.color_text(u_op.name, idx=2)))
             if not success:
                 break
         return graph

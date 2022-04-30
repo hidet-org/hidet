@@ -6,7 +6,7 @@ from hidet.ir.dialects.compute import TensorNode, GridCompute
 from hidet.tos.ir.functors import clone, analyze_usage
 from hidet.ir.task import Task, Prologue, Epilogue, is_elementwise, is_unary_elementwise
 from hidet.ir.functors import rewrite, collect
-from hidet.utils import prod, strict_zip
+from hidet.utils import prod, strict_zip, py
 from .common import concat_op_name
 
 
@@ -29,7 +29,6 @@ def update_params(task: Task, op: Operator, op_input: Tensor, task_input: Tensor
     op_extra_inputs: List[Tensor]
         The extra operator inputs to add.
     """
-    # todo: update usage
     task_param_inputs = task.parameters[:len(op.inputs)]
     task_param_outputs = task.parameters[len(op.inputs):]
 
@@ -101,14 +100,6 @@ def try_fuse(graph: FlowGraph, usage) -> bool:
                         )
                         task = u_task.copy()
                         task.prologues[u_task_input] = prologue
-                        update_params(
-                            task=task,
-                            op=u_op,
-                            op_input=u_input,
-                            task_input=u_task_input,
-                            op_extra_inputs=v_op.inputs,
-                            task_extra_inputs=v_task.inputs
-                        )
 
                 for existed_epilogue in u_task.epilogues.values():
                     if u_task_input in existed_epilogue.extra_inputs:
@@ -128,14 +119,6 @@ def try_fuse(graph: FlowGraph, usage) -> bool:
                         )
                         task = u_task.copy()
                         task.epilogues[u_task_input] = epilogue
-                        update_params(
-                            task=task,
-                            op=u_op,
-                            op_input=u_input,
-                            task_input=u_task_input,
-                            op_extra_inputs=v_op.inputs,
-                            task_extra_inputs=v_task.inputs
-                        )
 
             if task is None:
                 raise ValueError('Input {} has not been used in task.'.format(u_task_input))
@@ -147,12 +130,13 @@ def try_fuse(graph: FlowGraph, usage) -> bool:
                 op_input=u_input,
                 task_input=u_task_input,
                 op_extra_inputs=v_op.inputs,
-                task_extra_inputs=v_task.inputs
+                task_extra_inputs=v_task.inputs,
             )
             u_op.task = task
             if PassContext.current().verbose:
-                logger.info('Fused Prologue [{}, {}] => {}'.format(v_op.name, u_op.name, v_op.name + ' ' + u_op.name))
-            u_op.name = '{} {}'.format(v_op.name, u_op.name)
+                logger.info('Fused prologue {} {}'.format(py.color_text(v_op.name, idx=1), py.color_text(u_op.name, idx=2)))
+            # u_op.name = '{} {}'.format(v_op.name, u_op.name)
+
             return True
 
     return False

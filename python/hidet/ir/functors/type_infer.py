@@ -3,7 +3,7 @@ from hidet.ir.type import ScalarType, TensorType, FuncType
 from hidet.ir.expr import BinaryOp, Add, Sub, Multiply, Div, Mod, FloorDiv, Condition, LessThan, Equal, IfThenElse, TensorSlice, Not, Or, And, LessEqual, Let, RightShift, LeftShift, BitwiseNot, BitwiseOr, BitwiseAnd, Neg
 from hidet.ir.expr import Var, Constant, TensorElement, Call, Cast
 from hidet.ir.dialects.compute import TensorNode, ScalarNode
-from hidet.ir.dialects.lowlevel import PointerType, Dereference, Reference, Address
+from hidet.ir.dialects.lowlevel import PointerType, Dereference, Reference, Address, TensorPointerType
 
 from .base import ExprFunctor
 from ..dialects.pattern import AnyExpr
@@ -102,6 +102,8 @@ class TypeInfer(ExprFunctor):
             return base_type.scalar_type
         elif isinstance(base_type, PointerType):
             return base_type.base_type
+        elif isinstance(base_type, TensorPointerType):
+            return base_type.tensor_type.scalar_type
         else:
             raise NotImplementedError()
 

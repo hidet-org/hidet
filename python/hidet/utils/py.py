@@ -41,6 +41,67 @@ def green(v, fmt='{}'):
     return COLORS.OKGREEN + fmt.format(v) + COLORS.ENDC
 
 
+def cyan(v, fmt='{}'):
+    return COLORS.OKCYAN + fmt.format(v) + COLORS.ENDC
+
+
+def blue(v, fmt='{}'):
+    return COLORS.OKBLUE + fmt.format(v) + COLORS.ENDC
+
+
+def red(v, fmt='{}'):
+    return COLORS.WARNING + fmt.format(v) + COLORS.ENDC
+
+
+def color(v, fmt='{}', fg='default', bg='default'):
+    fg_code = {
+        "black": 30,
+        "red": 31,
+        "green": 32,
+        "yellow": 33,
+        "blue": 34,
+        "magenta": 35,
+        "cyan": 36,
+        "white": 37,
+        "default": 39,
+    }
+    bg_code = {
+        "black": 40,
+        "red": 41,
+        "green": 42,
+        "yellow": 43,
+        "blue": 44,
+        "magenta": 45,
+        "cyan": 46,
+        "white": 47,
+        "default": 49
+    }
+    return '\033[{};{}m{}\033[0m'.format(fg_code[fg], bg_code[bg], fmt.format(v))
+
+
+def color_table():
+    fg_names = ["default", "black", "red", "green", "yellow", "blue", "magenta", "cyan", "white"]
+    bg_names = ["default", "black", "red", "green", "yellow", "blue", "magenta", "cyan", "white"]
+    print('{:>10} {:>10}   {:<10}'.format('fg', 'bg', 'text'))
+    for bg in bg_names:
+        for fg in fg_names:
+            print('{:>10} {:>10}   {}'.format(fg, bg, color('sample text', fg=fg, bg=bg)))
+
+
+def color_rgb(v, fg, fmt='{}'):
+    return '\033[38;2;{};{};{}m{}\033[0m'.format(fg[0], fg[1], fg[2], v)
+
+
+def color_text(v, fmt='{}', idx: int = 0):
+    if idx == 0:
+        return fmt.format(v)
+    colors = {
+        1: (153, 96, 52),
+        2: (135, 166, 73)
+    }
+    return color_rgb(v, colors[idx], fmt=fmt)
+
+
 def nocolor(s: str) -> str:
     for name, value in COLORS.__dict__.items():
         if isinstance(value, str) and value[0] == '\033':
@@ -236,3 +297,9 @@ class TableBuilder:
 def line_profile():
     from line_profiler_pycharm import profile
     return profile
+
+
+if __name__ == '__main__':
+    # color_table()
+    print(color_text('sample', idx=1))
+    print(color_text('sample', idx=2))

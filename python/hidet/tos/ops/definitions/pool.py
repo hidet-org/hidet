@@ -16,7 +16,8 @@ class Pool2dTask(Task):
         pad = compute(
             name='pad',
             shape=[batch_size, channels, height + 2 * padding[0], width + 2 * padding[1]],
-            fcompute=lambda n, c, h, w: x.protect_read(indices=[n, c, h - padding[0], w - padding[1]], default_value=pad_value)
+            fcompute=lambda n, c, h, w: x.protect_read(indices=[n, c, h - padding[0], w - padding[1]], default_value=pad_value),
+            scope=x.data_type.scope
         )
         y = compute(
             name='y',

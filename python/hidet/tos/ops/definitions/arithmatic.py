@@ -1,7 +1,8 @@
 from typing import List, Callable, Any
 
 from hidet.ir import primitives
-from .utils import Task, Operator, Tensor, TensorNode, compute, input_like
+from hidet.utils import prod
+from .utils import Task, Operator, Tensor, TensorNode, InverseMap, compute, input_like
 
 
 def broadcast_shape(x_shape: List[int], y_shape: List[int]) -> List[int]:
@@ -36,7 +37,10 @@ class UnaryElementwiseTask(Task):
         super().__init__(
             name=name,
             inputs=[x],
-            outputs=[y]
+            outputs=[y],
+            inverse_map={
+                x: InverseMap.from_lambda(lambda *indices: list(indices), num_args=len(x.data_type.shape))
+            }
         )
 
 
@@ -61,10 +65,13 @@ class BinaryElementwiseTask(Task):
             fcompute=lambda *indices: op(x[imap(indices, x_shape)], y[imap(indices, y_shape)]),
             scope='global'
         )
+
         super().__init__(
             name=name,
             inputs=[x, y],
-            outputs=[z]
+            outputs=[z],
+            inverse_map={v: InverseMap.identity(len(v_shape)) for v, v_shape
+                         in zip([x, y], [x_shape, y_shape]) if prod(v_shape) == prod(z_shape)}
         )
 
 

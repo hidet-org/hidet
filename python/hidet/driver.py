@@ -27,6 +27,8 @@ def build_task(task: Task, space_level, opt_level, use_cache=True, cache_dir=Non
         return load_task_func(lib_path, task)
 
     logger.info("Compiling task {}{}{}...".format(COLORS.OKGREEN, task.name, COLORS.ENDC))
+    # print(task)
+    # exit(0)
 
     # build from scratch
     os.makedirs(task_dir, exist_ok=True)

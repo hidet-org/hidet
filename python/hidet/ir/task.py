@@ -4,7 +4,7 @@ from typing import Dict, List, Union, Optional, Sequence, Type, Tuple, Callable,
 from hidet.ir.node import Node
 from hidet.ir.expr import Expr, Var, TensorElement, var
 from hidet.ir.func import IRModule
-from hidet.ir.dialects.compute import TensorNode, ScalarNode
+from hidet.ir.dialects.compute import TensorNode, ScalarNode, GridCompute
 
 
 class Target:
@@ -71,6 +71,10 @@ class InverseMap:
         indices = list(func(*axes))
         return InverseMap(axes, indices)
 
+    @staticmethod
+    def identity(num_args: int) -> InverseMap:
+        return InverseMap.from_lambda(lambda *indices: list(indices), num_args=num_args)
+
     def __add__(self, other) -> InverseMap:
         from hidet.ir.functors import rewrite
         if not isinstance(other, InverseMap):
@@ -89,6 +93,41 @@ TaskType = TypeVar('TaskType')
 
 class Task(Node):
     def __init__(self, name, inputs, outputs, prologues=None, epilogues=None, parameters=None, inverse_map=None):
+        """
+        A Task is a computation definition.
+
+        param_inputs ===========>  task_inputs  ===================> task_outputs ===========> param_outputs
+             |        prologues                  task computations                 epilogues
+             |           ^                                                             ^
+             v           |                                                             |
+             +-----------+-------------------------------------------------------------+
+
+        Constraints:
+            1. Each task input can have zero or one prologue.
+            2. Each task output can have zero or one epilogue.
+            3. Prologue and epilogue can only have extra inputs from param inputs.
+            4. When a task input has prologue, it should not appear in param input.
+            5. When a task output has epilogue, it should not appear in param output.
+
+
+        Parameters
+        ----------
+        name: str
+            The name of the task. Can only contain a-z, A-Z, underscore, and digits.
+        inputs: List[TensorNode]
+            The inputs of the task computation.
+        outputs: List[TensorNode]
+            The outputs of the task computation.
+        prologues: Dict[TensorNode, Prologue]
+            The prologues.
+        epilogues: Dict[TensorNode, Epilogue]
+            The epilogues.
+        parameters: List[TensorNode]
+            The list of parameters in the final kernel.
+        inverse_map: Dict[TensorNode, Union[InverseMap, Callable[[Any], Any]]]
+            If the mapping of input axes to output axes are invertible, then inverse_map contains
+            the inverse map. It is used to convert a task to epilogue of previous task.
+        """
         self.name = name
         self.inputs: List[TensorNode] = inputs
         self.outputs: List[TensorNode] = outputs
@@ -138,6 +177,77 @@ class Task(Node):
             if name not in task.__dict__:
                 task.__dict__[name] = copy.copy(self.__dict__[name])
         return task
+
+    def absorb(self) -> Task:
+        """
+        Get a task that absorbed the prologues and epilogues into the main body of the computation.
+        This would make the specialized schedule inapplicable to the new task.
+
+        Returns
+        -------
+        ret: Task
+            The task absorbed the prologues and epilogues. Thus, its prologue and epilogues are empty.
+
+        """
+        from hidet.ir.functors import collect, rewrite
+        if len(self.prologues) + len(self.epilogues) == 0:
+            # current task have no prologue and epilogue. do nothing.
+            return self
+        num_outputs = len(self.outputs)
+        num_inputs = len(self.parameters) - num_outputs
+        global_inputs = self.parameters[:num_inputs]
+        for input_node in global_inputs:
+            if input_node.grid_compute:
+                raise ValueError('The input node of task should not have compute definition.')
+
+        # original tensor node to new tensor node.
+        tensor_map: Dict[TensorNode, TensorNode] = {}
+
+        # apply prologues
+        for task_input in self.inputs:
+            if task_input in self.prologues:
+                prologue = self.prologues[task_input]
+                tensor_map[task_input] = TensorNode(
+                    task_input.name,
+                    data_type=task_input.data_type,
+                    grid_compute=GridCompute(
+                        shape=task_input.grid_compute.shape,
+                        axes=prologue.indices,
+                        value=prologue.value
+                    )
+                )
+            else:
+                tensor_map[task_input] = task_input
+
+        # apply task computations and epilogues
+        for task_output in self.outputs:
+            new_output = TensorNode(
+                name=task_output.name,
+                data_type=task_output.data_type,
+                grid_compute=GridCompute(
+                    shape=task_output.grid_compute.shape,
+                    axes=task_output.grid_compute.axes,
+                    value=rewrite(task_output.grid_compute.value, tensor_map)
+                )
+            )
+            tensor_map[task_output] = new_output
+            if task_output in self.epilogues:
+                epilogue = self.epilogues[task_output]
+                tensor_map[task_output] = TensorNode(
+                    name=epilogue.out_tensor.name,
+                    data_type=epilogue.out_tensor.data_type,
+                    grid_compute=GridCompute(
+                        shape=epilogue.out_tensor.grid_compute.shape,
+                        axes=epilogue.out_tensor.grid_compute.axes,
+                        value=rewrite(epilogue.out_tensor.grid_compute.value, tensor_map)
+                    )
+                )
+        global_outputs = [tensor_map[task_output] for task_output in self.outputs]
+        return Task(
+            name=self.name,
+            inputs=global_inputs,
+            outputs=global_outputs,
+        )
 
 
 def is_elementwise(task: Task) -> bool:

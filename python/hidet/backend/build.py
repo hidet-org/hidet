@@ -137,7 +137,12 @@ def build_ir_module_job(build_instance: BuildInstance) -> Optional[str]:
     lib_path: str
         The path to the built dynamic linked library.
     """
-    with PassContext(save_ir=build_instance.keep_ir, save_dir=os.path.join(build_instance.output_dir, 'ir')):
+    from hidet.transforms.instruments import SaveIRInstrument
+    instruments = []
+    os.makedirs(build_instance.output_dir, exist_ok=True)
+    if build_instance.keep_ir:
+        instruments.append(SaveIRInstrument(out_dir=os.path.join(build_instance.output_dir, 'ir')))
+    with PassContext(instruments=instruments):
         ir_module = lower(build_instance.ir_module)
     src_path = os.path.join(build_instance.output_dir, 'source.cu')
     lib_path = os.path.join(build_instance.output_dir, 'lib.so')

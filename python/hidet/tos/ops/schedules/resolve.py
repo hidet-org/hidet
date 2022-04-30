@@ -6,7 +6,7 @@ from hidet.ir.type import TensorType
 from hidet.ir.expr import Constant
 from hidet.ir.func import IRModule
 from hidet.ir.task import Task
-from hidet.utils import TableBuilder
+from hidet.utils import TableBuilder, strict_zip
 from hidet.tos.tensor import randn, Tensor
 from hidet.backend import BuildInstance, batch_build_ir_modules
 from .common import Schedule
@@ -75,7 +75,7 @@ def resolve_ir_modules(ir_modules: List[IRModule], schedules: List[Schedule], ou
     if any(ir_module.task != ir_modules[0].task for ir_module in ir_modules):
         raise ValueError('Require all ir modules are from the same task.')
     build_instances = [BuildInstance(ir_module=ir_module,
-                                     output_dir=os.path.join(output_dir, idx),
+                                     output_dir=os.path.join(output_dir, 'resolve', str(idx)),
                                      keep_ir=False,
                                      nvcc_keep=False,
                                      verbose=False) for idx, ir_module in enumerate(ir_modules)]
@@ -84,7 +84,7 @@ def resolve_ir_modules(ir_modules: List[IRModule], schedules: List[Schedule], ou
     best_latency = 1e30
     best_ir_module = None
     latencies = []
-    for ir_module, compiled_func in zip(ir_modules, compiled_funcs, strict=True):
+    for ir_module, compiled_func in strict_zip(ir_modules, compiled_funcs):
         if compiled_func:
             repeat_latency = compiled_func.profile(*dummy_inputs, warmup=2, number=5, repeat=3)
             latency = float(np.median(repeat_latency))
