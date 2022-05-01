@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Any
 import copy
 import os
 import pickle
@@ -93,11 +94,8 @@ class InverseMap:
         return InverseMap(lhs.axes, indices)
 
 
-TaskType = TypeVar('TaskType')
-
-
 class Task(Node):
-    def __init__(self, name, inputs, outputs, prologues=None, epilogues=None, parameters=None, inverse_map=None):
+    def __init__(self, name, inputs, outputs, prologues=None, epilogues=None, parameters=None, inverse_map=None, attributes: Optional[Dict] = None):
         """
         A Task is a computation definition.
 
@@ -133,6 +131,7 @@ class Task(Node):
             If the mapping of input axes to output axes are invertible, then inverse_map contains
             the inverse map. It is used to convert a task to epilogue of previous task.
         """
+        self.attributes: Dict[str, Union[str, float, int, bool]] = attributes if attributes is not None else {}
         self.name = name
         self.inputs: List[TensorNode] = inputs
         self.outputs: List[TensorNode] = outputs
@@ -141,19 +140,24 @@ class Task(Node):
         self.parameters: List[TensorNode] = parameters if parameters else inputs + outputs
 
         inverse_map = inverse_map if inverse_map else {}
+        if not isinstance(inverse_map, dict):
+            raise ValueError('inverse_map should be a dict')
         self.inverse_map: Dict[TensorNode, InverseMap] = {
             a: (b if isinstance(b, InverseMap) else InverseMap.from_lambda(b)) for a, b in inverse_map.items()
         }
 
-        sanity_check(self)
-
     def implement(self, target: Union[Target, str]) -> IRModule:
+        from hidet.tos.ops.schedules import generic_cuda_schedule, generic_cpu_schedule
         if isinstance(target, str):
             target = Target.from_string(target)
         if target.name == 'cuda':
             ret = self.implement_cuda()
+            if ret is NotImplemented:
+                ret = generic_cuda_schedule(self)
         elif target.name == 'cpu':
             ret = self.implement_cpu()
+            if ret is NotImplemented:
+                ret = generic_cpu_schedule(self)
         else:
             raise ValueError()
         if not isinstance(ret, IRModule):
@@ -161,14 +165,21 @@ class Task(Node):
         return ret
 
     def implement_cuda(self) -> IRModule:
-        from hidet.tos.ops.schedules import generic_cuda_schedule
-        return generic_cuda_schedule(self)
+        return NotImplemented
 
     def implement_cpu(self) -> IRModule:
-        from hidet.tos.ops.schedules import generic_cpu_schedule
-        return generic_cpu_schedule(self)
+        return NotImplemented
 
-    def copy(self: TaskType) -> TaskType:
+    def fast_implement(self, space_level: int) -> bool:
+        if space_level == 0:
+            return True
+        else:
+            if 'implement_cuda' not in self.__class__.__dict__:
+                return True
+            else:
+                return False
+
+    def copy(self: Task) -> Task:
         cls = type(self)
         task = object.__new__(cls)
         task.name = self.name
@@ -183,77 +194,6 @@ class Task(Node):
                 task.__dict__[name] = copy.copy(self.__dict__[name])
         return task
 
-    def absorb(self) -> Task:
-        """
-        Get a task that absorbed the prologues and epilogues into the main body of the computation.
-        This would make the specialized schedule inapplicable to the new task.
-
-        Returns
-        -------
-        ret: Task
-            The task absorbed the prologues and epilogues. Thus, its prologue and epilogues are empty.
-
-        """
-        from hidet.ir.functors import collect, rewrite
-        if len(self.prologues) + len(self.epilogues) == 0:
-            # current task have no prologue and epilogue. do nothing.
-            return self
-        num_outputs = len(self.outputs)
-        num_inputs = len(self.parameters) - num_outputs
-        global_inputs = self.parameters[:num_inputs]
-        for input_node in global_inputs:
-            if input_node.grid_compute:
-                raise ValueError('The input node of task should not have compute definition.')
-
-        # original tensor node to new tensor node.
-        tensor_map: Dict[TensorNode, TensorNode] = {}
-
-        # apply prologues
-        for task_input in self.inputs:
-            if task_input in self.prologues:
-                prologue = self.prologues[task_input]
-                tensor_map[task_input] = TensorNode(
-                    task_input.name,
-                    data_type=task_input.data_type,
-                    grid_compute=GridCompute(
-                        shape=task_input.grid_compute.shape,
-                        axes=prologue.indices,
-                        value=prologue.value
-                    )
-                )
-            else:
-                tensor_map[task_input] = task_input
-
-        # apply task computations and epilogues
-        for task_output in self.outputs:
-            new_output = TensorNode(
-                name=task_output.name,
-                data_type=task_output.data_type,
-                grid_compute=GridCompute(
-                    shape=task_output.grid_compute.shape,
-                    axes=task_output.grid_compute.axes,
-                    value=rewrite(task_output.grid_compute.value, tensor_map)
-                )
-            )
-            tensor_map[task_output] = new_output
-            if task_output in self.epilogues:
-                epilogue = self.epilogues[task_output]
-                tensor_map[task_output] = TensorNode(
-                    name=epilogue.out_tensor.name,
-                    data_type=epilogue.out_tensor.data_type,
-                    grid_compute=GridCompute(
-                        shape=epilogue.out_tensor.grid_compute.shape,
-                        axes=epilogue.out_tensor.grid_compute.axes,
-                        value=rewrite(epilogue.out_tensor.grid_compute.value, tensor_map)
-                    )
-                )
-        global_outputs = [tensor_map[task_output] for task_output in self.outputs]
-        return Task(
-            name=self.name,
-            inputs=global_inputs,
-            outputs=global_outputs,
-        )
-
     def save(self, fname: str):
         dirname = os.path.dirname(fname)
         os.makedirs(dirname, exist_ok=True)
@@ -266,9 +206,34 @@ class Task(Node):
             return pickle.load(f)
 
 
-def is_elementwise(task: Task) -> bool:
+def is_injective_task(task: Task) -> bool:
     """
-    A task is elementwise if and only if there is only no reduce compute in the task.
+    Check whether a task is an injective task. A task is injective if and only if there is no reduce compute in
+    the task.
+
+    Parameters
+    ----------
+    task: Task
+        The task to check.
+
+    Returns
+    -------
+    ret: bool
+        Whether the task is injective.
+    """
+    from hidet.ir.functors import collect
+    scalar_nodes: List[ScalarNode] = collect(task.outputs, ScalarNode, stop_when_found=False)
+    return all(sn.reduce_compute is None for sn in scalar_nodes)
+
+
+def is_unary_injective_task(task: Task) -> bool:
+    return len(task.inputs) == 1 and len(task.outputs) == 1 and is_injective_task(task)
+
+
+def is_elementwise_task(task: Task) -> bool:
+    """
+    Check whether a task is an elementwise task. A task is elementwise if and only if it is a unary injective and
+    invertible.
 
     Parameters
     ----------
@@ -280,19 +245,7 @@ def is_elementwise(task: Task) -> bool:
     ret: bool
         Whether the task is elementwise.
     """
-    from hidet.ir.functors import collect
-    scalar_nodes: List[ScalarNode] = collect(task.outputs, ScalarNode, stop_when_found=False)
-    return all(sn.reduce_compute is None for sn in scalar_nodes)
-
-
-def is_unary_elementwise(task: Task) -> bool:
-    return len(task.inputs) == 1 and len(task.outputs) == 1 and is_elementwise(task)
-
-
-def sanity_check(task: Task):
-    from hidet.ir.functors import collect
-    # todo: check
-    pass
+    return is_unary_injective_task(task) and len(task.inverse_map) > 0
 
 
 def save_task(task: Task, fname: str):

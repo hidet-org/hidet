@@ -24,3 +24,10 @@ from .dialects.lowlevel import VoidType, PointerType, Dereference
 from .builders import FunctionBuilder, StmtBuilder
 
 from .task import Task, save_task, load_task
+
+
+# primitives
+from .primitives import max, min, exp, pow
+
+# utils
+from .utils import index_serialize, index_deserialize

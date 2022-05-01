@@ -239,10 +239,10 @@ def demo_reduce_mean():
 
 
 def demo_winograd_conv2d():
-    x = relay.var('x', shape=(1, 128, 28, 28))
+    x = relay.var('x', shape=(1, 128, 28, 28), dtype='float16')
     # w = relay.var('w', shape=(128, 128, 3, 3))
-    w = relay.const(np.random.randn(128, 128, 3, 3).astype(np.float), dtype='float32')
-    y = relay.nn.conv2d(x, w, strides=1, padding=1, kernel_size=3)
+    w = relay.const(np.random.randn(128, 128, 3, 3).astype(np.float), dtype='float16')
+    y = relay.nn.conv2d(x, w, strides=1, padding=1, kernel_size=3, out_dtype='float32')
     func = relay.Function(params=[x], body=y)
     ir_module = tvm.ir.IRModule.from_expr(func)
     print(ir_module)

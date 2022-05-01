@@ -4,9 +4,13 @@ import os
 import pickle
 import warnings
 from collections import defaultdict
+
+import hidet.tos.operator
 from hidet.tos.tensor import Tensor
 from hidet.tos.operator import Operator
 from hidet.utils import tracer
+from hidet.utils.doc import Doc, NewLine, Text, doc_join
+from hidet.utils.namer import Namer
 
 
 class FlowGraph:
@@ -19,9 +23,87 @@ class FlowGraph:
     def __call__(self, *inputs: Tensor) -> Union[List[Tensor], Tensor]:
         return self.forward(*inputs)
 
+    def __str__(self):
+        if any(v is None for v in [self.inputs, self.nodes, self.usage_count]):
+            self.update_nodes()
+        namer = Namer()
+
+        def get_tensor_sig(x: Tensor) -> Doc:
+            return Text(x.dtype) + '[' + doc_join([str(v) for v in x.shape], ', ') + ']'
+
+        def get_attr_repr(value: Union[float, int, bool, str, list, tuple]) -> Doc:
+            if isinstance(value, (float, int, bool)):
+                return Text(str(value))
+            elif isinstance(value, str):
+                return Text('"{}"'.format(value))
+            elif isinstance(value, list):
+                return '[' + doc_join([get_attr_repr(v) for v in value], ', ') + ']'
+            elif isinstance(value, tuple):
+                return '(' + doc_join([get_attr_repr(v) for v in value], ', ') + ')'
+            else:
+                raise ValueError(value)
+
+        param_docs = []
+        for x in self.inputs:
+            name = namer(x)
+            param_docs.append(Text(name) + ': ' + get_tensor_sig(x))
+
+        # head
+        head_doc = 'Graph(' + doc_join(param_docs, ', ') + ')'
+
+        # body
+        body_doc = Doc()
+        for op in self.nodes:
+            # const inputs
+            for x in op.inputs:
+                if x not in namer.obj_name:
+                    assert x.storage is not None
+                    body_doc += NewLine() + namer.get_name(x, hint='c') + ' = ' + 'Constant(' + get_tensor_sig(x) + ')'
+            outputs = op.outputs
+            if len(outputs) > 1:
+                raise NotImplementedError()
+            output: Tensor = outputs[0]
+            line_doc = Doc()
+            line_doc += namer(output) + ' = '
+            line_doc += op.name + ('*' if len(op.task.prologues) + len(op.task.epilogues) > 0 else '') + '('
+            line_doc += doc_join([namer(x) for x in op.inputs], sep=', ')
+            if op.attrs:
+                line_doc += ', ' + doc_join([Text(name) + '=' + get_attr_repr(value) for name, value in op.attrs.items()], ', ')
+            line_doc += ')'
+            line_doc += '  # ' + get_tensor_sig(output)
+            body_doc += NewLine() + line_doc
+
+        # return statement
+        body_doc += NewLine() + Text('return ') + doc_join([namer(x) for x in self.outputs], ', ')
+
+        graph_doc = head_doc + '{' + body_doc.indent() + NewLine() + '}'
+        return str(graph_doc)
+
+    def build(self):
+        tasks = []
+        tunable_tasks = []
+        task_keys = set()
+        space_level = hidet.get_space_level()
+        for node in self.nodes:
+            if node.task_func is None:
+                # if space_level == 0 or 'implement_cuda' not in node.task.__class__.__dict__:
+                task_key = hash(str(node.task))
+                if task_key in task_keys:
+                    continue
+                task_keys.add(task_key)
+                if node.task.fast_implement(space_level):
+                    tasks.append(node.task)
+                else:
+                    tunable_tasks.append(node.task)
+        hidet.driver.build_batch_task(tasks, space_level, parallel=True)
+        hidet.driver.build_batch_task(tunable_tasks, space_level, parallel=False)
+
     def forward(self, *inputs: Tensor) -> Union[List[Tensor], Tensor]:
         if any(v is None for v in [self.inputs, self.nodes, self.usage_count]):
             self.update_nodes()
+
+        self.build()
+
         if len(inputs) != len(self.inputs):
             raise ValueError('FlowGraph expects {} inputs, but got {}.'.format(len(self.inputs), len(inputs)))
         for idx, tensor in enumerate(inputs):
@@ -48,7 +130,7 @@ class FlowGraph:
                     node_inputs.append(node_input)
             # run node
             args = {f'input_{idx}': f'{tensor.dtype}{tensor.shape}' for idx, tensor in enumerate(node.inputs)}
-            args.update(node.attributes)
+            args.update(node.attrs)
             with tracer.profile(node.name, category='op', args=args, trace_cuda=True):
                 node_outputs = node.imperative_run(node_inputs)
             for st, at in zip(node.outputs, node_outputs):
@@ -60,12 +142,14 @@ class FlowGraph:
         # before save, clear the packed func cache because ctypes object can not be pickled
         for node in self.nodes:
             node.task_func = None
-        self.usage_count, self.inputs, self.nodes = None, None, None
+        self.usage_count, self.nodes = None, None
 
         dirname = os.path.dirname(fname)
         os.makedirs(dirname, exist_ok=True)
-        with open(fname, 'wb') as f:
+        # save to a temporary file first, in case pickle fails.
+        with open(fname + '.temp', 'wb') as f:
             pickle.dump(self, f)
+        os.rename(fname + '.temp', fname)
 
     @staticmethod
     def load(fname: str) -> FlowGraph:
@@ -89,6 +173,10 @@ class FlowGraph:
                               'but the inputs has not given to specify the order.'.format(len(inputs)))
             self.inputs = inputs
         return self
+
+    def cuda_graph(self):
+        from hidet.runtime.cuda_graph import create_cuda_graph
+        return create_cuda_graph(self)
 
     @staticmethod
     def _analyze(outputs: List[Tensor]) -> Tuple[List[Tensor], List[Operator], Dict[Tensor, int]]:

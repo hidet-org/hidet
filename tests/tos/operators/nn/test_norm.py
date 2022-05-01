@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 
 import hidet as hi
-from hidet.tos import operators as ops
+from hidet import ops
 from hidet.testing.check import check_unary
 from hidet.utils import prod
 
@@ -16,15 +16,9 @@ def check_ternary(a_shape, b_shape, c_shape, numpy_op, hidet_op, dtype: Union[st
 
     c = np.abs(c)
 
-    print(a)
-    print(b)
-    print(c)
-
     numpy_result = numpy_op(a, b, c)
     hidet_args = [hi.array(v).cuda() for v in [a, b, c]]
     hidet_result = hidet_op(*hidet_args).cpu().numpy()
-    print(numpy_result)
-    print(hidet_result)
     np.testing.assert_allclose(actual=hidet_result, desired=numpy_result, atol=atol, rtol=rtol)
 
 

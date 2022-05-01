@@ -3,12 +3,12 @@ from hidet.ir.func import *
 from hidet.ir.stmt import *
 from hidet.ir.expr import *
 from hidet.ir.dialects.compute import TensorNode, ScalarNode
-from hidet.ir.functors import StmtExprFunctor, TypeFunctor
+from hidet.ir.functors import StmtExprFunctor, TypeFunctor, TypeInfer
 from hidet.ir.dialects.lowlevel import VoidType, PointerType, Dereference, Address, ReferenceType, Reference, TensorPointerType
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
 from hidet.ir.utils.call_graph import CallGraph
 from hidet.utils.namer import Namer
-from hidet.ir.primitives import is_primitive_function, get_primitive_function
+from hidet.ir.primitives import is_primitive_function, lookup_primitive_function
 
 
 class Codegen(StmtExprFunctor, TypeFunctor):
@@ -17,6 +17,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         self.func_name_map = {}
         self.ir_module: Optional[IRModule] = None
         self.namer = Namer()
+        self.type_infer = TypeInfer()
 
     @staticmethod
     def canonize_funcname(name: str):
@@ -29,17 +30,20 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             dtype_doc = self(v_type)
             return dtype_doc + ' ' + name_doc
         elif isinstance(v_type, PointerType):
-            attr_doc = doc_join([self(attr) for attr in v_type.specifiers], sep=' ')
+            if len(v_type.specifiers) > 0:
+                attr_doc = doc_join([self(attr) for attr in v_type.specifiers], sep=' ') + ' '
+            else:
+                attr_doc = Doc()
             dtype = v_type.base_type
             base_type_doc = self(dtype)
             if v_type.use_bracket:
-                return attr_doc + ' ' + base_type_doc + ' ' + name_doc + '[]'
+                return attr_doc + base_type_doc + ' ' + name_doc + '[]'
             else:
-                return attr_doc + ' ' + base_type_doc + ' *' + name_doc
+                return attr_doc + base_type_doc + ' *' + ' __restrict__ ' + name_doc
         elif isinstance(v_type, TensorPointerType):
             dtype = v_type.tensor_type.scalar_type
             base_type_doc = self(dtype)
-            return base_type_doc + ' *' + name_doc
+            return base_type_doc + ' *' + ' __restrict__ ' + name_doc
         elif isinstance(v_type, ReferenceType):
             if isinstance(v_type.base_type, ScalarType):
                 base_type_doc = self(v_type.base_type)
@@ -47,12 +51,15 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             else:
                 raise NotImplementedError()
         elif isinstance(v_type, TensorType):
-            dtype_doc = self(v_type.scalar_type)
-            name_doc = self(v)
-            shape_doc = Doc()
-            for s in v_type.shape:
-                shape_doc += '[' + self(s) + ']'
-            return dtype_doc + ' ' + name_doc + shape_doc
+            dtype = v_type.scalar_type
+            base_type_doc = self(dtype)
+            return base_type_doc + ' *' + ' __restrict__ ' + name_doc
+            # dtype_doc = self(v_type.scalar_type)
+            # name_doc = self(v)
+            # shape_doc = Doc()
+            # for s in v_type.shape:
+            #     shape_doc += '[' + self(s) + ']'
+            # return dtype_doc + ' ' + '__restrict__' + name_doc + shape_doc
         else:
             raise ValueError()
 
@@ -74,13 +81,16 @@ class Codegen(StmtExprFunctor, TypeFunctor):
                 shape_doc += '[' + self(s) + ']'
             return scope_doc + dtype_doc + ' ' + name_doc + shape_doc
         elif isinstance(v_type, PointerType):
-            attr_doc = doc_join([self(attr) for attr in v_type.specifiers], sep=' ') + ' '
+            if len(v_type.specifiers) > 0:
+                attr_doc = doc_join([self(attr) for attr in v_type.specifiers], sep=' ') + ' '
+            else:
+                attr_doc = Doc()
             base_type_doc = self(v_type.base_type)
             name_doc = self(v)
             if v_type.use_bracket:
-                return attr_doc + ' ' + base_type_doc + ' ' + name_doc + '[]'
+                return attr_doc + base_type_doc + ' ' + name_doc + '[]'
             else:
-                return attr_doc + ' ' + base_type_doc + ' *' + name_doc
+                return attr_doc + base_type_doc + ' *' + name_doc
         elif isinstance(v_type, TensorPointerType):
             dtype_doc = self(v_type.tensor_type.scalar_type)
             name_doc = self(v)
@@ -114,9 +124,24 @@ class Codegen(StmtExprFunctor, TypeFunctor):
     def visit_IRModule(self, module: IRModule) -> Doc:
         self.ir_module = module
         doc = Doc()
-        doc += Text('#include <cassert>') + NewLine()
-        doc += Text('#include <cstdio>') + NewLine()
-        doc += Text('#include <cstdint>') + NewLine()
+        # todo: only add necessary headers
+        # doc += Text('#include <cassert>') + NewLine()
+        # doc += Text('#include <cstdio>') + NewLine()
+        # doc += Text('#include <cstdint>') + NewLine()
+        doc += Text('#include <cuda_fp16.h>') + NewLine()
+        doc += Text('#include <cuda_bf16.h>') + NewLine()
+        doc += Text('#include <hidet/runtime.h>') + NewLine()
+
+        # nvcc use float to 'store' tfloat32 data
+        doc += Text('typedef float tfloat32_t;') + NewLine()
+
+        # According to here: https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#wmma-altfp
+        # there should be a function called '__float_to_tf32' in cuda c to convert float to tfloat32,
+        # but I did not find such a function. By looking at cutlass's implementation of converting
+        # float to tfloat32, it seems that we do not need to do anything to convert. Put a definition
+        # here in case nvidia add the definition in the future.
+        doc += Text('#define __float_to_tf32(x) (x)') + NewLine()
+
         doc += '/*' + NewLine()
         doc += str(module.task) + NewLine()
         doc += '*/' + NewLine()
@@ -141,7 +166,9 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             doc += '__device__ __forceinline__'
         elif func.kind == 'packed_func' or func.kind == 'host_kernel':
             doc += '__host__'
-        doc += ' void'
+
+        doc += ' ' + self(func.ret_type)
+        # doc += ' void'
 
         # launch bound for grid worker
         if func.kind == 'cuda_kernel':
@@ -261,18 +288,25 @@ class Codegen(StmtExprFunctor, TypeFunctor):
 
     def visit_Call(self, e: Call):
         func_name = e.func_var.hint
-        func_name = func_name.replace('.', '_')
+        # func_name = func_name.replace('.', '_')
+        if '.' in func_name:
+            target, func_name = func_name.split('.')
         if func_name in self.ir_module.functions:
             # first check whether callee is in current ir module
             # because ir module functions will cover primitive functions
             func = self.ir_module.lookup(func_name)
         else:
-            assert is_primitive_function(func_name), "Callee {} not found in current ir module, and it is not primitive function."
-            v, func_type, func = get_primitive_function(func_name)
-            assert func is None, "Please use import_primitive_functions pass to import primitive function first"
+            key = e.func_var.hint
+            if not is_primitive_function(key):
+                raise ValueError("Callee {} not found in current ir module, and it is not primitive function.".format(key))
+            entry = lookup_primitive_function(key)
+            if entry.function is not None:
+                raise ValueError("Please use import_primitive_functions pass to import primitive function first: {}, functions in current module:\n{}.".format(entry.name, list(self.ir_module.functions.keys())))
+            if entry.generic:
+                raise ValueError("Please use resolve_generic_primitive_function pass to lower the generic primitive function {}.".format(entry.name))
             # system-provided function, do not canonize the func name
-            return func_name + (Text('(') + doc_join([self(arg) for arg in e.args], Text(', ')) + ')')
-        func_name = Text(self.canonize_funcname(e.func_var.hint))
+            return entry.name + (Text('(') + doc_join([self(arg) for arg in e.args], Text(', ')) + ')')
+        func_name = Text(self.canonize_funcname(func_name))
         if func.kind == 'cuda_kernel':
             def dim3_str(dims):
                 if isinstance(dims, (int, Expr)):
@@ -280,7 +314,12 @@ class Codegen(StmtExprFunctor, TypeFunctor):
                 else:
                     return Text('dim3(') + self(dims) + ')'
 
-            configs = [dim3_str(func.attrs['cuda_grid_dim']), dim3_str(func.attrs['cuda_block_dim']), func.attrs.get('cuda_smem_bytes', 0)]
+            configs = [
+                dim3_str(func.attrs['cuda_grid_dim']),  # grid dimension
+                dim3_str(func.attrs['cuda_block_dim']),  # block dimension
+                func.attrs.get('cuda_smem_bytes', 0),  # dynamic shared memory size
+                Text('get_cuda_stream()')  # cuda stream (get_cuda_stream() function is defined in hidet/runtime.h)
+            ]
             launch_config = Text('<<<') + doc_join([self(v) for v in configs], sep=', ') + Text('>>>')
         else:
             launch_config = []
@@ -309,6 +348,17 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             return Text(f'{value}f')
         elif dtype == 'int32':
             return Text(f'{value}')
+        elif dtype == 'float16':
+            return Text('half({})'.format(value))
+        elif dtype == 'int64':
+            return Text('{}'.format(value))
+        elif dtype == 'bfloat16':
+            return Text('__float2bfloat16({})'.format(value))
+        elif dtype == 'tfloat32':
+            return Text('__float_to_tf32({})'.format(value))
+        elif dtype == 'uint32':
+            assert value >= 0
+            return Text('{}u'.format(value))
         else:
             raise NotImplementedError('Cannot recognize scalar literal {} with dtype {}'.format(value, dtype))
 
@@ -374,7 +424,12 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         return doc
 
     def visit_ReturnStmt(self, stmt: ReturnStmt):
-        return NewLine() + 'return;'
+        doc = Doc()
+        doc += NewLine() + 'return'
+        if stmt.ret_value is not None:
+            doc += ' ' + self(stmt.ret_value)
+        doc += ';'
+        return doc
 
     def visit_AssertStmt(self, stmt: AssertStmt):
         return NewLine() + Text('assert(((void)"') + stmt.msg + '", ' + self(stmt.cond) + '));'
@@ -407,11 +462,16 @@ class Codegen(StmtExprFunctor, TypeFunctor):
 
     def visit_ScalarType(self, t: ScalarType):
         scalar_type_map = {
-            'int32': 'int32_t',
-            'float32': 'float',
+            'bool': 'bool',
             'uint8': 'uint8_t',
             'uint32': 'uint32_t',
-            'int64': 'int64_t'
+            'int32': 'int32_t',
+            'int64': 'int64_t',
+
+            'float16': 'half',
+            'float32': 'float',
+            'bfloat16': 'nv_bfloat16',
+            'tfloat32': 'tfloat32_t',
         }
         return Text(scalar_type_map[t.name])
 
@@ -422,7 +482,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         return self(t.base_type) + Text('*')
 
     def visit_TensorPointerType(self, t: TensorPointerType):
-        raise ValueError()
+        return self(t.tensor_type.scalar_type) + Text('*')
 
     def visit_ReferenceType(self, t: ReferenceType):
         raise ValueError()
@@ -442,7 +502,6 @@ class Codegen(StmtExprFunctor, TypeFunctor):
 
     def visit_AnyExpr(self, e: AnyExpr):
         raise ValueError()
-
 
 
 def codegen(ir_module: IRModule, src_out_path: Optional[str] = None) -> Optional[str]:

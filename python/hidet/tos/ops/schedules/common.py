@@ -11,7 +11,9 @@ from hidet.utils import prod
 
 
 class NotSupportedError(Exception):
-    pass
+    def __init__(self, obj: object, msg: str = ""):
+        self.obj = obj
+        self.msg = msg
 
 
 class Schedule:
@@ -79,7 +81,7 @@ class LoopExpander(ExprRewriter):
         self.new_buffer_map[e] = acc
 
         # init accumulator
-        self.sb += AssignStmt(acc, rc.init_const(e.data_type.name))
+        self.sb += AssignStmt(acc, rc.init_const(rc.reduce_type, e.data_type.name))
 
         # reduction loops
         for i in range(len(shape)):
@@ -87,14 +89,14 @@ class LoopExpander(ExprRewriter):
 
         # at the innermost loop body
         expr = self.visit(value)
-        self.sb += AssignStmt(acc, rc.combine(acc, expr))
+        self.sb += AssignStmt(acc, rc.combine(rc.reduce_type, acc, expr))
 
         # exit loop scope
         for i in range(len(shape)):
             self.sb.exit_body()
 
         # finalize
-        acc = rc.finalize(acc, prod(shape))
+        acc = rc.finalize(rc.reduce_type, acc, prod(shape))
 
         # if e is in the input buffer, we should write it back
         if e in self.input_map:

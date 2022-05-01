@@ -1,4 +1,3 @@
-import tvm
 from hidet.ir.dialects.compute import TensorNode, ScalarNode
 from hidet.ir.dialects.lowlevel import Reference, Address, ReferenceType, TensorPointerType, Dereference, VoidType, PointerType
 # from hidet.ir.dialects.pattern import ScalarExprPattern, TensorComputePattern, ReduceComputePattern, AnyExpr

@@ -2,7 +2,7 @@
 #include <iostream>
 #include <cublas_v2.h>
 #include <hidet/packedfunc.h>
-#include <hidet/runtime.h>
+#include <hidet/cuda_utils.h>
 
 
 

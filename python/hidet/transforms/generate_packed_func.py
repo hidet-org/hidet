@@ -9,7 +9,7 @@ from hidet.ir.dialects.lowlevel import VoidType, PointerType, Dereference, Tenso
 # from hidet.ir.task import Grid, Host
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.transforms import Pass
-from hidet.ir.primitives.func import set_kernel_max_dynamic_smem_bytes
+from hidet.ir.primitives import set_kernel_max_dynamic_smem_bytes
 
 
 class GeneratePackedFuncPass(Pass):
@@ -62,6 +62,9 @@ class GeneratePackedFuncPass(Pass):
                     else:
                         dtype = param.type.tensor_type.scalar_type
                     func_args.append(Cast(p_args[idx], PointerType(dtype)))
+                elif isinstance(param.type, PointerType):
+                    code = ArgType.POINTER
+                    func_args.append(Cast(p_args[idx], param.type))
                 else:
                     raise NotImplementedError()
                 sb += AssertStmt(Equal(p_arg_types[idx], code), "The {} th arg should be {}".format(idx, astext(param.type)))

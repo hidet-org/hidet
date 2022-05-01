@@ -8,11 +8,15 @@ import os
 import subprocess
 import tempfile
 from subprocess import PIPE
+
+from hidet.libinfo import get_include_dir
 from hidet.ir.func import IRModule
+from hidet.ir.type import FuncType
 from hidet.ir.task import Task
 from hidet.transforms import PassContext, lower
 from hidet.runtime import CompiledFunction
 from hidet.ffi import PackedFunc
+from hidet.ffi.ffi import library_paths
 from hidet.utils import cuda, Timer
 from hidet.backend import codegen
 
@@ -33,15 +37,27 @@ def compile_source(src_path: str, out_lib_path: str, keep_ptx=False) -> None:
     src_path = os.path.abspath(src_path)
     out_lib_path = os.path.abspath(out_lib_path)
     cc = cuda.query_compute_capability()
+
+    # dir contains the runtime header file 'hidet/runtime.h'
+    include_dirs = [get_include_dir()]
+    # dir contains the runtime library 'libhidet_runtime.so'
+    library_dirs = [os.path.dirname(library_paths['hidet_runtime'])]
+
     cc_code = '{}{}'.format(cc[0], cc[1])
-    command = ['nvcc',
-               '-keep' if keep_ptx else '',
-               '-gencode', f'arch=compute_{cc_code},code=sm_{cc_code}',
-               '--ptxas-options=-v',
-               '--compiler-options', "'-fPIC'",
-               '-lineinfo',
-               '-o', out_lib_path,
-               '--shared', src_path]
+    command = [
+        'nvcc',
+        *['-I{}'.format(include_dir) for include_dir in include_dirs],
+        *['-L{}'.format(library_dir) for library_dir in library_dirs],
+        '-keep' if keep_ptx else '',
+        '-gencode', f'arch=compute_{cc_code},code=sm_{cc_code}',
+        '--ptxas-options=-v',
+        '--compiler-options', "'-fPIC'",
+        '-lineinfo',
+        '-lhidet_runtime',
+        '--shared', src_path,
+        '-o', out_lib_path,
+    ]
+
     try:
         with tempfile.TemporaryDirectory() as working_dir:
             result = subprocess.run(" ".join(command).split(), stderr=PIPE, stdout=PIPE, cwd=working_dir)
@@ -51,6 +67,12 @@ def compile_source(src_path: str, out_lib_path: str, keep_ptx=False) -> None:
                     message += result.stdout.decode() + '\n'
                 if result.stderr:
                     message += result.stderr.decode()
+                if keep_ptx and os.path.exists(os.path.join(working_dir, os.path.basename(src_path).replace('.cu', '.ptx'))):
+                    out_lib_dir = os.path.dirname(out_lib_path)
+                    ptx_name = os.path.basename(src_path).replace('.cu', '.ptx')
+                    ptx_path = os.path.join(working_dir, ptx_name)
+                    target_ptx_path = os.path.join(out_lib_dir, ptx_name)
+                    os.rename(ptx_path, target_ptx_path)
                 raise Exception('Failed to compile file "{}":\n\n{}'.format(src_path, message))
             out_lib_dir = os.path.dirname(out_lib_path)
             if keep_ptx:
@@ -94,6 +116,19 @@ def load_task_func(lib_path: str, task) -> CompiledFunction:
     param_types = [param.data_type for param in task.parameters]
     packed_func = PackedFunc(param_types=param_types, c_func_pointer=lib[func_name])
     return CompiledFunction(name=task.name, packed_func=packed_func)
+
+
+def load_lib_func(lib_path: str, func_name: str, func_type: FuncType) -> CompiledFunction:
+    try:
+        lib = ctypes.CDLL(lib_path)
+    except OSError as e:
+        print("Removed the file '{}'".format(lib_path))
+        os.remove(lib_path)
+        raise e
+    func_name = 'hidet_{}'.format(func_name)
+    param_types = [param_type for param_type in func_type.param_types]
+    packed_func = PackedFunc(param_types=param_types, c_func_pointer=lib[func_name])
+    return CompiledFunction(name=func_name, packed_func=packed_func)
 
 
 class BuildInstance:
@@ -155,7 +190,7 @@ def build_ir_module_job(build_instance: BuildInstance) -> Optional[str]:
     return lib_path
 
 
-def batch_build_ir_modules(build_instances, parallel=True, verbose=False) -> List[CompiledFunction]:
+def batch_build_ir_modules(build_instances, parallel=True, verbose=False) -> List[Optional[CompiledFunction]]:
     """
     Build a batch of ir modules.
 
@@ -175,7 +210,6 @@ def batch_build_ir_modules(build_instances, parallel=True, verbose=False) -> Lis
     funcs: List[Optional[CompiledFunction]]
         The compiled functions, in the same order as build_instances.
         When the build for a build instance failed, None for that instance is returned.
-        The returned compiled functions follows the same order of build instances.
     """
     with Timer() as timer:
         lib_paths = []

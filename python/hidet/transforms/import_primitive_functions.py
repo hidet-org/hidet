@@ -2,7 +2,7 @@ from typing import List
 from hidet.ir.expr import Call
 from hidet.ir.func import IRModule, Function
 from hidet.ir.functors import collect
-from hidet.ir.primitives import is_primitive_function, get_primitive_function
+from hidet.ir.primitives import is_primitive_function, lookup_primitive_function
 from hidet.transforms import Pass
 
 
@@ -18,17 +18,19 @@ class ImportPrimitiveFunctionPass(Pass):
 
         primitive_funcs: List[Function] = []
         for func_name in used_primitive_funcs:
-            func_var, func_type, func = get_primitive_function(func_name)
-            if func is not None:
-                primitive_funcs.append(func)
+            entry = lookup_primitive_function(func_name)
+            if entry.function is not None:
+                primitive_funcs.append(entry.function)
 
         if len(primitive_funcs) == 0:
             return ir_module
         else:
             new_ir_module = IRModule(task=ir_module.task)
+            for func_name, func in ir_module.functions.items():
+                new_ir_module.add(func_name, func)
             for func in primitive_funcs:
-                new_ir_module.add(func.name, func)
-            new_ir_module.include(ir_module)
+                if func.name not in new_ir_module.functions:
+                    new_ir_module.add(func.name, func)
             return new_ir_module
 
 

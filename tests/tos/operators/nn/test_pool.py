@@ -3,7 +3,7 @@ from typing import Tuple
 import numpy as np
 import pytest
 
-import hidet.tos.operators as ops
+from hidet import ops
 from hidet.testing import check_unary
 
 

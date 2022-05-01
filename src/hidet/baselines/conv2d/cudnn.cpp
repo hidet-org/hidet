@@ -2,9 +2,9 @@
 #include <unordered_map>
 #include <cstring>
 #include <cudnn.h>
-#include <hidet/runtime.h>
+#include <hidet/cuda_utils.h>
 #include <hidet/packedfunc.h>
-#include <hidet/cudnn_common.h>
+#include "../cudnn_common.h"
 #include <time.h>
 
 struct Conv2dSetting {

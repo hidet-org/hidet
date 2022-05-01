@@ -5,11 +5,11 @@ import onnxruntime as ort
 
 import hidet
 from hidet import Tensor
-from hidet.ffi import cuda_api
+from hidet.ffi import cuda
 
 
-def create_ort_session(onnx_model_path) -> ort.InferenceSession:
-    session = ort.InferenceSession(onnx_model_path, providers=['CUDAExecutionProvider'])
+def create_ort_session(onnx_model_path, provider='CUDAExecutionProvider') -> ort.InferenceSession:
+    session = ort.InferenceSession(onnx_model_path, providers=[provider])
     session.disable_fallback()
     return session
 
@@ -41,11 +41,11 @@ def ort_benchmark(session: ort.InferenceSession, dummy_inputs: Dict[str, Tensor]
         session.run_with_iobinding(iobinding=io_binding)
     results = []
     for i in range(repeat):
-        cuda_api.device_synchronization()
+        cuda.device_synchronize()
         start_time = time()
         for j in range(number):
             session.run_with_iobinding(iobinding=io_binding)
-        cuda_api.device_synchronization()
+        cuda.device_synchronize()
         end_time = time()
         results.append((end_time - start_time) * 1000 / number)
     return results

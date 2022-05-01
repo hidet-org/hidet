@@ -197,7 +197,7 @@ def dump(flow_graph, fp):
             inputs=[Parameter(str(idx), tensor2argument[tensor]) for idx, tensor in enumerate(node.inputs)],
             outputs=[Parameter(str(idx), tensor2argument[tensor]) for idx, tensor in enumerate(node.outputs)],
             attributes=[
-                Attribute(name, type_string_of(value), str(value)) for name, value in node.attributes.items()
+                Attribute(name, type_string_of(value), str(value)) for name, value in node.attrs.items()
             ],
             description="{}".format(str(node.task))
         ))

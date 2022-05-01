@@ -602,7 +602,7 @@ class StmtVisitor(StmtFunctor):
             self.visit(stmt.else_body)
 
     def visit_ReturnStmt(self, stmt: ReturnStmt):
-        pass
+        self.visit(stmt.ret_value)
 
     def visit_AssertStmt(self, stmt: AssertStmt):
         self.visit(stmt.cond)
@@ -677,7 +677,11 @@ class StmtRewriter(StmtFunctor):
             return IfStmt(cond, then_body, else_body)
 
     def visit_ReturnStmt(self, stmt: ReturnStmt):
-        return stmt
+        ret_value = self.visit_expr(stmt.ret_value) if stmt.ret_value is not None else None
+        if ret_value is stmt.ret_value:
+            return stmt
+        else:
+            return ReturnStmt(ret_value)
 
     def visit_AssertStmt(self, stmt: AssertStmt):
         cond = self.visit_expr(stmt.cond)

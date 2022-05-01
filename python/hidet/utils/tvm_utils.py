@@ -10,7 +10,7 @@ import hidet
 import tvm
 import tvm.relay.backend.executor_factory
 from hidet import Tensor
-from hidet.ffi import cuda_api
+from hidet.ffi import cuda
 from hidet.utils import Timer, hidet_cache_dir, hidet_cache_file
 from tvm import relay
 from tvm.contrib import graph_executor
@@ -49,6 +49,7 @@ def autotvm_tune(ir_module: tvm.ir.IRModule, params: Dict[str, tvm.nd.NDArray], 
                 f.write('task {}\n{}\n\n'.format(task_idx, task))
 
         temp_log_file = log_file + '.tmp'
+        open(temp_log_file, 'a').close()    # in case no tunable operators
         with Timer(msg='AutoTVM tuning of {} tasks'.format(len(tasks)), file=os.path.join(out_dir, 'tuning_time.txt')):
             for task_idx, task in enumerate(tasks):
                 if tuner_name == 'xgb':
@@ -70,7 +71,7 @@ def autotvm_tune(ir_module: tvm.ir.IRModule, params: Dict[str, tvm.nd.NDArray], 
                     ]
                 )
         autotvm.record.pick_best(temp_log_file, log_file)
-        os.remove(temp_log_file)
+        # os.remove(temp_log_file)
 
     with autotvm.apply_history_best(log_file):
         with tvm.transform.PassContext(opt_level=3):
@@ -185,11 +186,11 @@ def tvm_benchmark(gmod: GraphModule, dummy_inputs: Dict[str, Tensor], warmup=10,
         gmod.run()
     results = []
     for i in range(repeat):
-        cuda_api.device_synchronization()
+        cuda.device_synchronize()
         start_time = time.time()
         for j in range(number):
             gmod.run()
-        cuda_api.device_synchronization()
+        cuda.device_synchronize()
         end_time = time.time()
         results.append((end_time - start_time) * 1000 / number)
     return results

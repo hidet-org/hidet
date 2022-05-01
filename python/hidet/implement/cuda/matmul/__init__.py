@@ -1,2 +1,0 @@
-from .static_matmul import CudaGridStaticMatmulImplementer
-from .static_batched_matmul import CudaGridStaticBatchedMatmulImplementer

@@ -1,7 +1,9 @@
 #include <cstdio>
 #include <cuda_runtime.h>
 
+#include <hidet/common.h>
 #include <hidet/packedfunc.h>
+#include <hidet/cuda_utils.h>
 #include <hidet/runtime.h>
 
 extern "C" {

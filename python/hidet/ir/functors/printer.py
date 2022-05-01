@@ -84,7 +84,8 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
     def visit_IRModule(self, ir_module: IRModule):
         doc = Doc()
         self.ir_module = ir_module
-        doc += str(ir_module.task)
+        if ir_module.task is not None:
+            doc += str(ir_module.task)
         doc += NewLine()
         for name, func in ir_module.functions.items():
             doc += ['def ', name, ' ', self(func), NewLine(), NewLine()]
@@ -203,7 +204,16 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
         if e.is_tensor():
             return 'ConstTensor({}, {})'.format(e.value.shape, e.data_type)
         else:
-            return Text(str(e.value))
+            dtype = e.data_type.name
+            if dtype == 'float32':
+                ret = '{}f'.format(float(e.value))
+            elif dtype == 'float16':
+                ret = 'half({})'.format(float(e.value))
+            elif dtype == 'int32':
+                ret = '{}'.format(int(e.value))
+            else:
+                ret = '{}({})'.format(dtype, e.value)
+            return Text(ret)
 
     def visit_EvaluateStmt(self, stmt: EvaluateStmt):
         return NewLine() + self(stmt.expr)
@@ -246,21 +256,24 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
         return doc
 
     def visit_ReturnStmt(self, stmt: ReturnStmt):
-        return NewLine() + Text('return')
+        doc = NewLine() + Text('return')
+        if stmt.ret_value:
+            doc += ' ' + self(stmt.ret_value)
+        return doc
 
     def visit_AssertStmt(self, stmt: AssertStmt):
         return NewLine() + 'assert(' + self(stmt.cond) + ', ' + stmt.msg + ')'
 
     def visit_AsmStmt(self, stmt: AsmStmt):
         volatile_doc = 'volatile ' if stmt.is_volatile else ''
-        template_doc = Text(stmt.template_string)
+        template_doc = '"' + Text(stmt.template_string) + '"'
         output_docs = []
         for label, expr in zip(stmt.output_labels, stmt.output_exprs):
-            output_docs.append(Text(label) + '(' + self(expr) + ')')
+            output_docs.append('"' + Text(label) + '"' + '(' + self(expr) + ')')
         input_docs = []
         for label, expr in zip(stmt.input_labels, stmt.input_exprs):
-            input_docs.append(Text(label) + '(' + self(expr) + ')')
-        return NewLine() + 'asm ' + volatile_doc + '(' + template_doc + ' : ' + doc_join(input_docs, ', ') + ' : ' + doc_join(output_docs, ', ') + ');'
+            input_docs.append('"' + Text(label) + '"' + '(' + self(expr) + ')')
+        return NewLine() + 'asm ' + volatile_doc + '(' + template_doc + ' : ' + doc_join(output_docs, ', ') + ' : ' + doc_join(input_docs, ', ') + ');'
 
     def visit_BlackBoxStmt(self, stmt: BlackBoxStmt):
         expr_docs = [str(self(e)) for e in stmt.exprs]
@@ -308,20 +321,24 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
     def visit_AnyExpr(self, e: AnyExpr):
         return Text('AnyExpr')
 
-    def print_tensor_nodes(self, nodes: List[TensorNode]) -> Doc:
+    def print_tensor_nodes(self, nodes: List[TensorNode], exclude_nodes: List[TensorNode] = None) -> Doc:
         from hidet.ir.functors import collect
+        if exclude_nodes is None:
+            exclude_nodes = []
         nodes: List[TensorNode] = collect(nodes, TensorNode)
         doc = Doc()
         for node in reversed(nodes):
+            if node in exclude_nodes:
+                continue
             if node.grid_compute is None:
-                doc += NewLine() + node.name + ': ' + self(node.data_type)
+                doc += NewLine() + self.namer.get_name(node) + ': ' + self(node.data_type)
             else:
                 gc = node.grid_compute
                 items = [
                     '[' + self(gc.shape) + ']',
                     '(' + self(gc.axes) + ') => ' + self(gc.value),
                 ]
-                doc += NewLine() + node.name + ': ' + 'grid(' + doc_join(items, ', ') + ')'
+                doc += NewLine() + self.namer.get_name(node) + ': ' + 'grid(' + doc_join(items, ', ') + ')'
         return doc
 
     def visit_Task(self, e: Task):
@@ -330,7 +347,8 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
             Text('parameters: ') + (NewLine() + doc_join(['{}: {}'.format(self.namer.get_name(v), self(v.data_type)) for v in e.parameters], NewLine())).indent(),
             Text('inputs: ') + '[' + doc_join([self.namer.get_name(v) for v in e.inputs], ', ') + ']',
             Text('outputs: ') + '[' + doc_join([self.namer.get_name(v) for v in e.outputs], ', ') + ']',
-            Text('computations: ') + self.print_tensor_nodes(e.outputs).indent()
+            Text('computations: ') + self.print_tensor_nodes(e.outputs).indent(),
+            Text('attributes: {') + self(e.attributes) + '}'
         ]
         front_part = doc_join(lines, NewLine())
         inverse_map_doc = Doc()
@@ -351,15 +369,31 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
         return Text('Task(') + (NewLine() + front_part + inverse_map_doc + prologue_doc + epilogue_doc).indent() + NewLine() + ')'
 
     def visit_Prologue(self, e: Prologue):
-        return 'Prologue((' + self(e.indices) + ') => ' + self(e.value) + ')'
+        from hidet.ir.functors import collect
+        items = [
+            '(' + self(e.indices) + ') => ' + self(e.value),
+            'extra_inputs: [' + self(e.extra_inputs) + ']'
+        ]
+        doc = 'Prologue(' + doc_join(items, ', ') + ')'
+        nodes = [node for node in collect(e.value, TensorNode) if node.grid_compute is not None]
+        if len(nodes) > 0:
+            doc += self.print_tensor_nodes(nodes, exclude_nodes=[]).indent()
+        return doc
 
     def visit_Epilogue(self, e: Epilogue):
-        ret = 'Epilogue((' + self(e.indices) + '), ' + self(e.orig_value) + ' => ' + self(e.value)
-        if e.out_tensor and e.out_indices:
-            ret = ret + ', out_indices=(' + self(e.out_indices) + '), out_tensor=' + self(e.out_tensor) + ')'
-        else:
-            ret = ')'
-        return ret
+        from hidet.ir.functors import collect
+        items = [
+            '(' + self(e.indices) + ')',
+            self(e.orig_value) + ' => ' + self(e.value),
+            'out_indices=(' + self(e.out_indices) + ')',
+            'out_tensor=' + self(e.out_tensor) + ')'
+        ]
+        doc = doc_join(items, ', ')
+        # ret = 'Epilogue((' + self(e.indices) + '), ' + self(e.orig_value) + ' => ' + self(e.value) + ', out_indices=(' + self(e.out_indices) + '), out_tensor=' + self(e.out_tensor) + ')'
+        nodes = [node for node in collect(e.value, TensorNode) if node.grid_compute is not None]
+        if len(nodes) > 0:
+            doc += self.print_tensor_nodes(nodes, exclude_nodes=[]).indent()
+        return doc
 
     def visit_InverseMap(self, e: InverseMap):
         return 'InverseMap([' + self(e.axes) + '] => [' + self(e.indices) + '])'

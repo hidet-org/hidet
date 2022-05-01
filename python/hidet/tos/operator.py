@@ -4,7 +4,7 @@ from collections import defaultdict
 from hidet.ir.task import Task
 from hidet.runtime import CompiledFunction
 from hidet.driver import build_task
-from hidet.tos.tensor import empty, Tensor
+from hidet.tos.tensor import empty, empty_like, Tensor
 
 
 def trim_op_ending(name: str):
@@ -12,22 +12,21 @@ def trim_op_ending(name: str):
 
 
 class Operator:
-    _current_opt_level = 0
     _current_space_level = 0
     _use_cache = True
 
-    _task_cache: Dict[Tuple[int, int], Dict[str, CompiledFunction]] = defaultdict(dict)
+    _task_cache: Dict[int, Dict[str, CompiledFunction]] = defaultdict(dict)
 
     def __init__(
             self,
             inputs: List[Tensor],
-            task: Task,
+            task: Optional[Task],
             outputs: Optional[List[Tensor]] = None,
             name: Optional[str] = None,
-            **kwargs):
+            attributes: Optional[Dict[str, Any]] = None):
         self.inputs: List[Tensor] = inputs
-        self.task: Task = task
-        self.attributes: Dict[str, Any] = kwargs
+        self.task: Optional[Task] = task
+        self.attrs: Dict[str, Any] = attributes if attributes is not None else {}
         self.outputs: Optional[List[Tensor]] = outputs
         self.name = name if name else trim_op_ending(self.__class__.__name__)
 
@@ -38,23 +37,11 @@ class Operator:
 
     def __str__(self):
         arguments = ['{}: {}{}'.format(i, t.dtype, t.shape) for i, t in enumerate(self.inputs)]
-        attributes = ['{}={}'.format(name, str(value)) for name, value in self.attributes.items()]
+        attributes = ['{}={}'.format(name, str(value)) for name, value in self.attrs.items()]
         return '{}({})'.format(self.name, ', '.join(arguments + attributes))
 
     def __dir__(self) -> Iterable[str]:
-        return ['task', 'inputs', 'outputs', 'attributes', 'name'] + list(self.attributes)
-
-    def __getattr__(self, item):
-        if item == 'attributes':
-            if 'attributes' in self.__dict__:
-                return self.__dict__['attributes']
-            else:
-                self.__dict__['attributes'] = {}
-                return self.__dict__['attributes']
-        if item in self.attributes:
-            return self.attributes[item]
-        else:
-            raise AttributeError(item)
+        return ['task', 'inputs', 'outputs', 'attributes', 'name'] + list(self.attrs)
 
     def run(self) -> List[Tensor]:
         if all(t.storage is not None for t in self.inputs):
@@ -73,11 +60,11 @@ class Operator:
     def imperative_run(self, inputs: List[Tensor]) -> List[Tensor]:
         if self.task_func is None:
             task_string = str(self.task)
-            level = (self._current_space_level, self._current_opt_level)
+            level = self._current_space_level
             if task_string in self._task_cache[level]:
                 self.task_func = self._task_cache[level][task_string]
             else:
-                self.task_func = build_task(self.task, space_level=self._current_space_level, opt_level=self._current_opt_level, use_cache=self._use_cache)
+                self.task_func = build_task(self.task, space_level=self._current_space_level, use_cache=self._use_cache)
                 self._task_cache[level][task_string] = self.task_func
         assert len(inputs) + len(self.task.outputs) == len(self.task.parameters)
         output_types = [output.data_type for output in self.task.parameters[-len(self.task.outputs):]]
@@ -90,24 +77,70 @@ class Operator:
         outputs = [Tensor(shape=type.const_shape(), dtype=type.scalar_type.name, device='cuda', storage=None, layout=type.layout, trace=(self, i)) for i, type in enumerate(output_types)]
         return outputs
 
-    def clone(self, *new_inputs: Tensor):
+    def reforward(self, inputs: List[Tensor], update_attributes: Optional[Dict[str, Any]] = None) -> List[Tensor]:
         cls = self.__class__
+        if not isinstance(self, Operator) or cls is Operator:
+            raise ValueError('Can only reforward operator whose class is a proper class of Operator. Please use .clone')
+        attributes = self.attrs.copy()
+        if update_attributes is not None:
+            attributes.update(update_attributes)
+        return cls(*inputs, **attributes).run()
+
+    def clone(self, inputs: List[Tensor], update_attributes: Optional[Dict[str, Any]] = None) -> List[Tensor]:
+        cls = self.__class__
+        attributes = self.attrs.copy()
+        if update_attributes is not None:
+            attributes.update(update_attributes)
+
         new_op = cls.__new__(cls)
         new_op.name = self.name
-        new_op.inputs = list(new_inputs)
+        new_op.inputs = inputs
         new_op.task = self.task
-        new_op.attributes = self.attributes
-        new_op.outputs = new_op.lazy_run()
+        new_op.attrs = attributes
+        new_op.outputs = new_op.run()
         new_op.task_func = None
-        return new_op
+        return new_op.outputs
 
+    def latency(self, warmup=3, number=20, repeat=5, median=True) -> Union[List[float], float]:
+        from hidet.ffi import cuda
+        from time import time
+        import numpy as np
+        dummy_inputs = []
+        for x in self.inputs:
+            if x.storage is not None:
+                dummy_inputs.append(x)
+            else:
+                if x.dtype in ['float32', 'float16', 'bfloat16']:
+                    dummy_inputs.append(empty_like(x))
+                else:
+                    raise ValueError('Can not generate dummpy input for dtype {}'.format(x.dtype))
+        output_types = [output.data_type for output in self.task.parameters[-len(self.task.outputs):]]
+        outputs = [empty(shape=type.const_shape(), dtype=type.scalar_type.name, device='cuda', layout=type.layout) for type in output_types]
 
-def opt_level(level=0):
-    Operator._current_opt_level = level
+        self.imperative_run(dummy_inputs)
+        for t in range(warmup):
+            self.task_func(*dummy_inputs, *outputs)
+        cuda.device_synchronize()
+        results = []
+        for i in range(repeat):
+            cuda.device_synchronize()
+            t1 = time()
+            for j in range(number):
+                self.task_func(*dummy_inputs, *outputs)
+            cuda.device_synchronize()
+            t2 = time()
+            results.append((t2 - t1) / number)
+        if median:
+            return float(np.median(results))
+        return results
 
 
 def space_level(level=0):
     Operator._current_space_level = level
+
+
+def get_space_level() -> int:
+    return Operator._current_space_level
 
 
 def cache_operator(use_cache=True):

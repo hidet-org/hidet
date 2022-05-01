@@ -1,254 +1,130 @@
-from typing import Dict, Callable, Set, Union, Optional, Tuple
-from hidet.ir.type import FuncType, ScalarType
-from hidet.ir.expr import Var, Call
-from hidet.ir.stmt import AsmStmt, BlackBoxStmt
+from typing import Dict, Union, Optional, List
+
+from hidet.ir.expr import Var
 from hidet.ir.func import Function
-# from hidet.ir.task import Thread
-from hidet.ir.dialects.lowlevel import VoidType, PointerType, ReferenceType
-from hidet.ir.builders import FunctionBuilder
-
-_primitive_functions: Dict[str, Tuple[Var, FuncType, Optional[Function]]] = {}
+from hidet.ir.type import FuncType
 
 
-def is_primitive_function(name):
-    return name in _primitive_functions
+class PrimitiveFunctionRegistry:
+    def __init__(self, space: str, name: str, func_type: FuncType, function: Optional[Function] = None, generic: bool = False):
+        key = '{}.{}'.format(space, name)
+        self.var = Var(hint=key, type=func_type)
+        self.space: str = space
+        self.name: str = name
+        self.func_type: FuncType = func_type
+        self.function: Optional[Function] = function
+
+        self.generic = generic
+        self.dispatch_dtype_rules: Dict[str, str] = {}
+
+    def dispatch_dtype(self, dtype: str, space: str, func_name: str):
+        if not self.generic:
+            raise ValueError('Can only dispatch a generic function.')
+        func_key = '{}.{}'.format(space, func_name)
+        self.dispatch_dtype_rules[dtype] = func_key
 
 
-def get_primitive_function(name: str) -> Tuple[Var, FuncType, Optional[Function]]:
-    assert name in _primitive_functions
-    return _primitive_functions[name]
+class PrimitiveFunctionPool:
+    def __init__(self):
+        self.key2func: Dict[str, PrimitiveFunctionRegistry] = {}
 
-
-def register_primitive_function(name, func_or_ftype: Optional[Union[Function, FuncType]] = None):
-    if isinstance(func_or_ftype, Function):
-        func = func_or_ftype
-        func_type = FuncType.from_func(func)
-    elif isinstance(func_or_ftype, FuncType):
-        func = None
-        func_type = func_or_ftype
-    else:
-        raise ValueError("Register function {} with type {}, expect a Function or FuncType.".format(name, func_or_ftype))
-    v = Var(name, func_type)
-    assert name not in _primitive_functions
-    _primitive_functions[name] = (v, func_type, func)
-
-
-def syncthreads() -> Call:
-    if '__syncthreads' not in _primitive_functions:
-        register_primitive_function('__syncthreads', FuncType([], VoidType()))
-    func_var = get_primitive_function('__syncthreads')[0]
-    return Call(func_var, [])
-
-
-def lds128(reg0, reg1, reg2, reg3, smem_addr) -> Call:
-    if 'lds128' not in _primitive_functions:
-        with FunctionBuilder('lds128') as fb:
-            # params
-            regs_vars = [Var(f'reg{i}', ReferenceType(ScalarType('float32'))) for i in range(4)]
-            smem_addr_var = Var('smem_addr', PointerType(ScalarType('float32')))
-            fb.extend_params(regs_vars + [smem_addr_var])
-            # body
-            body = AsmStmt(
-                r"{"
-                r"  .reg.u64 u64addr;"
-                r"  cvta.to.shared.u64 u64addr, %4;"
-                r"  ld.shared.v4.f32 {%0, %1, %2, %3}, [u64addr];"
-                r"}",
-                outputs=[('=f', reg) for reg in regs_vars],
-                inputs=[('l', smem_addr_var)],
-                is_volatile=True
+    def register(self, space: str, name: str, func_or_type: Union[Function, FuncType], generic):
+        if isinstance(func_or_type, Function):
+            registry = PrimitiveFunctionRegistry(
+                name=name,
+                func_type=FuncType.from_func(func_or_type),
+                space=space,
+                function=func_or_type,
+                generic=generic
             )
-            fb.set_body(body)
-        register_primitive_function('lds128', fb.get())
-    func_var = get_primitive_function('lds128')[0]
-    return Call(func_var, [reg0, reg1, reg2, reg3, smem_addr])
-
-
-def sts128(reg0, reg1, reg2, reg3, smem_addr) -> Call:
-    if 'sts128' not in _primitive_functions:
-        with FunctionBuilder('sts128') as fb:
-            # params
-            regs_vars = [Var(f'reg{i}', ReferenceType(ScalarType('float32'))) for i in range(4)]
-            smem_addr_var = Var('smem_addr', PointerType(ScalarType('float32')))
-            fb.extend_params(regs_vars + [smem_addr_var])
-            # body
-            body = AsmStmt(
-                r"{"
-                r"  .reg.u64 u64addr;"
-                r"  cvta.to.shared.u64 u64addr, %0;"
-                r"  st.shared.v4.f32 [u64addr], {%1, %2, %3, %4};"
-                r"}",
-                outputs=[],
-                inputs=[('l', smem_addr_var)] + [('f', reg) for reg in regs_vars],
-                is_volatile=True
+        elif isinstance(func_or_type, FuncType):
+            registry = PrimitiveFunctionRegistry(
+                name=name,
+                func_type=func_or_type,
+                space=space,
+                function=None,
+                generic=generic
             )
-            fb.set_body(body)
-        register_primitive_function('sts128', fb.get())
-    func_var = get_primitive_function('sts128')[0]
-    return Call(func_var, [reg0, reg1, reg2, reg3, smem_addr])
+        else:
+            raise TypeError('Expect a Function or FuncType to register a primitive function, got {}'.format(type(func_or_type)))
+        key = '{}.{}'.format(space, name)
+        if key in self.key2func:
+            raise KeyError('Primitive function {} has already registered.'.format(key))
+        self.key2func[key] = registry
+        return registry
+
+    def lookup(self, func_var: Var) -> PrimitiveFunctionRegistry:
+        if func_var.hint not in self.key2func:
+            raise KeyError('Can not find primitive function via variable: {}.'.format(func_var))
+        return self.key2func.get(func_var.hint)
+
+    def lookup_by_key(self, key: str) -> PrimitiveFunctionRegistry:
+        if key not in self.key2func:
+            raise KeyError('Can not find primitive function with key: {}.'.format(key))
+        return self.key2func[key]
+
+    def lookup_by_name(self, target: str, name: str) -> PrimitiveFunctionRegistry:
+        key = '{}.{}'.format(target, name)
+        if key not in self.key2func:
+            candidates = '\n'.join(self.registered_names()[target])
+            raise ValueError('Can not find primitive function with target "{}" and name "{}", candidates:\n{}'.format(target, name, candidates))
+        return self.key2func[key]
+
+    def registered_names(self) -> Dict[str, List[str]]:
+        ret = {}
+        for name in self.key2func:
+            target, func_name = name.split('.')
+            if target not in ret:
+                ret[target] = []
+            ret[target].append(func_name)
+        return ret
+
+    def has_registered(self, key: str) -> bool:
+        return key in self.key2func
 
 
-def printf(format_string, *args):
+primitive_func_pool = PrimitiveFunctionPool()
+
+
+def is_primitive_function(key: str):
+    return key in primitive_func_pool.key2func
+
+
+def lookup_primitive_function(key: str) -> PrimitiveFunctionRegistry:
+    return primitive_func_pool.lookup_by_key(key)
+
+
+def registered_primitive_functions() -> List[str]:
+    return list(primitive_func_pool.key2func.keys())
+
+
+def register_primitive_function(target, name, func_or_type: Union[Function, FuncType], generic=False) -> PrimitiveFunctionRegistry:
     """
-    usage:
-    printf(r"%d %d\n", expr_1, expr_2)
+    Register a primitive function.
+
+    Parameters
+    ----------
+    target: str
+        The target device of the primitive function works on. Candidates: 'base', 'cuda', 'cpu'.
+        'base' indicates this function is generic to different devices.
+        'cuda' indicates this is a primitive function in CUDA programming platform.
+        'cpu' indicates this is a primitive function specific in CPU.
+
+    name: str
+        The name of the primitive function.
+
+    func_or_type: Union[Function, FuncType]
+        Function definition or function type of the primitive function.
+        When function type is given, this function is implemented by underlying language (e.g., cuda c).
+
+    generic: bool
+        Whether this function is a generic function. A generic function will be lowered to a concrete primitive
+        function according to the calling arguments' type.
+
+    Returns
+    -------
+    ret: PrimitiveFunctionRegistry
+        The entry of registered primitive function.
     """
-    arg_string = ', '.join(['{}'] * len(args))
-    template_string = f'printf("{format_string}", {arg_string});'
-    return BlackBoxStmt(template_string, *args)
+    return primitive_func_pool.register(target, name, func_or_type, generic)
 
-
-def shfl_sync(mask, var, src_lane, width=32):
-    if '__shfl_sync' not in _primitive_functions:
-        register_primitive_function('__shfl_sync', FuncType(['int32', 'int32', 'int32', 'int32'], 'int32'))
-    func_var = get_primitive_function('__shfl_sync')[0]
-    return Call(func_var, [mask, var, src_lane, width])
-
-
-def shfl_up_sync(mask, var, delta, width=32):
-    if '__shfl_up_sync' not in _primitive_functions:
-        register_primitive_function('__shfl_up_sync', FuncType(['int32', 'int32', 'int32', 'int32'], 'int32'))
-    func_var = get_primitive_function('__shfl_up_sync')[0]
-    return Call(func_var, [mask, var, delta, width])
-
-
-def shfl_down_sync(mask, var, delta, width=32):
-    if '__shfl_down_sync' not in _primitive_functions:
-        register_primitive_function('__shfl_down_sync', FuncType(['int32', 'int32', 'int32', 'int32'], 'int32'))
-    func_var = get_primitive_function('__shfl_down_sync')[0]
-    return Call(func_var, [mask, var, delta, width])
-
-
-def shfl_xor_sync(mask, var, lane_mask, width=32):
-    if '__shfl_down_sync' not in _primitive_functions:
-        register_primitive_function('__shfl_down_sync', FuncType(['int32', 'int32', 'int32', 'int32'], 'int32'))
-    func_var = get_primitive_function('__shfl_down_sync')[0]
-    return Call(func_var, [mask, var, lane_mask, width])
-
-
-def expf(v):
-    if '__expf' not in _primitive_functions:
-        func_type = FuncType(param_types=['float32'], ret_type='float32')
-        register_primitive_function('__expf', func_type)
-    func_var = get_primitive_function('__expf')[0]
-    return Call(func_var, [v])
-
-
-def active_mask():
-    if '__activemask' not in _primitive_functions:
-        register_primitive_function('__activemask', FuncType([], 'int32'))
-    func_var = get_primitive_function('__activemask')[0]
-    return Call(func_var, [])
-
-
-def binary_type_infer(a_tp, b_tp):
-    return a_tp
-
-
-def cuda_max(a, b):
-    if 'max' not in _primitive_functions:
-        func_type = FuncType(type_infer_func=binary_type_infer)
-        register_primitive_function('max', func_type)
-    func_var = get_primitive_function('max')[0]
-    return Call(func_var, [a, b])
-
-
-def cuda_min(a, b):
-    if 'min' not in _primitive_functions:
-        func_type = FuncType(type_infer_func=binary_type_infer)
-        register_primitive_function('min', func_type)
-    func_var = get_primitive_function('min')[0]
-    return Call(func_var, [a, b])
-
-
-def cuda_sqrt(a):
-    if 'sqrtf' not in _primitive_functions:
-        func_type = FuncType(param_types=['float32'], ret_type='float32')
-        register_primitive_function('sqrtf', func_type)
-    func_var = get_primitive_function('sqrtf')[0]
-    return Call(func_var, [a])
-
-
-def cuda_rsqrt(a):
-    if 'rsqrtf' not in _primitive_functions:
-        func_type = FuncType(param_types=['float32'], ret_type='float32')
-        register_primitive_function('rsqrtf', func_type)
-    func_var = get_primitive_function('rsqrtf')[0]
-    return Call(func_var, [a])
-
-
-def cuda_pow(a, b):
-    if 'powf' not in _primitive_functions:
-        func_type = FuncType(param_types=['float32', 'float32'], ret_type='float32')
-        register_primitive_function('powf', func_type)
-    func_var = get_primitive_function('powf')[0]
-    return Call(func_var, [a, b])
-
-
-def cuda_erf(a):
-    if 'erff' not in _primitive_functions:
-        func_type = FuncType(param_types=['float32'], ret_type='float32')
-        register_primitive_function('erff', func_type)
-    func_var = get_primitive_function('erff')[0]
-    return Call(func_var, [a])
-
-
-def cuda_sin(a):
-    if 'sinf' not in _primitive_functions:
-        func_type = FuncType(param_types=['float32'], ret_type='float32')
-        register_primitive_function('sinf', func_type)
-    func_var = get_primitive_function('sinf')[0]
-    return Call(func_var, [a])
-
-
-def cuda_tanh(a):
-    if 'tanhf' not in _primitive_functions:
-        func_type = FuncType(param_types=['float32'], ret_type='float32')
-        register_primitive_function('tanhf', func_type)
-    func_var = get_primitive_function('tanhf')[0]
-    return Call(func_var, [a])
-
-
-def set_kernel_max_dynamic_smem_bytes(func_var, max_dynamic_smem_bytes):
-    template_string = r'cudaFuncSetAttribute({}, cudaFuncAttributeMaxDynamicSharedMemorySize, {});'
-    return BlackBoxStmt(template_string, func_var, max_dynamic_smem_bytes)
-
-
-def cuda_cos(a):
-    if 'cosf' not in _primitive_functions:
-        func_type = FuncType(param_types=['float32'], ret_type='float32')
-        register_primitive_function('cosf', func_type)
-    func_var = get_primitive_function('cosf')[0]
-    return Call(func_var, [a])
-
-
-def cuda_exp(a):
-    if 'expf' not in _primitive_functions:
-        func_type = FuncType(param_types=['float32'], ret_type='float32')
-        register_primitive_function('expf', func_type)
-    func_var = get_primitive_function('expf')[0]
-    return Call(func_var, [a])
-
-
-def cuda_round(a):
-    if 'roundf' not in _primitive_functions:
-        func_type = FuncType(param_types=['float32'], ret_type='float32')
-        register_primitive_function('roundf', func_type)
-    func_var = get_primitive_function('roundf')[0]
-    return Call(func_var, [a])
-
-
-def cuda_ceil(a):
-    if 'ceilf' not in _primitive_functions:
-        func_type = FuncType(param_types=['float32'], ret_type='float32')
-        register_primitive_function('ceilf', func_type)
-    func_var = get_primitive_function('ceilf')[0]
-    return Call(func_var, [a])
-
-
-def cuda_floor(a):
-    if 'floorf' not in _primitive_functions:
-        func_type = FuncType(param_types=['float32'], ret_type='float32')
-        register_primitive_function('floorf', func_type)
-    func_var = get_primitive_function('floorf')[0]
-    return Call(func_var, [a])

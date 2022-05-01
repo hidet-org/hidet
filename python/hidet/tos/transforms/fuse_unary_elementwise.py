@@ -1,11 +1,12 @@
 from .base import GraphPass, PassContext, logger
 from hidet.tos.ir import FlowGraph, Operator
 from hidet.tos.ir.functors import clone, analyze_usage
-from hidet.ir.task import Task, is_unary_elementwise
+from hidet.ir.task import Task, is_unary_injective_task
 from hidet.ir.functors import rewrite
 from hidet.utils import py
 
 from .common import concat_op_name
+from .utils import is_barrier
 
 
 class FuseUnaryElementwise(GraphPass):
@@ -20,7 +21,9 @@ class FuseUnaryElementwise(GraphPass):
         while True:
             success = False
             for u_op in graph.nodes:
-                if not is_unary_elementwise(u_op.task):
+                if is_barrier(u_op):
+                    continue
+                if not is_unary_injective_task(u_op.task):
                     continue
                 if len(usage[u_op.inputs[0]]) > 1:
                     # intermediate tensor can not be used by other operators.
@@ -28,7 +31,9 @@ class FuseUnaryElementwise(GraphPass):
                 v_op = u_op.inputs[0].op
                 if v_op is None:
                     continue
-                if not is_unary_elementwise(v_op.task):
+                if is_barrier(v_op):
+                    continue
+                if not is_unary_injective_task(v_op.task):
                     continue
 
                 # create fused op
@@ -38,6 +43,9 @@ class FuseUnaryElementwise(GraphPass):
                 z = rewrite(u_op.task.outputs[0], {u_op.task.inputs[0]: y})
                 if v_op.task.inverse_map and u_op.task.inverse_map:
                     inverse_map = {x: list(v_op.task.inverse_map.values())[0] + list(u_op.task.inverse_map.values())[0]}
+                elif v_op.task.inverse_map is not None:
+                    # if v_op is invertible but u_op is not invertible, we do not fuse them
+                    continue
                 else:
                     inverse_map = None
                 fused_op = Operator(
@@ -50,7 +58,7 @@ class FuseUnaryElementwise(GraphPass):
                     ),
                     outputs=u_op.outputs,
                     name=concat_op_name(v_op.name, u_op.name),
-                    **{**v_op.attributes, **u_op.attributes},
+                    attributes={**v_op.attrs, **u_op.attrs}
                 )
                 fused_op.outputs[0].trace = (fused_op, 0)
 
@@ -59,8 +67,14 @@ class FuseUnaryElementwise(GraphPass):
                 success = True
 
                 # log
-                if PassContext.current().verbose:
+                if PassContext.current().configs['verbose']:
                     logger.info('Fused elementwise {} {}'.format(py.color_text(v_op.name, idx=1), py.color_text(u_op.name, idx=2)))
+                    logger.debug('front op')
+                    logger.debug(v_op.task)
+                    logger.debug('back op')
+                    logger.debug(u_op.task)
+                    logger.debug('fused task')
+                    logger.debug(fused_op.task)
             if not success:
                 break
         return graph

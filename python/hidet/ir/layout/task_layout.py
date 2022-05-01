@@ -1,4 +1,5 @@
 from typing import Union, Tuple, List, Type, Dict, Optional, Sequence, Iterator, Callable, Iterable, Mapping
+import numpy as np
 import itertools
 from hidet.utils import prod
 
@@ -35,6 +36,13 @@ class TaskLayout:
 
     def __mul__(self, other) -> 'TaskLayout':
         return ComposedTaskLayout(outer=self, inner=other)
+
+    def __str__(self):
+        worker_id = np.empty(shape=self.task_shape, dtype=np.int32)
+        for w in range(self.num_workers):
+            for task_indices in self.worker2task(w):
+                worker_id[task_indices] = w
+        return np.array2string(worker_id)
 
     @staticmethod
     def row_major(task_shape: Sequence[int]):
@@ -206,3 +214,22 @@ def col_major_layout(*task_shape: int):
 
 def full_layout(*task_shape: int):
     return FullTaskLayout(task_shape)
+
+
+def row_map(*task_shape: int):
+    return row_major_layout(*task_shape)
+
+
+def col_map(*task_shape: int):
+    return col_major_layout(*task_shape)
+
+
+def repeat_map(*task_shape: int):
+    return full_layout(*task_shape)
+
+
+def grid_map(task_shape: List[int], order: Optional[List[int]] = None):
+    if order is None:
+        order = list(range(len(task_shape)))
+    assert len(order) == len(task_shape)
+    return GridTaskLayout(task_shape, order)

@@ -8,8 +8,7 @@ from .instruments import PassInstrument
 class PassContext:
     stack: List['PassContext'] = []
 
-    def __init__(self, opt_level: int = 0, instruments: Optional[List[PassInstrument]] = None, verbose: bool = False):
-        self.opt_level = opt_level
+    def __init__(self, instruments: Optional[List[PassInstrument]] = None, verbose: bool = False):
         self.instruments = instruments
         self.verbose = verbose
 

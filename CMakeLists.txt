@@ -20,10 +20,27 @@ endif()
 set(CMAKE_BUILD_TYPE ${HIDET_BUILD_TYPE})
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
+# add runtime target
+add_library(hidet_runtime SHARED
+        src/hidet/runtime/cuda_context.cpp
+        )
+target_include_directories(hidet_runtime PRIVATE
+        ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
+        ${CMAKE_SOURCE_DIR}/include
+        /usr/include
+        )
+set_target_properties(hidet_runtime PROPERTIES
+        CUDA_RUNTIME_LIBRARY SHARED
+        CUDA_ARCHITECTURES ${HIDET_CUDA_ARCH}
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
+        )
+
+# add main target
 add_library(hidet SHARED
         src/hidet/packedfunc.cpp
-        src/hidet/runtime/cuda_api.cpp
-        src/hidet/runtime/cuda_kernels.cu
+        src/hidet/logging.cpp
+        src/hidet/cuda_api.cpp
+        src/hidet/cuda_kernels.cu
         # matmul baselines
         src/hidet/baselines/matmul/reference.cu
         src/hidet/baselines/matmul/cublas.cpp
@@ -49,6 +66,7 @@ target_include_directories(hidet PRIVATE
 
 target_link_directories(hidet PRIVATE ${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES})
 
+# link a specific cudnn library
 if(NOT HIDET_CUDNN_PATH STREQUAL "Auto")
     target_include_directories(hidet PRIVATE ${HIDET_CUDNN_PATH}/include)
     target_link_directories(hidet PRIVATE ${HIDET_CUDNN_PATH}/lib64)
@@ -56,14 +74,18 @@ if(NOT HIDET_CUDNN_PATH STREQUAL "Auto")
 endif()
 
 target_link_libraries(hidet cudart cublas cudnn curand)
+target_link_libraries(hidet "-Wl,--no-as-needed" hidet_runtime)
 
 set_target_properties(hidet PROPERTIES
         CUDA_RUNTIME_LIBRARY SHARED
+        CUDA_ARCHITECTURES ${HIDET_CUDA_ARCH}
         LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
-        CUDA_ARCHITECTURES "${HIDET_CUDA_ARCH}"
         )
 
 # add -lineinfo option to nvcc, allowing us to get the source code from binary
 # do not influence optimization, can be used in nsight compute profiling
 target_compile_options(hidet PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-lineinfo>)
 
+
+# used for fast prototype primitive usage of cuda
+add_subdirectory(experiments/cuda_code)

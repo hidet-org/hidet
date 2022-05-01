@@ -64,16 +64,6 @@ class Function(Node):
         return default
 
 
-class FunctionGroup(Node):
-    def __init__(self, name, group=None):
-        self.name = name
-        self.group: List[Function] = group if group else []
-
-    def append(self, func: Function):
-        assert func.name == self.name
-        self.group.append(func)
-
-
 class IRModule(Node):
     def __init__(self, funcs=None, task=None, global_vars=None):
         from hidet.ir.task import Task
@@ -81,17 +71,16 @@ class IRModule(Node):
             assert isinstance(funcs, dict)
             # assert task is not None, 'Please specify the task'
         self.task: Optional[Task] = task
-        self.functions: Dict[str, Union[Function, FunctionGroup]] = funcs if funcs else {}
+        self.functions: Dict[str, Function] = funcs if funcs else {}
         self.global_vars: Dict[str, Var] = global_vars if global_vars else {}
 
-    def include(self, module):
+    def include(self, module, skip_duplicated=True):
         for name, func in module.functions.items():
             if name in self.functions:
-                funcs = [func] if isinstance(func, Function) else list(func.group)
-                if isinstance(self.functions[name], FunctionGroup):
-                    self.functions[name].group.extend(funcs)
+                if skip_duplicated:
+                    continue
                 else:
-                    self.functions[name] = FunctionGroup(name, funcs + [self.functions[name]])
+                    raise ValueError('Function {} has already existed in module while include another module.'.format(name))
             else:
                 self.functions[name] = func
 
@@ -103,30 +92,24 @@ class IRModule(Node):
             name = name_or_var.hint
         else:
             name = name_or_var
-        assert '.' not in name
+        if name not in self.functions:
+            raise KeyError('Function {} does not exist in module, existed functions: \n{}.'.format(name, list(self.functions.keys())))
         return self.functions[name]
 
     def lookup_var(self, name):
-        assert '.' not in name
         assert name in self.functions, (name, self.functions.keys())
         if name not in self.global_vars:
             func = self.functions[name]
             if isinstance(func, Function):
                 self.global_vars[name] = Var(name, FuncType.from_func(func))
-            elif isinstance(func, FunctionGroup):
-                self.global_vars[name] = Var(name, FuncType.from_func(func.group[0]))
             else:
                 raise ValueError()
 
         return self.global_vars[name]
 
-    def add(self, name, func: Union[Function, FunctionGroup]):
+    def add(self, name, func: Function):
         if name in self.functions:
-            existed_func = self.functions[name]
-            if isinstance(existed_func, FunctionGroup):
-                existed_func.group.append(func)
-            else:
-                self.functions[name] = FunctionGroup(name, group=[existed_func, func])
+            raise ValueError('Function {} has already existed in module.'.format(name))
         else:
             self.functions[name] = func
 

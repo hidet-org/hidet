@@ -3,7 +3,7 @@ from collections import defaultdict
 from hidet.ir.expr import Call
 from hidet.ir.func import IRModule, Function
 from hidet.ir.functors import collect
-from hidet.ir.primitives import is_primitive_function
+from hidet.ir.primitives import is_primitive_function, lookup_primitive_function
 
 
 class CallGraphNode:
@@ -38,8 +38,17 @@ class CallGraph:
             caller = func
             for call in collect(func.body, Call):
                 if is_primitive_function(call.func_var.hint):
-                    continue
-                callee = ir_module.lookup(call.func_var.hint)
+                    entry = lookup_primitive_function(call.func_var.hint)
+                    if entry.function is not None:
+                        if '.' in call.func_var.hint:
+                            target, name = call.func_var.hint.split('.')
+                        else:
+                            name = call.func_var.hint
+                        callee = ir_module.lookup(name)
+                    else:
+                        continue
+                else:
+                    callee = ir_module.lookup(call.func_var.hint)
                 self._add_edge(caller, callee)
 
         self._init_order()

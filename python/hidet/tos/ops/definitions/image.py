@@ -1,14 +1,14 @@
 from typing import Optional, List
 
 from hidet.ir.expr import Expr, if_then_else, convert, cast, And
-from hidet.ir.primitives import cuda_round, cuda_floor, cuda_ceil, cuda_max, cuda_min
+from hidet.ir import primitives as prim
 from .utils import Task, Operator, Tensor, TensorNode, compute, input_like
 
 
 # Acknowledgement: take TVM resize topi implementation as a reference
 
 
-def get_origin_index(x: Expr, image_width: int, target_width: int,  coordinate_transformation_mode: str) -> Expr:
+def get_origin_index(x: Expr, image_width: int, target_width: int, coordinate_transformation_mode: str) -> Expr:
     scale = image_width / target_width
     func_map = {
         'half_pixel':
@@ -32,15 +32,15 @@ def get_origin_index(x: Expr, image_width: int, target_width: int,  coordinate_t
 def get_closest_index(x: Expr, rounding_method: str) -> Expr:
     func_map = {
         'rounding_method':
-            lambda x: cast(cuda_round(x), 'int32'),
+            lambda x: cast(prim.round(x), 'int32'),
         'round_prefer_floor':
-            lambda x: cast(cuda_ceil(x - 0.5), 'int32'),
+            lambda x: cast(prim.ceil(x - 0.5), 'int32'),
         'round_prefer_ceil':
-            lambda x: cast(cuda_floor(x + 0.5), 'int32'),
+            lambda x: cast(prim.floor(x + 0.5), 'int32'),
         'floor':
-            lambda x: cast(cuda_floor(x + 1e-5), 'int32'),  # add epsilon (1e-5) to prevent gpu rounding error
+            lambda x: cast(prim.floor(x + 1e-5), 'int32'),  # add epsilon (1e-5) to prevent gpu rounding error
         'ceil':
-            lambda x: cast(cuda_ceil(x - 1e-5), 'int32')    # sub epsilon (1e-5) to prevent gpu rounding error
+            lambda x: cast(prim.ceil(x - 1e-5), 'int32')  # sub epsilon (1e-5) to prevent gpu rounding error
     }
     if rounding_method not in func_map:
         raise ValueError('Unsupported rounding_method: {}, candidates: {}'.format(rounding_method, func_map.keys()))
@@ -49,8 +49,8 @@ def get_closest_index(x: Expr, rounding_method: str) -> Expr:
 
 def get_2d_pixel(data: TensorNode, n, c, h, w) -> Expr:
     height, width = data.const_shape()[2:]
-    h = cuda_max(0, cuda_min(height, h))
-    w = cuda_max(0, cuda_min(width, w))
+    h = prim.max(0, prim.min(height, h))
+    w = prim.max(0, prim.min(width, w))
     return data[n, c, h, w]
 
 
@@ -59,7 +59,7 @@ def linear_interpolate(a, b, ratio):
 
 
 def resize2d_nchw_compute(data: TensorNode, size: List[int], method: str, coordinate_transformation_mode, rounding_method,
-                       roi, cubic_alpha, cubic_exclude, extrapolation_value) -> Task:
+                          roi, cubic_alpha, cubic_exclude, extrapolation_value):
     image_size = data.const_shape()[2:]
     target_size = size
 
@@ -71,8 +71,8 @@ def resize2d_nchw_compute(data: TensorNode, size: List[int], method: str, coordi
             w = get_closest_index(w, rounding_method)
             value = get_2d_pixel(data, n, c, h, w)
         elif method == 'linear':
-            h_int = cast(cuda_floor(h), 'int32')
-            w_int = cast(cuda_floor(w), 'int32')
+            h_int = cast(prim.floor(h), 'int32')
+            w_int = cast(prim.floor(w), 'int32')
             h_ratio = h - h_int
             w_ratio = w - w_int
             pixels = [[get_2d_pixel(data, n, c, h_int + i, w_int + j) for j in range(2)] for i in range(2)]
@@ -129,15 +129,16 @@ class Resize2dOp(Operator):
 
         super().__init__(
             inputs=[data],
-            task=Resize2dTask(input_like(data, 'data'), size, method, coordinate_transformation_mode, rounding_method,
-                              roi, cubic_alpha, cubic_exclude, extrapolation_value),
-            method=method,
-            coordinate_transformation_mode=coordinate_transformation_mode,
-            rounding_method=rounding_method,
-            roi=roi,
-            cubic_alpha=cubic_alpha,
-            cubic_exclude=cubic_exclude,
-            extrapolation_value=extrapolation_value
+            task=Resize2dTask(input_like(data, 'data'), size, method, coordinate_transformation_mode, rounding_method, roi, cubic_alpha, cubic_exclude, extrapolation_value),
+            attributes={
+                'method': method,
+                'coordinate_transformation_mode': coordinate_transformation_mode,
+                'rounding_method': rounding_method,
+                'roi': roi,
+                'cubic_alpha': cubic_alpha,
+                'cubic_exclude': cubic_exclude,
+                'extrapolation_value': extrapolation_value
+            }
         )
 
 

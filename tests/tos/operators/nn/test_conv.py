@@ -3,7 +3,7 @@ from typing import List
 import numpy as np
 import pytest
 
-import hidet.tos.operators as ops
+from hidet import ops
 from hidet.testing import check_binary
 
 
@@ -41,7 +41,7 @@ def numpy_conv2d(data: np.ndarray, weight: np.ndarray, padding: List[int], strid
 def test_conv2d(n, c, h, w, oc, kx, ky, padding, stride):
     check_binary(a_shape=[n, c, h, w], b_shape=[oc, c, kx, ky],
                  numpy_op=lambda data, weight: numpy_conv2d(data, weight, padding, stride),
-                 hidet_op=lambda data, weight: ops.conv2d(data, weight, padding, stride),
+                 hidet_op=lambda data, weight: ops.conv2d(ops.conv_pad(data, padding), weight, stride=stride),
                  dtype='float32', atol=1e-5, rtol=1e-5)
 
 

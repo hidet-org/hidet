@@ -22,27 +22,32 @@ tqdm
 nvtx
 
 # for onnx frontend
-onnx
+onnx==1.10.2
 
 ################################################################################
 # Optional packages
 ################################################################################
---extra-index-url https://download.pytorch.org/whl/cu113
-torch
-torchvision
+--extra-index-url https://download.pytorch.org/whl/cu115
+torch==1.11
+torchvision==0.12
 
 # for language model converting
-transformers
+transformers==4.19.2
 transformers[onnx]
 
 # for onnx runtime baseline
-onnxruntime-gpu
+onnxruntime-gpu==1.11.1
 
 # for tensor rt baseline
-nvidia-pyindex
-nvidia-tensorrt
+--extra-index-url https://pypi.ngc.nvidia.com
+nvidia-tensorrt==8.2.5.1
+
+tensorflow
+tensorflow-addons
+git+https://github.com/onnx/onnx-tensorflow@v1.7.0-tf-1.15
 
 # for tvm tuning
-xgboost
+decorator
+xgboost==1.5.0
 tornado
 cloudpickle

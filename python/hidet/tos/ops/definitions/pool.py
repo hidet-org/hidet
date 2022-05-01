@@ -1,4 +1,5 @@
 from typing import Union, Sequence
+from hidet.ir.expr import convert
 
 from .utils import Task, Operator, Tensor, TensorNode, compute, reduce, inline_compute, input_like, normalize_stride, normalize_kernel, normalize_padding
 
@@ -12,7 +13,7 @@ class Pool2dTask(Task):
         batch_size, channels, height, width = x.const_shape()
         out_height = (height + padding[0] + padding[2] - kernel[0]) // strides[0] + 1
         out_width = (width + padding[1] + padding[3] - kernel[1]) // strides[1] + 1
-        pad_value = 0.0 if reduce_type == 'avg' else -1e30
+        pad_value = convert(0.0 if reduce_type == 'avg' else -1e30, dtype=x.data_type.scalar_type)
         pad = compute(
             name='pad',
             shape=[batch_size, channels, height + 2 * padding[0], width + 2 * padding[1]],
@@ -47,9 +48,11 @@ class MaxPool2dOp(Operator):
         super().__init__(
             inputs=[input],
             task=Pool2dTask(input_like(input, 'x'), kernel, stride, padding, reduce_type='max'),
-            kernel=kernel,
-            stride=stride,
-            padding=padding
+            attributes={
+                'kernel': kernel,
+                'stride': stride,
+                'padding': padding
+            }
         )
 
 
@@ -63,9 +66,11 @@ class AvgPool2dOp(Operator):
         super().__init__(
             inputs=[input],
             task=Pool2dTask(input_like(input, 'x'), kernel, stride, padding, reduce_type='avg'),
-            kernel=kernel,
-            stride=stride,
-            padding=padding
+            attributes={
+                'kernel': kernel,
+                'stride': stride,
+                'padding': padding
+            }
         )
 
 

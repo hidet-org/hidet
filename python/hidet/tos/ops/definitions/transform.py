@@ -1,7 +1,9 @@
 from typing import List, Optional, Union, Sequence
+import functools
 
-from hidet.ir.expr import And, if_then_else, convert
+from hidet.ir.expr import Expr, And, if_then_else, convert
 from hidet.ir.layout import DataLayout, RowMajorLayout, ColumnMajorLayout
+from hidet.ir.utils import index_deserialize, index_serialize
 from hidet.utils import prod
 from .utils import Task, InverseMap, Operator, Tensor, TensorNode, compute, input_like, normalize_dim
 
@@ -11,31 +13,68 @@ def same_shape(shape_a: List[int], shape_b: List[int]) -> bool:
 
 
 class ReshapeTask(Task):
-    def __init__(self, x: TensorNode, shape: List[int]):
-        assert prod(x.const_shape()) == prod(shape)
-        x_layout = x.data_type.layout
-        y_layout = DataLayout.row_major(shape)
+    def __init__(self, x: TensorNode, y_shape: List[int]):
+        x_shape = x.const_shape()
+        if not prod(x_shape) == prod(y_shape):
+            raise ValueError('Can not reshape {} to {} because they have different number '
+                             'of elements: {} vs {}'.format(x_shape, y_shape, prod(x_shape), prod(y_shape)))
+        if not isinstance(x.data_type.layout, RowMajorLayout):
+            raise NotImplementedError('currently, only support row major layout. Please use '
+                                      '.contiguous() to transfer the given tensor into row major layout first.')
 
-        def index_map(y_indices):
-            idx = y_layout(*y_indices)
-            cur = 1
-            x_indices = []
-            for dim in reversed(x_layout.shape):
-                x_indices.append((idx // cur) % dim)
-                cur = cur * dim
-            return list(reversed(x_indices))
+        def index_map(dst_indices, src_shape, dst_shape):
+            src_groups = []
+            dst_groups = []
+            i, j = 0, 0
+            while i < len(src_shape) and j < len(dst_shape):
+                src_group = [i]
+                dst_group = [j]
+                x_size, y_size = src_shape[i], dst_shape[j]
+                i += 1
+                j += 1
+                while x_size != y_size:
+                    if x_size < y_size:
+                        x_size *= src_shape[i]
+                        src_group.append(i)
+                        i += 1
+                    else:
+                        y_size *= dst_shape[j]
+                        dst_group.append(j)
+                        j += 1
+                src_groups.append(src_group)
+                dst_groups.append(dst_group)
+            if i < len(src_shape):
+                assert prod(src_shape[i:]) == 1
+                src_groups.append(list(range(i, len(src_shape))))
+                dst_groups.append([])
+            if j < len(dst_shape):
+                assert prod(dst_shape[j:]) == 1
+                src_groups.append([])
+                dst_groups.append(list(range(j, len(dst_shape))))
+            src_indices = []
+            for src_group, dst_group in zip(src_groups, dst_groups):
+                x_group_shape = [src_shape[r] for r in src_group]
+                y_group_shape = [dst_shape[r] for r in dst_group]
+                y_group_indices = [dst_indices[r] for r in dst_group]
+                x_group_indices = index_deserialize(index_serialize(y_group_indices, y_group_shape), x_group_shape)
+                src_indices.extend(x_group_indices)
+            assert len(src_indices) == len(src_shape)
+            return src_indices
+
+        def inverse_map(*x_indices):
+            return index_map(x_indices, src_shape=y_shape, dst_shape=x_shape)
 
         y = compute(
             name='y',
-            shape=y_layout.shape,
-            fcompute=lambda *indices: x[index_map(indices)],
+            shape=y_shape,
+            fcompute=lambda *indices: x[index_map(indices, src_shape=x_shape, dst_shape=y_shape)],
             scope='global',
-            layout=y_layout
         )
         super().__init__(
             name='reshape',
             inputs=[x],
-            outputs=[y]
+            outputs=[y],
+            inverse_map={x: InverseMap.from_lambda(inverse_map, num_args=len(x_shape))}
         )
 
 
@@ -68,7 +107,11 @@ class RearrangeTask(Task):
                         x_indices[i] = 0
             return x[x_indices]
 
-        y = compute('y', y_shape, fcompute, scope='global')
+        y = compute(
+            name='y',
+            shape=y_shape,
+            fcompute=fcompute
+        )
 
         def inverse_map(*x_indices):
             y_indices = []
@@ -102,9 +145,9 @@ class ConcatTask(Task):
 
         def fmap(*indices):
             pre_sum = [sum([shapes[j][axis] for j in range(i)]) for i in range(n + 1)]
-            value = inputs[-1][indices[:axis] + (indices[axis] - pre_sum[-2],) + indices[axis+1:]]
-            for i, input in reversed(list(zip(range(n-1), inputs[:n-1]))):
-                input_i_value = inputs[i][indices[:axis] + (indices[axis] - pre_sum[i],) + indices[axis+1:]]
+            value = inputs[-1][indices[:axis] + (indices[axis] - pre_sum[-2],) + indices[axis + 1:]]
+            for i, input in reversed(list(zip(range(n - 1), inputs[:n - 1]))):
+                input_i_value = inputs[i][indices[:axis] + (indices[axis] - pre_sum[i],) + indices[axis + 1:]]
                 value = if_then_else(indices[axis] < pre_sum[i + 1], input_i_value, value)
             return value
 
@@ -230,6 +273,8 @@ class PadTask(Task):
         assert rank * 2 == len(pads)
         out_shape = [a + b + c for a, b, c in zip(pads[:rank], shape, pads[rank:])]
 
+        value = convert(value, dtype=data.data_type.scalar_type.name)
+
         def fmap(*indices):
             indices = [idx - beg for idx, beg in zip(indices, pads[:rank])]
             cond = And.join_list([And(0 <= idx, idx < shape[i]) for i, idx in enumerate(indices)])
@@ -248,6 +293,29 @@ class PadTask(Task):
         )
 
 
+class TileTask(Task):
+    def __init__(self, data: TensorNode, repeats: List[int]):
+        shape = data.const_shape()
+        assert len(shape) == len(repeats)
+        out_shape = [a * b for a, b in zip(shape, repeats)]
+
+        def fmap(*indices):
+            indices = [idx % shape[i] for i, idx in enumerate(indices)]
+            return data[indices]
+
+        out = compute(
+            name='out',
+            shape=out_shape,
+            fcompute=fmap,
+            scope=data.data_type.scope,
+        )
+        super().__init__(
+            name='tile',
+            inputs=[data],
+            outputs=[out]
+        )
+
+
 class ReshapeOp(Operator):
     def __init__(self, x: Tensor, shape):
         shape = self.normalize_shape(x.shape, shape)
@@ -255,7 +323,10 @@ class ReshapeOp(Operator):
         super().__init__(
             inputs=[x],
             task=task,
-            shape=shape
+            attributes={
+                'shape': shape
+            }
+
         )
 
     @staticmethod
@@ -287,7 +358,10 @@ class RearrangeOp(Operator):
         super().__init__(
             inputs=[x],
             task=RearrangeTask(input_like(x, 'x'), plan=plan),
-            plan=plan
+            attributes={
+                'plan': plan
+            }
+
         )
 
 
@@ -296,7 +370,10 @@ class SqueezeOp(Operator):
         super().__init__(
             inputs=[x],
             task=RearrangeTask(input_like(x, 'x'), plan=[[i] for i in range(len(x.shape)) if i not in dims]),
-            dims=dims
+            attributes={
+                'dims': dims
+            }
+
         )
 
     def imperative_run(self, inputs: Optional[List[Tensor]] = None) -> List[Tensor]:
@@ -324,7 +401,10 @@ class UnsqueezeOp(Operator):
         super().__init__(
             inputs=[x],
             task=RearrangeTask(input_like(x, 'x'), plan=plan),
-            dims=dims
+            attributes={
+                'dims': dims
+            }
+
         )
 
     def imperative_run(self, inputs: Optional[List[Tensor]] = None) -> List[Tensor]:
@@ -348,8 +428,11 @@ class FlattenOp(Operator):
         super().__init__(
             inputs=[x],
             task=RearrangeTask(input_like(x, 'x'), plan=plan),
-            start_dim=start_dim,
-            end_dim=end_dim
+            attributes={
+                'start_dim': start_dim,
+                'end_dim': end_dim
+            }
+
         )
 
 
@@ -363,7 +446,10 @@ class TransposeOp(Operator):
         super().__init__(
             inputs=[x],
             task=RearrangeTask(input_like(x, 'x'), plan),
-            axes=axes
+            attributes={
+                'axes': axes
+            }
+
         )
 
 
@@ -374,19 +460,25 @@ class CastOp(Operator):
         super().__init__(
             inputs=[x],
             task=UnaryElementwiseTask('cast', input_like(x, 'x'), op=lambda v: Cast(v, dtype)),
-            dtype=dtype
+            attributes={
+                'dtype': dtype
+            }
+
         )
 
 
 class ConcatOp(Operator):
-    def __init__(self, tensors: List[Tensor], axis: int):
+    def __init__(self, *tensors: Tensor, axis: int):
+        tensors = list(tensors)
         if len(tensors) == 0:
             raise ValueError('Concat requires at least one tensor, 0 given.')
         axis = normalize_dim(axis, len(tensors[0].shape))
         super().__init__(
             inputs=tensors,
             task=ConcatTask([input_like(tensor, 'x{}'.format(idx)) for idx, tensor in enumerate(tensors)], axis=axis),
-            axis=axis
+            attributes={
+                'axis': axis
+            }
         )
 
 
@@ -395,7 +487,9 @@ class TakeOp(Operator):
         super().__init__(
             inputs=[data, indices],
             task=TakeTask(input_like(data, 'data'), input_like(indices, 'indices'), axis=axis),
-            axis=axis
+            attributes={
+                'axis': axis
+            }
         )
 
 
@@ -406,14 +500,17 @@ class StridedSliceOp(Operator):
         super().__init__(
             inputs=[data],
             task=task,
-            starts=starts,
-            ends=ends,
-            axes=axes,
-            strides=strides
+            attributes={
+                'starts': starts,
+                'ends': ends,
+                'axes': axes,
+                'strides': strides
+            }
+
         )
 
     @staticmethod
-    def normalize(shape, starts, ends, axes: Optional, strides: Optional):
+    def normalize(shape, starts, ends, axes: Optional[List[int]], strides: Optional[List[int]]):
         # follow: https://github.com/onnx/onnx/blob/main/docs/Operators.md#slice to normalize
         rank = len(shape)
         if axes is None:
@@ -440,7 +537,9 @@ class BroadcastOp(Operator):
         super().__init__(
             inputs=[data],
             task=BroadcastTask(input_like(data, 'data'), shape),
-            shape=shape
+            attributes={
+                'shape': shape
+            }
         )
 
 
@@ -456,9 +555,26 @@ class PadOp(Operator):
         super().__init__(
             inputs=[data],
             task=PadTask(input_like(data, 'data'), pads, value),
-            pads=pads,
-            mode=mode,
-            value=value
+            attributes={
+                'pads': pads,
+                'mode': mode,
+                'value': value
+            }
+
+        )
+
+
+class TileOp(Operator):
+    def __init__(self, data: Tensor, repeats: List[int]):
+        if len(repeats) != len(data.shape):
+            raise ValueError("The length of 'repeats' parameter of Tile operator expects to have the "
+                             "same length as data shape. shape: {}, repeats: {}".format(data.shape, repeats))
+        super().__init__(
+            inputs=[data],
+            task=TileTask(input_like(data, 'data'), repeats),
+            attributes={
+                'repeats': repeats
+            }
         )
 
 
@@ -491,38 +607,58 @@ def rearrange(x: Tensor, plan: List[List[int]]) -> Tensor:
     unsqueeze([2, 3], dims=[0, 1]) = rearrange([2, 3], plan=[[], [], [0], [1]]) => Tensor([1, 1, 2, 3])
     flatten([2, 3, 4, 5], start_dim=1, end_dim=2) = rearrange([2, 3, 4, 5], plan=[[0], [1, 2], [3]]) => Tensor([2, 12, 5])
     """
+    if not isinstance(plan, (list, tuple)) or any(not isinstance(v, (list, tuple)) for v in plan):
+        raise ValueError('plan should be List[List[int]], but got: {}'.format(plan))
     return RearrangeOp(x, plan).get_output(0)
 
 
 def squeeze(x: Tensor, dims: Union[int, Sequence[int]]) -> Tensor:
     if isinstance(dims, int):
         dims = [dims]
+    if len(dims) == 0:
+        return x
     return SqueezeOp(x, dims).get_output(0)
 
 
 def unsqueeze(x: Tensor, dims: Union[int, Sequence[int]]) -> Tensor:
     if isinstance(dims, int):
         dims = [dims]
+    if len(dims) == 0:
+        return x
     return UnsqueezeOp(x, dims).get_output(0)
 
 
 def flatten(x: Tensor, start_dim=0, end_dim=None) -> Tensor:
     start_dim = normalize_dim(start_dim, len(x.shape))
     end_dim = normalize_dim(end_dim, len(x.shape))
-    if start_dim + 1 == end_dim:
+    if start_dim + 1 >= end_dim:
         return x
     return FlattenOp(x, start_dim, end_dim).get_output(0)
 
 
-def transpose(x: Tensor, axes: Optional[List[int]]) -> Tensor:
-    return TransposeOp(x, axes).get_output(0)
+def transpose(x: Tensor, axes: Optional[List[int]] = None) -> Tensor:
+    rank = len(x.shape)
+    if axes is None:
+        axes = list(reversed(range(rank)))
+    axes = [normalize_dim(dim, rank) for dim in axes]
+    dims = []
+    i = 0
+    for j in range(rank):
+        if j in axes:
+            dims.append(axes[i])
+            i += 1
+        else:
+            dims.append(j)
+    return TransposeOp(x, dims).get_output(0)
 
 
 def concat(tensors: List[Tensor], axis: int) -> Tensor:
-    return ConcatOp(tensors, axis).get_output(0)
+    return ConcatOp(*tensors, axis=axis).get_output(0)
 
 
 def cast(x: Tensor, dtype: str) -> Tensor:
+    if x.dtype == dtype:
+        return x
     return CastOp(x, dtype).get_output(0)
 
 
@@ -541,4 +677,45 @@ def broadcast(data: Tensor, shape) -> Tensor:
 
 
 def pad(data: Tensor, pads: List[int], mode: str = 'constant', value: float = 0.0) -> Tensor:
+    if all(p == 0 for p in pads):
+        return data
     return PadOp(data, pads, mode, value).get_output(0)
+
+
+def conv_pad(data: Tensor, pads: List[int]) -> Tensor:
+    from .utils import normalize_padding
+    pads = normalize_padding(pads, dim=len(data.shape) - 2)
+    return pad(data, pads)
+
+
+def tile(data: Tensor, repeats: List[int]) -> Tensor:
+    """
+    Tile a tensor. See https://numpy.org/doc/stable/reference/generated/numpy.tile.html.
+
+    Parameters
+    ----------
+    data: Tensor
+        The input tensor to be tiled.
+    repeats: List[int]
+        A list of integers to represent the number of repeats for each dimension.
+        Must have len(repeats) == len(data.shape).
+
+    Returns
+    -------
+    ret: Tensor
+        The tiled tensor, with shape [a * b for a, b in zip(data.shape, repeats)].
+    """
+    return TileOp(data, repeats).get_output(0)
+
+
+def split(data: Tensor, axis: int, parts: List[int]) -> List[Tensor]:
+    axis = normalize_dim(axis, len(data.shape))
+    if sum(parts) != data.shape[axis]:
+        raise ValueError('split operator expects the sum(parts) parameter equals the the extent of given axis'
+                         ', but got shape {}, axis {} and parts {}'.format(data.shape, axis, parts))
+    outputs = []
+    for i in range(len(parts)):
+        start = sum(parts[:i])
+        end = start + parts[i]
+        outputs.append(strided_slice(data, starts=[start], ends=[end], axes=[axis], strides=[1]))
+    return outputs

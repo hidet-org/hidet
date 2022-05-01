@@ -7,6 +7,9 @@ class Namer:
         self.obj_name = {}
         self.clear()
 
+    def __call__(self, x):
+        return self.get_name(x)
+
     def clear(self):
         self.name_id_clock.clear()
         self.obj_name.clear()
@@ -20,6 +23,7 @@ class Namer:
     def get_name(self, e, hint=None):
         from hidet.ir.expr import Var
         from hidet.ir.dialects.compute import ScalarNode, TensorNode
+        from hidet.tos.tensor import Tensor
         if e in self.obj_name:
             return self.obj_name[e]
         if hint:
@@ -33,6 +37,7 @@ class Namer:
                 ScalarNode: 'scalar',
                 TensorNode: 'tensor',
                 Var: 'v',
+                Tensor: 'x'
             }
             orig_name = alias[type(e)] if type(e) in alias else type(e).__name__
 

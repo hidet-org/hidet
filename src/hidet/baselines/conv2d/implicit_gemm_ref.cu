@@ -1,4 +1,4 @@
-#include <hidet/runtime.h>
+#include <hidet/cuda_utils.h>
 #include <hidet/packedfunc.h>
 
 // x[n, rc, h, w], w[c, rc, rx, ry], y[n, c, p, q]

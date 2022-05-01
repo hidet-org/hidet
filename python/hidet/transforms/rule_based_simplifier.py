@@ -3,14 +3,13 @@ from typing import Dict, Optional, List
 from itertools import product
 
 from hidet.ir.dialects.pattern import AnyExpr, match
-from hidet.ir.expr import Add, convert, Sub, Multiply, FloorDiv, Mod, LessThan, LessEqual, Equal, BinaryOp, And, IfThenElse, Or
-from hidet.ir.expr import Constant, Expr, Var, Cast
+from hidet.ir.expr import Add, convert, Sub, Multiply, FloorDiv, Mod, LessThan, LessEqual, Equal, BinaryOp, And, IfThenElse, Or, Div, Constant
+from hidet.ir.expr import Constant, Expr, Var, Cast, cast
 from hidet.ir.functors import FuncStmtExprRewriter
 from hidet.ir.functors import StmtExprRewriter, ExprVisitor
 from hidet.ir.functors import rewrite, ExprHash
 from hidet.transforms.base import FunctionPass
 from hidet.utils import prod, repeat_until_converge
-from hidet.utils.py import DictCustomKey
 from hidet.ir.stmt import LetStmt, ForStmt
 from hidet.ir.func import Function
 from hidet.ir.analyzers import BoundAnalyzer, BoundInfo
@@ -27,12 +26,19 @@ def any_constant():
     return Constant(value=None)
 
 
+def c_div(a, b):
+    if isinstance(a, int) and isinstance(b, int):
+        return a // b
+    else:
+        return a / b
+
+
 class ConstExprSimplifier(StmtExprRewriter):
     op_dict = {
         Add: operator.add,
         Sub: operator.sub,
         Multiply: operator.mul,
-        FloorDiv: operator.floordiv,
+        Div: c_div,
         Mod: operator.mod,
         LessThan: operator.lt,
         LessEqual: operator.le,
@@ -42,8 +48,13 @@ class ConstExprSimplifier(StmtExprRewriter):
     def visit_Binary(self, e: BinaryOp):
         e = StmtExprRewriter.visit_Binary(self, e)
         if e.a.is_const() and e.b.is_const() and e.__class__ in self.op_dict:
+            assert isinstance(e.a, Constant) and isinstance(e.b, Constant)
             op = self.op_dict[e.__class__]
-            return convert(op(e.a.const().value, e.b.const().value))
+            c = op(e.a.const().value, e.b.const().value)
+            if isinstance(c, bool):
+                return Constant(c, 'bool')
+            else:
+                return Constant(c, max(e.a.data_type, e.b.data_type))
         return e
 
     def visit_And(self, e: And):

@@ -42,9 +42,9 @@ class CudaTraceEvent(TraceEvent):
         super().__init__(name, category, event_type, None, pid=0, tid=tid, args=args)
         from hidet.runtime import cuda_event_pool
         if CudaTraceEvent.anchor_cuda_event is None:
-            from hidet.ffi.cuda_api import cuda_api
+            from hidet.ffi.cuda_api import cuda
             CudaTraceEvent.anchor_cuda_event = cuda_event_pool.new_event()
-            cuda_api.device_synchronization()
+            cuda.device_synchronize()
             CudaTraceEvent.anchor_cuda_event.record_on()
             CudaTraceEvent.anchor_cuda_event_host_time = time_ns()
         self.cuda_event = cuda_event_pool.new_event()
@@ -80,8 +80,8 @@ class Tracer:
         self.tracing: bool = False
 
     def export(self) -> Dict:
-        from hidet.ffi.cuda_api import cuda_api
-        cuda_api.device_synchronization()  # sync cuda events in trace
+        from hidet.ffi.cuda_api import cuda
+        cuda.device_synchronize()  # sync cuda events in trace
         ret = {
             'traceEvents': [event.export() for event in self.events],
             'displayTimeUnit': 'ns'
@@ -93,8 +93,8 @@ class Tracer:
         json.dump(self.export(), f)
 
     def clear(self):
-        from hidet.ffi.cuda_api import cuda_api
-        cuda_api.device_synchronization()  # sync cuda events in trace
+        from hidet.ffi.cuda_api import cuda
+        cuda.device_synchronize()  # sync cuda events in trace
         self.events.clear()
 
     def turn_on(self, turn_on=True):

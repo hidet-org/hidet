@@ -1,6 +1,6 @@
 from hidet.ir.func import IRModule
 from .utils import Task, Operator, Tensor, TensorNode, compute, input_like, normalize_dim, reduce
-from hidet.ir.primitives import expf
+from hidet.ir import primitives as prim
 
 
 class SoftmaxTask(Task):
@@ -27,7 +27,7 @@ class SoftmaxTask(Task):
         exp_value = compute(
             name='exp_value',
             shape=shape,
-            fcompute=lambda *indices: expf(x[indices] - max_value[indices[:axis] + indices[axis+1:]])
+            fcompute=lambda *indices: prim.exp(x[indices] - max_value[indices[:axis] + indices[axis+1:]])
         )
 
         # sum
@@ -57,6 +57,9 @@ class SoftmaxTask(Task):
         from hidet.tos.ops.schedules import softmax_cuda_schedule
         return softmax_cuda_schedule(self)
 
+    def fast_implement(self, space_level: int) -> bool:
+        return True
+
 
 class SoftmaxOp(Operator):
     def __init__(self,
@@ -66,7 +69,9 @@ class SoftmaxOp(Operator):
         super().__init__(
             inputs=[x],
             task=SoftmaxTask(input_like(x, 'x'), axis),
-            axis=axis
+            attributes={
+                'axis': axis
+            }
         )
 
 

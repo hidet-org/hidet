@@ -51,7 +51,7 @@ class GridCompute:
 
 
 class ReduceCompute:
-    def __init__(self, shape, axes, value, reduce_type):
+    def __init__(self, shape, axes, value, reduce_type, accumulate_dtype: str = 'float32'):
         from hidet.ir.functors import collect, simplify
         self.input_tensors: List[TensorNode] = collect(value, TensorNode, stop_when_found=True)
         self.input_scalars: List[ScalarNode] = collect(value, ScalarNode, stop_when_found=True)
@@ -59,32 +59,36 @@ class ReduceCompute:
         self.axes: Tuple[Var] = convert(axes)
         self.value: Expr = simplify(value)
         self.reduce_type: str = reduce_type
+        self.accumulate_dtype = accumulate_dtype
         assert reduce_type in ['max', 'avg', 'sum']
 
-    def init_const(self, data_type: Expr):
+    @staticmethod
+    def init_const(reduce_type: str, data_type: Union[ScalarType, str]):
         init_dict = {
             'sum': Constant(0.0, data_type),
             'avg': Constant(0.0, data_type),
             'max': Constant(float_type_min_value(), data_type)
         }
-        return init_dict[self.reduce_type]
+        return init_dict[reduce_type]
 
-    def combine(self, lhs: Expr, rhs: Expr):
-        from hidet.ir.primitives.func import cuda_max
+    @staticmethod
+    def combine(reduce_type: str, lhs: Expr, rhs: Expr):
+        from hidet.ir import primitives
         func_dict = {
             'sum': lambda a, b: a + b,
             'avg': lambda a, b: a + b,
-            'max': lambda a, b: cuda_max(a, b)
+            'max': lambda a, b: primitives.max(a, b)
         }
-        return func_dict[self.reduce_type](lhs, rhs)
+        return func_dict[reduce_type](lhs, rhs)
 
-    def finalize(self, acc: Expr, size: Expr):
+    @staticmethod
+    def finalize(reduce_type: str, acc: Expr, size: Expr):
         func_dict = {
             'sum': lambda acc, size: acc,
             'avg': lambda acc, size: acc / size,
             'max': lambda acc, size: acc
         }
-        return func_dict[self.reduce_type](acc, size)
+        return func_dict[reduce_type](acc, size)
 
     def const_shape(self) -> List[int]:
         return [int(v) for v in self.shape]
@@ -103,7 +107,7 @@ def tensor_input(name, base_type, shape, scope=None, layout=None):
     return TensorNode(name, data_type, grid_compute=None)
 
 
-def reduce(shape: Sequence[Union[int, Expr]], fcompute, reduce_type: str) -> ScalarNode:
+def reduce(shape: Sequence[Union[int, Expr]], fcompute, reduce_type: str, accumulate_dtype: str = 'float32') -> ScalarNode:
     from hidet.ir.functors import infer_type
     shape = convert(shape)
     axes = [var() for _ in shape]
@@ -111,7 +115,7 @@ def reduce(shape: Sequence[Union[int, Expr]], fcompute, reduce_type: str) -> Sca
     return ScalarNode(
         name=f'acc_{reduce_type}',
         data_type=infer_type(value),
-        reduce_compute=ReduceCompute(shape, axes, value, reduce_type)
+        reduce_compute=ReduceCompute(shape, axes, value, reduce_type, accumulate_dtype)
     )
 
 

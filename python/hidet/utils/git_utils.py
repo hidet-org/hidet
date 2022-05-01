@@ -3,6 +3,12 @@ import os
 import git
 import functools
 import datetime
+import logging
+
+
+logger = logging.Logger(__name__)
+logger.setLevel(logging.INFO)
+logger.addHandler(logging.StreamHandler())
 
 
 def get_repo_sha(short=False):
@@ -63,8 +69,23 @@ def repo_root() -> str:
     return repo.working_dir
 
 
+_hidet_cache_root_dir = os.path.join(repo_root(), '.hidet_cache')
+os.makedirs(_hidet_cache_root_dir, exist_ok=True)
+
+
+def hidet_set_cache_root(root_dir: str):
+    global _hidet_cache_root_dir
+    root_dir = os.path.abspath(os.path.expanduser(root_dir))
+    if not os.path.exists(root_dir):
+        os.makedirs(root_dir)
+    if not os.path.isdir(root_dir):
+        raise ValueError('Expect {} to be a directory.'.format(root_dir))
+    _hidet_cache_root_dir = root_dir
+    logger.info('Hidet cache root dir: {}'.format(root_dir))
+
+
 def hidet_cache_dir(category='./') -> str:
-    root = os.path.join(repo_root(), '.hidet_cache')
+    root = _hidet_cache_root_dir
     if category == './':
         ret = root
     else:
@@ -75,7 +96,9 @@ def hidet_cache_dir(category='./') -> str:
 
 def hidet_cache_file(*items: str) -> str:
     root_dir = hidet_cache_dir('./')
-    return os.path.join(root_dir, *items)
+    ret_path = os.path.join(root_dir, *items)
+    os.makedirs(os.path.dirname(ret_path), exist_ok=True)
+    return ret_path
 
 
 if __name__ == '__main__':

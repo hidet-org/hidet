@@ -13,29 +13,21 @@ def is_bool(tp):
     return isinstance(tp, ScalarType) and tp.name == 'bool'
 
 
-def upgrade(dtypes: List[str]) -> str:
-    dtype2priority = {
-        'int32': 1,
-        'int64': 2,
-        'float32': 3
-    }
-    return max(dtypes, key=lambda v: dtype2priority[v])
-
-
 class TypeInfer(ExprFunctor):
     def visit_Address(self, e: Address):
-        raise NotImplementedError()
+        base_type = self(e.expr)
+        return PointerType(base_type=base_type)
 
     def visit_Reference(self, e: Reference):
-        raise NotImplementedError()
+        return self(e.expr)
 
     def visit_Binary(self, e: BinaryOp):
-        atype: ScalarType = self.visit(e.a)
-        btype: ScalarType = self.visit(e.b)
-        if not atype or not btype:
-            return ScalarType(name=None)
+        a_dtype: ScalarType = self.visit(e.a)
+        b_dtype: ScalarType = self.visit(e.b)
+        # if not atype or not btype:
+        #     return ScalarType(name=None)
         if isinstance(e, (Add, Sub, Multiply, Div, Mod, FloorDiv)):
-            return ScalarType(upgrade([atype.name, btype.name]))
+            return ScalarType(max(a_dtype, b_dtype))
         elif isinstance(e, Condition):
             return ScalarType('bool')
         else:
@@ -115,7 +107,8 @@ class TypeInfer(ExprFunctor):
         true_type = self.visit(e.then_expr)
         false_type = self.visit(e.else_expr)
         assert is_bool(cond_type)
-        assert isinstance(true_type, ScalarType) and isinstance(false_type, ScalarType) and true_type.name == false_type.name
+        if not (isinstance(true_type, ScalarType) and isinstance(false_type, ScalarType) and true_type.name == false_type.name):
+            raise ValueError('If-then-else operand 1 and 2 have different types ({} vs {}): {}'.format(true_type, false_type, e))
         return true_type
 
     def visit_Let(self, e: Let):

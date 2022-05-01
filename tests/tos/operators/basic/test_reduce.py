@@ -1,8 +1,6 @@
 import pytest
 import numpy as np
-import hidet as hi
-import hidet.tos.operators as ops
-
+from hidet import ops
 from hidet.testing.check import check_unary
 
 

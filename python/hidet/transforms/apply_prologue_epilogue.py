@@ -14,6 +14,9 @@ class ApplyPrologueEpiloguePass(Pass):
         func = list(ir_module.functions.values())[0]
         task = ir_module.task
 
+        if task is None:
+            return ir_module
+
         if not (len(func.params) == len(task.inputs) + len(task.outputs)):
             raise ValueError('The parameters of function should be the same as the sum of task inputs and outputs.')
         num_inputs = len(task.inputs)
@@ -40,7 +43,7 @@ class ApplyPrologueEpiloguePass(Pass):
             prologue_value = inline_compute(prologue.value, reduce_limit=-1)
 
             # the following collect assumes that there is no nested tensor elements for the same tensor, such as A[A[1, 2], 3]
-            tensor_elements: List[TensorElement] = collect(body, TensorElement, stop_when_found=True)
+            tensor_elements: List[TensorElement] = collect(body, TensorElement)
             prologue_rewrite_map = {}
             for te in tensor_elements:
                 if te.base is not input_var:
@@ -48,7 +51,10 @@ class ApplyPrologueEpiloguePass(Pass):
                 rmap = {}
                 for extra_input in prologue.extra_inputs:
                     if extra_input not in param2var:
-                        raise ValueError('Prologue used tensor {} that has not defined in task parameters.'.format(extra_input))
+                        msg = 'Prologue used tensor {} that has not defined in task parameters. Task:\n{}'.format(
+                            extra_input, task
+                        )
+                        raise ValueError(msg)
                     rmap[extra_input] = param2var[extra_input]
                 for index_var, index_value in zip(prologue.indices, te.indices):
                     rmap[index_var] = index_value
@@ -63,11 +69,12 @@ class ApplyPrologueEpiloguePass(Pass):
             epilogue = task.epilogues[output_node]
 
             # first check the usage of output var in TensorElement
-            tensor_elements: List[TensorElement] = collect(body, TensorElement, stop_when_found=True)
+            tensor_elements: List[TensorElement] = collect(body, TensorElement)
             if any(te.base is output_var for te in tensor_elements):
                 raise NotImplementedError('Currently do not support read from output tensor.')
 
-            buffer_stores: List[BufferStoreStmt] = collect(body, BufferStoreStmt, stop_when_found=True)
+            # todo: support nested cases
+            buffer_stores: List[BufferStoreStmt] = collect(body, BufferStoreStmt)
             epilogue_rewrite_map = {}
             epilogue_value = inline_compute(epilogue.value, reduce_limit=-1)
             for bs in buffer_stores:

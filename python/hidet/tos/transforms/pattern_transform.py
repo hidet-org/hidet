@@ -1,100 +1,24 @@
-from typing import List, Optional, Dict, Tuple, Set
+from typing import List, Optional, Dict, Tuple, Set, Union
 
-from functools import lru_cache
+import hidet.tos.ops.definitions
 from hidet import tos
 from hidet.tos.ir.graph import FlowGraph, Operator, Tensor
 from hidet.tos.transforms import GraphPass, PassContext
 from hidet.tos.ir.functors import analyze_usage, graph_collect
 from .fold_const import fold_const_pass
-from .graph_patterns import GraphPattern, TensorPattern, OperatorPattern
-from .graph_patterns import basic_patterns, conv2d_patterns, matmul_patterns, transform_patterns
-
-
-class NotMatchedException(Exception):
-    pass
-
-
-class PatternMatcher:
-    def __init__(self):
-        self.matched = {}
-
-    def check(self, cond: bool, msg=""):
-        if not cond:
-            raise NotMatchedException(msg)
-
-    def match(self, pattern, target):
-        key = pattern if not isinstance(pattern, list) else id(pattern)
-        if key in self.matched:
-            self.check(target is self.matched[key], 'tried to match a pattern to two different objects')
-            # pattern has been matched to a different target
-            return
-        self.matched[key] = target
-        if isinstance(pattern, (list, tuple)):
-            self.match_Sequence(pattern, target)
-        elif isinstance(pattern, TensorPattern):
-            self.match_TensorPattern(pattern, target)
-        elif isinstance(pattern, OperatorPattern):
-            self.match_OperatorPattern(pattern, target)
-        else:
-            raise NotImplementedError()
-
-    def match_Sequence(self, pattern, target):
-        self.check(isinstance(target, (list, tuple)), 'target should be tuple or list')
-        self.check(len(pattern) == len(target), 'sequence length does not match')
-        for a, b in zip(pattern, target):
-            self.match(a, b)
-
-    def match_TensorPattern(self, pattern: TensorPattern, target):
-        self.check(isinstance(target, Tensor), "expect target with type 'Tensor'")
-        if pattern.is_const:
-            self.check(target.storage is not None, 'requires const tensor')
-        if pattern.is_symbolic:
-            self.check(target.storage is None, 'requires symbolic tensor')
-        if pattern.trace:
-            self.check(target.trace is not None)
-            self.check(pattern.trace[1] == target.trace[1])
-            self.match(pattern.trace[0], target.trace[0])
-
-    def match_OperatorPattern(self, pattern: OperatorPattern, target: Operator):
-        self.check(isinstance(target, pattern.op_cls), "expect target with type 'Operator'")
-        self.check(pattern.op_cls is target.__class__, 'operator cls does not match')
-        assert len(pattern.inputs) == len(target.inputs) and len(pattern.outputs) == len(target.outputs)
-        for a, b in zip(pattern.inputs, target.inputs):
-            self.match(a, b)
-        for a, b in zip(pattern.outputs, target.outputs):
-            self.match(a, b)
-
-
-def match(pattern, target) -> Optional[Dict]:
-    # short-cut for early stop
-    if pattern.trace is None:
-        if target.trace is not None:
-            return None
-        if (pattern.is_const and target.storage is None) or (pattern.is_symbolic and target.storage is not None):
-            return None
-        return {pattern: target}
-    if pattern.trace and target.trace and pattern.trace[0].op_cls is not target.trace[0].__class__:
-        return None
-    matcher = PatternMatcher()
-    try:
-        matcher.match(pattern, target)
-        return matcher.matched
-    except NotMatchedException:
-        return None
-
-
-@lru_cache()
-def all_patterns() -> List[GraphPattern]:
-    return basic_patterns() + conv2d_patterns() + matmul_patterns() + transform_patterns()
+from .graph_patterns import GraphPattern, TensorPattern, OperatorPattern, MatchDict, Usage, graph_pattern_match
+from .graph_patterns import all_graph_patterns
+from hidet.utils import strict_zip
 
 
 class PatternTransformPass(GraphPass):
     """
     A pattern transform can be conducted only if
     1. The pattern source matched the actual tensor and its spanned subregion.
-    2. The intermediate tensor in the matched region should not be used.
-        For example, if pattern a -> b -> c matched x -> y -> z. We need to make sure y has not been
-        used by other operators in the original graph.
+    2. The intermediate tensor in the matched region should not be used. Only the output tensors can be used
+       by not matched operators in original graph.
+       For example, if pattern a -> b -> c matched x -> y -> z. We need to make sure y has not been
+       used by other operators in the original graph.
 
     Time complexity of this implementation: O(num_applies * num_operators * num_patterns * pattern_size).
     """
@@ -102,48 +26,94 @@ class PatternTransformPass(GraphPass):
 
     def process_graph(self, graph: FlowGraph) -> FlowGraph:
         graph = tos.ir.functors.clone(graph)
+        graph_patterns = all_graph_patterns()
         fold_const = fold_const_pass()
         for t in range(self.max_num_transforms):
-            updated, graph = self.try_transform(graph)
+            updated, graph = self.try_transform(graph, graph_patterns)
             graph = fold_const.process_graph(graph)
             if not updated:
                 return graph
         print('Exceeded maximum number of transforms {}, stop early.'.format(self.max_num_transforms))
         return graph
 
-    def try_transform(self, graph: FlowGraph) -> Tuple[bool, FlowGraph]:
-        patterns: List[GraphPattern] = all_patterns()
-        usage: Dict[Tensor, List[Tuple[Optional[Operator], int]]] = analyze_usage(graph)
+    @staticmethod
+    def match_pattern(graph_pattern: GraphPattern, start_tensor: Tensor, usage: Usage) -> Optional[MatchDict]:
+        source_output_tensors = graph_pattern.source()
+
+        matched = graph_pattern_match(source_output_tensors[0], target=start_tensor, usage=usage)
+        if matched is None:
+            return None
+
+        for source_output_tensor in source_output_tensors:
+            if source_output_tensor not in matched:
+                raise NotImplementedError('The source pattern is not connected. Current we do not support disconnected patterns.')
+
+        return matched
+
+    @staticmethod
+    def check_usage_requirement(matched: MatchDict, usage: Usage, graph_pattern: GraphPattern) -> bool:
+        source_output_pattern_tensors: List[TensorPattern] = graph_pattern.source()
+
+        # actual tensor -> pattern tensor
+        tensor_map: Dict[Tensor, TensorPattern] = {v: k for k, v in matched.items() if isinstance(v, Tensor)}
+
+        # find out all inner tensors (all matched tensors that are not matched by output tensors, nor input tensors)
+        inner_tensors: List[Tensor] = []
+        for actual_tensor in tensor_map:
+            pattern_tensor = tensor_map[actual_tensor]
+            # input tensor in pattern
+            if pattern_tensor.trace is None:
+                continue
+            # output tensor in pattern
+            if pattern_tensor in source_output_pattern_tensors:
+                continue
+
+        # check whether all inner tensors are only used by matched operators
+        matched_operators: Set[Operator] = {v for v in matched.values() if isinstance(v, Operator)}
+        for inner_tensor in inner_tensors:
+            uses: List[Tuple[Optional[Operator], int]] = usage[inner_tensor]
+            if any(use[0] not in matched_operators for use in uses):
+                # used by not matched operator
+                return False
+        return True
+
+    @staticmethod
+    def try_transform(graph: FlowGraph, graph_patterns: List[GraphPattern]) -> Tuple[bool, FlowGraph]:
+        patterns: List[GraphPattern] = graph_patterns
+        usage: Usage = analyze_usage(graph)
         all_tensors: List[Tensor] = graph_collect(graph, Tensor)
 
-        for actual_tensor in all_tensors:
-            for graph_pattern in patterns:
-                source_pattern = graph_pattern.source()
+        for graph_pattern in patterns:
+            # print(graph_pattern.name)
+            for start_tensor in all_tensors:
                 # condition 1
-                matched = match(source_pattern, target=actual_tensor)
+                matched = PatternTransformPass.match_pattern(graph_pattern, start_tensor, usage)
                 if matched is None:
                     continue
+
                 # condition 2
-                rmap: Dict[Tensor, TensorPattern] = {v: k for k, v in matched.items() if isinstance(v, Tensor)}  # actual tensor -> pattern tensor
-                inner_tensors: List[Tensor] = [t for t in rmap if (rmap[t].trace is not None            # not input tensor
-                                                                   and rmap[t] is not source_pattern)]  # not output tensor
-                matched_operators: Set[Operator] = {v for v in matched.values() if isinstance(v, Operator)}
-                if any(any(use[0] not in matched_operators for use in usage[t]) for t in inner_tensors):
-                    # tensor t is used by an operator not matched by the pattern graph, which violates condition 2.
+                success = PatternTransformPass.check_usage_requirement(matched, usage, graph_pattern)
+                if not success:
                     continue
-                # apply this transform
-                target_tensor = graph_pattern.target(matched)
-                if target_tensor is None:
+
+                # generate target subgraph
+                target_output_tensors: Optional[List[Tensor]] = graph_pattern.target(matched)
+                if target_output_tensors is None:
+                    # matched graph pattern can not be applied to this subgraph
                     continue
-                if PassContext.current().verbose:
+
+                # apply the graph transform
+                if PassContext.current().configs['verbose']:
                     print('Applying transform: {}'.format(graph_pattern.name))
-                for use in usage[actual_tensor]:
-                    op, idx = use
-                    assert isinstance(idx, int)
-                    if op is None:
-                        graph.outputs[idx] = target_tensor
-                    else:
-                        op.inputs[idx] = target_tensor
+                source_output_pattern_tensors = graph_pattern.source()
+                source_output_tensors = [matched[t] for t in source_output_pattern_tensors]
+                for source_tensor, target_tensor in strict_zip(source_output_tensors, target_output_tensors):
+                    for use in usage[source_tensor]:
+                        op, idx = use
+                        if op is None:
+                            graph.outputs[idx] = target_tensor
+                        else:
+                            op.inputs[idx] = target_tensor
                 return True, graph
         return False, graph
 

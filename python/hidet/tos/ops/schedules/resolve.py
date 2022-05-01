@@ -1,4 +1,5 @@
 import os
+import time
 from typing import List
 import numpy as np
 
@@ -7,7 +8,7 @@ from hidet.ir.expr import Constant
 from hidet.ir.func import IRModule
 from hidet.ir.task import Task
 from hidet.utils import TableBuilder, strict_zip
-from hidet.tos.tensor import randn, Tensor
+from hidet.tos.tensor import randn, zeros, ones, Tensor
 from hidet.backend import BuildInstance, batch_build_ir_modules
 from .common import Schedule
 
@@ -34,14 +35,23 @@ def dummy_inputs_from_task(task: Task) -> List[Tensor]:
             raise ValueError('Currently, only support create dummy scalar inputs.')
         if any(not isinstance(s, Constant) for s in param_type.shape):
             raise ValueError('Currently, only support create dummy values for static tensor inputs.')
-        stype = param_type.scalar_type.name
+        dtype = param_type.scalar_type.name
         scope = param_type.scope.name
         shape = [int(s) for s in param_type.shape]
         scope2device = {
             'global': 'cuda',
             'host': 'cpu'
         }
-        inputs.append(randn(shape, stype, device=scope2device[scope], layout=param_type.layout))
+        device = scope2device[scope]
+        if dtype in ['float32', 'float16', 'bfloat16']:
+            x = randn(shape, dtype, device=device, layout=param_type.layout)
+        elif dtype in ['int64', 'int32', 'int8', 'uint64', 'uint32', 'uint8']:
+            x = zeros(shape, dtype, device=device, layout=param_type.layout)
+        elif dtype == 'bool':
+            x = ones(shape, dtype, device=device, layout=param_type.layout)
+        else:
+            raise ValueError('Currently do not support generate random array for data type {}'.format(dtype))
+        inputs.append(x)
     return inputs
 
 
@@ -84,13 +94,18 @@ def resolve_ir_modules(ir_modules: List[IRModule], schedules: List[Schedule], ou
     best_latency = 1e30
     best_ir_module = None
     latencies = []
+    time.sleep(5.0)
+    i = 0
     for ir_module, compiled_func in strict_zip(ir_modules, compiled_funcs):
+        print(schedules[i])
+        i += 1
         if compiled_func:
-            repeat_latency = compiled_func.profile(*dummy_inputs, warmup=2, number=5, repeat=3)
+            repeat_latency = compiled_func.profile(*dummy_inputs, warmup=5, number=10, repeat=3)
             latency = float(np.median(repeat_latency))
         else:
             # this ir module failed in building, skip
             latency = 1e30
+        print(latency)
         latencies.append(latency)
         if best_latency > latency:
             best_latency = latency

@@ -1,7 +1,7 @@
 import pytest
 from hidet.ir.expr import *
 from hidet.ir.dialects.compute import compute
-from hidet.ir.dialects.pattern import match, AnyExpr, UnionPattern, TensorComputePattern, any_const_int, compute_pattern
+from hidet.ir.dialects.pattern import match, AnyExpr, UnionPattern, any_const_int
 
 
 def check_pairs(pairs):
@@ -56,48 +56,6 @@ def test_union_pattern():
         (union, add_cd, {union: add_cd, a: c, b: d}),
         (union, mul_cd, {union: mul_cd, a: c, b: d}),
         (union, Mod(c, d), None)
-    ]
-    check_pairs(pairs)
-
-
-def test_tensor_compute():
-    c1 = any_const_int()
-    c2 = any_const_int()
-    tc1 = compute_pattern('C', [10, 10], lambda i, j: i + j)
-    tc2 = compute_pattern('E', [5, 5], lambda p, q: p + q)
-    tc3 = compute_pattern('F', [10, 10], lambda p, q: p * q)
-    tc4 = compute_pattern('G', [c1, c2], lambda p, q: p + q)
-
-    tgt = compute_pattern('D', [10, 10], lambda p, q: p + q)
-
-    pairs = [
-        (tc1, tgt, {tc1.axes[0]: tgt.axes[0], tc1.axes[1]: tgt.axes[1], tc1.value: tgt.value}),
-        (tc2, tgt, None),
-        (tc3, tgt, None),
-        (tc4, tgt, {tc4.axes[0]: tgt.axes[0], tc4.axes[1]: tgt.axes[1], tc4.value: tgt.value}),
-    ]
-    check_pairs(pairs)
-
-
-def test_tensor_compute_pattern():
-    tc1 = TensorComputePattern(rank=None, allow_dynamic_axis=True)
-    tc2 = TensorComputePattern(rank=None, allow_dynamic_axis=False)
-    tc3 = TensorComputePattern(rank=2, allow_dynamic_axis=True)
-    tc4 = TensorComputePattern(rank=2, allow_dynamic_axis=False)
-
-    a = scalar_var('a', 'int32')
-    b = scalar_var('b', 'int32')
-    c = scalar_var('c', 'int32')
-    tgt1 = compute_pattern('A', [10, 10], lambda i, j: i + j)
-    tgt2 = compute_pattern('B', [10, 10, 10], lambda i, j, k: i + j * k)
-    tgt3 = compute_pattern('C', [a, b], lambda i, j: i + j)
-    tgt4 = compute_pattern('D', [a, b, c], lambda i, j, k: i + j + k)
-
-    pairs = [
-        (tc1, tgt1, {}), (tc1, tgt2, {}), (tc1, tgt3, {}), (tc1, tgt4, {}),
-        (tc2, tgt1, {}), (tc2, tgt2, {}), (tc2, tgt3, None), (tc2, tgt4, None),
-        (tc3, tgt1, {}), (tc3, tgt2, None), (tc3, tgt3, {}), (tc3, tgt4, None),
-        (tc4, tgt1, {}), (tc4, tgt2, None), (tc4, tgt3, None), (tc4, tgt4, None),
     ]
     check_pairs(pairs)
 

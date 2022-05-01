@@ -1,4 +1,4 @@
-#include <hidet/runtime.h>
+#include <hidet/cuda_utils.h>
 #include <hidet/packedfunc.h>
 
 /// Reference GEMM computation.

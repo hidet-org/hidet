@@ -1,0 +1,3829 @@
+{
+  "layers": {
+    "layer_0": {
+      "Name": "resnetv17_conv0_fwd + resnetv17_batchnorm0_fwd + resnetv17_relu0_fwd",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "data",
+          "Dimensions": [
+            1,
+            3,
+            224,
+            224
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_relu0_fwd",
+          "Dimensions": [
+            1,
+            64,
+            112,
+            112
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        7,
+        7
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        3,
+        3
+      ],
+      "PostPadding": [
+        3,
+        3
+      ],
+      "Stride": [
+        2,
+        2
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 64,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 9408
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 64
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "HasReLU": 1,
+      "TacticName": "ampere_scudnn_128x64_relu_xregs_large_nn_v1",
+      "TacticValue": "0x5deb29b7a8e275f7"
+    },
+    "layer_1": {
+      "Name": "resnetv17_pool0_fwd",
+      "LayerType": "TiledPooling",
+      "Inputs": [
+        {
+          "Name": "resnetv17_relu0_fwd",
+          "Dimensions": [
+            1,
+            64,
+            112,
+            112
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_pool0_fwd",
+          "Dimensions": [
+            1,
+            64,
+            56,
+            56
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Pooling",
+      "PoolingType": "MAX",
+      "WindowSize": [
+        3,
+        3
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        1,
+        1
+      ],
+      "PostPadding": [
+        1,
+        1
+      ],
+      "Stride": [
+        2,
+        2
+      ],
+      "BlendFactor": 0,
+      "AverageCountExcludesPadding": 1,
+      "TacticValue": "0x80101"
+    },
+    "layer_2": {
+      "Name": "resnetv17_stage1_conv0_fwd + resnetv17_stage1_batchnorm0_fwd + resnetv17_stage1_relu0_fwd",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_pool0_fwd",
+          "Dimensions": [
+            1,
+            64,
+            56,
+            56
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage1_relu0_fwd",
+          "Dimensions": [
+            1,
+            64,
+            56,
+            56
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 64,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 4096
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 64
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "HasReLU": 1,
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_f32f32_f32f32_f32_nchwkcrs_nchw_tilesize64x64x8_stage3_warpsize1x4x1_g1_ffma_simple_t1r1s1_aligna4_alignc4",
+      "TacticValue": "0x1fc87d7eb370bb7a"
+    },
+    "layer_3": {
+      "Name": "resnetv17_stage1_conv1_fwd + resnetv17_stage1_batchnorm1_fwd + resnetv17_stage1_relu1_fwd",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage1_relu0_fwd",
+          "Dimensions": [
+            1,
+            64,
+            56,
+            56
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage1_relu1_fwd",
+          "Dimensions": [
+            1,
+            64,
+            56,
+            56
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        1,
+        1
+      ],
+      "PostPadding": [
+        1,
+        1
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 64,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 36864
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 64
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "HasReLU": 1,
+      "TacticName": "ampere_scudnn_winograd_128x128_ldg1_ldg4_relu_tile148t_nt_v1",
+      "TacticValue": "0x94119b4c514b211a"
+    },
+    "layer_4": {
+      "Name": "resnetv17_stage1_conv3_fwd + resnetv17_stage1_batchnorm3_fwd",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_pool0_fwd",
+          "Dimensions": [
+            1,
+            64,
+            56,
+            56
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage1_batchnorm3_fwd",
+          "Dimensions": [
+            1,
+            256,
+            56,
+            56
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 256,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 16384
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 256
+      },
+      "HasSparseWeights": 0,
+      "Activation": "NONE",
+      "HasBias": 1,
+      "HasReLU": 0,
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_f32f32_f32f32_f32_nchwkcrs_nchw_tilesize64x64x8_stage3_warpsize1x4x1_g1_ffma_simple_t1r1s1_aligna4_alignc4",
+      "TacticValue": "0x1fc87d7eb370bb7a"
+    },
+    "layer_5": {
+      "Name": "resnetv17_stage1_conv2_fwd + resnetv17_stage1_batchnorm2_fwd + resnetv17_stage1__plus0 + resnetv17_stage1_activation0",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage1_relu1_fwd",
+          "Dimensions": [
+            1,
+            64,
+            56,
+            56
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        },
+        {
+          "Name": "resnetv17_stage1_batchnorm3_fwd",
+          "Dimensions": [
+            1,
+            256,
+            56,
+            56
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage1_activation0",
+          "Dimensions": [
+            1,
+            256,
+            56,
+            56
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 256,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 16384
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 256
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "HasReLU": 1,
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_f32f32_f32f32_f32_nchwkcrs_nchw_tilesize64x64x8_stage3_warpsize1x4x1_g1_ffma_simple_t1r1s1_aligna4_alignc4",
+      "TacticValue": "0x1fc87d7eb370bb7a"
+    },
+    "layer_6": {
+      "Name": "resnetv17_stage1_conv4_fwd + resnetv17_stage1_batchnorm4_fwd + resnetv17_stage1_relu2_fwd",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage1_activation0",
+          "Dimensions": [
+            1,
+            256,
+            56,
+            56
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage1_relu2_fwd",
+          "Dimensions": [
+            1,
+            64,
+            56,
+            56
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 64,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 16384
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 64
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "HasReLU": 1,
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_f32f32_f32f32_f32_nchwkcrs_nchw_tilesize64x64x8_stage3_warpsize1x4x1_g1_ffma_simple_t1r1s1_aligna4_alignc4",
+      "TacticValue": "0x1fc87d7eb370bb7a"
+    },
+    "layer_7": {
+      "Name": "resnetv17_stage1_conv5_fwd + resnetv17_stage1_batchnorm5_fwd + resnetv17_stage1_relu3_fwd",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage1_relu2_fwd",
+          "Dimensions": [
+            1,
+            64,
+            56,
+            56
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage1_relu3_fwd",
+          "Dimensions": [
+            1,
+            64,
+            56,
+            56
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        1,
+        1
+      ],
+      "PostPadding": [
+        1,
+        1
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 64,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 36864
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 64
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "HasReLU": 1,
+      "TacticName": "ampere_scudnn_winograd_128x128_ldg1_ldg4_relu_tile148t_nt_v1",
+      "TacticValue": "0x94119b4c514b211a"
+    },
+    "layer_8": {
+      "Name": "resnetv17_stage1_conv6_fwd + resnetv17_stage1_batchnorm6_fwd + resnetv17_stage1__plus1 + resnetv17_stage1_activation1",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage1_relu3_fwd",
+          "Dimensions": [
+            1,
+            64,
+            56,
+            56
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        },
+        {
+          "Name": "resnetv17_stage1_activation0",
+          "Dimensions": [
+            1,
+            256,
+            56,
+            56
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage1_activation1",
+          "Dimensions": [
+            1,
+            256,
+            56,
+            56
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 256,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 16384
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 256
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "HasReLU": 1,
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_f32f32_f32f32_f32_nchwkcrs_nchw_tilesize64x64x8_stage3_warpsize1x4x1_g1_ffma_simple_t1r1s1_aligna4_alignc4",
+      "TacticValue": "0x1fc87d7eb370bb7a"
+    },
+    "layer_9": {
+      "Name": "resnetv17_stage1_conv7_fwd + resnetv17_stage1_batchnorm7_fwd + resnetv17_stage1_relu4_fwd",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage1_activation1",
+          "Dimensions": [
+            1,
+            256,
+            56,
+            56
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage1_relu4_fwd",
+          "Dimensions": [
+            1,
+            64,
+            56,
+            56
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 64,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 16384
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 64
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "HasReLU": 1,
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_f32f32_f32f32_f32_nchwkcrs_nchw_tilesize64x64x8_stage3_warpsize1x4x1_g1_ffma_simple_t1r1s1_aligna4_alignc4",
+      "TacticValue": "0x1fc87d7eb370bb7a"
+    },
+    "layer_10": {
+      "Name": "resnetv17_stage1_conv8_fwd + resnetv17_stage1_batchnorm8_fwd + resnetv17_stage1_relu5_fwd",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage1_relu4_fwd",
+          "Dimensions": [
+            1,
+            64,
+            56,
+            56
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage1_relu5_fwd",
+          "Dimensions": [
+            1,
+            64,
+            56,
+            56
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        1,
+        1
+      ],
+      "PostPadding": [
+        1,
+        1
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 64,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 36864
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 64
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "HasReLU": 1,
+      "TacticName": "ampere_scudnn_winograd_128x128_ldg1_ldg4_relu_tile148t_nt_v1",
+      "TacticValue": "0x94119b4c514b211a"
+    },
+    "layer_11": {
+      "Name": "resnetv17_stage1_conv9_fwd + resnetv17_stage1_batchnorm9_fwd + resnetv17_stage1__plus2 + resnetv17_stage1_activation2",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage1_relu5_fwd",
+          "Dimensions": [
+            1,
+            64,
+            56,
+            56
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        },
+        {
+          "Name": "resnetv17_stage1_activation1",
+          "Dimensions": [
+            1,
+            256,
+            56,
+            56
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage1_activation2",
+          "Dimensions": [
+            1,
+            256,
+            56,
+            56
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 256,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 16384
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 256
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "HasReLU": 1,
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_f32f32_f32f32_f32_nchwkcrs_nchw_tilesize64x64x8_stage3_warpsize1x4x1_g1_ffma_simple_t1r1s1_aligna4_alignc4",
+      "TacticValue": "0x1fc87d7eb370bb7a"
+    },
+    "layer_12": {
+      "Name": "resnetv17_stage2_conv0_fwd + resnetv17_stage2_batchnorm0_fwd + resnetv17_stage2_relu0_fwd",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage1_activation2",
+          "Dimensions": [
+            1,
+            256,
+            56,
+            56
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage2_relu0_fwd",
+          "Dimensions": [
+            1,
+            128,
+            28,
+            28
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        2,
+        2
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 128,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 32768
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 128
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "HasReLU": 1,
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_f32f32_f32f32_f32_nchwkcrs_nchw_tilesize64x64x8_stage3_warpsize1x4x1_g1_ffma_t1r1s1_aligna4_alignc4",
+      "TacticValue": "0x865894c4635db7fd"
+    },
+    "layer_13": {
+      "Name": "resnetv17_stage2_conv1_fwd + resnetv17_stage2_batchnorm1_fwd + resnetv17_stage2_relu1_fwd",
+      "LayerType": "FusedConvActConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage2_relu0_fwd",
+          "Dimensions": [
+            1,
+            128,
+            28,
+            28
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage2_relu1_fwd",
+          "Dimensions": [
+            1,
+            128,
+            28,
+            28
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        1,
+        1
+      ],
+      "PostPadding": [
+        1,
+        1
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 128,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 147456
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 128
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "ConvolutionTacticIndex": 119,
+      "TacticValue": "0x77ffff"
+    },
+    "layer_14": {
+      "Name": "resnetv17_stage2_conv3_fwd + resnetv17_stage2_batchnorm3_fwd",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage1_activation2",
+          "Dimensions": [
+            1,
+            256,
+            56,
+            56
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage2_batchnorm3_fwd",
+          "Dimensions": [
+            1,
+            512,
+            28,
+            28
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        2,
+        2
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 512,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 131072
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 512
+      },
+      "HasSparseWeights": 0,
+      "Activation": "NONE",
+      "HasBias": 1,
+      "HasReLU": 0,
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_f32f32_f32f32_f32_nchwkcrs_nchw_tilesize64x128x8_stage3_warpsize1x4x1_g1_ffma_aligna4_alignc4",
+      "TacticValue": "0x5aa723e0481da855"
+    },
+    "layer_15": {
+      "Name": "resnetv17_stage2_conv2_fwd + resnetv17_stage2_batchnorm2_fwd + resnetv17_stage2__plus0 + resnetv17_stage2_activation0",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage2_relu1_fwd",
+          "Dimensions": [
+            1,
+            128,
+            28,
+            28
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        },
+        {
+          "Name": "resnetv17_stage2_batchnorm3_fwd",
+          "Dimensions": [
+            1,
+            512,
+            28,
+            28
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage2_activation0",
+          "Dimensions": [
+            1,
+            512,
+            28,
+            28
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 512,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 65536
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 512
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "HasReLU": 1,
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_f32f32_f32f32_f32_nchwkcrs_nchw_tilesize64x64x8_stage3_warpsize1x4x1_g1_ffma_simple_t1r1s1_aligna4_alignc4",
+      "TacticValue": "0x1fc87d7eb370bb7a"
+    },
+    "layer_16": {
+      "Name": "resnetv17_stage2_conv4_fwd + resnetv17_stage2_batchnorm4_fwd + resnetv17_stage2_relu2_fwd",
+      "LayerType": "FusedConvActConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage2_activation0",
+          "Dimensions": [
+            1,
+            512,
+            28,
+            28
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage2_relu2_fwd",
+          "Dimensions": [
+            1,
+            128,
+            28,
+            28
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 128,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 65536
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 128
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "ConvolutionTacticIndex": 138,
+      "TacticValue": "0x8affff"
+    },
+    "layer_17": {
+      "Name": "resnetv17_stage2_conv5_fwd + resnetv17_stage2_batchnorm5_fwd + resnetv17_stage2_relu3_fwd",
+      "LayerType": "FusedConvActConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage2_relu2_fwd",
+          "Dimensions": [
+            1,
+            128,
+            28,
+            28
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage2_relu3_fwd",
+          "Dimensions": [
+            1,
+            128,
+            28,
+            28
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        1,
+        1
+      ],
+      "PostPadding": [
+        1,
+        1
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 128,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 147456
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 128
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "ConvolutionTacticIndex": 119,
+      "TacticValue": "0x77ffff"
+    },
+    "layer_18": {
+      "Name": "resnetv17_stage2_conv6_fwd + resnetv17_stage2_batchnorm6_fwd + resnetv17_stage2__plus1 + resnetv17_stage2_activation1",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage2_relu3_fwd",
+          "Dimensions": [
+            1,
+            128,
+            28,
+            28
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        },
+        {
+          "Name": "resnetv17_stage2_activation0",
+          "Dimensions": [
+            1,
+            512,
+            28,
+            28
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage2_activation1",
+          "Dimensions": [
+            1,
+            512,
+            28,
+            28
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 512,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 65536
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 512
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "HasReLU": 1,
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_f32f32_f32f32_f32_nchwkcrs_nchw_tilesize64x64x8_stage3_warpsize1x4x1_g1_ffma_simple_t1r1s1_aligna4_alignc4",
+      "TacticValue": "0x1fc87d7eb370bb7a"
+    },
+    "layer_19": {
+      "Name": "resnetv17_stage2_conv7_fwd + resnetv17_stage2_batchnorm7_fwd + resnetv17_stage2_relu4_fwd",
+      "LayerType": "FusedConvActConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage2_activation1",
+          "Dimensions": [
+            1,
+            512,
+            28,
+            28
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage2_relu4_fwd",
+          "Dimensions": [
+            1,
+            128,
+            28,
+            28
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 128,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 65536
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 128
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "ConvolutionTacticIndex": 138,
+      "TacticValue": "0x8affff"
+    },
+    "layer_20": {
+      "Name": "resnetv17_stage2_conv8_fwd + resnetv17_stage2_batchnorm8_fwd + resnetv17_stage2_relu5_fwd",
+      "LayerType": "FusedConvActConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage2_relu4_fwd",
+          "Dimensions": [
+            1,
+            128,
+            28,
+            28
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage2_relu5_fwd",
+          "Dimensions": [
+            1,
+            128,
+            28,
+            28
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        1,
+        1
+      ],
+      "PostPadding": [
+        1,
+        1
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 128,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 147456
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 128
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "ConvolutionTacticIndex": 119,
+      "TacticValue": "0x77ffff"
+    },
+    "layer_21": {
+      "Name": "resnetv17_stage2_conv9_fwd + resnetv17_stage2_batchnorm9_fwd + resnetv17_stage2__plus2 + resnetv17_stage2_activation2",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage2_relu5_fwd",
+          "Dimensions": [
+            1,
+            128,
+            28,
+            28
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        },
+        {
+          "Name": "resnetv17_stage2_activation1",
+          "Dimensions": [
+            1,
+            512,
+            28,
+            28
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage2_activation2",
+          "Dimensions": [
+            1,
+            512,
+            28,
+            28
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 512,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 65536
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 512
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "HasReLU": 1,
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_f32f32_f32f32_f32_nchwkcrs_nchw_tilesize64x64x8_stage3_warpsize1x4x1_g1_ffma_simple_t1r1s1_aligna4_alignc4",
+      "TacticValue": "0x1fc87d7eb370bb7a"
+    },
+    "layer_22": {
+      "Name": "resnetv17_stage2_conv10_fwd + resnetv17_stage2_batchnorm10_fwd + resnetv17_stage2_relu6_fwd",
+      "LayerType": "FusedConvActConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage2_activation2",
+          "Dimensions": [
+            1,
+            512,
+            28,
+            28
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage2_relu6_fwd",
+          "Dimensions": [
+            1,
+            128,
+            28,
+            28
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 128,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 65536
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 128
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "ConvolutionTacticIndex": 138,
+      "TacticValue": "0x8affff"
+    },
+    "layer_23": {
+      "Name": "resnetv17_stage2_conv11_fwd + resnetv17_stage2_batchnorm11_fwd + resnetv17_stage2_relu7_fwd",
+      "LayerType": "FusedConvActConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage2_relu6_fwd",
+          "Dimensions": [
+            1,
+            128,
+            28,
+            28
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage2_relu7_fwd",
+          "Dimensions": [
+            1,
+            128,
+            28,
+            28
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        1,
+        1
+      ],
+      "PostPadding": [
+        1,
+        1
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 128,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 147456
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 128
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "ConvolutionTacticIndex": 119,
+      "TacticValue": "0x77ffff"
+    },
+    "layer_24": {
+      "Name": "resnetv17_stage2_conv12_fwd + resnetv17_stage2_batchnorm12_fwd + resnetv17_stage2__plus3 + resnetv17_stage2_activation3",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage2_relu7_fwd",
+          "Dimensions": [
+            1,
+            128,
+            28,
+            28
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        },
+        {
+          "Name": "resnetv17_stage2_activation2",
+          "Dimensions": [
+            1,
+            512,
+            28,
+            28
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage2_activation3",
+          "Dimensions": [
+            1,
+            512,
+            28,
+            28
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 512,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 65536
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 512
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "HasReLU": 1,
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_f32f32_f32f32_f32_nchwkcrs_nchw_tilesize64x64x8_stage3_warpsize1x4x1_g1_ffma_simple_t1r1s1_aligna4_alignc4",
+      "TacticValue": "0x1fc87d7eb370bb7a"
+    },
+    "layer_25": {
+      "Name": "resnetv17_stage3_conv0_fwd + resnetv17_stage3_batchnorm0_fwd + resnetv17_stage3_relu0_fwd",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage2_activation3",
+          "Dimensions": [
+            1,
+            512,
+            28,
+            28
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage3_relu0_fwd",
+          "Dimensions": [
+            1,
+            256,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        2,
+        2
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 256,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 131072
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 256
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "HasReLU": 1,
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_f32f32_f32f32_f32_nchwkcrs_nchw_tilesize64x64x8_stage3_warpsize1x4x1_g1_ffma_t1r1s1_aligna4_alignc4",
+      "TacticValue": "0x865894c4635db7fd"
+    },
+    "layer_26": {
+      "Name": "resnetv17_stage3_conv1_fwd + resnetv17_stage3_batchnorm1_fwd + resnetv17_stage3_relu1_fwd",
+      "LayerType": "FusedConvActConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage3_relu0_fwd",
+          "Dimensions": [
+            1,
+            256,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage3_relu1_fwd",
+          "Dimensions": [
+            1,
+            256,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        1,
+        1
+      ],
+      "PostPadding": [
+        1,
+        1
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 256,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 589824
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 256
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "ConvolutionTacticIndex": 39,
+      "TacticValue": "0x27ffff"
+    },
+    "layer_27": {
+      "Name": "resnetv17_stage3_conv3_fwd + resnetv17_stage3_batchnorm3_fwd",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage2_activation3",
+          "Dimensions": [
+            1,
+            512,
+            28,
+            28
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage3_batchnorm3_fwd",
+          "Dimensions": [
+            1,
+            1024,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        2,
+        2
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 1024,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 524288
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 1024
+      },
+      "HasSparseWeights": 0,
+      "Activation": "NONE",
+      "HasBias": 1,
+      "HasReLU": 0,
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_f32f32_f32f32_f32_nchwkcrs_nchw_tilesize64x64x8_stage3_warpsize1x4x1_g1_ffma_t1r1s1_aligna4_alignc4",
+      "TacticValue": "0x865894c4635db7fd"
+    },
+    "layer_28": {
+      "Name": "resnetv17_stage3_conv2_fwd + resnetv17_stage3_batchnorm2_fwd + resnetv17_stage3__plus0 + resnetv17_stage3_activation0",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage3_relu1_fwd",
+          "Dimensions": [
+            1,
+            256,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        },
+        {
+          "Name": "resnetv17_stage3_batchnorm3_fwd",
+          "Dimensions": [
+            1,
+            1024,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage3_activation0",
+          "Dimensions": [
+            1,
+            1024,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 1024,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 262144
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 1024
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "HasReLU": 1,
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_f32f32_f32f32_f32_nchwkcrs_nchw_tilesize64x64x8_stage3_warpsize1x4x1_g1_ffma_simple_t1r1s1_aligna4_alignc4",
+      "TacticValue": "0x1fc87d7eb370bb7a"
+    },
+    "layer_29": {
+      "Name": "resnetv17_stage3_conv4_fwd + resnetv17_stage3_batchnorm4_fwd + resnetv17_stage3_relu2_fwd",
+      "LayerType": "FusedConvActConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage3_activation0",
+          "Dimensions": [
+            1,
+            1024,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage3_relu2_fwd",
+          "Dimensions": [
+            1,
+            256,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 256,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 262144
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 256
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "ConvolutionTacticIndex": 31,
+      "TacticValue": "0x1fffff"
+    },
+    "layer_30": {
+      "Name": "resnetv17_stage3_conv5_fwd + resnetv17_stage3_batchnorm5_fwd + resnetv17_stage3_relu3_fwd",
+      "LayerType": "FusedConvActConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage3_relu2_fwd",
+          "Dimensions": [
+            1,
+            256,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage3_relu3_fwd",
+          "Dimensions": [
+            1,
+            256,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        1,
+        1
+      ],
+      "PostPadding": [
+        1,
+        1
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 256,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 589824
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 256
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "ConvolutionTacticIndex": 39,
+      "TacticValue": "0x27ffff"
+    },
+    "layer_31": {
+      "Name": "resnetv17_stage3_conv6_fwd + resnetv17_stage3_batchnorm6_fwd + resnetv17_stage3__plus1 + resnetv17_stage3_activation1",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage3_relu3_fwd",
+          "Dimensions": [
+            1,
+            256,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        },
+        {
+          "Name": "resnetv17_stage3_activation0",
+          "Dimensions": [
+            1,
+            1024,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage3_activation1",
+          "Dimensions": [
+            1,
+            1024,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 1024,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 262144
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 1024
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "HasReLU": 1,
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_f32f32_f32f32_f32_nchwkcrs_nchw_tilesize64x64x8_stage3_warpsize1x4x1_g1_ffma_simple_t1r1s1_aligna4_alignc4",
+      "TacticValue": "0x1fc87d7eb370bb7a"
+    },
+    "layer_32": {
+      "Name": "resnetv17_stage3_conv7_fwd + resnetv17_stage3_batchnorm7_fwd + resnetv17_stage3_relu4_fwd",
+      "LayerType": "FusedConvActConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage3_activation1",
+          "Dimensions": [
+            1,
+            1024,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage3_relu4_fwd",
+          "Dimensions": [
+            1,
+            256,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 256,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 262144
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 256
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "ConvolutionTacticIndex": 31,
+      "TacticValue": "0x1fffff"
+    },
+    "layer_33": {
+      "Name": "resnetv17_stage3_conv8_fwd + resnetv17_stage3_batchnorm8_fwd + resnetv17_stage3_relu5_fwd",
+      "LayerType": "FusedConvActConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage3_relu4_fwd",
+          "Dimensions": [
+            1,
+            256,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage3_relu5_fwd",
+          "Dimensions": [
+            1,
+            256,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        1,
+        1
+      ],
+      "PostPadding": [
+        1,
+        1
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 256,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 589824
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 256
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "ConvolutionTacticIndex": 39,
+      "TacticValue": "0x27ffff"
+    },
+    "layer_34": {
+      "Name": "resnetv17_stage3_conv9_fwd + resnetv17_stage3_batchnorm9_fwd + resnetv17_stage3__plus2 + resnetv17_stage3_activation2",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage3_relu5_fwd",
+          "Dimensions": [
+            1,
+            256,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        },
+        {
+          "Name": "resnetv17_stage3_activation1",
+          "Dimensions": [
+            1,
+            1024,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage3_activation2",
+          "Dimensions": [
+            1,
+            1024,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 1024,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 262144
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 1024
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "HasReLU": 1,
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_f32f32_f32f32_f32_nchwkcrs_nchw_tilesize64x64x8_stage3_warpsize1x4x1_g1_ffma_simple_t1r1s1_aligna4_alignc4",
+      "TacticValue": "0x1fc87d7eb370bb7a"
+    },
+    "layer_35": {
+      "Name": "resnetv17_stage3_conv10_fwd + resnetv17_stage3_batchnorm10_fwd + resnetv17_stage3_relu6_fwd",
+      "LayerType": "FusedConvActConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage3_activation2",
+          "Dimensions": [
+            1,
+            1024,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage3_relu6_fwd",
+          "Dimensions": [
+            1,
+            256,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 256,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 262144
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 256
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "ConvolutionTacticIndex": 31,
+      "TacticValue": "0x1fffff"
+    },
+    "layer_36": {
+      "Name": "resnetv17_stage3_conv11_fwd + resnetv17_stage3_batchnorm11_fwd + resnetv17_stage3_relu7_fwd",
+      "LayerType": "FusedConvActConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage3_relu6_fwd",
+          "Dimensions": [
+            1,
+            256,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage3_relu7_fwd",
+          "Dimensions": [
+            1,
+            256,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        1,
+        1
+      ],
+      "PostPadding": [
+        1,
+        1
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 256,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 589824
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 256
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "ConvolutionTacticIndex": 39,
+      "TacticValue": "0x27ffff"
+    },
+    "layer_37": {
+      "Name": "resnetv17_stage3_conv12_fwd + resnetv17_stage3_batchnorm12_fwd + resnetv17_stage3__plus3 + resnetv17_stage3_activation3",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage3_relu7_fwd",
+          "Dimensions": [
+            1,
+            256,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        },
+        {
+          "Name": "resnetv17_stage3_activation2",
+          "Dimensions": [
+            1,
+            1024,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage3_activation3",
+          "Dimensions": [
+            1,
+            1024,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 1024,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 262144
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 1024
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "HasReLU": 1,
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_f32f32_f32f32_f32_nchwkcrs_nchw_tilesize64x64x8_stage3_warpsize1x4x1_g1_ffma_simple_t1r1s1_aligna4_alignc4",
+      "TacticValue": "0x1fc87d7eb370bb7a"
+    },
+    "layer_38": {
+      "Name": "resnetv17_stage3_conv13_fwd + resnetv17_stage3_batchnorm13_fwd + resnetv17_stage3_relu8_fwd",
+      "LayerType": "FusedConvActConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage3_activation3",
+          "Dimensions": [
+            1,
+            1024,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage3_relu8_fwd",
+          "Dimensions": [
+            1,
+            256,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 256,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 262144
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 256
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "ConvolutionTacticIndex": 31,
+      "TacticValue": "0x1fffff"
+    },
+    "layer_39": {
+      "Name": "resnetv17_stage3_conv14_fwd + resnetv17_stage3_batchnorm14_fwd + resnetv17_stage3_relu9_fwd",
+      "LayerType": "FusedConvActConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage3_relu8_fwd",
+          "Dimensions": [
+            1,
+            256,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage3_relu9_fwd",
+          "Dimensions": [
+            1,
+            256,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        1,
+        1
+      ],
+      "PostPadding": [
+        1,
+        1
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 256,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 589824
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 256
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "ConvolutionTacticIndex": 39,
+      "TacticValue": "0x27ffff"
+    },
+    "layer_40": {
+      "Name": "resnetv17_stage3_conv15_fwd + resnetv17_stage3_batchnorm15_fwd + resnetv17_stage3__plus4 + resnetv17_stage3_activation4",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage3_relu9_fwd",
+          "Dimensions": [
+            1,
+            256,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        },
+        {
+          "Name": "resnetv17_stage3_activation3",
+          "Dimensions": [
+            1,
+            1024,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage3_activation4",
+          "Dimensions": [
+            1,
+            1024,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 1024,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 262144
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 1024
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "HasReLU": 1,
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_f32f32_f32f32_f32_nchwkcrs_nchw_tilesize64x64x8_stage3_warpsize1x4x1_g1_ffma_simple_t1r1s1_aligna4_alignc4",
+      "TacticValue": "0x1fc87d7eb370bb7a"
+    },
+    "layer_41": {
+      "Name": "resnetv17_stage3_conv16_fwd + resnetv17_stage3_batchnorm16_fwd + resnetv17_stage3_relu10_fwd",
+      "LayerType": "FusedConvActConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage3_activation4",
+          "Dimensions": [
+            1,
+            1024,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage3_relu10_fwd",
+          "Dimensions": [
+            1,
+            256,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 256,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 262144
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 256
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "ConvolutionTacticIndex": 31,
+      "TacticValue": "0x1fffff"
+    },
+    "layer_42": {
+      "Name": "resnetv17_stage3_conv17_fwd + resnetv17_stage3_batchnorm17_fwd + resnetv17_stage3_relu11_fwd",
+      "LayerType": "FusedConvActConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage3_relu10_fwd",
+          "Dimensions": [
+            1,
+            256,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage3_relu11_fwd",
+          "Dimensions": [
+            1,
+            256,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        1,
+        1
+      ],
+      "PostPadding": [
+        1,
+        1
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 256,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 589824
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 256
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "ConvolutionTacticIndex": 39,
+      "TacticValue": "0x27ffff"
+    },
+    "layer_43": {
+      "Name": "resnetv17_stage3_conv18_fwd + resnetv17_stage3_batchnorm18_fwd + resnetv17_stage3__plus5 + resnetv17_stage3_activation5",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage3_relu11_fwd",
+          "Dimensions": [
+            1,
+            256,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        },
+        {
+          "Name": "resnetv17_stage3_activation4",
+          "Dimensions": [
+            1,
+            1024,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage3_activation5",
+          "Dimensions": [
+            1,
+            1024,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 1024,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 262144
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 1024
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "HasReLU": 1,
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_f32f32_f32f32_f32_nchwkcrs_nchw_tilesize64x64x8_stage3_warpsize1x4x1_g1_ffma_simple_t1r1s1_aligna4_alignc4",
+      "TacticValue": "0x1fc87d7eb370bb7a"
+    },
+    "layer_44": {
+      "Name": "resnetv17_stage4_conv0_fwd + resnetv17_stage4_batchnorm0_fwd + resnetv17_stage4_relu0_fwd",
+      "LayerType": "CudnnConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage3_activation5",
+          "Dimensions": [
+            1,
+            1024,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage4_relu0_fwd",
+          "Dimensions": [
+            1,
+            512,
+            7,
+            7
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        2,
+        2
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 512,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 524288
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 512
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "TacticValue": "0x71"
+    },
+    "layer_45": {
+      "Name": "resnetv17_stage4_conv1_fwd + resnetv17_stage4_batchnorm1_fwd + resnetv17_stage4_relu1_fwd",
+      "LayerType": "FusedConvActConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage4_relu0_fwd",
+          "Dimensions": [
+            1,
+            512,
+            7,
+            7
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage4_relu1_fwd",
+          "Dimensions": [
+            1,
+            512,
+            7,
+            7
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        1,
+        1
+      ],
+      "PostPadding": [
+        1,
+        1
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 512,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 2359296
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 512
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "ConvolutionTacticIndex": 36,
+      "TacticValue": "0x24ffff"
+    },
+    "layer_46": {
+      "Name": "resnetv17_stage4_conv3_fwd + resnetv17_stage4_batchnorm3_fwd",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage3_activation5",
+          "Dimensions": [
+            1,
+            1024,
+            14,
+            14
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage4_batchnorm3_fwd",
+          "Dimensions": [
+            1,
+            2048,
+            7,
+            7
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        2,
+        2
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 2048,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 2097152
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 2048
+      },
+      "HasSparseWeights": 0,
+      "Activation": "NONE",
+      "HasBias": 1,
+      "HasReLU": 0,
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_f32f32_f32f32_f32_nchwkcrs_nchw_tilesize64x64x8_stage3_warpsize1x4x1_g1_ffma_aligna4_alignc4",
+      "TacticValue": "0xa31d27de74b895ff"
+    },
+    "layer_47": {
+      "Name": "resnetv17_stage4_conv2_fwd + resnetv17_stage4_batchnorm2_fwd + resnetv17_stage4__plus0 + resnetv17_stage4_activation0",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage4_relu1_fwd",
+          "Dimensions": [
+            1,
+            512,
+            7,
+            7
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        },
+        {
+          "Name": "resnetv17_stage4_batchnorm3_fwd",
+          "Dimensions": [
+            1,
+            2048,
+            7,
+            7
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage4_activation0",
+          "Dimensions": [
+            1,
+            2048,
+            7,
+            7
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 2048,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 1048576
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 2048
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "HasReLU": 1,
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_f32f32_f32f32_f32_nchwkcrs_nchw_tilesize64x64x8_stage3_warpsize1x4x1_g1_ffma_simple_t1r1s1_aligna4_alignc4",
+      "TacticValue": "0x1fc87d7eb370bb7a"
+    },
+    "layer_48": {
+      "Name": "resnetv17_stage4_conv4_fwd + resnetv17_stage4_batchnorm4_fwd + resnetv17_stage4_relu2_fwd",
+      "LayerType": "FusedConvActConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage4_activation0",
+          "Dimensions": [
+            1,
+            2048,
+            7,
+            7
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage4_relu2_fwd",
+          "Dimensions": [
+            1,
+            512,
+            7,
+            7
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 512,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 1048576
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 512
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "ConvolutionTacticIndex": 31,
+      "TacticValue": "0x1fffff"
+    },
+    "layer_49": {
+      "Name": "resnetv17_stage4_conv5_fwd + resnetv17_stage4_batchnorm5_fwd + resnetv17_stage4_relu3_fwd",
+      "LayerType": "FusedConvActConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage4_relu2_fwd",
+          "Dimensions": [
+            1,
+            512,
+            7,
+            7
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage4_relu3_fwd",
+          "Dimensions": [
+            1,
+            512,
+            7,
+            7
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        1,
+        1
+      ],
+      "PostPadding": [
+        1,
+        1
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 512,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 2359296
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 512
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "ConvolutionTacticIndex": 36,
+      "TacticValue": "0x24ffff"
+    },
+    "layer_50": {
+      "Name": "resnetv17_stage4_conv6_fwd + resnetv17_stage4_batchnorm6_fwd + resnetv17_stage4__plus1 + resnetv17_stage4_activation1",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage4_relu3_fwd",
+          "Dimensions": [
+            1,
+            512,
+            7,
+            7
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        },
+        {
+          "Name": "resnetv17_stage4_activation0",
+          "Dimensions": [
+            1,
+            2048,
+            7,
+            7
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage4_activation1",
+          "Dimensions": [
+            1,
+            2048,
+            7,
+            7
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 2048,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 1048576
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 2048
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "HasReLU": 1,
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_f32f32_f32f32_f32_nchwkcrs_nchw_tilesize64x64x8_stage3_warpsize1x4x1_g1_ffma_simple_t1r1s1_aligna4_alignc4",
+      "TacticValue": "0x1fc87d7eb370bb7a"
+    },
+    "layer_51": {
+      "Name": "resnetv17_stage4_conv7_fwd + resnetv17_stage4_batchnorm7_fwd + resnetv17_stage4_relu4_fwd",
+      "LayerType": "FusedConvActConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage4_activation1",
+          "Dimensions": [
+            1,
+            2048,
+            7,
+            7
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage4_relu4_fwd",
+          "Dimensions": [
+            1,
+            512,
+            7,
+            7
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 512,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 1048576
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 512
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "ConvolutionTacticIndex": 31,
+      "TacticValue": "0x1fffff"
+    },
+    "layer_52": {
+      "Name": "resnetv17_stage4_conv8_fwd + resnetv17_stage4_batchnorm8_fwd + resnetv17_stage4_relu5_fwd",
+      "LayerType": "FusedConvActConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage4_relu4_fwd",
+          "Dimensions": [
+            1,
+            512,
+            7,
+            7
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage4_relu5_fwd",
+          "Dimensions": [
+            1,
+            512,
+            7,
+            7
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        3,
+        3
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        1,
+        1
+      ],
+      "PostPadding": [
+        1,
+        1
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 512,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 2359296
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 512
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "ConvolutionTacticIndex": 36,
+      "TacticValue": "0x24ffff"
+    },
+    "layer_53": {
+      "Name": "resnetv17_stage4_conv9_fwd + resnetv17_stage4_batchnorm9_fwd + resnetv17_stage4__plus2 + resnetv17_stage4_activation2",
+      "LayerType": "CaskConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage4_relu5_fwd",
+          "Dimensions": [
+            1,
+            512,
+            7,
+            7
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        },
+        {
+          "Name": "resnetv17_stage4_activation1",
+          "Dimensions": [
+            1,
+            2048,
+            7,
+            7
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_stage4_activation2",
+          "Dimensions": [
+            1,
+            2048,
+            7,
+            7
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 2048,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 1048576
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 2048
+      },
+      "HasSparseWeights": 0,
+      "Activation": "RELU",
+      "HasBias": 1,
+      "HasReLU": 1,
+      "TacticName": "sm80_xmma_fprop_implicit_gemm_f32f32_f32f32_f32_nchwkcrs_nchw_tilesize64x64x8_stage3_warpsize1x4x1_g1_ffma_simple_t1r1s1_aligna4_alignc4",
+      "TacticValue": "0x1fc87d7eb370bb7a"
+    },
+    "layer_54": {
+      "Name": "resnetv17_pool1_fwd",
+      "LayerType": "TiledPooling",
+      "Inputs": [
+        {
+          "Name": "resnetv17_stage4_activation2",
+          "Dimensions": [
+            1,
+            2048,
+            7,
+            7
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_pool1_fwd",
+          "Dimensions": [
+            1,
+            2048,
+            1,
+            1
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Pooling",
+      "PoolingType": "AVERAGE",
+      "WindowSize": [
+        7,
+        7
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "BlendFactor": 0,
+      "AverageCountExcludesPadding": 1,
+      "TacticValue": "0x7d0101"
+    },
+    "layer_55": {
+      "Name": "resnetv17_dense0_fwd + resnetv17_dense0_bias + (Unnamed Layer* 177) [Shuffle] + unsqueeze_node_after_resnetv17_dense0_bias + (Unnamed Layer* 177) [Shuffle]_(Unnamed Layer* 177) [Shuffle]_output + (Unnamed Layer* 178) [ElementWise]",
+      "LayerType": "CublasConvolution",
+      "Inputs": [
+        {
+          "Name": "resnetv17_pool1_fwd",
+          "Dimensions": [
+            1,
+            2048,
+            1,
+            1
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "(Unnamed Layer* 178) [ElementWise]_out_tensor",
+          "Dimensions": [
+            1,
+            1000,
+            1,
+            1
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "ParameterType": "Convolution",
+      "Kernel": [
+        1,
+        1
+      ],
+      "PaddingMode": "kEXPLICIT_ROUND_DOWN",
+      "PrePadding": [
+        0,
+        0
+      ],
+      "PostPadding": [
+        0,
+        0
+      ],
+      "Stride": [
+        1,
+        1
+      ],
+      "Dilation": [
+        1,
+        1
+      ],
+      "OutMaps": 1000,
+      "Groups": 1,
+      "Weights": {
+        "Type": "Float",
+        "Count": 2048000
+      },
+      "Bias": {
+        "Type": "Float",
+        "Count": 1000
+      },
+      "HasSparseWeights": 0,
+      "Activation": "NONE",
+      "HasBias": 1,
+      "CublasConvolutionTacticIndex": 0,
+      "TacticValue": "0x0"
+    },
+    "layer_56": {
+      "Name": "copied_squeeze_after_(Unnamed Layer* 178) [ElementWise]",
+      "LayerType": "NoOp",
+      "Inputs": [
+        {
+          "Name": "(Unnamed Layer* 178) [ElementWise]_out_tensor",
+          "Dimensions": [
+            1,
+            1000,
+            1,
+            1
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "Outputs": [
+        {
+          "Name": "resnetv17_dense0_fwd",
+          "Dimensions": [
+            1,
+            1000
+          ],
+          "Format/Datatype": "Row major linear FP32"
+        }
+      ],
+      "TacticValue": "0x0"
+    }
+  }
+}

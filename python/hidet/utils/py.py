@@ -1,3 +1,5 @@
+from typing import TypeVar, Iterable, Tuple, List, Union
+import numpy as np
 import cProfile
 import contextlib
 import io
@@ -19,7 +21,11 @@ def prod(seq: Sequence):
         return c
 
 
-def strict_zip(a: Sequence, b: Sequence) -> zip:
+TypeA = TypeVar('TypeA')
+TypeB = TypeVar('TypeB')
+
+
+def strict_zip(a: Sequence[TypeA], b: Sequence[TypeB]) -> Iterable[Tuple[TypeA, TypeB]]:
     if len(a) != len(b):
         raise ValueError('Expect two sequence have the same length in zip, got length {} and {}.'.format(len(a), len(b)))
     return zip(a, b)
@@ -149,26 +155,26 @@ class Timer:
             return '{:.1f} {}'.format(seconds / 60 / 60, 'hours')
 
 
-class DictCustomKey(MutableMapping, dict):
-    def __init__(self, hash_func: Callable[[object], int]):
-        super().__init__()
-        self.hash_func = hash_func
-
-    def __delitem__(self, v):
-        return dict.__delitem__(self, self.hash_func(v))
-
-    def __len__(self) -> int:
-        return dict.__len__(self)
-
-    def __iter__(self):
-        return dict.__iter__(self)
-
-    def __getitem__(self, item):
-        return dict.__getitem__(self, self.hash_func(item))
-
-    def __setitem__(self, key, value):
-        return dict.__setitem__(self, self.hash_func(key), value)
-
+# class DictCustomKey(MutableMapping, dict):
+#     def __init__(self, hash_func: Callable[[object], int]):
+#         super().__init__()
+#         self.hash_func = hash_func
+#
+#     def __delitem__(self, v):
+#         return dict.__delitem__(self, self.hash_func(v))
+#
+#     def __len__(self) -> int:
+#         return dict.__len__(self)
+#
+#     def __iter__(self):
+#         return dict.__iter__(self)
+#
+#     def __getitem__(self, item):
+#         return dict.__getitem__(self, self.hash_func(item))
+#
+#     def __setitem__(self, key, value):
+#         return dict.__setitem__(self, self.hash_func(key), value)
+#
 
 def repeat_until_converge(func, obj, limit=None):
     i = 0
@@ -297,6 +303,85 @@ class TableBuilder:
 def line_profile():
     from line_profiler_pycharm import profile
     return profile
+
+
+def initialize(*args, **kwargs):
+    """
+    Decorate an initialization function. After decorating with this function, the initialization function will be called
+    after the definition.
+
+    Parameters
+    ----------
+    args:
+        The positional arguments of initializing.
+    kwargs:
+        The keyword arguments of initializing.
+
+    Returns
+    -------
+    ret:
+        A decorator that will call given function with args and kwargs,
+        and return None (to prevent this function to be called again).
+    """
+    def decorator(f):
+        f(*args, **kwargs)
+        return None
+    return decorator
+
+
+def gcd(a: int, b: int) -> int:
+    """
+    Get the greatest common divisor of non-negative integers a and b.
+
+    Parameters
+    ----------
+    a: int
+        The lhs operand.
+    b: int
+        The rhs operand.
+
+    Returns
+    -------
+    ret: int
+        The greatest common divisor.
+    """
+    assert a >= 0 and b >= 0
+    return a if b == 0 else gcd(b, a % b)
+
+
+def lcm(a: int, b: int) -> int:
+    """
+    Get the least common multiple of non-negative integers a and b.
+    Parameters
+    ----------
+    a: int
+        The lhs operand.
+    b: int
+        The rhs operand.
+
+    Returns
+    -------
+    ret: int
+        The least common multiple.
+    """
+    return a // gcd(a, b) * b
+
+
+def error_tolerance(a: Union[np.ndarray, 'Tensor'], b: Union[np.ndarray, 'Tensor']) -> float:
+    from hidet.tos import Tensor
+    if isinstance(a, Tensor):
+        a = a.numpy()
+    if isinstance(b, Tensor):
+        b = b.numpy()
+    lf = 0.0
+    rg = 9.0
+    for step in range(20):
+        mid = (lf + rg) / 2.0
+        if np.allclose(a, b, rtol=mid, atol=mid):
+            rg = mid
+        else:
+            lf = mid
+    return (lf + rg) / 2.0
 
 
 if __name__ == '__main__':

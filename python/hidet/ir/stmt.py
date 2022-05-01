@@ -14,6 +14,13 @@ class EvaluateStmt(Stmt):
         self.expr = convert(expr)
 
 
+class DeclareStmt(Stmt):
+    def __init__(self, var, init: Optional[Expr] = None):
+        super().__init__()
+        self.var: Var = var
+        self.init: Optional[Expr] = init
+
+
 class BufferStoreStmt(Stmt):
     def __init__(self, buf, indices, value):
         super().__init__()
@@ -31,7 +38,9 @@ class AssignStmt(Stmt):
 
 
 class ReturnStmt(Stmt):
-    pass
+    def __init__(self, ret_value: Optional[Expr] = None):
+        super().__init__()
+        self.ret_value = ret_value
 
 
 class LetStmt(Stmt):

@@ -36,7 +36,7 @@ class BuildLetStmtRewriter(StmtExprRewriter):
 
     def visit_Binary(self, e: BinaryOp):
         etype = self.type_infer(e)
-        if isinstance(e, (Add, Sub, Multiply, FloorDiv, Mod)) and (isinstance(etype, ScalarType) and etype.name == 'int32'):
+        if isinstance(e, (Add, Sub, Multiply, Div, FloorDiv, Mod)) and (isinstance(etype, ScalarType) and etype.name == 'int32'):
             return self.exit_stack.enter_context(self.sb.let('v', StmtExprRewriter.visit_Binary(self, e)))
         else:
             return StmtExprRewriter.visit_Binary(self, e)

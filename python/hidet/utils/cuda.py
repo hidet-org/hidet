@@ -79,7 +79,7 @@ def query_compute_capability():
 
 def device_synchronize():
     from hidet.ffi.cuda_api import CudaAPI
-    CudaAPI.device_synchronization()
+    CudaAPI.device_synchronize()
 
 
 def preferred_gpu_clock():
@@ -127,6 +127,7 @@ def query_device_name(short=False) -> str:
     if short:
         short_name_dict = {
             'NVIDIA GeForce RTX 3070 Laptop GPU': 'RTX3070L',
+            'NVIDIA GeForce RTX 3090': 'RTX3090',
             'Tesla V100-SXM2-16GB': 'V100',
             'Tesla T4': 'T4',
         }

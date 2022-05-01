@@ -1,5 +1,5 @@
 from typing import List
-from hidet.ffi import cuda_api
+from hidet.ffi import cuda
 
 
 class CudaEvent:
@@ -12,10 +12,10 @@ class CudaEvent:
         self.handle = 0
 
     def elapsed_time_since(self, start_event) -> float:
-        return cuda_api.event_elapsed_time(start_event.handle, self.handle)
+        return cuda.event_elapsed_time(start_event.handle, self.handle)
 
     def record_on(self, stream_handle: int = 0):
-        cuda_api.event_record(self.handle, stream_handle)
+        cuda.event_record(self.handle, stream_handle)
 
 
 class CudaEventPool:
@@ -26,12 +26,12 @@ class CudaEventPool:
         if len(self.event_handles) > 0:
             return CudaEvent(self.event_handles.pop(), self)
         else:
-            return CudaEvent(cuda_api.create_event(), self)
+            return CudaEvent(cuda.create_event(), self)
 
     def __del__(self):
         while len(self.event_handles) > 0:
             handle = self.event_handles.pop()
-            cuda_api.destroy_event(handle)
+            cuda.destroy_event(handle)
 
 
 cuda_event_pool = CudaEventPool()

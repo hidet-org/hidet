@@ -13,13 +13,11 @@ class FoldConstantRewriter(GraphRewriter):
             return None
         else:
             if utils.same_list(inputs, op.inputs):
-                return op
+                return
             else:
-                # new_op = op.__class__(*inputs, **op.attributes)
-                new_op = op.clone(*inputs)
-                for original, updated in zip(op.outputs, new_op.run()):
+                updated_outputs = op.reforward(inputs)
+                for original, updated in zip(op.outputs, updated_outputs):
                     self.memo[original] = updated
-                return new_op
 
 
 class FoldConstantPass(GraphPass):

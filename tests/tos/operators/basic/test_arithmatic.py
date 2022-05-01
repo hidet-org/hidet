@@ -1,7 +1,7 @@
 import pytest
 import hidet
 import numpy as np
-from hidet.tos import operators as ops
+from hidet import ops
 
 
 def check_binary(a_shape, b_shape, dtype, op, hidet_op=None, a_positive=False, b_positive=False):

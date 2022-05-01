@@ -1,0 +1,2 @@
+ BatchSize                Model     Executor      Space    Latency        Std
+         1             resnet50      autotvm          2      1.813      0.003

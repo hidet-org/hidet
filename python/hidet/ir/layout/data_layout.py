@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from typing import Sequence, Union, List, Callable, Mapping, Dict, Tuple
+from typing import Sequence, Union, List, Callable, Mapping, Dict, Tuple, Optional
 
 from hidet import ir
 from hidet.ir.node import Node
@@ -36,6 +36,16 @@ def concat_let_expr(var2value, body: Expr):
     return body
 
 
+def to_data_layout(obj):
+    if isinstance(obj, (tuple, list)):
+        assert all(isinstance(v, int) for v in obj)
+        return DataLayout.row_major(obj)
+    elif isinstance(obj, DataLayout):
+        return obj
+    else:
+        raise ValueError('Can not convert {} to a DataLayout, expect a list or tuple of ints'.format(obj))
+
+
 # data layout
 class DataLayout(Node):
     def __init__(self, shape=None, size=None):
@@ -47,6 +57,9 @@ class DataLayout(Node):
 
     def __add__(self, other):
         return DataLayout.concat(lhs=self, rhs=other)
+
+    def __radd__(self, other):
+        return DataLayout.concat(lhs=other, rhs=self)
 
     def __mul__(self, other):
         return DataLayout.product(outer=self, inner=other)
@@ -104,6 +117,8 @@ class DataLayout(Node):
 
     @staticmethod
     def concat(lhs, rhs):
+        lhs = to_data_layout(lhs)
+        rhs = to_data_layout(rhs)
         return ConcatDataLayout(lhs, rhs)
 
     @staticmethod
@@ -351,4 +366,22 @@ class ConcatDataLayout(DataLayout):
         lhs_args = args[:len(self.lhs.shape)]
         rhs_args = args[len(self.lhs.shape):]
         return And(self.lhs.within_bound(*lhs_args), self.rhs.within_bound(*rhs_args))
+
+
+def row_layout(*shape: int):
+    return DataLayout.row_major(shape)
+
+
+def col_layout(*shape: int):
+    return DataLayout.column_major(shape)
+
+
+def local_layout(*shape: int):
+    return DataLayout.local(shape)
+
+
+def data_layout(shape: List[int], perm: Optional[List[int]] = None):
+    if perm is None:
+        perm = list(range(len(shape)))
+    return StridesLayout.from_shape(shape, perm)
 

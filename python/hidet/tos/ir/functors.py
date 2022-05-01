@@ -81,12 +81,11 @@ class GraphRewriter:
     def visit_Operator(self, op: Operator):
         inputs = [self(input) for input in op.inputs]
         if same_list(inputs, op.inputs):
-            return op
+            return
         else:
-            new_op = op.__class__(*inputs, **op.attributes)
-            for original, updated in zip(op.outputs, new_op.run()):
+            updated_outputs = op.clone(inputs)
+            for original, updated in zip(op.outputs, updated_outputs):
                 self.memo[original] = updated
-            return new_op
 
     def visit_Tensor(self, tensor: Tensor):
         if tensor.trace is None:
@@ -109,11 +108,10 @@ class GraphCloneRewriter(GraphRewriter):
         return FlowGraph(outputs, graph.inputs)
 
     def visit_Operator(self, op: Operator):
-        inputs = [self(input) for input in op.inputs]
-        new_op = op.clone(*inputs)
-        for original, updated in zip(op.outputs, new_op.run()):
+        inputs = [self(x) for x in op.inputs]
+        updated_outputs = op.clone(inputs)
+        for original, updated in zip(op.outputs, updated_outputs):
             self.memo[original] = updated
-        return new_op
 
     def visit_Tensor(self, tensor: Tensor):
         if tensor.trace is None:

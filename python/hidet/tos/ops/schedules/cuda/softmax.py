@@ -2,9 +2,10 @@ from typing import List
 
 from hidet.ir import IRModule
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
-from hidet.ir.expr import scalar_var, if_then_else, tensor_var
+from hidet.ir.expr import scalar_var, if_then_else, tensor_var, const_like, convert
 from hidet.ir.layout import TaskLayout
-from hidet.ir.primitives import expf, block_idx, thread_idx, cuda_max
+from hidet.ir.primitives import block_idx, thread_idx
+from hidet.ir import primitives as prim
 from hidet.ir.stmt import AssignStmt, BufferStoreStmt
 from hidet.tos.ops.definitions.softmax import SoftmaxTask
 from hidet.tos.ops.schedules.common import params_from_task
@@ -46,22 +47,22 @@ def softmax_cuda_schedule(task: SoftmaxTask) -> IRModule:
         sb = StmtBuilder()
 
         # get the max value along c dimension
-        sb += AssignStmt(rv, -1e30)
+        sb += AssignStmt(rv, convert(-1e30, x_dtype))
         other_indices = grid_layout.worker2task(block_idx())[0]
         for r, in block_layout.worker2task(thread_idx()):
             with sb.if_then(r < reduce_extent):
                 sb += BufferStoreStmt(buf, [r], x[other_indices[:axis] + (r,) + other_indices[axis:]])
-                sb += AssignStmt(rv, cuda_max(rv, buf[r]))
-        sb += warp_reduce(rv, cuda_max)
+                sb += AssignStmt(rv, prim.max(rv, buf[r]))
+        sb += warp_reduce(rv, prim.max)
 
         # calculate exp(v-max)
         for r, in block_layout.worker2task(thread_idx()):
-            sb += AssignStmt(buf[r], expf(buf[r] - rv))
+            sb += AssignStmt(buf[r], prim.exp(buf[r] - rv))
 
         # calculate sum(exp(v-max))
-        sb += AssignStmt(rv, 0.0)
+        sb += AssignStmt(rv, convert(0.0, x_dtype))
         for r, in block_layout.worker2task(thread_idx()):
-            sb += AssignStmt(rv, rv + if_then_else(r < reduce_extent, buf[r], 0.0))
+            sb += AssignStmt(rv, rv + if_then_else(r < reduce_extent, buf[r], convert(0.0, x_dtype)))
         sb += warp_reduce(rv, lambda a, b: a + b)
 
         # calculate exp(v-max) / sum(exp(vv-max))

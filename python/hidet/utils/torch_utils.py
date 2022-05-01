@@ -1,0 +1,47 @@
+import sys
+import os
+import subprocess
+from hidet.utils import hidet_cache_file
+
+
+def export_torchvision_model_as_onnx(model_name: str, output_path: str, skip_existed: bool = True):
+    if skip_existed and os.path.exists(output_path):
+        return
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    import torchvision
+    import torch
+    if model_name == 'resnet50':
+        model = torchvision.models.resnet50(pretrained=True).cuda()
+        input_shape = [1, 3, 224, 224]
+    elif model_name == 'inception_v3':
+        model = torchvision.models.inception_v3(pretrained=True, transform_input=False, aux_logits=True).cuda()
+        input_shape = [1, 3, 299, 299]
+    elif model_name == 'mobilenet_v2':
+        model = torchvision.models.mobilenet_v2(pretrained=True).cuda()
+        input_shape = [1, 3, 224, 224]
+    else:
+        raise NotImplementedError(model_name)
+
+    model.eval()
+    dummy_input = torch.randn(*input_shape, device='cuda')
+    input_names = ['data']
+    output_names = ['output']
+    torch.onnx.export(
+        model=model,
+        args=dummy_input,
+        f=output_path,
+        training=torch.onnx.TrainingMode.PRESERVE,
+        input_names=input_names,
+        output_names=output_names,
+        do_constant_folding=False,
+        dynamic_axes={
+            'data': {0: 'batch_size'},
+            'output': {0: 'batch_size'}
+        }
+    )
+
+
+if __name__ == '__main__':
+    names = ['resnet50', 'inception_v3', 'mobilenet_v2']
+    for name in names:
+        export_torchvision_model_as_onnx(name, hidet_cache_file('onnx', f'{name}.onnx'))

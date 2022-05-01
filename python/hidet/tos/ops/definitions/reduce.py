@@ -1,11 +1,11 @@
 from typing import List, Union
 
 from .arithmatic import square
-from .utils import Task, Operator, Tensor, TensorNode, compute, reduce, input_like, normalize_dim
+from .utils import Task, Operator, Tensor, TensorNode, IRModule, compute, reduce, input_like, normalize_dim
 
 
 class ReduceTask(Task):
-    def __init__(self, x: TensorNode, dims: List[int], keep_dim: bool, reduce_type: str):
+    def __init__(self, x: TensorNode, dims: List[int], keep_dim: bool, reduce_type: str, accumulate_dtype: str = 'float32'):
         x_shape = x.const_shape()
         y_shape = []
         for i in range(len(x_shape)):
@@ -33,14 +33,39 @@ class ReduceTask(Task):
                 return x[x_indices]
 
             reduce_shape = [x_shape[i] for i in dims]
-            return reduce(shape=reduce_shape, fcompute=reduce_fcompute, reduce_type=reduce_type)
+            return reduce(shape=reduce_shape, fcompute=reduce_fcompute,
+                          reduce_type=reduce_type, accumulate_dtype=accumulate_dtype)
 
         y = compute(name='y', shape=y_shape, fcompute=fcompute, scope='global')
+
+        self.dims: List[int] = dims
+        self.keep_dim: bool = keep_dim
+        self.reduce_type: str = reduce_type
+
         super().__init__(
             name='reduce_{}'.format(reduce_type),
             inputs=[x],
             outputs=[y],
+            attributes={
+                'dims': dims,
+                'keep_dim': keep_dim,
+                'reduce_type': reduce_type,
+                'accumulate_dtype': accumulate_dtype
+            }
         )
+
+    def implement_cuda(self) -> IRModule:
+        from ..schedules import cuda_schedule_reduce_by_default, cuda_schedule_reduce_by_warp_reduce
+        rank = len(self.inputs[0].const_shape())
+        if rank - 1 in self.dims:
+            # reduce over last dimension
+            return cuda_schedule_reduce_by_warp_reduce(self)
+        else:
+            # last dimension has not been reduced
+            return cuda_schedule_reduce_by_default(self)
+
+    def fast_implement(self, space_level: int) -> bool:
+        return True
 
 
 class ReduceMeanOp(Operator):
@@ -49,8 +74,10 @@ class ReduceMeanOp(Operator):
         super().__init__(
             inputs=[x],
             task=ReduceTask(input_like(x, 'x'), dims, keep_dim, 'avg'),
-            dims=dims,
-            keep_dim=keep_dim
+            attributes={
+                'dims': dims,
+                'keep_dim': keep_dim
+            }
         )
 
 
@@ -60,8 +87,10 @@ class ReduceSumOp(Operator):
         super().__init__(
             inputs=[x],
             task=ReduceTask(input_like(x, 'x'), dims, keep_dim, 'sum'),
-            dims=dims,
-            keep_dim=keep_dim
+            attributes={
+                'dims': dims,
+                'keep_dim': keep_dim
+            }
         )
 
 
@@ -78,5 +107,5 @@ def reduce_sum(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -
 
 
 def reduce_var(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -> Tensor:
-    return reduce_mean(square(x - reduce_mean(x, dims, keep_dim=True)), dims, keep_dim)
-
+    x = x - x.mean(dims=dims, keep_dim=True)
+    return square(x).mean(dims=dims, keep_dim=keep_dim)

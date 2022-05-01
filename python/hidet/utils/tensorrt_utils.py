@@ -1,3 +1,4 @@
+import datetime
 from typing import List, Optional, Dict, Tuple
 from collections import OrderedDict
 from hashlib import sha256
@@ -7,7 +8,7 @@ import time
 import numpy as np
 import tensorrt as trt
 import hidet
-from hidet.ffi import cuda_api
+from hidet.ffi import cuda
 from hidet import Tensor, randn, empty
 from hidet.utils import hidet_cache_dir, nvtx_annotate
 
@@ -34,14 +35,55 @@ class Profiler(trt.IProfiler):
         }
 
 
+class Logger(trt.ILogger):
+    def __init__(self, log_file: Optional[str] = None, print_out_level: str = 'INFO'):
+        super().__init__()
+        self.log_file = log_file
+        self.print_out_level = print_out_level
+        self.opened_file = None
+        self.level_id = {
+            'INTERNAL_ERROR': 0,
+            'ERROR': 1,
+            'WARNING': 2,
+            'INFO': 3,
+            'VERBOSE': 4
+        }
+        if self.log_file:
+            self.opened_file = open(self.log_file, 'w')
+
+    def log(self, severity: trt.ILogger.Severity, msg: str):
+        severity2name = {
+            trt.ILogger.INTERNAL_ERROR: 'INTERNAL_ERROR',
+            trt.ILogger.ERROR: 'ERROR',
+            trt.ILogger.WARNING: 'WARNING',
+            trt.ILogger.INFO: 'INFO',
+            trt.ILogger.VERBOSE: 'VERBOSE'
+        }
+        severity_name = severity2name[severity]
+        msg = '{} {} {}\n'.format(datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S'), severity_name, msg)
+        self.opened_file.write(msg)
+        # self.opened_file.flush()
+        if self.level_id[self.print_out_level] >= self.level_id[severity_name] >= self.level_id['WARNING']:
+            print(msg)
+        if severity_name in ['INTERNAL_ERROR', 'ERROR']:
+            raise RuntimeError('TensorRT ' + msg)
+
+    def __del__(self):
+        if self.opened_file:
+            self.opened_file.close()
+
+
 def milo_bytes(MiB):
     return MiB << 20
 
 
-def create_engine_from_onnx(onnx_model_path: str, workspace_bytes: int = 512 << 20, input_shapes: Optional[Dict[str, List[int]]] = None, use_tf32: bool = False, use_fp16: bool = False) -> trt.ICudaEngine:
-    logger = trt.Logger(trt.Logger.WARNING)
-    builder = trt.Builder(logger)
-
+def create_engine_from_onnx(
+        onnx_model_path: str,
+        workspace_bytes: int = 512 << 20,
+        input_shapes: Optional[Dict[str, List[int]]] = None,
+        use_tf32: bool = False,
+        use_fp16: bool = False
+) -> trt.ICudaEngine:
     cache_dir = hidet_cache_dir('trt_engine')
     os.makedirs(cache_dir, exist_ok=True)
     model_name = os.path.basename(onnx_model_path).split('.')[0]
@@ -50,16 +92,21 @@ def create_engine_from_onnx(onnx_model_path: str, workspace_bytes: int = 512 << 
     engine_name = '{}{}{}_ws{}_{}.engine'.format(model_name, '_tf32' if use_tf32 else '', '_fp16' if use_fp16 else '', workspace_bytes // (1 << 20), shape_hash_suffix)
     engine_path = os.path.join(cache_dir, engine_name)
 
+    # logger = trt.Logger(min_severity=trt.Logger.ERROR)   # use WARNINGS when needed
+
     if os.path.exists(engine_path):
         # load the engine directly
+        logger = Logger(engine_path + '.log', print_out_level='ERROR')
         runtime = trt.Runtime(logger)
         with open(engine_path, 'rb') as f:
             serialized_engine = f.read()
         engine = runtime.deserialize_cuda_engine(serialized_engine)
     else:
+        build_logger = Logger(engine_path + '.build.log', print_out_level='ERROR')
+        builder = trt.Builder(build_logger)
         # parse onnx model
         network: trt.INetworkDefinition = builder.create_network(1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH))
-        onnx_parser = trt.OnnxParser(network, logger)
+        onnx_parser = trt.OnnxParser(network, build_logger)
         success = onnx_parser.parse_from_file(onnx_model_path)
         for idx in range(onnx_parser.num_errors):
             print(onnx_parser.get_error(idx))
@@ -148,7 +195,7 @@ def engine_inference(engine: trt.ICudaEngine, inputs: Dict[str, Tensor]) -> Dict
     # inference
     context: trt.IExecutionContext = engine.create_execution_context()
     context.execute_async_v2(buffers, 0)
-    cuda_api.device_synchronization()
+    cuda.device_synchronize()
     return outputs
 
 
@@ -159,14 +206,14 @@ def engine_benchmark(engine: trt.ICudaEngine, dummy_inputs: Dict[str, Tensor], w
     with nvtx_annotate('warmup'):
         for i in range(warmup):
             context.execute_async_v2(buffers, 0)
-            cuda_api.device_synchronization()
+            cuda.device_synchronize()
     for i in range(repeat):
         with nvtx_annotate(f'repeat {i}'):
-            cuda_api.device_synchronization()
+            cuda.device_synchronize()
             start_time = time.time()
             for j in range(number):
                 context.execute_async_v2(buffers, 0)
-            cuda_api.device_synchronization()
+            cuda.device_synchronize()
             end_time = time.time()
         results.append((end_time - start_time) * 1000 / number)
     return results
@@ -191,7 +238,7 @@ def engine_profiler(engine: trt.ICudaEngine, dummy_inputs: Dict[str, Tensor]) ->
     profiler = Profiler()
     context.profiler = profiler
     context.execute_v2(buffers)
-    cuda_api.device_synchronization()
+    cuda.device_synchronize()
     return profiler.export_trace()
 
 

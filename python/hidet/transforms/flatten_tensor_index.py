@@ -58,7 +58,7 @@ class FlattenTensorAccessRewriter(FuncStmtExprRewriter):
         return BufferStoreStmt(var, [global_index], value)
 
     def visit_TensorSlice(self, e: TensorSlice):
-        raise ValueError('there should not be any tensor slice after flattening tensor slice.')
+        raise ValueError('there should not be any tensor slice after flattening tensor slice. got\n{}'.format(e))
 
 
 class FlattenTensorIndexPass(Pass):

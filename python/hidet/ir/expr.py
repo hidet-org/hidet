@@ -37,10 +37,10 @@ class Expr(Node):
         return Div(other, self)
 
     def __floordiv__(self, other):
-        return FloorDiv(self, other)
+        return Div(self, other)
 
     def __rfloordiv__(self, other):
-        return FloorDiv(other, self)
+        return Div(other, self)
 
     def __mod__(self, other):
         return Mod(self, other)
@@ -110,6 +110,9 @@ class Expr(Node):
         # return str(astext(self)) + ' at {}'.format(hex(id(self)))
         return str(astext(self))
 
+    def equals(self, other):
+        return Equal(self, other)
+
     def is_const(self):
         return isinstance(self, Constant)
 
@@ -129,10 +132,17 @@ class UnaryOp(Expr):
         self.a = convert(a)
 
 
-def convert(obj: Optional[Union[Expr, PyScalar, tuple, Sequence]]) -> Optional[Union[Expr, tuple]]:
+def convert(obj: Optional[Union[Expr, PyScalar, tuple, Sequence]], dtype: Optional[Union[str, ScalarType]] = None) -> Optional[Union[Expr, tuple]]:
     if isinstance(obj, Expr):
         return obj
-    elif isinstance(obj, bool):
+
+    if dtype is not None:
+        if isinstance(obj, (bool, int, float)):
+            return Constant(obj, dtype)
+        else:
+            raise ValueError('Can not convert {} to {}.'.format(obj, dtype))
+
+    if isinstance(obj, bool):
         return Constant(obj, ScalarType('bool'))
     elif isinstance(obj, int):
         return Constant(obj, ScalarType('int32'))
@@ -302,8 +312,8 @@ class TensorSlice(Expr):
 
 
 class Call(Expr):
-    def __init__(self, func, args):
-        self.func_var: Var = func
+    def __init__(self, func_var, args):
+        self.func_var: Var = func_var
         self.args = convert(args)
 
 
@@ -319,7 +329,7 @@ class Cast(Expr):
         self.expr = expr
         if isinstance(target_type, str):
             target_type = ScalarType(target_type)
-        self.target_type = target_type
+        self.target_type: TypeNode = target_type
 
 
 class Constant(Expr):
@@ -362,16 +372,14 @@ class Var(Expr):
         Hint is used to determine the name in codegen. Different vars may have the
         same hint. If two vars have the same hint such as 'x', the final name would be like 'x1', 'x2'.
 
+        OUTDATED:
         Name is the determined name in the final code. Used by primitive varaibles such as 'threadIdx.x'. No variable should have
         a same name as primitive objects (including primitive variables and primitive functions).
 
         Id is used to track the allocation of Var object in python, which is only used to help us to distinguish different Var
         in python debugger.
         """
-        from hidet.ir.primitives import is_reserved_name
         from hidet.ir.dialects.lowlevel import TensorPointerType
-        if hint is not None:
-            assert not is_reserved_name(hint)
         self.hint = hint
         self.name = name
         self.type: Union[TypeNode, TensorType, TensorPointerType] = type
@@ -457,8 +465,10 @@ def tensor_rank(v: Expr) -> int:
         return len(v.data_type.shape)
     elif isinstance(v, Constant) and isinstance(v.data_type, TensorType):
         return len(v.data_type.shape)
+    elif isinstance(v, Cast) and isinstance(v.target_type, PointerType):
+        return 1
     else:
-        raise ValueError(v)
+        raise ValueError('Can not infer the tensor rank of "{}"'.format(v))
 
 
 def cast(v: Expr, dtype):
@@ -473,3 +483,12 @@ def const_tensor(value: np.ndarray, data_type=None) -> Constant:
             shape=list(value.shape)
         )
     return Constant(value=value, data_type=data_type)
+
+
+def const_like(value: Union[float, int], e: Expr) -> Constant:
+    from hidet.ir.functors import infer_type
+    dtype = infer_type(e)
+    if isinstance(dtype, ScalarType):
+        return Constant(value=value, data_type=dtype)
+    else:
+        raise ValueError('Expect a scalar type, but got {}'.format(dtype))

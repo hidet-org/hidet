@@ -1,7 +1,7 @@
 #include <map>
-#include <hidet/cudnn_common.h>
+#include "cudnn_common.h"
 #include <hidet/packedfunc.h>
-#include <hidet/runtime.h>
+#include <hidet/cuda_utils.h>
 
 struct Pool2dWorkload {
     int n;

@@ -10,6 +10,8 @@ from .generate_packed_func import generate_packed_func_pass
 from .import_primitive_functions import import_primitive_functions_pass
 from .simplify_stmt import simplify_stmt_pass
 from .expand_let_expr import expand_let_expr_pass
+from .resolve_generic_primitive_function import resolve_primitive_func_pass
+from .add_explicit_cast import add_explicit_cast_pass
 from .explicit_unroll_for_stmt import explicit_unroll_for_stmt_pass
 from .inline_let_stmt import inline_let_stmt_pass
 from .common_subexpression_elimination import common_subexpression_elimination_pass, chain_seq_stmt_using_let_stmt_pass
@@ -24,34 +26,34 @@ from .normalize_const_tensor import normalize_const_tensor_pass
 
 def lower(ir_module: IRModule) -> IRModule:
     transforms = [
-        # necessary pass: apply prologues and epilogues
+        # necessary passes
         flatten_tensor_slice_pass(),
         apply_prologue_epilogue_pass(),
-
-        # necessary passes
         generate_packed_func_pass(),
         normalize_const_tensor_pass(),
         flatten_tensor_index_pass(),
-        expand_let_expr_pass(),
+        resolve_primitive_func_pass(),
+        import_primitive_functions_pass(),
+        resolve_primitive_func_pass(),
+        import_primitive_functions_pass(),
+        add_explicit_cast_pass(),
 
         # simplification
+        expand_let_expr_pass(),
         inline_let_stmt_pass(inline_all=True),
         rule_based_simplify_pass(),
         simplify_stmt_pass(),
 
         # common sub-expression elimination
-        build_let_stmt_pass(),
-        uplift_let_stmt_pass(),
-        common_subexpression_elimination_pass(),
-        inline_let_stmt_pass(inline_factor=1),
-        # inline_let_stmt_pass(inline_all=True),
+        # build_let_stmt_pass(),
+        # uplift_let_stmt_pass(),
+        # common_subexpression_elimination_pass(),
+        # inline_let_stmt_pass(inline_factor=1),
 
         # optimization (precompute condition)
-        precompute_condition_pass(),
-
+        # precompute_condition_pass(),
 
         # necessary pass
-        import_primitive_functions_pass()
     ]
 
     ctx = PassContext.current()

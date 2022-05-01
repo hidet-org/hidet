@@ -1,8 +1,8 @@
-from typing import Optional
+from typing import Optional, List
 import pytest
 import numpy as np
 import hidet as hi
-import hidet.tos.operators as ops
+from hidet import ops
 from hidet.utils import prod
 
 
@@ -16,11 +16,14 @@ def check_transform(shape, numpy_op, hidet_op, dtype=np.float32, atol=0, rtol=0)
 
 @pytest.mark.parametrize(
     "shape, new_shape",
-    [[[100, 200, 3], [100, 600]],
-     [[123, 321], [321, 123]],
-     [[123, 321], [-1, 123]],
-     [[123, 321], [123 * 321]],
-     [[1], []]]
+    [
+        [[100, 200, 3], [100, 600]],
+        [[123, 321], [321, 123]],
+        [[123, 321], [-1, 123]],
+        [[123, 321], [123 * 321]],
+        [[1, 123, 321, 1, 1], [1, 123, 1, 321, 1]],
+        [[1], []]
+    ]
 )
 def test_reshape(shape, new_shape):
     check_transform(shape, lambda x: np.reshape(x, new_shape), lambda x: ops.reshape(x, new_shape))
@@ -49,7 +52,7 @@ def test_squeeze(shape, dims):
      [[2, 9, 9], [3]],
      [[], [0, 1, 2, 3]]]
 )
-def test_unsqueeze(shape, dims):
+def test_unsqueeze(shape, dims: List[int]):
     check_transform(shape, lambda x: np.expand_dims(x, dims), lambda x: ops.unsqueeze(x, dims))
 
 
