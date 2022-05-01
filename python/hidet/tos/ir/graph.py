@@ -1,6 +1,8 @@
+from __future__ import annotations
 from typing import List, Union, Dict, Set, Optional, Tuple
+import os
+import pickle
 import warnings
-import json
 from collections import defaultdict
 from hidet.tos.tensor import Tensor
 from hidet.tos.operator import Operator
@@ -53,6 +55,26 @@ class FlowGraph:
                 tensor_map[st] = at
         ret = [tensor_map[st] for st in self.outputs]
         return ret[0] if len(ret) == 1 else ret
+
+    def save(self, fname: str):
+        # before save, clear the packed func cache because ctypes object can not be pickled
+        for node in self.nodes:
+            node.task_func = None
+        self.usage_count, self.inputs, self.nodes = None, None, None
+
+        dirname = os.path.dirname(fname)
+        os.makedirs(dirname, exist_ok=True)
+        with open(fname, 'wb') as f:
+            pickle.dump(self, f)
+
+    @staticmethod
+    def load(fname: str) -> FlowGraph:
+        with open(fname, 'rb') as f:
+            ret = pickle.load(f)
+        if not isinstance(ret, FlowGraph):
+            raise TypeError('Expect to load FlowGraph, got {}'.format(type(ret)))
+        ret.update_nodes()
+        return ret
 
     def update_nodes(self):
         inputs, self.nodes, self.usage_count = self._analyze(self.outputs)
@@ -159,3 +181,11 @@ def trace_from(tensor: Union[Tensor, List[Tensor]], inputs: Optional[Union[Tenso
         else:
             inputs = list(inputs)
     return FlowGraph(outputs, inputs).update_nodes()
+
+
+def save_graph(graph: FlowGraph, fname: str):
+    graph.save(fname)
+
+
+def load_graph(fname: str) -> FlowGraph:
+    return FlowGraph.load(fname)

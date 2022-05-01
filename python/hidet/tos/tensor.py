@@ -70,6 +70,39 @@ class Tensor:
         else:
             return head + ' with empty storage'
 
+    def __getstate__(self):
+        if self.storage:
+            data = self.detach().numpy()
+        else:
+            data = None
+
+        return {
+            'shape': self.shape,
+            'dtype': self.dtype,
+            'device': self.device,
+            'data': data,
+            'layout': self.layout,
+            'trace': self.trace
+        }
+
+    def __setstate__(self, state):
+        data = state['data']
+        if data is not None:
+            assert isinstance(data, np.ndarray)
+            tensor = from_numpy(data)
+            if state['device'] == 'cuda':
+                tensor = tensor.cuda()
+            storage = tensor.storage
+        else:
+            storage = None
+
+        self.shape = state['shape'],
+        self.dtype = state['dtype'],
+        self.device = state['device'],
+        self.storage = storage
+        self.layout = state['layout'],
+        self.trace = state['trace']
+
     def signature(self) -> str:
         return "Tensor(shape={}, dtype='{}', device='{}')".format(self.shape, self.dtype, self.device)
 
@@ -115,20 +148,31 @@ class Tensor:
             return self
         else:
             if self.trace is None:
-                return Tensor(self.shape, self.dtype, 'cpu', self.storage.cpu(), self.layout)
+                return Tensor(self.shape, self.dtype, 'cpu', self.storage.cpu() if self.storage else None, self.layout)
             else:
-                # lazy mode related
-                raise NotImplementedError()
+                raise ValueError('Please use .detach() to detach a trace variable first.')
 
     def cuda(self):
         if self.device == 'cuda':
             return self
         else:
             if self.trace is None:
-                return Tensor(self.shape, self.dtype, 'cuda', self.storage.cuda(), self.layout)
+                return Tensor(self.shape, self.dtype, 'cuda', self.storage.cuda() if self.storage else None, self.layout)
             else:
-                # lazy mode related
-                raise NotImplementedError()
+                raise ValueError('Please use .detach() to detach a trace variable first.')
+
+    def detach(self):
+        if self.trace is None:
+            return self
+        else:
+            return Tensor(
+                shape=self.shape,
+                dtype=self.dtype,
+                device=self.device,
+                storage=self.storage,
+                layout=self.layout,
+                trace=None
+            )
 
     def numpy(self) -> np.ndarray:
         if self.device != 'cpu':

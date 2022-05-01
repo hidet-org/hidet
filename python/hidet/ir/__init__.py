@@ -6,6 +6,7 @@ from . import functors
 from . import builders
 from . import primitives
 from . import layout
+from . import task
 
 from .func import IRModule, Function
 from .type import TypeNode, TensorType, ScalarType, FuncType
@@ -22,3 +23,4 @@ from .dialects.lowlevel import VoidType, PointerType, Dereference
 
 from .builders import FunctionBuilder, StmtBuilder
 
+from .task import Task, save_task, load_task

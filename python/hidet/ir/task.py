@@ -1,5 +1,7 @@
 from __future__ import annotations
 import copy
+import os
+import pickle
 from typing import Dict, List, Union, Optional, Sequence, Type, Tuple, Callable, TypeVar
 from hidet.ir.node import Node
 from hidet.ir.expr import Expr, Var, TensorElement, var
@@ -56,6 +58,9 @@ class TaskContext:
     @staticmethod
     def current() -> TaskContext:
         return TaskContext.contexts[-1]
+
+
+TaskContext.contexts.append(TaskContext())  # fallback context
 
 
 class InverseMap:
@@ -249,6 +254,17 @@ class Task(Node):
             outputs=global_outputs,
         )
 
+    def save(self, fname: str):
+        dirname = os.path.dirname(fname)
+        os.makedirs(dirname, exist_ok=True)
+        with open(fname, 'wb') as f:
+            pickle.dump(self, f)
+
+    @staticmethod
+    def load(fname: str) -> Task:
+        with open(fname, 'rb') as f:
+            return pickle.load(f)
+
 
 def is_elementwise(task: Task) -> bool:
     """
@@ -277,3 +293,12 @@ def sanity_check(task: Task):
     from hidet.ir.functors import collect
     # todo: check
     pass
+
+
+def save_task(task: Task, fname: str):
+    task.save(fname)
+
+
+def load_task(fname: str) -> Task:
+    return Task.load(fname)
+

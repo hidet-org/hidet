@@ -8,7 +8,7 @@ import argparse
 import hidet as hi
 import hidet
 from hidet import Tensor
-from hidet.utils import download, hidet_cache_dir, cuda, nvtx_annotate
+from hidet.utils import download, hidet_cache_dir, cuda, nvtx_annotate, hidet_cache_file
 from hidet.utils.git_utils import get_repo_sha, get_repo_commit_date
 from hidet.ffi import cuda_api
 
@@ -85,16 +85,22 @@ def benchmark_run(run_func, warmup, number, repeat) -> List[float]:
 
 
 def bench_hidet(args, out_dir) -> List[float]:
-    onnx_model_path: str = onnx_model(args.model)
-    model = hidet.tos.frontend.onnx_utils.from_onnx(onnx_model_path)
+    graph_path = hidet_cache_file('hidet_graph', args.model, f'bs_{args.bs}', 'graph.pickle')
     input_names, input_tensors = dummy_inputs(args)
-    symbol_inputs = [hi.symbol_like(data) for data in input_tensors]
-    outputs = model(*symbol_inputs)
-    graph: hi.FlowGraph = hi.trace_from(outputs, inputs=symbol_inputs)
-    with hidet.tos.PassContext(instruments=[
-        hidet.tos.transforms.SaveGraphInstrument(out_dir=os.path.join(out_dir, 'ir'))  # dump ir
-    ]):
-        graph = hi.tos.transforms.optimize(graph)
+    if os.path.exists(graph_path):
+        graph = hidet.load_graph(graph_path)
+    else:
+        onnx_model_path: str = onnx_model(args.model)
+        model = hidet.tos.frontend.onnx_utils.from_onnx(onnx_model_path)
+        symbol_inputs = [hi.symbol_like(data) for data in input_tensors]
+        outputs = model(*symbol_inputs)
+        graph: hi.FlowGraph = hi.trace_from(outputs, inputs=symbol_inputs)
+        with hidet.tos.PassContext(instruments=[
+            hidet.tos.transforms.SaveGraphInstrument(out_dir=os.path.join(out_dir, 'ir'))  # dump ir
+        ]):
+            graph = hi.tos.transforms.optimize(graph)
+        hidet.save_graph(graph, graph_path)
+
     hidet.space_level(args.hidet_space)
 
     # dump trace
@@ -267,5 +273,5 @@ if __name__ == '__main__':
     #         main(f'--exec {exec} --model {model}')
 
     main('--exec tvm --model resnet50 --warmup 1 --number 10 --repeat 10')
-    # main('--exec trt --model resnet50 --warmup 1 --number 10 --repeat 10')
-    # main('--exec hidet --model resnet50 --warmup 1 --number 10 --repeat 10')
+    main('--exec trt --model resnet50 --warmup 1 --number 10 --repeat 10')
+    main('--exec hidet --model resnet50 --warmup 1 --number 10 --repeat 10')

@@ -45,6 +45,12 @@ class Operator:
         return ['task', 'inputs', 'outputs', 'attributes', 'name'] + list(self.attributes)
 
     def __getattr__(self, item):
+        if item == 'attributes':
+            if 'attributes' in self.__dict__:
+                return self.__dict__['attributes']
+            else:
+                self.__dict__['attributes'] = {}
+                return self.__dict__['attributes']
         if item in self.attributes:
             return self.attributes[item]
         else:

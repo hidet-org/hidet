@@ -130,7 +130,7 @@ def _prepare_buffer(engine: trt.ICudaEngine, inputs: Dict[str, Tensor]) -> Tuple
             if name not in inputs:
                 raise ValueError("TensorRT engine requires input '{}', but only received inputs: {}.".format(name, list(inputs.keys())))
             if dtype != inputs[name].dtype:
-                inputs[name] = hidet.tos.operators.cast(inputs[name], dtype_map[dtype])
+                inputs[name] = hidet.tos.ops.cast(inputs[name], dtype_map[dtype])
             buffers.append(inputs[name].storage.addr)
         else:
             shape = engine.get_binding_shape(i)
