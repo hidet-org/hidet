@@ -129,7 +129,7 @@ class Operator:
                 self.task_func(*dummy_inputs, *outputs)
             cuda.device_synchronize()
             t2 = time()
-            results.append((t2 - t1) / number)
+            results.append((t2 - t1) / number * 1000.0)
         if median:
             return float(np.median(results))
         return results

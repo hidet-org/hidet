@@ -46,4 +46,17 @@ target_include_directories(e6_cutlass_tf32
 set_target_properties(e6_cutlass_tf32 PROPERTIES
         CUDA_ARCHITECTURES 86
         )
+# add -lineinfo option to nvcc, allowing us to get the source code from binary
+# do not influence optimization, can be used in nsight compute profiling
+target_compile_options(e6_cutlass_tf32 PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-lineinfo>)
 
+# e7
+add_executable(e7_mma
+        e7_mma/main.cu
+        )
+set_target_properties(e7_mma PROPERTIES
+        CUDA_ARCHITECTURES 86
+        )
+# add -lineinfo option to nvcc, allowing us to get the source code from binary
+# do not influence optimization, can be used in nsight compute profiling
+target_compile_options(e7_mma PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-lineinfo>)

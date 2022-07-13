@@ -212,7 +212,7 @@ class MatmulSchedule(Schedule):
                         block_warps = (block_warps_x, block_warps_y)
                         for warp_outer_x in [4, 2, 1]:
                             for warp_outer_y in [4, 2, 1]:
-                                for warp_outer_k in [1]:
+                                for warp_outer_k in [1, 2]:
                                     warp_outer = (warp_outer_x, warp_outer_y, warp_outer_k)
                                     try:
                                         ret.append(MatmulSchedule(wmma_config, block_warps, warp_outer, ta=ta, tb=tb))

@@ -229,7 +229,7 @@ using EpilogueOp = cutlass::epilogue::thread::LinearCombination<
         ElementComputeEpilogue>;  // <- data type for alpha/beta in linear combination function
 
 // Number of pipelines you want to use
-constexpr int NumStages = 4;
+constexpr int NumStages = 2;
 
 using Gemm = cutlass::gemm::device::Gemm<ElementInputA,
         LayoutInputA,
@@ -329,6 +329,17 @@ int run(Options &options) {
 
     // Initialize CUTLASS kernel with arguments and workspace pointer
     status = gemm_op.initialize(arguments, workspace.get());
+//    printf("%lu bytes\n", sizeof(Gemm::GemmKernel::Mma::Base::SharedStorage));
+//    printf("m %d\n", Gemm::GemmKernel::Mma::Base::Shape::kM);
+//    printf("n %d\n", Gemm::GemmKernel::Mma::Base::Shape::kN);
+//    printf("k %d\n", Gemm::GemmKernel::Mma::Base::Shape::kK);
+//    printf("stages %d\n", Gemm::GemmKernel::Mma::Base::kStages);
+//    printf("shape a row %d\n", Gemm::GemmKernel::Mma::Base::SharedStorage::ShapeA::kRow);
+//    printf("shape a col %d\n", Gemm::GemmKernel::Mma::Base::SharedStorage::ShapeA::kColumn);
+//    printf("shape a count %d\n", Gemm::GemmKernel::Mma::Base::SharedStorage::ShapeA::kCount);
+////    static_assert(std::is_same<Gemm::GemmKernel::Mma::Operator::ElementA, float>::value);
+////    printf("%d\n", std::is_same<Gemm::GemmKernel::Mma::Operator::ElementA, float>::value);
+////    printf("%d\n", std::is_same<Gemm::GemmKernel::Mma::Operator::ElementB, half>::value);
     CUTLASS_CHECK(status);
 
     // Result structure
