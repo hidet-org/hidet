@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from matplotlib import gridspec
 import numpy as np
 import os
-from common import end2end_data, exec_color, exec_edge_color
+from common import end2end_data, exec_color, exec_edge_color, exec_fullname
 
 script_dir = os.path.dirname(__file__)
 exp_name = 'exp_trt'
@@ -104,7 +104,7 @@ def main():
         #     tick_label[-3:-1] = ['2m', '2m']
         # tick_label = [minutes_to_text(v) for v in data[executor][:-2]] + ['2m', '2m']
         # bar_labels.append(tick_label)
-        bar = ax.bar(x, data[executor], color=exec_color[executor], edgecolor=exec_edge_color[executor], width=bar_width, label=executor_name[executor])
+        bar = ax.bar(x, data[executor], color=exec_color[executor], edgecolor=exec_edge_color[executor], width=bar_width, label=exec_fullname[executor])
         bars.append(bar)
 
     xticks = np.arange(num_inputs) * (bar_width * len(executors) + sep_width) + (len(executors) - 1) * (bar_width + bar_sep_width) / 2.0

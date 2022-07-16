@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 from matplotlib import gridspec
 import numpy as np
 import os
-from common import exec_color, exec_edge_color
+from common import exec_color, exec_edge_color, exec_fullname
 
 
 script_dir = os.path.dirname(__file__)
@@ -44,13 +44,13 @@ y_min = 0
 y_max = 19 * 60
 
 data = {
-    'Hidet': [20, 45, 22, 5, 5,
+    'hidet': [20, 45, 22, 5, 5,
               97 / 5
               ],
-    'Ansor': [210, 516, 228, 51, 52,
+    'ansor': [210, 516, 228, 51, 52,
               1057 / 5
               ],
-    'AutoTVM': [480, 900, 558,
+    'autotvm': [480, 900, 558,
                 2.3, 2.2,
                 # 16, 16,  # 2.3 and 2.2 are smaller than y_min, use 16 here for visualization and label 2m in the figure.
                 1942 / 5
@@ -82,9 +82,9 @@ def main():
     bar_sep_width = 0.1
     bar_width = 0.3
     sep_width = 0.4
-    num_inputs = len(data['Hidet'])
+    num_inputs = len(data['hidet'])
     ax: plt.Axes = fig.add_subplot()
-    executors = ['AutoTVM', 'Ansor', 'Hidet']
+    executors = ['autotvm', 'ansor', 'hidet']
     bars = []
     bar_labels = []
     for idx, executor in enumerate(executors):
@@ -94,7 +94,7 @@ def main():
         #     tick_label[-3:-1] = ['2m', '2m']
             # tick_label = [minutes_to_text(v) for v in data[executor][:-2]] + ['2m', '2m']
         bar_labels.append(tick_label)
-        bar = ax.bar(x, data[executor], color=exec_color[executor], tick_label=tick_label, edgecolor=exec_edge_color[executor], width=bar_width, label=executor)
+        bar = ax.bar(x, data[executor], color=exec_color[executor], tick_label=tick_label, edgecolor=exec_edge_color[executor], width=bar_width, label=exec_fullname[executor])
         bars.append(bar)
 
     xticks = np.arange(num_inputs) * (bar_width * len(executors) + sep_width) + (len(executors) - 1) * (bar_width + bar_sep_width) / 2.0
@@ -129,7 +129,7 @@ def main():
     def bold(s):
         return r'${' + s + r'}$'
 
-    ax.text(3.5, 8 * 60, 'Hidet speedup tuning by \n' +
+    ax.text(3.5, 8 * 60, '{} speedup tuning by \n'.format(exec_fullname['hidet']) +
                          '{}x (AutoTVM) and {}x (Ansor)\n'.format(bold('20'), bold('11')) +
                          'on average.'
             )

@@ -1,12 +1,13 @@
 from typing import List
 import operator
+from copy import copy
 import math
 import functools
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
 import numpy as np
 import os
-from common import end2end_data, exec_color, exec_edge_color, hline_color, hline_alpha
+from common import end2end_data, exec_color, exec_edge_color, hline_color, hline_alpha, exec_fullname
 
 script_dir = os.path.dirname(__file__)
 exp_name = 'exp_end2end'
@@ -20,14 +21,16 @@ plt.rc('font', **font)
 # plt.rcParams['text.color'] = 'blue'
 # plt.rc('text', **{'color': 'black'})
 
-executor_name = {
-    'torch': 'PyTorch',
-    'ort': 'OnnxRuntime',
-    'autotvm': 'AutoTVM',
-    'ansor': 'Ansor',
-    'trt': 'TensorRT',
-    'hidet': 'Hidet (ours)'
-}
+# executor_name = {
+#     'torch': 'PyTorch',
+#     'ort': 'OnnxRuntime',
+#     'autotvm': 'AutoTVM',
+#     'ansor': 'Ansor',
+#     'trt': 'TensorRT',
+#     'hidet': 'Hidet (ours)'
+# }
+executor_name = copy(exec_fullname)
+executor_name['hidet'] += ' (ours)'
 executors = [
     'torch',
     'ort',

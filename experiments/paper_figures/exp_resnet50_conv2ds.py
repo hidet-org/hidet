@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 from matplotlib import gridspec
 import numpy as np
 import os
-from common import exec_color, exec_edge_color
+from common import exec_color, exec_edge_color, exec_fullname
 
 
 script_dir = os.path.dirname(__file__)
@@ -115,7 +115,7 @@ def main():
         # p = np.poly1d(z)
         bar = ax.bar(x, y, color=exec_color[name_rmap[executor]],
                      edgecolor=exec_edge_color[name_rmap[executor]],
-                     width=bar_width, label=executor)
+                     width=bar_width, label=exec_fullname[name_rmap[executor]])
         # ax.plot(x, p(x), '-', color=colors[0][idx])
         bars.append(bar)
 

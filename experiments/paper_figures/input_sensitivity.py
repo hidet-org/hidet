@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 from matplotlib import gridspec
 import numpy as np
 import os
-from common import exec_color, exec_edge_color
+from common import exec_color, exec_edge_color, exec_fullname
 
 
 script_dir = os.path.dirname(__file__)
@@ -17,7 +17,6 @@ plt.rc('font', **font)
 # plt.rcParams['text.color'] = 'blue'
 # plt.rc('text', **{'color': 'black'})
 
-executors = ['(A) OnnxRuntime', '(B) AutoTVM', '(C) Ansor', '(D) TensorRT', '(E) Hidet (ours)']
 models = ['ResNet50', 'Inception V3', 'MobileNet V2', 'Bert', 'GPT-2']
 
 # data[i, j] = network i on executor j
@@ -41,10 +40,10 @@ colors = [
 ]
 
 data = {
-    'Hidet': [1.308, 1.353, 1.351, 1.357, 1.350, 1.353, 1.343, 1.346],
-    'Ansor': [2.057, 2.296, 1.856, 6.534, 1.999, 3.425, 27.357, float('NaN')],
+    'hidet': [1.308, 1.353, 1.351, 1.357, 1.350, 1.353, 1.343, 1.346],
+    'ansor': [2.057, 2.296, 1.856, 6.534, 1.999, 3.425, 27.357, float('NaN')],
     # 'AutoTVM': [2.141, 2.728, 1.941, 13.225, 2.422, 4.302, 37.949, 354.9]
-    'AutoTVM': [2.141, 2.728, 1.941, 13.225, 2.422, 4.302, 37.949, float('NaN')]
+    'autotvm': [2.141, 2.728, 1.941, 13.225, 2.422, 4.302, 37.949, float('NaN')]
 }
 tick_labels = [2048, 2047, 2046, 2045, 2044, 2043, 2042, 2039]
 
@@ -59,14 +58,14 @@ def main():
     bar_sep_width = 0.05
     bar_width = 0.3
     sep_width = 0.3
-    num_inputs = len(data['Hidet'])
+    num_inputs = len(data['hidet'])
     ax: plt.Axes = fig.add_subplot()
-    executors = ['AutoTVM', 'Ansor', 'Hidet']
+    executors = ['autotvm', 'ansor', 'hidet']
     bars = []
     for idx, executor in enumerate(executors):
         x = np.arange(num_inputs) * (bar_width * len(executors) + sep_width) + idx * (bar_width + bar_sep_width)
         bar = ax.bar(x, data[executor], color=exec_color[executor], #colors[0][idx],
-                     edgecolor=exec_edge_color[executor], width=bar_width, label=executor)
+                     edgecolor=exec_edge_color[executor], width=bar_width, label=exec_fullname[executor])
         bars.append(bar)
         for i, y in enumerate(data[executor]):
             if y >= y_max:
@@ -74,7 +73,7 @@ def main():
                 xx = x[i]
                 yy = y_max * 0.8
                 if idx == 0:
-                    if np.isnan(data['Ansor'][i]):
+                    if np.isnan(data['ansor'][i]):
                         xx += bar_width * 0.8
                     else:
                         xx -= bar_width * 1.8
@@ -92,7 +91,7 @@ def main():
                                 # patchB=l,
                             )
                             )
-            if np.isnan(y) and executor == 'AutoTVM':
+            if np.isnan(y) and executor == 'autotvm':
                 xy = (x[i], 0.0)
                 xytext = (x[i] - bar_width * 0.55, y_max * 0.28)
                 ax.annotate('Failed', xy, xytext=xytext,

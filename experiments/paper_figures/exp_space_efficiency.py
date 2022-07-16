@@ -3,7 +3,7 @@ import json
 import matplotlib.pyplot as plt
 import numpy as np
 import os
-from common import exec_color
+from common import exec_color, exec_fullname
 
 
 script_dir = os.path.dirname(__file__)
@@ -142,7 +142,7 @@ def draw_density(data: Dict[str, List[float]]):
         end = float(min(x_end, max(costs)))
         # x = np.linspace(start, end, num=1000)
         xx = x[(x >= start) & (x <= end)]
-        ax.plot(xx, density(xx), label=legend_name[name], color=deep_colors[name])
+        ax.plot(xx, density(xx), label=exec_fullname[name], color=deep_colors[name])
         ax.fill_between(xx, 0, density(xx), color=deep_colors[name], alpha=0.1)
 
     ax.annotate('180 sch.', xy=(0.04, 5), color=deep_colors['hidet'], weight='bold')

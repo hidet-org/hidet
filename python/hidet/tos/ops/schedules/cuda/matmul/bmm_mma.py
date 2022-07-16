@@ -18,11 +18,17 @@ from hidet.tos.ops.schedules.common import params_from_task, Schedule, NotSuppor
 
 
 class MatmulMmaSchedule(Schedule):
-
     def keys(self) -> List[Tuple[str, Union[int, float, str]]]:
         pass
 
     def derived_keys(self) -> List[Tuple[str, Union[int, float, str]]]:
         pass
 
+
+def batched_matmul_cuda_schedule_mma(task: MatmulTask) -> IRModule:
+    pass
+
+
+def batched_matmul_cuda_with_given_schedule(task: MatmulTask, schedule: MatmulMmaSchedule) -> IRModule:
+    pass
 
