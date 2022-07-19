@@ -6,73 +6,71 @@ from hidet.ir.type import FuncType
 
 
 class PrimitiveFunctionRegistry:
-    def __init__(self, space: str, name: str, func_type: FuncType, function: Optional[Function] = None, generic: bool = False):
-        key = '{}.{}'.format(space, name)
-        self.var = Var(hint=key, type=func_type)
-        self.space: str = space
+    def __init__(self, name: str, codegen_name: str, func_type: FuncType, function: Optional[Function] = None, generic: bool = False):
+        self.var = Var(hint=name, type=func_type)
         self.name: str = name
+        self.codegen_name: str = codegen_name
         self.func_type: FuncType = func_type
         self.function: Optional[Function] = function
 
-        self.generic = generic
+        self.generic: bool = generic
         self.dispatch_dtype_rules: Dict[str, str] = {}
 
-    def dispatch_dtype(self, dtype: str, space: str, func_name: str):
+    def dispatch_dtype(self, dtype: str, dispatched_func_name: str):
         if not self.generic:
             raise ValueError('Can only dispatch a generic function.')
-        func_key = '{}.{}'.format(space, func_name)
-        self.dispatch_dtype_rules[dtype] = func_key
+        self.dispatch_dtype_rules[dtype] = dispatched_func_name
 
 
 class PrimitiveFunctionPool:
     def __init__(self):
-        self.key2func: Dict[str, PrimitiveFunctionRegistry] = {}
+        self.name2func: Dict[str, PrimitiveFunctionRegistry] = {}
 
-    def register(self, space: str, name: str, func_or_type: Union[Function, FuncType], generic):
+    def register(self, name: str, func_or_type: Union[Function, FuncType], codegen_name: Optional[str], generic: bool):
         if isinstance(func_or_type, Function):
+            if func_or_type.name != name:
+                raise ValueError('The function name must be consistent, got {} and {}.'.format(name, func_or_type.name))
+            if codegen_name is not None:
+                if codegen_name != name:
+                    raise ValueError('The codegen_name must be consistent, got {} and {}'.format(name, codegen_name))
+                codegen_name = name
             registry = PrimitiveFunctionRegistry(
                 name=name,
+                codegen_name=codegen_name,
                 func_type=FuncType.from_func(func_or_type),
-                space=space,
                 function=func_or_type,
                 generic=generic
             )
         elif isinstance(func_or_type, FuncType):
+            if codegen_name is None:
+                codegen_name = name
             registry = PrimitiveFunctionRegistry(
                 name=name,
+                codegen_name=codegen_name,
                 func_type=func_or_type,
-                space=space,
                 function=None,
                 generic=generic
             )
         else:
             raise TypeError('Expect a Function or FuncType to register a primitive function, got {}'.format(type(func_or_type)))
-        key = '{}.{}'.format(space, name)
-        if key in self.key2func:
-            raise KeyError('Primitive function {} has already registered.'.format(key))
-        self.key2func[key] = registry
+        if name in self.name2func:
+            raise KeyError('Primitive function {} has already registered.'.format(name))
+        self.name2func[name] = registry
         return registry
 
     def lookup(self, func_var: Var) -> PrimitiveFunctionRegistry:
-        if func_var.hint not in self.key2func:
+        if func_var.hint not in self.name2func:
             raise KeyError('Can not find primitive function via variable: {}.'.format(func_var))
-        return self.key2func.get(func_var.hint)
+        return self.name2func.get(func_var.hint)
 
-    def lookup_by_key(self, key: str) -> PrimitiveFunctionRegistry:
-        if key not in self.key2func:
-            raise KeyError('Can not find primitive function with key: {}.'.format(key))
-        return self.key2func[key]
-
-    def lookup_by_name(self, target: str, name: str) -> PrimitiveFunctionRegistry:
-        key = '{}.{}'.format(target, name)
-        if key not in self.key2func:
-            candidates = '\n'.join(self.registered_names()[target])
-            raise ValueError('Can not find primitive function with target "{}" and name "{}", candidates:\n{}'.format(target, name, candidates))
-        return self.key2func[key]
+    def lookup_by_name(self, name: str) -> PrimitiveFunctionRegistry:
+        if name not in self.name2func:
+            raise KeyError('Can not find primitive function with key: {}.'.format(name))
+        return self.name2func[name]
 
     def registered_names(self) -> Dict[str, List[str]]:
         ret = {}
-        for name in self.key2func:
+        for name in self.name2func:
             target, func_name = name.split('.')
             if target not in ret:
                 ret[target] = []
@@ -80,42 +78,39 @@ class PrimitiveFunctionPool:
         return ret
 
     def has_registered(self, key: str) -> bool:
-        return key in self.key2func
+        return key in self.name2func
 
 
 primitive_func_pool = PrimitiveFunctionPool()
 
 
-def is_primitive_function(key: str):
-    return key in primitive_func_pool.key2func
+def is_primitive_function(name: str):
+    return name in primitive_func_pool.name2func
 
 
-def lookup_primitive_function(key: str) -> PrimitiveFunctionRegistry:
-    return primitive_func_pool.lookup_by_key(key)
+def lookup_primitive_function(name: str) -> PrimitiveFunctionRegistry:
+    return primitive_func_pool.lookup_by_name(name)
 
 
 def registered_primitive_functions() -> List[str]:
-    return list(primitive_func_pool.key2func.keys())
+    return list(primitive_func_pool.name2func.keys())
 
 
-def register_primitive_function(target, name, func_or_type: Union[Function, FuncType], generic=False) -> PrimitiveFunctionRegistry:
+def register_primitive_function(name: str, func_or_type: Union[Function, FuncType], codegen_name: Optional[str] = None, generic=False) -> PrimitiveFunctionRegistry:
     """
     Register a primitive function.
 
     Parameters
     ----------
-    target: str
-        The target device of the primitive function works on. Candidates: 'base', 'cuda', 'cpu'.
-        'base' indicates this function is generic to different devices.
-        'cuda' indicates this is a primitive function in CUDA programming platform.
-        'cpu' indicates this is a primitive function specific in CPU.
-
     name: str
         The name of the primitive function.
 
     func_or_type: Union[Function, FuncType]
         Function definition or function type of the primitive function.
         When function type is given, this function is implemented by underlying language (e.g., cuda c).
+
+    codegen_name: Optional[str]
+        The name used in code generation. When None is given, the 'name' parameter will be used.
 
     generic: bool
         Whether this function is a generic function. A generic function will be lowered to a concrete primitive
@@ -126,5 +121,5 @@ def register_primitive_function(target, name, func_or_type: Union[Function, Func
     ret: PrimitiveFunctionRegistry
         The entry of registered primitive function.
     """
-    return primitive_func_pool.register(target, name, func_or_type, generic)
+    return primitive_func_pool.register(name, func_or_type, codegen_name, generic)
 

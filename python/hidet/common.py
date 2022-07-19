@@ -1,0 +1,3 @@
+class HidetNotImplementedError(Exception):
+    pass
+

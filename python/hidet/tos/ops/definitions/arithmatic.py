@@ -1,6 +1,6 @@
 from typing import List, Callable, Any, Union, Type, Optional, Dict
 
-import operator
+import builtins
 from hidet.ir import primitives
 from hidet.ir import expr
 from hidet.ir.expr import const_like
@@ -23,8 +23,16 @@ def broadcast_shape(x_shape: List[int], y_shape: List[int]) -> List[int]:
     for p, q in zip(x_shape, y_shape):
         if p != q and p != 1 and q != 1:
             raise ValueError('can not broadcast two arrays with shape {} and {}'.format(orig_shapes[0], orig_shapes[1]))
-        result_shape.append(max(p, q))
+        result_shape.append(builtins.max(p, q))
     return result_shape
+
+
+def broadcast_shapes(shapes: List[List[int]]) -> List[int]:
+    assert len(shapes) >= 1
+    expanded_shape = shapes[0]
+    for shape in shapes:
+        expanded_shape = broadcast_shape(expanded_shape, shape)
+    return expanded_shape
 
 
 class UnaryElementwiseTask(Task):
@@ -75,6 +83,26 @@ class BinaryElementwiseTask(Task):
             outputs=[z],
             inverse_map={v: InverseMap.identity(len(v_shape)) for v, v_shape
                          in zip([x, y], [x_shape, y_shape]) if prod(v_shape) == prod(z_shape)}
+        )
+
+
+class VariadicElementwiseTask(Task):
+    def __init__(self, name: str, args: List[TensorNode], op: Callable[[Any], Any]):
+        shapes = [arg.const_shape() for arg in args]
+        out_shape = broadcast_shapes(shapes)
+        out = compute(
+            name='out',
+            shape=out_shape,
+            fcompute=lambda *indices: op(
+                *[arg[broadcast_indices(indices, shape, out_shape)] for shape, arg in zip(shapes, args)]
+            )
+        )
+        super().__init__(
+            name=name,
+            inputs=list(args),
+            outputs=[out],
+            inverse_map={v: InverseMap.identity(len(v_shape)) for v, v_shape in zip(args, shapes)
+                         if prod(v_shape) == prod(out_shape)}
         )
 
 
@@ -240,6 +268,25 @@ class WhereOp(Operator):
         )
 
 
+class MaxOp(Operator):
+    def __init__(self, tensors: List[Tensor]):
+        def scalar_max(args: List[expr.Expr]):
+            if len(args) == 1:
+                return args[0]
+            else:
+                return primitives.max(args[0], scalar_max(args[1:]))
+
+        super().__init__(
+            inputs=list(tensors),
+            task=VariadicElementwiseTask(
+                name='max',
+                args=[input_like(x, f'x{idx}') for idx, x in enumerate(tensors)],
+                op=lambda *args: scalar_max(args)
+            ),
+            name='max'
+        )
+
+
 PythonScalar = Union[float, int]
 
 
@@ -358,3 +405,7 @@ def where(cond: Tensor, x: Tensor, y: Tensor) -> Tensor:
     if cond.dtype != 'bool':
         raise ValueError('The condition tensor must have dtype "bool", but got {}'.format(cond.dtype))
     return WhereOp(cond, x, y).get_output(0)
+
+
+def max(*tensors: Tensor) -> Tensor:
+    return MaxOp(list(tensors)).get_output(0)

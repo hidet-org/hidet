@@ -40,10 +40,7 @@ class CallGraph:
                 if is_primitive_function(call.func_var.hint):
                     entry = lookup_primitive_function(call.func_var.hint)
                     if entry.function is not None:
-                        if '.' in call.func_var.hint:
-                            target, name = call.func_var.hint.split('.')
-                        else:
-                            name = call.func_var.hint
+                        name = call.func_var.hint
                         callee = ir_module.lookup(name)
                     else:
                         continue

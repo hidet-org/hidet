@@ -1,8 +1,20 @@
 from typing import Dict, List, Union, Optional, Tuple
+import string
 from hidet.ir.node import Node
 from hidet.ir.type import TypeNode, FuncType
 from hidet.ir.expr import Var, Constant
 from hidet.ir.stmt import Stmt
+
+
+def check_func_name(name: str):
+    if len(name) == 0:
+        raise ValueError('Do not allow empty function name.')
+    for c in name:
+        if not (c in string.ascii_lowercase or
+                c in string.ascii_uppercase or
+                c in string.digits or
+                c in '_'):
+            raise ValueError('Cannot use {} in function name'.format(repr(c)))
 
 
 class Function(Node):
@@ -39,7 +51,8 @@ class Function(Node):
     """
 
     def __init__(self, name: str, params, body, ret_type, kind: str, local_vars, local_const_vars=None, extern_vars=None, attrs=None):
-        self.name = name.replace('.', '_')
+        check_func_name(name)
+        self.name = name
         self.kind = kind
         assert isinstance(kind, str) and kind in ['cuda_device', 'cuda_kernel', 'host_kernel', 'packed_func']
         self.params: List[Var] = params
@@ -93,7 +106,7 @@ class IRModule(Node):
         else:
             name = name_or_var
         if name not in self.functions:
-            raise KeyError('Function {} does not exist in module, existed functions: \n{}.'.format(name, list(self.functions.keys())))
+            raise ValueError('Function {} does not exist in module, existed functions: \n{}.'.format(name, list(self.functions.keys())))
         return self.functions[name]
 
     def lookup_var(self, name):

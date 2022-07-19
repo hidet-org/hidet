@@ -269,7 +269,7 @@ def batched_matmul_cuda_with_given_schedule(task: MatmulTask, schedule: MatmulSc
 
     # define function
     with FunctionBuilder(
-            name=task.name + '.grid',
+            name=task.name + '_grid',
             kind='cuda_kernel',
             grid_dim=(grid_blocks_layout.num_workers, batch_size),
             block_dim=sch.block_size,

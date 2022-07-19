@@ -1,5 +1,6 @@
 from typing import List, Optional
 import contextlib
+import functools
 import psutil
 import multiprocessing
 from tqdm import tqdm
@@ -19,6 +20,23 @@ from hidet.ffi import PackedFunc
 from hidet.ffi.ffi import library_paths
 from hidet.utils import cuda, Timer
 from hidet.backend import codegen
+
+
+@functools.lru_cache()
+def nvcc_path() -> str:
+    import shutil
+    path: Optional[str] = shutil.which('nvcc')
+    if path is not None:
+        return path
+    try_dirs = [
+        '/usr/local/cuda/bin/',
+        '/usr/bin'
+    ]
+    for try_dir in try_dirs:
+        path = os.path.join(try_dir, 'nvcc')
+        if os.path.exists(path):
+            return path
+    raise FileNotFoundError('Can not find nvcc compiler.')
 
 
 def compile_source(src_path: str, out_lib_path: str, keep_ptx=False) -> None:
@@ -45,7 +63,7 @@ def compile_source(src_path: str, out_lib_path: str, keep_ptx=False) -> None:
 
     cc_code = '{}{}'.format(cc[0], cc[1])
     command = [
-        'nvcc',
+        nvcc_path(),
         *['-I{}'.format(include_dir) for include_dir in include_dirs],
         *['-L{}'.format(library_dir) for library_dir in library_dirs],
         '-keep' if keep_ptx else '',

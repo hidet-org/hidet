@@ -13,7 +13,7 @@ ExprLike = Union[Expr, int, float]
 
 
 def call_base(name: str, args: List[ExprLike]) -> Call:
-    entry = pool.lookup_by_name(target='base', name=name)
+    entry = pool.lookup_by_name('base_{}'.format(name))
     if entry.func_type.type_infer_func is None:
         param_types = entry.func_type.param_types
         if len(param_types) != len(args):
@@ -84,22 +84,6 @@ def printf(format_string, *args):
 
 
 def type_infer_func(arg_types: List[ScalarType]) -> ScalarType:
-    # level = {
-    #     'float64': 10,
-    #     'float32': 9,
-    #     'bfloat16': 8,
-    #     'float16': 7,
-    #
-    #     'int64': 5,
-    #     'uint64': 4.5,
-    #     'int32': 4,
-    #     'uint32': 3.5,
-    #     'int16': 3,
-    #     'uint16': 2.5,
-    #     'int8': 2,
-    #     'uint8': 1.5
-    # }
-    # return list(sorted(arg_types, key=lambda a: level[a.name]))[-1]
     return builtins.max(arg_types)
 
 
@@ -114,12 +98,13 @@ def register_primitive_functions_generic():
     ternary_names = [
         'fma'
     ]
-    for unary in unary_names:
-        register_primitive_function('base', unary, FuncType(type_infer_func=type_infer_func), generic=True)
-    for binary in binary_names:
-        register_primitive_function('base', binary, FuncType(type_infer_func=type_infer_func), generic=True)
-    for ternary in ternary_names:
-        register_primitive_function('base', ternary, FuncType(type_infer_func=type_infer_func), generic=True)
+    for name in unary_names + binary_names + ternary_names:
+        register_primitive_function(
+            name='{}_{}'.format('base', name),
+            codegen_name=None,
+            func_or_type=FuncType(type_infer_func=type_infer_func),
+            generic=True
+        )
 
 
 @initialize()
@@ -149,13 +134,38 @@ def register_primitive_functions_float32():
         'pow': 'powf',
         'fma': 'fmaf'
     }
-    for unary in unary_names:
-        register_primitive_function('base', unary, FuncType(param_types=['float32'], ret_type='float32'))
-    for binary in binary_names:
-        register_primitive_function('base', binary, FuncType(param_types=['float32', 'float32'], ret_type='float32'))
-    for ternary in ternary_names:
-        register_primitive_function('base', ternary, FuncType(param_types=['float32', 'float32', 'float32'], ret_type='float32'))
-    for base_name, fp32_name in base2float32.items():
-        pool.lookup_by_name('base', base_name).dispatch_dtype(dtype='float32', space='base', func_name=fp32_name)
+    for names, param_types in zip([unary_names, binary_names, ternary_names], [['float32'], ['float32'] * 2, ['float32'] * 3]):
+        for name in names:
+            register_primitive_function(
+                name='{}_{}'.format('cuda_fp32', name),
+                codegen_name=name,
+                func_or_type=FuncType(param_types=param_types, ret_type='float32'),
+                generic=False
+            )
+    for a, b in base2float32.items():
+        base_name = '{}_{}'.format('base', a)
+        fp32_name = '{}_{}'.format('cuda_fp32', b)
+        pool.lookup_by_name(base_name).dispatch_dtype(dtype='float32', dispatched_func_name=fp32_name)
 
+
+@initialize()
+def register_primitive_functions_int32():
+    binary_names = [
+        'max', 'min'
+    ]
+    base2int32 = {
+        'max': 'max',
+        'min': 'min'
+    }
+    for name in binary_names:
+        register_primitive_function(
+            name='{}_{}'.format('cuda_int32', name),
+            codegen_name=name,
+            func_or_type=FuncType(param_types=['int32', 'int32'], ret_type='int32'),
+            generic=False
+        )
+    for a, b in base2int32.items():
+        base_name = '{}_{}'.format('base', a)
+        int32_name = '{}_{}'.format('int32', b)
+        pool.lookup_by_name(base_name).dispatch_dtype(dtype='int32', dispatched_func_name=int32_name)
 

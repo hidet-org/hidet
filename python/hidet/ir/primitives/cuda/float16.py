@@ -33,15 +33,17 @@ def register_primitive_functions_float16():
         'erf': 'herf',
         'pow': 'hpow'
     }
-    for unary in unary_names:
-        register_primitive_function('float16', unary, FuncType(param_types=['float16'], ret_type='float16'))
-    for binary in binary_names:
-        register_primitive_function('float16', binary, FuncType(param_types=['float16', 'float16'], ret_type='float16'))
-    for ternary in ternary_names:
-        register_primitive_function('float16', ternary, FuncType(param_types=['float16', 'float16', 'float16'], ret_type='float16'))
+    for codegen_names, num_args in zip([unary_names, binary_names, ternary_names], [1, 2, 3]):
+        func_type = FuncType(param_types=['float16'] * num_args, ret_type='float16')
+        for codegen_name in codegen_names:
+            name = '{}_{}'.format('float16', codegen_name)
+            register_primitive_function(name=name, func_or_type=func_type, codegen_name=codegen_name)
 
-    register_unary_dialect_primitive_function(space='float16', func_name='htanh', generic_func=tanh, target_dtype='float16', dialect_dtype='float32')
-    register_unary_dialect_primitive_function(space='float16', func_name='herf', generic_func=erf, target_dtype='float16', dialect_dtype='float32')
-    register_binary_dialect_primitive_function(space='float16', func_name='hpow', generic_func=pow, target_dtype='float16', dialect_dtype='float32')
-    for base_name, fp16_name in base2float16.items():
-        primitive_func_pool.lookup_by_name('base', base_name).dispatch_dtype(dtype='float16', space='float16', func_name=fp16_name)
+    register_unary_dialect_primitive_function(func_name='float16_htanh', generic_func=tanh, target_dtype='float16', dialect_dtype='float32')
+    register_unary_dialect_primitive_function(func_name='float16_herf', generic_func=erf, target_dtype='float16', dialect_dtype='float32')
+    register_binary_dialect_primitive_function(func_name='float16_hpow', generic_func=pow, target_dtype='float16', dialect_dtype='float32')
+
+    for a, b in base2float16.items():
+        base_name = '{}_{}'.format('base', a)
+        fp16_name = '{}_{}'.format('float16', b)
+        primitive_func_pool.lookup_by_name(base_name).dispatch_dtype(dtype='float16', dispatched_func_name=fp16_name)

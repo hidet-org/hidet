@@ -270,7 +270,7 @@ class PatternMatcher:
             with ExitStack() as stack:
                 stack.enter_context(self.match(pattern.a, target.a))
                 stack.enter_context(self.match(pattern.b, target.b))
-        except NotMatchedError:
+        except NotMatchedError as e:
             pass
         else:
             return
@@ -309,8 +309,8 @@ class PatternMatcher:
     def match_Var(self, pattern: Var, target: Var):
         if isinstance(pattern.type, FuncType):
             return
-        with self.match(pattern.type, target.type):
-            pass
+        # with self.match(pattern.type, target.type):
+        #     pass
 
     def match_Constant(self, pattern: Constant, target: Constant):
         with self.match(pattern.data_type, target.data_type):

@@ -8,7 +8,7 @@ from .softmax import softmax
 from .activation import relu, sigmoid, relu6, clip
 from .norm import batch_norm_infer, instance_norm
 from .image import resize2d
-from .arithmatic import add, sub, multiply, divide, neg, sqrt, rsqrt, equal, less, where
+from .arithmatic import add, sub, multiply, divide, neg, sqrt, rsqrt, equal, less, where, max
 from .reduce import reduce_mean
 from .transform import squeeze, unsqueeze, flatten, concat, cast, take, rearrange, strided_slice, split
 from .special import barrier

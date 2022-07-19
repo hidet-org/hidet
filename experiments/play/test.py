@@ -73,11 +73,12 @@ def demo_map():
 
 
 def demo_matmul():
-    hidet.space_level(2)
+    hidet.space_level(0)
     m, n, k = 5120, 4096, 4096
     a = hidet.symbol([1, m, k])
     b = hidet.symbol([1, k, n])
-    c = hidet.ops.matmul(a, b, mma='wmma_f16_f32')
+    # c = hidet.ops.matmul(a, b, mma='wmma_f16_f32')
+    c = hidet.ops.matmul(a, b, mma='simt')
     print(c.op.latency())
 
 

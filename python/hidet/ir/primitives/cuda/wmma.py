@@ -95,7 +95,7 @@ def register_wmma_load_instructions():
         inst_name = 'wmma.load.{matrix}.sync.aligned.{layout}.{shape}.{dtype}'.format(
             matrix=matrix, layout=layout, shape='m{}n{}k{}'.format(*shape), dtype=short_dtype
         )
-        func_name = inst_name.replace('.', '_')
+        func_name = 'cuda_' + inst_name.replace('.', '_')
         dtype: ScalarType = ScalarType(dtype_short2long[short_dtype])
         with FunctionBuilder(name=func_name, kind='cuda_device') as fb:
             # parameters: dst, src, stride
@@ -118,7 +118,7 @@ def register_wmma_load_instructions():
                 inputs=[('l', src), ('r', stride)],
                 is_volatile=False
             )
-        register_primitive_function(target='cuda', name=func_name, func_or_type=fb.func)
+        register_primitive_function(name=func_name, func_or_type=fb.func)
 
 
 @initialize()
@@ -138,7 +138,7 @@ def register_wmma_mma_instructions():
             inst_name = 'wmma.mma.sync.aligned.{a_layout}.{b_layout}.{shape}.{d_dtype}.{a_dtype}.{b_dtype}.{c_dtype}'.format(
                 a_layout=a_layout, b_layout=b_layout, shape='m{}n{}k{}'.format(*shape), d_dtype=c_dtype, a_dtype=a_dtype, b_dtype=b_dtype, c_dtype=c_dtype
             )
-        func_name = inst_name.replace('.', '_')
+        func_name = 'cuda_' + inst_name.replace('.', '_')
         uint32_dtype = ScalarType('uint32')
         with FunctionBuilder(name=func_name, kind='cuda_device') as fb:
             # parameters: a, b, c
@@ -162,7 +162,7 @@ def register_wmma_mma_instructions():
                 inputs=[('r', a[i]) for i in range(a_num_regs)] + [('r', b[i]) for i in range(b_num_regs)],
                 is_volatile=False
             )
-        register_primitive_function(target='cuda', name=func_name, func_or_type=fb.func)
+        register_primitive_function(name=func_name, func_or_type=fb.func)
 
 
 @initialize()
@@ -177,7 +177,7 @@ def register_wmma_store_instructions():
         inst_name = 'wmma.store.d.sync.aligned.{layout}.{shape}.{dtype}'.format(
             layout=layout, shape='m{}n{}k{}'.format(*shape), dtype=dtype
         )
-        func_name = inst_name.replace('.', '_')
+        func_name = 'cuda_' + inst_name.replace('.', '_')
         dtype = ScalarType(dtype_short2long[dtype])
         with FunctionBuilder(name=func_name, kind='cuda_device') as fb:
             # parameters: dst, src
@@ -200,7 +200,7 @@ def register_wmma_store_instructions():
                 inputs=[('r', src[i]) for i in range(num_regs)] + [('l', dst)] + [('r', stride)],
                 is_volatile=False
             )
-        register_primitive_function(target='cuda', name=func_name, func_or_type=fb.func)
+        register_primitive_function(name=func_name, func_or_type=fb.func)
 
 
 def default_stride(matrix: str, layout: str, shape: Tuple[int, int, int]) -> int:
