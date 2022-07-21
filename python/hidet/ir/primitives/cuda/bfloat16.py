@@ -1,7 +1,7 @@
 from hidet.utils import initialize
 from ..func import FuncType, register_primitive_function, primitive_func_pool
 from .funcs import register_unary_dialect_primitive_function, register_binary_dialect_primitive_function
-from hidet.ir.primitives.base.funcs import erf, tanh, pow
+from hidet.ir.primitives.base.generic import erf, tanh, pow
 
 
 @initialize()

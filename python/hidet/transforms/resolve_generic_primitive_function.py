@@ -1,6 +1,6 @@
 from typing import List
 
-import hidet.ir.primitives.base.funcs
+import hidet.ir.primitives.base.generic
 from hidet.ir.type import ScalarType
 from hidet.ir.stmt import Stmt
 from hidet.ir.expr import Call, Expr, Add, Sub, Multiply, Div, BinaryOp, cast
@@ -12,7 +12,7 @@ from hidet.utils.py import green
 
 
 def resolve_dtype(arg_dtypes: List[ScalarType]) -> ScalarType:
-    return hidet.ir.primitives.base.funcs.type_infer_func(arg_dtypes)
+    return hidet.ir.primitives.base.generic.type_infer_func(arg_dtypes)
 
 
 def cast_args(args: List[Expr], arg_dtypes: List[ScalarType], target_dtype: ScalarType) -> List[Expr]:

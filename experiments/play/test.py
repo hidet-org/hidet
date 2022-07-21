@@ -82,6 +82,13 @@ def demo_matmul():
     print(c.op.latency())
 
 
+def demo_max():
+    a = hidet.array([1, 2, 3])
+    b = hidet.array([3, 2, 1])
+    c = hidet.ops.max(a, b)
+    print(c)
+
+
 if __name__ == '__main__':
     # demo_wmma()
     # demo_bf16()
@@ -90,4 +97,5 @@ if __name__ == '__main__':
     # demo_reduce()
     # demo_add()
     # demo_map()
-    demo_matmul()
+    # demo_matmul()
+    demo_max()
