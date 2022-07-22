@@ -247,6 +247,11 @@ using Gemm = cutlass::gemm::device::Gemm<ElementInputA,
         SwizzleThreadBlock,
         NumStages>;
 
+//constexpr int a = Gemm::GemmKernel::Mma::Base::kWarpGemmIterations;
+//static_assert(a == 2, "");
+//static_assert(Gemm::GemmKernel::Mma::Base::kWarpGemmIterations == 1, "");
+
+
 int run(Options &options) {
 
     // Create a tuple of problem size for matrix multiplication

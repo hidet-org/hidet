@@ -13,5 +13,13 @@ from hidet.testing import check_binary
         [[333, 444], [444, 555], "float32"],
     ]
 )
-def test_matmul(a_shape, b_shape, dtype):
-    check_binary(a_shape, b_shape, lambda x, y: np.dot(x, y), lambda x, y: ops.matmul(x, y), dtype, atol=1e-4, rtol=1e-4)
+@pytest.mark.parametrize(
+    'mma',
+    [
+        'simt',
+        # 'wmma',
+        # 'mma'
+    ]
+)
+def test_matmul(a_shape, b_shape, dtype, mma):
+    check_binary(a_shape, b_shape, lambda x, y: np.dot(x, y), lambda x, y: ops.matmul(x, y, mma=mma), dtype, atol=1e-4, rtol=1e-4)

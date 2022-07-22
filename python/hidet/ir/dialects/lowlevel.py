@@ -11,6 +11,8 @@ class VoidType(TypeNode):
 class PointerType(TypeNode):
     def __init__(self, base_type, specifiers: Optional[Sequence[str]] = None, use_bracket: bool = False):
         super().__init__()
+        if isinstance(base_type, str):
+            base_type = ScalarType(base_type)
         self.base_type = base_type
         self.specifiers = list(specifiers) if specifiers else []
         self.use_bracket = use_bracket
@@ -60,3 +62,7 @@ class Reference(Expr):
 
 def pointer_type(base_type):
     return PointerType(base_type)
+
+
+def tensor_pointer_var(hint: str, shape=None, scope: str = 'global', dtype: Union[str, ScalarType] = 'float32', layout=None):
+    return Var(hint, TensorPointerType(scope=scope, dtype=dtype, shape=shape, layout=layout))

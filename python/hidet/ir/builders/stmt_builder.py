@@ -3,7 +3,7 @@ from typing import Union, Optional, Sequence, List
 from hidet.ir.stmt import Stmt, ForStmt, IfStmt, EvaluateStmt, SeqStmt, LetStmt
 from hidet.ir.type import TypeNode, scalar_type, ScalarType
 from hidet.ir.expr import Expr, Var, var, convert
-from hidet.ir.layout import TaskLayout, TaskLayoutExpander
+from hidet.ir.mapping import TaskMapping, TaskMappingExpander
 
 ScopedStmt = Union[IfStmt, ForStmt, LetStmt]
 
@@ -63,8 +63,8 @@ class StmtBuilder:
         assert if_stmt.else_body is None
         return StmtScope(self, stmts=if_stmt, ret=None)
 
-    def for_task(self, worker_index: Expr, task_layout: TaskLayout):
-        expander = TaskLayoutExpander()
+    def for_task(self, worker_index: Expr, task_layout: TaskMapping):
+        expander = TaskMappingExpander()
         fields = expander.expand(worker_index, task_layout)
         return StmtScope(self, stmts=expander.stmts, ret=fields)
 

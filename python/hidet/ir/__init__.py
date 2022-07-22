@@ -6,6 +6,7 @@ from . import functors
 from . import builders
 from . import primitives
 from . import layout
+from . import mapping
 from . import task
 
 from .func import IRModule, Function
@@ -25,9 +26,6 @@ from .builders import FunctionBuilder, StmtBuilder
 
 from .task import Task, save_task, load_task
 
-
-# primitives
 from .primitives import max, min, exp, pow
 
-# utils
 from .utils import index_serialize, index_deserialize

@@ -7,7 +7,8 @@ from hidet.ir.primitives import active_mask, shfl_down_sync, shfl_sync
 from hidet.ir.stmt import AssignStmt, Stmt
 from hidet.ir.task import Task
 from hidet.utils import gcd, prod
-from hidet.ir.layout import TaskLayout, DataLayout, row_map, repeat_map, grid_map, row_layout, local_layout
+from hidet.ir.mapping import TaskMapping, row_spatial, repeat_map, row_repeat, spatial_map
+from hidet.ir.layout import DataLayout, row_layout, local_layout
 from hidet.tos.ops.schedules.common import NotSupportedError
 
 
@@ -70,7 +71,7 @@ def _get_shapes(task_shape: Sequence[int], num_workers=32, perm: Optional[Sequen
     return grid_shape, repeat_shape
 
 
-def get_task_map(task_shape: Sequence[int], num_workers=32, perm: Sequence[int] = None) -> TaskLayout:
+def get_task_map(task_shape: Sequence[int], num_workers=32, ranks: Sequence[int] = None) -> TaskMapping:
     """
     Get a task map that maps a collection of workers to a task domain with given shape. The returned
     task map is composed of repeat shape and grid shape. We first determine the size of each dimension
@@ -88,38 +89,38 @@ def get_task_map(task_shape: Sequence[int], num_workers=32, perm: Sequence[int] 
         The shape of the task domain.
     num_workers: int
         The number of workers.
-    perm: Optional[Sequence[int]]
+    ranks: Optional[Sequence[int]]
         todo: finish this.
 
     Returns
     -------
-    ret: TaskLayout
+    ret: TaskMapping
         The task mapping that maps given number of workers to given task domain.
 
     Examples
     --------
 
-    >>> get_task_map([4, 4], num_workers=2, perm=[0, 1])
+    >>> get_task_map([4, 4], num_workers=2, ranks=[0, 1])
     [[0 1 0 1]
      [0 1 0 1]
      [0 1 0 1]
      [0 1 0 1]]
 
-    >>> get_task_map([4, 4], num_workers=2, perm=[1, 0])
+    >>> get_task_map([4, 4], num_workers=2, ranks=[1, 0])
     [[0 0 0 0]
      [1 1 1 1]
      [0 0 0 0]
      [1 1 1 1]]
     """
-    grid_shape, repeat_shape = _get_shapes(task_shape, num_workers, perm)
+    grid_shape, repeat_shape = _get_shapes(task_shape, num_workers, ranks)
 
-    task_map = repeat_map(*repeat_shape) * grid_map(grid_shape, order=perm)
+    task_map = row_repeat(*repeat_shape) * spatial_map(grid_shape, ranks=ranks)
     return task_map
 
 
-def get_transfer_task_map(task_shape: Sequence[int], num_workers=32, order: Optional[Sequence[int]] = None) -> Tuple[TaskLayout, DataLayout]:
-    grid_shape, repeat_shape = _get_shapes(task_shape, num_workers, order)
+def get_transfer_task_map(task_shape: Sequence[int], num_workers=32, ranks: Optional[Sequence[int]] = None) -> Tuple[TaskMapping, DataLayout]:
+    grid_shape, repeat_shape = _get_shapes(task_shape, num_workers, ranks)
 
-    task_map = repeat_map(*repeat_shape) * grid_map(grid_shape, order=order)
+    task_map = row_repeat(*repeat_shape) * spatial_map(grid_shape, ranks=ranks)
     data_layout = row_layout(*repeat_shape) * local_layout(*grid_shape)
     return task_map, data_layout

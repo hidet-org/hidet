@@ -7,8 +7,8 @@ from typing import List, Optional, Tuple, Sequence, Union
 import numpy as np
 
 from hidet.ffi import cuda, cuda_kernels
-from hidet.ir.layout import DataLayout
-from hidet.ir.layout.data_layout import RowMajorLayout
+from hidet.ir.type import ScalarType
+from hidet.ir.layout import DataLayout, RowMajorLayout
 from hidet.runtime import Storage
 from hidet.utils import prod
 
@@ -150,7 +150,11 @@ class Tensor:
 
     @property
     def nbytes(self):
-        return prod(self.shape) * dtype_bytes(self.dtype)
+        return prod(self.shape) * ScalarType(self.dtype).nbytes()
+
+    @property
+    def num_elements(self):
+        return prod(self.shape)
 
     @property
     def op(self):
@@ -212,6 +216,10 @@ class Tensor:
         from .ops import cast
         return cast(self, dtype)
 
+    def to(self, dtype: str):
+        from .ops import cast
+        return cast(self, dtype)
+
     def cpu(self):
         if self.device == 'cpu':
             return self
@@ -249,29 +257,16 @@ class Tensor:
         # convert if this tensor is not in row major layout
         storage = self.contiguous().storage
 
-        # because numpy does not support bfloat16, we convert it into float32
-        if self.dtype == 'bfloat16':
+        # because numpy does not support bfloat16 and tfloat32, we convert them into float32
+        if self.dtype in ['bfloat16', 'tfloat32']:
             return self.cast('float32').numpy()
         else:
             array = storage.as_array(num_elements=prod(self.shape), dtype=self.dtype)
             return array.reshape(self.shape)
 
 
-def dtype_bytes(dtype: str):
-    bytes_dict = {
-        'float32': 4,
-        'bfloat16': 2,
-        'float16': 2,
-        'int32': 4,
-        'int64': 8,
-        'uint8': 1,
-        'bool': 1
-    }
-    return bytes_dict[dtype]
-
-
 def empty(shape: Sequence[int], dtype: str = 'float32', device: str = 'cuda', layout: Optional[DataLayout] = None) -> Tensor:
-    num_bytes = prod(shape) * dtype_bytes(dtype)
+    num_bytes = prod(shape) * ScalarType(dtype).nbytes()
     storage = Storage.new(device, num_bytes)
     return Tensor(shape, dtype, device, storage, layout)
 
@@ -304,7 +299,7 @@ def ones(shape: Sequence[int], dtype: str = 'float32', device: str = 'cuda', lay
 
 def full(shape: Sequence[int], fill_value, dtype: str = 'float32', device: str = 'cuda', layout: Optional[DataLayout] = None) -> Tensor:
     tensor = empty(shape, dtype, device, layout)
-    cuda_kernels.fill_value(tensor.storage.addr, tensor.nbytes, value=fill_value, dtype=dtype)
+    cuda_kernels.fill_value(tensor.storage.addr, num_elements=tensor.num_elements, value=fill_value, dtype=dtype)
     return tensor
 
 
@@ -325,7 +320,7 @@ def randint(low: int, high=None, shape: Sequence[int] = (), dtype: str = 'int32'
         'int64': np.int64
     }
     if dtype not in dtype_map:
-        raise ValueError('Do not support dtype {} for randint.'.format(repr(dtype)))
+        return randint(low=low, high=high, shape=shape, dtype='int32').cast(dtype)
     return array(np.random.randint(low=low, high=high, size=shape, dtype=dtype_map[dtype]))
 
 

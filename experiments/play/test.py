@@ -65,10 +65,10 @@ def demo_add():
 
 
 def demo_map():
-    from hidet.ir.layout.task_layout import grid_map
-    a = grid_map([3, 4])
-    print(grid_map([3, 1]) * grid_map([1, 4]))
-    print(grid_map([1, 4]) * grid_map([3, 1]))
+    from hidet.ir.layout.task_layout import spatial_map
+    a = spatial_map([3, 4])
+    print(spatial_map([3, 1]) * spatial_map([1, 4]))
+    print(spatial_map([1, 4]) * spatial_map([3, 1]))
     print(a)
 
 
@@ -89,6 +89,12 @@ def demo_max():
     print(c)
 
 
+def demo_func():
+    def f(b, *, c):
+        print(b, c)
+    f(1, c=2)
+
+
 if __name__ == '__main__':
     # demo_wmma()
     # demo_bf16()
@@ -98,4 +104,5 @@ if __name__ == '__main__':
     # demo_add()
     # demo_map()
     # demo_matmul()
-    demo_max()
+    # demo_max()
+    demo_func()

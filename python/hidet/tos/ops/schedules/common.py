@@ -17,11 +17,26 @@ class NotSupportedError(Exception):
 
 
 class Schedule:
+    def __str__(self):
+        items = []
+        for name, value in self.keys():
+            items.append('{}: {}'.format(name, value))
+        schedule_type = self.__class__.__name__
+        schedule_keys = ', '.join(items)
+        return '{}({})'.format(schedule_type, schedule_keys)
+
+    def __repr__(self):
+        return str(self)
+
     def keys(self) -> List[Tuple[str, Union[int, float, str]]]:
         raise NotImplementedError()
 
     def derived_keys(self) -> List[Tuple[str, Union[int, float, str]]]:
         raise NotImplementedError()
+
+    def check(self, cond, msg=''):
+        if not cond:
+            raise NotSupportedError(self, msg)
 
 
 class LoopExpander(ExprRewriter):

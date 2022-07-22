@@ -1,2 +1,3 @@
-from .bmm import batched_matmul_cuda_schedule_default
-from .bmm_wmma import batched_matmul_cuda_schedule_wmma
+from .simt import batched_matmul_cuda_schedule_simt
+from .wmma import batched_matmul_cuda_schedule_wmma
+from .mma import batched_matmul_cuda_schedule_mma

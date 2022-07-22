@@ -216,24 +216,6 @@ def default_stride(matrix: str, layout: str, shape: Tuple[int, int, int]) -> int
     return b if layout == 'row' else a
 
 
-def wmma_load(
-        config: WmmaConfig,
-        matrix: str,
-        shape: Tuple[int, int, int],
-        dtype: Union[str, ScalarType],
-        reg_addr: Expr,
-        mem_addr: Expr,
-        stride: Optional[Union[Expr, int]] = None,
-        layout: Optional[str] = 'row'
-):
-    func_name = 'wmma.load.{matrix}.sync.aligned.{layout}.{shape}.{dtype}'.format(
-        matrix=matrix, layout=layout, shape='m{}n{}k{}'.format(*shape), dtype=dtype
-    ).replace('.', '_')
-    if stride is None:
-        stride = default_stride(matrix, layout, shape)
-    return call_cuda(func_name, args=[reg_addr, mem_addr, stride])
-
-
 def wmma_load_a(
         config: WmmaConfig,
         reg_addr: Expr,

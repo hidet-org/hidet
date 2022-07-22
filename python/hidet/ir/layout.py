@@ -380,8 +380,8 @@ def local_layout(*shape: int):
     return DataLayout.local(shape)
 
 
-def data_layout(shape: List[int], perm: Optional[List[int]] = None):
-    if perm is None:
-        perm = list(range(len(shape)))
-    return StridesLayout.from_shape(shape, perm)
+def data_layout(shape: List[int], ranks: Optional[List[int]] = None):
+    if ranks is None:
+        ranks = list(range(len(shape)))
+    return StridesLayout.from_shape(shape, ranks)
 

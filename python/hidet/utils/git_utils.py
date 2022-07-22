@@ -4,6 +4,7 @@ import git
 import functools
 import datetime
 import logging
+import shutil
 
 
 logger = logging.Logger(__name__)
@@ -73,6 +74,24 @@ _hidet_cache_root_dir = os.path.join(repo_root(), '.hidet_cache')
 os.makedirs(_hidet_cache_root_dir, exist_ok=True)
 
 
+class CacheDir:
+    def __init__(self, cache_dir: str):
+        self.cache_dir = cache_dir
+        self.old_cache_dir = None
+        if not os.path.exists(cache_dir):
+            os.makedirs(cache_dir)
+        if not os.path.isdir(cache_dir):
+            raise ValueError('{} is not a directory.'.format(repr(cache_dir)))
+
+    def __enter__(self):
+        self.old_cache_dir = hidet_cache_dir()
+        hidet_set_cache_root(self.cache_dir)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        hidet_set_cache_root(self.old_cache_dir)
+        self.old_cache_dir = None
+
+
 def hidet_set_cache_root(root_dir: str):
     global _hidet_cache_root_dir
     root_dir = os.path.abspath(os.path.expanduser(root_dir))
@@ -99,6 +118,12 @@ def hidet_cache_file(*items: str) -> str:
     ret_path = os.path.join(root_dir, *items)
     os.makedirs(os.path.dirname(ret_path), exist_ok=True)
     return ret_path
+
+
+def hidet_clear_op_cache():
+    op_cache = hidet_cache_dir('./ops')
+    print('Clearing operator cache in {}'.format(op_cache))
+    shutil.rmtree(op_cache, ignore_errors=True)
 
 
 if __name__ == '__main__':

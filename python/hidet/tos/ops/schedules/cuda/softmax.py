@@ -3,7 +3,7 @@ from typing import List
 from hidet.ir import IRModule
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.ir.expr import scalar_var, if_then_else, tensor_var, const_like, convert
-from hidet.ir.layout import TaskLayout
+from hidet.ir.mapping import TaskMapping
 from hidet.ir.primitives import block_idx, thread_idx
 from hidet.ir import primitives as prim
 from hidet.ir.stmt import AssignStmt, BufferStoreStmt
@@ -17,12 +17,12 @@ def softmax_cuda_schedule(task: SoftmaxTask) -> IRModule:
     axis = task.axis
 
     other_shape = shape[:axis] + shape[axis+1:]
-    grid_layout = TaskLayout.row_major(task_shape=other_shape)
+    grid_layout = TaskMapping.row_major(task_shape=other_shape)
 
     warp_size = 32
     reduce_extent = shape[axis]
     outer_extent = (reduce_extent + warp_size - 1) // warp_size
-    block_layout = TaskLayout.full_layout([outer_extent]) * TaskLayout.row_major([warp_size])
+    block_layout = TaskMapping.full_layout([outer_extent]) * TaskMapping.row_major([warp_size])
 
     x_dtype = task.inputs[0].data_type.scalar_type
 

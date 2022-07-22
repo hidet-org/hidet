@@ -6,7 +6,8 @@ from hidet.ir.dialects.lowlevel import TensorPointerType, PointerType
 from hidet.ir.expr import Var, And, Cast, if_then_else, convert, Expr, cast
 from hidet.ir.func import IRModule
 from hidet.ir.functors import simplify_to_int
-from hidet.ir.layout import TaskLayout, DataLayout, row_map, repeat_map, row_layout, local_layout, data_layout
+from hidet.ir.mapping import TaskMapping, row_spatial, repeat_map
+from hidet.ir.layout import DataLayout, row_layout, local_layout, data_layout
 from hidet.ir.primitives import syncthreads, thread_idx, block_idx, syncwarp
 from hidet.ir.primitives.cuda.wmma import WmmaConfig, wmma_load_a, wmma_load_b, wmma_mma, wmma_store, wmma_configs
 from hidet.ir.stmt import AssignStmt, BufferStoreStmt, IfStmt
@@ -78,37 +79,38 @@ class MatmulSchedule(Schedule):
         threads = warps * warp_size
         self.check(threads <= 1024)
         self.threads = threads
-        self.warp_map = row_map(*block_multiple) * repeat_map(*warp_multiple[:2])
+        self.warp_map = row_spatial(*block_multiple) * repeat_map(*warp_multiple[:2])
         self.c_init_map = self.warp_map
 
         if not ta:
             self.check(wmma_config.a_layout == 'row')
-            self.a_g2s_map, self.regs_a_ldg_layout = get_transfer_task_map(task_shape=[block_shape[0], warp_k], num_workers=threads, order=[0, 1])
-            self.smem_a_layout = data_layout([2, block_shape[0], warp_k], perm=[0, 1, 2])
+            self.a_g2s_map, self.regs_a_ldg_layout = get_transfer_task_map(task_shape=[block_shape[0], warp_k], num_workers=threads, ranks=[0, 1])
+            self.smem_a_layout = data_layout([2, block_shape[0], warp_k], ranks=[0, 1, 2])
             self.load_a_stride = warp_k
         else:
             self.check(wmma_config.a_layout == 'col')
-            self.a_g2s_map, self.regs_a_ldg_layout = get_transfer_task_map(task_shape=[block_shape[0], warp_k], num_workers=threads, order=[1, 0])
-            self.smem_a_layout = data_layout([2, block_shape[0], warp_k], perm=[0, 2, 1])
+            self.a_g2s_map, self.regs_a_ldg_layout = get_transfer_task_map(task_shape=[block_shape[0], warp_k], num_workers=threads, ranks=[1, 0])
+            self.smem_a_layout = data_layout([2, block_shape[0], warp_k], ranks=[0, 2, 1])
             self.load_a_stride = block_shape[0]
 
         if not tb:
             self.check(wmma_config.b_layout == 'row')
-            self.b_g2s_map, self.regs_b_ldg_layout = get_transfer_task_map(task_shape=[warp_k, block_shape[1]], num_workers=threads, order=[0, 1])
-            self.smem_b_layout = data_layout([2, warp_k, block_shape[1]], perm=[0, 1, 2])
+            self.b_g2s_map, self.regs_b_ldg_layout = get_transfer_task_map(task_shape=[warp_k, block_shape[1]], num_workers=threads, ranks=[0, 1])
+            self.smem_b_layout = data_layout([2, warp_k, block_shape[1]], ranks=[0, 1, 2])
             self.load_b_stride = block_shape[1]
         else:
             self.check(wmma_config.b_layout == 'col')
-            self.b_g2s_map, self.regs_b_ldg_layout = get_transfer_task_map(task_shape=[warp_k, block_shape[1]], num_workers=threads, order=[1, 0])
-            self.smem_b_layout = data_layout([2, warp_k, block_shape[1]], perm=[0, 2, 1])
+            self.b_g2s_map, self.regs_b_ldg_layout = get_transfer_task_map(task_shape=[warp_k, block_shape[1]], num_workers=threads, ranks=[1, 0])
+            self.smem_b_layout = data_layout([2, warp_k, block_shape[1]], ranks=[0, 2, 1])
             self.load_b_stride = warp_k
 
-        self.c_s2g_warp_map = row_map(*wmma_shape)
+        self.c_s2g_warp_map = row_spatial(*wmma_shape)
         self.smem_c_layout = row_layout(*block_multiple) * local_layout(*warp_multiple[:2]) * row_layout(*wmma_shape)
         self.check(wmma_config.c_layout == 'row')
         self.store_c_stride = wmma_shape[1]
 
         # data layouts
+        # TODO: The following layout would cause duplicated data loading from shared memory to register
         c_seg_layout = local_layout(*block_multiple) * row_layout(*warp_multiple[:2])  # block_multiple * warp_multiple[:2]
         ab_seg_layout = local_layout(*block_multiple) * local_layout(*warp_multiple[:2])
         self.regs_a_layout = DataLayout.concat(ab_seg_layout, row_layout(wmma_config.a_regs))  # seg_layout + [a_segment_size]
@@ -264,7 +266,7 @@ def batched_matmul_cuda_with_given_schedule(task: MatmulTask, schedule: MatmulSc
     m_tile_size, n_tile_size = sch.block_shape
     m_tiles = (m_size + m_tile_size - 1) // m_tile_size
     n_tiles = (n_size + n_tile_size - 1) // n_tile_size
-    grid_blocks_layout: TaskLayout = TaskLayout.row_major([m_tiles, n_tiles])
+    grid_blocks_layout: TaskMapping = TaskMapping.row_major([m_tiles, n_tiles])
 
     # define function
     with FunctionBuilder(
@@ -370,7 +372,7 @@ def batched_matmul_cuda_with_given_schedule(task: MatmulTask, schedule: MatmulSc
                 fb += wmma_store(sch.wmma_config, smem_c_addr, regs_c_addr, sch.store_c_stride)
                 fb += copy(src=smem_c[offset_x:, offset_y:],
                            dst=gmem_c[block_idx('y'), block_offset[0] + offset_x:, block_offset[1] + offset_y:],
-                           layout=get_task_map(task_shape=(wmma_m, wmma_n), num_workers=32, perm=[0, 1]),
+                           layout=get_task_map(task_shape=(wmma_m, wmma_n), num_workers=32, ranks=[0, 1]),
                            dst_predicate=lambda i, j: And(block_offset[0] + offset_x + i < m_size, block_offset[1] + offset_y + j < n_size),
                            worker_idx=thread_idx() % warp_size)
 

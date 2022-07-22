@@ -4,7 +4,7 @@ from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.ir.dialects.compute import TensorNode
 from hidet.ir.expr import Var
 from hidet.ir.functors import rewrite
-from hidet.ir.layout import TaskLayout
+from hidet.ir.mapping import TaskMapping
 from hidet.ir.primitives import block_idx, thread_idx
 from hidet.ir.stmt import BufferStoreStmt
 from hidet.ir.task import Task
@@ -17,7 +17,7 @@ def generic_cuda_schedule(task: Task) -> IRModule:
     computation: TensorNode = inline_compute(task.outputs[0], reduce_limit=16)
     block_size = 512
     task_shape = computation.const_shape()
-    task_layout = TaskLayout.row_major(task_shape)
+    task_layout = TaskMapping.row_major(task_shape)
     num_blocks = (task_layout.num_workers + block_size - 1) // block_size
 
     with FunctionBuilder(name=task.name + '_grid', grid_dim=num_blocks, block_dim=block_size, kind='cuda_kernel', label='generic implementer') as fb:

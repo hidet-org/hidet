@@ -6,7 +6,8 @@ from hidet.ir.dialects.lowlevel import TensorPointerType, PointerType
 from hidet.ir.expr import Var, And, Equal, Cast, if_then_else, convert, Expr
 from hidet.ir.func import IRModule
 from hidet.ir.functors import simplify_to_int
-from hidet.ir.layout import TaskLayout, DataLayout, StridesLayout
+from hidet.ir.mapping import TaskMapping
+from hidet.ir.layout import DataLayout, StridesLayout
 from hidet.ir.primitives import syncthreads, thread_idx, block_idx
 from hidet.ir.stmt import AssignStmt, BufferStoreStmt, IfStmt
 from hidet.ir.type import scalar_type, tensor_type, ScalarType
@@ -60,7 +61,7 @@ class MatmulSchedule(Schedule):
             warp_k=1,
             block_warps=(4, 2),
             warp_outer=(2, 2),
-            atom_layout=TaskLayout.row_major([4, 8]),
+            atom_layout=TaskMapping.row_major([4, 8]),
             atom_layout_name='row_4x8',
             warp_inner=(4, 4),
             dtype='float32'
@@ -74,8 +75,8 @@ class MatmulSchedule(Schedule):
         self.atom_layout_name = atom_layout_name
 
         # sanity check
-        row_major = TaskLayout.row_major
-        full_layout = TaskLayout.full_layout
+        row_major = TaskMapping.row_major
+        full_layout = TaskMapping.full_layout
         warp_outer_layout = full_layout(warp_outer)
         warp_inner_layout = full_layout(warp_inner)
         warp_layout = warp_outer_layout * atom_layout * warp_inner_layout
@@ -116,8 +117,8 @@ class MatmulSchedule(Schedule):
         max_smem_bytes_per_block = min(cuda.max_smem_bytes_per_sm() // resident_blocks, cuda.max_smem_bytes_per_block()) // 128 * 128
 
         # derived task layouts
-        row_major = TaskLayout.row_major
-        full_layout = TaskLayout.full_layout
+        row_major = TaskMapping.row_major
+        full_layout = TaskMapping.full_layout
         self.block_warps_layout = block_warps_layout
         self.warp_layout = warp_layout
         self.block_layout = block_layout
@@ -190,7 +191,7 @@ class MatmulSchedule(Schedule):
                 for outer_m, outer_n in [[1, 1], [1, 2], [2, 1], [2, 2]]:
                     for block_warps_k, warp_k in [[8, 1]]:
                         for block_warps_m, block_warps_n in [[1, 1], [1, 2], [2, 2], [2, 4]]:
-                            for name, atom_layout in [('row_4x8', TaskLayout.row_major((4, 8)))]:
+                            for name, atom_layout in [('row_4x8', TaskMapping.row_major((4, 8)))]:
                                 try:
                                     settings.append(MatmulSchedule(
                                         block_warps_k=block_warps_k,
@@ -204,7 +205,7 @@ class MatmulSchedule(Schedule):
                                 except NotSupportedError as e:
                                     pass
         elif space_level == 2:
-            grid = TaskLayout.row_major
+            grid = TaskMapping.row_major
             for inner_m, inner_n in [[4, 4]]:
                 for outer_m, outer_n in [[1, 1], [1, 2], [2, 1], [2, 2], [1, 3], [3, 1], [2, 3], [3, 2], [3, 3]]:
                     for block_warps_k, warp_k in [[4, 1], [8, 1]]:
@@ -234,7 +235,7 @@ class MatmulSchedule(Schedule):
         return settings
 
 
-def batched_matmul_cuda_schedule_default(task: MatmulTask) -> IRModule:
+def batched_matmul_cuda_schedule_simt(task: MatmulTask) -> IRModule:
     ctx = TaskContext.current()
     all_schedules = MatmulSchedule.schedules(space_level=ctx.space_level)
     default_resolve_out_dir = os.path.join('./outs/resolve', task.name, 'batched_matmul_default_{}x{}x{}x{}'.format(task.batch_size, task.m_size, task.k_size, task.n_size))
@@ -265,7 +266,7 @@ def batched_matmul_cuda_with_given_schedule(task: MatmulTask, schedule: MatmulSc
     m_tile_size, n_tile_size = sch.block_shape
     m_tiles = (m_size + m_tile_size - 1) // m_tile_size
     n_tiles = (n_size + n_tile_size - 1) // n_tile_size
-    grid_blocks_layout: TaskLayout = TaskLayout.row_major([m_tiles, n_tiles])
+    grid_blocks_layout: TaskMapping = TaskMapping.row_major([m_tiles, n_tiles])
 
     # define function
     with FunctionBuilder(

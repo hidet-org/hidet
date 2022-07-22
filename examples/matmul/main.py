@@ -13,7 +13,7 @@ from hidet.ir.dialects.compute import compute, TensorInput
 from hidet.ir.dialects.lowlevel import TensorPointerType
 from hidet.ir.expr import Var, var
 from hidet.ir.func import IRModule
-from hidet.ir.layout import TaskLayout, row_major_layout, full_layout, DataLayout
+from hidet.ir.layout import TaskMapping, row_major_layout, full_layout, DataLayout
 from hidet.ir.primitives import block_idx, syncthreads
 from hidet.ir.task import ThreadBlock, Grid, Host
 from hidet.ir.type import TensorType, tensor_type

@@ -16,7 +16,25 @@ def var(hint):
     return ir.var(hint)
 
 
-class TaskLayout:
+def strides_from_ranks(shape: Sequence[int], ranks: Sequence[int]) -> List[int]:
+    if any(v <= 0 for v in shape):
+        raise ValueError('Shape must be non-negative, got {}'.format(shape))
+    if len(set(ranks)) != len(ranks):
+        raise ValueError('Duplicated ranks: {}'.format(ranks))
+    if any(v < 0 or v >= len(shape) for v in ranks):
+        raise ValueError('Ranks {} out of bound for shape {}'.format(ranks, shape))
+    if len(ranks) != len(shape):
+        raise ValueError('Ranks must have the same length as shape, got shape {} and ranks {}'.format(shape, ranks))
+    strides: List[Optional[int]] = [None] * len(shape)
+    acc = 1
+    for i in reversed(range(len(shape))):
+        dim = ranks.index(i)
+        strides[dim] = acc
+        acc *= shape[dim]
+    return strides
+
+
+class TaskMapping:
     registered = []
 
     def __init__(self,
@@ -34,8 +52,11 @@ class TaskLayout:
     def __call__(self, w: Int) -> List[Tuple[Int, ...]]:
         return self.worker2task(w)
 
-    def __mul__(self, other) -> 'TaskLayout':
-        return ComposedTaskLayout(outer=self, inner=other)
+    def __mul__(self, other) -> 'TaskMapping':
+        return ComposedTaskMapping(outer=self, inner=other)
+
+    def __getitem__(self, w: Int) -> List[Tuple[Int, ...]]:
+        return self.worker2task(w)
 
     def __str__(self):
         worker_id = np.empty(shape=self.task_shape, dtype=np.int32)
@@ -44,58 +65,65 @@ class TaskLayout:
                 worker_id[task_indices] = w
         return np.array2string(worker_id)
 
+    def of(self, w: Int) -> List[Tuple[Int, ...]]:
+        return self.worker2task(w)
+
+    def single_task_of(self, w: Int) -> Tuple[Int, ...]:
+        tasks = self.worker2task(w)
+        if len(tasks) != 1:
+            raise ValueError('Expect to have a single task, but got {} tasks'.format(len(tasks)))
+        return tasks[0]
+
     @staticmethod
     def row_major(task_shape: Sequence[int]):
-        return GridTaskLayout(task_shape, perm=list(range(len(task_shape))))
+        return SpatialTaskMapping(task_shape, ranks=list(range(len(task_shape))))
 
     @staticmethod
     def column_major(task_shape: Sequence[int]):
-        return GridTaskLayout(task_shape, perm=list(reversed(range(len(task_shape)))))
+        return SpatialTaskMapping(task_shape, ranks=list(reversed(range(len(task_shape)))))
 
     @staticmethod
     def full_layout(task_shape: Sequence[int]):
-        return FullTaskLayout(task_shape)
+        return RepeatTaskMapping(task_shape, ranks=list(range(len(task_shape))))
 
-    def projection(self, dim2value: Mapping[int, Int]) -> 'TaskLayout':
-        return ProjectedTaskLayout(base=self, dim2value=dim2value)
+    def projection(self, dim2value: Mapping[int, Int]) -> 'TaskMapping':
+        return ProjectedTaskMapping(base=self, dim2value=dim2value)
 
 
-class FullTaskLayout(TaskLayout):
-    def __init__(self, task_shape: Sequence[int]):
+class RepeatTaskMapping(TaskMapping):
+    def __init__(self, task_shape: Sequence[int], ranks: Optional[Sequence[int]]):
+        if ranks is None:
+            ranks = list(range(len(task_shape)))
+        self.ranks: List[int] = list(ranks)
+        self.strides: List[int] = strides_from_ranks(task_shape, ranks)
         super().__init__(num_workers=1, task_shape=tuple(task_shape), worker2task=self._worker2task)
 
     # noinspection PyUnusedLocal
-    def _worker2task(self, w):
+    def _worker2task(self, w: Int) -> List[Tuple[Int]]:
+        def key_func(task: Tuple[int]) -> int:
+            global_index = sum(a * b for a, b in zip(task, self.strides))
+            return global_index
         ranges = [range(s) for s in self.task_shape]
-        return list(itertools.product(*ranges))
+        tasks = list(tuple(task) for task in itertools.product(*ranges))
+        return list(sorted(tasks, key=key_func))
 
 
-class GridTaskLayout(TaskLayout):
-    def __init__(self, task_shape: Sequence[int], perm: Sequence[int]):
-        assert len(task_shape) == len(perm)
+class SpatialTaskMapping(TaskMapping):
+    def __init__(self, task_shape: Sequence[int], ranks: Sequence[int]):
+        assert len(task_shape) == len(ranks)
         super().__init__(num_workers=prod(task_shape), task_shape=tuple(task_shape), worker2task=self._worker2task)
-        self.perm = list(perm)
-        self.bases = self._get_bases()
-
-    def _get_bases(self):
-        rank = len(self.perm)
-        bases: List[Optional[int]] = [None] * rank
-        s = 1
-        for i in reversed(range(rank)):
-            j = self.perm.index(i)
-            bases[j] = s
-            s *= self.task_shape[j]
-        return bases
+        self.ranks = list(ranks)
+        self.strides = strides_from_ranks(task_shape, ranks)
 
     def _worker2task(self, w: Int) -> List[Tuple[Int]]:
         task = []
-        for mod, b in zip(self.task_shape, self.bases):
+        for mod, b in zip(self.task_shape, self.strides):
             task.append((w // b) % mod)
         return [tuple(task)]
 
 
-class ProjectedTaskLayout(TaskLayout):
-    def __init__(self, base: TaskLayout, dim2value: Mapping[int, Int]):
+class ProjectedTaskMapping(TaskMapping):
+    def __init__(self, base: TaskMapping, dim2value: Mapping[int, Int]):
         assert all(int(v) == 0 for v in dim2value.values())
         super().__init__(num_workers=base.num_workers,
                          task_shape=tuple(base.task_shape[i] if i not in dim2value else 1 for i in range(len(base.task_shape))),
@@ -111,8 +139,8 @@ class ProjectedTaskLayout(TaskLayout):
         return projected_tasks
 
 
-class ComposedTaskLayout(TaskLayout):
-    def __init__(self, outer: TaskLayout, inner: TaskLayout):
+class ComposedTaskMapping(TaskMapping):
+    def __init__(self, outer: TaskMapping, inner: TaskMapping):
         assert len(outer.task_shape) == len(inner.task_shape)
         super().__init__(
             num_workers=outer.num_workers * inner.num_workers,
@@ -134,7 +162,7 @@ class ComposedTaskLayout(TaskLayout):
         return tasks
 
 
-class TaskLayoutExpander:
+class TaskMappingExpander:
     def __init__(self):
         from hidet.ir.stmt import ForStmt, LetStmt
         self.stmts: List[Union[LetStmt, ForStmt]] = []
@@ -148,19 +176,19 @@ class TaskLayoutExpander:
             self.stmts.append(LetStmt(v, e))
             return v
 
-    def expand(self, w: Int, task_layout: TaskLayout) -> List[Sequence[Int]]:
+    def expand(self, w: Int, task_layout: TaskMapping) -> List[Sequence[Int]]:
         vtable = {
-            FullTaskLayout: self.expand_full,
-            GridTaskLayout: self.expand_grid,
-            ComposedTaskLayout: self.expand_composed,
-            ProjectedTaskLayout: self.expand_projected,
-            TaskLayout: self.expand_atom,
+            RepeatTaskMapping: self.expand_full,
+            SpatialTaskMapping: self.expand_grid,
+            ComposedTaskMapping: self.expand_composed,
+            ProjectedTaskMapping: self.expand_projected,
+            TaskMapping: self.expand_atom,
         }
         w = self.variablize(w)
         # noinspection PyArgumentList
         return vtable[task_layout.__class__](w, task_layout)
 
-    def expand_composed(self, w: Int, layout: ComposedTaskLayout):
+    def expand_composed(self, w: Int, layout: ComposedTaskMapping):
         outer_w = self.variablize(w // layout.inner.num_workers)
         inner_w = self.variablize(w % layout.inner.num_workers)
         outer_fields = self.expand(outer_w, layout.outer)
@@ -172,7 +200,7 @@ class TaskLayoutExpander:
                 fields.append(tuple(a + b for a, b in zip(scaled_outer_field, inner_field)))
         return fields
 
-    def expand_projected(self, w: Int, layout: ProjectedTaskLayout):
+    def expand_projected(self, w: Int, layout: ProjectedTaskMapping):
         rank = len(layout.task_shape)
         base_fields = self.expand(w, layout.base)
         projected_fields = []
@@ -180,10 +208,10 @@ class TaskLayoutExpander:
             projected_fields.append(tuple(layout.dim2value[i] if i in layout.dim2value else field[i] for i in range(rank)))
         return projected_fields
 
-    def expand_grid(self, w: Int, layout: GridTaskLayout):
+    def expand_grid(self, w: Int, layout: SpatialTaskMapping):
         return [[self.variablize(v) for v in layout(w)[0]]]
 
-    def expand_full(self, w: Int, layout: FullTaskLayout):
+    def expand_full(self, w: Int, layout: RepeatTaskMapping):
         unroll_limit = 1024
         if prod(layout.task_shape) < unroll_limit:
             # unroll automatically
@@ -200,36 +228,33 @@ class TaskLayoutExpander:
             return [axes]
 
     @staticmethod
-    def expand_atom(w: Int, layout: TaskLayout):
+    def expand_atom(w: Int, layout: TaskMapping):
         return layout(w)
 
 
-def row_major_layout(*task_shape: int):
-    return GridTaskLayout(task_shape, perm=list(range(len(task_shape))))
+def spatial_map(task_shape: Sequence[int], ranks: Optional[Sequence[int]] = None):
+    if ranks is None:
+        ranks = list(range(len(task_shape)))
+    return SpatialTaskMapping(task_shape, ranks)
 
 
-def col_major_layout(*task_shape: int):
-    return GridTaskLayout(task_shape, perm=list(reversed(range(len(task_shape)))))
+def row_spatial(*task_shape: int):
+    return spatial_map(task_shape)
 
 
-def full_layout(*task_shape: int):
-    return FullTaskLayout(task_shape)
+def col_spatial(*task_shape: int):
+    return spatial_map(task_shape, ranks=list(reversed(range(len(task_shape)))))
 
 
-def row_map(*task_shape: int):
-    return row_major_layout(*task_shape)
+def repeat_map(task_shape: Sequence[int], ranks: Optional[Sequence[int]] = None):
+    if ranks is None:
+        ranks = list(range(len(task_shape)))
+    return RepeatTaskMapping(task_shape, ranks)
 
 
-def col_map(*task_shape: int):
-    return col_major_layout(*task_shape)
+def row_repeat(*task_shape: int):
+    return repeat_map(task_shape)
 
 
-def repeat_map(*task_shape: int):
-    return full_layout(*task_shape)
-
-
-def grid_map(task_shape: List[int], order: Optional[List[int]] = None):
-    if order is None:
-        order = list(range(len(task_shape)))
-    assert len(order) == len(task_shape)
-    return GridTaskLayout(task_shape, order)
+def col_repeat(*task_shape: int):
+    return repeat_map(task_shape, ranks=list(reversed(range(len(task_shape)))))

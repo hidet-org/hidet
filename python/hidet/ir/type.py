@@ -20,6 +20,16 @@ class Scope(Node):
         assert name in ['host', 'global', 'shared', 'register', 'unspecified']
         self.name = name
 
+short2long = {
+    'bf16': 'bfloat16',
+    'tf32': 'tfloat32',
+    'f16': 'float16',
+    'fp16': 'float16',
+    'f32': 'float32',
+    'fp32': 'float32',
+    'f64': 'float64',
+    'fp64': 'float64'
+}
 
 dtype_list = [
     'int64',
@@ -42,6 +52,8 @@ for idx, dtype in enumerate(dtype_list):
 
 class ScalarType(TypeNode):
     def __init__(self, name):
+        if name in short2long:
+            name = short2long[name]
         if name not in dtype_list:
             raise ValueError('Can not recognize data type {}, candidates:\n{}'.format(name, dtype_list))
         self.name = name

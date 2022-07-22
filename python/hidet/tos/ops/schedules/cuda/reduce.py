@@ -4,7 +4,7 @@ from typing import List
 from hidet.ir import IRModule
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.ir.expr import scalar_var, if_then_else, tensor_var, const_like, convert, Expr, And, cast
-from hidet.ir.layout import TaskLayout
+from hidet.ir.mapping import TaskMapping
 from hidet.ir.primitives import block_idx, thread_idx
 from hidet.ir.dialects.compute import ReduceCompute
 from hidet.ir.stmt import AssignStmt, BufferStoreStmt
@@ -36,12 +36,12 @@ def cuda_schedule_reduce_by_warp_reduce(task: ReduceTask) -> IRModule:
     grid_shape = [v for i, v in enumerate(shape) if i not in dims]
     reduce_shape = [shape[i] for i in dims]
 
-    grid_layout = TaskLayout.row_major(task_shape=grid_shape)
+    grid_layout = TaskMapping.row_major(task_shape=grid_shape)
 
     warp_size = 32
     reduce_extent = prod(reduce_shape)
     warp_extent = (reduce_extent + warp_size - 1) // warp_size
-    block_layout = TaskLayout.full_layout([warp_extent]) * TaskLayout.row_major([warp_size])
+    block_layout = TaskMapping.full_layout([warp_extent]) * TaskMapping.row_major([warp_size])
 
     x_dtype = task.inputs[0].data_type.scalar_type
     accumulate_dtype = task.attributes['accumulate_dtype']
@@ -111,8 +111,8 @@ def cuda_schedule_reduce_by_default(task: ReduceTask) -> IRModule:
     reduce_extent = prod(reduce_shape)
 
     block_size = 256
-    remain_layout = TaskLayout.row_major(remain_shape)
-    reduce_layout = TaskLayout.full_layout(reduce_shape)
+    remain_layout = TaskMapping.row_major(remain_shape)
+    reduce_layout = TaskMapping.full_layout(reduce_shape)
 
     grid_size = (remain_layout.num_workers + block_size - 1) // block_size
 

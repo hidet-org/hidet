@@ -31,6 +31,7 @@ def lower(ir_module: IRModule) -> IRModule:
         apply_prologue_epilogue_pass(),
         generate_packed_func_pass(),
         normalize_const_tensor_pass(),
+        rule_based_simplify_pass(),  # make ir more readable
         flatten_tensor_index_pass(),
         resolve_primitive_func_pass(),
         import_primitive_functions_pass(),
