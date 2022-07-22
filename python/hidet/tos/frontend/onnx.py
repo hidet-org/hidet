@@ -1,4 +1,4 @@
-from typing import List, Union, Sequence, Optional, Dict, Callable
+from typing import List, Union, Sequence, Optional, Dict, Callable, Type
 from collections import defaultdict
 import os
 import numpy as np
@@ -23,10 +23,10 @@ class OnnxOperator:
         node: onnx.NodeProto
         """
         import onnx.numpy_helper
-        self.node = node
-        self.op_sets = op_sets
-        self.input_names = [name for name in node.input]
-        self.output_names = [name for name in node.output]
+        self.node: onnx.NodeProto = node
+        self.op_sets: List[int] = op_sets
+        self.input_names: List[str] = [name for name in node.input]
+        self.output_names: List[str] = [name for name in node.output]
         self.attrs = {}
         for attr in node.attribute:
             if attr.type == 1:  # float
@@ -124,6 +124,21 @@ class OnnxOperator:
         return ret
 
 
+dispatch_table: Dict[str, Type[OnnxOperator]] = {}
+
+
+def register_onnx_operator(cls: Type[OnnxOperator]):
+    if not issubclass(cls, OnnxOperator):
+        raise ValueError('Can only register a sub-class of OnnxOperator as an onnx operator.')
+    cls_name = cls.__name__
+    if not cls_name.startswith('Onnx'):
+        raise ValueError('Please name the class as OnnxOPNAME such as OnnxConv and OnnxAdd,'
+                         ' where OPNAME is the same as the operator name used by ONNX. Got {}'.format(cls_name))
+    dispatch_table[cls_name[4:]] = cls
+    return cls
+
+
+@register_onnx_operator
 class OnnxConv(OnnxOperator):
     def run_v1(self, inputs: List[Tensor]) -> List[Tensor]:
         padding = self.attrs.get('pads', [0, 0, 0, 0])
@@ -145,6 +160,7 @@ class OnnxConv(OnnxOperator):
         return self.run_v1(inputs)
 
 
+@register_onnx_operator
 class OnnxBatchNormalization(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         epsilon: float = self.attrs.get('epsilon', 1e-5)
@@ -157,48 +173,57 @@ class OnnxBatchNormalization(OnnxOperator):
         return [y * scale.unsqueeze([0, 2, 3]) + bias.unsqueeze([0, 2, 3])]
 
 
+@register_onnx_operator
 class OnnxRelu(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         return [ops.relu(inputs[0])]
 
 
+@register_onnx_operator
 class OnnxSin(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         return [ops.sin(inputs[0])]
 
 
+@register_onnx_operator
 class OnnxCos(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         return [ops.cos(inputs[0])]
 
 
+@register_onnx_operator
 class OnnxPow(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         x, y = inputs
         return [ops.pow(x, y)]
 
 
+@register_onnx_operator
 class OnnxDiv(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         x, y = inputs
         return [ops.divide(x, y)]
 
 
+@register_onnx_operator
 class OnnxSqrt(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         return [ops.sqrt(inputs[0])]
 
 
+@register_onnx_operator
 class OnnxErf(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         return [ops.erf(inputs[0])]
 
 
+@register_onnx_operator
 class OnnxTanh(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         return [ops.tanh(inputs[0])]
 
 
+@register_onnx_operator
 class OnnxMaxPool(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         kernel_size = list(self.attrs.get('kernel_shape'))
@@ -207,6 +232,7 @@ class OnnxMaxPool(OnnxOperator):
         return [ops.max_pool2d(inputs[0], kernel_size, strides, padding)]
 
 
+@register_onnx_operator
 class OnnxReduceMean(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         dims = self.attrs.get('axes')
@@ -214,7 +240,8 @@ class OnnxReduceMean(OnnxOperator):
         return [ops.reduce_mean(inputs[0], dims, keep_dim)]
 
 
-class OnnxSqueezeOp(OnnxOperator):
+@register_onnx_operator
+class OnnxSqueeze(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         dims = self.attrs.get('axes', None)
         data = inputs[0]
@@ -226,21 +253,25 @@ class OnnxSqueezeOp(OnnxOperator):
         return [ops.squeeze(inputs[0], dims)]
 
 
+@register_onnx_operator
 class OnnxAdd(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         return [inputs[0] + inputs[1]]
 
 
+@register_onnx_operator
 class OnnxSub(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         return [inputs[0] - inputs[1]]
 
 
+@register_onnx_operator
 class OnnxMul(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         return [inputs[0] * inputs[1]]
 
 
+@register_onnx_operator
 class OnnxMatMul(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         a, b = inputs
@@ -259,19 +290,26 @@ class OnnxMatMul(OnnxOperator):
             return [c]
 
 
+@register_onnx_operator
 class OnnxSoftmax(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         axis = self.attrs.get('axis')
         return [ops.softmax(inputs[0], axis)]
 
 
+@register_onnx_operator
 class OnnxGlobalAveragePool(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         x, = inputs
-        n, c, h, w = x.shape
-        return [ops.avg_pool2d(x, kernel=(h, w), stride=(1, 1), padding=(0, 0))]
+        dims = list(range(2, len(x.shape)))
+        return [ops.reduce_mean(x, dims=dims, keep_dim=True)]
+        # x, = inputs
+        # print(x.shape)
+        # n, c, h, w = x.shape
+        # return [ops.avg_pool2d(x, kernel=(h, w), stride=(1, 1), padding=(0, 0))]
 
 
+@register_onnx_operator
 class OnnxFlatten(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         axis = self.attrs.get('axis', 1)
@@ -282,9 +320,10 @@ class OnnxFlatten(OnnxOperator):
         return [ops.rearrange(x, plan=[dims[:axis], dims[axis:]])]
 
 
+@register_onnx_operator
 class OnnxUnsqueeze(OnnxOperator):
     def run_v1(self, inputs: List[Tensor]) -> List[Tensor]:
-        axes = self.attrs['axes']   # in [-output_rank, output_rank - 1]
+        axes = self.attrs['axes']  # in [-output_rank, output_rank - 1]
         x = inputs[0]
         rank = len(x.shape) + len(axes)
         axes = [(axis + rank) % rank for axis in axes]
@@ -298,6 +337,7 @@ class OnnxUnsqueeze(OnnxOperator):
         return [ops.unsqueeze(x, axes)]
 
 
+@register_onnx_operator
 class OnnxReshape(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         allow_zero = self.attrs.get('allowzero', 0)
@@ -306,6 +346,7 @@ class OnnxReshape(OnnxOperator):
         return [ops.reshape(x, shape)]
 
 
+@register_onnx_operator
 class OnnxTranspose(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         perm = self.attrs.get('perm', None)
@@ -314,18 +355,21 @@ class OnnxTranspose(OnnxOperator):
         return [ops.transpose(x, perm)]
 
 
+@register_onnx_operator
 class OnnxConcat(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         axis = self.attrs.get('axis')
         return [ops.concat(inputs, axis)]
 
 
+@register_onnx_operator
 class OnnxArgMax(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         return inputs
         # raise NotImplementedError('ArgMax')
 
 
+@register_onnx_operator
 class OnnxGemm(OnnxOperator):
 
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
@@ -349,6 +393,7 @@ class OnnxGemm(OnnxOperator):
         return [d]
 
 
+@register_onnx_operator
 class OnnxCast(OnnxOperator):
     code2dtype = {
         1: 'float32',
@@ -376,6 +421,7 @@ class OnnxCast(OnnxOperator):
         return [ops.cast(x, dtype)]
 
 
+@register_onnx_operator
 class OnnxShape(OnnxOperator):
 
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
@@ -394,6 +440,7 @@ class OnnxShape(OnnxOperator):
         return [hidet.array(x.shape[start:end]).cuda()]
 
 
+@register_onnx_operator
 class OnnxConstant(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         value: Optional[Tensor] = self.attrs.get('value')
@@ -403,6 +450,7 @@ class OnnxConstant(OnnxOperator):
         return [value]
 
 
+@register_onnx_operator
 class OnnxGather(OnnxOperator):
 
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
@@ -411,6 +459,7 @@ class OnnxGather(OnnxOperator):
         return [ops.take(data, indices, axis)]
 
 
+@register_onnx_operator
 class OnnxSlice(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         data, starts, ends = inputs[:3]
@@ -423,11 +472,13 @@ class OnnxSlice(OnnxOperator):
         return [ops.strided_slice(data, starts, ends, axes, steps)]
 
 
+@register_onnx_operator
 class OnnxSigmoid(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         return [ops.sigmoid(inputs[0])]
 
 
+@register_onnx_operator
 class OnnxInstanceNormalization(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         epsilon = self.attrs.get('epsilon', 1e-5)
@@ -440,6 +491,7 @@ class OnnxInstanceNormalization(OnnxOperator):
         return [ops.instance_norm(x, epsilon) * scale + bias]
 
 
+@register_onnx_operator
 class OnnxConstantOfShape(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         value = self.attrs.get('value')
@@ -451,6 +503,7 @@ class OnnxConstantOfShape(OnnxOperator):
         return [ops.broadcast(value, shape)]
 
 
+@register_onnx_operator
 class OnnxPad(OnnxOperator):
     def run_v2(self, inputs: List[Tensor]) -> List[Tensor]:
         data = inputs[0]
@@ -467,6 +520,7 @@ class OnnxPad(OnnxOperator):
         return [ops.pad(data, pads, mode, value)]
 
 
+@register_onnx_operator
 class OnnxResize(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         coordinate_transformation_mode = self.attrs.get('coordinate_transformation_mode', 'half_pixel')
@@ -498,6 +552,7 @@ class OnnxResize(OnnxOperator):
             raise NotImplementedError('Current only support 2d resize, got x {}.'.format(x.shape))
 
 
+@register_onnx_operator
 class OnnxExpand(OnnxOperator):
     def run_v8(self, inputs: List[Tensor]) -> List[Tensor]:
         data, new_shape = inputs
@@ -506,6 +561,7 @@ class OnnxExpand(OnnxOperator):
         return [ops.broadcast(data, new_shape)]
 
 
+@register_onnx_operator
 class OnnxRange(OnnxOperator):
     def run_v11(self, inputs: List[Tensor]) -> List[Tensor]:
         start, limit, delta = [self.tensor2list(t) for t in inputs]
@@ -514,6 +570,7 @@ class OnnxRange(OnnxOperator):
         return [array]
 
 
+@register_onnx_operator
 class OnnxTile(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         data, repeats = inputs
@@ -521,8 +578,8 @@ class OnnxTile(OnnxOperator):
         return [ops.tile(data, repeats)]
 
 
+@register_onnx_operator
 class OnnxAveragePool(OnnxOperator):
-
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         auto_pad = self.attrs.get('auto_pad', 'NOTSET')
         ceil_mode = self.attrs.get('ceil_mode', 0)
@@ -540,6 +597,7 @@ class OnnxAveragePool(OnnxOperator):
         return [x]
 
 
+@register_onnx_operator
 class OnnxClip(OnnxOperator):
     def run_v1(self, inputs: List[Tensor]) -> List[Tensor]:
         raise NotImplementedError()
@@ -558,24 +616,49 @@ class OnnxClip(OnnxOperator):
         raise NotImplementedError()
 
 
+@register_onnx_operator
 class OnnxEqual(OnnxOperator):
     def run_v11(self, inputs: List[Tensor]) -> List[Tensor]:
         a, b = inputs
         return [ops.equal(a, b)]
 
 
+@register_onnx_operator
 class OnnxLess(OnnxOperator):
     def run_v9(self, inputs: List[Tensor]) -> List[Tensor]:
         a, b = inputs
-        return [ops.less(a, b)]
+        return [ops.less_than(a, b)]
 
 
+@register_onnx_operator
+class OnnxGreater(OnnxOperator):
+    def run_v7(self, inputs: List[Tensor]) -> List[Tensor]:
+        a, b = inputs
+        return [ops.greater_than(a, b)]
+
+
+@register_onnx_operator
+class OnnxGreaterOrEqual(OnnxOperator):
+    def run_v12(self, inputs: List[Tensor]) -> List[Tensor]:
+        a, b = inputs
+        return [ops.greater_or_equal(a, b)]
+
+
+@register_onnx_operator
+class OnnxLessOrEqual(OnnxOperator):
+    def run_v12(self, inputs: List[Tensor]) -> List[Tensor]:
+        a, b = inputs
+        return [ops.less_or_equal(a, b)]
+
+
+@register_onnx_operator
 class OnnxWhere(OnnxOperator):
     def run_v9(self, inputs: List[Tensor]) -> List[Tensor]:
         cond, a, b = inputs
         return [ops.where(cond, a, b)]
 
 
+@register_onnx_operator
 class OnnxSplit(OnnxOperator):
     def run_v2(self, inputs: List[Tensor]) -> List[Tensor]:
         axis = self.attrs.get('axis', 0)
@@ -584,12 +667,25 @@ class OnnxSplit(OnnxOperator):
         return ops.split(data, axis, parts)
 
     def run_v13(self, inputs: List[Tensor]) -> List[Tensor]:
+        data = inputs[0]
         axis = self.attrs.get('axis', 0)
-        data, parts = inputs
-        parts = self.tensor2list(parts)
+        if len(inputs) == 1:
+            num_outputs = len(self.output_names)
+            extent = data.shape[axis]
+            if extent % num_outputs != 0:
+                raise ValueError('Can not split tensor with shape {} on axis {} into {} parts evenly.'.format(
+                    data.shape, axis, num_outputs
+                ))
+            parts = [extent // num_outputs] * num_outputs
+        elif len(inputs) == 2:
+            parts = self.tensor2list(inputs[1])
+        else:
+            raise ValueError('Expect the input of Split operator have 1 or 2 inputs, but got {} inputs. See:\n'.format(len(inputs)) +
+                             'https://github.com/onnx/onnx/blob/main/docs/Operators.md#Split')
         return ops.split(data, axis, parts)
 
 
+@register_onnx_operator
 class OnnxReduceSum(OnnxOperator):
     def run_v1(self, inputs: List[Tensor]) -> List[Tensor]:
         axes = self.attrs['axes']
@@ -597,80 +693,78 @@ class OnnxReduceSum(OnnxOperator):
         data = inputs[0]
         return [ops.reduce_sum(data, dims=axes, keep_dim=keepdims)]
 
-    def run_v11(self, inputs: List[Tensor]) -> List[Tensor]:
-        return self.run_v1(inputs)
-
     def run_v13(self, inputs: List[Tensor]) -> List[Tensor]:
-        raise NotImplementedError()
+        keepdims = self.attrs.get('keepdims', True)
+        noop_with_emtpy_axes = self.attrs.get('noop_with_empty_axes', False)
+        data = inputs[0]
+        if len(inputs) == 1:
+            if noop_with_emtpy_axes:
+                axes = []
+            else:
+                axes = list(range(len(data.shape)))
+        else:
+            axes = self.tensor2list(inputs[1])
+        return [ops.reduce_sum(data, dims=axes, keep_dim=keepdims)]
 
 
+@register_onnx_operator
+class OnnxReduceMin(OnnxOperator):
+    def run_v1(self, inputs: List[Tensor]) -> List[Tensor]:
+        axes = self.attrs['axes']
+        keepdims = self.attrs.get('keepdims', True)
+        data = inputs[0]
+        return [ops.reduce_min(data, dims=axes, keep_dim=keepdims)]
+
+
+@register_onnx_operator
+class OnnxReduceMax(OnnxOperator):
+    def run_v1(self, inputs: List[Tensor]) -> List[Tensor]:
+        axes = self.attrs['axes']
+        keepdims = self.attrs.get('keepdims', True)
+        data = inputs[0]
+        return [ops.reduce_max(data, dims=axes, keep_dim=keepdims)]
+
+
+@register_onnx_operator
 class OnnxMax(OnnxOperator):
-    def run_v13(self, inputs: List[Tensor]) -> List[Tensor]:
-        return self.run_v6(inputs)
-
-    def run_v12(self, inputs: List[Tensor]) -> List[Tensor]:
-        return self.run_v6(inputs)
-
-    def run_v8(self, inputs: List[Tensor]) -> List[Tensor]:
-        return self.run_v6(inputs)
-
     def run_v6(self, inputs: List[Tensor]) -> List[Tensor]:
-        pass
+        return [ops.max(*inputs)]
 
     def run_v1(self, inputs: List[Tensor]) -> List[Tensor]:
         raise NotImplementedError()
 
 
+@register_onnx_operator
+class OnnxMin(OnnxOperator):
+    def run_v6(self, inputs: List[Tensor]) -> List[Tensor]:
+        return [ops.min(*inputs)]
+
+
+@register_onnx_operator
+class OnnxReciprocal(OnnxOperator):
+    def run_v6(self, inputs: List[Tensor]) -> List[Tensor]:
+        return [ops.reciprocal(inputs[0])]
+
+
+@register_onnx_operator
+class OnnxExp(OnnxOperator):
+    def run_v1(self, inputs: List[Tensor]) -> List[Tensor]:
+        return [ops.exp(inputs[0])]
+
+
+@register_onnx_operator
+class OnnxLog(OnnxOperator):
+    def run_v1(self, inputs: List[Tensor]) -> List[Tensor]:
+        return [ops.log(inputs[0])]
+
+
+@register_onnx_operator
+class OnnxNeg(OnnxOperator):
+    def run_v1(self, inputs: List[Tensor]) -> List[Tensor]:
+        return [ops.neg(inputs[0])]
+
 
 def dispatch(node, op_sets: List[int]) -> OnnxOperator:
-    dispatch_table = {
-        'Conv': OnnxConv,
-        'Relu': OnnxRelu,
-        'Pow': OnnxPow,
-        'Div': OnnxDiv,
-        'Sqrt': OnnxSqrt,
-        'Erf': OnnxErf,
-        'Tanh': OnnxTanh,
-        'MaxPool': OnnxMaxPool,
-        'ReduceMean': OnnxReduceMean,
-        'Squeeze': OnnxSqueezeOp,
-        'Add': OnnxAdd,
-        'Sub': OnnxSub,
-        'Mul': OnnxMul,
-        'MatMul': OnnxMatMul,
-        'Softmax': OnnxSoftmax,
-        'ArgMax': OnnxArgMax,
-        'BatchNormalization': OnnxBatchNormalization,
-        'GlobalAveragePool': OnnxGlobalAveragePool,
-        'Flatten': OnnxFlatten,
-        'Unsqueeze': OnnxUnsqueeze,
-        'Concat': OnnxConcat,
-        'Cast': OnnxCast,
-        'Constant': OnnxConstant,
-        'Reshape': OnnxReshape,
-        'Shape': OnnxShape,
-        'Gemm': OnnxGemm,
-        'Gather': OnnxGather,
-        'Slice': OnnxSlice,
-        'Transpose': OnnxTranspose,
-        'Sin': OnnxSin,
-        'Cos': OnnxCos,
-        'Sigmoid': OnnxSigmoid,
-        'InstanceNormalization': OnnxInstanceNormalization,
-        'ConstantOfShape': OnnxConstantOfShape,
-        'Pad': OnnxPad,
-        'Resize': OnnxResize,
-        'Expand': OnnxExpand,
-        'Range': OnnxRange,
-        'Tile': OnnxTile,
-        'AveragePool': OnnxAveragePool,
-        'Clip': OnnxClip,
-        'Equal': OnnxEqual,
-        'Less': OnnxLess,
-        'Where': OnnxWhere,
-        'Split': OnnxSplit,
-        'ReduceSum': OnnxReduceSum,
-    }
     op_type = node.op_type
     if op_type not in dispatch_table:
         raise NotImplementedError("Operator '{}' (in opset {}) from onnx has not been supported yet.".format(op_type, op_sets))

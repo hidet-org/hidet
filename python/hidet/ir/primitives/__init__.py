@@ -1,7 +1,7 @@
 from .func import register_primitive_function, is_primitive_function, lookup_primitive_function
 
 # base primitive functions
-from .base import max, min, exp, pow, sqrt, rsqrt, erf, sin, cos, tanh, round, floor, ceil, printf
+from .base import max, min, exp, pow, sqrt, rsqrt, erf, sin, cos, tanh, round, floor, ceil, printf, log
 
 # cuda primitive functions and variables
 from .cuda import thread_idx, block_idx

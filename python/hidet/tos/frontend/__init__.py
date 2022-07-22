@@ -1,4 +1,3 @@
-from . import onnx_utils
-from . import torch_utils
+from . import onnx
 
-from .onnx_utils import from_onnx
+from .onnx import from_onnx

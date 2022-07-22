@@ -194,6 +194,16 @@ class TanhOp(UnaryElementwiseOp):
         super().__init__(x, op=lambda v: primitives.tanh(v), name='erf')
 
 
+class ExpOp(UnaryElementwiseOp):
+    def __init__(self, x):
+        super().__init__(x, op=lambda v: primitives.exp(v), name='exp')
+
+
+class LogOp(UnaryElementwiseOp):
+    def __init__(self, x):
+        super().__init__(x, op=lambda v: primitives.log(v), name='log')
+
+
 class RsqrtOp(UnaryElementwiseOp):
     def __init__(self, x):
         super().__init__(x, op=lambda v: primitives.rsqrt(v), name='rsqrt')
@@ -207,6 +217,11 @@ class PowOp(BinaryElementwiseOp):
 class NegOp(UnaryElementwiseOp):
     def __init__(self, x):
         super().__init__(x, op=lambda v: -v, name='neg')
+
+
+class ReciprocalOp(UnaryElementwiseOp):
+    def __init__(self, x):
+        super().__init__(x, op=lambda v: const_like(1.0, v) / v, name='reciprocal')
 
 
 class AddOp(BinaryElementwiseOp):
@@ -249,16 +264,6 @@ class CubeOp(UnaryElementwiseOp):
         super().__init__(x, op=lambda a: a * a * a, name='cube')
 
 
-class EqualOp(BinaryElementwiseOp):
-    def __init__(self, x: Tensor, y: Tensor):
-        super().__init__(x, y, lambda a, b: expr.Equal(a, b), name='equal')
-
-
-class LessOp(BinaryElementwiseOp):
-    def __init__(self, x: Tensor, y: Tensor):
-        super().__init__(x, y, lambda a, b: a < b, name='less')
-
-
 class WhereOp(Operator):
     def __init__(self, cond: Tensor, x: Tensor, y: Tensor):
         super().__init__(
@@ -284,6 +289,25 @@ class MaxOp(Operator):
                 op=lambda *args: scalar_max(args)
             ),
             name='max'
+        )
+
+
+class MinOp(Operator):
+    def __init__(self, tensors: List[Tensor]):
+        def scalar_min(args: List[expr.Expr]):
+            if len(args) == 1:
+                return args[0]
+            else:
+                return primitives.max(args[0], scalar_min(args[1:]))
+
+        super().__init__(
+            inputs=list(tensors),
+            task=VariadicElementwiseTask(
+                name='min',
+                args=[input_like(x, f'x{idx}') for idx, x in enumerate(tensors)],
+                op=lambda *args: scalar_min(args)
+            ),
+            name='min'
         )
 
 
@@ -367,12 +391,24 @@ def erf(x: Tensor) -> Tensor:
     return ErfOp(x).get_output(0)
 
 
+def exp(x: Tensor) -> Tensor:
+    return ExpOp(x).get_output(0)
+
+
+def log(x: Tensor) -> Tensor:
+    return LogOp(x).get_output(0)
+
+
 def rsqrt(x: Tensor) -> Tensor:
     return RsqrtOp(x).get_output(0)
 
 
 def neg(x: Tensor) -> Tensor:
     return NegOp(x).get_output(0)
+
+
+def reciprocal(x: Tensor) -> Tensor:
+    return ReciprocalOp(x).get_output(0)
 
 
 def sin(x: Tensor) -> Tensor:
@@ -391,21 +427,17 @@ def cube(x: Tensor) -> Tensor:
     return CubeOp(x).get_output(0)
 
 
-def equal(x: Tensor, y: Tensor) -> Tensor:
-    if x.dtype != y.dtype:
-        raise ValueError('Can only compare tensors with the same dtype, but got {} and {}'.format(x.dtype, y.dtype))
-    return EqualOp(x, y).get_output(0)
-
-
-def less(x: Tensor, y: Tensor) -> Tensor:
-    return LessOp(x, y).get_output(0)
-
-
 def where(cond: Tensor, x: Tensor, y: Tensor) -> Tensor:
     if cond.dtype != 'bool':
         raise ValueError('The condition tensor must have dtype "bool", but got {}'.format(cond.dtype))
     return WhereOp(cond, x, y).get_output(0)
 
 
-def max(*tensors: Tensor) -> Tensor:
-    return MaxOp(list(tensors)).get_output(0)
+def max(a: Tensor, b: Tensor, *others: Tensor) -> Tensor:
+    args = [a, b] + list(others)
+    return MaxOp(args).get_output(0)
+
+
+def min(a: Tensor, b: Tensor, *others: Tensor) -> Tensor:
+    args = [a, b] + list(others)
+    return MinOp(args).get_output(0)

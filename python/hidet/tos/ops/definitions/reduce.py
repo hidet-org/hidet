@@ -68,12 +68,14 @@ class ReduceTask(Task):
         return True
 
 
-class ReduceMeanOp(Operator):
-    def __init__(self, x: Tensor, dims: List[int], keep_dim: bool = False):
+class ReduceBaseOp(Operator):
+    def __init__(self, x: Tensor, dims: List[int], keep_dim: bool, reduce_type: str):
+        if reduce_type not in ['avg', 'max', 'min', 'sum']:
+            raise NotImplementedError('Do not support reduce type: {}'.format(reduce_type))
         dims = normalize_dim(dims, rank=len(x.shape))
         super().__init__(
             inputs=[x],
-            task=ReduceTask(input_like(x, 'x'), dims, keep_dim, 'avg'),
+            task=ReduceTask(input_like(x, 'x'), dims, keep_dim, reduce_type),
             attributes={
                 'dims': dims,
                 'keep_dim': keep_dim
@@ -81,17 +83,24 @@ class ReduceMeanOp(Operator):
         )
 
 
-class ReduceSumOp(Operator):
+class ReduceMeanOp(ReduceBaseOp):
     def __init__(self, x: Tensor, dims: List[int], keep_dim: bool = False):
-        dims = normalize_dim(dims, rank=len(x.shape))
-        super().__init__(
-            inputs=[x],
-            task=ReduceTask(input_like(x, 'x'), dims, keep_dim, 'sum'),
-            attributes={
-                'dims': dims,
-                'keep_dim': keep_dim
-            }
-        )
+        super().__init__(x, dims, keep_dim, 'avg')
+
+
+class ReduceSumOp(ReduceBaseOp):
+    def __init__(self, x: Tensor, dims: List[int], keep_dim: bool = False):
+        super().__init__(x, dims, keep_dim, 'sum')
+
+
+class ReduceMaxOp(ReduceBaseOp):
+    def __init__(self, x: Tensor, dims: List[int], keep_dim: bool = False):
+        super().__init__(x, dims, keep_dim, 'max')
+
+
+class ReduceMinOp(ReduceBaseOp):
+    def __init__(self, x: Tensor, dims: List[int], keep_dim: bool = False):
+        super().__init__(x, dims, keep_dim, 'min')
 
 
 def reduce_mean(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -> Tensor:
@@ -104,6 +113,18 @@ def reduce_sum(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -
     if isinstance(dims, int):
         dims = [dims]
     return ReduceSumOp(x, dims, keep_dim).get_output(0)
+
+
+def reduce_max(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -> Tensor:
+    if isinstance(dims, int):
+        dims = [dims]
+    return ReduceMaxOp(x, dims, keep_dim).get_output(0)
+
+
+def reduce_min(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -> Tensor:
+    if isinstance(dims, int):
+        dims = [dims]
+    return ReduceMinOp(x, dims, keep_dim).get_output(0)
 
 
 def reduce_var(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -> Tensor:

@@ -33,6 +33,10 @@ def exp(a: ExprLike) -> Expr:
     return call_base('exp', [a])
 
 
+def log(a: ExprLike) -> Expr:
+    return call_base('log', [a])
+
+
 def pow(a: ExprLike, b: ExprLike) -> Expr:
     return call_base('pow', [a, b])
 
@@ -90,7 +94,7 @@ def type_infer_func(arg_types: List[ScalarType]) -> ScalarType:
 @initialize()
 def register_primitive_functions_generic():
     unary_names = [
-        'neg', 'sin', 'cos', 'tanh', 'exp', 'round', 'floor', 'ceil', 'rsqrt', 'sqrt', 'erf'
+        'neg', 'sin', 'cos', 'tanh', 'exp', 'round', 'floor', 'ceil', 'rsqrt', 'sqrt', 'erf', 'log'
     ]
     binary_names = [
         'min', 'max', 'pow'

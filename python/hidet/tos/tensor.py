@@ -319,6 +319,16 @@ def randn(shape: Sequence[int], dtype: str = 'float32', mean: float = 0.0, stdde
     return tensor
 
 
+def randint(low: int, high=None, shape: Sequence[int] = (), dtype: str = 'int32') -> Tensor:
+    dtype_map = {
+        'int32': np.int32,
+        'int64': np.int64
+    }
+    if dtype not in dtype_map:
+        raise ValueError('Do not support dtype {} for randint.'.format(repr(dtype)))
+    return array(np.random.randint(low=low, high=high, size=shape, dtype=dtype_map[dtype]))
+
+
 def _tensor_like(constructor, data, shape, dtype, device, layout):
     shape = data.shape if shape is None else shape
     dtype = data.dtype if dtype is None else dtype
@@ -349,6 +359,10 @@ def full_like(data: Tensor, fill_value, shape: Optional[Sequence[int]] = None, d
 
 def randn_like(data: Tensor, shape: Optional[Sequence[int]] = None, dtype: Optional[str] = None, device: Optional[str] = None, layout: Optional[DataLayout] = None) -> Tensor:
     return _tensor_like(randn, data, shape, dtype, device, layout)
+
+
+def randint_like(data: Tensor, low: int, high: Optional[int] = None, shape: Optional[Sequence[int]] = None, dtype: Optional[str] = None, device: Optional[str] = None, layout: Optional[DataLayout] = None):
+    return _tensor_like(partial(randint, low=low, high=high), data, shape, dtype, device, layout)
 
 
 def void_pointer_to_uint64(p):

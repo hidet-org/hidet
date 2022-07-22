@@ -3,6 +3,7 @@ from typing import Dict, Union, Optional, List
 from hidet.ir.expr import Var
 from hidet.ir.func import Function
 from hidet.ir.type import FuncType
+from hidet.utils import green
 
 
 class PrimitiveFunctionRegistry:
@@ -19,6 +20,10 @@ class PrimitiveFunctionRegistry:
     def dispatch_dtype(self, dtype: str, dispatched_func_name: str):
         if not self.generic:
             raise ValueError('Can only dispatch a generic function.')
+        if not is_primitive_function(dispatched_func_name):
+            raise ValueError('Dispatched function {} does not exist during dispatching {} for data type {}.'.format(
+                green(dispatched_func_name), green(self.name), green(dtype)
+            ))
         self.dispatch_dtype_rules[dtype] = dispatched_func_name
 
 

@@ -227,8 +227,8 @@ def bench_trt(args, out_dir) -> BenchResult:
     onnx_path, input_names, input_tensors = get_onnx_model(name=args.model, batch_size=args.bs)
     engine = create_engine_from_onnx(
         onnx_model_path=onnx_path,
-        workspace_bytes=512 << 20,  # 512 MiB
         input_shapes={name: tensor.shape for name, tensor in zip(input_names, input_tensors)},
+        workspace_bytes=512 << 20,  # 512 MiB
         use_tf32=args.trt_tf32,
         use_fp16=args.trt_fp16
     )

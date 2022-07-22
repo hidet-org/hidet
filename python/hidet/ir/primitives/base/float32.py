@@ -6,7 +6,7 @@ from ..func import primitive_func_pool as pool
 @initialize()
 def register_primitive_functions_float32():
     unary_names = [
-        'sinf', 'cosf', 'tanhf', 'expf', 'roundf', 'floorf', 'ceilf', 'rsqrtf', 'sqrtf', 'erff'
+        'sinf', 'cosf', 'tanhf', 'expf', 'roundf', 'floorf', 'ceilf', 'rsqrtf', 'sqrtf', 'erff', 'logf'
     ]
     binary_names = [
         'fminf', 'fmaxf', 'powf'
@@ -24,6 +24,7 @@ def register_primitive_functions_float32():
         'ceil': 'ceilf',
         'rsqrt': 'rsqrtf',
         'erf': 'erff',
+        'log': 'logf',
         'sqrt': 'sqrtf',
         'min': 'fminf',
         'max': 'fmaxf',

@@ -5,6 +5,7 @@ from collections import defaultdict
 import ctypes
 import numpy as np
 from hidet.ffi import cuda
+from hidet.utils import green
 
 
 def nbytes2str(nbytes: int) -> str:
@@ -17,7 +18,7 @@ def nbytes2str(nbytes: int) -> str:
     else:
         size = nbytes
         unit = 'Bytes'
-    return '{} {}'.format(size, unit)
+    return green('{} {}'.format(size, unit))
 
 
 class StorageDevice:
