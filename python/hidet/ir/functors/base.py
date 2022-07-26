@@ -520,6 +520,7 @@ class StmtFunctor(NodeFunctor):
     def get_dispatch_mapping(cls) -> Mapping[Type[Node], Any]:
         return {
             EvaluateStmt: cls.visit_EvaluateStmt,
+            DeclareStmt: cls.visit_DeclareStmt,
             BufferStoreStmt: cls.visit_BufferStoreStmt,
             AssignStmt: cls.visit_AssignStmt,
             LetStmt: cls.visit_LetStmt,
@@ -533,6 +534,9 @@ class StmtFunctor(NodeFunctor):
         }
 
     def visit_expr(self, e: Expr):
+        raise NotImplementedError()
+
+    def visit_DeclareStmt(self, stmt: DeclareStmt):
         raise NotImplementedError()
 
     def visit_EvaluateStmt(self, stmt: EvaluateStmt):
@@ -572,6 +576,11 @@ class StmtFunctor(NodeFunctor):
 class StmtVisitor(StmtFunctor):
     def visit_expr(self, e: Expr):
         pass
+
+    def visit_DeclareStmt(self, stmt: DeclareStmt):
+        self.visit_expr(stmt.var)
+        if stmt.init:
+            self.visit_expr(stmt.init)
 
     def visit_EvaluateStmt(self, stmt: EvaluateStmt):
         self.visit_expr(stmt.expr)
@@ -625,6 +634,14 @@ class StmtVisitor(StmtFunctor):
 class StmtRewriter(StmtFunctor):
     def visit_expr(self, e: Expr):
         return e
+
+    def visit_DeclareStmt(self, stmt: DeclareStmt):
+        v = self.visit_expr(stmt.var)
+        init = self.visit_expr(stmt.init) if stmt.init else None
+        if v is stmt.var and init is stmt.init:
+            return stmt
+        else:
+            return DeclareStmt(v, init)
 
     def visit_EvaluateStmt(self, stmt: EvaluateStmt):
         e = self.visit_expr(stmt.expr)

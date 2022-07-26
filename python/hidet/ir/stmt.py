@@ -1,7 +1,7 @@
 from typing import Sequence, Tuple
 from typing import List, Union, Optional
 from hidet.ir.node import Node
-from hidet.ir.expr import Var, Expr, convert, Constant
+from hidet.ir.expr import Var, Expr, convert, Constant, TaskIterator
 
 
 class Stmt(Node):
@@ -69,6 +69,12 @@ class ForStmt(Stmt):
         self.body = body
 
 
+class ForTaskStmt(Stmt):
+    def __init__(self, loop_vars: Sequence[Var], task_iterator: TaskIterator):
+        self.loop_vars: List[Var] = list(loop_vars)
+        self.task_iterator: TaskIterator = task_iterator
+
+
 class IfStmt(Stmt):
     def __init__(self, cond: Expr, then_body=None, else_body=None):
         super().__init__()
@@ -112,4 +118,4 @@ class SeqStmt(Stmt):
         super().__init__()
         self.seq: Tuple[Stmt] = tuple(seq)
         for stmt in seq:
-            assert isinstance(stmt, Stmt)
+            assert isinstance(stmt, Stmt), str(type(stmt))

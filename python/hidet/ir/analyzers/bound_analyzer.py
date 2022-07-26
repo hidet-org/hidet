@@ -167,14 +167,26 @@ class BoundInfo:
             return 'Any'
 
 
-def normalize_launch_dims(dims: Union[int, Sequence[int]]) -> Sequence[int]:
-    if isinstance(dims, int):
-        return [dims, dims, dims]
-    else:
+Int = Union[int, Expr]
+
+
+def normalize_launch_dims(dims: Union[Int, Sequence[Int]]) -> List[int]:
+    if isinstance(dims, (list, tuple)):
         dims = list(dims)
         while len(dims) < 3:
             dims = dims + [1]
-        return dims
+    else:
+        dims = [dims, dims, dims]
+    ret = []
+    for dim in dims:
+        if isinstance(dim, int):
+            ret.append(dim)
+        elif isinstance(dim, Expr):
+            from hidet.ir.functors import simplify_to_int
+            ret.append(simplify_to_int(dim))
+        else:
+            raise ValueError(dim)
+    return ret
 
 
 class BoundAnalyzer(FuncStmtExprVisitor):

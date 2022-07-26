@@ -120,6 +120,21 @@ class Expr(Node):
         assert isinstance(self, Constant)
         return self
 
+    def read(self, items, protected=True):
+        te = self[items]
+        if not isinstance(te, TensorElement):
+            raise ValueError('expect element indexing, but got slicing.')
+        te.protected = protected
+        return te
+
+    def write(self, items, value, protected=True):
+        from hidet.ir.stmt import BufferStoreStmt
+        te = self[items]
+        if not isinstance(te, TensorElement):
+            raise ValueError('expect element indexing, but got slicing.')
+        te.protected = protected
+        return BufferStoreStmt(self, te.indices, value)
+
 
 class BinaryOp(Expr):
     def __init__(self, a, b):
@@ -188,9 +203,9 @@ class And(Condition, BinaryOp):
 
     @staticmethod
     def join(*conds):
-        cond = convert(True)
+        cond = None
         for c in conds:
-            cond = And(cond, convert(c))
+            cond = And(cond, convert(c)) if cond is not None else convert(c)
         return cond
 
     @staticmethod
@@ -204,10 +219,14 @@ class Or(Condition, BinaryOp):
 
     @staticmethod
     def join(*conds):
-        cond = convert(False)
+        cond = None
         for c in conds:
-            cond = Or(cond, convert(c))
+            cond = Or(cond, convert(c)) if cond is not None else convert(c)
         return cond
+
+    @staticmethod
+    def join_list(conds: Sequence[Condition]):
+        return Or.join(*conds)
 
 
 class Not(Condition, UnaryOp):
@@ -291,9 +310,10 @@ class RightShift(Expr):
 
 
 class TensorElement(Expr):
-    def __init__(self, base, indices):
+    def __init__(self, base, indices, protected=False):
         self.base = base
         self.indices = convert(indices)
+        self.protected: bool = protected
 
 
 class TensorSlice(Expr):
@@ -353,6 +373,13 @@ class Constant(Expr):
 
     def array(self) -> np.ndarray:
         return self.value
+
+
+class TaskIterator(Expr):
+    def __init__(self, mapping, worker: Expr):
+        from hidet.ir.mapping import TaskMapping
+        self.mapping: TaskMapping = mapping
+        self.worker: Expr = worker
 
 
 class IfThenElse(Expr):

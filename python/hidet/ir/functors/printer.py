@@ -3,7 +3,7 @@ from hidet.ir.node import Node
 from hidet.ir.func import IRModule, Function
 from hidet.ir.type import ScalarType, TensorType, TypeNode
 from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div, Sub, Not, Or, And, Let, IfThenElse, TensorSlice, RightShift, LeftShift, BitwiseNot, BitwiseOr, BitwiseAnd, Neg, Cast
-from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt, BlackBoxStmt, AsmStmt, ReturnStmt, LetStmt
+from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt, BlackBoxStmt, AsmStmt, ReturnStmt, LetStmt, DeclareStmt
 from hidet.ir.dialects.compute import TensorNode, ScalarNode
 from hidet.ir.dialects.lowlevel import VoidType, PointerType, Dereference, Address, ReferenceType, TensorPointerType, Reference
 from hidet.ir.dialects.pattern import AnyExpr
@@ -63,10 +63,18 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
         param_docs = []
         for i in range(len(func.params)):
             param = func.params[i]
-            param_docs.append([NewLine(), self(param), ': ', self(param.type)])
+            line = []
+            if i != 0:
+                line.append(NewLine())
+            line.extend([self(param), ': ', self(param.type)])
+            param_docs.append(line)
         doc += doc_join(param_docs, Text(', '))
         doc += ')'
-        doc = doc.indent(6)
+        doc = doc.indent(3)
+
+        # attributes
+        for attr_name, attr_value in func.attrs.items():
+            doc += (NewLine() + '# {}: {}'.format(attr_name, attr_value)).indent(4)
 
         # const locals
         for local_var, local_value in func.local_const_vars:
@@ -214,6 +222,12 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
             else:
                 ret = '{}({})'.format(dtype, e.value)
             return Text(ret)
+
+    def visit_DeclareStmt(self, stmt: DeclareStmt):
+        doc = NewLine() + Text('declare ') + self(stmt.var) + Text(': ') + self(stmt.var.type)
+        if stmt.init is not None:
+            doc += ' = ' + self(stmt.init)
+        return doc
 
     def visit_EvaluateStmt(self, stmt: EvaluateStmt):
         return NewLine() + self(stmt.expr)

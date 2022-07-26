@@ -158,26 +158,27 @@ def demo_mma():
 
 
 def demo_mma_op():
-    m, n, k = 180, 88, 888
-    a = hidet.randint(2, shape=[1, m, k], dtype='float32')
-    b = hidet.randint(2, shape=[1, k, n], dtype='float32')
-    # a = hidet.ones(shape=[1, m, k], dtype='float32')
-    # b = hidet.ones(shape=[1, k, n], dtype='float32')
+    mn = 4777
+    m, n, k = mn, mn, 777
+    # a = hidet.randint(2, shape=[1, m, k], dtype='float16')
+    # b = hidet.randint(2, shape=[1, k, n], dtype='float16')
+    a = hidet.ones(shape=[1, m, k], dtype='float16')
+    b = hidet.ones(shape=[1, k, n], dtype='float16')
     numpy.set_printoptions(linewidth=200)
     with hidet.utils.CacheDir('./outs/cache'):
         hidet.utils.hidet_clear_op_cache()
         for mma_type in [
             'mma_f16_f16',
-            'mma_f16_f32',
-            'mma_bf16_f32',
-            'mma_tf32_f32'
+            # 'mma_f16_f32',
+            # 'mma_bf16_f32',
+            # 'mma_tf32_f32'
         ]:
             hidet.space_level(1)
             c1 = hidet.ops.matmul(a, b, mma=mma_type)
             c2 = hidet.ops.matmul(a, b)
-            print(c1)
-            print(c2)
-            print(c1 - c2)
+            # print(c1)
+            # print(c2)
+            # print(c1 - c2)
         np.testing.assert_allclose(c1.numpy(), c2.numpy())
 
 

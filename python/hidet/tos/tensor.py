@@ -365,7 +365,7 @@ def void_pointer_to_uint64(p):
     return ret.value
 
 
-def from_numpy(array: np.ndarray) -> Tensor:
+def from_numpy(nparray: np.ndarray) -> Tensor:
     dtype_convert = {
         np.dtype(np.float32): 'float32',
         np.dtype(np.int64): 'int64',
@@ -374,10 +374,11 @@ def from_numpy(array: np.ndarray) -> Tensor:
         np.dtype(np.bool): 'bool',
         np.dtype(np.uint8): 'uint8'
     }
-    if array.dtype not in dtype_convert:
-        raise NotImplementedError("Do not support convert np.ndarray with data type '{}'.".format(array.dtype))
-    tensor = empty(shape=array.shape, dtype=dtype_convert[array.dtype], device='cpu')
-    cuda.memcpy_async(src_addr=void_pointer_to_uint64(array.ctypes.data_as(ctypes.c_void_p)),
+    if nparray.dtype not in dtype_convert:
+        raise NotImplementedError("Do not support convert np.ndarray with data type '{}'.".format(nparray.dtype))
+    nparray = nparray.copy(order='C')   # make the data layout like C, which is contiguous
+    tensor = empty(shape=nparray.shape, dtype=dtype_convert[nparray.dtype], device='cpu')
+    cuda.memcpy_async(src_addr=void_pointer_to_uint64(nparray.ctypes.data_as(ctypes.c_void_p)),
                       dst_addr=tensor.storage.addr,
                       num_bytes=tensor.nbytes,
                       kind=cuda.HostToHost)

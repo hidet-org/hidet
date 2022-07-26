@@ -123,8 +123,8 @@ struct Options {
 
     Options():
             help(false),
-            problem_size({5120, 4096, 4096}),
-            batch_count(1),
+            problem_size({128, 768, 3072}),
+            batch_count(16),
             reference_check(true),
             iterations(20),
             alpha(1),
@@ -189,11 +189,11 @@ struct Options {
 
 // The code section below describes datatype for input, output matrices and computation between
 // elements in input matrices.
-using ElementAccumulator = float;                   // <- data type of accumulator
+using ElementAccumulator = cutlass::half_t;                   // <- data type of accumulator
 using ElementComputeEpilogue = ElementAccumulator;  // <- data type of epilogue operations
-using ElementInputA = float;                        // <- data type of elements in input matrix A
-using ElementInputB = float;                        // <- data type of elements in input matrix B
-using ElementOutput = float;                        // <- data type of elements in output matrix D
+using ElementInputA = cutlass::half_t;                        // <- data type of elements in input matrix A
+using ElementInputB = cutlass::half_t;                        // <- data type of elements in input matrix B
+using ElementOutput = cutlass::half_t;                        // <- data type of elements in output matrix D
 
 // The code section below describes matrix layout of input and output matrices. Column Major for
 // Matrix A, Row Major for Matrix B and Row Major for Matrix C

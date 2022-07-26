@@ -95,17 +95,17 @@ def resolve_ir_modules(ir_modules: List[IRModule], schedules: List[Schedule], ou
     best_ir_module = None
     latencies = []
     time.sleep(5.0)
-    i = 0
+    # i = 0
     for ir_module, compiled_func in strict_zip(ir_modules, compiled_funcs):
-        print(schedules[i])
-        i += 1
+        # print(schedules[i])
+        # i += 1
         if compiled_func:
             repeat_latency = compiled_func.profile(*dummy_inputs, warmup=5, number=10, repeat=3)
             latency = float(np.median(repeat_latency))
         else:
             # this ir module failed in building, skip
             latency = 1e30
-        print(latency)
+        # print(latency)
         latencies.append(latency)
         if best_latency > latency:
             best_latency = latency

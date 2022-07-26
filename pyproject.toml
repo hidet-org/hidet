@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hidet"
+version =  "0.0.1"
+dependencies = [
+    "onnx",
+    "numpy",
+    "psutil",
+    "tqdm",
+    "nvtx"
+]

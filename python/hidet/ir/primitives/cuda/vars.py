@@ -1,4 +1,4 @@
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
 from hidet.ir.expr import Var
 from hidet.ir.type import ScalarType
@@ -28,6 +28,22 @@ def block_idx(dim='x') -> Var:
     return _primitive_variables[name]
 
 
+def block_dim(dim='x') -> Var:
+    assert dim in ['x', 'y', 'z']
+    name = 'blockIdx.{}'.format(dim)
+    if name not in _primitive_variables:
+        _primitive_variables[name] = attach_pool(Var(hint=name, type=ScalarType('int32'), name=name))
+    return _primitive_variables[name]
+
+
+def grid_dim(dim='x') -> Var:
+    assert dim in ['x', 'y', 'z']
+    name = 'gridIdx.{}'.format(dim)
+    if name not in _primitive_variables:
+        _primitive_variables[name] = attach_pool(Var(hint=name, type=ScalarType('int32'), name=name))
+    return _primitive_variables[name]
+
+
 def is_primitive_variable(name: str) -> bool:
     return name in _primitive_variables
 
@@ -37,3 +53,8 @@ def get_primitive_variable(name: str) -> Optional[Var]:
         return _primitive_variables[name]
     else:
         return None
+
+
+def get_all_primitive_vars() -> List[Var]:
+    return list(_primitive_variables.values())
+

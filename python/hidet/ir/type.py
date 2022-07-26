@@ -20,6 +20,7 @@ class Scope(Node):
         assert name in ['host', 'global', 'shared', 'register', 'unspecified']
         self.name = name
 
+
 short2long = {
     'bf16': 'bfloat16',
     'tf32': 'tfloat32',
@@ -90,6 +91,11 @@ class ScalarType(TypeNode):
 
     def __hash__(self):
         return hash(self.name)
+
+    def __getitem__(self, item) -> TensorType:
+        if not isinstance(item, tuple):
+            item = (item,)
+        return tensor_type(scope='unspecified', dtype=self, shape=list(item), layout=None)
 
     @staticmethod
     def from_numpy_dtype(np_dtype):
@@ -226,11 +232,22 @@ class FuncType(TypeNode):
         return FuncType([param.type for param in func.params], func.ret_type)
 
 
+class TaskMappingType(TypeNode):
+    def __init__(self, shape: Sequence[int], num_workers: int):
+        self.shape: List[int] = list(shape)
+        self.num_workers: int = num_workers
+
+
+class TaskIteratorType(TypeNode):
+    def __init__(self, rank: int):
+        self.rank = rank
+
+
 def scalar_type(type_name):
     return ScalarType(type_name)
 
 
-def tensor_type(scope, dtype, shape: Optional[List[Union[int, Expr]]] = None, layout: Optional['DataLayout'] = None):
+def tensor_type(scope, dtype, shape: Optional[Sequence[Union[int, Expr]]] = None, layout: Optional['DataLayout'] = None):
     """
     Construct a tensor type. Shape and layout must be given at least one.
 
@@ -270,7 +287,7 @@ def tensor_type(scope, dtype, shape: Optional[List[Union[int, Expr]]] = None, la
         assert isinstance(layout, DataLayout)
         shape = layout.shape
     elif layout is None:
-        layout = DataLayout.row_major([int(v) for v in shape])
+        layout = DataLayout.row_major(list(shape))
     else:
         assert isinstance(layout, DataLayout)
         assert isinstance(shape, (list, tuple))

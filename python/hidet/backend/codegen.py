@@ -8,6 +8,7 @@ from hidet.ir.dialects.lowlevel import VoidType, PointerType, Dereference, Addre
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
 from hidet.ir.utils.call_graph import CallGraph
 from hidet.utils.namer import Namer
+from hidet.utils import prod
 from hidet.ir.primitives import is_primitive_function, lookup_primitive_function
 
 
@@ -173,6 +174,8 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         # launch bound for grid worker
         if func.kind == 'cuda_kernel':
             block_dim = func.attrs['cuda_block_dim']
+            if isinstance(block_dim, list):
+                block_dim = prod(block_dim)
             if 'cuda_min_blocks' in func.attrs:
                 min_blocks = func.attrs['cuda_min_blocks']
                 doc += f' __launch_bounds__({block_dim}, {min_blocks})'
@@ -403,6 +406,12 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             dtype = e.data_type.scalar_type.name
             items = [self.scalar_literal(v, dtype) for v in np.array(e.value).flatten()]
             return '{' + doc_join(items, ', ') + '}'
+
+    def visit_DeclareStmt(self, stmt: DeclareStmt):
+        doc = NewLine() + self.local_var_declare(stmt.var)
+        if stmt.init is not None:
+            doc += ' = ' + self(stmt.init)
+        return doc + ';'
 
     def visit_EvaluateStmt(self, stmt: EvaluateStmt):
         return NewLine() + self(stmt.expr) + ';'

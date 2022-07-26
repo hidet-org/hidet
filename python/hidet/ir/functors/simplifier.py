@@ -71,7 +71,7 @@ class Simplifier(StmtExprRewriter):
             if e.__class__ in op_dict:
                 if a.data_type.name == 'int32' and b.data_type.name == 'int32' and isinstance(e, Div):
                     # the Div for int32 will use floordiv. Override the native behavior of python
-                    return a.value // b.value
+                    return convert(a.value // b.value, 'int32')
                 else:
                     return convert(op_dict[e.__class__](a.value, b.value))
             elif isinstance(e, And):

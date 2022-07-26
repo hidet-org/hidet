@@ -126,6 +126,7 @@ class BertSelfAttentionQueryKeyValue(nn.Module):
         value = self.transpose_for_scores(self.value_layer(hidden_states))
         return [query, key, value]
 
+
 class BertSelfAttentionQueryKeyValueV2(nn.Module):
     def __init__(self, config: BertConfig):
         super().__init__()
@@ -278,7 +279,8 @@ class BertModel(nn.Module):
         return [hidden_states, pooled_output]
 
 
-def get_bert_block(name: str, batch_size=1, seq_length=128, config: Optional[BertConfig] = None, nocache=False) -> Tuple[str, List[str], List["hidet.Tensor"]]:
+def get_bert_block(name: str, batch_size=1, seq_length=128, config: Optional[BertConfig] = None, precision='float32', nocache=False) -> Tuple[str, List[str], List["hidet.Tensor"]]:
+    assert precision in ['float32', 'float16']
     if config is None:
         config = BertConfig()
     hidden_size = config.hidden_size
@@ -428,12 +430,13 @@ def get_bert_block(name: str, batch_size=1, seq_length=128, config: Optional[Ber
     else:
         raise ValueError()
 
-    onnx_path = hidet_cache_file('onnx', 'bert', f'bs{batch_size}_{name}.onnx')
+    onnx_path = hidet_cache_file('onnx', 'bert', f'bs{batch_size}_{name}_{precision}.onnx')
     return export_torch_to_onnx(
         onnx_path=onnx_path,
         model=model,
         input_names=input_names,
         inputs=inputs,
+        precision=precision,
         nocache=nocache
     )
 

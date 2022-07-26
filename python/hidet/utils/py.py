@@ -56,7 +56,11 @@ def blue(v, fmt='{}'):
 
 
 def red(v, fmt='{}'):
-    return COLORS.WARNING + fmt.format(v) + COLORS.ENDC
+    return COLORS.FAIL + fmt.format(v) + COLORS.ENDC
+
+
+def bold(v, fmt='{}'):
+    return COLORS.BOLD + fmt.format(v) + COLORS.ENDC
 
 
 def color(v, fmt='{}', fg='default', bg='default'):

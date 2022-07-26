@@ -6,7 +6,7 @@ from hidet.ir.dialects.lowlevel import TensorPointerType, PointerType
 from hidet.ir.expr import Var, And, Cast, if_then_else, convert, Expr, cast
 from hidet.ir.func import IRModule
 from hidet.ir.functors import simplify_to_int
-from hidet.ir.mapping import TaskMapping, row_spatial, repeat_map
+from hidet.ir.mapping import TaskMapping, row_spatial, row_repeat
 from hidet.ir.layout import DataLayout, row_layout, local_layout, data_layout
 from hidet.ir.primitives import syncthreads, thread_idx, block_idx, syncwarp
 from hidet.ir.primitives.cuda.wmma import WmmaConfig, wmma_load_a, wmma_load_b, wmma_mma, wmma_store, wmma_configs
@@ -79,7 +79,7 @@ class MatmulSchedule(Schedule):
         threads = warps * warp_size
         self.check(threads <= 1024)
         self.threads = threads
-        self.warp_map = row_spatial(*block_multiple) * repeat_map(*warp_multiple[:2])
+        self.warp_map = row_spatial(*block_multiple) * row_repeat(*warp_multiple[:2])
         self.c_init_map = self.warp_map
 
         if not ta:

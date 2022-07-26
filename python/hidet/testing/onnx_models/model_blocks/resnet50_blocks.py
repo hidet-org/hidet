@@ -134,7 +134,8 @@ def conv_bn_relu_input_shape(bs: int, idx: int) -> List[int]:
     return [bs] + shapes[idx]
 
 
-def get_resnet50_block(name: str, batch_size=1, nocache=False) -> Tuple[str, List[str], List["hidet.Tensor"]]:
+def get_resnet50_block(name: str, batch_size=1, precision='float32', nocache=False) -> Tuple[str, List[str], List["hidet.Tensor"]]:
+    assert precision == 'float32'
     a, b, c = name.split('_')  # resnet50_conv_0 to resnet50_conv_22
     conv_idx = int(c)
     configs = get_resnet50_configs(batch_size)
@@ -144,7 +145,7 @@ def get_resnet50_block(name: str, batch_size=1, nocache=False) -> Tuple[str, Lis
 
     x = torch.randn(x_shape)
     return export_torch_to_onnx(
-        onnx_path=hidet_cache_file('onnx', 'resnet50', f'{name}.onnx'),
+        onnx_path=hidet_cache_file('onnx', 'resnet50', f'{name}_bs{batch_size}.onnx'),
         model=model,
         input_names=['x'],
         inputs=[x],

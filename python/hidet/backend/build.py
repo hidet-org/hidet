@@ -22,6 +22,19 @@ from hidet.utils import cuda, Timer
 from hidet.backend import codegen
 
 
+class CompilationFailed(Exception):
+    def __init__(self, source_path: str, msg: str):
+        self.source_path = source_path
+        self.msg = msg
+
+    def __str__(self):
+        lines = [
+            'failed to compile source file: {}'.format(self.source_path),
+            '{}'.format(self.msg)
+        ]
+        return '\n'.join(lines)
+
+
 @functools.lru_cache()
 def nvcc_path() -> str:
     import shutil
@@ -82,16 +95,17 @@ def compile_source(src_path: str, out_lib_path: str, keep_ptx=False) -> None:
             if result.returncode:
                 message = ''
                 if result.stdout:
-                    message += result.stdout.decode() + '\n'
+                    message += result.stdout.decode().strip() + '\n'
                 if result.stderr:
-                    message += result.stderr.decode()
+                    message += result.stderr.decode().strip()
                 if keep_ptx and os.path.exists(os.path.join(working_dir, os.path.basename(src_path).replace('.cu', '.ptx'))):
                     out_lib_dir = os.path.dirname(out_lib_path)
                     ptx_name = os.path.basename(src_path).replace('.cu', '.ptx')
                     ptx_path = os.path.join(working_dir, ptx_name)
                     target_ptx_path = os.path.join(out_lib_dir, ptx_name)
                     os.rename(ptx_path, target_ptx_path)
-                raise Exception('Failed to compile file "{}":\n\n{}'.format(src_path, message))
+                raise CompilationFailed(src_path, message)
+                # raise Exception('Failed to compile file "{}":\n\n{}'.format(src_path, message))
             out_lib_dir = os.path.dirname(out_lib_path)
             if keep_ptx:
                 ptx_name = os.path.basename(src_path).replace('.cu', '.ptx')

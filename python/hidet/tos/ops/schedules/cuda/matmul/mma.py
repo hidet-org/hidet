@@ -4,7 +4,7 @@ from typing import List, Tuple, Union, Optional, Sequence, TypeVar
 import os
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.ir.dialects.lowlevel import TensorPointerType, PointerType, tensor_pointer_var
-from hidet.ir.expr import Var, And, Equal, Cast, if_then_else, convert, Expr, tensor_var, cast, TensorSlice
+from hidet.ir.expr import Var, And, Equal, Cast, if_then_else, convert, Expr, tensor_var, cast, TensorSlice, Or
 from hidet.ir.func import IRModule
 from hidet.ir.functors import simplify_to_int
 from hidet.ir.primitives import syncthreads, thread_idx, block_idx, printf
@@ -51,7 +51,7 @@ class MatmulMmaSchedule(Schedule):
         self.a_g2s_map, self.regs_a_ldg_layout = get_transfer_task_map(task_shape=[self.block_m, self.block_k], num_workers=self.threads, ranks=[0, 1])
         self.b_g2s_map, self.regs_b_ldg_layout = get_transfer_task_map(task_shape=[self.block_k, self.block_n], num_workers=self.threads, ranks=[0, 1])
         self.smem_a_layout = data_layout([2, self.block_m, self.block_k], ranks=[0, 1, 2])
-        self.smem_b_layout = data_layout([2, self.block_k, self.block_m], ranks=[0, 1, 2])
+        self.smem_b_layout = data_layout([2, self.block_k, self.block_n], ranks=[0, 1, 2])
         self.smem_c_layout = data_layout([self.block_m, self.block_n], ranks=[0, 1])
         self.regs_a_layout = row_layout(2, self.mma_count_m, mma_config.a_elements)
         self.regs_b_layout = row_layout(2, self.mma_count_n, mma_config.b_elements)
@@ -99,10 +99,11 @@ class MatmulMmaSchedule(Schedule):
         assert mma_type.startswith('mma')
         if space_level == 0:
             default_schedule = {
-                'mma_f16_f16': MatmulMmaSchedule([128, 128, 16], [64, 64, 16], MmaConfig.m16n8k8_f16_f16()),
+                # 'mma_f16_f16': MatmulMmaSchedule([128, 128, 16], [64, 64, 16], MmaConfig.m16n8k8_f16_f16()),
+                'mma_f16_f16': MatmulMmaSchedule([64, 128, 16], [64, 64, 16], MmaConfig.m16n8k8_f16_f16()),
                 'mma_f16_f32': MatmulMmaSchedule([128, 64, 16], [64, 64, 16], MmaConfig.m16n8k8_f16_f32()),
                 'mma_bf16_f32': MatmulMmaSchedule([128, 64, 16], [64, 64, 16], MmaConfig.m16n8k8_bf16_f32()),
-                'mma_tf32_f32': MatmulMmaSchedule([128, 64, 16], [64, 64, 16], MmaConfig.m16n8k8_tf32_f32())
+                'mma_tf32_f32': MatmulMmaSchedule([64, 64, 16], [32, 32, 16], MmaConfig.m16n8k8_tf32_f32())
             }
             return [default_schedule[mma_type]]
         else:
@@ -117,15 +118,13 @@ class MatmulMmaSchedule(Schedule):
                             for warp_m in [16, 32, 64] if space_level == 2 else [32, 64]:
                                 for warp_n in [8, 16, 32, 64] if space_level == 2 else [32, 64]:
                                     for warp_k in [8, 16, 32]:
-                                        if block_m % warp_m != 0 or block_n % warp_n != 0 or block_k % warp_k != 0:
-                                            continue
                                         with contextlib.suppress(NotSupportedError):
                                             schedules.append(MatmulMmaSchedule(
                                                 block_shape=[block_m, block_n, block_k],
                                                 warp_shape=[warp_m, warp_n, warp_k],
                                                 mma_config=mma_config
                                             ))
-                                            print(len(schedules))
+                                            # print(len(schedules))
             if len(schedules) == 0:
                 raise ValueError('Can not find a valid schedule for {}'.format(mma_type))
             return schedules

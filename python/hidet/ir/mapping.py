@@ -68,6 +68,9 @@ class TaskMapping:
     def of(self, w: Int) -> List[Tuple[Int, ...]]:
         return self.worker2task(w)
 
+    def on(self, w: Int) -> List[Tuple[Int, ...]]:
+        return self.worker2task(w)
+
     def single_task_of(self, w: Int) -> Tuple[Int, ...]:
         tasks = self.worker2task(w)
         if len(tasks) != 1:

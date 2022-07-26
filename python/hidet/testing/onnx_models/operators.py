@@ -30,7 +30,8 @@ class Matmul(nn.Module):
         return torch.matmul(x, y)
 
 
-def get_onnx_operator(name: str, batch_size=1) -> Tuple[str, List[str], List["hidet.Tensor"]]:
+def get_onnx_operator(name: str, batch_size=1, precision='float32') -> Tuple[str, List[str], List["hidet.Tensor"]]:
+    assert precision == 'float32'
     onnx_path = hidet_cache_file('onnx', 'op', f'{name}.onnx')
     if name.startswith('op_sum_'):
         a, b, c = name.split('_')   # op_sum_0

@@ -121,7 +121,7 @@ def hidet_cache_file(*items: str) -> str:
 
 
 def hidet_clear_op_cache():
-    op_cache = hidet_cache_dir('./ops')
+    op_cache = hidet_cache_dir('ops')
     print('Clearing operator cache in {}'.format(op_cache))
     shutil.rmtree(op_cache, ignore_errors=True)
 

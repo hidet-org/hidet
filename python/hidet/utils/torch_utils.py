@@ -4,7 +4,8 @@ import subprocess
 from hidet.utils import hidet_cache_file
 
 
-def export_torchvision_model_as_onnx(model_name: str, output_path: str, skip_existed: bool = True):
+def export_torchvision_model_as_onnx(model_name: str, output_path: str, skip_existed: bool = True, precision='float32'):
+    assert precision == 'float32'
     if skip_existed and os.path.exists(output_path):
         return
     os.makedirs(os.path.dirname(output_path), exist_ok=True)

@@ -163,6 +163,7 @@ def create_engine_from_onnx(
 dtype_map = {
     trt.DataType.INT32: 'int32',
     trt.DataType.FLOAT: 'float32',
+    trt.DataType.HALF: 'float16'
 }
 
 

@@ -1,7 +1,7 @@
 from typing import List, Union, Callable, Any
 from hidet.ir.type import TensorType, tensor_type
 from hidet.ir.expr import Var, TensorElement, TensorSlice, Constant
-from hidet.ir.stmt import BufferStoreStmt
+from hidet.ir.stmt import BufferStoreStmt, DeclareStmt
 from hidet.ir.func import Function
 from hidet.ir.functors import simplify_to_int, FuncStmtExprRewriter
 from hidet.ir.dialects.lowlevel import PointerType, TensorPointerType
@@ -41,6 +41,16 @@ class FlattenTensorAccessRewriter(FuncStmtExprRewriter):
         elif isinstance(e, Constant) and isinstance(e.data_type, TensorType):
             return e.data_type.layout
         raise ValueError("Can not infer layout from '{}'".format(type(e)))
+
+    def visit_DeclareStmt(self, stmt: DeclareStmt):
+        if isinstance(stmt.var.type, TensorType):
+            size = simplify_to_int(stmt.var.type.layout.size)
+            var = Var(stmt.var.hint, tensor_type(stmt.var.type.scope, stmt.var.type.scalar_type, [size], DataLayout.row_major([size])))
+            self.memo[stmt.var] = var
+            init = self(stmt.init) if stmt.init is not None else None
+            return DeclareStmt(var, init)
+        else:
+            return FuncStmtExprRewriter.visit_DeclareStmt(self, stmt)
 
     def visit_TensorElement(self, e: TensorElement):
         var = self(e.base)

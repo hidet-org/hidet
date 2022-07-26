@@ -100,7 +100,26 @@ class TypeInfer(ExprFunctor):
             raise NotImplementedError()
 
     def visit_TensorSlice(self, e: TensorSlice):
-        raise NotImplementedError()
+        base_type = self.visit(e.base)
+        if isinstance(base_type, TensorPointerType):
+            base_type = base_type.tensor_type
+        assert isinstance(base_type, TensorType)
+        shape = []
+        for dim, (index, start, end) in enumerate(zip(e.indices, e.starts, e.ends)):
+            if index is not None:
+                pass
+            else:
+                if start is None:
+                    start = 0
+                if end is None:
+                    end = base_type.shape[dim]
+                shape.append(end - start)
+        return TensorPointerType(
+            scope='unspecified',
+            dtype=base_type.scalar_type,
+            shape=shape,
+            layout=None     # the layout of the slice is not used
+        )
 
     def visit_IfThenElse(self, e: IfThenElse):
         cond_type = self.visit(e.cond)

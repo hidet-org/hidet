@@ -45,9 +45,16 @@ def environment_info(args) -> str:
 
 
 @lru_cache()
-def get_onnx_model(name: str, batch_size: int) -> Tuple[str, List[str], List[hidet.Tensor]]:
+def get_onnx_model(name: str, batch_size: int, precision='float32') -> Tuple[str, List[str], List[hidet.Tensor]]:
     from hidet.testing import onnx_models
-    return onnx_models.get_onnx_model(name, batch_size)
+    precision_dict = {
+        'f16': 'float16',
+        'f32': 'float32',
+        'bf16': 'bfloat16'
+    }
+    if precision in precision_dict:
+        precision = precision_dict[precision]
+    return onnx_models.get_onnx_model(name, batch_size, precision=precision)
 
 
 def run_with_onnx(model_path: str, input_names: List[str], input_tensors: List[hidet.Tensor]) -> List[np.ndarray]:
@@ -86,7 +93,7 @@ def bench_tf(args, out_dir) -> BenchResult:
         set_jit(True)
 
     pb_path = hidet_cache_file('tf', '{}.pb'.format(args.model))
-    onnx_path, input_names, input_tensors = get_onnx_model(name=args.model, batch_size=args.bs)
+    onnx_path, input_names, input_tensors = get_onnx_model(name=args.model, batch_size=args.bs, precision=args.precision)
     if not os.path.exists(pb_path):
         from onnx_tf.backend import prepare, TensorflowRep
         import onnx
@@ -152,7 +159,7 @@ def bench_torch(args, out_dir) -> BenchResult:
 
 def bench_hidet(args, out_dir) -> BenchResult:
     result = BenchResult()
-    print('args', args, 'time stamp', time.time())
+    # print('args', args, 'time stamp', time.time())
 
     # configs
     result.configs = 'sp{}_{}_{}_{}_pk_{}'.format(args.hidet_space, args.mma, args.precision, args.reduce_precision, args.parallel_k)
@@ -164,7 +171,7 @@ def bench_hidet(args, out_dir) -> BenchResult:
         'bs_{}_{}'.format(args.bs, result.configs),
         'graph.pickle'
     )
-    onnx_path, input_names, input_tensors = get_onnx_model(name=args.model, batch_size=args.bs)
+    onnx_path, input_names, input_tensors = get_onnx_model(name=args.model, batch_size=args.bs, precision=args.precision)
 
     hidet.space_level(args.hidet_space)
 
@@ -174,7 +181,7 @@ def bench_hidet(args, out_dir) -> BenchResult:
         if args.disable_graph_cache:
             print('disabled graph cache, rebuilding...')
         t1 = time.time()
-        model = hidet.tos.frontend.onnx_utils.from_onnx(onnx_path)
+        model = hidet.tos.frontend.onnx.from_onnx(onnx_path)
         symbol_inputs = [hi.symbol_like(data) for data in input_tensors]
         outputs = model(*symbol_inputs)
         graph: hi.FlowGraph = hi.trace_from(outputs, inputs=symbol_inputs)
@@ -224,7 +231,7 @@ def bench_trt(args, out_dir) -> BenchResult:
     result.configs = '_'.join(configs)
 
     # latencies
-    onnx_path, input_names, input_tensors = get_onnx_model(name=args.model, batch_size=args.bs)
+    onnx_path, input_names, input_tensors = get_onnx_model(name=args.model, batch_size=args.bs, precision=args.precision)
     engine = create_engine_from_onnx(
         onnx_model_path=onnx_path,
         input_shapes={name: tensor.shape for name, tensor in zip(input_names, input_tensors)},
@@ -263,7 +270,7 @@ def bench_ort(args, out_dir) -> BenchResult:
     }[args.ort_provider]
 
     # latencies
-    onnx_path, input_names, input_tensors = get_onnx_model(name=args.model, batch_size=args.bs)
+    onnx_path, input_names, input_tensors = get_onnx_model(name=args.model, batch_size=args.bs, precision=args.precision)
     session = create_ort_session(onnx_path, provider=provider)
     inputs = {name: tensor for name, tensor in zip(input_names, input_tensors)}
     result.latencies = ort_benchmark(
@@ -286,7 +293,7 @@ def bench_tvm(args, out_dir) -> BenchResult:
     result.configs = 'trial_{}'.format(args.tvm_trial)
 
     # latencies
-    onnx_path, input_names, input_tensors = get_onnx_model(name=args.model, batch_size=args.bs)
+    onnx_path, input_names, input_tensors = get_onnx_model(name=args.model, batch_size=args.bs, precision=args.precision)
     gmod = tvm_graph_module_from_onnx(
         onnx_model_path=onnx_path,
         input_shapes={

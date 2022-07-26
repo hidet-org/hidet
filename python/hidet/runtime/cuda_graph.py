@@ -8,7 +8,7 @@ from hidet.tos import Tensor, FlowGraph
 
 
 def dummy_input_like(tensor: Tensor) -> Tensor:
-    if tensor.dtype == 'float32':
+    if tensor.dtype in ['float32', 'float16']:
         return randn_like(tensor)
     elif tensor.dtype in ['int64', 'int32', 'int8', 'uint64', 'uint32', 'uint8']:
         return zeros_like(tensor)
