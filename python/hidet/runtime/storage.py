@@ -5,7 +5,7 @@ from collections import defaultdict
 import ctypes
 import numpy as np
 from hidet.ffi import cuda
-from hidet.utils import green
+from hidet.utils import green, prod
 
 
 def nbytes2str(nbytes: int) -> str:
@@ -225,6 +225,22 @@ class Storage:
             # reinterpret the array when needed
             array = array.view(dtype2nptype[dtype])
         return array
+
+
+class TorchStorage(Storage):
+    def __init__(self, torch_tensor):
+        import torch
+        if not isinstance(torch_tensor, torch.Tensor):
+            raise ValueError('Expect a torch tensor, got {}'.format(type(torch_tensor).__name__))
+        if not torch_tensor.is_contiguous():
+            raise ValueError("Only contiguous torch tensor can be viewed as a Hidet storage.")
+        self.torch_tensor = torch_tensor    # keep a reference to the tensor to prevent it being freed.
+        super().__init__(
+            device='cuda',
+            addr=torch_tensor.data_ptr(),
+            num_bytes=torch_tensor.element_size() * prod(torch_tensor.size()),
+            free_handler=lambda storage: None
+        )
 
 
 class MemoryPool:

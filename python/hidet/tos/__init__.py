@@ -12,7 +12,7 @@ from .module import Module
 from .ir import FlowGraph
 from .transforms import GraphPass, PassContext
 
-from .tensor import array, randn, empty, zeros, ones, symbol, randint, randn_like, empty_like, zeros_like, ones_like, symbol_like, randint_like
+from .tensor import array, randn, empty, zeros, ones, symbol, randint, randn_like, empty_like, zeros_like, ones_like, symbol_like, randint_like, from_torch
 from .tensor import full, full_like
 from .operator import space_level, get_space_level
 from .ir import trace_from, load_graph, save_graph

@@ -682,7 +682,7 @@ def pad(data: Tensor, pads: List[int], mode: str = 'constant', value: float = 0.
     return PadOp(data, pads, mode, value).get_output(0)
 
 
-def conv_pad(data: Tensor, pads: List[int]) -> Tensor:
+def conv_pad(data: Tensor, pads: Union[int, List[int]]) -> Tensor:
     from .utils import normalize_padding
     pads = normalize_padding(pads, dim=len(data.shape) - 2)
     return pad(data, pads)

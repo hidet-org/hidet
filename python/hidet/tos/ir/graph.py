@@ -6,7 +6,7 @@ import warnings
 from collections import defaultdict
 
 import hidet.tos.operator
-from hidet.tos.tensor import Tensor
+from hidet.tos.tensor import Tensor, empty_like
 from hidet.tos.operator import Operator
 from hidet.utils import tracer
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
@@ -99,20 +99,26 @@ class FlowGraph:
         hidet.driver.build_batch_task(tunable_tasks, space_level, parallel=False)
 
     def forward(self, *inputs: Tensor) -> Union[List[Tensor], Tensor]:
-        if any(v is None for v in [self.inputs, self.nodes, self.usage_count]):
-            self.update_nodes()
+        outputs = self.dummy_outputs()
+        self.pure_forward(list(inputs), outputs)
+        return outputs[0] if len(outputs) == 1 else outputs
 
-        self.build()
-
-        if len(inputs) != len(self.inputs):
-            raise ValueError('FlowGraph expects {} inputs, but got {}.'.format(len(self.inputs), len(inputs)))
+    def pure_forward(self, inputs: List[Tensor], outputs: List[Tensor]):
         for idx, tensor in enumerate(inputs):
             if tensor.storage is None:
-                raise ValueError('FlowGraph expects all input tensors are non-symbolic, '
-                                 'but the input {} ({}) is a symbol tensor.'.format(idx, tensor.signature()))
+                raise ValueError('Expect non-symbolic input tensors, got symbolic input {} ({}).'.format(idx, tensor.signature()))
+        for idx, tensor in enumerate(outputs):
+            if tensor.storage is None:
+                raise ValueError('Expect non-symbolic output tensors, got symbolic output {} ({}).'.format(idx, tensor.signature()))
+        if any(v is None for v in [self.inputs, self.nodes, self.usage_count]):
+            self.update_nodes()
+        self.build()
+
         usage_count = self.usage_count.copy()
         tensor_map: Dict[Tensor, Tensor] = {}
         for st, at in zip(self.inputs, inputs):
+            tensor_map[st] = at
+        for st, at in zip(self.outputs, outputs):
             tensor_map[st] = at
         for node in self.nodes:
             # prepare node inputs
@@ -128,15 +134,29 @@ class FlowGraph:
                 else:
                     # constant input
                     node_inputs.append(node_input)
+
+            # prepare node outputs
+            node_outputs = node.dummy_outputs()
+            for i, symbolic_output in enumerate(node.outputs):
+                if symbolic_output in tensor_map:   # the output is a graph output
+                    node_outputs[i] = tensor_map[symbolic_output]
+                else:
+                    tensor_map[symbolic_output] = node_outputs[i]
+
             # run node
-            args = {f'input_{idx}': f'{tensor.dtype}{tensor.shape}' for idx, tensor in enumerate(node.inputs)}
-            args.update(node.attrs)
-            with tracer.profile(node.name, category='op', args=args, trace_cuda=True):
-                node_outputs = node.imperative_run(node_inputs)
-            for st, at in zip(node.outputs, node_outputs):
-                tensor_map[st] = at
-        ret = [tensor_map[st] for st in self.outputs]
-        return ret[0] if len(ret) == 1 else ret
+            node.pure_run(node_inputs, node_outputs)
+
+    def dummy_inputs(self) -> List[Tensor]:
+        inputs = []
+        for symbolic_input in self.inputs:
+            if symbolic_input.dtype in ['float32', 'float16', 'bfloat16']:
+                inputs.append(empty_like(symbolic_input))
+            else:
+                raise ValueError('Can not generate dummy input for tensor {}'.format(symbolic_input.signature()))
+        return inputs
+
+    def dummy_outputs(self) -> List[Tensor]:
+        return [empty_like(tensor) for tensor in self.outputs]
 
     def save(self, fname: str):
         # before save, clear the packed func cache because ctypes object can not be pickled
@@ -263,6 +283,7 @@ def trace_from(tensor: Union[Tensor, List[Tensor]], inputs: Optional[Union[Tenso
         outputs = [tensor]
     else:
         outputs = list(tensor)
+        assert all(isinstance(v, Tensor) for v in outputs)
     if inputs is not None:
         if isinstance(inputs, Tensor):
             inputs = [inputs]

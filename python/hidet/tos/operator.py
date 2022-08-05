@@ -58,24 +58,21 @@ class Operator:
         return outputs[idx]
 
     def imperative_run(self, inputs: List[Tensor]) -> List[Tensor]:
-        if self.task_func is None:
-            task_string = str(self.task)
-            level = self._current_space_level
-            if task_string in self._task_cache[level]:
-                self.task_func = self._task_cache[level][task_string]
-            else:
-                self.task_func = build_task(self.task, space_level=self._current_space_level, use_cache=self._use_cache)
-                self._task_cache[level][task_string] = self.task_func
+        self.build_task_func()
         assert len(inputs) + len(self.task.outputs) == len(self.task.parameters)
         output_types = [output.data_type for output in self.task.parameters[-len(self.task.outputs):]]
         outputs = [empty(shape=type.const_shape(), dtype=type.scalar_type.name, device='cuda', layout=type.layout) for type in output_types]
-        self.task_func(*inputs, *outputs)
+        self.pure_run(inputs, outputs)
         return outputs
 
     def lazy_run(self) -> List[Tensor]:
         output_types = [output.data_type for output in self.task.parameters[-len(self.task.outputs):]]
         outputs = [Tensor(shape=type.const_shape(), dtype=type.scalar_type.name, device='cuda', storage=None, layout=type.layout, trace=(self, i)) for i, type in enumerate(output_types)]
         return outputs
+
+    def pure_run(self, inputs: List[Tensor], outputs: List[Tensor]):
+        self.build_task_func()
+        self.task_func(*inputs, *outputs)
 
     def reforward(self, inputs: List[Tensor], update_attributes: Optional[Dict[str, Any]] = None) -> List[Tensor]:
         cls = self.__class__
@@ -101,10 +98,7 @@ class Operator:
         new_op.task_func = None
         return new_op.outputs
 
-    def latency(self, warmup=3, number=20, repeat=5, median=True) -> Union[List[float], float]:
-        from hidet.ffi import cuda
-        from time import time
-        import numpy as np
+    def dummy_inputs(self) -> List[Tensor]:
         dummy_inputs = []
         for x in self.inputs:
             if x.storage is not None:
@@ -113,9 +107,20 @@ class Operator:
                 if x.dtype in ['float32', 'float16', 'bfloat16']:
                     dummy_inputs.append(empty_like(x))
                 else:
-                    raise ValueError('Can not generate dummpy input for dtype {}'.format(x.dtype))
+                    raise ValueError('Can not generate dummy input for dtype {}'.format(x.dtype))
+        return dummy_inputs
+
+    def dummy_outputs(self) -> List[Tensor]:
         output_types = [output.data_type for output in self.task.parameters[-len(self.task.outputs):]]
-        outputs = [empty(shape=type.const_shape(), dtype=type.scalar_type.name, device='cuda', layout=type.layout) for type in output_types]
+        dummy_outputs = [empty(shape=type.const_shape(), dtype=type.scalar_type.name, device='cuda', layout=type.layout) for type in output_types]
+        return dummy_outputs
+
+    def latency(self, warmup=3, number=20, repeat=5, median=True) -> Union[List[float], float]:
+        from hidet.ffi import cuda
+        from time import time
+        import numpy as np
+        dummy_inputs = self.dummy_inputs()
+        outputs = self.dummy_outputs()
 
         self.imperative_run(dummy_inputs)
         for t in range(warmup):
@@ -133,6 +138,16 @@ class Operator:
         if median:
             return float(np.median(results))
         return results
+
+    def build_task_func(self):
+        if self.task_func is None:
+            task_string = str(self.task)
+            level = self._current_space_level
+            if task_string in self._task_cache[level]:
+                self.task_func = self._task_cache[level][task_string]
+            else:
+                self.task_func = build_task(self.task, space_level=self._current_space_level, use_cache=self._use_cache)
+                self._task_cache[level][task_string] = self.task_func
 
 
 def space_level(level=0):

@@ -13,7 +13,7 @@ from .tos import Tensor, Operator, Module, FlowGraph
 from .tos.frontend import torch
 
 from .tos import ops
-from .tos import empty, randn, zeros, ones, full, randint, symbol, array, empty_like, randn_like, zeros_like, ones_like, symbol_like, full_like, randint_like
+from .tos import empty, randn, zeros, ones, full, randint, symbol, array, empty_like, randn_like, zeros_like, ones_like, symbol_like, full_like, randint_like, from_torch
 from .tos import space_level, get_space_level
 from .tos import trace_from, load_graph, save_graph
 from .tos import jit

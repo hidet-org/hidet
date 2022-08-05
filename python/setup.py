@@ -1,9 +1,6 @@
-from typing import List
 import tempfile
 import os
-import shutil
-import pathlib
-from setuptools import setup, Extension, find_packages
+from setuptools import setup, find_packages
 import subprocess
 
 
@@ -20,10 +17,8 @@ class Cwd:
         os.chdir(self.old_cwd)
 
 
-cur_dir = os.path.dirname(os.path.abspath(__file__))
-
-
 def build_cpp():
+    cur_dir = os.path.dirname(os.path.abspath(__file__))
     cmake_dir = os.path.join(cur_dir, '..')
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -31,7 +26,7 @@ def build_cpp():
         with Cwd(tmp_dir):
             subprocess.run('cmake {}'.format(cmake_dir).split(), check=True)
             subprocess.run('cmake --build . -- hidet -j4'.split(), check=True)
-            subprocess.run('cp -r ./lib {}'.format(cur_dir).split(), check=True)
+            subprocess.run('cp -a ./lib/. {}'.format(os.path.join(cur_dir, 'hidet')).split(), check=True)
 
 
 build_cpp()
@@ -41,11 +36,11 @@ setup(
     version="0.0.1",
     description="Hidet: a compilation-based DNN inference framework.",
     packages=find_packages(),
-    include_dirs=[os.path.join(cur_dir, './lib')],
     include_package_data=True,
-    data_files=[
-        ('hidet', ['./lib/libhidet.so', './lib/libhidet_runtime.so']),
-    ],
+    package_data={
+        'hidet': ['*.so']
+    },
+    zip_safe=False,
     install_requires=[
         "onnx",
         "numpy",

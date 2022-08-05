@@ -73,10 +73,6 @@ class JitGraph:
 
     @staticmethod
     def args_representation(*args):
-        for arg in args:
-            if not isinstance(arg, Tensor):
-                raise NotImplementedError('Currently only support Tensor argument, got {}.'.format(type(arg)))
-
         args_repr = get_type_repr(args)
         return args_repr
 
@@ -84,9 +80,9 @@ class JitGraph:
         args_repr = self.args_representation(*args)
 
         if args_repr not in self.cached_graph:
-            symbol_inputs = [symbol_like(arg) for arg in args]
+            symbol_inputs = [symbol_like(arg) if isinstance(arg, Tensor) else arg for arg in args]
             symbol_outputs = self.func(*symbol_inputs)
-            graph = hidet.trace_from(symbol_outputs, inputs=symbol_inputs)
+            graph = hidet.trace_from(symbol_outputs, inputs=[v for v in symbol_inputs if isinstance(v, Tensor)])
             if self.opt:
                 with hidet.tos.PassContext() as ctx:
                     ctx.save_graph_instrument(self.save_ir_dir)

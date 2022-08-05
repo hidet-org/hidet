@@ -24,10 +24,11 @@ def load_library():
         libhidet_runtime_path = os.path.join(library_dir, 'libhidet_runtime.so')
         if not os.path.exists(libhidet_path) or not os.path.exists(libhidet_runtime_path):
             continue
-        _LIB = ctypes.cdll.LoadLibrary(libhidet_path)
         _LIB_RUNTIME = ctypes.cdll.LoadLibrary(libhidet_runtime_path)
-        library_paths['hidet'] = libhidet_path
+        _LIB = ctypes.cdll.LoadLibrary(libhidet_path)
         library_paths['hidet_runtime'] = libhidet_runtime_path
+        library_paths['hidet'] = libhidet_path
+        break
     if _LIB is None:
         raise OSError('Can not find library in the following directory: \n' + '\n'.join(library_dirs))
 

@@ -6,6 +6,7 @@ from typing import List, Optional, Tuple, Sequence, Union
 
 import numpy as np
 
+import hidet.runtime.storage
 from hidet.ffi import cuda, cuda_kernels
 from hidet.ir.type import ScalarType
 from hidet.ir.layout import DataLayout, RowMajorLayout
@@ -35,11 +36,11 @@ class Tensor:
                  layout: DataLayout = None,
                  trace: Optional[Tuple['Operator', int]] = None):
         from hidet.tos.operator import Operator
-        self.shape = [int(v) for v in shape]
-        self.dtype = str(dtype)
-        self.device = device
-        self.storage = storage
-        self.layout = layout if layout else DataLayout.row_major(shape)
+        self.shape: List[int] = [int(v) for v in shape]
+        self.dtype: str = str(dtype)
+        self.device: str = device
+        self.storage: Optional[Storage] = storage
+        self.layout: DataLayout = layout if layout else DataLayout.row_major(shape)
         self.trace: Optional[Tuple[Operator, int]] = trace
 
     def __neg__(self) -> Tensor:
@@ -264,6 +265,24 @@ class Tensor:
             array = storage.as_array(num_elements=prod(self.shape), dtype=self.dtype)
             return array.reshape(self.shape)
 
+    def torch(self):
+        import torch
+        torch_tensor = torch.empty(
+            size=self.shape,
+            dtype=getattr(torch, self.dtype),
+            device=self.device
+        )
+        if self.storage is None:
+            # convert a symbolic tensor to a dummy torch tensor
+            return torch_tensor
+        cuda.memcpy_async(
+            src_addr=self.storage.addr,
+            dst_addr=torch_tensor.data_ptr(),
+            num_bytes=self.nbytes,
+            kind=cuda.DeviceToDevice
+        )
+        return torch_tensor
+
 
 def empty(shape: Sequence[int], dtype: str = 'float32', device: str = 'cuda', layout: Optional[DataLayout] = None) -> Tensor:
     num_bytes = prod(shape) * ScalarType(dtype).nbytes()
@@ -384,6 +403,26 @@ def from_numpy(nparray: np.ndarray) -> Tensor:
                       kind=cuda.HostToHost)
     cuda.device_synchronize()
     return tensor
+
+
+def from_torch(torch_tensor) -> Tensor:
+    import torch
+    if not isinstance(torch_tensor, torch.Tensor):
+        raise ValueError('Expect a torch.Tensor, got {}'.format(type(torch_tensor)))
+    if not torch_tensor.is_cuda:
+        raise ValueError('Expect the torch tensor is on cuda device.')
+    dtype_convert = {
+        torch.float32: 'float32',
+        torch.float16: 'float16',
+        torch.int32: 'int32',
+        torch.int64: 'int64'
+    }
+    return Tensor(
+        shape=[int(v) for v in torch_tensor.size()],
+        dtype=dtype_convert[torch_tensor.dtype],
+        device='cuda',
+        storage=hidet.runtime.storage.TorchStorage(torch_tensor),
+    )
 
 
 def array(obj: Union[List, Tuple, np.ndarray, Tensor]) -> Tensor:
