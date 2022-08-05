@@ -1,9 +1,13 @@
 from typing import List, Tuple
 from .utils import export_torch_to_onnx
-import torch
 import hidet
 from hidet.utils import hidet_cache_file
-from torch import nn
+
+try:
+    import torch
+    from torch import nn
+except ImportError:
+    pass
 
 
 class ReduceSum(nn.Module):

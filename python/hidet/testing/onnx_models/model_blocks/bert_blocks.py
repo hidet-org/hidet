@@ -1,15 +1,14 @@
-import transformers
 from typing import Optional, List, Tuple
-import os
-import tempfile
 import math
-import torch
-import onnx
-from torch import nn, Tensor
 import hidet
 from hidet.utils import hidet_cache_file
 from ..utils import export_torch_to_onnx
 
+try:
+    import torch
+    from torch import nn, Tensor
+except ImportError:
+    pass
 
 # Acknowledgement: adopted the bert implementation from huggingface transformers package, with some simplification
 

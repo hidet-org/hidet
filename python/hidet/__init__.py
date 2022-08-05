@@ -5,7 +5,6 @@ from . import utils
 from . import tos
 from . import runtime
 from . import driver
-from . import testing
 
 from .ir import Task, save_task, load_task
 

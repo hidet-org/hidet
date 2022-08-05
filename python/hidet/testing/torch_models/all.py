@@ -1,11 +1,15 @@
 from typing import Tuple, List, Dict
-import torch
-import torchvision
-import transformers
-from torch import nn
+
+try:
+    import torch
+    import torchvision
+    from torch import nn
+except ImportError:
+    pass
 
 
 def get_torch_model(name: str, batch_size: int = 1, **kwargs) -> Tuple[nn.Module, Dict[str, torch.Tensor]]:
+    import transformers
     if name == 'resnet50':
         model = torchvision.models.resnet50(pretrained=True).eval().cuda()
         inputs = {

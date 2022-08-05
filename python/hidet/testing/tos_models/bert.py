@@ -1,4 +1,3 @@
-import transformers
 from typing import Optional
 import math
 import numpy as np

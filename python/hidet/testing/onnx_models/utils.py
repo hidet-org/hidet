@@ -1,10 +1,14 @@
 from typing import List, Optional
 import tempfile
 import os
-import torch
 import onnx
 import hidet
-from torch import nn
+
+try:
+    import torch
+    from torch import nn
+except ImportError:
+    pass
 
 
 def export_torch_to_onnx(

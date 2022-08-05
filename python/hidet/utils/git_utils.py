@@ -1,6 +1,6 @@
 from typing import List
 import os
-import git
+import os.path
 import functools
 import datetime
 import logging
@@ -26,6 +26,7 @@ def get_repo_sha(short=False):
     ret: str
         The commit sha hash.
     """
+    import git
     repo = git.Repo(search_parent_directories=True)
     sha = repo.head.object.hexsha
     if short:
@@ -49,6 +50,7 @@ def get_repo_commit_date(strftime='%Y-%m-%d') -> str:
     ret: str
         The commit date time in given format.
     """
+    import git
     repo = git.Repo(search_parent_directories=True)
     commit = repo.head
     committed_date = commit.commit.committed_date
@@ -66,8 +68,18 @@ def repo_root() -> str:
     ret: str
         The root directory.
     """
-    repo = git.Repo(search_parent_directories=True)
-    return repo.working_dir
+    hidet_cache = os.path.expanduser('~/.cache/hidet')
+    os.makedirs(hidet_cache, exist_ok=True)
+    try:
+        import git
+    except ImportError:
+        return hidet_cache
+    else:
+        try:
+            repo = git.Repo(search_parent_directories=True)
+            return repo.working_dir
+        except git.InvalidGitRepositoryError:
+            return hidet_cache
 
 
 _hidet_cache_root_dir = os.path.join(repo_root(), '.hidet_cache')

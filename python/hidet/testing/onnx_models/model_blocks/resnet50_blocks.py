@@ -1,14 +1,18 @@
 import os.path
 from typing import List, Tuple, Optional
 from collections import namedtuple, defaultdict
-import torch
 import tempfile
 import onnx
-import torchvision.models
 import hidet
-from torch import nn
 from hidet.utils import hidet_cache_file
 from ..utils import export_torch_to_onnx
+
+try:
+    import torch
+    from torch import nn
+    import torchvision.models
+except ImportError:
+    pass
 
 
 class ConvBnRelu(nn.Module):
