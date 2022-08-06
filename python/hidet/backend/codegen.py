@@ -454,6 +454,9 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         doc += Text('{') + body_doc.indent() + NewLine() + Text('} ')
         return doc
 
+    def visit_ForTaskStmt(self, stmt: ForTaskStmt):
+        raise ValueError('ForTaskStmt should be lowered to ForStmt in lower_task_mapping pass before code generation.')
+
     def visit_IfStmt(self, stmt: IfStmt):
         cond_doc = self(stmt.cond)
         if not (len(cond_doc.docs) > 0 and isinstance(cond_doc.docs[0], str) and cond_doc.docs[0].startswith('(')):

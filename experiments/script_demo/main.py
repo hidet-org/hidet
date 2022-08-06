@@ -95,8 +95,8 @@ def matmul_block(
 
 
 def matmul_use_mapping(m_size: int, n_size: int, k_size: int):
-    from hidet.ir import IRModule
-    from hidet.lang import script, f32, tensor, attr
+    from hidet.ir import IRModule, Var
+    from hidet.lang import script, f32, tensor, attr, printf
     from hidet.lang.mapping import spatial, repeat, chain
     from hidet.lang.layout import row_layout, col_layout, local_layout
     from hidet.lang.cuda import threadIdx, blockIdx, syncthreads
@@ -105,8 +105,6 @@ def matmul_use_mapping(m_size: int, n_size: int, k_size: int):
     block_k: int = 8
     warp_m: int = 32
     warp_n: int = 64
-    inst_m: int = 8
-    inst_n: int = 8
     warp_count = block_m // warp_m, block_n // warp_n   # (4, 2)
     threads = warp_count[0] * warp_count[1] * 32        # 256
 
@@ -117,11 +115,7 @@ def matmul_use_mapping(m_size: int, n_size: int, k_size: int):
         offset_m, offset_n = blockIdx.x * block_m, blockIdx.y * block_n
         smem_a = tensor('shared', 'float32', [block_m, block_k])
         smem_b = tensor('shared', 'float32', [block_k, block_n])
-        regs_c = tensor('register', 'float32', layout=(
-                local_layout(warp_count[0], warp_count[1])
-                * row_layout(4, 8)
-                * local_layout(inst_m, inst_n)
-        ))
+        regs_c = tensor('register', 'float32', layout=local_layout(4, 2) * row_layout(8, 8) * local_layout(4, 8))
         gmem_c = c[offset_m:, offset_n:]
 
         c_mapping = chain(spatial(4, 2), repeat(8, 8), spatial(4, 8))
@@ -131,16 +125,16 @@ def matmul_use_mapping(m_size: int, n_size: int, k_size: int):
             gmem_a = a[offset_m:, k0 * block_k:]
             gmem_b = b[k0 * block_k:, offset_n:]
             for i, k in chain(repeat(4, 1), spatial(32, 8)).on(threadIdx.x):
-                smem_a[i, k] = gmem_a.read([i, k])
+                smem_a[i, k] = gmem_a.read([i, k], protected=True)
             for k, j in chain(repeat(4, 1), spatial(2, 128)).on(threadIdx.x):
-                smem_b[k, j] = gmem_b.read([k, j])
+                smem_b[k, j] = gmem_b.read([k, j], protected=True)
             syncthreads()
             for i, j in c_mapping.on(threadIdx.x):
                 for k in range(block_k):
                     regs_c[i, j] += smem_a[i, k] * smem_b[k, j]
             syncthreads()
         for i, j in c_mapping.on(threadIdx.x):
-            gmem_c.write([i, j], regs_c[i, j])
+            gmem_c.write([i, j], regs_c[i, j], protected=True)
 
     print(matmul_grid)
     return IRModule(funcs={matmul_grid.name: matmul_grid})
@@ -148,21 +142,25 @@ def matmul_use_mapping(m_size: int, n_size: int, k_size: int):
 
 def main():
     m_size, n_size, k_size = 1024, 1024, 1024
+    # m_size, n_size, k_size = 128, 128, 128
     # ir_module = matmul_naive(m_size, n_size, k_size)
     # ir_module = matmul_block(m_size, n_size, k_size)
     ir_module = matmul_use_mapping(m_size, n_size, k_size)
     func = hidet.driver.build_ir_module(ir_module, func_name='matmul')
     a = hidet.randint(2, shape=[m_size, k_size], dtype='float32')
     b = hidet.randint(2, shape=[k_size, n_size], dtype='float32')
+    # a = hidet.ones([m_size, k_size])
+    # b = hidet.ones([k_size, n_size])
     c = hidet.zeros([m_size, n_size])
     func(a, b, c)
-    print(func.profile(a, b, c))
+    # print(func.profile(a, b, c))
     hidet.utils.cuda.device_synchronize()
-    with hidet.utils.Timer('normal') as timer:
-        for t in range(100):
-            c2 = hidet.ops.matmul(a, b)
-        hidet.utils.cuda.device_synchronize()
-    print(timer.elapsed_seconds())
+    c2 = hidet.ops.matmul(a, b)
+    # with hidet.utils.Timer('normal') as timer:
+    #     for t in range(100):
+    #         c2 = hidet.ops.matmul(a, b)
+    #     hidet.utils.cuda.device_synchronize()
+    # print(timer.elapsed_seconds())
     np.testing.assert_allclose(actual=c.numpy(), desired=c2.numpy())
 
 

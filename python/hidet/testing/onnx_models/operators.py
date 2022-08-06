@@ -94,5 +94,33 @@ def get_onnx_operator(name: str, batch_size=1, precision='float32') -> Tuple[str
             input_names=['x', 'y'],
             inputs=[x, y],
         )
+    elif name.startswith('op_setgan_conv_'): # like 'op_setgan_conv_3'
+        _, _, _, idx = name.split('_')
+        workload = {
+            # idx: [batch_size, in_channels, height, width, out_channels, kx, ky, sx, sy, px, py]
+            0: [576, 1, 64, 64, 32, 4, 4, 2, 2, 0, 0],
+            1: [576, 32, 31, 31, 64, 4, 4, 2, 2, 0, 0],
+            2: [576, 64, 14, 14, 128, 4, 4, 2, 2, 0, 0],
+            3: [576, 128, 6, 6, 128, 3, 3, 2, 2, 1, 1],
+            4: [448, 128, 6, 6, 128, 4, 4, 2, 2, 0, 0],
+            5: [576, 128, 6, 6, 128, 4, 4, 2, 2, 0, 0],
+            6: [576, 128, 6, 6, 128, 1, 1, 1, 1, 0, 0],
+            7: [448, 128, 6, 6, 128, 1, 1, 1, 1, 0, 0],
+            8: [448, 64, 14, 14, 64, 4, 4, 2, 2, 0, 0],
+            9: [576, 64, 14, 14, 64, 4, 4, 2, 2, 0, 0],
+            10: [576, 64, 14, 14, 64, 1, 1, 1, 1, 0, 0],
+            11: [448, 64, 14, 14, 64, 1, 1, 1, 1, 0, 0],
+            12: [448, 32, 31, 31, 32, 4, 4, 2, 2, 0, 0],
+            13: [576, 32, 31, 31, 32, 4, 4, 2, 2, 0, 0],
+            14: [576, 32, 31, 31, 32, 1, 1, 1, 1, 0, 0],
+            15: [448, 32, 31, 31, 32, 1, 1, 1, 1, 0, 0],
+        }
+        bs, in_channels, height, width, out_channels, kx, ky, sx, sy, px, py = workload[int(idx)]
+        return export_torch_to_onnx(
+            onnx_path=onnx_path,
+            model=nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=(kx, ky), stride=(sx, sy), padding=(px, py), bias=True),
+            input_names=['x'],
+            inputs=[torch.randn(bs, in_channels, height, width)]
+        )
     else:
         raise ValueError('')

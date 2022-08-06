@@ -1,6 +1,3 @@
-from abc import ABC
-from typing import Mapping
-
 from hidet.ir.dialects.pattern import *
 from hidet.ir.func import *
 from hidet.ir.stmt import *
@@ -525,6 +522,7 @@ class StmtFunctor(NodeFunctor):
             AssignStmt: cls.visit_AssignStmt,
             LetStmt: cls.visit_LetStmt,
             ForStmt: cls.visit_ForStmt,
+            ForTaskStmt: cls.visit_ForTaskStmt,
             IfStmt: cls.visit_IfStmt,
             ReturnStmt: cls.visit_ReturnStmt,
             AsmStmt: cls.visit_AsmStmt,
@@ -552,6 +550,9 @@ class StmtFunctor(NodeFunctor):
         raise NotImplementedError()
 
     def visit_ForStmt(self, stmt: ForStmt):
+        raise NotImplementedError()
+
+    def visit_ForTaskStmt(self, stmt: ForTaskStmt):
         raise NotImplementedError()
 
     def visit_IfStmt(self, stmt: IfStmt):
@@ -602,6 +603,12 @@ class StmtVisitor(StmtFunctor):
 
     def visit_ForStmt(self, stmt: ForStmt):
         self.visit_expr(stmt.extent)
+        self.visit(stmt.body)
+
+    def visit_ForTaskStmt(self, stmt: ForTaskStmt):
+        for loop_var in stmt.loop_vars:
+            self.visit_expr(loop_var)
+        self.visit_expr(stmt.worker)
         self.visit(stmt.body)
 
     def visit_IfStmt(self, stmt: IfStmt):
@@ -683,6 +690,17 @@ class StmtRewriter(StmtFunctor):
             return stmt
         else:
             return ForStmt(loop_var, extent, stmt.unroll, body)
+
+    def visit_ForTaskStmt(self, stmt: ForTaskStmt):
+        loop_vars = [self.visit_expr(v) for v in stmt.loop_vars]
+        # todo: visit expressions in task mapping
+        worker = self.visit_expr(stmt.worker)
+        body = self.visit(stmt.body)
+        if same_list(loop_vars, stmt.loop_vars) and worker is stmt.worker and body is stmt.body:
+            return stmt
+        else:
+            assert all(isinstance(v, Var) for v in loop_vars)
+            return ForTaskStmt(loop_vars=loop_vars, mapping=stmt.mapping, worker=worker, body=body)
 
     def visit_IfStmt(self, stmt: IfStmt):
         cond = self.visit_expr(stmt.cond)

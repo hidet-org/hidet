@@ -1,7 +1,8 @@
 from typing import Sequence, Tuple
 from typing import List, Union, Optional
 from hidet.ir.node import Node
-from hidet.ir.expr import Var, Expr, convert, Constant, TaskIterator
+from hidet.ir.expr import Var, Expr, convert, Constant
+from hidet.ir.mapping import TaskMapping
 
 
 class Stmt(Node):
@@ -22,12 +23,13 @@ class DeclareStmt(Stmt):
 
 
 class BufferStoreStmt(Stmt):
-    def __init__(self, buf, indices, value):
+    def __init__(self, buf, indices, value, protected=False):
         super().__init__()
         assert isinstance(indices, (list, tuple)), type(indices)
         self.buf = buf
         self.indices = convert(indices)
         self.value = convert(value)
+        self.protected = protected
 
 
 class AssignStmt(Stmt):
@@ -70,9 +72,11 @@ class ForStmt(Stmt):
 
 
 class ForTaskStmt(Stmt):
-    def __init__(self, loop_vars: Sequence[Var], task_iterator: TaskIterator):
+    def __init__(self, loop_vars: Sequence[Var], mapping: TaskMapping, worker: Expr, body: Stmt):
         self.loop_vars: List[Var] = list(loop_vars)
-        self.task_iterator: TaskIterator = task_iterator
+        self.mapping: TaskMapping = mapping
+        self.worker: Expr = worker
+        self.body: Stmt = body
 
 
 class IfStmt(Stmt):

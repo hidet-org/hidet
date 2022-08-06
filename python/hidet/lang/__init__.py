@@ -3,7 +3,8 @@ from hidet.ir.type import ScalarType, TensorType, Scope
 from hidet.ir.expr import Expr
 from hidet.ir.mapping import row_spatial, row_repeat
 from hidet.ir.layout import DataLayout
-from .script import script
+from hidet.ir.primitives import printf
+from hidet.lang.script import script
 
 i32 = ScalarType('int32')
 i64 = ScalarType('int64')

@@ -65,9 +65,6 @@ class TaskMapping:
                 worker_id[task_indices] = w
         return np.array2string(worker_id)
 
-    def of(self, w: Int) -> List[Tuple[Int, ...]]:
-        return self.worker2task(w)
-
     def on(self, w: Int) -> List[Tuple[Int, ...]]:
         return self.worker2task(w)
 

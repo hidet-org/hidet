@@ -18,15 +18,14 @@ class Cwd:
 
 
 def build_cpp():
-    cur_dir = os.path.dirname(os.path.abspath(__file__))
-    cmake_dir = os.path.join(cur_dir, '..')
+    root_dir = os.path.dirname(os.path.abspath(__file__))
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         os.makedirs(tmp_dir, exist_ok=True)
         with Cwd(tmp_dir):
-            subprocess.run('cmake {}'.format(cmake_dir).split(), check=True)
+            subprocess.run('cmake {}'.format(root_dir).split(), check=True)
             subprocess.run('cmake --build . -- hidet -j4'.split(), check=True)
-            subprocess.run('cp -a ./lib/. {}'.format(os.path.join(cur_dir, 'hidet')).split(), check=True)
+            subprocess.run('cp -a ./lib/. {}'.format(os.path.join(root_dir, 'python', 'hidet')).split(), check=True)
 
 
 build_cpp()
@@ -35,7 +34,9 @@ setup(
     name="hidet",
     version="0.0.1",
     description="Hidet: a compilation-based DNN inference framework.",
-    packages=find_packages(),
+    packages=find_packages(where='python',
+                           include=['hidet']),
+    package_dir={"": "python"},
     include_package_data=True,
     package_data={
         'hidet': ['*.so']
@@ -50,6 +51,3 @@ setup(
         "tabulate"
     ]
 )
-
-if __name__ == '__main__':
-    pass

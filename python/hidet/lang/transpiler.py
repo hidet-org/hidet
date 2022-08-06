@@ -1,20 +1,20 @@
 from __future__ import annotations
-from types import FunctionType
+import types
 
-import inspect
 from typing import Optional, Dict, Any, Union
-import warnings
 import os.path
 import ast
 from hidet.ir.builders import FunctionBuilder
 from ast import AST, Module
 import astunparse
 
+import hidet.lang.attr
+
 # statements
 from ast import FunctionDef, Return, Assign, AnnAssign, AugAssign, For, While, If, With, Assert, Expr, Pass, Break, Continue
 
 # expressions
-from ast import Constant, Num, Str
+from ast import Constant, Num, Str, NameConstant
 from ast import BoolOp, BinOp, UnaryOp, Lambda, IfExp, Compare, Call, Attribute, Subscript, Starred, Name, Tuple, Slice, ExtSlice, List
 
 # expr context
@@ -31,10 +31,6 @@ from ast import Index
 from hidet import ir
 from hidet.ir import Var
 from hidet.utils import red, cyan, green, bold, blue
-
-
-class AstNotSupported(Exception):
-    pass
 
 
 class HidetProgramError(Exception):
@@ -158,6 +154,9 @@ class PythonAstFunctor:
     def visit_Str(self, expr: Str):
         return self.visit(ast.copy_location(Constant(expr.s), expr))
 
+    def visit_NameConstant(self, expr: NameConstant):
+        return self.visit(ast.copy_location(Constant(expr.value), expr))
+
     def visit_Attribute(self, expr: Attribute):
         raise NotImplementedError()
 
@@ -187,8 +186,8 @@ class PythonAstFunctor:
 
 
 class Scope:
-    def __init__(self, parent: Scope):
-        self.parent: Scope = parent
+    def __init__(self, parent: Optional[Scope]):
+        self.parent: Optional[Scope] = parent
         self.name2var: Dict[str, Var] = {}
         self.name2host_var: Dict[str, Any] = {}
         self.stmts: list[ir.Stmt] = []
@@ -223,15 +222,18 @@ class Scope:
         return seq_stmt
 
 
-class ScopeContext:
-    def __init__(self, scopes: list[Scope]):
-        self.scopes = scopes
+class ScopeStack:
+    def __init__(self):
+        self.scopes: list[Scope] = []
 
     def __enter__(self) -> Scope:
-        parent_scope = self.scopes[-1] if len(self.scopes) > 0 else None
-        new_scope = Scope(parent_scope)
-        self.scopes.append(new_scope)
-        return new_scope
+        if len(self.scopes) == 0:
+            parent = None
+        else:
+            parent = self.scopes[-1]
+        scope = Scope(parent)
+        self.scopes.append(scope)
+        return scope
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.scopes.pop()
@@ -244,58 +246,84 @@ class PythonToHidetTranslator(PythonAstFunctor):
         self.func_annotations: Dict[str, Any] = func_annotations
 
         self.fb: Optional[FunctionBuilder] = None
-        self.scopes: list[Scope] = []
+        self.scope_stack: ScopeStack = ScopeStack()
 
-    def scope(self) -> ScopeContext:
-        return ScopeContext(self.scopes)
+    def scope(self):
+        return self.scope_stack
 
     @property
     def current_scope(self) -> Scope:
-        return self.scopes[-1]
+        if len(self.scope_stack.scopes) == 0:
+            raise ValueError('The scope stack is empty.')
+        return self.scope_stack.scopes[-1]
 
-    def process_assign(self, lhs: Union[Attribute, Subscript, Name], rhs: Union[ast.expr, ir.Expr, list[ast.expr]]):
-        if isinstance(rhs, ast.expr):
-            value = self.visit(rhs)
-        elif isinstance(rhs, ir.Expr):
-            value = rhs
-        elif isinstance(rhs, list):
-            value = [self.visit(v) for v in rhs]
-        else:
-            raise ValueError(rhs)
+    def process_assign(self, lhs: Union[Attribute, Subscript, Name], rhs):
+        # check the rhs value, must be an instance of base_types or a list of these kind of elements.
+        base_types = (
+            ir.Expr,
+            ir.TypeNode,
+            ir.DataLayout,
+            ir.TaskMapping,
+            float,
+            int
+        )
+        assert (
+            isinstance(rhs, base_types) or
+            (isinstance(rhs, list) and all(isinstance(v, base_types) for v in rhs))
+        ), 'unexpected value "{}" with type {}'.format(rhs, type(rhs))
 
+        # three cases of assignment:
+        #    1. v = ...
+        #    2. a[i, j] = ...
+        #    3. attr.name = ...
         if isinstance(lhs, Name):
-            var = self.current_scope.lookup(lhs.id)
+            var = self.current_scope.lookup(lhs.id, search_parents=True)
             if var is None:
+                # define a new variable
+                # during transpiling, there are two kinds of variables:
+                #   1. host variable, the variable in host language, and
+                #   2. hidet variable, the variable in hidet.
+                # Typical host variables are TaskMapping, DataLayout that are not scalar or tensor.
+                # We use host variable to reduce the complexity of hidet's data model.
                 var_name = lhs.id
-                if isinstance(value, (ir.TaskMapping, ir.DataLayout)):
-                    self.current_scope.define_host_var(var_name, value)
+                host_var_types = [
+                    ir.TaskMapping,
+                    ir.DataLayout,
+                    ir.TensorSlice
+                ]
+                if isinstance(rhs, tuple(host_var_types)):
+                    # host variable
+                    self.current_scope.define_host_var(var_name, rhs)
                 else:
-                    if isinstance(value, ir.TypeNode):
-                        # a = tensor('shared', 'float32', [3, 4])
-                        var_type = value
+                    # hidet variable, there are two ways to define a variable:
+                    #   1. var = type
+                    #      example: a = tensor('shared', 'float32', [3, 4])
+                    #   2. var = initialized value
+                    #      example: a = 3
+                    if isinstance(rhs, ir.TypeNode):  # case 1: var = type
+                        var_type = rhs
                         init_value = None
-                    else:
-                        # a = 5
-                        var_type = ir.infer_type(value)
-                        init_value = value
+                    else:   # case 2: var = initialized value
+                        var_type = ir.infer_type(rhs)
+                        init_value = rhs
                     var = Var(hint=var_name, type=var_type)
                     self.current_scope.append(ir.DeclareStmt(var, init=init_value))
                     self.current_scope.define(name=var_name, v=var)
             else:
-                self.current_scope.append(ir.AssignStmt(var, value=value))
+                self.current_scope.append(ir.AssignStmt(var, value=rhs))
         elif isinstance(lhs, Subscript):
+            # example: a[3, 4] = 5.0
             base = self.visit(lhs.value)
             indices = self.visit(lhs.slice)
             if not isinstance(indices, list):
                 indices = [indices]
-            self.current_scope.append(ir.BufferStoreStmt(buf=base, indices=indices, value=value))
+            self.current_scope.append(ir.BufferStoreStmt(buf=base, indices=indices, value=rhs))
         elif isinstance(lhs, Attribute):
-            from hidet.lang import attr
-            # attr.cuda_block_dim = ...
+            # example: attr.cuda_block_dim = 16, 16
             lhs_base = self.visit(lhs.value)
-            if lhs_base is attr:
+            if lhs_base is hidet.lang.attr:
                 attr_name = lhs.attr
-                self.current_scope.annotate(attr_name, value)
+                self.current_scope.annotate(attr_name, rhs)
             else:
                 raise HidetProgramError(self, lhs, 'Invalid assignment.')
         else:
@@ -368,9 +396,9 @@ class PythonToHidetTranslator(PythonAstFunctor):
             lhs_list = [target]
 
         if isinstance(value, (Tuple, List)):
-            rhs_list = value.elts
+            rhs_list = [self.visit(v) for v in value.elts]
         else:
-            rhs_list = [value]
+            rhs_list = [self.visit(value)]
 
         if len(lhs_list) == len(rhs_list):
             for lhs, rhs in zip(lhs_list, rhs_list):
@@ -497,6 +525,14 @@ class PythonToHidetTranslator(PythonAstFunctor):
             assert isinstance(target, Name)
             loop_vars.append(Var(target.id, type=ir.scalar_type('int32')))
 
+        def visit_body() -> ir.Stmt:
+            with self.scope() as for_scope:
+                for var in loop_vars:
+                    for_scope.define(name=var.hint, v=var)
+                for s in stmt.body:
+                    self.visit(s)
+            return for_scope.flush_stmts()
+
         # construct for body
         if isinstance(stmt.iter, Call) and isinstance(stmt.iter.func, Name) and stmt.iter.func.id == 'range':
             # case 1:
@@ -509,23 +545,40 @@ class PythonToHidetTranslator(PythonAstFunctor):
             if len(call.args) > 1:
                 raise NotImplementedError('Current we only support range(extent), will add range(start, stop, step) later.')
             extent = self.visit(call.args[0])
-
-            with self.scope() as for_scope:
-                assert len(loop_vars) == 1
-                for_scope.define(name=loop_vars[0].hint, v=loop_vars[0])
-                for s in stmt.body:
-                    self.visit(s)
             self.current_scope.append(ir.ForStmt(
                 loop_var=loop_vars[0],
                 extent=extent,
-                body=for_scope.flush_stmts()
+                body=visit_body()
             ))
-        else:
+        elif isinstance(stmt.iter, Call) and isinstance(stmt.iter.func, Attribute) and stmt.iter.func.attr == 'on':
             # case 2:
             #  for a, b in row_spatial(3, 4).on(thread_x):
             #    ...
             # Will be translated to ForTaskStmt
-            raise NotImplementedError()
+            if len(stmt.iter.args) != 1:
+                raise HidetProgramError(self, stmt.iter, 'Expect a single expression representing worker index.')
+            worker = self.visit(stmt.iter.args[0])
+            mapping = self.visit(stmt.iter.func.value)
+            if not isinstance(mapping, ir.TaskMapping):
+                raise HidetProgramError(self, stmt.iter.func.value, 'Expect task mapping here.')
+            self.current_scope.append(ir.ForTaskStmt(
+                loop_vars=loop_vars,
+                mapping=mapping,
+                worker=worker,
+                body=visit_body()
+            ))
+        else:
+            msg = (
+                'Cannot recognize the for loop statement. Currently, we support two types of for loop statements:\n'
+                '  for i in range(extent):\n'
+                '    body(i)\n'
+                'and\n'
+                '  for i, j in mapping.on(worker):\n'
+                '    body(i, j)\n'
+                '  (here the mapping can be arbitrary task mapping, or their composition. And the dimension of task can vary.)'
+            )
+            raise HidetProgramError(self, stmt.iter, msg)
+
         if len(stmt.orelse) > 0:
             raise HidetProgramError(self, stmt.orelse[0], 'Hidet does not support else clause in for loop.')
 
@@ -565,8 +618,11 @@ class PythonToHidetTranslator(PythonAstFunctor):
 
     def visit_Expr(self, stmt: Expr):
         value = self.visit(stmt.value)
-        if isinstance(value, ir.expr.Call):
+        if isinstance(value, ir.Call):
             self.current_scope.append(ir.EvaluateStmt(value))
+        elif isinstance(value, ir.Stmt):
+            # buf.write([i, j], value) would return a BufferStoreStmt
+            self.current_scope.append(value)
         else:
             raise HidetProgramError(self, stmt, 'Can not recognize expression statement.')
 
@@ -574,7 +630,9 @@ class PythonToHidetTranslator(PythonAstFunctor):
         func = self.visit(expr.func)
         args = [self.visit(arg) for arg in expr.args]
         kwargs = {kwarg.arg: self.visit(kwarg.value) for kwarg in expr.keywords}
-        if isinstance(func, FunctionType):
+        if isinstance(func, types.FunctionType):
+            return func(*args, **kwargs)
+        elif isinstance(func, types.MethodType):
             return func(*args, **kwargs)
         elif isinstance(func, ir.Expr):
             if len(kwargs) > 0:
@@ -595,4 +653,11 @@ class PythonToHidetTranslator(PythonAstFunctor):
             self.visit(expr.upper) if expr.upper is not None else None,
             self.visit(expr.step) if expr.step is not None else None
         )
+
+    def visit_Assert(self, stmt: Assert):
+        cond = self.visit(stmt.test)
+        msg = '' if stmt.msg is None else self.visit(stmt.msg)
+        if not isinstance(msg, str):
+            raise HidetProgramError(self, stmt.msg, 'Expect a string message.')
+        self.current_scope.append(ir.AssertStmt(cond=cond, msg=msg))
 

@@ -126,8 +126,8 @@ class JitGraph:
             return results
 
 
-def jit(opt=False, save_ir_dir='./outs', parallel_k='default', mma='simt'):
-    def decorator(func):
+def jit(opt=False, save_ir_dir='./outs', parallel_k='default', mma='simt') -> Callable[[Callable], JitGraph]:
+    def decorator(func) -> JitGraph:
         jit_graph = JitGraph(
             func=func,
             opt=opt,

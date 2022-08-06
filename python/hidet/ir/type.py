@@ -232,17 +232,6 @@ class FuncType(TypeNode):
         return FuncType([param.type for param in func.params], func.ret_type)
 
 
-class TaskMappingType(TypeNode):
-    def __init__(self, shape: Sequence[int], num_workers: int):
-        self.shape: List[int] = list(shape)
-        self.num_workers: int = num_workers
-
-
-class TaskIteratorType(TypeNode):
-    def __init__(self, rank: int):
-        self.rank = rank
-
-
 def scalar_type(type_name):
     return ScalarType(type_name)
 

@@ -3,12 +3,14 @@ from hidet.ir.node import Node
 from hidet.ir.func import IRModule, Function
 from hidet.ir.type import ScalarType, TensorType, TypeNode
 from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div, Sub, Not, Or, And, Let, IfThenElse, TensorSlice, RightShift, LeftShift, BitwiseNot, BitwiseOr, BitwiseAnd, Neg, Cast
-from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt, BlackBoxStmt, AsmStmt, ReturnStmt, LetStmt, DeclareStmt
+from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt, BlackBoxStmt, AsmStmt, ReturnStmt, LetStmt, DeclareStmt, ForTaskStmt
+from hidet.ir.mapping import RepeatTaskMapping, SpatialTaskMapping, ComposedTaskMapping, TaskMapping
 from hidet.ir.dialects.compute import TensorNode, ScalarNode
 from hidet.ir.dialects.lowlevel import VoidType, PointerType, Dereference, Address, ReferenceType, TensorPointerType, Reference
 from hidet.ir.dialects.pattern import AnyExpr
 from hidet.ir.layout import RowMajorLayout, ColumnMajorLayout
 from hidet.ir.task import Task, Prologue, Epilogue, InverseMap
+from hidet.utils import same_list
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
 from hidet.utils.namer import Namer
 
@@ -25,6 +27,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
         return self.visit(node)
 
     def visit(self, obj):
+        # python builtin type
         if isinstance(obj, (list, tuple)):
             return doc_join([self(v) for v in obj], ', ')
         elif isinstance(obj, dict):
@@ -33,14 +36,20 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
             return Text(obj.replace('\n', '\\n').replace('\t', '\\t'))
         elif isinstance(obj, (int, float)):
             return Text(str(obj))
+        elif obj is None:
+            return Text('None')
+        # type node
         elif isinstance(obj, TypeNode):
             return TypeFunctor.visit(self, obj)
+        # function and ir module
         elif isinstance(obj, Function):
             return self.visit_Function(obj)
         elif isinstance(obj, IRModule):
             return self.visit_IRModule(obj)
+        # expression and statement
         elif isinstance(obj, (Expr, Stmt)):
             return NodeFunctor.visit(self, obj)
+        # task related
         elif isinstance(obj, Task):
             return self.visit_Task(obj)
         elif isinstance(obj, Prologue):
@@ -49,8 +58,9 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
             return self.visit_Epilogue(obj)
         elif isinstance(obj, InverseMap):
             return self.visit_InverseMap(obj)
-        elif obj is None:
-            return Text('None')
+        # task mapping
+        elif isinstance(obj, TaskMapping):
+            return self.visit_TaskMapping(obj)
         else:
             return object.__repr__(obj)
 
@@ -154,7 +164,11 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
         return '(' + self(e.base) + ' >> ' + self(e.cnt) + ')'
 
     def visit_TensorElement(self, e: TensorElement):
-        return self(e.base) + '[' + self(e.indices) + ']'
+        if e.protected:
+            doc = self(e.base) + '.protect_read([' + self(e.indices) + '])'
+        else:
+            doc = self(e.base) + '[' + self(e.indices) + ']'
+        return doc
 
     def visit_TensorSlice(self, e: TensorSlice):
         subscriptions = []
@@ -237,6 +251,8 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
         doc += self(stmt.buf)
         doc += '[' + self(stmt.indices) + ']'
         doc += ' = ' + self(stmt.value)
+        if stmt.protected:
+            doc += '  [protected write]'
         return doc
 
     def visit_AssignStmt(self, stmt: AssignStmt):
@@ -258,6 +274,11 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
                 doc += '[unroll]'
             else:
                 doc += '[no-unroll]'
+        doc += self(stmt.body).indent(4)
+        return doc
+
+    def visit_ForTaskStmt(self, stmt: ForTaskStmt):
+        doc = NewLine() + Text('for ') + self(stmt.loop_vars) + ' in ' + self(stmt.mapping) + ' on ' + self(stmt.worker)
         doc += self(stmt.body).indent(4)
         return doc
 
@@ -426,6 +447,20 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
 
     def visit_TensorNode(self, e: TensorNode):
         return self.namer.get_name(e)
+
+    def visit_TaskMapping(self, mapping: TaskMapping):
+        if isinstance(mapping, (RepeatTaskMapping, SpatialTaskMapping)):
+            name = 'repeat' if isinstance(mapping, RepeatTaskMapping) else 'spatial'
+            args = [self(mapping.task_shape)]
+            if not same_list(mapping.ranks, list(range(len(mapping.task_shape)))):
+                args.append('ranks=[' + self(mapping.ranks) + ']')
+            arg_doc = doc_join(args, ', ')
+            # something like: spatial(1, 3, ranks=[1, 0])
+            return doc_join([name, '(', arg_doc, ')'], '')
+        elif isinstance(mapping, ComposedTaskMapping):
+            return self(mapping.outer) + '.' + self(mapping.inner)
+        else:
+            raise NotImplementedError()
 
 
 def astext(obj: Node) -> str:

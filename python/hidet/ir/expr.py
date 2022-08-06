@@ -132,8 +132,7 @@ class Expr(Node):
         te = self[items]
         if not isinstance(te, TensorElement):
             raise ValueError('expect element indexing, but got slicing.')
-        te.protected = protected
-        return BufferStoreStmt(self, te.indices, value)
+        return BufferStoreStmt(self, te.indices, value, protected)
 
 
 class BinaryOp(Expr):
@@ -373,13 +372,6 @@ class Constant(Expr):
 
     def array(self) -> np.ndarray:
         return self.value
-
-
-class TaskIterator(Expr):
-    def __init__(self, mapping, worker: Expr):
-        from hidet.ir.mapping import TaskMapping
-        self.mapping: TaskMapping = mapping
-        self.worker: Expr = worker
 
 
 class IfThenElse(Expr):

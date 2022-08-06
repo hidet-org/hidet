@@ -22,12 +22,14 @@ from .squeeze_let_stmt import squeeze_let_stmt_pass
 from .uplift_let_stmt import uplift_let_stmt_pass
 from .precompute_condition import precompute_condition_pass
 from .normalize_const_tensor import normalize_const_tensor_pass
+from .lower_task_mapping import lower_task_mapping_pass
 
 
 def lower(ir_module: IRModule) -> IRModule:
     transforms = [
         # necessary passes
         flatten_tensor_slice_pass(),
+        lower_task_mapping_pass(),
         apply_prologue_epilogue_pass(),
         generate_packed_func_pass(),
         normalize_const_tensor_pass(),

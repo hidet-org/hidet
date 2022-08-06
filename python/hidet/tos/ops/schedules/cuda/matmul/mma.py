@@ -267,9 +267,9 @@ def load_regs_a(smem_a: Union[Var, TensorSlice], regs_a: Var, sch: MatmulMmaSche
     # will copy the [0, warp_k] in block_k range
     sb = StmtBuilder()
     warp_id, lane_id = thread_idx() / 32, thread_idx() % 32
-    for warp_i, warp_j, warp_k in row_spatial(sch.warp_count_m, sch.warp_count_n, sch.warp_count_k).of(warp_id):
+    for warp_i, warp_j, warp_k in row_spatial(sch.warp_count_m, sch.warp_count_n, sch.warp_count_k).on(warp_id):
         for mma_i in range(sch.mma_count_m):
-            for p, (ii, kk) in enumerate(sch.mma_config.a_load_map.of(lane_id)):
+            for p, (ii, kk) in enumerate(sch.mma_config.a_load_map.on(lane_id)):
                 sb += BufferStoreStmt(
                     buf=regs_a, indices=[mma_i, p],
                     value=smem_a[warp_i * sch.warp_m + mma_i * sch.mma_m + ii, warp_k * sch.warp_k + kk]
@@ -280,9 +280,9 @@ def load_regs_a(smem_a: Union[Var, TensorSlice], regs_a: Var, sch: MatmulMmaSche
 def load_regs_b(smem_b: Union[Var, TensorSlice], regs_b: Var, sch: MatmulMmaSchedule) -> Stmt:
     sb = StmtBuilder()
     warp_id, lane_id = thread_idx() / 32, thread_idx() % 32
-    for warp_i, warp_j, warp_k in row_spatial(sch.warp_count_m, sch.warp_count_n, sch.warp_count_k).of(warp_id):
+    for warp_i, warp_j, warp_k in row_spatial(sch.warp_count_m, sch.warp_count_n, sch.warp_count_k).on(warp_id):
         for mma_j in range(sch.mma_count_n):
-            for p, (kk, jj) in enumerate(sch.mma_config.b_load_map.of(lane_id)):
+            for p, (kk, jj) in enumerate(sch.mma_config.b_load_map.on(lane_id)):
                 sb += BufferStoreStmt(
                     buf=regs_b, indices=[mma_j, p],
                     value=smem_b[warp_k * sch.warp_k + kk, warp_j * sch.warp_n + mma_j * sch.mma_n + jj]
@@ -308,10 +308,10 @@ def write_back(regs_c, smem_c, gmem_c, bound_m, bound_n, sch: MatmulMmaSchedule)
     sb = StmtBuilder()
     warp_id, lane_id = thread_idx() / 32, thread_idx() % 32
     for warp_k_round in range(sch.warp_count_k):
-        for warp_i, warp_j, warp_k in row_spatial(sch.warp_count_m, sch.warp_count_n, sch.warp_count_k).of(warp_id):
+        for warp_i, warp_j, warp_k in row_spatial(sch.warp_count_m, sch.warp_count_n, sch.warp_count_k).on(warp_id):
             with sb.if_then(Equal(warp_k, warp_k_round)):
-                for mma_i, mma_j in row_repeat(sch.mma_count_m, sch.mma_count_n).of(0):
-                    for p, (ii, jj) in enumerate(sch.mma_config.c_store_map.of(lane_id)):
+                for mma_i, mma_j in row_repeat(sch.mma_count_m, sch.mma_count_n).on(0):
+                    for p, (ii, jj) in enumerate(sch.mma_config.c_store_map.on(lane_id)):
                         i = warp_i * sch.warp_m + mma_i * sch.mma_m + ii
                         j = warp_j * sch.warp_n + mma_j * sch.mma_n + jj
                         with sb.if_then(And(i < bound_m, j < bound_n)):
