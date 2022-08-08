@@ -24,7 +24,7 @@ from .precompute_condition import precompute_condition_pass
 from .normalize_const_tensor import normalize_const_tensor_pass
 from .lower_task_mapping import lower_task_mapping_pass
 from .lower_protect_access import lower_protect_access_pass
-
+from .declare_to_let import declare_to_let_pass
 
 def lower(ir_module: IRModule) -> IRModule:
     transforms = [
@@ -42,6 +42,7 @@ def lower(ir_module: IRModule) -> IRModule:
         resolve_primitive_func_pass(),
         import_primitive_functions_pass(),
         add_explicit_cast_pass(),
+        declare_to_let_pass(),
 
         # simplification
         expand_let_expr_pass(),
