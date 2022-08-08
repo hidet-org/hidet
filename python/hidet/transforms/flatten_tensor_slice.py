@@ -1,5 +1,4 @@
 from hidet.ir.expr import TensorElement, TensorSlice
-from hidet.ir.expr import TensorElement, TensorSlice
 from hidet.ir.func import Function
 from hidet.ir.functors import FuncStmtExprRewriter
 from hidet.ir.stmt import BufferStoreStmt
@@ -34,7 +33,7 @@ def concat_slices(lhs_indices, lhs_starts, lhs_ends, rhs_indices, rhs_starts=Non
                 indices.append(None)
                 starts.append(None)
             # we ignore the end because we do not allow tensor-wise op.
-            # end is only used for bound-checking, which is left in future.
+            # end is only used for bound-checking, which is left in the future.
             ends.append(None)
             i += 1
     assert i == len(rhs_indices)
@@ -61,7 +60,7 @@ class FlattenTensorSliceRewriter(FuncStmtExprRewriter):
             e_indices = [self.visit(idx) for idx in e.indices]
             indices, starts, ends = concat_slices(base.indices, base.starts, base.ends, e_indices)
             assert not any(idx is None for idx in indices)
-            return TensorElement(base.base, indices)
+            return TensorElement(base.base, indices, e.protected)
         else:
             return FuncStmtExprRewriter.visit_TensorElement(self, e)
 
@@ -71,7 +70,7 @@ class FlattenTensorSliceRewriter(FuncStmtExprRewriter):
         if isinstance(base, TensorSlice):
             indices, starts, ends = concat_slices(base.indices, base.starts, base.ends, stmt_indices)
             assert not any(idx is None for idx in indices)
-            return BufferStoreStmt(base.base, indices, self.visit(stmt.value))
+            return BufferStoreStmt(base.base, indices, self.visit(stmt.value), stmt.protected)
         else:
             return FuncStmtExprRewriter.visit_BufferStoreStmt(self, stmt)
 

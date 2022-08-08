@@ -2,13 +2,6 @@ import hidet
 import numpy as np
 
 
-# import tvm
-# from tvm import script
-# script.ir_module()
-# script.from_source()
-# script.tir.prim_func()
-
-
 def matmul_naive(m_size: int, n_size: int, k_size: int):
     from hidet.ir import IRModule
     from hidet.lang import f32, script, attr
@@ -141,8 +134,8 @@ def matmul_use_mapping(m_size: int, n_size: int, k_size: int):
 
 
 def main():
-    m_size, n_size, k_size = 1024, 1024, 1024
-    # m_size, n_size, k_size = 128, 128, 128
+    # m_size, n_size, k_size = 1024, 1024, 1024
+    m_size, n_size, k_size = 127, 127, 127
     # ir_module = matmul_naive(m_size, n_size, k_size)
     # ir_module = matmul_block(m_size, n_size, k_size)
     ir_module = matmul_use_mapping(m_size, n_size, k_size)

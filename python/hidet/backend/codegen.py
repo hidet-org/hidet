@@ -272,6 +272,8 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         return '(' + self(e.base) + ' >> ' + self(e.cnt) + ')'
 
     def visit_TensorElement(self, e: TensorElement):
+        if e.protected:
+            raise ValueError('The protected reading of tensor element should be lowered in lower_protect_access pass.')
         return self(e.base) + doc_join(['[' + self(idx) + ']' for idx in e.indices], '')
 
     def visit_IfThenElse(self, e: IfThenElse):
@@ -417,6 +419,8 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         return NewLine() + self(stmt.expr) + ';'
 
     def visit_BufferStoreStmt(self, stmt: BufferStoreStmt):
+        if stmt.protected:
+            raise ValueError('The protected writing of tensor element should be lowered in lower_protect_access pass.')
         doc = NewLine()
         doc += self(stmt.buf)
         for idx in stmt.indices:

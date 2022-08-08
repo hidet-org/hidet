@@ -1,10 +1,9 @@
 from typing import List, Dict, Sequence, Union, Tuple
 import itertools
-from hidet.ir import Function, Constant, TensorType, Var, ForTaskStmt, Stmt, ForStmt, Expr, SeqStmt
-from hidet.ir import var, tensor_var
+from hidet.ir import Var, ForTaskStmt, Stmt, ForStmt, Expr, SeqStmt
 from hidet.ir.mapping import TaskMapping, SpatialTaskMapping, RepeatTaskMapping, ComposedTaskMapping
-from hidet.transforms.base import FunctionPass, Pass, FunctionBodyPass
-from hidet.ir.functors import StmtExprRewriter, collect, rewrite
+from hidet.transforms.base import Pass, FunctionBodyPass
+from hidet.ir.functors import StmtExprRewriter, rewrite
 from hidet.utils import prod
 
 Int = Union[Expr, int]

@@ -410,7 +410,7 @@ class ExprRewriter(ExprFunctor):
         if base is e.base and same_list(indices, e.indices):
             return e
         else:
-            return TensorElement(base, indices)
+            return TensorElement(base, indices, e.protected)
 
     def visit_TensorSlice(self, e: TensorSlice):
         base = self(e.base)
@@ -664,7 +664,7 @@ class StmtRewriter(StmtFunctor):
         if buf is stmt.buf and all(a is b for a, b in zip(indices, stmt.indices)) and value is stmt.value:
             return stmt
         else:
-            return BufferStoreStmt(buf, indices, value)
+            return BufferStoreStmt(buf, indices, value, stmt.protected)
 
     def visit_AssignStmt(self, stmt: AssignStmt):
         var = self.visit_expr(stmt.var)

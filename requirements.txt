@@ -3,7 +3,6 @@
 ################################################################################
 gitpython
 numpy
-sympy
 
 # used for query available memory
 psutil
