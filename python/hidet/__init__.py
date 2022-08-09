@@ -20,4 +20,6 @@ from .tos import jit
 
 from .utils import hidet_set_cache_root as set_cache_root
 
+from .lang import script, script_module
+
 sys.setrecursionlimit(10000)

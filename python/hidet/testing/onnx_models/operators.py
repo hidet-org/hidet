@@ -35,8 +35,7 @@ class Matmul(nn.Module):
 
 
 def get_onnx_operator(name: str, batch_size=1, precision='float32') -> Tuple[str, List[str], List["hidet.Tensor"]]:
-    assert precision == 'float32'
-    onnx_path = hidet_cache_file('onnx', 'op', f'{name}.onnx')
+    onnx_path = hidet_cache_file('onnx', 'op', f'bs{batch_size}_{precision}_{name}.onnx')
     if name.startswith('op_sum_'):
         a, b, c = name.split('_')   # op_sum_0
         op_idx = int(c)
@@ -50,6 +49,7 @@ def get_onnx_operator(name: str, batch_size=1, precision='float32') -> Tuple[str
             model=ReduceSum(dims=dims, keepdim=keepdim),
             input_names=['x'],
             inputs=[torch.randn(shape)],
+            precision=precision
         )
     elif name.startswith('op_resnet50_conv'):
         a, b, c, d = name.split('_')
@@ -62,7 +62,8 @@ def get_onnx_operator(name: str, batch_size=1, precision='float32') -> Tuple[str
             onnx_path=onnx_path,
             model=nn.Conv2d(in_channels=x_shape[1], out_channels=out_channels, kernel_size=kernel, stride=strides, padding=padding, bias=False),
             input_names=['x'],
-            inputs=[torch.randn(x_shape)]
+            inputs=[torch.randn(x_shape)],
+            precision=precision
         )
     elif name.startswith('op_matmul_'):     # like 'op_matmul_nn_0'
         a, b, layout, idx = name.split('_')
@@ -93,6 +94,7 @@ def get_onnx_operator(name: str, batch_size=1, precision='float32') -> Tuple[str
             model=Matmul(layout),
             input_names=['x', 'y'],
             inputs=[x, y],
+            precision=precision
         )
     elif name.startswith('op_setgan_conv_'): # like 'op_setgan_conv_3'
         _, _, _, idx = name.split('_')
@@ -120,7 +122,18 @@ def get_onnx_operator(name: str, batch_size=1, precision='float32') -> Tuple[str
             onnx_path=onnx_path,
             model=nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=(kx, ky), stride=(sx, sy), padding=(px, py), bias=True),
             input_names=['x'],
-            inputs=[torch.randn(bs, in_channels, height, width)]
+            inputs=[torch.randn(bs, in_channels, height, width)],
+            precision=precision
+        )
+    elif name.startswith('op_gemm_'):  # like 'op_gemm_m_n_k'
+        _, _, m, n, k = name.split('_')
+        m, n, k = int(m), int(n), int(k)
+        return export_torch_to_onnx(
+            onnx_path=onnx_path,
+            model=Matmul(layout='NN'),
+            input_names=['x', 'y'],
+            inputs=[torch.randn(batch_size, m, k), torch.randn(batch_size, k, n)],
+            precision=precision
         )
     else:
         raise ValueError('')

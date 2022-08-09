@@ -2,7 +2,7 @@ from typing import Dict, List, Union, Optional, Tuple
 import string
 from hidet.ir.node import Node
 from hidet.ir.type import TypeNode, FuncType
-from hidet.ir.expr import Var, Constant
+from hidet.ir.expr import Var, Constant, Call
 from hidet.ir.stmt import Stmt
 
 
@@ -64,6 +64,9 @@ class Function(Node):
         self.attrs = attrs if attrs else {}
 
         assert all(attr in self.valid_attrs for attr in self.attrs)
+
+    def __call__(self, *args, **kwargs) -> Call:
+        raise ValueError('Can only call script function in another script function, or lower it to execute.')
 
     def annotate(self, attr_name, attr_value, update=False):
         assert attr_name in self.valid_attrs

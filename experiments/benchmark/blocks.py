@@ -7,8 +7,9 @@ def main():
         '--exec trt --precision f16 --trt_fp16',
         # '--exec hidet --precision f32 --reduce_precision f32 --mma simt',
         # '--exec hidet --precision f16 --reduce_precision f16 --mma wmma',
-        '--exec hidet --precision f16 --reduce_precision f16 --mma mma --hidet_space 1 --parallel_k disabled',
-        '--exec hidet --precision f16 --reduce_precision f16 --mma mma --hidet_space 1 --parallel_k default',
+        # '--exec hidet --precision f16 --reduce_precision f16 --mma mma --hidet_space 1 --parallel_k disabled',
+        # '--exec hidet --precision f16 --reduce_precision f16 --mma mma --hidet_space 1 --parallel_k default',
+        # '--exec manual --precision f16 --reduce_precision f16',
         '--exec hidet --precision f16 --reduce_precision f16 --mma mma --hidet_space 1 --parallel_k 6',
         # '--exec ort --ort_provider cuda',
         # '--exec ort --ort_provider trt'
@@ -31,7 +32,8 @@ def main():
                 # '--model bert_layer',
                 # '--model bert_attention',
                 # '--model bert_intermediate',
-                '--model bert_output',
+                # '--model bert_output',
+                '--model op_gemm_128_768_3072',
                 # '--model bert_self_attention',
                 # '--model bert_self_output',
                 # '--model bert_self_at_query',
@@ -40,7 +42,7 @@ def main():
                 # '--model bert_self_at_softmax',
                 # '--model bert_self_at_context',
             ]:
-                extra = '--number 3 --repeat 1 --warmup 0'
+                extra = '--number 1 --repeat 1 --warmup 0'
                 # extra = ''
                 bench_model.main('{} {} {} {}'.format(executor, bs, model, extra))
 

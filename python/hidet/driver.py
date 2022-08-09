@@ -82,7 +82,7 @@ def build_batch_task(tasks: List[Task], space_level: int, parallel=True, use_cac
         map(_build_task_job, [(task, space_level, use_cache, cache_dir, False) for task in tasks])
 
 
-def build_ir_module(ir_module: IRModule, func_name: str, keep_ptx=False, working_dir='./outs'):
+def build_ir_module(ir_module: IRModule, func_name: str, keep_ptx=False, working_dir='./outs', verbose=False):
     module_string = str(ir_module)
     module_hash = sha256(module_string.encode()).hexdigest()[:16]
     working_dir = os.path.join(working_dir, 'ir_module', module_hash)
@@ -100,6 +100,8 @@ def build_ir_module(ir_module: IRModule, func_name: str, keep_ptx=False, working
     # compile source code
     compile_source(src_path, out_lib_path=lib_path, keep_ptx=keep_ptx)
     func = ir_module.lookup(func_name + '_grid')
+    if verbose:
+        print('Compiling {}'.format(src_path))
     return load_lib_func(lib_path, func_name, func_type=FuncType.from_func(func))
 
 

@@ -1,8 +1,9 @@
+from __future__ import annotations
 from typing import Callable, Tuple, Optional, List, Any, Dict
 from types import FunctionType
 import ast as py_ast
 import inspect
-from hidet.ir.func import Function
+from hidet.ir import IRModule, Function, Var, FuncType
 from .transpiler import PythonToHidetTranslator
 
 
@@ -57,5 +58,57 @@ def script(func: FunctionType) -> Function:
         func_annotations=func_annotations
     )
     hidet_function = translator(parsed)
+
+    # add function to current script module
+    ctx = ScriptModuleContext.current_context()
+    ctx.append_function(hidet_function)
     return hidet_function
 
+
+class ScriptModuleContext:
+    contexts: List[ScriptModuleContext] = []
+
+    def __init__(self):
+        self.name2var: Dict[str, Var] = {}
+        self.functions: List[Function] = []
+
+    def __enter__(self):
+        self.contexts.append(self)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.contexts.pop()
+
+    @staticmethod
+    def current_context() -> ScriptModuleContext:
+        if len(ScriptModuleContext.contexts) == 0:
+            msg = (
+                'Can only define script function in script module:\n\n'
+                'with hidet.script_module() as module:\n'
+                '    @hidet.script\n'
+                '    def kernel_function():\n'
+                '        ...\n'
+            )
+            raise ValueError(msg)
+            # add the fallback context
+        return ScriptModuleContext.contexts[-1]
+
+    def append_function(self, function: Function):
+        self.functions.append(function)
+        self.name2var[function.name] = Var(hint=function.name, type=FuncType.from_func(function))
+
+    def lookup(self, name: str) -> Optional[Var]:
+        if name not in self.name2var:
+            return None
+        return self.name2var[name]
+
+    def ir_module(self) -> IRModule:
+        return IRModule(
+            funcs={func.name: func for func in self.functions},
+            task=None,
+            global_vars=self.name2var
+        )
+
+
+def script_module() -> ScriptModuleContext:
+    return ScriptModuleContext()

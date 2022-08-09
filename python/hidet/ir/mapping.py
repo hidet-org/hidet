@@ -1,3 +1,4 @@
+from __future__ import annotations
 from typing import Union, Tuple, List, Type, Dict, Optional, Sequence, Iterator, Callable, Iterable, Mapping
 import numpy as np
 import itertools
@@ -88,6 +89,13 @@ class TaskMapping:
 
     def projection(self, dim2value: Mapping[int, Int]) -> 'TaskMapping':
         return ProjectedTaskMapping(base=self, dim2value=dim2value)
+
+    # chain api
+    def spatial(self, *task_shape, ranks: List[int] = None) -> TaskMapping:
+        return self * spatial_map(task_shape, ranks)
+
+    def repeat(self, *task_shape, ranks: List[int] = None) -> TaskMapping:
+        return self * repeat_map(task_shape, ranks)
 
 
 class RepeatTaskMapping(TaskMapping):

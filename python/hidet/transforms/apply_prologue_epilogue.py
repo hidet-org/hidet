@@ -9,9 +9,10 @@ from .base import Pass
 
 class ApplyPrologueEpiloguePass(Pass):
     def process_module(self, ir_module: IRModule) -> IRModule:
-        if len(ir_module.functions) != 1:
-            raise ValueError('apply_prologue_epilogue_pass should run first before generate_packed_func pass.')
-        func = list(ir_module.functions.values())[0]
+        kernel_functions = [func for func in ir_module.functions.values() if func.kind == 'cuda_kernel']
+        if len(kernel_functions) > 1:
+            raise ValueError('Expect a single kernel function.')
+        func = kernel_functions[0]
         task = ir_module.task
 
         if task is None:
@@ -103,7 +104,9 @@ class ApplyPrologueEpiloguePass(Pass):
         else:
             func = Function(func.name, params=param_vars, body=body, ret_type=func.ret_type, kind=func.kind,
                             local_vars=func.local_vars, local_const_vars=func.local_const_vars, extern_vars=func.extern_vars, attrs=func.attrs)
-            ir_module = IRModule(funcs={func.name: func}, task=ir_module.task, global_vars=ir_module.global_vars)
+            funcs = ir_module.functions.copy()
+            funcs[func.name] = func
+            ir_module = IRModule(funcs=funcs, task=ir_module.task, global_vars=ir_module.global_vars)
             return ir_module
 
 

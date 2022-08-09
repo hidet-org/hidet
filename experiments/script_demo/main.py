@@ -111,15 +111,15 @@ def matmul_use_mapping(m_size: int, n_size: int, k_size: int):
         regs_c = tensor('register', 'float32', layout=local_layout(4, 2) * row_layout(8, 8) * local_layout(4, 8))
         gmem_c = c[offset_m:, offset_n:]
 
-        c_mapping = chain(spatial(4, 2), repeat(8, 8), spatial(4, 8))
+        c_mapping = spatial(4, 2).repeat(8, 8).spatial(4, 8)
         for i, j in c_mapping.on(threadIdx.x):
             regs_c[i, j] = 0.0
         for k0 in range((k_size + block_k - 1) // block_k):
             gmem_a = a[offset_m:, k0 * block_k:]
             gmem_b = b[k0 * block_k:, offset_n:]
-            for i, k in chain(repeat(4, 1), spatial(32, 8)).on(threadIdx.x):
+            for i, k in repeat(4, 1).spatial(32, 8).on(threadIdx.x):
                 smem_a[i, k] = gmem_a.read([i, k], protected=True)
-            for k, j in chain(repeat(4, 1), spatial(2, 128)).on(threadIdx.x):
+            for k, j in repeat(4, 1).spatial(2, 128).on(threadIdx.x):
                 smem_b[k, j] = gmem_b.read([k, j], protected=True)
             syncthreads()
             for i, j in c_mapping.on(threadIdx.x):
@@ -131,6 +131,27 @@ def matmul_use_mapping(m_size: int, n_size: int, k_size: int):
 
     print(matmul_grid)
     return IRModule(funcs={matmul_grid.name: matmul_grid})
+
+
+def demo_call_example():
+    from hidet.ir import IRModule
+    from hidet.lang import attr, i32
+    from hidet.lang import printf
+    from hidet.lang.cuda import threadIdx
+
+    with hidet.script_module() as module:
+        @hidet.script
+        def print_index(idx: i32):
+            printf(r'threadIdx.x %d\n', idx)
+
+        @hidet.script
+        def call_example_grid():
+            attr.cuda_grid_dim = 1
+            attr.cuda_block_dim = 12
+            print_index(threadIdx.x)
+
+    func = hidet.driver.build_ir_module(module.ir_module(), func_name='call_example', verbose=True)
+    func()
 
 
 def main():
@@ -163,4 +184,5 @@ if __name__ == '__main__':
     # if a < 5:
     #     pass
     #     """)))
-    main()
+    # main()
+    demo_call_example()

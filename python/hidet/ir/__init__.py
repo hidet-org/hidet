@@ -21,7 +21,7 @@ from .layout import DataLayout
 
 from .mapping import TaskMapping
 
-from .stmt import Stmt, DeclareStmt, EvaluateStmt, BufferStoreStmt, AssignStmt, ForStmt, IfStmt, AssertStmt, SeqStmt, LetStmt, ForTaskStmt
+from .stmt import Stmt, DeclareStmt, EvaluateStmt, BufferStoreStmt, AssignStmt, ForStmt, IfStmt, AssertStmt, SeqStmt, LetStmt, ForTaskStmt, ReturnStmt
 
 from .dialects.compute import TensorNode, ScalarNode
 from .dialects.lowlevel import VoidType, PointerType, TensorPointerType, Dereference

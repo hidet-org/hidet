@@ -11,6 +11,57 @@ import hidet
 from hidet import Tensor
 from hidet.utils import cuda, nvtx_annotate, hidet_cache_file, error_tolerance
 from hidet.utils.git_utils import get_repo_sha, get_repo_commit_date
+from executors import bench_manual
+
+parser = argparse.ArgumentParser(description='Hidet model benchmark script.')
+
+# ======
+
+# general parameters
+parser.add_argument('--model', type=str,
+                    # choices=['resnet50', 'inception_v3', 'mobilenet_v2', 'bert', 'bart'],
+                    required=True,
+                    help='The model to benchmark.')
+parser.add_argument('--exec', type=str, choices=['hidet', 'trt', 'ort', 'tvm', 'autotvm', 'ansor', 'tf', 'tf_xla', 'torch', 'manual'], required=True,
+                    help='Executor.')
+parser.add_argument('--out_dir', type=str, default='./results/',
+                    help='Output directory.')
+parser.add_argument('--warmup', type=int, default=10, help='Number of warmups.')
+parser.add_argument('--number', type=int, default=10, help='Number of runs per repeat.')
+parser.add_argument('--repeat', type=int, default=10, help='Number of repeats.')
+
+# ======
+
+# executor parameters
+# hidet executor parameters
+parser.add_argument('--precision', choices=['f16', 'bf16', 'f32'], default='f32')
+parser.add_argument('--reduce_precision', choices=['f16', 'f32'], default='f32')
+parser.add_argument('--mma', choices=['simt', 'wmma', 'mma'], default='simt')
+parser.add_argument('--hidet_space', type=int, choices=[0, 1, 2], default=2,
+                    help='The space level of each operator in the model. Large space level means longer compilation time and better performance.')
+parser.add_argument('--parallel_k', choices=['disabled', 'default', 'search', '2', '4', '6', '8'], default='default')
+parser.add_argument('--disable-graph-cache', action='store_true')
+
+# tvm number of trial per task
+parser.add_argument('--tvm_trial', type=int, default=800, help='Number of trial per task in autotvm and ansor, default 800.')
+
+# tensorrt configs
+parser.add_argument('--trt_tf32', action='store_true')
+parser.add_argument('--trt_fp16', action='store_true')
+
+# onnx runtime configs
+parser.add_argument('--ort_provider', choices=['cuda', 'trt'], default='cuda')
+
+# ======
+
+# model agnostic parameters
+parser.add_argument('--bs', type=int, default=1, help='Batch size.')
+
+# model specific parameters
+# bert
+parser.add_argument('--bert_seq_length', type=int, default=128, help='Sequence length of bert input.')
+parser.add_argument('--bert_hidden_size', type=int, default=768, help='Hidden size of bert.')
+parser.add_argument('--bert_vocab_size', type=int, default=30522, help='Vocabulary size of bert.')
 
 
 class BenchResult:
@@ -345,6 +396,7 @@ def main(command_line_args: Optional[str] = None):
         'tf': bench_tf,
         'tf_xla': bench_tf,
         'torch': bench_torch,
+        'manual': bench_manual
     }
     bench_func = bench_dict[args.exec]
     with nvtx_annotate(message=args.exec):
@@ -352,7 +404,7 @@ def main(command_line_args: Optional[str] = None):
             result: BenchResult = bench_func(args, out_dir)
 
     # error tolerance
-    onnx_path, input_names, input_tensors = get_onnx_model(name=args.model, batch_size=args.bs)
+    onnx_path, input_names, input_tensors = get_onnx_model(name=args.model, batch_size=args.bs, precision=args.precision)
     onnx_outputs = run_with_onnx(model_path=onnx_path, input_names=input_names, input_tensors=input_tensors)
     et = -1.0
     if result.outputs is not None:
@@ -387,178 +439,3 @@ def main(command_line_args: Optional[str] = None):
         )
         print(head + summary)
         f.write(head + summary)
-
-
-parser = argparse.ArgumentParser(description='Hidet model benchmark script.')
-
-# ======
-
-# general parameters
-parser.add_argument('--model', type=str,
-                    # choices=['resnet50', 'inception_v3', 'mobilenet_v2', 'bert', 'bart'],
-                    required=True,
-                    help='The model to benchmark.')
-parser.add_argument('--exec', type=str, choices=['hidet', 'trt', 'ort', 'tvm', 'autotvm', 'ansor', 'tf', 'tf_xla', 'torch'], required=True,
-                    help='Executor.')
-parser.add_argument('--out_dir', type=str, default='./results/',
-                    help='Output directory.')
-parser.add_argument('--warmup', type=int, default=10, help='Number of warmups.')
-parser.add_argument('--number', type=int, default=10, help='Number of runs per repeat.')
-parser.add_argument('--repeat', type=int, default=10, help='Number of repeats.')
-
-# ======
-
-# executor parameters
-# hidet executor parameters
-parser.add_argument('--precision', choices=['f16', 'bf16', 'f32'], default='f32')
-parser.add_argument('--reduce_precision', choices=['f16', 'f32'], default='f32')
-parser.add_argument('--mma', choices=['simt', 'wmma', 'mma'], default='simt')
-parser.add_argument('--hidet_space', type=int, choices=[0, 1, 2], default=2, help='The space level of each operator in the model. Large space level means longer compilation time and better performance.')
-parser.add_argument('--parallel_k', choices=['disabled', 'default', 'search', '2', '4', '6', '8'], default='default')
-parser.add_argument('--disable-graph-cache', action='store_true')
-
-# tvm number of trial per task
-parser.add_argument('--tvm_trial', type=int, default=800, help='Number of trial per task in autotvm and ansor, default 800.')
-
-# tensorrt configs
-parser.add_argument('--trt_tf32', action='store_true')
-parser.add_argument('--trt_fp16', action='store_true')
-
-# onnx runtime configs
-parser.add_argument('--ort_provider', choices=['cuda', 'trt'], default='cuda')
-
-# ======
-
-# model agnostic parameters
-parser.add_argument('--bs', type=int, default=1, help='Batch size.')
-
-# model specific parameters
-# bert
-parser.add_argument('--bert_seq_length', type=int, default=128, help='Sequence length of bert input.')
-parser.add_argument('--bert_hidden_size', type=int, default=768, help='Hidden size of bert.')
-parser.add_argument('--bert_vocab_size', type=int, default=30522, help='Vocabulary size of bert.')
-
-
-def bench_bert_blocks():
-    for model in [
-        # '--model bert_all',
-        # '--model bert_embeddings',
-        # '--model bert_encoder',
-        # '--model bert_pooler',
-        # '--model bert_layer',
-        # '--model bert_attention',
-        # '--model bert_intermediate',
-        # '--model bert_output',
-        # '--model bert_self_attention',
-        # '--model bert_self_output',
-        # '--model bert_self_at_query',
-        '--model bert_self_at_qkv',
-        '--model bert_self_at_qkv_v2',
-        # '--model bert_self_at_qkv --bs 8',
-        # '--model bert_self_at_softmax',
-        # '--model bert_self_at_context',
-    ]:
-        for executor in [
-            '--exec trt',
-            '--exec trt --trt_tf32',
-            # '--exec hidet --precision f32 --reduce_precision f32 --mma wmma --disable-graph-cache'
-            # '--exec hidet --precision f32 --reduce_precision f32 --mma wmma --hidet_space 0',
-            # '--exec hidet --precision f32 --reduce_precision f32 --mma wmma',
-            '--exec hidet --parallel_k disabled --precision f32 --reduce_precision f32 --mma wmma --hidet_space 0',
-            '--exec hidet --parallel_k disabled --precision f32 --reduce_precision f32 --mma wmma --hidet_space 2'
-        ]:
-            main(f'{executor} {model} --warmup 10 --number 10 --repeat 10')
-
-
-def bench_resnet50_blocks():
-    for idx in range(23):
-        main(f'--exec tvm --model conv_{idx} --warmup 10 --number 10 --repeat 10')
-        main(f'--exec trt --model conv_{idx} --warmup 10 --number 10 --repeat 10')
-        main(f'--exec hidet --model conv_{idx} --warmup 10 --number 10 --repeat 10')
-
-
-def bench_single_operators():
-    for name in [
-        # 'op_sum_0',
-        # 'op_sum_1',
-        'op_matmul_nn_1',
-        # 'op_matmul_nt_0'
-        # 'op_matmul_nn_2',
-        'op_matmul_nn_3',
-    ]:
-        for executor in [
-            # '--exec trt --trt_fp16',
-            '--exec trt --trt_tf32',
-            # '--exec hidet --precision f32 --reduce_precision f32 --mma simt --parallel_k disabled',
-            # '--exec hidet --precision f16 --reduce_precision f16 --mma wmma',
-            # '--exec hidet --precision f16 --reduce_precision f16 --mma wmma --parallel_k disabled',
-            # '--exec hidet --precision f32 --reduce_precision f32 --mma wmma --parallel_k disabled --hidet_space 0',
-            # '--exec hidet --precision f32 --reduce_precision f32 --mma wmma --parallel_k 8 --hidet_space 0',
-            # '--exec hidet --precision f32 --reduce_precision f32 --mma wmma --parallel_k disabled --hidet_space 2',
-            # '--exec hidet --precision f32 --reduce_precision f32 --mma wmma --parallel_k 8 --hidet_space 2',
-            '--exec hidet --precision f32 --reduce_precision f32 --mma wmma --parallel_k 4 --hidet_space 2',
-            '--exec hidet --precision f32 --reduce_precision f32 --mma wmma --parallel_k 2 --hidet_space 2',
-        ]:
-            # main(f'{executor} --model {name} --warmup 10 --number 10 --repeat 10')
-            main(f'{executor} --model {name} --warmup 1 --number 1 --repeat 1')
-
-
-def bench_cnn_models():
-    for model in [
-        'resnet50',
-        'inception_v3',
-        'mobilenet_v2',
-    ]:
-        for executor in [
-            '--exec tf'
-            # '--exec hidet --precision f32 --reduce_precision f32 --mma simt',
-            # '--exec hidet --precision f32 --reduce_precision f32 --mma wmma',
-        ]:
-            # main(f'--exec autotvm --model {model} --warmup 10 --number 10 --repeat 10 --validate')
-            # main(f'--exec ort --model {model} --warmup 10 --number 10 --repeat 10 --validate')
-            # main(f'--exec ansor --model {model} --warmup 10 --number 10 --repeat 10 --validate')
-            # main(f'--exec trt --model {model} --warmup 10 --number 10 --repeat 10 --validate')
-            # main(f'--exec hidet --model {model} --warmup 10 --number 10 --repeat 10 --hidet_space 0')
-            main(f'{executor} --model {model} --warmup 10 --number 10 --repeat 10 --hidet_space 0')
-
-
-def bench_nlp_models():
-    for model in [
-        # 'bert',
-        'gpt2'
-    ]:
-        for bs in [
-            # 1,
-            16
-        ]:
-            for executor in [
-                # '--exec trt',
-                # '--exec trt --trt_fp16',
-                # '--exec trt --trt_tf32',
-                # '--exec hidet --precision f16 --reduce_precision f16 --mma wmma',
-                # '--exec hidet --precision f16 --reduce_precision f32 --mma wmma',
-                # '--exec hidet --precision bf16 --reduce_precision f32 --mma wmma',
-                # '--exec hidet --precision f32 --reduce_precision f32 --mma wmma',
-                # '--exec hidet --precision f16 --reduce_precision f16 --mma simt',
-                '--exec hidet --precision f32 --reduce_precision f32 --mma simt',
-                # '--exec ort --ort_provider cuda'
-            ]:
-                # main(f'--exec tvm --model {model} --warmup 10 --number 10 --repeat 10')
-                # if model != 'gpt2':  # skip due to error
-                main(f'{executor} --bs {bs} --model {model} --warmup 10 --number 10 --repeat 10')
-
-
-if __name__ == '__main__':
-    # main(f'--exec hidet --model bert --warmup 10 --number 10 --repeat 10 --precision f16 --reduce_precision f32 --mma wmma --hidet_space 2')
-    # main(f'--exec hidet --model bert --warmup 10 --number 10 --repeat 10 --precision f16 --reduce_precision f16 --mma wmma --hidet_space 2')
-    # main(f'--exec hidet --model bert --warmup 10 --number 10 --repeat 10 --precision f32 --reduce_precision f32 --mma simt --hidet_space 2')
-    # main(f'--exec hidet --model bert --warmup 10 --number 10 --repeat 10 --precision f16 --reduce_precision f16 --mma simt --hidet_space 2')
-    # bench_cnn_models()
-    # bench_bert_blocks()
-    # bench_single_operators()
-    bench_nlp_models()
-    # bench_tf(None, None)
-    # main(f'--exec tf --model op_matmul_nn_1 --warmup 10 --number 10 --repeat 10')
-    # main(f'--exec tf_xla --model op_matmul_nn_1 --warmup 10 --number 10 --repeat 10')
-    # main(f'--exec ort --model op_matmul_nn_1 --warmup 10 --number 10 --repeat 10')
-    # main(f'--exec hidet --model op_matmul_nn_1 --warmup 10 --number 10 --repeat 10')

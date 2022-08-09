@@ -365,24 +365,31 @@ class PythonToHidetTranslator(PythonAstFunctor):
             for stmt in func_def.body:
                 self.visit(stmt)
 
-        if 'cuda_grid_dim' not in scope.attributes:
-            raise HidetProgramError(self, func_def, "cuda requires to specify 'attr.cuda_grid_dim' attribute to define the number of thread blocks to launch.")
-        if 'cuda_block_dim' not in scope.attributes:
-            raise HidetProgramError(self, func_def, "cuda requries to specify 'attr.cuda_block_dim' attribute to define the number of threads per block.")
+        if 'cuda_grid_dim' in scope.attributes and 'cuda_block_dim' in scope.attributes:
+            func_kind = 'cuda_kernel'
+            func_attrs = {
+                'cuda_grid_dim': scope.attributes['cuda_grid_dim'],
+                'cuda_block_dim': scope.attributes['cuda_block_dim']
+            }
+        else:
+            func_kind = 'cuda_device'
+            func_attrs = {}
+
+        # if 'cuda_grid_dim' not in scope.attributes:
+        #     raise HidetProgramError(self, func_def, "cuda requires to specify 'attr.cuda_grid_dim' attribute to define the number of thread blocks to launch.")
+        # if 'cuda_block_dim' not in scope.attributes:
+        #     raise HidetProgramError(self, func_def, "cuda requries to specify 'attr.cuda_block_dim' attribute to define the number of threads per block.")
 
         return ir.Function(
             name=func_name,
             params=func_params,
             body=scope.flush_stmts(),
             ret_type=ir.VoidType(),
-            kind='cuda_kernel',
-            local_vars=[],          # todo: fill the following parameters
+            kind=func_kind,
+            local_vars=[],          # todo: remove local variables in function as we support DeclareStmt now.
             local_const_vars=[],
             extern_vars=ir.primitives.cuda.vars.get_all_primitive_vars(),
-            attrs={
-                'cuda_grid_dim': scope.attributes['cuda_grid_dim'],
-                'cuda_block_dim': scope.attributes['cuda_block_dim']
-            }
+            attrs=func_attrs
         )
 
     def visit_Assign(self, stmt: Assign):
@@ -631,13 +638,25 @@ class PythonToHidetTranslator(PythonAstFunctor):
         args = [self.visit(arg) for arg in expr.args]
         kwargs = {kwarg.arg: self.visit(kwarg.value) for kwarg in expr.keywords}
         if isinstance(func, types.FunctionType):
+            # call python function
             return func(*args, **kwargs)
         elif isinstance(func, types.MethodType):
+            # call python class method
             return func(*args, **kwargs)
         elif isinstance(func, ir.Expr):
+            # call hidet function
             if len(kwargs) > 0:
                 raise HidetProgramError(self, expr, 'Hidet do not support call with keyword.')
-            return ir.expr.Call(func, args)
+            return ir.Call(func, args)
+        elif isinstance(func, ir.Function):
+            from hidet.lang.script import ScriptModuleContext
+            ctx = ScriptModuleContext.current_context()
+            func_var = ctx.lookup(func.name)
+            if func_var is None:
+                raise HidetProgramError(self, expr, 'Call undefined function.')
+            if len(kwargs) > 0:
+                raise HidetProgramError(self, expr, 'Hidet do not support call with keyword.')
+            return ir.Call(func_var, args)
         else:
             raise ValueError('Can not recognize callee {}'.format(func))
 
@@ -660,4 +679,14 @@ class PythonToHidetTranslator(PythonAstFunctor):
         if not isinstance(msg, str):
             raise HidetProgramError(self, stmt.msg, 'Expect a string message.')
         self.current_scope.append(ir.AssertStmt(cond=cond, msg=msg))
+
+    def visit_Return(self, stmt: Return):
+        if stmt.value is not None:
+            return_value = self.visit(stmt.value)
+        else:
+            return_value = None
+        self.current_scope.append(ir.ReturnStmt(return_value))
+
+    def visit_Pass(self, stmt: Pass):
+        return ir.SeqStmt([])
 
