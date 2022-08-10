@@ -1,4 +1,4 @@
-import bench_model
+import bench
 
 
 def main():
@@ -23,7 +23,7 @@ def main():
         ]:
             for idx in range(23):
                 model = '--model resnet50_conv_{}'.format(idx)
-                bench_model.main('{} {} {}'.format(executor, bs, model))
+                bench.main('{} {} {}'.format(executor, bs, model))
 
 
 if __name__ == '__main__':

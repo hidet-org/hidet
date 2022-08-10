@@ -30,7 +30,7 @@ from ast import Index
 
 from hidet import ir
 from hidet.ir import Var
-from hidet.utils import red, cyan, green, bold, blue
+from hidet.utils import red, cyan, green, bold, blue, str_indent
 
 
 class HidetProgramError(Exception):
@@ -54,10 +54,14 @@ class HidetProgramError(Exception):
                     source_line = ''
         lines.append('')
         lines.append('  File {file}:{line}:{column}:'.format(file=os.path.abspath(self.file), line=self.lineno - 1, column=self.column))
-        lines.append('    {msg}'.format(msg=blue(self.msg)))
         if source_line:
             lines.append(source_line)
             lines.append(' ' * self.column + bold(red('^')))
+        if source_line and '\n' not in self.msg:
+            indent = self.column
+        else:
+            indent = 4
+        lines.append('{msg}'.format(msg=blue(str_indent(self.msg, indent=indent))))
         return '\n'.join(lines)
 
 
@@ -304,6 +308,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
                         var_type = rhs
                         init_value = None
                     else:   # case 2: var = initialized value
+                        rhs = ir.convert(rhs)
                         var_type = ir.infer_type(rhs)
                         init_value = rhs
                     var = Var(hint=var_name, type=var_type)
@@ -355,8 +360,19 @@ class PythonToHidetTranslator(PythonAstFunctor):
                 if arg_name not in self.func_annotations:
                     raise HidetProgramError(self, arg, 'Hidet expects type annotation for each function argument.')
                 arg_type = self.func_annotations[arg_name]
-                if isinstance(arg_type, ir.TensorType):
-                    arg_type = ir.TensorPointerType(scope='global', dtype=arg_type.scalar_type, shape=arg_type.shape, layout=arg_type.layout)
+                if isinstance(arg_type, ir.TypeNode):
+                    if isinstance(arg_type, ir.TensorType):
+                        # we automatically change the tensor type of argument to a tensor pointer type.
+                        arg_type = ir.TensorPointerType(scope='global', dtype=arg_type.scalar_type, shape=arg_type.shape, layout=arg_type.layout)
+                elif arg_type in [int, float]:
+                    type_dict = {
+                        int: ir.scalar_type('int32'),
+                        float: ir.scalar_type('float32')
+                    }
+                    arg_type = type_dict[arg_type]
+                else:
+                    raise HidetProgramError(self, arg, 'Hidet expect a type here.')
+
                 param_var = Var(hint=arg_name, type=arg_type)
                 func_params.append(param_var)
                 scope.define(arg_name, param_var)
@@ -421,7 +437,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
 
     def visit_Name(self, expr: Name):
         if isinstance(expr.ctx, Store):
-            raise ValueError('Internal, please deal with all Store behavior in parent nodes like Assign.')
+            raise ValueError('Internal Error, please deal with all Store behavior in parent nodes like Assign.')
         elif isinstance(expr.ctx, Load):
             name: str = expr.id
             var: Optional[Var] = self.current_scope.lookup(name)
@@ -495,7 +511,22 @@ class PythonToHidetTranslator(PythonAstFunctor):
         return cond
 
     def visit_UnaryOp(self, expr: UnaryOp):
-        pass
+        value = self.visit(expr.operand)
+        if isinstance(expr.op, Not):
+            # not v
+            return ir.Not(value)
+        elif isinstance(expr.op, Invert):
+            # ~v, get the address of v
+            from hidet.ir.dialects.lowlevel import Address
+            return Address(value)
+        elif isinstance(expr.op, UAdd):
+            # +v
+            return value
+        elif isinstance(expr.op, USub):
+            # -v
+            return ir.Neg(value)
+        else:
+            raise HidetProgramError(self, expr, 'Can not recognize unary operator.')
 
     def visit_If(self, stmt: If):
         cond = self.visit(stmt.test)
@@ -564,7 +595,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
             # Will be translated to ForTaskStmt
             if len(stmt.iter.args) != 1:
                 raise HidetProgramError(self, stmt.iter, 'Expect a single expression representing worker index.')
-            worker = self.visit(stmt.iter.args[0])
+            worker = ir.convert(self.visit(stmt.iter.args[0]))
             mapping = self.visit(stmt.iter.func.value)
             if not isinstance(mapping, ir.TaskMapping):
                 raise HidetProgramError(self, stmt.iter.func.value, 'Expect task mapping here.')
@@ -590,7 +621,11 @@ class PythonToHidetTranslator(PythonAstFunctor):
             raise HidetProgramError(self, stmt.orelse[0], 'Hidet does not support else clause in for loop.')
 
     def visit_AugAssign(self, stmt: AugAssign):
-        var_value = self.visit(stmt.target)
+        if isinstance(stmt.target, Name):
+            target = Name(stmt.target.id, Load())
+            var_value = self.visit(target)
+        else:
+            raise NotImplementedError()
         value = self.visit(stmt.value)
         op_dict = {
             Add: ir.Add,

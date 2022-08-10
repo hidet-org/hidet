@@ -1,4 +1,4 @@
-import bench_model
+import bench
 
 
 def main():
@@ -32,7 +32,7 @@ def main():
                 '--model bert',
                 # '--model gpt2'
             ]:
-                bench_model.main('{} {} {}'.format(executor, bs, model))
+                bench.main('{} {} {}'.format(executor, bs, model))
 
 
 if __name__ == '__main__':

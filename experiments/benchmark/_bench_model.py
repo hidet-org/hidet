@@ -11,7 +11,6 @@ import hidet
 from hidet import Tensor
 from hidet.utils import cuda, nvtx_annotate, hidet_cache_file, error_tolerance
 from hidet.utils.git_utils import get_repo_sha, get_repo_commit_date
-from executors import bench_manual
 
 parser = argparse.ArgumentParser(description='Hidet model benchmark script.')
 
@@ -395,8 +394,7 @@ def main(command_line_args: Optional[str] = None):
         'tvm': bench_tvm,
         'tf': bench_tf,
         'tf_xla': bench_tf,
-        'torch': bench_torch,
-        'manual': bench_manual
+        'torch': bench_torch
     }
     bench_func = bench_dict[args.exec]
     with nvtx_annotate(message=args.exec):

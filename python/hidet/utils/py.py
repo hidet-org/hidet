@@ -119,6 +119,12 @@ def nocolor(s: str) -> str:
     return s
 
 
+def str_indent(msg: str, indent=0) -> str:
+    lines = msg.split('\n')
+    lines = [' ' * indent + line for line in lines]
+    return '\n'.join(lines)
+
+
 class Timer:
     def __init__(self, msg=None, file=None, verbose=True, stdout=True):
         self.start_time = None

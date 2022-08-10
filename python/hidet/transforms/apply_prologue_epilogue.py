@@ -12,6 +12,8 @@ class ApplyPrologueEpiloguePass(Pass):
         kernel_functions = [func for func in ir_module.functions.values() if func.kind == 'cuda_kernel']
         if len(kernel_functions) > 1:
             raise ValueError('Expect a single kernel function.')
+        if len(kernel_functions) == 0:
+            raise ValueError('Expect a kernel function, but no kernel function found.')
         func = kernel_functions[0]
         task = ir_module.task
 

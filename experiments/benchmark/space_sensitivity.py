@@ -1,4 +1,4 @@
-import bench_model
+import bench
 
 
 def main():
@@ -31,7 +31,7 @@ def main():
                 '--model op_matmul_nn_10',
                 '--model op_matmul_nn_11',
             ]:
-                bench_model.main('{} {} {}'.format(executor, bs, model))
+                bench.main('{} {} {}'.format(executor, bs, model))
 
 
 if __name__ == '__main__':

@@ -14,7 +14,7 @@ from .type import TypeNode, TensorType, ScalarType, FuncType
 from .type import scalar_type, tensor_type
 
 from .expr import Expr, Var, Constant
-from .expr import BinaryOp, Condition, LessThan, LessEqual, Equal, Add, Sub, Multiply, Div, Mod, FloorDiv, Let, Cast, And, Or, TensorElement, Call, TensorSlice
+from .expr import BinaryOp, Condition, LessThan, LessEqual, Equal, Add, Sub, Multiply, Div, Mod, FloorDiv, Let, Cast, And, Or, TensorElement, Call, TensorSlice, Not, Neg
 from .expr import var, scalar_var, tensor_var, is_one, is_zero, convert
 
 from .layout import DataLayout

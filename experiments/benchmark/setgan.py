@@ -1,4 +1,4 @@
-import bench_model
+import bench
 
 
 def main():
@@ -46,7 +46,7 @@ def main():
             ]:
                 extra = '--number 1 --repeat 1 --warmup 0'
                 # extra = ''
-                bench_model.main('{} {} {} {}'.format(executor, bs, model, extra))
+                bench.main('{} {} {} {}'.format(executor, bs, model, extra))
 
 
 if __name__ == '__main__':

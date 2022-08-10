@@ -1,4 +1,4 @@
-import bench_model
+import bench
 
 
 def main():
@@ -9,8 +9,8 @@ def main():
         # '--exec hidet --precision f16 --reduce_precision f16 --mma wmma',
         # '--exec hidet --precision f16 --reduce_precision f16 --mma mma --hidet_space 1 --parallel_k disabled',
         # '--exec hidet --precision f16 --reduce_precision f16 --mma mma --hidet_space 1 --parallel_k default',
-        # '--exec manual --precision f16 --reduce_precision f16',
         '--exec hidet --precision f16 --reduce_precision f16 --mma mma --hidet_space 1 --parallel_k 6',
+        '--exec manual --precision f16 --reduce_precision f16',
         # '--exec ort --ort_provider cuda',
         # '--exec ort --ort_provider trt'
         # '--exec ansor --tvm_trial 800',
@@ -42,9 +42,9 @@ def main():
                 # '--model bert_self_at_softmax',
                 # '--model bert_self_at_context',
             ]:
-                extra = '--number 1 --repeat 1 --warmup 0'
-                # extra = ''
-                bench_model.main('{} {} {} {}'.format(executor, bs, model, extra))
+                # extra = '--number 1 --repeat 1 --warmup 0'
+                extra = ''
+                bench.main('{} {} {} {}'.format(executor, bs, model, extra))
 
 
 if __name__ == '__main__':
