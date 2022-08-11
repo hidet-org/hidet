@@ -30,6 +30,7 @@ parser.add_argument('--exec', type=str, choices=['hidet', 'trt', 'ort', 'tvm', '
                     help='Executor.')
 parser.add_argument('--out_dir', type=str, default='./results/',
                     help='Output directory.')
+parser.add_argument('--nocheck', action='store_true', help='Do not check the output. Used when profiling each single kernel.')
 parser.add_argument('--warmup', type=int, default=10, help='Number of warmups.')
 parser.add_argument('--number', type=int, default=10, help='Number of runs per repeat.')
 parser.add_argument('--repeat', type=int, default=10, help='Number of repeats.')
@@ -122,12 +123,14 @@ def main(command_line_args: Optional[str] = None):
             result: BenchResult = bench_func(args, out_dir)
 
     # error tolerance
-    onnx_path, input_names, input_tensors = get_onnx_model(name=args.model, batch_size=args.bs, precision=args.precision)
-    onnx_outputs = run_with_onnx(model_path=onnx_path, input_names=input_names, input_tensors=input_tensors)
     et = -1.0
-    if result.outputs is not None:
-        for baseline_output, onnx_output in zip(result.outputs, onnx_outputs):
-            et = max(et, error_tolerance(baseline_output.numpy(), onnx_output))
+    if not args.nocheck:
+        onnx_path, input_names, input_tensors = get_onnx_model(name=args.model, batch_size=args.bs, precision=args.precision)
+        onnx_outputs = run_with_onnx(model_path=onnx_path, input_names=input_names, input_tensors=input_tensors)
+        if result.outputs is not None:
+            for baseline_output, onnx_output in zip(result.outputs, onnx_outputs):
+                et = max(et, error_tolerance(baseline_output.numpy(), onnx_output))
+
 
     # write results
     with open(os.path.join(out_dir, 'env.txt'), 'w') as f:
@@ -145,7 +148,7 @@ def main(command_line_args: Optional[str] = None):
         head = '{:>10} {:>20} {:>12} {:>40} {:>10} {:>10} {:>10} {:>10}\n'.format(
             'BatchSize', 'Model', 'Executor', 'Config', 'Space', 'Latency', 'Std', 'Error'
         )
-        summary = '{:>10} {:>20} {:>12} {:>40} {:10} {:10.3f} {:10.3f} {:10.3f}\n'.format(
+        summary = '{:>10} {:>20} {:>12} {:>40} {:10} {:10.3f} {:10.3f} {}\n'.format(
             args.bs,
             args.model,
             args.exec,
@@ -153,7 +156,7 @@ def main(command_line_args: Optional[str] = None):
             args.hidet_space,
             float(np.median(result.latencies)),
             float(np.std(result.latencies)),
-            et
+            f'{et:10.3f}' if et != -1.0 else '{:>10}'.format('N/A')
         )
         print(head + summary)
         f.write(head + summary)

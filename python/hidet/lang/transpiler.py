@@ -599,6 +599,8 @@ class PythonToHidetTranslator(PythonAstFunctor):
             mapping = self.visit(stmt.iter.func.value)
             if not isinstance(mapping, ir.TaskMapping):
                 raise HidetProgramError(self, stmt.iter.func.value, 'Expect task mapping here.')
+            if len(mapping.task_shape) != len(loop_vars):
+                raise HidetProgramError(self, stmt, 'Can not unpack {} to {} indices.'.format(len(mapping.task_shape), len(loop_vars)))
             self.current_scope.append(ir.ForTaskStmt(
                 loop_vars=loop_vars,
                 mapping=mapping,

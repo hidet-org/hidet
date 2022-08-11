@@ -33,6 +33,7 @@ def main():
                 # '--model bert_attention',
                 # '--model bert_intermediate',
                 # '--model bert_output',
+                # '--model op_gemm_128_768_3072',
                 '--model op_gemm_128_768_3072',
                 # '--model bert_self_attention',
                 # '--model bert_self_output',
@@ -42,8 +43,8 @@ def main():
                 # '--model bert_self_at_softmax',
                 # '--model bert_self_at_context',
             ]:
-                # extra = '--number 1 --repeat 1 --warmup 0'
-                extra = ''
+                extra = '--number 1 --repeat 1 --warmup 0 --nocheck'
+                # extra = ''
                 bench.main('{} {} {} {}'.format(executor, bs, model, extra))
 
 
