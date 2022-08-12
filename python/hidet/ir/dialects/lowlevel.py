@@ -66,3 +66,7 @@ def pointer_type(base_type):
 
 def tensor_pointer_var(hint: str, shape=None, scope: str = 'global', dtype: Union[str, ScalarType] = 'float32', layout=None):
     return Var(hint, TensorPointerType(scope=scope, dtype=dtype, shape=shape, layout=layout))
+
+
+def void_pointer():
+    return PointerType(VoidType())

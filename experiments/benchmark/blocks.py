@@ -9,7 +9,7 @@ def main():
         # '--exec hidet --precision f16 --reduce_precision f16 --mma wmma',
         # '--exec hidet --precision f16 --reduce_precision f16 --mma mma --hidet_space 1 --parallel_k disabled',
         # '--exec hidet --precision f16 --reduce_precision f16 --mma mma --hidet_space 1 --parallel_k default',
-        '--exec hidet --precision f16 --reduce_precision f16 --mma mma --hidet_space 1 --parallel_k 6',
+        # '--exec hidet --precision f16 --reduce_precision f16 --mma mma --hidet_space 1 --parallel_k 6',
         '--exec manual --precision f16 --reduce_precision f16',
         # '--exec ort --ort_provider cuda',
         # '--exec ort --ort_provider trt'
