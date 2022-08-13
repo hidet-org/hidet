@@ -73,7 +73,7 @@ class ReduceCompute:
 
     @staticmethod
     def combine(reduce_type: str, lhs: Expr, rhs: Expr):
-        from hidet.ir import primitives
+        import hidet.ir.primitives as primitives
         func_dict = {
             'sum': lambda a, b: a + b,
             'avg': lambda a, b: a + b,

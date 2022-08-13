@@ -1,6 +1,6 @@
 from typing import List
 from hidet.ir.type import ScalarType, TensorType, FuncType
-from hidet.ir.expr import BinaryOp, Add, Sub, Multiply, Div, Mod, FloorDiv, Condition, LessThan, Equal, IfThenElse, TensorSlice, Not, Or, And, LessEqual, Let, RightShift, LeftShift, BitwiseNot, BitwiseOr, BitwiseAnd, Neg
+from hidet.ir.expr import BinaryOp, Add, Sub, Multiply, Div, Mod, FloorDiv, Condition, LessThan, Equal, IfThenElse, TensorSlice, Not, Or, And, LessEqual, Let, RightShift, LeftShift, BitwiseNot, BitwiseOr, BitwiseAnd, Neg, NotEqual
 from hidet.ir.expr import Var, Constant, TensorElement, Call, Cast
 from hidet.ir.dialects.compute import TensorNode, ScalarNode
 from hidet.ir.dialects.lowlevel import PointerType, Dereference, Reference, Address, TensorPointerType
@@ -58,6 +58,9 @@ class TypeInfer(ExprFunctor):
         return self.visit_Binary(e)
 
     def visit_Equal(self, e: Equal):
+        return self.visit_Binary(e)
+
+    def visit_NotEqual(self, e: NotEqual):
         return self.visit_Binary(e)
 
     def visit_LessEqual(self, e: LessEqual):

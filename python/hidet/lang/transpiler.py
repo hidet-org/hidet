@@ -189,6 +189,15 @@ class PythonAstFunctor:
         raise NotImplementedError()
 
 
+HostTypes = (
+    ir.TaskMapping,
+    ir.DataLayout,
+    float,
+    int,
+    type(None)
+)
+
+
 class Scope:
     def __init__(self, parent: Optional[Scope]):
         self.parent: Optional[Scope] = parent
@@ -197,13 +206,13 @@ class Scope:
         self.stmts: list[ir.Stmt] = []
         self.attributes: dict[str, Any] = {}
 
-    def define(self, name: str, v: Var):
+    def define_var(self, name: str, v: Var):
         self.name2var[name] = v
 
-    def define_host_var(self, name: str, v: Any):
-        self.name2host_var[name] = v
+    def define_host_var(self, name: str, value: Any):
+        self.name2host_var[name] = value
 
-    def lookup(self, name: str, search_parents=True) -> Optional[Union[Var, Any]]:
+    def lookup(self, name: str, search_parents=True) -> Optional[Union[Var, HostTypes]]:
         if name in self.name2var:
             return self.name2var[name]
         if name in self.name2host_var:
@@ -261,19 +270,25 @@ class PythonToHidetTranslator(PythonAstFunctor):
             raise ValueError('The scope stack is empty.')
         return self.scope_stack.scopes[-1]
 
-    def process_assign(self, lhs: Union[Attribute, Subscript, Name], rhs):
-        # check the rhs value, must be an instance of base_types or a list of these kind of elements.
-        base_types = (
+    def process_assign(self, lhs: Union[Attribute, Subscript, Name], rhs, type_annotation: Optional[ast.expr] = None):
+        # check the rhs value, must be an instance of allowed_types or a list of these kinds of elements.
+        host_var_types = (
+            ir.TaskMapping,
+            ir.DataLayout,
+            ir.TensorSlice,
+        )
+        allowed_types = (
             ir.Expr,
             ir.TypeNode,
-            ir.DataLayout,
-            ir.TaskMapping,
             float,
-            int
+            int,
+            str,
+            type(None)
         )
+        allowed_types += host_var_types
         assert (
-            isinstance(rhs, base_types) or
-            (isinstance(rhs, list) and all(isinstance(v, base_types) for v in rhs))
+            isinstance(rhs, allowed_types) or
+            (isinstance(rhs, list) and all(isinstance(v, allowed_types) for v in rhs))
         ), 'unexpected value "{}" with type {}'.format(rhs, type(rhs))
 
         # three cases of assignment:
@@ -281,41 +296,66 @@ class PythonToHidetTranslator(PythonAstFunctor):
         #    2. a[i, j] = ...
         #    3. attr.name = ...
         if isinstance(lhs, Name):
-            var = self.current_scope.lookup(lhs.id, search_parents=True)
-            if var is None:
-                # define a new variable
-                # during transpiling, there are two kinds of variables:
-                #   1. host variable, the variable in host language, and
-                #   2. hidet variable, the variable in hidet.
-                # Typical host variables are TaskMapping, DataLayout that are not scalar or tensor.
-                # We use host variable to reduce the complexity of hidet's data model.
-                var_name = lhs.id
-                host_var_types = [
-                    ir.TaskMapping,
-                    ir.DataLayout,
-                    ir.TensorSlice
-                ]
-                if isinstance(rhs, tuple(host_var_types)):
-                    # host variable
-                    self.current_scope.define_host_var(var_name, rhs)
-                else:
-                    # hidet variable, there are two ways to define a variable:
-                    #   1. var = type
-                    #      example: a = tensor('shared', 'float32', [3, 4])
-                    #   2. var = initialized value
-                    #      example: a = 3
-                    if isinstance(rhs, ir.TypeNode):  # case 1: var = type
-                        var_type = rhs
-                        init_value = None
-                    else:   # case 2: var = initialized value
-                        rhs = ir.convert(rhs)
-                        var_type = ir.infer_type(rhs)
-                        init_value = rhs
+            var_name = lhs.id
+            if type_annotation is not None or self.current_scope.lookup(var_name, search_parents=True) is None:
+                # There are two cases of variable definition:
+                #   1) assignment with type annotation, or
+                #   2) the used name has not been defined yet.
+                if type_annotation is not None:
+                    if self.current_scope.lookup(var_name, search_parents=False) is not None:
+                        raise HidetProgramError(self, lhs, 'Can not define two variables with the same name in the same scope.')
+                    var_type = self.visit(type_annotation)
                     var = Var(hint=var_name, type=var_type)
-                    self.current_scope.append(ir.DeclareStmt(var, init=init_value))
-                    self.current_scope.define(name=var_name, v=var)
+                    self.current_scope.define_var(name=var_name, v=var)
+                    self.current_scope.append(ir.DeclareStmt(var, init=rhs))
+                else:
+                    # define a new variable
+                    # during transpiling, there are two kinds of variables:
+                    #   1. host variable, the variable in host language, and
+                    #   2. hidet variable, the variable in hidet.
+                    # Typical host variables are like TaskMapping, DataLayout that are not scalar or tensor.
+                    # We use host variable to reduce the complexity of hidet's data model.
+                    if isinstance(rhs, host_var_types):
+                        self.current_scope.define_host_var(var_name, rhs)
+                    else:
+                        if isinstance(rhs, ir.TypeNode):
+                            var_type = rhs
+                            init_value = None
+                        else:
+                            rhs = ir.convert(rhs)
+                            var_type = ir.infer_type(rhs)
+                            init_value = rhs
+                        var = Var(hint=var_name, type=var_type)
+                        self.current_scope.append(ir.DeclareStmt(var, init=init_value))
+                        self.current_scope.define_var(name=var_name, v=var)
             else:
+                # In other cases, it is an assignment of defined variable.
+                var = self.current_scope.lookup(var_name, search_parents=True)
                 self.current_scope.append(ir.AssignStmt(var, value=rhs))
+            # var = self.current_scope.lookup(lhs.id, search_parents=True)
+            # if var is None:
+            #     var_name = lhs.id
+            #     if isinstance(rhs, tuple(host_var_types)):
+            #         # host variable
+            #         self.current_scope.define_host_var(var_name, rhs)
+            #     else:
+            #         # hidet variable, there are two ways to define a variable:
+            #         #   1. var = type
+            #         #      example: a = tensor('shared', 'float32', [3, 4])
+            #         #   2. var = initialized value
+            #         #      example: a = 3
+            #         if isinstance(rhs, ir.TypeNode):  # case 1: var = type
+            #             var_type = rhs
+            #             init_value = None
+            #         else:   # case 2: var = initialized value
+            #             rhs = ir.convert(rhs)
+            #             var_type = ir.infer_type(rhs)
+            #             init_value = rhs
+            #         var = Var(hint=var_name, type=var_type)
+            #         self.current_scope.append(ir.DeclareStmt(var, init=init_value))
+            #         self.current_scope.define_var(name=var_name, v=var)
+            # else:
+            #     self.current_scope.append(ir.AssignStmt(var, value=rhs))
         elif isinstance(lhs, Subscript):
             # example: a[3, 4] = 5.0
             base = self.visit(lhs.value)
@@ -340,71 +380,89 @@ class PythonToHidetTranslator(PythonAstFunctor):
         return self.visit(module.body[0])
 
     def visit_FunctionDef(self, func_def: FunctionDef):
-        func_name = func_def.name
+        from hidet.ir.primitives.cuda.vars import get_all_primitive_vars
         func_params = []
-        with self.scope() as scope:
-            # process function arguments
-            args: ast.arguments = func_def.args
-            if args.vararg is not None:
-                raise HidetProgramError(self, args.vararg, 'Hidet program does not support "*args" arguments.')
-            if len(args.kwonlyargs) != 0:
-                raise HidetProgramError(self, args.kwonlyargs[0], 'Hidet program does not support "*kwargs" arguments.')
-            if args.kwarg is not None:
-                raise HidetProgramError(self, args.kwarg, 'Hidet program does not support keyword arguments.')
-            if len(args.kw_defaults) > 0:
-                raise HidetProgramError(self, args.kw_defaults[0], 'Hidet does not support default argument.')
-            if len(args.defaults) > 0:
-                raise HidetProgramError(self, args.defaults[0], 'Hidet does not support default argument.')
-            for arg in args.args:
-                arg_name = arg.arg
-                if arg_name not in self.func_annotations:
-                    raise HidetProgramError(self, arg, 'Hidet expects type annotation for each function argument.')
-                arg_type = self.func_annotations[arg_name]
-                if isinstance(arg_type, ir.TypeNode):
-                    if isinstance(arg_type, ir.TensorType):
-                        # we automatically change the tensor type of argument to a tensor pointer type.
-                        arg_type = ir.TensorPointerType(scope='global', dtype=arg_type.scalar_type, shape=arg_type.shape, layout=arg_type.layout)
-                elif arg_type in [int, float]:
-                    type_dict = {
-                        int: ir.scalar_type('int32'),
-                        float: ir.scalar_type('float32')
-                    }
-                    arg_type = type_dict[arg_type]
-                else:
-                    raise HidetProgramError(self, arg, 'Hidet expect a type here.')
+        with self.scope() as env_scope:
+            for name, value in self.env.items():
+                env_scope.define_host_var(name, value)
+            with self.scope() as scope:
+                # process function arguments
+                args: ast.arguments = func_def.args
+                if args.vararg is not None:
+                    raise HidetProgramError(self, args.vararg, 'Hidet program does not support "*args" arguments.')
+                if len(args.kwonlyargs) != 0:
+                    raise HidetProgramError(self, args.kwonlyargs[0], 'Hidet program does not support "*kwargs" arguments.')
+                if args.kwarg is not None:
+                    raise HidetProgramError(self, args.kwarg, 'Hidet program does not support keyword arguments.')
+                if len(args.kw_defaults) > 0:
+                    raise HidetProgramError(self, args.kw_defaults[0], 'Hidet does not support default argument.')
+                if len(args.defaults) > 0:
+                    raise HidetProgramError(self, args.defaults[0], 'Hidet does not support default argument.')
+                for arg in args.args:
+                    arg_name = arg.arg
+                    if arg_name not in self.func_annotations:
+                        raise HidetProgramError(self, arg, 'Hidet expects type annotation for each function argument.')
+                    arg_type = self.func_annotations[arg_name]
+                    if isinstance(arg_type, ir.TypeNode):
+                        if isinstance(arg_type, ir.TensorType):
+                            # we automatically change the tensor type of argument to a tensor pointer type.
+                            arg_type = ir.TensorPointerType(scope='global', dtype=arg_type.scalar_type, shape=arg_type.shape, layout=arg_type.layout)
+                    elif arg_type in [int, float]:
+                        type_dict = {
+                            int: ir.scalar_type('int32'),
+                            float: ir.scalar_type('float32')
+                        }
+                        arg_type = type_dict[arg_type]
+                    elif isinstance(arg_type, str):
+                        raise HidetProgramError(self, arg, (
+                            'A python string as parameter type annotation detected. \n'
+                            'This is usually because "from __future__ import annotations" has been used.\n'
+                            'Currently, hidet script is not compatible with this feature. \n'
+                            'Please considering not using it in module that defines hidet script.'
+                        ))
+                    else:
+                        raise HidetProgramError(self, arg, 'Hidet expect a type annotation for this parameter.')
 
-                param_var = Var(hint=arg_name, type=arg_type)
-                func_params.append(param_var)
-                scope.define(arg_name, param_var)
+                    param_var = Var(hint=arg_name, type=arg_type)
+                    func_params.append(param_var)
+                    scope.define_var(arg_name, param_var)
 
-            # process function body
-            for stmt in func_def.body:
-                self.visit(stmt)
+                # process function body
+                for stmt in func_def.body:
+                    self.visit(stmt)
 
-        if 'cuda_grid_dim' in scope.attributes and 'cuda_block_dim' in scope.attributes:
-            func_kind = 'cuda_kernel'
+            # return type
+            if func_def.returns is None:
+                # the default return type is void
+                ret_type = ir.VoidType()
+            else:
+                ret_type = self.visit(func_def.returns)
+                if not isinstance(ret_type, ir.TypeNode):
+                    raise HidetProgramError(self, func_def.returns, 'Expect a type of function return value.')
+
+            # get function attributes
+            attrs: Dict[str, Any] = scope.attributes.copy()
             func_attrs = {
-                'cuda_grid_dim': scope.attributes['cuda_grid_dim'],
-                'cuda_block_dim': scope.attributes['cuda_block_dim']
+                'cuda_grid_dim': attrs.get('cuda_grid_dim', 1),
+                'cuda_block_dim': attrs.get('cuda_block_dim', 1)
             }
-        else:
-            func_kind = 'cuda_device'
-            func_attrs = {}
-
-        # if 'cuda_grid_dim' not in scope.attributes:
-        #     raise HidetProgramError(self, func_def, "cuda requires to specify 'attr.cuda_grid_dim' attribute to define the number of thread blocks to launch.")
-        # if 'cuda_block_dim' not in scope.attributes:
-        #     raise HidetProgramError(self, func_def, "cuda requries to specify 'attr.cuda_block_dim' attribute to define the number of threads per block.")
+            if 'func_kind' in attrs:
+                func_kind = attrs['func_kind']
+            elif 'cuda_grid_dim' in attrs or 'cuda_block_dim' in attrs:
+                func_kind = 'cuda_kernel'
+            else:
+                func_kind = 'cuda_device'
+            func_name = attrs.get('func_name', func_def.name)
 
         return ir.Function(
             name=func_name,
             params=func_params,
             body=scope.flush_stmts(),
-            ret_type=ir.VoidType(),
+            ret_type=ret_type,
             kind=func_kind,
             local_vars=[],          # todo: remove local variables in function as we support DeclareStmt now.
             local_const_vars=[],
-            extern_vars=ir.primitives.cuda.vars.get_all_primitive_vars(),
+            extern_vars=get_all_primitive_vars(),
             attrs=func_attrs
         )
 
@@ -467,6 +525,9 @@ class PythonToHidetTranslator(PythonAstFunctor):
         elif isinstance(lhs, ir.TaskMapping) and isinstance(rhs, ir.TaskMapping):
             assert isinstance(expr.op, Mult)
             return lhs * rhs
+        elif isinstance(lhs, str) and isinstance(rhs, str):
+            assert isinstance(expr.op, Add)
+            return lhs + rhs
         else:
             op_dict = {
                 Add: ir.Add,
@@ -500,7 +561,8 @@ class PythonToHidetTranslator(PythonAstFunctor):
             Gt: lambda a, b: ir.LessThan(b, a),
             Lt: ir.LessThan,
             GtE: lambda a, b: ir.LessEqual(b, a),
-            LtE: ir.LessEqual
+            LtE: ir.LessEqual,
+            NotEq: ir.NotEqual
         }
         cond = None
         comparators = [self.visit(v) for v in expr.comparators]
@@ -566,7 +628,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
         def visit_body() -> ir.Stmt:
             with self.scope() as for_scope:
                 for var in loop_vars:
-                    for_scope.define(name=var.hint, v=var)
+                    for_scope.define_var(name=var.hint, v=var)
                 for s in stmt.body:
                     self.visit(s)
             return for_scope.flush_stmts()
@@ -681,9 +743,14 @@ class PythonToHidetTranslator(PythonAstFunctor):
             # call python class method
             return func(*args, **kwargs)
         elif isinstance(func, ir.Expr):
+            from hidet.ir.functors import infer_type
             # call hidet function
             if len(kwargs) > 0:
                 raise HidetProgramError(self, expr, 'Hidet do not support call with keyword.')
+            func_type: ir.FuncType = infer_type(func)
+            assert isinstance(func_type, ir.FuncType)
+            if len(func_type.param_types) != len(args):
+                raise HidetProgramError(self, expr, 'The number of parameters of callee and given arguments does not match.')
             return ir.Call(func, args)
         elif isinstance(func, ir.Function):
             from hidet.lang.script import ScriptModuleContext
@@ -694,6 +761,12 @@ class PythonToHidetTranslator(PythonAstFunctor):
             if len(kwargs) > 0:
                 raise HidetProgramError(self, expr, 'Hidet do not support call with keyword.')
             return ir.Call(func_var, args)
+        elif isinstance(func, types.BuiltinMethodType):
+            # call python builtin method
+            return func(*args, **kwargs)
+        elif isinstance(func, type):
+            # class
+            return func(*args, **kwargs)
         else:
             raise ValueError('Can not recognize callee {}'.format(func))
 
@@ -712,8 +785,8 @@ class PythonToHidetTranslator(PythonAstFunctor):
 
     def visit_Assert(self, stmt: Assert):
         cond = self.visit(stmt.test)
-        msg = '' if stmt.msg is None else self.visit(stmt.msg)
-        if not isinstance(msg, str):
+        msg = None if stmt.msg is None else self.visit(stmt.msg)
+        if stmt.msg is not None and not isinstance(msg, str):
             raise HidetProgramError(self, stmt.msg, 'Expect a string message.')
         self.current_scope.append(ir.AssertStmt(cond=cond, msg=msg))
 
@@ -726,4 +799,29 @@ class PythonToHidetTranslator(PythonAstFunctor):
 
     def visit_Pass(self, stmt: Pass):
         return ir.SeqStmt([])
+
+    def visit_AnnAssign(self, stmt: AnnAssign):
+        lhs = stmt.target
+        rhs = self.visit(stmt.value) if stmt.value else None
+        assert isinstance(lhs, (Name, Attribute, Subscript))
+        if isinstance(lhs, (Attribute, Subscript)):
+            raise HidetProgramError(self, stmt.annotation, 'Hidet do not support annotation for expression like "x.y" or "x[y]"')
+        self.process_assign(lhs, rhs, stmt.annotation)
+
+        # raise HidetProgramError(self, stmt, 'Hidet currently do not support annotated assignment.')
+
+    def visit_While(self, stmt: While):
+        raise HidetProgramError(self, stmt, 'Hidet currently do not support while statement.')
+
+    def visit_With(self, stmt: With):
+        raise HidetProgramError(self, stmt, 'Hidet currently do not support with statement.')
+
+    def visit_Break(self, stmt: Break):
+        raise HidetProgramError(self, stmt, 'Hidet currently do not support break statement.')
+
+    def visit_Continue(self, stmt: Continue):
+        raise HidetProgramError(self, stmt, 'Hidet currently do not support continue statement.')
+
+    def visit_Lambda(self, expr: Lambda):
+        raise HidetProgramError(self, expr, 'Hidet currently do not support lambda expression.')
 

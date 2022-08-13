@@ -1,6 +1,8 @@
 from collections import namedtuple
 from hidet.ir.primitives.cuda import thread_idx, block_idx, block_dim, grid_dim, syncthreads
-from hidet.ir.primitives.cuda.mma import MmaConfig, mma_sync
+from hidet.ir.primitives.cuda.mma import MmaConfig, mma_sync, ldmatrix
+from hidet.ir.primitives.cuda.cvta import cvta_generic_to_shared
+from hidet.ir.primitives.cuda.cp_async import cp_async, cp_async_commit_group, cp_async_wait_group, cp_async_wait_all
 
 dim3 = namedtuple('dim3', field_names=['x', 'y', 'z'])
 

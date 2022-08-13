@@ -3,8 +3,10 @@ from typing import Callable, Tuple, Optional, List, Any, Dict
 from types import FunctionType
 import ast as py_ast
 import inspect
-from hidet.ir import IRModule, Function, Var, FuncType
-from .transpiler import PythonToHidetTranslator
+from hidet.ir.func import IRModule, Function
+from hidet.ir.type import FuncType
+from hidet.ir.expr import Var
+from hidet.lang.transpiler import PythonToHidetTranslator
 
 
 def eliminate_indent(source: str) -> Tuple[str, int]:
@@ -40,13 +42,16 @@ def script(func: FunctionType) -> Function:
     start_line += inc_lineno
     parsed: py_ast.AST = py_ast.parse(source=source)
 
-    # Get the environment (binding of free variables)
-    # See the data model of python for the details of func.__closure__ and func.__code__:
+    # Get the environment (globals and binding of free variables)
+    # See the data model of python for the details of func.__globals__, func.__closure__ and func.__code__:
     #     https://docs.python.org/3/reference/datamodel.html
+    env: Dict[str, Any] = func.__globals__.copy()
     func_freevar_names: List[str] = list(func.__code__.co_freevars)
     func_freevar_cells: List[Any] = [v.cell_contents for v in func.__closure__] if func.__closure__ else []
     assert len(func_freevar_names) == len(func_freevar_cells)
-    env: Dict[str, Any] = {name: value for name, value in zip(func_freevar_names, func_freevar_cells)}
+    env.update({name: value for name, value in zip(func_freevar_names, func_freevar_cells)})
+
+    # get the type annotations of function parameters.
     func_annotations: Dict[str, Any] = func.__annotations__
 
     # Translate the Python function into Hidet function
@@ -59,9 +64,10 @@ def script(func: FunctionType) -> Function:
     )
     hidet_function = translator(parsed)
 
-    # add function to current script module
+    # add function to current script module if we are in a script module context
     ctx = ScriptModuleContext.current_context()
-    ctx.append_function(hidet_function)
+    if ctx:
+        ctx.append_function(hidet_function)
     return hidet_function
 
 
@@ -80,18 +86,9 @@ class ScriptModuleContext:
         self.contexts.pop()
 
     @staticmethod
-    def current_context() -> ScriptModuleContext:
-        if len(ScriptModuleContext.contexts) == 0:
-            msg = (
-                'Can only define script function in script module:\n\n'
-                'with hidet.script_module() as module:\n'
-                '    @hidet.script\n'
-                '    def kernel_function():\n'
-                '        ...\n'
-            )
-            raise ValueError(msg)
-            # add the fallback context
-        return ScriptModuleContext.contexts[-1]
+    def current_context() -> Optional[ScriptModuleContext]:
+        contexts = ScriptModuleContext.contexts
+        return contexts[-1] if len(contexts) > 0 else None
 
     def append_function(self, function: Function):
         self.functions.append(function)

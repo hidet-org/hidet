@@ -1,6 +1,7 @@
-from typing import Sequence, Tuple
+from typing import Sequence, Tuple, Any
 from typing import List, Union, Optional
 from hidet.ir.node import Node
+from hidet.ir.type import ScalarType
 from hidet.ir.expr import Var, Expr, convert, Constant
 from hidet.ir.mapping import TaskMapping
 
@@ -88,10 +89,10 @@ class IfStmt(Stmt):
 
 
 class AssertStmt(Stmt):
-    def __init__(self, cond: Union[Expr, bool], msg: str):
+    def __init__(self, cond: Union[Expr, bool], msg: Optional[str]):
         super().__init__()
-        self.cond = convert(cond)
-        self.msg = msg
+        self.cond: Expr = convert(cond)
+        self.msg: Optional[str] = msg
 
 
 class AsmStmt(Stmt):
@@ -123,3 +124,55 @@ class SeqStmt(Stmt):
         self.seq: Tuple[Stmt] = tuple(seq)
         for stmt in seq:
             assert isinstance(stmt, Stmt), str(type(stmt))
+
+
+def asm(
+        template: str,
+        *,
+        outputs: Sequence[Any] = (),
+        output_inputs: Sequence[Any] = (),
+        inputs: Sequence[Any] = (),
+        is_volatile=False
+):
+    from hidet.ir.functors import infer_type
+    from hidet.ir.dialects.lowlevel import PointerType, TensorPointerType, ReferenceType
+    updated_outputs = []
+    updated_inputs = []
+
+    def get_register_type(expr: Expr) -> str:
+        expr = convert(expr)
+        expr_type = infer_type(expr)
+
+        if isinstance(expr_type, ReferenceType):
+            expr_type = expr_type.base_type
+
+        if isinstance(expr_type, ScalarType):
+            if isinstance(expr, Constant):
+                return 'n'
+            else:
+                dtype2reg = {
+                    'float16': 'h',
+                    'float32': 'f',
+                    'float64': 'd',
+                    'int32': 'r',
+                    'uint32': 'r',
+                }
+                if expr_type.name not in dtype2reg:
+                    raise NotImplementedError('{}'.format(expr_type))
+                return dtype2reg[expr_type.name]
+        elif isinstance(expr_type, (PointerType, TensorPointerType)):
+            return 'l'
+        else:
+            raise ValueError('Can not deal with type {} in asm code.'.format(expr_type))
+
+    for output in outputs:
+        constraint = '=' + get_register_type(output)
+        updated_outputs.append((constraint, convert(output)))
+    for output_input in output_inputs:
+        constraint = '+' + get_register_type(output_input)
+        updated_outputs.append((constraint, convert(output_input)))
+    for input in inputs:
+        constraint = get_register_type(input)
+        updated_inputs.append((constraint, convert(input)))
+    return AsmStmt(template, updated_outputs, updated_inputs, is_volatile)
+

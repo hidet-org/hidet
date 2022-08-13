@@ -7,8 +7,8 @@ from hidet.ir.dialects.lowlevel import VoidType
 from hidet.ir.expr import Expr, Call, cast
 from hidet.ir.expr import Var
 from hidet.ir.stmt import AsmStmt, BlackBoxStmt, ReturnStmt
-from hidet.ir.type import ScalarType
-from hidet.ir.primitives.func import FuncType, register_primitive_function, primitive_func_pool
+from hidet.ir.type import ScalarType, FuncType
+from hidet.ir.primitives.func import register_primitive_function, primitive_func_pool
 from hidet.utils import initialize
 
 

@@ -154,6 +154,73 @@ def demo_call_example():
     func()
 
 
+def demo_cvta():
+    from hidet.ir import IRModule
+    from hidet.lang import attr, i32, tensor
+    from hidet.lang import printf
+    from hidet.lang.cuda import threadIdx
+    from hidet.ir.primitives.cuda.cvta import cvta_generic_to_shared
+
+    with hidet.script_module() as module:
+        @hidet.script
+        def cvta_grid():
+            attr.cuda_grid_dim = 1
+            attr.cuda_block_dim = 1
+            smem = tensor('shared', 'float32', shape=[10])
+            smem_ptr = cvta_generic_to_shared(~smem[3])
+            printf(r'%p %d\n', ~smem[0], smem_ptr)
+
+    func = hidet.driver.build_ir_module(module.ir_module(), func_name='cvta', verbose=True)
+    func()
+
+
+def demo_cp_async():
+    from hidet.lang import f32, tensor, attr, printf
+    from hidet.lang.cuda import threadIdx, blockIdx, cp_async, cp_async_commit_group, cp_async_wait_all, syncthreads, cvta_generic_to_shared
+    with hidet.script_module() as module:
+        @hidet.script
+        def demo_cp_async_grid(a: f32[4]):
+            attr.cuda_grid_dim = 1
+            attr.cuda_block_dim = 1
+            smem = tensor('shared', 'float32', [4])
+            cp_async(smem, a, cp_size=16)
+            cp_async_wait_all()
+            # syncthreads()
+            for i in range(4):
+                assert smem[i] == a[i]
+
+    func = hidet.driver.build_ir_module(module.ir_module(), func_name='demo_cp_async', verbose=True, keep_ptx=True)
+    a = hidet.array(list(range(4))).to('float32').cuda()
+    print(a)
+    func(a)
+
+
+def demo_ldmatrix():
+    from hidet.lang import script, f16, f32, tensor, attr, spatial, repeat, printf, cast
+    from hidet.lang.cuda import ldmatrix, threadIdx, syncthreads
+    from hidet.ir.dialects.lowlevel import PointerType, Dereference, TensorPointerType
+
+    with hidet.script_module() as module:
+        @hidet.script
+        def demo_ldmatrix_grid(a: f16[8, 8]):
+            attr.cuda_grid_dim = 1
+            attr.cuda_block_dim = 32
+
+            smem = tensor('shared', 'float16', [8, 8])
+            regs = tensor('register', 'uint32', [1])
+
+            for i, j in repeat(2, 1).spatial(4, 8).on(threadIdx.x):
+                smem[i, j] = a[i, j]
+            syncthreads()
+            ldmatrix(regs=[regs[0]], smem_addr=~smem[threadIdx.x][0])
+            regs_view = cast(~regs[0], TensorPointerType('register', dtype='float16', shape=[2]))
+            printf(r'%d %.0f %.0f\n', threadIdx.x, cast(regs_view[0], f32), cast(regs_view[1], f32))
+    func = hidet.driver.build_ir_module(module.ir_module(), func_name='demo_ldmatrix', verbose=True, keep_ptx=True)
+    a = hidet.array(np.arange(64).astype(np.float16)).cuda()
+    print(a)
+    func(a)
+
+
 def main():
     # m_size, n_size, k_size = 1024, 1024, 1024
     m_size, n_size, k_size = 127, 127, 127
@@ -179,10 +246,8 @@ def main():
 
 
 if __name__ == '__main__':
-    # import astunparse
-    #     print(ast.dump(ast.parse("""
-    # if a < 5:
-    #     pass
-    #     """)))
     # main()
-    demo_call_example()
+    # demo_call_example()
+    # demo_cvta()
+    # demo_cp_async()
+    demo_ldmatrix()

@@ -244,6 +244,9 @@ class Codegen(StmtExprFunctor, TypeFunctor):
     def visit_LessEqual(self, e: LessThan):
         return Text('(') + self(e.a) + ' <= ' + self(e.b) + ')'
 
+    def visit_NotEqual(self, e: NotEqual):
+        return Text('(') + self(e.a) + ' != ' + self(e.b) + ')'
+
     def visit_Equal(self, e: Equal):
         return Text('(') + self(e.a) + ' == ' + self(e.b) + ')'
 
@@ -280,7 +283,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         return '(' + self(e.cond) + ' ? ' + self(e.then_expr) + ' : ' + self(e.else_expr) + ')'
 
     def visit_Cast(self, e: Cast):
-        return Text('(') + self.visit(e.target_type) + ')' + self(e.expr)
+        return Text('((') + self.visit(e.target_type) + ')(' + self(e.expr) + '))'
 
     def visit_Address(self, e: Address):
         return Text('&') + self.visit(e.expr)
@@ -481,7 +484,10 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         return doc
 
     def visit_AssertStmt(self, stmt: AssertStmt):
-        return NewLine() + Text('assert(((void)"') + stmt.msg + '", ' + self(stmt.cond) + '));'
+        if stmt.msg is not None:
+            return NewLine() + Text('assert(((void)"') + stmt.msg + '", ' + self(stmt.cond) + '));'
+        else:
+            return NewLine() + Text('assert(') + self(stmt.cond) + ');'
 
     def visit_AsmStmt(self, stmt: AsmStmt):
         volatile_doc = 'volatile ' if stmt.is_volatile else ''

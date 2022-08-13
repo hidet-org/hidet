@@ -70,7 +70,7 @@ class PrimitiveFunctionPool:
 
     def lookup_by_name(self, name: str) -> PrimitiveFunctionRegistry:
         if name not in self.name2func:
-            raise KeyError('Can not find primitive function with key: {}.'.format(name))
+            raise ValueError('Can not find primitive function with key: {}, candidates:\n{}.'.format(name, '\n'.join(str(v) for v in primitive_func_pool.name2func)))
         return self.name2func[name]
 
     def registered_names(self) -> Dict[str, List[str]]:

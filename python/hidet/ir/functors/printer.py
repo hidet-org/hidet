@@ -2,7 +2,8 @@ from typing import Dict, Optional, List
 from hidet.ir.node import Node
 from hidet.ir.func import IRModule, Function
 from hidet.ir.type import ScalarType, TensorType, TypeNode
-from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div, Sub, Not, Or, And, Let, IfThenElse, TensorSlice, RightShift, LeftShift, BitwiseNot, BitwiseOr, BitwiseAnd, Neg, Cast
+from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div, Sub, Not, Or, And, Let, IfThenElse, TensorSlice, RightShift, LeftShift, BitwiseNot, BitwiseOr, BitwiseAnd, Neg, Cast, \
+    NotEqual
 from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt, BlackBoxStmt, AsmStmt, ReturnStmt, LetStmt, DeclareStmt, ForTaskStmt
 from hidet.ir.mapping import RepeatTaskMapping, SpatialTaskMapping, ComposedTaskMapping, TaskMapping
 from hidet.ir.dialects.compute import TensorNode, ScalarNode
@@ -135,6 +136,9 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
 
     def visit_LessEqual(self, e: LessThan):
         return Text('(') + self(e.a) + ' <= ' + self(e.b) + ')'
+
+    def visit_NotEqual(self, e: NotEqual):
+        return Text('(') + self(e.a) + ' != ' + self(e.b) + ')'
 
     def visit_Equal(self, e: Equal):
         return Text('(') + self(e.a) + ' == ' + self(e.b) + ')'
@@ -297,7 +301,10 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
         return doc
 
     def visit_AssertStmt(self, stmt: AssertStmt):
-        return NewLine() + 'assert(' + self(stmt.cond) + ', ' + stmt.msg + ')'
+        if stmt.msg:
+            return NewLine() + 'assert(' + self(stmt.cond) + ', ' + stmt.msg + ')'
+        else:
+            return NewLine() + 'assert(' + self(stmt.cond) + ')'
 
     def visit_AsmStmt(self, stmt: AsmStmt):
         volatile_doc = 'volatile ' if stmt.is_volatile else ''

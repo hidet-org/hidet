@@ -196,6 +196,11 @@ class Equal(Condition, BinaryOp):
             return True
 
 
+class NotEqual(Condition, BinaryOp):
+    def __init__(self, a, b):
+        super().__init__(a, b)
+
+
 class And(Condition, BinaryOp):
     def __init__(self, a, b):
         super().__init__(a, b)

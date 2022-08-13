@@ -3,7 +3,8 @@ from hidet.ir.dialects.lowlevel import Reference, Address, ReferenceType, Tensor
 # from hidet.ir.dialects.pattern import ScalarExprPattern, TensorComputePattern, ReduceComputePattern, AnyExpr
 from hidet.ir.dialects.pattern import AnyExpr
 from hidet.ir.node import Node
-from hidet.ir.expr import Call, TensorElement, Not, Or, And, Constant, Var, Let, Equal, LessThan, FloorDiv, Mod, Div, Multiply, Sub, Add, TensorType, ScalarType, Expr, IfThenElse, RightShift, LeftShift, BitwiseNot, BitwiseOr, BitwiseAnd, TensorSlice, Neg, Cast
+from hidet.ir.expr import Call, TensorElement, Not, Or, And, Constant, Var, Let, Equal, LessThan, FloorDiv, Mod, Div, Multiply, Sub, Add, TensorType, ScalarType, Expr, IfThenElse, RightShift, LeftShift, BitwiseNot, BitwiseOr, BitwiseAnd, \
+    TensorSlice, Neg, Cast, NotEqual
 from hidet.ir.functors import ExprFunctor, TypeFunctor, NodeFunctor
 from hidet.ir.type import TypeNode
 from hidet.ir.utils.hash_sum import HashSum
@@ -65,6 +66,9 @@ class ExprHash(ExprFunctor, TypeFunctor):
         return self(e.a) + self(e.b) + e.class_index()
 
     def visit_LessEqual(self, e: LessThan):
+        return self(e.a) + self(e.b) + e.class_index()
+
+    def visit_NotEqual(self, e: NotEqual):
         return self(e.a) + self(e.b) + e.class_index()
 
     def visit_Equal(self, e: Equal):

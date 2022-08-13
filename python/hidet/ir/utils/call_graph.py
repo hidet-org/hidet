@@ -3,7 +3,6 @@ from collections import defaultdict
 from hidet.ir.expr import Call
 from hidet.ir.func import IRModule, Function
 from hidet.ir.functors import collect
-from hidet.ir.primitives import is_primitive_function, lookup_primitive_function
 
 
 class CallGraphNode:
@@ -23,6 +22,7 @@ class CallGraphNode:
 
 class CallGraph:
     def __init__(self, ir_module: IRModule):
+        from hidet.ir.primitives import is_primitive_function, lookup_primitive_function
         self.nodes: List[CallGraphNode] = []
         self.func2node = {}
 

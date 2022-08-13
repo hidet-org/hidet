@@ -66,6 +66,7 @@ class ExprFunctor(NodeFunctor):
             LessThan: cls.visit_LessThan,
             LessEqual: cls.visit_LessEqual,
             Equal: cls.visit_Equal,
+            NotEqual: cls.visit_NotEqual,
             And: cls.visit_And,
             Or: cls.visit_Or,
             Not: cls.visit_Not,
@@ -115,6 +116,9 @@ class ExprFunctor(NodeFunctor):
         raise NotImplementedError()
 
     def visit_Equal(self, e: Equal):
+        raise NotImplementedError()
+
+    def visit_NotEqual(self, e: NotEqual):
         raise NotImplementedError()
 
     def visit_And(self, e: And):
@@ -221,6 +225,10 @@ class ExprVisitor(ExprFunctor):
         self.visit(e.b)
 
     def visit_Equal(self, e: Equal):
+        self.visit(e.a)
+        self.visit(e.b)
+
+    def visit_NotEqual(self, e: NotEqual):
         self.visit(e.a)
         self.visit(e.b)
 
@@ -353,6 +361,9 @@ class ExprRewriter(ExprFunctor):
         return self.visit_Binary(e)
 
     def visit_Equal(self, e: Equal):
+        return self.visit_Binary(e)
+
+    def visit_NotEqual(self, e: NotEqual):
         return self.visit_Binary(e)
 
     def visit_And(self, e: And):

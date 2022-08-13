@@ -1,11 +1,11 @@
-from __future__ import annotations
 from typing import List, Dict
 from hidet.ir.mapping import TaskMapping, row_spatial, col_spatial, repeat_map, row_repeat, col_repeat
 from hidet.utils import initialize
 from hidet.ir.type import ScalarType
 from hidet.ir.expr import Var, Expr, cast
-from hidet.ir.stmt import AsmStmt, AssignStmt
-from hidet.ir.dialects.lowlevel import PointerType
+from hidet.ir.stmt import AsmStmt, AssignStmt, asm
+from hidet.ir.func import Function
+from hidet.ir.dialects.lowlevel import PointerType, VoidType
 from hidet.ir.builders import FunctionBuilder
 from hidet.ir.primitives.func import register_primitive_function
 from hidet.ir.primitives.cuda.funcs import call_cuda
@@ -45,39 +45,39 @@ class MmaConfig:
         )
 
     @staticmethod
-    def m16n8k8_f16_f16() -> MmaConfig:
+    def m16n8k8_f16_f16():
         return mma_configs['m16n8k8_f16_f16']
 
     @staticmethod
-    def m16n8k8_f16_f32() -> MmaConfig:
+    def m16n8k8_f16_f32():
         return mma_configs['m16n8k8_f16_f32']
 
     @staticmethod
-    def m16n8k16_f16_f16() -> MmaConfig:
+    def m16n8k16_f16_f16():
         return mma_configs['m16n8k16_f16_f16']
 
     @staticmethod
-    def m16n8k16_f16_f32() -> MmaConfig:
+    def m16n8k16_f16_f32():
         return mma_configs['m16n8k16_f16_f32']
 
     @staticmethod
-    def m16n8k8_bf16_f32() -> MmaConfig:
+    def m16n8k8_bf16_f32():
         return mma_configs['m16n8k8_bf16_f32']
 
     @staticmethod
-    def m16n8k16_bf16_f32() -> MmaConfig:
+    def m16n8k16_bf16_f32():
         return mma_configs['m16n8k16_bf16_f32']
 
     @staticmethod
-    def m16n8k4_tf32_f32() -> MmaConfig:
+    def m16n8k4_tf32_f32():
         return mma_configs['m16n8k4_tf32_f32']
 
     @staticmethod
-    def m16n8k8_tf32_f32() -> MmaConfig:
+    def m16n8k8_tf32_f32():
         return mma_configs['m16n8k8_tf32_f32']
 
     @staticmethod
-    def all() -> List[MmaConfig]:
+    def all():
         return list(mma_configs.values())
 
     def __str__(self):
@@ -177,6 +177,71 @@ def register_mma_instructions():
         register_primitive_function(name=func_name, func_or_type=fb.func)
 
 
+def resolve_ldmatrix_func_name(num: int, shared_space_addr: bool = False, trans=False) -> str:
+    if num not in [1, 2, 4]:
+        raise ValueError('Only support loading 1, 2, or 4 matrices using ldmatrix instruction.')
+    return 'ldmatrix_x{num}{shared}{trans}'.format(
+        num=num,
+        shared='_shared' if shared_space_addr else '',
+        trans='_trans' if trans else ''
+    )
+
+
+@initialize()
+def register_ldmatrix_instructions():
+    from hidet.lang import script, u32, void_pointer, attr, ref_u32
+    for num in [1, 2, 4]:
+        for trans in [False, True]:
+            for shared_space_addr in [False, True]:
+                func_name = 'cuda_' + resolve_ldmatrix_func_name(num=num, shared_space_addr=shared_space_addr, trans=trans)
+                inst_name = 'ldmatrix.sync.aligned.m8n8{num}{trans}{ss}.b16'.format(
+                    num=f'.x{num}',
+                    trans='.trans' if trans else '',
+                    ss='.shared' if shared_space_addr else ''
+                )
+                smem_type = u32 if shared_space_addr else void_pointer
+                if num == 1:
+                    template = '{inst_name} {{%0}}, [%1];'.format(inst_name=inst_name)
+
+                    @script
+                    def cuda_ldmatrix(reg0: ref_u32,
+                                      smem: smem_type):
+                        attr.func_name = func_name
+                        attr.func_kind = 'cuda_device'
+                        asm(template, outputs=[reg0], inputs=[smem])
+                    assert isinstance(cuda_ldmatrix, Function)
+                    register_primitive_function(cuda_ldmatrix.name, cuda_ldmatrix)
+
+                elif num == 2:
+                    template = '{inst_name} {{%0, %1}}, [%2];'.format(inst_name=inst_name)
+
+                    @script
+                    def cuda_ldmatrix(reg0: ref_u32,
+                                      reg1: ref_u32,
+                                      smem: smem_type):
+                        attr.func_name = func_name
+                        attr.func_kind = 'cuda_device'
+                        asm(template, outputs=[reg0, reg1], inputs=[smem])
+                    assert isinstance(cuda_ldmatrix, Function)
+                    register_primitive_function(cuda_ldmatrix.name, cuda_ldmatrix)
+                elif num == 4:
+                    template = '{inst_name} {{%0, %1, %2, %3}}, [%4];'.format(inst_name=inst_name)
+
+                    @script
+                    def cuda_ldmatrix(reg0: ref_u32,
+                                      reg1: ref_u32,
+                                      reg2: ref_u32,
+                                      reg3: ref_u32,
+                                      smem: smem_type):
+                        attr.func_name = func_name
+                        attr.func_kind = 'cuda_device'
+                        asm(template, outputs=[reg0, reg1, reg2, reg3], inputs=[smem])
+                    assert isinstance(cuda_ldmatrix, Function)
+                    register_primitive_function(cuda_ldmatrix.name, cuda_ldmatrix)
+                else:
+                    raise ValueError()
+
+
 def mma_sync(
         config: MmaConfig,
         a_addr: Expr,
@@ -186,3 +251,13 @@ def mma_sync(
     name = config.inst_name().replace('.', '_')
     return call_cuda(func_name=name, args=[a_addr, b_addr, c_addr])
 
+
+def ldmatrix(
+        regs: List[Expr],
+        smem_addr: Expr,
+        shared_space_addr: bool = False,
+        trans: bool = False
+):
+    num = len(regs)
+    func_name = resolve_ldmatrix_func_name(num=num, shared_space_addr=shared_space_addr, trans=trans)
+    return call_cuda(func_name, [reg for reg in regs] + [smem_addr])

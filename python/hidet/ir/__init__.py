@@ -4,7 +4,6 @@ from . import stmt
 from . import func
 from . import functors
 from . import builders
-from . import primitives
 from . import layout
 from . import mapping
 from . import task
@@ -14,7 +13,7 @@ from .type import TypeNode, TensorType, ScalarType, FuncType
 from .type import scalar_type, tensor_type
 
 from .expr import Expr, Var, Constant
-from .expr import BinaryOp, Condition, LessThan, LessEqual, Equal, Add, Sub, Multiply, Div, Mod, FloorDiv, Let, Cast, And, Or, TensorElement, Call, TensorSlice, Not, Neg
+from .expr import BinaryOp, Condition, LessThan, LessEqual, Equal, NotEqual, Add, Sub, Multiply, Div, Mod, FloorDiv, Let, Cast, And, Or, TensorElement, Call, TensorSlice, Not, Neg
 from .expr import var, scalar_var, tensor_var, is_one, is_zero, convert
 
 from .layout import DataLayout
@@ -29,8 +28,6 @@ from .dialects.lowlevel import VoidType, PointerType, TensorPointerType, Derefer
 from .builders import FunctionBuilder, StmtBuilder
 
 from .task import Task, save_task, load_task
-
-from .primitives import max, min, exp, pow
 
 from .functors import infer_type
 
