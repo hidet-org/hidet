@@ -57,6 +57,9 @@ parser.add_argument('--trt_fp16', action='store_true')
 # onnx runtime configs
 parser.add_argument('--ort_provider', choices=['cuda', 'trt'], default='cuda')
 
+# hidet manual config
+parser.add_argument('--manual_config', type=str, default='default', help='Custom config for hidet manual executor')
+
 # ======
 
 # model agnostic parameters

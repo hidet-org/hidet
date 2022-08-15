@@ -211,13 +211,15 @@ class BoundAnalyzer(FuncStmtExprVisitor):
     def visit_Function(self, func: Function):
         # note: we use the vars in func.extern_vars instead of hidet.ir.primitives.thread_idx for multiprocessing
         extern_var_map = {var.name: var for var in func.extern_vars}
-        if func.kind == 'cuda_kernel':
-            block_dims = normalize_launch_dims(func.attrs['cuda_block_dim'])
-            grid_dims = normalize_launch_dims(func.attrs['cuda_grid_dim'])
-            for block_dim, suffix in zip(block_dims, ['x', 'y', 'z']):
-                self.bound[extern_var_map['threadIdx.{}'.format(suffix)]] = BoundInfo(min_value=0, max_value=int(block_dim) - 1)
-            for grid_dim, suffix in zip(grid_dims, ['x', 'y', 'z']):
-                self.bound[extern_var_map['blockIdx.{}'.format(suffix)]] = BoundInfo(min_value=0, max_value=int(grid_dim) - 1)
+        if func.kind in ['cuda_kernel', 'cuda_device']:
+            if 'cuda_block_dim' in func.attrs:
+                block_dims = normalize_launch_dims(func.attrs['cuda_block_dim'])
+                for block_dim, suffix in zip(block_dims, ['x', 'y', 'z']):
+                    self.bound[extern_var_map['threadIdx.{}'.format(suffix)]] = BoundInfo(min_value=0, max_value=int(block_dim) - 1)
+            if 'cuda_grid_dim' in func.attrs:
+                grid_dims = normalize_launch_dims(func.attrs['cuda_grid_dim'])
+                for grid_dim, suffix in zip(grid_dims, ['x', 'y', 'z']):
+                    self.bound[extern_var_map['blockIdx.{}'.format(suffix)]] = BoundInfo(min_value=0, max_value=int(grid_dim) - 1)
         self.visit(func.body)
 
     def combine(self, e: Union[Add, Sub, Multiply, FloorDiv, Mod, Div]):

@@ -332,30 +332,6 @@ class PythonToHidetTranslator(PythonAstFunctor):
                 # In other cases, it is an assignment of defined variable.
                 var = self.current_scope.lookup(var_name, search_parents=True)
                 self.current_scope.append(ir.AssignStmt(var, value=rhs))
-            # var = self.current_scope.lookup(lhs.id, search_parents=True)
-            # if var is None:
-            #     var_name = lhs.id
-            #     if isinstance(rhs, tuple(host_var_types)):
-            #         # host variable
-            #         self.current_scope.define_host_var(var_name, rhs)
-            #     else:
-            #         # hidet variable, there are two ways to define a variable:
-            #         #   1. var = type
-            #         #      example: a = tensor('shared', 'float32', [3, 4])
-            #         #   2. var = initialized value
-            #         #      example: a = 3
-            #         if isinstance(rhs, ir.TypeNode):  # case 1: var = type
-            #             var_type = rhs
-            #             init_value = None
-            #         else:   # case 2: var = initialized value
-            #             rhs = ir.convert(rhs)
-            #             var_type = ir.infer_type(rhs)
-            #             init_value = rhs
-            #         var = Var(hint=var_name, type=var_type)
-            #         self.current_scope.append(ir.DeclareStmt(var, init=init_value))
-            #         self.current_scope.define_var(name=var_name, v=var)
-            # else:
-            #     self.current_scope.append(ir.AssignStmt(var, value=rhs))
         elif isinstance(lhs, Subscript):
             # example: a[3, 4] = 5.0
             base = self.visit(lhs.value)
@@ -380,7 +356,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
         return self.visit(module.body[0])
 
     def visit_FunctionDef(self, func_def: FunctionDef):
-        from hidet.ir.primitives.cuda.vars import get_all_primitive_vars
+        from hidet.ir.primitives.cuda.vars import thread_idx, block_idx
         func_params = []
         with self.scope() as env_scope:
             for name, value in self.env.items():
@@ -441,18 +417,16 @@ class PythonToHidetTranslator(PythonAstFunctor):
                     raise HidetProgramError(self, func_def.returns, 'Expect a type of function return value.')
 
             # get function attributes
-            attrs: Dict[str, Any] = scope.attributes.copy()
-            func_attrs = {
-                'cuda_grid_dim': attrs.get('cuda_grid_dim', 1),
-                'cuda_block_dim': attrs.get('cuda_block_dim', 1)
-            }
-            if 'func_kind' in attrs:
-                func_kind = attrs['func_kind']
-            elif 'cuda_grid_dim' in attrs or 'cuda_block_dim' in attrs:
+            func_attrs: Dict[str, Any] = scope.attributes.copy()
+            if 'func_kind' in func_attrs:
+                func_kind = func_attrs['func_kind']
+            elif 'cuda_grid_dim' in func_attrs or 'cuda_block_dim' in func_attrs:
+                if not all(name in func_attrs for name in ['cuda_grid_dim', 'cuda_block_dim']):
+                    raise HidetProgramError(self, func_def, 'CUDA kernel expects to have both attrs.cuda_grid_dim and attrs.cuda_block_dim.')
                 func_kind = 'cuda_kernel'
             else:
                 func_kind = 'cuda_device'
-            func_name = attrs.get('func_name', func_def.name)
+            func_name = func_attrs.get('func_name', func_def.name)
 
         return ir.Function(
             name=func_name,
@@ -462,7 +436,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
             kind=func_kind,
             local_vars=[],          # todo: remove local variables in function as we support DeclareStmt now.
             local_const_vars=[],
-            extern_vars=get_all_primitive_vars(),
+            extern_vars=[thread_idx('x'), thread_idx('y'), thread_idx('z'), block_idx('x'), block_idx('y'), block_idx('z')],
             attrs=func_attrs
         )
 

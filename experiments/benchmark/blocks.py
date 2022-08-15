@@ -10,7 +10,8 @@ def main():
         # '--exec hidet --precision f16 --reduce_precision f16 --mma mma --hidet_space 1 --parallel_k disabled',
         # '--exec hidet --precision f16 --reduce_precision f16 --mma mma --hidet_space 1 --parallel_k default',
         # '--exec hidet --precision f16 --reduce_precision f16 --mma mma --hidet_space 1 --parallel_k 6',
-        '--exec manual --precision f16 --reduce_precision f16',
+        '--exec manual --precision f16 --reduce_precision f16 --manual_config default',
+        '--exec manual --precision f16 --reduce_precision f16 --manual_config cp_async',
         # '--exec ort --ort_provider cuda',
         # '--exec ort --ort_provider trt'
         # '--exec ansor --tvm_trial 800',

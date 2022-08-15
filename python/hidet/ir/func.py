@@ -63,7 +63,7 @@ class Function(Node):
         self.extern_vars: List[Var] = extern_vars if extern_vars else []
         self.attrs = attrs if attrs else {}
 
-        assert all(attr in self.valid_attrs for attr in self.attrs)
+        # assert all(attr in self.valid_attrs for attr in self.attrs)
 
     def __call__(self, *args, **kwargs) -> Call:
         raise ValueError('Can only call script function in another script function, or lower it to execute.')

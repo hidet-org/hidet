@@ -1,6 +1,7 @@
 from typing import List, Optional
 from hidet import Tensor
 from .manual_kernels.gemm_mma_fp16 import gemm_mma_fp16_kernel
+from .manual_kernels.gemm_mma_fp16_cp_async import gemm_mma_fp16_cp_async_kernel
 from bench.common import BenchResult, get_onnx_model, benchmark_run
 import hidet
 
@@ -11,7 +12,13 @@ def bench_manual(args, out_dir: str) -> BenchResult:
         _, _, m, n, k = args.model.split('_')
         bs = args.bs
         m, n, k = int(m), int(n), int(k)
-        func = gemm_mma_fp16_kernel(args.bs, m, n, k)
+        # func = gemm_mma_fp16_kernel(args.bs, m, n, k)
+        if args.manual_config == 'cp_async':
+            func = gemm_mma_fp16_cp_async_kernel(args.bs, m, n, k)
+        elif args.manual_config == 'default':
+            func = gemm_mma_fp16_kernel(args.bs, m, n, k)
+        else:
+            raise ValueError(args.manual_config)
         a = input_tensors[0]
         b = input_tensors[1]
         c = hidet.randn([bs, m, n], 'float16')
@@ -19,7 +26,7 @@ def bench_manual(args, out_dir: str) -> BenchResult:
         return BenchResult(
             latencies=benchmark_run(run_func=run_func, warmup=args.warmup, number=args.number, repeat=args.repeat),
             outputs=[c],
-            configs='manual'
+            configs=args.manual_config
         )
     else:
         raise NotImplementedError()

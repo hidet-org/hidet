@@ -4,11 +4,7 @@ import hidet
 from bench.common import BenchResult, benchmark_run
 
 
-def gemm_mma_fp16_kernel(bs, m_size, n_size, k_size) -> CompiledFunction:
-    return gemm_mma_fp16_kernel_v1(bs, m_size, n_size, k_size)
-
-
-def gemm_mma_fp16_kernel_v1(bs, m_size, n_size, k_size) -> CompiledFunction:
+def gemm_mma_fp16_cp_async_kernel(bs, m_size, n_size, k_size) -> CompiledFunction:
     from hidet.lang import f16, spatial, repeat, tensor, attr
     from hidet.lang.layout import row_layout, col_layout, local_layout
     from hidet.lang.mapping import repeat, spatial
@@ -81,11 +77,32 @@ def gemm_mma_fp16_kernel_v1(bs, m_size, n_size, k_size) -> CompiledFunction:
                                 p += 1
 
         @hidet.script
-        def gemm_mma_grid(a: f16[bs, m_size, k_size], b: f16[bs, k_size, n_size], c: f16[bs, m_size, n_size]):
+        def load_smem_a(
+                k0: int,
+                a: f16[bs, m_size, k_size],
+                smem_a: f16[block_m, block_k]
+        ):
+            offset_m, offset_n, offset_k = blockIdx.x * block_m, blockIdx.y * block_n, k0 * block_k
+            gmem_a = a[blockIdx.z, offset_m:, offset_k:]
+            for i, k in repeat(16, 1).spatial(8, 16).on(threadIdx.x):
+                smem_a[i, k] = gmem_a.read([i, k], protected=True)
+
+        @hidet.script
+        def load_smem_b(
+                k0: int,
+                b: f16[bs, k_size, n_size],
+                smem_b: f16[block_k, block_m]
+        ):
+            offset_m, offset_n, offset_k = blockIdx.x * block_m, blockIdx.y * block_n, k0 * block_k
+            gmem_b = b[blockIdx.z, offset_k:, offset_n:]
+            for k, j in repeat(16, 1).spatial(1, 128).on(threadIdx.x):
+                smem_b[k, j] = gmem_b.read([k, j], protected=True)
+
+        @hidet.script
+        def gemm_mma_cp_async_grid(a: f16[bs, m_size, k_size], b: f16[bs, k_size, n_size], c: f16[bs, m_size, n_size]):
             # matrix multiplication, using mma instruction
             attr.cuda_grid_dim = (m_size + block_m - 1) // block_m, (n_size + block_n - 1) // block_n, bs
             attr.cuda_block_dim = threads
-            offset_m, offset_n = blockIdx.x * block_m, blockIdx.y * block_n
             smem_a = tensor('shared', 'float16', [block_m, block_k])
             smem_b = tensor('shared', 'float16', [block_k, block_n])
             regs_a = tensor('register', 'float16', [4, mma_config.a_elements])
@@ -96,13 +113,8 @@ def gemm_mma_fp16_kernel_v1(bs, m_size, n_size, k_size) -> CompiledFunction:
                 regs_c[i, j, p] = 0.0
 
             for k0 in range((k_size + block_k - 1) // block_k):
-                offset_k = k0 * block_k
-                gmem_a = a[blockIdx.z, offset_m:, offset_k:]
-                gmem_b = b[blockIdx.z, offset_k:, offset_n:]
-                for i, k in repeat(16, 1).spatial(8, 16).on(threadIdx.x):
-                    smem_a[i, k] = gmem_a.read([i, k], protected=True)
-                for k, j in repeat(16, 1).spatial(1, 128).on(threadIdx.x):
-                    smem_b[k, j] = gmem_b.read([k, j], protected=True)
+                load_smem_a(k0, a, smem_a)
+                load_smem_b(k0, b, smem_b)
                 syncthreads()
                 load_regs_a(smem_a, regs_a)
                 load_regs_b(smem_b, regs_b)
@@ -111,22 +123,20 @@ def gemm_mma_fp16_kernel_v1(bs, m_size, n_size, k_size) -> CompiledFunction:
             store_c(regs_c, c)
 
     ir_module = module.ir_module()
-    func = hidet.driver.build_ir_module(ir_module, func_name='gemm_mma')
+    func = hidet.driver.build_ir_module(ir_module, func_name='gemm_mma_cp_async')
     return func
 
 
 if __name__ == '__main__':
     bs, m, n, k = 11, 111, 222, 333
-    func = gemm_mma_fp16_kernel_v1(bs, m, n, k)
+    func = gemm_mma_fp16_cp_async_kernel(bs, m, n, k)
     a = hidet.randint(0, 2, [bs, m, k], 'float16')
     b = hidet.randint(0, 2, [bs, k, n], 'float16')
     c = hidet.zeros([bs, m, n], 'float16')
     func(a, b, c)
     c2 = hidet.ops.matmul(a, b)
     np.set_printoptions(threshold=3000, linewidth=200, edgeitems=100)
-    # print(a)
-    # print(b)
-    # print(c)
-    # print(c2)
-    # print(c-c2)
     np.testing.assert_allclose(actual=c.numpy(), desired=c2.numpy())
+
+
+
