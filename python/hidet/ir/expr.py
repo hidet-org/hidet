@@ -68,8 +68,29 @@ class Expr(Node):
         return LessEqual(other, self)
 
     def __invert__(self):
+        """
+        We override the invert operator ~a as the addressing operator.
+        """
         from hidet.ir.dialects.lowlevel import Address
         return Address(self)
+
+    def __or__(self, other):
+        return BitwiseOr(self, other)
+
+    def __ror__(self, other):
+        return BitwiseOr(other, self)
+
+    def __and__(self, other):
+        return BitwiseAnd(self, other)
+
+    def __rand__(self, other):
+        return BitwiseAnd(other, self)
+
+    def __xor__(self, other):
+        return BitwiseXor(self, other)
+
+    def __rxor__(self, other):
+        return BitwiseXor(other, self)
 
     def __getitem__(self, items):
         if not isinstance(items, (tuple, list)):
@@ -297,6 +318,11 @@ class BitwiseOr(BinaryOp):
             for v in lst[1:]:
                 current = BitwiseOr(current, v)
             return current
+
+
+class BitwiseXor(BinaryOp):
+    def __init__(self, a, b):
+        super().__init__(a, b)
 
 
 class LeftShift(Expr):

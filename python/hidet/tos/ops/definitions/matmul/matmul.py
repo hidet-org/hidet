@@ -41,11 +41,13 @@ class MatmulTask(Task):
         )
 
     def implement_cuda(self) -> IRModule:
-        from hidet.tos.ops.schedules.cuda.matmul import batched_matmul_cuda_schedule_simt, batched_matmul_cuda_schedule_wmma, batched_matmul_cuda_schedule_mma
+        from hidet.tos.ops.schedules.cuda.matmul import batched_matmul_cuda_schedule_simt, batched_matmul_cuda_schedule_wmma, batched_matmul_cuda_schedule_mma, batched_matmul_cuda_schedule_mma_fp16
         if self.mma == 'simt' or self.mma == 'default':
             return batched_matmul_cuda_schedule_simt(self)
         elif self.mma.startswith('wmma'):
             return batched_matmul_cuda_schedule_wmma(self)
+        elif self.mma == 'mma_custom':
+            return batched_matmul_cuda_schedule_mma_fp16(self)
         elif self.mma.startswith('mma'):
             return batched_matmul_cuda_schedule_mma(self)
         else:
@@ -166,7 +168,8 @@ def batched_matmul(a: Tensor, b: Tensor, algo: str = 'default', mma: str = 'defa
     mma_candidates = [
         'default', 'simt', 'wmma', 'mma',
         'wmma_f16_f16', 'wmma_f16_f32', 'wmma_bf16_f32', 'wmma_tf32_f32',
-        'mma_f16_f16', 'mma_f16_f32', 'mma_bf16_f32', 'mma_tf32_f32'
+        'mma_f16_f16', 'mma_f16_f32', 'mma_bf16_f32', 'mma_tf32_f32',
+        'mma_custom'
     ]
     algo_candidates = ['default', 'direct', 'parallel_k']
     if mma not in mma_candidates:

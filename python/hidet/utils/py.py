@@ -378,11 +378,31 @@ def lcm(a: int, b: int) -> int:
 
 
 def error_tolerance(a: Union[np.ndarray, 'Tensor'], b: Union[np.ndarray, 'Tensor']) -> float:
+    """
+    Given two tensors with the same shape and data type, this function finds the minimal e, such that
+
+        abs(a - b) <= abs(b) * e + e
+
+    Parameters
+    ----------
+    a: Union[np.ndarray, hidet.Tensor]
+        The first tensor.
+    b: Union[np.ndarray, hidet.Tensor]
+        The second tensor.
+
+    Returns
+    -------
+    ret: float
+        The error tolerance between a and b.
+    """
     from hidet.tos import Tensor
     if isinstance(a, Tensor):
         a = a.numpy()
     if isinstance(b, Tensor):
         b = b.numpy()
+    if isinstance(a.dtype, np.floating):
+        a = a.astype(np.float32)
+        b = b.astype(np.float32)
     lf = 0.0
     rg = 9.0
     for step in range(20):

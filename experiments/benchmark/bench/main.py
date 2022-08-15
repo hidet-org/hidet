@@ -41,7 +41,7 @@ parser.add_argument('--repeat', type=int, default=10, help='Number of repeats.')
 # hidet executor parameters
 parser.add_argument('--precision', choices=['f16', 'bf16', 'f32'], default='f32')
 parser.add_argument('--reduce_precision', choices=['f16', 'f32'], default='f32')
-parser.add_argument('--mma', choices=['simt', 'wmma', 'mma'], default='simt')
+parser.add_argument('--mma', choices=['simt', 'wmma', 'mma', 'mma_custom'], default='simt')
 parser.add_argument('--hidet_space', type=int, choices=[0, 1, 2], default=2,
                     help='The space level of each operator in the model. Large space level means longer compilation time and better performance.')
 parser.add_argument('--parallel_k', choices=['disabled', 'default', 'search', '2', '4', '6', '8'], default='default')

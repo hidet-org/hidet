@@ -68,8 +68,9 @@ class GeneratePackedFuncPass(Pass):
                 else:
                     raise NotImplementedError()
                 sb += AssertStmt(Equal(p_arg_types[idx], code), "The {} th arg should be {}".format(idx, astext(param.type)))
-            if func.kind == 'cuda_kernel' and func.get_attr('cuda_dynamic_smem_bytes', 0) > 48 * 1024:
-                sb += set_kernel_max_dynamic_smem_bytes(func_global_var, func.attrs['cuda_dynamic_smem_bytes'])
+            if func.kind == 'cuda_kernel' and simplify_to_int(func.get_attr('cuda_dynamic_smem_bytes', 0)) > 48 * 1024:
+                dynamic_smem_bytes = simplify_to_int(func.get_attr('cuda_dynamic_smem_bytes', 0))
+                sb += set_kernel_max_dynamic_smem_bytes(func_global_var, dynamic_smem_bytes)
             sb += Call(func_global_var, func_args)
             fb.set_body(sb.finish())
         return fb.get()

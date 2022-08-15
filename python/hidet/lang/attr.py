@@ -32,4 +32,4 @@ cuda_block_dim: Dim3 = 1
 cuda_min_blocks: int = 1
 
 # The size of dynamic shared memory allocated to the cuda kernel.
-cuda_dyn_smem_bytes: Int = 0
+cuda_dynamic_smem_bytes: Int = 0

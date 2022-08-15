@@ -1,5 +1,7 @@
 from __future__ import annotations
 import types
+import builtins
+import contextlib
 
 from typing import Optional, Dict, Any, Union
 import os.path
@@ -81,7 +83,14 @@ class PythonAstFunctor:
         else:
             msg = 'The AST node {} does not support in HidetScript.'.format(node.__class__.__name__)
             raise HidetProgramError(self, node, msg)
-        return visitor(node)
+
+        try:
+            return visitor(node)
+        except HidetProgramError:
+            raise
+        except Exception as e:
+            import traceback
+            raise HidetProgramError(self, node, 'Internal exception occurred during transpiling.')
 
     def visit_Module(self, module: Module):
         raise NotImplementedError()
@@ -297,7 +306,8 @@ class PythonToHidetTranslator(PythonAstFunctor):
         #    3. attr.name = ...
         if isinstance(lhs, Name):
             var_name = lhs.id
-            if type_annotation is not None or self.current_scope.lookup(var_name, search_parents=True) is None:
+            lookup_result = self.current_scope.lookup(var_name, search_parents=True)
+            if type_annotation is not None or lookup_result is None or not isinstance(lookup_result, Var):
                 # There are two cases of variable definition:
                 #   1) assignment with type annotation, or
                 #   2) the used name has not been defined yet.
@@ -330,7 +340,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
                         self.current_scope.define_var(name=var_name, v=var)
             else:
                 # In other cases, it is an assignment of defined variable.
-                var = self.current_scope.lookup(var_name, search_parents=True)
+                var = lookup_result
                 self.current_scope.append(ir.AssignStmt(var, value=rhs))
         elif isinstance(lhs, Subscript):
             # example: a[3, 4] = 5.0
@@ -463,7 +473,14 @@ class PythonToHidetTranslator(PythonAstFunctor):
             assert isinstance(lhs, (Subscript, Name, Attribute))
             self.process_assign(lhs, rhs_list)
         elif len(rhs_list) == 1:
-            raise HidetProgramError(self, stmt, 'Hidet does not support unpacking.')
+            if isinstance(rhs_list[0], ir.Expr):
+                raise HidetProgramError(self, stmt, 'Hidet does not support unpacking.')
+            else:
+                rhs_list = list(rhs_list[0])
+                if len(lhs_list) != len(rhs_list):
+                    raise HidetProgramError(self, stmt, 'Trying to assign {} values to {} objects'.format(len(rhs_list), len(lhs_list)))
+                for lhs, rhs in zip(lhs_list, rhs_list):
+                    self.process_assign(lhs, rhs)
         else:
             raise HidetProgramError(self, stmt, 'Can not assign {} elements to {} elements.'.format(len(rhs_list), len(lhs_list)))
 
@@ -477,6 +494,9 @@ class PythonToHidetTranslator(PythonAstFunctor):
                 if name in self.env:
                     # access external variable, such as thread_x
                     return self.env[name]
+                if name in builtins.__dict__:
+                    # access builtin functions such as max, min
+                    return builtins.__dict__[name]
                 raise HidetProgramError(self, expr, 'Trying to access variable without definition.')
             return var
         elif isinstance(expr.ctx, Del):
@@ -509,7 +529,10 @@ class PythonToHidetTranslator(PythonAstFunctor):
                 Mult: ir.Multiply,
                 Div: ir.Div,
                 FloorDiv: ir.Div,   # we treat Div and FloorDiv equivalently with the same semantics as in C/C++
-                Mod: ir.Mod
+                Mod: ir.Mod,
+                BitXor: ir.BitwiseXor,
+                BitOr: ir.BitwiseOr,
+                BitAnd: ir.BitwiseAnd
             }
             if isinstance(expr.op, Pow):
                 return ir.primitives.pow(lhs, rhs)
@@ -552,9 +575,15 @@ class PythonToHidetTranslator(PythonAstFunctor):
             # not v
             return ir.Not(value)
         elif isinstance(expr.op, Invert):
-            # ~v, get the address of v
+            # there are two cases for a ~ operator: ~something
+            # case 1: get the address of an expression
+            # case 2: get the pointer type that points to the given type
             from hidet.ir.dialects.lowlevel import Address
-            return Address(value)
+            from hidet.ir.type import TypeNode
+            if isinstance(value, TypeNode):
+                return ~value
+            else:
+                return Address(value)
         elif isinstance(expr.op, UAdd):
             # +v
             return value
@@ -608,11 +637,11 @@ class PythonToHidetTranslator(PythonAstFunctor):
             return for_scope.flush_stmts()
 
         # construct for body
-        if isinstance(stmt.iter, Call) and isinstance(stmt.iter.func, Name) and stmt.iter.func.id == 'range':
+        if isinstance(stmt.iter, Call) and isinstance(stmt.iter.func, Name) and self.visit(stmt.iter.func) is builtins.range:   # and stmt.iter.func.id == 'range':
             # case 1:
             #   for i in range(...):
             #     ...
-            # Will be translated to ForStmt
+            # Will be translated to a single for loop (i.e., ForStmt).
             call = stmt.iter
 
             # get extent
@@ -624,8 +653,25 @@ class PythonToHidetTranslator(PythonAstFunctor):
                 extent=extent,
                 body=visit_body()
             ))
-        elif isinstance(stmt.iter, Call) and isinstance(stmt.iter.func, Attribute) and stmt.iter.func.attr == 'on':
+        elif isinstance(stmt.iter, Call) and isinstance(stmt.iter.func, Name) and self.visit(stmt.iter.func) is hidet.lang.grid:
             # case 2:
+            #  for i, j in grid(3, 4):
+            #    ...
+            # Will be translated to nested for loops (i.e., ForStmt).
+            call = stmt.iter
+            extents = [self.visit(arg) for arg in call.args]
+            if len(extents) != len(loop_vars):
+                raise HidetProgramError(self, stmt.iter, 'The number of iterable variables {} must match the rank of grid {}'.format(len(loop_vars), len(extents)))
+            body = visit_body()
+            for loop_var, extent in zip(reversed(loop_vars), reversed(extents)):
+                body = ir.ForStmt(
+                    loop_var=loop_var,
+                    extent=extent,
+                    body=body
+                )
+            self.current_scope.append(body)
+        elif isinstance(stmt.iter, Call) and isinstance(stmt.iter.func, Attribute) and stmt.iter.func.attr == 'on':
+            # case 3:
             #  for a, b in row_spatial(3, 4).on(thread_x):
             #    ...
             # Will be translated to ForTaskStmt
@@ -710,6 +756,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
         func = self.visit(expr.func)
         args = [self.visit(arg) for arg in expr.args]
         kwargs = {kwarg.arg: self.visit(kwarg.value) for kwarg in expr.keywords}
+
         if isinstance(func, types.FunctionType):
             # call python function
             return func(*args, **kwargs)
@@ -727,6 +774,10 @@ class PythonToHidetTranslator(PythonAstFunctor):
                 raise HidetProgramError(self, expr, 'The number of parameters of callee and given arguments does not match.')
             return ir.Call(func, args)
         elif isinstance(func, ir.Function):
+            # call a function defined as hidet script, like
+            # @hidet.script
+            # def f():
+            #     ....
             from hidet.lang.script import ScriptModuleContext
             ctx = ScriptModuleContext.current_context()
             func_var = ctx.lookup(func.name)
@@ -735,9 +786,22 @@ class PythonToHidetTranslator(PythonAstFunctor):
             if len(kwargs) > 0:
                 raise HidetProgramError(self, expr, 'Hidet do not support call with keyword.')
             return ir.Call(func_var, args)
-        elif isinstance(func, types.BuiltinMethodType):
-            # call python builtin method
-            return func(*args, **kwargs)
+        elif isinstance(func, (types.BuiltinMethodType, types.BuiltinFunctionType)):
+            # call python builtin method, such "a string".format(...) or max, min
+            import hidet.ir.primitives as primitives
+            if all(not isinstance(arg, ir.Node) for arg in args):
+                # pure python function call
+                return func(*args, **kwargs)
+            else:
+                # overload hidet primitive, such as max, min
+                if len(kwargs) > 0:
+                    raise HidetProgramError(self, expr, 'Hidet do not support calling builtin function with keyword argument.')
+                if func is builtins.max:
+                    return primitives.max(*args)
+                elif func is builtins.min:
+                    return primitives.min(*args)
+                else:
+                    raise HidetProgramError(self, expr, 'Currently, do not support calling python builtin function.')
         elif isinstance(func, type):
             # class
             return func(*args, **kwargs)

@@ -1,2 +1,0 @@
- BatchSize                Model     Executor      Space    Latency        Std
-         1             resnet50          trt          2      3.073      0.052

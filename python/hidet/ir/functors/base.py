@@ -73,6 +73,7 @@ class ExprFunctor(NodeFunctor):
             BitwiseAnd: cls.visit_BitwiseAnd,
             BitwiseOr: cls.visit_BitwiseOr,
             BitwiseNot: cls.visit_BitwiseNot,
+            BitwiseXor: cls.visit_BitwiseXor,
             LeftShift: cls.visit_LeftShift,
             RightShift: cls.visit_RightShift,
             TensorElement: cls.visit_TensorElement,
@@ -140,6 +141,9 @@ class ExprFunctor(NodeFunctor):
         raise NotImplementedError()
 
     def visit_BitwiseNot(self, e: BitwiseNot):
+        raise NotImplementedError()
+
+    def visit_BitwiseXor(self, e: BitwiseXor):
         raise NotImplementedError()
 
     def visit_LeftShift(self, e: LeftShift):
@@ -251,6 +255,10 @@ class ExprVisitor(ExprFunctor):
         self.visit(e.b)
 
     def visit_BitwiseOr(self, e: BitwiseOr):
+        self.visit(e.a)
+        self.visit(e.b)
+
+    def visit_BitwiseXor(self, e: BitwiseXor):
         self.visit(e.a)
         self.visit(e.b)
 
@@ -390,6 +398,9 @@ class ExprRewriter(ExprFunctor):
         return self.visit_Binary(e)
 
     def visit_BitwiseOr(self, e: BitwiseOr):
+        return self.visit_Binary(e)
+
+    def visit_BitwiseXor(self, e: BitwiseXor):
         return self.visit_Binary(e)
 
     def visit_BitwiseNot(self, e: BitwiseNot):

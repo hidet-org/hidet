@@ -1,2 +1,0 @@
- BatchSize                Model     Executor      Space    Latency        Std
-         1    bert-base-uncased          trt          2      4.207      0.109

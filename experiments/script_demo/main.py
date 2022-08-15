@@ -37,8 +37,8 @@ def matmul_block(
     warp_n: int = 64
     inst_m: int = 8
     inst_n: int = 8
-    warp_count = block_m // warp_m, block_n // warp_n   # (4, 2)
-    threads = warp_count[0] * warp_count[1] * 32        # 256
+    warp_count = block_m // warp_m, block_n // warp_n  # (4, 2)
+    threads = warp_count[0] * warp_count[1] * 32  # 256
 
     @script
     def matmul_grid(a: f32[m_size, k_size], b: f32[k_size, n_size], c: f32[m_size, n_size]):
@@ -98,8 +98,8 @@ def matmul_use_mapping(m_size: int, n_size: int, k_size: int):
     block_k: int = 8
     warp_m: int = 32
     warp_n: int = 64
-    warp_count = block_m // warp_m, block_n // warp_n   # (4, 2)
-    threads = warp_count[0] * warp_count[1] * 32        # 256
+    warp_count = block_m // warp_m, block_n // warp_n  # (4, 2)
+    threads = warp_count[0] * warp_count[1] * 32  # 256
 
     @script
     def matmul_grid(a: f32[m_size, k_size], b: f32[k_size, n_size], c: f32[m_size, n_size]):
@@ -131,6 +131,30 @@ def matmul_use_mapping(m_size: int, n_size: int, k_size: int):
 
     print(matmul_grid)
     return IRModule(funcs={matmul_grid.name: matmul_grid})
+
+
+def main():
+    # m_size, n_size, k_size = 1024, 1024, 1024
+    m_size, n_size, k_size = 127, 127, 127
+    # ir_module = matmul_naive(m_size, n_size, k_size)
+    # ir_module = matmul_block(m_size, n_size, k_size)
+    ir_module = matmul_use_mapping(m_size, n_size, k_size)
+    func = hidet.driver.build_ir_module(ir_module, func_name='matmul')
+    a = hidet.randint(2, shape=[m_size, k_size], dtype='float32')
+    b = hidet.randint(2, shape=[k_size, n_size], dtype='float32')
+    # a = hidet.ones([m_size, k_size])
+    # b = hidet.ones([k_size, n_size])
+    c = hidet.zeros([m_size, n_size])
+    func(a, b, c)
+    # print(func.profile(a, b, c))
+    hidet.utils.cuda.device_synchronize()
+    c2 = hidet.ops.matmul(a, b)
+    # with hidet.utils.Timer('normal') as timer:
+    #     for t in range(100):
+    #         c2 = hidet.ops.matmul(a, b)
+    #     hidet.utils.cuda.device_synchronize()
+    # print(timer.elapsed_seconds())
+    np.testing.assert_allclose(actual=c.numpy(), desired=c2.numpy())
 
 
 def demo_call_example():
@@ -221,28 +245,262 @@ def demo_ldmatrix():
     func(a)
 
 
-def main():
-    # m_size, n_size, k_size = 1024, 1024, 1024
-    m_size, n_size, k_size = 127, 127, 127
-    # ir_module = matmul_naive(m_size, n_size, k_size)
-    # ir_module = matmul_block(m_size, n_size, k_size)
-    ir_module = matmul_use_mapping(m_size, n_size, k_size)
-    func = hidet.driver.build_ir_module(ir_module, func_name='matmul')
-    a = hidet.randint(2, shape=[m_size, k_size], dtype='float32')
-    b = hidet.randint(2, shape=[k_size, n_size], dtype='float32')
-    # a = hidet.ones([m_size, k_size])
-    # b = hidet.ones([k_size, n_size])
-    c = hidet.zeros([m_size, n_size])
-    func(a, b, c)
-    # print(func.profile(a, b, c))
-    hidet.utils.cuda.device_synchronize()
-    c2 = hidet.ops.matmul(a, b)
-    # with hidet.utils.Timer('normal') as timer:
-    #     for t in range(100):
-    #         c2 = hidet.ops.matmul(a, b)
-    #     hidet.utils.cuda.device_synchronize()
-    # print(timer.elapsed_seconds())
-    np.testing.assert_allclose(actual=c.numpy(), desired=c2.numpy())
+def demo_ldmatrix_x4():
+    from hidet.lang import script, f16, f32, tensor, attr, spatial, repeat, printf, cast, view, u32, col_spatial
+    from hidet.lang.cuda import ldmatrix, threadIdx, syncthreads
+    from hidet.ir.dialects.lowlevel import PointerType, Dereference, TensorPointerType
+
+    with hidet.script_module() as module:
+        @hidet.script
+        def demo_ldmatrix_grid(a: f16[16, 16]):
+            attr.cuda_grid_dim = 1
+            attr.cuda_block_dim = 32
+
+            smem = tensor('shared', 'float16', [16, 16])
+            regs = tensor('register', 'float16', [8])
+            # regs = tensor('register', 'uint32', [4])
+
+            for i, j in repeat(8, 1).spatial(2, 16).on(threadIdx.x):
+                smem[i, j] = a[i, j]
+            syncthreads()
+            u32_regs = view(regs, u32[4])
+            p, q = col_spatial(16, 2).map(threadIdx.x)
+            ldmatrix(regs=[u32_regs[0], u32_regs[1], u32_regs[2], u32_regs[3]], smem_addr=~smem[p, q * 8])
+            printf(
+                r'threadIdx.x %d %.0f %.0f %.0f %.0f %.0f %.0f %.0f %.0f\n',
+                threadIdx.x,
+                cast(regs[0], f32),
+                cast(regs[1], f32),
+                cast(regs[2], f32),
+                cast(regs[3], f32),
+                cast(regs[4], f32),
+                cast(regs[5], f32),
+                cast(regs[6], f32),
+                cast(regs[7], f32)
+            )
+            # regs_view = cast(~regs[0], TensorPointerType('register', dtype='float16', shape=[2]))
+            # printf(r'%d %.0f %.0f\n', threadIdx.x, cast(regs_view[0], f32), cast(regs_view[1], f32))
+    func = hidet.driver.build_ir_module(module.ir_module(), func_name='demo_ldmatrix', verbose=True, keep_ptx=True)
+    a = hidet.array(np.arange(8 * 8 * 4).astype(np.float16)).cuda()
+    print(a)
+    func(a)
+
+
+def demo_ldmatrix_x4_trans():
+    from hidet.lang import script, f16, f32, tensor, attr, spatial, repeat, printf, cast, view, u32, col_spatial
+    from hidet.lang.cuda import ldmatrix, threadIdx, syncthreads
+    from hidet.ir.dialects.lowlevel import PointerType, Dereference, TensorPointerType
+
+    with hidet.script_module() as module:
+        @hidet.script
+        def demo_ldmatrix_grid(a: f16[16, 16]):
+            attr.cuda_grid_dim = 1
+            attr.cuda_block_dim = 32
+
+            smem = tensor('shared', 'float16', [16, 24])
+            regs = tensor('register', 'float16', [8])
+            # regs = tensor('register', 'uint32', [4])
+
+            for i, j in repeat(8, 1).spatial(2, 16).on(threadIdx.x):
+                smem[i, j] = a[i, j]
+            syncthreads()
+            u32_regs = view(regs, u32[4])
+            p, q = col_spatial(16, 2).map(threadIdx.x)
+            ldmatrix(regs=[u32_regs[0], u32_regs[1], u32_regs[2], u32_regs[3]], smem_addr=~smem[p, q * 8], trans=True)
+            printf(
+                r'threadIdx.x %2d: %3.0f %3.0f %3.0f %3.0f %3.0f %3.0f %3.0f %3.0f\n',
+                threadIdx.x,
+                cast(regs[0], f32),
+                cast(regs[1], f32),
+                cast(regs[2], f32),
+                cast(regs[3], f32),
+                cast(regs[4], f32),
+                cast(regs[5], f32),
+                cast(regs[6], f32),
+                cast(regs[7], f32)
+            )
+            # regs_view = cast(~regs[0], TensorPointerType('register', dtype='float16', shape=[2]))
+            # printf(r'%d %.0f %.0f\n', threadIdx.x, cast(regs_view[0], f32), cast(regs_view[1], f32))
+    func = hidet.driver.build_ir_module(module.ir_module(), func_name='demo_ldmatrix', verbose=True, keep_ptx=True)
+    a = hidet.array(np.arange(8 * 8 * 4).astype(np.float16)).cuda()
+    print(a)
+    func(a)
+
+
+def demo_cp_async_bank_conflicts():
+    from hidet.lang import script, f16, f32, tensor, attr, spatial, repeat, printf, cast, view, u32, col_spatial, i64, i32
+    from hidet.lang.cuda import ldmatrix, threadIdx, syncthreads, cp_async, cp_async_wait_all, cvta_generic_to_shared
+    from hidet.ir.dialects.lowlevel import PointerType, Dereference, TensorPointerType
+
+    size = 256
+    with hidet.script_module() as module:
+        @hidet.script
+        def demo_cp_async_bank_conflicts_grid(a: f16[size]):
+            attr.cuda_grid_dim = 1
+            attr.cuda_block_dim = 32
+
+            smem = tensor('shared', 'float16', [size])
+            group = threadIdx.x / 4
+            index_in_group = threadIdx.x % 4
+            idx = index_in_group * 8 + group
+            idx = idx ^ 23
+            # printf(r'idx %d threadIdx.x %d\n', idx, threadIdx.x)
+            # idx = threadIdx.x ^ 1
+            cp_async(
+                dst=~smem[idx * 8],
+                src=~a[(idx ^ 13) * 8],
+                cp_size=16,
+                cache_level='global'
+            )
+            cp_async_wait_all()
+            printf(r'threadIdx %d \t gmem_addr %d \t smem_addr %d\n', threadIdx.x, cast(cast(~a[(idx ^ 13) * 8], i64) - cast(~a[0], i64), i32), cvta_generic_to_shared(~smem[idx * 8]))
+            # printf(r'threadIdx.x %d  %.0f %.0f\n', threadIdx.x, cast(smem[threadIdx.x * 2], f32), cast(smem[threadIdx.x * 2 + 1], f32))
+
+            # regs_view = cast(~regs[0], TensorPointerType('register', dtype='float16', shape=[2]))
+            # printf(r'%d %.0f %.0f\n', threadIdx.x, cast(regs_view[0], f32), cast(regs_view[1], f32))
+    func = hidet.driver.build_ir_module(module.ir_module(), func_name='demo_cp_async_bank_conflicts', verbose=True, keep_ptx=True)
+    a = hidet.array(np.arange(size).astype(np.float16)).cuda()
+    print(a)
+    func(a)
+
+
+def demo_cp_async_bank_conflicts_v2():
+    from hidet.lang import script, f16, f32, tensor, attr, spatial, repeat, printf, cast, view, u32, col_spatial
+    from hidet.lang.cuda import ldmatrix, threadIdx, syncthreads, cp_async, cp_async_wait_all
+    from hidet.lang.layout import row_layout, col_layout
+    from hidet.ir.dialects.lowlevel import PointerType, Dereference, TensorPointerType
+
+    print(row_layout(2, 1) * (row_layout(2, 2).swizzle(1)) * row_layout(4, 8))
+
+    with hidet.script_module() as module:
+        @hidet.script
+        def demo_cp_async_bank_conflicts_grid(a: f16[16, 16], b: f16[16, 16]):
+            attr.cuda_grid_dim = 1
+            attr.cuda_block_dim = 32
+
+            smem = tensor('shared', 'float16', [16, 16], layout=row_layout(2, 1) * (row_layout(2, 2).swizzle(1)) * row_layout(4, 8))
+            for i, j in spatial(16, 2).on(threadIdx.x):
+                cp_async(
+                    dst=~smem[i, j * 8],
+                    src=~a[i, j * 8],
+                    cp_size=16,
+                )
+            cp_async_wait_all()
+            syncthreads()
+            for i, j in repeat(8, 1).spatial(2, 16).on(threadIdx.x):
+                b[i, j] = smem[i, j]
+            # printf(r'threadIdx.x %d  %.0f %.0f\n', threadIdx.x, cast(smem[threadIdx.x * 2], f32), cast(smem[threadIdx.x * 2 + 1], f32))
+            # regs_view = cast(~regs[0], TensorPointerType('register', dtype='float16', shape=[2]))
+            # printf(r'%d %.0f %.0f\n', threadIdx.x, cast(regs_view[0], f32), cast(regs_view[1], f32))
+    func = hidet.driver.build_ir_module(module.ir_module(), func_name='demo_cp_async_bank_conflicts', verbose=True, keep_ptx=True)
+    a = hidet.array(np.arange(16 * 16).astype(np.float16)).cuda()
+    b = hidet.array(np.zeros(16 * 16).astype(np.float16)).cuda()
+    # print(a)
+    func(a, b)
+    print(b)
+
+
+def demo_cp_async_ldmatrix_bank_conflicts():
+    from hidet.lang import script, f16, f32, tensor, attr, spatial, repeat, printf, cast, view, u32, col_spatial, i64, i32
+    from hidet.lang.cuda import ldmatrix, threadIdx, syncthreads, cp_async, cp_async_wait_all, blockIdx, cvta_generic_to_shared
+    from hidet.lang.layout import row_layout, col_layout
+    from hidet.ir.dialects.lowlevel import PointerType, Dereference, TensorPointerType
+
+    block_count_m, block_count_n = 1, 1
+    block_m, block_n = 128, 64
+    smem_layout = row_layout(block_m // 16, block_n // 16) * row_layout(16, 2).swizzle(1, log_step=2) * row_layout(1, 8)
+    # smem_layout = row_layout(block_m, block_n)
+    with hidet.script_module() as module:
+        @hidet.script
+        def demo_cp_async_ldmatrix_bank_conflicts_grid(
+                a: f16[block_count_m * block_m, block_count_n * block_n]
+        ):
+            attr.cuda_grid_dim = block_count_m, block_count_n
+            # attr.cuda_block_dim = 256
+            attr.cuda_block_dim = 32
+            offset_m, offset_n = blockIdx.x * block_m, blockIdx.y * block_n
+
+            smem = tensor('shared', 'float16', [block_m, block_n], layout=smem_layout)
+            # for i, j in repeat(1, 1).spatial(32, 8).on(threadIdx.x):
+            for i, j in repeat(1, 1).spatial(32, 8).on(threadIdx.x):
+                cp_async(
+                    dst=~smem[i, j * 8],
+                    src=~a[offset_m + i, offset_n + j * 8],
+                    cp_size=16,
+                    cache_level='global'
+                )
+                printf(
+                    r'threadIdx %d \t gmem_addr %d \t smem_addr %d\n',
+                    threadIdx.x,
+                    cast(cast(~a[offset_m + i, offset_n + j * 8], i64) - cast(~a[0, 0], i64), i32),
+                    # cvta_generic_to_shared(~smem[smem_idx])
+                    cvta_generic_to_shared(~smem[i, j * 8])
+                    # cvta_generic_to_shared(smem_addr)
+                )
+                # printf(r'threadIdx %d smem_addr %d\n', threadIdx.x, cvta_generic_to_shared(~smem[i, j * 8]))
+            cp_async_wait_all()
+            syncthreads()
+    func = hidet.driver.build_ir_module(module.ir_module(), func_name='demo_cp_async_ldmatrix_bank_conflicts', verbose=True, keep_ptx=True)
+    a = hidet.array(np.arange(block_m * block_n * block_count_m * block_count_n).astype(np.float16)).cuda()
+    # print(a)
+    func(a)
+    # print(b)
+
+
+def demo_cp_async_ldmatrix_bank_conflicts_16x128():
+    from hidet.lang import script, f16, f32, tensor, attr, spatial, repeat, printf, cast, view, u32, col_spatial, i64, i32
+    from hidet.lang.cuda import ldmatrix, threadIdx, syncthreads, cp_async, cp_async_wait_all, blockIdx, cvta_generic_to_shared
+    from hidet.lang.layout import row_layout, col_layout
+    from hidet.ir.dialects.lowlevel import PointerType, Dereference, TensorPointerType
+
+    # print((row_layout(16, 2).swizzle(1, log_step=3)) * row_layout(1, 8))
+
+    block_m, block_n = 2, 2
+    with hidet.script_module() as module:
+        @hidet.script
+        def demo_cp_async_ldmatrix_bank_conflicts_grid(
+                a: f16[16 * block_m, 128 * block_n]
+        ):
+            attr.cuda_grid_dim = block_m, block_n
+            attr.cuda_block_dim = 128
+            offset_m, offset_n = blockIdx.x * 16, blockIdx.y * 128
+
+            smem = tensor('shared', 'float16', [16, 128], layout=row_layout(2, 2) * row_layout(8, 8).swizzle(1) * row_layout(1, 8))
+            # smem = tensor('shared', 'float16', [16, 128], layout=row_layout(16, 128))
+            for i, j in repeat(2, 1).spatial(8, 16).on(threadIdx.x):
+                cp_async(
+                    dst=~smem[i, j * 8],
+                    src=~a[offset_m + i, offset_n + j * 8],
+                    cp_size=16,
+                    cache_level='global'
+                )
+                # printf(
+                #     r'threadIdx %d \t gmem_addr %d \t smem_addr %d\n',
+                #     threadIdx.x,
+                #     cast(cast(~a[offset_m + i, offset_n + j * 8], i64) - cast(~a[0, 0], i64), i32),
+                #     # cvta_generic_to_shared(~smem[smem_idx])
+                #     cvta_generic_to_shared(~smem[i, j * 8])
+                #     # cvta_generic_to_shared(smem_addr)
+                # )
+                # printf(r'threadIdx %d smem_addr %d\n', threadIdx.x, cvta_generic_to_shared(~smem[i, j * 8]))
+            cp_async_wait_all()
+            syncthreads()
+    func = hidet.driver.build_ir_module(module.ir_module(), func_name='demo_cp_async_ldmatrix_bank_conflicts', verbose=True, keep_ptx=True)
+    a = hidet.array(np.arange(128 * 16 * block_m * block_n).astype(np.float16)).cuda()
+    b = hidet.array(np.zeros(128 * 16 * block_m * block_n).astype(np.float16)).cuda()
+    # print(a)
+    func(a)
+    # print(b)
+
+
+def demo_for_grid():
+    from hidet.lang import grid, printf
+    with hidet.script_module() as module:
+        @hidet.script
+        def func():
+            for i, j in grid(3, 4):
+                printf(r'%d %d\n', i, j)
+    print(module.ir_module())
 
 
 if __name__ == '__main__':
@@ -250,4 +508,11 @@ if __name__ == '__main__':
     # demo_call_example()
     # demo_cvta()
     # demo_cp_async()
-    demo_ldmatrix()
+    # demo_ldmatrix()
+    # demo_ldmatrix_x4()
+    # demo_ldmatrix_x4_trans()
+    # demo_cp_async_bank_conflicts()
+    # demo_cp_async_bank_conflicts_v2()
+    # demo_cp_async_ldmatrix_bank_conflicts()
+    # demo_cp_async_ldmatrix_bank_conflicts_16x128()
+    demo_for_grid()

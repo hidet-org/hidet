@@ -1,6 +1,7 @@
+from __future__ import annotations
 from typing import Optional, Union, Sequence
 from hidet.ir.type import TypeNode, ScalarType, TensorType, Scope, Int, tensor_type
-from hidet.ir.expr import Expr, TensorElement, Var, Constant
+from hidet.ir.expr import Expr, TensorElement, Var, Constant, cast
 from hidet.ir.layout import DataLayout
 
 
@@ -31,6 +32,12 @@ class TensorPointerType(TypeNode):
                  shape: Optional[Sequence[Int]] = None,
                  layout: Optional[Union[Sequence[Int], DataLayout]] = None):
         self.tensor_type: TensorType = tensor_type(scope, dtype, shape, layout)
+
+    @staticmethod
+    def from_tensor_type(tp: TensorType) -> TensorPointerType:
+        tpt = object.__new__(TensorPointerType)
+        tpt.tensor_type = tp
+        return tpt
 
 
 #
@@ -70,3 +77,9 @@ def tensor_pointer_var(hint: str, shape=None, scope: str = 'global', dtype: Unio
 
 def void_pointer():
     return PointerType(VoidType())
+
+
+def view(ptr: Expr, tp: TensorType) -> Expr:
+    if not isinstance(tp, TensorType):
+        raise ValueError('Expect a tensor type, got {}'.format(type(tp).__name__))
+    return cast(ptr, TensorPointerType.from_tensor_type(tp))

@@ -3,6 +3,7 @@ from typing import Callable, Tuple, Optional, List, Any, Dict
 from types import FunctionType
 import ast as py_ast
 import inspect
+from hidet.ir.task import Task
 from hidet.ir.func import IRModule, Function
 from hidet.ir.type import FuncType
 from hidet.ir.expr import Var
@@ -74,9 +75,10 @@ def script(func: FunctionType) -> Function:
 class ScriptModuleContext:
     contexts: List[ScriptModuleContext] = []
 
-    def __init__(self):
+    def __init__(self, task=None):
         self.name2var: Dict[str, Var] = {}
         self.functions: List[Function] = []
+        self.task: Optional[Task] = task
 
     def __enter__(self):
         self.contexts.append(self)
@@ -102,10 +104,10 @@ class ScriptModuleContext:
     def ir_module(self) -> IRModule:
         return IRModule(
             funcs={func.name: func for func in self.functions},
-            task=None,
+            task=self.task,
             global_vars=self.name2var
         )
 
 
-def script_module() -> ScriptModuleContext:
-    return ScriptModuleContext()
+def script_module(task: Optional[Task] = None) -> ScriptModuleContext:
+    return ScriptModuleContext(task)

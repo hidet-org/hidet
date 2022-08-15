@@ -1,7 +1,6 @@
 from typing import List, Optional
 from hidet import Tensor
-from .manual_kernels.gemm_mma_fp16 import gemm_mma_fp16_kernel
-from .manual_kernels.gemm_mma_fp16_cp_async import gemm_mma_fp16_cp_async_kernel
+from . import manual_kernels
 from bench.common import BenchResult, get_onnx_model, benchmark_run
 import hidet
 
@@ -13,10 +12,18 @@ def bench_manual(args, out_dir: str) -> BenchResult:
         bs = args.bs
         m, n, k = int(m), int(n), int(k)
         # func = gemm_mma_fp16_kernel(args.bs, m, n, k)
-        if args.manual_config == 'cp_async':
-            func = gemm_mma_fp16_cp_async_kernel(args.bs, m, n, k)
-        elif args.manual_config == 'default':
-            func = gemm_mma_fp16_kernel(args.bs, m, n, k)
+        if args.manual_config == 'default':
+            func = manual_kernels.gemm_mma_fp16_kernel(args.bs, m, n, k)
+        elif args.manual_config == 'cp_async':
+            func = manual_kernels.gemm_mma_fp16_cp_async_kernel(args.bs, m, n, k)
+        elif args.manual_config == 'cp_async_multi_stage':
+            func = manual_kernels.gemm_mma_fp16_cp_async_multi_stage_kernel(args.bs, m, n, k)
+        elif args.manual_config == 'ldmatrix':
+            func = manual_kernels.gemm_mma_fp16_ldmatrix_kernel(args.bs, m, n, k)
+        elif args.manual_config == 'cp_async_ldmatrix':
+            func = manual_kernels.gemm_mma_fp16_cp_async_ldmatrix_kernel(args.bs, m, n, k)
+        elif args.manual_config == 'cp_async_ldmatrix_opt':
+            func = manual_kernels.gemm_mma_fp16_cp_async_ldmatrix_opt_kernel(args.bs, m, n, k)
         else:
             raise ValueError(args.manual_config)
         a = input_tensors[0]

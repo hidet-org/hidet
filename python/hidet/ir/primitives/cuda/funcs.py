@@ -146,5 +146,5 @@ def active_mask():
 
 def set_kernel_max_dynamic_smem_bytes(func, max_dynamic_smem_bytes):
     template_string = r'cudaFuncSetAttribute({}, cudaFuncAttributeMaxDynamicSharedMemorySize, {});'
-    raise ValueError('update to use func instead of func_var')
+    # raise ValueError('update to use func instead of func_var')
     return BlackBoxStmt(template_string, func, max_dynamic_smem_bytes)

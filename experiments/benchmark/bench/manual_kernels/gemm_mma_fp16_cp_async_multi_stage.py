@@ -4,12 +4,12 @@ import hidet
 from bench.common import BenchResult, benchmark_run
 
 
-def gemm_mma_fp16_cp_async_kernel(bs, m_size, n_size, k_size) -> CompiledFunction:
+def gemm_mma_fp16_cp_async_multi_stage_kernel(bs, m_size, n_size, k_size) -> CompiledFunction:
     from hidet.lang import f16, f32, spatial, repeat, tensor, attr, printf, cast
     from hidet.lang.layout import row_layout, col_layout, local_layout
     from hidet.lang.mapping import repeat, spatial
     from hidet.lang.cuda import blockIdx, threadIdx, syncthreads
-    from hidet.lang.cuda import MmaConfig, mma_sync, cp_async, cp_async_wait_all, cvta_generic_to_shared
+    from hidet.lang.cuda import MmaConfig, mma_sync, cp_async, cp_async_wait_all, cp_async_commit_group, cp_async_wait_group, cvta_generic_to_shared
 
     # optimize for 128x768x3072
     mma_config = MmaConfig.m16n8k16_f16_f16()
@@ -19,6 +19,7 @@ def gemm_mma_fp16_cp_async_kernel(bs, m_size, n_size, k_size) -> CompiledFunctio
     mma_m, mma_n, mma_k = mma_config.m, mma_config.n, mma_config.k  # 16, 8, 16
     mma_count_m, mma_count_n, mma_count = 4, 8, 1
     threads = warp_count_m * warp_count_n * warp_count_k * 32
+    stages = 4
 
     with hidet.script_module() as module:
         @hidet.script
@@ -103,13 +104,15 @@ def gemm_mma_fp16_cp_async_kernel(bs, m_size, n_size, k_size) -> CompiledFunctio
                 src_size = 0 if (offset_k + k >= k_size or offset_n + j >= n_size) else min(n_size - (offset_n + j), 8)
                 cp_async(~smem_b[k, j], ~gmem_b[k, j], cp_size=16, src_size=src_size * 2)
 
+        assert 2 <= stages <= 4
+
         @hidet.script
-        def gemm_mma_cp_async_grid(a: f16[bs, m_size, k_size], b: f16[bs, k_size, n_size], c: f16[bs, m_size, n_size]):
+        def gemm_mma_cp_async_multi_stage_grid(a: f16[bs, m_size, k_size], b: f16[bs, k_size, n_size], c: f16[bs, m_size, n_size]):
             # matrix multiplication, using mma instruction
             attr.cuda_grid_dim = (m_size + block_m - 1) // block_m, (n_size + block_n - 1) // block_n, bs
             attr.cuda_block_dim = threads
-            smem_a = tensor('shared', 'float16', [block_m, block_k])
-            smem_b = tensor('shared', 'float16', [block_k, block_n])
+            smem_a = tensor('shared', 'float16', [stages, block_m, block_k])
+            smem_b = tensor('shared', 'float16', [stages, block_k, block_n])
             regs_a = tensor('register', 'float16', [4, mma_config.a_elements])
             regs_b = tensor('register', 'float16', [8, mma_config.b_elements])
             regs_c = tensor('register', 'float16', [4, 8, mma_config.c_elements])
@@ -117,19 +120,25 @@ def gemm_mma_fp16_cp_async_kernel(bs, m_size, n_size, k_size) -> CompiledFunctio
             for i, j, p in repeat(4, 8, mma_config.c_elements).on(0):
                 regs_c[i, j, p] = 0.0
 
+            for stage in range(stages - 1):
+                load_smem_a(stage, a, ~smem_a[stage, 0, 0])
+                load_smem_b(stage, b, ~smem_b[stage, 0, 0])
+                cp_async_commit_group()
+
             for k0 in range((k_size + block_k - 1) // block_k):
-                load_smem_a(k0, a, smem_a)
-                load_smem_b(k0, b, smem_b)
-                cp_async_wait_all()
+                load_smem_a(k0 + stages - 1, a, ~smem_a[(k0 + stages - 1) % stages, 0, 0])
+                load_smem_b(k0 + stages - 1, b, ~smem_b[(k0 + stages - 1) % stages, 0, 0])
+                cp_async_commit_group()
+                cp_async_wait_group(allow_on_fly_groups=stages - 1)
                 syncthreads()
-                load_regs_a(smem_a, regs_a)
-                load_regs_b(smem_b, regs_b)
+                load_regs_a(~smem_a[k0 % stages, 0, 0], regs_a)
+                load_regs_b(~smem_b[k0 % stages, 0, 0], regs_b)
                 warp_mma(regs_a, regs_b, regs_c)
                 syncthreads()
             store_c(regs_c, c)
 
     ir_module = module.ir_module()
-    func = hidet.driver.build_ir_module(ir_module, func_name='gemm_mma_cp_async')
+    func = hidet.driver.build_ir_module(ir_module, func_name='gemm_mma_cp_async_multi_stage')
     return func
 
 
@@ -137,7 +146,7 @@ if __name__ == '__main__':
     # bs, m, n, k = 11, 111, 222, 333
     # bs, m, n, k = 1, 10, 10, 10
     bs, m, n, k = 1, 1280, 1280, 1280
-    func = gemm_mma_fp16_cp_async_kernel(bs, m, n, k)
+    func = gemm_mma_fp16_cp_async_multi_stage_kernel(bs, m, n, k)
     # a = hidet.randint(0, 2, [bs, m, k], 'float16')
     # b = hidet.randint(0, 2, [bs, k, n], 'float16')
     a = hidet.ones([bs, m, k], 'float16')
@@ -150,6 +159,3 @@ if __name__ == '__main__':
     # print(c)
     np.set_printoptions(threshold=3000, linewidth=200, edgeitems=100)
     np.testing.assert_allclose(actual=c.numpy(), desired=c2.numpy())
-
-
-

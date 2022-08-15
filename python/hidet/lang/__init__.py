@@ -1,9 +1,9 @@
 from typing import Union, Sequence, Optional
 from hidet.ir.type import ScalarType, TensorType, Scope
 from hidet.ir.expr import Expr, cast
-from hidet.ir.mapping import row_spatial, row_repeat
+from hidet.ir.mapping import row_spatial, row_repeat, col_repeat, col_spatial
 from hidet.ir.layout import DataLayout
-from hidet.ir.dialects.lowlevel import PointerType, VoidType, ReferenceType
+from hidet.ir.dialects.lowlevel import PointerType, VoidType, ReferenceType, view
 from hidet.ir.primitives import printf
 from hidet.lang.script import script, script_module
 
@@ -29,3 +29,15 @@ def tensor(scope: Union[Scope, str],
            layout: Optional[DataLayout] = None):
     from hidet.ir.type import tensor_type
     return tensor_type(scope, dtype, shape, layout)
+
+
+def tensor_pointer(scope: Union[Scope, str],
+                   dtype: Union[ScalarType, str],
+                   shape: Optional[Sequence[ConstExpr]] = None,
+                   layout: Optional[DataLayout] = None):
+    from hidet.ir.type import tensor_type
+    return ~tensor_type(scope, dtype, shape, layout)
+
+
+def grid(*dim_extents):
+    raise ValueError('Please call this function within the @hidet.script decorated function.')

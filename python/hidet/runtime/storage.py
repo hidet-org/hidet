@@ -28,7 +28,7 @@ class StorageDevice:
     def name(self):
         raise NotImplementedError()
 
-    def freeze(self, flag: bool):   # when freeze, no allocate or free should happen. used in CudaGraph
+    def freeze(self, flag: bool):  # when freeze, no allocate or free should happen. used in CudaGraph
         self.froze = flag
 
     def allocate(self, nbytes) -> int:
@@ -173,8 +173,17 @@ class Storage:
         else:
             raise NotImplementedError()
 
+    def copy(self) -> Storage:
+        kind_dict = {
+            'cpu': cuda.HostToHost,
+            'cuda': cuda.DeviceToDevice
+        }
+        storage = Storage.new(self.device, self.num_bytes)
+        cuda.memcpy_async(src_addr=self.addr, dst_addr=storage.addr, num_bytes=self.num_bytes, kind=kind_dict[self.device])
+        return storage
+
     @staticmethod
-    def new(device: str, num_bytes: int) -> 'Storage':
+    def new(device: str, num_bytes: int) -> Storage:
         if device == 'cpu':
             return CpuMemoryPool.current().allocate(nbytes=num_bytes)
         elif device == 'cuda':
@@ -234,7 +243,7 @@ class TorchStorage(Storage):
             raise ValueError('Expect a torch tensor, got {}'.format(type(torch_tensor).__name__))
         if not torch_tensor.is_contiguous():
             raise ValueError("Only contiguous torch tensor can be viewed as a Hidet storage.")
-        self.torch_tensor = torch_tensor    # keep a reference to the tensor to prevent it being freed.
+        self.torch_tensor = torch_tensor  # keep a reference to the tensor to prevent it being freed.
         super().__init__(
             device='cuda',
             addr=torch_tensor.data_ptr(),

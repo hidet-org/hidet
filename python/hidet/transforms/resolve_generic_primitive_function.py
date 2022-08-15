@@ -52,7 +52,7 @@ class ResolveGenericPrimitiveFuncRewriter(StmtExprRewriter):
         rhs = self.visit(e.b)
         lhs_dtype = self.type_infer(lhs)
         rhs_dtype = self.type_infer(rhs)
-        if lhs_dtype.name != rhs_dtype.name:
+        if isinstance(lhs_dtype, ScalarType) and isinstance(rhs_dtype, ScalarType) and lhs_dtype.name != rhs_dtype.name:
             dtype = resolve_dtype([lhs_dtype, rhs_dtype])
             lhs, rhs = cast_args([lhs, rhs], [lhs_dtype, rhs_dtype], dtype)
             if lhs is e.a and rhs is e.b:

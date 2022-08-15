@@ -208,7 +208,7 @@ def register_ldmatrix_instructions():
                                       smem: smem_type):
                         attr.func_name = func_name
                         attr.func_kind = 'cuda_device'
-                        asm(template, outputs=[reg0], inputs=[smem])
+                        asm(template, outputs=[reg0], inputs=[smem], is_volatile=True)
                     assert isinstance(cuda_ldmatrix, Function)
                     register_primitive_function(cuda_ldmatrix.name, cuda_ldmatrix)
 
@@ -221,7 +221,7 @@ def register_ldmatrix_instructions():
                                       smem: smem_type):
                         attr.func_name = func_name
                         attr.func_kind = 'cuda_device'
-                        asm(template, outputs=[reg0, reg1], inputs=[smem])
+                        asm(template, outputs=[reg0, reg1], inputs=[smem], is_volatile=True)
                     assert isinstance(cuda_ldmatrix, Function)
                     register_primitive_function(cuda_ldmatrix.name, cuda_ldmatrix)
                 elif num == 4:
@@ -235,7 +235,7 @@ def register_ldmatrix_instructions():
                                       smem: smem_type):
                         attr.func_name = func_name
                         attr.func_kind = 'cuda_device'
-                        asm(template, outputs=[reg0, reg1, reg2, reg3], inputs=[smem])
+                        asm(template, outputs=[reg0, reg1, reg2, reg3], inputs=[smem], is_volatile=True)
                     assert isinstance(cuda_ldmatrix, Function)
                     register_primitive_function(cuda_ldmatrix.name, cuda_ldmatrix)
                 else:
@@ -258,6 +258,29 @@ def ldmatrix(
         shared_space_addr: bool = False,
         trans: bool = False
 ):
+    """
+    Load a matrix 1, 2, or 4 matrix with shape 8x8 from shared memory to registers.
+
+    See Also
+    https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#warp-level-matrix-instructions-ldmatrix
+
+    Parameters
+    ----------
+    regs: List[Expr]
+        The registers to store the data.
+    smem_addr: Expr
+        The address of the shared memory.
+        If the shared_space_addr is True,
+            smem_addr should be the address in shared memory space, and has type of uint32 or int32.
+        If the shared_space_addr is False,
+            smem_addr should be in the generic memory space, and has type of arbitrary pointer.
+        More information about the memory space in cuda programming model can be found in the comment of
+        cvta_generic_to_shared primitive function.
+    shared_space_addr: bool
+        Whether shared memory space is used for smem_addr address.
+    trans: bool
+        Whether the input matrix in shared memory is transposed.
+    """
     num = len(regs)
     func_name = resolve_ldmatrix_func_name(num=num, shared_space_addr=shared_space_addr, trans=trans)
     return call_cuda(func_name, [reg for reg in regs] + [smem_addr])

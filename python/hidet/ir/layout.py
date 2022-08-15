@@ -1,3 +1,4 @@
+import itertools
 from collections import OrderedDict
 from typing import Sequence, Union, List, Callable, Mapping, Dict, Tuple, Optional
 
@@ -64,6 +65,16 @@ class DataLayout(Node):
     def __mul__(self, other):
         return DataLayout.product(outer=self, inner=other)
 
+    def __str__(self):
+        import numpy as np
+        shape = [int(v) for v in self.shape]
+        table = np.zeros(shape=shape, dtype=np.int)
+        ranges = [range(v) for v in shape]
+        for indices in itertools.product(*ranges):
+            local_index = self.global2local(*indices)
+            table[indices] = int(local_index)
+        return np.array_str(table, max_line_width=120)
+
     def const_shape(self) -> List[int]:
         return [int(v) for v in self.shape]
 
@@ -104,6 +115,9 @@ class DataLayout(Node):
 
     def reorder(self, order: Sequence[int]):
         return self.fuse(order)
+
+    def swizzle(self, dim: int, regards_dim: Optional[int] = None, log_step: int = 0):
+        return SwizzleDataLayout(base=self, dim=dim, regards_dim=regards_dim, log_step=log_step)
 
     def fuse(self, dim2fuse: Sequence[Union[Sequence[int], int]]):
         return FusedDataLayout(base=self, dim2fuse=dim2fuse)
@@ -191,6 +205,56 @@ class LocalLayout(DataLayout):
     def global2cond(self, *args: Int) -> Bool:
         from hidet.ir.expr import And
         return And.join_list([v < s for s, v in zip(self.shape, args)])
+
+
+class SwizzleDataLayout(DataLayout):
+    """
+    Swizzle a layout (called base layout) to get a swizzled data layout. The shape of swizzled layout is the same as the base layout.
+
+    Example:
+        A 2-dimension tensor with shape [a, b] where a = 2^m for some m and b <= a,
+        After swizzle(plan={0: [1]}), we get a data layout with shape [a, b], and
+          swizzled_layout(i, j) = base_layout(i ^ j, j)
+        (Note, swizzle requires the swizzled dimension to be a power of 2)
+    """
+    def __init__(self, base: DataLayout, dim: int, regards_dim: Optional[int] = None, log_step: int = 0):
+        self.base: DataLayout = base
+        self.dim: int = int(dim)
+        if regards_dim is None:
+            if len(base.shape) != 2:
+                raise ValueError('Optional regards_dim is only available for 2-rank layout, got layout with shape {}.'.format(base.shape))
+            self.regards_dim = 1 - dim
+        else:
+            self.regards_dim = dim
+        self.log_step = log_step
+
+        if self.dim == self.regards_dim:
+            raise ValueError('The swizzle dim and regards dim can not be the same, got {} and {}'.format(self.dim, self.regards_dim))
+        rank = len(base.shape)
+        if not (0 <= self.dim < rank and 0 <= self.regards_dim < rank):
+            raise ValueError('The dim {} (regards dim {}) out of bound for layout {}'.format(self.dim, self.regards_dim, base.shape))
+        super().__init__(
+            shape=self.base.shape,
+            size=self.base.size
+        )
+
+    def global2local(self, *args: Int) -> Int:
+        assert len(args) == len(self.shape)
+        origin_indices = list(args)
+        indices = []
+        for dim, origin_index in enumerate(origin_indices):
+            if dim == self.dim:
+                regards_index = origin_indices[self.regards_dim] // (2 ** self.log_step)
+                regards_extent = self.shape[self.regards_dim] // (2 ** self.log_step)
+                if regards_extent > self.shape[dim]:
+                    regards_index = regards_index % self.shape[dim]     # prevent the xor making the index out of bound
+                indices.append(origin_index ^ regards_index)
+            else:
+                indices.append(origin_index)
+        return self.base.global2local(*indices)
+
+    def global2cond(self, *args: Int) -> Bool:
+        return self.base.global2cond(*args)
 
 
 class TiledDataLayout(DataLayout):

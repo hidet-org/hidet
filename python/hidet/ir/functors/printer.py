@@ -3,7 +3,7 @@ from hidet.ir.node import Node
 from hidet.ir.func import IRModule, Function
 from hidet.ir.type import ScalarType, TensorType, TypeNode
 from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div, Sub, Not, Or, And, Let, IfThenElse, TensorSlice, RightShift, LeftShift, BitwiseNot, BitwiseOr, BitwiseAnd, Neg, Cast, \
-    NotEqual
+    NotEqual, BitwiseXor
 from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt, BlackBoxStmt, AsmStmt, ReturnStmt, LetStmt, DeclareStmt, ForTaskStmt
 from hidet.ir.mapping import RepeatTaskMapping, SpatialTaskMapping, ComposedTaskMapping, TaskMapping
 from hidet.ir.dialects.compute import TensorNode, ScalarNode
@@ -157,6 +157,9 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
 
     def visit_BitwiseOr(self, e: BitwiseOr):
         return '(' + self(e.a) + ' | ' + self(e.b) + ')'
+
+    def visit_BitwiseXor(self, e: BitwiseXor):
+        return '(' + self(e.a) + ' ^ ' + self(e.b) + ')'
 
     def visit_BitwiseNot(self, e: BitwiseNot):
         return '(~' + self(e.base) + ')'

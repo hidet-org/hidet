@@ -239,6 +239,18 @@ class Tensor:
             else:
                 raise ValueError('Please use .detach() to detach a trace variable first.')
 
+    def copy(self) -> Tensor:
+        if self.trace is not None:
+            raise ValueError('Please use .detach() to detach a trace variable first before copying.')
+        return Tensor(
+            shape=list(self.shape),
+            dtype=self.dtype,
+            device=self.device,
+            storage=self.storage.copy(),
+            layout=self.layout,
+            trace=None
+        )
+
     def detach(self):
         if self.trace is None:
             return self

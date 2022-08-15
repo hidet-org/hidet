@@ -11,7 +11,19 @@ Int = Union['Expr', int]
 
 
 class TypeNode(Node):
-    pass
+    def __invert__(self) -> TypeNode:
+        from hidet.ir.dialects.lowlevel import PointerType, TensorPointerType
+        # get the pointer type that points to current type
+        if isinstance(self, TensorType):
+            return TensorPointerType.from_tensor_type(self)
+        elif isinstance(self, ScalarType):
+            return PointerType(base_type=self)
+        elif isinstance(self, (PointerType, TensorPointerType)):
+            raise ValueError('Hidet currently does not support pointer type that points to pointer, \n'
+                             'because it is very rare to use such types in a tensor program. \n'
+                             'Will add such support if needed in the future.')
+        else:
+            raise ValueError('Can not recognize type {}'.format(self))
 
 
 # scope
@@ -281,7 +293,8 @@ def tensor_type(scope, dtype, shape: Optional[Sequence[Union[int, Expr]]] = None
         assert isinstance(layout, DataLayout)
         assert isinstance(shape, (list, tuple))
         for a, b in zip(shape, layout.shape):
-            assert int(a) == int(b)
+            if int(a) != int(b):
+                raise ValueError('The shape of tensor and the shape of layout are not compatible, {} vs {}'.format(list(shape), list(layout.shape)))
     shape = convert(shape)
     return TensorType(scope, dtype, shape, layout)
 

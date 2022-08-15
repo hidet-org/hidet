@@ -82,7 +82,7 @@ def register_cp_async_wait_group():
         def cuda_cp_async_wait_group():
             attr.func_name = func_name
             attr.func_kind = 'cuda_device'
-            asm('cp.async.commit_group {};'.format(groups))
+            asm('cp.async.wait_group {};'.format(groups))
         assert isinstance(cuda_cp_async_wait_group, Function)
         register_primitive_function(cuda_cp_async_wait_group.name, cuda_cp_async_wait_group)
 
@@ -152,7 +152,7 @@ def cp_async_commit_group():
     return call_cuda('cp_async_commit_group', [])
 
 
-def cp_async_wait_group(n: int):
+def cp_async_wait_group(allow_on_fly_groups: Union[int, Expr]):
     """
     Wait the completion of prior asynchronous copy operations.
 
@@ -161,12 +161,16 @@ def cp_async_wait_group(n: int):
 
     Parameters
     ----------
-    n: int
-        The maximum number of asynchronous copies that are allowed to be on-the-fly after this function.
+    allow_on_fly_groups: Union[int, Expr]
+        The maximum number of asynchronous copies that are allowed to be on-the-fly after this function. Can be a python integer or
+        a hidet constant expression.
     """
-    if not 0 <= n < 10:
+    if isinstance(allow_on_fly_groups, Expr):
+        from hidet.ir.functors.simplifier import simplify_to_int
+        allow_on_fly_groups = simplify_to_int(allow_on_fly_groups)
+    if not 0 <= allow_on_fly_groups < 10:
         raise ValueError('n out of bound')
-    return call_cuda('cp_async_wait_group_{}'.format(n), [])
+    return call_cuda('cp_async_wait_group_{}'.format(allow_on_fly_groups), [])
 
 
 def cp_async_wait_all():

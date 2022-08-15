@@ -118,7 +118,7 @@ class PassContext:
             - 'wmma'
                Use wmma instructions.
             - 'mma'
-               Use mma instructions (not supported yet).
+               Use mma instructions.
         """
         self.configs['mma'] = mma
         return self

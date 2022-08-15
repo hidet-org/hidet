@@ -25,6 +25,8 @@ class ResolveMmaRewriter(GraphRewriter):
                     mma_dtype = self.get_mma_dtype(a.dtype, b.dtype)
                     mma_acc_dtype = self.get_mma_acc_dtype(mma_dtype, reduce_dtype)
                     mma = 'mma_{}_{}'.format(mma_dtype, mma_acc_dtype)
+                elif mma_type == 'mma_custom':
+                    mma = 'mma_custom'
                 elif mma_type == 'simt':
                     mma = 'simt'
                 elif mma_type.startswith('wmma_'):

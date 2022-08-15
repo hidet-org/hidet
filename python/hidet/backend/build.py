@@ -205,14 +205,19 @@ def build_ir_module_job(build_instance: BuildInstance) -> Optional[str]:
         The path to the built dynamic linked library.
     """
     from hidet.transforms.instruments import SaveIRInstrument
+    src_path = os.path.join(build_instance.output_dir, 'source.cu')
+    lib_path = os.path.join(build_instance.output_dir, 'lib.so')
+
+    if os.path.exists(lib_path):
+        # skip if already built
+        return lib_path
+
     instruments = []
     os.makedirs(build_instance.output_dir, exist_ok=True)
     if build_instance.keep_ir:
         instruments.append(SaveIRInstrument(out_dir=os.path.join(build_instance.output_dir, 'ir')))
     with PassContext(instruments=instruments):
         ir_module = lower(build_instance.ir_module)
-    src_path = os.path.join(build_instance.output_dir, 'source.cu')
-    lib_path = os.path.join(build_instance.output_dir, 'lib.so')
     codegen(ir_module, src_out_path=src_path)
     try:
         compile_source(src_path, lib_path)

@@ -1,6 +1,7 @@
 from typing import List
 from hidet.ir.type import ScalarType, TensorType, FuncType
-from hidet.ir.expr import BinaryOp, Add, Sub, Multiply, Div, Mod, FloorDiv, Condition, LessThan, Equal, IfThenElse, TensorSlice, Not, Or, And, LessEqual, Let, RightShift, LeftShift, BitwiseNot, BitwiseOr, BitwiseAnd, Neg, NotEqual
+from hidet.ir.expr import BinaryOp, Add, Sub, Multiply, Div, Mod, FloorDiv, Condition, LessThan, Equal, IfThenElse, TensorSlice, Not, Or, And, LessEqual, Let, RightShift, LeftShift, BitwiseNot, BitwiseOr, BitwiseAnd, Neg, NotEqual, \
+    BitwiseXor
 from hidet.ir.expr import Var, Constant, TensorElement, Call, Cast
 from hidet.ir.dialects.compute import TensorNode, ScalarNode
 from hidet.ir.dialects.lowlevel import PointerType, Dereference, Reference, Address, TensorPointerType
@@ -82,6 +83,9 @@ class TypeInfer(ExprFunctor):
     def visit_BitwiseOr(self, e: BitwiseOr):
         return self.visit(e.a)
 
+    def visit_BitwiseXor(self, e: BitwiseXor):
+        return self.visit(e.a)
+
     def visit_BitwiseNot(self, e: BitwiseNot):
         return self.visit(e.base)
 
@@ -129,8 +133,18 @@ class TypeInfer(ExprFunctor):
         true_type = self.visit(e.then_expr)
         false_type = self.visit(e.else_expr)
         assert is_bool(cond_type)
-        if not (isinstance(true_type, ScalarType) and isinstance(false_type, ScalarType) and true_type.name == false_type.name):
+
+        pointer_types = (PointerType, TensorPointerType)
+
+        if isinstance(true_type, ScalarType) and isinstance(false_type, ScalarType):
+            if true_type.name != false_type.name:
+                raise ValueError('If-then-else operand 1 and 2 have different types ({} vs {}): {}'.format(true_type, false_type, e))
+        elif isinstance(true_type, pointer_types) and isinstance(false_type, pointer_types):
+            # pass the check
+            pass
+        else:
             raise ValueError('If-then-else operand 1 and 2 have different types ({} vs {}): {}'.format(true_type, false_type, e))
+
         return true_type
 
     def visit_Let(self, e: Let):

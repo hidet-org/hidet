@@ -95,6 +95,21 @@ def demo_func():
     f(1, c=2)
 
 
+def demo_layout():
+    from hidet.ir.layout import row_layout, col_layout, local_layout
+    # print(row_layout(4, 4))
+    print('A = row_layout(4, 4)')
+    print(row_layout(4, 4))
+    print('B = row_layout(4, 4).swizzle(dim=1)')
+    print('B[i, j ^ i] = A[i, j]')
+    print(row_layout(4, 4).swizzle(1))
+    # print(col_layout(3, 4))
+    # print(local_layout(3, 4))
+    # print(row_layout(3, 4).swizzle(plan={1: 0}))
+    # print((row_layout(3, 4) * row_layout(3, 4)))
+    # print((row_layout(3, 4) * row_layout(3, 4)).swizzle(1))
+
+
 if __name__ == '__main__':
     # demo_wmma()
     # demo_bf16()
@@ -105,4 +120,5 @@ if __name__ == '__main__':
     # demo_map()
     # demo_matmul()
     # demo_max()
-    demo_func()
+    # demo_func()
+    demo_layout()

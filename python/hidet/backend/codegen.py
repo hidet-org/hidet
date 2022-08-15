@@ -265,6 +265,9 @@ class Codegen(StmtExprFunctor, TypeFunctor):
     def visit_BitwiseOr(self, e: BitwiseOr):
         return '(' + self(e.a) + ' | ' + self(e.b) + ')'
 
+    def visit_BitwiseXor(self, e: BitwiseXor):
+        return '(' + self(e.a) + ' ^ ' + self(e.b) + ')'
+
     def visit_BitwiseNot(self, e: BitwiseNot):
         return '(~' + self(e.base) + ')'
 
@@ -309,7 +312,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
                 configs = [
                     dim3_str(func.attrs['cuda_grid_dim']),  # grid dimension
                     dim3_str(func.attrs['cuda_block_dim']),  # block dimension
-                    func.attrs.get('cuda_smem_bytes', 0),  # dynamic shared memory size
+                    func.attrs.get('cuda_dynamic_smem_bytes', 0),  # dynamic shared memory size
                     Text('get_cuda_stream()')  # cuda stream (get_cuda_stream() function is defined in hidet/runtime.h)
                 ]
                 launch_config = Text('<<<') + doc_join([self(v) for v in configs], sep=', ') + Text('>>>')
@@ -379,6 +382,8 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         if name in cast2int:
             return Text(f'(int){name}')
         else:
+            if isinstance(e.type, FuncType):
+                name = self.canonize_funcname(name)
             return Text(name)
 
     @staticmethod
