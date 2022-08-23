@@ -80,6 +80,20 @@ class ForTaskStmt(Stmt):
         self.body: Stmt = body
 
 
+class WhileStmt(Stmt):
+    def __init__(self, cond: Expr, body: Stmt):
+        self.cond = cond
+        self.body = body
+
+
+class BreakStmt(Stmt):
+    pass
+
+
+class ContinueStmt(Stmt):
+    pass
+
+
 class IfStmt(Stmt):
     def __init__(self, cond: Expr, then_body=None, else_body=None):
         super().__init__()

@@ -846,19 +846,24 @@ class PythonToHidetTranslator(PythonAstFunctor):
             raise HidetProgramError(self, stmt.annotation, 'Hidet do not support annotation for expression like "x.y" or "x[y]"')
         self.process_assign(lhs, rhs, stmt.annotation)
 
-        # raise HidetProgramError(self, stmt, 'Hidet currently do not support annotated assignment.')
-
     def visit_While(self, stmt: While):
-        raise HidetProgramError(self, stmt, 'Hidet currently do not support while statement.')
+        if len(stmt.orelse) > 0:
+            raise HidetProgramError(self, stmt.orelse[0], 'Hidet does not support else for while statement.')
+        cond = self.visit(stmt.test)
+        with self.scope() as while_scope:
+            for body_stmt in stmt.body:
+                self.visit(body_stmt)
+        while_stmt = ir.WhileStmt(cond, while_scope.flush_stmts())
+        self.current_scope.append(while_stmt)
+
+    def visit_Break(self, stmt: Break):
+        self.current_scope.append(ir.BreakStmt())
+
+    def visit_Continue(self, stmt: Continue):
+        self.current_scope.append(ir.ContinueStmt())
 
     def visit_With(self, stmt: With):
         raise HidetProgramError(self, stmt, 'Hidet currently do not support with statement.')
-
-    def visit_Break(self, stmt: Break):
-        raise HidetProgramError(self, stmt, 'Hidet currently do not support break statement.')
-
-    def visit_Continue(self, stmt: Continue):
-        raise HidetProgramError(self, stmt, 'Hidet currently do not support continue statement.')
 
     def visit_Lambda(self, expr: Lambda):
         raise HidetProgramError(self, expr, 'Hidet currently do not support lambda expression.')

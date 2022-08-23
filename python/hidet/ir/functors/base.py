@@ -315,7 +315,7 @@ class ExprVisitor(ExprFunctor):
         if e.grid_compute:
             self.visit(e.grid_compute.value)
 
-    # lowlevel dialect
+    # low level dialect
     def visit_Cast(self, e: Cast):
         self.visit(e.expr)
 
@@ -490,13 +490,13 @@ class ExprRewriter(ExprFunctor):
             return Call(func_var, args)
 
     def visit_Let(self, e: Let):
-        var = e.var
+        v = e.var
         value = self(e.value)
         body = self(e.body)
-        if same_list([var, value, body], [e.var, e.value, e.body]):
+        if same_list([v, value, body], [e.var, e.value, e.body]):
             return e
         else:
-            return Let(var, value, body)
+            return Let(v, value, body)
 
     def visit_Var(self, e: Var):
         return e
@@ -545,6 +545,9 @@ class StmtFunctor(NodeFunctor):
             LetStmt: cls.visit_LetStmt,
             ForStmt: cls.visit_ForStmt,
             ForTaskStmt: cls.visit_ForTaskStmt,
+            WhileStmt: cls.visit_WhileStmt,
+            BreakStmt: cls.visit_BreakStmt,
+            ContinueStmt: cls.visit_ContinueStmt,
             IfStmt: cls.visit_IfStmt,
             ReturnStmt: cls.visit_ReturnStmt,
             AsmStmt: cls.visit_AsmStmt,
@@ -575,6 +578,15 @@ class StmtFunctor(NodeFunctor):
         raise NotImplementedError()
 
     def visit_ForTaskStmt(self, stmt: ForTaskStmt):
+        raise NotImplementedError()
+
+    def visit_WhileStmt(self, stmt: WhileStmt):
+        raise NotImplementedError()
+
+    def visit_BreakStmt(self, stmt: BreakStmt):
+        raise NotImplementedError()
+
+    def visit_ContinueStmt(self, stmt: ContinueStmt):
         raise NotImplementedError()
 
     def visit_IfStmt(self, stmt: IfStmt):
@@ -633,6 +645,16 @@ class StmtVisitor(StmtFunctor):
         self.visit_expr(stmt.worker)
         self.visit(stmt.body)
 
+    def visit_WhileStmt(self, stmt: WhileStmt):
+        self.visit(stmt.cond)
+        self.visit(stmt.body)
+
+    def visit_BreakStmt(self, stmt: BreakStmt):
+        pass
+
+    def visit_ContinueStmt(self, stmt: ContinueStmt):
+        pass
+
     def visit_IfStmt(self, stmt: IfStmt):
         self.visit_expr(stmt.cond)
         self.visit(stmt.then_body)
@@ -689,12 +711,12 @@ class StmtRewriter(StmtFunctor):
             return BufferStoreStmt(buf, indices, value, stmt.protected)
 
     def visit_AssignStmt(self, stmt: AssignStmt):
-        var = self.visit_expr(stmt.var)
+        v = self.visit_expr(stmt.var)
         value = self.visit_expr(stmt.value)
-        if var is stmt.var and value is stmt.value:
+        if v is stmt.var and value is stmt.value:
             return stmt
         else:
-            return AssignStmt(var, value)
+            return AssignStmt(v, value)
 
     def visit_LetStmt(self, stmt: LetStmt):
         bind_values = [self.visit_expr(bind_value) for bind_value in stmt.bind_values]
@@ -714,7 +736,7 @@ class StmtRewriter(StmtFunctor):
             return ForStmt(loop_var, extent, stmt.unroll, body)
 
     def visit_ForTaskStmt(self, stmt: ForTaskStmt):
-        loop_vars = [self.visit_expr(v) for v in stmt.loop_vars]
+        loop_vars: List[Expr] = [self.visit_expr(v) for v in stmt.loop_vars]
         # todo: visit expressions in task mapping
         worker = self.visit_expr(stmt.worker)
         body = self.visit(stmt.body)
@@ -722,7 +744,22 @@ class StmtRewriter(StmtFunctor):
             return stmt
         else:
             assert all(isinstance(v, Var) for v in loop_vars)
-            return ForTaskStmt(loop_vars=loop_vars, mapping=stmt.mapping, worker=worker, body=body)
+            asserted_loop_vars: List[Var] = [v for v in loop_vars if isinstance(v, Var)]    # avoid IDE warning
+            return ForTaskStmt(loop_vars=asserted_loop_vars, mapping=stmt.mapping, worker=worker, body=body)
+
+    def visit_WhileStmt(self, stmt: WhileStmt):
+        cond = self.visit(stmt.cond)
+        body = self.visit(stmt.body)
+        if cond is stmt.cond and body is stmt.body:
+            return stmt
+        else:
+            return WhileStmt(cond, body)
+
+    def visit_BreakStmt(self, stmt: BreakStmt):
+        return stmt
+
+    def visit_ContinueStmt(self, stmt: ContinueStmt):
+        return stmt
 
     def visit_IfStmt(self, stmt: IfStmt):
         cond = self.visit_expr(stmt.cond)

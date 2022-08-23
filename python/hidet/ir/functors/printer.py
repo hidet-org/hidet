@@ -4,7 +4,7 @@ from hidet.ir.func import IRModule, Function
 from hidet.ir.type import ScalarType, TensorType, TypeNode
 from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div, Sub, Not, Or, And, Let, IfThenElse, TensorSlice, RightShift, LeftShift, BitwiseNot, BitwiseOr, BitwiseAnd, Neg, Cast, \
     NotEqual, BitwiseXor
-from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt, BlackBoxStmt, AsmStmt, ReturnStmt, LetStmt, DeclareStmt, ForTaskStmt
+from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt, BlackBoxStmt, AsmStmt, ReturnStmt, LetStmt, DeclareStmt, ForTaskStmt, WhileStmt, ContinueStmt, BreakStmt
 from hidet.ir.mapping import RepeatTaskMapping, SpatialTaskMapping, ComposedTaskMapping, TaskMapping
 from hidet.ir.dialects.compute import TensorNode, ScalarNode
 from hidet.ir.dialects.lowlevel import VoidType, PointerType, Dereference, Address, ReferenceType, TensorPointerType, Reference
@@ -288,6 +288,17 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
         doc = NewLine() + Text('for ') + self(stmt.loop_vars) + ' in ' + self(stmt.mapping) + ' on ' + self(stmt.worker)
         doc += self(stmt.body).indent(4)
         return doc
+
+    def visit_WhileStmt(self, stmt: WhileStmt):
+        doc = NewLine() + 'while ' + self(stmt.cond)
+        doc += self(stmt.body).indent(4)
+        return doc
+
+    def visit_BreakStmt(self, stmt: BreakStmt):
+        return NewLine() + 'break'
+
+    def visit_ContinueStmt(self, stmt: ContinueStmt):
+        return NewLine() + 'continue'
 
     def visit_IfStmt(self, stmt: IfStmt):
         doc = NewLine() + Text('if ') + self(stmt.cond)

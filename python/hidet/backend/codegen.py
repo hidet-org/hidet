@@ -469,6 +469,18 @@ class Codegen(StmtExprFunctor, TypeFunctor):
     def visit_ForTaskStmt(self, stmt: ForTaskStmt):
         raise ValueError('ForTaskStmt should be lowered to ForStmt in lower_task_mapping pass before code generation.')
 
+    def visit_WhileStmt(self, stmt: WhileStmt):
+        doc = NewLine() + Text('while (') + self(stmt.cond) + ')'
+        body_doc = self(stmt.body)
+        doc += Text(' {') + body_doc.indent() + NewLine() + Text('} ')
+        return doc
+
+    def visit_BreakStmt(self, stmt: BreakStmt):
+        return NewLine() + 'break;'
+
+    def visit_ContinueStmt(self, stmt: ContinueStmt):
+        return NewLine() + 'continue;'
+
     def visit_IfStmt(self, stmt: IfStmt):
         cond_doc = self(stmt.cond)
         if not (len(cond_doc.docs) > 0 and isinstance(cond_doc.docs[0], str) and cond_doc.docs[0].startswith('(')):

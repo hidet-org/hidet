@@ -4,6 +4,7 @@ import numpy as np
 
 from hidet import ir
 from hidet.ir.node import Node
+from hidet.utils import initialize
 
 # typing forward declaration
 Expr = 'Expr'
@@ -59,8 +60,12 @@ dtype_list = [
 ]
 
 float_dtype_rank = {}
-for idx, dtype in enumerate(dtype_list):
-    float_dtype_rank[dtype] = len(dtype_list) - idx
+
+
+@initialize()
+def init_float_dtype_rank():
+    for idx, dtype in enumerate(dtype_list):
+        float_dtype_rank[dtype] = len(dtype_list) - idx
 
 
 class ScalarType(TypeNode):
