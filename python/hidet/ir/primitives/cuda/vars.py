@@ -1,3 +1,4 @@
+from collections import namedtuple
 from typing import Dict, Optional, List
 
 from hidet.ir.expr import Var
@@ -57,4 +58,11 @@ def get_primitive_variable(name: str) -> Optional[Var]:
 
 def get_all_primitive_vars() -> List[Var]:
     return list(_primitive_variables.values())
+
+
+dim3 = namedtuple('dim3', field_names=['x', 'y', 'z'])
+threadIdx = dim3(thread_idx('x'), thread_idx('y'), thread_idx('z'))
+blockIdx = dim3(block_idx('x'), block_idx('y'), block_idx('z'))
+blockDim = dim3(block_dim('x'), block_dim('y'), block_dim('z'))
+gridDim = dim3(grid_dim('x'), grid_dim('y'), grid_dim('z'))
 
