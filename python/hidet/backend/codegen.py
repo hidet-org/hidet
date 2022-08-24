@@ -126,12 +126,9 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         self.ir_module = module
         doc = Doc()
         # todo: only add necessary headers
-        # doc += Text('#include <cassert>') + NewLine()
-        # doc += Text('#include <cstdio>') + NewLine()
-        # doc += Text('#include <cstdint>') + NewLine()
         doc += Text('#include <cuda_fp16.h>') + NewLine()
         doc += Text('#include <cuda_bf16.h>') + NewLine()
-        doc += Text('#include <hidet/runtime.h>') + NewLine()
+        doc += Text('#include <hidet/runtime/cuda_context.h>') + NewLine()
 
         # nvcc use float to 'store' tfloat32 data
         doc += Text('typedef float tfloat32_t;') + NewLine()
@@ -391,19 +388,21 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         if dtype == 'bool':
             return Text('true') if value else Text('false')
         elif dtype == 'float32':
-            return Text(f'{value}f')
+            return Text(f'float({value})')
         elif dtype == 'int32':
+            assert isinstance(value, int)
             return Text(f'{value}')
         elif dtype == 'float16':
             return Text('half({})'.format(value))
         elif dtype == 'int64':
-            return Text('{}'.format(value))
+            assert isinstance(value, int)
+            return Text('{}ll'.format(value))
         elif dtype == 'bfloat16':
             return Text('__float2bfloat16({})'.format(value))
         elif dtype == 'tfloat32':
             return Text('__float_to_tf32({})'.format(value))
         elif dtype == 'uint32':
-            assert value >= 0
+            assert isinstance(value, int) and value >= 0
             return Text('{}u'.format(value))
         else:
             raise NotImplementedError('Cannot recognize scalar literal {} with dtype {}'.format(value, dtype))

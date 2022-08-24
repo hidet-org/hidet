@@ -65,7 +65,7 @@ def test_batch_norm_2d(shape):
         [1, 32, 48],
         [1, 20, 20, 20],
         [1, 20, 20, 5, 5],
-        [1, 32, 262144]
+        [1, 32, 26214]
     ]
 )
 def test_instance_norm(shape):

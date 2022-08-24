@@ -25,6 +25,8 @@ endif()
 # add runtime target
 add_library(hidet_runtime SHARED
         src/hidet/runtime/cuda_context.cpp
+        src/hidet/runtime/callbacks.cpp
+        src/hidet/runtime/logging.cpp
         )
 target_include_directories(hidet_runtime PRIVATE
         ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
@@ -40,7 +42,6 @@ set_target_properties(hidet_runtime PROPERTIES
 # hidet target
 list(APPEND HIDET_SOURCES
         src/hidet/packedfunc.cpp
-        src/hidet/logging.cpp
         src/hidet/cuda_api.cpp
         src/hidet/cuda_kernels.cu
         )

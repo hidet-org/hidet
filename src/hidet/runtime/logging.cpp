@@ -1,4 +1,4 @@
-#include <hidet/logging.h>
+#include <hidet/runtime/logging.h>
 
 
 ErrorState* ErrorState::global() {

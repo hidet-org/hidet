@@ -63,7 +63,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
         elif isinstance(obj, TaskMapping):
             return self.visit_TaskMapping(obj)
         else:
-            return object.__repr__(obj)
+            raise ValueError('Do not support print object {}'.format(object.__repr__(obj)))
 
     def visit_Function(self, func: Function):
         self.namer.clear()
@@ -462,7 +462,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
             items = [
                 '[' + self(rc.shape) + ']',
                 '(' + self(rc.axes) + ') => ' + self(rc.value),
-                self(rc.reduce_type)
+                str(rc.reduce_operation)
             ]
             return 'reduce(' + doc_join(items, ', ') + ')'
 

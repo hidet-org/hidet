@@ -1,7 +1,7 @@
 from .base import GraphPass, PassContext, logger
 from hidet.ir.expr import Var, var, TensorElement
 from hidet.tos.ir import FlowGraph, Operator
-from hidet.ir.dialects.compute import TensorNode, GridCompute
+from hidet.ir.dialects.compute import TensorNode, GridCompute, ScalarNode
 from hidet.tos.ir.functors import clone, analyze_usage
 from hidet.ir.task import Task, Epilogue, is_injective_task, is_unary_injective_task, is_elementwise_task
 from hidet.ir.functors import rewrite, collect
@@ -82,13 +82,16 @@ def try_fuse(graph: FlowGraph, usage) -> bool:
             value = rewrite(grid_compute.value, rmap)
 
             # prepare the parameters and epilogue
+            new_output_node_value = rewrite(grid_compute.value, {u_task_input: v_output})
             new_output_node = TensorNode(
                 name=u_output.name,
                 data_type=u_output.data_type,
                 grid_compute=GridCompute(
+                    input_tensors=collect(new_output_node_value, TensorNode, stop_when_found=True),
+                    input_scalars=collect(new_output_node_value, ScalarNode, stop_when_found=True),
                     shape=grid_compute.shape,
                     axes=grid_compute.axes,
-                    value=rewrite(grid_compute.value, {u_task_input: v_output})
+                    value=new_output_node_value
                 )
             )
             input_params = parameters[:len(v_op.inputs)]

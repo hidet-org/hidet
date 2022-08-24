@@ -1,11 +1,10 @@
 #include <cstdint>
 #include <ctime>
 #include <hidet/common.h>
-#include <hidet/logging.h>
 #include <hidet/cuda_utils.h>
 #include <cuda_runtime.h>
 #include <curand.h>
-#include <hidet/runtime.h>
+#include <hidet/runtime/logging.h>
 #include <cuda_profiler_api.h>
 
 struct CurandContext {

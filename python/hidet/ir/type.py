@@ -72,7 +72,9 @@ def init_float_dtype_rank():
 
 
 class ScalarType(TypeNode):
-    def __init__(self, name):
+    def __init__(self, name: str):
+        if not isinstance(name, str):
+            raise ValueError('Expect the name of scalar type.')
         if name in short2long:
             name = short2long[name]
         if name not in dtype_list:
@@ -184,6 +186,40 @@ class ScalarType(TypeNode):
 
     def is_integer(self) -> bool:
         return self.name in ['bool', 'uint8', 'int32', 'uint32', 'int64']
+
+    def min_value(self) -> Expr:
+        from hidet.ir.expr import Constant
+        value_dict = {
+            'float16': -65504,
+            'float32': -3.4e38,
+            'float64': -1e308,
+            'int32': -2147483648,
+            'uint32': 0
+        }
+        if self.name not in value_dict:
+            raise NotImplementedError()
+        return Constant(value_dict[self.name], self)
+
+    def max_value(self) -> Expr:
+        from hidet.ir.expr import Constant
+        value_dict = {
+            'float16': -65504,
+            'float32': -3.4e38,
+            'float64': -1e308,
+            'int32': -2147483648,
+            'uint32': 0
+        }
+        if self.name not in value_dict:
+            raise NotImplementedError()
+        return Constant(value_dict[self.name], self)
+
+    def zero(self) -> Expr:
+        from hidet.ir.expr import Constant
+        return Constant(0, self)
+
+    def one(self) -> Expr:
+        from hidet.ir.expr import Constant
+        return Constant(1, self)
 
     @staticmethod
     def resolve_out_dtype(lhs: Union[ScalarType, str], rhs: Union[ScalarType, str]) -> ScalarType:

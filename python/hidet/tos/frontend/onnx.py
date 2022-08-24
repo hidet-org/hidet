@@ -7,6 +7,9 @@ from hidet.common import HidetNotImplementedError
 from hidet.tos.modules import nn
 from hidet.tos import ops
 from hidet.tos.tensor import Tensor, from_numpy, randn
+import onnx
+import onnx.numpy_helper
+import onnx.external_data_helper
 from hidet.utils import line_profile, prod
 
 """
@@ -37,6 +40,8 @@ class OnnxOperator:
                 v = attr.s.decode('utf-8')
             elif attr.type == 4:  # tensor
                 v = from_numpy(onnx.numpy_helper.to_array(tensor=attr.t)).cuda()
+            elif attr.type == 5:  # graph
+                v = attr.g
             elif attr.type == 6:  # floats
                 v = list(attr.floats)
             elif attr.type == 7:  # ints
@@ -303,10 +308,6 @@ class OnnxGlobalAveragePool(OnnxOperator):
         x, = inputs
         dims = list(range(2, len(x.shape)))
         return [ops.reduce_mean(x, dims=dims, keep_dim=True)]
-        # x, = inputs
-        # print(x.shape)
-        # n, c, h, w = x.shape
-        # return [ops.avg_pool2d(x, kernel=(h, w), stride=(1, 1), padding=(0, 0))]
 
 
 @register_onnx_operator
@@ -764,6 +765,42 @@ class OnnxNeg(OnnxOperator):
         return [ops.neg(inputs[0])]
 
 
+@register_onnx_operator
+class OnnxIf(OnnxOperator):
+    def run_v1(self, inputs: List[Tensor]) -> List[Tensor]:
+        cond = inputs[0]
+        if cond.storage is None:
+            raise ValueError('Hidet currently does not support dynamic control flow in computation graph'
+                             ' (If operator with condition that depends on non-const input).')
+
+        cond = cond.numpy().flatten()
+        if cond.size > 1:
+            raise ValueError('Condition in If operator can only have a single element.')
+        if np.all(cond):
+            graph = OnnxGraph(self.attrs['then_branch'], self.op_sets)
+        else:
+            graph = OnnxGraph(self.attrs['else_branch'], self.op_sets)
+        return graph(*inputs)
+
+
+@register_onnx_operator
+class OnnxNot(OnnxOperator):
+    def run_v1(self, inputs: List[Tensor]) -> List[Tensor]:
+        return [ops.cond_not(inputs[0])]
+
+
+@register_onnx_operator
+class OnnxCumSum(OnnxOperator):
+    def run_v11(self, inputs: List[Tensor]) -> List[Tensor]:
+        raise NotImplementedError()
+
+
+@register_onnx_operator
+class OnnxOneHot(OnnxOperator):
+    def run_v9(self, inputs: List[Tensor]) -> List[Tensor]:
+        raise NotImplementedError()
+
+
 def dispatch(node, op_sets: List[int]) -> OnnxOperator:
     op_type = node.op_type
     if op_type not in dispatch_table:
@@ -819,35 +856,16 @@ def run_trt(node: OnnxOperator, inputs: List[Tensor]) -> List[Tensor]:
     return [hidet.array(output).cuda() for output in outputs]
 
 
-class OnnxModule(nn.Module):
-    def __init__(self, model):
-        """
-        Parameters
-        ----------
-        model: onnx.ModelProto
-        """
+class OnnxGraph(nn.Module):
+    def __init__(self, graph: onnx.GraphProto, op_sets: List[int]):
         super().__init__()
-        import onnx.numpy_helper
-        import onnx.external_data_helper
-        graph = model.graph
-
-        # check operator set
-        self.op_sets = []
-        for opset_import in model.opset_import:
-            if opset_import.domain not in ['', 'ai.onnx', 'ai.onnx.ml']:
-                # we currently only support standard onnx operator domain
-                raise ValueError('Onnx model imports unknown operator domain: {}'.format(repr(opset_import.domain)))
-            self.op_sets.append(int(opset_import.version))
-        self.op_sets = list(reversed(sorted(self.op_sets)))
-
+        self.op_sets = op_sets
         self.name: str = graph.name
-        self.model = model
         for param in graph.initializer:
             numpy_array = onnx.numpy_helper.to_array(tensor=param)
             self.parameters[param.name] = from_numpy(numpy_array).cuda()
         self.input_names: List[str] = [input.name for input in graph.input if input.name not in self.parameters]
         self.output_names: List[str] = [output.name for output in graph.output]
-
         self.operators: List[OnnxOperator] = []
         self.operators: List[OnnxOperator] = [dispatch(node, op_sets=self.op_sets) for node in graph.node]
         self.usage_count: Dict[str, int] = self.count_usage()
@@ -888,10 +906,7 @@ class OnnxModule(nn.Module):
                     del name2tensor[name]
         # put outputs
         results = [name2tensor[name] for name in self.output_names]
-        if len(results) == 1:
-            return results[0]
-        else:
-            return results
+        return results
 
     def count_usage(self):
         usage_count = defaultdict(int)
@@ -901,6 +916,26 @@ class OnnxModule(nn.Module):
         for graph_output_name in self.output_names:
             usage_count[graph_output_name] += 1
         return usage_count
+
+
+class OnnxModule(nn.Module):
+    def __init__(self, model: onnx.ModelProto):
+        super().__init__()
+        op_sets = []
+        for opset_import in model.opset_import:
+            if opset_import.domain not in ['', 'ai.onnx', 'ai.onnx.ml']:
+                # we currently only support standard onnx operator domain
+                raise ValueError('Onnx model imports unknown operator domain: {}, we currently only support standard onnx operator set.'.format(repr(opset_import.domain)))
+            op_sets.append(int(opset_import.version))
+        self.op_sets = list(reversed(sorted(op_sets)))
+        self.graph = OnnxGraph(model.graph, op_sets=self.op_sets)
+
+    def forward(self, *args):
+        results = self.graph(*args)
+        if len(results) == 1:
+            return results[0]
+        else:
+            return results
 
 
 def from_onnx(model: Union[str, 'onnx.ModelProto']) -> OnnxModule:

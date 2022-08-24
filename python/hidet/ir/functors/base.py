@@ -505,6 +505,7 @@ class ExprRewriter(ExprFunctor):
         return e
 
     def visit_ScalarNode(self, e: ScalarNode):
+        from hidet.ir.functors import collect
         if e.reduce_compute is None:
             return e
         else:
@@ -515,9 +516,12 @@ class ExprRewriter(ExprFunctor):
             if value is rc.value and same_list(axes, rc.axes) and same_list(shape, rc.shape):
                 return e
             else:
-                return ScalarNode(e.name, e.data_type, ReduceCompute(shape, axes, value, rc.reduce_type))
+                input_tensors = collect(value, TensorNode, stop_when_found=True)
+                input_scalars = collect(value, ScalarNode, stop_when_found=True)
+                return ScalarNode(e.name, e.data_type, ReduceCompute(input_tensors, input_scalars, shape, axes, value, rc.reduce_operation, rc.accumulate_dtype))
 
     def visit_TensorNode(self, e: TensorNode):
+        from hidet.ir.functors import collect
         if e.grid_compute is None:
             return e
         else:
@@ -528,7 +532,9 @@ class ExprRewriter(ExprFunctor):
             if value is gc.value and same_list(axes, gc.axes) and same_list(shape, gc.shape):
                 return e
             else:
-                return TensorNode(e.name, e.data_type, GridCompute(shape, axes, value))
+                input_tensors = collect(value, TensorNode, stop_when_found=True)
+                input_scalars = collect(value, ScalarNode, stop_when_found=True)
+                return TensorNode(e.name, e.data_type, GridCompute(input_tensors, input_scalars, shape, axes, value))
 
     def visit_AnyExpr(self, e: AnyExpr):
         return e

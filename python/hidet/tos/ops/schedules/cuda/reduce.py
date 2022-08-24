@@ -6,8 +6,9 @@ from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.ir.expr import scalar_var, if_then_else, tensor_var, const_like, convert, Expr, And, cast
 from hidet.ir.mapping import TaskMapping
 from hidet.ir.primitives import block_idx, thread_idx
-from hidet.ir.dialects.compute import ReduceCompute
+from hidet.ir.dialects.compute import ReduceCompute, ReduceOperation
 from hidet.ir.stmt import AssignStmt, BufferStoreStmt
+from hidet.ir.type import ScalarType
 from hidet.ir.utils import index_deserialize
 from hidet.tos.ops.definitions.reduce import ReduceTask
 from hidet.tos.ops.schedules.common import params_from_task
@@ -63,10 +64,8 @@ def cuda_schedule_reduce_by_warp_reduce(task: ReduceTask) -> IRModule:
         fb.extend_local_vars([rv])
 
         # get reduce functors
-        reduce_type = task.reduce_type
-        init_value = ReduceCompute.init_const(reduce_type=reduce_type, data_type=accumulate_dtype)
-        combine = functools.partial(ReduceCompute.combine, reduce_type)
-        finalize = functools.partial(ReduceCompute.finalize, reduce_type)
+        ro = ReduceOperation.from_name(task.reduce_type)
+        init_value = ro.initial_value(ScalarType(accumulate_dtype))
 
         # body
         sb = StmtBuilder()
@@ -78,10 +77,10 @@ def cuda_schedule_reduce_by_warp_reduce(task: ReduceTask) -> IRModule:
             with sb.if_then(r < reduce_extent):
                 reduce_indices = index_deserialize(r, shape=reduce_shape)
                 input_indices = merge_indices(grid_indices, reduce_indices, reduce_dims=task.dims)
-                sb += AssignStmt(rv, combine(rv, x[input_indices]))
+                sb += AssignStmt(rv, ro.combine(rv, x[input_indices]))
 
-        sb += warp_reduce(rv, op=combine)
-        sb += AssignStmt(rv, finalize(acc=rv, size=reduce_extent))
+        sb += warp_reduce(rv, op=ro.combine)
+        sb += AssignStmt(rv, ro.finalize(acc=rv, size=reduce_extent))
 
         # write back
         for r, in block_layout.worker2task(thread_idx()):
@@ -136,10 +135,8 @@ def cuda_schedule_reduce_by_default(task: ReduceTask) -> IRModule:
         fb.extend_local_vars([rv])
 
         # get reduce functors
-        reduce_type = task.reduce_type
-        init_value = ReduceCompute.init_const(reduce_type=reduce_type, data_type=accumulate_dtype)
-        combine = functools.partial(ReduceCompute.combine, reduce_type)
-        finalize = functools.partial(ReduceCompute.finalize, reduce_type)
+        ro = ReduceOperation.from_name(task.reduce_type)
+        init_value = ro.initial_value(ScalarType(accumulate_dtype))
 
         # body
         sb = StmtBuilder()
@@ -149,8 +146,8 @@ def cuda_schedule_reduce_by_default(task: ReduceTask) -> IRModule:
             sb += AssignStmt(rv, init_value)
             for reduce_indices in reduce_layout.worker2task(0):
                 input_indices = merge_indices(remain_indices, reduce_indices, reduce_dims=task.dims)
-                sb += AssignStmt(rv, combine(rv, x[input_indices]))
-            sb += AssignStmt(rv, finalize(acc=rv, size=reduce_extent))
+                sb += AssignStmt(rv, ro.combine(rv, x[input_indices]))
+            sb += AssignStmt(rv, ro.finalize(acc=rv, size=reduce_extent))
 
             # write back
             reduce_indices = [convert(0) for _ in reduce_shape]

@@ -1,4 +1,4 @@
-#include <hidet/runtime.h>
+#include <hidet/runtime/cuda_context.h>
 
 CudaContext *CudaContext::global() {
     static thread_local CudaContext instance;

@@ -28,7 +28,7 @@ class TypeInfer(ExprFunctor):
         # if not atype or not btype:
         #     return ScalarType(name=None)
         if isinstance(e, (Add, Sub, Multiply, Div, Mod, FloorDiv)):
-            return ScalarType(max(a_dtype, b_dtype))
+            return max(a_dtype, b_dtype)
         elif isinstance(e, Condition):
             return ScalarType('bool')
         else:

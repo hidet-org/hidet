@@ -512,19 +512,15 @@ class PatternMatcher:
             raise NotMatchedError(pattern, target)
 
 
-# def compute_pattern(name, shape, fcompute, accumulate=None, scope=None, layout=None):
-#     shape = convert(shape)
-#     axes = [var() for _ in shape]
-#     value = convert(fcompute(*axes))
-#     data_type = TensorType(scope, dtype=ScalarType('float32'), shape=shape, layout=layout)
-#     return TensorCompute(name, shape, axes, value, data_type, accumulate)
-#
-
 def reduce_pattern(shape: Sequence[Union[int, Expr]], fcompute, reduce_type: str):
+    from hidet.ir.functors import collect
     shape = convert(shape)
     axes = [var() for _ in shape]
     value = convert(fcompute(*axes))
-    return ReduceCompute(value, shape, axes, reduce_type, scalar_type('float32'))
+    input_tensors = collect(value, TensorNode, stop_when_found=True)
+    input_scalars = collect(value, ScalarNode, stop_when_found=True)
+    reduce_operation = ReduceOperation.from_name(reduce_type)
+    return ReduceCompute(input_tensors, input_scalars, shape, axes, value, reduce_operation, accumulate_dtype=ScalarType('float32'))
 
 
 def any_const_int():

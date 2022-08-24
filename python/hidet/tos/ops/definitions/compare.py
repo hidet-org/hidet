@@ -1,6 +1,11 @@
 from hidet.ir import expr
-from .arithmatic import BinaryElementwiseOp
+from .arithmatic import BinaryElementwiseOp, UnaryElementwiseOp
 from .utils import Tensor
+
+
+class NotOp(UnaryElementwiseOp):
+    def __init__(self, x: Tensor):
+        super().__init__(x, lambda a: expr.Not(a), name='not')
 
 
 class EqualOp(BinaryElementwiseOp):
@@ -26,6 +31,10 @@ class LessOrEqual(BinaryElementwiseOp):
 class GreaterOrEqual(BinaryElementwiseOp):
     def __init__(self, x: Tensor, y: Tensor):
         super().__init__(x, y, lambda a, b: a >= b, name='ge')
+
+
+def cond_not(x: Tensor) -> Tensor:
+    return NotOp(x).get_output(0)
 
 
 def equal(x: Tensor, y: Tensor) -> Tensor:
