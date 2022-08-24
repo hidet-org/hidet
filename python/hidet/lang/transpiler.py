@@ -751,7 +751,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
             # buf.write([i, j], value) would return a BufferStoreStmt
             self.current_scope.append(value)
         else:
-            raise HidetProgramError(self, stmt, 'Can not recognize expression statement.')
+            raise HidetProgramError(self, stmt, 'Can not recognize expression statement with type {}.'.format(type(value)))
 
     def visit_Call(self, expr: Call):
         func = self.visit(expr.func)

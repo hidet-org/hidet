@@ -544,8 +544,34 @@ def demo_load_store():
 
 
 def demo_mutex():
-    from hidet.lang import printf, attr
+    from hidet.lang import printf, attr, i32
+    from hidet.lang.cuda import load, store, nano_sleep, atomic_cas, blockIdx, threadIdx, shfl_sync, syncthreads_and, syncthreads, acquire_lock, release_lock
 
+    with hidet.script_module() as module:
+        @hidet.script
+        def func_grid(mutex_lock: i32[1]):
+            attr.cuda_grid_dim = 5
+            attr.cuda_block_dim = 32
+            # status: i32 = 1
+            # while syncthreads_and(status == 1):
+            #     if threadIdx.x == 0:
+            #         status = atomic_cas(mutex_lock, 0, 1)
+            # got the lock, begin of critical region
+            acquire_lock(mutex_lock)
+            if threadIdx.x == 0:
+                printf(r'blockIdx.x %d\n', blockIdx.x)
+                printf(r'start\n')
+                nano_sleep(4000000000)  # sleep 1 seconds
+                printf(r'end\n')
+            release_lock(mutex_lock)
+            # end of critical region
+            # syncthreads()
+            # if threadIdx.x == 0:
+            #     status = atomic_cas(mutex_lock, 1, 0)
+    func = hidet.driver.build_ir_module(module.ir_module(), func_name='func', verbose=True, keep_ptx=True)
+    a = hidet.zeros([1], dtype='int32')
+    func(a)
+    print(a)
 
 
 if __name__ == '__main__':
@@ -562,4 +588,5 @@ if __name__ == '__main__':
     # demo_cp_async_ldmatrix_bank_conflicts_16x128()
     # demo_for_grid()
     # demo_while_grid()
-    demo_load_store()
+    # demo_load_store()
+    demo_mutex()

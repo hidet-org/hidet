@@ -85,9 +85,12 @@ def register_primitive_functions_with_body():
 def register_primitive_functions():
     functions = [
         ('cuda_syncthreads', '__syncthreads', FuncType([], VoidType())),
+        ('cuda_syncthreads_count', '__syncthreads_count', FuncType(['int32'], 'int32')),
+        ('cuda_syncthreads_and', '__syncthreads_and', FuncType(['int32'], 'int32')),
+        ('cuda_syncthreads_or', '__syncthreads_or', FuncType(['int32'], 'int32')),
         ('cuda_syncwarp', '__syncwarp', FuncType([], VoidType())),
         ('cuda_activemask', '__activemask', FuncType([], 'int32')),
-        ('cuda_shfl_sync', '__shfl_sync', FuncType(type_infer_func=lambda arg_types: arg_types[1])),    # T __shfl_sync(unsigned mask, T var, int srcLane, int width=warpSize)
+        ('cuda_shfl_sync', '__shfl_sync', FuncType(type_infer_func=lambda arg_types: arg_types[1])),  # T __shfl_sync(unsigned mask, T var, int srcLane, int width=warpSize)
         ('cuda_shfl_up_sync', '__shfl_up_sync', FuncType(type_infer_func=lambda arg_types: arg_types[1])),
         ('cuda_shfl_down_sync', '__shfl_down_sync', FuncType(type_infer_func=lambda arg_types: arg_types[1])),
     ]
@@ -102,6 +105,18 @@ def call_cuda(func_name, args: List[Expr]) -> Call:
 
 def syncthreads() -> Call:
     return call_cuda('syncthreads', [])
+
+
+def syncthreads_count(value: Expr) -> Call:
+    return call_cuda('syncthreads_count', [value])
+
+
+def syncthreads_and(cond: Union[Expr, int, bool]) -> Call:
+    return call_cuda('syncthreads_and', [cond])
+
+
+def syncthreads_or(cond: Expr) -> Call:
+    return call_cuda('syncthreads_or', [cond])
 
 
 def syncwarp() -> Call:

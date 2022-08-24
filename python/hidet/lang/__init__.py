@@ -3,7 +3,7 @@ from hidet.ir.type import ScalarType, TensorType, Scope
 from hidet.ir.expr import Expr, cast
 from hidet.ir.mapping import row_spatial, row_repeat, col_repeat, col_spatial
 from hidet.ir.layout import DataLayout
-from hidet.ir.dialects.lowlevel import PointerType, VoidType, ReferenceType, view
+from hidet.ir.dialects.lowlevel import PointerType, VoidType, ReferenceType, view, Dereference
 from hidet.ir.primitives import printf
 from hidet.lang.script import script, script_module
 from hidet.ir.stmt import asm
@@ -42,3 +42,7 @@ def tensor_pointer(scope: Union[Scope, str],
 
 def grid(*dim_extents):
     raise ValueError('Please call this function within the @hidet.script decorated function.')
+
+
+def deref(addr: Expr):
+    return Dereference(addr)

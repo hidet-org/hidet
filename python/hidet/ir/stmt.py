@@ -20,7 +20,7 @@ class DeclareStmt(Stmt):
     def __init__(self, var, init: Optional[Expr] = None):
         super().__init__()
         self.var: Var = var
-        self.init: Optional[Expr] = init
+        self.init: Optional[Expr] = convert(init)
 
 
 class BufferStoreStmt(Stmt):

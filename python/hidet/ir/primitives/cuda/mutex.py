@@ -1,35 +1,43 @@
-from typing import List, Dict
-
-from hidet.ir.mapping import TaskMapping, row_spatial, col_spatial, repeat_map, row_repeat, col_repeat
-from hidet.utils import initialize
-from hidet.ir.type import ScalarType
-from hidet.ir.expr import Var, Expr, cast
-from hidet.ir.stmt import AsmStmt, AssignStmt, asm
+from hidet.ir.expr import Expr
 from hidet.ir.func import Function
-from hidet.ir.dialects.lowlevel import PointerType, VoidType
-from hidet.ir.builders import FunctionBuilder
-from hidet.ir.primitives.func import register_primitive_function
-from hidet.ir.primitives.cuda.funcs import call_cuda
+from hidet.ir.primitives.func import register_primitive_function, call_primitive_func
+from hidet.utils import initialize
 
 
 @initialize()
 def register_functions():
-    from hidet.lang import script, i32
+    from hidet.lang import script, i32, attr
+    from hidet.lang.cuda import syncthreads_and, threadIdx, atomic_cas, syncthreads
 
     @script
-    def cuda_lock(addr: ~i32):
-        while True:
-            pass
+    def cuda_acquire_lock(mutex_lock: ~i32):
+        attr.func_kind = 'cuda_device'
+        attr.func_name = 'cuda_acquire_lock'
+        status: i32 = 1
+        while syncthreads_and(status == 1):
+            if threadIdx.x == 0:
+                status = atomic_cas(mutex_lock, 0, 1)
+    assert isinstance(cuda_acquire_lock, Function)
+    register_primitive_function(cuda_acquire_lock.name, cuda_acquire_lock)
 
     @script
-    def cuda_unlock(addr: ~i32):
-        pass
+    def cuda_release_lock(mutex_lock: ~i32):
+        attr.func_kind = 'cuda_device'
+        attr.func_name = 'cuda_release_lock'
+        syncthreads()
+        if threadIdx.x == 0:
+            atomic_cas(mutex_lock, 1, 0)
+    assert isinstance(cuda_release_lock, Function)
+    register_primitive_function(cuda_release_lock.name, cuda_release_lock)
 
 
-def lock(addr: Expr, scope: str = 'gpu'):
-    pass
+def acquire_lock(addr: Expr, scope: str = 'gpu'):
+    if scope != 'gpu':
+        raise NotImplementedError()
+    return call_primitive_func('cuda_acquire_lock', [addr])
 
 
-def unlock(addr: Expr, scope: str = 'gpu'):
-    pass
-
+def release_lock(addr: Expr, scope: str = 'gpu'):
+    if scope != 'gpu':
+        raise NotImplementedError()
+    return call_primitive_func('cuda_release_lock', [addr])
