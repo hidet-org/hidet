@@ -2,7 +2,7 @@ from . import float16
 from . import bfloat16
 from . import mma
 
-from .funcs import set_kernel_max_dynamic_smem_bytes
+from .smem import set_kernel_max_dynamic_smem_bytes
 from .sync import syncthreads, syncwarp
 from .ldst import lds128, sts128
 from .shfl import shfl_sync, shfl_up_sync, shfl_down_sync, shfl_xor_sync, active_mask

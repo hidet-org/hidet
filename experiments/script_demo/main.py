@@ -577,7 +577,7 @@ def demo_mutex():
 if __name__ == '__main__':
     # main()
     # demo_call_example()
-    # demo_cvta()
+    demo_cvta()
     # demo_cp_async()
     # demo_ldmatrix()
     # demo_ldmatrix_x4()
@@ -589,4 +589,4 @@ if __name__ == '__main__':
     # demo_for_grid()
     # demo_while_grid()
     # demo_load_store()
-    demo_mutex()
+    # demo_mutex()

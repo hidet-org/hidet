@@ -1,8 +1,8 @@
 from collections import namedtuple
 from hidet.ir.dialects.lowlevel import PointerType
-dyn_smem_storage = PointerType(base_type='uint8', specifiers=['extern', '__shared__'], use_bracket=True)
 
 from hidet.ir.primitives.cuda.vars import threadIdx, blockIdx, blockDim, gridDim
+from hidet.ir.primitives.cuda.smem import dynamic_shared_memory, set_kernel_max_dynamic_smem_bytes
 from hidet.ir.primitives.cuda.sync import syncthreads, syncthreads_and, syncthreads_count, syncthreads_or
 from hidet.ir.primitives.cuda.mma import MmaConfig, mma_sync, ldmatrix
 from hidet.ir.primitives.cuda.cvta import cvta_generic_to_shared

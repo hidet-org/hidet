@@ -109,6 +109,9 @@ class ScalarType(TypeNode):
             other = ScalarType(other)
         return float_dtype_rank[self.name] > float_dtype_rank[other.name]
 
+    def __str__(self):
+        return self.name
+
     def __hash__(self):
         return hash(self.name)
 

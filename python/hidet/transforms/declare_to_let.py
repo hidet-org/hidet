@@ -21,12 +21,16 @@ class DeclareToLetRewriter(StmtExprRewriter):
         self.assigns: Dict[Var, int] = defaultdict(int)
 
     def rewrite(self, func_body: Stmt):
-        for stmt in collect(func_body, (DeclareStmt, AssignStmt)):
+        for stmt in collect(func_body, (DeclareStmt, AssignStmt, AsmStmt)):
             if isinstance(stmt, DeclareStmt):
                 if stmt.init is not None:
                     self.assigns[stmt.var] += 1
             elif isinstance(stmt, AssignStmt):
                 self.assigns[stmt.var] += 1
+            elif isinstance(stmt, AsmStmt):
+                for output_expr in stmt.output_exprs:
+                    if isinstance(output_expr, Var):
+                        self.assigns[output_expr] += 1
             else:
                 raise ValueError()
         return self.visit(func_body)

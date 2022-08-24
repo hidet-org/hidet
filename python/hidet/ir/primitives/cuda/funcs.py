@@ -43,7 +43,3 @@ def call_cuda(func_name, args: List[Expr]) -> Call:
     entry = primitive_func_pool.lookup_by_name('cuda_{}'.format(func_name))
     return Call(entry.var, args)
 
-
-def set_kernel_max_dynamic_smem_bytes(func: Var, max_dynamic_smem_bytes: Expr):
-    template_string = r'cudaFuncSetAttribute({}, cudaFuncAttributeMaxDynamicSharedMemorySize, {});'
-    return BlackBoxStmt(template_string, func, max_dynamic_smem_bytes)

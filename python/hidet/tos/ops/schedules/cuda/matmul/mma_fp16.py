@@ -124,7 +124,7 @@ def gemm_mma_fp16_cp_async_ldmatrix_opt_kernel(
     from hidet.lang import f16, spatial, repeat, tensor, attr, cast, col_spatial, view, u32, tensor_pointer
     from hidet.lang.layout import row_layout, DataLayout
     from hidet.lang.mapping import repeat, spatial
-    from hidet.lang.cuda import blockIdx, threadIdx, syncthreads, dyn_smem_storage
+    from hidet.lang.cuda import blockIdx, threadIdx, syncthreads, dynamic_shared_memory
     from hidet.lang.cuda import mma_sync, cp_async, cp_async_wait_all, ldmatrix
 
     # optimize for 128x768x3072
@@ -253,11 +253,13 @@ def gemm_mma_fp16_cp_async_ldmatrix_opt_kernel(
             attr.cuda_grid_dim = (m_size + block_m - 1) // block_m, (n_size + block_n - 1) // block_n, bs
             attr.cuda_block_dim = threads
             attr.cuda_dynamic_smem_bytes = 2 * (block_m + block_n) * block_k * 2    # the second 2 means '2 bytes per float16'
-            smem_storage = dyn_smem_storage
+            # smem_storage = dyn_smem_storage
             smem_a = tensor_pointer('shared', 'float16', shape=[2, block_m, block_k], layout=DataLayout.concat(row_layout(2), smem_a_type.layout))
             smem_b = tensor_pointer('shared', 'float16', shape=[2, block_k, block_n], layout=DataLayout.concat(row_layout(2), smem_b_type.layout))
-            smem_a = cast(~smem_storage[0], ~f16)
-            smem_b = cast(~smem_storage[2 * block_m * block_k * 2], ~f16)
+            # smem_a = cast(~smem_storage[0], ~f16)
+            # smem_b = cast(~smem_storage[2 * block_m * block_k * 2], ~f16)
+            smem_a = dynamic_shared_memory(byte_offset=0, dtype=f16)
+            smem_b = dynamic_shared_memory(byte_offset=2 * block_m * block_k * 2, dtype=f16)
             regs_a = tensor('register', 'float16', [mma_count_m, mma_config.a_elements])
             regs_b = tensor('register', 'float16', [mma_count_n, mma_config.b_elements])
             regs_c = tensor('register', 'float16', [mma_count_m, mma_count_n, mma_config.c_elements])
