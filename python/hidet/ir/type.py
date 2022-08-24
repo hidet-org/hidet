@@ -46,16 +46,19 @@ short2long = {
 }
 
 dtype_list = [
-    'int64',
     'float64',
-    'int32',
+    'uint64',
+    'int64',
     'uint32',
     'float32',
     'tfloat32',
-    'bfloat16',
     'int32',
+    'uint32',
+    'bfloat16',
+    'uint16',
     'float16',
     'uint8',
+    'int8',
     'bool'
 ]
 
@@ -155,15 +158,21 @@ class ScalarType(TypeNode):
 
     def nbytes(self) -> int:
         bytes_dict = {
+            'uint64': 8,
+            'uint32': 4,
+            'uint16': 2,
+            'uint8': 1,
+            'float64': 8,
             'float32': 4,
+            'float16': 2,
+            'float8': 1,
+            'int64': 8,
+            'int32': 4,
+            'int16': 2,
+            'int8': 1,
+            'bool': 1,
             'tfloat32': 4,
             'bfloat16': 2,
-            'float16': 2,
-            'int32': 4,
-            'uint8': 1,
-            'uint32': 4,
-            'int64': 8,
-            'bool': 1
         }
         return bytes_dict[self.name]
 

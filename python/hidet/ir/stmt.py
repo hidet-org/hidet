@@ -124,7 +124,7 @@ class AsmStmt(Stmt):
 
 
 class BlackBoxStmt(Stmt):
-    def __init__(self, template_string: str, *exprs: Sequence[Expr]):
+    def __init__(self, template_string: str, *exprs: Expr):
         super().__init__()
         self.template_string: str = template_string
         self.exprs: Tuple[Expr] = convert(exprs)
@@ -168,8 +168,14 @@ def asm(
                     'float16': 'h',
                     'float32': 'f',
                     'float64': 'd',
-                    'int32': 'r',
+                    'uint8': 'h',
+                    'uint16': 'h',
                     'uint32': 'r',
+                    'uint64': 'l',
+                    'int8': 'h',
+                    'int16': 'h',
+                    'int32': 'r',
+                    'int64': 'l'
                 }
                 if expr_type.name not in dtype2reg:
                     raise NotImplementedError('{}'.format(expr_type))

@@ -285,6 +285,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
             ir.TaskMapping,
             ir.DataLayout,
             ir.TensorSlice,
+            str,
         )
         allowed_types = (
             ir.Expr,

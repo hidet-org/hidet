@@ -1,6 +1,6 @@
 from typing import Dict, Union, Optional, List
 
-from hidet.ir.expr import Var
+from hidet.ir.expr import Var, Expr, Call
 from hidet.ir.func import Function
 from hidet.ir.type import FuncType
 from hidet.utils import green
@@ -128,3 +128,7 @@ def register_primitive_function(name: str, func_or_type: Union[Function, FuncTyp
     """
     return primitive_func_pool.register(name, func_or_type, codegen_name, generic)
 
+
+def call_primitive_func(func_name, args: List[Expr]) -> Call:
+    entry = primitive_func_pool.lookup_by_name(func_name)
+    return Call(entry.var, args)

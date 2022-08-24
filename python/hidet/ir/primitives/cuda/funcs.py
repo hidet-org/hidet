@@ -8,6 +8,7 @@ from hidet.ir.expr import Expr, Call, cast
 from hidet.ir.expr import Var
 from hidet.ir.stmt import AsmStmt, BlackBoxStmt, ReturnStmt
 from hidet.ir.type import ScalarType, FuncType
+from hidet.ir.func import Function
 from hidet.ir.primitives.func import register_primitive_function, primitive_func_pool
 from hidet.utils import initialize
 
@@ -90,15 +91,6 @@ def register_primitive_functions():
         ('cuda_shfl_up_sync', '__shfl_up_sync', FuncType(type_infer_func=lambda arg_types: arg_types[1])),
         ('cuda_shfl_down_sync', '__shfl_down_sync', FuncType(type_infer_func=lambda arg_types: arg_types[1])),
     ]
-    # functions = {
-    #     'cuda_syncthreads'
-    #     '__syncthreads': FuncType([], VoidType()),
-    #     '__syncwarp': FuncType([], VoidType()),
-    #     '__activemask': FuncType([], 'int32'),
-    #     '__shfl_sync': FuncType(type_infer_func=lambda arg_types: arg_types[1]),    # T __shfl_sync(unsigned mask, T var, int srcLane, int width=warpSize)
-    #     '__shfl_up_sync': FuncType(type_infer_func=lambda arg_types: arg_types[1]),
-    #     '__shfl_down_sync': FuncType(type_infer_func=lambda arg_types: arg_types[1]),
-    # }
     for name, codegen_name, func_type in functions:
         register_primitive_function(name=name, func_or_type=func_type, codegen_name=codegen_name)
 
@@ -144,7 +136,6 @@ def active_mask():
     return call_cuda('activemask', [])
 
 
-def set_kernel_max_dynamic_smem_bytes(func, max_dynamic_smem_bytes):
+def set_kernel_max_dynamic_smem_bytes(func: Var, max_dynamic_smem_bytes: Expr):
     template_string = r'cudaFuncSetAttribute({}, cudaFuncAttributeMaxDynamicSharedMemorySize, {});'
-    # raise ValueError('update to use func instead of func_var')
     return BlackBoxStmt(template_string, func, max_dynamic_smem_bytes)

@@ -6,6 +6,7 @@ from hidet.ir.layout import DataLayout
 from hidet.ir.dialects.lowlevel import PointerType, VoidType, ReferenceType, view
 from hidet.ir.primitives import printf
 from hidet.lang.script import script, script_module
+from hidet.ir.stmt import asm
 
 i32 = ScalarType('int32')
 u32 = ScalarType('uint32')

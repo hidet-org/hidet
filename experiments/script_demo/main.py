@@ -524,6 +524,30 @@ def demo_while_grid():
     func()
 
 
+def demo_load_store():
+    from hidet.lang import printf, attr, i32
+    from hidet.lang.cuda import load, store, threadIdx
+
+    with hidet.script_module() as module:
+        @hidet.script
+        def func_grid(a: i32[5]):
+            attr.cuda_grid_dim = 1
+            attr.cuda_block_dim = 1
+
+            b = load(~a[1])
+            if threadIdx.x == 0:
+                printf(r'%d\n', b)
+    print(module.ir_module())
+    func = hidet.driver.build_ir_module(module.ir_module(), func_name='func', verbose=True, keep_ptx=True)
+    a = hidet.array(np.arange(5, dtype=np.int32)).cuda()
+    func(a)
+
+
+def demo_mutex():
+    from hidet.lang import printf, attr
+
+
+
 if __name__ == '__main__':
     # main()
     # demo_call_example()
@@ -537,4 +561,5 @@ if __name__ == '__main__':
     # demo_cp_async_ldmatrix_bank_conflicts()
     # demo_cp_async_ldmatrix_bank_conflicts_16x128()
     # demo_for_grid()
-    demo_while_grid()
+    # demo_while_grid()
+    demo_load_store()
