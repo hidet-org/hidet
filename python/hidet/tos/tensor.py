@@ -398,6 +398,7 @@ def void_pointer_to_uint64(p):
 
 def from_numpy(nparray: np.ndarray) -> Tensor:
     dtype_convert = {
+        np.dtype(np.float64): 'float64',
         np.dtype(np.float32): 'float32',
         np.dtype(np.int64): 'int64',
         np.dtype(np.int32): 'int32',

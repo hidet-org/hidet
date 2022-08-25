@@ -1,7 +1,7 @@
 from typing import List, Optional, Union, Sequence
 import functools
 
-from hidet.ir.expr import Expr, And, if_then_else, convert
+from hidet.ir.expr import Expr, And, if_then_else, convert, Equal
 from hidet.ir.layout import DataLayout, RowMajorLayout, ColumnMajorLayout
 from hidet.ir.utils import index_deserialize, index_serialize
 from hidet.utils import prod
@@ -316,6 +316,33 @@ class TileTask(Task):
         )
 
 
+class OneHotTask(Task):
+    def __init__(self, x: TensorNode, depth: int, axis: int, on_value: Expr, off_value: Expr):
+        x_shape = x.const_shape()
+        axis = normalize_dim(axis, len(x_shape) + 1)
+        y_shape = x_shape[:axis] + [depth] + x_shape[axis:]
+        y = compute(
+            name='y',
+            shape=y_shape,
+            fcompute=lambda *indices: if_then_else(
+                cond=Equal(x[indices[:axis] + indices[axis + 1:]], indices[axis]),
+                then_expr=on_value,
+                else_expr=off_value
+            )
+        )
+        super().__init__(
+            name='onehot',
+            inputs=[x],
+            outputs=[y],
+            attributes={
+                'depth': depth,
+                'axis': axis,
+                'on_value': on_value,
+                'off_value': off_value
+            }
+        )
+
+
 class ReshapeOp(Operator):
     def __init__(self, x: Tensor, shape):
         shape = self.normalize_shape(x.shape, shape)
@@ -578,6 +605,20 @@ class TileOp(Operator):
         )
 
 
+class OneHotOp(Operator):
+    def __init__(self, x: Tensor, depth: int, axis: int, on_value: Union[int, Expr], off_value: Union[int, Expr]):
+        super().__init__(
+            inputs=[x],
+            task=OneHotTask(input_like(x, 'x'), depth, axis, on_value, off_value),
+            attributes={
+                'depth': depth,
+                'axis': axis,
+                'on_value': on_value,
+                'off_value': off_value
+            }
+        )
+
+
 def reshape(x: Tensor, shape) -> Tensor:
     if same_shape(x.shape, shape):
         return x
@@ -719,3 +760,10 @@ def split(data: Tensor, axis: int, parts: List[int]) -> List[Tensor]:
         end = start + parts[i]
         outputs.append(strided_slice(data, starts=[start], ends=[end], axes=[axis], strides=[1]))
     return outputs
+
+
+def onehot(x: Tensor, depth: int, axis: int = -1, on_value: Union[int, Expr] = 1, off_value: Union[int, Expr] = 0) -> Tensor:
+    on_value = convert(on_value)
+    off_value = convert(off_value)
+    return OneHotOp(x, depth, axis, on_value, off_value).get_output(0)
+

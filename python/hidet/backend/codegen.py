@@ -541,6 +541,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
 
             'float16': 'half',
             'float32': 'float',
+            'float64': 'double',
             'bfloat16': 'nv_bfloat16',
             'tfloat32': 'tfloat32_t',
         }

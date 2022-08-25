@@ -275,6 +275,26 @@ def demo_debug_fuse_prologue_pass():
     # print(y3.shape)
 
 
+def demo_cumsum():
+    a = hidet.array([
+        [1, 2, 3, 4],
+        [4, 5, 6, 7],
+        [7, 8, 9, 10]
+    ])
+    b = hidet.ops.cumsum(a, dim=0, reverse=True, exclusive=True)
+    print(a)
+    print(b)
+
+
+def demo_onehot():
+    a = hidet.array([
+        [1, 3, 2]
+    ])
+    b = hidet.ops.onehot(a, 4)
+    print(a)
+    print(b)
+
+
 if __name__ == '__main__':
     # demo_block('bert')
     # demo_parallel_k_matmul()
@@ -283,4 +303,6 @@ if __name__ == '__main__':
     # demo_no_barrier()
     # demo_barrier()
     # demo_transposed_matmul()
-    demo_debug_fuse_prologue_pass()
+    # demo_debug_fuse_prologue_pass()
+    # demo_cumsum()
+    demo_onehot()

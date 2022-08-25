@@ -767,6 +767,10 @@ class OnnxNeg(OnnxOperator):
 
 @register_onnx_operator
 class OnnxIf(OnnxOperator):
+    def __init__(self, node, op_sets: List[int]):
+        super().__init__(node, op_sets)
+        self.env_tensors: Dict[str, Tensor] = {}
+
     def run_v1(self, inputs: List[Tensor]) -> List[Tensor]:
         cond = inputs[0]
         if cond.storage is None:
@@ -777,10 +781,10 @@ class OnnxIf(OnnxOperator):
         if cond.size > 1:
             raise ValueError('Condition in If operator can only have a single element.')
         if np.all(cond):
-            graph = OnnxGraph(self.attrs['then_branch'], self.op_sets)
+            graph = OnnxGraph(self.attrs['then_branch'], self.op_sets, self.env_tensors)
         else:
-            graph = OnnxGraph(self.attrs['else_branch'], self.op_sets)
-        return graph(*inputs)
+            graph = OnnxGraph(self.attrs['else_branch'], self.op_sets, self.env_tensors)
+        return graph(*inputs[1:])
 
 
 @register_onnx_operator
@@ -792,13 +796,21 @@ class OnnxNot(OnnxOperator):
 @register_onnx_operator
 class OnnxCumSum(OnnxOperator):
     def run_v11(self, inputs: List[Tensor]) -> List[Tensor]:
-        raise NotImplementedError()
+        x, axis = inputs
+        axis = self.tensor2list(axis)
+        exclusive = self.attrs.get('exclusive', False)
+        reverse = self.attrs.get('reverse', False)
+        return [ops.cumsum(x, axis, exclusive=exclusive, reverse=reverse)]
 
 
 @register_onnx_operator
 class OnnxOneHot(OnnxOperator):
     def run_v9(self, inputs: List[Tensor]) -> List[Tensor]:
-        raise NotImplementedError()
+        axis = self.attrs.get('axis', -1)
+        indices, depth, values = inputs
+        depth = self.tensor2list(depth)
+        on_value, off_value = self.tensor2list(values)
+        return [ops.onehot(indices, depth, axis, on_value, off_value)]
 
 
 def dispatch(node, op_sets: List[int]) -> OnnxOperator:
@@ -857,7 +869,7 @@ def run_trt(node: OnnxOperator, inputs: List[Tensor]) -> List[Tensor]:
 
 
 class OnnxGraph(nn.Module):
-    def __init__(self, graph: onnx.GraphProto, op_sets: List[int]):
+    def __init__(self, graph: onnx.GraphProto, op_sets: List[int], env_tensors: Optional[Dict[str, Tensor]] = None):
         super().__init__()
         self.op_sets = op_sets
         self.name: str = graph.name
@@ -868,10 +880,13 @@ class OnnxGraph(nn.Module):
         self.output_names: List[str] = [output.name for output in graph.output]
         self.operators: List[OnnxOperator] = []
         self.operators: List[OnnxOperator] = [dispatch(node, op_sets=self.op_sets) for node in graph.node]
+        self.env_tensors: Dict[str, Tensor] = env_tensors if env_tensors else {}
         self.usage_count: Dict[str, int] = self.count_usage()
 
     def forward(self, *args):
         name2tensor = {}
+        if self.env_tensors:
+            name2tensor.update(self.env_tensors)
         assert len(args) == len(self.input_names)
         # parameters
         for name, param in self.parameters.items():
@@ -882,7 +897,12 @@ class OnnxGraph(nn.Module):
         # run nodes
         usage_count = self.usage_count.copy()
         for operator in self.operators:
+            for name in operator.input_names:
+                if name not in name2tensor:
+                    raise ValueError('Tensor "{}" is used before produce.'.format(name))
             inputs = [name2tensor[name] for name in operator.input_names]
+            if isinstance(operator, OnnxIf):
+                operator.env_tensors = name2tensor
             outputs = operator.run(inputs)
 
             check = False
@@ -900,10 +920,11 @@ class OnnxGraph(nn.Module):
             for name, tensor in zip(operator.output_names, outputs):
                 name2tensor[name] = tensor
             for name in operator.input_names:
-                usage_count[name] -= 1
-                if usage_count[name] == 0:
-                    # free memory
-                    del name2tensor[name]
+                if name not in self.env_tensors:
+                    usage_count[name] -= 1
+                    if usage_count[name] == 0:
+                        # free memory
+                        del name2tensor[name]
         # put outputs
         results = [name2tensor[name] for name in self.output_names]
         return results
@@ -915,6 +936,7 @@ class OnnxGraph(nn.Module):
                 usage_count[input_name] += 1
         for graph_output_name in self.output_names:
             usage_count[graph_output_name] += 1
+        # todo: add the usage of sub graphs
         return usage_count
 
 
