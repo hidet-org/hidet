@@ -144,15 +144,15 @@ class ExprHash(ExprFunctor, TypeFunctor):
         return self(e.base) + self(e.indices) + self(e.starts) + self(e.ends) + e.class_index()
 
     def visit_ScalarNode(self, e: ScalarNode):
-        if e.reduce_compute:
-            rc = e.reduce_compute
+        if e.scalar_compute:
+            rc = e.scalar_compute
             return self(rc.axes) + self(rc.value) + self(rc.shape) + e.class_index()
         else:
             return HashSum(e) + e.class_index()
 
     def visit_TensorNode(self, e: TensorNode):
-        if e.grid_compute:
-            rc = e.grid_compute
+        if e.tensor_compute:
+            rc = e.tensor_compute
             return self(rc.axes) + self(rc.value) + self(rc.shape) + e.class_index()
         else:
             return HashSum(e) + e.class_index()

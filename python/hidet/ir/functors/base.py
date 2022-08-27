@@ -308,12 +308,20 @@ class ExprVisitor(ExprFunctor):
 
     # compute dialect
     def visit_ScalarNode(self, e: ScalarNode):
-        if e.reduce_compute:
-            self.visit(e.reduce_compute.value)
+        if e.scalar_compute:
+            if isinstance(e.scalar_compute, ReduceCompute):
+                self.visit(e.scalar_compute.value)
+            else:
+                raise NotImplementedError()
 
     def visit_TensorNode(self, e: TensorNode):
-        if e.grid_compute:
-            self.visit(e.grid_compute.value)
+        if e.tensor_compute:
+            if isinstance(e.tensor_compute, GridCompute):
+                self.visit(e.tensor_compute.value)
+            elif isinstance(e.tensor_compute, ArgReduceCompute):
+                self.visit(e.tensor_compute.x)
+            else:
+                raise NotImplementedError()
 
     # low level dialect
     def visit_Cast(self, e: Cast):
@@ -506,35 +514,46 @@ class ExprRewriter(ExprFunctor):
 
     def visit_ScalarNode(self, e: ScalarNode):
         from hidet.ir.functors import collect
-        if e.reduce_compute is None:
+        if e.scalar_compute is None:
             return e
         else:
-            rc = e.reduce_compute
-            axes = self(rc.axes)
-            value = self(rc.value)
-            shape = self(rc.shape)
-            if value is rc.value and same_list(axes, rc.axes) and same_list(shape, rc.shape):
-                return e
+            if isinstance(e.scalar_compute, ReduceCompute):
+                rc = e.scalar_compute
+                axes = self(rc.axes)
+                value = self(rc.value)
+                shape = self(rc.shape)
+                if value is rc.value and same_list(axes, rc.axes) and same_list(shape, rc.shape):
+                    return e
+                else:
+                    input_tensors = collect(value, TensorNode, stop_when_found=True)
+                    input_scalars = collect(value, ScalarNode, stop_when_found=True)
+                    return ScalarNode(e.name, e.data_type, ReduceCompute(input_tensors, input_scalars, shape, axes, value, rc.reduce_operation, rc.accumulate_dtype))
             else:
-                input_tensors = collect(value, TensorNode, stop_when_found=True)
-                input_scalars = collect(value, ScalarNode, stop_when_found=True)
-                return ScalarNode(e.name, e.data_type, ReduceCompute(input_tensors, input_scalars, shape, axes, value, rc.reduce_operation, rc.accumulate_dtype))
+                raise NotImplementedError()
 
     def visit_TensorNode(self, e: TensorNode):
         from hidet.ir.functors import collect
-        if e.grid_compute is None:
+        if e.tensor_compute is None:
             return e
         else:
-            gc = e.grid_compute
-            axes = self(gc.axes)
-            value = self(gc.value)
-            shape = self(gc.shape)
-            if value is gc.value and same_list(axes, gc.axes) and same_list(shape, gc.shape):
-                return e
-            else:
-                input_tensors = collect(value, TensorNode, stop_when_found=True)
-                input_scalars = collect(value, ScalarNode, stop_when_found=True)
-                return TensorNode(e.name, e.data_type, GridCompute(input_tensors, input_scalars, shape, axes, value))
+            if isinstance(e.tensor_compute, GridCompute):
+                gc = e.tensor_compute
+                axes = self(gc.axes)
+                value = self(gc.value)
+                shape = self(gc.shape)
+                if value is gc.value and same_list(axes, gc.axes) and same_list(shape, gc.shape):
+                    return e
+                else:
+                    input_tensors = collect(value, TensorNode, stop_when_found=True)
+                    input_scalars = collect(value, ScalarNode, stop_when_found=True)
+                    return TensorNode(e.name, e.data_type, GridCompute(input_tensors, input_scalars, shape, axes, value))
+            elif isinstance(e.tensor_compute, ArgReduceCompute):
+                arc = e.tensor_compute
+                x = self(arc.x)
+                if x is arc.x:
+                    return e
+                else:
+                    return TensorNode(e.name, e.data_type, ArgReduceCompute(x, arc.dim, arc.reduce_type))
 
     def visit_AnyExpr(self, e: AnyExpr):
         return e

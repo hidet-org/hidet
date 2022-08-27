@@ -1,7 +1,7 @@
 from typing import List, Union
 
 from .arithmatic import square
-from .utils import Task, Operator, Tensor, TensorNode, IRModule, compute, reduce, input_like, normalize_dim
+from .utils import Task, Operator, Tensor, TensorNode, IRModule, compute, reduce, input_like, normalize_dim, arg_reduce
 
 
 class ReduceTask(Task):
@@ -68,6 +68,20 @@ class ReduceTask(Task):
         return True
 
 
+class ArgReduceTask(Task):
+    def __init__(self, x: TensorNode, dim: int, reduce_type: str):
+        y = arg_reduce(x=x, dim=dim, reduce_type=reduce_type)
+        super().__init__(
+            name='arg{}'.format(reduce_type),
+            inputs=[x],
+            outputs=[y],
+            attributes={
+                'dim': dim,
+                'reduce_type': reduce_type
+            }
+        )
+
+
 class ReduceBaseOp(Operator):
     def __init__(self, x: Tensor, dims: List[int], keep_dim: bool, reduce_type: str):
         if reduce_type not in ['avg', 'max', 'min', 'sum']:
@@ -79,6 +93,19 @@ class ReduceBaseOp(Operator):
             attributes={
                 'dims': dims,
                 'keep_dim': keep_dim
+            }
+        )
+
+
+class ArgReduceBaseOp(Operator):
+    def __init__(self, x: Tensor, dim: int, reduce_type: str):
+        if reduce_type not in ['min', 'max']:
+            raise NotImplementedError('Do not support reduce type: {}'.format(reduce_type))
+        super().__init__(
+            inputs=[x],
+            task=ArgReduceTask(input_like(x, 'x'), dim, reduce_type),
+            attributes={
+                'dim': dim,
             }
         )
 
@@ -101,6 +128,16 @@ class ReduceMaxOp(ReduceBaseOp):
 class ReduceMinOp(ReduceBaseOp):
     def __init__(self, x: Tensor, dims: List[int], keep_dim: bool = False):
         super().__init__(x, dims, keep_dim, 'min')
+
+
+class ArgMinOp(ArgReduceBaseOp):
+    def __init__(self, x: Tensor, dim: int):
+        super().__init__(x, dim, 'min')
+
+
+class ArgMaxOp(ArgReduceBaseOp):
+    def __init__(self, x: Tensor, dim: int):
+        super().__init__(x, dim, 'max')
 
 
 def reduce_mean(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -> Tensor:
@@ -130,3 +167,12 @@ def reduce_min(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -
 def reduce_var(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -> Tensor:
     x = x - x.mean(dims=dims, keep_dim=True)
     return square(x).mean(dims=dims, keep_dim=keep_dim)
+
+
+def argmin(x: Tensor, dim: int) -> Tensor:
+    return ArgMinOp(x, dim).get_output(0)
+
+
+def argmax(x: Tensor, dim: int) -> Tensor:
+    return ArgMaxOp(x, dim).get_output(0)
+

@@ -366,8 +366,7 @@ class OnnxConcat(OnnxOperator):
 @register_onnx_operator
 class OnnxArgMax(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
-        return inputs
-        # raise NotImplementedError('ArgMax')
+        raise NotImplementedError('ArgMax')
 
 
 @register_onnx_operator

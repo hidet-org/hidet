@@ -25,7 +25,7 @@ def generic_cuda_schedule(task: Task) -> IRModule:
         params = params_from_task(task)
         param_map = {param: var for param, var in zip(task.inputs + task.outputs, params)}
         fb.extend_params(params)
-        scalar_value = rewrite(computation.grid_compute.value, param_map)  # replace TensorInput to function parameter
+        scalar_value = rewrite(computation.tensor_compute.value, param_map)  # replace TensorInput to function parameter
         assert len(task.outputs) == 1
         out = param_map[task.outputs[0]]
         # body
@@ -35,7 +35,7 @@ def generic_cuda_schedule(task: Task) -> IRModule:
             with sb.for_task(worker_index=worker_idx, task_layout=task_layout) as tasks:
                 buffer_map = {}
                 for axes_values in tasks:
-                    remap = {axis: value for axis, value in zip(computation.grid_compute.axes, axes_values)}
+                    remap = {axis: value for axis, value in zip(computation.tensor_compute.axes, axes_values)}
                     stmt, value, new_buffer_map = expand_loop(rewrite(scalar_value, remap), input_map=buffer_map)
                     buffer_map.update(new_buffer_map)
                     sb += stmt

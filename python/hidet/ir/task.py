@@ -223,7 +223,7 @@ def is_injective_task(task: Task) -> bool:
     """
     from hidet.ir.functors import collect
     scalar_nodes: List[ScalarNode] = collect(task.outputs, ScalarNode, stop_when_found=False)
-    return all(sn.reduce_compute is None for sn in scalar_nodes)
+    return all(sn.scalar_compute is None for sn in scalar_nodes)
 
 
 def is_unary_injective_task(task: Task) -> bool:

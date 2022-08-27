@@ -14,20 +14,21 @@ class ScalarNode(ComputeNode):
     def __init__(self, name, data_type, reduce_compute=None):
         super().__init__(name)
         self.data_type: ScalarType = data_type
-        self.reduce_compute: Optional[ReduceCompute] = reduce_compute
+        self.scalar_compute: Optional[ReduceCompute] = reduce_compute
 
     def is_input(self) -> bool:
-        return self.reduce_compute is None
+        return self.scalar_compute is None
 
 
 class TensorNode(ComputeNode):
-    def __init__(self, name, data_type, grid_compute=None):
+    def __init__(self, name, data_type, tensor_compute=None):
+        from .custom_computes import ArgReduceCompute
         super().__init__(name)
         self.data_type: TensorType = data_type
-        self.grid_compute: Optional[GridCompute] = grid_compute
+        self.tensor_compute: Optional[Union[GridCompute, ArgReduceCompute]] = tensor_compute
 
     def is_input(self) -> bool:
-        return self.grid_compute is None
+        return self.tensor_compute is None
 
     def const_shape(self) -> List[int]:
         return self.data_type.const_shape()
@@ -80,6 +81,18 @@ class ReduceCompute:
         return [int(v) for v in self.shape]
 
 
+class CustomCompute:
+    def __init__(
+            self,
+            input_tensors: Sequence[TensorNode],
+            input_scalars: Sequence[ScalarNode],
+            data_type: Union[TensorType, ScalarType]
+    ):
+        self.input_tensors: List[TensorNode] = list(input_tensors)
+        self.input_scalars: List[ScalarNode] = list(input_scalars)
+        self.data_type: Union[TensorType, ScalarType] = data_type
+
+
 def scalar_input(name, dtype):
     if isinstance(dtype, str):
         dtype = ScalarType(dtype)
@@ -90,7 +103,7 @@ def scalar_input(name, dtype):
 
 def tensor_input(name, base_type, shape, scope=None, layout=None):
     data_type = tensor_type(scope, base_type, shape, layout)
-    return TensorNode(name, data_type, grid_compute=None)
+    return TensorNode(name, data_type, tensor_compute=None)
 
 
 def reduce(shape: Sequence[Union[int, Expr]], fcompute, reduce_type: str, accumulate_dtype: str = 'float32') -> ScalarNode:
@@ -121,7 +134,7 @@ def compute(name, shape, fcompute, scope=None, layout=None) -> TensorNode:
     return TensorNode(
         name=name,
         data_type=tensor_type('global', dtype=infer_type(value), shape=shape, layout=layout),
-        grid_compute=GridCompute(
+        tensor_compute=GridCompute(
             input_tensors=collect(value, TensorNode, stop_when_found=True),
             input_scalars=collect(value, ScalarNode, stop_when_found=True),
             shape=shape,

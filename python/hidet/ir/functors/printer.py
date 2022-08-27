@@ -6,7 +6,7 @@ from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, Exp
     NotEqual, BitwiseXor
 from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt, BlackBoxStmt, AsmStmt, ReturnStmt, LetStmt, DeclareStmt, ForTaskStmt, WhileStmt, ContinueStmt, BreakStmt
 from hidet.ir.mapping import RepeatTaskMapping, SpatialTaskMapping, ComposedTaskMapping, TaskMapping
-from hidet.ir.dialects.compute import TensorNode, ScalarNode
+from hidet.ir.dialects.compute import TensorNode, ScalarNode, GridCompute, ArgReduceCompute, ReduceCompute
 from hidet.ir.dialects.lowlevel import VoidType, PointerType, Dereference, Address, ReferenceType, TensorPointerType, Reference
 from hidet.ir.dialects.pattern import AnyExpr
 from hidet.ir.layout import RowMajorLayout, ColumnMajorLayout
@@ -386,15 +386,25 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
         for node in reversed(nodes):
             if node in exclude_nodes:
                 continue
-            if node.grid_compute is None:
+            if node.tensor_compute is None:
                 doc += NewLine() + self.namer.get_name(node) + ': ' + self(node.data_type)
             else:
-                gc = node.grid_compute
-                items = [
-                    '[' + self(gc.shape) + ']',
-                    '(' + self(gc.axes) + ') => ' + self(gc.value),
-                ]
-                doc += NewLine() + self.namer.get_name(node) + ': ' + 'grid(' + doc_join(items, ', ') + ')'
+                if isinstance(node.tensor_compute, GridCompute):
+                    gc = node.tensor_compute
+                    items = [
+                        '[' + self(gc.shape) + ']',
+                        '(' + self(gc.axes) + ') => ' + self(gc.value),
+                    ]
+                    doc += NewLine() + self.namer.get_name(node) + ': ' + 'grid(' + doc_join(items, ', ') + ')'
+                elif isinstance(node.tensor_compute, ArgReduceCompute):
+                    arc = node.tensor_compute
+                    items = [
+                        self(arc.x),
+                        'dim={}'.format(arc.dim)
+                    ]
+                    doc += NewLine() + self.namer.get_name(node) + ': ' + 'arg{}('.format(arc.reduce_type) + doc_join(items, ', ') + ')'
+                else:
+                    raise NotImplementedError()
         return doc
 
     def visit_Task(self, e: Task):
@@ -431,7 +441,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
             'extra_inputs: [' + self(e.extra_inputs) + ']'
         ]
         doc = 'Prologue(' + doc_join(items, ', ') + ')'
-        nodes = [node for node in collect(e.value, TensorNode) if node.grid_compute is not None]
+        nodes = [node for node in collect(e.value, TensorNode) if node.tensor_compute is not None]
         if len(nodes) > 0:
             doc += self.print_tensor_nodes(nodes, exclude_nodes=[]).indent()
         return doc
@@ -446,7 +456,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
         ]
         doc = doc_join(items, ', ')
         # ret = 'Epilogue((' + self(e.indices) + '), ' + self(e.orig_value) + ' => ' + self(e.value) + ', out_indices=(' + self(e.out_indices) + '), out_tensor=' + self(e.out_tensor) + ')'
-        nodes = [node for node in collect(e.value, TensorNode) if node.grid_compute is not None]
+        nodes = [node for node in collect(e.value, TensorNode) if node.tensor_compute is not None]
         if len(nodes) > 0:
             doc += self.print_tensor_nodes(nodes, exclude_nodes=[]).indent()
         return doc
@@ -455,10 +465,10 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
         return 'InverseMap([' + self(e.axes) + '] => [' + self(e.indices) + '])'
 
     def visit_ScalarNode(self, e: ScalarNode):
-        if e.reduce_compute is None:
+        if e.scalar_compute is None:
             return self.namer.get_name(e, e.name)
         else:
-            rc = e.reduce_compute
+            rc = e.scalar_compute
             items = [
                 '[' + self(rc.shape) + ']',
                 '(' + self(rc.axes) + ') => ' + self(rc.value),

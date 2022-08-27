@@ -295,6 +295,16 @@ def demo_onehot():
     print(b)
 
 
+def demo_argmax():
+    a = hidet.array([
+        [0, 3, 2],
+        [4, 12, 5],
+        [8, 3, 5],
+        [11, 2, 3]
+    ])
+    print(ops.argmax(a, 1))
+
+
 if __name__ == '__main__':
     # demo_block('bert')
     # demo_parallel_k_matmul()
@@ -305,4 +315,5 @@ if __name__ == '__main__':
     # demo_transposed_matmul()
     # demo_debug_fuse_prologue_pass()
     # demo_cumsum()
-    demo_onehot()
+    # demo_onehot()
+    demo_argmax()

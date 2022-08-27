@@ -63,7 +63,7 @@ def try_fuse(graph: FlowGraph, usage) -> bool:
             dest_indices = [rewrite(dest_index_expr, rmap) for dest_index_expr in imap.indices]
 
             # prepare the TensorElement in the u task's expression
-            grid_compute = u_output.grid_compute
+            grid_compute = u_output.tensor_compute
             tensor_elements = [te for te in collect(grid_compute.value, TensorElement) if te.base is u_task_input]
             if len(tensor_elements) == 0:
                 raise ValueError('Encountered a task whose output has not accessed its input.')
@@ -86,7 +86,7 @@ def try_fuse(graph: FlowGraph, usage) -> bool:
             new_output_node = TensorNode(
                 name=u_output.name,
                 data_type=u_output.data_type,
-                grid_compute=GridCompute(
+                tensor_compute=GridCompute(
                     input_tensors=collect(new_output_node_value, TensorNode, stop_when_found=True),
                     input_scalars=collect(new_output_node_value, ScalarNode, stop_when_found=True),
                     shape=grid_compute.shape,

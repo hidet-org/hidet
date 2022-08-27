@@ -354,3 +354,7 @@ def tensor_type(scope, dtype, shape: Optional[Sequence[Union[int, Expr]]] = None
 
 def max_float_dtype(float_dtypes: Iterable[str]) -> str:
     return max(float_dtypes, key=lambda dtype: float_dtype_rank[dtype])
+
+
+int32 = ScalarType('int32')
+

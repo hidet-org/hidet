@@ -88,8 +88,8 @@ def try_fuse(graph: FlowGraph, usage) -> bool:
                 # u_input is an input of original task
                 prologue = Prologue(
                     extra_inputs=v_task.inputs,
-                    indices=v_task_output.grid_compute.axes,
-                    value=v_task_output.grid_compute.value
+                    indices=v_task_output.tensor_compute.axes,
+                    value=v_task_output.tensor_compute.value
                 )
                 task = u_task.copy()
                 task.prologues[u_task_input] = prologue
@@ -99,7 +99,7 @@ def try_fuse(graph: FlowGraph, usage) -> bool:
                     if u_task_input in existed_prologue.extra_inputs:
                         # u_input is used in an existing prologue
                         tensor_elements: List[TensorElement] = collect(existed_prologue.value, TensorElement)
-                        gc = v_task_output.grid_compute
+                        gc = v_task_output.tensor_compute
                         rmap = {te: rewrite(gc.value, {a: b for a, b in strict_zip(gc.axes, te.indices)})
                                 for te in tensor_elements if te.base is u_task_input}
                         value = rewrite(existed_prologue.value, rmap)
@@ -117,7 +117,7 @@ def try_fuse(graph: FlowGraph, usage) -> bool:
                     if u_task_input in existed_epilogue.extra_inputs:
                         # u_input is used in an existing epilogue
                         tensor_elements: List[TensorElement] = collect(existed_epilogue.value, TensorElement)
-                        gc = v_task_output.grid_compute
+                        gc = v_task_output.tensor_compute
                         rmap = {te: rewrite(gc.value, {a: b for a, b in strict_zip(gc.axes, te.indices)})
                                 for te in tensor_elements if te.base is u_task_input}
                         value = rewrite(existed_epilogue.value, rmap)
