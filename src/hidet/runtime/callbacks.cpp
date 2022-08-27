@@ -22,14 +22,14 @@ struct CallbackRegistryPool {
 template<int id, typename FuncType>
 static FuncType* get_callback_ptr() {
     auto pool = CallbackRegistryPool::global();
-    if(pool->id2ptr.size() >= id) {
+    if(id >= pool->id2ptr.size()) {
         throw HidetException(__FILE__, __LINE__, "Callback function registry pool has not been populated.");
     }
     void* ptr = pool->id2ptr[id];
     if (ptr == nullptr) {
         throw HidetException(__FILE__, __LINE__, "Callback with id " + std::to_string(id) + " has been called before registration.");
     }
-    typedef FuncType& FuncPointerType;
+    typedef FuncType* FuncPointerType;
     return FuncPointerType(ptr);
 }
 
@@ -55,7 +55,6 @@ DLL uint64_t allocate_cuda_storage(uint64_t nbytes) {
 
 DLL void free_cuda_storage(uint64_t ptr) {
     API_BEGIN()
-    return get_callback_ptr<0, typeof(free_cuda_storage)>()(ptr);
+    return get_callback_ptr<1, typeof(free_cuda_storage)>()(ptr);
     API_END()
 }
-

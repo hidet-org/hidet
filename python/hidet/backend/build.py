@@ -75,17 +75,34 @@ def compile_source(src_path: str, out_lib_path: str, keep_ptx=False) -> None:
     library_dirs = [os.path.dirname(library_paths['hidet_runtime'])]
 
     cc_code = '{}{}'.format(cc[0], cc[1])
+    # The following command compiles the cuda source code to a shared library
+    # See https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html for more information about nvcc compilation options.
     command = [
+        # the path to nvcc compiler
         nvcc_path(),
+        # the included directories.
         *['-I{}'.format(include_dir) for include_dir in include_dirs],
+        # the library directories.
         *['-L{}'.format(library_dir) for library_dir in library_dirs],
+        # keep option will keep the intermediate results during compilation, including PTX.
         '-keep' if keep_ptx else '',
+        # the target PTX and SASS version.
         '-gencode', f'arch=compute_{cc_code},code=sm_{cc_code}',
+        # allow ptxas (PTX assembler) to output information like register/smem usage.
         '--ptxas-options=-v',
+        # compile into position independent code.
         '--compiler-options', "'-fPIC'",
+        # embed the line information into the binary, allow Nsight Compute to get the source code for profiling.
         '-lineinfo',
+        # link the hidet runtime library, all APIs for communication between kernels and host system are in hidet runtime.
         '-lhidet_runtime',
-        '--shared', src_path,
+        # shared cuda runtime library is used (.so), instead of static one (.a). used to reduce binary size.
+        '--cudart', 'shared',
+        # generate shared library (lib.so).
+        '--shared',
+        # the source path.
+        src_path,
+        # the output library path.
         '-o', out_lib_path,
     ]
 

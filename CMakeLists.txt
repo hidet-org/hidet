@@ -33,6 +33,8 @@ target_include_directories(hidet_runtime PRIVATE
         ${CMAKE_SOURCE_DIR}/include
         /usr/include
         )
+target_link_directories(hidet_runtime PRIVATE ${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES})
+target_link_libraries(hidet_runtime cudart)
 set_target_properties(hidet_runtime PROPERTIES
         CUDA_RUNTIME_LIBRARY SHARED
         CUDA_ARCHITECTURES ${HIDET_CUDA_ARCH}

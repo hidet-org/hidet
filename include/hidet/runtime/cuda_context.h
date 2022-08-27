@@ -1,13 +1,16 @@
 #pragma once
 #include <hidet/common.h>
+#include <hidet/runtime/callbacks.h>
 #include <cuda_runtime.h>
 
 struct Workspace {
     void* base;
-    size_t nbytes;
-    void reserve(size_t nbytes) {
-
+    size_t allocated_nbytes;
+    Workspace() {
+        base = nullptr;
+        allocated_nbytes = 0;
     }
+    void reserve(size_t nbytes);
 };
 
 struct CudaContext {

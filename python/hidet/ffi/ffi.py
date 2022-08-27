@@ -6,6 +6,7 @@ import ctypes
 from hidet.libinfo import get_library_search_dirs
 
 _LIB: Optional[ctypes.CDLL] = None
+_LIB_RUNTIME: Optional[ctypes.CDLL] = None
 
 
 library_paths: Dict[str, Optional[str]] = {
@@ -15,7 +16,7 @@ library_paths: Dict[str, Optional[str]] = {
 
 
 def load_library():
-    global _LIB
+    global _LIB, _LIB_RUNTIME
     if _LIB:
         return
     library_dirs = get_library_search_dirs()
@@ -47,13 +48,32 @@ class BackendException(Exception):
     pass
 
 
+def func_exists(func_name: str, shared_lib: ctypes.CDLL) -> bool:
+    try:
+        getattr(shared_lib, func_name)
+        return True
+    except AttributeError as e:
+        return False
+
+
 def get_func(func_name, arg_types: List, restype):
-    func = _LIB[func_name]
+    if func_exists(func_name, _LIB):
+        func = getattr(_LIB, func_name)
+    elif func_exists(func_name, _LIB_RUNTIME):
+        func = getattr(_LIB_RUNTIME, func_name)
+    else:
+        raise ValueError('Can not find function "{}" in hidet libraries:\n{}\n{}'.format(
+            func_name, library_paths['hidet'], library_paths['hidet_runtime']
+        ))
+
     func.argtypes = arg_types
     func.restype = restype
 
     def func_with_check(*args):
-        ret = func(*args)
+        try:
+            ret = func(*args)
+        except TypeError as e:
+            raise TypeError('The argument or return type of function {} does not match.'.format(func_name)) from e
         status = get_last_error()
         if status is not None:
             msg = 'Calling {} with arguments {} failed. error:\n{}'.format(func_name, args, status)
