@@ -36,6 +36,10 @@ def try_fuse(graph: FlowGraph, usage) -> bool:
                 # we do not fuse an injective_op v with an injective_op u by taking u as epilogue.
                 continue
 
+            if not v_op.task.allow_epilogue():
+                # operator v does not support fuse epilogue
+                continue
+
             # v_op -> u_op  ==> v_op (with u_op as epilogue)
             v_task = v_op.task
             u_task = u_op.task

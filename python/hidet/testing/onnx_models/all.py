@@ -1,4 +1,5 @@
 from typing import Tuple, List
+import warnings
 import numpy as np
 import hidet
 from hidet.tos import Tensor
@@ -34,10 +35,12 @@ def get_onnx_model(name: str, batch_size: int = 1, precision='float32', **kwargs
         return model_path, input_names, input_tensors
     elif name == 'bert':
         model_path = hidet_cache_file('onnx', 'bert.onnx')
+        if precision != 'float32':
+            warnings.warn('the float32 model is returned although {} is requested, because transformers package does not provide api to export f16 model.')
         export_transformer_model_as_onnx(
             model_name='bert-base-uncased',
             output_path=model_path,
-            precision=precision
+            precision='float32'
         )
         vocab_size = 30522
         seq_length = kwargs.get('seq_length', 128)

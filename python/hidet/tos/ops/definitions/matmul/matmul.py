@@ -13,7 +13,7 @@ class MatmulTask(Task):
         self.m_size: int = m_size
         self.k_size: int = k_size
         self.n_size: int = n_size
-        self.mma = mma
+        self.mma: str = mma
         c = compute(
             name='c',
             shape=[batch_size, m_size, n_size],
@@ -52,6 +52,18 @@ class MatmulTask(Task):
             return batched_matmul_cuda_schedule_mma(self)
         else:
             raise ValueError('Can not recognize mma type {}, candidates: {}'.format(self.mma, ['simt', 'wmma', 'mma']))
+
+    def allow_prologue(self, only_elementwise=False) -> True:
+        if self.mma == 'mma_custom':
+            return False
+        else:
+            return True
+
+    def allow_epilogue(self, only_elementwise=False) -> True:
+        if self.mma == 'mma_custom':
+            return False
+        else:
+            return True
 
     def fast_implement(self, space_level: int) -> bool:
         return space_level == 0
@@ -114,6 +126,7 @@ def matmul(a: Tensor, b: Tensor, algo: str = 'default', mma: str = 'default', ta
         https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#warp-level-matrix-instructions
 
     ta: bool
+        todo: remove ta, tb, and tc
         Whether to transpose matrix A.
 
     tb: bool

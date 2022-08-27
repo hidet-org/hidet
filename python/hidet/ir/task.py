@@ -170,7 +170,32 @@ class Task(Node):
     def implement_cpu(self) -> IRModule:
         return NotImplemented
 
+    def allow_prologue(self, only_elementwise=False) -> True:
+        return True
+
+    def allow_epilogue(self, only_elementwise=False) -> True:
+        return True
+
     def fast_implement(self, space_level: int) -> bool:
+        """
+        Whether the function can be implemented through a single thread.
+
+        Note:
+        When we implement a task, we might try different schedules by launching multiple compilation processes.
+        This prevents us from implementing such kind of task with other tasks in the model. Thus, we usually
+        parallelize the implementing of tasks that only use a single thread during their implementing. Then
+        implement those require multiple threads one by one.
+
+        Parameters
+        ----------
+        space_level: int
+            The space level to explore during implementing.
+
+        Returns
+        -------
+        ret: bool
+            True if this task can be implemented through a single cpu thread.
+        """
         if space_level == 0:
             return True
         else:

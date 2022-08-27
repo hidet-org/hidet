@@ -127,10 +127,7 @@ def resolve_ir_modules(ir_modules: List[IRModule], schedules: List[Schedule], ou
         errors = [float('NaN')] * len(compiled_funcs)
 
     # measure latency
-    i = 0
     for ir_module, compiled_func in strict_zip(ir_modules, compiled_funcs):
-        print(i, schedules[i])
-        i += 1
         if compiled_func:
             repeat_latency = compiled_func.profile(*dummy_inputs, warmup=5, number=10, repeat=3)
             latency = float(np.median(repeat_latency))

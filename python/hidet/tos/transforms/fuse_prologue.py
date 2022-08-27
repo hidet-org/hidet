@@ -52,6 +52,9 @@ def try_fuse(graph: FlowGraph, usage) -> bool:
             continue
         # v_op -> u_op => (v_op as prologue) u_op
         u_task = u_op.task
+        if not u_task.allow_prologue():
+            # operator u does not support fuse prologue
+            continue
         # if is_injective_task(u_task) and not is_sink_op(u_op, usage):
         # if is_injective_task(u_task):
         #     continue
