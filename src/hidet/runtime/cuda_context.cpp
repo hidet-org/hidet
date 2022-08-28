@@ -2,13 +2,18 @@
 #include "hidet/cuda_utils.h"
 
 void Workspace::reserve(size_t nbytes) {
+    API_BEGIN()
     if(nbytes > this->allocated_nbytes) {
         if(base) {
             free_cuda_storage(reinterpret_cast<uint64_t>(this->base));
         }
         this->base = reinterpret_cast<void*>(allocate_cuda_storage(nbytes));
+        if(this->base == nullptr) {
+            throw HidetException(__FILE__, __LINE__, "allocate workspace failed.");
+        }
         CUDA_CALL(cudaMemsetAsync(this->base, 0, nbytes, CudaContext::global()->stream));
     }
+    API_END()
 }
 CudaContext *CudaContext::global() {
     static thread_local CudaContext instance;

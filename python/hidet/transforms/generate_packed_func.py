@@ -6,7 +6,6 @@ from hidet.ir.stmt import AssertStmt, SeqStmt, EvaluateStmt
 from hidet.ir.func import IRModule, Function
 from hidet.ir.functors import astext, simplify_to_int
 from hidet.ir.dialects.lowlevel import VoidType, PointerType, Dereference, TensorPointerType
-# from hidet.ir.task import Grid, Host
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.transforms import Pass
 from hidet.ir.primitives import set_kernel_max_dynamic_smem_bytes
@@ -23,7 +22,7 @@ class GeneratePackedFuncPass(Pass):
             if func.get_attr('packed_func', None) is not None:
                 # this function itself is a packed function
                 continue
-            if any(f.get_attr('packed_func', None) is func for f in ir_module.functions.values()):
+            if any(f.get_attr('packed_func', None) is ir_module.lookup_var(func.name) for f in ir_module.functions.values()):
                 # the packed function for current function has existed, skip
                 continue
             packed_func = self.generate_packed_func(func, ir_module.lookup_var(func.name))

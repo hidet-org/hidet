@@ -4,12 +4,13 @@ import hidet
 from bench.common import BenchResult, benchmark_run
 
 
-def gemm_mma_fp16_cp_async_ldmatrix_parallel_k_kernel(bs, m_size, n_size, k_size) -> CompiledFunction:
-    from hidet.lang import f16, f32, spatial, repeat, tensor, attr, printf, cast, col_spatial, view, u32, PointerType, tensor_pointer, grid
+def gemm_mma_fp16_parallel_k_kernel(bs, m_size, n_size, k_size) -> CompiledFunction:
+    from hidet.lang import f16, f32, spatial, repeat, tensor, attr, printf, cast, col_spatial, view, u32, PointerType, tensor_pointer, grid, i32, void_p, var_of_function, static, void
     from hidet.lang.layout import row_layout, col_layout, local_layout, DataLayout
     from hidet.lang.mapping import repeat, spatial
     from hidet.lang.cuda import blockIdx, threadIdx, syncthreads, dynamic_shared_memory
-    from hidet.lang.cuda import MmaConfig, mma_sync, cp_async, cp_async_wait_all, cvta_generic_to_shared, ldmatrix, cp_async_wait_group, cp_async_commit_group
+    from hidet.lang.cuda import MmaConfig, mma_sync, cp_async, cp_async_wait_all, cvta_generic_to_shared, ldmatrix, cp_async_wait_group, cp_async_commit_group, acquire_lock, release_lock
+    from hidet.lang.runtime import request_workspace
 
     # optimize for 128x768x3072
     # mma_config = MmaConfig.m16n8k16_f16_f16()
@@ -22,6 +23,7 @@ def gemm_mma_fp16_cp_async_ldmatrix_parallel_k_kernel(bs, m_size, n_size, k_size
 
     # block_m, block_n, block_k = 128, 128, 16
     # warp_m, warp_n, warp_k = 64, 64, 16
+    block_count_m, block_count_n = (m_size + block_m - 1) // block_m, (n_size + block_n - 1) // block_n
     warp_count_m, warp_count_n, warp_count_k = block_m // warp_m, block_n // warp_n, block_k // warp_k
     mma_m, mma_n, mma_k = mma_config.m, mma_config.n, mma_config.k  # 16, 8, 16
     mma_count_m, mma_count_n, mma_count_k = warp_m // mma_m, warp_n // mma_n, warp_k // mma_k
@@ -90,11 +92,14 @@ def gemm_mma_fp16_cp_async_ldmatrix_parallel_k_kernel(bs, m_size, n_size, k_size
         @hidet.script
         def store_c(
                 regs_c: tensor('register', 'float16', [mma_count_m, mma_count_n, mma_config.c_elements]),
-                c: tensor('global', 'float16', [bs, m_size, n_size])
+                c: tensor('global', 'float16', [bs, m_size, n_size]),
+                locks: tensor('global', 'int32', [bs, block_count_m, block_count_n])
         ):
             warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
             offset_m, offset_n = blockIdx.x * block_m, blockIdx.y * block_n
             gmem_c = c[blockIdx.z, offset_m:, offset_n:]
+            lock = ~locks[blockIdx.z, blockIdx.x, blockIdx.y]
+            acquire_lock(lock)
             for k_round in range(warp_count_k):
                 for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
                     if wk == k_round:
@@ -106,6 +111,7 @@ def gemm_mma_fp16_cp_async_ldmatrix_parallel_k_kernel(bs, m_size, n_size, k_size
                                              regs_c[mi, mj, p],
                                              protected=True)
                                 p += 1
+            release_lock(lock)
 
         @hidet.script
         def load_smem_a(
@@ -134,7 +140,7 @@ def gemm_mma_fp16_cp_async_ldmatrix_parallel_k_kernel(bs, m_size, n_size, k_size
                 cp_async(~smem_b[k, j], ~gmem_b[k, j], cp_size=16, src_size=src_size * 2, cache_level='global')
 
         @hidet.script
-        def gemm_mma_cp_async_ldmatrix_opt_grid(a: f16[bs, m_size, k_size], b: f16[bs, k_size, n_size], c: f16[bs, m_size, n_size]):
+        def gemm_mma_fp16_parallel_k_grid(a: f16[bs, m_size, k_size], b: f16[bs, k_size, n_size], c: f16[bs, m_size, n_size], locks: i32[bs, block_count_m, block_count_n]):
             # matrix multiplication, using mma instruction
             attr.cuda_grid_dim = (m_size + block_m - 1) // block_m, (n_size + block_n - 1) // block_n, bs
             attr.cuda_block_dim = threads
@@ -174,10 +180,34 @@ def gemm_mma_fp16_cp_async_ldmatrix_parallel_k_kernel(bs, m_size, n_size, k_size
                         warp_mma(~regs_a[mk % 2, mi, 0], ~regs_b[mk % 2, mj, 0], ~regs_c[mi, mj, 0])
                 cp_async_wait_all()
                 syncthreads()
-            store_c(regs_c, c)
+            store_c(regs_c, c, locks)
+
+        from hidet.lang.runtime import request_workspace
+
+        @hidet.script
+        def gemm_mma_fp16_parallel_k(
+                num_args: int,
+                arg_types: ~i32,
+                args: ~void_p
+        ):
+            attr.func_kind = 'packed_func'
+            attr.packed_func = var_of_function(gemm_mma_fp16_parallel_k_grid)
+            locks = static(tensor_pointer('global', dtype='int32', shape=[bs, block_count_m, block_count_n]))
+            if locks == 0:
+                locks = request_workspace(nbytes=4 * bs * block_count_m * block_count_n, require_clean=True)
+            assert num_args == 3
+            assert arg_types[0] == 3
+            assert arg_types[1] == 3
+            assert arg_types[2] == 3
+            gemm_mma_fp16_parallel_k_grid(
+                cast(args[0], ~f16),
+                cast(args[1], ~f16),
+                cast(args[2], ~f16),
+                locks
+            )
 
     ir_module = module.ir_module()
-    func = hidet.driver.build_ir_module(ir_module, func_name='gemm_mma_cp_async_ldmatrix_opt')
+    func = hidet.driver.build_ir_module(ir_module, func_name='gemm_mma_fp16_parallel_k', func_type=hidet.ir.FuncType([~f32, ~f32, ~f32], void))
     return func
 
 
@@ -187,7 +217,7 @@ if __name__ == '__main__':
     # bs, m, n, k = 11, 111, 222, 333
     # bs, m, n, k = 1, 10, 10, 10
     bs, m, n, k = 1, 1280, 1280, 1280
-    func = gemm_mma_fp16_cp_async_ldmatrix_parallel_k_kernel(bs, m, n, k)
+    func = gemm_mma_fp16_parallel_k_kernel(bs, m, n, k)
     # a = hidet.randint(0, 2, [bs, m, k], 'float16')
     # b = hidet.randint(0, 2, [bs, k, n], 'float16')
     a = hidet.ones([bs, m, k], 'float16')

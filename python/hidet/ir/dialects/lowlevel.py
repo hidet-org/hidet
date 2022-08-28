@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional, Union, Sequence
+from typing import Optional, Union, Sequence, List
 from hidet.ir.type import TypeNode, ScalarType, TensorType, Scope, Int, tensor_type
 from hidet.ir.expr import Expr, TensorElement, Var, Constant, cast
 from hidet.ir.layout import DataLayout
@@ -14,9 +14,9 @@ class PointerType(TypeNode):
         super().__init__()
         if isinstance(base_type, str):
             base_type = ScalarType(base_type)
-        self.base_type = base_type
-        self.specifiers = list(specifiers) if specifiers else []
-        self.use_bracket = use_bracket
+        self.base_type: TypeNode = base_type
+        self.specifiers: List[str] = list(specifiers) if specifiers else []
+        self.use_bracket: bool = use_bracket
 
 
 class ReferenceType(TypeNode):
@@ -83,3 +83,6 @@ def view(ptr: Expr, tp: TensorType) -> Expr:
     if not isinstance(tp, TensorType):
         raise ValueError('Expect a tensor type, got {}'.format(type(tp).__name__))
     return cast(ptr, TensorPointerType.from_tensor_type(tp))
+
+
+void_p = PointerType(VoidType())

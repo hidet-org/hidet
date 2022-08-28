@@ -1,5 +1,6 @@
 from typing import Optional, Union, Tuple
-from hidet.ir import Expr
+from hidet.ir.expr import Expr, Var
+from hidet.ir.func import Function
 
 Int = Union[Expr, int]
 Dim3 = Union[Int, Tuple[Int, Int], Tuple[Int, Int, Int]]
@@ -19,6 +20,11 @@ func_name: Optional[str] = None
 
 # The kind of this function. Candidates: 'cuda_kernel', 'cuda_device', 'host_kernel', 'packed_func'
 func_kind: Optional[str] = None
+
+
+# If the func_kind == packed_func, then this attribute should be set to the var to function to be packed.
+packed_func: Optional[Var] = None
+
 
 # The grid dimension of a cuda kernel, specifying the number of thread blocks
 cuda_grid_dim: Dim3 = 1

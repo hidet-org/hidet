@@ -44,8 +44,8 @@ class Function(Node):
             the dynamic shared memory in cuda launch configuration
         'cuda_min_blocks': int
             the minimal number of thread blocks in launch bound of cuda kernel function
-        'packed_func': Function
-            the target function that this packed_func has packed. valid when attrs['kind'] == 'packed_func'
+        'packed_func': Var
+            the var of target function that this packed_func has packed. valid when attrs['kind'] == 'packed_func'
         'label': str
             the label of this function when it is in a function group
     """
@@ -63,7 +63,9 @@ class Function(Node):
         self.extern_vars: List[Var] = extern_vars if extern_vars else []
         self.attrs = attrs if attrs else {}
 
-        # assert all(attr in self.valid_attrs for attr in self.attrs)
+        # for attr in self.attrs:
+        #     if attr not in self.valid_attrs:
+        #         raise ValueError('Unrecognize function attribute: {}'.format(attr))
 
     def __call__(self, *args, **kwargs) -> Call:
         raise ValueError('Can only call script function in another script function, or lower it to execute.')

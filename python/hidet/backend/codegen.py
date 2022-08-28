@@ -417,7 +417,10 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             return '{' + doc_join(items, ', ') + '}'
 
     def visit_DeclareStmt(self, stmt: DeclareStmt):
-        doc = NewLine() + self.local_var_declare(stmt.var)
+        doc = NewLine()
+        if stmt.is_static:
+            doc += 'static '
+        doc += self.local_var_declare(stmt.var)
         if stmt.init is not None:
             doc += ' = ' + self(stmt.init)
         return doc + ';'

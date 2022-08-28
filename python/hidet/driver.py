@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 import os
 import multiprocessing
 import logging
@@ -82,13 +82,15 @@ def build_batch_task(tasks: List[Task], space_level: int, parallel=True, use_cac
         map(_build_task_job, [(task, space_level, use_cache, cache_dir, False) for task in tasks])
 
 
-def build_ir_module(ir_module: IRModule, func_name: str, keep_ptx=False, working_dir='./outs', verbose=False):
+def build_ir_module(ir_module: IRModule, func_name: str, keep_ptx=False, working_dir='./outs', verbose=False, func_type: Optional[FuncType] = None):
     module_string = str(ir_module)
     module_hash = sha256(module_string.encode()).hexdigest()[:16]
     working_dir = os.path.join(working_dir, 'ir_module', module_hash)
     src_path = os.path.join(working_dir, 'source.cu')
     lib_path = os.path.join(working_dir, 'lib.so')
 
+    if verbose:
+        print('Compiling {}'.format(src_path))
     # lower ir module
     with PassContext(instruments=[
                          SaveIRInstrument(out_dir=working_dir),
@@ -99,10 +101,10 @@ def build_ir_module(ir_module: IRModule, func_name: str, keep_ptx=False, working
     codegen(ir_module, src_out_path=src_path)
     # compile source code
     compile_source(src_path, out_lib_path=lib_path, keep_ptx=keep_ptx)
-    func = ir_module.lookup(func_name + '_grid')
-    if verbose:
-        print('Compiling {}'.format(src_path))
-    return load_lib_func(lib_path, func_name, func_type=FuncType.from_func(func))
+    if func_type is None:
+        func = ir_module.lookup(func_name + '_grid')
+        func_type = FuncType.from_func(func)
+    return load_lib_func(lib_path, func_name, func_type=func_type)
 
 
 if __name__ == '__main__':

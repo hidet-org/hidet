@@ -17,10 +17,11 @@ class EvaluateStmt(Stmt):
 
 
 class DeclareStmt(Stmt):
-    def __init__(self, var, init: Optional[Expr] = None):
+    def __init__(self, var, init: Optional[Expr] = None, is_static=False):
         super().__init__()
         self.var: Var = var
         self.init: Optional[Expr] = convert(init)
+        self.is_static: bool = is_static
 
 
 class BufferStoreStmt(Stmt):

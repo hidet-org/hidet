@@ -10,7 +10,6 @@ from hidet.ir.builders import FunctionBuilder
 from ast import AST, Module
 import astunparse
 
-import hidet.lang.attr
 
 # statements
 from ast import FunctionDef, Return, Assign, AnnAssign, AugAssign, For, While, If, With, Assert, Expr, Pass, Break, Continue
@@ -33,6 +32,8 @@ from ast import Index
 from hidet import ir
 from hidet.ir import Var
 from hidet.utils import red, cyan, green, bold, blue, str_indent
+import hidet.lang.attr
+from hidet.lang.type_utils import TypeDecorator
 
 
 class HidetProgramError(Exception):
@@ -89,8 +90,8 @@ class PythonAstFunctor:
         except HidetProgramError:
             raise
         except Exception as e:
-            import traceback
-            raise HidetProgramError(self, node, 'Internal exception occurred during transpiling.')
+            # import traceback
+            raise HidetProgramError(self, node, 'Internal exception occurred during transpiling this ast node.') from e
 
     def visit_Module(self, module: Module):
         raise NotImplementedError()
@@ -285,11 +286,13 @@ class PythonToHidetTranslator(PythonAstFunctor):
             ir.TaskMapping,
             ir.DataLayout,
             ir.TensorSlice,
+            ir.Function,
             str,
         )
         allowed_types = (
             ir.Expr,
             ir.TypeNode,
+            TypeDecorator,
             float,
             int,
             str,
@@ -329,15 +332,20 @@ class PythonToHidetTranslator(PythonAstFunctor):
                     if isinstance(rhs, host_var_types):
                         self.current_scope.define_host_var(var_name, rhs)
                     else:
+                        is_static = False
                         if isinstance(rhs, ir.TypeNode):
                             var_type = rhs
                             init_value = None
+                        elif isinstance(rhs, TypeDecorator):
+                            var_type = rhs.decorated_type
+                            init_value = None
+                            is_static = 'static' in rhs.decorates
                         else:
                             rhs = ir.convert(rhs)
                             var_type = ir.infer_type(rhs)
                             init_value = rhs
                         var = Var(hint=var_name, type=var_type)
-                        self.current_scope.append(ir.DeclareStmt(var, init=init_value))
+                        self.current_scope.append(ir.DeclareStmt(var, init=init_value, is_static=is_static))
                         self.current_scope.define_var(name=var_name, v=var)
             else:
                 # In other cases, it is an assignment of defined variable.

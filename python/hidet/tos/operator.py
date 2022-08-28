@@ -5,6 +5,7 @@ from hidet.ir.task import Task
 from hidet.runtime import CompiledFunction
 from hidet.driver import build_task
 from hidet.tos.tensor import empty, empty_like, Tensor
+from hidet.ffi.ffi import get_last_error, BackendException
 
 
 def trim_op_ending(name: str):
@@ -73,6 +74,11 @@ class Operator:
     def pure_run(self, inputs: List[Tensor], outputs: List[Tensor]):
         self.build_task_func()
         self.task_func(*inputs, *outputs)
+
+        status = get_last_error()
+        if status is not None:
+            msg = 'Kernel failed. Error:\n{}'.format(self.name, status)
+            raise BackendException(msg)
 
     def reforward(self, inputs: List[Tensor], update_attributes: Optional[Dict[str, Any]] = None) -> List[Tensor]:
         cls = self.__class__

@@ -248,6 +248,8 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
         doc = NewLine() + Text('declare ') + self(stmt.var) + Text(': ') + self(stmt.var.type)
         if stmt.init is not None:
             doc += ' = ' + self(stmt.init)
+        if stmt.is_static:
+            doc += ' [static]'
         return doc
 
     def visit_EvaluateStmt(self, stmt: EvaluateStmt):

@@ -20,9 +20,7 @@ class TypeNode(Node):
         elif isinstance(self, ScalarType):
             return PointerType(base_type=self)
         elif isinstance(self, (PointerType, TensorPointerType)):
-            raise ValueError('Hidet currently does not support pointer type that points to pointer, \n'
-                             'because it is very rare to use such types in a tensor program. \n'
-                             'Will add such support if needed in the future.')
+            return PointerType(base_type=self)
         else:
             raise ValueError('Can not recognize type {}'.format(self))
 
@@ -357,4 +355,8 @@ def max_float_dtype(float_dtypes: Iterable[str]) -> str:
 
 
 int32 = ScalarType('int32')
-
+uint32 = ScalarType('uint32')
+int64 = ScalarType('int64')
+uint64 = ScalarType('uint64')
+uint8 = ScalarType('uint8')
+boolean = ScalarType('bool')

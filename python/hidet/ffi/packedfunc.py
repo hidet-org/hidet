@@ -85,7 +85,8 @@ class PackedFunc:
 
     def _convert_args(self, args: Sequence):
         args = self._apply_default_args(args)
-        assert len(args) == len(self.param_types)
+        if not len(args) == len(self.param_types):
+            raise ValueError('The callee expects {} arguments, but got {}.'.format(len(self.param_types), len(args)))
         converted_args = [self._convert_arg(param_type, arg) for param_type, arg in zip(self.param_types, args)]
         if self.ret_type is not None:
             if self.ret_type is bool:
