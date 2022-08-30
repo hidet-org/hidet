@@ -17,7 +17,7 @@ def resolve_load_inst_name(dtype: str, space: str, sync: Optional[str], scope: s
         if space == 'generic':
             inst_name = f'ld.{sync}.{scope}.b{nbits}'
         else:
-            inst_name = f'ld.{sync}.{space}.{space}.b{nbits}'
+            inst_name = f'ld.{sync}.{scope}.{space}.b{nbits}'
     else:
         if space == 'generic':
             inst_name = f'ld.b{nbits}'
@@ -34,7 +34,7 @@ def resolve_store_inst_name(dtype: str, space: str, sync: Optional[str], scope: 
         if space == 'generic':
             inst_name = f'st.{sync}.{scope}.b{nbits}'
         else:
-            inst_name = f'st.{sync}.{space}.{space}.b{nbits}'
+            inst_name = f'st.{sync}.{scope}.{space}.b{nbits}'
     else:
         if space == 'generic':
             inst_name = f'st.b{nbits}'
@@ -74,7 +74,7 @@ def register_functions():
         for space in ['generic', 'global', 'local', 'shared']:
             for sync in [None, 'release', 'relaxed']:
                 for scope in ['cta', 'gpu', 'sys']:
-                    inst_name = resolve_load_inst_name(dtype, space, sync, scope)
+                    inst_name = resolve_store_inst_name(dtype, space, sync, scope)
                     func_name = 'cuda_' + inst_name.replace('.', '_') + f'_{dtype}'
                     if func_name in registered:
                         continue
@@ -201,7 +201,7 @@ def store(addr: Expr, value: Expr, space: str = 'generic', sync: Optional[str] =
         The scope of the synchronization. Candidates: 'cta', 'gpu', 'sys'.
     """
     dtype = resolve_pointed_dtype(addr)
-    func_name = 'cuda_' + resolve_store_inst_name(dtype, space, sync, scope) + f'_{dtype}'
+    func_name = 'cuda_' + resolve_store_inst_name(dtype, space, sync, scope).replace('.', '_') + f'_{dtype}'
     return call_primitive_func(func_name, [addr, value])
 
 

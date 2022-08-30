@@ -1,6 +1,8 @@
+from typing import Union
 from hidet.ir.expr import Expr
 from hidet.ir.func import Function
 from hidet.ir.primitives.func import register_primitive_function, call_primitive_func
+from hidet.ir.primitives.cuda.ldst import load, store
 from hidet.utils import initialize
 
 
@@ -29,6 +31,27 @@ def register_functions():
             atomic_cas(mutex_lock, 1, 0)
     assert isinstance(cuda_release_lock, Function)
     register_primitive_function(cuda_release_lock.name, cuda_release_lock)
+
+    @script
+    def cuda_acquire_seq_semaphore(semaphore: ~i32, expect_status: i32):
+        attr.func_kind = 'cuda_device'
+        attr.func_name = 'cuda_acquire_seq_semaphore'
+        actual_status = load(semaphore, space='global', sync='acquire', scope='gpu')
+        while syncthreads_and(actual_status != expect_status):
+            if threadIdx.x == 0:
+                actual_status = load(semaphore, space='global', sync='acquire', scope='gpu')
+    assert isinstance(cuda_acquire_seq_semaphore, Function)
+    register_primitive_function(cuda_acquire_seq_semaphore.name, cuda_acquire_seq_semaphore)
+
+    @script
+    def cuda_release_seq_semaphore(semaphore: ~i32, status: i32):
+        attr.func_kind = 'cuda_device'
+        attr.func_name = 'cuda_release_seq_semaphore'
+        syncthreads()
+        if threadIdx.x == 0:
+            store(semaphore, status, space='global', sync='release', scope='gpu')
+    assert isinstance(cuda_release_seq_semaphore, Function)
+    register_primitive_function(cuda_release_seq_semaphore.name, cuda_release_seq_semaphore)
 
 
 def acquire_lock(addr: Expr, scope: str = 'gpu'):
@@ -75,3 +98,12 @@ def release_lock(addr: Expr, scope: str = 'gpu'):
     if scope != 'gpu':
         raise NotImplementedError()
     return call_primitive_func('cuda_release_lock', [addr])
+
+
+def acquire_seq_semaphore(addr: Expr, expect_status: Union[int, Expr]):
+    return call_primitive_func('cuda_acquire_seq_semaphore', [addr, expect_status])
+
+
+def release_seq_semaphore(addr: Expr, store_status: Union[int, Expr]):
+    return call_primitive_func('cuda_release_seq_semaphore', [addr, store_status])
+

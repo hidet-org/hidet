@@ -4,12 +4,13 @@ import hidet
 from bench.common import BenchResult, benchmark_run
 
 
-def gemm_mma_fp16_parallel_k_kernel(bs, m_size, n_size, k_size) -> CompiledFunction:
+def gemm_mma_fp16_parallel_k_kernel(batch_size, m_size, n_size, k_size) -> CompiledFunction:
     from hidet.lang import f16, f32, spatial, repeat, tensor, attr, printf, cast, col_spatial, view, u32, PointerType, tensor_pointer, grid, i32, void_p, var_of_function, static, void
     from hidet.lang.layout import row_layout, col_layout, local_layout, DataLayout
     from hidet.lang.mapping import repeat, spatial
     from hidet.lang.cuda import blockIdx, threadIdx, syncthreads, dynamic_shared_memory
     from hidet.lang.cuda import MmaConfig, mma_sync, cp_async, cp_async_wait_all, cvta_generic_to_shared, ldmatrix, cp_async_wait_group, cp_async_commit_group, acquire_lock, release_lock
+    from hidet.lang.cuda import acquire_seq_semaphore, release_seq_semaphore
     from hidet.lang.runtime import request_workspace
 
     # optimize for 128x768x3072
@@ -20,10 +21,11 @@ def gemm_mma_fp16_parallel_k_kernel(bs, m_size, n_size, k_size) -> CompiledFunct
     mma_config = MmaConfig.m16n8k16_f16_f16()
     block_m, block_n, block_k = 64, 128, 16
     warp_m, warp_n, warp_k = 32, 64, 16
+    split_k_size = 256
 
     # block_m, block_n, block_k = 128, 128, 16
     # warp_m, warp_n, warp_k = 64, 64, 16
-    block_count_m, block_count_n = (m_size + block_m - 1) // block_m, (n_size + block_n - 1) // block_n
+    block_count_m, block_count_n, block_count_k = (m_size + block_m - 1) // block_m, (n_size + block_n - 1) // block_n, (k_size + split_k_size - 1) // split_k_size
     warp_count_m, warp_count_n, warp_count_k = block_m // warp_m, block_n // warp_n, block_k // warp_k
     mma_m, mma_n, mma_k = mma_config.m, mma_config.n, mma_config.k  # 16, 8, 16
     mma_count_m, mma_count_n, mma_count_k = warp_m // mma_m, warp_n // mma_n, warp_k // mma_k
@@ -89,38 +91,62 @@ def gemm_mma_fp16_parallel_k_kernel(bs, m_size, n_size, k_size) -> CompiledFunct
         ):
             mma_sync(mma_config, regs_a, regs_b, regs_c)
 
+        assert warp_count_k == 1, "current store_c implementation only supports warp_count_k == 1"
+
+        def inbound(indices, bounds):
+            from hidet.ir.expr import And, LessThan
+            return And.join_list([LessThan(index, bound) for index, bound in zip(indices, bounds)])
+
         @hidet.script
         def store_c(
                 regs_c: tensor('register', 'float16', [mma_count_m, mma_count_n, mma_config.c_elements]),
-                c: tensor('global', 'float16', [bs, m_size, n_size]),
-                locks: tensor('global', 'int32', [bs, block_count_m, block_count_n])
+                c: tensor('global', 'float16', [batch_size, m_size, n_size]),
+                locks: tensor('global', 'int32', [batch_size, block_count_m, block_count_n])
         ):
+            split_k_tile, batch = spatial(block_count_k, batch_size).single_task_of(blockIdx.z)
             warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
             offset_m, offset_n = blockIdx.x * block_m, blockIdx.y * block_n
-            gmem_c = c[blockIdx.z, offset_m:, offset_n:]
-            lock = ~locks[blockIdx.z, blockIdx.x, blockIdx.y]
-            acquire_lock(lock)
-            for k_round in range(warp_count_k):
+            # gmem_c = c[blockIdx.z, offset_m:, offset_n:]
+            lock = ~locks[batch, blockIdx.x, blockIdx.y]
+
+            acquire_seq_semaphore(lock, split_k_tile)
+            if split_k_tile == 0:
                 for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
-                    if wk == k_round:
-                        for mi, mj in repeat(mma_count_m, mma_count_n).on(0):
-                            p = 0
-                            for i, j in mma_config.c_store_map.on(lane_id):
-                                gmem_c.write([wi * warp_m + mi * mma_m + i,
-                                              wj * warp_n + mj * mma_n + j],
-                                             regs_c[mi, mj, p],
-                                             protected=True)
-                                p += 1
-            release_lock(lock)
+                    for mi, mj in repeat(mma_count_m, mma_count_n).on(0):
+                        p = 0
+                        for ii, jj in mma_config.c_store_map.on(lane_id):
+                            b, i, j = [
+                                batch,
+                                offset_m + (wi * warp_m + mi * mma_m + ii),
+                                offset_n + (wj * warp_n + mj * mma_n + jj)
+                            ]
+                            if inbound([i, j], [m_size, n_size]):
+                                c[b, i, j] = regs_c[mi, mj, p]
+                            p += 1
+            else:
+                for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
+                    for mi, mj in repeat(mma_count_m, mma_count_n).on(0):
+                        p = 0
+                        for ii, jj in mma_config.c_store_map.on(lane_id):
+                            b, i, j = [
+                                batch,
+                                offset_m + (wi * warp_m + mi * mma_m + ii),
+                                offset_n + (wj * warp_n + mj * mma_n + jj)
+                            ]
+                            if inbound([i, j], [m_size, n_size]):
+                                c[b, i, j] = c[b, i, j] + regs_c[mi, mj, p]
+                            p += 1
+            release_seq_semaphore(lock, (split_k_tile + 1) % block_count_k)
 
         @hidet.script
         def load_smem_a(
                 k0: int,
-                a: f16[bs, m_size, k_size],
+                a: f16[batch_size, m_size, k_size],
                 smem_a: smem_a_type
         ):
-            offset_m, offset_n, offset_k = blockIdx.x * block_m, blockIdx.y * block_n, k0 * block_k
-            gmem_a = a[blockIdx.z, offset_m:, offset_k:]
+            split_k_tile, batch = spatial(block_count_k, batch_size).single_task_of(blockIdx.z)
+            offset_m, offset_n, offset_k = blockIdx.x * block_m, blockIdx.y * block_n, k0 * block_k + split_k_tile * split_k_size
+            gmem_a = a[batch, offset_m:, offset_k:]
             for i, k_seg in load_smem_a_map.on(threadIdx.x):
                 k = k_seg * 8
                 src_size = 0 if (offset_m + i >= m_size or offset_k + k >= k_size) else min(k_size - (offset_k + k), 8)
@@ -129,41 +155,44 @@ def gemm_mma_fp16_parallel_k_kernel(bs, m_size, n_size, k_size) -> CompiledFunct
         @hidet.script
         def load_smem_b(
                 k0: int,
-                b: f16[bs, k_size, n_size],
+                b: f16[batch_size, k_size, n_size],
                 smem_b: smem_b_type
         ):
-            offset_m, offset_n, offset_k = blockIdx.x * block_m, blockIdx.y * block_n, k0 * block_k
-            gmem_b = b[blockIdx.z, offset_k:, offset_n:]
+            split_k_tile, batch = spatial(block_count_k, batch_size).single_task_of(blockIdx.z)
+            offset_m, offset_n, offset_k = blockIdx.x * block_m, blockIdx.y * block_n, k0 * block_k + split_k_tile * split_k_size
+            gmem_b = b[batch, offset_k:, offset_n:]
             for k, j_seg in load_smem_b_map.on(threadIdx.x):
                 j = j_seg * 8
                 src_size = 0 if (offset_k + k >= k_size or offset_n + j >= n_size) else min(n_size - (offset_n + j), 8)
                 cp_async(~smem_b[k, j], ~gmem_b[k, j], cp_size=16, src_size=src_size * 2, cache_level='global')
 
         @hidet.script
-        def gemm_mma_fp16_parallel_k_grid(a: f16[bs, m_size, k_size], b: f16[bs, k_size, n_size], c: f16[bs, m_size, n_size], locks: i32[bs, block_count_m, block_count_n]):
+        def gemm_mma_fp16_parallel_k_grid(
+                a: f16[batch_size, m_size, k_size],
+                b: f16[batch_size, k_size, n_size],
+                c: f16[batch_size, m_size, n_size],
+                locks: i32[batch_size, block_count_m, block_count_n]
+        ):
             # matrix multiplication, using mma instruction
-            attr.cuda_grid_dim = (m_size + block_m - 1) // block_m, (n_size + block_n - 1) // block_n, bs
+            attr.cuda_grid_dim = (m_size + block_m - 1) // block_m, (n_size + block_n - 1) // block_n, batch_size * block_count_k
             attr.cuda_block_dim = threads
             attr.cuda_dynamic_smem_bytes = 2 * (block_m + block_n) * block_k * 2  # the second 2 means '2 bytes per float16'
-            # smem_storage = dyn_smem_storage
-            smem_a = tensor_pointer('shared', 'float16', shape=[2, block_m, block_k], layout=DataLayout.concat(row_layout(2), smem_a_type.layout))
-            smem_b = tensor_pointer('shared', 'float16', shape=[2, block_k, block_n], layout=DataLayout.concat(row_layout(2), smem_b_type.layout))
+            smem_a: tensor_pointer('shared', 'float16', shape=[2, block_m, block_k], layout=DataLayout.concat(row_layout(2), smem_a_type.layout))
+            smem_b: tensor_pointer('shared', 'float16', shape=[2, block_k, block_n], layout=DataLayout.concat(row_layout(2), smem_b_type.layout))
             smem_a = dynamic_shared_memory(byte_offset=0, dtype=f16)
             smem_b = dynamic_shared_memory(byte_offset=2 * block_m * block_k * 2, dtype=f16)
-            # smem_a = cast(~smem_storage[0], ~f16)
-            # smem_b = cast(~smem_storage[2 * block_m * block_k * 2], ~f16)
             regs_a = tensor('register', 'float16', [2, mma_count_m, mma_config.a_elements])
             regs_b = tensor('register', 'float16', [2, mma_count_n, mma_config.b_elements])
             regs_c = tensor('register', 'float16', [mma_count_m, mma_count_n, mma_config.c_elements])
 
-            for i, j, p in repeat(mma_count_m, mma_count_n, mma_config.c_elements).on(0):
+            for i, j, p in grid(mma_count_m, mma_count_n, mma_config.c_elements):
                 regs_c[i, j, p] = 0.0
 
             load_smem_a(0, a, ~smem_a[0, 0, 0])
             load_smem_b(0, b, ~smem_b[0, 0, 0])
             cp_async_wait_all()
             syncthreads()
-            for k0 in range((k_size + block_k - 1) // block_k):
+            for k0 in range((split_k_size + block_k - 1) // block_k):
                 load_smem_a(k0 + 1, a, ~smem_a[(k0 + 1) % 2, 0, 0])
                 load_smem_b(k0 + 1, b, ~smem_b[(k0 + 1) % 2, 0, 0])
                 for mi in range(mma_count_m):
@@ -192,9 +221,9 @@ def gemm_mma_fp16_parallel_k_kernel(bs, m_size, n_size, k_size) -> CompiledFunct
         ):
             attr.func_kind = 'packed_func'
             attr.packed_func = var_of_function(gemm_mma_fp16_parallel_k_grid)
-            locks = static(tensor_pointer('global', dtype='int32', shape=[bs, block_count_m, block_count_n]))
+            locks = static(tensor_pointer('global', dtype='int32', shape=[batch_size, block_count_m, block_count_n]))
             if locks == 0:
-                locks = request_workspace(nbytes=4 * bs * block_count_m * block_count_n, require_clean=True)
+                locks = request_workspace(nbytes=4 * batch_size * block_count_m * block_count_n, require_clean=True)
             assert num_args == 3
             assert arg_types[0] == 3
             assert arg_types[1] == 3
