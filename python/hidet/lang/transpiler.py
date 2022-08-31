@@ -718,7 +718,8 @@ class PythonToHidetTranslator(PythonAstFunctor):
             target = Name(stmt.target.id, Load())
             var_value = self.visit(target)
         else:
-            raise NotImplementedError()
+            var_value = self.visit(stmt.target)
+            # raise NotImplementedError()
         value = self.visit(stmt.value)
         op_dict = {
             Add: ir.Add,

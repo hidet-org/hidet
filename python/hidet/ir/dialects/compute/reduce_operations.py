@@ -26,6 +26,9 @@ class ReduceOperation:
     def combine(self, lhs: Expr, rhs: Expr) -> Expr:
         raise NotImplementedError()
 
+    def arg_combine(self, lhs_value: Expr, rhs_value: Expr):
+        raise NotImplementedError()
+
     def require_finalize(self) -> bool:
         raise NotImplementedError()
 
@@ -42,6 +45,10 @@ class Min(ReduceOperation):
     def combine(self, lhs: Expr, rhs: Expr) -> Expr:
         from hidet.ir import primitives
         return primitives.min(lhs, rhs)
+
+    def arg_combine(self, lhs_value: Expr, rhs_value: Expr):
+        from hidet.ir.expr import LessThan
+        return LessThan(lhs_value, rhs_value)
 
     def require_finalize(self) -> bool:
         return False
@@ -60,6 +67,10 @@ class Max(ReduceOperation):
         from hidet.ir import primitives
         return primitives.max(lhs, rhs)
 
+    def arg_combine(self, lhs_value: Expr, rhs_value: Expr):
+        from hidet.ir.expr import LessThan
+        return LessThan(rhs_value, lhs_value)
+
     def require_finalize(self) -> bool:
         return False
 
@@ -76,6 +87,9 @@ class Sum(ReduceOperation):
     def combine(self, lhs: Expr, rhs: Expr) -> Expr:
         return lhs + rhs
 
+    def arg_combine(self, lhs_value: Expr, rhs_value: Expr):
+        raise ValueError('Sum reduction does not argument reduce.')
+
     def require_finalize(self) -> bool:
         return False
 
@@ -91,6 +105,9 @@ class Average(ReduceOperation):
 
     def combine(self, lhs: Expr, rhs: Expr) -> Expr:
         return lhs + rhs
+
+    def arg_combine(self, lhs_value: Expr, rhs_value: Expr):
+        raise ValueError('Average reduction does not argument reduce.')
 
     def require_finalize(self) -> bool:
         return True

@@ -36,6 +36,8 @@ def dynamic_shared_memory(byte_offset: Union[Expr, int], dtype: Union[ScalarType
     return call_primitive_func(func_name, [byte_offset])
 
 
-def set_kernel_max_dynamic_smem_bytes(func: Var, max_dynamic_smem_bytes: Expr) -> Stmt:
+def set_kernel_max_dynamic_smem_bytes(func: Var, max_dynamic_smem_bytes: Union[Expr, int]) -> Stmt:
+    from hidet.ir.expr import convert
+    max_dynamic_smem_bytes = convert(max_dynamic_smem_bytes)
     template_string = r'cudaFuncSetAttribute({}, cudaFuncAttributeMaxDynamicSharedMemorySize, {});'
     return BlackBoxStmt(template_string, func, max_dynamic_smem_bytes)

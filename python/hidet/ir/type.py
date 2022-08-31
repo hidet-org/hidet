@@ -191,21 +191,23 @@ class ScalarType(TypeNode):
             'float16': -65504,
             'float32': -3.4e38,
             'float64': -1e308,
-            'int32': -2147483648,
+            'int64': -9223372036854775808 + 1,
+            'int32': -2147483648 + 1,
             'uint32': 0
         }
         if self.name not in value_dict:
-            raise NotImplementedError()
+            raise NotImplementedError(self.name)
         return Constant(value_dict[self.name], self)
 
     def max_value(self) -> Expr:
         from hidet.ir.expr import Constant
         value_dict = {
-            'float16': -65504,
-            'float32': -3.4e38,
-            'float64': -1e308,
-            'int32': -2147483648,
-            'uint32': 0
+            'float16': 65504,
+            'float32': 3.4e38,
+            'float64': 1e308,
+            'int64': 9223372036854775807,
+            'int32': 2147483647,
+            'uint32': 4294967295
         }
         if self.name not in value_dict:
             raise NotImplementedError()

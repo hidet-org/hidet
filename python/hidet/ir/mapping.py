@@ -269,3 +269,29 @@ def row_repeat(*task_shape: int):
 
 def col_repeat(*task_shape: int):
     return repeat_map(task_shape, ranks=list(reversed(range(len(task_shape)))))
+
+
+def auto_map(*task_shape: int, workers: int, ranks: Optional[Sequence[int]] = None) -> TaskMapping:
+    from hidet.utils import prod, gcd
+    task_shape: List[int] = list(task_shape)
+    num_tasks = prod(task_shape)
+    if num_tasks % workers != 0:
+        raise ValueError('Expect the number of tasks {} in task shape {} be a multiple of number of workers {}.'.format(
+            num_tasks, task_shape, workers
+        ))
+    num_dims = len(task_shape)
+    if ranks is None:
+        ranks = list(range(num_dims))
+    else:
+        ranks = list(ranks)
+    spatial_shape = [0] * num_dims
+    repeat_shape = [0] * num_dims
+
+    remain = workers
+    for rank in reversed(range(num_dims)):
+        dim = ranks.index(rank)
+        spatial_shape[dim] = gcd(remain, task_shape[dim])
+        repeat_shape[dim] = task_shape[dim] // spatial_shape[dim]
+        remain //= spatial_shape[dim]
+    return repeat_map(repeat_shape, ranks) * spatial_map(spatial_shape, ranks)
+

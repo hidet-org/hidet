@@ -1,4 +1,5 @@
 from hidet.ir.dialects.pattern import *
+from hidet.ir.dialects.compute import *
 from hidet.ir.func import *
 from hidet.ir.stmt import *
 
@@ -311,6 +312,8 @@ class ExprVisitor(ExprFunctor):
         if e.scalar_compute:
             if isinstance(e.scalar_compute, ReduceCompute):
                 self.visit(e.scalar_compute.value)
+            elif isinstance(e.scalar_compute, ArgReduceCompute):
+                self.visit(e.scalar_compute.value)
             else:
                 raise NotImplementedError()
 
@@ -318,8 +321,6 @@ class ExprVisitor(ExprFunctor):
         if e.tensor_compute:
             if isinstance(e.tensor_compute, GridCompute):
                 self.visit(e.tensor_compute.value)
-            elif isinstance(e.tensor_compute, ArgReduceCompute):
-                self.visit(e.tensor_compute.x)
             else:
                 raise NotImplementedError()
 
@@ -528,8 +529,19 @@ class ExprRewriter(ExprFunctor):
                     input_tensors = collect(value, TensorNode, stop_when_found=True)
                     input_scalars = collect(value, ScalarNode, stop_when_found=True)
                     return ScalarNode(e.name, e.data_type, ReduceCompute(input_tensors, input_scalars, shape, axes, value, rc.reduce_operation, rc.accumulate_dtype))
+            elif isinstance(e.scalar_compute, ArgReduceCompute):
+                sc = e.scalar_compute
+                axis = self(sc.axis)
+                value = self(sc.value)
+                extent = self(sc.extent)
+                if value is sc.value and axis is sc.axis and extent is sc.extent:
+                    return e
+                else:
+                    input_tensors = collect(value, TensorNode, stop_when_found=True)
+                    input_scalars = collect(value, ScalarNode, stop_when_found=True)
+                    return ScalarNode(e.name, e.data_type, ArgReduceCompute(input_tensors, input_scalars, extent, axis, value, sc.reduce_operation, sc.index_dtype))
             else:
-                raise NotImplementedError()
+                raise NotImplementedError('Can not recognize ScalarCompute: {}'.format(type(e.scalar_compute).__name__))
 
     def visit_TensorNode(self, e: TensorNode):
         from hidet.ir.functors import collect
@@ -547,13 +559,8 @@ class ExprRewriter(ExprFunctor):
                     input_tensors = collect(value, TensorNode, stop_when_found=True)
                     input_scalars = collect(value, ScalarNode, stop_when_found=True)
                     return TensorNode(e.name, e.data_type, GridCompute(input_tensors, input_scalars, shape, axes, value))
-            elif isinstance(e.tensor_compute, ArgReduceCompute):
-                arc = e.tensor_compute
-                x = self(arc.x)
-                if x is arc.x:
-                    return e
-                else:
-                    return TensorNode(e.name, e.data_type, ArgReduceCompute(x, arc.dim, arc.reduce_type))
+            else:
+                raise NotImplementedError('Can not recognize TensorCompute: {}'.format(type(e.tensor_compute).__name__))
 
     def visit_AnyExpr(self, e: AnyExpr):
         return e
@@ -901,6 +908,33 @@ class TypeFunctor(NodeFunctor):
         raise NotImplementedError()
 
     def visit_VoidType(self, t: VoidType):
+        raise NotImplementedError()
+
+
+class ComputeFunctor(NodeFunctor):
+    @staticmethod
+    def get_dispatch_mapping(cls) -> Mapping[Type[Node], Any]:
+        return {
+            ScalarNode: cls.visit_ScalarNode,
+            TensorNode: cls.visit_TensorNode,
+            GridCompute: cls.visit_GridCompute,
+            ReduceCompute: cls.visit_ReduceCompute,
+            ArgReduceCompute: cls.visit_ArgReduceCompute
+        }
+
+    def visit_ScalarNode(self, node: ScalarNode):
+        raise NotImplementedError()
+
+    def visit_TensorNode(self, node: TensorNode):
+        raise NotImplementedError()
+
+    def visit_GridCompute(self, c: GridCompute):
+        raise NotImplementedError()
+
+    def visit_ReduceCompute(self, c: ReduceCompute):
+        raise NotImplementedError()
+
+    def visit_ArgReduceCompute(self, c: ArgReduceCompute):
         raise NotImplementedError()
 
 

@@ -1,7 +1,7 @@
-from typing import Union, Sequence, Optional
+from typing import Union, Sequence, Optional, List
 from hidet.ir.type import ScalarType, TensorType, Scope
 from hidet.ir.expr import Expr, Var, cast
-from hidet.ir.mapping import row_spatial, row_repeat, col_repeat, col_spatial
+from hidet.ir.mapping import row_spatial, row_repeat, col_repeat, col_spatial, TaskMapping, auto_map
 from hidet.ir.layout import DataLayout
 from hidet.ir.dialects.lowlevel import PointerType, VoidType, ReferenceType, view, Dereference, void_p
 from hidet.ir.primitives import printf
@@ -23,6 +23,8 @@ void = VoidType()
 
 spatial = row_spatial
 repeat = row_repeat
+auto_map = auto_map
+
 
 ConstExpr = Union[Expr, int]
 

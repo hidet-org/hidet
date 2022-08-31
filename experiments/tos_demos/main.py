@@ -296,13 +296,15 @@ def demo_onehot():
 
 
 def demo_argmax():
-    a = hidet.array([
-        [0, 3, 2],
-        [4, 12, 5],
-        [8, 3, 5],
-        [11, 2, 3]
-    ])
-    print(ops.argmax(a, 1))
+    with hidet.utils.CacheDir('./outs/cache'):
+        a = hidet.array([
+            [0, 3, 2],
+            [4, 12, 5],
+            [8, 3, 9],
+            [11, 2, 3]
+        ])
+        print(ops.argmax(a, 1))
+        print(ops.argmin(a, 1))
 
 
 if __name__ == '__main__':

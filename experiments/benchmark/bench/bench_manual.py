@@ -24,6 +24,8 @@ def bench_manual(args, out_dir: str) -> BenchResult:
             func = manual_kernels.gemm_mma_fp16_cp_async_ldmatrix_kernel(args.bs, m, n, k)
         elif args.manual_config == 'cp_async_ldmatrix_opt':
             func = manual_kernels.gemm_mma_fp16_cp_async_ldmatrix_opt_kernel(args.bs, m, n, k)
+        elif args.manual_config == 'all':
+            func = manual_kernels.gemm_mma_fp16_all_kernel(args.bs, m, n, k)
         else:
             raise ValueError(args.manual_config)
         a = input_tensors[0]

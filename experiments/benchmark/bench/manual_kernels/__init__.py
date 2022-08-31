@@ -8,3 +8,4 @@ from .gemm_mma_fp16_cp_async_multi_stage import gemm_mma_fp16_cp_async_multi_sta
 from .gemm_mma_fp16_ldmatrix import gemm_mma_fp16_ldmatrix_kernel
 from .gemm_mma_fp16_cp_async_ldmatrix import gemm_mma_fp16_cp_async_ldmatrix_kernel
 from .gemm_mma_fp16_cp_async_ldmatrix_opt import gemm_mma_fp16_cp_async_ldmatrix_opt_kernel
+from .gemm_mma_fp16_all import gemm_mma_fp16_all_kernel

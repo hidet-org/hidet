@@ -20,6 +20,9 @@ class ApplyPrologueEpiloguePass(Pass):
         if task is None:
             return ir_module
 
+        if len(task.prologues) == 0 and len(task.epilogues) == 0:
+            return ir_module
+
         if not (len(func.params) == len(task.inputs) + len(task.outputs)):
             raise ValueError('The parameters of function should be the same as the sum of task inputs and outputs.')
         num_inputs = len(task.inputs)

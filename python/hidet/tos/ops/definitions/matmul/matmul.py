@@ -41,13 +41,14 @@ class MatmulTask(Task):
         )
 
     def implement_cuda(self) -> IRModule:
-        from hidet.tos.ops.schedules.cuda.matmul import batched_matmul_cuda_schedule_simt, batched_matmul_cuda_schedule_wmma, batched_matmul_cuda_schedule_mma, batched_matmul_cuda_schedule_mma_fp16
+        from hidet.tos.ops.schedules.cuda.matmul import batched_matmul_cuda_schedule_simt, batched_matmul_cuda_schedule_wmma, batched_matmul_cuda_schedule_mma, batched_matmul_cuda_schedule_mma_fp16, batched_matmul_cuda_schedule_mma_fp16_pk
         if self.mma == 'simt' or self.mma == 'default':
             return batched_matmul_cuda_schedule_simt(self)
         elif self.mma.startswith('wmma'):
             return batched_matmul_cuda_schedule_wmma(self)
         elif self.mma == 'mma_custom':
-            return batched_matmul_cuda_schedule_mma_fp16(self)
+            # return batched_matmul_cuda_schedule_mma_fp16(self)
+            return batched_matmul_cuda_schedule_mma_fp16_pk(self)
         elif self.mma.startswith('mma'):
             return batched_matmul_cuda_schedule_mma(self)
         else:

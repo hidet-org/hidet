@@ -118,6 +118,9 @@ class Expr(Node):
         else:
             return TensorElement(base=self, indices=indices)
 
+    def __setitem__(self, key, value):
+        raise ValueError()
+
     def __int__(self):
         assert isinstance(self, Constant), 'Expect a Constant, got {} with type {}'.format(self, type(self))
         return int(self)

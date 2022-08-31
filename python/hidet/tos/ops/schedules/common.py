@@ -5,7 +5,7 @@ from hidet.ir.dialects.compute import TensorNode, ScalarNode, GridCompute, ArgRe
 from hidet.ir.builders import StmtBuilder
 from hidet.ir.expr import *
 from hidet.ir.functors import infer_type, ExprRewriter, rewrite
-from hidet.ir.stmt import ForStmt, BufferStoreStmt, AssignStmt
+from hidet.ir.stmt import ForStmt, BufferStoreStmt, AssignStmt, DeclareStmt
 from hidet.ir.task import Task
 from hidet.utils import prod
 
@@ -89,14 +89,13 @@ class LoopExpander(ExprRewriter):
 
         sc = e.scalar_compute
         if isinstance(sc, ReduceCompute):
-            rc = e.scalar_compute
-            shape, axes, value = rc.shape, rc.axes, rc.value
+            shape, axes, value = sc.shape, sc.axes, sc.value
             # declare accumulator
             acc = scalar_var(e.name, infer_type(value))
             self.new_buffer_map[e] = acc
 
             # init accumulator
-            self.sb += AssignStmt(acc, rc.reduce_operation.initial_value(e.data_type.name))
+            self.sb += AssignStmt(acc, sc.reduce_operation.initial_value(e.data_type.name))
 
             # reduction loops
             for i in range(len(shape)):
@@ -104,14 +103,14 @@ class LoopExpander(ExprRewriter):
 
             # at the innermost loop body
             expr = self.visit(value)
-            self.sb += AssignStmt(acc, rc.reduce_operation.combine(acc, expr))
+            self.sb += AssignStmt(acc, sc.reduce_operation.combine(acc, expr))
 
             # exit loop scope
             for i in range(len(shape)):
                 self.sb.exit_body()
 
             # finalize
-            acc = rc.reduce_operation.finalize(acc, prod(shape))
+            acc = sc.reduce_operation.finalize(acc, prod(shape))
 
             # if e is in the input buffer, we should write it back
             if e in self.input_map:
@@ -119,6 +118,36 @@ class LoopExpander(ExprRewriter):
                 self.sb += AssignStmt(input_var, acc)
 
             return acc
+        elif isinstance(sc, ArgReduceCompute):
+            extent, axis, value = sc.extent, sc.axis, sc.value
+            value_dtype = infer_type(value)
+            # declare index accumulator
+            acc_index = scalar_var(e.name + '_idx', sc.index_dtype)
+            acc_value = scalar_var(e.name + '_val', value_dtype)
+            self.new_buffer_map[e] = acc_index
+
+            # init accumulator
+            self.sb += DeclareStmt(acc_value, init=sc.reduce_operation.initial_value(value_dtype))
+            self.sb += AssignStmt(acc_index, 0)
+
+            # reduction loops
+            self.sb.enter_body(ForStmt(axis, extent))
+
+            # compare and update index
+            expr = self.visit(value)
+            with self.sb.if_then(sc.reduce_operation.arg_combine(lhs_value=expr, rhs_value=acc_value)):
+                self.sb += AssignStmt(acc_value, expr)
+                self.sb += AssignStmt(acc_index, axis)
+
+            # exit loop
+            self.sb.exit_body()
+
+            # if e is in the input buffer, we should write it back
+            if e in self.input_map:
+                input_var = self.input_map[e]
+                self.sb += AssignStmt(input_var, acc_index)
+
+            return acc_index
         else:
             raise NotImplementedError('Compute pattern {}'.format(type(sc).__name__))
 

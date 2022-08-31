@@ -470,13 +470,23 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
         if e.scalar_compute is None:
             return self.namer.get_name(e, e.name)
         else:
-            rc = e.scalar_compute
-            items = [
-                '[' + self(rc.shape) + ']',
-                '(' + self(rc.axes) + ') => ' + self(rc.value),
-                str(rc.reduce_operation)
-            ]
-            return 'reduce(' + doc_join(items, ', ') + ')'
+            sc = e.scalar_compute
+            if isinstance(sc, ReduceCompute):
+                items = [
+                    '[' + self(sc.shape) + ']',
+                    '(' + self(sc.axes) + ') => ' + self(sc.value),
+                    str(sc.reduce_operation)
+                ]
+                return 'reduce(' + doc_join(items, ', ') + ')'
+            elif isinstance(sc, ArgReduceCompute):
+                items = [
+                    '[' + self(sc.extent) + ']',
+                    '' + self(sc.axis) + ' => ' + self(sc.value),
+                    str(sc.reduce_operation)
+                ]
+                return 'arg_reduce(' + doc_join(items, ', ') + ')'
+            else:
+                raise NotImplementedError()
 
     def visit_TensorNode(self, e: TensorNode):
         return self.namer.get_name(e)
