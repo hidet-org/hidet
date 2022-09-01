@@ -834,7 +834,7 @@ class OnnxOneHot(OnnxOperator):
         axis = self.attrs.get('axis', -1)
         indices, depth, values = inputs
         depth = self.tensor2scalar(depth)
-        on_value, off_value = self.tensor2list(values)
+        off_value, on_value = self.tensor2list(values)
         return [ops.onehot(indices, depth, axis, on_value, off_value)]
 
 
@@ -945,7 +945,7 @@ class OnnxGraph(nn.Module):
             assert len(outputs) == len(operator.output_names)
             for name, tensor in zip(operator.output_names, outputs):
                 name2tensor[name] = tensor
-                print('{:>50} {}'.format(name, tensor.signature()))
+                # print('{:>50} {}'.format(name, tensor.signature()))
             for name in operator.input_names:
                 if name not in self.env_tensors:
                     usage_count[name] -= 1
@@ -978,6 +978,8 @@ class OnnxModule(nn.Module):
             op_sets.append(int(opset_import.version))
         self.op_sets = list(reversed(sorted(op_sets)))
         self.graph = OnnxGraph(model.graph, op_sets=self.op_sets)
+        self.input_names: List[str] = self.graph.input_names
+        self.output_names: List[str] = self.graph.output_names
 
     def forward(self, *args):
         results = self.graph(*args)
@@ -985,6 +987,16 @@ class OnnxModule(nn.Module):
             return results[0]
         else:
             return results
+
+    def dict_forward(self, feed_dict: Dict[str, Tensor]) -> Dict[str, Tensor]:
+        args = []
+        for name in self.input_names:
+            if name not in feed_dict:
+                raise ValueError('Missing input: {}'.format(name))
+            args.append(feed_dict[name])
+        outputs = self.graph(*args)
+        output_dict = {name: value for name, value in zip(self.output_names, outputs)}
+        return output_dict
 
 
 def from_onnx(model: Union[str, 'onnx.ModelProto']) -> OnnxModule:
