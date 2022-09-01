@@ -117,6 +117,18 @@ class OnnxOperator:
         return tensor.cpu().numpy().tolist()
 
     @staticmethod
+    def tensor2scalar(tensor: Tensor) -> Union[int, float]:
+        value = OnnxOperator.tensor2list(tensor)
+        if isinstance(value, (list, tuple)):
+            if len(value) == 1:
+                return value[0]
+            else:
+                raise ValueError('Expect a scalar, got {}'.format(value))
+        else:
+            assert isinstance(value, (int, float))
+            return value
+
+    @staticmethod
     def optional_inputs(inputs: List[Tensor], requires: List[bool]) -> List[Union[Tensor, None]]:
         diff = len(requires) - len(inputs)
         assert diff >= 0, 'Onnx get {} inputs but expect at most {}.'.format(len(inputs), len(requires))
@@ -247,7 +259,7 @@ class OnnxReduceMean(OnnxOperator):
 
 @register_onnx_operator
 class OnnxSqueeze(OnnxOperator):
-    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+    def run_v1(self, inputs: List[Tensor]) -> List[Tensor]:
         dims = self.attrs.get('axes', None)
         data = inputs[0]
         if dims is None:
@@ -256,6 +268,11 @@ class OnnxSqueeze(OnnxOperator):
         else:
             dims = list(dims)
         return [ops.squeeze(inputs[0], dims)]
+
+    def run_v13(self, inputs: List[Tensor]) -> List[Tensor]:
+        data, axes = inputs
+        dims = self.tensor2list(axes)
+        return [ops.squeeze(data, dims)]
 
 
 @register_onnx_operator
@@ -297,8 +314,12 @@ class OnnxMatMul(OnnxOperator):
 
 @register_onnx_operator
 class OnnxSoftmax(OnnxOperator):
-    def run(self, inputs: List[Tensor]) -> List[Tensor]:
-        axis = self.attrs.get('axis')
+    def run_v1(self, inputs: List[Tensor]) -> List[Tensor]:
+        axis = self.attrs.get('axis', 1)
+        return [ops.softmax(inputs[0], axis)]
+
+    def run_v13(self, inputs: List[Tensor]) -> List[Tensor]:
+        axis = self.attrs.get('axis', -1)
         return [ops.softmax(inputs[0], axis)]
 
 
@@ -366,8 +387,12 @@ class OnnxConcat(OnnxOperator):
 @register_onnx_operator
 class OnnxArgMax(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
-        return inputs
-        # raise NotImplementedError('ArgMax')
+        axis = self.attrs.get('axis', 0)
+        keepdims = self.attrs.get('keepdims', True)
+        select_last_index = self.attrs.get('select_last_index', False)
+        if select_last_index:
+            raise NotImplementedError()
+        return [ops.argmax(inputs[0], dim=axis, keep_dim=keepdims)]
 
 
 @register_onnx_operator
@@ -808,7 +833,7 @@ class OnnxOneHot(OnnxOperator):
     def run_v9(self, inputs: List[Tensor]) -> List[Tensor]:
         axis = self.attrs.get('axis', -1)
         indices, depth, values = inputs
-        depth = self.tensor2list(depth)
+        depth = self.tensor2scalar(depth)
         on_value, off_value = self.tensor2list(values)
         return [ops.onehot(indices, depth, axis, on_value, off_value)]
 
@@ -829,6 +854,7 @@ def run_trt(node: OnnxOperator, inputs: List[Tensor]) -> List[Tensor]:
     hidet_outputs = node.run(inputs)
     dtype_map = {
         'float32': TensorProto.FLOAT,
+        'int32': TensorProto.INT32,
         'int64': TensorProto.INT64,
         'bool': TensorProto.BOOL
     }
@@ -919,6 +945,7 @@ class OnnxGraph(nn.Module):
             assert len(outputs) == len(operator.output_names)
             for name, tensor in zip(operator.output_names, outputs):
                 name2tensor[name] = tensor
+                print('{:>50} {}'.format(name, tensor.signature()))
             for name in operator.input_names:
                 if name not in self.env_tensors:
                     usage_count[name] -= 1
