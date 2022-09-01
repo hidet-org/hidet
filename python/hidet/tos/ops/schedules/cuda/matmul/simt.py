@@ -214,7 +214,9 @@ class MatmulSchedule(Schedule):
                                 ('row_4x8', grid((4, 8))),
                                 ('custom_4x8', grid((2, 1)) * grid((1, 8)) * grid((2, 1))),
                                 ('row_2x16', grid((2, 16))),
-                                # ('row_1x32', grid((1, 32))),
+                                ('row_16x2', grid((16, 2))),
+                                ('row_1x32', grid((1, 32))),
+                                ('row_32x1', grid((32, 1))),
                             ]:
                                 try:
                                     settings.append(MatmulSchedule(

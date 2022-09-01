@@ -18,7 +18,7 @@ set(CMAKE_BUILD_TYPE ${HIDET_BUILD_TYPE})
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
 # submodules
-if($HIDET_BUILD_TVM STREQUAL "ON")
+if(${HIDET_BUILD_TVM} STREQUAL "ON")
     include(cmake/TVM.cmake)
 endif()
 

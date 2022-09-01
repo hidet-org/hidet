@@ -121,4 +121,5 @@ if __name__ == '__main__':
     # demo_matmul()
     # demo_max()
     # demo_func()
-    demo_layout()
+    # demo_layout()
+    demo_matmul_v2()

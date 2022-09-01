@@ -31,7 +31,7 @@ def dump_relay_cuda_code(ir_module, params=None, out_dir: str = './outs', opt_le
     import tvm.relay
     import tvm.target
     with tvm.transform.PassContext(opt_level=opt_level):
-        graph_module = tvm.relay.build(ir_module, target='cuda', target_host=tvm.target.Target('c'), params=params)
+        graph_module = tvm.relay.build(ir_module, target=tvm.target.cuda(arch='sm_60'), target_host=tvm.target.Target('c'), params=params)
     # graph_module = tvm.relay.build(ir_module, target='cuda')
     dump_code(graph_module, out_dir)
 

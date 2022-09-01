@@ -37,5 +37,20 @@ def bench_manual(args, out_dir: str) -> BenchResult:
             outputs=[c],
             configs=args.manual_config
         )
+    elif args.model.startswith('op_dwc_'):
+        from .manual_kernels.depthwise_conv2d import dwc_kernel
+        _, _, n, c, h, w, s, k = args.model.split('_')
+        n, c, h, w, s, k = int(n), int(c), int(h), int(w), int(s), int(k)
+        func = dwc_kernel(n, c, h, w, s, k)
+        xx, ww = input_tensors
+        yy = hidet.randn([n, c, h, w])
+
+        run_func = lambda: func(xx, ww, yy)
+        return BenchResult(
+            latencies=benchmark_run(run_func=run_func, warmup=args.warmup, number=args.number, repeat=args.repeat),
+            outputs=[yy],
+            configs=args.manual_config
+        )
+
     else:
         raise NotImplementedError()

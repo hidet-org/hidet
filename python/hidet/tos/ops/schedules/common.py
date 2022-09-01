@@ -17,16 +17,18 @@ class NotSupportedError(Exception):
 
 
 class Schedule:
-    def __str__(self):
+    def __str__(self, show_derived=False):
         items = []
         for name, value in self.keys():
+            items.append('{}: {}'.format(name, value))
+        for name, value in self.derived_keys():
             items.append('{}: {}'.format(name, value))
         schedule_type = self.__class__.__name__
         schedule_keys = ', '.join(items)
         return '{}({})'.format(schedule_type, schedule_keys)
 
     def __repr__(self):
-        return str(self)
+        return self.__str__(show_derived=True)
 
     def keys(self) -> List[Tuple[str, Union[int, float, str]]]:
         raise NotImplementedError()

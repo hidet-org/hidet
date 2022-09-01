@@ -1,5 +1,6 @@
 from typing import List, Union, Sequence, Optional, Dict, Callable, Type
 from collections import defaultdict
+import warnings
 import os
 import numpy as np
 import hidet
@@ -171,6 +172,10 @@ class OnnxConv(OnnxOperator):
         if bias is not None:
             bias = ops.unsqueeze(bias, [0, 2, 3])
             output = output + bias
+        if groups > 1:
+            kx, ky, sx, sy = w.shape[2], w.shape[3], strides[0], strides[1]
+            n, c, h, w = output.shape
+            # print('n, c, h, w, kx, ky, sx, sy = out_shape {} {} {} {} kernel {} {} stride {} {}'.format(n, c, h, w, kx, ky, sx, sy))
         return [output]
 
     def run_v11(self, inputs: List[Tensor]) -> List[Tensor]:
@@ -1022,4 +1027,6 @@ def from_onnx(model: Union[str, 'onnx.ModelProto']) -> OnnxModule:
     except ValueError:
         # ignore 'ValueError: Message onnx.ModelProto exceeds maximum protobuf size of 2GB'
         pass
+    except onnx.onnx_cpp2py_export.checker.ValidationError:
+        warnings.warn('The onnx model has not pass the onnx checker.')
     return OnnxModule(model)

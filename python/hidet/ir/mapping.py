@@ -18,7 +18,7 @@ def var(hint):
 
 
 def strides_from_ranks(shape: Sequence[int], ranks: Sequence[int]) -> List[int]:
-    if any(v <= 0 for v in shape):
+    if any(v < 0 for v in shape):
         raise ValueError('Shape must be non-negative, got {}'.format(shape))
     if len(set(ranks)) != len(ranks):
         raise ValueError('Duplicated ranks: {}'.format(ranks))
@@ -42,6 +42,11 @@ class TaskMapping:
                  num_workers: int = None,
                  task_shape: Tuple[int, ...] = None,
                  worker2task: Optional[Callable[[Int], List[Tuple[Int, ...]]]] = None):
+        from hidet.ir import Expr
+        from hidet.ir.functors import simplify_to_int
+        if isinstance(num_workers, Expr):
+            num_workers = simplify_to_int(num_workers)
+        task_shape = tuple(simplify_to_int(v) for v in task_shape)
         self.num_workers: int = num_workers
         self.task_shape: Tuple[int, ...] = task_shape
         self.worker2task: Callable[[Int], List[Tuple[Int]]] = worker2task
@@ -244,6 +249,8 @@ class TaskMappingExpander:
 
 
 def spatial_map(task_shape: Sequence[int], ranks: Optional[Sequence[int]] = None):
+    from hidet.ir.functors import simplify_to_int
+    task_shape = [simplify_to_int(v) for v in task_shape]
     if ranks is None:
         ranks = list(range(len(task_shape)))
     return SpatialTaskMapping(task_shape, ranks)
@@ -258,6 +265,8 @@ def col_spatial(*task_shape: int):
 
 
 def repeat_map(task_shape: Sequence[int], ranks: Optional[Sequence[int]] = None):
+    from hidet.ir.functors import simplify_to_int
+    task_shape = [simplify_to_int(v) for v in task_shape]
     if ranks is None:
         ranks = list(range(len(task_shape)))
     return RepeatTaskMapping(task_shape, ranks)

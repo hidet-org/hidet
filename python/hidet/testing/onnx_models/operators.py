@@ -34,10 +34,20 @@ class Matmul(nn.Module):
         return torch.matmul(x, y)
 
 
+class DepthwiseConv2d(nn.Module):
+    def __init__(self, c, s):
+        super().__init__()
+        self.c = c
+        self.s = s
+
+    def forward(self, x: torch.Tensor, w: torch.Tensor):
+        return torch.conv2d(x, w, bias=None, stride=self.s, padding=0, groups=self.c)
+
+
 def get_onnx_operator(name: str, batch_size=1, precision='float32') -> Tuple[str, List[str], List["hidet.Tensor"]]:
     onnx_path = hidet_cache_file('onnx', 'op', f'bs{batch_size}_{precision}_{name}.onnx')
     if name.startswith('op_sum_'):
-        a, b, c = name.split('_')   # op_sum_0
+        a, b, c = name.split('_')  # op_sum_0
         op_idx = int(c)
         idx_2_configs = {
             0: [[batch_size, 8, 128, 768], [1], False],
@@ -65,7 +75,7 @@ def get_onnx_operator(name: str, batch_size=1, precision='float32') -> Tuple[str
             inputs=[torch.randn(x_shape)],
             precision=precision
         )
-    elif name.startswith('op_matmul_'):     # like 'op_matmul_nn_0'
+    elif name.startswith('op_matmul_'):  # like 'op_matmul_nn_0'
         a, b, layout, idx = name.split('_')
         layout = str(layout).upper()
         workloads = {
@@ -96,7 +106,7 @@ def get_onnx_operator(name: str, batch_size=1, precision='float32') -> Tuple[str
             inputs=[x, y],
             precision=precision
         )
-    elif name.startswith('op_setgan_conv_'): # like 'op_setgan_conv_3'
+    elif name.startswith('op_setgan_conv_'):  # like 'op_setgan_conv_3'
         _, _, _, idx = name.split('_')
         workload = {
             # idx: [batch_size, in_channels, height, width, out_channels, kx, ky, sx, sy, px, py]
@@ -133,6 +143,17 @@ def get_onnx_operator(name: str, batch_size=1, precision='float32') -> Tuple[str
             model=Matmul(layout='NN'),
             input_names=['x', 'y'],
             inputs=[torch.randn(batch_size, m, k), torch.randn(batch_size, k, n)],
+            precision=precision
+        )
+    elif name.startswith('op_dwc_'):  # like 'op_dwc_n_c_h_w_s_k'
+        _, _, n, c, h, w, s, k = name.split('_')
+        n, c, h, w, s, k = int(n), int(c), int(h), int(w), int(s), int(k)
+        return export_torch_to_onnx(
+            onnx_path=onnx_path,
+            model=DepthwiseConv2d(c, s),
+            input_names=['x', 'w'],
+            inputs=[torch.randn(n, c, (h - 1) * s + k, (w - 1) * s + k),
+                    torch.randn(c, 1, k, k)],
             precision=precision
         )
     else:

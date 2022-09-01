@@ -88,7 +88,7 @@ def parallel_k_batched_matmul_search(a: Tensor, b: Tensor, mma: str = 'default')
                     best_nparts = nparts
                     best_nparts_latency = latency
                 candidate_latencies.append(latency)
-        print('candidate latencies: {}, choose factor {}'.format(['{:.3f}'.format(v * 1000) for v in candidate_latencies], best_nparts))
+        print('candidate latencies: {}, choose factor {}'.format(['{:.5f}'.format(v) for v in candidate_latencies], best_nparts))
     else:
         assert len(factors) == 1
         best_nparts = factors[0]

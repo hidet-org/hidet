@@ -252,6 +252,138 @@ def demo_winograd_conv2d():
     )
 
 
+def demo_conv2d_hwnc():
+    n, c, h, w = 1, 128, 28, 28
+    x = relay.var('x', shape=(n, c, h, w), dtype='float16')
+    # w = relay.var('w', shape=(128, 128, 3, 3))
+    w = relay.const(np.random.randn(c, c, 3, 3).astype(np.float), dtype='float16')
+    y = relay.nn.conv2d(x, w, strides=1, padding=1, kernel_size=3, out_dtype='float32',
+                        )
+    func = relay.Function(params=[x], body=y)
+    ir_module = tvm.ir.IRModule.from_expr(func)
+    print(ir_module)
+    hidet.utils.tvm_utils.dump_relay_cuda_code(
+        ir_module=ir_module,
+        out_dir='./outs/hwnc'
+    )
+
+
+def demo_double_buffer():
+    import tvm
+    from tvm import te
+
+    A = te.placeholder([10], name='A')
+    B = te.placeholder([10], name='B')
+    C = te.compute([10], lambda i: A[i] + B[i], 'C')
+
+    s: te.Schedule = te.create_schedule(C.op)
+    AS = s.cache_read(A, 'shared', [C])
+    BS = s.cache_read(B, 'shared', [C])
+    s[AS].double_buffer()
+    s[BS].double_buffer()
+
+    print(tvm.lower(s, [A, B, C], simple_mode=True))
+    # fadd = tvm.build(s, [A, B, C], target='cuda', name='myadd')
+
+
+def demo_dense():
+    m, k, n = 2024, 2024, 2024
+    x = relay.var('x', shape=(m, k), dtype='float32')
+    y = relay.var('y', shape=(k, n), dtype='float32')
+    z = relay.nn.matmul(x, y)
+    func = relay.Function(params=[x, y], body=z)
+    ir_module = tvm.ir.IRModule.from_expr(func)
+    print(ir_module)
+    hidet.utils.tvm_utils.dump_relay_cuda_code(
+        ir_module=ir_module,
+        out_dir='./outs/dense_{}_{}_{}'.format(m, n, k),
+        opt_level=0
+    )
+
+
+def demo_dense_large():
+    from tvm import topi
+    fcompute, fschedule = topi.gpu.dense_large_batch, topi.gpu.schedule_dense_large_batch
+
+    batch_size, in_dim, out_dim = 1024, 1024, 1024
+
+    A = te.placeholder((batch_size, in_dim), name="A", dtype='float32')
+    B = te.placeholder((out_dim, in_dim), name="B", dtype='float32')
+    C = te.placeholder((out_dim,), name="C", dtype='float32')
+
+    with tvm.target.Target('cuda'):
+        D = fcompute(A, B)
+        s = fschedule([D])
+
+    func = tvm.driver.build(s, [A, B, C], target='cuda')
+    with open('./outs/large_dense.cu', 'w') as f:
+        f.write(func.imported_modules[0].get_source())
+    # hidet.utils.tvm_utils.dump_relay_cuda_code(
+    #     ir_module=ir_module,
+    #     out_dir='./outs/large_dense',
+    # )
+    # a = tvm.nd.array(a_np, dev)
+    # b = tvm.nd.array(b_np, dev)
+    # c = tvm.nd.array(c_np, dev)
+    # d = tvm.nd.array(np.zeros(get_const_tuple(D.shape), dtype=out_dtype), dev)
+    # f = tvm.build(s, [A, B, C, D], target, name="dense")
+    # f(a, b, c, d)
+    # tvm.testing.assert_allclose(d.numpy(), d_np, **tol)
+
+
+def demo_double_buffer_v2():
+    import tvm
+    from tvm import topi
+    from tvm import te
+
+    A = te.placeholder((100,), name='A')
+    B = topi.nn.relu(A)
+
+    s: te.Schedule = te.create_schedule(B.op)
+    AA = s.cache_read(A, 'shared', [B])
+    s[AA].compute_at(s[B], B.op.axis[0])
+    s[AA].double_buffer()
+    s[B].bind(B.op.axis[0], te.thread_axis('blockIdx.x'))
+    func = tvm.build(s, [A, B], target='cuda', name='func')
+    print(tvm.lower(s, [A, B], simple_mode=True))
+    print(func.imported_modules[0].get_source())
+
+
+def demo_depthwise():
+    # n, c, h, w, kx, ky, sx, sy = out_shape 1 32 112 112 kernel 3 3 stride 1 1
+    # n, c, h, w, kx, ky, sx, sy = out_shape 1 96 56 56 kernel 3 3 stride 2 2
+    # n, c, h, w, kx, ky, sx, sy = out_shape 1 144 56 56 kernel 3 3 stride 1 1
+    # n, c, h, w, kx, ky, sx, sy = out_shape 1 144 28 28 kernel 3 3 stride 2 2
+    # n, c, h, w, kx, ky, sx, sy = out_shape 1 192 28 28 kernel 3 3 stride 1 1
+    # n, c, h, w, kx, ky, sx, sy = out_shape 1 192 28 28 kernel 3 3 stride 1 1
+    # n, c, h, w, kx, ky, sx, sy = out_shape 1 192 14 14 kernel 3 3 stride 2 2
+    # n, c, h, w, kx, ky, sx, sy = out_shape 1 384 14 14 kernel 3 3 stride 1 1
+    # n, c, h, w, kx, ky, sx, sy = out_shape 1 384 14 14 kernel 3 3 stride 1 1
+    # n, c, h, w, kx, ky, sx, sy = out_shape 1 384 14 14 kernel 3 3 stride 1 1
+    # n, c, h, w, kx, ky, sx, sy = out_shape 1 384 14 14 kernel 3 3 stride 1 1
+    # n, c, h, w, kx, ky, sx, sy = out_shape 1 576 14 14 kernel 3 3 stride 1 1
+    # n, c, h, w, kx, ky, sx, sy = out_shape 1 576 14 14 kernel 3 3 stride 1 1
+    # n, c, h, w, kx, ky, sx, sy = out_shape 1 576 7 7 kernel 3 3 stride 2 2
+    # n, c, h, w, kx, ky, sx, sy = out_shape 1 960 7 7 kernel 3 3 stride 1 1
+    # n, c, h, w, kx, ky, sx, sy = out_shape 1 960 7 7 kernel 3 3 stride 1 1
+    # n, c, h, w, kx, ky, sx, sy = out_shape 1 960 7 7 kernel 3 3 stride 1 1
+
+    # n, c, h, w, r, s = 1, 960, 7, 7, 3, 3
+    # n, c, h, w, r, s = 1, 576, 14, 14, 3, 3
+    # n, c, h, w, r, s = 1, 192, 28, 28, 3, 3
+    n, c, h, w, r, s = 1, 384, 14, 14, 3, 3
+    x = relay.var('x', shape=(n, c, h, w), dtype='float32')
+    y = relay.var('y', shape=(c, 1, r, s), dtype='float32')
+    z = relay.nn.conv2d(x, y, strides=(1, 1), padding=(1, 1), groups=c)
+    func = relay.Function(params=[x, y], body=z)
+    ir_module = tvm.ir.IRModule.from_expr(func)
+    print(ir_module)
+    hidet.utils.tvm_utils.dump_relay_cuda_code(
+        ir_module=ir_module,
+        out_dir='./outs/depthwise_{}_{}_{}_{}_{}_{}'.format(n, c, h, w, r, s)
+    )
+
+
 if __name__ == '__main__':
     # demo_vthread()
     # demo_conv2d_te()
@@ -262,5 +394,8 @@ if __name__ == '__main__':
     # demo_gather()
     # demo_variance()
     # demo_reduce_mean()
-    demo_winograd_conv2d()
-
+    # demo_winograd_conv2d()
+    # demo_double_buffer_v2()
+    # demo_dense()
+    # demo_dense_large()
+    demo_depthwise()

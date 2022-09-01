@@ -241,6 +241,9 @@ def build_ir_module_job(build_instance: BuildInstance) -> Optional[str]:
     except subprocess.CalledProcessError:
         print('Compilation failed for an instance')
         return None
+    except CompilationFailed:
+        print('Compilation failed for an instance')
+        return None
     return lib_path
 
 

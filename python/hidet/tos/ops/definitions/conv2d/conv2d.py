@@ -1,5 +1,5 @@
 from typing import List, Union
-from hidet.tos.ops.definitions.utils import Task, Operator, Tensor, compute, input_like, TensorNode, normalize_kernel, normalize_stride, normalize_padding, reduce
+from hidet.tos.ops.definitions.utils import Task, Operator, Tensor, compute, input_like, TensorNode, normalize_kernel, normalize_stride, normalize_padding, reduce, IRModule
 
 
 class Conv2dTask(Task):
@@ -24,11 +24,28 @@ class Conv2dTask(Task):
                 reduce_type='sum'
             )
         )
+        self.channels = c
+        self.stride = stride
+        self.groups = groups
         super().__init__(
             name='conv2d',
             inputs=[data, weight],
             outputs=[output],
         )
+
+    # def implement_cuda(self) -> IRModule:
+    #     # return NotImplemented
+    #     if self.groups == self.channels:
+    #         from hidet.tos.ops.schedules.cuda.depthwise_conv import schedule_depthwise_conv2d
+    #         return schedule_depthwise_conv2d(self)
+    #     else:
+    #         return NotImplemented   # call default scheduler
+    #
+    # def fast_implement(self, space_level: int) -> bool:
+    #     if self.groups == self.channels:
+    #         return False
+    #     else:
+    #         return True
 
 
 class Conv2dOp(Operator):
