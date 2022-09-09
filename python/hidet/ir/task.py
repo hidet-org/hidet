@@ -147,7 +147,7 @@ class Task(Node):
         }
 
     def implement(self, target: Union[Target, str]) -> IRModule:
-        from hidet.tos.ops.schedules import generic_cuda_schedule, generic_cpu_schedule
+        from hidet.graph.ops.schedules import generic_cuda_schedule, generic_cpu_schedule
         if isinstance(target, str):
             target = Target.from_string(target)
         if target.name == 'cuda':

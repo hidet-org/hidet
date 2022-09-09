@@ -23,7 +23,7 @@ class Namer:
     def get_name(self, e, hint=None):
         from hidet.ir.expr import Var
         from hidet.ir.dialects.compute import ScalarNode, TensorNode
-        from hidet.tos.tensor import Tensor
+        from hidet.graph.tensor import Tensor
         if e in self.obj_name:
             return self.obj_name[e]
         if hint:

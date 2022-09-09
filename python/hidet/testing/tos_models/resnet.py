@@ -1,7 +1,7 @@
 from typing import Type, Union, List, Callable, Any
 
 import hidet.utils
-from hidet.tos.modules import nn
+from hidet.graph.modules import nn
 
 
 def conv1x1(in_channels, out_channels, stride=1) -> nn.Conv2d:

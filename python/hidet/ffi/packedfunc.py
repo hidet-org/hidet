@@ -43,7 +43,7 @@ class PackedFunc:
         """
         convert arg to a c_void_p
         """
-        from hidet.tos.tensor import Tensor
+        from hidet.graph.tensor import Tensor
         if isinstance(arg, int):
             assert isinstance(param_type, ScalarType)
             if param_type.name == 'int32':

@@ -2,6 +2,7 @@ from typing import List, Optional
 import contextlib
 import functools
 import psutil
+import shutil
 import multiprocessing
 from tqdm import tqdm
 import ctypes
@@ -128,7 +129,8 @@ def compile_source(src_path: str, out_lib_path: str, keep_ptx=False) -> None:
                 ptx_name = os.path.basename(src_path).replace('.cu', '.ptx')
                 ptx_path = os.path.join(working_dir, ptx_name)
                 target_ptx_path = os.path.join(out_lib_dir, ptx_name)
-                os.rename(ptx_path, target_ptx_path)
+                shutil.move(ptx_path, target_ptx_path)
+                # os.rename(ptx_path, target_ptx_path)
             with open(os.path.join(out_lib_dir, 'nvcc_log.txt'), 'w') as f:
                 f.write('Command: {}\n'.format(" ".join(result.args)))
                 f.write(result.stdout.decode('utf-8'))
@@ -147,7 +149,7 @@ def load_task_func(lib_path: str, task) -> CompiledFunction:
     ----------
     lib_path: str
         The dynamic library path.
-    task: hidet.tos.task.Task
+    task: hidet.graph.task.Task
         The task that corresponds to the dynamic library.
 
     Returns

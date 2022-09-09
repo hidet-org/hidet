@@ -395,7 +395,7 @@ def error_tolerance(a: Union[np.ndarray, 'Tensor'], b: Union[np.ndarray, 'Tensor
     ret: float
         The error tolerance between a and b.
     """
-    from hidet.tos import Tensor
+    from hidet.graph import Tensor
     if isinstance(a, Tensor):
         a = a.numpy()
     if isinstance(b, Tensor):

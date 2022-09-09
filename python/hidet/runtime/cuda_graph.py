@@ -1,10 +1,10 @@
 from typing import List, Optional
 import time
-from hidet.tos import randn_like, zeros_like
+from hidet.graph import randn_like, zeros_like
 from hidet.ffi import cuda
 from hidet.runtime.storage import CudaMemoryPool
 from hidet.runtime.cuda_stream import CudaStream
-from hidet.tos import Tensor, FlowGraph
+from hidet.graph import Tensor, FlowGraph
 
 
 def dummy_input_like(tensor: Tensor) -> Tensor:

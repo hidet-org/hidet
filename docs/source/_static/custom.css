@@ -1,0 +1,13 @@
+div.sphx-glr-download-link-note {
+    height: 0;
+    /*visibility: hidden;*/
+    display: none;
+}
+
+div.sphx-glr-download-jupyter {
+    display: none;
+}
+
+div.sphx-glr-download-python {
+    text-align: right;
+}

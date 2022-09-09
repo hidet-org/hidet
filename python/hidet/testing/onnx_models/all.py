@@ -2,7 +2,7 @@ from typing import Tuple, List
 import warnings
 import numpy as np
 import hidet
-from hidet.tos import Tensor
+from hidet.graph import Tensor
 from hidet.utils import download, hidet_cache_dir, hidet_cache_file
 from hidet.utils.transformers_utils import export_transformer_model_as_onnx
 from hidet.utils.torch_utils import export_torchvision_model_as_onnx

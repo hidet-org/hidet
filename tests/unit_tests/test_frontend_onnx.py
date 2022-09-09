@@ -17,7 +17,7 @@ def check_model(model_path: str, input_names: List[str], input_tensors: List[Ten
     onnx_outputs = onnx_session.run(None, input_feed={name: tensor.numpy() for name, tensor in zip(input_names, input_tensors)})
 
     # hidet
-    hidet_model = hidet.tos.frontend.from_onnx(model_path)
+    hidet_model = hidet.graph.frontend.from_onnx(model_path)
     hidet_inputs = [hidet.array(tensor).cuda() for tensor in input_tensors]
 
     if mode == 'imperative':
@@ -29,9 +29,9 @@ def check_model(model_path: str, input_names: List[str], input_tensors: List[Ten
         if mode == 'opt':
             model_name = os.path.splitext(os.path.basename(model_path))[0]
             out_dir = os.path.join('./outs/', model_name)
-            with hidet.tos.PassContext() as ctx:
+            with hidet.graph.PassContext() as ctx:
                 ctx.save_graph_instrument(out_dir)
-                graph = hidet.tos.optimize(graph)
+                graph = hidet.graph.optimize(graph)
         hidet_outputs = graph(*hidet_inputs)
     else:
         raise ValueError()

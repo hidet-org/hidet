@@ -17,11 +17,11 @@ set(HIDET_BUILD_TYPE Release)
 # Hidet does not depends on TVM, but we can build it to do benchmarking and comparison.
 #  - ON: Build TVM
 #  - OFF: Do not build TVM
-set(HIDET_BUILD_TVM ON)
+set(HIDET_BUILD_TVM OFF)
 
 # Whether to build cudnn baseline
 #  - ON: Build cudnn baseline, and search it automatically.
 #  - A-Path-to-cuDNN: Use the given path to search cudnn library. Can be used to specify
 #                     different version of cuDNN.
 #  - OFF: Do not build cudnn baseline.
-set(HIDET_BASELINE_CUDNN ON)
+set(HIDET_BASELINE_CUDNN OFF)

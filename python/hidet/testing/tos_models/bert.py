@@ -1,9 +1,9 @@
 from typing import Optional
 import math
 import numpy as np
-from hidet.tos import randn, zeros, array, ones
-from hidet.tos import nn, Tensor
-from hidet.tos import ops
+from hidet.graph import randn, zeros, array, ones
+from hidet.graph import nn, Tensor
+from hidet.graph import ops
 
 
 # Acknowledgement: adopted the bert implementation from huggingface transformers package, with some simplification

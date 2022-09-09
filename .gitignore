@@ -195,3 +195,6 @@ build-release
 
 # cache for kernel binary
 .hidet_cache/
+
+# sphinx gallery output
+/docs/source/gallery

@@ -220,7 +220,7 @@ if __name__ == '__main__':
     #     'token_type_ids': hidet.array(token_type_ids).cuda()
     # }
     # input_shapes = {key: tensor.shape for key, tensor in dummy_inputs.items()}
-    # # from hidet.tos.frontend import from_onnx
+    # # from hidet.graph.frontend import from_onnx
     # # hidet_model = from_onnx(onnx_model_path)
     # # hidet_output = hidet_model(*dummy_inputs.values())
     # #

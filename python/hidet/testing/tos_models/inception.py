@@ -1,6 +1,6 @@
 from typing import Tuple, List, Union
 import hidet
-from hidet.tos import nn, ops, Tensor
+from hidet.graph import nn, ops, Tensor
 
 # import torchvision.models.inception
 
