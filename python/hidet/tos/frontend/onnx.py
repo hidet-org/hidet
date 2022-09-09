@@ -843,6 +843,13 @@ class OnnxOneHot(OnnxOperator):
         return [ops.onehot(indices, depth, axis, on_value, off_value)]
 
 
+@register_onnx_operator
+class OnnxPyFunc(OnnxOperator):
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        warnings.warn('PyFunc operator in ONNX model encountered, dummy output is returned. If dummy output are used, there will be errors.')
+        return [randn([1]) for name in self.output_names]
+
+
 def dispatch(node, op_sets: List[int]) -> OnnxOperator:
     op_type = node.op_type
     if op_type not in dispatch_table:

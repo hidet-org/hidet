@@ -202,7 +202,10 @@ def dump(flow_graph, fp):
             description="{}".format(str(node.task))
         ))
     for idx, tensor in enumerate(flow_graph.outputs):
-        outputs.append(Parameter('output:{}'.format(idx), tensor2argument[tensor]))
+        if tensor in tensor2argument:
+            outputs.append(Parameter('output:{}'.format(idx), tensor2argument[tensor]))
+        else:
+            outputs.append(Parameter('output:{}'.format(idx), Argument('output:{}'.format(idx), data_type=tensor.dtype, shape=tensor.shape, has_initializer=False)))
     graph = Graph(inputs, outputs, nodes, name="")
     model = Model(graph, source='Hidet', description='Converted from FlowGraph')
 

@@ -48,7 +48,8 @@ class ApplyPrologueEpiloguePass(Pass):
             prologue = task.prologues[input_node]
             prologue_value = inline_compute(prologue.value, reduce_limit=-1)
 
-            # the following collect assumes that there is no nested tensor elements for the same tensor, such as A[A[1, 2], 3]
+            # the following collect assumes that there is no nested tensor element indexing regards to the same tensor, such as A[A[1, 2], 3]
+            # todo: add support for nested access
             tensor_elements: List[TensorElement] = collect(body, TensorElement)
             prologue_rewrite_map = {}
             for te in tensor_elements:

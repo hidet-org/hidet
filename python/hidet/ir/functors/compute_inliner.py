@@ -1,6 +1,6 @@
-from hidet.ir.dialects.compute import TensorNode
+from hidet.ir.dialects.compute import TensorNode, GridCompute
 from hidet.ir.expr import TensorElement
-from hidet.utils import prod
+from hidet.utils import prod, same_list
 from .base import ExprRewriter
 from .util_functors import rewrite
 
@@ -12,13 +12,15 @@ class ComputeInlineRewriter(ExprRewriter):
 
     def visit_TensorElement(self, e: TensorElement):
         base = self(e.base)
+        indices = [self(index) for index in e.indices]
         if isinstance(base, TensorNode) and base.tensor_compute:
-            grid_compute = base.tensor_compute
-            input_scalars = grid_compute.input_scalars
-            cnt = sum(prod(input_scalar.scalar_compute.const_shape()) for input_scalar in input_scalars if input_scalar.scalar_compute)
-            if cnt == 0 or cnt <= self.reduce_limit:
-                return rewrite(grid_compute.value, {axis: index for axis, index in zip(grid_compute.axes, e.indices)})
-        return e
+            if isinstance(base.tensor_compute, GridCompute):
+                grid_compute = base.tensor_compute
+                input_scalars = grid_compute.input_scalars
+                cnt = sum(prod(input_scalar.scalar_compute.const_shape()) for input_scalar in input_scalars if input_scalar.scalar_compute)
+                if cnt == 0 or cnt <= self.reduce_limit:
+                    return rewrite(grid_compute.value, {axis: index for axis, index in zip(grid_compute.axes, indices)})
+        return ExprRewriter.visit_TensorElement(self, e)
 
 
 def inline_compute(expr: TensorNode, reduce_limit=0) -> TensorNode:

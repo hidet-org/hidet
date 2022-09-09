@@ -32,6 +32,7 @@ class FlowGraph:
             return Text(x.dtype) + '[' + doc_join([str(v) for v in x.shape], ', ') + ']'
 
         def get_attr_repr(value: Union[float, int, bool, str, list, tuple]) -> Doc:
+            from hidet.ir.expr import Constant
             if isinstance(value, (float, int, bool)):
                 return Text(str(value))
             elif isinstance(value, str):
@@ -40,6 +41,8 @@ class FlowGraph:
                 return '[' + doc_join([get_attr_repr(v) for v in value], ', ') + ']'
             elif isinstance(value, tuple):
                 return '(' + doc_join([get_attr_repr(v) for v in value], ', ') + ')'
+            # elif isinstance(value, Constant):
+            #     return get_attr_repr(value.value)
             else:
                 raise ValueError(value)
 
@@ -96,6 +99,7 @@ class FlowGraph:
                 else:
                     tunable_tasks.append(node.task)
         hidet.driver.build_batch_task(tasks, space_level, parallel=True)
+        # hidet.driver.build_batch_task(tasks, space_level, parallel=False)
         hidet.driver.build_batch_task(tunable_tasks, space_level, parallel=False)
 
     def forward(self, *inputs: Tensor) -> Union[List[Tensor], Tensor]:

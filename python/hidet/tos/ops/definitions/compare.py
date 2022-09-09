@@ -38,8 +38,8 @@ def cond_not(x: Tensor) -> Tensor:
 
 
 def equal(x: Tensor, y: Tensor) -> Tensor:
-    if x.dtype != y.dtype:
-        raise ValueError('Can only compare tensors with the same dtype, but got {} and {}'.format(x.dtype, y.dtype))
+    # if x.dtype != y.dtype:
+    #     raise ValueError('Can only compare tensors with the same dtype, but got {} and {}'.format(x.dtype, y.dtype))
     return EqualOp(x, y).get_output(0)
 
 
