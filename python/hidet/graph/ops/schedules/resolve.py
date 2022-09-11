@@ -9,8 +9,6 @@ from hidet.ir.func import IRModule
 from hidet.ir.task import Task
 from hidet.utils import TableBuilder, strict_zip, error_tolerance
 from hidet.graph.tensor import randn, zeros, ones, Tensor, array
-from hidet.backend import BuildInstance, batch_build_ir_modules
-from hidet.runtime import CompiledFunction
 from .common import Schedule
 
 
@@ -81,6 +79,8 @@ def resolve_ir_modules(ir_modules: List[IRModule], schedules: List[Schedule], ou
     ret: IRModule
         The best ir module we can find.
     """
+    from hidet.backend import BuildInstance, batch_build_ir_modules
+    from hidet.runtime import CompiledFunction
     if len(ir_modules) == 0:
         raise ValueError('Require at least one ir module.')
     if len(ir_modules) == 1:

@@ -10,7 +10,7 @@ import hidet.runtime.storage
 from hidet.ffi import cuda, cuda_kernels
 from hidet.ir.type import ScalarType
 from hidet.ir.layout import DataLayout, RowMajorLayout
-from hidet.runtime import Storage
+from hidet.runtime.storage import Storage
 from hidet.utils import prod
 
 
@@ -28,6 +28,31 @@ def convert(v):
 
 
 class Tensor:
+    """An n-dimension array, could be symbolic or concrete.
+
+    This class defines an n-dimension array.
+
+    Attributes
+    ----------
+    shape: List[int]
+        The shape of the tensor.
+
+    dtype: str
+        The data type of the tensor.
+
+    device: str
+        The device of the tensor.
+
+    layout: DataLayout
+        The data layout of the tensor.
+
+    storage: Optional[Storage]
+        The storage of the tensor. None indicates it is a symbolic tensor.
+
+    trace: Optional[Tuple[Operator, int]]
+        Where this tensor is derived from. A trace = (op, i) indicates that this tensor is the i-th output of the op operator.
+    """
+
     def __init__(self,
                  shape: Sequence[int],
                  dtype: str,
@@ -296,7 +321,28 @@ class Tensor:
         return torch_tensor
 
 
-def empty(shape: Sequence[int], dtype: str = 'float32', device: str = 'cuda', layout: Optional[DataLayout] = None) -> Tensor:
+def empty(shape, dtype: str = 'float32', device: str = 'cuda', layout: Optional[DataLayout] = None) -> Tensor:
+    """Create an uninitialized tensor.
+
+    Parameters
+    ----------
+    shape: Sequence[int]
+        The shape of new tensor.
+
+    dtype: str
+        The data type of element of the tensor.
+
+    device: str
+        The device of the new tensor is created on.
+
+    layout: Optional[DataLayout]
+        The data layout of the tensor.
+
+    Returns
+    -------
+    ret: Tensor
+        The created tensor.
+    """
     num_bytes = prod(shape) * ScalarType(dtype).nbytes()
     storage = Storage.new(device, num_bytes)
     return Tensor(shape, dtype, device, storage, layout)
@@ -334,9 +380,8 @@ def full(shape: Sequence[int], fill_value, dtype: str = 'float32', device: str =
     return tensor
 
 
-def randn(shape: Sequence[int], dtype: str = 'float32', mean: float = 0.0, stddev: float = 1.0, device: str = 'cuda', layout: Optional[DataLayout] = None) -> Tensor:
-    """
-    Create a tensor with randomly intialized values in uniform distribution.
+def randn(shape, dtype='float32', mean=0.0, stddev=1.0, device='cuda', layout=None) -> Tensor:
+    """Create a tensor with uniformly distributed values.
 
     Parameters
     ----------
@@ -362,14 +407,20 @@ def randn(shape: Sequence[int], dtype: str = 'float32', mean: float = 0.0, stdde
     -------
     ret: Tensor
         The created tensor.
+
+    Examples
+    --------
+    >>> randn([2, 3])
+    Tensor(shape=[2, 3], dtype='float32', device='cuda')
+    [[ 0.10720467 -1.6906018   0.06347568]
+     [-0.37061226  0.562728    1.857547  ]]
     """
     tensor = empty(shape, dtype, device, layout)
     if dtype == 'float32':
         cuda.generate_normal(tensor.storage.addr, num_elements=prod(tensor.shape), mean=mean, stddev=stddev)
     else:
-        float32_tensor = randn_like(tensor, dtype='float32')
+        float32_tensor = randn_like(tensor, dtype='float32')  # todo: add mean and stddev
         return float32_tensor.cast(dtype=dtype)
-        # raise NotImplementedError('Currently do not support generate random array for data type {}'.format(dtype))
     return tensor
 
 
@@ -395,7 +446,31 @@ def empty_like(data: Tensor, shape: Optional[Sequence[int]] = None, dtype: Optio
     return _tensor_like(empty, data, shape, dtype, device, layout)
 
 
-def symbol_like(data: Tensor, shape: Optional[Sequence[int]] = None, dtype: Optional[str] = None, device: Optional[str] = None, layout: Optional[DataLayout] = None) -> Tensor:
+def symbol_like(data: Tensor, shape=None, dtype=None, device=None, layout=None) -> Tensor:
+    """ Create a symbol tensor like an existing tensor.
+
+    Parameters
+    ----------
+    data: Tensor
+        The information of this tensor will be used to create the symbol tensor.
+
+    shape: Optional[Sequence[int]]
+        The shape of the new tensor.
+
+    dtype: Optional[str]
+        The data type of the new tensor.
+
+    device: Optional[str]
+        The device of the new tensor.
+
+    layout: Optional[DataLayout]
+        The data layout of the new tensor.
+
+    Returns
+    -------
+    ret: Tensor
+        The created symbol tensor.
+    """
     return _tensor_like(symbol, data, shape, dtype, device, layout)
 
 
@@ -436,7 +511,7 @@ def from_numpy(nparray: np.ndarray) -> Tensor:
     }
     if nparray.dtype not in dtype_convert:
         raise NotImplementedError("Do not support convert np.ndarray with data type '{}'.".format(nparray.dtype))
-    nparray = nparray.copy(order='C')   # make the data layout like C, which is contiguous
+    nparray = nparray.copy(order='C')  # make the data layout like C, which is contiguous
     tensor = empty(shape=nparray.shape, dtype=dtype_convert[nparray.dtype], device='cpu')
     cuda.memcpy_async(src_addr=void_pointer_to_uint64(nparray.ctypes.data_as(ctypes.c_void_p)),
                       dst_addr=tensor.storage.addr,
@@ -447,6 +522,21 @@ def from_numpy(nparray: np.ndarray) -> Tensor:
 
 
 def from_torch(torch_tensor) -> Tensor:
+    """ Create a hidet tensor from pytorch tensor.
+
+    The created tensor shared the same memory as given pytorch tensor. Thus, any content
+    modification on one tensor would be reflected on the other one.
+
+    Parameters
+    ----------
+    torch_tensor: torch.Tensor
+        The pytorch tensor.
+
+    Returns
+    -------
+    ret: hidet.Tensor
+        The created hidet tensor.
+    """
     import torch
     if not isinstance(torch_tensor, torch.Tensor):
         raise ValueError('Expect a torch.Tensor, got {}'.format(type(torch_tensor)))

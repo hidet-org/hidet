@@ -2,8 +2,7 @@ from typing import List, Optional, Dict, Any, Iterable, Tuple, Union
 from collections import defaultdict
 
 from hidet.ir.task import Task
-from hidet.runtime import CompiledFunction
-from hidet.driver import build_task
+from hidet.runtime.module import CompiledFunction
 from hidet.graph.tensor import empty, empty_like, Tensor
 from hidet.ffi.ffi import get_last_error, BackendException
 
@@ -146,6 +145,7 @@ class Operator:
         return results
 
     def build_task_func(self):
+        from hidet.driver import build_task
         if self.task_func is None:
             task_string = str(self.task)
             level = self._current_space_level

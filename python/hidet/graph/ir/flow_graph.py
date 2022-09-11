@@ -14,6 +14,8 @@ from hidet.utils.namer import Namer
 
 
 class FlowGraph:
+    """The computation graph representation.
+    """
     def __init__(self, outputs: List[Tensor], inputs=None, nodes=None):
         self.outputs: List[Tensor] = outputs
         self.inputs: Optional[List[Tensor]] = inputs
@@ -21,6 +23,9 @@ class FlowGraph:
         self.usage_count: Optional[Dict[Tensor, int]] = None
 
     def __call__(self, *inputs: Tensor) -> Union[List[Tensor], Tensor]:
+        """Run the computation graph.
+        See Also :func:`FlowGraph.forward`.
+        """
         return self.forward(*inputs)
 
     def __str__(self):
@@ -103,11 +108,35 @@ class FlowGraph:
         hidet.driver.build_batch_task(tunable_tasks, space_level, parallel=False)
 
     def forward(self, *inputs: Tensor) -> Union[List[Tensor], Tensor]:
+        """Run the computation graph.
+
+        Parameters
+        ----------
+        *inputs: Tensor
+            The input tensors. They should be consistent with the symbolic inputs
+            of the computation graph.
+
+        Returns
+        -------
+        output: Union[List[Tensor], Tensor]
+            If there is only one output, it is returned directly. Otherwise, a list
+            of output tensors are returned.
+        """
         outputs = self.dummy_outputs()
         self.pure_forward(list(inputs), outputs)
         return outputs[0] if len(outputs) == 1 else outputs
 
     def pure_forward(self, inputs: List[Tensor], outputs: List[Tensor]):
+        """Run the computation graph and store results to given tensors.
+
+        Parameters
+        ----------
+        inputs: List[Tensor]
+            The input tensors.
+
+        outputs: List[Tensor]
+            The output tensors to store the output results to.
+        """
         for idx, tensor in enumerate(inputs):
             if tensor.storage is None:
                 raise ValueError('Expect non-symbolic input tensors, got symbolic input {} ({}).'.format(idx, tensor.signature()))
@@ -199,6 +228,13 @@ class FlowGraph:
         return self
 
     def cuda_graph(self):
+        """Create a CudaGraph from FlowGraph.
+
+        Returns
+        -------
+        ret: hidet.runtime.CudaGraph
+            The created cuda graph.
+        """
         from hidet.runtime.cuda_graph import create_cuda_graph
         return create_cuda_graph(self)
 

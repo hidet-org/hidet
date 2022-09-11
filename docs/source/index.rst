@@ -14,14 +14,20 @@ Hidet is an open-source DNN inference framework, it features
 
 
 .. toctree::
-   :maxdepth: 1
-   :caption: Getting Started
+  :maxdepth: 1
+  :caption: Getting Started
 
-   getting_started/install
-   gallery/quick-start
+  getting_started/install
+  gallery/quick-start
 
 .. toctree::
-   :maxdepth: 1
-   :caption: Tutorials
+  :maxdepth: 1
+  :caption: Tutorials
 
-   tutorials/run_onnx_model
+  gallery/tutorials/run_onnx_model
+
+.. toctree::
+  :maxdepth: 1
+  :caption: Reference
+
+  python_api/index.rst

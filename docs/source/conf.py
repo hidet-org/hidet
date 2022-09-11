@@ -10,9 +10,9 @@
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
-# import os
-# import sys
-# sys.path.insert(0, os.path.abspath('.'))
+import os
+import sys
+sys.path.insert(0, os.path.abspath('../../python'))
 
 
 # -- Project information -----------------------------------------------------
@@ -34,7 +34,9 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.autodoc",
     "sphinx.ext.autosummary",
+    'sphinx.ext.intersphinx',
     "sphinx_gallery.gen_gallery",
+    'autodocsumm',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -49,17 +51,26 @@ pygments_style = "sphinx"
 
 autosummary_generate = True
 
+intersphinx_mapping = {
+    'torch': ('https://pytorch.org/docs/stable', None),
+    'torchvision': ('https://pytorch.org/vision/stable', None),
+    "python": ("https://docs.python.org/3", None),
+}
+
 # -- Options for HTML output -------------------------------------------------
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
 html_theme = 'sphinx_book_theme'
+# html_theme = 'sphinx_rtd_theme'
 html_theme_options = {
     "repository_url": "https://github.com/yaoyaoding/hidet",
     "use_repository_button": True,
 }
 html_title = "Hidet Documentation"
+html_permalinks_icon = "<span>¶</span>"
+
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,

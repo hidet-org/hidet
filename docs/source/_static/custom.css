@@ -1,6 +1,5 @@
 div.sphx-glr-download-link-note {
     height: 0;
-    /*visibility: hidden;*/
     display: none;
 }
 
@@ -10,4 +9,14 @@ div.sphx-glr-download-jupyter {
 
 div.sphx-glr-download-python {
     text-align: right;
+}
+
+dt.sig {
+    font-size: 1em;
+    font-family: "Gentium Basic", monospace;
+    font-weight: 550;
+}
+
+div.container-xl {
+    max-width: 1500px;
 }

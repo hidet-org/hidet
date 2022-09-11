@@ -27,7 +27,7 @@ def parallel_k_batched_matmul(a: Tensor, b: Tensor, mma: str = 'default', nparts
 
     nparts = gcd(nparts, k_size)
 
-    print('parallel_k of batched matmul {}x{}x{}x{} used factor {}'.format(batch_size, m_size, n_size, k_size, nparts))
+    # print('parallel_k of batched matmul {}x{}x{}x{} used factor {}'.format(batch_size, m_size, n_size, k_size, nparts))
 
     if nparts == 1:
         # warnings.warn('Parallel k matmul use nparts=1, fall back to direct matmul.')

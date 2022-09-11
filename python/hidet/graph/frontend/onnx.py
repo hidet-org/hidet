@@ -980,6 +980,24 @@ class OnnxGraph(nn.Module):
 
 
 class OnnxModule(nn.Module):
+    """Loaded ONNX model.
+
+    Parameters
+    ----------
+    model: onnx.ModelProto
+        The onnx model to load, in the protobuf format.
+
+    Attributes
+    ----------
+    op_sets: List[int]
+        The operator sets used by the loaded model.
+
+    input_names: List[str]
+        The input names of the loaded onnx model.
+
+    output_names: List[str]
+        The output names of the loaded onnx model.
+    """
     def __init__(self, model: onnx.ModelProto):
         super().__init__()
         op_sets = []
@@ -988,12 +1006,27 @@ class OnnxModule(nn.Module):
                 # we currently only support standard onnx operator domain
                 raise ValueError('Onnx model imports unknown operator domain: {}, we currently only support standard onnx operator set.'.format(repr(opset_import.domain)))
             op_sets.append(int(opset_import.version))
-        self.op_sets = list(reversed(sorted(op_sets)))
-        self.graph = OnnxGraph(model.graph, op_sets=self.op_sets)
+        self.op_sets: List[int] = list(reversed(sorted(op_sets)))
+        self.graph: OnnxGraph = OnnxGraph(model.graph, op_sets=self.op_sets)
         self.input_names: List[str] = self.graph.input_names
         self.output_names: List[str] = self.graph.output_names
 
     def forward(self, *args):
+        """Run the onnx model with given inputs.
+
+        Parameters
+        ----------
+        args: Sequence[hidet.Tensor]
+            The input tensors. The number and order of the input tensors should match the
+            OnnxModule.input_names attributes.
+
+        Returns
+        -------
+        ret: Union[hidet.Tensor, List[hidet.Tensor]]
+            The output tensor(s). If there are 2 or more tensors returned,
+            a list of tensors are return with the order of OnnxModule.output_names.
+            If there is only one tensor is returned, the single tensor is directly returned (instead of a list).
+        """
         results = self.graph(*args)
         if len(results) == 1:
             return results[0]
