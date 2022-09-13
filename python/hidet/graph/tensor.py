@@ -106,7 +106,10 @@ class Tensor:
             array_str = str(self.cpu().numpy())
             return '{}\n{}'.format(head, array_str)
         else:
-            return head + ' with empty storage'
+            if self.trace is None:
+                return head
+            else:
+                return '{}\nfrom {}'.format(head, self.trace)
 
     def __getitem__(self, item):
         from hidet.graph.ops import strided_slice
@@ -321,7 +324,7 @@ class Tensor:
         return torch_tensor
 
 
-def empty(shape, dtype: str = 'float32', device: str = 'cuda', layout: Optional[DataLayout] = None) -> Tensor:
+def empty(shape, dtype: str = 'float32', device: str = 'cuda', layout: Optional[DataLayout] = None):
     """Create an uninitialized tensor.
 
     Parameters
@@ -349,16 +352,80 @@ def empty(shape, dtype: str = 'float32', device: str = 'cuda', layout: Optional[
 
 
 def symbol(shape: Sequence[int], dtype: str = 'float32', device: str = 'cuda', layout: Optional[DataLayout] = None) -> Tensor:
+    """Create a symbolic tensor.
+
+    Parameters
+    ----------
+    shape: Sequence[int]
+        The shape of new tensor.
+
+    dtype: str
+        The data type of element of the tensor.
+
+    device: str
+        The device of the new tensor is created on.
+
+    layout: Optional[DataLayout]
+        The data layout of the tensor.
+
+    Returns
+    -------
+    ret: Tensor
+        The created tensor.
+
+    """
     return Tensor(shape, dtype, device, None, layout)
 
 
-def zeros(shape: Sequence[int], dtype: str = 'float32', device: str = 'cuda', layout: Optional[DataLayout] = None) -> Tensor:
+def zeros(shape: Sequence[int], dtype='float32', device='cuda', layout=None) -> Tensor:
+    """Create a tensor initialized with zero.
+
+    Parameters
+    ----------
+    shape: Sequence[int]
+        The shape of new tensor.
+
+    dtype: str
+        The data type of element of the tensor.
+
+    device: str
+        The device of the new tensor is created on.
+
+    layout: Optional[DataLayout]
+        The data layout of the tensor.
+
+    Returns
+    -------
+    ret: Tensor
+        The created tensor.
+    """
     tensor = empty(shape, dtype, device, layout)
     cuda.memset_async(tensor.storage.addr, tensor.nbytes, value=0)
     return tensor
 
 
-def ones(shape: Sequence[int], dtype: str = 'float32', device: str = 'cuda', layout: Optional[DataLayout] = None) -> Tensor:
+def ones(shape, dtype='float32', device='cuda', layout=None) -> Tensor:
+    """Create a tensor initialized with one.
+
+    Parameters
+    ----------
+    shape: Sequence[int]
+        The shape of new tensor.
+
+    dtype: str
+        The data type of element of the tensor.
+
+    device: str
+        The device of the new tensor is created on.
+
+    layout: Optional[DataLayout]
+        The data layout of the tensor.
+
+    Returns
+    -------
+    ret: Tensor
+        The created tensor.
+    """
     value_map = {
         'float32': 1.0,
         'int32': 1,
@@ -374,7 +441,31 @@ def ones(shape: Sequence[int], dtype: str = 'float32', device: str = 'cuda', lay
             raise NotImplementedError('Not implemented ones for dtype {}, please create a float32 tensor and cast to this type'.format(dtype))
 
 
-def full(shape: Sequence[int], fill_value, dtype: str = 'float32', device: str = 'cuda', layout: Optional[DataLayout] = None) -> Tensor:
+def full(shape, fill_value, dtype='float32', device='cuda', layout=None) -> Tensor:
+    """Create a tensor initialized with given constant.
+
+    Parameters
+    ----------
+    shape: Sequence[int]
+        The shape of new tensor.
+
+    fill_value: Union[float, int]
+        The constant to initialize the new tensor.
+
+    dtype: str
+        The data type of element of the tensor.
+
+    device: str
+        The device of the new tensor is created on.
+
+    layout: Optional[DataLayout]
+        The data layout of the tensor.
+
+    Returns
+    -------
+    ret: Tensor
+        The created tensor.
+    """
     tensor = empty(shape, dtype, device, layout)
     cuda_kernels.fill_value(tensor.storage.addr, num_elements=tensor.num_elements, value=fill_value, dtype=dtype)
     return tensor
@@ -446,7 +537,7 @@ def empty_like(data: Tensor, shape: Optional[Sequence[int]] = None, dtype: Optio
     return _tensor_like(empty, data, shape, dtype, device, layout)
 
 
-def symbol_like(data: Tensor, shape=None, dtype=None, device=None, layout=None) -> Tensor:
+def symbol_like(data: Tensor, shape=None, dtype=None, device=None, layout=None):
     """ Create a symbol tensor like an existing tensor.
 
     Parameters
@@ -521,7 +612,7 @@ def from_numpy(nparray: np.ndarray) -> Tensor:
     return tensor
 
 
-def from_torch(torch_tensor) -> Tensor:
+def from_torch(torch_tensor):
     """ Create a hidet tensor from pytorch tensor.
 
     The created tensor shared the same memory as given pytorch tensor. Thus, any content
@@ -534,7 +625,7 @@ def from_torch(torch_tensor) -> Tensor:
 
     Returns
     -------
-    ret: hidet.Tensor
+    ret: Tensor
         The created hidet tensor.
     """
     import torch

@@ -20,8 +20,7 @@ def batch_norm_infer(x: Tensor, running_mean: Tensor, running_var: Tensor, epsil
 
 
 def instance_norm(x: Tensor, axis: int = 1, epsilon: float = 1e-5) -> Tensor:
-    """
-    Instance norm.
+    """Instance norm.
 
     Parameters
     ----------

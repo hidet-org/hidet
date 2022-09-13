@@ -14,6 +14,18 @@ from .eliminate_barrier import eliminate_barrier_pass
 
 
 def optimize(graph: FlowGraph) -> FlowGraph:
+    """Optimize a flow graph.
+
+    Parameters
+    ----------
+    graph: FlowGraph
+        The flow graph to be optimized.
+
+    Returns
+    -------
+    ret: FlowGraph
+        The optimized flow graph.
+    """
     passes = [
         fold_const_pass(),
         pattern_transform_pass(),

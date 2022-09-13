@@ -5,6 +5,7 @@ hidet.graph
   :caption: Submodules
 
   frontend/onnx
+  ops/index
 
 
 .. automodule:: hidet.graph

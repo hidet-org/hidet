@@ -12,6 +12,8 @@ def trim_op_ending(name: str):
 
 
 class Operator:
+    """An operator that takes tensor as input and output.
+    """
     _current_space_level = 0
     _use_cache = True
 

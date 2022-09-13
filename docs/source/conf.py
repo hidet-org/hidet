@@ -35,6 +35,9 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.autosummary",
     'sphinx.ext.intersphinx',
+    'sphinx.ext.viewcode',
+    'sphinx.ext.coverage',
+    'sphinx.ext.todo',
     "sphinx_gallery.gen_gallery",
     'autodocsumm',
 ]
@@ -49,7 +52,19 @@ exclude_patterns = []
 
 pygments_style = "sphinx"
 
+# Configuration of sphinx.ext.coverage
+coverage_show_missing_items = True
+
 autosummary_generate = True
+
+# If true, the current module name will be prepended to all description
+# unit titles (such as .. function::).
+# add_module_names = False
+
+# If true, the todo role would be rendered.
+todo_include_todos = True
+
+autodoc_typehints = 'description'
 
 intersphinx_mapping = {
     'torch': ('https://pytorch.org/docs/stable', None),
@@ -62,11 +77,14 @@ intersphinx_mapping = {
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
+html_logo = '_static/logo.svg'
+html_favicon = '_static/favicon.svg'
 html_theme = 'sphinx_book_theme'
 # html_theme = 'sphinx_rtd_theme'
 html_theme_options = {
     "repository_url": "https://github.com/yaoyaoding/hidet",
     "use_repository_button": True,
+    'logo_only': True,
 }
 html_title = "Hidet Documentation"
 html_permalinks_icon = "<span>¶</span>"

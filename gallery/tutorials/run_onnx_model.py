@@ -1,4 +1,7 @@
 """
+.. currentmodule:: hidet
+.. _Run ONNX Model with Hidet:
+
 Run ONNX Model with Hidet
 =========================
 
@@ -116,7 +119,7 @@ graph: hidet.FlowGraph = hidet.trace_from(symbol_output)
 #   The `CUDA Graph <https://developer.nvidia.com/blog/cuda-graphs/>`_ is a more efficient
 #   way to submit workload to NVIDIA GPU, it eliminates most of the framework-side overhead.
 #
-# We use :func:`FlowGraph.cuda_graph() <hidet.graph.FlowGraph.cuda_graph>` to create the cuda
+# We use :meth:`~hidet.graph.FlowGraph.cuda_graph` method on the flow graph to create the cuda
 # graph (:class:`hidet.runtime.CudaGraph`),
 # :func:`CudaGraph.set_input_tensors() <hidet.runtime.CudaGraph.set_input_tensors>`
 # to set the input tensors and :func:`CudaGraph.run() <hidet.runtime.CudaGraph.run>` to run the cuda graph, and

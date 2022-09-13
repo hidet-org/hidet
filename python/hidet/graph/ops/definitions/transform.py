@@ -626,8 +626,7 @@ def reshape(x: Tensor, shape) -> Tensor:
 
 
 def rearrange(x: Tensor, plan: List[List[int]]) -> Tensor:
-    """
-    Rearrange a tensor. This task is a general task of squeeze, unsqueeze, flatten, and perm.
+    """Rearrange a tensor. This task is a general task of squeeze, unsqueeze, flatten, and perm.
 
     Parameters
     ----------
@@ -644,9 +643,9 @@ def rearrange(x: Tensor, plan: List[List[int]]) -> Tensor:
 
     Examples
     --------
-    squeeze([1, 1, 2, 3], dims=[0, 1]) = rearrange([1, 1, 2, 3], plan=[[2], [3]]) => Tensor([2, 3])
-    unsqueeze([2, 3], dims=[0, 1]) = rearrange([2, 3], plan=[[], [], [0], [1]]) => Tensor([1, 1, 2, 3])
-    flatten([2, 3, 4, 5], start_dim=1, end_dim=2) = rearrange([2, 3, 4, 5], plan=[[0], [1, 2], [3]]) => Tensor([2, 12, 5])
+    .. squeeze([1, 1, 2, 3], dims=[0, 1]) = rearrange([1, 1, 2, 3], plan=[[2], [3]]) => Tensor([2, 3])
+    .. unsqueeze([2, 3], dims=[0, 1]) = rearrange([2, 3], plan=[[], [], [0], [1]]) => Tensor([1, 1, 2, 3])
+    .. flatten([2, 3, 4, 5], start_dim=1, end_dim=2) = rearrange([2, 3, 4, 5], plan=[[0], [1, 2], [3]]) => Tensor([2, 12, 5])
     """
     if not isinstance(plan, (list, tuple)) or any(not isinstance(v, (list, tuple)) for v in plan):
         raise ValueError('plan should be List[List[int]], but got: {}'.format(plan))

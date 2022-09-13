@@ -6,6 +6,10 @@
 Welcome to Hidet's Documentation
 ================================
 
+.. note::
+
+  Hidet has not been open-sourced yet. Please do not distribute this website.
+
 Hidet is an open-source DNN inference framework, it features
 
 - **Ease of Use**: Support end to end inference given a model in ONNX format.
@@ -17,8 +21,8 @@ Hidet is an open-source DNN inference framework, it features
   :maxdepth: 1
   :caption: Getting Started
 
-  getting_started/install
-  gallery/quick-start
+  getting-started/install
+  gallery/getting-started/quick-start
 
 .. toctree::
   :maxdepth: 1

@@ -90,8 +90,7 @@ class MatmulOp(Operator):
 
 
 def matmul(a: Tensor, b: Tensor, algo: str = 'default', mma: str = 'default', ta=False, tb=False, tc=False) -> Tensor:
-    """
-    Batched matrix multiplication.
+    """Batched matrix multiplication.
 
     Parameters
     ----------
@@ -103,6 +102,7 @@ def matmul(a: Tensor, b: Tensor, algo: str = 'default', mma: str = 'default', ta
 
     algo: str
         The algorithm to use. There are two algorithms:
+
         - 'direct':
            Direct matrix multiplication.
         - 'parallel_k':
@@ -112,6 +112,7 @@ def matmul(a: Tensor, b: Tensor, algo: str = 'default', mma: str = 'default', ta
 
     mma: str
         The matrix-multiplication-accumulate (mma) in warp level:
+
         - 'simt':
            Use cuda core to do the warp-level mma (simt stands for single-instruction-multiple-threads).
         - 'wmma_f16_f16', 'wmma_f16_f32', 'wmma_bf16_f32', 'wmma_tf32_f32':

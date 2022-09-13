@@ -189,7 +189,7 @@ class FlowGraph:
         return inputs
 
     def dummy_outputs(self) -> List[Tensor]:
-        return [empty_like(tensor) for tensor in self.outputs]
+        return [empty_like(tensor) if tensor.storage is None else tensor for tensor in self.outputs]
 
     def save(self, fname: str):
         # before save, clear the packed func cache because ctypes object can not be pickled

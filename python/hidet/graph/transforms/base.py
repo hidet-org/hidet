@@ -10,6 +10,8 @@ logger.addHandler(logging.StreamHandler())
 
 
 class PassContext:
+    """Graph-level pass context.
+    """
     _stack: List['PassContext'] = []
 
     def __init__(self):
@@ -66,6 +68,7 @@ class PassContext:
         ----------
         dtype: Optional[str]
             The target dtype to mix the precision of the model. Candidates:
+
             - None
               Do not mix the precision.
             - 'float16'
@@ -88,6 +91,7 @@ class PassContext:
         ----------
         dtype: Optional[str]
         The target dtype to use for accumulation.
+
             - None
               Use the same as inputs of operators.
             - 'float16'
@@ -109,10 +113,12 @@ class PassContext:
         """
         Specify the matrix-multiply-accumulate (mma) computation primitives used in matrix multiplication and
         convolution.
+
         Parameters
         ----------
         mma: str
             The mma computation primitive to use. Candidates:
+
             - 'simt'
                Use cuda cores.
             - 'wmma'

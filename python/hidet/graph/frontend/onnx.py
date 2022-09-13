@@ -844,6 +844,12 @@ class OnnxOneHot(OnnxOperator):
 
 
 @register_onnx_operator
+class OnnxIdentity(OnnxOperator):
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        return inputs
+
+
+@register_onnx_operator
 class OnnxPyFunc(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         warnings.warn('PyFunc operator in ONNX model encountered, dummy output is returned. If dummy output are used, there will be errors.')
