@@ -28,8 +28,8 @@ def lower(ir_module: IRModule) -> IRModule:
         flatten_tensor_slice_pass(),
         lower_protect_access_pass(),
         lower_task_mapping_pass(),
-        apply_prologue_epilogue_pass(),
-        generate_packed_func_pass(),
+        # apply_prologue_epilogue_pass(),
+        # generate_packed_func_pass(),
         normalize_const_tensor_pass(),
         rule_based_simplify_pass(),  # make ir more readable
         flatten_tensor_index_pass(),

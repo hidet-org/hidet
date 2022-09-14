@@ -1,6 +1,6 @@
 #include <cstdint>
 #include <ctime>
-#include <hidet/common.h>
+#include <hidet/runtime/common.h>
 #include <hidet/cuda_utils.h>
 #include <cuda_runtime.h>
 #include <curand.h>

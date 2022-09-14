@@ -12,7 +12,7 @@ from hidet.testing import check_unary
     ]
 )
 def test_relu(shape, dtype):
-    check_unary(shape, lambda x: np.maximum(x, np.zeros_like(x).astype(dtype)), lambda x: ops.relu(x), dtype)
+    check_unary(shape, lambda x: np.maximum(x, np.zeros_like(x).astype(dtype)), lambda x: ops.relu(x), dtype=dtype)
 
 
 if __name__ == '__main__':

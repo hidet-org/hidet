@@ -10,7 +10,7 @@ from hidet.ir.dialects.compute import TensorNode, ScalarNode, GridCompute, ArgRe
 from hidet.ir.dialects.lowlevel import VoidType, PointerType, Dereference, Address, ReferenceType, TensorPointerType, Reference
 from hidet.ir.dialects.pattern import AnyExpr
 from hidet.ir.layout import RowMajorLayout, ColumnMajorLayout
-from hidet.ir.task import Task, Prologue, Epilogue, InverseMap
+from hidet.ir.task import Task, TaskGraph, Prologue, Epilogue, InverseMap
 from hidet.utils import same_list
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
 from hidet.utils.namer import Namer
@@ -53,6 +53,8 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
         # task related
         elif isinstance(obj, Task):
             return self.visit_Task(obj)
+        elif isinstance(obj, TaskGraph):
+            return self.visit_TaskGraph(obj)
         elif isinstance(obj, Prologue):
             return self.visit_Prologue(obj)
         elif isinstance(obj, Epilogue):
@@ -353,15 +355,17 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
 
     def visit_TensorType(self, t: TensorType):
         assert t.scope is not None
+        items = [self(t.scalar_type), '[' + self(t.shape) + ']', self(t.scope.name)]
         if isinstance(t.layout, RowMajorLayout):
             layout = 'row_major'
+            # default layout, do not print
         elif isinstance(t.layout, ColumnMajorLayout):
-            layout = 'column_major'
+            items.append(Text('column_major'))
         elif t.layout is None:
             layout = 'None'
+            # skip None
         else:
-            layout = type(t.layout).__name__
-        items = [self(t.scalar_type), '[' + self(t.shape) + ']', self(t.scope.name), self(layout)]
+            items.append(Text(type(t.layout).__name__))
         return Text('tensor(') + doc_join(items, ', ') + ')'
 
     def visit_PointerType(self, t: PointerType):
@@ -389,22 +393,21 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
             if node in exclude_nodes:
                 continue
             if node.tensor_compute is None:
-                doc += NewLine() + self.namer.get_name(node) + ': ' + self(node.data_type)
+                doc += NewLine() + self(node) + ': ' + self(node.data_type)
             else:
                 if isinstance(node.tensor_compute, GridCompute):
+                    # example
+                    # y: float32[10, 10] where y[i, j] = x[i, j] + 1
                     gc = node.tensor_compute
-                    items = [
-                        '[' + self(gc.shape) + ']',
-                        '(' + self(gc.axes) + ') => ' + self(gc.value),
-                    ]
-                    doc += NewLine() + self.namer.get_name(node) + ': ' + 'grid(' + doc_join(items, ', ') + ')'
-                elif isinstance(node.tensor_compute, ArgReduceCompute):
-                    arc = node.tensor_compute
-                    items = [
-                        self(arc.x),
-                        'dim={}'.format(arc.dim)
-                    ]
-                    doc += NewLine() + self.namer.get_name(node) + ': ' + 'arg{}('.format(arc.reduce_type) + doc_join(items, ', ') + ')'
+                    doc += NewLine()
+                    doc += self(node) + ': ' + self(node.data_type.scalar_type) + '[' + self(node.data_type.shape) + ']'
+                    doc += Text(' where ') + self(node) + '[' + self(gc.axes) + '] = ' + self(gc.value)
+                    # items = [
+                    #     '[' + self(gc.shape) + ']',
+                    #     'where ',
+                    #     '[' + self(gc.axes) + '] = ' + self(gc.value),
+                    # ]
+                    # doc += NewLine() + self.namer.get_name(node) + ': ' + 'grid(' + doc_join(items, ', ') + ')'
                 else:
                     raise NotImplementedError()
         return doc
@@ -416,52 +419,79 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
             Text('inputs: ') + '[' + doc_join([self.namer.get_name(v) for v in e.inputs], ', ') + ']',
             Text('outputs: ') + '[' + doc_join([self.namer.get_name(v) for v in e.outputs], ', ') + ']',
             Text('computations: ') + self.print_tensor_nodes(e.outputs).indent(),
-            Text('attributes: {') + self(e.attributes) + '}'
+            Text('attributes: {') + self(e.attributes) + '}',
         ]
+        if len(e.task_graph.nodes) > 1:
+            lines.append(Text('task_graph: ') + self(e.task_graph))
         front_part = doc_join(lines, NewLine())
         inverse_map_doc = Doc()
-        prologue_doc = Doc()
-        epilogue_doc = Doc()
         if e.inverse_map:
             inverse_map_doc += NewLine() + Text('inverse_map:')
             for tensor, inverse_map in e.inverse_map.items():
                 inverse_map_doc += (NewLine() + self.namer.get_name(tensor) + ': ' + self(inverse_map)).indent()
-        if e.prologues:
-            prologue_doc += NewLine() + Text('prologue:')
-            for tensor, prologue in e.prologues.items():
-                prologue_doc += (NewLine() + self.namer.get_name(tensor) + ': ' + self(prologue)).indent()
-        if e.epilogues:
-            epilogue_doc += NewLine() + Text('epilogue:')
-            for tensor, epilogue in e.epilogues.items():
-                epilogue_doc += (NewLine() + self.namer.get_name(tensor) + ': ' + self(epilogue)).indent()
-        return Text('Task(') + (NewLine() + front_part + inverse_map_doc + prologue_doc + epilogue_doc).indent() + NewLine() + ')'
+        return Text('Task(') + (NewLine() + front_part + inverse_map_doc).indent() + NewLine() + ')'
+
+    def visit_TaskGraph(self, task_graph: TaskGraph):
+        head = Text('TaskGraph(') + self(task_graph.input_tensors) + ') {'
+        body = []
+        for task in task_graph.nodes:
+            arg_items = []
+            for task_input in task.inputs:
+                if task_input in task_graph.consume:
+                    arg_items.append(self(task_input) + '=' + self(task_graph.consume[task_input]))
+                else:
+                    arg_items.append(self(task_input))
+                # task_input = task_graph.consume[task_input] if task_input in task_graph.consume else task_input
+                # arg_items.append(self(task_input) + '=' + )
+            for name, value in task.attributes.items():
+                arg_items.append(self(name) + '=' + self(value))
+            args = doc_join(arg_items, ', ')
+            assign_line = self(task.outputs) + ' = ' + task.name + '(' + args + ')'
+            if task is task_graph.anchor:
+                assign_line = assign_line + ' [anchor]'
+            if task is task_graph.anchor:
+                compute_body = Doc()
+            else:
+                compute_body = self.print_tensor_nodes(task.outputs, exclude_nodes=task.inputs).indent()
+            body.append(assign_line + compute_body)
+
+        body.append('return ' + self([task_graph.consume[v] if v in task_graph.consume else v for v in task_graph.output_tensors]))
+
+        body = (NewLine() + doc_join(body, NewLine())).indent()
+        tail = NewLine() + '}'
+        return head + body + tail
 
     def visit_Prologue(self, e: Prologue):
         from hidet.ir.functors import collect
-        items = [
-            '(' + self(e.indices) + ') => ' + self(e.value),
-            'extra_inputs: [' + self(e.extra_inputs) + ']'
-        ]
-        doc = 'Prologue(' + doc_join(items, ', ') + ')'
         nodes = [node for node in collect(e.value, TensorNode) if node.tensor_compute is not None]
-        if len(nodes) > 0:
-            doc += self.print_tensor_nodes(nodes, exclude_nodes=[]).indent()
-        return doc
+        assert len(nodes) == 0
+
+        inverse_map_lines = doc_join(['{}: {}'.format(self(tensor), self(inv)) for tensor, inv in e.inverse_map.items()], sep=NewLine())
+        if len(inverse_map_lines.docs) > 0:
+            inverse_map_lines = NewLine() + inverse_map_lines
+        lines = [
+            'extra_inputs: [{}]'.format(doc_join([self(v) for v in e.extra_inputs], ', ')),
+            'computation: out[{}] = {}'.format(self(e.indices), self(e.value)),
+            'inverse_map:' + inverse_map_lines.indent(),
+            'bindings: {{{}}}'.format(doc_join(['{}: {}'.format(self(a), self(b)) for a, b in e.bindings.items()], ', '))
+        ]
+        return Text('Prologue(') + (NewLine() + doc_join(lines, NewLine())).indent() + NewLine() + ')'
 
     def visit_Epilogue(self, e: Epilogue):
         from hidet.ir.functors import collect
-        items = [
-            '(' + self(e.indices) + ')',
-            self(e.orig_value) + ' => ' + self(e.value),
-            'out_indices=(' + self(e.out_indices) + ')',
-            'out_tensor=' + self(e.out_tensor) + ')'
-        ]
-        doc = doc_join(items, ', ')
-        # ret = 'Epilogue((' + self(e.indices) + '), ' + self(e.orig_value) + ' => ' + self(e.value) + ', out_indices=(' + self(e.out_indices) + '), out_tensor=' + self(e.out_tensor) + ')'
         nodes = [node for node in collect(e.value, TensorNode) if node.tensor_compute is not None]
-        if len(nodes) > 0:
-            doc += self.print_tensor_nodes(nodes, exclude_nodes=[]).indent()
-        return doc
+        assert len(nodes) == 0
+
+        self(e.indices)  # first name the indices of origin output
+        self(e.orig_tensor)
+
+        lines = [
+            'extra_inputs: [{}]'.format(doc_join([self(v) for v in e.extra_inputs], ', ')),
+            'orig_tensor: {}'.format(self(e.orig_tensor)),
+            'computation: out[{}] = {} (where {} = {}[{}])'.format(self(e.out_indices), self(e.value), self(e.orig_value), self(e.orig_tensor), self(e.indices)),
+            'bindings: {{{}}}'.format(doc_join(['{}: {}'.format(self(a), self(b)) for a, b in e.bindings.items()], ', '))
+        ]
+        return Text('Epilogue(') + (NewLine() + doc_join(lines, NewLine())).indent() + NewLine() + ')'
 
     def visit_InverseMap(self, e: InverseMap):
         return 'InverseMap([' + self(e.axes) + '] => [' + self(e.indices) + '])'

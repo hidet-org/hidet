@@ -22,4 +22,4 @@ from hidet.testing import check_binary
     ]
 )
 def test_matmul(a_shape, b_shape, dtype, mma):
-    check_binary(a_shape, b_shape, lambda x, y: np.dot(x, y), lambda x, y: ops.matmul(x, y, mma=mma), dtype, atol=1e-4, rtol=1e-4)
+    check_binary(a_shape, b_shape, lambda x, y: np.dot(x, y), lambda x, y: ops.matmul(x, y, mma=mma), dtype=dtype, atol=1e-4, rtol=1e-4)

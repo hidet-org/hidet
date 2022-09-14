@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Union
 
 
 def doc_join(seq: List, sep):
@@ -22,7 +22,7 @@ class Doc:
     default_indent = 2
 
     def __init__(self):
-        self.docs = []
+        self.docs: List[Union[str, NewLineToken]] = []
 
     def append(self, doc):
         if isinstance(doc, list):
@@ -42,6 +42,22 @@ class Doc:
         for token in self.docs:
             if isinstance(token, NewLineToken):
                 doc.docs.append(NewLineToken(indent=token.indent + inc))
+            else:
+                doc.docs.append(token)
+        return doc
+
+    def trim(self):
+        i = 0
+        while i < len(self.docs) and isinstance(self.docs[i], NewLineToken):
+            i += 1
+        j = len(self.docs)
+        while j > i and isinstance(self.docs[j-1], NewLineToken):
+            j -= 1
+        doc = Doc()
+        for k in range(i, j):
+            token = self.docs[k]
+            if isinstance(token, NewLineToken):
+                doc.docs.append(NewLineToken(indent=token.indent))
             else:
                 doc.docs.append(token)
         return doc

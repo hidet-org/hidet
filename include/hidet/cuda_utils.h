@@ -4,7 +4,7 @@
 #include <cuda_runtime.h>
 #include <cudnn.h>
 #include <iostream>
-#include <hidet/common.h>
+#include <hidet/runtime/common.h>
 #include <hidet/runtime/logging.h>
 
 

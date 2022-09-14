@@ -11,6 +11,7 @@ from hidet.ir.primitives.cuda import thread_idx
 from hidet.ir.primitives.cuda.mma import MmaConfig, mma_sync, mma_configs
 from hidet.ir.stmt import BufferStoreStmt
 from hidet.ir.type import ScalarType
+from hidet.transforms.tools import fuse_and_pack
 
 
 def matmul_mma_tensor_core(config: MmaConfig):
@@ -44,7 +45,9 @@ def matmul_mma_tensor_core(config: MmaConfig):
         for p, (i, j) in enumerate(config.c_store_map(w)):
             fb += BufferStoreStmt(c, [i, j], regs_c[p])
     func = fb.func
-    return IRModule(funcs={func.name: func})
+    ir_module = IRModule(funcs={func.name: func})
+    fuse_and_pack(ir_module, func, pack_func_name='matmul_mma')
+    return ir_module
 
 
 @pytest.mark.parametrize(
@@ -63,8 +66,8 @@ def test_mma(config: MmaConfig):
     ir_module = matmul_mma_tensor_core(config)
     func = build_ir_module(ir_module, func_name='matmul_mma', keep_ptx=True)
     m, n, k = config.m, config.n, config.k
-    a = hidet.randint(3, shape=[m, k]).to(ScalarType(config.input_dtype).name)
-    b = hidet.randint(3, shape=[k, n]).to(ScalarType(config.input_dtype).name)
+    a = hidet.randint(3, shape=[m, k]).to(ScalarType(config.input_dtype).name).cuda()
+    b = hidet.randint(3, shape=[k, n]).to(ScalarType(config.input_dtype).name).cuda()
     c = hidet.empty([m, n], dtype=ScalarType(config.output_dtype).name)
     func(a, b, c)
     c_desire = hidet.ops.matmul(a, b)

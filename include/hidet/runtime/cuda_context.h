@@ -1,29 +1,31 @@
 #pragma once
-#include <hidet/common.h>
+#include <hidet/runtime/common.h>
 #include <hidet/runtime/callbacks.h>
+#include <hidet/runtime/context.h>
 #include <cuda_runtime.h>
 
-struct Workspace {
-    void* base;
-    size_t allocated_nbytes;
-    Workspace() {
-        base = nullptr;
-        allocated_nbytes = 0;
-    }
-    void reserve(size_t nbytes);
-};
+struct CudaContext: BaseContext {
+    /* The cuda stream the kernels will be launched on. */
+    cudaStream_t stream = nullptr;
 
-struct CudaContext {
-    cudaStream_t stream;
-    Workspace clean_workspace;
-    Workspace dirty_workspace;
-    size_t workspace_nbytes;
+    /**
+     * Get the instance of cuda context.
+     */
     static CudaContext* global();
 };
 
+/**
+ * Set the cuda stream of cuda context.
+ */
 DLL void set_cuda_stream(cudaStream_t stream);
 
+/**
+ * Get the cuda stream of cuda context.
+ */
 DLL cudaStream_t get_cuda_stream();
 
-DLL void* request_workspace(size_t nbytes, bool require_clean);
+/**
+ * Request a workspace.
+ */
+DLL void* request_cuda_workspace(size_t nbytes, bool require_clean);
 

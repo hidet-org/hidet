@@ -29,19 +29,20 @@ class FlowGraph:
         return self.forward(*inputs)
 
     def __str__(self):
+        from hidet.utils.py import cyan, green, blue, red, magenta
         if any(v is None for v in [self.inputs, self.nodes, self.usage_count]):
             self.update_nodes()
         namer = Namer()
 
         def get_tensor_sig(x: Tensor) -> Doc:
-            return Text(x.dtype) + '[' + doc_join([str(v) for v in x.shape], ', ') + ']'
+            return Text(blue(x.dtype)) + '[' + doc_join([red(str(v)) for v in x.shape], ', ') + ']'
 
         def get_attr_repr(value: Union[float, int, bool, str, list, tuple]) -> Doc:
             from hidet.ir.expr import Constant
             if isinstance(value, (float, int, bool)):
-                return Text(str(value))
+                return Text(red(str(value)))
             elif isinstance(value, str):
-                return Text('"{}"'.format(value))
+                return Text(green('"{}"'.format(value)))
             elif isinstance(value, list):
                 return '[' + doc_join([get_attr_repr(v) for v in value], ', ') + ']'
             elif isinstance(value, tuple):
@@ -61,30 +62,31 @@ class FlowGraph:
 
         # body
         body_doc = Doc()
+        const_doc = Doc()
         for op in self.nodes:
             # const inputs
             for x in op.inputs:
                 if x not in namer.obj_name:
                     assert x.storage is not None
-                    body_doc += NewLine() + namer.get_name(x, hint='c') + ' = ' + 'Constant(' + get_tensor_sig(x) + ')'
+                    const_doc += NewLine() + namer.get_name(x, hint='c') + ' = ' + blue('Constant') + '(' + get_tensor_sig(x) + ')'
             outputs = op.outputs
             if len(outputs) > 1:
                 raise NotImplementedError()
             output: Tensor = outputs[0]
             line_doc = Doc()
-            line_doc += namer(output) + ' = '
-            line_doc += op.name + ('*' if len(op.task.prologues) + len(op.task.epilogues) > 0 else '') + '('
+            line_doc += namer(output) + ': ' + get_tensor_sig(output) + ' = '
+            line_doc += blue(op.name) + ('*' if len(op.task.task_graph.nodes) > 1 else '') + '('
             line_doc += doc_join([namer(x) for x in op.inputs], sep=', ')
             if op.attrs:
-                line_doc += ', ' + doc_join([Text(name) + '=' + get_attr_repr(value) for name, value in op.attrs.items()], ', ')
-            line_doc += ')'
-            line_doc += '  # ' + get_tensor_sig(output)
+                line_doc += ', ' + doc_join([Text(magenta(name)) + '=' + get_attr_repr(value) for name, value in op.attrs.items()], ', ')
+            line_doc += ')  '
+            # line_doc += '# ' + get_tensor_sig(output)
             body_doc += NewLine() + line_doc
 
         # return statement
-        body_doc += NewLine() + Text('return ') + doc_join([namer(x) for x in self.outputs], ', ')
+        body_doc += NewLine() + Text(blue('return ')) + doc_join([namer(x) for x in self.outputs], ', ')
 
-        graph_doc = head_doc + '{' + body_doc.indent() + NewLine() + '}'
+        graph_doc = head_doc + '{' + const_doc.indent() + body_doc.indent() + NewLine() + '}'
         return str(graph_doc)
 
     def build(self):
@@ -100,12 +102,13 @@ class FlowGraph:
                 if task_key in task_keys:
                     continue
                 task_keys.add(task_key)
-                if node.task.fast_implement(space_level):
+                # if node.task.fast_implement(space_level):
+                if space_level == 0 or 'implement_cuda' not in node.task.__class__.__dict__:
                     tasks.append(node.task)
                 else:
                     tunable_tasks.append(node.task)
-        hidet.driver.build_batch_task(tasks, space_level, warmup=profile_config.warmup, number=profile_config.number, repeat=profile_config.repeat, parallel=True)
-        # hidet.driver.build_batch_task(tasks, space_level, warmup=profile_config.warmup, number=profile_config.number, repeat=profile_config.repeat, parallel=False)
+        # hidet.driver.build_batch_task(tasks, space_level, warmup=profile_config.warmup, number=profile_config.number, repeat=profile_config.repeat, parallel=True)
+        hidet.driver.build_batch_task(tasks, space_level, warmup=profile_config.warmup, number=profile_config.number, repeat=profile_config.repeat, parallel=False)
         hidet.driver.build_batch_task(tunable_tasks, space_level, warmup=profile_config.warmup, number=profile_config.number, repeat=profile_config.repeat, parallel=False)
 
     def forward(self, *inputs: Tensor) -> Union[List[Tensor], Tensor]:
@@ -192,22 +195,41 @@ class FlowGraph:
     def dummy_outputs(self) -> List[Tensor]:
         return [empty_like(tensor) if tensor.storage is None else tensor for tensor in self.outputs]
 
-    def save(self, fname: str):
+    def save(self, model_file: str):
+        """Save the flow graph to a file.
+
+        Parameters
+        ----------
+        model_file: str
+            The model file to store the flow graph.
+        """
         # before save, clear the packed func cache because ctypes object can not be pickled
         for node in self.nodes:
             node.task_func = None
         self.usage_count, self.nodes = None, None
 
-        dirname = os.path.dirname(fname)
+        dirname = os.path.dirname(model_file)
         os.makedirs(dirname, exist_ok=True)
         # save to a temporary file first, in case pickle fails.
-        with open(fname + '.temp', 'wb') as f:
+        with open(model_file + '.temp', 'wb') as f:
             pickle.dump(self, f)
-        os.rename(fname + '.temp', fname)
+        os.rename(model_file + '.temp', model_file)
 
     @staticmethod
-    def load(fname: str) -> FlowGraph:
-        with open(fname, 'rb') as f:
+    def load(model_file: str) -> FlowGraph:
+        """Load a flow graph from a file.
+
+        Parameters
+        ----------
+        model_file: str
+            The path to the flow graph.
+
+        Returns
+        -------
+        ret: FlowGraph
+            The loaded flow graph.
+        """
+        with open(model_file, 'rb') as f:
             ret = pickle.load(f)
         if not isinstance(ret, FlowGraph):
             raise TypeError('Expect to load FlowGraph, got {}'.format(type(ret)))

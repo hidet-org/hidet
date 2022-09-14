@@ -324,9 +324,11 @@ def binary_arithmatic(
     if not (isinstance(x, (Tensor, float, int)) and isinstance(y, (Tensor, float, int))):
         raise ValueError('Only support add/sub/mul/div between hidet.Tensor, float, and int. got {} and {}'.format(type(x), type(y)))
     if isinstance(x, (float, int)):
-        x = convert(x)
+        assert isinstance(y, Tensor)
+        x = convert(x, y.device)
     if isinstance(y, (float, int)):
-        y = convert(y)
+        assert isinstance(x, Tensor)
+        y = convert(y, x.device)
     x_scalar = len(x.shape) == 0 and x.storage is not None
     y_scalar = len(y.shape) == 0 and y.storage is not None
     if x_scalar and y_scalar:

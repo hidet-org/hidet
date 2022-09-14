@@ -1,5 +1,6 @@
 from typing import Dict, Sequence, Union, Type
 import ctypes
+from enum import Enum
 
 from .ffi import _LIB
 from ctypes import c_int32, c_void_p, pointer, c_float, cast, c_bool
@@ -11,10 +12,11 @@ c_int32_p = POINTER(c_int32)
 c_float_p = POINTER(c_float)
 
 
-class ArgType:
+class ArgType(Enum):
     INT32 = 1
     FLOAT32 = 2
     POINTER = 3
+    FLOAT16 = 4
 
 
 class CPackedFunc(Structure):

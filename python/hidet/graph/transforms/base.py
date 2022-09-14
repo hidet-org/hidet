@@ -11,6 +11,44 @@ logger.addHandler(logging.StreamHandler())
 
 class PassContext:
     """Graph-level pass context.
+
+    Use the pass context to control the behavior of optimization passes. Normally, we can
+    optimize a flow graph by directly calling :func:`hidet.graph.optimize`:
+
+    .. code-block:: python
+
+      graph_opt = hidet.graph.optimize(graph)
+
+    This will optimize the given flow graph in a default context.
+
+    To customize the optimizations, run the :func:`~hidet.graph.optimize` function with in
+    a custom :class:`hidet.graph.PassContext`:
+
+    .. code-block:: python
+
+      with hidet.graph.PassContext() as ctx:
+          # config the contexts
+          ctx.profile_pass_instrument(print_stdout=True)  # print elapsed time for each pass
+          ctx.save_graph_instrument(out_dir='./outs')  # save the output of each pass as text
+          ctx.set_precision(dtype='float16')  # use float16 as the data type
+          ctx.set_reduce_precision(dtype='float32')  # use float32 for reduction accumulation
+          ctx.set_mma('mma')  # use TensorCore in NVIDIA GPUs to accelerate matmul and conv2d
+          ...   # other configs
+
+          # call optimize function
+          graph_opt = hidet.graph.optimize(graph)
+
+    Please refer to the member functions of this class for the available configs and their usage.
+
+    Attributes
+    ----------
+    instruments: List[GraphPassInstrument]
+        The graph pass instruments that will be applied before and after each pass. The instruments
+        will be applied in order. See :class:`hidet.graph.GraphPassInstrument` on how to add custom
+        instrument.
+
+    configs: Dict[str, Any]
+        The current configs of the pass context.
     """
     _stack: List['PassContext'] = []
 

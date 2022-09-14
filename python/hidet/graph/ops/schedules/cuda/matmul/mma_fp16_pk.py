@@ -8,6 +8,7 @@ from hidet.ir.task import TaskContext
 from hidet.graph.ops.definitions.matmul.matmul import MatmulTask
 from hidet.graph.ops.schedules.common import Schedule, NotSupportedError
 from hidet.graph.ops.schedules.resolve import resolve_ir_modules
+from hidet.transforms.tools import fuse_and_pack
 
 
 class MatmulMmaFp16PkSchedule(Schedule):
@@ -330,5 +331,4 @@ def gemm_mma_fp16_cp_async_ldmatrix_opt_kernel(
                 cast(args[2], ~f16),
                 locks
             )
-    ir_module = module.ir_module()
-    return ir_module
+    return fuse_and_pack(module.ir_module(), matmul_grid, task)

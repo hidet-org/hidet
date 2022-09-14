@@ -1,7 +1,7 @@
 #pragma once
 #include <iostream>
 #include <sstream>
-#include <hidet/common.h>
+#include <hidet/runtime/common.h>
 
 struct ErrorState {
     bool has_error;

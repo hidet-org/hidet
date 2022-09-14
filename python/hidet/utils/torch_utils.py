@@ -20,6 +20,9 @@ def export_torchvision_model_as_onnx(model_name: str, output_path: str, skip_exi
     elif model_name == 'mobilenet_v2':
         model = torchvision.models.mobilenet_v2(pretrained=True).cuda()
         input_shape = [1, 3, 224, 224]
+    elif model_name == 'resnext50':
+        model = torchvision.models.resnext50_32x4d(pretrained=True).cuda()
+        input_shape = [1, 3, 224, 224]
     else:
         raise NotImplementedError(model_name)
 

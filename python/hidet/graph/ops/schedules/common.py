@@ -78,8 +78,6 @@ class LoopExpander(ExprRewriter):
             # exit loop scope
             for i in range(len(shape)):
                 self.sb.exit_body()
-        elif isinstance(tc, ArgReduceCompute):
-            raise NotImplementedError('Compute pattern {}'.format(type(tc).__name__))
         else:
             raise NotImplementedError('Compute pattern {}'.format(type(tc).__name__))
         return buf
@@ -180,60 +178,6 @@ def expand_loop(expr: Expr, input_map: Mapping[Union[ScalarNode, TensorNode], Va
     expander = LoopExpander(input_map)
     stmt, value, new_buffer_map = expander.expand(expr)
     return stmt, value, new_buffer_map
-
-
-# class VirtualTensor:
-#     """
-#     A virtual tensor map index to a value
-#     VirtualTensor can be used to abstract an expression to a tensor.
-#     Support indexing and slicing.
-#
-#     For example, considering this expression: 0 <= i && i < 32 ? A[i] : 0.0, we can construct a
-#     virtual tensor A = VirtualTensor(fmap=lambda i: 0<=i && i<32 ? A[i] : 0.0);
-#     Then we can access A[i] and slice A[1:].
-#     """
-#
-#     def __init__(self, fmap):
-#         self.fmap = fmap
-#
-#     def __getitem__(self, item):
-#         if not isinstance(item, (list, tuple)):
-#             item = [item]
-#         if any(isinstance(v, slice) for v in item):
-#             starts = []
-#             indices = []
-#             for v in item:
-#                 if isinstance(v, slice):
-#                     starts.append(v.start if v.start else 0)
-#                     indices.append(None)
-#                 else:
-#                     starts.append(None)
-#                     indices.append(v)
-#
-#             def fmap(*slice_indices):
-#                 assert len(indices) == len([v for v in starts if v is not None])
-#                 orig_indices = []
-#                 cur = 0
-#                 for i in range(len(starts)):
-#                     if starts[i] is not None:
-#                         orig_indices.append(slice_indices[cur] + starts[i])
-#                         cur += 1
-#                     else:
-#                         orig_indices.append(indices[i])
-#                 return self.__getitem__(orig_indices)
-#
-#             return VirtualTensor(fmap)
-#         else:
-#             return self.fmap(*item)
-#
-#     @staticmethod
-#     def from_indexed_value(indices: Sequence[Var], value: Expr) -> VirtualTensor:
-#         def fmap(*actual_indices):
-#             if len(actual_indices) != len(indices):
-#                 raise ValueError('Expect {} number of indices, got {}.'.format(len(indices), len(actual_indices)))
-#             return rewrite(value, {a: b for a, b in zip(indices, actual_indices)})
-#
-#         return VirtualTensor(fmap)
 
 
 def params_from_task(task: Task) -> List[Var]:

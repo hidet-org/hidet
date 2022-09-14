@@ -1,3 +1,4 @@
+from typing import Sequence, Iterable
 from collections import defaultdict
 
 
@@ -52,3 +53,14 @@ class Namer:
 
         self.obj_name[e] = name
         return name
+
+    @staticmethod
+    def unique_name_among(name: str, existed_names: Iterable[str]) -> str:
+        name_set = set(existed_names)
+        if name not in name_set:
+            return name
+        else:
+            i = 1
+            while name + '_' + str(i) in name_set:
+                i += 1
+            return name + '_' + str(i)

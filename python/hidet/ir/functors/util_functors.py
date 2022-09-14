@@ -113,7 +113,7 @@ def collect(node: Union[Function, Expr, Stmt, list, tuple], node_types, stop_whe
 
     Returns
     -------
-    ret: List[Node]
+    ret: List[Any]
         The collected nodes.
 
     """

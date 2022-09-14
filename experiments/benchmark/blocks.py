@@ -32,14 +32,14 @@ def main_old():
             # '--exec manual --precision f16 --reduce_precision f16 --manual_config cp_async_ldmatrix',
             # '--exec manual --precision f16 --reduce_precision f16 --manual_config cp_async_ldmatrix_opt',
             # '--exec manual --precision f16 --reduce_precision f16 --manual_config all',
-            '--exec manual --manual_config none --disable-graph-cache',
+            # '--exec manual --manual_config none --disable-graph-cache',
             # '--exec hidet --precision f16 --reduce_precision f16 --mma mma_custom --hidet_space 2 --parallel_k disabled',
             # '--exec ort --ort_provider trt'
             # '--exec ansor --tvm_trial 800',
             # '--exec autotvm --tvm_trial 1000',
-            # '--exec ort --ort_provider cuda',
+            '--exec ort --ort_provider cuda',
             # '--exec ort --ort_provider trt'
-            '--exec ansor --tvm_trial 800',
+            # '--exec ansor --tvm_trial 800',
             # '--exec autotvm --tvm_trial 1000',
         ]:
             for bs in [
@@ -99,6 +99,7 @@ n, c, h, w, kx, ky, sx, sy = out_shape 1 960 7 7 kernel 3 3 stride 1 1
                     # '--model op_gemm_128_3072_768',  # 1
                     # '--model op_gemm_128_768_3072',  # 1
                     # '--model op_gemm_128_768_3072',  # 1
+                    '--model op_dwc_64_128_62_62_1_7',
                     # '--model op_dwc_1_384_14_14_1_3',
                     # '--model op_dwc_1_32_112_112_1_3',
                     # '--model op_dwc_1_96_56_56_2_3',
@@ -117,7 +118,7 @@ n, c, h, w, kx, ky, sx, sy = out_shape 1 960 7 7 kernel 3 3 stride 1 1
                     # '--model op_dwc_1_960_7_7_1_3',
                     # '--model op_dwc_1_960_7_7_1_3',
                     # '--model op_dwc_1_960_7_7_1_3',
-                    '--model op_gemm_128_768_3072',
+                    # '--model op_gemm_128_768_3072',
                     # '--model op_gemm_1024_1024_1024',
                     # '--model op_gemm_131_769_3079',
                     # '--model bert_self_attention',

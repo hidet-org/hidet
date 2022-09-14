@@ -35,7 +35,10 @@ class Operator:
         self.task: Optional[Task] = task
         self.attrs: Dict[str, Any] = attributes if attributes is not None else {}
         self.outputs: Optional[List[Tensor]] = outputs
-        self.name = name if name else trim_op_ending(self.__class__.__name__)
+        self.name: str = name if name else trim_op_ending(self.__class__.__name__)
+
+        # assert len(inputs) > 0 and all(inputs[i].device == inputs[0].device for i in range(len(inputs))), 'Expect input tensor on the same device'
+        self.device: str = inputs[0].device
 
         assert all(isinstance(v, Tensor) for v in inputs)
 
@@ -47,8 +50,8 @@ class Operator:
         attributes = ['{}={}'.format(name, str(value)) for name, value in self.attrs.items()]
         return '{}({})'.format(self.name, ', '.join(arguments + attributes))
 
-    def __dir__(self) -> Iterable[str]:
-        return ['task', 'inputs', 'outputs', 'attributes', 'name'] + list(self.attrs)
+    # def __dir__(self) -> Iterable[str]:
+    #     return ['task', 'inputs', 'outputs', 'attributes', 'name', 'device'] + list(self.attrs)
 
     def run(self) -> List[Tensor]:
         if all(t.storage is not None for t in self.inputs):
@@ -68,13 +71,23 @@ class Operator:
         self.build_task_func()
         assert len(inputs) + len(self.task.outputs) == len(self.task.parameters)
         output_types = [output.data_type for output in self.task.parameters[-len(self.task.outputs):]]
-        outputs = [empty(shape=type.const_shape(), dtype=type.scalar_type.name, device='cuda', layout=type.layout) for type in output_types]
+        outputs = [empty(shape=type.const_shape(), dtype=type.scalar_type.name, device=self.device, layout=type.layout) for type in output_types]
         self.pure_run(inputs, outputs)
         return outputs
 
     def lazy_run(self) -> List[Tensor]:
-        output_types = [output.data_type for output in self.task.parameters[-len(self.task.outputs):]]
-        outputs = [Tensor(shape=type.const_shape(), dtype=type.scalar_type.name, device='cuda', storage=None, layout=type.layout, trace=(self, i)) for i, type in enumerate(output_types)]
+        output_nodes = self.task.parameters[-len(self.task.outputs):]
+        output_types = [output_node.data_type for output_node in output_nodes]
+        outputs = []
+        for i, output_type in enumerate(output_types):
+            outputs.append(Tensor(
+                shape=output_type.const_shape(),
+                dtype=output_type.scalar_type.name,
+                device=self.device,
+                storage=None,
+                layout=output_type.layout,
+                trace=(self, i)
+            ))
         return outputs
 
     def pure_run(self, inputs: List[Tensor], outputs: List[Tensor]):
@@ -106,6 +119,7 @@ class Operator:
         new_op.inputs = inputs
         new_op.task = self.task
         new_op.attrs = attributes
+        new_op.device = self.device
         new_op.outputs = new_op.run()
         new_op.task_func = None
         return new_op.outputs
@@ -160,7 +174,7 @@ class Operator:
                 self.task_func = self._task_cache[level][task_string]
             else:
                 pc = _profile_config
-                self.task_func = build_task(self.task, warmup=pc.warmup, number=pc.number, repeat=pc.repeat, space_level=self._current_space_level, use_cache=self._use_cache)
+                self.task_func = build_task(self.task, space_level=self._current_space_level, target_device=self.device, warmup=pc.warmup, number=pc.number, repeat=pc.repeat, use_cache=self._use_cache)
                 self._task_cache[level][task_string] = self.task_func
 
 

@@ -18,6 +18,7 @@ from hidet.graph.ops.schedules.common import params_from_task, Schedule, NotSupp
 from hidet.graph.ops.schedules.cuda.common import get_task_map, get_transfer_task_map
 from hidet.graph.ops.schedules.resolve import resolve_ir_modules
 from hidet.utils import cuda, prod
+from hidet.transforms.tools import fuse_and_pack
 
 
 def shape_prod(a_shape: List[int], b_shape: List[int]) -> List[int]:
@@ -377,8 +378,8 @@ def batched_matmul_cuda_with_given_schedule(task: MatmulTask, schedule: MatmulSc
                            worker_idx=thread_idx() % warp_size)
 
     func = fb.get()
-    ir_module.add(func.name, func)
-    return ir_module
+    ir_module = IRModule(funcs={func.name: func}, task=task)
+    return fuse_and_pack(ir_module, func, task)
 
 
 def init(dst, init_value, sch):

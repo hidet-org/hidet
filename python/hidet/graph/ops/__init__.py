@@ -1,7 +1,7 @@
 from . import definitions
 
 from .definitions.conv2d import conv2d, conv2d_winograd, conv2d_gemm, conv2d_gemm_image_transform
-from .definitions.matmul import matmul, parallel_k_batched_matmul
+from .definitions.matmul import matmul, batched_matmul, parallel_k_batched_matmul
 from .definitions.pool import max_pool2d, avg_pool2d
 from .definitions.softmax import softmax
 from .definitions.activation import relu, sigmoid, clip, relu6

@@ -14,6 +14,7 @@ from hidet.graph.ops.definitions.reduce import ReduceTask
 from hidet.graph.ops.schedules.common import params_from_task
 from .common import warp_reduce
 from hidet.utils import prod
+from hidet.transforms.tools import fuse_and_pack
 
 
 def merge_indices(grid_indices: List[Expr], reduce_indices: List[Expr], reduce_dims: List[int]) -> List[Expr]:
@@ -96,7 +97,8 @@ def cuda_schedule_reduce_by_warp_reduce(task: ReduceTask) -> IRModule:
 
         fb.set_body(sb.finish())
     func = fb.get()
-    return IRModule(funcs={func.name: func}, task=task)
+    ir_module = IRModule(funcs={func.name: func}, task=task)
+    return fuse_and_pack(ir_module, func, task)
 
 
 def cuda_schedule_reduce_by_default(task: ReduceTask) -> IRModule:
@@ -159,4 +161,5 @@ def cuda_schedule_reduce_by_default(task: ReduceTask) -> IRModule:
 
         fb.set_body(sb.finish())
     func = fb.get()
-    return IRModule(funcs={func.name: func}, task=task)
+    ir_module = IRModule(funcs={func.name: func}, task=task)
+    return fuse_and_pack(ir_module, func, task)

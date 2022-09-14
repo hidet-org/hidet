@@ -35,6 +35,23 @@ def free_cuda_storage(addr: int) -> None:
     del runtime_allocated_storages[addr]
 
 
+@register_runtime_callback(restype=c_uint64, argtypes=[c_uint64])
+def allocate_cpu_storage(nbytes: int) -> int:
+    from hidet.runtime.storage import Storage
+    storage = Storage.new('cpu', nbytes)
+    runtime_allocated_storages[storage.addr] = storage
+    return storage.addr
+
+
+@register_runtime_callback(restype=None, argtypes=[c_uint64])
+def free_cpu_storage(addr: int) -> None:
+    if addr == 0:
+        return
+    if addr not in runtime_allocated_storages:
+        raise ValueError('Runtime trying to free a storage that has not been allocated.')
+    del runtime_allocated_storages[addr]
+
+
 if __name__ == '__main__':
     runtime_api.free_cuda_storage(0)
     ret = runtime_api.allocate_cuda_storage(10)

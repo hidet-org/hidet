@@ -7,14 +7,20 @@ from .pattern_transform import pattern_transform_pass
 from .automatic_mix_precision import automatic_mix_precision_pass
 from .resolve_mma import resolve_mma_pass
 from .resolve_variant import resolve_variant_pass
-from .fuse_unary_elementwise import fuse_unary_elementwise_pass
-from .fuse_epilogue import fuse_epilogue_pass
-from .fuse_prologue import fuse_prologue_pass
+from .fuse_operator import fuse_operator_pass
 from .eliminate_barrier import eliminate_barrier_pass
 
 
 def optimize(graph: FlowGraph) -> FlowGraph:
     """Optimize a flow graph.
+
+    This function applies a sequence of predefined graph-level passes to a :class:`~hidet.graph.FlowGraph` to
+    conduct optimizations and graph transformations.
+
+    .. tip::
+
+        Some graph passes provide options to config, please refer to :class:`hidet.graph.PassContext` for more
+        information on graph pass configuration.
 
     Parameters
     ----------
@@ -32,9 +38,7 @@ def optimize(graph: FlowGraph) -> FlowGraph:
         automatic_mix_precision_pass(),
         resolve_variant_pass(),
         resolve_mma_pass(),
-        fuse_unary_elementwise_pass(),
-        fuse_epilogue_pass(),
-        fuse_prologue_pass(),
+        fuse_operator_pass(),
         eliminate_barrier_pass()
     ]
     ctx = PassContext.current()

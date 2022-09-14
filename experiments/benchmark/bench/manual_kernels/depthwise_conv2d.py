@@ -1,7 +1,7 @@
 import hidet
 from hidet.runtime import CompiledFunction
 from hidet.ir.dialects.compute import tensor_input
-from hidet.tos.ops.schedules.cuda.depthwise_conv import schedule_depthwise_conv2d, Conv2dTask
+from hidet.graph.ops.schedules.cuda.depthwise_conv import schedule_depthwise_conv2d, Conv2dTask
 
 
 def dwc_kernel(batch_size, channels, height, width, stride, kernel) -> CompiledFunction:

@@ -198,3 +198,6 @@ build-release
 
 # sphinx gallery output
 /docs/source/gallery
+
+# onnx model
+*.onnx

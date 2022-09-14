@@ -1,9 +1,12 @@
+from __future__ import annotations
 from typing import Union, Sequence, Tuple, Optional, List, Dict, Any
+
 from hidet.ir.node import Node
 from hidet.ir.type import ScalarType, TensorType, Scope, tensor_type, scalar_type
 from hidet.ir.expr import Expr, Constant, convert, Var, var, And, if_then_else
 from hidet.utils.info import float_type_min_value
 from .reduce_operations import ReduceOperation
+from hidet.utils.namer import Namer
 
 
 class ComputeNode(Expr):
@@ -26,6 +29,12 @@ class TensorNode(ComputeNode):
         super().__init__(name)
         self.data_type: TensorType = data_type
         self.tensor_compute: Optional[TensorCompute] = tensor_compute
+
+    def astext(self):
+        from hidet.ir.functors.printer import IRPrinter
+        printer = IRPrinter()
+        doc = printer.print_tensor_nodes([self])
+        return str(doc.trim())
 
     def is_input(self) -> bool:
         return self.tensor_compute is None
@@ -51,7 +60,10 @@ class ScalarCompute(ComputePrimitive):
 
 
 class TensorCompute(ComputePrimitive):
-    pass
+    def as_grid_compute(self) -> GridCompute:
+        if not isinstance(self, GridCompute):
+            raise TypeError("Current object is not a grid compute.")
+        return self
 
 
 class GridCompute(TensorCompute):

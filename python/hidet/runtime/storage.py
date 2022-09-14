@@ -154,7 +154,7 @@ class Storage:
     def __setstate__(self, state):
         raise ValueError()
 
-    def cpu(self):
+    def cpu(self) -> Storage:
         if self.device == 'cpu':
             return self
         elif self.device == 'cuda':
@@ -174,7 +174,7 @@ class Storage:
         else:
             raise NotImplementedError()
 
-    def cuda(self):
+    def cuda(self) -> Storage:
         if self.device == 'cuda':
             return self
         elif self.device == 'cpu':

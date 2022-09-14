@@ -129,6 +129,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         doc += Text('#include <cuda_fp16.h>') + NewLine()
         doc += Text('#include <cuda_bf16.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cuda_context.h>') + NewLine()
+        doc += Text('#include <hidet/runtime/cpu_context.h>') + NewLine()
 
         # nvcc use float to 'store' tfloat32 data
         doc += Text('typedef float tfloat32_t;') + NewLine()
@@ -325,47 +326,8 @@ class Codegen(StmtExprFunctor, TypeFunctor):
                 raise ValueError("Please use resolve_generic_primitive_function pass to lower the generic primitive function {}.".format(entry.name))
             # system-provided function, do not canonize the func name
             return entry.codegen_name + (Text('(') + doc_join([self(arg) for arg in e.args], Text(', ')) + ')')
-            pass
         else:
             raise ValueError("Callee {} not found in current ir module, and it is not primitive function.".format(func_name))
-        # func_name = e.func_var.hint
-        # # func_name = func_name.replace('.', '_')
-        # if '.' in func_name:
-        #     target, func_name = func_name.split('.')
-        # if func_name in self.ir_module.functions:
-        #     # first check whether callee is in current ir module
-        #     # because ir module functions will cover primitive functions
-        #     func = self.ir_module.lookup(func_name)
-        # else:
-        #     key = e.func_var.hint
-        #     if not is_primitive_function(key):
-        #         raise ValueError("Callee {} not found in current ir module, and it is not primitive function.".format(key))
-        #     entry = lookup_primitive_function(key)
-        #     if entry.function is not None:
-        #         raise ValueError("Please use import_primitive_functions pass to import primitive function first: {}, functions in current module:\n{}.".format(entry.name, list(self.ir_module.functions.keys())))
-        #     if entry.generic:
-        #         raise ValueError("Please use resolve_generic_primitive_function pass to lower the generic primitive function {}.".format(entry.name))
-        #     # system-provided function, do not canonize the func name
-        #     return entry.name + (Text('(') + doc_join([self(arg) for arg in e.args], Text(', ')) + ')')
-        # func_name = Text(self.canonize_funcname(func_name))
-        # if func.kind == 'cuda_kernel':
-        #     def dim3_str(dims):
-        #         if isinstance(dims, (int, Expr)):
-        #             return self(dims)
-        #         else:
-        #             return Text('dim3(') + self(dims) + ')'
-        #
-        #     configs = [
-        #         dim3_str(func.attrs['cuda_grid_dim']),  # grid dimension
-        #         dim3_str(func.attrs['cuda_block_dim']),  # block dimension
-        #         func.attrs.get('cuda_smem_bytes', 0),  # dynamic shared memory size
-        #         Text('get_cuda_stream()')  # cuda stream (get_cuda_stream() function is defined in hidet/runtime.h)
-        #     ]
-        #     launch_config = Text('<<<') + doc_join([self(v) for v in configs], sep=', ') + Text('>>>')
-        # else:
-        #     launch_config = []
-        # param_doc = Text('(') + doc_join([self(arg) for arg in e.args], Text(', ')) + ')'
-        # return func_name + launch_config + param_doc
 
     def visit_Let(self, e: Let):
         raise ValueError("please run 'expand_let_expr' pass before codegen")

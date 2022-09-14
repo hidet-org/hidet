@@ -54,13 +54,13 @@ class MatmulTask(Task):
         else:
             raise ValueError('Can not recognize mma type {}, candidates: {}'.format(self.mma, ['simt', 'wmma', 'mma']))
 
-    def allow_prologue(self, only_elementwise=False) -> True:
+    def allow_prologue(self) -> True:
         if self.mma == 'mma_custom':
             return False
         else:
             return True
 
-    def allow_epilogue(self, only_elementwise=False) -> True:
+    def allow_epilogue(self) -> True:
         if self.mma == 'mma_custom':
             return False
         else:

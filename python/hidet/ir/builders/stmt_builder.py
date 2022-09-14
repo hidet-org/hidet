@@ -1,16 +1,16 @@
 from typing import Union, Optional, Sequence, List
 
-from hidet.ir.stmt import Stmt, ForStmt, IfStmt, EvaluateStmt, SeqStmt, LetStmt
+from hidet.ir.stmt import Stmt, ForStmt, IfStmt, EvaluateStmt, SeqStmt, LetStmt, ForTaskStmt
 from hidet.ir.type import TypeNode, scalar_type, ScalarType
 from hidet.ir.expr import Expr, Var, var, convert
 from hidet.ir.mapping import TaskMapping, TaskMappingExpander
 
-ScopedStmt = Union[IfStmt, ForStmt, LetStmt]
+ScopedStmt = Union[IfStmt, ForStmt, LetStmt, ForTaskStmt]
 
 
 class StmtScope:
     def __init__(self, sb: 'StmtBuilder', stmts: Union[Sequence[ScopedStmt], ScopedStmt], ret=None):
-        if isinstance(stmts, (IfStmt, ForStmt, LetStmt)):
+        if isinstance(stmts, (IfStmt, ForStmt, LetStmt, ForTaskStmt)):
             stmts = [stmts]
         self.sb = sb
         self.stmts = stmts
@@ -28,10 +28,18 @@ class StmtScope:
 
 class StmtBuilder:
     def __init__(self):
+        # the structure of scope_stack:
+        # [
+        #    [...], # finished statements in outermost scope
+        #    [...], # finished statements in the second outermost scope
+        #    ...
+        #    [...], # finished statements in the innermost scope
+        # ]
+        # when we exit a scope, it will be wrapped into a statement and append to outer scope
         self.scope_stack = [[]]
 
-    def __iadd__(self, other: Union[Stmt, Expr]):
-        assert isinstance(other, (Stmt, Expr))
+    def __iadd__(self, other: Union[Stmt, Expr, Sequence[Stmt]]):
+        assert isinstance(other, (Stmt, Expr, list, tuple))
         self.append(other)
         return self
 
@@ -63,18 +71,27 @@ class StmtBuilder:
         assert if_stmt.else_body is None
         return StmtScope(self, stmts=if_stmt, ret=None)
 
+    def for_mapping(self, iter_names: Sequence[str], mapping: TaskMapping, worker: Expr) -> StmtScope:
+        iter_names = [var(name) for name in iter_names]
+        return StmtScope(self, stmts=ForTaskStmt(iter_names, mapping, worker, None), ret=iter_names)
+
     def for_task(self, worker_index: Expr, task_layout: TaskMapping):
+        # replaced by for_mapping, todo: remove this function and rewrite all its usage
         expander = TaskMappingExpander()
         fields = expander.expand(worker_index, task_layout)
         return StmtScope(self, stmts=expander.stmts, ret=fields)
 
-    def append(self, stmt: Union[Stmt, Expr]):
+    def append(self, stmt: Union[Stmt, Expr, Sequence[Stmt]]):
         if stmt is None:
             return
-        if not isinstance(stmt, Stmt):
-            assert isinstance(stmt, Expr)
-            stmt = EvaluateStmt(stmt)
-        self.scope_stack[-1].append(stmt)
+        if isinstance(stmt, (Stmt, Expr)):
+            if isinstance(stmt, Expr):
+                stmt = EvaluateStmt(stmt)
+            self.scope_stack[-1].append(stmt)
+        else:
+            assert isinstance(stmt, (tuple, list))
+            for s in stmt:
+                self.append(s)
 
     def enter_body(self, stmt: Union[IfStmt, ForStmt, LetStmt]):
         self.scope_stack[-1].append(stmt)
@@ -93,6 +110,8 @@ class StmtBuilder:
             else:
                 assert last_stmt.else_body is None
                 last_stmt.else_body = body
+        elif isinstance(last_stmt, ForTaskStmt):
+            last_stmt.body = body
         else:
             assert False
 

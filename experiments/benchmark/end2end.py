@@ -7,12 +7,12 @@ def main():
         # '--exec ort --ort_provider cuda',
         # '--exec trt',
         # '--exec trt --trt_fp16',
-        # '--exec hidet --precision f32 --reduce_precision f32 --mma simt',
+        '--exec hidet --precision f32 --reduce_precision f32 --mma simt',
         # '--exec hidet --precision f32 --reduce_precision f32 --mma simt --hidet_space 0 --disable-graph-cache',
         # '--exec hidet --precision f32 --reduce_precision f32 --mma simt --hidet_space 0 --parallel_k search --disable-graph-cache',
         # '--exec hidet --precision f32 --reduce_precision f32 --mma simt --hidet_space 2 --parallel_k search --disable-graph-cache',
         # '--exec hidet --precision f32 --reduce_precision f32 --mma simt --hidet_space 2 --parallel_k 4 --disable-graph-cache',
-        '--exec hidet --precision f32 --reduce_precision f32 --mma simt --parallel_k search --disable-graph-cache',
+        # '--exec hidet --precision f32 --reduce_precision f32 --mma simt --parallel_k search --disable-graph-cache',
         # '--exec hidet --precision f32 --reduce_precision f32 --mma simt --parallel_k disabled',
         # '--exec hidet --precision f32 --reduce_precision f32 --mma simt --parallel_k 2',
         # '--exec hidet --precision f32 --reduce_precision f32 --mma simt --parallel_k 4',
@@ -31,11 +31,11 @@ def main():
             # '--bs 16'
         ]:
             for model in [
-                # '--model resnet50',
-                # '--model inception_v3',
+                '--model resnet50',
+                '--model inception_v3',
                 '--model mobilenet_v2',
-                # '--model bert',
-                # '--model gpt2'
+                '--model bert',
+                '--model gpt2'
             ]:
                 bench.main('{} {} {}'.format(executor, bs, model))
 

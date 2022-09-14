@@ -1,14 +1,13 @@
 from typing import List, Tuple, Union, TypeVar
 import os
 
-from hidet.ir.func import IRModule
+from hidet.ir.func import IRModule, Function
 from hidet.graph.ops.definitions.conv2d.conv2d import Conv2dTask
-from hidet.graph.ops.schedules.cuda import generic_cuda_schedule
-from hidet.graph.ops.schedules.common import params_from_task, Schedule, NotSupportedError
+from hidet.graph.ops.schedules.common import Schedule, NotSupportedError
 from hidet.ir.task import TaskContext
 from hidet.graph.ops.schedules.resolve import resolve_ir_modules
-from hidet.utils import prod
-from hidet.utils import cuda
+from hidet.utils import prod, cuda
+from hidet.transforms.tools import fuse_and_pack
 
 
 T = TypeVar('T', bound=Tuple)
@@ -213,11 +212,9 @@ def schedule_depthwise_conv2d_kernel(
                     gn, gc, gh, gw = offset_n * block_n + nn, offset_c * block_c + cc, offset_h * block_h + hh, offset_w * block_w + ww
                     for r, s in grid(kernel_height, kernel_width):
                         regs_y[rn, rc, rh, rw] = regs_y[rn, rc, rh, rw] + smem_x[nn, cc, hh * stride_height + r, ww * stride_width + s] * smem_w[cc, r, s]
-                        # if gh == 0 and gw == 0:
-                        #     printf(r'threadIdx.x %3d r %d s %d y[%d, %d, %d, %d] %.0f x %.0f w %.0f\n', threadIdx.x, r, s, gn, gc, gh, gw, regs_y[rn, rc, rh, rw], smem_x[nn, cc, hh * stride_height + r, ww * stride_width + s], smem_w[cc, r, s])
                     if gn < batch_size and gc < channels and gh < height and gw < width:
                         gmem_y[gn, gc, gh, gw] = regs_y[rn, rc, rh, rw]
-    return script_module.ir_module()
+    return fuse_and_pack(script_module.ir_module(), conv2d_grid, task)
 
 
 def dwc_kernel(batch_size, channels, height, width, stride, kernel):

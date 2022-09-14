@@ -15,13 +15,13 @@ from hidet.runtime.storage import Storage
 from hidet.utils import prod
 
 
-def convert(v):
+def convert(v, device: str):
     if isinstance(v, (float, int)):
         dtype_map = {
             float: 'float32',
             int: 'int64'
         }
-        return full(shape=[1], fill_value=v, dtype=dtype_map[type(v)])
+        return full(shape=[1], fill_value=v, dtype=dtype_map[type(v)], device=device)
     elif isinstance(v, Tensor):
         return v
     else:
@@ -176,21 +176,58 @@ class Tensor:
         self.trace = state['trace']
 
     def signature(self) -> str:
+        """Get the signature of the tensor.
+
+        Returns
+        -------
+        ret: str
+            The signature of the tensor.
+        """
         return "Tensor(shape={}, dtype='{}', device='{}')".format(self.shape, self.dtype, self.device)
 
     @property
     def nbytes(self):
+        """The number of bytes of the tensor.
+
+        Returns
+        -------
+        ret: int
+            The number of bytes.
+        """
         return prod(self.shape) * ScalarType(self.dtype).nbytes()
 
     @property
     def num_elements(self):
+        """The number of elements of the tensor.
+
+        Returns
+        -------
+        ret: int
+            The number of elements.
+        """
         return prod(self.shape)
 
     @property
     def op(self):
+        """The operator that produces this tensor.
+
+        Returns
+        -------
+        ret: Optional[hidet.graph.operator.Operator]
+            The operator that produces this tensor. None indicates it is not traced.
+        """
         return self.trace[0] if self.trace else None
 
     def scalar(self) -> Union[float, int]:
+        """Get the scalar value.
+
+        If a tensor has shape ``[]`` (i.e., rank = 0), this tensor is a scalar. This function get the value of this tensor.
+
+        Returns
+        -------
+        ret: Union[float, int]
+            The value of the tensor.
+        """
         if len(self.shape) != 0:
             raise ValueError('Can not convert a Tensor with shape {} to a scalar.'.format(self.shape))
         value = self.numpy().tolist()
@@ -198,59 +235,287 @@ class Tensor:
         return value
 
     def contiguous(self):
+        """Create a tensor with contiguous row-major layout.
+
+        If the tensor already has the continuous row-major layout, this tensor is returned directly.
+
+        Returns
+        -------
+        ret: Tensor
+            The tensor with contiguous row-major layout.
+        """
         if isinstance(self.layout, RowMajorLayout):
             return self
         return self.reshape(self.shape)
 
     def reshape(self, shape: Sequence[int]):
+        """Create a reshaped tensor.
+
+        See Also :func:`hidet.graph.ops.reshape`.
+
+        Parameters
+        ----------
+        shape: Sequence[int]
+            The new shape.
+
+        Returns
+        -------
+        ret: Tensor
+            The reshaped tensor.
+        """
         from .ops import reshape
         return reshape(self, shape)
 
     def squeeze(self, dims: Union[int, Sequence[int]]):
+        """Create a squeezed tensor.
+
+        See Also :func:`hidet.graph.ops.squeeze`.
+
+        Parameters
+        ----------
+        dims: Union[int, Sequence[int]]
+            The dimension(s) to squeeze.
+
+        Returns
+        -------
+        ret: Tensor
+            The squeezed tensor.
+        """
         from .ops import squeeze
         return squeeze(self, dims)
 
     def unsqueeze(self, dims: Union[int, Sequence[int]]):
+        """Create a unsqueezed tensor.
+
+        See Also :func:`hidet.graph.ops.unsqueeze`.
+
+        Parameters
+        ----------
+        dims: Union[int, Sequence[int]]
+            The dimensions to unsqueeze.
+
+        Returns
+        -------
+        ret: Tensor
+            The unsqueezed tensor.
+        """
         from .ops import unsqueeze
         return unsqueeze(self, dims)
 
     def rearrange(self, plan: List[List[int]]):
+        """Create a rearranged tensor.
+
+        See Also :func:`hidet.graph.ops.rearrange`.
+
+        Parameters
+        ----------
+        plan: List[List[int]]
+            The rearrange plan.
+
+        Returns
+        -------
+        ret: Tensor
+            The rearranged tensor.
+        """
         from .ops import rearrange
         return rearrange(self, plan)
 
     def flatten(self, start_dim=0, end_dim=None):
+        """Create a flattened tensor.
+
+        See Also :func:`hidet.graph.ops.flatten`.
+
+        Parameters
+        ----------
+        start_dim: int
+            The start dimension to flatten.
+
+        end_dim: int
+            The end dimension (exclusive) to flatten.
+
+        Returns
+        -------
+        ret: Tensor
+            The flattened tensor.
+        """
         from .ops import flatten
         return flatten(self, start_dim, end_dim)
 
     def transpose(self, axes: Optional[Sequence[int]]):
+        """Create a transposed tensor.
+
+        See Also :func:`hidet.graph.ops.transpose`.
+
+        Parameters
+        ----------
+        axes: Optional[Sequence[int]]
+            The axes to transpose.
+
+        Returns
+        -------
+        ret: Tensor
+            The transposed tensor.
+        """
         from .ops import transpose
         return transpose(self, axes)
 
     def barrier(self) -> Tensor:
+        """Create a fusion barrier toward current tensor.
+
+        See Also :func:`hidet.graph.ops.barrier`.
+
+        Returns
+        -------
+        ret: Tensor
+            The same tensor after barrier.
+        """
         from .ops import barrier
         return barrier(self)
 
     def sum(self, dims: Union[int, List[int]], keep_dim: bool = False):
+        """Create a sum reduced tensor.
+
+        See Also :func:`hidet.graph.ops.reduce_sum`.
+
+        Parameters
+        ----------
+        dims: Union[int, List[int]]
+            The dimensions to sum up.
+
+        keep_dim: bool
+            Whether to keep the reduced dimensions.
+
+        Returns
+        -------
+        ret: Tensor
+            The reduced tensor.
+        """
         from .ops import reduce_sum
         return reduce_sum(self, dims=dims, keep_dim=keep_dim)
 
     def mean(self, dims: Union[int, List[int]], keep_dim: bool = False):
+        """Create a mean reduced tensor.
+
+        See Also :func:`hidet.graph.ops.reduce_mean`.
+
+        Parameters
+        ----------
+        dims: Union[int, List[int]]
+            The dimensions to average up.
+
+        keep_dim: bool
+            Whether to keep the reduced dimensions.
+
+        Returns
+        -------
+        ret: Tensor
+            The reduced tensor.
+        """
         from .ops import reduce_mean
         return reduce_mean(self, dims=dims, keep_dim=keep_dim)
 
     def rsqrt(self):
+        """Compute the ``1/sqrt(x)`` of current tensor x.
+
+        See Also :func:`hidet.graph.ops.rsqrt`.
+
+        Returns
+        -------
+        ret: Tensor
+            The result tensor.
+        """
         from .ops import rsqrt
         return rsqrt(self)
 
     def cast(self, dtype):
+        """Cast the data type of current tensor.
+
+        Parameters
+        ----------
+        dtype: str
+            The target data type to convert to.
+
+        Returns
+        -------
+        ret: Tensor
+            The tensor with the new data type.
+        """
         from .ops import cast
         return cast(self, dtype)
 
-    def to(self, dtype: str):
+    def to(self, dtype: Optional[str] = None, device: Optional[str] = None):
+        """Cast the data type of current tensor or move it to another device.
+
+        Parameters
+        ----------
+        dtype: Optional[str]
+            The target data type to convert to. None indicates unchanged.
+
+        device: Optional[str]
+            The target device to copy the tensor. None indicates unchanged.
+
+        Returns
+        -------
+        ret: Tensor
+            The tensor with the new data type on target device.
+        """
         from .ops import cast
-        return cast(self, dtype)
+        tensor = self
+        if dtype is not None:
+            tensor = cast(tensor, dtype)
+        if device is not None:
+            if device == 'cpu':
+                tensor = tensor.cpu()
+            elif device == 'cuda':
+                tensor = tensor.cuda()
+            else:
+                raise ValueError('Cannot recognize device {}'.format(device))
+        return tensor
+
+    def cpu(self):
+        """Create a copy of self tensor on cpu device.
+
+        If the current tensor is already on cpu device, self is returned.
+
+        Returns
+        -------
+        ret: Tensor
+            The new tensor or self.
+        """
+        if self.device == 'cpu':
+            return self
+        else:
+            if self.trace is None:
+                return Tensor(self.shape, self.dtype, 'cpu', self.storage.cpu() if self.storage else None, self.layout)
+            else:
+                raise ValueError('Please use .detach() to detach a trace variable first.')
+
+    def cuda(self):
+        """Create a copy of self tensor on cuda device.
+
+        If the current tensor is already on cuda device, self is returned.
+
+        Returns
+        -------
+        ret: Tensor
+            The new tensor or self.
+        """
+        if self.device == 'cuda':
+            return self
+        else:
+            if self.trace is None:
+                return Tensor(self.shape, self.dtype, 'cuda', self.storage.cuda() if self.storage else None, self.layout)
+            else:
+                raise ValueError('Please use .detach() to detach a trace variable first.')
 
     def copy(self) -> Tensor:
+        """Create a copy of current tensor.
+
+        Returns
+        -------
+        ret: Tensor
+            A new tensor with the same contents as the current one.
+        """
         if self.trace is not None:
             raise ValueError('Please use .detach() to detach a trace variable first before copying.')
         return Tensor(
@@ -275,6 +540,13 @@ class Tensor:
         )
 
     def detach(self):
+        """Detach the current tensor from tracing.
+
+        Returns
+        -------
+        ret: Tensor
+            The detached tensor.
+        """
         if self.trace is None:
             return self
         else:
@@ -286,15 +558,6 @@ class Tensor:
                 layout=self.layout,
                 trace=None
             )
-
-    def cpu(self):
-        if self.device == 'cpu':
-            return self
-        else:
-            if self.trace is None:
-                return Tensor(self.shape, self.dtype, 'cpu', self.storage.cpu() if self.storage else None, self.layout)
-            else:
-                raise ValueError('Please use .detach() to detach a trace variable first.')
 
     def cpu_async(self, stream: Optional[CudaStream] = None):
         """
@@ -317,15 +580,6 @@ class Tensor:
                 ret = Tensor(self.shape, self.dtype, 'cpu', self.storage.cpu_async(stream) if self.storage else None, self.layout)
                 # ret._ref = self  # prevent the storage of self tensor from being freed before the async copy is finished
                 return ret
-            else:
-                raise ValueError('Please use .detach() to detach a trace variable first.')
-
-    def cuda(self):
-        if self.device == 'cuda':
-            return self
-        else:
-            if self.trace is None:
-                return Tensor(self.shape, self.dtype, 'cuda', self.storage.cuda() if self.storage else None, self.layout)
             else:
                 raise ValueError('Please use .detach() to detach a trace variable first.')
 
@@ -381,6 +635,13 @@ class Tensor:
         return np_array
 
     def torch(self):
+        """Convert to a torch tensor.
+
+        Returns
+        -------
+        ret: torch.Tensor
+            A new torch tensor with the same contents of current hidet tensor.
+        """
         import torch
         torch_tensor = torch.empty(
             size=self.shape,
@@ -724,6 +985,18 @@ def from_torch(torch_tensor):
 
 
 def array(obj: Union[List, Tuple, np.ndarray, Tensor]) -> Tensor:
+    """Convert a list, tuple, or numpy ndarray to a hidet tensor.
+
+    Parameters
+    ----------
+    obj: Union[List, Tuple, np.ndarray, Tensor]
+        The object to be converted.
+
+    Returns
+    -------
+    ret: Tensor
+        The hidet tensor converted from given object.
+    """
     if isinstance(obj, np.ndarray):
         return from_numpy(obj)
     elif isinstance(obj, Tensor):

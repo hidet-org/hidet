@@ -1,8 +1,9 @@
 from __future__ import annotations
-from typing import Any
+from typing import Any, Deque
 import copy
 import os
 import pickle
+from collections import deque
 from typing import Dict, List, Union, Optional, Sequence, Type, Tuple, Callable, TypeVar
 from hidet.ir.node import Node
 from hidet.ir.expr import Expr, Var, TensorElement, var
@@ -25,22 +26,120 @@ class Target:
         name, attrs = items[0], items[1:]
         return Target(name, attrs)
 
+# todo: rename Prologue.indices and Epilogue.indices to axes
+
+
+class InverseMap(Node):
+    def __init__(self, axes: List[Var], indices: List[Expr]):
+        from hidet.ir.functors import simplify
+        self.axes: List[Var] = axes
+        self.indices: List[Expr] = [simplify(e) for e in indices]
+
+    @staticmethod
+    def from_obj(obj: Union[InverseMap, Callable[[Any], Any]]):
+        if isinstance(obj, InverseMap):
+            return obj
+        else:
+            return InverseMap.from_lambda(lambda *args: obj(*args))
+
+    @staticmethod
+    def from_lambda(func, num_args=None) -> InverseMap:
+        num_args = num_args if num_args is not None else func.__code__.co_argcount
+        axes = [var('v') for v in range(num_args)]
+        indices = list(func(*axes))
+        return InverseMap(axes, indices)
+
+    @staticmethod
+    def identity(num_args: int) -> InverseMap:
+        return InverseMap.from_lambda(lambda *indices: list(indices), num_args=num_args)
+
+    def __add__(self, other) -> InverseMap:
+        from hidet.ir.functors import rewrite
+        if not isinstance(other, InverseMap):
+            raise ValueError('Can not concat InverseMap with {}'.format(type(other)))
+        lhs, rhs = self, other
+        if len(lhs.indices) != len(rhs.axes):
+            raise ValueError('Can not concat InverseMap a and b, '
+                             'where a has {} indices and b has {} axes'.format(len(lhs.indices), len(rhs.axes)))
+        rmap = {a: b for a, b in zip(rhs.axes, lhs.indices)}
+        indices = [rewrite(index_expr, rmap) for index_expr in rhs.indices]
+        return InverseMap(lhs.axes, indices)
+
 
 class Prologue(Node):
-    def __init__(self, extra_inputs, indices, value):
+    def __init__(self, extra_inputs, indices, value, inverse_map=None):
+        if inverse_map is None:
+            inverse_map = {}
         self.extra_inputs: List[TensorNode] = extra_inputs
         self.indices: List[Var] = indices
         self.value: Expr = value
+        self.inverse_map: Dict[TensorNode, InverseMap] = {a: InverseMap.from_obj(b) for a, b in inverse_map.items()}
+        self.bindings: Dict[TensorNode, TensorNode] = {}
 
 
 class Epilogue(Node):
-    def __init__(self, extra_inputs, indices, orig_value, value, out_indices, out_tensor):
+    def __init__(self, extra_inputs, indices, orig_value, value, out_indices, orig_tensor, out_tensor, bindings):
         self.extra_inputs: List[TensorNode] = extra_inputs
+
         self.indices: List[Var] = indices
         self.orig_value: Var = orig_value
         self.value: Expr = value
         self.out_indices: List[Expr] = out_indices
+
+        self.orig_tensor: TensorNode = orig_tensor
         self.out_tensor: TensorNode = out_tensor
+
+        self.bindings: Dict[TensorNode, TensorNode] = bindings
+
+
+class TaskGraph(Node):
+    def __init__(
+            self,
+            anchor: Task,
+            nodes: Sequence[Task],
+            consume: Dict[TensorNode, TensorNode],
+            input_tensors: Sequence[TensorNode],
+            output_tensors: Sequence[TensorNode]
+    ):
+        self.anchor: Task = anchor
+        self.nodes: List[Task] = list(nodes)
+        self.input_tensors: List[TensorNode] = list(input_tensors)
+        self.output_tensors: List[TensorNode] = list(output_tensors)
+        self.consume: Dict[TensorNode, TensorNode] = consume
+
+    @staticmethod
+    def from_task(task: Task) -> TaskGraph:
+        return TaskGraph(
+            anchor=task,
+            nodes=[task],
+            consume={},
+            input_tensors=task.inputs,
+            output_tensors=task.outputs
+        )
+
+    def absorb(self) -> Task:
+        from hidet.ir.functors import rewrite
+        graph_input_tensors: List[TensorNode] = self.input_tensors
+        update_map: Dict[TensorNode, TensorNode] = {a: a for a in graph_input_tensors}
+        for task in self.nodes:
+            remap: Dict[TensorNode, TensorNode] = {}
+            for task_input_tensor in task.inputs:
+                if task_input_tensor not in self.consume:
+                    assert task_input_tensor in graph_input_tensors, 'must be graph input tensor'
+                    # do not need to rewrite, skip
+                else:
+                    remap[task_input_tensor] = update_map[self.consume[task_input_tensor]]
+            for task_output_tensor in task.outputs:
+                update_map[task_output_tensor] = rewrite(task_output_tensor, remap)
+                # original_output_tensor = task_output_tensor
+                # updated_output = rewrite(task_output_tensor, remap)
+                # update_map[original_output_tensor] = updated_output
+        graph_output_tensors: List[TensorNode] = [update_map[tensor] for tensor in self.output_tensors]
+        return Task(
+            name=self.anchor.name,
+            inputs=graph_input_tensors,
+            outputs=graph_output_tensors
+        )
 
 
 class TaskContext:
@@ -84,100 +183,38 @@ class TaskContext:
 TaskContext.contexts.append(TaskContext())  # fallback context
 
 
-class InverseMap:
-    def __init__(self, axes: List[Var], indices: List[Expr]):
-        from hidet.ir.functors import simplify
-        self.axes: List[Var] = axes
-        self.indices: List[Expr] = [simplify(e) for e in indices]
-
-    @staticmethod
-    def from_lambda(func, num_args=None) -> InverseMap:
-        num_args = num_args if num_args is not None else func.__code__.co_argcount
-        axes = [var('v') for v in range(num_args)]
-        indices = list(func(*axes))
-        return InverseMap(axes, indices)
-
-    @staticmethod
-    def identity(num_args: int) -> InverseMap:
-        return InverseMap.from_lambda(lambda *indices: list(indices), num_args=num_args)
-
-    def __add__(self, other) -> InverseMap:
-        from hidet.ir.functors import rewrite
-        if not isinstance(other, InverseMap):
-            raise ValueError('Can not concat InverseMap with {}'.format(type(other)))
-        lhs, rhs = self, other
-        if len(lhs.indices) != len(rhs.axes):
-            raise ValueError('Can not concat InverseMap a and b, '
-                             'where a has {} indices and b has {} axes'.format(len(lhs.indices), len(rhs.axes)))
-        rmap = {a: b for a, b in zip(rhs.axes, lhs.indices)}
-        indices = [rewrite(index_expr, rmap) for index_expr in rhs.indices]
-        return InverseMap(lhs.axes, indices)
-
-
 class Task(Node):
-    def __init__(self, name, inputs, outputs, prologues=None, epilogues=None, parameters=None, inverse_map=None, attributes: Optional[Dict] = None):
-        """
-        A Task is a computation definition.
-
-        param_inputs ===========>  task_inputs  ===================> task_outputs ===========> param_outputs
-             |        prologues                  task computations                 epilogues
-             |           ^                                                             ^
-             v           |                                                             |
-             +-----------+-------------------------------------------------------------+
-
-        Constraints:
-            1. Each task input can have zero or one prologue.
-            2. Each task output can have zero or one epilogue.
-            3. Prologue and epilogue can only have extra inputs from param inputs.
-            4. When a task input has prologue, it should not appear in param input.
-            5. When a task output has epilogue, it should not appear in param output.
-
-
-        Parameters
-        ----------
-        name: str
-            The name of the task. Can only contain a-z, A-Z, underscore, and digits.
-        inputs: List[TensorNode]
-            The inputs of the task computation.
-        outputs: List[TensorNode]
-            The outputs of the task computation.
-        prologues: Dict[TensorNode, Prologue]
-            The prologues.
-        epilogues: Dict[TensorNode, Epilogue]
-            The epilogues.
-        parameters: List[TensorNode]
-            The list of parameters in the final kernel.
-        inverse_map: Dict[TensorNode, Union[InverseMap, Callable[[Any], Any]]]
-            If the mapping of input axes to output axes are invertible, then inverse_map contains
-            the inverse map. It is used to convert a task to epilogue of previous task.
-        """
-        self.attributes: Dict[str, Union[str, float, int, bool]] = attributes if attributes is not None else {}
-        self.name = name
+    def __init__(self, name, inputs, outputs, inverse_map=None, attributes=None):
+        if inverse_map is None:
+            inverse_map = {}
+        if attributes is None:
+            attributes = {}
+        self.name: str = name
         self.inputs: List[TensorNode] = inputs
         self.outputs: List[TensorNode] = outputs
-        self.prologues: Dict[TensorNode, Prologue] = prologues if prologues else {}
-        self.epilogues: Dict[TensorNode, Epilogue] = epilogues if epilogues else {}
-        self.parameters: List[TensorNode] = parameters if parameters else inputs + outputs
+        self.attributes: Dict[str, Union[str, float, int, bool]] = attributes
+        self.inverse_map: Dict[TensorNode, InverseMap] = {a: InverseMap.from_obj(b) for a, b in inverse_map.items()}
+        self.task_graph: Optional[TaskGraph] = TaskGraph.from_task(self)
 
-        inverse_map = inverse_map if inverse_map else {}
-        if not isinstance(inverse_map, dict):
-            raise ValueError('inverse_map should be a dict')
-        self.inverse_map: Dict[TensorNode, InverseMap] = {
-            a: (b if isinstance(b, InverseMap) else InverseMap.from_lambda(b)) for a, b in inverse_map.items()
-        }
+    @property
+    def parameters(self) -> List[TensorNode]:
+        return self.task_graph.input_tensors + self.task_graph.output_tensors
 
     def implement(self, target: Union[Target, str]) -> IRModule:
-        from hidet.graph.ops.schedules import generic_cuda_schedule, generic_cpu_schedule
+        from hidet.graph.ops.schedules.cuda.auto_scheduler import CudaAutoScheduler
+        from hidet.graph.ops.schedules.cpu.auto_scheduler import CpuAutoScheduler
         if isinstance(target, str):
             target = Target.from_string(target)
         if target.name == 'cuda':
             ret = self.implement_cuda()
             if ret is NotImplemented:
-                ret = generic_cuda_schedule(self)
+                auto_scheduler = CudaAutoScheduler()
+                ret = auto_scheduler.schedule_task(self, 'cuda')
         elif target.name == 'cpu':
             ret = self.implement_cpu()
             if ret is NotImplemented:
-                ret = generic_cpu_schedule(self)
+                auto_scheduler = CpuAutoScheduler()
+                ret = auto_scheduler.schedule_task(self, 'cpu')
         else:
             raise ValueError()
         if not isinstance(ret, IRModule):
@@ -190,54 +227,30 @@ class Task(Node):
     def implement_cpu(self) -> IRModule:
         return NotImplemented
 
-    def allow_prologue(self, only_elementwise=False) -> True:
+    def allow_prologue(self) -> True:
         return True
 
-    def allow_epilogue(self, only_elementwise=False) -> True:
+    def allow_epilogue(self) -> True:
         return True
 
-    def fast_implement(self, space_level: int) -> bool:
-        """
-        Whether the function can be implemented through a single thread.
+    def is_injective_task(self) -> bool:
+        from hidet.ir.functors import collect
 
-        Note:
-        When we implement a task, we might try different schedules by launching multiple compilation processes.
-        This prevents us from implementing such kind of task with other tasks in the model. Thus, we usually
-        parallelize the implementing of tasks that only use a single thread during their implementing. Then
-        implement those require multiple threads one by one.
+        if len(self.outputs) != 1 or not isinstance(self.outputs[0].tensor_compute, GridCompute):
+            return False
 
-        Parameters
-        ----------
-        space_level: int
-            The space level to explore during implementing.
-
-        Returns
-        -------
-        ret: bool
-            True if this task can be implemented through a single cpu thread.
-        """
-        if space_level == 0:
-            return True
-        else:
-            if 'implement_cuda' not in self.__class__.__dict__:
-                return True
-            else:
+        scalar_nodes: List[ScalarNode] = collect(self.outputs, ScalarNode, stop_when_found=False)
+        for scalar_node in scalar_nodes:
+            if scalar_node.scalar_compute is not None:
                 return False
 
-    def copy(self: Task) -> Task:
-        cls = type(self)
-        task = object.__new__(cls)
-        task.name = self.name
-        task.inputs = self.inputs.copy()
-        task.outputs = self.outputs.copy()
-        task.prologues = self.prologues.copy()
-        task.epilogues = self.epilogues.copy()
-        task.parameters = self.parameters.copy()
-        task.inverse_map = self.inverse_map.copy()
-        for name in self.__dict__:
-            if name not in task.__dict__:
-                task.__dict__[name] = copy.copy(self.__dict__[name])
-        return task
+        tensor_nodes: List[TensorNode] = collect(self.outputs, TensorNode, stop_when_found=False)
+        for tensor_node in tensor_nodes:
+            tensor_compute = tensor_node.tensor_compute
+            if tensor_compute is not None and not isinstance(tensor_compute, GridCompute):
+                return False
+
+        return True
 
     def save(self, fname: str):
         dirname = os.path.dirname(fname)

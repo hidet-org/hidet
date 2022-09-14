@@ -16,6 +16,7 @@ from hidet.utils import cuda
 from hidet.graph.ops.definitions.matmul.matmul import MatmulTask
 from hidet.graph.ops.schedules.resolve import resolve_ir_modules
 from hidet.graph.ops.schedules.common import params_from_task, Schedule, NotSupportedError
+from hidet.transforms.tools import fuse_and_pack
 
 
 """
@@ -354,8 +355,8 @@ def batched_matmul_cuda_with_given_schedule(task: MatmulTask, schedule: MatmulSc
         fb.set_body(sb.finish())
 
     func = fb.get()
-    ir_module.add(func.name, func)
-    return ir_module
+    ir_module = IRModule(funcs={func.name: func}, task=task)
+    return fuse_and_pack(ir_module, func, task)
 
 
 def init(dst, init_value, layout):

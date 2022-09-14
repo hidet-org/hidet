@@ -10,7 +10,7 @@ from .tensor import Tensor
 from .operator import Operator
 from .module import Module
 from .ir import FlowGraph
-from .transforms import GraphPass, PassContext
+from .transforms import GraphPass, PassContext, GraphPassInstrument
 
 from .tensor import array, randn, empty, zeros, ones, symbol, randint, randn_like, empty_like, zeros_like, ones_like, symbol_like, randint_like, from_torch
 from .tensor import full, full_like

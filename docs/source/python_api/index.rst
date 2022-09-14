@@ -8,4 +8,5 @@ Python API
    root
    graph/index
    runtime/index
+   utils/index
    testing/index

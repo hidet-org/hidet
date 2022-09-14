@@ -54,15 +54,11 @@ class Expr(Node):
     def __le__(self, other):
         return LessEqual(self, other)
 
-    #
-    # for performance, we should use Equal(e1, e2) to represent equivalence expression
-    #
-    # def __eq__(self, other):
-    #     return Equal(self, other)
-    #
-    # def __hash__(self):
-    #     return id(self)
-    #
+    def __eq__(self, other):
+        return Equal(self, other)
+
+    def __hash__(self):
+        return id(self)
 
     def __ge__(self, other):
         return LessEqual(other, self)

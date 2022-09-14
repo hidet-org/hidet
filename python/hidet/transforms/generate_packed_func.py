@@ -25,6 +25,8 @@ class GeneratePackedFuncPass(Pass):
             if any(f.get_attr('packed_func', None) is ir_module.lookup_var(func.name) for f in ir_module.functions.values()):
                 # the packed function for current function has existed, skip
                 continue
+            if not func.name.endswith('_grid') and not func.name.endswith('_host'):
+                continue
             packed_func = self.generate_packed_func(func, ir_module.lookup_var(func.name))
             new_ir_module.add(packed_func.name, packed_func)
         return new_ir_module
@@ -48,21 +50,21 @@ class GeneratePackedFuncPass(Pass):
                 assert isinstance(param, Var)
                 if isinstance(param.type, ScalarType):
                     if param.type.name == 'int32':
-                        code = ArgType.INT32
+                        code: ArgType = ArgType.INT32
                     elif param.type.name == 'float32':
-                        code = ArgType.FLOAT32
+                        code: ArgType = ArgType.FLOAT32
                     else:
                         raise NotImplementedError()
                     func_args.append(Dereference(Cast(p_args[idx], PointerType(param.type))))
                 elif isinstance(param.type, (TensorPointerType, TensorType)):
-                    code = ArgType.POINTER
+                    code: ArgType = ArgType.POINTER
                     if isinstance(param.type, TensorType):
                         dtype = param.type.scalar_type
                     else:
                         dtype = param.type.tensor_type.scalar_type
                     func_args.append(Cast(p_args[idx], PointerType(dtype)))
                 elif isinstance(param.type, PointerType):
-                    code = ArgType.POINTER
+                    code: ArgType = ArgType.POINTER
                     func_args.append(Cast(p_args[idx], param.type))
                 else:
                     raise NotImplementedError()

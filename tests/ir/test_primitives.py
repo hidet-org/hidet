@@ -2,12 +2,15 @@ import pytest
 
 from hidet.backend import build
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
+from hidet.ir.dialects.lowlevel import VoidType
+from hidet.ir.type import FuncType
 from hidet.ir.expr import var, tensor_var
 from hidet.ir.func import IRModule
 from hidet.ir.primitives import lds128, sts128
 from hidet.ir.stmt import BlackBoxStmt, AssignStmt, BufferStoreStmt
 from hidet.utils import cuda
 from hidet.driver import build_ir_module
+from hidet.transforms.tools import fuse_and_pack
 
 
 def test_lds128(capfd):
@@ -28,7 +31,8 @@ def test_lds128(capfd):
 
     func = fb.get()
     ir_module = IRModule({func.name: func}, task=None)
-    compiled_func = build_ir_module(ir_module, func_name='test_lds128', working_dir='./outs/')
+    fuse_and_pack(ir_module, func, pack_func_name='test_lds128')
+    compiled_func = build_ir_module(ir_module, func_name='test_lds128', working_dir='./outs/', func_type=FuncType([], VoidType()))
     compiled_func()
     cuda.device_synchronize()
     captured = capfd.readouterr()
@@ -53,7 +57,8 @@ def test_sts128(capfd):
 
     func = fb.get()
     ir_module = IRModule({func.name: func}, task=None)
-    compiled_func = build_ir_module(ir_module, func_name='test_sts128', working_dir='./outs/')
+    fuse_and_pack(ir_module, func, pack_func_name='test_sts128')
+    compiled_func = build_ir_module(ir_module, func_name='test_sts128', working_dir='./outs/', func_type=FuncType([], VoidType()))
     compiled_func()
     cuda.device_synchronize()
     captured = capfd.readouterr()

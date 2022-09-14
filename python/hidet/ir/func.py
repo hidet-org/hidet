@@ -125,6 +125,11 @@ class IRModule(Node):
 
         return self.global_vars[name]
 
+    def update_function(self, func: Function):
+        self.functions[func.name] = func
+        if func.name in self.global_vars:
+            self.global_vars[func.name].type = func.name, FuncType.from_func(func)
+
     def add(self, name, func: Function):
         if name in self.functions:
             raise ValueError('Function {} has already existed in module.'.format(name))

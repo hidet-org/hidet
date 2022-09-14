@@ -3,6 +3,8 @@ from collections import defaultdict
 
 from hidet.ir.expr import Var, Expr, Constant, Mod, Add, Sub
 from hidet.ir.functors import StmtExprRewriter, StmtExprVisitor, rewrite, same_list
+from hidet.ir.type import TensorType
+from hidet.ir.dialects.lowlevel import TensorPointerType
 from hidet.ir.stmt import Stmt, LetStmt
 from hidet.transforms import Pass, FunctionBodyPass, RepeatFunctionPass
 
@@ -47,7 +49,10 @@ class NaiveLetStmtInlineRewriter(StmtExprRewriter):
         # inline
         return self.visit(stmt)
 
-    def should_inline(self, var, expr) -> bool:
+    def should_inline(self, var: Var, expr: Expr) -> bool:
+        if isinstance(var.type, (TensorPointerType, TensorType)):
+            # do not inline tensor or tensor type
+            return False
         if isinstance(expr, (Var, Constant)):
             # let v1 = v2
             # let v1 = constant

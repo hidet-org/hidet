@@ -25,6 +25,7 @@ endif()
 # add runtime target
 add_library(hidet_runtime SHARED
         src/hidet/runtime/cuda_context.cpp
+        src/hidet/runtime/cpu_context.cpp
         src/hidet/runtime/callbacks.cpp
         src/hidet/runtime/logging.cpp
         )

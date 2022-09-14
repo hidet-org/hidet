@@ -9,7 +9,10 @@ from .base import Pass
 
 class ApplyPrologueEpiloguePass(Pass):
     def process_module(self, ir_module: IRModule) -> IRModule:
+        return ir_module
         kernel_functions = [func for func in ir_module.functions.values() if func.kind == 'cuda_kernel']
+        if ir_module.task is None or len(ir_module.task.prologues) + len(ir_module.task.epilogues) == 0:
+            return ir_module
         if len(kernel_functions) > 1:
             raise ValueError('Expect a single kernel function.')
         if len(kernel_functions) == 0:
