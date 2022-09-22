@@ -34,8 +34,7 @@ setup(
     name="hidet",
     version="0.0.1",
     description="Hidet: a compilation-based DNN inference framework.",
-    packages=find_packages(where='python',
-                           include=['hidet']),
+    packages=find_packages(where='python'),
     package_dir={"": "python"},
     include_package_data=True,
     package_data={
