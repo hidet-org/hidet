@@ -1,5 +1,6 @@
 import tempfile
 import os
+import shutil
 from setuptools import setup, find_packages
 import subprocess
 
@@ -23,12 +24,24 @@ def build_cpp():
     with tempfile.TemporaryDirectory() as tmp_dir:
         os.makedirs(tmp_dir, exist_ok=True)
         with Cwd(tmp_dir):
+            lib_dir = os.path.join(root_dir, 'python', 'hidet', 'lib')
             subprocess.run('cmake {}'.format(root_dir).split(), check=True)
             subprocess.run('cmake --build . -- hidet -j4'.split(), check=True)
-            subprocess.run('cp -a ./lib/. {}'.format(os.path.join(root_dir, 'python', 'hidet')).split(), check=True)
+            subprocess.run('mkdir -p {}'.format(lib_dir).split(), check=True)
+            subprocess.run('cp -a ./lib/. {}'.format(lib_dir).split(), check=True)
 
 
-build_cpp()
+def copy_include_dir():
+    root_dir = os.path.dirname(os.path.abspath(__file__))
+    include_dir = os.path.join(root_dir, 'include')
+    dst_include_dir = os.path.join(root_dir, 'python', 'hidet', 'include')
+    if os.path.exists(dst_include_dir) and os.path.isdir(dst_include_dir):
+        shutil.rmtree(dst_include_dir)
+    shutil.copytree(include_dir, dst_include_dir)
+
+
+# build_cpp()
+copy_include_dir()
 
 setup(
     name="hidet",
@@ -38,7 +51,11 @@ setup(
     package_dir={"": "python"},
     include_package_data=True,
     package_data={
-        'hidet': ['*.so']
+        'hidet': [
+            'lib/*.so',
+            'include/hidet/runtime/*.h',
+            'include/hidet/*.h'
+        ]
     },
     zip_safe=False,
     install_requires=[

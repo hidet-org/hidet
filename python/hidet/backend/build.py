@@ -11,7 +11,7 @@ import subprocess
 import tempfile
 from subprocess import PIPE
 
-from hidet.libinfo import get_include_dir
+from hidet.libinfo import get_include_dirs
 from hidet.ir.func import IRModule
 from hidet.ir.type import FuncType
 from hidet.ir.task import Task
@@ -71,7 +71,7 @@ def compile_source(src_path: str, out_lib_path: str, keep_ptx=False) -> None:
     cc = cuda.query_compute_capability()
 
     # dir contains the runtime header file 'hidet/runtime.h'
-    include_dirs = [get_include_dir()]
+    include_dirs = get_include_dirs()
     # dir contains the runtime library 'libhidet_runtime.so'
     library_dirs = [os.path.dirname(library_paths['hidet_runtime'])]
 
