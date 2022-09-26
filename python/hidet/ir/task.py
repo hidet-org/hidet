@@ -44,10 +44,30 @@ class Epilogue(Node):
 
 
 class TaskContext:
+    """Scheduling task context.
+    """
     contexts = []
 
-    def __init__(self, space_level: int = 0, resolve_out_dir: str = None):
+    def __init__(self, space_level: int = 0, warmup: int = 3, number: int = 10, repeat: int = 3, resolve_out_dir: str = None):
+        """Create a task context.
+
+        Parameters
+        ----------
+        space_level: int
+            The search space level. Can be 0, 1, or 2. Larger space level indicates larger search space.
+        warmup: int
+            The number of warmups for tuning.
+        number: int
+            The number of runs per repeat.
+        repeat: int
+            The number of repeats.
+        resolve_out_dir: Optional[str]
+            The output directory for the intermediate output for tuning.
+        """
         self.space_level = space_level
+        self.warmup: int = warmup
+        self.number: int = number
+        self.repeat: int = repeat
         self.resolve_out_dir = resolve_out_dir
 
     def __enter__(self):

@@ -14,7 +14,7 @@ from .graph.frontend import torch
 
 from .graph import ops
 from .graph import empty, randn, zeros, ones, full, randint, symbol, array, empty_like, randn_like, zeros_like, ones_like, symbol_like, full_like, randint_like, from_torch
-from .graph import space_level, get_space_level
+from .graph import space_level, get_space_level, profile_config, get_profile_config, cache_operator
 from .graph import trace_from, load_graph, save_graph
 from .graph import jit
 

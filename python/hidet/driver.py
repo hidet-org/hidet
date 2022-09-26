@@ -23,7 +23,7 @@ def disable_cache(disable: bool = False):
     cache_disabled = not disable
 
 
-def build_task(task: Task, space_level, use_cache=True, cache_dir=None, load=True):
+def build_task(task: Task, space_level: int, warmup: int, number: int, repeat: int, use_cache=True, cache_dir=None, load=True):
     # resolve task dir
     if cache_dir is None:
         cache_dir = os.path.join(hidet_cache_dir(), 'ops')
@@ -51,11 +51,11 @@ def build_task(task: Task, space_level, use_cache=True, cache_dir=None, load=Tru
     with open(os.path.join(task_dir, 'task.txt'), 'w') as f:
         f.write(task_string)
     # implement task
-    with TaskContext(space_level=space_level, resolve_out_dir=task_dir):
+    with TaskContext(space_level=space_level, warmup=warmup, number=number, repeat=repeat, resolve_out_dir=task_dir):
         ir_module = task.implement(target='cuda')
     # lower ir module
     with PassContext(instruments=[
-                         SaveIRInstrument(out_dir=os.path.join('./outs/ir', task.name, task_hash)),
+                         # SaveIRInstrument(out_dir=os.path.join('./outs/ir', task.name, task_hash)),
                          ProfileInstrument(log_file=os.path.join('./outs/ir', task.name, task_hash, 'lower_time.txt'))
                      ]):
         ir_module = lower(ir_module)
@@ -70,16 +70,16 @@ def build_task(task: Task, space_level, use_cache=True, cache_dir=None, load=Tru
 
 
 def _build_task_job(args):
-    task, space_level, use_cache, cache_dir, load = args
-    build_task(task, space_level, use_cache, cache_dir, load)
+    task, space_level, warmup, number, repeat, use_cache, cache_dir, load = args
+    build_task(task, space_level, warmup, number, repeat, use_cache, cache_dir, load)
 
 
-def build_batch_task(tasks: List[Task], space_level: int, parallel=True, use_cache=True, cache_dir=None):
+def build_batch_task(tasks: List[Task], space_level: int, warmup: int, number: int, repeat: int, parallel=True, use_cache=True, cache_dir=None):
     if parallel and len(tasks) > 1:
         with multiprocessing.Pool() as pool:
-            pool.map(_build_task_job, [(task, space_level, use_cache, cache_dir, False) for task in tasks])
+            pool.map(_build_task_job, [(task, space_level, warmup, number, repeat, use_cache, cache_dir, False) for task in tasks])
     else:
-        map(_build_task_job, [(task, space_level, use_cache, cache_dir, False) for task in tasks])
+        map(_build_task_job, [(task, space_level, warmup, number, repeat, use_cache, cache_dir, False) for task in tasks])
 
 
 def build_ir_module(ir_module: IRModule, func_name: str, keep_ptx=False, working_dir='./outs', verbose=False, func_type: Optional[FuncType] = None):
