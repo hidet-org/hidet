@@ -31,11 +31,11 @@ def bench_hidet(args, out_dir) -> BenchResult:
         if args.disable_graph_cache:
             print('disabled graph cache, rebuilding...')
         t1 = time.time()
-        model = hidet.tos.frontend.onnx.from_onnx(onnx_path)
+        model = hidet.graph.frontend.onnx.from_onnx(onnx_path)
         symbol_inputs = [hidet.symbol_like(data) for data in input_tensors]
         outputs = model(*symbol_inputs)
         graph: hidet.FlowGraph = hidet.trace_from(outputs, inputs=symbol_inputs)
-        with hidet.tos.PassContext() as ctx:
+        with hidet.graph.PassContext() as ctx:
             short2long = {
                 'f16': 'float16',
                 'f32': 'float32',
@@ -54,7 +54,7 @@ def bench_hidet(args, out_dir) -> BenchResult:
             else:
                 ctx.set_parallel_k(nparts=int(args.parallel_k))
 
-            graph = hidet.tos.transforms.optimize(graph)
+            graph = hidet.graph.transforms.optimize(graph)
 
         hidet.save_graph(graph, graph_path + '.tmp')
         os.rename(graph_path + '.tmp', graph_path)

@@ -92,6 +92,7 @@ class FlowGraph:
         tunable_tasks = []
         task_keys = set()
         space_level = hidet.get_space_level()
+        profile_config = hidet.get_profile_config()
         for node in self.nodes:
             if node.task_func is None:
                 # if space_level == 0 or 'implement_cuda' not in node.task.__class__.__dict__:
@@ -103,9 +104,9 @@ class FlowGraph:
                     tasks.append(node.task)
                 else:
                     tunable_tasks.append(node.task)
-        hidet.driver.build_batch_task(tasks, space_level, parallel=True)
-        # hidet.driver.build_batch_task(tasks, space_level, parallel=False)
-        hidet.driver.build_batch_task(tunable_tasks, space_level, parallel=False)
+        hidet.driver.build_batch_task(tasks, space_level, warmup=profile_config.warmup, number=profile_config.number, repeat=profile_config.repeat, parallel=True)
+        # hidet.driver.build_batch_task(tasks, space_level, warmup=profile_config.warmup, number=profile_config.number, repeat=profile_config.repeat, parallel=False)
+        hidet.driver.build_batch_task(tunable_tasks, space_level, warmup=profile_config.warmup, number=profile_config.number, repeat=profile_config.repeat, parallel=False)
 
     def forward(self, *inputs: Tensor) -> Union[List[Tensor], Tensor]:
         """Run the computation graph.
