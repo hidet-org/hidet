@@ -6,7 +6,7 @@ import numpy as np
 from hidet.ir.type import TensorType
 from hidet.ir.expr import Constant
 from hidet.ir.func import IRModule
-from hidet.ir.task import Task
+from hidet.ir.task import Task, TaskContext
 from hidet.utils import TableBuilder, strict_zip, error_tolerance
 from hidet.graph.tensor import randn, zeros, ones, Tensor, array
 from .common import Schedule
@@ -127,9 +127,10 @@ def resolve_ir_modules(ir_modules: List[IRModule], schedules: List[Schedule], ou
         errors = [float('NaN')] * len(compiled_funcs)
 
     # measure latency
+    ctx = TaskContext.current()
     for ir_module, compiled_func in strict_zip(ir_modules, compiled_funcs):
         if compiled_func:
-            repeat_latency = compiled_func.profile(*dummy_inputs, warmup=5, number=10, repeat=3)
+            repeat_latency = compiled_func.profile(*dummy_inputs, warmup=ctx.warmup, number=ctx.number, repeat=ctx.repeat)
             latency = float(np.median(repeat_latency))
         else:
             # this ir module failed in building, skip
