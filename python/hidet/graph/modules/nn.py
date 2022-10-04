@@ -55,7 +55,10 @@ class Linear(Module):
         return 'in_features={}, out_features={}'.format(self.in_features, self.out_features)
 
     def forward(self, x: Tensor) -> Tensor:
-        return ops.matmul(x, self.weight) + self.bias
+        x = ops.matmul(x, self.weight)
+        if self.bias is not None:
+            x = ops.add(x, self.bias)
+        return x
 
 
 class Relu(Module):

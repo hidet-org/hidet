@@ -11,7 +11,7 @@ class CudaAPI:
     _free_async = get_func('hidet_cuda_free_async', [c_uint64], None)
     _free_host = get_func('hidet_cuda_free_host', [c_uint64], None)
     _memset_async = get_func('hidet_cuda_memset_async', [c_uint64, c_uint64, c_uint8], None)
-    _memcpy_async = get_func('hidet_cuda_memcpy_async', [c_uint64, c_uint64, c_uint64, c_uint32], None)
+    _memcpy_async = get_func('hidet_cuda_memcpy_async', [c_uint64, c_uint64, c_uint64, c_uint32, c_uint64], None)
     _mem_pool_trim_to = get_func('hidet_cuda_mem_pool_trim_to', [c_uint64], None)
     # device control
     _device_synchronize = get_func('hidet_cuda_device_synchronize', [], None)
@@ -73,9 +73,13 @@ class CudaAPI:
     DeviceToDevice = 3
 
     @classmethod
-    def memcpy_async(cls, src_addr: int, dst_addr: int, num_bytes: int, kind: int) -> None:
+    def memcpy_async(cls, src_addr: int, dst_addr: int, num_bytes: int, kind: int, stream: int = 0) -> None:
         assert 0 <= kind <= 3
-        cls._memcpy_async(src_addr, dst_addr, num_bytes, kind)
+        cls._memcpy_async(src_addr, dst_addr, num_bytes, kind, stream)
+
+    @classmethod
+    def memcpy(cls, src_addr: int, dst_addr: int, num_bytes: int, kind: int) -> None:
+        cls.memcpy_async(src_addr, dst_addr, num_bytes, kind, stream=0)
         if kind != cls.DeviceToDevice:
             cls.device_synchronize()
 

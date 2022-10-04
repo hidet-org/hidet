@@ -1,11 +1,12 @@
 from __future__ import annotations
-from typing import Callable, Dict, List, Type
+from typing import Callable, Dict, List, Type, Optional
 import warnings
 from collections import defaultdict
 import ctypes
 import numpy as np
 from hidet.ffi import cuda
-from hidet.utils import green, prod
+from hidet.utils import green, prod, cyan
+from hidet.runtime.cuda_stream import CudaStream
 
 
 def nbytes2str(nbytes: int) -> str:
@@ -158,7 +159,17 @@ class Storage:
             return self
         elif self.device == 'cuda':
             host_storage = self.new('cpu', self.num_bytes)
-            cuda.memcpy_async(src_addr=self.addr, dst_addr=host_storage.addr, num_bytes=self.num_bytes, kind=cuda.DeviceToHost)
+            cuda.memcpy(src_addr=self.addr, dst_addr=host_storage.addr, num_bytes=self.num_bytes, kind=cuda.DeviceToHost)
+            return host_storage
+        else:
+            raise NotImplementedError()
+
+    def cpu_async(self, stream: Optional[CudaStream] = None):
+        if self.device == 'cpu':
+            return self
+        elif self.device == 'cuda':
+            host_storage = self.new('cpu', self.num_bytes)
+            cuda.memcpy_async(src_addr=self.addr, dst_addr=host_storage.addr, num_bytes=self.num_bytes, kind=cuda.DeviceToHost, stream=stream.handle if stream else 0)
             return host_storage
         else:
             raise NotImplementedError()
@@ -168,7 +179,17 @@ class Storage:
             return self
         elif self.device == 'cpu':
             cuda_storage = self.new('cuda', self.num_bytes)
-            cuda.memcpy_async(src_addr=self.addr, dst_addr=cuda_storage.addr, num_bytes=self.num_bytes, kind=cuda.HostToDevice)
+            cuda.memcpy(src_addr=self.addr, dst_addr=cuda_storage.addr, num_bytes=self.num_bytes, kind=cuda.HostToDevice)
+            return cuda_storage
+        else:
+            raise NotImplementedError()
+
+    def cuda_async(self, stream: Optional[CudaStream] = None):
+        if self.device == 'cuda':
+            return self
+        elif self.device == 'cpu':
+            cuda_storage = self.new('cuda', self.num_bytes)
+            cuda.memcpy_async(src_addr=self.addr, dst_addr=cuda_storage.addr, num_bytes=self.num_bytes, kind=cuda.HostToDevice, stream=stream.handle if stream else 0)
             return cuda_storage
         else:
             raise NotImplementedError()
@@ -182,6 +203,15 @@ class Storage:
         cuda.memcpy_async(src_addr=self.addr, dst_addr=storage.addr, num_bytes=self.num_bytes, kind=kind_dict[self.device])
         return storage
 
+    def copy_async(self, stream: Optional[CudaStream] = None) -> Storage:
+        kind_dict = {
+            'cpu': cuda.HostToHost,
+            'cuda': cuda.DeviceToDevice
+        }
+        storage = Storage.new(self.device, self.num_bytes)
+        cuda.memcpy_async(src_addr=self.addr, dst_addr=storage.addr, num_bytes=self.num_bytes, kind=kind_dict[self.device], stream=stream.handle if stream else 0)
+        return storage
+
     @staticmethod
     def new(device: str, num_bytes: int) -> Storage:
         if device == 'cpu':
@@ -191,7 +221,7 @@ class Storage:
         else:
             raise ValueError("Unrecognized device '{}', candidates: {}".format(device, ['cpu', 'cuda']))
 
-    def as_array(self, num_elements: int, dtype: str = 'float32') -> np.ndarray:
+    def as_array(self, num_elements: int, dtype: str = 'float32', share_mem=True) -> np.ndarray:
         """
         Convert to one-dimension numpy array, sharing the underlying storage.
 
@@ -223,7 +253,6 @@ class Storage:
         if self.device != 'cpu':
             raise ValueError('The storage must be cpu storage. Please use .cpu() to convert first.')
         buf = (dtype2ctype[dtype] * num_elements).from_address(self.addr)
-        buf._hidet_storage = self  # so this storage will not be freed as long as the buffer not been freed.
         assert ctypes.sizeof(buf) <= self.num_bytes, 'Trying to view a storage as a larger array'
         with warnings.catch_warnings():
             # temporarily ignore a warning due to python bug.
@@ -233,7 +262,11 @@ class Storage:
         if dtype in dtype2nptype:
             # reinterpret the array when needed
             array = array.view(dtype2nptype[dtype])
-        return array
+        if share_mem:
+            buf._hidet_storage = self  # so this storage will not be freed as long as the buffer not been freed.
+            return array
+        else:
+            return array.copy()
 
 
 class TorchStorage(Storage):
@@ -266,10 +299,14 @@ class MemoryPool:
         allocated = (nbytes + self.block_size - 1) // self.block_size * self.block_size
         block_list = self.memory_blocks[allocated]
         if len(block_list) > 0:
+            # if self.storage_device.name() == 'cpu':
+            #     print('Allocating new block of size {} bytes on {}, {}'.format(allocated, self.storage_device.name(), green('reused')))
             storage = block_list.pop()
             addr = storage.addr
             self.reserved_size -= storage.num_bytes
         else:
+            # if self.storage_device.name() == 'cpu':
+            #     print('Allocating new block of size {} bytes on {}, {}'.format(allocated, self.storage_device.name(), cyan('allocate new')))
             addr = self.storage_device.allocate(allocated)
             if addr == 0 and allocated != 0:
                 # out of memory
@@ -293,6 +330,8 @@ class MemoryPool:
     def free(self, storage: Storage):
         self.memory_blocks[storage.num_bytes].append(storage)
         self.reserved_size += storage.num_bytes
+        # if self.storage_device.name() == 'cpu':
+        #     print('Freeing {} bytes on {}, free blocks {}'.format(storage.num_bytes, self.storage_device.name(), len(self.memory_blocks[storage.num_bytes])))
         if self.reserved_size > self.max_reserve_size:
             self.clear()
 
@@ -353,7 +392,7 @@ CudaMemoryPool.stack.append(CudaMemoryPool())
 class CpuMemoryPool(MemoryPool):
     stack = []
 
-    def __init__(self, block_size: int = 4096, max_reserve_size: int = 128 * 1024 ** 2):
+    def __init__(self, block_size: int = 4096, max_reserve_size: int = 512 * 1024 ** 2):
         super().__init__(CpuStorageDevice(), block_size, max_reserve_size)
 
     def __enter__(self):
@@ -368,15 +407,3 @@ class CpuMemoryPool(MemoryPool):
 
 
 CpuMemoryPool.stack.append(CpuMemoryPool())
-
-# cpu_pool = MemoryPool(
-#     storage_device=CpuStorageDevice(),
-#     block_size=4 * 1024,  # 4 KiB
-#     max_reserve_size=128 * 1024 * 1024  # 128 MiB
-# )
-
-# cuda_pool = MemoryPool(
-#     storage_device=CudaStorageDevice(),
-#     block_size=4 * 1024,  # 4 KiB
-#     max_reserve_size=3 * 1024 * 1024 * 1024  # 5 GiB
-# )

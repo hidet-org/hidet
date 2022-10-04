@@ -34,7 +34,7 @@ exec_fullname = {
     'autotvm': 'AutoTVM',
     'ansor': 'Ansor',
     'trt': 'TensorRT',
-    'hidet': 'Qubic',
+    'hidet': 'Hidet',
 }
 
 end2end_data = {

@@ -10,6 +10,7 @@ import hidet.runtime.storage
 from hidet.ffi import cuda, cuda_kernels
 from hidet.ir.type import ScalarType
 from hidet.ir.layout import DataLayout, RowMajorLayout
+from hidet.runtime.cuda_stream import CudaStream
 from hidet.runtime.storage import Storage
 from hidet.utils import prod
 
@@ -249,24 +250,6 @@ class Tensor:
         from .ops import cast
         return cast(self, dtype)
 
-    def cpu(self):
-        if self.device == 'cpu':
-            return self
-        else:
-            if self.trace is None:
-                return Tensor(self.shape, self.dtype, 'cpu', self.storage.cpu() if self.storage else None, self.layout)
-            else:
-                raise ValueError('Please use .detach() to detach a trace variable first.')
-
-    def cuda(self):
-        if self.device == 'cuda':
-            return self
-        else:
-            if self.trace is None:
-                return Tensor(self.shape, self.dtype, 'cuda', self.storage.cuda() if self.storage else None, self.layout)
-            else:
-                raise ValueError('Please use .detach() to detach a trace variable first.')
-
     def copy(self) -> Tensor:
         if self.trace is not None:
             raise ValueError('Please use .detach() to detach a trace variable first before copying.')
@@ -275,6 +258,18 @@ class Tensor:
             dtype=self.dtype,
             device=self.device,
             storage=self.storage.copy(),
+            layout=self.layout,
+            trace=None
+        )
+
+    def copy_async(self, stream: Optional[CudaStream] = None) -> Tensor:
+        if self.trace is not None:
+            raise ValueError('Please use .detach() to detach a trace variable first before copying.')
+        return Tensor(
+            shape=list(self.shape),
+            dtype=self.dtype,
+            device=self.device,
+            storage=self.storage.copy_async(stream),
             layout=self.layout,
             trace=None
         )
@@ -292,18 +287,98 @@ class Tensor:
                 trace=None
             )
 
-    def numpy(self) -> np.ndarray:
+    def cpu(self):
+        if self.device == 'cpu':
+            return self
+        else:
+            if self.trace is None:
+                return Tensor(self.shape, self.dtype, 'cpu', self.storage.cpu() if self.storage else None, self.layout)
+            else:
+                raise ValueError('Please use .detach() to detach a trace variable first.')
+
+    def cpu_async(self, stream: Optional[CudaStream] = None):
+        """
+        Copy the tensor to CPU asynchronously.
+
+        Parameters
+        ----------
+        stream: Optional[CudaStream]
+            The stream to copy the tensor to CPU on.
+
+        Returns
+        -------
+        ret: Tensor
+            The tensor on CPU.
+        """
+        if self.device == 'cpu':
+            return self
+        else:
+            if self.trace is None:
+                ret = Tensor(self.shape, self.dtype, 'cpu', self.storage.cpu_async(stream) if self.storage else None, self.layout)
+                # ret._ref = self  # prevent the storage of self tensor from being freed before the async copy is finished
+                return ret
+            else:
+                raise ValueError('Please use .detach() to detach a trace variable first.')
+
+    def cuda(self):
+        if self.device == 'cuda':
+            return self
+        else:
+            if self.trace is None:
+                return Tensor(self.shape, self.dtype, 'cuda', self.storage.cuda() if self.storage else None, self.layout)
+            else:
+                raise ValueError('Please use .detach() to detach a trace variable first.')
+
+    def cuda_async(self, stream: Optional[CudaStream] = None):
+        """
+        Copy the tensor to GPU asynchronously.
+
+        Parameters
+        ----------
+        stream: Optional[CudaStream]
+            The stream to copy the tensor to GPU on.
+
+        Returns
+        -------
+        ret: Tensor
+            The tensor on GPU.
+        """
+        if self.device == 'cuda':
+            return self
+        else:
+            if self.trace is None:
+                ret = Tensor(self.shape, self.dtype, 'cuda', self.storage.cuda_async(stream) if self.storage else None, self.layout)
+                # ret._ref = self  # prevent the storage of self tensor from being freed before the async copy is finished
+                return ret
+            else:
+                raise ValueError('Please use .detach() to detach a trace variable first.')
+
+    def numpy(self, share_mem=True) -> np.ndarray:
+        """
+        Convert the tensor to a numpy array.
+
+        If this is a cpu tensor and share_mem is True, the numpy array will share the memory with the tensor when possible.
+
+        Parameters
+        ----------
+        share_mem: bool
+            Whether to share the memory with the tensor when possible.
+
+        Returns
+        -------
+        ret: np.ndarray
+            The numpy array.
+        """
         if self.device != 'cpu':
             return self.cpu().numpy()
-        # convert if this tensor is not in row major layout
-        storage = self.contiguous().storage
-
-        # because numpy does not support bfloat16 and tfloat32, we convert them into float32
         if self.dtype in ['bfloat16', 'tfloat32']:
+            # because numpy does not support bfloat16 and tfloat32, we convert them into float32
             return self.cast('float32').numpy()
-        else:
-            array = storage.as_array(num_elements=prod(self.shape), dtype=self.dtype)
-            return array.reshape(self.shape)
+
+        storage = self.contiguous().storage  # convert if this tensor is not in row major layout
+        np_array = storage.as_array(num_elements=prod(self.shape), dtype=self.dtype, share_mem=share_mem)
+        np_array: np.ndarray = np_array.reshape(self.shape)
+        return np_array
 
     def torch(self):
         import torch
@@ -573,7 +648,8 @@ def ones_like(data: Tensor, shape: Optional[Sequence[int]] = None, dtype: Option
     return _tensor_like(ones, data, shape, dtype, device, layout)
 
 
-def full_like(data: Tensor, fill_value, shape: Optional[Sequence[int]] = None, dtype: Optional[str] = None, device: Optional[str] = None, layout: Optional[DataLayout] = None) -> Tensor:
+def full_like(data: Tensor, fill_value, shape: Optional[Sequence[int]] = None, dtype: Optional[str] = None, device: Optional[str] = None,
+              layout: Optional[DataLayout] = None) -> Tensor:
     return _tensor_like(partial(full, fill_value=fill_value), data, shape, dtype, device, layout)
 
 
@@ -581,7 +657,8 @@ def randn_like(data: Tensor, shape: Optional[Sequence[int]] = None, dtype: Optio
     return _tensor_like(randn, data, shape, dtype, device, layout)
 
 
-def randint_like(data: Tensor, low: int, high: Optional[int] = None, shape: Optional[Sequence[int]] = None, dtype: Optional[str] = None, device: Optional[str] = None, layout: Optional[DataLayout] = None):
+def randint_like(data: Tensor, low: int, high: Optional[int] = None, shape: Optional[Sequence[int]] = None, dtype: Optional[str] = None, device: Optional[str] = None,
+                 layout: Optional[DataLayout] = None):
     return _tensor_like(partial(randint, low=low, high=high), data, shape, dtype, device, layout)
 
 
@@ -604,11 +681,10 @@ def from_numpy(nparray: np.ndarray) -> Tensor:
         raise NotImplementedError("Do not support convert np.ndarray with data type '{}'.".format(nparray.dtype))
     nparray = nparray.copy(order='C')  # make the data layout like C, which is contiguous
     tensor = empty(shape=nparray.shape, dtype=dtype_convert[nparray.dtype], device='cpu')
-    cuda.memcpy_async(src_addr=void_pointer_to_uint64(nparray.ctypes.data_as(ctypes.c_void_p)),
-                      dst_addr=tensor.storage.addr,
-                      num_bytes=tensor.nbytes,
-                      kind=cuda.HostToHost)
-    cuda.device_synchronize()
+    cuda.memcpy(src_addr=void_pointer_to_uint64(nparray.ctypes.data_as(ctypes.c_void_p)),
+                dst_addr=tensor.storage.addr,
+                num_bytes=tensor.nbytes,
+                kind=cuda.HostToHost)
     return tensor
 
 

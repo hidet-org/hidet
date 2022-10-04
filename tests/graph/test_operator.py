@@ -8,6 +8,7 @@ def test_profile_config():
     hidet.space_level(2)
     hidet.profile_config(1, 1, 1)
     c = hidet.ops.matmul(a, b)
+    hidet.space_level(0)
 
 
 if __name__ == '__main__':

@@ -28,3 +28,9 @@ class CudaStream:
 
     def synchronize(self):
         cuda.stream_synchronize(self.handle)
+
+    @staticmethod
+    def default_stream() -> CudaStream:
+        stream = object.__new__(CudaStream)
+        stream.handle = 0
+        return stream

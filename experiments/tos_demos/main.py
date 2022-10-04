@@ -1,10 +1,16 @@
+from typing import List
+import time
 import numpy as np
 import math
 
 import hidet
-from hidet.tos import Tensor, ops
-from hidet.tos.tensor import symbol_like, randn, array
+import hidet.testing
+from hidet import FlowGraph
+from hidet.runtime import CudaGraph, CudaStream
+from hidet.graph import Tensor, ops
+from hidet.graph.tensor import symbol_like, randn, array
 from hidet.utils import error_tolerance
+from hidet.utils import nvtx_annotate
 
 
 def demo_block(name: str):
@@ -307,6 +313,82 @@ def demo_argmax():
         print(ops.argmin(a, 1))
 
 
+def demo_cuda_graph():
+    n = 2048
+    a = hidet.randn([n, n])
+    b = hidet.randn([n, n])
+
+    @hidet.jit(opt=True)
+    def func(x: Tensor, y: Tensor) -> Tensor:
+        return ops.matmul(x, y)
+
+    graph = func.flow_graph_for(a, b)
+    cuda_graph_1 = graph.cuda_graph()
+    cuda_graph_1.set_input_tensors([a, b])
+    cuda_graph_2 = graph.cuda_graph()
+    cuda_graph_2.set_input_tensors([a, b])
+
+    stream1 = hidet.runtime.CudaStream()
+    stream2 = hidet.runtime.CudaStream()
+    cuda_graph_1.run(stream1)
+    cuda_graph_2.run(stream2)
+    stream1.synchronize()
+    # cuda_graph_1.run()
+    # cuda_graph_2.run()
+    hidet.utils.cuda.device_synchronize()
+
+
+def get_flow_graph(n=1024) -> hidet.FlowGraph:
+    class Model(hidet.graph.Module):
+        def __init__(self):
+            super(Model, self).__init__()
+            num_layers = 20
+            self.linear_layers = hidet.graph.nn.Sequential([hidet.graph.nn.Linear(n, n) for _ in range(num_layers)])
+
+        def forward(self, x: Tensor) -> Tensor:
+            return self.linear_layers(x)
+
+    model = Model()
+    return model.flow_graph_for(inputs=[hidet.randn([1, n])])
+
+
+def demo_pipeline():
+    n = 2048
+    with hidet.runtime.storage.CpuMemoryPool(max_reserve_size=5 * 1024 ** 3):
+        with nvtx_annotate('init'):
+            num_samples = 20
+            data: List[np.ndarray] = [np.random.randn(1, n).astype('float32') for _ in range(num_samples)]
+            outputs: List[np.ndarray] = []
+            graph: FlowGraph = get_flow_graph(n)
+
+        with nvtx_annotate('create graphs'):
+            num_stages: int = 2
+            cuda_streams: List[CudaStream] = [CudaStream() for _ in range(num_stages)]
+            cuda_graphs: List[CudaGraph] = [graph.cuda_graph() for _ in range(num_stages)]
+
+        for i in range(num_samples + num_stages - 1):
+            j = i - num_stages
+            if j >= 0:
+                with nvtx_annotate('[{}] j_async_copy'.format(i)):
+                    stream = cuda_streams[j % num_stages]
+                    output_j = cuda_graphs[j % num_stages].get_output_tensors()[0]
+                    output_j = output_j.cpu_async(stream)
+                    stream.synchronize()
+                with nvtx_annotate('[{}] j_numpy'.format(i)):
+                    outputs.append(output_j.numpy(share_mem=False))
+                with nvtx_annotate('[{}] j_post_processing'.format(i)):
+                    time.sleep(0.0010)
+            if i < num_samples:
+                stream = cuda_streams[i % num_stages]
+                with nvtx_annotate('[{}] i_input_preprocessing'.format(i)):
+                    time.sleep(0.0010)
+                with nvtx_annotate('[{}] i_array_async'.format(i)):
+                    input_i = hidet.array(data[i]).cuda_async(stream)
+                with nvtx_annotate('[{}] i_set_inputs_run'.format(i)):
+                    cuda_graphs[i % num_stages].set_input_tensors([input_i], stream=stream)
+                    cuda_graphs[i % num_stages].run(stream=stream)
+
+
 if __name__ == '__main__':
     # demo_block('bert')
     # demo_parallel_k_matmul()
@@ -318,4 +400,8 @@ if __name__ == '__main__':
     # demo_debug_fuse_prologue_pass()
     # demo_cumsum()
     # demo_onehot()
-    demo_argmax()
+    # demo_argmax()
+    # demo_cuda_graph()
+
+    demo_pipeline()
+

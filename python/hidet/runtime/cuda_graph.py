@@ -1,4 +1,5 @@
-from typing import List, Optional
+import numpy as np
+from typing import List, Optional, Iterable, Sequence, Callable, Union, Iterator
 import time
 from hidet.ffi import cuda
 from hidet.runtime.storage import CudaMemoryPool
@@ -61,10 +62,10 @@ class CudaGraph:
 
     1. Use function :func:`FlowGraph.cuda_graph() <hidet.graph.FlowGraph.cuda_graph>` to create a cuda graph from an existing
        flow graph.
-    2. Use :func:`set_input_tensors() <hidet.runtime.CudaGraph.set_input_tensors>` or :func:`set_input_tensor() <hidet.runtime.CudaGraph.set_input_tensor>` to
+    2. Use :func:`~hidet.runtime.cuda_graph.CudaGraph.set_input_tensors` or :func:`~hidet.runtime.cuda_graph.CudaGraph.set_input_tensor` to
        set the values of the cuda graph input tensors. These functions would copy the contents of the given tensors to the input tensors of the cuda graph.
-    3. Run the cuda graph with :func:`run() <hidet.runtime.CudaGraph.run>`.
-    4. Access the results through the cuda graph output tensors :attr:`hidet.runtime.CudaGraph.outputs`.
+    3. Run the cuda graph with :func:`~hidet.runtime.cuda_graph.CudaGraph.run`.
+    4. Access the results through the cuda graph output tensors :attr:`~hidet.runtime.cuda_graph.CudaGraph.outputs`.
 
     Attributes
     ----------
@@ -121,7 +122,7 @@ class CudaGraph:
         """
         return self.outputs
 
-    def set_input_tensors(self, input_tensors: List[Tensor]):
+    def set_input_tensors(self, input_tensors: List[Tensor], stream: Optional[CudaStream] = None):
         """Set the values of input tensors.
 
         This function copies the contents of the given tensors to the input tensors of the cuda graph.
@@ -130,13 +131,16 @@ class CudaGraph:
         ----------
         input_tensors: List[Tensor]
             The tensors stored the input contents.
+
+        stream: Optional[CudaStream]
+            The stream to copy the contents.
         """
         if len(input_tensors) != len(self.inputs):
             raise ValueError('Expect {} input tensors, got {}'.format(len(self.inputs), len(input_tensors)))
         for idx, tensor in enumerate(input_tensors):
-            self.set_input_tensor(idx, tensor)
+            self.set_input_tensor(idx, tensor, stream)
 
-    def set_input_tensor(self, idx: int, input_tensor: Tensor):
+    def set_input_tensor(self, idx: int, input_tensor: Tensor, stream: Optional[CudaStream] = None):
         """Set the content of the input tensor with index `idx`.
 
         This function copies the contents of the given tensor to the input tensor of the cuda graph.
@@ -148,6 +152,9 @@ class CudaGraph:
 
         input_tensor: Tensor
             The tensor that contains the content.
+
+        stream: Optional[CudaStream]
+            The stream to copy the contents.
         """
         src = input_tensor
         dst = self.inputs[idx]
@@ -159,9 +166,9 @@ class CudaGraph:
         if any(a != b for a, b in zip(input_tensor.shape, self.inputs[idx].shape)):
             msg = 'The i-th {} input tensor expect shape {}, bot got a tensor with shape {}'.format(idx, dst.shape, src.shape)
             raise ValueError(msg)
-        cuda.memcpy_async(src.storage.addr, dst.storage.addr, num_bytes=dst.nbytes, kind=cuda.DeviceToDevice)
+        cuda.memcpy_async(src.storage.addr, dst.storage.addr, num_bytes=dst.nbytes, kind=cuda.DeviceToDevice, stream=stream.handle if stream else 0)
 
-    def run_with_inputs(self, inputs, stream=None) -> List[Tensor]:
+    def run_with_inputs(self, inputs) -> List[Tensor]:
         """Run the cuda graph with given inputs.
 
         Parameters
@@ -179,11 +186,11 @@ class CudaGraph:
         """
         self.set_input_tensors(inputs)
         cuda.device_synchronize()
-        self.run(stream)
+        self.run()
         cuda.device_synchronize()
         return self.get_output_tensors()
 
-    def run(self, stream=None):
+    def run(self, stream: Optional[CudaStream] = None):
         """Run the cuda graph.
 
         Before run this function, :func:`set_input_tensors` or :func:`set_input_tensor` should be used set the input
@@ -198,7 +205,7 @@ class CudaGraph:
         """
         self.cuda_graph_exec.launch(stream)
 
-    def profile(self, warmup, number, repeat) -> List[float]:
+    def profile(self, warmup, number, repeat, median=True) -> Union[float, List[float]]:
         latency_list = []
         for i in range(warmup):
             self.run()
@@ -209,8 +216,11 @@ class CudaGraph:
                 self.run()
             cuda.device_synchronize()
             end = time.time()
-            latency_list.append((end - start) / number)
-        return latency_list
+            latency_list.append((end - start) / number * 1000)
+        if median:
+            return float(np.median(latency_list))
+        else:
+            return latency_list
 
     def __del__(self):
         self.mem_pool.storage_device.freeze(False)
@@ -219,3 +229,96 @@ class CudaGraph:
 def create_cuda_graph(flow_graph: FlowGraph) -> CudaGraph:
     exec_ctx = CudaGraph(flow_graph)
     return exec_ctx
+
+
+def cuda_graph_pipeline_iterator(
+        cuda_graph: CudaGraph,
+        input_iterator: Iterable[Sequence[np.ndarray]]
+) -> Iterator[List[np.ndarray]]:
+    """
+    Create an iterator that runs the cuda graph on the given input iterator with pipeline optimization.
+
+    Parameters
+    ----------
+    cuda_graph: CudaGraph
+        The cuda graph to run.
+    input_iterator: Iterable[Sequence[np.ndarray]]
+        The input iterator.
+
+    Returns
+    -------
+    ret: Iterator[List[np.ndarray]]
+        The output iterator.
+    """
+    # original execution:
+    # CPU: feed input to x[0]
+    # GPU: async y[0] = graph(x[0])
+    # CPU: wait y[0]
+    # CPU: consume y[0]
+    # CPU: feed input to x[1]
+    # GPU: async y[1] = graph(x[1])
+    # CPU: wait y[1]
+    # CPU: consume y[1]
+
+    # stream = CudaStream.default_stream()
+    # for np_input_tensors in input_feeder:
+    #     cuda_input_tensors: List[Tensor] = [hidet.array(x).cuda() for x in np_input_tensors]
+    #     cuda_graph.set_input_tensors(cuda_input_tensors)
+    #     cuda_graph.run(stream)
+    #     stream.synchronize()
+    #     cuda_output_tensors = cuda_graph.get_output_tensors()
+    #     np_output_tensors: List[np.ndarray] = [x.cpu().numpy(share_mem=False) for x in cuda_output_tensors]
+    #     output_consumer(np_output_tensors)
+
+    # pipeline execution:
+    # CPU: feed input to x[0]
+    # GPU: async y[0] = graph(x[0])
+    # CPU: feed input to x[1]
+    # CPU: wait y[0]
+    # GPU: async y[1] = graph(x[1])
+    # CPU: consume y[0]
+    # CPU: feed input to x[2]
+    # CPU: wait y[1]
+    import hidet
+    stream = CudaStream()
+    stream_d2h = CudaStream()
+
+    for i, numpy_inputs in enumerate(input_iterator):
+        if i == 0:
+            cuda_inputs = [hidet.array(x).cuda_async(stream) for x in numpy_inputs]
+            cuda_graph.set_input_tensors(cuda_inputs, stream)
+            cuda_graph.run(stream)
+        else:
+            cuda_inputs = [hidet.array(x).cuda_async(stream) for x in numpy_inputs]
+            cuda_graph.set_input_tensors(cuda_inputs, stream)
+            cuda_outputs = [x.copy_async(stream) for x in cuda_graph.outputs]
+            stream.synchronize()
+            cuda_graph.run(stream)
+            cpu_outputs = [output.cpu_async(stream_d2h) for output in cuda_outputs]
+            stream_d2h.synchronize()
+            numpy_outputs = [x.numpy(share_mem=False) for x in cpu_outputs]
+            yield numpy_outputs
+    stream.synchronize()
+    numpy_outputs = [output.numpy(share_mem=False) for output in cuda_graph.outputs]
+    yield numpy_outputs
+
+
+def cuda_graph_pipeline_execute(
+        cuda_graph: CudaGraph,
+        input_iterator: Iterable[Sequence[np.ndarray]],
+        output_consumer: Callable[[List[np.ndarray]], None]
+):
+    """
+    Execute the cuda graph with pipeline optimization.
+
+    Parameters
+    ----------
+    cuda_graph: CudaGraph
+        The cuda graph to execute.
+    input_iterator: Iterable[Sequence[np.ndarray]]
+        The input feeder. It should be an iterable that yields a sequence of numpy arrays.
+    output_consumer: Callable[[List[np.ndarray]], None]
+        The output consumer. It should be a callable that accepts a list of numpy arrays.
+    """
+    for outputs in cuda_graph_pipeline_iterator(cuda_graph, input_iterator):
+        output_consumer(outputs)

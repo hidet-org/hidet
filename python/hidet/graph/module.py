@@ -1,5 +1,7 @@
-from typing import Optional
+from typing import Optional, Sequence
 from collections import OrderedDict
+from hidet.graph.tensor import symbol_like
+from hidet.graph.ir.flow_graph import FlowGraph, trace_from
 from hidet.graph.tensor import Tensor
 
 
@@ -60,3 +62,13 @@ class Module:
 
     def forward(self, *args):
         raise NotImplementedError()
+
+    def flow_graph_for(self, inputs: Sequence[Tensor]) -> FlowGraph:
+        symbol_inputs = []
+        for arg in inputs:
+            if isinstance(arg, Tensor):
+                symbol_inputs.append(symbol_like(arg))
+            else:
+                raise ValueError('Currently only support Tensor as input when automatically creating flow_graph.')
+        symbol_outputs = self.forward(*symbol_inputs)
+        return trace_from(symbol_outputs, symbol_inputs)

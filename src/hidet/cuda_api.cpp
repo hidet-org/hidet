@@ -70,7 +70,7 @@ DLL void hidet_cuda_memset_async(uint64_t addr, uint64_t bytes, uint8_t value) {
     API_END();
 }
 
-DLL void hidet_cuda_memcpy_async(uint64_t src, uint64_t dst, uint64_t bytes, uint32_t kind) {
+DLL void hidet_cuda_memcpy_async(uint64_t src, uint64_t dst, uint64_t bytes, uint32_t kind, uint64_t stream) {
     API_BEGIN();
     /*!
      * kind:
@@ -79,7 +79,7 @@ DLL void hidet_cuda_memcpy_async(uint64_t src, uint64_t dst, uint64_t bytes, uin
      *   cudaMemcpyDeviceToHost        =   2,
      *   cudaMemcpyDeviceToDevice      =   3,
     */
-    CUDA_CALL(cudaMemcpyAsync(reinterpret_cast<void*>(dst), reinterpret_cast<void*>(src), bytes, cudaMemcpyKind(kind), nullptr));
+    CUDA_CALL(cudaMemcpyAsync(reinterpret_cast<void*>(dst), reinterpret_cast<void*>(src), bytes, cudaMemcpyKind(kind), reinterpret_cast<cudaStream_t>(stream)));
     API_END();
 }
 
@@ -125,7 +125,9 @@ DLL uint64_t hidet_cuda_stream_create() {
 
 DLL void hidet_cuda_stream_destroy(uint64_t stream) {
     API_BEGIN();
-    CUDA_CALL(cudaStreamDestroy(reinterpret_cast<cudaStream_t>(stream)));
+    if(stream != 0) {
+        CUDA_CALL(cudaStreamDestroy(reinterpret_cast<cudaStream_t>(stream)));
+    }
     API_END();
 }
 

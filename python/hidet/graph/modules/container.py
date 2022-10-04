@@ -10,6 +10,9 @@ class Sequential(Module):
         if len(args) == 1 and isinstance(args[0], OrderedDict):
             for key, module in args[0].items():
                 self.__setattr__(key, module)
+        elif len(args) == 1 and isinstance(args[0], (tuple, list)):
+            for i, module in enumerate(args[0]):
+                self.__setattr__(str(i), module)
         else:
             for idx, module in enumerate(args):
                 self.__setattr__(str(idx), module)
