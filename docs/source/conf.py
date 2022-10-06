@@ -39,6 +39,7 @@ extensions = [
     'sphinx.ext.coverage',
     'sphinx.ext.todo',
     "sphinx_gallery.gen_gallery",
+    'sphinxcontrib.googleanalytics',
     'autodocsumm',
 ]
 
@@ -88,6 +89,10 @@ html_theme_options = {
 }
 html_title = "Hidet Documentation"
 html_permalinks_icon = "<span>¶</span>"
+
+googleanalytics_id = 'G-406WJTRD8C'
+googleanalytics_enabled = True
+
 
 
 # Add any paths that contain custom static files (such as style sheets) here,

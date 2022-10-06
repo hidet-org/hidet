@@ -3,3 +3,4 @@ sphinx-gallery
 autodocsumm
 sphinx-book-theme
 matplotlib
+git+https://github.com/sphinx-contrib/googleanalytics@master#egg=sphinxcontrib-googleanalytics
