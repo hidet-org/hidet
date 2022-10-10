@@ -279,7 +279,7 @@ def batch_build_ir_modules(build_instances, parallel=True, verbose=False) -> Lis
             mem_for_worker = 1.5 * 1024 * 1024 * 1024  # 1.5 GiB
             num_workers = min(max(int(psutil.virtual_memory().available // mem_for_worker), 1), psutil.cpu_count())
             with multiprocessing.Pool(processes=num_workers) as pool:
-                for lib_path in tqdm(pool.imap(build_ir_module_job, build_instances), total=len(build_instances), disable=not verbose):
+                for lib_path in tqdm(pool.imap(build_ir_module_job, build_instances), desc='Compiling', total=len(build_instances), disable=not verbose):
                     lib_paths.append(lib_path)
         else:
             lib_paths = map(build_ir_module_job, build_instances)

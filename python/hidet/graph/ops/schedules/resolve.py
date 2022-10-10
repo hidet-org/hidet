@@ -2,6 +2,7 @@ import os
 import time
 from typing import List, Optional
 import numpy as np
+from tqdm import tqdm
 
 from hidet.ir.type import TensorType
 from hidet.ir.expr import Constant
@@ -128,7 +129,7 @@ def resolve_ir_modules(ir_modules: List[IRModule], schedules: List[Schedule], ou
 
     # measure latency
     ctx = TaskContext.current()
-    for ir_module, compiled_func in strict_zip(ir_modules, compiled_funcs):
+    for ir_module, compiled_func in tqdm(strict_zip(ir_modules, compiled_funcs), desc='Benchmarking', total=len(ir_modules)):
         if compiled_func:
             repeat_latency = compiled_func.profile(*dummy_inputs, warmup=ctx.warmup, number=ctx.number, repeat=ctx.repeat)
             latency = float(np.median(repeat_latency))
