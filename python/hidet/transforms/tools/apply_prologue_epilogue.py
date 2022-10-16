@@ -1,5 +1,5 @@
 from typing import Sequence, Dict, List
-from hidet.ir.dialects.compute import TensorNode, GridCompute, TensorCompute
+from hidet.ir.compute import TensorNode, GridCompute, TensorCompute
 from hidet.ir.expr import Expr, Var, TensorElement
 from hidet.ir.stmt import BufferStoreStmt
 from hidet.ir.func import Function, IRModule

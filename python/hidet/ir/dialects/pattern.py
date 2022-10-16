@@ -1,13 +1,10 @@
-import contextlib
-import traceback
 from typing import Type, Tuple, Any, ContextManager, Callable
 from contextlib import ExitStack
 from hidet.ir.type import *
 from hidet.ir.expr import *
-from hidet.ir.dialects.compute import *
-from hidet.ir.dialects.lowlevel import *
+from hidet.ir.compute import *
 from hidet.ir.task import *
-from hidet.ir.layout import StridesLayout
+from hidet.ir.layout import StridesLayout, DataLayout
 
 
 class PatternNode(Node):
@@ -56,40 +53,6 @@ class UnionPattern(PatternNode):
 class OptionalPattern(PatternNode):
     def __init__(self, pattern):
         self.pattern = pattern
-
-
-# class ReduceComputePattern(ExprPattern):
-#     def __init__(self, allow_dynamic_axis=True):
-#         self.allow_dynamic_axis = allow_dynamic_axis
-#
-#
-# class TensorComputePattern(ExprPattern):
-#     def __init__(self, rank=None, allow_dynamic_axis=True, value=None):
-#         self.rank = rank
-#         self.allow_dynamic_axis = allow_dynamic_axis
-#         self.value = value
-#
-#
-# class ScalarExprPattern(ExprPattern):
-#     def __init__(self, base_pattern=None, exclude_vars=()):
-#         self.base_pattern: Optional[Expr] = base_pattern
-#         self.exclude_vars: Sequence[Union[Var, TensorInput, ScalarInput]] = exclude_vars
-#
-#
-# class TaskPattern(PatternNode):
-#     def __init__(self, compute_pattern=None, required_params=None, allow_extra_params=True, allow_tensor_extra_params=True, worker=None):
-#         self.compute_pattern: Optional[Expr] = compute_pattern
-#         self.required_params: Optional[List[ComputeNode]] = required_params
-#         self.extra_params: Expr = Expr()  # as a handle to reference the unmatched params
-#         self.allow_extra_params: bool = allow_extra_params
-#         self.allow_tensor_extra_params: bool = allow_tensor_extra_params
-#         self.worker: Optional[Worker] = worker
-#
-#
-# class TensorAccessPattern(ExprPattern):
-#     def __init__(self, base_pattern=None, indices_pattern=None):
-#         self.base_pattern: Optional[Expr] = base_pattern
-#         self.indices_pattern: Optional[List[Expr]] = indices_pattern
 
 
 class NotMatchedError(Exception):
@@ -191,38 +154,20 @@ class PatternMatcher:
                 Constant: PatternMatcher.match_Constant,
                 And: PatternMatcher.match_CommutativeBinary,
                 Or: PatternMatcher.match_CommutativeBinary,
-                # compute dialect expr
-                # ScalarInput: PatternMatcher.match_ScalarInput,
-                # TensorInput: PatternMatcher.match_TensorInput,
-                # TensorCompute: PatternMatcher.match_TensorCompute,
-                # ReduceCompute: PatternMatcher.match_ReduceCompute,
-                # CustomCompute: PatternMatcher.match_CustomCompute,
                 # type
                 ScalarType: PatternMatcher.match_ScalarType,
                 TensorType: PatternMatcher.match_TensorType,
                 # scope
                 Scope: PatternMatcher.match_Scope,
                 # layout
-                # TaskLayout: PatternMatcher.always_match,
                 DataLayout: PatternMatcher.match_DataLayout,
                 StridesLayout: PatternMatcher.match_StridesLayout,
-                # worker
-                # Host: PatternMatcher.always_match,
-                # Grid: PatternMatcher.match_Grid,
-                # ThreadBlock: PatternMatcher.match_ThreadBlock,
-                # Warp: PatternMatcher.match_Warp,
-                # Thread: PatternMatcher.always_match,
                 # patterns
-                # TaskPattern: PatternMatcher.match_TaskPattern,
                 AnyExpr: PatternMatcher.match_AnyPattern,
-                # ReduceComputePattern: PatternMatcher.match_ReduceComputePattern,
-                # TensorComputePattern: PatternMatcher.match_TensorComputePattern,
-                # ScalarExprPattern: PatternMatcher.match_ScalarExprPattern,
                 UnionPattern: PatternMatcher.match_UnionPattern,
                 OptionalPattern: PatternMatcher.match_OptionalPattern,
                 ScalarTypePattern: PatternMatcher.match_ScalarTypePattern,
                 TensorTypePattern: PatternMatcher.match_TensorTypePattern,
-                # TensorAccessPattern: PatternMatcher.match_TensorAccessPattern,
                 # python containers and types
                 str: PatternMatcher.match_String,
                 list: PatternMatcher.match_Sequence,
@@ -321,39 +266,6 @@ class PatternMatcher:
         if pattern.value != target.value:
             raise NotMatchedError(pattern, target)
 
-    # def match_ScalarInput(self, pattern: ScalarInput, target: ScalarInput):
-    #     with ExitStack() as stack:
-    #         stack.enter_context(self.match(pattern.data_type, target.data_type))
-    #
-    # def match_TensorInput(self, pattern: TensorInput, target: TensorInput):
-    #     with ExitStack() as stack:
-    #         stack.enter_context(self.match(pattern.data_type, target.data_type))
-    #
-    # def match_TensorCompute(self, pattern: TensorCompute, target: TensorCompute):
-    #     with ExitStack() as stack:
-    #         stack.enter_context(self.match(pattern.shape, target.shape))
-    #         stack.enter_context(self.match(pattern.axes, target.axes))
-    #         stack.enter_context(self.match(pattern.value, target.value))
-    #         stack.enter_context(self.match(pattern.data_type, target.data_type))
-    #
-    # def match_ReduceCompute(self, pattern: ReduceCompute, target: ReduceCompute):
-    #     with ExitStack() as stack:
-    #         stack.enter_context(self.match(pattern.axes, target.axes))
-    #         stack.enter_context(self.match(pattern.shape, target.shape))
-    #         stack.enter_context(self.match(pattern.value, target.value))
-    #         stack.enter_context(self.match(pattern.reduce_type, target.reduce_type))
-    #         stack.enter_context(self.match(pattern.data_type, target.data_type))
-    #
-    # def match_CustomCompute(self, pattern: CustomCompute, target: CustomCompute):
-    #     with ExitStack() as stack:
-    #         stack.enter_context(self.match(pattern.identifier, target.identifier))
-    #         stack.enter_context(self.match(pattern.data_type, target.data_type))
-    #         stack.enter_context(self.match(pattern.params, target.params))
-    #         for key, value in pattern.attributes.items():
-    #             if key not in target.attributes:
-    #                 raise NotMatchedError(pattern, target, 'key {} not found in target CustomCompute'.format(key))
-    #             stack.enter_context(self.match(value, target.attributes[key]))
-
     def match_DataLayout(self, pattern, target):
         if isinstance(target, (StridesLayout, DataLayout)):
             pass
@@ -393,38 +305,6 @@ class PatternMatcher:
         if pattern.name is not None and (pattern.name is None or pattern.name != target.name):
             raise NotMatchedError(pattern, target)
 
-    # def match_ReduceComputePattern(self, pattern: ReduceComputePattern, target: ReduceCompute):
-    #     self.check_type(pattern, target, ReduceCompute)
-    #     if not pattern.allow_dynamic_axis and any(not isinstance(v, Constant) for v in target.shape):
-    #         raise NotMatchedError(pattern, target, "does not allow dynamic axis in reduce")
-    #
-    # def match_TensorComputePattern(self, pattern: TensorComputePattern, target: TensorCompute):
-    #     self.check_type(pattern, target, TensorCompute)
-    #     if pattern.rank is not None and len(target.shape) != pattern.rank:
-    #         raise NotMatchedError(pattern, target, "rank does not match")
-    #     if not pattern.allow_dynamic_axis and any(not isinstance(v, Constant) for v in target.shape):
-    #         raise NotMatchedError(pattern, target, "does not allow dynamic axis")
-    #     with self.match(pattern.value, target.value):
-    #         pass
-    #
-    # def match_ScalarExprPattern(self, pattern: ScalarExprPattern, target: Expr):
-    #     from hidet.ir.functors import collect
-    #     if len(pattern.exclude_vars) > 0:
-    #         if len(pattern.exclude_vars) > 0:
-    #             matched_exclude_vars = [self.matched[v] for v in pattern.exclude_vars if v in self.matched]
-    #             included_vars = collect(target, Var)
-    #             for included_var in included_vars:
-    #                 if included_var in matched_exclude_vars:
-    #                     raise NotMatchedError(pattern, target, "excluded var occurred in target")
-    #     if pattern.base_pattern is not None:
-    #         for sub_expr in collect(target, Expr):
-    #             try:
-    #                 with self.match(pattern.base_pattern, sub_expr):
-    #                     return
-    #             except NotMatchedError:
-    #                 continue
-    #         raise NotMatchedError(pattern, target, "can not find a sub expression to match base pattern")
-
     def match_ScalarType(self, pattern: ScalarType, target: ScalarType):
         if pattern.name:
             if pattern.name != target.name:
@@ -457,48 +337,6 @@ class PatternMatcher:
             stack.enter_context(self.match(pattern.layout, target.layout))
             if not pattern.allow_dynamic_size and any(not isinstance(s, Constant) for s in target.shape):
                 raise NotMatchedError(pattern, target)
-
-    # def match_TensorAccessPattern(self, pattern: TensorAccessPattern, target: Expr):
-    #     self.check_type(pattern, target, TensorElement)
-    #     assert isinstance(target, TensorElement)
-    #     self.check_cond(pattern, target,
-    #                     cond=isinstance(target.base, (TensorInput, TensorCompute)),
-    #                     message='TensorAccessPattern expect the target is a '
-    #                             'tensor access based on TensorInput or TensorCompute')
-    #     with ExitStack() as stack:
-    #         if pattern.base_pattern is not None:
-    #             stack.enter_context(self.match(pattern.base_pattern, target.base))
-    #         if pattern.indices_pattern is not None:
-    #             self.check_cond(pattern, target, cond=len(pattern.indices_pattern) == len(target.indices),
-    #                             message='TensorAccessPattern expect pattern and target have the same number of indices')
-    #             for index_pattern, index_expr in zip(pattern.indices_pattern, target.indices):
-    #                 stack.enter_context(self.match(index_pattern, index_expr))
-    #
-    # def match_Grid(self, pattern: Grid, target: Grid):
-    #     with ExitStack() as stack:
-    #         stack.enter_context(self.match(pattern.grid_dim, target.grid_dim))
-    #         stack.enter_context(self.match(pattern.block_dim, target.block_dim))
-    #
-    # def match_ThreadBlock(self, pattern: ThreadBlock, target: ThreadBlock):
-    #     with ExitStack() as stack:
-    #         stack.enter_context(self.match(pattern.block_dim, target.block_dim))
-    #         stack.enter_context(self.match(pattern.task_layout, target.task_layout))
-    #
-    # def match_Warp(self, pattern: Warp, target: Warp):
-    #     with ExitStack() as stack:
-    #         stack.enter_context(self.match(pattern.task_layout, target.task_layout))
-    #
-    # def match_TaskPattern(self, pattern: TaskPattern, target: Task):
-    #     self.check_type(pattern, target, Task)
-    #     with ExitStack() as stack:
-    #         stack.enter_context(self.match(pattern.compute_pattern, target.compute))
-    #         matched_params = [self.matched[param] for param in pattern.required_params] if pattern.required_params else []
-    #         extra_params = [param for param in target.params if param not in matched_params]
-    #         if not pattern.allow_extra_params and len(extra_params) > 0:
-    #             raise NotMatchedError(pattern, target, "do not allow extra param(s)")
-    #         if not pattern.allow_tensor_extra_params and any(isinstance(p, TensorInput) for p in extra_params):
-    #             raise NotMatchedError(pattern, target, "do not allow extra tensor param(s)")
-    #         stack.enter_context(self.match(pattern.worker, target.worker))
 
     def match_Sequence(self, pattern: Sequence, target: Sequence):
         with ExitStack() as stack:
@@ -533,15 +371,6 @@ def any_const_ints(num=1):
 
 def any_const():
     return AnyExpr(Constant)
-
-#
-# def any_scalar_expr(base_pattern: Optional[Expr] = None,
-#                     exclude_vars: Sequence[Union[Var, TensorInput, ScalarInput]] = ()):
-#     return ScalarExprPattern(base_pattern=base_pattern, exclude_vars=exclude_vars)
-
-
-# def any_tensor_input() -> TensorInput:
-#     return TensorInput(None, None)
 
 
 def int_vars(names):

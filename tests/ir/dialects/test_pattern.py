@@ -1,6 +1,6 @@
 import pytest
 from hidet.ir.expr import *
-from hidet.ir.dialects.compute import compute
+from hidet.ir.compute import compute
 from hidet.ir.dialects.pattern import match, AnyExpr, UnionPattern, any_const_int
 
 

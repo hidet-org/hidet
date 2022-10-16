@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Mapping
 
-from hidet.ir.dialects.compute import TensorNode, ScalarNode, GridCompute, ArgReduceCompute, ReduceCompute
+from hidet.ir.compute import TensorNode, ScalarNode, GridCompute, ArgReduceCompute, ReduceCompute
 from hidet.ir.builders import StmtBuilder
 from hidet.ir.expr import *
 from hidet.ir.functors import infer_type, ExprRewriter, rewrite

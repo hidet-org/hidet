@@ -1,8 +1,7 @@
 from typing import Sequence
 from hidet.ir import Stmt, Expr, TensorElement, BufferStoreStmt, IfStmt, convert
-from hidet.ir.dialects.lowlevel import TensorPointerType
 from hidet.ir.expr import And, IfThenElse
-from hidet.ir.type import TensorType
+from hidet.ir.type import TensorType, TensorPointerType
 from hidet.transforms.base import Pass, FunctionBodyPass
 from hidet.ir.functors import StmtExprRewriter, infer_type
 

@@ -1,5 +1,4 @@
-from hidet.ir.type import scalar_type
-from hidet.ir.dialects.lowlevel import pointer_type
+from hidet.ir.type import scalar_type, pointer_type
 from hidet.ffi import PackedFunc, _LIB
 
 

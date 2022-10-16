@@ -1,9 +1,8 @@
-from hidet.ir.dialects.compute import TensorNode, ScalarNode
-from hidet.ir.dialects.lowlevel import Reference, Address, ReferenceType, TensorPointerType, Dereference, VoidType, PointerType
+from hidet.ir.compute import TensorNode, ScalarNode
 from hidet.ir.dialects.pattern import AnyExpr
 from hidet.ir.expr import *
 from hidet.ir.functors import ExprFunctor, TypeFunctor, NodeFunctor
-from hidet.ir.type import TypeNode
+from hidet.ir.type import TypeNode, ReferenceType, TensorPointerType, VoidType, PointerType
 from hidet.ir.utils.hash_sum import HashSum
 
 

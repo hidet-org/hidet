@@ -2,7 +2,6 @@ import os
 from typing import List, Tuple, Union, Optional
 
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
-from hidet.ir.dialects.lowlevel import TensorPointerType, PointerType
 from hidet.ir.expr import Var, And, Cast, if_then_else, convert, Expr, cast
 from hidet.ir.func import IRModule
 from hidet.ir.functors import simplify_to_int
@@ -12,7 +11,7 @@ from hidet.ir.primitives import syncthreads, thread_idx, block_idx, syncwarp
 from hidet.ir.primitives.cuda.wmma import WmmaConfig, wmma_load_a, wmma_load_b, wmma_mma, wmma_store, wmma_configs
 from hidet.ir.stmt import AssignStmt, BufferStoreStmt, IfStmt
 from hidet.ir.task import TaskContext, Task
-from hidet.ir.type import scalar_type, tensor_type, ScalarType
+from hidet.ir.type import scalar_type, tensor_type, ScalarType, TensorPointerType, PointerType
 from hidet.graph.ops.definitions.matmul.matmul import MatmulTask
 from hidet.graph.ops.schedules.common import params_from_task, Schedule, NotSupportedError
 from hidet.graph.ops.schedules.cuda.common import get_task_map, get_transfer_task_map

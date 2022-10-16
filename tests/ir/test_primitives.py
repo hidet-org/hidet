@@ -2,8 +2,7 @@ import pytest
 
 from hidet.backend import build
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
-from hidet.ir.dialects.lowlevel import VoidType
-from hidet.ir.type import FuncType
+from hidet.ir.type import FuncType, VoidType
 from hidet.ir.expr import var, tensor_var
 from hidet.ir.func import IRModule
 from hidet.ir.primitives import lds128, sts128

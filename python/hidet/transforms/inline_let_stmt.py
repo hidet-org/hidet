@@ -3,8 +3,7 @@ from collections import defaultdict
 
 from hidet.ir.expr import Var, Expr, Constant, Mod, Add, Sub
 from hidet.ir.functors import StmtExprRewriter, StmtExprVisitor, rewrite, same_list
-from hidet.ir.type import TensorType
-from hidet.ir.dialects.lowlevel import TensorPointerType
+from hidet.ir.type import TensorType, TensorPointerType
 from hidet.ir.stmt import Stmt, LetStmt
 from hidet.transforms import Pass, FunctionBodyPass, RepeatFunctionPass
 

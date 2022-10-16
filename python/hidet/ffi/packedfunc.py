@@ -5,8 +5,7 @@ from enum import Enum
 from .ffi import _LIB
 from ctypes import c_int32, c_void_p, pointer, c_float, cast, c_bool
 from ctypes import POINTER, Structure
-from hidet.ir.type import TypeNode, ScalarType, TensorType
-from hidet.ir.dialects.lowlevel import PointerType, TensorPointerType
+from hidet.ir.type import TypeNode, ScalarType, TensorType, PointerType, TensorPointerType
 
 c_int32_p = POINTER(c_int32)
 c_float_p = POINTER(c_float)

@@ -1,5 +1,5 @@
 from hidet.graph.ops.schedules.common import expand_loop
-from hidet.ir.dialects.lowlevel import VoidType
+from hidet.ir.type import VoidType
 from hidet.ir.expr import Var
 from hidet.ir.func import IRModule, Function
 from hidet.ir.task import Task

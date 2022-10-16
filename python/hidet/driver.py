@@ -70,16 +70,16 @@ def build_task(task: Task, space_level: int, target_device: str = 'cuda', warmup
 
 
 def _build_task_job(args):
-    task, space_level, warmup, number, repeat, use_cache, cache_dir, load = args
-    build_task(task, space_level, task.device, warmup, number, repeat, use_cache, cache_dir, load)
+    task, space_level, target_device, warmup, number, repeat, use_cache, cache_dir, load = args
+    build_task(task, space_level, target_device, warmup, number, repeat, use_cache, cache_dir, load)
 
 
-def build_batch_task(tasks: List[Task], space_level: int, warmup: int = 3, number: int = 10, repeat: int = 3, parallel=True, use_cache=True, cache_dir=None):
+def build_batch_task(tasks: List[Task], space_level: int, target_device: str = 'cuda', warmup: int = 3, number: int = 10, repeat: int = 3, parallel=True, use_cache=True, cache_dir=None):
     if parallel and len(tasks) > 1:
         with multiprocessing.Pool() as pool:
-            pool.map(_build_task_job, [(task, space_level, warmup, number, repeat, use_cache, cache_dir, False) for task in tasks])
+            pool.map(_build_task_job, [(task, space_level, target_device, warmup, number, repeat, use_cache, cache_dir, False) for task in tasks])
     else:
-        map(_build_task_job, [(task, space_level, warmup, number, repeat, use_cache, cache_dir, False) for task in tasks])
+        map(_build_task_job, [(task, space_level, target_device, warmup, number, repeat, use_cache, cache_dir, False) for task in tasks])
 
 
 def build_ir_module(ir_module: IRModule, func_name: str, keep_ptx=False, working_dir='./outs', verbose=False, func_type: Optional[FuncType] = None):

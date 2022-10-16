@@ -1,7 +1,7 @@
 from typing import List, Dict
 
 from hidet.ir.builders import FunctionBuilder
-from hidet.ir.dialects.compute import TensorNode, GridCompute
+from hidet.ir.compute import TensorNode, GridCompute
 from hidet.ir.expr import Call, Expr, Var
 from hidet.ir.functors import collect, rewrite, simplify_to_int
 from hidet.ir.stmt import Stmt, BufferStoreStmt, EvaluateStmt

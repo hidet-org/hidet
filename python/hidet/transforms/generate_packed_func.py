@@ -1,11 +1,10 @@
 from typing import Optional
 from hidet.ffi import ArgType
-from hidet.ir.type import ScalarType, TensorType
-from hidet.ir.expr import Var, Call, Equal, Cast
+from hidet.ir.type import ScalarType, TensorType, VoidType, PointerType, TensorPointerType
+from hidet.ir.expr import Var, Call, Equal, Cast, Dereference
 from hidet.ir.stmt import AssertStmt, SeqStmt, EvaluateStmt
 from hidet.ir.func import IRModule, Function
 from hidet.ir.functors import astext, simplify_to_int
-from hidet.ir.dialects.lowlevel import VoidType, PointerType, Dereference, TensorPointerType
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.transforms import Pass
 from hidet.ir.primitives import set_kernel_max_dynamic_smem_bytes

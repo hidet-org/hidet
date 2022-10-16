@@ -6,7 +6,7 @@ from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.ir.expr import scalar_var, if_then_else, tensor_var, const_like, convert, Expr, And, cast
 from hidet.ir.mapping import TaskMapping
 from hidet.ir.primitives import block_idx, thread_idx
-from hidet.ir.dialects.compute import ReduceCompute, ReduceOperation
+from hidet.ir.compute import ReduceCompute, ReduceOperation
 from hidet.ir.stmt import AssignStmt, BufferStoreStmt
 from hidet.ir.type import ScalarType
 from hidet.ir.utils import index_deserialize

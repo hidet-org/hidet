@@ -8,7 +8,7 @@ from typing import Dict, List, Union, Optional, Sequence, Type, Tuple, Callable,
 from hidet.ir.node import Node
 from hidet.ir.expr import Expr, Var, TensorElement, var
 from hidet.ir.func import IRModule
-from hidet.ir.dialects.compute import TensorNode, ScalarNode, GridCompute
+from hidet.ir.compute import TensorNode, ScalarNode, GridCompute
 
 
 class Target:

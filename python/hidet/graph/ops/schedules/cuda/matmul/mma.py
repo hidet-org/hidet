@@ -3,8 +3,7 @@ from typing import List, Tuple, Union, Optional, Sequence, TypeVar
 
 import os
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
-from hidet.ir.dialects.lowlevel import TensorPointerType, PointerType, tensor_pointer_var
-from hidet.ir.expr import Var, And, Equal, Cast, if_then_else, convert, Expr, tensor_var, cast, TensorSlice, Or
+from hidet.ir.expr import Var, And, Equal, Cast, if_then_else, convert, Expr, tensor_var, cast, TensorSlice, Or, tensor_pointer_var
 from hidet.ir.func import IRModule
 from hidet.ir.functors import simplify_to_int
 from hidet.ir.primitives import syncthreads, thread_idx, block_idx, printf
@@ -12,7 +11,7 @@ from hidet.ir.primitives.cuda.mma import MmaConfig, mma_sync
 from hidet.ir.mapping import row_spatial, row_repeat
 from hidet.ir.layout import row_layout, col_layout, local_layout, data_layout
 from hidet.ir.stmt import AssignStmt, BufferStoreStmt, IfStmt, Stmt
-from hidet.ir.type import scalar_type, tensor_type, TensorType, ScalarType
+from hidet.ir.type import scalar_type, tensor_type, TensorType, ScalarType, TensorPointerType, PointerType
 from hidet.ir.task import TaskContext
 from hidet.utils import cuda, prod
 from hidet.graph.ops.definitions.matmul.matmul import MatmulTask

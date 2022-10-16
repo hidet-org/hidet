@@ -1,11 +1,10 @@
 from typing import List, Dict
 from hidet.ir.mapping import TaskMapping, row_spatial, col_spatial, repeat_map, row_repeat, col_repeat
 from hidet.utils import initialize
-from hidet.ir.type import ScalarType
+from hidet.ir.type import ScalarType, PointerType, VoidType
 from hidet.ir.expr import Var, Expr, cast
 from hidet.ir.stmt import AsmStmt, AssignStmt, asm
 from hidet.ir.func import Function
-from hidet.ir.dialects.lowlevel import PointerType, VoidType
 from hidet.ir.builders import FunctionBuilder
 from hidet.ir.primitives.func import register_primitive_function
 from hidet.ir.primitives.cuda.funcs import call_cuda

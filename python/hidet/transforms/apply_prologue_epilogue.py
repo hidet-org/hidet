@@ -2,7 +2,7 @@ from typing import Dict, List
 from hidet.ir.expr import Var, TensorElement
 from hidet.ir.stmt import BufferStoreStmt
 from hidet.ir.func import Function, IRModule
-from hidet.ir.dialects.compute import TensorNode
+from hidet.ir.compute import TensorNode
 from hidet.ir.functors import collect, rewrite, inline_compute
 from .base import Pass
 

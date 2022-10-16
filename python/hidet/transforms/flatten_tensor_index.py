@@ -1,10 +1,9 @@
 from typing import List, Union, Callable, Any
-from hidet.ir.type import TensorType, tensor_type
+from hidet.ir.type import TensorType, tensor_type, PointerType, TensorPointerType
 from hidet.ir.expr import Var, TensorElement, TensorSlice, Constant
 from hidet.ir.stmt import BufferStoreStmt, DeclareStmt
 from hidet.ir.func import Function
 from hidet.ir.functors import simplify_to_int, FuncStmtExprRewriter
-from hidet.ir.dialects.lowlevel import PointerType, TensorPointerType
 from hidet.transforms import Pass
 from hidet.ir.layout import StridesLayout, DataLayout
 

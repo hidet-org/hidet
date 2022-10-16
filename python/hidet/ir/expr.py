@@ -1,9 +1,8 @@
 import string
 import numpy as np
-from typing import Optional, Union, Sequence, List, Tuple
+from typing import Optional, Union, Sequence, Tuple
 from .node import Node
-from .type import TypeNode, TensorType, TensorType, ScalarType, Scope, tensor_type, scalar_type
-from .layout import DataLayout
+from .type import TypeNode, TensorType, ScalarType, TensorPointerType, PointerType, FuncType, tensor_type, scalar_type
 
 PyScalar = Union[int, float]
 
@@ -67,7 +66,6 @@ class Expr(Node):
         """
         We override the invert operator ~a as the addressing operator.
         """
-        from hidet.ir.dialects.lowlevel import Address
         return Address(self)
 
     def __or__(self, other):
@@ -411,6 +409,22 @@ class IfThenElse(Expr):
         self.else_expr = convert(else_expr)
 
 
+class Dereference(Expr):
+    def __init__(self, expr):
+        self.expr = expr
+
+
+class Address(Expr):
+    def __init__(self, expr):
+        self.expr = expr
+
+
+class Reference(Expr):
+    def __init__(self, expr):
+        assert isinstance(expr, (TensorElement, Var)), "only l-value can be referenced."
+        self.expr = expr
+
+
 class Var(Expr):
     id_clock = 0
 
@@ -428,10 +442,9 @@ class Var(Expr):
         Id is used to track the allocation of Var object in python, which is only used to help us to distinguish different Var
         in python debugger.
         """
-        from hidet.ir.dialects.lowlevel import TensorPointerType
         self.hint = hint
         self.name = name
-        self.type: Union[TypeNode, TensorType, TensorPointerType] = type
+        self.type: Union[TypeNode, TensorType, TensorPointerType, FuncType] = type
         self.id = self.new_id()
 
     @staticmethod
@@ -484,21 +497,18 @@ def if_then_else(cond: Union[Expr, PyScalar], then_expr: Union[Expr, PyScalar], 
 
 
 def is_tensor(v: Expr) -> bool:
-    from hidet.ir.dialects.lowlevel import TensorPointerType
     if not isinstance(v, Var):
         return False
     return isinstance(v.type, (TensorType, TensorPointerType))
 
 
 def get_tensor_layout(v: Expr):
-    from hidet.ir.dialects.lowlevel import TensorPointerType
     assert isinstance(v, Var) and isinstance(v.type, (TensorType, TensorPointerType))
     return v.type.layout if isinstance(v.type, TensorType) else v.type.tensor_type.layout
 
 
 def tensor_rank(v: Expr) -> int:
-    from hidet.ir.dialects.compute import TensorNode
-    from hidet.ir.dialects.lowlevel import TensorPointerType, PointerType
+    from hidet.ir.compute import TensorNode
     if isinstance(v, Var):
         if isinstance(v.type, TensorType):
             return len(v.type.shape)
@@ -541,3 +551,14 @@ def const_like(value: Union[float, int], e: Expr) -> Constant:
         return Constant(value=value, data_type=dtype)
     else:
         raise ValueError('Expect a scalar type, but got {}'.format(dtype))
+
+
+def tensor_pointer_var(hint: str, shape=None, scope: str = 'global', dtype: Union[str, ScalarType] = 'float32', layout=None):
+    return Var(hint, TensorPointerType(scope=scope, dtype=dtype, shape=shape, layout=layout))
+
+
+def view(ptr: Expr, tp: TensorType) -> Expr:
+    if not isinstance(tp, TensorType):
+        raise ValueError('Expect a tensor type, got {}'.format(type(tp).__name__))
+    return cast(ptr, TensorPointerType.from_tensor_type(tp))
+

@@ -13,7 +13,6 @@ Int = Union['Expr', int]
 
 class TypeNode(Node):
     def __invert__(self) -> TypeNode:
-        from hidet.ir.dialects.lowlevel import PointerType, TensorPointerType
         # get the pointer type that points to current type
         if isinstance(self, TensorType):
             return TensorPointerType.from_tensor_type(self)
@@ -45,15 +44,15 @@ short2long = {
 
 dtype_list = [
     'float64',
+    'float32',
+    'tfloat32',
     'uint64',
     'int64',
     'uint32',
-    'float32',
-    'tfloat32',
     'int32',
     'uint32',
-    'bfloat16',
     'uint16',
+    'bfloat16',
     'float16',
     'uint8',
     'int8',
@@ -266,6 +265,41 @@ class TensorType(TypeNode):
         return [int(v) for v in self.shape]
 
 
+class VoidType(TypeNode):
+    pass
+
+
+class PointerType(TypeNode):
+    def __init__(self, base_type, specifiers: Optional[Sequence[str]] = None, use_bracket: bool = False):
+        super().__init__()
+        if isinstance(base_type, str):
+            base_type = ScalarType(base_type)
+        self.base_type: TypeNode = base_type
+        self.specifiers: List[str] = list(specifiers) if specifiers else []
+        self.use_bracket: bool = use_bracket
+
+
+class ReferenceType(TypeNode):
+    def __init__(self, base_type):
+        super().__init__()
+        self.base_type = base_type
+
+
+class TensorPointerType(TypeNode):
+    def __init__(self,
+                 scope: Optional[Union[Scope, str]] = None,
+                 dtype: Optional[Union[ScalarType, str]] = None,
+                 shape: Optional[Sequence[Int]] = None,
+                 layout: Optional[Union[Sequence[Int], 'DataLayout']] = None):
+        self.tensor_type: TensorType = tensor_type(scope, dtype, shape, layout)
+
+    @staticmethod
+    def from_tensor_type(tp: TensorType) -> TensorPointerType:
+        tpt = object.__new__(TensorPointerType)
+        tpt.tensor_type = tp
+        return tpt
+
+
 TypeLike = Union[str, TypeNode]
 
 
@@ -352,9 +386,15 @@ def tensor_type(scope, dtype, shape: Optional[Sequence[Union[int, Expr]]] = None
     return TensorType(scope, dtype, shape, layout)
 
 
-def max_float_dtype(float_dtypes: Iterable[str]) -> str:
-    return max(float_dtypes, key=lambda dtype: float_dtype_rank[dtype])
+def pointer_type(base_type):
+    return PointerType(base_type)
 
+
+def void_pointer():
+    return PointerType(VoidType())
+
+
+void_p = PointerType(VoidType())
 
 int32 = ScalarType('int32')
 uint32 = ScalarType('uint32')

@@ -1,5 +1,5 @@
 from hidet.ir.dialects.pattern import *
-from hidet.ir.dialects.compute import *
+from hidet.ir.compute import *
 from hidet.ir.func import *
 from hidet.ir.stmt import *
 

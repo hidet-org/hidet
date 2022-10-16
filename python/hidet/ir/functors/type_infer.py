@@ -1,10 +1,9 @@
 from typing import List
-from hidet.ir.type import ScalarType, TensorType, FuncType
+from hidet.ir.type import ScalarType, TensorType, FuncType, PointerType, TensorPointerType
 from hidet.ir.expr import BinaryOp, Add, Sub, Multiply, Div, Mod, FloorDiv, Condition, LessThan, Equal, IfThenElse, TensorSlice, Not, Or, And, LessEqual, Let, RightShift, LeftShift, BitwiseNot, BitwiseOr, BitwiseAnd, Neg, NotEqual, \
-    BitwiseXor
+    BitwiseXor, Dereference, Reference, Address
 from hidet.ir.expr import Var, Constant, TensorElement, Call, Cast
-from hidet.ir.dialects.compute import TensorNode, ScalarNode
-from hidet.ir.dialects.lowlevel import PointerType, Dereference, Reference, Address, TensorPointerType
+from hidet.ir.compute import TensorNode, ScalarNode
 
 from .base import ExprFunctor
 from ..dialects.pattern import AnyExpr

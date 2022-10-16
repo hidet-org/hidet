@@ -219,7 +219,7 @@ def schedule_depthwise_conv2d_kernel(
 
 def dwc_kernel(batch_size, channels, height, width, stride, kernel):
     import hidet
-    from hidet.ir.dialects.compute import tensor_input
+    from hidet.ir.compute import tensor_input
     in_height, in_width = (height - 1) * stride + kernel, (width - 1) * stride + kernel
     # print(batch_size, channels, height, width, stride, kernel, in_height, in_width)
     task = Conv2dTask(

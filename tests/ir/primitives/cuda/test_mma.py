@@ -4,13 +4,12 @@ import pytest
 import hidet
 from hidet.driver import build_ir_module
 from hidet.ir.builders import FunctionBuilder
-from hidet.ir.dialects.lowlevel import TensorPointerType
 from hidet.ir.expr import Var, tensor_var
 from hidet.ir.func import IRModule
 from hidet.ir.primitives.cuda import thread_idx
 from hidet.ir.primitives.cuda.mma import MmaConfig, mma_sync, mma_configs
 from hidet.ir.stmt import BufferStoreStmt
-from hidet.ir.type import ScalarType
+from hidet.ir.type import ScalarType, TensorPointerType, FuncType
 from hidet.transforms.tools import fuse_and_pack
 
 
@@ -64,7 +63,7 @@ def matmul_mma_tensor_core(config: MmaConfig):
 )
 def test_mma(config: MmaConfig):
     ir_module = matmul_mma_tensor_core(config)
-    func = build_ir_module(ir_module, func_name='matmul_mma', keep_ptx=True)
+    func = build_ir_module(ir_module, func_name='matmul_mma', keep_ptx=True, func_type=FuncType.from_func(ir_module.lookup('matmul_mma_grid')))
     m, n, k = config.m, config.n, config.k
     a = hidet.randint(3, shape=[m, k]).to(ScalarType(config.input_dtype).name).cuda()
     b = hidet.randint(3, shape=[k, n]).to(ScalarType(config.input_dtype).name).cuda()

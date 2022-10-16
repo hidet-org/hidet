@@ -1,8 +1,7 @@
 from typing import List
 from hidet.ffi.packedfunc import ArgType
 from hidet.ir.func import Function, IRModule
-from hidet.ir.dialects.lowlevel import TensorPointerType, PointerType
-from hidet.ir.type import ScalarType, TensorType
+from hidet.ir.type import ScalarType, TensorType, TensorPointerType, PointerType
 from hidet.ir.expr import Expr, Var, Call
 from hidet.ir.stmt import Stmt, AssertStmt
 from hidet.ir.functors import simplify_to_int

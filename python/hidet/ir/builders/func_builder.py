@@ -1,6 +1,6 @@
 from typing import List, Dict, Optional
 
-from hidet.ir.dialects.lowlevel import VoidType
+from hidet.ir.type import VoidType
 from hidet.ir.expr import Var
 from hidet.ir.func import Function
 from hidet.ir.stmt import Stmt

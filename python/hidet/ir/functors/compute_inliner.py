@@ -1,4 +1,4 @@
-from hidet.ir.dialects.compute import TensorNode, GridCompute
+from hidet.ir.compute import TensorNode, GridCompute
 from hidet.ir.expr import TensorElement
 from hidet.utils import prod, same_list
 from .base import ExprRewriter

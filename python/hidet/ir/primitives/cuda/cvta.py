@@ -1,7 +1,7 @@
 from typing import List, Dict, Optional
 from hidet.ir.mapping import TaskMapping, row_spatial, col_spatial, repeat_map, row_repeat, col_repeat
 from hidet.utils import initialize
-from hidet.ir.type import ScalarType
+from hidet.ir.type import ScalarType, PointerType, VoidType, void_pointer
 from hidet.ir.expr import Var, Expr, Call, cast
 from hidet.ir.stmt import AsmStmt, AssignStmt, asm
 from hidet.ir.builders import FunctionBuilder
@@ -16,7 +16,6 @@ def resolve_cvta_func_name(src_space: str, dst_space: str) -> str:
 
 @initialize()
 def register_cvta_instructions():
-    from hidet.ir.dialects.lowlevel import PointerType, VoidType, void_pointer
     from hidet.lang import attr, u32, tensor
     for src_space in ['generic']:
         for dst_space in ['shared']:

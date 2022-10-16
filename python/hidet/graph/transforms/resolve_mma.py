@@ -3,8 +3,6 @@ import warnings
 from .base import GraphPass, PassContext
 from hidet.graph.ir import FlowGraph, Operator, Tensor, GraphRewriter
 from hidet.graph.ops.definitions import MatmulOp
-from hidet.graph import ops
-from hidet.ir.type import max_float_dtype
 from hidet.graph.ops.definitions.matmul.matmul import batched_matmul
 
 
@@ -41,6 +39,10 @@ class ResolveMmaRewriter(GraphRewriter):
 
     @staticmethod
     def get_mma_dtype(a_dtype: str, b_dtype: str):
+        from hidet.ir.type import float_dtype_rank
+        def max_float_dtype(float_dtypes) -> str:
+            return max(float_dtypes, key=lambda dtype: float_dtype_rank[dtype])
+
         dtype = max_float_dtype([a_dtype, b_dtype])
         if dtype not in ['float16', 'bfloat16', 'float32']:
             raise ValueError('Can not recognize data type {} as input data type of matrix multiplication.'.format(dtype))

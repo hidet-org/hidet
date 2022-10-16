@@ -9,13 +9,14 @@ from hidet.graph.transforms.base import GraphPass
 from hidet.utils.structure import DirectedGraph
 from hidet.utils.doc import Doc, Text, NewLine, doc_join
 from hidet.utils.namer import Namer
+from hidet.utils.py import unique
 
 
 class FusibleGraph:
     def __init__(self, anchor: Operator):
         self.anchor: Operator = anchor
         self.operators: List[Operator] = [anchor]
-        self.input_tensors: List[Tensor] = list(set(anchor.inputs))   # use set to remove duplicates
+        self.input_tensors: List[Tensor] = unique(anchor.inputs)   # remove duplicates
         self.output_tensors: List[Tensor] = list(anchor.outputs)
 
     def __str__(self):
@@ -93,7 +94,7 @@ def fuse_epilogue_operators(
                 sub_graph.operators.append(user)
                 sub_graph.output_tensors.remove(found_output_tensor)
                 sub_graph.output_tensors.append(user.outputs[0])
-                sub_graph.input_tensors.extend([tensor for tensor in set(user.inputs)
+                sub_graph.input_tensors.extend([tensor for tensor in unique(user.inputs)
                                                 if (tensor not in sub_graph.input_tensors and
                                                     tensor is not found_output_tensor)])
                 belong[user] = sub_graph
@@ -145,7 +146,7 @@ def fuse_prologue_operators(
                 producer: Operator = found_input_tensor.trace[0]
                 sub_graph.operators.insert(0, producer)
                 sub_graph.input_tensors.remove(found_input_tensor)
-                sub_graph.input_tensors.extend([tensor for tensor in set(producer.inputs)
+                sub_graph.input_tensors.extend([tensor for tensor in unique(producer.inputs)
                                                 if tensor not in sub_graph.input_tensors])
                 belong[producer] = sub_graph
                 # continue the while loop to fuse more operators
@@ -261,6 +262,7 @@ def task_from_sub_graph(sub_graph: FusibleGraph, usage: Usage) -> Task:
     task_graph_outputs: List[TensorNode] = [mapping[tensor] for tensor in sub_graph.output_tensors]
 
     anchor_task = copy.copy(sub_graph.anchor.task)
+    nodes[nodes.index(sub_graph.anchor.task)] = anchor_task
     task_graph = TaskGraph(
         anchor=anchor_task,
         nodes=nodes,
@@ -275,15 +277,18 @@ def task_from_sub_graph(sub_graph: FusibleGraph, usage: Usage) -> Task:
 
 
 def operator_from_sub_graph(sub_graph: FusibleGraph, input_remap: Dict[Tensor, Tensor], usage: Usage) -> Operator:
-    updated_inputs: List[Tensor] = [input_remap[tensor] if tensor in input_remap else tensor for tensor in sub_graph.input_tensors]
     if len(sub_graph.operators) == 1:
         # if there is only one operator in the sub-graph, we just update its inputs.
         origin_op = sub_graph.operators[0]
+        updated_inputs: List[Tensor] = [input_remap[tensor] if tensor in input_remap else tensor for tensor in origin_op.inputs]
+        if origin_op.name == 'Concat':
+            print('Concat')
         outs = origin_op.reforward(updated_inputs)
         updated_op = outs[0].trace[0]
         return updated_op
     else:
         # otherwise, create a new operator from the sub-graph.
+        updated_inputs: List[Tensor] = [input_remap[tensor] if tensor in input_remap else tensor for tensor in sub_graph.input_tensors]
         task: Task = task_from_sub_graph(sub_graph, usage)
         op = Operator(
             inputs=updated_inputs,

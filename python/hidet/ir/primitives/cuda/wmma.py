@@ -2,13 +2,12 @@ from collections import namedtuple
 from typing import List, Optional, Union, Tuple
 
 from hidet.ir.builders import FunctionBuilder
-from hidet.ir.dialects.lowlevel import PointerType
 from hidet.ir.expr import Expr, cast
 from hidet.ir.expr import Var
 from hidet.ir.primitives.cuda.funcs import call_cuda
 from hidet.ir.primitives.func import register_primitive_function
 from hidet.ir.stmt import AsmStmt, AssignStmt
-from hidet.ir.type import ScalarType
+from hidet.ir.type import ScalarType, PointerType
 from hidet.utils import initialize
 
 """

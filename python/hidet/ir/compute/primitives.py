@@ -1,12 +1,10 @@
 from __future__ import annotations
-from typing import Union, Sequence, Tuple, Optional, List, Dict, Any
+from typing import Union, Sequence, Tuple, Optional, List
 
 from hidet.ir.node import Node
-from hidet.ir.type import ScalarType, TensorType, Scope, tensor_type, scalar_type
-from hidet.ir.expr import Expr, Constant, convert, Var, var, And, if_then_else
-from hidet.utils.info import float_type_min_value
+from hidet.ir.type import ScalarType, TensorType, tensor_type
+from hidet.ir.expr import Expr, convert, Var, var, And, if_then_else
 from .reduce_operations import ReduceOperation
-from hidet.utils.namer import Namer
 
 
 class ComputeNode(Expr):
@@ -129,18 +127,6 @@ class ArgReduceCompute(ScalarCompute):
         self.index_dtype: ScalarType = index_dtype
 
         assert all(isinstance(v, TensorNode) for v in self.input_tensors) and all(isinstance(v, ScalarNode) for v in self.input_scalars)
-
-
-class CustomCompute:
-    def __init__(
-            self,
-            input_tensors: Sequence[TensorNode],
-            input_scalars: Sequence[ScalarNode],
-            data_type: Union[TensorType, ScalarType]
-    ):
-        self.input_tensors: List[TensorNode] = list(input_tensors)
-        self.input_scalars: List[ScalarNode] = list(input_scalars)
-        self.data_type: Union[TensorType, ScalarType] = data_type
 
 
 def scalar_input(name, dtype):

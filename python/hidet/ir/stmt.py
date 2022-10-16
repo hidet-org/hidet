@@ -1,7 +1,7 @@
 from typing import Sequence, Tuple, Any
 from typing import List, Union, Optional
 from hidet.ir.node import Node
-from hidet.ir.type import ScalarType
+from hidet.ir.type import ScalarType, PointerType, TensorPointerType, ReferenceType
 from hidet.ir.expr import Var, Expr, convert, Constant
 from hidet.ir.mapping import TaskMapping
 
@@ -150,7 +150,6 @@ def asm(
         is_volatile=False
 ):
     from hidet.ir.functors import infer_type
-    from hidet.ir.dialects.lowlevel import PointerType, TensorPointerType, ReferenceType
     updated_outputs = []
     updated_inputs = []
 

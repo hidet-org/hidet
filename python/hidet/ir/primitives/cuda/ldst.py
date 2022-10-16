@@ -1,6 +1,6 @@
 from typing import Optional
 
-from hidet.ir.dialects.lowlevel import PointerType, TensorPointerType
+from hidet.ir.type import PointerType, TensorPointerType
 from hidet.ir.expr import Expr
 from hidet.ir.func import Function
 from hidet.ir.functors import infer_type
@@ -93,8 +93,8 @@ def register_functions():
 
 @initialize()
 def register_primitive_functions_with_body():
+    from hidet.ir.type import ReferenceType
     from hidet.ir.expr import Var
-    from hidet.ir.dialects.lowlevel import ReferenceType
     from hidet.ir.stmt import AsmStmt
     from hidet.ir.builders import FunctionBuilder
     # lds128

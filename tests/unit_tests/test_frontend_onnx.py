@@ -48,11 +48,11 @@ def check_model(model_path: str, input_names: List[str], input_tensors: List[Ten
 @pytest.mark.parametrize(
     "model_name",
     [
-        'resnet50',
-        'inception_v3',
-        'mobilenet_v2',
+        # 'resnet50',
+        # 'inception_v3',
+        # 'mobilenet_v2',
         'bert',
-        'gpt2'
+        # 'gpt2'
     ]
 )
 @pytest.mark.parametrize(
@@ -62,8 +62,8 @@ def check_model(model_path: str, input_names: List[str], input_tensors: List[Ten
 @pytest.mark.parametrize(
     "mode",
     [
-        'traced',
-        'imperative',
+        # 'traced',
+        # 'imperative',
         'opt'
     ]
 )

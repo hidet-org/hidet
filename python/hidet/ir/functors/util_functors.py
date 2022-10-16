@@ -2,7 +2,7 @@ from typing import Union, Mapping
 from hidet.ir.expr import Let
 from hidet.ir.func import Function
 from hidet.ir.stmt import Stmt, ForStmt, LetStmt
-from hidet.ir.dialects.compute import *
+from hidet.ir.compute import *
 
 from .base import StmtExprVisitor, StmtExprRewriter, FuncStmtExprVisitor
 

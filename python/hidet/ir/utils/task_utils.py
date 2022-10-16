@@ -1,6 +1,5 @@
 from typing import Sequence, Optional, List
-from hidet.ir.type import TensorType, FuncType
-from hidet.ir.dialects.lowlevel import VoidType
+from hidet.ir.type import TensorType, FuncType, VoidType
 from hidet.ir.func import IRModule
 from hidet.ir.task import Task
 

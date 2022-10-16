@@ -1,13 +1,12 @@
 from typing import Dict, Optional, List
 from hidet.ir.node import Node
 from hidet.ir.func import IRModule, Function
-from hidet.ir.type import ScalarType, TensorType, TypeNode
+from hidet.ir.type import ScalarType, TensorType, TypeNode, VoidType, PointerType, ReferenceType, TensorPointerType
 from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div, Sub, Not, Or, And, Let, IfThenElse, TensorSlice, RightShift, LeftShift, BitwiseNot, BitwiseOr, BitwiseAnd, Neg, Cast, \
-    NotEqual, BitwiseXor
+    NotEqual, BitwiseXor, Reference, Dereference, Address
 from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt, BlackBoxStmt, AsmStmt, ReturnStmt, LetStmt, DeclareStmt, ForTaskStmt, WhileStmt, ContinueStmt, BreakStmt
 from hidet.ir.mapping import RepeatTaskMapping, SpatialTaskMapping, ComposedTaskMapping, TaskMapping
-from hidet.ir.dialects.compute import TensorNode, ScalarNode, GridCompute, ArgReduceCompute, ReduceCompute
-from hidet.ir.dialects.lowlevel import VoidType, PointerType, Dereference, Address, ReferenceType, TensorPointerType, Reference
+from hidet.ir.compute import TensorNode, ScalarNode, GridCompute, ArgReduceCompute, ReduceCompute
 from hidet.ir.dialects.pattern import AnyExpr
 from hidet.ir.layout import RowMajorLayout, ColumnMajorLayout
 from hidet.ir.task import Task, TaskGraph, Prologue, Epilogue, InverseMap
@@ -418,6 +417,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
             Text('parameters: ') + (NewLine() + doc_join(['{}: {}'.format(self.namer.get_name(v), self(v.data_type)) for v in e.parameters], NewLine())).indent(),
             Text('inputs: ') + '[' + doc_join([self.namer.get_name(v) for v in e.inputs], ', ') + ']',
             Text('outputs: ') + '[' + doc_join([self.namer.get_name(v) for v in e.outputs], ', ') + ']',
+            # Text('computations: ') + self.print_tensor_nodes(e.outputs, exclude_nodes=[v for v in e.parameters if v not in e.outputs]).indent(),
             Text('computations: ') + self.print_tensor_nodes(e.outputs).indent(),
             Text('attributes: {') + self(e.attributes) + '}',
         ]

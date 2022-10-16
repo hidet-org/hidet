@@ -1,6 +1,5 @@
 import numpy as np
-from hidet.ir.type import scalar_type
-from hidet.ir.dialects.lowlevel import pointer_type
+from hidet.ir.type import scalar_type, pointer_type
 from hidet.ffi import PackedFunc, _LIB
 
 cudnn_pooling_mode_dict = {

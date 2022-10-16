@@ -11,6 +11,11 @@ from tabulate import tabulate
 from typing import Callable, MutableMapping, Sequence
 
 
+def unique(seq: Sequence) -> List:
+    added = set()
+    return [item for item in seq if (item not in added and not added.add(item))]
+
+
 def prod(seq: Sequence):
     if len(seq) == 0:
         return 1

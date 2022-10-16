@@ -587,7 +587,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
             # there are two cases for a ~ operator: ~something
             # case 1: get the address of an expression
             # case 2: get the pointer type that points to the given type
-            from hidet.ir.dialects.lowlevel import Address
+            from hidet.ir.expr import Address
             from hidet.ir.type import TypeNode
             if isinstance(value, TypeNode):
                 return ~value

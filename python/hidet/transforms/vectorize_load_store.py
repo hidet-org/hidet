@@ -2,11 +2,10 @@ from typing import List, Type, Optional
 import contextlib
 from hidet.transforms import Pass
 from hidet.ir.type import TensorType
-from hidet.ir.expr import Expr, Var, TensorElement
+from hidet.ir.expr import Expr, Var, TensorElement, Address
 from hidet.ir.stmt import Stmt, SeqStmt, BufferStoreStmt, AssignStmt, EvaluateStmt
 from hidet.ir.func import Function
 from hidet.ir.functors import StmtRewriter, equal, same_list
-from hidet.ir.dialects.lowlevel import Address
 from hidet.ir.primitives import lds128, sts128
 
 

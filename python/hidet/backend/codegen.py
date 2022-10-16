@@ -1,10 +1,10 @@
 from hidet.ir.dialects.pattern import AnyExpr
+from hidet.ir.type import *
 from hidet.ir.func import *
 from hidet.ir.stmt import *
 from hidet.ir.expr import *
-from hidet.ir.dialects.compute import TensorNode, ScalarNode
+from hidet.ir.compute import TensorNode, ScalarNode
 from hidet.ir.functors import StmtExprFunctor, TypeFunctor, TypeInfer
-from hidet.ir.dialects.lowlevel import VoidType, PointerType, Dereference, Address, ReferenceType, Reference, TensorPointerType
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
 from hidet.ir.utils.call_graph import CallGraph
 from hidet.utils.namer import Namer

@@ -1,14 +1,13 @@
 from typing import Union, List, Dict, Sequence, Tuple, Set, Optional
 
-from hidet.ir.type import uint8, int32
-from hidet.ir.expr import TensorElement, Call, Expr, Var, scalar_var, convert, cast, var
+from hidet.ir.type import uint8, int32, TensorPointerType, void_pointer, VoidType
+from hidet.ir.expr import TensorElement, Call, Expr, Var, scalar_var, convert, cast, var, tensor_pointer_var
 from hidet.ir.stmt import Stmt, AssignStmt, SeqStmt, ForStmt, DeclareStmt, BufferStoreStmt, ForTaskStmt, EvaluateStmt
 from hidet.ir.task import Task
 from hidet.ir.func import IRModule, Function
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.ir.functors import ExprRewriter, ExprVisitor, inline_compute, collect, rewrite, infer_type, simplify_to_int
-from hidet.ir.dialects.compute import ComputeNode, ScalarNode, TensorNode, GridCompute, ReduceCompute, ArgReduceCompute, TensorCompute
-from hidet.ir.dialects.lowlevel import TensorPointerType, tensor_pointer_var, void_pointer, VoidType
+from hidet.ir.compute import ComputeNode, ScalarNode, TensorNode, GridCompute, ReduceCompute, ArgReduceCompute, TensorCompute
 from hidet.ir.primitives.runtime import request_cuda_workspace, request_cpu_workspace
 from hidet.utils import prod, DirectedGraph
 from hidet.utils.namer import Namer
@@ -76,7 +75,7 @@ def inline_grid_compute(nodes: List[TensorNode]) -> List[TensorNode]:
 
     .. code-block:: python
 
-         from hidet.ir.dialects.compute import tensor_input, compute
+         from hidet.ir.compute import tensor_input, compute
          a = tensor_input('a', 'float32', [10])
          b = compute('b', [10], lambda i: a[i] + 1)
          c = compute('c', [10], lambda i: b[i] * 2)
