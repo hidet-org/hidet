@@ -1,6 +1,0 @@
-[submodule "3rdparty/cutlass"]
-	path = 3rdparty/cutlass
-	url = git@github.com:NVIDIA/cutlass.git
-[submodule "3rdparty/tvm"]
-	path = 3rdparty/tvm
-	url = git@github.com:apache/tvm.git
