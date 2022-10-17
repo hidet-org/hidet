@@ -468,8 +468,8 @@ def scalar_var(hint: str, dtype: Union[str, ScalarType] = 'float32') -> Var:
     return Var(hint, dtype)
 
 
-def tensor_var(hint: str, shape=None, scope: str = 'global', dtype: Union[str, ScalarType] = 'float32', layout=None) -> Var:
-    return Var(hint, tensor_type(scope, dtype, shape, layout))
+def tensor_var(hint: str, shape=None, dtype: Union[str, ScalarType] = 'float32', layout=None) -> Var:
+    return Var(hint, tensor_type(dtype, shape, layout))
 
 
 def is_one(v: Expr) -> bool:
@@ -537,7 +537,6 @@ def cast(v: Expr, dtype):
 def const_tensor(value: np.ndarray, data_type=None) -> Constant:
     if data_type is None:
         data_type = tensor_type(
-            scope='host',
             dtype=ScalarType.from_numpy_dtype(value.dtype),
             shape=list(value.shape)
         )
@@ -553,8 +552,8 @@ def const_like(value: Union[float, int], e: Expr) -> Constant:
         raise ValueError('Expect a scalar type, but got {}'.format(dtype))
 
 
-def tensor_pointer_var(hint: str, shape=None, scope: str = 'global', dtype: Union[str, ScalarType] = 'float32', layout=None):
-    return Var(hint, TensorPointerType(scope=scope, dtype=dtype, shape=shape, layout=layout))
+def tensor_pointer_var(hint: str, shape=None, dtype: Union[str, ScalarType] = 'float32', layout=None):
+    return Var(hint, TensorPointerType(dtype=dtype, shape=shape, layout=layout))
 
 
 def view(ptr: Expr, tp: TensorType) -> Expr:

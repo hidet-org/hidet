@@ -36,7 +36,7 @@ class ReduceTask(Task):
             return reduce(shape=reduce_shape, fcompute=reduce_fcompute,
                           reduce_type=reduce_type, accumulate_dtype=accumulate_dtype)
 
-        y = compute(name='y', shape=y_shape, fcompute=fcompute, scope='global')
+        y = compute(name='y', shape=y_shape, fcompute=fcompute)
 
         self.dims: List[int] = dims
         self.keep_dim: bool = keep_dim

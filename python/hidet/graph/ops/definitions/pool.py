@@ -17,8 +17,7 @@ class Pool2dTask(Task):
         pad = compute(
             name='pad',
             shape=[batch_size, channels, height + 2 * padding[0], width + 2 * padding[1]],
-            fcompute=lambda n, c, h, w: x.protect_read(indices=[n, c, h - padding[0], w - padding[1]], default_value=pad_value),
-            scope=x.data_type.scope
+            fcompute=lambda n, c, h, w: x.protect_read(indices=[n, c, h - padding[0], w - padding[1]], default_value=pad_value)
         )
         y = compute(
             name='y',
@@ -27,8 +26,7 @@ class Pool2dTask(Task):
                 shape=[kernel[0], kernel[1]],
                 fcompute=lambda rx, ry: pad[n, c, h * strides[0] + rx, w * strides[1] + ry],
                 reduce_type=reduce_type
-            ),
-            scope='global'
+            )
         )
         y = inline_compute(y)
         super().__init__(

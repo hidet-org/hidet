@@ -283,6 +283,10 @@ def operator_from_sub_graph(sub_graph: FusibleGraph, input_remap: Dict[Tensor, T
         updated_inputs: List[Tensor] = [input_remap[tensor] if tensor in input_remap else tensor for tensor in origin_op.inputs]
         if origin_op.name == 'Concat':
             print('Concat')
+        if origin_op.__class__ is Operator:
+            raise ValueError('Found an fused operator in the fusion pass.\n'
+                             'For now, this pass expects to accept a graph without fused operators.\n'
+                             'Have you run this pass twice?')
         outs = origin_op.reforward(updated_inputs)
         updated_op = outs[0].trace[0]
         return updated_op

@@ -6,7 +6,7 @@ from hidet.ir.type import FuncType, VoidType
 from hidet.ir.expr import var, tensor_var
 from hidet.ir.func import IRModule
 from hidet.ir.primitives import lds128, sts128
-from hidet.ir.stmt import BlackBoxStmt, AssignStmt, BufferStoreStmt
+from hidet.ir.stmt import BlackBoxStmt, AssignStmt, BufferStoreStmt, DeclareStmt, Scope
 from hidet.utils import cuda
 from hidet.driver import build_ir_module
 from hidet.transforms.tools import fuse_and_pack
@@ -16,17 +16,18 @@ def test_lds128(capfd):
     with FunctionBuilder('test_lds128_grid', kind='cuda_kernel', grid_dim=1, block_dim=1) as fb:
         # params
         regs = [var(f'reg{i}', 'float32') for i in range(4)]
-        smem_tensor = tensor_var('smem_tensor', [4], 'shared', 'float32')
-        fb.extend_local_vars(regs + [smem_tensor])
+        smem_tensor = tensor_var('smem_tensor', [4], 'float32')
+        fb += DeclareStmt(smem_tensor, scope=Scope.Shared)
+        for reg in regs:
+            fb += DeclareStmt(reg)
 
         # body
-        sb = StmtBuilder()
         for i in range(4):
-            sb += BufferStoreStmt(smem_tensor, [i], i)
-        sb += lds128(regs[0], regs[1], regs[2], regs[3], smem_tensor)
-        sb += BlackBoxStmt(r'printf("%.2f %.2f %.2f %.2f\n", {}, {}, {}, {});',
+            fb += BufferStoreStmt(smem_tensor, [i], i)
+        fb += lds128(regs[0], regs[1], regs[2], regs[3], smem_tensor)
+        fb += BlackBoxStmt(r'printf("%.2f %.2f %.2f %.2f\n", {}, {}, {}, {});',
                            regs[0], regs[1], regs[2], regs[3])
-        fb.set_body(sb.finish())
+        fb.set_body(fb.finish())
 
     func = fb.get()
     ir_module = IRModule({func.name: func}, task=None)
@@ -42,17 +43,17 @@ def test_sts128(capfd):
     with FunctionBuilder('test_sts128_grid', kind='cuda_kernel', grid_dim=1, block_dim=1) as fb:
         # params
         regs = [var(f'reg{i}', 'float32') for i in range(4)]
-        smem_tensor = tensor_var('smem_tensor', [4], 'shared', 'float32')
-        fb.extend_local_vars(regs + [smem_tensor])
+        smem_tensor = tensor_var('smem_tensor', [4], 'float32')
+        fb += DeclareStmt(smem_tensor, scope=Scope.Shared)
+        for reg in regs:
+            fb += DeclareStmt(reg)
 
         # body
-        sb = StmtBuilder()
         for i in range(4):
-            sb += AssignStmt(regs[i], i)
-        sb += sts128(regs[0], regs[1], regs[2], regs[3], smem_tensor)
-        sb += BlackBoxStmt(r'printf("%.2f %.2f %.2f %.2f\n", {}, {}, {}, {});',
+            fb += AssignStmt(regs[i], i)
+        fb += sts128(regs[0], regs[1], regs[2], regs[3], smem_tensor)
+        fb += BlackBoxStmt(r'printf("%.2f %.2f %.2f %.2f\n", {}, {}, {}, {});',
                            smem_tensor[0], smem_tensor[1], smem_tensor[2], smem_tensor[3])
-        fb.set_body(sb.finish())
 
     func = fb.get()
     ir_module = IRModule({func.name: func}, task=None)

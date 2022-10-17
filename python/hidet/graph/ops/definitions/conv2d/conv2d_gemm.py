@@ -18,8 +18,7 @@ class Conv2dGemmImageTransformTask(Task):
         gemm_x = compute(
             name='gemm_x',
             shape=[groups, n * p * q, gc * kx * ky],
-            fcompute=lambda g, i, k: x[i // (p * q), g * gc + k // (kx * ky), i // q % p * sx + k // ky % kx, i % q * sy + k % ky],
-            scope=x.data_type.scope
+            fcompute=lambda g, i, k: x[i // (p * q), g * gc + k // (kx * ky), i // q % p * sx + k // ky % kx, i % q * sy + k % ky]
         )
         super().__init__(
             name='conv2d_gemm_image_transform',

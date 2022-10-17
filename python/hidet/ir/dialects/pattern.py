@@ -158,7 +158,7 @@ class PatternMatcher:
                 ScalarType: PatternMatcher.match_ScalarType,
                 TensorType: PatternMatcher.match_TensorType,
                 # scope
-                Scope: PatternMatcher.match_Scope,
+                # Scope: PatternMatcher.match_Scope,
                 # layout
                 DataLayout: PatternMatcher.match_DataLayout,
                 StridesLayout: PatternMatcher.match_StridesLayout,
@@ -301,10 +301,10 @@ class PatternMatcher:
             with self.match(pattern.pattern, target):
                 pass
 
-    def match_Scope(self, pattern: Scope, target: Scope):
-        if pattern.name is not None and (pattern.name is None or pattern.name != target.name):
-            raise NotMatchedError(pattern, target)
-
+    # def match_Scope(self, pattern: Scope, target: Scope):
+    #     if pattern.name is not None and (pattern.name is None or pattern.name != target.name):
+    #         raise NotMatchedError(pattern, target)
+    #
     def match_ScalarType(self, pattern: ScalarType, target: ScalarType):
         if pattern.name:
             if pattern.name != target.name:
@@ -315,7 +315,7 @@ class PatternMatcher:
             stack.enter_context(self.match(pattern.scalar_type, target.scalar_type))
             stack.enter_context(self.match(pattern.shape, target.shape))
             stack.enter_context(self.match(pattern.layout, target.layout))
-            stack.enter_context(self.match(pattern.scope, target.scope))
+            # stack.enter_context(self.match(pattern.scope, target.scope))
 
     def match_ScalarTypePattern(self, pattern: ScalarTypePattern, target: ScalarType):
         self.check_type(pattern, target, ScalarType)

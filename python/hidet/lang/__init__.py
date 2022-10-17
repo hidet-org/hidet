@@ -1,11 +1,11 @@
 from typing import Union, Sequence, Optional, List
-from hidet.ir.type import ScalarType, TensorType, Scope, PointerType, VoidType, ReferenceType, void_p
+from hidet.ir.type import ScalarType, TensorType, PointerType, VoidType, ReferenceType, void_p
 from hidet.ir.expr import Expr, Var, cast, view, Dereference
 from hidet.ir.mapping import row_spatial, row_repeat, col_repeat, col_spatial, TaskMapping, auto_map
 from hidet.ir.layout import DataLayout
 from hidet.ir.primitives import printf
 from hidet.lang.script import script, script_module
-from hidet.ir.stmt import asm
+from hidet.ir.stmt import asm, Scope
 from hidet.ir.func import Function
 from hidet.lang.type_utils import static
 
@@ -33,7 +33,7 @@ def tensor(scope: Union[Scope, str],
            shape: Optional[Sequence[ConstExpr]] = None,
            layout: Optional[DataLayout] = None):
     from hidet.ir.type import tensor_type
-    return tensor_type(scope, dtype, shape, layout)
+    return tensor_type(dtype, shape, layout)
 
 
 def tensor_pointer(scope: Union[Scope, str],
@@ -41,7 +41,7 @@ def tensor_pointer(scope: Union[Scope, str],
                    shape: Optional[Sequence[ConstExpr]] = None,
                    layout: Optional[DataLayout] = None):
     from hidet.ir.type import tensor_type
-    return ~tensor_type(scope, dtype, shape, layout)
+    return ~tensor_type(dtype, shape, layout)
 
 
 def grid(*dim_extents):

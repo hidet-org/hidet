@@ -137,8 +137,8 @@ def scalar_input(name, dtype):
     return ScalarNode(name, dtype, reduce_compute=None)
 
 
-def tensor_input(name, base_type, shape, scope=None, layout=None):
-    data_type = tensor_type(scope, base_type, shape, layout)
+def tensor_input(name, base_type, shape, layout=None):
+    data_type = tensor_type(base_type, shape, layout)
     return TensorNode(name, data_type, tensor_compute=None)
 
 
@@ -162,14 +162,14 @@ def reduce(shape: Sequence[Union[int, Expr]], fcompute, reduce_type: str, accumu
     )
 
 
-def compute(name, shape, fcompute, scope=None, layout=None) -> TensorNode:
+def compute(name, shape, fcompute, layout=None) -> TensorNode:
     from hidet.ir.functors import infer_type, simplify, collect
     shape = [convert(v) for v in shape]
     axes = [var() for _ in shape]
     value = simplify(convert(fcompute(*axes)))
     return TensorNode(
         name=name,
-        data_type=tensor_type('global', dtype=infer_type(value), shape=shape, layout=layout),
+        data_type=tensor_type(dtype=infer_type(value), shape=shape, layout=layout),
         tensor_compute=GridCompute(
             input_tensors=collect(value, TensorNode, stop_when_found=True),
             input_scalars=collect(value, ScalarNode, stop_when_found=True),

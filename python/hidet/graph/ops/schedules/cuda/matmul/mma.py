@@ -10,7 +10,7 @@ from hidet.ir.primitives import syncthreads, thread_idx, block_idx, printf
 from hidet.ir.primitives.cuda.mma import MmaConfig, mma_sync
 from hidet.ir.mapping import row_spatial, row_repeat
 from hidet.ir.layout import row_layout, col_layout, local_layout, data_layout
-from hidet.ir.stmt import AssignStmt, BufferStoreStmt, IfStmt, Stmt
+from hidet.ir.stmt import AssignStmt, BufferStoreStmt, IfStmt, Stmt, DeclareStmt, Scope
 from hidet.ir.type import scalar_type, tensor_type, TensorType, ScalarType, TensorPointerType, PointerType
 from hidet.ir.task import TaskContext
 from hidet.utils import cuda, prod
@@ -166,6 +166,7 @@ def batched_matmul_cuda_schedule_mma(task: MatmulTask) -> IRModule:
     return resolve_ir_modules(
         ir_modules=ir_modules,
         schedules=all_schedules,
+        target_device='cuda',
         output_dir=resolve_out_dir,
         parallel=True,
         verbose=True
@@ -197,19 +198,25 @@ def batched_matmul_cuda_with_given_schedule(task: MatmulTask, sch: MatmulMmaSche
         gmem_a, gmem_b, gmem_c = [param[block_idx('y'), :, :] for param in params]
 
         # declare local variables
-        smem_a = tensor_pointer_var('smem_a', scope='shared', dtype=a_dtype, layout=sch.smem_a_layout)
-        smem_b = tensor_pointer_var('smem_b', scope='shared', dtype=b_dtype, layout=sch.smem_b_layout)
-        smem_c = tensor_pointer_var('smem_c', scope='shared', dtype=c_dtype, layout=sch.smem_c_layout)
-        smem_storage = tensor_var('smem_storage', shape=[sch.smem_storage_nbytes], scope='shared', dtype='uint8')
-        regs_a = tensor_var('regs_a', scope='register', dtype=a_dtype, layout=sch.regs_a_layout)
-        regs_b = tensor_var('regs_b', scope='register', dtype=b_dtype, layout=sch.regs_b_layout)
-        regs_c = tensor_var('regs_c', scope='register', dtype=c_dtype, layout=sch.regs_c_layout)
-        regs_ldg_a = tensor_var('regs_ldg_a', scope='register', dtype=a_dtype, layout=sch.regs_a_ldg_layout)
-        regs_ldg_b = tensor_var('regs_ldg_b', scope='register', dtype=b_dtype, layout=sch.regs_b_ldg_layout)
+        smem_a = tensor_pointer_var('smem_a', dtype=a_dtype, layout=sch.smem_a_layout)
+        smem_b = tensor_pointer_var('smem_b', dtype=b_dtype, layout=sch.smem_b_layout)
+        smem_c = tensor_pointer_var('smem_c', dtype=c_dtype, layout=sch.smem_c_layout)
+        smem_storage = tensor_var('smem_storage', shape=[sch.smem_storage_nbytes], dtype='uint8')
+        fb += DeclareStmt(smem_storage, scope=Scope.Shared)
         fb += AssignStmt(smem_a, ~smem_storage[0])
         fb += AssignStmt(smem_b, ~smem_storage[smem_a.type.tensor_type.storage_bytes()])
         fb += AssignStmt(smem_c, ~smem_storage[0])
-        fb.extend_local_vars([smem_storage, smem_a, smem_b, smem_c, regs_a, regs_b, regs_c, regs_ldg_a, regs_ldg_b])
+
+        regs_a = tensor_var('regs_a', dtype=a_dtype, layout=sch.regs_a_layout)
+        regs_b = tensor_var('regs_b', dtype=b_dtype, layout=sch.regs_b_layout)
+        regs_c = tensor_var('regs_c', dtype=c_dtype, layout=sch.regs_c_layout)
+        regs_ldg_a = tensor_var('regs_ldg_a', dtype=a_dtype, layout=sch.regs_a_ldg_layout)
+        regs_ldg_b = tensor_var('regs_ldg_b', dtype=b_dtype, layout=sch.regs_b_ldg_layout)
+        fb += DeclareStmt(regs_a)
+        fb += DeclareStmt(regs_b)
+        fb += DeclareStmt(regs_c)
+        fb += DeclareStmt(regs_ldg_a)
+        fb += DeclareStmt(regs_ldg_b)
 
         # initialize regs c
         for i, j, p in row_repeat(sch.mma_count_m, sch.mma_count_n, sch.mma_config.c_elements)[0]:

@@ -116,6 +116,7 @@ def batched_matmul_cuda_schedule_mma_fp16_pk(task: MatmulTask) -> IRModule:
     return resolve_ir_modules(
         ir_modules=ir_modules,
         schedules=all_schedules,
+        target_device='cuda',
         output_dir=resolve_out_dir,
         parallel=True,
         verbose=True

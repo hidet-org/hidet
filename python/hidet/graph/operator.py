@@ -22,8 +22,6 @@ class Operator:
     _current_space_level = 0
     _use_cache = True
 
-    _task_cache: Dict[int, Dict[str, CompiledFunction]] = defaultdict(dict)
-
     def __init__(
             self,
             inputs: List[Tensor],
@@ -168,14 +166,8 @@ class Operator:
     def build_task_func(self):
         from hidet.driver import build_task
         if self.task_func is None:
-            task_string = str(self.task)
-            level = self._current_space_level
-            if task_string in self._task_cache[level]:
-                self.task_func = self._task_cache[level][task_string]
-            else:
-                pc = _profile_config
-                self.task_func = build_task(self.task, space_level=self._current_space_level, target_device=self.device, warmup=pc.warmup, number=pc.number, repeat=pc.repeat, use_cache=self._use_cache)
-                self._task_cache[level][task_string] = self.task_func
+            pc = _profile_config
+            self.task_func = build_task(self.task, space_level=self._current_space_level, target_device=self.device, warmup=pc.warmup, number=pc.number, repeat=pc.repeat, use_cache=self._use_cache)
 
 
 def space_level(level=0):

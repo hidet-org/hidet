@@ -41,8 +41,7 @@ class UnaryElementwiseTask(Task):
         y = compute(
             name='y',
             shape=shape,
-            fcompute=lambda *indices: op(x.__getitem__(indices)),
-            scope='global'
+            fcompute=lambda *indices: op(x.__getitem__(indices))
         )
         super().__init__(
             name=name,
@@ -73,8 +72,7 @@ class BinaryElementwiseTask(Task):
         z = compute(
             name='z',
             shape=z_shape,
-            fcompute=lambda *indices: op(x[broadcast_indices(indices, x_shape, z_shape)], y[broadcast_indices(indices, y_shape, z_shape)]),
-            scope='global'
+            fcompute=lambda *indices: op(x[broadcast_indices(indices, x_shape, z_shape)], y[broadcast_indices(indices, y_shape, z_shape)])
         )
 
         super().__init__(

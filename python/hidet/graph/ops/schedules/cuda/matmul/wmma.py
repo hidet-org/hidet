@@ -9,7 +9,7 @@ from hidet.ir.mapping import TaskMapping, row_spatial, row_repeat
 from hidet.ir.layout import DataLayout, row_layout, local_layout, data_layout
 from hidet.ir.primitives import syncthreads, thread_idx, block_idx, syncwarp
 from hidet.ir.primitives.cuda.wmma import WmmaConfig, wmma_load_a, wmma_load_b, wmma_mma, wmma_store, wmma_configs
-from hidet.ir.stmt import AssignStmt, BufferStoreStmt, IfStmt
+from hidet.ir.stmt import AssignStmt, BufferStoreStmt, IfStmt, DeclareStmt, Scope
 from hidet.ir.task import TaskContext, Task
 from hidet.ir.type import scalar_type, tensor_type, ScalarType, TensorPointerType, PointerType
 from hidet.graph.ops.definitions.matmul.matmul import MatmulTask
@@ -238,6 +238,7 @@ def batched_matmul_cuda_schedule_wmma(task: MatmulTask) -> IRModule:
     return resolve_ir_modules(
         ir_modules=ir_modules,
         schedules=all_schedules,
+        target_device='cuda',
         output_dir=resolve_out_dir,
         parallel=True,
         verbose=True
@@ -283,28 +284,33 @@ def batched_matmul_cuda_with_given_schedule(task: MatmulTask, schedule: MatmulSc
         fb.extend_params(params)
 
         # declare local variables
-        smem_a = Var('smem_a', TensorPointerType('shared', a_dtype, layout=sch.smem_a_layout))
-        smem_b = Var('smem_b', TensorPointerType('shared', b_dtype, layout=sch.smem_b_layout))
-        smem_c = Var('smem_c', TensorPointerType('shared', c_dtype, layout=sch.smem_c_layout))
+        smem_a = Var('smem_a', TensorPointerType(a_dtype, layout=sch.smem_a_layout))
+        smem_b = Var('smem_b', TensorPointerType(b_dtype, layout=sch.smem_b_layout))
+        smem_c = Var('smem_c', TensorPointerType(c_dtype, layout=sch.smem_c_layout))
         if sch.use_dynamic_smem:
             # 'extern __shared__ uint8_t smem_storage[];' in c code
             smem_storage = Var('smem_storage', PointerType(base_type=scalar_type('uint8'), specifiers=['extern', '__shared__'], use_bracket=True))
+            fb += DeclareStmt(smem_storage)
         else:
-            smem_storage = Var('smem_storage', tensor_type('shared', dtype='uint8', shape=[sch.used_smem_bytes_per_block]))
+            smem_storage = Var('smem_storage', tensor_type(dtype='uint8', shape=[sch.used_smem_bytes_per_block]))
+            fb += DeclareStmt(smem_storage, scope=Scope.Shared)
         smem_a_bytes = simplify_to_int(smem_a.type.tensor_type.storage_bytes())
-        fb.extend_local_vars([smem_a, smem_b, smem_c, smem_storage])
-        fb += AssignStmt(smem_a, Cast(~smem_storage[0], PointerType(a_dtype)))
-        fb += AssignStmt(smem_b, Cast(~smem_storage[smem_a_bytes], PointerType(b_dtype)))
-        fb += AssignStmt(smem_c, Cast(~smem_storage[0], PointerType(c_dtype)))
+        fb += DeclareStmt(smem_a, Cast(~smem_storage[0], PointerType(a_dtype)))
+        fb += DeclareStmt(smem_b, Cast(~smem_storage[smem_a_bytes], PointerType(b_dtype)))
+        fb += DeclareStmt(smem_c, Cast(~smem_storage[0], PointerType(c_dtype)))
 
         # declare a, b, c registers
         reg_dtype = ScalarType('uint32')
-        regs_a = Var('regs_a', tensor_type('register', reg_dtype, layout=schedule.regs_a_layout))
-        regs_b = Var('regs_b', tensor_type('register', reg_dtype, layout=schedule.regs_b_layout))
-        regs_c = Var('regs_c', tensor_type('register', reg_dtype, layout=schedule.regs_c_layout))
-        regs_a_ldg = Var('regs_a_ldg', tensor_type(scope='register', dtype=a_dtype, layout=schedule.regs_a_ldg_layout))
-        regs_b_ldg = Var('regs_b_ldg', tensor_type(scope='register', dtype=b_dtype, layout=schedule.regs_b_ldg_layout))
-        fb.extend_local_vars([regs_a, regs_b, regs_c, regs_a_ldg, regs_b_ldg])
+        regs_a = Var('regs_a', tensor_type(reg_dtype, layout=schedule.regs_a_layout))
+        regs_b = Var('regs_b', tensor_type(reg_dtype, layout=schedule.regs_b_layout))
+        regs_c = Var('regs_c', tensor_type(reg_dtype, layout=schedule.regs_c_layout))
+        regs_a_ldg = Var('regs_a_ldg', tensor_type(dtype=a_dtype, layout=schedule.regs_a_ldg_layout))
+        regs_b_ldg = Var('regs_b_ldg', tensor_type(dtype=b_dtype, layout=schedule.regs_b_ldg_layout))
+        fb += DeclareStmt(regs_a)
+        fb += DeclareStmt(regs_b)
+        fb += DeclareStmt(regs_c)
+        fb += DeclareStmt(regs_a_ldg)
+        fb += DeclareStmt(regs_b_ldg)
 
         a_default_value = convert(0.0, a_dtype)
         b_default_value = convert(0.0, b_dtype)

@@ -4,7 +4,7 @@ from hidet.ir.func import IRModule, Function
 from hidet.ir.type import ScalarType, TensorType, TypeNode, VoidType, PointerType, ReferenceType, TensorPointerType
 from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div, Sub, Not, Or, And, Let, IfThenElse, TensorSlice, RightShift, LeftShift, BitwiseNot, BitwiseOr, BitwiseAnd, Neg, Cast, \
     NotEqual, BitwiseXor, Reference, Dereference, Address
-from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt, BlackBoxStmt, AsmStmt, ReturnStmt, LetStmt, DeclareStmt, ForTaskStmt, WhileStmt, ContinueStmt, BreakStmt
+from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt, BlackBoxStmt, AsmStmt, ReturnStmt, LetStmt, DeclareStmt, ForTaskStmt, WhileStmt, ContinueStmt, BreakStmt, Scope
 from hidet.ir.mapping import RepeatTaskMapping, SpatialTaskMapping, ComposedTaskMapping, TaskMapping
 from hidet.ir.compute import TensorNode, ScalarNode, GridCompute, ArgReduceCompute, ReduceCompute
 from hidet.ir.dialects.pattern import AnyExpr
@@ -251,6 +251,8 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
             doc += ' = ' + self(stmt.init)
         if stmt.is_static:
             doc += ' [static]'
+        if stmt.scope != Scope.Default:
+            doc += ' [{}]'.format(stmt.scope)
         return doc
 
     def visit_EvaluateStmt(self, stmt: EvaluateStmt):
@@ -353,13 +355,12 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
         return Text('{}'.format(t.name))
 
     def visit_TensorType(self, t: TensorType):
-        assert t.scope is not None
-        items = [self(t.scalar_type), '[' + self(t.shape) + ']', self(t.scope.name)]
+        items = [self(t.scalar_type), '[' + self(t.shape) + ']']
         if isinstance(t.layout, RowMajorLayout):
             layout = 'row_major'
             # default layout, do not print
         elif isinstance(t.layout, ColumnMajorLayout):
-            items.append(Text('column_major'))
+            items.append(Text('col_major'))
         elif t.layout is None:
             layout = 'None'
             # skip None

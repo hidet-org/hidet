@@ -401,7 +401,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
                     if isinstance(arg_type, ir.TypeNode):
                         if isinstance(arg_type, ir.TensorType):
                             # we automatically change the tensor type of argument to a tensor pointer type.
-                            arg_type = ir.TensorPointerType(scope='global', dtype=arg_type.scalar_type, shape=arg_type.shape, layout=arg_type.layout)
+                            arg_type = ir.TensorPointerType(dtype=arg_type.scalar_type, shape=arg_type.shape, layout=arg_type.layout)
                     elif arg_type in [int, float]:
                         type_dict = {
                             int: ir.scalar_type('int32'),

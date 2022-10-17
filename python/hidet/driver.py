@@ -10,6 +10,7 @@ from hidet.utils.py import cyan, green
 from hidet.ir.task import Task, TaskContext
 from hidet.ir.func import IRModule
 from hidet.ir.type import FuncType
+from hidet.runtime.module import compiled_task_cache, CompiledFunction
 
 logger = logging.Logger(__name__)
 logger.setLevel(logging.INFO)
@@ -24,49 +25,54 @@ def disable_cache(disable: bool = False):
 
 
 def build_task(task: Task, space_level: int, target_device: str = 'cuda', warmup: int = 3, number: int = 10, repeat: int = 3, use_cache=True, cache_dir=None, load=True):
-    # resolve task dir
-    if cache_dir is None:
-        cache_dir = os.path.join(hidet_cache_dir(), 'ops')
-    config_str = '{}_space_{}'.format(target_device, space_level)
-    task_string = str(task)
-    task_hash = sha256(task_string.encode()).hexdigest()[:16]
-    task_dir = os.path.join(cache_dir, config_str, task.name, task_hash)
-    src_path = os.path.join(task_dir, 'source.cu')
-    lib_path = os.path.join(task_dir, 'lib.so')
+    task_string: str = str(task)
+    compiled_func: Optional[CompiledFunction] = None
 
-    # use previously generated library when available
-    if not cache_disabled and use_cache and os.path.exists(lib_path):
-        logger.debug("Load cached task binary {} from path: \n{}".format(green(task.name), cyan(lib_path)))
-        if not load:
-            return None
-        return load_task_func(lib_path, task)
+    # check in-memory cache
+    if compiled_task_cache.contains(target_device, space_level, task_string):
+        if load:
+            compiled_func = compiled_task_cache.get(target_device, space_level, task_string)
+    else:
+        # check on-disk cache
+        if cache_dir is None:
+            cache_dir = os.path.join(hidet_cache_dir(), 'ops')
+        config_str = '{}_space_{}'.format(target_device, space_level)
+        task_hash = sha256(task_string.encode()).hexdigest()[:16]
+        task_dir = os.path.join(cache_dir, config_str, task.name, task_hash)
+        src_path = os.path.join(task_dir, 'source.cu')
+        lib_path = os.path.join(task_dir, 'lib.so')
 
-    logger.info("Compiling task {}{}{}...".format(COLORS.OKGREEN, task.name, COLORS.ENDC))
-    # print(task)
-    # exit(0)
-
-    # build from scratch
-    os.makedirs(task_dir, exist_ok=True)
-    # write task
-    with open(os.path.join(task_dir, 'task.txt'), 'w') as f:
-        f.write(task_string)
-    # implement task
-    with TaskContext(space_level=space_level, warmup=warmup, number=number, repeat=repeat, resolve_out_dir=task_dir):
-        ir_module = task.implement(target=target_device)
-    # lower ir module
-    with PassContext(instruments=[
-                         # SaveIRInstrument(out_dir=os.path.join('./outs/ir', task.name, task_hash)),
-                         ProfileInstrument(log_file=os.path.join('./outs/ir', task.name, task_hash, 'lower_time.txt'))
-                     ]):
-        ir_module = lower(ir_module)
-    # code generation
-    codegen(ir_module, src_out_path=src_path)
-    # compile source code
-    compile_source(src_path, out_lib_path=lib_path, keep_ptx=False)
-    # load function
-    if not load:
-        return None
-    return load_task_func(lib_path, task)
+        # use previously generated library when available
+        if not cache_disabled and use_cache and os.path.exists(lib_path):
+            logger.debug("Load cached task binary {} from path: \n{}".format(green(task.name), cyan(lib_path)))
+            if load:
+                compiled_func = load_task_func(lib_path, task)
+                compiled_task_cache.add(target_device, space_level, task_string, compiled_func)
+        else:
+            logger.info("Compiling task {}{}{}...".format(COLORS.OKGREEN, task.name, COLORS.ENDC))
+            # build from scratch
+            os.makedirs(task_dir, exist_ok=True)
+            # write task
+            with open(os.path.join(task_dir, 'task.txt'), 'w') as f:
+                f.write(task_string)
+            # implement task
+            with TaskContext(space_level=space_level, warmup=warmup, number=number, repeat=repeat, resolve_out_dir=task_dir):
+                ir_module = task.implement(target=target_device)
+            # lower ir module
+            with PassContext(instruments=[
+                                 # SaveIRInstrument(out_dir=os.path.join('./outs/ir', task.name, task_hash)),
+                                 ProfileInstrument(log_file=os.path.join('./outs/ir', task.name, task_hash, 'lower_time.txt'))
+                             ]):
+                ir_module = lower(ir_module)
+            # code generation
+            codegen(ir_module, src_out_path=src_path)
+            # compile source code
+            compile_source(src_path, out_lib_path=lib_path, keep_ptx=False)
+            # load function
+            if load:
+                compiled_func = load_task_func(lib_path, task)
+                compiled_task_cache.add(target_device, space_level, task_string, compiled_func)
+    return compiled_func
 
 
 def _build_task_job(args):

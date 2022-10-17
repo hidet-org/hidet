@@ -93,8 +93,7 @@ def resize2d_nchw_compute(data: TensorNode, size: List[int], method: str, coordi
     out = compute(
         'out',
         shape=output_shape,
-        fcompute=fmap,
-        scope=data.data_type.scope
+        fcompute=fmap
     )
     return out
 

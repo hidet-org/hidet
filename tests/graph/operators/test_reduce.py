@@ -7,10 +7,10 @@ from hidet.testing.check import check_unary
 @pytest.mark.parametrize(
     'shape, dims, keep_dim',
     [
-        [[111, 222, 333], 1, False],
-        [[111, 222, 333], 1, True],
-        [[111, 222, 333], (0, 2), False],
-        [[111, 222, 333], (0, 2), True]
+        [[11, 22, 33], 1, False],
+        [[11, 22, 33], 1, True],
+        [[11, 22, 33], (0, 2), False],
+        [[11, 22, 33], (0, 2), True]
     ]
 )
 def test_reduce_mean(shape, dims, keep_dim: bool):
@@ -21,10 +21,10 @@ def test_reduce_mean(shape, dims, keep_dim: bool):
     "shape, axis, keep_dim",
     [
         [[1, 24, 32], 1, True],
-        [[111, 222, 333], 1, False],
-        [[111, 222, 333], 1, True],
-        [[111, 222, 333], (0, 2), False],
-        [[111, 222, 333], (0, 2), True]
+        [[11, 22, 33], 1, False],
+        [[11, 22, 33], 1, True],
+        [[11, 22, 33], (0, 2), False],
+        [[11, 22, 33], (0, 2), True]
     ]
 )
 def test_var(shape, axis, keep_dim: bool):

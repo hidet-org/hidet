@@ -71,16 +71,12 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             name_doc = self(v)
             return dtype_doc + ' ' + name_doc
         elif isinstance(v_type, TensorType):
-            if v_type.scope.name == 'shared':
-                scope_doc = '__shared__ '
-            else:
-                scope_doc = ''
             dtype_doc = self(v_type.scalar_type)
             name_doc = self(v)
             shape_doc = Doc()
             for s in v_type.shape:
                 shape_doc += '[' + self(s) + ']'
-            return scope_doc + dtype_doc + ' ' + name_doc + shape_doc
+            return dtype_doc + ' ' + name_doc + shape_doc
         elif isinstance(v_type, PointerType):
             if len(v_type.specifiers) > 0:
                 attr_doc = doc_join([self(attr) for attr in v_type.specifiers], sep=' ') + ' '
@@ -382,6 +378,12 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         doc = NewLine()
         if stmt.is_static:
             doc += 'static '
+        if stmt.scope != Scope.Default:
+            scope2specifier = {
+                Scope.Shared: '__shared__',
+                Scope.Global: '__global__',
+            }
+            doc += scope2specifier[stmt.scope] + ' '
         doc += self.local_var_declare(stmt.var)
         if stmt.init is not None:
             doc += ' = ' + self(stmt.init)

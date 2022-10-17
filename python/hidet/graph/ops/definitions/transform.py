@@ -67,8 +67,7 @@ class ReshapeTask(Task):
         y = compute(
             name='y',
             shape=y_shape,
-            fcompute=lambda *indices: x[index_map(indices, src_shape=x_shape, dst_shape=y_shape)],
-            scope='global',
+            fcompute=lambda *indices: x[index_map(indices, src_shape=x_shape, dst_shape=y_shape)]
         )
         super().__init__(
             name='reshape',
@@ -179,8 +178,7 @@ class TakeTask(Task):
         output = compute(
             name='output',
             shape=output_shape,
-            fcompute=lambda *output_indices: fmap(*output_indices),
-            scope='global'
+            fcompute=lambda *output_indices: fmap(*output_indices)
         )
         super().__init__(
             name='take',
@@ -221,8 +219,7 @@ class StridedSliceTask(Task):
         out = compute(
             'out',
             shape=output_shape,
-            fcompute=lambda *indices: fmap(indices),
-            scope=data.data_type.scope
+            fcompute=lambda *indices: fmap(indices)
         )
         super().__init__(
             name='slice',
@@ -256,8 +253,7 @@ class BroadcastTask(Task):
         out = compute(
             'out',
             shape=shape,
-            fcompute=fmap,
-            scope=data.data_type.scope
+            fcompute=fmap
         )
         super().__init__(
             name='broadcast',
@@ -283,8 +279,7 @@ class PadTask(Task):
         out = compute(
             'out',
             shape=out_shape,
-            fcompute=fmap,
-            scope=data.data_type.scope
+            fcompute=fmap
         )
         super().__init__(
             name='pad',
@@ -306,8 +301,7 @@ class TileTask(Task):
         out = compute(
             name='out',
             shape=out_shape,
-            fcompute=fmap,
-            scope=data.data_type.scope,
+            fcompute=fmap
         )
         super().__init__(
             name='tile',

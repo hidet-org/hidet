@@ -1,9 +1,19 @@
 from typing import Sequence, Tuple, Any
+import enum
 from typing import List, Union, Optional
 from hidet.ir.node import Node
 from hidet.ir.type import ScalarType, PointerType, TensorPointerType, ReferenceType
 from hidet.ir.expr import Var, Expr, convert, Constant
+from hidet.ir.compute import TensorNode
 from hidet.ir.mapping import TaskMapping
+
+
+# scope
+class Scope(enum.Enum):
+    Default = 0
+    Global = 1
+    Shared = 2
+    Register = 3
 
 
 class Stmt(Node):
@@ -13,22 +23,23 @@ class Stmt(Node):
 class EvaluateStmt(Stmt):
     def __init__(self, expr):
         super().__init__()
-        self.expr = convert(expr)
+        self.expr: Expr = convert(expr)
 
 
 class DeclareStmt(Stmt):
-    def __init__(self, var, init: Optional[Expr] = None, is_static=False):
+    def __init__(self, var, init: Optional[Expr] = None, is_static=False, scope: Optional[Scope] = None):
         super().__init__()
         self.var: Var = var
         self.init: Optional[Expr] = convert(init)
         self.is_static: bool = is_static
+        self.scope: Optional[Scope] = scope if scope else Scope.Default
 
 
 class BufferStoreStmt(Stmt):
     def __init__(self, buf, indices, value, protected=False):
         super().__init__()
         assert isinstance(indices, (list, tuple)), type(indices)
-        self.buf = buf
+        self.buf: Union[Var, TensorNode] = buf
         self.indices = convert(indices)
         self.value = convert(value)
         self.protected = protected
@@ -37,14 +48,14 @@ class BufferStoreStmt(Stmt):
 class AssignStmt(Stmt):
     def __init__(self, var, value):
         super().__init__()
-        self.var = var
-        self.value = convert(value)
+        self.var: Var = var
+        self.value: Expr = convert(value)
 
 
 class ReturnStmt(Stmt):
     def __init__(self, ret_value: Optional[Expr] = None):
         super().__init__()
-        self.ret_value = ret_value
+        self.ret_value: Optional[Expr] = ret_value
 
 
 class LetStmt(Stmt):
@@ -56,9 +67,9 @@ class LetStmt(Stmt):
         assert len(bind_vars) == len(bind_values)
         assert len(bind_vars) > 0
         bind_values = [convert(bind_value) for bind_value in bind_values]
-        self.bind_vars = bind_vars
-        self.bind_values = bind_values
-        self.body = body
+        self.bind_vars: List[Var] = bind_vars
+        self.bind_values: List[Expr] = bind_values
+        self.body: Optional[Stmt] = body
 
 
 class ForStmt(Stmt):
@@ -68,9 +79,9 @@ class ForStmt(Stmt):
         from hidet.ir.functors import simplify
         super().__init__()
         self.loop_var: Var = loop_var
-        self.extent = simplify(convert(extent))
-        self.unroll = unroll
-        self.body = body
+        self.extent: Expr = simplify(convert(extent))
+        self.unroll: Optional[Union[int, bool]] = unroll
+        self.body: Optional[Stmt] = body
 
 
 class ForTaskStmt(Stmt):
@@ -83,8 +94,8 @@ class ForTaskStmt(Stmt):
 
 class WhileStmt(Stmt):
     def __init__(self, cond: Expr, body: Stmt):
-        self.cond = cond
-        self.body = body
+        self.cond: Expr = cond
+        self.body: Stmt = body
 
 
 class BreakStmt(Stmt):
@@ -98,9 +109,9 @@ class ContinueStmt(Stmt):
 class IfStmt(Stmt):
     def __init__(self, cond: Expr, then_body=None, else_body=None):
         super().__init__()
-        self.cond = convert(cond)
-        self.then_body = then_body
-        self.else_body = else_body
+        self.cond: Expr = convert(cond)
+        self.then_body: Optional[Stmt] = then_body
+        self.else_body: Optional[Stmt] = else_body
 
 
 class AssertStmt(Stmt):

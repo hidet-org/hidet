@@ -13,7 +13,7 @@ from hidet.graph.tensor import randn, zeros, ones, Tensor, array
 from .common import Schedule
 
 
-def dummy_inputs_from_task(task: Task) -> List[Tensor]:
+def dummy_inputs_from_task(task: Task, target_device: str) -> List[Tensor]:
     """
     Create dummy inputs values for given task.
 
@@ -36,26 +36,20 @@ def dummy_inputs_from_task(task: Task) -> List[Tensor]:
         if any(not isinstance(s, Constant) for s in param_type.shape):
             raise ValueError('Currently, only support create dummy values for static tensor inputs.')
         dtype = param_type.scalar_type.name
-        scope = param_type.scope.name
         shape = [int(s) for s in param_type.shape]
-        scope2device = {
-            'global': 'cuda',
-            'host': 'cpu'
-        }
-        device = scope2device[scope]
         if dtype in ['float32', 'float16', 'bfloat16']:
-            x = randn(shape, dtype, device=device, layout=param_type.layout)
+            x = randn(shape, dtype, device=target_device, layout=param_type.layout)
         elif dtype in ['int64', 'int32', 'int8', 'uint64', 'uint32', 'uint8']:
-            x = zeros(shape, dtype, device=device, layout=param_type.layout)
+            x = zeros(shape, dtype, device=target_device, layout=param_type.layout)
         elif dtype == 'bool':
-            x = ones(shape, dtype, device=device, layout=param_type.layout)
+            x = ones(shape, dtype, device=target_device, layout=param_type.layout)
         else:
             raise ValueError('Currently do not support generate random array for data type {}'.format(dtype))
         inputs.append(x)
     return inputs
 
 
-def resolve_ir_modules(ir_modules: List[IRModule], schedules: List[Schedule], output_dir: str, parallel: bool = True, verbose: bool = True, validate: bool = False) -> IRModule:
+def resolve_ir_modules(ir_modules: List[IRModule], schedules: List[Schedule], target_device: str, output_dir: str, parallel: bool = True, verbose: bool = True, validate: bool = False) -> IRModule:
     """
     Resolve the ir modules of the same task by comparing the latency of each kernel.
 
@@ -65,6 +59,8 @@ def resolve_ir_modules(ir_modules: List[IRModule], schedules: List[Schedule], ou
         The ir modules to resolve.
     schedules: List[Schedule]
         The schedules corresponding to each ir module. The order of schedules must be consistent with ir modules'.
+    target_device: str
+        The target device to compile each ir module.
     output_dir: str
         The output directory to store the summary and lowered source code of each ir module.
     parallel: bool
@@ -98,7 +94,7 @@ def resolve_ir_modules(ir_modules: List[IRModule], schedules: List[Schedule], ou
                                      nvcc_keep=False,
                                      verbose=False) for idx, ir_module in enumerate(ir_modules)]
     compiled_funcs: List[Optional[CompiledFunction]] = batch_build_ir_modules(build_instances, parallel=parallel, verbose=verbose)
-    dummy_inputs = dummy_inputs_from_task(ir_modules[0].task)
+    dummy_inputs = dummy_inputs_from_task(ir_modules[0].task, target_device)
     best_latency = 1e30
     best_ir_module = None
     latencies = []

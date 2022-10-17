@@ -134,6 +134,7 @@ def schedule_depthwise_conv2d(task: Conv2dTask) -> IRModule:
     return resolve_ir_modules(
         ir_modules=ir_modules,
         schedules=schedules,
+        target_device='cuda',
         output_dir=resolve_out_dir,
         parallel=True,
         verbose=True
@@ -223,8 +224,8 @@ def dwc_kernel(batch_size, channels, height, width, stride, kernel):
     in_height, in_width = (height - 1) * stride + kernel, (width - 1) * stride + kernel
     # print(batch_size, channels, height, width, stride, kernel, in_height, in_width)
     task = Conv2dTask(
-        data=tensor_input('x', 'float32', [batch_size, channels, in_height, in_width], 'global'),
-        weight=tensor_input('w', 'float32', [channels, 1, kernel, kernel], 'global'),
+        data=tensor_input('x', 'float32', [batch_size, channels, in_height, in_width]),
+        weight=tensor_input('w', 'float32', [channels, 1, kernel, kernel]),
         stride=[stride, stride],
         groups=channels
     )

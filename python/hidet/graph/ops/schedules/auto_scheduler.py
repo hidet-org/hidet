@@ -146,7 +146,7 @@ class AutoScheduler:
     @staticmethod
     def allocate_tensors(fb: FunctionBuilder, device: str, buffer_bytes: int, buffer_offset: Dict[TensorNode, int], node_map: Dict[TensorNode, Var]):
         if buffer_bytes > 0:
-            buffer = Var('buffer', TensorPointerType(scope='unspecified', dtype='uint8', shape=[buffer_bytes]))
+            buffer = Var('buffer', TensorPointerType(dtype='uint8', shape=[buffer_bytes]))
             if device == 'cuda':
                 space_ptr: Expr = request_cuda_workspace(nbytes=buffer_bytes, require_clean=False)
             elif device == 'cpu':

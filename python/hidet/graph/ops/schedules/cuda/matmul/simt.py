@@ -8,7 +8,7 @@ from hidet.ir.functors import simplify_to_int
 from hidet.ir.mapping import TaskMapping
 from hidet.ir.layout import DataLayout, StridesLayout
 from hidet.ir.primitives import syncthreads, thread_idx, block_idx
-from hidet.ir.stmt import AssignStmt, BufferStoreStmt, IfStmt
+from hidet.ir.stmt import AssignStmt, BufferStoreStmt, IfStmt, DeclareStmt, Scope
 from hidet.ir.type import scalar_type, tensor_type, ScalarType, TensorPointerType, PointerType
 from hidet.ir.task import TaskContext
 from hidet.utils import cuda
@@ -248,6 +248,7 @@ def batched_matmul_cuda_schedule_simt(task: MatmulTask) -> IRModule:
     return resolve_ir_modules(
         ir_modules=ir_modules,
         schedules=all_schedules,
+        target_device='cuda',
         output_dir=resolve_out_dir,
         parallel=True,
         verbose=True
@@ -287,25 +288,30 @@ def batched_matmul_cuda_with_given_schedule(task: MatmulTask, schedule: MatmulSc
         fb.extend_params(params)
 
         # declare local variables
-        smem_a = Var('smem_a', TensorPointerType('shared', a_dtype, layout=StridesLayout.from_shape([2, sch.block_shape[0], sch.block_k], perm=[0, 2, 1])))
-        smem_b = Var('smem_b', TensorPointerType('shared', b_dtype, layout=StridesLayout.from_shape([2, sch.block_k, sch.block_shape[1]], perm=[0, 1, 2])))
+        smem_a = Var('smem_a', TensorPointerType(a_dtype, layout=StridesLayout.from_shape([2, sch.block_shape[0], sch.block_k], perm=[0, 2, 1])))
+        smem_b = Var('smem_b', TensorPointerType(b_dtype, layout=StridesLayout.from_shape([2, sch.block_k, sch.block_shape[1]], perm=[0, 1, 2])))
         if sch.use_dynamic_smem:
             # 'extern __shared__ uint8_t smem_storage[];' in c code
             smem_storage = Var('smem_storage', PointerType(base_type=scalar_type('uint8'), specifiers=['extern', '__shared__'], use_bracket=True))
+            sb += DeclareStmt(smem_storage)
         else:
-            smem_storage = Var('smem_storage', tensor_type('shared', dtype='uint8', shape=[sch.used_smem_bytes_per_block]))
+            smem_storage = Var('smem_storage', tensor_type(dtype='uint8', shape=[sch.used_smem_bytes_per_block]))
+            sb += DeclareStmt(smem_storage, scope=Scope.Shared)
         smem_a_bytes = simplify_to_int(smem_a.type.tensor_type.storage_bytes())
-        fb.extend_local_vars([smem_a, smem_b, smem_storage])
-        sb += AssignStmt(smem_a, Cast(~smem_storage[0], PointerType(a_dtype)))
-        sb += AssignStmt(smem_b, Cast(~(smem_storage[smem_a_bytes]), PointerType(b_dtype)))
+        sb += DeclareStmt(smem_a, init=Cast(~smem_storage[0], PointerType(a_dtype)), scope=Scope.Shared)
+        sb += DeclareStmt(smem_b, init=Cast(~(smem_storage[smem_a_bytes]), PointerType(b_dtype)), scope=Scope.Shared)
 
         # declare a, b, c registers
-        regs_a = Var('regs_A', tensor_type('register', a_dtype, layout=[2] + schedule.regs_a_layout))
-        regs_b = Var('regs_B', tensor_type('register', b_dtype, layout=[2] + schedule.regs_b_layout))
-        regs_c = Var('regs_C', tensor_type('register', c_dtype, layout=schedule.regs_c_layout))
-        regs_a_ldg = Var('regs_A_ldg', tensor_type(scope='register', dtype=a_dtype, layout=schedule.regs_a_ldg_layout))
-        regs_b_ldg = Var('regs_B_ldg', tensor_type(scope='register', dtype=b_dtype, layout=schedule.regs_b_ldg_layout))
-        fb.extend_local_vars([regs_a, regs_b, regs_c, regs_a_ldg, regs_b_ldg])
+        regs_a = Var('regs_A', tensor_type(a_dtype, layout=[2] + schedule.regs_a_layout))
+        regs_b = Var('regs_B', tensor_type(b_dtype, layout=[2] + schedule.regs_b_layout))
+        regs_c = Var('regs_C', tensor_type(c_dtype, layout=schedule.regs_c_layout))
+        regs_a_ldg = Var('regs_A_ldg', tensor_type(dtype=a_dtype, layout=schedule.regs_a_ldg_layout))
+        regs_b_ldg = Var('regs_B_ldg', tensor_type(dtype=b_dtype, layout=schedule.regs_b_ldg_layout))
+        sb += DeclareStmt(regs_a)
+        sb += DeclareStmt(regs_b)
+        sb += DeclareStmt(regs_c)
+        sb += DeclareStmt(regs_a_ldg)
+        sb += DeclareStmt(regs_b_ldg)
 
         a_default_value = convert(0.0, a_dtype)
         b_default_value = convert(0.0, b_dtype)

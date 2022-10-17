@@ -8,7 +8,7 @@ from hidet.ir.expr import Var, tensor_var
 from hidet.ir.func import IRModule
 from hidet.ir.primitives.cuda import thread_idx
 from hidet.ir.primitives.cuda.mma import MmaConfig, mma_sync, mma_configs
-from hidet.ir.stmt import BufferStoreStmt
+from hidet.ir.stmt import BufferStoreStmt, DeclareStmt, Scope
 from hidet.ir.type import ScalarType, TensorPointerType, FuncType
 from hidet.transforms.tools import fuse_and_pack
 
@@ -21,16 +21,18 @@ def matmul_mma_tensor_core(config: MmaConfig):
             block_dim=32
     ) as fb:
         # parameters
-        a = Var('a', TensorPointerType('global', config.input_dtype, [config.m, config.k]))
-        b = Var('b', TensorPointerType('global', config.input_dtype, [config.k, config.n]))
-        c = Var('c', TensorPointerType('global', config.output_dtype, [config.m, config.n]))
+        a = Var('a', TensorPointerType(config.input_dtype, [config.m, config.k]))
+        b = Var('b', TensorPointerType(config.input_dtype, [config.k, config.n]))
+        c = Var('c', TensorPointerType(config.output_dtype, [config.m, config.n]))
         fb.extend_params([a, b, c])
 
         # local variables
-        regs_a = tensor_var('regs_a', [config.a_elements], 'register', config.input_dtype)
-        regs_b = tensor_var('regs_b', [config.b_elements], 'register', config.input_dtype)
-        regs_c = tensor_var('regs_c', [config.c_elements], 'register', config.output_dtype)
-        fb.extend_local_vars([regs_a, regs_b, regs_c])
+        regs_a = tensor_var('regs_a', [config.a_elements], config.input_dtype)
+        regs_b = tensor_var('regs_b', [config.b_elements], config.input_dtype)
+        regs_c = tensor_var('regs_c', [config.c_elements], config.output_dtype)
+        fb += DeclareStmt(regs_a)
+        fb += DeclareStmt(regs_b)
+        fb += DeclareStmt(regs_c)
 
         # body
         w = thread_idx()

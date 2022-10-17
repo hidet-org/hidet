@@ -11,12 +11,7 @@ from hidet.ir.functors import inline_compute
 
 
 def input_like(tensor: Tensor, name: str) -> TensorNode:
-    # todo: make scope and device consistent
-    device2scope = {
-        'cuda': 'global',
-        'cpu': 'host'
-    }
-    return tensor_input(name, tensor.dtype, tensor.shape, device2scope[tensor.device], tensor.layout)
+    return tensor_input(name, tensor.dtype, tensor.shape, tensor.layout)
 
 
 def normalize_stride(stride: Union[int, Sequence[int]], dim=2) -> List[int]:

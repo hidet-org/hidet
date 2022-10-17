@@ -18,7 +18,7 @@ class FlattenTensorAccessRewriter(FuncStmtExprRewriter):
         for var in func.params + func.local_vars + const_local_vars:
             if isinstance(var.type, TensorType):
                 size = simplify_to_int(var.type.layout.size)
-                self.memo[var] = Var(var.hint, tensor_type(var.type.scope, var.type.scalar_type, [size], DataLayout.row_major([size])))
+                self.memo[var] = Var(var.hint, tensor_type(var.type.scalar_type, [size], DataLayout.row_major([size])))
             elif isinstance(var.type, TensorPointerType):
                 self.memo[var] = var
         body = self(func.body)
@@ -44,10 +44,10 @@ class FlattenTensorAccessRewriter(FuncStmtExprRewriter):
     def visit_DeclareStmt(self, stmt: DeclareStmt):
         if isinstance(stmt.var.type, TensorType):
             size = simplify_to_int(stmt.var.type.layout.size)
-            var = Var(stmt.var.hint, tensor_type(stmt.var.type.scope, stmt.var.type.scalar_type, [size], DataLayout.row_major([size])))
+            var = Var(stmt.var.hint, tensor_type(stmt.var.type.scalar_type, [size], DataLayout.row_major([size])))
             self.memo[stmt.var] = var
             init = self(stmt.init) if stmt.init is not None else None
-            return DeclareStmt(var, init)
+            return DeclareStmt(var, init, scope=stmt.scope)
         else:
             return FuncStmtExprRewriter.visit_DeclareStmt(self, stmt)
 

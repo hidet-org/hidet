@@ -6,7 +6,8 @@ from hidet.ir.expr import scalar_var, if_then_else, tensor_var, const_like, conv
 from hidet.ir.mapping import TaskMapping
 from hidet.ir.primitives import block_idx, thread_idx
 from hidet.ir import primitives as prim
-from hidet.ir.stmt import AssignStmt, BufferStoreStmt
+from hidet.ir.stmt import AssignStmt, BufferStoreStmt, DeclareStmt, Scope
+from hidet.ir.layout import row_layout, local_layout
 from hidet.graph.ops.definitions.softmax import SoftmaxTask
 from hidet.graph.ops.schedules.common import params_from_task
 from hidet.transforms.tools import fuse_and_pack
@@ -39,13 +40,15 @@ def softmax_cuda_schedule(task: SoftmaxTask) -> IRModule:
         x, y = params
         fb.extend_params(params)
 
-        # local variables
-        buf = tensor_var('buf', shape=[outer_extent], scope='register', dtype=x_dtype)
-        rv = scalar_var('rv', x_dtype)  # rv stands for reduce value
-        fb.extend_local_vars([rv, buf])
-
         # body
         sb = StmtBuilder()
+
+        # local variables
+        buf = tensor_var('buf', dtype=x_dtype, layout=row_layout(outer_extent) * local_layout(warp_size))
+        sb += DeclareStmt(buf)
+
+        rv = scalar_var('rv', x_dtype)  # rv stands for reduce value
+        sb += DeclareStmt(rv)
 
         # get the max value along c dimension
         sb += AssignStmt(rv, convert(-1e30, x_dtype))

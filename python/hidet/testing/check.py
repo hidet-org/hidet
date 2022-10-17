@@ -18,6 +18,7 @@ def check_unary(shape, numpy_op, hidet_op, device: str = 'all', dtype: Union[str
 def check_binary(a_shape, b_shape, numpy_op, hidet_op, device: str = 'all', dtype: Union[str, np.dtype] = np.float32, atol=0.0, rtol=0.0):
     if device == 'all':
         for device in ['cuda', 'cpu']:
+            print('checking', device)
             check_binary(a_shape, b_shape, numpy_op, hidet_op, device, dtype, atol, rtol)
     a = np.array(np.random.randn(*a_shape)).astype(dtype)
     b = np.array(np.random.randn(*b_shape)).astype(dtype)

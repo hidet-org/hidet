@@ -24,11 +24,6 @@ class TypeNode(Node):
             raise ValueError('Can not recognize type {}'.format(self))
 
 
-# scope
-class Scope(Node):
-    def __init__(self, name):
-        assert name in ['host', 'global', 'shared', 'register', 'unspecified']
-        self.name = name
 
 
 short2long = {
@@ -117,7 +112,7 @@ class ScalarType(TypeNode):
     def __getitem__(self, item) -> TensorType:
         if not isinstance(item, tuple):
             item = (item,)
-        return tensor_type(scope='unspecified', dtype=self, shape=list(item), layout=None)
+        return tensor_type(dtype=self, shape=list(item), layout=None)
 
     @staticmethod
     def from_numpy_dtype(np_dtype):
@@ -236,30 +231,18 @@ class ScalarType(TypeNode):
 
 class TensorType(TypeNode):
     def __init__(self,
-                 scope: Optional[Scope] = None,
+                 # scope: Optional[Scope] = None,
                  dtype: Optional[ScalarType] = None,
                  shape: Optional[Tuple[Expr, ...]] = None,
                  layout: Optional['DataLayout'] = None):
         from hidet.ir.layout import DataLayout
-        self.scope: Scope = scope
+        # self.scope: Scope = scope
         self.scalar_type: ScalarType = dtype
         self.shape: Tuple[Expr] = shape
         self.layout: DataLayout = layout
 
     def storage_bytes(self) -> Expr:
         return self.layout.size * self.scalar_type.nbytes()
-
-    def slice_out(self, dims: Sequence[int]) -> 'TensorType':
-        layout = self.layout.slice_out(dims)
-        return tensor_type(self.scope, self.scalar_type, layout=layout)
-
-    def split(self, dim2factor: Mapping[int, Int]) -> 'TensorType':
-        layout = self.layout.split(dim2factor)
-        return tensor_type(self.scope, self.scalar_type, layout=layout)
-
-    def reorder(self, order: Sequence[int]):
-        layout = self.layout.reorder(order)
-        return tensor_type(self.scope, self.scalar_type, layout=layout)
 
     def const_shape(self) -> List[int]:
         return [int(v) for v in self.shape]
@@ -287,11 +270,10 @@ class ReferenceType(TypeNode):
 
 class TensorPointerType(TypeNode):
     def __init__(self,
-                 scope: Optional[Union[Scope, str]] = None,
                  dtype: Optional[Union[ScalarType, str]] = None,
                  shape: Optional[Sequence[Int]] = None,
                  layout: Optional[Union[Sequence[Int], 'DataLayout']] = None):
-        self.tensor_type: TensorType = tensor_type(scope, dtype, shape, layout)
+        self.tensor_type: TensorType = tensor_type(dtype, shape, layout)
 
     @staticmethod
     def from_tensor_type(tp: TensorType) -> TensorPointerType:
@@ -335,15 +317,12 @@ def scalar_type(type_name):
     return ScalarType(type_name)
 
 
-def tensor_type(scope, dtype, shape: Optional[Sequence[Union[int, Expr]]] = None, layout: Optional['DataLayout'] = None):
+def tensor_type(dtype, shape: Optional[Sequence[Union[int, Expr]]] = None, layout: Optional['DataLayout'] = None):
     """
     Construct a tensor type. Shape and layout must be given at least one.
 
     Parameters
     ----------
-    scope: str or Scope
-        The scope of the tensor. Scope can be 'host', 'global', 'shared', and 'local'
-
     dtype: str or ScalarType
         The scalar type of this tensor.
 
@@ -361,10 +340,6 @@ def tensor_type(scope, dtype, shape: Optional[Sequence[Union[int, Expr]]] = None
     """
     from hidet.ir.expr import convert, Constant
     from hidet.ir.layout import DataLayout, StridesLayout
-    if isinstance(scope, str):
-        scope = Scope(scope)
-    if not isinstance(scope, Scope):
-        raise ValueError('Tensor type scope expect a "str" or "Scope", but got {}'.format(type(scope)))
     if isinstance(dtype, str):
         dtype = ScalarType(dtype)
     if not isinstance(dtype, ScalarType):
@@ -383,7 +358,7 @@ def tensor_type(scope, dtype, shape: Optional[Sequence[Union[int, Expr]]] = None
             if int(a) != int(b):
                 raise ValueError('The shape of tensor and the shape of layout are not compatible, {} vs {}'.format(list(shape), list(layout.shape)))
     shape = convert(shape)
-    return TensorType(scope, dtype, shape, layout)
+    return TensorType(dtype, shape, layout)
 
 
 def pointer_type(base_type):

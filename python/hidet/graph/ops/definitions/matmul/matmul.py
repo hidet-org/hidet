@@ -22,7 +22,6 @@ class MatmulTask(Task):
                 fcompute=lambda k: a[r, i, k] * b[r, k, j],
                 reduce_type='sum'
             ),
-            scope='global'
         )
         super().__init__(
             name='matmul',

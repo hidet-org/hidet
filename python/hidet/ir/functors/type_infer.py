@@ -121,7 +121,6 @@ class TypeInfer(ExprFunctor):
                     end = base_type.shape[dim]
                 shape.append(end - start)
         return TensorPointerType(
-            scope='unspecified',
             dtype=base_type.scalar_type,
             shape=shape,
             layout=None     # the layout of the slice is not used
