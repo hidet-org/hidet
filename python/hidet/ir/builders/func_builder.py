@@ -15,7 +15,6 @@ class FunctionBuilder(StmtBuilder):
         self.kind = kind
         self.params: List[Var] = []
         self.ret_type = ret_type
-        self.local_vars = []
         self.func: Optional[Function] = None
         self.body: Optional[Stmt] = None
         self.extern_vars = []
@@ -44,9 +43,9 @@ class FunctionBuilder(StmtBuilder):
     def extend_extern_vars(self, extern_vars: List[Var]):
         self.extern_vars.extend(extern_vars)
 
-    def extend_local_vars(self, local_vars: List[Var]):
-        assert isinstance(local_vars, (tuple, list))
-        self.local_vars.extend(local_vars)
+    # def extend_local_vars(self, local_vars: List[Var]):
+    #     assert isinstance(local_vars, (tuple, list))
+    #     self.local_vars.extend(local_vars)
 
     def extend_attrs(self, new_attrs: Dict[str, object]):
         self.attrs.update(new_attrs)
@@ -64,7 +63,7 @@ class FunctionBuilder(StmtBuilder):
             self.extend_extern_vars([thread_idx(dim) for dim in ['x', 'y', 'z']])
         if self.body is None:
             self.body = self.finish()
-        self.func = Function(self.name, kind=self.kind, params=self.params, body=self.body, ret_type=self.ret_type, local_vars=self.local_vars,
+        self.func = Function(self.name, kind=self.kind, params=self.params, body=self.body, ret_type=self.ret_type,
                              local_const_vars=[], extern_vars=self.extern_vars, attrs=self.attrs)
 
     def get(self) -> Function:

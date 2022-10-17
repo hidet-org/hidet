@@ -131,7 +131,7 @@ class VectorizeLoadStorePass(Pass):
         if body is func.body:
             return func
         else:
-            return Function(func.name, func.params, body, func.ret_type, local_vars=func.local_vars,
+            return Function(func.name, func.params, body, func.ret_type,
                             local_const_vars=func.local_const_vars, extern_vars=func.extern_vars, attrs=func.attrs)
 
 

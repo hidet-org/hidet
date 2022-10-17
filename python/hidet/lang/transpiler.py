@@ -453,7 +453,6 @@ class PythonToHidetTranslator(PythonAstFunctor):
             body=scope.flush_stmts(),
             ret_type=ret_type,
             kind=func_kind,
-            local_vars=[],          # todo: remove local variables in function as we support DeclareStmt now.
             local_const_vars=[],
             extern_vars=[thread_idx('x'), thread_idx('y'), thread_idx('z'), block_idx('x'), block_idx('y'), block_idx('z')],
             attrs=func_attrs

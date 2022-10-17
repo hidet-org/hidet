@@ -74,7 +74,6 @@ class PrologueEpilogueRewriter(FuncStmtExprRewriter):
             body=self.visit(func.body),
             ret_type=func.ret_type,
             kind=func.kind,
-            local_vars=func.local_vars,
             local_const_vars=func.local_const_vars,
             extern_vars=func.extern_vars,
             attrs=func.attrs

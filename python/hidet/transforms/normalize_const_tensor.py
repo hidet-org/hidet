@@ -17,7 +17,7 @@ class NormalizeConstTensorPass(FunctionPass):
         if body is func.body:
             return func
         else:
-            return Function(func.name, func.params, body, func.ret_type, kind=func.kind, local_vars=func.local_vars, local_const_vars=local_const_vars,
+            return Function(func.name, func.params, body, func.ret_type, kind=func.kind, local_const_vars=local_const_vars,
                             extern_vars=func.extern_vars, attrs=func.attrs)
 
 

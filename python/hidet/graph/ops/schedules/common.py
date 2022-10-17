@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Mapping
+from typing import Mapping, List
 
 from hidet.ir.compute import TensorNode, ScalarNode, GridCompute, ArgReduceCompute, ReduceCompute
 from hidet.ir.builders import StmtBuilder
@@ -46,11 +46,10 @@ class LoopExpander(ExprRewriter):
         super().__init__()
         self.sb = StmtBuilder()
         self.input_map = input_map
-        self.new_buffer_map = {}
 
     def expand(self, e):
         value = self.visit(e)
-        return self.sb.finish(), value, self.new_buffer_map
+        return self.sb.finish(), value
 
     def visit_TensorNode(self, e: TensorNode):
         if e.tensor_compute is None:
@@ -64,7 +63,7 @@ class LoopExpander(ExprRewriter):
                 buf = self.input_map[e]
             else:
                 buf = Var(e.name, e.data_type)
-                self.new_buffer_map[e] = buf
+                self.sb += DeclareStmt(buf)
 
             shape, axes, value = grid_compute.shape, grid_compute.axes, grid_compute.value
             # tensor compute loops
@@ -92,10 +91,7 @@ class LoopExpander(ExprRewriter):
             shape, axes, value = sc.shape, sc.axes, sc.value
             # declare accumulator
             acc = scalar_var(e.name, infer_type(value))
-            self.new_buffer_map[e] = acc
-
-            # init accumulator
-            self.sb += AssignStmt(acc, sc.reduce_operation.initial_value(e.data_type.name))
+            self.sb += DeclareStmt(acc, init=sc.reduce_operation.initial_value(e.data_type.name))
 
             # reduction loops
             for i in range(len(shape)):
@@ -124,11 +120,10 @@ class LoopExpander(ExprRewriter):
             # declare index accumulator
             acc_index = scalar_var(e.name + '_idx', sc.index_dtype)
             acc_value = scalar_var(e.name + '_val', value_dtype)
-            self.new_buffer_map[e] = acc_index
 
             # init accumulator
             self.sb += DeclareStmt(acc_value, init=sc.reduce_operation.initial_value(value_dtype))
-            self.sb += AssignStmt(acc_index, 0)
+            self.sb += DeclareStmt(acc_index, init=convert(0))
 
             # reduction loops
             self.sb.enter_body(ForStmt(axis, extent))
@@ -153,31 +148,9 @@ class LoopExpander(ExprRewriter):
 
 
 def expand_loop(expr: Expr, input_map: Mapping[Union[ScalarNode, TensorNode], Var]):
-    """
-    Generate statements to calculate the expression.
-
-    The expression may contain TensorCompute and ReduceCompute sub-expressions.
-    After expand, the stmt will not have ScalarInput, TensorInput, TensorCompute and ReduceCompute anymore.
-
-    The returned new_buffer_map is a mapping from ReduceCompute and TensorCompute sub-expressions to
-    new allocated buffers used to conduct the computation.
-
-    For example, the following expr:
-    compute([3, 3], (i, j) -> reduce_sum(A[i, k] * B[k, j], axis=k)) where k = axis(3)
-    will be expanded to
-    for i in range(3):
-        for j in range(3):
-            s = 0
-            for k in range(3):
-                s += A[i, k] * B[k, j]
-            C[i, j] = s
-
-    If C is in input_map, then the mapped var is used directly. Otherwise, a new tensor var is created to store the results
-    and returned in new_buffer_map. We only reuse tensor in input_map.
-    """
     expander = LoopExpander(input_map)
-    stmt, value, new_buffer_map = expander.expand(expr)
-    return stmt, value, new_buffer_map
+    stmt, value = expander.expand(expr)
+    return stmt, value
 
 
 def params_from_task(task: Task) -> List[Var]:

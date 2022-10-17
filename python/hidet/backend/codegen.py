@@ -199,11 +199,6 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         for const_local_var, const_local_value in func.local_const_vars:
             doc += (NewLine() + self.local_var_declare(const_local_var) + ' = ' + self(const_local_value) + ';').indent()
 
-        # locals
-        for local_var in func.local_vars:
-            doc += (NewLine() + self.local_var_declare(local_var) + ';').indent()
-            # doc += (NewLine() + self(local_var.type) + ' ' + self(local_var) + ';').indent()
-
         # body
         doc += self(func.body).indent()
 

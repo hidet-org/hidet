@@ -50,7 +50,7 @@ class Function(Node):
             the label of this function when it is in a function group
     """
 
-    def __init__(self, name: str, params, body, ret_type, kind: str, local_vars, local_const_vars=None, extern_vars=None, attrs=None):
+    def __init__(self, name: str, params, body, ret_type, kind: str, local_const_vars=None, extern_vars=None, attrs=None):
         check_func_name(name)
         self.name = name
         self.kind = kind
@@ -58,23 +58,12 @@ class Function(Node):
         self.params: List[Var] = params
         self.body: Stmt = body
         self.ret_type: TypeNode = ret_type
-        self.local_vars: List[Var] = local_vars
         self.local_const_vars: List[Tuple[Var, Constant]] = local_const_vars if local_const_vars else []
         self.extern_vars: List[Var] = extern_vars if extern_vars else []
         self.attrs = attrs if attrs else {}
 
-        # for attr in self.attrs:
-        #     if attr not in self.valid_attrs:
-        #         raise ValueError('Unrecognize function attribute: {}'.format(attr))
-
     def __call__(self, *args, **kwargs) -> Call:
         raise ValueError('Can only call script function in another script function, or lower it to execute.')
-
-    def annotate(self, attr_name, attr_value, update=False):
-        assert attr_name in self.valid_attrs
-        if attr_name in self.attrs and not update:
-            raise AttributeError(f'{attr_name} has existed')
-        self.attrs[attr_name] = attr_value
 
     def get_attr(self, attr_name, default=None):
         if attr_name in self.attrs:

@@ -876,7 +876,7 @@ class FuncStmtExprRewriter(StmtExprRewriter):
         if body is func.body:
             return func
         else:
-            return Function(func.name, params=func.params, body=body, ret_type=func.ret_type, kind=func.kind, local_vars=func.local_vars,
+            return Function(func.name, params=func.params, body=body, ret_type=func.ret_type, kind=func.kind,
                             local_const_vars=func.local_const_vars, extern_vars=func.extern_vars, attrs=func.attrs)
 
 

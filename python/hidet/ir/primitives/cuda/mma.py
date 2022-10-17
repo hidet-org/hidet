@@ -3,7 +3,7 @@ from hidet.ir.mapping import TaskMapping, row_spatial, col_spatial, repeat_map, 
 from hidet.utils import initialize
 from hidet.ir.type import ScalarType, PointerType, VoidType
 from hidet.ir.expr import Var, Expr, cast
-from hidet.ir.stmt import AsmStmt, AssignStmt, asm
+from hidet.ir.stmt import AsmStmt, AssignStmt, asm, DeclareStmt
 from hidet.ir.func import Function
 from hidet.ir.builders import FunctionBuilder
 from hidet.ir.primitives.func import register_primitive_function
@@ -152,7 +152,9 @@ def register_mma_instructions():
             ra = Var('ra', PointerType('uint32'))
             rb = Var('rb', PointerType('uint32'))
             rc = Var('rc', PointerType('uint32'))
-            fb.extend_local_vars([ra, rb, rc])
+            fb += DeclareStmt(ra)
+            fb += DeclareStmt(rb)
+            fb += DeclareStmt(rc)
 
             # body
             a_regs, b_regs, c_regs = config.a_regs, config.b_regs, config.c_regs
