@@ -195,10 +195,6 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         if label:
             doc += (NewLine() + '// label: {}'.format(label)).indent()
 
-        # const locals
-        for const_local_var, const_local_value in func.local_const_vars:
-            doc += (NewLine() + self.local_var_declare(const_local_var) + ' = ' + self(const_local_value) + ';').indent()
-
         # body
         doc += self(func.body).indent()
 
@@ -403,7 +399,8 @@ class Codegen(StmtExprFunctor, TypeFunctor):
     def visit_LetStmt(self, stmt: LetStmt):
         doc = Doc()
         for bind_var, bind_value in zip(stmt.bind_vars, stmt.bind_values):
-            doc += NewLine() + self(bind_var.type) + ' ' + self(bind_var) + ' = ' + self(bind_value) + ';'
+            doc += NewLine() + self.local_var_declare(bind_var) + ' = ' + self(bind_value) + ';'
+            # doc += NewLine() + self(bind_var.type) + ' ' + self(bind_var) + ' = ' + self(bind_value) + ';'
         doc += self(stmt.body)
         return doc
 
@@ -510,7 +507,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         return Text(scalar_type_map[t.name])
 
     def visit_TensorType(self, t: TensorType):
-        return Text('TensorType(') + self(t.scalar_type) + ', [' + doc_join([self(s) for s in t.shape], ", ") + '], ' + t.scope.name + ')'
+        return Text('TensorType(') + self(t.scalar_type) + ', [' + doc_join([self(s) for s in t.shape], ", ") + ']' + ')'
 
     def visit_PointerType(self, t: PointerType):
         return self(t.base_type) + Text('*')

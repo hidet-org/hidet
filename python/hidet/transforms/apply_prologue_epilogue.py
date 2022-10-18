@@ -112,7 +112,7 @@ class ApplyPrologueEpiloguePass(Pass):
             return ir_module
         else:
             func = Function(func.name, params=param_vars, body=body, ret_type=func.ret_type, kind=func.kind,
-                            local_const_vars=func.local_const_vars, extern_vars=func.extern_vars, attrs=func.attrs)
+                            extern_vars=func.extern_vars, attrs=func.attrs)
             funcs = ir_module.functions.copy()
             funcs[func.name] = func
             ir_module = IRModule(funcs=funcs, task=ir_module.task, global_vars=ir_module.global_vars)

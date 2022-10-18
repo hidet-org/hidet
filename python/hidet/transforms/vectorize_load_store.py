@@ -132,7 +132,7 @@ class VectorizeLoadStorePass(Pass):
             return func
         else:
             return Function(func.name, func.params, body, func.ret_type,
-                            local_const_vars=func.local_const_vars, extern_vars=func.extern_vars, attrs=func.attrs)
+                            extern_vars=func.extern_vars, attrs=func.attrs)
 
 
 def vectorize_load_store_pass():

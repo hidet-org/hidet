@@ -50,15 +50,14 @@ class Function(Node):
             the label of this function when it is in a function group
     """
 
-    def __init__(self, name: str, params, body, ret_type, kind: str, local_const_vars=None, extern_vars=None, attrs=None):
+    def __init__(self, name: str, params, body, ret_type, kind: str, extern_vars=None, attrs=None):
         check_func_name(name)
-        self.name = name
+        self.name: str = name
         self.kind = kind
         assert isinstance(kind, str) and kind in ['cuda_device', 'cuda_kernel', 'host_kernel', 'packed_func']
         self.params: List[Var] = params
         self.body: Stmt = body
         self.ret_type: TypeNode = ret_type
-        self.local_const_vars: List[Tuple[Var, Constant]] = local_const_vars if local_const_vars else []
         self.extern_vars: List[Var] = extern_vars if extern_vars else []
         self.attrs = attrs if attrs else {}
 

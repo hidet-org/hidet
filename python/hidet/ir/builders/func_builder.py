@@ -64,7 +64,7 @@ class FunctionBuilder(StmtBuilder):
         if self.body is None:
             self.body = self.finish()
         self.func = Function(self.name, kind=self.kind, params=self.params, body=self.body, ret_type=self.ret_type,
-                             local_const_vars=[], extern_vars=self.extern_vars, attrs=self.attrs)
+                             extern_vars=self.extern_vars, attrs=self.attrs)
 
     def get(self) -> Function:
         assert self.func.body is not None

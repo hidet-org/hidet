@@ -60,7 +60,7 @@ def build_task(task: Task, space_level: int, target_device: str = 'cuda', warmup
                 ir_module = task.implement(target=target_device)
             # lower ir module
             with PassContext(instruments=[
-                                 # SaveIRInstrument(out_dir=os.path.join('./outs/ir', task.name, task_hash)),
+                                 SaveIRInstrument(out_dir=os.path.join('./outs/ir', task.name, task_hash)),
                                  ProfileInstrument(log_file=os.path.join('./outs/ir', task.name, task_hash, 'lower_time.txt'))
                              ]):
                 ir_module = lower(ir_module)

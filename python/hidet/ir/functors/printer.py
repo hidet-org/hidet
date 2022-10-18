@@ -88,10 +88,6 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
         for attr_name, attr_value in func.attrs.items():
             doc += (NewLine() + '# {}: {}'.format(attr_name, attr_value)).indent(4)
 
-        # const locals
-        for local_var, local_value in func.local_const_vars:
-            doc += (NewLine() + Text('declare ') + self(local_var) + Text(': ') + self(local_var.type) + ' = ' + self(local_value)).indent(4)
-
         # body
         doc += self(func.body).indent(4)
 

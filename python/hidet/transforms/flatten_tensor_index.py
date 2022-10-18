@@ -14,8 +14,7 @@ class FlattenTensorAccessRewriter(FuncStmtExprRewriter):
     #   TensorElement:  A[2, 1]     ==> A[2 * 4 + 1]
     # BufferStoreStmt:  A[2, 1] = 3 ==> A[2 * 4 + 1] = 3
     def visit_Function(self, func: Function):
-        const_local_vars = [v for v, _ in func.local_const_vars]
-        for var in func.params + const_local_vars:
+        for var in func.params:
             if isinstance(var.type, TensorType):
                 size = simplify_to_int(var.type.layout.size)
                 self.memo[var] = Var(var.hint, tensor_type(var.type.scalar_type, [size], DataLayout.row_major([size])))
@@ -23,9 +22,8 @@ class FlattenTensorAccessRewriter(FuncStmtExprRewriter):
                 self.memo[var] = var
         body = self(func.body)
         params = [self(p) for p in func.params]
-        local_const_vars = [(self(v), value) for v, value in func.local_const_vars]
         return Function(func.name, params, body, func.ret_type, kind=func.kind,
-                        local_const_vars=local_const_vars, extern_vars=func.extern_vars, attrs=func.attrs)
+                        extern_vars=func.extern_vars, attrs=func.attrs)
 
     @staticmethod
     def get_layout(e) -> DataLayout:
