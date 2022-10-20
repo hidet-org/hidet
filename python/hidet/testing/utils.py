@@ -1,4 +1,6 @@
 from typing import List, Union, Callable, Any
+from hidet.graph.tensor import array
+import numpy as np
 
 
 def benchmark_func(run_func, warmup=1, number=5, repeat=5, median=True) -> Union[List[float], float]:
@@ -52,3 +54,27 @@ def benchmark_func(run_func, warmup=1, number=5, repeat=5, median=True) -> Union
         return float(np.median(results))
     else:
         return results
+
+
+def check_unary(shape, numpy_op, hidet_op, device: str = 'all', dtype: Union[str, np.dtype] = np.float32, atol=0, rtol=0):
+    if device == 'all':
+        for device in ['cuda', 'cpu']:
+            check_unary(shape, numpy_op, hidet_op, device, dtype, atol, rtol)
+    # wrap np.array(...) in case shape = []
+    data = np.array(np.random.randn(*shape)).astype(dtype)
+    numpy_result = numpy_op(data)
+    hidet_result = hidet_op(array(data).to(device=device)).cpu().numpy()
+    np.testing.assert_allclose(actual=hidet_result, desired=numpy_result, atol=atol, rtol=rtol)
+
+
+def check_binary(a_shape, b_shape, numpy_op, hidet_op, device: str = 'all', dtype: Union[str, np.dtype] = np.float32, atol=0.0, rtol=0.0):
+    if device == 'all':
+        for device in ['cuda', 'cpu']:
+            print('checking', device)
+            check_binary(a_shape, b_shape, numpy_op, hidet_op, device, dtype, atol, rtol)
+    a = np.array(np.random.randn(*a_shape)).astype(dtype)
+    b = np.array(np.random.randn(*b_shape)).astype(dtype)
+    numpy_result = numpy_op(a, b)
+    hidet_result = hidet_op(array(a).to(device=device), array(b).to(device=device)).cpu().numpy()
+    np.testing.assert_allclose(actual=hidet_result, desired=numpy_result, atol=atol, rtol=rtol)
+

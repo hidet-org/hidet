@@ -5,7 +5,7 @@ import hidet
 from hidet.ir.func import IRModule
 from hidet.ir.primitives.cuda.mma import MmaConfig
 from hidet.ir.task import TaskContext
-from hidet.graph.ops.definitions.matmul.matmul import MatmulTask
+from hidet.graph.ops.definitions.matmul import BatchMatmulTask
 from hidet.graph.ops.schedules.common import Schedule, NotSupportedError
 from hidet.graph.ops.schedules.resolve import resolve_ir_modules
 from hidet.transforms.tools import fuse_and_pack
@@ -99,7 +99,7 @@ class MatmulMmaFp16Schedule(Schedule):
         ]
 
 
-def batched_matmul_cuda_schedule_mma_fp16(task: MatmulTask) -> IRModule:
+def batched_matmul_cuda_schedule_mma_fp16(task: BatchMatmulTask) -> IRModule:
     ctx = TaskContext.current()
     default_resolve_out_dir = os.path.join('./outs/resolve', task.name, 'batched_matmul_mma_fp16_{}x{}x{}x{}'.format(task.batch_size, task.m_size, task.k_size, task.n_size))
     resolve_out_dir = ctx.resolve_out_dir if ctx.resolve_out_dir else default_resolve_out_dir
@@ -120,7 +120,7 @@ def batched_matmul_cuda_schedule_mma_fp16(task: MatmulTask) -> IRModule:
 
 
 def gemm_mma_fp16_cp_async_ldmatrix_opt_kernel(
-        task: MatmulTask,
+        task: BatchMatmulTask,
         sch: MatmulMmaFp16Schedule
 ) -> IRModule:
     from hidet.lang import f16, spatial, repeat, tensor, attr, cast, col_spatial, view, u32, tensor_pointer

@@ -1,6 +1,6 @@
 from typing import Type, Union, List, Callable, Any
 
-import hidet.utils
+import hidet
 from hidet.graph.modules import nn
 
 
@@ -116,21 +116,31 @@ class ResNet(nn.Module):
         return x
 
 
-def resnet18():
-    return ResNet(block=BasicBlock, layers=[2, 2, 2, 2])
+def resnet18(batch_size=1, channels=3, height=224, width=224):
+    model = ResNet(block=BasicBlock, layers=[2, 2, 2, 2])
+    inputs = [hidet.randn([batch_size, channels, height, width])]
+    return model, inputs
 
 
-def resnet34():
-    return ResNet(block=BasicBlock, layers=[3, 4, 6, 3])
+def resnet34(batch_size=1, channels=3, height=224, width=224):
+    model = ResNet(block=BasicBlock, layers=[3, 4, 6, 3])
+    inputs = [hidet.randn([batch_size, channels, height, width])]
+    return model, inputs
 
 
-def resnet50():
-    return ResNet(block=Bottleneck, layers=[3, 4, 6, 3])
+def resnet50(batch_size=1, channels=3, height=224, width=224):
+    model = ResNet(block=Bottleneck, layers=[3, 4, 6, 3])
+    inputs = [hidet.randn([batch_size, channels, height, width])]
+    return model, inputs
 
 
-def resnet101():
-    return ResNet(block=Bottleneck, layers=[3, 4, 23, 3])
+def resnet101(batch_size=1, channels=3, height=224, width=224):
+    model = ResNet(block=Bottleneck, layers=[3, 4, 23, 3])
+    inputs = [hidet.randn([batch_size, channels, height, width])]
+    return model, inputs
 
 
-def resnet152():
-    return ResNet(block=Bottleneck, layers=[3, 8, 36, 3])
+def resnet152(batch_size=1, channels=3, height=224, width=224):
+    model = ResNet(block=Bottleneck, layers=[3, 8, 36, 3])
+    inputs = [hidet.randn([batch_size, channels, height, width])]
+    return model, inputs

@@ -12,7 +12,7 @@ from hidet.ir.primitives.cuda.wmma import WmmaConfig, wmma_load_a, wmma_load_b, 
 from hidet.ir.stmt import AssignStmt, BufferStoreStmt, IfStmt, DeclareStmt, Scope
 from hidet.ir.task import TaskContext, Task
 from hidet.ir.type import scalar_type, tensor_type, ScalarType, TensorPointerType, PointerType
-from hidet.graph.ops.definitions.matmul.matmul import MatmulTask
+from hidet.graph.ops.definitions.matmul import BatchMatmulTask
 from hidet.graph.ops.schedules.common import params_from_task, Schedule, NotSupportedError
 from hidet.graph.ops.schedules.cuda.common import get_task_map, get_transfer_task_map
 from hidet.graph.ops.schedules.resolve import resolve_ir_modules
@@ -227,7 +227,7 @@ class MatmulSchedule(Schedule):
             raise ValueError('Space level {} must in [0, 1, 2].'.format(space_level))
 
 
-def batched_matmul_cuda_schedule_wmma(task: MatmulTask) -> IRModule:
+def batched_matmul_cuda_schedule_wmma(task: BatchMatmulTask) -> IRModule:
     ctx = TaskContext.current()
     all_schedules = MatmulSchedule.schedules(task, space_level=ctx.space_level)
     default_resolve_out_dir = os.path.join('./outs/resolve', task.name, 'batched_matmul_wmma_{}x{}x{}x{}'.format(task.batch_size, task.m_size, task.k_size, task.n_size))
@@ -245,7 +245,7 @@ def batched_matmul_cuda_schedule_wmma(task: MatmulTask) -> IRModule:
     )
 
 
-def batched_matmul_cuda_with_given_schedule(task: MatmulTask, schedule: MatmulSchedule) -> IRModule:
+def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, schedule: MatmulSchedule) -> IRModule:
     ir_module = IRModule(task=task)
     sch = schedule
 

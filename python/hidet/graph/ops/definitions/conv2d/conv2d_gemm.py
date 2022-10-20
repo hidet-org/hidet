@@ -1,6 +1,6 @@
 from typing import List
 
-from hidet.graph.ops.definitions.matmul.matmul import matmul
+from hidet.graph.ops.definitions.matmul.batch_matmul import batch_matmul
 from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, compute, input_like, TensorNode
 from hidet.graph.ops.definitions.utils import normalize_kernel, normalize_stride
 from .utils import infer_conv2d_shape
@@ -141,7 +141,7 @@ def conv2d_gemm_inverse_transform(gemm_y: Tensor, out_height, out_width) -> Tens
 def conv2d_gemm(data: Tensor, weight: Tensor, stride, groups: int = 1) -> Tensor:
     gemm_x = conv2d_gemm_image_transform(data, kernel=weight.shape[2:], stride=stride, groups=groups)
     gemm_w = conv2d_gemm_filter_transform(weight, groups=groups)
-    gemm_y = matmul(gemm_x, gemm_w)
+    gemm_y = batch_matmul(gemm_x, gemm_w)
 
     y_shape = infer_conv2d_shape(data.shape, weight.shape, stride, groups)
     y = conv2d_gemm_inverse_transform(gemm_y, out_height=y_shape[2], out_width=y_shape[3])

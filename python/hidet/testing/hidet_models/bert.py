@@ -75,10 +75,10 @@ class BertSelfAttention(nn.Module):
         query = self.transpose_for_scores(self.query_layer(hidden_states))
         key = self.transpose_for_scores(self.key_layer(hidden_states))
         value = self.transpose_for_scores(self.value_layer(hidden_states))
-        attention_scores = ops.matmul(query, key.transpose([-1, -2])) / math.sqrt(self.attention_head_size)
+        attention_scores = ops.batch_matmul(query, key.transpose([-1, -2])) / math.sqrt(self.attention_head_size)
         attention_scores = attention_scores + attention_mask
         attention_probs = ops.softmax(attention_scores, axis=-1)
-        context = ops.matmul(attention_probs, value)
+        context = ops.batch_matmul(attention_probs, value)
         context = context.reshape([batch_size, self.num_attention_heads, seq_length, self.attention_head_size])
         context = context.rearrange([[0], [2], [1, 3]])
         return context

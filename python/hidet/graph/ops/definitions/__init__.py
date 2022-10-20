@@ -2,7 +2,7 @@ from .conv2d import conv2d, conv2d_winograd, conv2d_gemm
 from .conv2d import conv2d_gemm_image_transform, conv2d_gemm_filter_transform, conv2d_gemm_inverse_transform
 from .conv2d import conv2d_winograd_image_transform, conv2d_winograd_filter_transform, conv2d_winograd_inverse_transform
 
-from .matmul import matmul
+from .matmul import batch_matmul, matmul
 from .pool import max_pool2d, avg_pool2d
 from .softmax import softmax
 from .activation import relu, sigmoid, relu6, clip
@@ -15,7 +15,7 @@ from .transform import squeeze, unsqueeze, flatten, concat, cast, take, rearrang
 from .cumulative import cumsum
 from .special import barrier
 
-from .matmul import MatmulOp
+from .matmul import BatchMatmulOp
 from .conv2d import Conv2dOp
 from .arithmatic import ErfOp, PowOp, AddOp, SubOp, MultiplyOp, DivideOp, WhereOp
 from .compare import EqualOp

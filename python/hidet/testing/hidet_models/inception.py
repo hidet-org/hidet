@@ -277,7 +277,7 @@ def inception_tail(batch_size=1):
     return model, inputs
 
 
-def inception_v3(batch_size=1):
-    inputs = [hidet.randn([batch_size, 3, 299, 299])]
+def inception_v3(batch_size=1, channels=3, height=299, width=299):
+    inputs = [hidet.randn([batch_size, channels, height, width])]
     model = InceptionV3()
     return model, inputs

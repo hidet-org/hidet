@@ -4,7 +4,7 @@ from typing import List, Tuple
 import numpy as np
 
 from hidet.ir.expr import const_tensor, Constant, cast
-from hidet.graph.ops.definitions.matmul.matmul import matmul
+from hidet.graph.ops.definitions.matmul.batch_matmul import batch_matmul
 from hidet.graph.ops.definitions.transform import flatten, reshape
 from hidet.graph.ops.definitions.utils import Tensor, Operator, Task, TensorNode, input_like, compute, reduce, normalize_kernel
 
@@ -208,7 +208,7 @@ def conv2d_winograd(x: Tensor, w: Tensor) -> Tensor:
     # product
     x = flatten(x, start_dim=0, end_dim=2)  # [alpha_x * alpha_y, ci, p]
     w = flatten(w, start_dim=0, end_dim=2)  # [alpha_x * alpha_y, co, ci]
-    y = matmul(w, x)  # [alpha_x * alpha_y, co, p]
+    y = batch_matmul(w, x)  # [alpha_x * alpha_y, co, p]
     y = reshape(y, [alpha[0], alpha[1], y.shape[1], y.shape[2]])  # [alpha_x, alpha_y, co, p]
 
     # winograd inverse transform

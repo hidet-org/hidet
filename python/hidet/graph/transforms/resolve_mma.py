@@ -2,13 +2,13 @@ from typing import List, Optional
 import warnings
 from .base import GraphPass, PassContext
 from hidet.graph.ir import FlowGraph, Operator, Tensor, GraphRewriter
-from hidet.graph.ops.definitions import MatmulOp
-from hidet.graph.ops.definitions.matmul.matmul import batched_matmul
+from hidet.graph.ops.definitions import BatchMatmulOp
+from hidet.graph.ops.definitions.matmul import batch_matmul
 
 
 class ResolveMmaRewriter(GraphRewriter):
     def visit_Operator(self, op: Operator):
-        if isinstance(op, MatmulOp):
+        if isinstance(op, BatchMatmulOp):
             a: Tensor = self(op.inputs[0])
             b: Tensor = self(op.inputs[1])
             mma_type: str = PassContext.current().configs['mma']
@@ -33,7 +33,7 @@ class ResolveMmaRewriter(GraphRewriter):
                     raise ValueError('Can not recognize mma_type {}'.format(mma_type))
             else:
                 mma = op_mma
-            self.memo[op.outputs[0]] = batched_matmul(a, b, algo=op.attrs['algo'], mma=mma, ta=ta, tb=tb, tc=tc)
+            self.memo[op.outputs[0]] = batch_matmul(a, b, algo=op.attrs['algo'], mma=mma, ta=ta, tb=tb, tc=tc)
         else:
             return GraphRewriter.visit_Operator(self, op)
 

@@ -2,7 +2,6 @@ import itertools
 from collections import OrderedDict
 from typing import Sequence, Union, List, Callable, Mapping, Dict, Tuple, Optional
 
-from hidet import ir
 from hidet.ir.node import Node
 from hidet.utils import prod
 
@@ -50,6 +49,7 @@ def to_data_layout(obj):
 # data layout
 class DataLayout(Node):
     def __init__(self, shape=None, size=None):
+        from hidet import ir
         self.shape: Tuple[Int] = tuple([int(v) if isinstance(v, ir.Constant) else v for v in shape]) if shape is not None else None
         self.size: Int = size
 
@@ -164,8 +164,9 @@ class StridesLayout(DataLayout):
     @staticmethod
     def storage_size(shape, strides) -> Expr:
         # assume the strides are positive, but do not assume the tensor is contiguous.
+        from hidet.ir.functors import simplify
         max_index = sum([(a - 1) * b for a, b in zip(shape, strides)]) + 1
-        return ir.functors.simplify(max_index)
+        return simplify(max_index)
 
     @staticmethod
     def from_shape(shape: Sequence[Int], perm: Sequence[int]):

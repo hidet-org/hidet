@@ -1,10 +1,12 @@
 from typing import List, Type, Optional
 from hidet.graph.ir import Operator, Tensor
 from hidet.graph import ops
-from hidet.graph.ops.definitions import Conv2dOp
-from .base import ResolveRule
+from hidet.graph.transforms import ResolveRule, register_resolve_rule
+
+from .conv2d import Conv2dOp
 
 
+@register_resolve_rule
 class Conv2dResolveRule(ResolveRule):
     def __init__(self, enable_winograd=False):
         self.enable_winograd = enable_winograd

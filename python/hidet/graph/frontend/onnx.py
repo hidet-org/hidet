@@ -302,19 +302,20 @@ class OnnxMul(OnnxOperator):
 class OnnxMatMul(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         a, b = inputs
-        assert len(a.shape) >= 2 and len(b.shape) >= 2
-        if len(a.shape) == 2 and len(b.shape) == 2:
-            return [ops.matmul(a, b)]
-        else:
-            prefix_shape = hidet.graph.ops.definitions.arithmatic.broadcast_shape(a.shape[:-2], b.shape[:-2])
-            a = ops.broadcast(a, prefix_shape + a.shape[-2:])
-            b = ops.broadcast(b, prefix_shape + b.shape[-2:])
-            a = ops.flatten(a, end_dim=-2)  # [B, M, K]
-            b = ops.flatten(b, end_dim=-2)  # [B, K, N]
-            c = ops.matmul(a, b)  # [B, M, N]
-            c_expect_shape = prefix_shape + [a.shape[-2], b.shape[-1]]
-            c = c.reshape(c_expect_shape)
-            return [c]
+        return [ops.matmul(a, b)]
+        # assert len(a.shape) >= 2 and len(b.shape) >= 2
+        # if len(a.shape) == 2 and len(b.shape) == 2:
+        #     return [ops.batch_matmul(a, b)]
+        # else:
+        #     prefix_shape = hidet.graph.ops.definitions.arithmatic.broadcast_shape(a.shape[:-2], b.shape[:-2])
+        #     a = ops.broadcast(a, prefix_shape + a.shape[-2:])
+        #     b = ops.broadcast(b, prefix_shape + b.shape[-2:])
+        #     a = ops.flatten(a, end_dim=-2)  # [B, M, K]
+        #     b = ops.flatten(b, end_dim=-2)  # [B, K, N]
+        #     c = ops.batch_matmul(a, b)  # [B, M, N]
+        #     c_expect_shape = prefix_shape + [a.shape[-2], b.shape[-1]]
+        #     c = c.reshape(c_expect_shape)
+        #     return [c]
 
 
 @register_onnx_operator

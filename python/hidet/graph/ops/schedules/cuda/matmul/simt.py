@@ -12,7 +12,7 @@ from hidet.ir.stmt import AssignStmt, BufferStoreStmt, IfStmt, DeclareStmt, Scop
 from hidet.ir.type import scalar_type, tensor_type, ScalarType, TensorPointerType, PointerType
 from hidet.ir.task import TaskContext
 from hidet.utils import cuda
-from hidet.graph.ops.definitions.matmul.matmul import MatmulTask
+from hidet.graph.ops.definitions.matmul import BatchMatmulTask
 from hidet.graph.ops.schedules.resolve import resolve_ir_modules
 from hidet.graph.ops.schedules.common import params_from_task, Schedule, NotSupportedError
 from hidet.transforms.tools import fuse_and_pack
@@ -237,7 +237,7 @@ class MatmulSchedule(Schedule):
         return settings
 
 
-def batched_matmul_cuda_schedule_simt(task: MatmulTask) -> IRModule:
+def batched_matmul_cuda_schedule_simt(task: BatchMatmulTask) -> IRModule:
     ctx = TaskContext.current()
     all_schedules = MatmulSchedule.schedules(space_level=ctx.space_level)
     default_resolve_out_dir = os.path.join('./outs/resolve', task.name, 'batched_matmul_default_{}x{}x{}x{}'.format(task.batch_size, task.m_size, task.k_size, task.n_size))
@@ -255,7 +255,7 @@ def batched_matmul_cuda_schedule_simt(task: MatmulTask) -> IRModule:
     )
 
 
-def batched_matmul_cuda_with_given_schedule(task: MatmulTask, schedule: MatmulSchedule) -> IRModule:
+def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, schedule: MatmulSchedule) -> IRModule:
     ir_module = IRModule(task=task)
     sch = schedule
 

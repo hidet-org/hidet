@@ -261,6 +261,48 @@ class FlowGraph:
         from hidet.runtime.cuda_graph import create_cuda_graph
         return create_cuda_graph(self)
 
+    def latency(self, warmup=1, number=3, repeat=3, median=True) -> Union[float, List[float]]:
+        """Measure the latency of the flow graph.
+
+        Parameters
+        ----------
+        warmup: int
+            The number of warmup runs.
+
+        number: int
+            The number of runs to measure the latency.
+
+        repeat: int
+            The number of times to repeat the measurement.
+
+        median: bool
+            Whether to return the median latency.
+
+        Returns
+        -------
+        ret: Union[float, List[float]]
+            The measured latency in milliseconds.
+        """
+        import time
+        import numpy as np
+        from hidet.ffi.cuda_api import cuda
+        dummy_inputs = self.dummy_inputs()
+        for i in range(warmup):
+            self.forward(*dummy_inputs)
+        results = []
+        for i in range(repeat):
+            cuda.device_synchronize()
+            t1 = time.time()
+            for j in range(number):
+                self.forward(*dummy_inputs)
+            cuda.device_synchronize()
+            t2 = time.time()
+            results.append((t2 - t1) * 1000 / number)
+        if median:
+            return float(np.median(results))
+        else:
+            return results
+
     @staticmethod
     def _analyze(outputs: List[Tensor]) -> Tuple[List[Tensor], List[Operator], Dict[Tensor, int]]:
         inputs = []

@@ -5,34 +5,8 @@ from hidet.ir import primitives
 from hidet.ir import expr
 from hidet.ir.expr import const_like
 from hidet.utils import prod
-from .utils import Task, Operator, Tensor, TensorNode, InverseMap, compute, input_like
+from .utils import Task, Operator, Tensor, TensorNode, InverseMap, compute, input_like, broadcast_shape, broadcast_shapes, broadcast_indices
 from hidet.graph.tensor import convert
-
-
-def broadcast_shape(x_shape: List[int], y_shape: List[int]) -> List[int]:
-    """
-    Broadcast two shapes with the same rule as numpy.
-    Please refer to https://numpy.org/doc/stable/user/basics.broadcasting.html for details.
-    """
-    orig_shapes = x_shape, y_shape
-    while len(x_shape) < len(y_shape):
-        x_shape = [1] + x_shape
-    while len(y_shape) < len(x_shape):
-        y_shape = [1] + y_shape
-    result_shape = []
-    for p, q in zip(x_shape, y_shape):
-        if p != q and p != 1 and q != 1:
-            raise ValueError('can not broadcast two arrays with shape {} and {}'.format(orig_shapes[0], orig_shapes[1]))
-        result_shape.append(builtins.max(p, q))
-    return result_shape
-
-
-def broadcast_shapes(shapes: List[List[int]]) -> List[int]:
-    assert len(shapes) >= 1
-    expanded_shape = shapes[0]
-    for shape in shapes:
-        expanded_shape = broadcast_shape(expanded_shape, shape)
-    return expanded_shape
 
 
 class UnaryElementwiseTask(Task):
@@ -51,16 +25,6 @@ class UnaryElementwiseTask(Task):
                 x: InverseMap.from_lambda(lambda *indices: list(indices), num_args=len(x.data_type.shape))
             }
         )
-
-
-def broadcast_indices(indices, shape, out_shape):
-    # used to support broadcast
-    pad_dim = len(out_shape) - len(shape)
-    indices = list(indices[pad_dim:])
-    for idx, dim in enumerate(shape):
-        if int(dim) == 1:
-            indices[idx] = 0
-    return indices
 
 
 class BinaryElementwiseTask(Task):

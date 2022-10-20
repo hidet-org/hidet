@@ -1,6 +1,6 @@
 import warnings
-from .matmul import matmul, Tensor, cuda
-from hidet.utils.py import gcd, factor
+from .batch_matmul import batch_matmul, Tensor, cuda
+from hidet.utils.py import gcd, factorize
 
 
 def parallel_k_nparts(batch_size, m_size, n_size, k_size) -> int:
@@ -31,11 +31,11 @@ def parallel_k_batched_matmul(a: Tensor, b: Tensor, mma: str = 'default', nparts
 
     if nparts == 1:
         # warnings.warn('Parallel k matmul use nparts=1, fall back to direct matmul.')
-        return matmul(a, b, algo='direct', mma=mma)
+        return batch_matmul(a, b, algo='direct', mma=mma)
     else:
         a = a.reshape([batch_size, m_size, nparts, k_size // nparts]).rearrange([[0, 2], [1], [3]])  # [batch_size * nparts, m_size, k_size // nparts]
         b = b.reshape([batch_size, nparts, k_size // nparts, n_size]).rearrange([[0, 1], [2], [3]])  # [batch_size * nparts, k_size // nparts, n_size]
-        c = matmul(a, b, algo='direct', mma=mma).reshape([batch_size, nparts, m_size, n_size]).sum(1)
+        c = batch_matmul(a, b, algo='direct', mma=mma).reshape([batch_size, nparts, m_size, n_size]).sum(1)
         return c
 
     # if nparts is None:
@@ -60,7 +60,7 @@ def parallel_k_batched_matmul_search(a: Tensor, b: Tensor, mma: str = 'default')
     k_size = a.shape[-1]
     batch_size, m_size, n_size = a.shape[0], a.shape[1], b.shape[2]
 
-    factors = [v for v in factor(k_size) if v <= 16]
+    factors = [v for v in factorize(k_size) if v <= 16]
 
     best_nparts = None
     best_nparts_latency = 1e9
@@ -71,7 +71,7 @@ def parallel_k_batched_matmul_search(a: Tensor, b: Tensor, mma: str = 'default')
         for nparts in factors:
             num_trials = 1000
             if nparts == 1:
-                c = matmul(a, b, algo='direct', mma=mma)
+                c = batch_matmul(a, b, algo='direct', mma=mma)
                 latency = float(np.median(c.op.latency(number=num_trials)))
                 if latency < best_nparts_latency:
                     best_nparts = nparts
@@ -80,7 +80,7 @@ def parallel_k_batched_matmul_search(a: Tensor, b: Tensor, mma: str = 'default')
             else:
                 aa = a.reshape([batch_size, m_size, nparts, k_size // nparts]).rearrange([[0, 2], [1], [3]])  # [batch_size * nparts, m_size, k_size // nparts]
                 bb = b.reshape([batch_size, nparts, k_size // nparts, n_size]).rearrange([[0, 1], [2], [3]])  # [batch_size * nparts, k_size // nparts, n_size]
-                cc = matmul(aa, bb, algo='direct', mma=mma)
+                cc = batch_matmul(aa, bb, algo='direct', mma=mma)
                 c1 = cc.reshape([batch_size, nparts, m_size, n_size])
                 c2 = c1.sum(1)
                 latency = cc.op.latency(number=num_trials) + c2.op.latency(number=num_trials)
@@ -93,3 +93,5 @@ def parallel_k_batched_matmul_search(a: Tensor, b: Tensor, mma: str = 'default')
         assert len(factors) == 1
         best_nparts = factors[0]
     return parallel_k_batched_matmul(a, b, mma, best_nparts)
+
+raise ValueError('Not used')

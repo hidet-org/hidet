@@ -100,15 +100,6 @@ def print_implicit_gemm_workloads(configs: List[Conv2dConfig] = None):
         print(m_size, n_size, k_size)
 
 
-def conv_bn_relu_onnx_path(idx: int) -> str:
-    path = hidet.utils.hidet_cache_file('onnx', f'conv_{idx}.onnx')
-    if not os.path.exists(path):
-        export_conv_bn_relu()
-    if not os.path.exists(path):
-        raise ValueError('failed generate onnx model')
-    return path
-
-
 def conv_bn_relu_input_shape(bs: int, idx: int) -> List[int]:
     shapes = {
         0: [3, 224, 224],

@@ -219,7 +219,7 @@ def get_next_file_index(dirname: str) -> int:
             return idx
 
 
-def factor(n):
+def factorize(n):
     """
     example:
     factor(12) => [1, 2, 3, 4, 6, 12]

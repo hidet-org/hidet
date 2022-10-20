@@ -14,7 +14,7 @@ from hidet.ir.stmt import AssignStmt, BufferStoreStmt, IfStmt, Stmt, DeclareStmt
 from hidet.ir.type import scalar_type, tensor_type, TensorType, ScalarType, TensorPointerType, PointerType
 from hidet.ir.task import TaskContext
 from hidet.utils import cuda, prod
-from hidet.graph.ops.definitions.matmul.matmul import MatmulTask
+from hidet.graph.ops.definitions.matmul import BatchMatmulTask
 from hidet.graph.ops.schedules.resolve import resolve_ir_modules
 from hidet.graph.ops.schedules.common import params_from_task, Schedule, NotSupportedError
 from hidet.graph.ops.schedules.cuda.common import get_transfer_task_map
@@ -85,7 +85,7 @@ class MatmulMmaSchedule(Schedule):
             return 'mma_tf32_f32'
 
     @staticmethod
-    def schedules(task: MatmulTask, space_level: int):
+    def schedules(task: BatchMatmulTask, space_level: int):
         ta, tb = task.attributes['ta'], task.attributes['tb']
         if ta or tb:
             raise NotImplementedError()
@@ -153,7 +153,7 @@ class MatmulMmaSchedule(Schedule):
         ]
 
 
-def batched_matmul_cuda_schedule_mma(task: MatmulTask) -> IRModule:
+def batched_matmul_cuda_schedule_mma(task: BatchMatmulTask) -> IRModule:
     ctx = TaskContext.current()
     default_resolve_out_dir = os.path.join('./outs/resolve', task.name, 'batched_matmul_mma_{}x{}x{}x{}'.format(task.batch_size, task.m_size, task.k_size, task.n_size))
     resolve_out_dir = ctx.resolve_out_dir if ctx.resolve_out_dir else default_resolve_out_dir
@@ -173,7 +173,7 @@ def batched_matmul_cuda_schedule_mma(task: MatmulTask) -> IRModule:
     )
 
 
-def batched_matmul_cuda_with_given_schedule(task: MatmulTask, sch: MatmulMmaSchedule) -> IRModule:
+def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, sch: MatmulMmaSchedule) -> IRModule:
     m_size, n_size, k_size = task.m_size, task.n_size, task.k_size
     m_tile_size, n_tile_size, k_tile_size = sch.block_shape
     m_tiles = (m_size + m_tile_size - 1) // m_tile_size

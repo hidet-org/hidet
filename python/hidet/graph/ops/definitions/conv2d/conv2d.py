@@ -33,20 +33,6 @@ class Conv2dTask(Task):
             outputs=[output],
         )
 
-    # def implement_cuda(self) -> IRModule:
-    #     # return NotImplemented
-    #     if self.groups == self.channels:
-    #         from hidet.graph.ops.schedules.cuda.depthwise_conv import schedule_depthwise_conv2d
-    #         return schedule_depthwise_conv2d(self)
-    #     else:
-    #         return NotImplemented   # call default scheduler
-    #
-    # def fast_implement(self, space_level: int) -> bool:
-    #     if self.groups == self.channels:
-    #         return False
-    #     else:
-    #         return True
-
 
 class Conv2dOp(Operator):
     def __init__(self, x: Tensor, w: Tensor, stride: List[int], groups: int):

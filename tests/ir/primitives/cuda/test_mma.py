@@ -21,9 +21,9 @@ def matmul_mma_tensor_core(config: MmaConfig):
             block_dim=32
     ) as fb:
         # parameters
-        a = Var('a', TensorPointerType(config.input_dtype, [config.m, config.k]))
-        b = Var('b', TensorPointerType(config.input_dtype, [config.k, config.n]))
-        c = Var('c', TensorPointerType(config.output_dtype, [config.m, config.n]))
+        a = Var('a', TensorPointerType(config.input_dtype, [1, config.m, config.k]))
+        b = Var('b', TensorPointerType(config.input_dtype, [1, config.k, config.n]))
+        c = Var('c', TensorPointerType(config.output_dtype, [1, config.m, config.n]))
         fb.extend_params([a, b, c])
 
         # local variables
@@ -39,12 +39,12 @@ def matmul_mma_tensor_core(config: MmaConfig):
         for p in range(config.c_elements):
             fb += BufferStoreStmt(regs_c, [p], 0.0)
         for p, (i, k) in enumerate(config.a_load_map(w)):
-            fb += BufferStoreStmt(regs_a, [p], a[i, k])
+            fb += BufferStoreStmt(regs_a, [p], a[0, i, k])
         for p, (k, j) in enumerate(config.b_load_map(w)):
-            fb += BufferStoreStmt(regs_b, [p], b[k, j])
+            fb += BufferStoreStmt(regs_b, [p], b[0, k, j])
         fb += mma_sync(config, regs_a, regs_b, regs_c)
         for p, (i, j) in enumerate(config.c_store_map(w)):
-            fb += BufferStoreStmt(c, [i, j], regs_c[p])
+            fb += BufferStoreStmt(c, [0, i, j], regs_c[p])
     func = fb.func
     ir_module = IRModule(funcs={func.name: func})
     fuse_and_pack(ir_module, func, pack_func_name='matmul_mma')
@@ -67,9 +67,9 @@ def test_mma(config: MmaConfig):
     ir_module = matmul_mma_tensor_core(config)
     func = build_ir_module(ir_module, func_name='matmul_mma', keep_ptx=True, func_type=FuncType.from_func(ir_module.lookup('matmul_mma_grid')))
     m, n, k = config.m, config.n, config.k
-    a = hidet.randint(3, shape=[m, k]).to(ScalarType(config.input_dtype).name).cuda()
-    b = hidet.randint(3, shape=[k, n]).to(ScalarType(config.input_dtype).name).cuda()
-    c = hidet.empty([m, n], dtype=ScalarType(config.output_dtype).name)
+    a = hidet.randint(3, shape=[1, m, k]).to(ScalarType(config.input_dtype).name).cuda()
+    b = hidet.randint(3, shape=[1, k, n]).to(ScalarType(config.input_dtype).name).cuda()
+    c = hidet.empty([1, m, n], dtype=ScalarType(config.output_dtype).name)
     func(a, b, c)
-    c_desire = hidet.ops.matmul(a, b)
+    c_desire = hidet.ops.batch_matmul(a, b)
     np.testing.assert_allclose(actual=c.numpy(), desired=c_desire.numpy())

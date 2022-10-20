@@ -5,3 +5,5 @@ from .conv2d_winograd import Conv2dWinogradInverseTransformOp, Conv2dWinogradFil
 from .conv2d_gemm import conv2d_gemm, conv2d_gemm_image_transform, conv2d_gemm_filter_transform, conv2d_gemm_inverse_transform
 from .conv2d_gemm import Conv2dGemmImageTransformOp
 
+
+from . import resolve

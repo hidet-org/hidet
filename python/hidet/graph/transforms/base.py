@@ -68,7 +68,7 @@ class PassContext:
             'mma': 'simt',
 
             # parallel k
-            # ['default', 'disabled', 2, 4, ...]
+            # ['default', 'disabled', 'search', 2, 4, ...]
             'parallel_k': 'default',
 
             # print lower details

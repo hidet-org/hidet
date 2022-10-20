@@ -1,8 +1,48 @@
-from typing import Type, List
-from .base import GraphPass
-from .resolve_variant_rules import ResolveRule, Conv2dResolveRule, MatmulResolveRule
+from typing import Type, List, Optional, Union
 from hidet.graph.ir import FlowGraph, GraphRewriter, Tensor, Operator
 from hidet.utils import strict_zip, same_list
+from .base import GraphPass, PassContext
+
+
+class ResolveRule:
+    def op_cls(self) -> Type[Operator]:
+        raise NotImplementedError()
+
+    def resolve(self, op: Operator) -> Optional[List[Tensor]]:
+        """
+        Parameters
+        ----------
+        op: Operator
+            The operator to be resolved.
+
+        Returns
+        -------
+        ret: Optional[List[Tensor]]
+            None - indicates the operator has not been resolved, keep the original operator.
+            List[Tensor] - the output of resolved operators.
+        """
+        raise NotImplementedError()
+
+    def get_config(self, name, default=None):
+        return PassContext.current().configs.get(name, default)
+
+
+registered_resolve_rules: List[ResolveRule] = []
+
+
+def register_resolve_rule(rule_or_cls: Union[Type[ResolveRule], ResolveRule]):
+    if isinstance(rule_or_cls, ResolveRule):
+        rule = rule_or_cls
+    elif issubclass(rule_or_cls, ResolveRule):
+        rule = rule_or_cls()
+    else:
+        raise ValueError("Expect a ResolveRule instance or subclass, got {}".format(type(rule_or_cls)))
+    registered_resolve_rules.append(rule)
+    return rule_or_cls
+
+
+def get_registered_resolve_rules() -> List[ResolveRule]:
+    return registered_resolve_rules
 
 
 class ResolveVariantRewriter(GraphRewriter):
@@ -37,10 +77,7 @@ class ResolveVariantRewriter(GraphRewriter):
 
 class ResolveVariantPass(GraphPass):
     def process_graph(self, graph: FlowGraph) -> FlowGraph:
-        rule_seq: List[ResolveRule] = [
-            Conv2dResolveRule(),
-            MatmulResolveRule()
-        ]
+        rule_seq: List[ResolveRule] = [rule for rule in get_registered_resolve_rules()]
         for rule in rule_seq:
             resolver = ResolveVariantRewriter(rule)
             while True:

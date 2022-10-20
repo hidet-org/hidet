@@ -5,10 +5,11 @@ from .instruments import GraphPassInstrument, SaveGraphInstrument, ProfileInstru
 from .fold_const import fold_const_pass
 from .pattern_transform import pattern_transform_pass
 from .automatic_mix_precision import automatic_mix_precision_pass
-from .resolve_mma import resolve_mma_pass
 from .resolve_variant import resolve_variant_pass
 from .fuse_operator import fuse_operator_pass
 from .eliminate_barrier import eliminate_barrier_pass
+
+from .resolve_variant import ResolveRule, register_resolve_rule, get_registered_resolve_rules
 
 
 def optimize(graph: FlowGraph) -> FlowGraph:
@@ -37,7 +38,6 @@ def optimize(graph: FlowGraph) -> FlowGraph:
         pattern_transform_pass(),
         automatic_mix_precision_pass(),
         resolve_variant_pass(),
-        resolve_mma_pass(),
         fuse_operator_pass(),
         eliminate_barrier_pass()
     ]

@@ -2,7 +2,6 @@ from __future__ import annotations
 from typing import Sequence, Optional, Union, List, Tuple, Mapping, Callable, Iterable
 import numpy as np
 
-from hidet import ir
 from hidet.ir.node import Node
 from hidet.utils import initialize
 
