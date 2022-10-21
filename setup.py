@@ -41,20 +41,20 @@ def copy_include_dir():
 
 
 # build_cpp()
-copy_include_dir()
+# copy_include_dir()
 
 setup(
     name="hidet",
     version="0.0.1",
     description="Hidet: a compilation-based DNN inference framework.",
+    python_requires='>=3.7',
     packages=find_packages(where='python'),
     package_dir={"": "python"},
     include_package_data=True,
     package_data={
         'hidet': [
             'lib/*.so',
-            'include/hidet/runtime/*.h',
-            'include/hidet/*.h'
+            'include/**/*.h'
         ]
     },
     zip_safe=False,
@@ -64,6 +64,7 @@ setup(
         "psutil",
         "tqdm",
         "nvtx",
-        "tabulate"
+        "tabulate",
+        "astunparse"
     ]
 )
