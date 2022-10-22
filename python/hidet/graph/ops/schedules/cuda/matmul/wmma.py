@@ -51,13 +51,7 @@ class MatmulSchedule(Schedule):
             wmma_config: WmmaConfig,
             block_multiple=(4, 2),
             warp_multiple=(2, 2, 1),
-            ta=False,
-            tb=False
     ):
-        # self.check(wmma_config.a_layout == 'col')
-        # self.check(wmma_config.b_layout == 'row')
-        # self.check(wmma_config.c_layout == 'row')
-
         self.block_multiple = block_multiple
         self.warp_multiple = warp_multiple
         self.wmma_config = wmma_config
@@ -82,27 +76,15 @@ class MatmulSchedule(Schedule):
         self.warp_map = row_spatial(*block_multiple) * row_repeat(*warp_multiple[:2])
         self.c_init_map = self.warp_map
 
-        if not ta:
-            self.check(wmma_config.a_layout == 'row')
-            self.a_g2s_map, self.regs_a_ldg_layout = get_transfer_task_map(task_shape=[block_shape[0], warp_k], num_workers=threads, ranks=[0, 1])
-            self.smem_a_layout = data_layout([2, block_shape[0], warp_k], ranks=[0, 1, 2])
-            self.load_a_stride = warp_k
-        else:
-            self.check(wmma_config.a_layout == 'col')
-            self.a_g2s_map, self.regs_a_ldg_layout = get_transfer_task_map(task_shape=[block_shape[0], warp_k], num_workers=threads, ranks=[1, 0])
-            self.smem_a_layout = data_layout([2, block_shape[0], warp_k], ranks=[0, 2, 1])
-            self.load_a_stride = block_shape[0]
+        self.check(wmma_config.a_layout == 'row')
+        self.a_g2s_map, self.regs_a_ldg_layout = get_transfer_task_map(task_shape=[block_shape[0], warp_k], num_workers=threads, ranks=[0, 1])
+        self.smem_a_layout = data_layout([2, block_shape[0], warp_k], ranks=[0, 1, 2])
+        self.load_a_stride = warp_k
 
-        if not tb:
-            self.check(wmma_config.b_layout == 'row')
-            self.b_g2s_map, self.regs_b_ldg_layout = get_transfer_task_map(task_shape=[warp_k, block_shape[1]], num_workers=threads, ranks=[0, 1])
-            self.smem_b_layout = data_layout([2, warp_k, block_shape[1]], ranks=[0, 1, 2])
-            self.load_b_stride = block_shape[1]
-        else:
-            self.check(wmma_config.b_layout == 'col')
-            self.b_g2s_map, self.regs_b_ldg_layout = get_transfer_task_map(task_shape=[warp_k, block_shape[1]], num_workers=threads, ranks=[1, 0])
-            self.smem_b_layout = data_layout([2, warp_k, block_shape[1]], ranks=[0, 2, 1])
-            self.load_b_stride = warp_k
+        self.check(wmma_config.b_layout == 'row')
+        self.b_g2s_map, self.regs_b_ldg_layout = get_transfer_task_map(task_shape=[warp_k, block_shape[1]], num_workers=threads, ranks=[0, 1])
+        self.smem_b_layout = data_layout([2, warp_k, block_shape[1]], ranks=[0, 1, 2])
+        self.load_b_stride = block_shape[1]
 
         self.c_s2g_warp_map = row_spatial(*wmma_shape)
         self.smem_c_layout = row_layout(*block_multiple) * local_layout(*warp_multiple[:2]) * row_layout(*wmma_shape)
@@ -153,16 +135,12 @@ class MatmulSchedule(Schedule):
             ('resident_blocks', self.resident_blocks)
         ]
 
-    def __str__(self):
-        return "_".join(['{}_{}'.format(a, b) for a, b in self.keys() + self.derived_keys()])
-
     def check(self, cond, msg: str = ""):
         if not cond:
             raise NotSupportedError(self, msg)
 
     @staticmethod
     def schedules(task: Task, space_level: int = 0):
-        ta, tb = task.attributes['ta'], task.attributes['tb']
         wmma_type = task.attributes['mma']  # like 'wmma_f16_f32' or 'wmma'
 
         # choose a specific wmma type when needed
@@ -195,14 +173,14 @@ class MatmulSchedule(Schedule):
                 'wmma_bf16_f32': (16, 16, 16),
                 'wmma_tf32_f32': (16, 16, 8)
             }
-            a_layout = 'row' if not ta else 'col'
-            b_layout = 'row' if not tb else 'col'
+            a_layout = 'row'
+            b_layout = 'row'
             _, ab_dtype, c_dtype = wmma_type.split('_')
             wmma_config = find_compatible_wmma_config(WmmaConfig(
                 shape=default_shape[wmma_type], a_dtype=ab_dtype, b_dtype=ab_dtype, c_dtype=c_dtype,
                 a_layout=a_layout, b_layout=b_layout, c_layout='row', a_regs=None, b_regs=None, c_regs=None
             ))
-            return [MatmulSchedule(wmma_config, block_multiple=(2, 2), warp_multiple=(2, 2, 1), ta=ta, tb=tb)]
+            return [MatmulSchedule(wmma_config, block_multiple=(2, 2), warp_multiple=(2, 2, 1))]
         elif space_level == 2:
             ret = []
             _, ab_dtype, c_dtype = wmma_type.split('_')
@@ -217,7 +195,7 @@ class MatmulSchedule(Schedule):
                                 for warp_outer_k in [1, 2]:
                                     warp_outer = (warp_outer_x, warp_outer_y, warp_outer_k)
                                     try:
-                                        ret.append(MatmulSchedule(wmma_config, block_warps, warp_outer, ta=ta, tb=tb))
+                                        ret.append(MatmulSchedule(wmma_config, block_warps, warp_outer))
                                     except NotSupportedError:
                                         pass
             if len(ret) == 0:

@@ -86,7 +86,8 @@ class MatmulMmaSchedule(Schedule):
 
     @staticmethod
     def schedules(task: BatchMatmulTask, space_level: int):
-        ta, tb = task.attributes['ta'], task.attributes['tb']
+        # ta, tb = task.attributes['ta'], task.attributes['tb']
+        ta, tb = False, False
         if ta or tb:
             raise NotImplementedError()
 
@@ -203,9 +204,9 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, sch: MatmulMm
         smem_c = tensor_pointer_var('smem_c', dtype=c_dtype, layout=sch.smem_c_layout)
         smem_storage = tensor_var('smem_storage', shape=[sch.smem_storage_nbytes], dtype='uint8')
         fb += DeclareStmt(smem_storage, scope=Scope.Shared)
-        fb += AssignStmt(smem_a, ~smem_storage[0])
-        fb += AssignStmt(smem_b, ~smem_storage[smem_a.type.tensor_type.storage_bytes()])
-        fb += AssignStmt(smem_c, ~smem_storage[0])
+        fb += DeclareStmt(smem_a, init=cast(~smem_storage[0], ~a_dtype))
+        fb += DeclareStmt(smem_b, init=cast(~smem_storage[smem_a.type.tensor_type.storage_bytes()], ~b_dtype))
+        fb += DeclareStmt(smem_c, init=cast(~smem_storage[0], ~c_dtype))
 
         regs_a = tensor_var('regs_a', dtype=a_dtype, layout=sch.regs_a_layout)
         regs_b = tensor_var('regs_b', dtype=b_dtype, layout=sch.regs_b_layout)
