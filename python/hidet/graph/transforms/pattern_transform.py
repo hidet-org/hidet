@@ -32,8 +32,10 @@ class PatternTransformPass(GraphPass):
             updated, graph = self.try_transform(graph, graph_patterns)
             graph = fold_const.process_graph(graph)
             if not updated:
+                graph.update_nodes()
                 return graph
         print('Exceeded maximum number of transforms {}, stop early.'.format(self.max_num_transforms))
+        graph.update_nodes()
         return graph
 
     @staticmethod

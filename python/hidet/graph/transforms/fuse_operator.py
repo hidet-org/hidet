@@ -201,6 +201,11 @@ def sanity_check_partition(graph: FlowGraph, partition: List[FusibleGraph], belo
 
 
 def partition_graph(graph: FlowGraph, usage: Usage) -> List[FusibleGraph]:
+    if graph.nodes is None:
+        # graph.nodes is the cache of operators in the traced graph of graph.outputs.
+        # some pass will invalidate the cache, so we need to re-trace the graph.
+        graph.update_nodes()
+
     belong: Dict[Operator, FusibleGraph] = {}
 
     # first, we find all non-injective operators as the anchor operators,

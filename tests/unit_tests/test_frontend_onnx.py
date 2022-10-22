@@ -27,10 +27,10 @@ def check_model(model_path: str, input_names: List[str], input_tensors: List[Ten
         symbol_outputs = hidet_model(*symbol_inputs)
         graph = hidet.trace_from(symbol_outputs, symbol_inputs)
         if mode == 'opt':
-            model_name = os.path.splitext(os.path.basename(model_path))[0]
-            out_dir = os.path.join('./outs/', model_name)
+            # model_name = os.path.splitext(os.path.basename(model_path))[0]
+            # out_dir = os.path.join('./outs/', model_name)
             with hidet.graph.PassContext() as ctx:
-                ctx.save_graph_instrument(out_dir)
+                # ctx.save_graph_instrument(out_dir)
                 graph = hidet.graph.optimize(graph)
         hidet_outputs = graph(*hidet_inputs)
     else:

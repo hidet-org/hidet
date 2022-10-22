@@ -4,7 +4,7 @@ import pytest
 
 import hidet as hi
 from hidet import ops
-from hidet.testing.check import check_unary
+from hidet.testing import check_unary
 from hidet.utils import prod
 
 
