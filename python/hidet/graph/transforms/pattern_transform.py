@@ -27,6 +27,8 @@ class PatternTransformPass(GraphPass):
     def process_graph(self, graph: FlowGraph) -> FlowGraph:
         graph = functors.clone(graph)
         graph_patterns = all_graph_patterns()
+        # from .graph_patterns.matmul_patterns import TwoMatmulFusionPattern
+        # graph_patterns = [TwoMatmulFusionPattern()]
         fold_const = fold_const_pass()
         for t in range(self.max_num_transforms):
             updated, graph = self.try_transform(graph, graph_patterns)

@@ -4,42 +4,6 @@ from hidet.graph.ir.flow_graph import Operator, Tensor
 from .base import GraphPattern, TensorPattern, OperatorPattern, MatchDict
 
 
-# class GraphConstructor:
-#     """
-#     Construct the new subgraph according the matched subgraph and target graph.
-#     """
-#     def __init__(self, matched):
-#         self.memo = {}
-#         self.matched = matched
-#         self.new_operators = []
-#
-#     def visit(self, obj: Union[TensorPattern, OperatorPattern]):
-#         if obj in self.memo:
-#             return self.memo[obj]
-#         if isinstance(obj, OperatorPattern):
-#             ret = self.visit_OperatorPattern(obj)
-#         elif isinstance(obj, TensorPattern):
-#             ret = self.visit_TensorPattern(obj)
-#         else:
-#             raise ValueError()
-#         self.memo[obj] = ret
-#         return ret
-#
-#     def visit_TensorPattern(self, t: TensorPattern) -> Tensor:
-#         if t.trace is None:
-#             # input in pattern
-#             return self.matched[t]
-#         else:
-#             op, idx = t.trace
-#             return self.visit(op).get_output(idx)
-#
-#     def visit_OperatorPattern(self, t: OperatorPattern) -> Operator:
-#         inputs = [self.visit(x) for x in t.inputs]
-#         op = t.op_cls(*inputs)
-#         self.new_operators.append(op)
-#         return op
-
-
 class ArithmaticGraphPattern(GraphPattern):
     def __init__(self, name, fsrc, fdst):
         super().__init__(name)
