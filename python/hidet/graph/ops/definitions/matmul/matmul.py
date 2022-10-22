@@ -51,7 +51,7 @@ class MatmulTask(Task):
             )
         )
         super().__init__(
-            name='generic_matmul',
+            name='matmul',
             inputs=[a, b],
             outputs=[c]
         )

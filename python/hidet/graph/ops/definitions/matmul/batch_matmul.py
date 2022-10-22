@@ -49,7 +49,7 @@ class BatchMatmulTask(Task):
 
 
 class BatchMatmulOp(Operator):
-    def __init__(self, a: Tensor, b: Tensor, algo, mma: str = 'simt'):
+    def __init__(self, a: Tensor, b: Tensor, mma: str = 'simt'):
         if not (len(a.shape) == len(b.shape) == 3 and a.shape[0] == b.shape[0] and a.shape[2] == b.shape[1]):
             raise ValueError('Matrix multiplication expect tensor A and B with shape [B, M, K] and [B, K, N]' +
                              ', got {} and {}'.format(a.shape, b.shape))
@@ -58,7 +58,6 @@ class BatchMatmulOp(Operator):
             inputs=[a, b],
             task=task,
             attributes={
-                'algo': algo,
                 'mma': mma
             }
         )
@@ -94,54 +93,3 @@ def batch_matmul(a: Tensor, b: Tensor, mma: str = 'simt') -> Tensor:
         The result tensor of matrix multiplication.
     """
     return BatchMatmulOp(a, b, mma).get_output(0)
-
-    # if len(a.shape) < 2 or len(b.shape) < 2:
-    #     raise ValueError('Current only support matrix multiplication with two matrices whose rank >= 2.')
-    #
-    # if len(a.shape) == 2 and len(b.shape) == 2:
-    #     if ta:
-    #         aa = a.transpose([-1, -2]).barrier().transpose([-1, -2])
-    #     else:
-    #         aa = a
-    #     if tb:
-    #         bb = b.transpose([-1, -2]).barrier().transpose([-1, -2])
-    #     else:
-    #         bb = b
-    #     aa = aa.unsqueeze(0)
-    #     bb = bb.unsqueeze(0)
-    #     cc = batch_matmul_internal(aa, bb, algo, mma, ta, tb, tc)
-    #     cc = cc.squeeze(0)
-    #     if tc:
-    #         cc = cc.transpose([-1, -2]).barrier().transpose([-1, -2])
-    #     return cc
-    # else:
-    #     if ta:
-    #         aa = a.transpose([-1, -2]).barrier().transpose([-1, -2])
-    #     else:
-    #         aa = a
-    #     if tb:
-    #         bb = b.transpose([-1, -2]).barrier().transpose([-1, -2])
-    #     else:
-    #         bb = b
-    #     stack_shape = broadcast_shape(aa.shape[:-2], bb.shape[:-2])
-    #     aa = broadcast(aa, shape=stack_shape + a.shape[-2:]).flatten(end_dim=-2)
-    #     bb = broadcast(bb, shape=stack_shape + b.shape[-2:]).flatten(end_dim=-2)
-    #     cc = batch_matmul_internal(aa, bb, algo, mma, ta, tb, tc)
-    #     if tc:
-    #         cc = cc.transpose([-1, -2]).barrier().transpose([-1, -2])
-    #     return cc
-
-
-# def batch_matmul_internal(a: Tensor, b: Tensor, algo: str = 'default', mma: str = 'default', ta=True, tb=False, tc=False) -> Tensor:
-#     mma_candidates = [
-#         'default', 'simt', 'wmma', 'mma',
-#         'wmma_f16_f16', 'wmma_f16_f32', 'wmma_bf16_f32', 'wmma_tf32_f32',
-#         'mma_f16_f16', 'mma_f16_f32', 'mma_bf16_f32', 'mma_tf32_f32',
-#         'mma_custom'
-#     ]
-#     algo_candidates = ['default', 'direct', 'parallel_k']
-#     if mma not in mma_candidates:
-#         raise ValueError('Can not recognize mma {}, candidates: {}'.format(mma, mma_candidates))
-#     if algo not in algo_candidates:
-#         raise ValueError('Can not recognize algorithm {}, candidates: {}'.format(algo, algo_candidates))
-#     return BatchMatmulOp(a, b, algo, mma, ta, tb, tc).get_output(0)

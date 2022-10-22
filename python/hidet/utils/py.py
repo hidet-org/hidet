@@ -240,7 +240,7 @@ def same_list(lhs, rhs, use_equal=False):
     if len(lhs) != len(rhs):
         return False
     for l, r in zip(lhs, rhs):
-        if use_equal:
+        if use_equal or (isinstance(l, int) and isinstance(r, int)):
             if l != r:
                 return False
         else:
