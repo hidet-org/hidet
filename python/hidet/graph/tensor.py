@@ -51,7 +51,8 @@ class Tensor:
         The storage of the tensor. None indicates it is a symbolic tensor.
 
     trace: Optional[Tuple[Operator, int]]
-        Where this tensor is derived from. A trace = (op, i) indicates that this tensor is the i-th output of the op operator.
+        Where this tensor is derived from. A trace = (op, i) indicates that this tensor is the i-th output of the op
+        operator.
     """
 
     def __init__(self,
@@ -59,7 +60,7 @@ class Tensor:
                  dtype: str,
                  device: str,
                  storage: Optional[Storage],
-                 layout: DataLayout = None,
+                 layout: Optional[DataLayout] = None,
                  trace: Optional[Tuple['Operator', int]] = None):
         from hidet.graph.operator import Operator
         self.shape: List[int] = [int(v) for v in shape]
@@ -221,7 +222,8 @@ class Tensor:
     def scalar(self) -> Union[float, int]:
         """Get the scalar value.
 
-        If a tensor has shape ``[]`` (i.e., rank = 0), this tensor is a scalar. This function get the value of this tensor.
+        If a tensor has shape ``[]`` (i.e., rank = 0), this tensor is a scalar. This function get the value of this
+        tensor.
 
         Returns
         -------
@@ -504,7 +506,8 @@ class Tensor:
             return self
         else:
             if self.trace is None:
-                return Tensor(self.shape, self.dtype, 'cuda', self.storage.cuda() if self.storage else None, self.layout)
+                return Tensor(self.shape, self.dtype, 'cuda', self.storage.cuda() if self.storage else None,
+                              self.layout)
             else:
                 raise ValueError('Please use .detach() to detach a trace variable first.')
 
@@ -577,8 +580,8 @@ class Tensor:
             return self
         else:
             if self.trace is None:
-                ret = Tensor(self.shape, self.dtype, 'cpu', self.storage.cpu_async(stream) if self.storage else None, self.layout)
-                # ret._ref = self  # prevent the storage of self tensor from being freed before the async copy is finished
+                ret = Tensor(self.shape, self.dtype, 'cpu', self.storage.cpu_async(stream) if self.storage else None,
+                             self.layout)
                 return ret
             else:
                 raise ValueError('Please use .detach() to detach a trace variable first.')
@@ -601,8 +604,8 @@ class Tensor:
             return self
         else:
             if self.trace is None:
-                ret = Tensor(self.shape, self.dtype, 'cuda', self.storage.cuda_async(stream) if self.storage else None, self.layout)
-                # ret._ref = self  # prevent the storage of self tensor from being freed before the async copy is finished
+                ret = Tensor(self.shape, self.dtype, 'cuda', self.storage.cuda_async(stream) if self.storage else None,
+                             self.layout)
                 return ret
             else:
                 raise ValueError('Please use .detach() to detach a trace variable first.')
@@ -611,7 +614,8 @@ class Tensor:
         """
         Convert the tensor to a numpy array.
 
-        If this is a cpu tensor and share_mem is True, the numpy array will share the memory with the tensor when possible.
+        If this is a cpu tensor and share_mem is True, the numpy array will share the memory with the tensor when
+        possible.
 
         Parameters
         ----------
@@ -687,7 +691,7 @@ def empty(shape, dtype: str = 'float32', device: str = 'cuda', layout: Optional[
     return Tensor(shape, dtype, device, storage, layout)
 
 
-def symbol(shape: Sequence[int], dtype: str = 'float32', device: str = 'cuda', layout: Optional[DataLayout] = None) -> Tensor:
+def symbol(shape: Sequence[int], dtype='float32', device='cuda', layout=None) -> Tensor:
     """Create a symbolic tensor.
 
     Parameters
@@ -774,7 +778,8 @@ def ones(shape, dtype='float32', device='cuda', layout=None) -> Tensor:
             f32_tensor = ones(shape, 'float32', device, layout)
             return f32_tensor.cast(dtype)
         else:
-            raise NotImplementedError('Not implemented ones for dtype {}, please create a float32 tensor and cast to this type'.format(dtype))
+            raise NotImplementedError(
+                'Not implemented ones for dtype {}, please create a float32 tensor and cast to this type'.format(dtype))
 
 
 def full(shape, fill_value, dtype='float32', device='cuda', layout=None) -> Tensor:
@@ -869,7 +874,8 @@ def _tensor_like(constructor, data, shape, dtype, device, layout):
     return constructor(shape=shape, dtype=dtype, device=device, layout=layout)
 
 
-def empty_like(data: Tensor, shape: Optional[Sequence[int]] = None, dtype: Optional[str] = None, device: Optional[str] = None, layout: Optional[DataLayout] = None) -> Tensor:
+def empty_like(data: Tensor, shape: Optional[Sequence[int]] = None, dtype: Optional[str] = None,
+               device: Optional[str] = None, layout: Optional[DataLayout] = None) -> Tensor:
     return _tensor_like(empty, data, shape, dtype, device, layout)
 
 
@@ -901,24 +907,29 @@ def symbol_like(data: Tensor, shape=None, dtype=None, device=None, layout=None):
     return _tensor_like(symbol, data, shape, dtype, device, layout)
 
 
-def zeros_like(data: Tensor, shape: Optional[Sequence[int]] = None, dtype: Optional[str] = None, device: Optional[str] = None, layout: Optional[DataLayout] = None) -> Tensor:
+def zeros_like(data: Tensor, shape: Optional[Sequence[int]] = None, dtype: Optional[str] = None,
+               device: Optional[str] = None, layout: Optional[DataLayout] = None) -> Tensor:
     return _tensor_like(zeros, data, shape, dtype, device, layout)
 
 
-def ones_like(data: Tensor, shape: Optional[Sequence[int]] = None, dtype: Optional[str] = None, device: Optional[str] = None, layout: Optional[DataLayout] = None) -> Tensor:
+def ones_like(data: Tensor, shape: Optional[Sequence[int]] = None, dtype: Optional[str] = None,
+              device: Optional[str] = None, layout: Optional[DataLayout] = None) -> Tensor:
     return _tensor_like(ones, data, shape, dtype, device, layout)
 
 
-def full_like(data: Tensor, fill_value, shape: Optional[Sequence[int]] = None, dtype: Optional[str] = None, device: Optional[str] = None,
+def full_like(data: Tensor, fill_value, shape: Optional[Sequence[int]] = None, dtype: Optional[str] = None,
+              device: Optional[str] = None,
               layout: Optional[DataLayout] = None) -> Tensor:
     return _tensor_like(partial(full, fill_value=fill_value), data, shape, dtype, device, layout)
 
 
-def randn_like(data: Tensor, shape: Optional[Sequence[int]] = None, dtype: Optional[str] = None, device: Optional[str] = None, layout: Optional[DataLayout] = None) -> Tensor:
+def randn_like(data: Tensor, shape: Optional[Sequence[int]] = None, dtype: Optional[str] = None,
+               device: Optional[str] = None, layout: Optional[DataLayout] = None) -> Tensor:
     return _tensor_like(randn, data, shape, dtype, device, layout)
 
 
-def randint_like(data: Tensor, low: int, high: Optional[int] = None, shape: Optional[Sequence[int]] = None, dtype: Optional[str] = None, device: Optional[str] = None,
+def randint_like(data: Tensor, low: int, high: Optional[int] = None, shape: Optional[Sequence[int]] = None,
+                 dtype: Optional[str] = None, device: Optional[str] = None,
                  layout: Optional[DataLayout] = None):
     return _tensor_like(partial(randint, low=low, high=high), data, shape, dtype, device, layout)
 

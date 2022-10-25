@@ -1,10 +1,10 @@
-from typing import Any, Union, Sequence, List
+from typing import Union, Sequence, List
 
 import torch
 from torch import autograd
+from torch.autograd.function import FunctionCtx
 from hidet import ops, jit
 from hidet.graph.tensor import from_torch, Tensor
-from torch.autograd.function import FunctionCtx, Function
 
 
 @jit(opt=True)
@@ -42,16 +42,3 @@ class Conv2d(autograd.Function):
     @staticmethod
     def backward(ctx: FunctionCtx, grad_output: torch.Tensor):
         raise NotImplementedError()
-
-
-if __name__ == '__main__':
-    data: torch.Tensor = torch.randn([1, 3, 12, 12]).cuda()
-    weight = torch.randn([1, 3, 3, 3]).cuda()
-    data.requires_grad = True
-    weight.requires_grad = True
-    output: torch.Tensor = Conv2d.apply(data, weight, 1, 0)
-    s = output.sum()
-    print(data)
-    print(weight)
-    print(output)
-    s.backward()

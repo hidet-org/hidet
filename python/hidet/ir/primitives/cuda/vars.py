@@ -65,4 +65,3 @@ threadIdx = dim3(thread_idx('x'), thread_idx('y'), thread_idx('z'))
 blockIdx = dim3(block_idx('x'), block_idx('y'), block_idx('z'))
 blockDim = dim3(block_dim('x'), block_dim('y'), block_dim('z'))
 gridDim = dim3(grid_dim('x'), grid_dim('y'), grid_dim('z'))
-

@@ -1,7 +1,8 @@
 from typing import Union, Sequence
 from hidet.ir.expr import convert
 
-from .utils import Task, Operator, Tensor, TensorNode, compute, reduce, inline_compute, input_like, normalize_stride, normalize_kernel, normalize_padding
+from .utils import Task, Operator, Tensor, TensorNode, compute, reduce, input_like, normalize_stride, normalize_kernel
+from .utils import normalize_padding
 
 
 class Pool2dTask(Task):
@@ -17,7 +18,8 @@ class Pool2dTask(Task):
         pad = compute(
             name='pad',
             shape=[batch_size, channels, height + 2 * padding[0], width + 2 * padding[1]],
-            fcompute=lambda n, c, h, w: x.protect_read(indices=[n, c, h - padding[0], w - padding[1]], default_value=pad_value)
+            fcompute=lambda n, c, h, w: x.protect_read(indices=[n, c, h - padding[0], w - padding[1]],
+                                                       default_value=pad_value)
         )
         y = compute(
             name='y',
@@ -28,7 +30,6 @@ class Pool2dTask(Task):
                 reduce_type=reduce_type
             )
         )
-        y = inline_compute(y)
         super().__init__(
             name='{}_pool2d'.format(reduce_type),
             inputs=[x],
@@ -38,14 +39,14 @@ class Pool2dTask(Task):
 
 class MaxPool2dOp(Operator):
     def __init__(self,
-                 input: Tensor,
+                 x: Tensor,
                  kernel: Union[int, Sequence[int]],
                  stride: Union[int, Sequence[int]],
                  padding: Union[int, Sequence[int]]
                  ):
         super().__init__(
-            inputs=[input],
-            task=Pool2dTask(input_like(input, 'x'), kernel, stride, padding, reduce_type='max'),
+            inputs=[x],
+            task=Pool2dTask(input_like(x, 'x'), kernel, stride, padding, reduce_type='max'),
             attributes={
                 'kernel': kernel,
                 'stride': stride,
@@ -56,14 +57,14 @@ class MaxPool2dOp(Operator):
 
 class AvgPool2dOp(Operator):
     def __init__(self,
-                 input: Tensor,
+                 x: Tensor,
                  kernel: Union[int, Sequence[int]],
                  stride: Union[int, Sequence[int]],
                  padding: Union[int, Sequence[int]]
                  ):
         super().__init__(
-            inputs=[input],
-            task=Pool2dTask(input_like(input, 'x'), kernel, stride, padding, reduce_type='avg'),
+            inputs=[x],
+            task=Pool2dTask(input_like(x, 'x'), kernel, stride, padding, reduce_type='avg'),
             attributes={
                 'kernel': kernel,
                 'stride': stride,
@@ -72,9 +73,9 @@ class AvgPool2dOp(Operator):
         )
 
 
-def max_pool2d(input: Tensor, kernel, stride, padding) -> Tensor:
-    return MaxPool2dOp(input, kernel, stride, padding).get_output(0)
+def max_pool2d(x: Tensor, kernel, stride, padding) -> Tensor:
+    return MaxPool2dOp(x, kernel, stride, padding).get_output(0)
 
 
-def avg_pool2d(input: Tensor, kernel, stride, padding) -> Tensor:
-    return AvgPool2dOp(input, kernel, stride, padding).get_output(0)
+def avg_pool2d(x: Tensor, kernel, stride, padding) -> Tensor:
+    return AvgPool2dOp(x, kernel, stride, padding).get_output(0)

@@ -10,7 +10,8 @@ Ints = Union[int, List[int], Tuple[int]]
 
 
 class BasicConv2d(nn.Module):
-    def __init__(self, in_channels: int, out_channels: int, kernel_size: Ints, padding: Ints = 0, stride: Ints = 1, groups: int = 1) -> None:
+    def __init__(self, in_channels: int, out_channels: int, kernel_size: Ints, padding: Ints = 0, stride: Ints = 1,
+                 groups: int = 1) -> None:
         super().__init__()
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, padding, stride, groups)
         self.bn = nn.BatchNorm2d(out_channels, eps=0.001)
@@ -226,7 +227,8 @@ class InceptionV3(nn.Module):
         return self.blocks(x)
 
 
-def basic_conv2d(batch_size, in_channels, height, width, out_channels, kernel_size, padding, stride, groups) -> Tuple[nn.Module, List[Tensor]]:
+def basic_conv2d(batch_size, in_channels, height, width, out_channels, kernel_size, padding, stride,
+                 groups) -> Tuple[nn.Module, List[Tensor]]:
     inputs = [hidet.randn([batch_size, in_channels, height, width])]
     model = BasicConv2d(in_channels, out_channels, kernel_size, padding, stride, groups)
     return model, inputs

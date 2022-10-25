@@ -3,7 +3,8 @@ import os
 import subprocess
 
 
-def export_transformer_model_as_onnx(model_name: str, output_path: str, precision='float32', feature='default', skip_exists=True):
+def export_transformer_model_as_onnx(model_name: str, output_path: str, precision='float32', feature='default',
+                                     skip_exists=True):
     """
     Export a model from transformers package.
 
@@ -20,8 +21,8 @@ def export_transformer_model_as_onnx(model_name: str, output_path: str, precisio
 
     Examples
     --------
-    Call export_transformer_model_as_onnx() will download (when needed) the requested model and export it to an onnx model.
-    The function will return '{output_dir}/bert-base-uncased.onnx', which can be load by onnx package.
+    Call export_transformer_model_as_onnx() will download (when needed) the requested model and export it to an onnx
+    model. The function will return '{output_dir}/bert-base-uncased.onnx', which can be load by onnx package.
     """
     assert precision == 'float32'
     if skip_exists and os.path.exists(output_path):

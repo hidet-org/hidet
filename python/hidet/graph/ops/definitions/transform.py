@@ -1,8 +1,6 @@
 from typing import List, Optional, Union, Sequence
-import functools
-
-from hidet.ir.expr import Expr, And, if_then_else, convert, Equal
-from hidet.ir.layout import DataLayout, RowMajorLayout, ColumnMajorLayout
+from hidet.ir.expr import And, if_then_else, convert
+from hidet.ir.layout import RowMajorLayout, ColumnMajorLayout
 from hidet.ir.utils import index_deserialize, index_serialize
 from hidet.utils import prod
 from .utils import Task, InverseMap, Operator, Tensor, TensorNode, compute, input_like, normalize_dim
@@ -15,7 +13,7 @@ def same_shape(shape_a: List[int], shape_b: List[int]) -> bool:
 class ReshapeTask(Task):
     def __init__(self, x: TensorNode, y_shape: List[int]):
         x_shape = x.const_shape()
-        if not prod(x_shape) == prod(y_shape):
+        if prod(x_shape) != prod(y_shape):
             raise ValueError('Can not reshape {} to {} because they have different number '
                              'of elements: {} vs {}'.format(x_shape, y_shape, prod(x_shape), prod(y_shape)))
         if not isinstance(x.data_type.layout, RowMajorLayout):
@@ -93,14 +91,14 @@ class RearrangeTask(Task):
                 if len(dims) == 0:
                     # this new dimension has size 1
                     continue
-                else:
-                    split_indices = index_split(total_index=y_index, dim_sizes=[x_shape[k] for k in dims])
-                    for j, x_index in zip(dims, split_indices):
-                        x_indices[j] = x_index
+                split_indices = index_split(total_index=y_index, dim_sizes=[x_shape[k] for k in dims])
+                for j, x_index in zip(dims, split_indices):
+                    x_indices[j] = x_index
             for i, x_index in enumerate(x_indices):
                 if x_index is None:
                     if x_shape[i] != 1:
-                        msg = 'Rearrange plan {} on tensor {} leave non-one dimension {} not been accessed'.format(plan, x_shape, i)
+                        msg = 'Rearrange plan {} on tensor {} leave non-one dimension {} not been accessed'.format(
+                            plan, x_shape, i)
                         raise ValueError(msg)
                     else:
                         x_indices[i] = 0
@@ -138,15 +136,16 @@ class ConcatTask(Task):
             if len(shapes[0]) != len(shapes[i]):
                 raise ValueError('Concat: all shapes must have the same rank, got {}'.format(shapes))
             if any(a != b for j, (a, b) in enumerate(zip(shapes[0], shapes[i])) if j != axis):
-                raise ValueError('Concat: all tensors must have the same shape except axis dimension, got {}, axis {}'.format(shapes, axis))
+                raise ValueError('Concat: all tensors must have the same shape except axis dimension, '
+                                 'got {}, axis {}'.format(shapes, axis))
         rank = len(shapes[0])
         out_shape = [shapes[0][i] if i != axis else sum(shapes[j][i] for j in range(n)) for i in range(rank)]
 
         def fmap(*indices):
-            pre_sum = [sum([shapes[j][axis] for j in range(i)]) for i in range(n + 1)]
+            pre_sum = [sum(shapes[j][axis] for j in range(i)) for i in range(n + 1)]
             value = inputs[-1][indices[:axis] + (indices[axis] - pre_sum[-2],) + indices[axis + 1:]]
-            for i, input in reversed(list(zip(range(n - 1), inputs[:n - 1]))):
-                input_i_value = inputs[i][indices[:axis] + (indices[axis] - pre_sum[i],) + indices[axis + 1:]]
+            for i, inp in reversed(list(zip(range(n - 1), inputs[:n - 1]))):
+                input_i_value = inp[indices[:axis] + (indices[axis] - pre_sum[i],) + indices[axis + 1:]]
                 value = if_then_else(indices[axis] < pre_sum[i + 1], input_i_value, value)
             return value
 
@@ -172,7 +171,8 @@ class TakeTask(Task):
 
         def fmap(*output_indices):
             indices_indices = output_indices[axis: axis + len(indices_shape)]
-            data_indices = output_indices[:axis] + (indices[indices_indices],) + output_indices[axis + len(indices_shape):]
+            data_indices = (output_indices[:axis] + (indices[indices_indices],)
+                            + output_indices[axis + len(indices_shape):])
             return data[data_indices]
 
         output = compute(
@@ -188,7 +188,8 @@ class TakeTask(Task):
 
 
 class StridedSliceTask(Task):
-    def __init__(self, data: TensorNode, starts: List[Optional[int]], ends: List[Optional[int]], axes: List[int], strides: List[int]):
+    def __init__(self, data: TensorNode, starts: List[Optional[int]], ends: List[Optional[int]], axes: List[int],
+                 strides: List[int]):
         assert len(starts) == len(ends) == len(axes) == len(strides)
         if len(axes) != len(set(axes)):
             raise ValueError('Duplicated axes in slice, axes: {}'.format(axes))
@@ -197,20 +198,22 @@ class StridedSliceTask(Task):
         axis2info = {}
         for axis, start, end, stride in zip(axes, starts, ends, strides):
             if stride == 0:
-                raise NotImplementedError('Stride can not be 0 in slicing: starts {} ends {} axes {} strides {}.'.format(starts, ends, axes, strides))
+                raise NotImplementedError('Stride can not be 0 in slicing: '
+                                          'starts {} ends {} axes {} strides {}.'.format(starts, ends, axes, strides))
             if stride > 0:
                 output_shape[axis] = (end - start + stride - 1) // stride
             else:
                 output_shape[axis] = (start - end + (-stride) - 1) // (-stride)
             if output_shape[axis] <= 0:
-                raise NotImplementedError('Slice result can not be: starts {} ends {} axes {} strides {}'.format(starts, ends, axes, strides))
+                raise NotImplementedError('Slice result can not be: '
+                                          'starts {} ends {} axes {} strides {}'.format(starts, ends, axes, strides))
             axis2info[axis] = (start, end, stride)
 
         def fmap(indices):
             data_indices = []
             for axis, index in enumerate(indices):
                 if axis in axis2info:
-                    start, end, stride = axis2info[axis]
+                    start, _, stride = axis2info[axis]
                     data_indices.append(start + index * stride)
                 else:
                     data_indices.append(index)
@@ -233,7 +236,7 @@ def can_broadcast(src_shape: List[int], dst_shape: List[int]) -> bool:
         return False
     src_shape = [1 for _ in range(len(dst_shape) - len(src_shape))] + src_shape
     for a, b in zip(src_shape, dst_shape):
-        if a != 1 and a != b:
+        if a not in [1, b]:
             return False
     return True
 
@@ -330,18 +333,21 @@ class ReshapeOp(Operator):
         for i in range(len(shape)):
             if shape[i] == 0:
                 if i >= len(origin_shape):
-                    raise ValueError('0 is used outside original shape: origin {} target {}'.format(origin_shape, shape))
+                    raise ValueError('0 is used outside original shape: '
+                                     'origin {} target {}'.format(origin_shape, shape))
                 shape[i] = origin_shape[i]
         size = prod(origin_shape)
-        cnt = sum([1 for v in shape if v == -1])
+        cnt = sum(1 for v in shape if v == -1)
         if cnt == 0:
             if prod(shape) != size:
-                raise ValueError('Reshape: given shape has different size with input tensor: shape {} and size {}'.format(shape, size))
+                raise ValueError('Reshape: given shape has different size with input tensor: '
+                                 'shape {} and size {}'.format(shape, size))
             return shape
         elif cnt == 1:
             remain_size = prod([v for v in shape if v != -1])
             if size % remain_size != 0:
-                raise ValueError('Given shape is incompatible with input tensor: shape {} and size {}'.format(shape, size))
+                raise ValueError('Given shape is incompatible with input tensor: '
+                                 'shape {} and size {}'.format(shape, size))
             return [v if v != -1 else size // remain_size for v in shape]
         else:
             raise ValueError('Can not infer the shape when there are multiple -1: {}'.format(shape))
@@ -433,7 +439,9 @@ class FlattenOp(Operator):
 class TransposeOp(Operator):
     def __init__(self, x: Tensor, axes: Optional[List[int]] = None):
         if axes and len(axes) != len(x.shape):
-            raise ValueError('Transpose tensor with shape {} expect a permutation of axes with length {}, got {}'.format(x.shape, len(x.shape), axes))
+            msg = 'Transpose tensor with shape {} expect a permutation of axes with length {}, got {}'.format(
+                x.shape, len(x.shape), axes)
+            raise ValueError(msg)
         if axes is None:
             axes = list(reversed(range(len(x.shape))))
         plan = [[v] for v in axes]
@@ -488,7 +496,8 @@ class TakeOp(Operator):
 
 
 class StridedSliceOp(Operator):
-    def __init__(self, data: Tensor, starts: List[int], ends: List[int], axes: Optional[List[int]] = None, strides: Optional[List[int]] = None):
+    def __init__(self, data: Tensor, starts: List[int], ends: List[int], axes: Optional[List[int]] = None,
+                 strides: Optional[List[int]] = None):
         starts, ends, axes, strides = self.normalize(data.shape, starts, ends, axes, strides)
         task = StridedSliceTask(input_like(data, 'data'), starts, ends, axes, strides)
         super().__init__(
@@ -572,20 +581,6 @@ class TileOp(Operator):
         )
 
 
-class OneHotOp(Operator):
-    def __init__(self, x: Tensor, depth: int, axis: int, on_value: Union[int, Expr], off_value: Union[int, Expr]):
-        super().__init__(
-            inputs=[x],
-            task=OneHotTask(input_like(x, 'x'), depth, axis, on_value, off_value),
-            attributes={
-                'depth': depth,
-                'axis': axis,
-                'on_value': on_value,
-                'off_value': off_value
-            }
-        )
-
-
 def reshape(x: Tensor, shape) -> Tensor:
     if same_shape(x.shape, shape):
         return x
@@ -610,9 +605,10 @@ def rearrange(x: Tensor, plan: List[List[int]]) -> Tensor:
 
     Examples
     --------
-    .. squeeze([1, 1, 2, 3], dims=[0, 1]) = rearrange([1, 1, 2, 3], plan=[[2], [3]]) => Tensor([2, 3])
-    .. unsqueeze([2, 3], dims=[0, 1]) = rearrange([2, 3], plan=[[], [], [0], [1]]) => Tensor([1, 1, 2, 3])
-    .. flatten([2, 3, 4, 5], start_dim=1, end_dim=2) = rearrange([2, 3, 4, 5], plan=[[0], [1, 2], [3]]) => Tensor([2, 12, 5])
+    - squeeze([1, 1, 2, 3], dims=[0, 1]) = rearrange([1, 1, 2, 3], plan=[[2], [3]]) => Tensor([2, 3])
+    - unsqueeze([2, 3], dims=[0, 1]) = rearrange([2, 3], plan=[[], [], [0], [1]]) => Tensor([1, 1, 2, 3])
+    - flatten([2, 3, 4, 5], start_dim=1, end_dim=2) = rearrange([2, 3, 4, 5], plan=[[0], [1, 2], [3]]) =>
+      Tensor([2, 12, 5])
     """
     if not isinstance(plan, (list, tuple)) or any(not isinstance(v, (list, tuple)) for v in plan):
         raise ValueError('plan should be List[List[int]], but got: {}'.format(plan))
@@ -673,7 +669,8 @@ def take(data: Tensor, indices: Tensor, axis: int = 0) -> Tensor:
     return TakeOp(data, indices, axis).get_output(0)
 
 
-def strided_slice(data: Tensor, starts: List[int], ends: List[int], axes: Optional[List[int]] = None, strides: Optional[List[int]] = None) -> Tensor:
+def strided_slice(data: Tensor, starts: List[int], ends: List[int], axes: Optional[List[int]] = None,
+                  strides: Optional[List[int]] = None) -> Tensor:
     return StridedSliceOp(data, starts, ends, axes, strides).get_output(0)
 
 

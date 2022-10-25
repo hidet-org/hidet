@@ -9,7 +9,8 @@ from .stmt_builder import StmtBuilder
 
 
 class FunctionBuilder(StmtBuilder):
-    def __init__(self, name: str, kind: str, label: str = "", ret_type=VoidType(), grid_dim=None, block_dim=None, dynamic_smem_bytes=None, min_blocks=None, attrs=None):
+    def __init__(self, name: str, kind: str, label: str = "", ret_type=VoidType(), grid_dim=None, block_dim=None,
+                 dynamic_smem_bytes=None, min_blocks=None, attrs=None):
         super().__init__()
         self.name = name
         self.kind = kind
@@ -54,7 +55,7 @@ class FunctionBuilder(StmtBuilder):
         self.body = body
 
     def finish_func(self):
-        from hidet.ir.primitives.cuda.vars import block_idx, thread_idx
+        from hidet.ir.primitives.cuda.vars import block_idx, thread_idx  # pylint: disable=import-outside-toplevel
         assert self.func is None
         if 'label' not in self.attrs:
             self.attrs['label'] = self.label

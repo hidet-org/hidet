@@ -25,13 +25,11 @@ def func_type_from_task(task: Task) -> FuncType:
     ret: FuncType
         The function type for the given task.
     """
-    from hidet.ir.type import TensorType
-
     param_types: List[TensorType] = [tensor.data_type for tensor in task.parameters]
     return FuncType(param_types=param_types, ret_type=VoidType())
 
 
-def validate_schedule(task: Task, device: str, dummy_inputs: Optional[Sequence] = None, rtol: float = 1e-5, atol: float = 1e-5) -> bool:
+def validate_schedule(task: Task, device: str, dummy_inputs: Optional[Sequence] = None, rtol=1e-5, atol=1e-5) -> bool:
     """
     Validate the correctness of schedule in the given task.
 
@@ -58,6 +56,7 @@ def validate_schedule(task: Task, device: str, dummy_inputs: Optional[Sequence] 
     ret: bool
         Whether the schedule for given device is valid.
     """
+    # pylint: disable=import-outside-toplevel, too-many-locals
     from numpy import allclose
     from hidet.driver import build_ir_module
     from hidet.graph.ops.schedules.cuda.auto_scheduler import CudaAutoScheduler

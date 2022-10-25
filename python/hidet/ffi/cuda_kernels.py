@@ -1,4 +1,4 @@
-from ctypes import c_uint64, c_uint32, c_float, c_uint8, c_int32, c_int64
+from ctypes import c_uint64, c_float, c_int32, c_int64
 from hidet.ffi.ffi import get_func
 
 

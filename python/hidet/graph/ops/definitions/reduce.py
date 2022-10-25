@@ -5,7 +5,8 @@ from .utils import Task, Operator, Tensor, TensorNode, IRModule, compute, reduce
 
 
 class ReduceTask(Task):
-    def __init__(self, x: TensorNode, dims: List[int], keep_dim: bool, reduce_type: str, accumulate_dtype: str = 'float32'):
+    def __init__(self, x: TensorNode, dims: List[int], keep_dim: bool, reduce_type: str,
+                 accumulate_dtype: str = 'float32'):
         x_shape = x.const_shape()
         y_shape = []
         for i in range(len(x_shape)):
@@ -55,6 +56,7 @@ class ReduceTask(Task):
         )
 
     def implement_cuda(self) -> IRModule:
+        # pylint: disable=import-outside-toplevel
         from ..schedules import cuda_schedule_reduce_by_default, cuda_schedule_reduce_by_warp_reduce
         rank = len(self.inputs[0].const_shape())
         if rank - 1 in self.dims:
@@ -63,9 +65,6 @@ class ReduceTask(Task):
         else:
             # last dimension has not been reduced
             return cuda_schedule_reduce_by_default(self)
-
-    def fast_implement(self, space_level: int) -> bool:
-        return True
 
 
 class ArgReduceTask(Task):
@@ -83,7 +82,8 @@ class ArgReduceTask(Task):
             def reduce_fcompute(reduce_index):
                 x_indices = indices[:dim] + (reduce_index,) + indices[dim + (1 if keep_dim else 0):]
                 return x[x_indices]
-            return arg_reduce(extent=x_shape[dim], fcompute=reduce_fcompute, reduce_type=reduce_type, index_dtype='int32')
+            return arg_reduce(extent=x_shape[dim], fcompute=reduce_fcompute, reduce_type=reduce_type,
+                              index_dtype='int32')
 
         y = compute(name='y', shape=y_shape, fcompute=fcompute)
         super().__init__(
@@ -191,4 +191,3 @@ def argmin(x: Tensor, dim: int, keep_dim: bool = False) -> Tensor:
 
 def argmax(x: Tensor, dim: int, keep_dim: bool = False) -> Tensor:
     return ArgMaxOp(x, dim, keep_dim).get_output(0)
-

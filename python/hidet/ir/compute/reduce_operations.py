@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Union
 from hidet.ir.type import ScalarType
-from hidet.ir.expr import Expr, Constant, convert
+from hidet.ir.expr import Expr, Constant
 
 
 class ReduceOperation:
@@ -43,11 +43,11 @@ class Min(ReduceOperation):
         return data_type.max_value()
 
     def combine(self, lhs: Expr, rhs: Expr) -> Expr:
-        from hidet.ir import primitives
+        from hidet.ir import primitives   # pylint: disable=import-outside-toplevel
         return primitives.min(lhs, rhs)
 
     def arg_combine(self, lhs_value: Expr, rhs_value: Expr):
-        from hidet.ir.expr import LessThan
+        from hidet.ir.expr import LessThan  # pylint: disable=import-outside-toplevel
         return LessThan(lhs_value, rhs_value)
 
     def require_finalize(self) -> bool:
@@ -64,11 +64,11 @@ class Max(ReduceOperation):
         return data_type.min_value()
 
     def combine(self, lhs: Expr, rhs: Expr) -> Expr:
-        from hidet.ir import primitives
+        from hidet.ir import primitives  # pylint: disable=import-outside-toplevel
         return primitives.max(lhs, rhs)
 
     def arg_combine(self, lhs_value: Expr, rhs_value: Expr):
-        from hidet.ir.expr import LessThan
+        from hidet.ir.expr import LessThan  # pylint: disable=import-outside-toplevel
         return LessThan(rhs_value, lhs_value)
 
     def require_finalize(self) -> bool:

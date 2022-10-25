@@ -1,6 +1,5 @@
-from typing import Sequence, Tuple, Any
+from typing import Sequence, Tuple, Any, List, Union, Optional
 import enum
-from typing import List, Union, Optional
 from hidet.ir.node import Node
 from hidet.ir.type import ScalarType, PointerType, TensorPointerType, ReferenceType
 from hidet.ir.expr import Var, Expr, convert, Constant
@@ -76,7 +75,7 @@ class ForStmt(Stmt):
     DEFAULT_UNROLL_LIMIT = 32
 
     def __init__(self, loop_var, extent, unroll: Optional[Union[int, bool]] = None, body=None):
-        from hidet.ir.functors import simplify
+        from hidet.ir.functors import simplify  # pylint: disable=import-outside-toplevel
         super().__init__()
         self.loop_var: Var = loop_var
         self.extent: Expr = simplify(convert(extent))
@@ -160,7 +159,7 @@ def asm(
         inputs: Sequence[Any] = (),
         is_volatile=False
 ):
-    from hidet.ir.functors import infer_type
+    from hidet.ir.functors import infer_type    # pylint: disable=import-outside-toplevel
     updated_outputs = []
     updated_inputs = []
 
@@ -202,8 +201,7 @@ def asm(
     for output_input in output_inputs:
         constraint = '+' + get_register_type(output_input)
         updated_outputs.append((constraint, convert(output_input)))
-    for input in inputs:
-        constraint = get_register_type(input)
-        updated_inputs.append((constraint, convert(input)))
+    for x in inputs:
+        constraint = get_register_type(x)
+        updated_inputs.append((constraint, convert(x)))
     return AsmStmt(template, updated_outputs, updated_inputs, is_volatile)
-

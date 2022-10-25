@@ -5,7 +5,7 @@ import logging
 from hashlib import sha256
 from hidet.transforms import lower, PassContext, SaveIRInstrument, ProfileInstrument
 from hidet.backend import codegen, compile_source, load_task_func, load_lib_func
-from hidet.utils import COLORS, hidet_cache_dir
+from hidet.utils import hidet_cache_dir
 from hidet.utils.py import cyan, green
 from hidet.ir.task import Task, TaskContext
 from hidet.ir.func import IRModule
@@ -24,7 +24,10 @@ def disable_cache(disable: bool = False):
     cache_disabled = not disable
 
 
-def build_task(task: Task, space_level: int, target_device: str = 'cuda', warmup: int = 3, number: int = 10, repeat: int = 3, use_cache=True, cache_dir=None, load=True):
+def build_task(task: Task, space_level: int, target_device: str = 'cuda',
+               warmup: int = 3, number: int = 10, repeat: int = 3,
+               use_cache=True, cache_dir=None, load=True):
+    # pylint: disable=too-many-arguments, too-many-locals
     task_string: str = str(task)
     compiled_func: Optional[CompiledFunction] = None
 
@@ -36,7 +39,7 @@ def build_task(task: Task, space_level: int, target_device: str = 'cuda', warmup
         # check on-disk cache
         if cache_dir is None:
             cache_dir = os.path.join(hidet_cache_dir(), 'ops')
-        config_str = '{}_space_{}'.format(target_device, space_level)
+        config_str = f'{target_device}_space_{space_level}'
         task_hash = sha256(task_string.encode()).hexdigest()[:16]
         task_dir = os.path.join(cache_dir, config_str, task.name, task_hash)
         src_path = os.path.join(task_dir, 'source.cu')
@@ -44,25 +47,27 @@ def build_task(task: Task, space_level: int, target_device: str = 'cuda', warmup
 
         # use previously generated library when available
         if not cache_disabled and use_cache and os.path.exists(lib_path):
-            logger.debug("Load cached task binary {} from path: \n{}".format(green(task.name), cyan(lib_path)))
+            logger.debug(f"Load cached task binary {green(task.name)} from path: \n{cyan(lib_path)}")
             if load:
                 compiled_func = load_task_func(lib_path, task)
                 compiled_task_cache.add(target_device, space_level, task_string, compiled_func)
         else:
-            logger.info("Compiling task {}{}{}...".format(COLORS.OKGREEN, task.name, COLORS.ENDC))
+            logger.info(f"Compiling task {green(task.name)}...")
             # build from scratch
             os.makedirs(task_dir, exist_ok=True)
             # write task
             with open(os.path.join(task_dir, 'task.txt'), 'w') as f:
                 f.write(task_string)
             # implement task
-            with TaskContext(space_level=space_level, warmup=warmup, number=number, repeat=repeat, resolve_out_dir=task_dir):
+            with TaskContext(space_level, warmup, number, repeat, resolve_out_dir=task_dir):
                 ir_module = task.implement(target=target_device)
             # lower ir module
-            with PassContext(instruments=[
-                                 SaveIRInstrument(out_dir=os.path.join('./outs/ir', task.name, task_hash)),
-                                 ProfileInstrument(log_file=os.path.join('./outs/ir', task.name, task_hash, 'lower_time.txt'))
-                             ]):
+            with PassContext(
+                    instruments=[
+                        SaveIRInstrument(out_dir=os.path.join('./outs/ir', task.name, task_hash)),
+                        ProfileInstrument(log_file=os.path.join('./outs/ir', task.name, task_hash, 'lower_time.txt'))
+                    ]
+            ):
                 ir_module = lower(ir_module)
             # code generation
             codegen(ir_module, src_out_path=src_path)
@@ -80,15 +85,19 @@ def _build_task_job(args):
     build_task(task, space_level, target_device, warmup, number, repeat, use_cache, cache_dir, load)
 
 
-def build_batch_task(tasks: List[Task], space_level: int, target_device: str = 'cuda', warmup: int = 3, number: int = 10, repeat: int = 3, parallel=True, use_cache=True, cache_dir=None):
+def build_batch_task(tasks: List[Task], space_level: int, target_device: str = 'cuda', warmup: int = 3,
+                     number: int = 10, repeat: int = 3, parallel=True, use_cache=True, cache_dir=None):
+    # pylint: disable=too-many-arguments
+    jobs = [(task, space_level, target_device, warmup, number, repeat, use_cache, cache_dir, False) for task in tasks]
     if parallel and len(tasks) > 1:
         with multiprocessing.Pool() as pool:
-            pool.map(_build_task_job, [(task, space_level, target_device, warmup, number, repeat, use_cache, cache_dir, False) for task in tasks])
+            pool.map(_build_task_job, jobs)
     else:
-        map(_build_task_job, [(task, space_level, target_device, warmup, number, repeat, use_cache, cache_dir, False) for task in tasks])
+        map(_build_task_job, jobs)
 
 
-def build_ir_module(ir_module: IRModule, func_name: str, keep_ptx=False, working_dir='./outs', verbose=False, func_type: Optional[FuncType] = None):
+def build_ir_module(ir_module: IRModule, func_name: str, keep_ptx=False, working_dir='./outs', verbose=False,
+                    func_type: Optional[FuncType] = None):
     module_string = str(ir_module)
     module_hash = sha256(module_string.encode()).hexdigest()[:16]
     working_dir = os.path.join(working_dir, 'ir_module', module_hash)
@@ -96,7 +105,7 @@ def build_ir_module(ir_module: IRModule, func_name: str, keep_ptx=False, working
     lib_path = os.path.join(working_dir, 'lib.so')
 
     if verbose:
-        print('Compiling {}'.format(src_path))
+        print(f'Compiling {src_path}')
     # lower ir module
     with PassContext(instruments=[
                          SaveIRInstrument(out_dir=working_dir),

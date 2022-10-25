@@ -1,4 +1,3 @@
-from typing import List, Union, Callable, Any
 from hidet.ir.type import TensorType, tensor_type, PointerType, TensorPointerType
 from hidet.ir.expr import Var, TensorElement, TensorSlice, Constant
 from hidet.ir.stmt import BufferStoreStmt, DeclareStmt

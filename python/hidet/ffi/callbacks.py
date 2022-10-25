@@ -1,7 +1,6 @@
-from typing import Dict, Any
+from typing import Dict
 from ctypes import CFUNCTYPE, c_uint64
 from hidet.ffi.runtime_api import runtime_api
-from hidet.utils import initialize
 
 
 def register_runtime_callback(restype, argtypes):
@@ -20,6 +19,7 @@ runtime_allocated_storages: Dict[int, 'hidet.runtime.storage.Storage'] = {}
 
 @register_runtime_callback(restype=c_uint64, argtypes=[c_uint64])
 def allocate_cuda_storage(nbytes: int) -> int:
+    # pylint: disable=import-outside-toplevel
     from hidet.runtime.storage import Storage
     storage = Storage.new('cuda', nbytes)
     runtime_allocated_storages[storage.addr] = storage
@@ -37,6 +37,7 @@ def free_cuda_storage(addr: int) -> None:
 
 @register_runtime_callback(restype=c_uint64, argtypes=[c_uint64])
 def allocate_cpu_storage(nbytes: int) -> int:
+    # pylint: disable=import-outside-toplevel
     from hidet.runtime.storage import Storage
     storage = Storage.new('cpu', nbytes)
     runtime_allocated_storages[storage.addr] = storage

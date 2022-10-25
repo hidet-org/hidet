@@ -1,6 +1,6 @@
 from hidet.ir.func import IRModule
-from .utils import Task, Operator, Tensor, TensorNode, compute, input_like, normalize_dim, reduce
 from hidet.ir import primitives as prim
+from .utils import Task, Operator, Tensor, TensorNode, compute, input_like, normalize_dim, reduce
 
 
 class SoftmaxTask(Task):
@@ -56,9 +56,6 @@ class SoftmaxTask(Task):
     def implement_cuda(self) -> IRModule:
         from hidet.graph.ops.schedules import softmax_cuda_schedule
         return softmax_cuda_schedule(self)
-
-    def fast_implement(self, space_level: int) -> bool:
-        return True
 
 
 class SoftmaxOp(Operator):

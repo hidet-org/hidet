@@ -1,7 +1,5 @@
-from typing import List, Optional, Dict, Union
-
-from hidet.graph.ir.flow_graph import Operator, Tensor
-from .base import GraphPattern, TensorPattern, OperatorPattern, MatchDict
+from typing import List, Optional
+from .base import GraphPattern, TensorPattern, MatchDict
 
 
 class ArithmaticGraphPattern(GraphPattern):
@@ -37,6 +35,7 @@ def arithmatic_patterns() -> List[GraphPattern]:
         ['x - a => x + (-a)', lambda x, y, a, b: x - a, lambda x, y, a, b: x + (-a)],
         ['(x + a) + b => x + (a + b)', lambda x, y, a, b: (x + a) + b, lambda x, y, a, b: x + (a + b)],
         ['(x + a) * b => x * b + a * b', lambda x, y, a, b: (x + a) * b, lambda x, y, a, b: x * b + a * b],
-        ['(x + a) + (y + b) => (x + y) + (a + b)', lambda x, y, a, b: (x + a) + (y + b), lambda x, y, a, b: (x + y) + (a + b)],
+        ['(x + a) + (y + b) => (x + y) + (a + b)',
+         lambda x, y, a, b: (x + a) + (y + b), lambda x, y, a, b: (x + y) + (a + b)],
     ]
     return [ArithmaticGraphPattern(name, src, tgt) for name, src, tgt in pairs]

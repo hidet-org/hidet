@@ -1,13 +1,13 @@
-from typing import Union, List, Dict, Sequence, Tuple, Set, Optional
+from typing import Union, List, Dict, Sequence, Tuple, Set
 
-from hidet.ir.type import uint8, int32, TensorPointerType, void_pointer, VoidType
-from hidet.ir.expr import TensorElement, Call, Expr, Var, scalar_var, convert, cast, var, tensor_pointer_var
-from hidet.ir.stmt import Stmt, AssignStmt, SeqStmt, ForStmt, DeclareStmt, BufferStoreStmt, ForTaskStmt, EvaluateStmt
+from hidet.ir.type import uint8, int32, TensorPointerType, void_pointer
+from hidet.ir.expr import TensorElement, Expr, Var, scalar_var, convert, cast
+from hidet.ir.stmt import Stmt, AssignStmt, ForStmt, DeclareStmt, BufferStoreStmt
 from hidet.ir.task import Task
 from hidet.ir.func import IRModule, Function
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
-from hidet.ir.functors import ExprRewriter, ExprVisitor, inline_compute, collect, rewrite, infer_type, simplify_to_int
-from hidet.ir.compute import ComputeNode, ScalarNode, TensorNode, GridCompute, ReduceCompute, ArgReduceCompute, TensorCompute
+from hidet.ir.functors import ExprRewriter, ExprVisitor, collect, rewrite, infer_type, simplify_to_int
+from hidet.ir.compute import ScalarNode, TensorNode, GridCompute, ReduceCompute, ArgReduceCompute
 from hidet.ir.primitives.runtime import request_cuda_workspace, request_cpu_workspace
 from hidet.utils import prod, DirectedGraph
 from hidet.utils.namer import Namer
@@ -129,8 +129,11 @@ class AutoScheduler:
         return dag
 
     @staticmethod
-    def plan_memory(dag: DirectedGraph, order: Sequence[TensorNode], require_allocate: Set[TensorNode]) -> Tuple[int, Dict[TensorNode, int]]:
-        from hidet.ir.functors import simplify_to_int
+    def plan_memory(
+            dag: DirectedGraph,                 # pylint: disable=unused-argument
+            order: Sequence[TensorNode],
+            require_allocate: Set[TensorNode]
+    ) -> Tuple[int, Dict[TensorNode, int]]:
         # dag has not been used in this simple plan.
         alignment_bytes: int = 128  # make sure each buffer aligns with 128 bytes
         allocated_bytes: int = 0
@@ -144,7 +147,13 @@ class AutoScheduler:
         return allocated_bytes, buffer_offset
 
     @staticmethod
-    def allocate_tensors(fb: FunctionBuilder, device: str, buffer_bytes: int, buffer_offset: Dict[TensorNode, int], node_map: Dict[TensorNode, Var]):
+    def allocate_tensors(
+            fb: FunctionBuilder,
+            device: str,
+            buffer_bytes: int,
+            buffer_offset: Dict[TensorNode, int],
+            node_map: Dict[TensorNode, Var]
+    ):
         if buffer_bytes > 0:
             buffer = Var('buffer', TensorPointerType(dtype='uint8', shape=[buffer_bytes]))
             if device == 'cuda':
@@ -160,13 +169,13 @@ class AutoScheduler:
             if node in node_map:
                 # this node is either an input or output tensor
                 continue
-            else:
-                assert buffer is not None
-                v = Var(node.name, TensorPointerType.from_tensor_type(node.data_type))
-                node_map[node] = v
-                fb += DeclareStmt(v, init=cast(~buffer[buffer_offset[node]], ~v.type.tensor_type.scalar_type))
+            assert buffer is not None
+            v = Var(node.name, TensorPointerType.from_tensor_type(node.data_type))
+            node_map[node] = v
+            fb += DeclareStmt(v, init=cast(~buffer[buffer_offset[node]], ~v.type.tensor_type.scalar_type))
 
     def schedule_task(self, task: Task, device: str) -> IRModule:
+        # pylint: disable=too-many-locals, unnecessary-comprehension
         # absorb the prologue and epilogue into a single task
         task = task.task_graph.absorb()
 
@@ -273,6 +282,7 @@ class ComputeExprLower(ExprRewriter):
             # declare intermediate tensor buffer
             buf = Var(e.name, e.data_type)
 
+            # pylint: disable=unused-variable
             shape, axes, value = grid_compute.shape, grid_compute.axes, grid_compute.value
             # tensor compute loops
             for i in range(len(shape)):

@@ -1,20 +1,17 @@
 from typing import List, Optional
-import contextlib
 import functools
-import psutil
-import shutil
-import multiprocessing
-from tqdm import tqdm
-import ctypes
 import os
-import subprocess
+import ctypes
+import shutil
 import tempfile
+import subprocess
 from subprocess import PIPE
+import multiprocessing
+import psutil
+from tqdm import tqdm
 
 from hidet.libinfo import get_include_dirs
-from hidet.ir.func import IRModule
 from hidet.ir.type import FuncType
-from hidet.ir.task import Task
 from hidet.transforms import PassContext, lower
 from hidet.runtime import CompiledFunction
 from hidet.ffi import PackedFunc
@@ -38,7 +35,6 @@ class CompilationFailed(Exception):
 
 @functools.lru_cache()
 def nvcc_path() -> str:
-    import shutil
     path: Optional[str] = shutil.which('nvcc')
     if path is not None:
         return path
@@ -66,6 +62,7 @@ def compile_source(src_path: str, out_lib_path: str, keep_ptx=False) -> None:
     keep_ptx: bool, default False
         Whether to keep the ptx code in the same directory of output library.
     """
+    # pylint: disable=too-many-locals
     src_path = os.path.abspath(src_path)
     out_lib_path = os.path.abspath(out_lib_path)
     cc = cuda.query_compute_capability()
@@ -77,7 +74,7 @@ def compile_source(src_path: str, out_lib_path: str, keep_ptx=False) -> None:
 
     cc_code = '{}{}'.format(cc[0], cc[1])
     # The following command compiles the cuda source code to a shared library
-    # See https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html for more information about nvcc compilation options.
+    # See https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html for more information about nvcc compilation.
     command = [
         # the path to nvcc compiler
         nvcc_path(),
@@ -95,7 +92,7 @@ def compile_source(src_path: str, out_lib_path: str, keep_ptx=False) -> None:
         '--compiler-options', "'-fPIC'",
         # embed the line information into the binary, allow Nsight Compute to get the source code for profiling.
         '-lineinfo',
-        # link the hidet runtime library, all APIs for communication between kernels and host system are in hidet runtime.
+        # link the hidet runtime, all APIs for communication between kernels and host system are in hidet runtime.
         '-lhidet_runtime',
         # shared cuda runtime library is used (.so), instead of static one (.a). used to reduce binary size.
         '--cudart', 'shared',
@@ -109,21 +106,20 @@ def compile_source(src_path: str, out_lib_path: str, keep_ptx=False) -> None:
 
     try:
         with tempfile.TemporaryDirectory() as working_dir:
-            result = subprocess.run(" ".join(command).split(), stderr=PIPE, stdout=PIPE, cwd=working_dir)
+            result = subprocess.run(" ".join(command).split(), stderr=PIPE, stdout=PIPE, cwd=working_dir, check=False)
             if result.returncode:
                 message = ''
                 if result.stdout:
                     message += result.stdout.decode().strip() + '\n'
                 if result.stderr:
                     message += result.stderr.decode().strip()
-                if keep_ptx and os.path.exists(os.path.join(working_dir, os.path.basename(src_path).replace('.cu', '.ptx'))):
+                ptx_name = os.path.basename(src_path).replace('.cu', '.ptx')
+                if keep_ptx and os.path.exists(os.path.join(working_dir, ptx_name)):
                     out_lib_dir = os.path.dirname(out_lib_path)
-                    ptx_name = os.path.basename(src_path).replace('.cu', '.ptx')
                     ptx_path = os.path.join(working_dir, ptx_name)
                     target_ptx_path = os.path.join(out_lib_dir, ptx_name)
                     os.rename(ptx_path, target_ptx_path)
                 raise CompilationFailed(src_path, message)
-                # raise Exception('Failed to compile file "{}":\n\n{}'.format(src_path, message))
             out_lib_dir = os.path.dirname(out_lib_path)
             if keep_ptx:
                 ptx_name = os.path.basename(src_path).replace('.cu', '.ptx')
@@ -177,8 +173,7 @@ def load_lib_func(lib_path: str, func_name: str, func_type: FuncType) -> Compile
         os.remove(lib_path)
         raise e
     func_name = 'hidet_{}'.format(func_name)
-    param_types = [param_type for param_type in func_type.param_types]
-    packed_func = PackedFunc(param_types=param_types, c_func_pointer=lib[func_name])
+    packed_func = PackedFunc(param_types=list(func_type.param_types), c_func_pointer=lib[func_name])
     return CompiledFunction(name=func_name, packed_func=packed_func)
 
 
@@ -223,6 +218,7 @@ def build_ir_module_job(build_instance: BuildInstance) -> Optional[str]:
     lib_path: str
         The path to the built dynamic linked library.
     """
+    # pylint: disable=import-outside-toplevel
     from hidet.transforms.instruments import SaveIRInstrument
     src_path = os.path.join(build_instance.output_dir, 'source.cu')
     lib_path = os.path.join(build_instance.output_dir, 'lib.so')
@@ -279,12 +275,14 @@ def batch_build_ir_modules(build_instances, parallel=True, verbose=False) -> Lis
             mem_for_worker = 1.5 * 1024 * 1024 * 1024  # 1.5 GiB
             num_workers = min(max(int(psutil.virtual_memory().available // mem_for_worker), 1), psutil.cpu_count())
             with multiprocessing.Pool(processes=num_workers) as pool:
-                for lib_path in tqdm(pool.imap(build_ir_module_job, build_instances), desc='Compiling', total=len(build_instances), disable=not verbose):
+                for lib_path in tqdm(pool.imap(build_ir_module_job, build_instances),
+                                     desc='Compiling', total=len(build_instances), disable=not verbose):
                     lib_paths.append(lib_path)
         else:
             lib_paths = map(build_ir_module_job, build_instances)
         assert len(lib_paths) == len(build_instances)
-        funcs = [load_task_func(lib_path, instance.ir_module.task) if lib_path else None for lib_path, instance in zip(lib_paths, build_instances)]
+        funcs = [load_task_func(lib_path, instance.ir_module.task) if lib_path else None
+                 for lib_path, instance in zip(lib_paths, build_instances)]
     if verbose:
         print('Batch build {} modules within {:.3f} seconds, on average {:.1f} seconds per module.'.format(
             len(build_instances), timer.elapsed_seconds(), timer.elapsed_seconds() / len(build_instances)))

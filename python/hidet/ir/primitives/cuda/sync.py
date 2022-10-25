@@ -1,13 +1,8 @@
-from hidet.ir.type import ScalarType
-from typing import List, Optional, Union, Tuple
+from typing import Union
 
-from hidet.ir.builders import FunctionBuilder, StmtBuilder
-from hidet.ir.expr import Expr, Call, cast
-from hidet.ir.expr import Var
-from hidet.ir.stmt import AsmStmt, BlackBoxStmt, ReturnStmt
-from hidet.ir.type import ScalarType, FuncType, PointerType, ReferenceType, VoidType
-from hidet.ir.func import Function
-from hidet.ir.primitives.func import register_primitive_function, primitive_func_pool
+from hidet.ir.expr import Expr, Call
+from hidet.ir.type import FuncType, VoidType
+from hidet.ir.primitives.func import register_primitive_function
 from hidet.utils import initialize
 from hidet.ir.primitives.func import call_primitive_func
 
@@ -43,4 +38,3 @@ def syncthreads_or(cond: Expr) -> Call:
 
 def syncwarp() -> Call:
     return call_primitive_func('cuda_syncwarp', [])
-

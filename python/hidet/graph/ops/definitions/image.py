@@ -58,8 +58,9 @@ def linear_interpolate(a, b, ratio):
     return a * (1.0 - ratio) + b * ratio
 
 
-def resize2d_nchw_compute(data: TensorNode, size: List[int], method: str, coordinate_transformation_mode, rounding_method,
-                          roi, cubic_alpha, cubic_exclude, extrapolation_value):
+def resize2d_nchw_compute(data: TensorNode, size: List[int], method: str,
+                          coordinate_transformation_mode, rounding_method,
+                          roi, cubic_alpha, cubic_exclude, extrapolation_value):  # pylint: disable=unused-argument
     image_size = data.const_shape()[2:]
     target_size = size
 
@@ -86,7 +87,9 @@ def resize2d_nchw_compute(data: TensorNode, size: List[int], method: str, coordi
                 method, ['nearest', 'linear', 'cubic']
             ))
         if coordinate_transformation_mode == 'tf_half_pixel_for_nn':
-            value = if_then_else(And.join(0 <= h, h < image_size[0], 0 <= w, w < image_size[1]), value, extrapolation_value)
+            value = if_then_else(And.join(0 <= h, h < image_size[0], 0 <= w, w < image_size[1]),
+                                 value,
+                                 extrapolation_value)
         return value
 
     output_shape = data.const_shape()[:2] + list(target_size)
@@ -101,7 +104,8 @@ def resize2d_nchw_compute(data: TensorNode, size: List[int], method: str, coordi
 class Resize2dTask(Task):
     def __init__(self, data: TensorNode, size: List[int], method: str, coordinate_transformation_mode, rounding_method,
                  roi, cubic_alpha, cubic_exclude, extrapolation_value):
-        out = resize2d_nchw_compute(data, size, method, coordinate_transformation_mode, rounding_method, roi, cubic_alpha, cubic_exclude, extrapolation_value)
+        out = resize2d_nchw_compute(data, size, method, coordinate_transformation_mode, rounding_method, roi,
+                                    cubic_alpha, cubic_exclude, extrapolation_value)
         super().__init__(
             name='resize2d',
             inputs=[data],
@@ -111,7 +115,8 @@ class Resize2dTask(Task):
 
 class Resize2dOp(Operator):
     supported_methods = ['nearest', 'linear', 'cubic']
-    supported_coord_trans_mode = ['half_pixel', 'align_corners', 'asymmetric', 'pytorch_half_pixel', 'tf_half_pixel_for_nn', 'tf_crop_and_resize']
+    supported_coord_trans_mode = ['half_pixel', 'align_corners', 'asymmetric', 'pytorch_half_pixel',
+                                  'tf_half_pixel_for_nn', 'tf_crop_and_resize']
     supported_rounding_methods = ['round', 'floor', 'ceil']
 
     def __init__(self, data, size: List[int], method: str, coordinate_transformation_mode: str, rounding_method: str,
@@ -122,13 +127,15 @@ class Resize2dOp(Operator):
             raise ValueError("Resize only support coordinate transformation modes: {}, but got {}.".format(
                 self.supported_coord_trans_mode, coordinate_transformation_mode))
         if method == 'nearest' and rounding_method not in self.supported_rounding_methods:
-            raise ValueError("Resize only support rounding methods: {}, but got {}.".format(self.supported_rounding_methods, rounding_method))
+            raise ValueError("Resize only support rounding methods: {}, but got {}.".format(
+                self.supported_rounding_methods, rounding_method))
         if len(size) != 2:
             raise ValueError('Resize2d expect size has 2 elements (height, width), got {}'.format(size))
 
         super().__init__(
             inputs=[data],
-            task=Resize2dTask(input_like(data, 'data'), size, method, coordinate_transformation_mode, rounding_method, roi, cubic_alpha, cubic_exclude, extrapolation_value),
+            task=Resize2dTask(input_like(data, 'data'), size, method, coordinate_transformation_mode, rounding_method,
+                              roi, cubic_alpha, cubic_exclude, extrapolation_value),
             attributes={
                 'method': method,
                 'coordinate_transformation_mode': coordinate_transformation_mode,
@@ -141,5 +148,7 @@ class Resize2dOp(Operator):
         )
 
 
-def resize2d(data: Tensor, size: List[int], method: str, coordinate_transformation_mode: str, rounding_method: str, roi: Optional, cubic_alpha: Optional, cubic_exclude: Optional, extrapolation_value: Optional) -> Tensor:
-    return Resize2dOp(data, size, method, coordinate_transformation_mode, rounding_method, roi, cubic_alpha, cubic_exclude, extrapolation_value).get_output(0)
+def resize2d(data: Tensor, size: List[int], method: str, coordinate_transformation_mode: str, rounding_method: str,
+             roi: Optional, cubic_alpha: Optional, cubic_exclude: Optional, extrapolation_value: Optional) -> Tensor:
+    return Resize2dOp(data, size, method, coordinate_transformation_mode, rounding_method, roi, cubic_alpha,
+                      cubic_exclude, extrapolation_value).get_output(0)

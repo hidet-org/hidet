@@ -1,10 +1,7 @@
-from typing import List, Dict, Optional
-from hidet.ir.mapping import TaskMapping, row_spatial, col_spatial, repeat_map, row_repeat, col_repeat
 from hidet.utils import initialize
-from hidet.ir.type import ScalarType, PointerType, VoidType, void_pointer
-from hidet.ir.expr import Var, Expr, Call, cast
-from hidet.ir.stmt import AsmStmt, AssignStmt, asm
-from hidet.ir.builders import FunctionBuilder
+from hidet.ir.type import PointerType, VoidType
+from hidet.ir.expr import Expr
+from hidet.ir.stmt import asm
 from hidet.ir.primitives.func import register_primitive_function
 from hidet.ir.primitives.cuda.funcs import call_cuda
 from hidet.lang import script
@@ -16,7 +13,7 @@ def resolve_cvta_func_name(src_space: str, dst_space: str) -> str:
 
 @initialize()
 def register_cvta_instructions():
-    from hidet.lang import attr, u32, tensor
+    from hidet.lang import attr, u32
     for src_space in ['generic']:
         for dst_space in ['shared']:
             if src_space == dst_space:
@@ -62,4 +59,3 @@ def cvta_generic_to_shared(generic_addr: Expr) -> Expr:
     """
     func_name = resolve_cvta_func_name(src_space='generic', dst_space='shared')
     return call_cuda(func_name, args=[generic_addr])
-

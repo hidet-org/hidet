@@ -1,14 +1,11 @@
-from hidet.ir.type import ScalarType
-from typing import List, Optional, Union, Tuple
+from typing import List
 
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.ir.expr import Expr, Call, cast
 from hidet.ir.expr import Var
-from hidet.ir.stmt import AsmStmt, BlackBoxStmt, ReturnStmt
-from hidet.ir.type import ScalarType, FuncType, PointerType, ReferenceType, VoidType
-from hidet.ir.func import Function
+from hidet.ir.stmt import ReturnStmt
+from hidet.ir.type import ScalarType
 from hidet.ir.primitives.func import register_primitive_function, primitive_func_pool
-from hidet.utils import initialize
 
 
 def register_unary_dialect_primitive_function(func_name, generic_func, target_dtype: str, dialect_dtype: str):
@@ -40,4 +37,3 @@ def call_cuda(func_name, args: List[Expr]) -> Call:
     # todo: replace all usage of this function to call_primitive_func
     entry = primitive_func_pool.lookup_by_name('cuda_{}'.format(func_name))
     return Call(entry.var, args)
-

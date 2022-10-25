@@ -1,3 +1,4 @@
+# pylint: disable=cell-var-from-loop
 from typing import Optional
 
 from hidet.ir.type import PointerType, TensorPointerType
@@ -45,7 +46,7 @@ def resolve_store_inst_name(dtype: str, space: str, sync: Optional[str], scope: 
 
 @initialize()
 def register_functions():
-    from hidet.lang import attr, script, asm
+    from hidet.lang import attr, script, asm  # pylint: disable=import-outside-toplevel
 
     registered = set()
     for dtype in ['uint8', 'uint16', 'uint32', 'uint64', 'int8', 'int32', 'int64', 'float16', 'float32']:
@@ -93,6 +94,7 @@ def register_functions():
 
 @initialize()
 def register_primitive_functions_with_body():
+    # pylint: disable=import-outside-toplevel
     from hidet.ir.type import ReferenceType
     from hidet.ir.expr import Var
     from hidet.ir.stmt import AsmStmt

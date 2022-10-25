@@ -1,20 +1,19 @@
-import functools
 from typing import List
 
 from hidet.ir import IRModule
-from hidet.ir.builders import FunctionBuilder, StmtBuilder
-from hidet.ir.expr import scalar_var, if_then_else, tensor_var, const_like, convert, Expr, And, cast
+from hidet.ir.builders import FunctionBuilder
+from hidet.ir.expr import scalar_var, convert, Expr, And, cast
 from hidet.ir.mapping import TaskMapping
 from hidet.ir.primitives import block_idx, thread_idx
-from hidet.ir.compute import ReduceCompute, ReduceOperation
+from hidet.ir.compute import ReduceOperation
 from hidet.ir.stmt import AssignStmt, BufferStoreStmt, DeclareStmt
 from hidet.ir.type import ScalarType
 from hidet.ir.utils import index_deserialize
 from hidet.graph.ops.definitions.reduce import ReduceTask
 from hidet.graph.ops.schedules.common import params_from_task
-from .common import warp_reduce
 from hidet.utils import prod
 from hidet.transforms.tools import fuse_and_pack
+from .common import warp_reduce
 
 
 def merge_indices(grid_indices: List[Expr], reduce_indices: List[Expr], reduce_dims: List[int]) -> List[Expr]:
@@ -134,7 +133,8 @@ def cuda_schedule_reduce_by_default(task: ReduceTask) -> IRModule:
 
         # body
         remain_indices = remain_layout.worker2task(thread_idx() + block_idx() * block_size)[0]
-        with fb.if_then(And.join_list([remain_index < remain_shape[i] for i, remain_index in enumerate(remain_indices)])):
+        with fb.if_then(And.join_list([remain_index < remain_shape[i]
+                                       for i, remain_index in enumerate(remain_indices)])):
             # get the reduced value along reduce dimensions
             for reduce_indices in reduce_layout.worker2task(0):
                 input_indices = merge_indices(remain_indices, reduce_indices, reduce_dims=task.dims)

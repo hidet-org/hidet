@@ -29,7 +29,7 @@ class TensorNode(ComputeNode):
         self.tensor_compute: Optional[TensorCompute] = tensor_compute
 
     def astext(self):
-        from hidet.ir.functors.printer import IRPrinter
+        from hidet.ir.functors.printer import IRPrinter  # pylint: disable=import-outside-toplevel
         printer = IRPrinter()
         doc = printer.print_tensor_nodes([self])
         return str(doc.trim())
@@ -46,7 +46,7 @@ class TensorNode(ComputeNode):
         for index, extent in zip(indices, self.data_type.shape):
             conds.append(0 <= index)
             conds.append(index < extent)
-        return if_then_else(And.join(*conds), self.__getitem__(indices), default_value)
+        return if_then_else(And.join(*conds), self[indices], default_value)
 
 
 class ComputePrimitive(Node):
@@ -79,7 +79,8 @@ class GridCompute(TensorCompute):
         self.axes: Tuple[Var] = tuple(axes)
         self.value: Expr = value
 
-        assert all(isinstance(v, TensorNode) for v in self.input_tensors) and all(isinstance(v, ScalarNode) for v in self.input_scalars)
+        assert all(isinstance(v, TensorNode) for v in self.input_tensors)
+        assert all(isinstance(v, ScalarNode) for v in self.input_scalars)
 
 
 class ReduceCompute(ScalarCompute):
@@ -101,7 +102,8 @@ class ReduceCompute(ScalarCompute):
         self.reduce_operation: ReduceOperation = reduce_operation
         self.accumulate_dtype: ScalarType = accumulate_dtype
 
-        assert all(isinstance(v, TensorNode) for v in self.input_tensors) and all(isinstance(v, ScalarNode) for v in self.input_scalars)
+        assert all(isinstance(v, TensorNode) for v in self.input_tensors)
+        assert all(isinstance(v, ScalarNode) for v in self.input_scalars)
 
     def const_shape(self) -> List[int]:
         return [int(v) for v in self.shape]
@@ -126,7 +128,8 @@ class ArgReduceCompute(ScalarCompute):
         self.reduce_operation: ReduceOperation = reduce_operation
         self.index_dtype: ScalarType = index_dtype
 
-        assert all(isinstance(v, TensorNode) for v in self.input_tensors) and all(isinstance(v, ScalarNode) for v in self.input_scalars)
+        assert all(isinstance(v, TensorNode) for v in self.input_tensors)
+        assert all(isinstance(v, ScalarNode) for v in self.input_scalars)
 
 
 def scalar_input(name, dtype):
@@ -142,8 +145,12 @@ def tensor_input(name, base_type, shape, layout=None):
     return TensorNode(name, data_type, tensor_compute=None)
 
 
-def reduce(shape: Sequence[Union[int, Expr]], fcompute, reduce_type: str, accumulate_dtype: str = 'float32') -> ScalarNode:
-    from hidet.ir.functors import infer_type, simplify, collect
+def reduce(
+        shape: Sequence[Union[int, Expr]],
+        fcompute, reduce_type: str,
+        accumulate_dtype: str = 'float32'
+) -> ScalarNode:
+    from hidet.ir.functors import infer_type, simplify, collect   # pylint: disable=import-outside-toplevel
     shape = [convert(v) for v in shape]
     axes = [var() for _ in shape]
     value = simplify(convert(fcompute(*axes)))
@@ -163,7 +170,7 @@ def reduce(shape: Sequence[Union[int, Expr]], fcompute, reduce_type: str, accumu
 
 
 def compute(name, shape, fcompute, layout=None) -> TensorNode:
-    from hidet.ir.functors import infer_type, simplify, collect
+    from hidet.ir.functors import infer_type, simplify, collect   # pylint: disable=import-outside-toplevel
     shape = [convert(v) for v in shape]
     axes = [var() for _ in shape]
     value = simplify(convert(fcompute(*axes)))
@@ -181,7 +188,7 @@ def compute(name, shape, fcompute, layout=None) -> TensorNode:
 
 
 def arg_reduce(extent: Union[int, Expr], fcompute, reduce_type: str, index_dtype: str = 'int32') -> ScalarNode:
-    from hidet.ir.functors import collect, simplify
+    from hidet.ir.functors import collect, simplify  # pylint: disable=import-outside-toplevel
     extent = convert(extent)
     axis = var()
     value = simplify(convert(fcompute(axis)))
@@ -198,5 +205,3 @@ def arg_reduce(extent: Union[int, Expr], fcompute, reduce_type: str, index_dtype
             index_dtype=ScalarType(index_dtype)
         )
     )
-
-

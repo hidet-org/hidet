@@ -1,7 +1,7 @@
 from hidet.utils import initialize
+from hidet.ir.primitives.base.generic import erf, tanh, pow
 from ..func import FuncType, register_primitive_function, primitive_func_pool
 from .funcs import register_unary_dialect_primitive_function, register_binary_dialect_primitive_function
-from hidet.ir.primitives.base.generic import erf, tanh, pow
 
 
 @initialize()
@@ -38,9 +38,12 @@ def register_primitive_functions_bfloat16():
         for codegen_name in codegen_names:
             name = '{}_{}'.format('bfloat16', codegen_name)
             register_primitive_function(name=name, func_or_type=func_type, codegen_name=codegen_name)
-    register_unary_dialect_primitive_function(func_name='bfloat16_htanh', generic_func=tanh, target_dtype='bfloat16', dialect_dtype='float32')
-    register_unary_dialect_primitive_function(func_name='bfloat16_herf', generic_func=erf, target_dtype='bfloat16', dialect_dtype='float32')
-    register_binary_dialect_primitive_function(func_name='bfloat16_hpow', generic_func=pow, target_dtype='bfloat16', dialect_dtype='float32')
+    register_unary_dialect_primitive_function(func_name='bfloat16_htanh', generic_func=tanh, target_dtype='bfloat16',
+                                              dialect_dtype='float32')
+    register_unary_dialect_primitive_function(func_name='bfloat16_herf', generic_func=erf, target_dtype='bfloat16',
+                                              dialect_dtype='float32')
+    register_binary_dialect_primitive_function(func_name='bfloat16_hpow', generic_func=pow, target_dtype='bfloat16',
+                                               dialect_dtype='float32')
 
     for a, b in base2bfloat16.items():
         base_name = '{}_{}'.format('base', a)

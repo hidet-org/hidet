@@ -1,7 +1,7 @@
 from typing import Optional
 import math
 import numpy as np
-from hidet.graph import randn, zeros, array, ones
+from hidet.graph import zeros, array, ones
 from hidet.graph import nn, Tensor
 from hidet.graph import ops
 
@@ -65,13 +65,13 @@ class BertSelfAttention(nn.Module):
         self.value_layer = nn.Linear(config.hidden_size, config.hidden_size)
 
     def transpose_for_scores(self, x: Tensor) -> Tensor:
-        batch_size, seq_length, hidden_size = x.shape
+        batch_size, seq_length, _ = x.shape
         x = x.reshape([batch_size, seq_length, self.num_attention_heads, self.attention_head_size])
         x = x.rearrange([[0, 2], [1], [3]])
         return x
 
     def forward(self, hidden_states: Tensor, attention_mask: Tensor):
-        batch_size, seq_length, hidden_size = hidden_states.shape
+        batch_size, seq_length, _ = hidden_states.shape
         query = self.transpose_for_scores(self.query_layer(hidden_states))
         key = self.transpose_for_scores(self.key_layer(hidden_states))
         value = self.transpose_for_scores(self.value_layer(hidden_states))
@@ -156,7 +156,7 @@ class BertEncoder(nn.Module):
         self.layers = nn.ModuleList(layers)
 
     def forward(self, hidden_states: Tensor, attention_mask: Tensor):
-        for i, layer_module in enumerate(self.layers.submodules.values()):
+        for layer_module in self.layers.submodules.values():
             hidden_states = layer_module(hidden_states, attention_mask)
         return hidden_states
 

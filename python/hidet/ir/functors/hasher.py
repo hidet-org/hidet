@@ -1,8 +1,11 @@
 from hidet.ir.compute import TensorNode, ScalarNode
 from hidet.ir.dialects.pattern import AnyExpr
-from hidet.ir.expr import *
+from hidet.ir.expr import Expr, Var, Constant, Add, Sub, Multiply, Div, Mod, FloorDiv, Neg, LessThan, LessEqual
+from hidet.ir.expr import NotEqual, Equal, IfThenElse, And, Or, Not, BitwiseAnd, BitwiseOr, BitwiseNot, BitwiseXor
+from hidet.ir.expr import LeftShift, RightShift, TensorElement, Cast, Dereference, Address, Reference, Call, Let
+from hidet.ir.expr import TensorSlice
 from hidet.ir.functors import ExprFunctor, TypeFunctor, NodeFunctor
-from hidet.ir.type import TypeNode, ReferenceType, TensorPointerType, VoidType, PointerType
+from hidet.ir.type import TypeNode, ReferenceType, TensorPointerType, VoidType, PointerType, ScalarType, TensorType
 from hidet.ir.utils.hash_sum import HashSum
 
 
@@ -10,21 +13,21 @@ class ExprHash(ExprFunctor, TypeFunctor):
     def __init__(self):
         super().__init__()
 
-    def visit(self, e):
-        if e in self.memo:
-            return self.memo[e]
-        if isinstance(e, (str, float, int)):
-            ret = HashSum(e)
-        elif isinstance(e, tuple):
-            ret = HashSum(tuple(self(v) for v in e))
-        elif isinstance(e, (Expr, TypeNode)):
-            ret = NodeFunctor.visit(self, e)
-        elif e is None:
+    def visit(self, node):
+        if node in self.memo:
+            return self.memo[node]
+        if isinstance(node, (str, float, int)):
+            ret = HashSum(node)
+        elif isinstance(node, tuple):
+            ret = HashSum(tuple(self(v) for v in node))
+        elif isinstance(node, (Expr, TypeNode)):
+            ret = NodeFunctor.visit(self, node)
+        elif node is None:
             ret = HashSum(None)
         else:
             # for stmt/func/...
-            ret = HashSum(e)
-        self.memo[e] = ret
+            ret = HashSum(node)
+        self.memo[node] = ret
         return ret
 
     def hash(self, expr):
@@ -61,7 +64,7 @@ class ExprHash(ExprFunctor, TypeFunctor):
     def visit_LessThan(self, e: LessThan):
         return self(e.a) + self(e.b) + e.class_index()
 
-    def visit_LessEqual(self, e: LessThan):
+    def visit_LessEqual(self, e: LessEqual):
         return self(e.a) + self(e.b) + e.class_index()
 
     def visit_NotEqual(self, e: NotEqual):
@@ -125,7 +128,7 @@ class ExprHash(ExprFunctor, TypeFunctor):
         return self(t.name) + t.class_index()
 
     def visit_TensorType(self, t: TensorType):
-        return self(t.scalar_type) + self(t.scope.name) + self(t.shape) + t.class_index()
+        return self(t.scalar_type) + self(t.shape) + t.class_index()
 
     def visit_PointerType(self, t: PointerType):
         return self(t.base_type) + t.class_index()
@@ -143,18 +146,10 @@ class ExprHash(ExprFunctor, TypeFunctor):
         return self(e.base) + self(e.indices) + self(e.starts) + self(e.ends) + e.class_index()
 
     def visit_ScalarNode(self, e: ScalarNode):
-        if e.scalar_compute:
-            rc = e.scalar_compute
-            return self(rc.axes) + self(rc.value) + self(rc.shape) + e.class_index()
-        else:
-            return HashSum(e) + e.class_index()
+        raise NotImplementedError()
 
     def visit_TensorNode(self, e: TensorNode):
-        if e.tensor_compute:
-            rc = e.tensor_compute
-            return self(rc.axes) + self(rc.value) + self(rc.shape) + e.class_index()
-        else:
-            return HashSum(e) + e.class_index()
+        raise NotImplementedError()
 
     def visit_AnyExpr(self, e: AnyExpr):
         return HashSum(e) + e.class_index()

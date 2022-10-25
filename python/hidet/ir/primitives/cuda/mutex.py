@@ -106,4 +106,3 @@ def acquire_seq_semaphore(addr: Expr, expect_status: Union[int, Expr]):
 
 def release_seq_semaphore(addr: Expr, store_status: Union[int, Expr]):
     return call_primitive_func('cuda_release_seq_semaphore', [addr, store_status])
-

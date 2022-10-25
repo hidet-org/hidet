@@ -1,10 +1,10 @@
-from typing import Optional, Union, List
+from typing import Union, List
 import math
 from hidet.graph import ops
 from hidet.graph.common import normalize
 from hidet.graph.module import Module, Tensor
 from hidet.graph.tensor import randn, zeros, ones
-from hidet.graph.modules.container import Sequential, ModuleList
+from hidet.graph.modules.container import Sequential, ModuleList  # pylint: disable=unused-import
 
 
 class Conv2d(Module):
@@ -16,10 +16,13 @@ class Conv2d(Module):
         self.padding = normalize(padding)
         self.stride = normalize(stride)
         self.groups = groups
-        self.weight = randn(shape=[out_channels, in_channels, *self.kernel], dtype='float32', stddev=1.0 / math.sqrt(out_channels))
+        self.weight = randn(shape=[out_channels, in_channels, *self.kernel],
+                            dtype='float32',
+                            stddev=1.0 / math.sqrt(out_channels))
 
     def extra_str(self) -> str:
-        return 'in_channels={}, out_channels={}, kernel_size={}, stride={}, padding={}'.format(self.in_channels, self.out_channels, self.kernel, self.stride, self.padding)
+        return 'in_channels={}, out_channels={}, kernel_size={}, stride={}, padding={}'.format(
+            self.in_channels, self.out_channels, self.kernel, self.stride, self.padding)
 
     def forward(self, x):
         x = ops.pad(x, ops.utils.normalize_padding(self.padding))
@@ -104,7 +107,7 @@ class AdaptiveAvgPool2d(Module):
         return 'output_size={}'.format(self.output_size)
 
     def forward(self, x: Tensor) -> Tensor:
-        n, c, h, w = x.shape
+        h, w = x.shape[2:]
         return ops.avg_pool2d(x, kernel=(h, w), stride=(1, 1), padding=(0, 0))
 
 
@@ -151,4 +154,3 @@ class Gelu(Module):
 class Tanh(Module):
     def forward(self, x):
         return ops.tanh(x)
-

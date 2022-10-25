@@ -27,7 +27,7 @@ class Module:
                 self.submodules[key] = value
         else:
             super().__setattr__(key, value)
-        cnt = sum([1 for collection in [parameters, submodules, self.__dict__] if collection and key in collection])
+        cnt = sum(1 for collection in [parameters, submodules, self.__dict__] if collection and key in collection)
         assert cnt <= 1, 'duplicated definition of {}'.format(key)
 
     def __getattr__(self, item):

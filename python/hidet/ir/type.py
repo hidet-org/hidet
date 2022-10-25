@@ -1,5 +1,6 @@
+# pylint: disable=import-outside-toplevel
 from __future__ import annotations
-from typing import Sequence, Optional, Union, List, Tuple, Mapping, Callable, Iterable
+from typing import Sequence, Optional, Union, List, Tuple, Callable
 import numpy as np
 
 from hidet.ir.node import Node
@@ -66,8 +67,7 @@ class ScalarType(TypeNode):
     def __init__(self, name: str):
         if not isinstance(name, str):
             raise ValueError('Expect the name of scalar type.')
-        if name in short2long:
-            name = short2long[name]
+        name = short2long.get(name, name)
         if name not in dtype_list:
             raise ValueError('Can not recognize data type {}, candidates:\n{}'.format(name, dtype_list))
         self.name = name
@@ -292,7 +292,8 @@ class FuncType(TypeNode):
         self.param_types = [self._convert_type(tp) for tp in param_types] if param_types is not None else None
         self.ret_type = self._convert_type(ret_type) if ret_type is not None else None
         self.type_infer_func = type_infer_func
-        assert not all(v is None for v in [ret_type, type_infer_func]), 'Please provide either a static type or a type infer func'
+        msg = 'Please provide either a static type or a type infer func'
+        assert not all(v is None for v in [ret_type, type_infer_func]), msg
 
     def ret_type_on(self, arg_types: List[TypeNode]) -> TypeNode:
         if self.ret_type is not None:
@@ -337,8 +338,8 @@ def tensor_type(dtype, shape: Optional[Sequence[Union[int, Expr]]] = None, layou
     ret: TensorType
         The constructed tensor type
     """
-    from hidet.ir.expr import convert, Constant
-    from hidet.ir.layout import DataLayout, StridesLayout
+    from hidet.ir.expr import convert
+    from hidet.ir.layout import DataLayout
     if isinstance(dtype, str):
         dtype = ScalarType(dtype)
     if not isinstance(dtype, ScalarType):
@@ -355,7 +356,8 @@ def tensor_type(dtype, shape: Optional[Sequence[Union[int, Expr]]] = None, layou
         assert isinstance(shape, (list, tuple))
         for a, b in zip(shape, layout.shape):
             if int(a) != int(b):
-                raise ValueError('The shape of tensor and the shape of layout are not compatible, {} vs {}'.format(list(shape), list(layout.shape)))
+                raise ValueError('The shape of tensor and the shape of layout are not compatible, '
+                                 '{} vs {}'.format(list(shape), list(layout.shape)))
     shape = convert(shape)
     return TensorType(dtype, shape, layout)
 

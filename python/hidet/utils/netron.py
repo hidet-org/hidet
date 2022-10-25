@@ -187,7 +187,8 @@ def dump(flow_graph, fp):
             name = 'const:{}'.format(constant_cnt)
             constant_cnt += 1
             scalar_value = str(tensor.cpu().numpy()) if len(tensor.shape) == 0 and tensor.storage else None
-            tensor2argument[tensor] = Argument(name, data_type=tensor.dtype, shape=tensor.shape, has_initializer=True, scalar_value=scalar_value)
+            tensor2argument[tensor] = Argument(name, data_type=tensor.dtype, shape=tensor.shape, has_initializer=True,
+                                               scalar_value=scalar_value)
         for idx, tensor in enumerate(node.outputs):
             name = '{}:{}'.format(node_name, idx)
             tensor2argument[tensor] = Argument(name, data_type=tensor.dtype, shape=tensor.shape, has_initializer=False)
@@ -205,11 +206,9 @@ def dump(flow_graph, fp):
         if tensor in tensor2argument:
             outputs.append(Parameter('output:{}'.format(idx), tensor2argument[tensor]))
         else:
-            outputs.append(Parameter('output:{}'.format(idx), Argument('output:{}'.format(idx), data_type=tensor.dtype, shape=tensor.shape, has_initializer=False)))
+            outputs.append(Parameter('output:{}'.format(idx), Argument('output:{}'.format(idx), data_type=tensor.dtype,
+                                                                       shape=tensor.shape, has_initializer=False)))
     graph = Graph(inputs, outputs, nodes, name="")
     model = Model(graph, source='Hidet', description='Converted from FlowGraph')
 
     json.dump(model.export(), fp, indent=2)
-
-
-

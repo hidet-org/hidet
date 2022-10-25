@@ -1,4 +1,4 @@
-from ctypes import c_void_p, c_char_p, c_uint64, pointer, cast
+from ctypes import c_void_p, c_char_p, c_uint64
 from .ffi import get_func
 
 
@@ -33,4 +33,3 @@ class RuntimeAPI:
 
 
 runtime_api = RuntimeAPI()
-

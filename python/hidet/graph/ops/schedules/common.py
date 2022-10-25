@@ -1,10 +1,11 @@
+# pylint: disable=consider-using-enumerate
 from __future__ import annotations
-from typing import Mapping, List
+from typing import Mapping, List, Union, Tuple
 
 from hidet.ir.compute import TensorNode, ScalarNode, GridCompute, ArgReduceCompute, ReduceCompute
 from hidet.ir.builders import StmtBuilder
-from hidet.ir.expr import *
-from hidet.ir.functors import infer_type, ExprRewriter, rewrite
+from hidet.ir.expr import Expr, Var, scalar_var, convert
+from hidet.ir.functors import infer_type, ExprRewriter
 from hidet.ir.stmt import ForStmt, BufferStoreStmt, AssignStmt, DeclareStmt
 from hidet.ir.task import Task
 from hidet.utils import prod
@@ -12,6 +13,7 @@ from hidet.utils import prod
 
 class NotSupportedError(Exception):
     def __init__(self, obj: object, msg: str = ""):
+        super().__init__()
         self.obj = obj
         self.msg = msg
 
@@ -57,7 +59,7 @@ class LoopExpander(ExprRewriter):
             return self.input_map[e]
         tc = e.tensor_compute
         if isinstance(tc, GridCompute):
-            grid_compute = e.tensor_compute
+            grid_compute = tc
             # declare output buffer when needed
             if e in self.input_map:
                 buf = self.input_map[e]
@@ -65,6 +67,7 @@ class LoopExpander(ExprRewriter):
                 buf = Var(e.name, e.data_type)
                 self.sb += DeclareStmt(buf)
 
+            # pylint: disable=unused-variable
             shape, axes, value = grid_compute.shape, grid_compute.axes, grid_compute.value
             # tensor compute loops
             for i in range(len(shape)):

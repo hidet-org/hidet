@@ -1,18 +1,17 @@
+"""
+Please refer to the following section in PTX manual for the details of MMA instructions:
+  https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#warp-level-matrix-instructions-for-mma
+"""
 from typing import List, Dict
-from hidet.ir.mapping import TaskMapping, row_spatial, col_spatial, repeat_map, row_repeat, col_repeat
+from hidet.ir.mapping import TaskMapping, row_spatial, col_spatial, row_repeat, col_repeat
 from hidet.utils import initialize
-from hidet.ir.type import ScalarType, PointerType, VoidType
+from hidet.ir.type import ScalarType, PointerType
 from hidet.ir.expr import Var, Expr, cast
 from hidet.ir.stmt import AsmStmt, AssignStmt, asm, DeclareStmt
 from hidet.ir.func import Function
 from hidet.ir.builders import FunctionBuilder
 from hidet.ir.primitives.func import register_primitive_function
 from hidet.ir.primitives.cuda.funcs import call_cuda
-
-"""
-Please refer to the following section in PTX manual for the details of MMA instructions:
-  https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#warp-level-matrix-instructions-for-mma
-"""
 
 
 def num_regs(short_dtype: str, num_elements: int) -> int:
@@ -194,7 +193,8 @@ def register_ldmatrix_instructions():
     for num in [1, 2, 4]:
         for trans in [False, True]:
             for shared_space_addr in [False, True]:
-                func_name = 'cuda_' + resolve_ldmatrix_func_name(num=num, shared_space_addr=shared_space_addr, trans=trans)
+                func_name = 'cuda_' + resolve_ldmatrix_func_name(num=num, shared_space_addr=shared_space_addr,
+                                                                 trans=trans)
                 inst_name = 'ldmatrix.sync.aligned.m8n8{num}{trans}{ss}.b16'.format(
                     num=f'.x{num}',
                     trans='.trans' if trans else '',

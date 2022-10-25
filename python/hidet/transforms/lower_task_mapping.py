@@ -1,4 +1,4 @@
-from typing import List, Dict, Sequence, Union, Tuple, Optional
+from typing import List, Dict, Sequence, Union, Optional
 import itertools
 from hidet.ir import Var, ForTaskStmt, Stmt, ForStmt, Expr, SeqStmt
 from hidet.ir.expr import var
@@ -55,6 +55,7 @@ class TaskMappingExpander:
         return [task]
 
     def visit_Repeat(self, mapping: RepeatTaskMapping, worker: Expr) -> List[TaskIndex]:
+        # pylint: disable=unused-argument
         # worker is unused because there is only a single worker with index 0
         unroll = False
         if unroll:

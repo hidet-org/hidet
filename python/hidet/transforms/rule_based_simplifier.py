@@ -1,16 +1,13 @@
 import operator
-from typing import Dict, Optional, List
+from typing import Dict
 from itertools import product
 
 from hidet.ir.dialects.pattern import AnyExpr, match
-from hidet.ir.expr import Add, convert, Sub, Multiply, FloorDiv, Mod, LessThan, LessEqual, Equal, BinaryOp, And, IfThenElse, Or, Div, Constant
-from hidet.ir.expr import Constant, Expr, Var, Cast, cast
-from hidet.ir.functors import FuncStmtExprRewriter
-from hidet.ir.functors import StmtExprRewriter, ExprVisitor
-from hidet.ir.functors import rewrite, ExprHash
+from hidet.ir.expr import Add, convert, Sub, Multiply, Mod, LessThan, LessEqual, Equal, BinaryOp, And, IfThenElse, Or
+from hidet.ir.expr import Div, Constant, Expr
+from hidet.ir.functors import FuncStmtExprRewriter, StmtExprRewriter, rewrite
 from hidet.transforms.base import FunctionPass
 from hidet.utils import prod, repeat_until_converge
-from hidet.ir.stmt import LetStmt, ForStmt
 from hidet.ir.func import Function
 from hidet.ir.analyzers import BoundAnalyzer, BoundInfo
 
@@ -135,30 +132,33 @@ class RuleBasedSimplifier(FuncStmtExprRewriter):
         ]
         self.bound_patterns = [
             # ((pattern_args, pattern_func, target_args, target_func)
-            ((ec1, ec2, c1), (ec1, ec2, c1), lambda ec1, ec2, c1: (ec1 + ec2) // c1, lambda ec1, ec2, c1: ec1 // c1 + ec2 // c1),
-            ((ec1, ec2, c1), (ec1, ec2, c1), lambda ec1, ec2, c1: (ec1 + ec2) % c1, lambda ec1, ec2, c1: ec1 % c1 + ec2 % c1),
+            ((ec1, ec2, c1), (ec1, ec2, c1),
+             lambda ec1, ec2, c1: (ec1 + ec2) // c1,
+             lambda ec1, ec2, c1: ec1 // c1 + ec2 // c1),
+            ((ec1, ec2, c1), (ec1, ec2, c1),
+             lambda ec1, ec2, c1: (ec1 + ec2) % c1,
+             lambda ec1, ec2, c1: ec1 % c1 + ec2 % c1),
             ((ec1, c1), (ec1,), lambda ec1, c1: ec1 % c1, lambda ec1: ec1),
             ((ec1, c1, c2), (ec1, c2), lambda ec1, c1, c2: (ec1 % c1) % c2, lambda ec1, c2: ec1 % c2)
         ]
 
     def apply_rule(self, e):
-        for idx, (pattern, target) in enumerate(self.patterns):
+        for pattern, target in self.patterns:
             if pattern.__class__ is not e.__class__:
                 continue
-            mapping, msg = match(pattern, e)
+            mapping, _ = match(pattern, e)
             if mapping:
-                # print('apply rule ', pattern, target, 'on', e)
                 mapping = {a: b for a, b in mapping.items() if a in self.args}
                 ret = rewrite(target, rewrite_map=mapping)
                 return ret
         return e
 
     def apply_bound_aware_rule(self, e):
-        for idx, (pattern_args, target_args, pattern_func, target_func) in enumerate(self.bound_patterns):
+        for pattern_args, target_args, pattern_func, target_func in self.bound_patterns:
             pattern = pattern_func(*pattern_args)
             if pattern.__class__ is not e.__class__:
                 continue
-            mapping, msg = match(pattern, e)
+            mapping, _ = match(pattern, e)
             if mapping:
                 mapping = {a: b for a, b in mapping.items() if a in self.args}
                 self.analyzer(e)

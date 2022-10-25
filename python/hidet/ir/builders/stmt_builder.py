@@ -1,7 +1,6 @@
-from typing import Union, Optional, Sequence, List
+from typing import Union, Optional, Sequence
 
 from hidet.ir.stmt import Stmt, ForStmt, IfStmt, EvaluateStmt, SeqStmt, LetStmt, ForTaskStmt
-from hidet.ir.type import TypeNode, scalar_type, ScalarType
 from hidet.ir.expr import Expr, Var, var, convert
 from hidet.ir.mapping import TaskMapping, TaskMappingExpander
 

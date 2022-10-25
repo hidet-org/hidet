@@ -25,4 +25,3 @@ def index_deserialize(scalar_index: Expr, shape: List[int]) -> List[Expr]:
             indices.append(scalar_index // acc)
         acc *= extent
     return list(reversed(indices))
-

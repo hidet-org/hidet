@@ -1,4 +1,4 @@
-from typing import Type, Union, List, Callable, Any
+from typing import Type, Union, List
 
 import hidet
 from hidet.graph.modules import nn

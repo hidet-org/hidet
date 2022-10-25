@@ -2,10 +2,10 @@ from typing import Dict, Sequence, Union, Type
 import ctypes
 from enum import Enum
 
-from .ffi import _LIB
-from ctypes import c_int32, c_void_p, pointer, c_float, cast, c_bool
+from ctypes import c_int32, c_void_p, pointer, c_float, cast
 from ctypes import POINTER, Structure
 from hidet.ir.type import TypeNode, ScalarType, TensorType, PointerType, TensorPointerType
+from .ffi import _LIB
 
 c_int32_p = POINTER(c_int32)
 c_float_p = POINTER(c_float)
@@ -44,6 +44,7 @@ class PackedFunc:
         """
         convert arg to a c_void_p
         """
+        # pylint: disable=import-outside-toplevel
         from hidet.graph.tensor import Tensor
         if isinstance(arg, int):
             assert isinstance(param_type, ScalarType)
@@ -54,7 +55,7 @@ class PackedFunc:
                 return cast(pointer(c_float(arg)), c_void_p)
         elif isinstance(arg, Tensor):
             return cast(arg.storage.addr, c_void_p)
-        raise NotImplementedError("Call PackedFunc with argument type: '{}' has not been implemented yet.".format(type(arg)))
+        raise NotImplementedError(f"Call PackedFunc with argument type: '{type(arg)}' has not been implemented yet.")
 
     def _type_code(self, param_type: Union[Type[Union[bool, int, TypeNode]]]):
         type_map = {
@@ -93,7 +94,7 @@ class PackedFunc:
             if self.ret_type is bool:
                 ret_arg = c_int32()
             else:
-                raise NotImplementedError("Currently do not support return type '{}' in packed function.".format(self.ret_type))
+                raise NotImplementedError(f"Currently do not support return type '{self.ret_type}' in packed function.")
             converted_args.append(cast(pointer(ret_arg), c_void_p))
         else:
             ret_arg = None
@@ -113,6 +114,6 @@ class PackedFunc:
 
     def profile(self, *args, warmup: int = 1, number: int = 1, repeat: int = 10):
         results = (c_float * repeat)()
-        p_args, ret_arg = self._convert_args(args)
+        p_args, _ = self._convert_args(args)
         _LIB.ProfilePackedFunc(self.c_packed_func, p_args, warmup, number, repeat, cast(pointer(results), c_float_p))
         return [float(v) / number for v in results]

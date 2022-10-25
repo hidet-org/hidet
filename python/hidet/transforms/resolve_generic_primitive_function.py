@@ -3,11 +3,10 @@ from typing import List
 import hidet.ir.primitives.base.generic
 from hidet.ir.type import ScalarType
 from hidet.ir.stmt import Stmt
-from hidet.ir.expr import Call, Expr, Add, Sub, Multiply, Div, BinaryOp, cast
-from hidet.ir.func import IRModule, Function
-from hidet.ir.functors import collect, StmtExprRewriter, infer_type, TypeInfer
+from hidet.ir.expr import Call, Expr, BinaryOp, cast
+from hidet.ir.functors import StmtExprRewriter, infer_type, TypeInfer
 from hidet.ir.primitives import is_primitive_function, lookup_primitive_function
-from hidet.transforms import Pass, FunctionBodyPass
+from hidet.transforms import FunctionBodyPass
 from hidet.utils.py import green
 
 
@@ -38,7 +37,8 @@ class ResolveGenericPrimitiveFuncRewriter(StmtExprRewriter):
                 arg_types = [infer_type(arg) for arg in args]
                 resolved_dtype = resolve_dtype(arg_types)
                 if resolved_dtype.name not in entry.dispatch_dtype_rules:
-                    msg = 'Can not dispatch generic primitive function {} to dtype {}'.format(green(entry.name), green(resolved_dtype))
+                    msg = 'Can not dispatch generic primitive function {} to dtype {}'.format(
+                        green(entry.name), green(resolved_dtype))
                     raise NotImplementedError(msg)
                 dispatched_func_key = entry.dispatch_dtype_rules[resolved_dtype.name]
                 dispatched_func_entry = lookup_primitive_function(name=dispatched_func_key)

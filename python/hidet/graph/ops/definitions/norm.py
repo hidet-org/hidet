@@ -1,7 +1,6 @@
 from typing import List
 from .utils import Tensor
-from .arithmatic import sqrt, square
-from .reduce import reduce_mean, reduce_var
+from .arithmatic import square
 
 
 def normalize(x: Tensor, dims: List[int], epsilon: float = 1e-5) -> Tensor:

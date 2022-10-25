@@ -1,8 +1,5 @@
 from hidet.ir.func import IRModule
 from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, TensorNode, compute, reduce, input_like
-from hidet.graph.ops.definitions.arithmatic import broadcast_shape
-from hidet.graph.ops.definitions.transform import broadcast, unsqueeze, transpose
-from hidet.ffi import cuda
 
 
 class BatchMatmulTask(Task):
@@ -37,13 +34,13 @@ class BatchMatmulTask(Task):
         )
 
     def implement_cuda(self) -> IRModule:
-        from hidet.graph.ops.schedules.cuda.matmul import batched_matmul_cuda_schedule_simt, batched_matmul_cuda_schedule_wmma, batched_matmul_cuda_schedule_mma
+        from hidet.graph.ops.schedules.cuda import matmul as matmul_schedule  # pylint: disable=import-outside-toplevel
         if self.mma == 'simt':
-            return batched_matmul_cuda_schedule_simt(self)
+            return matmul_schedule.batched_matmul_cuda_schedule_simt(self)
         elif self.mma.startswith('wmma'):
-            return batched_matmul_cuda_schedule_wmma(self)
+            return matmul_schedule.batched_matmul_cuda_schedule_wmma(self)
         elif self.mma.startswith('mma'):
-            return batched_matmul_cuda_schedule_mma(self)
+            return matmul_schedule.batched_matmul_cuda_schedule_mma(self)
         else:
             raise ValueError('Can not recognize mma type {}, candidates: {}'.format(self.mma, ['simt', 'wmma', 'mma']))
 

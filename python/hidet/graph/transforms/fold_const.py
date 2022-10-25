@@ -1,4 +1,4 @@
-from hidet.graph.ir import FlowGraph, Operator, Tensor, GraphRewriter
+from hidet.graph.ir import FlowGraph, Operator, GraphRewriter
 from hidet.graph.transforms import GraphPass
 from hidet import utils
 
@@ -13,11 +13,12 @@ class FoldConstantRewriter(GraphRewriter):
             return None
         else:
             if utils.same_list(inputs, op.inputs):
-                return
+                return None
             else:
                 updated_outputs = op.reforward(inputs)
                 for original, updated in zip(op.outputs, updated_outputs):
                     self.memo[original] = updated
+                return None
 
 
 class FoldConstantPass(GraphPass):

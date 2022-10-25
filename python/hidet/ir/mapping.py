@@ -1,8 +1,9 @@
+# pylint: disable=import-outside-toplevel
 from __future__ import annotations
-from typing import Union, Tuple, List, Type, Dict, Optional, Sequence, Iterator, Callable, Iterable, Mapping
-import numpy as np
+from typing import Union, Tuple, List, Optional, Sequence, Callable, Mapping
 import itertools
-from hidet.utils import prod
+import numpy as np
+from hidet.utils import prod, gcd
 
 Int = Union['Expr', int]
 
@@ -115,7 +116,7 @@ class RepeatTaskMapping(TaskMapping):
         super().__init__(num_workers=1, task_shape=tuple(task_shape), worker2task=self._worker2task)
 
     # noinspection PyUnusedLocal
-    def _worker2task(self, w: Int) -> List[Tuple[Int]]:
+    def _worker2task(self, w: Int) -> List[Tuple[Int]]:  # pylint: disable=unused-argument
         def key_func(task: Tuple[int]) -> int:
             global_index = sum(a * b for a, b in zip(task, self.strides))
             return global_index
@@ -141,9 +142,8 @@ class SpatialTaskMapping(TaskMapping):
 class ProjectedTaskMapping(TaskMapping):
     def __init__(self, base: TaskMapping, dim2value: Mapping[int, Int]):
         assert all(int(v) == 0 for v in dim2value.values())
-        super().__init__(num_workers=base.num_workers,
-                         task_shape=tuple(base.task_shape[i] if i not in dim2value else 1 for i in range(len(base.task_shape))),
-                         worker2task=self._worker2task)
+        task_shape = tuple(base.task_shape[i] if i not in dim2value else 1 for i in range(len(base.task_shape)))
+        super().__init__(num_workers=base.num_workers, task_shape=task_shape, worker2task=self._worker2task)
         self.base = base
         self.dim2value = dim2value
 
@@ -160,13 +160,13 @@ class ComposedTaskMapping(TaskMapping):
         assert len(outer.task_shape) == len(inner.task_shape)
         super().__init__(
             num_workers=outer.num_workers * inner.num_workers,
-            task_shape=tuple([a * b for a, b in zip(outer.task_shape, inner.task_shape)]),
+            task_shape=tuple(a * b for a, b in zip(outer.task_shape, inner.task_shape)),
             worker2task=self._worker2task
         )
         self.outer = outer
         self.inner = inner
 
-    def _worker2task(self, worker_index: Int) -> List[Tuple[Int]]:
+    def _worker2task(self, worker_index: Int) -> List[Tuple[Int, ...]]:
         outer_worker_index = worker_index // self.inner.num_workers
         inner_worker_index = worker_index % self.inner.num_workers
         outer_tasks = self.outer.worker2task(outer_worker_index)
@@ -174,7 +174,8 @@ class ComposedTaskMapping(TaskMapping):
         tasks = []
         for outer_task in outer_tasks:
             for inner_task in inner_tasks:
-                tasks.append(tuple(a * self.inner.task_shape[i] + b for i, (a, b) in enumerate(zip(outer_task, inner_task))))
+                task = tuple(a * self.inner.task_shape[i] + b for i, (a, b) in enumerate(zip(outer_task, inner_task)))
+                tasks.append(task)
         return tasks
 
 
@@ -221,7 +222,8 @@ class TaskMappingExpander:
         base_fields = self.expand(w, layout.base)
         projected_fields = []
         for field in base_fields:
-            projected_fields.append(tuple(layout.dim2value[i] if i in layout.dim2value else field[i] for i in range(rank)))
+            projected_fields.append(tuple(layout.dim2value[i] if i in layout.dim2value else field[i]
+                                          for i in range(rank)))
         return projected_fields
 
     def expand_grid(self, w: Int, layout: SpatialTaskMapping):
@@ -234,7 +236,7 @@ class TaskMappingExpander:
             return layout(w)
         else:
             # do not expand, use for loop
-            from hidet.ir import var, ForStmt
+            from hidet.ir import ForStmt
             shape = layout.task_shape
             axes = []
             for i, s in enumerate(shape):
@@ -281,7 +283,6 @@ def col_repeat(*task_shape: int):
 
 
 def auto_map(*task_shape: int, workers: int, ranks: Optional[Sequence[int]] = None) -> TaskMapping:
-    from hidet.utils import prod, gcd
     task_shape: List[int] = list(task_shape)
     num_tasks = prod(task_shape)
     if num_tasks % workers != 0:
@@ -303,4 +304,3 @@ def auto_map(*task_shape: int, workers: int, ranks: Optional[Sequence[int]] = No
         repeat_shape[dim] = task_shape[dim] // spatial_shape[dim]
         remain //= spatial_shape[dim]
     return repeat_map(repeat_shape, ranks) * spatial_map(spatial_shape, ranks)
-

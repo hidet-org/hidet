@@ -1,11 +1,10 @@
-from typing import List, Dict, Optional, Union
-from hidet.ir.mapping import TaskMapping, row_spatial, col_spatial, repeat_map, row_repeat, col_repeat
+# pylint: disable=line-too-long
+from typing import Union
 from hidet.utils import initialize
-from hidet.ir.type import ScalarType, PointerType, VoidType, void_pointer
-from hidet.ir.expr import Var, Expr, Call, cast
-from hidet.ir.stmt import AsmStmt, AssignStmt, asm
+from hidet.ir.type import PointerType, VoidType
+from hidet.ir.expr import Expr, Call
+from hidet.ir.stmt import asm
 from hidet.ir.func import Function
-from hidet.ir.builders import FunctionBuilder
 from hidet.ir.primitives.func import register_primitive_function
 from hidet.ir.primitives.cuda.funcs import call_cuda
 
@@ -99,7 +98,7 @@ def register_cp_async_wait_all():
     register_primitive_function(cuda_cp_async_wait_all.name, cuda_cp_async_wait_all)
 
 
-def cp_async(dst: Expr, src: Expr, cp_size: int, src_size: Optional[Union[Expr, int]] = None, cache_level: str = 'always', prefetch_bytes: int = 0) -> Call:
+def cp_async(dst: Expr, src: Expr, cp_size: int, src_size=None, cache_level='always', prefetch_bytes=0) -> Call:
     """
     Copy data from global memory to shared memory asynchronously.
 
@@ -161,8 +160,8 @@ def cp_async_wait_group(allow_on_fly_groups: Union[int, Expr]):
     Parameters
     ----------
     allow_on_fly_groups: Union[int, Expr]
-        The maximum number of asynchronous copies that are allowed to be on-the-fly after this function. Can be a python integer or
-        a hidet constant expression.
+        The maximum number of asynchronous copies that are allowed to be on-the-fly after this function.
+        Can be a python integer or a hidet constant expression.
     """
     if isinstance(allow_on_fly_groups, Expr):
         from hidet.ir.functors.simplifier import simplify_to_int

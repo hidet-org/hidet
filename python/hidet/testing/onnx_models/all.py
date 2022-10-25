@@ -3,14 +3,15 @@ import warnings
 import numpy as np
 import hidet
 from hidet.graph import Tensor
-from hidet.utils import download, hidet_cache_dir, hidet_cache_file
+from hidet.utils import hidet_cache_file
 from hidet.utils.transformers_utils import export_transformer_model_as_onnx
 from hidet.utils.torch_utils import export_torchvision_model_as_onnx
 from .model_blocks import get_bert_block, get_resnet50_block
 from .operators import get_onnx_operator
 
 
-def get_onnx_model(name: str, batch_size: int = 1, precision='float32', **kwargs) -> Tuple[str, List[str], List[Tensor]]:
+def get_onnx_model(name: str, batch_size: int = 1,
+                   precision='float32', **kwargs) -> Tuple[str, List[str], List[Tensor]]:
     """
     kwargs candidates:
       seq_length=128
@@ -36,7 +37,8 @@ def get_onnx_model(name: str, batch_size: int = 1, precision='float32', **kwargs
     elif name == 'bert':
         model_path = hidet_cache_file('onnx', 'bert.onnx')
         if precision != 'float32':
-            warnings.warn('the float32 model is returned although {} is requested, because transformers package does not provide api to export f16 model.')
+            warnings.warn('the float32 model is returned although {} is requested, '
+                          'because transformers package does not provide api to export f16 model.')
         export_transformer_model_as_onnx(
             model_name='bert-base-uncased',
             output_path=model_path,
@@ -103,24 +105,3 @@ def get_onnx_model(name: str, batch_size: int = 1, precision='float32', **kwargs
         return get_onnx_operator(name, batch_size, precision=precision)
     else:
         raise NotImplementedError('Can not recognize model {}'.format(name))
-
-
-if __name__ == '__main__':
-    names = [
-        'resnet50',
-        'inception_v3',
-        'mobilenet_v2',
-        'bert',
-        'bart',
-        'gpt2'
-    ]
-    configs = {
-        'bert': {'seq_length': 512},
-        'bart': {'seq_length': 512},
-        'gpt2': {'seq_length': 512},
-    }
-    for model_name in names:
-        kwargs = {}
-        if model_name in configs:
-            kwargs.update(configs[model_name])
-        get_onnx_model(model_name, **kwargs)

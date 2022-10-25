@@ -1,9 +1,7 @@
 from __future__ import annotations
-from typing import List, Optional, Dict, Any, Union, Tuple, Type, Set
-from hidet.graph.ir.flow_graph import FlowGraph, Operator, Tensor
-from hidet.graph.transforms import GraphPass, PassContext
+from typing import List, Optional, Dict, Union, Tuple, Type
+from hidet.graph.ir.flow_graph import Operator, Tensor
 from hidet.graph import ops
-from hidet import graph
 
 
 class TensorPattern:
@@ -107,7 +105,11 @@ class GraphPattern:
         raise NotImplementedError()
 
 
-def op_pattern(op_cls: Type[Operator], input_patterns: List[TensorPattern], num_outputs=1) -> Union[TensorPattern, List[TensorPattern]]:
+def op_pattern(
+        op_cls: Type[Operator],
+        input_patterns: List[TensorPattern],
+        num_outputs=1
+) -> Union[TensorPattern, List[TensorPattern]]:
     op = OperatorPattern(op_cls, input_patterns, num_outputs)
     if num_outputs == 1:
         return op.outputs[0]
@@ -194,17 +196,17 @@ class PatternMatcher:
         desire_uses: List[Tuple[OperatorPattern, int]] = pattern.uses
         actual_uses: List[Tuple[Optional[Operator], int]] = self.usage[target]
         for desire_use in desire_uses:
-            desire_operator, desire_index = desire_use
+            desire_operator, desire_index = desire_use  # pylint: disable=unused-variable
             if desire_operator in self.matched:
                 # this desire operator in pattern has been spanned
                 continue
             spanned = False
             for actual_use in actual_uses:
-                actual_operator, actual_index = actual_use
+                actual_operator, actual_index = actual_use  # pylint: disable=unused-variable
                 if actual_operator in self.reverse_matched:
                     # this actual operator has been matched
                     continue
-                if type(actual_operator) != desire_operator.op_cls:
+                if type(actual_operator) != desire_operator.op_cls:  # pylint: disable=unidiomatic-typecheck
                     continue
                 self.match(desire_operator, actual_operator)
                 spanned = True
@@ -239,4 +241,3 @@ def graph_pattern_match(pattern: TensorPattern, target: Tensor, usage: Usage) ->
         return matcher.matched
     except NotMatchedException:
         return None
-

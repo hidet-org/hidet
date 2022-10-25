@@ -2,11 +2,11 @@ from typing import List
 
 from hidet.ir import IRModule
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
-from hidet.ir.expr import scalar_var, if_then_else, tensor_var, const_like, convert
+from hidet.ir.expr import scalar_var, if_then_else, tensor_var, convert
 from hidet.ir.mapping import TaskMapping
 from hidet.ir.primitives import block_idx, thread_idx
 from hidet.ir import primitives as prim
-from hidet.ir.stmt import AssignStmt, BufferStoreStmt, DeclareStmt, Scope
+from hidet.ir.stmt import AssignStmt, BufferStoreStmt, DeclareStmt
 from hidet.ir.layout import row_layout, local_layout
 from hidet.graph.ops.definitions.softmax import SoftmaxTask
 from hidet.graph.ops.schedules.common import params_from_task

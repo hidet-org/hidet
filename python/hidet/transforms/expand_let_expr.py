@@ -1,5 +1,6 @@
-from hidet.ir.expr import Let, var
-from hidet.ir.stmt import *
+from hidet.ir.expr import Let
+from hidet.ir.stmt import Stmt, LetStmt, EvaluateStmt, BufferStoreStmt, AssignStmt, ForStmt, IfStmt, AssertStmt, AsmStmt
+from hidet.ir.stmt import BlackBoxStmt
 from hidet.ir.functors import StmtExprRewriter
 from hidet.transforms import Pass, FunctionBodyPass
 
@@ -7,7 +8,8 @@ from hidet.transforms import Pass, FunctionBodyPass
 def wrapper(stmt_visitor):
     def wrapped_visitor(self, stmt):
         self.stmt_stack.append([])
-        self.memo.clear()  # do not cache exprs between different statements, so the let expr will always generate let stmt.
+        # do not cache exprs between different statements, so the let expr will always generate let stmt.
+        self.memo.clear()
         updated_stmt = stmt_visitor(self, stmt)
         let_stmts = self.stmt_stack.pop()
         if len(let_stmts) == 0:
@@ -84,4 +86,3 @@ class ExpandLetExprPass(FunctionBodyPass):
 
 def expand_let_expr_pass() -> Pass:
     return ExpandLetExprPass()
-

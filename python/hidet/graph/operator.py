@@ -1,5 +1,5 @@
-from typing import List, Optional, Dict, Any, Iterable, Tuple, Union
-from collections import defaultdict, namedtuple
+from typing import List, Optional, Dict, Any, Union
+from collections import namedtuple
 
 from hidet.ir.task import Task
 from hidet.runtime.module import CompiledFunction
@@ -35,7 +35,6 @@ class Operator:
         self.outputs: Optional[List[Tensor]] = outputs
         self.name: str = name if name else trim_op_ending(self.__class__.__name__)
 
-        # assert len(inputs) > 0 and all(inputs[i].device == inputs[0].device for i in range(len(inputs))), 'Expect input tensor on the same device'
         self.device: str = inputs[0].device
 
         assert all(isinstance(v, Tensor) for v in inputs)
@@ -69,7 +68,8 @@ class Operator:
         self.build_task_func()
         assert len(inputs) + len(self.task.outputs) == len(self.task.parameters)
         output_types = [output.data_type for output in self.task.parameters[-len(self.task.outputs):]]
-        outputs = [empty(shape=type.const_shape(), dtype=type.scalar_type.name, device=self.device, layout=type.layout) for type in output_types]
+        outputs = [empty(shape=type.const_shape(), dtype=type.scalar_type.name, device=self.device, layout=type.layout)
+                   for type in output_types]
         self.pure_run(inputs, outputs)
         return outputs
 
@@ -94,7 +94,7 @@ class Operator:
 
         status = get_last_error()
         if status is not None:
-            msg = 'Kernel failed. Error:\n{}'.format(self.name, status)
+            msg = 'Kernel for operator {} failed. Error:\n{}'.format(self.name, status)
             raise BackendException(msg)
 
     def reforward(self, inputs: List[Tensor], update_attributes: Optional[Dict[str, Any]] = None) -> List[Tensor]:
@@ -136,38 +136,24 @@ class Operator:
 
     def dummy_outputs(self) -> List[Tensor]:
         output_types = [output.data_type for output in self.task.parameters[-len(self.task.outputs):]]
-        dummy_outputs = [empty(shape=type.const_shape(), dtype=type.scalar_type.name, device='cuda', layout=type.layout) for type in output_types]
+        dummy_outputs = [empty(shape=type.const_shape(), dtype=type.scalar_type.name, device='cuda', layout=type.layout)
+                         for type in output_types]
         return dummy_outputs
 
     def latency(self, warmup=3, number=20, repeat=5, median=True) -> Union[List[float], float]:
-        from hidet.ffi import cuda
-        from time import time
-        import numpy as np
+        from hidet.testing import benchmark_func
         dummy_inputs = self.dummy_inputs()
         outputs = self.dummy_outputs()
-
         self.imperative_run(dummy_inputs)
-        for t in range(warmup):
-            self.task_func(*dummy_inputs, *outputs)
-        cuda.device_synchronize()
-        results = []
-        for i in range(repeat):
-            cuda.device_synchronize()
-            t1 = time()
-            for j in range(number):
-                self.task_func(*dummy_inputs, *outputs)
-            cuda.device_synchronize()
-            t2 = time()
-            results.append((t2 - t1) / number * 1000.0)
-        if median:
-            return float(np.median(results))
-        return results
+        return benchmark_func(lambda: self.task_func(*dummy_inputs, *outputs),
+                              warmup=warmup, number=number, repeat=repeat, median=median)
 
     def build_task_func(self):
         from hidet.driver import build_task
         if self.task_func is None:
             pc = _profile_config
-            self.task_func = build_task(self.task, space_level=self._current_space_level, target_device=self.device, warmup=pc.warmup, number=pc.number, repeat=pc.repeat, use_cache=self._use_cache)
+            self.task_func = build_task(self.task, space_level=self._current_space_level, target_device=self.device,
+                                        warmup=pc.warmup, number=pc.number, repeat=pc.repeat, use_cache=self._use_cache)
 
 
 def space_level(level=0):
@@ -203,7 +189,7 @@ def space_level(level=0):
     level: int
         The space level to use. Candidates: 0, 1, and 2.
     """
-    Operator._current_space_level = level
+    Operator._current_space_level = level  # pylint: disable=protected-access
 
 
 def get_space_level() -> int:
@@ -214,7 +200,7 @@ def get_space_level() -> int:
     ret: int
         The current space level.
     """
-    return Operator._current_space_level
+    return Operator._current_space_level  # pylint: disable=protected-access
 
 
 def cache_operator(use_cache: bool = True):
@@ -233,7 +219,7 @@ def cache_operator(use_cache: bool = True):
     use_cache: bool
         Whether to cache the compiled operator.
     """
-    Operator._use_cache = use_cache
+    Operator._use_cache = use_cache  # pylint: disable=protected-access
 
 
 def profile_config(warmup=3, number=10, repeat=3):
@@ -268,7 +254,7 @@ def profile_config(warmup=3, number=10, repeat=3):
         The number of repeats.
     """
     global _profile_config
-    _profile_config = ProfileConfig(warmup, number, repeat)
+    _profile_config = ProfileConfig(warmup, number, repeat)  # pylint: disable=protected-access
 
 
 def get_profile_config() -> ProfileConfig:
@@ -280,4 +266,3 @@ def get_profile_config() -> ProfileConfig:
         The current profile config. It is a named tuple with fields (warmup, number, repeat).
     """
     return _profile_config
-

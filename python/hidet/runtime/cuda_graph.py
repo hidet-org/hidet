@@ -1,11 +1,10 @@
-import numpy as np
-from typing import List, Optional, Iterable, Sequence, Callable, Union, Iterator
-import time
+from typing import List, Optional, Union
 from hidet.ffi import cuda
 from hidet.runtime.storage import CudaMemoryPool
 from hidet.runtime.cuda_stream import CudaStream
 from hidet.graph.tensor import Tensor
 from hidet.graph.ir.flow_graph import FlowGraph
+from hidet.testing import benchmark_func
 
 
 def dummy_input_like(tensor: Tensor) -> Tensor:
@@ -58,12 +57,14 @@ class CudaGraphImpl:
 class CudaGraph:
     """CUDA Graph wrapper class.
 
-    The cuda graph tracks the kernel launches on the cuda device and replays them efficiently. To use the cuda graph, we should
+    The cuda graph tracks the kernel launches on the cuda device and replays them efficiently. To use the cuda graph,
+    we should
 
-    1. Use function :func:`FlowGraph.cuda_graph() <hidet.graph.FlowGraph.cuda_graph>` to create a cuda graph from an existing
-       flow graph.
-    2. Use :func:`~hidet.runtime.cuda_graph.CudaGraph.set_input_tensors` or :func:`~hidet.runtime.cuda_graph.CudaGraph.set_input_tensor` to
-       set the values of the cuda graph input tensors. These functions would copy the contents of the given tensors to the input tensors of the cuda graph.
+    1. Use function :func:`FlowGraph.cuda_graph() <hidet.graph.FlowGraph.cuda_graph>` to create a cuda graph from an
+       existing flow graph.
+    2. Use :func:`~hidet.runtime.cuda_graph.CudaGraph.set_input_tensors` or
+       :func:`~hidet.runtime.cuda_graph.CudaGraph.set_input_tensor` to set the values of the cuda graph input tensors.
+       These functions would copy the contents of the given tensors to the input tensors of the cuda graph.
     3. Run the cuda graph with :func:`~hidet.runtime.cuda_graph.CudaGraph.run`.
     4. Access the results through the cuda graph output tensors :attr:`~hidet.runtime.cuda_graph.CudaGraph.outputs`.
 
@@ -161,12 +162,15 @@ class CudaGraph:
         if src.device != 'cuda':
             src = src.cuda()
         if src.dtype != dst.dtype:
-            msg = 'The i-th {} input tensor expect data type {}, but got a tensor with data type {}.'.format(idx, dst.dtype, src.dtype)
+            msg = 'The i-th {} input tensor expect data type {}, but got a tensor with data type {}.'.format(
+                idx, dst.dtype, src.dtype)
             raise ValueError(msg)
         if any(a != b for a, b in zip(input_tensor.shape, self.inputs[idx].shape)):
-            msg = 'The i-th {} input tensor expect shape {}, bot got a tensor with shape {}'.format(idx, dst.shape, src.shape)
+            msg = 'The i-th {} input tensor expect shape {}, bot got a tensor with shape {}'.format(
+                idx, dst.shape, src.shape)
             raise ValueError(msg)
-        cuda.memcpy_async(src.storage.addr, dst.storage.addr, num_bytes=dst.nbytes, kind=cuda.DeviceToDevice, stream=stream.handle if stream else 0)
+        cuda.memcpy_async(src.storage.addr, dst.storage.addr, num_bytes=dst.nbytes, kind=cuda.DeviceToDevice,
+                          stream=stream.handle if stream else 0)
 
     def run_with_inputs(self, inputs) -> List[Tensor]:
         """Run the cuda graph with given inputs.
@@ -206,21 +210,7 @@ class CudaGraph:
         self.cuda_graph_exec.launch(stream)
 
     def profile(self, warmup, number, repeat, median=True) -> Union[float, List[float]]:
-        latency_list = []
-        for i in range(warmup):
-            self.run()
-        for i in range(repeat):
-            cuda.device_synchronize()
-            start = time.time()
-            for j in range(number):
-                self.run()
-            cuda.device_synchronize()
-            end = time.time()
-            latency_list.append((end - start) / number * 1000)
-        if median:
-            return float(np.median(latency_list))
-        else:
-            return latency_list
+        return benchmark_func(lambda: self.run(), warmup, number, repeat, median)
 
     def __del__(self):
         self.mem_pool.storage_device.freeze(False)

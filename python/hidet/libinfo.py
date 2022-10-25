@@ -1,8 +1,19 @@
+"""
+Query the search directories for dynamic shared library, and the runtime header include path.
+"""
 from typing import List
 import os
 
 
 def get_include_dirs():
+    """
+    Get the include directories for the runtime header files.
+
+    Returns
+    -------
+    include_dirs : List[str]
+        The include directories.
+    """
     cur_file = os.path.abspath(__file__)
     hidet_package_root = os.path.dirname(cur_file)
     include_dirs = []
@@ -22,6 +33,14 @@ def get_include_dirs():
 
 
 def get_library_search_dirs() -> List[str]:
+    """
+    Get the library search directories for the dynamic libraries of hidet.
+
+    Returns
+    -------
+    lib_dirs : List[str]
+        The library search directories.
+    """
     cur_file = os.path.abspath(__file__)
     root = os.path.dirname(cur_file)
     relative_dirs = [
@@ -36,7 +55,3 @@ def get_library_search_dirs() -> List[str]:
         '../../build-debug/lib',
     ]
     return [os.path.abspath(os.path.join(root, relative)) for relative in relative_dirs]
-
-
-if __name__ == '__main__':
-    print(get_include_dirs())

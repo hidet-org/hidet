@@ -1,11 +1,10 @@
 from typing import List
 from hidet.graph.ir.functors import GraphRewriter
 from hidet.graph.ir.flow_graph import FlowGraph, Operator, Tensor
-from hidet.graph.ops import definitions as defs
 from hidet.graph import ops
 from hidet.ir.type import ScalarType
-from .base import GraphPass
 from hidet.utils import strict_zip, same_list
+from .base import GraphPass
 
 
 class DefaultTransformStrategy:
@@ -55,6 +54,7 @@ class AutoMixPrecisionRewriter(GraphRewriter):
             updated_outputs = op.reforward(casted_inputs)
             for original, updated in zip(op.outputs, updated_outputs):
                 self.memo[original] = updated
+            return None
 
 
 class AutoMixPrecisionPass(GraphPass):

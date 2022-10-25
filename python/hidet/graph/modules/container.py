@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional, Iterable
+from typing import Iterable
 from collections import OrderedDict
 from hidet.graph.module import Module
 
@@ -17,7 +17,7 @@ class Sequential(Module):
             for idx, module in enumerate(args):
                 self.__setattr__(str(idx), module)
 
-    def forward(self, x):
+    def forward(self, x):  # pylint: disable=arguments-differ
         for module in self.submodules.values():
             x = module(x)
         return x

@@ -1,4 +1,3 @@
-from typing import List
 import os
 import os.path
 import functools
@@ -19,7 +18,7 @@ def get_repo_sha(short=False):
     Parameters
     ----------
     short: bool, default False
-        Whether get a short version of hash.
+        Whether to get a short version of hash.
 
     Returns
     -------
@@ -136,8 +135,3 @@ def hidet_clear_op_cache():
     op_cache = hidet_cache_dir('ops')
     print('Clearing operator cache in {}'.format(op_cache))
     shutil.rmtree(op_cache, ignore_errors=True)
-
-
-if __name__ == '__main__':
-    print(repo_root())
-

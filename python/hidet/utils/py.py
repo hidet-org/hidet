@@ -1,5 +1,4 @@
-from typing import TypeVar, Iterable, Tuple, List, Union
-import numpy as np
+from typing import TypeVar, Iterable, Tuple, List, Union, Sequence
 import cProfile
 import contextlib
 import io
@@ -7,8 +6,8 @@ import itertools
 import os
 import pstats
 import time
+import numpy as np
 from tabulate import tabulate
-from typing import Callable, MutableMapping, Sequence
 
 
 def unique(seq: Sequence) -> List:
@@ -32,7 +31,8 @@ TypeB = TypeVar('TypeB')
 
 def strict_zip(a: Sequence[TypeA], b: Sequence[TypeB]) -> Iterable[Tuple[TypeA, TypeB]]:
     if len(a) != len(b):
-        raise ValueError('Expect two sequence have the same length in zip, got length {} and {}.'.format(len(a), len(b)))
+        raise ValueError('Expect two sequence have the same length in zip, '
+                         'got length {} and {}.'.format(len(a), len(b)))
     return zip(a, b)
 
 
@@ -109,7 +109,8 @@ def color_table():
 
 
 def color_rgb(v, fg, fmt='{}'):
-    return '\033[38;2;{};{};{}m{}\033[0m'.format(fg[0], fg[1], fg[2], v)
+    fmt = '\033[38;2;{};{};{}m'.format(fg[0], fg[1], fg[2]) + fmt + '\033[0m'
+    return fmt.format(v)
 
 
 def color_text(v, fmt='{}', idx: int = 0):
@@ -123,7 +124,7 @@ def color_text(v, fmt='{}', idx: int = 0):
 
 
 def nocolor(s: str) -> str:
-    for name, value in COLORS.__dict__.items():
+    for value in COLORS.__dict__.values():
         if isinstance(value, str) and value[0] == '\033':
             s = s.replace(value, '')
     return s
@@ -217,6 +218,7 @@ def get_next_file_index(dirname: str) -> int:
     for idx in itertools.count(0):
         if idx not in indices:
             return idx
+    return -1
 
 
 def factorize(n):
@@ -345,7 +347,6 @@ def initialize(*args, **kwargs):
     """
     def decorator(f):
         f(*args, **kwargs)
-        return None
     return decorator
 
 
@@ -415,7 +416,7 @@ def error_tolerance(a: Union[np.ndarray, 'Tensor'], b: Union[np.ndarray, 'Tensor
         b = b.astype(np.float32)
     lf = 0.0
     rg = 9.0
-    for step in range(20):
+    for _ in range(20):
         mid = (lf + rg) / 2.0
         if np.allclose(a, b, rtol=mid, atol=mid):
             rg = mid

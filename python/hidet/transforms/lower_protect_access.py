@@ -63,4 +63,3 @@ class LowerProtectAccessPass(FunctionBodyPass):
 
 def lower_protect_access_pass() -> Pass:
     return LowerProtectAccessPass()
-

@@ -1,4 +1,4 @@
-from hidet.graph.ir import FlowGraph, Operator, Tensor, GraphRewriter
+from hidet.graph.ir import FlowGraph, Operator, GraphRewriter
 from hidet.graph.transforms import GraphPass
 
 from .utils import is_barrier
@@ -12,6 +12,7 @@ class EliminateBarrierRewriter(GraphRewriter):
             outputs = inputs
             for original, updated in zip(op.outputs, outputs):
                 self.memo[original] = updated
+            return None
         else:
             return GraphRewriter.visit_Operator(self, op)
 

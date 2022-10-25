@@ -9,7 +9,7 @@ from hidet.ir.expr import Constant
 from hidet.ir.func import IRModule
 from hidet.ir.task import Task, TaskContext
 from hidet.utils import TableBuilder, strict_zip, error_tolerance
-from hidet.graph.tensor import randn, zeros, ones, Tensor, array
+from hidet.graph.tensor import randn, zeros, ones, Tensor
 from .common import Schedule
 
 
@@ -28,7 +28,7 @@ def dummy_inputs_from_task(task: Task, target_device: str) -> List[Tensor]:
         The dummy input tensors.
     """
     inputs = []
-    for idx, param in enumerate(task.parameters):
+    for param in task.parameters:
         param_type = param.data_type
 
         if not isinstance(param_type, TensorType):
@@ -49,7 +49,10 @@ def dummy_inputs_from_task(task: Task, target_device: str) -> List[Tensor]:
     return inputs
 
 
-def resolve_ir_modules(ir_modules: List[IRModule], schedules: List[Schedule], target_device: str, output_dir: str, parallel: bool = True, verbose: bool = True, validate: bool = False) -> IRModule:
+def resolve_ir_modules(
+        ir_modules: List[IRModule], schedules: List[Schedule], target_device: str, output_dir: str,
+        parallel=True, verbose=True, validate=False
+) -> IRModule:
     """
     Resolve the ir modules of the same task by comparing the latency of each kernel.
 
@@ -69,8 +72,8 @@ def resolve_ir_modules(ir_modules: List[IRModule], schedules: List[Schedule], ta
         Whether to show the progress of parallel building.
     validate: bool
         Whether to mutual validate the correctness of different schedules. To perform the mutual validation, we will
-        run all successful built ir modules with the same dummy inputs, compare their outputs, and make sure their outputs
-        are within error threshold. Default: False.
+        run all successful built ir modules with the same dummy inputs, compare their outputs, and make sure their
+        outputs are within error threshold. Default: False.
     Returns
     -------
     ret: IRModule
@@ -93,7 +96,8 @@ def resolve_ir_modules(ir_modules: List[IRModule], schedules: List[Schedule], ta
                                      keep_ir=False,
                                      nvcc_keep=False,
                                      verbose=False) for idx, ir_module in enumerate(ir_modules)]
-    compiled_funcs: List[Optional[CompiledFunction]] = batch_build_ir_modules(build_instances, parallel=parallel, verbose=verbose)
+    compiled_funcs: List[Optional[CompiledFunction]] = batch_build_ir_modules(build_instances, parallel=parallel,
+                                                                              verbose=verbose)
     dummy_inputs = dummy_inputs_from_task(ir_modules[0].task, target_device)
     best_latency = 1e30
     best_ir_module = None
@@ -107,7 +111,7 @@ def resolve_ir_modules(ir_modules: List[IRModule], schedules: List[Schedule], ta
     errors: List[float] = []
     if validate:
         task = ir_modules[0].task
-        num_inputs, num_outputs = len(task.inputs), len(task.outputs)
+        num_inputs, num_outputs = len(task.inputs), len(task.outputs)  # pylint: disable=unused-variable
         inputs, outputs = dummy_inputs[:num_inputs], dummy_inputs[num_inputs:]
         example_outputs: Optional[List[Tensor]] = None
         for func in compiled_funcs:
@@ -125,9 +129,11 @@ def resolve_ir_modules(ir_modules: List[IRModule], schedules: List[Schedule], ta
 
     # measure latency
     ctx = TaskContext.current()
-    for ir_module, compiled_func in tqdm(strict_zip(ir_modules, compiled_funcs), desc='Benchmarking', total=len(ir_modules)):
+    for ir_module, compiled_func in tqdm(strict_zip(ir_modules, compiled_funcs), desc='Benchmarking',
+                                         total=len(ir_modules)):
         if compiled_func:
-            repeat_latency = compiled_func.profile(*dummy_inputs, warmup=ctx.warmup, number=ctx.number, repeat=ctx.repeat)
+            repeat_latency = compiled_func.profile(*dummy_inputs, warmup=ctx.warmup, number=ctx.number,
+                                                   repeat=ctx.repeat)
             latency = float(np.median(repeat_latency))
         else:
             # this ir module failed in building, skip
@@ -138,7 +144,8 @@ def resolve_ir_modules(ir_modules: List[IRModule], schedules: List[Schedule], ta
             best_ir_module = ir_module
 
     # generate summary
-    with TableBuilder(headers=['idx'] + [v[0] for v in (schedules[0].keys() + schedules[0].derived_keys())] + ['Error', 'latency']) as tb:
+    headers = ['idx'] + [v[0] for v in (schedules[0].keys() + schedules[0].derived_keys())] + ['Error', 'latency']
+    with TableBuilder(headers=headers) as tb:
         rows = []
         for idx, (schedule, error, latency) in enumerate(zip(schedules, errors, latencies)):
             row = [idx] + [v[1] for v in schedule.keys() + schedule.derived_keys()] + [error, latency]

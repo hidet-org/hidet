@@ -1,6 +1,5 @@
 from typing import Optional, Union, Tuple
 from hidet.ir.expr import Expr, Var
-from hidet.ir.func import Function
 
 Int = Union[Expr, int]
 Dim3 = Union[Int, Tuple[Int, Int], Tuple[Int, Int, Int]]

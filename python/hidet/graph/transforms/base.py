@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import List, Sequence, Optional, Dict, Any
+from typing import List, Optional, Dict, Any
 import logging
 
 from hidet.graph.ir.flow_graph import FlowGraph
@@ -207,7 +207,7 @@ class PassContext:
         out_dir: str
             The directory to save graph.
         """
-        from .instruments.save_graph_instrument import SaveGraphInstrument
+        from .instruments.save_graph_instrument import SaveGraphInstrument  # pylint: disable=import-outside-toplevel
         self.instruments.append(SaveGraphInstrument(out_dir))
         return self
 
@@ -223,7 +223,7 @@ class PassContext:
         print_stdout: bool
             Whether to print the elapsed time for each pass to standard output.
         """
-        from .instruments.profile_instrument import ProfileInstrument
+        from .instruments.profile_instrument import ProfileInstrument  # pylint: disable=import-outside-toplevel
         self.instruments.append(ProfileInstrument(log_file, print_stdout))
         return self
 

@@ -1,7 +1,16 @@
-from hidet.ir.dialects.pattern import *
-from hidet.ir.compute import *
-from hidet.ir.func import *
-from hidet.ir.stmt import *
+# pylint: disable=bad-staticmethod-argument
+from typing import Any, Union, Mapping, Sequence, Type, List
+from hidet.ir.node import Node
+from hidet.ir.type import ScalarType, TensorType, PointerType, TensorPointerType, ReferenceType, VoidType
+from hidet.ir.expr import Add, Sub, Multiply, Div, Mod, FloorDiv, Neg, LessThan, LessEqual, Equal, NotEqual, And, Or
+from hidet.ir.expr import Not, BitwiseAnd, BitwiseOr, BitwiseNot, BitwiseXor, LeftShift, RightShift, TensorElement
+from hidet.ir.expr import TensorSlice, IfThenElse, Call, Let, Var, Constant, Cast, Dereference, Address, Reference
+from hidet.ir.expr import BinaryOp, Expr
+from hidet.ir.stmt import EvaluateStmt, DeclareStmt, BufferStoreStmt, AssignStmt, LetStmt, ForStmt, ForTaskStmt, SeqStmt
+from hidet.ir.stmt import WhileStmt, BreakStmt, ContinueStmt, IfStmt, ReturnStmt, AsmStmt, AssertStmt, BlackBoxStmt
+from hidet.ir.func import Function
+from hidet.ir.compute import TensorNode, ScalarNode, ReduceCompute, ArgReduceCompute, GridCompute
+from hidet.ir.dialects.pattern import AnyExpr
 
 
 class NodeFunctor:
@@ -20,9 +29,10 @@ class NodeFunctor:
         if isinstance(node, Node):
             idx = node.class_index() if node is not None else 0
             # noinspection PyUnresolvedReferences
-            dispatch_table = self.__class__.dispatch_table
+            dispatch_table = self.__class__.dispatch_table  # pylint: disable=no-member
             if idx >= len(dispatch_table):
-                raise NotImplementedError('Does not implement dispatch function in "{}" for node "{}"'.format(type(self).__qualname__, type(node).__qualname__))
+                raise NotImplementedError('Does not implement dispatch function in "{}" for node "{}"'.format(
+                    type(self).__qualname__, type(node).__qualname__))
             ret = dispatch_table[idx](self, node)
         elif isinstance(node, tuple):
             ret = tuple(self.visit(v) for v in node)
@@ -35,7 +45,7 @@ class NodeFunctor:
         return ret
 
     @staticmethod
-    def get_dispatch_mapping(cls) -> Mapping[Type[Node], Any]:
+    def get_dispatch_mapping(cls) -> Mapping[Type[Node], Any]:  # pylint: disable=unused-argument
         return {}
 
     @classmethod
@@ -514,7 +524,7 @@ class ExprRewriter(ExprFunctor):
         return e
 
     def visit_ScalarNode(self, e: ScalarNode):
-        from hidet.ir.functors import collect
+        from hidet.ir.functors import collect  # pylint: disable=import-outside-toplevel
         if e.scalar_compute is None:
             return e
         else:
@@ -528,7 +538,8 @@ class ExprRewriter(ExprFunctor):
                 else:
                     input_tensors = collect(value, TensorNode, stop_when_found=True)
                     input_scalars = collect(value, ScalarNode, stop_when_found=True)
-                    return ScalarNode(e.name, e.data_type, ReduceCompute(input_tensors, input_scalars, shape, axes, value, rc.reduce_operation, rc.accumulate_dtype))
+                    return ScalarNode(e.name, e.data_type, ReduceCompute(
+                        input_tensors, input_scalars, shape, axes, value, rc.reduce_operation, rc.accumulate_dtype))
             elif isinstance(e.scalar_compute, ArgReduceCompute):
                 sc = e.scalar_compute
                 axis = self(sc.axis)
@@ -539,12 +550,13 @@ class ExprRewriter(ExprFunctor):
                 else:
                     input_tensors = collect(value, TensorNode, stop_when_found=True)
                     input_scalars = collect(value, ScalarNode, stop_when_found=True)
-                    return ScalarNode(e.name, e.data_type, ArgReduceCompute(input_tensors, input_scalars, extent, axis, value, sc.reduce_operation, sc.index_dtype))
+                    return ScalarNode(e.name, e.data_type, ArgReduceCompute(
+                        input_tensors, input_scalars, extent, axis, value, sc.reduce_operation, sc.index_dtype))
             else:
                 raise NotImplementedError('Can not recognize ScalarCompute: {}'.format(type(e.scalar_compute).__name__))
 
     def visit_TensorNode(self, e: TensorNode):
-        from hidet.ir.functors import collect
+        from hidet.ir.functors import collect  # pylint: disable=import-outside-toplevel
         if e.tensor_compute is None:
             return e
         else:
@@ -558,7 +570,8 @@ class ExprRewriter(ExprFunctor):
                 else:
                     input_tensors = collect(value, TensorNode, stop_when_found=True)
                     input_scalars = collect(value, ScalarNode, stop_when_found=True)
-                    return TensorNode(e.name, e.data_type, GridCompute(input_tensors, input_scalars, shape, axes, value))
+                    return TensorNode(e.name, e.data_type,
+                                      GridCompute(input_tensors, input_scalars, shape, axes, value))
             else:
                 raise NotImplementedError('Can not recognize TensorCompute: {}'.format(type(e.tensor_compute).__name__))
 
@@ -663,7 +676,7 @@ class StmtVisitor(StmtFunctor):
         self.visit_expr(stmt.value)
 
     def visit_LetStmt(self, stmt: LetStmt):
-        for bind_var, bind_value in zip(stmt.bind_vars, stmt.bind_values):
+        for _, bind_value in zip(stmt.bind_vars, stmt.bind_values):
             self.visit_expr(bind_value)
         self.visit(stmt.body)
 
@@ -842,7 +855,7 @@ class StmtRewriter(StmtFunctor):
             return SeqStmt(seq)
 
 
-class StmtExprFunctor(ExprFunctor, StmtFunctor):
+class StmtExprFunctor(ExprFunctor, StmtFunctor):  # pylint: disable=abstract-method
     def visit_expr(self, e: Expr):
         return self.visit(e)
 

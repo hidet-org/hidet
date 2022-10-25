@@ -1,7 +1,6 @@
-from typing import List, Dict
+from typing import List, Dict, Optional
 import os
 import os.path
-from typing import Optional
 import ctypes
 from hidet.libinfo import get_library_search_dirs
 
@@ -52,7 +51,7 @@ def func_exists(func_name: str, shared_lib: ctypes.CDLL) -> bool:
     try:
         getattr(shared_lib, func_name)
         return True
-    except AttributeError as e:
+    except AttributeError:
         return False
 
 

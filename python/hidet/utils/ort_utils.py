@@ -1,11 +1,8 @@
-from time import time
 from typing import Dict, List
-
 import onnxruntime as ort
-
 import hidet
 from hidet import Tensor
-from hidet.ffi import cuda
+from hidet.testing import benchmark_func
 
 
 def create_ort_session(onnx_model_path, provider='CUDAExecutionProvider') -> ort.InferenceSession:
@@ -35,28 +32,8 @@ def ort_inference(session: ort.InferenceSession, inputs: Dict[str, Tensor]) -> D
     return outputs
 
 
-def ort_benchmark(session: ort.InferenceSession, dummy_inputs: Dict[str, Tensor], warmup=10, number=10, repeat=10) -> List[float]:
+def ort_benchmark(session: ort.InferenceSession, dummy_inputs: Dict[str, Tensor], warmup=10, number=10,
+                  repeat=10) -> List[float]:
     io_binding = _prepare_io_binding(session, dummy_inputs)
-    for i in range(warmup):
-        session.run_with_iobinding(iobinding=io_binding)
-    results = []
-    for i in range(repeat):
-        cuda.device_synchronize()
-        start_time = time()
-        for j in range(number):
-            session.run_with_iobinding(iobinding=io_binding)
-        cuda.device_synchronize()
-        end_time = time()
-        results.append((end_time - start_time) * 1000 / number)
-    return results
-
-
-if __name__ == '__main__':
-    model_path = hidet.utils.hidet_cache_file('onnx', 'resnet50-v1-7.onnx')
-    session = create_ort_session(model_path)
-    inputs = {
-        'data': hidet.randn([1, 3, 224, 224])
-    }
-    outputs = ort_inference(session, inputs)
-    print(outputs)
-    print(ort_benchmark(session, inputs))
+    return benchmark_func(lambda: session.run_with_iobinding(iobinding=io_binding), warmup=warmup, number=number,
+                          repeat=repeat, median=False)

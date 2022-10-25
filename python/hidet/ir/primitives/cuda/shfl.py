@@ -7,7 +7,8 @@ from hidet.utils import initialize
 def register_primitive_functions():
     functions = [
         ('cuda_activemask', '__activemask', FuncType([], 'int32')),
-        ('cuda_shfl_sync', '__shfl_sync', FuncType(type_infer_func=lambda arg_types: arg_types[1])),  # T __shfl_sync(unsigned mask, T var, int srcLane, int width=warpSize)
+        # T __shfl_sync(unsigned mask, T var, int srcLane, int width=warpSize)
+        ('cuda_shfl_sync', '__shfl_sync', FuncType(type_infer_func=lambda arg_types: arg_types[1])),
         ('cuda_shfl_up_sync', '__shfl_up_sync', FuncType(type_infer_func=lambda arg_types: arg_types[1])),
         ('cuda_shfl_down_sync', '__shfl_down_sync', FuncType(type_infer_func=lambda arg_types: arg_types[1])),
     ]
@@ -33,5 +34,3 @@ def shfl_xor_sync(mask, var, lane_mask, width=32):
 
 def active_mask():
     return call_primitive_func('cuda_activemask', [])
-
-

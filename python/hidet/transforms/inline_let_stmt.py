@@ -1,8 +1,7 @@
-from typing import Mapping
 from collections import defaultdict
 
-from hidet.ir.expr import Var, Expr, Constant, Mod, Add, Sub
-from hidet.ir.functors import StmtExprRewriter, StmtExprVisitor, rewrite, same_list
+from hidet.ir.expr import Var, Expr, Constant, Add, Sub
+from hidet.ir.functors import StmtExprRewriter, StmtExprVisitor, same_list
 from hidet.ir.type import TensorType, TensorPointerType
 from hidet.ir.stmt import Stmt, LetStmt
 from hidet.transforms import Pass, FunctionBodyPass, RepeatFunctionPass
@@ -19,10 +18,10 @@ class LetVarRefAnalyzer(StmtExprVisitor):
         self.var2value = {}
         self.visit(expr)
 
-    def visit(self, obj):
-        if isinstance(obj, Var):
-            self.usage_count[obj] += 1
-        return StmtExprVisitor.visit(self, obj)
+    def visit(self, node):
+        if isinstance(node, Var):
+            self.usage_count[node] += 1
+        return StmtExprVisitor.visit(self, node)
 
     def visit_LetStmt(self, stmt: LetStmt):
         for bind_var, bind_value in zip(stmt.bind_vars, stmt.bind_values):

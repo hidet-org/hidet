@@ -7,7 +7,8 @@ from hidet.utils import green
 
 
 class PrimitiveFunctionRegistry:
-    def __init__(self, name: str, codegen_name: str, func_type: FuncType, function: Optional[Function] = None, generic: bool = False):
+    def __init__(self, name: str, codegen_name: str, func_type: FuncType, function: Optional[Function] = None,
+                 generic: bool = False):
         self.var = Var(hint=name, type=func_type)
         self.name: str = name
         self.codegen_name: str = codegen_name
@@ -57,7 +58,8 @@ class PrimitiveFunctionPool:
                 generic=generic
             )
         else:
-            raise TypeError('Expect a Function or FuncType to register a primitive function, got {}'.format(type(func_or_type)))
+            raise TypeError('Expect a Function or FuncType to register a primitive function, got {}'.format(
+                type(func_or_type)))
         if name in self.name2func:
             raise KeyError('Primitive function {} has already registered.'.format(name))
         self.name2func[name] = registry
@@ -70,7 +72,8 @@ class PrimitiveFunctionPool:
 
     def lookup_by_name(self, name: str) -> PrimitiveFunctionRegistry:
         if name not in self.name2func:
-            raise ValueError('Can not find primitive function with key: {}, candidates:\n{}.'.format(name, '\n'.join(str(v) for v in primitive_func_pool.name2func)))
+            raise ValueError('Can not find primitive function with key: {}, candidates:\n{}.'.format(
+                name, '\n'.join(str(v) for v in primitive_func_pool.name2func)))
         return self.name2func[name]
 
     def registered_names(self) -> Dict[str, List[str]]:
@@ -101,7 +104,12 @@ def registered_primitive_functions() -> List[str]:
     return list(primitive_func_pool.name2func.keys())
 
 
-def register_primitive_function(name: str, func_or_type: Union[Function, FuncType], codegen_name: Optional[str] = None, generic=False) -> PrimitiveFunctionRegistry:
+def register_primitive_function(
+        name: str,
+        func_or_type: Union[Function, FuncType],
+        codegen_name: Optional[str] = None,
+        generic=False
+) -> PrimitiveFunctionRegistry:
     """
     Register a primitive function.
 

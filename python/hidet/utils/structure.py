@@ -146,4 +146,3 @@ class DirectedGraph:
             raise ValueError('Loop detected during generating topological order for a directed graph.')
 
         return order
-

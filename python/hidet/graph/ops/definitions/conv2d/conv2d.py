@@ -1,9 +1,11 @@
 from typing import List, Union
-from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, compute, input_like, TensorNode, normalize_kernel, normalize_stride, normalize_padding, reduce, IRModule
+from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, TensorNode
+from hidet.graph.ops.definitions.utils import compute, input_like, normalize_stride, reduce
 
 
 class Conv2dTask(Task):
     def __init__(self, data: TensorNode, weight: TensorNode, stride: List[int], groups: int):
+        # pylint: disable=too-many-locals
         n, c, h, w = data.const_shape()
         oc, wc, kx, ky = weight.const_shape()
         sx, sy = stride
@@ -13,14 +15,18 @@ class Conv2dTask(Task):
                              'but got in_channels, out_channels, groups: {}, {}, {}'.format(c, oc, groups))
         if wc * groups != c:
             raise ValueError('Conv2d expect the weight has shape [out_channels, in_channels / groups, kx, ky], \n'
-                             'but got weight shape {}, in_channels {} and groups {}'.format([oc, wc, kx, ky], c, groups))
+                             'got weight shape {}, in_channels {} and groups {}'.format([oc, wc, kx, ky], c, groups))
         out_group_size = oc // groups
         output = compute(
             name='out',
             shape=[n, oc, p, q],
             fcompute=lambda ni, oci, pi, qi: reduce(
                 shape=[wc, kx, ky],
-                fcompute=lambda wci, kxi, kyi: data[ni, (oci // out_group_size) * wc + wci, pi * sx + kxi, qi * sy + kyi] * weight[oci, wci, kxi, kyi],
+                fcompute=lambda wci, kxi, kyi: (
+                  data[ni, (oci // out_group_size) * wc + wci, pi * sx + kxi, qi * sy + kyi]
+                  *
+                  weight[oci, wci, kxi, kyi]
+                ),
                 reduce_type='sum'
             )
         )

@@ -1,8 +1,8 @@
-from typing import Dict, List, Union, Optional, Tuple
+from typing import Dict, List, Union, Optional
 import string
 from hidet.ir.node import Node
 from hidet.ir.type import TypeNode, FuncType
-from hidet.ir.expr import Var, Constant, Call
+from hidet.ir.expr import Var, Call
 from hidet.ir.stmt import Stmt
 
 
@@ -31,9 +31,9 @@ class Function(Node):
     """
     Valid Attrs:
         'kind': str, candidates: 'cuda_device', 'cuda_kernel', 'host_kernel', 'packed_func'
-            the kind of this function. 
+            the kind of this function.
                 - 'cuda_device': this is a cuda device function, can only be called by cuda function
-                - 'cuda_kernel': this is a cuda kernel function 
+                - 'cuda_kernel': this is a cuda kernel function
                 - 'host_kernel': this is a cpu kernel function
                 - 'packed_func': this is a packed function that wraps kernel function(s)
         'cuda_grid_dim': Union[int, List[int]]
@@ -72,6 +72,7 @@ class Function(Node):
 
 class IRModule(Node):
     def __init__(self, funcs=None, task=None, global_vars=None):
+        # pylint: disable=import-outside-toplevel
         from hidet.ir.task import Task
         if funcs:
             assert isinstance(funcs, dict)
@@ -85,10 +86,8 @@ class IRModule(Node):
             if name in self.functions:
                 if skip_duplicated:
                     continue
-                else:
-                    raise ValueError('Function {} has already existed in module while include another module.'.format(name))
-            else:
-                self.functions[name] = func
+                raise ValueError(f'Function {name} has already existed in module while include another module.')
+            self.functions[name] = func
 
         for name, var in module.global_vars.items():
             self.global_vars[name] = var
@@ -99,7 +98,8 @@ class IRModule(Node):
         else:
             name = name_or_var
         if name not in self.functions:
-            raise ValueError('Function {} does not exist in module, existed functions: \n{}.'.format(name, list(self.functions.keys())))
+            raise ValueError('Function {} does not exist in module, existed functions: \n{}.'.format(
+                name, list(self.functions.keys())))
         return self.functions[name]
 
     def lookup_var(self, name):
@@ -123,5 +123,3 @@ class IRModule(Node):
             raise ValueError('Function {} has already existed in module.'.format(name))
         else:
             self.functions[name] = func
-
-

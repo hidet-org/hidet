@@ -1,6 +1,4 @@
-from collections import namedtuple
-from hidet.ir.type import PointerType
-
+# pylint: disable=unused-import
 from hidet.ir.primitives.cuda.vars import threadIdx, blockIdx, blockDim, gridDim
 from hidet.ir.primitives.cuda.smem import dynamic_shared_memory, set_kernel_max_dynamic_smem_bytes
 from hidet.ir.primitives.cuda.sync import syncthreads, syncthreads_and, syncthreads_count, syncthreads_or

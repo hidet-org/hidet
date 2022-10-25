@@ -53,7 +53,8 @@ class ResolveVariantRewriter(GraphRewriter):
     def visit_Operator(self, op: Operator):
         op_cls = self.rule.op_cls()
         if not isinstance(op, op_cls):
-            return GraphRewriter.visit_Operator(self, op)
+            GraphRewriter.visit_Operator(self, op)
+            return
         inputs = [self(x) for x in op.inputs]
         if same_list(inputs, op.inputs):
             resolve_op = op
@@ -84,8 +85,7 @@ class ResolveVariantPass(GraphPass):
                 updated_graph = resolver(graph)
                 if updated_graph is graph:
                     break
-                else:
-                    graph = updated_graph
+                graph = updated_graph
         return graph
 
 

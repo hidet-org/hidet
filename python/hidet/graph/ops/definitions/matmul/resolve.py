@@ -1,7 +1,6 @@
 from typing import List, Type, Optional
 from functools import lru_cache
 
-import hidet
 from hidet.graph.ir import Operator, Tensor
 from hidet.graph.transforms import ResolveRule, register_resolve_rule
 from hidet.utils.py import gcd, factorize
@@ -34,17 +33,20 @@ def parallel_k_search_nparts(dtype: str, mma: str, batch_size, m_size, n_size, k
     best_nparts_latency = 1e9
     latencies = []
 
-    print('search parallel k factor for [{} x {} x {} x {}] among {}'.format(batch_size, m_size, n_size, k_size, nparts_candidates))
+    print('search parallel k factor for [{} x {} x {} x {}] among {}'.format(batch_size, m_size, n_size, k_size,
+                                                                             nparts_candidates))
     for nparts in nparts_candidates:
         a = hidet.symbol([batch_size, m_size, k_size], dtype=dtype, device='cuda')
         b = hidet.symbol([batch_size, k_size, n_size], dtype=dtype, device='cuda')
-        aa = a.reshape([batch_size, m_size, nparts, k_size // nparts]).rearrange([[0, 2], [1], [3]])  # [batch_size * nparts, m_size, k_size // nparts]
-        bb = b.reshape([batch_size, nparts, k_size // nparts, n_size]).rearrange([[0, 1], [2], [3]])  # [batch_size * nparts, k_size // nparts, n_size]
+        # to [batch_size * nparts, m_size, k_size // nparts]
+        aa = a.reshape([batch_size, m_size, nparts, k_size // nparts]).rearrange([[0, 2], [1], [3]])
+        # to [batch_size * nparts, k_size // nparts, n_size]
+        bb = b.reshape([batch_size, nparts, k_size // nparts, n_size]).rearrange([[0, 1], [2], [3]])
         cc = batch_matmul(aa, bb, mma=mma)
         c = cc.reshape([batch_size, nparts, m_size, n_size]).sum(1)
 
         graph: hidet.FlowGraph = hidet.trace_from(c, [a, b])
-        with hidet.graph.PassContext() as ctx:
+        with hidet.graph.PassContext():
             graph: hidet.FlowGraph = hidet.graph.transforms.fuse_operator_pass()(graph)
 
         latency: float = graph.latency()
@@ -93,8 +95,10 @@ class MatmulResolveRule(ResolveRule):
         if nparts == 1:
             c = batch_matmul(a, b, mma=mma)
         else:
-            aa = a.reshape([batch_size, m_size, nparts, k_size // nparts]).rearrange([[0, 2], [1], [3]])  # [batch_size * nparts, m_size, k_size // nparts]
-            bb = b.reshape([batch_size, nparts, k_size // nparts, n_size]).rearrange([[0, 1], [2], [3]])  # [batch_size * nparts, k_size // nparts, n_size]
+            # [batch_size * nparts, m_size, k_size // nparts]
+            aa = a.reshape([batch_size, m_size, nparts, k_size // nparts]).rearrange([[0, 2], [1], [3]])
+            # [batch_size * nparts, k_size // nparts, n_size]
+            bb = b.reshape([batch_size, nparts, k_size // nparts, n_size]).rearrange([[0, 1], [2], [3]])
             c = batch_matmul(aa, bb, mma=mma).reshape([batch_size, nparts, m_size, n_size]).sum(1)
         return c
 

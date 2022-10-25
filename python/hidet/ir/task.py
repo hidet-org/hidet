@@ -1,12 +1,10 @@
+# pylint: disable=import-outside-toplevel
 from __future__ import annotations
-from typing import Any, Deque
-import copy
+from typing import Any, Dict, List, Union, Optional, Sequence, Callable
 import os
 import pickle
-from collections import deque
-from typing import Dict, List, Union, Optional, Sequence, Type, Tuple, Callable, TypeVar
 from hidet.ir.node import Node
-from hidet.ir.expr import Expr, Var, TensorElement, var
+from hidet.ir.expr import Expr, Var, var
 from hidet.ir.func import IRModule
 from hidet.ir.compute import TensorNode, ScalarNode, GridCompute
 
@@ -40,7 +38,7 @@ class InverseMap(Node):
         if isinstance(obj, InverseMap):
             return obj
         else:
-            return InverseMap.from_lambda(lambda *args: obj(*args))
+            return InverseMap.from_lambda(lambda *args: obj(*args))   # pylint: disable=unnecessary-lambda
 
     @staticmethod
     def from_lambda(func, num_args=None) -> InverseMap:
@@ -61,7 +59,7 @@ class InverseMap(Node):
         if len(lhs.indices) != len(rhs.axes):
             raise ValueError('Can not concat InverseMap a and b, '
                              'where a has {} indices and b has {} axes'.format(len(lhs.indices), len(rhs.axes)))
-        rmap = {a: b for a, b in zip(rhs.axes, lhs.indices)}
+        rmap = dict(zip(rhs.axes, lhs.indices))
         indices = [rewrite(index_expr, rmap) for index_expr in rhs.indices]
         return InverseMap(lhs.axes, indices)
 
@@ -147,7 +145,8 @@ class TaskContext:
     """
     contexts = []
 
-    def __init__(self, space_level: int = 0, warmup: int = 3, number: int = 10, repeat: int = 3, resolve_out_dir: str = None):
+    def __init__(self, space_level: int = 0, warmup: int = 3, number: int = 10, repeat: int = 3,
+                 resolve_out_dir: str = None):
         """Create a task context.
 
         Parameters
@@ -218,7 +217,7 @@ class Task(Node):
         else:
             raise ValueError()
         if not isinstance(ret, IRModule):
-            raise AssertionError('The task implement function should return an IRModule, but got a {}.'.format(type(ret)))
+            raise AssertionError(f'The task implement function should return an IRModule, but got a {type(ret)}.')
         return ret
 
     def implement_cuda(self) -> IRModule:
@@ -312,4 +311,3 @@ def save_task(task: Task, fname: str):
 
 def load_task(fname: str) -> Task:
     return Task.load(fname)
-

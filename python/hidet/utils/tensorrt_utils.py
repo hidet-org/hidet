@@ -1,16 +1,15 @@
-import datetime
 from typing import List, Optional, Dict, Tuple
 from collections import OrderedDict
 from hashlib import sha256
-import json
 import os
-import time
-import numpy as np
+import json
+import datetime
 import tensorrt as trt
 import hidet
 from hidet.ffi import cuda
-from hidet import Tensor, randn, empty
-from hidet.utils import hidet_cache_dir, nvtx_annotate
+from hidet import Tensor
+from hidet.utils import hidet_cache_dir
+from hidet.testing import benchmark_func
 
 
 class Profiler(trt.IProfiler):
@@ -49,7 +48,7 @@ class Logger(trt.ILogger):
             'VERBOSE': 4
         }
         if self.log_file:
-            self.opened_file = open(self.log_file, 'w')
+            self.opened_file = open(self.log_file, 'w')  # pylint: disable=consider-using-with
 
     def log(self, severity: trt.ILogger.Severity, msg: str):
         severity2name = {
@@ -71,6 +70,7 @@ class Logger(trt.ILogger):
     def __del__(self):
         if self.opened_file:
             self.opened_file.close()
+            self.opened_file = None
 
 
 def milo_bytes(MiB):
@@ -89,7 +89,8 @@ def create_engine_from_onnx(
     model_name = os.path.basename(onnx_model_path).split('.')[0]
     shape_hash = tuple((name, tuple(shape)) for name, shape in sorted(input_shapes.items(), key=lambda item: item[0]))
     shape_hash_suffix = sha256(str(shape_hash).encode()).hexdigest()[:6]
-    engine_name = '{}{}{}_ws{}_{}.engine'.format(model_name, '_tf32' if use_tf32 else '', '_fp16' if use_fp16 else '', workspace_bytes // (1 << 20), shape_hash_suffix)
+    engine_name = '{}{}{}_ws{}_{}.engine'.format(model_name, '_tf32' if use_tf32 else '', '_fp16' if use_fp16 else '',
+                                                 workspace_bytes // (1 << 20), shape_hash_suffix)
     engine_path = os.path.join(cache_dir, engine_name)
 
     # logger = trt.Logger(min_severity=trt.Logger.ERROR)   # use WARNINGS when needed
@@ -105,7 +106,9 @@ def create_engine_from_onnx(
         build_logger = Logger(engine_path + '.build.log', print_out_level='ERROR')
         builder = trt.Builder(build_logger)
         # parse onnx model
-        network: trt.INetworkDefinition = builder.create_network(1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH))
+        network: trt.INetworkDefinition = builder.create_network(
+            1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
+        )
         onnx_parser = trt.OnnxParser(network, build_logger)
         success = onnx_parser.parse_from_file(onnx_model_path)
         for idx in range(onnx_parser.num_errors):
@@ -117,9 +120,11 @@ def create_engine_from_onnx(
         config: trt.IBuilderConfig = builder.create_builder_config()
         # config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, workspace_bytes)
         config.max_workspace_size = workspace_bytes
-        # allow us to inspect the engine, see https://docs.nvidia.com/deeplearning/tensorrt/developer-guide/index.html#engine-inspector
+        # allow us to inspect the engine,
+        # see https://docs.nvidia.com/deeplearning/tensorrt/developer-guide/index.html#engine-inspector
         config.profiling_verbosity = trt.ProfilingVerbosity.DETAILED
-        # whether allow tf32/, see https://docs.nvidia.com/deeplearning/tensorrt/developer-guide/index.html#tf32-inference-c
+        # whether allow tf32/,
+        # see https://docs.nvidia.com/deeplearning/tensorrt/developer-guide/index.html#tf32-inference-c
         if use_tf32:
             config.set_flag(trt.BuilderFlag.TF32)
         else:
@@ -128,7 +133,8 @@ def create_engine_from_onnx(
             config.set_flag(trt.BuilderFlag.FP16)
         else:
             config.clear_flag(trt.BuilderFlag.FP16)
-        # force to use the precision in network definition, see https://docs.nvidia.com/deeplearning/tensorrt/developer-guide/index.html#layer-level-control
+        # force to use the precision in network definition,
+        # see https://docs.nvidia.com/deeplearning/tensorrt/developer-guide/index.html#layer-level-control
         config.set_flag(trt.BuilderFlag.OBEY_PRECISION_CONSTRAINTS)
 
         # optimization profiles required by dynamic inputs
@@ -138,8 +144,8 @@ def create_engine_from_onnx(
             tensor: trt.ITensor = network.get_input(i)
             if any(v == -1 for v in tensor.shape):
                 if input_shapes is None or tensor.name not in input_shapes:
-                    raise Exception("Found dynamic input: {}{}, "
-                                    "please specify input_shapes as the target shape.".format(tensor.name, list(tensor.shape)))
+                    raise Exception("Found dynamic input: {}{}, ".format(tensor.name, list(tensor.shape))
+                                    + "please specify input_shapes as the target shape.")
                 opt_shape = input_shapes[tensor.name]
                 profile.set_shape(tensor.name, min=opt_shape, opt=opt_shape, max=opt_shape)
         config.add_optimization_profile(profile)
@@ -167,7 +173,8 @@ dtype_map = {
 }
 
 
-def _prepare_buffer(engine: trt.ICudaEngine, inputs: Dict[str, Tensor]) -> Tuple[Dict[str, Tensor], Dict[str, Tensor], List[int]]:
+def _prepare_buffer(engine: trt.ICudaEngine,
+                    inputs: Dict[str, Tensor]) -> Tuple[Dict[str, Tensor], Dict[str, Tensor], List[int]]:
     inputs = inputs.copy()
     outputs = {}
     buffers = []
@@ -176,7 +183,8 @@ def _prepare_buffer(engine: trt.ICudaEngine, inputs: Dict[str, Tensor]) -> Tuple
         if engine.binding_is_input(i):
             dtype: trt.DataType = engine.get_binding_dtype(i)
             if name not in inputs:
-                raise ValueError("TensorRT engine requires input '{}', but only received inputs: {}.".format(name, list(inputs.keys())))
+                raise ValueError("TensorRT engine requires input '{}', but only received inputs: {}.".format(
+                    name, list(inputs.keys())))
             if dtype != inputs[name].dtype:
                 inputs[name] = hidet.graph.ops.cast(inputs[name], dtype_map[dtype])
             buffers.append(inputs[name].storage.addr)
@@ -200,31 +208,20 @@ def engine_inference(engine: trt.ICudaEngine, inputs: Dict[str, Tensor]) -> Dict
     return outputs
 
 
-def engine_benchmark(engine: trt.ICudaEngine, dummy_inputs: Dict[str, Tensor], warmup: int = 3, number: int = 5, repeat: int = 5) -> List[float]:
-    inputs, outputs, buffers = _prepare_buffer(engine, dummy_inputs)
+def engine_benchmark(engine: trt.ICudaEngine, dummy_inputs: Dict[str, Tensor], warmup: int = 3, number: int = 5,
+                     repeat: int = 5) -> List[float]:
+    _, _, buffers = _prepare_buffer(engine, dummy_inputs)
     context: trt.IExecutionContext = engine.create_execution_context()
-    results = []
-    with nvtx_annotate('warmup'):
-        for i in range(warmup):
-            context.execute_async_v2(buffers, 0)
-            cuda.device_synchronize()
-    for i in range(repeat):
-        with nvtx_annotate(f'repeat {i}'):
-            cuda.device_synchronize()
-            start_time = time.time()
-            for j in range(number):
-                context.execute_async_v2(buffers, 0)
-            cuda.device_synchronize()
-            end_time = time.time()
-        results.append((end_time - start_time) * 1000 / number)
-    return results
+    return benchmark_func(context.execute_async_v2(buffers, 0), warmup, number, repeat, median=False)
 
 
 def engine_inspect(engine: trt.ICudaEngine) -> Dict:
     inspector: trt.EngineInspector = engine.create_engine_inspector()
     layer_information = {}
     for i in range(engine.num_layers):
-        layer_information['layer_{}'.format(i)] = json.loads(str(inspector.get_layer_information(i, trt.LayerInformationFormat.JSON)))
+        layer_information['layer_{}'.format(i)] = json.loads(str(inspector.get_layer_information(
+            i, trt.LayerInformationFormat.JSON)
+        ))
     # engine_information = json.loads(str(inspector.get_engine_information(trt.LayerInformationFormat.JSON)))
     return {
         'layers': layer_information,
@@ -234,35 +231,10 @@ def engine_inspect(engine: trt.ICudaEngine) -> Dict:
 
 def engine_profiler(engine: trt.ICudaEngine, dummy_inputs: Dict[str, Tensor]) -> Dict:
     # prepare inputs and outputs
-    inputs, outputs, buffers = _prepare_buffer(engine, dummy_inputs)
+    _, _, buffers = _prepare_buffer(engine, dummy_inputs)
     context: trt.IExecutionContext = engine.create_execution_context()
     profiler = Profiler()
     context.profiler = profiler
     context.execute_v2(buffers)
     cuda.device_synchronize()
     return profiler.export_trace()
-
-
-if __name__ == '__main__':
-    # onnx_model_path = os.path.join(hidet_cache_dir('onnx'), 'resnet50-v1-7.onnx')
-    onnx_model_path = os.path.join(hidet_cache_dir('onnx'), 'bert-base-uncased.onnx')
-    batch_size = 1
-    seq_length = 512
-    vocab_size = 30522
-    input_ids = np.random.randint(0, vocab_size, [batch_size, seq_length], dtype=np.int64)
-    attention_mask = np.ones(shape=[batch_size, seq_length], dtype=np.int64)
-    token_type_ids = np.zeros(shape=[batch_size, seq_length], dtype=np.int64)
-
-    # onnx
-    inputs = {
-        'input_ids': hidet.array(input_ids).cuda(),
-        'attention_mask': hidet.array(attention_mask).cuda(),
-        'token_type_ids': hidet.array(token_type_ids).cuda()
-    }
-    engine = create_engine_from_onnx(onnx_model_path, input_shapes={
-        key: tensor.shape for key, tensor in inputs.items()
-    })
-    outputs = engine_inference(engine, inputs)
-    results = engine_benchmark(engine, inputs)
-    print(results)
-

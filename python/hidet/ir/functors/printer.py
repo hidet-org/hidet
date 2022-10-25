@@ -1,10 +1,13 @@
-from typing import Dict, Optional, List
+from typing import Optional, List
 from hidet.ir.node import Node
 from hidet.ir.func import IRModule, Function
 from hidet.ir.type import ScalarType, TensorType, TypeNode, VoidType, PointerType, ReferenceType, TensorPointerType
-from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div, Sub, Not, Or, And, Let, IfThenElse, TensorSlice, RightShift, LeftShift, BitwiseNot, BitwiseOr, BitwiseAnd, Neg, Cast, \
-    NotEqual, BitwiseXor, Reference, Dereference, Address
-from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt, BlackBoxStmt, AsmStmt, ReturnStmt, LetStmt, DeclareStmt, ForTaskStmt, WhileStmt, ContinueStmt, BreakStmt, Scope
+from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div
+from hidet.ir.expr import Sub, Not, Or, And, Let, IfThenElse, TensorSlice, RightShift, LeftShift, BitwiseNot, BitwiseOr
+from hidet.ir.expr import BitwiseAnd, Neg, Cast, NotEqual, BitwiseXor, Reference, Dereference, Address
+from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt
+from hidet.ir.stmt import BlackBoxStmt, AsmStmt, ReturnStmt, LetStmt, DeclareStmt, ForTaskStmt, WhileStmt, ContinueStmt
+from hidet.ir.stmt import BreakStmt, Scope
 from hidet.ir.mapping import RepeatTaskMapping, SpatialTaskMapping, ComposedTaskMapping, TaskMapping
 from hidet.ir.compute import TensorNode, ScalarNode, GridCompute, ArgReduceCompute, ReduceCompute
 from hidet.ir.dialects.pattern import AnyExpr
@@ -26,7 +29,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
     def __call__(self, node):
         return self.visit(node)
 
-    def visit(self, obj):
+    def visit(self, obj):   # pylint: disable=arguments-renamed, too-many-branches
         # python builtin type
         if isinstance(obj, (list, tuple)):
             return doc_join([self(v) for v in obj], ', ')
@@ -73,8 +76,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
         # parameters
         doc += 'fn('
         param_docs = []
-        for i in range(len(func.params)):
-            param = func.params[i]
+        for i, param in enumerate(func.params):
             line = []
             if i != 0:
                 line.append(NewLine())
@@ -326,7 +328,8 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
         input_docs = []
         for label, expr in zip(stmt.input_labels, stmt.input_exprs):
             input_docs.append('"' + Text(label) + '"' + '(' + self(expr) + ')')
-        return NewLine() + 'asm ' + volatile_doc + '(' + template_doc + ' : ' + doc_join(output_docs, ', ') + ' : ' + doc_join(input_docs, ', ') + ');'
+        return (NewLine() + 'asm ' + volatile_doc + '(' + template_doc + ' : ' + doc_join(output_docs, ', ')
+                + ' : ' + doc_join(input_docs, ', ') + ');')
 
     def visit_BlackBoxStmt(self, stmt: BlackBoxStmt):
         expr_docs = [str(self(e)) for e in stmt.exprs]
@@ -339,7 +342,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
 
     def visit_SeqStmt(self, stmt: SeqStmt):
         doc = Doc()
-        for idx, s in enumerate(stmt.seq):
+        for s in stmt.seq:
             doc += self(s)
         return doc
 
@@ -349,13 +352,13 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
     def visit_TensorType(self, t: TensorType):
         items = [self(t.scalar_type), '[' + self(t.shape) + ']']
         if isinstance(t.layout, RowMajorLayout):
-            layout = 'row_major'
             # default layout, do not print
+            pass
         elif isinstance(t.layout, ColumnMajorLayout):
             items.append(Text('col_major'))
         elif t.layout is None:
-            layout = 'None'
             # skip None
+            pass
         else:
             items.append(Text(type(t.layout).__name__))
         return Text('tensor(') + doc_join(items, ', ') + ')'
@@ -376,7 +379,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
         return Text('AnyExpr')
 
     def print_tensor_nodes(self, nodes: List[TensorNode], exclude_nodes: List[TensorNode] = None) -> Doc:
-        from hidet.ir.functors import collect
+        from hidet.ir.functors import collect  # pylint: disable=import-outside-toplevel
         if exclude_nodes is None:
             exclude_nodes = []
         nodes: List[TensorNode] = collect(nodes, TensorNode)
@@ -407,10 +410,10 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
     def visit_Task(self, e: Task):
         lines = [
             Text('name: ') + e.name,
-            Text('parameters: ') + (NewLine() + doc_join(['{}: {}'.format(self.namer.get_name(v), self(v.data_type)) for v in e.parameters], NewLine())).indent(),
+            Text('parameters: ') + (NewLine() + doc_join(['{}: {}'.format(
+                self.namer.get_name(v), self(v.data_type)) for v in e.parameters], NewLine())).indent(),
             Text('inputs: ') + '[' + doc_join([self.namer.get_name(v) for v in e.inputs], ', ') + ']',
             Text('outputs: ') + '[' + doc_join([self.namer.get_name(v) for v in e.outputs], ', ') + ']',
-            # Text('computations: ') + self.print_tensor_nodes(e.outputs, exclude_nodes=[v for v in e.parameters if v not in e.outputs]).indent(),
             Text('computations: ') + self.print_tensor_nodes(e.outputs).indent(),
             Text('attributes: {') + self(e.attributes) + '}',
         ]
@@ -448,30 +451,33 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
                 compute_body = self.print_tensor_nodes(task.outputs, exclude_nodes=task.inputs).indent()
             body.append(assign_line + compute_body)
 
-        body.append('return ' + self([task_graph.consume[v] if v in task_graph.consume else v for v in task_graph.output_tensors]))
+        body.append('return ' + self([task_graph.consume[v] if v in task_graph.consume else v
+                                      for v in task_graph.output_tensors]))
 
         body = (NewLine() + doc_join(body, NewLine())).indent()
         tail = NewLine() + '}'
         return head + body + tail
 
     def visit_Prologue(self, e: Prologue):
-        from hidet.ir.functors import collect
+        from hidet.ir.functors import collect  # pylint: disable=import-outside-toplevel
         nodes = [node for node in collect(e.value, TensorNode) if node.tensor_compute is not None]
         assert len(nodes) == 0
 
-        inverse_map_lines = doc_join(['{}: {}'.format(self(tensor), self(inv)) for tensor, inv in e.inverse_map.items()], sep=NewLine())
+        inverse_map_lines = doc_join(['{}: {}'.format(self(tensor), self(inv))
+                                      for tensor, inv in e.inverse_map.items()], sep=NewLine())
         if len(inverse_map_lines.docs) > 0:
             inverse_map_lines = NewLine() + inverse_map_lines
         lines = [
             'extra_inputs: [{}]'.format(doc_join([self(v) for v in e.extra_inputs], ', ')),
             'computation: out[{}] = {}'.format(self(e.indices), self(e.value)),
             'inverse_map:' + inverse_map_lines.indent(),
-            'bindings: {{{}}}'.format(doc_join(['{}: {}'.format(self(a), self(b)) for a, b in e.bindings.items()], ', '))
+            'bindings: {{{}}}'.format(doc_join(['{}: {}'.format(self(a), self(b))
+                                                for a, b in e.bindings.items()], ', '))
         ]
         return Text('Prologue(') + (NewLine() + doc_join(lines, NewLine())).indent() + NewLine() + ')'
 
     def visit_Epilogue(self, e: Epilogue):
-        from hidet.ir.functors import collect
+        from hidet.ir.functors import collect  # pylint: disable=import-outside-toplevel
         nodes = [node for node in collect(e.value, TensorNode) if node.tensor_compute is not None]
         assert len(nodes) == 0
 
@@ -481,8 +487,10 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
         lines = [
             'extra_inputs: [{}]'.format(doc_join([self(v) for v in e.extra_inputs], ', ')),
             'orig_tensor: {}'.format(self(e.orig_tensor)),
-            'computation: out[{}] = {} (where {} = {}[{}])'.format(self(e.out_indices), self(e.value), self(e.orig_value), self(e.orig_tensor), self(e.indices)),
-            'bindings: {{{}}}'.format(doc_join(['{}: {}'.format(self(a), self(b)) for a, b in e.bindings.items()], ', '))
+            'computation: out[{}] = {} (where {} = {}[{}])'.format(
+                self(e.out_indices), self(e.value), self(e.orig_value), self(e.orig_tensor), self(e.indices)),
+            'bindings: {{{}}}'.format(doc_join(['{}: {}'.format(self(a), self(b))
+                                                for a, b in e.bindings.items()], ', '))
         ]
         return Text('Epilogue(') + (NewLine() + doc_join(lines, NewLine())).indent() + NewLine() + ')'
 

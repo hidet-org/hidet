@@ -1,13 +1,9 @@
 from typing import List, Optional, Sequence, Tuple
-import warnings
-import os
-from hidet.ir.func import IRModule
 from hidet.ir.builders import StmtBuilder
 from hidet.ir.primitives import active_mask, shfl_down_sync, shfl_sync
 from hidet.ir.stmt import AssignStmt, Stmt
-from hidet.ir.task import Task
 from hidet.utils import gcd, prod
-from hidet.ir.mapping import TaskMapping, row_spatial, repeat_map, row_repeat, spatial_map
+from hidet.ir.mapping import TaskMapping, row_repeat, spatial_map
 from hidet.ir.layout import DataLayout, row_layout, local_layout
 from hidet.graph.ops.schedules.common import NotSupportedError
 
@@ -37,7 +33,11 @@ def warp_reduce(v, op) -> Stmt:
     return sb.finish()
 
 
-def _get_shapes(task_shape: Sequence[int], num_workers=32, perm: Optional[Sequence[int]] = None) -> Tuple[List[int], List[int]]:
+def _get_shapes(
+        task_shape: Sequence[int],
+        num_workers=32,
+        perm: Optional[Sequence[int]] = None
+) -> Tuple[List[int], List[int]]:
     rank = len(task_shape)
 
     if prod(task_shape) % num_workers != 0:
@@ -118,7 +118,11 @@ def get_task_map(task_shape: Sequence[int], num_workers=32, ranks: Sequence[int]
     return task_map
 
 
-def get_transfer_task_map(task_shape: Sequence[int], num_workers=32, ranks: Optional[Sequence[int]] = None) -> Tuple[TaskMapping, DataLayout]:
+def get_transfer_task_map(
+        task_shape: Sequence[int],
+        num_workers=32,
+        ranks: Optional[Sequence[int]] = None
+) -> Tuple[TaskMapping, DataLayout]:
     grid_shape, repeat_shape = _get_shapes(task_shape, num_workers, ranks)
 
     task_map = row_repeat(*repeat_shape) * spatial_map(grid_shape, ranks=ranks)

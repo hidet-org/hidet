@@ -6,12 +6,11 @@ from hidet.ir.expr import Expr, Var, Call
 from hidet.ir.stmt import Stmt, AssertStmt
 from hidet.ir.functors import simplify_to_int
 from hidet.ir.builders import StmtBuilder
-from hidet.ir.task import Task
 
 
 def generate_packed_func(ir_module: IRModule, func: Function, pack_func_name: str) -> Function:
     from hidet import lang
-    from hidet.lang import attr, u32, i32, void_p, deref, cast
+    from hidet.lang import attr, i32, void_p, deref, cast
     from hidet.lang.cuda import set_kernel_max_dynamic_smem_bytes
 
     func_var = ir_module.lookup_var(func.name)
@@ -44,7 +43,8 @@ def generate_packed_func(ir_module: IRModule, func: Function, pack_func_name: st
             else:
                 raise NotImplementedError('Unsupported type: {}'.format(param.type))
             extracted_arguments.append(arg)
-            sb += AssertStmt(arg_types[idx] == code.value, 'The {}-th argument should be {} ({})'.format(idx, code.name, param.type))
+            sb += AssertStmt(arg_types[idx] == code.value, 'The {}-th argument should be {} ({})'.format(
+                idx, code.name, param.type))
 
         if func.kind == 'cuda_kernel' and simplify_to_int(func.get_attr('cuda_dynamic_smem_bytes', 0)) > 48 * 1024:
             dynamic_smem_bytes = simplify_to_int(func.get_attr('cuda_dynamic_smem_bytes', 0))

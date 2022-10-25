@@ -59,7 +59,6 @@ class GraphPassInstrument:
         graph: FlowGraph
             The flow graph before applying all passes.
         """
-        pass
 
     def before_pass(self, pass_name: str, graph: FlowGraph) -> None:
         """Called before each pass.
@@ -72,7 +71,6 @@ class GraphPassInstrument:
         graph: FlowGraph
             The flow graph before applying the pass.
         """
-        pass
 
     def after_pass(self, pass_name: str, graph: FlowGraph) -> None:
         """Called after each pass.
@@ -85,7 +83,6 @@ class GraphPassInstrument:
         graph: FlowGraph
             The flow graph after applied the pass.
         """
-        pass
 
     def after_all_passes(self, graph: FlowGraph) -> None:
         """Called after applying all passes.
@@ -95,5 +92,3 @@ class GraphPassInstrument:
         graph: FlowGraph
             The flow graph after applying all passes.
         """
-        pass
-

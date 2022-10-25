@@ -1,9 +1,11 @@
-from typing import Type, Tuple, Any, ContextManager, Callable
+from typing import Any, Sequence, Tuple, Type, Optional, List, Union, Dict, Callable, ContextManager
 from contextlib import ExitStack
-from hidet.ir.type import *
-from hidet.ir.expr import *
-from hidet.ir.compute import *
-from hidet.ir.task import *
+from hidet.ir.node import Node
+from hidet.ir.type import TypeNode, ScalarType, TensorType, FuncType
+from hidet.ir.expr import Expr, Constant, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, Equal, LessEqual
+from hidet.ir.expr import TensorElement, IfThenElse, Call, Var, And, Or, BinaryOp, convert, var
+from hidet.ir.compute import TensorNode, ScalarNode, ReduceOperation, ReduceCompute
+from hidet.ir.stmt import Scope
 from hidet.ir.layout import StridesLayout, DataLayout
 
 
@@ -74,6 +76,7 @@ class MatchContext:
         self.target: Matchable = target
 
     def __enter__(self):
+        # pylint: disable=too-many-branches
         if self.pattern is None:
             # None in pattern matches anything
             return
@@ -127,8 +130,10 @@ class PatternMatcher:
     invariant: every time when we enter match(...)
         0 the self.matched[...] stored the matched patterns and targets, and ongoing matching must follow them
         1 if successful, all sub-expressions of pattern have been set in self.matched[...]
-        2 if failed, it acted like we have not call this function (we treat self.matched[v] = None and v not in self.matched as the same state)
+        2 if failed, it acted like we have not call this function (we treat self.matched[v] = None
+          and v not in self.matched as the same state)
     """
+    # pylint: disable=no-self-use
     _dispatch_table: Dict[Type[Node], Callable[[Node, Node], None]] = None
 
     @staticmethod
@@ -188,7 +193,9 @@ class PatternMatcher:
             return None, str(e)
             # return None, str(traceback.format_exc())
 
-    def match(self, pattern: Optional[Union[Node, Sequence]], target: Optional[Union[Node, Sequence]]) -> ContextManager:
+    def match(self,
+              pattern: Optional[Union[Node, Sequence]],
+              target: Optional[Union[Node, Sequence]]) -> ContextManager:
         return MatchContext(self, pattern, target)
 
     @staticmethod
@@ -196,7 +203,8 @@ class PatternMatcher:
         if expect_target_type is None:
             expect_target_type = pattern.__class__
         if not isinstance(target, expect_target_type):
-            raise NotMatchedError(pattern, target, "Pattern expect target with type {}, but got type {}".format(expect_target_type, type(target)))
+            raise NotMatchedError(pattern, target, "Pattern expect target with type {}, but got type {}".format(
+                expect_target_type, type(target)))
 
     def check_cond(self, pattern, target, cond, message=""):
         if not cond:
@@ -215,7 +223,7 @@ class PatternMatcher:
             with ExitStack() as stack:
                 stack.enter_context(self.match(pattern.a, target.a))
                 stack.enter_context(self.match(pattern.b, target.b))
-        except NotMatchedError as e:
+        except NotMatchedError:
             pass
         else:
             return
@@ -251,7 +259,7 @@ class PatternMatcher:
             stack.enter_context(self.match(pattern.func_var, target.func_var))
             stack.enter_context(self.match(pattern.args, target.args))
 
-    def match_Var(self, pattern: Var, target: Var):
+    def match_Var(self, pattern: Var, target: Var):  # pylint: disable=unused-argument
         if isinstance(pattern.type, FuncType):
             return
         # with self.match(pattern.type, target.type):
@@ -351,14 +359,15 @@ class PatternMatcher:
 
 
 def reduce_pattern(shape: Sequence[Union[int, Expr]], fcompute, reduce_type: str):
-    from hidet.ir.functors import collect
+    from hidet.ir.functors import collect  # pylint: disable=import-outside-toplevel
     shape = convert(shape)
     axes = [var() for _ in shape]
     value = convert(fcompute(*axes))
     input_tensors = collect(value, TensorNode, stop_when_found=True)
     input_scalars = collect(value, ScalarNode, stop_when_found=True)
     reduce_operation = ReduceOperation.from_name(reduce_type)
-    return ReduceCompute(input_tensors, input_scalars, shape, axes, value, reduce_operation, accumulate_dtype=ScalarType('float32'))
+    return ReduceCompute(input_tensors, input_scalars, shape, axes, value, reduce_operation,
+                         accumulate_dtype=ScalarType('float32'))
 
 
 def any_const_int():

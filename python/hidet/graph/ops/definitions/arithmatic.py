@@ -1,13 +1,13 @@
-from typing import List, Callable, Any, Union, Type, Optional, Dict
+# pylint: disable=redefined-builtin, unnecessary-lambda
+from typing import List, Callable, Any, Union, Optional, Dict
 
-import builtins
 from hidet.ir import primitives
 from hidet.ir import expr
 from hidet.ir.expr import const_like
 from hidet.utils import prod
-from .utils import Task, Operator, Tensor, TensorNode, InverseMap, compute, input_like, broadcast_shape, broadcast_shapes, broadcast_indices
 from hidet.graph.tensor import convert
-
+from .utils import Task, Operator, Tensor, TensorNode, InverseMap, compute, input_like
+from .utils import broadcast_shape, broadcast_shapes, broadcast_indices
 
 class UnaryElementwiseTask(Task):
     def __init__(self, name: str, x: TensorNode, op: Callable[[Any], Any]):
@@ -36,7 +36,10 @@ class BinaryElementwiseTask(Task):
         z = compute(
             name='z',
             shape=z_shape,
-            fcompute=lambda *indices: op(x[broadcast_indices(indices, x_shape, z_shape)], y[broadcast_indices(indices, y_shape, z_shape)])
+            fcompute=lambda *indices: op(
+                x[broadcast_indices(indices, x_shape, z_shape)],
+                y[broadcast_indices(indices, y_shape, z_shape)]
+            )
         )
 
         super().__init__(
@@ -284,7 +287,9 @@ def binary_arithmatic(
         tensor_tensor_op
 ) -> Union[Tensor, float, int]:
     if not (isinstance(x, (Tensor, float, int)) and isinstance(y, (Tensor, float, int))):
-        raise ValueError('Only support add/sub/mul/div between hidet.Tensor, float, and int. got {} and {}'.format(type(x), type(y)))
+        raise ValueError('Only support add/sub/mul/div between hidet.Tensor, float, and int. got {} and {}'.format(
+            type(x), type(y)
+        ))
     if isinstance(x, (float, int)):
         assert isinstance(y, Tensor)
         x = convert(x, y.device)

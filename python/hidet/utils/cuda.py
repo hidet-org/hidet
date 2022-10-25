@@ -68,6 +68,7 @@ def max_num_regs_per_block(cc=None):
 
 
 def max_num_regs_per_sm(cc=None):
+    # pylint: disable=unused-argument
     return 64 * 1024
 
 
@@ -221,12 +222,12 @@ def query_memory_max_clock() -> int:
 
 
 def query_persistent_mode() -> bool:
-    result = subprocess.run('nvidia-smi -pm 1'.split(), stdin=PIPE, stdout=PIPE)
+    result = subprocess.run('nvidia-smi -pm 1'.split(), stdin=PIPE, stdout=PIPE, check=False)
     return result.returncode == 0
 
 
 def turn_on_persistent_mode():
-    result = subprocess.run('nvidia-smi -pm 1'.split(), stdin=PIPE, stdout=PIPE)
+    result = subprocess.run('nvidia-smi -pm 1'.split(), stdin=PIPE, stdout=PIPE, check=False)
     if result.returncode != 0:
         # the persistent mode is disabled, use sudo -S to turn it on, passwd is required from shell
         command = 'sudo -S nvidia-smi -pm 1'

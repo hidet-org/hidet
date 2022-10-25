@@ -68,7 +68,7 @@ class BertSelfAttention(nn.Module):
         self.value_layer = nn.Linear(config.hidden_size, config.hidden_size)
 
     def transpose_for_scores(self, x: Tensor) -> Tensor:
-        batch_size, seq_length, hidden_size = x.shape
+        batch_size, seq_length, _ = x.shape
         x = x.reshape([batch_size, seq_length, self.num_attention_heads, self.attention_head_size])
         x = x.permute(0, 2, 1, 3)
         return x
@@ -94,7 +94,7 @@ class BertSelfAttentionQuery(nn.Module):
         self.query_layer = nn.Linear(config.hidden_size, config.hidden_size)
 
     def transpose_for_scores(self, x: Tensor) -> Tensor:
-        batch_size, seq_length, hidden_size = x.shape
+        batch_size, seq_length, _ = x.shape
         x = x.reshape([batch_size, seq_length, self.num_attention_heads, self.attention_head_size])
         x = x.permute(0, 2, 1, 3)
         return x
@@ -114,7 +114,7 @@ class BertSelfAttentionQueryKeyValue(nn.Module):
         self.value_layer = nn.Linear(config.hidden_size, config.hidden_size)
 
     def transpose_for_scores(self, x: Tensor) -> Tensor:
-        batch_size, seq_length, hidden_size = x.shape
+        batch_size, seq_length, _ = x.shape
         x = x.reshape([batch_size, seq_length, self.num_attention_heads, self.attention_head_size])
         x = x.permute(0, 2, 1, 3)
         return x
@@ -236,7 +236,7 @@ class BertEncoder(nn.Module):
         self.layers = nn.ModuleList(layers)
 
     def forward(self, hidden_states: Tensor, attention_mask: Tensor):
-        for i, layer_module in enumerate(self.layers):
+        for layer_module in self.layers:
             hidden_states = layer_module(hidden_states, attention_mask)
         return hidden_states
 
@@ -278,7 +278,8 @@ class BertModel(nn.Module):
         return [hidden_states, pooled_output]
 
 
-def get_bert_block(name: str, batch_size=1, seq_length=128, config: Optional[BertConfig] = None, precision='float32', nocache=False) -> Tuple[str, List[str], List["hidet.Tensor"]]:
+def get_bert_block(name: str, batch_size=1, seq_length=128, config: Optional[BertConfig] = None, precision='float32',
+                   nocache=False) -> Tuple[str, List[str], List["hidet.Tensor"]]:
     assert precision in ['float32', 'float16']
     if config is None:
         config = BertConfig()
@@ -438,20 +439,3 @@ def get_bert_block(name: str, batch_size=1, seq_length=128, config: Optional[Ber
         precision=precision,
         nocache=nocache
     )
-
-
-if __name__ == '__main__':
-    for name in [
-        'bert_all',
-        'bert_embeddings',
-        'bert_encoder',
-        'bert_pooler',
-        'bert_layer',
-        'bert_attention',
-        'bert_intermediate',
-        'bert_output',
-        'bert_self_attention',
-        'bert_self_output',
-    ]:
-        print(name)
-        get_bert_block(name)

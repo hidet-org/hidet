@@ -1,3 +1,4 @@
+# pylint: disable=unused-variable
 from hidet.ir.expr import TensorElement, TensorSlice
 from hidet.ir.func import Function
 from hidet.ir.functors import FuncStmtExprRewriter

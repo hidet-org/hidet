@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Callable, Tuple, Optional, List, Any, Dict
+from typing import Tuple, Optional, List, Any, Dict
 from types import FunctionType
 import ast as py_ast
 import inspect
@@ -50,7 +50,7 @@ def script(func: FunctionType) -> Function:
     func_freevar_names: List[str] = list(func.__code__.co_freevars)
     func_freevar_cells: List[Any] = [v.cell_contents for v in func.__closure__] if func.__closure__ else []
     assert len(func_freevar_names) == len(func_freevar_cells)
-    env.update({name: value for name, value in zip(func_freevar_names, func_freevar_cells)})
+    env.update(dict(zip(func_freevar_names, func_freevar_cells)))
 
     # get the type annotations of function parameters.
     func_annotations: Dict[str, Any] = func.__annotations__

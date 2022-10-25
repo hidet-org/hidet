@@ -1,3 +1,6 @@
+"""
+Winograd convolution, see <Fast Algorithms for Convolutional Neural Networks> https://arxiv.org/pdf/1509.09308.pdf
+"""
 from functools import lru_cache
 from typing import List, Tuple
 
@@ -5,12 +8,7 @@ import numpy as np
 
 from hidet.ir.expr import const_tensor, Constant, cast
 from hidet.graph.ops.definitions.matmul import matmul
-from hidet.graph.ops.definitions.transform import flatten, reshape
-from hidet.graph.ops.definitions.utils import Tensor, Operator, Task, TensorNode, input_like, compute, reduce, normalize_kernel
-
-"""
-Winograd convolution, see <Fast Algorithms for Convolutional Neural Networks> https://arxiv.org/pdf/1509.09308.pdf
-"""
+from ..utils import Tensor, Operator, Task, TensorNode, input_like, compute, reduce, normalize_kernel
 
 
 @lru_cache(maxsize=32)
@@ -39,6 +37,7 @@ def winograd_transform_matrices(m: int, r: int) -> Tuple[Constant, Constant, Con
 
 class Conv2dWinogradImageTransformTask(Task):
     def __init__(self, x: TensorNode, kernel: List[int], ms: List[int]):
+        # pylint: disable=too-many-locals
         assert len(kernel) == 2 and len(x.const_shape()) == 4
         n, c, h, w = x.const_shape()
         rx, ry = kernel
@@ -100,7 +99,7 @@ class Conv2dWinogradInverseTransformTask(Task):
     def __init__(self, y: TensorNode, input_shape, kernel, ms):
         assert len(y.const_shape()) == 4
         alpha_x, alpha_y, oc, p = y.const_shape()
-        n, c, h, w = input_shape
+        n, c, h, w = input_shape  # pylint: disable=unused-variable
         rx, ry = kernel
         mx, my = ms
         oh, ow = h - rx + 1, w - ry + 1  # output size of image
@@ -120,7 +119,12 @@ class Conv2dWinogradInverseTransformTask(Task):
         output = compute(
             name='output',
             shape=[n, oc, oh, ow],
-            fcompute=lambda nn, occ, ohh, oww: inverse[ohh % mx, oww % my, occ, nn * (nh * nw) + (ohh // mx) * nw + (oww // my)],
+            fcompute=lambda nn, occ, ohh, oww: inverse[
+                ohh % mx,
+                oww % my,
+                occ,
+                nn * (nh * nw) + (ohh // mx) * nw + (oww // my)
+            ]
         )
         super().__init__(
             name='conv2d_winograd_inverse_transform',
@@ -199,17 +203,13 @@ def conv2d_winograd(x: Tensor, w: Tensor) -> Tensor:
     input_shape = x.shape
     kernel = w.shape[2:]
     ms = [r2m[r] for r in kernel]
-    alpha = [r + m - 1 for r, m in zip(kernel, ms)]
 
     # winograd transform
     x = conv2d_winograd_image_transform(x, kernel, ms)  # [alpha_x, alpha_y, ci, p]
     w = conv2d_winograd_filter_transform(w, ms)  # [alpha_x, alpha_y, co, ci]
 
     # product
-    # x = flatten(x, start_dim=0, end_dim=2)  # [alpha_x * alpha_y, ci, p]
-    # w = flatten(w, start_dim=0, end_dim=2)  # [alpha_x * alpha_y, co, ci]
     y = matmul(w, x)  # [alpha_x * alpha_y, co, p]
-    # y = reshape(y, [alpha[0], alpha[1], y.shape[1], y.shape[2]])  # [alpha_x, alpha_y, co, p]
 
     # winograd inverse transform
     y = conv2d_winograd_inverse_transform(y, input_shape, kernel, ms)  # [n, oc, oh, ow]

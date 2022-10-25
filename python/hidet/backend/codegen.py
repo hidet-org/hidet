@@ -1,8 +1,15 @@
+from typing import Optional
+import numpy as np
 from hidet.ir.dialects.pattern import AnyExpr
-from hidet.ir.type import *
-from hidet.ir.func import *
-from hidet.ir.stmt import *
-from hidet.ir.expr import *
+from hidet.ir.type import ScalarType, PointerType, TensorPointerType, ReferenceType, TensorType, TypeNode, FuncType
+from hidet.ir.type import VoidType
+from hidet.ir.expr import Var, Expr, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, Neg, NotEqual, Equal, And, Or
+from hidet.ir.expr import Not, BitwiseAnd, BitwiseOr, BitwiseXor, BitwiseNot, LeftShift, RightShift, TensorElement
+from hidet.ir.expr import IfThenElse, Cast, Address, Reference, Dereference, Call, Let, Constant, TensorSlice, convert
+from hidet.ir.stmt import Stmt, Scope, DeclareStmt, EvaluateStmt, BufferStoreStmt, AssignStmt, LetStmt, ForStmt
+from hidet.ir.stmt import ForTaskStmt, WhileStmt, BreakStmt, ContinueStmt, IfStmt, ReturnStmt, AssertStmt, AsmStmt
+from hidet.ir.stmt import BlackBoxStmt, SeqStmt
+from hidet.ir.func import IRModule, Function
 from hidet.ir.compute import TensorNode, ScalarNode
 from hidet.ir.functors import StmtExprFunctor, TypeFunctor, TypeInfer
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
@@ -99,6 +106,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         return self.visit(node)
 
     def visit(self, node):
+        # pylint: disable=too-many-return-statements
         if isinstance(node, IRModule):
             return self.visit_IRModule(node)
         elif isinstance(node, Function):
@@ -159,7 +167,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             doc += '__global__'
         elif func.kind == 'cuda_device':
             doc += '__device__ __forceinline__'
-        elif func.kind == 'packed_func' or func.kind == 'host_kernel':
+        elif func.kind in ['packed_func', 'host_kernel']:
             doc += '__host__'
 
         doc += ' ' + self(func.ret_type)
@@ -184,8 +192,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         # parameters
         doc += '('
         param_docs = []
-        for i in range(len(func.params)):
-            param = func.params[i]
+        for param in func.params:
             param_docs.append(self.param_declare(param))
         doc += doc_join(param_docs, Text(', '))
         doc += ') {'
@@ -308,13 +315,18 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         elif is_primitive_function(func_name):
             entry = lookup_primitive_function(func_name)
             if entry.function is not None:
-                raise ValueError("Please use import_primitive_functions pass to import primitive function first: {}, functions in current module:\n{}.".format(entry.name, list(self.ir_module.functions.keys())))
+                msg = (f"Please use import_primitive_functions pass to import primitive function first: {entry.name}, "
+                       f"functions in current module:\n{list(self.ir_module.functions.keys())}.")
+                raise ValueError(msg)
             if entry.generic:
-                raise ValueError("Please use resolve_generic_primitive_function pass to lower the generic primitive function {}.".format(entry.name))
+                msg = ("Please use resolve_generic_primitive_function pass to lower "
+                       "the generic primitive function {}.".format(entry.name))
+                raise ValueError(msg)
             # system-provided function, do not canonize the func name
             return entry.codegen_name + (Text('(') + doc_join([self(arg) for arg in e.args], Text(', ')) + ')')
         else:
-            raise ValueError("Callee {} not found in current ir module, and it is not primitive function.".format(func_name))
+            msg = "Callee {} not found in current ir module, and it is not primitive function.".format(func_name)
+            raise ValueError(msg)
 
     def visit_Let(self, e: Let):
         raise ValueError("please run 'expand_let_expr' pass before codegen")
@@ -473,7 +485,8 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         input_docs = []
         for label, expr in zip(stmt.input_labels, stmt.input_exprs):
             input_docs.append(Text(f'"{label}"') + '(' + self(expr) + ')')
-        return NewLine() + 'asm ' + volatile_doc + '(' + template_doc + ' : ' + doc_join(output_docs, ', ') + ' : ' + doc_join(input_docs, ', ') + ');'
+        return (NewLine() + 'asm ' + volatile_doc + '(' + template_doc + ' : ' + doc_join(output_docs, ', ')
+                + ' : ' + doc_join(input_docs, ', ') + ');')
 
     def visit_BlackBoxStmt(self, stmt: BlackBoxStmt):
         expr_docs = [str(self(e)) for e in stmt.exprs]
@@ -486,7 +499,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
 
     def visit_SeqStmt(self, stmt: SeqStmt):
         doc = Doc()
-        for idx, s in enumerate(stmt.seq):
+        for s in stmt.seq:
             doc += self(s)
         return doc
 
@@ -507,7 +520,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         return Text(scalar_type_map[t.name])
 
     def visit_TensorType(self, t: TensorType):
-        return Text('TensorType(') + self(t.scalar_type) + ', [' + doc_join([self(s) for s in t.shape], ", ") + ']' + ')'
+        return Text('TensorType(') + self(t.scalar_type) + ', [' + doc_join([self(s) for s in t.shape], ", ") + '])'
 
     def visit_PointerType(self, t: PointerType):
         return self(t.base_type) + Text('*')
@@ -535,12 +548,11 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         raise ValueError()
 
 
-def codegen(ir_module: IRModule, src_out_path: Optional[str] = None) -> Optional[str]:
+def codegen(ir_module: IRModule, src_out_path: Optional[str] = None) -> str:
     gen = Codegen()
     doc = gen(ir_module)
     code = str(doc)
     if src_out_path is not None:
         with open(src_out_path, 'w') as f:
             f.write(code)
-    else:
-        return code
+    return code

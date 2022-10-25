@@ -1,5 +1,4 @@
-import os.path
-from typing import List, Tuple, Optional
+from typing import List, Tuple
 from collections import namedtuple, defaultdict
 import tempfile
 import onnx
@@ -18,7 +17,8 @@ except ImportError:
 class ConvBnRelu(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride, padding, bias):
         super().__init__()
-        self.conv = nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=stride, padding=padding, bias=bias)
+        self.conv = nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size,
+                              stride=stride, padding=padding, bias=bias)
         self.bn = nn.BatchNorm2d(num_features=out_channels)
         self.relu = nn.ReLU()
 
@@ -27,7 +27,8 @@ class ConvBnRelu(nn.Module):
         return x
 
 
-def conv_bn_relu(batch_size, height, width, in_channels, out_channels, kernel_size, stride, padding, bias=True) -> onnx.ModelProto:
+def conv_bn_relu(batch_size, height, width, in_channels, out_channels, kernel_size, stride, padding,
+                 bias=True) -> onnx.ModelProto:
     module = ConvBnRelu(in_channels, out_channels, kernel_size, stride, padding, bias)
     module.eval()
     x = torch.randn([batch_size, in_channels, height, width], dtype=torch.float32)
@@ -52,7 +53,8 @@ def conv_bn_relu(batch_size, height, width, in_channels, out_channels, kernel_si
     return onnx_model
 
 
-Conv2dConfig = namedtuple('Conv2dConfig', field_names=['batch_size', 'height', 'width', 'in_channels', 'out_channels', 'kernel_size', 'stride', 'padding'])
+Conv2dConfig = namedtuple('Conv2dConfig', field_names=['batch_size', 'height', 'width', 'in_channels', 'out_channels',
+                                                       'kernel_size', 'stride', 'padding'])
 
 
 def get_resnet50_configs(batch_size: int = 1) -> List[Conv2dConfig]:
@@ -87,7 +89,7 @@ def get_resnet50_configs(batch_size: int = 1) -> List[Conv2dConfig]:
 def print_implicit_gemm_workloads(configs: List[Conv2dConfig] = None):
     if configs is None:
         configs = get_resnet50_configs()
-    for idx, config in enumerate(configs):
+    for config in configs:
         n, c, h, w = config.batch_size, config.in_channels, config.height, config.width
         oc = config.out_channels
         kx, ky = config.kernel_size
@@ -129,14 +131,16 @@ def conv_bn_relu_input_shape(bs: int, idx: int) -> List[int]:
     return [bs] + shapes[idx]
 
 
-def get_resnet50_block(name: str, batch_size=1, precision='float32', nocache=False) -> Tuple[str, List[str], List["hidet.Tensor"]]:
+def get_resnet50_block(name: str, batch_size=1, precision='float32',
+                       nocache=False) -> Tuple[str, List[str], List["hidet.Tensor"]]:
     assert precision == 'float32'
-    a, b, c = name.split('_')  # resnet50_conv_0 to resnet50_conv_22
+    _, _, c = name.split('_')  # resnet50_conv_0 to resnet50_conv_22
     conv_idx = int(c)
     configs = get_resnet50_configs(batch_size)
     config = configs[conv_idx]
     x_shape = conv_bn_relu_input_shape(batch_size, conv_idx)
-    model = ConvBnRelu(in_channels=config.in_channels, out_channels=config.out_channels, kernel_size=config.kernel_size, stride=config.stride, padding=config.padding, bias=True)
+    model = ConvBnRelu(in_channels=config.in_channels, out_channels=config.out_channels, kernel_size=config.kernel_size,
+                       stride=config.stride, padding=config.padding, bias=True)
 
     x = torch.randn(x_shape)
     return export_torch_to_onnx(
@@ -146,32 +150,3 @@ def get_resnet50_block(name: str, batch_size=1, precision='float32', nocache=Fal
         inputs=[x],
         nocache=nocache
     )
-
-
-if __name__ == '__main__':
-    for name in [
-        'resnet50_conv_0',
-        'resnet50_conv_1',
-        'resnet50_conv_2',
-        'resnet50_conv_3',
-        'resnet50_conv_4',
-        'resnet50_conv_5',
-        'resnet50_conv_6',
-        'resnet50_conv_7',
-        'resnet50_conv_8',
-        'resnet50_conv_9',
-        'resnet50_conv_10',
-        'resnet50_conv_11',
-        'resnet50_conv_12',
-        'resnet50_conv_13',
-        'resnet50_conv_14',
-        'resnet50_conv_15',
-        'resnet50_conv_16',
-        'resnet50_conv_17',
-        'resnet50_conv_18',
-        'resnet50_conv_19',
-        'resnet50_conv_20',
-        'resnet50_conv_21',
-        'resnet50_conv_22',
-    ]:
-        get_resnet50_block(name)

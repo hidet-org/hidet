@@ -1,10 +1,9 @@
 from typing import Optional
 import math
-from hidet.ir import primitives as prim, convert
+from hidet.ir import primitives as prim
 from hidet.ir.expr import const_like
-
 from .utils import Tensor
-from .arithmatic import UnaryElementwiseOp, erf, tanh, cube
+from .arithmatic import UnaryElementwiseOp
 
 
 class ReluOp(UnaryElementwiseOp):
@@ -31,7 +30,11 @@ class ClipOp(UnaryElementwiseOp):
 
 class GeluOp(UnaryElementwiseOp):
     def __init__(self, x):
-        super().__init__(x, op=lambda v: const_like(0.5, v) * v * (const_like(1.0, v) + prim.erf(v * const_like(1 / math.sqrt(2), v))), name='gelu')
+        super().__init__(
+            x=x,
+            op=lambda v: const_like(0.5, v) * v * (const_like(1.0, v) + prim.erf(v * const_like(1 / math.sqrt(2), v))),
+            name='gelu'
+        )
 
 
 def relu(x) -> Tensor:

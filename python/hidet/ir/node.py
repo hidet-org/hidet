@@ -5,7 +5,7 @@ class Node:
     _dispatch_index = {None: 0}
 
     def __str__(self):
-        from hidet.ir.functors.printer import astext
+        from hidet.ir.functors.printer import astext    # pylint: disable=import-outside-toplevel
         return astext(self)
 
     def __repr__(self):
@@ -30,4 +30,3 @@ class Node:
                 table.append(None)
             table[idx] = target
         return table
-

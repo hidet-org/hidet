@@ -1,9 +1,8 @@
-from .base import FunctionBodyPass, Pass
-from hidet.ir.functors import StmtExprRewriter, TypeInfer, TypeFunctor
+from hidet.ir.functors import StmtExprRewriter, TypeInfer
 from hidet.ir.stmt import Stmt, AssignStmt, BufferStoreStmt
-from hidet.ir.expr import Expr, Cast, Add, Sub, Multiply, Div, FloorDiv, BinaryOp, cast
+from hidet.ir.expr import Expr, Cast, Add, Sub, Multiply, Div, BinaryOp, cast
 from hidet.ir.type import ScalarType, TypeNode, TensorType, TensorPointerType, PointerType, ReferenceType, VoidType
-from hidet.utils import same_list
+from .base import FunctionBodyPass, Pass
 
 
 class TypeNotMatch(Exception):

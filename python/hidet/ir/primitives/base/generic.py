@@ -1,13 +1,11 @@
-from typing import List, Optional, Union
+from typing import List, Union
 import builtins
-import math
 from hidet.ir.type import ScalarType
-from hidet.ir.expr import Expr, Call, Var, cast
-from hidet.ir.stmt import BlackBoxStmt, AsmStmt, ReturnStmt
-from hidet.ir.builders import FunctionBuilder, StmtBuilder
-from ..func import FuncType, register_primitive_function, is_primitive_function, lookup_primitive_function, registered_primitive_functions
-from ..func import primitive_func_pool as pool
+from hidet.ir.expr import Expr, Call
+from hidet.ir.stmt import BlackBoxStmt
 from hidet.utils import initialize
+from ..func import FuncType, register_primitive_function
+from ..func import primitive_func_pool as pool
 
 ExprLike = Union[Expr, int, float]
 
@@ -114,7 +112,3 @@ def register_primitive_functions_generic():
             func_or_type=FuncType(type_infer_func=type_infer_func),
             generic=True
         )
-
-
-
-

@@ -1,5 +1,4 @@
 from typing import Iterable
-from hidet.ir.functors import ExprRewriter
 import numpy as np
 
 
@@ -34,5 +33,3 @@ class HashSum:
     @staticmethod
     def hash_set(objs: Iterable) -> 'HashSum':
         return HashSum(tuple(sorted([hash(obj) for obj in objs])))
-
-

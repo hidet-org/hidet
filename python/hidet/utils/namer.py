@@ -1,4 +1,4 @@
-from typing import Sequence, Iterable
+from typing import Iterable
 from collections import defaultdict
 
 

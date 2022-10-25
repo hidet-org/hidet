@@ -47,9 +47,9 @@ class PrologueEpilogueRewriter(FuncStmtExprRewriter):
                 self.reverse_consume[b] = []
             self.reverse_consume[b].append(a)
         self.input2task: Dict[TensorNode, Task] = {}
-        for task in self.task_graph.nodes:
-            for input_tensor in task.inputs:
-                self.input2task[input_tensor] = task
+        for internal_task in self.task_graph.nodes:
+            for input_tensor in internal_task.inputs:
+                self.input2task[input_tensor] = internal_task
 
         self.binding: Dict[TensorNode, Var] = {}
         self.anchor_inputs: List[Var] = []
@@ -119,7 +119,8 @@ class PrologueEpilogueRewriter(FuncStmtExprRewriter):
                 # but not an output tensor of task graph.
                 consumed_by: List[TensorNode] = self.reverse_consume[buf]
                 if len(consumed_by) != 1:
-                    raise ValueError('Expect tensor {} to be consumed exactly once, got {}.'.format(buf, len(consumed_by)))
+                    raise ValueError('Expect tensor {} to be consumed exactly once, got {}.'.format(
+                        buf, len(consumed_by)))
                 consumer_input: TensorNode = consumed_by[0]
                 consumer_task: Task = self.input2task[consumer_input]
                 inverse_map: InverseMap = consumer_task.inverse_map[consumer_input]
@@ -157,9 +158,11 @@ class PrologueEpilogueRewriter(FuncStmtExprRewriter):
                 # replace out[i + 3, i + j] with value (in the example above)
                 tensor_elements: List[TensorElement] = collect(value, TensorElement, stop_when_found=False)
                 tensor_elements = [te for te in tensor_elements if te.base is consumer_input]
-                assert len(tensor_elements) == 1, 'Epilgoue can only index one time of the input tensor with inverse map'
+                assert len(tensor_elements) == 1, ('Epilgoue can only index one time of the input tensor '
+                                                   'with inverse map')
                 tensor_element: TensorElement = tensor_elements[0]
-                self.memo[tensor_element] = self.visit(stmt.value)  # in the context of above example, we replace 'out[i + 3, i + j]' by 'value'
+                # in the context of above example, we replace 'out[i + 3, i + j]' by 'value'
+                self.memo[tensor_element] = self.visit(stmt.value)
 
                 # step 3
                 return self.visit(BufferStoreStmt(consumer_output, out_indices, value, stmt.protected))
@@ -167,7 +170,8 @@ class PrologueEpilogueRewriter(FuncStmtExprRewriter):
                 raise ValueError('Output tensor {} has not been bound.'.format(buf))
         elif stmt.buf in self.anchor_outputs:
             output_index = self.anchor_outputs.index(stmt.buf)
-            return self.visit(BufferStoreStmt(self.task.outputs[output_index], stmt.indices, stmt.value, stmt.protected))
+            return self.visit(BufferStoreStmt(self.task.outputs[output_index], stmt.indices, stmt.value,
+                                              stmt.protected))
         else:
             return FuncStmtExprRewriter.visit_BufferStoreStmt(self, stmt)
 

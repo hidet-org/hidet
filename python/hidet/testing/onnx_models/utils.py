@@ -49,7 +49,6 @@ def export_torch_to_onnx(
         dirname = os.path.dirname(onnx_path)
         os.makedirs(dirname, exist_ok=True)
         shutil.move(path, onnx_path)
-        # os.rename(path, onnx_path)    'OSError: [Errno 18] Invalid cross-device link' when src and dst are on different filesystem.
         onnx.checker.check_model(onnx_path)
 
     numpy_inputs = [torch_tensor.cpu().numpy() for torch_tensor in inputs]

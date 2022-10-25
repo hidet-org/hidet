@@ -14,7 +14,7 @@ class GraphVisitor:
     def visit(self, obj: Union[FlowGraph, Operator, Tensor, list, tuple]):
         key = obj if not isinstance(obj, list) else id(obj)
         if self.memo is not None and obj in self.memo:
-            return self.memo[key]
+            return
         if isinstance(obj, FlowGraph):
             self.visit_FlowGraph(obj)
         elif isinstance(obj, Operator):
@@ -33,12 +33,12 @@ class GraphVisitor:
             self(output)
 
     def visit_Operator(self, op: Operator):
-        for input in op.inputs:
-            self(input)
+        for inp in op.inputs:
+            self(inp)
 
     def visit_Tensor(self, tensor: Tensor):
         if tensor.trace is None:
-            return tensor
+            return
         self(tensor.trace[0])
 
     def visit_Sequence(self, seq: Union[list, tuple]):
@@ -60,7 +60,7 @@ class GraphRewriter:
         if isinstance(obj, FlowGraph):
             ret = self.visit_FlowGraph(obj)
         elif isinstance(obj, Operator):
-            ret = self.visit_Operator(obj)
+            ret = self.visit_Operator(obj)    # pylint: disable=assignment-from-none
         elif isinstance(obj, Tensor):
             ret = self.visit_Tensor(obj)
         elif isinstance(obj, (list, tuple)):
@@ -139,8 +139,8 @@ class GraphUsageAnalyzer(GraphVisitor):
         GraphVisitor.visit_FlowGraph(self, graph)
 
     def visit_Operator(self, op: Operator):
-        for idx, input in enumerate(op.inputs):
-            self.usage[input].append((op, idx))
+        for idx, inp in enumerate(op.inputs):
+            self.usage[inp].append((op, idx))
         GraphVisitor.visit_Operator(self, op)
 
 
@@ -157,4 +157,3 @@ def graph_collect(obj: Union[FlowGraph, Operator, Tensor], cls: Type[Union[Opera
     visitor = GraphVisitor()
     visitor.visit(obj)
     return [v for v in visitor.memo if isinstance(v, cls)]
-

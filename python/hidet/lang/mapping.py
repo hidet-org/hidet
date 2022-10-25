@@ -1,4 +1,4 @@
-from typing import List
+# pylint: disable=unused-import
 from hidet.ir.mapping import TaskMapping
 from hidet.ir.mapping import row_repeat as repeat
 from hidet.ir.mapping import row_spatial as spatial
@@ -11,4 +11,3 @@ def chain(*task_mappings) -> TaskMapping:
     for mapping in task_mappings[1:]:
         composed = composed * mapping
     return composed
-

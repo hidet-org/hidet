@@ -1,14 +1,13 @@
-from typing import List, Optional, Dict, Tuple, Set, Union
+from typing import List, Optional, Dict, Tuple, Set
 
-import hidet.graph.ops.definitions
 from hidet.graph.ir import functors
 from hidet.graph.ir.flow_graph import FlowGraph, Operator, Tensor
 from hidet.graph.transforms import GraphPass, PassContext
 from hidet.graph.ir.functors import analyze_usage, graph_collect
-from .fold_const import fold_const_pass
-from .graph_patterns import GraphPattern, TensorPattern, OperatorPattern, MatchDict, Usage, graph_pattern_match
-from .graph_patterns import all_graph_patterns
 from hidet.utils import strict_zip
+from .fold_const import fold_const_pass
+from .graph_patterns import GraphPattern, TensorPattern, MatchDict, Usage, graph_pattern_match
+from .graph_patterns import all_graph_patterns
 
 
 class PatternTransformPass(GraphPass):
@@ -28,7 +27,7 @@ class PatternTransformPass(GraphPass):
         graph = functors.clone(graph)
         graph_patterns = all_graph_patterns()
         fold_const = fold_const_pass()
-        for t in range(self.max_num_transforms):
+        for _ in range(self.max_num_transforms):
             updated, graph = self.try_transform(graph, graph_patterns)
             graph = fold_const.process_graph(graph)
             if not updated:
@@ -48,7 +47,8 @@ class PatternTransformPass(GraphPass):
 
         for source_output_tensor in source_output_tensors:
             if source_output_tensor not in matched:
-                raise NotImplementedError('The source pattern is not connected. Current we do not support disconnected patterns.')
+                msg = 'The source pattern is not connected. Current we do not support disconnected patterns.'
+                raise NotImplementedError(msg)
 
         return matched
 

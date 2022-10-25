@@ -25,32 +25,32 @@ def download_url_to_file(url, dst, progress=True):
     # modified based on PyTorch
     file_size = None
     req = urllib.request.Request(url, headers={"User-Agent": ""})
-    u = urllib.request.urlopen(req)
-    meta = u.info()
-    if hasattr(meta, 'getheaders'):
-        content_length = meta.getheaders("Content-Length")
-    else:
-        content_length = meta.get_all("Content-Length")
-    if content_length is not None and len(content_length) > 0:
-        file_size = int(content_length[0])
+    with urllib.request.urlopen(req) as u:
+        meta = u.info()
+        if hasattr(meta, 'getheaders'):
+            content_length = meta.getheaders("Content-Length")
+        else:
+            content_length = meta.get_all("Content-Length")
+        if content_length is not None and len(content_length) > 0:
+            file_size = int(content_length[0])
 
-    dst = os.path.expanduser(dst)
-    dst_dir = os.path.dirname(dst)
-    os.makedirs(dst_dir, exist_ok=True)
-    f = tempfile.NamedTemporaryFile(delete=False, dir=dst_dir)
+        dst = os.path.expanduser(dst)
+        dst_dir = os.path.dirname(dst)
+        os.makedirs(dst_dir, exist_ok=True)
+        f = tempfile.NamedTemporaryFile(delete=False, dir=dst_dir)  # pylint: disable=consider-using-with
 
-    try:
-        with tqdm(total=file_size, disable=not progress, unit='B', unit_scale=True, unit_divisor=1024) as pbar:
-            while True:
-                buffer = u.read(8192)
-                if len(buffer) == 0:
-                    break
-                f.write(buffer)
-                pbar.update(len(buffer))
+        try:
+            with tqdm(total=file_size, disable=not progress, unit='B', unit_scale=True, unit_divisor=1024) as pbar:
+                while True:
+                    buffer = u.read(8192)
+                    if len(buffer) == 0:
+                        break
+                    f.write(buffer)
+                    pbar.update(len(buffer))
 
-        f.close()
-        shutil.move(f.name, dst)
-    finally:
-        f.close()
-        if os.path.exists(f.name):
-            os.remove(f.name)
+            f.close()
+            shutil.move(f.name, dst)
+        finally:
+            f.close()
+            if os.path.exists(f.name):
+                os.remove(f.name)

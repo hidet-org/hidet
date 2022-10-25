@@ -1,22 +1,23 @@
-from typing import List, Union, Sequence, Optional, Dict, Callable, Type
+"""
+Import onnx model to hidet.
+
+Please refers to https://github.com/onnx/onnx/blob/main/docs/Operators.md for operator definition.
+Please refers to https://github.com/onnx/onnx/blob/main/onnx/onnx.proto for proto structure of onnx format.
+"""
+# pylint: disable=unused-argument
+from typing import List, Union, Optional, Dict, Callable, Type
 from collections import defaultdict
 import warnings
 import os
 import numpy as np
-import hidet
-from hidet.common import HidetNotImplementedError
-from hidet.graph.modules import nn
-from hidet.graph import ops
-from hidet.graph.tensor import Tensor, from_numpy, randn
 import onnx
 import onnx.numpy_helper
 import onnx.external_data_helper
-from hidet.utils import line_profile, prod
+import hidet
+from hidet.graph.modules import nn
+from hidet.graph import ops
+from hidet.graph.tensor import Tensor, from_numpy, randn
 
-"""
-Please refers to https://github.com/onnx/onnx/blob/main/docs/Operators.md for operator definition when adding new operators.
-Please refers to https://github.com/onnx/onnx/blob/main/onnx/onnx.proto for proto structure of onnx format.
-"""
 
 
 class OnnxOperator:
@@ -26,7 +27,6 @@ class OnnxOperator:
         ----------
         node: onnx.NodeProto
         """
-        import onnx.numpy_helper
         self.node: onnx.NodeProto = node
         self.op_sets: List[int] = op_sets
         self.input_names: List[str] = [name for name in node.input]
@@ -66,7 +66,8 @@ class OnnxOperator:
                 if self.implemented(try_op_set):
                     return try_op_set
                 try_op_set -= 1
-        raise NotImplementedError('Can not resolve opset for operator {} given opsets {}.'.format(self.node.op_type, op_sets))
+        raise NotImplementedError('Can not resolve opset for operator {} given opsets {}.'.format(
+            self.node.op_type, op_sets))
 
     def implemented(self, opset: int):
         func_name = 'run_v{}'.format(opset)
@@ -172,10 +173,6 @@ class OnnxConv(OnnxOperator):
         if bias is not None:
             bias = ops.unsqueeze(bias, [0, 2, 3])
             output = output + bias
-        if groups > 1:
-            kx, ky, sx, sy = w.shape[2], w.shape[3], strides[0], strides[1]
-            n, c, h, w = output.shape
-            # print('n, c, h, w, kx, ky, sx, sy = out_shape {} {} {} {} kernel {} {} stride {} {}'.format(n, c, h, w, kx, ky, sx, sy))
         return [output]
 
     def run_v11(self, inputs: List[Tensor]) -> List[Tensor]:
@@ -186,7 +183,8 @@ class OnnxConv(OnnxOperator):
 class OnnxBatchNormalization(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         epsilon: float = self.attrs.get('epsilon', 1e-5)
-        momentum: float = self.attrs.get('momentum', 0.9)
+        # for inference, we can ignore this momentum attribute
+        momentum: float = self.attrs.get('momentum', 0.9)   # pylint: disable=unused-variable
         training_mode: int = self.attrs.get('training_mode', 0)
         assert training_mode == 0, 'BatchNorm in training mode occurs, currently, hidet does not support training.'
 
@@ -368,7 +366,7 @@ class OnnxUnsqueeze(OnnxOperator):
 @register_onnx_operator
 class OnnxReshape(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
-        allow_zero = self.attrs.get('allowzero', 0)
+        allow_zero = self.attrs.get('allowzero', 0)  # pylint: disable=unused-variable
         x, shape = inputs
         shape = self.tensor2list(shape)
         return [ops.reshape(x, shape)]
@@ -712,8 +710,8 @@ class OnnxSplit(OnnxOperator):
         elif len(inputs) == 2:
             parts = self.tensor2list(inputs[1])
         else:
-            raise ValueError('Expect the input of Split operator have 1 or 2 inputs, but got {} inputs. See:\n'.format(len(inputs)) +
-                             'https://github.com/onnx/onnx/blob/main/docs/Operators.md#Split')
+            raise ValueError('Expect the input of Split operator have 1 or 2 inputs, but got {} inputs. See:\n'.format(
+                len(inputs)) + 'https://github.com/onnx/onnx/blob/main/docs/Operators.md#Split')
         return ops.split(data, axis, parts)
 
 
@@ -843,43 +841,43 @@ class OnnxIdentity(OnnxOperator):
 @register_onnx_operator
 class OnnxPyFunc(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
-        warnings.warn('PyFunc operator in ONNX model encountered, dummy output is returned. If dummy output are used, there will be errors.')
+        warnings.warn('PyFunc operator in ONNX model encountered, dummy output is returned. '
+                      'If dummy output are used, there will be errors.')
         return [randn([1]) for name in self.output_names]
 
 
 def dispatch(node, op_sets: List[int]) -> OnnxOperator:
     op_type = node.op_type
     if op_type not in dispatch_table:
-        raise NotImplementedError("Operator '{}' (in opset {}) from onnx has not been supported yet.".format(op_type, op_sets))
+        raise NotImplementedError("Operator '{}' (in opset {}) from onnx has not been supported yet.".format(
+            op_type, op_sets))
     op = dispatch_table[op_type](node, op_sets)
     return op
 
 
 def run_trt(node: OnnxOperator, inputs: List[Tensor]) -> List[Tensor]:
-    import onnx
-    from onnx.helper import make_value_info, make_tensor_type_proto
-    from onnx import TensorProto
+    # pylint: disable=no-member
     import onnxruntime
     hidet_outputs = node.run(inputs)
     dtype_map = {
-        'float32': TensorProto.FLOAT,
-        'int32': TensorProto.INT32,
-        'int64': TensorProto.INT64,
-        'bool': TensorProto.BOOL
+        'float32': onnx.TensorProto.FLOAT,
+        'int32': onnx.TensorProto.INT32,
+        'int64': onnx.TensorProto.INT64,
+        'bool': onnx.TensorProto.BOOL
     }
     inputs_value_info = [
-        make_value_info(
+        onnx.helper.make_value_info(
             name=name,
-            type_proto=make_tensor_type_proto(
+            type_proto=onnx.helper.make_tensor_type_proto(
                 elem_type=dtype_map[tensor.dtype],
                 shape=tensor.shape
             )
         ) for name, tensor in zip(node.input_names, inputs)
     ]
     outputs_value_info = [
-        make_value_info(
+        onnx.helper.make_value_info(
             name=name,
-            type_proto=make_tensor_type_proto(
+            type_proto=onnx.helper.make_tensor_type_proto(
                 elem_type=dtype_map[tensor.dtype],
                 shape=tensor.shape
             )
@@ -927,8 +925,8 @@ class OnnxGraph(nn.Module):
         for name, param in self.parameters.items():
             name2tensor[name] = param
         # inputs
-        for name, input in zip(self.input_names, args):
-            name2tensor[name] = input
+        for name, inp in zip(self.input_names, args):
+            name2tensor[name] = inp
         # run nodes
         usage_count = self.usage_count.copy()
         for operator in self.operators:
@@ -1001,7 +999,8 @@ class OnnxModule(nn.Module):
         for opset_import in model.opset_import:
             if opset_import.domain not in ['', 'ai.onnx', 'ai.onnx.ml']:
                 # we currently only support standard onnx operator domain
-                raise ValueError('Onnx model imports unknown operator domain: {}, we currently only support standard onnx operator set.'.format(repr(opset_import.domain)))
+                raise ValueError('Onnx model imports unknown operator domain: {}, we currently '
+                                 'only support standard onnx operator set.'.format(repr(opset_import.domain)))
             op_sets.append(int(opset_import.version))
         self.op_sets: List[int] = list(reversed(sorted(op_sets)))
         self.graph: OnnxGraph = OnnxGraph(model.graph, op_sets=self.op_sets)
@@ -1055,7 +1054,6 @@ def from_onnx(model: Union[str, 'onnx.ModelProto']) -> OnnxModule:
     ret: OnnxModule
         The loaded model.
     """
-    import onnx
     if isinstance(model, str):
         model = os.path.expanduser(model)
         model = onnx.load_model(model, load_external_data=False)
@@ -1064,6 +1062,6 @@ def from_onnx(model: Union[str, 'onnx.ModelProto']) -> OnnxModule:
     except ValueError:
         # ignore 'ValueError: Message onnx.ModelProto exceeds maximum protobuf size of 2GB'
         pass
-    except onnx.onnx_cpp2py_export.checker.ValidationError:
+    except onnx.onnx_cpp2py_export.checker.ValidationError:  # pylint: disable=c-extension-no-member
         warnings.warn('The onnx model has not pass the onnx checker.')
     return OnnxModule(model)

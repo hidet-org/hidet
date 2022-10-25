@@ -1,13 +1,13 @@
 from typing import Union
 import operator
-from hidet.ir.expr import Expr, BinaryOp, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, LessEqual, Equal, Constant, And, Or, Not
-from hidet.ir.expr import is_one, is_zero, is_true, is_false, convert
+from hidet.ir.expr import Expr, BinaryOp, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, LessEqual, Equal, Constant
+from hidet.ir.expr import And, Or, Not, is_one, is_zero, is_true, is_false, convert
 from hidet.ir.stmt import Stmt, IfStmt, SeqStmt, ForStmt
-from hidet.ir.functors import StmtExprRewriter, same_list, rewrite
+from hidet.ir.functors import StmtExprRewriter, rewrite
 
 
 class Simplifier(StmtExprRewriter):
-    def visit_Binary(self, e: BinaryOp):
+    def visit_Binary(self, e: BinaryOp):  # pylint: disable=too-many-branches
         a = self(e.a)
         b = self(e.b)
         if isinstance(e, Add):
@@ -127,7 +127,7 @@ def simplify(node: Union[Stmt, Expr], repeat_limit=10):
     if isinstance(node, (int, float)):
         return node
     simplifier = Simplifier()
-    for i in range(repeat_limit):
+    for _ in range(repeat_limit):
         old_node = node
         node = simplifier(node)
         if old_node is node:

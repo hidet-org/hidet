@@ -1,7 +1,6 @@
 from typing import Union
 
 from hidet.ir.expr import Expr, convert
-from hidet.ir.func import Function
 from hidet.ir.type import ScalarType, VoidType, FuncType
 from hidet.ir.primitives.func import register_primitive_function, call_primitive_func
 from hidet.utils import initialize

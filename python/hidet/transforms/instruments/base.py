@@ -13,5 +13,3 @@ class PassInstrument:
 
     def after_all_passes(self, ir_module: IRModule):
         pass
-
-

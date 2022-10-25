@@ -1,18 +1,15 @@
-from typing import List, Dict, Sequence, Union, Tuple, Set
+"""
+Convert DeclareStmt with initialized value to LetStmt if the declared variable has never been
+modified (with AssignStmt).
+"""
+from typing import List, Dict
 from collections import defaultdict
-import itertools
 
-from hidet.ir import SeqStmt, AssertStmt, IfStmt, ForTaskStmt, ForStmt, BufferStoreStmt, EvaluateStmt
-from hidet.ir.expr import Var, Expr
-from hidet.ir.stmt import AssignStmt, DeclareStmt, LetStmt, Stmt, BlackBoxStmt, AsmStmt, ReturnStmt
-from hidet.ir.mapping import TaskMapping, SpatialTaskMapping, RepeatTaskMapping, ComposedTaskMapping
+from hidet.ir import SeqStmt
+from hidet.ir.expr import Var
+from hidet.ir.stmt import AssignStmt, DeclareStmt, LetStmt, Stmt, AsmStmt
 from hidet.transforms.base import Pass, FunctionBodyPass
-from hidet.ir.functors import StmtFunctor, StmtExprRewriter, rewrite, collect
-from hidet.utils import prod
-
-"""
-Convert DeclareStmt with initialized value to LetStmt if the declared variable has never been modified (with AssignStmt).
-"""
+from hidet.ir.functors import StmtExprRewriter, collect
 
 
 class DeclareToLetRewriter(StmtExprRewriter):

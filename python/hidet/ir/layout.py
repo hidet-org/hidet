@@ -1,6 +1,7 @@
+# pylint: disable=import-outside-toplevel
 import itertools
 from collections import OrderedDict
-from typing import Sequence, Union, List, Callable, Mapping, Dict, Tuple, Optional
+from typing import Sequence, Union, List, Mapping, Dict, Tuple, Optional
 
 from hidet.ir.node import Node
 from hidet.utils import prod
@@ -50,7 +51,9 @@ def to_data_layout(obj):
 class DataLayout(Node):
     def __init__(self, shape=None, size=None):
         from hidet import ir
-        self.shape: Tuple[Int] = tuple([int(v) if isinstance(v, ir.Constant) else v for v in shape]) if shape is not None else None
+        if shape is None:
+            shape = []
+        self.shape: Tuple[Int] = tuple(int(v) if isinstance(v, ir.Constant) else v for v in shape)
         self.size: Int = size
 
     def __call__(self, *args: Int):
@@ -165,7 +168,7 @@ class StridesLayout(DataLayout):
     def storage_size(shape, strides) -> Expr:
         # assume the strides are positive, but do not assume the tensor is contiguous.
         from hidet.ir.functors import simplify
-        max_index = sum([(a - 1) * b for a, b in zip(shape, strides)]) + 1
+        max_index = sum((a - 1) * b for a, b in zip(shape, strides)) + 1
         return simplify(max_index)
 
     @staticmethod
@@ -210,7 +213,8 @@ class LocalLayout(DataLayout):
 
 class SwizzleDataLayout(DataLayout):
     """
-    Swizzle a layout (called base layout) to get a swizzled data layout. The shape of swizzled layout is the same as the base layout.
+    Swizzle a layout (called base layout) to get a swizzled data layout. The shape of swizzled layout is the same as
+    the base layout.
 
     Example:
         A 2-dimension tensor with shape [a, b] where a = 2^m for some m and b <= a,
@@ -223,17 +227,20 @@ class SwizzleDataLayout(DataLayout):
         self.dim: int = int(dim)
         if regards_dim is None:
             if len(base.shape) != 2:
-                raise ValueError('Optional regards_dim is only available for 2-rank layout, got layout with shape {}.'.format(base.shape))
+                raise ValueError('Optional regards_dim is only available for 2-rank layout, '
+                                 'got layout with shape {}.'.format(base.shape))
             self.regards_dim = 1 - dim
         else:
             self.regards_dim = dim
         self.log_step = log_step
 
         if self.dim == self.regards_dim:
-            raise ValueError('The swizzle dim and regards dim can not be the same, got {} and {}'.format(self.dim, self.regards_dim))
+            raise ValueError('The swizzle dim and regards dim can not be the same, got {} and {}'.format(
+                self.dim, self.regards_dim))
         rank = len(base.shape)
         if not (0 <= self.dim < rank and 0 <= self.regards_dim < rank):
-            raise ValueError('The dim {} (regards dim {}) out of bound for layout {}'.format(self.dim, self.regards_dim, base.shape))
+            raise ValueError('The dim {} (regards dim {}) out of bound for layout {}'.format(
+                self.dim, self.regards_dim, base.shape))
         super().__init__(
             shape=self.base.shape,
             size=self.base.size
@@ -332,8 +339,7 @@ class FusedDataLayout(DataLayout):
         covered = []
         shape = []
         self.dims = []
-        for i in range(len(dim2fuse)):
-            item = dim2fuse[i]
+        for i, item in enumerate(dim2fuse):
             if isinstance(item, int):
                 item = [item]
             else:
@@ -341,12 +347,15 @@ class FusedDataLayout(DataLayout):
             self.dims.append(item)
             covered.extend(item)
             shape.append(prod([base.shape[i] for i in item]))
-        assert len(covered) == len(base.shape) and len(set(covered)) == len(covered), "missing some dimension or duplicated dimension"
+
+        msg = "missing some dimension or duplicated dimension"
+        assert len(covered) == len(base.shape) and len(set(covered)) == len(covered), msg
+
         super().__init__(shape=shape, size=base.size)
 
     def base_args(self, *args: Int):
         original_args = [None] * len(self.base.shape)
-        for i in range(len(self.dims)):
+        for i in range(len(self.dims)):   # pylint: disable=consider-using-enumerate
             dim_sizes = [self.base.shape[v] for v in self.dims[i]]
             for j, dim in enumerate(self.dims[i]):
                 original_args[dim] = args[i] // prod(dim_sizes[j + 1:]) % dim_sizes[j]
@@ -449,4 +458,3 @@ def data_layout(shape: List[int], ranks: Optional[List[int]] = None):
     if ranks is None:
         ranks = list(range(len(shape)))
     return StridesLayout.from_shape(shape, ranks)
-

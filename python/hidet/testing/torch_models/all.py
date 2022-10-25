@@ -1,4 +1,4 @@
-from typing import Tuple, List, Dict
+from typing import Tuple, Dict
 
 try:
     import torch
@@ -54,18 +54,3 @@ def get_torch_model(name: str, batch_size: int = 1, **kwargs) -> Tuple[nn.Module
         return model, inputs
     else:
         raise ValueError('Can not recognize model: {}'.format(name))
-
-
-if __name__ == '__main__':
-    from time import time
-    for name in ['resnet50', 'inception_v3', 'mobilenet_v2', 'bert', 'gpt2']:
-        model, inputs = get_torch_model(name)
-        outputs = model(**inputs)
-        repeats = 10
-        torch.cuda.synchronize()
-        t1 = time()
-        for t in range(repeats):
-            outputs = model(**inputs)
-        torch.cuda.synchronize()
-        t2 = time()
-        print('{} {:.1f}'.format(name, (t2 - t1) / repeats * 1000.0))

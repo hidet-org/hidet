@@ -1,4 +1,5 @@
-from typing import List, Union, Callable, Any
+from typing import List, Union
+import time
 from hidet.graph.tensor import array
 import numpy as np
 
@@ -34,18 +35,16 @@ def benchmark_func(run_func, warmup=1, number=5, repeat=5, median=True) -> Union
     """
     from hidet.utils.nvtx_utils import nvtx_annotate
     from hidet.utils import cuda
-    import numpy as np
-    import time
     results = []
     with nvtx_annotate('warmup'):
-        for i in range(warmup):
+        for _ in range(warmup):
             run_func()
             cuda.device_synchronize()
     for i in range(repeat):
         with nvtx_annotate(f'repeat {i}'):
             cuda.device_synchronize()
             start_time = time.time()
-            for j in range(number):
+            for _ in range(number):
                 run_func()
             cuda.device_synchronize()
             end_time = time.time()
@@ -56,10 +55,12 @@ def benchmark_func(run_func, warmup=1, number=5, repeat=5, median=True) -> Union
         return results
 
 
-def check_unary(shape, numpy_op, hidet_op, device: str = 'all', dtype: Union[str, np.dtype] = np.float32, atol=0, rtol=0):
+def check_unary(shape, numpy_op, hidet_op, device: str = 'all', dtype: Union[str, np.dtype] = np.float32, atol=0,
+                rtol=0):
     if device == 'all':
-        for device in ['cuda', 'cpu']:
-            check_unary(shape, numpy_op, hidet_op, device, dtype, atol, rtol)
+        for dev in ['cuda', 'cpu']:
+            check_unary(shape, numpy_op, hidet_op, dev, dtype, atol, rtol)
+        return
     # wrap np.array(...) in case shape = []
     data = np.array(np.random.randn(*shape)).astype(dtype)
     numpy_result = numpy_op(data)
@@ -67,14 +68,15 @@ def check_unary(shape, numpy_op, hidet_op, device: str = 'all', dtype: Union[str
     np.testing.assert_allclose(actual=hidet_result, desired=numpy_result, atol=atol, rtol=rtol)
 
 
-def check_binary(a_shape, b_shape, numpy_op, hidet_op, device: str = 'all', dtype: Union[str, np.dtype] = np.float32, atol=0.0, rtol=0.0):
+def check_binary(a_shape, b_shape, numpy_op, hidet_op, device: str = 'all', dtype: Union[str, np.dtype] = np.float32,
+                 atol=0.0, rtol=0.0):
     if device == 'all':
-        for device in ['cuda', 'cpu']:
-            print('checking', device)
-            check_binary(a_shape, b_shape, numpy_op, hidet_op, device, dtype, atol, rtol)
+        for dev in ['cuda', 'cpu']:
+            print('checking', dev)
+            check_binary(a_shape, b_shape, numpy_op, hidet_op, dev, dtype, atol, rtol)
+        return
     a = np.array(np.random.randn(*a_shape)).astype(dtype)
     b = np.array(np.random.randn(*b_shape)).astype(dtype)
     numpy_result = numpy_op(a, b)
     hidet_result = hidet_op(array(a).to(device=device), array(b).to(device=device)).cpu().numpy()
     np.testing.assert_allclose(actual=hidet_result, desired=numpy_result, atol=atol, rtol=rtol)
-

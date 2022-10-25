@@ -1,3 +1,4 @@
+# pylint: disable=unused-import
 from typing import Tuple, List, Union, Sequence, Optional
 import builtins
 from hidet.ir.layout import DataLayout
@@ -7,8 +8,6 @@ from hidet.ir.task import Task, InverseMap
 from hidet.ir.func import IRModule
 from hidet.graph.operator import Operator, Tensor
 from hidet.ir.compute import TensorNode, tensor_input, compute, reduce, arg_reduce
-
-from hidet.ir.functors import inline_compute
 
 
 def input_like(tensor: Tensor, name: str) -> TensorNode:
@@ -23,7 +22,8 @@ def normalize_stride(stride: Union[int, Sequence[int]], dim=2) -> List[int]:
             return stride * dim
         elif len(stride) == dim:
             return stride
-    raise ValueError('Stride must be an integer or a list of integer with length 1 or {}, but got {}'.format(dim, stride))
+    msg = 'Stride must be an integer or a list of integer with length 1 or {}, but got {}'.format(dim, stride)
+    raise ValueError(msg)
 
 
 def normalize_kernel(kernel: Union[int, Sequence[int]], dim=2) -> List[int]:
@@ -34,7 +34,8 @@ def normalize_kernel(kernel: Union[int, Sequence[int]], dim=2) -> List[int]:
             return kernel * dim
         elif len(kernel) == dim:
             return kernel
-    raise ValueError('Kernel size must be an integer or a list of integer with length 1 or {}, but got {}'.format(dim, kernel))
+    msg = 'Kernel size must be an integer or a list of integer with length 1 or {}, but got {}'.format(dim, kernel)
+    raise ValueError(msg)
 
 
 def normalize_padding(padding: Union[int, Sequence[int]], dim=2) -> List[int]:
@@ -47,7 +48,8 @@ def normalize_padding(padding: Union[int, Sequence[int]], dim=2) -> List[int]:
             return list(padding + padding)
         elif len(padding) == dim * 2:
             return list(padding)
-    raise ValueError('Padding must be an integer or a list of integer with length 1, {}, or {}, but got {}'.format(dim, dim * 2, padding))
+    raise ValueError('Padding must be an integer or a list of integer with length 1, '
+                     '{}, or {}, but got {}'.format(dim, dim * 2, padding))
 
 
 def normalize_dim(dim: Optional[Union[int, Sequence[int]]], rank: int) -> Union[int, List[int]]:
@@ -62,7 +64,7 @@ def normalize_dim(dim: Optional[Union[int, Sequence[int]]], rank: int) -> Union[
             dim = rank
         if dim < 0:
             dim += rank
-        if not (0 <= dim <= rank):
+        if not 0 <= dim <= rank:
             raise ValueError('Given dim {} is not a valid dim for rank {}'.format(original_dim, rank))
         return dim
 
@@ -84,8 +86,6 @@ def normalize_index(index: Optional[int], dim_size, default) -> int:
 def resolve_out_dtype(input_dtypes: List[Union[ScalarType, str]]) -> str:
     if len(input_dtypes) == 0:
         raise ValueError('Expect at least one input dtype to resolve the output dtype.')
-    def combine(lhs_dtype, rhs_dtype) -> str:
-        pass
     out_dtype = input_dtypes[0]
     for input_dtype in input_dtypes[1:]:
         out_dtype = ScalarType.resolve_out_dtype(out_dtype, input_dtype)
@@ -126,5 +126,3 @@ def broadcast_indices(indices, shape, out_shape):
         if int(dim) == 1:
             indices[idx] = 0
     return indices
-
-

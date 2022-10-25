@@ -1,7 +1,6 @@
 from typing import Dict, Tuple, Optional
 from collections import namedtuple
-from hidet.ir.task import Task
-from hidet.ir.func import Function, IRModule
+from hidet.ir.func import IRModule
 
 
 class CompiledModule:
@@ -47,4 +46,3 @@ class CompiledTaskCache:
 
 
 compiled_task_cache = CompiledTaskCache()
-

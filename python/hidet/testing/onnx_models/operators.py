@@ -1,7 +1,7 @@
 from typing import List, Tuple
-from .utils import export_torch_to_onnx
 import hidet
 from hidet.utils import hidet_cache_file
+from .utils import export_torch_to_onnx
 
 try:
     import torch
@@ -47,7 +47,7 @@ class DepthwiseConv2d(nn.Module):
 def get_onnx_operator(name: str, batch_size=1, precision='float32') -> Tuple[str, List[str], List["hidet.Tensor"]]:
     onnx_path = hidet_cache_file('onnx', 'op', f'bs{batch_size}_{precision}_{name}.onnx')
     if name.startswith('op_sum_'):
-        a, b, c = name.split('_')  # op_sum_0
+        _, _, c = name.split('_')  # op_sum_0
         op_idx = int(c)
         idx_2_configs = {
             0: [[batch_size, 8, 128, 768], [1], False],
@@ -62,7 +62,7 @@ def get_onnx_operator(name: str, batch_size=1, precision='float32') -> Tuple[str
             precision=precision
         )
     elif name.startswith('op_resnet50_conv'):
-        a, b, c, d = name.split('_')
+        _, _, _, d = name.split('_')
         op_idx = int(d)
         idx_2_configs = {
             2: [[batch_size, 256, 28, 28], 256, 3, 1, 2],
@@ -70,13 +70,14 @@ def get_onnx_operator(name: str, batch_size=1, precision='float32') -> Tuple[str
         x_shape, out_channels, kernel, padding, strides = idx_2_configs[op_idx]
         return export_torch_to_onnx(
             onnx_path=onnx_path,
-            model=nn.Conv2d(in_channels=x_shape[1], out_channels=out_channels, kernel_size=kernel, stride=strides, padding=padding, bias=False),
+            model=nn.Conv2d(in_channels=x_shape[1], out_channels=out_channels, kernel_size=kernel, stride=strides,
+                            padding=padding, bias=False),
             input_names=['x'],
             inputs=[torch.randn(x_shape)],
             precision=precision
         )
     elif name.startswith('op_matmul_'):  # like 'op_matmul_nn_0'
-        a, b, layout, idx = name.split('_')
+        _, _, layout, idx = name.split('_')
         layout = str(layout).upper()
         workloads = {
             0: [batch_size, 128, 128, 64],
@@ -130,7 +131,8 @@ def get_onnx_operator(name: str, batch_size=1, precision='float32') -> Tuple[str
         bs, in_channels, height, width, out_channels, kx, ky, sx, sy, px, py = workload[int(idx)]
         return export_torch_to_onnx(
             onnx_path=onnx_path,
-            model=nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=(kx, ky), stride=(sx, sy), padding=(px, py), bias=True),
+            model=nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=(kx, ky), stride=(sx, sy),
+                            padding=(px, py), bias=True),
             input_names=['x'],
             inputs=[torch.randn(bs, in_channels, height, width)],
             precision=precision

@@ -1,6 +1,7 @@
+# pylint: disable=import-outside-toplevel, useless-parent-delegation, redefined-outer-name, redefined-builtin
+from typing import Optional, Union, Sequence, Tuple
 import string
 import numpy as np
-from typing import Optional, Union, Sequence, Tuple
 from .node import Node
 from .type import TypeNode, TensorType, ScalarType, TensorPointerType, PointerType, FuncType, tensor_type, scalar_type
 
@@ -125,7 +126,6 @@ class Expr(Node):
 
     def __str__(self):
         from hidet.ir.functors import astext
-        # return str(astext(self)) + ' at {}'.format(hex(id(self)))
         return str(astext(self))
 
     def equals(self, other):
@@ -164,7 +164,10 @@ class UnaryOp(Expr):
         self.a = convert(a)
 
 
-def convert(obj: Optional[Union[Expr, PyScalar, tuple, Sequence]], dtype: Optional[Union[str, ScalarType]] = None) -> Optional[Union[Expr, tuple]]:
+def convert(
+        obj: Optional[Union[Expr, PyScalar, tuple, Sequence]],
+        dtype: Optional[Union[str, ScalarType]] = None
+) -> Optional[Union[Expr, tuple]]:
     if isinstance(obj, Expr):
         return obj
 
@@ -181,7 +184,7 @@ def convert(obj: Optional[Union[Expr, PyScalar, tuple, Sequence]], dtype: Option
     elif isinstance(obj, float):
         return Constant(obj, ScalarType('float32'))
     elif isinstance(obj, (tuple, list)):
-        return tuple([convert(v) for v in obj])
+        return tuple(convert(v) for v in obj)
     elif obj is None:
         return None
     else:
@@ -436,11 +439,11 @@ class Var(Expr):
         same hint. If two vars have the same hint such as 'x', the final name would be like 'x1', 'x2'.
 
         OUTDATED:
-        Name is the determined name in the final code. Used by primitive varaibles such as 'threadIdx.x'. No variable should have
-        a same name as primitive objects (including primitive variables and primitive functions).
+        Name is the determined name in the final code. Used by primitive varaibles such as 'threadIdx.x'. No variable
+        should have a same name as primitive objects (including primitive variables and primitive functions).
 
-        Id is used to track the allocation of Var object in python, which is only used to help us to distinguish different Var
-        in python debugger.
+        Id is used to track the allocation of Var object in python, which is only used to help us to distinguish
+        different Var in python debugger.
         """
         self.hint = hint
         self.name = name
@@ -492,7 +495,9 @@ def is_const_int(v: Expr) -> bool:
     return isinstance(v, Constant) and v.data_type.name == 'int32'
 
 
-def if_then_else(cond: Union[Expr, PyScalar], then_expr: Union[Expr, PyScalar], else_expr: Union[Expr, PyScalar]) -> IfThenElse:
+def if_then_else(cond: Union[Expr, PyScalar],
+                 then_expr: Union[Expr, PyScalar],
+                 else_expr: Union[Expr, PyScalar]) -> IfThenElse:
     return IfThenElse(convert(cond), convert(then_expr), convert(else_expr))
 
 
@@ -519,7 +524,7 @@ def tensor_rank(v: Expr) -> int:
         else:
             raise ValueError(v)
     elif isinstance(v, TensorSlice):
-        return sum([1 if i is None else 0 for i in v.indices])
+        return sum(1 if i is None else 0 for i in v.indices)
     elif isinstance(v, TensorNode):
         return len(v.data_type.shape)
     elif isinstance(v, Constant) and isinstance(v.data_type, TensorType):
@@ -560,4 +565,3 @@ def view(ptr: Expr, tp: TensorType) -> Expr:
     if not isinstance(tp, TensorType):
         raise ValueError('Expect a tensor type, got {}'.format(type(tp).__name__))
     return cast(ptr, TensorPointerType.from_tensor_type(tp))
-

@@ -1,8 +1,7 @@
 from typing import Union, Mapping
-from hidet.ir.expr import Let
+from hidet.ir.expr import Let, Var, Expr
 from hidet.ir.func import Function
 from hidet.ir.stmt import Stmt, ForStmt, LetStmt
-from hidet.ir.compute import *
 
 from .base import StmtExprVisitor, StmtExprRewriter, FuncStmtExprVisitor
 
@@ -12,13 +11,13 @@ class StmtExprMapRewriter(StmtExprRewriter):
         super().__init__()
         self.rmap = rmap
 
-    def visit(self, e):
-        if e not in self.memo:
-            if e in self.rmap:
-                self.memo[e] = self.rmap[e]
+    def visit(self, node):
+        if node not in self.memo:
+            if node in self.rmap:
+                self.memo[node] = self.rmap[node]
             else:
-                self.memo[e] = StmtExprRewriter.visit(self, e)
-        return self.memo[e]
+                self.memo[node] = StmtExprRewriter.visit(self, node)
+        return self.memo[node]
 
 
 class SubStmtExprCollector(FuncStmtExprVisitor):
@@ -33,15 +32,15 @@ class SubStmtExprCollector(FuncStmtExprVisitor):
         self.visit(e)
         return self.exprs
 
-    def visit(self, e):
-        if e in self.memo:
-            return self.memo[e]
-        if isinstance(e, self.expr_types):
-            self.exprs.append(e)
+    def visit(self, node):
+        if node in self.memo:
+            return self.memo[node]
+        if isinstance(node, self.expr_types):
+            self.exprs.append(node)
             if self.stop_when_found:
-                self.memo[e] = None
-                return
-        StmtExprVisitor.visit(self, e)
+                self.memo[node] = None
+                return None
+        return StmtExprVisitor.visit(self, node)
 
 
 class FreeVarCollector(StmtExprVisitor):

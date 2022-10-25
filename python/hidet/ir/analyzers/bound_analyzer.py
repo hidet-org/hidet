@@ -1,4 +1,4 @@
-from typing import Optional, List, Set, Dict, Union, Mapping, Sequence, Tuple
+from typing import Optional, List, Set, Dict, Union, Mapping, Sequence
 import itertools
 import operator
 from collections import defaultdict
@@ -47,6 +47,7 @@ class BoundInfo:
 
     @staticmethod
     def combine(lhs: 'BoundInfo', rhs: 'BoundInfo', op) -> 'BoundInfo':
+        # pylint: disable=too-many-branches
         if not lhs.has_determent_range() or not rhs.has_determent_range():
             return BoundInfo()
         if lhs.is_empty_set() or rhs.is_empty_set():
@@ -54,7 +55,8 @@ class BoundInfo:
 
         lhs_candidates = lhs.candidate_set()
         rhs_candidates = rhs.candidate_set()
-        if lhs_candidates and rhs_candidates and len(lhs_candidates) * len(rhs_candidates) <= BoundInfo._max_compute_iters:
+        if (lhs_candidates and rhs_candidates
+                and len(lhs_candidates) * len(rhs_candidates) <= BoundInfo._max_compute_iters):
             candidates = set()
             for lv in lhs_candidates:
                 for rv in rhs_candidates:
@@ -182,7 +184,7 @@ def normalize_launch_dims(dims: Union[Int, Sequence[Int]]) -> List[int]:
         if isinstance(dim, int):
             ret.append(dim)
         elif isinstance(dim, Expr):
-            from hidet.ir.functors import simplify_to_int
+            from hidet.ir.functors import simplify_to_int  # pylint: disable=import-outside-toplevel
             ret.append(simplify_to_int(dim))
         else:
             raise ValueError(dim)
@@ -215,11 +217,13 @@ class BoundAnalyzer(FuncStmtExprVisitor):
             if 'cuda_block_dim' in func.attrs:
                 block_dims = normalize_launch_dims(func.attrs['cuda_block_dim'])
                 for block_dim, suffix in zip(block_dims, ['x', 'y', 'z']):
-                    self.bound[extern_var_map['threadIdx.{}'.format(suffix)]] = BoundInfo(min_value=0, max_value=int(block_dim) - 1)
+                    bound_info = BoundInfo(min_value=0, max_value=int(block_dim) - 1)
+                    self.bound[extern_var_map['threadIdx.{}'.format(suffix)]] = bound_info
             if 'cuda_grid_dim' in func.attrs:
                 grid_dims = normalize_launch_dims(func.attrs['cuda_grid_dim'])
                 for grid_dim, suffix in zip(grid_dims, ['x', 'y', 'z']):
-                    self.bound[extern_var_map['blockIdx.{}'.format(suffix)]] = BoundInfo(min_value=0, max_value=int(grid_dim) - 1)
+                    bound_info = BoundInfo(min_value=0, max_value=int(grid_dim) - 1)
+                    self.bound[extern_var_map['blockIdx.{}'.format(suffix)]] = bound_info
         self.visit(func.body)
 
     def combine(self, e: Union[Add, Sub, Multiply, FloorDiv, Mod, Div]):
@@ -264,7 +268,10 @@ class BoundAnalyzer(FuncStmtExprVisitor):
             self.bound[e] = BoundInfo(value=e.value)
 
 
-def infer_bound(node: Union[Function, Stmt, Expr], var2bound: Optional[Mapping[Var, BoundInfo]] = None) -> Dict[Expr, BoundInfo]:
+def infer_bound(
+        node: Union[Function, Stmt, Expr],
+        var2bound: Optional[Mapping[Var, BoundInfo]] = None
+) -> Dict[Expr, BoundInfo]:
     visitor = BoundAnalyzer(var2bound)
     visitor.visit(node)
     return visitor.bound

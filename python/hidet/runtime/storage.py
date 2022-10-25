@@ -1,11 +1,11 @@
 from __future__ import annotations
-from typing import Callable, Dict, List, Type, Optional
+from typing import Callable, Dict, List, Optional
 import warnings
 from collections import defaultdict
 import ctypes
 import numpy as np
 from hidet.ffi import cuda
-from hidet.utils import green, prod, cyan
+from hidet.utils import green, prod
 from hidet.runtime.cuda_stream import CudaStream
 
 
@@ -159,7 +159,8 @@ class Storage:
             return self
         elif self.device == 'cuda':
             host_storage = self.new('cpu', self.num_bytes)
-            cuda.memcpy(src_addr=self.addr, dst_addr=host_storage.addr, num_bytes=self.num_bytes, kind=cuda.DeviceToHost)
+            cuda.memcpy(src_addr=self.addr, dst_addr=host_storage.addr, num_bytes=self.num_bytes,
+                        kind=cuda.DeviceToHost)
             return host_storage
         else:
             raise NotImplementedError()
@@ -169,7 +170,8 @@ class Storage:
             return self
         elif self.device == 'cuda':
             host_storage = self.new('cpu', self.num_bytes)
-            cuda.memcpy_async(src_addr=self.addr, dst_addr=host_storage.addr, num_bytes=self.num_bytes, kind=cuda.DeviceToHost, stream=stream.handle if stream else 0)
+            cuda.memcpy_async(src_addr=self.addr, dst_addr=host_storage.addr, num_bytes=self.num_bytes,
+                              kind=cuda.DeviceToHost, stream=stream.handle if stream else 0)
             return host_storage
         else:
             raise NotImplementedError()
@@ -179,7 +181,8 @@ class Storage:
             return self
         elif self.device == 'cpu':
             cuda_storage = self.new('cuda', self.num_bytes)
-            cuda.memcpy(src_addr=self.addr, dst_addr=cuda_storage.addr, num_bytes=self.num_bytes, kind=cuda.HostToDevice)
+            cuda.memcpy(src_addr=self.addr, dst_addr=cuda_storage.addr, num_bytes=self.num_bytes,
+                        kind=cuda.HostToDevice)
             return cuda_storage
         else:
             raise NotImplementedError()
@@ -189,7 +192,8 @@ class Storage:
             return self
         elif self.device == 'cpu':
             cuda_storage = self.new('cuda', self.num_bytes)
-            cuda.memcpy_async(src_addr=self.addr, dst_addr=cuda_storage.addr, num_bytes=self.num_bytes, kind=cuda.HostToDevice, stream=stream.handle if stream else 0)
+            cuda.memcpy_async(src_addr=self.addr, dst_addr=cuda_storage.addr, num_bytes=self.num_bytes,
+                              kind=cuda.HostToDevice, stream=stream.handle if stream else 0)
             return cuda_storage
         else:
             raise NotImplementedError()
@@ -200,7 +204,8 @@ class Storage:
             'cuda': cuda.DeviceToDevice
         }
         storage = Storage.new(self.device, self.num_bytes)
-        cuda.memcpy_async(src_addr=self.addr, dst_addr=storage.addr, num_bytes=self.num_bytes, kind=kind_dict[self.device])
+        cuda.memcpy_async(src_addr=self.addr, dst_addr=storage.addr, num_bytes=self.num_bytes,
+                          kind=kind_dict[self.device])
         return storage
 
     def copy_async(self, stream: Optional[CudaStream] = None) -> Storage:
@@ -209,7 +214,8 @@ class Storage:
             'cuda': cuda.DeviceToDevice
         }
         storage = Storage.new(self.device, self.num_bytes)
-        cuda.memcpy_async(src_addr=self.addr, dst_addr=storage.addr, num_bytes=self.num_bytes, kind=kind_dict[self.device], stream=stream.handle if stream else 0)
+        cuda.memcpy_async(src_addr=self.addr, dst_addr=storage.addr, num_bytes=self.num_bytes,
+                          kind=kind_dict[self.device], stream=stream.handle if stream else 0)
         return storage
 
     @staticmethod
@@ -263,6 +269,7 @@ class Storage:
             # reinterpret the array when needed
             array = array.view(dtype2nptype[dtype])
         if share_mem:
+            # pylint: disable=protected-access
             buf._hidet_storage = self  # so this storage will not be freed as long as the buffer not been freed.
             return array
         else:
@@ -299,27 +306,23 @@ class MemoryPool:
         allocated = (nbytes + self.block_size - 1) // self.block_size * self.block_size
         block_list = self.memory_blocks[allocated]
         if len(block_list) > 0:
-            # if self.storage_device.name() == 'cpu':
-            #     print('Allocating new block of size {} bytes on {}, {}'.format(allocated, self.storage_device.name(), green('reused')))
             storage = block_list.pop()
             addr = storage.addr
             self.reserved_size -= storage.num_bytes
         else:
-            # if self.storage_device.name() == 'cpu':
-            #     print('Allocating new block of size {} bytes on {}, {}'.format(allocated, self.storage_device.name(), cyan('allocate new')))
             addr = self.storage_device.allocate(allocated)
             if addr == 0 and allocated != 0:
                 # out of memory
                 self.clear()
                 addr = self.storage_device.allocate(allocated)
                 if addr == 0:
-                    raise MemoryError('Can not allocate memory from {} device, total {}, hidet allocated {}, free {}, requesting {}.'.format(
-                        self.storage_device.name(),
-                        nbytes2str(self.storage_device.total_memory()),
-                        nbytes2str(self.storage_device.allocated_memory()),
-                        nbytes2str(self.storage_device.free_memory()),
-                        nbytes2str(allocated)
-                    ))
+                    raise MemoryError(
+                        f'Can not allocate memory from {self.storage_device.name()} device, '
+                        f'total {nbytes2str(self.storage_device.total_memory())}, '
+                        f'hidet allocated {nbytes2str(self.storage_device.allocated_memory())}, '
+                        f'free {nbytes2str(self.storage_device.free_memory())}, '
+                        f'requesting {nbytes2str(allocated)}.'
+                    )
         return Storage(
             device=self.storage_device.name(),
             addr=addr,
@@ -330,8 +333,6 @@ class MemoryPool:
     def free(self, storage: Storage):
         self.memory_blocks[storage.num_bytes].append(storage)
         self.reserved_size += storage.num_bytes
-        # if self.storage_device.name() == 'cpu':
-        #     print('Freeing {} bytes on {}, free blocks {}'.format(storage.num_bytes, self.storage_device.name(), len(self.memory_blocks[storage.num_bytes])))
         if self.reserved_size > self.max_reserve_size:
             self.clear()
 
@@ -341,9 +342,6 @@ class MemoryPool:
             for storage in block_list:
                 self.storage_device.free(storage.addr)
                 storage.addr = 0
-        # print('Cleared memory pool, returned {} memory back to {} device'.format(
-        #     nbytes2str(self.reserved_size), self.storage_device.name()
-        # ))
         self.memory_blocks.clear()
         self.reserved_size = 0
 

@@ -1,6 +1,4 @@
-import sys
 import os
-import subprocess
 from hidet.utils import hidet_cache_file
 
 

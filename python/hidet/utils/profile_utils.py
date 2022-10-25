@@ -51,12 +51,13 @@ class CudaTraceEvent(TraceEvent):
         self.cuda_event.record_on()
 
     def export(self) -> Dict:
-        self.time_stamp = self.cuda_event.elapsed_time_since(self.anchor_cuda_event) * 1000000.0 + self.anchor_cuda_event_host_time
+        self.time_stamp = (self.cuda_event.elapsed_time_since(self.anchor_cuda_event) * 1000000.0
+                           + self.anchor_cuda_event_host_time)
         return TraceEvent.export(self)
 
 
 class TraceContext:
-    def __init__(self, tracer, name, category, args, trace_cuda=False):
+    def __init__(self, tracer, name, category, args, trace_cuda=False):  # pylint: disable=redefined-outer-name
         self.tracer: Tracer = tracer
         self.name = name
         self.category = category
@@ -100,7 +101,8 @@ class Tracer:
     def turn_on(self, turn_on=True):
         self.tracing = turn_on
 
-    def profile(self, name: str, category: str = 'python', args: Optional[Dict[str, Any]] = None, trace_cuda=False) -> ContextManager:
+    def profile(self, name: str, category: str = 'python', args: Optional[Dict[str, Any]] = None,
+                trace_cuda=False) -> ContextManager:
         if self.tracing:
             return TraceContext(self, name, category, args, trace_cuda)
         else:

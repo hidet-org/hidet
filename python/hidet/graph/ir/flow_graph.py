@@ -8,7 +8,6 @@ from collections import defaultdict
 import hidet.graph.operator
 from hidet.graph.tensor import Tensor, empty_like
 from hidet.graph.operator import Operator
-from hidet.utils import tracer
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
 from hidet.utils.namer import Namer
 
@@ -29,7 +28,7 @@ class FlowGraph:
         return self.forward(*inputs)
 
     def __str__(self):
-        from hidet.utils.py import cyan, green, blue, red, magenta
+        from hidet.utils.py import green, blue, red, magenta  # pylint: disable=import-outside-toplevel
         if any(v is None for v in [self.inputs, self.nodes, self.usage_count]):
             self.update_nodes()
         namer = Namer()
@@ -38,7 +37,6 @@ class FlowGraph:
             return Text(blue(x.dtype)) + '[' + doc_join([red(str(v)) for v in x.shape], ', ') + ']'
 
         def get_attr_repr(value: Union[float, int, bool, str, list, tuple]) -> Doc:
-            from hidet.ir.expr import Constant
             if isinstance(value, (float, int, bool)):
                 return Text(red(str(value)))
             elif isinstance(value, str):
@@ -47,8 +45,6 @@ class FlowGraph:
                 return '[' + doc_join([get_attr_repr(v) for v in value], ', ') + ']'
             elif isinstance(value, tuple):
                 return '(' + doc_join([get_attr_repr(v) for v in value], ', ') + ')'
-            # elif isinstance(value, Constant):
-            #     return get_attr_repr(value.value)
             else:
                 raise ValueError(value)
 
@@ -68,7 +64,8 @@ class FlowGraph:
             for x in op.inputs:
                 if x not in namer.obj_name:
                     assert x.storage is not None
-                    const_doc += NewLine() + namer.get_name(x, hint='c') + ' = ' + blue('Constant') + '(' + get_tensor_sig(x) + ')'
+                    const_doc += (NewLine() + namer.get_name(x, hint='c') + ' = ' + blue('Constant') +
+                                  '(' + get_tensor_sig(x) + ')')
             outputs = op.outputs
             if len(outputs) > 1:
                 raise NotImplementedError()
@@ -78,7 +75,8 @@ class FlowGraph:
             line_doc += blue(op.name) + ('*' if len(op.task.task_graph.nodes) > 1 else '') + '('
             line_doc += doc_join([namer(x) for x in op.inputs], sep=', ')
             if op.attrs:
-                line_doc += ', ' + doc_join([Text(magenta(name)) + '=' + get_attr_repr(value) for name, value in op.attrs.items()], ', ')
+                line_doc += ', ' + doc_join([Text(magenta(name)) + '=' + get_attr_repr(value)
+                                             for name, value in op.attrs.items()], ', ')
             line_doc += ')  '
             # line_doc += '# ' + get_tensor_sig(output)
             body_doc += NewLine() + line_doc
@@ -107,9 +105,12 @@ class FlowGraph:
                     tasks.append(node.task)
                 else:
                     tunable_tasks.append(node.task)
-        hidet.driver.build_batch_task(tasks, space_level, warmup=profile_config.warmup, number=profile_config.number, repeat=profile_config.repeat, parallel=True)
-        # hidet.driver.build_batch_task(tasks, space_level, warmup=profile_config.warmup, number=profile_config.number, repeat=profile_config.repeat, parallel=False)
-        hidet.driver.build_batch_task(tunable_tasks, space_level, warmup=profile_config.warmup, number=profile_config.number, repeat=profile_config.repeat, parallel=False)
+        hidet.driver.build_batch_task(tasks, space_level, warmup=profile_config.warmup,
+                                      number=profile_config.number, repeat=profile_config.repeat, parallel=True)
+        # hidet.driver.build_batch_task(tasks, space_level, warmup=profile_config.warmup,
+        #                               number=profile_config.number, repeat=profile_config.repeat, parallel=False)
+        hidet.driver.build_batch_task(tunable_tasks, space_level, warmup=profile_config.warmup,
+                                      number=profile_config.number, repeat=profile_config.repeat, parallel=False)
 
     def forward(self, *inputs: Tensor) -> Union[List[Tensor], Tensor]:
         """Run the computation graph.
@@ -143,10 +144,12 @@ class FlowGraph:
         """
         for idx, tensor in enumerate(inputs):
             if tensor.storage is None:
-                raise ValueError('Expect non-symbolic input tensors, got symbolic input {} ({}).'.format(idx, tensor.signature()))
+                msg = 'Expect non-symbolic input tensors, got symbolic input {} ({}).'.format(idx, tensor.signature())
+                raise ValueError(msg)
         for idx, tensor in enumerate(outputs):
             if tensor.storage is None:
-                raise ValueError('Expect non-symbolic output tensors, got symbolic output {} ({}).'.format(idx, tensor.signature()))
+                msg = 'Expect non-symbolic output tensors, got symbolic output {} ({}).'.format(idx, tensor.signature())
+                raise ValueError(msg)
         if any(v is None for v in [self.inputs, self.nodes, self.usage_count]):
             self.update_nodes()
         self.build()
@@ -287,13 +290,13 @@ class FlowGraph:
         import numpy as np
         from hidet.ffi.cuda_api import cuda
         dummy_inputs = self.dummy_inputs()
-        for i in range(warmup):
+        for _ in range(warmup):
             self.forward(*dummy_inputs)
         results = []
-        for i in range(repeat):
+        for _ in range(repeat):
             cuda.device_synchronize()
             t1 = time.time()
-            for j in range(number):
+            for _ in range(number):
                 self.forward(*dummy_inputs)
             cuda.device_synchronize()
             t2 = time.time()

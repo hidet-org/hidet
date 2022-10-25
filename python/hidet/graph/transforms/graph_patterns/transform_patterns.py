@@ -2,9 +2,9 @@ from typing import List, Optional
 
 from hidet.graph import ops
 from hidet.graph.ir.flow_graph import Tensor
-from hidet.graph.ops.definitions.transform import ReshapeOp, SqueezeOp, StridedSliceOp
-from .base import GraphPattern, TensorPattern, MatchDict, op_pattern
+from hidet.graph.ops.definitions.transform import ReshapeOp, SqueezeOp
 from hidet.utils import prod
+from .base import GraphPattern, TensorPattern, MatchDict, op_pattern
 
 
 def reverse_reshape_dim(orig_shape, new_shape, new_axis) -> Optional[int]:
@@ -37,7 +37,7 @@ class ReshapeScalePattern(GraphPattern):
         return [self.z]
 
     def target(self, matched: MatchDict) -> Optional[List[Tensor]]:
-        x, scale, y, z = [matched[v] for v in [self.x, self.scale, self.y, self.z]]
+        x, scale, y = [matched[v] for v in [self.x, self.scale, self.y]]
         if len(scale.shape) < len(y.shape):
             diff_dims = len(y.shape) - len(scale.shape)
             scale = scale.unsqueeze(dims=list(range(diff_dims)))
@@ -66,7 +66,7 @@ class ReshapeBiasPattern(GraphPattern):
         return [self.z]
 
     def target(self, matched: MatchDict) -> Optional[List[Tensor]]:
-        x, bias, y, z = [matched[v] for v in [self.x, self.bias, self.y, self.z]]
+        x, bias, y = [matched[v] for v in [self.x, self.bias, self.y]]
         if len(bias.shape) < len(y.shape):
             diff_dims = len(y.shape) - len(bias.shape)
             bias = bias.unsqueeze(dims=list(range(diff_dims)))
@@ -109,4 +109,3 @@ def transform_patterns() -> List[GraphPattern]:
         ReshapeBiasPattern(),
         SqueezeMultiplyPattern()
     ]
-

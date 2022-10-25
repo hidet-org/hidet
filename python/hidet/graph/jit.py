@@ -1,9 +1,8 @@
 from typing import Optional, Callable, Dict, List, Union
-import numpy as np
 import os
 import time
-import functools
 import inspect
+import numpy as np
 import hidet
 from hidet.graph import Tensor
 from hidet.graph.ir.flow_graph import FlowGraph
@@ -12,9 +11,6 @@ from hidet.ffi import cuda
 
 
 def get_type_repr(value):
-    import numpy as np
-    from hidet.graph import Tensor
-
     if isinstance(value, (str, int, float)):
         return str(type(value).__name__)
     elif isinstance(value, list):
@@ -108,13 +104,13 @@ class JitGraph:
         cuda_graph.set_input_tensors(args)
 
         results = []
-        for i in range(warmup):
+        for _ in range(warmup):
             cuda_graph.run()
             cuda.device_synchronize()
-        for i in range(repeat):
+        for _ in range(repeat):
             cuda.device_synchronize()
             start_time = time.time()
-            for j in range(number):
+            for _ in range(number):
                 cuda_graph.run()
             cuda.device_synchronize()
             end_time = time.time()

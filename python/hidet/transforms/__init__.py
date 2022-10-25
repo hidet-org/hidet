@@ -3,7 +3,6 @@ from hidet.ir.func import IRModule
 from .base import Pass, FunctionPass, FunctionBodyPass, SequencePass, RepeatFunctionPass, PassContext
 from .instruments import PassInstrument, SaveIRInstrument, ProfileInstrument
 
-from .apply_prologue_epilogue import apply_prologue_epilogue_pass
 from .flatten_tensor_slice import flatten_tensor_slice_pass
 from .flatten_tensor_index import flatten_tensor_index_pass
 from .generate_packed_func import generate_packed_func_pass
@@ -14,7 +13,6 @@ from .resolve_generic_primitive_function import resolve_primitive_func_pass
 from .add_explicit_cast import add_explicit_cast_pass
 from .inline_let_stmt import inline_let_stmt_pass
 from .rule_based_simplifier import rule_based_simplify_pass
-from .simplify_stmt import simplify_stmt_pass
 from .normalize_const_tensor import normalize_const_tensor_pass
 from .lower_task_mapping import lower_task_mapping_pass
 from .lower_protect_access import lower_protect_access_pass

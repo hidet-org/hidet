@@ -31,7 +31,8 @@ def register_primitive_functions_float32():
         'pow': 'powf',
         'fma': 'fmaf'
     }
-    for names, param_types in zip([unary_names, binary_names, ternary_names], [['float32'], ['float32'] * 2, ['float32'] * 3]):
+    for names, param_types in zip([unary_names, binary_names, ternary_names],
+                                  [['float32'], ['float32'] * 2, ['float32'] * 3]):
         for name in names:
             register_primitive_function(
                 name='{}_{}'.format('cuda_fp32', name),

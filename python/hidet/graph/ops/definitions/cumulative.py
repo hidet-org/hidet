@@ -23,7 +23,8 @@ class CumulativeTask(Task):
                 shape=y_shape,
                 fcompute=lambda *indices: reduce(
                     shape=[y_shape[dim] - indices[dim] - (1 if exclusive else 0)],
-                    fcompute=lambda k: x[indices[:dim] + (indices[dim] + k + (1 if exclusive else 0),) + indices[dim+1:]],
+                    fcompute=lambda k: x[
+                        indices[:dim] + (indices[dim] + k + (1 if exclusive else 0),) + indices[dim+1:]],
                     reduce_type=reduce_type,
                     accumulate_dtype=x.data_type.scalar_type.name
                 )
@@ -43,7 +44,7 @@ class CumulativeTask(Task):
 class CumulativeBaseOp(Operator):
     def __init__(self, x: Tensor, dim: int, exclusive: bool, reverse: bool, reduce_type: str):
         if reduce_type not in ['sum']:
-            raise NotImplementedError('Current do not support cumulative operator for {} reduction.'.format(reduce_type))
+            raise NotImplementedError(f'Current do not support cumulative operator for {reduce_type} reduction.')
         dim = normalize_dim(dim, rank=len(x.shape))
         super().__init__(
             inputs=[x],

@@ -1,7 +1,7 @@
-from typing import List
 from hidet.ir.type import ScalarType, TensorType, FuncType, PointerType, TensorPointerType
-from hidet.ir.expr import BinaryOp, Add, Sub, Multiply, Div, Mod, FloorDiv, Condition, LessThan, Equal, IfThenElse, TensorSlice, Not, Or, And, LessEqual, Let, RightShift, LeftShift, BitwiseNot, BitwiseOr, BitwiseAnd, Neg, NotEqual, \
-    BitwiseXor, Dereference, Reference, Address
+from hidet.ir.expr import BinaryOp, Add, Sub, Multiply, Div, Mod, FloorDiv, Condition, LessThan, Equal, IfThenElse
+from hidet.ir.expr import TensorSlice, Not, Or, And, LessEqual, Let, RightShift, LeftShift, BitwiseNot, BitwiseOr
+from hidet.ir.expr import BitwiseAnd, Neg, NotEqual, BitwiseXor, Dereference, Reference, Address
 from hidet.ir.expr import Var, Constant, TensorElement, Call, Cast
 from hidet.ir.compute import TensorNode, ScalarNode
 
@@ -123,7 +123,7 @@ class TypeInfer(ExprFunctor):
         return TensorPointerType(
             dtype=base_type.scalar_type,
             shape=shape,
-            layout=None     # the layout of the slice is not used
+            layout=None  # the layout of the slice is not used
         )
 
     def visit_IfThenElse(self, e: IfThenElse):
@@ -136,12 +136,14 @@ class TypeInfer(ExprFunctor):
 
         if isinstance(true_type, ScalarType) and isinstance(false_type, ScalarType):
             if true_type.name != false_type.name:
-                raise ValueError('If-then-else operand 1 and 2 have different types ({} vs {}): {}'.format(true_type, false_type, e))
+                msg = 'If-then-else operand 1 and 2 have different types ({} vs {}) {}'.format(true_type, false_type, e)
+                raise ValueError(msg)
         elif isinstance(true_type, pointer_types) and isinstance(false_type, pointer_types):
             # pass the check
             pass
         else:
-            raise ValueError('If-then-else operand 1 and 2 have different types ({} vs {}): {}'.format(true_type, false_type, e))
+            msg = 'If-then-else operand 1 and 2 have different types ({} vs {}): {}'.format(true_type, false_type, e)
+            raise ValueError(msg)
 
         return true_type
 
@@ -153,7 +155,8 @@ class TypeInfer(ExprFunctor):
         func_var = e.func_var
         func_type = func_var.type
         if not isinstance(func_type, FuncType):
-            raise ValueError('Type infer failed, expect a function var "{}" but got variable with type "{}"'.format(func_var, func_type))
+            raise ValueError('Type infer failed, expect a function var "{}" but got variable with type "{}"'.format(
+                func_var, func_type))
         args_type = [self(arg) for arg in e.args]
         return func_type.ret_type_on(args_type)
 
