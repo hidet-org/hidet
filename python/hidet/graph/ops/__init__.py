@@ -11,7 +11,7 @@ from .definitions.arithmatic import add, sub, multiply, divide, neg, sqrt, rsqrt
 from .definitions.compare import equal, less_than, greater_than, less_or_equal, greater_or_equal, cond_not
 from .definitions.reduce import reduce_mean, reduce_sum, reduce_var, reduce_min, reduce_max, argmin, argmax
 from .definitions.cumulative import cumsum
-from .definitions.transform import squeeze, unsqueeze, flatten, concat, cast, take, rearrange, strided_slice, reshape, transpose, broadcast, pad, tile, split, conv_pad, onehot
+from .definitions.transform import squeeze, unsqueeze, flatten, concat, cast, take, rearrange, strided_slice, reshape, transpose, broadcast, pad, tile, split, conv_pad
 from .definitions.special import barrier
 
 from .definitions import utils

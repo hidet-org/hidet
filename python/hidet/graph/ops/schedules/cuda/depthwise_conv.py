@@ -75,19 +75,6 @@ class DepthwiseConv2dSchedule(Schedule):
                                 schedules.append(DepthwiseConv2dSchedule(task, task_shape, block_shape, repeat_shape))
                             except NotSupportedError:
                                 pass
-            # for block_shape, repeat_shape in [
-            #     ((1, 1, 7, 7), (1, 1, 7, 7)),
-            #     ((1, 4, 7, 7), (1, 2, 7, 7)),
-            #     ((1, 12, 7, 7), (1, 6, 7, 7)),
-            #     ((1, 12, 7, 7), (1, 12, 7, 7)),
-            #     ((1, 24, 7, 7), (1, 12, 7, 7)),
-            #     ((1, 36, 7, 7), (1, 12, 7, 7)),
-            #     ((1, 72, 7, 7), (1, 12, 7, 7))
-            # ]:
-            #     try:
-            #         schedules.append(DepthwiseConv2dSchedule(task, task_shape, block_shape, repeat_shape))
-            #     except NotSupportedError:
-            #         pass
             return schedules
         else:
             raise ValueError()

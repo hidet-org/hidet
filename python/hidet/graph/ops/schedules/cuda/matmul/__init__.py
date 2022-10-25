@@ -1,6 +1,3 @@
 from .simt import batched_matmul_cuda_schedule_simt
 from .wmma import batched_matmul_cuda_schedule_wmma
 from .mma import batched_matmul_cuda_schedule_mma
-from .mma_fp16 import batched_matmul_cuda_schedule_mma_fp16
-from .mma_fp16_pk import batched_matmul_cuda_schedule_mma_fp16_pk
-

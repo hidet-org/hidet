@@ -835,16 +835,6 @@ class OnnxCumSum(OnnxOperator):
 
 
 @register_onnx_operator
-class OnnxOneHot(OnnxOperator):
-    def run_v9(self, inputs: List[Tensor]) -> List[Tensor]:
-        axis = self.attrs.get('axis', -1)
-        indices, depth, values = inputs
-        depth = self.tensor2scalar(depth)
-        off_value, on_value = self.tensor2list(values)
-        return [ops.onehot(indices, depth, axis, on_value, off_value)]
-
-
-@register_onnx_operator
 class OnnxIdentity(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         return inputs
