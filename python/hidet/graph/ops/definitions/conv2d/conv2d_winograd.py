@@ -14,22 +14,9 @@ from ..utils import Tensor, Operator, Task, TensorNode, input_like, compute, red
 @lru_cache(maxsize=32)
 def winograd_transform_matrices(m: int, r: int) -> Tuple[Constant, Constant, Constant]:
     if m == 2 and r == 3:
-        G = np.array(
-            [[1, 0, 0],
-             [1 / 2, 1 / 2, 1 / 2],
-             [1 / 2, -1 / 2, 1 / 2],
-             [0, 0, 1]]
-        ).astype(np.float32)
-        BT = np.array(
-            [[1, 0, -1, 0],
-             [0, 1, 1, 0],
-             [0, -1, 1, 0],
-             [0, 1, 0, -1]]
-        ).astype(np.float32)
-        AT = np.array(
-            [[1, 1, 1, 0],
-             [0, 1, -1, -1]]
-        ).astype(np.float32)
+        G = np.array([[1, 0, 0], [1 / 2, 1 / 2, 1 / 2], [1 / 2, -1 / 2, 1 / 2], [0, 0, 1]]).astype(np.float32)
+        BT = np.array([[1, 0, -1, 0], [0, 1, 1, 0], [0, -1, 1, 0], [0, 1, 0, -1]]).astype(np.float32)
+        AT = np.array([[1, 1, 1, 0], [0, 1, -1, -1]]).astype(np.float32)
         return const_tensor(G), const_tensor(BT), const_tensor(AT)
     else:
         raise NotImplementedError('winograd transform matrices: m = {}, r = {}'.format(m, r))
@@ -49,7 +36,7 @@ class Conv2dWinogradImageTransformTask(Task):
         tile = compute(
             name='tile',
             shape=[c, p, alpha_x, alpha_y],
-            fcompute=lambda cc, pp, ax, ay: x[pp // (nh * nw), cc, (pp // nw) % nh * mx + ax, pp % nw * my + ay]
+            fcompute=lambda cc, pp, ax, ay: x[pp // (nh * nw), cc, (pp // nw) % nh * mx + ax, pp % nw * my + ay],
         )
         BH = winograd_transform_matrices(mx, rx)[1]
         BW = winograd_transform_matrices(my, ry)[1]
@@ -60,14 +47,10 @@ class Conv2dWinogradImageTransformTask(Task):
             fcompute=lambda ax, ay, cc, pp: reduce(
                 shape=[alpha_x, alpha_y],
                 fcompute=lambda kx, ky: cast(BH[ax, kx], dtype) * tile[cc, pp, kx, ky] * cast(BW[ay, ky], dtype),
-                reduce_type='sum'
-            )
+                reduce_type='sum',
+            ),
         )
-        super().__init__(
-            name='conv2d_winograd_image_transform',
-            inputs=[x],
-            outputs=[y]
-        )
+        super().__init__(name='conv2d_winograd_image_transform', inputs=[x], outputs=[y])
 
 
 class Conv2dWinogradFilterTransformTask(Task):
@@ -85,14 +68,10 @@ class Conv2dWinogradFilterTransformTask(Task):
             fcompute=lambda ax, ay, occ, cc: reduce(
                 shape=[rx, ry],
                 fcompute=lambda kx, ky: cast(GH[ax, kx], dtype) * w[occ, cc, kx, ky] * cast(GW[ay, ky], dtype),
-                reduce_type='sum'
-            )
+                reduce_type='sum',
+            ),
         )
-        super().__init__(
-            name='conv2d_winograd_filter_transform',
-            inputs=[w],
-            outputs=[y]
-        )
+        super().__init__(name='conv2d_winograd_filter_transform', inputs=[w], outputs=[y])
 
 
 class Conv2dWinogradInverseTransformTask(Task):
@@ -113,24 +92,17 @@ class Conv2dWinogradInverseTransformTask(Task):
             fcompute=lambda mxx, myy, occ, pp: reduce(
                 shape=[alpha_x, alpha_y],
                 fcompute=lambda kx, ky: cast(AH[mxx, kx], dtype) * y[kx, ky, occ, pp] * cast(AW[myy, ky], dtype),
-                reduce_type='sum'
-            )
+                reduce_type='sum',
+            ),
         )
         output = compute(
             name='output',
             shape=[n, oc, oh, ow],
             fcompute=lambda nn, occ, ohh, oww: inverse[
-                ohh % mx,
-                oww % my,
-                occ,
-                nn * (nh * nw) + (ohh // mx) * nw + (oww // my)
-            ]
+                ohh % mx, oww % my, occ, nn * (nh * nw) + (ohh // mx) * nw + (oww // my)
+            ],
         )
-        super().__init__(
-            name='conv2d_winograd_inverse_transform',
-            inputs=[y],
-            outputs=[output]
-        )
+        super().__init__(name='conv2d_winograd_inverse_transform', inputs=[y], outputs=[output])
 
 
 class Conv2dWinogradImageTransformOp(Operator):
@@ -142,11 +114,7 @@ class Conv2dWinogradImageTransformOp(Operator):
         super().__init__(
             inputs=[x],
             task=Conv2dWinogradImageTransformTask(input_like(x, 'x'), kernel, ms),
-            attributes={
-                'kernel': kernel,
-                'ms': ms
-            }
-
+            attributes={'kernel': kernel, 'ms': ms},
         )
 
 
@@ -154,12 +122,7 @@ class Conv2dWinogradFilterTransformOp(Operator):
     def __init__(self, w: Tensor, ms):
         assert len(ms) == 2
         super().__init__(
-            inputs=[w],
-            task=Conv2dWinogradFilterTransformTask(input_like(w, 'w'), ms),
-            attributes={
-                'ms': ms
-            }
-
+            inputs=[w], task=Conv2dWinogradFilterTransformTask(input_like(w, 'w'), ms), attributes={'ms': ms}
         )
 
 
@@ -169,12 +132,7 @@ class Conv2dWinogradInverseTransformOp(Operator):
         super().__init__(
             inputs=[y],
             task=Conv2dWinogradInverseTransformTask(input_like(y, 'y'), input_shape, kernel, ms),
-            attributes={
-                'input_shape': input_shape,
-                'kernel': kernel,
-                'ms': ms
-            }
-
+            attributes={'input_shape': input_shape, 'kernel': kernel, 'ms': ms},
         )
 
 
@@ -192,10 +150,7 @@ def conv2d_winograd_inverse_transform(y: Tensor, input_shape, kernel, ms) -> Ten
 
 def conv2d_winograd(x: Tensor, w: Tensor) -> Tensor:
     assert len(x.shape) == 4 and len(w.shape) == 4 and x.shape[1] == w.shape[1]
-    r2m = {
-        1: 1,
-        3: 2
-    }
+    r2m = {1: 1, 3: 2}
     for k in w.shape[2:]:
         if k not in r2m:
             raise NotImplementedError('Winograd convolution for kernel size {} has not been supported yet.'.format(k))

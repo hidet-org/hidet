@@ -113,8 +113,15 @@ class FuncStmtExprRewriterWithScope(FuncStmtExprRewriter):
             for param in func.params:
                 scope.declare(param)
             body = scope.wrap(self.visit(func.body))
-            return Function(func.name, func.params, body, func.ret_type, kind=func.kind,
-                            extern_vars=func.extern_vars, attrs=func.attrs)
+            return Function(
+                func.name,
+                func.params,
+                body,
+                func.ret_type,
+                kind=func.kind,
+                extern_vars=func.extern_vars,
+                attrs=func.attrs,
+            )
 
     def visit_ForStmt(self, stmt: ForStmt):
         with self.new_scope(stmt) as scope:

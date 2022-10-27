@@ -23,7 +23,7 @@ class Model:
             'license': self.license,
             'domain': self.domain,
             'source': self.source,
-            'format': self.format
+            'format': self.format,
         }
 
 
@@ -39,7 +39,7 @@ class Graph:
             'name': self.name,
             'inputs': [param.export() for param in self.inputs],
             'outputs': [param.export() for param in self.outputs],
-            'nodes': [node.export() for node in self.nodes]
+            'nodes': [node.export() for node in self.nodes],
         }
 
 
@@ -50,11 +50,7 @@ class Parameter:
         self.visible: bool = visible
 
     def export(self):
-        return {
-            'name': self.name,
-            'arguments': [arg.export() for arg in self.arguments],
-            'visible': self.visible
-        }
+        return {'name': self.name, 'arguments': [arg.export() for arg in self.arguments], 'visible': self.visible}
 
 
 class Argument:
@@ -71,8 +67,8 @@ class Argument:
             'type': {
                 "string": '{}{}'.format(self.data_type, self.shape),
                 "shape": {'dimensions': self.shape},
-                "dataType": self.data_type
-            }
+                "dataType": self.data_type,
+            },
         }
         if self.has_initializer:
             ret['initializer'] = {'kind': 'Initializer'}
@@ -119,14 +115,11 @@ class Node:
     def export(self):
         return {
             'name': self.name,
-            'type': {
-                'name': self.type_name,
-                'category': self.category
-            },
+            'type': {'name': self.type_name, 'category': self.category},
             'inputs': [param.export() for param in self.inputs],
             'outputs': [param.export() for param in self.outputs],
             'attributes': [attr.export() for attr in self.attributes],
-            'description': self.description
+            'description': self.description,
         }
 
 
@@ -144,7 +137,7 @@ class Attribute:
             'type': self.type_name,
             'value': self.value,
             'visible': self.visible,
-            'description': self.description
+            'description': self.description,
         }
 
 
@@ -160,6 +153,7 @@ def type_string_of(value):
 
 def dump(flow_graph, fp):
     from hidet import FlowGraph
+
     assert isinstance(flow_graph, FlowGraph)
     flow_graph.update_nodes()
     tensor2argument = {}
@@ -182,32 +176,39 @@ def dump(flow_graph, fp):
         for idx, tensor in enumerate(node.inputs):
             if tensor.storage is None:  # not a constant
                 continue
-            if tensor in tensor2argument:   # constant shared by multiple nodes
+            if tensor in tensor2argument:  # constant shared by multiple nodes
                 continue
             name = 'const:{}'.format(constant_cnt)
             constant_cnt += 1
             scalar_value = str(tensor.cpu().numpy()) if len(tensor.shape) == 0 and tensor.storage else None
-            tensor2argument[tensor] = Argument(name, data_type=tensor.dtype, shape=tensor.shape, has_initializer=True,
-                                               scalar_value=scalar_value)
+            tensor2argument[tensor] = Argument(
+                name, data_type=tensor.dtype, shape=tensor.shape, has_initializer=True, scalar_value=scalar_value
+            )
         for idx, tensor in enumerate(node.outputs):
             name = '{}:{}'.format(node_name, idx)
             tensor2argument[tensor] = Argument(name, data_type=tensor.dtype, shape=tensor.shape, has_initializer=False)
-        nodes.append(Node(
-            name=node_name,
-            type_name=node_type,
-            inputs=[Parameter(str(idx), tensor2argument[tensor]) for idx, tensor in enumerate(node.inputs)],
-            outputs=[Parameter(str(idx), tensor2argument[tensor]) for idx, tensor in enumerate(node.outputs)],
-            attributes=[
-                Attribute(name, type_string_of(value), str(value)) for name, value in node.attrs.items()
-            ],
-            description="{}".format(str(node.task))
-        ))
+        nodes.append(
+            Node(
+                name=node_name,
+                type_name=node_type,
+                inputs=[Parameter(str(idx), tensor2argument[tensor]) for idx, tensor in enumerate(node.inputs)],
+                outputs=[Parameter(str(idx), tensor2argument[tensor]) for idx, tensor in enumerate(node.outputs)],
+                attributes=[Attribute(name, type_string_of(value), str(value)) for name, value in node.attrs.items()],
+                description="{}".format(str(node.task)),
+            )
+        )
     for idx, tensor in enumerate(flow_graph.outputs):
         if tensor in tensor2argument:
             outputs.append(Parameter('output:{}'.format(idx), tensor2argument[tensor]))
         else:
-            outputs.append(Parameter('output:{}'.format(idx), Argument('output:{}'.format(idx), data_type=tensor.dtype,
-                                                                       shape=tensor.shape, has_initializer=False)))
+            outputs.append(
+                Parameter(
+                    'output:{}'.format(idx),
+                    Argument(
+                        'output:{}'.format(idx), data_type=tensor.dtype, shape=tensor.shape, has_initializer=False
+                    ),
+                )
+            )
     graph = Graph(inputs, outputs, nodes, name="")
     model = Model(graph, source='Hidet', description='Converted from FlowGraph')
 

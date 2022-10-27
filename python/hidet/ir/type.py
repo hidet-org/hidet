@@ -24,8 +24,6 @@ class TypeNode(Node):
             raise ValueError('Can not recognize type {}'.format(self))
 
 
-
-
 short2long = {
     'bf16': 'bfloat16',
     'tf32': 'tfloat32',
@@ -34,7 +32,7 @@ short2long = {
     'f32': 'float32',
     'fp32': 'float32',
     'f64': 'float64',
-    'fp64': 'float64'
+    'fp64': 'float64',
 }
 
 dtype_list = [
@@ -51,7 +49,7 @@ dtype_list = [
     'float16',
     'uint8',
     'int8',
-    'bool'
+    'bool',
 ]
 
 float_dtype_rank = {}
@@ -180,13 +178,14 @@ class ScalarType(TypeNode):
 
     def min_value(self) -> Expr:
         from hidet.ir.expr import Constant
+
         value_dict = {
             'float16': -65504,
             'float32': -3.4e38,
             'float64': -1e308,
             'int64': -9223372036854775808 + 1,
             'int32': -2147483648 + 1,
-            'uint32': 0
+            'uint32': 0,
         }
         if self.name not in value_dict:
             raise NotImplementedError(self.name)
@@ -194,13 +193,14 @@ class ScalarType(TypeNode):
 
     def max_value(self) -> Expr:
         from hidet.ir.expr import Constant
+
         value_dict = {
             'float16': 65504,
             'float32': 3.4e38,
             'float64': 1e308,
             'int64': 9223372036854775807,
             'int32': 2147483647,
-            'uint32': 4294967295
+            'uint32': 4294967295,
         }
         if self.name not in value_dict:
             raise NotImplementedError()
@@ -208,10 +208,12 @@ class ScalarType(TypeNode):
 
     def zero(self) -> Expr:
         from hidet.ir.expr import Constant
+
         return Constant(0, self)
 
     def one(self) -> Expr:
         from hidet.ir.expr import Constant
+
         return Constant(1, self)
 
     @staticmethod
@@ -229,12 +231,15 @@ class ScalarType(TypeNode):
 
 
 class TensorType(TypeNode):
-    def __init__(self,
-                 # scope: Optional[Scope] = None,
-                 dtype: Optional[ScalarType] = None,
-                 shape: Optional[Tuple[Expr, ...]] = None,
-                 layout: Optional['DataLayout'] = None):
+    def __init__(
+        self,
+        # scope: Optional[Scope] = None,
+        dtype: Optional[ScalarType] = None,
+        shape: Optional[Tuple[Expr, ...]] = None,
+        layout: Optional['DataLayout'] = None,
+    ):
         from hidet.ir.layout import DataLayout
+
         # self.scope: Scope = scope
         self.scalar_type: ScalarType = dtype
         self.shape: Tuple[Expr] = shape
@@ -268,10 +273,12 @@ class ReferenceType(TypeNode):
 
 
 class TensorPointerType(TypeNode):
-    def __init__(self,
-                 dtype: Optional[Union[ScalarType, str]] = None,
-                 shape: Optional[Sequence[Int]] = None,
-                 layout: Optional[Union[Sequence[Int], 'DataLayout']] = None):
+    def __init__(
+        self,
+        dtype: Optional[Union[ScalarType, str]] = None,
+        shape: Optional[Sequence[Int]] = None,
+        layout: Optional[Union[Sequence[Int], 'DataLayout']] = None,
+    ):
         self.tensor_type: TensorType = tensor_type(dtype, shape, layout)
 
     @staticmethod
@@ -285,10 +292,12 @@ TypeLike = Union[str, TypeNode]
 
 
 class FuncType(TypeNode):
-    def __init__(self,
-                 param_types: Optional[List[TypeLike]] = None,
-                 ret_type: Optional[TypeLike] = None,
-                 type_infer_func: Optional[Callable] = None):  # Callable[[a number of TypeNode], TypeNode]
+    def __init__(
+        self,
+        param_types: Optional[List[TypeLike]] = None,
+        ret_type: Optional[TypeLike] = None,
+        type_infer_func: Optional[Callable] = None,
+    ):  # Callable[[a number of TypeNode], TypeNode]
         self.param_types = [self._convert_type(tp) for tp in param_types] if param_types is not None else None
         self.ret_type = self._convert_type(ret_type) if ret_type is not None else None
         self.type_infer_func = type_infer_func
@@ -340,6 +349,7 @@ def tensor_type(dtype, shape: Optional[Sequence[Union[int, Expr]]] = None, layou
     """
     from hidet.ir.expr import convert
     from hidet.ir.layout import DataLayout
+
     if isinstance(dtype, str):
         dtype = ScalarType(dtype)
     if not isinstance(dtype, ScalarType):
@@ -356,8 +366,10 @@ def tensor_type(dtype, shape: Optional[Sequence[Union[int, Expr]]] = None, layou
         assert isinstance(shape, (list, tuple))
         for a, b in zip(shape, layout.shape):
             if int(a) != int(b):
-                raise ValueError('The shape of tensor and the shape of layout are not compatible, '
-                                 '{} vs {}'.format(list(shape), list(layout.shape)))
+                raise ValueError(
+                    'The shape of tensor and the shape of layout are not compatible, '
+                    '{} vs {}'.format(list(shape), list(layout.shape))
+                )
     shape = convert(shape)
     return TensorType(dtype, shape, layout)
 

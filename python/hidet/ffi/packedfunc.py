@@ -19,9 +19,7 @@ class ArgType(Enum):
 
 
 class CPackedFunc(Structure):
-    _fields_ = [("num_args", c_int32),
-                ("arg_types", c_int32_p),
-                ("func_pointer", c_void_p)]
+    _fields_ = [("num_args", c_int32), ("arg_types", c_int32_p), ("func_pointer", c_void_p)]
 
 
 class PackedFunc:
@@ -46,6 +44,7 @@ class PackedFunc:
         """
         # pylint: disable=import-outside-toplevel
         from hidet.graph.tensor import Tensor
+
         if isinstance(arg, int):
             assert isinstance(param_type, ScalarType)
             if param_type.name == 'int32':
@@ -58,12 +57,7 @@ class PackedFunc:
         raise NotImplementedError(f"Call PackedFunc with argument type: '{type(arg)}' has not been implemented yet.")
 
     def _type_code(self, param_type: Union[Type[Union[bool, int, TypeNode]]]):
-        type_map = {
-            'bool': c_int32(1),
-            'int32': c_int32(1),
-            'float32': c_int32(2),
-            'pointer': c_int32(3)
-        }
+        type_map = {'bool': c_int32(1), 'int32': c_int32(1), 'float32': c_int32(2), 'pointer': c_int32(3)}
         if param_type is bool or param_type is int:
             type_name = 'int32'
         elif isinstance(param_type, ScalarType):

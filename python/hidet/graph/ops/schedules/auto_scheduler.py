@@ -130,9 +130,9 @@ class AutoScheduler:
 
     @staticmethod
     def plan_memory(
-            dag: DirectedGraph,                 # pylint: disable=unused-argument
-            order: Sequence[TensorNode],
-            require_allocate: Set[TensorNode]
+        dag: DirectedGraph,  # pylint: disable=unused-argument
+        order: Sequence[TensorNode],
+        require_allocate: Set[TensorNode],
     ) -> Tuple[int, Dict[TensorNode, int]]:
         # dag has not been used in this simple plan.
         alignment_bytes: int = 128  # make sure each buffer aligns with 128 bytes
@@ -148,11 +148,11 @@ class AutoScheduler:
 
     @staticmethod
     def allocate_tensors(
-            fb: FunctionBuilder,
-            device: str,
-            buffer_bytes: int,
-            buffer_offset: Dict[TensorNode, int],
-            node_map: Dict[TensorNode, Var]
+        fb: FunctionBuilder,
+        device: str,
+        buffer_bytes: int,
+        buffer_offset: Dict[TensorNode, int],
+        node_map: Dict[TensorNode, Var],
     ):
         if buffer_bytes > 0:
             buffer = Var('buffer', TensorPointerType(dtype='uint8', shape=[buffer_bytes]))

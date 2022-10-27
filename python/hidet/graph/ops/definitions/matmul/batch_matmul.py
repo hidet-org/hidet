@@ -15,26 +15,19 @@ class BatchMatmulTask(Task):
             name='c',
             shape=[batch_size, m_size, n_size],
             fcompute=lambda r, i, j: reduce(
-                shape=[k_size],
-                fcompute=lambda k: a[r, i, k] * b[r, k, j],
-                reduce_type='sum'
+                shape=[k_size], fcompute=lambda k: a[r, i, k] * b[r, k, j], reduce_type='sum'
             ),
         )
         super().__init__(
             name='matmul',
             inputs=[a, b],
             outputs=[c],
-            attributes={
-                'batch_size': batch_size,
-                'm_size': m_size,
-                'n_size': n_size,
-                'k_size': k_size,
-                'mma': mma
-            }
+            attributes={'batch_size': batch_size, 'm_size': m_size, 'n_size': n_size, 'k_size': k_size, 'mma': mma},
         )
 
     def implement_cuda(self) -> IRModule:
         from hidet.graph.ops.schedules.cuda import matmul as matmul_schedule  # pylint: disable=import-outside-toplevel
+
         if self.mma == 'simt':
             return matmul_schedule.batched_matmul_cuda_schedule_simt(self)
         elif self.mma.startswith('wmma'):
@@ -48,16 +41,12 @@ class BatchMatmulTask(Task):
 class BatchMatmulOp(Operator):
     def __init__(self, a: Tensor, b: Tensor, mma: str = 'simt'):
         if not (len(a.shape) == len(b.shape) == 3 and a.shape[0] == b.shape[0] and a.shape[2] == b.shape[1]):
-            raise ValueError('Matrix multiplication expect tensor A and B with shape [B, M, K] and [B, K, N]' +
-                             ', got {} and {}'.format(a.shape, b.shape))
+            raise ValueError(
+                'Matrix multiplication expect tensor A and B with shape [B, M, K] and [B, K, N]'
+                + ', got {} and {}'.format(a.shape, b.shape)
+            )
         task = BatchMatmulTask(input_like(a, 'a'), input_like(b, 'b'), mma)
-        super().__init__(
-            inputs=[a, b],
-            task=task,
-            attributes={
-                'mma': mma
-            }
-        )
+        super().__init__(inputs=[a, b], task=task, attributes={'mma': mma})
 
 
 def batch_matmul(a: Tensor, b: Tensor, mma: str = 'simt') -> Tensor:

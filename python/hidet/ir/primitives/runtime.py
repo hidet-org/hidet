@@ -8,12 +8,19 @@ from hidet.utils import initialize
 
 @initialize()
 def register_functions():
-    register_primitive_function(name='get_cuda_stream', func_or_type=FuncType([], void_p),
-                                codegen_name='get_cuda_stream')
-    register_primitive_function(name='request_cuda_workspace', func_or_type=FuncType([uint64, boolean], void_p),
-                                codegen_name='request_cuda_workspace')
-    register_primitive_function(name='request_cpu_workspace', func_or_type=FuncType([uint64, boolean], void_p),
-                                codegen_name='request_cpu_workspace')
+    register_primitive_function(
+        name='get_cuda_stream', func_or_type=FuncType([], void_p), codegen_name='get_cuda_stream'
+    )
+    register_primitive_function(
+        name='request_cuda_workspace',
+        func_or_type=FuncType([uint64, boolean], void_p),
+        codegen_name='request_cuda_workspace',
+    )
+    register_primitive_function(
+        name='request_cpu_workspace',
+        func_or_type=FuncType([uint64, boolean], void_p),
+        codegen_name='request_cpu_workspace',
+    )
 
 
 def get_cuda_stream() -> void_p:

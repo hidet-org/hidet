@@ -57,11 +57,7 @@ def script(func: FunctionType) -> Function:
 
     # Translate the Python function into Hidet function
     translator = PythonToHidetTranslator(
-        file=file,
-        start_lineno=start_line,
-        start_column=col_offset,
-        env=env,
-        func_annotations=func_annotations
+        file=file, start_lineno=start_line, start_column=col_offset, env=env, func_annotations=func_annotations
     )
     hidet_function = translator(parsed)
 
@@ -102,11 +98,7 @@ class ScriptModuleContext:
         return self.name2var[name]
 
     def ir_module(self) -> IRModule:
-        return IRModule(
-            funcs={func.name: func for func in self.functions},
-            task=self.task,
-            global_vars=self.name2var
-        )
+        return IRModule(funcs={func.name: func for func in self.functions}, task=self.task, global_vars=self.name2var)
 
 
 def script_module(task: Optional[Task] = None) -> ScriptModuleContext:

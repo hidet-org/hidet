@@ -21,8 +21,9 @@ class FlattenTensorAccessRewriter(FuncStmtExprRewriter):
                 self.memo[var] = var
         body = self(func.body)
         params = [self(p) for p in func.params]
-        return Function(func.name, params, body, func.ret_type, kind=func.kind,
-                        extern_vars=func.extern_vars, attrs=func.attrs)
+        return Function(
+            func.name, params, body, func.ret_type, kind=func.kind, extern_vars=func.extern_vars, attrs=func.attrs
+        )
 
     @staticmethod
     def get_layout(e) -> DataLayout:
@@ -52,8 +53,10 @@ class FlattenTensorAccessRewriter(FuncStmtExprRewriter):
         indices = [self(i) for i in e.indices]
         layout = self.get_layout(e.base)
         if len(indices) != len(layout.shape):
-            raise ValueError('Access {}-d tensor {} named {} with {}-d indices {}'.format(
-                len(layout.shape), list(layout.shape), var.hint, len(indices), list(indices))
+            raise ValueError(
+                'Access {}-d tensor {} named {} with {}-d indices {}'.format(
+                    len(layout.shape), list(layout.shape), var.hint, len(indices), list(indices)
+                )
             )
         global_index = layout(*indices)
         return TensorElement(var, [global_index])

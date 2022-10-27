@@ -5,15 +5,9 @@ from ..func import primitive_func_pool as pool
 
 @initialize()
 def register_primitive_functions_float32():
-    unary_names = [
-        'sinf', 'cosf', 'tanhf', 'expf', 'roundf', 'floorf', 'ceilf', 'rsqrtf', 'sqrtf', 'erff', 'logf'
-    ]
-    binary_names = [
-        'fminf', 'fmaxf', 'powf'
-    ]
-    ternary_names = [
-        'fmaf'
-    ]
+    unary_names = ['sinf', 'cosf', 'tanhf', 'expf', 'roundf', 'floorf', 'ceilf', 'rsqrtf', 'sqrtf', 'erff', 'logf']
+    binary_names = ['fminf', 'fmaxf', 'powf']
+    ternary_names = ['fmaf']
     base2float32 = {
         'sin': 'sinf',
         'cos': 'cosf',
@@ -29,16 +23,17 @@ def register_primitive_functions_float32():
         'min': 'fminf',
         'max': 'fmaxf',
         'pow': 'powf',
-        'fma': 'fmaf'
+        'fma': 'fmaf',
     }
-    for names, param_types in zip([unary_names, binary_names, ternary_names],
-                                  [['float32'], ['float32'] * 2, ['float32'] * 3]):
+    for names, param_types in zip(
+        [unary_names, binary_names, ternary_names], [['float32'], ['float32'] * 2, ['float32'] * 3]
+    ):
         for name in names:
             register_primitive_function(
                 name='{}_{}'.format('cuda_fp32', name),
                 codegen_name=name,
                 func_or_type=FuncType(param_types=param_types, ret_type='float32'),
-                generic=False
+                generic=False,
             )
     for a, b in base2float32.items():
         base_name = '{}_{}'.format('base', a)

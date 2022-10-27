@@ -59,8 +59,10 @@ class TaskMappingExpander:
         # worker is unused because there is only a single worker with index 0
         unroll = False
         if unroll:
+
             def global_index(task: Sequence[int], strides: Sequence[int]) -> int:
                 return sum(a * b for a, b in zip(task, strides))
+
             strides = strides_from_ranks(shape=mapping.task_shape, ranks=mapping.ranks)
             ranges = [range(s) for s in mapping.task_shape]
             tasks = list(tuple(task) for task in itertools.product(*ranges))

@@ -14,7 +14,7 @@ def register_primitive_functions():
         ('cuda_syncthreads_count', '__syncthreads_count', FuncType(['int32'], 'int32')),
         ('cuda_syncthreads_and', '__syncthreads_and', FuncType(['int32'], 'int32')),
         ('cuda_syncthreads_or', '__syncthreads_or', FuncType(['int32'], 'int32')),
-        ('cuda_syncwarp', '__syncwarp', FuncType([], VoidType()))
+        ('cuda_syncwarp', '__syncwarp', FuncType([], VoidType())),
     ]
     for name, codegen_name, func_type in functions:
         register_primitive_function(name=name, func_or_type=func_type, codegen_name=codegen_name)

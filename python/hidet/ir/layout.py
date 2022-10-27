@@ -14,11 +14,13 @@ Bool = Union['Expr', bool]
 
 def is_atom(expr: Expr):
     from hidet.ir import Constant, Var
+
     return isinstance(expr, (Constant, Var))
 
 
 def variablize(expr_list: Sequence[Expr], var2value: Dict['Var', Expr]) -> List['Var']:
     from hidet.ir import var
+
     out = []
     for expr in expr_list:
         if is_atom(expr):
@@ -32,6 +34,7 @@ def variablize(expr_list: Sequence[Expr], var2value: Dict['Var', Expr]) -> List[
 
 def concat_let_expr(var2value, body: Expr):
     from hidet.ir import Let
+
     for var, value in reversed(var2value.items()):
         body = Let(var, value, body)
     return body
@@ -51,6 +54,7 @@ def to_data_layout(obj):
 class DataLayout(Node):
     def __init__(self, shape=None, size=None):
         from hidet import ir
+
         if shape is None:
             shape = []
         self.shape: Tuple[Int] = tuple(int(v) if isinstance(v, ir.Constant) else v for v in shape)
@@ -70,6 +74,7 @@ class DataLayout(Node):
 
     def __str__(self):
         import numpy as np
+
         shape = [int(v) for v in self.shape]
         table = np.zeros(shape=shape, dtype=np.int)
         ranges = [range(v) for v in shape]
@@ -153,8 +158,7 @@ class DataLayout(Node):
 
 class StridesLayout(DataLayout):
     def __init__(self, shape, strides):
-        super().__init__(shape=shape,
-                         size=StridesLayout.storage_size(shape, strides))
+        super().__init__(shape=shape, size=StridesLayout.storage_size(shape, strides))
         self.strides: List[Int] = strides
 
     def global2local(self, *args: Int) -> Int:
@@ -162,12 +166,14 @@ class StridesLayout(DataLayout):
 
     def global2cond(self, *args: Int) -> Bool:
         from hidet.ir.expr import And
+
         return And.join_list([v < s for s, v in zip(self.shape, args)])
 
     @staticmethod
     def storage_size(shape, strides) -> Expr:
         # assume the strides are positive, but do not assume the tensor is contiguous.
         from hidet.ir.functors import simplify
+
         max_index = sum((a - 1) * b for a, b in zip(shape, strides)) + 1
         return simplify(max_index)
 
@@ -183,7 +189,7 @@ class StridesLayout(DataLayout):
         tuples = sorted(tuples, key=lambda t: t[1])
         reordered_shape = [shape[t[0]] for t in tuples]
         for i in range(rank):
-            tuples[i][2] = prod(reordered_shape[i + 1:])
+            tuples[i][2] = prod(reordered_shape[i + 1 :])
         tuples = sorted(tuples, key=lambda t: t[0])
         strides = [t[2] for t in tuples]
         return strides
@@ -208,6 +214,7 @@ class LocalLayout(DataLayout):
 
     def global2cond(self, *args: Int) -> Bool:
         from hidet.ir.expr import And
+
         return And.join_list([v < s for s, v in zip(self.shape, args)])
 
 
@@ -222,29 +229,31 @@ class SwizzleDataLayout(DataLayout):
           swizzled_layout(i, j) = base_layout(i ^ j, j)
         (Note, swizzle requires the swizzled dimension to be a power of 2)
     """
+
     def __init__(self, base: DataLayout, dim: int, regards_dim: Optional[int] = None, log_step: int = 0):
         self.base: DataLayout = base
         self.dim: int = int(dim)
         if regards_dim is None:
             if len(base.shape) != 2:
-                raise ValueError('Optional regards_dim is only available for 2-rank layout, '
-                                 'got layout with shape {}.'.format(base.shape))
+                raise ValueError(
+                    'Optional regards_dim is only available for 2-rank layout, '
+                    'got layout with shape {}.'.format(base.shape)
+                )
             self.regards_dim = 1 - dim
         else:
             self.regards_dim = dim
         self.log_step = log_step
 
         if self.dim == self.regards_dim:
-            raise ValueError('The swizzle dim and regards dim can not be the same, got {} and {}'.format(
-                self.dim, self.regards_dim))
+            raise ValueError(
+                'The swizzle dim and regards dim can not be the same, got {} and {}'.format(self.dim, self.regards_dim)
+            )
         rank = len(base.shape)
         if not (0 <= self.dim < rank and 0 <= self.regards_dim < rank):
-            raise ValueError('The dim {} (regards dim {}) out of bound for layout {}'.format(
-                self.dim, self.regards_dim, base.shape))
-        super().__init__(
-            shape=self.base.shape,
-            size=self.base.size
-        )
+            raise ValueError(
+                'The dim {} (regards dim {}) out of bound for layout {}'.format(self.dim, self.regards_dim, base.shape)
+            )
+        super().__init__(shape=self.base.shape, size=self.base.size)
 
     def global2local(self, *args: Int) -> Int:
         assert len(args) == len(self.shape)
@@ -252,10 +261,10 @@ class SwizzleDataLayout(DataLayout):
         indices = []
         for dim, origin_index in enumerate(origin_indices):
             if dim == self.dim:
-                regards_index = origin_indices[self.regards_dim] // (2 ** self.log_step)
-                regards_extent = self.shape[self.regards_dim] // (2 ** self.log_step)
+                regards_index = origin_indices[self.regards_dim] // (2**self.log_step)
+                regards_extent = self.shape[self.regards_dim] // (2**self.log_step)
                 if regards_extent > self.shape[dim]:
-                    regards_index = regards_index % self.shape[dim]     # prevent the xor making the index out of bound
+                    regards_index = regards_index % self.shape[dim]  # prevent the xor making the index out of bound
                 indices.append(origin_index ^ regards_index)
             else:
                 indices.append(origin_index)
@@ -274,7 +283,7 @@ class TiledDataLayout(DataLayout):
         super().__init__(shape=[b // a for a, b in zip(inner_shape, self.shape)] + list(inner_shape), size=base.size)
 
     def base_args(self, *args):
-        outer_args, inner_args = args[:len(args) // 2], args[len(args) // 2:]
+        outer_args, inner_args = args[: len(args) // 2], args[len(args) // 2 :]
         return [o * factor + i for factor, o, i in zip(self.inner_shape, outer_args, inner_args)]
 
     def global2local(self, *args):
@@ -355,10 +364,10 @@ class FusedDataLayout(DataLayout):
 
     def base_args(self, *args: Int):
         original_args = [None] * len(self.base.shape)
-        for i in range(len(self.dims)):   # pylint: disable=consider-using-enumerate
+        for i in range(len(self.dims)):  # pylint: disable=consider-using-enumerate
             dim_sizes = [self.base.shape[v] for v in self.dims[i]]
             for j, dim in enumerate(self.dims[i]):
-                original_args[dim] = args[i] // prod(dim_sizes[j + 1:]) % dim_sizes[j]
+                original_args[dim] = args[i] // prod(dim_sizes[j + 1 :]) % dim_sizes[j]
         return original_args
 
     def global2local(self, *args: Int) -> Int:
@@ -379,8 +388,9 @@ class SliceOutDataLayout(DataLayout):
         assert all(d < len(base.shape) for d in dims)
         self.base = base
         self.dims = set(dims)
-        super().__init__(shape=[s for r, s in enumerate(base.shape) if r not in dims],
-                         size=base.size)  # todo: update size
+        super().__init__(
+            shape=[s for r, s in enumerate(base.shape) if r not in dims], size=base.size
+        )  # todo: update size
 
     def base_args(self, *args: Int):
         merged_args = []
@@ -403,10 +413,7 @@ class SliceOutDataLayout(DataLayout):
 class ProductDataLayout(DataLayout):
     def __init__(self, outer: DataLayout, inner: DataLayout):
         assert len(outer.shape) == len(inner.shape)
-        super().__init__(
-            shape=[a * b for a, b in zip(outer.shape, inner.shape)],
-            size=outer.size * inner.size
-        )
+        super().__init__(shape=[a * b for a, b in zip(outer.shape, inner.shape)], size=outer.size * inner.size)
         self.outer = outer
         self.inner = inner
 
@@ -417,6 +424,7 @@ class ProductDataLayout(DataLayout):
 
     def global2cond(self, *args: Int) -> Bool:
         from hidet.ir.expr import And
+
         outer_args = [v // b for v, b in zip(args, self.inner.shape)]
         inner_args = [v % b for v, b in zip(args, self.inner.shape)]
         return And(self.outer.within_bound(*outer_args), self.inner.within_bound(*inner_args))
@@ -424,21 +432,20 @@ class ProductDataLayout(DataLayout):
 
 class ConcatDataLayout(DataLayout):
     def __init__(self, lhs: DataLayout, rhs: DataLayout):
-        super().__init__(
-            shape=list(lhs.shape) + list(rhs.shape),
-            size=lhs.size * rhs.size)
+        super().__init__(shape=list(lhs.shape) + list(rhs.shape), size=lhs.size * rhs.size)
         self.lhs = lhs
         self.rhs = rhs
 
     def global2local(self, *args: Int) -> Int:
-        lhs_args = args[:len(self.lhs.shape)]
-        rhs_args = args[len(self.lhs.shape):]
+        lhs_args = args[: len(self.lhs.shape)]
+        rhs_args = args[len(self.lhs.shape) :]
         return self.lhs(*lhs_args) * self.rhs.size + self.rhs(*rhs_args)
 
     def global2cond(self, *args: Int) -> Bool:
         from hidet.ir.expr import And
-        lhs_args = args[:len(self.lhs.shape)]
-        rhs_args = args[len(self.lhs.shape):]
+
+        lhs_args = args[: len(self.lhs.shape)]
+        rhs_args = args[len(self.lhs.shape) :]
         return And(self.lhs.within_bound(*lhs_args), self.rhs.within_bound(*rhs_args))
 
 

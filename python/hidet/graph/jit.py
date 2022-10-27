@@ -46,12 +46,12 @@ def get_bind_repr(bind: inspect.BoundArguments) -> str:
 class JitGraph:
     # todo: use inspect package to support more wide range input and outputs
     def __init__(
-            self,
-            func: Callable,
-            opt: bool = False,
-            parallel_k: str = 'default',
-            save_ir_dir: Optional[str] = './outs',
-            mma: str = 'wmma_tf32_f32',
+        self,
+        func: Callable,
+        opt: bool = False,
+        parallel_k: str = 'default',
+        save_ir_dir: Optional[str] = './outs',
+        mma: str = 'wmma_tf32_f32',
     ):
         self.func: Callable = func
         self.cached_graph: Dict[str, FlowGraph] = {}
@@ -124,13 +124,7 @@ class JitGraph:
 
 def jit(opt=False, save_ir_dir='./outs', parallel_k='default', mma='simt') -> Callable[[Callable], JitGraph]:
     def decorator(func) -> JitGraph:
-        jit_graph = JitGraph(
-            func=func,
-            opt=opt,
-            parallel_k=parallel_k,
-            save_ir_dir=save_ir_dir,
-            mma=mma
-        )
+        jit_graph = JitGraph(func=func, opt=opt, parallel_k=parallel_k, save_ir_dir=save_ir_dir, mma=mma)
         return jit_graph
 
     return decorator

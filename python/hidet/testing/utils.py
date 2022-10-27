@@ -5,7 +5,7 @@ import numpy as np
 
 
 def benchmark_func(run_func, warmup=1, number=5, repeat=5, median=True) -> Union[List[float], float]:
-    """ Benchmark given function.
+    """Benchmark given function.
 
     The given function ``run_func`` will be executed :math:`warmup + repeat * number` times. Each :math:`number` times
     of execution will be grouped and conducted together.
@@ -35,6 +35,7 @@ def benchmark_func(run_func, warmup=1, number=5, repeat=5, median=True) -> Union
     """
     from hidet.utils.nvtx_utils import nvtx_annotate
     from hidet.utils import cuda
+
     results = []
     with nvtx_annotate('warmup'):
         for _ in range(warmup):
@@ -55,8 +56,9 @@ def benchmark_func(run_func, warmup=1, number=5, repeat=5, median=True) -> Union
         return results
 
 
-def check_unary(shape, numpy_op, hidet_op, device: str = 'all', dtype: Union[str, np.dtype] = np.float32, atol=0,
-                rtol=0):
+def check_unary(
+    shape, numpy_op, hidet_op, device: str = 'all', dtype: Union[str, np.dtype] = np.float32, atol=0, rtol=0
+):
     if device == 'all':
         for dev in ['cuda', 'cpu']:
             check_unary(shape, numpy_op, hidet_op, dev, dtype, atol, rtol)
@@ -68,8 +70,16 @@ def check_unary(shape, numpy_op, hidet_op, device: str = 'all', dtype: Union[str
     np.testing.assert_allclose(actual=hidet_result, desired=numpy_result, atol=atol, rtol=rtol)
 
 
-def check_binary(a_shape, b_shape, numpy_op, hidet_op, device: str = 'all', dtype: Union[str, np.dtype] = np.float32,
-                 atol=0.0, rtol=0.0):
+def check_binary(
+    a_shape,
+    b_shape,
+    numpy_op,
+    hidet_op,
+    device: str = 'all',
+    dtype: Union[str, np.dtype] = np.float32,
+    atol=0.0,
+    rtol=0.0,
+):
     if device == 'all':
         for dev in ['cuda', 'cpu']:
             print('checking', dev)

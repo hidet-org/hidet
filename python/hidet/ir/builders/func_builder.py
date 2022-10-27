@@ -9,8 +9,18 @@ from .stmt_builder import StmtBuilder
 
 
 class FunctionBuilder(StmtBuilder):
-    def __init__(self, name: str, kind: str, label: str = "", ret_type=VoidType(), grid_dim=None, block_dim=None,
-                 dynamic_smem_bytes=None, min_blocks=None, attrs=None):
+    def __init__(
+        self,
+        name: str,
+        kind: str,
+        label: str = "",
+        ret_type=VoidType(),
+        grid_dim=None,
+        block_dim=None,
+        dynamic_smem_bytes=None,
+        min_blocks=None,
+        attrs=None,
+    ):
         super().__init__()
         self.name = name
         self.kind = kind
@@ -56,6 +66,7 @@ class FunctionBuilder(StmtBuilder):
 
     def finish_func(self):
         from hidet.ir.primitives.cuda.vars import block_idx, thread_idx  # pylint: disable=import-outside-toplevel
+
         assert self.func is None
         if 'label' not in self.attrs:
             self.attrs['label'] = self.label
@@ -64,8 +75,15 @@ class FunctionBuilder(StmtBuilder):
             self.extend_extern_vars([thread_idx(dim) for dim in ['x', 'y', 'z']])
         if self.body is None:
             self.body = self.finish()
-        self.func = Function(self.name, kind=self.kind, params=self.params, body=self.body, ret_type=self.ret_type,
-                             extern_vars=self.extern_vars, attrs=self.attrs)
+        self.func = Function(
+            self.name,
+            kind=self.kind,
+            params=self.params,
+            body=self.body,
+            ret_type=self.ret_type,
+            extern_vars=self.extern_vars,
+            attrs=self.attrs,
+        )
 
     def get(self) -> Function:
         assert self.func.body is not None

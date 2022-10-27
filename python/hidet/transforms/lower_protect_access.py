@@ -32,7 +32,7 @@ class LowerProtectAccessRewriter(StmtExprRewriter):
             return IfThenElse(
                 cond=bound_checking_condition(base, indices),
                 then_expr=TensorElement(base, indices, protected=False),
-                else_expr=convert(0.0, dtype=infer_type(e))
+                else_expr=convert(0.0, dtype=infer_type(e)),
             )
         else:
             return StmtExprRewriter.visit_TensorElement(self, e)
@@ -44,12 +44,7 @@ class LowerProtectAccessRewriter(StmtExprRewriter):
             value = self.visit(stmt.value)
             return IfStmt(
                 cond=bound_checking_condition(buf, indices),
-                then_body=BufferStoreStmt(
-                    buf=buf,
-                    indices=indices,
-                    protected=False,
-                    value=value
-                )
+                then_body=BufferStoreStmt(buf=buf, indices=indices, protected=False, value=value),
             )
         else:
             return StmtExprRewriter.visit_BufferStoreStmt(self, stmt)

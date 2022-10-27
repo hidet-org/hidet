@@ -68,13 +68,11 @@ class OperatorPattern:
 
     def __repr__(self):
         input_items = [str(v) for v in self.inputs]
-        unary_ops = {
-            ops.definitions.arithmatic.NegOp: '-'
-        }
+        unary_ops = {ops.definitions.arithmatic.NegOp: '-'}
         binary_ops = {
             ops.definitions.arithmatic.AddOp: '+',
             ops.definitions.arithmatic.SubOp: '-',
-            ops.definitions.arithmatic.MultiplyOp: '*'
+            ops.definitions.arithmatic.MultiplyOp: '*',
         }
         if self.op_cls in unary_ops:
             return '({}{})'.format(unary_ops[self.op_cls], input_items[0])
@@ -106,9 +104,7 @@ class GraphPattern:
 
 
 def op_pattern(
-        op_cls: Type[Operator],
-        input_patterns: List[TensorPattern],
-        num_outputs=1
+    op_cls: Type[Operator], input_patterns: List[TensorPattern], num_outputs=1
 ) -> Union[TensorPattern, List[TensorPattern]]:
     op = OperatorPattern(op_cls, input_patterns, num_outputs)
     if num_outputs == 1:

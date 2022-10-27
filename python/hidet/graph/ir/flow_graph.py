@@ -13,8 +13,8 @@ from hidet.utils.namer import Namer
 
 
 class FlowGraph:
-    """The computation graph representation.
-    """
+    """The computation graph representation."""
+
     def __init__(self, outputs: List[Tensor], inputs=None, nodes=None):
         self.outputs: List[Tensor] = outputs
         self.inputs: Optional[List[Tensor]] = inputs
@@ -29,6 +29,7 @@ class FlowGraph:
 
     def __str__(self):
         from hidet.utils.py import green, blue, red, magenta  # pylint: disable=import-outside-toplevel
+
         if any(v is None for v in [self.inputs, self.nodes, self.usage_count]):
             self.update_nodes()
         namer = Namer()
@@ -64,8 +65,15 @@ class FlowGraph:
             for x in op.inputs:
                 if x not in namer.obj_name:
                     assert x.storage is not None
-                    const_doc += (NewLine() + namer.get_name(x, hint='c') + ' = ' + blue('Constant') +
-                                  '(' + get_tensor_sig(x) + ')')
+                    const_doc += (
+                        NewLine()
+                        + namer.get_name(x, hint='c')
+                        + ' = '
+                        + blue('Constant')
+                        + '('
+                        + get_tensor_sig(x)
+                        + ')'
+                    )
             outputs = op.outputs
             if len(outputs) > 1:
                 raise NotImplementedError()
@@ -75,8 +83,9 @@ class FlowGraph:
             line_doc += blue(op.name) + ('*' if len(op.task.task_graph.nodes) > 1 else '') + '('
             line_doc += doc_join([namer(x) for x in op.inputs], sep=', ')
             if op.attrs:
-                line_doc += ', ' + doc_join([Text(magenta(name)) + '=' + get_attr_repr(value)
-                                             for name, value in op.attrs.items()], ', ')
+                line_doc += ', ' + doc_join(
+                    [Text(magenta(name)) + '=' + get_attr_repr(value) for name, value in op.attrs.items()], ', '
+                )
             line_doc += ')  '
             # line_doc += '# ' + get_tensor_sig(output)
             body_doc += NewLine() + line_doc
@@ -105,12 +114,24 @@ class FlowGraph:
                     tasks.append(node.task)
                 else:
                     tunable_tasks.append(node.task)
-        hidet.driver.build_batch_task(tasks, space_level, warmup=profile_config.warmup,
-                                      number=profile_config.number, repeat=profile_config.repeat, parallel=True)
+        hidet.driver.build_batch_task(
+            tasks,
+            space_level,
+            warmup=profile_config.warmup,
+            number=profile_config.number,
+            repeat=profile_config.repeat,
+            parallel=True,
+        )
         # hidet.driver.build_batch_task(tasks, space_level, warmup=profile_config.warmup,
         #                               number=profile_config.number, repeat=profile_config.repeat, parallel=False)
-        hidet.driver.build_batch_task(tunable_tasks, space_level, warmup=profile_config.warmup,
-                                      number=profile_config.number, repeat=profile_config.repeat, parallel=False)
+        hidet.driver.build_batch_task(
+            tunable_tasks,
+            space_level,
+            warmup=profile_config.warmup,
+            number=profile_config.number,
+            repeat=profile_config.repeat,
+            parallel=False,
+        )
 
     def forward(self, *inputs: Tensor) -> Union[List[Tensor], Tensor]:
         """Run the computation graph.
@@ -178,7 +199,7 @@ class FlowGraph:
             # prepare node outputs
             node_outputs = node.dummy_outputs()
             for i, symbolic_output in enumerate(node.outputs):
-                if symbolic_output in tensor_map:   # the output is a graph output
+                if symbolic_output in tensor_map:  # the output is a graph output
                     node_outputs[i] = tensor_map[symbolic_output]
                 else:
                     tensor_map[symbolic_output] = node_outputs[i]
@@ -248,8 +269,10 @@ class FlowGraph:
                 raise ValueError('There is a symbol tensor not given in inputs')
         else:
             if len(inputs) > 1:
-                warnings.warn('There are {} symbol inputs traced, '
-                              'but the inputs has not given to specify the order.'.format(len(inputs)))
+                warnings.warn(
+                    'There are {} symbol inputs traced, '
+                    'but the inputs has not given to specify the order.'.format(len(inputs))
+                )
             self.inputs = inputs
         return self
 
@@ -262,6 +285,7 @@ class FlowGraph:
             The created cuda graph.
         """
         from hidet.runtime.cuda_graph import create_cuda_graph
+
         return create_cuda_graph(self)
 
     def latency(self, warmup=1, number=3, repeat=3, median=True) -> Union[float, List[float]]:
@@ -289,6 +313,7 @@ class FlowGraph:
         import time
         import numpy as np
         from hidet.ffi.cuda_api import cuda
+
         dummy_inputs = self.dummy_inputs()
         for _ in range(warmup):
             self.forward(*dummy_inputs)
@@ -321,6 +346,7 @@ class FlowGraph:
                 v: Operator = it.op
                 if v not in all_nodes:
                     find_all_nodes(v)
+
         for ot in outputs:
             if ot.trace:
                 find_all_nodes(ot.op)

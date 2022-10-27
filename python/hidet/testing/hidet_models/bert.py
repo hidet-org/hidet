@@ -8,6 +8,7 @@ from hidet.graph import ops
 
 # Acknowledgement: adopted the bert implementation from huggingface transformers package, with some simplification
 
+
 class BertConfig:
     def __init__(self):
         self.vocab_size = 30522
@@ -29,10 +30,10 @@ class BertEmbeddings(nn.Module):
         self.layer_norm = nn.LayerNorm(config.hidden_size)
 
     def forward(
-            self,
-            input_ids: Tensor,                          # [batch_size, seq_length] in [0, vocab_size)
-            token_type_ids: Optional[Tensor] = None,    # [batch_size, seq_length] in [0, type_vocab_size)
-            position_ids: Optional[Tensor] = None       # [batch_size, seq_length] in [0, max_position_embeddings)
+        self,
+        input_ids: Tensor,  # [batch_size, seq_length] in [0, vocab_size)
+        token_type_ids: Optional[Tensor] = None,  # [batch_size, seq_length] in [0, type_vocab_size)
+        position_ids: Optional[Tensor] = None,  # [batch_size, seq_length] in [0, max_position_embeddings)
     ):
         batch_size, seq_length = input_ids.shape
 
@@ -55,8 +56,10 @@ class BertSelfAttention(nn.Module):
     def __init__(self, config: BertConfig):
         super().__init__()
         if config.hidden_size % config.num_attention_heads != 0:
-            raise ValueError('Multi head attention expects hidden_size % num_attention_heads == 0, '
-                             'got {} and {}'.format(config.hidden_size, config.num_attention_heads))
+            raise ValueError(
+                'Multi head attention expects hidden_size % num_attention_heads == 0, '
+                'got {} and {}'.format(config.hidden_size, config.num_attention_heads)
+            )
         self.num_attention_heads = config.num_attention_heads
         self.attention_head_size = config.hidden_size // config.num_attention_heads
 

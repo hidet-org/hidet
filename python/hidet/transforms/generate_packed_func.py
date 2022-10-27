@@ -20,8 +20,9 @@ class GeneratePackedFuncPass(Pass):
             if func.get_attr('packed_func', None) is not None:
                 # this function itself is a packed function
                 continue
-            if any(f.get_attr('packed_func', None) is ir_module.lookup_var(func.name)
-                   for f in ir_module.functions.values()):
+            if any(
+                f.get_attr('packed_func', None) is ir_module.lookup_var(func.name) for f in ir_module.functions.values()
+            ):
                 # the packed function for current function has existed, skip
                 continue
             if not func.name.endswith('_grid') and not func.name.endswith('_host'):
@@ -67,8 +68,9 @@ class GeneratePackedFuncPass(Pass):
                     func_args.append(Cast(p_args[idx], param.type))
                 else:
                     raise NotImplementedError()
-                sb += AssertStmt(Equal(p_arg_types[idx], code), "The {} th arg should be {}".format(
-                    idx, astext(param.type)))
+                sb += AssertStmt(
+                    Equal(p_arg_types[idx], code), "The {} th arg should be {}".format(idx, astext(param.type))
+                )
             if func.kind == 'cuda_kernel' and simplify_to_int(func.get_attr('cuda_dynamic_smem_bytes', 0)) > 48 * 1024:
                 dynamic_smem_bytes = simplify_to_int(func.get_attr('cuda_dynamic_smem_bytes', 0))
                 sb += set_kernel_max_dynamic_smem_bytes(func_global_var, dynamic_smem_bytes)

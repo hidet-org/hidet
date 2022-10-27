@@ -31,8 +31,9 @@ TypeB = TypeVar('TypeB')
 
 def strict_zip(a: Sequence[TypeA], b: Sequence[TypeB]) -> Iterable[Tuple[TypeA, TypeB]]:
     if len(a) != len(b):
-        raise ValueError('Expect two sequence have the same length in zip, '
-                         'got length {} and {}.'.format(len(a), len(b)))
+        raise ValueError(
+            'Expect two sequence have the same length in zip, ' 'got length {} and {}.'.format(len(a), len(b))
+        )
     return zip(a, b)
 
 
@@ -94,7 +95,7 @@ def color(v, fmt='{}', fg='default', bg='default'):
         "magenta": 45,
         "cyan": 46,
         "white": 47,
-        "default": 49
+        "default": 49,
     }
     return '\033[{};{}m{}\033[0m'.format(fg_code[fg], bg_code[bg], fmt.format(v))
 
@@ -116,10 +117,7 @@ def color_rgb(v, fg, fmt='{}'):
 def color_text(v, fmt='{}', idx: int = 0):
     if idx == 0:
         return fmt.format(v)
-    colors = {
-        1: (153, 96, 52),
-        2: (135, 166, 73)
-    }
+    colors = {1: (153, 96, 52), 2: (135, 166, 73)}
     return color_rgb(v, colors[idx], fmt=fmt)
 
 
@@ -196,6 +194,7 @@ class Timer:
 #     def __setitem__(self, key, value):
 #         return dict.__setitem__(self, self.hash_func(key), value)
 #
+
 
 def repeat_until_converge(func, obj, limit=None):
     i = 0
@@ -324,6 +323,7 @@ class TableBuilder:
 
 def line_profile():
     from line_profiler_pycharm import profile
+
     return profile
 
 
@@ -345,8 +345,10 @@ def initialize(*args, **kwargs):
         A decorator that will call given function with args and kwargs,
         and return None (to prevent this function to be called again).
     """
+
     def decorator(f):
         f(*args, **kwargs)
+
     return decorator
 
 
@@ -407,6 +409,7 @@ def error_tolerance(a: Union[np.ndarray, 'Tensor'], b: Union[np.ndarray, 'Tensor
         The error tolerance between a and b.
     """
     from hidet.graph import Tensor
+
     if isinstance(a, Tensor):
         a = a.numpy()
     if isinstance(b, Tensor):

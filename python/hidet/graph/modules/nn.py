@@ -16,13 +16,14 @@ class Conv2d(Module):
         self.padding = normalize(padding)
         self.stride = normalize(stride)
         self.groups = groups
-        self.weight = randn(shape=[out_channels, in_channels, *self.kernel],
-                            dtype='float32',
-                            stddev=1.0 / math.sqrt(out_channels))
+        self.weight = randn(
+            shape=[out_channels, in_channels, *self.kernel], dtype='float32', stddev=1.0 / math.sqrt(out_channels)
+        )
 
     def extra_str(self) -> str:
         return 'in_channels={}, out_channels={}, kernel_size={}, stride={}, padding={}'.format(
-            self.in_channels, self.out_channels, self.kernel, self.stride, self.padding)
+            self.in_channels, self.out_channels, self.kernel, self.stride, self.padding
+        )
 
     def forward(self, x):
         x = ops.pad(x, ops.utils.normalize_padding(self.padding))

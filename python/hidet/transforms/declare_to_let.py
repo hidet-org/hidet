@@ -38,7 +38,7 @@ class DeclareToLetRewriter(StmtExprRewriter):
             stmt = seq[i]
             if isinstance(stmt, DeclareStmt):
                 if self.assigns[stmt.var] == 1 and stmt.init is not None:
-                    let_stmt = LetStmt(bind_vars=[stmt.var], bind_values=[stmt.init], body=self.concat(seq[i + 1:]))
+                    let_stmt = LetStmt(bind_vars=[stmt.var], bind_values=[stmt.init], body=self.concat(seq[i + 1 :]))
                     seq = seq[:i] + [let_stmt]
         return self.concat(seq)
 

@@ -23,6 +23,7 @@ def register_functions():
             attr.func_name = func_name
             dynamic_smem = PointerType(base_type='uint8', specifiers=['extern', '__shared__'], use_bracket=True)
             return cast(~dynamic_smem[byte_offset], ~dtype)
+
         assert isinstance(cuda_dynamic_shared_memory, Function)
         register_primitive_function(cuda_dynamic_shared_memory.name, cuda_dynamic_shared_memory)
 
@@ -34,6 +35,7 @@ def dynamic_shared_memory(byte_offset: Union[Expr, int], dtype: Union[ScalarType
 
 def set_kernel_max_dynamic_smem_bytes(func: Var, max_dynamic_smem_bytes: Union[Expr, int]) -> Stmt:
     from hidet.ir.expr import convert
+
     max_dynamic_smem_bytes = convert(max_dynamic_smem_bytes)
     template_string = r'cudaFuncSetAttribute({}, cudaFuncAttributeMaxDynamicSharedMemorySize, {});'
     return BlackBoxStmt(template_string, func, max_dynamic_smem_bytes)

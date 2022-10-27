@@ -24,6 +24,7 @@ class CallGraph:
     def __init__(self, ir_module: IRModule):
         # pylint: disable=import-outside-toplevel
         from hidet.ir.primitives import is_primitive_function, lookup_primitive_function
+
         self.nodes: List[CallGraphNode] = []
         self.func2node = {}
 

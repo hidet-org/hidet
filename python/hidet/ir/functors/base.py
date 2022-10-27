@@ -31,8 +31,11 @@ class NodeFunctor:
             # noinspection PyUnresolvedReferences
             dispatch_table = self.__class__.dispatch_table  # pylint: disable=no-member
             if idx >= len(dispatch_table):
-                raise NotImplementedError('Does not implement dispatch function in "{}" for node "{}"'.format(
-                    type(self).__qualname__, type(node).__qualname__))
+                raise NotImplementedError(
+                    'Does not implement dispatch function in "{}" for node "{}"'.format(
+                        type(self).__qualname__, type(node).__qualname__
+                    )
+                )
             ret = dispatch_table[idx](self, node)
         elif isinstance(node, tuple):
             ret = tuple(self.visit(v) for v in node)
@@ -525,6 +528,7 @@ class ExprRewriter(ExprFunctor):
 
     def visit_ScalarNode(self, e: ScalarNode):
         from hidet.ir.functors import collect  # pylint: disable=import-outside-toplevel
+
         if e.scalar_compute is None:
             return e
         else:
@@ -538,8 +542,13 @@ class ExprRewriter(ExprFunctor):
                 else:
                     input_tensors = collect(value, TensorNode, stop_when_found=True)
                     input_scalars = collect(value, ScalarNode, stop_when_found=True)
-                    return ScalarNode(e.name, e.data_type, ReduceCompute(
-                        input_tensors, input_scalars, shape, axes, value, rc.reduce_operation, rc.accumulate_dtype))
+                    return ScalarNode(
+                        e.name,
+                        e.data_type,
+                        ReduceCompute(
+                            input_tensors, input_scalars, shape, axes, value, rc.reduce_operation, rc.accumulate_dtype
+                        ),
+                    )
             elif isinstance(e.scalar_compute, ArgReduceCompute):
                 sc = e.scalar_compute
                 axis = self(sc.axis)
@@ -550,13 +559,19 @@ class ExprRewriter(ExprFunctor):
                 else:
                     input_tensors = collect(value, TensorNode, stop_when_found=True)
                     input_scalars = collect(value, ScalarNode, stop_when_found=True)
-                    return ScalarNode(e.name, e.data_type, ArgReduceCompute(
-                        input_tensors, input_scalars, extent, axis, value, sc.reduce_operation, sc.index_dtype))
+                    return ScalarNode(
+                        e.name,
+                        e.data_type,
+                        ArgReduceCompute(
+                            input_tensors, input_scalars, extent, axis, value, sc.reduce_operation, sc.index_dtype
+                        ),
+                    )
             else:
                 raise NotImplementedError('Can not recognize ScalarCompute: {}'.format(type(e.scalar_compute).__name__))
 
     def visit_TensorNode(self, e: TensorNode):
         from hidet.ir.functors import collect  # pylint: disable=import-outside-toplevel
+
         if e.tensor_compute is None:
             return e
         else:
@@ -570,8 +585,9 @@ class ExprRewriter(ExprFunctor):
                 else:
                     input_tensors = collect(value, TensorNode, stop_when_found=True)
                     input_scalars = collect(value, ScalarNode, stop_when_found=True)
-                    return TensorNode(e.name, e.data_type,
-                                      GridCompute(input_tensors, input_scalars, shape, axes, value))
+                    return TensorNode(
+                        e.name, e.data_type, GridCompute(input_tensors, input_scalars, shape, axes, value)
+                    )
             else:
                 raise NotImplementedError('Can not recognize TensorCompute: {}'.format(type(e.tensor_compute).__name__))
 
@@ -789,7 +805,7 @@ class StmtRewriter(StmtFunctor):
             return stmt
         else:
             assert all(isinstance(v, Var) for v in loop_vars)
-            asserted_loop_vars: List[Var] = [v for v in loop_vars if isinstance(v, Var)]    # avoid IDE warning
+            asserted_loop_vars: List[Var] = [v for v in loop_vars if isinstance(v, Var)]  # avoid IDE warning
             return ForTaskStmt(loop_vars=asserted_loop_vars, mapping=stmt.mapping, worker=worker, body=body)
 
     def visit_WhileStmt(self, stmt: WhileStmt):
@@ -835,8 +851,12 @@ class StmtRewriter(StmtFunctor):
         if same_list(input_exprs, stmt.input_exprs) and same_list(output_exprs, stmt.output_exprs):
             return stmt
         else:
-            return AsmStmt(stmt.template_string, list(zip(stmt.output_labels, output_exprs)),
-                           list(zip(stmt.input_labels, input_exprs)), stmt.is_volatile)
+            return AsmStmt(
+                stmt.template_string,
+                list(zip(stmt.output_labels, output_exprs)),
+                list(zip(stmt.input_labels, input_exprs)),
+                stmt.is_volatile,
+            )
 
     def visit_BlackBoxStmt(self, stmt: BlackBoxStmt):
         exprs = [self.visit_expr(e) for e in stmt.exprs]
@@ -889,8 +909,15 @@ class FuncStmtExprRewriter(StmtExprRewriter):
         if body is func.body:
             return func
         else:
-            return Function(func.name, params=func.params, body=body, ret_type=func.ret_type, kind=func.kind,
-                            extern_vars=func.extern_vars, attrs=func.attrs)
+            return Function(
+                func.name,
+                params=func.params,
+                body=body,
+                ret_type=func.ret_type,
+                kind=func.kind,
+                extern_vars=func.extern_vars,
+                attrs=func.attrs,
+            )
 
 
 class TypeFunctor(NodeFunctor):
@@ -932,7 +959,7 @@ class ComputeFunctor(NodeFunctor):
             TensorNode: cls.visit_TensorNode,
             GridCompute: cls.visit_GridCompute,
             ReduceCompute: cls.visit_ReduceCompute,
-            ArgReduceCompute: cls.visit_ArgReduceCompute
+            ArgReduceCompute: cls.visit_ArgReduceCompute,
         }
 
     def visit_ScalarNode(self, node: ScalarNode):

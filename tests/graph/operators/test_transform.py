@@ -22,8 +22,8 @@ def check_transform(shape, numpy_op, hidet_op, dtype=np.float32, atol=0, rtol=0)
         [[123, 321], [-1, 123]],
         [[123, 321], [123 * 321]],
         [[1, 123, 321, 1, 1], [1, 123, 1, 321, 1]],
-        [[1], []]
-    ]
+        [[1], []],
+    ],
 )
 def test_reshape(shape, new_shape):
     check_transform(shape, lambda x: np.reshape(x, new_shape), lambda x: ops.reshape(x, new_shape))
@@ -36,34 +36,19 @@ def test_rearrange():
     pass
 
 
-@pytest.mark.parametrize(
-    "shape, dims",
-    [[[1, 3, 1, 4], [0, 2]],
-     [[2, 9, 9, 1], [3]],
-     [[1, 1, 1, 1], [0, 1, 2, 3]]]
-)
+@pytest.mark.parametrize("shape, dims", [[[1, 3, 1, 4], [0, 2]], [[2, 9, 9, 1], [3]], [[1, 1, 1, 1], [0, 1, 2, 3]]])
 def test_squeeze(shape, dims):
     check_transform(shape, lambda x: np.squeeze(x, axis=tuple(dims)), lambda x: ops.squeeze(x, dims))
 
 
-@pytest.mark.parametrize(
-    "shape, dims",
-    [[[3, 4], [0, 2]],
-     [[2, 9, 9], [3]],
-     [[], [0, 1, 2, 3]]]
-)
+@pytest.mark.parametrize("shape, dims", [[[3, 4], [0, 2]], [[2, 9, 9], [3]], [[], [0, 1, 2, 3]]])
 def test_unsqueeze(shape, dims: List[int]):
     check_transform(shape, lambda x: np.expand_dims(x, dims), lambda x: ops.unsqueeze(x, dims))
 
 
 @pytest.mark.parametrize(
     "shape, start_dim, end_dim",
-    [
-        [[33, 44, 55], 0, None],
-        [[33, 44, 55], 0, 1],
-        [[33, 44, 55], 0, 2],
-        [[33, 44, 55], 1, 2]
-    ]
+    [[[33, 44, 55], 0, None], [[33, 44, 55], 0, 1], [[33, 44, 55], 0, 2], [[33, 44, 55], 1, 2]],
 )
 def test_flatten(shape, start_dim: int, end_dim: Optional[int]):
     rank = len(shape)
@@ -79,12 +64,7 @@ def test_flatten(shape, start_dim: int, end_dim: Optional[int]):
 
 @pytest.mark.parametrize(
     "shape, axes",
-    [
-        [[33, 44, 55], [0, 1, 2]],
-        [[33, 44, 55], [0, 2, 1]],
-        [[33, 44, 55], [2, 1, 0]],
-        [[33, 44, 55], [1, 2, 0]],
-    ]
+    [[[33, 44, 55], [0, 1, 2]], [[33, 44, 55], [0, 2, 1]], [[33, 44, 55], [2, 1, 0]], [[33, 44, 55], [1, 2, 0]]],
 )
 def test_transpose(shape, axes):
     check_transform(shape, lambda x: np.transpose(x, axes), lambda x: ops.transpose(x, axes))
@@ -96,7 +76,7 @@ def test_transpose(shape, axes):
         [[[33, 44, 55], [1, 44, 55], [32, 44, 55]], 'float32', 0],
         [[[33, 1, 55], [33, 8, 55], [33, 111, 55]], 'float32', 1],
         [[[33, 1, 55], [33, 8, 55], [33, 111, 55]], 'float32', -2],
-    ]
+    ],
 )
 def test_concat(shapes, dtype, axis):
     data_list = [np.random.randn(*shape).astype(dtype) for shape in shapes]
@@ -105,23 +85,12 @@ def test_concat(shapes, dtype, axis):
     np.testing.assert_allclose(actual=hidet_result, desired=numpy_result, rtol=0, atol=0)
 
 
-@pytest.mark.parametrize(
-    "shape, src_type, dst_type",
-    [
-        [[33, 44, 55], "int64", "float32"],
-    ]
-)
+@pytest.mark.parametrize("shape, src_type, dst_type", [[[33, 44, 55], "int64", "float32"]])
 def test_cast(shape, src_type, dst_type):
     check_transform(shape, lambda x: x.astype(dst_type), lambda x: ops.cast(x, dst_type), dtype=src_type)
 
 
-@pytest.mark.parametrize(
-    "shape, indices_shape, axis",
-    [
-        [[1234, 512], [128], 0],
-        [[12, 34, 56], [2, 2], 1]
-    ]
-)
+@pytest.mark.parametrize("shape, indices_shape, axis", [[[1234, 512], [128], 0], [[12, 34, 56], [2, 2], 1]])
 def test_take(shape, indices_shape, axis):
     dim_extent = shape[axis]
     indices = np.random.randint(0, dim_extent - 1, indices_shape).astype(np.int64)
@@ -134,7 +103,7 @@ def test_take(shape, indices_shape, axis):
         [[100, 100, 100], [0, 0, 0], [10, 20, 30], [0, 1, 2], [1, 1, 1]],
         [[100, 100, 100], [5, 6, 7], [10, 20, 30], [0, 1, 2], [1, 1, 1]],
         [[100, 100, 100], [5, 6, 7], [10, 20, 30], [0, 1, 2], [1, 2, 3]],
-    ]
+    ],
 )
 def test_strided_slice(shape, starts, ends, axes, strides):
     slice_obj = [slice(None, None) for _ in range(len(shape))]
@@ -144,12 +113,7 @@ def test_strided_slice(shape, starts, ends, axes, strides):
 
 
 @pytest.mark.parametrize(
-    "shape, broadcast_shape",
-    [
-        [[1, 1, 1], [33, 44, 55]],
-        [[1, 22, 5], [33, 22, 5]],
-        [[1, 55, 1], [33, 55, 44]]
-    ]
+    "shape, broadcast_shape", [[[1, 1, 1], [33, 44, 55]], [[1, 22, 5], [33, 22, 5]], [[1, 55, 1], [33, 55, 44]]]
 )
 def test_broadcast(shape, broadcast_shape):
     check_transform(shape, lambda x: x + np.zeros(broadcast_shape), lambda x: ops.broadcast(x, broadcast_shape))

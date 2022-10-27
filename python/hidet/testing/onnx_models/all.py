@@ -10,8 +10,9 @@ from .model_blocks import get_bert_block, get_resnet50_block
 from .operators import get_onnx_operator
 
 
-def get_onnx_model(name: str, batch_size: int = 1,
-                   precision='float32', **kwargs) -> Tuple[str, List[str], List[Tensor]]:
+def get_onnx_model(
+    name: str, batch_size: int = 1, precision='float32', **kwargs
+) -> Tuple[str, List[str], List[Tensor]]:
     """
     kwargs candidates:
       seq_length=128
@@ -37,63 +38,41 @@ def get_onnx_model(name: str, batch_size: int = 1,
     elif name == 'bert':
         model_path = hidet_cache_file('onnx', 'bert.onnx')
         if precision != 'float32':
-            warnings.warn('the float32 model is returned although {} is requested, '
-                          'because transformers package does not provide api to export f16 model.')
-        export_transformer_model_as_onnx(
-            model_name='bert-base-uncased',
-            output_path=model_path,
-            precision='float32'
-        )
+            warnings.warn(
+                'the float32 model is returned although {} is requested, '
+                'because transformers package does not provide api to export f16 model.'
+            )
+        export_transformer_model_as_onnx(model_name='bert-base-uncased', output_path=model_path, precision='float32')
         vocab_size = 30522
         seq_length = kwargs.get('seq_length', 128)
-        input_names = [
-            'input_ids',
-            'attention_mask',
-            'token_type_ids'
-        ]
+        input_names = ['input_ids', 'attention_mask', 'token_type_ids']
         input_tensors = [
-            hidet.array(np.random.randint(0, vocab_size-1, size=[batch_size, seq_length], dtype=np.int64)),
+            hidet.array(np.random.randint(0, vocab_size - 1, size=[batch_size, seq_length], dtype=np.int64)),
             hidet.ones(shape=[batch_size, seq_length], dtype='int64'),
-            hidet.zeros(shape=[batch_size, seq_length], dtype='int64')
+            hidet.zeros(shape=[batch_size, seq_length], dtype='int64'),
         ]
         return model_path, input_names, input_tensors
     elif name == 'bart':
         model_path = hidet_cache_file('onnx', 'bart.onnx')
-        export_transformer_model_as_onnx(
-            model_name='facebook/bart-base',
-            output_path=model_path,
-            precision=precision
-        )
+        export_transformer_model_as_onnx(model_name='facebook/bart-base', output_path=model_path, precision=precision)
         vocab_size = 50265
         seq_length = kwargs.get('seq_length', 128)
-        input_names = [
-            'input_ids',
-            'attention_mask',
-            'decoder_input_ids',
-            'decoder_attention_mask'
-        ]
+        input_names = ['input_ids', 'attention_mask', 'decoder_input_ids', 'decoder_attention_mask']
         input_tensors = [
-            hidet.array(np.random.randint(0, vocab_size-1, size=[batch_size, seq_length], dtype=np.int64)),
+            hidet.array(np.random.randint(0, vocab_size - 1, size=[batch_size, seq_length], dtype=np.int64)),
             hidet.ones(shape=[batch_size, seq_length], dtype='int64'),
-            hidet.array(np.random.randint(0, vocab_size-1, size=[batch_size, seq_length], dtype=np.int64)),
-            hidet.ones(shape=[batch_size, seq_length], dtype='int64')
+            hidet.array(np.random.randint(0, vocab_size - 1, size=[batch_size, seq_length], dtype=np.int64)),
+            hidet.ones(shape=[batch_size, seq_length], dtype='int64'),
         ]
         return model_path, input_names, input_tensors
     elif name == 'gpt2':
         model_path = hidet_cache_file('onnx', 'gpt2.onnx')
-        export_transformer_model_as_onnx(
-            model_name='gpt2',
-            output_path=model_path,
-            precision=precision
-        )
+        export_transformer_model_as_onnx(model_name='gpt2', output_path=model_path, precision=precision)
         vocab_size = 50257
         seq_length = kwargs.get('seq_length', 128)
-        input_names = [
-            'input_ids',
-            'attention_mask',
-        ]
+        input_names = ['input_ids', 'attention_mask']
         input_tensors = [
-            hidet.array(np.random.randint(0, vocab_size-1, size=[batch_size, seq_length], dtype=np.int64)),
+            hidet.array(np.random.randint(0, vocab_size - 1, size=[batch_size, seq_length], dtype=np.int64)),
             hidet.ones(shape=[batch_size, seq_length], dtype='int64'),
         ]
         return model_path, input_names, input_tensors

@@ -99,6 +99,7 @@ def register_primitive_functions_with_body():
     from hidet.ir.expr import Var
     from hidet.ir.stmt import AsmStmt
     from hidet.ir.builders import FunctionBuilder
+
     # lds128
     with FunctionBuilder('cuda_lds128', kind='cuda_device') as fb:
         # params
@@ -114,7 +115,7 @@ def register_primitive_functions_with_body():
             r"}",
             outputs=[('=f', reg) for reg in regs_vars],
             inputs=[('l', smem_addr_var)],
-            is_volatile=True
+            is_volatile=True,
         )
         fb.set_body(body)
     register_primitive_function(name='cuda_lds128', func_or_type=fb.get())
@@ -134,7 +135,7 @@ def register_primitive_functions_with_body():
             r"}",
             outputs=[],
             inputs=[('l', smem_addr_var)] + [('f', reg) for reg in regs_vars],
-            is_volatile=True
+            is_volatile=True,
         )
         fb.set_body(body)
     register_primitive_function(name='cuda_sts128', func_or_type=fb.get())

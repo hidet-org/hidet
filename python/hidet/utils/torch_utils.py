@@ -9,6 +9,7 @@ def export_torchvision_model_as_onnx(model_name: str, output_path: str, skip_exi
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     import torchvision
     import torch
+
     if model_name == 'resnet50':
         model = torchvision.models.resnet50(pretrained=True).cuda()
         input_shape = [1, 3, 224, 224]
@@ -36,10 +37,7 @@ def export_torchvision_model_as_onnx(model_name: str, output_path: str, skip_exi
         input_names=input_names,
         output_names=output_names,
         do_constant_folding=False,
-        dynamic_axes={
-            'data': {0: 'batch_size'},
-            'output': {0: 'batch_size'}
-        }
+        dynamic_axes={'data': {0: 'batch_size'}, 'output': {0: 'batch_size'}},
     )
 
 

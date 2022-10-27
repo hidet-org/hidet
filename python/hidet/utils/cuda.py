@@ -21,7 +21,7 @@ def max_smem_bytes_per_sm(cc=None):
             (7, 5): 64,
             (8, 0): 164,
             (8, 6): 100,
-            (8, 7): 164
+            (8, 7): 164,
         }
         return data[cc] * 1024
 
@@ -42,7 +42,7 @@ def max_smem_bytes_per_block(cc=None):
             (7, 5): 64,
             (8, 0): 163,
             (8, 6): 99,
-            (8, 7): 163
+            (8, 7): 163,
         }
         return data[cc] * 1024
 
@@ -54,16 +54,7 @@ def max_num_regs_per_thread():
 def max_num_regs_per_block(cc=None):
     if cc is None:
         cc = query_compute_capability()
-    data = {
-        (6, 0): 64,
-        (6, 1): 64,
-        (6, 2): 32,
-        (7, 0): 64,
-        (7, 2): 64,
-        (7, 5): 64,
-        (8, 0): 64,
-        (8, 6): 64
-    }
+    data = {(6, 0): 64, (6, 1): 64, (6, 2): 32, (7, 0): 64, (7, 2): 64, (7, 5): 64, (8, 0): 64, (8, 6): 64}
     return data[cc] * 1024
 
 
@@ -80,6 +71,7 @@ def query_compute_capability():
 
 def device_synchronize():
     from hidet.ffi.cuda_api import CudaAPI
+
     CudaAPI.device_synchronize()
 
 
@@ -87,11 +79,7 @@ def preferred_gpu_clock():
     use_max = True
     if use_max:
         return query_gpu_max_clock()
-    base_clocks = {
-        'NVIDIA GeForce RTX 3070 Laptop GPU': 1560,
-        'Tesla V100-SXM2-16GB': 1530,
-        'Tesla T4': 1250,
-    }
+    base_clocks = {'NVIDIA GeForce RTX 3070 Laptop GPU': 1560, 'Tesla V100-SXM2-16GB': 1530, 'Tesla T4': 1250}
     name = query_gpu('gpu_name')
     if name in base_clocks:
         return base_clocks[name]
@@ -154,7 +142,7 @@ def query_arch() -> str:
         (7, 2): 'Volta',
         (7, 5): 'Turing',
         (8, 0): 'Ampere',
-        (8, 6): 'Ampere'
+        (8, 6): 'Ampere',
     }
     return arch2name[query_compute_capability()]
 
@@ -188,8 +176,12 @@ def query_clocks_throttle_reason() -> str:
 def query_gpu(names: Union[List[str], str]):
     if not isinstance(names, (list, tuple)):
         names = [names]
-    result = subprocess.run(f'nvidia-smi -i 0 --query-gpu={",".join(names)} --format=csv,noheader,nounits'.split(),
-                            stdin=PIPE, stdout=PIPE, check=True)
+    result = subprocess.run(
+        f'nvidia-smi -i 0 --query-gpu={",".join(names)} --format=csv,noheader,nounits'.split(),
+        stdin=PIPE,
+        stdout=PIPE,
+        check=True,
+    )
     results = [s.strip() for s in result.stdout.decode('utf-8').split(',')]
     if len(results) == 1:
         return results[0]

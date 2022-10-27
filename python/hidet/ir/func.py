@@ -10,10 +10,7 @@ def check_func_name(name: str):
     if len(name) == 0:
         raise ValueError('Do not allow empty function name.')
     for c in name:
-        if not (c in string.ascii_lowercase or
-                c in string.ascii_uppercase or
-                c in string.digits or
-                c in '_'):
+        if not (c in string.ascii_lowercase or c in string.ascii_uppercase or c in string.digits or c in '_'):
             raise ValueError('Cannot use {} in function name'.format(repr(c)))
 
 
@@ -26,7 +23,7 @@ class Function(Node):
         'cuda_grid_dim',
         'cuda_block_dim',
         'cuda_dynamic_smem_bytes',
-        'cuda_min_blocks'
+        'cuda_min_blocks',
     ]
     """
     Valid Attrs:
@@ -74,6 +71,7 @@ class IRModule(Node):
     def __init__(self, funcs=None, task=None, global_vars=None):
         # pylint: disable=import-outside-toplevel
         from hidet.ir.task import Task
+
         if funcs:
             assert isinstance(funcs, dict)
             # assert task is not None, 'Please specify the task'
@@ -98,8 +96,11 @@ class IRModule(Node):
         else:
             name = name_or_var
         if name not in self.functions:
-            raise ValueError('Function {} does not exist in module, existed functions: \n{}.'.format(
-                name, list(self.functions.keys())))
+            raise ValueError(
+                'Function {} does not exist in module, existed functions: \n{}.'.format(
+                    name, list(self.functions.keys())
+                )
+            )
         return self.functions[name]
 
     def lookup_var(self, name):

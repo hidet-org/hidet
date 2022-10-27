@@ -20,17 +20,10 @@ class Conv2dGemmImageTransformTask(Task):
             name='gemm_x',
             shape=[groups, n * p * q, gc * kx * ky],
             fcompute=lambda g, i, k: x[
-                i // (p * q),
-                g * gc + k // (kx * ky),
-                i // q % p * sx + k // ky % kx,
-                i % q * sy + k % ky
-            ]
+                i // (p * q), g * gc + k // (kx * ky), i // q % p * sx + k // ky % kx, i % q * sy + k % ky
+            ],
         )
-        super().__init__(
-            name='conv2d_gemm_image_transform',
-            inputs=[x],
-            outputs=[gemm_x],
-        )
+        super().__init__(name='conv2d_gemm_image_transform', inputs=[x], outputs=[gemm_x])
 
 
 class Conv2dGemmImageTransformOp(Operator):
@@ -40,11 +33,7 @@ class Conv2dGemmImageTransformOp(Operator):
         super().__init__(
             inputs=[x],
             task=Conv2dGemmImageTransformTask(input_like(x, 'x'), kernel, stride, groups),
-            attributes={
-                'kernel': kernel,
-                'stride': stride
-            }
-
+            attributes={'kernel': kernel, 'stride': stride},
         )
 
 

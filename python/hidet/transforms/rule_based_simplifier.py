@@ -132,14 +132,20 @@ class RuleBasedSimplifier(FuncStmtExprRewriter):
         ]
         self.bound_patterns = [
             # ((pattern_args, pattern_func, target_args, target_func)
-            ((ec1, ec2, c1), (ec1, ec2, c1),
-             lambda ec1, ec2, c1: (ec1 + ec2) // c1,
-             lambda ec1, ec2, c1: ec1 // c1 + ec2 // c1),
-            ((ec1, ec2, c1), (ec1, ec2, c1),
-             lambda ec1, ec2, c1: (ec1 + ec2) % c1,
-             lambda ec1, ec2, c1: ec1 % c1 + ec2 % c1),
+            (
+                (ec1, ec2, c1),
+                (ec1, ec2, c1),
+                lambda ec1, ec2, c1: (ec1 + ec2) // c1,
+                lambda ec1, ec2, c1: ec1 // c1 + ec2 // c1,
+            ),
+            (
+                (ec1, ec2, c1),
+                (ec1, ec2, c1),
+                lambda ec1, ec2, c1: (ec1 + ec2) % c1,
+                lambda ec1, ec2, c1: ec1 % c1 + ec2 % c1,
+            ),
             ((ec1, c1), (ec1,), lambda ec1, c1: ec1 % c1, lambda ec1: ec1),
-            ((ec1, c1, c2), (ec1, c2), lambda ec1, c1, c2: (ec1 % c1) % c2, lambda ec1, c2: ec1 % c2)
+            ((ec1, c1, c2), (ec1, c2), lambda ec1, c1, c2: (ec1 % c1) % c2, lambda ec1, c2: ec1 % c2),
         ]
 
     def apply_rule(self, e):

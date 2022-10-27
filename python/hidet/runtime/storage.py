@@ -137,7 +137,6 @@ class CpuStorageDevice(StorageDevice):
 
 
 class Storage:
-
     def __init__(self, device, addr, num_bytes, free_handler):
         self.device: str = device
         self.addr: int = addr
@@ -159,8 +158,9 @@ class Storage:
             return self
         elif self.device == 'cuda':
             host_storage = self.new('cpu', self.num_bytes)
-            cuda.memcpy(src_addr=self.addr, dst_addr=host_storage.addr, num_bytes=self.num_bytes,
-                        kind=cuda.DeviceToHost)
+            cuda.memcpy(
+                src_addr=self.addr, dst_addr=host_storage.addr, num_bytes=self.num_bytes, kind=cuda.DeviceToHost
+            )
             return host_storage
         else:
             raise NotImplementedError()
@@ -170,8 +170,13 @@ class Storage:
             return self
         elif self.device == 'cuda':
             host_storage = self.new('cpu', self.num_bytes)
-            cuda.memcpy_async(src_addr=self.addr, dst_addr=host_storage.addr, num_bytes=self.num_bytes,
-                              kind=cuda.DeviceToHost, stream=stream.handle if stream else 0)
+            cuda.memcpy_async(
+                src_addr=self.addr,
+                dst_addr=host_storage.addr,
+                num_bytes=self.num_bytes,
+                kind=cuda.DeviceToHost,
+                stream=stream.handle if stream else 0,
+            )
             return host_storage
         else:
             raise NotImplementedError()
@@ -181,8 +186,9 @@ class Storage:
             return self
         elif self.device == 'cpu':
             cuda_storage = self.new('cuda', self.num_bytes)
-            cuda.memcpy(src_addr=self.addr, dst_addr=cuda_storage.addr, num_bytes=self.num_bytes,
-                        kind=cuda.HostToDevice)
+            cuda.memcpy(
+                src_addr=self.addr, dst_addr=cuda_storage.addr, num_bytes=self.num_bytes, kind=cuda.HostToDevice
+            )
             return cuda_storage
         else:
             raise NotImplementedError()
@@ -192,30 +198,35 @@ class Storage:
             return self
         elif self.device == 'cpu':
             cuda_storage = self.new('cuda', self.num_bytes)
-            cuda.memcpy_async(src_addr=self.addr, dst_addr=cuda_storage.addr, num_bytes=self.num_bytes,
-                              kind=cuda.HostToDevice, stream=stream.handle if stream else 0)
+            cuda.memcpy_async(
+                src_addr=self.addr,
+                dst_addr=cuda_storage.addr,
+                num_bytes=self.num_bytes,
+                kind=cuda.HostToDevice,
+                stream=stream.handle if stream else 0,
+            )
             return cuda_storage
         else:
             raise NotImplementedError()
 
     def copy(self) -> Storage:
-        kind_dict = {
-            'cpu': cuda.HostToHost,
-            'cuda': cuda.DeviceToDevice
-        }
+        kind_dict = {'cpu': cuda.HostToHost, 'cuda': cuda.DeviceToDevice}
         storage = Storage.new(self.device, self.num_bytes)
-        cuda.memcpy_async(src_addr=self.addr, dst_addr=storage.addr, num_bytes=self.num_bytes,
-                          kind=kind_dict[self.device])
+        cuda.memcpy_async(
+            src_addr=self.addr, dst_addr=storage.addr, num_bytes=self.num_bytes, kind=kind_dict[self.device]
+        )
         return storage
 
     def copy_async(self, stream: Optional[CudaStream] = None) -> Storage:
-        kind_dict = {
-            'cpu': cuda.HostToHost,
-            'cuda': cuda.DeviceToDevice
-        }
+        kind_dict = {'cpu': cuda.HostToHost, 'cuda': cuda.DeviceToDevice}
         storage = Storage.new(self.device, self.num_bytes)
-        cuda.memcpy_async(src_addr=self.addr, dst_addr=storage.addr, num_bytes=self.num_bytes,
-                          kind=kind_dict[self.device], stream=stream.handle if stream else 0)
+        cuda.memcpy_async(
+            src_addr=self.addr,
+            dst_addr=storage.addr,
+            num_bytes=self.num_bytes,
+            kind=kind_dict[self.device],
+            stream=stream.handle if stream else 0,
+        )
         return storage
 
     @staticmethod
@@ -250,11 +261,9 @@ class Storage:
             'float16': ctypes.c_uint16,
             'int32': ctypes.c_int32,
             'int64': ctypes.c_int64,
-            'bool': ctypes.c_bool
+            'bool': ctypes.c_bool,
         }
-        dtype2nptype = {
-            'float16': np.float16
-        }
+        dtype2nptype = {'float16': np.float16}
 
         if self.device != 'cpu':
             raise ValueError('The storage must be cpu storage. Please use .cpu() to convert first.')
@@ -279,6 +288,7 @@ class Storage:
 class TorchStorage(Storage):
     def __init__(self, torch_tensor):
         import torch
+
         if not isinstance(torch_tensor, torch.Tensor):
             raise ValueError('Expect a torch tensor, got {}'.format(type(torch_tensor).__name__))
         if not torch_tensor.is_contiguous():
@@ -288,7 +298,7 @@ class TorchStorage(Storage):
             device='cuda',
             addr=torch_tensor.data_ptr(),
             num_bytes=torch_tensor.element_size() * prod(torch_tensor.size()),
-            free_handler=lambda storage: None
+            free_handler=lambda storage: None,
         )
 
 
@@ -323,12 +333,7 @@ class MemoryPool:
                         f'free {nbytes2str(self.storage_device.free_memory())}, '
                         f'requesting {nbytes2str(allocated)}.'
                     )
-        return Storage(
-            device=self.storage_device.name(),
-            addr=addr,
-            num_bytes=allocated,
-            free_handler=self.free
-        )
+        return Storage(device=self.storage_device.name(), addr=addr, num_bytes=allocated, free_handler=self.free)
 
     def free(self, storage: Storage):
         self.memory_blocks[storage.num_bytes].append(storage)
@@ -352,11 +357,11 @@ class MemoryPool:
             ['Allocated', allocated],
             ['Peak', peak_allocated],
             ['Reserved', self.reserved_size],
-            ['Active', allocated - self.reserved_size]
+            ['Active', allocated - self.reserved_size],
         ]
         lines = [
             'Status of {} memory pool'.format(self.storage_device.name()),
-            *['{:>12}: {}'.format(name, nbytes2str(nbytes)) for name, nbytes in items]
+            *['{:>12}: {}'.format(name, nbytes2str(nbytes)) for name, nbytes in items],
         ]
         return '\n'.join(lines)
 
@@ -370,7 +375,7 @@ class MemoryPool:
 class CudaMemoryPool(MemoryPool):
     stack = []
 
-    def __init__(self, block_size: int = 4096, max_reserve_size: int = 4 * 1024 ** 3):
+    def __init__(self, block_size: int = 4096, max_reserve_size: int = 4 * 1024**3):
         super().__init__(CudaStorageDevice(), block_size, max_reserve_size)
 
     def __enter__(self):
@@ -390,7 +395,7 @@ CudaMemoryPool.stack.append(CudaMemoryPool())
 class CpuMemoryPool(MemoryPool):
     stack = []
 
-    def __init__(self, block_size: int = 4096, max_reserve_size: int = 512 * 1024 ** 2):
+    def __init__(self, block_size: int = 4096, max_reserve_size: int = 512 * 1024**2):
         super().__init__(CpuStorageDevice(), block_size, max_reserve_size)
 
     def __enter__(self):

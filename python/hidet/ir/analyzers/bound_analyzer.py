@@ -55,8 +55,11 @@ class BoundInfo:
 
         lhs_candidates = lhs.candidate_set()
         rhs_candidates = rhs.candidate_set()
-        if (lhs_candidates and rhs_candidates
-                and len(lhs_candidates) * len(rhs_candidates) <= BoundInfo._max_compute_iters):
+        if (
+            lhs_candidates
+            and rhs_candidates
+            and len(lhs_candidates) * len(rhs_candidates) <= BoundInfo._max_compute_iters
+        ):
             candidates = set()
             for lv in lhs_candidates:
                 for rv in rhs_candidates:
@@ -70,13 +73,19 @@ class BoundInfo:
             lhs_candidates = [lhs.possible_min_value(), lhs.possible_max_value()]
             rhs_candidates = [rhs.possible_min_value(), rhs.possible_max_value()]
             if op in [operator.add, operator.sub, operator.mul]:
-                candidates = [op(a, b) for a, b in itertools.product([min(lhs_candidates), max(lhs_candidates)],
-                                                                     [min(rhs_candidates), max(rhs_candidates)])]
+                candidates = [
+                    op(a, b)
+                    for a, b in itertools.product(
+                        [min(lhs_candidates), max(lhs_candidates)], [min(rhs_candidates), max(rhs_candidates)]
+                    )
+                ]
                 return BoundInfo(min_value=min(candidates), max_value=max(candidates))
             elif op is operator.floordiv:
                 if all(v > 0 for v in rhs_candidates):
-                    return BoundInfo(min_value=min(lhs_candidates) // max(rhs_candidates),
-                                     max_value=max(lhs_candidates) // min(rhs_candidates))
+                    return BoundInfo(
+                        min_value=min(lhs_candidates) // max(rhs_candidates),
+                        max_value=max(lhs_candidates) // min(rhs_candidates),
+                    )
                 else:
                     return BoundInfo()
             elif op is operator.mod:
@@ -185,6 +194,7 @@ def normalize_launch_dims(dims: Union[Int, Sequence[Int]]) -> List[int]:
             ret.append(dim)
         elif isinstance(dim, Expr):
             from hidet.ir.functors import simplify_to_int  # pylint: disable=import-outside-toplevel
+
             ret.append(simplify_to_int(dim))
         else:
             raise ValueError(dim)
@@ -269,8 +279,7 @@ class BoundAnalyzer(FuncStmtExprVisitor):
 
 
 def infer_bound(
-        node: Union[Function, Stmt, Expr],
-        var2bound: Optional[Mapping[Var, BoundInfo]] = None
+    node: Union[Function, Stmt, Expr], var2bound: Optional[Mapping[Var, BoundInfo]] = None
 ) -> Dict[Expr, BoundInfo]:
     visitor = BoundAnalyzer(var2bound)
     visitor.visit(node)

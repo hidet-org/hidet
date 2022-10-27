@@ -3,26 +3,16 @@ from .utils import Task, Operator, Tensor, TensorNode, compute, input_like
 
 # todo: add GraphInput and GraphOutput special operators here.
 
+
 class BarrierTask(Task):
     def __init__(self, x: TensorNode):
-        y = compute(
-            name='y',
-            shape=x.const_shape(),
-            fcompute=lambda *indices: x[indices]
-        )
-        super().__init__(
-            name='barrier',
-            inputs=[x],
-            outputs=[y]
-        )
+        y = compute(name='y', shape=x.const_shape(), fcompute=lambda *indices: x[indices])
+        super().__init__(name='barrier', inputs=[x], outputs=[y])
 
 
 class BarrierOp(Operator):
     def __init__(self, x: Tensor):
-        super().__init__(
-            inputs=[x],
-            task=BarrierTask(input_like(x, 'x')),
-        )
+        super().__init__(inputs=[x], task=BarrierTask(input_like(x, 'x')))
 
 
 def barrier(x: Tensor) -> Tensor:

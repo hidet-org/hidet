@@ -99,8 +99,5 @@ def inline_let_stmt_pass(inline_factor=1, inline_all=False) -> Pass:
         return InlineNaiveLetStmtPass(inline_factor, inline_all)
     else:
         return RepeatFunctionPass(
-            name='InlineLetStmtPass',
-            passes=[
-                InlineNaiveLetStmtPass(inline_factor, inline_all)
-            ],
-            repeat_limit=10)
+            name='InlineLetStmtPass', passes=[InlineNaiveLetStmtPass(inline_factor, inline_all)], repeat_limit=10
+        )

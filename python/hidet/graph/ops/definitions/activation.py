@@ -33,7 +33,7 @@ class GeluOp(UnaryElementwiseOp):
         super().__init__(
             x=x,
             op=lambda v: const_like(0.5, v) * v * (const_like(1.0, v) + prim.erf(v * const_like(1 / math.sqrt(2), v))),
-            name='gelu'
+            name='gelu',
         )
 
 

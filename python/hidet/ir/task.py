@@ -24,12 +24,14 @@ class Target:
         name, attrs = items[0], items[1:]
         return Target(name, attrs)
 
+
 # todo: rename Prologue.indices and Epilogue.indices to axes
 
 
 class InverseMap(Node):
     def __init__(self, axes: List[Var], indices: List[Expr]):
         from hidet.ir.functors import simplify
+
         self.axes: List[Var] = axes
         self.indices: List[Expr] = [simplify(e) for e in indices]
 
@@ -38,7 +40,7 @@ class InverseMap(Node):
         if isinstance(obj, InverseMap):
             return obj
         else:
-            return InverseMap.from_lambda(lambda *args: obj(*args))   # pylint: disable=unnecessary-lambda
+            return InverseMap.from_lambda(lambda *args: obj(*args))  # pylint: disable=unnecessary-lambda
 
     @staticmethod
     def from_lambda(func, num_args=None) -> InverseMap:
@@ -53,12 +55,15 @@ class InverseMap(Node):
 
     def __add__(self, other) -> InverseMap:
         from hidet.ir.functors import rewrite
+
         if not isinstance(other, InverseMap):
             raise ValueError('Can not concat InverseMap with {}'.format(type(other)))
         lhs, rhs = self, other
         if len(lhs.indices) != len(rhs.axes):
-            raise ValueError('Can not concat InverseMap a and b, '
-                             'where a has {} indices and b has {} axes'.format(len(lhs.indices), len(rhs.axes)))
+            raise ValueError(
+                'Can not concat InverseMap a and b, '
+                'where a has {} indices and b has {} axes'.format(len(lhs.indices), len(rhs.axes))
+            )
         rmap = dict(zip(rhs.axes, lhs.indices))
         indices = [rewrite(index_expr, rmap) for index_expr in rhs.indices]
         return InverseMap(lhs.axes, indices)
@@ -92,12 +97,12 @@ class Epilogue(Node):
 
 class TaskGraph(Node):
     def __init__(
-            self,
-            anchor: Task,
-            nodes: Sequence[Task],
-            consume: Dict[TensorNode, TensorNode],
-            input_tensors: Sequence[TensorNode],
-            output_tensors: Sequence[TensorNode]
+        self,
+        anchor: Task,
+        nodes: Sequence[Task],
+        consume: Dict[TensorNode, TensorNode],
+        input_tensors: Sequence[TensorNode],
+        output_tensors: Sequence[TensorNode],
     ):
         self.anchor: Task = anchor
         self.nodes: List[Task] = list(nodes)
@@ -107,16 +112,11 @@ class TaskGraph(Node):
 
     @staticmethod
     def from_task(task: Task) -> TaskGraph:
-        return TaskGraph(
-            anchor=task,
-            nodes=[task],
-            consume={},
-            input_tensors=task.inputs,
-            output_tensors=task.outputs
-        )
+        return TaskGraph(anchor=task, nodes=[task], consume={}, input_tensors=task.inputs, output_tensors=task.outputs)
 
     def absorb(self) -> Task:
         from hidet.ir.functors import rewrite
+
         graph_input_tensors: List[TensorNode] = self.input_tensors
         update_map: Dict[TensorNode, TensorNode] = {a: a for a in graph_input_tensors}
         for task in self.nodes:
@@ -133,20 +133,17 @@ class TaskGraph(Node):
                 # updated_output = rewrite(task_output_tensor, remap)
                 # update_map[original_output_tensor] = updated_output
         graph_output_tensors: List[TensorNode] = [update_map[tensor] for tensor in self.output_tensors]
-        return Task(
-            name=self.anchor.name,
-            inputs=graph_input_tensors,
-            outputs=graph_output_tensors
-        )
+        return Task(name=self.anchor.name, inputs=graph_input_tensors, outputs=graph_output_tensors)
 
 
 class TaskContext:
-    """Scheduling task context.
-    """
+    """Scheduling task context."""
+
     contexts = []
 
-    def __init__(self, space_level: int = 0, warmup: int = 3, number: int = 10, repeat: int = 3,
-                 resolve_out_dir: str = None):
+    def __init__(
+        self, space_level: int = 0, warmup: int = 3, number: int = 10, repeat: int = 3, resolve_out_dir: str = None
+    ):
         """Create a task context.
 
         Parameters
@@ -202,6 +199,7 @@ class Task(Node):
     def implement(self, target: Union[Target, str]) -> IRModule:
         from hidet.graph.ops.schedules.cuda.auto_scheduler import CudaAutoScheduler
         from hidet.graph.ops.schedules.cpu.auto_scheduler import CpuAutoScheduler
+
         if isinstance(target, str):
             target = Target.from_string(target)
         if target.name == 'cuda':
@@ -279,6 +277,7 @@ def is_injective_task(task: Task) -> bool:
         Whether the task is injective.
     """
     from hidet.ir.functors import collect
+
     scalar_nodes: List[ScalarNode] = collect(task.outputs, ScalarNode, stop_when_found=False)
     return all(sn.scalar_compute is None for sn in scalar_nodes)
 

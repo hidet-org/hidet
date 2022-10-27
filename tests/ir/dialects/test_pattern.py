@@ -40,7 +40,7 @@ def test_any_pattern():
         (Add(any_expr, b), Add(c, d), {any_expr: c, b: d}),
         (any_var, Add(c, d), None),
         (any_add, s, {any_add: s}),
-        (any_add, m, None)
+        (any_add, m, None),
     ]
     check_pairs(pairs)
 
@@ -55,7 +55,7 @@ def test_union_pattern():
         (union, c, {union: c, a: c}),
         (union, add_cd, {union: add_cd, a: c, b: d}),
         (union, mul_cd, {union: mul_cd, a: c, b: d}),
-        (union, Mod(c, d), None)
+        (union, Mod(c, d), None),
     ]
     check_pairs(pairs)
 

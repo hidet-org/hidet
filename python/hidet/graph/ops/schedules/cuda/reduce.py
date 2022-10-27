@@ -48,11 +48,11 @@ def cuda_schedule_reduce_by_warp_reduce(task: ReduceTask) -> IRModule:
     accumulate_dtype = task.attributes['accumulate_dtype']
 
     with FunctionBuilder(
-            name=task.name + '_grid',
-            kind='cuda_kernel',
-            grid_dim=grid_layout.num_workers,
-            block_dim=block_layout.num_workers,
-            label='reduce schedule'
+        name=task.name + '_grid',
+        kind='cuda_kernel',
+        grid_dim=grid_layout.num_workers,
+        block_dim=block_layout.num_workers,
+        label='reduce schedule',
     ) as fb:
         # params
         params = params_from_task(task)
@@ -68,7 +68,7 @@ def cuda_schedule_reduce_by_warp_reduce(task: ReduceTask) -> IRModule:
         grid_indices = grid_layout.worker2task(block_idx())[0]
 
         # get the reduced value along reduce dimensions
-        for r, in block_layout.worker2task(thread_idx()):
+        for (r,) in block_layout.worker2task(thread_idx()):
             with fb.if_then(r < reduce_extent):
                 reduce_indices = index_deserialize(r, shape=reduce_shape)
                 input_indices = merge_indices(grid_indices, reduce_indices, reduce_dims=task.dims)
@@ -78,7 +78,7 @@ def cuda_schedule_reduce_by_warp_reduce(task: ReduceTask) -> IRModule:
         fb += AssignStmt(rv, ro.finalize(acc=rv, size=reduce_extent))
 
         # write back
-        for r, in block_layout.worker2task(thread_idx()):
+        for (r,) in block_layout.worker2task(thread_idx()):
             with fb.if_then(r < reduce_extent):
                 reduce_indices = index_deserialize(r, shape=reduce_shape)
                 with fb.if_then(And.join_list([reduce_index.equals(0) for reduce_index in reduce_indices])):
@@ -115,11 +115,7 @@ def cuda_schedule_reduce_by_default(task: ReduceTask) -> IRModule:
     accumulate_dtype = task.attributes['accumulate_dtype']
 
     with FunctionBuilder(
-            name=task.name + '_grid',
-            kind='cuda_kernel',
-            grid_dim=grid_size,
-            block_dim=block_size,
-            label='reduce schedule'
+        name=task.name + '_grid', kind='cuda_kernel', grid_dim=grid_size, block_dim=block_size, label='reduce schedule'
     ) as fb:
         # params
         params = params_from_task(task)
@@ -133,8 +129,9 @@ def cuda_schedule_reduce_by_default(task: ReduceTask) -> IRModule:
 
         # body
         remain_indices = remain_layout.worker2task(thread_idx() + block_idx() * block_size)[0]
-        with fb.if_then(And.join_list([remain_index < remain_shape[i]
-                                       for i, remain_index in enumerate(remain_indices)])):
+        with fb.if_then(
+            And.join_list([remain_index < remain_shape[i] for i, remain_index in enumerate(remain_indices)])
+        ):
             # get the reduced value along reduce dimensions
             for reduce_indices in reduce_layout.worker2task(0):
                 input_indices = merge_indices(remain_indices, reduce_indices, reduce_dims=task.dims)

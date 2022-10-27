@@ -26,6 +26,7 @@ def get_repo_sha(short=False):
         The commit sha hash.
     """
     import git
+
     repo = git.Repo(search_parent_directories=True)
     sha = repo.head.object.hexsha
     if short:
@@ -50,6 +51,7 @@ def get_repo_commit_date(strftime='%Y-%m-%d') -> str:
         The commit date time in given format.
     """
     import git
+
     repo = git.Repo(search_parent_directories=True)
     commit = repo.head
     committed_date = commit.commit.committed_date

@@ -443,6 +443,7 @@ disable=raw-checker-failed,
         unbalanced-tuple-unpacking,
         logging-format-interpolation,
         import-error,
+        bad-option-value,
         no-member,                          # too many false positives
         unnecessary-comprehension,          # sometimes, it is more readable to use a comprehension
         import-outside-toplevel,            # this is commonly used in this project, and it's not a problem

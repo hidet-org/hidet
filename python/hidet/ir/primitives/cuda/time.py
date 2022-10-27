@@ -18,9 +18,9 @@ def register_functions():
     #
     # assert isinstance(cuda_nano_sleep, Function)
     # register_primitive_function(cuda_nano_sleep.name, cuda_nano_sleep)
-    register_primitive_function(name='cuda_nano_sleep',
-                                func_or_type=FuncType([ScalarType('uint32')], VoidType()),
-                                codegen_name='__nanosleep')
+    register_primitive_function(
+        name='cuda_nano_sleep', func_or_type=FuncType([ScalarType('uint32')], VoidType()), codegen_name='__nanosleep'
+    )
 
 
 def nano_sleep(nano_seconds: Union[Expr, int]):

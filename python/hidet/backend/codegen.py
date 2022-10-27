@@ -295,6 +295,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             func = self.ir_module.lookup(func_name)
             func_name = Text(self.canonize_funcname(func_name))
             if func.kind == 'cuda_kernel':
+
                 def dim3_str(dims):
                     if isinstance(dims, (int, Expr)):
                         return self(dims)
@@ -305,7 +306,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
                     dim3_str(func.attrs['cuda_grid_dim']),  # grid dimension
                     dim3_str(func.attrs['cuda_block_dim']),  # block dimension
                     func.attrs.get('cuda_dynamic_smem_bytes', 0),  # dynamic shared memory size
-                    Text('get_cuda_stream()')  # cuda stream (get_cuda_stream() function is defined in hidet/runtime.h)
+                    Text('get_cuda_stream()'),  # cuda stream (get_cuda_stream() function is defined in hidet/runtime.h)
                 ]
                 launch_config = Text('<<<') + doc_join([self(v) for v in configs], sep=', ') + Text('>>>')
             else:
@@ -315,12 +316,16 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         elif is_primitive_function(func_name):
             entry = lookup_primitive_function(func_name)
             if entry.function is not None:
-                msg = (f"Please use import_primitive_functions pass to import primitive function first: {entry.name}, "
-                       f"functions in current module:\n{list(self.ir_module.functions.keys())}.")
+                msg = (
+                    f"Please use import_primitive_functions pass to import primitive function first: {entry.name}, "
+                    f"functions in current module:\n{list(self.ir_module.functions.keys())}."
+                )
                 raise ValueError(msg)
             if entry.generic:
-                msg = ("Please use resolve_generic_primitive_function pass to lower "
-                       "the generic primitive function {}.".format(entry.name))
+                msg = (
+                    "Please use resolve_generic_primitive_function pass to lower "
+                    "the generic primitive function {}.".format(entry.name)
+                )
                 raise ValueError(msg)
             # system-provided function, do not canonize the func name
             return entry.codegen_name + (Text('(') + doc_join([self(arg) for arg in e.args], Text(', ')) + ')')
@@ -332,10 +337,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         raise ValueError("please run 'expand_let_expr' pass before codegen")
 
     def visit_Var(self, e: Var):
-        cast2int = {
-            'threadIdx.x',
-            'blockIdx.x'
-        }
+        cast2int = {'threadIdx.x', 'blockIdx.x'}
         name = self.namer.get_name(e)
         if name in cast2int:
             return Text(f'(int){name}')
@@ -382,10 +384,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         if stmt.is_static:
             doc += 'static '
         if stmt.scope != Scope.Default:
-            scope2specifier = {
-                Scope.Shared: '__shared__',
-                Scope.Global: '__global__',
-            }
+            scope2specifier = {Scope.Shared: '__shared__', Scope.Global: '__global__'}
             doc += scope2specifier[stmt.scope] + ' '
         doc += self.local_var_declare(stmt.var)
         if stmt.init is not None:
@@ -485,8 +484,18 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         input_docs = []
         for label, expr in zip(stmt.input_labels, stmt.input_exprs):
             input_docs.append(Text(f'"{label}"') + '(' + self(expr) + ')')
-        return (NewLine() + 'asm ' + volatile_doc + '(' + template_doc + ' : ' + doc_join(output_docs, ', ')
-                + ' : ' + doc_join(input_docs, ', ') + ');')
+        return (
+            NewLine()
+            + 'asm '
+            + volatile_doc
+            + '('
+            + template_doc
+            + ' : '
+            + doc_join(output_docs, ', ')
+            + ' : '
+            + doc_join(input_docs, ', ')
+            + ');'
+        )
 
     def visit_BlackBoxStmt(self, stmt: BlackBoxStmt):
         expr_docs = [str(self(e)) for e in stmt.exprs]
@@ -510,7 +519,6 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             'uint32': 'uint32_t',
             'int32': 'int32_t',
             'int64': 'int64_t',
-
             'float16': 'half',
             'float32': 'float',
             'float64': 'double',

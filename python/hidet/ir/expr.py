@@ -1,4 +1,5 @@
 # pylint: disable=import-outside-toplevel, useless-parent-delegation, redefined-outer-name, redefined-builtin
+# pylint: disable=useless-super-delegation
 from typing import Optional, Union, Sequence, Tuple
 import string
 import numpy as np
@@ -126,6 +127,7 @@ class Expr(Node):
 
     def __str__(self):
         from hidet.ir.functors import astext
+
         return str(astext(self))
 
     def equals(self, other):
@@ -147,6 +149,7 @@ class Expr(Node):
 
     def write(self, items, value, protected=True):
         from hidet.ir.stmt import BufferStoreStmt
+
         te = self[items]
         if not isinstance(te, TensorElement):
             raise ValueError('expect element indexing, but got slicing.')
@@ -165,8 +168,7 @@ class UnaryOp(Expr):
 
 
 def convert(
-        obj: Optional[Union[Expr, PyScalar, tuple, Sequence]],
-        dtype: Optional[Union[str, ScalarType]] = None
+    obj: Optional[Union[Expr, PyScalar, tuple, Sequence]], dtype: Optional[Union[str, ScalarType]] = None
 ) -> Optional[Union[Expr, tuple]]:
     if isinstance(obj, Expr):
         return obj
@@ -495,9 +497,9 @@ def is_const_int(v: Expr) -> bool:
     return isinstance(v, Constant) and v.data_type.name == 'int32'
 
 
-def if_then_else(cond: Union[Expr, PyScalar],
-                 then_expr: Union[Expr, PyScalar],
-                 else_expr: Union[Expr, PyScalar]) -> IfThenElse:
+def if_then_else(
+    cond: Union[Expr, PyScalar], then_expr: Union[Expr, PyScalar], else_expr: Union[Expr, PyScalar]
+) -> IfThenElse:
     return IfThenElse(convert(cond), convert(then_expr), convert(else_expr))
 
 
@@ -514,6 +516,7 @@ def get_tensor_layout(v: Expr):
 
 def tensor_rank(v: Expr) -> int:
     from hidet.ir.compute import TensorNode
+
     if isinstance(v, Var):
         if isinstance(v.type, TensorType):
             return len(v.type.shape)
@@ -541,15 +544,13 @@ def cast(v: Expr, dtype):
 
 def const_tensor(value: np.ndarray, data_type=None) -> Constant:
     if data_type is None:
-        data_type = tensor_type(
-            dtype=ScalarType.from_numpy_dtype(value.dtype),
-            shape=list(value.shape)
-        )
+        data_type = tensor_type(dtype=ScalarType.from_numpy_dtype(value.dtype), shape=list(value.shape))
     return Constant(value=value, data_type=data_type)
 
 
 def const_like(value: Union[float, int], e: Expr) -> Constant:
     from hidet.ir.functors import infer_type
+
     dtype = infer_type(e)
     if isinstance(dtype, ScalarType):
         return Constant(value=value, data_type=dtype)

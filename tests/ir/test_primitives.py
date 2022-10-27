@@ -25,14 +25,15 @@ def test_lds128(capfd):
         for i in range(4):
             fb += BufferStoreStmt(smem_tensor, [i], i)
         fb += lds128(regs[0], regs[1], regs[2], regs[3], smem_tensor)
-        fb += BlackBoxStmt(r'printf("%.2f %.2f %.2f %.2f\n", {}, {}, {}, {});',
-                           regs[0], regs[1], regs[2], regs[3])
+        fb += BlackBoxStmt(r'printf("%.2f %.2f %.2f %.2f\n", {}, {}, {}, {});', regs[0], regs[1], regs[2], regs[3])
         fb.set_body(fb.finish())
 
     func = fb.get()
     ir_module = IRModule({func.name: func}, task=None)
     fuse_and_pack(ir_module, func, pack_func_name='test_lds128')
-    compiled_func = build_ir_module(ir_module, func_name='test_lds128', working_dir='./outs/', func_type=FuncType([], VoidType()))
+    compiled_func = build_ir_module(
+        ir_module, func_name='test_lds128', working_dir='./outs/', func_type=FuncType([], VoidType())
+    )
     compiled_func()
     cuda.device_synchronize()
     captured = capfd.readouterr()
@@ -52,13 +53,20 @@ def test_sts128(capfd):
         for i in range(4):
             fb += AssignStmt(regs[i], i)
         fb += sts128(regs[0], regs[1], regs[2], regs[3], smem_tensor)
-        fb += BlackBoxStmt(r'printf("%.2f %.2f %.2f %.2f\n", {}, {}, {}, {});',
-                           smem_tensor[0], smem_tensor[1], smem_tensor[2], smem_tensor[3])
+        fb += BlackBoxStmt(
+            r'printf("%.2f %.2f %.2f %.2f\n", {}, {}, {}, {});',
+            smem_tensor[0],
+            smem_tensor[1],
+            smem_tensor[2],
+            smem_tensor[3],
+        )
 
     func = fb.get()
     ir_module = IRModule({func.name: func}, task=None)
     fuse_and_pack(ir_module, func, pack_func_name='test_sts128')
-    compiled_func = build_ir_module(ir_module, func_name='test_sts128', working_dir='./outs/', func_type=FuncType([], VoidType()))
+    compiled_func = build_ir_module(
+        ir_module, func_name='test_sts128', working_dir='./outs/', func_type=FuncType([], VoidType())
+    )
     compiled_func()
     cuda.device_synchronize()
     captured = capfd.readouterr()
@@ -67,6 +75,3 @@ def test_sts128(capfd):
 
 if __name__ == '__main__':
     pytest.main(__file__)
-
-
-

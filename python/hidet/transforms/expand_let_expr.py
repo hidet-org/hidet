@@ -25,7 +25,6 @@ def wrapper(stmt_visitor):
 
 
 class LetExprExpander(StmtExprRewriter):
-
     def __init__(self):
         super().__init__()
         self.stmt_stack = []

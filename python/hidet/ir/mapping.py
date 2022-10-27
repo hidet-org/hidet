@@ -10,11 +10,13 @@ Int = Union['Expr', int]
 
 def is_atom(expr):
     from hidet.ir import Constant, Var
+
     return isinstance(expr, (Constant, Var))
 
 
 def var(hint):
     from hidet import ir
+
     return ir.var(hint)
 
 
@@ -39,12 +41,15 @@ def strides_from_ranks(shape: Sequence[int], ranks: Sequence[int]) -> List[int]:
 class TaskMapping:
     registered = []
 
-    def __init__(self,
-                 num_workers: int = None,
-                 task_shape: Tuple[int, ...] = None,
-                 worker2task: Optional[Callable[[Int], List[Tuple[Int, ...]]]] = None):
+    def __init__(
+        self,
+        num_workers: int = None,
+        task_shape: Tuple[int, ...] = None,
+        worker2task: Optional[Callable[[Int], List[Tuple[Int, ...]]]] = None,
+    ):
         from hidet.ir import Expr
         from hidet.ir.functors import simplify_to_int
+
         if isinstance(num_workers, Expr):
             num_workers = simplify_to_int(num_workers)
         task_shape = tuple(simplify_to_int(v) for v in task_shape)
@@ -120,6 +125,7 @@ class RepeatTaskMapping(TaskMapping):
         def key_func(task: Tuple[int]) -> int:
             global_index = sum(a * b for a, b in zip(task, self.strides))
             return global_index
+
         ranges = [range(s) for s in self.task_shape]
         tasks = list(tuple(task) for task in itertools.product(*ranges))
         return list(sorted(tasks, key=key_func))
@@ -161,7 +167,7 @@ class ComposedTaskMapping(TaskMapping):
         super().__init__(
             num_workers=outer.num_workers * inner.num_workers,
             task_shape=tuple(a * b for a, b in zip(outer.task_shape, inner.task_shape)),
-            worker2task=self._worker2task
+            worker2task=self._worker2task,
         )
         self.outer = outer
         self.inner = inner
@@ -182,10 +188,12 @@ class ComposedTaskMapping(TaskMapping):
 class TaskMappingExpander:
     def __init__(self):
         from hidet.ir.stmt import ForStmt, LetStmt
+
         self.stmts: List[Union[LetStmt, ForStmt]] = []
 
     def variablize(self, e):
         from hidet.ir import LetStmt
+
         if is_atom(e):
             return e
         else:
@@ -222,8 +230,9 @@ class TaskMappingExpander:
         base_fields = self.expand(w, layout.base)
         projected_fields = []
         for field in base_fields:
-            projected_fields.append(tuple(layout.dim2value[i] if i in layout.dim2value else field[i]
-                                          for i in range(rank)))
+            projected_fields.append(
+                tuple(layout.dim2value[i] if i in layout.dim2value else field[i] for i in range(rank))
+            )
         return projected_fields
 
     def expand_grid(self, w: Int, layout: SpatialTaskMapping):
@@ -237,6 +246,7 @@ class TaskMappingExpander:
         else:
             # do not expand, use for loop
             from hidet.ir import ForStmt
+
             shape = layout.task_shape
             axes = []
             for i, s in enumerate(shape):
@@ -252,6 +262,7 @@ class TaskMappingExpander:
 
 def spatial_map(task_shape: Sequence[int], ranks: Optional[Sequence[int]] = None):
     from hidet.ir.functors import simplify_to_int
+
     task_shape = [simplify_to_int(v) for v in task_shape]
     if ranks is None:
         ranks = list(range(len(task_shape)))
@@ -268,6 +279,7 @@ def col_spatial(*task_shape: int):
 
 def repeat_map(task_shape: Sequence[int], ranks: Optional[Sequence[int]] = None):
     from hidet.ir.functors import simplify_to_int
+
     task_shape = [simplify_to_int(v) for v in task_shape]
     if ranks is None:
         ranks = list(range(len(task_shape)))
@@ -286,9 +298,11 @@ def auto_map(*task_shape: int, workers: int, ranks: Optional[Sequence[int]] = No
     task_shape: List[int] = list(task_shape)
     num_tasks = prod(task_shape)
     if num_tasks % workers != 0:
-        raise ValueError('Expect the number of tasks {} in task shape {} be a multiple of number of workers {}.'.format(
-            num_tasks, task_shape, workers
-        ))
+        raise ValueError(
+            'Expect the number of tasks {} in task shape {} be a multiple of number of workers {}.'.format(
+                num_tasks, task_shape, workers
+            )
+        )
     num_dims = len(task_shape)
     if ranks is None:
         ranks = list(range(num_dims))

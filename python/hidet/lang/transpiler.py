@@ -39,9 +39,12 @@ from hidet.lang.type_utils import TypeDecorator
 
 
 class HidetProgramError(Exception):
-    def __init__(self, translator: PythonAstFunctor,
-                 obj: Union[ast.AST, ast.expr, ast.arg, ast.stmt, ast.Attribute, ast.Name],
-                 msg: str):
+    def __init__(
+        self,
+        translator: PythonAstFunctor,
+        obj: Union[ast.AST, ast.expr, ast.arg, ast.stmt, ast.Attribute, ast.Name],
+        msg: str,
+    ):
         super().__init__()
         self.file = translator.file
         self.lineno = translator.start_lineno + obj.lineno
@@ -60,10 +63,10 @@ class HidetProgramError(Exception):
                 else:
                     source_line = ''
         lines.append('')
-        lines.append('  File {file}:{line}:{column}:'.format(
-            file=os.path.abspath(self.file),
-            line=self.lineno - 1,
-            column=self.column)
+        lines.append(
+            '  File {file}:{line}:{column}:'.format(
+                file=os.path.abspath(self.file), line=self.lineno - 1, column=self.column
+            )
         )
         if source_line:
             lines.append(source_line)
@@ -207,13 +210,7 @@ class PythonAstFunctor:
         raise NotImplementedError()
 
 
-HostTypes = (
-    ir.TaskMapping,
-    ir.DataLayout,
-    float,
-    int,
-    type(None)
-)
+HostTypes = (ir.TaskMapping, ir.DataLayout, float, int, type(None))
 
 
 class Scope:
@@ -291,26 +288,11 @@ class PythonToHidetTranslator(PythonAstFunctor):
     def process_assign(self, lhs: Union[Attribute, Subscript, Name], rhs, type_annotation: Optional[ast.expr] = None):
         # pylint: disable=too-many-locals, too-many-branches, too-many-statements
         # check the rhs value, must be an instance of allowed_types or a list of these kinds of elements.
-        host_var_types = (
-            ir.TaskMapping,
-            ir.DataLayout,
-            ir.TensorSlice,
-            ir.Function,
-            str,
-        )
-        allowed_types = (
-            ir.Expr,
-            ir.TypeNode,
-            TypeDecorator,
-            float,
-            int,
-            str,
-            type(None)
-        )
+        host_var_types = (ir.TaskMapping, ir.DataLayout, ir.TensorSlice, ir.Function, str)
+        allowed_types = (ir.Expr, ir.TypeNode, TypeDecorator, float, int, str, type(None))
         allowed_types += host_var_types
-        assert (
-            isinstance(rhs, allowed_types) or
-            (isinstance(rhs, list) and all(isinstance(v, allowed_types) for v in rhs))
+        assert isinstance(rhs, allowed_types) or (
+            isinstance(rhs, list) and all(isinstance(v, allowed_types) for v in rhs)
         ), 'unexpected value "{}" with type {}'.format(rhs, type(rhs))
 
         # three cases of assignment:
@@ -390,6 +372,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
     def visit_FunctionDef(self, func_def: FunctionDef):
         # pylint: disable=too-many-locals, too-many-branches, too-many-statements, import-outside-toplevel
         from hidet.ir.primitives.cuda.vars import thread_idx, block_idx
+
         func_params = []
         with self.scope() as env_scope:
             for name, value in self.env.items():
@@ -400,8 +383,9 @@ class PythonToHidetTranslator(PythonAstFunctor):
                 if args.vararg is not None:
                     raise HidetProgramError(self, args.vararg, 'Hidet program does not support "*args" arguments.')
                 if len(args.kwonlyargs) != 0:
-                    raise HidetProgramError(self, args.kwonlyargs[0],
-                                            'Hidet program does not support "*kwargs" arguments.')
+                    raise HidetProgramError(
+                        self, args.kwonlyargs[0], 'Hidet program does not support "*kwargs" arguments.'
+                    )
                 if args.kwarg is not None:
                     raise HidetProgramError(self, args.kwarg, 'Hidet program does not support keyword arguments.')
                 if len(args.kw_defaults) > 0:
@@ -416,21 +400,23 @@ class PythonToHidetTranslator(PythonAstFunctor):
                     if isinstance(arg_type, ir.TypeNode):
                         if isinstance(arg_type, ir.TensorType):
                             # we automatically change the tensor type of argument to a tensor pointer type.
-                            arg_type = ir.TensorPointerType(dtype=arg_type.scalar_type, shape=arg_type.shape,
-                                                            layout=arg_type.layout)
+                            arg_type = ir.TensorPointerType(
+                                dtype=arg_type.scalar_type, shape=arg_type.shape, layout=arg_type.layout
+                            )
                     elif arg_type in [int, float]:
-                        type_dict = {
-                            int: ir.scalar_type('int32'),
-                            float: ir.scalar_type('float32')
-                        }
+                        type_dict = {int: ir.scalar_type('int32'), float: ir.scalar_type('float32')}
                         arg_type = type_dict[arg_type]
                     elif isinstance(arg_type, str):
-                        raise HidetProgramError(self, arg, (
-                            'A python string as parameter type annotation detected. \n'
-                            'This is usually because "from __future__ import annotations" has been used.\n'
-                            'Currently, hidet script is not compatible with this feature. \n'
-                            'Please considering not using it in module that defines hidet script.'
-                        ))
+                        raise HidetProgramError(
+                            self,
+                            arg,
+                            (
+                                'A python string as parameter type annotation detected. \n'
+                                'This is usually because "from __future__ import annotations" has been used.\n'
+                                'Currently, hidet script is not compatible with this feature. \n'
+                                'Please considering not using it in module that defines hidet script.'
+                            ),
+                        )
                     else:
                         raise HidetProgramError(self, arg, 'Hidet expect a type annotation for this parameter.')
 
@@ -458,8 +444,8 @@ class PythonToHidetTranslator(PythonAstFunctor):
             elif 'cuda_grid_dim' in func_attrs or 'cuda_block_dim' in func_attrs:
                 if not all(name in func_attrs for name in ['cuda_grid_dim', 'cuda_block_dim']):
                     raise HidetProgramError(
-                        self, func_def,
-                        'CUDA kernel expects to have both attrs.cuda_grid_dim and attrs.cuda_block_dim.')
+                        self, func_def, 'CUDA kernel expects to have both attrs.cuda_grid_dim and attrs.cuda_block_dim.'
+                    )
                 func_kind = 'cuda_kernel'
             else:
                 func_kind = 'cuda_device'
@@ -471,9 +457,15 @@ class PythonToHidetTranslator(PythonAstFunctor):
             body=scope.flush_stmts(),
             ret_type=ret_type,
             kind=func_kind,
-            extern_vars=[thread_idx('x'), thread_idx('y'), thread_idx('z'), block_idx('x'), block_idx('y'),
-                         block_idx('z')],
-            attrs=func_attrs
+            extern_vars=[
+                thread_idx('x'),
+                thread_idx('y'),
+                thread_idx('z'),
+                block_idx('x'),
+                block_idx('y'),
+                block_idx('z'),
+            ],
+            attrs=func_attrs,
         )
 
     def visit_Assign(self, stmt: Assign):
@@ -504,13 +496,15 @@ class PythonToHidetTranslator(PythonAstFunctor):
                 raise HidetProgramError(self, stmt, 'Hidet does not support unpacking.')
             rhs_list = list(rhs_list[0])
             if len(lhs_list) != len(rhs_list):
-                raise HidetProgramError(self, stmt, 'Trying to assign {} values to {} objects'.format(
-                    len(rhs_list), len(lhs_list)))
+                raise HidetProgramError(
+                    self, stmt, 'Trying to assign {} values to {} objects'.format(len(rhs_list), len(lhs_list))
+                )
             for lhs, rhs in zip(lhs_list, rhs_list):
                 self.process_assign(lhs, rhs)
         else:
-            raise HidetProgramError(self, stmt, 'Can not assign {} elements to {} elements.'.format(
-                len(rhs_list), len(lhs_list)))
+            raise HidetProgramError(
+                self, stmt, 'Can not assign {} elements to {} elements.'.format(len(rhs_list), len(lhs_list))
+            )
 
     def visit_Name(self, expr: Name):
         if isinstance(expr.ctx, Store):
@@ -556,14 +550,15 @@ class PythonToHidetTranslator(PythonAstFunctor):
                 Sub: ir.Sub,
                 Mult: ir.Multiply,
                 Div: ir.Div,
-                FloorDiv: ir.Div,   # we treat Div and FloorDiv equivalently with the same semantics as in C/C++
+                FloorDiv: ir.Div,  # we treat Div and FloorDiv equivalently with the same semantics as in C/C++
                 Mod: ir.Mod,
                 BitXor: ir.BitwiseXor,
                 BitOr: ir.BitwiseOr,
-                BitAnd: ir.BitwiseAnd
+                BitAnd: ir.BitwiseAnd,
             }
             # pylint: disable=import-outside-toplevel
             from hidet.ir import primitives
+
             if isinstance(expr.op, Pow):
                 return primitives.pow(lhs, rhs)
             elif type(expr.op) in op_dict:
@@ -586,11 +581,11 @@ class PythonToHidetTranslator(PythonAstFunctor):
             And: ir.And,
             Or: ir.Or,
             Eq: ir.Equal,
-            Gt: lambda a, b: ir.LessThan(b, a),     # pylint: disable=arguments-out-of-order
+            Gt: lambda a, b: ir.LessThan(b, a),  # pylint: disable=arguments-out-of-order
             Lt: ir.LessThan,
-            GtE: lambda a, b: ir.LessEqual(b, a),   # pylint: disable=arguments-out-of-order
+            GtE: lambda a, b: ir.LessEqual(b, a),  # pylint: disable=arguments-out-of-order
             LtE: ir.LessEqual,
-            NotEq: ir.NotEqual
+            NotEq: ir.NotEqual,
         }
         cond = None
         comparators = [self.visit(v) for v in expr.comparators]
@@ -611,6 +606,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
             # case 2: get the pointer type that points to the given type
             from hidet.ir.expr import Address
             from hidet.ir.type import TypeNode
+
             if isinstance(value, TypeNode):
                 return ~value
             else:
@@ -668,8 +664,11 @@ class PythonToHidetTranslator(PythonAstFunctor):
             return for_scope.flush_stmts()
 
         # construct for body
-        if (isinstance(stmt.iter, Call) and isinstance(stmt.iter.func, Name)
-                and self.visit(stmt.iter.func) is builtins.range):   # and stmt.iter.func.id == 'range':
+        if (
+            isinstance(stmt.iter, Call)
+            and isinstance(stmt.iter.func, Name)
+            and self.visit(stmt.iter.func) is builtins.range
+        ):  # and stmt.iter.func.id == 'range':
             # case 1:
             #   for i in range(...):
             #     ...
@@ -681,13 +680,12 @@ class PythonToHidetTranslator(PythonAstFunctor):
                 msg = 'Current we only support range(extent), will add range(start, stop, step) later.'
                 raise NotImplementedError(msg)
             extent = self.visit(call.args[0])
-            self.current_scope.append(ir.ForStmt(
-                loop_var=loop_vars[0],
-                extent=extent,
-                body=visit_body()
-            ))
-        elif (isinstance(stmt.iter, Call) and isinstance(stmt.iter.func, Name)
-              and self.visit(stmt.iter.func) is hidet.lang.grid):
+            self.current_scope.append(ir.ForStmt(loop_var=loop_vars[0], extent=extent, body=visit_body()))
+        elif (
+            isinstance(stmt.iter, Call)
+            and isinstance(stmt.iter.func, Name)
+            and self.visit(stmt.iter.func) is hidet.lang.grid
+        ):
             # case 2:
             #  for i, j in grid(3, 4):
             #    ...
@@ -699,11 +697,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
                 raise HidetProgramError(self, stmt.iter, msg)
             body = visit_body()
             for loop_var, extent in zip(reversed(loop_vars), reversed(extents)):
-                body = ir.ForStmt(
-                    loop_var=loop_var,
-                    extent=extent,
-                    body=body
-                )
+                body = ir.ForStmt(loop_var=loop_var, extent=extent, body=body)
             self.current_scope.append(body)
         elif isinstance(stmt.iter, Call) and isinstance(stmt.iter.func, Attribute) and stmt.iter.func.attr == 'on':
             # case 3:
@@ -719,12 +713,9 @@ class PythonToHidetTranslator(PythonAstFunctor):
             if len(mapping.task_shape) != len(loop_vars):
                 msg = 'Can not unpack {} to {} indices.'.format(len(mapping.task_shape), len(loop_vars))
                 raise HidetProgramError(self, stmt, msg)
-            self.current_scope.append(ir.ForTaskStmt(
-                loop_vars=loop_vars,
-                mapping=mapping,
-                worker=worker,
-                body=visit_body()
-            ))
+            self.current_scope.append(
+                ir.ForTaskStmt(loop_vars=loop_vars, mapping=mapping, worker=worker, body=visit_body())
+            )
         else:
             msg = (
                 'Cannot recognize the for loop statement. Currently, we support two types of for loop statements:\n'
@@ -753,8 +744,8 @@ class PythonToHidetTranslator(PythonAstFunctor):
             Sub: ir.Sub,
             Mult: ir.Multiply,
             Div: ir.Div,
-            FloorDiv: ir.Div,   # we treat Div and FloorDiv equivalently with the same semantics as in C/C++
-            Mod: ir.Mod
+            FloorDiv: ir.Div,  # we treat Div and FloorDiv equivalently with the same semantics as in C/C++
+            Mod: ir.Mod,
         }
         result_value = op_dict[type(stmt.op)](var_value, value)
         assert isinstance(stmt.target, (Name, Subscript))
@@ -802,6 +793,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
             return func(*args, **kwargs)
         elif isinstance(func, ir.Expr):
             from hidet.ir.functors import infer_type
+
             # call hidet function
             if len(kwargs) > 0:
                 raise HidetProgramError(self, expr, 'Hidet do not support call with keyword.')
@@ -817,6 +809,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
             # def f():
             #     ....
             from hidet.lang.script import ScriptModuleContext
+
             ctx = ScriptModuleContext.current_context()
             func_var = ctx.lookup(func.name)
             if func_var is None:
@@ -827,6 +820,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
         elif isinstance(func, (types.BuiltinMethodType, types.BuiltinFunctionType)):
             # call python builtin method, such "a string".format(...) or max, min
             from hidet.ir import primitives
+
             if all(not isinstance(arg, ir.Node) for arg in args):
                 # pure python function call
                 return func(*args, **kwargs)
@@ -857,7 +851,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
         return slice(
             self.visit(expr.lower) if expr.lower is not None else None,
             self.visit(expr.upper) if expr.upper is not None else None,
-            self.visit(expr.step) if expr.step is not None else None
+            self.visit(expr.step) if expr.step is not None else None,
         )
 
     def visit_Assert(self, stmt: Assert):

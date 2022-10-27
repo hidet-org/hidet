@@ -1,5 +1,4 @@
 from typing import List, Tuple
-import hidet
 from hidet.utils import hidet_cache_file
 from .utils import export_torch_to_onnx
 
@@ -49,32 +48,33 @@ def get_onnx_operator(name: str, batch_size=1, precision='float32') -> Tuple[str
     if name.startswith('op_sum_'):
         _, _, c = name.split('_')  # op_sum_0
         op_idx = int(c)
-        idx_2_configs = {
-            0: [[batch_size, 8, 128, 768], [1], False],
-            1: [[batch_size, 8, 128, 768], [3], False],
-        }
+        idx_2_configs = {0: [[batch_size, 8, 128, 768], [1], False], 1: [[batch_size, 8, 128, 768], [3], False]}
         shape, dims, keepdim = idx_2_configs[op_idx]
         return export_torch_to_onnx(
             onnx_path=onnx_path,
             model=ReduceSum(dims=dims, keepdim=keepdim),
             input_names=['x'],
             inputs=[torch.randn(shape)],
-            precision=precision
+            precision=precision,
         )
     elif name.startswith('op_resnet50_conv'):
         _, _, _, d = name.split('_')
         op_idx = int(d)
-        idx_2_configs = {
-            2: [[batch_size, 256, 28, 28], 256, 3, 1, 2],
-        }
+        idx_2_configs = {2: [[batch_size, 256, 28, 28], 256, 3, 1, 2]}
         x_shape, out_channels, kernel, padding, strides = idx_2_configs[op_idx]
         return export_torch_to_onnx(
             onnx_path=onnx_path,
-            model=nn.Conv2d(in_channels=x_shape[1], out_channels=out_channels, kernel_size=kernel, stride=strides,
-                            padding=padding, bias=False),
+            model=nn.Conv2d(
+                in_channels=x_shape[1],
+                out_channels=out_channels,
+                kernel_size=kernel,
+                stride=strides,
+                padding=padding,
+                bias=False,
+            ),
             input_names=['x'],
             inputs=[torch.randn(x_shape)],
-            precision=precision
+            precision=precision,
         )
     elif name.startswith('op_matmul_'):  # like 'op_matmul_nn_0'
         _, _, layout, idx = name.split('_')
@@ -101,11 +101,7 @@ def get_onnx_operator(name: str, batch_size=1, precision='float32') -> Tuple[str
         if layout[1] == 'T':
             y = torch.transpose(y, -1, -2)
         return export_torch_to_onnx(
-            onnx_path=onnx_path,
-            model=Matmul(layout),
-            input_names=['x', 'y'],
-            inputs=[x, y],
-            precision=precision
+            onnx_path=onnx_path, model=Matmul(layout), input_names=['x', 'y'], inputs=[x, y], precision=precision
         )
     elif name.startswith('op_setgan_conv_'):  # like 'op_setgan_conv_3'
         _, _, _, idx = name.split('_')
@@ -131,11 +127,17 @@ def get_onnx_operator(name: str, batch_size=1, precision='float32') -> Tuple[str
         bs, in_channels, height, width, out_channels, kx, ky, sx, sy, px, py = workload[int(idx)]
         return export_torch_to_onnx(
             onnx_path=onnx_path,
-            model=nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=(kx, ky), stride=(sx, sy),
-                            padding=(px, py), bias=True),
+            model=nn.Conv2d(
+                in_channels=in_channels,
+                out_channels=out_channels,
+                kernel_size=(kx, ky),
+                stride=(sx, sy),
+                padding=(px, py),
+                bias=True,
+            ),
             input_names=['x'],
             inputs=[torch.randn(bs, in_channels, height, width)],
-            precision=precision
+            precision=precision,
         )
     elif name.startswith('op_gemm_'):  # like 'op_gemm_m_n_k'
         _, _, m, n, k = name.split('_')
@@ -145,7 +147,7 @@ def get_onnx_operator(name: str, batch_size=1, precision='float32') -> Tuple[str
             model=Matmul(layout='NN'),
             input_names=['x', 'y'],
             inputs=[torch.randn(batch_size, m, k), torch.randn(batch_size, k, n)],
-            precision=precision
+            precision=precision,
         )
     elif name.startswith('op_dwc_'):  # like 'op_dwc_n_c_h_w_s_k'
         _, _, n, c, h, w, s, k = name.split('_')
@@ -154,9 +156,8 @@ def get_onnx_operator(name: str, batch_size=1, precision='float32') -> Tuple[str
             onnx_path=onnx_path,
             model=DepthwiseConv2d(c, s),
             input_names=['x', 'w'],
-            inputs=[torch.randn(n, c, (h - 1) * s + k, (w - 1) * s + k),
-                    torch.randn(c, 1, k, k)],
-            precision=precision
+            inputs=[torch.randn(n, c, (h - 1) * s + k, (w - 1) * s + k), torch.randn(c, 1, k, k)],
+            precision=precision,
         )
     else:
         raise ValueError('')

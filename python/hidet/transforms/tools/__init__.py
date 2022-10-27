@@ -5,8 +5,9 @@ from .apply_prologue_epilogue import apply_prologue_epilogue
 from .generate_packed_func import generate_packed_func
 
 
-def fuse_and_pack(ir_module: IRModule, kernel_func, task: Optional[Task] = None,
-                  pack_func_name: Optional[str] = None) -> IRModule:
+def fuse_and_pack(
+    ir_module: IRModule, kernel_func, task: Optional[Task] = None, pack_func_name: Optional[str] = None
+) -> IRModule:
     assert isinstance(kernel_func, Function)
     if task:
         fused_func = apply_prologue_epilogue(ir_module, kernel_func, task)

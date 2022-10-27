@@ -36,7 +36,6 @@ def lower(ir_module: IRModule) -> IRModule:
         propagate_launch_bound_pass(),
         add_explicit_cast_pass(),
         declare_to_let_pass(),
-
         # simplification
         expand_let_expr_pass(),
         inline_let_stmt_pass(inline_all=False),

@@ -66,7 +66,7 @@ class Simplifier(StmtExprRewriter):
                 Mod: operator.mod,
                 FloorDiv: operator.floordiv,
                 LessThan: operator.lt,
-                Equal: operator.eq
+                Equal: operator.eq,
             }
             if e.__class__ in op_dict:
                 if a.data_type.name == 'int32' and b.data_type.name == 'int32' and isinstance(e, Div):

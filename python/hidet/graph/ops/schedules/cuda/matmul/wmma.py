@@ -25,12 +25,7 @@ def shape_prod(a_shape: List[int], b_shape: List[int]) -> List[int]:
     return [a * b for a, b in zip(a_shape, b_shape)]
 
 
-short_dtype_bytes = {
-    'f16': 2,
-    'bf16': 2,
-    'tf32': 4,
-    'f32': 4
-}
+short_dtype_bytes = {'f16': 2, 'bf16': 2, 'tf32': 4, 'f32': 4}
 
 
 def find_compatible_wmma_config(config: WmmaConfig):
@@ -46,12 +41,7 @@ def find_compatible_wmma_config(config: WmmaConfig):
 
 
 class MatmulSchedule(Schedule):
-    def __init__(
-            self,
-            wmma_config: WmmaConfig,
-            block_multiple=(4, 2),
-            warp_multiple=(2, 2, 1),
-    ):
+    def __init__(self, wmma_config: WmmaConfig, block_multiple=(4, 2), warp_multiple=(2, 2, 1)):
         self.block_multiple = block_multiple
         self.warp_multiple = warp_multiple
         self.wmma_config = wmma_config
@@ -77,14 +67,16 @@ class MatmulSchedule(Schedule):
         self.c_init_map = self.warp_map
 
         self.check(wmma_config.a_layout == 'row')
-        self.a_g2s_map, self.regs_a_ldg_layout = get_transfer_task_map(task_shape=[block_shape[0], warp_k],
-                                                                       num_workers=threads, ranks=[0, 1])
+        self.a_g2s_map, self.regs_a_ldg_layout = get_transfer_task_map(
+            task_shape=[block_shape[0], warp_k], num_workers=threads, ranks=[0, 1]
+        )
         self.smem_a_layout = data_layout([2, block_shape[0], warp_k], ranks=[0, 1, 2])
         self.load_a_stride = warp_k
 
         self.check(wmma_config.b_layout == 'row')
-        self.b_g2s_map, self.regs_b_ldg_layout = get_transfer_task_map(task_shape=[warp_k, block_shape[1]],
-                                                                       num_workers=threads, ranks=[0, 1])
+        self.b_g2s_map, self.regs_b_ldg_layout = get_transfer_task_map(
+            task_shape=[warp_k, block_shape[1]], num_workers=threads, ranks=[0, 1]
+        )
         self.smem_b_layout = data_layout([2, warp_k, block_shape[1]], ranks=[0, 1, 2])
         self.load_b_stride = block_shape[1]
 
@@ -103,22 +95,32 @@ class MatmulSchedule(Schedule):
 
         # analyze regs & smem usage
         reserved_regs = 48  # number of reserved registers for intermediate results
-        self.used_num_regs_per_thread = (self.regs_a_layout.size + self.regs_b_layout.size + self.regs_c_layout.size +
-                                         self.regs_a_ldg_layout.size + self.regs_b_ldg_layout.size + reserved_regs)
+        self.used_num_regs_per_thread = (
+            self.regs_a_layout.size
+            + self.regs_b_layout.size
+            + self.regs_c_layout.size
+            + self.regs_a_ldg_layout.size
+            + self.regs_b_ldg_layout.size
+            + reserved_regs
+        )
         self.used_num_regs_per_thread = (self.used_num_regs_per_thread + 7) // 8 * 8
-        self.used_smem_bytes_per_block = max((self.smem_a_layout.size + self.smem_b_layout.size)
-                                             * short_dtype_bytes[wmma_config.a_dtype],
-                                             self.smem_c_layout.size * short_dtype_bytes[wmma_config.c_dtype])
+        self.used_smem_bytes_per_block = max(
+            (self.smem_a_layout.size + self.smem_b_layout.size) * short_dtype_bytes[wmma_config.a_dtype],
+            self.smem_c_layout.size * short_dtype_bytes[wmma_config.c_dtype],
+        )
         self.used_smem_bytes_per_block = (self.used_smem_bytes_per_block + 127) // 128 * 128
 
         self.check(self.used_num_regs_per_thread <= cuda.max_num_regs_per_thread(), 'registers per thread exceeded')
-        self.check(self.used_num_regs_per_thread * threads <= cuda.max_num_regs_per_block(),
-                   'registers in block exceeded')
+        self.check(
+            self.used_num_regs_per_thread * threads <= cuda.max_num_regs_per_block(), 'registers in block exceeded'
+        )
         self.check(self.used_smem_bytes_per_block <= cuda.max_smem_bytes_per_block(), 'shared memory exceeded')
 
-        self.use_dynamic_smem = (self.used_smem_bytes_per_block > 48 * 1024)
-        resident_blocks = min(cuda.max_num_regs_per_sm() // (self.used_num_regs_per_thread * threads),
-                              cuda.max_smem_bytes_per_sm() // self.used_smem_bytes_per_block)
+        self.use_dynamic_smem = self.used_smem_bytes_per_block > 48 * 1024
+        resident_blocks = min(
+            cuda.max_num_regs_per_sm() // (self.used_num_regs_per_thread * threads),
+            cuda.max_smem_bytes_per_sm() // self.used_smem_bytes_per_block,
+        )
         self.min_thread_blocks = resident_blocks
         self.resident_blocks = resident_blocks
 
@@ -136,7 +138,7 @@ class MatmulSchedule(Schedule):
             ('threads', self.threads),
             ('regs', self.used_num_regs_per_thread),
             ('smem', self.used_smem_bytes_per_block),
-            ('resident_blocks', self.resident_blocks)
+            ('resident_blocks', self.resident_blocks),
         ]
 
     def check(self, cond, msg: str = ""):
@@ -149,12 +151,7 @@ class MatmulSchedule(Schedule):
 
         # choose a specific wmma type when needed
         if wmma_type == 'wmma':
-            dtype_rank = {
-                'float16': 0,
-                'bfloat16': 1,
-                'tfloat32': 2,
-                'float32': 4
-            }
+            dtype_rank = {'float16': 0, 'bfloat16': 1, 'tfloat32': 2, 'float32': 4}
             a_dtype = task.inputs[0].data_type.scalar_type.name
             b_dtype = task.inputs[1].data_type.scalar_type.name
             c_dtype = task.outputs[0].data_type.scalar_type.name
@@ -175,15 +172,25 @@ class MatmulSchedule(Schedule):
                 'wmma_f16_f16': (16, 16, 16),
                 'wmma_f16_f32': (16, 16, 16),
                 'wmma_bf16_f32': (16, 16, 16),
-                'wmma_tf32_f32': (16, 16, 8)
+                'wmma_tf32_f32': (16, 16, 8),
             }
             a_layout = 'row'
             b_layout = 'row'
             _, ab_dtype, c_dtype = wmma_type.split('_')
-            wmma_config = find_compatible_wmma_config(WmmaConfig(
-                shape=default_shape[wmma_type], a_dtype=ab_dtype, b_dtype=ab_dtype, c_dtype=c_dtype,
-                a_layout=a_layout, b_layout=b_layout, c_layout='row', a_regs=None, b_regs=None, c_regs=None
-            ))
+            wmma_config = find_compatible_wmma_config(
+                WmmaConfig(
+                    shape=default_shape[wmma_type],
+                    a_dtype=ab_dtype,
+                    b_dtype=ab_dtype,
+                    c_dtype=c_dtype,
+                    a_layout=a_layout,
+                    b_layout=b_layout,
+                    c_layout='row',
+                    a_regs=None,
+                    b_regs=None,
+                    c_regs=None,
+                )
+            )
             return [MatmulSchedule(wmma_config, block_multiple=(2, 2), warp_multiple=(2, 2, 1))]
         elif space_level == 2:
             ret = []
@@ -212,8 +219,11 @@ class MatmulSchedule(Schedule):
 def batched_matmul_cuda_schedule_wmma(task: BatchMatmulTask) -> IRModule:
     ctx = TaskContext.current()
     all_schedules = MatmulSchedule.schedules(task, space_level=ctx.space_level)
-    default_resolve_out_dir = os.path.join('./outs/resolve', task.name, 'batched_matmul_wmma_{}x{}x{}x{}'.format(
-        task.batch_size, task.m_size, task.k_size, task.n_size))
+    default_resolve_out_dir = os.path.join(
+        './outs/resolve',
+        task.name,
+        'batched_matmul_wmma_{}x{}x{}x{}'.format(task.batch_size, task.m_size, task.k_size, task.n_size),
+    )
     resolve_out_dir = ctx.resolve_out_dir if ctx.resolve_out_dir else default_resolve_out_dir
     ir_modules = []
     for schedule in all_schedules:
@@ -224,7 +234,7 @@ def batched_matmul_cuda_schedule_wmma(task: BatchMatmulTask) -> IRModule:
         target_device='cuda',
         output_dir=resolve_out_dir,
         parallel=True,
-        verbose=True
+        verbose=True,
     )
 
 
@@ -232,12 +242,7 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, schedule: Mat
     ir_module = IRModule(task=task)
     sch = schedule
 
-    dtype_short2long = {
-        'f16': 'float16',
-        'bf16': 'bfloat16',
-        'tf32': 'tfloat32',
-        'f32': 'float32'
-    }
+    dtype_short2long = {'f16': 'float16', 'bf16': 'bfloat16', 'tf32': 'tfloat32', 'f32': 'float32'}
 
     a_dtype = ScalarType(dtype_short2long[sch.wmma_config.a_dtype])
     b_dtype = ScalarType(dtype_short2long[sch.wmma_config.b_dtype])
@@ -254,13 +259,14 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, schedule: Mat
 
     # define function
     with FunctionBuilder(
-            name=task.name + '_grid',
-            kind='cuda_kernel',
-            grid_dim=(grid_blocks_layout.num_workers, batch_size),
-            block_dim=sch.threads,
-            dynamic_smem_bytes=sch.used_smem_bytes_per_block if sch.use_dynamic_smem else 0,
-            min_blocks=sch.min_thread_blocks,
-            label=str(sch)) as fb:
+        name=task.name + '_grid',
+        kind='cuda_kernel',
+        grid_dim=(grid_blocks_layout.num_workers, batch_size),
+        block_dim=sch.threads,
+        dynamic_smem_bytes=sch.used_smem_bytes_per_block if sch.use_dynamic_smem else 0,
+        min_blocks=sch.min_thread_blocks,
+        label=str(sch),
+    ) as fb:
         # declare params
         params = params_from_task(task)
         gmem_a, gmem_b, gmem_c = params
@@ -272,8 +278,10 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, schedule: Mat
         smem_c = Var('smem_c', TensorPointerType(c_dtype, layout=sch.smem_c_layout))
         if sch.use_dynamic_smem:
             # 'extern __shared__ uint8_t smem_storage[];' in c code
-            smem_storage = Var('smem_storage', PointerType(base_type=scalar_type('uint8'),
-                                                           specifiers=['extern', '__shared__'], use_bracket=True))
+            smem_storage = Var(
+                'smem_storage',
+                PointerType(base_type=scalar_type('uint8'), specifiers=['extern', '__shared__'], use_bracket=True),
+            )
             fb += DeclareStmt(smem_storage)
         else:
             smem_storage = Var('smem_storage', tensor_type(dtype='uint8', shape=[sch.used_smem_bytes_per_block]))
@@ -308,15 +316,23 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, schedule: Mat
             first_k_tile = k_size - (block_k_tiles - 1) * sch.warp_k
             block_offset = [idx * dim for idx, dim in zip([bi, bj], sch.block_shape)]
             # transfer first tile
-            fb += copy(gmem_a[block_idx('y'), block_offset[0]:, :], regs_a_ldg, sch.a_g2s_map,
-                       src_predicate=lambda i, k: And.join(block_offset[0] + i < m_size, k < first_k_tile),
-                       default_value=a_default_value,
-                       cast_dtype=a_dtype)
+            fb += copy(
+                gmem_a[block_idx('y'), block_offset[0] :, :],
+                regs_a_ldg,
+                sch.a_g2s_map,
+                src_predicate=lambda i, k: And.join(block_offset[0] + i < m_size, k < first_k_tile),
+                default_value=a_default_value,
+                cast_dtype=a_dtype,
+            )
             fb += copy(regs_a_ldg, smem_a[0], layout=sch.a_g2s_map)
-            fb += copy(gmem_b[block_idx('y'), :, block_offset[1]:], regs_b_ldg, sch.b_g2s_map,
-                       src_predicate=lambda k, j: And.join(k < first_k_tile, block_offset[1] + j < n_size),
-                       default_value=b_default_value,
-                       cast_dtype=b_dtype)
+            fb += copy(
+                gmem_b[block_idx('y'), :, block_offset[1] :],
+                regs_b_ldg,
+                sch.b_g2s_map,
+                src_predicate=lambda k, j: And.join(k < first_k_tile, block_offset[1] + j < n_size),
+                default_value=b_default_value,
+                cast_dtype=b_dtype,
+            )
             fb += copy(regs_b_ldg, smem_b[0], layout=sch.b_g2s_map)
             fb += syncthreads()
             # init regs c
@@ -325,23 +341,39 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, schedule: Mat
             warp_idx = thread_idx() / 32
             with fb.for_loop('k0', block_k_tiles - 1) as k0:
                 block_offset_k = k0 * sch.warp_k + first_k_tile
-                fb += copy(gmem_a[block_idx('y'), block_offset[0]:, block_offset_k:], regs_a_ldg, schedule.a_g2s_map,
-                           src_predicate=lambda i, _: block_offset[0] + i < m_size,
-                           default_value=a_default_value,
-                           cast_dtype=a_dtype)
-                fb += copy(gmem_b[block_idx('y'), block_offset_k:, block_offset[1]:], regs_b_ldg, schedule.b_g2s_map,
-                           src_predicate=lambda _, j: block_offset[1] + j < n_size,
-                           default_value=b_default_value,
-                           cast_dtype=b_dtype)
+                fb += copy(
+                    gmem_a[block_idx('y'), block_offset[0] :, block_offset_k:],
+                    regs_a_ldg,
+                    schedule.a_g2s_map,
+                    src_predicate=lambda i, _: block_offset[0] + i < m_size,
+                    default_value=a_default_value,
+                    cast_dtype=a_dtype,
+                )
+                fb += copy(
+                    gmem_b[block_idx('y'), block_offset_k:, block_offset[1] :],
+                    regs_b_ldg,
+                    schedule.b_g2s_map,
+                    src_predicate=lambda _, j: block_offset[1] + j < n_size,
+                    default_value=b_default_value,
+                    cast_dtype=b_dtype,
+                )
                 for warp_offset_x, warp_offset_y in sch.warp_map(warp_idx):
                     regs_a_addr = ~regs_a[warp_offset_x, warp_offset_y, 0]
                     regs_b_addr = ~regs_b[warp_offset_x, warp_offset_y, 0]
                     regs_c_addr = ~regs_c[warp_offset_x, warp_offset_y, 0]
                     for k1 in range(sch.warp_multiple[2]):
-                        fb += wmma_load_a(sch.wmma_config, regs_a_addr,
-                                          ~smem_a[k0 % 2, warp_offset_x * wmma_m, k1 * wmma_k], sch.load_a_stride)
-                        fb += wmma_load_b(sch.wmma_config, regs_b_addr,
-                                          ~smem_b[k0 % 2, k1 * wmma_k, warp_offset_y * wmma_n], sch.load_b_stride)
+                        fb += wmma_load_a(
+                            sch.wmma_config,
+                            regs_a_addr,
+                            ~smem_a[k0 % 2, warp_offset_x * wmma_m, k1 * wmma_k],
+                            sch.load_a_stride,
+                        )
+                        fb += wmma_load_b(
+                            sch.wmma_config,
+                            regs_b_addr,
+                            ~smem_b[k0 % 2, k1 * wmma_k, warp_offset_y * wmma_n],
+                            sch.load_b_stride,
+                        )
                         fb += wmma_mma(sch.wmma_config, regs_a_addr, regs_b_addr, regs_c_addr)
                 fb += copy(regs_a_ldg, smem_a[(k0 + 1) % 2], schedule.a_g2s_map)
                 fb += copy(regs_b_ldg, smem_b[(k0 + 1) % 2], schedule.b_g2s_map)
@@ -352,10 +384,18 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, schedule: Mat
                     regs_b_addr = ~regs_b[warp_offset_x, warp_offset_y, 0]
                     regs_c_addr = ~regs_c[warp_offset_x, warp_offset_y, 0]
                     for k1 in range(sch.warp_multiple[2]):
-                        fb += wmma_load_a(sch.wmma_config, regs_a_addr,
-                                          ~smem_a[k0 % 2, warp_offset_x * wmma_m, k1 * wmma_k], sch.load_a_stride)
-                        fb += wmma_load_b(sch.wmma_config, regs_b_addr,
-                                          ~smem_b[k0 % 2, k1 * wmma_k, warp_offset_y * wmma_n], sch.load_b_stride)
+                        fb += wmma_load_a(
+                            sch.wmma_config,
+                            regs_a_addr,
+                            ~smem_a[k0 % 2, warp_offset_x * wmma_m, k1 * wmma_k],
+                            sch.load_a_stride,
+                        )
+                        fb += wmma_load_b(
+                            sch.wmma_config,
+                            regs_b_addr,
+                            ~smem_b[k0 % 2, k1 * wmma_k, warp_offset_y * wmma_n],
+                            sch.load_b_stride,
+                        )
                         fb += wmma_mma(sch.wmma_config, regs_a_addr, regs_b_addr, regs_c_addr)
             fb += syncthreads()  # we need this because smem_c shares the memory with smem_a and smem_b
             for warp_offset_x, warp_offset_y in sch.warp_map(warp_idx):
@@ -364,12 +404,15 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, schedule: Mat
                 smem_c_addr = ~smem_c[offset_x, offset_y]
                 regs_c_addr = ~regs_c[warp_offset_x, warp_offset_y, 0]
                 fb += wmma_store(sch.wmma_config, smem_c_addr, regs_c_addr, sch.store_c_stride)
-                fb += copy(src=smem_c[offset_x:, offset_y:],
-                           dst=gmem_c[block_idx('y'), block_offset[0] + offset_x:, block_offset[1] + offset_y:],
-                           layout=get_task_map(task_shape=(wmma_m, wmma_n), num_workers=32, ranks=[0, 1]),
-                           dst_predicate=lambda i, j: And(block_offset[0] + offset_x + i < m_size,
-                                                          block_offset[1] + offset_y + j < n_size),
-                           worker_idx=thread_idx() % warp_size)
+                fb += copy(
+                    src=smem_c[offset_x:, offset_y:],
+                    dst=gmem_c[block_idx('y'), block_offset[0] + offset_x :, block_offset[1] + offset_y :],
+                    layout=get_task_map(task_shape=(wmma_m, wmma_n), num_workers=32, ranks=[0, 1]),
+                    dst_predicate=lambda i, j: And(
+                        block_offset[0] + offset_x + i < m_size, block_offset[1] + offset_y + j < n_size
+                    ),
+                    worker_idx=thread_idx() % warp_size,
+                )
 
     func = fb.get()
     ir_module = IRModule(funcs={func.name: func}, task=task)
@@ -385,8 +428,16 @@ def init(dst, init_value, sch):
     return sb.finish()
 
 
-def copy(src, dst, layout, src_predicate=None, dst_predicate=None, default_value: Optional[Union[Expr, float]] = 0.0,
-         worker_idx=None, cast_dtype=None):
+def copy(
+    src,
+    dst,
+    layout,
+    src_predicate=None,
+    dst_predicate=None,
+    default_value: Optional[Union[Expr, float]] = 0.0,
+    worker_idx=None,
+    cast_dtype=None,
+):
     if worker_idx is None:
         worker_idx = thread_idx()
     sb = StmtBuilder()

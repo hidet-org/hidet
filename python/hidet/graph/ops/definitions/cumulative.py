@@ -12,10 +12,10 @@ class CumulativeTask(Task):
                 shape=y_shape,
                 fcompute=lambda *indices: reduce(
                     shape=[indices[dim] + (0 if exclusive else 1)],
-                    fcompute=lambda k: x[indices[:dim] + (k,) + indices[dim+1:]],
+                    fcompute=lambda k: x[indices[:dim] + (k,) + indices[dim + 1 :]],
                     reduce_type=reduce_type,
-                    accumulate_dtype=x.data_type.scalar_type.name
-                )
+                    accumulate_dtype=x.data_type.scalar_type.name,
+                ),
             )
         else:
             y = compute(
@@ -24,20 +24,18 @@ class CumulativeTask(Task):
                 fcompute=lambda *indices: reduce(
                     shape=[y_shape[dim] - indices[dim] - (1 if exclusive else 0)],
                     fcompute=lambda k: x[
-                        indices[:dim] + (indices[dim] + k + (1 if exclusive else 0),) + indices[dim+1:]],
+                        indices[:dim] + (indices[dim] + k + (1 if exclusive else 0),) + indices[dim + 1 :]
+                    ],
                     reduce_type=reduce_type,
-                    accumulate_dtype=x.data_type.scalar_type.name
-                )
+                    accumulate_dtype=x.data_type.scalar_type.name,
+                ),
             )
 
         super().__init__(
             name='cum_{}'.format(reduce_type),
             inputs=[x],
             outputs=[y],
-            attributes={
-                'dim': dim,
-                'reduce_type': reduce_type
-            }
+            attributes={'dim': dim, 'reduce_type': reduce_type},
         )
 
 
@@ -49,11 +47,7 @@ class CumulativeBaseOp(Operator):
         super().__init__(
             inputs=[x],
             task=CumulativeTask(input_like(x, 'x'), dim, reduce_type, exclusive, reverse),
-            attributes={
-                'dim': dim,
-                'exclusive': exclusive,
-                'reverse': reverse
-            }
+            attributes={'dim': dim, 'exclusive': exclusive, 'reverse': reverse},
         )
 
 

@@ -22,16 +22,14 @@ class Profiler(trt.IProfiler):
 
     def export_trace(self):
         from hidet.utils.profile_utils import TraceEvent
+
         events = []
         current_time = 0
         for layer, latency in self.layer2latency.items():
             events.append(TraceEvent(layer, 'op', 'B', current_time * 1000000, 0, 0, {'name': layer}))
             current_time += latency
             events.append(TraceEvent(layer, 'op', 'E', current_time * 1000000, 0, 0, {'name': layer}))
-        return {
-            'traceEvents': [event.export() for event in events],
-            'displayTimeUnit': 'ns'
-        }
+        return {'traceEvents': [event.export() for event in events], 'displayTimeUnit': 'ns'}
 
 
 class Logger(trt.ILogger):
@@ -40,13 +38,7 @@ class Logger(trt.ILogger):
         self.log_file = log_file
         self.print_out_level = print_out_level
         self.opened_file = None
-        self.level_id = {
-            'INTERNAL_ERROR': 0,
-            'ERROR': 1,
-            'WARNING': 2,
-            'INFO': 3,
-            'VERBOSE': 4
-        }
+        self.level_id = {'INTERNAL_ERROR': 0, 'ERROR': 1, 'WARNING': 2, 'INFO': 3, 'VERBOSE': 4}
         if self.log_file:
             self.opened_file = open(self.log_file, 'w')  # pylint: disable=consider-using-with
 
@@ -56,7 +48,7 @@ class Logger(trt.ILogger):
             trt.ILogger.ERROR: 'ERROR',
             trt.ILogger.WARNING: 'WARNING',
             trt.ILogger.INFO: 'INFO',
-            trt.ILogger.VERBOSE: 'VERBOSE'
+            trt.ILogger.VERBOSE: 'VERBOSE',
         }
         severity_name = severity2name[severity]
         msg = '{} {} {}\n'.format(datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S'), severity_name, msg)
@@ -78,19 +70,24 @@ def milo_bytes(MiB):
 
 
 def create_engine_from_onnx(
-        onnx_model_path: str,
-        workspace_bytes: int = 512 << 20,
-        input_shapes: Optional[Dict[str, List[int]]] = None,
-        use_tf32: bool = False,
-        use_fp16: bool = False
+    onnx_model_path: str,
+    workspace_bytes: int = 512 << 20,
+    input_shapes: Optional[Dict[str, List[int]]] = None,
+    use_tf32: bool = False,
+    use_fp16: bool = False,
 ) -> trt.ICudaEngine:
     cache_dir = hidet_cache_dir('trt_engine')
     os.makedirs(cache_dir, exist_ok=True)
     model_name = os.path.basename(onnx_model_path).split('.')[0]
     shape_hash = tuple((name, tuple(shape)) for name, shape in sorted(input_shapes.items(), key=lambda item: item[0]))
     shape_hash_suffix = sha256(str(shape_hash).encode()).hexdigest()[:6]
-    engine_name = '{}{}{}_ws{}_{}.engine'.format(model_name, '_tf32' if use_tf32 else '', '_fp16' if use_fp16 else '',
-                                                 workspace_bytes // (1 << 20), shape_hash_suffix)
+    engine_name = '{}{}{}_ws{}_{}.engine'.format(
+        model_name,
+        '_tf32' if use_tf32 else '',
+        '_fp16' if use_fp16 else '',
+        workspace_bytes // (1 << 20),
+        shape_hash_suffix,
+    )
     engine_path = os.path.join(cache_dir, engine_name)
 
     # logger = trt.Logger(min_severity=trt.Logger.ERROR)   # use WARNINGS when needed
@@ -144,8 +141,10 @@ def create_engine_from_onnx(
             tensor: trt.ITensor = network.get_input(i)
             if any(v == -1 for v in tensor.shape):
                 if input_shapes is None or tensor.name not in input_shapes:
-                    raise Exception("Found dynamic input: {}{}, ".format(tensor.name, list(tensor.shape))
-                                    + "please specify input_shapes as the target shape.")
+                    raise Exception(
+                        "Found dynamic input: {}{}, ".format(tensor.name, list(tensor.shape))
+                        + "please specify input_shapes as the target shape."
+                    )
                 opt_shape = input_shapes[tensor.name]
                 profile.set_shape(tensor.name, min=opt_shape, opt=opt_shape, max=opt_shape)
         config.add_optimization_profile(profile)
@@ -166,15 +165,12 @@ def create_engine_from_onnx(
     return engine
 
 
-dtype_map = {
-    trt.DataType.INT32: 'int32',
-    trt.DataType.FLOAT: 'float32',
-    trt.DataType.HALF: 'float16'
-}
+dtype_map = {trt.DataType.INT32: 'int32', trt.DataType.FLOAT: 'float32', trt.DataType.HALF: 'float16'}
 
 
-def _prepare_buffer(engine: trt.ICudaEngine,
-                    inputs: Dict[str, Tensor]) -> Tuple[Dict[str, Tensor], Dict[str, Tensor], List[int]]:
+def _prepare_buffer(
+    engine: trt.ICudaEngine, inputs: Dict[str, Tensor]
+) -> Tuple[Dict[str, Tensor], Dict[str, Tensor], List[int]]:
     inputs = inputs.copy()
     outputs = {}
     buffers = []
@@ -183,8 +179,11 @@ def _prepare_buffer(engine: trt.ICudaEngine,
         if engine.binding_is_input(i):
             dtype: trt.DataType = engine.get_binding_dtype(i)
             if name not in inputs:
-                raise ValueError("TensorRT engine requires input '{}', but only received inputs: {}.".format(
-                    name, list(inputs.keys())))
+                raise ValueError(
+                    "TensorRT engine requires input '{}', but only received inputs: {}.".format(
+                        name, list(inputs.keys())
+                    )
+                )
             if dtype != inputs[name].dtype:
                 inputs[name] = hidet.graph.ops.cast(inputs[name], dtype_map[dtype])
             buffers.append(inputs[name].storage.addr)
@@ -208,8 +207,9 @@ def engine_inference(engine: trt.ICudaEngine, inputs: Dict[str, Tensor]) -> Dict
     return outputs
 
 
-def engine_benchmark(engine: trt.ICudaEngine, dummy_inputs: Dict[str, Tensor], warmup: int = 3, number: int = 5,
-                     repeat: int = 5) -> List[float]:
+def engine_benchmark(
+    engine: trt.ICudaEngine, dummy_inputs: Dict[str, Tensor], warmup: int = 3, number: int = 5, repeat: int = 5
+) -> List[float]:
     _, _, buffers = _prepare_buffer(engine, dummy_inputs)
     context: trt.IExecutionContext = engine.create_execution_context()
     return benchmark_func(context.execute_async_v2(buffers, 0), warmup, number, repeat, median=False)
@@ -219,9 +219,9 @@ def engine_inspect(engine: trt.ICudaEngine) -> Dict:
     inspector: trt.EngineInspector = engine.create_engine_inspector()
     layer_information = {}
     for i in range(engine.num_layers):
-        layer_information['layer_{}'.format(i)] = json.loads(str(inspector.get_layer_information(
-            i, trt.LayerInformationFormat.JSON)
-        ))
+        layer_information['layer_{}'.format(i)] = json.loads(
+            str(inspector.get_layer_information(i, trt.LayerInformationFormat.JSON))
+        )
     # engine_information = json.loads(str(inspector.get_engine_information(trt.LayerInformationFormat.JSON)))
     return {
         'layers': layer_information,

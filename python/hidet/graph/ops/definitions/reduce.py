@@ -5,8 +5,9 @@ from .utils import Task, Operator, Tensor, TensorNode, IRModule, compute, reduce
 
 
 class ReduceTask(Task):
-    def __init__(self, x: TensorNode, dims: List[int], keep_dim: bool, reduce_type: str,
-                 accumulate_dtype: str = 'float32'):
+    def __init__(
+        self, x: TensorNode, dims: List[int], keep_dim: bool, reduce_type: str, accumulate_dtype: str = 'float32'
+    ):
         x_shape = x.const_shape()
         y_shape = []
         for i in range(len(x_shape)):
@@ -34,8 +35,9 @@ class ReduceTask(Task):
                 return x[x_indices]
 
             reduce_shape = [x_shape[i] for i in dims]
-            return reduce(shape=reduce_shape, fcompute=reduce_fcompute,
-                          reduce_type=reduce_type, accumulate_dtype=accumulate_dtype)
+            return reduce(
+                shape=reduce_shape, fcompute=reduce_fcompute, reduce_type=reduce_type, accumulate_dtype=accumulate_dtype
+            )
 
         y = compute(name='y', shape=y_shape, fcompute=fcompute)
 
@@ -51,13 +53,14 @@ class ReduceTask(Task):
                 'dims': dims,
                 'keep_dim': keep_dim,
                 'reduce_type': reduce_type,
-                'accumulate_dtype': accumulate_dtype
-            }
+                'accumulate_dtype': accumulate_dtype,
+            },
         )
 
     def implement_cuda(self) -> IRModule:
         # pylint: disable=import-outside-toplevel
         from ..schedules import cuda_schedule_reduce_by_default, cuda_schedule_reduce_by_warp_reduce
+
         rank = len(self.inputs[0].const_shape())
         if rank - 1 in self.dims:
             # reduce over last dimension
@@ -80,20 +83,19 @@ class ArgReduceTask(Task):
 
         def fcompute(*indices):
             def reduce_fcompute(reduce_index):
-                x_indices = indices[:dim] + (reduce_index,) + indices[dim + (1 if keep_dim else 0):]
+                x_indices = indices[:dim] + (reduce_index,) + indices[dim + (1 if keep_dim else 0) :]
                 return x[x_indices]
-            return arg_reduce(extent=x_shape[dim], fcompute=reduce_fcompute, reduce_type=reduce_type,
-                              index_dtype='int32')
+
+            return arg_reduce(
+                extent=x_shape[dim], fcompute=reduce_fcompute, reduce_type=reduce_type, index_dtype='int32'
+            )
 
         y = compute(name='y', shape=y_shape, fcompute=fcompute)
         super().__init__(
             name='arg{}'.format(reduce_type),
             inputs=[x],
             outputs=[y],
-            attributes={
-                'dim': dim,
-                'reduce_type': reduce_type
-            }
+            attributes={'dim': dim, 'reduce_type': reduce_type},
         )
 
 
@@ -105,10 +107,7 @@ class ReduceBaseOp(Operator):
         super().__init__(
             inputs=[x],
             task=ReduceTask(input_like(x, 'x'), dims, keep_dim, reduce_type),
-            attributes={
-                'dims': dims,
-                'keep_dim': keep_dim
-            }
+            attributes={'dims': dims, 'keep_dim': keep_dim},
         )
 
 
@@ -119,10 +118,7 @@ class ArgReduceBaseOp(Operator):
         super().__init__(
             inputs=[x],
             task=ArgReduceTask(input_like(x, 'x'), dim, keep_dim, reduce_type),
-            attributes={
-                'dim': dim,
-                'keep_dim': keep_dim
-            }
+            attributes={'dim': dim, 'keep_dim': keep_dim},
         )
 
 

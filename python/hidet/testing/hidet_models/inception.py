@@ -10,8 +10,15 @@ Ints = Union[int, List[int], Tuple[int]]
 
 
 class BasicConv2d(nn.Module):
-    def __init__(self, in_channels: int, out_channels: int, kernel_size: Ints, padding: Ints = 0, stride: Ints = 1,
-                 groups: int = 1) -> None:
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: Ints,
+        padding: Ints = 0,
+        stride: Ints = 1,
+        groups: int = 1,
+    ) -> None:
         super().__init__()
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, padding, stride, groups)
         self.bn = nn.BatchNorm2d(out_channels, eps=0.001)
@@ -121,12 +128,7 @@ class InceptionC(nn.Module):
         branch_pool = ops.avg_pool2d(x, kernel=3, stride=1, padding=1)
         branch_pool = self.branch_pool(branch_pool)
 
-        return ops.concat([
-            branch1x1,
-            branch7x7,
-            branch7x7_dbl,
-            branch_pool
-        ], axis=1)
+        return ops.concat([branch1x1, branch7x7, branch7x7_dbl, branch_pool], axis=1)
 
 
 class InceptionD(nn.Module):
@@ -172,18 +174,12 @@ class InceptionE(nn.Module):
         branch1x1 = self.branch1x1(x)
 
         branch3x3 = self.branch3x3_1(x)
-        branch3x3 = [
-            self.branch3x3_2a(branch3x3),
-            self.branch3x3_2b(branch3x3)
-        ]
+        branch3x3 = [self.branch3x3_2a(branch3x3), self.branch3x3_2b(branch3x3)]
         branch3x3 = ops.concat(branch3x3, axis=1)
 
         branch3x3_dbl = self.branch3x3_dbl_1(x)
         branch3x3_dbl = self.branch3x3_dbl_2(branch3x3_dbl)
-        branch3x3_dbl = [
-            self.branch3x3_dbl_3a(branch3x3_dbl),
-            self.branch3x3_dbl_3b(branch3x3_dbl)
-        ]
+        branch3x3_dbl = [self.branch3x3_dbl_3a(branch3x3_dbl), self.branch3x3_dbl_3b(branch3x3_dbl)]
         branch3x3_dbl = ops.concat(branch3x3_dbl, axis=1)
 
         branch_pool = ops.avg_pool2d(x, kernel=3, stride=1, padding=1)
@@ -220,15 +216,16 @@ class InceptionV3(nn.Module):
             InceptionD(in_channels=768),
             InceptionE(in_channels=1280),
             InceptionE(in_channels=2048),
-            InceptionTail()
+            InceptionTail(),
         )
 
     def forward(self, x):
         return self.blocks(x)
 
 
-def basic_conv2d(batch_size, in_channels, height, width, out_channels, kernel_size, padding, stride,
-                 groups) -> Tuple[nn.Module, List[Tensor]]:
+def basic_conv2d(
+    batch_size, in_channels, height, width, out_channels, kernel_size, padding, stride, groups
+) -> Tuple[nn.Module, List[Tensor]]:
     inputs = [hidet.randn([batch_size, in_channels, height, width])]
     model = BasicConv2d(in_channels, out_channels, kernel_size, padding, stride, groups)
     return model, inputs

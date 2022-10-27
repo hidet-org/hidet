@@ -24,7 +24,7 @@ class TraceEvent:
             'ts': self.time_stamp / 1000.0,
             'pid': self.pid,
             'tid': self.tid,
-            'args': {k: str(v) for k, v in self.args.items()}
+            'args': {k: str(v) for k, v in self.args.items()},
         }
         return event
 
@@ -41,8 +41,10 @@ class CudaTraceEvent(TraceEvent):
     def __init__(self, name, category, event_type, tid, args):
         super().__init__(name, category, event_type, None, pid=0, tid=tid, args=args)
         from hidet.runtime import cuda_event_pool
+
         if CudaTraceEvent.anchor_cuda_event is None:
             from hidet.ffi.cuda_api import cuda
+
             CudaTraceEvent.anchor_cuda_event = cuda_event_pool.new_event()
             cuda.device_synchronize()
             CudaTraceEvent.anchor_cuda_event.record_on()
@@ -51,8 +53,9 @@ class CudaTraceEvent(TraceEvent):
         self.cuda_event.record_on()
 
     def export(self) -> Dict:
-        self.time_stamp = (self.cuda_event.elapsed_time_since(self.anchor_cuda_event) * 1000000.0
-                           + self.anchor_cuda_event_host_time)
+        self.time_stamp = (
+            self.cuda_event.elapsed_time_since(self.anchor_cuda_event) * 1000000.0 + self.anchor_cuda_event_host_time
+        )
         return TraceEvent.export(self)
 
 
@@ -82,11 +85,9 @@ class Tracer:
 
     def export(self) -> Dict:
         from hidet.ffi.cuda_api import cuda
+
         cuda.device_synchronize()  # sync cuda events in trace
-        ret = {
-            'traceEvents': [event.export() for event in self.events],
-            'displayTimeUnit': 'ns'
-        }
+        ret = {'traceEvents': [event.export() for event in self.events], 'displayTimeUnit': 'ns'}
         self.clear()
         return ret
 
@@ -95,14 +96,16 @@ class Tracer:
 
     def clear(self):
         from hidet.ffi.cuda_api import cuda
+
         cuda.device_synchronize()  # sync cuda events in trace
         self.events.clear()
 
     def turn_on(self, turn_on=True):
         self.tracing = turn_on
 
-    def profile(self, name: str, category: str = 'python', args: Optional[Dict[str, Any]] = None,
-                trace_cuda=False) -> ContextManager:
+    def profile(
+        self, name: str, category: str = 'python', args: Optional[Dict[str, Any]] = None, trace_cuda=False
+    ) -> ContextManager:
         if self.tracing:
             return TraceContext(self, name, category, args, trace_cuda)
         else:

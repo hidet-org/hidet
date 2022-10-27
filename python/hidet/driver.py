@@ -24,9 +24,17 @@ def disable_cache(disable: bool = False):
     cache_disabled = not disable
 
 
-def build_task(task: Task, space_level: int, target_device: str = 'cuda',
-               warmup: int = 3, number: int = 10, repeat: int = 3,
-               use_cache=True, cache_dir=None, load=True):
+def build_task(
+    task: Task,
+    space_level: int,
+    target_device: str = 'cuda',
+    warmup: int = 3,
+    number: int = 10,
+    repeat: int = 3,
+    use_cache=True,
+    cache_dir=None,
+    load=True,
+):
     # pylint: disable=too-many-arguments, too-many-locals
     task_string: str = str(task)
     compiled_func: Optional[CompiledFunction] = None
@@ -63,10 +71,10 @@ def build_task(task: Task, space_level: int, target_device: str = 'cuda',
                 ir_module = task.implement(target=target_device)
             # lower ir module
             with PassContext(
-                    instruments=[
-                        SaveIRInstrument(out_dir=os.path.join('./outs/ir', task.name, task_hash)),
-                        ProfileInstrument(log_file=os.path.join('./outs/ir', task.name, task_hash, 'lower_time.txt'))
-                    ]
+                instruments=[
+                    SaveIRInstrument(out_dir=os.path.join('./outs/ir', task.name, task_hash)),
+                    ProfileInstrument(log_file=os.path.join('./outs/ir', task.name, task_hash, 'lower_time.txt')),
+                ]
             ):
                 ir_module = lower(ir_module)
             # code generation
@@ -85,8 +93,17 @@ def _build_task_job(args):
     build_task(task, space_level, target_device, warmup, number, repeat, use_cache, cache_dir, load)
 
 
-def build_batch_task(tasks: List[Task], space_level: int, target_device: str = 'cuda', warmup: int = 3,
-                     number: int = 10, repeat: int = 3, parallel=True, use_cache=True, cache_dir=None):
+def build_batch_task(
+    tasks: List[Task],
+    space_level: int,
+    target_device: str = 'cuda',
+    warmup: int = 3,
+    number: int = 10,
+    repeat: int = 3,
+    parallel=True,
+    use_cache=True,
+    cache_dir=None,
+):
     # pylint: disable=too-many-arguments
     jobs = [(task, space_level, target_device, warmup, number, repeat, use_cache, cache_dir, False) for task in tasks]
     if parallel and len(tasks) > 1:
@@ -96,8 +113,14 @@ def build_batch_task(tasks: List[Task], space_level: int, target_device: str = '
         map(_build_task_job, jobs)
 
 
-def build_ir_module(ir_module: IRModule, func_name: str, keep_ptx=False, working_dir='./outs', verbose=False,
-                    func_type: Optional[FuncType] = None):
+def build_ir_module(
+    ir_module: IRModule,
+    func_name: str,
+    keep_ptx=False,
+    working_dir='./outs',
+    verbose=False,
+    func_type: Optional[FuncType] = None,
+):
     module_string = str(ir_module)
     module_hash = sha256(module_string.encode()).hexdigest()[:16]
     working_dir = os.path.join(working_dir, 'ir_module', module_hash)
@@ -107,10 +130,12 @@ def build_ir_module(ir_module: IRModule, func_name: str, keep_ptx=False, working
     if verbose:
         print(f'Compiling {src_path}')
     # lower ir module
-    with PassContext(instruments=[
-                         SaveIRInstrument(out_dir=working_dir),
-                         ProfileInstrument(log_file=os.path.join(working_dir, 'lower_time.txt'))
-                     ]):
+    with PassContext(
+        instruments=[
+            SaveIRInstrument(out_dir=working_dir),
+            ProfileInstrument(log_file=os.path.join(working_dir, 'lower_time.txt')),
+        ]
+    ):
         ir_module = lower(ir_module)
     # code generation
     codegen(ir_module, src_out_path=src_path)

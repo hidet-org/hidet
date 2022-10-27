@@ -75,16 +75,15 @@ def validate_schedule(task: Task, device: str, dummy_inputs: Optional[Sequence] 
     else:
         dummy_inputs = list(dummy_inputs)
 
-    actual_outputs: List[Tensor] = [empty(output.data_type.const_shape(), output.data_type.scalar_type.name, device)
-                                    for output in task.task_graph.output_tensors]
+    actual_outputs: List[Tensor] = [
+        empty(output.data_type.const_shape(), output.data_type.scalar_type.name, device)
+        for output in task.task_graph.output_tensors
+    ]
     desire_outputs: List[Tensor] = [empty_like(output) for output in actual_outputs]
 
     if len(dummy_inputs) != len(task.task_graph.input_tensors):
         raise ValueError("The number of dummy inputs does not match the number of task inputs.")
-    device2scheduler = {
-        "cuda": CudaAutoScheduler,
-        "cpu": CpuAutoScheduler
-    }
+    device2scheduler = {"cuda": CudaAutoScheduler, "cpu": CpuAutoScheduler}
 
     ir_module_actual: IRModule = task.implement(device)
     ir_module_desire: IRModule = device2scheduler[device]().schedule_task(task, device)

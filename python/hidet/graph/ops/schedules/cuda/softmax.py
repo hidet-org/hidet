@@ -18,7 +18,7 @@ def softmax_cuda_schedule(task: SoftmaxTask) -> IRModule:
     shape: List[int] = task.x_shape
     axis = task.axis
 
-    other_shape = shape[:axis] + shape[axis+1:]
+    other_shape = shape[:axis] + shape[axis + 1 :]
     grid_layout = TaskMapping.row_major(task_shape=other_shape)
 
     warp_size = 32
@@ -29,11 +29,11 @@ def softmax_cuda_schedule(task: SoftmaxTask) -> IRModule:
     x_dtype = task.inputs[0].data_type.scalar_type
 
     with FunctionBuilder(
-            name=task.name + '_grid',
-            kind='cuda_kernel',
-            grid_dim=grid_layout.num_workers,
-            block_dim=block_layout.num_workers,
-            label='softmax schedule'
+        name=task.name + '_grid',
+        kind='cuda_kernel',
+        grid_dim=grid_layout.num_workers,
+        block_dim=block_layout.num_workers,
+        label='softmax schedule',
     ) as fb:
         # params
         params = params_from_task(task)
@@ -53,24 +53,24 @@ def softmax_cuda_schedule(task: SoftmaxTask) -> IRModule:
         # get the max value along c dimension
         sb += AssignStmt(rv, convert(-1e30, x_dtype))
         other_indices = grid_layout.worker2task(block_idx())[0]
-        for r, in block_layout.worker2task(thread_idx()):
+        for (r,) in block_layout.worker2task(thread_idx()):
             with sb.if_then(r < reduce_extent):
                 sb += BufferStoreStmt(buf, [r], x[other_indices[:axis] + (r,) + other_indices[axis:]])
                 sb += AssignStmt(rv, prim.max(rv, buf[r]))
         sb += warp_reduce(rv, prim.max)
 
         # calculate exp(v-max)
-        for r, in block_layout.worker2task(thread_idx()):
+        for (r,) in block_layout.worker2task(thread_idx()):
             sb += AssignStmt(buf[r], prim.exp(buf[r] - rv))
 
         # calculate sum(exp(v-max))
         sb += AssignStmt(rv, convert(0.0, x_dtype))
-        for r, in block_layout.worker2task(thread_idx()):
+        for (r,) in block_layout.worker2task(thread_idx()):
             sb += AssignStmt(rv, rv + if_then_else(r < reduce_extent, buf[r], convert(0.0, x_dtype)))
         sb += warp_reduce(rv, lambda a, b: a + b)
 
         # calculate exp(v-max) / sum(exp(vv-max))
-        for r, in block_layout.worker2task(thread_idx()):
+        for (r,) in block_layout.worker2task(thread_idx()):
             with sb.if_then(r < reduce_extent):
                 sb += BufferStoreStmt(y, other_indices[:axis] + (r,) + other_indices[axis:], buf[r] / rv)
 

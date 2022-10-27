@@ -51,7 +51,7 @@ class Doc:
         while i < len(self.docs) and isinstance(self.docs[i], NewLineToken):
             i += 1
         j = len(self.docs)
-        while j > i and isinstance(self.docs[j-1], NewLineToken):
+        while j > i and isinstance(self.docs[j - 1], NewLineToken):
             j -= 1
         doc = Doc()
         for k in range(i, j):

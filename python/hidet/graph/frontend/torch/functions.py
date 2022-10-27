@@ -8,21 +8,20 @@ from hidet.graph.tensor import from_torch, Tensor
 
 
 @jit(opt=True)
-def conv2d(data: Tensor,
-           weight: Tensor,
-           strides: Union[int, Sequence[int]],
-           padding: Union[int, Sequence[int]],
-           groups: int = 1):
+def conv2d(
+    data: Tensor,
+    weight: Tensor,
+    strides: Union[int, Sequence[int]],
+    padding: Union[int, Sequence[int]],
+    groups: int = 1,
+):
     data = ops.conv_pad(data, padding)
     return ops.conv2d(data, weight, strides, groups)
 
 
 class Conv2d(autograd.Function):
     @staticmethod
-    def forward(ctx: FunctionCtx,
-                data: torch.Tensor,
-                weight: torch.Tensor,
-                strides, padding, groups=1):
+    def forward(ctx: FunctionCtx, data: torch.Tensor, weight: torch.Tensor, strides, padding, groups=1):
         # view the torch tensor as hidet tensor
         data = from_torch(data)
         weight = from_torch(weight)

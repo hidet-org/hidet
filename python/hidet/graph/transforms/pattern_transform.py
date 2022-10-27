@@ -21,6 +21,7 @@ class PatternTransformPass(GraphPass):
 
     Time complexity of this implementation: O(num_applies * num_operators * num_patterns * pattern_size).
     """
+
     max_num_transforms = 1000
 
     def process_graph(self, graph: FlowGraph) -> FlowGraph:

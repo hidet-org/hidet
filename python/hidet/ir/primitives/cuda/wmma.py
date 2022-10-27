@@ -14,21 +14,13 @@ from hidet.ir.stmt import AsmStmt
 from hidet.ir.type import ScalarType, PointerType
 from hidet.utils import initialize
 
-dtype_short2long = {
-    'f16': 'float16',
-    'bf16': 'bfloat16',
-    'tf32': 'tfloat32',
-    'f32': 'float32'
-}
-dtype_long2short = {
-    'float16': 'f16',
-    'bfloat16': 'bf16',
-    'tfloat32': 'tf32',
-    'float32': 'f32'
-}
+dtype_short2long = {'f16': 'float16', 'bf16': 'bfloat16', 'tf32': 'tfloat32', 'f32': 'float32'}
+dtype_long2short = {'float16': 'f16', 'bfloat16': 'bf16', 'tfloat32': 'tf32', 'float32': 'f32'}
 
-WmmaConfig = namedtuple('WmmaConfig', ['shape', 'a_dtype', 'b_dtype', 'c_dtype', 'a_layout', 'b_layout', 'c_layout',
-                                       'a_regs', 'b_regs', 'c_regs'])
+WmmaConfig = namedtuple(
+    'WmmaConfig',
+    ['shape', 'a_dtype', 'b_dtype', 'c_dtype', 'a_layout', 'b_layout', 'c_layout', 'a_regs', 'b_regs', 'c_regs'],
+)
 wmma_configs: List[WmmaConfig] = []
 
 
@@ -47,8 +39,9 @@ def init_wmma_configs():
                         a_regs = 8
                         b_regs = 8
                         c_regs = 4 if c_dtype == 'f16' else 8
-                        config = WmmaConfig(shape, a_dtype, b_dtype, c_dtype, a_layout, b_layout, c_layout, a_regs,
-                                            b_regs, c_regs)
+                        config = WmmaConfig(
+                            shape, a_dtype, b_dtype, c_dtype, a_layout, b_layout, c_layout, a_regs, b_regs, c_regs
+                        )
                         wmma_configs.append(config)
 
     # bf16 x bf16 => f32
@@ -64,8 +57,9 @@ def init_wmma_configs():
                     a_regs = regs_map[m]
                     b_regs = regs_map[n]
                     c_regs = 8
-                    config = WmmaConfig(shape, a_dtype, b_dtype, c_dtype, a_layout, b_layout, c_layout, a_regs, b_regs,
-                                        c_regs)
+                    config = WmmaConfig(
+                        shape, a_dtype, b_dtype, c_dtype, a_layout, b_layout, c_layout, a_regs, b_regs, c_regs
+                    )
                     wmma_configs.append(config)
 
     # tf32 x tf32 => f32
@@ -79,8 +73,9 @@ def init_wmma_configs():
                     a_regs = 4
                     b_regs = 4
                     c_regs = 8
-                    config = WmmaConfig(shape, a_dtype, b_dtype, c_dtype, a_layout, b_layout, c_layout, a_regs, b_regs,
-                                        c_regs)
+                    config = WmmaConfig(
+                        shape, a_dtype, b_dtype, c_dtype, a_layout, b_layout, c_layout, a_regs, b_regs, c_regs
+                    )
                     wmma_configs.append(config)
 
 
@@ -113,21 +108,23 @@ def register_wmma_load_instructions():
                 inst_name,
                 '{{{}}},'.format(', '.join([f'%{i}' for i in range(num_regs)])),
                 '[%{}],'.format(num_regs),
-                '%{};'.format(num_regs + 1)
+                '%{};'.format(num_regs + 1),
             ]
             fb += AsmStmt(
                 template_string=' '.join(template_sub_strings),
                 outputs=[('=r', dst[i]) for i in range(num_regs)],
                 inputs=[('l', src), ('r', stride)],
-                is_volatile=False
+                is_volatile=False,
             )
         register_primitive_function(name=func_name, func_or_type=fb.func)
 
 
 @initialize()
 def register_wmma_mma_instructions():
-    WmmaMmaConfig = namedtuple('WmmaMmaConfig', ['shape', 'a_layout', 'b_layout', 'a_dtype', 'b_dtype', 'c_dtype',
-                                                 'a_num_regs', 'b_num_regs', 'c_num_regs'])
+    WmmaMmaConfig = namedtuple(
+        'WmmaMmaConfig',
+        ['shape', 'a_layout', 'b_layout', 'a_dtype', 'b_dtype', 'c_dtype', 'a_num_regs', 'b_num_regs', 'c_num_regs'],
+    )
     configs = set()
     for wmma_config in wmma_configs:
         # pylint: disable=unused-variable
@@ -141,9 +138,16 @@ def register_wmma_mma_instructions():
             )
         else:
             # pylint: disable=line-too-long
-            inst_name = 'wmma.mma.sync.aligned.{a_layout}.{b_layout}.{shape}.{d_dtype}.{a_dtype}.{b_dtype}.{c_dtype}'.format(
-                a_layout=a_layout, b_layout=b_layout, shape='m{}n{}k{}'.format(*shape), d_dtype=c_dtype,
-                a_dtype=a_dtype, b_dtype=b_dtype, c_dtype=c_dtype
+            inst_name = (
+                'wmma.mma.sync.aligned.{a_layout}.{b_layout}.{shape}.{d_dtype}.{a_dtype}.{b_dtype}.{c_dtype}'.format(
+                    a_layout=a_layout,
+                    b_layout=b_layout,
+                    shape='m{}n{}k{}'.format(*shape),
+                    d_dtype=c_dtype,
+                    a_dtype=a_dtype,
+                    b_dtype=b_dtype,
+                    c_dtype=c_dtype,
+                )
             )
         func_name = 'cuda_' + inst_name.replace('.', '_')
         uint32_dtype = ScalarType('uint32')
@@ -159,16 +163,17 @@ def register_wmma_mma_instructions():
                 inst_name,
                 '{{{}}},'.format(', '.join([f'%{i}' for i in range(c_num_regs)])),
                 '{{{}}},'.format(', '.join([f'%{i}' for i in range(c_num_regs, c_num_regs + a_num_regs)])),
-                '{{{}}},'.format(', '.join([f'%{i}' for i in range(c_num_regs + a_num_regs, c_num_regs + a_num_regs
-                                                                   + b_num_regs)])),
-                '{{{}}};'.format(', '.join([f'%{i}' for i in range(c_num_regs)]))
+                '{{{}}},'.format(
+                    ', '.join([f'%{i}' for i in range(c_num_regs + a_num_regs, c_num_regs + a_num_regs + b_num_regs)])
+                ),
+                '{{{}}};'.format(', '.join([f'%{i}' for i in range(c_num_regs)])),
             ]
             template_string = ' '.join(template_sub_strings)
             fb += AsmStmt(
                 template_string=template_string,
                 outputs=[('+r', c[i]) for i in range(c_num_regs)],
                 inputs=[('r', a[i]) for i in range(a_num_regs)] + [('r', b[i]) for i in range(b_num_regs)],
-                is_volatile=False
+                is_volatile=False,
             )
         register_primitive_function(name=func_name, func_or_type=fb.func)
 
@@ -200,14 +205,14 @@ def register_wmma_store_instructions():
                 inst_name,
                 '[%{}],'.format(num_regs),
                 '{{{}}},'.format(', '.join([f'%{i}' for i in range(num_regs)])),
-                '%{};'.format(num_regs + 1)
+                '%{};'.format(num_regs + 1),
             ]
             template_string = ' '.join(template_sub_strings)
             fb += AsmStmt(
                 template_string=template_string,
                 outputs=[],
                 inputs=[('r', src[i]) for i in range(num_regs)] + [('l', dst)] + [('r', stride)],
-                is_volatile=False
+                is_volatile=False,
             )
         register_primitive_function(name=func_name, func_or_type=fb.func)
 
@@ -216,21 +221,12 @@ def default_stride(matrix: str, layout: str, shape: Tuple[int, int, int]) -> int
     assert matrix in ['a', 'b', 'c']
     assert layout in ['row', 'col']
     m, n, k = shape
-    matrix_shape = {
-        'a': (m, k),
-        'b': (k, n),
-        'c': (m, n)
-    }
+    matrix_shape = {'a': (m, k), 'b': (k, n), 'c': (m, n)}
     a, b = matrix_shape[matrix]
     return b if layout == 'row' else a
 
 
-def wmma_load_a(
-        config: WmmaConfig,
-        reg_addr: Expr,
-        mem_addr: Expr,
-        stride: Optional[Union[Expr, int]] = None,
-):
+def wmma_load_a(config: WmmaConfig, reg_addr: Expr, mem_addr: Expr, stride: Optional[Union[Expr, int]] = None):
     func_name = 'wmma.load.{matrix}.sync.aligned.{layout}.{shape}.{dtype}'.format(
         matrix='a', layout=config.a_layout, shape='m{}n{}k{}'.format(*config.shape), dtype=config.a_dtype
     ).replace('.', '_')
@@ -242,12 +238,7 @@ def wmma_load_a(
     return call_cuda(func_name, args=[reg_addr, mem_addr, stride])
 
 
-def wmma_load_b(
-        config: WmmaConfig,
-        reg_addr: Expr,
-        mem_addr: Expr,
-        stride: Optional[Union[Expr, int]] = None,
-):
+def wmma_load_b(config: WmmaConfig, reg_addr: Expr, mem_addr: Expr, stride: Optional[Union[Expr, int]] = None):
     func_name = 'wmma.load.{matrix}.sync.aligned.{layout}.{shape}.{dtype}'.format(
         matrix='b', layout=config.b_layout, shape='m{}n{}k{}'.format(*config.shape), dtype=config.b_dtype
     ).replace('.', '_')
@@ -259,30 +250,21 @@ def wmma_load_b(
     return call_cuda(func_name, args=[reg_addr, mem_addr, stride])
 
 
-def wmma_mma(
-        config: WmmaConfig,
-        a_regs_addr: Expr,
-        b_regs_addr: Expr,
-        c_regs_addr: Expr
-):
+def wmma_mma(config: WmmaConfig, a_regs_addr: Expr, b_regs_addr: Expr, c_regs_addr: Expr):
     head_part = 'wmma.mma.sync.aligned.{a_layout}.{b_layout}.{shape}'.format(
         a_layout=config.a_layout, b_layout=config.b_layout, shape='m{}n{}k{}'.format(*config.shape)
     )
     if config.a_dtype == 'f16' and config.b_dtype == 'f16':
         type_part = '.{d_dtype}.{c_dtype}'.format(d_dtype=config.c_dtype, c_dtype=config.c_dtype)
     else:
-        type_part = '.{d_dtype}.{a_dtype}.{b_dtype}.{c_dtype}'.format(d_dtype=config.c_dtype, a_dtype=config.a_dtype,
-                                                                      b_dtype=config.b_dtype, c_dtype=config.c_dtype)
+        type_part = '.{d_dtype}.{a_dtype}.{b_dtype}.{c_dtype}'.format(
+            d_dtype=config.c_dtype, a_dtype=config.a_dtype, b_dtype=config.b_dtype, c_dtype=config.c_dtype
+        )
     func_name = (head_part + type_part).replace('.', '_')
     return call_cuda(func_name, args=[a_regs_addr, b_regs_addr, c_regs_addr])
 
 
-def wmma_store(
-        config: WmmaConfig,
-        mem_addr: Expr,
-        reg_addr: Expr,
-        stride: Optional[Union[Expr, int]] = None,
-):
+def wmma_store(config: WmmaConfig, mem_addr: Expr, reg_addr: Expr, stride: Optional[Union[Expr, int]] = None):
     func_name = 'wmma.store.d.sync.aligned.{layout}.{shape}.{dtype}'.format(
         layout=config.c_layout, shape='m{}n{}k{}'.format(*config.shape), dtype=config.c_dtype
     ).replace('.', '_')

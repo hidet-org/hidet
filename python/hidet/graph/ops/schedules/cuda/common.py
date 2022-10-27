@@ -34,15 +34,15 @@ def warp_reduce(v, op) -> Stmt:
 
 
 def _get_shapes(
-        task_shape: Sequence[int],
-        num_workers=32,
-        perm: Optional[Sequence[int]] = None
+    task_shape: Sequence[int], num_workers=32, perm: Optional[Sequence[int]] = None
 ) -> Tuple[List[int], List[int]]:
     rank = len(task_shape)
 
     if prod(task_shape) % num_workers != 0:
-        raise NotSupportedError('Number of workers must be a divisor of total number of tasks, '
-                                'task shape {} and number workers {}.'.format(task_shape, num_workers))
+        raise NotSupportedError(
+            'Number of workers must be a divisor of total number of tasks, '
+            'task shape {} and number workers {}.'.format(task_shape, num_workers)
+        )
 
     # can not have duplicated dimensions
     if len(set(perm)) != len(perm):
@@ -119,9 +119,7 @@ def get_task_map(task_shape: Sequence[int], num_workers=32, ranks: Sequence[int]
 
 
 def get_transfer_task_map(
-        task_shape: Sequence[int],
-        num_workers=32,
-        ranks: Optional[Sequence[int]] = None
+    task_shape: Sequence[int], num_workers=32, ranks: Optional[Sequence[int]] = None
 ) -> Tuple[TaskMapping, DataLayout]:
     grid_shape, repeat_shape = _get_shapes(task_shape, num_workers, ranks)
 

@@ -24,9 +24,7 @@ def check_unary(shape, dtype, numpy_op, hidet_op, positive=False):
     np.testing.assert_allclose(actual=hidet_b, desired=numpy_b, atol=1e-5, rtol=1e-5)
 
 
-binary_op_shapes = [[[1], [200]],
-                    [[100, 200], [1, 200]],
-                    [[200, 1], [200]]]
+binary_op_shapes = [[[1], [200]], [[100, 200], [1, 200]], [[200, 1], [200]]]
 
 unary_op_shapes = [[1], [100], [200]]
 
@@ -83,4 +81,3 @@ def test_neg(shape):
 
 if __name__ == '__main__':
     pytest.main([__file__])
-

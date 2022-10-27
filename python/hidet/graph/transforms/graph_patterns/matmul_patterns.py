@@ -75,8 +75,10 @@ class ThreeMatmulBiasFusionPattern(GraphPattern):
         return [self.y1, self.y2, self.y3]
 
     def target(self, matched: MatchDict) -> Optional[List[Tensor]]:
-        x, c1, c2, c3, b1, b2, b3, y1, y2, y3 = [matched[t] for t in [self.x, self.c1, self.c2, self.c3, self.b1,
-                                                                      self.b2, self.b3, self.y1, self.y2, self.y3]]
+        x, c1, c2, c3, b1, b2, b3, y1, y2, y3 = [
+            matched[t]
+            for t in [self.x, self.c1, self.c2, self.c3, self.b1, self.b2, self.b3, self.y1, self.y2, self.y3]
+        ]
         if len(c1.shape) == len(c2.shape) == len(c3.shape) >= 2:
             if same_list(c1.shape[:-1], c2.shape[:-1]) and same_list(c2.shape[:-1], c3.shape[:-1]):
                 if len(b1.shape) == len(b2.shape) == len(b3.shape) == 1:
@@ -91,8 +93,4 @@ class ThreeMatmulBiasFusionPattern(GraphPattern):
 
 
 def matmul_patterns() -> List[GraphPattern]:
-    return [
-        ThreeMatmulBiasFusionPattern(),
-        ThreeMatmulFusionPattern(),
-        TwoMatmulFusionPattern(),
-    ]
+    return [ThreeMatmulBiasFusionPattern(), ThreeMatmulFusionPattern(), TwoMatmulFusionPattern()]

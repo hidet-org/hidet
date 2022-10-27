@@ -176,8 +176,7 @@ class CudaAPI:
 
     @staticmethod
     def compute_capability() -> Tuple[int, int]:
-        return (CudaAPI.device_property(CudaAPI.PropertyMajor),
-                CudaAPI.device_property(CudaAPI.PropertyMinor))
+        return (CudaAPI.device_property(CudaAPI.PropertyMajor), CudaAPI.device_property(CudaAPI.PropertyMinor))
 
 
 cuda = CudaAPI()

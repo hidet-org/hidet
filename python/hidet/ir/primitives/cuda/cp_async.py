@@ -14,7 +14,7 @@ def resolve_name_cp_async(cp_size: int, cache_level: str = 'always', prefetch_by
         prefetch_part = '_l2_{}B'.format(prefetch_bytes)
     else:
         prefetch_part = ''
-    cache_part = 'c' + cache_level[0]   # 'ca' or 'cg'
+    cache_part = 'c' + cache_level[0]  # 'ca' or 'cg'
     return 'cp_async_size_{}_{}{}'.format(cp_size, cache_part, prefetch_part)
 
 
@@ -36,22 +36,16 @@ def register_cp_async():
                 func_name = 'cuda_' + resolve_name_cp_async(cp_size, cache_level, prefetch_bytes)
                 template_string = 'cp.async.{cache_level}.shared.global{prefetch} [%0], [%1], %2, %3;'.format(
                     cache_level={'always': 'ca', 'global': 'cg'}[cache_level],
-                    prefetch='.L2::{}B'.format(prefetch_bytes) if prefetch_bytes != 0 else ''
+                    prefetch='.L2::{}B'.format(prefetch_bytes) if prefetch_bytes != 0 else '',
                 )
 
                 @script
-                def cuda_cp_async(
-                        dst: PointerType(VoidType()),
-                        src: PointerType(VoidType()),
-                        src_size: i32
-                ):
+                def cuda_cp_async(dst: PointerType(VoidType()), src: PointerType(VoidType()), src_size: i32):
                     attr.func_name = func_name
                     attr.func_kind = 'cuda_device'
                     dst_smem_ptr = cvta_generic_to_shared(dst)
-                    asm(
-                        template=template_string,
-                        inputs=[dst_smem_ptr, src, cp_size, src_size]
-                    )
+                    asm(template=template_string, inputs=[dst_smem_ptr, src, cp_size, src_size])
+
                 assert isinstance(cuda_cp_async, Function)
                 register_primitive_function(name=cuda_cp_async.name, func_or_type=cuda_cp_async)
 
@@ -65,6 +59,7 @@ def register_cp_async_commit_group():
         attr.func_name = 'cuda_cp_async_commit_group'
         attr.func_kind = 'cuda_device'
         asm('cp.async.commit_group;')
+
     assert isinstance(cuda_cp_async_commit_group, Function)
     register_primitive_function(cuda_cp_async_commit_group.name, cuda_cp_async_commit_group)
 
@@ -81,6 +76,7 @@ def register_cp_async_wait_group():
             attr.func_name = func_name
             attr.func_kind = 'cuda_device'
             asm('cp.async.wait_group {};'.format(groups))
+
         assert isinstance(cuda_cp_async_wait_group, Function)
         register_primitive_function(cuda_cp_async_wait_group.name, cuda_cp_async_wait_group)
 
@@ -94,6 +90,7 @@ def register_cp_async_wait_all():
         attr.func_name = 'cuda_cp_async_wait_all'
         attr.func_kind = 'cuda_device'
         asm('cp.async.wait_all;')
+
     assert isinstance(cuda_cp_async_wait_all, Function)
     register_primitive_function(cuda_cp_async_wait_all.name, cuda_cp_async_wait_all)
 
@@ -165,6 +162,7 @@ def cp_async_wait_group(allow_on_fly_groups: Union[int, Expr]):
     """
     if isinstance(allow_on_fly_groups, Expr):
         from hidet.ir.functors.simplifier import simplify_to_int
+
         allow_on_fly_groups = simplify_to_int(allow_on_fly_groups)
     if not 0 <= allow_on_fly_groups < 10:
         raise ValueError('n out of bound')

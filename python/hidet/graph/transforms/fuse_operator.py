@@ -16,7 +16,7 @@ class FusibleGraph:
     def __init__(self, anchor: Operator):
         self.anchor: Operator = anchor
         self.operators: List[Operator] = [anchor]
-        self.input_tensors: List[Tensor] = unique(anchor.inputs)   # remove duplicates
+        self.input_tensors: List[Tensor] = unique(anchor.inputs)  # remove duplicates
         self.output_tensors: List[Tensor] = list(anchor.outputs)
 
     def __str__(self):
@@ -36,11 +36,7 @@ class FusibleGraph:
 Usage = Dict[Tensor, List[Tuple[Operator, int]]]
 
 
-def fuse_epilogue_operators(
-        anchors: Sequence[Operator],
-        usage: Usage,
-        belong: Dict[Operator, FusibleGraph]
-):
+def fuse_epilogue_operators(anchors: Sequence[Operator], usage: Usage, belong: Dict[Operator, FusibleGraph]):
     for anchor in anchors:
         if not anchor.task.allow_epilogue():
             # this anchor operator does not allow epilogue fusion, skip
@@ -93,18 +89,18 @@ def fuse_epilogue_operators(
             sub_graph.operators.append(user)
             sub_graph.output_tensors.remove(found_output_tensor)
             sub_graph.output_tensors.append(user.outputs[0])
-            sub_graph.input_tensors.extend([tensor for tensor in unique(user.inputs)
-                                            if (tensor not in sub_graph.input_tensors and
-                                                tensor is not found_output_tensor)])
+            sub_graph.input_tensors.extend(
+                [
+                    tensor
+                    for tensor in unique(user.inputs)
+                    if (tensor not in sub_graph.input_tensors and tensor is not found_output_tensor)
+                ]
+            )
             belong[user] = sub_graph
             # continue the while loop to fuse more operators
 
 
-def fuse_prologue_operators(
-        anchors: Sequence[Operator],
-        usage: Usage,
-        belong: Dict[Operator, FusibleGraph]
-):
+def fuse_prologue_operators(anchors: Sequence[Operator], usage: Usage, belong: Dict[Operator, FusibleGraph]):
     for anchor in anchors:
         if not anchor.task.allow_prologue():
             # this anchor operator does not allow prologue fusion, skip
@@ -144,16 +140,15 @@ def fuse_prologue_operators(
             producer: Operator = found_input_tensor.trace[0]
             sub_graph.operators.insert(0, producer)
             sub_graph.input_tensors.remove(found_input_tensor)
-            sub_graph.input_tensors.extend([tensor for tensor in unique(producer.inputs)
-                                            if tensor not in sub_graph.input_tensors])
+            sub_graph.input_tensors.extend(
+                [tensor for tensor in unique(producer.inputs) if tensor not in sub_graph.input_tensors]
+            )
             belong[producer] = sub_graph
             # continue the while loop to fuse more operators
 
 
 def topological_order(
-        anchors: Sequence[Operator],
-        usage: Usage,
-        belong: Dict[Operator, FusibleGraph]
+    anchors: Sequence[Operator], usage: Usage, belong: Dict[Operator, FusibleGraph]
 ) -> List[FusibleGraph]:
     dag = DirectedGraph()
     sub_graphs: List[FusibleGraph] = [belong[anchor] for anchor in anchors]
@@ -184,22 +179,26 @@ def sanity_check_partition(graph: FlowGraph, partition: List[FusibleGraph], belo
             if input_tensor.trace is None:
                 # graph input
                 continue
-            producer_node, idx = input_tensor.trace     # pylint: disable=unused-variable
+            producer_node, idx = input_tensor.trace  # pylint: disable=unused-variable
             producer_subgraph: FusibleGraph = belong[producer_node]
             consumer_subgraph: FusibleGraph = belong[consumer_node]
             if producer_subgraph is consumer_subgraph:
                 # it is an intra-sub-graph edge
                 sub_graph = producer_subgraph
-                assert input_tensor not in sub_graph.input_tensors, \
-                    "intra-sub-graph edge should not be an input tensor of its sub-graph"
-                assert input_tensor not in sub_graph.output_tensors, \
-                    "intra-sub-graph edge should not be an output tensor of its sub-graph"
+                assert (
+                    input_tensor not in sub_graph.input_tensors
+                ), "intra-sub-graph edge should not be an input tensor of its sub-graph"
+                assert (
+                    input_tensor not in sub_graph.output_tensors
+                ), "intra-sub-graph edge should not be an output tensor of its sub-graph"
             else:
                 # it is an inter-sub-graph edge
-                assert input_tensor in producer_subgraph.output_tensors, \
-                    "inter-sub-graph edge does not start in producer subgraph's output_tensors"
-                assert input_tensor in consumer_subgraph.input_tensors, \
-                    "inter-sub-graph edge does not end in consumer subgraph's input_tensors"
+                assert (
+                    input_tensor in producer_subgraph.output_tensors
+                ), "inter-sub-graph edge does not start in producer subgraph's output_tensors"
+                assert (
+                    input_tensor in consumer_subgraph.input_tensors
+                ), "inter-sub-graph edge does not end in consumer subgraph's input_tensors"
 
 
 def partition_graph(graph: FlowGraph, usage: Usage) -> List[FusibleGraph]:
@@ -275,7 +274,7 @@ def task_from_sub_graph(sub_graph: FusibleGraph, usage: Usage) -> Task:
         nodes=nodes,
         consume=consume,
         input_tensors=task_graph_inputs,
-        output_tensors=task_graph_outputs
+        output_tensors=task_graph_outputs,
     )
 
     anchor_task.task_graph = task_graph
@@ -287,30 +286,31 @@ def operator_from_sub_graph(sub_graph: FusibleGraph, input_remap: Dict[Tensor, T
     if len(sub_graph.operators) == 1:
         # if there is only one operator in the sub-graph, we just update its inputs.
         origin_op = sub_graph.operators[0]
-        updated_inputs: List[Tensor] = [input_remap[tensor] if tensor in input_remap else tensor
-                                        for tensor in origin_op.inputs]
+        updated_inputs: List[Tensor] = [
+            input_remap[tensor] if tensor in input_remap else tensor for tensor in origin_op.inputs
+        ]
         if origin_op.name == 'Concat':
             print('Concat')
         if origin_op.__class__ is Operator:
-            raise ValueError('Found an fused operator in the fusion pass.\n'
-                             'For now, this pass expects to accept a graph without fused operators.\n'
-                             'Have you run this pass twice?')
+            raise ValueError(
+                'Found an fused operator in the fusion pass.\n'
+                'For now, this pass expects to accept a graph without fused operators.\n'
+                'Have you run this pass twice?'
+            )
         outs = origin_op.reforward(updated_inputs)
         updated_op = outs[0].trace[0]
         return updated_op
     else:
         # otherwise, create a new operator from the sub-graph.
-        updated_inputs: List[Tensor] = [input_remap[tensor] if tensor in input_remap else tensor
-                                        for tensor in sub_graph.input_tensors]
+        updated_inputs: List[Tensor] = [
+            input_remap[tensor] if tensor in input_remap else tensor for tensor in sub_graph.input_tensors
+        ]
         task: Task = task_from_sub_graph(sub_graph, usage)
         op = Operator(
             inputs=updated_inputs,
             task=task,
             name='Fused' + sub_graph.anchor.name,
-            attributes={
-                **sub_graph.anchor.attrs,
-                'fusion': ' '.join([op.name for op in sub_graph.operators]),
-            }
+            attributes={**sub_graph.anchor.attrs, 'fusion': ' '.join([op.name for op in sub_graph.operators])},
         )
         op.outputs = op.lazy_run()
         return op
@@ -325,13 +325,13 @@ def construct_fused_graph(graph: FlowGraph, sub_graphs: Sequence[FusibleGraph], 
         op = operator_from_sub_graph(sub_graph, input_remap, usage)
         input_remap.update({a: b for a, b in zip(sub_graph.output_tensors, op.outputs)})
         graph_nodes.append(op)
-    graph_output_tensors: List[Tensor] = [input_remap[tensor] if tensor in input_remap else tensor
-                                          for tensor in graph.outputs]
+    graph_output_tensors: List[Tensor] = [
+        input_remap[tensor] if tensor in input_remap else tensor for tensor in graph.outputs
+    ]
     return FlowGraph(graph_output_tensors, inputs=graph_input_tensors, nodes=graph_nodes)
 
 
 class FuseOperatorPass(GraphPass):
-
     def process_graph(self, graph: FlowGraph) -> FlowGraph:
         usage: Usage = analyze_usage(graph)
         partition: List[FusibleGraph] = partition_graph(graph, usage)

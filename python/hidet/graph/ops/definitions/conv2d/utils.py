@@ -2,8 +2,9 @@ from typing import List, Union
 from ..utils import normalize_stride
 
 
-def infer_conv2d_shape(x_shape: List[int], w_shape: List[int],
-                       strides: Union[int, List[int]], groups: int) -> List[int]:
+def infer_conv2d_shape(
+    x_shape: List[int], w_shape: List[int], strides: Union[int, List[int]], groups: int
+) -> List[int]:
     n, c, h, w = x_shape
     oc, gc, kx, ky = w_shape
     sx, sy = normalize_stride(strides)

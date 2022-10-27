@@ -3,8 +3,9 @@ import os
 import subprocess
 
 
-def export_transformer_model_as_onnx(model_name: str, output_path: str, precision='float32', feature='default',
-                                     skip_exists=True):
+def export_transformer_model_as_onnx(
+    model_name: str, output_path: str, precision='float32', feature='default', skip_exists=True
+):
     """
     Export a model from transformers package.
 

@@ -133,6 +133,7 @@ class PatternMatcher:
         2 if failed, it acted like we have not call this function (we treat self.matched[v] = None
           and v not in self.matched as the same state)
     """
+
     # pylint: disable=no-self-use
     _dispatch_table: Dict[Type[Node], Callable[[Node, Node], None]] = None
 
@@ -176,7 +177,7 @@ class PatternMatcher:
                 # python containers and types
                 str: PatternMatcher.match_String,
                 list: PatternMatcher.match_Sequence,
-                tuple: PatternMatcher.match_Sequence
+                tuple: PatternMatcher.match_Sequence,
             }
         return PatternMatcher._dispatch_table
 
@@ -193,9 +194,9 @@ class PatternMatcher:
             return None, str(e)
             # return None, str(traceback.format_exc())
 
-    def match(self,
-              pattern: Optional[Union[Node, Sequence]],
-              target: Optional[Union[Node, Sequence]]) -> ContextManager:
+    def match(
+        self, pattern: Optional[Union[Node, Sequence]], target: Optional[Union[Node, Sequence]]
+    ) -> ContextManager:
         return MatchContext(self, pattern, target)
 
     @staticmethod
@@ -203,8 +204,11 @@ class PatternMatcher:
         if expect_target_type is None:
             expect_target_type = pattern.__class__
         if not isinstance(target, expect_target_type):
-            raise NotMatchedError(pattern, target, "Pattern expect target with type {}, but got type {}".format(
-                expect_target_type, type(target)))
+            raise NotMatchedError(
+                pattern,
+                target,
+                "Pattern expect target with type {}, but got type {}".format(expect_target_type, type(target)),
+            )
 
     def check_cond(self, pattern, target, cond, message=""):
         if not cond:
@@ -360,14 +364,16 @@ class PatternMatcher:
 
 def reduce_pattern(shape: Sequence[Union[int, Expr]], fcompute, reduce_type: str):
     from hidet.ir.functors import collect  # pylint: disable=import-outside-toplevel
+
     shape = convert(shape)
     axes = [var() for _ in shape]
     value = convert(fcompute(*axes))
     input_tensors = collect(value, TensorNode, stop_when_found=True)
     input_scalars = collect(value, ScalarNode, stop_when_found=True)
     reduce_operation = ReduceOperation.from_name(reduce_type)
-    return ReduceCompute(input_tensors, input_scalars, shape, axes, value, reduce_operation,
-                         accumulate_dtype=ScalarType('float32'))
+    return ReduceCompute(
+        input_tensors, input_scalars, shape, axes, value, reduce_operation, accumulate_dtype=ScalarType('float32')
+    )
 
 
 def any_const_int():

@@ -48,8 +48,10 @@ def normalize_padding(padding: Union[int, Sequence[int]], dim=2) -> List[int]:
             return list(padding + padding)
         elif len(padding) == dim * 2:
             return list(padding)
-    raise ValueError('Padding must be an integer or a list of integer with length 1, '
-                     '{}, or {}, but got {}'.format(dim, dim * 2, padding))
+    raise ValueError(
+        'Padding must be an integer or a list of integer with length 1, '
+        '{}, or {}, but got {}'.format(dim, dim * 2, padding)
+    )
 
 
 def normalize_dim(dim: Optional[Union[int, Sequence[int]]], rank: int) -> Union[int, List[int]]:

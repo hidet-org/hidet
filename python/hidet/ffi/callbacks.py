@@ -21,6 +21,7 @@ runtime_allocated_storages: Dict[int, 'hidet.runtime.storage.Storage'] = {}
 def allocate_cuda_storage(nbytes: int) -> int:
     # pylint: disable=import-outside-toplevel
     from hidet.runtime.storage import Storage
+
     storage = Storage.new('cuda', nbytes)
     runtime_allocated_storages[storage.addr] = storage
     return storage.addr
@@ -39,6 +40,7 @@ def free_cuda_storage(addr: int) -> None:
 def allocate_cpu_storage(nbytes: int) -> int:
     # pylint: disable=import-outside-toplevel
     from hidet.runtime.storage import Storage
+
     storage = Storage.new('cpu', nbytes)
     runtime_allocated_storages[storage.addr] = storage
     return storage.addr

@@ -19,7 +19,6 @@ from hidet.graph import ops
 from hidet.graph.tensor import Tensor, from_numpy, randn
 
 
-
 class OnnxOperator:
     def __init__(self, node, op_sets: List[int]):
         """
@@ -66,8 +65,9 @@ class OnnxOperator:
                 if self.implemented(try_op_set):
                     return try_op_set
                 try_op_set -= 1
-        raise NotImplementedError('Can not resolve opset for operator {} given opsets {}.'.format(
-            self.node.op_type, op_sets))
+        raise NotImplementedError(
+            'Can not resolve opset for operator {} given opsets {}.'.format(self.node.op_type, op_sets)
+        )
 
     def implemented(self, opset: int):
         func_name = 'run_v{}'.format(opset)
@@ -139,7 +139,7 @@ class OnnxOperator:
         ret += [None for _ in range(diff)]
         for i, (t, r) in enumerate(zip(ret, requires)):
             if t is None and r:
-                raise 'The {}th input is required.'.format(i)
+                raise ValueError('The {}th input is required.'.format(i))
         return ret
 
 
@@ -151,8 +151,10 @@ def register_onnx_operator(cls: Type[OnnxOperator]):
         raise ValueError('Can only register a sub-class of OnnxOperator as an onnx operator.')
     cls_name = cls.__name__
     if not cls_name.startswith('Onnx'):
-        raise ValueError('Please name the class as OnnxOPNAME such as OnnxConv and OnnxAdd,'
-                         ' where OPNAME is the same as the operator name used by ONNX. Got {}'.format(cls_name))
+        raise ValueError(
+            'Please name the class as OnnxOPNAME such as OnnxConv and OnnxAdd,'
+            ' where OPNAME is the same as the operator name used by ONNX. Got {}'.format(cls_name)
+        )
     dispatch_table[cls_name[4:]] = cls
     return cls
 
@@ -184,7 +186,7 @@ class OnnxBatchNormalization(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         epsilon: float = self.attrs.get('epsilon', 1e-5)
         # for inference, we can ignore this momentum attribute
-        momentum: float = self.attrs.get('momentum', 0.9)   # pylint: disable=unused-variable
+        momentum: float = self.attrs.get('momentum', 0.9)  # pylint: disable=unused-variable
         training_mode: int = self.attrs.get('training_mode', 0)
         assert training_mode == 0, 'BatchNorm in training mode occurs, currently, hidet does not support training.'
 
@@ -330,7 +332,7 @@ class OnnxSoftmax(OnnxOperator):
 @register_onnx_operator
 class OnnxGlobalAveragePool(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
-        x, = inputs
+        (x,) = inputs
         dims = list(range(2, len(x.shape)))
         return [ops.reduce_mean(x, dims=dims, keep_dim=True)]
 
@@ -401,7 +403,6 @@ class OnnxArgMax(OnnxOperator):
 
 @register_onnx_operator
 class OnnxGemm(OnnxOperator):
-
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         alpha = self.attrs.get('alpha', 1.0)
         beta = self.attrs.get('beta', 0.0)
@@ -453,7 +454,6 @@ class OnnxCast(OnnxOperator):
 
 @register_onnx_operator
 class OnnxShape(OnnxOperator):
-
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         start = self.attrs.get('start', 0)
         end: Optional[int] = self.attrs.get('end', None)
@@ -482,7 +482,6 @@ class OnnxConstant(OnnxOperator):
 
 @register_onnx_operator
 class OnnxGather(OnnxOperator):
-
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         axis = self.attrs.get('axis', 0)
         data, indices = inputs
@@ -576,8 +575,19 @@ class OnnxResize(OnnxOperator):
         if len(x.shape) == 4:
             if not (target_size[0] == x.shape[0] and target_size[1] == x.shape[1]):
                 raise ValueError('Unsupported resize on batch and channel dimension.')
-            return [ops.resize2d(x, target_size[2:], mode, coordinate_transformation_mode, nearest_mode,
-                                 roi, cubic_coeff_a, exclude_outside, extrapolation_value)]
+            return [
+                ops.resize2d(
+                    x,
+                    target_size[2:],
+                    mode,
+                    coordinate_transformation_mode,
+                    nearest_mode,
+                    roi,
+                    cubic_coeff_a,
+                    exclude_outside,
+                    extrapolation_value,
+                )
+            ]
         else:
             raise NotImplementedError('Current only support 2d resize, got x {}.'.format(x.shape))
 
@@ -703,15 +713,19 @@ class OnnxSplit(OnnxOperator):
             num_outputs = len(self.output_names)
             extent = data.shape[axis]
             if extent % num_outputs != 0:
-                raise ValueError('Can not split tensor with shape {} on axis {} into {} parts evenly.'.format(
-                    data.shape, axis, num_outputs
-                ))
+                raise ValueError(
+                    'Can not split tensor with shape {} on axis {} into {} parts evenly.'.format(
+                        data.shape, axis, num_outputs
+                    )
+                )
             parts = [extent // num_outputs] * num_outputs
         elif len(inputs) == 2:
             parts = self.tensor2list(inputs[1])
         else:
-            raise ValueError('Expect the input of Split operator have 1 or 2 inputs, but got {} inputs. See:\n'.format(
-                len(inputs)) + 'https://github.com/onnx/onnx/blob/main/docs/Operators.md#Split')
+            raise ValueError(
+                'Expect the input of Split operator have 1 or 2 inputs, but got {} inputs. See:\n'.format(len(inputs))
+                + 'https://github.com/onnx/onnx/blob/main/docs/Operators.md#Split'
+            )
         return ops.split(data, axis, parts)
 
 
@@ -803,8 +817,10 @@ class OnnxIf(OnnxOperator):
     def run_v1(self, inputs: List[Tensor]) -> List[Tensor]:
         cond = inputs[0]
         if cond.storage is None:
-            raise ValueError('Hidet currently does not support dynamic control flow in computation graph'
-                             ' (If operator with condition that depends on non-const input).')
+            raise ValueError(
+                'Hidet currently does not support dynamic control flow in computation graph'
+                ' (If operator with condition that depends on non-const input).'
+            )
 
         cond = cond.numpy().flatten()
         if cond.size > 1:
@@ -841,16 +857,19 @@ class OnnxIdentity(OnnxOperator):
 @register_onnx_operator
 class OnnxPyFunc(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
-        warnings.warn('PyFunc operator in ONNX model encountered, dummy output is returned. '
-                      'If dummy output are used, there will be errors.')
+        warnings.warn(
+            'PyFunc operator in ONNX model encountered, dummy output is returned. '
+            'If dummy output are used, there will be errors.'
+        )
         return [randn([1]) for name in self.output_names]
 
 
 def dispatch(node, op_sets: List[int]) -> OnnxOperator:
     op_type = node.op_type
     if op_type not in dispatch_table:
-        raise NotImplementedError("Operator '{}' (in opset {}) from onnx has not been supported yet.".format(
-            op_type, op_sets))
+        raise NotImplementedError(
+            "Operator '{}' (in opset {}) from onnx has not been supported yet.".format(op_type, op_sets)
+        )
     op = dispatch_table[op_type](node, op_sets)
     return op
 
@@ -858,46 +877,38 @@ def dispatch(node, op_sets: List[int]) -> OnnxOperator:
 def run_trt(node: OnnxOperator, inputs: List[Tensor]) -> List[Tensor]:
     # pylint: disable=no-member
     import onnxruntime
+
     hidet_outputs = node.run(inputs)
     dtype_map = {
         'float32': onnx.TensorProto.FLOAT,
         'int32': onnx.TensorProto.INT32,
         'int64': onnx.TensorProto.INT64,
-        'bool': onnx.TensorProto.BOOL
+        'bool': onnx.TensorProto.BOOL,
     }
     inputs_value_info = [
         onnx.helper.make_value_info(
             name=name,
-            type_proto=onnx.helper.make_tensor_type_proto(
-                elem_type=dtype_map[tensor.dtype],
-                shape=tensor.shape
-            )
-        ) for name, tensor in zip(node.input_names, inputs)
+            type_proto=onnx.helper.make_tensor_type_proto(elem_type=dtype_map[tensor.dtype], shape=tensor.shape),
+        )
+        for name, tensor in zip(node.input_names, inputs)
     ]
     outputs_value_info = [
         onnx.helper.make_value_info(
             name=name,
-            type_proto=onnx.helper.make_tensor_type_proto(
-                elem_type=dtype_map[tensor.dtype],
-                shape=tensor.shape
-            )
-        ) for name, tensor in zip(node.output_names, hidet_outputs)
+            type_proto=onnx.helper.make_tensor_type_proto(elem_type=dtype_map[tensor.dtype], shape=tensor.shape),
+        )
+        for name, tensor in zip(node.output_names, hidet_outputs)
     ]
-    graph = onnx.helper.make_graph(
-        nodes=[node.node],
-        name='test',
-        inputs=inputs_value_info,
-        outputs=outputs_value_info
-    )
+    graph = onnx.helper.make_graph(nodes=[node.node], name='test', inputs=inputs_value_info, outputs=outputs_value_info)
     model = onnx.helper.make_model(graph, opset_imports=[onnx.helper.make_opsetid("", opset) for opset in node.op_sets])
     # print(model)
     onnx.checker.check_model(model)
     # serialized_model = onnx._serialize(model)
     serialized_model = model.SerializeToString()
     session = onnxruntime.InferenceSession(serialized_model, providers=['CPUExecutionProvider'])
-    outputs = session.run(node.output_names, input_feed={
-        name: tensor.cpu().numpy() for name, tensor in zip(node.input_names, inputs)
-    })
+    outputs = session.run(
+        node.output_names, input_feed={name: tensor.cpu().numpy() for name, tensor in zip(node.input_names, inputs)}
+    )
     return [hidet.array(output).cuda() for output in outputs]
 
 
@@ -993,14 +1004,17 @@ class OnnxModule(nn.Module):
     output_names: List[str]
         The output names of the loaded onnx model.
     """
+
     def __init__(self, model: onnx.ModelProto):
         super().__init__()
         op_sets = []
         for opset_import in model.opset_import:
             if opset_import.domain not in ['', 'ai.onnx', 'ai.onnx.ml']:
                 # we currently only support standard onnx operator domain
-                raise ValueError('Onnx model imports unknown operator domain: {}, we currently '
-                                 'only support standard onnx operator set.'.format(repr(opset_import.domain)))
+                raise ValueError(
+                    'Onnx model imports unknown operator domain: {}, we currently '
+                    'only support standard onnx operator set.'.format(repr(opset_import.domain))
+                )
             op_sets.append(int(opset_import.version))
         self.op_sets: List[int] = list(reversed(sorted(op_sets)))
         self.graph: OnnxGraph = OnnxGraph(model.graph, op_sets=self.op_sets)

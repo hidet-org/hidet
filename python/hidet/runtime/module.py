@@ -15,6 +15,7 @@ class CompiledModule:
 class CompiledFunction:
     def __init__(self, name, packed_func):
         from hidet.ffi import PackedFunc
+
         self.name: str = name
         self.packed_func: PackedFunc = packed_func
 

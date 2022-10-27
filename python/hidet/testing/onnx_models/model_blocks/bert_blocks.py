@@ -1,6 +1,5 @@
 from typing import Optional, List, Tuple
 import math
-import hidet
 from hidet.utils import hidet_cache_file
 from ..utils import export_torch_to_onnx
 
@@ -11,6 +10,7 @@ except ImportError:
     pass
 
 # Acknowledgement: adopted the bert implementation from huggingface transformers package, with some simplification
+
 
 class BertConfig:
     def __init__(self):
@@ -33,10 +33,10 @@ class BertEmbeddings(nn.Module):
         self.layer_norm = nn.LayerNorm(config.hidden_size)
 
     def forward(
-            self,
-            input_ids: Tensor,  # [batch_size, seq_length] in [0, vocab_size)
-            token_type_ids: Optional[Tensor] = None,  # [batch_size, seq_length] in [0, type_vocab_size)
-            position_ids: Optional[Tensor] = None  # [batch_size, seq_length] in [0, max_position_embeddings)
+        self,
+        input_ids: Tensor,  # [batch_size, seq_length] in [0, vocab_size)
+        token_type_ids: Optional[Tensor] = None,  # [batch_size, seq_length] in [0, type_vocab_size)
+        position_ids: Optional[Tensor] = None,  # [batch_size, seq_length] in [0, max_position_embeddings)
     ):
         batch_size, seq_length = input_ids.shape
 
@@ -58,8 +58,10 @@ class BertSelfAttention(nn.Module):
     def __init__(self, config: BertConfig):
         super().__init__()
         if config.hidden_size % config.num_attention_heads != 0:
-            raise ValueError('Multi head attention expects hidden_size % num_attention_heads == 0, '
-                             'got {} and {}'.format(config.hidden_size, config.num_attention_heads))
+            raise ValueError(
+                'Multi head attention expects hidden_size % num_attention_heads == 0, '
+                'got {} and {}'.format(config.hidden_size, config.num_attention_heads)
+            )
         self.num_attention_heads = config.num_attention_heads
         self.attention_head_size = config.hidden_size // config.num_attention_heads
 
@@ -278,150 +280,98 @@ class BertModel(nn.Module):
         return [hidden_states, pooled_output]
 
 
-def get_bert_block(name: str, batch_size=1, seq_length=128, config: Optional[BertConfig] = None, precision='float32',
-                   nocache=False) -> Tuple[str, List[str], List["hidet.Tensor"]]:
+def get_bert_block(
+    name: str, batch_size=1, seq_length=128, config: Optional[BertConfig] = None, precision='float32', nocache=False
+) -> Tuple[str, List[str], List["hidet.Tensor"]]:
     assert precision in ['float32', 'float16']
     if config is None:
         config = BertConfig()
     hidden_size = config.hidden_size
     if name == 'bert_all':
         model = BertModel(config)
-        input_names = [
-            'input_ids',
-            'token_type_ids',
-            'attention_mask'
-        ]
+        input_names = ['input_ids', 'token_type_ids', 'attention_mask']
         inputs = [
             torch.randint(0, config.vocab_size, [batch_size, seq_length], dtype=torch.int64),
             torch.zeros([batch_size, seq_length], dtype=torch.int64),
-            torch.ones([batch_size, seq_length], dtype=torch.int64)
+            torch.ones([batch_size, seq_length], dtype=torch.int64),
         ]
     elif name == 'bert_embeddings':
         model = BertEmbeddings(config)
-        input_names = [
-            'input_ids',
-            'token_type_ids',
-            'position_ids'
-        ]
+        input_names = ['input_ids', 'token_type_ids', 'position_ids']
         inputs = [
             torch.randint(0, config.vocab_size, [batch_size, seq_length], dtype=torch.int64),
             torch.zeros([batch_size, seq_length], dtype=torch.int64),
-            torch.arange(seq_length, dtype=torch.int64).expand(batch_size, seq_length)
+            torch.arange(seq_length, dtype=torch.int64).expand(batch_size, seq_length),
         ]
     elif name == 'bert_encoder':
         model = BertEncoder(config)
-        input_names = [
-            'hidden_states',
-            'attention_mask'
-        ]
+        input_names = ['hidden_states', 'attention_mask']
         inputs = [
             torch.randn([batch_size, seq_length, hidden_size]),
-            torch.zeros([batch_size, 1, 1, seq_length], dtype=torch.float32)
+            torch.zeros([batch_size, 1, 1, seq_length], dtype=torch.float32),
         ]
     elif name == 'bert_pooler':
         model = BertPooler(config)
-        input_names = [
-            'hidden_states'
-        ]
-        inputs = [
-            torch.randn([batch_size, seq_length, hidden_size]),
-        ]
+        input_names = ['hidden_states']
+        inputs = [torch.randn([batch_size, seq_length, hidden_size])]
     elif name == 'bert_layer':
         model = BertLayer(config)
-        input_names = [
-            'hidden_states',
-            'attention_mask'
-        ]
+        input_names = ['hidden_states', 'attention_mask']
         inputs = [
             torch.randn([batch_size, seq_length, hidden_size]),
-            torch.zeros([batch_size, 1, 1, seq_length], dtype=torch.float32)
+            torch.zeros([batch_size, 1, 1, seq_length], dtype=torch.float32),
         ]
     elif name == 'bert_attention':
         model = BertAttention(config)
-        input_names = [
-            'hidden_states',
-            'attention_mask'
-        ]
+        input_names = ['hidden_states', 'attention_mask']
         inputs = [
             torch.randn([batch_size, seq_length, hidden_size]),
-            torch.zeros([batch_size, 1, 1, seq_length], dtype=torch.float32)
+            torch.zeros([batch_size, 1, 1, seq_length], dtype=torch.float32),
         ]
     elif name == 'bert_intermediate':
         model = BertIntermediate(config)
-        input_names = [
-            'hidden_states',
-        ]
-        inputs = [
-            torch.randn([batch_size, seq_length, hidden_size]),
-        ]
+        input_names = ['hidden_states']
+        inputs = [torch.randn([batch_size, seq_length, hidden_size])]
     elif name == 'bert_output':
         model = BertOutput(config)
-        input_names = [
-            'hidden_states',
-            'skip_hidden_states'
-        ]
+        input_names = ['hidden_states', 'skip_hidden_states']
         inputs = [
             torch.randn([batch_size, seq_length, config.intermediate_size]),
             torch.randn([batch_size, seq_length, hidden_size]),
         ]
     elif name == 'bert_self_attention':
         model = BertSelfAttention(config)
-        input_names = [
-            'hidden_states',
-            'attention_mask'
-        ]
+        input_names = ['hidden_states', 'attention_mask']
         inputs = [
             torch.randn([batch_size, seq_length, hidden_size]),
-            torch.zeros([batch_size, 1, 1, seq_length], dtype=torch.float32)
+            torch.zeros([batch_size, 1, 1, seq_length], dtype=torch.float32),
         ]
     elif name == 'bert_self_output':
         model = BertSelfOutput(config)
-        input_names = [
-            'hidden_states',
-            'skip_hidden_states'
-        ]
+        input_names = ['hidden_states', 'skip_hidden_states']
         inputs = [
             torch.randn([batch_size, seq_length, hidden_size]),
             torch.randn([batch_size, seq_length, hidden_size]),
         ]
     elif name == 'bert_self_at_query':
         model = BertSelfAttentionQuery(config)
-        input_names = [
-            'hidden_states'
-        ]
-        inputs = [
-            torch.randn([batch_size, seq_length, hidden_size])
-        ]
+        input_names = ['hidden_states']
+        inputs = [torch.randn([batch_size, seq_length, hidden_size])]
     elif name == 'bert_self_at_qkv':
         model = BertSelfAttentionQueryKeyValue(config)
-        input_names = [
-            'hidden_states'
-        ]
-        inputs = [
-            torch.randn([batch_size, seq_length, hidden_size])
-        ]
+        input_names = ['hidden_states']
+        inputs = [torch.randn([batch_size, seq_length, hidden_size])]
     elif name == 'bert_self_at_qkv_v2':
         model = BertSelfAttentionQueryKeyValueV2(config)
-        input_names = [
-            'hidden_states'
-        ]
-        inputs = [
-            torch.randn([batch_size, seq_length, hidden_size])
-        ]
+        input_names = ['hidden_states']
+        inputs = [torch.randn([batch_size, seq_length, hidden_size])]
     elif name == 'bert_self_at_softmax':
         model = BertSelfAttentionSoftmax(config)
-        input_names = [
-            'attention_scores'
-        ]
-        inputs = [
-            torch.randn([batch_size, config.num_attention_heads, seq_length, seq_length])
-        ]
+        input_names = ['attention_scores']
+        inputs = [torch.randn([batch_size, config.num_attention_heads, seq_length, seq_length])]
     elif name == 'bert_self_at_context':
         model = BertSelfAttentionContext()
-        input_names = [
-            'attention_probs',
-            'value'
-        ]
+        input_names = ['attention_probs', 'value']
         attention_head_size = config.hidden_size // config.num_attention_heads
         inputs = [
             torch.randn([batch_size, config.num_attention_heads, seq_length, seq_length]),
@@ -432,10 +382,5 @@ def get_bert_block(name: str, batch_size=1, seq_length=128, config: Optional[Ber
 
     onnx_path = hidet_cache_file('onnx', 'bert', f'bs{batch_size}_{name}_{precision}.onnx')
     return export_torch_to_onnx(
-        onnx_path=onnx_path,
-        model=model,
-        input_names=input_names,
-        inputs=inputs,
-        precision=precision,
-        nocache=nocache
+        onnx_path=onnx_path, model=model, input_names=input_names, inputs=inputs, precision=precision, nocache=nocache
     )

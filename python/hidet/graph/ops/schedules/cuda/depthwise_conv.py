@@ -22,11 +22,11 @@ def tuple_divide(lhs: T, rhs: T, ceil=False) -> T:
 
 class DepthwiseConv2dSchedule(Schedule):
     def __init__(
-            self,
-            task: Conv2dTask,
-            task_shape: Tuple[int, int, int, int],
-            block_shape: Tuple[int, int, int, int],
-            repeat_shape: Tuple[int, int, int, int],
+        self,
+        task: Conv2dTask,
+        task_shape: Tuple[int, int, int, int],
+        block_shape: Tuple[int, int, int, int],
+        repeat_shape: Tuple[int, int, int, int],
     ):
         self.task_shape: Tuple[int, int, int, int] = task_shape
         self.block_shape: Tuple[int, int, int, int] = block_shape
@@ -39,9 +39,13 @@ class DepthwiseConv2dSchedule(Schedule):
         self.threads = prod(self.thread_count)
         strides = task.stride
         kernels = task.inputs[1].const_shape()[2:]
-        self.smem_nbytes = (block_shape[0] * block_shape[1] * ((block_shape[2] - 1) * strides[0] + kernels[0]) *
-                            ((block_shape[3] - 1) * strides[1] + kernels[1])
-                            + block_shape[1] * kernels[0] * kernels[1])* 4
+        self.smem_nbytes = (
+            block_shape[0]
+            * block_shape[1]
+            * ((block_shape[2] - 1) * strides[0] + kernels[0])
+            * ((block_shape[3] - 1) * strides[1] + kernels[1])
+            + block_shape[1] * kernels[0] * kernels[1]
+        ) * 4
         if self.smem_nbytes > cuda.max_smem_bytes_per_block():
             raise NotSupportedError(self)
         if self.threads > 1024 or self.threads < 32:
@@ -53,10 +57,7 @@ class DepthwiseConv2dSchedule(Schedule):
         task_shape: Tuple[int, int, int, int] = tuple(task.outputs[0].const_shape())
         if space_level == 0:
             sch = DepthwiseConv2dSchedule(
-                task=task,
-                task_shape=task_shape,
-                block_shape=(1, 36, 7, 7),
-                repeat_shape=(1, 12, 7, 7),
+                task=task, task_shape=task_shape, block_shape=(1, 36, 7, 7), repeat_shape=(1, 12, 7, 7)
             )
             return [sch]
         elif space_level == 1:
@@ -86,7 +87,7 @@ class DepthwiseConv2dSchedule(Schedule):
             ('task', '{}x{}x{}x{}'.format(*self.task_shape)),
             ('block', '{}x{}x{}x{}'.format(*self.block_shape)),
             ('repeat', '{}x{}x{}x{}'.format(*self.repeat_shape)),
-            ('thread', '{}x{}x{}x{}'.format(*self.thread_shape))
+            ('thread', '{}x{}x{}x{}'.format(*self.thread_shape)),
         ]
 
     def derived_keys(self) -> List[Tuple[str, Union[int, float, str]]]:
@@ -95,7 +96,7 @@ class DepthwiseConv2dSchedule(Schedule):
             ('repeat_count', '{}x{}x{}x{}'.format(*self.repeat_count)),
             ('thread_count', '{}x{}x{}x{}'.format(*self.thread_count)),
             ('blocks', '{}'.format(self.blocks)),
-            ('threads', '{}'.format(self.threads))
+            ('threads', '{}'.format(self.threads)),
         ]
 
 
@@ -110,15 +111,27 @@ def schedule_depthwise_conv2d(task: Conv2dTask) -> IRModule:
     schedules = DepthwiseConv2dSchedule.schedules_for(task, space_level=ctx.space_level)
     ir_modules = [
         schedule_depthwise_conv2d_kernel(
-            task, sch, batch_size, channels, height, width, kernel_height, kernel_width, in_height, in_width,
-            stride_width, stride_height
-        ) for sch in schedules
+            task,
+            sch,
+            batch_size,
+            channels,
+            height,
+            width,
+            kernel_height,
+            kernel_width,
+            in_height,
+            in_width,
+            stride_width,
+            stride_height,
+        )
+        for sch in schedules
     ]
     default_resolve_out_dir = os.path.join(
-        './outs/resolve', task.name,
+        './outs/resolve',
+        task.name,
         'depthwise_conv2d_{}x{}x{}x{}_s{}x{}_k{}x{}'.format(
             batch_size, channels, height, width, stride_height, stride_width, kernel_height, kernel_width
-        )
+        ),
     )
     resolve_out_dir = ctx.resolve_out_dir if ctx.resolve_out_dir else default_resolve_out_dir
     return resolve_ir_modules(
@@ -127,28 +140,29 @@ def schedule_depthwise_conv2d(task: Conv2dTask) -> IRModule:
         target_device='cuda',
         output_dir=resolve_out_dir,
         parallel=True,
-        verbose=True
+        verbose=True,
     )
 
 
 def schedule_depthwise_conv2d_kernel(
-        task: Conv2dTask,
-        sch: DepthwiseConv2dSchedule,
-        batch_size: int,
-        channels: int,
-        height: int,
-        width: int,
-        kernel_height: int,
-        kernel_width: int,
-        in_height: int,
-        in_width: int,
-        stride_width: int,
-        stride_height: int
+    task: Conv2dTask,
+    sch: DepthwiseConv2dSchedule,
+    batch_size: int,
+    channels: int,
+    height: int,
+    width: int,
+    kernel_height: int,
+    kernel_width: int,
+    in_height: int,
+    in_width: int,
+    stride_width: int,
+    stride_height: int,
 ) -> IRModule:
     import hidet
     from hidet.lang import f32, tensor, attr, grid
     from hidet.lang.mapping import spatial, repeat
     from hidet.lang.cuda import threadIdx, blockIdx, syncthreads
+
     # print(sch)
 
     block_n, block_c, block_h, block_w = sch.block_shape
@@ -160,40 +174,59 @@ def schedule_depthwise_conv2d_kernel(
 
     with hidet.lang.script_module(task) as script_module:
 
-        smem_x_num_elements = block_n * block_c * ((block_h - 1) * stride_height + kernel_height) * \
-                              ((block_w - 1) * stride_width + kernel_width)
+        smem_x_num_elements = (
+            block_n
+            * block_c
+            * ((block_h - 1) * stride_height + kernel_height)
+            * ((block_w - 1) * stride_width + kernel_width)
+        )
         smem_x_repeats = (smem_x_num_elements + sch.threads - 1) // sch.threads
         smem_w_num_elements = block_c * kernel_height * kernel_width
         smem_w_repeats = (smem_w_num_elements + sch.threads - 1) // sch.threads
 
         @hidet.lang.script
         def conv2d_grid(
-                gmem_x: f32[batch_size, channels, in_height, in_width],
-                gmem_w: f32[channels, 1, kernel_height, kernel_width],
-                gmem_y: f32[batch_size, channels, height, width]
+            gmem_x: f32[batch_size, channels, in_height, in_width],
+            gmem_w: f32[channels, 1, kernel_height, kernel_width],
+            gmem_y: f32[batch_size, channels, height, width],
         ):
             attr.func_name = func_name
             attr.cuda_grid_dim = sch.blocks
             attr.cuda_block_dim = sch.threads
 
-            smem_x = tensor('shared', 'float32', [block_n, block_c, (block_h - 1) * stride_height + kernel_height,
-                                                  (block_w - 1) * stride_width + kernel_width])
+            smem_x = tensor(
+                'shared',
+                'float32',
+                [
+                    block_n,
+                    block_c,
+                    (block_h - 1) * stride_height + kernel_height,
+                    (block_w - 1) * stride_width + kernel_width,
+                ],
+            )
             smem_w = tensor('shared', 'float32', [block_c, kernel_height, kernel_width])
             regs_y = tensor('register', 'float32', [count_n, count_c, count_h, count_w])
 
             offset_n, offset_c, offset_h, offset_w = spatial(bcn, bcc, bch, bcw).single_task_of(blockIdx.x)
             for worker in repeat(smem_x_repeats).spatial(sch.threads).on(threadIdx.x):
                 if worker < smem_x_num_elements:
-                    n, c, h, w = spatial(block_n,
-                                         block_c,
-                                         (block_h - 1) * stride_height + kernel_height,
-                                         (block_w - 1) * stride_width + kernel_width).single_task_of(worker)
-                    nn, cc, hh, ww = (offset_n * block_n + n,
-                                      offset_c * block_c + c,
-                                      offset_h * block_h * stride_height + h,
-                                      offset_w * block_w * stride_width + w)
-                    smem_x[n, c, h, w] = (gmem_x[nn, cc, hh, ww] if nn < batch_size and cc < channels and
-                                                                    hh < in_height and ww < in_width else 0.0)
+                    n, c, h, w = spatial(
+                        block_n,
+                        block_c,
+                        (block_h - 1) * stride_height + kernel_height,
+                        (block_w - 1) * stride_width + kernel_width,
+                    ).single_task_of(worker)
+                    nn, cc, hh, ww = (
+                        offset_n * block_n + n,
+                        offset_c * block_c + c,
+                        offset_h * block_h * stride_height + h,
+                        offset_w * block_w * stride_width + w,
+                    )
+                    smem_x[n, c, h, w] = (
+                        gmem_x[nn, cc, hh, ww]
+                        if nn < batch_size and cc < channels and hh < in_height and ww < in_width
+                        else 0.0
+                    )
 
             offset_n, offset_c, offset_h, offset_w = spatial(bcn, bcc, bch, bcw).single_task_of(blockIdx.x)
             for worker in repeat(smem_w_repeats).spatial(sch.threads).on(threadIdx.x):
@@ -209,13 +242,18 @@ def schedule_depthwise_conv2d_kernel(
                 for tn, tc, th, tw in spatial(tcn, tcc, tch, tcw).on(threadIdx.x):
                     regs_y[rn, rc, rh, rw] = 0.0
                     nn, cc, hh, ww = rn * group_n + tn, rc * group_c + tc, rh * group_h + th, rw * group_w + tw
-                    gn, gc, gh, gw = (offset_n * block_n + nn, offset_c * block_c + cc,
-                                      offset_h * block_h + hh, offset_w * block_w + ww)
+                    gn, gc, gh, gw = (
+                        offset_n * block_n + nn,
+                        offset_c * block_c + cc,
+                        offset_h * block_h + hh,
+                        offset_w * block_w + ww,
+                    )
                     for r, s in grid(kernel_height, kernel_width):
                         regs_y[rn, rc, rh, rw] = (
-                                regs_y[rn, rc, rh, rw]
-                                + smem_x[nn, cc, hh * stride_height + r, ww * stride_width + s] * smem_w[cc, r, s]
+                            regs_y[rn, rc, rh, rw]
+                            + smem_x[nn, cc, hh * stride_height + r, ww * stride_width + s] * smem_w[cc, r, s]
                         )
                     if gn < batch_size and gc < channels and gh < height and gw < width:
                         gmem_y[gn, gc, gh, gw] = regs_y[rn, rc, rh, rw]
+
     return fuse_and_pack(script_module.ir_module(), conv2d_grid, task)

@@ -9,21 +9,16 @@ from hidet.graph.tensor import convert
 from .utils import Task, Operator, Tensor, TensorNode, InverseMap, compute, input_like
 from .utils import broadcast_shape, broadcast_shapes, broadcast_indices
 
+
 class UnaryElementwiseTask(Task):
     def __init__(self, name: str, x: TensorNode, op: Callable[[Any], Any]):
         shape = x.const_shape()
-        y = compute(
-            name='y',
-            shape=shape,
-            fcompute=lambda *indices: op(x.__getitem__(indices))
-        )
+        y = compute(name='y', shape=shape, fcompute=lambda *indices: op(x.__getitem__(indices)))
         super().__init__(
             name=name,
             inputs=[x],
             outputs=[y],
-            inverse_map={
-                x: InverseMap.from_lambda(lambda *indices: list(indices), num_args=len(x.data_type.shape))
-            }
+            inverse_map={x: InverseMap.from_lambda(lambda *indices: list(indices), num_args=len(x.data_type.shape))},
         )
 
 
@@ -37,17 +32,19 @@ class BinaryElementwiseTask(Task):
             name='z',
             shape=z_shape,
             fcompute=lambda *indices: op(
-                x[broadcast_indices(indices, x_shape, z_shape)],
-                y[broadcast_indices(indices, y_shape, z_shape)]
-            )
+                x[broadcast_indices(indices, x_shape, z_shape)], y[broadcast_indices(indices, y_shape, z_shape)]
+            ),
         )
 
         super().__init__(
             name=name,
             inputs=[x, y],
             outputs=[z],
-            inverse_map={v: InverseMap.identity(len(v_shape)) for v, v_shape
-                         in zip([x, y], [x_shape, y_shape]) if prod(v_shape) == prod(z_shape)}
+            inverse_map={
+                v: InverseMap.identity(len(v_shape))
+                for v, v_shape in zip([x, y], [x_shape, y_shape])
+                if prod(v_shape) == prod(z_shape)
+            },
         )
 
 
@@ -60,14 +57,17 @@ class VariadicElementwiseTask(Task):
             shape=out_shape,
             fcompute=lambda *indices: op(
                 *[arg[broadcast_indices(indices, shape, out_shape)] for shape, arg in zip(shapes, args)]
-            )
+            ),
         )
         super().__init__(
             name=name,
             inputs=list(args),
             outputs=[out],
-            inverse_map={v: InverseMap.identity(len(v_shape)) for v, v_shape in zip(args, shapes)
-                         if prod(v_shape) == prod(out_shape)}
+            inverse_map={
+                v: InverseMap.identity(len(v_shape))
+                for v, v_shape in zip(args, shapes)
+                if prod(v_shape) == prod(out_shape)
+            },
         )
 
 
@@ -84,34 +84,30 @@ class WhereTask(Task):
             fcompute=lambda *indices: expr.if_then_else(
                 cond=cond[broadcast_indices(indices, cond_shape, z_shape)],
                 then_expr=x[broadcast_indices(indices, x_shape, z_shape)],
-                else_expr=y[broadcast_indices(indices, y_shape, z_shape)]
-            )
+                else_expr=y[broadcast_indices(indices, y_shape, z_shape)],
+            ),
         )
 
         super().__init__(
             name='where',
             inputs=[cond, x, y],
             outputs=[z],
-            inverse_map={v: InverseMap.identity(len(v_shape)) for v, v_shape
-                         in zip([cond, x, y], [cond_shape, x_shape, y_shape]) if prod(v_shape) == prod(z_shape)}
+            inverse_map={
+                v: InverseMap.identity(len(v_shape))
+                for v, v_shape in zip([cond, x, y], [cond_shape, x_shape, y_shape])
+                if prod(v_shape) == prod(z_shape)
+            },
         )
 
 
 class UnaryElementwiseOp(Operator):
     def __init__(self, x: Tensor, op, name: str, attributes: Optional[Dict[str, Any]] = None):
-        super().__init__(
-            inputs=[x],
-            task=UnaryElementwiseTask(name, input_like(x, 'x'), op=op),
-            attributes=attributes
-        )
+        super().__init__(inputs=[x], task=UnaryElementwiseTask(name, input_like(x, 'x'), op=op), attributes=attributes)
 
 
 class BinaryElementwiseOp(Operator):
     def __init__(self, x: Tensor, y: Tensor, op, name: str):
-        super().__init__(
-            inputs=[x, y],
-            task=BinaryElementwiseTask(name, input_like(x, 'x'), input_like(y, 'y'), op=op)
-        )
+        super().__init__(inputs=[x, y], task=BinaryElementwiseTask(name, input_like(x, 'x'), input_like(y, 'y'), op=op))
 
 
 class AddScalarOp(UnaryElementwiseOp):
@@ -234,7 +230,7 @@ class WhereOp(Operator):
         super().__init__(
             inputs=[cond, x, y],
             task=WhereTask(input_like(cond, 'cond'), input_like(x, 'x'), input_like(y, 'y')),
-            name='where'
+            name='where',
         )
 
 
@@ -251,9 +247,9 @@ class MaxOp(Operator):
             task=VariadicElementwiseTask(
                 name='max',
                 args=[input_like(x, f'x{idx}') for idx, x in enumerate(tensors)],
-                op=lambda *args: scalar_max(args)
+                op=lambda *args: scalar_max(args),
             ),
-            name='max'
+            name='max',
         )
 
 
@@ -270,9 +266,9 @@ class MinOp(Operator):
             task=VariadicElementwiseTask(
                 name='min',
                 args=[input_like(x, f'x{idx}') for idx, x in enumerate(tensors)],
-                op=lambda *args: scalar_min(args)
+                op=lambda *args: scalar_min(args),
             ),
-            name='min'
+            name='min',
         )
 
 
@@ -280,16 +276,12 @@ PythonScalar = Union[float, int]
 
 
 def binary_arithmatic(
-        x: Union[Tensor, float, int],
-        y: Union[Tensor, float, int],
-        tensor_scalar_op,
-        scalar_tensor_op,
-        tensor_tensor_op
+    x: Union[Tensor, float, int], y: Union[Tensor, float, int], tensor_scalar_op, scalar_tensor_op, tensor_tensor_op
 ) -> Union[Tensor, float, int]:
     if not (isinstance(x, (Tensor, float, int)) and isinstance(y, (Tensor, float, int))):
-        raise ValueError('Only support add/sub/mul/div between hidet.Tensor, float, and int. got {} and {}'.format(
-            type(x), type(y)
-        ))
+        raise ValueError(
+            'Only support add/sub/mul/div between hidet.Tensor, float, and int. got {} and {}'.format(type(x), type(y))
+        )
     if isinstance(x, (float, int)):
         assert isinstance(y, Tensor)
         x = convert(x, y.device)
@@ -310,37 +302,41 @@ def binary_arithmatic(
 
 def add(x: Union[Tensor, float, int], y: Union[Tensor, float, int]) -> Tensor:
     return binary_arithmatic(
-        x, y,
+        x,
+        y,
         lambda a, b: AddScalarOp(a, b).get_output(0),
         lambda a, b: AddScalarOp(b, a).get_output(0),
-        lambda a, b: AddOp(a, b).get_output(0)
+        lambda a, b: AddOp(a, b).get_output(0),
     )
 
 
 def sub(x: Union[Tensor, float, int], y: Union[Tensor, float, int]) -> Tensor:
     return binary_arithmatic(
-        x, y,
+        x,
+        y,
         lambda a, b: SubScalarOp(a, b).get_output(0),
         lambda a, b: RSubScalarOp(b, a).get_output(0),
-        lambda a, b: SubOp(a, b).get_output(0)
+        lambda a, b: SubOp(a, b).get_output(0),
     )
 
 
 def multiply(x: Union[Tensor, float, int], y: Union[Tensor, float, int]) -> Tensor:
     return binary_arithmatic(
-        x, y,
+        x,
+        y,
         lambda a, b: MultiplyScalarOp(a, b).get_output(0),
         lambda a, b: MultiplyScalarOp(b, a).get_output(0),
-        lambda a, b: MultiplyOp(a, b).get_output(0)
+        lambda a, b: MultiplyOp(a, b).get_output(0),
     )
 
 
 def divide(x: Union[Tensor, float, int], y: Union[Tensor, float, int]) -> Tensor:
     return binary_arithmatic(
-        x, y,
+        x,
+        y,
         lambda a, b: DivideScalarOp(a, b).get_output(0),
         lambda a, b: RDivideScalarOp(b, a).get_output(0),
-        lambda a, b: DivideOp(a, b).get_output(0)
+        lambda a, b: DivideOp(a, b).get_output(0),
     )
 
 

@@ -22,14 +22,12 @@ from hidet.backend import codegen
 
 class CompilationFailed(Exception):
     def __init__(self, source_path: str, msg: str):
+        super().__init__()
         self.source_path = source_path
         self.msg = msg
 
     def __str__(self):
-        lines = [
-            'failed to compile source file: {}'.format(self.source_path),
-            '{}'.format(self.msg)
-        ]
+        lines = ['failed to compile source file: {}'.format(self.source_path), '{}'.format(self.msg)]
         return '\n'.join(lines)
 
 
@@ -38,10 +36,7 @@ def nvcc_path() -> str:
     path: Optional[str] = shutil.which('nvcc')
     if path is not None:
         return path
-    try_dirs = [
-        '/usr/local/cuda/bin/',
-        '/usr/bin'
-    ]
+    try_dirs = ['/usr/local/cuda/bin/', '/usr/bin']
     for try_dir in try_dirs:
         path = os.path.join(try_dir, 'nvcc')
         if os.path.exists(path):
@@ -85,23 +80,27 @@ def compile_source(src_path: str, out_lib_path: str, keep_ptx=False) -> None:
         # keep option will keep the intermediate results during compilation, including PTX.
         '-keep' if keep_ptx else '',
         # the target PTX and SASS version.
-        '-gencode', f'arch=compute_{cc_code},code=sm_{cc_code}',
+        '-gencode',
+        f'arch=compute_{cc_code},code=sm_{cc_code}',
         # allow ptxas (PTX assembler) to output information like register/smem usage.
         '--ptxas-options=-v',
         # compile into position independent code.
-        '--compiler-options', "'-fPIC'",
+        '--compiler-options',
+        "'-fPIC'",
         # embed the line information into the binary, allow Nsight Compute to get the source code for profiling.
         '-lineinfo',
         # link the hidet runtime, all APIs for communication between kernels and host system are in hidet runtime.
         '-lhidet_runtime',
         # shared cuda runtime library is used (.so), instead of static one (.a). used to reduce binary size.
-        '--cudart', 'shared',
+        '--cudart',
+        'shared',
         # generate shared library (lib.so).
         '--shared',
         # the source path.
         src_path,
         # the output library path.
-        '-o', out_lib_path,
+        '-o',
+        out_lib_path,
     ]
 
     try:
@@ -220,6 +219,7 @@ def build_ir_module_job(build_instance: BuildInstance) -> Optional[str]:
     """
     # pylint: disable=import-outside-toplevel
     from hidet.transforms.instruments import SaveIRInstrument
+
     src_path = os.path.join(build_instance.output_dir, 'source.cu')
     lib_path = os.path.join(build_instance.output_dir, 'lib.so')
 
@@ -275,15 +275,24 @@ def batch_build_ir_modules(build_instances, parallel=True, verbose=False) -> Lis
             mem_for_worker = 1.5 * 1024 * 1024 * 1024  # 1.5 GiB
             num_workers = min(max(int(psutil.virtual_memory().available // mem_for_worker), 1), psutil.cpu_count())
             with multiprocessing.Pool(processes=num_workers) as pool:
-                for lib_path in tqdm(pool.imap(build_ir_module_job, build_instances),
-                                     desc='Compiling', total=len(build_instances), disable=not verbose):
+                for lib_path in tqdm(
+                    pool.imap(build_ir_module_job, build_instances),
+                    desc='Compiling',
+                    total=len(build_instances),
+                    disable=not verbose,
+                ):
                     lib_paths.append(lib_path)
         else:
             lib_paths = map(build_ir_module_job, build_instances)
         assert len(lib_paths) == len(build_instances)
-        funcs = [load_task_func(lib_path, instance.ir_module.task) if lib_path else None
-                 for lib_path, instance in zip(lib_paths, build_instances)]
+        funcs = [
+            load_task_func(lib_path, instance.ir_module.task) if lib_path else None
+            for lib_path, instance in zip(lib_paths, build_instances)
+        ]
     if verbose:
-        print('Batch build {} modules within {:.3f} seconds, on average {:.1f} seconds per module.'.format(
-            len(build_instances), timer.elapsed_seconds(), timer.elapsed_seconds() / len(build_instances)))
+        print(
+            'Batch build {} modules within {:.3f} seconds, on average {:.1f} seconds per module.'.format(
+                len(build_instances), timer.elapsed_seconds(), timer.elapsed_seconds() / len(build_instances)
+            )
+        )
     return funcs

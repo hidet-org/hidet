@@ -96,19 +96,13 @@ def type_infer_func(arg_types: List[ScalarType]) -> ScalarType:
 
 @initialize()
 def register_primitive_functions_generic():
-    unary_names = [
-        'neg', 'sin', 'cos', 'tanh', 'exp', 'round', 'floor', 'ceil', 'rsqrt', 'sqrt', 'erf', 'log'
-    ]
-    binary_names = [
-        'min', 'max', 'pow'
-    ]
-    ternary_names = [
-        'fma'
-    ]
+    unary_names = ['neg', 'sin', 'cos', 'tanh', 'exp', 'round', 'floor', 'ceil', 'rsqrt', 'sqrt', 'erf', 'log']
+    binary_names = ['min', 'max', 'pow']
+    ternary_names = ['fma']
     for name in unary_names + binary_names + ternary_names:
         register_primitive_function(
             name='{}_{}'.format('base', name),
             codegen_name=None,
             func_or_type=FuncType(type_infer_func=type_infer_func),
-            generic=True
+            generic=True,
         )

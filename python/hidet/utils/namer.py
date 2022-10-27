@@ -15,9 +15,7 @@ class Namer:
         self.name_id_clock.clear()
         self.obj_name.clear()
         # add keywords in target language
-        keywords = [
-            'const'
-        ]
+        keywords = ['const']
         for kw in keywords:
             self.name_id_clock[kw] = 0
 
@@ -25,6 +23,7 @@ class Namer:
         from hidet.ir.expr import Var
         from hidet.ir.compute import ScalarNode, TensorNode
         from hidet.graph.tensor import Tensor
+
         if e in self.obj_name:
             return self.obj_name[e]
         if hint:
@@ -34,12 +33,7 @@ class Namer:
         elif isinstance(e, (ScalarNode, TensorNode)):
             orig_name = e.name
         else:
-            alias = {
-                ScalarNode: 'scalar',
-                TensorNode: 'tensor',
-                Var: 'v',
-                Tensor: 'x'
-            }
+            alias = {ScalarNode: 'scalar', TensorNode: 'tensor', Var: 'v', Tensor: 'x'}
             orig_name = alias[type(e)] if type(e) in alias else type(e).__name__
 
         if orig_name in self.name_id_clock:

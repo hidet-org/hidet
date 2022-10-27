@@ -99,13 +99,9 @@ class SqueezeMultiplyPattern(GraphPattern):
         dims = s.op.attrs['dims']
         if len(c.shape) < len(y.shape):
             c = c.unsqueeze(list(range(len(y.shape) - len(c.shape))))
-        c = c.unsqueeze(dims)   # now, c has the same shape as x
+        c = c.unsqueeze(dims)  # now, c has the same shape as x
         return [ops.squeeze(x * c, dims=dims)]
 
 
 def transform_patterns() -> List[GraphPattern]:
-    return [
-        ReshapeScalePattern(),
-        ReshapeBiasPattern(),
-        SqueezeMultiplyPattern()
-    ]
+    return [ReshapeScalePattern(), ReshapeBiasPattern(), SqueezeMultiplyPattern()]

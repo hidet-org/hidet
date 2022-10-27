@@ -45,25 +45,16 @@ class MatmulTask(Task):
             name='c',
             shape=c_shape,
             fcompute=lambda *indices: reduce(
-                shape=[reduce_extent],
-                fcompute=lambda k: fcompute(indices, k),
-                reduce_type='sum'
-            )
+                shape=[reduce_extent], fcompute=lambda k: fcompute(indices, k), reduce_type='sum'
+            ),
         )
-        super().__init__(
-            name='matmul',
-            inputs=[a, b],
-            outputs=[c]
-        )
+        super().__init__(name='matmul', inputs=[a, b], outputs=[c])
 
 
 class MatmulOp(Operator):
     def __init__(self, a: Tensor, b: Tensor):
         task = MatmulTask(input_like(a, 'a'), input_like(b, 'b'))
-        super().__init__(
-            inputs=[a, b],
-            task=task
-        )
+        super().__init__(inputs=[a, b], task=task)
 
 
 def matmul(a: Tensor, b: Tensor) -> Tensor:

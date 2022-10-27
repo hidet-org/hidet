@@ -13,8 +13,12 @@ def check_model(model_path: str, input_names: List[str], input_tensors: List[Ten
     onnx.checker.check_model(model_path)
 
     # onnx
-    onnx_session = onnxruntime.InferenceSession(model_path, providers=['CPUExecutionProvider'])  # use cpu executor for high accuracy
-    onnx_outputs = onnx_session.run(None, input_feed={name: tensor.numpy() for name, tensor in zip(input_names, input_tensors)})
+    onnx_session = onnxruntime.InferenceSession(
+        model_path, providers=['CPUExecutionProvider']
+    )  # use cpu executor for high accuracy
+    onnx_outputs = onnx_session.run(
+        None, input_feed={name: tensor.numpy() for name, tensor in zip(input_names, input_tensors)}
+    )
 
     # hidet
     hidet_model = hidet.graph.frontend.from_onnx(model_path)
@@ -53,20 +57,10 @@ def check_model(model_path: str, input_names: List[str], input_tensors: List[Ten
         # 'mobilenet_v2',
         'bert',
         # 'gpt2'
-    ]
+    ],
 )
-@pytest.mark.parametrize(
-    "batch_size",
-    [1]
-)
-@pytest.mark.parametrize(
-    "mode",
-    [
-        'traced',
-        'imperative',
-        'opt'
-    ]
-)
+@pytest.mark.parametrize("batch_size", [1])
+@pytest.mark.parametrize("mode", ['traced', 'imperative', 'opt'])
 def test_onnx_model(model_name: str, batch_size: int, mode: str):
     assert model_name in ['resnet50', 'inception_v3', 'mobilenet_v2', 'bert', 'bart', 'gpt2']
     assert mode in ['imperative', 'traced', 'opt']

@@ -19,6 +19,7 @@ def register_functions():
         while syncthreads_and(status == 1):
             if threadIdx.x == 0:
                 status = atomic_cas(mutex_lock, 0, 1)
+
     assert isinstance(cuda_acquire_lock, Function)
     register_primitive_function(cuda_acquire_lock.name, cuda_acquire_lock)
 
@@ -29,6 +30,7 @@ def register_functions():
         syncthreads()
         if threadIdx.x == 0:
             atomic_cas(mutex_lock, 1, 0)
+
     assert isinstance(cuda_release_lock, Function)
     register_primitive_function(cuda_release_lock.name, cuda_release_lock)
 
@@ -40,6 +42,7 @@ def register_functions():
         while syncthreads_and(actual_status != expect_status):
             if threadIdx.x == 0:
                 actual_status = load(semaphore, space='global', sync='acquire', scope='gpu')
+
     assert isinstance(cuda_acquire_seq_semaphore, Function)
     register_primitive_function(cuda_acquire_seq_semaphore.name, cuda_acquire_seq_semaphore)
 
@@ -50,6 +53,7 @@ def register_functions():
         syncthreads()
         if threadIdx.x == 0:
             store(semaphore, status, space='global', sync='release', scope='gpu')
+
     assert isinstance(cuda_release_seq_semaphore, Function)
     register_primitive_function(cuda_release_seq_semaphore.name, cuda_release_seq_semaphore)
 

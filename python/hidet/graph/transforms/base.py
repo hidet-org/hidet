@@ -50,6 +50,7 @@ class PassContext:
     configs: Dict[str, Any]
         The current configs of the pass context.
     """
+
     _stack: List['PassContext'] = []
 
     def __init__(self):
@@ -58,21 +59,17 @@ class PassContext:
             # target precision:
             # [None, 'float16', 'bfloat16', 'float32']
             'precision': None,
-
             # target reduce precision:
             # [None, 'float16', 'float32']
             'reduce_precision': None,
-
             # mma primitive:
             # ['simt', 'wmma', 'mma']
             'mma': 'simt',
-
             # parallel k
             # ['default', 'disabled', 'search', 2, 4, ...]
             'parallel_k': 'default',
-
             # print lower details
-            'verbose': False
+            'verbose': False,
         }
 
     def __enter__(self) -> PassContext:
@@ -208,6 +205,7 @@ class PassContext:
             The directory to save graph.
         """
         from .instruments.save_graph_instrument import SaveGraphInstrument  # pylint: disable=import-outside-toplevel
+
         self.instruments.append(SaveGraphInstrument(out_dir))
         return self
 
@@ -224,6 +222,7 @@ class PassContext:
             Whether to print the elapsed time for each pass to standard output.
         """
         from .instruments.profile_instrument import ProfileInstrument  # pylint: disable=import-outside-toplevel
+
         self.instruments.append(ProfileInstrument(log_file, print_stdout))
         return self
 

@@ -14,12 +14,7 @@ from hidet.transforms.tools import fuse_and_pack
 
 
 def matmul_mma_tensor_core(config: MmaConfig):
-    with FunctionBuilder(
-            name='matmul_mma_grid',
-            kind='cuda_kernel',
-            grid_dim=1,
-            block_dim=32
-    ) as fb:
+    with FunctionBuilder(name='matmul_mma_grid', kind='cuda_kernel', grid_dim=1, block_dim=32) as fb:
         # parameters
         a = Var('a', TensorPointerType(config.input_dtype, [1, config.m, config.k]))
         b = Var('b', TensorPointerType(config.input_dtype, [1, config.k, config.n]))
@@ -52,7 +47,8 @@ def matmul_mma_tensor_core(config: MmaConfig):
 
 
 @pytest.mark.parametrize(
-    'config', [
+    'config',
+    [
         MmaConfig.m16n8k8_f16_f16(),
         MmaConfig.m16n8k16_f16_f16(),
         MmaConfig.m16n8k8_f16_f32(),
@@ -61,11 +57,16 @@ def matmul_mma_tensor_core(config: MmaConfig):
         MmaConfig.m16n8k8_tf32_f32(),
         MmaConfig.m16n8k8_bf16_f32(),
         MmaConfig.m16n8k16_bf16_f32(),
-    ]
+    ],
 )
 def test_mma(config: MmaConfig):
     ir_module = matmul_mma_tensor_core(config)
-    func = build_ir_module(ir_module, func_name='matmul_mma', keep_ptx=True, func_type=FuncType.from_func(ir_module.lookup('matmul_mma_grid')))
+    func = build_ir_module(
+        ir_module,
+        func_name='matmul_mma',
+        keep_ptx=True,
+        func_type=FuncType.from_func(ir_module.lookup('matmul_mma_grid')),
+    )
     m, n, k = config.m, config.n, config.k
     a = hidet.randint(3, shape=[1, m, k]).to(ScalarType(config.input_dtype).name).cuda()
     b = hidet.randint(3, shape=[1, k, n]).to(ScalarType(config.input_dtype).name).cuda()

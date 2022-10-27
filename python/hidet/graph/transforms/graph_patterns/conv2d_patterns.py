@@ -86,8 +86,4 @@ class ThreeConv2dFusionPattern(GraphPattern):
 
 
 def conv2d_patterns() -> List[GraphPattern]:
-    return [
-        Conv2dScalePattern(),
-        ThreeConv2dFusionPattern(),
-        TwoConv2dFusionPattern()
-    ]
+    return [Conv2dScalePattern(), ThreeConv2dFusionPattern(), TwoConv2dFusionPattern()]

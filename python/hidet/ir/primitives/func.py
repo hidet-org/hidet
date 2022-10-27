@@ -7,8 +7,14 @@ from hidet.utils import green
 
 
 class PrimitiveFunctionRegistry:
-    def __init__(self, name: str, codegen_name: str, func_type: FuncType, function: Optional[Function] = None,
-                 generic: bool = False):
+    def __init__(
+        self,
+        name: str,
+        codegen_name: str,
+        func_type: FuncType,
+        function: Optional[Function] = None,
+        generic: bool = False,
+    ):
         self.var = Var(hint=name, type=func_type)
         self.name: str = name
         self.codegen_name: str = codegen_name
@@ -22,9 +28,11 @@ class PrimitiveFunctionRegistry:
         if not self.generic:
             raise ValueError('Can only dispatch a generic function.')
         if not is_primitive_function(dispatched_func_name):
-            raise ValueError('Dispatched function {} does not exist during dispatching {} for data type {}.'.format(
-                green(dispatched_func_name), green(self.name), green(dtype)
-            ))
+            raise ValueError(
+                'Dispatched function {} does not exist during dispatching {} for data type {}.'.format(
+                    green(dispatched_func_name), green(self.name), green(dtype)
+                )
+            )
         self.dispatch_dtype_rules[dtype] = dispatched_func_name
 
 
@@ -45,21 +53,18 @@ class PrimitiveFunctionPool:
                 codegen_name=codegen_name,
                 func_type=FuncType.from_func(func_or_type),
                 function=func_or_type,
-                generic=generic
+                generic=generic,
             )
         elif isinstance(func_or_type, FuncType):
             if codegen_name is None:
                 codegen_name = name
             registry = PrimitiveFunctionRegistry(
-                name=name,
-                codegen_name=codegen_name,
-                func_type=func_or_type,
-                function=None,
-                generic=generic
+                name=name, codegen_name=codegen_name, func_type=func_or_type, function=None, generic=generic
             )
         else:
-            raise TypeError('Expect a Function or FuncType to register a primitive function, got {}'.format(
-                type(func_or_type)))
+            raise TypeError(
+                'Expect a Function or FuncType to register a primitive function, got {}'.format(type(func_or_type))
+            )
         if name in self.name2func:
             raise KeyError('Primitive function {} has already registered.'.format(name))
         self.name2func[name] = registry
@@ -72,8 +77,11 @@ class PrimitiveFunctionPool:
 
     def lookup_by_name(self, name: str) -> PrimitiveFunctionRegistry:
         if name not in self.name2func:
-            raise ValueError('Can not find primitive function with key: {}, candidates:\n{}.'.format(
-                name, '\n'.join(str(v) for v in primitive_func_pool.name2func)))
+            raise ValueError(
+                'Can not find primitive function with key: {}, candidates:\n{}.'.format(
+                    name, '\n'.join(str(v) for v in primitive_func_pool.name2func)
+                )
+            )
         return self.name2func[name]
 
     def registered_names(self) -> Dict[str, List[str]]:
@@ -105,10 +113,7 @@ def registered_primitive_functions() -> List[str]:
 
 
 def register_primitive_function(
-        name: str,
-        func_or_type: Union[Function, FuncType],
-        codegen_name: Optional[str] = None,
-        generic=False
+    name: str, func_or_type: Union[Function, FuncType], codegen_name: Optional[str] = None, generic=False
 ) -> PrimitiveFunctionRegistry:
     """
     Register a primitive function.

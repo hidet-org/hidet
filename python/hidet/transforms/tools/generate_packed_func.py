@@ -22,11 +22,7 @@ def generate_packed_func(ir_module: IRModule, func: Function, pack_func_name: st
         for idx, param in enumerate(func.params):
             assert isinstance(param, Var)
             if isinstance(param.type, ScalarType):
-                name2code = {
-                    'int32': ArgType.INT32,
-                    'float32': ArgType.FLOAT32,
-                    'float16': ArgType.FLOAT16
-                }
+                name2code = {'int32': ArgType.INT32, 'float32': ArgType.FLOAT32, 'float16': ArgType.FLOAT16}
                 if param.type.name not in name2code:
                     raise NotImplementedError('Unsupported scalar type: {}'.format(param.type.name))
                 code: ArgType = name2code[param.type.name]
@@ -43,8 +39,9 @@ def generate_packed_func(ir_module: IRModule, func: Function, pack_func_name: st
             else:
                 raise NotImplementedError('Unsupported type: {}'.format(param.type))
             extracted_arguments.append(arg)
-            sb += AssertStmt(arg_types[idx] == code.value, 'The {}-th argument should be {} ({})'.format(
-                idx, code.name, param.type))
+            sb += AssertStmt(
+                arg_types[idx] == code.value, 'The {}-th argument should be {} ({})'.format(idx, code.name, param.type)
+            )
 
         if func.kind == 'cuda_kernel' and simplify_to_int(func.get_attr('cuda_dynamic_smem_bytes', 0)) > 48 * 1024:
             dynamic_smem_bytes = simplify_to_int(func.get_attr('cuda_dynamic_smem_bytes', 0))
@@ -53,6 +50,7 @@ def generate_packed_func(ir_module: IRModule, func: Function, pack_func_name: st
         return sb.finish()
 
     with lang.script_module():
+
         @lang.script
         def packed_func(num_args: i32, arg_types: ~i32, args: ~void_p):
             attr.func_name = pack_func_name

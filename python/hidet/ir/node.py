@@ -5,7 +5,8 @@ class Node:
     _dispatch_index = {None: 0}
 
     def __str__(self):
-        from hidet.ir.functors.printer import astext    # pylint: disable=import-outside-toplevel
+        from hidet.ir.functors.printer import astext  # pylint: disable=import-outside-toplevel
+
         return astext(self)
 
     def __repr__(self):

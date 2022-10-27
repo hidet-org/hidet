@@ -35,7 +35,10 @@ def arithmatic_patterns() -> List[GraphPattern]:
         ['x - a => x + (-a)', lambda x, y, a, b: x - a, lambda x, y, a, b: x + (-a)],
         ['(x + a) + b => x + (a + b)', lambda x, y, a, b: (x + a) + b, lambda x, y, a, b: x + (a + b)],
         ['(x + a) * b => x * b + a * b', lambda x, y, a, b: (x + a) * b, lambda x, y, a, b: x * b + a * b],
-        ['(x + a) + (y + b) => (x + y) + (a + b)',
-         lambda x, y, a, b: (x + a) + (y + b), lambda x, y, a, b: (x + y) + (a + b)],
+        [
+            '(x + a) + (y + b) => (x + y) + (a + b)',
+            lambda x, y, a, b: (x + a) + (y + b),
+            lambda x, y, a, b: (x + y) + (a + b),
+        ],
     ]
     return [ArithmaticGraphPattern(name, src, tgt) for name, src, tgt in pairs]

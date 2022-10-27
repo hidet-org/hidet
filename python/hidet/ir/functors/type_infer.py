@@ -121,9 +121,7 @@ class TypeInfer(ExprFunctor):
                     end = base_type.shape[dim]
                 shape.append(end - start)
         return TensorPointerType(
-            dtype=base_type.scalar_type,
-            shape=shape,
-            layout=None  # the layout of the slice is not used
+            dtype=base_type.scalar_type, shape=shape, layout=None  # the layout of the slice is not used
         )
 
     def visit_IfThenElse(self, e: IfThenElse):
@@ -155,8 +153,11 @@ class TypeInfer(ExprFunctor):
         func_var = e.func_var
         func_type = func_var.type
         if not isinstance(func_type, FuncType):
-            raise ValueError('Type infer failed, expect a function var "{}" but got variable with type "{}"'.format(
-                func_var, func_type))
+            raise ValueError(
+                'Type infer failed, expect a function var "{}" but got variable with type "{}"'.format(
+                    func_var, func_type
+                )
+            )
         args_type = [self(arg) for arg in e.args]
         return func_type.ret_type_on(args_type)
 

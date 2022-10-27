@@ -8,10 +8,7 @@ _LIB: Optional[ctypes.CDLL] = None
 _LIB_RUNTIME: Optional[ctypes.CDLL] = None
 
 
-library_paths: Dict[str, Optional[str]] = {
-    'hidet': None,
-    'hidet_runtime': None
-}
+library_paths: Dict[str, Optional[str]] = {'hidet': None, 'hidet_runtime': None}
 
 
 def load_library():
@@ -61,9 +58,11 @@ def get_func(func_name, arg_types: List, restype):
     elif func_exists(func_name, _LIB_RUNTIME):
         func = getattr(_LIB_RUNTIME, func_name)
     else:
-        raise ValueError('Can not find function "{}" in hidet libraries:\n{}\n{}'.format(
-            func_name, library_paths['hidet'], library_paths['hidet_runtime']
-        ))
+        raise ValueError(
+            'Can not find function "{}" in hidet libraries:\n{}\n{}'.format(
+                func_name, library_paths['hidet'], library_paths['hidet_runtime']
+            )
+        )
 
     func.argtypes = arg_types
     func.restype = restype

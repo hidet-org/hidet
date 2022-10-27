@@ -17,13 +17,9 @@ def numpy_softmax(data, axis):
 
 @pytest.mark.parametrize(
     "shape, axis",
-    [
-        [[1, 1000], 1],
-        [[16, 1000], 1],
-        [[1, 1000, 1, 1], 1],
-        [[16, 1000, 1, 1], 1],
-        [[1, 128, 128, 128], 2]
-    ]
+    [[[1, 1000], 1], [[16, 1000], 1], [[1, 1000, 1, 1], 1], [[16, 1000, 1, 1], 1], [[1, 128, 128, 128], 2]],
 )
 def test_softmax(shape, axis):
-    check_unary(shape, lambda x: numpy_softmax(x, axis), lambda x: ops.softmax(x, axis), dtype='float32', atol=1e-5, rtol=1e-5)
+    check_unary(
+        shape, lambda x: numpy_softmax(x, axis), lambda x: ops.softmax(x, axis), dtype='float32', atol=1e-5, rtol=1e-5
+    )

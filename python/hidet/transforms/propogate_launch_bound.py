@@ -41,7 +41,7 @@ class PropagateLaunchBoundPass(FunctionPass):
                 ret_type=func.ret_type,
                 kind=func.kind,
                 extern_vars=func.extern_vars,
-                attrs=attrs
+                attrs=attrs,
             )
         return func
 

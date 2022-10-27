@@ -38,7 +38,8 @@ class ResolveGenericPrimitiveFuncRewriter(StmtExprRewriter):
                 resolved_dtype = resolve_dtype(arg_types)
                 if resolved_dtype.name not in entry.dispatch_dtype_rules:
                     msg = 'Can not dispatch generic primitive function {} to dtype {}'.format(
-                        green(entry.name), green(resolved_dtype))
+                        green(entry.name), green(resolved_dtype)
+                    )
                     raise NotImplementedError(msg)
                 dispatched_func_key = entry.dispatch_dtype_rules[resolved_dtype.name]
                 dispatched_func_entry = lookup_primitive_function(name=dispatched_func_key)

@@ -9,14 +9,14 @@ from hidet.utils import initialize
 @initialize()
 def register_functions():
     i32 = ScalarType('int32')
-    register_primitive_function('cuda_atomic_add', func_or_type=FuncType([~i32, i32], i32),
-                                codegen_name='atomicAdd')
-    register_primitive_function('cuda_atomic_sub', func_or_type=FuncType([~i32, i32], i32),
-                                codegen_name='atomicSub')
-    register_primitive_function('cuda_atomic_exchange', func_or_type=FuncType([~i32, i32], i32),
-                                codegen_name='atomicExch')
-    register_primitive_function('cuda_atomic_cas', func_or_type=FuncType([~i32, i32, i32], i32),
-                                codegen_name='atomicCAS')
+    register_primitive_function('cuda_atomic_add', func_or_type=FuncType([~i32, i32], i32), codegen_name='atomicAdd')
+    register_primitive_function('cuda_atomic_sub', func_or_type=FuncType([~i32, i32], i32), codegen_name='atomicSub')
+    register_primitive_function(
+        'cuda_atomic_exchange', func_or_type=FuncType([~i32, i32], i32), codegen_name='atomicExch'
+    )
+    register_primitive_function(
+        'cuda_atomic_cas', func_or_type=FuncType([~i32, i32, i32], i32), codegen_name='atomicCAS'
+    )
 
 
 def atomic_add(addr: Expr, value: Expr):

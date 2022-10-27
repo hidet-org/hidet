@@ -50,8 +50,13 @@ def dummy_inputs_from_task(task: Task, target_device: str) -> List[Tensor]:
 
 
 def resolve_ir_modules(
-        ir_modules: List[IRModule], schedules: List[Schedule], target_device: str, output_dir: str,
-        parallel=True, verbose=True, validate=False
+    ir_modules: List[IRModule],
+    schedules: List[Schedule],
+    target_device: str,
+    output_dir: str,
+    parallel=True,
+    verbose=True,
+    validate=False,
 ) -> IRModule:
     """
     Resolve the ir modules of the same task by comparing the latency of each kernel.
@@ -81,6 +86,7 @@ def resolve_ir_modules(
     """
     from hidet.backend import BuildInstance, batch_build_ir_modules
     from hidet.runtime import CompiledFunction
+
     if len(ir_modules) == 0:
         raise ValueError('Require at least one ir module.')
     if len(ir_modules) == 1:
@@ -91,13 +97,19 @@ def resolve_ir_modules(
         raise ValueError('Require all ir modules are from the same task.')
 
     # build ir modules
-    build_instances = [BuildInstance(ir_module=ir_module,
-                                     output_dir=os.path.join(output_dir, 'resolve', str(idx)),
-                                     keep_ir=False,
-                                     nvcc_keep=False,
-                                     verbose=False) for idx, ir_module in enumerate(ir_modules)]
-    compiled_funcs: List[Optional[CompiledFunction]] = batch_build_ir_modules(build_instances, parallel=parallel,
-                                                                              verbose=verbose)
+    build_instances = [
+        BuildInstance(
+            ir_module=ir_module,
+            output_dir=os.path.join(output_dir, 'resolve', str(idx)),
+            keep_ir=False,
+            nvcc_keep=False,
+            verbose=False,
+        )
+        for idx, ir_module in enumerate(ir_modules)
+    ]
+    compiled_funcs: List[Optional[CompiledFunction]] = batch_build_ir_modules(
+        build_instances, parallel=parallel, verbose=verbose
+    )
     dummy_inputs = dummy_inputs_from_task(ir_modules[0].task, target_device)
     best_latency = 1e30
     best_ir_module = None
@@ -129,11 +141,13 @@ def resolve_ir_modules(
 
     # measure latency
     ctx = TaskContext.current()
-    for ir_module, compiled_func in tqdm(strict_zip(ir_modules, compiled_funcs), desc='Benchmarking',
-                                         total=len(ir_modules)):
+    for ir_module, compiled_func in tqdm(
+        strict_zip(ir_modules, compiled_funcs), desc='Benchmarking', total=len(ir_modules)
+    ):
         if compiled_func:
-            repeat_latency = compiled_func.profile(*dummy_inputs, warmup=ctx.warmup, number=ctx.number,
-                                                   repeat=ctx.repeat)
+            repeat_latency = compiled_func.profile(
+                *dummy_inputs, warmup=ctx.warmup, number=ctx.number, repeat=ctx.repeat
+            )
             latency = float(np.median(repeat_latency))
         else:
             # this ir module failed in building, skip

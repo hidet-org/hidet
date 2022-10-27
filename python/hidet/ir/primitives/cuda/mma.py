@@ -89,50 +89,80 @@ mma_configs: Dict[str, MmaConfig] = {}
 def register_mma_configs():
     # f16
     for output_dtype in ['f16', 'f32']:
-        mma_configs.update({
-            'm16n8k8_f16_{}'.format(output_dtype): MmaConfig(
-                m=16, n=8, k=8, input_dtype='f16', output_dtype=output_dtype,
+        mma_configs.update(
+            {
+                'm16n8k8_f16_{}'.format(output_dtype): MmaConfig(
+                    m=16,
+                    n=8,
+                    k=8,
+                    input_dtype='f16',
+                    output_dtype=output_dtype,
+                    a_load_map=row_repeat(2, 1) * row_spatial(8, 4) * row_repeat(1, 2),
+                    b_load_map=col_spatial(4, 8) * col_repeat(2, 1),
+                    c_store_map=row_repeat(2, 1) * row_spatial(8, 4) * row_repeat(1, 2),
+                ),
+                'm16n8k16_f16_{}'.format(output_dtype): MmaConfig(
+                    m=16,
+                    n=8,
+                    k=16,
+                    input_dtype='f16',
+                    output_dtype=output_dtype,
+                    a_load_map=col_repeat(2, 2) * row_spatial(8, 4) * row_repeat(1, 2),
+                    b_load_map=col_repeat(2, 1) * col_spatial(4, 8) * col_repeat(2, 1),
+                    c_store_map=row_repeat(2, 1) * row_spatial(8, 4) * row_repeat(1, 2),
+                ),
+            }
+        )
+    # bf16
+    mma_configs.update(
+        {
+            'm16n8k8_bf16_f32': MmaConfig(
+                m=16,
+                n=8,
+                k=8,
+                input_dtype='bf16',
+                output_dtype='f32',
                 a_load_map=row_repeat(2, 1) * row_spatial(8, 4) * row_repeat(1, 2),
                 b_load_map=col_spatial(4, 8) * col_repeat(2, 1),
-                c_store_map=row_repeat(2, 1) * row_spatial(8, 4) * row_repeat(1, 2)
+                c_store_map=row_repeat(2, 1) * row_spatial(8, 4) * row_repeat(1, 2),
             ),
-            'm16n8k16_f16_{}'.format(output_dtype): MmaConfig(
-                m=16, n=8, k=16, input_dtype='f16', output_dtype=output_dtype,
+            'm16n8k16_bf16_f32': MmaConfig(
+                m=16,
+                n=8,
+                k=16,
+                input_dtype='bf16',
+                output_dtype='f32',
                 a_load_map=col_repeat(2, 2) * row_spatial(8, 4) * row_repeat(1, 2),
                 b_load_map=col_repeat(2, 1) * col_spatial(4, 8) * col_repeat(2, 1),
-                c_store_map=row_repeat(2, 1) * row_spatial(8, 4) * row_repeat(1, 2)
-            )
-        })
-    # bf16
-    mma_configs.update({
-        'm16n8k8_bf16_f32': MmaConfig(
-            m=16, n=8, k=8, input_dtype='bf16', output_dtype='f32',
-            a_load_map=row_repeat(2, 1) * row_spatial(8, 4) * row_repeat(1, 2),
-            b_load_map=col_spatial(4, 8) * col_repeat(2, 1),
-            c_store_map=row_repeat(2, 1) * row_spatial(8, 4) * row_repeat(1, 2)
-        ),
-        'm16n8k16_bf16_f32': MmaConfig(
-            m=16, n=8, k=16, input_dtype='bf16', output_dtype='f32',
-            a_load_map=col_repeat(2, 2) * row_spatial(8, 4) * row_repeat(1, 2),
-            b_load_map=col_repeat(2, 1) * col_spatial(4, 8) * col_repeat(2, 1),
-            c_store_map=row_repeat(2, 1) * row_spatial(8, 4) * row_repeat(1, 2)
-        )
-    })
+                c_store_map=row_repeat(2, 1) * row_spatial(8, 4) * row_repeat(1, 2),
+            ),
+        }
+    )
     # tf32
-    mma_configs.update({
-        'm16n8k4_tf32_f32': MmaConfig(
-            m=16, n=8, k=4, input_dtype='tf32', output_dtype='f32',
-            a_load_map=row_repeat(2, 1) * row_spatial(8, 4),
-            b_load_map=col_spatial(4, 8),
-            c_store_map=row_repeat(2, 1) * row_spatial(8, 4) * row_repeat(1, 2)
-        ),
-        'm16n8k8_tf32_f32': MmaConfig(
-            m=16, n=8, k=8, input_dtype='tf32', output_dtype='f32',
-            a_load_map=col_repeat(2, 2) * row_spatial(8, 4),
-            b_load_map=col_repeat(2, 1) * col_spatial(4, 8),
-            c_store_map=row_repeat(2, 1) * row_spatial(8, 4) * row_repeat(1, 2)
-        )
-    })
+    mma_configs.update(
+        {
+            'm16n8k4_tf32_f32': MmaConfig(
+                m=16,
+                n=8,
+                k=4,
+                input_dtype='tf32',
+                output_dtype='f32',
+                a_load_map=row_repeat(2, 1) * row_spatial(8, 4),
+                b_load_map=col_spatial(4, 8),
+                c_store_map=row_repeat(2, 1) * row_spatial(8, 4) * row_repeat(1, 2),
+            ),
+            'm16n8k8_tf32_f32': MmaConfig(
+                m=16,
+                n=8,
+                k=8,
+                input_dtype='tf32',
+                output_dtype='f32',
+                a_load_map=col_repeat(2, 2) * row_spatial(8, 4),
+                b_load_map=col_repeat(2, 1) * col_spatial(4, 8),
+                c_store_map=row_repeat(2, 1) * row_spatial(8, 4) * row_repeat(1, 2),
+            ),
+        }
+    )
 
 
 @initialize()
@@ -162,7 +192,7 @@ def register_mma_instructions():
                 '{{{}}},'.format(', '.join([f'%{i}' for i in range(c_regs)])),
                 '{{{}}},'.format(', '.join([f'%{i}' for i in range(c_regs, c_regs + a_regs)])),
                 '{{{}}},'.format(', '.join([f'%{i}' for i in range(c_regs + a_regs, c_regs + a_regs + b_regs)])),
-                '{{{}}};'.format(', '.join([f'%{i}' for i in range(c_regs)]))
+                '{{{}}};'.format(', '.join([f'%{i}' for i in range(c_regs)])),
             ]
             template_string = ' '.join(template_sub_strings)
             fb += AssignStmt(ra, cast(a, ra.type))
@@ -172,7 +202,7 @@ def register_mma_instructions():
                 template_string=template_string,
                 outputs=[('+r', rc[i]) for i in range(c_regs)],
                 inputs=[('r', ra[i]) for i in range(a_regs)] + [('r', rb[i]) for i in range(b_regs)],
-                is_volatile=False
+                is_volatile=False,
             )
         register_primitive_function(name=func_name, func_or_type=fb.func)
 
@@ -181,35 +211,33 @@ def resolve_ldmatrix_func_name(num: int, shared_space_addr: bool = False, trans=
     if num not in [1, 2, 4]:
         raise ValueError('Only support loading 1, 2, or 4 matrices using ldmatrix instruction.')
     return 'ldmatrix_x{num}{shared}{trans}'.format(
-        num=num,
-        shared='_shared' if shared_space_addr else '',
-        trans='_trans' if trans else ''
+        num=num, shared='_shared' if shared_space_addr else '', trans='_trans' if trans else ''
     )
 
 
 @initialize()
 def register_ldmatrix_instructions():
     from hidet.lang import script, u32, void_pointer, attr, ref_u32
+
     for num in [1, 2, 4]:
         for trans in [False, True]:
             for shared_space_addr in [False, True]:
-                func_name = 'cuda_' + resolve_ldmatrix_func_name(num=num, shared_space_addr=shared_space_addr,
-                                                                 trans=trans)
+                func_name = 'cuda_' + resolve_ldmatrix_func_name(
+                    num=num, shared_space_addr=shared_space_addr, trans=trans
+                )
                 inst_name = 'ldmatrix.sync.aligned.m8n8{num}{trans}{ss}.b16'.format(
-                    num=f'.x{num}',
-                    trans='.trans' if trans else '',
-                    ss='.shared' if shared_space_addr else ''
+                    num=f'.x{num}', trans='.trans' if trans else '', ss='.shared' if shared_space_addr else ''
                 )
                 smem_type = u32 if shared_space_addr else void_pointer
                 if num == 1:
                     template = '{inst_name} {{%0}}, [%1];'.format(inst_name=inst_name)
 
                     @script
-                    def cuda_ldmatrix(reg0: ref_u32,
-                                      smem: smem_type):
+                    def cuda_ldmatrix(reg0: ref_u32, smem: smem_type):
                         attr.func_name = func_name
                         attr.func_kind = 'cuda_device'
                         asm(template, outputs=[reg0], inputs=[smem], is_volatile=True)
+
                     assert isinstance(cuda_ldmatrix, Function)
                     register_primitive_function(cuda_ldmatrix.name, cuda_ldmatrix)
 
@@ -217,48 +245,34 @@ def register_ldmatrix_instructions():
                     template = '{inst_name} {{%0, %1}}, [%2];'.format(inst_name=inst_name)
 
                     @script
-                    def cuda_ldmatrix(reg0: ref_u32,
-                                      reg1: ref_u32,
-                                      smem: smem_type):
+                    def cuda_ldmatrix(reg0: ref_u32, reg1: ref_u32, smem: smem_type):
                         attr.func_name = func_name
                         attr.func_kind = 'cuda_device'
                         asm(template, outputs=[reg0, reg1], inputs=[smem], is_volatile=True)
+
                     assert isinstance(cuda_ldmatrix, Function)
                     register_primitive_function(cuda_ldmatrix.name, cuda_ldmatrix)
                 elif num == 4:
                     template = '{inst_name} {{%0, %1, %2, %3}}, [%4];'.format(inst_name=inst_name)
 
                     @script
-                    def cuda_ldmatrix(reg0: ref_u32,
-                                      reg1: ref_u32,
-                                      reg2: ref_u32,
-                                      reg3: ref_u32,
-                                      smem: smem_type):
+                    def cuda_ldmatrix(reg0: ref_u32, reg1: ref_u32, reg2: ref_u32, reg3: ref_u32, smem: smem_type):
                         attr.func_name = func_name
                         attr.func_kind = 'cuda_device'
                         asm(template, outputs=[reg0, reg1, reg2, reg3], inputs=[smem], is_volatile=True)
+
                     assert isinstance(cuda_ldmatrix, Function)
                     register_primitive_function(cuda_ldmatrix.name, cuda_ldmatrix)
                 else:
                     raise ValueError()
 
 
-def mma_sync(
-        config: MmaConfig,
-        a_addr: Expr,
-        b_addr: Expr,
-        c_addr: Expr
-):
+def mma_sync(config: MmaConfig, a_addr: Expr, b_addr: Expr, c_addr: Expr):
     name = config.inst_name().replace('.', '_')
     return call_cuda(func_name=name, args=[a_addr, b_addr, c_addr])
 
 
-def ldmatrix(
-        regs: List[Expr],
-        smem_addr: Expr,
-        shared_space_addr: bool = False,
-        trans: bool = False
-):
+def ldmatrix(regs: List[Expr], smem_addr: Expr, shared_space_addr: bool = False, trans: bool = False):
     """
     Load a matrix 1, 2, or 4 matrix with shape 8x8 from shared memory to registers.
 

@@ -9,6 +9,7 @@ from hidet.testing import benchmark_func
 
 def dummy_input_like(tensor: Tensor) -> Tensor:
     from hidet.graph import randn_like, zeros_like
+
     if tensor.dtype in ['float32', 'float16']:
         return randn_like(tensor)
     elif tensor.dtype in ['int64', 'int32', 'int8', 'uint64', 'uint32', 'uint8']:
@@ -82,13 +83,11 @@ class CudaGraph:
     mem_pool: CudaMemoryPool
         The memory pool used by this cuda graph.
     """
+
     def __init__(self, flow_graph: FlowGraph):
         flow_graph.update_nodes()
         self.flow_graph = flow_graph
-        self.mem_pool = CudaMemoryPool(
-            block_size=4096,
-            max_reserve_size=10 * 1024 ** 3
-        )
+        self.mem_pool = CudaMemoryPool(block_size=4096, max_reserve_size=10 * 1024**3)
         self.cuda_graph_impl = CudaGraphImpl()
         with self.mem_pool:
             self.inputs = [dummy_input_like(tensor) for tensor in flow_graph.inputs]
@@ -163,14 +162,21 @@ class CudaGraph:
             src = src.cuda()
         if src.dtype != dst.dtype:
             msg = 'The i-th {} input tensor expect data type {}, but got a tensor with data type {}.'.format(
-                idx, dst.dtype, src.dtype)
+                idx, dst.dtype, src.dtype
+            )
             raise ValueError(msg)
         if any(a != b for a, b in zip(input_tensor.shape, self.inputs[idx].shape)):
             msg = 'The i-th {} input tensor expect shape {}, bot got a tensor with shape {}'.format(
-                idx, dst.shape, src.shape)
+                idx, dst.shape, src.shape
+            )
             raise ValueError(msg)
-        cuda.memcpy_async(src.storage.addr, dst.storage.addr, num_bytes=dst.nbytes, kind=cuda.DeviceToDevice,
-                          stream=stream.handle if stream else 0)
+        cuda.memcpy_async(
+            src.storage.addr,
+            dst.storage.addr,
+            num_bytes=dst.nbytes,
+            kind=cuda.DeviceToDevice,
+            stream=stream.handle if stream else 0,
+        )
 
     def run_with_inputs(self, inputs) -> List[Tensor]:
         """Run the cuda graph with given inputs.

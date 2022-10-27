@@ -76,6 +76,7 @@ class ForStmt(Stmt):
 
     def __init__(self, loop_var, extent, unroll: Optional[Union[int, bool]] = None, body=None):
         from hidet.ir.functors import simplify  # pylint: disable=import-outside-toplevel
+
         super().__init__()
         self.loop_var: Var = loop_var
         self.extent: Expr = simplify(convert(extent))
@@ -121,11 +122,13 @@ class AssertStmt(Stmt):
 
 
 class AsmStmt(Stmt):
-    def __init__(self,
-                 template_string: str = "",
-                 outputs: Sequence[Tuple[str, Expr]] = (),
-                 inputs: Sequence[Tuple[str, Expr]] = (),
-                 is_volatile=False):
+    def __init__(
+        self,
+        template_string: str = "",
+        outputs: Sequence[Tuple[str, Expr]] = (),
+        inputs: Sequence[Tuple[str, Expr]] = (),
+        is_volatile=False,
+    ):
         self.template_string = template_string
         self.output_labels = [pr[0] for pr in outputs]
         self.output_exprs = [pr[1] for pr in outputs]
@@ -152,14 +155,15 @@ class SeqStmt(Stmt):
 
 
 def asm(
-        template: str,
-        *,
-        outputs: Sequence[Any] = (),
-        output_inputs: Sequence[Any] = (),
-        inputs: Sequence[Any] = (),
-        is_volatile=False
+    template: str,
+    *,
+    outputs: Sequence[Any] = (),
+    output_inputs: Sequence[Any] = (),
+    inputs: Sequence[Any] = (),
+    is_volatile=False
 ):
-    from hidet.ir.functors import infer_type    # pylint: disable=import-outside-toplevel
+    from hidet.ir.functors import infer_type  # pylint: disable=import-outside-toplevel
+
     updated_outputs = []
     updated_inputs = []
 
@@ -185,7 +189,7 @@ def asm(
                     'int8': 'h',
                     'int16': 'h',
                     'int32': 'r',
-                    'int64': 'l'
+                    'int64': 'l',
                 }
                 if expr_type.name not in dtype2reg:
                     raise NotImplementedError('{}'.format(expr_type))

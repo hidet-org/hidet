@@ -27,23 +27,29 @@ repeat = row_repeat
 ConstExpr = Union[Expr, int]
 
 
-def tensor(scope: Union[Scope, str],
-           dtype: Union[ScalarType, str],
-           shape: Optional[Sequence[ConstExpr]] = None,
-           layout: Optional[DataLayout] = None):
+def tensor(
+    scope: Union[Scope, str],
+    dtype: Union[ScalarType, str],
+    shape: Optional[Sequence[ConstExpr]] = None,
+    layout: Optional[DataLayout] = None,
+):
     # pylint: disable=import-outside-toplevel
     _ = scope
     from hidet.ir.type import tensor_type
+
     return tensor_type(dtype, shape, layout)
 
 
-def tensor_pointer(scope: Union[Scope, str],
-                   dtype: Union[ScalarType, str],
-                   shape: Optional[Sequence[ConstExpr]] = None,
-                   layout: Optional[DataLayout] = None):
+def tensor_pointer(
+    scope: Union[Scope, str],
+    dtype: Union[ScalarType, str],
+    shape: Optional[Sequence[ConstExpr]] = None,
+    layout: Optional[DataLayout] = None,
+):
     # pylint: disable=import-outside-toplevel
     _ = scope
     from hidet.ir.type import tensor_type
+
     return ~tensor_type(dtype, shape, layout)
 
 
@@ -58,6 +64,7 @@ def deref(addr: Expr):
 def var_of_function(func: Function) -> Var:
     # pylint: disable=import-outside-toplevel
     from hidet.lang.script import ScriptModuleContext
+
     if not isinstance(func, Function):
         raise ValueError('Expect a hidet.ir.Function, got {}.'.format(type(func).__name__))
     ctx = ScriptModuleContext.current_context()

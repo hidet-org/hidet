@@ -14,6 +14,7 @@ def resolve_cvta_func_name(src_space: str, dst_space: str) -> str:
 @initialize()
 def register_cvta_instructions():
     from hidet.lang import attr, u32
+
     for src_space in ['generic']:
         for dst_space in ['shared']:
             if src_space == dst_space:
@@ -27,7 +28,7 @@ def register_cvta_instructions():
                 asm(
                     template="{.reg.u64 smem_ptr; cvta.to.shared.u64 smem_ptr, %1; cvt.u32.u64 %0, smem_ptr;}",
                     outputs=[ret],
-                    inputs=[src]
+                    inputs=[src],
                 )
                 return ret
 

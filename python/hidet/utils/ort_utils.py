@@ -27,13 +27,21 @@ def _prepare_io_binding(session: ort.InferenceSession, inputs: Dict[str, Tensor]
 def ort_inference(session: ort.InferenceSession, inputs: Dict[str, Tensor]) -> Dict[str, Tensor]:
     io_binding = _prepare_io_binding(session, inputs)
     session.run_with_iobinding(iobinding=io_binding)
-    outputs = {output_node.name: hidet.array(value.numpy()).cuda()
-               for output_node, value in zip(session.get_outputs(), io_binding.get_outputs())}
+    outputs = {
+        output_node.name: hidet.array(value.numpy()).cuda()
+        for output_node, value in zip(session.get_outputs(), io_binding.get_outputs())
+    }
     return outputs
 
 
-def ort_benchmark(session: ort.InferenceSession, dummy_inputs: Dict[str, Tensor], warmup=10, number=10,
-                  repeat=10) -> List[float]:
+def ort_benchmark(
+    session: ort.InferenceSession, dummy_inputs: Dict[str, Tensor], warmup=10, number=10, repeat=10
+) -> List[float]:
     io_binding = _prepare_io_binding(session, dummy_inputs)
-    return benchmark_func(lambda: session.run_with_iobinding(iobinding=io_binding), warmup=warmup, number=number,
-                          repeat=repeat, median=False)
+    return benchmark_func(
+        lambda: session.run_with_iobinding(iobinding=io_binding),
+        warmup=warmup,
+        number=number,
+        repeat=repeat,
+        median=False,
+    )

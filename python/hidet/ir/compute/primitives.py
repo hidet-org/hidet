@@ -30,6 +30,7 @@ class TensorNode(ComputeNode):
 
     def astext(self):
         from hidet.ir.functors.printer import IRPrinter  # pylint: disable=import-outside-toplevel
+
         printer = IRPrinter()
         doc = printer.print_tensor_nodes([self])
         return str(doc.trim())
@@ -65,14 +66,7 @@ class TensorCompute(ComputePrimitive):
 
 
 class GridCompute(TensorCompute):
-    def __init__(
-            self,
-            input_tensors,
-            input_scalars,
-            shape: Sequence[Expr],
-            axes: Sequence[Var],
-            value: Expr
-    ):
+    def __init__(self, input_tensors, input_scalars, shape: Sequence[Expr], axes: Sequence[Var], value: Expr):
         self.input_tensors: List[TensorNode] = list(input_tensors)
         self.input_scalars: List[ScalarNode] = list(input_scalars)
         self.shape: Tuple[Expr] = tuple(shape)
@@ -85,14 +79,14 @@ class GridCompute(TensorCompute):
 
 class ReduceCompute(ScalarCompute):
     def __init__(
-            self,
-            input_tensors,
-            input_scalars,
-            shape: Sequence[Expr],
-            axes: Sequence[Var],
-            value: Expr,
-            reduce_operation: ReduceOperation,
-            accumulate_dtype: ScalarType
+        self,
+        input_tensors,
+        input_scalars,
+        shape: Sequence[Expr],
+        axes: Sequence[Var],
+        value: Expr,
+        reduce_operation: ReduceOperation,
+        accumulate_dtype: ScalarType,
     ):
         self.input_tensors: List[TensorNode] = list(input_tensors)
         self.input_scalars: List[ScalarNode] = list(input_scalars)
@@ -111,14 +105,14 @@ class ReduceCompute(ScalarCompute):
 
 class ArgReduceCompute(ScalarCompute):
     def __init__(
-            self,
-            input_tensors,
-            input_scalars,
-            extent: Expr,
-            axis: Var,
-            value: Expr,
-            reduce_operation: ReduceOperation,
-            index_dtype: ScalarType
+        self,
+        input_tensors,
+        input_scalars,
+        extent: Expr,
+        axis: Var,
+        value: Expr,
+        reduce_operation: ReduceOperation,
+        index_dtype: ScalarType,
     ):
         self.input_tensors: List[TensorNode] = list(input_tensors)
         self.input_scalars: List[ScalarNode] = list(input_scalars)
@@ -146,11 +140,10 @@ def tensor_input(name, base_type, shape, layout=None):
 
 
 def reduce(
-        shape: Sequence[Union[int, Expr]],
-        fcompute, reduce_type: str,
-        accumulate_dtype: str = 'float32'
+    shape: Sequence[Union[int, Expr]], fcompute, reduce_type: str, accumulate_dtype: str = 'float32'
 ) -> ScalarNode:
-    from hidet.ir.functors import infer_type, simplify, collect   # pylint: disable=import-outside-toplevel
+    from hidet.ir.functors import infer_type, simplify, collect  # pylint: disable=import-outside-toplevel
+
     shape = [convert(v) for v in shape]
     axes = [var() for _ in shape]
     value = simplify(convert(fcompute(*axes)))
@@ -164,13 +157,14 @@ def reduce(
             axes=axes,
             value=value,
             reduce_operation=ReduceOperation.from_name(reduce_type),
-            accumulate_dtype=ScalarType(accumulate_dtype)
-        )
+            accumulate_dtype=ScalarType(accumulate_dtype),
+        ),
     )
 
 
 def compute(name, shape, fcompute, layout=None) -> TensorNode:
-    from hidet.ir.functors import infer_type, simplify, collect   # pylint: disable=import-outside-toplevel
+    from hidet.ir.functors import infer_type, simplify, collect  # pylint: disable=import-outside-toplevel
+
     shape = [convert(v) for v in shape]
     axes = [var() for _ in shape]
     value = simplify(convert(fcompute(*axes)))
@@ -182,13 +176,14 @@ def compute(name, shape, fcompute, layout=None) -> TensorNode:
             input_scalars=collect(value, ScalarNode, stop_when_found=True),
             shape=shape,
             axes=axes,
-            value=value
-        )
+            value=value,
+        ),
     )
 
 
 def arg_reduce(extent: Union[int, Expr], fcompute, reduce_type: str, index_dtype: str = 'int32') -> ScalarNode:
     from hidet.ir.functors import collect, simplify  # pylint: disable=import-outside-toplevel
+
     extent = convert(extent)
     axis = var()
     value = simplify(convert(fcompute(axis)))
@@ -202,6 +197,6 @@ def arg_reduce(extent: Union[int, Expr], fcompute, reduce_type: str, index_dtype
             axis=axis,
             value=value,
             reduce_operation=ReduceOperation.from_name(reduce_type),
-            index_dtype=ScalarType(index_dtype)
-        )
+            index_dtype=ScalarType(index_dtype),
+        ),
     )

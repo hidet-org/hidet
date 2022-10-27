@@ -60,7 +60,7 @@ class GraphRewriter:
         if isinstance(obj, FlowGraph):
             ret = self.visit_FlowGraph(obj)
         elif isinstance(obj, Operator):
-            ret = self.visit_Operator(obj)    # pylint: disable=assignment-from-none
+            ret = self.visit_Operator(obj)  # pylint: disable=assignment-from-none
         elif isinstance(obj, Tensor):
             ret = self.visit_Tensor(obj)
         elif isinstance(obj, (list, tuple)):

@@ -26,14 +26,21 @@ def dump_code(graph_factory: tvm.relay.backend.executor_factory.ExecutorFactoryM
 
 def dump_relay_cuda_code(ir_module, params=None, out_dir: str = './outs', opt_level=3):
     with tvm.transform.PassContext(opt_level=opt_level):
-        graph_module = tvm.relay.build(ir_module, target=tvm.target.cuda(arch='sm_60'),
-                                       target_host=tvm.target.Target('c'), params=params)
+        graph_module = tvm.relay.build(
+            ir_module, target=tvm.target.cuda(arch='sm_60'), target_host=tvm.target.Target('c'), params=params
+        )
     # graph_module = tvm.relay.build(ir_module, target='cuda')
     dump_code(graph_module, out_dir)
 
 
-def autotvm_tune(ir_module: tvm.ir.IRModule, params: Dict[str, tvm.nd.NDArray], target: tvm.target.Target, out_dir: str,
-                 tuner_name='ga', num_trial=1000) -> None:
+def autotvm_tune(
+    ir_module: tvm.ir.IRModule,
+    params: Dict[str, tvm.nd.NDArray],
+    target: tvm.target.Target,
+    out_dir: str,
+    tuner_name='ga',
+    num_trial=1000,
+) -> None:
     lib_path = os.path.join(out_dir, 'lib.so')
 
     log_file = os.path.join(out_dir, 'records.json')
@@ -63,8 +70,8 @@ def autotvm_tune(ir_module: tvm.ir.IRModule, params: Dict[str, tvm.nd.NDArray], 
                     ),
                     callbacks=[
                         autotvm.callback.progress_bar(num_trial, f'[Task {task_idx:>2}/{len(tasks):<2}]'),
-                        autotvm.callback.log_to_file(temp_log_file)
-                    ]
+                        autotvm.callback.log_to_file(temp_log_file),
+                    ],
                 )
         autotvm.record.pick_best(temp_log_file, log_file)
         # os.remove(temp_log_file)
@@ -76,9 +83,15 @@ def autotvm_tune(ir_module: tvm.ir.IRModule, params: Dict[str, tvm.nd.NDArray], 
     dump_code(lib, out_dir)
 
 
-def ansor_tune(ir_module: tvm.ir.IRModule, params: Dict[str, tvm.nd.NDArray], target: tvm.target.Target, out_dir: str,
-               num_trial_per_task=800):
+def ansor_tune(
+    ir_module: tvm.ir.IRModule,
+    params: Dict[str, tvm.nd.NDArray],
+    target: tvm.target.Target,
+    out_dir: str,
+    num_trial_per_task=800,
+):
     from tvm import auto_scheduler
+
     log_file = os.path.join(out_dir, 'records.json')
     lib_path = os.path.join(out_dir, 'lib.so')
 
@@ -93,14 +106,16 @@ def ansor_tune(ir_module: tvm.ir.IRModule, params: Dict[str, tvm.nd.NDArray], ta
         temp_log_file = log_file + '.temp'
         tune_option = auto_scheduler.TuningOptions(
             num_measure_trials=num_trial_per_task * len(tasks),
-            measure_callbacks=[
-                auto_scheduler.RecordToFile(temp_log_file)
-            ]
+            measure_callbacks=[auto_scheduler.RecordToFile(temp_log_file)],
         )
-        tuner = auto_scheduler.TaskScheduler(tasks, task_weights, callbacks=[
-            auto_scheduler.task_scheduler.PrintTableInfo(),
-            auto_scheduler.task_scheduler.LogEstimatedLatency(os.path.join(out_dir, 'estimated_latency.csv'))
-        ])
+        tuner = auto_scheduler.TaskScheduler(
+            tasks,
+            task_weights,
+            callbacks=[
+                auto_scheduler.task_scheduler.PrintTableInfo(),
+                auto_scheduler.task_scheduler.LogEstimatedLatency(os.path.join(out_dir, 'estimated_latency.csv')),
+            ],
+        )
         with Timer(msg='Ansor tuning of {} tasks'.format(len(tasks)), file=os.path.join(out_dir, 'tuning_time.txt')):
             tuner.tune(tune_option)
         os.rename(temp_log_file, log_file)
@@ -111,8 +126,9 @@ def ansor_tune(ir_module: tvm.ir.IRModule, params: Dict[str, tvm.nd.NDArray], ta
     dump_code(lib, out_dir)
 
 
-def build_ir_module(ir_module: tvm.ir.IRModule, params: Dict[str, tvm.nd.NDArray], target: tvm.target.Target,
-                    out_dir: str):
+def build_ir_module(
+    ir_module: tvm.ir.IRModule, params: Dict[str, tvm.nd.NDArray], target: tvm.target.Target, out_dir: str
+):
     lib_path = os.path.join(out_dir, 'lib.so')
     with tvm.transform.PassContext(opt_level=3):
         lib = relay.build(ir_module, target, params=params)
@@ -120,8 +136,13 @@ def build_ir_module(ir_module: tvm.ir.IRModule, params: Dict[str, tvm.nd.NDArray
     dump_code(lib, out_dir)
 
 
-def tvm_graph_module_from_onnx(onnx_model_path: str, input_shapes: Optional[Dict[str, List[int]]], tune_autotvm=False,
-                               tune_ansor=False, tune_trial_per_task=800) -> GraphModule:
+def tvm_graph_module_from_onnx(
+    onnx_model_path: str,
+    input_shapes: Optional[Dict[str, List[int]]],
+    tune_autotvm=False,
+    tune_ansor=False,
+    tune_trial_per_task=800,
+) -> GraphModule:
     # determine output dir
     if tune_autotvm and tune_ansor:
         raise ValueError('Can not tune network with ansor and autotvm at the same time.')
@@ -133,7 +154,7 @@ def tvm_graph_module_from_onnx(onnx_model_path: str, input_shapes: Optional[Dict
         tuner_name = 'notune'
     model_name = os.path.basename(onnx_model_path).rsplit('.', 1)[0]
     cache_dir = hidet_cache_dir(category='tvm_cache')
-    hash_key = (onnx_model_path + str(input_shapes) + str(tune_trial_per_task))
+    hash_key = onnx_model_path + str(input_shapes) + str(tune_trial_per_task)
     out_dir = os.path.join(cache_dir, f'{model_name}_{tuner_name}_{sha256(hash_key.encode()).hexdigest()[:6]}')
     os.makedirs(out_dir, exist_ok=True)
 
@@ -150,7 +171,7 @@ def tvm_graph_module_from_onnx(onnx_model_path: str, input_shapes: Optional[Dict
                 'inputs: {}'.format(str(input_shapes)),
                 'ansor: {}'.format(tune_ansor),
                 'autotvm: {}'.format(tune_autotvm),
-                'trial per task: {}'.format(tune_trial_per_task)
+                'trial per task: {}'.format(tune_trial_per_task),
             ]
             f.write('\n'.join(lines))
         if tune_autotvm:

@@ -17,18 +17,19 @@ _profile_config = ProfileConfig(warmup=3, number=10, repeat=3)
 
 
 class Operator:
-    """An operator that takes tensor as input and output.
-    """
+    """An operator that takes tensor as input and output."""
+
     _current_space_level = 0
     _use_cache = True
 
     def __init__(
-            self,
-            inputs: List[Tensor],
-            task: Optional[Task],
-            outputs: Optional[List[Tensor]] = None,
-            name: Optional[str] = None,
-            attributes: Optional[Dict[str, Any]] = None):
+        self,
+        inputs: List[Tensor],
+        task: Optional[Task],
+        outputs: Optional[List[Tensor]] = None,
+        name: Optional[str] = None,
+        attributes: Optional[Dict[str, Any]] = None,
+    ):
         self.inputs: List[Tensor] = inputs
         self.task: Optional[Task] = task
         self.attrs: Dict[str, Any] = attributes if attributes is not None else {}
@@ -67,25 +68,29 @@ class Operator:
     def imperative_run(self, inputs: List[Tensor]) -> List[Tensor]:
         self.build_task_func()
         assert len(inputs) + len(self.task.outputs) == len(self.task.parameters)
-        output_types = [output.data_type for output in self.task.parameters[-len(self.task.outputs):]]
-        outputs = [empty(shape=type.const_shape(), dtype=type.scalar_type.name, device=self.device, layout=type.layout)
-                   for type in output_types]
+        output_types = [output.data_type for output in self.task.parameters[-len(self.task.outputs) :]]
+        outputs = [
+            empty(shape=type.const_shape(), dtype=type.scalar_type.name, device=self.device, layout=type.layout)
+            for type in output_types
+        ]
         self.pure_run(inputs, outputs)
         return outputs
 
     def lazy_run(self) -> List[Tensor]:
-        output_nodes = self.task.parameters[-len(self.task.outputs):]
+        output_nodes = self.task.parameters[-len(self.task.outputs) :]
         output_types = [output_node.data_type for output_node in output_nodes]
         outputs = []
         for i, output_type in enumerate(output_types):
-            outputs.append(Tensor(
-                shape=output_type.const_shape(),
-                dtype=output_type.scalar_type.name,
-                device=self.device,
-                storage=None,
-                layout=output_type.layout,
-                trace=(self, i)
-            ))
+            outputs.append(
+                Tensor(
+                    shape=output_type.const_shape(),
+                    dtype=output_type.scalar_type.name,
+                    device=self.device,
+                    storage=None,
+                    layout=output_type.layout,
+                    trace=(self, i),
+                )
+            )
         return outputs
 
     def pure_run(self, inputs: List[Tensor], outputs: List[Tensor]):
@@ -135,25 +140,37 @@ class Operator:
         return dummy_inputs
 
     def dummy_outputs(self) -> List[Tensor]:
-        output_types = [output.data_type for output in self.task.parameters[-len(self.task.outputs):]]
-        dummy_outputs = [empty(shape=type.const_shape(), dtype=type.scalar_type.name, device='cuda', layout=type.layout)
-                         for type in output_types]
+        output_types = [output.data_type for output in self.task.parameters[-len(self.task.outputs) :]]
+        dummy_outputs = [
+            empty(shape=type.const_shape(), dtype=type.scalar_type.name, device='cuda', layout=type.layout)
+            for type in output_types
+        ]
         return dummy_outputs
 
     def latency(self, warmup=3, number=20, repeat=5, median=True) -> Union[List[float], float]:
         from hidet.testing import benchmark_func
+
         dummy_inputs = self.dummy_inputs()
         outputs = self.dummy_outputs()
         self.imperative_run(dummy_inputs)
-        return benchmark_func(lambda: self.task_func(*dummy_inputs, *outputs),
-                              warmup=warmup, number=number, repeat=repeat, median=median)
+        return benchmark_func(
+            lambda: self.task_func(*dummy_inputs, *outputs), warmup=warmup, number=number, repeat=repeat, median=median
+        )
 
     def build_task_func(self):
         from hidet.driver import build_task
+
         if self.task_func is None:
             pc = _profile_config
-            self.task_func = build_task(self.task, space_level=self._current_space_level, target_device=self.device,
-                                        warmup=pc.warmup, number=pc.number, repeat=pc.repeat, use_cache=self._use_cache)
+            self.task_func = build_task(
+                self.task,
+                space_level=self._current_space_level,
+                target_device=self.device,
+                warmup=pc.warmup,
+                number=pc.number,
+                repeat=pc.repeat,
+                use_cache=self._use_cache,
+            )
 
 
 def space_level(level=0):

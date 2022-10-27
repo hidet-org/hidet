@@ -75,7 +75,7 @@ class PrologueEpilogueRewriter(FuncStmtExprRewriter):
             ret_type=func.ret_type,
             kind=func.kind,
             extern_vars=func.extern_vars,
-            attrs=func.attrs
+            attrs=func.attrs,
         )
 
     def visit_TensorElement(self, e: TensorElement):
@@ -119,8 +119,9 @@ class PrologueEpilogueRewriter(FuncStmtExprRewriter):
                 # but not an output tensor of task graph.
                 consumed_by: List[TensorNode] = self.reverse_consume[buf]
                 if len(consumed_by) != 1:
-                    raise ValueError('Expect tensor {} to be consumed exactly once, got {}.'.format(
-                        buf, len(consumed_by)))
+                    raise ValueError(
+                        'Expect tensor {} to be consumed exactly once, got {}.'.format(buf, len(consumed_by))
+                    )
                 consumer_input: TensorNode = consumed_by[0]
                 consumer_task: Task = self.input2task[consumer_input]
                 inverse_map: InverseMap = consumer_task.inverse_map[consumer_input]
@@ -158,8 +159,9 @@ class PrologueEpilogueRewriter(FuncStmtExprRewriter):
                 # replace out[i + 3, i + j] with value (in the example above)
                 tensor_elements: List[TensorElement] = collect(value, TensorElement, stop_when_found=False)
                 tensor_elements = [te for te in tensor_elements if te.base is consumer_input]
-                assert len(tensor_elements) == 1, ('Epilgoue can only index one time of the input tensor '
-                                                   'with inverse map')
+                assert len(tensor_elements) == 1, (
+                    'Epilgoue can only index one time of the input tensor ' 'with inverse map'
+                )
                 tensor_element: TensorElement = tensor_elements[0]
                 # in the context of above example, we replace 'out[i + 3, i + j]' by 'value'
                 self.memo[tensor_element] = self.visit(stmt.value)
@@ -170,14 +172,16 @@ class PrologueEpilogueRewriter(FuncStmtExprRewriter):
                 raise ValueError('Output tensor {} has not been bound.'.format(buf))
         elif stmt.buf in self.anchor_outputs:
             output_index = self.anchor_outputs.index(stmt.buf)
-            return self.visit(BufferStoreStmt(self.task.outputs[output_index], stmt.indices, stmt.value,
-                                              stmt.protected))
+            return self.visit(
+                BufferStoreStmt(self.task.outputs[output_index], stmt.indices, stmt.value, stmt.protected)
+            )
         else:
             return FuncStmtExprRewriter.visit_BufferStoreStmt(self, stmt)
 
 
 def apply_prologue_epilogue(ir_module: IRModule, func: Function, task: Task) -> Function:
     from hidet.transforms.flatten_tensor_slice import FlattenTensorSliceRewriter
+
     rewriter1 = FlattenTensorSliceRewriter()
     rewriter2 = PrologueEpilogueRewriter(task)
     fused_func = rewriter2(rewriter1(func))

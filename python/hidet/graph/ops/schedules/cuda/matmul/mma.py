@@ -48,10 +48,12 @@ class MatmulMmaSchedule(Schedule):
         self.warp_count_m, self.warp_count_n, self.warp_count_k = self.warp_count
         self.mma_count_m, self.mma_count_n, self.mma_count_k = self.mma_count
 
-        self.a_g2s_map, self.regs_a_ldg_layout = get_transfer_task_map(task_shape=[self.block_m, self.block_k],
-                                                                       num_workers=self.threads, ranks=[0, 1])
-        self.b_g2s_map, self.regs_b_ldg_layout = get_transfer_task_map(task_shape=[self.block_k, self.block_n],
-                                                                       num_workers=self.threads, ranks=[0, 1])
+        self.a_g2s_map, self.regs_a_ldg_layout = get_transfer_task_map(
+            task_shape=[self.block_m, self.block_k], num_workers=self.threads, ranks=[0, 1]
+        )
+        self.b_g2s_map, self.regs_b_ldg_layout = get_transfer_task_map(
+            task_shape=[self.block_k, self.block_n], num_workers=self.threads, ranks=[0, 1]
+        )
         self.smem_a_layout = data_layout([2, self.block_m, self.block_k], ranks=[0, 1, 2])
         self.smem_b_layout = data_layout([2, self.block_k, self.block_n], ranks=[0, 1, 2])
         self.smem_c_layout = data_layout([self.block_m, self.block_n], ranks=[0, 1])
@@ -60,11 +62,18 @@ class MatmulMmaSchedule(Schedule):
         self.regs_c_layout = row_layout(self.mma_count_m, self.mma_count_n, mma_config.c_elements)
         self.smem_storage_nbytes = max(
             (self.smem_a_layout.size + self.smem_b_layout.size) * ScalarType(mma_config.input_dtype).nbytes(),
-            self.smem_c_layout.size * ScalarType(mma_config.output_dtype).nbytes()
+            self.smem_c_layout.size * ScalarType(mma_config.output_dtype).nbytes(),
         )
-        self.used_registers = ((self.regs_a_layout.size + self.regs_b_layout.size + self.regs_a_ldg_layout.size
-                                + self.regs_b_ldg_layout.size) * ScalarType(mma_config.input_dtype).nbytes()
-                               + self.regs_c_layout.size * ScalarType(mma_config.output_dtype).nbytes()) // 4 + 24
+        self.used_registers = (
+            (
+                self.regs_a_layout.size
+                + self.regs_b_layout.size
+                + self.regs_a_ldg_layout.size
+                + self.regs_b_ldg_layout.size
+            )
+            * ScalarType(mma_config.input_dtype).nbytes()
+            + self.regs_c_layout.size * ScalarType(mma_config.output_dtype).nbytes()
+        ) // 4 + 24
         self.used_registers = (self.used_registers + 7) // 8 * 8
         self.check(self.smem_storage_nbytes <= cuda.max_smem_bytes_per_block())
         self.check(self.used_registers <= cuda.max_num_regs_per_thread())
@@ -72,12 +81,7 @@ class MatmulMmaSchedule(Schedule):
 
     @staticmethod
     def resolve_mma_type(a_dtype: ScalarType, b_dtype: ScalarType, c_dtype: ScalarType):
-        dtype_rank = {
-            'float16': 0,
-            'bfloat16': 1,
-            'tfloat32': 2,
-            'float32': 4
-        }
+        dtype_rank = {'float16': 0, 'bfloat16': 1, 'tfloat32': 2, 'float32': 4}
         ab_rank = max(dtype_rank[a_dtype.name], dtype_rank[b_dtype.name])
         if ab_rank <= dtype_rank['float16']:
             if c_dtype == 'float32':
@@ -109,7 +113,7 @@ class MatmulMmaSchedule(Schedule):
                 'mma_f16_f16': MatmulMmaSchedule([64, 128, 16], [64, 64, 16], MmaConfig.m16n8k8_f16_f16()),
                 'mma_f16_f32': MatmulMmaSchedule([128, 64, 16], [64, 64, 16], MmaConfig.m16n8k8_f16_f32()),
                 'mma_bf16_f32': MatmulMmaSchedule([128, 64, 16], [64, 64, 16], MmaConfig.m16n8k8_bf16_f32()),
-                'mma_tf32_f32': MatmulMmaSchedule([64, 64, 16], [32, 32, 16], MmaConfig.m16n8k8_tf32_f32())
+                'mma_tf32_f32': MatmulMmaSchedule([64, 64, 16], [32, 32, 16], MmaConfig.m16n8k8_tf32_f32()),
             }
             return [default_schedule[mma_type]]
         else:
@@ -125,11 +129,13 @@ class MatmulMmaSchedule(Schedule):
                                 for warp_n in [8, 16, 32, 64] if space_level == 2 else [32, 64]:
                                     for warp_k in [8, 16, 32]:
                                         with contextlib.suppress(NotSupportedError):
-                                            schedules.append(MatmulMmaSchedule(
-                                                block_shape=[block_m, block_n, block_k],
-                                                warp_shape=[warp_m, warp_n, warp_k],
-                                                mma_config=mma_config
-                                            ))
+                                            schedules.append(
+                                                MatmulMmaSchedule(
+                                                    block_shape=[block_m, block_n, block_k],
+                                                    warp_shape=[warp_m, warp_n, warp_k],
+                                                    mma_config=mma_config,
+                                                )
+                                            )
                                             # print(len(schedules))
             if len(schedules) == 0:
                 raise ValueError('Can not find a valid schedule for {}'.format(mma_type))
@@ -146,7 +152,7 @@ class MatmulMmaSchedule(Schedule):
         return [
             ('block', '{}x{}x{}'.format(self.block_m, self.block_n, self.block_k)),
             ('warp', '{}x{}x{}'.format(self.warp_m, self.warp_n, self.warp_k)),
-            ('mma', str(self.mma_config))
+            ('mma', str(self.mma_config)),
         ]
 
     def derived_keys(self) -> List[Tuple[str, Union[int, float, str]]]:
@@ -155,14 +161,17 @@ class MatmulMmaSchedule(Schedule):
             ('mma_count', '{}x{}x{}'.format(self.mma_count_m, self.mma_count_n, self.mma_count_k)),
             ('threads', self.threads),
             ('smem_bytes', self.smem_storage_nbytes),
-            ('registers', self.used_registers)
+            ('registers', self.used_registers),
         ]
 
 
 def batched_matmul_cuda_schedule_mma(task: BatchMatmulTask) -> IRModule:
     ctx = TaskContext.current()
-    default_resolve_out_dir = os.path.join('./outs/resolve', task.name, 'batched_matmul_mma_{}x{}x{}x{}'.format(
-        task.batch_size, task.m_size, task.k_size, task.n_size))
+    default_resolve_out_dir = os.path.join(
+        './outs/resolve',
+        task.name,
+        'batched_matmul_mma_{}x{}x{}x{}'.format(task.batch_size, task.m_size, task.k_size, task.n_size),
+    )
     resolve_out_dir = ctx.resolve_out_dir if ctx.resolve_out_dir else default_resolve_out_dir
 
     all_schedules = MatmulMmaSchedule.schedules(task, space_level=ctx.space_level)
@@ -176,13 +185,13 @@ def batched_matmul_cuda_schedule_mma(task: BatchMatmulTask) -> IRModule:
         target_device='cuda',
         output_dir=resolve_out_dir,
         parallel=True,
-        verbose=True
+        verbose=True,
     )
 
 
 def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, sch: MatmulMmaSchedule) -> IRModule:
     m_size, n_size, k_size = task.m_size, task.n_size, task.k_size
-    m_tile_size, n_tile_size, k_tile_size = sch.block_shape     # pylint: disable=unused-variable
+    m_tile_size, n_tile_size, k_tile_size = sch.block_shape  # pylint: disable=unused-variable
     m_tiles = (m_size + m_tile_size - 1) // m_tile_size
     n_tiles = (n_size + n_tile_size - 1) // n_tile_size
     grid_map = row_spatial(m_tiles, n_tiles)
@@ -194,11 +203,12 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, sch: MatmulMm
     a_zero, b_zero, c_zero = [convert(0.0, dtype) for dtype in [a_dtype, b_dtype, c_dtype]]
 
     with FunctionBuilder(
-            name=task.name + '_grid',
-            kind='cuda_kernel',
-            grid_dim=(grid_map.num_workers, task.batch_size),
-            block_dim=sch.threads,
-            label=str(sch)) as fb:
+        name=task.name + '_grid',
+        kind='cuda_kernel',
+        grid_dim=(grid_map.num_workers, task.batch_size),
+        block_dim=sch.threads,
+        label=str(sch),
+    ) as fb:
         # declare params
         params = params_from_task(task)
         fb.extend_params(params)
@@ -233,13 +243,23 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, sch: MatmulMm
             block_k_tiles = (k_size + sch.block_k - 1) // sch.block_k
             block_offset_m, block_offset_n = [idx * extent for idx, extent in zip([bi, bj], [sch.block_m, sch.block_n])]
             # transfer first block
-            fb += copy(gmem_a[block_offset_m:, :], regs_ldg_a, sch.a_g2s_map,
-                       src_pred=lambda i, k: And(block_offset_m + i < m_size, k < k_size),
-                       def_value=a_zero, cast_dtype=a_dtype)
+            fb += copy(
+                gmem_a[block_offset_m:, :],
+                regs_ldg_a,
+                sch.a_g2s_map,
+                src_pred=lambda i, k: And(block_offset_m + i < m_size, k < k_size),
+                def_value=a_zero,
+                cast_dtype=a_dtype,
+            )
             fb += copy(regs_ldg_a, smem_a[0], sch.a_g2s_map)
-            fb += copy(gmem_b[:, block_offset_n:], regs_ldg_b, sch.b_g2s_map,
-                       src_pred=lambda k, j: And(k < k_size, block_offset_n + j < n_size),
-                       def_value=b_zero, cast_dtype=b_dtype)
+            fb += copy(
+                gmem_b[:, block_offset_n:],
+                regs_ldg_b,
+                sch.b_g2s_map,
+                src_pred=lambda k, j: And(k < k_size, block_offset_n + j < n_size),
+                def_value=b_zero,
+                cast_dtype=b_dtype,
+            )
             fb += copy(regs_ldg_b, smem_b[0], sch.b_g2s_map)
             fb += syncthreads()
             fb += load_regs_a(smem_a[0], regs_a[0], sch)
@@ -247,6 +267,7 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, sch: MatmulMm
 
             # main loop
             with fb.for_loop('k0', block_k_tiles) as k0:
+
                 def body(fb, ko):
                     with fb.for_loop('k1', sch.mma_count_k) as k1:
                         with fb.if_then(Equal(k1, 0)):
@@ -257,7 +278,7 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, sch: MatmulMm
                                 sch.a_g2s_map,
                                 src_pred=lambda i, k: And(block_offset_m + i < m_size, block_offset_k + k < k_size),
                                 def_value=a_zero,
-                                cast_dtype=a_dtype
+                                cast_dtype=a_dtype,
                             )
                             fb += copy(
                                 gmem_b[block_offset_k:, block_offset_n:],
@@ -265,7 +286,7 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, sch: MatmulMm
                                 sch.b_g2s_map,
                                 src_pred=lambda k, j: And(block_offset_k + k < k_size, block_offset_n + j < n_size),
                                 def_value=b_zero,
-                                cast_dtype=b_dtype
+                                cast_dtype=b_dtype,
                             )
                         with fb.if_then(Equal(k1, sch.mma_count_k - 1)):
                             fb += copy(regs_ldg_a, smem_a[(k0 + 1) % 2], sch.a_g2s_map)
@@ -274,8 +295,8 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, sch: MatmulMm
                             fb += load_regs_a(smem_a[(k0 + 1) % 2], regs_a[(k1 + ko + 1) % 2], sch)
                             fb += load_regs_b(smem_b[(k0 + 1) % 2], regs_b[(k1 + ko + 1) % 2], sch)
                         with fb.otherwise():
-                            fb += load_regs_a(smem_a[k0 % 2, :, (k1 + 1) * sch.mma_k:], regs_a[(k1 + ko + 1) % 2], sch)
-                            fb += load_regs_b(smem_b[k0 % 2, (k1 + 1) * sch.mma_k:, :], regs_b[(k1 + ko + 1) % 2], sch)
+                            fb += load_regs_a(smem_a[k0 % 2, :, (k1 + 1) * sch.mma_k :], regs_a[(k1 + ko + 1) % 2], sch)
+                            fb += load_regs_b(smem_b[k0 % 2, (k1 + 1) * sch.mma_k :, :], regs_b[(k1 + ko + 1) % 2], sch)
                         fb += warp_mma(regs_a[(k1 + ko) % 2], regs_b[(k1 + ko) % 2], regs_c, sch)
 
                 if sch.mma_count_k % 2 == 0:
@@ -287,9 +308,14 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, sch: MatmulMm
                         body(fb, 1)
 
             # write back
-            fb += write_back(regs_c, smem_c,
-                             gmem_c[block_offset_m:, block_offset_n:],
-                             m_size - block_offset_m, n_size - block_offset_n, sch)
+            fb += write_back(
+                regs_c,
+                smem_c,
+                gmem_c[block_offset_m:, block_offset_n:],
+                m_size - block_offset_m,
+                n_size - block_offset_n,
+                sch,
+            )
 
     func = fb.func
     ir_module = IRModule(funcs={func.name: func}, task=task)
@@ -307,8 +333,9 @@ def load_regs_a(smem_a: Union[Var, TensorSlice], regs_a: Var, sch: MatmulMmaSche
         for mma_i in range(sch.mma_count_m):
             for p, (ii, kk) in enumerate(sch.mma_config.a_load_map.on(lane_id)):
                 sb += BufferStoreStmt(
-                    buf=regs_a, indices=[mma_i, p],
-                    value=smem_a[warp_i * sch.warp_m + mma_i * sch.mma_m + ii, warp_k * sch.warp_k + kk]
+                    buf=regs_a,
+                    indices=[mma_i, p],
+                    value=smem_a[warp_i * sch.warp_m + mma_i * sch.mma_m + ii, warp_k * sch.warp_k + kk],
                 )
     return sb.finish()
 
@@ -321,8 +348,9 @@ def load_regs_b(smem_b: Union[Var, TensorSlice], regs_b: Var, sch: MatmulMmaSche
         for mma_j in range(sch.mma_count_n):
             for p, (kk, jj) in enumerate(sch.mma_config.b_load_map.on(lane_id)):
                 sb += BufferStoreStmt(
-                    buf=regs_b, indices=[mma_j, p],
-                    value=smem_b[warp_k * sch.warp_k + kk, warp_j * sch.warp_n + mma_j * sch.mma_n + jj]
+                    buf=regs_b,
+                    indices=[mma_j, p],
+                    value=smem_b[warp_k * sch.warp_k + kk, warp_j * sch.warp_n + mma_j * sch.mma_n + jj],
                 )
     return sb.finish()
 
@@ -366,8 +394,16 @@ def write_back(regs_c, smem_c, gmem_c, bound_m, bound_n, sch: MatmulMmaSchedule)
     return sb.finish()
 
 
-def copy(src, dst, mapping, src_pred=None, dst_pred=None, def_value: Optional[Union[Expr, float]] = 0.0,
-         worker_idx=None, cast_dtype=None):
+def copy(
+    src,
+    dst,
+    mapping,
+    src_pred=None,
+    dst_pred=None,
+    def_value: Optional[Union[Expr, float]] = 0.0,
+    worker_idx=None,
+    cast_dtype=None,
+):
     if worker_idx is None:
         worker_idx = thread_idx()
     sb = StmtBuilder()
