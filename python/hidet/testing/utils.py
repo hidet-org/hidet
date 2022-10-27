@@ -1,7 +1,7 @@
 from typing import List, Union
 import time
-from hidet.graph.tensor import array
 import numpy as np
+from hidet.graph.tensor import array
 
 
 def benchmark_func(run_func, warmup=1, number=5, repeat=5, median=True) -> Union[List[float], float]:
