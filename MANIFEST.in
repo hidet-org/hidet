@@ -1,0 +1,2 @@
+recursive-include python/hidet/lib *.so
+recursive-include python/hidet/include *.h

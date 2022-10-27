@@ -5,22 +5,38 @@ import os
 import onnx
 import hidet
 
-try:
-    import torch
-    from torch import nn
-except ImportError:
-    pass
-
 
 def export_torch_to_onnx(
-    onnx_path: str,
-    model: nn.Module,
-    input_names: List[str],
-    inputs: List[torch.Tensor],
-    precision: Optional[str] = None,
-    nocache=False,
+    onnx_path: str, model, input_names: List[str], inputs, precision: Optional[str] = None, nocache=False
 ):
-    # onnx_path = hidet_cache_file('onnx', 'bert', f'{name}.onnx')
+    """
+    Export a torch model to onnx.
+
+    Parameters
+    ----------
+    onnx_path: str
+        Path to store the onnx file.
+    model: torch.nn.Module
+        The torch model to be exported.
+    input_names: List[str]
+        The names of the inputs in the exported onnx model.
+    inputs: Sequence[torch.Tensor]
+        The inputs to the model.
+    precision: Optional[str]
+        The precision of the exported onnx model. If None, the precision of the model is not changed.
+        Candidates: 'float16', 'float32'
+    nocache: bool
+        If True, the onnx model will be exported even if the onnx file already exists.
+
+    Returns
+    -------
+    (onnx_path, input_names, hidet_inputs): Tuple[str, List[str], List[hidet.Tensor]]
+        The path to the exported onnx model, the names of the inputs in the exported onnx model, and the inputs to the
+        exported onnx model.
+    """
+
+    import torch
+
     if nocache and os.path.exists(onnx_path):
         os.remove(onnx_path)
     precision_dict = {'float32': torch.float32, 'float16': torch.float16}

@@ -107,7 +107,7 @@ def compile_source(src_path: str, out_lib_path: str, keep_ptx=False) -> None:
         with tempfile.TemporaryDirectory() as working_dir:
             result = subprocess.run(" ".join(command).split(), stderr=PIPE, stdout=PIPE, cwd=working_dir, check=False)
             if result.returncode:
-                message = ''
+                message = "Command: " + " ".join(command) + "\n"
                 if result.stdout:
                     message += result.stdout.decode().strip() + '\n'
                 if result.stderr:
@@ -117,7 +117,7 @@ def compile_source(src_path: str, out_lib_path: str, keep_ptx=False) -> None:
                     out_lib_dir = os.path.dirname(out_lib_path)
                     ptx_path = os.path.join(working_dir, ptx_name)
                     target_ptx_path = os.path.join(out_lib_dir, ptx_name)
-                    os.rename(ptx_path, target_ptx_path)
+                    shutil.move(ptx_path, target_ptx_path)
                 raise CompilationFailed(src_path, message)
             out_lib_dir = os.path.dirname(out_lib_path)
             if keep_ptx:

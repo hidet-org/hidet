@@ -15,14 +15,17 @@ rm -rf build; mkdir build;
 cd build; cmake ../..; make -j4; cd ..
 
 # copy the built libraries and headers to python module
-cp -r ./build/lib ../python/hidet
-cp -r ../include ../python/hidet
+cp ../setup.py ./setup.py
+cp ../MANIFEST.in ./MANIFEST.in
+cp -r ../python ./
+cp -r ./build/lib ./python/hidet
+cp -r ../include ./python/hidet
 
 # build wheel
-pip wheel --no-deps ..
+pip wheel --no-deps .
 
 # remove all intermediate directories
-rm -rf ../python/hidet/hidet.egg-info
-rm -rf ../python/hidet/lib
-rm -rf ../python/hidet/include
+rm -rf ./python
 rm -rf ./build
+rm ./setup.py
+rm ./MANIFEST.in

@@ -1,0 +1,9 @@
+# python test
+pytest
+
+# for models to test
+torchvision
+transformers
+
+# check the correctness with onnxruntime
+onnxruntime-gpu

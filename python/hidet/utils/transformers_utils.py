@@ -1,6 +1,7 @@
 import sys
 import os
 import subprocess
+import shutil
 
 
 def export_transformer_model_as_onnx(
@@ -32,7 +33,7 @@ def export_transformer_model_as_onnx(
     command = '{} -m transformers.onnx --model {} --feature {} {}'.format(sys.executable, model_name, feature, temp_dir)
     print("Running '{}'".format(command))
     subprocess.run(command.split(), check=True)
-    os.rename(os.path.join(temp_dir, 'model.onnx'), output_path)
+    shutil.move(os.path.join(temp_dir, 'model.onnx'), output_path)
     print('Model saved at: {}'.format(output_path))
 
 
