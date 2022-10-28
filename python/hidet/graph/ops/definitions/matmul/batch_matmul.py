@@ -19,7 +19,7 @@ class BatchMatmulTask(Task):
             ),
         )
         super().__init__(
-            name='matmul',
+            name='batch_matmul',
             inputs=[a, b],
             outputs=[c],
             attributes={'batch_size': batch_size, 'm_size': m_size, 'n_size': n_size, 'k_size': k_size, 'mma': mma},

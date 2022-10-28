@@ -114,6 +114,9 @@ class OnnxOperator:
     def run_v13(self, inputs: List[Tensor]) -> List[Tensor]:
         return NotImplemented
 
+    def run_v14(self, inputs: List[Tensor]) -> List[Tensor]:
+        return NotImplemented
+
     @staticmethod
     def tensor2list(tensor: Tensor) -> Union[List, int, float]:
         return tensor.cpu().numpy().tolist()

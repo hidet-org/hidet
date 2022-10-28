@@ -1,6 +1,6 @@
 from typing import Type, List, Optional, Union
 from hidet.graph.ir import FlowGraph, GraphRewriter, Tensor, Operator
-from hidet.utils import strict_zip, same_list
+from hidet.utils import strict_zip, same_list, repeat_until_converge
 from .base import GraphPass, PassContext
 
 
@@ -78,15 +78,21 @@ class ResolveVariantRewriter(GraphRewriter):
 
 class ResolveVariantPass(GraphPass):
     def process_graph(self, graph: FlowGraph) -> FlowGraph:
-        rule_seq: List[ResolveRule] = [rule for rule in get_registered_resolve_rules()]
-        for rule in rule_seq:
-            resolver = ResolveVariantRewriter(rule)
-            while True:
-                updated_graph = resolver(graph)
-                if updated_graph is graph:
-                    break
-                graph = updated_graph
-        return graph
+        def apply_rules(graph: FlowGraph) -> FlowGraph:
+            for rule in get_registered_resolve_rules():
+                rewriter = ResolveVariantRewriter(rule)
+                graph = rewriter(graph)
+            return graph
+
+        return repeat_until_converge(apply_rules, graph, limit=None)
+        # for rule in rule_seq:
+        #     resolver = ResolveVariantRewriter(rule)
+        #     while True:
+        #         updated_graph = resolver(graph)
+        #         if updated_graph is graph:
+        #             break
+        #         graph = updated_graph
+        # return graph
 
 
 def resolve_variant_pass() -> GraphPass:

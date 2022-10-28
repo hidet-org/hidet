@@ -17,6 +17,7 @@ The ResNet50 onnx model exported from PyTorch model zoo would be used as an exam
 # under current working directory.
 
 import os
+import warnings
 import torch
 import torchvision
 
@@ -24,6 +25,7 @@ import torchvision
 onnx_path = './resnet50.onnx'
 
 # load torchvision pretrained resnet50 and create a random input
+warnings.filterwarnings('ignore')
 torch_model = torchvision.models.resnet50(pretrained=True).eval().cuda()
 torch_data = torch.randn([1, 3, 224, 224]).cuda()
 
@@ -119,11 +121,11 @@ graph: hidet.FlowGraph = hidet.trace_from(symbol_output)
 #   The `CUDA Graph <https://developer.nvidia.com/blog/cuda-graphs/>`_ is a more efficient
 #   way to submit workload to NVIDIA GPU, it eliminates most of the framework-side overhead.
 #
-# We use :meth:`~hidet.graph.FlowGraph.cuda_graph` method on the flow graph to create the cuda
-# graph (:class:`hidet.runtime.CudaGraph`),
-# :func:`CudaGraph.set_input_tensors() <hidet.runtime.CudaGraph.set_input_tensors>`
-# to set the input tensors and :func:`CudaGraph.run() <hidet.runtime.CudaGraph.run>` to run the cuda graph, and
-# :attr:`CudaGraph.outputs <hidet.runtime.CudaGraph.outputs>` to access the outputs.
+# We use :meth:`~hidet.graph.FlowGraph.cuda_graph` method of a :class:`~hidet.graph.FlowGraph` to create a
+# :class:`~hidet.runtime.cuda_graph.CudaGraph`.
+# Then :meth:`~hidet.runtime.cuda_graph.CudaGraph.set_input_tensors` method is used  to set the input tensors.
+# Finally, we use :meth:`~hidet.runtime.cuda_graph.CudaGraph.run` method to run the cuda graph, and access
+# :attr:`~hidet.runtime.cuda_graph.CudaGraph.outputs` to get the outputs.
 
 def bench_hidet_graph(graph: hidet.FlowGraph):
     cuda_graph = graph.cuda_graph()
@@ -140,24 +142,27 @@ bench_hidet_graph(graph)
 # %%
 # Optimize FlowGraph
 # ------------------
-# To optimize the model, we set the level of operator schedule space to 2 with :func:`hidet.space_level`. We also conduct graph level optimizations with
-# :func:`hidet.graph.optimize`.
+# To optimize the model, we set the level of operator schedule space to 2 with :func:`hidet.space_level`. We also
+# conduct graph level optimizations with :func:`hidet.graph.optimize`.
 
 # set the search space level for kernel tuning
 hidet.space_level(2)
 
 # optimize the flow graph, such as operator fusion
-graph_opt: hidet.FlowGraph = hidet.graph.optimize(graph)
+with hidet.graph.PassContext() as ctx:
+    ctx.save_graph_instrument('./outs/graphs')
+    graph_opt: hidet.FlowGraph = hidet.graph.optimize(graph)
 
 bench_hidet_graph(graph_opt)
 
 # %%
 # Summary
 # -------
-# Hidet is a DNN inference framework that accepts ONNX model. It conducts both graph-level and operator-level optimizations. We follow the following steps
-# to run an ONNX model in Hidet:
+# Hidet is a DNN inference framework that accepts ONNX model. It conducts both graph-level and operator-level
+# optimizations. We follow the following steps to run an ONNX model in Hidet:
 #
 # 1. Load the model with :func:`hidet.graph.frontend.onnx.from_onnx`.
 # 2. Run the model with symbolic inputs, and use :func:`hidet.trace_from` to create the :class:`hidet.graph.FlowGraph`.
-# 3. Create a :class:`hidet.runtime.CudaGraph` using :func:`hidet.graph.FlowGraph.cuda_graph`.
+# 3. Create a :class:`hidet.runtime.cuda_graph.CudaGraph` using :func:`hidet.graph.FlowGraph.cuda_graph`.
 # 4. Run the cuda graph.
+

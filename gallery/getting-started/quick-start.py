@@ -26,7 +26,7 @@ import hidet
 # Hidet takes :class:`~hidet.graph.Tensor` as the core object to compute and manipulate.
 # The following code defines a tensor with randomly initialized tensor with :func:`hidet.randn`.
 
-a = hidet.randn([1, 2, 3])
+a = hidet.randn([2, 3])
 print(a)
 
 # %%
@@ -41,7 +41,7 @@ print(a)
 # Hidet provides :mod:`a bunch of operators <hidet.graph.ops>` (e.g., :func:`~hidet.graph.ops.matmul` and :func:`~hidet.graph.ops.conv2d`) to compute and manipulate
 # tensors. We can do a matrix multiplication as follows:
 b, c = hidet.randn([3, 2]), hidet.randn([2])
-d = hidet.ops.batch_matmul(a, b)
+d = hidet.ops.matmul(a, b)
 d = d + c   # 'd + c' is equivalent to 'hidet.ops.add(d, c)'
 print(d)
 
@@ -64,7 +64,7 @@ print(d)
 
 
 def linear_bias(x, b, c):
-    return hidet.ops.batch_matmul(x, b) + c
+    return hidet.ops.matmul(x, b) + c
 
 
 x = hidet.symbol_like(a)

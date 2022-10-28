@@ -12,8 +12,15 @@
 #
 import os
 import sys
-sys.path.insert(0, os.path.abspath('../../python'))
 
+# Workaround for issue https://github.com/sphinx-contrib/googleanalytics/issues/2
+# Note that a warning still will be issued "unsupported object from its setup() function"
+# Remove this workaround when the issue has been resolved upstream
+import sphinx.application
+import sphinx.errors
+sphinx.application.ExtensionError = sphinx.errors.ExtensionError
+
+sys.path.insert(0, os.path.abspath('../../python'))
 
 # -- Project information -----------------------------------------------------
 
@@ -108,4 +115,3 @@ sphinx_gallery_conf = {
     'filename_pattern': r'/*\.py',
     "download_all_examples": False,
 }
-

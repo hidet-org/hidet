@@ -20,3 +20,7 @@ div.sphx-glr-download-python {
 div.container-xl {
     max-width: 1500px;
 }
+
+.sphx-glr-script-out .highlight pre {
+    background-color: #e9ecef !important;
+}

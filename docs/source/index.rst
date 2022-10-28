@@ -28,14 +28,23 @@ Hidet is an open-source DNN inference framework, it features
   :maxdepth: 1
   :caption: Tutorials
 
-  gallery/tutorials/run_onnx_model
+  gallery/tutorials/run-onnx-model
 
 
 .. toctree::
   :maxdepth: 1
   :caption: How-to Guides
 
-  gallery/how-to-guides/pipeline_inference
+  how-to-guides/add-new-operator/index
+  gallery/how-to-guides/add-operator-resolve-rule
+  gallery/how-to-guides/add-subgraph-rewrite-rule
+
+.. toctree::
+  :maxdepth: 1
+  :caption: Notes
+
+  notes/hidet-cache
+  notes/visualize-flow-graph
 
 .. toctree::
   :maxdepth: 1
