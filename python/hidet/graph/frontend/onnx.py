@@ -5,7 +5,7 @@ Please refers to https://github.com/onnx/onnx/blob/main/docs/Operators.md for op
 Please refers to https://github.com/onnx/onnx/blob/main/onnx/onnx.proto for proto structure of onnx format.
 """
 # pylint: disable=unused-argument
-from typing import List, Union, Optional, Dict, Callable, Type
+from typing import List, Union, Optional, Dict, Callable, Type, Sequence, Set
 from collections import defaultdict
 import warnings
 import os
@@ -115,6 +115,12 @@ class OnnxOperator:
         return NotImplemented
 
     def run_v14(self, inputs: List[Tensor]) -> List[Tensor]:
+        return NotImplemented
+
+    def run_v15(self, inputs: List[Tensor]) -> List[Tensor]:
+        return NotImplemented
+
+    def run_v16(self, inputs: List[Tensor]) -> List[Tensor]:
         return NotImplemented
 
     @staticmethod
@@ -867,6 +873,58 @@ class OnnxPyFunc(OnnxOperator):
         return [randn([1]) for name in self.output_names]
 
 
+@register_onnx_operator
+class OnnxLeakyRelu(OnnxOperator):
+    def run_v1(self, inputs: List[Tensor]) -> List[Tensor]:
+        alpha = self.attrs.get('alpha', 0.01)
+        return [ops.leaky_relu(inputs[0], alpha)]
+
+
+@register_onnx_operator
+class OnnxConvTranspose(OnnxOperator):
+    def run_v1(self, inputs: List[Tensor]) -> List[Tensor]:
+        from hidet.graph.ops.definitions.utils import normalize_stride
+
+        data, weight = inputs[:2]
+        if len(data.shape) != 4:
+            raise ValueError('Currently, only support 2D ConvTranspose.')
+        auto_pad: str = self.attrs.get('auto_pad', 'NOTSET')
+        dilations: Union[int, List[int]] = self.attrs.get('dilations', 1)
+        group: int = self.attrs.get('group', 1)
+        output_padding: Union[int, List[int]] = self.attrs.get('output_padding', 0)
+        output_shape: Optional[List[int]] = self.attrs.get('output_shape', None)
+        pads: Union[int, List[int]] = self.attrs.get('pads', 0)
+        strides: int = self.attrs.get('strides', 1)
+
+        if auto_pad != 'NOTSET':
+            raise NotImplementedError('auto_pad {} is not supported yet.'.format(auto_pad))
+        if output_shape is not None:
+            raise NotImplementedError('output_shape is not supported yet.')
+        if isinstance(dilations, int):
+            dilations = [dilations] * 2
+        if any(d != 1 for d in dilations):
+            raise NotImplementedError('dilations {} is not supported yet.'.format(dilations))
+
+        output_padding = normalize_stride(output_padding)
+
+        if len(pads) == 4 and any(p < 0 for p in pads[2:]):
+            # sometimes upstream framework may export onnx model with negative pads
+            # this is a workaround to fix it
+            # remove this when upstream framework fix their bug
+            for i, p in enumerate(pads[2:]):
+                if p < 0:
+                    pads[2 + i] = 0
+                    output_padding[i] += -p
+
+        output = ops.conv2d_transpose(
+            data, weight, stride=strides, padding=pads, groups=group, output_padding=output_padding
+        )
+        if len(inputs) > 2:
+            bias: Tensor = inputs[2]  # 1D tensor added on channel axis
+            output = output + ops.unsqueeze(bias, [0, 2, 3])
+        return [output]
+
+
 def dispatch(node, op_sets: List[int]) -> OnnxOperator:
     op_type = node.op_type
     if op_type not in dispatch_table:
@@ -875,6 +933,22 @@ def dispatch(node, op_sets: List[int]) -> OnnxOperator:
         )
     op = dispatch_table[op_type](node, op_sets)
     return op
+
+
+def dispatch_operators(nodes: Sequence[onnx.NodeProto], op_sets: List[int]) -> List[OnnxOperator]:
+    dispatched: List[OnnxOperator] = []
+    unsupported: Set[str] = set()
+
+    for node in nodes:
+        op_type: str = node.op_type
+        if op_type not in dispatch_table:
+            unsupported.add(op_type)
+        else:
+            op_cls: Type[OnnxOperator] = dispatch_table[op_type]
+            dispatched.append(op_cls(node, op_sets))
+    if len(unsupported) > 0:
+        raise NotImplementedError("Operator(s) {} from onnx have not been supported yet.".format(list(unsupported)))
+    return dispatched
 
 
 def run_trt(node: OnnxOperator, inputs: List[Tensor]) -> List[Tensor]:
@@ -925,8 +999,8 @@ class OnnxGraph(nn.Module):
             self.parameters[param.name] = from_numpy(numpy_array).cuda()
         self.input_names: List[str] = [input.name for input in graph.input if input.name not in self.parameters]
         self.output_names: List[str] = [output.name for output in graph.output]
-        self.operators: List[OnnxOperator] = []
-        self.operators: List[OnnxOperator] = [dispatch(node, op_sets=self.op_sets) for node in graph.node]
+        self.operators: List[OnnxOperator] = dispatch_operators(graph.node, op_sets)
+        # self.operators: List[OnnxOperator] = [dispatch(node, op_sets=self.op_sets) for node in graph.node]
         self.env_tensors: Dict[str, Tensor] = env_tensors if env_tensors else {}
         self.usage_count: Dict[str, int] = self.count_usage()
 
@@ -951,6 +1025,12 @@ class OnnxGraph(nn.Module):
             if isinstance(operator, OnnxIf):
                 operator.env_tensors = name2tensor
             outputs = operator.run(inputs)
+            if not isinstance(outputs, (tuple, list)):
+                raise ValueError(
+                    'Operator "{}" should return a sequence of tensors, got {}.'.format(
+                        operator.node.op_type, type(outputs)
+                    )
+                )
 
             check = False
             if check:

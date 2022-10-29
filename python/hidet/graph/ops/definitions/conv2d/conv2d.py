@@ -1,4 +1,4 @@
-from typing import List, Union
+from typing import List, Union, Sequence
 from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, TensorNode
 from hidet.graph.ops.definitions.utils import compute, input_like, normalize_stride, reduce
 
@@ -40,7 +40,7 @@ class Conv2dTask(Task):
 
 
 class Conv2dOp(Operator):
-    def __init__(self, x: Tensor, w: Tensor, stride: List[int], groups: int):
+    def __init__(self, x: Tensor, w: Tensor, stride: Sequence[int], groups: int):
         stride = normalize_stride(stride)
         super().__init__(
             inputs=[x, w],
@@ -49,5 +49,5 @@ class Conv2dOp(Operator):
         )
 
 
-def conv2d(data: Tensor, weight: Tensor, stride: Union[int, List[int]], groups: int = 1) -> Tensor:
+def conv2d(data: Tensor, weight: Tensor, stride: Union[int, Sequence[int]], groups: int = 1) -> Tensor:
     return Conv2dOp(data, weight, stride, groups).get_output(0)
