@@ -26,7 +26,7 @@ def disable_cache(disable: bool = False):
 
 def build_task(
     task: Task,
-    space_level: int,
+    space_level: int = 0,
     target_device: str = 'cuda',
     warmup: int = 3,
     number: int = 10,

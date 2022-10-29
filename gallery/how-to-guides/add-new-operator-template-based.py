@@ -1,6 +1,6 @@
 """
-With Schedule Template
-======================
+Template-based Scheduling
+=========================
 .. todo::
     Will come soon.
 

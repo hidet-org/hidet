@@ -6,6 +6,7 @@ Python API
    :caption: Python API
 
    root
+   ir/index
    graph/index
    runtime/index
    utils/index

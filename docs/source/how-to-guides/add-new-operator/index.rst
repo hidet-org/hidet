@@ -5,14 +5,21 @@ Hidet is designed to be extensible. It is easy to add new operators to Hidet. Th
 an operator.
 
 1. **Rule-based Scheduling**
-   Define the mathematical computation of the operator, and use Hidet's rule-based scheduler to implement the
-   computation.
+   Define the mathematical computation of the operator, and Hidet will automatically schedule the computation into
+   parallel tensor program with Hidet's rule-based scheduler.
 2. **Template-based Scheduling**
-   Besides the computation, also give the concrete implementation of the operator.
+   Besides the computation, user can also give the concrete implementation of the operator to achieve better performance
+   for complex operators.
 
 .. toctree::
   :maxdepth: 1
-  :caption: Two Methods
+  :caption: Define Computation
+
+  ../../gallery/how-to-guides/add-new-operator-compute-definition
+
+.. toctree::
+  :maxdepth: 1
+  :caption: Two Scheduling Methods
 
   ../../gallery/how-to-guides/add-new-operator-rule-based
   ../../gallery/how-to-guides/add-new-operator-template-based
