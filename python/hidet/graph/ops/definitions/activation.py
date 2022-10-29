@@ -1,7 +1,7 @@
 from typing import Optional
 import math
 from hidet.ir import primitives as prim
-from hidet.ir.expr import const_like
+from hidet.ir.expr import const_like, if_then_else
 from .utils import Tensor
 from .arithmatic import UnaryElementwiseOp
 
@@ -9,6 +9,16 @@ from .arithmatic import UnaryElementwiseOp
 class ReluOp(UnaryElementwiseOp):
     def __init__(self, x):
         super().__init__(x, op=lambda v: prim.max(v, const_like(0.0, v)), name='relu')
+
+
+class LeakyReluOp(UnaryElementwiseOp):
+    def __init__(self, x, alpha):
+        super().__init__(
+            x,
+            op=lambda v: if_then_else(v >= 0, v, v * const_like(alpha, v)),
+            name='leaky_relu',
+            attributes={'alpha': alpha},
+        )
 
 
 class SigmoidOp(UnaryElementwiseOp):
@@ -39,6 +49,10 @@ class GeluOp(UnaryElementwiseOp):
 
 def relu(x) -> Tensor:
     return ReluOp(x).get_output(0)
+
+
+def leaky_relu(x: Tensor, alpha: float) -> Tensor:
+    return LeakyReluOp(x, alpha).get_output(0)
 
 
 def sigmoid(x: Tensor) -> Tensor:
