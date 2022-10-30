@@ -9,10 +9,75 @@ Each operator takes a list of input tensors and produces a list of output tensor
     inputs: List[Tensor]
     outputs: List[Tensor] = operator(inputs)
 
-The precise mathematical definition of each operator in Hidet is defined through a domain-specific-language (DSL).
+.. note::
+  :class: margin
 
-In this article, we will show how to define the mathematical definition of a new operator in Hidet using this DSL.
-The DSL is defined in the :py:mod:`hidet.ir.compute` module.
+  Our seniors `Halide <https://halide-lang.org/>`_ and `Apache TVM <https://tvm.apache.org/>`_ also employ a similar DSL
+  to define the mathematical definition of an operator.
+
+The precise mathematical definition of each operator in Hidet is defined through a domain-specific-language (DSL).
+In this article, we will show how to define the mathematical definition of a new operator in Hidet using this DSL,
+which is defined in the :py:mod:`hidet.ir.compute` module.
+
+
+Compute Primitives
+------------------
+This module provides compute primitives to define the mathematical computation of an operator:
+
+.. py:function:: tensor_input(name: str, dtype: str, shape: List[int])
+
+The :py:func:`~hidet.ir.compute.tensor_input` primitive defines a tensor input by specifying the name, data type, and
+shape of the tensor.
+
+Examples:
+
+.. code-block:: python
+
+  a = tensor_input('a', dtype='float32', shape=[10, 10])
+  b = tensor_input('b', dtype='float32', shape=[])
+  b = tensor_input('data', dtype='float16', shape=[1, 3, 224, 224])
+
+
+.. py:function:: compute(name: str, shape: List[int], fcompute: Callable[[Var,...], Expr])
+
+The :py:func:`~hidet.ir.compute.compute` primitive defines a tensor by specifying
+
+- the name of the tensor, just a hint for what the tensor represents,
+- the shape of the tensor, and
+- a function that maps an index to the expression that computes the value of the tensor at that index.
+
+The computation of each element of the tensor is *independent* with each other and can be computed in parallel.
+
+Examples:
+
+.. code-block:: python
+
+  # define a input tensor
+  a = tensor_input('a', dtype='float32', shape=[10, 10])
+
+  # example 1: slice the first column of a
+  b = compute('slice', shape=[10], fcompute=lambda i: a[i, 0])
+
+  # example 2: reverse the rows of matrix a
+  c = compute('reverse', shape=[10, 10], fcompute=lambda i, j: a[9 - i, j])
+
+  # example 3: add 1 to the diagonal elements of a
+  from hidet.ir.expr import if_then_else
+  d = compute(
+    name='diag_add',
+    shape=[10, 10],
+    fcompute=lambda i, j: if_then_else(i == j, then_expr=a[i, j] + 1.0, else_expr=a[i, j])
+  )
+
+In the last example, we used an :py:func:`~hidet.ir.expr.if_then_else` expression to define a conditional expression.
+
+
+.. py:function:: reduce(shape: List[int], fcompute: Callable[[Var, ...], Expr], reduce_type='sum')
+
+The :py:func:`~hidet.ir.compute.reduce` primitive
+
+.. py:function:: arg_reduce(extent: int, fcompute: Callable[[Var], Expr], reduce_type='max')
+
 """
 from typing import List
 import hidet
