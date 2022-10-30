@@ -51,3 +51,6 @@ em.sig-param {
 code {
     font-family: monospace;
 }
+code {
+    color: #3e3ead;
+}

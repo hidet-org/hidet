@@ -215,17 +215,40 @@ nodes. The edges of the DAG are the dependencies between the tensor nodes.
         b -> e
     }
 
-Such a DAG is defined by a :py:class:`~hidet.ir.task.Task` object.
+Such a DAG is stored in a :py:class:`~hidet.ir.task.Task` object.
 
 .. py:class:: Task(name: str, inputs: List[TensorNode], outputs: List[TensorNode])
     :noindex:
-
-
-Examples
---------
-
-The computation of each operator in Hidet is defined
 """
+
+
+def demo_task():
+    from hidet.ir.compute import tensor_input, compute
+    from hidet.ir.task import Task
+
+    # define the computation DAG through the compute primitives
+    a = tensor_input('a', dtype='float32', shape=[10])
+    b = tensor_input('b', dtype='float32', shape=[10])
+    c = compute('c', [10], lambda i: a[i] + i)
+    d = compute('d', [10], lambda i: c[9 - i])
+    e = compute('e', [10], lambda i: a[i] + b[i])
+
+    # create a task object
+    task = Task(name='task', inputs=[a, b], outputs=[d, e])
+    print(task)
+
+
+demo_task()
+
+# %%
+#
+
+# %%
+# Examples
+# --------
+#
+# The computation of each operator in Hidet is defined
+
 from typing import List
 import hidet
 from hidet.ir.compute import tensor_input, reduce, compute, arg_reduce, TensorNode
