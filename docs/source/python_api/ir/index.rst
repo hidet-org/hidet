@@ -8,4 +8,5 @@ hidet.ir
   expr
   stmt
   compute
+  task
 

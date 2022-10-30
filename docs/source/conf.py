@@ -45,6 +45,7 @@ extensions = [
     'sphinx.ext.viewcode',
     'sphinx.ext.coverage',
     'sphinx.ext.todo',
+    'sphinx.ext.graphviz',
     "sphinx_gallery.gen_gallery",
     'sphinxcontrib.googleanalytics',
     'sphinx_copybutton',
@@ -119,3 +120,5 @@ sphinx_gallery_conf = {
 
 copybutton_prompt_text = r">>> |\.\.\. |\$ |In \[\d*\]: | {2,5}\.\.\.: | {5,8}: "
 copybutton_prompt_is_regexp = True
+
+graphviz_output_format = "svg"
