@@ -13,6 +13,9 @@ class CompiledModule:
 
 
 class CompiledFunction:
+    """
+    A compiled function that can be directly called.
+    """
     def __init__(self, name, packed_func):
         from hidet.ffi import PackedFunc
 

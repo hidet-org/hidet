@@ -26,15 +26,48 @@ def disable_cache(disable: bool = False):
 
 def build_task(
     task: Task,
-    space_level: int = 0,
-    target_device: str = 'cuda',
-    warmup: int = 3,
-    number: int = 10,
-    repeat: int = 3,
+    space_level=0,
+    target_device='cuda',
+    warmup=3,
+    number=10,
+    repeat=3,
     use_cache=True,
     cache_dir=None,
     load=True,
-):
+) -> Optional[CompiledFunction]:
+    """
+    Build a task into a compiled function.
+
+    Parameters
+    ----------
+    task: Task
+        The task to be built.
+    space_level: int
+        The space level of the schedule space. Candidates are 0, 1, 2, 3. Space level 0 indicates to use the default
+        schedule without tuning. Space level 1 indicates to search in a small search space. Space level 2 indicates to
+        search in the largest search space. Larger search space leads to better performance, but also takes more time to
+        tune.
+    target_device: str
+        The target device. Candidates are 'cuda' and 'cpu'.
+    warmup: int
+        The number of warmup runs when benchmarking different schedules.
+    number: int
+        The number of runs per repeat when benchmarking different schedules.
+    repeat: int
+        The number of repeats when benchmarking different schedules.
+    use_cache: bool
+        Whether to use cache on disk.
+    cache_dir: str
+        The cache directory. The default is None, which means to use the default cache directory:
+        **hidet_cache_dir/ops**.
+    load: bool
+        Whether to load the compiled function. If False, the compiled function will not be loaded, and None is returned.
+        Otherwise, the compiled function is loaded and returned.
+    Returns
+    -------
+    compiled_func:
+        When load is True, the compiled function is returned. Otherwise, None is returned.
+    """
     # pylint: disable=too-many-arguments, too-many-locals
     task_string: str = str(task)
     compiled_func: Optional[CompiledFunction] = None
@@ -146,8 +179,3 @@ def build_ir_module(
         func_type = FuncType.from_func(func)
     return load_lib_func(lib_path, func_name, func_type=func_type)
 
-
-if __name__ == '__main__':
-    print(sha256('abc'.encode()).hexdigest())
-    print(hex(hash('abc')))
-    print(type(hex(1)))

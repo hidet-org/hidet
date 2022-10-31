@@ -1,8 +1,23 @@
 Installation
 ============
 
-Install from pip
+Install via pip
 ----------------
+
+.. todo::
+  :class: margin
+
+  Coming soon.
+
+Run the following command to install ``hidet`` package directly using python pip:
+
+.. code-block:: console
+
+  $ pip install hidet
+
+
+Install from source
+-------------------
 
 .. note::
   :class: margin
@@ -10,16 +25,6 @@ Install from pip
   Currently, hidet is not open-sourced yet. Please ask Yaoyao get access to the GitHub repository.
 
   In the future, we will publish hidet to The `Python Package Index (PyPI) <https://pypi.org/>`_.
-
-Run the following command to install ``hidet`` package directly using python pip:
-
-.. code-block:: console
-
-  $ pip install git+ssh://git@github.com/yaoyaoding/hidet.git
-
-
-Install from source
--------------------
 
 If you are a developer of Hidet, it is better to install hidet from source.
 

@@ -46,6 +46,7 @@ extensions = [
     'sphinx.ext.coverage',
     'sphinx.ext.todo',
     'sphinx.ext.graphviz',
+    'sphinx.ext.doctest',
     "sphinx_gallery.gen_gallery",
     'sphinxcontrib.googleanalytics',
     'sphinx_copybutton',

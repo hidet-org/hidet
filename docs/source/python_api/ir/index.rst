@@ -7,6 +7,7 @@ hidet.ir
   type
   expr
   stmt
+  func
   compute
   task
 
