@@ -6,7 +6,7 @@ from hidet.ir.type import FuncType, VoidType
 from hidet.ir.expr import var, tensor_var
 from hidet.ir.func import IRModule
 from hidet.ir.primitives import lds128, sts128
-from hidet.ir.stmt import BlackBoxStmt, AssignStmt, BufferStoreStmt, DeclareStmt, Scope
+from hidet.ir.stmt import BlackBoxStmt, AssignStmt, BufferStoreStmt, DeclareStmt, DeclareScope
 from hidet.utils import cuda
 from hidet.driver import build_ir_module
 from hidet.transforms.tools import fuse_and_pack
@@ -17,7 +17,7 @@ def test_lds128(capfd):
         # params
         regs = [var(f'reg{i}', 'float32') for i in range(4)]
         smem_tensor = tensor_var('smem_tensor', [4], 'float32')
-        fb += DeclareStmt(smem_tensor, scope=Scope.Shared)
+        fb += DeclareStmt(smem_tensor, scope=DeclareScope.Shared)
         for reg in regs:
             fb += DeclareStmt(reg)
 
@@ -45,7 +45,7 @@ def test_sts128(capfd):
         # params
         regs = [var(f'reg{i}', 'float32') for i in range(4)]
         smem_tensor = tensor_var('smem_tensor', [4], 'float32')
-        fb += DeclareStmt(smem_tensor, scope=Scope.Shared)
+        fb += DeclareStmt(smem_tensor, scope=DeclareScope.Shared)
         for reg in regs:
             fb += DeclareStmt(reg)
 

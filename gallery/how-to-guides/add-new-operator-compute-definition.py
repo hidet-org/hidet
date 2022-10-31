@@ -18,7 +18,7 @@ Each operator takes a list of input tensors and produces a list of output tensor
   DSL to define the mathematical definition of an operator.
 
 The precise mathematical definition of each operator in Hidet is defined through a domain-specific-language (DSL).
-In this article, we will show how to define the mathematical definition of a new operator in Hidet using this DSL,
+In this tutorial, we will show how to define the mathematical definition of a new operator in Hidet using this DSL,
 which is defined in the :py:mod:`hidet.ir.compute` module.
 
 
@@ -290,6 +290,7 @@ def run_task(task: Task, inputs: List[hidet.Tensor], outputs: List[hidet.Tensor]
         print(tensor)
     print()
 
+
 # %%
 # The following code shows how to 1) define the computation, 2) define the task, and 3) build and run the task.
 #
@@ -301,11 +302,13 @@ def run_task(task: Task, inputs: List[hidet.Tensor], outputs: List[hidet.Tensor]
 #  high-level computation graph of a deep learning model. The latter is a tensor node in the domain-specific language
 #  that is used to describe the computation of a single operator.
 
-import numpy as np
 from hidet.ir.compute import tensor_input, reduce, compute, arg_reduce, TensorNode
 
+# sphinx_gallery_start_ignore
 # Hidet use numpy for tensor printing, this line reduce the number of printed digits
+import numpy as np
 np.set_printoptions(precision=2, suppress=True)
+# sphinx_gallery_end_ignore
 
 def add_example():
     a: TensorNode = tensor_input(name='a', dtype='float32', shape=[5])
@@ -317,6 +320,7 @@ def add_example():
 
 add_example()
 
+
 # %%
 # More Examples
 # -------------
@@ -325,13 +329,14 @@ add_example()
 #   :class: margin
 #
 #   All the hidet operators are defined in :py:mod:`hidet.graph.ops` submodule. And all of existing operators
-#   are defined through the compute primitives described in this article. Feel free to check the source code to learn more
-#   about how to define the computation of different operators.
+#   are defined through the compute primitives described in this tutorial. Feel free to check the source code to learn
+#   more about how to define the computation of different operators.
 #
 # At last, we show more examples of using the compute primitives to define operator computation.
 #
 # ReduceSum
 # ^^^^^^^^^
+
 def reduce_sum_example():
     a = tensor_input('a', dtype='float32', shape=[4, 3])
     b = compute(
@@ -344,6 +349,7 @@ def reduce_sum_example():
 
 
 reduce_sum_example()
+
 
 # %%
 # ArgMax
@@ -360,8 +366,8 @@ def arg_max_example():
     run_task(task, [hidet.randn([4, 3])], [hidet.empty([4], dtype='int32')])
 
 
-
 arg_max_example()
+
 
 # %%
 # MatMul
@@ -406,7 +412,7 @@ softmax_example()
 # %%
 # Summary
 # -------
-# In this article, we introduced the compute primitives that are used to define the computation of operators in Hidet.
+# In this tutorial, we introduced the compute primitives that are used to define the computation of operators in Hidet.
 # After that, we showed how to wrap the computation DAG into a task and build and run the task. In the next step, we
 # will show you how to use these compute primitives to define new operators in Hidet.
 #

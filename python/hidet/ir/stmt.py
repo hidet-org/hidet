@@ -8,7 +8,7 @@ from hidet.ir.mapping import TaskMapping
 
 
 # scope
-class Scope(enum.Enum):
+class DeclareScope(enum.Enum):
     """
     The scope of a tensor variable used in declaration statement.
     """
@@ -17,6 +17,17 @@ class Scope(enum.Enum):
     Global = 1
     Shared = 2
     Register = 3
+
+    @staticmethod
+    def from_str(name):
+        if name == 'global':
+            return DeclareScope.Global
+        elif name == 'shared':
+            return DeclareScope.Shared
+        elif name == 'register':
+            return DeclareScope.Register
+        else:
+            return DeclareScope.Default
 
 
 class Stmt(Node):
@@ -30,12 +41,12 @@ class EvaluateStmt(Stmt):
 
 
 class DeclareStmt(Stmt):
-    def __init__(self, var, init: Optional[Expr] = None, is_static=False, scope: Optional[Scope] = None):
+    def __init__(self, var, init: Optional[Expr] = None, is_static=False, scope: Optional[DeclareScope] = None):
         super().__init__()
         self.var: Var = var
         self.init: Optional[Expr] = convert(init)
         self.is_static: bool = is_static
-        self.scope: Optional[Scope] = scope if scope else Scope.Default
+        self.scope: Optional[DeclareScope] = scope if scope else DeclareScope.Default
 
 
 class BufferStoreStmt(Stmt):

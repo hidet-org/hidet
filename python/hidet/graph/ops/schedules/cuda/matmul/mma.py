@@ -11,7 +11,7 @@ from hidet.ir.primitives import syncthreads, thread_idx, block_idx
 from hidet.ir.primitives.cuda.mma import MmaConfig, mma_sync
 from hidet.ir.mapping import row_spatial, row_repeat
 from hidet.ir.layout import row_layout, data_layout
-from hidet.ir.stmt import BufferStoreStmt, IfStmt, Stmt, DeclareStmt, Scope
+from hidet.ir.stmt import BufferStoreStmt, IfStmt, Stmt, DeclareStmt, DeclareScope
 from hidet.ir.type import ScalarType
 from hidet.utils import cuda, prod
 from hidet.graph.ops.definitions.matmul import BatchMatmulTask
@@ -211,7 +211,7 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, sch: MatmulMm
         smem_b = tensor_pointer_var('smem_b', dtype=b_dtype, layout=sch.smem_b_layout)
         smem_c = tensor_pointer_var('smem_c', dtype=c_dtype, layout=sch.smem_c_layout)
         smem_storage = tensor_var('smem_storage', shape=[sch.smem_storage_nbytes], dtype='uint8')
-        fb += DeclareStmt(smem_storage, scope=Scope.Shared)
+        fb += DeclareStmt(smem_storage, scope=DeclareScope.Shared)
         fb += DeclareStmt(smem_a, init=cast(~smem_storage[0], ~a_dtype))
         fb += DeclareStmt(smem_b, init=cast(~smem_storage[smem_a.type.tensor_type.storage_bytes()], ~b_dtype))
         fb += DeclareStmt(smem_c, init=cast(~smem_storage[0], ~c_dtype))

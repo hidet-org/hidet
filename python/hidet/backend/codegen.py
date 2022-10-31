@@ -6,7 +6,7 @@ from hidet.ir.type import VoidType
 from hidet.ir.expr import Var, Expr, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, Neg, NotEqual, Equal, And, Or
 from hidet.ir.expr import Not, BitwiseAnd, BitwiseOr, BitwiseXor, BitwiseNot, LeftShift, RightShift, TensorElement
 from hidet.ir.expr import IfThenElse, Cast, Address, Reference, Dereference, Call, Let, Constant, TensorSlice, convert
-from hidet.ir.stmt import Stmt, Scope, DeclareStmt, EvaluateStmt, BufferStoreStmt, AssignStmt, LetStmt, ForStmt
+from hidet.ir.stmt import Stmt, DeclareScope, DeclareStmt, EvaluateStmt, BufferStoreStmt, AssignStmt, LetStmt, ForStmt
 from hidet.ir.stmt import ForTaskStmt, WhileStmt, BreakStmt, ContinueStmt, IfStmt, ReturnStmt, AssertStmt, AsmStmt
 from hidet.ir.stmt import BlackBoxStmt, SeqStmt
 from hidet.ir.func import IRModule, Function
@@ -145,9 +145,10 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         # here in case nvidia add the definition in the future.
         doc += Text('#define __float_to_tf32(x) (x)') + NewLine()
 
-        doc += '/*' + NewLine()
-        doc += str(module.task) + NewLine()
-        doc += '*/' + NewLine()
+        if module.task is not None:
+            doc += '/*' + NewLine()
+            doc += str(module.task) + NewLine()
+            doc += '*/' + NewLine()
         doc += Text('extern "C" {') + NewLine()
 
         call_graph = CallGraph(module)
@@ -383,9 +384,13 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         doc = NewLine()
         if stmt.is_static:
             doc += 'static '
-        if stmt.scope != Scope.Default:
-            scope2specifier = {Scope.Shared: '__shared__', Scope.Global: '__global__'}
-            doc += scope2specifier[stmt.scope] + ' '
+        if stmt.scope != DeclareScope.Default:
+            scope2specifier = {
+                DeclareScope.Shared: '__shared__ ',
+                DeclareScope.Global: '__global__ ',
+                DeclareScope.Register: ''    # we can not force nvcc to use register, but it will do so if possible
+            }
+            doc += scope2specifier[stmt.scope]
         doc += self.local_var_declare(stmt.var)
         if stmt.init is not None:
             doc += ' = ' + self(stmt.init)

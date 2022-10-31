@@ -7,7 +7,7 @@ from hidet.ir.expr import Sub, Not, Or, And, Let, IfThenElse, TensorSlice, Right
 from hidet.ir.expr import BitwiseAnd, Neg, Cast, NotEqual, BitwiseXor, Reference, Dereference, Address
 from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt
 from hidet.ir.stmt import BlackBoxStmt, AsmStmt, ReturnStmt, LetStmt, DeclareStmt, ForTaskStmt, WhileStmt, ContinueStmt
-from hidet.ir.stmt import BreakStmt, Scope
+from hidet.ir.stmt import BreakStmt, DeclareScope
 from hidet.ir.mapping import RepeatTaskMapping, SpatialTaskMapping, ComposedTaskMapping, TaskMapping
 from hidet.ir.compute import TensorNode, ScalarNode, GridCompute, ArgReduceCompute, ReduceCompute
 from hidet.ir.dialects.pattern import AnyExpr
@@ -241,7 +241,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
             doc += ' = ' + self(stmt.init)
         if stmt.is_static:
             doc += ' [static]'
-        if stmt.scope != Scope.Default:
+        if stmt.scope != DeclareScope.Default:
             doc += ' [{}]'.format(stmt.scope)
         return doc
 

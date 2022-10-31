@@ -17,11 +17,13 @@ class CompiledFunction:
     A compiled function that can be directly called.
     """
 
-    def __init__(self, name, packed_func):
+    def __init__(self, name, packed_func, lib_path: Optional[str] = None, src_path: Optional[str] = None):
         from hidet.ffi import PackedFunc
 
         self.name: str = name
         self.packed_func: PackedFunc = packed_func
+        self.lib_path: Optional[str] = lib_path
+        self.src_path: Optional[str] = src_path
 
     def __call__(self, *args):
         self.packed_func(*args)

@@ -8,7 +8,7 @@ from hidet.ir.expr import Var, tensor_var
 from hidet.ir.func import IRModule
 from hidet.ir.primitives.cuda import thread_idx
 from hidet.ir.primitives.cuda.mma import MmaConfig, mma_sync, mma_configs
-from hidet.ir.stmt import BufferStoreStmt, DeclareStmt, Scope
+from hidet.ir.stmt import BufferStoreStmt, DeclareStmt, DeclareScope
 from hidet.ir.type import ScalarType, TensorPointerType, FuncType
 from hidet.transforms.tools import fuse_and_pack
 
