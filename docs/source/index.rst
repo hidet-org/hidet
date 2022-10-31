@@ -43,7 +43,7 @@ Hidet is an open-source DNN inference framework, it features
   :maxdepth: 1
   :caption: Notes
 
-  notes/hidet-cache
+  notes/operator-cache
   notes/visualize-flow-graph
 
 .. toctree::

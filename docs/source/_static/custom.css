@@ -24,3 +24,40 @@ div.container-xl {
 .sphx-glr-script-out .highlight pre {
     background-color: #e9ecef !important;
 }
+
+div.sphx-glr-download a {
+    background-color: #0084c845 !important;
+    background-image: none !important;
+}
+
+div.sphx-glr-download a:hover {
+    background-color: rgba(0, 132, 200, 0.5) !important;
+    background-image: none !important;
+}
+
+dt.sig {
+    letter-spacing: 0;
+    font-family: Menlo,Monaco,Consolas,SFMono-Regular,"Liberation Mono","Courier New",monospace;
+    /*font-family: ;*/
+    /*font-size=1em;*/
+}
+
+span.sig-name {
+    color: #0558b7;
+}
+em.sig-param {
+    font-style: normal;
+}
+em.property {
+    font-style: normal;
+}
+code {
+    font-family: monospace;
+}
+code {
+    color: #3e3ead;
+}
+
+.heading-style, h1, h2, h3, h4, h5, h6 {
+    font-family: Ubuntu, system-ui;
+}

@@ -45,8 +45,11 @@ extensions = [
     'sphinx.ext.viewcode',
     'sphinx.ext.coverage',
     'sphinx.ext.todo',
+    'sphinx.ext.graphviz',
+    'sphinx.ext.doctest',
     "sphinx_gallery.gen_gallery",
     'sphinxcontrib.googleanalytics',
+    'sphinx_copybutton',
     'autodocsumm',
 ]
 
@@ -77,7 +80,7 @@ autodoc_typehints = 'description'
 intersphinx_mapping = {
     'torch': ('https://pytorch.org/docs/stable', None),
     'torchvision': ('https://pytorch.org/vision/stable', None),
-    "python": ("https://docs.python.org/3", None),
+    # "python": ("https://docs.python.org/3", None),
 }
 
 # -- Options for HTML output -------------------------------------------------
@@ -115,3 +118,8 @@ sphinx_gallery_conf = {
     'filename_pattern': r'/*\.py',
     "download_all_examples": False,
 }
+
+copybutton_prompt_text = r">>> |\.\.\. |\$ |In \[\d*\]: | {2,5}\.\.\.: | {5,8}: "
+copybutton_prompt_is_regexp = True
+
+graphviz_output_format = "svg"

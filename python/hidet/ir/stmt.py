@@ -9,6 +9,10 @@ from hidet.ir.mapping import TaskMapping
 
 # scope
 class Scope(enum.Enum):
+    """
+    The scope of a tensor variable used in declaration statement.
+    """
+
     Default = 0
     Global = 1
     Shared = 2

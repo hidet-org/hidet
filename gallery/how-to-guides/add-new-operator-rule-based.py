@@ -1,7 +1,8 @@
 """
-With Rule-based Scheduler
-=============================================
-.. todo::
-    Will come soon.
+Using Rule-based Scheduling
+===========================
+
+
+
 
 """

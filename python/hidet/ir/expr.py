@@ -408,6 +408,19 @@ class Constant(Expr):
 
 
 class IfThenElse(Expr):
+    """
+    The if-then-else expression.
+
+    Parameters
+    ----------
+    cond: Expr
+        The condition of the if-then-else expression.
+    then_expr: Expr
+        The expression to be evaluated if the condition is true.
+    else_expr: Expr
+        The expression to be evaluated if the condition is false.
+    """
+
     def __init__(self, cond: Union[Expr, PyScalar], then_expr: Union[Expr, PyScalar], else_expr: Union[Expr, PyScalar]):
         self.cond = convert(cond)
         self.then_expr = convert(then_expr)
@@ -500,6 +513,25 @@ def is_const_int(v: Expr) -> bool:
 def if_then_else(
     cond: Union[Expr, PyScalar], then_expr: Union[Expr, PyScalar], else_expr: Union[Expr, PyScalar]
 ) -> IfThenElse:
+    """
+    Create an if-then-else expression.
+
+    Parameters
+    ----------
+    cond: Expr or PyScalar
+        The condition of the if-then-else expression.
+
+    then_expr: Expr or PyScalar
+        The expression to be evaluated if the condition is true.
+
+    else_expr: Expr or PyScalar
+        The expression to be evaluated if the condition is false.
+
+    Returns
+    -------
+    ret: IfThenElse
+        The if-then-else expression.
+    """
     return IfThenElse(convert(cond), convert(then_expr), convert(else_expr))
 
 
