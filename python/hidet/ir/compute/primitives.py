@@ -31,6 +31,7 @@ class TensorNode(ComputeNode):
     :py:func:`~hidet.ir.compute.tensor_input`. and the intermediate node is created by
     :py:func:`~hidet.ir.compute.compute`.
     """
+
     def __init__(self, name, data_type, tensor_compute=None):
         super().__init__(name)
         self.data_type: TensorType = data_type

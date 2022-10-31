@@ -73,6 +73,7 @@ class IRModule(Node):
 
     An IRModule contains one or more functions. It is the basic compilation unit of hidet.
     """
+
     def __init__(self, funcs=None, task=None, global_vars=None):
         # pylint: disable=import-outside-toplevel
         from hidet.ir.task import Task

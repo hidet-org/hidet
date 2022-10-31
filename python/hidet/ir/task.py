@@ -183,6 +183,7 @@ class Task(Node):
     """
     A task defines the operator computation.
     """
+
     def __init__(self, name, inputs, outputs, inverse_map=None, attributes=None):
         if inverse_map is None:
             inverse_map = {}

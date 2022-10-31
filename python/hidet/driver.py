@@ -178,4 +178,3 @@ def build_ir_module(
         func = ir_module.lookup(func_name)
         func_type = FuncType.from_func(func)
     return load_lib_func(lib_path, func_name, func_type=func_type)
-

@@ -420,6 +420,7 @@ class IfThenElse(Expr):
     else_expr: Expr
         The expression to be evaluated if the condition is false.
     """
+
     def __init__(self, cond: Union[Expr, PyScalar], then_expr: Union[Expr, PyScalar], else_expr: Union[Expr, PyScalar]):
         self.cond = convert(cond)
         self.then_expr = convert(then_expr)
