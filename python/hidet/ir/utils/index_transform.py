@@ -9,7 +9,7 @@ def index_serialize(indices: List[Expr], shape: List[int]) -> Expr:
     acc = 1
     for idx_value, extent in reversed(list(zip(indices, shape))):
         scalar_index += idx_value * acc
-        acc = extent
+        acc *= extent
     return scalar_index
 
 
