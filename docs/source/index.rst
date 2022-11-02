@@ -38,6 +38,8 @@ Hidet is an open-source DNN inference framework, it features
   how-to-guides/add-new-operator/index
   gallery/how-to-guides/add-operator-resolve-rule
   gallery/how-to-guides/add-subgraph-rewrite-rule
+  gallery/how-to-guides/visualize-flow-graph
+
 
 .. toctree::
   :maxdepth: 1

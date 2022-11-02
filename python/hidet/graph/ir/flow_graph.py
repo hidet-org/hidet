@@ -29,20 +29,18 @@ class FlowGraph:
         return self.forward(*inputs)
 
     def __str__(self):
-        from hidet.utils.py import green, blue, red, magenta  # pylint: disable=import-outside-toplevel
-
         if any(v is None for v in [self.inputs, self.nodes, self.usage_count]):
             self.update_nodes()
         namer = Namer()
 
         def get_tensor_sig(x: Tensor) -> Doc:
-            return Text(blue(x.dtype)) + '[' + doc_join([red(str(v)) for v in x.shape], ', ') + ']'
+            return Text(x.dtype) + '[' + doc_join([str(v) for v in x.shape], ', ') + ']'
 
         def get_attr_repr(value: Union[float, int, bool, str, list, tuple]) -> Doc:
             if isinstance(value, (float, int, bool)):
-                return Text(red(str(value)))
+                return Text(str(value))
             elif isinstance(value, str):
-                return Text(green('"{}"'.format(value)))
+                return Text('"{}"'.format(value))
             elif isinstance(value, list):
                 return '[' + doc_join([get_attr_repr(v) for v in value], ', ') + ']'
             elif isinstance(value, tuple):
@@ -69,11 +67,7 @@ class FlowGraph:
                     const_doc += (
                         NewLine()
                         + namer.get_name(x, hint='c')
-                        + ' = '
-                        + blue('Constant')
-                        + '('
-                        + get_tensor_sig(x)
-                        + ')'
+                        + ' = Constant(' + get_tensor_sig(x) + ')'
                     )
             outputs = op.outputs
             if len(outputs) > 1:
@@ -81,18 +75,18 @@ class FlowGraph:
             output: Tensor = outputs[0]
             line_doc = Doc()
             line_doc += namer(output) + ': ' + get_tensor_sig(output) + ' = '
-            line_doc += blue(op.name) + ('*' if len(op.task.task_graph.nodes) > 1 else '') + '('
+            line_doc += op.name + ('*' if len(op.task.task_graph.nodes) > 1 else '') + '('
             line_doc += doc_join([namer(x) for x in op.inputs], sep=', ')
             if op.attrs:
                 line_doc += ', ' + doc_join(
-                    [Text(magenta(name)) + '=' + get_attr_repr(value) for name, value in op.attrs.items()], ', '
+                    [Text(name) + '=' + get_attr_repr(value) for name, value in op.attrs.items()], ', '
                 )
             line_doc += ')  '
             # line_doc += '# ' + get_tensor_sig(output)
             body_doc += NewLine() + line_doc
 
         # return statement
-        body_doc += NewLine() + Text(blue('return ')) + doc_join([namer(x) for x in self.outputs], ', ')
+        body_doc += NewLine() + Text('return ') + doc_join([namer(x) for x in self.outputs], ', ')
 
         graph_doc = head_doc + '{' + const_doc.indent() + body_doc.indent() + NewLine() + '}'
         return str(graph_doc)
