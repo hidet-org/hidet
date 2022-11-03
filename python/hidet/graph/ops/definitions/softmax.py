@@ -47,7 +47,7 @@ class SoftmaxTask(Task):
         )
         super().__init__(name='softmax', inputs=[x], outputs=[out])
 
-    def implement_cuda(self) -> IRModule:
+    def implement_cuda(self, workding_dir: str) -> IRModule:
         from hidet.graph.ops.schedules import softmax_cuda_schedule
 
         return softmax_cuda_schedule(self)

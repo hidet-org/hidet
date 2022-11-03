@@ -14,7 +14,6 @@ from .transforms import GraphPass, PassContext, GraphPassInstrument
 
 from .tensor import array, randn, empty, zeros, ones, symbol, randint, randn_like, empty_like, zeros_like, ones_like
 from .tensor import symbol_like, randint_like, from_torch, full, full_like
-from .operator import space_level, get_space_level, profile_config, get_profile_config, cache_operator
 from .ir import trace_from, load_graph, save_graph
 from .transforms import optimize
 from .modules import nn

@@ -2,6 +2,7 @@
 Hidet is an open-source DNN inference framework based on compilation.
 """
 import sys
+from . import option
 from . import ir
 from . import backend
 from . import utils
@@ -18,11 +19,8 @@ from .graph.frontend import torch
 from .graph import ops
 from .graph import empty, randn, zeros, ones, full, randint, symbol, array, from_torch
 from .graph import empty_like, randn_like, zeros_like, ones_like, symbol_like, full_like, randint_like
-from .graph import space_level, get_space_level, profile_config, get_profile_config, cache_operator
 from .graph import trace_from, load_graph, save_graph
 from .graph import jit
-
-from .utils import hidet_set_cache_root as set_cache_root
 
 from .lang import script, script_module
 

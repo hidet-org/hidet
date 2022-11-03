@@ -57,7 +57,7 @@ class ReduceTask(Task):
             },
         )
 
-    def implement_cuda(self) -> IRModule:
+    def implement_cuda(self, workding_dir: str) -> IRModule:
         # pylint: disable=import-outside-toplevel
         from ..schedules import cuda_schedule_reduce_by_default, cuda_schedule_reduce_by_warp_reduce
 

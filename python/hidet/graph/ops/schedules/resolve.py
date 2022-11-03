@@ -4,10 +4,11 @@ from typing import List, Optional
 import numpy as np
 from tqdm import tqdm
 
+from hidet import option
 from hidet.ir.type import TensorType
 from hidet.ir.expr import Constant
 from hidet.ir.func import IRModule
-from hidet.ir.task import Task, TaskContext
+from hidet.ir.task import Task
 from hidet.utils import TableBuilder, strict_zip, error_tolerance
 from hidet.graph.tensor import randn, zeros, ones, Tensor
 from .common import Schedule
@@ -140,14 +141,12 @@ def resolve_ir_modules(
         errors = [float('NaN')] * len(compiled_funcs)
 
     # measure latency
-    ctx = TaskContext.current()
+    warmup, number, repeat = option.get_option('bench_config')
     for ir_module, compiled_func in tqdm(
         strict_zip(ir_modules, compiled_funcs), desc='Benchmarking', total=len(ir_modules)
     ):
         if compiled_func:
-            repeat_latency = compiled_func.profile(
-                *dummy_inputs, warmup=ctx.warmup, number=ctx.number, repeat=ctx.repeat
-            )
+            repeat_latency = compiled_func.profile(*dummy_inputs, warmup=warmup, number=number, repeat=repeat)
             latency = float(np.median(repeat_latency))
         else:
             # this ir module failed in building, skip

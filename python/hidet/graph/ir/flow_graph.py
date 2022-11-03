@@ -6,6 +6,7 @@ import warnings
 from collections import defaultdict
 
 import hidet.graph.operator
+from hidet import option
 from hidet.graph.tensor import Tensor, empty_like
 from hidet.graph.operator import Operator
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
@@ -100,38 +101,23 @@ class FlowGraph:
         tasks = []
         tunable_tasks = []
         task_keys = set()
-        space_level = hidet.get_space_level()
-        profile_config = hidet.get_profile_config()
+        search_space = hidet.option.get_option('search_space')
         for node in self.nodes:
             if node.task_func is None:
-                # if space_level == 0 or 'implement_cuda' not in node.task.__class__.__dict__:
                 task_key = hash(str(node.task))
                 if task_key in task_keys:
                     continue
                 task_keys.add(task_key)
-                # if node.task.fast_implement(space_level):
-                if space_level == 0 or 'implement_cuda' not in node.task.__class__.__dict__:
+                if search_space == 0 or 'implement_cuda' not in node.task.__class__.__dict__:
                     tasks.append(node.task)
                 else:
                     tunable_tasks.append(node.task)
-        hidet.driver.build_batch_task(
-            tasks,
-            space_level,
-            warmup=profile_config.warmup,
-            number=profile_config.number,
-            repeat=profile_config.repeat,
-            parallel=True,
-        )
-        # hidet.driver.build_batch_task(tasks, space_level, warmup=profile_config.warmup,
-        #                               number=profile_config.number, repeat=profile_config.repeat, parallel=False)
-        hidet.driver.build_batch_task(
-            tunable_tasks,
-            space_level,
-            warmup=profile_config.warmup,
-            number=profile_config.number,
-            repeat=profile_config.repeat,
-            parallel=False,
-        )
+
+        hidet.driver.build_batch_task(tasks)
+
+        with option.context():
+            hidet.option.parallel_build(False)
+            hidet.driver.build_batch_task(tunable_tasks)  # build tunable tasks one by one
 
     def forward(self, *inputs: Tensor) -> Union[List[Tensor], Tensor]:
         """Run the computation graph.

@@ -1,10 +1,10 @@
 from typing import List, Tuple, Union, TypeVar
 import os
 
+from hidet import option
 from hidet.ir.func import IRModule
 from hidet.graph.ops.definitions.conv2d.conv2d import Conv2dTask
 from hidet.graph.ops.schedules.common import Schedule, NotSupportedError
-from hidet.ir.task import TaskContext
 from hidet.graph.ops.schedules.resolve import resolve_ir_modules
 from hidet.utils import prod, cuda
 from hidet.transforms.tools import fuse_and_pack
@@ -52,9 +52,10 @@ class DepthwiseConv2dSchedule(Schedule):
             raise NotSupportedError(self)
 
     @staticmethod
-    def schedules_for(task: Conv2dTask, space_level: int):
+    def schedules_for(task: Conv2dTask):
         # pylint: disable=too-many-nested-blocks
         task_shape: Tuple[int, int, int, int] = tuple(task.outputs[0].const_shape())
+        space_level = option.get_option('search_space')
         if space_level == 0:
             sch = DepthwiseConv2dSchedule(
                 task=task, task_shape=task_shape, block_shape=(1, 36, 7, 7), repeat_shape=(1, 12, 7, 7)
@@ -100,15 +101,14 @@ class DepthwiseConv2dSchedule(Schedule):
         ]
 
 
-def schedule_depthwise_conv2d(task: Conv2dTask) -> IRModule:
-    ctx = TaskContext.current()
+def schedule_depthwise_conv2d(task: Conv2dTask, workding_dir: str) -> IRModule:
     data, weight, output = task.inputs[0], task.inputs[1], task.outputs[0]
     stride_height, stride_width = task.stride
     batch_size, channels, in_height, in_width = data.const_shape()
     _, _, height, width = output.const_shape()
     _, _, kernel_height, kernel_width = weight.const_shape()
     # print(batch_size, channels, height, width, stride_height, kernel_height, in_height, in_width)
-    schedules = DepthwiseConv2dSchedule.schedules_for(task, space_level=ctx.space_level)
+    schedules = DepthwiseConv2dSchedule.schedules_for(task)
     ir_modules = [
         schedule_depthwise_conv2d_kernel(
             task,
@@ -126,19 +126,11 @@ def schedule_depthwise_conv2d(task: Conv2dTask) -> IRModule:
         )
         for sch in schedules
     ]
-    default_resolve_out_dir = os.path.join(
-        './outs/resolve',
-        task.name,
-        'depthwise_conv2d_{}x{}x{}x{}_s{}x{}_k{}x{}'.format(
-            batch_size, channels, height, width, stride_height, stride_width, kernel_height, kernel_width
-        ),
-    )
-    resolve_out_dir = ctx.resolve_out_dir if ctx.resolve_out_dir else default_resolve_out_dir
     return resolve_ir_modules(
         ir_modules=ir_modules,
         schedules=schedules,
         target_device='cuda',
-        output_dir=resolve_out_dir,
+        output_dir=os.path.join(workding_dir, './resolve'),
         parallel=True,
         verbose=True,
     )

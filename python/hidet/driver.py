@@ -3,11 +3,12 @@ import os
 import multiprocessing
 import logging
 from hashlib import sha256
+
+from hidet import option
 from hidet.transforms import lower, PassContext, SaveIRInstrument, ProfileInstrument
 from hidet.backend import codegen, compile_source, load_task_func, load_lib_func
-from hidet.utils import hidet_cache_dir
 from hidet.utils.py import cyan, green
-from hidet.ir.task import Task, TaskContext
+from hidet.ir.task import Task
 from hidet.ir.func import IRModule
 from hidet.ir.type import FuncType
 from hidet.runtime.module import compiled_task_cache, CompiledFunction
@@ -16,25 +17,8 @@ logger = logging.Logger(__name__)
 logger.setLevel(logging.INFO)
 logger.addHandler(logging.StreamHandler())
 
-cache_disabled = False
 
-
-def disable_cache(disable: bool = False):
-    global cache_disabled
-    cache_disabled = not disable
-
-
-def build_task(
-    task: Task,
-    space_level=0,
-    target_device='cuda',
-    warmup=3,
-    number=10,
-    repeat=3,
-    use_cache=True,
-    cache_dir=None,
-    load=True,
-) -> Optional[CompiledFunction]:
+def build_task(task: Task, target_device='cuda', load=True) -> Optional[CompiledFunction]:
     """
     Build a task into a compiled function.
 
@@ -42,24 +26,8 @@ def build_task(
     ----------
     task: Task
         The task to be built.
-    space_level: int
-        The space level of the schedule space. Candidates are 0, 1, 2, 3. Space level 0 indicates to use the default
-        schedule without tuning. Space level 1 indicates to search in a small search space. Space level 2 indicates to
-        search in the largest search space. Larger search space leads to better performance, but also takes more time to
-        tune.
     target_device: str
         The target device. Candidates are 'cuda' and 'cpu'.
-    warmup: int
-        The number of warmup runs when benchmarking different schedules.
-    number: int
-        The number of runs per repeat when benchmarking different schedules.
-    repeat: int
-        The number of repeats when benchmarking different schedules.
-    use_cache: bool
-        Whether to use cache on disk.
-    cache_dir: str
-        The cache directory. The default is None, which means to use the default cache directory:
-        **hidet_cache_dir/ops**.
     load: bool
         Whether to load the compiled function. If False, the compiled function will not be loaded, and None is returned.
         Otherwise, the compiled function is loaded and returned.
@@ -68,9 +36,12 @@ def build_task(
     compiled_func:
         When load is True, the compiled function is returned. Otherwise, None is returned.
     """
-    # pylint: disable=too-many-arguments, too-many-locals
     task_string: str = str(task)
     compiled_func: Optional[CompiledFunction] = None
+
+    space_level = option.get_option('search_space')
+    op_cache_dir = os.path.join(option.get_option('cache_dir'), './ops')
+    use_cache = option.get_option('cache_operator')
 
     # check in-memory cache
     if compiled_task_cache.contains(target_device, space_level, task_string):
@@ -78,16 +49,14 @@ def build_task(
             compiled_func = compiled_task_cache.get(target_device, space_level, task_string)
     else:
         # check on-disk cache
-        if cache_dir is None:
-            cache_dir = os.path.join(hidet_cache_dir(), 'ops')
         config_str = f'{target_device}_space_{space_level}'
         task_hash = sha256(task_string.encode()).hexdigest()[:16]
-        task_dir = os.path.join(cache_dir, config_str, task.name, task_hash)
+        task_dir = os.path.join(op_cache_dir, config_str, task.name, task_hash)
         src_path = os.path.join(task_dir, 'source.cu')
         lib_path = os.path.join(task_dir, 'lib.so')
 
         # use previously generated library when available
-        if not cache_disabled and use_cache and os.path.exists(lib_path):
+        if use_cache and os.path.exists(lib_path):
             logger.debug(f"Load cached task binary {green(task.name)} from path: \n{cyan(lib_path)}")
             if load:
                 compiled_func = load_task_func(lib_path, task)
@@ -100,15 +69,16 @@ def build_task(
             with open(os.path.join(task_dir, 'task.txt'), 'w') as f:
                 f.write(task_string)
             # implement task
-            with TaskContext(space_level, warmup, number, repeat, resolve_out_dir=task_dir):
-                ir_module = task.implement(target=target_device)
+            ir_module = task.implement(target=target_device, workding_dir=task_dir)
             # lower ir module
-            with PassContext(
-                instruments=[
-                    SaveIRInstrument(out_dir=os.path.join('./outs/ir', task.name, task_hash)),
-                    ProfileInstrument(log_file=os.path.join('./outs/ir', task.name, task_hash, 'lower_time.txt')),
+            if option.get_option('save_lower_ir'):
+                instruments = [
+                    SaveIRInstrument(out_dir=os.path.join(task_dir, './ir')),
+                    ProfileInstrument(log_file=os.path.join(task_dir, './lower_time.txt')),
                 ]
-            ):
+            else:
+                instruments = []
+            with PassContext(instruments=instruments):
                 ir_module = lower(ir_module)
             # code generation
             codegen(ir_module, src_out_path=src_path)
@@ -122,24 +92,15 @@ def build_task(
 
 
 def _build_task_job(args):
-    task, space_level, target_device, warmup, number, repeat, use_cache, cache_dir, load = args
-    build_task(task, space_level, target_device, warmup, number, repeat, use_cache, cache_dir, load)
+    task, target_device, dumped_options = args
+    option.restore_options(dumped_options)
+    build_task(task, target_device, load=False)
 
 
-def build_batch_task(
-    tasks: List[Task],
-    space_level: int,
-    target_device: str = 'cuda',
-    warmup: int = 3,
-    number: int = 10,
-    repeat: int = 3,
-    parallel=True,
-    use_cache=True,
-    cache_dir=None,
-):
-    # pylint: disable=too-many-arguments
-    jobs = [(task, space_level, target_device, warmup, number, repeat, use_cache, cache_dir, False) for task in tasks]
-    if parallel and len(tasks) > 1:
+def build_batch_task(tasks: List[Task], target_device: str = 'cuda'):
+    dumped_options = option.dump_options()
+    jobs = [(task, target_device, dumped_options) for task in tasks]
+    if option.get_option('parallel_build') and len(jobs) > 1:
         with multiprocessing.Pool() as pool:
             pool.map(_build_task_job, jobs)
     else:

@@ -35,6 +35,7 @@ write back
 from typing import List, Tuple, Union, Optional
 
 import os
+from hidet import option
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.ir.expr import Var, And, Equal, Cast, if_then_else, convert, Expr
 from hidet.ir.func import IRModule
@@ -44,7 +45,6 @@ from hidet.ir.layout import DataLayout, StridesLayout
 from hidet.ir.primitives import syncthreads, thread_idx, block_idx
 from hidet.ir.stmt import BufferStoreStmt, IfStmt, DeclareStmt, Scope
 from hidet.ir.type import scalar_type, tensor_type, ScalarType, TensorPointerType, PointerType
-from hidet.ir.task import TaskContext
 from hidet.utils import cuda
 from hidet.graph.ops.definitions.matmul import BatchMatmulTask
 from hidet.graph.ops.schedules.resolve import resolve_ir_modules
@@ -291,15 +291,9 @@ class MatmulSchedule(Schedule):
         return settings
 
 
-def batched_matmul_cuda_schedule_simt(task: BatchMatmulTask) -> IRModule:
-    ctx = TaskContext.current()
-    all_schedules = MatmulSchedule.schedules(space_level=ctx.space_level)
-    default_resolve_out_dir = os.path.join(
-        './outs/resolve',
-        task.name,
-        'batched_matmul_default_{}x{}x{}x{}'.format(task.batch_size, task.m_size, task.k_size, task.n_size),
-    )
-    resolve_out_dir = ctx.resolve_out_dir if ctx.resolve_out_dir else default_resolve_out_dir
+def batched_matmul_cuda_schedule_simt(task: BatchMatmulTask, working_dir: str) -> IRModule:
+    all_schedules = MatmulSchedule.schedules(space_level=option.get_option('search_space'))
+    resolve_out_dir = os.path.join(working_dir, './resolve')
     ir_modules = []
     for schedule in all_schedules:
         ir_modules.append(batched_matmul_cuda_with_given_schedule(task, schedule))
