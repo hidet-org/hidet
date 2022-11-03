@@ -6,7 +6,7 @@ from .definitions.conv2d_transpose import conv2d_transpose
 from .definitions.matmul import batch_matmul, matmul
 from .definitions.pool import max_pool2d, avg_pool2d
 from .definitions.softmax import softmax
-from .definitions.activation import relu, leaky_relu, sigmoid, clip, relu6
+from .definitions.activation import relu, leaky_relu, sigmoid, clip, relu6, prelu
 from .definitions.norm import batch_norm_infer, instance_norm, layer_norm
 from .definitions.image import resize2d
 from .definitions.arithmatic import add, sub, multiply, divide, neg, sqrt, rsqrt, sin, cos, pow, erf, tanh, where
