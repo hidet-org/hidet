@@ -1,16 +1,10 @@
-name: Python Tests (Full)
+name: Python Tests (Fast)
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
-    paths: # run when any of these files change
-      - 'include/**'
-      - 'src/**'
-      - 'python/hidet/backend/**'
-      - 'python/hidet/transforms/**'
-      - 'python/hidet/ir/**'
 
 jobs:
   tests:
