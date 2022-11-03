@@ -2,6 +2,7 @@
 Hidet is an open-source DNN inference framework based on compilation.
 """
 import sys
+from . import option
 from . import ir
 from . import backend
 from . import utils

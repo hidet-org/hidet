@@ -4,6 +4,7 @@ import functools
 import datetime
 import logging
 import shutil
+import git
 
 
 logger = logging.Logger(__name__)
@@ -25,8 +26,6 @@ def get_repo_sha(short=False):
     ret: str
         The commit sha hash.
     """
-    import git
-
     repo = git.Repo(search_parent_directories=True)
     sha = repo.head.object.hexsha
     if short:
@@ -50,13 +49,39 @@ def get_repo_commit_date(strftime='%Y-%m-%d') -> str:
     ret: str
         The commit date time in given format.
     """
-    import git
-
     repo = git.Repo(search_parent_directories=True)
     commit = repo.head
     committed_date = commit.commit.committed_date
     dt = datetime.datetime.fromtimestamp(committed_date)
     return str(dt.strftime(strftime))
+
+
+def in_git_repo():
+    """
+    Check whether the source code is in a git repository.
+
+    Returns
+    -------
+    ret: bool
+        True if the source code is in a git repository. Otherwise, False.
+    """
+    try:
+        git.Repo(path=__file__, search_parent_directories=True)
+        return True
+    except git.exc.InvalidGitRepositoryError:
+        return False
+
+def get_git_repo_root():
+    """
+    Get the root directory of the git repository that contains the current source code.
+
+    Returns
+    -------
+    ret: str
+        The root directory of the git repository.
+    """
+    repo = git.Repo(path=__file__, search_parent_directories=True)
+    return repo.working_dir
 
 
 @functools.lru_cache(maxsize=1)
