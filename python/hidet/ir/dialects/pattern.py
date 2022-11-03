@@ -5,7 +5,7 @@ from hidet.ir.type import TypeNode, ScalarType, TensorType, FuncType
 from hidet.ir.expr import Expr, Constant, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, Equal, LessEqual
 from hidet.ir.expr import TensorElement, IfThenElse, Call, Var, And, Or, BinaryOp, convert, var
 from hidet.ir.compute import TensorNode, ScalarNode, ReduceOperation, ReduceCompute
-from hidet.ir.stmt import Scope
+from hidet.ir.stmt import DeclareScope
 from hidet.ir.layout import StridesLayout, DataLayout
 
 
@@ -30,7 +30,7 @@ class ScalarTypePattern(TypePattern):
 class TensorTypePattern(TypePattern):
     def __init__(self, scope=None, scalar_type=None, rank=None, shape=None, layout=None, allow_dynamic_size=False):
         self.rank: Optional[int] = rank
-        self.scope: Optional[Union[Scope, List[Scope]]] = scope
+        self.scope: Optional[Union[DeclareScope, List[DeclareScope]]] = scope
         self.scalar_type: Optional[Union[ScalarType, ScalarTypePattern]] = scalar_type
         self.shape: Optional[List[Expr]] = shape
         self.layout: Optional[DataLayout] = layout
@@ -340,7 +340,7 @@ class PatternMatcher:
             if pattern.rank is not None and len(target.shape) != pattern.rank:
                 raise NotMatchedError(pattern, target)
             if pattern.scope is not None:
-                if isinstance(pattern.scope, Scope) and pattern.scope.name != target.scope.name:
+                if isinstance(pattern.scope, DeclareScope) and pattern.scope.name != target.scope.name:
                     raise NotMatchedError(pattern, target)
                 if isinstance(pattern.scope, list) and target.scope.name not in [s.name for s in pattern.scope]:
                     raise NotMatchedError(pattern, target)

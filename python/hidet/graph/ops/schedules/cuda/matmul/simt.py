@@ -43,7 +43,7 @@ from hidet.ir.functors import simplify_to_int
 from hidet.ir.mapping import TaskMapping
 from hidet.ir.layout import DataLayout, StridesLayout
 from hidet.ir.primitives import syncthreads, thread_idx, block_idx
-from hidet.ir.stmt import BufferStoreStmt, IfStmt, DeclareStmt, Scope
+from hidet.ir.stmt import BufferStoreStmt, IfStmt, DeclareStmt, DeclareScope
 from hidet.ir.type import scalar_type, tensor_type, ScalarType, TensorPointerType, PointerType
 from hidet.utils import cuda
 from hidet.graph.ops.definitions.matmul import BatchMatmulTask
@@ -361,10 +361,12 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, schedule: Mat
             sb += DeclareStmt(smem_storage)
         else:
             smem_storage = Var('smem_storage', tensor_type(dtype='uint8', shape=[sch.used_smem_bytes_per_block]))
-            sb += DeclareStmt(smem_storage, scope=Scope.Shared)
+            sb += DeclareStmt(smem_storage, scope=DeclareScope.Shared)
         smem_a_bytes = simplify_to_int(smem_a.type.tensor_type.storage_bytes())
-        sb += DeclareStmt(smem_a, init=Cast(~smem_storage[0], PointerType(a_dtype)), scope=Scope.Shared)
-        sb += DeclareStmt(smem_b, init=Cast(~(smem_storage[smem_a_bytes]), PointerType(b_dtype)), scope=Scope.Shared)
+        sb += DeclareStmt(smem_a, init=Cast(~smem_storage[0], PointerType(a_dtype)), scope=DeclareScope.Shared)
+        sb += DeclareStmt(
+            smem_b, init=Cast(~(smem_storage[smem_a_bytes]), PointerType(b_dtype)), scope=DeclareScope.Shared
+        )
 
         # declare a, b, c registers
         regs_a = Var('regs_A', tensor_type(a_dtype, layout=[2] + schedule.regs_a_layout))

@@ -1,16 +1,10 @@
-name: Python Tests (Full)
+name: Python Tests (Fast)
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
-    paths: # run when any of these files change
-      - 'include/**'
-      - 'src/**'
-      - 'python/hidet/backend/**'
-      - 'python/hidet/transforms/**'
-      - 'python/hidet/ir/**'
 
 jobs:
   tests:
@@ -45,5 +39,5 @@ jobs:
           python -m pytest -v tests/minimal/test_add.py
       - name: Run full tests
         run: |
-          # stop the build if format is not correct, clear cache
-          python -m pytest -v --clear-cache ./tests   
+          # stop the build if format is not correct
+          python -m pytest -v ./tests

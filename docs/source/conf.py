@@ -96,13 +96,13 @@ html_theme_options = {
     "repository_url": "https://github.com/yaoyaoding/hidet",
     "use_repository_button": True,
     'logo_only': True,
+    "extra_navbar": r"<a href=/netron target=_blank>Customized Netron</a>",
 }
 html_title = "Hidet Documentation"
 html_permalinks_icon = "<span>¶</span>"
 
 googleanalytics_id = 'G-406WJTRD8C'
 googleanalytics_enabled = True
-
 
 
 # Add any paths that contain custom static files (such as style sheets) here,

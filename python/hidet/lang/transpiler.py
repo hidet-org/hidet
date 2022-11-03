@@ -31,7 +31,8 @@ from ast import Index
 
 import astunparse
 from hidet import ir
-from hidet.ir import Var
+from hidet.ir.expr import Var
+from hidet.ir.stmt import DeclareScope
 from hidet.ir.builders import FunctionBuilder
 from hidet.utils import red, bold, blue, str_indent
 import hidet.lang.attr
@@ -324,20 +325,23 @@ class PythonToHidetTranslator(PythonAstFunctor):
                     if isinstance(rhs, host_var_types):
                         self.current_scope.define_host_var(var_name, rhs)
                     else:
+                        init_value = None
                         is_static = False
+                        scope = DeclareScope.Default
                         if isinstance(rhs, ir.TypeNode):
                             var_type = rhs
-                            init_value = None
                         elif isinstance(rhs, TypeDecorator):
                             var_type = rhs.decorated_type
-                            init_value = None
-                            is_static = 'static' in rhs.decorates
+                            is_static = rhs.is_static
+                            scope = rhs.scope
                         else:
                             rhs = ir.convert(rhs)
                             var_type = ir.infer_type(rhs)
                             init_value = rhs
                         var = Var(hint=var_name, type=var_type)
-                        self.current_scope.append(ir.DeclareStmt(var, init=init_value, is_static=is_static))
+                        self.current_scope.append(
+                            ir.DeclareStmt(var, init=init_value, is_static=is_static, scope=scope)
+                        )
                         self.current_scope.define_var(name=var_name, v=var)
             else:
                 # In other cases, it is an assignment of defined variable.
@@ -770,15 +774,19 @@ class PythonToHidetTranslator(PythonAstFunctor):
         else_expr = self.visit(expr.orelse)
         return ir.expr.if_then_else(cond, then_expr, else_expr)
 
-    def visit_Expr(self, stmt: Expr):
-        value = self.visit(stmt.value)
+    def visit_Expr(self, expr: Expr):
+        value = self.visit(expr.value)
         if isinstance(value, ir.Call):
             self.current_scope.append(ir.EvaluateStmt(value))
         elif isinstance(value, ir.Stmt):
             # buf.write([i, j], value) would return a BufferStoreStmt
             self.current_scope.append(value)
+        elif isinstance(value, str):
+            # a """...""" string would be returned as a str
+            # skip it
+            pass
         else:
-            raise HidetProgramError(self, stmt, f'Can not recognize expression statement with type {type(value)}.')
+            raise HidetProgramError(self, expr, f'Can not recognize expression statement with type {type(value)}.')
 
     def visit_Call(self, expr: Call):
         func = self.visit(expr.func)

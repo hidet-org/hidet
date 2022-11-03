@@ -19,7 +19,7 @@ DLL void hidet_cuda_fill_value_float32(uint64_t addr, uint64_t num_elements, flo
     fill_value_generic(addr, num_elements, fill_value);
 }
 
-DLL void hidet_cuda_fill_value_int32(uint32_t addr, uint64_t num_elements, int32_t fill_value) {
+DLL void hidet_cuda_fill_value_int32(uint64_t addr, uint64_t num_elements, int32_t fill_value) {
     fill_value_generic(addr, num_elements, fill_value);
 }
 

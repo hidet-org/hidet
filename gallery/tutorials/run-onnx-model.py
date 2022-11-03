@@ -165,4 +165,3 @@ bench_hidet_graph(graph_opt)
 # 2. Run the model with symbolic inputs, and use :func:`hidet.trace_from` to create the :class:`hidet.graph.FlowGraph`.
 # 3. Create a :class:`hidet.runtime.cuda_graph.CudaGraph` using :func:`hidet.graph.FlowGraph.cuda_graph`.
 # 4. Run the cuda graph.
-
