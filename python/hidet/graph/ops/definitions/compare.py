@@ -1,5 +1,5 @@
 from hidet.ir import expr
-from .arithmatic import BinaryElementwiseOp, UnaryElementwiseOp
+from .arithmetic import BinaryElementwiseOp, UnaryElementwiseOp
 from .utils import Tensor
 
 

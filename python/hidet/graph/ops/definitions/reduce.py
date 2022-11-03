@@ -1,6 +1,6 @@
 from typing import List, Union
 
-from .arithmatic import square
+from .arithmetic import square
 from .utils import Task, Operator, Tensor, TensorNode, IRModule, compute, reduce, input_like, normalize_dim, arg_reduce
 
 

@@ -3,7 +3,7 @@ import math
 from hidet.ir import primitives as prim
 from hidet.ir.expr import const_like, if_then_else
 from .utils import Tensor
-from .arithmatic import UnaryElementwiseOp, BinaryElementwiseOp
+from .arithmetic import UnaryElementwiseOp, BinaryElementwiseOp
 
 
 class ReluOp(UnaryElementwiseOp):
