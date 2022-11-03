@@ -2,6 +2,7 @@ import contextlib
 from typing import List, Tuple, Union, Optional, Sequence, TypeVar
 
 import os
+from hidet import option
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.ir.expr import Var, And, Equal, if_then_else, convert, Expr, tensor_var, cast, TensorSlice
 from hidet.ir.expr import tensor_pointer_var
@@ -12,7 +13,6 @@ from hidet.ir.mapping import row_spatial, row_repeat
 from hidet.ir.layout import row_layout, data_layout
 from hidet.ir.stmt import BufferStoreStmt, IfStmt, Stmt, DeclareStmt, Scope
 from hidet.ir.type import ScalarType
-from hidet.ir.task import TaskContext
 from hidet.utils import cuda, prod
 from hidet.graph.ops.definitions.matmul import BatchMatmulTask
 from hidet.graph.ops.schedules.resolve import resolve_ir_modules
@@ -165,16 +165,8 @@ class MatmulMmaSchedule(Schedule):
         ]
 
 
-def batched_matmul_cuda_schedule_mma(task: BatchMatmulTask) -> IRModule:
-    ctx = TaskContext.current()
-    default_resolve_out_dir = os.path.join(
-        './outs/resolve',
-        task.name,
-        'batched_matmul_mma_{}x{}x{}x{}'.format(task.batch_size, task.m_size, task.k_size, task.n_size),
-    )
-    resolve_out_dir = ctx.resolve_out_dir if ctx.resolve_out_dir else default_resolve_out_dir
-
-    all_schedules = MatmulMmaSchedule.schedules(task, space_level=ctx.space_level)
+def batched_matmul_cuda_schedule_mma(task: BatchMatmulTask, working_dir: str) -> IRModule:
+    all_schedules = MatmulMmaSchedule.schedules(task, space_level=option.get_option('search_space'))
     ir_modules = []
     for sch in all_schedules:
         ir_modules.append(batched_matmul_cuda_with_given_schedule(task, sch))
@@ -183,7 +175,7 @@ def batched_matmul_cuda_schedule_mma(task: BatchMatmulTask) -> IRModule:
         ir_modules=ir_modules,
         schedules=all_schedules,
         target_device='cuda',
-        output_dir=resolve_out_dir,
+        output_dir=os.path.join(working_dir, './resolve'),
         parallel=True,
         verbose=True,
     )

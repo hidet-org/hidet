@@ -12,6 +12,6 @@ from .py import line_profile, same_list, strict_zip, initialize, gcd, lcm, error
 from .py import str_indent, unique
 from .structure import DirectedGraph
 from .nvtx_utils import nvtx_annotate
-from .git_utils import hidet_cache_dir, hidet_cache_file, hidet_set_cache_root, hidet_clear_op_cache, CacheDir
+from .cache_utils import hidet_cache_dir, hidet_cache_file, hidet_clear_op_cache
 from .net_utils import download
 from .profile_utils import tracer

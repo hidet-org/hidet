@@ -12,7 +12,7 @@ from hidet.ir.mapping import RepeatTaskMapping, SpatialTaskMapping, ComposedTask
 from hidet.ir.compute import TensorNode, ScalarNode, GridCompute, ArgReduceCompute, ReduceCompute
 from hidet.ir.dialects.pattern import AnyExpr
 from hidet.ir.layout import RowMajorLayout, ColumnMajorLayout
-from hidet.ir.task import Task, TaskGraph, Prologue, Epilogue, InverseMap
+from hidet.ir.task import Task, TaskGraph, InverseMap
 from hidet.utils import same_list
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
 from hidet.utils.namer import Namer
@@ -57,10 +57,6 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
             return self.visit_Task(obj)
         elif isinstance(obj, TaskGraph):
             return self.visit_TaskGraph(obj)
-        elif isinstance(obj, Prologue):
-            return self.visit_Prologue(obj)
-        elif isinstance(obj, Epilogue):
-            return self.visit_Epilogue(obj)
         elif isinstance(obj, InverseMap):
             return self.visit_InverseMap(obj)
         # task mapping
@@ -475,48 +471,6 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
         body = (NewLine() + doc_join(body, NewLine())).indent()
         tail = NewLine() + '}'
         return head + body + tail
-
-    def visit_Prologue(self, e: Prologue):
-        from hidet.ir.functors import collect  # pylint: disable=import-outside-toplevel
-
-        nodes = [node for node in collect(e.value, TensorNode) if node.tensor_compute is not None]
-        assert len(nodes) == 0
-
-        inverse_map_lines = doc_join(
-            ['{}: {}'.format(self(tensor), self(inv)) for tensor, inv in e.inverse_map.items()], sep=NewLine()
-        )
-        if len(inverse_map_lines.docs) > 0:
-            inverse_map_lines = NewLine() + inverse_map_lines
-        lines = [
-            'extra_inputs: [{}]'.format(doc_join([self(v) for v in e.extra_inputs], ', ')),
-            'computation: out[{}] = {}'.format(self(e.indices), self(e.value)),
-            'inverse_map:' + inverse_map_lines.indent(),
-            'bindings: {{{}}}'.format(
-                doc_join(['{}: {}'.format(self(a), self(b)) for a, b in e.bindings.items()], ', ')
-            ),
-        ]
-        return Text('Prologue(') + (NewLine() + doc_join(lines, NewLine())).indent() + NewLine() + ')'
-
-    def visit_Epilogue(self, e: Epilogue):
-        from hidet.ir.functors import collect  # pylint: disable=import-outside-toplevel
-
-        nodes = [node for node in collect(e.value, TensorNode) if node.tensor_compute is not None]
-        assert len(nodes) == 0
-
-        self(e.indices)  # first name the indices of origin output
-        self(e.orig_tensor)
-
-        lines = [
-            'extra_inputs: [{}]'.format(doc_join([self(v) for v in e.extra_inputs], ', ')),
-            'orig_tensor: {}'.format(self(e.orig_tensor)),
-            'computation: out[{}] = {} (where {} = {}[{}])'.format(
-                self(e.out_indices), self(e.value), self(e.orig_value), self(e.orig_tensor), self(e.indices)
-            ),
-            'bindings: {{{}}}'.format(
-                doc_join(['{}: {}'.format(self(a), self(b)) for a, b in e.bindings.items()], ', ')
-            ),
-        ]
-        return Text('Epilogue(') + (NewLine() + doc_join(lines, NewLine())).indent() + NewLine() + ')'
 
     def visit_InverseMap(self, e: InverseMap):
         return 'InverseMap([' + self(e.axes) + '] => [' + self(e.indices) + '])'

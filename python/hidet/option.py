@@ -1,22 +1,20 @@
 from __future__ import annotations
-from typing import Dict, Any, List, Tuple, Optional, Callable, Iterable
+from typing import Dict, Any, List, Optional, Callable, Iterable, Tuple
 import os
 
+
 class OptionRegistry:
-    """
-    A registry for registered option.
-    """
     registered_options: Dict[str, OptionRegistry] = {}
 
     def __init__(
-            self,
-            name: str,
-            type_hint: str,
-            description: str,
-            default_value: Any,
-            choices: Optional[Iterable[Any]] = None,
-            normalizer: Optional[Callable[[Any], Any]] = None,
-            checker: Optional[Callable[[Any], bool]] = None
+        self,
+        name: str,
+        type_hint: str,
+        description: str,
+        default_value: Any,
+        normalizer: Optional[Callable[[Any], Any]] = None,
+        choices: Optional[Iterable[Any]] = None,
+        checker: Optional[Callable[[Any], bool]] = None,
     ):
         self.name = name
         self.type_hint = type_hint
@@ -28,21 +26,25 @@ class OptionRegistry:
 
     @staticmethod
     def register_option(
-            name: str,
-            type_hint: str,
-            description: str,
-            defalut_value: Any,
-            normalizer: Optional[Callable[[Any], Any]] = None,
-            choices: Optional[Iterable[Any]] = None,
-            checker: Optional[Callable[[Any], bool]] = None
+        name: str,
+        type_hint: str,
+        description: str,
+        defalut_value: Any,
+        normalizer: Optional[Callable[[Any], Any]] = None,
+        choices: Optional[Iterable[Any]] = None,
+        checker: Optional[Callable[[Any], bool]] = None,
     ):
         registered_options = OptionRegistry.registered_options
         if name in registered_options:
             raise KeyError(f'Option {name} has already been registered.')
-        registered_options[name] = OptionRegistry(name, type_hint, description, defalut_value, normalizer, choices, checker)
+        registered_options[name] = OptionRegistry(
+            name, type_hint, description, defalut_value, normalizer, choices, checker
+        )
         return OptionRegistry
 
+
 register_option = OptionRegistry.register_option
+
 
 def register_hidet_options():
     from hidet.utils import git_utils
@@ -51,45 +53,53 @@ def register_hidet_options():
         name='bench_config',
         type_hint='Tuple[int, int, int]',
         description='The (warmup, number, repeat) parameters for benchmarking. '
-                    'The benchmarking will run warmup + number * repeat times.',
+        'The benchmarking will run warmup + number * repeat times.',
         defalut_value=(3, 10, 3),
-        checker=lambda x: isinstance(x, tuple) and len(x) == 3 and all(v >= 0 for v in x)
     ).register_option(
-        name='search_space',
+        name='search_space',  #
         type_hint='int',
         description='The search space level.',
         defalut_value=0,
-        choices=[0, 1, 2]
+        choices=[0, 1, 2],
     ).register_option(
         name='cache_operator',
         type_hint='bool',
         description='Whether to enable operator cache on disk.',
         defalut_value=True,
-        choices=[True, False]
+        choices=[True, False],
     ).register_option(
         name='cache_dir',
         type_hint='path',
         description='The directory to store the cache.',
         defalut_value=os.path.abspath(
-            os.path.join(git_utils.get_git_repo_root(), '.hidet_cache')  # developer mode
-            if git_utils.in_git_repo() else
-            os.path.join(os.path.expanduser('~'), '.hidet', 'cache')     # user mode
+            os.path.join(git_utils.git_repo_root(), '.hidet_cache')  # developer mode
+            if git_utils.in_git_repo()
+            else os.path.join(os.path.expanduser('~'), '.hidet', 'cache')  # user mode
         ),
-        normalizer=lambda x: os.path.abspath(x)
+        normalizer=os.path.abspath,
     ).register_option(
         name='parallel_build',
         type_hint='bool',
         defalut_value=True,
         description='Whether to build operators in parallel.',
-        choices=[True, False]
+        choices=[True, False],
+    ).register_option(
+        name='save_lower_ir',
+        type_hint='bool',
+        defalut_value=False,
+        description='Whether to save the IR when lower an IRModule to the operator cache.',
+        choices=[True, False],
     )
 
+
 register_hidet_options()
+
 
 class OptionContext:
     """
     The option context.
     """
+
     stack: List[OptionContext] = []
 
     def __init__(self):
@@ -99,10 +109,21 @@ class OptionContext:
         pass
 
     def __enter__(self):
+        """
+        Enter the option context.
+
+        Returns
+        -------
+        ret: OptionContext
+            The option context itself.
+        """
         OptionContext.stack.append(self)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        """
+        Exit the option context.
+        """
         OptionContext.stack.pop()
 
     @staticmethod
@@ -136,11 +157,36 @@ class OptionContext:
 OptionContext.stack.append(OptionContext())
 
 
+def dump_options() -> Dict[str, Any]:
+    """
+    Dump the options in option context stack.
+
+    Returns
+    -------
+    ret: Dict[str, Any]
+        The dumped options.
+    """
+    return {'option_context_stack': OptionContext.stack, 'registered_options': OptionRegistry.registered_options}
+
+
+def restore_options(dumped_options: Dict[str, Any]):
+    """
+    Restore the options from dumped options.
+
+    Parameters
+    ----------
+    dumped_options: Dict[str, Any]
+        The dumped options.
+    """
+    OptionContext.stack = dumped_options['option_context_stack']
+    OptionRegistry.registered_options = dumped_options['registered_options']
+
+
 def current_context() -> OptionContext:
     """
     Get the current option context.
 
-    To get the value of an option in the current context::
+    To get the value of an option in the current context:
 
     .. code-block:: python
 
@@ -156,11 +202,12 @@ def current_context() -> OptionContext:
     """
     return OptionContext.current()
 
+
 def context() -> OptionContext:
     """
     Create a new option context.
 
-    To set options in the new context, use the ``with`` statement::
+    To set options in the new context, use the ``with`` statement:
 
     .. code-block:: python
 
@@ -176,6 +223,7 @@ def context() -> OptionContext:
     """
     return OptionContext()
 
+
 def set_option(name: str, value: Any):
     """
     Set the value of an option in current option context.
@@ -190,6 +238,7 @@ def set_option(name: str, value: Any):
         The value of the option.
     """
     OptionContext.current().set_option(name, value)
+
 
 def get_option(name: str) -> Any:
     """
@@ -207,8 +256,10 @@ def get_option(name: str) -> Any:
     """
     return OptionContext.current().get_option(name)
 
+
 def bench_config(warmup: int = 1, number: int = 5, repeat: int = 5):
-    """Set the benchmark config of operator tuning.
+    """
+    Set the benchmark config of operator tuning.
 
     To profile a schedule, hidet will run the following code:
 
@@ -240,8 +291,22 @@ def bench_config(warmup: int = 1, number: int = 5, repeat: int = 5):
     """
     OptionContext.current().set_option('bench_config', (warmup, number, repeat))
 
+
+def get_bench_config() -> Tuple[int, int, int]:
+    """
+    Get the benchmark config of operator tuning.
+
+    Returns
+    -------
+    ret: Tuple[int, int, int]
+        The benchmark config.
+    """
+    return OptionContext.current().get_option('bench_config')
+
+
 def search_space(space: int):
-    """Set the schedule space level of tunable operator.
+    """
+    Set the schedule search space of tunable operator.
 
     Some operators can be tuned in hidet to achieve the best performance, such as matrix multiplication.
 
@@ -263,7 +328,7 @@ def search_space(space: int):
 
     .. code-block:: python
 
-        hidet.space_level(2)
+        hidet.search_space(2)
 
     After calling above function, all subsequent compilation would use space level 2, until we call this
     function again with another space level.
@@ -275,6 +340,19 @@ def search_space(space: int):
     """
     OptionContext.current().set_option('search_space', space)
 
+
+def get_search_space() -> int:
+    """
+    Get the schedule search space of tunable operator.
+
+    Returns
+    -------
+    ret: int
+        The schedule space level.
+    """
+    return OptionContext.current().get_option('search_space')
+
+
 def cache_operator(enabled: bool = True):
     """
     Whether to cache compiled operator on disk.
@@ -285,7 +363,7 @@ def cache_operator(enabled: bool = True):
 
     .. code-block:: python
 
-        hidet.cache_operator(False)
+        hidet.option.cache_operator(False)
 
     Parameters
     ----------
@@ -294,13 +372,28 @@ def cache_operator(enabled: bool = True):
     """
     OptionContext.current().set_option('cache_operator', enabled)
 
+
+def get_cache_operator() -> bool:
+    """
+    Get the option value of whether to cache compiled operator on disk.
+
+    Returns
+    -------
+    ret: bool
+        Whether to cache the compiled operator.
+    """
+    return OptionContext.current().get_option('cache_operator')
+
+
 def cache_dir(new_dir: str):
     """
     Set the directory to store the cache.
 
-    - If the hidet source code is in a git repository, the cache will be stored in the root directory of the git
-      repository.
-    - Otherwise, the cache will be stored in ``~/.hidet/cache``.
+    The default cache directory:
+
+    - If the hidet code is in a git repo, the cache will be stored in the repo root:
+      ``hidet-repo/.hidet_cache``.
+    - Otherwise, the cache will be stored in the user home directory: ``~/.hidet/cache``.
 
     Parameters
     ----------
@@ -308,6 +401,19 @@ def cache_dir(new_dir: str):
         The new directory to store the cache.
     """
     OptionContext.current().set_option('cache_dir', new_dir)
+
+
+def get_cache_dir() -> str:
+    """
+    Get the directory to store the cache.
+
+    Returns
+    -------
+    ret: str
+        The directory to store the cache.
+    """
+    return OptionContext.current().get_option('cache_dir')
+
 
 def parallel_build(enabled: bool = True):
     """
@@ -319,3 +425,39 @@ def parallel_build(enabled: bool = True):
         Whether to build operators in parallel.
     """
     OptionContext.current().set_option('parallel_build', enabled)
+
+
+def get_parallel_build() -> bool:
+    """
+    Get the option value of whether to build operators in parallel.
+
+    Returns
+    -------
+    ret: bool
+        Whether to build operators in parallel.
+    """
+    return OptionContext.current().get_option('parallel_build')
+
+
+def save_lower_ir(enabled: bool = True):
+    """
+    Whether to save the lower IR.
+
+    Parameters
+    ----------
+    enabled: bool
+        Whether to save the lower IR.
+    """
+    OptionContext.current().set_option('save_lower_ir', enabled)
+
+
+def get_save_lower_ir() -> bool:
+    """
+    Get the option value of whether to save the lower IR.
+
+    Returns
+    -------
+    ret: bool
+        Whether to save the lower IR.
+    """
+    return OptionContext.current().get_option('save_lower_ir')

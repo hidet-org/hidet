@@ -1,5 +1,4 @@
 from typing import List, Optional, Dict, Any, Union
-from collections import namedtuple
 
 from hidet.ir.task import Task
 from hidet.runtime.module import CompiledFunction
@@ -7,20 +6,18 @@ from hidet.graph.tensor import empty, empty_like, Tensor
 from hidet.ffi.ffi import get_last_error, BackendException
 
 
-def trim_op_ending(name: str):
-    return name[:-2] if name.endswith('Op') else name
-
-
-ProfileConfig = namedtuple('ProfileConfig', ['warmup', 'number', 'repeat'])
-
-_profile_config = ProfileConfig(warmup=3, number=10, repeat=3)
+def get_operator_name(op, given_name: Optional[str] = None):
+    if given_name is not None:
+        return given_name
+    cls_name = op.__class__.__name__
+    if cls_name.endswith('Op'):
+        return cls_name[:-2]
+    else:
+        return cls_name
 
 
 class Operator:
     """An operator that takes tensor as input and output."""
-
-    _current_space_level = 0
-    _use_cache = True
 
     def __init__(
         self,
@@ -34,7 +31,7 @@ class Operator:
         self.task: Optional[Task] = task
         self.attrs: Dict[str, Any] = attributes if attributes is not None else {}
         self.outputs: Optional[List[Tensor]] = outputs
-        self.name: str = name if name else trim_op_ending(self.__class__.__name__)
+        self.name: str = get_operator_name(self, name)
 
         self.device: str = inputs[0].device
 
@@ -47,9 +44,6 @@ class Operator:
         arguments = ['{}: {}{}'.format(i, t.dtype, t.shape) for i, t in enumerate(self.inputs)]
         attributes = ['{}={}'.format(name, str(value)) for name, value in self.attrs.items()]
         return '{}({})'.format(self.name, ', '.join(arguments + attributes))
-
-    # def __dir__(self) -> Iterable[str]:
-    #     return ['task', 'inputs', 'outputs', 'attributes', 'name', 'device'] + list(self.attrs)
 
     def run(self) -> List[Tensor]:
         if all(t.storage is not None for t in self.inputs):
@@ -161,125 +155,4 @@ class Operator:
         from hidet.driver import build_task
 
         if self.task_func is None:
-            pc = _profile_config
-            self.task_func = build_task(
-                self.task,
-                space_level=self._current_space_level,
-                target_device=self.device,
-                warmup=pc.warmup,
-                number=pc.number,
-                repeat=pc.repeat,
-                use_cache=self._use_cache,
-            )
-
-
-def space_level(level=0):
-    """Set the schedule space level of tunable operator.
-
-    Some operators can be tuned in hidet to achieve the best performance, such as matrix multiplication.
-
-    During tuning, different operator schedules will be tried and profiled to get the best one.
-
-    We call the space of the tried operator schedule `schedule space`. There is a trade-off between the
-    tuning time and the operator execution time. If we try more schedules, the tuning process would take
-    longer time, and we are likely to find better schedule.
-
-    This function allows user to set the space level that controls the search space we tried.
-
-    By convention, we have space level
-
-    - 0 for schedule space contains only a single schedule.
-    - 1 for schedule space contains tens of schedules so that the tuning time will be less than 1 minute.
-    - 2 for arbitrary large space.
-
-    Usage
-
-    .. code-block:: python
-
-        hidet.space_level(2)
-
-    After calling above function, all subsequent compilation would use space level 2, until we call this
-    function again with another space level.
-
-    Parameters
-    ----------
-    level: int
-        The space level to use. Candidates: 0, 1, and 2.
-    """
-    Operator._current_space_level = level  # pylint: disable=protected-access
-
-
-def get_space_level() -> int:
-    """Get the current space level.
-
-    Returns
-    -------
-    ret: int
-        The current space level.
-    """
-    return Operator._current_space_level  # pylint: disable=protected-access
-
-
-def cache_operator(use_cache: bool = True):
-    """Whether to cache compiled operator.
-
-    By default, hidet would cache all compiled operator and reuse whenever possible.
-
-    If user wants to disable the cache, run
-
-    .. code-block:: python
-
-        hidet.cache_operator(False)
-
-    Parameters
-    ----------
-    use_cache: bool
-        Whether to cache the compiled operator.
-    """
-    Operator._use_cache = use_cache  # pylint: disable=protected-access
-
-
-def profile_config(warmup=3, number=10, repeat=3):
-    """Set the profiling config of operator tuning.
-
-    To profile a schedule, hidet will run the following code:
-
-    .. code-block:: python
-
-        for i in range(warmup):
-            run()
-        latency = []
-        for i in range(repeat):
-            synchronize device
-            t1 = time()
-            for j in range(number):
-                run()
-            synchronize device
-            t2 = time()
-            latency.append((t2 - t1) / number)
-        return median of latency
-
-    Thus, there will be total ``warmup + number * repeat`` times of execution.
-
-    Parameters
-    ----------
-    warmup: int
-        The number of warmup runs.
-    number: int
-        The number of runs in a repeat.
-    repeat: int
-        The number of repeats.
-    """
-    global _profile_config
-    _profile_config = ProfileConfig(warmup, number, repeat)  # pylint: disable=protected-access
-
-
-def get_profile_config() -> ProfileConfig:
-    """Get the current profile config.
-
-    Returns
-    -------
-    ret: ProfileConfig
-        The current profile config. It is a named tuple with fields (warmup, number, repeat).
-    """
-    return _profile_config
+            self.task_func = build_task(self.task, target_device=self.device, load=True)

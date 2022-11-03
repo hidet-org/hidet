@@ -1,5 +1,5 @@
 # python test
-pytest
+pytest==7.2
 
 # for models to test
 --extra-index-url https://download.pytorch.org/whl/cu116

@@ -25,9 +25,6 @@ class Target:
         return Target(name, attrs)
 
 
-# todo: rename Prologue.indices and Epilogue.indices to axes
-
-
 class InverseMap(Node):
     def __init__(self, axes: List[Var], indices: List[Expr]):
         from hidet.ir.functors import simplify
@@ -67,32 +64,6 @@ class InverseMap(Node):
         rmap = dict(zip(rhs.axes, lhs.indices))
         indices = [rewrite(index_expr, rmap) for index_expr in rhs.indices]
         return InverseMap(lhs.axes, indices)
-
-
-class Prologue(Node):
-    def __init__(self, extra_inputs, indices, value, inverse_map=None):
-        if inverse_map is None:
-            inverse_map = {}
-        self.extra_inputs: List[TensorNode] = extra_inputs
-        self.indices: List[Var] = indices
-        self.value: Expr = value
-        self.inverse_map: Dict[TensorNode, InverseMap] = {a: InverseMap.from_obj(b) for a, b in inverse_map.items()}
-        self.bindings: Dict[TensorNode, TensorNode] = {}
-
-
-class Epilogue(Node):
-    def __init__(self, extra_inputs, indices, orig_value, value, out_indices, orig_tensor, out_tensor, bindings):
-        self.extra_inputs: List[TensorNode] = extra_inputs
-
-        self.indices: List[Var] = indices
-        self.orig_value: Var = orig_value
-        self.value: Expr = value
-        self.out_indices: List[Expr] = out_indices
-
-        self.orig_tensor: TensorNode = orig_tensor
-        self.out_tensor: TensorNode = out_tensor
-
-        self.bindings: Dict[TensorNode, TensorNode] = bindings
 
 
 class TaskGraph(Node):
@@ -136,49 +107,6 @@ class TaskGraph(Node):
         return Task(name=self.anchor.name, inputs=graph_input_tensors, outputs=graph_output_tensors)
 
 
-class TaskContext:
-    """Scheduling task context."""
-
-    contexts = []
-
-    def __init__(
-        self, space_level: int = 0, warmup: int = 3, number: int = 10, repeat: int = 3, resolve_out_dir: str = None
-    ):
-        """Create a task context.
-
-        Parameters
-        ----------
-        space_level: int
-            The search space level. Can be 0, 1, or 2. Larger space level indicates larger search space.
-        warmup: int
-            The number of warmups for tuning.
-        number: int
-            The number of runs per repeat.
-        repeat: int
-            The number of repeats.
-        resolve_out_dir: Optional[str]
-            The output directory for the intermediate output for tuning.
-        """
-        self.space_level = space_level
-        self.warmup: int = warmup
-        self.number: int = number
-        self.repeat: int = repeat
-        self.resolve_out_dir = resolve_out_dir
-
-    def __enter__(self):
-        self.contexts.append(self)
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.contexts.pop()
-
-    @staticmethod
-    def current() -> TaskContext:
-        return TaskContext.contexts[-1]
-
-
-TaskContext.contexts.append(TaskContext())  # fallback context
-
-
 class Task(Node):
     """
     A task defines the operator computation.
@@ -200,19 +128,19 @@ class Task(Node):
     def parameters(self) -> List[TensorNode]:
         return self.task_graph.input_tensors + self.task_graph.output_tensors
 
-    def implement(self, target: Union[Target, str]) -> IRModule:
+    def implement(self, target: Union[Target, str], workding_dir: str) -> IRModule:
         from hidet.graph.ops.schedules.cuda.auto_scheduler import CudaAutoScheduler
         from hidet.graph.ops.schedules.cpu.auto_scheduler import CpuAutoScheduler
 
         if isinstance(target, str):
             target = Target.from_string(target)
         if target.name == 'cuda':
-            ret = self.implement_cuda()
+            ret = self.implement_cuda(workding_dir)
             if ret is NotImplemented:
                 auto_scheduler = CudaAutoScheduler()
                 ret = auto_scheduler.schedule_task(self, 'cuda')
         elif target.name == 'cpu':
-            ret = self.implement_cpu()
+            ret = self.implement_cpu(workding_dir)
             if ret is NotImplemented:
                 auto_scheduler = CpuAutoScheduler()
                 ret = auto_scheduler.schedule_task(self, 'cpu')
@@ -222,10 +150,10 @@ class Task(Node):
             raise AssertionError(f'The task implement function should return an IRModule, but got a {type(ret)}.')
         return ret
 
-    def implement_cuda(self) -> IRModule:
+    def implement_cuda(self, workding_dir: str) -> IRModule:
         return NotImplemented
 
-    def implement_cpu(self) -> IRModule:
+    def implement_cpu(self, workding_dir: str) -> IRModule:
         return NotImplemented
 
     def allow_prologue(self) -> True:

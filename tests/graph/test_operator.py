@@ -5,10 +5,10 @@ import pytest
 def test_profile_config():
     a = hidet.randn([1, 10, 10], device='cuda')
     b = hidet.randn([1, 10, 10], device='cuda')
-    hidet.space_level(1)
-    hidet.profile_config(1, 1, 1)
+    hidet.option.search_space(1)
+    hidet.option.bench_config(1, 1, 1)
     c = hidet.ops.batch_matmul(a, b)
-    hidet.space_level(0)
+    hidet.option.search_space(0)
 
 
 if __name__ == '__main__':

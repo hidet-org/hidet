@@ -85,7 +85,7 @@ def validate_schedule(task: Task, device: str, dummy_inputs: Optional[Sequence] 
         raise ValueError("The number of dummy inputs does not match the number of task inputs.")
     device2scheduler = {"cuda": CudaAutoScheduler, "cpu": CpuAutoScheduler}
 
-    ir_module_actual: IRModule = task.implement(device)
+    ir_module_actual: IRModule = task.implement(device, workding_dir='./outs')
     ir_module_desire: IRModule = device2scheduler[device]().schedule_task(task, device)
 
     func_type: FuncType = func_type_from_task(task)

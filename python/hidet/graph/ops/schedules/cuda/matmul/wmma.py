@@ -1,6 +1,7 @@
 import os
 from typing import List, Tuple, Union, Optional
 
+from hidet import option
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.ir.expr import Var, And, Cast, if_then_else, convert, Expr, cast
 from hidet.ir.func import IRModule
@@ -10,7 +11,7 @@ from hidet.ir.layout import DataLayout, row_layout, local_layout, data_layout
 from hidet.ir.primitives import syncthreads, thread_idx, block_idx
 from hidet.ir.primitives.cuda.wmma import WmmaConfig, wmma_load_a, wmma_load_b, wmma_mma, wmma_store, wmma_configs
 from hidet.ir.stmt import BufferStoreStmt, IfStmt, DeclareStmt, Scope
-from hidet.ir.task import TaskContext, Task
+from hidet.ir.task import Task
 from hidet.ir.type import scalar_type, tensor_type, ScalarType, TensorPointerType, PointerType
 from hidet.graph.ops.definitions.matmul import BatchMatmulTask
 from hidet.graph.ops.schedules.common import params_from_task, Schedule, NotSupportedError
@@ -216,15 +217,8 @@ class MatmulSchedule(Schedule):
             raise ValueError('Space level {} must in [0, 1, 2].'.format(space_level))
 
 
-def batched_matmul_cuda_schedule_wmma(task: BatchMatmulTask) -> IRModule:
-    ctx = TaskContext.current()
-    all_schedules = MatmulSchedule.schedules(task, space_level=ctx.space_level)
-    default_resolve_out_dir = os.path.join(
-        './outs/resolve',
-        task.name,
-        'batched_matmul_wmma_{}x{}x{}x{}'.format(task.batch_size, task.m_size, task.k_size, task.n_size),
-    )
-    resolve_out_dir = ctx.resolve_out_dir if ctx.resolve_out_dir else default_resolve_out_dir
+def batched_matmul_cuda_schedule_wmma(task: BatchMatmulTask, working_dir: str) -> IRModule:
+    all_schedules = MatmulSchedule.schedules(task, space_level=option.get_option('search_space'))
     ir_modules = []
     for schedule in all_schedules:
         ir_modules.append(batched_matmul_cuda_with_given_schedule(task, schedule))
@@ -232,7 +226,7 @@ def batched_matmul_cuda_schedule_wmma(task: BatchMatmulTask) -> IRModule:
         ir_modules=ir_modules,
         schedules=all_schedules,
         target_device='cuda',
-        output_dir=resolve_out_dir,
+        output_dir=os.path.join(working_dir, './resolve'),
         parallel=True,
         verbose=True,
     )
