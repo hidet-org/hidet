@@ -925,6 +925,12 @@ class OnnxConvTranspose(OnnxOperator):
         return [output]
 
 
+@register_onnx_operator
+class OnnxPRelu(OnnxOperator):
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        return [ops.prelu(inputs[0], inputs[1])]
+
+
 def dispatch(node, op_sets: List[int]) -> OnnxOperator:
     op_type = node.op_type
     if op_type not in dispatch_table:

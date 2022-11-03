@@ -8,7 +8,7 @@ from .conv2d_transpose import conv2d_transpose
 from .matmul import batch_matmul, matmul
 from .pool import max_pool2d, avg_pool2d
 from .softmax import softmax
-from .activation import relu, sigmoid, relu6, clip
+from .activation import relu, sigmoid, relu6, clip, prelu
 from .norm import batch_norm_infer, instance_norm
 from .image import resize2d
 from .arithmatic import add, sub, multiply, divide, neg, sqrt, rsqrt, where, max, min, reciprocal, exp, log

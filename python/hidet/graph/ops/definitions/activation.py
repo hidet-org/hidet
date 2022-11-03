@@ -3,7 +3,7 @@ import math
 from hidet.ir import primitives as prim
 from hidet.ir.expr import const_like, if_then_else
 from .utils import Tensor
-from .arithmatic import UnaryElementwiseOp
+from .arithmatic import UnaryElementwiseOp, BinaryElementwiseOp
 
 
 class ReluOp(UnaryElementwiseOp):
@@ -47,6 +47,11 @@ class GeluOp(UnaryElementwiseOp):
         )
 
 
+class PReluOp(BinaryElementwiseOp):
+    def __init__(self, x, slope):
+        super().__init__(x, slope, op=lambda a, b: if_then_else(a >= 0, a, a * b), name='prelu')
+
+
 def relu(x) -> Tensor:
     return ReluOp(x).get_output(0)
 
@@ -69,3 +74,7 @@ def relu6(x: Tensor) -> Tensor:
 
 def gelu(x: Tensor) -> Tensor:
     return GeluOp(x).get_output(0)
+
+
+def prelu(x: Tensor, slope: Tensor) -> Tensor:
+    return PReluOp(x, slope).get_output(0)
