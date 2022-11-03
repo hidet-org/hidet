@@ -64,11 +64,7 @@ class FlowGraph:
             for x in op.inputs:
                 if x not in namer.obj_name:
                     assert x.storage is not None
-                    const_doc += (
-                        NewLine()
-                        + namer.get_name(x, hint='c')
-                        + ' = Constant(' + get_tensor_sig(x) + ')'
-                    )
+                    const_doc += NewLine() + namer.get_name(x, hint='c') + ' = Constant(' + get_tensor_sig(x) + ')'
             outputs = op.outputs
             if len(outputs) > 1:
                 raise NotImplementedError()

@@ -388,7 +388,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             scope2specifier = {
                 DeclareScope.Shared: '__shared__ ',
                 DeclareScope.Global: '__global__ ',
-                DeclareScope.Register: ''    # we can not force nvcc to use register, but it will do so if possible
+                DeclareScope.Register: '',  # we can not force nvcc to use register, but it will do so if possible
             }
             doc += scope2specifier[stmt.scope]
         doc += self.local_var_declare(stmt.var)

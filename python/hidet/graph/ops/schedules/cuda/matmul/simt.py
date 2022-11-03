@@ -364,7 +364,9 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, schedule: Mat
             sb += DeclareStmt(smem_storage, scope=DeclareScope.Shared)
         smem_a_bytes = simplify_to_int(smem_a.type.tensor_type.storage_bytes())
         sb += DeclareStmt(smem_a, init=Cast(~smem_storage[0], PointerType(a_dtype)), scope=DeclareScope.Shared)
-        sb += DeclareStmt(smem_b, init=Cast(~(smem_storage[smem_a_bytes]), PointerType(b_dtype)), scope=DeclareScope.Shared)
+        sb += DeclareStmt(
+            smem_b, init=Cast(~(smem_storage[smem_a_bytes]), PointerType(b_dtype)), scope=DeclareScope.Shared
+        )
 
         # declare a, b, c registers
         regs_a = Var('regs_A', tensor_type(a_dtype, layout=[2] + schedule.regs_a_layout))

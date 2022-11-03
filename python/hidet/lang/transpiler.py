@@ -339,9 +339,9 @@ class PythonToHidetTranslator(PythonAstFunctor):
                             var_type = ir.infer_type(rhs)
                             init_value = rhs
                         var = Var(hint=var_name, type=var_type)
-                        self.current_scope.append(ir.DeclareStmt(
-                            var, init=init_value, is_static=is_static, scope=scope
-                        ))
+                        self.current_scope.append(
+                            ir.DeclareStmt(var, init=init_value, is_static=is_static, scope=scope)
+                        )
                         self.current_scope.define_var(name=var_name, v=var)
             else:
                 # In other cases, it is an assignment of defined variable.

@@ -1,4 +1,4 @@
-from typing import List, Sequence, Union, Optional
+from typing import Union, Optional
 from hidet.ir.type import TypeNode
 from hidet.ir.stmt import DeclareScope
 

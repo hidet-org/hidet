@@ -34,16 +34,16 @@ def tensor(
     layout: Optional[DataLayout] = None,
 ):
     from hidet.ir.type import tensor_type
+
     return with_scope(scope, tensor_type(dtype, shape, layout))
 
 
 def tensor_pointer(
-    dtype: Union[ScalarType, str],
-    shape: Optional[Sequence[ConstExpr]] = None,
-    layout: Optional[DataLayout] = None,
+    dtype: Union[ScalarType, str], shape: Optional[Sequence[ConstExpr]] = None, layout: Optional[DataLayout] = None
 ):
     # pylint: disable=import-outside-toplevel
     from hidet.ir.type import tensor_type
+
     return ~tensor_type(dtype, shape, layout)
 
 
