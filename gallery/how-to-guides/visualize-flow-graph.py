@@ -10,10 +10,6 @@ bottom of the documentation side bar.
 
 In this tutorial, we will show you how to visualize the flow graph of a model.
 
-.. todo::
-
-    Work in progress.
-
 Define model
 ------------
 
