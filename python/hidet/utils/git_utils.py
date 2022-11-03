@@ -1,11 +1,33 @@
 import datetime
 import logging
-import git
 
 
 logger = logging.Logger(__name__)
 logger.setLevel(logging.INFO)
 logger.addHandler(logging.StreamHandler())
+
+
+def in_git_repo():
+    """
+    Check whether git program has been installed and the source code is in a git repository.
+
+    This function must be called before any other git-related functions.
+
+    Returns
+    -------
+    ret: bool
+        True if the source code is in a git repository. Otherwise, False.
+    """
+    try:
+        import git
+    except ImportError:
+        return False
+
+    try:
+        git.Repo(path=__file__, search_parent_directories=True)
+        return True
+    except git.exc.InvalidGitRepositoryError:
+        return False
 
 
 def get_repo_sha(short=False):
@@ -22,6 +44,8 @@ def get_repo_sha(short=False):
     ret: str
         The commit sha hash.
     """
+    import git
+
     repo = git.Repo(search_parent_directories=True)
     sha = repo.head.object.hexsha
     if short:
@@ -45,27 +69,13 @@ def get_repo_commit_date(strftime='%Y-%m-%d') -> str:
     ret: str
         The commit date time in given format.
     """
+    import git
+
     repo = git.Repo(search_parent_directories=True)
     commit = repo.head
     committed_date = commit.commit.committed_date
     dt = datetime.datetime.fromtimestamp(committed_date)
     return str(dt.strftime(strftime))
-
-
-def in_git_repo():
-    """
-    Check whether the source code is in a git repository.
-
-    Returns
-    -------
-    ret: bool
-        True if the source code is in a git repository. Otherwise, False.
-    """
-    try:
-        git.Repo(path=__file__, search_parent_directories=True)
-        return True
-    except git.exc.InvalidGitRepositoryError:
-        return False
 
 
 def git_repo_root():
@@ -77,5 +87,7 @@ def git_repo_root():
     ret: str
         The root directory of the git repository.
     """
+    import git
+
     repo = git.Repo(path=__file__, search_parent_directories=True)
     return repo.working_dir
