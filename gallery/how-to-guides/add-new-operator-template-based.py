@@ -47,12 +47,8 @@ class BatchMatmulFp16Task(Task):
 
     def implement_cuda(self) -> IRModule:
         # override this method to use template-based scheduling
-        return batch_matmul_mma_fp16_schedule(
-            bs=self.attributes['batch_size'],
-            m_size=self.attributes['m_size'],
-            n_size=self.attributes['n_size'],
-            k_size=self.attributes['k_size']
-        )
+        return batch_matmul_mma_fp16_schedule(self)
+
 
 # %%
 # In above task definition, we override the :code:`implement_cuda()` method to use template-based scheduling. Inside
@@ -74,12 +70,18 @@ class BatchMatmulFp16Task(Task):
 #
 
 
-def batch_matmul_mma_fp16_schedule(bs, m_size, n_size, k_size) -> IRModule:
+def batch_matmul_mma_fp16_schedule(task: BatchMatmulFp16Task) -> IRModule:
     from hidet.lang import f16, spatial, repeat, tensor, attr, grid, printf, cast
     from hidet.lang.mapping import repeat, spatial
     from hidet.lang.cuda import blockIdx, threadIdx, syncthreads
     from hidet.lang.cuda import MmaConfig, mma_sync
-    from hidet.transforms.tools import generate_packed_func
+    from hidet.transforms.tools import fuse_and_pack
+
+    # get the workload size
+    bs = task.attributes['batch_size'],
+    m_size = task.attributes['m_size'],
+    n_size = task.attributes['n_size'],
+    k_size = task.attributes['k_size']
 
     # define the template hyper-parameters
     mma_config = MmaConfig.m16n8k16_f16_f16()
@@ -187,8 +189,10 @@ def batch_matmul_mma_fp16_schedule(bs, m_size, n_size, k_size) -> IRModule:
             store_c(regs_c, c)
 
     ir_module = module.ir_module()
-    generate_packed_func(ir_module, batch_matmul_kernel, pack_func_name='batch_matmul_fp16')
+    # conduct the fusion (when the task has prologue or epilogue) and generate the packed function
+    ir_module = fuse_and_pack(ir_module, kernel_func=batch_matmul_kernel, task=task)
     return ir_module
+
 
 # %%
 # Define the operator
@@ -237,6 +241,7 @@ op = BatchMatmulFp16Op(a, b)
 c = op.get_output(0)
 func = op.task_func
 import os
+
 relative_path = os.path.relpath(func.src_path, os.path.dirname(hidet.utils.hidet_cache_dir()))
 source_path = func.src_path
 # sphinx_gallery_end_ignore
