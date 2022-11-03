@@ -1,6 +1,12 @@
 # python test
 pytest==7.2
 
+# formatter
+black==22.10.0
+
+# linter
+pylint==2.15.5
+
 # for models to test
 --extra-index-url https://download.pytorch.org/whl/cu116
 torch
