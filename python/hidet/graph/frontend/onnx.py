@@ -931,6 +931,18 @@ class OnnxPRelu(OnnxOperator):
         return [ops.prelu(inputs[0], inputs[1])]
 
 
+@register_onnx_operator
+class OnnxAbs(OnnxOperator):
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        return [ops.abs(inputs[0])]
+
+
+@register_onnx_operator
+class OnnxAnd(OnnxOperator):
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        return [ops.cond_and(inputs[0], inputs[1])]
+
+
 def dispatch(node, op_sets: List[int]) -> OnnxOperator:
     op_type = node.op_type
     if op_type not in dispatch_table:

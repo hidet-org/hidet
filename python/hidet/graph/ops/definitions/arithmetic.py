@@ -3,7 +3,7 @@ from typing import List, Callable, Any, Union, Optional, Dict
 
 from hidet.ir import primitives
 from hidet.ir import expr
-from hidet.ir.expr import const_like
+from hidet.ir.expr import const_like, if_then_else
 from hidet.utils import prod
 from hidet.graph.tensor import convert
 from .utils import Task, Operator, Tensor, TensorNode, InverseMap, compute, input_like
@@ -272,6 +272,11 @@ class MinOp(Operator):
         )
 
 
+class AbsOp(UnaryElementwiseOp):
+    def __init__(self, x: Tensor):
+        super().__init__(x, op=lambda a: if_then_else(a >= 0, a, -a), name='abs')
+
+
 PythonScalar = Union[float, int]
 
 
@@ -406,3 +411,7 @@ def max(a: Tensor, b: Tensor, *others: Tensor) -> Tensor:
 def min(a: Tensor, b: Tensor, *others: Tensor) -> Tensor:
     args = [a, b] + list(others)
     return MinOp(args).get_output(0)
+
+
+def abs(x: Tensor) -> Tensor:
+    return AbsOp(x).get_output(0)
