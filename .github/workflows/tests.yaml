@@ -1,22 +1,10 @@
-name: Python Tests (Full)
+name: Tests
 
 on:
   push:
     branches: [main]
-    paths: # run when any of these files change
-      - 'include/**'
-      - 'src/**'
-      - 'python/hidet/backend/**'
-      - 'python/hidet/transforms/**'
-      - 'python/hidet/ir/**'
+
   pull_request:
-    branches: [main]
-    paths: # run when any of these files change
-      - 'include/**'
-      - 'src/**'
-      - 'python/hidet/backend/**'
-      - 'python/hidet/transforms/**'
-      - 'python/hidet/ir/**'
 
 jobs:
   tests:
@@ -44,12 +32,29 @@ jobs:
           pip install -r requirements-dev.txt
           bash scripts/build_wheel.sh
           WHEEL=$(find ./scripts/ -maxdepth 1 -name '*.whl')
-          echo "Built wheel: $WHEEL" 
-          pip install --no-deps --force-reinstall $WHEEL
-      - name: Run minimal tests
+          echo "WHEEL_NAME=$WHEEL" >> $GITHUB_ENV
+          echo "Built wheel: {{ env.WHEEL_NAME }}"" 
+
+      - name: Install hidet
         run: |
-          python -m pytest -v tests/minimal/test_add.py
-      - name: Run full tests
+          pip install --no-deps --force-reinstall {{ env.WHEEL_NAME }}
+
+      - name: Diff against main
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            include/**/*.h
+            src/**/*
+            python/hidet/backend/**/*.py
+            python/hidet/transforms/**/*.py
+            python/hidet/ir/**/*.py
+
+      - name: Run full tests (clear operator cache)
         run: |
-          # stop the build if format is not correct, clear cache
-          python -m pytest -v --clear-cache ./tests   
+          python -m pytest -v --clear-cache ./tests
+        if: env.GIT_DIFF
+
+      - name: Run fast tests (keep operator cache)
+        run: |
+          python -m pytest -v ./tests
+        if: "!env.GIT_DIFF"
