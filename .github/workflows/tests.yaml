@@ -33,7 +33,7 @@ jobs:
           bash scripts/build_wheel.sh
           WHEEL=$(find ./scripts/ -maxdepth 1 -name '*.whl')
           echo "WHEEL_NAME=$WHEEL" >> $GITHUB_ENV
-          echo "Built wheel: {{ env.WHEEL_NAME }}"" 
+          echo "Built wheel: {{ env.WHEEL_NAME }}"
 
       - name: Install hidet
         run: |

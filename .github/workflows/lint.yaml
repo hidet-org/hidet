@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  check-format-and-lint:
+  format-and-lint:
     runs-on: ubuntu-latest
     strategy:
       matrix:
