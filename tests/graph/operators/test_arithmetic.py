@@ -79,5 +79,10 @@ def test_neg(shape):
     check_unary(shape, np.float32, np.negative, ops.neg)
 
 
+@pytest.mark.parametrize("shape", unary_op_shapes)
+def test_abs(shape):
+    check_unary(shape, np.float32, np.absolute, ops.abs)
+
+
 if __name__ == '__main__':
     pytest.main([__file__])
