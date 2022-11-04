@@ -2,7 +2,7 @@ from typing import List, Optional
 from .base import GraphPattern, TensorPattern, MatchDict
 
 
-class ArithmaticGraphPattern(GraphPattern):
+class arithmeticGraphPattern(GraphPattern):
     def __init__(self, name, fsrc, fdst):
         super().__init__(name)
         x, y = TensorPattern.tensors(2, is_symbolic=True)  # can not be const
@@ -24,7 +24,7 @@ class ArithmaticGraphPattern(GraphPattern):
         # return [constructor.visit(self.tgt)]
 
 
-def arithmatic_patterns() -> List[GraphPattern]:
+def arithmetic_patterns() -> List[GraphPattern]:
     # # tensors can be used as pattern inputs
     # x, y, z = TensorPattern.tensors(3, is_symbolic=True)  # can not be const
     # a, b, c = TensorPattern.tensors(3, is_const=True)  # can not be symbolic
@@ -41,4 +41,4 @@ def arithmatic_patterns() -> List[GraphPattern]:
             lambda x, y, a, b: (x + y) + (a + b),
         ],
     ]
-    return [ArithmaticGraphPattern(name, src, tgt) for name, src, tgt in pairs]
+    return [arithmeticGraphPattern(name, src, tgt) for name, src, tgt in pairs]

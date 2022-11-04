@@ -11,7 +11,7 @@ from .softmax import softmax
 from .activation import relu, sigmoid, relu6, clip, prelu
 from .norm import batch_norm_infer, instance_norm
 from .image import resize2d
-from .arithmatic import add, sub, multiply, divide, neg, sqrt, rsqrt, where, max, min, reciprocal, exp, log
+from .arithmetic import add, sub, multiply, divide, neg, sqrt, rsqrt, where, max, min, reciprocal, exp, log
 from .compare import equal, less_than, greater_than, less_or_equal, greater_or_equal, cond_not
 from .reduce import reduce_mean, reduce_min, reduce_max, reduce_sum, reduce_var, argmin, argmax
 from .transform import squeeze, unsqueeze, flatten, concat, cast, take, rearrange, strided_slice, split, pad, conv_pad
@@ -20,7 +20,7 @@ from .special import barrier
 
 from .matmul import BatchMatmulOp
 from .conv2d import Conv2dOp
-from .arithmatic import ErfOp, PowOp, AddOp, SubOp, MultiplyOp, DivideOp, WhereOp
+from .arithmetic import ErfOp, PowOp, AddOp, SubOp, MultiplyOp, DivideOp, WhereOp
 from .compare import EqualOp
 from .reduce import ReduceSumOp, ReduceMeanOp
 from .transform import PadOp

@@ -3,6 +3,12 @@ name: Python Tests (Full)
 on:
   push:
     branches: [main]
+    paths: # run when any of these files change
+      - 'include/**'
+      - 'src/**'
+      - 'python/hidet/backend/**'
+      - 'python/hidet/transforms/**'
+      - 'python/hidet/ir/**'
   pull_request:
     branches: [main]
     paths: # run when any of these files change

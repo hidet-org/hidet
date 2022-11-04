@@ -275,7 +275,7 @@ class MinOp(Operator):
 PythonScalar = Union[float, int]
 
 
-def binary_arithmatic(
+def binary_arithmetic(
     x: Union[Tensor, float, int], y: Union[Tensor, float, int], tensor_scalar_op, scalar_tensor_op, tensor_tensor_op
 ) -> Union[Tensor, float, int]:
     if not (isinstance(x, (Tensor, float, int)) and isinstance(y, (Tensor, float, int))):
@@ -301,7 +301,7 @@ def binary_arithmatic(
 
 
 def add(x: Union[Tensor, float, int], y: Union[Tensor, float, int]) -> Tensor:
-    return binary_arithmatic(
+    return binary_arithmetic(
         x,
         y,
         lambda a, b: AddScalarOp(a, b).get_output(0),
@@ -311,7 +311,7 @@ def add(x: Union[Tensor, float, int], y: Union[Tensor, float, int]) -> Tensor:
 
 
 def sub(x: Union[Tensor, float, int], y: Union[Tensor, float, int]) -> Tensor:
-    return binary_arithmatic(
+    return binary_arithmetic(
         x,
         y,
         lambda a, b: SubScalarOp(a, b).get_output(0),
@@ -321,7 +321,7 @@ def sub(x: Union[Tensor, float, int], y: Union[Tensor, float, int]) -> Tensor:
 
 
 def multiply(x: Union[Tensor, float, int], y: Union[Tensor, float, int]) -> Tensor:
-    return binary_arithmatic(
+    return binary_arithmetic(
         x,
         y,
         lambda a, b: MultiplyScalarOp(a, b).get_output(0),
@@ -331,7 +331,7 @@ def multiply(x: Union[Tensor, float, int], y: Union[Tensor, float, int]) -> Tens
 
 
 def divide(x: Union[Tensor, float, int], y: Union[Tensor, float, int]) -> Tensor:
-    return binary_arithmatic(
+    return binary_arithmetic(
         x,
         y,
         lambda a, b: DivideScalarOp(a, b).get_output(0),

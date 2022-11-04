@@ -316,7 +316,7 @@ class OnnxMatMul(OnnxOperator):
         # if len(a.shape) == 2 and len(b.shape) == 2:
         #     return [ops.batch_matmul(a, b)]
         # else:
-        #     prefix_shape = hidet.graph.ops.definitions.arithmatic.broadcast_shape(a.shape[:-2], b.shape[:-2])
+        #     prefix_shape = hidet.graph.ops.definitions.arithmetic.broadcast_shape(a.shape[:-2], b.shape[:-2])
         #     a = ops.broadcast(a, prefix_shape + a.shape[-2:])
         #     b = ops.broadcast(b, prefix_shape + b.shape[-2:])
         #     a = ops.flatten(a, end_dim=-2)  # [B, M, K]
@@ -606,7 +606,7 @@ class OnnxExpand(OnnxOperator):
     def run_v8(self, inputs: List[Tensor]) -> List[Tensor]:
         data, new_shape = inputs
         new_shape = self.tensor2list(new_shape)
-        new_shape = hidet.graph.ops.definitions.arithmatic.broadcast_shape(data.shape, new_shape)
+        new_shape = hidet.graph.ops.definitions.arithmetic.broadcast_shape(data.shape, new_shape)
         return [ops.broadcast(data, new_shape)]
 
 

@@ -394,7 +394,7 @@ class TransposeOp(Operator):
 class CastOp(Operator):
     def __init__(self, x: Tensor, dtype: str):
         from hidet.ir.expr import Cast
-        from .arithmatic import UnaryElementwiseTask
+        from .arithmetic import UnaryElementwiseTask
 
         super().__init__(
             inputs=[x],

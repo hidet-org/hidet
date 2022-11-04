@@ -28,16 +28,16 @@ class TensorPattern:
                 return '{}[{}]'.format(op_str, idx)
 
     def __add__(self, other):
-        return OperatorPattern(ops.definitions.arithmatic.AddOp, inputs=[self, other]).outputs[0]
+        return OperatorPattern(ops.definitions.arithmetic.AddOp, inputs=[self, other]).outputs[0]
 
     def __sub__(self, other):
-        return OperatorPattern(ops.definitions.arithmatic.SubOp, inputs=[self, other]).outputs[0]
+        return OperatorPattern(ops.definitions.arithmetic.SubOp, inputs=[self, other]).outputs[0]
 
     def __mul__(self, other):
-        return OperatorPattern(ops.definitions.arithmatic.MultiplyOp, inputs=[self, other]).outputs[0]
+        return OperatorPattern(ops.definitions.arithmetic.MultiplyOp, inputs=[self, other]).outputs[0]
 
     def __neg__(self):
-        return OperatorPattern(ops.definitions.arithmatic.NegOp, inputs=[self]).outputs[0]
+        return OperatorPattern(ops.definitions.arithmetic.NegOp, inputs=[self]).outputs[0]
 
     def op(self) -> Optional[OperatorPattern]:
         if self.trace is None:
@@ -68,11 +68,11 @@ class OperatorPattern:
 
     def __repr__(self):
         input_items = [str(v) for v in self.inputs]
-        unary_ops = {ops.definitions.arithmatic.NegOp: '-'}
+        unary_ops = {ops.definitions.arithmetic.NegOp: '-'}
         binary_ops = {
-            ops.definitions.arithmatic.AddOp: '+',
-            ops.definitions.arithmatic.SubOp: '-',
-            ops.definitions.arithmatic.MultiplyOp: '*',
+            ops.definitions.arithmetic.AddOp: '+',
+            ops.definitions.arithmetic.SubOp: '-',
+            ops.definitions.arithmetic.MultiplyOp: '*',
         }
         if self.op_cls in unary_ops:
             return '({}{})'.format(unary_ops[self.op_cls], input_items[0])

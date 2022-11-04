@@ -20,8 +20,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install black pylint==2.15.5
           pip install -r requirements.txt
+          pip install -r requirements-dev.txt
       - name: Format with black
         run: |
           # stop the build if format is not correct

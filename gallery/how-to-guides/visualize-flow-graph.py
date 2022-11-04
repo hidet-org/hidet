@@ -2,12 +2,18 @@
 Visualize Flow Graph
 ====================
 
-.. todo::
+Visualization is a key component of a machine learning tool to allow us have a better understanding of the model.
 
-    Work in progress.
+We customized the popular `Netron <https://github.com/lutzroeder/netron>`_ viewer to visualize the flow graph of a
+hidet model. The customized Netron viewer can be found at `here </netron>`_, you can also find a link on the
+bottom of the documentation side bar.
+
+In this tutorial, we will show you how to visualize the flow graph of a model.
 
 Define model
 ------------
+
+We first define a model with a self-attention layer.
 
 """
 import math
@@ -45,11 +51,15 @@ class SelfAttention(nn.Module):
         context = context.rearrange([[0], [2], [1, 3]])
         return context
 
+
+model = SelfAttention()
+print(model)
+
 # %%
 # Generate flow graph
 # -------------------
+# Then we generate the flow graph of the model.
 
-model = SelfAttention()
 graph = model.flow_graph_for(inputs=[
     hidet.randn([1, 128, 768], device='cpu'),
     hidet.ones([1, 128], dtype='int32', device='cpu')
@@ -59,20 +69,33 @@ print(graph)
 # %%
 # Dump netron graph
 # -----------------
+# To visualize the flow graph, we need to dump the graph structure to a json file using
+# :py:func:`hidet.utils.netron.dump` function.
 from hidet.utils import netron
 
 with open('attention-graph.json', 'w') as f:
     netron.dump(graph, f)
 
 # %%
-# :download:`Download attention-graph.json <../../../../gallery/how-to-guides/attention-graph.json>`
+# Above code will generate a json file named ``attention-graph.json``.
+#
+# You can download the generated json file
+# :download:`attention-graph.json <../../../../gallery/how-to-guides/attention-graph.json>`
+# and open it with the `customized Netron viewer </netron>`_.
+#
 
 # %%
 # Visualize optimization intermediate graphs
 # ------------------------------------------
+#
+# Hidet also provides a way to visualize the intermediate graphs of the optimization passes.
+#
+# To get the json files for the intermediate graphs, we need to add an instrument that dumps the graph in the
+# pass context before optimize it. We can use
+# :py:meth:`PassContext.save_graph_instrument() <hidet.graph.transforms.PassContext.save_graph_instrument>`
+# method to do that.
 
 with hidet.graph.PassContext() as ctx:
-
     # print the time cost of each pass
     ctx.profile_pass_instrument(print_stdout=True)
 
@@ -83,6 +106,7 @@ with hidet.graph.PassContext() as ctx:
     graph_opt = hidet.graph.optimize(graph)
 
 # %%
+# Above code will generate a directory named ``outs`` that contains the json files for the intermediate graphs.
 # The optimized graph:
 
 print(graph_opt)
@@ -101,3 +125,5 @@ print(graph_opt)
 # %%
 # Summary
 # -------
+# This tutorial shows how to visualize the flow graph of a model and the intermediate graphs of the optimization passes.
+#

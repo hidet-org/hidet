@@ -21,7 +21,7 @@ from ast import ExtSlice, List
 # expr context
 from ast import Load, Store, Del
 
-# arithmatic and bitwise operators
+# arithmetic and bitwise operators
 from ast import UAdd, USub, Add, Sub, Mult, Div, FloorDiv, Mod, Pow, BitOr, BitXor, BitAnd, Invert
 
 # bool and compare operators
