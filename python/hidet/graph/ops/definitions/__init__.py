@@ -12,7 +12,7 @@ from .activation import relu, sigmoid, relu6, clip, prelu
 from .norm import batch_norm_infer, instance_norm
 from .image import resize2d
 from .arithmetic import add, sub, multiply, divide, neg, sqrt, rsqrt, where, max, min, reciprocal, exp, log, abs
-from .compare import equal, less_than, greater_than, less_or_equal, greater_or_equal, cond_not
+from .compare import equal, less_than, greater_than, less_or_equal, greater_or_equal, cond_not, cond_and
 from .reduce import reduce_mean, reduce_min, reduce_max, reduce_sum, reduce_var, argmin, argmax
 from .transform import squeeze, unsqueeze, flatten, concat, cast, take, rearrange, strided_slice, split, pad, conv_pad
 from .cumulative import cumsum

@@ -33,6 +33,11 @@ class GreaterOrEqual(BinaryElementwiseOp):
         super().__init__(x, y, lambda a, b: a >= b, name='ge')
 
 
+class AndOp(BinaryElementwiseOp):
+    def __init__(self, x: Tensor, y: Tensor):
+        super().__init__(x, y, lambda a, b: expr.And(a, b), name='and')
+
+
 def cond_not(x: Tensor) -> Tensor:
     return NotOp(x).get_output(0)
 
@@ -57,3 +62,7 @@ def less_or_equal(x: Tensor, y: Tensor) -> Tensor:
 
 def greater_or_equal(x: Tensor, y: Tensor) -> Tensor:
     return GreaterOrEqual(x, y).get_output(0)
+
+
+def cond_and(x: Tensor, y: Tensor) -> Tensor:
+    return AndOp(x, y).get_output(0)
