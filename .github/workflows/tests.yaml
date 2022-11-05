@@ -63,15 +63,17 @@ jobs:
 #
       - name: Diff 
         run: |
-          echo git diff ${{ github.base_ref }}...${{ github.ref }} --name-only
-          if [ "${{ github.event_name }}" == "push" ]; then
-            FROM="${{ github.base_ref }}"
-            TO="${{ github.ref }}"
-          else
-            FROM="${{ github.base_ref }}"
-            TO="refs/pull/${{ github.event.pull_request.number }}/merge"
-          fi
-          git diff $FROM...$TO --name-only > git_diff.txt
+#          echo git diff ${{ github.base_ref }}...${{ github.ref }} --name-only
+#          if [ "${{ github.event_name }}" == "push" ]; then
+#            FROM="${{ github.base_ref }}"
+#            TO="${{ github.ref }}"
+#          else
+#            FROM="${{ github.base_ref }}"
+#            TO="refs/pull/${{ github.event.pull_request.number }}/merge"
+#          fi
+          git fetch origin main
+          git diff origin/main..HEAD --name-only > git_diff.txt
+#          git diff $FROM...$TO --name-only > git_diff.txt
           cat git_diff.txt | grep "python/hidet/ir/*" > filtered_diff.txt
           cat git_diff.txt | grep "python/hidet/transforms/*" >> filtered_diff.txt
           cat git_diff.txt | grep "python/hidet/backend/*" > filtered_diff.txt
