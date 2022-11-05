@@ -20,8 +20,6 @@ jobs:
           git --version
 
       - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -51,6 +49,10 @@ jobs:
           pip install --no-deps --force-reinstall ${{ env.WHEEL_NAME }}
 
       # Run tests
+      
+      - name: Fix ownership of the repo
+        run: |
+          git config --global --add safe.directory `pwd`
 
       - name: Diff against main
         uses: technote-space/get-diff-action@v6
