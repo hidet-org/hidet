@@ -29,6 +29,9 @@ except ImportError:
     # Otherwise, we might in a git repo, and we can import hidet from the repo by adding the repo root to sys.path.
     sys.path.insert(0, os.path.abspath('../../python'))
 
+import hidet
+print('Build docs with under cache: {}'.format(hidet.option.get_cache_dir()))
+
 # -- Project information -----------------------------------------------------
 
 project = 'Hidet'
