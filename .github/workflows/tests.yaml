@@ -67,7 +67,7 @@ jobs:
             TO="${{ github.ref }}"
           else
             FROM=${{ github.base_ref }}"
-            TO="refs/pull/${{ pull.number }}/merge"
+            TO="refs/pull/${{ github.event.pull_request.number }}/merge"
           fi
           git diff $FROM...$TO --name-only > git_diff.txt
           cat git_diff.txt | grep "python/hidet/ir/*" > filtered_diff.txt
