@@ -42,6 +42,7 @@ jobs:
           path: ${{ env.WHEEL_NAME }}
   Test:
     needs: Build
+    runs-on: [self-hosted, Linux, X64, gpu]
     steps:
       - name: Install dependencies
         run: |
@@ -81,6 +82,7 @@ jobs:
 
   Docs:
     needs: Build
+    runs-on: [self-hosted, Linux, X64, gpu]
     steps:
       - name: Install dependencies
         run: |
