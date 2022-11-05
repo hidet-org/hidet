@@ -78,19 +78,15 @@ jobs:
             gallery/**
             docs/**
 
-      - name: Stop if no docs changes
-        if: "!env.GIT_DIFF"
-        run: |
-          echo "No docs changes, skipping docs build"
-          exit 0
-
       - name: Install docs dependencies
         run: |
           pip install -r docs/requirements.txt
+        if: env.GIT_DIFF
 
       - name: Build docs
         run: |
           cd docs; make clean; make html
+        if: env.GIT_DIFF
 
       - name: Upload docs
         uses: up9cloud/action-rsync@master
@@ -98,4 +94,5 @@ jobs:
           HOST: ${{ secrets.DOCS_HOST }}
           KEY: ${{ secrets.DOCS_DEPLOY_SSH_KEY }}
           TARGET: ${{ secrets.DOCS_TARGET }}
+        if: env.GIT_DIFF
 #        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
