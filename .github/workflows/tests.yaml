@@ -66,7 +66,7 @@ jobs:
             FROM="${{ github.base_ref }}"
             TO="${{ github.ref }}"
           else
-            FROM=${{ pull.base.ref }}"
+            FROM=${{ github.base_ref }}"
             TO="refs/pull/${{ pull.number }}/merge"
           fi
           git diff $FROM...$TO --name-only > git_diff.txt
