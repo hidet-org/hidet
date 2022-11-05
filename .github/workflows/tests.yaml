@@ -13,9 +13,7 @@ jobs:
       image: nvidia/cuda:11.8.0-devel-ubuntu20.04
       options: --gpus all
     steps:
-      - uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v3
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -61,6 +59,28 @@ jobs:
             python/hidet/transforms/**/*.py
             python/hidet/ir/**/*.py
 
+      - name: Diff 
+        run: |
+          echo git diff ${{ github.base_ref }}...${{ github.ref }} --name-only
+          if [ "${{ github.event_name }}" == "push" ]; then
+            FROM="${{ github.base_ref }}"
+            TO="${{ github.ref }}"
+          else
+            FROM=${{ pull.base.ref }}"
+            TO="refs/pull/${{ pull.number }}/merge"
+          fi
+          git diff $FROM...$TO --name-only > git_diff.txt
+          cat git_diff.txt | grep "python/hidet/ir/*" > filtered_diff.txt
+          cat git_diff.txt | grep "python/hidet/transforms/*" >> filtered_diff.txt
+          cat git_diff.txt | grep "python/hidet/backend/*" > filtered_diff.txt
+          cat git_diff.txt | grep "src/*" > filtered_diff.txt
+          cat git_diff.txt | grep "include/*" > filtered_diff.txt
+          echo "Found Diff"
+          cat found_diff.txt
+          echo "Filtered Diff"
+          cat filtered_diff.txt
+          echo GIT_DIFF=`cat filtered_diff.txt` >> $GITHUB_ENV
+
       - name: Run tests with operator cache cleared
         run: |
           python -m pytest -v --durations=20 --clear-cache ./tests
@@ -72,14 +92,6 @@ jobs:
         if: "!env.GIT_DIFF"
 
       # Build the docs
-
-      - name: Diff against main
-        uses: technote-space/get-diff-action@v6
-        with:
-          PATTERNS: |
-            gallery/**
-            docs/**
-          
 
       - name: Install docs dependencies
         run: |
