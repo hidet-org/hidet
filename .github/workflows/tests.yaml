@@ -38,42 +38,13 @@ jobs:
           bash scripts/build_wheel.sh
           WHEEL=$(find ./scripts/ -maxdepth 1 -name '*.whl')
           echo "WHEEL_NAME=$WHEEL" >> $GITHUB_ENV
-          echo "WHEEL_NAME=$WHEEL" >> $GITHUB_OUTPUT  # used by the subsequent jobs
           echo "Built wheel: ${{ env.WHEEL_NAME }}"
-      - name: Upload wheel
-        uses: actions/upload-artifact@v2
-        with:
-          name: hidet-wheel
-          path: ${{ env.WHEEL_NAME }}
-  Test:
-    needs: Build
-    runs-on: [self-hosted, Linux, X64, gpu]
-    defaults:
-      run:  # avoid overlapping with the previous job
-        working-directory: ./test-job
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.8"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install -r requirements-dev.txt
-
-      - name: Download wheel
-        uses: actions/download-artifact@v2
-        with:
-          name: hidet-wheel
-          path: ./scripts
 
       - name: Install hidet
         run: |
-          pip install --no-deps --force-reinstall ${{ steps.Build.outputs.WHEEL_NAME }} 
+          pip install --no-deps --force-reinstall ${{ env.WHEEL_NAME }}} 
+
+      # Run tests
 
       - name: Diff against main
         uses: technote-space/get-diff-action@v6
@@ -95,14 +66,7 @@ jobs:
           python -m pytest -v ./tests
         if: "!env.GIT_DIFF"
 
-  Docs:
-    needs: Test
-    runs-on: [self-hosted, Linux, X64, gpu]
-    defaults:
-      run:
-        working-directory: ./docs-job
-    steps:
-      - uses: actions/checkout@v3
+      # Build the docs
 
       - name: Diff against main
         uses: technote-space/get-diff-action@v6
