@@ -12,9 +12,6 @@ jobs:
     container:
       image: nvidia/cuda:11.8.0-devel-ubuntu20.04
       options: --gpus all
-    defaults:
-      run:
-        working-directory: build-job
     steps:
       - uses: actions/checkout@v3
 
