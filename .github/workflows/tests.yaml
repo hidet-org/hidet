@@ -64,21 +64,6 @@ jobs:
             python/hidet/transforms/**/*.py
             python/hidet/ir/**/*.py
 
-#      - name: Diff
-#        run: |
-#          git fetch origin main
-#          git diff origin/main..HEAD --name-only > git_diff.txt
-#          cat git_diff.txt | grep "python/hidet/ir/*" > filtered_diff.txt
-#          cat git_diff.txt | grep "python/hidet/transforms/*" >> filtered_diff.txt
-#          cat git_diff.txt | grep "python/hidet/backend/*" > filtered_diff.txt
-#          cat git_diff.txt | grep "src/*" > filtered_diff.txt
-#          cat git_diff.txt | grep "include/*" > filtered_diff.txt
-#          echo "Found Diff"
-#          cat found_diff.txt
-#          echo "Filtered Diff"
-#          cat filtered_diff.txt
-#          echo GIT_DIFF=`cat filtered_diff.txt` >> $GITHUB_ENV
-
       - name: Run tests with operator cache cleared
         run: |
           python -m pytest -v --durations=20 --clear-cache ./tests
@@ -108,4 +93,4 @@ jobs:
           KEY: ${{ secrets.DOCS_DEPLOY_SSH_KEY }}
           USER: ${{ secrets.DOCS_DEPLOY_USER }}
           TARGET: ${{ secrets.DOCS_TARGET }}
-#        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
