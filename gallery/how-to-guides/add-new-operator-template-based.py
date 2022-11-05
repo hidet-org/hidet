@@ -45,7 +45,7 @@ class BatchMatmulFp16Task(Task):
             }
         )
 
-    def implement_cuda(self) -> IRModule:
+    def implement_cuda(self, working_dir: str) -> IRModule:
         # override this method to use template-based scheduling
         return batch_matmul_mma_fp16_schedule(self)
 

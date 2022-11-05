@@ -61,12 +61,12 @@ jobs:
 
       - name: Run tests with operator cache cleared
         run: |
-          python -m pytest -v --clear-cache ./tests
+          python -m pytest -v --durations=20 --clear-cache ./tests
         if: env.GIT_DIFF
 
       - name: Run tests with operator cache
         run: |
-          python -m pytest -v ./tests
+          python -m pytest -v --durations=20 ./tests
         if: "!env.GIT_DIFF"
 
       # Build the docs
