@@ -156,10 +156,10 @@ class Task(Node):
     def implement_cpu(self, workding_dir: str) -> IRModule:
         return NotImplemented
 
-    def allow_prologue(self) -> True:
+    def allow_prologue(self) -> bool:
         return True
 
-    def allow_epilogue(self) -> True:
+    def allow_epilogue(self) -> bool:
         return True
 
     def is_injective_task(self) -> bool:
