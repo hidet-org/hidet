@@ -3,8 +3,9 @@ name: Tests
 on:
   push:
     branches: [main]
-
-  pull_request:
+    paths:
+      - 'docs/**'
+      - 'gallery/**'
 
 jobs:
   tests:
@@ -15,9 +16,7 @@ jobs:
     steps:
       - name: Install dependencies via apt
         run: |
-          pwd
           apt update && apt install -y ccache git
-          git --version
 
       - uses: actions/checkout@v3
 
@@ -48,31 +47,6 @@ jobs:
         run: |
           pip install --no-deps --force-reinstall ${{ env.WHEEL_NAME }}
 
-      # Run tests
-      
-      - name: Fix ownership of the repo
-        run: |
-          git config --global --add safe.directory `pwd`
-
-      - name: Diff against main
-        uses: technote-space/get-diff-action@v6
-        with:
-          PATTERNS: |
-            include/**/*.h
-            src/**/*
-            python/hidet/backend/**/*.py
-            python/hidet/transforms/**/*.py
-            python/hidet/ir/**/*.py
-
-      - name: Run tests with operator cache cleared
-        run: |
-          python -m pytest -v --durations=20 --clear-cache ./tests
-        if: env.GIT_DIFF
-
-      - name: Run tests with operator cache
-        run: |
-          python -m pytest -v --durations=20 ./tests
-        if: "!env.GIT_DIFF"
 
       # Build the docs
 
@@ -83,3 +57,13 @@ jobs:
       - name: Build docs
         run: |
           cd docs; make clean; make html
+
+      - name: Upload docs
+        uses: up9cloud/action-rsync@master
+        env:
+          VERBOSE: true
+          SOURCE: docs/build/html
+          HOST: ${{ secrets.DOCS_HOST }}
+          KEY: ${{ secrets.DOCS_DEPLOY_SSH_KEY }}
+          USER: ${{ secrets.DOCS_DEPLOY_USER }}
+          TARGET: ${{ secrets.DOCS_TARGET }}
