@@ -10,7 +10,7 @@ This guide walks through the key functionality of Hidet for tensor computation.
 # %%
 # We should first import hidet.
 import hidet
-hidet.option.cache_dir('./cache')
+
 # %%
 # Define tensors
 # --------------
