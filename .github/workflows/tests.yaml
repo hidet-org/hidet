@@ -12,10 +12,11 @@ jobs:
     container:
       image: nvidia/cuda:11.8.0-devel-ubuntu20.04
       options: --gpus all
+    defaults:
+      run:
+        working-directory: ./build-job
     steps:
       - uses: actions/checkout@v3
-        with:
-          path: ./hidet-build-checkout
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -46,10 +47,11 @@ jobs:
   Test:
     needs: Build
     runs-on: [self-hosted, Linux, X64, gpu]
+    defaults:
+      run:  # avoid overlapping with the previous job
+        working-directory: ./test-job
     steps:
       - uses: actions/checkout@v3
-        with:
-          path: ./hidet-test-checkout
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -95,10 +97,11 @@ jobs:
   Docs:
     needs: Build
     runs-on: [self-hosted, Linux, X64, gpu]
+    defaults:
+      run:
+        working-directory: ./docs-job
     steps:
       - uses: actions/checkout@v3
-        with:
-          path: ./hidet-docs-checkout
 
       - name: Set up Python
         uses: actions/setup-python@v4
