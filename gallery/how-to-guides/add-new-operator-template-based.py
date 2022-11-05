@@ -182,7 +182,7 @@ def batch_matmul_mma_fp16_schedule(task: BatchMatmulFp16Task) -> IRModule:
                 gmem_b = b[blockIdx.z, offset_k:, offset_n:]
                 for i, k in repeat(8, 1).spatial(16, 8).on(threadIdx.x):
                     smem_a[i, k] = gmem_a.read([i, k], protected=True)
-                for k, j in repeat(16, 1).spatial(1, 128).on(threadIdx.x):
+                for k, j in repeat(8, 1).spatial(1, 128).on(threadIdx.x):
                     smem_b[k, j] = gmem_b.read([k, j], protected=True)
                 syncthreads()
                 load_regs_a(smem_a, regs_a)
