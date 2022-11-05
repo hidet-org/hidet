@@ -14,7 +14,7 @@ jobs:
       options: --gpus all
     defaults:
       run:
-        working-directory: ./build-job
+        working-directory: build-job
     steps:
       - uses: actions/checkout@v3
 
