@@ -13,6 +13,12 @@ jobs:
       image: nvidia/cuda:11.8.0-devel-ubuntu20.04
       options: --gpus all
     steps:
+      - name: Install dependencies via apt
+        run: |
+          pwd
+          apt update && apt install -y ccache git
+          git --version
+
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
@@ -26,11 +32,6 @@ jobs:
         uses: jwlawson/actions-setup-cmake@v1.13
         with:
           cmake-version: '3.19.x'
-
-      - name: Install dependencies via apt
-        run: |
-          pwd
-          apt update && apt install -y ccache git
 
       - name: Install dependencies via pip
         run: |
