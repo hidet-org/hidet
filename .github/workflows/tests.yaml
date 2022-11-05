@@ -90,7 +90,10 @@ jobs:
       - name: Upload docs
         uses: up9cloud/action-rsync@master
         env:
+          VERBOSE: true
+          SOURCE: docs/build/html
           HOST: ${{ secrets.DOCS_HOST }}
           KEY: ${{ secrets.DOCS_DEPLOY_SSH_KEY }}
+          USER: ${{ secrets.DOCS_DEPLOY_USER }}
           TARGET: ${{ secrets.DOCS_TARGET }}
 #        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
