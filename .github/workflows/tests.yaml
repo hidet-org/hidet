@@ -1,4 +1,4 @@
-name: Tests
+name: Docs
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   pull_request:
 
 jobs:
-  tests:
+  docs:
     runs-on: [self-hosted, Linux, X64, gpu]
     container:
       image: nvidia/cuda:11.8.0-devel-ubuntu20.04
