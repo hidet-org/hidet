@@ -201,3 +201,6 @@ build-release
 
 # onnx model
 *.onnx
+
+# intermediate files
+/gallery/**/*.json

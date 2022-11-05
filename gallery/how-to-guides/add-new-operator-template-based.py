@@ -45,7 +45,10 @@ class BatchMatmulFp16Task(Task):
             }
         )
 
-    def implement_cuda(self) -> IRModule:
+    def allow_epilogue(self) -> bool:
+        return False
+
+    def implement_cuda(self, working_dir: str) -> IRModule:
         # override this method to use template-based scheduling
         return batch_matmul_mma_fp16_schedule(self)
 
@@ -75,20 +78,20 @@ def batch_matmul_mma_fp16_schedule(task: BatchMatmulFp16Task) -> IRModule:
     from hidet.lang.mapping import repeat, spatial
     from hidet.lang.cuda import blockIdx, threadIdx, syncthreads
     from hidet.lang.cuda import MmaConfig, mma_sync
-    from hidet.transforms.tools import fuse_and_pack
+    from hidet.transforms.tools import generate_packed_func
 
     # get the workload size
-    bs = task.attributes['batch_size'],
-    m_size = task.attributes['m_size'],
-    n_size = task.attributes['n_size'],
+    bs = task.attributes['batch_size']
+    m_size = task.attributes['m_size']
+    n_size = task.attributes['n_size']
     k_size = task.attributes['k_size']
 
     # define the template hyper-parameters
-    mma_config = MmaConfig.m16n8k16_f16_f16()
-    block_m, block_n, block_k = 128, 128, 16
-    warp_m, warp_n, warp_k = 64, 64, 16
+    mma_config = MmaConfig.m16n8k8_f16_f16()
+    block_m, block_n, block_k = 128, 128, 8
+    warp_m, warp_n, warp_k = 64, 64, 8
     warp_count_m, warp_count_n, warp_count_k = 2, 2, 1
-    mma_m, mma_n, mma_k = mma_config.m, mma_config.n, mma_config.k  # 16, 8, 16
+    mma_m, mma_n, mma_k = mma_config.m, mma_config.n, mma_config.k  # 16, 8, 8
     mma_count_m, mma_count_n, mma_count = 4, 8, 1
     threads = warp_count_m * warp_count_n * warp_count_k * 32
 
@@ -177,9 +180,9 @@ def batch_matmul_mma_fp16_schedule(task: BatchMatmulFp16Task) -> IRModule:
                 offset_k = k0 * block_k
                 gmem_a = a[blockIdx.z, offset_m:, offset_k:]
                 gmem_b = b[blockIdx.z, offset_k:, offset_n:]
-                for i, k in repeat(16, 1).spatial(8, 16).on(threadIdx.x):
+                for i, k in repeat(8, 1).spatial(16, 8).on(threadIdx.x):
                     smem_a[i, k] = gmem_a.read([i, k], protected=True)
-                for k, j in repeat(16, 1).spatial(1, 128).on(threadIdx.x):
+                for k, j in repeat(8, 1).spatial(1, 128).on(threadIdx.x):
                     smem_b[k, j] = gmem_b.read([k, j], protected=True)
                 syncthreads()
                 load_regs_a(smem_a, regs_a)
@@ -190,7 +193,8 @@ def batch_matmul_mma_fp16_schedule(task: BatchMatmulFp16Task) -> IRModule:
 
     ir_module = module.ir_module()
     # conduct the fusion (when the task has prologue or epilogue) and generate the packed function
-    ir_module = fuse_and_pack(ir_module, kernel_func=batch_matmul_kernel, task=task)
+    # ir_module = fuse_and_pack(ir_module, kernel_func=batch_matmul_kernel, task=task)
+    generate_packed_func(ir_module, func=batch_matmul_kernel, pack_func_name=task.name)
     return ir_module
 
 

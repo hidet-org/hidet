@@ -63,6 +63,7 @@ class PrologueEpilogueRewriter(FuncStmtExprRewriter):
         self.anchor_outputs: List[Var] = func.params[anchor_num_inputs:]
 
         # create parameters for fused function, and bind task graph parameters to function parameters
+        # todo: do not create new parameters for the inputs/outputs that have not been fused
         new_params: List[Var] = []
         for tensor_node in self.task_graph.input_tensors + self.task_graph.output_tensors:
             new_params.append(Var(tensor_node.name, tensor_node.data_type))
