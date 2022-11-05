@@ -13,7 +13,7 @@ jobs:
       image: nvidia/cuda:11.8.0-devel-ubuntu20.04
       options: --gpus all
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v2
 
       - name: Set up Python
         uses: actions/setup-python@v4
