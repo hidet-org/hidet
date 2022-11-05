@@ -14,6 +14,8 @@ jobs:
       options: --gpus all
     steps:
       - uses: actions/checkout@v3
+        path: ./hidet-build-checkout
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
@@ -45,6 +47,7 @@ jobs:
     runs-on: [self-hosted, Linux, X64, gpu]
     steps:
       - uses: actions/checkout@v3
+        path: ./hidet-test-checkout
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -92,6 +95,7 @@ jobs:
     runs-on: [self-hosted, Linux, X64, gpu]
     steps:
       - uses: actions/checkout@v3
+        path: ./hidet-docs-checkout
 
       - name: Set up Python
         uses: actions/setup-python@v4
