@@ -22,13 +22,17 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: "3.8"
+
       - name: Setup cmake
         uses: jwlawson/actions-setup-cmake@v1.13
         with:
           cmake-version: '3.19.x'
+
       - name: Setup ccache
         run: |
+          pwd
           apt update && apt install -y ccache
+
       - name: Build hidet
         run: |
           python -m pip install --upgrade pip
@@ -95,13 +99,26 @@ jobs:
         if: "!env.GIT_DIFF"
 
   Docs:
-    needs: Build
+    needs: Test
     runs-on: [self-hosted, Linux, X64, gpu]
     defaults:
       run:
         working-directory: ./docs-job
     steps:
       - uses: actions/checkout@v3
+
+      - name: Diff against main
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            gallery/**
+            docs/**
+
+      - name: Stop if no docs changes
+        if: "!env.GIT_DIFF"
+        run: |
+          echo "No docs changes, skipping docs build"
+          exit 0
 
       - name: Set up Python
         uses: actions/setup-python@v4
