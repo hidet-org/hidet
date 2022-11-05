@@ -87,11 +87,11 @@ def batch_matmul_mma_fp16_schedule(task: BatchMatmulFp16Task) -> IRModule:
     k_size = task.attributes['k_size']
 
     # define the template hyper-parameters
-    mma_config = MmaConfig.m16n8k16_f16_f16()
-    block_m, block_n, block_k = 128, 128, 16
-    warp_m, warp_n, warp_k = 64, 64, 16
+    mma_config = MmaConfig.m16n8k8_f16_f16()
+    block_m, block_n, block_k = 128, 128, 8
+    warp_m, warp_n, warp_k = 64, 64, 8
     warp_count_m, warp_count_n, warp_count_k = 2, 2, 1
-    mma_m, mma_n, mma_k = mma_config.m, mma_config.n, mma_config.k  # 16, 8, 16
+    mma_m, mma_n, mma_k = mma_config.m, mma_config.n, mma_config.k  # 16, 8, 8
     mma_count_m, mma_count_n, mma_count = 4, 8, 1
     threads = warp_count_m * warp_count_n * warp_count_k * 32
 
