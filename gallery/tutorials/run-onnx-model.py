@@ -146,7 +146,7 @@ bench_hidet_graph(graph)
 # conduct graph level optimizations with :func:`hidet.graph.optimize`.
 
 # set the search space level for kernel tuning,
-hidet.option.search_space(2)
+hidet.option.search_space(0)
 
 # optimize the flow graph, such as operator fusion
 with hidet.graph.PassContext() as ctx:
