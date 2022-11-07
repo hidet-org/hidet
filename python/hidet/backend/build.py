@@ -1,5 +1,6 @@
 from typing import List, Optional
 import functools
+import warnings
 import os
 import ctypes
 import shutil
@@ -126,10 +127,18 @@ def compile_source(src_path: str, out_lib_path: str, keep_ptx=False) -> None:
                 target_ptx_path = os.path.join(out_lib_dir, ptx_name)
                 shutil.move(ptx_path, target_ptx_path)
                 # os.rename(ptx_path, target_ptx_path)
+            with open(os.path.join(out_lib_dir, 'compile.sh'), 'w') as f:
+                f.write("#!/bin/bash\n")
+                f.write(" ".join(result.args))
             with open(os.path.join(out_lib_dir, 'nvcc_log.txt'), 'w') as f:
-                f.write('Command: {}\n'.format(" ".join(result.args)))
-                f.write(result.stdout.decode('utf-8'))
-                f.write(result.stderr.decode('utf-8'))
+                output = '\n'.join([result.stdout.decode('utf-8').strip(), result.stderr.decode('utf-8').strip()])
+                f.write(output)
+
+                lines = output.split('\n')
+                warning_lines = [line for line in lines if 'warning' in line]
+                warning_lines = warning_lines[: len(warning_lines) // 2]  # nvcc would print the same warning twice
+                if len(warning_lines) > 0:
+                    warnings.warn('Compilation warnings:\n' + '\n'.join(warning_lines))
     except subprocess.CalledProcessError as e:
         print(' '.join(command))
         print(e.stderr.decode('utf-8'))

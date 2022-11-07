@@ -1,14 +1,18 @@
 import pytest
 import numpy as np
 import torch
+import torch.nn.functional
 import hidet
 
 
+@pytest.mark.parametrize("hidet_op", [hidet.ops.conv2d_transpose, hidet.ops.conv2d_transpose_gemm])
 @pytest.mark.parametrize(
     'in_channels, out_channels, kernel_size, stride, pads, groups, height, width, output_padding',
     [[10, 20, (5, 5), (3, 2), [2, 1], 5, 11, 10, (2, 1)]],
 )
-def test_conv2d_transpose(in_channels, out_channels, kernel_size, stride, pads, groups, height, width, output_padding):
+def test_conv2d_transpose(
+    hidet_op, in_channels, out_channels, kernel_size, stride, pads, groups, height, width, output_padding
+):
     torch_data = torch.ones(1, in_channels, height, width, dtype=torch.float32).cuda()
     torch_weight = torch.ones(
         out_channels, in_channels // groups, kernel_size[0], kernel_size[1], dtype=torch.float32
@@ -32,9 +36,7 @@ def test_conv2d_transpose(in_channels, out_channels, kernel_size, stride, pads, 
         dilation=1,
         output_padding=output_padding,
     )
-    hidet_transpose_output = hidet.ops.conv2d_transpose(
-        hidet_output, hidet_weight, stride, pads, groups, output_padding=output_padding
-    )
+    hidet_transpose_output = hidet_op(hidet_output, hidet_weight, stride, pads, groups, output_padding=output_padding)
     np.testing.assert_allclose(hidet_transpose_output.numpy(), torch_transpose_output.cpu().numpy(), atol=1e-5)
 
 

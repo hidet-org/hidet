@@ -2,7 +2,7 @@
 from . import definitions
 
 from .definitions.conv2d import conv2d, conv2d_winograd, conv2d_gemm, conv2d_gemm_image_transform
-from .definitions.conv2d_transpose import conv2d_transpose
+from .definitions.conv2d_transpose import conv2d_transpose, conv2d_transpose_gemm
 from .definitions.matmul import batch_matmul, matmul
 from .definitions.pool import max_pool2d, avg_pool2d
 from .definitions.softmax import softmax
