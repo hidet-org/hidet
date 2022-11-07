@@ -5,9 +5,9 @@ from hidet.graph.transforms import ResolveRule, register_resolve_rule
 
 from .conv2d_transpose import Conv2dTransposeOp
 
+
 @register_resolve_rule
 class Conv2dTransposeResolveRule(ResolveRule):
-
     def op_cls(self) -> Type[Operator]:
         return Conv2dTransposeOp
 

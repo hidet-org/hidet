@@ -136,7 +136,7 @@ def compile_source(src_path: str, out_lib_path: str, keep_ptx=False) -> None:
 
                 lines = output.split('\n')
                 warning_lines = [line for line in lines if 'warning' in line]
-                warning_lines = warning_lines[:len(warning_lines) // 2]  # nvcc would print the same warning twice
+                warning_lines = warning_lines[: len(warning_lines) // 2]  # nvcc would print the same warning twice
                 if len(warning_lines) > 0:
                     warnings.warn('Compilation warnings:\n' + '\n'.join(warning_lines))
     except subprocess.CalledProcessError as e:
