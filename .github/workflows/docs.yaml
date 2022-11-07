@@ -62,6 +62,7 @@ jobs:
         uses: up9cloud/action-rsync@master
         env:
           VERBOSE: true
+          ARGS: -avzh
           SOURCE: docs/build/html
           HOST: ${{ secrets.DOCS_HOST }}
           KEY: ${{ secrets.DOCS_DEPLOY_SSH_KEY }}
