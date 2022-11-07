@@ -5,12 +5,10 @@ pytest==7.2
 black==22.10.0
 
 # linter
-pylint==2.15.5
+pylint==2.13.9
 
 # for models to test
---extra-index-url https://download.pytorch.org/whl/cu116
 torch
---extra-index-url https://download.pytorch.org/whl/cu116
 torchvision
 transformers
 

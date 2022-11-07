@@ -38,7 +38,7 @@ def optimize(graph: FlowGraph) -> FlowGraph:
         pattern_transform_pass(),
         automatic_mix_precision_pass(),
         resolve_variant_pass(),
-        fuse_operator_pass(),
+        # fuse_operator_pass(),
         eliminate_barrier_pass(),
     ]
     ctx = PassContext.current()

@@ -3,7 +3,7 @@ from .conv2d import conv2d, conv2d_winograd, conv2d_gemm
 from .conv2d import conv2d_gemm_image_transform, conv2d_gemm_filter_transform, conv2d_gemm_inverse_transform
 from .conv2d import conv2d_winograd_image_transform, conv2d_winograd_filter_transform, conv2d_winograd_inverse_transform
 
-from .conv2d_transpose import conv2d_transpose
+from .conv2d_transpose import conv2d_transpose, conv2d_transpose_gemm
 
 from .matmul import batch_matmul, matmul
 from .pool import max_pool2d, avg_pool2d
