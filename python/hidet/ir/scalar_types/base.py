@@ -1,3 +1,5 @@
+from __future__ import annotations
+from typing import Any, Dict
 from hidet.ir.expr import Expr, Constant
 
 # just a hint
@@ -24,6 +26,16 @@ class ScalarTypeAttr:
     def is_vector(self) -> bool:
         raise NotImplementedError()
 
+    # constant creation
+    def constant(self, value: Any) -> Constant:
+        raise ValueError()
+
+    def one(self) -> Constant:
+        return self.constant(1)
+
+    def zero(self) -> Constant:
+        return self.constant(0)
+
     # basic arithmetic operations
     def add(self, a: Expr, b: Expr) -> Expr:
         return NotImplemented
@@ -48,16 +60,16 @@ class ScalarTypeAttr:
         return NotImplemented
 
     def lt(self, a: Expr, b: Expr) -> BoolExpr:
-        raise NotImplementedError()
+        return NotImplemented
 
     def le(self, a: Expr, b: Expr) -> BoolExpr:
-        raise NotImplementedError()
+        return NotImplemented
 
     def gt(self, a: Expr, b: Expr) -> BoolExpr:
-        raise NotImplementedError()
+        return NotImplemented
 
     def ge(self, a: Expr, b: Expr) -> BoolExpr:
-        raise NotImplementedError()
+        return NotImplemented
 
     # math functions
 
@@ -81,13 +93,41 @@ class ScalarTypeAttr:
         raise NotImplementedError()
 
     def rsqrt(self, a: Expr) -> Expr:
-        return NotImplemented
+        return self.one() / self.sqrt(a)
 
+    def log(self, a: Expr) -> Expr:
+        raise NotImplementedError()
+
+    def ceil(self, a: Expr) -> Expr:
+        raise NotImplementedError()
+
+    def floor(self, a: Expr) -> Expr:
+        raise NotImplementedError()
+
+    # binary math functions
     def min(self, a: Expr, b: Expr) -> Expr:
         raise NotImplementedError()
 
     def max(self, a: Expr, b: Expr) -> Expr:
         raise NotImplementedError()
 
+    def pow(self, a: Expr, b: Expr) -> Expr:
+        raise NotImplementedError()
+
+    # ternary math functions
     def fma(self, a: Expr, b: Expr, c: Expr) -> Expr:
-        return NotImplemented
+        return a * b + c
+
+
+_registered_types: Dict[str, ScalarTypeAttr] = {}
+
+
+def register_scalar_type(scalar_type: ScalarTypeAttr):
+    name = scalar_type.name()
+    if name in _registered_types:
+        raise ValueError(f'Scalar type {name} has already been registered.')
+    _registered_types[name] = scalar_type
+
+
+def lookup_scalar_type(name: str) -> ScalarTypeAttr:
+    return _registered_types[name]
