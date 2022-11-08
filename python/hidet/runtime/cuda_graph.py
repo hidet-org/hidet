@@ -90,7 +90,7 @@ class CudaGraph:
         self.mem_pool = CudaMemoryPool(block_size=4096, max_reserve_size=10 * 1024**3)
         self.cuda_graph_impl = CudaGraphImpl()
         with self.mem_pool:
-            self.inputs = [dummy_input_like(tensor) for tensor in flow_graph.inputs]
+            self.inputs = [dummy_input_like(tensor).cuda() for tensor in flow_graph.inputs]
             # run twice to avoid any memory allocation during capturing
             self.outputs = flow_graph.forward(*self.inputs)
             self.outputs = flow_graph.forward(*self.inputs)
