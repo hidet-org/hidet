@@ -791,7 +791,7 @@ class StmtRewriter(StmtFunctor):
         loop_var = stmt.loop_var
         extent = self.visit_expr(stmt.extent)
         body = self.visit(stmt.body)
-        if loop_var is stmt.loop_var and body is stmt.body:
+        if loop_var is stmt.loop_var and extent is stmt.extent and body is stmt.body:
             return stmt
         else:
             return ForStmt(loop_var, extent, stmt.unroll, body)

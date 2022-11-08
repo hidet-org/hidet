@@ -124,6 +124,21 @@ class Task(Node):
         self.inverse_map: Dict[TensorNode, InverseMap] = {a: InverseMap.from_obj(b) for a, b in inverse_map.items()}
         self.task_graph: Optional[TaskGraph] = TaskGraph.from_task(self)
 
+    def signature(self) -> str:
+        params = []
+        for tensor in self.inputs:
+            name = tensor.name
+            dtype = tensor.data_type.scalar_type.name
+            shape = tensor.const_shape()
+            params.append('{}={}{}'.format(name, dtype, shape))
+        for name, value in self.attributes.items():
+            params.append('{}={}'.format(name, value))
+        param_doc = ', '.join(params)
+        fuse_doc = ''
+        if len(self.task_graph.nodes) > 1:
+            fuse_doc = ' ({} fused)'.format(len(self.task_graph.nodes) - 1)
+        return ''.join([self.name, '(', param_doc, ')', fuse_doc])
+
     @property
     def parameters(self) -> List[TensorNode]:
         return self.task_graph.input_tensors + self.task_graph.output_tensors
