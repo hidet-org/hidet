@@ -28,6 +28,10 @@ from .arithmetic import (
     abs,
     rightshift,
     leftshift,
+    bitwise_and,
+    bitwise_not,
+    bitwise_or,
+    bitwise_xor,
 )
 from .compare import equal, less_than, greater_than, less_or_equal, greater_or_equal, cond_not, cond_and
 from .reduce import reduce_mean, reduce_min, reduce_max, reduce_sum, reduce_var, argmin, argmax

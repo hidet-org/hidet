@@ -94,5 +94,25 @@ def test_leftshift(a_shape, b_shape):
     check_binary(a_shape, b_shape, np.uint32, np.left_shift, ops.leftshift)
 
 
+@pytest.mark.parametrize("a_shape, b_shape", binary_op_shapes)
+def test_bitwise_and(a_shape, b_shape):
+    check_binary(a_shape, b_shape, np.int32, np.bitwise_and, ops.bitwise_and)
+
+
+@pytest.mark.parametrize("a_shape", unary_op_shapes)
+def test_bitwise_not(a_shape):
+    check_unary(a_shape, np.int32, np.invert, ops.bitwise_not)
+
+
+@pytest.mark.parametrize("a_shape, b_shape", binary_op_shapes)
+def test_bitwise_or(a_shape, b_shape):
+    check_binary(a_shape, b_shape, np.int32, np.bitwise_or, ops.bitwise_or)
+
+
+@pytest.mark.parametrize("a_shape, b_shape", binary_op_shapes)
+def test_bitwise_xor(a_shape, b_shape):
+    check_binary(a_shape, b_shape, np.int32, np.bitwise_xor, ops.bitwise_xor)
+
+
 if __name__ == '__main__':
     pytest.main([__file__])

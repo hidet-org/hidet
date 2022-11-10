@@ -953,6 +953,30 @@ class OnnxBitShift(OnnxOperator):
             return [ops.leftshift(inputs[0], inputs[1])]
 
 
+@register_onnx_operator
+class OnnxBitwiseAnd(OnnxOperator):
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        return [ops.bitwise_and(inputs[0], inputs[1])]
+
+
+@register_onnx_operator
+class OnnxBitwiseNot(OnnxOperator):
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        return [ops.bitwise_not(inputs[0])]
+
+
+@register_onnx_operator
+class OnnxBitwiseOr(OnnxOperator):
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        return [ops.bitwise_or(inputs[0], inputs[1])]
+
+
+@register_onnx_operator
+class OnnxBitwiseXor(OnnxOperator):
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        return [ops.bitwise_xor(inputs[0], inputs[1])]
+
+
 def dispatch(node, op_sets: List[int]) -> OnnxOperator:
     op_type = node.op_type
     if op_type not in dispatch_table:

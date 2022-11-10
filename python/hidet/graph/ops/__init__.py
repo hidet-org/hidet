@@ -26,6 +26,10 @@ from .definitions.arithmetic import (
     abs,
     rightshift,
     leftshift,
+    bitwise_and,
+    bitwise_not,
+    bitwise_or,
+    bitwise_xor,
 )
 from .definitions.arithmetic import square, max, min, reciprocal, exp, log
 from .definitions.compare import equal, less_than, greater_than, less_or_equal, greater_or_equal, cond_not, cond_and

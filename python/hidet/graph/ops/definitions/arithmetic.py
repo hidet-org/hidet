@@ -287,6 +287,26 @@ class LeftShiftOp(BinaryElementwiseOp):
         super().__init__(x, y, op=lambda a, b: expr.LeftShift(a, b), name='leftshift')
 
 
+class BitwiseAndOp(BinaryElementwiseOp):
+    def __init__(self, x: Tensor, y: Tensor):
+        super().__init__(x, y, op=lambda a, b: a & b, name='bitwise_and')
+
+
+class BitwiseNotOp(UnaryElementwiseOp):
+    def __init__(self, x: Tensor):
+        super().__init__(x, op=lambda a: expr.BitwiseNot(a), name='bitwise_not')
+
+
+class BitwiseOrOp(BinaryElementwiseOp):
+    def __init__(self, x: Tensor, y: Tensor):
+        super().__init__(x, y, op=lambda a, b: a | b, name='bitwise_or')
+
+
+class BitwiseXorOp(BinaryElementwiseOp):
+    def __init__(self, x: Tensor, y: Tensor):
+        super().__init__(x, y, op=lambda a, b: a ^ b, name='bitwise_xor')
+
+
 PythonScalar = Union[float, int]
 
 
@@ -433,3 +453,19 @@ def rightshift(x: Tensor, y: Tensor) -> Tensor:
 
 def leftshift(x: Tensor, y: Tensor) -> Tensor:
     return LeftShiftOp(x, y).get_output(0)
+
+
+def bitwise_and(x: Tensor, y: Tensor) -> Tensor:
+    return BitwiseAndOp(x, y).get_output(0)
+
+
+def bitwise_not(x: Tensor) -> Tensor:
+    return BitwiseNotOp(x).get_output(0)
+
+
+def bitwise_or(x: Tensor, y: Tensor) -> Tensor:
+    return BitwiseOrOp(x, y).get_output(0)
+
+
+def bitwise_xor(x: Tensor, y: Tensor) -> Tensor:
+    return BitwiseXorOp(x, y).get_output(0)
