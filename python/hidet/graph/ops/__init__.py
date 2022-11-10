@@ -30,6 +30,7 @@ from .definitions.arithmetic import (
     bitwise_not,
     bitwise_or,
     bitwise_xor,
+    ceil,
 )
 from .definitions.arithmetic import square, max, min, reciprocal, exp, log
 from .definitions.compare import equal, less_than, greater_than, less_or_equal, greater_or_equal, cond_not, cond_and

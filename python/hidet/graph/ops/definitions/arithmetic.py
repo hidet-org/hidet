@@ -307,6 +307,11 @@ class BitwiseXorOp(BinaryElementwiseOp):
         super().__init__(x, y, op=lambda a, b: a ^ b, name='bitwise_xor')
 
 
+class CeilOp(UnaryElementwiseOp):
+    def __init__(self, x: Tensor):
+        super().__init__(x, op=lambda a: primitives.ceil(a), name='ceil')
+
+
 PythonScalar = Union[float, int]
 
 
@@ -469,3 +474,7 @@ def bitwise_or(x: Tensor, y: Tensor) -> Tensor:
 
 def bitwise_xor(x: Tensor, y: Tensor) -> Tensor:
     return BitwiseXorOp(x, y).get_output(0)
+
+
+def ceil(x: Tensor) -> Tensor:
+    return CeilOp(x).get_output(0)
