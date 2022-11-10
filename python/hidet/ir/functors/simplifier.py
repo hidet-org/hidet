@@ -1,6 +1,22 @@
 from typing import Union
 import operator
-from hidet.ir.expr import Expr, BinaryOp, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, LessEqual, Equal, Constant
+from hidet.ir.expr import (
+    Expr,
+    BinaryOp,
+    Add,
+    Sub,
+    Multiply,
+    Div,
+    Mod,
+    FloorDiv,
+    LessThan,
+    LessEqual,
+    Equal,
+    Constant,
+    BitwiseAnd,
+    BitwiseOr,
+    BitwiseXor,
+)
 from hidet.ir.expr import And, Or, Not, is_one, is_zero, is_true, is_false, convert
 from hidet.ir.stmt import Stmt, IfStmt, SeqStmt, ForStmt
 from hidet.ir.functors import StmtExprRewriter, rewrite
@@ -54,6 +70,12 @@ class Simplifier(StmtExprRewriter):
                 return b
             if is_false(b):
                 return a
+        elif isinstance(e, BitwiseAnd):
+            pass
+        elif isinstance(e, BitwiseOr):
+            pass
+        elif isinstance(e, BitwiseXor):
+            pass
         else:
             raise ValueError()
 
