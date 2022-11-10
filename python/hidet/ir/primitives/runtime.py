@@ -1,8 +1,9 @@
 from typing import Union
 
 from hidet.ir.expr import Expr
-from hidet.ir.type import FuncType, int64, boolean, void_p
+from hidet.ir.type import FuncType, void_p
 from hidet.ir.primitives.func import register_primitive_function, call_primitive_func
+from hidet.ir.dtypes import int64, boolean
 from hidet.utils import initialize
 
 

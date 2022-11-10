@@ -36,5 +36,5 @@ from .functors import infer_type
 
 from .utils import index_serialize, index_deserialize
 
-from .data_types import float32, tfloat32, bfloat16, float16, int64, int32, int16, int8, uint64, uint32, uint16, uint8
-from .data_types import boolean
+from .dtypes import float32, tfloat32, bfloat16, float16, int64, int32, int16, int8, uint64, uint32, uint16, uint8
+from .dtypes import boolean

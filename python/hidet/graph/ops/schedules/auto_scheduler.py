@@ -1,6 +1,6 @@
 from typing import Union, List, Dict, Sequence, Tuple, Set
 
-from hidet.ir.type import uint8, int32, TensorPointerType, void_pointer
+from hidet.ir.type import TensorPointerType, void_pointer
 from hidet.ir.expr import TensorElement, Expr, Var, scalar_var, convert, cast
 from hidet.ir.stmt import Stmt, AssignStmt, ForStmt, DeclareStmt, BufferStoreStmt
 from hidet.ir.task import Task
@@ -9,6 +9,7 @@ from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.ir.functors import ExprRewriter, ExprVisitor, collect, rewrite, infer_type, simplify_to_int
 from hidet.ir.compute import ScalarNode, TensorNode, GridCompute, ReduceCompute, ArgReduceCompute
 from hidet.ir.primitives.runtime import request_cuda_workspace, request_cpu_workspace
+from hidet.ir.dtypes import uint8, int32
 from hidet.utils import prod, DirectedGraph
 from hidet.utils.namer import Namer
 

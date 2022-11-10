@@ -162,19 +162,21 @@ class FuncType(TypeNode):
         return FuncType([param.type for param in func.params], func.ret_type)
 
 
-def tensor_type(dtype, shape: Optional[Sequence[Union[int, Expr]]] = None, layout: Optional['DataLayout'] = None):
+def tensor_type(dtype, shape=None, layout=None):
     """
-    Construct a tensor type. Shape and layout must be given at least one.
+    Construct a tensor type.
+
+    Shape and layout must be given at least one.
 
     Parameters
     ----------
     dtype: str or DataType
         The scalar type of this tensor.
 
-    shape: Optional[List[Union[int, Expr]]]
+    shape: Optional[Sequence[Union[int, Expr]]]
         The shape of the tensor. If not given, the shape in layout will be used.
 
-    layout: Optional[DataLayout]
+    layout: Optional[hidet.ir.layout.DataLayout]
         The layout of the tensor. If not given, the row major layout of given shape will
         be used.
 
@@ -219,7 +221,7 @@ def void_pointer():
 
 
 def data_type(name: str) -> DataType:
-    from hidet.ir.data_types import name2dtype, sname2dtype
+    from hidet.ir.dtypes import name2dtype, sname2dtype
 
     if name in name2dtype:
         return name2dtype[name]
