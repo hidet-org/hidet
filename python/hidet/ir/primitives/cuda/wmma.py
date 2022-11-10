@@ -11,7 +11,7 @@ from hidet.ir.expr import Var
 from hidet.ir.primitives.cuda.funcs import call_cuda
 from hidet.ir.primitives.func import register_primitive_function
 from hidet.ir.stmt import AsmStmt
-from hidet.ir.type import ScalarType, PointerType
+from hidet.ir.type import DataType, PointerType, data_type
 from hidet.utils import initialize
 
 dtype_short2long = {'f16': 'float16', 'bf16': 'bfloat16', 'tf32': 'tfloat32', 'f32': 'float32'}
@@ -94,12 +94,12 @@ def register_wmma_load_instructions():
             matrix=matrix, layout=layout, shape='m{}n{}k{}'.format(*shape), dtype=short_dtype
         )
         func_name = 'cuda_' + inst_name.replace('.', '_')
-        dtype: ScalarType = ScalarType(dtype_short2long[short_dtype])
+        dtype: DataType = data_type(dtype_short2long[short_dtype])
         with FunctionBuilder(name=func_name, kind='cuda_device') as fb:
             # parameters: dst, src, stride
-            dst = Var('dst', PointerType(ScalarType('uint32')))
+            dst = Var('dst', PointerType(data_type('uint32')))
             src = Var('src', PointerType(dtype))
-            stride = Var('stride', ScalarType('int32'))
+            stride = Var('stride', data_type('int32'))
             fb.extend_params([dst, src, stride])
 
             # body
@@ -150,7 +150,7 @@ def register_wmma_mma_instructions():
                 )
             )
         func_name = 'cuda_' + inst_name.replace('.', '_')
-        uint32_dtype = ScalarType('uint32')
+        uint32_dtype = data_type('uint32')
         with FunctionBuilder(name=func_name, kind='cuda_device') as fb:
             # parameters: a, b, c
             a = Var('a', PointerType(uint32_dtype))
@@ -192,12 +192,12 @@ def register_wmma_store_instructions():
             layout=layout, shape='m{}n{}k{}'.format(*shape), dtype=dtype
         )
         func_name = 'cuda_' + inst_name.replace('.', '_')
-        dtype = ScalarType(dtype_short2long[dtype])
+        dtype = data_type(dtype_short2long[dtype])
         with FunctionBuilder(name=func_name, kind='cuda_device') as fb:
             # parameters: dst, src
             dst = Var('dst', PointerType(dtype))
-            src = Var('src', PointerType(ScalarType('uint32')))
-            stride = Var('stride', ScalarType('int32'))
+            src = Var('src', PointerType(data_type('uint32')))
+            stride = Var('stride', data_type('int32'))
             fb.extend_params([dst, src, stride])
 
             # body

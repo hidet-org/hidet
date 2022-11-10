@@ -62,9 +62,9 @@ class Operator:
     def imperative_run(self, inputs: List[Tensor]) -> List[Tensor]:
         self.build_task_func()
         assert len(inputs) + len(self.task.outputs) == len(self.task.parameters)
-        output_types = [output.data_type for output in self.task.parameters[-len(self.task.outputs) :]]
+        output_types = [output.ttype for output in self.task.parameters[-len(self.task.outputs) :]]
         outputs = [
-            empty(shape=type.const_shape(), dtype=type.scalar_type.name, device=self.device, layout=type.layout)
+            empty(shape=type.const_shape(), dtype=type.dtype.name, device=self.device, layout=type.layout)
             for type in output_types
         ]
         self.pure_run(inputs, outputs)
@@ -72,13 +72,13 @@ class Operator:
 
     def lazy_run(self) -> List[Tensor]:
         output_nodes = self.task.parameters[-len(self.task.outputs) :]
-        output_types = [output_node.data_type for output_node in output_nodes]
+        output_types = [output_node.ttype for output_node in output_nodes]
         outputs = []
         for i, output_type in enumerate(output_types):
             outputs.append(
                 Tensor(
                     shape=output_type.const_shape(),
-                    dtype=output_type.scalar_type.name,
+                    dtype=output_type.dtype.name,
                     device=self.device,
                     storage=None,
                     layout=output_type.layout,
@@ -134,9 +134,9 @@ class Operator:
         return dummy_inputs
 
     def dummy_outputs(self) -> List[Tensor]:
-        output_types = [output.data_type for output in self.task.parameters[-len(self.task.outputs) :]]
+        output_types = [output.ttype for output in self.task.parameters[-len(self.task.outputs) :]]
         dummy_outputs = [
-            empty(shape=type.const_shape(), dtype=type.scalar_type.name, device='cuda', layout=type.layout)
+            empty(shape=type.const_shape(), dtype=type.dtype.name, device='cuda', layout=type.layout)
             for type in output_types
         ]
         return dummy_outputs

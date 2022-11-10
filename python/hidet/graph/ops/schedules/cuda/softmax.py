@@ -26,7 +26,7 @@ def softmax_cuda_schedule(task: SoftmaxTask) -> IRModule:
     outer_extent = (reduce_extent + warp_size - 1) // warp_size
     block_layout = TaskMapping.full_layout([outer_extent]) * TaskMapping.row_major([warp_size])
 
-    x_dtype = task.inputs[0].data_type.scalar_type
+    x_dtype = task.inputs[0].ttype.dtype
 
     with FunctionBuilder(
         name=task.name + '_grid',

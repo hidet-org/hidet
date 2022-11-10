@@ -1,7 +1,7 @@
 from hidet.ir.functors import StmtExprRewriter, TypeInfer
 from hidet.ir.stmt import Stmt, AssignStmt, BufferStoreStmt
 from hidet.ir.expr import Expr, Cast, Add, Sub, Multiply, Div, BinaryOp, cast
-from hidet.ir.type import ScalarType, TypeNode, TensorType, TensorPointerType, PointerType, ReferenceType, VoidType
+from hidet.ir.type import DataType, TypeNode, TensorType, TensorPointerType, PointerType, ReferenceType, VoidType
 from .base import FunctionBodyPass, Pass
 
 
@@ -15,7 +15,7 @@ class TypeNotMatch(Exception):
 
 class TypeChecker:
     def visit(self, a: TypeNode, b: TypeNode):
-        if isinstance(a, ScalarType):
+        if isinstance(a, DataType):
             return self.visit_ScalarType(a, b)
         elif isinstance(a, TensorType):
             return self.visit_TensorType(a, b)
@@ -35,15 +35,15 @@ class TypeChecker:
         if not cond:
             raise TypeNotMatch(a, b, msg)
 
-    def visit_ScalarType(self, a: ScalarType, b: TypeNode):
-        self.check(a, b, isinstance(b, ScalarType))
-        assert isinstance(b, ScalarType)
+    def visit_ScalarType(self, a: DataType, b: TypeNode):
+        self.check(a, b, isinstance(b, DataType))
+        assert isinstance(b, DataType)
         self.check(a, b, a.name == b.name)
 
     def visit_TensorType(self, a: TensorType, b: TypeNode):
         self.check(a, b, isinstance(b, TensorType))
         assert isinstance(b, TensorType)
-        self.visit(a.scalar_type, b.scalar_type)
+        self.visit(a.dtype, b.dtype)
         # todo: check data layout and shape
 
     def visit_PointerType(self, a: PointerType, b: TypeNode):
@@ -80,7 +80,7 @@ class AddExplicitCastRewriter(StmtExprRewriter):
 
     @staticmethod
     def convert(source_type: TypeNode, target_type: TypeNode, source_value: Expr) -> Expr:
-        if isinstance(source_type, ScalarType) and isinstance(target_type, ScalarType):
+        if isinstance(source_type, DataType) and isinstance(target_type, DataType):
             # because there is no implicit conversion function between bfloat16 and float16
             # in the underlying cuda c library, we use 'float32' as a bridge type
             has_float16 = 'float16' in [source_type.name, target_type.name]
@@ -94,14 +94,18 @@ class AddExplicitCastRewriter(StmtExprRewriter):
 
     def visit_Binary(self, e: BinaryOp):
         if isinstance(e, (Add, Sub, Multiply, Div)):
+            from hidet.ir.utils.type_utils import numeric_promotation
+
             a, b = self(e.a), self(e.b)
-            a_dtype: ScalarType = self.type_infer(a)
-            b_dtype: ScalarType = self.type_infer(b)
-            op = e.__class__
-            if a_dtype > b_dtype:
-                return op(a, cast(b, a_dtype))
-            elif a_dtype < b_dtype:
-                return op(cast(a, b_dtype), b)
+            a_dtype: DataType = self.type_infer(a)
+            b_dtype: DataType = self.type_infer(b)
+            if a_dtype.name != b_dtype.name:
+                op = e.__class__
+                c_dtype = numeric_promotation(a_dtype, b_dtype)
+                if a_dtype.name == c_dtype.name:
+                    return op(a, cast(b, a_dtype))
+                else:
+                    return op(cast(a, b_dtype), b)
             else:
                 return StmtExprRewriter.visit_Binary(self, e)
         else:
@@ -127,9 +131,9 @@ class AddExplicitCastRewriter(StmtExprRewriter):
         source_type = self.type_infer(value)
         buffer_type = self.type_infer(buf)
         if isinstance(buffer_type, TensorType):
-            target_type = buffer_type.scalar_type
+            target_type = buffer_type.dtype
         elif isinstance(buffer_type, TensorPointerType):
-            target_type = buffer_type.tensor_type.scalar_type
+            target_type = buffer_type.tensor_type.dtype
         elif isinstance(buffer_type, PointerType):
             target_type = buffer_type.base_type
         else:

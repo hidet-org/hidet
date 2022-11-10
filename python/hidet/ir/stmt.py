@@ -1,7 +1,7 @@
 from typing import Sequence, Tuple, Any, List, Union, Optional
 import enum
 from hidet.ir.node import Node
-from hidet.ir.type import ScalarType, PointerType, TensorPointerType, ReferenceType
+from hidet.ir.type import DataType, PointerType, TensorPointerType, ReferenceType
 from hidet.ir.expr import Var, Expr, convert, Constant
 from hidet.ir.compute import TensorNode
 from hidet.ir.mapping import TaskMapping
@@ -189,7 +189,7 @@ def asm(
         if isinstance(expr_type, ReferenceType):
             expr_type = expr_type.base_type
 
-        if isinstance(expr_type, ScalarType):
+        if isinstance(expr_type, DataType):
             if isinstance(expr, Constant):
                 return 'n'
             else:

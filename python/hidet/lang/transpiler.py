@@ -405,10 +405,10 @@ class PythonToHidetTranslator(PythonAstFunctor):
                         if isinstance(arg_type, ir.TensorType):
                             # we automatically change the tensor type of argument to a tensor pointer type.
                             arg_type = ir.TensorPointerType(
-                                dtype=arg_type.scalar_type, shape=arg_type.shape, layout=arg_type.layout
+                                dtype=arg_type.dtype, shape=arg_type.shape, layout=arg_type.layout
                             )
                     elif arg_type in [int, float]:
-                        type_dict = {int: ir.scalar_type('int32'), float: ir.scalar_type('float32')}
+                        type_dict = {int: ir.data_type('int32'), float: ir.data_type('float32')}
                         arg_type = type_dict[arg_type]
                     elif isinstance(arg_type, str):
                         raise HidetProgramError(
@@ -657,7 +657,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
         loop_vars: list[Var] = []
         for target in iter_targets:
             assert isinstance(target, Name)
-            loop_vars.append(Var(target.id, type=ir.scalar_type('int32')))
+            loop_vars.append(Var(target.id, type=ir.data_type('int32')))
 
         def visit_body() -> ir.Stmt:
             with self.scope() as for_scope:

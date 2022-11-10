@@ -1,6 +1,5 @@
 from typing import List, Union
-import builtins
-from hidet.ir.type import ScalarType
+from hidet.ir.type import DataType
 from hidet.ir.expr import Expr, Call
 from hidet.ir.stmt import BlackBoxStmt
 from hidet.utils import initialize
@@ -90,8 +89,13 @@ def printf(format_string, *args):
     return BlackBoxStmt(template_string, *args)
 
 
-def type_infer_func(arg_types: List[ScalarType]) -> ScalarType:
-    return builtins.max(arg_types)
+def type_infer_func(arg_types: List[DataType]) -> DataType:
+    from hidet.ir.utils.type_utils import numeric_promotation
+
+    dtype = arg_types[0]
+    for arg_type in arg_types[1:]:
+        dtype = numeric_promotation(dtype, arg_type)
+    return dtype
 
 
 @initialize()

@@ -1,5 +1,5 @@
 from hidet.ffi import ArgType
-from hidet.ir.type import ScalarType, TensorType, VoidType, PointerType, TensorPointerType
+from hidet.ir.type import DataType, TensorType, VoidType, PointerType, TensorPointerType, data_type
 from hidet.ir.expr import Var, Call, Equal, Cast, Dereference
 from hidet.ir.stmt import AssertStmt
 from hidet.ir.func import IRModule, Function
@@ -37,8 +37,8 @@ class GeneratePackedFuncPass(Pass):
         packed_name = func.name[:-5]
         with FunctionBuilder(name=packed_name, kind='packed_func', attrs={'packed_func': func_global_var}) as fb:
             # params
-            p_num_args = Var('num_args', ScalarType('int32'))
-            p_arg_types = Var('arg_types', PointerType(ScalarType('int32')))
+            p_num_args = Var('num_args', data_type('int32'))
+            p_arg_types = Var('arg_types', PointerType(data_type('int32')))
             p_args = Var('args', PointerType(PointerType(VoidType())))
             fb.extend_params([p_num_args, p_arg_types, p_args])
 
@@ -48,7 +48,7 @@ class GeneratePackedFuncPass(Pass):
             func_args = []
             for idx, param in enumerate(func.params):
                 assert isinstance(param, Var)
-                if isinstance(param.type, ScalarType):
+                if isinstance(param.type, DataType):
                     if param.type.name == 'int32':
                         code: ArgType = ArgType.INT32
                     elif param.type.name == 'float32':
@@ -59,9 +59,9 @@ class GeneratePackedFuncPass(Pass):
                 elif isinstance(param.type, (TensorPointerType, TensorType)):
                     code: ArgType = ArgType.POINTER
                     if isinstance(param.type, TensorType):
-                        dtype = param.type.scalar_type
+                        dtype = param.type.dtype
                     else:
-                        dtype = param.type.tensor_type.scalar_type
+                        dtype = param.type.tensor_type.dtype
                     func_args.append(Cast(p_args[idx], PointerType(dtype)))
                 elif isinstance(param.type, PointerType):
                     code: ArgType = ArgType.POINTER

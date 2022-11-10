@@ -1,7 +1,7 @@
 from typing import List
 
 import hidet.ir.primitives.base.generic
-from hidet.ir.type import ScalarType
+from hidet.ir.type import DataType
 from hidet.ir.stmt import Stmt
 from hidet.ir.expr import Call, Expr, BinaryOp, cast
 from hidet.ir.functors import StmtExprRewriter, infer_type, TypeInfer
@@ -10,11 +10,11 @@ from hidet.transforms import FunctionBodyPass
 from hidet.utils.py import green
 
 
-def resolve_dtype(arg_dtypes: List[ScalarType]) -> ScalarType:
+def resolve_dtype(arg_dtypes: List[DataType]) -> DataType:
     return hidet.ir.primitives.base.generic.type_infer_func(arg_dtypes)
 
 
-def cast_args(args: List[Expr], arg_dtypes: List[ScalarType], target_dtype: ScalarType) -> List[Expr]:
+def cast_args(args: List[Expr], arg_dtypes: List[DataType], target_dtype: DataType) -> List[Expr]:
     casted_args = []
     for arg, arg_dtype in zip(args, arg_dtypes):
         if arg_dtype.name != target_dtype.name:
@@ -53,7 +53,7 @@ class ResolveGenericPrimitiveFuncRewriter(StmtExprRewriter):
         rhs = self.visit(e.b)
         lhs_dtype = self.type_infer(lhs)
         rhs_dtype = self.type_infer(rhs)
-        if isinstance(lhs_dtype, ScalarType) and isinstance(rhs_dtype, ScalarType) and lhs_dtype.name != rhs_dtype.name:
+        if isinstance(lhs_dtype, DataType) and isinstance(rhs_dtype, DataType) and lhs_dtype.name != rhs_dtype.name:
             dtype = resolve_dtype([lhs_dtype, rhs_dtype])
             lhs, rhs = cast_args([lhs, rhs], [lhs_dtype, rhs_dtype], dtype)
             if lhs is e.a and rhs is e.b:

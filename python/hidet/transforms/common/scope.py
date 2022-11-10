@@ -1,6 +1,6 @@
 from typing import List, Dict, Optional, ContextManager
 
-from hidet.ir.type import ScalarType, FuncType
+from hidet.ir.type import FuncType, data_type
 from hidet.ir.expr import Expr, Var, BitwiseAnd, LeftShift, BitwiseOr
 from hidet.ir.functors import collect
 from hidet.ir.stmt import LetStmt, ForStmt
@@ -52,7 +52,7 @@ class Scope:
 
     def define_predicate(self, predicate: Expr) -> Expr:
         if len(self.defined_predicates) == 0 or len(self.defined_predicates[-1]) == 32:
-            var = Var('p', type=ScalarType('uint32'))
+            var = Var('p', type=data_type('uint32'))
             self.defined_predicates.append([])
             self.predicate_vars.append(var)
             self.stack.var2scope[var] = self

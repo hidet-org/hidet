@@ -9,7 +9,7 @@ from hidet.ir.func import IRModule
 from hidet.ir.primitives.cuda import thread_idx
 from hidet.ir.primitives.cuda.mma import MmaConfig, mma_sync, mma_configs
 from hidet.ir.stmt import BufferStoreStmt, DeclareStmt, DeclareScope
-from hidet.ir.type import ScalarType, TensorPointerType, FuncType
+from hidet.ir.type import TensorPointerType, FuncType, data_type
 from hidet.transforms.tools import fuse_and_pack
 
 
@@ -75,9 +75,9 @@ def test_mma(config: MmaConfig):
         func_type=FuncType.from_func(ir_module.lookup('matmul_mma_grid')),
     )
     m, n, k = config.m, config.n, config.k
-    a = hidet.randint(3, shape=[1, m, k]).to(ScalarType(config.input_dtype).name).cuda()
-    b = hidet.randint(3, shape=[1, k, n]).to(ScalarType(config.input_dtype).name).cuda()
-    c = hidet.empty([1, m, n], dtype=ScalarType(config.output_dtype).name)
+    a = hidet.randint(3, shape=[1, m, k]).to(data_type(config.input_dtype).name).cuda()
+    b = hidet.randint(3, shape=[1, k, n]).to(data_type(config.input_dtype).name).cuda()
+    c = hidet.empty([1, m, n], dtype=data_type(config.output_dtype).name)
     func(a, b, c)
     c_desire = hidet.ops.batch_matmul(a, b)
     np.testing.assert_allclose(actual=c.numpy(), desired=c_desire.numpy())

@@ -40,7 +40,7 @@ class Conv2dWinogradImageTransformTask(Task):
         )
         BH = winograd_transform_matrices(mx, rx)[1]
         BW = winograd_transform_matrices(my, ry)[1]
-        dtype = x.data_type.scalar_type
+        dtype = x.ttype.dtype
         y = compute(
             name='y',
             shape=[alpha_x, alpha_y, c, p],
@@ -61,7 +61,7 @@ class Conv2dWinogradFilterTransformTask(Task):
         alpha_x, alpha_y = mx + rx - 1, my + ry - 1
         GH = winograd_transform_matrices(mx, rx)[0]
         GW = winograd_transform_matrices(my, ry)[0]
-        dtype = w.data_type.scalar_type
+        dtype = w.ttype.dtype
         y = compute(
             name='y',
             shape=[alpha_x, alpha_y, oc, c],
@@ -85,7 +85,7 @@ class Conv2dWinogradInverseTransformTask(Task):
         nh, nw = (oh + mx - 1) // mx, (ow + my - 1) // my  # number of tiles on each image dimension
         AH = winograd_transform_matrices(mx, rx)[2]
         AW = winograd_transform_matrices(my, ry)[2]
-        dtype = y.data_type.scalar_type
+        dtype = y.ttype.dtype
         inverse = compute(
             name='inverse',
             shape=[mx, my, oc, p],

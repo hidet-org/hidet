@@ -5,7 +5,7 @@ from hidet.ir.expr import NotEqual, Equal, IfThenElse, And, Or, Not, BitwiseAnd,
 from hidet.ir.expr import LeftShift, RightShift, TensorElement, Cast, Dereference, Address, Reference, Call, Let
 from hidet.ir.expr import TensorSlice
 from hidet.ir.functors import ExprFunctor, TypeFunctor, NodeFunctor
-from hidet.ir.type import TypeNode, ReferenceType, TensorPointerType, VoidType, PointerType, ScalarType, TensorType
+from hidet.ir.type import TypeNode, ReferenceType, TensorPointerType, VoidType, PointerType, DataType, TensorType
 from hidet.ir.utils.hash_sum import HashSum
 
 
@@ -38,7 +38,7 @@ class ExprHash(ExprFunctor, TypeFunctor):
         return HashSum(e) + e.class_index()
 
     def visit_Constant(self, e: Constant):
-        return HashSum(e.value) + self(e.data_type) + e.class_index()
+        return HashSum(e.value) + self(e.type) + e.class_index()
 
     def visit_Add(self, e: Add):
         return (self(e.a) & self(e.b)) + e.class_index()
@@ -124,11 +124,11 @@ class ExprHash(ExprFunctor, TypeFunctor):
     def visit_Let(self, e: Let):
         return self(e.var) + self(e.value) + self(e.body) + e.class_index()
 
-    def visit_ScalarType(self, t: ScalarType):
+    def visit_ScalarType(self, t: DataType):
         return self(t.name) + t.class_index()
 
     def visit_TensorType(self, t: TensorType):
-        return self(t.scalar_type) + self(t.shape) + t.class_index()
+        return self(t.dtype) + self(t.shape) + t.class_index()
 
     def visit_PointerType(self, t: PointerType):
         return self(t.base_type) + t.class_index()

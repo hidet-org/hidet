@@ -17,7 +17,7 @@ class CudaAutoScheduler(AutoScheduler):
 
         used_tensors: List[TensorNode] = collect(gc.value, TensorNode, stop_when_found=True)
         param_tensors: List[TensorNode] = used_tensors + [node]
-        params: List[Var] = [Var(tensor.name, tensor.data_type) for tensor in param_tensors]
+        params: List[Var] = [Var(tensor.name, tensor.ttype) for tensor in param_tensors]
 
         block_dim = 500
         grid_dim: int = simplify_to_int((prod(gc.shape) + block_dim - 1) // block_dim)

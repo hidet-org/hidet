@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Union, Sequence, Tuple, Optional, List
 
 from hidet.ir.node import Node
-from hidet.ir.type import ScalarType, TensorType, tensor_type
+from hidet.ir.type import DataType, TensorType, tensor_type, data_type
 from hidet.ir.expr import Expr, convert, Var, var, And, if_then_else
 from hidet.ir.layout import DataLayout
 from .reduce_operations import ReduceOperation
@@ -14,9 +14,9 @@ class ComputeNode(Expr):
 
 
 class ScalarNode(ComputeNode):
-    def __init__(self, name, data_type, reduce_compute=None):
+    def __init__(self, name, dtype, reduce_compute=None):
         super().__init__(name)
-        self.data_type: ScalarType = data_type
+        self.dtype: DataType = dtype
         self.scalar_compute: Optional[ScalarCompute] = reduce_compute
 
     def is_input(self) -> bool:
@@ -32,9 +32,9 @@ class TensorNode(ComputeNode):
     :py:func:`~hidet.ir.compute.compute`.
     """
 
-    def __init__(self, name, data_type, tensor_compute=None):
+    def __init__(self, name, ttype, tensor_compute=None):
         super().__init__(name)
-        self.data_type: TensorType = data_type
+        self.ttype: TensorType = ttype
         self.tensor_compute: Optional[TensorCompute] = tensor_compute
 
     def astext(self):
@@ -48,12 +48,12 @@ class TensorNode(ComputeNode):
         return self.tensor_compute is None
 
     def const_shape(self) -> List[int]:
-        return self.data_type.const_shape()
+        return self.ttype.const_shape()
 
     def protect_read(self, indices, default_value=0.0) -> Expr:
         conds = []
-        assert len(indices) == len(self.data_type.shape)
-        for index, extent in zip(indices, self.data_type.shape):
+        assert len(indices) == len(self.ttype.shape)
+        for index, extent in zip(indices, self.ttype.shape):
             conds.append(0 <= index)
             conds.append(index < extent)
         return if_then_else(And.join(*conds), self[indices], default_value)
@@ -95,7 +95,7 @@ class ReduceCompute(ScalarCompute):
         axes: Sequence[Var],
         value: Expr,
         reduce_operation: ReduceOperation,
-        accumulate_dtype: ScalarType,
+        accumulate_dtype: DataType,
     ):
         self.input_tensors: List[TensorNode] = list(input_tensors)
         self.input_scalars: List[ScalarNode] = list(input_scalars)
@@ -103,7 +103,7 @@ class ReduceCompute(ScalarCompute):
         self.axes: Tuple[Var] = tuple(axes)
         self.value: Expr = value
         self.reduce_operation: ReduceOperation = reduce_operation
-        self.accumulate_dtype: ScalarType = accumulate_dtype
+        self.accumulate_dtype: DataType = accumulate_dtype
 
         assert all(isinstance(v, TensorNode) for v in self.input_tensors)
         assert all(isinstance(v, ScalarNode) for v in self.input_scalars)
@@ -121,7 +121,7 @@ class ArgReduceCompute(ScalarCompute):
         axis: Var,
         value: Expr,
         reduce_operation: ReduceOperation,
-        index_dtype: ScalarType,
+        index_dtype: DataType,
     ):
         self.input_tensors: List[TensorNode] = list(input_tensors)
         self.input_scalars: List[ScalarNode] = list(input_scalars)
@@ -129,7 +129,7 @@ class ArgReduceCompute(ScalarCompute):
         self.axis: Var = axis
         self.value: Expr = value
         self.reduce_operation: ReduceOperation = reduce_operation
-        self.index_dtype: ScalarType = index_dtype
+        self.index_dtype: DataType = index_dtype
 
         assert all(isinstance(v, TensorNode) for v in self.input_tensors)
         assert all(isinstance(v, ScalarNode) for v in self.input_scalars)
@@ -137,9 +137,9 @@ class ArgReduceCompute(ScalarCompute):
 
 def scalar_input(name, dtype):
     if isinstance(dtype, str):
-        dtype = ScalarType(dtype)
+        dtype = data_type(dtype)
     else:
-        assert isinstance(dtype, ScalarType)
+        assert isinstance(dtype, DataType)
     return ScalarNode(name, dtype, reduce_compute=None)
 
 
@@ -151,7 +151,7 @@ def tensor_input(name, dtype, shape: Sequence[Union[Expr, int]], layout: Optiona
     ----------
     name: str
         The name of the input tensor.
-    dtype: str or ScalarType
+    dtype: str or DataType
         The scalar type of the tensor.
     shape: Sequence[Union[Expr, int]]
         The shape of the tensor.
@@ -162,8 +162,8 @@ def tensor_input(name, dtype, shape: Sequence[Union[Expr, int]], layout: Optiona
     ret: TensorNode
         The input tensor node.
     """
-    data_type = tensor_type(dtype, shape, layout)
-    return TensorNode(name, data_type, tensor_compute=None)
+    ttype = tensor_type(dtype, shape, layout)
+    return TensorNode(name, ttype, tensor_compute=None)
 
 
 def reduce(
@@ -195,7 +195,7 @@ def reduce(
     value = simplify(convert(fcompute(*axes)))
     return ScalarNode(
         name=f'acc_{reduce_type}',
-        data_type=infer_type(value),
+        dtype=infer_type(value),
         reduce_compute=ReduceCompute(
             input_tensors=collect(value, TensorNode, stop_when_found=True),
             input_scalars=collect(value, ScalarNode, stop_when_found=True),
@@ -203,7 +203,7 @@ def reduce(
             axes=axes,
             value=value,
             reduce_operation=ReduceOperation.from_name(reduce_type),
-            accumulate_dtype=ScalarType(accumulate_dtype),
+            accumulate_dtype=data_type(accumulate_dtype),
         ),
     )
 
@@ -236,7 +236,7 @@ def compute(name, shape: Sequence[Union[int, Expr]], fcompute, layout=None) -> T
     value = simplify(convert(fcompute(*axes)))
     return TensorNode(
         name=name,
-        data_type=tensor_type(dtype=infer_type(value), shape=shape, layout=layout),
+        ttype=tensor_type(dtype=infer_type(value), shape=shape, layout=layout),
         tensor_compute=GridCompute(
             input_tensors=collect(value, TensorNode, stop_when_found=True),
             input_scalars=collect(value, ScalarNode, stop_when_found=True),
@@ -274,7 +274,7 @@ def arg_reduce(extent: Union[int, Expr], fcompute, reduce_type: str, index_dtype
     value = simplify(convert(fcompute(axis)))
     return ScalarNode(
         name='arg_{}'.format(reduce_type),
-        data_type=ScalarType(index_dtype),
+        dtype=data_type(index_dtype),
         reduce_compute=ArgReduceCompute(
             input_tensors=collect(value, TensorNode, stop_when_found=True),
             input_scalars=collect(value, ScalarNode, stop_when_found=True),
@@ -282,6 +282,6 @@ def arg_reduce(extent: Union[int, Expr], fcompute, reduce_type: str, index_dtype
             axis=axis,
             value=value,
             reduce_operation=ReduceOperation.from_name(reduce_type),
-            index_dtype=ScalarType(index_dtype),
+            index_dtype=data_type(index_dtype),
         ),
     )

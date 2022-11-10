@@ -12,7 +12,7 @@ from hidet.ir.primitives.cuda.mma import MmaConfig, mma_sync
 from hidet.ir.mapping import row_spatial, row_repeat
 from hidet.ir.layout import row_layout, data_layout
 from hidet.ir.stmt import BufferStoreStmt, IfStmt, Stmt, DeclareStmt, DeclareScope
-from hidet.ir.type import ScalarType
+from hidet.ir.type import DataType, data_type
 from hidet.utils import cuda, prod
 from hidet.graph.ops.definitions.matmul import BatchMatmulTask
 from hidet.graph.ops.schedules.resolve import resolve_ir_modules
@@ -61,8 +61,8 @@ class MatmulMmaSchedule(Schedule):
         self.regs_b_layout = row_layout(2, self.mma_count_n, mma_config.b_elements)
         self.regs_c_layout = row_layout(self.mma_count_m, self.mma_count_n, mma_config.c_elements)
         self.smem_storage_nbytes = max(
-            (self.smem_a_layout.size + self.smem_b_layout.size) * ScalarType(mma_config.input_dtype).nbytes(),
-            self.smem_c_layout.size * ScalarType(mma_config.output_dtype).nbytes(),
+            (self.smem_a_layout.size + self.smem_b_layout.size) * data_type(mma_config.input_dtype).nbytes(),
+            self.smem_c_layout.size * data_type(mma_config.output_dtype).nbytes(),
         )
         self.used_registers = (
             (
@@ -71,8 +71,8 @@ class MatmulMmaSchedule(Schedule):
                 + self.regs_a_ldg_layout.size
                 + self.regs_b_ldg_layout.size
             )
-            * ScalarType(mma_config.input_dtype).nbytes()
-            + self.regs_c_layout.size * ScalarType(mma_config.output_dtype).nbytes()
+            * data_type(mma_config.input_dtype).nbytes()
+            + self.regs_c_layout.size * data_type(mma_config.output_dtype).nbytes()
         ) // 4 + 24
         self.used_registers = (self.used_registers + 7) // 8 * 8
         self.check(self.smem_storage_nbytes <= cuda.max_smem_bytes_per_block())
@@ -80,7 +80,7 @@ class MatmulMmaSchedule(Schedule):
         self.check(self.used_registers * self.threads <= cuda.max_num_regs_per_block())
 
     @staticmethod
-    def resolve_mma_type(a_dtype: ScalarType, b_dtype: ScalarType, c_dtype: ScalarType):
+    def resolve_mma_type(a_dtype: DataType, b_dtype: DataType, c_dtype: DataType):
         dtype_rank = {'float16': 0, 'bfloat16': 1, 'tfloat32': 2, 'float32': 4}
         ab_rank = max(dtype_rank[a_dtype.name], dtype_rank[b_dtype.name])
         if ab_rank <= dtype_rank['float16']:
@@ -103,7 +103,7 @@ class MatmulMmaSchedule(Schedule):
         mma_type = task.attributes['mma']  # like 'wmma_f16_f32' or 'wmma'
         if mma_type == 'mma':
             a, b, c = task.inputs[0], task.inputs[1], task.outputs[0]
-            a_dtype, b_dtype, c_dtype = [t.data_type.scalar_type for t in [a, b, c]]
+            a_dtype, b_dtype, c_dtype = [t.ttype.dtype for t in [a, b, c]]
             mma_type = MatmulMmaSchedule.resolve_mma_type(a_dtype, b_dtype, c_dtype)
 
         assert mma_type.startswith('mma')
@@ -188,9 +188,9 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, sch: MatmulMm
     n_tiles = (n_size + n_tile_size - 1) // n_tile_size
     grid_map = row_spatial(m_tiles, n_tiles)
 
-    a_dtype = ScalarType(sch.mma_config.input_dtype)
-    b_dtype = ScalarType(sch.mma_config.input_dtype)
-    c_dtype = ScalarType(sch.mma_config.output_dtype)
+    a_dtype = data_type(sch.mma_config.input_dtype)
+    b_dtype = data_type(sch.mma_config.input_dtype)
+    c_dtype = data_type(sch.mma_config.output_dtype)
 
     a_zero, b_zero, c_zero = [convert(0.0, dtype) for dtype in [a_dtype, b_dtype, c_dtype]]
 

@@ -4,14 +4,14 @@ from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.ir.expr import Expr, Call, cast
 from hidet.ir.expr import Var
 from hidet.ir.stmt import ReturnStmt
-from hidet.ir.type import ScalarType
+from hidet.ir.type import data_type
 from hidet.ir.primitives.func import register_primitive_function, primitive_func_pool
 
 
 def register_unary_dialect_primitive_function(func_name, generic_func, target_dtype: str, dialect_dtype: str):
-    with FunctionBuilder(func_name, kind='cuda_device', ret_type=ScalarType(target_dtype)) as fb:
+    with FunctionBuilder(func_name, kind='cuda_device', ret_type=data_type(target_dtype)) as fb:
         # params
-        x = Var('x', type=ScalarType(target_dtype))
+        x = Var('x', type=data_type(target_dtype))
         fb.extend_params([x])
         # body
         sb = StmtBuilder()
@@ -21,10 +21,10 @@ def register_unary_dialect_primitive_function(func_name, generic_func, target_dt
 
 
 def register_binary_dialect_primitive_function(func_name, generic_func, target_dtype: str, dialect_dtype: str):
-    with FunctionBuilder(func_name, kind='cuda_device', ret_type=ScalarType(target_dtype)) as fb:
+    with FunctionBuilder(func_name, kind='cuda_device', ret_type=data_type(target_dtype)) as fb:
         # params
-        x = Var('x', type=ScalarType(target_dtype))
-        y = Var('y', type=ScalarType(target_dtype))
+        x = Var('x', type=data_type(target_dtype))
+        y = Var('y', type=data_type(target_dtype))
         fb.extend_params([x, y])
         # body
         sb = StmtBuilder()

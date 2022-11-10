@@ -1,7 +1,7 @@
 from typing import Optional, List
 from hidet.ir.node import Node
 from hidet.ir.func import IRModule, Function
-from hidet.ir.type import ScalarType, TensorType, TypeNode, VoidType, PointerType, ReferenceType, TensorPointerType
+from hidet.ir.type import DataType, TensorType, TypeNode, VoidType, PointerType, ReferenceType, TensorPointerType
 from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div
 from hidet.ir.expr import Sub, Not, Or, And, Let, IfThenElse, TensorSlice, RightShift, LeftShift, BitwiseNot, BitwiseOr
 from hidet.ir.expr import BitwiseAnd, Neg, Cast, NotEqual, BitwiseXor, Reference, Dereference, Address
@@ -220,11 +220,11 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
 
     def visit_Constant(self, e: Constant):
         if e.value is None:
-            return self('Constant(None, type=') + self(e.data_type) + ')'
+            return self('Constant(None, type=') + self(e.type) + ')'
         if e.is_tensor():
-            return 'ConstTensor({}, {})'.format(e.value.shape, e.data_type)
+            return 'ConstTensor({}, {})'.format(e.value.shape, e.type)
         else:
-            dtype = e.data_type.name
+            dtype = e.type.name
             if dtype == 'float32':
                 ret = '{}f'.format(float(e.value))
             elif dtype == 'float16':
@@ -352,11 +352,11 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
             doc += self(s)
         return doc
 
-    def visit_ScalarType(self, t: ScalarType):
+    def visit_ScalarType(self, t: DataType):
         return Text('{}'.format(t.name))
 
     def visit_TensorType(self, t: TensorType):
-        items = [self(t.scalar_type), '[' + self(t.shape) + ']']
+        items = [self(t.dtype), '[' + self(t.shape) + ']']
         if isinstance(t.layout, RowMajorLayout):
             # default layout, do not print
             pass
@@ -395,14 +395,14 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
             if node in exclude_nodes:
                 continue
             if node.tensor_compute is None:
-                doc += NewLine() + self(node) + ': ' + self(node.data_type)
+                doc += NewLine() + self(node) + ': ' + self(node.ttype)
             else:
                 if isinstance(node.tensor_compute, GridCompute):
                     # example
                     # y: float32[10, 10] where y[i, j] = x[i, j] + 1
                     gc = node.tensor_compute
                     doc += NewLine()
-                    doc += self(node) + ': ' + self(node.data_type.scalar_type) + '[' + self(node.data_type.shape) + ']'
+                    doc += self(node) + ': ' + self(node.ttype.dtype) + '[' + self(node.ttype.shape) + ']'
                     doc += Text(' where ') + self(node) + '[' + self(gc.axes) + '] = ' + self(gc.value)
                     # items = [
                     #     '[' + self(gc.shape) + ']',
@@ -420,9 +420,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
             Text('parameters: ')
             + (
                 NewLine()
-                + doc_join(
-                    ['{}: {}'.format(self.namer.get_name(v), self(v.data_type)) for v in e.parameters], NewLine()
-                )
+                + doc_join(['{}: {}'.format(self.namer.get_name(v), self(v.ttype)) for v in e.parameters], NewLine())
             ).indent(),
             Text('inputs: ') + '[' + doc_join([self.namer.get_name(v) for v in e.inputs], ', ') + ']',
             Text('outputs: ') + '[' + doc_join([self.namer.get_name(v) for v in e.outputs], ', ') + ']',

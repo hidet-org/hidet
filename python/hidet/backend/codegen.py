@@ -1,7 +1,7 @@
 from typing import Optional
 import numpy as np
 from hidet.ir.dialects.pattern import AnyExpr
-from hidet.ir.type import ScalarType, PointerType, TensorPointerType, ReferenceType, TensorType, TypeNode, FuncType
+from hidet.ir.type import DataType, PointerType, TensorPointerType, ReferenceType, TensorType, TypeNode, FuncType
 from hidet.ir.type import VoidType
 from hidet.ir.expr import Var, Expr, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, Neg, NotEqual, Equal, And, Or
 from hidet.ir.expr import Not, BitwiseAnd, BitwiseOr, BitwiseXor, BitwiseNot, LeftShift, RightShift, TensorElement
@@ -34,7 +34,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
     def param_declare(self, v: Var):
         v_type = v.type
         name_doc = self(v)
-        if isinstance(v_type, ScalarType):
+        if isinstance(v_type, DataType):
             dtype_doc = self(v_type)
             return dtype_doc + ' ' + name_doc
         elif isinstance(v_type, PointerType):
@@ -49,17 +49,17 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             else:
                 return attr_doc + base_type_doc + ' *' + ' __restrict__ ' + name_doc
         elif isinstance(v_type, TensorPointerType):
-            dtype = v_type.tensor_type.scalar_type
+            dtype = v_type.tensor_type.dtype
             base_type_doc = self(dtype)
             return base_type_doc + ' *' + ' __restrict__ ' + name_doc
         elif isinstance(v_type, ReferenceType):
-            if isinstance(v_type.base_type, ScalarType):
+            if isinstance(v_type.base_type, DataType):
                 base_type_doc = self(v_type.base_type)
                 return base_type_doc + ' &' + name_doc
             else:
                 raise NotImplementedError()
         elif isinstance(v_type, TensorType):
-            dtype = v_type.scalar_type
+            dtype = v_type.dtype
             base_type_doc = self(dtype)
             return base_type_doc + ' *' + ' __restrict__ ' + name_doc
             # dtype_doc = self(v_type.scalar_type)
@@ -73,12 +73,12 @@ class Codegen(StmtExprFunctor, TypeFunctor):
 
     def local_var_declare(self, v: Var):
         v_type = v.type
-        if isinstance(v_type, ScalarType):
+        if isinstance(v_type, DataType):
             dtype_doc = self(v_type)
             name_doc = self(v)
             return dtype_doc + ' ' + name_doc
         elif isinstance(v_type, TensorType):
-            dtype_doc = self(v_type.scalar_type)
+            dtype_doc = self(v_type.dtype)
             name_doc = self(v)
             shape_doc = Doc()
             for s in v_type.shape:
@@ -96,7 +96,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             else:
                 return attr_doc + base_type_doc + ' *' + name_doc
         elif isinstance(v_type, TensorPointerType):
-            dtype_doc = self(v_type.tensor_type.scalar_type)
+            dtype_doc = self(v_type.tensor_type.dtype)
             name_doc = self(v)
             return dtype_doc + ' *' + name_doc
         else:
@@ -373,10 +373,10 @@ class Codegen(StmtExprFunctor, TypeFunctor):
 
     def visit_Constant(self, e: Constant):
         if e.is_scalar():
-            return self.scalar_literal(e.value, e.data_type.name)
+            return self.scalar_literal(e.value, e.type.name)
         else:
-            assert isinstance(e.data_type, TensorType)
-            dtype = e.data_type.scalar_type.name
+            assert isinstance(e.type, TensorType)
+            dtype = e.type.dtype.name
             items = [self.scalar_literal(v, dtype) for v in np.array(e.value).flatten()]
             return '{' + doc_join(items, ', ') + '}'
 
@@ -517,7 +517,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             doc += self(s)
         return doc
 
-    def visit_ScalarType(self, t: ScalarType):
+    def visit_ScalarType(self, t: DataType):
         scalar_type_map = {
             'bool': 'bool',
             'uint8': 'uint8_t',
@@ -533,13 +533,13 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         return Text(scalar_type_map[t.name])
 
     def visit_TensorType(self, t: TensorType):
-        return Text('TensorType(') + self(t.scalar_type) + ', [' + doc_join([self(s) for s in t.shape], ", ") + '])'
+        return Text('TensorType(') + self(t.dtype) + ', [' + doc_join([self(s) for s in t.shape], ", ") + '])'
 
     def visit_PointerType(self, t: PointerType):
         return self(t.base_type) + Text('*')
 
     def visit_TensorPointerType(self, t: TensorPointerType):
-        return self(t.tensor_type.scalar_type) + Text('*')
+        return self(t.tensor_type.dtype) + Text('*')
 
     def visit_ReferenceType(self, t: ReferenceType):
         raise ValueError()

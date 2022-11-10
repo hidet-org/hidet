@@ -18,7 +18,7 @@ class ReshapeTask(Task):
                 'Can not reshape {} to {} because they have different number '
                 'of elements: {} vs {}'.format(x_shape, y_shape, prod(x_shape), prod(y_shape))
             )
-        if not isinstance(x.data_type.layout, RowMajorLayout):
+        if not isinstance(x.ttype.layout, RowMajorLayout):
             raise NotImplementedError(
                 'currently, only support row major layout. Please use '
                 '.contiguous() to transfer the given tensor into row major layout first.'
@@ -254,7 +254,7 @@ class PadTask(Task):
         assert rank * 2 == len(pads)
         out_shape = [a + b + c for a, b, c in zip(pads[:rank], shape, pads[rank:])]
 
-        value = convert(value, dtype=data.data_type.scalar_type.name)
+        value = convert(value, dtype=data.ttype.dtype.name)
 
         def fmap(*indices):
             indices = [idx - beg for idx, beg in zip(indices, pads[:rank])]

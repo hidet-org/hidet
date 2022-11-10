@@ -2,7 +2,7 @@ from typing import List
 from hidet.graph.ir.functors import GraphRewriter
 from hidet.graph.ir.flow_graph import FlowGraph, Operator, Tensor
 from hidet.graph import ops
-from hidet.ir.type import ScalarType
+from hidet.ir.type import data_type
 from hidet.utils import strict_zip, same_list
 from .base import GraphPass
 
@@ -20,13 +20,13 @@ class DefaultTransformStrategy:
 class AutoMixPrecisionRewriter(GraphRewriter):
     def __init__(self, target_dtype: str):
         super().__init__()
-        assert ScalarType(target_dtype).is_float()
+        assert data_type(target_dtype).is_float()
         self.target_dtype = target_dtype
         self.policy = DefaultTransformStrategy()
 
     @staticmethod
     def cast_float(x: Tensor, target_dtype: str) -> Tensor:
-        if ScalarType(x.dtype).is_float():
+        if data_type(x.dtype).is_float():
             return ops.cast(x, target_dtype)
         return x
 
