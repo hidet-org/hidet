@@ -94,14 +94,14 @@ class AddExplicitCastRewriter(StmtExprRewriter):
 
     def visit_Binary(self, e: BinaryOp):
         if isinstance(e, (Add, Sub, Multiply, Div)):
-            from hidet.ir.utils.type_utils import numeric_promotation
+            from hidet.ir.utils.type_utils import numeric_promotion
 
             a, b = self(e.a), self(e.b)
             a_dtype: DataType = self.type_infer(a)
             b_dtype: DataType = self.type_infer(b)
             if a_dtype.name != b_dtype.name:
                 op = e.__class__
-                c_dtype = numeric_promotation(a_dtype, b_dtype)
+                c_dtype = numeric_promotion(a_dtype, b_dtype)
                 if a_dtype.name == c_dtype.name:
                     return op(a, cast(b, a_dtype))
                 else:

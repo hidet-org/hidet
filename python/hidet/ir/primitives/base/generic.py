@@ -90,11 +90,11 @@ def printf(format_string, *args):
 
 
 def type_infer_func(arg_types: List[DataType]) -> DataType:
-    from hidet.ir.utils.type_utils import numeric_promotation
+    from hidet.ir.utils.type_utils import numeric_promotion
 
     dtype = arg_types[0]
     for arg_type in arg_types[1:]:
-        dtype = numeric_promotation(dtype, arg_type)
+        dtype = numeric_promotion(dtype, arg_type)
     return dtype
 
 

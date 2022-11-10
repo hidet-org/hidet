@@ -22,14 +22,14 @@ class TypeInfer(ExprFunctor):
         return self(e.expr)
 
     def visit_Binary(self, e: BinaryOp):
-        from hidet.ir.utils.type_utils import numeric_promotation
+        from hidet.ir.utils.type_utils import numeric_promotion
 
         a_dtype: DataType = self.visit(e.a)
         b_dtype: DataType = self.visit(e.b)
         # if not atype or not btype:
         #     return ScalarType(name=None)
         if isinstance(e, (Add, Sub, Multiply, Div, Mod, FloorDiv)):
-            return numeric_promotation(a_dtype, b_dtype)
+            return numeric_promotion(a_dtype, b_dtype)
         elif isinstance(e, Condition):
             return data_type('bool')
         else:

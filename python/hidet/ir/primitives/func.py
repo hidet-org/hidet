@@ -144,4 +144,10 @@ def register_primitive_function(
 
 def call_primitive_func(func_name, args: List[Expr]) -> Call:
     entry = primitive_func_pool.lookup_by_name(func_name)
+    if entry.func_type.param_types is not None:
+        if len(entry.func_type.param_types) != len(args):
+            raise ValueError(
+                'The number of arguments does not match the number of parameters of function {}, '
+                'got {} and expect {}.'.format(func_name, len(args), len(entry.func_type.param_types))
+            )
     return Call(entry.var, args)

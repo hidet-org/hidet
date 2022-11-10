@@ -86,13 +86,13 @@ def normalize_index(index: Optional[int], dim_size, default) -> int:
 
 
 def resolve_out_dtype(input_dtypes: List[Union[DataType, str]]) -> str:
-    from hidet.ir.utils.type_utils import numeric_promotation
+    from hidet.ir.utils.type_utils import numeric_promotion
 
     if len(input_dtypes) == 0:
         raise ValueError('Expect at least one input dtype to resolve the output dtype.')
     out_dtype = input_dtypes[0]
     for input_dtype in input_dtypes[1:]:
-        out_dtype = numeric_promotation(out_dtype, input_dtype)
+        out_dtype = numeric_promotion(out_dtype, input_dtype)
     return out_dtype.name
 
 
