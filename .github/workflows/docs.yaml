@@ -11,6 +11,9 @@ on:
 
 jobs:
   docs:
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
     runs-on: [self-hosted, Linux, X64, gpu]
     container:
       image: nvidia/cuda:11.8.0-devel-ubuntu20.04
