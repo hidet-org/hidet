@@ -84,5 +84,15 @@ def test_abs(shape):
     check_unary(shape, np.float32, np.absolute, ops.abs)
 
 
+@pytest.mark.parametrize("a_shape, b_shape", binary_op_shapes)
+def test_rightshift(a_shape, b_shape):
+    check_binary(a_shape, b_shape, np.uint32, np.right_shift, ops.rightshift)
+
+
+@pytest.mark.parametrize("a_shape, b_shape", binary_op_shapes)
+def test_leftshift(a_shape, b_shape):
+    check_binary(a_shape, b_shape, np.uint32, np.left_shift, ops.leftshift)
+
+
 if __name__ == '__main__':
     pytest.main([__file__])

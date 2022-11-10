@@ -261,6 +261,7 @@ class Storage:
             'float16': ctypes.c_uint16,
             'int32': ctypes.c_int32,
             'int64': ctypes.c_int64,
+            'uint32': ctypes.c_uint32,
             'bool': ctypes.c_bool,
         }
         dtype2nptype = {'float16': np.float16}

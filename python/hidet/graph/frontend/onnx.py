@@ -943,6 +943,16 @@ class OnnxAnd(OnnxOperator):
         return [ops.cond_and(inputs[0], inputs[1])]
 
 
+@register_onnx_operator
+class OnnxBitShift(OnnxOperator):
+    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+        direction = self.attrs.get('direction', 'RIGHT')
+        if direction == 'RIGHT':
+            return [ops.rightshift(inputs[0], inputs[1])]
+        else:
+            return [ops.leftshift(inputs[0], inputs[1])]
+
+
 def dispatch(node, op_sets: List[int]) -> OnnxOperator:
     op_type = node.op_type
     if op_type not in dispatch_table:

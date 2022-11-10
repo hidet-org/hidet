@@ -277,6 +277,16 @@ class AbsOp(UnaryElementwiseOp):
         super().__init__(x, op=lambda a: if_then_else(a >= 0, a, -a), name='abs')
 
 
+class RightShiftOp(BinaryElementwiseOp):
+    def __init__(self, x: Tensor, y: Tensor):
+        super().__init__(x, y, op=lambda a, b: expr.RightShift(a, b), name='rightshift')
+
+
+class LeftShiftOp(BinaryElementwiseOp):
+    def __init__(self, x: Tensor, y: Tensor):
+        super().__init__(x, y, op=lambda a, b: expr.LeftShift(a, b), name='leftshift')
+
+
 PythonScalar = Union[float, int]
 
 
@@ -415,3 +425,11 @@ def min(a: Tensor, b: Tensor, *others: Tensor) -> Tensor:
 
 def abs(x: Tensor) -> Tensor:
     return AbsOp(x).get_output(0)
+
+
+def rightshift(x: Tensor, y: Tensor) -> Tensor:
+    return RightShiftOp(x, y).get_output(0)
+
+
+def leftshift(x: Tensor, y: Tensor) -> Tensor:
+    return LeftShiftOp(x, y).get_output(0)

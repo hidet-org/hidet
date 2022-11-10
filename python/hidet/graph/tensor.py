@@ -998,6 +998,7 @@ def from_numpy(nparray: np.ndarray) -> Tensor:
         np.dtype(np.float16): 'float16',
         np.dtype(np.bool): 'bool',
         np.dtype(np.uint8): 'uint8',
+        np.dtype(np.uint32): 'uint32',
     }
     if nparray.dtype not in dtype_convert:
         raise NotImplementedError("Do not support convert np.ndarray with data type '{}'.".format(nparray.dtype))
