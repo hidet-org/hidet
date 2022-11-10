@@ -2,13 +2,13 @@ from typing import Union
 
 from hidet.ir.expr import Expr
 from hidet.ir.primitives.func import register_primitive_function, call_primitive_func
-from hidet.ir.type import FuncType, ScalarType
+from hidet.ir.type import FuncType, data_type
 from hidet.utils import initialize
 
 
 @initialize()
 def register_functions():
-    i32 = ScalarType('int32')
+    i32 = data_type('int32')
     register_primitive_function('cuda_atomic_add', func_or_type=FuncType([~i32, i32], i32), codegen_name='atomicAdd')
     register_primitive_function('cuda_atomic_sub', func_or_type=FuncType([~i32, i32], i32), codegen_name='atomicSub')
     register_primitive_function(

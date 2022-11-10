@@ -15,7 +15,7 @@ class CpuAutoScheduler(AutoScheduler):
 
         used_tensors: List[TensorNode] = collect(gc.value, TensorNode, stop_when_found=True)
         param_tensors: List[TensorNode] = used_tensors + [node]
-        params: List[Var] = [Var(tensor.name, tensor.data_type) for tensor in param_tensors]
+        params: List[Var] = [Var(tensor.name, tensor.ttype) for tensor in param_tensors]
 
         with FunctionBuilder(name=f'compute_{node.name}', kind='host_kernel') as fb:
             # set function parameters

@@ -18,7 +18,7 @@ class UnaryElementwiseTask(Task):
             name=name,
             inputs=[x],
             outputs=[y],
-            inverse_map={x: InverseMap.from_lambda(lambda *indices: list(indices), num_args=len(x.data_type.shape))},
+            inverse_map={x: InverseMap.from_lambda(lambda *indices: list(indices), num_args=len(x.ttype.shape))},
         )
 
 
@@ -274,7 +274,7 @@ class MinOp(Operator):
 
 class AbsOp(UnaryElementwiseOp):
     def __init__(self, x: Tensor):
-        super().__init__(x, op=lambda a: if_then_else(a >= 0, a, -a), name='abs')
+        super().__init__(x, op=lambda a: if_then_else(a >= const_like(0, a), a, -a), name='abs')
 
 
 class RightShiftOp(BinaryElementwiseOp):

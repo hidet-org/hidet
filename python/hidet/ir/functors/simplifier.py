@@ -91,7 +91,7 @@ class Simplifier(StmtExprRewriter):
                 Equal: operator.eq,
             }
             if e.__class__ in op_dict:
-                if a.data_type.name == 'int32' and b.data_type.name == 'int32' and isinstance(e, Div):
+                if a.type.name == 'int32' and b.type.name == 'int32' and isinstance(e, Div):
                     # the Div for int32 will use floordiv. Override the native behavior of python
                     return convert(a.value // b.value, 'int32')
                 else:
@@ -161,5 +161,5 @@ def simplify_to_int(node: Union[Expr, int], repeat_limit=10) -> int:
     if isinstance(node, int):
         return node
     node = simplify(node, repeat_limit)
-    assert isinstance(node, Constant) and node.data_type.name in ['int32', 'uint8']
+    assert isinstance(node, Constant) and node.type.name in ['int32', 'uint8']
     return node.value

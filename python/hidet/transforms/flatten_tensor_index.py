@@ -16,7 +16,7 @@ class FlattenTensorAccessRewriter(FuncStmtExprRewriter):
         for var in func.params:
             if isinstance(var.type, TensorType):
                 size = simplify_to_int(var.type.layout.size)
-                self.memo[var] = Var(var.hint, tensor_type(var.type.scalar_type, [size], DataLayout.row_major([size])))
+                self.memo[var] = Var(var.hint, tensor_type(var.type.dtype, [size], DataLayout.row_major([size])))
             elif isinstance(var.type, TensorPointerType):
                 self.memo[var] = var
         body = self(func.body)
@@ -34,14 +34,14 @@ class FlattenTensorAccessRewriter(FuncStmtExprRewriter):
                 return e.type.tensor_type.layout
             elif isinstance(e.type, PointerType):
                 return StridesLayout(shape=[0], strides=[1])
-        elif isinstance(e, Constant) and isinstance(e.data_type, TensorType):
-            return e.data_type.layout
+        elif isinstance(e, Constant) and isinstance(e.type, TensorType):
+            return e.type.layout
         raise ValueError("Can not infer layout from '{}' (expression {})".format(type(e), e))
 
     def visit_DeclareStmt(self, stmt: DeclareStmt):
         if isinstance(stmt.var.type, TensorType):
             size = simplify_to_int(stmt.var.type.layout.size)
-            var = Var(stmt.var.hint, tensor_type(stmt.var.type.scalar_type, [size], DataLayout.row_major([size])))
+            var = Var(stmt.var.hint, tensor_type(stmt.var.type.dtype, [size], DataLayout.row_major([size])))
             self.memo[stmt.var] = var
             init = self(stmt.init) if stmt.init is not None else None
             return DeclareStmt(var, init, scope=stmt.scope)

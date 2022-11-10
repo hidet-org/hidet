@@ -1,5 +1,5 @@
 from typing import Union, Sequence, Optional, List
-from hidet.ir.type import TypeNode, ScalarType, TensorType, PointerType, VoidType, ReferenceType, void_p
+from hidet.ir.type import TypeNode, DataType, TensorType, PointerType, VoidType, ReferenceType, void_p, data_type
 from hidet.ir.expr import Expr, Var, cast, view, Dereference
 from hidet.ir.mapping import row_spatial, row_repeat, col_repeat, col_spatial, TaskMapping, auto_map
 from hidet.ir.layout import DataLayout
@@ -9,11 +9,11 @@ from hidet.ir.stmt import asm, DeclareScope
 from hidet.ir.func import Function
 from hidet.lang.type_utils import static, with_scope
 
-i32 = ScalarType('int32')
-u32 = ScalarType('uint32')
-i64 = ScalarType('int64')
-f32 = ScalarType('float32')
-f16 = ScalarType('float16')
+i32 = data_type('int32')
+u32 = data_type('uint32')
+i64 = data_type('int64')
+f32 = data_type('float32')
+f16 = data_type('float16')
 
 ref_u32 = ReferenceType(u32)
 
@@ -29,7 +29,7 @@ ConstExpr = Union[Expr, int]
 
 def tensor(
     scope: Union[DeclareScope, str],
-    dtype: Union[ScalarType, str],
+    dtype: Union[DataType, str],
     shape: Optional[Sequence[ConstExpr]] = None,
     layout: Optional[DataLayout] = None,
 ):
@@ -39,7 +39,7 @@ def tensor(
 
 
 def tensor_pointer(
-    dtype: Union[ScalarType, str], shape: Optional[Sequence[ConstExpr]] = None, layout: Optional[DataLayout] = None
+    dtype: Union[DataType, str], shape: Optional[Sequence[ConstExpr]] = None, layout: Optional[DataLayout] = None
 ):
     # pylint: disable=import-outside-toplevel
     from hidet.ir.type import tensor_type

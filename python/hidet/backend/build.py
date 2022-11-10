@@ -168,7 +168,7 @@ def load_task_func(lib_path: str, task) -> CompiledFunction:
         os.remove(lib_path)
         raise e
     func_name = 'hidet_{}'.format(task.name)
-    param_types = [param.data_type for param in task.parameters]
+    param_types = [param.ttype for param in task.parameters]
     packed_func = PackedFunc(param_types=param_types, c_func_pointer=lib[func_name])
 
     potential_src_path = os.path.join(os.path.dirname(lib_path), 'source.cu')

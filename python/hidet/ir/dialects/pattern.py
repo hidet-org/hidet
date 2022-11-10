@@ -1,7 +1,7 @@
 from typing import Any, Sequence, Tuple, Type, Optional, List, Union, Dict, Callable, ContextManager
 from contextlib import ExitStack
 from hidet.ir.node import Node
-from hidet.ir.type import TypeNode, ScalarType, TensorType, FuncType
+from hidet.ir.type import TypeNode, DataType, TensorType, FuncType, data_type
 from hidet.ir.expr import Expr, Constant, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, Equal, LessEqual
 from hidet.ir.expr import TensorElement, IfThenElse, Call, Var, And, Or, BinaryOp, convert, var
 from hidet.ir.compute import TensorNode, ScalarNode, ReduceOperation, ReduceCompute
@@ -31,7 +31,7 @@ class TensorTypePattern(TypePattern):
     def __init__(self, scope=None, scalar_type=None, rank=None, shape=None, layout=None, allow_dynamic_size=False):
         self.rank: Optional[int] = rank
         self.scope: Optional[Union[DeclareScope, List[DeclareScope]]] = scope
-        self.scalar_type: Optional[Union[ScalarType, ScalarTypePattern]] = scalar_type
+        self.scalar_type: Optional[Union[DataType, ScalarTypePattern]] = scalar_type
         self.shape: Optional[List[Expr]] = shape
         self.layout: Optional[DataLayout] = layout
         self.allow_dynamic_size = allow_dynamic_size
@@ -107,8 +107,11 @@ class MatchContext:
             PatternMatcher.check_type(self.pattern, self.target)
         try:
             self.matched[self.pattern] = self.target
-            # noinspection PyArgumentList
-            self.dispatch[self.pattern.__class__](self.matcher, self.pattern, self.target)
+            if isinstance(self.pattern, DataType):
+                self.dispatch[DataType](self.matcher, self.pattern, self.target)
+            else:
+                # noinspection PyArgumentList
+                self.dispatch[self.pattern.__class__](self.matcher, self.pattern, self.target)
         except NotMatchedError as e:
             # error from current <pattern, target>
             del self.matched[self.pattern]
@@ -161,7 +164,7 @@ class PatternMatcher:
                 And: PatternMatcher.match_CommutativeBinary,
                 Or: PatternMatcher.match_CommutativeBinary,
                 # type
-                ScalarType: PatternMatcher.match_ScalarType,
+                DataType: PatternMatcher.match_DataType,
                 TensorType: PatternMatcher.match_TensorType,
                 # scope
                 # Scope: PatternMatcher.match_Scope,
@@ -270,7 +273,7 @@ class PatternMatcher:
         #     pass
 
     def match_Constant(self, pattern: Constant, target: Constant):
-        with self.match(pattern.data_type, target.data_type):
+        with self.match(pattern.type, target.type):
             pass
         if pattern.value is None:
             # None matches any const value
@@ -317,20 +320,20 @@ class PatternMatcher:
     #     if pattern.name is not None and (pattern.name is None or pattern.name != target.name):
     #         raise NotMatchedError(pattern, target)
     #
-    def match_ScalarType(self, pattern: ScalarType, target: ScalarType):
+    def match_DataType(self, pattern: DataType, target: DataType):
         if pattern.name:
             if pattern.name != target.name:
                 raise NotMatchedError(pattern, target)
 
     def match_TensorType(self, pattern: TensorType, target: TensorType):
         with ExitStack() as stack:
-            stack.enter_context(self.match(pattern.scalar_type, target.scalar_type))
+            stack.enter_context(self.match(pattern.dtype, target.dtype))
             stack.enter_context(self.match(pattern.shape, target.shape))
             stack.enter_context(self.match(pattern.layout, target.layout))
             # stack.enter_context(self.match(pattern.scope, target.scope))
 
-    def match_ScalarTypePattern(self, pattern: ScalarTypePattern, target: ScalarType):
-        self.check_type(pattern, target, ScalarType)
+    def match_ScalarTypePattern(self, pattern: ScalarTypePattern, target: DataType):
+        self.check_type(pattern, target, DataType)
         if pattern.allowed_types is not None and target.name not in pattern.allowed_types:
             raise NotMatchedError(pattern, target)
 
@@ -344,7 +347,7 @@ class PatternMatcher:
                     raise NotMatchedError(pattern, target)
                 if isinstance(pattern.scope, list) and target.scope.name not in [s.name for s in pattern.scope]:
                     raise NotMatchedError(pattern, target)
-            stack.enter_context(self.match(pattern.scalar_type, target.scalar_type))
+            stack.enter_context(self.match(pattern.scalar_type, target.dtype))
             stack.enter_context(self.match(pattern.shape, target.shape))
             stack.enter_context(self.match(pattern.layout, target.layout))
             if not pattern.allow_dynamic_size and any(not isinstance(s, Constant) for s in target.shape):
@@ -372,12 +375,12 @@ def reduce_pattern(shape: Sequence[Union[int, Expr]], fcompute, reduce_type: str
     input_scalars = collect(value, ScalarNode, stop_when_found=True)
     reduce_operation = ReduceOperation.from_name(reduce_type)
     return ReduceCompute(
-        input_tensors, input_scalars, shape, axes, value, reduce_operation, accumulate_dtype=ScalarType('float32')
+        input_tensors, input_scalars, shape, axes, value, reduce_operation, accumulate_dtype=data_type('float32')
     )
 
 
 def any_const_int():
-    return Constant(None, ScalarType('int32'))
+    return Constant(None, data_type('int32'))
 
 
 def any_const_ints(num=1):

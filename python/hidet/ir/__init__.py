@@ -10,8 +10,8 @@ from . import task
 
 from .node import Node
 from .func import IRModule, Function
-from .type import TypeNode, TensorType, ScalarType, FuncType, VoidType, PointerType, TensorPointerType
-from .type import scalar_type, tensor_type
+from .type import TypeNode, TensorType, DataType, FuncType, VoidType, PointerType, TensorPointerType
+from .type import data_type, tensor_type
 
 from .expr import Expr, Var, Constant
 from .expr import BinaryOp, Condition, LessThan, LessEqual, Equal, NotEqual, Add, Sub, Multiply, Div, Mod, FloorDiv
@@ -35,3 +35,6 @@ from .task import Task, save_task, load_task
 from .functors import infer_type
 
 from .utils import index_serialize, index_deserialize
+
+from .data_types import float32, tfloat32, bfloat16, float16, int64, int32, int16, int8, uint64, uint32, uint16, uint8
+from .data_types import boolean

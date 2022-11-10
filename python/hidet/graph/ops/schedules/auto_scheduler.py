@@ -142,7 +142,7 @@ class AutoScheduler:
             if tensor not in require_allocate:
                 continue
             buffer_offset[tensor] = allocated_bytes
-            allocated_bytes += simplify_to_int(tensor.data_type.storage_bytes())
+            allocated_bytes += simplify_to_int(tensor.ttype.storage_bytes())
             allocated_bytes = (allocated_bytes + alignment_bytes - 1) // alignment_bytes * alignment_bytes
         return allocated_bytes, buffer_offset
 
@@ -170,9 +170,9 @@ class AutoScheduler:
                 # this node is either an input or output tensor
                 continue
             assert buffer is not None
-            v = Var(node.name, TensorPointerType.from_tensor_type(node.data_type))
+            v = Var(node.name, TensorPointerType.from_tensor_type(node.ttype))
             node_map[node] = v
-            fb += DeclareStmt(v, init=cast(~buffer[buffer_offset[node]], ~v.type.tensor_type.scalar_type))
+            fb += DeclareStmt(v, init=cast(~buffer[buffer_offset[node]], ~v.type.tensor_type.dtype))
 
     def schedule_task(self, task: Task, device: str) -> IRModule:
         # pylint: disable=too-many-locals, unnecessary-comprehension
@@ -206,7 +206,7 @@ class AutoScheduler:
             # extract the actual arguments from packed arguments
             params: List[Var] = []
             for idx, task_param in enumerate(task.inputs + task.outputs):
-                param = Var(task_param.name, ~task_param.data_type.scalar_type)
+                param = Var(task_param.name, ~task_param.ttype.dtype)
                 params.append(param)
                 fb += DeclareStmt(param, init=cast(args[idx], param.type))
 
@@ -280,7 +280,7 @@ class ComputeExprLower(ExprRewriter):
         if isinstance(tc, GridCompute):
             grid_compute: GridCompute = tc
             # declare intermediate tensor buffer
-            buf = Var(e.name, e.data_type)
+            buf = Var(e.name, e.ttype)
 
             # pylint: disable=unused-variable
             shape, axes, value = grid_compute.shape, grid_compute.axes, grid_compute.value
@@ -311,7 +311,7 @@ class ComputeExprLower(ExprRewriter):
             shape, axes, value = sc.shape, sc.axes, sc.value
             # declare accumulator
             acc = scalar_var(e.name, infer_type(value))
-            self.sb += DeclareStmt(acc, init=sc.reduce_operation.initial_value(e.data_type.name))
+            self.sb += DeclareStmt(acc, init=sc.reduce_operation.initial_value(e.dtype.name))
 
             # reduction loops
             for i in range(len(shape)):

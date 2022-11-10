@@ -12,7 +12,7 @@ from hidet.ir.primitives import syncthreads, thread_idx, block_idx
 from hidet.ir.primitives.cuda.wmma import WmmaConfig, wmma_load_a, wmma_load_b, wmma_mma, wmma_store, wmma_configs
 from hidet.ir.stmt import BufferStoreStmt, IfStmt, DeclareStmt, DeclareScope
 from hidet.ir.task import Task
-from hidet.ir.type import scalar_type, tensor_type, ScalarType, TensorPointerType, PointerType
+from hidet.ir.type import data_type, tensor_type, TensorPointerType, PointerType
 from hidet.graph.ops.definitions.matmul import BatchMatmulTask
 from hidet.graph.ops.schedules.common import params_from_task, Schedule, NotSupportedError
 from hidet.graph.ops.schedules.cuda.common import get_task_map, get_transfer_task_map
@@ -153,9 +153,9 @@ class MatmulSchedule(Schedule):
         # choose a specific wmma type when needed
         if wmma_type == 'wmma':
             dtype_rank = {'float16': 0, 'bfloat16': 1, 'tfloat32': 2, 'float32': 4}
-            a_dtype = task.inputs[0].data_type.scalar_type.name
-            b_dtype = task.inputs[1].data_type.scalar_type.name
-            c_dtype = task.outputs[0].data_type.scalar_type.name
+            a_dtype = task.inputs[0].ttype.dtype.name
+            b_dtype = task.inputs[1].ttype.dtype.name
+            c_dtype = task.outputs[0].ttype.dtype.name
             ab_rank = max(dtype_rank[a_dtype], dtype_rank[b_dtype])
             if ab_rank <= dtype_rank['float16']:
                 if c_dtype == 'float32':
@@ -238,9 +238,9 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, schedule: Mat
 
     dtype_short2long = {'f16': 'float16', 'bf16': 'bfloat16', 'tf32': 'tfloat32', 'f32': 'float32'}
 
-    a_dtype = ScalarType(dtype_short2long[sch.wmma_config.a_dtype])
-    b_dtype = ScalarType(dtype_short2long[sch.wmma_config.b_dtype])
-    c_dtype = ScalarType(dtype_short2long[sch.wmma_config.c_dtype])
+    a_dtype = data_type(dtype_short2long[sch.wmma_config.a_dtype])
+    b_dtype = data_type(dtype_short2long[sch.wmma_config.b_dtype])
+    c_dtype = data_type(dtype_short2long[sch.wmma_config.c_dtype])
 
     batch_size = task.batch_size
     m_size, k_size, n_size = task.m_size, task.k_size, task.n_size
@@ -274,7 +274,7 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, schedule: Mat
             # 'extern __shared__ uint8_t smem_storage[];' in c code
             smem_storage = Var(
                 'smem_storage',
-                PointerType(base_type=scalar_type('uint8'), specifiers=['extern', '__shared__'], use_bracket=True),
+                PointerType(base_type=data_type('uint8'), specifiers=['extern', '__shared__'], use_bracket=True),
             )
             fb += DeclareStmt(smem_storage)
         else:
@@ -286,7 +286,7 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, schedule: Mat
         fb += DeclareStmt(smem_c, Cast(~smem_storage[0], PointerType(c_dtype)))
 
         # declare a, b, c registers
-        reg_dtype = ScalarType('uint32')
+        reg_dtype = data_type('uint32')
         regs_a = Var('regs_a', tensor_type(reg_dtype, layout=schedule.regs_a_layout))
         regs_b = Var('regs_b', tensor_type(reg_dtype, layout=schedule.regs_b_layout))
         regs_c = Var('regs_c', tensor_type(reg_dtype, layout=schedule.regs_c_layout))
@@ -300,7 +300,7 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, schedule: Mat
 
         a_default_value = convert(0.0, a_dtype)
         b_default_value = convert(0.0, b_dtype)
-        acc_default_value = convert(0, regs_c.type.scalar_type)
+        acc_default_value = convert(0, regs_c.type.dtype)
 
         wmma = sch.wmma_config
         wmma_m, wmma_n, wmma_k = wmma.shape

@@ -25,7 +25,7 @@ def func_type_from_task(task: Task) -> FuncType:
     ret: FuncType
         The function type for the given task.
     """
-    param_types: List[TensorType] = [tensor.data_type for tensor in task.parameters]
+    param_types: List[TensorType] = [tensor.ttype for tensor in task.parameters]
     return FuncType(param_types=param_types, ret_type=VoidType())
 
 
@@ -67,17 +67,16 @@ def validate_schedule(task: Task, device: str, dummy_inputs: Optional[Sequence] 
     if dummy_inputs is None:
         dummy_inputs = []
         for input_tensor in task.task_graph.input_tensors:
-            tensor_type: TensorType = input_tensor.data_type
-            if tensor_type.scalar_type.is_float():
-                dummy_inputs.append(randn(tensor_type.const_shape(), tensor_type.scalar_type.name, device=device))
+            tensor_type: TensorType = input_tensor.ttype
+            if tensor_type.dtype.is_float():
+                dummy_inputs.append(randn(tensor_type.const_shape(), tensor_type.dtype.name, device=device))
             else:
-                dummy_inputs.append(zeros(tensor_type.const_shape(), tensor_type.scalar_type.name, device=device))
+                dummy_inputs.append(zeros(tensor_type.const_shape(), tensor_type.dtype.name, device=device))
     else:
         dummy_inputs = list(dummy_inputs)
 
     actual_outputs: List[Tensor] = [
-        empty(output.data_type.const_shape(), output.data_type.scalar_type.name, device)
-        for output in task.task_graph.output_tensors
+        empty(output.ttype.const_shape(), output.ttype.dtype.name, device) for output in task.task_graph.output_tensors
     ]
     desire_outputs: List[Tensor] = [empty_like(output) for output in actual_outputs]
 

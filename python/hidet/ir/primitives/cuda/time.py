@@ -1,7 +1,7 @@
 from typing import Union
 
 from hidet.ir.expr import Expr, convert
-from hidet.ir.type import ScalarType, VoidType, FuncType
+from hidet.ir.type import VoidType, FuncType, data_type
 from hidet.ir.primitives.func import register_primitive_function, call_primitive_func
 from hidet.utils import initialize
 
@@ -19,7 +19,7 @@ def register_functions():
     # assert isinstance(cuda_nano_sleep, Function)
     # register_primitive_function(cuda_nano_sleep.name, cuda_nano_sleep)
     register_primitive_function(
-        name='cuda_nano_sleep', func_or_type=FuncType([ScalarType('uint32')], VoidType()), codegen_name='__nanosleep'
+        name='cuda_nano_sleep', func_or_type=FuncType([data_type('uint32')], VoidType()), codegen_name='__nanosleep'
     )
 
 

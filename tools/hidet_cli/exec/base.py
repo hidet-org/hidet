@@ -25,7 +25,7 @@ class TensorArgType(click.ParamType):
             if dtype not in ['float32', 'float16', 'int64', 'int32', 'int8']:
                 self.fail('invalid dtype: {}'.format(dtype))
             shape = [int(s) for s in shape_str.split(',')]
-            if hidet.ir.ScalarType(dtype).is_float():
+            if hidet.ir.data_type(dtype).is_float():
                 return hidet.randn(shape, dtype=dtype)
             else:
                 return hidet.zeros(shape, dtype=dtype)

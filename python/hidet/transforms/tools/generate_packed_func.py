@@ -1,7 +1,7 @@
 from typing import List
 from hidet.ffi.packedfunc import ArgType
 from hidet.ir.func import Function, IRModule
-from hidet.ir.type import ScalarType, TensorType, TensorPointerType, PointerType
+from hidet.ir.type import DataType, TensorType, TensorPointerType, PointerType
 from hidet.ir.expr import Expr, Var, Call
 from hidet.ir.stmt import Stmt, AssertStmt
 from hidet.ir.functors import simplify_to_int
@@ -21,7 +21,7 @@ def generate_packed_func(ir_module: IRModule, func: Function, pack_func_name: st
         extracted_arguments: List[Expr] = []
         for idx, param in enumerate(func.params):
             assert isinstance(param, Var)
-            if isinstance(param.type, ScalarType):
+            if isinstance(param.type, DataType):
                 name2code = {'int32': ArgType.INT32, 'float32': ArgType.FLOAT32, 'float16': ArgType.FLOAT16}
                 if param.type.name not in name2code:
                     raise NotImplementedError('Unsupported scalar type: {}'.format(param.type.name))
@@ -29,10 +29,10 @@ def generate_packed_func(ir_module: IRModule, func: Function, pack_func_name: st
                 arg: Expr = deref(cast(args[idx], ~param.type))
             elif isinstance(param.type, TensorType):
                 code: ArgType = ArgType.POINTER
-                arg: Expr = cast(args[idx], ~param.type.scalar_type)
+                arg: Expr = cast(args[idx], ~param.type.dtype)
             elif isinstance(param.type, TensorPointerType):
                 code: ArgType = ArgType.POINTER
-                arg: Expr = cast(args[idx], ~param.type.tensor_type.scalar_type)
+                arg: Expr = cast(args[idx], ~param.type.tensor_type.dtype)
             elif isinstance(param.type, PointerType):
                 code: ArgType = ArgType.POINTER
                 arg: Expr = cast(args[idx], param.type)

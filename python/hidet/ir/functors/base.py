@@ -1,7 +1,7 @@
 # pylint: disable=bad-staticmethod-argument
 from typing import Any, Union, Mapping, Sequence, Type, List
 from hidet.ir.node import Node
-from hidet.ir.type import ScalarType, TensorType, PointerType, TensorPointerType, ReferenceType, VoidType
+from hidet.ir.type import DataType, TensorType, PointerType, TensorPointerType, ReferenceType, VoidType
 from hidet.ir.expr import Add, Sub, Multiply, Div, Mod, FloorDiv, Neg, LessThan, LessEqual, Equal, NotEqual, And, Or
 from hidet.ir.expr import Not, BitwiseAnd, BitwiseOr, BitwiseNot, BitwiseXor, LeftShift, RightShift, TensorElement
 from hidet.ir.expr import TensorSlice, IfThenElse, Call, Let, Var, Constant, Cast, Dereference, Address, Reference
@@ -544,7 +544,7 @@ class ExprRewriter(ExprFunctor):
                     input_scalars = collect(value, ScalarNode, stop_when_found=True)
                     return ScalarNode(
                         e.name,
-                        e.data_type,
+                        e.dtype,
                         ReduceCompute(
                             input_tensors, input_scalars, shape, axes, value, rc.reduce_operation, rc.accumulate_dtype
                         ),
@@ -561,7 +561,7 @@ class ExprRewriter(ExprFunctor):
                     input_scalars = collect(value, ScalarNode, stop_when_found=True)
                     return ScalarNode(
                         e.name,
-                        e.data_type,
+                        e.dtype,
                         ArgReduceCompute(
                             input_tensors, input_scalars, extent, axis, value, sc.reduce_operation, sc.index_dtype
                         ),
@@ -585,9 +585,7 @@ class ExprRewriter(ExprFunctor):
                 else:
                     input_tensors = collect(value, TensorNode, stop_when_found=True)
                     input_scalars = collect(value, ScalarNode, stop_when_found=True)
-                    return TensorNode(
-                        e.name, e.data_type, GridCompute(input_tensors, input_scalars, shape, axes, value)
-                    )
+                    return TensorNode(e.name, e.ttype, GridCompute(input_tensors, input_scalars, shape, axes, value))
             else:
                 raise NotImplementedError('Can not recognize TensorCompute: {}'.format(type(e.tensor_compute).__name__))
 
@@ -924,7 +922,7 @@ class TypeFunctor(NodeFunctor):
     @staticmethod
     def get_dispatch_mapping(cls) -> Mapping[Type[Node], Any]:
         return {
-            ScalarType: cls.visit_ScalarType,
+            DataType: cls.visit_ScalarType,
             TensorType: cls.visit_TensorType,
             PointerType: cls.visit_PointerType,
             TensorPointerType: cls.visit_TensorPointerType,
@@ -932,7 +930,7 @@ class TypeFunctor(NodeFunctor):
             VoidType: cls.visit_VoidType,
         }
 
-    def visit_ScalarType(self, t: ScalarType):
+    def visit_ScalarType(self, t: DataType):
         raise NotImplementedError()
 
     def visit_TensorType(self, t: TensorType):

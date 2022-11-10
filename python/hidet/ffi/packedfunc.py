@@ -4,7 +4,7 @@ from enum import Enum
 
 from ctypes import c_int32, c_void_p, pointer, c_float, cast
 from ctypes import POINTER, Structure
-from hidet.ir.type import TypeNode, ScalarType, TensorType, PointerType, TensorPointerType
+from hidet.ir.type import TypeNode, DataType, TensorType, PointerType, TensorPointerType
 from .ffi import _LIB
 
 c_int32_p = POINTER(c_int32)
@@ -46,7 +46,7 @@ class PackedFunc:
         from hidet.graph.tensor import Tensor
 
         if isinstance(arg, int):
-            assert isinstance(param_type, ScalarType)
+            assert isinstance(param_type, DataType)
             if param_type.name == 'int32':
                 return cast(pointer(c_int32(arg)), c_void_p)
         elif isinstance(arg, float):
@@ -60,7 +60,7 @@ class PackedFunc:
         type_map = {'bool': c_int32(1), 'int32': c_int32(1), 'float32': c_int32(2), 'pointer': c_int32(3)}
         if param_type is bool or param_type is int:
             type_name = 'int32'
-        elif isinstance(param_type, ScalarType):
+        elif isinstance(param_type, DataType):
             type_name = param_type.name
         elif isinstance(param_type, (PointerType, TensorType, TensorPointerType)):
             type_name = 'pointer'

@@ -7,7 +7,7 @@ from hidet.ir.mapping import TaskMapping
 from hidet.ir.primitives import block_idx, thread_idx
 from hidet.ir.compute import ReduceOperation
 from hidet.ir.stmt import AssignStmt, BufferStoreStmt, DeclareStmt
-from hidet.ir.type import ScalarType
+from hidet.ir.type import data_type
 from hidet.ir.utils import index_deserialize
 from hidet.graph.ops.definitions.reduce import ReduceTask
 from hidet.graph.ops.schedules.common import params_from_task
@@ -44,7 +44,7 @@ def cuda_schedule_reduce_by_warp_reduce(task: ReduceTask) -> IRModule:
     warp_extent = (reduce_extent + warp_size - 1) // warp_size
     block_layout = TaskMapping.full_layout([warp_extent]) * TaskMapping.row_major([warp_size])
 
-    x_dtype = task.inputs[0].data_type.scalar_type
+    x_dtype = task.inputs[0].ttype.dtype
     accumulate_dtype = task.attributes['accumulate_dtype']
 
     with FunctionBuilder(
@@ -62,7 +62,7 @@ def cuda_schedule_reduce_by_warp_reduce(task: ReduceTask) -> IRModule:
         # local variables
         ro = ReduceOperation.from_name(task.reduce_type)
         rv = scalar_var('rv', accumulate_dtype)  # rv stands for reduce value
-        fb += DeclareStmt(rv, init=ro.initial_value(ScalarType(accumulate_dtype)))
+        fb += DeclareStmt(rv, init=ro.initial_value(data_type(accumulate_dtype)))
 
         # body
         grid_indices = grid_layout.worker2task(block_idx())[0]
@@ -111,7 +111,7 @@ def cuda_schedule_reduce_by_default(task: ReduceTask) -> IRModule:
 
     grid_size = (remain_layout.num_workers + block_size - 1) // block_size
 
-    x_dtype = task.inputs[0].data_type.scalar_type
+    x_dtype = task.inputs[0].ttype.dtype
     accumulate_dtype = task.attributes['accumulate_dtype']
 
     with FunctionBuilder(
@@ -125,7 +125,7 @@ def cuda_schedule_reduce_by_default(task: ReduceTask) -> IRModule:
         # local variables
         ro = ReduceOperation.from_name(task.reduce_type)
         rv = scalar_var('rv', accumulate_dtype)  # rv stands for reduce value
-        fb += DeclareStmt(rv, init=ro.initial_value(ScalarType(accumulate_dtype)))
+        fb += DeclareStmt(rv, init=ro.initial_value(data_type(accumulate_dtype)))
 
         # body
         remain_indices = remain_layout.worker2task(thread_idx() + block_idx() * block_size)[0]

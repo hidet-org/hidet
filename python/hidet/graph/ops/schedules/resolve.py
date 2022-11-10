@@ -30,13 +30,13 @@ def dummy_inputs_from_task(task: Task, target_device: str) -> List[Tensor]:
     """
     inputs = []
     for param in task.parameters:
-        param_type = param.data_type
+        param_type = param.ttype
 
         if not isinstance(param_type, TensorType):
             raise ValueError('Currently, only support create dummy scalar inputs.')
         if any(not isinstance(s, Constant) for s in param_type.shape):
             raise ValueError('Currently, only support create dummy values for static tensor inputs.')
-        dtype = param_type.scalar_type.name
+        dtype = param_type.dtype.name
         shape = [int(s) for s in param_type.shape]
         if dtype in ['float32', 'float16', 'bfloat16']:
             x = randn(shape, dtype, device=target_device, layout=param_type.layout)

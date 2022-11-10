@@ -128,7 +128,7 @@ class Task(Node):
         params = []
         for tensor in self.inputs:
             name = tensor.name
-            dtype = tensor.data_type.scalar_type.name
+            dtype = tensor.ttype.dtype.name
             shape = tensor.const_shape()
             params.append('{}={}{}'.format(name, dtype, shape))
         for name, value in self.attributes.items():

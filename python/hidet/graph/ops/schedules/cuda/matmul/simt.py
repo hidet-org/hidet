@@ -44,7 +44,7 @@ from hidet.ir.mapping import TaskMapping
 from hidet.ir.layout import DataLayout, StridesLayout
 from hidet.ir.primitives import syncthreads, thread_idx, block_idx
 from hidet.ir.stmt import BufferStoreStmt, IfStmt, DeclareStmt, DeclareScope
-from hidet.ir.type import scalar_type, tensor_type, ScalarType, TensorPointerType, PointerType
+from hidet.ir.type import data_type, tensor_type, TensorPointerType, PointerType
 from hidet.utils import cuda
 from hidet.graph.ops.definitions.matmul import BatchMatmulTask
 from hidet.graph.ops.schedules.resolve import resolve_ir_modules
@@ -178,7 +178,7 @@ class MatmulSchedule(Schedule):
         ).projection({0: 0})
 
         # derived constants
-        used_smem_bytes_per_block = (block_shape[0] + block_shape[1]) * block_k * 2 * ScalarType(dtype).nbytes()
+        used_smem_bytes_per_block = (block_shape[0] + block_shape[1]) * block_k * 2 * data_type(dtype).nbytes()
         self.check(
             used_smem_bytes_per_block <= max_smem_bytes_per_block,
             f"Used shared memory ({used_smem_bytes_per_block} bytes) "
@@ -310,9 +310,9 @@ def batched_matmul_cuda_schedule_simt(task: BatchMatmulTask, working_dir: str) -
 def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, schedule: MatmulSchedule) -> IRModule:
     sch = schedule
 
-    a_dtype = task.inputs[0].data_type.scalar_type
-    b_dtype = task.inputs[1].data_type.scalar_type
-    c_dtype = task.outputs[0].data_type.scalar_type
+    a_dtype = task.inputs[0].ttype.dtype
+    b_dtype = task.inputs[1].ttype.dtype
+    c_dtype = task.outputs[0].ttype.dtype
 
     batch_size = task.batch_size
     m_size, k_size, n_size = task.m_size, task.k_size, task.n_size
@@ -356,7 +356,7 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, schedule: Mat
             # 'extern __shared__ uint8_t smem_storage[];' in c code
             smem_storage = Var(
                 'smem_storage',
-                PointerType(base_type=scalar_type('uint8'), specifiers=['extern', '__shared__'], use_bracket=True),
+                PointerType(base_type=data_type('uint8'), specifiers=['extern', '__shared__'], use_bracket=True),
             )
             sb += DeclareStmt(smem_storage)
         else:

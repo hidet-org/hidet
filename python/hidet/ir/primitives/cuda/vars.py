@@ -2,7 +2,7 @@ from collections import namedtuple
 from typing import Dict, Optional, List
 
 from hidet.ir.expr import Var
-from hidet.ir.type import ScalarType
+from hidet.ir.type import data_type
 
 _primitive_variables: Dict[str, Var] = {}
 
@@ -17,7 +17,7 @@ def thread_idx(dim='x') -> Var:
     assert dim in ['x', 'y', 'z']
     name = 'threadIdx.{}'.format(dim)
     if name not in _primitive_variables:
-        _primitive_variables[name] = attach_pool(Var(hint=name, type=ScalarType('int32'), name=name))
+        _primitive_variables[name] = attach_pool(Var(hint=name, type=data_type('int32'), name=name))
     return _primitive_variables[name]
 
 
@@ -25,7 +25,7 @@ def block_idx(dim='x') -> Var:
     assert dim in ['x', 'y', 'z']
     name = 'blockIdx.{}'.format(dim)
     if name not in _primitive_variables:
-        _primitive_variables[name] = attach_pool(Var(hint=name, type=ScalarType('int32'), name=name))
+        _primitive_variables[name] = attach_pool(Var(hint=name, type=data_type('int32'), name=name))
     return _primitive_variables[name]
 
 
@@ -33,7 +33,7 @@ def block_dim(dim='x') -> Var:
     assert dim in ['x', 'y', 'z']
     name = 'blockIdx.{}'.format(dim)
     if name not in _primitive_variables:
-        _primitive_variables[name] = attach_pool(Var(hint=name, type=ScalarType('int32'), name=name))
+        _primitive_variables[name] = attach_pool(Var(hint=name, type=data_type('int32'), name=name))
     return _primitive_variables[name]
 
 
@@ -41,7 +41,7 @@ def grid_dim(dim='x') -> Var:
     assert dim in ['x', 'y', 'z']
     name = 'gridIdx.{}'.format(dim)
     if name not in _primitive_variables:
-        _primitive_variables[name] = attach_pool(Var(hint=name, type=ScalarType('int32'), name=name))
+        _primitive_variables[name] = attach_pool(Var(hint=name, type=data_type('int32'), name=name))
     return _primitive_variables[name]
 
 

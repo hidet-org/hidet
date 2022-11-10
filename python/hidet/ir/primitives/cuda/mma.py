@@ -5,7 +5,7 @@ Please refer to the following section in PTX manual for the details of MMA instr
 from typing import List, Dict
 from hidet.ir.mapping import TaskMapping, row_spatial, col_spatial, row_repeat, col_repeat
 from hidet.utils import initialize
-from hidet.ir.type import ScalarType, PointerType
+from hidet.ir.type import PointerType, data_type
 from hidet.ir.expr import Var, Expr, cast
 from hidet.ir.stmt import AsmStmt, AssignStmt, asm, DeclareStmt
 from hidet.ir.func import Function
@@ -15,7 +15,7 @@ from hidet.ir.primitives.cuda.funcs import call_cuda
 
 
 def num_regs(short_dtype: str, num_elements: int) -> int:
-    num_bytes = ScalarType(short_dtype).nbytes() * num_elements
+    num_bytes = data_type(short_dtype).nbytes() * num_elements
     assert num_bytes % (4 * 32) == 0
     return num_bytes // (4 * 32)
 

@@ -3,7 +3,7 @@ from typing import Union
 from hidet.ir.expr import Expr, Call
 from hidet.ir.expr import Var
 from hidet.ir.stmt import BlackBoxStmt, Stmt
-from hidet.ir.type import ScalarType, PointerType
+from hidet.ir.type import DataType, PointerType, data_type
 from hidet.ir.func import Function
 from hidet.ir.primitives.func import register_primitive_function, call_primitive_func
 from hidet.utils import initialize
@@ -15,7 +15,7 @@ def register_functions():
 
     for dtype in ['uint8', 'uint32', 'int32', 'float16', 'float32']:
         func_name = f'cuda_dynamic_shared_memory_{dtype}'
-        dtype = ScalarType(dtype)
+        dtype = data_type(dtype)
 
         @script
         def cuda_dynamic_shared_memory(byte_offset: int) -> ~dtype:
@@ -28,7 +28,7 @@ def register_functions():
         register_primitive_function(cuda_dynamic_shared_memory.name, cuda_dynamic_shared_memory)
 
 
-def dynamic_shared_memory(byte_offset: Union[Expr, int], dtype: Union[ScalarType, str]) -> Call:
+def dynamic_shared_memory(byte_offset: Union[Expr, int], dtype: Union[DataType, str]) -> Call:
     func_name = f'cuda_dynamic_shared_memory_{dtype}'
     return call_primitive_func(func_name, [byte_offset])
 

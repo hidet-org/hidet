@@ -1,17 +1,17 @@
 # pylint: disable=cell-var-from-loop
 from typing import Optional
 
-from hidet.ir.type import PointerType, TensorPointerType
+from hidet.ir.type import PointerType, TensorPointerType, data_type
 from hidet.ir.expr import Expr
 from hidet.ir.func import Function
 from hidet.ir.functors import infer_type
 from hidet.ir.primitives.func import register_primitive_function, call_primitive_func
-from hidet.ir.type import ScalarType
+from hidet.ir.type import DataType
 from hidet.utils import initialize
 
 
 def resolve_load_inst_name(dtype: str, space: str, sync: Optional[str], scope: str) -> str:
-    dtype = ScalarType(dtype)
+    dtype = data_type(dtype)
     nbytes = dtype.nbytes()
     nbits = nbytes * 8
     if sync:
@@ -28,7 +28,7 @@ def resolve_load_inst_name(dtype: str, space: str, sync: Optional[str], scope: s
 
 
 def resolve_store_inst_name(dtype: str, space: str, sync: Optional[str], scope: str) -> str:
-    dtype = ScalarType(dtype)
+    dtype = data_type(dtype)
     nbytes = dtype.nbytes()
     nbits = nbytes * 8
     if sync:
@@ -60,11 +60,11 @@ def register_functions():
                     registered.add(func_name)
 
                     @script
-                    def cuda_load(addr: ~ScalarType(dtype)) -> ScalarType(dtype):
+                    def cuda_load(addr: ~data_type(dtype)) -> data_type(dtype):
                         attr.func_kind = 'cuda_device'
                         attr.func_name = func_name
                         template = inst_name + ' %0, [%1];'
-                        ret: ScalarType(dtype) = 0  # define a variable used to store the loaded data
+                        ret: data_type(dtype) = 0  # define a variable used to store the loaded data
                         asm(template, outputs=[ret], inputs=[addr], is_volatile=True)
                         return ret
 
@@ -82,7 +82,7 @@ def register_functions():
                     registered.add(func_name)
 
                     @script
-                    def cuda_store(addr: ~ScalarType(dtype), value: ScalarType(dtype)):
+                    def cuda_store(addr: ~data_type(dtype), value: data_type(dtype)):
                         attr.func_kind = 'cuda_device'
                         attr.func_name = func_name
                         template = inst_name + ' [%0], %1;'
@@ -103,8 +103,8 @@ def register_primitive_functions_with_body():
     # lds128
     with FunctionBuilder('cuda_lds128', kind='cuda_device') as fb:
         # params
-        regs_vars = [Var(f'reg{i}', ReferenceType(ScalarType('float32'))) for i in range(4)]
-        smem_addr_var = Var('smem_addr', PointerType(ScalarType('float32')))
+        regs_vars = [Var(f'reg{i}', ReferenceType(data_type('float32'))) for i in range(4)]
+        smem_addr_var = Var('smem_addr', PointerType(data_type('float32')))
         fb.extend_params(regs_vars + [smem_addr_var])
         # body
         body = AsmStmt(
@@ -123,8 +123,8 @@ def register_primitive_functions_with_body():
     # sts128
     with FunctionBuilder('cuda_sts128', kind='cuda_device') as fb:
         # params
-        regs_vars = [Var(f'reg{i}', ReferenceType(ScalarType('float32'))) for i in range(4)]
-        smem_addr_var = Var('smem_addr', PointerType(ScalarType('float32')))
+        regs_vars = [Var(f'reg{i}', ReferenceType(data_type('float32'))) for i in range(4)]
+        smem_addr_var = Var('smem_addr', PointerType(data_type('float32')))
         fb.extend_params(regs_vars + [smem_addr_var])
         # body
         body = AsmStmt(
@@ -148,8 +148,8 @@ def resolve_pointed_dtype(addr: Expr) -> str:
     if isinstance(ptr_type, PointerType):
         dtype = ptr_type.base_type
     else:
-        dtype = ptr_type.tensor_type.scalar_type
-    if not isinstance(dtype, ScalarType):
+        dtype = ptr_type.tensor_type.dtype
+    if not isinstance(dtype, DataType):
         raise ValueError('Expect a pointer to a scalar type, got {}'.format(ptr_type))
     return dtype.name
 

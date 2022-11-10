@@ -11,10 +11,10 @@ class NormalizeConstTensorPass(FunctionPass):
         if len(consts) == 0:
             return func
 
-        tensor_consts: List[Constant] = [const for const in consts if isinstance(const.data_type, TensorType)]
+        tensor_consts: List[Constant] = [const for const in consts if isinstance(const.type, TensorType)]
         body: Stmt = func.body
 
-        const_vars = [Var('const', tensor_const.data_type) for tensor_const in tensor_consts]
+        const_vars = [Var('const', tensor_const.type) for tensor_const in tensor_consts]
         declares = [DeclareStmt(const_var, tensor_const) for const_var, tensor_const in zip(const_vars, tensor_consts)]
         remap = {a: b for a, b in zip(tensor_consts, const_vars)}
         body = rewrite(body, remap)

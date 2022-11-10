@@ -14,7 +14,7 @@ class CumulativeTask(Task):
                     shape=[indices[dim] + (0 if exclusive else 1)],
                     fcompute=lambda k: x[indices[:dim] + (k,) + indices[dim + 1 :]],
                     reduce_type=reduce_type,
-                    accumulate_dtype=x.data_type.scalar_type.name,
+                    accumulate_dtype=x.ttype.dtype.name,
                 ),
             )
         else:
@@ -27,7 +27,7 @@ class CumulativeTask(Task):
                         indices[:dim] + (indices[dim] + k + (1 if exclusive else 0),) + indices[dim + 1 :]
                     ],
                     reduce_type=reduce_type,
-                    accumulate_dtype=x.data_type.scalar_type.name,
+                    accumulate_dtype=x.ttype.dtype.name,
                 ),
             )
 

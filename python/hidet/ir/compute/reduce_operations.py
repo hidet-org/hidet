@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Union
-from hidet.ir.type import ScalarType
+from hidet.ir.type import DataType, data_type
 from hidet.ir.expr import Expr, Constant
 
 
@@ -15,7 +15,7 @@ class ReduceOperation:
     def __str__(self):
         return self.__class__.__name__.lower()
 
-    def initial_value(self, data_type: Union[ScalarType, str]) -> Constant:
+    def initial_value(self, dtype: Union[DataType, str]) -> Constant:
         raise NotImplementedError()
 
     def combine(self, lhs: Expr, rhs: Expr) -> Expr:
@@ -32,10 +32,10 @@ class ReduceOperation:
 
 
 class Min(ReduceOperation):
-    def initial_value(self, data_type: Union[ScalarType, str]) -> Expr:
-        if isinstance(data_type, str):
-            data_type = ScalarType(data_type)
-        return data_type.max_value()
+    def initial_value(self, dtype: Union[DataType, str]) -> Expr:
+        if isinstance(dtype, str):
+            dtype = data_type(dtype)
+        return dtype.max_value()
 
     def combine(self, lhs: Expr, rhs: Expr) -> Expr:
         from hidet.ir import primitives  # pylint: disable=import-outside-toplevel
@@ -55,10 +55,10 @@ class Min(ReduceOperation):
 
 
 class Max(ReduceOperation):
-    def initial_value(self, data_type: Union[ScalarType, str]) -> Constant:
-        if isinstance(data_type, str):
-            data_type = ScalarType(data_type)
-        return data_type.min_value()
+    def initial_value(self, dtype: Union[DataType, str]) -> Constant:
+        if isinstance(dtype, str):
+            dtype = data_type(dtype)
+        return dtype.min_value()
 
     def combine(self, lhs: Expr, rhs: Expr) -> Expr:
         from hidet.ir import primitives  # pylint: disable=import-outside-toplevel
@@ -78,10 +78,10 @@ class Max(ReduceOperation):
 
 
 class Sum(ReduceOperation):
-    def initial_value(self, data_type: Union[ScalarType, str]) -> Constant:
-        if isinstance(data_type, str):
-            data_type = ScalarType(data_type)
-        return data_type.zero()
+    def initial_value(self, dtype: Union[DataType, str]) -> Constant:
+        if isinstance(dtype, str):
+            dtype = data_type(dtype)
+        return dtype.zero()
 
     def combine(self, lhs: Expr, rhs: Expr) -> Expr:
         return lhs + rhs
@@ -97,10 +97,10 @@ class Sum(ReduceOperation):
 
 
 class Average(ReduceOperation):
-    def initial_value(self, data_type: Union[ScalarType, str]) -> Constant:
-        if isinstance(data_type, str):
-            data_type = ScalarType(data_type)
-        return data_type.zero()
+    def initial_value(self, dtype: Union[DataType, str]) -> Constant:
+        if isinstance(dtype, str):
+            dtype = data_type(dtype)
+        return dtype.zero()
 
     def combine(self, lhs: Expr, rhs: Expr) -> Expr:
         return lhs + rhs

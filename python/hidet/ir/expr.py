@@ -4,7 +4,7 @@ from typing import Optional, Union, Sequence, Tuple
 import string
 import numpy as np
 from .node import Node
-from .type import TypeNode, TensorType, ScalarType, TensorPointerType, PointerType, FuncType, tensor_type, scalar_type
+from .type import TypeNode, TensorType, DataType, TensorPointerType, PointerType, FuncType, tensor_type, data_type
 
 PyScalar = Union[int, float]
 
@@ -168,7 +168,7 @@ class UnaryOp(Expr):
 
 
 def convert(
-    obj: Optional[Union[Expr, PyScalar, tuple, Sequence]], dtype: Optional[Union[str, ScalarType]] = None
+    obj: Optional[Union[Expr, PyScalar, tuple, Sequence]], dtype: Optional[Union[str, DataType]] = None
 ) -> Optional[Union[Expr, tuple]]:
     if isinstance(obj, Expr):
         return obj
@@ -180,11 +180,11 @@ def convert(
             raise ValueError('Can not convert {} to {}.'.format(obj, dtype))
 
     if isinstance(obj, bool):
-        return Constant(obj, ScalarType('bool'))
+        return Constant(obj, data_type('bool'))
     elif isinstance(obj, int):
-        return Constant(obj, ScalarType('int32'))
+        return Constant(obj, data_type('int32'))
     elif isinstance(obj, float):
-        return Constant(obj, ScalarType('float32'))
+        return Constant(obj, data_type('float32'))
     elif isinstance(obj, (tuple, list)):
         return tuple(convert(v) for v in obj)
     elif obj is None:
@@ -380,22 +380,22 @@ class Cast(Expr):
     def __init__(self, expr, target_type):
         self.expr = expr
         if isinstance(target_type, str):
-            target_type = ScalarType(target_type)
+            target_type = data_type(target_type)
         self.target_type: TypeNode = target_type
 
 
 class Constant(Expr):
-    def __init__(self, value=None, data_type=None):
-        if data_type and isinstance(data_type, str):
-            data_type = ScalarType(data_type)
+    def __init__(self, value=None, const_type=None):
+        if const_type and isinstance(const_type, str):
+            const_type = data_type(const_type)
         self.value: Optional[np.ndarray, float, int] = value
-        self.data_type: Optional[Union[ScalarType, TensorType]] = data_type
+        self.type: Optional[Union[DataType, TensorType]] = const_type
 
     def is_scalar(self) -> bool:
-        return self.data_type and isinstance(self.data_type, ScalarType)
+        return self.type and isinstance(self.type, DataType)
 
     def is_tensor(self) -> bool:
-        return self.data_type and isinstance(self.data_type, TensorType)
+        return self.type and isinstance(self.type, TensorType)
 
     def __int__(self):
         return int(self.value)
@@ -478,15 +478,15 @@ class Var(Expr):
 def var(hint: str = None, dtype='int32'):
     if isinstance(hint, str):
         assert set(hint) <= set(string.ascii_letters + '_.' + string.digits)
-    return Var(hint, ScalarType(dtype))
+    return Var(hint, data_type(dtype))
 
 
-def scalar_var(hint: str, dtype: Union[str, ScalarType] = 'float32') -> Var:
-    dtype = dtype if isinstance(dtype, ScalarType) else scalar_type(dtype)
+def scalar_var(hint: str, dtype: Union[str, DataType] = 'float32') -> Var:
+    dtype = dtype if isinstance(dtype, DataType) else data_type(dtype)
     return Var(hint, dtype)
 
 
-def tensor_var(hint: str, shape=None, dtype: Union[str, ScalarType] = 'float32', layout=None) -> Var:
+def tensor_var(hint: str, shape=None, dtype: Union[str, DataType] = 'float32', layout=None) -> Var:
     return Var(hint, tensor_type(dtype, shape, layout))
 
 
@@ -499,15 +499,15 @@ def is_zero(v: Expr) -> bool:
 
 
 def is_true(v: Expr) -> bool:
-    return isinstance(v, Constant) and v.data_type.name == 'bool' and v.value is True
+    return isinstance(v, Constant) and v.type.name == 'bool' and v.value is True
 
 
 def is_false(v: Expr) -> bool:
-    return isinstance(v, Constant) and v.data_type.name == 'bool' and v.value is False
+    return isinstance(v, Constant) and v.type.name == 'bool' and v.value is False
 
 
 def is_const_int(v: Expr) -> bool:
-    return isinstance(v, Constant) and v.data_type.name == 'int32'
+    return isinstance(v, Constant) and v.type.name == 'int32'
 
 
 def if_then_else(
@@ -561,9 +561,9 @@ def tensor_rank(v: Expr) -> int:
     elif isinstance(v, TensorSlice):
         return sum(1 if i is None else 0 for i in v.indices)
     elif isinstance(v, TensorNode):
-        return len(v.data_type.shape)
-    elif isinstance(v, Constant) and isinstance(v.data_type, TensorType):
-        return len(v.data_type.shape)
+        return len(v.ttype.shape)
+    elif isinstance(v, Constant) and isinstance(v.type, TensorType):
+        return len(v.type.shape)
     elif isinstance(v, Cast) and isinstance(v.target_type, PointerType):
         return 1
     else:
@@ -574,23 +574,23 @@ def cast(v: Expr, dtype):
     return Cast(v, dtype)
 
 
-def const_tensor(value: np.ndarray, data_type=None) -> Constant:
-    if data_type is None:
-        data_type = tensor_type(dtype=ScalarType.from_numpy_dtype(value.dtype), shape=list(value.shape))
-    return Constant(value=value, data_type=data_type)
+def const_tensor(value: np.ndarray) -> Constant:
+    from hidet.ir.utils.type_utils import from_numpy_dtype
+
+    return Constant(value=value, const_type=tensor_type(dtype=from_numpy_dtype(value.dtype), shape=list(value.shape)))
 
 
 def const_like(value: Union[float, int], e: Expr) -> Constant:
     from hidet.ir.functors import infer_type
 
     dtype = infer_type(e)
-    if isinstance(dtype, ScalarType):
-        return Constant(value=value, data_type=dtype)
+    if isinstance(dtype, DataType):
+        return Constant(value=value, const_type=dtype)
     else:
         raise ValueError('Expect a scalar type, but got {}'.format(dtype))
 
 
-def tensor_pointer_var(hint: str, shape=None, dtype: Union[str, ScalarType] = 'float32', layout=None):
+def tensor_pointer_var(hint: str, shape=None, dtype: Union[str, DataType] = 'float32', layout=None):
     return Var(hint, TensorPointerType(dtype=dtype, shape=shape, layout=layout))
 
 

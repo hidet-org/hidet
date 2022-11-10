@@ -1,4 +1,4 @@
-from hidet.ir.type import ScalarType, TensorType, FuncType, PointerType, TensorPointerType
+from hidet.ir.type import DataType, TensorType, FuncType, PointerType, TensorPointerType, data_type
 from hidet.ir.expr import BinaryOp, Add, Sub, Multiply, Div, Mod, FloorDiv, Condition, LessThan, Equal, IfThenElse
 from hidet.ir.expr import TensorSlice, Not, Or, And, LessEqual, Let, RightShift, LeftShift, BitwiseNot, BitwiseOr
 from hidet.ir.expr import BitwiseAnd, Neg, NotEqual, BitwiseXor, Dereference, Reference, Address
@@ -10,7 +10,7 @@ from ..dialects.pattern import AnyExpr
 
 
 def is_bool(tp):
-    return isinstance(tp, ScalarType) and tp.name == 'bool'
+    return isinstance(tp, DataType) and tp.name == 'bool'
 
 
 class TypeInfer(ExprFunctor):
@@ -22,14 +22,16 @@ class TypeInfer(ExprFunctor):
         return self(e.expr)
 
     def visit_Binary(self, e: BinaryOp):
-        a_dtype: ScalarType = self.visit(e.a)
-        b_dtype: ScalarType = self.visit(e.b)
+        from hidet.ir.utils.type_utils import numeric_promotation
+
+        a_dtype: DataType = self.visit(e.a)
+        b_dtype: DataType = self.visit(e.b)
         # if not atype or not btype:
         #     return ScalarType(name=None)
         if isinstance(e, (Add, Sub, Multiply, Div, Mod, FloorDiv)):
-            return max(a_dtype, b_dtype)
+            return numeric_promotation(a_dtype, b_dtype)
         elif isinstance(e, Condition):
-            return ScalarType('bool')
+            return data_type('bool')
         else:
             raise NotImplementedError('Binary op type infer {}'.format(type(e)))
 
@@ -74,7 +76,7 @@ class TypeInfer(ExprFunctor):
 
     def visit_Not(self, e: Not):
         assert is_bool(self.visit(e.a))
-        return ScalarType('bool')
+        return data_type('bool')
 
     def visit_BitwiseAnd(self, e: BitwiseAnd):
         return self.visit(e.a)
@@ -97,11 +99,11 @@ class TypeInfer(ExprFunctor):
     def visit_TensorElement(self, e: TensorElement):
         base_type = self.visit(e.base)
         if isinstance(base_type, TensorType):
-            return base_type.scalar_type
+            return base_type.dtype
         elif isinstance(base_type, PointerType):
             return base_type.base_type
         elif isinstance(base_type, TensorPointerType):
-            return base_type.tensor_type.scalar_type
+            return base_type.tensor_type.dtype
         else:
             raise NotImplementedError()
 
@@ -120,9 +122,7 @@ class TypeInfer(ExprFunctor):
                 if end is None:
                     end = base_type.shape[dim]
                 shape.append(end - start)
-        return TensorPointerType(
-            dtype=base_type.scalar_type, shape=shape, layout=None  # the layout of the slice is not used
-        )
+        return TensorPointerType(dtype=base_type.dtype, shape=shape, layout=None)  # the layout of the slice is not used
 
     def visit_IfThenElse(self, e: IfThenElse):
         cond_type = self.visit(e.cond)
@@ -132,7 +132,7 @@ class TypeInfer(ExprFunctor):
 
         pointer_types = (PointerType, TensorPointerType)
 
-        if isinstance(true_type, ScalarType) and isinstance(false_type, ScalarType):
+        if isinstance(true_type, DataType) and isinstance(false_type, DataType):
             if true_type.name != false_type.name:
                 msg = 'If-then-else operand 1 and 2 have different types ({} vs {}) {}'.format(true_type, false_type, e)
                 raise ValueError(msg)
@@ -173,13 +173,13 @@ class TypeInfer(ExprFunctor):
         return e.type
 
     def visit_Constant(self, e: Constant):
-        return e.data_type
+        return e.type
 
     def visit_ScalarNode(self, e: ScalarNode):
-        return e.data_type
+        return e.dtype
 
     def visit_TensorNode(self, e: TensorNode):
-        return e.data_type
+        return e.ttype
 
     def visit_AnyExpr(self, e: AnyExpr):
         raise ValueError('Can not infer type of an AnyExpr.')

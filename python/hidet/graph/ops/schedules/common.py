@@ -64,7 +64,7 @@ class LoopExpander(ExprRewriter):
             if e in self.input_map:
                 buf = self.input_map[e]
             else:
-                buf = Var(e.name, e.data_type)
+                buf = Var(e.name, e.ttype)
                 self.sb += DeclareStmt(buf)
 
             # pylint: disable=unused-variable
@@ -94,7 +94,7 @@ class LoopExpander(ExprRewriter):
             shape, axes, value = sc.shape, sc.axes, sc.value
             # declare accumulator
             acc = scalar_var(e.name, infer_type(value))
-            self.sb += DeclareStmt(acc, init=sc.reduce_operation.initial_value(e.data_type.name))
+            self.sb += DeclareStmt(acc, init=sc.reduce_operation.initial_value(e.dtype.name))
 
             # reduction loops
             for i in range(len(shape)):
@@ -157,4 +157,4 @@ def expand_loop(expr: Expr, input_map: Mapping[Union[ScalarNode, TensorNode], Va
 
 
 def params_from_task(task: Task) -> List[Var]:
-    return [Var(param.name, param.data_type) for param in task.inputs + task.outputs]
+    return [Var(param.name, param.ttype) for param in task.inputs + task.outputs]

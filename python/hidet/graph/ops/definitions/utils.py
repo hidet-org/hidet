@@ -3,7 +3,7 @@ from typing import Tuple, List, Union, Sequence, Optional
 import builtins
 from hidet.ir.layout import DataLayout
 from hidet.ir.expr import Var
-from hidet.ir.type import TensorType, tensor_type, ScalarType
+from hidet.ir.type import TensorType, tensor_type, DataType
 from hidet.ir.task import Task, InverseMap
 from hidet.ir.func import IRModule
 from hidet.graph.operator import Operator, Tensor
@@ -85,12 +85,14 @@ def normalize_index(index: Optional[int], dim_size, default) -> int:
         return dim_size
 
 
-def resolve_out_dtype(input_dtypes: List[Union[ScalarType, str]]) -> str:
+def resolve_out_dtype(input_dtypes: List[Union[DataType, str]]) -> str:
+    from hidet.ir.utils.type_utils import numeric_promotation
+
     if len(input_dtypes) == 0:
         raise ValueError('Expect at least one input dtype to resolve the output dtype.')
     out_dtype = input_dtypes[0]
     for input_dtype in input_dtypes[1:]:
-        out_dtype = ScalarType.resolve_out_dtype(out_dtype, input_dtype)
+        out_dtype = numeric_promotation(out_dtype, input_dtype)
     return out_dtype.name
 
 

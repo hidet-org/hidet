@@ -8,7 +8,7 @@ import numpy as np
 
 import hidet.runtime.storage
 from hidet.ffi import cuda, cuda_kernels
-from hidet.ir.type import ScalarType
+from hidet.ir.type import data_type
 from hidet.ir.layout import DataLayout, RowMajorLayout
 from hidet.runtime.cuda_stream import CudaStream
 from hidet.runtime.storage import Storage
@@ -204,7 +204,7 @@ class Tensor:
         ret: int
             The number of bytes.
         """
-        return prod(self.shape) * ScalarType(self.dtype).nbytes()
+        return prod(self.shape) * data_type(self.dtype).nbytes()
 
     @property
     def num_elements(self):
@@ -711,7 +711,7 @@ def empty(shape, dtype: str = 'float32', device: str = 'cuda', layout: Optional[
     ret: Tensor
         The created tensor.
     """
-    num_bytes = prod(shape) * ScalarType(dtype).nbytes()
+    num_bytes = prod(shape) * data_type(dtype).nbytes()
     storage = Storage.new(device, num_bytes)
     return Tensor(shape, dtype, device, storage, layout)
 
