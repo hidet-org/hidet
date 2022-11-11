@@ -43,7 +43,7 @@ class ConstExprSimplifier(StmtExprRewriter):
     }
 
     def visit_Binary(self, e: BinaryOp):
-        from hidet.ir.utils.type_utils import numeric_promotation
+        from hidet.ir.utils.type_utils import numeric_promotion
 
         e = StmtExprRewriter.visit_Binary(self, e)
         if e.a.is_const() and e.b.is_const() and e.__class__ in self.op_dict:
@@ -53,7 +53,7 @@ class ConstExprSimplifier(StmtExprRewriter):
             if isinstance(c, bool):
                 return Constant(c, 'bool')
             else:
-                return Constant(c, numeric_promotation(e.a.type, e.b.type))
+                return Constant(c, numeric_promotion(e.a.type, e.b.type))
         return e
 
     def visit_And(self, e: And):

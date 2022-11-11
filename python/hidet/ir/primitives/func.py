@@ -3,7 +3,6 @@ from typing import Dict, Union, Optional, List
 from hidet.ir.expr import Var, Expr, Call
 from hidet.ir.func import Function
 from hidet.ir.type import FuncType
-from hidet.utils import green
 
 
 class PrimitiveFunctionRegistry:
@@ -20,20 +19,7 @@ class PrimitiveFunctionRegistry:
         self.codegen_name: str = codegen_name
         self.func_type: FuncType = func_type
         self.function: Optional[Function] = function
-
         self.generic: bool = generic
-        self.dispatch_dtype_rules: Dict[str, str] = {}
-
-    def dispatch_dtype(self, dtype: str, dispatched_func_name: str):
-        if not self.generic:
-            raise ValueError('Can only dispatch a generic function.')
-        if not is_primitive_function(dispatched_func_name):
-            raise ValueError(
-                'Dispatched function {} does not exist during dispatching {} for data type {}.'.format(
-                    green(dispatched_func_name), green(self.name), green(dtype)
-                )
-            )
-        self.dispatch_dtype_rules[dtype] = dispatched_func_name
 
 
 class PrimitiveFunctionPool:
@@ -144,4 +130,10 @@ def register_primitive_function(
 
 def call_primitive_func(func_name, args: List[Expr]) -> Call:
     entry = primitive_func_pool.lookup_by_name(func_name)
+    if entry.func_type.param_types is not None:
+        if len(entry.func_type.param_types) != len(args):
+            raise ValueError(
+                'The number of arguments does not match the number of parameters of function {}, '
+                'got {} and expect {}.'.format(func_name, len(args), len(entry.func_type.param_types))
+            )
     return Call(entry.var, args)

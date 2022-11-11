@@ -14,6 +14,7 @@ u32 = data_type('uint32')
 i64 = data_type('int64')
 f32 = data_type('float32')
 f16 = data_type('float16')
+bf16 = data_type('bfloat16')
 
 ref_u32 = ReferenceType(u32)
 

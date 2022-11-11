@@ -1,0 +1,70 @@
+from hidet.ir.expr import Expr, Call
+from hidet.ir.type import FuncType
+from hidet.ir.primitives.func import register_primitive_function, primitive_func_pool
+from hidet.ir.primitives.math import MathFunctionSet, register_math_function_set
+
+
+class CPUInt32MathFunctionSet(MathFunctionSet):
+    def register(self):
+        entries = {'min': ['min', 2], 'max': ['max', 2]}
+
+        for name, (codegen_name, num_args) in entries.items():
+            register_primitive_function(
+                name='cpu_i32_{}'.format(name),
+                codegen_name=codegen_name,
+                func_or_type=FuncType(param_types=['int32'] * num_args, ret_type='int32'),
+            )
+
+    def call(self, name: str, *args) -> Expr:
+        entry = primitive_func_pool.lookup_by_name(name)
+        return Call(entry.var, args)
+
+    def min(self, a: Expr, b: Expr) -> Expr:
+        return self.call('cpu_i32_min', a, b)
+
+    def max(self, a: Expr, b: Expr) -> Expr:
+        return self.call('cpu_i32_max', a, b)
+
+    def sin(self, a: Expr) -> Expr:
+        raise ValueError('sin is not supported for int32')
+
+    def cos(self, a: Expr) -> Expr:
+        raise ValueError('cos is not supported for int32')
+
+    def tanh(self, a: Expr) -> Expr:
+        raise ValueError('tanh is not supported for int32')
+
+    def exp(self, a: Expr) -> Expr:
+        raise ValueError('exp is not supported for int32')
+
+    def erf(self, a: Expr) -> Expr:
+        raise ValueError('erf is not supported for int32')
+
+    def sqrt(self, a: Expr) -> Expr:
+        raise ValueError('sqrt is not supported for int32')
+
+    def rsqrt(self, a: Expr) -> Expr:
+        raise ValueError('rsqrt is not supported for int32')
+
+    def log(self, a: Expr) -> Expr:
+        raise ValueError('log is not supported for int32')
+
+    def round(self, a: Expr) -> Expr:
+        raise ValueError('round is not supported for int32')
+
+    def ceil(self, a: Expr) -> Expr:
+        raise ValueError('ceil is not supported for int32')
+
+    def floor(self, a: Expr) -> Expr:
+        raise ValueError('floor is not supported for int32')
+
+    def pow(self, a: Expr, b: Expr) -> Expr:
+        raise ValueError('pow is not supported for int32')
+
+    def fma(self, a: Expr, b: Expr, c: Expr) -> Expr:
+        raise ValueError('fma is not supported for int32')
+
+
+cpu_i32_math_function_set = CPUInt32MathFunctionSet()
+cpu_i32_math_function_set.register()
+register_math_function_set('cpu', 'int32', cpu_i32_math_function_set)
