@@ -32,20 +32,17 @@ class CUDABFloat16MathFunctionSet(MathFunctionSet):
             'floor': ['hfloor', 1],
             'min': ['__hmin', 2],
             'max': ['__hmax', 2],
-            'fma': ['__hfma', 3]
+            'fma': ['__hfma', 3],
         }
 
         for name, (codegen_name, num_args) in entries.items():
             register_primitive_function(
                 name='cuda_bf16_{}'.format(name),
                 codegen_name=codegen_name,
-                func_or_type=FuncType(param_types=['bfloat16'] * num_args, ret_type='bfloat16')
+                func_or_type=FuncType(param_types=['bfloat16'] * num_args, ret_type='bfloat16'),
             )
 
-        register_primitive_function(
-            name='cuda_bf16_tanh',
-            func_or_type=cuda_bf16_tanh_func()
-        )
+        register_primitive_function(name='cuda_bf16_tanh', func_or_type=cuda_bf16_tanh_func())
 
     def call(self, name: str, *args) -> Expr:
         entry = primitive_func_pool.lookup_by_name(name)

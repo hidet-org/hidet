@@ -3,7 +3,6 @@ from typing import Dict, Union, Optional, List
 from hidet.ir.expr import Var, Expr, Call
 from hidet.ir.func import Function
 from hidet.ir.type import FuncType
-from hidet.utils import green
 
 
 class PrimitiveFunctionRegistry:

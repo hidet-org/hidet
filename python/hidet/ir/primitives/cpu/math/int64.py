@@ -6,16 +6,13 @@ from hidet.ir.primitives.math import MathFunctionSet, register_math_function_set
 
 class CPUInt64MathFunctionSet(MathFunctionSet):
     def register(self):
-        entries = {
-            'min': ['min', 2],
-            'max': ['max', 2],
-        }
+        entries = {'min': ['min', 2], 'max': ['max', 2]}
 
         for name, (codegen_name, num_args) in entries.items():
             register_primitive_function(
                 name='cpu_i64_{}'.format(name),
                 codegen_name=codegen_name,
-                func_or_type=FuncType(param_types=['int64'] * num_args, ret_type='int64')
+                func_or_type=FuncType(param_types=['int64'] * num_args, ret_type='int64'),
             )
 
     def call(self, name: str, *args) -> Expr:

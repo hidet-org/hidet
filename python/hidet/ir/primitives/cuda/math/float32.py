@@ -21,14 +21,14 @@ class CUDAFloat32MathFunctionSet(MathFunctionSet):
             'min': ['fminf', 2],
             'max': ['fmaxf', 2],
             'pow': ['powf', 2],
-            'fma': ['fmaf', 3]
+            'fma': ['fmaf', 3],
         }
 
         for name, (codegen_name, num_args) in entries.items():
             register_primitive_function(
                 name='cuda_f32_{}'.format(name),
                 codegen_name=codegen_name,
-                func_or_type=FuncType(param_types=['float32'] * num_args, ret_type='float32')
+                func_or_type=FuncType(param_types=['float32'] * num_args, ret_type='float32'),
             )
 
     def call(self, name: str, *args) -> Expr:

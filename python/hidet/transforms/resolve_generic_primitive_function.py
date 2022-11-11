@@ -13,6 +13,7 @@ from hidet.utils.py import green
 
 def resolve_dtype(arg_dtypes: List[DataType]) -> DataType:
     import hidet.ir.primitives.math
+
     return hidet.ir.primitives.math.type_infer_func(arg_dtypes)
 
 
@@ -44,7 +45,7 @@ class ResolveGenericPrimitiveFuncRewriter(StmtExprRewriter):
                 #         green(entry.name), green(resolved_dtype)
                 #     )
                 #     raise NotImplementedError(msg)
-                generic, func_name = entry.name.split('_')    # such as 'generic_exp'
+                generic, func_name = entry.name.split('_')  # such as 'generic_exp'
                 assert generic == 'generic'
                 dtype: str = resolved_dtype.name
                 key: Tuple[str, str] = (self.device, dtype)
@@ -89,12 +90,7 @@ class ResolveGenericPrimitiveFuncPass(FunctionBodyPass):
         self.device: Optional[str] = None
 
     def process_func(self, func: Function) -> Function:
-        func_kind_to_device = {
-            'host_kernel': 'cpu',
-            'packed_func': 'cpu',
-            'cuda_kernel': 'cuda',
-            'cuda_device': 'cuda',
-        }
+        func_kind_to_device = {'host_kernel': 'cpu', 'packed_func': 'cpu', 'cuda_kernel': 'cuda', 'cuda_device': 'cuda'}
         self.device = func_kind_to_device[func.kind]
         return FunctionBodyPass.process_func(self, func)
 
