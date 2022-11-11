@@ -1,5 +1,4 @@
-from . import float16
-from . import bfloat16
+from . import math
 from . import mma
 
 from .smem import set_kernel_max_dynamic_smem_bytes

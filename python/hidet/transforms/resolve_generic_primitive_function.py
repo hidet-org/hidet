@@ -1,17 +1,19 @@
-from typing import List
+from typing import List, Optional, Tuple
 
-import hidet.ir.primitives.base.generic
 from hidet.ir.type import DataType
 from hidet.ir.stmt import Stmt
 from hidet.ir.expr import Call, Expr, BinaryOp, cast
+from hidet.ir.func import Function
 from hidet.ir.functors import StmtExprRewriter, infer_type, TypeInfer
 from hidet.ir.primitives import is_primitive_function, lookup_primitive_function
+from hidet.ir.primitives.math import registered_math_function_sets
 from hidet.transforms import FunctionBodyPass
 from hidet.utils.py import green
 
 
 def resolve_dtype(arg_dtypes: List[DataType]) -> DataType:
-    return hidet.ir.primitives.base.generic.type_infer_func(arg_dtypes)
+    import hidet.ir.primitives.math
+    return hidet.ir.primitives.math.type_infer_func(arg_dtypes)
 
 
 def cast_args(args: List[Expr], arg_dtypes: List[DataType], target_dtype: DataType) -> List[Expr]:
@@ -25,9 +27,10 @@ def cast_args(args: List[Expr], arg_dtypes: List[DataType], target_dtype: DataTy
 
 
 class ResolveGenericPrimitiveFuncRewriter(StmtExprRewriter):
-    def __init__(self):
+    def __init__(self, device: str):
         super().__init__()
         self.type_infer = TypeInfer()
+        self.device: str = device
 
     def visit_Call(self, e: Call):
         if is_primitive_function(e.func_var.hint):
@@ -35,16 +38,32 @@ class ResolveGenericPrimitiveFuncRewriter(StmtExprRewriter):
             if entry.generic:
                 args = [self(arg) for arg in e.args]
                 arg_types = [infer_type(arg) for arg in args]
-                resolved_dtype = resolve_dtype(arg_types)
-                if resolved_dtype.name not in entry.dispatch_dtype_rules:
-                    msg = 'Can not dispatch generic primitive function {} to dtype {}'.format(
-                        green(entry.name), green(resolved_dtype)
+                resolved_dtype: DataType = resolve_dtype(arg_types)
+                # if resolved_dtype.name not in entry.dispatch_dtype_rules:
+                #     msg = 'Can not dispatch generic primitive function {} to dtype {}'.format(
+                #         green(entry.name), green(resolved_dtype)
+                #     )
+                #     raise NotImplementedError(msg)
+                generic, func_name = entry.name.split('_')    # such as 'generic_exp'
+                assert generic == 'generic'
+                dtype: str = resolved_dtype.name
+                key: Tuple[str, str] = (self.device, dtype)
+                if key not in registered_math_function_sets:
+                    msg = 'Can not dispatch generic primitive function {} to device {} and dtype {}.\n'.format(
+                        green(entry.name), green(self.device), green(dtype)
                     )
+                    msg += 'Registered math function sets: {}'.format(list(registered_math_function_sets.keys())) + '\n'
                     raise NotImplementedError(msg)
-                dispatched_func_key = entry.dispatch_dtype_rules[resolved_dtype.name]
-                dispatched_func_entry = lookup_primitive_function(name=dispatched_func_key)
-                casted_args = cast_args(args, arg_types, resolved_dtype)
-                return Call(dispatched_func_entry.var, casted_args)
+                else:
+                    func_set = registered_math_function_sets[key]
+                    assert hasattr(func_set, func_name)
+                    func = getattr(func_set, func_name)
+                    return func(*args)
+
+                # dispatched_func_key = entry.dispatch_dtype_rules[resolved_dtype.name]
+                # dispatched_func_entry = lookup_primitive_function(name=dispatched_func_key)
+                # casted_args = cast_args(args, arg_types, resolved_dtype)
+                # return Call(dispatched_func_entry.var, casted_args)
 
         return StmtExprRewriter.visit_Call(self, e)
 
@@ -65,8 +84,22 @@ class ResolveGenericPrimitiveFuncRewriter(StmtExprRewriter):
 
 
 class ResolveGenericPrimitiveFuncPass(FunctionBodyPass):
+    def __init__(self):
+        super().__init__()
+        self.device: Optional[str] = None
+
+    def process_func(self, func: Function) -> Function:
+        func_kind_to_device = {
+            'host_kernel': 'cpu',
+            'packed_func': 'cpu',
+            'cuda_kernel': 'cuda',
+            'cuda_device': 'cuda',
+        }
+        self.device = func_kind_to_device[func.kind]
+        return FunctionBodyPass.process_func(self, func)
+
     def process_body(self, stmt: Stmt) -> Stmt:
-        rewriter = ResolveGenericPrimitiveFuncRewriter()
+        rewriter = ResolveGenericPrimitiveFuncRewriter(self.device)
         return rewriter.visit(stmt)
 
 

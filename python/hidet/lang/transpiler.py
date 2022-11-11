@@ -843,11 +843,8 @@ class PythonToHidetTranslator(PythonAstFunctor):
                     return primitives.min(*args)
                 else:
                     raise HidetProgramError(self, expr, 'Currently, do not support calling python builtin function.')
-        elif isinstance(func, type):
-            # class
-            return func(*args, **kwargs)
         else:
-            raise ValueError('Can not recognize callee {}'.format(func))
+            return func(*args, **kwargs)
 
     def visit_Starred(self, expr: Starred):
         raise HidetProgramError(self, expr, 'Hidet do not support unpack operator.')

@@ -4,7 +4,7 @@ from hidet.ir.primitives.func import register_primitive_function, primitive_func
 from hidet.ir.primitives.math import MathFunctionSet, register_math_function_set
 
 
-class CPUInt32MathFunctionSet(MathFunctionSet):
+class CUDAInt32MathFunctionSet(MathFunctionSet):
     def register(self):
         entries = {
             'min': ['min', 2],
@@ -13,7 +13,7 @@ class CPUInt32MathFunctionSet(MathFunctionSet):
 
         for name, (codegen_name, num_args) in entries.items():
             register_primitive_function(
-                name='cpu_i32_{}'.format(name),
+                name='cuda_i32_{}'.format(name),
                 codegen_name=codegen_name,
                 func_or_type=FuncType(param_types=['int32'] * num_args, ret_type='int32')
             )
@@ -23,10 +23,10 @@ class CPUInt32MathFunctionSet(MathFunctionSet):
         return Call(entry.var, args)
 
     def min(self, a: Expr, b: Expr) -> Expr:
-        return self.call('cpu_i32_min', a, b)
+        return self.call('cuda_i32_min', a, b)
 
     def max(self, a: Expr, b: Expr) -> Expr:
-        return self.call('cpu_i32_max', a, b)
+        return self.call('cuda_i32_max', a, b)
 
     def sin(self, a: Expr) -> Expr:
         raise ValueError('sin is not supported for int32')
@@ -68,6 +68,6 @@ class CPUInt32MathFunctionSet(MathFunctionSet):
         raise ValueError('fma is not supported for int32')
 
 
-cpu_i32_math_function_set = CPUInt32MathFunctionSet()
-cpu_i32_math_function_set.register()
-register_math_function_set('cpu', 'int32', cpu_i32_math_function_set)
+cuda_i32_math_function_set = CUDAInt32MathFunctionSet()
+cuda_i32_math_function_set.register()
+register_math_function_set('cuda', 'int32', cuda_i32_math_function_set)

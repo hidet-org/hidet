@@ -20,20 +20,7 @@ class PrimitiveFunctionRegistry:
         self.codegen_name: str = codegen_name
         self.func_type: FuncType = func_type
         self.function: Optional[Function] = function
-
         self.generic: bool = generic
-        self.dispatch_dtype_rules: Dict[str, str] = {}
-
-    def dispatch_dtype(self, dtype: str, dispatched_func_name: str):
-        if not self.generic:
-            raise ValueError('Can only dispatch a generic function.')
-        if not is_primitive_function(dispatched_func_name):
-            raise ValueError(
-                'Dispatched function {} does not exist during dispatching {} for data type {}.'.format(
-                    green(dispatched_func_name), green(self.name), green(dtype)
-                )
-            )
-        self.dispatch_dtype_rules[dtype] = dispatched_func_name
 
 
 class PrimitiveFunctionPool:

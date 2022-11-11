@@ -4,7 +4,7 @@ from hidet.ir.primitives.func import register_primitive_function, primitive_func
 from hidet.ir.primitives.math import MathFunctionSet, register_math_function_set
 
 
-class CPUInt32MathFunctionSet(MathFunctionSet):
+class CUDAInt64MathFunctionSet(MathFunctionSet):
     def register(self):
         entries = {
             'min': ['min', 2],
@@ -13,9 +13,9 @@ class CPUInt32MathFunctionSet(MathFunctionSet):
 
         for name, (codegen_name, num_args) in entries.items():
             register_primitive_function(
-                name='cpu_i32_{}'.format(name),
+                name='cuda_i64_{}'.format(name),
                 codegen_name=codegen_name,
-                func_or_type=FuncType(param_types=['int32'] * num_args, ret_type='int32')
+                func_or_type=FuncType(param_types=['int64'] * num_args, ret_type='int64')
             )
 
     def call(self, name: str, *args) -> Expr:
@@ -23,51 +23,51 @@ class CPUInt32MathFunctionSet(MathFunctionSet):
         return Call(entry.var, args)
 
     def min(self, a: Expr, b: Expr) -> Expr:
-        return self.call('cpu_i32_min', a, b)
+        return self.call('cuda_i64_min', a, b)
 
     def max(self, a: Expr, b: Expr) -> Expr:
-        return self.call('cpu_i32_max', a, b)
+        return self.call('cuda_i64_max', a, b)
 
     def sin(self, a: Expr) -> Expr:
-        raise ValueError('sin is not supported for int32')
+        raise ValueError('sin is not supported for int64')
 
     def cos(self, a: Expr) -> Expr:
-        raise ValueError('cos is not supported for int32')
+        raise ValueError('cos is not supported for int64')
 
     def tanh(self, a: Expr) -> Expr:
-        raise ValueError('tanh is not supported for int32')
+        raise ValueError('tanh is not supported for int64')
 
     def exp(self, a: Expr) -> Expr:
-        raise ValueError('exp is not supported for int32')
+        raise ValueError('exp is not supported for int64')
 
     def erf(self, a: Expr) -> Expr:
-        raise ValueError('erf is not supported for int32')
+        raise ValueError('erf is not supported for int64')
 
     def sqrt(self, a: Expr) -> Expr:
-        raise ValueError('sqrt is not supported for int32')
+        raise ValueError('sqrt is not supported for int64')
 
     def rsqrt(self, a: Expr) -> Expr:
-        raise ValueError('rsqrt is not supported for int32')
+        raise ValueError('rsqrt is not supported for int64')
 
     def log(self, a: Expr) -> Expr:
-        raise ValueError('log is not supported for int32')
+        raise ValueError('log is not supported for int64')
 
     def round(self, a: Expr) -> Expr:
-        raise ValueError('round is not supported for int32')
+        raise ValueError('round is not supported for int64')
 
     def ceil(self, a: Expr) -> Expr:
-        raise ValueError('ceil is not supported for int32')
+        raise ValueError('ceil is not supported for int64')
 
     def floor(self, a: Expr) -> Expr:
-        raise ValueError('floor is not supported for int32')
+        raise ValueError('floor is not supported for int64')
 
     def pow(self, a: Expr, b: Expr) -> Expr:
-        raise ValueError('pow is not supported for int32')
+        raise ValueError('pow is not supported for int64')
 
     def fma(self, a: Expr, b: Expr, c: Expr) -> Expr:
-        raise ValueError('fma is not supported for int32')
+        raise ValueError('fma is not supported for int64')
 
 
-cpu_i32_math_function_set = CPUInt32MathFunctionSet()
-cpu_i32_math_function_set.register()
-register_math_function_set('cpu', 'int32', cpu_i32_math_function_set)
+cuda_i64_math_function_set = CUDAInt64MathFunctionSet()
+cuda_i64_math_function_set.register()
+register_math_function_set('cuda', 'int64', cuda_i64_math_function_set)

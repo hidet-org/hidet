@@ -196,6 +196,7 @@ def asm(
                 dtype2reg = {
                     'float16': 'h',
                     'float32': 'f',
+                    'bfloat16': 'h',
                     'float64': 'd',
                     'uint8': 'h',
                     'uint16': 'h',

@@ -4,7 +4,7 @@ from hidet.ir.primitives.func import register_primitive_function, primitive_func
 from hidet.ir.primitives.math import MathFunctionSet, register_math_function_set
 
 
-class CPUFloat32MathFunctionSet(MathFunctionSet):
+class CUDAFloat32MathFunctionSet(MathFunctionSet):
     def register(self):
         entries = {
             'sin': ['sinf', 1],
@@ -26,7 +26,7 @@ class CPUFloat32MathFunctionSet(MathFunctionSet):
 
         for name, (codegen_name, num_args) in entries.items():
             register_primitive_function(
-                name='cpu_f32_{}'.format(name),
+                name='cuda_f32_{}'.format(name),
                 codegen_name=codegen_name,
                 func_or_type=FuncType(param_types=['float32'] * num_args, ret_type='float32')
             )
@@ -36,51 +36,51 @@ class CPUFloat32MathFunctionSet(MathFunctionSet):
         return Call(entry.var, args)
 
     def sin(self, a: Expr) -> Expr:
-        return self.call('cpu_f32_sin', a)
+        return self.call('cuda_f32_sin', a)
 
     def cos(self, a: Expr) -> Expr:
-        return self.call('cpu_f32_cos', a)
+        return self.call('cuda_f32_cos', a)
 
     def tanh(self, a: Expr) -> Expr:
-        return self.call('cpu_f32_tanh', a)
+        return self.call('cuda_f32_tanh', a)
 
     def exp(self, a: Expr) -> Expr:
-        return self.call('cpu_f32_exp', a)
+        return self.call('cuda_f32_exp', a)
 
     def erf(self, a: Expr) -> Expr:
-        return self.call('cpu_f32_erf', a)
+        return self.call('cuda_f32_erf', a)
 
     def sqrt(self, a: Expr) -> Expr:
-        return self.call('cpu_f32_sqrt', a)
+        return self.call('cuda_f32_sqrt', a)
 
     def rsqrt(self, a: Expr) -> Expr:
-        return self.call('cpu_f32_rsqrt', a)
+        return self.call('cuda_f32_rsqrt', a)
 
     def log(self, a: Expr) -> Expr:
-        return self.call('cpu_f32_log', a)
+        return self.call('cuda_f32_log', a)
 
     def round(self, a: Expr) -> Expr:
-        return self.call('cpu_f32_round', a)
+        return self.call('cuda_f32_round', a)
 
     def ceil(self, a: Expr) -> Expr:
-        return self.call('cpu_f32_ceil', a)
+        return self.call('cuda_f32_ceil', a)
 
     def floor(self, a: Expr) -> Expr:
-        return self.call('cpu_f32_floor', a)
+        return self.call('cuda_f32_floor', a)
 
     def min(self, a: Expr, b: Expr) -> Expr:
-        return self.call('cpu_f32_min', a, b)
+        return self.call('cuda_f32_min', a, b)
 
     def max(self, a: Expr, b: Expr) -> Expr:
-        return self.call('cpu_f32_max', a, b)
+        return self.call('cuda_f32_max', a, b)
 
     def pow(self, a: Expr, b: Expr) -> Expr:
-        return self.call('cpu_f32_pow', a, b)
+        return self.call('cuda_f32_pow', a, b)
 
     def fma(self, a: Expr, b: Expr, c: Expr) -> Expr:
-        return self.call('cpu_f32_fma', a, b, c)
+        return self.call('cuda_f32_fma', a, b, c)
 
 
-cpu_f32_math_function_set = CPUFloat32MathFunctionSet()
-cpu_f32_math_function_set.register()
-register_math_function_set('cpu', 'float32', cpu_f32_math_function_set)
+cuda_f32_math_function_set = CUDAFloat32MathFunctionSet()
+cuda_f32_math_function_set.register()
+register_math_function_set('cuda', 'float32', cuda_f32_math_function_set)
