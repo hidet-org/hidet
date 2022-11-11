@@ -44,7 +44,7 @@ from hidet.ir.mapping import TaskMapping
 from hidet.ir.layout import DataLayout, StridesLayout
 from hidet.ir.primitives import syncthreads, thread_idx, block_idx
 from hidet.ir.stmt import BufferStoreStmt, IfStmt, DeclareStmt, DeclareScope
-from hidet.ir.type import data_type, tensor_type, TensorPointerType, PointerType
+from hidet.ir.type import data_type, tensor_type, PointerType, tensor_pointer_type
 from hidet.utils import cuda
 from hidet.graph.ops.definitions.matmul import BatchMatmulTask
 from hidet.graph.ops.schedules.resolve import resolve_ir_modules
@@ -342,13 +342,13 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, schedule: Mat
         # declare local variables
         smem_a = Var(
             'smem_a',
-            TensorPointerType(
+            tensor_pointer_type(
                 a_dtype, layout=StridesLayout.from_shape([2, sch.block_shape[0], sch.block_k], perm=[0, 2, 1])
             ),
         )
         smem_b = Var(
             'smem_b',
-            TensorPointerType(
+            tensor_pointer_type(
                 b_dtype, layout=StridesLayout.from_shape([2, sch.block_k, sch.block_shape[1]], perm=[0, 1, 2])
             ),
         )

@@ -1,4 +1,4 @@
-from typing import Dict, Sequence, Union, Type, List
+from typing import Sequence, List
 import ctypes
 from enum import Enum
 
@@ -10,6 +10,7 @@ from .ffi import _LIB
 
 c_int32_p = POINTER(c_int32)
 c_float_p = POINTER(c_float)
+
 
 class ArgType(Enum):
     INT32 = 1
@@ -50,7 +51,6 @@ class PackedFunc:
         self.param_types: List[TypeNode] = list(param_types)
         self.c_packed_func: CPackedFunc = make_c_packed_func(param_types, c_func_pointer)
 
-
     def convert_args(self, args: Sequence):
         """
         Convert arguments to a list of c_void_p.
@@ -67,16 +67,19 @@ class PackedFunc:
             converted arguments.
         """
         from hidet.graph import Tensor
+
         if len(args) != len(self.param_types):
             raise ValueError('The callee expects {} arguments, but got {}.'.format(len(self.param_types), len(args)))
 
         converted_args: List[ctypes.c_void_p] = []
-        for i, (param_type, arg) in enumerate(zip(self.param_types, args), start=1):
+        for i, (param_type, arg) in enumerate(zip(self.param_types, args)):
             if isinstance(arg, (float, int)):
                 if not isinstance(param_type, DataType):
-                    raise ValueError('The callee expects the {}-th element to be a {}, but got a {}.'.format(
-                        i, param_type, type(arg)
-                    ))
+                    raise ValueError(
+                        'The callee expects the {}-th element to be a {}, but got a {}.'.format(
+                            i + 1, param_type, type(arg)
+                        )
+                    )
                 if param_type.name == 'int32':
                     assert isinstance(arg, int), 'Expect an int, but got a {}.'.format(type(arg))
                     converted_args.append(cast(pointer(c_int32(arg)), c_void_p))
@@ -97,20 +100,23 @@ class PackedFunc:
                     expect_dtype = param_type.base_type
                     expect_shape = None
                 else:
-                    raise ValueError('The callee expects the {}-th element to be a {}, but got a {}.'.format(
-                        i, param_type, type(arg)
-                    ))
-                if (arg.dtype != expect_dtype.name
-                    or (expect_shape is not None and not same_list(arg.shape, expect_shape))
+                    raise ValueError(
+                        'The callee expects the {}-th element to be a {}, but got a {}.'.format(
+                            i + 1, param_type, type(arg)
+                        )
+                    )
+                if arg.dtype != expect_dtype.name or (
+                    expect_shape is not None and not same_list(arg.shape, expect_shape)
                 ):
-                    raise ValueError('The callee expects the {}-th element to be a {}{}, but got a {}{}.'.format(
-                        i, expect_dtype, expect_shape if expect_shape else " tensor", arg.dtype, arg.shape
-                    ))
+                    raise ValueError(
+                        'The callee expects the {}-th element to be a {}{}, but got a {}{}.'.format(
+                            i + 1, expect_dtype, expect_shape if expect_shape else " tensor", arg.dtype, arg.shape
+                        )
+                    )
                 converted_args.append(cast(arg.storage.addr, c_void_p))
             else:
                 raise ValueError(f"Argument type '{type(arg)}' is not supported.")
-            return cast((c_void_p * len(converted_args))(*converted_args), c_void_p)
-
+        return cast((c_void_p * len(converted_args))(*converted_args), c_void_p)
 
     def __call__(self, *args):
         p_args = self.convert_args(args)

@@ -7,7 +7,6 @@ from hidet.ir.node import Node
 # typing forward declaration
 Expr = 'Expr'
 Int = Union['Expr', int]
-DataLayout = 'DataLayout'
 
 
 class TypeNode(Node):
@@ -79,17 +78,27 @@ class DataType(TypeNode):
 
 
 class TensorType(TypeNode):
-    def __init__(
-        self,
-        dtype: Optional[DataType] = None,
-        shape: Optional[Tuple[Expr, ...]] = None,
-        layout: Optional[DataLayout] = None,
-    ):
+    def __init__(self, dtype=None, shape=None, layout=None):
+        """
+        A tensor type.
+
+        Parameters
+        ----------
+        dtype: DataType
+            The data type of the tensor.
+        shape: Tuple[Expr, ...]
+            The shape of the tensor.
+        layout: hidet.ir.layout.DataLayout
+            The layout of the tensor.
+        """
         from hidet.ir.layout import DataLayout
 
         self.dtype: DataType = dtype
         self.shape: Tuple[Expr] = shape
         self.layout: DataLayout = layout
+
+    def __invert__(self):
+        return TensorPointerType.from_tensor_type(self)
 
     def storage_bytes(self) -> Expr:
         return self.layout.size * self.dtype.nbytes()
@@ -119,12 +128,19 @@ class ReferenceType(TypeNode):
 
 
 class TensorPointerType(TypeNode):
-    def __init__(
-        self,
-        dtype: Optional[Union[DataType, str]] = None,
-        shape: Optional[Sequence[Int]] = None,
-        layout: Optional[Union[Sequence[Int], DataLayout]] = None,
-    ):
+    def __init__(self, dtype, shape, layout):
+        """
+        A pointer type that points to tensor.
+
+        Parameters
+        ----------
+        dtype: DataType
+            The data type of the tensor.
+        shape: Tuple[Expr, ...]
+            The shape of the tensor.
+        layout: hidet.ir.layout.DataLayout
+            The layout of the tensor.
+        """
         self.tensor_type: TensorType = tensor_type(dtype, shape, layout)
 
     @staticmethod
@@ -179,10 +195,10 @@ def tensor_type(dtype, shape: Optional[Sequence[Union[int, Expr]]] = None, layou
     dtype: str or DataType
         The scalar type of this tensor.
 
-    shape: Optional[Sequence[Union[int, Expr]]]
+    shape: Sequence[Union[int, Expr]] or none
         The shape of the tensor. If not given, the shape in layout will be used.
 
-    layout: Optional[hidet.ir.layout.DataLayout]
+    layout: hidet.ir.layout.DataLayout or none
         The layout of the tensor. If not given, the row major layout of given shape will
         be used.
 
@@ -220,6 +236,11 @@ def tensor_type(dtype, shape: Optional[Sequence[Union[int, Expr]]] = None, layou
 
 def pointer_type(base_type):
     return PointerType(base_type)
+
+
+def tensor_pointer_type(dtype, shape=None, layout=None):
+    ttype = tensor_type(dtype, shape, layout)
+    return TensorPointerType(ttype.dtype, ttype.shape, ttype.layout)
 
 
 def void_pointer():

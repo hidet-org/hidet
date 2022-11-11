@@ -1,6 +1,6 @@
 from typing import Union, List, Dict, Sequence, Tuple, Set
 
-from hidet.ir.type import TensorPointerType, void_pointer
+from hidet.ir.type import tensor_pointer_type, void_pointer
 from hidet.ir.expr import TensorElement, Expr, Var, scalar_var, convert, cast
 from hidet.ir.stmt import Stmt, AssignStmt, ForStmt, DeclareStmt, BufferStoreStmt
 from hidet.ir.task import Task
@@ -156,7 +156,7 @@ class AutoScheduler:
         node_map: Dict[TensorNode, Var],
     ):
         if buffer_bytes > 0:
-            buffer = Var('buffer', TensorPointerType(dtype='uint8', shape=[buffer_bytes]))
+            buffer = Var('buffer', tensor_pointer_type(dtype='uint8', shape=[buffer_bytes]))
             if device == 'cuda':
                 space_ptr: Expr = request_cuda_workspace(nbytes=buffer_bytes, require_clean=False)
             elif device == 'cpu':
@@ -171,7 +171,7 @@ class AutoScheduler:
                 # this node is either an input or output tensor
                 continue
             assert buffer is not None
-            v = Var(node.name, TensorPointerType.from_tensor_type(node.ttype))
+            v = Var(node.name, ~node.ttype)
             node_map[node] = v
             fb += DeclareStmt(v, init=cast(~buffer[buffer_offset[node]], ~v.type.tensor_type.dtype))
 
