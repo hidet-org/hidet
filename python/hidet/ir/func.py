@@ -85,17 +85,6 @@ class IRModule(Node):
         self.functions: Dict[str, Function] = funcs if funcs else {}
         self.global_vars: Dict[str, Var] = global_vars if global_vars else {}
 
-    def include(self, module, skip_duplicated=True):
-        for name, func in module.functions.items():
-            if name in self.functions:
-                if skip_duplicated:
-                    continue
-                raise ValueError(f'Function {name} has already existed in module while include another module.')
-            self.functions[name] = func
-
-        for name, var in module.global_vars.items():
-            self.global_vars[name] = var
-
     def lookup(self, name_or_var: Union[str, Var]):
         if isinstance(name_or_var, Var):
             name = name_or_var.hint

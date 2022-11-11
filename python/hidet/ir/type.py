@@ -7,6 +7,7 @@ from hidet.ir.node import Node
 # typing forward declaration
 Expr = 'Expr'
 Int = Union['Expr', int]
+DataLayout = 'DataLayout'
 
 
 class TypeNode(Node):
@@ -40,6 +41,11 @@ class DataType(TypeNode):
 
     def __call__(self, value: Any):
         return self.constant(value)
+
+    def __getitem__(self, item):
+        if not isinstance(item, tuple):
+            item = (item,)
+        return tensor_type(dtype=self, shape=list(item))
 
     def short_name(self) -> str:
         raise NotImplementedError()
@@ -77,7 +83,7 @@ class TensorType(TypeNode):
         self,
         dtype: Optional[DataType] = None,
         shape: Optional[Tuple[Expr, ...]] = None,
-        layout: Optional['DataLayout'] = None,
+        layout: Optional[DataLayout] = None,
     ):
         from hidet.ir.layout import DataLayout
 
@@ -117,7 +123,7 @@ class TensorPointerType(TypeNode):
         self,
         dtype: Optional[Union[DataType, str]] = None,
         shape: Optional[Sequence[Int]] = None,
-        layout: Optional[Union[Sequence[Int], 'DataLayout']] = None,
+        layout: Optional[Union[Sequence[Int], DataLayout]] = None,
     ):
         self.tensor_type: TensorType = tensor_type(dtype, shape, layout)
 
@@ -136,8 +142,8 @@ class FuncType(TypeNode):
         self,
         param_types: Optional[List[TypeLike]] = None,
         ret_type: Optional[TypeLike] = None,
-        type_infer_func: Optional[Callable] = None,
-    ):  # Callable[[a number of TypeNode], TypeNode]
+        type_infer_func: Optional[Callable] = None,  # Callable[[a number of TypeNode], TypeNode]
+    ):
         self.param_types = [self._convert_type(tp) for tp in param_types] if param_types is not None else None
         self.ret_type = self._convert_type(ret_type) if ret_type is not None else None
         self.type_infer_func = type_infer_func
@@ -162,7 +168,7 @@ class FuncType(TypeNode):
         return FuncType([param.type for param in func.params], func.ret_type)
 
 
-def tensor_type(dtype, shape=None, layout=None):
+def tensor_type(dtype, shape: Optional[Sequence[Union[int, Expr]]] = None, layout=None):
     """
     Construct a tensor type.
 

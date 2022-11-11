@@ -9,7 +9,7 @@ from hidet.transforms import lower, PassContext, SaveIRInstrument, ProfileInstru
 from hidet.backend import codegen, compile_source, load_task_func, load_lib_func
 from hidet.utils.py import cyan, green
 from hidet.ir.task import Task
-from hidet.ir.func import IRModule
+from hidet.ir.func import IRModule, Function
 from hidet.ir.type import FuncType
 from hidet.runtime.module import compiled_task_cache, CompiledFunction
 
@@ -123,6 +123,7 @@ def build_ir_module(
 
     if verbose:
         print(f'Compiling {src_path}')
+
     # lower ir module
     with PassContext(
         instruments=[
@@ -131,11 +132,20 @@ def build_ir_module(
         ]
     ):
         ir_module = lower(ir_module)
+
     # code generation
     codegen(ir_module, src_out_path=src_path)
+
     # compile source code
     compile_source(src_path, out_lib_path=lib_path, keep_ptx=keep_ptx)
-    if func_type is None:
-        func = ir_module.lookup(func_name)
+
+    # get function type
+    func: Function = ir_module.lookup(func_name)
+    if func.kind == 'packed_func':
+        packed_func = ir_module.lookup(func.attrs['packed_func'])
+        func_type = FuncType.from_func(packed_func)
+    else:
         func_type = FuncType.from_func(func)
+
+    # load function
     return load_lib_func(lib_path, func_name, func_type=func_type)
