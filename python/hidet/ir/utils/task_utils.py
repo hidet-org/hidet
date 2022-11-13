@@ -87,9 +87,8 @@ def validate_schedule(task: Task, device: str, dummy_inputs: Optional[Sequence] 
     ir_module_actual: IRModule = task.implement(device, workding_dir='./outs')
     ir_module_desire: IRModule = device2scheduler[device]().schedule_task(task, device)
 
-    func_type: FuncType = func_type_from_task(task)
-    func_actual: CompiledFunction = build_ir_module(ir_module_actual, func_name=task.name, func_type=func_type)
-    func_desire: CompiledFunction = build_ir_module(ir_module_desire, func_name=task.name, func_type=func_type)
+    func_actual: CompiledFunction = build_ir_module(ir_module_actual, func_name=task.name)
+    func_desire: CompiledFunction = build_ir_module(ir_module_desire, func_name=task.name)
 
     func_actual(*dummy_inputs, *actual_outputs)
     func_desire(*dummy_inputs, *desire_outputs)
