@@ -1,6 +1,6 @@
 from typing import Optional, List
 
-from hidet.ir.expr import Expr, if_then_else, convert, cast, And
+from hidet.ir.expr import Expr, if_then_else, convert, cast, And, Or
 from hidet.ir import primitives as prim
 from .utils import Task, Operator, Tensor, TensorNode, compute, input_like
 
@@ -14,7 +14,7 @@ def get_origin_index(x: Expr, image_width: int, target_width: int, coordinate_tr
         'half_pixel': lambda x: (x + 0.5) * scale - 0.5,
         'align_corners': lambda x: x * ((image_width - 1) / (target_width - 1)),
         'asymmetric': lambda x: x * scale,
-        'pytorch_half_pixel': lambda x: (x + 0.5) * scale if target_width > 1 else convert(0.0),
+        'pytorch_half_pixel': lambda x: (x + 0.5) * scale - 0.5 if target_width > 1 else convert(0.0),
         'tf_half_pixel_for_nn': lambda x: (x + 0.5) * scale,
     }
     if coordinate_transformation_mode not in func_map:
@@ -28,7 +28,7 @@ def get_origin_index(x: Expr, image_width: int, target_width: int, coordinate_tr
 
 def get_closest_index(x: Expr, rounding_method: str) -> Expr:
     func_map = {
-        'rounding_method': lambda x: cast(prim.round(x), 'int32'),
+        'round': lambda x: cast(prim.round(x), 'int32'),
         'round_prefer_floor': lambda x: cast(prim.ceil(x - 0.5), 'int32'),
         'round_prefer_ceil': lambda x: cast(prim.floor(x + 0.5), 'int32'),
         'floor': lambda x: cast(prim.floor(x + 1e-5), 'int32'),  # add epsilon (1e-5) to prevent gpu rounding error
@@ -50,6 +50,21 @@ def linear_interpolate(a, b, ratio):
     return a * (1.0 - ratio) + b * ratio
 
 
+def get_cubic_weights(s, a):
+    # See equations (4)-(6) in https://ieeexplore.ieee.org/document/1163711
+    s2 = s * s
+    s3 = s * s * s
+    w1 = a * (s3 - 2 * s2 + s)
+    w2 = (a + 2) * s3 - (3 + a) * s2 + 1
+    w3 = -(a + 2) * s3 + (3 + 2 * a) * s2 - a * s
+    w4 = -a * s3 + a * s2
+    return [w1, w2, w3, w4]
+
+
+def cubic_interpolate(inputs, weights):
+    return sum(inputs_i * weights_i for inputs_i, weights_i in zip(inputs, weights))
+
+
 def resize2d_nchw_compute(
     data: TensorNode,
     size: List[int],
@@ -63,6 +78,8 @@ def resize2d_nchw_compute(
 ):  # pylint: disable=unused-argument
     image_size = data.const_shape()[2:]
     target_size = size
+    image_height = image_size[0]
+    image_width = image_size[1]
 
     def fmap(n, c, h, w):
         h = get_origin_index(h, image_size[0], target_size[0], coordinate_transformation_mode)
@@ -81,7 +98,28 @@ def resize2d_nchw_compute(
             bottom = linear_interpolate(*pixels[1], w_ratio)
             value = linear_interpolate(top, bottom, h_ratio)
         elif method == 'cubic':
-            raise NotImplementedError(method)
+            h_int = cast(prim.floor(h), 'int32')
+            w_int = cast(prim.floor(w), 'int32')
+            h_ratio = h - prim.floor(h)
+            w_ratio = w - prim.floor(w)
+            pixels = [[get_2d_pixel(data, n, c, h_int + i - 1, w_int + j - 1) for j in range(4)] for i in range(4)]
+
+            weight_w = get_cubic_weights(w_ratio, cubic_alpha)
+            weight_h = get_cubic_weights(h_ratio, cubic_alpha)
+            if cubic_exclude:
+                for i in range(4):
+                    weight_w[i] = if_then_else(Or.join(w_int - 1 + i < 0, w_int + i > image_width), 0.0, weight_w[i])
+                    weight_h[i] = if_then_else(Or.join(h_int - 1 + i < 0, h_int + i > image_height), 0.0, weight_h[i])
+                sum_weight_w = sum(weight_w)
+                sum_weight_h = sum(weight_h)
+                weight_w = [w / sum_weight_w for w in weight_w]
+                weight_h = [h / sum_weight_h for h in weight_h]
+            col0 = cubic_interpolate(pixels[0], weight_w)
+            col1 = cubic_interpolate(pixels[1], weight_w)
+            col2 = cubic_interpolate(pixels[2], weight_w)
+            col3 = cubic_interpolate(pixels[3], weight_w)
+            value = cubic_interpolate([col0, col1, col2, col3], weight_h)
+
         else:
             raise ValueError(
                 'Unsupported scaling method: {}, candidates: {}'.format(method, ['nearest', 'linear', 'cubic'])
@@ -134,7 +172,7 @@ class Resize2dOp(Operator):
         'tf_half_pixel_for_nn',
         'tf_crop_and_resize',
     ]
-    supported_rounding_methods = ['round', 'floor', 'ceil']
+    supported_rounding_methods = ['round', 'round_prefer_floor', 'round_prefer_ceil', 'floor', 'ceil']
 
     def __init__(
         self,
