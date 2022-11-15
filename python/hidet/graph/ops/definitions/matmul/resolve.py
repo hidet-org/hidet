@@ -147,7 +147,7 @@ class MatmulResolveRule(ResolveRule):
             assert len(a.shape) >= 2 and len(b.shape) >= 2
             a_head = a.shape[:-2]
             b_head = b.shape[:-2]
-            c_head = broadcast_shapes([a_head, b_head, [1]])    # [1] is used to make sure len(c_head) > 0
+            c_head = broadcast_shapes([a_head, b_head, [1]])  # [1] is used to make sure len(c_head) > 0
             a_broadcast_shape = c_head + a.shape[-2:]
             b_broadcast_shape = c_head + b.shape[-2:]
             a = broadcast(a, a_broadcast_shape).flatten(start_dim=0, end_dim=-2)
