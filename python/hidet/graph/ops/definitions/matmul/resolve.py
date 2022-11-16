@@ -8,6 +8,8 @@ from hidet.ffi.cuda_api import cuda
 
 from .matmul import MatmulOp
 from .batch_matmul import batch_matmul
+from ..transform import broadcast
+from ..utils import broadcast_shapes
 
 
 def parallel_k_heuristic_nparts(batch_size, m_size, n_size, k_size) -> int:
@@ -143,14 +145,13 @@ class MatmulResolveRule(ResolveRule):
         else:
             # example: [a, b, c] x [c, d] -> [a, b, d]
             assert len(a.shape) >= 2 and len(b.shape) >= 2
-            if len(a.shape) == 2:
-                a = a.unsqueeze([0])
-            else:
-                a = a.flatten(start_dim=0, end_dim=-2)
-            if len(b.shape) == 2:
-                b = b.unsqueeze([0])
-            else:
-                b = b.flatten(start_dim=0, end_dim=-2)
+            a_head = a.shape[:-2]
+            b_head = b.shape[:-2]
+            c_head = broadcast_shapes([a_head, b_head, [1]])  # [1] is used to make sure len(c_head) > 0
+            a_broadcast_shape = c_head + a.shape[-2:]
+            b_broadcast_shape = c_head + b.shape[-2:]
+            a = broadcast(a, a_broadcast_shape).flatten(start_dim=0, end_dim=-2)
+            b = broadcast(b, b_broadcast_shape).flatten(start_dim=0, end_dim=-2)
             c = self.run_batch_matmul(a, b)
             c = c.reshape(c_shape)
         return [c]
