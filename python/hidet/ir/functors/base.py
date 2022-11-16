@@ -238,7 +238,7 @@ class ExprVisitor(ExprFunctor):
         self.visit(e.a)
         self.visit(e.b)
 
-    def visit_LessEqual(self, e: LessThan):
+    def visit_LessEqual(self, e: LessEqual):
         self.visit(e.a)
         self.visit(e.b)
 
