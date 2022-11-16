@@ -61,6 +61,9 @@ class Expr(Node):
     def __hash__(self):
         return id(self)
 
+    def __gt__(self, other):
+        return LessThan(other, self)
+
     def __ge__(self, other):
         return LessEqual(other, self)
 

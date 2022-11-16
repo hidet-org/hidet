@@ -1,6 +1,6 @@
 from typing import Optional, List
 
-from hidet.ir.expr import Expr, if_then_else, convert, cast, And, Or, const_like
+from hidet.ir.expr import Expr, if_then_else, convert, cast, And, Or
 from hidet.ir import primitives as prim
 from .utils import Task, Operator, Tensor, TensorNode, compute, input_like
 
@@ -108,8 +108,12 @@ def resize2d_nchw_compute(
             weight_h = get_cubic_weights(h_ratio, cubic_alpha)
             if cubic_exclude:
                 for i in range(4):
-                    weight_w[i] = if_then_else(Or.join((w_int - const_like(1,w_int) + i) < const_like(0, w_int), (w_int + i) > const_like(image_width, w_int)), 0.0, weight_w[i])
-                    weight_h[i] = if_then_else(Or.join((h_int - const_like(1,h_int) + i) < const_like(0, h_int), (h_int + i) > const_like(image_height,h_int)), 0.0, weight_h[i])
+                    weight_w[i] = if_then_else(
+                        Or.join((w_int - 1 + i) < 0, (w_int + i) > image_width), 0.0, weight_w[i]
+                    )
+                    weight_h[i] = if_then_else(
+                        Or.join((h_int - 1 + i) < 0, (h_int + i) > image_height), 0.0, weight_h[i]
+                    )
                 sum_weight_w = sum(weight_w)
                 sum_weight_h = sum(weight_h)
                 weight_w = [w / sum_weight_w for w in weight_w]
