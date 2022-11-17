@@ -51,11 +51,11 @@ class DataType(TypeNode):
 
     @property
     def short_name(self) -> str:
-        raise self._short_name
+        return self._short_name
 
     @property
     def nbytes(self) -> int:
-        raise self._nbytes
+        return self._nbytes
 
     def is_float(self) -> bool:
         raise NotImplementedError()
