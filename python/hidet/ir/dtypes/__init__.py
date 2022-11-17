@@ -1,19 +1,10 @@
-from .float32 import float32, f32
-from .tfloat32 import tfloat32, tf32
-from .bfloat16 import bfloat16, bf16
-from .float16 import float16, f16
-
-from .int64 import int64, i64
-from .int32 import int32, i32
-from .int16 import int16, i16
-from .int8 import int8, i8
-
-from .uint64 import uint64, u64
-from .uint32 import uint32, u32
-from .uint16 import uint16, u16
-from .uint8 import uint8, u8
-
+from .integer import int8, int16, int32, int64, uint8, uint16, uint32, uint64
+from .integer import i8, i16, i32, i64, u8, u16, u32, u64
+from .floats import float16, float32, float64, bfloat16, tfloat32
+from .floats import f16, f32, f64, bf16, tf32
 from .boolean import boolean
+from .vector import float16x2, float32x4
+from .vector import f16x2, f32x4
 
 name2dtype = {
     'float32': float32,
@@ -29,6 +20,8 @@ name2dtype = {
     'uint16': uint16,
     'uint8': uint8,
     'bool': boolean,
+    'float32x4': float32x4,
+    'float16x2': float16x2,
 }
 
 sname2dtype = {
@@ -45,4 +38,6 @@ sname2dtype = {
     'u16': uint16,
     'u8': uint8,
     'bool': boolean,
+    'f32x4': f32x4,
+    'f16x2': f16x2,
 }

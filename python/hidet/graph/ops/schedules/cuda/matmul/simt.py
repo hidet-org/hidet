@@ -178,7 +178,7 @@ class MatmulSchedule(Schedule):
         ).projection({0: 0})
 
         # derived constants
-        used_smem_bytes_per_block = (block_shape[0] + block_shape[1]) * block_k * 2 * data_type(dtype).nbytes()
+        used_smem_bytes_per_block = (block_shape[0] + block_shape[1]) * block_k * 2 * data_type(dtype).nbytes
         self.check(
             used_smem_bytes_per_block <= max_smem_bytes_per_block,
             f"Used shared memory ({used_smem_bytes_per_block} bytes) "

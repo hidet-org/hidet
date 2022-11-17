@@ -204,7 +204,7 @@ class Tensor:
         ret: int
             The number of bytes.
         """
-        return prod(self.shape) * data_type(self.dtype).nbytes()
+        return prod(self.shape) * data_type(self.dtype).nbytes
 
     @property
     def num_elements(self):
@@ -711,7 +711,7 @@ def empty(shape, dtype: str = 'float32', device: str = 'cuda', layout: Optional[
     ret: Tensor
         The created tensor.
     """
-    num_bytes = prod(shape) * data_type(dtype).nbytes()
+    num_bytes = prod(shape) * data_type(dtype).nbytes
     storage = Storage.new(device, num_bytes)
     return Tensor(shape, dtype, device, storage, layout)
 

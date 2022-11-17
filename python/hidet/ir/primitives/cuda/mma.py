@@ -15,7 +15,7 @@ from hidet.ir.primitives.cuda.funcs import call_cuda
 
 
 def num_regs(short_dtype: str, num_elements: int) -> int:
-    num_bytes = data_type(short_dtype).nbytes() * num_elements
+    num_bytes = data_type(short_dtype).nbytes * num_elements
     assert num_bytes % (4 * 32) == 0
     return num_bytes // (4 * 32)
 

@@ -23,11 +23,10 @@ class TypeNode(Node):
 
 
 class DataType(TypeNode):
-    def __init__(self, name: str):
-        if self.__class__ is DataType:
-            raise TypeError('DataType is an abstract class. Please use data_type() to create a concrete DataType.')
-
-        self.name = name
+    def __init__(self, name: str, short_name: str, nbytes: int):
+        self._name = name
+        self._short_name = short_name
+        self._nbytes = nbytes
 
     def __str__(self):
         return self.name
@@ -46,11 +45,17 @@ class DataType(TypeNode):
             item = (item,)
         return tensor_type(dtype=self, shape=list(item))
 
-    def short_name(self) -> str:
-        raise NotImplementedError()
+    @property
+    def name(self) -> str:
+        return self._name
 
+    @property
+    def short_name(self) -> str:
+        raise self._short_name
+
+    @property
     def nbytes(self) -> int:
-        raise NotImplementedError()
+        raise self._nbytes
 
     def is_float(self) -> bool:
         raise NotImplementedError()
@@ -101,7 +106,7 @@ class TensorType(TypeNode):
         return TensorPointerType.from_tensor_type(self)
 
     def storage_bytes(self) -> Expr:
-        return self.layout.size * self.dtype.nbytes()
+        return self.layout.size * self.dtype.nbytes
 
     def const_shape(self) -> List[int]:
         return [int(v) for v in self.shape]

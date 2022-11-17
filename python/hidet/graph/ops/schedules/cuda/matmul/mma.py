@@ -61,8 +61,8 @@ class MatmulMmaSchedule(Schedule):
         self.regs_b_layout = row_layout(2, self.mma_count_n, mma_config.b_elements)
         self.regs_c_layout = row_layout(self.mma_count_m, self.mma_count_n, mma_config.c_elements)
         self.smem_storage_nbytes = max(
-            (self.smem_a_layout.size + self.smem_b_layout.size) * data_type(mma_config.input_dtype).nbytes(),
-            self.smem_c_layout.size * data_type(mma_config.output_dtype).nbytes(),
+            (self.smem_a_layout.size + self.smem_b_layout.size) * data_type(mma_config.input_dtype).nbytes,
+            self.smem_c_layout.size * data_type(mma_config.output_dtype).nbytes,
         )
         self.used_registers = (
             (
@@ -71,8 +71,8 @@ class MatmulMmaSchedule(Schedule):
                 + self.regs_a_ldg_layout.size
                 + self.regs_b_ldg_layout.size
             )
-            * data_type(mma_config.input_dtype).nbytes()
-            + self.regs_c_layout.size * data_type(mma_config.output_dtype).nbytes()
+            * data_type(mma_config.input_dtype).nbytes
+            + self.regs_c_layout.size * data_type(mma_config.output_dtype).nbytes
         ) // 4 + 24
         self.used_registers = (self.used_registers + 7) // 8 * 8
         self.check(self.smem_storage_nbytes <= cuda.max_smem_bytes_per_block())
