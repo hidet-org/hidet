@@ -122,6 +122,7 @@ class PointerType(TypeNode):
         if isinstance(base_type, str):
             base_type = data_type(base_type)
         self.base_type: TypeNode = base_type
+        # todo: move the following attributes to DeclareStmt
         self.specifiers: List[str] = list(specifiers) if specifiers else []
         self.use_bracket: bool = use_bracket
 
@@ -193,7 +194,7 @@ def tensor_type(dtype, shape: Optional[Sequence[Union[int, Expr]]] = None, layou
     """
     Construct a tensor type.
 
-    Shape and layout must be given at least one.
+    One of shape and layout must be given.
 
     Parameters
     ----------
