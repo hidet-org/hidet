@@ -23,5 +23,8 @@ nvtx
 # for print python ast node
 astunparse
 
+# for command line interface
+click
+
 # for package version check
 packaging
