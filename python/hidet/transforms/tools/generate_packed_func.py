@@ -8,7 +8,7 @@ from hidet.ir.functors import simplify_to_int
 from hidet.ir.builders import StmtBuilder
 
 
-def generate_packed_func(ir_module: IRModule, func: Function, pack_func_name: str) -> Function:
+def add_packed_func(ir_module: IRModule, func: Function, pack_func_name: str):
     from hidet import lang
     from hidet.lang import attr, i32, void_p, deref, cast
     from hidet.lang.cuda import set_kernel_max_dynamic_smem_bytes
@@ -58,4 +58,5 @@ def generate_packed_func(ir_module: IRModule, func: Function, pack_func_name: st
             extract_params_and_call(num_args, arg_types, args)
 
     assert isinstance(packed_func, Function)
+    packed_func.attrs['packed_func'] = ir_module.lookup_var(func.name)
     ir_module.add(packed_func.name, packed_func)

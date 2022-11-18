@@ -152,7 +152,7 @@ class ErfOp(UnaryElementwiseOp):
 
 class TanhOp(UnaryElementwiseOp):
     def __init__(self, x):
-        super().__init__(x, op=lambda v: primitives.tanh(v), name='erf')
+        super().__init__(x, op=lambda v: primitives.tanh(v), name='tanh')
 
 
 class ExpOp(UnaryElementwiseOp):

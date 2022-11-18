@@ -31,9 +31,7 @@ def test_lds128(capfd):
     func = fb.get()
     ir_module = IRModule({func.name: func}, task=None)
     fuse_and_pack(ir_module, func, pack_func_name='test_lds128')
-    compiled_func = build_ir_module(
-        ir_module, func_name='test_lds128', working_dir='./outs/', func_type=FuncType([], VoidType())
-    )
+    compiled_func = build_ir_module(ir_module, func_name='test_lds128', working_dir='./outs/')
     compiled_func()
     cuda.device_synchronize()
     captured = capfd.readouterr()
@@ -64,9 +62,7 @@ def test_sts128(capfd):
     func = fb.get()
     ir_module = IRModule({func.name: func}, task=None)
     fuse_and_pack(ir_module, func, pack_func_name='test_sts128')
-    compiled_func = build_ir_module(
-        ir_module, func_name='test_sts128', working_dir='./outs/', func_type=FuncType([], VoidType())
-    )
+    compiled_func = build_ir_module(ir_module, func_name='test_sts128', working_dir='./outs/')
     compiled_func()
     cuda.device_synchronize()
     captured = capfd.readouterr()

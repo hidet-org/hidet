@@ -1,10 +1,11 @@
-from typing import Dict, Sequence, Union, Type
+from typing import Sequence, List
 import ctypes
 from enum import Enum
 
 from ctypes import c_int32, c_void_p, pointer, c_float, cast
 from ctypes import POINTER, Structure
 from hidet.ir.type import TypeNode, DataType, TensorType, PointerType, TensorPointerType
+from hidet.utils.py import same_list
 from .ffi import _LIB
 
 c_int32_p = POINTER(c_int32)
@@ -22,92 +23,107 @@ class CPackedFunc(Structure):
     _fields_ = [("num_args", c_int32), ("arg_types", c_int32_p), ("func_pointer", c_void_p)]
 
 
-class PackedFunc:
-    def __init__(self, param_types, c_func_pointer, ret_type=None, default_args: Dict[int, object] = None):
-        self.param_types = param_types
-        self.ret_type = ret_type
-        self.c_func_pointer = c_func_pointer
-        self.default_args = default_args if default_args is not None else {}
-
-        type_codes = [self._type_code(param_type) for param_type in self.param_types]
-        if self.ret_type:
-            type_codes.append(self._type_code(self.ret_type))
-        n = len(type_codes)
-        num_args = c_int32(n)
-        arg_types = cast(pointer((c_int32 * n)(*type_codes)), POINTER(c_int32))
-        func_pointer = cast(self.c_func_pointer, c_void_p)
-        self.c_packed_func = CPackedFunc(num_args, arg_types, func_pointer)
-
-    def _convert_arg(self, param_type, arg: Union[int, float, 'Tensor']):
-        """
-        convert arg to a c_void_p
-        """
-        # pylint: disable=import-outside-toplevel
-        from hidet.graph.tensor import Tensor
-
-        if isinstance(arg, int):
-            assert isinstance(param_type, DataType)
+def make_c_packed_func(param_types: Sequence[TypeNode], c_func_pointer) -> CPackedFunc:
+    type_codes = []
+    for param_type in param_types:
+        if isinstance(param_type, DataType):
             if param_type.name == 'int32':
-                return cast(pointer(c_int32(arg)), c_void_p)
-        elif isinstance(arg, float):
-            if param_type.name == 'float32':
-                return cast(pointer(c_float(arg)), c_void_p)
-        elif isinstance(arg, Tensor):
-            return cast(arg.storage.addr, c_void_p)
-        raise NotImplementedError(f"Call PackedFunc with argument type: '{type(arg)}' has not been implemented yet.")
-
-    def _type_code(self, param_type: Union[Type[Union[bool, int, TypeNode]]]):
-        type_map = {'bool': c_int32(1), 'int32': c_int32(1), 'float32': c_int32(2), 'pointer': c_int32(3)}
-        if param_type is bool or param_type is int:
-            type_name = 'int32'
-        elif isinstance(param_type, DataType):
-            type_name = param_type.name
-        elif isinstance(param_type, (PointerType, TensorType, TensorPointerType)):
-            type_name = 'pointer'
-        else:
-            raise NotImplementedError(param_type)
-        return type_map[type_name]
-
-    def _apply_default_args(self, orig_args):
-        n = len(orig_args) + len(self.default_args)
-        args = []
-        orig_args = list(reversed(orig_args))
-        for i in range(n):
-            if i in self.default_args:
-                args.append(self.default_args[i])
+                type_codes.append(ArgType.INT32.value)
+            elif param_type.name == 'float32':
+                type_codes.append(ArgType.FLOAT32.value)
+            elif param_type.name == 'float16':
+                type_codes.append(ArgType.FLOAT16.value)
             else:
-                args.append(orig_args.pop())
-        return args
+                raise NotImplementedError('Unsupported scalar type: {}'.format(param_type.name))
+        elif isinstance(param_type, (TensorType, PointerType, TensorPointerType)):
+            type_codes.append(ArgType.POINTER.value)
+        else:
+            raise NotImplementedError('Unsupported type: {}'.format(param_type))
+    n = len(type_codes)
+    num_args = c_int32(n)
+    arg_types = cast(pointer((c_int32 * n)(*type_codes)), POINTER(c_int32))
+    func_pointer = cast(c_func_pointer, c_void_p)
+    return CPackedFunc(num_args, arg_types, func_pointer)
 
-    def _convert_args(self, args: Sequence):
-        args = self._apply_default_args(args)
-        if not len(args) == len(self.param_types):
+
+class PackedFunc:
+    def __init__(self, param_types: Sequence[TypeNode], c_func_pointer):
+        self.param_types: List[TypeNode] = list(param_types)
+        self.c_packed_func: CPackedFunc = make_c_packed_func(param_types, c_func_pointer)
+
+    def convert_args(self, args: Sequence):
+        """
+        Convert arguments to a list of c_void_p.
+
+        Parameters
+        ----------
+        args: Sequence[Union[int, float, hidet.Tensor]]
+            Arguments to be converted.
+
+        Returns
+        -------
+        ret: c_void_p
+            A pointer that points to a c-array, while each element of the c-array is also a pointer that points to the
+            converted arguments.
+        """
+        from hidet.graph import Tensor
+
+        if len(args) != len(self.param_types):
             raise ValueError('The callee expects {} arguments, but got {}.'.format(len(self.param_types), len(args)))
-        converted_args = [self._convert_arg(param_type, arg) for param_type, arg in zip(self.param_types, args)]
-        if self.ret_type is not None:
-            if self.ret_type is bool:
-                ret_arg = c_int32()
+
+        converted_args: List[ctypes.c_void_p] = []
+        for i, (param_type, arg) in enumerate(zip(self.param_types, args)):
+            if isinstance(arg, (float, int)):
+                if not isinstance(param_type, DataType):
+                    raise ValueError(
+                        'The callee expects the {}-th element to be a {}, but got a {}.'.format(
+                            i + 1, param_type, type(arg)
+                        )
+                    )
+                if param_type.name == 'int32':
+                    assert isinstance(arg, int), 'Expect an int, but got a {}.'.format(type(arg))
+                    converted_args.append(cast(pointer(c_int32(arg)), c_void_p))
+                elif param_type.name == 'float32':
+                    assert isinstance(arg, float), 'Expect a float, but got a {}.'.format(type(arg))
+                    converted_args.append(cast(pointer(c_float(arg)), c_void_p))
+                else:
+                    raise NotImplementedError(f"PackedFunc does not support argument type '{param_type.name}'.")
+            elif isinstance(arg, Tensor):
+                if isinstance(param_type, TensorType):
+                    expect_dtype = param_type.dtype
+                    expect_shape = param_type.const_shape()
+                elif isinstance(param_type, TensorPointerType):
+                    expect_dtype = param_type.tensor_type.dtype
+                    expect_shape = param_type.tensor_type.const_shape()
+                elif isinstance(param_type, PointerType):
+                    isinstance(param_type.base_type, DataType)
+                    expect_dtype = param_type.base_type
+                    expect_shape = None
+                else:
+                    raise ValueError(
+                        'The callee expects the {}-th element to be a {}, but got a {}.'.format(
+                            i + 1, param_type, type(arg)
+                        )
+                    )
+                if arg.dtype != expect_dtype.name or (
+                    expect_shape is not None and not same_list(arg.shape, expect_shape)
+                ):
+                    raise ValueError(
+                        'The callee expects the {}-th element to be a {}{}, but got a {}{}.'.format(
+                            i + 1, expect_dtype, expect_shape if expect_shape else " tensor", arg.dtype, arg.shape
+                        )
+                    )
+                converted_args.append(cast(arg.storage.addr, c_void_p))
             else:
-                raise NotImplementedError(f"Currently do not support return type '{self.ret_type}' in packed function.")
-            converted_args.append(cast(pointer(ret_arg), c_void_p))
-        else:
-            ret_arg = None
-        p_args = cast(pointer((ctypes.c_void_p * len(converted_args))(*converted_args)), c_void_p)
-        return p_args, ret_arg
+                raise ValueError(f"Argument type '{type(arg)}' is not supported.")
+        return cast((c_void_p * len(converted_args))(*converted_args), c_void_p)
 
     def __call__(self, *args):
-        p_args, ret_arg = self._convert_args(args)
+        p_args = self.convert_args(args)
         _LIB.CallPackedFunc(self.c_packed_func, p_args)
-        if ret_arg is not None:
-            if issubclass(self.ret_type, bool):
-                return bool(ret_arg.value)
-            else:
-                raise NotImplementedError()
-        else:
-            return None
 
-    def profile(self, *args, warmup: int = 1, number: int = 1, repeat: int = 10):
+    def profile(self, *args, warmup: int = 1, number: int = 1, repeat: int = 10) -> List[float]:
         results = (c_float * repeat)()
-        p_args, _ = self._convert_args(args)
+        p_args = self.convert_args(args)
         _LIB.ProfilePackedFunc(self.c_packed_func, p_args, warmup, number, repeat, cast(pointer(results), c_float_p))
         return [float(v) / number for v in results]

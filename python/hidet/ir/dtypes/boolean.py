@@ -5,13 +5,7 @@ from hidet.ir.type import DataType
 
 class Boolean(DataType):
     def __init__(self):
-        super().__init__('bool')
-
-    def short_name(self) -> str:
-        return 'bool'
-
-    def nbytes(self) -> int:
-        return 1
+        super().__init__('bool', 'bool', 1)
 
     def is_float(self) -> bool:
         return False

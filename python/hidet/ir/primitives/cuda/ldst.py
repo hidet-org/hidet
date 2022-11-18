@@ -12,7 +12,7 @@ from hidet.utils import initialize
 
 def resolve_load_inst_name(dtype: str, space: str, sync: Optional[str], scope: str) -> str:
     dtype = data_type(dtype)
-    nbytes = dtype.nbytes()
+    nbytes = dtype.nbytes
     nbits = nbytes * 8
     if sync:
         if space == 'generic':
@@ -29,7 +29,7 @@ def resolve_load_inst_name(dtype: str, space: str, sync: Optional[str], scope: s
 
 def resolve_store_inst_name(dtype: str, space: str, sync: Optional[str], scope: str) -> str:
     dtype = data_type(dtype)
-    nbytes = dtype.nbytes()
+    nbytes = dtype.nbytes
     nbits = nbytes * 8
     if sync:
         if space == 'generic':

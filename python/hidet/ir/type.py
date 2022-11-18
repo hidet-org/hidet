@@ -23,11 +23,10 @@ class TypeNode(Node):
 
 
 class DataType(TypeNode):
-    def __init__(self, name: str):
-        if self.__class__ is DataType:
-            raise TypeError('DataType is an abstract class. Please use data_type() to create a concrete DataType.')
-
-        self.name = name
+    def __init__(self, name: str, short_name: str, nbytes: int):
+        self._name = name
+        self._short_name = short_name
+        self._nbytes = nbytes
 
     def __str__(self):
         return self.name
@@ -41,11 +40,22 @@ class DataType(TypeNode):
     def __call__(self, value: Any):
         return self.constant(value)
 
-    def short_name(self) -> str:
-        raise NotImplementedError()
+    def __getitem__(self, item):
+        if not isinstance(item, tuple):
+            item = (item,)
+        return tensor_type(dtype=self, shape=list(item))
 
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def short_name(self) -> str:
+        return self._short_name
+
+    @property
     def nbytes(self) -> int:
-        raise NotImplementedError()
+        return self._nbytes
 
     def is_float(self) -> bool:
         raise NotImplementedError()
@@ -73,20 +83,30 @@ class DataType(TypeNode):
 
 
 class TensorType(TypeNode):
-    def __init__(
-        self,
-        dtype: Optional[DataType] = None,
-        shape: Optional[Tuple[Expr, ...]] = None,
-        layout: Optional['DataLayout'] = None,
-    ):
+    def __init__(self, dtype=None, shape=None, layout=None):
+        """
+        A tensor type.
+
+        Parameters
+        ----------
+        dtype: DataType
+            The data type of the tensor.
+        shape: Tuple[Expr, ...]
+            The shape of the tensor.
+        layout: hidet.ir.layout.DataLayout
+            The layout of the tensor.
+        """
         from hidet.ir.layout import DataLayout
 
         self.dtype: DataType = dtype
         self.shape: Tuple[Expr] = shape
         self.layout: DataLayout = layout
 
+    def __invert__(self):
+        return TensorPointerType.from_tensor_type(self)
+
     def storage_bytes(self) -> Expr:
-        return self.layout.size * self.dtype.nbytes()
+        return self.layout.size * self.dtype.nbytes
 
     def const_shape(self) -> List[int]:
         return [int(v) for v in self.shape]
@@ -102,6 +122,7 @@ class PointerType(TypeNode):
         if isinstance(base_type, str):
             base_type = data_type(base_type)
         self.base_type: TypeNode = base_type
+        # todo: move the following attributes to DeclareStmt
         self.specifiers: List[str] = list(specifiers) if specifiers else []
         self.use_bracket: bool = use_bracket
 
@@ -113,12 +134,19 @@ class ReferenceType(TypeNode):
 
 
 class TensorPointerType(TypeNode):
-    def __init__(
-        self,
-        dtype: Optional[Union[DataType, str]] = None,
-        shape: Optional[Sequence[Int]] = None,
-        layout: Optional[Union[Sequence[Int], 'DataLayout']] = None,
-    ):
+    def __init__(self, dtype, shape, layout):
+        """
+        A pointer type that points to tensor.
+
+        Parameters
+        ----------
+        dtype: DataType
+            The data type of the tensor.
+        shape: Tuple[Expr, ...]
+            The shape of the tensor.
+        layout: hidet.ir.layout.DataLayout
+            The layout of the tensor.
+        """
         self.tensor_type: TensorType = tensor_type(dtype, shape, layout)
 
     @staticmethod
@@ -136,8 +164,8 @@ class FuncType(TypeNode):
         self,
         param_types: Optional[List[TypeLike]] = None,
         ret_type: Optional[TypeLike] = None,
-        type_infer_func: Optional[Callable] = None,
-    ):  # Callable[[a number of TypeNode], TypeNode]
+        type_infer_func: Optional[Callable] = None,  # Callable[[a number of TypeNode], TypeNode]
+    ):
         self.param_types = [self._convert_type(tp) for tp in param_types] if param_types is not None else None
         self.ret_type = self._convert_type(ret_type) if ret_type is not None else None
         self.type_infer_func = type_infer_func
@@ -162,21 +190,21 @@ class FuncType(TypeNode):
         return FuncType([param.type for param in func.params], func.ret_type)
 
 
-def tensor_type(dtype, shape=None, layout=None):
+def tensor_type(dtype, shape: Optional[Sequence[Union[int, Expr]]] = None, layout=None):
     """
     Construct a tensor type.
 
-    Shape and layout must be given at least one.
+    One of shape and layout must be given.
 
     Parameters
     ----------
     dtype: str or DataType
         The scalar type of this tensor.
 
-    shape: Optional[Sequence[Union[int, Expr]]]
+    shape: Sequence[Union[int, Expr]] or none
         The shape of the tensor. If not given, the shape in layout will be used.
 
-    layout: Optional[hidet.ir.layout.DataLayout]
+    layout: hidet.ir.layout.DataLayout or none
         The layout of the tensor. If not given, the row major layout of given shape will
         be used.
 
@@ -214,6 +242,11 @@ def tensor_type(dtype, shape=None, layout=None):
 
 def pointer_type(base_type):
     return PointerType(base_type)
+
+
+def tensor_pointer_type(dtype, shape=None, layout=None):
+    ttype = tensor_type(dtype, shape, layout)
+    return TensorPointerType(ttype.dtype, ttype.shape, ttype.layout)
 
 
 def void_pointer():

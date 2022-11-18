@@ -212,7 +212,7 @@ def engine_benchmark(
 ) -> List[float]:
     _, _, buffers = _prepare_buffer(engine, dummy_inputs)
     context: trt.IExecutionContext = engine.create_execution_context()
-    return benchmark_func(context.execute_async_v2(buffers, 0), warmup, number, repeat, median=False)
+    return benchmark_func(lambda: context.execute_async_v2(buffers, 0), warmup, number, repeat, median=False)
 
 
 def engine_inspect(engine: trt.ICudaEngine) -> Dict:

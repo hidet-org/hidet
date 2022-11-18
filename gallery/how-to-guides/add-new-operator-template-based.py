@@ -78,7 +78,7 @@ def batch_matmul_mma_fp16_schedule(task: BatchMatmulFp16Task) -> IRModule:
     from hidet.lang.mapping import repeat, spatial
     from hidet.lang.cuda import blockIdx, threadIdx, syncthreads
     from hidet.lang.cuda import MmaConfig, mma_sync
-    from hidet.transforms.tools import generate_packed_func
+    from hidet.transforms.tools import add_packed_func
 
     # get the workload size
     bs = task.attributes['batch_size']
@@ -194,7 +194,7 @@ def batch_matmul_mma_fp16_schedule(task: BatchMatmulFp16Task) -> IRModule:
     ir_module = module.ir_module()
     # conduct the fusion (when the task has prologue or epilogue) and generate the packed function
     # ir_module = fuse_and_pack(ir_module, kernel_func=batch_matmul_kernel, task=task)
-    generate_packed_func(ir_module, func=batch_matmul_kernel, pack_func_name=task.name)
+    add_packed_func(ir_module, func=batch_matmul_kernel, pack_func_name=task.name)
     return ir_module
 
 

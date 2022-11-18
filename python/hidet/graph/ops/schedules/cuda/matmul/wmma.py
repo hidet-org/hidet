@@ -12,7 +12,7 @@ from hidet.ir.primitives import syncthreads, thread_idx, block_idx
 from hidet.ir.primitives.cuda.wmma import WmmaConfig, wmma_load_a, wmma_load_b, wmma_mma, wmma_store, wmma_configs
 from hidet.ir.stmt import BufferStoreStmt, IfStmt, DeclareStmt, DeclareScope
 from hidet.ir.task import Task
-from hidet.ir.type import data_type, tensor_type, TensorPointerType, PointerType
+from hidet.ir.type import data_type, tensor_type, PointerType, tensor_pointer_type
 from hidet.graph.ops.definitions.matmul import BatchMatmulTask
 from hidet.graph.ops.schedules.common import params_from_task, Schedule, NotSupportedError
 from hidet.graph.ops.schedules.cuda.common import get_task_map, get_transfer_task_map
@@ -267,9 +267,9 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, schedule: Mat
         fb.extend_params(params)
 
         # declare local variables
-        smem_a = Var('smem_a', TensorPointerType(a_dtype, layout=sch.smem_a_layout))
-        smem_b = Var('smem_b', TensorPointerType(b_dtype, layout=sch.smem_b_layout))
-        smem_c = Var('smem_c', TensorPointerType(c_dtype, layout=sch.smem_c_layout))
+        smem_a = Var('smem_a', tensor_pointer_type(a_dtype, layout=sch.smem_a_layout))
+        smem_b = Var('smem_b', tensor_pointer_type(b_dtype, layout=sch.smem_b_layout))
+        smem_c = Var('smem_c', tensor_pointer_type(c_dtype, layout=sch.smem_c_layout))
         if sch.use_dynamic_smem:
             # 'extern __shared__ uint8_t smem_storage[];' in c code
             smem_storage = Var(
