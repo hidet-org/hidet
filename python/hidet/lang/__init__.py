@@ -8,13 +8,10 @@ from hidet.lang.script import script, script_module
 from hidet.ir.stmt import asm, DeclareScope
 from hidet.ir.func import Function
 from hidet.lang.type_utils import static, with_scope
+from hidet.ir.dtypes import int8, int16, int32, int64, uint8, uint16, uint32, uint64, float16, float32, float64, boolean
+from hidet.ir.dtypes import i8, i16, i32, i64, u8, u16, u32, u64, f16, f32, f64
+from hidet.ir.dtypes import bfloat16, tfloat32, bf16, tf32
 
-i32 = data_type('int32')
-u32 = data_type('uint32')
-i64 = data_type('int64')
-f32 = data_type('float32')
-f16 = data_type('float16')
-bf16 = data_type('bfloat16')
 
 ref_u32 = ReferenceType(u32)
 

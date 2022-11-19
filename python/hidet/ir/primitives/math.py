@@ -1,4 +1,4 @@
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 from hidet.ir.expr import Expr, Call
 from hidet.ir.type import FuncType, DataType
 from hidet.ir.utils.type_utils import numeric_promotion
@@ -6,6 +6,30 @@ from hidet.ir.primitives.func import register_primitive_function, lookup_primiti
 
 
 class MathFunctionSet:
+    # cast function
+    def cast(self, a: Expr, cast_dtype: DataType) -> Optional[Expr]:
+        """
+        Cast expression a to cast_dtype.
+
+        If the default implementation is used, return None. The default implementation is to use the cast expression
+        in the underlying language (e.g. C cast):
+          (cast_dtype)(a)
+
+        Parameters
+        ----------
+        a: Expr
+            The expression to be cast.
+
+        cast_dtype: DataType
+            The target data type.
+
+        Returns
+        -------
+        ret:
+            The cast expression. None if (cast_dtype)(a) is used to represent the cast.
+        """
+        return None
+
     # unary math functions
     def sin(self, a: Expr) -> Expr:
         raise NotImplementedError()
@@ -55,6 +79,8 @@ class MathFunctionSet:
         raise NotImplementedError()
 
 
+# (device, dtype) -> math function set
+# such as ('cuda', 'float16') -> MathFunctionSet
 registered_math_function_sets: Dict[Tuple[str, str], MathFunctionSet] = {}
 
 

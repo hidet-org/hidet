@@ -18,6 +18,7 @@ from .lower_task_mapping import lower_task_mapping_pass
 from .lower_protect_access import lower_protect_access_pass
 from .declare_to_let import declare_to_let_pass
 from .propogate_launch_bound import propagate_launch_bound_pass
+from .lower_special_cast import lower_special_cast_pass
 
 
 def lower(ir_module: IRModule) -> IRModule:
@@ -29,6 +30,7 @@ def lower(ir_module: IRModule) -> IRModule:
         normalize_const_tensor_pass(),
         rule_based_simplify_pass(),  # make ir more readable
         flatten_tensor_index_pass(),
+        lower_special_cast_pass(),
         resolve_primitive_func_pass(),
         import_primitive_functions_pass(),
         resolve_primitive_func_pass(),

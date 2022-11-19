@@ -1,12 +1,16 @@
 """
-Convert DeclareStmt with initialized value to LetStmt if the declared variable has never been
-modified (with AssignStmt).
+Convert DeclareStmt with initialized value to LetStmt if the declared variable satisfy the following conditions:
+    1. has never been modified with AssignStmt statement, and
+    2. has never been addressed with Address expression, and
+    3. has never been referenced with Reference expression, and
+    4. has never appeared in outputs of AsmStmt statement
+
 """
 from typing import List, Dict
 from collections import defaultdict
 
 from hidet.ir import SeqStmt
-from hidet.ir.expr import Var
+from hidet.ir.expr import Expr, Var, Address, Reference
 from hidet.ir.stmt import AssignStmt, DeclareStmt, LetStmt, Stmt, AsmStmt
 from hidet.transforms.base import Pass, FunctionBodyPass
 from hidet.ir.functors import StmtExprRewriter, collect
@@ -18,18 +22,32 @@ class DeclareToLetRewriter(StmtExprRewriter):
         self.assigns: Dict[Var, int] = defaultdict(int)
 
     def rewrite(self, func_body: Stmt):
-        for stmt in collect(func_body, (DeclareStmt, AssignStmt, AsmStmt)):
-            if isinstance(stmt, DeclareStmt):
-                if stmt.init is not None:
+        for potential_usage in collect(func_body, (DeclareStmt, AssignStmt, AsmStmt, Address, Reference)):
+            if isinstance(potential_usage, Stmt):
+                stmt = potential_usage
+                if isinstance(stmt, DeclareStmt):
+                    if stmt.init is not None:
+                        self.assigns[stmt.var] += 1
+                elif isinstance(stmt, AssignStmt):
                     self.assigns[stmt.var] += 1
-            elif isinstance(stmt, AssignStmt):
-                self.assigns[stmt.var] += 1
-            elif isinstance(stmt, AsmStmt):
-                for output_expr in stmt.output_exprs:
-                    if isinstance(output_expr, Var):
-                        self.assigns[output_expr] += 1
+                elif isinstance(stmt, AsmStmt):
+                    for output_expr in stmt.output_exprs:
+                        if isinstance(output_expr, Var):
+                            self.assigns[output_expr] += 1
+                else:
+                    assert False
+            elif isinstance(potential_usage, Expr):
+                expr = potential_usage
+                if isinstance(expr, Address):
+                    if isinstance(expr.expr, Var):
+                        self.assigns[expr.expr] += 1
+                elif isinstance(expr, Reference):
+                    if isinstance(expr.expr, Var):
+                        self.assigns[expr.expr] += 1
+                else:
+                    assert False
             else:
-                raise ValueError()
+                assert False
         return self.visit(func_body)
 
     def visit_SeqStmt(self, seq_stmt: SeqStmt):

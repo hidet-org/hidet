@@ -40,11 +40,6 @@ class ResolveGenericPrimitiveFuncRewriter(StmtExprRewriter):
                 args = [self(arg) for arg in e.args]
                 arg_types = [infer_type(arg) for arg in args]
                 resolved_dtype: DataType = resolve_dtype(arg_types)
-                # if resolved_dtype.name not in entry.dispatch_dtype_rules:
-                #     msg = 'Can not dispatch generic primitive function {} to dtype {}'.format(
-                #         green(entry.name), green(resolved_dtype)
-                #     )
-                #     raise NotImplementedError(msg)
                 generic, func_name = entry.name.split('_')  # such as 'generic_exp'
                 assert generic == 'generic'
                 dtype: str = resolved_dtype.name
@@ -60,11 +55,6 @@ class ResolveGenericPrimitiveFuncRewriter(StmtExprRewriter):
                     assert hasattr(func_set, func_name)
                     func = getattr(func_set, func_name)
                     return func(*args)
-
-                # dispatched_func_key = entry.dispatch_dtype_rules[resolved_dtype.name]
-                # dispatched_func_entry = lookup_primitive_function(name=dispatched_func_key)
-                # casted_args = cast_args(args, arg_types, resolved_dtype)
-                # return Call(dispatched_func_entry.var, casted_args)
 
         return StmtExprRewriter.visit_Call(self, e)
 

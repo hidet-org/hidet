@@ -41,10 +41,10 @@ class BertEmbeddings(nn.Module):
         batch_size, seq_length = input_ids.shape
 
         if position_ids is None:
-            ids = torch.arange(seq_length, dtype=torch.int64).expand((batch_size, -1))
+            ids = torch.arange(seq_length, dtype=torch.int64).expand((batch_size, -1)).cuda()
             position_ids = ids
         if token_type_ids is None:
-            token_type_ids = torch.zeros([batch_size, seq_length], dtype=torch.int64)
+            token_type_ids = torch.zeros([batch_size, seq_length], dtype=torch.int64).cuda()
 
         input_embeds = self.word_embeddings(input_ids)
         token_type_embeddings = self.token_type_embeddings(token_type_ids)
@@ -80,7 +80,9 @@ class BertSelfAttention(nn.Module):
         query = self.transpose_for_scores(self.query_layer(hidden_states))
         key = self.transpose_for_scores(self.key_layer(hidden_states))
         value = self.transpose_for_scores(self.value_layer(hidden_states))
-        attention_scores = torch.matmul(query, torch.transpose(key, -1, -2)) / math.sqrt(self.attention_head_size)
+        attention_scores = torch.matmul(query, torch.transpose(key, -1, -2)) / torch.tensor(
+            math.sqrt(self.attention_head_size), dtype=hidden_states.dtype
+        )
         attention_scores = attention_scores + attention_mask
         attention_probs = torch.softmax(attention_scores, dim=-1)
         context = torch.matmul(attention_probs, value)
@@ -265,16 +267,16 @@ class BertModel(nn.Module):
         self.pooler = BertPooler(config)
 
     @staticmethod
-    def extend_attention_mask(attention_mask: Tensor) -> Tensor:
+    def extend_attention_mask(attention_mask: Tensor, dtype: torch.dtype) -> Tensor:
         # attention_mask: [batch_size, seq_length] in {0, 1}
         # return: [batch_size, 1, 1, seq_length] in {-10000, 0}
         attention_mask = attention_mask[:, None, None, :]
-        attention_mask = (1.0 - attention_mask) * -10000.0
+        attention_mask = (torch.tensor(1.0, dtype=dtype) - attention_mask) * torch.tensor(-10000.0, dtype=dtype)
         return attention_mask
 
     def forward(self, input_ids: Tensor, token_type_ids: Tensor, attention_mask: Tensor):
         embeds = self.embeddings.forward(input_ids, token_type_ids)
-        attention_mask = self.extend_attention_mask(attention_mask)
+        attention_mask = self.extend_attention_mask(attention_mask, embeds.dtype)
         hidden_states = self.encoder.forward(embeds, attention_mask)
         pooled_output = self.pooler(hidden_states)
         return [hidden_states, pooled_output]

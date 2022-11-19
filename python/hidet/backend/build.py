@@ -105,6 +105,16 @@ def compile_source(src_path: str, out_lib_path: str, keep_ptx=False) -> None:
     ]
 
     try:
+        # the directory to store the library "lib.so"
+        out_lib_dir = os.path.dirname(out_lib_path)
+
+        # write the compilation command to "compile.sh"
+        with open(os.path.join(out_lib_dir, 'compile.sh'), 'w') as f:
+            f.write("#!/bin/bash\n\n")
+            f.write(" ".join(command))
+            f.write("\n")
+
+        # run the compilation command
         with tempfile.TemporaryDirectory() as working_dir:
             result = subprocess.run(" ".join(command).split(), stderr=PIPE, stdout=PIPE, cwd=working_dir, check=False)
             if result.returncode:
@@ -115,21 +125,16 @@ def compile_source(src_path: str, out_lib_path: str, keep_ptx=False) -> None:
                     message += result.stderr.decode().strip()
                 ptx_name = os.path.basename(src_path).replace('.cu', '.ptx')
                 if keep_ptx and os.path.exists(os.path.join(working_dir, ptx_name)):
-                    out_lib_dir = os.path.dirname(out_lib_path)
                     ptx_path = os.path.join(working_dir, ptx_name)
                     target_ptx_path = os.path.join(out_lib_dir, ptx_name)
                     shutil.move(ptx_path, target_ptx_path)
                 raise CompilationFailed(src_path, message)
-            out_lib_dir = os.path.dirname(out_lib_path)
             if keep_ptx:
                 ptx_name = os.path.basename(src_path).replace('.cu', '.ptx')
                 ptx_path = os.path.join(working_dir, ptx_name)
                 target_ptx_path = os.path.join(out_lib_dir, ptx_name)
                 shutil.move(ptx_path, target_ptx_path)
                 # os.rename(ptx_path, target_ptx_path)
-            with open(os.path.join(out_lib_dir, 'compile.sh'), 'w') as f:
-                f.write("#!/bin/bash\n")
-                f.write(" ".join(result.args))
             with open(os.path.join(out_lib_dir, 'nvcc_log.txt'), 'w') as f:
                 output = '\n'.join([result.stdout.decode('utf-8').strip(), result.stderr.decode('utf-8').strip()])
                 f.write(output)

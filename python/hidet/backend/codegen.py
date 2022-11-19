@@ -357,7 +357,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             assert isinstance(value, int)
             return Text(f'{value}')
         elif dtype == 'float16':
-            return Text('half({})'.format(value))
+            return Text('__half({})'.format(value))
         elif dtype == 'int64':
             assert isinstance(value, int)
             return Text('{}ll'.format(value))
@@ -521,7 +521,11 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         scalar_type_map = {
             'bool': 'bool',
             'uint8': 'uint8_t',
+            'uint16': 'uint16_t',
             'uint32': 'uint32_t',
+            'uint64': 'uint64_t',
+            'int8': 'int8_t',
+            'int16': 'int16_t',
             'int32': 'int32_t',
             'int64': 'int64_t',
             'float16': 'half',
