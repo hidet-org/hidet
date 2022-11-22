@@ -253,15 +253,20 @@ def void_pointer():
     return PointerType(VoidType())
 
 
-def data_type(name: str) -> DataType:
+def data_type(name: Union[str, DataType]) -> DataType:
     from hidet.ir.dtypes import name2dtype, sname2dtype
 
-    if name in name2dtype:
-        return name2dtype[name]
-    elif name in sname2dtype:
-        return sname2dtype[name]
+    if isinstance(name, DataType):
+        return name
+    elif isinstance(name, str):
+        if name in name2dtype:
+            return name2dtype[name]
+        elif name in sname2dtype:
+            return sname2dtype[name]
+        else:
+            raise ValueError('Unknown data type: {}, candidates:\n{}'.format(name, '\n'.join(name2dtype.keys())))
     else:
-        raise ValueError('Unknown data type: {}'.format(name))
+        raise ValueError('Expect a string or a DataType, but got {}'.format(type(name)))
 
 
 void_p = PointerType(VoidType())

@@ -195,6 +195,9 @@ class Tensor:
         """
         return "Tensor(shape={}, dtype='{}', device='{}')".format(self.shape, self.dtype, self.device)
 
+    def is_symbolic(self) -> bool:
+        return self.storage is None
+
     @property
     def nbytes(self):
         """The number of bytes of the tensor.

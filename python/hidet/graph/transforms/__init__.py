@@ -9,7 +9,7 @@ from .resolve_variant import resolve_variant_pass
 from .fuse_operator import fuse_operator_pass
 from .eliminate_barrier import eliminate_barrier_pass
 
-from .resolve_variant import ResolveRule, register_resolve_rule, get_registered_resolve_rules
+from .resolve_variant import ResolveRule, register_resolve_rule, get_resolve_chain
 
 
 def optimize(graph: FlowGraph) -> FlowGraph:

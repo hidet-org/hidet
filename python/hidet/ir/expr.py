@@ -159,6 +159,22 @@ class Expr(Node):
         return BufferStoreStmt(self, te.indices, value, protected)
 
 
+# the following are used as type hints
+# if a primitive function expect an int8 expression, we should use ExprInt8 instead of Expr
+# to explicit tell the reader that this function expect an int8 expression
+# but this is not enforced by the type system of python
+# ExprInt8 should be read as "expression with int8 type"
+# Usage example:
+#
+#   def cuda_i64_to_f16(a: ExprInt64) -> ExprFloat16:
+#       ...
+# Above function expects an int64 expression and returns a float16 value.
+
+ExprInt8 = ExprInt16 = ExprInt32 = ExprInt64 = Expr
+ExprUInt8 = ExprUInt16 = ExprUInt32 = ExprUInt64 = Expr
+ExprFloat16 = ExprFloat32 = ExprFloat64 = ExprBFloat16 = ExprTFloat32 = Expr
+
+
 class BinaryOp(Expr):
     def __init__(self, a, b):
         self.a = convert(a)
@@ -601,3 +617,11 @@ def view(ptr: Expr, tp: TensorType) -> Expr:
     if not isinstance(tp, TensorType):
         raise ValueError('Expect a tensor type, got {}'.format(type(tp).__name__))
     return cast(ptr, TensorPointerType.from_tensor_type(tp))
+
+
+def address(v: Expr) -> Expr:
+    return Address(v)
+
+
+def deref(v: Expr) -> Expr:
+    return Dereference(v)
