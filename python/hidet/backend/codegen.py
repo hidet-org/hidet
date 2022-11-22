@@ -273,7 +273,12 @@ class Codegen(StmtExprFunctor, TypeFunctor):
     def visit_TensorElement(self, e: TensorElement):
         if e.protected:
             raise ValueError('The protected reading of tensor element should be lowered in lower_protect_access pass.')
-        return self(e.base) + doc_join(['[' + self(idx) + ']' for idx in e.indices], '')
+        base_doc = self(e.base)
+        index_doc = doc_join(['[' + self(idx) + ']' for idx in e.indices], '')
+        if isinstance(e.base, Address):
+            return Text('(') + base_doc + Text(')') + index_doc
+        else:
+            return base_doc + index_doc
 
     def visit_IfThenElse(self, e: IfThenElse):
         return '(' + self(e.cond) + ' ? ' + self(e.then_expr) + ' : ' + self(e.else_expr) + ')'

@@ -5,7 +5,7 @@ Please refer to the following section in PTX manual for the details of MMA instr
 from typing import List, Dict
 from hidet.ir.mapping import TaskMapping, row_spatial, col_spatial, row_repeat, col_repeat
 from hidet.utils import initialize
-from hidet.ir.type import PointerType, data_type
+from hidet.ir.type import PointerType, DataType, data_type
 from hidet.ir.expr import Var, Expr, cast
 from hidet.ir.stmt import AsmStmt, AssignStmt, asm, DeclareStmt
 from hidet.ir.func import Function
@@ -270,6 +270,46 @@ def register_ldmatrix_instructions():
 def mma_sync(config: MmaConfig, a_addr: Expr, b_addr: Expr, c_addr: Expr):
     name = config.inst_name().replace('.', '_')
     return call_cuda(func_name=name, args=[a_addr, b_addr, c_addr])
+
+
+def _print_segment(mapping: TaskMapping, dtype: DataType, addr: Expr, worker_id: Expr, precision: int, msg: str):
+    from hidet.ir.dtypes import int32, float32
+    from hidet.ir.expr import And, var
+    from hidet.ir.stmt import DeclareStmt
+    from hidet.ir.primitives import printf, syncwarp
+    from hidet.ir.builders import StmtBuilder
+
+    sb = StmtBuilder()
+    seg = Var('seg', ~dtype)
+    with sb.let(seg, addr):
+        if msg:
+            with sb.if_then(worker_id == 0):
+                sb += printf(f'{msg}\\n')
+        with sb.for_loop('i', mapping.task_shape[0], unroll=False) as i:
+            with sb.for_loop('j', mapping.task_shape[1], unroll=False) as j:
+                p = var('p', int32)
+                sb += DeclareStmt(p, int32(0))
+                with sb.for_mapping(['ii', 'jj'], mapping, worker_id) as (ii, jj):
+                    with sb.if_then(And(ii == i, jj == j)):
+                        sb += printf('%.{}f '.format(precision), cast(seg[p], float32))
+                    sb += syncwarp()
+                    sb += AssignStmt(p, p + 1)
+            with sb.if_then(worker_id == 0):
+                sb += printf(r'\n')
+            sb += syncwarp()
+    return sb.finish()
+
+
+def print_segment_a(config: MmaConfig, a_addr: Expr, worker_id: Expr, precision: int = 2, msg: str = 'Segment A'):
+    return _print_segment(config.a_load_map, data_type(config.input_dtype), a_addr, worker_id, precision, msg)
+
+
+def print_segment_b(config: MmaConfig, b_addr: Expr, worker_id: Expr, precision: int = 2, msg: str = 'Segment B'):
+    return _print_segment(config.b_load_map, data_type(config.input_dtype), b_addr, worker_id, precision, msg)
+
+
+def print_segment_c(config: MmaConfig, c_addr: Expr, worker_id: Expr, precision: int = 2, msg: str = 'Segment C'):
+    return _print_segment(config.c_store_map, data_type(config.output_dtype), c_addr, worker_id, precision, msg)
 
 
 def ldmatrix(regs: List[Expr], smem_addr: Expr, shared_space_addr: bool = False, trans: bool = False):
