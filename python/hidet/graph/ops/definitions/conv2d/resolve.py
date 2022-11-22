@@ -1,4 +1,4 @@
-from typing import List, Type, Optional
+from typing import List, Optional
 from hidet.graph.ir import Operator, Tensor
 from hidet.graph import ops
 from hidet.graph.transforms import ResolveRule, register_resolve_rule
@@ -6,13 +6,10 @@ from hidet.graph.transforms import ResolveRule, register_resolve_rule
 from .conv2d import Conv2dOp
 
 
-@register_resolve_rule
+@register_resolve_rule(Conv2dOp)
 class Conv2dResolveRule(ResolveRule):
     def __init__(self, enable_winograd=False):
         self.enable_winograd = enable_winograd
-
-    def op_cls(self) -> Type[Operator]:
-        return Conv2dOp
 
     def resolve(self, op: Operator) -> Optional[List[Tensor]]:
         assert isinstance(op, Conv2dOp)

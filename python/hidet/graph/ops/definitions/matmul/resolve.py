@@ -1,4 +1,4 @@
-from typing import List, Type, Optional
+from typing import List, Optional
 from functools import lru_cache
 
 from hidet.graph.ir import Operator, Tensor
@@ -68,7 +68,7 @@ def parallel_k_search_nparts(dtype: str, mma: str, batch_size, m_size, n_size, k
     return best_nparts
 
 
-@register_resolve_rule
+@register_resolve_rule(MatmulOp)
 class MatmulResolveRule(ResolveRule):
     """
     Resolve a generic matrix multiplication operator to a batched matrix multiplication operator.
@@ -81,9 +81,6 @@ class MatmulResolveRule(ResolveRule):
 
     This resolve rule also parallelize k dimension when possible, and determine the mma instruction.
     """
-
-    def op_cls(self) -> Type[Operator]:
-        return MatmulOp
 
     def run_batch_matmul(self, a: Tensor, b: Tensor) -> Tensor:
         parallel_k = self.get_config('parallel_k', default='default')  # 'default', 'search', 2, 4, ...

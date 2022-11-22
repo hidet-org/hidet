@@ -4,7 +4,7 @@ import time
 
 import hidet
 from bench.common import benchmark_run, BenchResult, get_onnx_model
-from hidet.utils import hidet_cache_file
+from hidet.utils import hidet_cache_file, hidet_cache_dir
 
 
 def bench_hidet(args, out_dir) -> BenchResult:
@@ -21,6 +21,7 @@ def bench_hidet(args, out_dir) -> BenchResult:
         'bs_{}_{}'.format(args.bs, result.configs),
         'graph.pickle'
     )
+    graph_cache_dir = os.path.dirname(graph_path)
     onnx_path, input_names, input_tensors = get_onnx_model(name=args.model, batch_size=args.bs, precision=args.precision)
 
     hidet.option.search_space(args.hidet_space)
@@ -41,7 +42,7 @@ def bench_hidet(args, out_dir) -> BenchResult:
                 'f32': 'float32',
                 'bf16': 'bfloat16'
             }
-            ctx.save_graph_instrument(out_dir=os.path.join(out_dir, 'ir'))
+            ctx.save_graph_instrument(out_dir=os.path.join(graph_cache_dir, 'ir'))
             ctx.set_precision(short2long[args.precision])
             ctx.set_reduce_precision(short2long[args.reduce_precision])
             ctx.set_mma(args.mma)
@@ -58,7 +59,6 @@ def bench_hidet(args, out_dir) -> BenchResult:
 
         hidet.save_graph(graph, graph_path + '.tmp')
         os.rename(graph_path + '.tmp', graph_path)
-
         graph(*input_tensors)
         t2 = time.time()
         with open(os.path.join(os.path.dirname(graph_path), 'tuning_time.txt'), 'w') as f:

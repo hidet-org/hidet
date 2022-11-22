@@ -1,16 +1,13 @@
-from typing import List, Type, Optional
-from hidet.graph.ir import Operator, Tensor
+from typing import List, Optional
+from hidet.graph.ir import Tensor
 from hidet.graph import ops
 from hidet.graph.transforms import ResolveRule, register_resolve_rule
 
 from .conv2d_transpose import Conv2dTransposeOp
 
 
-@register_resolve_rule
+@register_resolve_rule(Conv2dTransposeOp)
 class Conv2dTransposeResolveRule(ResolveRule):
-    def op_cls(self) -> Type[Operator]:
-        return Conv2dTransposeOp
-
     def resolve(self, op: Conv2dTransposeOp) -> Optional[List[Tensor]]:
         attrs = op.attrs
         data, weight = op.inputs

@@ -1,13 +1,10 @@
-from typing import Type, List, Optional, Union
+from typing import Type, List, Optional, Dict
 from hidet.graph.ir import FlowGraph, GraphRewriter, Tensor, Operator
 from hidet.utils import strict_zip, same_list, repeat_until_converge
 from .base import GraphPass, PassContext
 
 
 class ResolveRule:
-    def op_cls(self) -> Type[Operator]:
-        raise NotImplementedError()
-
     def resolve(self, op: Operator) -> Optional[List[Tensor]]:
         """
         Parameters
@@ -17,7 +14,7 @@ class ResolveRule:
 
         Returns
         -------
-        ret: Optional[List[Tensor]]
+        ret:
             None - indicates the operator has not been resolved, keep the original operator.
             List[Tensor] - the output of resolved operators.
         """
@@ -27,32 +24,53 @@ class ResolveRule:
         return PassContext.current().configs.get(name, default)
 
 
-registered_resolve_rules: List[ResolveRule] = []
+class ResolveRuleChain:
+    def __init__(self, op_cls: Type[Operator], rules: List[ResolveRule]):
+        self.op_cls: Type[Operator] = op_cls
+        self.rules: List[ResolveRule] = list(rules)
+
+    def resolve(self, op: Operator) -> Optional[List[Tensor]]:
+        # apply rules in reverse order, so that the latest rule has the highest priority
+        for rule in reversed(self.rules):
+            if self.op_cls == type(op):
+                return rule.resolve(op)
+        return None
 
 
-def register_resolve_rule(rule_or_cls: Union[Type[ResolveRule], ResolveRule]):
-    if isinstance(rule_or_cls, ResolveRule):
-        rule = rule_or_cls
-    elif issubclass(rule_or_cls, ResolveRule):
-        rule = rule_or_cls()
-    else:
-        raise ValueError("Expect a ResolveRule instance or subclass, got {}".format(type(rule_or_cls)))
-    registered_resolve_rules.append(rule)
-    return rule_or_cls
+registered_resolve_rules: Dict[Type[Operator], ResolveRuleChain] = {}
 
 
-def get_registered_resolve_rules() -> List[ResolveRule]:
-    return registered_resolve_rules
+def register_resolve_rule(op_cls: Type[Operator]):
+    if not issubclass(op_cls, Operator):
+        raise ValueError("Expect a subclass of Operator, got {}".format(type(op_cls)))
+
+    def wrapper(rule_cls: Type[ResolveRule]):
+        if not issubclass(rule_cls, ResolveRule):
+            raise ValueError("Expect a subclass of ResolveRule, got {}".format(type(rule_cls)))
+
+        if op_cls not in registered_resolve_rules:
+            registered_resolve_rules[op_cls] = ResolveRuleChain(op_cls, [])
+        chain = registered_resolve_rules[op_cls]
+        chain.rules.append(rule_cls())
+        return rule_cls
+
+    return wrapper
+
+
+def get_resolve_chain(op_cls: Type[Operator]) -> Optional[ResolveRuleChain]:
+    if op_cls not in registered_resolve_rules:
+        return None
+    return registered_resolve_rules[op_cls]
 
 
 class ResolveVariantRewriter(GraphRewriter):
-    def __init__(self, rule: ResolveRule):
+    def __init__(self, op_cls: Type[Operator], rule_chain: ResolveRuleChain):
         super().__init__()
-        self.rule = rule
+        self.op_cls: Type[Operator] = op_cls
+        self.rule_chain: ResolveRuleChain = rule_chain
 
     def visit_Operator(self, op: Operator):
-        op_cls = self.rule.op_cls()
-        if not isinstance(op, op_cls):
+        if not isinstance(op, self.op_cls):
             GraphRewriter.visit_Operator(self, op)
             return
         inputs = [self(x) for x in op.inputs]
@@ -61,7 +79,7 @@ class ResolveVariantRewriter(GraphRewriter):
         else:
             updated_outputs = op.reforward(inputs)
             resolve_op = updated_outputs[0].op
-        outs = self.rule.resolve(resolve_op)
+        outs = self.rule_chain.resolve(resolve_op)
 
         if outs is None:
             # keep the original operator
@@ -77,22 +95,14 @@ class ResolveVariantRewriter(GraphRewriter):
 
 
 class ResolveVariantPass(GraphPass):
-    def process_graph(self, graph: FlowGraph) -> FlowGraph:
+    def process_graph(self, input_graph: FlowGraph) -> FlowGraph:
         def apply_rules(graph: FlowGraph) -> FlowGraph:
-            for rule in get_registered_resolve_rules():
-                rewriter = ResolveVariantRewriter(rule)
+            for op_cls, rule_chain in registered_resolve_rules.items():
+                rewriter = ResolveVariantRewriter(op_cls, rule_chain)
                 graph = rewriter(graph)
             return graph
 
-        return repeat_until_converge(apply_rules, graph, limit=None)
-        # for rule in rule_seq:
-        #     resolver = ResolveVariantRewriter(rule)
-        #     while True:
-        #         updated_graph = resolver(graph)
-        #         if updated_graph is graph:
-        #             break
-        #         graph = updated_graph
-        # return graph
+        return repeat_until_converge(apply_rules, input_graph, limit=None)
 
 
 def resolve_variant_pass() -> GraphPass:

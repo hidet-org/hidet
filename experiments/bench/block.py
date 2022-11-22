@@ -27,7 +27,7 @@ def main():
             # '--bs 16'
         ]:
             for model in [
-                '--model bert_all',
+                # '--model bert_all',
                 # '--model bert_embeddings',
                 # '--model bert_encoder',
                 # '--model bert_pooler',
@@ -43,9 +43,10 @@ def main():
                 # '--model bert_self_at_softmax',
                 # '--model bert_self_at_context',
             ]:
-                # extra = '--number 1 --repeat 1 --warmup 0 --nocheck'
-                extra = ''
-                bench.main('{} {} {} {}'.format(executor, bs, model, extra))
+                extra = '--number 1 --repeat 1 --warmup 0 --nocheck'
+                # extra = ''
+                with hidet.utils.nvtx_annotate(message=executor.split()[1], color='green'):
+                    bench.main('{} {} {} {}'.format(executor, bs, model, extra))
 
 
 if __name__ == '__main__':
