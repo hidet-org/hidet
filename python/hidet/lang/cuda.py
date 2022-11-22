@@ -1,4 +1,10 @@
 # pylint: disable=unused-import
+from typing import Union, Optional, Sequence
+from hidet.ir.type import DataType, tensor_type
+from hidet.ir.expr import Expr
+from hidet.ir.stmt import DeclareScope
+from hidet.ir.layout import DataLayout
+from hidet.lang.type_utils import shared_scope, register_scope
 from hidet.ir.primitives.cuda.vars import threadIdx, blockIdx, blockDim, gridDim
 from hidet.ir.primitives.cuda.smem import dynamic_shared_memory, set_kernel_max_dynamic_smem_bytes
 from hidet.ir.primitives.cuda.sync import syncthreads, syncthreads_and, syncthreads_count, syncthreads_or
@@ -10,3 +16,20 @@ from hidet.ir.primitives.cuda.time import nano_sleep
 from hidet.ir.primitives.cuda.atomic import atomic_add, atomic_sub, atomic_exchange, atomic_cas
 from hidet.ir.primitives.cuda.shfl import shfl_sync, shfl_up_sync, shfl_xor_sync, shfl_down_sync
 from hidet.ir.primitives.cuda.mutex import acquire_lock, release_lock, acquire_seq_semaphore, release_seq_semaphore
+
+
+def shared_tensor(
+    dtype: Union[DataType, str],
+    shape: Optional[Sequence[Union[Expr, int]]] = None,
+    layout: Optional[DataLayout] = None,
+):
+    return shared_scope(tensor_type(dtype, shape, layout))
+
+
+def register_tensor(
+    dtype: Union[DataType, str],
+    shape: Optional[Sequence[Union[Expr, int]]] = None,
+    layout: Optional[DataLayout] = None,
+):
+    return register_scope(tensor_type(dtype, shape, layout))
+

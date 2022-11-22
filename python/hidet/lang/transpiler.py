@@ -407,6 +407,13 @@ class PythonToHidetTranslator(PythonAstFunctor):
                             arg_type = ir.TensorPointerType(
                                 dtype=arg_type.dtype, shape=arg_type.shape, layout=arg_type.layout
                             )
+                    elif isinstance(arg_type, TypeDecorator):
+                        arg_type = arg_type.decorated_type
+                        if isinstance(arg_type, ir.TensorType):
+                            # we automatically change the tensor type of argument to a tensor pointer type.
+                            arg_type = ir.TensorPointerType(
+                                dtype=arg_type.dtype, shape=arg_type.shape, layout=arg_type.layout
+                            )
                     elif arg_type in [int, float]:
                         type_dict = {int: ir.data_type('int32'), float: ir.data_type('float32')}
                         arg_type = type_dict[arg_type]
@@ -540,8 +547,12 @@ class PythonToHidetTranslator(PythonAstFunctor):
         lhs = self.visit(expr.left)
         rhs = self.visit(expr.right)
         if isinstance(lhs, ir.DataLayout) and isinstance(rhs, ir.DataLayout):
-            assert isinstance(expr.op, Mult)
-            return lhs * rhs
+            if isinstance(expr.op, Mult):
+                return lhs * rhs
+            elif isinstance(expr.op, Add):
+                return lhs + rhs
+            else:
+                raise HidetProgramError(self, expr, 'Hidet does not support this operation on DataLayout.')
         elif isinstance(lhs, ir.TaskMapping) and isinstance(rhs, ir.TaskMapping):
             assert isinstance(expr.op, Mult)
             return lhs * rhs
@@ -766,7 +777,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
         if hasattr(base, attr):
             return getattr(base, attr)
         else:
-            raise HidetProgramError(self, expr, 'Can not access attribute.')
+            raise HidetProgramError(self, expr, 'Can not access attribute "{}" of this object.'.format(attr))
 
     def visit_IfExp(self, expr: IfExp):
         cond = self.visit(expr.test)
