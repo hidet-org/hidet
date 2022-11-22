@@ -32,8 +32,9 @@ class ResolveRuleChain:
     def resolve(self, op: Operator) -> Optional[List[Tensor]]:
         # apply rules in reverse order, so that the latest rule has the highest priority
         for rule in reversed(self.rules):
-            if self.op_cls == type(op):
-                return rule.resolve(op)
+            outs = rule.resolve(op)
+            if outs is not None:
+                return outs
         return None
 
 
