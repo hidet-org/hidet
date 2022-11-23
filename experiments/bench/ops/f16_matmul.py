@@ -1,10 +1,14 @@
+from typing import Optional, List
+
 import numpy as np
 import numpy.testing
 from hidet.ir.func import IRModule
 from hidet.ir.compute import TensorNode
 from hidet.graph import Operator, Tensor
-from hidet.graph.ops.definitions.matmul.batch_matmul import BatchMatmulTask
+from hidet.graph.ops.definitions.matmul.batch_matmul import BatchMatmulTask, BatchMatmulOp
 from hidet.graph.ops.definitions.utils import input_like
+from hidet.graph.ops.schedules import Schedule
+from hidet.graph.transforms.resolve_variant import register_resolve_rule, ResolveRule
 import hidet
 
 hidet.option.cache_dir('./outs/cache')
@@ -158,8 +162,6 @@ class BatchMatmulF16Task(BatchMatmulTask):
                         )
                     cp_async(~smem_a[i, k], ~gmem_a[i, k], cp_size=16, src_size=src_size * 2, cache_level='global')
                     cp_async_wait_all()
-                    if k0 == 0 and i < 2 and k < 2:
-                        printf(r'gmem_a[%d, %d] = %f, smem_a[%d, %d] = %f src_size %d %d\n', i, k, cast(gmem_a[i, k], float32), i, k, cast(smem_a[i, k], float32), src_size, cast(cast(~gmem_a[i, k], 'uint64') % 16, 'int32'))
 
             @hidet.script
             def load_smem_b(
@@ -175,8 +177,6 @@ class BatchMatmulF16Task(BatchMatmulTask):
                         n_size - (offset_n + j), 8
                         )
                     cp_async(~smem_b[k, j], ~gmem_b[k, j], cp_size=16, src_size=src_size * 2, cache_level='global')
-                    if k0 == 0 and k < 2 and j < 2:
-                        printf(r'gmem_b[%d, %d] = %f, smem_b[%d, %d] = %f src_size %d\n', k, j, cast(gmem_b[k, j], float32), k, j, cast(smem_b[k, j], float32), src_size)
 
             @hidet.script
             def gemm_mma_cp_async_ldmatrix_opt_grid(
@@ -209,12 +209,6 @@ class BatchMatmulF16Task(BatchMatmulTask):
                 load_smem_b(0, b, ~smem_b[0, 0, 0])
 
                 cp_async_wait_all()
-                if threadIdx.x == 0:
-                    printf(r"%d %d %d %d %d %d\n", blockIdx.x, blockIdx.y, blockIdx.z, threadIdx.x, threadIdx.y, threadIdx.z)
-                    for i, k in grid(m_size, k_size):
-                        printf(r"a[%d, %d] = %f (%f)\n", i, k, cast(a[blockIdx.z, i, k], float32), cast(smem_a[0, i, k], float32))
-                    for k, j in grid(k_size, n_size):
-                        printf(r"b[%d, %d] = %f (%f)\n", k, j, cast(b[blockIdx.z, k, j], float32), cast(smem_b[0, k, j], float32))
                 syncthreads()
                 for k0 in range((k_size + block_k - 1) // block_k):
                     load_smem_a(k0 + 1, a, ~smem_a[(k0 + 1) % 2, 0, 0])
@@ -223,20 +217,6 @@ class BatchMatmulF16Task(BatchMatmulTask):
                         load_regs_a(mi, 0, ~smem_a[k0 % 2, 0, 0], ~regs_a[0, mi, 0])
                     for mj in range(mma_count_n):
                         load_regs_b(mj, 0, ~smem_b[k0 % 2, 0, 0], ~regs_b[0, mj, 0])
-                    if threadIdx.x == 0:
-                        printf(r"shared a:\n")
-                        for i in range(mma_m):
-                            for k in range(mma_k):
-                                printf(r"%.2f ", cast(smem_a[0, i, k], float32))
-                            printf(r"\n")
-                        printf(r"shared b:\n")
-                        for k in range(mma_k):
-                            for j in range(mma_n):
-                                printf(r"%.2f ", cast(smem_b[0, k, j], float32))
-                            printf(r"\n")
-                    if threadIdx.x / 32 == 0:
-                        print_segment_a(mma_config, ~regs_a[0, 0, 0], worker_id=threadIdx.x % 32)
-                        print_segment_b(mma_config, ~regs_b[0, 0, 0], worker_id=threadIdx.x % 32)
                     for mk in range(mma_count_k):
                         if mk + 1 < mma_count_k:
                             for mi in range(mma_count_m):
@@ -245,9 +225,6 @@ class BatchMatmulF16Task(BatchMatmulTask):
                                 load_regs_b(mj, mk + 1, ~smem_b[k0 % 2, 0, 0], ~regs_b[(mk + 1) % 2, mj, 0])
                         for mi, mj in grid(mma_count_m, mma_count_n):
                             warp_mma(~regs_a[mk % 2, mi, 0], ~regs_b[mk % 2, mj, 0], ~regs_c[mi, mj, 0])
-                            if threadIdx.x < 32 and mk == 0 and mi == 0 and mj == 0:
-                                print_segment_c(mma_config, ~regs_c[mi, mj, 0], worker_id=threadIdx.x % 32)
-                            break
                     cp_async_wait_all()
                     syncthreads()
                 store_c(regs_c, c)
@@ -264,20 +241,34 @@ class BatchMatmulF16Op(Operator):
 
 
 def batch_matmul_f16(a: Tensor, b: Tensor) -> Tensor:
+    if len(a.shape) != 3 or len(b.shape) != 3:
+        raise ValueError('Expect 3D tensors')
+    if a.shape[-1] % 8 != 0 or b.shape[-1] % 8 != 0:
+        raise ValueError('Expect the last dimension of the input tensors to be a multiple of 8')
     if a.dtype != 'float16' or b.dtype != 'float16':
         raise ValueError('BatchMatmulF16Op only support float16, got {} and {}'.format(a.dtype, b.dtype))
     return BatchMatmulF16Op(a, b).get_output(0)
 
 
+@register_resolve_rule(BatchMatmulOp)
+class ResolveBatchMatmulToBatchMatmulF16(ResolveRule):
+    def resolve(self, op: BatchMatmulOp) -> Optional[List[Tensor]]:
+        a, b = op.inputs
+        if a.dtype == 'float16' and b.dtype == 'float16':
+            if a.shape[-1] % 8 == 0 and b.shape[-1] % 8 == 0:
+                return [batch_matmul_f16(a, b)]
+        return None
+
+
 def main():
     numpy.set_printoptions(linewidth=180)
-    n = 2
+    n = 1024
     a = hidet.ones([1, n, n], dtype='float16')
     b = hidet.ones([1, n, n], dtype='float16')
     c1 = batch_matmul_f16(a, b).numpy()
-    print(c1)
+    # print(c1)
     c2 = numpy.matmul(a.numpy(), b.numpy())
-    print(c2)
+    # print(c2)
     # print(c2 - c1)
     numpy.testing.assert_allclose(c1, c2, rtol=2e-2, atol=2e-2)
 

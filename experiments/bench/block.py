@@ -1,5 +1,6 @@
 import bench
 import hidet
+import ops.f16_matmul
 
 hidet.option.cache_dir('./outs/cache')
 hidet.option.parallel_build(False)
@@ -11,8 +12,9 @@ def main():
         # '--exec trt',
         # '--exec hidet --precision f32 --reduce_precision f32 --mma simt --hidet_space 2',
         '--exec trt --precision f16 --trt_fp16',
-        '--exec hidet --precision f16 --reduce_precision f16 --mma wmma --hidet_space 2',
+        # '--exec hidet --precision f16 --reduce_precision f16 --mma wmma --hidet_space 2',
         '--exec hidet --precision f16 --reduce_precision f16 --mma mma --hidet_space 2',
+        # '--exec hidet --precision f16 --reduce_precision f16 --mma simt --hidet_space 2',
         # '--exec hidet --precision f16 --reduce_precision f16 --mma mma --hidet_space 1 --parallel_k disabled',
         # '--exec hidet --precision f16 --reduce_precision f16 --mma mma --hidet_space 1 --parallel_k default',
         # '--exec hidet --precision f16 --reduce_precision f16 --mma mma --hidet_space 1 --parallel_k 6',
