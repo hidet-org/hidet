@@ -2,6 +2,7 @@ from typing import Optional, List
 
 import numpy as np
 import numpy.testing
+from functools import partial
 from hidet.ir.func import IRModule
 from hidet.ir.compute import TensorNode
 from hidet.graph import Operator, Tensor
@@ -9,6 +10,7 @@ from hidet.graph.ops.definitions.matmul.batch_matmul import BatchMatmulTask, Bat
 from hidet.graph.ops.definitions.utils import input_like
 from hidet.graph.ops.schedules import Schedule
 from hidet.graph.transforms.resolve_variant import register_resolve_rule, ResolveRule
+from hidet.graph.ops.schedules import tune
 import hidet
 
 hidet.option.cache_dir('./outs/cache')
@@ -31,9 +33,15 @@ class BatchMatmulF16Task(BatchMatmulTask):
                                               self.attributes['m_size'],
                                               self.attributes['n_size'],
                                               self.attributes['k_size'])
-        return self.schedule(batch_size, m_size, n_size, k_size)
+        return tune.tune(
+            partial(self.schedule, batch_size, m_size, n_size, k_size),
+            self,
+            'cuda',
+            working_dir
+        )
 
-    def schedule(self, batch_size, m_size, n_size, k_size) -> IRModule:
+    @tune.space(2, 'block_m', [64, 128])
+    def schedule(self, batch_size, m_size, n_size, k_size, block_m=64, block_n=128, block_k=16) -> IRModule:
         from hidet.ir.type import tensor_type
         from hidet.ir.primitives.cuda.mma import print_segment_a, print_segment_b, print_segment_c
         from hidet.lang import spatial, repeat, tensor, attr, col_spatial, view, u32, tensor_pointer, grid, printf, cast
@@ -51,7 +59,7 @@ class BatchMatmulF16Task(BatchMatmulTask):
         # warp_m, warp_n, warp_k = 64, 32, 64
         # mma_config = MmaConfig.m16n8k8_f16_f16()
         mma_config = MmaConfig.m16n8k16_f16_f16()
-        block_m, block_n, block_k = 64, 128, 16
+        # block_m, block_n, block_k = 64, 128, 16
         warp_m, warp_n, warp_k = 32, 64, 16
 
         # block_m, block_n, block_k = 128, 128, 16
@@ -262,6 +270,7 @@ class ResolveBatchMatmulToBatchMatmulF16(ResolveRule):
 
 def main():
     numpy.set_printoptions(linewidth=180)
+    hidet.option.search_space(space=2)
     n = 1024
     a = hidet.ones([1, n, n], dtype='float16')
     b = hidet.ones([1, n, n], dtype='float16')

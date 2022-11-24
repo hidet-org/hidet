@@ -283,7 +283,7 @@ def batch_build_ir_modules(build_instances, parallel=True, verbose=False) -> Lis
 
     Returns
     -------
-    funcs: List[Optional[CompiledFunction]]
+    funcs:
         The compiled functions, in the same order as build_instances.
         When the build for a build instance failed, None for that instance is returned.
     """
