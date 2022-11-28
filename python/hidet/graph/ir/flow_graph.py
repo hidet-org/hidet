@@ -120,11 +120,11 @@ class FlowGraph:
                 else:
                     tunable_tasks.append(node.task)
 
-        hidet.driver.build_batch_task(tasks)
+        hidet.driver.build_task_batch(tasks)
 
         with option.context():
             hidet.option.parallel_build(False)
-            hidet.driver.build_batch_task(tunable_tasks)  # build tunable tasks one by one
+            hidet.driver.build_task_batch(tunable_tasks)  # build tunable tasks one by one
 
     def forward(self, *inputs: Tensor) -> Union[List[Tensor], Tensor]:
         """Run the computation graph.

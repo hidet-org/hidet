@@ -1,4 +1,5 @@
 from typing import Optional
+import os
 import numpy as np
 from hidet.ir.dialects.pattern import AnyExpr
 from hidet.ir.type import DataType, PointerType, TensorPointerType, ReferenceType, TensorType, TypeNode, FuncType
@@ -575,6 +576,9 @@ def codegen(ir_module: IRModule, src_out_path: Optional[str] = None) -> str:
     doc = gen(ir_module)
     code = str(doc)
     if src_out_path is not None:
+        dir_path = os.path.dirname(src_out_path)
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
         with open(src_out_path, 'w') as f:
             f.write(code)
     return code

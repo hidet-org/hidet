@@ -29,19 +29,11 @@ class BatchMatmulF16Task(BatchMatmulTask):
         return False
 
     def implement_cuda(self, working_dir: str) -> IRModule:
-        batch_size, m_size, n_size, k_size = (self.attributes['batch_size'],
-                                              self.attributes['m_size'],
-                                              self.attributes['n_size'],
-                                              self.attributes['k_size'])
-        return tune.tune(
-            partial(self.schedule, batch_size, m_size, n_size, k_size),
-            self,
-            'cuda',
-            working_dir
-        )
+        return tune.tune(self.schedule, task=self, target_device='cuda', working_dir=working_dir)
 
-    @tune.space(2, 'block_m', [64, 128])
-    def schedule(self, batch_size, m_size, n_size, k_size, block_m=64, block_n=128, block_k=16) -> IRModule:
+    @tune.space(0, 'block_m, block_n, block_k', [[64, 128, 16]])
+    @tune.space(1, 'block_m', [64, 128])
+    def schedule(self, block_m=64, block_n=128, block_k=16) -> IRModule:
         from hidet.ir.type import tensor_type
         from hidet.ir.primitives.cuda.mma import print_segment_a, print_segment_b, print_segment_c
         from hidet.lang import spatial, repeat, tensor, attr, col_spatial, view, u32, tensor_pointer, grid, printf, cast
@@ -52,6 +44,11 @@ class BatchMatmulF16Task(BatchMatmulTask):
         from hidet.lang.cuda import shared_tensor, register_tensor
         from hidet.lang import float16, float32
         from hidet.transforms.tools import add_packed_func
+
+        batch_size, m_size, n_size, k_size = (self.attributes['batch_size'],
+                                              self.attributes['m_size'],
+                                              self.attributes['n_size'],
+                                              self.attributes['k_size'])
 
         # optimize for 128x768x3072
         # mma_config = MmaConfig.m16n8k16_f16_f16()
@@ -270,7 +267,7 @@ class ResolveBatchMatmulToBatchMatmulF16(ResolveRule):
 
 def main():
     numpy.set_printoptions(linewidth=180)
-    hidet.option.search_space(space=2)
+    hidet.option.search_space(space=0)
     n = 1024
     a = hidet.ones([1, n, n], dtype='float16')
     b = hidet.ones([1, n, n], dtype='float16')

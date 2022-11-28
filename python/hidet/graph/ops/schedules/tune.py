@@ -1,7 +1,6 @@
-from typing import Union, Sequence, TypeVar, Any, Dict, List, Tuple, Set, Optional
+from typing import Union, Sequence, TypeVar, Any, Dict, List, Optional
 import os
 import itertools
-import inspect
 from tqdm import tqdm
 import numpy as np
 from hidet.ir.func import IRModule
@@ -21,6 +20,12 @@ class TuningSpace:
         self.existing_names: List[str] = []
 
     def iterate_space(self, level: int):
+        # when given level is not defined, down to lower level
+        while level > 0 and level not in self.spaces:
+            level -= 1
+        if level not in self.spaces:
+            raise ValueError('No search space is attached.')
+
         sub_keys = list(self.spaces[level].keys())
         sub_spaces = list(self.spaces[level].values())
         space_size = prod([len(s) for s in sub_spaces])
@@ -29,7 +34,7 @@ class TuningSpace:
                 f'The search space has {space_size} schedules, '
                 f'which is too large. Please consider to reduce the search space.'
             )
-        for values in itertools.product(sub_spaces):
+        for values in itertools.product(*sub_spaces):
             kwargs = {}
             for key, value in zip(sub_keys, values):
                 if ',' in key:
@@ -46,6 +51,12 @@ class TuningSpace:
         for name in names:
             if name in self.existing_names:
                 raise ValueError(f'Subspace {name} is already added.')
+        if len(names) > 1:
+            for choice in choices:
+                if not hasattr(choice, '__len__'):
+                    raise ValueError(f'When multiple names are given, choices must be iterable.')
+                if len(choice) != len(names):
+                    raise ValueError(f'Number of choices {len(choice)} does not match number of names {len(names)}.')
         self.spaces[level][",".join(names)] = choices
 
 
@@ -62,7 +73,7 @@ def space(level: int, names: str, choices: Sequence[Union[Choice, Sequence[Choic
 
 
 def tune(template_func, task: Task, target_device: str, working_dir: str) -> IRModule:
-    from hidet.backend import BuildInstance, batch_build_ir_modules
+    from hidet.driver import build_ir_module_batch
     from hidet.runtime import CompiledFunction
 
     # get ir modules to tune
@@ -71,7 +82,8 @@ def tune(template_func, task: Task, target_device: str, working_dir: str) -> IRM
         # iterate space and instantiate schedules into tensor programs
         kwargs_list = list(tuning_space.iterate_space(hidet.option.get_search_space()))
     else:
-        kwargs_list = [{}]
+        raise ValueError('No tuning space is attached to the template function.\n'
+                         'Please use @tune.space to decorate the template function to define the search space.')
 
     ir_modules = []
     for kwargs in kwargs_list:
@@ -81,18 +93,8 @@ def tune(template_func, task: Task, target_device: str, working_dir: str) -> IRM
         return ir_modules[0]
 
     # build ir modules into compiled functions
-    build_instances = [
-        BuildInstance(
-            ir_module=ir_module,
-            output_dir=os.path.join(working_dir, 'resolve', str(idx)),
-            keep_ir=False,
-            nvcc_keep=False,
-            verbose=False,
-        )
-        for idx, ir_module in enumerate(ir_modules)
-    ]
-    compiled_funcs: List[Optional[CompiledFunction]] = batch_build_ir_modules(
-        build_instances, parallel=hidet.option.get_parallel_build(), verbose=True
+    compiled_funcs: List[Optional[CompiledFunction]] = build_ir_module_batch(
+        ir_modules, func_name=task.name, output_dir=os.path.join(working_dir, 'tuning'), parallel=True, verbose=True
     )
     if any([f is None for f in compiled_funcs]):
         raise ValueError('All ir modules failed to build.')
@@ -122,9 +124,9 @@ def tune(template_func, task: Task, target_device: str, working_dir: str) -> IRM
     column_widths = [max([len(str(v)) for v in column]) + 2 for column in columns]
     justified_columns = []
     for column, width in zip(columns, column_widths):
-        justified_columns.append(''.join([v.ljust(width) for v in column]))
+        justified_columns.append([v.ljust(width) for v in column])
     summary = '\n'.join(''.join(row_items) for row_items in zip(*justified_columns))
-    with open(os.path.join(working_dir, 'tune_summary.txt'), 'w') as f:
+    with open(os.path.join(working_dir, 'tuning_summary.txt'), 'w') as f:
         f.write(summary)
 
     # select the best schedule and return

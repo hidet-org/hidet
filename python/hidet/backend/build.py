@@ -13,6 +13,7 @@ from tqdm import tqdm
 
 from hidet.libinfo import get_include_dirs
 from hidet.ir.type import FuncType
+from hidet.ir.func import IRModule
 from hidet.transforms import PassContext, lower
 from hidet.runtime import CompiledFunction
 from hidet.ffi import PackedFunc
@@ -217,11 +218,11 @@ class BuildInstance:
         verbose: bool
             Reserved.
         """
-        self.ir_module = ir_module
-        self.output_dir = output_dir
-        self.keep_ir = keep_ir
-        self.nvcc_keep = nvcc_keep
-        self.verbose = verbose
+        self.ir_module: IRModule = ir_module
+        self.output_dir: str = output_dir
+        self.keep_ir: bool = keep_ir
+        self.nvcc_keep: bool = nvcc_keep
+        self.verbose: bool = verbose
 
 
 def build_ir_module_job(build_instance: BuildInstance) -> Optional[str]:
