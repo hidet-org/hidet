@@ -390,6 +390,23 @@ def lcm(a: int, b: int) -> int:
     return a // gcd(a, b) * b
 
 
+def is_power_of_two(n: int) -> bool:
+    """
+    Check if an integer is a power of two: 1, 2, 4, 8, 16, 32, ...
+
+    Parameters
+    ----------
+    n: int
+        The integer to check.
+
+    Returns
+    -------
+    ret: bool
+        True if n is a power of two, False otherwise.
+    """
+    return n > 0 and (n & (n - 1)) == 0
+
+
 def error_tolerance(a: Union[np.ndarray, 'Tensor'], b: Union[np.ndarray, 'Tensor']) -> float:
     """
     Given two tensors with the same shape and data type, this function finds the minimal e, such that

@@ -11,6 +11,7 @@ from hidet.graph.ops.definitions.utils import input_like
 from hidet.graph.ops.schedules import Schedule
 from hidet.graph.transforms.resolve_variant import register_resolve_rule, ResolveRule
 from hidet.graph.ops.schedules import tune
+from hidet.utils.py import is_power_of_two
 import hidet
 
 hidet.option.cache_dir('./outs/cache')
@@ -31,9 +32,32 @@ class BatchMatmulF16Task(BatchMatmulTask):
     def implement_cuda(self, working_dir: str) -> IRModule:
         return tune.tune(self.schedule, task=self, target_device='cuda', working_dir=working_dir)
 
-    @tune.space(0, 'block_m, block_n, block_k', [[64, 128, 16]])
-    @tune.space(1, 'block_m', [64, 128])
-    def schedule(self, block_m=64, block_n=128, block_k=16) -> IRModule:
+    # @tune.space(2, 'block_m, block_n, block_k', [[64, 128, 16],
+    #                                              [64, 128, 8]])
+    # @tune.space(2, 'warp_m, warp_n, warp_k', [[32, 64, 16],
+    #                                           [64, 64, 16]])
+    @tune.space(2, 'block_m', [32, 64, 128, 256])
+    @tune.space(2, 'block_n', [32, 64, 128, 256])
+    @tune.space(2, 'block_k', [8, 16, 32, 64, 128])
+    @tune.space(2, 'warp_m', [16, 32, 48, 64])
+    @tune.space(2, 'warp_n', [16, 32, 48, 64])
+    @tune.space(2, 'warp_k', [8, 16, 32, 64])
+    @tune.space(2, 'mma', ['m16n8k8', 'm16n8k16'])
+    # @tune.space(2, 'block_m', [32, 64, 128, 256])
+    # @tune.space(2, 'block_n', [32, 64, 128, 256])
+    # @tune.space(2, 'block_k', [8, 16, 32, 128])
+    # @tune.space(2, 'warp_m', [16, 32, 48])
+    # @tune.space(2, 'warp_n', [16, 32, 48])
+    # @tune.space(2, 'warp_k', [8, 16, 32])
+    # @tune.space(2, 'mma', ['m16n8k16'])
+    # @tune.space(2, 'block_m', [128])
+    # @tune.space(2, 'block_n', [64])
+    # @tune.space(2, 'block_k', [128])
+    # @tune.space(2, 'warp_m', [16])
+    # @tune.space(2, 'warp_n', [32])
+    # @tune.space(2, 'warp_k', [32])
+    # @tune.space(2, 'mma', ['m16n8k16'])
+    def schedule(self, block_m=64, block_n=128, block_k=16, warp_m=32, warp_n=64, warp_k=16, mma: str = 'm16n8k8') -> IRModule:
         from hidet.ir.type import tensor_type
         from hidet.ir.primitives.cuda.mma import print_segment_a, print_segment_b, print_segment_c
         from hidet.lang import spatial, repeat, tensor, attr, col_spatial, view, u32, tensor_pointer, grid, printf, cast
@@ -45,29 +69,31 @@ class BatchMatmulF16Task(BatchMatmulTask):
         from hidet.lang import float16, float32
         from hidet.transforms.tools import add_packed_func
 
-        batch_size, m_size, n_size, k_size = (self.attributes['batch_size'],
-                                              self.attributes['m_size'],
-                                              self.attributes['n_size'],
-                                              self.attributes['k_size'])
+        batch_size, m_size, n_size, k_size = (self.attributes['batch_size'], self.attributes['m_size'],
+                                              self.attributes['n_size'], self.attributes['k_size'])
 
-        # optimize for 128x768x3072
-        # mma_config = MmaConfig.m16n8k16_f16_f16()
-        # block_m, block_n, block_k = 128, 128, 64
-        # warp_m, warp_n, warp_k = 64, 32, 64
-        # mma_config = MmaConfig.m16n8k8_f16_f16()
-        mma_config = MmaConfig.m16n8k16_f16_f16()
-        # block_m, block_n, block_k = 64, 128, 16
-        warp_m, warp_n, warp_k = 32, 64, 16
+        mma_configs = {
+            'm16n8k8': MmaConfig.m16n8k8_f16_f16(),
+            'm16n8k16': MmaConfig.m16n8k16_f16_f16(),
+        }
+        tune.check(mma in mma_configs)
+        mma_config = mma_configs[mma]
 
-        # block_m, block_n, block_k = 128, 128, 16
-        # warp_m, warp_n, warp_k = 64, 64, 16
-        warp_count_m, warp_count_n, warp_count_k = block_m // warp_m, block_n // warp_n, block_k // warp_k
         mma_m, mma_n, mma_k = mma_config.m, mma_config.n, mma_config.k  # 16, 8, 16
+        warp_count_m, warp_count_n, warp_count_k = block_m // warp_m, block_n // warp_n, block_k // warp_k
         mma_count_m, mma_count_n, mma_count_k = warp_m // mma_m, warp_n // mma_n, warp_k // mma_k
         threads = warp_count_m * warp_count_n * warp_count_k * 32
-        assert block_m % warp_m == block_n % warp_n == block_k % warp_k == 0
-        assert warp_m % mma_m == warp_n % mma_n == warp_k % mma_k == 0
-        assert block_n % 64 == 0
+
+        tune.check(block_m % warp_m == block_n % warp_n == block_k % warp_k == 0, 'warp dims divide block dims')
+        tune.check(warp_m % mma_m == warp_n % mma_n == warp_k % mma_k == 0, 'mma dims divide warp dims')
+
+        tune.check(block_n % 64 == 0, 'block_n must be multiple of 64, required by async gmem -> smem loading')
+        tune.check(block_k % 8 == 0)
+        tune.check(is_power_of_two(block_k // 8))
+        tune.check(threads % (block_k // 8) == 0)
+        tune.check(threads % (block_n // 8) == 0)
+        tune.check(block_m % (threads // (block_k // 8)) == 0)
+        tune.check(block_k % (threads // (block_n // 8)) == 0)
         smem_a_type = tensor_type(
             'float16', shape=[block_m, block_k],
             layout=row_layout(block_m, block_k // 8).swizzle(1) * row_layout(1, 8)
@@ -78,10 +104,10 @@ class BatchMatmulF16Task(BatchMatmulTask):
         )
         load_smem_a_map = repeat(block_m // (threads // (block_k // 8)), 1).spatial(
             threads // (block_k // 8), block_k // 8
-            )
+        )
         load_smem_b_map = repeat(block_k // (threads // (block_n // 8)), 1).spatial(
             threads // (block_n // 8), block_n // 8
-            )
+        )
 
         with hidet.script_module() as module:
             @hidet.script
@@ -141,7 +167,7 @@ class BatchMatmulF16Task(BatchMatmulTask):
                 for k_round in range(warp_count_k):
                     for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
                         if wk == k_round:
-                            for mi, mj in repeat(mma_count_m, mma_count_n).on(0):
+                            for mi, mj in grid(mma_count_m, mma_count_n):
                                 p = 0
                                 for i, j in mma_config.c_store_map.on(lane_id):
                                     gmem_c.write(
@@ -166,7 +192,6 @@ class BatchMatmulF16Task(BatchMatmulTask):
                         k_size - (offset_k + k), 8
                         )
                     cp_async(~smem_a[i, k], ~gmem_a[i, k], cp_size=16, src_size=src_size * 2, cache_level='global')
-                    cp_async_wait_all()
 
             @hidet.script
             def load_smem_b(
@@ -267,7 +292,7 @@ class ResolveBatchMatmulToBatchMatmulF16(ResolveRule):
 
 def main():
     numpy.set_printoptions(linewidth=180)
-    hidet.option.search_space(space=0)
+    hidet.option.search_space(space=2)
     n = 1024
     a = hidet.ones([1, n, n], dtype='float16')
     b = hidet.ones([1, n, n], dtype='float16')

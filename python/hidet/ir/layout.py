@@ -11,6 +11,8 @@ Expr = 'Expr'
 Int = Union['Expr', int]
 Bool = Union['Expr', bool]
 
+def is_power_of_two(n: int):
+    return n != 0 and (n & (n - 1)) == 0
 
 def is_atom(expr: Expr):
     from hidet.ir import Constant, Var
@@ -252,6 +254,10 @@ class SwizzleDataLayout(DataLayout):
         if not (0 <= self.dim < rank and 0 <= self.regards_dim < rank):
             raise ValueError(
                 'The dim {} (regards dim {}) out of bound for layout {}'.format(self.dim, self.regards_dim, base.shape)
+            )
+        if not is_power_of_two(self.base.shape[self.dim]):
+            raise ValueError(
+                'The swizzled dim {} must be a power of 2, got length {}'.format(self.dim, self.shape[self.dim])
             )
         super().__init__(shape=self.base.shape, size=self.base.size)
 
