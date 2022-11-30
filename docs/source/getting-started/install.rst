@@ -35,7 +35,7 @@ First clone the repository to local:
 
 .. code-block:: console
 
-  $ git clone https://github.com/yaoyaoding/hidet
+  $ git clone https://github.com/hidet-org/hidet
 
 Build shared libraries
 ~~~~~~~~~~~~~~~~~~~~~~
