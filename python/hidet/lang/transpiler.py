@@ -33,6 +33,7 @@ import astunparse
 from hidet import ir
 from hidet.ir.expr import Var
 from hidet.ir.stmt import DeclareScope
+from hidet.ir.functors import simplify_to_int
 from hidet.ir.builders import FunctionBuilder
 from hidet.utils import red, bold, blue, str_indent
 import hidet.lang.attr
@@ -359,6 +360,11 @@ class PythonToHidetTranslator(PythonAstFunctor):
             lhs_base = self.visit(lhs.value)
             if lhs_base is hidet.lang.attr:
                 attr_name = lhs.attr
+                if attr_name in ['cuda_block_dim', 'cuda_grid_dim', 'cuda_dynamic_smem_bytes']:
+                    if isinstance(rhs, (tuple, list)):
+                        rhs = [simplify_to_int(v) for v in rhs]
+                    else:
+                        rhs = simplify_to_int(rhs)
                 self.current_scope.annotate(attr_name, rhs)
             else:
                 raise HidetProgramError(self, lhs, 'Invalid assignment.')

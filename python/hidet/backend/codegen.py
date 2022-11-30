@@ -303,6 +303,9 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             func_name = Text(self.canonize_funcname(func_name))
             if func.kind == 'cuda_kernel':
 
+                if isinstance(func.attrs['cuda_block_dim'], int) and func.attrs['cuda_block_dim'] > 1024:
+                    raise ValueError('CUDA block dimension cannot be larger than 1024.')
+
                 def dim3_str(dims):
                     if isinstance(dims, (int, Expr)):
                         return self(dims)

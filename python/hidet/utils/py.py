@@ -435,7 +435,7 @@ def error_tolerance(a: Union[np.ndarray, 'Tensor'], b: Union[np.ndarray, 'Tensor
         a = a.astype(np.float32)
         b = b.astype(np.float32)
     lf = 0.0
-    rg = 9.0
+    rg = 10.0
     for _ in range(20):
         mid = (lf + rg) / 2.0
         if np.allclose(a, b, rtol=mid, atol=mid):

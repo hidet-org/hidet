@@ -52,8 +52,9 @@ def parallel_k_search_nparts(dtype: str, mma: str, batch_size, m_size, n_size, k
         c = cc.reshape([batch_size, nparts, m_size, n_size]).sum(1)
 
         graph: hidet.FlowGraph = hidet.trace_from(c, [a, b])
-        with hidet.graph.PassContext():
-            graph: hidet.FlowGraph = hidet.graph.transforms.fuse_operator_pass()(graph)
+        # with hidet.graph.PassContext() as ctx:
+        # graph: hidet.FlowGraph = hidet.graph.transforms.fuse_operator_pass()(graph)
+        graph: hidet.FlowGraph = hidet.graph.optimize(graph)
 
         latency: float = graph.latency()
         latencies.append(latency)

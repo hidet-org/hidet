@@ -78,6 +78,28 @@ def space(level: int, names: str, choices: Sequence[Union[Choice, Sequence[Choic
     return wrapper
 
 
+def _generate_summary(kwargs_list: List[Dict[str, Any]], latencies: List[float]) -> str:
+    # sort by latency
+    indices, kwargs_list, latencies = zip(
+        *sorted(zip(range(len(latencies)), kwargs_list, latencies), key=lambda x: x[-1])
+    )
+
+    # generate summary column by column
+    columns = []
+    columns.append(['index'] + [str(v) for v in indices])
+    keys = reversed(kwargs_list[0].keys())
+    for key in keys:
+        columns.append([key] + [str(kwargs[key]) for kwargs in kwargs_list])
+    columns.append(['latency'] + [f'{v:.6f}' for v in latencies])
+    column_widths = [max([len(str(v)) for v in column]) + 2 for column in columns]
+    justified_columns = []
+    for column, width in zip(columns, column_widths):
+        justified_columns.append([v.ljust(width) for v in column])
+    summary = '\n'.join(''.join(row_items) for row_items in zip(*justified_columns))
+
+    return summary
+
+
 def tune(template_func, task: Task, target_device: str, working_dir: str) -> IRModule:
     from hidet.driver import build_ir_module_batch
     from hidet.runtime import CompiledFunction
@@ -132,17 +154,7 @@ def tune(template_func, task: Task, target_device: str, working_dir: str) -> IRM
         latencies.append(latency)
 
     # generate summary
-    columns = []
-    columns.append(['index'] + [str(v) for v in range(len(ir_modules))])
-    keys = reversed(ir_modules_kwargs[0].keys())
-    for key in keys:
-        columns.append([key] + [str(kwargs[key]) for kwargs in ir_modules_kwargs])
-    columns.append(['latency'] + [f'{v:.6f}' for v in latencies])
-    column_widths = [max([len(str(v)) for v in column]) + 2 for column in columns]
-    justified_columns = []
-    for column, width in zip(columns, column_widths):
-        justified_columns.append([v.ljust(width) for v in column])
-    summary = '\n'.join(''.join(row_items) for row_items in zip(*justified_columns))
+    summary = _generate_summary(ir_modules_kwargs, latencies)
     with open(os.path.join(working_dir, 'tuning_summary.txt'), 'w') as f:
         f.write(summary)
 

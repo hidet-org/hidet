@@ -13,7 +13,7 @@ def main():
         # '--exec hidet --precision f32 --reduce_precision f32 --mma simt --hidet_space 2',
         '--exec trt --precision f16 --trt_fp16',
         # '--exec hidet --precision f16 --reduce_precision f16 --mma wmma --hidet_space 2',
-        '--exec hidet --precision f16 --reduce_precision f16 --mma mma --hidet_space 2',
+        # '--exec hidet --precision f16 --reduce_precision f16 --mma mma --hidet_space 2 --parallel_k search',
         # '--exec hidet --precision f16 --reduce_precision f16 --mma simt --hidet_space 2',
         # '--exec hidet --precision f16 --reduce_precision f16 --mma mma --hidet_space 1 --parallel_k disabled',
         # '--exec hidet --precision f16 --reduce_precision f16 --mma mma --hidet_space 1 --parallel_k default',
@@ -33,7 +33,7 @@ def main():
                 # '--model bert_embeddings',
                 # '--model bert_encoder',
                 # '--model bert_pooler',
-                '--model bert_layer',
+                # '--model bert_layer',
                 # '--model bert_attention',
                 # '--model bert_intermediate',
                 # '--model bert_output',
@@ -44,9 +44,13 @@ def main():
                 # '--model bert_self_at_qkv_v2',
                 # '--model bert_self_at_softmax',
                 # '--model bert_self_at_context',
+
+                '--model op_gemm_128_768_768',   # 5
+                '--model op_gemm_128_3072_768',  # 1
+                '--model op_gemm_128_768_3072',  # 1
             ]:
-                # extra = '--number 1 --repeat 1 --warmup 0 --nocheck'
-                extra = ''
+                extra = '--number 1 --repeat 1 --warmup 0 --nocheck'
+                # extra = ''
                 with hidet.utils.nvtx_annotate(message=executor.split()[1], color='green'):
                     bench.main('{} {} {} {}'.format(executor, bs, model, extra))
 
