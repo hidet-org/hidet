@@ -3,26 +3,76 @@ from typing import Optional, List
 import numpy as np
 import numpy.testing
 from functools import partial
+from hidet.ir.dtypes import float16
+from hidet.ir.expr import if_then_else
 from hidet.ir.func import IRModule
 from hidet.ir.compute import TensorNode
 from hidet.graph import Operator, Tensor
 from hidet.graph.ops.definitions.matmul.batch_matmul import BatchMatmulTask, BatchMatmulOp
 from hidet.graph.ops.definitions.matmul.matmul import MatmulTask
-from hidet.graph.ops.definitions.utils import input_like
+from hidet.ir.task import Task
+from hidet.ir.compute import compute, reduce
+from hidet.graph.ops.definitions.utils import input_like, broadcast_shape, can_broadcast, broadcast_indices
 from hidet.graph.ops.schedules import Schedule
 from hidet.graph.transforms.resolve_variant import register_resolve_rule, ResolveRule
 from hidet.graph.ops.schedules import tune
-from hidet.utils.py import is_power_of_two
+from hidet.utils.py import is_power_of_two, cdiv
 import hidet
 
 hidet.option.cache_dir('./outs/cache')
 hidet.option.save_lower_ir()
 
 
-class BatchMatmulF16Task(BatchMatmulTask):
-    def __init__(self, a: TensorNode, b: TensorNode):
-        super().__init__(a, b)
-        self.name = 'batch_matmul_f16'
+class BatchMatmulF16Task(Task):
+    def __init__(self, a: TensorNode, b: TensorNode, parallel_k_parts: int = 1):
+        a_shape = a.const_shape()
+        b_shape = b.const_shape()
+
+        if not a.ttype.dtype == float16 or not b.ttype.dtype == float16:
+            raise ValueError('Both inputs must be float16 tensors')
+
+        if len(a_shape) < 2 or len(b_shape) < 2:
+            raise ValueError('Matrix multiplication expect at least 2D tensor, got {} and {}'.format(a_shape, b_shape))
+
+        if a_shape[-1] != b_shape[-2]:
+            raise ValueError(
+                'Matrix multiplication expect tensor A and B with shape [..., M, K] and [..., K, N]'
+                ', got {} and {}'.format(a_shape, b_shape)
+            )
+
+        if not can_broadcast(a_shape[:-2], b_shape[:-2]):
+            raise ValueError(
+                'Matrix multiplication expect tensor A and B with compatible broadcast shape, '
+                'got {} and {}'.format(a_shape, b_shape)
+            )
+
+        m_size, n_size, k_size = a_shape[-2], b_shape[-1], a_shape[-1]
+        c_shape = [parallel_k_parts] + broadcast_shape(a_shape[:-2], b_shape[:-2]) + [a_shape[-2], b_shape[-1]]
+        k_part_extent = cdiv(k_size, parallel_k_parts)
+
+        c = compute(
+            name='c',
+            shape=c_shape,
+            fcompute=lambda k_part, *indices: reduce(
+                shape=[k_part_extent],
+                fcompute=lambda k: if_then_else(
+                    k_part * k_part_extent + k < k_size,
+                    a[broadcast_indices(indices[:-2], a_shape[:-2], c_shape[1:-2]) + [indices[-2], k]] *
+                    b[broadcast_indices(indices[:-2], b_shape[:-2], c_shape[1:-2]) + [k, indices[-1]]],
+                    float16(0.0)
+                ),
+                reduce_type='sum'
+            )
+        )
+
+        super().__init__(
+            name='matmul_f16_pk',
+            inputs=[a, b],
+            outputs=[c],
+            attributes={
+                'parallel_k_parts': parallel_k_parts
+            }
+        )
 
     def allow_prologue(self) -> bool:
         return False
@@ -30,8 +80,8 @@ class BatchMatmulF16Task(BatchMatmulTask):
     def allow_epilogue(self) -> bool:
         return False
 
-    def implement_cuda(self, working_dir: str) -> IRModule:
-        return tune.tune(self.schedule, task=self, target_device='cuda', working_dir=working_dir)
+    # def implement_cuda(self, working_dir: str) -> IRModule:
+    #     return tune.tune(self.schedule, task=self, target_device='cuda', working_dir=working_dir)
 
     # @tune.space(2, 'block_m, block_n, block_k', [[64, 128, 16],
     #                                              [64, 128, 8]])
@@ -59,7 +109,9 @@ class BatchMatmulF16Task(BatchMatmulTask):
     @tune.space(1, 'warp_n', [64])
     @tune.space(1, 'warp_k', [16])
     @tune.space(1, 'mma', ['m16n8k16'])
-    def schedule(self, block_m=64, block_n=128, block_k=16, warp_m=32, warp_n=64, warp_k=16, mma: str = 'm16n8k16') -> IRModule:
+    def schedule(
+        self, block_m=64, block_n=128, block_k=16, warp_m=32, warp_n=64, warp_k=16, mma: str = 'm16n8k16'
+    ) -> IRModule:
         from hidet.ir.type import tensor_type
         from hidet.ir.primitives.cuda.mma import print_segment_a, print_segment_b, print_segment_c
         from hidet.lang import spatial, repeat, tensor, attr, col_spatial, view, u32, tensor_pointer, grid, printf, cast
@@ -195,7 +247,7 @@ class BatchMatmulF16Task(BatchMatmulTask):
                     k = k_seg * 8
                     src_size = 0 if (offset_m + i >= m_size or offset_k + k >= k_size) else min(
                         k_size - (offset_k + k), 8
-                        )
+                    )
                     cp_async(~smem_a[i, k], ~gmem_a[i, k], cp_size=16, src_size=src_size * 2, cache_level='global')
 
             @hidet.script
@@ -210,7 +262,7 @@ class BatchMatmulF16Task(BatchMatmulTask):
                     j = j_seg * 8
                     src_size = 0 if (offset_k + k >= k_size or offset_n + j >= n_size) else min(
                         n_size - (offset_n + j), 8
-                        )
+                    )
                     cp_async(~smem_b[k, j], ~gmem_b[k, j], cp_size=16, src_size=src_size * 2, cache_level='global')
 
             @hidet.script
@@ -271,18 +323,21 @@ class BatchMatmulF16Task(BatchMatmulTask):
 
 
 class BatchMatmulF16Op(Operator):
-    def __init__(self, a: Tensor, b: Tensor):
-        super().__init__(inputs=[a, b], task=BatchMatmulF16Task(input_like(a, 'a'), input_like(b, 'b')))
+    def __init__(self, a: Tensor, b: Tensor, parallel_k_parts=1):
+        super().__init__(
+            inputs=[a, b],
+            task=BatchMatmulF16Task(input_like(a, 'a'), input_like(b, 'b'), parallel_k_parts)
+        )
 
 
-def batch_matmul_f16(a: Tensor, b: Tensor) -> Tensor:
+def batch_matmul_f16(a: Tensor, b: Tensor, parallel_k_parts=1) -> Tensor:
     if len(a.shape) != 3 or len(b.shape) != 3:
         raise ValueError('Expect 3D tensors')
     if a.shape[-1] % 8 != 0 or b.shape[-1] % 8 != 0:
         raise ValueError('Expect the last dimension of the input tensors to be a multiple of 8')
     if a.dtype != 'float16' or b.dtype != 'float16':
         raise ValueError('BatchMatmulF16Op only support float16, got {} and {}'.format(a.dtype, b.dtype))
-    return BatchMatmulF16Op(a, b).get_output(0)
+    return BatchMatmulF16Op(a, b, parallel_k_parts).get_output(0)
 
 
 @register_resolve_rule(BatchMatmulOp)
@@ -306,7 +361,9 @@ def main():
     # m, n, k = 8, 8, 8
     a = hidet.ones([1, m, k], dtype='float16')
     b = hidet.ones([1, k, n], dtype='float16')
-    c1 = batch_matmul_f16(a, b).numpy()
+    # c1 = batch_matmul_f16(a, b).numpy()
+    c1 = batch_matmul_f16(a, b, parallel_k_parts=32)
+    c1 = hidet.ops.reduce_sum(c1, dims=0, keep_dim=False).numpy()
     # print(c1)
     c2 = numpy.matmul(a.numpy(), b.numpy())
     # print(c2)

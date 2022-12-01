@@ -2,7 +2,7 @@
 from typing import Tuple, List, Union, Sequence, Optional
 import builtins
 from hidet.ir.layout import DataLayout
-from hidet.ir.expr import Var
+from hidet.ir.expr import Var, Expr
 from hidet.ir.type import TensorType, tensor_type, DataType
 from hidet.ir.task import Task, InverseMap
 from hidet.ir.func import IRModule
@@ -96,6 +96,16 @@ def resolve_out_dtype(input_dtypes: List[Union[DataType, str]]) -> str:
     return out_dtype.name
 
 
+def can_broadcast(src_shape: List[int], dst_shape: List[int]) -> bool:
+    if len(dst_shape) < len(src_shape):
+        return False
+    src_shape = [1 for _ in range(len(dst_shape) - len(src_shape))] + src_shape
+    for a, b in zip(src_shape, dst_shape):
+        if a not in [1, b]:
+            return False
+    return True
+
+
 def broadcast_shape(x_shape: List[int], y_shape: List[int]) -> List[int]:
     """
     Broadcast two shapes with the same rule as numpy.
@@ -122,8 +132,10 @@ def broadcast_shapes(shapes: List[List[int]]) -> List[int]:
     return expanded_shape
 
 
-def broadcast_indices(indices, shape, out_shape):
-    # used to support broadcast
+def broadcast_indices(indices: Sequence[Union[Expr, int]], shape: Sequence[int], out_shape: Sequence[int]) -> List[Expr]:
+    if len(indices) != len(out_shape):
+        raise ValueError('Number of indices {} does not match the output shape {}'.format(indices, out_shape))
+
     pad_dim = len(out_shape) - len(shape)
     indices = list(indices[pad_dim:])
     for idx, dim in enumerate(shape):

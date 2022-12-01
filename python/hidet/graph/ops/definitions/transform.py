@@ -3,7 +3,7 @@ from hidet.ir.expr import And, if_then_else, convert
 from hidet.ir.layout import RowMajorLayout, ColumnMajorLayout
 from hidet.ir.utils import index_deserialize, index_serialize
 from hidet.utils import prod
-from .utils import Task, InverseMap, Operator, Tensor, TensorNode, compute, input_like, normalize_dim
+from .utils import Task, InverseMap, Operator, Tensor, TensorNode, compute, input_like, normalize_dim, can_broadcast
 
 
 def same_shape(shape_a: List[int], shape_b: List[int]) -> bool:
@@ -219,16 +219,6 @@ class StridedSliceTask(Task):
 
         out = compute('out', shape=output_shape, fcompute=lambda *indices: fmap(indices))
         super().__init__(name='slice', inputs=[data], outputs=[out])
-
-
-def can_broadcast(src_shape: List[int], dst_shape: List[int]) -> bool:
-    if len(dst_shape) < len(src_shape):
-        return False
-    src_shape = [1 for _ in range(len(dst_shape) - len(src_shape))] + src_shape
-    for a, b in zip(src_shape, dst_shape):
-        if a not in [1, b]:
-            return False
-    return True
 
 
 class BroadcastTask(Task):

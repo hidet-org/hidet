@@ -1,5 +1,6 @@
 # pylint: disable=import-outside-toplevel, too-many-branches, too-many-locals
 from __future__ import annotations
+import typing
 import types
 import builtins
 
@@ -7,7 +8,6 @@ from typing import Optional, Dict, Any, Union
 import os.path
 import ast
 from ast import Module
-
 
 # statements
 from ast import FunctionDef, Return, Assign, AnnAssign, AugAssign, For, While, If, With, Assert, Expr, Pass, Break
@@ -565,7 +565,13 @@ class PythonToHidetTranslator(PythonAstFunctor):
         elif isinstance(lhs, str) and isinstance(rhs, str):
             assert isinstance(expr.op, Add)
             return lhs + rhs
-        else:
+        elif isinstance(lhs, list) and isinstance(rhs, list):
+            assert isinstance(expr.op, Add)
+            return lhs + rhs
+        elif isinstance(lhs, tuple) and isinstance(rhs, tuple):
+            assert isinstance(expr.op, Add)
+            return lhs + rhs
+        elif isinstance(lhs, (ir.Expr, float, int)) and isinstance(rhs, (ir.Expr, float, int)):
             op_dict = {
                 Add: ir.Add,
                 Sub: ir.Sub,
@@ -587,6 +593,8 @@ class PythonToHidetTranslator(PythonAstFunctor):
             else:
                 type_name = type(expr.op).__name__
                 raise HidetProgramError(self, expr, 'Currently, we do not support {} operator.'.format(type_name))
+        else:
+            raise HidetProgramError(self, expr, 'Can not apply operator {} to {} and {}.'.format(expr.op, type(lhs), type(rhs)))
 
     def visit_BoolOp(self, expr: BoolOp):
         values = [self.visit(v) for v in expr.values]
@@ -666,23 +674,51 @@ class PythonToHidetTranslator(PythonAstFunctor):
 
     def visit_For(self, stmt: For):
         # create loop vars
+        iter_targets: list[Name] = []
         if isinstance(stmt.target, (List, Tuple)):
-            iter_targets = stmt.target.elts
+            for target in stmt.target.elts:
+                if not isinstance(target, Name):
+                    raise HidetProgramError(self, stmt, 'For loop target must be a name.')
+                iter_targets.append(target)
         else:
-            iter_targets = [stmt.target]
-        assert all(isinstance(v, Name) for v in iter_targets)
+            if not isinstance(stmt.target, Name):
+                raise HidetProgramError(self, stmt, 'For loop target must be a name.')
+            iter_targets.append(stmt.target)
+
         loop_vars: list[Var] = []
-        for target in iter_targets:
-            assert isinstance(target, Name)
-            loop_vars.append(Var(target.id, type=ir.data_type('int32')))
+        host_vars: Dict[str, Any] = {}
 
         def visit_body() -> ir.Stmt:
             with self.scope() as for_scope:
                 for var in loop_vars:
                     for_scope.define_var(name=var.hint, v=var)
+                for name, value in host_vars.items():
+                    for_scope.define_host_var(name, value)
                 for s in stmt.body:
                     self.visit(s)
             return for_scope.flush_stmts()
+
+        def declare_loop_vars(num: int):
+            p = len(iter_targets)
+            q = num
+
+            # for i_1, ..., i_p in grid(n_1, ..., n_q):
+            #    ...
+            # we mush have either
+            #  1. p == q,
+            #  2. or p == 1 and q > 1
+
+            if not (p == q or p == 1):
+                raise HidetProgramError(self, stmt, f'Expect {num} loop variables, but got {len(iter_targets)}.')
+
+            if p == q:
+                for target in iter_targets:
+                    loop_vars.append(Var(target.id, type=ir.data_type('int32')))
+            else:
+                name = iter_targets[0].id
+                for i in range(q):
+                    loop_vars.append(Var(f'_{name}_{i}', type=ir.data_type('int32')))
+                host_vars[name] = list(loop_vars)
 
         # construct for body
         if (
@@ -698,8 +734,9 @@ class PythonToHidetTranslator(PythonAstFunctor):
 
             # get extent
             if len(call.args) > 1:
-                msg = 'Current we only support range(extent), will add range(start, stop, step) later.'
+                msg = 'Current we only support range(extent), will add range(start, stop, step) when needed.'
                 raise NotImplementedError(msg)
+            declare_loop_vars(num=1)
             extent = self.visit(call.args[0])
             self.current_scope.append(ir.ForStmt(loop_var=loop_vars[0], extent=extent, body=visit_body()))
         elif (
@@ -713,9 +750,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
             # Will be translated to nested for loops (i.e., ForStmt).
             call = stmt.iter
             extents = [self.visit(arg) for arg in call.args]
-            if len(extents) != len(loop_vars):
-                msg = f'The number of iterable variables {len(loop_vars)} must match the rank of grid {len(extents)}'
-                raise HidetProgramError(self, stmt.iter, msg)
+            declare_loop_vars(num=len(extents))
             body = visit_body()
             for loop_var, extent in zip(reversed(loop_vars), reversed(extents)):
                 body = ir.ForStmt(loop_var=loop_var, extent=extent, body=body)
@@ -731,9 +766,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
             mapping = self.visit(stmt.iter.func.value)
             if not isinstance(mapping, ir.TaskMapping):
                 raise HidetProgramError(self, stmt.iter.func.value, 'Expect task mapping here.')
-            if len(mapping.task_shape) != len(loop_vars):
-                msg = 'Can not unpack {} to {} indices.'.format(len(mapping.task_shape), len(loop_vars))
-                raise HidetProgramError(self, stmt, msg)
+            declare_loop_vars(num=len(mapping.task_shape))
             self.current_scope.append(
                 ir.ForTaskStmt(loop_vars=loop_vars, mapping=mapping, worker=worker, body=visit_body())
             )

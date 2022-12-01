@@ -118,7 +118,12 @@ def build_ir_module(
     save_ir: bool = True,
     profile_pass: bool = True,
     load: bool = True,
+    use_hash_dir: bool = True,
 ):
+    if use_hash_dir:
+        hash_dir = sha256(str(ir_module).encode()).hexdigest()[:16]
+        output_dir = os.path.join(output_dir, hash_dir)
+
     src_path = os.path.join(output_dir, 'source.cu')
     lib_path = os.path.join(output_dir, 'lib.so')
 
@@ -156,7 +161,9 @@ def _build_ir_module_job(args) -> Optional[Tuple[str, str, FuncType]]:
     ir_module, func_name, output_dir, dumped_options = args
     option.restore_options(dumped_options)
     try:
-        return build_ir_module(ir_module, func_name, output_dir, save_ir=False, profile_pass=False, load=False)
+        return build_ir_module(
+            ir_module, func_name, output_dir, save_ir=False, profile_pass=False, load=False, use_hash_dir=False
+        )
     except subprocess.CalledProcessError:
         print('Failed launch subprocess to compile the lowered source code via nvcc.')
         return None

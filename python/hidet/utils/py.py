@@ -407,6 +407,25 @@ def is_power_of_two(n: int) -> bool:
     return n > 0 and (n & (n - 1)) == 0
 
 
+def cdiv(n: int, d: int) -> int:
+    """
+    Get the ceiling of n / d.
+
+    Parameters
+    ----------
+    n: int
+        The numerator.
+    d: int
+        The denominator.
+
+    Returns
+    -------
+    ret: int
+        The ceiling of n / d.
+    """
+    return (n + d - 1) // d
+
+
 def error_tolerance(a: Union[np.ndarray, 'Tensor'], b: Union[np.ndarray, 'Tensor']) -> float:
     """
     Given two tensors with the same shape and data type, this function finds the minimal e, such that
