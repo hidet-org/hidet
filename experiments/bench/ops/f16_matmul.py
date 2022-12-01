@@ -123,16 +123,17 @@ class BatchMatmulF16Task(Task):
         from hidet.lang import float16, float32
         from hidet.transforms.tools import add_packed_func
 
+        # input shapes
         node_a, node_b, node_c = self.inputs[0], self.inputs[1], self.outputs[0]
         a_shape: List[int] = node_a.const_shape()
         b_shape: List[int] = node_b.const_shape()
         c_shape: List[int] = node_c.const_shape()
         m_size, n_size, k_size = a_shape[-2], b_shape[-1], a_shape[-1]
         a_head, b_head, c_head = a_shape[:-2], b_shape[:-2], c_shape[:-2]
+        k_parts = self.attributes['parallel_k_parts']
+        k_part_extent = cdiv(k_size, k_parts)
 
-        # batch_size, m_size, n_size, k_size = (self.attributes['batch_size'], self.attributes['m_size'],
-        #                                       self.attributes['n_size'], self.attributes['k_size'])
-
+        # schedule parameters
         mma_configs = {
             'm16n8k8': MmaConfig.m16n8k8_f16_f16(),
             'm16n8k16': MmaConfig.m16n8k16_f16_f16(),
