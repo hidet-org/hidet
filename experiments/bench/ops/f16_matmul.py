@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Tuple
 
 import numpy as np
 import numpy.testing
@@ -16,7 +16,7 @@ from hidet.graph.ops.definitions.utils import input_like, broadcast_shape, can_b
 from hidet.graph.ops.schedules import Schedule
 from hidet.graph.transforms.resolve_variant import register_resolve_rule, ResolveRule
 from hidet.graph.ops.schedules import tune
-from hidet.utils.py import is_power_of_two, cdiv
+from hidet.utils.py import is_power_of_two, cdiv, prod
 import hidet
 
 hidet.option.cache_dir('./outs/cache')
@@ -123,8 +123,15 @@ class BatchMatmulF16Task(Task):
         from hidet.lang import float16, float32
         from hidet.transforms.tools import add_packed_func
 
-        batch_size, m_size, n_size, k_size = (self.attributes['batch_size'], self.attributes['m_size'],
-                                              self.attributes['n_size'], self.attributes['k_size'])
+        node_a, node_b, node_c = self.inputs[0], self.inputs[1], self.outputs[0]
+        a_shape: List[int] = node_a.const_shape()
+        b_shape: List[int] = node_b.const_shape()
+        c_shape: List[int] = node_c.const_shape()
+        m_size, n_size, k_size = a_shape[-2], b_shape[-1], a_shape[-1]
+        a_head, b_head, c_head = a_shape[:-2], b_shape[:-2], c_shape[:-2]
+
+        # batch_size, m_size, n_size, k_size = (self.attributes['batch_size'], self.attributes['m_size'],
+        #                                       self.attributes['n_size'], self.attributes['k_size'])
 
         mma_configs = {
             'm16n8k8': MmaConfig.m16n8k8_f16_f16(),
@@ -137,6 +144,7 @@ class BatchMatmulF16Task(Task):
         warp_count_m, warp_count_n, warp_count_k = block_m // warp_m, block_n // warp_n, block_k // warp_k
         mma_count_m, mma_count_n, mma_count_k = warp_m // mma_m, warp_n // mma_n, warp_k // mma_k
         threads = warp_count_m * warp_count_n * warp_count_k * 32
+        grid_dim: Tuple[int, int, int] = cdiv(m_size, block_m), cdiv(n_size, block_n), prod(c_head)
         dynamic_smem_bytes = 2 * (block_m + block_n) * block_k * 2
 
         tune.check(block_m % warp_m == block_n % warp_n == block_k % warp_k == 0, 'warp dims divide block dims')
@@ -216,7 +224,7 @@ class BatchMatmulF16Task(Task):
             @hidet.script
             def store_c(
                 regs_c: float16[mma_count_m, mma_count_n, mma_config.c_elements],
-                c: float16[batch_size, m_size, n_size]
+                c: float16[c_head + [m_size, n_size]]
             ):
                 warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
                 offset_m, offset_n = blockIdx.x * block_m, blockIdx.y * block_n
@@ -238,7 +246,7 @@ class BatchMatmulF16Task(Task):
             @hidet.script
             def load_smem_a(
                 k0: int,
-                a: float16[batch_size, m_size, k_size],
+                a: float16[a_head + [m_size, k_size]],
                 smem_a: smem_a_type
             ):
                 offset_m, offset_n, offset_k = blockIdx.x * block_m, blockIdx.y * block_n, k0 * block_k
@@ -253,7 +261,7 @@ class BatchMatmulF16Task(Task):
             @hidet.script
             def load_smem_b(
                 k0: int,
-                b: float16[batch_size, k_size, n_size],
+                b: float16[b_head + [k_size, n_size]],
                 smem_b: smem_b_type
             ):
                 offset_m, offset_n, offset_k = blockIdx.x * block_m, blockIdx.y * block_n, k0 * block_k
@@ -267,12 +275,12 @@ class BatchMatmulF16Task(Task):
 
             @hidet.script
             def gemm_mma_cp_async_ldmatrix_opt_grid(
-                a: float16[batch_size, m_size, k_size],
-                b: float16[batch_size, k_size, n_size],
-                c: float16[batch_size, m_size, n_size]
+                a: float16[a_head + [m_size, k_size]],
+                b: float16[b_head + [k_size, n_size]],
+                c: float16[c_head + [m_size, n_size]]
             ):
                 # matrix multiplication, using mma instruction
-                attr.cuda_grid_dim = (m_size + block_m - 1) // block_m, (n_size + block_n - 1) // block_n, batch_size
+                attr.cuda_grid_dim = grid_dim
                 attr.cuda_block_dim = threads
                 # the second 2 means '2 bytes per float16'
                 attr.cuda_dynamic_smem_bytes = dynamic_smem_bytes
