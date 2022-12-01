@@ -305,6 +305,15 @@ class ReshapeOp(Operator):
         else:
             raise ValueError('Can not infer the shape when there are multiple -1: {}'.format(shape))
 
+    def imperative_run(self, inputs: List[Tensor]) -> List[Tensor]:
+        x = inputs[0]
+        if isinstance(x.layout, (RowMajorLayout, ColumnMajorLayout)):
+            shape = self.task.outputs[0].const_shape()
+            layout = x.layout.__class__(shape)
+            return [Tensor(shape=shape, dtype=x.dtype, device=x.device, storage=x.storage, layout=layout, trace=None)]
+        else:
+            return Operator.imperative_run(self, inputs)
+
 
 class RearrangeOp(Operator):
     def __init__(self, x: Tensor, plan: List[List[int]]):

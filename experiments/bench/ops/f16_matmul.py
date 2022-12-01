@@ -9,7 +9,7 @@ from hidet.ir.func import IRModule
 from hidet.ir.compute import TensorNode
 from hidet.graph import Operator, Tensor
 from hidet.graph.ops.definitions.matmul.batch_matmul import BatchMatmulTask, BatchMatmulOp
-from hidet.graph.ops.definitions.matmul.matmul import MatmulTask
+from hidet.graph.ops.definitions.matmul.matmul import MatmulTask, MatmulOp
 from hidet.ir.task import Task
 from hidet.ir.compute import compute, reduce
 from hidet.graph.ops.definitions.utils import input_like, broadcast_shape, can_broadcast, broadcast_indices
@@ -17,6 +17,7 @@ from hidet.graph.ops.schedules import Schedule
 from hidet.graph.transforms.resolve_variant import register_resolve_rule, ResolveRule
 from hidet.graph.ops.schedules import tune
 from hidet.utils.py import is_power_of_two, cdiv, prod
+from hidet.graph.ops.definitions.utils import broadcast_indices
 import hidet
 
 hidet.option.cache_dir('./outs/cache')
@@ -80,8 +81,8 @@ class BatchMatmulF16Task(Task):
     def allow_epilogue(self) -> bool:
         return False
 
-    # def implement_cuda(self, working_dir: str) -> IRModule:
-    #     return tune.tune(self.schedule, task=self, target_device='cuda', working_dir=working_dir)
+    def implement_cuda(self, working_dir: str) -> IRModule:
+        return tune.tune(self.schedule, task=self, target_device='cuda', working_dir=working_dir)
 
     # @tune.space(2, 'block_m, block_n, block_k', [[64, 128, 16],
     #                                              [64, 128, 8]])
@@ -102,9 +103,9 @@ class BatchMatmulF16Task(Task):
     # @tune.space(2, 'warp_n', [16, 32, 48])
     # @tune.space(2, 'warp_k', [8, 16, 32])
     # @tune.space(2, 'mma', ['m16n8k16'])
-    @tune.space(1, 'block_m', [256])
+    @tune.space(1, 'block_m', [128])
     @tune.space(1, 'block_n', [64])
-    @tune.space(1, 'block_k', [128])
+    @tune.space(1, 'block_k', [32])
     @tune.space(1, 'warp_m', [64])
     @tune.space(1, 'warp_n', [64])
     @tune.space(1, 'warp_k', [16])
@@ -117,7 +118,7 @@ class BatchMatmulF16Task(Task):
         from hidet.lang import spatial, repeat, tensor, attr, col_spatial, view, u32, tensor_pointer, grid, printf, cast
         from hidet.lang.layout import row_layout, col_layout, local_layout, DataLayout
         from hidet.lang.mapping import repeat, spatial
-        from hidet.lang.cuda import blockIdx, threadIdx, syncthreads, dynamic_shared_memory
+        from hidet.lang.cuda import blockIdx, threadIdx, syncthreads, dynamic_shared_memory, syncwarp
         from hidet.lang.cuda import MmaConfig, mma_sync, cp_async, cp_async_wait_all, ldmatrix
         from hidet.lang.cuda import shared_tensor, register_tensor
         from hidet.lang import float16, float32
@@ -131,7 +132,7 @@ class BatchMatmulF16Task(Task):
         m_size, n_size, k_size = a_shape[-2], b_shape[-1], a_shape[-1]
         a_head, b_head, c_head = a_shape[:-2], b_shape[:-2], c_shape[:-2]
         k_parts = self.attributes['parallel_k_parts']
-        k_part_extent = cdiv(k_size, k_parts)
+        k_part_extent = cdiv(cdiv(k_size, k_parts), 8) * 8
 
         # schedule parameters
         mma_configs = {
@@ -223,41 +224,28 @@ class BatchMatmulF16Task(Task):
                 mma_sync(mma_config, regs_a, regs_b, regs_c)
 
             @hidet.script
-            def store_c(
-                regs_c: float16[mma_count_m, mma_count_n, mma_config.c_elements],
-                c: float16[c_head + [m_size, n_size]]
-            ):
-                warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
-                offset_m, offset_n = blockIdx.x * block_m, blockIdx.y * block_n
-                gmem_c = c[blockIdx.z, offset_m:, offset_n:]
-                for k_round in range(warp_count_k):
-                    for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
-                        if wk == k_round:
-                            for mi, mj in grid(mma_count_m, mma_count_n):
-                                p = 0
-                                for i, j in mma_config.c_store_map.on(lane_id):
-                                    gmem_c.write(
-                                        [wi * warp_m + mi * mma_m + i,
-                                         wj * warp_n + mj * mma_n + j],
-                                        regs_c[mi, mj, p],
-                                        protected=True
-                                    )
-                                    p += 1
-
-            @hidet.script
             def load_smem_a(
                 k0: int,
                 a: float16[a_head + [m_size, k_size]],
                 smem_a: smem_a_type
             ):
-                offset_m, offset_n, offset_k = blockIdx.x * block_m, blockIdx.y * block_n, k0 * block_k
-                gmem_a = a[blockIdx.z, offset_m:, offset_k:]
+                c_head_index = spatial(*c_head).map(blockIdx.z)
+                offset_m, offset_n = blockIdx.x * block_m, blockIdx.y * block_n
+                offset_k = c_head_index[0] * k_part_extent + k0 * block_k
+                maximum_k = min(k_size, (c_head_index[0] + 1) * k_part_extent)
+                gmem_a = a[broadcast_indices(c_head_index[1:], a_head, c_head[1:])][offset_m:, offset_k:]
                 for i, k_seg in load_smem_a_map.on(threadIdx.x):
                     k = k_seg * 8
-                    src_size = 0 if (offset_m + i >= m_size or offset_k + k >= k_size) else min(
-                        k_size - (offset_k + k), 8
+                    src_size = 0 if (offset_m + i >= m_size or offset_k + k >= maximum_k) else min(
+                        maximum_k - (offset_k + k), 8
                     )
                     cp_async(~smem_a[i, k], ~gmem_a[i, k], cp_size=16, src_size=src_size * 2, cache_level='global')
+                    cp_async_wait_all()
+                    # if blockIdx.z == 1 and threadIdx.x == 0:
+                    #     printf('src_size: %d\n', src_size)
+                    #     for j in range(8):
+                    #         printf('%f ', float32(smem_a[i, k + j]))
+                    #     printf('\n')
 
             @hidet.script
             def load_smem_b(
@@ -265,14 +253,45 @@ class BatchMatmulF16Task(Task):
                 b: float16[b_head + [k_size, n_size]],
                 smem_b: smem_b_type
             ):
-                offset_m, offset_n, offset_k = blockIdx.x * block_m, blockIdx.y * block_n, k0 * block_k
-                gmem_b = b[blockIdx.z, offset_k:, offset_n:]
+                c_head_index = spatial(*c_head).map(blockIdx.z)
+                offset_m, offset_n = blockIdx.x * block_m, blockIdx.y * block_n
+                offset_k = c_head_index[0] * k_part_extent + k0 * block_k
+                maximum_k = min(k_size, (c_head_index[0] + 1) * k_part_extent)
+                gmem_b = b[broadcast_indices(c_head_index[1:], b_head, c_head[1:])][offset_k:, offset_n:]
                 for k, j_seg in load_smem_b_map.on(threadIdx.x):
                     j = j_seg * 8
-                    src_size = 0 if (offset_k + k >= k_size or offset_n + j >= n_size) else min(
+                    src_size = 0 if (offset_k + k >= maximum_k or offset_n + j >= n_size) else min(
                         n_size - (offset_n + j), 8
                     )
                     cp_async(~smem_b[k, j], ~gmem_b[k, j], cp_size=16, src_size=src_size * 2, cache_level='global')
+
+            @hidet.script
+            def store_c(
+                regs_c: float16[mma_count_m, mma_count_n, mma_config.c_elements],
+                c: float16[c_head + [m_size, n_size]]
+            ):
+                warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
+                offset_m, offset_n = blockIdx.x * block_m, blockIdx.y * block_n
+                c_head_index = spatial(*c_head).map(blockIdx.z)
+                gmem_c = c[c_head_index][offset_m:, offset_n:]
+                for k_round in range(warp_count_k):
+                    for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
+                        if wk == k_round:
+                            for mi, mj in grid(mma_count_m, mma_count_n):
+                                p = 0
+                                for i, j in mma_config.c_store_map.on(lane_id):
+                                    delta_m = wi * warp_m + mi * mma_m + i
+                                    delta_n = wj * warp_n + mj * mma_n + j
+                                    in_bound = (offset_m + delta_m < m_size) and (offset_n + delta_n < n_size)
+                                    if in_bound:
+                                        if k_round == 0:
+                                            gmem_c[delta_m, delta_n] = regs_c[mi, mj, p]
+                                        else:
+                                            gmem_c[delta_m, delta_n] += regs_c[mi, mj, p]
+                                        # printf("[%d, %d, %d][%3d] %d c[%d, %d] = %f\n", blockIdx.x, blockIdx.y, blockIdx.z, threadIdx.x, k_round, delta_m, delta_n, float32(gmem_c[delta_m, delta_n]))
+                                    p += 1
+                    if warp_count_k > 1:
+                        syncthreads()
 
             @hidet.script
             def gemm_mma_cp_async_ldmatrix_opt_grid(
@@ -303,10 +322,22 @@ class BatchMatmulF16Task(Task):
 
                 load_smem_a(0, a, ~smem_a[0, 0, 0])
                 load_smem_b(0, b, ~smem_b[0, 0, 0])
-
                 cp_async_wait_all()
+
+                # if blockIdx.x == 0 and blockIdx.y == 0 and blockIdx.z == 1 and threadIdx.x == 0:
+                #     printf('smem a:\n')
+                #     for i in range(block_m):
+                #         for k in range(block_k):
+                #             printf('%f ', float32(smem_a[0, i, k]))
+                #         printf('\n')
+                #     printf('smem b:\n')
+                #     for k in range(block_k):
+                #         for j in range(block_n):
+                #             printf('%f ', float32(smem_b[0, k, j]))
+                #         printf('\n')
+                #
                 syncthreads()
-                for k0 in range((k_size + block_k - 1) // block_k):
+                for k0 in range((k_part_extent + block_k - 1) // block_k):
                     load_smem_a(k0 + 1, a, ~smem_a[(k0 + 1) % 2, 0, 0])
                     load_smem_b(k0 + 1, b, ~smem_b[(k0 + 1) % 2, 0, 0])
                     for mi in range(mma_count_m):
@@ -320,9 +351,15 @@ class BatchMatmulF16Task(Task):
                             for mj in range(mma_count_n):
                                 load_regs_b(mj, mk + 1, ~smem_b[k0 % 2, 0, 0], ~regs_b[(mk + 1) % 2, mj, 0])
                         for mi, mj in grid(mma_count_m, mma_count_n):
+                            # if mi == 0 and mj == 0 and blockIdx.z == 1 and threadIdx.x / 32 == 0:
+                            #     print_segment_a(mma_config, ~regs_a[mk % 2, mi, 0], threadIdx.x)
+                            #     print_segment_b(mma_config, ~regs_b[mk % 2, mj, 0], threadIdx.x)
                             warp_mma(~regs_a[mk % 2, mi, 0], ~regs_b[mk % 2, mj, 0], ~regs_c[mi, mj, 0])
+                            # if mi == 0 and mj == 0 and blockIdx.z == 1 and threadIdx.x / 32 == 0:
+                            #     print_segment_c(mma_config, ~regs_c[mi, mj, 0], threadIdx.x)
                     cp_async_wait_all()
                     syncthreads()
+
                 store_c(regs_c, c)
 
         ir_module = module.ir_module()
@@ -359,19 +396,30 @@ class ResolveBatchMatmulToBatchMatmulF16(ResolveRule):
         return None
 
 
+@register_resolve_rule(MatmulOp)
+class ResolveMatmulToBatchMatmulF16(ResolveRule):
+    def resolve(self, op: MatmulOp) -> Optional[List[Tensor]]:
+        a, b = op.inputs
+        if a.dtype == 'float16' and b.dtype == 'float16':
+            if a.shape[-1] % 8 == 0:
+                return [batch_matmul_f16(a, b).squeeze(0)]
+
+
 def main():
     numpy.set_printoptions(linewidth=180)
     hidet.option.search_space(space=0)
     hidet.option.search_space(space=2)
+    hidet.option.search_space(space=1)
     # hidet.option.search_space(space=1)
-    # m, n, k = 128, 768, 32
+    m, n, k = 128, 768, 32
     # m, n, k = 64, 128, 32
-    m, n, k = 1024, 1024, 1024
+    # m, n, k = 1024, 1024, 1024
     # m, n, k = 8, 8, 8
     a = hidet.ones([1, m, k], dtype='float16')
     b = hidet.ones([1, k, n], dtype='float16')
     # c1 = batch_matmul_f16(a, b).numpy()
-    c1 = batch_matmul_f16(a, b, parallel_k_parts=32)
+    c1 = batch_matmul_f16(a, b, parallel_k_parts=3)
+    # print(c1)
     c1 = hidet.ops.reduce_sum(c1, dims=0, keep_dim=False).numpy()
     # print(c1)
     c2 = numpy.matmul(a.numpy(), b.numpy())

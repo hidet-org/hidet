@@ -290,7 +290,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
     def process_assign(self, lhs: Union[Attribute, Subscript, Name], rhs, type_annotation: Optional[ast.expr] = None):
         # pylint: disable=too-many-locals, too-many-branches, too-many-statements
         # check the rhs value, must be an instance of allowed_types or a list of these kinds of elements.
-        host_var_types = (ir.TaskMapping, ir.DataLayout, ir.TensorSlice, ir.Function, str)
+        host_var_types = (ir.TaskMapping, ir.DataLayout, ir.TensorSlice, ir.Function, str, list, tuple)
         allowed_types = (ir.Expr, ir.TypeNode, TypeDecorator, float, int, str, type(None))
         allowed_types += host_var_types
         assert isinstance(rhs, allowed_types) or (
@@ -840,7 +840,12 @@ class PythonToHidetTranslator(PythonAstFunctor):
 
     def visit_Call(self, expr: Call):
         func = self.visit(expr.func)
-        args = [self.visit(arg) for arg in expr.args]
+        args = []
+        for arg in expr.args:
+            if isinstance(arg, Starred):
+                args.extend(self.visit(arg.value))
+            else:
+                args.append(self.visit(arg))
         kwargs = {kwarg.arg: self.visit(kwarg.value) for kwarg in expr.keywords}
 
         if isinstance(func, types.FunctionType):

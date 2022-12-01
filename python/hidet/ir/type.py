@@ -38,10 +38,14 @@ class DataType(TypeNode):
         return hash(self.name)
 
     def __call__(self, value: Any):
-        return self.constant(value)
+        from hidet.ir.expr import Expr, cast
+        if isinstance(value, Expr):
+            return cast(value, self)
+        else:
+            return self.constant(value)
 
     def __getitem__(self, item):
-        if not isinstance(item, tuple):
+        if not isinstance(item, (tuple, list)):
             item = (item,)
         return tensor_type(dtype=self, shape=list(item))
 

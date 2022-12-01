@@ -7,7 +7,7 @@ from hidet.ir.layout import DataLayout
 from hidet.lang.type_utils import shared_scope, register_scope
 from hidet.ir.primitives.cuda.vars import threadIdx, blockIdx, blockDim, gridDim
 from hidet.ir.primitives.cuda.smem import dynamic_shared_memory, set_kernel_max_dynamic_smem_bytes
-from hidet.ir.primitives.cuda.sync import syncthreads, syncthreads_and, syncthreads_count, syncthreads_or
+from hidet.ir.primitives.cuda.sync import syncthreads, syncthreads_and, syncthreads_count, syncthreads_or, syncwarp
 from hidet.ir.primitives.cuda.mma import MmaConfig, mma_sync, ldmatrix
 from hidet.ir.primitives.cuda.cvta import cvta_generic_to_shared
 from hidet.ir.primitives.cuda.cp_async import cp_async, cp_async_commit_group, cp_async_wait_group, cp_async_wait_all
