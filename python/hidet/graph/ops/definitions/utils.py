@@ -106,6 +106,14 @@ def can_broadcast(src_shape: List[int], dst_shape: List[int]) -> bool:
     return True
 
 
+def can_mutually_broadcast(x_shape: List[int], y_shape: List[int]) -> bool:
+    while len(x_shape) < len(y_shape):
+        x_shape = [1] + x_shape
+    while len(y_shape) < len(x_shape):
+        y_shape = [1] + y_shape
+    return all([p == q or p == 1 or q == 1 for p, q in zip(x_shape, y_shape)])
+
+
 def broadcast_shape(x_shape: List[int], y_shape: List[int]) -> List[int]:
     """
     Broadcast two shapes with the same rule as numpy.

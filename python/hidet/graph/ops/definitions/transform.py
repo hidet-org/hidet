@@ -376,6 +376,15 @@ class FlattenOp(Operator):
             attributes={'start_dim': start_dim, 'end_dim': end_dim},
         )
 
+    def imperative_run(self, inputs: List[Tensor]) -> List[Tensor]:
+        x = inputs[0] if inputs else self.inputs[0]
+        if isinstance(x.layout, (RowMajorLayout, ColumnMajorLayout)):
+            shape = self.task.outputs[0].const_shape()
+            layout = x.layout.__class__(shape)
+            return [Tensor(shape=shape, dtype=x.dtype, device=x.device, storage=x.storage, layout=layout, trace=None)]
+        else:
+            return Operator.imperative_run(self, inputs)
+
 
 class TransposeOp(Operator):
     def __init__(self, x: Tensor, axes: Optional[List[int]] = None):

@@ -12,7 +12,7 @@ from hidet.graph.ops.definitions.matmul.batch_matmul import BatchMatmulTask, Bat
 from hidet.graph.ops.definitions.matmul.matmul import MatmulTask, MatmulOp
 from hidet.ir.task import Task
 from hidet.ir.compute import compute, reduce
-from hidet.graph.ops.definitions.utils import input_like, broadcast_shape, can_broadcast, broadcast_indices
+from hidet.graph.ops.definitions.utils import input_like, broadcast_shape, can_broadcast, broadcast_indices, can_mutually_broadcast
 from hidet.graph.ops.schedules import Schedule
 from hidet.graph.transforms.resolve_variant import register_resolve_rule, ResolveRule
 from hidet.graph.ops.schedules import tune
@@ -41,7 +41,7 @@ class BatchMatmulF16Task(Task):
                 ', got {} and {}'.format(a_shape, b_shape)
             )
 
-        if not can_broadcast(a_shape[:-2], b_shape[:-2]):
+        if not can_mutually_broadcast(a_shape[:-2], b_shape[:-2]):
             raise ValueError(
                 'Matrix multiplication expect tensor A and B with compatible broadcast shape, '
                 'got {} and {}'.format(a_shape, b_shape)
@@ -288,7 +288,6 @@ class BatchMatmulF16Task(Task):
                                             gmem_c[delta_m, delta_n] = regs_c[mi, mj, p]
                                         else:
                                             gmem_c[delta_m, delta_n] += regs_c[mi, mj, p]
-                                        # printf("[%d, %d, %d][%3d] %d c[%d, %d] = %f\n", blockIdx.x, blockIdx.y, blockIdx.z, threadIdx.x, k_round, delta_m, delta_n, float32(gmem_c[delta_m, delta_n]))
                                     p += 1
                     if warp_count_k > 1:
                         syncthreads()
@@ -377,8 +376,8 @@ class BatchMatmulF16Op(Operator):
 
 
 def batch_matmul_f16(a: Tensor, b: Tensor, parallel_k_parts=1) -> Tensor:
-    if len(a.shape) != 3 or len(b.shape) != 3:
-        raise ValueError('Expect 3D tensors')
+    # if len(a.shape) != 3 or len(b.shape) != 3:
+    #     raise ValueError('Expect 3D tensors')
     if a.shape[-1] % 8 != 0 or b.shape[-1] % 8 != 0:
         raise ValueError('Expect the last dimension of the input tensors to be a multiple of 8')
     if a.dtype != 'float16' or b.dtype != 'float16':
@@ -418,9 +417,15 @@ def main():
     a = hidet.ones([1, m, k], dtype='float16')
     b = hidet.ones([1, k, n], dtype='float16')
     # c1 = batch_matmul_f16(a, b).numpy()
-    c1 = batch_matmul_f16(a, b, parallel_k_parts=3)
+    # c1 = batch_matmul_f16(a, b, parallel_k_parts=3)
+
+    @hidet.jit(opt=True)
+    def f(a, b):
+        return hidet.ops.matmul(a, b)
+
     # print(c1)
-    c1 = hidet.ops.reduce_sum(c1, dims=0, keep_dim=False).numpy()
+    # c1 = hidet.ops.reduce_sum(c1, dims=0, keep_dim=False).numpy()
+    c1 = f(a, b).numpy()
     # print(c1)
     c2 = numpy.matmul(a.numpy(), b.numpy())
     # print(c2)

@@ -53,7 +53,7 @@ class LowerCastRewriter(StmtExprRewriter):
             if not isinstance(src_dtype, DataType):
                 # convert from non-dtype (e.g., pointer) to dtype
                 return StmtExprRewriter.visit_Cast(self, e)
-            if (src_dtype, target_type) in registered_math_function_sets:
+            if (self.device, src_dtype.name) in registered_math_function_sets:
                 function_set: MathFunctionSet = registered_math_function_sets[(self.device, src_dtype.name)]
                 casted: Optional[Expr] = function_set.cast(src_expr, target_type)
             else:
