@@ -102,13 +102,13 @@ def cuda_schedule_matmul(task: MatMulTask) -> IRModule:
             attr.cuda_grid_dim = (m_tiles * n_tiles, bs)
             attr.cuda_block_dim = block_size
 
-            offset_m, offset_n = blockIdx.x // block_n * block_n, blockIdx.x % block_n * block_m
+            offset_m, offset_n = blockIdx.x // n_tiles * block_m, blockIdx.x % n_tiles * block_n
 
-            smem_a = tensor('shared', 'float16', [block_m, block_k])
-            smem_b = tensor('shared', 'float16', [block_k, block_n])
-            # regs_a = tensor('register', 'float16', [8, 1])
-            # regs_b = tensor('register', 'float16', [1, 8])
-            regs_c = tensor('register', 'float16', [8, 8])
+            smem_a = tensor('shared', 'float32', [block_m, block_k])
+            smem_b = tensor('shared', 'float32', [block_k, block_n])
+            # regs_a = tensor('register', 'float32', [8, 1])
+            # regs_b = tensor('register', 'float32', [1, 8])
+            regs_c = tensor('register', 'float32', [8, 8])
 
             for i, j in grid(8, 8):
                 regs_c[i, j] = 0.0
@@ -119,7 +119,7 @@ def cuda_schedule_matmul(task: MatMulTask) -> IRModule:
                 gmem_b = b[blockIdx.y, offset_k:, offset_n:]
                 for i, k in spatial(8, 1).repeat(4, 1).spatial(4, 8).on(threadIdx.x):
                     smem_a[i, k] = gmem_a.read([i, k], protected=True)
-                for k, j in spatial(4, 2).repeat(1, 4).spatial(32, 1).on(threadIdx.x):
+                for k, j in spatial(2, 4).repeat(4, 1).spatial(1, 32).on(threadIdx.x):
                     smem_b[k, j] = gmem_b.read([k, j], protected=True)
                 syncthreads()
                 # load_regs_a()
@@ -132,7 +132,7 @@ def cuda_schedule_matmul(task: MatMulTask) -> IRModule:
                 for i, j in block_layout.repeat(8, 8).on(threadIdx.x):
                     for k_frag in range(block_k):
                         regs_c[i%8, j%8] += smem_a[i, k_frag] * smem_b[k_frag, j]
-                # syncthreads()
+                syncthreads()
 
             gmem_c = c[blockIdx.y, offset_m:, offset_n:]
             for i, j in block_layout.repeat(8,8).on(threadIdx.x):
