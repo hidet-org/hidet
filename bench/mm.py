@@ -3,6 +3,7 @@ import numpy as np
 from typing import List, Callable, Any, Union, Optional, Dict
 from hidet.ir import IRModule
 from hidet.ir.compute import ReduceOperation, reduce
+from hidet.ir.layout import DataLayout
 from hidet.graph.ops.definitions.matmul.batch_matmul import BatchMatmulOp
 from hidet.transforms.tools import fuse_and_pack
 from hidet.lang import f16, f32, spatial, repeat, tensor, attr, grid, printf, cast
@@ -40,14 +41,20 @@ class MatMulTask(Task):
         )
 
     def implement_cuda(self, workding_dir: str) -> IRModule:
-        return cuda_schedule_matmul(self)
-
+        #return cuda_schedule_matmul(self)
+        return cuda_schedule_matmul_smem(self)
 
 def cuda_schedule_matmul(task: MatMulTask) -> IRModule:
+    local_layout = DataLayout.local
+    row_major = DataLayout.row_major
+
     bs = task.attributes['batch_size']
     m_size = task.attributes['m_size']
     n_size = task.attributes['n_size']
     k_size = task.attributes['k_size']
+
+    warp_inner = (4, 4)
+    warp_outer = (2, 2)
 
     block_size = 256
     block_m, block_n, block_k = 128, 128, 8
@@ -138,6 +145,69 @@ def cuda_schedule_matmul(task: MatMulTask) -> IRModule:
             for i, j in block_layout.repeat(8,8).on(threadIdx.x):
                 gmem_c.write([i, j], regs_c[i%8, j%8], protected=True)
             # store_c(regs_c, c)
+
+    ir_module = module.ir_module()
+    add_packed_func(ir_module, func=mm_kernel, pack_func_name=task.name)
+    return ir_module
+
+def cuda_schedule_matmul_smem(task: MatMulTask) -> IRModule:
+    bs = task.attributes['batch_size']
+    m_size = task.attributes['m_size']
+    n_size = task.attributes['n_size']
+    k_size = task.attributes['k_size']
+
+    local_layout = DataLayout.local
+    row_major = DataLayout.row_major
+
+    block_size = 256
+    block_m, block_n, block_k = 128, 128, 8
+    m_tiles = (m_size + block_m - 1) // block_m
+    n_tiles = (n_size + block_n - 1) // block_n
+    k_tiles = (k_size + block_k - 1) // block_k
+
+    grid_layout = spatial(m_tiles, n_tiles)
+    block_layout = spatial(16, 16)  # 8x8 elements per thread
+
+
+    with hidet.script_module() as module:
+        @hidet.script
+        def mm_kernel(
+            a: f32[bs, m_size, k_size],
+            b: f32[bs, k_size, n_size],
+            c: f32[bs, m_size, n_size]
+        ):
+            attr.cuda_grid_dim = (m_tiles * n_tiles, bs)
+            attr.cuda_block_dim = block_size
+
+            offset_m, offset_n = blockIdx.x // n_tiles * block_m, blockIdx.x % n_tiles * block_n
+
+            smem_a = tensor('shared', 'float32', [block_m, block_k])
+            smem_b = tensor('shared', 'float32', [block_k, block_n])
+            regs_c = tensor('register', 'float32', shape=(8,8), layout=local_layout((1,1))*row_major((8,8)))
+
+            for i, j in grid(8, 8):
+                regs_c[i, j] = 0.0
+
+            for k in range(k_tiles):
+                offset_k = k * block_k
+                gmem_a = a[blockIdx.y, offset_m:, offset_k:]
+                gmem_b = b[blockIdx.y, offset_k:, offset_n:]
+                for i, k in spatial(8, 1).repeat(4, 1).spatial(4, 8).on(threadIdx.x):
+                    smem_a[i, k] = gmem_a.read([i, k], protected=True)
+                for k, j in spatial(2, 4).repeat(4, 1).spatial(1, 32).on(threadIdx.x):
+                    smem_b[k, j] = gmem_b.read([k, j], protected=True)
+                syncthreads()
+                # for i in row:
+                #   for j in col:
+                #       regs_c[i,j] += a[batch, arow(i), acol(k)] * b[batch, brow(k), bcol(j)]
+                for i, j in block_layout.repeat(8, 8).on(threadIdx.x):
+                    for k_frag in range(block_k):
+                        regs_c[i, j] += smem_a[i, k_frag] * smem_b[k_frag, j]
+                syncthreads()
+
+            gmem_c = c[blockIdx.y, offset_m:, offset_n:]
+            for i, j in block_layout.repeat(8,8).on(threadIdx.x):
+                gmem_c.write([i, j], regs_c[i, j], protected=True)
 
     ir_module = module.ir_module()
     add_packed_func(ir_module, func=mm_kernel, pack_func_name=task.name)
