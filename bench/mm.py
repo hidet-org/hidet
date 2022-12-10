@@ -8,7 +8,7 @@ from hidet.ir.mapping import TaskMapping
 from hidet.ir.type import data_type
 from hidet.graph.ops.definitions.matmul.batch_matmul import BatchMatmulOp
 from hidet.transforms.tools import fuse_and_pack
-from hidet.lang import f16, f32, spatial, repeat, tensor, attr, grid, printf, cast
+from hidet.lang import f16, f32, i32, spatial, repeat, tensor, attr, grid, printf, cast
 from hidet.lang.mapping import repeat, spatial
 from hidet.lang.cuda import blockIdx, threadIdx, syncthreads
 from hidet.transforms.tools import add_packed_func
@@ -44,7 +44,8 @@ class MatMulTask(Task):
 
     def implement_cuda(self, workding_dir: str) -> IRModule:
         return cuda_schedule_matmul(self)
-        #return cuda_schedule_matmul_smem(self)
+        # return cuda_schedule_matmul_smem(self)
+
 
 def cuda_schedule_matmul(task: MatMulTask) -> IRModule:
     local_layout = DataLayout.local
@@ -60,54 +61,60 @@ def cuda_schedule_matmul(task: MatMulTask) -> IRModule:
     block_warps = (4, 2)
 
     # Task Layouts
-    warp_inner_layout = repeat(warp_inner)
-    warp_mid_layout = spatial(warp_mid)
-    warp_outer_layout = repeat(warp_outer)
+    warp_inner_layout = repeat(*warp_inner)
+    warp_mid_layout = spatial(*warp_mid)
+    warp_outer_layout = repeat(*warp_outer)
     warp_layout = warp_outer_layout * warp_mid_layout * warp_inner_layout
-    block_warps_layout = spatial(block_warps)
+    block_warps_layout = spatial(*block_warps)
     block_layout = block_warps_layout * warp_layout
-    block_k = block_warps_k * warp_k # 8 * 1 = 8
-    warp_mid_shape = warp_mid_layout.task_shape # 4x8
-    block_shape = block_layout.task_shape # 128x128
+    block_k = block_warps_k * warp_k  # 8 * 1 = 8
+    warp_mid_shape = warp_mid_layout.task_shape  # 4x8
+    block_shape = block_layout.task_shape  # 128x128
     warp_size = 32
-    block_size = block_layout.num_workers # 256
+    block_size = block_layout.num_workers  # 256
 
-    lines = block_size // block_k # 256 // 8 = 32
+    lines = block_size // block_k  # 256 // 8 = 32
     # spatial(32x8) x repeat(4x1)
-    a_g2s_layout = spatial((lines, block_k)) * repeat((block_shape[0] // lines, 1))
+    a_g2s_layout = spatial(lines, block_k) * \
+        repeat(block_shape[0] // lines, 1)
     # repeat(1x4) x spatial(8x32)
-    b_g2s_layout = repeat((1,block_shape[1] // lines)) * spatial((block_k, lines))
+    b_g2s_layout = repeat(
+        1, block_shape[1] // lines) * spatial(block_k, lines)
     a_s2r_layout = (     # spatial(4x2) x repeat(2x1) x spatial(4x8) x repeat(4x1)
         block_warps_layout
-        * repeat([warp_outer[0], warp_k])
+        * repeat(warp_outer[0], warp_k)
         * warp_mid_layout
-        * repeat([warp_inner[0], warp_k])
-    ).projection({1: 0})
+        * repeat(warp_inner[0], warp_k)
+    # ).projection({1: 0})
+    )
     b_s2r_layout = (     # spatial(4x2) x repeat(1x2) x spatial(4x8) x repeat(1x4)
         block_warps_layout
-        * repeat([warp_k, warp_outer[1]])
+        * repeat(warp_k, warp_outer[1])
         * warp_mid_layout
-        * repeat([warp_k, warp_inner[1]])
-    ).projection({0: 0})
+        * repeat(warp_k, warp_inner[1])
+    # ).projection({0: 0})
+    )
 
     # Data Layouts
     regs_a_layout = (
         local_layout((block_warps[0], 1))      # 4x1
         * col_major((warp_outer[0], warp_k))   # 2x1
-        * local_layout((warp_mid_shape[0], 1)) # 4x1
+        * local_layout((warp_mid_shape[0], 1))  # 4x1
         * row_major((warp_inner[0], 1))        # 4x1
     )
+    regs_a_layout = [2] + regs_a_layout
     regs_b_layout = (
         local_layout((1, block_warps[1]))      # 1x2
         * row_major((warp_k, warp_outer[1]))   # 1x2
-        * local_layout((1, warp_mid_shape[1])) # 1x8
+        * local_layout((1, warp_mid_shape[1]))  # 1x8
         * row_major((1, warp_inner[1]))        # 1x4
     )
+    regs_b_layout = [2] + regs_b_layout
     # local(4x2) x spatial(2x2) x local(4x8) x spatial(4x4)
     regs_c_layout = (
-        local_layout(block_warps) * row_major(warp_outer) * 
+        local_layout(block_warps) * row_major(warp_outer) *
         local_layout(warp_mid_shape) * row_major(warp_inner)
-    )  
+    )
     # local(32x8) x spatial(4x1)
     regs_a_ldg_layout = local_layout((block_size // block_k, block_k)) * row_major(
         (block_shape[0] // (block_size // block_k), 1)
@@ -133,16 +140,117 @@ def cuda_schedule_matmul(task: MatMulTask) -> IRModule:
 
     with hidet.script_module() as module:
         @hidet.script
-        def copy(src, dst, layout, src_predicate=None, dst_predicate=None, default_value=0.0):
-            for indices in layout(threadIdx.x):
-                if dst_predicate and not dst_predicate(*indices):
-                    continue
-                if src_predicate and not src_predicate(*indices):
-                    value = default_value
+        def copy_a_g2r(
+                    a: f32[bs, m_size, k_size],
+                    regs_a_ldg: f32[
+                        regs_a_ldg_layout.shape[0],
+                        regs_a_ldg_layout.shape[1]],
+                    offset_m: i32,
+                    offset_k: i32,
+                    first_k_tile_size: i32
+        ):
+            gmem_a = a[blockIdx.y, offset_m:, offset_k:]
+            for i, k in a_g2s_layout.on(threadIdx.x):
+                k_predicate = first_k_tile_size == 0 or k < first_k_tile_size
+                if offset_m + i < m_size and k_predicate:
+                    regs_a_ldg[i, k] = gmem_a.read([i,k], protected=True)
                 else:
-                    value = src.read(indices, protected=True)
-                dst[indices] = src.read(indices, protected=True)
-            return
+                    regs_a_ldg[i, k] = 0.0
+
+        @hidet.script
+        def copy_a_r2s(
+                    regs_a_ldg: f32[
+                        regs_a_ldg_layout.shape[0],
+                        regs_a_ldg_layout.shape[1]],
+                    smem_a: f32[2, block_m, block_k],
+                    buffer_idx: i32
+        ):
+            for i, k in a_g2s_layout.on(threadIdx.x):
+                smem_a[buffer_idx, i, k] = regs_a_ldg[i, k]
+
+        @hidet.script
+        def copy_a_s2r(
+            smem_a: f32[2, block_m, block_k],
+            regs_a: f32[2, regs_a_layout.shape[1],
+                        regs_a_layout.shape[2]],
+            smem_buffer_idx: i32,
+            regs_buffer_idx: i32,
+            k_frag_idx: i32
+        ):
+            smem_a_start = smem_a[smem_buffer_idx % 2, :, k_frag_idx:]
+            for i, k in a_s2r_layout.on(threadIdx.x):
+                regs_a[regs_buffer_idx, i, k] = smem_a_start[i, k]
+
+
+        @hidet.script
+        def copy_b_g2r(
+                    b: f32[bs, k_size, n_size],
+                    regs_b_ldg: f32[
+                        regs_b_ldg_layout.shape[0],
+                        regs_b_ldg_layout.shape[1]],
+                    offset_k: i32,
+                    offset_n: i32,
+                    first_k_tile_size: i32
+        ):
+            gmem_b = b[blockIdx.y, offset_k:, offset_n:]
+            for k, j in b_g2s_layout.on(threadIdx.x):
+                k_predicate = first_k_tile_size == 0 or k < first_k_tile_size
+                if offset_n + j < n_size and k_predicate:
+                    regs_b_ldg[k, j] = gmem_b.read([k, j], protected=True)
+                else:
+                    regs_b_ldg[k, j] = 0.0
+        
+
+        @hidet.script
+        def copy_b_r2s(
+                    regs_b_ldg: f32[
+                        regs_b_ldg_layout.shape[0],
+                        regs_b_ldg_layout.shape[1]],
+                    smem_b: f32[2, block_k, block_n],
+                    buffer_idx: i32
+        ):
+            for i, k in a_g2s_layout.on(threadIdx.x):
+                smem_b[buffer_idx, i, k] = regs_b_ldg[i, k]
+    
+        @hidet.script
+        def copy_b_s2r(
+            smem_b: f32[2, block_k, block_n],
+            regs_b: f32[2, regs_b_layout.shape[1],
+                        regs_b_layout.shape[2]],
+            smem_buffer_idx: i32,
+            regs_buffer_idx: i32,
+            k_frag_idx: i32
+        ):
+            smem_b_start = smem_b[smem_buffer_idx % 2, k_frag_idx:, :]
+            for k, j in b_s2r_layout.on(threadIdx.x):
+                regs_b[regs_buffer_idx, k, j] = smem_b_start[k, j]
+        
+        @hidet.script
+        def copy_c_r2g(
+            regs_c: f32[regs_c_layout.shape[0],
+                        regs_c_layout.shape[1]],
+            c: f32[bs, m_size, n_size],
+            offset_m: i32,
+            offset_n: i32
+        ):
+            gmem_c = c[blockIdx.y, offset_m:, offset_n:]
+            for i, j in block_layout.on(threadIdx.x):
+                if offset_m + i < m_size and offset_n + j < n_size:
+                    gmem_c.write([i, j], regs_c[i, j], protected=True)
+
+        @hidet.script
+        def mma(
+            regs_a: f32[2, regs_a_layout.shape[1],
+                        regs_a_layout.shape[2]],
+            regs_b: f32[2, regs_b_layout.shape[1],
+                        regs_b_layout.shape[2]],
+            regs_c: f32[regs_c_layout.shape[0],
+                        regs_c_layout.shape[1]],
+            buffer_idx: i32
+        ):
+            for i, j in block_layout.on(threadIdx.x):
+                for k in range(warp_k):
+                    regs_c[i, j] += regs_a[buffer_idx, i, k] * regs_b[buffer_idx, k, j]
 
 
         @hidet.script
@@ -154,38 +262,36 @@ def cuda_schedule_matmul(task: MatMulTask) -> IRModule:
             attr.cuda_grid_dim = (m_tiles * n_tiles, bs)
             attr.cuda_block_dim = block_size
 
-            offset_m, offset_n = blockIdx.x // n_tiles * block_m, blockIdx.x % n_tiles * block_n
+            offset_m, offset_n = blockIdx.x // n_tiles * \
+                block_m, blockIdx.x % n_tiles * block_n
 
             smem_a = tensor('shared', 'float32', layout=StridesLayout.from_shape(
                 [2, block_m, block_k], perm=[0, 2, 1]))
             smem_b = tensor('shared', 'float32', layout=StridesLayout.from_shape(
                 [2, block_k, block_n], perm=[0, 1, 2]))
-            regs_a = tensor('register', 'float32', layout=[2] + regs_a_layout)
-            regs_b = tensor('register', 'float32', layout=[2] + regs_b_layout)
+            regs_a = tensor('register', 'float32', layout=regs_a_layout)
+            regs_b = tensor('register', 'float32', layout=regs_b_layout)
             regs_c = tensor('register', 'float32', layout=regs_c_layout)
-            regs_a_ldg = tensor('register', 'float32', layout=regs_a_ldg_layout)
-            regs_b_ldg = tensor('register', 'float32', layout=regs_b_ldg_layout)
+            regs_a_ldg = tensor('register', 'float32',
+                                layout=regs_a_ldg_layout)
+            regs_b_ldg = tensor('register', 'float32',
+                            layout=regs_b_ldg_layout)
 
-            
             # Copy first k-tile from global to shared
             first_k_tile_size = k_size - (k_tiles - 1) * block_k
-            gmem_a = a[blockIdx.y, offset_m:, :]
-            gmem_b = b[blockIdx.y, :, offset_n:]
-            copy(gmem_a, regs_a_ldg, regs_a_ldg_layout, src_predicate=lambda i, k:
-                 offset_m + i < m_size and k < first_k_tile_size)
-            copy(regs_a_ldg, smem_a[0], a_g2s_layout)
-            copy(gmem_b, regs_b_ldg, regs_b_ldg_layout, src_predicate=lambda k, j:
-                 offset_n + j < n_size and k < first_k_tile_size)
-            copy(regs_b_ldg, smem_b[0], b_g2s_layout)
+            copy_a_g2r(a, regs_a_ldg, offset_m, 0, first_k_tile_size)
+            copy_a_r2s(regs_a_ldg, smem_a, 0)
+            copy_b_g2r(b, regs_b_ldg, 0, offset_n, first_k_tile_size)
+            copy_b_r2s(regs_b_ldg, smem_b, 0)
             syncthreads()
 
             # Copy first k-frag within first k-tile from shared to local
-            copy(smem_a[0], regs_a[0], a_s2r_layout)
-            copy(smem_b[0], regs_b[0], b_s2r_layout)
+            copy_a_s2r(smem_a, regs_a, 0, 0, 0)
+            copy_b_s2r(smem_b, regs_b, 0, 0, 0)
             syncthreads()
 
             # Initialize regs C
-            for i, j in block_layout(threadIdx.x):
+            for i, j in block_layout.on(threadIdx.x):
                 regs_c[i, j] = 0.0
 
             # Main k-tile loop
@@ -194,19 +300,42 @@ def cuda_schedule_matmul(task: MatMulTask) -> IRModule:
                 for k_frag in range(block_warps_k):
                     if k_frag == block_warps_k - 1:
                         # Store next AB tile from local into shared
+                        copy_a_r2s(regs_a_ldg, smem_a, (k + 1) % 2)
+                        copy_b_r2s(regs_b_ldg, smem_b, (k + 1) % 2)
+                        syncthreads()
+                        # Load next k-fragment (from next k-tile) from shared to local
+                        copy_a_s2r(smem_a, regs_a, k + 1,(k_frag + 1) % 2, 0)
+                        copy_b_s2r(smem_b, regs_b, k + 1,(k_frag + 1) % 2, 0)
+                    else:
+                        # Load next k-fragment from shared to local
+                        copy_a_s2r(smem_a, regs_a, k,(k_frag + 1) % 2, k_frag + 1)
+                        copy_b_s2r(smem_b, regs_b, k,(k_frag + 1) % 2, k_frag + 1)
                         pass
                     if k_frag == 0:
                         # Load next AB tile from global into local
-                        pass
+                        copy_a_g2r(a, regs_a_ldg, offset_m, offset_k, 0)
+                        copy_b_g2r(b, regs_b_ldg, offset_k, offset_n, 0)
                     # Perform MMA
+                    mma(regs_a, regs_b, regs_c, k_frag % 2)
 
             # Perform MMA for last k-tile
-            # Store results from regs_c into C
+            last_k = k_tiles - 1
+            for k_frag in range(block_warps_k):
+                if k_frag < block_warps_k - 1:
+                    pass
+                    # Load next k-fragment from shared to local
+                    copy_a_s2r(smem_a, regs_a, last_k + 1,(k_frag + 1) % 2, k_frag + 1)
+                    copy_b_s2r(smem_b, regs_b, last_k + 1,(k_frag + 1) % 2, k_frag + 1)
+                # Perform MMA
+                mma(regs_a, regs_b, regs_c, (k_frag + 1) % 2)
 
+            # Store results from regs_c into C
+            copy_c_r2g(regs_c, c, offset_m, offset_n) 
 
     ir_module = module.ir_module()
     add_packed_func(ir_module, func=mm_kernel, pack_func_name=task.name)
     return ir_module
+
 
 def cuda_schedule_matmul_smem(task: MatMulTask) -> IRModule:
     bs = task.attributes['batch_size']
@@ -226,7 +355,6 @@ def cuda_schedule_matmul_smem(task: MatMulTask) -> IRModule:
     grid_layout = spatial(m_tiles, n_tiles)
     block_layout = spatial(16, 16)  # 8x8 elements per thread
 
-
     with hidet.script_module() as module:
         @hidet.script
         def mm_kernel(
@@ -237,11 +365,13 @@ def cuda_schedule_matmul_smem(task: MatMulTask) -> IRModule:
             attr.cuda_grid_dim = (m_tiles * n_tiles, bs)
             attr.cuda_block_dim = block_size
 
-            offset_m, offset_n = blockIdx.x // n_tiles * block_m, blockIdx.x % n_tiles * block_n
+            offset_m, offset_n = blockIdx.x // n_tiles * \
+                block_m, blockIdx.x % n_tiles * block_n
 
             smem_a = tensor('shared', 'float32', [block_m, block_k])
             smem_b = tensor('shared', 'float32', [block_k, block_n])
-            regs_c = tensor('register', 'float32', shape=(8,8), layout=local_layout((1,1))*row_major((8,8)))
+            regs_c = tensor('register', 'float32', shape=(
+                8, 8), layout=local_layout((1, 1))*row_major((8, 8)))
 
             for i, j in grid(8, 8):
                 regs_c[i, j] = 0.0
@@ -264,7 +394,7 @@ def cuda_schedule_matmul_smem(task: MatMulTask) -> IRModule:
                 syncthreads()
 
             gmem_c = c[blockIdx.y, offset_m:, offset_n:]
-            for i, j in block_layout.repeat(8,8).on(threadIdx.x):
+            for i, j in block_layout.repeat(8, 8).on(threadIdx.x):
                 gmem_c.write([i, j], regs_c[i, j], protected=True)
 
     ir_module = module.ir_module()
@@ -278,7 +408,7 @@ class MatMulOp(Operator):
             x, 'x'), input_like(y, 'y')))
 
 
-hidet.option.search_space(0)
+hidet.option.search_space(2)
 hidet.option.save_lower_ir(True)
 hidet.option.cache_dir('.')
 
