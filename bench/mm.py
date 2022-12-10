@@ -85,14 +85,12 @@ def cuda_schedule_matmul(task: MatMulTask) -> IRModule:
         * repeat(warp_outer[0], warp_k)
         * warp_mid_layout
         * repeat(warp_inner[0], warp_k)
-    # ).projection({1: 0})
     )
     b_s2r_layout = (     # spatial(4x2) x repeat(1x2) x spatial(4x8) x repeat(1x4)
         block_warps_layout
         * repeat(warp_k, warp_outer[1])
         * warp_mid_layout
         * repeat(warp_k, warp_inner[1])
-    # ).projection({0: 0})
     )
 
     # Data Layouts
@@ -149,7 +147,7 @@ def cuda_schedule_matmul(task: MatMulTask) -> IRModule:
         ):
             gmem_a = a[blockIdx.y, offset_m:, offset_k:]
             for i, k in a_g2s_layout.on(threadIdx.x):
-                k_predicate = first_k_tile_size == 0 or k < first_k_tile_size
+                k_predicate = ((first_k_tile_size == 0) or k < first_k_tile_size)
                 if offset_m + i < m_size and k_predicate:
                     regs_a_ldg[i, k] = gmem_a.read([i,k], protected=True)
                 else:
@@ -172,9 +170,9 @@ def cuda_schedule_matmul(task: MatMulTask) -> IRModule:
             regs_buffer_idx: i32,
             k_frag_idx: i32
         ):
-            smem_a_start = smem_a[smem_buffer_idx % 2, :, k_frag_idx:]
+            smem_a_start = smem_a[smem_buffer_idx, :, k_frag_idx:]
             for i, k in a_s2r_layout.on(threadIdx.x):
-                regs_a[regs_buffer_idx, i, k] = smem_a_start[i, k]
+                regs_a[regs_buffer_idx, i, k] = smem_a_start[i, 0]
 
 
         @hidet.script
@@ -187,7 +185,7 @@ def cuda_schedule_matmul(task: MatMulTask) -> IRModule:
         ):
             gmem_b = b[blockIdx.y, offset_k:, offset_n:]
             for k, j in b_g2s_layout.on(threadIdx.x):
-                k_predicate = first_k_tile_size == 0 or k < first_k_tile_size
+                k_predicate = ((first_k_tile_size == 0) or k < first_k_tile_size)
                 if offset_n + j < n_size and k_predicate:
                     regs_b_ldg[k, j] = gmem_b.read([k, j], protected=True)
                 else:
@@ -200,8 +198,8 @@ def cuda_schedule_matmul(task: MatMulTask) -> IRModule:
                     smem_b: f32[2, block_k, block_n],
                     buffer_idx: i32
         ):
-            for i, k in a_g2s_layout.on(threadIdx.x):
-                smem_b[buffer_idx, i, k] = regs_b_ldg[i, k]
+            for k, j in b_g2s_layout.on(threadIdx.x):
+                smem_b[buffer_idx, k, j] = regs_b_ldg[k, j]
     
         @hidet.script
         def copy_b_s2r(
@@ -211,9 +209,9 @@ def cuda_schedule_matmul(task: MatMulTask) -> IRModule:
             regs_buffer_idx: i32,
             k_frag_idx: i32
         ):
-            smem_b_start = smem_b[smem_buffer_idx % 2, k_frag_idx:, :]
+            smem_b_start = smem_b[smem_buffer_idx, k_frag_idx:, :]
             for k, j in b_s2r_layout.on(threadIdx.x):
-                regs_b[regs_buffer_idx, k, j] = smem_b_start[k, j]
+                regs_b[regs_buffer_idx, k, j] = smem_b_start[0, j]
         
         @hidet.script
         def copy_c_r2g(
@@ -271,8 +269,8 @@ def cuda_schedule_matmul(task: MatMulTask) -> IRModule:
             copy_b_r2s(regs_b_ldg, smem_b, 0)
             syncthreads()
             # Copy first k-frag within first k-tile from shared to local
-            # copy_a_s2r(smem_a, regs_a, 0, 0, 0)
-            # copy_b_s2r(smem_b, regs_b, 0, 0, 0)
+            copy_a_s2r(smem_a, regs_a, 0, 0, 0)
+            copy_b_s2r(smem_b, regs_b, 0, 0, 0)
             syncthreads()
             # Initialize regs C
             for i, j in block_layout.on(threadIdx.x):
@@ -288,13 +286,12 @@ def cuda_schedule_matmul(task: MatMulTask) -> IRModule:
                         copy_b_r2s(regs_b_ldg, smem_b, (k + 1) % 2)
                         syncthreads()
                         # Load next k-fragment (from next k-tile) from shared to local
-                        # copy_a_s2r(smem_a, regs_a, k + 1,(k_frag + 1) % 2, 0)
-                        # copy_b_s2r(smem_b, regs_b, k + 1,(k_frag + 1) % 2, 0)
+                        copy_a_s2r(smem_a, regs_a, (k + 1) % 2,(k_frag + 1) % 2, 0)
+                        copy_b_s2r(smem_b, regs_b, (k + 1) % 2,(k_frag + 1) % 2, 0)
                     else:
                         # Load next k-fragment from shared to local
-                        # copy_a_s2r(smem_a, regs_a, k,(k_frag + 1) % 2, k_frag + 1)
-                        # copy_b_s2r(smem_b, regs_b, k,(k_frag + 1) % 2, k_frag + 1)
-                        pass
+                        copy_a_s2r(smem_a, regs_a, k % 2,(k_frag + 1) % 2, k_frag + 1)
+                        copy_b_s2r(smem_b, regs_b, k % 2,(k_frag + 1) % 2, k_frag + 1)
                     if k_frag == 0:
                         # Load next AB tile from global into local
                         copy_a_g2r(a, regs_a_ldg, offset_m, offset_k, 0)
@@ -305,12 +302,11 @@ def cuda_schedule_matmul(task: MatMulTask) -> IRModule:
             last_k = k_tiles - 1
             for k_frag in range(block_warps_k):
                 if k_frag < block_warps_k - 1:
-                    pass
                     # Load next k-fragment from shared to local
-                    # copy_a_s2r(smem_a, regs_a, last_k + 1,(k_frag + 1) % 2, k_frag + 1)
-                    # copy_b_s2r(smem_b, regs_b, last_k + 1,(k_frag + 1) % 2, k_frag + 1)
+                    copy_a_s2r(smem_a, regs_a, (last_k) % 2,(k_frag + 1) % 2, k_frag + 1)
+                    copy_b_s2r(smem_b, regs_b, (last_k) % 2,(k_frag + 1) % 2, k_frag + 1)
                 # Perform MMA
-                mma(regs_a, regs_b, regs_c, (k_frag + 1) % 2)
+                mma(regs_a, regs_b, regs_c, (k_frag) % 2)
 
             # Store results from regs_c into C
             copy_c_r2g(regs_c, c, offset_m, offset_n) 
@@ -368,9 +364,6 @@ def cuda_schedule_matmul_smem(task: MatMulTask) -> IRModule:
                 for k, j in spatial(2, 4).repeat(4, 1).spatial(1, 32).on(threadIdx.x):
                     smem_b[k, j] = gmem_b.read([k, j], protected=True)
                 syncthreads()
-                # for i in row:
-                #   for j in col:
-                #       regs_c[i,j] += a[batch, arow(i), acol(k)] * b[batch, brow(k), bcol(j)]
                 for i, j in block_layout.repeat(8, 8).on(threadIdx.x):
                     for k_frag in range(block_k):
                         regs_c[i, j] += smem_a[i, k_frag] * smem_b[k_frag, j]
@@ -410,6 +403,3 @@ print("Ref: ", BatchMatmulOp(a, b).latency())
 c = BatchMatmulOp(a, b).get_output(0)
 np.testing.assert_allclose(actual=c.cpu().numpy(),
                            desired=numpy_c, atol=1e-3, rtol=1e-3)
-
-# c = hidet.ops.reduce_sum(r,[1,4])
-# print(c)
