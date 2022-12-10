@@ -5,7 +5,7 @@ from hidet.ir import IRModule
 from hidet.ir.compute import ReduceOperation, reduce
 from hidet.ir.layout import DataLayout, StridesLayout
 from hidet.ir.mapping import TaskMapping
-from hidet.ir.type import data_type
+from hidet.ir.type import data_type, TensorType
 from hidet.graph.ops.definitions.matmul.batch_matmul import BatchMatmulOp
 from hidet.transforms.tools import fuse_and_pack
 from hidet.lang import f16, f32, i32, spatial, repeat, tensor, attr, grid, printf, cast
@@ -142,9 +142,7 @@ def cuda_schedule_matmul(task: MatMulTask) -> IRModule:
         @hidet.script
         def copy_a_g2r(
                     a: f32[bs, m_size, k_size],
-                    regs_a_ldg: f32[
-                        regs_a_ldg_layout.shape[0],
-                        regs_a_ldg_layout.shape[1]],
+                    regs_a_ldg: TensorType(dtype='float32', layout=regs_a_ldg_layout),
                     offset_m: i32,
                     offset_k: i32,
                     first_k_tile_size: i32
@@ -159,9 +157,7 @@ def cuda_schedule_matmul(task: MatMulTask) -> IRModule:
 
         @hidet.script
         def copy_a_r2s(
-                    regs_a_ldg: f32[
-                        regs_a_ldg_layout.shape[0],
-                        regs_a_ldg_layout.shape[1]],
+                    regs_a_ldg: TensorType(dtype='float32', layout=regs_a_ldg_layout),
                     smem_a: f32[2, block_m, block_k],
                     buffer_idx: i32
         ):
@@ -171,8 +167,7 @@ def cuda_schedule_matmul(task: MatMulTask) -> IRModule:
         @hidet.script
         def copy_a_s2r(
             smem_a: f32[2, block_m, block_k],
-            regs_a: f32[2, regs_a_layout.shape[1],
-                        regs_a_layout.shape[2]],
+            regs_a: TensorType(dtype='float32', layout=regs_a_layout),
             smem_buffer_idx: i32,
             regs_buffer_idx: i32,
             k_frag_idx: i32
@@ -185,9 +180,7 @@ def cuda_schedule_matmul(task: MatMulTask) -> IRModule:
         @hidet.script
         def copy_b_g2r(
                     b: f32[bs, k_size, n_size],
-                    regs_b_ldg: f32[
-                        regs_b_ldg_layout.shape[0],
-                        regs_b_ldg_layout.shape[1]],
+                    regs_b_ldg: TensorType(dtype='float32', layout=regs_b_ldg_layout),
                     offset_k: i32,
                     offset_n: i32,
                     first_k_tile_size: i32
@@ -203,9 +196,7 @@ def cuda_schedule_matmul(task: MatMulTask) -> IRModule:
 
         @hidet.script
         def copy_b_r2s(
-                    regs_b_ldg: f32[
-                        regs_b_ldg_layout.shape[0],
-                        regs_b_ldg_layout.shape[1]],
+                    regs_b_ldg: TensorType(dtype='float32', layout=regs_b_ldg_layout),
                     smem_b: f32[2, block_k, block_n],
                     buffer_idx: i32
         ):
@@ -215,8 +206,7 @@ def cuda_schedule_matmul(task: MatMulTask) -> IRModule:
         @hidet.script
         def copy_b_s2r(
             smem_b: f32[2, block_k, block_n],
-            regs_b: f32[2, regs_b_layout.shape[1],
-                        regs_b_layout.shape[2]],
+            regs_b: TensorType(dtype='float32', layout=regs_b_layout),
             smem_buffer_idx: i32,
             regs_buffer_idx: i32,
             k_frag_idx: i32
@@ -227,8 +217,7 @@ def cuda_schedule_matmul(task: MatMulTask) -> IRModule:
         
         @hidet.script
         def copy_c_r2g(
-            regs_c: f32[regs_c_layout.shape[0],
-                        regs_c_layout.shape[1]],
+            regs_c: TensorType(dtype='float32', layout=regs_c_layout),
             c: f32[bs, m_size, n_size],
             offset_m: i32,
             offset_n: i32
@@ -240,12 +229,9 @@ def cuda_schedule_matmul(task: MatMulTask) -> IRModule:
 
         @hidet.script
         def mma(
-            regs_a: f32[2, regs_a_layout.shape[1],
-                        regs_a_layout.shape[2]],
-            regs_b: f32[2, regs_b_layout.shape[1],
-                        regs_b_layout.shape[2]],
-            regs_c: f32[regs_c_layout.shape[0],
-                        regs_c_layout.shape[1]],
+            regs_a: TensorType(dtype='float32', layout=regs_a_layout),
+            regs_b: TensorType(dtype='float32', layout=regs_b_layout),
+            regs_c: TensorType(dtype='float32', layout=regs_c_layout),
             buffer_idx: i32
         ):
             for i, j in block_layout.on(threadIdx.x):
@@ -284,12 +270,10 @@ def cuda_schedule_matmul(task: MatMulTask) -> IRModule:
             copy_b_g2r(b, regs_b_ldg, 0, offset_n, first_k_tile_size)
             copy_b_r2s(regs_b_ldg, smem_b, 0)
             syncthreads()
-
             # Copy first k-frag within first k-tile from shared to local
-            copy_a_s2r(smem_a, regs_a, 0, 0, 0)
-            copy_b_s2r(smem_b, regs_b, 0, 0, 0)
+            # copy_a_s2r(smem_a, regs_a, 0, 0, 0)
+            # copy_b_s2r(smem_b, regs_b, 0, 0, 0)
             syncthreads()
-
             # Initialize regs C
             for i, j in block_layout.on(threadIdx.x):
                 regs_c[i, j] = 0.0
@@ -304,12 +288,12 @@ def cuda_schedule_matmul(task: MatMulTask) -> IRModule:
                         copy_b_r2s(regs_b_ldg, smem_b, (k + 1) % 2)
                         syncthreads()
                         # Load next k-fragment (from next k-tile) from shared to local
-                        copy_a_s2r(smem_a, regs_a, k + 1,(k_frag + 1) % 2, 0)
-                        copy_b_s2r(smem_b, regs_b, k + 1,(k_frag + 1) % 2, 0)
+                        # copy_a_s2r(smem_a, regs_a, k + 1,(k_frag + 1) % 2, 0)
+                        # copy_b_s2r(smem_b, regs_b, k + 1,(k_frag + 1) % 2, 0)
                     else:
                         # Load next k-fragment from shared to local
-                        copy_a_s2r(smem_a, regs_a, k,(k_frag + 1) % 2, k_frag + 1)
-                        copy_b_s2r(smem_b, regs_b, k,(k_frag + 1) % 2, k_frag + 1)
+                        # copy_a_s2r(smem_a, regs_a, k,(k_frag + 1) % 2, k_frag + 1)
+                        # copy_b_s2r(smem_b, regs_b, k,(k_frag + 1) % 2, k_frag + 1)
                         pass
                     if k_frag == 0:
                         # Load next AB tile from global into local
@@ -317,15 +301,14 @@ def cuda_schedule_matmul(task: MatMulTask) -> IRModule:
                         copy_b_g2r(b, regs_b_ldg, offset_k, offset_n, 0)
                     # Perform MMA
                     mma(regs_a, regs_b, regs_c, k_frag % 2)
-
             # Perform MMA for last k-tile
             last_k = k_tiles - 1
             for k_frag in range(block_warps_k):
                 if k_frag < block_warps_k - 1:
                     pass
                     # Load next k-fragment from shared to local
-                    copy_a_s2r(smem_a, regs_a, last_k + 1,(k_frag + 1) % 2, k_frag + 1)
-                    copy_b_s2r(smem_b, regs_b, last_k + 1,(k_frag + 1) % 2, k_frag + 1)
+                    # copy_a_s2r(smem_a, regs_a, last_k + 1,(k_frag + 1) % 2, k_frag + 1)
+                    # copy_b_s2r(smem_b, regs_b, last_k + 1,(k_frag + 1) % 2, k_frag + 1)
                 # Perform MMA
                 mma(regs_a, regs_b, regs_c, (k_frag + 1) % 2)
 
