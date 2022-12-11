@@ -109,7 +109,7 @@ class MatmulResolveRule(ResolveRule):
             c = batch_matmul(aa, bb, mma=mma).reshape([batch_size, nparts, m_size, n_size]).sum(1)
         return c
 
-    def resolve(self, op: Operator) -> Optional[List[Tensor]]:
+    def resolve_generic(self, op: Operator) -> Optional[List[Tensor]]:
         assert isinstance(op, MatmulOp)
         a: Tensor = op.inputs[0]
         b: Tensor = op.inputs[1]
@@ -153,3 +153,14 @@ class MatmulResolveRule(ResolveRule):
             c = self.run_batch_matmul(a, b)
             c = c.reshape(c_shape)
         return [c]
+
+    def resolve_f16(self, op: Operator) -> Optional[List[Tensor]]:
+        pass
+
+    def resolve(self, op: Operator) -> Optional[List[Tensor]]:
+        a: Tensor = op.inputs[0]
+        b: Tensor = op.inputs[1]
+        if a.dtype == 'float16' or b.dtype == 'float16':
+            return self.resolve_f16(op)
+        else:
+            return self.resolve_generic(op)
