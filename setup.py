@@ -18,12 +18,6 @@ setup(
     packages=find_packages(where='python'),
     package_dir={"": "python"},
     include_package_data=True,
-    # package_data={
-    #     'hidet': [
-    #         *glob('lib/*.so'),
-    #         *glob('include/**/*.h', recursive=True),
-    #     ]
-    # },
     install_requires=[
         "onnx",
         "numpy",
