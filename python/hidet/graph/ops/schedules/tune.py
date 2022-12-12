@@ -6,7 +6,7 @@ import numpy as np
 from hidet.ir.func import IRModule
 from hidet.ir.task import Task
 import hidet.option
-from hidet.utils import prod, strict_zip
+from hidet.utils import prod
 from .resolve import dummy_inputs_from_task
 
 Choice = TypeVar('Choice')
@@ -60,7 +60,7 @@ class TuningSpace:
         if len(names) > 1:
             for choice in choices:
                 if not hasattr(choice, '__len__'):
-                    raise ValueError(f'When multiple names are given, choices must be iterable.')
+                    raise ValueError(f'When multiple names are given, choices must be iterable, got {type(choice)}')
                 if len(choice) != len(names):
                     raise ValueError(f'Number of choices {len(choice)} does not match number of names {len(names)}.')
         self.spaces[level][",".join(names)] = choices
@@ -121,7 +121,7 @@ def tune(template_func, task: Task, target_device: str, working_dir: str) -> IRM
         try:
             ir_modules.append(template_func(**kwargs))
             ir_modules_kwargs.append(kwargs)
-        except ScheduleError as e:
+        except ScheduleError:
             # the schedule is invalid, skip it
             continue
 
@@ -135,16 +135,15 @@ def tune(template_func, task: Task, target_device: str, working_dir: str) -> IRM
     compiled_funcs: List[Optional[CompiledFunction]] = build_ir_module_batch(
         ir_modules, func_name=task.name, output_dir=os.path.join(working_dir, 'tuning'), parallel=True, verbose=True
     )
-    if any([f is None for f in compiled_funcs]):
+    assert len(compiled_funcs) == len(ir_modules)
+    if any(f is None for f in compiled_funcs):
         raise ValueError('All ir modules failed to build.')
 
     # benchmark
     dummy_inputs = dummy_inputs_from_task(task, target_device=target_device)
     latencies = []
     warmup, number, repeat = hidet.option.get_option('bench_config')
-    for ir_module, compiled_func in tqdm(
-        strict_zip(ir_modules, compiled_funcs), desc='Benchmarking', total=len(ir_modules)
-    ):
+    for compiled_func in tqdm(compiled_funcs, desc='Benchmarking', total=len(ir_modules)):
         if compiled_func:
             repeat_latency = compiled_func.profile(*dummy_inputs, warmup=warmup, number=number, repeat=repeat)
             latency = float(np.median(repeat_latency))
@@ -165,4 +164,3 @@ def tune(template_func, task: Task, target_device: str, working_dir: str) -> IRM
 def check(condition: bool, message: str = ""):
     if not condition:
         raise ScheduleError(message)
-

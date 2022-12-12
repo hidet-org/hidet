@@ -275,7 +275,6 @@ def mma_sync(config: MmaConfig, a_addr: Expr, b_addr: Expr, c_addr: Expr):
 def _print_segment(mapping: TaskMapping, dtype: DataType, addr: Expr, worker_id: Expr, precision: int, msg: str):
     from hidet.ir.dtypes import int32, float32
     from hidet.ir.expr import And, var
-    from hidet.ir.stmt import DeclareStmt
     from hidet.ir.primitives import printf, syncwarp
     from hidet.ir.builders import StmtBuilder
 

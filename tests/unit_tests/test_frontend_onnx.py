@@ -31,10 +31,8 @@ def check_model(model_path: str, input_names: List[str], input_tensors: List[Ten
         symbol_outputs = hidet_model(*symbol_inputs)
         graph = hidet.trace_from(symbol_outputs, symbol_inputs)
         if mode == 'opt':
-            # model_name = os.path.splitext(os.path.basename(model_path))[0]
-            # out_dir = os.path.join('./outs/', model_name)
             with hidet.graph.PassContext() as ctx:
-                # ctx.save_graph_instrument(out_dir)
+                ctx.set_precision('float16')
                 graph = hidet.graph.optimize(graph)
         hidet_outputs = graph(*hidet_inputs)
     else:
@@ -60,12 +58,13 @@ def check_model(model_path: str, input_names: List[str], input_tensors: List[Ten
     ],
 )
 @pytest.mark.parametrize("batch_size", [1])
+@pytest.mark.parametrize("dtype", ['float32', 'float16'])
 @pytest.mark.parametrize("mode", ['traced', 'imperative', 'opt'])
-def test_onnx_model(model_name: str, batch_size: int, mode: str):
+def test_onnx_model(model_name: str, batch_size: int, dtype: str, mode: str):
     assert model_name in ['resnet50', 'inception_v3', 'mobilenet_v2', 'bert', 'bart', 'gpt2']
     assert mode in ['imperative', 'traced', 'opt']
 
-    print('checking model {} in {} mode'.format(model_name, mode))
+    print('checking model {} in {} mode with dtype {}'.format(model_name, mode, dtype))
     model_path, input_names, input_tensors = get_onnx_model(model_name, batch_size=batch_size)
     check_model(model_path, input_names, input_tensors, mode)
 

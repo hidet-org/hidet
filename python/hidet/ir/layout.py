@@ -11,8 +11,10 @@ Expr = 'Expr'
 Int = Union['Expr', int]
 Bool = Union['Expr', bool]
 
+
 def is_power_of_two(n: int):
     return n != 0 and (n & (n - 1)) == 0
+
 
 def is_atom(expr: Expr):
     from hidet.ir import Constant, Var

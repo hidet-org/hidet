@@ -70,4 +70,3 @@ def test_tuple_as_index(capfd):
             expected += '{} {}\n'.format(i, j)
 
     check(kernel, expected, capfd)
-

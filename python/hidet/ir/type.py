@@ -38,9 +38,23 @@ class DataType(TypeNode):
         return hash(self.name)
 
     def __call__(self, value: Any):
-        from hidet.ir.expr import Expr, cast
-        if isinstance(value, Expr):
-            return cast(value, self)
+        """
+        Create a constant of current data type, or convert an existing Expr to current data type with cast expression.
+
+        Parameters
+        ----------
+        value: Any
+            The value of the constant.
+
+        Returns
+        -------
+        ret: Constant or Cast
+            The constant or cast expression.
+        """
+        from hidet.ir import expr
+
+        if isinstance(value, expr.Expr):
+            return expr.cast(value, self)
         else:
             return self.constant(value)
 

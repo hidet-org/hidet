@@ -19,17 +19,12 @@ from hidet.ir.primitives.cuda.mutex import acquire_lock, release_lock, acquire_s
 
 
 def shared_tensor(
-    dtype: Union[DataType, str],
-    shape: Optional[Sequence[Union[Expr, int]]] = None,
-    layout: Optional[DataLayout] = None,
+    dtype: Union[DataType, str], shape: Optional[Sequence[Union[Expr, int]]] = None, layout: Optional[DataLayout] = None
 ):
     return shared_scope(tensor_type(dtype, shape, layout))
 
 
 def register_tensor(
-    dtype: Union[DataType, str],
-    shape: Optional[Sequence[Union[Expr, int]]] = None,
-    layout: Optional[DataLayout] = None,
+    dtype: Union[DataType, str], shape: Optional[Sequence[Union[Expr, int]]] = None, layout: Optional[DataLayout] = None
 ):
     return register_scope(tensor_type(dtype, shape, layout))
-

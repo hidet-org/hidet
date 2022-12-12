@@ -173,11 +173,7 @@ def _build_ir_module_job(args) -> Optional[Tuple[str, str, FuncType]]:
 
 
 def build_ir_module_batch(
-    ir_modules: Sequence[IRModule],
-    func_name: str,
-    output_dir: str,
-    parallel=True,
-    verbose=False
+    ir_modules: Sequence[IRModule], func_name: str, output_dir: str, parallel=True, verbose=False
 ) -> List[Optional[CompiledFunction]]:
     """
     Build a batch of ir modules.
@@ -207,8 +203,10 @@ def build_ir_module_batch(
     """
     with Timer() as timer:
         dumped_options = option.dump_options()
-        jobs = [(ir_module, func_name, os.path.join(output_dir, str(idx)), dumped_options)
-                for idx, ir_module in enumerate(ir_modules)]
+        jobs = [
+            (ir_module, func_name, os.path.join(output_dir, str(idx)), dumped_options)
+            for idx, ir_module in enumerate(ir_modules)
+        ]
         build_results = []
         if parallel:
             # Set the affinity of current process. Some package such as numpy will change affinity of current process,
@@ -221,10 +219,7 @@ def build_ir_module_batch(
 
             with multiprocessing.Pool(processes=num_workers) as pool:
                 for build_result in tqdm(
-                    pool.imap(_build_ir_module_job, jobs),
-                    desc='Compiling',
-                    total=len(jobs),
-                    disable=not verbose,
+                    pool.imap(_build_ir_module_job, jobs), desc='Compiling', total=len(jobs), disable=not verbose
                 ):
                     build_results.append(build_result)
         else:

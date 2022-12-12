@@ -111,7 +111,7 @@ def can_mutually_broadcast(x_shape: List[int], y_shape: List[int]) -> bool:
         x_shape = [1] + x_shape
     while len(y_shape) < len(x_shape):
         y_shape = [1] + y_shape
-    return all([p == q or p == 1 or q == 1 for p, q in zip(x_shape, y_shape)])
+    return all(p == q or p == 1 or q == 1 for p, q in zip(x_shape, y_shape))
 
 
 def broadcast_shape(x_shape: List[int], y_shape: List[int]) -> List[int]:
@@ -140,7 +140,9 @@ def broadcast_shapes(shapes: List[List[int]]) -> List[int]:
     return expanded_shape
 
 
-def broadcast_indices(indices: Sequence[Union[Expr, int]], shape: Sequence[int], out_shape: Sequence[int]) -> List[Expr]:
+def broadcast_indices(
+    indices: Sequence[Union[Expr, int]], shape: Sequence[int], out_shape: Sequence[int]
+) -> List[Expr]:
     if len(indices) != len(out_shape):
         raise ValueError('Number of indices {} does not match the output shape {}'.format(indices, out_shape))
 

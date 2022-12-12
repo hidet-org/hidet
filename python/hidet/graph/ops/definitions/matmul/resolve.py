@@ -157,6 +157,7 @@ class MatmulResolveRule(ResolveRule):
 
     def resolve_f16(self, op: Operator) -> Optional[List[Tensor]]:
         import hidet
+
         a: Tensor = op.inputs[0]
         b: Tensor = op.inputs[1]
         c: Tensor = op.outputs[0]
@@ -193,7 +194,7 @@ class MatmulResolveRule(ResolveRule):
                     'Results: {{{}}},'.format(
                         ', '.join('{}: {:.1f}'.format(a, b * 1000) for a, b in zip(candidates, latencies))
                     ),
-                    'Picked {} with {:.1f} micro-seconds'.format(candidates[best_idx], latencies[best_idx] * 1000)
+                    'Picked {} with {:.1f} micro-seconds'.format(candidates[best_idx], latencies[best_idx] * 1000),
                 )
                 k_parts = candidates[best_idx]
             else:

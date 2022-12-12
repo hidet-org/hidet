@@ -171,5 +171,3 @@ def resolve_ir_modules(
         f.write(str(tb))
 
     return best_ir_module
-
-

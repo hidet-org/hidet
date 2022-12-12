@@ -1,6 +1,5 @@
 # pylint: disable=import-outside-toplevel, too-many-branches, too-many-locals
 from __future__ import annotations
-import typing
 import types
 import builtins
 
@@ -594,7 +593,9 @@ class PythonToHidetTranslator(PythonAstFunctor):
                 type_name = type(expr.op).__name__
                 raise HidetProgramError(self, expr, 'Currently, we do not support {} operator.'.format(type_name))
         else:
-            raise HidetProgramError(self, expr, 'Can not apply operator {} to {} and {}.'.format(expr.op, type(lhs), type(rhs)))
+            raise HidetProgramError(
+                self, expr, 'Can not apply operator {} to {} and {}.'.format(expr.op, type(lhs), type(rhs))
+            )
 
     def visit_BoolOp(self, expr: BoolOp):
         values = [self.visit(v) for v in expr.values]
@@ -708,7 +709,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
             #  1. p == q,
             #  2. or p == 1 and q > 1
 
-            if not (p == q or p == 1):
+            if p not in (1, q):
                 raise HidetProgramError(self, stmt, f'Expect {num} loop variables, but got {len(iter_targets)}.')
 
             if p == q:
@@ -893,9 +894,15 @@ class PythonToHidetTranslator(PythonAstFunctor):
                     msg = 'Hidet do not support calling builtin function with keyword argument.'
                     raise HidetProgramError(self, expr, msg)
                 if func is builtins.max:
-                    return primitives.max(*args)
+                    if len(args) != 2:
+                        msg = 'Hidet builtin function "max" takes two arguments.'
+                        raise HidetProgramError(self, expr, msg)
+                    return primitives.max(args[0], args[1])
                 elif func is builtins.min:
-                    return primitives.min(*args)
+                    if len(args) != 2:
+                        msg = 'Hidet builtin function "min" takes two arguments.'
+                        raise HidetProgramError(self, expr, msg)
+                    return primitives.min(args[0], args[1])
                 else:
                     raise HidetProgramError(self, expr, 'Currently, do not support calling python builtin function.')
         else:
