@@ -90,8 +90,18 @@ class ResolveVariantRewriter(GraphRewriter):
                 self.memo[original] = updated
         else:
             # update output of resolved operator
-            for original, updated in strict_zip(op.outputs, outs):
+            if not isinstance(outs, (list, tuple)):
+                raise ValueError("The resolve rule of operator '{}' should return a list of tensors, but got {}".format(
+                    op.name, type(outs)))
+            if len(outs) != len(op.outputs):
+                raise ValueError("The resolve rule of operator '{}' should return {} tensors, but got {} ones".format(
+                    op.name, len(op.outputs), len(outs)))
+            for i, (original, updated) in enumerate(strict_zip(op.outputs, outs)):
                 assert original not in self.memo
+                if (original.dtype, tuple(original.shape)) != (updated.dtype, tuple(updated.shape)):
+                    raise ValueError(("The resolve rule of operator '{}' should return tensors with the same dtype and "
+                                      "shape as the original ones. The {}-th tensor expect {}{} but got {}{}").format(
+                        op.name, original.dtype, list(original.shape), updated.dtype, list(updated.shape)))
                 self.memo[original] = updated
 
 
