@@ -1,4 +1,4 @@
-name: Docs
+name: Deploy Docs
 
 on:
   push:
@@ -18,7 +18,7 @@ jobs:
     steps:
       - name: Install dependencies via apt
         run: |
-          apt update && apt install -y ccache git
+          apt update && apt install -y ccache git graphviz
 
       - uses: actions/checkout@v3
 
@@ -31,10 +31,6 @@ jobs:
         uses: jwlawson/actions-setup-cmake@v1.13
         with:
           cmake-version: '3.19.x'
-
-      - name: Setup Graphviz   # used by sphinx.ext.graphviz
-        run: |
-          apt install -y graphviz
 
       - name: Install dependencies via pip
         run: |
