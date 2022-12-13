@@ -33,7 +33,8 @@ jobs:
           cmake-version: '3.19.x'
 
       - name: Setup Graphviz   # used by sphinx.ext.graphviz
-        uses: ts-graphviz/setup-graphviz@v1
+        run: |
+          apt install -y graphviz
 
       - name: Install dependencies via pip
         run: |
