@@ -2,11 +2,6 @@ cmake_minimum_required(VERSION 3.19)
 
 project(hidet C CXX CUDA)
 
-# common configs
-set(CMAKE_C_COMPILER_LAUNCHER ccache)
-set(CMAKE_CXX_COMPILER_LAUNCHER ccache)
-set(CMAKE_CUDA_COMPILER_LAUNCHER ccache)
-
 # config hidet
 if(EXISTS "${CMAKE_BINARY_DIR}/config.cmake")
     include(${CMAKE_BINARY_DIR}/config.cmake)

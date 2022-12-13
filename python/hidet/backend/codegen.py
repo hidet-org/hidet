@@ -1,4 +1,5 @@
 from typing import Optional
+import os
 import numpy as np
 from hidet.ir.dialects.pattern import AnyExpr
 from hidet.ir.type import DataType, PointerType, TensorPointerType, ReferenceType, TensorType, TypeNode, FuncType
@@ -273,7 +274,12 @@ class Codegen(StmtExprFunctor, TypeFunctor):
     def visit_TensorElement(self, e: TensorElement):
         if e.protected:
             raise ValueError('The protected reading of tensor element should be lowered in lower_protect_access pass.')
-        return self(e.base) + doc_join(['[' + self(idx) + ']' for idx in e.indices], '')
+        base_doc = self(e.base)
+        index_doc = doc_join(['[' + self(idx) + ']' for idx in e.indices], '')
+        if isinstance(e.base, Address):
+            return Text('(') + base_doc + Text(')') + index_doc
+        else:
+            return base_doc + index_doc
 
     def visit_IfThenElse(self, e: IfThenElse):
         return '(' + self(e.cond) + ' ? ' + self(e.then_expr) + ' : ' + self(e.else_expr) + ')'
@@ -296,6 +302,9 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             func = self.ir_module.lookup(func_name)
             func_name = Text(self.canonize_funcname(func_name))
             if func.kind == 'cuda_kernel':
+
+                if isinstance(func.attrs['cuda_block_dim'], int) and func.attrs['cuda_block_dim'] > 1024:
+                    raise ValueError('CUDA block dimension cannot be larger than 1024.')
 
                 def dim3_str(dims):
                     if isinstance(dims, (int, Expr)):
@@ -570,6 +579,9 @@ def codegen(ir_module: IRModule, src_out_path: Optional[str] = None) -> str:
     doc = gen(ir_module)
     code = str(doc)
     if src_out_path is not None:
+        dir_path = os.path.dirname(src_out_path)
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
         with open(src_out_path, 'w') as f:
             f.write(code)
     return code

@@ -604,7 +604,7 @@ def const_like(value: Union[float, int], e: Expr) -> Constant:
 
     dtype = infer_type(e)
     if isinstance(dtype, DataType):
-        return Constant(value=value, const_type=dtype)
+        return dtype(value)
     else:
         raise ValueError('Expect a scalar type, but got {}'.format(dtype))
 

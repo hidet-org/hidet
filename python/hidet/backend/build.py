@@ -13,6 +13,7 @@ from tqdm import tqdm
 
 from hidet.libinfo import get_include_dirs
 from hidet.ir.type import FuncType
+from hidet.ir.func import IRModule
 from hidet.transforms import PassContext, lower
 from hidet.runtime import CompiledFunction
 from hidet.ffi import PackedFunc
@@ -95,6 +96,10 @@ def compile_source(src_path: str, out_lib_path: str, keep_ptx=False) -> None:
         # shared cuda runtime library is used (.so), instead of static one (.a). used to reduce binary size.
         '--cudart',
         'shared',
+        # supress warming no 177 like: "warning #177-D: variable "xxx" was declared but never referenced"
+        # see https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#generic-tool-options-diag-suppress
+        '--diag-suppress',
+        '177',
         # generate shared library (lib.so).
         '--shared',
         # the source path.
@@ -217,11 +222,11 @@ class BuildInstance:
         verbose: bool
             Reserved.
         """
-        self.ir_module = ir_module
-        self.output_dir = output_dir
-        self.keep_ir = keep_ir
-        self.nvcc_keep = nvcc_keep
-        self.verbose = verbose
+        self.ir_module: IRModule = ir_module
+        self.output_dir: str = output_dir
+        self.keep_ir: bool = keep_ir
+        self.nvcc_keep: bool = nvcc_keep
+        self.verbose: bool = verbose
 
 
 def build_ir_module_job(build_instance: BuildInstance) -> Optional[str]:
@@ -283,7 +288,7 @@ def batch_build_ir_modules(build_instances, parallel=True, verbose=False) -> Lis
 
     Returns
     -------
-    funcs: List[Optional[CompiledFunction]]
+    funcs:
         The compiled functions, in the same order as build_instances.
         When the build for a build instance failed, None for that instance is returned.
     """

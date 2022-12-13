@@ -1,13 +1,17 @@
-from typing import List, Optional
+import subprocess
+from typing import List, Optional, Sequence, Tuple
 import os
 import multiprocessing
 import logging
 from hashlib import sha256
+import psutil
+from tqdm import tqdm
 
 from hidet import option
 from hidet.transforms import lower, PassContext, SaveIRInstrument, ProfileInstrument
 from hidet.backend import codegen, compile_source, load_task_func, load_lib_func
-from hidet.utils.py import cyan, green
+from hidet.backend.build import CompilationFailed
+from hidet.utils.py import cyan, green, Timer
 from hidet.ir.task import Task
 from hidet.ir.func import IRModule, Function
 from hidet.ir.type import FuncType
@@ -92,52 +96,66 @@ def build_task(task: Task, target_device='cuda', load=True) -> Optional[Compiled
 
 
 def _build_task_job(args):
-    task, target_device, dumped_options = args
-    option.restore_options(dumped_options)
-    build_task(task, target_device, load=False)
+    try:
+        task, target_device, dumped_options = args
+        option.restore_options(dumped_options)
+        build_task(task, target_device, load=False)
+        return True
+    except CompilationFailed as e:
+        if option.get_option('parallel_build'):
+            return False
+        else:
+            raise e
 
 
-def build_batch_task(tasks: List[Task], target_device: str = 'cuda'):
+def build_task_batch(tasks: List[Task], target_device: str = 'cuda', raise_on_error: bool = True):
     dumped_options = option.dump_options()
     jobs = [(task, target_device, dumped_options) for task in tasks]
     if option.get_option('parallel_build') and len(jobs) > 1:
         with multiprocessing.Pool() as pool:
-            pool.map(_build_task_job, jobs)
+            status_list = list(pool.map(_build_task_job, jobs))
     else:
-        map(_build_task_job, jobs)
+        status_list = list(map(_build_task_job, jobs))
+    if not all(status_list) and raise_on_error:
+        msg = ['Failed to build {} tasks:'.format(sum(1 for s in status_list if not s))]
+        for task, status in zip(tasks, status_list):
+            if not status:
+                msg.append(f'  {task.signature()}')
+        msg.append('Please turn off parallel build to see the error message:')
+        msg.append('  hidet.option.parallel_build(False)')
+        raise RuntimeError('\n'.join(msg))
 
 
 def build_ir_module(
     ir_module: IRModule,
     func_name: str,
-    keep_ptx=False,
-    working_dir='./outs',
-    verbose=False,
-    func_type: Optional[FuncType] = None,
+    output_dir='./outs/ir_module',
+    save_ir: bool = True,
+    profile_pass: bool = True,
+    load: bool = True,
+    use_hash_dir: bool = True,
 ):
-    module_string = str(ir_module)
-    module_hash = sha256(module_string.encode()).hexdigest()[:16]
-    working_dir = os.path.join(working_dir, 'ir_module', module_hash)
-    src_path = os.path.join(working_dir, 'source.cu')
-    lib_path = os.path.join(working_dir, 'lib.so')
+    if use_hash_dir:
+        hash_dir = sha256(str(ir_module).encode()).hexdigest()[:16]
+        output_dir = os.path.join(output_dir, hash_dir)
 
-    if verbose:
-        print(f'Compiling {src_path}')
+    src_path = os.path.join(output_dir, 'source.cu')
+    lib_path = os.path.join(output_dir, 'lib.so')
 
     # lower ir module
-    with PassContext(
-        instruments=[
-            SaveIRInstrument(out_dir=working_dir),
-            ProfileInstrument(log_file=os.path.join(working_dir, 'lower_time.txt')),
-        ]
-    ):
+    instruments = []
+    if save_ir:
+        instruments.append(SaveIRInstrument(out_dir=os.path.join(output_dir, './ir')))
+    if profile_pass:
+        instruments.append(ProfileInstrument(log_file=os.path.join(output_dir, './lower_time.txt')))
+    with PassContext(instruments=instruments):
         ir_module = lower(ir_module)
 
     # code generation
     codegen(ir_module, src_out_path=src_path)
 
     # compile source code
-    compile_source(src_path, out_lib_path=lib_path, keep_ptx=keep_ptx)
+    compile_source(src_path, out_lib_path=lib_path, keep_ptx=False)
 
     # get function type
     func: Function = ir_module.lookup(func_name)
@@ -147,5 +165,94 @@ def build_ir_module(
     else:
         func_type = FuncType.from_func(func)
 
-    # load function
-    return load_lib_func(lib_path, func_name, func_type=func_type)
+    if load:
+        # load function
+        return load_lib_func(lib_path, func_name, func_type=func_type)
+    else:
+        return lib_path, func_name, func_type
+
+
+def _build_ir_module_job(args) -> Optional[Tuple[str, str, FuncType]]:
+    ir_module, func_name, output_dir, dumped_options = args
+    option.restore_options(dumped_options)
+    try:
+        return build_ir_module(
+            ir_module, func_name, output_dir, save_ir=False, profile_pass=False, load=False, use_hash_dir=False
+        )
+    except subprocess.CalledProcessError:
+        print('Failed launch subprocess to compile the lowered source code via nvcc.')
+        return None
+    except CompilationFailed:
+        print('Failed to compile the lowered source code via nvcc.')
+        return None
+
+
+def build_ir_module_batch(
+    ir_modules: Sequence[IRModule], func_name: str, output_dir: str, parallel=True, verbose=False
+) -> List[Optional[CompiledFunction]]:
+    """
+    Build a batch of ir modules.
+
+    Parameters
+    ----------
+    ir_modules: Sequence[IRModule]
+        A sequence of ir modules to build.
+
+    func_name: str
+        The name of the function to load after building.
+
+    output_dir: str
+        The output directory to save the compiled library and source code (lib.so and source.cu).
+
+    parallel: bool
+        Whether build in parallel. Default True.
+
+    verbose: bool
+        Whether show the progress and summary. Default False.
+
+    Returns
+    -------
+    funcs:
+        The compiled functions, in the same order as build_instances.
+        When the build for a build instance failed, None for that instance is returned.
+    """
+    with Timer() as timer:
+        dumped_options = option.dump_options()
+        jobs = [
+            (ir_module, func_name, os.path.join(output_dir, str(idx)), dumped_options)
+            for idx, ir_module in enumerate(ir_modules)
+        ]
+        build_results = []
+        if parallel:
+            # Set the affinity of current process. Some package such as numpy will change affinity of current process,
+            # which might limit the parallelism of compilation.
+            os.sched_setaffinity(0, range(os.cpu_count()))
+
+            # the maximum number of processes is limited by the number of cores and memory
+            mem_for_worker = 1.5 * 1024 * 1024 * 1024  # 1.5 GiB
+            num_workers = min(max(int(psutil.virtual_memory().available // mem_for_worker), 1), psutil.cpu_count())
+
+            with multiprocessing.Pool(processes=num_workers) as pool:
+                for build_result in tqdm(
+                    pool.imap(_build_ir_module_job, jobs), desc='Compiling', total=len(jobs), disable=not verbose
+                ):
+                    build_results.append(build_result)
+        else:
+            # sequential build
+            build_results = list(map(_build_ir_module_job, jobs))
+
+        # load compiled functions
+        funcs: List[Optional[CompiledFunction]] = []
+        for build_result in build_results:
+            if build_result is not None:
+                lib_path, func_name, func_type = build_result
+                funcs.append(load_lib_func(lib_path, func_name, func_type))
+            else:
+                funcs.append(None)
+    if verbose:
+        print(
+            'Batch build {} modules within {:.3f} seconds, on average {:.1f} seconds per module.'.format(
+                len(jobs), timer.elapsed_seconds(), timer.elapsed_seconds() / len(jobs)
+            )
+        )
+    return funcs

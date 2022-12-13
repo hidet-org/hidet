@@ -1,5 +1,6 @@
+# pylint: disable=protected-access
 from __future__ import annotations
-from typing import List, Union, Dict, Set, Optional, Tuple
+from typing import List, Union, Dict, Set, Optional, Tuple, Sequence
 import os
 import pickle
 from collections import defaultdict
@@ -13,21 +14,70 @@ from hidet.utils.namer import Namer
 
 
 class GraphForwardInstrument:
-    prev: Optional[GraphForwardInstrument] = None
-    current: Optional[GraphForwardInstrument] = None
+    def before_graph(self, graph: FlowGraph, inputs: List[Tensor]) -> None:
+        pass
+
+    def after_graph(self, graph: FlowGraph, inputs: List[Tensor], outputs: List[Tensor]) -> None:
+        pass
+
+    def before_operator(self, op: Operator, inputs: List[Tensor]) -> None:
+        pass
+
+    def after_operator(self, op: Operator, inputs: List[Tensor], outputs: List[Tensor]) -> None:
+        pass
+
+
+class GraphForwardContext:
+    _stack: List[GraphForwardContext] = []
+
+    def __init__(self):
+        self.instruments: List[GraphForwardInstrument] = []
 
     def __enter__(self):
-        GraphForwardInstrument.prev = GraphForwardInstrument.current
-        GraphForwardInstrument.current = self
+        GraphForwardContext._stack.append(self)
+        return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        GraphForwardInstrument.current = GraphForwardInstrument.prev
+        GraphForwardContext._stack.pop()
 
-    def before_graph_run(self, graph: FlowGraph, inputs: List[Tensor]):
-        pass
+    @staticmethod
+    def current() -> GraphForwardContext:
+        if len(GraphForwardContext._stack) == 0:
+            GraphForwardContext._stack.append(GraphForwardContext())
+        return GraphForwardContext._stack[-1]
 
-    def after_operator_run(self, op: Operator, inputs: List[Tensor], outputs: List[Tensor]):
-        pass
+    def _trigger_before_graph(self, graph: FlowGraph, inputs: List[Tensor]) -> None:
+        for instrument in self.instruments:
+            instrument.before_graph(graph, inputs)
+
+    def _trigger_after_graph(self, graph: FlowGraph, inputs: List[Tensor], outputs: List[Tensor]) -> None:
+        for instrument in self.instruments:
+            instrument.after_graph(graph, inputs, outputs)
+
+    def _trigger_before_operator(self, op: Operator, inputs: List[Tensor]) -> None:
+        for instrument in self.instruments:
+            instrument.before_operator(op, inputs)
+
+    def _trigger_after_operator(self, op: Operator, inputs: List[Tensor], outputs: List[Tensor]) -> None:
+        for instrument in self.instruments:
+            instrument.after_operator(op, inputs, outputs)
+
+    def append_instrument(self, instrument: GraphForwardInstrument):
+        self.instruments.append(instrument)
+
+    def debug(self, output_dir='./outs/debug', print_summary: bool = False):
+        from .flow_graph_impl import GraphForwardDebugInstrument
+
+        self.instruments.append(GraphForwardDebugInstrument(output_dir, print_summary))
+
+    def benchmark(self, output_dir='./outs/benchmark', print_summary: bool = False, warmup=3, number=10, repeat=3):
+        from .flow_graph_impl import GraphForwardBenchmarkInstrument
+
+        self.instruments.append(GraphForwardBenchmarkInstrument(output_dir, print_summary, warmup, number, repeat))
+
+
+def forward_context() -> GraphForwardContext:
+    return GraphForwardContext()
 
 
 class FlowGraph:
@@ -95,7 +145,6 @@ class FlowGraph:
                     [Text(name) + '=' + get_attr_repr(value) for name, value in op.attrs.items()], ', '
                 )
             line_doc += ')  '
-            # line_doc += '# ' + get_tensor_sig(output)
             body_doc += NewLine() + line_doc
 
         # return statement
@@ -120,11 +169,11 @@ class FlowGraph:
                 else:
                     tunable_tasks.append(node.task)
 
-        hidet.driver.build_batch_task(tasks)
+        hidet.driver.build_task_batch(tasks)
 
         with option.context():
             hidet.option.parallel_build(False)
-            hidet.driver.build_batch_task(tunable_tasks)  # build tunable tasks one by one
+            hidet.driver.build_task_batch(tunable_tasks)  # build tunable tasks one by one
 
     def forward(self, *inputs: Tensor) -> Union[List[Tensor], Tensor]:
         """Run the computation graph.
@@ -168,8 +217,7 @@ class FlowGraph:
             self.update_nodes()
         self.build()
 
-        if GraphForwardInstrument.current is not None:
-            GraphForwardInstrument.current.before_graph_run(self, inputs)
+        GraphForwardContext.current()._trigger_before_graph(self, inputs)
 
         usage_count = self.usage_count.copy()
         tensor_map: Dict[Tensor, Tensor] = {}
@@ -201,10 +249,11 @@ class FlowGraph:
                     tensor_map[symbolic_output] = node_outputs[i]
 
             # run node
+            GraphForwardContext.current()._trigger_before_operator(node, node_inputs)
             node.pure_run(node_inputs, node_outputs)
+            GraphForwardContext.current()._trigger_after_operator(node, node_inputs, node_outputs)
 
-            if GraphForwardInstrument.current is not None:
-                GraphForwardInstrument.current.after_operator_run(node, node_inputs, node_outputs)
+        GraphForwardContext.current()._trigger_after_graph(self, inputs, outputs)
 
     def dummy_inputs(self) -> List[Tensor]:
         inputs = []
@@ -288,7 +337,9 @@ class FlowGraph:
 
         return create_cuda_graph(self)
 
-    def latency(self, warmup=1, number=3, repeat=3, median=True) -> Union[float, List[float]]:
+    def latency(
+        self, warmup=1, number=3, repeat=3, median=True, dummy_inputs: Optional[Sequence[Tensor]] = None
+    ) -> Union[float, List[float]]:
         """Measure the latency of the flow graph.
 
         Parameters
@@ -305,6 +356,9 @@ class FlowGraph:
         median: bool
             Whether to return the median latency.
 
+        dummy_inputs: Optional[Sequence[Tensor]]
+            The dummy inputs to run the flow graph. If not given, automatic generated dummy inputs would be used.
+
         Returns
         -------
         ret: Union[float, List[float]]
@@ -314,7 +368,8 @@ class FlowGraph:
         import numpy as np
         from hidet.ffi.cuda_api import cuda
 
-        dummy_inputs = self.dummy_inputs()
+        if dummy_inputs is None:
+            dummy_inputs = self.dummy_inputs()
         for _ in range(warmup):
             self.forward(*dummy_inputs)
         results = []

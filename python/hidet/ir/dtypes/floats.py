@@ -1,4 +1,5 @@
 from typing import Any
+import warnings
 from hidet.ir.type import DataType
 
 
@@ -6,8 +7,8 @@ class FloatType(DataType):
     def __init__(self, name, short_name, nbytes, min_value, max_value):
         super().__init__(name, short_name, nbytes)
 
-        self._min_value = min_value
-        self._max_value = max_value
+        self._min_value: float = min_value
+        self._max_value: float = max_value
 
     def is_float(self) -> bool:
         return True
@@ -24,6 +25,25 @@ class FloatType(DataType):
         if isinstance(value, Constant):
             value = value.value
         value = float(value)
+
+        if value > self._max_value:
+            warnings.warn(
+                (
+                    'Constant value {} is larger than the maximum value {} of data type {}. '
+                    'Truncated to maximum value of {}.'
+                ).format(value, self._max_value, self.name, self.name)
+            )
+            value = self._max_value
+
+        if value < self._min_value:
+            warnings.warn(
+                (
+                    'Constant value {} is smaller than the minimum value {} of data type {}. '
+                    'Truncated to minimum value of {}.'
+                ).format(value, self._min_value, self.name, self.name)
+            )
+            value = self._min_value
+
         return Constant(value, self)
 
     def one(self):

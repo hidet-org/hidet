@@ -3,7 +3,7 @@ from hidet.ir.expr import And, if_then_else, convert
 from hidet.ir.layout import RowMajorLayout, ColumnMajorLayout
 from hidet.ir.utils import index_deserialize, index_serialize
 from hidet.utils import prod
-from .utils import Task, InverseMap, Operator, Tensor, TensorNode, compute, input_like, normalize_dim
+from .utils import Task, InverseMap, Operator, Tensor, TensorNode, compute, input_like, normalize_dim, can_broadcast
 
 
 def same_shape(shape_a: List[int], shape_b: List[int]) -> bool:
@@ -221,16 +221,6 @@ class StridedSliceTask(Task):
         super().__init__(name='slice', inputs=[data], outputs=[out])
 
 
-def can_broadcast(src_shape: List[int], dst_shape: List[int]) -> bool:
-    if len(dst_shape) < len(src_shape):
-        return False
-    src_shape = [1 for _ in range(len(dst_shape) - len(src_shape))] + src_shape
-    for a, b in zip(src_shape, dst_shape):
-        if a not in [1, b]:
-            return False
-    return True
-
-
 class BroadcastTask(Task):
     def __init__(self, data: TensorNode, shape: List[int]):
         data_shape = data.const_shape()
@@ -315,6 +305,15 @@ class ReshapeOp(Operator):
         else:
             raise ValueError('Can not infer the shape when there are multiple -1: {}'.format(shape))
 
+    def imperative_run(self, inputs: List[Tensor]) -> List[Tensor]:
+        x = inputs[0]
+        if isinstance(x.layout, (RowMajorLayout, ColumnMajorLayout)):
+            shape = self.task.outputs[0].const_shape()
+            layout = x.layout.__class__(shape)
+            return [Tensor(shape=shape, dtype=x.dtype, device=x.device, storage=x.storage, layout=layout, trace=None)]
+        else:
+            return Operator.imperative_run(self, inputs)
+
 
 class RearrangeOp(Operator):
     def __init__(self, x: Tensor, plan: List[List[int]]):
@@ -376,6 +375,15 @@ class FlattenOp(Operator):
             task=RearrangeTask(input_like(x, 'x'), plan=plan),
             attributes={'start_dim': start_dim, 'end_dim': end_dim},
         )
+
+    def imperative_run(self, inputs: List[Tensor]) -> List[Tensor]:
+        x = inputs[0] if inputs else self.inputs[0]
+        if isinstance(x.layout, (RowMajorLayout, ColumnMajorLayout)):
+            shape = self.task.outputs[0].const_shape()
+            layout = x.layout.__class__(shape)
+            return [Tensor(shape=shape, dtype=x.dtype, device=x.device, storage=x.storage, layout=layout, trace=None)]
+        else:
+            return Operator.imperative_run(self, inputs)
 
 
 class TransposeOp(Operator):

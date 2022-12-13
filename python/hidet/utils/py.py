@@ -390,6 +390,42 @@ def lcm(a: int, b: int) -> int:
     return a // gcd(a, b) * b
 
 
+def is_power_of_two(n: int) -> bool:
+    """
+    Check if an integer is a power of two: 1, 2, 4, 8, 16, 32, ...
+
+    Parameters
+    ----------
+    n: int
+        The integer to check.
+
+    Returns
+    -------
+    ret: bool
+        True if n is a power of two, False otherwise.
+    """
+    return n > 0 and (n & (n - 1)) == 0
+
+
+def cdiv(n: int, d: int) -> int:
+    """
+    Get the ceiling of n / d.
+
+    Parameters
+    ----------
+    n: int
+        The numerator.
+    d: int
+        The denominator.
+
+    Returns
+    -------
+    ret: int
+        The ceiling of n / d.
+    """
+    return (n + d - 1) // d
+
+
 def error_tolerance(a: Union[np.ndarray, 'Tensor'], b: Union[np.ndarray, 'Tensor']) -> float:
     """
     Given two tensors with the same shape and data type, this function finds the minimal e, such that
@@ -418,7 +454,7 @@ def error_tolerance(a: Union[np.ndarray, 'Tensor'], b: Union[np.ndarray, 'Tensor
         a = a.astype(np.float32)
         b = b.astype(np.float32)
     lf = 0.0
-    rg = 9.0
+    rg = 10.0
     for _ in range(20):
         mid = (lf + rg) / 2.0
         if np.allclose(a, b, rtol=mid, atol=mid):

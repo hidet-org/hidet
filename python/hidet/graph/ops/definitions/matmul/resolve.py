@@ -1,13 +1,14 @@
-from typing import List, Optional
+from typing import List, Optional, Callable, Any
 from functools import lru_cache
 
 from hidet.graph.ir import Operator, Tensor
 from hidet.graph.transforms import ResolveRule, register_resolve_rule
-from hidet.utils.py import gcd, factorize
+from hidet.utils.py import gcd, factorize, prod, cdiv
 from hidet.ffi.cuda_api import cuda
 
 from .matmul import MatmulOp
 from .batch_matmul import batch_matmul
+from .matmul_f16 import matmul_f16
 from ..transform import broadcast
 from ..utils import broadcast_shapes
 
@@ -52,8 +53,9 @@ def parallel_k_search_nparts(dtype: str, mma: str, batch_size, m_size, n_size, k
         c = cc.reshape([batch_size, nparts, m_size, n_size]).sum(1)
 
         graph: hidet.FlowGraph = hidet.trace_from(c, [a, b])
-        with hidet.graph.PassContext():
-            graph: hidet.FlowGraph = hidet.graph.transforms.fuse_operator_pass()(graph)
+        # with hidet.graph.PassContext() as ctx:
+        # graph: hidet.FlowGraph = hidet.graph.transforms.fuse_operator_pass()(graph)
+        graph: hidet.FlowGraph = hidet.graph.optimize(graph)
 
         latency: float = graph.latency()
         latencies.append(latency)
@@ -108,7 +110,7 @@ class MatmulResolveRule(ResolveRule):
             c = batch_matmul(aa, bb, mma=mma).reshape([batch_size, nparts, m_size, n_size]).sum(1)
         return c
 
-    def resolve(self, op: Operator) -> Optional[List[Tensor]]:
+    def resolve_generic(self, op: Operator) -> Optional[List[Tensor]]:
         assert isinstance(op, MatmulOp)
         a: Tensor = op.inputs[0]
         b: Tensor = op.inputs[1]
@@ -152,3 +154,62 @@ class MatmulResolveRule(ResolveRule):
             c = self.run_batch_matmul(a, b)
             c = c.reshape(c_shape)
         return [c]
+
+    def resolve_f16(self, op: Operator) -> Optional[List[Tensor]]:
+        import hidet
+
+        a: Tensor = op.inputs[0]
+        b: Tensor = op.inputs[1]
+        c: Tensor = op.outputs[0]
+
+        if not (a.dtype == 'float16' and b.dtype == 'float16' and a.shape[-1] % 8 == b.shape[-1] % 8 == 0):
+            return None
+
+        parallel_k = self.get_config('parallel_k', default='default')  # 'default', 'search', 2, 4, ...
+        if isinstance(parallel_k, str):
+            if parallel_k == 'default':
+                batch_size, m_size, n_size, k_size = prod(c.shape[:-2]), c.shape[-2], c.shape[-1], a.shape[-1]
+                estimate_blocks = batch_size * cdiv(m_size, 64) * cdiv(n_size, 64)
+                estimate_concurrent_blocks = 80 * 5
+                max_k_parts = cdiv(k_size, 64)
+                k_parts = min(cdiv(estimate_concurrent_blocks, estimate_blocks), max_k_parts)
+            elif parallel_k == 'disabled':
+                k_parts = 1
+            elif parallel_k == 'search':
+                candidates = [1, 2, 3, 4, 5, 6, 8, 10, 12, 16]
+                aa = hidet.symbol_like(a)
+                bb = hidet.symbol_like(b)
+                latencies: List[float] = []
+                print('Searching the best parallel_k for {} x {} among {}'.format(a.shape, b.shape, candidates))
+                for candidate in candidates:
+                    cc = matmul_f16(aa, bb, parallel_k_parts=candidate)
+                    # if candidate > 1:
+                    #     cc = cc.sum(0)
+                    graph = hidet.trace_from([cc], [aa, bb])
+                    graph: hidet.FlowGraph = hidet.graph.optimize(graph)
+                    latency: float = graph.latency()
+                    latencies.append(latency)
+                best_idx = min(range(len(candidates)), key=lambda i: latencies[i])
+                print(
+                    'Results: {{{}}},'.format(
+                        ', '.join('{}: {:.1f}'.format(a, b * 1000) for a, b in zip(candidates, latencies))
+                    ),
+                    'Picked {} with {:.1f} micro-seconds'.format(candidates[best_idx], latencies[best_idx] * 1000),
+                )
+                k_parts = candidates[best_idx]
+            else:
+                raise ValueError(f'invalid parallel_k: {parallel_k}')
+        elif isinstance(parallel_k, int):
+            k_parts = min(max(parallel_k, 1), 32)
+        else:
+            raise ValueError(f'invalid parallel_k: {parallel_k}')
+        c = matmul_f16(a, b, parallel_k_parts=k_parts).sum(0)
+        return [c]
+
+    def resolve(self, op: Operator) -> Optional[List[Tensor]]:
+        resolve_funcs: List[Callable[[Operator], Any]] = [self.resolve_f16, self.resolve_generic]
+        for resolve_func in resolve_funcs:
+            outs = resolve_func(op)
+            if outs is not None:
+                return outs
+        return None
