@@ -1,6 +1,6 @@
 # pylint: disable=protected-access
 from __future__ import annotations
-from typing import List, Union, Dict, Set, Optional, Tuple
+from typing import List, Union, Dict, Set, Optional, Tuple, Sequence
 import os
 import pickle
 from collections import defaultdict
@@ -65,10 +65,15 @@ class GraphForwardContext:
     def append_instrument(self, instrument: GraphForwardInstrument):
         self.instruments.append(instrument)
 
-    def debug(self, output_dir='./outs/debug'):
+    def debug(self, output_dir='./outs/debug', print_summary: bool = False):
         from .flow_graph_impl import GraphForwardDebugInstrument
 
-        self.instruments.append(GraphForwardDebugInstrument(output_dir, print_stdout=True))
+        self.instruments.append(GraphForwardDebugInstrument(output_dir, print_summary))
+
+    def benchmark(self, output_dir='./outs/benchmark', print_summary: bool = False, warmup=3, number=10, repeat=3):
+        from .flow_graph_impl import GraphForwardBenchmarkInstrument
+
+        self.instruments.append(GraphForwardBenchmarkInstrument(output_dir, print_summary, warmup, number, repeat))
 
 
 def forward_context() -> GraphForwardContext:
@@ -332,7 +337,9 @@ class FlowGraph:
 
         return create_cuda_graph(self)
 
-    def latency(self, warmup=1, number=3, repeat=3, median=True) -> Union[float, List[float]]:
+    def latency(
+        self, warmup=1, number=3, repeat=3, median=True, dummy_inputs: Optional[Sequence[Tensor]] = None
+    ) -> Union[float, List[float]]:
         """Measure the latency of the flow graph.
 
         Parameters
@@ -349,6 +356,9 @@ class FlowGraph:
         median: bool
             Whether to return the median latency.
 
+        dummy_inputs: Optional[Sequence[Tensor]]
+            The dummy inputs to run the flow graph. If not given, automatic generated dummy inputs would be used.
+
         Returns
         -------
         ret: Union[float, List[float]]
@@ -358,7 +368,8 @@ class FlowGraph:
         import numpy as np
         from hidet.ffi.cuda_api import cuda
 
-        dummy_inputs = self.dummy_inputs()
+        if dummy_inputs is None:
+            dummy_inputs = self.dummy_inputs()
         for _ in range(warmup):
             self.forward(*dummy_inputs)
         results = []
