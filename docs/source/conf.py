@@ -24,12 +24,13 @@ try:
     # The gallery scripts require to import hidet module.
     # We first try to import hidet from existing sys.path.
     import hidet
-    # If successful, hidet is already installed, and we can skip the following.
+    # If successful, hidet is already installed.
 except ImportError:
     # Otherwise, we might in a git repo, and we can import hidet from the repo by adding the repo root to sys.path.
     sys.path.insert(0, os.path.abspath('../../python'))
 
 import hidet
+hidet.option.cache_dir('./docs_cache')
 print('Build docs with under cache: {}'.format(hidet.option.get_cache_dir()))
 
 # -- Project information -----------------------------------------------------

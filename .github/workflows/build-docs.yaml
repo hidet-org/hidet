@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
 
-  workflow_dispatch:
+  pull_request:
 
 jobs:
   docs:
@@ -59,22 +59,6 @@ jobs:
         run: |
           pip install -r docs/requirements.txt
 
-      - name: Clear hidet operator cache   # clear hidet op cache when this event is triggered manually
-        run: |
-          cd docs; python source/clear-hidet-cache.py;
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-
       - name: Build docs
         run: |
           cd docs; make clean; make html
-
-      - name: Upload docs
-        uses: up9cloud/action-rsync@master
-        env:
-          VERBOSE: true
-          ARGS: -avzh
-          SOURCE: docs/build/html
-          HOST: ${{ secrets.DOCS_HOST }}
-          KEY: ${{ secrets.DOCS_DEPLOY_SSH_KEY }}
-          USER: ${{ secrets.DOCS_DEPLOY_USER }}
-          TARGET: ${{ secrets.DOCS_TARGET }}
