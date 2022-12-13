@@ -9,7 +9,7 @@ from hidet import symbol_like, Tensor
 from hidet.testing.onnx_models import get_onnx_model
 
 
-def check_model(model_path: str, input_names: List[str], input_tensors: List[Tensor], mode: str):
+def check_model(model_path: str, input_names: List[str], input_tensors: List[Tensor], mode: str, dtype: str):
     onnx.checker.check_model(model_path)
 
     # onnx
@@ -32,7 +32,7 @@ def check_model(model_path: str, input_names: List[str], input_tensors: List[Ten
         graph = hidet.trace_from(symbol_outputs, symbol_inputs)
         if mode == 'opt':
             with hidet.graph.PassContext() as ctx:
-                ctx.set_precision('float16')
+                ctx.set_precision(dtype)
                 graph = hidet.graph.optimize(graph)
         hidet_outputs = graph(*hidet_inputs)
     else:
@@ -43,8 +43,9 @@ def check_model(model_path: str, input_names: List[str], input_tensors: List[Ten
     hidet_outputs = [tensor.numpy() for tensor in hidet_outputs]
 
     assert len(onnx_outputs) == len(hidet_outputs)
+    tol = {'float32': 1e-4, 'float16': 2e-2}[dtype]
     for onnx_output, hidet_output in zip(onnx_outputs, hidet_outputs):
-        np.testing.assert_allclose(actual=hidet_output, desired=onnx_output, rtol=1e-4, atol=1e-4)
+        np.testing.assert_allclose(actual=hidet_output, desired=onnx_output, rtol=tol, atol=tol)
 
 
 @pytest.mark.parametrize(
@@ -66,7 +67,7 @@ def test_onnx_model(model_name: str, batch_size: int, dtype: str, mode: str):
 
     print('checking model {} in {} mode with dtype {}'.format(model_name, mode, dtype))
     model_path, input_names, input_tensors = get_onnx_model(model_name, batch_size=batch_size)
-    check_model(model_path, input_names, input_tensors, mode)
+    check_model(model_path, input_names, input_tensors, mode, dtype)
 
 
 if __name__ == '__main__':

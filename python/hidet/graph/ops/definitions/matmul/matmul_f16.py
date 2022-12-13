@@ -84,6 +84,7 @@ class MatmulF16Task(Task):
     def schedule(
         self, block_m=64, block_n=128, block_k=16, warp_m=32, warp_n=64, warp_k=16, mma: str = 'm16n8k16'
     ) -> IRModule:
+        # pylint: disable=unused-variable
         import hidet
         from hidet.ir.type import tensor_type
         from hidet.lang import attr, col_spatial, view, u32, tensor_pointer, grid
@@ -148,7 +149,7 @@ class MatmulF16Task(Task):
             @hidet.script
             def load_regs_a(mi: int, k1: int, smem_a: smem_a_type, regs_a: float16[mma_config.a_elements]):
                 warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
-                for wi, _, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
+                for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
                     p, q = col_spatial(16, 2).map(lane_id)
                     row_addr = ~smem_a[wi * warp_m + mi * mma_m + p, wk * warp_k + k1 * mma_k + q * 8]
                     b32_regs = view(regs_a, u32[4])
@@ -162,8 +163,8 @@ class MatmulF16Task(Task):
             @hidet.script
             def load_regs_b(mj: int, k1: int, smem_b: smem_b_type, regs_b: float16[mma_config.b_elements]):
                 warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
-                for _, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
-                    p, _ = col_spatial(16, 2).map(lane_id)
+                for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
+                    p, q = col_spatial(16, 2).map(lane_id)
                     # have not used q as we only use the address of the first 16 threads to load 2 of 8x8 f16 matrix.
                     row_addr = ~smem_b[wk * warp_k + k1 * mma_k + p, wj * warp_n + mj * mma_n]
                     regs = view(regs_b, u32[2])

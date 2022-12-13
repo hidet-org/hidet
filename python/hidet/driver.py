@@ -96,19 +96,34 @@ def build_task(task: Task, target_device='cuda', load=True) -> Optional[Compiled
 
 
 def _build_task_job(args):
-    task, target_device, dumped_options = args
-    option.restore_options(dumped_options)
-    build_task(task, target_device, load=False)
+    try:
+        task, target_device, dumped_options = args
+        option.restore_options(dumped_options)
+        build_task(task, target_device, load=False)
+        return True
+    except CompilationFailed as e:
+        if option.get_option('parallel_build'):
+            return False
+        else:
+            raise e
 
 
-def build_task_batch(tasks: List[Task], target_device: str = 'cuda'):
+def build_task_batch(tasks: List[Task], target_device: str = 'cuda', raise_on_error: bool = True):
     dumped_options = option.dump_options()
     jobs = [(task, target_device, dumped_options) for task in tasks]
     if option.get_option('parallel_build') and len(jobs) > 1:
         with multiprocessing.Pool() as pool:
-            pool.map(_build_task_job, jobs)
+            status_list = list(pool.map(_build_task_job, jobs))
     else:
-        map(_build_task_job, jobs)
+        status_list = list(map(_build_task_job, jobs))
+    if not all(status_list) and raise_on_error:
+        msg = ['Failed to build {} tasks:'.format(sum(1 for s in status_list if not s))]
+        for task, status in zip(tasks, status_list):
+            if not status:
+                msg.append(f'  {task.signature()}')
+        msg.append('Please turn off parallel build to see the error message:')
+        msg.append('  hidet.option.parallel_build(False)')
+        raise RuntimeError('\n'.join(msg))
 
 
 def build_ir_module(

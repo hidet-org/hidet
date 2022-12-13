@@ -33,7 +33,7 @@ class Conv2dGemmImageTransformOp(Operator):
         super().__init__(
             inputs=[x],
             task=Conv2dGemmImageTransformTask(input_like(x, 'x'), kernel, stride, groups),
-            attributes={'kernel': kernel, 'stride': stride},
+            attributes={'kernel': kernel, 'stride': stride, 'groups': groups},
         )
 
 
