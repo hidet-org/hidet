@@ -24,12 +24,13 @@ try:
     # The gallery scripts require to import hidet module.
     # We first try to import hidet from existing sys.path.
     import hidet
-    # If successful, hidet is already installed, and we can skip the following.
+    # If successful, hidet is already installed.
 except ImportError:
     # Otherwise, we might in a git repo, and we can import hidet from the repo by adding the repo root to sys.path.
     sys.path.insert(0, os.path.abspath('../../python'))
 
 import hidet
+hidet.option.cache_dir(os.path.join(hidet.option.get_cache_dir(), 'docs-cache'))
 print('Build docs with under cache: {}'.format(hidet.option.get_cache_dir()))
 
 # -- Project information -----------------------------------------------------
@@ -90,7 +91,7 @@ autodoc_typehints = 'description'
 intersphinx_mapping = {
     'torch': ('https://pytorch.org/docs/stable', None),
     'torchvision': ('https://pytorch.org/vision/stable', None),
-    # "python": ("https://docs.python.org/3", None),
+    'numpy': ('https://numpy.org/doc/stable', None),
 }
 
 # -- Options for HTML output -------------------------------------------------
@@ -107,6 +108,8 @@ html_theme_options = {
     "use_repository_button": True,
     'logo_only': True,
     "extra_navbar": r"<a href=/netron target=_blank>Customized Netron</a>",
+    "show_navbar_depth": 1,
+    # "home_page_in_toc": True
 }
 html_title = "Hidet Documentation"
 html_permalinks_icon = "<span>¶</span>"

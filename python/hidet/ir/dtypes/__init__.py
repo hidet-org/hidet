@@ -7,6 +7,7 @@ from .vector import float16x2, float32x4
 from .vector import f16x2, f32x4
 
 name2dtype = {
+    'float64': float64,
     'float32': float32,
     'tfloat32': tfloat32,
     'bfloat16': bfloat16,
@@ -25,6 +26,7 @@ name2dtype = {
 }
 
 sname2dtype = {
+    'f64': float64,
     'f32': float32,
     'tf32': tfloat32,
     'bf16': bfloat16,
