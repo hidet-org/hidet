@@ -30,7 +30,7 @@ except ImportError:
     sys.path.insert(0, os.path.abspath('../../python'))
 
 import hidet
-hidet.option.cache_dir('./docs_cache')
+hidet.option.cache_dir(os.path.join(hidet.option.get_cache_dir(), 'docs-cache'))
 print('Build docs with under cache: {}'.format(hidet.option.get_cache_dir()))
 
 # -- Project information -----------------------------------------------------
