@@ -6,6 +6,7 @@ hidet.graph
 
   frontend/onnx
   ops/index
+  transforms/index
 
 
 .. automodule:: hidet.graph

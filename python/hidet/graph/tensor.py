@@ -807,7 +807,7 @@ def ones(shape, dtype='float32', device='cuda', layout=None) -> Tensor:
             )
 
 
-def full(shape, fill_value, dtype='float32', device='cuda', layout=None) -> Tensor:
+def full(shape, fill_value: Union[float, int], dtype='float32', device='cuda', layout=None) -> Tensor:
     """Create a tensor initialized with given constant.
 
     Parameters
@@ -1047,7 +1047,7 @@ def from_torch(torch_tensor):
     )
 
 
-def array(obj: Union[List, Tuple, np.ndarray, Tensor]) -> Tensor:
+def array(obj: Union[float, int, List, Tuple, np.ndarray, Tensor]) -> Tensor:
     """Convert a list, tuple, or numpy ndarray to a hidet tensor.
 
     Parameters

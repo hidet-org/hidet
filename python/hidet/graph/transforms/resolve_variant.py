@@ -5,8 +5,14 @@ from .base import GraphPass, PassContext
 
 
 class ResolveRule:
+    """
+    A resolve rule defines how to resolve an operator to other operators.
+    """
+
     def resolve(self, op: Operator) -> Optional[List[Tensor]]:
         """
+        When define a resolve rule, the user should subclass this class and override this method.
+
         Parameters
         ----------
         op: Operator
@@ -14,9 +20,10 @@ class ResolveRule:
 
         Returns
         -------
-        ret:
-            None - indicates the operator has not been resolved, keep the original operator.
-            List[Tensor] - the output of resolved operators.
+        ret: Optional[List[Tensor]]
+            This function should return a list of tensors if the operator can be resolved, otherwise return None.
+            In the first case, the returned tensors will be used to replace the outputs of the original operator, thus
+            the number of tensors should be the same as the number of outputs of the original operator.
         """
         raise NotImplementedError()
 
@@ -42,6 +49,42 @@ registered_resolve_rules: Dict[Type[Operator], ResolveRuleChain] = {}
 
 
 def register_resolve_rule(op_cls: Type[Operator]):
+    """
+    Register a resolve rule for an operator class.
+
+    Parameters
+    ----------
+    op_cls: Type[Operator]
+        The operator class to be registered.
+
+    Returns
+    -------
+    ret: Callable[[Type[ResolveRule]], Type[ResolveRule]]
+        The decorator function.
+
+    Notes
+    -----
+
+    In the following example, we define a resolve rule for operator ``PowOp`` to resolve ``pow(x, 2.0)``
+    to ``square(x)``.
+
+    .. code-block:: python
+
+        from hidet.ir import Tensor
+        from hidet import ops
+        from hidet.graph.ops.definitions import PowOp
+        from hidet.graph.transforms import ResolveRule, register_resolve_rule
+
+        @register_resolve_rule(PowOp)
+        class AddResolveRule(ResolveRule):
+            def resolve(self, op: PowOp) -> Optional[List[Tensor]]:
+                a: Tensor = op.inputs[0]
+                b: Tensor = op.inputs[1]
+                if not b.is_symbolic() and len(b.shape) == 0 and b.scalar() == 2:
+                    return [ops.square(a)]
+                return None
+
+    """
     if not issubclass(op_cls, Operator):
         raise ValueError("Expect a subclass of Operator, got {}".format(type(op_cls)))
 

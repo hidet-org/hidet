@@ -91,7 +91,7 @@ autodoc_typehints = 'description'
 intersphinx_mapping = {
     'torch': ('https://pytorch.org/docs/stable', None),
     'torchvision': ('https://pytorch.org/vision/stable', None),
-    # "python": ("https://docs.python.org/3", None),
+    'numpy': ('https://numpy.org/doc/stable', None),
 }
 
 # -- Options for HTML output -------------------------------------------------
@@ -108,6 +108,8 @@ html_theme_options = {
     "use_repository_button": True,
     'logo_only': True,
     "extra_navbar": r"<a href=/netron target=_blank>Customized Netron</a>",
+    "show_navbar_depth": 1,
+    # "home_page_in_toc": True
 }
 html_title = "Hidet Documentation"
 html_permalinks_icon = "<span>¶</span>"
