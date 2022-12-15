@@ -3,11 +3,11 @@ from typing import List, Optional
 from hidet.graph import ops
 from hidet.graph.ir.flow_graph import Tensor
 from hidet.graph.ops.definitions.matmul import MatmulOp
-from hidet.utils import same_list
-from .base import GraphPattern, TensorPattern, MatchDict, op_pattern
+from hidet.utils import same_list, initialize
+from .base import SubgraphRewriteRule, TensorPattern, MatchDict, op_pattern, register_rewrite_rule
 
 
-class TwoMatmulFusionPattern(GraphPattern):
+class TwoMatmulFusionPattern(SubgraphRewriteRule):
     def __init__(self):
         super().__init__('matmul(x, c1)|matmul(x, c2) ==> matmul(x, concat(c1, c2)) followed by split')
         self.x = TensorPattern.tensor(is_symbolic=True)
@@ -31,7 +31,7 @@ class TwoMatmulFusionPattern(GraphPattern):
             return None
 
 
-class ThreeMatmulFusionPattern(GraphPattern):
+class ThreeMatmulFusionPattern(SubgraphRewriteRule):
     def __init__(self):
         super().__init__('matmul(x, c1)|matmul(x, c2)|matmul(x, c3) => matmul(x, concat(c1, c2, c3)) followed by split')
         self.x = TensorPattern.tensor(is_symbolic=True)
@@ -57,7 +57,7 @@ class ThreeMatmulFusionPattern(GraphPattern):
         return None
 
 
-class ThreeMatmulBiasFusionPattern(GraphPattern):
+class ThreeMatmulBiasFusionPattern(SubgraphRewriteRule):
     def __init__(self):
         super().__init__('3 branches of matmul(x, branch c) + branch b ==> matmul(x, c) + b followed by split')
         self.x = TensorPattern.tensor(is_symbolic=True)
@@ -91,6 +91,8 @@ class ThreeMatmulBiasFusionPattern(GraphPattern):
                         return [new_y1, new_y2, new_y3]
         return None
 
-
-def matmul_patterns() -> List[GraphPattern]:
-    return [ThreeMatmulBiasFusionPattern(), ThreeMatmulFusionPattern(), TwoMatmulFusionPattern()]
+@initialize()
+def matmul_patterns():
+    register_rewrite_rule(ThreeMatmulBiasFusionPattern())
+    register_rewrite_rule(ThreeMatmulFusionPattern())
+    register_rewrite_rule(TwoMatmulFusionPattern())

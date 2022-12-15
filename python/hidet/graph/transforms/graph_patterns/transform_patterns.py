@@ -3,8 +3,8 @@ from typing import List, Optional
 from hidet.graph import ops
 from hidet.graph.ir.flow_graph import Tensor
 from hidet.graph.ops.definitions.transform import ReshapeOp, SqueezeOp
-from hidet.utils import prod
-from .base import GraphPattern, TensorPattern, MatchDict, op_pattern
+from hidet.utils import prod, initialize
+from .base import SubgraphRewriteRule, TensorPattern, MatchDict, op_pattern, register_rewrite_rule
 
 
 def reverse_reshape_dim(orig_shape, new_shape, new_axis) -> Optional[int]:
@@ -25,7 +25,7 @@ def reverse_reshape_dim(orig_shape, new_shape, new_axis) -> Optional[int]:
     return None
 
 
-class ReshapeScalePattern(GraphPattern):
+class ReshapeScalePattern(SubgraphRewriteRule):
     def __init__(self):
         super().__init__('reshape(x) * scale')
         self.x = TensorPattern.tensor(is_symbolic=True)
@@ -54,7 +54,7 @@ class ReshapeScalePattern(GraphPattern):
             return None
 
 
-class ReshapeBiasPattern(GraphPattern):
+class ReshapeBiasPattern(SubgraphRewriteRule):
     def __init__(self):
         super().__init__('reshape(x) + bias')
         self.x = TensorPattern.tensor(is_symbolic=True)
@@ -83,7 +83,7 @@ class ReshapeBiasPattern(GraphPattern):
             return None
 
 
-class SqueezeMultiplyPattern(GraphPattern):
+class SqueezeMultiplyPattern(SubgraphRewriteRule):
     def __init__(self):
         super().__init__('squeeze(x) * c => squeeze(x * c)')
         self.x = TensorPattern.tensor()
@@ -103,5 +103,8 @@ class SqueezeMultiplyPattern(GraphPattern):
         return [ops.squeeze(x * c, dims=dims)]
 
 
-def transform_patterns() -> List[GraphPattern]:
-    return [ReshapeScalePattern(), ReshapeBiasPattern(), SqueezeMultiplyPattern()]
+@initialize()
+def transform_patterns():
+    register_rewrite_rule(ReshapeScalePattern())
+    register_rewrite_rule(ReshapeBiasPattern())
+    register_rewrite_rule(SqueezeMultiplyPattern())
