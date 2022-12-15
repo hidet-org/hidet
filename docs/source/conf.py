@@ -62,6 +62,7 @@ extensions = [
     'sphinxcontrib.googleanalytics',
     'sphinx_copybutton',
     'autodocsumm',
+    'sphinxcontrib.bibtex',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -87,6 +88,9 @@ autosummary_generate = True
 todo_include_todos = True
 
 autodoc_typehints = 'description'
+
+bibtex_default_style = 'unsrt'
+bibtex_bibfiles = ['references.bib']
 
 intersphinx_mapping = {
     'torch': ('https://pytorch.org/docs/stable', None),

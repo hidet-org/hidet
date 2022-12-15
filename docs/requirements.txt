@@ -4,4 +4,5 @@ sphinx-copybutton
 autodocsumm
 sphinx-book-theme
 matplotlib
+sphinxcontrib-bibtex
 git+https://github.com/sphinx-contrib/googleanalytics@master#egg=sphinxcontrib-googleanalytics
