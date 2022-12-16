@@ -1,3 +1,4 @@
+# pylint: disable=unused-import
 from typing import List, Optional, Dict, Tuple, Set
 
 from hidet.graph.ir import functors
@@ -6,11 +7,11 @@ from hidet.graph.transforms import GraphPass, PassContext
 from hidet.graph.ir.functors import analyze_usage, graph_collect
 from hidet.utils import strict_zip
 from .fold_const import fold_const_pass
-from .graph_patterns import SubgraphRewriteRule, TensorPattern, MatchDict, Usage, graph_pattern_match
-from .graph_patterns.base import registered_rewrite_rules
+from .graph_patterns import SubgraphRewriteRule, TensorPattern, OperatorPattern, MatchDict, Usage, graph_pattern_match
+from .graph_patterns.base import registered_rewrite_rules, register_rewrite_rule
 
 
-class PatternTransformPass(GraphPass):
+class SubgraphRewritePass(GraphPass):
     """
     A pattern transform can be conducted only if
     1. The pattern source matched the actual tensor and its spanned subregion.
@@ -89,12 +90,12 @@ class PatternTransformPass(GraphPass):
             # print(graph_pattern.name)
             for start_tensor in all_tensors:
                 # condition 1
-                matched = PatternTransformPass.match_pattern(graph_pattern, start_tensor, usage)
+                matched = SubgraphRewritePass.match_pattern(graph_pattern, start_tensor, usage)
                 if matched is None:
                     continue
 
                 # condition 2
-                success = PatternTransformPass.check_usage_requirement(matched, usage, graph_pattern)
+                success = SubgraphRewritePass.check_usage_requirement(matched, usage, graph_pattern)
                 if not success:
                     continue
 
@@ -120,5 +121,5 @@ class PatternTransformPass(GraphPass):
         return False, graph
 
 
-def pattern_transform_pass() -> GraphPass:
-    return PatternTransformPass()
+def subgraph_rewrite_pass() -> GraphPass:
+    return SubgraphRewritePass()

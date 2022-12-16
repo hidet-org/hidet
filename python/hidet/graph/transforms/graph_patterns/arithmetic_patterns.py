@@ -1,6 +1,7 @@
 from typing import List, Optional
-from .base import SubgraphRewriteRule, TensorPattern, MatchDict, register_rewrite_rule
 from hidet.utils.py import initialize
+from .base import SubgraphRewriteRule, TensorPattern, MatchDict, register_rewrite_rule
+
 
 class ArithmeticSubgraphRewriteRule(SubgraphRewriteRule):
     def __init__(self, name, fsrc, fdst):
@@ -45,4 +46,3 @@ def arithmetic_patterns():
     rules = [ArithmeticSubgraphRewriteRule(name, src, tgt) for name, src, tgt in pairs]
     for rule in rules:
         register_rewrite_rule(rule)
-

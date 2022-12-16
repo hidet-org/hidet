@@ -581,6 +581,8 @@ def transpose(x: Tensor, axes: Optional[List[int]] = None) -> Tensor:
 
 
 def concat(tensors: List[Tensor], axis: int) -> Tensor:
+    if not isinstance(tensors, (list, tuple)) or any(not isinstance(t, Tensor) for t in tensors):
+        raise ValueError('concat: expect a sequence of tensors, but got: {}'.format(type(tensors)))
     return ConcatOp(*tensors, axis=axis).get_output(0)
 
 

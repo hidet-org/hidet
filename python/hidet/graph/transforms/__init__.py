@@ -3,13 +3,15 @@ from hidet.graph.ir import FlowGraph
 from .base import GraphPass, PassContext, logger
 from .instruments import GraphPassInstrument, SaveGraphInstrument, ProfileInstrument
 from .fold_const import fold_const_pass
-from .pattern_transform import pattern_transform_pass
+from .subgraph_rewrite import subgraph_rewrite_pass
 from .automatic_mix_precision import automatic_mix_precision_pass
 from .resolve_variant import resolve_variant_pass
 from .fuse_operator import fuse_operator_pass
 from .eliminate_barrier import eliminate_barrier_pass
 
 from .resolve_variant import ResolveRule, register_resolve_rule, get_resolve_chain
+from .graph_patterns import TensorPattern, OperatorPattern, SubgraphRewriteRule, register_rewrite_rule, op_pattern
+from .graph_patterns import registered_rewrite_rules
 
 
 def optimize(graph: FlowGraph) -> FlowGraph:
@@ -35,7 +37,7 @@ def optimize(graph: FlowGraph) -> FlowGraph:
     """
     passes = [
         fold_const_pass(),
-        pattern_transform_pass(),
+        subgraph_rewrite_pass(),
         automatic_mix_precision_pass(),
         resolve_variant_pass(),
         fuse_operator_pass(),

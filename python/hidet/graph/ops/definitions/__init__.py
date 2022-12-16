@@ -15,12 +15,12 @@ from .conv2d import conv2d
 from .conv2d_transpose import conv2d_transpose
 from .matmul import batch_matmul, matmul
 
-from .matmul import BatchMatmulOp
+from .matmul import BatchMatmulOp, MatmulOp
 from .conv2d import Conv2dOp
 from .arithmetic import ErfOp, PowOp, AddOp, SubOp, MultiplyOp, DivideOp, WhereOp
 from .compare import EqualOp
 from .reduce import ReduceSumOp, ReduceMeanOp
-from .transform import PadOp
+from .transform import PadOp, ConcatOp
 
 from . import utils
 from . import arithmetic_resolve

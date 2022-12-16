@@ -91,6 +91,7 @@ class ThreeMatmulBiasFusionPattern(SubgraphRewriteRule):
                         return [new_y1, new_y2, new_y3]
         return None
 
+
 @initialize()
 def matmul_patterns():
     register_rewrite_rule(ThreeMatmulBiasFusionPattern())
