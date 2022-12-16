@@ -1,8 +1,9 @@
 from typing import List, Optional
-from .base import GraphPattern, TensorPattern, MatchDict
+from hidet.utils.py import initialize
+from .base import SubgraphRewriteRule, TensorPattern, MatchDict, register_rewrite_rule
 
 
-class arithmeticGraphPattern(GraphPattern):
+class ArithmeticSubgraphRewriteRule(SubgraphRewriteRule):
     def __init__(self, name, fsrc, fdst):
         super().__init__(name)
         x, y = TensorPattern.tensors(2, is_symbolic=True)  # can not be const
@@ -24,7 +25,8 @@ class arithmeticGraphPattern(GraphPattern):
         # return [constructor.visit(self.tgt)]
 
 
-def arithmetic_patterns() -> List[GraphPattern]:
+@initialize()
+def arithmetic_patterns():
     # # tensors can be used as pattern inputs
     # x, y, z = TensorPattern.tensors(3, is_symbolic=True)  # can not be const
     # a, b, c = TensorPattern.tensors(3, is_const=True)  # can not be symbolic
@@ -41,4 +43,6 @@ def arithmetic_patterns() -> List[GraphPattern]:
             lambda x, y, a, b: (x + y) + (a + b),
         ],
     ]
-    return [arithmeticGraphPattern(name, src, tgt) for name, src, tgt in pairs]
+    rules = [ArithmeticSubgraphRewriteRule(name, src, tgt) for name, src, tgt in pairs]
+    for rule in rules:
+        register_rewrite_rule(rule)

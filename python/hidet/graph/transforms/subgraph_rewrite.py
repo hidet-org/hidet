@@ -1,3 +1,4 @@
+# pylint: disable=unused-import
 from typing import List, Optional, Dict, Tuple, Set
 
 from hidet.graph.ir import functors
@@ -6,11 +7,11 @@ from hidet.graph.transforms import GraphPass, PassContext
 from hidet.graph.ir.functors import analyze_usage, graph_collect
 from hidet.utils import strict_zip
 from .fold_const import fold_const_pass
-from .graph_patterns import GraphPattern, TensorPattern, MatchDict, Usage, graph_pattern_match
-from .graph_patterns import all_graph_patterns
+from .graph_patterns import SubgraphRewriteRule, TensorPattern, OperatorPattern, MatchDict, Usage, graph_pattern_match
+from .graph_patterns.base import registered_rewrite_rules, register_rewrite_rule
 
 
-class PatternTransformPass(GraphPass):
+class SubgraphRewritePass(GraphPass):
     """
     A pattern transform can be conducted only if
     1. The pattern source matched the actual tensor and its spanned subregion.
@@ -26,10 +27,9 @@ class PatternTransformPass(GraphPass):
 
     def process_graph(self, graph: FlowGraph) -> FlowGraph:
         graph = functors.clone(graph)
-        graph_patterns = all_graph_patterns()
         fold_const = fold_const_pass()
         for _ in range(self.max_num_transforms):
-            updated, graph = self.try_transform(graph, graph_patterns)
+            updated, graph = self.try_transform(graph, registered_rewrite_rules)
             graph = fold_const.process_graph(graph)
             if not updated:
                 graph.update_nodes()
@@ -39,7 +39,7 @@ class PatternTransformPass(GraphPass):
         return graph
 
     @staticmethod
-    def match_pattern(graph_pattern: GraphPattern, start_tensor: Tensor, usage: Usage) -> Optional[MatchDict]:
+    def match_pattern(graph_pattern: SubgraphRewriteRule, start_tensor: Tensor, usage: Usage) -> Optional[MatchDict]:
         source_output_tensors = graph_pattern.source()
 
         matched = graph_pattern_match(source_output_tensors[0], target=start_tensor, usage=usage)
@@ -54,7 +54,7 @@ class PatternTransformPass(GraphPass):
         return matched
 
     @staticmethod
-    def check_usage_requirement(matched: MatchDict, usage: Usage, graph_pattern: GraphPattern) -> bool:
+    def check_usage_requirement(matched: MatchDict, usage: Usage, graph_pattern: SubgraphRewriteRule) -> bool:
         source_output_pattern_tensors: List[TensorPattern] = graph_pattern.source()
 
         # actual tensor -> pattern tensor
@@ -81,8 +81,8 @@ class PatternTransformPass(GraphPass):
         return True
 
     @staticmethod
-    def try_transform(graph: FlowGraph, graph_patterns: List[GraphPattern]) -> Tuple[bool, FlowGraph]:
-        patterns: List[GraphPattern] = graph_patterns
+    def try_transform(graph: FlowGraph, graph_patterns: List[SubgraphRewriteRule]) -> Tuple[bool, FlowGraph]:
+        patterns: List[SubgraphRewriteRule] = graph_patterns
         usage: Usage = analyze_usage(graph)
         all_tensors: List[Tensor] = graph_collect(graph, Tensor)
 
@@ -90,12 +90,12 @@ class PatternTransformPass(GraphPass):
             # print(graph_pattern.name)
             for start_tensor in all_tensors:
                 # condition 1
-                matched = PatternTransformPass.match_pattern(graph_pattern, start_tensor, usage)
+                matched = SubgraphRewritePass.match_pattern(graph_pattern, start_tensor, usage)
                 if matched is None:
                     continue
 
                 # condition 2
-                success = PatternTransformPass.check_usage_requirement(matched, usage, graph_pattern)
+                success = SubgraphRewritePass.check_usage_requirement(matched, usage, graph_pattern)
                 if not success:
                     continue
 
@@ -121,5 +121,5 @@ class PatternTransformPass(GraphPass):
         return False, graph
 
 
-def pattern_transform_pass() -> GraphPass:
-    return PatternTransformPass()
+def subgraph_rewrite_pass() -> GraphPass:
+    return SubgraphRewritePass()

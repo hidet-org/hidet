@@ -3,11 +3,11 @@ from typing import List, Optional
 from hidet.graph import ops
 from hidet.graph.ir.flow_graph import Tensor, Operator
 from hidet.graph.ops.definitions.conv2d import Conv2dOp
-from hidet.utils import same_list
-from .base import GraphPattern, TensorPattern, MatchDict, op_pattern
+from hidet.utils import same_list, initialize
+from .base import SubgraphRewriteRule, TensorPattern, MatchDict, op_pattern, register_rewrite_rule
 
 
-class Conv2dScalePattern(GraphPattern):
+class Conv2dScalePattern(SubgraphRewriteRule):
     def __init__(self):
         super().__init__('conv2d(x, w) * scale => conv2d(x, w * scale)')
         self.x = TensorPattern.tensor()
@@ -27,7 +27,7 @@ class Conv2dScalePattern(GraphPattern):
         return [ops.conv2d(x, w * scale.squeeze([0]).unsqueeze([3]), stride=attrs['stride'], groups=attrs['groups'])]
 
 
-class TwoConv2dFusionPattern(GraphPattern):
+class TwoConv2dFusionPattern(SubgraphRewriteRule):
     def __init__(self):
         super().__init__('conv2d(x, w1)|conv2d(x, w2) => conv2d(x, w1 + w2)')
         self.x = TensorPattern.tensor()
@@ -54,7 +54,7 @@ class TwoConv2dFusionPattern(GraphPattern):
         return None
 
 
-class ThreeConv2dFusionPattern(GraphPattern):
+class ThreeConv2dFusionPattern(SubgraphRewriteRule):
     def __init__(self):
         super().__init__('conv2d(x, w1)|conv2d(x, w2)|conv2d(x, w3) => conv2d(x, w1 + w2 + w3)')
         self.x = TensorPattern.tensor()
@@ -85,5 +85,8 @@ class ThreeConv2dFusionPattern(GraphPattern):
         return None
 
 
-def conv2d_patterns() -> List[GraphPattern]:
-    return [Conv2dScalePattern(), ThreeConv2dFusionPattern(), TwoConv2dFusionPattern()]
+@initialize()
+def conv2d_patterns():
+    register_rewrite_rule(Conv2dScalePattern())
+    register_rewrite_rule(ThreeConv2dFusionPattern())  # put this before TwoConv2dFusionPattern
+    register_rewrite_rule(TwoConv2dFusionPattern())

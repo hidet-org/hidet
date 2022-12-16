@@ -1,4 +1,6 @@
 """
+.. _add-operator-resolve-rule:
+
 Add Operator Resolve Rule
 =========================
 

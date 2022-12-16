@@ -1,10 +1,14 @@
 from __future__ import annotations
 from typing import List, Optional, Dict, Union, Tuple, Type
 from hidet.graph.ir.flow_graph import Operator, Tensor
-from hidet.graph import ops
+from hidet.graph.ops.definitions.arithmetic import AddOp, SubOp, MultiplyOp, NegOp
 
 
 class TensorPattern:
+    """
+    The tensor pattern represents a tensor in the pattern graph.
+    """
+
     def __init__(self, is_const=False, is_symbolic=False, trace=None):
         self.is_const: bool = is_const
         self.is_symbolic: bool = is_symbolic
@@ -28,16 +32,16 @@ class TensorPattern:
                 return '{}[{}]'.format(op_str, idx)
 
     def __add__(self, other):
-        return OperatorPattern(ops.definitions.arithmetic.AddOp, inputs=[self, other]).outputs[0]
+        return OperatorPattern(AddOp, inputs=[self, other]).outputs[0]
 
     def __sub__(self, other):
-        return OperatorPattern(ops.definitions.arithmetic.SubOp, inputs=[self, other]).outputs[0]
+        return OperatorPattern(SubOp, inputs=[self, other]).outputs[0]
 
     def __mul__(self, other):
-        return OperatorPattern(ops.definitions.arithmetic.MultiplyOp, inputs=[self, other]).outputs[0]
+        return OperatorPattern(MultiplyOp, inputs=[self, other]).outputs[0]
 
     def __neg__(self):
-        return OperatorPattern(ops.definitions.arithmetic.NegOp, inputs=[self]).outputs[0]
+        return OperatorPattern(NegOp, inputs=[self]).outputs[0]
 
     def op(self) -> Optional[OperatorPattern]:
         if self.trace is None:
@@ -58,6 +62,10 @@ class TensorPattern:
 
 
 class OperatorPattern:
+    """
+    The operator pattern represents an operator in the pattern graph.
+    """
+
     def __init__(self, op_cls, inputs, num_outputs=1):
         self.op_cls = op_cls
         self.inputs: List[TensorPattern] = inputs
@@ -68,12 +76,8 @@ class OperatorPattern:
 
     def __repr__(self):
         input_items = [str(v) for v in self.inputs]
-        unary_ops = {ops.definitions.arithmetic.NegOp: '-'}
-        binary_ops = {
-            ops.definitions.arithmetic.AddOp: '+',
-            ops.definitions.arithmetic.SubOp: '-',
-            ops.definitions.arithmetic.MultiplyOp: '*',
-        }
+        unary_ops = {NegOp: '-'}
+        binary_ops = {AddOp: '+', SubOp: '-', MultiplyOp: '*'}
         if self.op_cls in unary_ops:
             return '({}{})'.format(unary_ops[self.op_cls], input_items[0])
         elif self.op_cls in binary_ops:
@@ -85,9 +89,22 @@ class OperatorPattern:
 MatchDict = Dict[Union[TensorPattern, OperatorPattern], Union[Tensor, Operator]]
 
 
-class GraphPattern:
-    def __init__(self, name):
-        self.name = name
+class SubgraphRewriteRule:
+    """
+    A sub-graph rewrite rule defines a sub-graph pattern (called source) to match in the computation graph, and
+    a target sub-graph constructor to replace the matched sub-graph.
+
+    When defining a new sub-graph rewrite rule, you need to define a new class inherited from SubgraphRewriteRule and
+    implement the source() and target() methods. The source() method returns a list of output tensors in the sub-graph
+    pattern while the target() method returns a list of output tensors in the target sub-graph, given the match dict
+    that maps the tensors/operators in the pattern to the matched tensors/operators in the computation graph.
+
+    After defining the sub-graph rewrite rule, you need to register it to the sub-graph rewrite rule registry via
+    :func:`register_rewrite_rule`.
+    """
+
+    def __init__(self, name=""):
+        self.name = name if name else self.__class__.__name__
 
     def source(self) -> List[TensorPattern]:
         """
@@ -106,6 +123,25 @@ class GraphPattern:
 def op_pattern(
     op_cls: Type[Operator], input_patterns: List[TensorPattern], num_outputs=1
 ) -> Union[TensorPattern, List[TensorPattern]]:
+    """
+    Create an operator pattern with the given operator class and input patterns, and return the output patterns.
+
+    Parameters
+    ----------
+    op_cls: Type[Operator]
+        The operator class. This operator pattern will only be matched to an operator of the same class.
+
+    input_patterns: List[TensorPattern]
+        The input patterns of the operator.
+
+    num_outputs: int
+        The number of output tensors of the operator.Default is 1.
+
+    Returns
+    -------
+    ret: Union[TensorPattern, List[TensorPattern]]
+        The output tensor pattern(s) of the operator.
+    """
     op = OperatorPattern(op_cls, input_patterns, num_outputs)
     if num_outputs == 1:
         return op.outputs[0]
@@ -237,3 +273,26 @@ def graph_pattern_match(pattern: TensorPattern, target: Tensor, usage: Usage) ->
         return matcher.matched
     except NotMatchedException:
         return None
+
+
+registered_rewrite_rules: List[SubgraphRewriteRule] = []
+
+
+def register_rewrite_rule(rule: Union[SubgraphRewriteRule, Type[SubgraphRewriteRule]]):
+    """
+    Register a sub-graph rewrite rule.
+
+    Parameters
+    ----------
+    rule: SubgraphRewriteRule or Type[SubgraphRewriteRule]
+        The rule to be registered. If it is a type, it will be instantiated with default arguments. Otherwise, it
+        should be an instance of SubgraphRewriteRule.
+    """
+    if isinstance(rule, SubgraphRewriteRule):
+        registered_rewrite_rules.append(rule)
+        return None
+    elif issubclass(rule, SubgraphRewriteRule):
+        registered_rewrite_rules.append(rule())
+        return rule
+    else:
+        raise TypeError('rule should be a SubgraphRewriteRule or a subclass of SubgraphRewriteRule')
