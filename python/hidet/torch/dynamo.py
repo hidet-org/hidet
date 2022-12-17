@@ -3,6 +3,7 @@ from packaging import version
 
 try:
     import torch
+
     if version.parse(torch.__version__) < version.parse('2.0.0.dev'):
         raise ImportError('torch dynamo requires torch version >= 2.0.0.dev')
 except ImportError:
@@ -43,6 +44,7 @@ use_fp16_reduction = False
 
 def onnx2hidet(subgraph):
     from torch._dynamo.optimizations.subgraph import SubGraph
+
     assert isinstance(subgraph, SubGraph)
     import hidet
     from hidet import FlowGraph
@@ -74,11 +76,13 @@ def onnx2hidet(subgraph):
         cuda_graph.set_input_tensors(hidet_inputs)
         cuda_graph.run()
         hidet_outputs: List[hidet.Tensor] = cuda_graph.get_output_tensors()
+
     return subgraph.wrap_returns(run)
 
 
 def register_onnx2hidet_backend():
     from torch._dynamo.optimizations.backends import create_backend
+
     create_backend(onnx2hidet)
 
 
@@ -88,4 +92,3 @@ if success:
     a = torch.randn(3)
     b = a.__dlpack__()
     print(b)
-
