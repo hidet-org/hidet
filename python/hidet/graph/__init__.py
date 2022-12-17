@@ -18,3 +18,5 @@ from .ir import trace_from, load_graph, save_graph, forward_context
 from .transforms import optimize
 from .modules import nn
 from .jit import jit
+
+from .impl.dlpack import from_dlpack

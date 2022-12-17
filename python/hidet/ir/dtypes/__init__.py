@@ -43,3 +43,7 @@ sname2dtype = {
     'f32x4': f32x4,
     'f16x2': f16x2,
 }
+
+
+def support(name: str) -> bool:
+    return name in name2dtype

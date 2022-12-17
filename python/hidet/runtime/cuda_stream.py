@@ -34,3 +34,9 @@ class CudaStream:
         stream = object.__new__(CudaStream)
         stream.handle = 0
         return stream
+
+    @staticmethod
+    def from_handle(handle: int) -> CudaStream:
+        stream = object.__new__(CudaStream)
+        stream.handle = handle
+        return stream
