@@ -25,3 +25,6 @@ onnx
 
 # for print python ast node
 astunparse
+
+# for package version check
+packaging
