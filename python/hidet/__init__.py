@@ -2,7 +2,7 @@
 Hidet is an open-source DNN inference framework based on compilation.
 """
 import sys
-from . import option
+from . import option, torch
 from . import ir
 from . import backend
 from . import utils
@@ -15,8 +15,6 @@ from .ir.dtypes import int8, int16, int32, int64, uint8, uint16, uint32, uint64,
 from .ir.dtypes import bfloat16, tfloat32
 
 from .graph import Tensor, Operator, Module, FlowGraph
-
-from .graph.frontend import torch
 
 from .graph import ops
 from .graph import empty, randn, zeros, ones, full, randint, symbol, array, from_torch

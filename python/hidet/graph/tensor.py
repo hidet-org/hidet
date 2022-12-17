@@ -688,26 +688,17 @@ class Tensor:
         return np_array
 
     def torch(self):
-        """Convert to a torch tensor.
+        """
+        Convert to a torch tensor.
 
         Returns
         -------
         ret: torch.Tensor
-            A new torch tensor with the same contents of current hidet tensor.
+            The torch tensor that shares the memory with the hidet tensor.
         """
         import torch
 
-        torch_tensor = torch.empty(size=self.shape, dtype=getattr(torch, self.dtype), device=self.device)
-        if self.storage is None:
-            # convert a symbolic tensor to a dummy torch tensor
-            return torch_tensor
-        cuda.memcpy_async(
-            src_addr=self.storage.addr,
-            dst_addr=torch_tensor.data_ptr(),
-            num_bytes=self.nbytes,
-            kind=cuda.DeviceToDevice,
-        )
-        return torch_tensor
+        return torch.from_dlpack(self)
 
 
 def empty(shape, dtype: str = 'float32', device: str = 'cuda', layout: Optional[DataLayout] = None):
