@@ -185,6 +185,24 @@ class Tensor:
         self.layout = state['layout']
         self.trace = state['trace']
 
+    def __dlpack__(self, stream: Optional[int] = None):
+        """
+        This function is used to support interoperability with other frameworks that support __dlpack__ protocol.
+        """
+        from .impl.dlpack import to_dlpack
+
+        if stream:
+            cuda.stream_synchronize(stream)
+        return to_dlpack(self)
+
+    def __dlpack_device__(self) -> Tuple[int, int]:
+        """
+        This function is used to support interoperability with other frameworks that support __dlpack__ protocol.
+        """
+        from .impl.dlpack import to_dlpack_device
+
+        return to_dlpack_device(self)
+
     def signature(self) -> str:
         """Get the signature of the tensor.
 

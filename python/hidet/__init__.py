@@ -23,6 +23,7 @@ from .graph import empty, randn, zeros, ones, full, randint, symbol, array, from
 from .graph import empty_like, randn_like, zeros_like, ones_like, symbol_like, full_like, randint_like
 from .graph import trace_from, load_graph, save_graph
 from .graph import jit
+from .graph import from_dlpack
 
 from .lang import script, script_module
 
