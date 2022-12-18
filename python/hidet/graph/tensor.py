@@ -356,7 +356,7 @@ class Tensor:
 
         return rearrange(self, plan)
 
-    def flatten(self, start_dim=0, end_dim=None):
+    def flatten(self, start_dim=0, end_dim=-1):
         """Create a flattened tensor.
 
         See Also :func:`hidet.graph.ops.flatten`.
@@ -367,7 +367,7 @@ class Tensor:
             The start dimension to flatten.
 
         end_dim: int
-            The end dimension (exclusive) to flatten.
+            The end dimension (inclusive) to flatten.
 
         Returns
         -------
@@ -1045,15 +1045,9 @@ def from_torch(torch_tensor):
 
     if not isinstance(torch_tensor, torch.Tensor):
         raise ValueError('Expect a torch.Tensor, got {}'.format(type(torch_tensor)))
-    if not torch_tensor.is_cuda:
-        raise ValueError('Expect the torch tensor is on cuda device.')
-    dtype_convert = {torch.float32: 'float32', torch.float16: 'float16', torch.int32: 'int32', torch.int64: 'int64'}
-    return Tensor(
-        shape=[int(v) for v in torch_tensor.size()],
-        dtype=dtype_convert[torch_tensor.dtype],
-        device='cuda',
-        storage=hidet.runtime.storage.TorchStorage(torch_tensor),
-    )
+    if torch_tensor.requires_grad:
+        raise ValueError('Please first call .detach() on the pytorch tensor before converting it to hidet.')
+    return hidet.from_dlpack(torch_tensor)
 
 
 def array(obj: Union[float, int, List, Tuple, np.ndarray, Tensor]) -> Tensor:

@@ -367,9 +367,9 @@ class FlattenOp(Operator):
         rank = len(x.shape)
         start_dim = normalize_dim(start_dim, rank)
         end_dim = normalize_dim(end_dim, rank)
-        assert 0 <= start_dim < end_dim <= rank
+        assert 0 <= start_dim <= end_dim < rank
         dims = list(range(len(x.shape)))
-        plan = [[v] for v in dims[:start_dim]] + [dims[start_dim:end_dim]] + [[v] for v in dims[end_dim:]]
+        plan = [[v] for v in dims[:start_dim]] + [dims[start_dim : end_dim + 1]] + [[v] for v in dims[end_dim + 1 :]]
         super().__init__(
             inputs=[x],
             task=RearrangeTask(input_like(x, 'x'), plan=plan),
@@ -556,10 +556,10 @@ def unsqueeze(x: Tensor, dims: Union[int, Sequence[int]]) -> Tensor:
     return UnsqueezeOp(x, dims).get_output(0)
 
 
-def flatten(x: Tensor, start_dim=0, end_dim=None) -> Tensor:
+def flatten(x: Tensor, start_dim=0, end_dim=-1) -> Tensor:
     start_dim = normalize_dim(start_dim, len(x.shape))
     end_dim = normalize_dim(end_dim, len(x.shape))
-    if start_dim + 1 >= end_dim:
+    if start_dim >= end_dim:
         return x
     return FlattenOp(x, start_dim, end_dim).get_output(0)
 

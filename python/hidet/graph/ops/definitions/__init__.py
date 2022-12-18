@@ -4,7 +4,8 @@ from .arithmetic import bitwise_and, bitwise_not, bitwise_or, bitwise_xor, ceil,
 from .compare import equal, less_than, greater_than, less_or_equal, greater_or_equal, cond_not, cond_and
 from .reduce import reduce_mean, reduce_min, reduce_max, reduce_sum, reduce_var, argmin, argmax
 from .transform import squeeze, unsqueeze, flatten, concat, cast, take, rearrange, strided_slice, split, pad, conv_pad
-from .pool import max_pool2d, avg_pool2d
+from .pool import avg_pool2d, adaptive_avg_pool1d, adaptive_avg_pool2d, adaptive_avg_pool3d
+from .pool import max_pool2d, adaptive_max_pool1d, adaptive_max_pool2d, adaptive_max_pool3d
 from .softmax import softmax
 from .activation import relu, sigmoid, relu6, clip, prelu
 from .norm import batch_norm_infer, instance_norm

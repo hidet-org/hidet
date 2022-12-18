@@ -11,6 +11,8 @@ from hidet.ir.compute import TensorNode, tensor_input, compute, reduce, arg_redu
 
 
 def input_like(tensor: Tensor, name: str) -> TensorNode:
+    if not isinstance(tensor, Tensor):
+        raise TypeError('Expect a hidet.Tensor, but got an object with type {}'.format(type(tensor)))
     return tensor_input(name, tensor.dtype, tensor.shape, tensor.layout)
 
 
@@ -31,11 +33,16 @@ def normalize_kernel(kernel: Union[int, Sequence[int]], dim=2) -> List[int]:
         return [kernel for _ in range(dim)]
     elif isinstance(kernel, (list, tuple)):
         if len(kernel) == 1:
-            return kernel * dim
+            return list(kernel * dim)
         elif len(kernel) == dim:
-            return kernel
+            return list(kernel)
     msg = 'Kernel size must be an integer or a list of integer with length 1 or {}, but got {}'.format(dim, kernel)
     raise ValueError(msg)
+
+
+def normalize_output(output: Union[int, Sequence[int]], dim=2) -> List[int]:
+    # same as normalize_kernel
+    return normalize_kernel(output, dim)
 
 
 def normalize_padding(padding: Union[int, Sequence[int]], dim=2) -> List[int]:
