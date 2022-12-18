@@ -48,17 +48,15 @@ def test_unsqueeze(shape, dims: List[int]):
 
 @pytest.mark.parametrize(
     "shape, start_dim, end_dim",
-    [[[33, 44, 55], 0, None], [[33, 44, 55], 0, 1], [[33, 44, 55], 0, 2], [[33, 44, 55], 1, 2]],
+    [[[33, 44, 55], 0, -1], [[33, 44, 55], 0, 1], [[33, 44, 55], 0, 2], [[33, 44, 55], 1, 2]],
 )
 def test_flatten(shape, start_dim: int, end_dim: Optional[int]):
     rank = len(shape)
     if start_dim < 0:
         start_dim += rank
-    if end_dim is None:
-        end_dim = len(shape)
-    elif end_dim < 0:
-        end_dim += rank
-    flattened_shape = shape[:start_dim] + [prod(shape[start_dim:end_dim])] + shape[end_dim:]
+    if end_dim < 0:
+        end_dim += len(shape)
+    flattened_shape = shape[:start_dim] + [prod(shape[start_dim : end_dim + 1])] + shape[end_dim + 1 :]
     check_transform(shape, lambda x: np.reshape(x, flattened_shape), lambda x: ops.flatten(x, start_dim, end_dim))
 
 

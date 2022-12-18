@@ -135,7 +135,7 @@ def is_compact_tensor(shape: List[int], strides: List[int]) -> bool:
     assert len(shape) == len(strides)
     current_stride = 1
     for extent, stride in zip(reversed(shape), reversed(strides)):
-        if stride != current_stride:
+        if stride != current_stride and extent != 1:
             return False
         current_stride *= extent
     return True
@@ -177,8 +177,10 @@ def from_dlpack_capsule(dltensor) -> Tensor:
             strides: List[int] = read_longs(tensor.strides, tensor.ndim)
             if not is_compact_tensor(shape, strides):
                 raise ValueError(
-                    'from_dlpack: only compact tensors are supported for hidet\n'
-                    'Please consider make it continuous before passing it to hidet.'
+                    (
+                        'from_dlpack: got tensor with shape {} and strides {}. Only compact tensors are supported for '
+                        'hidet, please consider make it continuous before passing it to hidet.'
+                    ).format(shape, strides)
                 )
         else:
             # tensor.strides = nullptr, a compact tensor

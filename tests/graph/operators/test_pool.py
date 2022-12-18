@@ -2,9 +2,10 @@ from typing import Tuple
 
 import numpy as np
 import pytest
+import torch.nn.functional
 
 from hidet import ops
-from hidet.testing import check_unary
+from hidet.testing import check_unary, check_torch_unary
 
 
 def numpy_pool2d(
@@ -70,6 +71,45 @@ def test_avg_pool2d(shape, kernel, stride, padding):
         lambda x: ops.avg_pool2d(x, kernel, stride, padding),
         atol=1e-5,
         rtol=1e-5,
+    )
+
+
+@pytest.mark.parametrize('reduce_type', ['max', 'avg'])
+@pytest.mark.parametrize(
+    'shape,output_size',
+    [
+        ((1, 3, 224, 224), (7, 7)),
+        ((1, 3, 32, 32), (3, 3)),
+        ((1, 2, 37, 63), (3, 2)),
+        ((1, 1, 1, 1), (1, 1)),
+        ((1, 3, 224), 7),
+        ((1, 3, 32, 32, 32), (7, 7, 7)),
+    ],
+)
+def test_adaptive_pool(shape, output_size, reduce_type):
+    spatial_dim = len(shape) - 2
+    torch_func = {
+        (1, 'max'): torch.nn.functional.adaptive_max_pool1d,
+        (1, 'avg'): torch.nn.functional.adaptive_avg_pool1d,
+        (2, 'max'): torch.nn.functional.adaptive_max_pool2d,
+        (2, 'avg'): torch.nn.functional.adaptive_avg_pool2d,
+        (3, 'max'): torch.nn.functional.adaptive_max_pool3d,
+        (3, 'avg'): torch.nn.functional.adaptive_avg_pool3d,
+    }[(spatial_dim, reduce_type)]
+    hidet_func = {
+        (1, 'max'): ops.adaptive_max_pool1d,
+        (1, 'avg'): ops.adaptive_avg_pool1d,
+        (2, 'max'): ops.adaptive_max_pool2d,
+        (2, 'avg'): ops.adaptive_avg_pool2d,
+        (3, 'max'): ops.adaptive_max_pool3d,
+        (3, 'avg'): ops.adaptive_avg_pool3d,
+    }[(spatial_dim, reduce_type)]
+    check_torch_unary(
+        shape,
+        torch_func=lambda x: torch_func(x, output_size),
+        hidet_func=lambda x: hidet_func(x, output_size),
+        atol=1e-6,
+        rtol=1e-6,
     )
 
 

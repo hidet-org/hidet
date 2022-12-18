@@ -1,4 +1,4 @@
-from typing import List, Union
+from typing import List, Union, Sequence
 import time
 import numpy as np
 from hidet.graph.tensor import array
@@ -90,3 +90,50 @@ def check_binary(
     numpy_result = numpy_op(a, b)
     hidet_result = hidet_op(array(a).to(device=device), array(b).to(device=device)).cpu().numpy()
     np.testing.assert_allclose(actual=hidet_result, desired=numpy_result, atol=atol, rtol=rtol)
+
+
+def check_torch_unary(
+    shape: Sequence[int], torch_func, hidet_func, device: str = 'all', dtype: str = 'float32', atol=0.0, rtol=0.0
+):
+    if device == 'all':
+        for dev in ['cuda', 'cpu']:
+            check_torch_unary(shape, torch_func, hidet_func, dev, dtype, atol, rtol)
+        return
+    import torch
+    import hidet
+
+    torch_data = torch.randn(*shape, dtype=getattr(torch, dtype)).to(device=device)
+    hidet_data = hidet.from_torch(torch_data)
+    torch_result: torch.Tensor = torch_func(torch_data)
+    hidet_result: hidet.Tensor = hidet_func(hidet_data)
+    np.testing.assert_allclose(
+        actual=hidet_result.cpu().numpy(), desired=torch_result.cpu().numpy(), atol=atol, rtol=rtol
+    )
+
+
+def check_torch_binary(
+    a_shape: Sequence[int],
+    b_shape: Sequence[int],
+    torch_func,
+    hidet_func,
+    device: str = 'all',
+    dtype: str = 'float32',
+    atol=0.0,
+    rtol=0.0,
+):
+    if device == 'all':
+        for dev in ['cuda', 'cpu']:
+            check_torch_binary(a_shape, b_shape, torch_func, hidet_func, dev, dtype, atol, rtol)
+        return
+    import torch
+    import hidet
+
+    torch_a = torch.randn(*a_shape, dtype=getattr(torch, dtype)).to(device=device)
+    torch_b = torch.randn(*b_shape, dtype=getattr(torch, dtype)).to(device=device)
+    hidet_a = hidet.from_torch(torch_a)
+    hidet_b = hidet.from_torch(torch_b)
+    torch_result: torch.Tensor = torch_func(torch_a, torch_b)
+    hidet_result: hidet.Tensor = hidet_func(hidet_a, hidet_b)
+    np.testing.assert_allclose(
+        actual=hidet_result.cpu().numpy(), desired=torch_result.cpu().numpy(), atol=atol, rtol=rtol
+    )
