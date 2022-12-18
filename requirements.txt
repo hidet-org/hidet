@@ -20,9 +20,6 @@ tqdm
 # in Nsight System.
 nvtx
 
-# for onnx frontend
-onnx
-
 # for print python ast node
 astunparse
 
