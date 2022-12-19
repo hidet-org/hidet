@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Dict, Any, Type, Callable, Optional, Tuple, Set
+from typing import Dict, Any, Type, Callable, Optional, Tuple, Set, Union, Sequence
 import logging
 import inspect
 import operator
@@ -207,16 +207,11 @@ class Interpreter:
         def to_torch(value):
             if isinstance(value, Tensor):
                 if value.is_symbolic():
-                    # if data_type(value.dtype).is_integer():
-                    #     return torch.zeros(value.shape, dtype=getattr(torch, value.dtype), device=value.device)
-                    # else:
-                    #     return torch.randn(value.shape, dtype=getattr(torch, value.dtype), device=value.device)
                     if data_type(value.dtype).is_integer():
-                        return hidet.zeros_like(value).torch()
+                        value = hidet.zeros_like(value)
                     else:
-                        return hidet.randn_like(value).torch()
-                else:
-                    return value.torch()
+                        value = hidet.randn_like(value)
+                value = value.torch()
             return value
 
         def load_arg(a, env):
@@ -293,19 +288,16 @@ class Interpreter:
             else:
                 assert False
 
-            logger.info('after %s', node)
-            for k, v in torch_env.items():
-                if isinstance(v, torch.Tensor):
-                    logger.info('[torch] %s: %s', k, v)
-            for k, v in hidet_env.items():
-                if isinstance(v, Tensor):
-                    logger.info('[hidet] %s: %s', k, v)
-            import hidet.graph.impl.dlpack
-            logger.info('remain dlpack tensors: %d', len(hidet.graph.impl.dlpack.DLManagedTensorContext.allocated))
-            logger.info('')
-
-            if node.name == 'ones':
-                exit(0)
+            # logger.info('after %s', node)
+            # for k, v in torch_env.items():
+            #     if isinstance(v, torch.Tensor):
+            #         logger.info('[torch] %s: %s', k, v)
+            # for k, v in hidet_env.items():
+            #     if isinstance(v, Tensor):
+            #         logger.info('[hidet] %s: %s', k, v)
+            # import hidet.graph.impl.dlpack
+            # logger.info('remain dlpack tensors: %d', len(hidet.graph.impl.dlpack.DLManagedTensorContext.allocated))
+            # logger.info('')
 
         logger.info('finish interpreting graph')
 
@@ -314,7 +306,7 @@ class Interpreter:
         return graph_hidet_output
 
 
-def from_torch(module):
+def from_torch(module, example_inputs: Union[torch.Tensor, Sequence[torch.Tensor]], concrete_args=None, check=True):
     """
     Convert a torch.nn.Module or torch.fx.GraphModule to a hidet.nn.Module.
 
@@ -322,6 +314,17 @@ def from_torch(module):
     ----------
     module: Union[torch.nn.Module, torch.fx.GraphModule]
         The torch module to convert.
+
+    example_inputs: Union[torch.Tensor, Sequence[torch.Tensor]]
+        The example inputs to the module.
+
+    concrete_args: Optional[Dict[str, Any]]
+        The concrete arguments to the module. If provided, will be used to make some arguments concrete during symbolic
+        tracing.
+
+    check: bool
+        Whether to check the converted module. If True, will warn if the output of converted module has
+        large relative/absolute error. Default: True.
 
     Returns
     -------
