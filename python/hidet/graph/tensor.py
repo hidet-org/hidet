@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 import ctypes
 from functools import partial
 from typing import List, Optional, Tuple, Sequence, Union
@@ -122,17 +123,53 @@ class Tensor:
                 return '{}\nfrom {}'.format(head, self.trace)
 
     def __getitem__(self, item):
-        from hidet.graph.ops import strided_slice
+        from hidet.graph.ops import strided_slice, unsqueeze
+
+        if isinstance(item, list):
+            item = tuple(item)
 
         if not isinstance(item, tuple):
             item = tuple([item])
+
+        # now, the item could have
+        # 1. integer index
+        # 2. slice
+        # 3. Ellipsis
+        # 4. None
+        # e.g., [1, 3:5, ..., None]
+
+        # process Ellipsis
+        # e.g., x[1, ..., 2] -> x[1, :, :, 2]
+        if Ellipsis in item:
+            if item.count(Ellipsis) > 1:
+                raise ValueError('Only one ellipsis allowed in index.')
+            ellipsis_index = item.index(Ellipsis)
+            ellipsis_ndim = len(self.shape) - sum([1 if axis not in [None, Ellipsis] else 0 for axis in item])
+            if ellipsis_ndim < 0:
+                ellipsis_ndim = 0
+            item = item[:ellipsis_index] + (slice(None),) * ellipsis_ndim + item[ellipsis_index + 1:]
+
+        # process None
+        # e.g., x[2, None, 3] -> x[2, 1, 3]
+        if None in item:
+            dims = []
+            for i, v in enumerate(item):
+                if v is None:
+                    dims.append(i)
+            item = [v if v is not None else slice(None) for v in item]
+            return self.unsqueeze(dims)[item]
+
+        assert None not in item
+
+        # process slice and integer index
         rank = len(self.shape)
         if all(not isinstance(v, slice) for v in item) and len(item) == rank:
-            # element access
+            # element access, return a python scalar
             return strided_slice(self, starts=list(item), ends=[v + 1 for v in item]).numpy().flatten()[0]
         else:
+            # slice access, return a hidet tensor
             while len(item) < rank:
-                item = item + (slice(None, None, None),)
+                item = item + (slice(None),)
             starts, ends, steps = [], [], []
             squeeze_dims = []
             for dim, v in enumerate(item):

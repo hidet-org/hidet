@@ -1,7 +1,7 @@
 from __future__ import annotations
 import torch
 from hidet.graph.tensor import Tensor
-from .interpreter import HidetModule, register_module
+from .interpreter import HidetModule, register_module, warnings
 from . import register_functions as regs
 
 
@@ -31,7 +31,7 @@ class HidetAdaptiveAvgPool2d(HidetModule):
 class HidetReLU(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, torch.nn.ReLU)
-        return regs.relu(x)
+        return regs.relu(x, self.mod.inplace)
 
 
 @register_module(torch.nn.MaxPool2d)
@@ -73,4 +73,53 @@ class HidetBatchNorm2d(HidetModule):
             training=self.mod.training,
             momentum=self.mod.momentum,
             eps=self.mod.eps,
+        )
+
+
+@register_module(torch.nn.Dropout)
+@register_module(torch.nn.Dropout1d)
+@register_module(torch.nn.Dropout2d)
+@register_module(torch.nn.Dropout3d)
+class HidetDropout2d(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, (torch.nn.Dropout, torch.nn.Dropout1d, torch.nn.Dropout2d, torch.nn.Dropout3d))
+        if self.mod.training:
+            warnings.warn_once(
+                'hidet: Dropout/1D/2D/3D in training mode is not supported. Treating as in inference mode.'
+            )
+        return x
+
+
+@register_module(torch.nn.LayerNorm)
+class HidetLayerNorm(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.LayerNorm)
+        return regs.layer_norm(
+            x=x,
+            normalized_shape=self.mod.normalized_shape,
+            weight=self.param('weight'),
+            bias=self.param('bias'),
+            eps=self.mod.eps,
+        )
+
+
+@register_module(torch.nn.Tanh)
+class HidetTanh(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.Tanh)
+        return regs.tanh(x)
+
+
+@register_module(torch.nn.Embedding)
+class HidetEmbedding(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.Embedding)
+        return regs.embedding(
+            x=x,
+            weight=self.param('weight'),
+            padding_idx=self.mod.padding_idx,
+            max_norm=self.mod.max_norm,
+            norm_type=self.mod.norm_type,
+            scale_grad_by_freq=self.mod.scale_grad_by_freq,
+            sparse=self.mod.sparse
         )
