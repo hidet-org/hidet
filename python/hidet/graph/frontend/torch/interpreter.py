@@ -207,10 +207,14 @@ class Interpreter:
         def to_torch(value):
             if isinstance(value, Tensor):
                 if value.is_symbolic():
+                    # if data_type(value.dtype).is_integer():
+                    #     return torch.zeros(value.shape, dtype=getattr(torch, value.dtype), device=value.device)
+                    # else:
+                    #     return torch.randn(value.shape, dtype=getattr(torch, value.dtype), device=value.device)
                     if data_type(value.dtype).is_integer():
-                        return torch.zeros(value.shape, dtype=getattr(torch, value.dtype), device=value.device)
+                        return hidet.zeros_like(value).torch()
                     else:
-                        return torch.randn(value.shape, dtype=getattr(torch, value.dtype), device=value.device)
+                        return hidet.randn_like(value).torch()
                 else:
                     return value.torch()
             return value
@@ -228,7 +232,8 @@ class Interpreter:
         graph_torch_output: Optional[Any] = None
 
         for idx, node in enumerate(self.graph.nodes):
-            logger.debug(f"interpreting node {idx}: {node}")
+            assert isinstance(node, torch.fx.Node)
+            logger.debug(f"interpreting node {idx}: {node.format_node()}")
 
             if node.op == "placeholder":
                 arg = next(args_iter)
@@ -288,14 +293,19 @@ class Interpreter:
             else:
                 assert False
 
-            # logger.info('after %s', node)
-            # for k, v in torch_env.items():
-            #     if isinstance(v, torch.Tensor):
-            #         logger.info('[torch] %s: %s', k, v)
-            # for k, v in hidet_env.items():
-            #     if isinstance(v, Tensor):
-            #         logger.info('[hidet] %s: %s', k, v)
-            # logger.info('')
+            logger.info('after %s', node)
+            for k, v in torch_env.items():
+                if isinstance(v, torch.Tensor):
+                    logger.info('[torch] %s: %s', k, v)
+            for k, v in hidet_env.items():
+                if isinstance(v, Tensor):
+                    logger.info('[hidet] %s: %s', k, v)
+            import hidet.graph.impl.dlpack
+            logger.info('remain dlpack tensors: %d', len(hidet.graph.impl.dlpack.DLManagedTensorContext.allocated))
+            logger.info('')
+
+            if node.name == 'ones':
+                exit(0)
 
         logger.info('finish interpreting graph')
 

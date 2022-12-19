@@ -208,7 +208,8 @@ class DLManagedTensorContext:
         ndim = len(tensor.shape)
         self.shape = (ctypes.c_uint64 * ndim)(*tensor.shape)
 
-        tensor = DLTensor(
+        self.tensor = tensor
+        dl_tensor = DLTensor(
             data=tensor.storage.addr,
             device=DLDevice(
                 # todo: set device_id when we support multiple GPUs
@@ -223,7 +224,7 @@ class DLManagedTensorContext:
         )
         self.allocated.add(self)
         self.managed_tensor = DLManagedTensor(
-            dl_tensor=tensor, manager_ctx=0, deleter=DLTensorDeleter(lambda _: self.allocated.remove(self))
+            dl_tensor=dl_tensor, manager_ctx=0, deleter=DLTensorDeleter(lambda _: self.allocated.remove(self))
         )
 
     def capsuled_dltensor(self) -> ctypes.py_object:
