@@ -19,7 +19,6 @@ setup(
     package_dir={"": "python"},
     include_package_data=True,
     install_requires=[
-        "onnx",
         "numpy",
         "psutil",
         "tqdm",

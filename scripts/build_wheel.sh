@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e  # exit immediately if a command exits with a non-zero status.
+
 ###############################################################################
 # This script builds a wheel for the current platform and Python version.
 ###############################################################################

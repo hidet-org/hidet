@@ -13,4 +13,5 @@ torchvision
 transformers
 
 # check the correctness with onnxruntime
+onnx
 onnxruntime-gpu
