@@ -166,9 +166,9 @@ class TakeTask(Task):
 
         def fmap(*output_indices):
             indices_indices = output_indices[axis : axis + len(indices_shape)]
-            data_indices = (
-                output_indices[:axis] + (indices[indices_indices],) + output_indices[axis + len(indices_shape) :]
-            )
+            index_value = indices[indices_indices]
+            index_value = if_then_else(index_value < 0, index_value + data_shape[axis], index_value)
+            data_indices = output_indices[:axis] + (index_value,) + output_indices[axis + len(indices_shape) :]
             return data[data_indices]
 
         output = compute(name='output', shape=output_shape, fcompute=lambda *output_indices: fmap(*output_indices))
@@ -200,7 +200,7 @@ class StridedSliceTask(Task):
                 output_shape[axis] = (end - start + stride - 1) // stride
             else:
                 output_shape[axis] = (start - end + (-stride) - 1) // (-stride)
-            if output_shape[axis] <= 0:
+            if output_shape[axis] < 0:
                 raise NotImplementedError(
                     'Slice result can not be: '
                     'starts {} ends {} axes {} strides {}'.format(starts, ends, axes, strides)
@@ -583,6 +583,12 @@ def transpose(x: Tensor, axes: Optional[Sequence[int]] = None) -> Tensor:
 def concat(tensors: List[Tensor], axis: int) -> Tensor:
     if not isinstance(tensors, (list, tuple)) or any(not isinstance(t, Tensor) for t in tensors):
         raise ValueError('concat: expect a sequence of tensors, but got: {}'.format(type(tensors)))
+    if any(tensors[0].dtype != t.dtype for t in tensors):
+        raise ValueError(
+            'concat: expect all tensors have the same dtype, but got:\n{}'.format(
+                '\n'.join(t.signature() for t in tensors)
+            )
+        )
     return ConcatOp(*tensors, axis=axis).get_output(0)
 
 
