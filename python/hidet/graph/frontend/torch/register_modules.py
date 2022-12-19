@@ -121,5 +121,5 @@ class HidetEmbedding(HidetModule):
             max_norm=self.mod.max_norm,
             norm_type=self.mod.norm_type,
             scale_grad_by_freq=self.mod.scale_grad_by_freq,
-            sparse=self.mod.sparse
+            sparse=self.mod.sparse,
         )

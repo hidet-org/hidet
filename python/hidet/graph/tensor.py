@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import builtins
 import ctypes
 from functools import partial
 from typing import List, Optional, Tuple, Sequence, Union
@@ -123,7 +122,7 @@ class Tensor:
                 return '{}\nfrom {}'.format(head, self.trace)
 
     def __getitem__(self, item):
-        from hidet.graph.ops import strided_slice, unsqueeze
+        from hidet.graph.ops import strided_slice
 
         if isinstance(item, list):
             item = tuple(item)
@@ -145,9 +144,8 @@ class Tensor:
                 raise ValueError('Only one ellipsis allowed in index.')
             ellipsis_index = item.index(Ellipsis)
             ellipsis_ndim = len(self.shape) - sum([1 if axis not in [None, Ellipsis] else 0 for axis in item])
-            if ellipsis_ndim < 0:
-                ellipsis_ndim = 0
-            item = item[:ellipsis_index] + (slice(None),) * ellipsis_ndim + item[ellipsis_index + 1:]
+            ellipsis_ndim = max(ellipsis_ndim, 0)
+            item = item[:ellipsis_index] + (slice(None),) * ellipsis_ndim + item[ellipsis_index + 1 :]
 
         # process None
         # e.g., x[2, None, 3] -> x[2, 1, 3]

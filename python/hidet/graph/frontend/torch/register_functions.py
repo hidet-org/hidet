@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional, Union, List, Sequence
+from typing import Optional, Union, Sequence
 import operator
 import torch
 from hidet.graph.tensor import Tensor
@@ -76,14 +76,14 @@ def cos(x: Tensor):
 
 @register_function(torch.nn.functional.batch_norm)
 def batch_norm(
-        x: Tensor,
-        running_mean: Optional[Tensor],
-        running_var: Optional[Tensor],
-        weight: Optional[Tensor],
-        bias: Optional[Tensor],
-        training: bool,
-        momentum: float,
-        eps: float,
+    x: Tensor,
+    running_mean: Optional[Tensor],
+    running_var: Optional[Tensor],
+    weight: Optional[Tensor],
+    bias: Optional[Tensor],
+    training: bool,
+    momentum: float,
+    eps: float,
 ):
     if training:
         warnings.warn_once(
@@ -170,13 +170,15 @@ def matmul(x: Tensor, y: Tensor):
 
 
 @register_function(torch.ones)
-def ones(*size: Union[int, Sequence[int]],
-         out: Optional[Tensor] = None,
-         dtype: Optional[torch.dtype] = None,
-         layout: Optional[torch.layout] = None,
-         device: Optional[Union[torch.device, str, None]] = None,
-         pin_memory: Optional[bool] = False,
-         requires_grad: Optional[bool] = False):
+def ones(
+    *size: Union[int, Sequence[int]],
+    out: Optional[Tensor] = None,
+    dtype: Optional[torch.dtype] = None,
+    layout: Optional[torch.layout] = None,
+    device: Optional[Union[torch.device, str, None]] = None,
+    pin_memory: Optional[bool] = False,
+    requires_grad: Optional[bool] = False,
+):
     import hidet
 
     if out is not None:
@@ -198,9 +200,7 @@ def ones(*size: Union[int, Sequence[int]],
     _ = requires_grad
 
     return hidet.ones(
-        shape=shape,
-        dtype=dtype_from_torch(torch_dtype=dtype).name,
-        device=device_from_torch(torch_device=device)
+        shape=shape, dtype=dtype_from_torch(torch_dtype=dtype).name, device=device_from_torch(torch_device=device)
     )
 
 
@@ -211,11 +211,11 @@ def gelu(x: Tensor):
 
 @register_function(torch.nn.functional.layer_norm)
 def layer_norm(
-        x: Tensor,
-        normalized_shape: Sequence[int],
-        weight: Optional[Tensor] = None,
-        bias: Optional[Tensor] = None,
-        eps: float = 1e-5
+    x: Tensor,
+    normalized_shape: Sequence[int],
+    weight: Optional[Tensor] = None,
+    bias: Optional[Tensor] = None,
+    eps: float = 1e-5,
 ):
     y = ops.layer_norm(x, num_last_dims=len(normalized_shape), epsilon=eps)
     if weight is not None:
@@ -232,13 +232,13 @@ def tanh(x: Tensor):
 
 @register_function(torch.nn.functional.embedding)
 def embedding(
-        x: Tensor,
-        weight: Tensor,
-        padding_idx: Optional[int] = None,
-        max_norm: Optional[float] = None,
-        norm_type: float = 2.0,
-        scale_grad_by_freq: bool = False,
-        sparse: bool = False
+    x: Tensor,
+    weight: Tensor,
+    padding_idx: Optional[int] = None,
+    max_norm: Optional[float] = None,
+    norm_type: float = 2.0,
+    scale_grad_by_freq: bool = False,
+    sparse: bool = False,
 ):
     import hidet
 

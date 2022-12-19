@@ -1,5 +1,5 @@
 # pylint: disable=no-name-in-module
-from typing import List, Callable, Sequence, Dict, Any
+from typing import List, Callable, Sequence
 import logging
 import torch
 import hidet.option
@@ -28,9 +28,9 @@ class DynamoConfig:
         """
         The schedule search space for the operator kernel tuning
         Candidates are: 0, 1, 2
-         - 0: Use the default schedule, without tuning
-         - 1: Tune the schedule in a small search space, usually takes less than one minute to tune a kernel
-         - 2: Tune the schedule in a large search space, achieves the best performance, but takes longer time to tune a kernel
+         - 0: Use the default schedule, without tuning.
+         - 1: Tune the schedule in a small search space. Usually takes less than one minute to tune a kernel.
+         - 2: Tune the schedule in a large search space. Usually achieves the best performance, but takes longer time.
         """
         self._search_space = level
 
@@ -39,12 +39,12 @@ class DynamoConfig:
         Parallelization on k dimension of the matrix multiplication
         Candidates are: 'default', 'disabled', 'search'
          - 'default':
-            Default parallelization strategy. A heuristic strategy is used to decide whether to parallelize on k dimension and
-            the size of split factor
+            Default parallelization strategy. A heuristic strategy is used to decide whether to parallelize on k
+            dimension and the size of split factor
          - 'disabled':
             Disable parallelization on k dimension
          - 'search':
-            Search for the best parallelization strategy. The most expensive option but usually achieves the best performance.
+            Search for the best parallelization strategy. Takes more time but usually achieves the best performance.
         """
         self._parallel_k = strategy
 
@@ -97,8 +97,8 @@ def generate_executor(flow_graph: FlowGraph) -> Callable:
 
     logger.info('schedule search space: %d', search_space)
 
-    has_cpu_tensor = any([tensor.device == 'cpu' for tensor in graph_opt.inputs + graph_opt.outputs])
-    has_cuda_tensor = any([tensor.device == 'cuda' for tensor in graph_opt.inputs + graph_opt.outputs])
+    has_cpu_tensor = any(tensor.device == 'cpu' for tensor in graph_opt.inputs + graph_opt.outputs)
+    has_cuda_tensor = any(tensor.device == 'cuda' for tensor in graph_opt.inputs + graph_opt.outputs)
 
     if has_cpu_tensor and has_cuda_tensor:
         raise RuntimeError('the flow graph contains both CPU and CUDA tensors, currently not supported by hidet')

@@ -41,15 +41,17 @@ class UniqueWarnings:
         """
         Only warn once for all duplicated messages between resets.
         """
-        import warnings
+        import warnings as _warnings
+
         if msg not in self.warned:
-            warnings.warn(msg, stacklevel=2)
+            _warnings.warn(msg, stacklevel=2)
             self.warned.add(msg)
 
     @staticmethod
     def warn(msg: str):
-        import warnings
-        warnings.warn(msg, stacklevel=2)
+        import warnings as _warnings
+
+        _warnings.warn(msg, stacklevel=2)
 
     def reset(self):
         self.warned.clear()
@@ -84,6 +86,7 @@ def register_method(cls: Type[object], method_name: str):
 
 def tensor_from_torch(tensor: torch.Tensor) -> Tensor:
     import hidet.graph.tensor
+
     if tensor.requires_grad:
         if torch.is_grad_enabled():
             warnings.warn_once(
@@ -190,17 +193,18 @@ class ImportedTorchModule(Module):
             code = dict(inspect.getmembers(caused_callable))['__code__']
         callable_name, filename, lineno = caused_callable.__name__, code.co_filename, code.co_firstlineno
         raise type(exception)(
-            f'{exception}, occurred in {callable_name}, defined at\n'
-            f'  File "{filename}", line {lineno}'
+            f'{exception}, occurred in {callable_name}, defined at\n' f'  File "{filename}", line {lineno}'
         )
 
     def forward(self, *args):
+        # pylint: disable=broad-except
         args_iter = iter(args)
         env: Dict[str, Any] = {}
         output = None
 
         def load_args(a):
             return torch.fx.graph.map_arg(a, lambda n: env[n.name])
+
         logger.info('start to interpret graph')
         for idx, node in enumerate(self.graph.nodes):
             logger.debug(f"interpreting node {idx}: {node}")

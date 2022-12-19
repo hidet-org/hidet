@@ -2,9 +2,9 @@ from __future__ import annotations
 import torch
 from hidet.ir.type import DataType, data_type
 from hidet.graph.tensor import Tensor
+from hidet.graph import ops
 from .interpreter import register_method
 from .utils import dtype_from_torch, device_from_torch
-from hidet.graph import ops
 
 
 @register_method(Tensor, 'cuda')
@@ -25,7 +25,7 @@ def tensor_cpu(self: Tensor):
 def tensor_to(self: Tensor, *args, **kwargs):
     """
     There are three argument format for torch.Tensor.to:
-    
+
     1. to(self, dtype, non_blocking=False, copy=False, memory_format=torch.preserve_format)
     2. to(self, device=None, dtype=None, non_blocking=False, copy=False, memory_format=torch.preserve_format)
     3. to(self, non_blocking=False, copy=False, memory_format=torch.preserve_format)
@@ -59,8 +59,7 @@ def tensor_to(self: Tensor, *args, **kwargs):
     _ = non_blocking
 
     return self.to(
-        dtype=dtype_from_torch(dtype).name if dtype else None,
-        device=device_from_torch(device) if device else None,
+        dtype=dtype_from_torch(dtype).name if dtype else None, device=device_from_torch(device) if device else None
     )
 
 
@@ -87,12 +86,7 @@ def tensor_view(self: Tensor, *args):
         else:
             assert False
 
-        return Tensor(
-            new_shape,
-            dst_dtype.name,
-            self.device,
-            self.storage,
-        )
+        return Tensor(new_shape, dst_dtype.name, self.device, self.storage)
     else:
         if len(args) == 1 and isinstance(args[0], (list, tuple)):
             args = args[0]
