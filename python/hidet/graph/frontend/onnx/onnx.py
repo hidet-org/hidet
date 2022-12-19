@@ -9,6 +9,7 @@ from typing import List, Union, Optional, Dict, Callable, Type, Sequence, Set
 from collections import defaultdict
 import warnings
 import os
+import logging
 import numpy as np
 import onnx
 import onnx.numpy_helper
@@ -17,6 +18,9 @@ import hidet
 from hidet.graph.modules import nn
 from hidet.graph import ops
 from hidet.graph.tensor import Tensor, from_numpy, randn
+
+
+log = logging.getLogger(__name__)
 
 
 class OnnxOperator:
@@ -312,19 +316,6 @@ class OnnxMatMul(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         a, b = inputs
         return [ops.matmul(a, b)]
-        # assert len(a.shape) >= 2 and len(b.shape) >= 2
-        # if len(a.shape) == 2 and len(b.shape) == 2:
-        #     return [ops.batch_matmul(a, b)]
-        # else:
-        #     prefix_shape = hidet.graph.ops.definitions.arithmetic.broadcast_shape(a.shape[:-2], b.shape[:-2])
-        #     a = ops.broadcast(a, prefix_shape + a.shape[-2:])
-        #     b = ops.broadcast(b, prefix_shape + b.shape[-2:])
-        #     a = ops.flatten(a, end_dim=-2)  # [B, M, K]
-        #     b = ops.flatten(b, end_dim=-2)  # [B, K, N]
-        #     c = ops.batch_matmul(a, b)  # [B, M, N]
-        #     c_expect_shape = prefix_shape + [a.shape[-2], b.shape[-1]]
-        #     c = c.reshape(c_expect_shape)
-        #     return [c]
 
 
 @register_onnx_operator
@@ -1063,7 +1054,7 @@ class OnnxGraph(nn.Module):
         self.usage_count: Dict[str, int] = self.count_usage()
 
     def forward(self, *args):
-        name2tensor = {}
+        name2tensor = {"": None}
         if self.env_tensors:
             name2tensor.update(self.env_tensors)
         assert len(args) == len(self.input_names)
@@ -1074,6 +1065,9 @@ class OnnxGraph(nn.Module):
         for name, inp in zip(self.input_names, args):
             name2tensor[name] = inp
         # run nodes
+
+        log.info('start to interpret onnx graph')
+
         usage_count = self.usage_count.copy()
         for operator in self.operators:
             for name in operator.input_names:
@@ -1111,8 +1105,12 @@ class OnnxGraph(nn.Module):
                     if usage_count[name] == 0:
                         # free memory
                         del name2tensor[name]
+
         # put outputs
         results = [name2tensor[name] for name in self.output_names]
+
+        log.info('finish to interpret onnx graph')
+
         return results
 
     def count_usage(self):
