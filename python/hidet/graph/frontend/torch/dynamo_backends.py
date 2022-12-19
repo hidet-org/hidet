@@ -157,7 +157,7 @@ def onnx2hidet_backend(subgraph):
 def hidet_backend(subgraph):
     from hidet import Tensor
     from torch._dynamo.optimizations.subgraph import SubGraph
-    from .interpreter import ImportedTorchModule
+    from .interpreter import Interpreter
     from .utils import symbol_like_torch
 
     assert isinstance(subgraph, SubGraph)
@@ -181,7 +181,7 @@ def hidet_backend(subgraph):
 
     assert isinstance(subgraph.model, torch.fx.GraphModule)
     graph_module: torch.fx.GraphModule = subgraph.model
-    imported_module: ImportedTorchModule = hidet.frontend.from_torch(graph_module)
+    imported_module: Interpreter = hidet.frontend.from_torch(graph_module)
 
     output = imported_module(*symbolic_inputs)
     output_format, output_tensors = serialize_output(output)
@@ -191,7 +191,7 @@ def hidet_backend(subgraph):
     def wrapper(*args: Tensor):
         outputs: Sequence[torch.Tensor] = executor(*args)
         ret = deserialize_output(output_format, outputs)
-        return ret[0]
+        return ret
 
     return wrapper
 

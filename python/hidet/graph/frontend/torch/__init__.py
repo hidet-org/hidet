@@ -1,7 +1,7 @@
 from .availability import available, dynamo_available
 
 if available():
-    from .interpreter import ImportedTorchModule, from_torch
+    from .interpreter import Interpreter, from_torch
     from . import register_functions
     from . import register_modules
     from . import register_methods

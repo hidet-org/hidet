@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import Optional, Union, Sequence
+import logging
 import operator
 import torch
 from hidet.graph.tensor import Tensor
@@ -261,7 +262,7 @@ def embedding(
 
 
 @register_function(torch.permute)
-@register_method(Tensor, 'permute')
+@register_method(torch.Tensor.permute)
 def permute(x: Tensor, *args):
     if len(args) == 1 and isinstance(args[0], (list, tuple)):
         args = args[0]
@@ -270,7 +271,7 @@ def permute(x: Tensor, *args):
 
 
 @register_function(torch.transpose)
-@register_method(Tensor, 'transpose')
+@register_method(torch.Tensor.transpose)
 def transpose(x: Tensor, dim0: int, dim1: int):
     if dim0 < dim1:
         dim0, dim1 = dim1, dim0
