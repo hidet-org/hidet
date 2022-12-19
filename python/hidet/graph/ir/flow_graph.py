@@ -1,16 +1,20 @@
 # pylint: disable=protected-access
 from __future__ import annotations
 from typing import List, Union, Dict, Set, Optional, Tuple, Sequence
+import logging
 import os
 import pickle
 from collections import defaultdict
 
 import hidet.graph.operator
 from hidet import option
-from hidet.graph.tensor import Tensor, empty_like
+from hidet.ir.type import data_type
+from hidet.graph.tensor import Tensor, empty_like, zeros_like, randn_like
 from hidet.graph.operator import Operator
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
 from hidet.utils.namer import Namer
+
+log = logging.getLogger(__name__)
 
 
 class GraphForwardInstrument:
@@ -225,7 +229,9 @@ class FlowGraph:
             tensor_map[st] = at
         for st, at in zip(self.outputs, outputs):
             tensor_map[st] = at
-        for node in self.nodes:
+
+        num_operators = len(self.nodes)
+        for idx, node in enumerate(self.nodes):
             # prepare node inputs
             node_inputs = []
             for node_input in node.inputs:
@@ -250,6 +256,9 @@ class FlowGraph:
 
             # run node
             GraphForwardContext.current()._trigger_before_operator(node, node_inputs)
+            log.debug('[%4d/%d] run operator %s', idx, num_operators, node.name)
+            log.debug('inputs: %s', [x.signature() for x in node_inputs])
+            log.debug('outputs: %s', [x.signature() for x in node_outputs])
             node.pure_run(node_inputs, node_outputs)
             GraphForwardContext.current()._trigger_after_operator(node, node_inputs, node_outputs)
 
@@ -258,10 +267,11 @@ class FlowGraph:
     def dummy_inputs(self) -> List[Tensor]:
         inputs = []
         for symbolic_input in self.inputs:
-            if symbolic_input.dtype in ['float32', 'float16', 'bfloat16']:
-                inputs.append(empty_like(symbolic_input))
-            else:
-                raise ValueError('Can not generate dummy input for tensor {}'.format(symbolic_input.signature()))
+            dtype = data_type(symbolic_input.dtype)
+            if dtype.is_integer():
+                inputs.append(zeros_like(symbolic_input))
+            elif dtype.is_float():
+                inputs.append(randn_like(symbolic_input))
         return inputs
 
     def dummy_outputs(self) -> List[Tensor]:

@@ -1,15 +1,17 @@
 from __future__ import annotations
 from typing import Dict, Any, Type, Callable, Optional, Tuple, Set
+import logging
+import inspect
 import operator
-import warnings
 import itertools
 import torch
 from torch.fx import Node
 
 from hidet.graph.module import Module
 from hidet.graph.tensor import Tensor
-from hidet.graph.tensor import from_torch as tensor_from_torch
 from .availability import available
+
+logger = logging.getLogger(__name__)
 
 
 class Registry:
@@ -27,7 +29,35 @@ class ExpectedRegistry:
     torch_root_functions: Set[Callable] = set(c for c in torch.__dict__.values() if callable(c))
 
 
-_warning_require_grad = True
+class UniqueWarnings:
+    """
+    Used to suppress duplicate warnings.
+    """
+
+    def __init__(self):
+        self.warned: Set[str] = set()
+
+    def warn_once(self, msg: str):
+        """
+        Only warn once for all duplicated messages between resets.
+        """
+        import warnings as _warnings
+
+        if msg not in self.warned:
+            _warnings.warn(msg, stacklevel=2)
+            self.warned.add(msg)
+
+    @staticmethod
+    def warn(msg: str):
+        import warnings as _warnings
+
+        _warnings.warn(msg, stacklevel=2)
+
+    def reset(self):
+        self.warned.clear()
+
+
+warnings = UniqueWarnings()
 
 
 def register_module(torch_cls: Type[torch.nn.Module]):
@@ -54,6 +84,20 @@ def register_method(cls: Type[object], method_name: str):
     return decorator
 
 
+def tensor_from_torch(tensor: torch.Tensor) -> Tensor:
+    import hidet.graph.tensor
+
+    if tensor.requires_grad:
+        if torch.is_grad_enabled():
+            warnings.warn_once(
+                "hidet: a parameter with requires_grad=True used for computation while "
+                "torch.is_grad_enabled() is True.  Please consider use 'with torch.no_grad()' "
+                "to wrap the model execution."
+            )
+        tensor = tensor.detach()
+    return hidet.graph.tensor.from_torch(tensor)
+
+
 class HidetModule:
     def __init__(self, torch_module: torch.nn.Module):
         self.mod: torch.nn.Module = torch_module
@@ -75,16 +119,6 @@ class HidetModule:
                 self.hidet_params[name] = None
             else:
                 torch_param: torch.Tensor = self.torch_params[name]
-                if torch_param.requires_grad:
-                    global _warning_require_grad
-                    if _warning_require_grad:
-                        warnings.warn(
-                            f"hidet: weight '{name}' in module {self.mod} has requires_grad=True."
-                            " Please consider calling .requires_grad_(False) on the model to silence this "
-                            "warning"
-                        )
-                        _warning_require_grad = False
-                    torch_param = torch_param.detach()
                 self.hidet_params[name] = tensor_from_torch(torch_param)
         return self.hidet_params[name]
 
@@ -147,25 +181,23 @@ class ImportedTorchModule(Module):
                 raise RuntimeError(f"Node referenced nonexistent target {target_atoms[:i]} not")
             attr = getattr(attr, atom)
         if isinstance(attr, torch.Tensor):
-            if attr.requires_grad:
-                global _warning_require_grad
-                if _warning_require_grad:
-                    warnings.warn(
-                        f"hidet: weight '{target}' in module {self.mod} has requires_grad=True,"
-                        " Please consider calling .requires_grad_(False) on the model to silence this "
-                        "warning"
-                    )
-                    _warning_require_grad = False
-                attr = attr.detach()
             attr = tensor_from_torch(attr)
         return attr
 
     @staticmethod
-    def _reset_warning_flag():
-        global _warning_require_grad
-        _warning_require_grad = True  # reset warning flag
+    def _raise_exception(exception: Exception, caused_callable: Any):
+        if isinstance(caused_callable, HidetModule):
+            func = dict(inspect.getmembers(caused_callable.__call__))['__func__']
+            code = dict(inspect.getmembers(func))['__code__']
+        else:
+            code = dict(inspect.getmembers(caused_callable))['__code__']
+        callable_name, filename, lineno = caused_callable.__name__, code.co_filename, code.co_firstlineno
+        raise type(exception)(
+            f'{exception}, occurred in {callable_name}, defined at\n' f'  File "{filename}", line {lineno}'
+        )
 
     def forward(self, *args):
+        # pylint: disable=broad-except
         args_iter = iter(args)
         env: Dict[str, Any] = {}
         output = None
@@ -173,7 +205,10 @@ class ImportedTorchModule(Module):
         def load_args(a):
             return torch.fx.graph.map_arg(a, lambda n: env[n.name])
 
-        for node in self.graph.nodes:
+        logger.info('start to interpret graph')
+        for idx, node in enumerate(self.graph.nodes):
+            logger.debug(f"interpreting node {idx}: {node}")
+
             assert isinstance(node, Node)
             if node.op == "placeholder":
                 env[node.name] = next(args_iter)
@@ -181,23 +216,35 @@ class ImportedTorchModule(Module):
                 env[node.name] = self._access_attribute(node.target)
             elif node.op == "call_function":
                 func = Registry.registered_functions[node.target]
-                env[node.name] = func(*load_args(node.args), **load_args(node.kwargs))
+                func_args = load_args(node.args)
+                func_kwargs = load_args(node.kwargs)
+                try:
+                    env[node.name] = func(*func_args, **func_kwargs)
+                except Exception as e:
+                    self._raise_exception(e, func)
             elif node.op == "call_method":
                 self_obj, *args = load_args(node.args)
                 kwargs = load_args(node.kwargs)
                 method = self._lookup_hidet_method(self_obj, node.target)
-                env[node.name] = method(self_obj, *args, **kwargs)
+                try:
+                    env[node.name] = method(self_obj, *args, **kwargs)
+                except Exception as e:
+                    self._raise_exception(e, method)
             elif node.op == "call_module":
                 hidet_module: HidetModule = self._lookup_hidet_module(node.target)
                 self_obj, *args = load_args(node.args)
                 kwargs = load_args(node.kwargs)
-                env[node.name] = hidet_module(self_obj, *args, **kwargs)
+                try:
+                    env[node.name] = hidet_module(self_obj, *args, **kwargs)
+                except Exception as e:
+                    self._raise_exception(e, hidet_module)
             elif node.op == "output":
                 output = node.args
             else:
                 assert False
+        logger.info('finish interpreting graph')
 
-        self._reset_warning_flag()
+        warnings.reset()
 
         return load_args(output)
 

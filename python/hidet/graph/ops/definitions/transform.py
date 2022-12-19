@@ -564,7 +564,7 @@ def flatten(x: Tensor, start_dim=0, end_dim=-1) -> Tensor:
     return FlattenOp(x, start_dim, end_dim).get_output(0)
 
 
-def transpose(x: Tensor, axes: Optional[List[int]] = None) -> Tensor:
+def transpose(x: Tensor, axes: Optional[Sequence[int]] = None) -> Tensor:
     rank = len(x.shape)
     if axes is None:
         axes = list(reversed(range(rank)))

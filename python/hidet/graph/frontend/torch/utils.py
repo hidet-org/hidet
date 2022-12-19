@@ -2,12 +2,11 @@ from typing import Tuple, Any, List, Union, Dict
 from hidet.graph.tensor import Tensor
 from hidet.ir.type import DataType
 from hidet.ir import dtypes
+from .availability import available
 
 
 def dtype_from_torch(torch_dtype) -> DataType:
-    import hidet
-
-    if not hidet.torch.available():
+    if not available():
         raise RuntimeError('torch is not available')
 
     import torch
@@ -28,6 +27,24 @@ def dtype_from_torch(torch_dtype) -> DataType:
         torch.double: dtypes.float64,
     }
     return mapping[torch_dtype]
+
+
+def device_from_torch(torch_device) -> str:
+    if not available():
+        raise RuntimeError('torch is not available')
+
+    import torch
+
+    assert isinstance(torch_device, torch.device)
+
+    if torch_device.type == 'cpu':
+        return 'cpu'
+    elif torch_device.type == 'cuda':
+        if torch_device.index != 0:
+            raise NotImplementedError('hidet currents only supports single gpu inference.')
+        return 'cuda'
+    else:
+        raise NotImplementedError(f'unsupported torch device {torch_device}')
 
 
 def symbol_like_torch(tensor) -> Tensor:

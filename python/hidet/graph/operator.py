@@ -136,7 +136,7 @@ class Operator:
     def dummy_outputs(self) -> List[Tensor]:
         output_types = [output.ttype for output in self.task.parameters[-len(self.task.outputs) :]]
         dummy_outputs = [
-            empty(shape=type.const_shape(), dtype=type.dtype.name, device='cuda', layout=type.layout)
+            empty(shape=type.const_shape(), dtype=type.dtype.name, device=self.device, layout=type.layout)
             for type in output_types
         ]
         return dummy_outputs
