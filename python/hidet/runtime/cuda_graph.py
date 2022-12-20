@@ -1,5 +1,4 @@
 from typing import List, Optional, Union
-from hidet.ir import dtypes
 from hidet.ffi import cuda
 from hidet.runtime.storage import CudaMemoryPool
 from hidet.runtime.cuda_stream import CudaStream

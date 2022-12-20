@@ -1,7 +1,6 @@
 from typing import List, Optional, Dict, Tuple
 import os
 import numpy as np
-from hidet.ir.type import data_type
 from hidet.runtime import CompiledFunction
 from .flow_graph import FlowGraph, Operator, Tensor, GraphForwardInstrument
 
@@ -215,9 +214,7 @@ class GraphForwardBenchmarkInstrument(GraphForwardInstrument):
         for idx, (op, latency, std) in enumerate(self.latency_list):
             op_idx = '{}'.format(idx)
             op_name = '{}'.format(op.name)
-            inputs = ', '.join(
-                [(tensor.dtype.short_name + str(tensor.shape)).replace(' ', '') for tensor in op.inputs]
-            )
+            inputs = ', '.join([(tensor.dtype.short_name + str(tensor.shape)).replace(' ', '') for tensor in op.inputs])
             outputs = ', '.join(
                 [(tensor.dtype.short_name + str(tensor.shape)).replace(' ', '') for tensor in op.outputs]
             )

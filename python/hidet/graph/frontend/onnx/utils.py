@@ -4,6 +4,7 @@ from hidet.ir.type import DataType
 
 def dtype_from_onnx(onnx_dtype) -> DataType:
     import onnx
+
     dtype_map = {
         onnx.TensorProto.DOUBLE: dtypes.float64,
         onnx.TensorProto.FLOAT: dtypes.float32,
@@ -24,6 +25,7 @@ def dtype_from_onnx(onnx_dtype) -> DataType:
 
 def dtype_to_onnx(dtype: DataType):
     import onnx
+
     dtype_map = {
         dtypes.float64: onnx.TensorProto.DOUBLE,
         dtypes.float32: onnx.TensorProto.FLOAT,

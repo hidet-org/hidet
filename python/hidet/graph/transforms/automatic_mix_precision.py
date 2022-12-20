@@ -1,5 +1,4 @@
 from typing import List, Union
-from hidet.ir import dtypes
 from hidet.graph.ir.functors import GraphRewriter
 from hidet.graph.ir.flow_graph import FlowGraph, Operator, Tensor
 from hidet.graph import ops

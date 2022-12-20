@@ -186,7 +186,9 @@ def dump(flow_graph, fp):
             )
         for idx, tensor in enumerate(node.outputs):
             name = '{}:{}'.format(node_name, idx)
-            tensor2argument[tensor] = Argument(name, data_type=tensor.dtype.name, shape=tensor.shape, has_initializer=False)
+            tensor2argument[tensor] = Argument(
+                name, data_type=tensor.dtype.name, shape=tensor.shape, has_initializer=False
+            )
         nodes.append(
             Node(
                 name=node_name,

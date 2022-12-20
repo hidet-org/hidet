@@ -1,6 +1,6 @@
 from __future__ import annotations
 import torch
-from hidet.ir.type import DataType, data_type
+from hidet.ir.type import DataType
 from hidet.graph.tensor import Tensor
 from hidet.graph import ops
 from .interpreter import register_method

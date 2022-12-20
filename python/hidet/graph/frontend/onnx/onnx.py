@@ -1009,14 +1009,18 @@ def run_trt(node: OnnxOperator, inputs: List[Tensor]) -> List[Tensor]:
     inputs_value_info = [
         onnx.helper.make_value_info(
             name=name,
-            type_proto=onnx.helper.make_tensor_type_proto(elem_type=utils.dtype_to_onnx(tensor.dtype), shape=tensor.shape),
+            type_proto=onnx.helper.make_tensor_type_proto(
+                elem_type=utils.dtype_to_onnx(tensor.dtype), shape=tensor.shape
+            ),
         )
         for name, tensor in zip(node.input_names, inputs)
     ]
     outputs_value_info = [
         onnx.helper.make_value_info(
             name=name,
-            type_proto=onnx.helper.make_tensor_type_proto(elem_type=utils.dtype_to_onnx(tensor.dtype), shape=tensor.shape),
+            type_proto=onnx.helper.make_tensor_type_proto(
+                elem_type=utils.dtype_to_onnx(tensor.dtype), shape=tensor.shape
+            ),
         )
         for name, tensor in zip(node.output_names, hidet_outputs)
     ]

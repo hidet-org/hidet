@@ -878,7 +878,6 @@ def full(shape, fill_value: Union[float, int], dtype='float32', device='cuda', l
     ret: Tensor
         The created tensor.
     """
-    dtype
     tensor = empty(shape, dtype, device, layout)
     cuda_kernels.fill_value(tensor.storage.addr, num_elements=tensor.num_elements, value=fill_value, dtype=dtype)
     return tensor

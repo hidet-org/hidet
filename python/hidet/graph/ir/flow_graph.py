@@ -8,7 +8,6 @@ from collections import defaultdict
 
 import hidet.graph.operator
 from hidet import option
-from hidet.ir.type import data_type
 from hidet.graph.tensor import Tensor, empty_like, zeros_like, randn_like
 from hidet.graph.operator import Operator
 from hidet.utils.doc import Doc, NewLine, Text, doc_join

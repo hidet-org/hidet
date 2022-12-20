@@ -29,7 +29,8 @@ def register_functions():
 
 
 def dynamic_shared_memory(byte_offset: Union[Expr, int], dtype: Union[DataType, str]) -> Call:
-    func_name = f'cuda_dynamic_shared_memory_{dtype}'
+    dtype: DataType = data_type(dtype)
+    func_name = f'cuda_dynamic_shared_memory_{dtype.name}'
     return call_primitive_func(func_name, [byte_offset])
 
 
