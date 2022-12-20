@@ -1,15 +1,16 @@
 from __future__ import annotations
-from typing import Dict, Any, Type, Callable, Optional, Tuple, Set
+from typing import Dict, Any, Type, Callable, Optional, Tuple, Set, List
 import logging
 import inspect
 import operator
 import itertools
+import tabulate
 import torch
-from torch.fx import Node
 
-from hidet.graph.module import Module
+from hidet.ir.type import data_type
 from hidet.graph.tensor import Tensor
 from .availability import available
+from .utils import relative_absolute_error
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ logger = logging.getLogger(__name__)
 class Registry:
     registered_modules: Dict[Type[torch.nn.Module], Type[HidetModule]] = {}
     registered_functions: Dict[Callable, Callable] = {}
-    registered_methods: Dict[Tuple[Type, str], Callable] = {}
+    registered_methods: Dict[Callable, Callable] = {}
 
 
 class ExpectedRegistry:
@@ -27,6 +28,9 @@ class ExpectedRegistry:
         c for c in torch.nn.__dict__.values() if isinstance(c, type) and issubclass(c, torch.nn.Module)
     )
     torch_root_functions: Set[Callable] = set(c for c in torch.__dict__.values() if callable(c))
+    torch_tensor_methods: Set[Callable] = set(
+        getattr(torch.Tensor, name) for name in dir(torch.Tensor) if callable(getattr(torch.Tensor, name))
+    )
 
 
 class UniqueWarnings:
@@ -76,10 +80,10 @@ def register_function(func: Callable):
     return decorator
 
 
-def register_method(cls: Type[object], method_name: str):
-    def decorator(hidet_func):
-        Registry.registered_methods[(cls, method_name)] = hidet_func
-        return hidet_func
+def register_method(method: Callable):
+    def decorator(hidet_method):
+        Registry.registered_methods[method] = hidet_method
+        return hidet_method
 
     return decorator
 
@@ -123,8 +127,8 @@ class HidetModule:
         return self.hidet_params[name]
 
 
-class ImportedTorchModule(Module):
-    def __init__(self, graph_module: torch.fx.GraphModule):
+class Interpreter:
+    def __init__(self, graph_module: torch.fx.GraphModule, check=True):
         super().__init__()
         self.graph_module: torch.fx.GraphModule = graph_module
         self.graph: torch.fx.Graph = graph_module.graph
@@ -132,6 +136,24 @@ class ImportedTorchModule(Module):
         self.hidet_modules: Dict[str, HidetModule] = {}
 
         self._check_support()
+
+    def __call__(self, *args):
+        return self.forward(*args)
+
+    @staticmethod
+    def _get_callable_name(target: Callable) -> str:
+        if target in ExpectedRegistry.torch_modules:
+            return f'torch.nn.{target.__name__}'
+        elif target in ExpectedRegistry.torch_functional:
+            return f'torch.nn.functional.{target.__name__}'
+        elif target in ExpectedRegistry.operator_functions:
+            return f'operator.{target.__name__}'
+        elif target in ExpectedRegistry.torch_root_functions:
+            return f'torch.{target.__name__}'
+        elif target in ExpectedRegistry.torch_tensor_methods:
+            return f'torch.Tensor.{target.__name__}'
+        else:
+            return str(target)
 
     def _check_support(self):
         not_supported = set()
@@ -147,16 +169,7 @@ class ImportedTorchModule(Module):
             lines = []
             lines.append("The following modules/functions are not supported by hidet yet:")
             for target in not_supported:
-                if target in ExpectedRegistry.torch_modules:
-                    lines.append("  torch.nn.{}".format(target.__name__))
-                elif target in ExpectedRegistry.torch_functional:
-                    lines.append("  torch.nn.functional.{}".format(target.__name__))
-                elif target in ExpectedRegistry.operator_functions:
-                    lines.append("  operator.{}".format(target.__name__))
-                elif target in ExpectedRegistry.torch_root_functions:
-                    lines.append("  torch.{}".format(target.__name__))
-                else:
-                    lines.append("  {}".format(target))
+                lines.append(f"  {self._get_callable_name(target)}")
             raise NotImplementedError("\n".join(lines))
 
     def _lookup_hidet_module(self, target: str) -> HidetModule:
@@ -167,22 +180,11 @@ class ImportedTorchModule(Module):
             self.hidet_modules[target] = hidet_cls(torch_module)
         return self.hidet_modules[target]
 
-    def _lookup_hidet_method(self, self_obj, target: str):
-        cls = type(self_obj)
-        if (cls, target) not in Registry.registered_methods:
-            raise NotImplementedError(f"hidet: method {cls.__name__}.{target} is not supported yet.")
-        return Registry.registered_methods[(cls, target)]
-
-    def _access_attribute(self, target: str) -> Any:
-        target_atoms = target.split(".")
-        attr = self.graph_module
-        for i, atom in enumerate(target_atoms):
-            if not hasattr(attr, atom):
-                raise RuntimeError(f"Node referenced nonexistent target {target_atoms[:i]} not")
-            attr = getattr(attr, atom)
-        if isinstance(attr, torch.Tensor):
-            attr = tensor_from_torch(attr)
-        return attr
+    def _lookup_hidet_method(self, torch_method):
+        if torch_method not in Registry.registered_methods:
+            method_name = self._get_callable_name(torch_method)
+            raise NotImplementedError(f"hidet: method {method_name} is not supported yet.")
+        return Registry.registered_methods[torch_method]
 
     @staticmethod
     def _raise_exception(exception: Exception, caused_callable: Any):
@@ -198,69 +200,226 @@ class ImportedTorchModule(Module):
 
     def forward(self, *args):
         # pylint: disable=broad-except
-        args_iter = iter(args)
-        env: Dict[str, Any] = {}
-        output = None
-
-        def load_args(a):
+        def load_arg(a, env):
             return torch.fx.graph.map_arg(a, lambda n: env[n.name])
 
         logger.info('start to interpret graph')
-        for idx, node in enumerate(self.graph.nodes):
-            logger.debug(f"interpreting node {idx}: {node}")
 
-            assert isinstance(node, Node)
+        args_iter = iter(args)
+        hidet_env: Dict[str, Any] = {}
+
+        graph_hidet_output: Optional[Any] = None
+
+        for idx, node in enumerate(self.graph.nodes):
+            assert isinstance(node, torch.fx.Node)
+            logger.debug(f"interpreting node {idx}: {node.format_node()}")
+
             if node.op == "placeholder":
-                env[node.name] = next(args_iter)
+                arg = next(args_iter)
+                if isinstance(arg, torch.Tensor):
+                    raise RuntimeError('input tensor must be hidet Tensor, got torch.Tensor')
+                hidet_env[node.name] = arg
             elif node.op == "get_attr":
-                env[node.name] = self._access_attribute(node.target)
+                target_atoms = node.target.split(".")
+                attr = self.graph_module
+                for i, atom in enumerate(target_atoms):
+                    if not hasattr(attr, atom):
+                        raise RuntimeError(f"Node referenced nonexistent target {target_atoms[:i]} not")
+                    attr = getattr(attr, atom)
+                hidet_env[node.name] = tensor_from_torch(attr) if isinstance(attr, torch.Tensor) else attr
             elif node.op == "call_function":
-                func = Registry.registered_functions[node.target]
-                func_args = load_args(node.args)
-                func_kwargs = load_args(node.kwargs)
+                hidet_func = Registry.registered_functions[node.target]
+                hidet_args = load_arg(node.args, hidet_env)
+                hidet_kwargs = load_arg(node.kwargs, hidet_env)
                 try:
-                    env[node.name] = func(*func_args, **func_kwargs)
+                    hidet_env[node.name] = hidet_func(*hidet_args, **hidet_kwargs)
                 except Exception as e:
-                    self._raise_exception(e, func)
+                    self._raise_exception(e, hidet_func)
             elif node.op == "call_method":
-                self_obj, *args = load_args(node.args)
-                kwargs = load_args(node.kwargs)
-                method = self._lookup_hidet_method(self_obj, node.target)
+                args = load_arg(node.args, hidet_env)
+                kwargs = load_arg(node.kwargs, hidet_env)
+
+                if isinstance(args[0], Tensor):
+                    torch_method = getattr(torch.Tensor, node.target)
+                else:
+                    torch_method = getattr(type(args[0]), node.target)
+                hidet_method = self._lookup_hidet_method(torch_method)
                 try:
-                    env[node.name] = method(self_obj, *args, **kwargs)
+                    hidet_env[node.name] = hidet_method(*args, **kwargs)
                 except Exception as e:
-                    self._raise_exception(e, method)
+                    self._raise_exception(e, hidet_method)
             elif node.op == "call_module":
-                hidet_module: HidetModule = self._lookup_hidet_module(node.target)
-                self_obj, *args = load_args(node.args)
-                kwargs = load_args(node.kwargs)
+                hidet_module = self._lookup_hidet_module(node.target)
+                args = load_arg(node.args, hidet_env)
+                kwargs = load_arg(node.kwargs, hidet_env)
                 try:
-                    env[node.name] = hidet_module(self_obj, *args, **kwargs)
+                    hidet_env[node.name] = hidet_module(*args, **kwargs)
                 except Exception as e:
                     self._raise_exception(e, hidet_module)
             elif node.op == "output":
-                output = node.args
+                graph_hidet_output = hidet_env[node.name] = load_arg(node.args[0], hidet_env)
             else:
                 assert False
+
         logger.info('finish interpreting graph')
 
         warnings.reset()
 
-        return load_args(output)
+        return graph_hidet_output
+
+    def forward_with_check(self, *args) -> str:
+        # pylint: disable=broad-except
+        def to_hidet(value):
+            if isinstance(value, torch.Tensor):
+                return tensor_from_torch(value.clone())
+            return value
+
+        def to_torch(value):
+            if isinstance(value, Tensor):
+                if value.is_symbolic():
+                    raise ValueError('expect concrete arguments to check the correctness')
+                value = value.torch()
+            return value
+
+        def load_arg(a, env):
+            return torch.fx.graph.map_arg(a, lambda n: env[n.name])
+
+        logger.info('start to interpret graph')
+
+        args_iter = iter(args)
+        torch_env: Dict[str, Any] = {}
+        hidet_env: Dict[str, Any] = {}
+        check_report: List[Tuple[str, str, str, str, str]] = [('kind', 'operator', 'dtype', 'error', 'attention')]
+
+        for idx, node in enumerate(self.graph.nodes):
+            assert isinstance(node, torch.fx.Node)
+            logger.debug(f"interpreting node {idx}: {node.format_node()}")
+
+            readable_target = ''
+
+            if node.op == "placeholder":
+                arg = next(args_iter)
+                torch_env[node.name] = to_torch(arg)
+                hidet_env[node.name] = to_hidet(arg)
+            elif node.op == "get_attr":
+                target_atoms = node.target.split(".")
+                attr = self.graph_module
+                for i, atom in enumerate(target_atoms):
+                    if not hasattr(attr, atom):
+                        raise RuntimeError(f"Node referenced nonexistent target {target_atoms[:i]} not")
+                    attr = getattr(attr, atom)
+                torch_env[node.name] = attr
+                hidet_env[node.name] = to_hidet(attr)
+            elif node.op == "call_function":
+                torch_func = node.target
+                torch_args = load_arg(node.args, torch_env)
+                torch_kwargs = load_arg(node.kwargs, torch_env)
+                torch_env[node.name] = torch_func(*torch_args, **torch_kwargs)
+
+                hidet_func = Registry.registered_functions[torch_func]
+                hidet_args = load_arg(node.args, hidet_env)
+                hidet_kwargs = load_arg(node.kwargs, hidet_env)
+
+                try:
+                    hidet_env[node.name] = hidet_func(*hidet_args, **hidet_kwargs)
+                except Exception as e:
+                    self._raise_exception(e, hidet_func)
+
+                readable_target = self._get_callable_name(torch_func)
+            elif node.op == "call_method":
+                torch_args = load_arg(node.args, torch_env)
+                torch_kwargs = load_arg(node.kwargs, torch_env)
+                torch_method = getattr(type(torch_args[0]), node.target)
+                torch_env[node.name] = torch_method(*torch_args, **torch_kwargs)
+
+                hidet_args = load_arg(node.args, hidet_env)
+                hidet_kwargs = load_arg(node.kwargs, hidet_env)
+                hidet_method = self._lookup_hidet_method(torch_method)
+
+                try:
+                    hidet_env[node.name] = hidet_method(*hidet_args, **hidet_kwargs)
+                except Exception as e:
+                    self._raise_exception(e, hidet_method)
+
+                readable_target = self._get_callable_name(torch_method)
+            elif node.op == "call_module":
+                torch_module = self.torch_modules[node.target]
+                torch_args = load_arg(node.args, torch_env)
+                torch_kwargs = load_arg(node.kwargs, torch_env)
+                torch_env[node.name] = torch_module(*torch_args, **torch_kwargs)
+
+                hidet_module = self._lookup_hidet_module(node.target)
+                hidet_args = load_arg(node.args, hidet_env)
+                hidet_kwargs = load_arg(node.kwargs, hidet_env)
+
+                try:
+                    hidet_env[node.name] = hidet_module(*hidet_args, **hidet_kwargs)
+                except Exception as e:
+                    self._raise_exception(e, hidet_module)
+
+                readable_target = self._get_callable_name(torch_module)
+            elif node.op == "output":
+                torch_env[node.name] = load_arg(node.args[0], torch_env)
+                hidet_env[node.name] = load_arg(node.args[0], hidet_env)
+            else:
+                assert False
+
+            torch_output = torch_env[node.name]
+            hidet_output = hidet_env[node.name]
+
+            if isinstance(torch_output, (list, tuple)) and isinstance(torch_output[0], torch.Tensor):
+                torch_output = torch_output[0]
+                hidet_output = hidet_output[0]
+
+            if isinstance(torch_output, torch.Tensor) and isinstance(hidet_output, Tensor):
+                error = relative_absolute_error(actual=torch_output, expected=hidet_output.torch())
+                dtype = data_type(hidet_output.dtype)
+                if dtype.is_integer():
+                    pay_attention = error > 1e-8  # int32, ...
+                elif dtype.is_float():
+                    if dtype.nbytes <= 2:
+                        pay_attention = error > 1e-1  # fp16
+                    else:
+                        pay_attention = error > 5e-5  # fp32
+                else:
+                    pay_attention = False
+                check_report.append(
+                    (node.op, readable_target, dtype.name, f'{error:.1e}', '<------' if pay_attention else '')
+                )
+
+        logger.info('finish interpreting graph')
+
+        warnings.reset()
+
+        return tabulate.tabulate(
+            tabular_data=check_report[1:],
+            headers=check_report[0],
+            floatfmt='.3e',
+            showindex=True,
+            disable_numparse=True,
+        )
 
 
-def from_torch(module):
+def from_torch(module, concrete_args=None, check=True):
     """
     Convert a torch.nn.Module or torch.fx.GraphModule to a hidet.nn.Module.
 
     Parameters
     ----------
-    module: Union[torch.nn.Module, torch.fx.GraphModule]
+    module: torch.nn.Module or torch.fx.GraphModule
         The torch module to convert.
+
+    concrete_args: Dict[str, Any] or None
+        The concrete arguments to the module. If provided, will be used to make some arguments concrete during symbolic
+        tracing.
+
+    check: bool
+        Whether to check the converted module. If True, will warn if the output of converted module has
+        large relative/absolute error. Default: True.
 
     Returns
     -------
-    ret: ImportedTorchModule
+    ret: Interpreter
         The converted hidet module, which is a subclass of hidet.nn.Module.
     """
     if not available():
@@ -269,7 +428,7 @@ def from_torch(module):
     if isinstance(module, torch.fx.GraphModule):
         graph_module = module
     elif isinstance(module, torch.nn.Module):
-        graph_module = torch.fx.symbolic_trace(module)
+        graph_module = torch.fx.symbolic_trace(module, concrete_args=concrete_args)
     else:
         raise ValueError(f'Current only support import torch.nn.Module and torch.fx.GraphModule, got {type(module)}.')
-    return ImportedTorchModule(graph_module)
+    return Interpreter(graph_module, check)

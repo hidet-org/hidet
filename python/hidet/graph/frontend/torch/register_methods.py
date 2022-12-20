@@ -7,21 +7,21 @@ from .interpreter import register_method
 from .utils import dtype_from_torch, device_from_torch
 
 
-@register_method(Tensor, 'cuda')
+@register_method(torch.Tensor.cuda)
 def tensor_cuda(self: Tensor):
     if self.is_symbolic():
         raise NotImplementedError('hidet: torch.Tensor.cuda() is not supported for symbolic tensors.')
     return self.cuda()
 
 
-@register_method(Tensor, 'cpu')
+@register_method(torch.Tensor.cpu)
 def tensor_cpu(self: Tensor):
     if self.is_symbolic():
         raise NotImplementedError('hidet: torch.Tensor.cpu() is not supported for symbolic tensors.')
     return self.cpu()
 
 
-@register_method(Tensor, 'to')
+@register_method(torch.Tensor.to)
 def tensor_to(self: Tensor, *args, **kwargs):
     """
     There are three argument format for torch.Tensor.to:
@@ -63,7 +63,7 @@ def tensor_to(self: Tensor, *args, **kwargs):
     )
 
 
-@register_method(Tensor, 'view')
+@register_method(torch.Tensor.view)
 def tensor_view(self: Tensor, *args):
     if len(args) == 1 and isinstance(args[0], torch.dtype):
         if self.is_symbolic():
@@ -94,7 +94,7 @@ def tensor_view(self: Tensor, *args):
         return ops.reshape(self, dst_shape)
 
 
-@register_method(Tensor, 'contiguous')
+@register_method(torch.Tensor.contiguous)
 def tensor_contiguous(self: Tensor):
     # hidet tensor is always contiguous
     return self

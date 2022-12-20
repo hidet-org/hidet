@@ -901,7 +901,7 @@ def randn(shape, dtype='float32', mean=0.0, stddev=1.0, device='cuda', layout=No
     device: str
         The device of the new tensor is created on.
 
-    layout: Optional[DataLayout]
+    layout: DataLayout or None
         The data layout of the tensor.
 
     Returns
@@ -916,12 +916,12 @@ def randn(shape, dtype='float32', mean=0.0, stddev=1.0, device='cuda', layout=No
     [[ 0.10720467 -1.6906018   0.06347568]
      [-0.37061226  0.562728    1.857547  ]]
     """
-    tensor = empty(shape, dtype, device, layout)
-    if dtype == 'float32':
-        cuda.generate_normal(tensor.storage.addr, num_elements=prod(tensor.shape), mean=mean, stddev=stddev)
-    else:
-        float32_tensor = randn_like(tensor, dtype='float32')  # todo: add mean and stddev
-        return float32_tensor.cast(dtype=dtype)
+    if device != 'cuda' or dtype != 'float32':
+        return randn(shape, 'float32', mean, stddev, 'cuda', layout).to(device=device, dtype=dtype)
+
+    assert device == 'cuda' and dtype == 'float32'
+    tensor = empty(shape, dtype='float32', device='cuda', layout=layout)
+    cuda.generate_normal(tensor.storage.addr, num_elements=prod(tensor.shape), mean=mean, stddev=stddev)
     return tensor
 
 
