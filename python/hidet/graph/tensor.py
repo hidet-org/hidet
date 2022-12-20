@@ -3,12 +3,14 @@ from __future__ import annotations
 import ctypes
 from functools import partial
 from typing import List, Optional, Tuple, Sequence, Union
+import warnings
 
 import numpy as np
 
 import hidet.runtime.storage
 from hidet.ffi import cuda, cuda_kernels
-from hidet.ir.type import data_type
+from hidet.ir import dtypes
+from hidet.ir.type import DataType, data_type
 from hidet.ir.layout import DataLayout, RowMajorLayout
 from hidet.runtime.cuda_stream import CudaStream
 from hidet.runtime.storage import Storage
@@ -35,7 +37,7 @@ class Tensor:
     shape: List[int]
         The shape of the tensor.
 
-    dtype: str
+    dtype: DataType
         The data type of the tensor.
 
     device: str
@@ -55,7 +57,7 @@ class Tensor:
     def __init__(
         self,
         shape: Sequence[int],
-        dtype: str,
+        dtype: Union[str, DataType],
         device: str,
         storage: Optional[Storage],
         layout: Optional[DataLayout] = None,
@@ -64,7 +66,7 @@ class Tensor:
         from hidet.graph.operator import Operator
 
         self.shape: List[int] = [int(v) for v in shape]
-        self.dtype: str = str(dtype)
+        self.dtype: DataType = data_type(dtype)
         self.device: str = device
         self.storage: Optional[Storage] = storage
         self.layout: DataLayout = layout if layout else DataLayout.row_major(shape)
@@ -246,7 +248,7 @@ class Tensor:
         ret: str
             The signature of the tensor.
         """
-        return "Tensor(shape={}, dtype='{}', device='{}')".format(self.shape, self.dtype, self.device)
+        return "Tensor(shape={}, dtype='{}', device='{}')".format(self.shape, self.dtype.name, self.device)
 
     def is_symbolic(self) -> bool:
         return self.storage is None
@@ -260,7 +262,7 @@ class Tensor:
         ret: int
             The number of bytes.
         """
-        return prod(self.shape) * data_type(self.dtype).nbytes
+        return prod(self.shape) * self.dtype.nbytes
 
     @property
     def num_elements(self):
@@ -509,7 +511,7 @@ class Tensor:
 
         Parameters
         ----------
-        dtype: str
+        dtype: DataType or str
             The target data type to convert to.
 
         Returns
@@ -713,9 +715,9 @@ class Tensor:
         """
         if self.device != 'cpu':
             return self.cpu().numpy()
-        if self.dtype in ['bfloat16', 'tfloat32']:
-            # because numpy does not support bfloat16 and tfloat32, we convert them into float32
-            return self.cast('float32').numpy()
+        if self.dtype in [dtypes.bfloat16, dtypes.tfloat32]:
+            warnings.warn('numpy does not support {}, converting to float32'.format(self.dtype.name))
+            return self.cast(dtypes.float32).numpy()
 
         storage = self.contiguous().storage  # convert if this tensor is not in row major layout
         np_array = storage.as_array(num_elements=prod(self.shape), dtype=self.dtype, share_mem=share_mem)
@@ -862,13 +864,13 @@ def full(shape, fill_value: Union[float, int], dtype='float32', device='cuda', l
     fill_value: Union[float, int]
         The constant to initialize the new tensor.
 
-    dtype: str
+    dtype: DataType or str
         The data type of element of the tensor.
 
     device: str
         The device of the new tensor is created on.
 
-    layout: Optional[DataLayout]
+    layout: DataLayout or None
         The data layout of the tensor.
 
     Returns
@@ -876,6 +878,7 @@ def full(shape, fill_value: Union[float, int], dtype='float32', device='cuda', l
     ret: Tensor
         The created tensor.
     """
+    dtype
     tensor = empty(shape, dtype, device, layout)
     cuda_kernels.fill_value(tensor.storage.addr, num_elements=tensor.num_elements, value=fill_value, dtype=dtype)
     return tensor
@@ -932,7 +935,7 @@ def randint(low: int, high=None, shape: Sequence[int] = (), dtype: str = 'int32'
     return array(np.random.randint(low=low, high=high, size=shape, dtype=dtype_map[dtype]))
 
 
-def _tensor_like(constructor, data, shape, dtype, device, layout):
+def _tensor_like(constructor, data: Tensor, shape, dtype, device, layout):
     shape = data.shape if shape is None else shape
     dtype = data.dtype if dtype is None else dtype
     device = data.device if device is None else device

@@ -398,9 +398,7 @@ class Let(Expr):
 class Cast(Expr):
     def __init__(self, expr, target_type):
         self.expr = expr
-        if isinstance(target_type, str):
-            target_type = data_type(target_type)
-        self.target_type: TypeNode = target_type
+        self.target_type: TypeNode = data_type(target_type)
 
 
 class Constant(Expr):

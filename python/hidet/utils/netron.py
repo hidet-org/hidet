@@ -164,7 +164,7 @@ def dump(flow_graph, fp):
     nodes = []
     for idx, tensor in enumerate(flow_graph.inputs):
         name = 'input:{}'.format(idx)
-        argument = Argument(name, data_type=tensor.dtype, shape=tensor.shape, has_initializer=False)
+        argument = Argument(name, data_type=tensor.dtype.name, shape=tensor.shape, has_initializer=False)
         tensor2argument[tensor] = argument
         inputs.append(Parameter(name, argument))
 
@@ -182,11 +182,11 @@ def dump(flow_graph, fp):
             constant_cnt += 1
             scalar_value = str(tensor.cpu().numpy()) if len(tensor.shape) == 0 and tensor.storage else None
             tensor2argument[tensor] = Argument(
-                name, data_type=tensor.dtype, shape=tensor.shape, has_initializer=True, scalar_value=scalar_value
+                name, data_type=tensor.dtype.name, shape=tensor.shape, has_initializer=True, scalar_value=scalar_value
             )
         for idx, tensor in enumerate(node.outputs):
             name = '{}:{}'.format(node_name, idx)
-            tensor2argument[tensor] = Argument(name, data_type=tensor.dtype, shape=tensor.shape, has_initializer=False)
+            tensor2argument[tensor] = Argument(name, data_type=tensor.dtype.name, shape=tensor.shape, has_initializer=False)
         nodes.append(
             Node(
                 name=node_name,
@@ -205,7 +205,7 @@ def dump(flow_graph, fp):
                 Parameter(
                     'output:{}'.format(idx),
                     Argument(
-                        'output:{}'.format(idx), data_type=tensor.dtype, shape=tensor.shape, has_initializer=False
+                        'output:{}'.format(idx), data_type=tensor.dtype.name, shape=tensor.shape, has_initializer=False
                     ),
                 )
             )

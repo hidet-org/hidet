@@ -69,7 +69,7 @@ def tensor_view(self: Tensor, *args):
         if self.is_symbolic():
             raise NotImplementedError('hidet: torch.Tensor.view(dtype) is not supported for symbolic tensors for now.')
         assert len(args) == 1
-        src_dtype: DataType = data_type(self.dtype)
+        src_dtype: DataType = self.dtype
         dst_dtype: DataType = dtype_from_torch(args[0])
         if src_dtype == dst_dtype:
             return self

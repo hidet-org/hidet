@@ -105,7 +105,7 @@ class PackedFunc:
                             i + 1, param_type, type(arg)
                         )
                     )
-                if arg.dtype != expect_dtype.name or (
+                if arg.dtype != expect_dtype or (
                     expect_shape is not None and not same_list(arg.shape, expect_shape)
                 ):
                     raise ValueError(

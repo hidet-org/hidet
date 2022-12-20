@@ -1,6 +1,7 @@
 from typing import List, Optional, Callable, Any
 from functools import lru_cache
 
+from hidet.ir import dtypes
 from hidet.graph.ir import Operator, Tensor
 from hidet.graph.transforms import ResolveRule, register_resolve_rule
 from hidet.utils.py import gcd, factorize, prod, cdiv
@@ -92,7 +93,7 @@ class MatmulResolveRule(ResolveRule):
         if parallel_k == 'default':
             nparts = parallel_k_heuristic_nparts(batch_size, m_size, n_size, k_size)
         elif parallel_k == 'search':
-            nparts = parallel_k_search_nparts(a.dtype, mma, batch_size, m_size, n_size, k_size)
+            nparts = parallel_k_search_nparts(a.dtype.name, mma, batch_size, m_size, n_size, k_size)
         elif parallel_k == 'disabled':
             nparts = 1
         elif isinstance(parallel_k, int):
@@ -162,7 +163,7 @@ class MatmulResolveRule(ResolveRule):
         b: Tensor = op.inputs[1]
         c: Tensor = op.outputs[0]
 
-        if not (a.dtype == 'float16' and b.dtype == 'float16' and a.shape[-1] % 8 == b.shape[-1] % 8 == 0):
+        if not (a.dtype == dtypes.float16 and b.dtype == dtypes.float16 and a.shape[-1] % 8 == b.shape[-1] % 8 == 0):
             return None
 
         parallel_k = self.get_config('parallel_k', default='default')  # 'default', 'search', 2, 4, ...

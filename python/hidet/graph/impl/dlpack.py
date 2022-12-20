@@ -3,6 +3,7 @@ from typing import List, Callable, Set, Tuple
 import ctypes
 from ctypes import pythonapi
 import hidet.ir
+from hidet.ir import DataType, dtypes
 from hidet.utils import initialize, prod
 from hidet.runtime.storage import Storage
 from hidet.ir.type import data_type
@@ -41,27 +42,28 @@ class DLDevice(ctypes.Structure):
 
 class DLDataType(ctypes.Structure):
     _fields_ = [('code', ctypes.c_int8), ('bits', ctypes.c_int8), ('lanes', ctypes.c_int16)]
+    _dtype_map = {
+        dtypes.int8: (DLDataTypeCode.kDLInt, 8, 1),
+        dtypes.int16: (DLDataTypeCode.kDLInt, 16, 1),
+        dtypes.int32: (DLDataTypeCode.kDLInt, 32, 1),
+        dtypes.int64: (DLDataTypeCode.kDLInt, 64, 1),
+        dtypes.uint8: (DLDataTypeCode.kDLUInt, 8, 1),
+        dtypes.uint16: (DLDataTypeCode.kDLUInt, 16, 1),
+        dtypes.uint32: (DLDataTypeCode.kDLUInt, 32, 1),
+        dtypes.uint64: (DLDataTypeCode.kDLUInt, 64, 1),
+        dtypes.float16: (DLDataTypeCode.kDLFloat, 16, 1),
+        dtypes.float32: (DLDataTypeCode.kDLFloat, 32, 1),
+        dtypes.float64: (DLDataTypeCode.kDLFloat, 64, 1),
+        dtypes.bfloat16: (DLDataTypeCode.kDLBfloat, 16, 1),
+        dtypes.boolean: (DLDataTypeCode.kDLBool, 8, 1),
+    }
 
     @staticmethod
-    def from_dtype(dtype: str) -> DLDataType:
-        if dtype.startswith('int'):
-            return DLDataType(DLDataTypeCode.kDLInt, int(dtype[3:]), 1)
-        elif dtype.startswith('uint'):
-            return DLDataType(DLDataTypeCode.kDLUInt, int(dtype[4:]), 1)
-        elif dtype.startswith('float'):
-            return DLDataType(DLDataTypeCode.kDLFloat, int(dtype[5:]), 1)
-        elif dtype == 'bfloat16':
-            return DLDataType(DLDataTypeCode.kDLBfloat, 16, 1)
-        elif dtype == 'tfloat32':
-            # treat tfloat32 as float32
-            return DLDataType(DLDataTypeCode.kDLFloat, 32, 1)
-        elif dtype.startswith('bool'):
-            return DLDataType(DLDataTypeCode.kDLBool, 8, 1)
-        else:
-            raise NotImplementedError()
+    def from_dtype(dtype: DataType) -> DLDataType:
+        return DLDataType._dtype_map[dtype]
 
     @staticmethod
-    def to_dtype(dl_dtype: DLDataType) -> str:
+    def to_dtype(dl_dtype: DLDataType) -> DataType:
         dtype_code: int = dl_dtype.code
         dtype_bits: int = dl_dtype.bits
         dtype_lanes: int = dl_dtype.lanes
@@ -91,7 +93,7 @@ class DLDataType(ctypes.Structure):
             dtype = dtype_name
         if not hidet.ir.dtypes.support(dtype):
             raise ValueError('from_dlpack: dtype {} is not supported for hidet'.format(dtype))
-        return dtype
+        return data_type(dtype)
 
 
 class DLTensor(ctypes.Structure):
@@ -156,7 +158,7 @@ def from_dlpack_capsule(dltensor) -> Tensor:
         shape: List[int] = read_longs(tensor.shape, tensor.ndim)
 
         # dtype
-        dtype: str = DLDataType.to_dtype(tensor.dtype)
+        dtype: DataType = DLDataType.to_dtype(tensor.dtype)
 
         # device
         device_type = tensor.device.device_type
@@ -188,7 +190,7 @@ def from_dlpack_capsule(dltensor) -> Tensor:
         storage = DLPackStorage(
             device=device,
             addr=tensor.data + tensor.byte_offset,
-            num_bytes=data_type(dtype).nbytes * prod(shape),
+            num_bytes=dtype.nbytes * prod(shape),
             managed_tensor_addr=ptr,
             deleter=managed_tensor.deleter,
         )

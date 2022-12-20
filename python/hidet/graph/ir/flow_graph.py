@@ -105,7 +105,7 @@ class FlowGraph:
         namer = Namer()
 
         def get_tensor_sig(x: Tensor) -> Doc:
-            return Text(x.dtype) + '[' + doc_join([str(v) for v in x.shape], ', ') + ']'
+            return Text(x.dtype.name) + '[' + doc_join([str(v) for v in x.shape], ', ') + ']'
 
         def get_attr_repr(value: Union[float, int, bool, str, list, tuple]) -> Doc:
             if isinstance(value, (float, int, bool)):
@@ -267,11 +267,12 @@ class FlowGraph:
     def dummy_inputs(self) -> List[Tensor]:
         inputs = []
         for symbolic_input in self.inputs:
-            dtype = data_type(symbolic_input.dtype)
-            if dtype.is_integer():
+            if symbolic_input.dtype.is_integer():
                 inputs.append(zeros_like(symbolic_input))
-            elif dtype.is_float():
+            elif symbolic_input.dtype.is_float():
                 inputs.append(randn_like(symbolic_input))
+            else:
+                assert False
         return inputs
 
     def dummy_outputs(self) -> List[Tensor]:

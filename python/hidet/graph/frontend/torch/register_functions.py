@@ -143,7 +143,7 @@ def truediv(x: Union[Tensor, int, float], y: Union[Tensor, int, float]):
     import hidet
 
     def is_integer(v: Union[Tensor, int, float]) -> bool:
-        return isinstance(v, int) or (isinstance(v, Tensor) and data_type(v.dtype).is_integer())
+        return isinstance(v, int) or (isinstance(v, Tensor) and v.dtype.is_integer())
 
     if is_integer(x) and is_integer(y):
         if isinstance(y, (int, float)):

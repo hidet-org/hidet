@@ -85,7 +85,7 @@ class GraphForwardDebugInstrument(GraphForwardInstrument):
                 op_idx,
                 op_name,
                 'x{}'.format(idx),
-                '{}{}'.format(data_type(tensor.dtype).short_name, list(tensor.shape)),
+                '{}{}'.format(tensor.dtype.short_name, list(tensor.shape)),
                 stats['nan'],
                 stats['inf'],
                 stats['zero'],
@@ -112,7 +112,7 @@ class GraphForwardDebugInstrument(GraphForwardInstrument):
                 op_idx,
                 op_name,
                 'y{}'.format(idx),
-                '{}{}'.format(data_type(tensor.dtype).short_name, list(tensor.shape)),
+                '{}{}'.format(tensor.dtype.short_name, list(tensor.shape)),
                 stats['nan'],
                 stats['inf'],
                 stats['zero'],
@@ -216,10 +216,10 @@ class GraphForwardBenchmarkInstrument(GraphForwardInstrument):
             op_idx = '{}'.format(idx)
             op_name = '{}'.format(op.name)
             inputs = ', '.join(
-                [(data_type(tensor.dtype).short_name + str(tensor.shape)).replace(' ', '') for tensor in op.inputs]
+                [(tensor.dtype.short_name + str(tensor.shape)).replace(' ', '') for tensor in op.inputs]
             )
             outputs = ', '.join(
-                [(data_type(tensor.dtype).short_name + str(tensor.shape)).replace(' ', '') for tensor in op.outputs]
+                [(tensor.dtype.short_name + str(tensor.shape)).replace(' ', '') for tensor in op.outputs]
             )
             lines.append(
                 self._template.format(

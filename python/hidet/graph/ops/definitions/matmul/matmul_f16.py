@@ -1,4 +1,5 @@
 from typing import List, Tuple
+from hidet.ir import dtypes
 from hidet.ir.dtypes import float16
 from hidet.ir.expr import if_then_else
 from hidet.ir.func import IRModule, Function
@@ -309,6 +310,6 @@ def matmul_f16(a: Tensor, b: Tensor, parallel_k_parts=1) -> Tensor:
         raise ValueError('a and b must have at least 2 dimensions, got shape {} and {}'.format(a.shape, b.shape))
     if a.shape[-1] % 8 != 0 or b.shape[-1] % 8 != 0:
         raise ValueError('Expect the last dimension of the input tensors to be a multiple of 8')
-    if a.dtype != 'float16' or b.dtype != 'float16':
+    if a.dtype != dtypes.float16 or b.dtype != dtypes.float16:
         raise ValueError('BatchMatmulF16Op only support float16, got {} and {}'.format(a.dtype, b.dtype))
     return MatmulF16Op(a, b, parallel_k_parts).get_output(0)

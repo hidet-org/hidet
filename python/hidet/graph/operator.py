@@ -1,5 +1,6 @@
 from typing import List, Optional, Dict, Any, Union
 
+from hidet.ir.dtypes import float16, bfloat16, float32
 from hidet.ir.task import Task
 from hidet.runtime.module import CompiledFunction
 from hidet.graph.tensor import empty, empty_like, Tensor
@@ -41,7 +42,7 @@ class Operator:
         self.task_func: Optional[CompiledFunction] = None
 
     def __str__(self):
-        arguments = ['{}: {}{}'.format(i, t.dtype, t.shape) for i, t in enumerate(self.inputs)]
+        arguments = ['{}: {}{}'.format(i, t.dtype.name, t.shape) for i, t in enumerate(self.inputs)]
         attributes = ['{}={}'.format(name, str(value)) for name, value in self.attrs.items()]
         return '{}({})'.format(self.name, ', '.join(arguments + attributes))
 
@@ -127,7 +128,7 @@ class Operator:
             if x.storage is not None:
                 dummy_inputs.append(x)
             else:
-                if x.dtype in ['float32', 'float16', 'bfloat16']:
+                if x.dtype in [float16, bfloat16, float32]:
                     dummy_inputs.append(empty_like(x))
                 else:
                     raise ValueError('Can not generate dummy input for dtype {}'.format(x.dtype))
