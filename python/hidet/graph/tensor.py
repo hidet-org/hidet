@@ -917,10 +917,10 @@ def randn(shape, dtype='float32', mean=0.0, stddev=1.0, device='cuda', layout=No
      [-0.37061226  0.562728    1.857547  ]]
     """
     if device != 'cuda' or dtype != 'float32':
-        return randn(shape, 'float32', mean, stddev, 'cuda', layout).to(device=dtype, dtype=dtype)
+        return randn(shape, 'float32', mean, stddev, 'cuda', layout).to(device=device, dtype=dtype)
 
     assert device == 'cuda' and dtype == 'float32'
-    tensor = empty(shape, 'float32', 'cuda', layout)
+    tensor = empty(shape, dtype='float32', device='cuda', layout=layout)
     cuda.generate_normal(tensor.storage.addr, num_elements=prod(tensor.shape), mean=mean, stddev=stddev)
     return tensor
 
