@@ -1,9 +1,10 @@
 # pylint: disable=redefined-builtin, unnecessary-lambda
-from typing import List, Callable, Any, Union, Optional, Dict
+from typing import List, Callable, Any, Union, Optional, Dict, Sequence
 
 from hidet.ir import primitives
 from hidet.ir import expr, dtypes
-from hidet.ir.expr import const_like, if_then_else
+from hidet.ir.type import DataType, data_type
+from hidet.ir.expr import Constant, const_like, if_then_else
 from hidet.utils import prod
 from hidet.graph.tensor import convert
 from .utils import Task, Operator, Tensor, TensorNode, InverseMap, compute, input_like
@@ -68,6 +69,23 @@ class VariadicElementwiseTask(Task):
                 for v, v_shape in zip(args, shapes)
                 if prod(v_shape) == prod(out_shape)
             },
+        )
+
+
+class ConstantTask(Task):
+    def __init__(self, name: str, shape: Sequence[int], value: Union[int, float, bool, Constant], dtype: DataType):
+        value: Constant = dtype(value)
+        const_output = compute(
+            name='c',
+            shape=list(shape),
+            fcompute=lambda *indices: value,
+        )
+        super().__init__(
+            name=name,
+            inputs=[],
+            outputs=[const_output],
+            inverse_map={},
+            attributes={'shape': shape, 'value': value.value, 'dtype': dtype}
         )
 
 
@@ -272,6 +290,30 @@ class MinOp(Operator):
         )
 
 
+class ConstantOp(Operator):
+    def __init__(self, shape: Sequence[int], value: Union[float, int, bool, Constant], dtype: Optional[DataType] = None, device: str='cpu'):
+        shape = [int(v) for v in shape]
+        if dtype is None:
+            if isinstance(value, int):
+                dtype = dtypes.int64
+            elif isinstance(value, float):
+                dtype = dtypes.float32
+            elif isinstance(value, bool):
+                dtype = dtypes.boolean
+            elif isinstance(value, Constant):
+                assert isinstance(value.type, DataType)
+                dtype = value.type
+            else:
+                raise ValueError(f'Unknown type for value {value}')
+
+        super().__init__(
+            inputs=[],
+            task=ConstantTask(name='const', shape=shape, value=value, dtype=dtype),
+            name='constant',
+            attributes={'shape': shape, 'value': value, 'dtype': dtype, 'device': device},
+        )
+
+
 class AbsOp(UnaryElementwiseOp):
     def __init__(self, x: Tensor):
         super().__init__(x, op=lambda a: if_then_else(a >= const_like(0, a), a, -a), name='abs')
@@ -316,18 +358,40 @@ PythonScalar = Union[float, int]
 
 
 def binary_arithmetic(
-    x: Union[Tensor, float, int], y: Union[Tensor, float, int], tensor_scalar_op, scalar_tensor_op, tensor_tensor_op
+    x: Union[Tensor, float, int, Constant], y: Union[Tensor, float, int, Constant], tensor_scalar_op, scalar_tensor_op,
+    tensor_tensor_op
 ) -> Union[Tensor, float, int]:
-    if not (isinstance(x, (Tensor, float, int)) and isinstance(y, (Tensor, float, int))):
+    from hidet import ops
+
+    if not (isinstance(x, (Tensor, float, int, Constant)) and isinstance(y, (Tensor, float, int, Constant))):
         raise ValueError(
-            'Only support add/sub/mul/div between hidet.Tensor, float, and int. got {} and {}'.format(type(x), type(y))
+            'Only support add/sub/mul/div between hidet.Tensor, float, int, and Constant. got {} and {}'.format(
+                type(x), type(y)
+            )
         )
-    if isinstance(x, (float, int)):
-        assert isinstance(y, Tensor)
-        x = convert(x, y.device)
-    if isinstance(y, (float, int)):
-        assert isinstance(x, Tensor)
-        y = convert(y, x.device)
+    if isinstance(x, (float, int, Constant)) and isinstance(y, (float, int, Constant)):
+        raise ValueError('One of x and y must be a Tensor')
+
+    if isinstance(x, int):
+        x = convert(x, device=y.device, dtype=y.dtype)
+    elif isinstance(x, float):
+        if y.dtype.is_float():
+            x = convert(x, device=y.device, dtype=y.dtype)
+        else:
+            x = convert(x, device=y.device, dtype=dtypes.float32)
+    elif isinstance(x, Constant):
+        x = convert(x, device=y.device)
+
+    if isinstance(y, int):
+        y = convert(y, device=x.device, dtype=x.dtype)
+    elif isinstance(y, float):
+        if x.dtype.is_float():
+            y = convert(y, device=x.device, dtype=x.dtype)
+        else:
+            y = convert(y, device=x.device, dtype=dtypes.float32)
+    elif isinstance(y, Constant):
+        y = convert(y, device=x.device)
+
     x_scalar = len(x.shape) == 0 and x.storage is not None
     y_scalar = len(y.shape) == 0 and y.storage is not None
     if x_scalar and y_scalar:
@@ -478,3 +542,12 @@ def bitwise_xor(x: Tensor, y: Tensor) -> Tensor:
 
 def ceil(x: Tensor) -> Tensor:
     return CeilOp(x).get_output(0)
+
+
+def constant(
+    shape: Sequence[int],
+    value: Union[float, int, bool, Constant],
+    dtype: Optional[Union[DataType, str]] = None,
+    device: str = 'cpu'
+) -> Tensor:
+    return ConstantOp(shape, value, data_type(dtype), device).get_output(0)

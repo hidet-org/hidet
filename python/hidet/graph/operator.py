@@ -34,7 +34,7 @@ class Operator:
         self.outputs: Optional[List[Tensor]] = outputs
         self.name: str = get_operator_name(self, name)
 
-        self.device: str = inputs[0].device
+        self.device: str = inputs[0].device if len(inputs) > 0 else attributes['device']
 
         assert all(isinstance(v, Tensor) for v in inputs)
 

@@ -2,6 +2,7 @@ from typing import Optional
 import os
 import numpy as np
 from hidet.ir.dialects.pattern import AnyExpr
+from hidet.ir import dtypes
 from hidet.ir.type import DataType, PointerType, TensorPointerType, ReferenceType, TensorType, TypeNode, FuncType
 from hidet.ir.type import VoidType
 from hidet.ir.expr import Var, Expr, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, Neg, NotEqual, Equal, And, Or
@@ -357,23 +358,23 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             return Text(name)
 
     @staticmethod
-    def scalar_literal(value, dtype: str):
-        if dtype == 'bool':
-            return Text('true') if value else Text('false')
-        elif dtype == 'float32':
-            return Text(f'float({value})')
+    def scalar_literal(value, dtype: DataType):
+        if dtype == dtypes.boolean:
+            ret = 'true' if value else 'false'
+        elif dtype == dtypes.float32:
+            ret = '{}f'.format(float(value))
         elif dtype == 'int32':
             assert isinstance(value, int)
-            return Text(f'{value}')
+            ret = '{}'.format(int(value))
         elif dtype == 'float16':
-            return Text('__half({})'.format(value))
+            ret = 'half({})'.format(float(value))
         elif dtype == 'int64':
             assert isinstance(value, int)
-            return Text('{}ll'.format(value))
+            ret = '{}ll'.format(int(value))
         elif dtype == 'bfloat16':
-            return Text('__float2bfloat16({})'.format(value))
+            ret = '__float2bfloat16({})'.format(float(value))
         elif dtype == 'tfloat32':
-            return Text('__float_to_tf32({})'.format(value))
+            ret = '__float2tfloat32({})'.format(float(value))
         elif dtype == 'uint32':
             assert isinstance(value, int) and value >= 0
             return Text('{}u'.format(value))
@@ -382,10 +383,10 @@ class Codegen(StmtExprFunctor, TypeFunctor):
 
     def visit_Constant(self, e: Constant):
         if e.is_scalar():
-            return self.scalar_literal(e.value, e.type.name)
+            return self.scalar_literal(e.value, e.type)
         else:
             assert isinstance(e.type, TensorType)
-            dtype = e.type.dtype.name
+            dtype = e.type.dtype
             items = [self.scalar_literal(v, dtype) for v in np.array(e.value).flatten()]
             return '{' + doc_join(items, ', ') + '}'
 

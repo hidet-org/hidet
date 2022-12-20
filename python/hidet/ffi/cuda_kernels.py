@@ -9,15 +9,15 @@ class CudaKernels:
     _fill_value_float32 = get_func('hidet_cuda_fill_value_float32', [c_uint64, c_uint64, c_float], None)
 
     @classmethod
-    def fill_value(cls, addr: int, num_elements: int, value, dtype: str) -> None:
-        if dtype == 'float32':
+    def fill_value(cls, addr: int, num_elements: int, value, dtype_name: str) -> None:
+        if dtype_name == 'float32':
             return cls._fill_value_float32(addr, num_elements, value)
-        elif dtype == 'int64':
+        elif dtype_name == 'int64':
             return cls._fill_value_int64(addr, num_elements, value)
-        elif dtype == 'int32':
+        elif dtype_name == 'int32':
             return cls._fill_value_int32(addr, num_elements, value)
         else:
-            raise NotImplementedError('Currently do not support fill value with dtype "{}"'.format(dtype))
+            raise NotImplementedError('Currently do not support fill value with dtype "{}"'.format(dtype_name))
 
 
 cuda_kernels = CudaKernels()

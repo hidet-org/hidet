@@ -43,8 +43,8 @@ class DataType(TypeNode):
 
         Parameters
         ----------
-        value: Any
-            The value of the constant.
+        value: Union[int, float, bool, list, tuple, Constant, Expr]
+            The value of the constant or the value to be casted.
 
         Returns
         -------
@@ -55,8 +55,12 @@ class DataType(TypeNode):
 
         if isinstance(value, expr.Expr):
             return expr.cast(value, self)
-        else:
+        elif isinstance(value, expr.Constant):
+            return self.constant(value.value)
+        elif isinstance(value, (int, float, bool, list, tuple)):
             return self.constant(value)
+        else:
+            raise ValueError('Can not convert {} to {}'.format(value, self))
 
     def __getitem__(self, item):
         if not isinstance(item, (tuple, list)):
