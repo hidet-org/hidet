@@ -1,6 +1,5 @@
 from __future__ import annotations
 from typing import Optional, Union, Sequence
-import logging
 import operator
 import torch
 from hidet.graph.tensor import Tensor
@@ -30,8 +29,9 @@ def adaptive_avg_pool2d(x: Tensor, output_size):
 
 @register_function(torch.nn.functional.relu)
 def relu(x: Tensor, inplace: bool):
-    if inplace:
-        warnings.warn_once('hidet: relu with inplace=True is not supported. Treat as inplace=False.')
+    # if inplace:
+    #     warnings.warn_once('hidet: relu with inplace=True is not supported. Treat as inplace=False.')
+    _ = inplace
     return ops.relu(x)
 
 

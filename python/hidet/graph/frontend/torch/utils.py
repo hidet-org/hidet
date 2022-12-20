@@ -161,3 +161,28 @@ def serialize_output(obj: Union[Dict, List, Tuple, Tensor, Any]) -> Tuple[Any, L
 
 def deserialize_output(obj: Union[Dict, List, Tuple, Any], tensors) -> Any:
     return Deserializer(obj, tensors).deserialize(obj)
+
+
+def relative_absolute_error(actual, expected) -> float:
+    """
+    Return :math:`max(|actual - expected| / (|expected| + 1))`, which is the minimum eps satisfy
+
+    :math:`|actual - expected| < eps * |expected| + eps`
+
+    Parameters
+    ----------
+    actual : torch.Tensor
+        The actual value
+    expected : torch.Tensor
+        The expected value
+
+    Returns
+    -------
+    ret: float
+        The relative error
+    """
+    import torch
+
+    actual: torch.Tensor = actual.detach()
+    expected: torch.Tensor = expected.detach()
+    return float(torch.max(torch.abs(actual - expected) / (torch.abs(expected) + 1.0)))
