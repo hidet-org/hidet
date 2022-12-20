@@ -28,6 +28,9 @@ class ExpectedRegistry:
         c for c in torch.nn.__dict__.values() if isinstance(c, type) and issubclass(c, torch.nn.Module)
     )
     torch_root_functions: Set[Callable] = set(c for c in torch.__dict__.values() if callable(c))
+    torch_tensor_methods: Set[Callable] = set(
+        getattr(torch.Tensor, name) for name in dir(torch.Tensor) if callable(getattr(torch.Tensor, name))
+    )
 
 
 class UniqueWarnings:
@@ -147,6 +150,8 @@ class Interpreter:
             return f'operator.{target.__name__}'
         elif target in ExpectedRegistry.torch_root_functions:
             return f'torch.{target.__name__}'
+        elif target in ExpectedRegistry.torch_tensor_methods:
+            return f'torch.Tensor.{target.__name__}'
         else:
             return str(target)
 
@@ -284,9 +289,7 @@ class Interpreter:
         args_iter = iter(args)
         torch_env: Dict[str, Any] = {}
         hidet_env: Dict[str, Any] = {}
-        check_report: List[Tuple[str, str, str, str, str, str]] = [
-            ('kind', 'name', 'operator', 'dtype', 'error', 'attention')
-        ]
+        check_report: List[Tuple[str, str, str, str, str]] = [('kind', 'operator', 'dtype', 'error', 'attention')]
 
         for idx, node in enumerate(self.graph.nodes):
             assert isinstance(node, torch.fx.Node)
@@ -377,18 +380,11 @@ class Interpreter:
                     if dtype.nbytes <= 2:
                         pay_attention = error > 1e-1  # fp16
                     else:
-                        pay_attention = error > 1e-5  # fp32
+                        pay_attention = error > 5e-5  # fp32
                 else:
                     pay_attention = False
                 check_report.append(
-                    (
-                        node.op,
-                        node.name,
-                        readable_target,
-                        dtype.name,
-                        f'{error:.1e}',
-                        '<------' if pay_attention else '',
-                    )
+                    (node.op, readable_target, dtype.name, f'{error:.1e}', '<------' if pay_attention else '')
                 )
 
         logger.info('finish interpreting graph')
