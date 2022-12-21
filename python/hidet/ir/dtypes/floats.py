@@ -1,5 +1,6 @@
 from typing import Any
 import warnings
+import numpy as np
 from hidet.ir.type import DataType
 
 
@@ -63,11 +64,11 @@ class FloatType(DataType):
         return self.constant(self._max_value)
 
 
-float16 = FloatType('float16', 'f16', 2, -6.55e4, 6.55e4)
-float32 = FloatType('float32', 'f32', 4, -3.40e38, 3.40e38)
-float64 = FloatType('float64', 'f64', 8, -1.79e308, 1.79e308)
-bfloat16 = FloatType('bfloat16', 'bf16', 2, -3.38e38, 3.38e38)
-tfloat32 = FloatType('tfloat32', 'tf32', 4, -3.40e38, 3.40e38)
+float16 = FloatType('float16', 'f16', 2, np.finfo(np.float16).min, np.finfo(np.float16).max)
+float32 = FloatType('float32', 'f32', 4, np.finfo(np.float32).min, np.finfo(np.float32).max)
+float64 = FloatType('float64', 'f64', 8, np.finfo(np.float64).min, np.finfo(np.float64).max)
+bfloat16 = FloatType('bfloat16', 'bf16', 2, -3.4e38, 3.4e38)
+tfloat32 = FloatType('tfloat32', 'tf32', 4, -3.4e38, 3.4e38)
 
 f16 = float16
 f32 = float32
