@@ -510,16 +510,16 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         for label, expr in zip(stmt.input_labels, stmt.input_exprs):
             input_docs.append(Text(f'"{label}"') + '(' + self(expr) + ')')
         return (
-                NewLine()
-                + 'asm '
-                + volatile_doc
-                + '('
-                + template_doc
-                + ' : '
-                + doc_join(output_docs, ', ')
-                + ' : '
-                + doc_join(input_docs, ', ')
-                + ');'
+            NewLine()
+            + 'asm '
+            + volatile_doc
+            + '('
+            + template_doc
+            + ' : '
+            + doc_join(output_docs, ', ')
+            + ' : '
+            + doc_join(input_docs, ', ')
+            + ');'
         )
 
     def visit_BlackBoxStmt(self, stmt: BlackBoxStmt):

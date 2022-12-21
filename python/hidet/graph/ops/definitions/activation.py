@@ -14,10 +14,7 @@ class ReluOp(UnaryElementwiseOp):
 class LeakyReluOp(UnaryElementwiseOp):
     def __init__(self, x: Tensor, alpha):
         super().__init__(
-            x,
-            op=lambda v: if_then_else(v >= 0, v, v * x.dtype(alpha)),
-            name='leaky_relu',
-            attributes={'alpha': alpha},
+            x, op=lambda v: if_then_else(v >= 0, v, v * x.dtype(alpha)), name='leaky_relu', attributes={'alpha': alpha}
         )
 
 
@@ -42,9 +39,7 @@ class GeluOp(UnaryElementwiseOp):
     def __init__(self, x: Tensor):
         dtype = x.dtype
         super().__init__(
-            x=x,
-            op=lambda v: dtype(0.5) * v * (dtype.one + prim.erf(v * dtype(1 / math.sqrt(2)))),
-            name='gelu',
+            x=x, op=lambda v: dtype(0.5) * v * (dtype.one + prim.erf(v * dtype(1 / math.sqrt(2)))), name='gelu'
         )
 
 

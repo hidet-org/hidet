@@ -72,20 +72,18 @@ class VariadicElementwiseTask(Task):
 
 
 class ConstantTask(Task):
-    def __init__(self, name: str, shape: Sequence[int], value: Union[int, float, bool, Constant], dtype: Union[DataType, str]):
+    def __init__(
+        self, name: str, shape: Sequence[int], value: Union[int, float, bool, Constant], dtype: Union[DataType, str]
+    ):
         dtype: DataType = data_type(dtype)
         value: Constant = dtype(value)
-        const_output = compute(
-            name='c',
-            shape=list(shape),
-            fcompute=lambda *indices: value,
-        )
+        const_output = compute(name='c', shape=list(shape), fcompute=lambda *indices: value)
         super().__init__(
             name=name,
             inputs=[],
             outputs=[const_output],
             inverse_map={},
-            attributes={'shape': shape, 'value': value.value, 'dtype': dtype.name}
+            attributes={'shape': shape, 'value': value.value, 'dtype': dtype.name},
         )
 
 
@@ -304,7 +302,13 @@ class MinOp(Operator):
 
 
 class ConstantOp(Operator):
-    def __init__(self, shape: Sequence[int], value: Union[float, int, bool, Constant], dtype: Optional[DataType] = None, device: str='cpu'):
+    def __init__(
+        self,
+        shape: Sequence[int],
+        value: Union[float, int, bool, Constant],
+        dtype: Optional[DataType] = None,
+        device: str = 'cpu',
+    ):
         shape = [int(v) for v in shape]
         if dtype is None:
             if isinstance(value, int):
@@ -368,11 +372,11 @@ class CeilOp(UnaryElementwiseOp):
 
 
 def binary_arithmetic(
-        x: Union[Tensor, Constant, float, int],
-        y: Union[Tensor, Constant, float, int],
-        tensor_scalar_op: Callable[[Tensor, Constant], Tensor],
-        scalar_tensor_op: Callable[[Constant, Tensor], Tensor],
-        tensor_tensor_op: Callable[[Tensor, Tensor], Tensor],
+    x: Union[Tensor, Constant, float, int],
+    y: Union[Tensor, Constant, float, int],
+    tensor_scalar_op: Callable[[Tensor, Constant], Tensor],
+    scalar_tensor_op: Callable[[Constant, Tensor], Tensor],
+    tensor_tensor_op: Callable[[Tensor, Tensor], Tensor],
 ) -> Union[Tensor, float, int]:
     if not (isinstance(x, (Tensor, float, int, Constant)) and isinstance(y, (Tensor, float, int, Constant))):
         raise ValueError(
@@ -554,6 +558,6 @@ def constant(
     shape: Sequence[int],
     value: Union[float, int, bool, Constant],
     dtype: Optional[Union[DataType, str]] = None,
-    device: str = 'cpu'
+    device: str = 'cpu',
 ) -> Tensor:
     return ConstantOp(shape, value, data_type(dtype), device).get_output(0)

@@ -21,10 +21,7 @@ from hidet.utils import prod
 def convert(v: Union[int, float, Constant], device: str, dtype: Optional[DataType] = None):
     if isinstance(v, (int, float)):
         if dtype is None:
-            dtype = {
-                int: dtypes.int64,
-                float: dtypes.float32
-            }
+            dtype = {int: dtypes.int64, float: dtypes.float32}
         return full(shape=[], fill_value=v, dtype=dtype, device=device)
     elif isinstance(v, Constant):
         if dtype is None:
@@ -826,7 +823,7 @@ def zeros(shape: Sequence[int], dtype='float32', device='cuda', layout=None) -> 
     return tensor
 
 
-def ones(shape, dtype='float32', device='cuda') -> Tensor:
+def ones(shape, dtype='float32', device='cuda', layout=None) -> Tensor:
     """Create a tensor initialized with one.
 
     Parameters
@@ -840,14 +837,16 @@ def ones(shape, dtype='float32', device='cuda') -> Tensor:
     device: str
         The device of the new tensor is created on.
 
+    layout: DataLayout or None
+        The data layout of the tensor.
+
     Returns
     -------
     ret: Tensor
         The created tensor.
     """
-    from hidet import ops
     dtype = data_type(dtype)
-    return ops.constant(shape=shape, value=dtype.one, dtype=dtype, device=device)
+    return full(shape, dtype.one, dtype, device, layout)
 
 
 def full(shape, fill_value: Union[float, int], dtype='float32', device='cuda', layout=None) -> Tensor:
@@ -876,12 +875,10 @@ def full(shape, fill_value: Union[float, int], dtype='float32', device='cuda', l
         The created tensor.
     """
     from hidet import ops
-    assert layout is None
+
+    assert layout is None, 'full is not implemented for non-row major layout'
     dtype = data_type(dtype)
     return ops.constant(shape=shape, value=fill_value, dtype=dtype, device=device)
-    # tensor = empty(shape, dtype, device, layout)
-    # cuda_kernels.fill_value(tensor.storage.addr, num_elements=tensor.num_elements, value=fill_value, dtype_name=dtype.name)
-    # return tensor
 
 
 def randn(shape, dtype='float32', mean=0.0, stddev=1.0, device='cuda', layout=None) -> Tensor:
