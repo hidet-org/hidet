@@ -5,6 +5,7 @@ if available():
     from . import register_functions
     from . import register_modules
     from . import register_methods
+    from . import utils
 
 if dynamo_available():
     from . import dynamo_backends
