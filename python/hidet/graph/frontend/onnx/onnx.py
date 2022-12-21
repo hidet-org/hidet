@@ -20,7 +20,6 @@ from hidet.graph import ops
 from hidet.graph.tensor import Tensor, from_numpy, randn
 from . import utils
 
-
 log = logging.getLogger(__name__)
 
 
@@ -126,6 +125,12 @@ class OnnxOperator:
         return NotImplemented
 
     def run_v16(self, inputs: List[Tensor]) -> List[Tensor]:
+        return NotImplemented
+
+    def run_v17(self, inputs: List[Tensor]) -> List[Tensor]:
+        return NotImplemented
+
+    def run_v18(self, inputs: List[Tensor]) -> List[Tensor]:
         return NotImplemented
 
     @staticmethod
@@ -973,6 +978,33 @@ class OnnxBitwiseXor(OnnxOperator):
 class OnnxCeil(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         return [ops.ceil(inputs[0])]
+
+
+@register_onnx_operator
+class OnnxReduceL2(OnnxOperator):
+    def run_v1(self, inputs: List[Tensor]) -> List[Tensor]:
+        axes: Optional[List[int]] = self.attrs.get('axes', None)
+        keepdims: int = self.attrs.get('keepdims', 1)
+        assert len(inputs) == 1
+        data: Tensor = inputs[0]
+        rank = len(data.shape)
+        if axes is None:
+            axes = list(range(rank))
+        axes: List[int] = [ops.utils.normalize_dim(rank, axis) for axis in axes]
+        return [ops.sqrt(ops.reduce_sum(ops.square(data), axes, keep_dim=bool(keepdims)))]
+
+    def run_v18(self, inputs: List[Tensor]) -> List[Tensor]:
+        keepdims: int = self.attrs.get('keepdims', 1)
+        noop_with_empty_axes: int = self.attrs.get('noop_with_empty_axes', 0)
+        data, axes_tensor = self.optional_inputs(inputs, requires=[True, False])
+        if axes_tensor is None:
+            if noop_with_empty_axes:
+                return [data]
+            else:
+                axes: List[int] = list(range(len(data.shape)))
+        else:
+            axes: List[int] = self.tensor2list(axes_tensor)
+        return [ops.sqrt(ops.reduce_sum(ops.square(data), axes, keep_dim=bool(keepdims)))]
 
 
 def dispatch(node, op_sets: List[int]) -> OnnxOperator:
