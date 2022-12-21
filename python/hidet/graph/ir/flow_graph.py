@@ -116,7 +116,7 @@ class FlowGraph:
             elif isinstance(value, tuple):
                 return '(' + doc_join([get_attr_repr(v) for v in value], ', ') + ')'
             else:
-                raise ValueError(value)
+                return Text(str(value))
 
         param_docs = []
         for x in self.inputs:
