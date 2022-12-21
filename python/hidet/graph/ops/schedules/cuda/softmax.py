@@ -2,7 +2,7 @@ from typing import List
 
 from hidet.ir import IRModule
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
-from hidet.ir.expr import scalar_var, if_then_else, tensor_var, convert
+from hidet.ir.expr import scalar_var, if_then_else, tensor_var
 from hidet.ir.mapping import TaskMapping
 from hidet.ir.primitives import block_idx, thread_idx
 from hidet.ir import primitives as prim

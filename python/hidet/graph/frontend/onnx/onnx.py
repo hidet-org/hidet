@@ -653,7 +653,7 @@ class OnnxAveragePool(OnnxOperator):
 @register_onnx_operator
 class OnnxClip(OnnxOperator):
     def run_v1(self, inputs: List[Tensor]) -> List[Tensor]:
-        x, = inputs
+        (x,) = inputs
         min_value = self.attrs.get('min', None)
         max_value = self.attrs.get('max', None)
         x = ops.clip(x, min_value, max_value)
