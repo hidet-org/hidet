@@ -1,7 +1,7 @@
 from typing import List
 import os
-import click
 import re
+import click
 import hidet
 from hidet.ffi.cuda_api import cuda
 from hidet.testing import benchmark_func
@@ -14,7 +14,7 @@ class TensorArgType(click.ParamType):
 
     name = 'tensor'
 
-    def convert(self, value, param, ctx):
+    def convert(self, value, param, ctx):  # pylint: disable=inconsistent-return-statements
         if isinstance(value, str):
             match = self.p.match(value)
             if match is None:
@@ -24,11 +24,12 @@ class TensorArgType(click.ParamType):
             shape_str = match.group(2)
             if dtype not in ['float32', 'float16', 'int64', 'int32', 'int8']:
                 self.fail('invalid dtype: {}'.format(dtype))
-            shape = [int(s) for s in shape_str.split(',')]
-            if hidet.ir.data_type(dtype).is_float():
-                return hidet.randn(shape, dtype=dtype)
             else:
-                return hidet.zeros(shape, dtype=dtype)
+                shape = [int(s) for s in shape_str.split(',')]
+                if hidet.ir.data_type(dtype).is_float():
+                    return hidet.randn(shape, dtype=dtype)
+                else:
+                    return hidet.zeros(shape, dtype=dtype)
         else:
             self.fail('invalid tensor format: {}'.format(value))
 
@@ -37,8 +38,16 @@ TensorArg = TensorArgType()
 
 
 @click.command('exec')
-@click.option('--opt', is_flag=True, default=False, help='Conduct graph-level optimizations (e.g., fusion and sub-graph rewrite).')
-@click.option('--space', default='0', show_default=True, type=click.Choice(['0', '1', '2']), help='The search space of the tunable operator')
+@click.option(
+    '--opt', is_flag=True, default=False, help='Conduct graph-level optimizations (e.g., fusion and sub-graph rewrite).'
+)
+@click.option(
+    '--space',
+    default='0',
+    show_default=True,
+    type=click.Choice(['0', '1', '2']),
+    help='The search space of the tunable operator',
+)
 @click.option('--keep', is_flag=True, default=False, help='Keep the intermediate results of the graph optimizations.')
 @click.option('--verbose', is_flag=True, default=False, help='Verbose output.')
 @click.argument('model', type=click.Path(exists=True, dir_okay=False))
@@ -50,10 +59,11 @@ def exec_group(model: str, tensor: List[hidet.Tensor], opt: bool, space: str, ke
       MODEL: The model to execute, should be a path to a model file.
       Currently, only support onnx model (e.g., file like model.onnx).
 
-      TENSOR: The arguments of the model. Can be a numpy tensor file .npy or a string represents the type and shape of a dummy input.
+      TENSOR: The arguments of the model. Can be a numpy tensor file .npy or a string represents the type and shape of
+      a dummy input.
 
-         The format of the string is like: "float32[1,3,224,224]" where the type is float32, and the shape is [1,3,224,224].
-         Candidates of the type are: float32, float16, int64, int32, int16, int8, uint8.
+         The format of the string is like: "float32[1,3,224,224]" where the type is float32, and the shape is
+         [1,3,224,224]. Candidates of the type are: float32, float16, int64, int32, int16, int8, uint8.
 
     Examples
 
@@ -96,4 +106,8 @@ def exec_group(model: str, tensor: List[hidet.Tensor], opt: bool, space: str, ke
     cuda_graph.set_input_tensors(tensor)
     cuda_graph.run()
     cuda.device_synchronize()
-    print('Latency: {:.3} ms'.format(benchmark_func(lambda: cuda_graph.run(), warmup=1, number=5, repeat=100, median=True)))
+    print(
+        'Latency: {:.3} ms'.format(
+            benchmark_func(lambda: cuda_graph.run(), warmup=1, number=5, repeat=100, median=True)
+        )
+    )

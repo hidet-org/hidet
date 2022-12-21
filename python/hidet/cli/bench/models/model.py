@@ -43,10 +43,7 @@ class BenchModel:
         with torch.no_grad():
             model_opt = torch.compile(model, backend=backend)
             latency = benchmark_func(
-                run_func=lambda: model_opt(*args, **kwargs),
-                warmup=warmup,
-                number=number,
-                repeat=repeat
+                run_func=lambda: model_opt(*args, **kwargs), warmup=warmup, number=number, repeat=repeat
             )
         return latency
 
@@ -66,9 +63,7 @@ class BenchModel:
 
     @staticmethod
     def headers() -> List[str]:
-        return [
-            'model', 'inputs', 'eager', 'inductor', 'hidet', 'hidet_f16'
-        ]
+        return ['model', 'inputs', 'eager', 'inductor', 'hidet', 'hidet_f16']
 
     def benchmark(self) -> List[Any]:
         return [
@@ -77,7 +72,7 @@ class BenchModel:
             self.bench_eager(),
             self.bench_inductor(),
             self.bench_hidet(),
-            self.bench_hidet(use_fp16=True)
+            self.bench_hidet(use_fp16=True),
         ]
 
 
