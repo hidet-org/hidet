@@ -1,1 +1,1 @@
-from .resnet50 import bench_resnet50
+from .resnet50 import bench_resnet

@@ -2,6 +2,7 @@ from typing import Tuple, Sequence, Dict, List, Any
 import torch
 import torch.backends.cudnn
 from torch import nn
+import torch._dynamo as dynamo
 from hidet.testing import benchmark_func
 import hidet
 
@@ -38,6 +39,7 @@ class BenchModel:
         model = model.cuda().eval()
         args = [arg.cuda() for arg in args]
         kwargs = {k: v.cuda() for k, v in kwargs.items()}
+        dynamo.reset()
         with torch.no_grad():
             model_opt = torch.compile(model, backend=backend)
             latency = benchmark_func(
@@ -63,12 +65,12 @@ class BenchModel:
         return self.bench_with_backend('hidet')
 
     @staticmethod
-    def result_header() -> List[str]:
+    def headers() -> List[str]:
         return [
             'model', 'inputs', 'eager', 'inductor', 'hidet', 'hidet_f16'
         ]
 
-    def bench_all(self) -> List[Any]:
+    def benchmark(self) -> List[Any]:
         return [
             str(self),
             self.inputs_str(),
@@ -79,4 +81,5 @@ class BenchModel:
         ]
 
 
-registered_models: List[BenchModel] = []
+all_registered_models: List[BenchModel] = []
+commonly_used_models: List[BenchModel] = []

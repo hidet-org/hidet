@@ -306,6 +306,7 @@ def batch_build_ir_modules(build_instances, parallel=True, verbose=False) -> Lis
                     desc='Compiling',
                     total=len(build_instances),
                     disable=not verbose,
+                    ncols=80,
                 ):
                     lib_paths.append(lib_path)
         else:

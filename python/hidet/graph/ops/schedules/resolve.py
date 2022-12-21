@@ -143,7 +143,7 @@ def resolve_ir_modules(
     # measure latency
     warmup, number, repeat = option.get_option('bench_config')
     for ir_module, compiled_func in tqdm(
-        strict_zip(ir_modules, compiled_funcs), desc='Benchmarking', total=len(ir_modules)
+        strict_zip(ir_modules, compiled_funcs), desc='Benchmarking', total=len(ir_modules), ncols=80
     ):
         if compiled_func:
             repeat_latency = compiled_func.profile(*dummy_inputs, warmup=warmup, number=number, repeat=repeat)
