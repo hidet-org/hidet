@@ -2,6 +2,7 @@ from typing import Optional
 import os
 import numpy as np
 from hidet.ir.dialects.pattern import AnyExpr
+from hidet.ir import dtypes
 from hidet.ir.type import DataType, PointerType, TensorPointerType, ReferenceType, TensorType, TypeNode, FuncType
 from hidet.ir.type import VoidType
 from hidet.ir.expr import Var, Expr, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, Neg, NotEqual, Equal, And, Or
@@ -357,35 +358,45 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             return Text(name)
 
     @staticmethod
-    def scalar_literal(value, dtype: str):
-        if dtype == 'bool':
-            return Text('true') if value else Text('false')
-        elif dtype == 'float32':
-            return Text(f'float({value})')
-        elif dtype == 'int32':
-            assert isinstance(value, int)
-            return Text(f'{value}')
-        elif dtype == 'float16':
-            return Text('__half({})'.format(value))
-        elif dtype == 'int64':
-            assert isinstance(value, int)
-            return Text('{}ll'.format(value))
-        elif dtype == 'bfloat16':
-            return Text('__float2bfloat16({})'.format(value))
-        elif dtype == 'tfloat32':
-            return Text('__float_to_tf32({})'.format(value))
-        elif dtype == 'uint32':
-            assert isinstance(value, int) and value >= 0
-            return Text('{}u'.format(value))
+    def scalar_literal(value, dtype: DataType):
+        if dtype == dtypes.boolean:
+            ret = 'true' if value else 'false'
+        elif dtype == dtypes.float64:
+            ret = '{}'.format(float(value))
+        elif dtype == dtypes.float32:
+            ret = '{}f'.format(float(value))
+        elif dtype == dtypes.float16:
+            ret = 'half({}f)'.format(float(value))
+        elif dtype == dtypes.tfloat32:
+            ret = '__float_to_tf32({}f)'.format(float(value))
+        elif dtype == dtypes.bfloat16:
+            ret = '__float2bfloat16({}f)'.format(float(value))
+        elif dtype == dtypes.int64:
+            ret = '{}ll'.format(int(value))
+        elif dtype == dtypes.int32:
+            ret = '{}'.format(int(value))
+        elif dtype == dtypes.int16:
+            ret = 'int16_t({})'.format(int(value))
+        elif dtype == dtypes.int8:
+            ret = 'int8_t({})'.format(int(value))
+        elif dtype == dtypes.uint64:
+            ret = '{}ull'.format(int(value))
+        elif dtype == dtypes.uint32:
+            ret = '{}u'.format(int(value))
+        elif dtype == dtypes.uint16:
+            ret = 'uint16_t({})'.format(int(value))
+        elif dtype == dtypes.uint8:
+            ret = 'uint8_t({})'.format(int(value))
         else:
             raise NotImplementedError('Cannot recognize scalar literal {} with dtype {}'.format(value, dtype))
+        return Text(ret)
 
     def visit_Constant(self, e: Constant):
         if e.is_scalar():
-            return self.scalar_literal(e.value, e.type.name)
+            return self.scalar_literal(e.value, e.type)
         else:
             assert isinstance(e.type, TensorType)
-            dtype = e.type.dtype.name
+            dtype = e.type.dtype
             items = [self.scalar_literal(v, dtype) for v in np.array(e.value).flatten()]
             return '{' + doc_join(items, ', ') + '}'
 

@@ -12,7 +12,7 @@ from .definitions.norm import batch_norm_infer, instance_norm, layer_norm
 from .definitions.image import resize2d
 from .definitions.arithmetic import add, sub, multiply, divide, neg, sqrt, rsqrt, sin, cos, pow, erf, tanh, where, abs
 from .definitions.arithmetic import rightshift, leftshift, bitwise_and, bitwise_not, bitwise_or, bitwise_xor, ceil
-from .definitions.arithmetic import square, max, min, reciprocal, exp, log
+from .definitions.arithmetic import square, max, min, reciprocal, exp, log, constant
 from .definitions.compare import equal, less_than, greater_than, less_or_equal, greater_or_equal, cond_not, cond_and
 from .definitions.reduce import reduce_mean, reduce_sum, reduce_var, reduce_min, reduce_max, argmin, argmax
 from .definitions.cumulative import cumsum

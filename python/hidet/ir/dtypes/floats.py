@@ -46,15 +46,19 @@ class FloatType(DataType):
 
         return Constant(value, self)
 
+    @property
     def one(self):
         return self.constant(1.0)
 
+    @property
     def zero(self):
         return self.constant(0.0)
 
+    @property
     def min_value(self):
         return self.constant(self._min_value)
 
+    @property
     def max_value(self):
         return self.constant(self._max_value)
 

@@ -25,15 +25,19 @@ class Boolean(DataType):
         value = bool(value)
         return Constant(value, self)
 
+    @property
     def one(self):
         return self.constant(True)
 
+    @property
     def zero(self):
         return self.constant(False)
 
+    @property
     def min_value(self):
         raise ValueError('Boolean type has no minimum value.')
 
+    @property
     def max_value(self):
         raise ValueError('Boolean type has no maximum value.')
 

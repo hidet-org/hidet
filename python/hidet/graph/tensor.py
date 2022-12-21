@@ -8,21 +8,25 @@ import warnings
 import numpy as np
 
 import hidet.runtime.storage
-from hidet.ffi import cuda, cuda_kernels
+from hidet.ffi import cuda
 from hidet.ir import dtypes
 from hidet.ir.type import DataType, data_type
+from hidet.ir.expr import Constant
 from hidet.ir.layout import DataLayout, RowMajorLayout
 from hidet.runtime.cuda_stream import CudaStream
 from hidet.runtime.storage import Storage
 from hidet.utils import prod
 
 
-def convert(v, device: str):
-    if isinstance(v, (float, int)):
-        dtype_map = {float: 'float32', int: 'int64'}
-        return full(shape=[1], fill_value=v, dtype=dtype_map[type(v)], device=device)
-    elif isinstance(v, Tensor):
-        return v
+def convert(v: Union[int, float, Constant], device: str, dtype: Optional[DataType] = None):
+    if isinstance(v, (int, float)):
+        if dtype is None:
+            dtype = {int: dtypes.int64, float: dtypes.float32}
+        return full(shape=[], fill_value=v, dtype=dtype, device=device)
+    elif isinstance(v, Constant):
+        if dtype is None:
+            dtype = v.type
+        return full(shape=[], fill_value=v.value, dtype=dtype, device=device)
     else:
         raise NotImplementedError()
 
@@ -738,7 +742,7 @@ class Tensor:
         return torch.from_dlpack(self)
 
 
-def empty(shape, dtype: str = 'float32', device: str = 'cuda', layout: Optional[DataLayout] = None):
+def empty(shape, dtype: Union[DataType, str] = 'float32', device: str = 'cuda', layout: Optional[DataLayout] = None):
     """Create an uninitialized tensor.
 
     Parameters
@@ -746,7 +750,7 @@ def empty(shape, dtype: str = 'float32', device: str = 'cuda', layout: Optional[
     shape: Sequence[int]
         The shape of new tensor.
 
-    dtype: str
+    dtype: str or DataType
         The data type of element of the tensor.
 
     device: str
@@ -760,7 +764,8 @@ def empty(shape, dtype: str = 'float32', device: str = 'cuda', layout: Optional[
     ret: Tensor
         The created tensor.
     """
-    num_bytes = prod(shape) * data_type(dtype).nbytes
+    dtype = data_type(dtype)
+    num_bytes = prod(shape) * dtype.nbytes
     storage = Storage.new(device, num_bytes)
     return Tensor(shape, dtype, device, storage, layout)
 
@@ -832,7 +837,7 @@ def ones(shape, dtype='float32', device='cuda', layout=None) -> Tensor:
     device: str
         The device of the new tensor is created on.
 
-    layout: Optional[DataLayout]
+    layout: DataLayout or None
         The data layout of the tensor.
 
     Returns
@@ -840,17 +845,8 @@ def ones(shape, dtype='float32', device='cuda', layout=None) -> Tensor:
     ret: Tensor
         The created tensor.
     """
-    value_map = {'float32': 1.0, 'int32': 1, 'int64': 1}
-    if dtype in value_map:
-        return full(shape, value_map[dtype], dtype, device, layout)
-    else:
-        if dtype in ['float16', 'bool']:
-            f32_tensor = ones(shape, 'float32', device, layout)
-            return f32_tensor.cast(dtype)
-        else:
-            raise NotImplementedError(
-                'Not implemented ones for dtype {}, please create a float32 tensor and cast to this type'.format(dtype)
-            )
+    dtype = data_type(dtype)
+    return full(shape, dtype.one, dtype, device, layout)
 
 
 def full(shape, fill_value: Union[float, int], dtype='float32', device='cuda', layout=None) -> Tensor:
@@ -878,9 +874,11 @@ def full(shape, fill_value: Union[float, int], dtype='float32', device='cuda', l
     ret: Tensor
         The created tensor.
     """
-    tensor = empty(shape, dtype, device, layout)
-    cuda_kernels.fill_value(tensor.storage.addr, num_elements=tensor.num_elements, value=fill_value, dtype=dtype)
-    return tensor
+    from hidet import ops
+
+    assert layout is None, 'full is not implemented for non-row major layout'
+    dtype = data_type(dtype)
+    return ops.constant(shape=shape, value=fill_value, dtype=dtype, device=device)
 
 
 def randn(shape, dtype='float32', mean=0.0, stddev=1.0, device='cuda', layout=None) -> Tensor:

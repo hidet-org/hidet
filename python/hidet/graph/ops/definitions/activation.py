@@ -1,49 +1,45 @@
 from typing import Optional
 import math
 from hidet.ir import primitives as prim
-from hidet.ir.expr import const_like, if_then_else
+from hidet.ir.expr import if_then_else
 from .utils import Tensor
 from .arithmetic import UnaryElementwiseOp, BinaryElementwiseOp
 
 
 class ReluOp(UnaryElementwiseOp):
-    def __init__(self, x):
-        super().__init__(x, op=lambda v: prim.max(v, const_like(0.0, v)), name='relu')
+    def __init__(self, x: Tensor):
+        super().__init__(x, op=lambda v: prim.max(v, x.dtype.zero), name='relu')
 
 
 class LeakyReluOp(UnaryElementwiseOp):
-    def __init__(self, x, alpha):
+    def __init__(self, x: Tensor, alpha):
         super().__init__(
-            x,
-            op=lambda v: if_then_else(v >= 0, v, v * const_like(alpha, v)),
-            name='leaky_relu',
-            attributes={'alpha': alpha},
+            x, op=lambda v: if_then_else(v >= 0, v, v * x.dtype(alpha)), name='leaky_relu', attributes={'alpha': alpha}
         )
 
 
 class SigmoidOp(UnaryElementwiseOp):
-    def __init__(self, x):
-        super().__init__(x, op=lambda v: const_like(1.0, v) / (const_like(1.0, v) + prim.exp(-v)), name='sigmoid')
+    def __init__(self, x: Tensor):
+        super().__init__(x, op=lambda v: x.dtype(1.0) / (x.dtype.one + prim.exp(-v)), name='sigmoid')
 
 
 class ClipOp(UnaryElementwiseOp):
-    def __init__(self, x, min_val: Optional[float] = None, max_val: Optional[float] = None):
+    def __init__(self, x: Tensor, min_val: Optional[float] = None, max_val: Optional[float] = None):
         def op(v):
             if min_val is not None:
-                v = prim.max(v, const_like(min_val, v))
+                v = prim.max(v, x.dtype(min_val))
             if max_val is not None:
-                v = prim.min(v, const_like(max_val, v))
+                v = prim.min(v, x.dtype(max_val))
             return v
 
         super().__init__(x, op=op, name='clip')
 
 
 class GeluOp(UnaryElementwiseOp):
-    def __init__(self, x):
+    def __init__(self, x: Tensor):
+        dtype = x.dtype
         super().__init__(
-            x=x,
-            op=lambda v: const_like(0.5, v) * v * (const_like(1.0, v) + prim.erf(v * const_like(1 / math.sqrt(2), v))),
-            name='gelu',
+            x=x, op=lambda v: dtype(0.5) * v * (dtype.one + prim.erf(v * dtype(1 / math.sqrt(2)))), name='gelu'
         )
 
 

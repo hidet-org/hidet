@@ -43,8 +43,8 @@ class DataType(TypeNode):
 
         Parameters
         ----------
-        value: Any
-            The value of the constant.
+        value: Union[int, float, bool, list, tuple, Constant, Expr]
+            The value of the constant or the value to be casted.
 
         Returns
         -------
@@ -53,10 +53,14 @@ class DataType(TypeNode):
         """
         from hidet.ir import expr
 
-        if isinstance(value, expr.Expr):
+        if isinstance(value, (int, float, bool, list, tuple)):
+            return self.constant(value)
+        elif isinstance(value, expr.Constant):
+            return self.constant(value.value)
+        elif isinstance(value, expr.Expr):
             return expr.cast(value, self)
         else:
-            return self.constant(value)
+            raise ValueError('Can not convert {} to {}'.format(value, self))
 
     def __getitem__(self, item):
         if not isinstance(item, (tuple, list)):
@@ -87,15 +91,19 @@ class DataType(TypeNode):
     def constant(self, value: Any):
         raise NotImplementedError()
 
+    @property
     def one(self):
         raise NotImplementedError()
 
+    @property
     def zero(self):
         raise NotImplementedError()
 
+    @property
     def min_value(self):
         raise NotImplementedError()
 
+    @property
     def max_value(self):
         raise NotImplementedError()
 

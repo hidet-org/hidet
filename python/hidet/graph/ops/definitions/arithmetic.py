@@ -1,11 +1,11 @@
 # pylint: disable=redefined-builtin, unnecessary-lambda
-from typing import List, Callable, Any, Union, Optional, Dict
+from typing import List, Callable, Any, Union, Optional, Dict, Sequence
 
 from hidet.ir import primitives
 from hidet.ir import expr, dtypes
-from hidet.ir.expr import const_like, if_then_else
+from hidet.ir.type import DataType, data_type
+from hidet.ir.expr import Constant, if_then_else
 from hidet.utils import prod
-from hidet.graph.tensor import convert
 from .utils import Task, Operator, Tensor, TensorNode, InverseMap, compute, input_like
 from .utils import broadcast_shape, broadcast_shapes, broadcast_indices
 
@@ -71,6 +71,22 @@ class VariadicElementwiseTask(Task):
         )
 
 
+class ConstantTask(Task):
+    def __init__(
+        self, name: str, shape: Sequence[int], value: Union[int, float, bool, Constant], dtype: Union[DataType, str]
+    ):
+        dtype: DataType = data_type(dtype)
+        value: Constant = dtype(value)
+        const_output = compute(name='c', shape=list(shape), fcompute=lambda *indices: value)
+        super().__init__(
+            name=name,
+            inputs=[],
+            outputs=[const_output],
+            inverse_map={},
+            attributes={'shape': shape, 'value': value.value, 'dtype': dtype.name},
+        )
+
+
 class WhereTask(Task):
     def __init__(self, cond: TensorNode, x: TensorNode, y: TensorNode):
         cond_shape = cond.const_shape()
@@ -110,34 +126,47 @@ class BinaryElementwiseOp(Operator):
         super().__init__(inputs=[x, y], task=BinaryElementwiseTask(name, input_like(x, 'x'), input_like(y, 'y'), op=op))
 
 
+def resolve_dtype(tensor_dtype: DataType, scalar_dtype: DataType) -> DataType:
+    if tensor_dtype.is_integer() and scalar_dtype.is_float():
+        return scalar_dtype
+    else:
+        return tensor_dtype
+
+
 class AddScalarOp(UnaryElementwiseOp):
-    def __init__(self, x: Tensor, scalar: Union[float, int]):
-        super().__init__(x, op=lambda v: v + const_like(scalar, v), attributes={'scalar': scalar}, name='adds')
+    def __init__(self, x: Tensor, scalar: Constant):
+        dtype = resolve_dtype(x.dtype, scalar.type)
+        super().__init__(x, op=lambda v: v + dtype(scalar), attributes={'scalar': scalar}, name='adds')
 
 
 class SubScalarOp(UnaryElementwiseOp):
-    def __init__(self, x: Tensor, scalar: Union[float, int]):
-        super().__init__(x, op=lambda v: v - const_like(scalar, v), attributes={'scalar': scalar}, name='subs')
+    def __init__(self, x: Tensor, scalar: Constant):
+        dtype = resolve_dtype(x.dtype, scalar.type)
+        super().__init__(x, op=lambda v: v - dtype(scalar), attributes={'scalar': scalar}, name='subs')
 
 
 class RSubScalarOp(UnaryElementwiseOp):
-    def __init__(self, x: Tensor, scalar: Union[float, int]):
-        super().__init__(x, op=lambda v: const_like(scalar, v) - v, attributes={'scalar': scalar}, name='rsubs')
+    def __init__(self, x: Tensor, scalar: Constant):
+        dtype = resolve_dtype(x.dtype, scalar.type)
+        super().__init__(x, op=lambda v: dtype(scalar) - v, attributes={'scalar': scalar}, name='rsubs')
 
 
 class MultiplyScalarOp(UnaryElementwiseOp):
-    def __init__(self, x: Tensor, scalar: Union[float, int]):
-        super().__init__(x, op=lambda v: v * const_like(scalar, v), attributes={'scalar': scalar}, name='muls')
+    def __init__(self, x: Tensor, scalar: Constant):
+        dtype = resolve_dtype(x.dtype, scalar.type)
+        super().__init__(x, op=lambda v: v * dtype(scalar), attributes={'scalar': scalar}, name='muls')
 
 
 class DivideScalarOp(UnaryElementwiseOp):
-    def __init__(self, x: Tensor, scalar: Union[float, int]):
-        super().__init__(x, op=lambda v: v / const_like(scalar, v), attributes={'scalar': scalar}, name='divs')
+    def __init__(self, x: Tensor, scalar: Constant):
+        dtype = resolve_dtype(x.dtype, scalar.type)
+        super().__init__(x, op=lambda v: v / dtype(scalar), attributes={'scalar': scalar}, name='divs')
 
 
 class RDivideScalarOp(UnaryElementwiseOp):
-    def __init__(self, x: Tensor, scalar: Union[float, int]):
-        super().__init__(x, op=lambda v: const_like(scalar, v) / v, attributes={'scalar': scalar}, name='rdivs')
+    def __init__(self, x: Tensor, scalar: Constant):
+        dtype = resolve_dtype(x.dtype, scalar.type)
+        super().__init__(x, op=lambda v: dtype(scalar) / v, attributes={'scalar': scalar}, name='rdivs')
 
 
 class SqrtOp(UnaryElementwiseOp):
@@ -182,7 +211,7 @@ class NegOp(UnaryElementwiseOp):
 
 class ReciprocalOp(UnaryElementwiseOp):
     def __init__(self, x):
-        super().__init__(x, op=lambda v: const_like(1.0, v) / v, name='reciprocal')
+        super().__init__(x, op=lambda v: x.dtype.one / v, name='reciprocal')
 
 
 class AddOp(BinaryElementwiseOp):
@@ -272,9 +301,39 @@ class MinOp(Operator):
         )
 
 
+class ConstantOp(Operator):
+    def __init__(
+        self,
+        shape: Sequence[int],
+        value: Union[float, int, bool, Constant],
+        dtype: Optional[DataType] = None,
+        device: str = 'cpu',
+    ):
+        shape = [int(v) for v in shape]
+        if dtype is None:
+            if isinstance(value, int):
+                dtype = dtypes.int64
+            elif isinstance(value, float):
+                dtype = dtypes.float32
+            elif isinstance(value, bool):
+                dtype = dtypes.boolean
+            elif isinstance(value, Constant):
+                assert isinstance(value.type, DataType)
+                dtype = value.type
+            else:
+                raise ValueError(f'Unknown type for value {value}')
+
+        super().__init__(
+            inputs=[],
+            task=ConstantTask(name='const', shape=shape, value=value, dtype=dtype),
+            name='constant',
+            attributes={'shape': shape, 'value': value, 'dtype': dtype, 'device': device},
+        )
+
+
 class AbsOp(UnaryElementwiseOp):
     def __init__(self, x: Tensor):
-        super().__init__(x, op=lambda a: if_then_else(a >= const_like(0, a), a, -a), name='abs')
+        super().__init__(x, op=lambda a: if_then_else(a >= x.dtype.zero, a, -a), name='abs')
 
 
 class RightShiftOp(BinaryElementwiseOp):
@@ -312,32 +371,47 @@ class CeilOp(UnaryElementwiseOp):
         super().__init__(x, op=lambda a: primitives.ceil(a), name='ceil')
 
 
-PythonScalar = Union[float, int]
-
-
 def binary_arithmetic(
-    x: Union[Tensor, float, int], y: Union[Tensor, float, int], tensor_scalar_op, scalar_tensor_op, tensor_tensor_op
+    x: Union[Tensor, Constant, float, int],
+    y: Union[Tensor, Constant, float, int],
+    tensor_scalar_op: Callable[[Tensor, Constant], Tensor],
+    scalar_tensor_op: Callable[[Constant, Tensor], Tensor],
+    tensor_tensor_op: Callable[[Tensor, Tensor], Tensor],
 ) -> Union[Tensor, float, int]:
-    if not (isinstance(x, (Tensor, float, int)) and isinstance(y, (Tensor, float, int))):
+    if not (isinstance(x, (Tensor, float, int, Constant)) and isinstance(y, (Tensor, float, int, Constant))):
         raise ValueError(
-            'Only support add/sub/mul/div between hidet.Tensor, float, and int. got {} and {}'.format(type(x), type(y))
+            'Only support add/sub/mul/div between hidet.Tensor, float, int, and Constant. got {} and {}'.format(
+                type(x), type(y)
+            )
         )
-    if isinstance(x, (float, int)):
-        assert isinstance(y, Tensor)
-        x = convert(x, y.device)
-    if isinstance(y, (float, int)):
-        assert isinstance(x, Tensor)
-        y = convert(y, x.device)
-    x_scalar = len(x.shape) == 0 and x.storage is not None
-    y_scalar = len(y.shape) == 0 and y.storage is not None
-    if x_scalar and y_scalar:
+    if not isinstance(x, Tensor) and not isinstance(y, Tensor):
+        raise ValueError('One of x and y must be a Tensor')
+
+    if isinstance(x, Tensor) and isinstance(y, Tensor) and len(x.shape) == len(y.shape) == 0:
         return tensor_tensor_op(x, y)
-    elif y_scalar:
-        return tensor_scalar_op(x, y.scalar())
-    elif x_scalar:
-        return scalar_tensor_op(x.scalar(), y)
+
+    if isinstance(x, int):
+        x = dtypes.int32(x)
+    elif isinstance(x, float):
+        x = dtypes.float32(x)
+    elif isinstance(x, Tensor) and len(x.shape) == 0:
+        x = x.dtype(x.scalar())
+
+    if isinstance(y, int):
+        y = dtypes.int32(y)
+    elif isinstance(y, float):
+        y = dtypes.float32(y)
+    elif isinstance(y, Tensor) and len(y.shape) == 0:
+        y = y.dtype(y.scalar())
+
+    if isinstance(x, Tensor) and isinstance(y, Tensor):
+        return tensor_tensor_op(x, y)
+    elif isinstance(x, Tensor):
+        return tensor_scalar_op(x, y)
+    elif isinstance(y, Tensor):
+        return scalar_tensor_op(x, y)
     else:
-        return tensor_tensor_op(x, y)
+        assert False
 
 
 def add(x: Union[Tensor, float, int], y: Union[Tensor, float, int]) -> Tensor:
@@ -478,3 +552,12 @@ def bitwise_xor(x: Tensor, y: Tensor) -> Tensor:
 
 def ceil(x: Tensor) -> Tensor:
     return CeilOp(x).get_output(0)
+
+
+def constant(
+    shape: Sequence[int],
+    value: Union[float, int, bool, Constant],
+    dtype: Optional[Union[DataType, str]] = None,
+    device: str = 'cpu',
+) -> Tensor:
+    return ConstantOp(shape, value, data_type(dtype), device).get_output(0)

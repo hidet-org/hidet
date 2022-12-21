@@ -600,16 +600,6 @@ def const_tensor(value: np.ndarray) -> Constant:
     return Constant(value=value, const_type=tensor_type(dtype=from_numpy_dtype(value.dtype), shape=list(value.shape)))
 
 
-def const_like(value: Union[float, int], e: Expr) -> Constant:
-    from hidet.ir.functors import infer_type
-
-    dtype = infer_type(e)
-    if isinstance(dtype, DataType):
-        return dtype(value)
-    else:
-        raise ValueError('Expect a scalar type, but got {}'.format(dtype))
-
-
 def tensor_pointer_var(hint: str, shape=None, dtype: Union[str, DataType] = 'float32', layout=None):
     return Var(hint, TensorPointerType(dtype=dtype, shape=shape, layout=layout))
 

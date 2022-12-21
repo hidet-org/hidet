@@ -36,7 +36,6 @@ set_target_properties(hidet_runtime PROPERTIES
 list(APPEND HIDET_SOURCES
         src/hidet/packedfunc.cpp
         src/hidet/cuda_api.cpp
-        src/hidet/cuda_kernels.cu
         )
 
 # add main target

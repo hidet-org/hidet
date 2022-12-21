@@ -34,3 +34,15 @@ def test_to_dlpack():
 
     e[1:] = 1.0
     np.testing.assert_allclose(d.cpu().numpy(), e.cpu().numpy())
+
+
+def test_type_conversion():
+    a = hidet.randn([2, 3], dtype=hidet.float32)
+    assert (a + 1).dtype == hidet.float32
+    assert (a + 1.0).dtype == hidet.float32
+    assert (a + hidet.float64(1.0)).dtype == hidet.float32
+
+    a = hidet.randn([2, 3], dtype=hidet.int32)
+    assert (a + 1).dtype == hidet.int32
+    assert (a + 1.0).dtype == hidet.float32
+    assert (a + hidet.float64(1.0)).dtype == hidet.float64
