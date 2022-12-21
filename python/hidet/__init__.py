@@ -31,4 +31,4 @@ from .graph.frontend import onnx
 
 from .lang import script, script_module
 
-sys.setrecursionlimit(10000)
+sys.setrecursionlimit(100000)

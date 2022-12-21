@@ -20,7 +20,7 @@ def bench_group(ctx: click.Context, space: str, cuda_graph: bool, no_opt: bool):
 
 
 for command in [
-    models.bench_resnet50
+    models.bench_resnet
 ]:
     assert isinstance(command, click.Command)
     bench_group.add_command(command)

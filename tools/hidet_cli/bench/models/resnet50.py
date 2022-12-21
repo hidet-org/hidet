@@ -19,7 +19,7 @@ def bench_resnet50(ctx: click.Context, batch_size: int, channels: int, height: i
     use_cuda_graph = ctx.obj['cuda-graph']
     model, inputs = resnet50(batch_size, channels, height, width)
     graph = model.flow_graph_for(inputs)
-    hidet.space_level(space)
+    hidet.option.search_space(space)
     if opt:
         with hidet.graph.PassContext() as ctx:
             graph = hidet.graph.optimize(graph)

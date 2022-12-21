@@ -35,6 +35,7 @@ class DynamoConfig:
          - 2: Tune the schedule in a large search space. Usually achieves the best performance, but takes longer time.
         """
         self._search_space = level
+        return self
 
     def parallel_k(self, strategy="default"):
         """
@@ -55,30 +56,35 @@ class DynamoConfig:
         Whether to use float16 data type
         """
         self._use_fp16 = flag
+        return self
 
     def use_fp16_reduction(self, flag=True):
         """
         Whether to use float16 data type for reduction
         """
         self._use_fp16_reduction = flag
+        return self
 
     def use_cuda_graph(self, flag=True):
         """
         Whether to use cuda graph
         """
         self._use_cuda_graph = flag
+        return self
 
     def print_input_graph(self, flag=True):
         """
         Whether to print the input graph
         """
         self._print_input_graph = flag
+        return self
 
     def correctness_report(self, flag=True):
         """
         Whether to check correctness and print report error
         """
         self._correctness_report = flag
+        return self
 
 
 dynamo_config = DynamoConfig()

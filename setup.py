@@ -1,4 +1,3 @@
-from glob import glob
 from setuptools import setup, find_packages, Distribution
 
 
@@ -24,7 +23,13 @@ setup(
         "tqdm",
         "nvtx",
         "tabulate",
-        "astunparse"
+        "astunparse",
+        "click"
     ],
     distclass=BinaryDistribution,
+    entry_points={
+        'console_scripts': [
+            'hidet = hidet.cli.main:main',
+        ],
+    },
 )
