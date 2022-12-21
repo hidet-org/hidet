@@ -2,7 +2,7 @@
 from typing import List, Callable, Any, Union, Optional, Dict
 
 from hidet.ir import primitives
-from hidet.ir import expr
+from hidet.ir import expr, dtypes
 from hidet.ir.expr import const_like, if_then_else
 from hidet.utils import prod
 from hidet.graph.tensor import convert
@@ -433,8 +433,8 @@ def cube(x: Tensor) -> Tensor:
 
 
 def where(cond: Tensor, x: Tensor, y: Tensor) -> Tensor:
-    if cond.dtype != 'bool':
-        raise ValueError('The condition tensor must have dtype "bool", but got {}'.format(cond.dtype))
+    if cond.dtype != dtypes.boolean:
+        raise ValueError('The condition tensor must have dtype "bool", but got {}'.format(cond.dtype.name))
     return WhereOp(cond, x, y).get_output(0)
 
 

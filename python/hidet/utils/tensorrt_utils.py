@@ -184,7 +184,7 @@ def _prepare_buffer(
                         name, list(inputs.keys())
                     )
                 )
-            if dtype != inputs[name].dtype:
+            if dtype != inputs[name].dtype.name:
                 inputs[name] = hidet.graph.ops.cast(inputs[name], dtype_map[dtype])
             buffers.append(inputs[name].storage.addr)
         else:

@@ -10,9 +10,9 @@ from hidet.testing import benchmark_func
 def dummy_input_like(tensor: Tensor) -> Tensor:
     from hidet.graph import randn_like, zeros_like
 
-    if tensor.dtype in ['float32', 'float16']:
+    if tensor.dtype.is_float():
         return randn_like(tensor)
-    elif tensor.dtype in ['int64', 'int32', 'int8', 'uint64', 'uint32', 'uint8']:
+    elif tensor.dtype.is_integer():
         return zeros_like(tensor)
     else:
         raise ValueError('Can not generate dummy input for data type {}'.format(tensor.dtype))

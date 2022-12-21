@@ -1,4 +1,5 @@
 from typing import List, Optional, Union, Sequence
+from hidet.ir.type import DataType, data_type
 from hidet.ir.expr import And, if_then_else, convert
 from hidet.ir.layout import RowMajorLayout, ColumnMajorLayout
 from hidet.ir.utils import index_deserialize, index_serialize
@@ -400,7 +401,7 @@ class TransposeOp(Operator):
 
 
 class CastOp(Operator):
-    def __init__(self, x: Tensor, dtype: str):
+    def __init__(self, x: Tensor, dtype: DataType):
         from hidet.ir.expr import Cast
         from .arithmetic import UnaryElementwiseTask
 
@@ -592,7 +593,8 @@ def concat(tensors: List[Tensor], axis: int) -> Tensor:
     return ConcatOp(*tensors, axis=axis).get_output(0)
 
 
-def cast(x: Tensor, dtype: str) -> Tensor:
+def cast(x: Tensor, dtype: Union[str, DataType]) -> Tensor:
+    dtype = data_type(dtype)
     if x.dtype == dtype:
         return x
     return CastOp(x, dtype).get_output(0)

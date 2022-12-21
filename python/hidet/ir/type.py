@@ -29,7 +29,7 @@ class DataType(TypeNode):
         self._nbytes = nbytes
 
     def __str__(self):
-        return self.name
+        return 'hidet.{}'.format(self.name)
 
     def __eq__(self, other):
         return isinstance(other, DataType) and self.name == other.name
@@ -271,20 +271,20 @@ def void_pointer():
     return PointerType(VoidType())
 
 
-def data_type(name: Union[str, DataType]) -> DataType:
+def data_type(dtype: Union[str, DataType]) -> DataType:
     from hidet.ir.dtypes import name2dtype, sname2dtype
 
-    if isinstance(name, DataType):
-        return name
-    elif isinstance(name, str):
-        if name in name2dtype:
-            return name2dtype[name]
-        elif name in sname2dtype:
-            return sname2dtype[name]
+    if isinstance(dtype, DataType):
+        return dtype
+    elif isinstance(dtype, str):
+        if dtype in name2dtype:
+            return name2dtype[dtype]
+        elif dtype in sname2dtype:
+            return sname2dtype[dtype]
         else:
-            raise ValueError('Unknown data type: {}, candidates:\n{}'.format(name, '\n'.join(name2dtype.keys())))
+            raise ValueError('Unknown data type: {}, candidates:\n{}'.format(dtype, '\n'.join(name2dtype.keys())))
     else:
-        raise ValueError('Expect a string or a DataType, but got {}'.format(type(name)))
+        raise ValueError('Expect a string or a DataType, but got {}'.format(type(dtype)))
 
 
 void_p = PointerType(VoidType())

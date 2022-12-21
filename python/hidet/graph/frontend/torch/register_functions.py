@@ -5,7 +5,6 @@ import torch
 from hidet.graph.tensor import Tensor
 from hidet.graph import ops
 from hidet.utils import same_list
-from hidet.ir.type import data_type
 from .interpreter import register_function, register_method
 from .interpreter import warnings
 from .utils import dtype_from_torch, device_from_torch
@@ -143,7 +142,7 @@ def truediv(x: Union[Tensor, int, float], y: Union[Tensor, int, float]):
     import hidet
 
     def is_integer(v: Union[Tensor, int, float]) -> bool:
-        return isinstance(v, int) or (isinstance(v, Tensor) and data_type(v.dtype).is_integer())
+        return isinstance(v, int) or (isinstance(v, Tensor) and v.dtype.is_integer())
 
     if is_integer(x) and is_integer(y):
         if isinstance(y, (int, float)):

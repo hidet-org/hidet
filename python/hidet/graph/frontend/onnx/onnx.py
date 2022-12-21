@@ -18,6 +18,7 @@ import hidet
 from hidet.graph.modules import nn
 from hidet.graph import ops
 from hidet.graph.tensor import Tensor, from_numpy, randn
+from . import utils
 
 
 log = logging.getLogger(__name__)
@@ -1005,23 +1006,21 @@ def run_trt(node: OnnxOperator, inputs: List[Tensor]) -> List[Tensor]:
     import onnxruntime
 
     hidet_outputs = node.run(inputs)
-    dtype_map = {
-        'float32': onnx.TensorProto.FLOAT,
-        'int32': onnx.TensorProto.INT32,
-        'int64': onnx.TensorProto.INT64,
-        'bool': onnx.TensorProto.BOOL,
-    }
     inputs_value_info = [
         onnx.helper.make_value_info(
             name=name,
-            type_proto=onnx.helper.make_tensor_type_proto(elem_type=dtype_map[tensor.dtype], shape=tensor.shape),
+            type_proto=onnx.helper.make_tensor_type_proto(
+                elem_type=utils.dtype_to_onnx(tensor.dtype), shape=tensor.shape
+            ),
         )
         for name, tensor in zip(node.input_names, inputs)
     ]
     outputs_value_info = [
         onnx.helper.make_value_info(
             name=name,
-            type_proto=onnx.helper.make_tensor_type_proto(elem_type=dtype_map[tensor.dtype], shape=tensor.shape),
+            type_proto=onnx.helper.make_tensor_type_proto(
+                elem_type=utils.dtype_to_onnx(tensor.dtype), shape=tensor.shape
+            ),
         )
         for name, tensor in zip(node.output_names, hidet_outputs)
     ]

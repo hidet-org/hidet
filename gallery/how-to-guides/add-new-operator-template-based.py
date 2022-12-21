@@ -208,7 +208,7 @@ from hidet.graph.ops.definitions.utils import input_like
 
 class BatchMatmulFp16Op(Operator):
     def __init__(self, a: Tensor, b: Tensor):
-        assert a.dtype == 'float16' and b.dtype == 'float16'
+        assert a.dtype == hidet.float16 and b.dtype == hidet.float16
         super().__init__(
             inputs=[a, b],
             task=BatchMatmulFp16Task(

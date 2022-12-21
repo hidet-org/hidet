@@ -1,7 +1,6 @@
 from typing import List, Optional, Dict, Tuple
 import os
 import numpy as np
-from hidet.ir.type import data_type
 from hidet.runtime import CompiledFunction
 from .flow_graph import FlowGraph, Operator, Tensor, GraphForwardInstrument
 
@@ -85,7 +84,7 @@ class GraphForwardDebugInstrument(GraphForwardInstrument):
                 op_idx,
                 op_name,
                 'x{}'.format(idx),
-                '{}{}'.format(data_type(tensor.dtype).short_name, list(tensor.shape)),
+                '{}{}'.format(tensor.dtype.short_name, list(tensor.shape)),
                 stats['nan'],
                 stats['inf'],
                 stats['zero'],
@@ -112,7 +111,7 @@ class GraphForwardDebugInstrument(GraphForwardInstrument):
                 op_idx,
                 op_name,
                 'y{}'.format(idx),
-                '{}{}'.format(data_type(tensor.dtype).short_name, list(tensor.shape)),
+                '{}{}'.format(tensor.dtype.short_name, list(tensor.shape)),
                 stats['nan'],
                 stats['inf'],
                 stats['zero'],
@@ -215,11 +214,9 @@ class GraphForwardBenchmarkInstrument(GraphForwardInstrument):
         for idx, (op, latency, std) in enumerate(self.latency_list):
             op_idx = '{}'.format(idx)
             op_name = '{}'.format(op.name)
-            inputs = ', '.join(
-                [(data_type(tensor.dtype).short_name + str(tensor.shape)).replace(' ', '') for tensor in op.inputs]
-            )
+            inputs = ', '.join([(tensor.dtype.short_name + str(tensor.shape)).replace(' ', '') for tensor in op.inputs])
             outputs = ', '.join(
-                [(data_type(tensor.dtype).short_name + str(tensor.shape)).replace(' ', '') for tensor in op.outputs]
+                [(tensor.dtype.short_name + str(tensor.shape)).replace(' ', '') for tensor in op.outputs]
             )
             lines.append(
                 self._template.format(

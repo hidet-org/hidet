@@ -1,9 +1,11 @@
 from __future__ import annotations
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Union
 import warnings
 from collections import defaultdict
 import ctypes
 import numpy as np
+from hidet.ir import dtypes
+from hidet.ir.type import DataType, data_type
 from hidet.ffi import cuda
 from hidet.utils import green, prod
 from hidet.runtime.cuda_stream import CudaStream
@@ -238,9 +240,9 @@ class Storage:
         else:
             raise ValueError("Unrecognized device '{}', candidates: {}".format(device, ['cpu', 'cuda']))
 
-    def as_array(self, num_elements: int, dtype: str = 'float32', share_mem=True) -> np.ndarray:
+    def as_array(self, num_elements: int, dtype: Union[str, DataType] = 'float32', share_mem=True) -> np.ndarray:
         """
-        Convert to one-dimension numpy array, sharing the underlying storage.
+        Convert the storage to one-dimension numpy array.
 
         Parameters
         ----------
@@ -251,20 +253,31 @@ class Storage:
         dtype: str, default 'float32'
             The type of data in this storage.
 
+        share_mem: bool, default True
+            Whether to share the memory with the storage. If True, the returned array will share the memory with the
+            storage. If False, the returned array will have a copy of the data in the storage.
+
         Returns
         -------
         ret: numpy.ndarray
             A numpy ndarray with one dimension that share the same data as the storage.
         """
+        dtype = data_type(dtype)
         dtype2ctype = {
-            'float32': ctypes.c_float,
-            'float16': ctypes.c_uint16,
-            'int32': ctypes.c_int32,
-            'int64': ctypes.c_int64,
-            'uint32': ctypes.c_uint32,
-            'bool': ctypes.c_bool,
+            dtypes.float64: ctypes.c_double,
+            dtypes.float32: ctypes.c_float,
+            dtypes.float16: ctypes.c_uint16,
+            dtypes.int64: ctypes.c_int64,
+            dtypes.int32: ctypes.c_int32,
+            dtypes.int16: ctypes.c_int16,
+            dtypes.int8: ctypes.c_int8,
+            dtypes.uint64: ctypes.c_uint64,
+            dtypes.uint32: ctypes.c_uint32,
+            dtypes.uint16: ctypes.c_uint16,
+            dtypes.uint8: ctypes.c_uint8,
+            dtypes.boolean: ctypes.c_bool,
         }
-        dtype2nptype = {'float16': np.float16}
+        dtype2nptype = {dtypes.float16: np.float16}
 
         if self.device != 'cpu':
             raise ValueError('The storage must be cpu storage. Please use .cpu() to convert first.')

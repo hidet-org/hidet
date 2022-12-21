@@ -396,10 +396,9 @@ class Let(Expr):
 
 
 class Cast(Expr):
-    def __init__(self, expr, target_type):
+    def __init__(self, expr, target_type: TypeNode):
+        assert isinstance(target_type, TypeNode)
         self.expr = expr
-        if isinstance(target_type, str):
-            target_type = data_type(target_type)
         self.target_type: TypeNode = target_type
 
 
@@ -589,7 +588,9 @@ def tensor_rank(v: Expr) -> int:
         raise ValueError('Can not infer the tensor rank of "{}"'.format(v))
 
 
-def cast(v: Expr, dtype):
+def cast(v: Expr, dtype: Union[str, DataType, TypeNode]):
+    if isinstance(dtype, str):
+        dtype = data_type(dtype)
     return Cast(v, dtype)
 
 

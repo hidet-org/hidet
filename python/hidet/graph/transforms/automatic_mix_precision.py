@@ -1,8 +1,8 @@
-from typing import List
+from typing import List, Union
 from hidet.graph.ir.functors import GraphRewriter
 from hidet.graph.ir.flow_graph import FlowGraph, Operator, Tensor
 from hidet.graph import ops
-from hidet.ir.type import data_type
+from hidet.ir.type import DataType, data_type
 from hidet.utils import strict_zip, same_list
 from .base import GraphPass
 
@@ -18,15 +18,16 @@ class DefaultTransformStrategy:
 
 
 class AutoMixPrecisionRewriter(GraphRewriter):
-    def __init__(self, target_dtype: str):
+    def __init__(self, target_dtype: Union[str, DataType]):
         super().__init__()
-        assert data_type(target_dtype).is_float()
-        self.target_dtype = target_dtype
+        self.target_dtype: DataType = data_type(target_dtype)
         self.policy = DefaultTransformStrategy()
 
+        assert self.target_dtype.is_float()
+
     @staticmethod
-    def cast_float(x: Tensor, target_dtype: str) -> Tensor:
-        if data_type(x.dtype).is_float():
+    def cast_float(x: Tensor, target_dtype: DataType) -> Tensor:
+        if x.dtype.is_float():
             return ops.cast(x, target_dtype)
         return x
 
@@ -59,7 +60,7 @@ class AutoMixPrecisionRewriter(GraphRewriter):
 
 class AutoMixPrecisionPass(GraphPass):
     def process_graph(self, graph: FlowGraph) -> FlowGraph:
-        target_dtype = self.current_context().configs['precision']
+        target_dtype: Union[str, DataType] = self.current_context().configs['precision']
         if target_dtype is None:
             return graph
         else:
