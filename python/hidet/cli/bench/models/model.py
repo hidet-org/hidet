@@ -1,11 +1,15 @@
+# pylint: disable=ungrouped-imports
 from typing import Tuple, Sequence, Dict, List, Any
 import torch
 import torch.backends.cudnn
 from torch import nn
-import torch._dynamo as dynamo
 from hidet.testing import benchmark_func
 import hidet
 
+if hidet.torch.dynamo_available():
+    import torch._dynamo as dynamo
+else:
+    dynamo = None
 
 torch.backends.cudnn.allow_tf32 = False  # for fair comparison
 
