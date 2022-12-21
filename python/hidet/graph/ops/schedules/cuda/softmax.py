@@ -51,7 +51,7 @@ def softmax_cuda_schedule(task: SoftmaxTask) -> IRModule:
         sb += DeclareStmt(rv)
 
         # get the max value along c dimension
-        sb += AssignStmt(rv, convert(-1e30, x_dtype))
+        sb += AssignStmt(rv, x_dtype.min_value)
         other_indices = grid_layout.worker2task(block_idx())[0]
         for (r,) in block_layout.worker2task(thread_idx()):
             with sb.if_then(r < reduce_extent):
@@ -64,9 +64,9 @@ def softmax_cuda_schedule(task: SoftmaxTask) -> IRModule:
             sb += AssignStmt(buf[r], prim.exp(buf[r] - rv))
 
         # calculate sum(exp(v-max))
-        sb += AssignStmt(rv, convert(0.0, x_dtype))
+        sb += AssignStmt(rv, x_dtype.zero)
         for (r,) in block_layout.worker2task(thread_idx()):
-            sb += AssignStmt(rv, rv + if_then_else(r < reduce_extent, buf[r], convert(0.0, x_dtype)))
+            sb += AssignStmt(rv, rv + if_then_else(r < reduce_extent, buf[r], x_dtype.zero))
         sb += warp_reduce(rv, lambda a, b: a + b)
 
         # calculate exp(v-max) / sum(exp(vv-max))

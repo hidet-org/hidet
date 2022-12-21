@@ -135,7 +135,9 @@ class OnnxOperator:
 
     @staticmethod
     def tensor2list(tensor: Tensor) -> Union[List, int, float]:
-        return tensor.cpu().numpy().tolist()
+        ret = tensor.cpu().numpy().tolist()
+        assert isinstance(ret, (list, int, float))
+        return ret
 
     @staticmethod
     def tensor2scalar(tensor: Tensor) -> Union[int, float]:
@@ -210,8 +212,13 @@ class OnnxBatchNormalization(OnnxOperator):
         assert training_mode == 0, 'BatchNorm in training mode occurs, currently, hidet does not support training.'
 
         x, scale, bias, running_mean, running_var = inputs
-        y = ops.batch_norm_infer(x, running_mean=running_mean, running_var=running_var, epsilon=epsilon, axis=1)
-        return [y * scale.unsqueeze([0, 2, 3]) + bias.unsqueeze([0, 2, 3])]
+        if len(x.shape) == 1:
+            y = (x - running_mean) * (running_var + epsilon).rsqrt()
+            return [y * scale + bias]
+        else:
+            unsqueeze_dims = [dim for dim in range(len(x.shape)) if dim != 1]
+            y = ops.batch_norm_infer(x, running_mean=running_mean, running_var=running_var, epsilon=epsilon, axis=1)
+            return [y * scale.unsqueeze(unsqueeze_dims) + bias.unsqueeze(unsqueeze_dims)]
 
 
 @register_onnx_operator
@@ -646,20 +653,19 @@ class OnnxAveragePool(OnnxOperator):
 @register_onnx_operator
 class OnnxClip(OnnxOperator):
     def run_v1(self, inputs: List[Tensor]) -> List[Tensor]:
-        raise NotImplementedError()
-
-    def run_v6(self, inputs: List[Tensor]) -> List[Tensor]:
-        x = inputs[0]
+        x, = inputs
         min_value = self.attrs.get('min', None)
         max_value = self.attrs.get('max', None)
         x = ops.clip(x, min_value, max_value)
         return [x]
 
     def run_v11(self, inputs: List[Tensor]) -> List[Tensor]:
-        raise NotImplementedError()
-
-    def run_v12(self, inputs: List[Tensor]) -> List[Tensor]:
-        raise NotImplementedError()
+        data, min_value, max_value = self.optional_inputs(inputs, requires=[True, False, False])
+        if min_value is not None:
+            min_value = self.tensor2scalar(min_value)
+        if max_value is not None:
+            max_value = self.tensor2scalar(max_value)
+        return [ops.clip(data, min_value, max_value)]
 
 
 @register_onnx_operator
@@ -990,7 +996,7 @@ class OnnxReduceL2(OnnxOperator):
         rank = len(data.shape)
         if axes is None:
             axes = list(range(rank))
-        axes: List[int] = [ops.utils.normalize_dim(rank, axis) for axis in axes]
+        axes: List[int] = [ops.utils.normalize_dim(axis, rank) for axis in axes]
         return [ops.sqrt(ops.reduce_sum(ops.square(data), axes, keep_dim=bool(keepdims)))]
 
     def run_v18(self, inputs: List[Tensor]) -> List[Tensor]:
