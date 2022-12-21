@@ -40,17 +40,21 @@ class VectorType(DataType):
             raise ValueError('Invalid vector constant, expect {} elements, got {}'.format(self.num_lanes, len(value)))
         return Constant(value, self)
 
+    @property
     def one(self):
-        return self.constant([self.lane_type.one()] * self.num_lanes)
+        return self.constant([self.lane_type.one] * self.num_lanes)
 
+    @property
     def zero(self):
-        return self.constant([self.lane_type.zero()] * self.num_lanes)
+        return self.constant([self.lane_type.zero] * self.num_lanes)
 
+    @property
     def min_value(self):
-        return self.constant([self.lane_type.min_value()] * self.num_lanes)
+        return self.constant([self.lane_type.min_value] * self.num_lanes)
 
+    @property
     def max_value(self):
-        return self.constant([self.lane_type.max_value()] * self.num_lanes)
+        return self.constant([self.lane_type.max_value] * self.num_lanes)
 
 
 float32x4 = VectorType(float32, 4)

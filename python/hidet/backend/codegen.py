@@ -361,25 +361,35 @@ class Codegen(StmtExprFunctor, TypeFunctor):
     def scalar_literal(value, dtype: DataType):
         if dtype == dtypes.boolean:
             ret = 'true' if value else 'false'
+        elif dtype == dtypes.float64:
+            ret = '{}'.format(float(value))
         elif dtype == dtypes.float32:
             ret = '{}f'.format(float(value))
-        elif dtype == 'int32':
-            assert isinstance(value, int)
-            ret = '{}'.format(int(value))
-        elif dtype == 'float16':
-            ret = 'half({})'.format(float(value))
-        elif dtype == 'int64':
-            assert isinstance(value, int)
+        elif dtype == dtypes.float16:
+            ret = 'half({}f)'.format(float(value))
+        elif dtype == dtypes.tfloat32:
+            ret = '__float_to_tf32({}f)'.format(float(value))
+        elif dtype == dtypes.bfloat16:
+            ret = '__float2bfloat16({}f)'.format(float(value))
+        elif dtype == dtypes.int64:
             ret = '{}ll'.format(int(value))
-        elif dtype == 'bfloat16':
-            ret = '__float2bfloat16({})'.format(float(value))
-        elif dtype == 'tfloat32':
-            ret = '__float2tfloat32({})'.format(float(value))
-        elif dtype == 'uint32':
-            assert isinstance(value, int) and value >= 0
-            return Text('{}u'.format(value))
+        elif dtype == dtypes.int32:
+            ret = '{}'.format(int(value))
+        elif dtype == dtypes.int16:
+            ret = 'int16_t({})'.format(int(value))
+        elif dtype == dtypes.int8:
+            ret = 'int8_t({})'.format(int(value))
+        elif dtype == dtypes.uint64:
+            ret = '{}ull'.format(int(value))
+        elif dtype == dtypes.uint32:
+            ret = '{}u'.format(int(value))
+        elif dtype == dtypes.uint16:
+            ret = 'uint16_t({})'.format(int(value))
+        elif dtype == dtypes.uint8:
+            ret = 'uint8_t({})'.format(int(value))
         else:
             raise NotImplementedError('Cannot recognize scalar literal {} with dtype {}'.format(value, dtype))
+        return Text(ret)
 
     def visit_Constant(self, e: Constant):
         if e.is_scalar():
@@ -500,16 +510,16 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         for label, expr in zip(stmt.input_labels, stmt.input_exprs):
             input_docs.append(Text(f'"{label}"') + '(' + self(expr) + ')')
         return (
-            NewLine()
-            + 'asm '
-            + volatile_doc
-            + '('
-            + template_doc
-            + ' : '
-            + doc_join(output_docs, ', ')
-            + ' : '
-            + doc_join(input_docs, ', ')
-            + ');'
+                NewLine()
+                + 'asm '
+                + volatile_doc
+                + '('
+                + template_doc
+                + ' : '
+                + doc_join(output_docs, ', ')
+                + ' : '
+                + doc_join(input_docs, ', ')
+                + ');'
         )
 
     def visit_BlackBoxStmt(self, stmt: BlackBoxStmt):

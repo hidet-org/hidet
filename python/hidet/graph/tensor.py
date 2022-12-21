@@ -8,7 +8,7 @@ import warnings
 import numpy as np
 
 import hidet.runtime.storage
-from hidet.ffi import cuda, cuda_kernels
+from hidet.ffi import cuda
 from hidet.ir import dtypes
 from hidet.ir.type import DataType, data_type
 from hidet.ir.expr import Constant
@@ -826,7 +826,7 @@ def zeros(shape: Sequence[int], dtype='float32', device='cuda', layout=None) -> 
     return tensor
 
 
-def ones(shape, dtype='float32', device='cuda', layout=None) -> Tensor:
+def ones(shape, dtype='float32', device='cuda') -> Tensor:
     """Create a tensor initialized with one.
 
     Parameters
@@ -840,25 +840,14 @@ def ones(shape, dtype='float32', device='cuda', layout=None) -> Tensor:
     device: str
         The device of the new tensor is created on.
 
-    layout: Optional[DataLayout]
-        The data layout of the tensor.
-
     Returns
     -------
     ret: Tensor
         The created tensor.
     """
-    value_map = {'float32': 1.0, 'int32': 1, 'int64': 1}
-    if dtype in value_map:
-        return full(shape, value_map[dtype], dtype, device, layout)
-    else:
-        if dtype in ['float16', 'bool']:
-            f32_tensor = ones(shape, 'float32', device, layout)
-            return f32_tensor.cast(dtype)
-        else:
-            raise NotImplementedError(
-                'Not implemented ones for dtype {}, please create a float32 tensor and cast to this type'.format(dtype)
-            )
+    from hidet import ops
+    dtype = data_type(dtype)
+    return ops.constant(shape=shape, value=dtype.one, dtype=dtype, device=device)
 
 
 def full(shape, fill_value: Union[float, int], dtype='float32', device='cuda', layout=None) -> Tensor:

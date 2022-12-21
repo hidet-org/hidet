@@ -35,7 +35,7 @@ class Min(ReduceOperation):
     def initial_value(self, dtype: Union[DataType, str]) -> Expr:
         if isinstance(dtype, str):
             dtype = data_type(dtype)
-        return dtype.max_value()
+        return dtype.max_value
 
     def combine(self, lhs: Expr, rhs: Expr) -> Expr:
         from hidet.ir import primitives  # pylint: disable=import-outside-toplevel
@@ -58,7 +58,7 @@ class Max(ReduceOperation):
     def initial_value(self, dtype: Union[DataType, str]) -> Constant:
         if isinstance(dtype, str):
             dtype = data_type(dtype)
-        return dtype.min_value()
+        return dtype.min_value
 
     def combine(self, lhs: Expr, rhs: Expr) -> Expr:
         from hidet.ir import primitives  # pylint: disable=import-outside-toplevel
@@ -81,7 +81,7 @@ class Sum(ReduceOperation):
     def initial_value(self, dtype: Union[DataType, str]) -> Constant:
         if isinstance(dtype, str):
             dtype = data_type(dtype)
-        return dtype.zero()
+        return dtype.zero
 
     def combine(self, lhs: Expr, rhs: Expr) -> Expr:
         return lhs + rhs
@@ -100,7 +100,7 @@ class Average(ReduceOperation):
     def initial_value(self, dtype: Union[DataType, str]) -> Constant:
         if isinstance(dtype, str):
             dtype = data_type(dtype)
-        return dtype.zero()
+        return dtype.zero
 
     def combine(self, lhs: Expr, rhs: Expr) -> Expr:
         return lhs + rhs

@@ -29,7 +29,7 @@ class CompilationFailed(Exception):
         self.msg = msg
 
     def __str__(self):
-        lines = ['failed to compile source file: {}'.format(self.source_path), '{}'.format(self.msg)]
+        lines = ['failed to compile file://{}'.format(self.source_path), '{}'.format(self.msg)]
         return '\n'.join(lines)
 
 
