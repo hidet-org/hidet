@@ -73,10 +73,14 @@ for name, model in [('eager', model), ('hidet', model_opt)]:
 #   precision of data type automatically (e.g., float16), or control the behavior of parallelization of the reduction
 #   dimension of the matrix multiplication and convolution operators.
 #
-# You can learn more about them in
-# the tutorial :doc:`/gallery/tutorials/optimize-pytorch-model`.
-
-# %%
+# .. seealso::
+#
+#   You can learn more about the configuration of hidet as a backend in torch dynamo in the tutorial
+#   :doc:`/gallery/tutorials/optimize-pytorch-model`.
+#
+# In the remaining parts, we will show you the key components of Hidet.
+#
+#
 # Define tensors
 # --------------
 #
