@@ -286,7 +286,38 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         return '(' + self(e.cond) + ' ? ' + self(e.then_expr) + ' : ' + self(e.else_expr) + ')'
 
     def visit_Cast(self, e: Cast):
-        return Text('((') + self.visit(e.target_type) + ')(' + self(e.expr) + '))'
+        src_dtype = self.type_infer(e.expr)
+        dst_dtype = e.target_type
+        if isinstance(src_dtype, DataType) and isinstance(dst_dtype, DataType) and src_dtype == dtypes.float16:
+            # in cuda, cuda_fp16.h only defines the half struct with conversion operators for the types like float,
+            # short, int, unsigned int, long long, unsigned long long, but not for the types like int8_t, uint8_t,
+            # int16_t, uint16_t, int32_t, uint32_t, int64_t, uint64_t, so we need to cast them here.
+            if dst_dtype == dtypes.int64:
+                return '(long long)(' + self(e.expr) + ')'
+            elif dst_dtype == dtypes.uint64:
+                return '(unsigned long long)(' + self(e.expr) + ')'
+            elif dst_dtype == dtypes.int32:
+                return '(int)(' + self(e.expr) + ')'
+            elif dst_dtype == dtypes.uint32:
+                return '(unsigned int)(' + self(e.expr) + ')'
+            elif dst_dtype == dtypes.int16:
+                return '(short)(' + self(e.expr) + ')'
+            elif dst_dtype == dtypes.uint16:
+                return '(unsigned short)(' + self(e.expr) + ')'
+            elif dst_dtype == dtypes.int8:
+                return '(char)(' + self(e.expr) + ')'
+            elif dst_dtype == dtypes.uint8:
+                return '(unsigned char)(' + self(e.expr) + ')'
+            elif dst_dtype == dtypes.boolean:
+                return '(bool)(' + self(e.expr) + ')'
+            elif dst_dtype == dtypes.float32:
+                return '(float)(' + self(e.expr) + ')'
+            elif dst_dtype == dtypes.float64:
+                return '(double)(' + self(e.expr) + ')'
+            else:
+                return Text('((') + self.visit(e.target_type) + ')(' + self(e.expr) + '))'
+        else:
+            return Text('((') + self.visit(e.target_type) + ')(' + self(e.expr) + '))'
 
     def visit_Address(self, e: Address):
         return Text('&') + self.visit(e.expr)
