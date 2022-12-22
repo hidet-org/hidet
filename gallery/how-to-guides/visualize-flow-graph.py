@@ -116,7 +116,7 @@ print(graph_opt)
 #
 # :download:`Download 1_FoldConstantPass.json <../../../../gallery/how-to-guides/outs/1_FoldConstantPass.json>`
 #
-# :download:`Download 2_PatternTransformPass.json <../../../../gallery/how-to-guides/outs/2_PatternTransformPass.json>`
+# :download:`Download 2_PatternTransformPass.json <../../../../gallery/how-to-guides/outs/2_SubgraphRewritePass.json>`
 #
 # :download:`Download 4_ResolveVariantPass.json <../../../../gallery/how-to-guides/outs/4_ResolveVariantPass.json>`
 #

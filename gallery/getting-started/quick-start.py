@@ -6,9 +6,6 @@ Quick Start
 
 This guide walks through the key functionality of Hidet for tensor computation.
 """
-import torch._dynamo as dynamo
-import torch.hub
-
 # %%
 # We should first import hidet.
 import hidet
@@ -16,49 +13,67 @@ import hidet
 # %%
 # Optimize PyTorch model with Hidet
 # ---------------------------------
-# .. tip::
+# .. note::
 #   :class: margin
 #
 #   Torch dynamo is a feature introduced in PyTorch 2.0, which has not been officially released yet. Please install the
 #   nightly build of PyTorch to use this feature.
 #
-# The easiest way to use Hidet is to use the :func:`torch.compile` function with 'hidet' as the backend.
+# The easiest way to use Hidet is to use the :func:`torch.compile` function with 'hidet' as the backend, such as
+#
+# .. code-block:: python
+#
+#   model_opt = torch.compile(model, backend='hidet')
+#
+# Next, we use resnet18 model as an example to show how to optimize a PyTorch model with Hidet.
 
-# use a pretrained model resnet18 as an example
+# disable tf32 to make the result of torch more accurate
+import torch.backends.cudnn
+torch.backends.cudnn.allow_tf32 = False
+
+# take resnet18 as an example
 x = torch.randn(1, 3, 224, 224).cuda()
-model = torch.hub.load('pytorch/vision:v0.9.0', 'resnet18', pretrained=True).cuda().eval()
+model = torch.hub.load('pytorch/vision:v0.9.0', 'resnet18', pretrained=True, verbose=False)
+model = model.cuda().eval()
 
-
-# first optimize the model with pytorch's default backend 'inductor'
+# currently, hidet only support inference
 with torch.no_grad():
-    model_inductor = torch.compile(model, backend='inductor')
-    model_inductor(x)
+    # optimize the model with 'hidet' backend
+    model_opt = torch.compile(model, backend='hidet')
 
-    # benchmark the performance of the optimized model with inductor backend
-    # the benchmark_func would run (warmup + number * repeat) times and return the median latency.
-    from hidet.testing import benchmark_func
-    inductor_latency: float = benchmark_func(lambda: model_inductor(x), warmup=3, number=10, repeat=10)
+    # run the optimized model
+    y1 = model_opt(x)
+    y2 = model(x)
 
-# torch dynamo requires to call the reset function before we use another backend
-dynamo.reset()
+    # check the correctness (when tf32 is used, the error tolerance would go to 1e-3)
+    torch.testing.assert_close(actual=y1, expected=y2, rtol=1e-5, atol=1e-5)
 
-# optimize the model with hidet provided backend 'hidet'
-# the first run of hidet optimized model would take 20 to 30 minutes to optimize the model and tune the execution
-# schedule for each convolution/matrix multiplication in the model. Usually, the optimizing time depends on the number
-# of these operators in the model and the performance of your CPU. It takes about 1 minute to tune such a kernel on
-# an i9-12900k CPU.
-with torch.no_grad():
-    model_hidet = torch.compile(model, backend='hidet')
-    model_hidet(x)
 
-    # benchmark the performance of the optimized model
-    hidet_latency: float = benchmark_func(lambda: model_hidet(x), warmup=3, number=10, repeat=10)
+# benchmark the performance
+for name, model in [('eager', model), ('hidet', model_opt)]:
+    start_event = torch.cuda.Event(enable_timing=True)
+    end_event = torch.cuda.Event(enable_timing=True)
+    torch.cuda.synchronize()
+    start_event.record()
+    for _ in range(100):
+        y = model(x)
+    end_event.record()
+    torch.cuda.synchronize()
+    print('{:>10}: {:.3f} ms'.format(name, start_event.elapsed_time(end_event) / 100.0))
 
-print(' inductor: {} ms'.format(inductor_latency))
-print('    hidet: {} ms'.format(hidet_latency))
 
 # %%
-# Hidet provides some configurations to control the optimization of hidet backend. You can learn more about them in
+# Hidet provides some configurations to control the optimization of hidet backend. such as
+#
+# - **Search Space**: you can choose the search space of operator kernel tuning. A larger schedule space usually
+#   achieves the better performance, but takes longer time to optimize.
+# - **Correctness Checking**: print the correctness checking report. You can know the numerical difference between the
+#   hidet generated operator and the original pytorch operator.
+# - **Other Configurations**: you can also configure the other optimizations of hidet backend, such as using a lower
+#   precision of data type automatically (e.g., float16), or control the behavior of parallelization of the reduction
+#   dimension of the matrix multiplication and convolution operators.
+#
+# You can learn more about them in
 # the tutorial :doc:`/gallery/tutorials/optimize-pytorch-model`.
 
 # %%
