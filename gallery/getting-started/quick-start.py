@@ -6,10 +6,60 @@ Quick Start
 
 This guide walks through the key functionality of Hidet for tensor computation.
 """
+import torch._dynamo as dynamo
+import torch.hub
 
 # %%
 # We should first import hidet.
 import hidet
+
+# %%
+# Optimize PyTorch model with Hidet
+# ---------------------------------
+# .. tip::
+#   :class: margin
+#
+#   Torch dynamo is a feature introduced in PyTorch 2.0, which has not been officially released yet. Please install the
+#   nightly build of PyTorch to use this feature.
+#
+# The easiest way to use Hidet is to use the :func:`torch.compile` function with 'hidet' as the backend.
+
+# use a pretrained model resnet18 as an example
+x = torch.randn(1, 3, 224, 224).cuda()
+model = torch.hub.load('pytorch/vision:v0.9.0', 'resnet18', pretrained=True).cuda().eval()
+
+
+# first optimize the model with pytorch's default backend 'inductor'
+with torch.no_grad():
+    model_inductor = torch.compile(model, backend='inductor')
+    model_inductor(x)
+
+    # benchmark the performance of the optimized model with inductor backend
+    # the benchmark_func would run (warmup + number * repeat) times and return the median latency.
+    from hidet.testing import benchmark_func
+    inductor_latency: float = benchmark_func(lambda: model_inductor(x), warmup=3, number=10, repeat=10)
+
+# torch dynamo requires to call the reset function before we use another backend
+dynamo.reset()
+
+# optimize the model with hidet provided backend 'hidet'
+# the first run of hidet optimized model would take 20 to 30 minutes to optimize the model and tune the execution
+# schedule for each convolution/matrix multiplication in the model. Usually, the optimizing time depends on the number
+# of these operators in the model and the performance of your CPU. It takes about 1 minute to tune such a kernel on
+# an i9-12900k CPU.
+with torch.no_grad():
+    model_hidet = torch.compile(model, backend='hidet')
+    model_hidet(x)
+
+    # benchmark the performance of the optimized model
+    hidet_latency: float = benchmark_func(lambda: model_hidet(x), warmup=3, number=10, repeat=10)
+
+print(' inductor: {} ms'.format(inductor_latency))
+print('    hidet: {} ms'.format(hidet_latency))
+
+# %%
+# Hidet provides some configurations to control the optimization of hidet backend. You can learn more about them in
+# the tutorial :doc:`/gallery/tutorials/optimize-pytorch-model`.
 
 # %%
 # Define tensors

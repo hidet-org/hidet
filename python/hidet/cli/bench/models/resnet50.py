@@ -5,7 +5,7 @@ from .model import BenchModel, all_registered_models, commonly_used_models
 
 
 class ResNet(BenchModel):
-    def __init__(self, batch_size, channels: int, height: int, width: int, model_name: str):
+    def __init__(self, model_name: str, batch_size, channels: int, height: int, width: int):
         self.model_name = model_name
         self.batch_size = batch_size
         self.channels = channels
@@ -24,37 +24,12 @@ class ResNet(BenchModel):
         return args, kwargs
 
 
-class ResNet18(ResNet):
-    def __init__(self, batch_size, channels: int, height: int, width: int):
-        super().__init__(batch_size, channels, height, width, 'resnet18')
-
-
-class ResNet34(ResNet):
-    def __init__(self, batch_size, channels: int, height: int, width: int):
-        super().__init__(batch_size, channels, height, width, 'resnet34')
-
-
-class ResNet50(ResNet):
-    def __init__(self, batch_size, channels: int, height: int, width: int):
-        super().__init__(batch_size, channels, height, width, 'resnet50')
-
-
-class ResNet101(ResNet):
-    def __init__(self, batch_size, channels: int, height: int, width: int):
-        super().__init__(batch_size, channels, height, width, 'resnet101')
-
-
-class ResNet152(ResNet):
-    def __init__(self, batch_size, channels: int, height: int, width: int):
-        super().__init__(batch_size, channels, height, width, 'resnet152')
-
-
 resnet_models = {
-    'resnet18': ResNet18(1, 3, 224, 224),
-    'resnet34': ResNet34(1, 3, 224, 224),
-    'resnet50': ResNet50(1, 3, 224, 224),
-    'resnet101': ResNet101(1, 3, 224, 224),
-    'resnet152': ResNet152(1, 3, 224, 224),
+    'resnet18': ResNet('resnet18', 1, 3, 224, 224),
+    'resnet34': ResNet('resnet34', 1, 3, 224, 224),
+    'resnet50': ResNet('resnet50', 1, 3, 224, 224),
+    'resnet101': ResNet('resnet101', 1, 3, 224, 224),
+    'resnet152': ResNet('resnet152', 1, 3, 224, 224),
 }
 
 
@@ -63,20 +38,25 @@ commonly_used_models.append(resnet_models['resnet50'])
 
 
 @click.command(name='resnet')
+@click.option(
+    '--models',
+    type=str,
+    default='resnet50',
+    show_default=True,
+    help='Comma seperated models to benchmark. Available models: {}'.format(', '.join(list(resnet_models.keys()))),
+)
 @click.option('-n', '--batch-size', default=1, show_default=True, help='Batch size')
 @click.option('-c', '--channels', default=3, show_default=True, help='Input channels')
 @click.option('-h', '--height', default=224, show_default=True, help='Input image height')
 @click.option('-w', '--width', default=224, show_default=True, help='Input image width')
-def bench_resnet(batch_size: int, channels: int, height: int, width: int):
-    models = {
-        'resnet18': ResNet18(batch_size, channels, height, width),
-        'resnet34': ResNet34(batch_size, channels, height, width),
-        'resnet50': ResNet50(batch_size, channels, height, width),
-        'resnet101': ResNet101(batch_size, channels, height, width),
-        'resnet152': ResNet152(batch_size, channels, height, width),
-    }
+def bench_resnet(models: str, batch_size: int, channels: int, height: int, width: int):
+    models = [model.strip() for model in models.split(',')]
+    for model in models:
+        if model not in resnet_models:
+            raise ValueError('Unknown model: {}, candidates: {}'.format(model, list(resnet_models.keys())))
 
+    bench_models = [ResNet(model_name, batch_size, channels, height, width) for model_name in models]
     header = BenchModel.headers()
-    result = [model.benchmark() for model in models.values()]
+    result = [bench_model.benchmark() for bench_model in bench_models]
 
     click.echo(tabulate(result, headers=header, tablefmt='github', floatfmt='.3f', numalign='right', stralign='left'))

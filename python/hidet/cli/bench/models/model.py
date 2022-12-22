@@ -11,7 +11,7 @@ if hidet.torch.dynamo_available():
 else:
     dynamo = None
 
-torch.backends.cudnn.allow_tf32 = False  # for fair comparison
+# torch.backends.cudnn.allow_tf32 = False  # for fair comparison
 
 
 class BenchModel:
