@@ -234,7 +234,11 @@ def build_ir_module_batch(
 
             with multiprocessing.Pool(processes=num_workers) as pool:
                 for build_result in tqdm(
-                    pool.imap(_build_ir_module_job, jobs), desc='Compiling', total=len(jobs), disable=not verbose
+                    pool.imap(_build_ir_module_job, jobs),
+                    desc='Compiling',
+                    total=len(jobs),
+                    disable=not verbose,
+                    ncols=80,
                 ):
                     build_results.append(build_result)
         else:

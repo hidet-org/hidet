@@ -28,6 +28,7 @@ Hidet is an open-source DNN inference framework, it features
   :maxdepth: 1
   :caption: Tutorials
 
+  gallery/tutorials/optimize-pytorch-model
   gallery/tutorials/run-onnx-model
 
 

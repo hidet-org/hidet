@@ -11,7 +11,7 @@ if hidet.torch.dynamo_available():
 else:
     dynamo = None
 
-torch.backends.cudnn.allow_tf32 = False  # for fair comparison
+# torch.backends.cudnn.allow_tf32 = False  # for fair comparison
 
 
 class BenchModel:
@@ -38,14 +38,14 @@ class BenchModel:
             items.append('{}={}'.format(k, self.tensor_str(v)))
         return ', '.join(items)
 
-    def bench_with_backend(self, backend: str, warmup=3, number=10, repeat=10):
+    def bench_with_backend(self, backend: str, mode=None, passes=None, warmup=3, number=10, repeat=10):
         model, (args, kwargs) = self.model(), self.example_inputs()
         model = model.cuda().eval()
         args = [arg.cuda() for arg in args]
         kwargs = {k: v.cuda() for k, v in kwargs.items()}
         dynamo.reset()
         with torch.no_grad():
-            model_opt = torch.compile(model, backend=backend)
+            model_opt = torch.compile(model, backend=backend, mode=mode, passes=passes)
             latency = benchmark_func(
                 run_func=lambda: model_opt(*args, **kwargs), warmup=warmup, number=number, repeat=repeat
             )
@@ -55,7 +55,7 @@ class BenchModel:
         return self.bench_with_backend('eager')
 
     def bench_inductor(self) -> float:
-        return self.bench_with_backend('inductor')
+        return self.bench_with_backend('inductor', mode='max-autotune')
 
     def bench_hidet(self, use_cuda_graph=True, use_fp16=False, use_fp16_reduction=False, space=2) -> float:
         config = hidet.torch.dynamo_config

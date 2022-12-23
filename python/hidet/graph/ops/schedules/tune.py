@@ -143,7 +143,7 @@ def tune(template_func, task: Task, target_device: str, working_dir: str) -> IRM
     dummy_inputs = dummy_inputs_from_task(task, target_device=target_device)
     latencies = []
     warmup, number, repeat = hidet.option.get_option('bench_config')
-    for compiled_func in tqdm(compiled_funcs, desc='Benchmarking', total=len(ir_modules)):
+    for compiled_func in tqdm(compiled_funcs, desc='Benchmarking', total=len(ir_modules), ncols=80):
         if compiled_func:
             repeat_latency = compiled_func.profile(*dummy_inputs, warmup=warmup, number=number, repeat=repeat)
             latency = float(np.median(repeat_latency))

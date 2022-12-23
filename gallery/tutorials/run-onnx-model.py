@@ -2,8 +2,8 @@
 .. currentmodule:: hidet
 .. _Run ONNX Model with Hidet:
 
-Run ONNX Model with Hidet
-=========================
+Optimize ONNX Model
+===================
 
 This tutorial walks through the steps to run a model in `ONNX format <https://onnx.ai/>`_ with Hidet.
 The ResNet50 onnx model exported from PyTorch model zoo would be used as an example.
