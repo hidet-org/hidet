@@ -142,6 +142,14 @@ def build_ir_module(
     src_path = os.path.join(output_dir, 'source.cu')
     lib_path = os.path.join(output_dir, 'lib.so')
 
+    # get function type
+    func: Function = ir_module.lookup(func_name)
+    if func.kind == 'packed_func':
+        packed_func = ir_module.lookup(func.attrs['packed_func'])
+        func_type = FuncType.from_func(packed_func)
+    else:
+        func_type = FuncType.from_func(func)
+
     # lower ir module
     instruments = []
     if save_ir:
@@ -156,14 +164,6 @@ def build_ir_module(
 
     # compile source code
     compile_source(src_path, out_lib_path=lib_path, keep_ptx=False)
-
-    # get function type
-    func: Function = ir_module.lookup(func_name)
-    if func.kind == 'packed_func':
-        packed_func = ir_module.lookup(func.attrs['packed_func'])
-        func_type = FuncType.from_func(packed_func)
-    else:
-        func_type = FuncType.from_func(func)
 
     if load:
         # load function
