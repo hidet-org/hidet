@@ -15,11 +15,11 @@ class Event:
         else:
             flags = cudart.cudaEventDefault
         err, self._handle = cudart.cudaEventCreateWithFlags(flags)
-        assert err == 0
+        assert err == 0, err
 
     def __del__(self):
-        err = cudart.cudaEventDestroy(self._handle)
-        assert err == 0
+        (err,) = cudart.cudaEventDestroy(self._handle)
+        assert err == 0, err
 
     def handle(self) -> cudaEvent_t:
         return self._handle
@@ -29,7 +29,7 @@ class Event:
         if not self._enable_timing or not start_event._enable_timing:
             raise RuntimeError("Event does not have timing enabled")
         err, elapsed_time = cudart.cudaEventElapsedTime(start_event._handle, self._handle)
-        assert err == 0
+        assert err == 0, err
         return elapsed_time
 
     def record(self, stream):
@@ -37,12 +37,12 @@ class Event:
 
         if not isinstance(stream, Stream):
             raise TypeError("stream must be a Stream")
-        err = cudart.cudaEventRecord(self._handle, stream.handle())
-        assert err
+        (err,) = cudart.cudaEventRecord(self._handle, stream.handle())
+        assert err, err
 
     def synchronize(self):
         if not self._blocking:
             raise RuntimeError("Event does not have blocking enabled")
-        err = cudart.cudaEventSynchronize(self._handle)
+        (err,) = cudart.cudaEventSynchronize(self._handle)
         if err != 0:
             raise RuntimeError("cudaEventSynchronize failed with error: {}".format(err.name))

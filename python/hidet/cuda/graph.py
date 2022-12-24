@@ -3,20 +3,21 @@ from typing import List, Sequence, Optional
 from cuda import cudart
 from cuda.cudart import cudaGraphExec_t
 from hidet.graph.tensor import Tensor, zeros_like, randn_like
-from hidet.graph.ir.flow_graph import FlowGraph
 from hidet.runtime.storage import CudaMemoryPool
 from hidet.utils import same_list
-from .stream import Stream, current_stream
-from .memory import memcpy_async, cudaMemcpyKind
+from .stream import Stream, StreamContext, current_stream
+from .memory import memcpy_async
 
 
 class CudaGraphCapture:
     def __init__(self):
         self.stream = Stream()
+        self.stream_context = StreamContext(self.stream)
         self.captured_graph: Optional[cudart.cudaGraph_t] = None
 
     def __enter__(self):
-        err = cudart.cudaStreamBeginCapture(
+        self.stream_context.__enter__()
+        (err,) = cudart.cudaStreamBeginCapture(
             self.stream.handle(), cudart.cudaStreamCaptureMode.cudaStreamCaptureModeGlobal
         )
         if err != 0:
@@ -24,12 +25,13 @@ class CudaGraphCapture:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         err, self.captured_graph = cudart.cudaStreamEndCapture(self.stream.handle())
-        assert err == 0
+        assert err == 0, err
+        self.stream_context.__exit__(exc_type, exc_val, exc_tb)
 
     def __del__(self):
         if self.captured_graph is not None:
-            err = cudart.cudaGraphDestroy(self.captured_graph)
-            assert err == 0
+            (err,) = cudart.cudaGraphDestroy(self.captured_graph)
+            assert err == 0, err
 
     def instantiate(self) -> cudaGraphExec_t:
         if self.captured_graph is None:
@@ -41,7 +43,11 @@ class CudaGraphCapture:
 
 
 class CudaGraph:
-    def __init__(self, flow_graph: FlowGraph):
+    def __init__(self, flow_graph):
+        from hidet.graph.ir.flow_graph import FlowGraph
+
+        flow_graph: FlowGraph
+
         self._memory_pool: CudaMemoryPool = CudaMemoryPool(block_size=4096, max_reserve_size=10 * 1024**3)
         self._graph_capture: CudaGraphCapture = CudaGraphCapture()
         self._flow_graph: FlowGraph = flow_graph
@@ -84,8 +90,9 @@ class CudaGraph:
             return self.run(inputs)
 
     def __del__(self):
-        err = cudart.cudaGraphExecDestroy(self._graph_exec)
-        assert err == 0
+        (err,) = cudart.cudaGraphExecDestroy(self._graph_exec)
+        self._memory_pool.storage_device.freeze(False)
+        assert err == 0, err
 
     def copy_inputs(self, inputs: Sequence[Tensor], stream: Optional[Stream]):
         if len(inputs) != len(self._inputs):
@@ -99,13 +106,7 @@ class CudaGraph:
                 raise ValueError("the dtype of input does not match")
             if src.device != dst.device:
                 raise ValueError("the device of input does not match")
-            memcpy_async(
-                dst.storage.addr,
-                src.storage.addr,
-                dst.nbytes,
-                kind=cudaMemcpyKind.cudaMemcpyDeviceToDevice,
-                stream=stream,
-            )
+            memcpy_async(dst=dst.storage.addr, src=src.storage.addr, num_bytes=dst.nbytes, stream=stream)
 
     @property
     def inputs(self) -> List[Tensor]:

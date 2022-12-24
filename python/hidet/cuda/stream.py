@@ -9,12 +9,12 @@ class Stream:
     def __init__(self):
         self._handle: cudaStream_t
         err, self._handle = cudart.cudaStreamCreate()
-        assert err == 0
+        assert err == 0, err
 
     def __del__(self):
         if self._handle != 0:
-            err = cudart.cudaStreamDestroy(self._handle)
-            assert err == 0
+            (err,) = cudart.cudaStreamDestroy(self._handle)
+            assert err == 0, err
 
     def __int__(self):
         return int(self._handle)
@@ -23,19 +23,19 @@ class Stream:
         return self._handle
 
     def synchronize(self) -> None:
-        err = cudart.cudaStreamSynchronize(self._handle)
+        (err,) = cudart.cudaStreamSynchronize(self._handle)
         if err != 0:
             raise RuntimeError("cudaStreamSynchronize failed with error: {}".format(err.name))
 
     @staticmethod
     def from_handle(handle: Union[cudaStream_t, int]) -> Stream:
         new_stream = Stream.__new__(Stream)
-        new_stream._handle = cudaStream_t(handle)   # pylint: disable=protected-access
+        new_stream._handle = cudaStream_t(handle)  # pylint: disable=protected-access
         return new_stream
 
 
-_current_stream: Stream = Stream()
 _default_stream: Stream = Stream.from_handle(cudart.cudaStreamDefault)
+_current_stream: Stream = _default_stream
 
 
 class StreamContext:
@@ -49,14 +49,14 @@ class StreamContext:
         global _current_stream
         self._prev = _current_stream
         _current_stream = self._stream
-        runtime_api.set_current_stream(stream_handle=_current_stream.handle())
+        runtime_api.set_current_stream(_current_stream)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         from hidet.ffi import runtime_api
 
         global _current_stream
         _current_stream = self._prev
-        runtime_api.set_current_stream(stream_handle=_current_stream.handle())
+        runtime_api.set_current_stream(_current_stream)
 
 
 def current_stream() -> Stream:

@@ -1,12 +1,13 @@
 from typing import List, Tuple, Union, TypeVar
 import os
 
+import hidet.cuda
 from hidet import option
 from hidet.ir.func import IRModule
 from hidet.graph.ops.definitions.conv2d.conv2d import Conv2dTask
 from hidet.graph.ops.schedules.common import Schedule, NotSupportedError
 from hidet.graph.ops.schedules.resolve import resolve_ir_modules
-from hidet.utils import prod, cuda
+from hidet.utils import prod
 from hidet.transforms.tools import fuse_and_pack
 
 
@@ -46,7 +47,7 @@ class DepthwiseConv2dSchedule(Schedule):
             * ((block_shape[3] - 1) * strides[1] + kernels[1])
             + block_shape[1] * kernels[0] * kernels[1]
         ) * 4
-        if self.smem_nbytes > cuda.max_smem_bytes_per_block():
+        if self.smem_nbytes > hidet.cuda.properties().sharedMemPerBlock:
             raise NotSupportedError(self)
         if self.threads > 1024 or self.threads < 32:
             raise NotSupportedError(self)
@@ -129,6 +130,7 @@ def schedule_depthwise_conv2d(task: Conv2dTask, workding_dir: str) -> IRModule:
     return resolve_ir_modules(
         ir_modules=ir_modules,
         schedules=schedules,
+        func_name=task.name,
         target_device='cuda',
         output_dir=os.path.join(workding_dir, './resolve'),
         parallel=True,
@@ -150,7 +152,6 @@ def schedule_depthwise_conv2d_kernel(
     stride_width: int,
     stride_height: int,
 ) -> IRModule:
-    import hidet
     from hidet.lang import f32, tensor, attr, grid
     from hidet.lang.mapping import spatial, repeat
     from hidet.lang.cuda import threadIdx, blockIdx, syncthreads

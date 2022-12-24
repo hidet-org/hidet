@@ -11,6 +11,7 @@ import multiprocessing
 import psutil
 from tqdm import tqdm
 
+import hidet.cuda
 from hidet.libinfo import get_include_dirs
 from hidet.ir.type import FuncType
 from hidet.ir.func import IRModule
@@ -18,7 +19,7 @@ from hidet.transforms import PassContext, lower
 from hidet.runtime import CompiledFunction
 from hidet.ffi import PackedFunc
 from hidet.ffi.ffi import library_paths
-from hidet.utils import cuda, Timer
+from hidet.utils import Timer
 from hidet.backend import codegen
 
 
@@ -62,7 +63,7 @@ def compile_source(src_path: str, out_lib_path: str, keep_ptx=False) -> None:
     # pylint: disable=too-many-locals
     src_path = os.path.abspath(src_path)
     out_lib_path = os.path.abspath(out_lib_path)
-    cc = cuda.query_compute_capability()
+    cc = hidet.cuda.compute_capability()
 
     # dir contains the runtime header file 'hidet/runtime.h'
     include_dirs = get_include_dirs()

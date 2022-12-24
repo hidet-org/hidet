@@ -1,7 +1,6 @@
 from typing import List
 import pytest
 import numpy as np
-import os
 import onnx
 import onnxruntime
 import hidet.utils
@@ -62,7 +61,7 @@ def check_model(model_path: str, input_names: List[str], input_tensors: List[Ten
 @pytest.mark.parametrize("dtype", ['float32', 'float16'])
 @pytest.mark.parametrize("mode", ['traced', 'imperative', 'opt'])
 def test_onnx_model(model_name: str, batch_size: int, dtype: str, mode: str):
-    if hidet.utils.cuda.query_compute_capability() < (8, 0) and dtype == 'float16':
+    if hidet.cuda.compute_capability() < (8, 0) and dtype == 'float16':
         pytest.skip(
             'float16 will triger hidet to use fp16 tensor core (mma.m16n8k16), '
             'which is only supported on sm80 and above'

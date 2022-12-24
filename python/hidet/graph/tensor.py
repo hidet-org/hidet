@@ -8,12 +8,12 @@ import warnings
 import numpy as np
 
 import hidet.runtime.storage
-from hidet.ffi import cuda
+import hidet.cuda
+from hidet.cuda import Stream
 from hidet.ir import dtypes
 from hidet.ir.type import DataType, data_type
 from hidet.ir.expr import Constant
 from hidet.ir.layout import DataLayout, RowMajorLayout
-from hidet.runtime.cuda_stream import CudaStream
 from hidet.runtime.storage import Storage
 from hidet.utils import prod
 
@@ -232,8 +232,8 @@ class Tensor:
         """
         from .impl.dlpack import to_dlpack
 
-        if stream:
-            cuda.stream_synchronize(stream)
+        if stream is not None:
+            Stream.from_handle(stream).synchronize()
         return to_dlpack(self)
 
     def __dlpack_device__(self) -> Tuple[int, int]:
@@ -614,7 +614,7 @@ class Tensor:
             trace=None,
         )
 
-    def copy_async(self, stream: Optional[CudaStream] = None) -> Tensor:
+    def copy_async(self, stream: Optional[Stream] = None) -> Tensor:
         if self.trace is not None:
             raise ValueError('Please use .detach() to detach a trace variable first before copying.')
         return Tensor(
@@ -646,13 +646,13 @@ class Tensor:
                 trace=None,
             )
 
-    def cpu_async(self, stream: Optional[CudaStream] = None):
+    def cpu_async(self, stream: Optional[Stream] = None):
         """
         Copy the tensor to CPU asynchronously.
 
         Parameters
         ----------
-        stream: Optional[CudaStream]
+        stream: Optional[Stream]
             The stream to copy the tensor to CPU on.
 
         Returns
@@ -671,13 +671,13 @@ class Tensor:
             else:
                 raise ValueError('Please use .detach() to detach a trace variable first.')
 
-    def cuda_async(self, stream: Optional[CudaStream] = None):
+    def cuda_async(self, stream: Optional[Stream] = None):
         """
         Copy the tensor to GPU asynchronously.
 
         Parameters
         ----------
-        stream: Optional[CudaStream]
+        stream: Optional[Stream]
             The stream to copy the tensor to GPU on.
 
         Returns
@@ -819,7 +819,7 @@ def zeros(shape: Sequence[int], dtype='float32', device='cuda', layout=None) -> 
         The created tensor.
     """
     tensor = empty(shape, dtype, device, layout)
-    cuda.memset_async(tensor.storage.addr, tensor.nbytes, value=0)
+    hidet.cuda.memset_async(addr=tensor.storage.addr, num_bytes=tensor.nbytes, value=0)
     return tensor
 
 
@@ -916,13 +916,19 @@ def randn(shape, dtype='float32', mean=0.0, stddev=1.0, device='cuda', layout=No
     [[ 0.10720467 -1.6906018   0.06347568]
      [-0.37061226  0.562728    1.857547  ]]
     """
-    if device != 'cuda' or dtype != 'float32':
-        return randn(shape, 'float32', mean, stddev, 'cuda', layout).to(device=device, dtype=dtype)
 
-    assert device == 'cuda' and dtype == 'float32'
-    tensor = empty(shape, dtype='float32', device='cuda', layout=layout)
-    cuda.generate_normal(tensor.storage.addr, num_elements=prod(tensor.shape), mean=mean, stddev=stddev)
-    return tensor
+    np_tensor = np.random.randn(*shape)
+    np_tensor = np_tensor * stddev + mean
+    hidet_tensor = from_numpy(np_tensor)
+    return hidet_tensor.to(device=device, dtype=dtype)
+
+    # if device != 'cuda' or dtype != 'float32':
+    #     return randn(shape, 'float32', mean, stddev, 'cuda', layout).to(device=device, dtype=dtype)
+    #
+    # assert device == 'cuda' and dtype == 'float32'
+    # tensor = empty(shape, dtype='float32', device='cuda', layout=layout)
+    # cuda.generate_normal(tensor.storage.addr, num_elements=prod(tensor.shape), mean=mean, stddev=stddev)
+    # return tensor
 
 
 def randint(low: int, high=None, shape: Sequence[int] = (), dtype: str = 'int32') -> Tensor:
@@ -1051,11 +1057,10 @@ def from_numpy(nparray: np.ndarray) -> Tensor:
         raise NotImplementedError("Do not support convert np.ndarray with data type '{}'.".format(nparray.dtype))
     nparray = nparray.copy(order='C')  # make the data layout like C, which is contiguous
     tensor = empty(shape=nparray.shape, dtype=dtype_convert[nparray.dtype], device='cpu')
-    cuda.memcpy(
-        src_addr=void_pointer_to_uint64(nparray.ctypes.data_as(ctypes.c_void_p)),
-        dst_addr=tensor.storage.addr,
+    hidet.cuda.memcpy(
+        dst=tensor.storage.addr,
+        src=void_pointer_to_uint64(nparray.ctypes.data_as(ctypes.c_void_p)),
         num_bytes=tensor.nbytes,
-        kind=cuda.HostToHost,
     )
     return tensor
 

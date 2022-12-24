@@ -1,17 +1,7 @@
-from packaging import version
-
-try:
-    import torch
-except ImportError:
-    torch = None
-    _available = False
-else:
-    _available = True
-
-if not _available or version.parse(torch.__version__) < version.parse('2.0.0.dev'):
-    _dynamo_available = False
-else:
-    _dynamo_available = True
+import sys
+from importlib.util import find_spec
+from importlib.metadata import version
+from packaging.version import parse
 
 
 def available():
@@ -23,7 +13,8 @@ def available():
     ret: bool
         True if torch is installed.
     """
-    return _available
+    spec = find_spec('torch')
+    return spec is not None
 
 
 def dynamo_available():
@@ -35,4 +26,16 @@ def dynamo_available():
     ret: bool
         True if torch is installed and torch dynamo is available.
     """
-    return _dynamo_available
+    return available() and parse(version('torch')) >= parse('2.0.0.dev')
+
+
+def imported():
+    """
+    Check if torch is imported.
+
+    Returns
+    -------
+    ret: bool
+        True if torch is imported.
+    """
+    return 'torch' in sys.modules

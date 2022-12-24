@@ -53,6 +53,7 @@ def dummy_inputs_from_task(task: Task, target_device: str) -> List[Tensor]:
 def resolve_ir_modules(
     ir_modules: List[IRModule],
     schedules: List[Schedule],
+    func_name: str,
     target_device: str,
     output_dir: str,
     parallel=True,
@@ -85,7 +86,8 @@ def resolve_ir_modules(
     ret: IRModule
         The best ir module we can find.
     """
-    from hidet.backend import BuildInstance, batch_build_ir_modules
+    # from hidet.backend import BuildInstance, batch_build_ir_modules
+    from hidet.driver import build_ir_module_batch
     from hidet.runtime import CompiledFunction
 
     if len(ir_modules) == 0:
@@ -98,18 +100,25 @@ def resolve_ir_modules(
         raise ValueError('Require all ir modules are from the same task.')
 
     # build ir modules
-    build_instances = [
-        BuildInstance(
-            ir_module=ir_module,
-            output_dir=os.path.join(output_dir, 'resolve', str(idx)),
-            keep_ir=False,
-            nvcc_keep=False,
-            verbose=False,
-        )
-        for idx, ir_module in enumerate(ir_modules)
-    ]
-    compiled_funcs: List[Optional[CompiledFunction]] = batch_build_ir_modules(
-        build_instances, parallel=parallel, verbose=verbose
+    # build_instances = [
+    #     BuildInstance(
+    #         ir_module=ir_module,
+    #         output_dir=os.path.join(output_dir, 'resolve', str(idx)),
+    #         keep_ir=False,
+    #         nvcc_keep=False,
+    #         verbose=False,
+    #     )
+    #     for idx, ir_module in enumerate(ir_modules)
+    # ]
+    # compiled_funcs: List[Optional[CompiledFunction]] = batch_build_ir_modules(
+    #     build_instances, parallel=parallel, verbose=verbose
+    # )
+    compiled_funcs: List[Optional[CompiledFunction]] = build_ir_module_batch(
+        ir_modules,
+        func_name=func_name,
+        output_dir=os.path.join(output_dir, 'resolve'),
+        parallel=parallel,
+        verbose=verbose,
     )
     dummy_inputs = dummy_inputs_from_task(ir_modules[0].task, target_device)
     best_latency = 1e30

@@ -1,4 +1,5 @@
 from typing import Sequence, List
+import time
 import ctypes
 from enum import Enum
 
@@ -121,7 +122,21 @@ class PackedFunc:
         _LIB.CallPackedFunc(self.c_packed_func, p_args)
 
     def profile(self, *args, warmup: int = 1, number: int = 1, repeat: int = 10) -> List[float]:
-        results = (c_float * repeat)()
+        from hidet.cuda import current_stream
+
         p_args = self.convert_args(args)
-        _LIB.ProfilePackedFunc(self.c_packed_func, p_args, warmup, number, repeat, cast(pointer(results), c_float_p))
-        return [float(v) / number for v in results]
+
+        for _ in range(warmup):
+            _LIB.CallPackedFunc(self.c_packed_func, p_args)
+
+        results = []
+        for _ in range(repeat):
+            current_stream().synchronize()
+            start = time.time()
+            for _ in range(number):
+                _LIB.CallPackedFunc(self.c_packed_func, p_args)
+            current_stream().synchronize()
+            end = time.time()
+            results.append((end - start) / number)
+
+        return results

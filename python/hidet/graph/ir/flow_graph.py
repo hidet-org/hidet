@@ -7,6 +7,7 @@ import pickle
 from collections import defaultdict
 
 import hidet.graph.operator
+import hidet.cuda
 from hidet import option
 from hidet.graph.tensor import Tensor, empty_like, zeros_like, randn_like
 from hidet.graph.operator import Operator
@@ -340,12 +341,12 @@ class FlowGraph:
 
         Returns
         -------
-        ret: hidet.runtime.CudaGraph
+        ret: hidet.cuda.graph.CudaGraph
             The created cuda graph.
         """
-        from hidet.runtime.cuda_graph import create_cuda_graph
+        from hidet.cuda.graph import CudaGraph
 
-        return create_cuda_graph(self)
+        return CudaGraph(self)
 
     def latency(
         self, warmup=1, number=3, repeat=3, median=True, dummy_inputs: Optional[Sequence[Tensor]] = None
@@ -376,7 +377,6 @@ class FlowGraph:
         """
         import time
         import numpy as np
-        from hidet.ffi.cuda_api import cuda
 
         if dummy_inputs is None:
             dummy_inputs = self.dummy_inputs()
@@ -384,11 +384,11 @@ class FlowGraph:
             self.forward(*dummy_inputs)
         results = []
         for _ in range(repeat):
-            cuda.device_synchronize()
+            hidet.cuda.synchronize()
             t1 = time.time()
             for _ in range(number):
                 self.forward(*dummy_inputs)
-            cuda.device_synchronize()
+            hidet.cuda.synchronize()
             t2 = time.time()
             results.append((t2 - t1) * 1000 / number)
         if median:

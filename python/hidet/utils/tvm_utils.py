@@ -162,7 +162,7 @@ def tvm_graph_module_from_onnx(
     if not os.path.exists(lib_path):
         onnx_model = onnx.load_model(onnx_model_path)
         ir_module, params = relay.frontend.from_onnx(onnx_model, input_shapes, dtype='float32')
-        target = tvm.target.cuda(arch='sm_{}{}'.format(*hidet.utils.cuda.query_compute_capability()))
+        target = tvm.target.cuda(arch='sm_{}{}'.format(*hidet.cuda.compute_capability()))
         with open(os.path.join(out_dir, 'relay_model.txt'), 'w') as f:
             f.write(str(ir_module))
         with open(os.path.join(out_dir, 'model_info.txt'), 'w') as f:

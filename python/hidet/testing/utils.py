@@ -33,21 +33,21 @@ def benchmark_func(run_func, warmup=1, number=5, repeat=5, median=True) -> Union
         - When median == True, a single latency number is returned.
         - When median == False, the latency of each repeat is returned, as a list of floats.
     """
-    from hidet.utils.nvtx_utils import nvtx_annotate
-    from hidet.utils import cuda
+    import nvtx
+    import hidet.cuda
 
     results = []
-    with nvtx_annotate('warmup'):
+    with nvtx.annotate('warmup'):
         for _ in range(warmup):
             run_func()
-            cuda.device_synchronize()
+            hidet.cuda.synchronize()
     for i in range(repeat):
-        with nvtx_annotate(f'repeat {i}'):
-            cuda.device_synchronize()
+        with nvtx.annotate(f'repeat {i}'):
+            hidet.cuda.synchronize()
             start_time = time.time()
             for _ in range(number):
                 run_func()
-            cuda.device_synchronize()
+            hidet.cuda.synchronize()
             end_time = time.time()
         results.append((end_time - start_time) * 1000 / number)
     if median:

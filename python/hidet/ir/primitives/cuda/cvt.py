@@ -28,6 +28,10 @@ def register_cvta_instructions():
         for dst_dtype in [u8, u16, u32, u64, i8, i16, i32, i64, bf16, f16, f32, f64]:
             if src_dtype == dst_dtype:
                 continue
+            if src_dtype.is_integer() and dst_dtype.is_float():
+                continue
+            if src_dtype.is_float() and dst_dtype.is_integer():
+                continue
             func_name = resolve_cvt_func_name(src_dtype, dst_dtype)
 
             @script

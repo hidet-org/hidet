@@ -2,6 +2,8 @@ import contextlib
 from typing import List, Tuple, Union, Optional, Sequence, TypeVar
 
 import os
+
+import hidet.cuda
 from hidet import option
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.ir.expr import Var, And, Equal, if_then_else, convert, Expr, tensor_var, cast, TensorSlice
@@ -13,7 +15,7 @@ from hidet.ir.mapping import row_spatial, row_repeat
 from hidet.ir.layout import row_layout, data_layout
 from hidet.ir.stmt import BufferStoreStmt, IfStmt, Stmt, DeclareStmt, DeclareScope
 from hidet.ir.type import DataType, data_type
-from hidet.utils import cuda, prod
+from hidet.utils import prod
 from hidet.graph.ops.definitions.matmul import BatchMatmulTask
 from hidet.graph.ops.schedules.resolve import resolve_ir_modules
 from hidet.graph.ops.schedules.common import params_from_task, Schedule, NotSupportedError
@@ -75,9 +77,9 @@ class MatmulMmaSchedule(Schedule):
             + self.regs_c_layout.size * data_type(mma_config.output_dtype).nbytes
         ) // 4 + 24
         self.used_registers = (self.used_registers + 7) // 8 * 8
-        self.check(self.smem_storage_nbytes <= cuda.max_smem_bytes_per_block())
-        self.check(self.used_registers <= cuda.max_num_regs_per_thread())
-        self.check(self.used_registers * self.threads <= cuda.max_num_regs_per_block())
+        self.check(self.smem_storage_nbytes <= 48 * 1024)
+        self.check(self.used_registers <= 255)
+        self.check(self.used_registers * self.threads <= hidet.cuda.properties().regsPerBlock)
 
     @staticmethod
     def resolve_mma_type(a_dtype: DataType, b_dtype: DataType, c_dtype: DataType):
@@ -174,6 +176,7 @@ def batched_matmul_cuda_schedule_mma(task: BatchMatmulTask, working_dir: str) ->
     return resolve_ir_modules(
         ir_modules=ir_modules,
         schedules=all_schedules,
+        func_name=task.name,
         target_device='cuda',
         output_dir=os.path.join(working_dir, './resolve'),
         parallel=True,

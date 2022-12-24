@@ -2,11 +2,11 @@
 #include <hidet/runtime/common.h>
 #include <hidet/runtime/callbacks.h>
 #include <hidet/runtime/context.h>
-#include <cuda_runtime.h>
+// #include <cuda_runtime.h>
 
 struct CudaContext: BaseContext {
     /* The cuda stream the kernels will be launched on. */
-    cudaStream_t stream = nullptr;
+    void* stream = nullptr;
 
     /**
      * Get the instance of cuda context.
@@ -17,12 +17,12 @@ struct CudaContext: BaseContext {
 /**
  * Set the cuda stream of cuda context.
  */
-DLL void set_cuda_stream(cudaStream_t stream);
+DLL void set_cuda_stream(void* stream);
 
 /**
  * Get the cuda stream of cuda context.
  */
-DLL cudaStream_t get_cuda_stream();
+DLL void* get_cuda_stream();
 
 /**
  * Request a workspace.

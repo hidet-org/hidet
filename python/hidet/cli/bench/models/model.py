@@ -1,8 +1,5 @@
 # pylint: disable=ungrouped-imports, no-name-in-module
-from typing import Tuple, Sequence, Dict, List, Any
-import torch
-import torch.backends.cudnn
-from torch import nn
+from typing import List, Any
 from hidet.testing import benchmark_func
 import hidet
 
@@ -11,25 +8,60 @@ if hidet.torch.dynamo_available():
 else:
     dynamo = None
 
-# torch.backends.cudnn.allow_tf32 = False  # for fair comparison
-
 
 class BenchModel:
     def __str__(self):
         raise NotImplementedError()
 
-    def model(self) -> nn.Module:
+    def model(self):
+        """
+        Returns a pytorch model to benchmark.
+
+        Returns
+        -------
+        ret: torch.nn.Module
+            The model to benchmark.
+        """
         raise NotImplementedError()
 
-    def example_inputs(self) -> Tuple[Sequence[torch.Tensor], Dict[str, torch.Tensor]]:
+    def example_inputs(self):
+        """
+        Returns a tuple of (args, kwargs) as the inputs to pass to the model.
+
+        Returns
+        -------
+        ret: Tuple[Sequence[torch.Tensor], Dict[str, torch.Tensor]]
+            The inputs to pass to the model.
+        """
         raise NotImplementedError()
 
     @staticmethod
-    def tensor_str(tensor: torch.Tensor) -> str:
+    def tensor_str(tensor) -> str:
+        """
+        Returns a string representation of a tensor.
+
+        Parameters
+        ----------
+        tensor: torch.Tensor
+            The tensor to represent.
+
+        Returns
+        -------
+        ret: str
+            The string representation of the tensor.
+        """
         dtype = hidet.torch.utils.dtype_from_torch(tensor.dtype)
         return '{}[{}]'.format(dtype.short_name, ','.join(map(str, tensor.shape)))
 
     def inputs_str(self) -> str:
+        """
+        Returns a string representation of the inputs to the model.
+
+        Returns
+        -------
+        ret: str
+            The string representation of the inputs to the model.
+        """
         args, kwargs = self.example_inputs()
         items = []
         for arg in args:
@@ -39,6 +71,8 @@ class BenchModel:
         return ', '.join(items)
 
     def bench_with_backend(self, backend: str, mode=None, passes=None, warmup=3, number=10, repeat=10):
+        import torch
+
         model, (args, kwargs) = self.model(), self.example_inputs()
         model = model.cuda().eval()
         args = [arg.cuda() for arg in args]

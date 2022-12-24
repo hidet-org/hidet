@@ -1,4 +1,6 @@
+from typing import Union
 from ctypes import c_void_p, c_char_p, c_uint64
+from hidet.cuda import Stream
 from .ffi import get_func
 
 
@@ -10,8 +12,8 @@ class RuntimeAPI:
     _free_cuda_storage = get_func('free_cuda_storage', [c_uint64], None)
 
     @staticmethod
-    def set_current_stream(stream_handle: int) -> None:
-        RuntimeAPI._set_current_stream(c_void_p(stream_handle))
+    def set_current_stream(stream: Union[Stream, int]) -> None:
+        RuntimeAPI._set_current_stream(c_void_p(int(stream)))
 
     @staticmethod
     def get_current_stream() -> int:
