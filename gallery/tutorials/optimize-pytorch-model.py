@@ -67,10 +67,13 @@ import torch.backends.cudnn
 import hidet
 
 x = torch.randn(1, 3, 224, 224).cuda()
-model = torch.hub.load('pytorch/vision:v0.9.0', 'resnet18', pretrained=True, verbose=False).cuda()
-model.eval()
+model = torch.hub.load(
+    'pytorch/vision:v0.9.0', 'resnet18', pretrained=True, verbose=False
+).cuda().eval()
 
-torch.backends.cudnn.allow_tf32 = False  # tf32 would harm the effective precision of torch's results
+torch.backends.cudnn.allow_tf32 = (
+    False  # tf32 would harm the effective precision of torch's results
+)
 
 with torch.no_grad():
     hidet.torch.dynamo_config.correctness_report()
@@ -150,6 +153,7 @@ with torch.no_grad():
 
 # sphinx_gallery_start_ignore
 import torch._dynamo as dynamo
+
 hidet.torch.dynamo_config.correctness_report(False)  # reset
 dynamo.reset()  # clear the compiled cache
 # sphinx_gallery_end_ignore

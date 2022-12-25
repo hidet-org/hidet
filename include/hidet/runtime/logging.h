@@ -27,10 +27,3 @@ struct HidetException: std::exception {
 DLL void hidet_set_last_error(const char *msg);
 
 DLL const char * hidet_get_last_error();
-
-#define API_BEGIN() try {
-/*body*/
-#define API_END(ret) } catch (const HidetException& e) {          \
-                         hidet_set_last_error(e.what());          \
-                         return ret;                              \
-                     }

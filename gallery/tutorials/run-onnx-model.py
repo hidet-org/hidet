@@ -36,13 +36,10 @@ torch.onnx.export(
     f=onnx_path,
     input_names=['data'],
     output_names=['output'],
-    dynamic_axes={
-        'data': {0: 'batch_size'},
-        'output': {0: 'batch_size'}
-    }
+    dynamic_axes={'data': {0: 'batch_size'}, 'output': {0: 'batch_size'}},
 )
 
-print('{}: {:.1f} MiB'.format(onnx_path, os.path.getsize(onnx_path) / (2 ** 20)))
+print('{}: {:.1f} MiB'.format(onnx_path, os.path.getsize(onnx_path) / (2**20)))
 
 # %%
 # Before going further, we first measure the latency of reset50 directly using PyTorch for inference.
@@ -86,8 +83,9 @@ output: hidet.Tensor = hidet_onnx_module(data)
 
 # check the output of hidet with pytorch
 torch_output = torch_model(torch_data).detach()
-np.testing.assert_allclose(actual=output.numpy(), desired=torch_output.cpu().numpy(),
-                           rtol=1e-2, atol=1e-2)
+np.testing.assert_allclose(
+    actual=output.numpy(), desired=torch_output.cpu().numpy(), rtol=1e-2, atol=1e-2
+)
 
 # %%
 # Because the overhead to parse and translate the onnx model is large, the latency of directly use
@@ -122,18 +120,16 @@ graph: hidet.FlowGraph = hidet.trace_from(symbol_output)
 #   way to submit workload to NVIDIA GPU, it eliminates most of the framework-side overhead.
 #
 # We use :meth:`~hidet.graph.FlowGraph.cuda_graph` method of a :class:`~hidet.graph.FlowGraph` to create a
-# :class:`~hidet.runtime.cuda_graph.CudaGraph`.
-# Then :meth:`~hidet.runtime.cuda_graph.CudaGraph.set_input_tensors` method is used  to set the input tensors.
-# Finally, we use :meth:`~hidet.runtime.cuda_graph.CudaGraph.run` method to run the cuda graph, and access
-# :attr:`~hidet.runtime.cuda_graph.CudaGraph.outputs` to get the outputs.
+# :class:`~hidet.cuda.graph.CudaGraph`.
+# Then, we use :meth:`~hidet.cuda.graph.CudaGraph.run` method to run the cuda graph.
+
 
 def bench_hidet_graph(graph: hidet.FlowGraph):
     cuda_graph = graph.cuda_graph()
-    cuda_graph.set_input_tensors([data])
-    cuda_graph.run()
-    output = cuda_graph.outputs[0]
-    np.testing.assert_allclose(actual=output.numpy(), desired=torch_output.cpu().numpy(),
-                               rtol=1e-2, atol=1e-2)
+    (output,) = cuda_graph.run([data])
+    np.testing.assert_allclose(
+        actual=output.numpy(), desired=torch_output.cpu().numpy(), rtol=1e-2, atol=1e-2
+    )
     print('  Hidet: {:.3f} ms'.format(benchmark_func(lambda: cuda_graph.run())))
 
 

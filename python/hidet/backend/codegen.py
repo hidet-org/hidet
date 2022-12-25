@@ -348,7 +348,8 @@ class Codegen(StmtExprFunctor, TypeFunctor):
                     dim3_str(func.attrs['cuda_grid_dim']),  # grid dimension
                     dim3_str(func.attrs['cuda_block_dim']),  # block dimension
                     func.attrs.get('cuda_dynamic_smem_bytes', 0),  # dynamic shared memory size
-                    Text('get_cuda_stream()'),  # cuda stream (get_cuda_stream() function is defined in hidet/runtime.h)
+                    # cuda stream (get_cuda_stream() function is defined in hidet/runtime.h)
+                    Text('(cudaStream_t)get_cuda_stream()'),
                 ]
                 launch_config = Text('<<<') + doc_join([self(v) for v in configs], sep=', ') + Text('>>>')
             else:

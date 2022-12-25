@@ -9,7 +9,6 @@ import torch
 
 from hidet.ir.type import data_type
 from hidet.graph.tensor import Tensor
-from .availability import available
 from .utils import relative_absolute_error
 
 logger = logging.getLogger(__name__)
@@ -128,7 +127,7 @@ class HidetModule:
 
 
 class Interpreter:
-    def __init__(self, graph_module: torch.fx.GraphModule, check=True):
+    def __init__(self, graph_module: torch.fx.GraphModule):
         super().__init__()
         self.graph_module: torch.fx.GraphModule = graph_module
         self.graph: torch.fx.Graph = graph_module.graph
@@ -398,37 +397,3 @@ class Interpreter:
             showindex=True,
             disable_numparse=True,
         )
-
-
-def from_torch(module, concrete_args=None, check=True):
-    """
-    Convert a torch.nn.Module or torch.fx.GraphModule to a hidet.nn.Module.
-
-    Parameters
-    ----------
-    module: torch.nn.Module or torch.fx.GraphModule
-        The torch module to convert.
-
-    concrete_args: Dict[str, Any] or None
-        The concrete arguments to the module. If provided, will be used to make some arguments concrete during symbolic
-        tracing.
-
-    check: bool
-        Whether to check the converted module. If True, will warn if the output of converted module has
-        large relative/absolute error. Default: True.
-
-    Returns
-    -------
-    ret: Interpreter
-        The converted hidet module, which is a subclass of hidet.nn.Module.
-    """
-    if not available():
-        raise RuntimeError('torch is not available.')
-
-    if isinstance(module, torch.fx.GraphModule):
-        graph_module = module
-    elif isinstance(module, torch.nn.Module):
-        graph_module = torch.fx.symbolic_trace(module, concrete_args=concrete_args)
-    else:
-        raise ValueError(f'Current only support import torch.nn.Module and torch.fx.GraphModule, got {type(module)}.')
-    return Interpreter(graph_module, check)

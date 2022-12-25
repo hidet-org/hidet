@@ -4,11 +4,11 @@ import warnings
 from collections import defaultdict
 import ctypes
 import numpy as np
+import hidet.cuda
+from hidet.cuda import Stream, current_stream
 from hidet.ir import dtypes
 from hidet.ir.type import DataType, data_type
-from hidet.ffi import cuda
 from hidet.utils import green, prod
-from hidet.runtime.cuda_stream import CudaStream
 
 
 def nbytes2str(nbytes: int) -> str:
@@ -67,7 +67,7 @@ class CudaStorageDevice(StorageDevice):
         if self.froze:
             raise MemoryError('Should not allocate when the device is frozen.')
 
-        addr = cuda.malloc_async(nbytes)
+        addr = hidet.cuda.malloc_async(nbytes)
         if addr == 0 and nbytes != 0:
             # out of memory
             return 0
@@ -80,7 +80,7 @@ class CudaStorageDevice(StorageDevice):
         if self.froze:
             raise MemoryError('Should not free when the device is frozen.')
 
-        cuda.free_async(addr)
+        hidet.cuda.free_async(addr)
         self._allocated_memory -= self.addr2nbytes.pop(addr)
 
     def allocated_memory(self) -> int:
@@ -90,10 +90,10 @@ class CudaStorageDevice(StorageDevice):
         return self._peak_allocated_memory
 
     def free_memory(self) -> int:
-        return cuda.mem_info()[0]
+        return hidet.cuda.memory_info()[0]
 
     def total_memory(self) -> int:
-        return cuda.mem_info()[1]
+        return hidet.cuda.memory_info()[1]
 
 
 class CpuStorageDevice(StorageDevice):
@@ -110,7 +110,7 @@ class CpuStorageDevice(StorageDevice):
         if self.froze:
             raise MemoryError('Should not allocate when the device is frozen.')
 
-        addr = cuda.malloc_host(nbytes)
+        addr = hidet.cuda.malloc_host(nbytes)
         if addr == 0 and nbytes != 0:
             return 0
         self._allocated_memory += nbytes
@@ -122,7 +122,7 @@ class CpuStorageDevice(StorageDevice):
         if self.froze:
             raise MemoryError('Should not free when the device is frozen.')
 
-        cuda.free_host(addr)
+        hidet.cuda.free_host(addr)
         self._allocated_memory -= self.addr2nbytes.pop(addr)
 
     def allocated_memory(self) -> int:
@@ -160,25 +160,17 @@ class Storage:
             return self
         elif self.device == 'cuda':
             host_storage = self.new('cpu', self.num_bytes)
-            cuda.memcpy(
-                src_addr=self.addr, dst_addr=host_storage.addr, num_bytes=self.num_bytes, kind=cuda.DeviceToHost
-            )
+            hidet.cuda.memcpy(dst=host_storage.addr, src=self.addr, num_bytes=self.num_bytes)
             return host_storage
         else:
             raise NotImplementedError()
 
-    def cpu_async(self, stream: Optional[CudaStream] = None):
+    def cpu_async(self, stream: Optional[Stream] = None):
         if self.device == 'cpu':
             return self
         elif self.device == 'cuda':
             host_storage = self.new('cpu', self.num_bytes)
-            cuda.memcpy_async(
-                src_addr=self.addr,
-                dst_addr=host_storage.addr,
-                num_bytes=self.num_bytes,
-                kind=cuda.DeviceToHost,
-                stream=stream.handle if stream else 0,
-            )
+            hidet.cuda.memcpy_async(dst=host_storage.addr, src=self.addr, num_bytes=self.num_bytes, stream=stream)
             return host_storage
         else:
             raise NotImplementedError()
@@ -188,47 +180,30 @@ class Storage:
             return self
         elif self.device == 'cpu':
             cuda_storage = self.new('cuda', self.num_bytes)
-            cuda.memcpy(
-                src_addr=self.addr, dst_addr=cuda_storage.addr, num_bytes=self.num_bytes, kind=cuda.HostToDevice
-            )
+            hidet.cuda.memcpy(src=self.addr, dst=cuda_storage.addr, num_bytes=self.num_bytes)
             return cuda_storage
         else:
             raise NotImplementedError()
 
-    def cuda_async(self, stream: Optional[CudaStream] = None):
+    def cuda_async(self, stream: Optional[Stream] = None):
         if self.device == 'cuda':
             return self
         elif self.device == 'cpu':
             cuda_storage = self.new('cuda', self.num_bytes)
-            cuda.memcpy_async(
-                src_addr=self.addr,
-                dst_addr=cuda_storage.addr,
-                num_bytes=self.num_bytes,
-                kind=cuda.HostToDevice,
-                stream=stream.handle if stream else 0,
-            )
+            hidet.cuda.memcpy_async(dst=cuda_storage.addr, src=self.addr, num_bytes=self.num_bytes, stream=stream)
             return cuda_storage
         else:
             raise NotImplementedError()
 
     def copy(self) -> Storage:
-        kind_dict = {'cpu': cuda.HostToHost, 'cuda': cuda.DeviceToDevice}
-        storage = Storage.new(self.device, self.num_bytes)
-        cuda.memcpy_async(
-            src_addr=self.addr, dst_addr=storage.addr, num_bytes=self.num_bytes, kind=kind_dict[self.device]
-        )
-        return storage
+        stream = current_stream()
+        ret = self.copy_async(stream)
+        stream.synchronize()
+        return ret
 
-    def copy_async(self, stream: Optional[CudaStream] = None) -> Storage:
-        kind_dict = {'cpu': cuda.HostToHost, 'cuda': cuda.DeviceToDevice}
+    def copy_async(self, stream: Optional[Stream] = None) -> Storage:
         storage = Storage.new(self.device, self.num_bytes)
-        cuda.memcpy_async(
-            src_addr=self.addr,
-            dst_addr=storage.addr,
-            num_bytes=self.num_bytes,
-            kind=kind_dict[self.device],
-            stream=stream.handle if stream else 0,
-        )
+        hidet.cuda.memcpy_async(dst=storage.addr, src=self.addr, num_bytes=self.num_bytes, stream=stream)
         return storage
 
     @staticmethod
@@ -356,7 +331,7 @@ class MemoryPool:
             self.clear()
 
     def clear(self):
-        cuda.device_synchronize()
+        hidet.cuda.synchronize()
         for block_list in self.memory_blocks.values():
             for storage in block_list:
                 self.storage_device.free(storage.addr)

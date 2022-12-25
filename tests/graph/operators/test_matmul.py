@@ -11,7 +11,7 @@ from hidet.testing import check_binary
 )
 @pytest.mark.parametrize('mma', ['simt', 'wmma', 'mma'])
 def test_batch_matmul(a_shape, b_shape, dtype, mma):
-    if hidet.utils.cuda.query_compute_capability() < (8, 0) and mma in ['wmma', 'mma'] and dtype == 'float32':
+    if hidet.cuda.compute_capability() < (8, 0) and mma in ['wmma', 'mma'] and dtype == 'float32':
         pytest.skip('wmma and mma for float32 will triger hidet to use tf32, which is only supported on sm80 and above')
     tolerance = {
         ('float16', 'simt'): 0.5,

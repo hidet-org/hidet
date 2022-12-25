@@ -22,7 +22,7 @@ static void reserve_cpu_workspace(Workspace &workspace, size_t nbytes) {
 }
 
 DLL void* request_cpu_workspace(size_t nbytes, bool require_clean) {
-    API_BEGIN()
+    try {
         auto ctx = CpuContext::global();
         if(require_clean) {
             reserve_cpu_workspace(ctx->clean_workspace, nbytes);
@@ -31,5 +31,8 @@ DLL void* request_cpu_workspace(size_t nbytes, bool require_clean) {
             reserve_cpu_workspace(ctx->dirty_workspace, nbytes);
             return ctx->dirty_workspace.base;
         }
-    API_END(nullptr)
+    } catch (HidetException &e) {
+        hidet_set_last_error(e.what());
+        return nullptr;
+    }
 }

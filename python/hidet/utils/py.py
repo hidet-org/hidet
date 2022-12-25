@@ -1,4 +1,4 @@
-from typing import TypeVar, Iterable, Tuple, List, Union, Sequence
+from typing import TypeVar, Iterable, Tuple, List, Union, Sequence, Optional
 import cProfile
 import contextlib
 import io
@@ -23,6 +23,16 @@ def prod(seq: Sequence):
         for i in range(1, len(seq)):
             c = c * seq[i]
         return c
+
+
+def clip(
+    x: Union[int, float], low: Optional[Union[int, float]], high: Optional[Union[int, float]]
+) -> Union[int, float]:
+    if low is not None:
+        x = max(x, low)
+    if high is not None:
+        x = min(x, high)
+    return x
 
 
 TypeA = TypeVar('TypeA')
@@ -174,28 +184,6 @@ class Timer:
             return '{:.1f} {}'.format(seconds / 60 / 60, 'hours')
 
 
-# class DictCustomKey(MutableMapping, dict):
-#     def __init__(self, hash_func: Callable[[object], int]):
-#         super().__init__()
-#         self.hash_func = hash_func
-#
-#     def __delitem__(self, v):
-#         return dict.__delitem__(self, self.hash_func(v))
-#
-#     def __len__(self) -> int:
-#         return dict.__len__(self)
-#
-#     def __iter__(self):
-#         return dict.__iter__(self)
-#
-#     def __getitem__(self, item):
-#         return dict.__getitem__(self, self.hash_func(item))
-#
-#     def __setitem__(self, key, value):
-#         return dict.__setitem__(self, self.hash_func(key), value)
-#
-
-
 def repeat_until_converge(func, obj, limit=None):
     i = 0
     while True:
@@ -319,12 +307,6 @@ class TableBuilder:
 
     def extend_header(self, column_names):
         self.headers.extend(column_names)
-
-
-def line_profile():
-    from line_profiler_pycharm import profile
-
-    return profile
 
 
 def initialize(*args, **kwargs):

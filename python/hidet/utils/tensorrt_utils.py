@@ -6,7 +6,7 @@ import json
 import datetime
 import tensorrt as trt
 import hidet
-from hidet.ffi import cuda
+import hidet.cuda
 from hidet import Tensor
 from hidet.utils import hidet_cache_dir
 from hidet.testing import benchmark_func
@@ -19,17 +19,6 @@ class Profiler(trt.IProfiler):
 
     def report_layer_time(self, layer_name, ms):
         self.layer2latency[layer_name] = ms
-
-    def export_trace(self):
-        from hidet.utils.profile_utils import TraceEvent
-
-        events = []
-        current_time = 0
-        for layer, latency in self.layer2latency.items():
-            events.append(TraceEvent(layer, 'op', 'B', current_time * 1000000, 0, 0, {'name': layer}))
-            current_time += latency
-            events.append(TraceEvent(layer, 'op', 'E', current_time * 1000000, 0, 0, {'name': layer}))
-        return {'traceEvents': [event.export() for event in events], 'displayTimeUnit': 'ns'}
 
 
 class Logger(trt.ILogger):
@@ -203,7 +192,7 @@ def engine_inference(engine: trt.ICudaEngine, inputs: Dict[str, Tensor]) -> Dict
     # inference
     context: trt.IExecutionContext = engine.create_execution_context()
     context.execute_async_v2(buffers, 0)
-    cuda.device_synchronize()
+    hidet.cuda.synchronize()
     return outputs
 
 
@@ -227,14 +216,3 @@ def engine_inspect(engine: trt.ICudaEngine) -> Dict:
         'layers': layer_information,
         # 'engine': engine_information
     }
-
-
-def engine_profiler(engine: trt.ICudaEngine, dummy_inputs: Dict[str, Tensor]) -> Dict:
-    # prepare inputs and outputs
-    _, _, buffers = _prepare_buffer(engine, dummy_inputs)
-    context: trt.IExecutionContext = engine.create_execution_context()
-    profiler = Profiler()
-    context.profiler = profiler
-    context.execute_v2(buffers)
-    cuda.device_synchronize()
-    return profiler.export_trace()

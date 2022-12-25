@@ -1,5 +1,6 @@
 from typing import Dict
-from ctypes import CFUNCTYPE, c_uint64
+from ctypes import CFUNCTYPE, c_uint64, c_int32
+import hidet.cuda
 from hidet.ffi.runtime_api import runtime_api
 
 
@@ -55,8 +56,6 @@ def free_cpu_storage(addr: int) -> None:
     del runtime_allocated_storages[addr]
 
 
-if __name__ == '__main__':
-    runtime_api.free_cuda_storage(0)
-    ret = runtime_api.allocate_cuda_storage(10)
-    print(ret)
-    # runtime_api.set_current_stream(0)
+@register_runtime_callback(restype=None, argtypes=[c_uint64, c_int32, c_uint64])
+def cuda_memset(addr: int, value: int, nbytes: int) -> None:
+    return hidet.cuda.memset(addr, value, nbytes)

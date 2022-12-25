@@ -1,6 +1,7 @@
 import os
 from typing import List, Tuple, Union, Optional
 
+import hidet.cuda
 from hidet import option
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.ir.expr import Var, And, Cast, if_then_else, convert, Expr, cast
@@ -17,7 +18,7 @@ from hidet.graph.ops.definitions.matmul import BatchMatmulTask
 from hidet.graph.ops.schedules.common import params_from_task, Schedule, NotSupportedError
 from hidet.graph.ops.schedules.cuda.common import get_task_map, get_transfer_task_map
 from hidet.graph.ops.schedules.resolve import resolve_ir_modules
-from hidet.utils import cuda, prod
+from hidet.utils import prod
 from hidet.transforms.tools import fuse_and_pack
 
 
@@ -111,16 +112,19 @@ class MatmulSchedule(Schedule):
         )
         self.used_smem_bytes_per_block = (self.used_smem_bytes_per_block + 127) // 128 * 128
 
-        self.check(self.used_num_regs_per_thread <= cuda.max_num_regs_per_thread(), 'registers per thread exceeded')
+        self.check(self.used_num_regs_per_thread <= 255, 'registers per thread exceeded')
         self.check(
-            self.used_num_regs_per_thread * threads <= cuda.max_num_regs_per_block(), 'registers in block exceeded'
+            self.used_num_regs_per_thread * threads <= hidet.cuda.properties().regsPerBlock,
+            'registers in block exceeded',
         )
-        self.check(self.used_smem_bytes_per_block <= cuda.max_smem_bytes_per_block(), 'shared memory exceeded')
+        self.check(
+            self.used_smem_bytes_per_block <= hidet.cuda.properties().sharedMemPerBlock, 'shared memory exceeded'
+        )
 
         self.use_dynamic_smem = self.used_smem_bytes_per_block > 48 * 1024
         resident_blocks = min(
-            cuda.max_num_regs_per_sm() // (self.used_num_regs_per_thread * threads),
-            cuda.max_smem_bytes_per_sm() // self.used_smem_bytes_per_block,
+            hidet.cuda.properties().sharedMemPerBlock // (self.used_num_regs_per_thread * threads),
+            hidet.cuda.properties().sharedMemPerMultiprocessor // self.used_smem_bytes_per_block,
         )
         self.min_thread_blocks = resident_blocks
         self.resident_blocks = resident_blocks
@@ -225,6 +229,7 @@ def batched_matmul_cuda_schedule_wmma(task: BatchMatmulTask, working_dir: str) -
     return resolve_ir_modules(
         ir_modules=ir_modules,
         schedules=all_schedules,
+        func_name=task.name,
         target_device='cuda',
         output_dir=os.path.join(working_dir, './resolve'),
         parallel=True,

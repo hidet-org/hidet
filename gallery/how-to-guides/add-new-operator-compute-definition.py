@@ -307,8 +307,10 @@ from hidet.ir.compute import tensor_input, reduce, compute, arg_reduce, TensorNo
 # sphinx_gallery_start_ignore
 # Hidet use numpy for tensor printing, this line reduce the number of printed digits
 import numpy as np
+
 np.set_printoptions(precision=2, suppress=True)
 # sphinx_gallery_end_ignore
+
 
 def add_example():
     a: TensorNode = tensor_input(name='a', dtype='float32', shape=[5])
@@ -337,12 +339,15 @@ add_example()
 # ReduceSum
 # ^^^^^^^^^
 
+
 def reduce_sum_example():
     a = tensor_input('a', dtype='float32', shape=[4, 3])
     b = compute(
         'b',
         shape=[4],
-        fcompute=lambda i: reduce(shape=[3], fcompute=lambda j: a[i, j], reduce_type='sum')
+        fcompute=lambda i: reduce(
+            shape=[3], fcompute=lambda j: a[i, j], reduce_type='sum'
+        ),
     )
     task = Task('reduce_sum', inputs=[a], outputs=[b])
     run_task(task, [hidet.randn([4, 3])], [hidet.empty([4])])
@@ -355,12 +360,15 @@ reduce_sum_example()
 # ArgMax
 # ^^^^^^
 
+
 def arg_max_example():
     a = tensor_input('a', dtype='float32', shape=[4, 3])
     b = compute(
         'b',
         shape=[4],
-        fcompute=lambda i: arg_reduce(extent=3, fcompute=lambda j: a[i, j], reduce_type='max')
+        fcompute=lambda i: arg_reduce(
+            extent=3, fcompute=lambda j: a[i, j], reduce_type='max'
+        ),
     )
     task = Task('arg_max', inputs=[a], outputs=[b])
     run_task(task, [hidet.randn([4, 3])], [hidet.empty([4], dtype='int32')])
@@ -379,10 +387,8 @@ def matmul_example():
         'c',
         shape=[3, 3],
         fcompute=lambda i, j: reduce(
-            shape=[3],
-            fcompute=lambda k: a[i, k] * b[k, j],
-            reduce_type='sum'
-        )
+            shape=[3], fcompute=lambda k: a[i, k] * b[k, j], reduce_type='sum'
+        ),
     )
     task = Task('matmul', inputs=[a, b], outputs=[c])
     run_task(task, [hidet.randn([3, 3]), hidet.randn([3, 3])], [hidet.empty([3, 3])])
@@ -396,6 +402,7 @@ matmul_example()
 # ^^^^^^^
 def softmax_example():
     from hidet.ir.primitives import exp
+
     a = tensor_input('a', dtype='float32', shape=[3])
     max_val = reduce(shape=[3], fcompute=lambda i: a[i], reduce_type='max')
     b = compute('b', shape=[3], fcompute=lambda i: a[i] - max_val)

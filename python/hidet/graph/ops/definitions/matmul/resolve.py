@@ -1,11 +1,11 @@
 from typing import List, Optional, Callable, Any
 from functools import lru_cache
 
+import hidet.cuda
 from hidet.ir import dtypes
 from hidet.graph.ir import Operator, Tensor
 from hidet.graph.transforms import ResolveRule, register_resolve_rule
 from hidet.utils.py import gcd, factorize, prod, cdiv
-from hidet.ffi.cuda_api import cuda
 
 from .matmul import MatmulOp
 from .batch_matmul import batch_matmul
@@ -16,7 +16,7 @@ from ..utils import broadcast_shapes
 
 def parallel_k_heuristic_nparts(batch_size, m_size, n_size, k_size) -> int:
     estimate_thread_blocks = batch_size * ((m_size + 63) // 64) * ((n_size + 63) // 64)
-    num_multi_processors = cuda.device_property(cuda.PropertyMultiProcessorCount)
+    num_multi_processors = hidet.cuda.properties().multiProcessorCount
     # we hope to run multiple waves of thread blocks (e.g., 5)
     if estimate_thread_blocks * 8 <= num_multi_processors * 5:
         nparts = 8
@@ -31,8 +31,6 @@ def parallel_k_heuristic_nparts(batch_size, m_size, n_size, k_size) -> int:
 
 @lru_cache(maxsize=1024)
 def parallel_k_search_nparts(dtype: str, mma: str, batch_size, m_size, n_size, k_size) -> int:
-    import hidet
-
     nparts_candidates = [nparts for nparts in factorize(k_size) if nparts <= 16]
     best_nparts = None
     best_nparts_latency = 1e9
@@ -157,8 +155,6 @@ class MatmulResolveRule(ResolveRule):
         return [c]
 
     def resolve_f16(self, op: Operator) -> Optional[List[Tensor]]:
-        import hidet
-
         a: Tensor = op.inputs[0]
         b: Tensor = op.inputs[1]
         c: Tensor = op.outputs[0]

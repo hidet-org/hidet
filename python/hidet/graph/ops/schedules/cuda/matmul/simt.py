@@ -35,6 +35,8 @@ write back
 from typing import List, Tuple, Union, Optional
 
 import os
+
+import hidet.cuda
 from hidet import option
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.ir.expr import Var, And, Equal, Cast, if_then_else, convert, Expr
@@ -45,7 +47,6 @@ from hidet.ir.layout import DataLayout, StridesLayout
 from hidet.ir.primitives import syncthreads, thread_idx, block_idx
 from hidet.ir.stmt import BufferStoreStmt, IfStmt, DeclareStmt, DeclareScope
 from hidet.ir.type import data_type, tensor_type, PointerType, tensor_pointer_type
-from hidet.utils import cuda
 from hidet.graph.ops.definitions.matmul import BatchMatmulTask
 from hidet.graph.ops.schedules.resolve import resolve_ir_modules
 from hidet.graph.ops.schedules.common import params_from_task, Schedule, NotSupportedError
@@ -146,10 +147,15 @@ class MatmulSchedule(Schedule):
         )
         # the number of registers allocated to each thread is a multiple of 8.
         used_num_regs_per_thread = (used_num_regs_per_thread + 7) // 8 * 8
-        resident_blocks = cuda.max_num_regs_per_sm() // (used_num_regs_per_thread * block_size)
+        resident_blocks = hidet.cuda.properties().regsPerBlock // (used_num_regs_per_thread * block_size)
 
         max_smem_bytes_per_block = (
-            min(cuda.max_smem_bytes_per_sm() // resident_blocks, cuda.max_smem_bytes_per_block()) // 128 * 128
+            min(
+                hidet.cuda.properties().sharedMemPerMultiprocessor // resident_blocks,
+                hidet.cuda.properties().sharedMemPerBlock,
+            )
+            // 128
+            * 128
         )
 
         # derived task layouts
@@ -197,13 +203,10 @@ class MatmulSchedule(Schedule):
         self.use_dynamic_smem = used_smem_bytes_per_block > 48 * 1024
         self.min_thread_blocks = resident_blocks
 
+        self.check(used_num_regs_per_thread <= 255, f'register used {used_num_regs_per_thread} exceeds maximum {255}')
         self.check(
-            used_num_regs_per_thread <= cuda.max_num_regs_per_thread(),
-            f'register used {used_num_regs_per_thread} exceeds maximum {cuda.max_num_regs_per_thread()}',
-        )
-        self.check(
-            used_num_regs_per_thread * block_size <= cuda.max_num_regs_per_block(),
-            f'echo block can only have {cuda.max_num_regs_per_block()} registers, '
+            used_num_regs_per_thread * block_size <= hidet.cuda.properties().regsPerBlock,
+            f'echo block can only have {hidet.cuda.properties().regsPerBlock} registers, '
             f'but this schedule requires {used_num_regs_per_thread * block_size} registers',
         )
 
@@ -300,6 +303,7 @@ def batched_matmul_cuda_schedule_simt(task: BatchMatmulTask, working_dir: str) -
     return resolve_ir_modules(
         ir_modules=ir_modules,
         schedules=all_schedules,
+        func_name=task.name,
         target_device='cuda',
         output_dir=resolve_out_dir,
         parallel=True,

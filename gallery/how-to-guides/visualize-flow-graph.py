@@ -34,7 +34,9 @@ class SelfAttention(nn.Module):
 
     def transpose_for_scores(self, x: Tensor) -> Tensor:
         batch_size, seq_length, hidden_size = x.shape
-        x = x.reshape([batch_size, seq_length, self.num_attention_heads, self.attention_head_size])
+        x = x.reshape(
+            [batch_size, seq_length, self.num_attention_heads, self.attention_head_size]
+        )
         x = x.rearrange([[0, 2], [1], [3]])
         return x  # [batch_size * num_attention_heads, seq_length, attention_head_size]
 
@@ -43,11 +45,15 @@ class SelfAttention(nn.Module):
         query = self.transpose_for_scores(self.query_layer(hidden_states))
         key = self.transpose_for_scores(self.key_layer(hidden_states))
         value = self.transpose_for_scores(self.value_layer(hidden_states))
-        attention_scores = ops.matmul(query, key.transpose([-1, -2])) / math.sqrt(self.attention_head_size)
+        attention_scores = ops.matmul(query, key.transpose([-1, -2])) / math.sqrt(
+            self.attention_head_size
+        )
         attention_scores = attention_scores + attention_mask
         attention_probs = ops.softmax(attention_scores, axis=-1)
         context = ops.matmul(attention_probs, value)
-        context = context.reshape([batch_size, self.num_attention_heads, seq_length, self.attention_head_size])
+        context = context.reshape(
+            [batch_size, self.num_attention_heads, seq_length, self.attention_head_size]
+        )
         context = context.rearrange([[0], [2], [1, 3]])
         return context
 
@@ -60,10 +66,12 @@ print(model)
 # -------------------
 # Then we generate the flow graph of the model.
 
-graph = model.flow_graph_for(inputs=[
-    hidet.randn([1, 128, 768], device='cpu'),
-    hidet.ones([1, 128], dtype='int32', device='cpu')
-])
+graph = model.flow_graph_for(
+    inputs=[
+        hidet.randn([1, 128, 768], device='cpu'),
+        hidet.ones([1, 128], dtype='int32', device='cpu'),
+    ]
+)
 print(graph)
 
 # %%

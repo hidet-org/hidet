@@ -14,6 +14,7 @@ def pytest_sessionstart(session):
     """
     # set the cache directory to a subdirectory of the current directory
     hidet.option.cache_dir(os.path.join(hidet.option.get_cache_dir(), 'test_cache'))
+    print('Cache directory: {}'.format(hidet.option.get_cache_dir()))
 
     if session.config.getoption("--clear-cache"):
         print('Clearing cache directory: {}'.format(hidet.option.get_cache_dir()))

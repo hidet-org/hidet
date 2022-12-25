@@ -50,9 +50,9 @@ def register_functions():
 
     registered = set()
     for dtype in ['uint8', 'uint16', 'uint32', 'uint64', 'int8', 'int32', 'int64', 'float16', 'float32']:
-        for space in ['generic', 'global', 'local', 'shared']:
-            for sync in [None, 'acquire', 'relaxed']:
-                for scope in ['cta', 'gpu', 'sys']:
+        for space in ['generic', 'global']:
+            for sync in ['acquire']:
+                for scope in ['gpu']:
                     inst_name = resolve_load_inst_name(dtype, space, sync, scope)
                     func_name = 'cuda_' + inst_name.replace('.', '_') + f'_{dtype}'
                     if func_name in registered:
@@ -72,9 +72,9 @@ def register_functions():
                     register_primitive_function(name=cuda_load.name, func_or_type=cuda_load)
 
     for dtype in ['uint8', 'uint16', 'uint32', 'uint64', 'int8', 'int32', 'int64', 'float16', 'float32']:
-        for space in ['generic', 'global', 'local', 'shared']:
-            for sync in [None, 'release', 'relaxed']:
-                for scope in ['cta', 'gpu', 'sys']:
+        for space in ['generic', 'global']:
+            for sync in ['release']:
+                for scope in ['gpu']:
                     inst_name = resolve_store_inst_name(dtype, space, sync, scope)
                     func_name = 'cuda_' + inst_name.replace('.', '_') + f'_{dtype}'
                     if func_name in registered:

@@ -7,7 +7,6 @@ import hidet
 from hidet.graph import Tensor
 from hidet.graph.ir.flow_graph import FlowGraph
 from hidet.graph.tensor import symbol_like
-from hidet.ffi import cuda
 
 
 def get_type_repr(value):
@@ -106,13 +105,13 @@ class JitGraph:
         results = []
         for _ in range(warmup):
             cuda_graph.run()
-            cuda.device_synchronize()
+            hidet.cuda.synchronize()
         for _ in range(repeat):
-            cuda.device_synchronize()
+            hidet.cuda.synchronize()
             start_time = time.time()
             for _ in range(number):
                 cuda_graph.run()
-            cuda.device_synchronize()
+            hidet.cuda.synchronize()
             end_time = time.time()
             results.append((end_time - start_time) * 1000 / number)
 

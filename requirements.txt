@@ -28,3 +28,6 @@ click
 
 # for package version check
 packaging
+
+# for cuda runtime api and runtime compilation api
+cuda-python

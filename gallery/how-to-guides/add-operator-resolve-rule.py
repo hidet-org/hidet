@@ -128,5 +128,3 @@ print(graph_opt_new)
 # rule to an operator. The resolve rule is a powerful tool to reuse existing operators to implement new operators.
 # We can also use it to resolve a generic operator to more specialized variants.
 #
-
-
