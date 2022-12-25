@@ -9,7 +9,7 @@ from hidet.utils.torch_utils import export_torchvision_model_as_onnx
 
 
 def get_onnx_model(
-    name: str, batch_size: int = 1, precision='float32', **kwargs
+        name: str, batch_size: int = 1, precision='float32', **kwargs
 ) -> Tuple[str, List[str], List[Tensor]]:
     """
     kwargs candidates:
@@ -74,17 +74,5 @@ def get_onnx_model(
             hidet.ones(shape=[batch_size, seq_length], dtype='int64'),
         ]
         return model_path, input_names, input_tensors
-    elif name.startswith('resnet50_'):
-        from .model_blocks import get_resnet50_block
-
-        return get_resnet50_block(name, batch_size=batch_size, precision=precision, **kwargs)
-    elif name.startswith('bert_'):
-        from .model_blocks import get_bert_block
-
-        return get_bert_block(name, batch_size=batch_size, precision=precision, **kwargs)
-    elif name.startswith('op_'):
-        from .operators import get_onnx_operator
-
-        return get_onnx_operator(name, batch_size, precision=precision)
     else:
         raise NotImplementedError('Can not recognize model {}'.format(name))
