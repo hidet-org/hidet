@@ -9,7 +9,6 @@ import numpy as np
 
 import hidet.runtime.storage
 import hidet.cuda
-from hidet.cuda import Stream
 from hidet.ir import dtypes
 from hidet.ir.type import DataType, data_type
 from hidet.ir.expr import Constant
@@ -233,7 +232,12 @@ class Tensor:
         from .impl.dlpack import to_dlpack
 
         if stream is not None:
-            Stream.from_handle(stream).synchronize()
+            consumer_stream = hidet.cuda.ExternalStream(stream)
+            provider_stream = hidet.cuda.current_stream()
+            if consumer_stream != provider_stream:
+                event = hidet.cuda.Event()
+                event.record(provider_stream)
+                consumer_stream.wait_event(event)
         return to_dlpack(self)
 
     def __dlpack_device__(self) -> Tuple[int, int]:
@@ -614,7 +618,7 @@ class Tensor:
             trace=None,
         )
 
-    def copy_async(self, stream: Optional[Stream] = None) -> Tensor:
+    def copy_async(self, stream: Optional[hidet.cuda.Stream] = None) -> Tensor:
         if self.trace is not None:
             raise ValueError('Please use .detach() to detach a trace variable first before copying.')
         return Tensor(
@@ -646,13 +650,13 @@ class Tensor:
                 trace=None,
             )
 
-    def cpu_async(self, stream: Optional[Stream] = None):
+    def cpu_async(self, stream=None):
         """
         Copy the tensor to CPU asynchronously.
 
         Parameters
         ----------
-        stream: Optional[Stream]
+        stream: hidet.cuda.Stream, optional
             The stream to copy the tensor to CPU on.
 
         Returns
@@ -671,13 +675,13 @@ class Tensor:
             else:
                 raise ValueError('Please use .detach() to detach a trace variable first.')
 
-    def cuda_async(self, stream: Optional[Stream] = None):
+    def cuda_async(self, stream=None):
         """
         Copy the tensor to GPU asynchronously.
 
         Parameters
         ----------
-        stream: Optional[Stream]
+        stream: hidet.cuda.Stream, optional
             The stream to copy the tensor to GPU on.
 
         Returns

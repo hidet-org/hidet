@@ -8,6 +8,7 @@ Python API
    root
    option
    driver
+   cuda
    ir/index
    graph/index
    runtime/index

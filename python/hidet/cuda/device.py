@@ -7,11 +7,27 @@ from cuda.cudart import cudaDeviceProp
 
 @lru_cache(maxsize=1)
 def available() -> bool:
+    """
+    Returns True if CUDA is available, False otherwise.
+
+    Returns
+    -------
+    ret: bool
+        Whether CUDA is available.
+    """
     return device_count() > 0
 
 
 @lru_cache(maxsize=1)
 def device_count() -> int:
+    """
+    Get the number of available CUDA devices.
+
+    Returns
+    -------
+    count: int
+        The number of available CUDA devices.
+    """
     err, count = cudart.cudaGetDeviceCount()
     assert err == 0, err
     return count
@@ -19,28 +35,92 @@ def device_count() -> int:
 
 @lru_cache(maxsize=None)
 def properties(device_id: int = 0) -> cudaDeviceProp:
+    """
+    Get the properties of a CUDA device.
+
+    Parameters
+    ----------
+    device_id: int
+        The ID of the device.
+
+    Returns
+    -------
+    prop: cudaDeviceProp
+        The properties of the device.
+    """
     err, prop = cudart.cudaGetDeviceProperties(device_id)
     assert err == 0, err
     return prop
 
 
+def set_device(device_id: int):
+    """
+    Set the current cuda device.
+
+    Parameters
+    ----------
+    device_id: int
+        The ID of the cuda device.
+    """
+    (err,) = cudart.cudaSetDevice(device_id)
+    assert err == 0, err
+
+
+def get_device() -> int:
+    """
+    Get the current cuda device.
+
+    Returns
+    -------
+    device_id: int
+        The ID of the cuda device.
+    """
+    err, device_id = cudart.cudaGetDevice()
+    assert err == 0, err
+    return device_id
+
+
 def compute_capability(device_id: int = 0) -> Tuple[int, int]:
+    """
+    Get the compute capability of a CUDA device.
+
+    Parameters
+    ----------
+    device_id: int
+        The ID of the device.
+
+    Returns
+    -------
+    (major, minor): Tuple[int, int]
+        The compute capability of the device.
+    """
     prop = properties(device_id)
     return prop.major, prop.minor
 
 
 def synchronize():
+    """
+    Synchronize the host thread with the device.
+
+    This function blocks until the device has completed all preceding requested tasks.
+    """
     (err,) = cudart.cudaDeviceSynchronize()
     if err != 0:
         raise RuntimeError("cudaDeviceSynchronize failed with error: {}".format(err.name))
 
 
 def profiler_start():
+    """
+    Mark the start of a profiling range.
+    """
     (err,) = cudart.cudaProfilerStart()
     assert err == 0, err
 
 
 def profiler_stop():
+    """
+    Mark the end of a profiling range.
+    """
     (err,) = cudart.cudaProfilerStop()
     assert err == 0, err
 

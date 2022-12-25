@@ -36,6 +36,10 @@ x = torch.randn(1, 3, 224, 224).cuda()
 model = torch.hub.load('pytorch/vision:v0.9.0', 'resnet18', pretrained=True, verbose=False)
 model = model.cuda().eval()
 
+# we should register the hidet backend for pytorch dynamo
+# only need to do this if you import hidet before torch. Otherwise, it is done automatically
+hidet.torch.register_dynamo_backends()
+
 # currently, hidet only support inference
 with torch.no_grad():
     # optimize the model with 'hidet' backend
@@ -183,7 +187,7 @@ print(y1)
 # For CUDA device, a more efficient way is to create a cuda graph to dispatch the kernels in a flow graph
 # to the NVIDIA GPU.
 cuda_graph = opt_graph.cuda_graph()
-outputs = cuda_graph.run_with_inputs([a])
+outputs = cuda_graph.run([a])
 y2 = outputs[0]
 print(y2)
 

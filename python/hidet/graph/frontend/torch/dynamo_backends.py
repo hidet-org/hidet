@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def generate_executor(flow_graph: FlowGraph) -> Callable:
-    from hidet.runtime import CudaGraph
+    from hidet.cuda.graph import CudaGraph
 
     use_fp16 = dynamo_config['use_fp16']
     use_fp16_reduction = dynamo_config['use_fp16_reduction']
@@ -49,9 +49,7 @@ def generate_executor(flow_graph: FlowGraph) -> Callable:
 
         def run(*inputs: torch.Tensor):
             hidet_inputs: List[hidet.Tensor] = [hidet.from_torch(tensor) for tensor in inputs]
-            cuda_graph.set_input_tensors(hidet_inputs)
-            cuda_graph.run()
-            hidet_outputs: List[hidet.Tensor] = cuda_graph.get_output_tensors()
+            hidet_outputs: List[hidet.Tensor] = cuda_graph.run_async(inputs=hidet_inputs)
             torch_outputs: List[torch.Tensor] = [tensor.torch() for tensor in hidet_outputs]
             return torch_outputs
 

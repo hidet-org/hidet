@@ -1,4 +1,4 @@
-from typing import TypeVar, Iterable, Tuple, List, Union, Sequence
+from typing import TypeVar, Iterable, Tuple, List, Union, Sequence, Optional
 import cProfile
 import contextlib
 import io
@@ -23,6 +23,16 @@ def prod(seq: Sequence):
         for i in range(1, len(seq)):
             c = c * seq[i]
         return c
+
+
+def clip(
+    x: Union[int, float], low: Optional[Union[int, float]], high: Optional[Union[int, float]]
+) -> Union[int, float]:
+    if low is not None:
+        x = max(x, low)
+    if high is not None:
+        x = min(x, high)
+    return x
 
 
 TypeA = TypeVar('TypeA')

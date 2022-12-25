@@ -29,6 +29,8 @@ class CudaGraphCapture:
         self.stream_context.__exit__(exc_type, exc_val, exc_tb)
 
     def __del__(self):
+        if cudart is None:  # cudart has been unloaded
+            return
         if self.captured_graph is not None:
             (err,) = cudart.cudaGraphDestroy(self.captured_graph)
             assert err == 0, err
@@ -43,6 +45,17 @@ class CudaGraphCapture:
 
 
 class CudaGraph:
+    """
+    A CUDA graph that executes a :class:`~hidet.graph.ir.flow_graph.FlowGraph` on the GPU.
+
+    You can create the CUDA graph by calling :meth:`~hidet.graph.ir.flow_graph.FlowGraph.cuda_graph`.
+
+    Parameters
+    ----------
+    flow_graph: FlowGraph
+        The flow graph to be executed.
+    """
+
     def __init__(self, flow_graph):
         from hidet.graph.ir.flow_graph import FlowGraph
 
@@ -90,9 +103,11 @@ class CudaGraph:
             return self.run(inputs)
 
     def __del__(self):
+        if cudart is None:  # cudart has been unloaded
+            return
         (err,) = cudart.cudaGraphExecDestroy(self._graph_exec)
-        self._memory_pool.storage_device.freeze(False)
         assert err == 0, err
+        self._memory_pool.storage_device.freeze(False)
 
     def copy_inputs(self, inputs: Sequence[Tensor], stream: Optional[Stream]):
         if len(inputs) != len(self._inputs):
