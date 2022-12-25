@@ -9,7 +9,7 @@ from hidet.utils.torch_utils import export_torchvision_model_as_onnx
 
 
 def get_onnx_model(
-        name: str, batch_size: int = 1, precision='float32', **kwargs
+    name: str, batch_size: int = 1, precision='float32', **kwargs
 ) -> Tuple[str, List[str], List[Tensor]]:
     """
     kwargs candidates:

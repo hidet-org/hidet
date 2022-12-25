@@ -69,7 +69,9 @@ import hidet
 x = torch.randn(1, 3, 224, 224).cuda()
 model = torch.hub.load(
     'pytorch/vision:v0.9.0', 'resnet18', pretrained=True, verbose=False
-).cuda().eval()
+)
+model = model.cuda().eval()
+
 
 torch.backends.cudnn.allow_tf32 = (
     False  # tf32 would harm the effective precision of torch's results

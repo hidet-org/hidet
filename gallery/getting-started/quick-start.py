@@ -36,7 +36,8 @@ torch.backends.cudnn.allow_tf32 = False
 x = torch.randn(1, 3, 224, 224).cuda()
 model = torch.hub.load(
     'pytorch/vision:v0.9.0', 'resnet18', pretrained=True, verbose=False
-).cuda().eval()
+)
+model = model.cuda().eval()
 
 # we should register the hidet backend for pytorch dynamo
 # only need to do this if you import hidet before torch. Otherwise, it is done automatically
