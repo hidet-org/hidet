@@ -117,9 +117,9 @@ class FuseTwoMatmulRewriteRule(SubgraphRewriteRule):
         # For example, in this case, we check whether the two weight matrices share the
         # same shape except the last dimension.
         if (
-                2 <= len(c1.shape) == len(c2.shape) and
-                same_list(c1.shape[:-1], c2.shape[:-1]) and
-                concat.attrs["axis"] == len(y.shape) - 1
+            2 <= len(c1.shape) == len(c2.shape)
+            and same_list(c1.shape[:-1], c2.shape[:-1])
+            and concat.attrs["axis"] == len(y.shape) - 1
         ):
             # If applicable, we construct the target sub-graph and return the output tensors.
             c = ops.concat([c1, c2], axis=-1)
@@ -146,7 +146,9 @@ for rule in registered_rewrite_rules:
 # last line. In this tutorial, to prevent the default rewrite rules from being applied, we first clear the registered
 # rewrite rules and then register the rewrite rule we just defined:
 registered_rewrite_rules.clear()
-register_rewrite_rule(FuseTwoMatmulRewriteRule())  # a second way to register the rewrite rule
+register_rewrite_rule(
+    FuseTwoMatmulRewriteRule()
+)  # a second way to register the rewrite rule
 
 # %%
 # The rewrite process is done in a graph optimization pass called `subgraph_rewrite_pass`.

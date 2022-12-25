@@ -32,6 +32,7 @@ of the batch matrix multiplication.
 # sphinx_gallery_start_ignore
 # Hidet use numpy for tensor printing, this line reduce the number of printed digits
 import numpy as np
+
 np.set_printoptions(precision=2, suppress=True)
 # sphinx_gallery_end_ignore
 from hidet.ir.compute import TensorNode, compute, reduce
@@ -51,15 +52,15 @@ class BatchMatmulTask(Task):
             fcompute=lambda p, i, j: reduce(
                 shape=[k_size],
                 fcompute=lambda k: a[p, i, k] * b[p, k, j],
-                reduce_type='sum'
-            )
+                reduce_type='sum',
+            ),
         )
 
         # call the parent class constructor to initialize the task
         super().__init__(
             name='batch_matmul',  # the name of the task
             inputs=[a, b],  # the input tensor nodes
-            outputs=[c]  # the output tensor nodes
+            outputs=[c],  # the output tensor nodes
         )
 
 
@@ -79,8 +80,8 @@ class BatchMatmulOp(Operator):
             task=BatchMatmulTask(  # the task of the operator
                 # create tensor nodes (TensorNode) with the same shape and dtype as the tensors (Tensor)
                 input_like(a, 'a'),
-                input_like(b, 'b')
-            )
+                input_like(b, 'b'),
+            ),
         )
 
 
@@ -111,6 +112,7 @@ def demo_usage():
     print(b)
     print(c)
 
+
 demo_usage()
 
 # %%
@@ -131,4 +133,3 @@ demo_usage()
 # In this tutorial, we have learned how to define a new operator with given computation definition, and use hidet's
 # provided rule-based scheduler to automatically schedule the computation into a tensor program. In the next tutorial,
 # we will learn how to use the template-based scheduling to achieve better performance.
-

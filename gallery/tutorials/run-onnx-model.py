@@ -36,13 +36,10 @@ torch.onnx.export(
     f=onnx_path,
     input_names=['data'],
     output_names=['output'],
-    dynamic_axes={
-        'data': {0: 'batch_size'},
-        'output': {0: 'batch_size'}
-    }
+    dynamic_axes={'data': {0: 'batch_size'}, 'output': {0: 'batch_size'}},
 )
 
-print('{}: {:.1f} MiB'.format(onnx_path, os.path.getsize(onnx_path) / (2 ** 20)))
+print('{}: {:.1f} MiB'.format(onnx_path, os.path.getsize(onnx_path) / (2**20)))
 
 # %%
 # Before going further, we first measure the latency of reset50 directly using PyTorch for inference.
@@ -86,8 +83,9 @@ output: hidet.Tensor = hidet_onnx_module(data)
 
 # check the output of hidet with pytorch
 torch_output = torch_model(torch_data).detach()
-np.testing.assert_allclose(actual=output.numpy(), desired=torch_output.cpu().numpy(),
-                           rtol=1e-2, atol=1e-2)
+np.testing.assert_allclose(
+    actual=output.numpy(), desired=torch_output.cpu().numpy(), rtol=1e-2, atol=1e-2
+)
 
 # %%
 # Because the overhead to parse and translate the onnx model is large, the latency of directly use
@@ -125,11 +123,13 @@ graph: hidet.FlowGraph = hidet.trace_from(symbol_output)
 # :class:`~hidet.cuda.graph.CudaGraph`.
 # Then, we use :meth:`~hidet.cuda.graph.CudaGraph.run` method to run the cuda graph.
 
+
 def bench_hidet_graph(graph: hidet.FlowGraph):
     cuda_graph = graph.cuda_graph()
-    output, = cuda_graph.run([data])
-    np.testing.assert_allclose(actual=output.numpy(), desired=torch_output.cpu().numpy(),
-                               rtol=1e-2, atol=1e-2)
+    (output,) = cuda_graph.run([data])
+    np.testing.assert_allclose(
+        actual=output.numpy(), desired=torch_output.cpu().numpy(), rtol=1e-2, atol=1e-2
+    )
     print('  Hidet: {:.3f} ms'.format(benchmark_func(lambda: cuda_graph.run())))
 
 

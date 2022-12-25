@@ -29,12 +29,14 @@ import hidet
 
 # disable tf32 to make the result of torch more accurate
 import torch.backends.cudnn
+
 torch.backends.cudnn.allow_tf32 = False
 
 # take resnet18 as an example
 x = torch.randn(1, 3, 224, 224).cuda()
-model = torch.hub.load('pytorch/vision:v0.9.0', 'resnet18', pretrained=True, verbose=False)
-model = model.cuda().eval()
+model = torch.hub.load(
+    'pytorch/vision:v0.9.0', 'resnet18', pretrained=True, verbose=False
+).cuda().eval()
 
 # we should register the hidet backend for pytorch dynamo
 # only need to do this if you import hidet before torch. Otherwise, it is done automatically
@@ -115,7 +117,7 @@ print(a)
 # tensors. We can do a matrix multiplication as follows:
 b, c = hidet.randn([3, 2]), hidet.randn([2])
 d = hidet.ops.matmul(a, b)
-d = d + c   # 'd + c' is equivalent to 'hidet.ops.add(d, c)'
+d = d + c  # 'd + c' is equivalent to 'hidet.ops.add(d, c)'
 print(d)
 
 # %%
@@ -207,4 +209,3 @@ print(y2)
 # ---------
 # It is time to learn how to use hidet in your project. A good start is to :ref:`Run ONNX Model with Hidet`.
 #
-
