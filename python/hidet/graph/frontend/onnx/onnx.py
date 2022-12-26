@@ -480,7 +480,7 @@ class OnnxShape(OnnxOperator):
             end = rank
         start = max(min(start, rank), 0)
         end = max(min(end, rank), 0)
-        return [hidet.array(x.shape[start:end]).cuda()]
+        return [hidet.asarray(x.shape[start:end]).cuda()]
 
 
 @register_onnx_operator
@@ -619,7 +619,7 @@ class OnnxRange(OnnxOperator):
     def run_v11(self, inputs: List[Tensor]) -> List[Tensor]:
         start, limit, delta = [self.tensor2list(t) for t in inputs]
         array = np.arange(start=start, stop=limit, step=delta)
-        array = hidet.array(array).cuda().cast(dtype=inputs[0].dtype)
+        array = hidet.asarray(array).cuda().cast(dtype=inputs[0].dtype)
         return [array]
 
 
@@ -1072,7 +1072,7 @@ def run_trt(node: OnnxOperator, inputs: List[Tensor]) -> List[Tensor]:
     outputs = session.run(
         node.output_names, input_feed={name: tensor.cpu().numpy() for name, tensor in zip(node.input_names, inputs)}
     )
-    return [hidet.array(output).cuda() for output in outputs]
+    return [hidet.asarray(output).cuda() for output in outputs]
 
 
 class OnnxGraph(nn.Module):

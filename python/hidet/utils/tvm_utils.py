@@ -195,7 +195,7 @@ def tvm_inference(gmod: GraphModule, inputs: Dict[str, Tensor]) -> List[Tensor]:
     outputs = []
     for i in range(gmod.get_num_outputs()):
         output: tvm.nd.NDArray = gmod.get_output(i)
-        outputs.append(hidet.array(output.numpy()).cuda())
+        outputs.append(hidet.asarray(output.numpy()).cuda())
     return outputs
 
 

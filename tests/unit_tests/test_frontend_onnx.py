@@ -21,7 +21,7 @@ def check_model(model_path: str, input_names: List[str], input_tensors: List[Ten
 
     # hidet
     hidet_model = hidet.graph.frontend.from_onnx(model_path)
-    hidet_inputs = [hidet.array(tensor).cuda() for tensor in input_tensors]
+    hidet_inputs = [hidet.asarray(tensor).cuda() for tensor in input_tensors]
 
     if mode == 'imperative':
         hidet_outputs = hidet_model(*hidet_inputs)

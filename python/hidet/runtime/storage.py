@@ -8,7 +8,8 @@ import hidet.cuda
 from hidet.cuda import Stream, current_stream
 from hidet.ir import dtypes
 from hidet.ir.type import DataType, data_type
-from hidet.utils import green, prod
+from hidet.utils import green, prod, initialize
+from hidet.runtime.device import Device
 
 
 def nbytes2str(nbytes: int) -> str:
@@ -24,123 +25,174 @@ def nbytes2str(nbytes: int) -> str:
     return green('{} {}'.format(size, unit))
 
 
-class StorageDevice:
-    def __init__(self):
-        self.froze = False
+class MemoryAPI:
+    def __init__(self, device: Device):
+        self.device: Device = device
+        self.addr2nbytes: Dict[int, int] = {}
+        self.peak_allocated: int = 0
+        self.allocated: int = 0
 
-    def name(self):
-        raise NotImplementedError()
+    def malloc(self, nbytes: int) -> int:
+        raise NotImplementedError
 
-    def freeze(self, flag: bool):  # when freeze, no allocate or free should happen. used in CudaGraph
-        self.froze = flag
+    def free(self, addr: int):
+        raise NotImplementedError
 
-    def allocate(self, nbytes) -> int:
-        raise NotImplementedError()
-
-    def free(self, addr):
-        raise NotImplementedError()
-
-    def allocated_memory(self) -> int:
-        raise NotImplementedError()
-
-    def peak_allocated_memory(self) -> int:
-        raise NotImplementedError()
-
-    def free_memory(self) -> int:
-        raise NotImplementedError()
-
-    def total_memory(self) -> int:
-        raise NotImplementedError()
+    def memory_info(self) -> (int, int):
+        raise NotImplementedError
 
 
-class CudaStorageDevice(StorageDevice):
-    def __init__(self):
-        super().__init__()
-        self.addr2nbytes = {}
-        self._peak_allocated_memory = 0
-        self._allocated_memory = 0
+class CudaMemoryAPI(MemoryAPI):
 
-    def name(self):
-        return 'cuda'
-
-    def allocate(self, nbytes):
-        if self.froze:
-            raise MemoryError('Should not allocate when the device is frozen.')
-
-        addr = hidet.cuda.malloc_async(nbytes)
+    def malloc(self, nbytes: int) -> int:
+        with hidet.cuda.device(self.device.id):
+            addr = hidet.cuda.malloc_async(nbytes)
         if addr == 0 and nbytes != 0:
             # out of memory
             return 0
-        self._allocated_memory += nbytes
-        self._peak_allocated_memory = max(self._peak_allocated_memory, self._allocated_memory)
-        self.addr2nbytes[addr] = nbytes
-        return addr
+        else:
+            self.allocated += nbytes
+            self.peak_allocated = max(self.peak_allocated, self.allocated)
+            self.addr2nbytes[addr] = nbytes
+            return addr
 
-    def free(self, addr):
-        if self.froze:
-            raise MemoryError('Should not free when the device is frozen.')
+    def free(self, addr: int):
+        with hidet.cuda.device(self.device.id):
+            hidet.cuda.free_async(addr)
+        self.allocated -= self.addr2nbytes.pop(addr)
 
-        hidet.cuda.free_async(addr)
-        self._allocated_memory -= self.addr2nbytes.pop(addr)
-
-    def allocated_memory(self) -> int:
-        return self._allocated_memory
-
-    def peak_allocated_memory(self) -> int:
-        return self._peak_allocated_memory
-
-    def free_memory(self) -> int:
-        return hidet.cuda.memory_info()[0]
-
-    def total_memory(self) -> int:
-        return hidet.cuda.memory_info()[1]
+    def memory_info(self) -> (int, int):
+        return hidet.cuda.memory_info()
 
 
-class CpuStorageDevice(StorageDevice):
-    def __init__(self):
-        super().__init__()
-        self.addr2nbytes = {}
-        self._allocated_memory = 0
-        self._peak_allocated_memory = 0
+class CpuMemoryAPI(MemoryAPI):
 
-    def name(self):
-        return 'cpu'
-
-    def allocate(self, nbytes):
-        if self.froze:
-            raise MemoryError('Should not allocate when the device is frozen.')
-
+    def malloc(self, nbytes: int) -> int:
         addr = hidet.cuda.malloc_host(nbytes)
         if addr == 0 and nbytes != 0:
             return 0
-        self._allocated_memory += nbytes
-        self._peak_allocated_memory = max(self._peak_allocated_memory, self._allocated_memory)
+        self.allocated += nbytes
+        self.peak_allocated = max(self.peak_allocated, self.allocated)
         self.addr2nbytes[addr] = nbytes
         return addr
 
-    def free(self, addr):
-        if self.froze:
-            raise MemoryError('Should not free when the device is frozen.')
-
+    def free(self, addr: int):
         hidet.cuda.free_host(addr)
-        self._allocated_memory -= self.addr2nbytes.pop(addr)
+        self.allocated -= self.addr2nbytes.pop(addr)
 
-    def allocated_memory(self) -> int:
-        return self._allocated_memory
-
-    def peak_allocated_memory(self) -> int:
-        return self._peak_allocated_memory
-
-    def free_memory(self) -> int:
+    def memory_info(self) -> (int, int):
         raise NotImplementedError()
 
-    def total_memory(self) -> int:
-        raise NotImplementedError()
+
+# class StorageDevice:
+#     def __init__(self, device: Device):
+#         self.device: Device = device
+#         self.froze = False
+#
+#     def freeze(self, flag: bool):  # when freeze, no allocate or free should happen. used in CudaGraph
+#         self.froze = flag
+#
+#     def allocate(self, nbytes) -> int:
+#         raise NotImplementedError()
+#
+#     def free(self, addr):
+#         raise NotImplementedError()
+#
+#     def allocated_memory(self) -> int:
+#         raise NotImplementedError()
+#
+#     def peak_allocated_memory(self) -> int:
+#         raise NotImplementedError()
+#
+#     def free_memory(self) -> int:
+#         raise NotImplementedError()
+#
+#     def total_memory(self) -> int:
+#         raise NotImplementedError()
+#
+#
+# class CudaStorageDevice(StorageDevice):
+#     def __init__(self, device: Device):
+#         super().__init__(device)
+#         self.addr2nbytes = {}
+#         self._peak_allocated_memory = 0
+#         self._allocated_memory = 0
+#
+#     def allocate(self, nbytes):
+#         if self.froze:
+#             raise MemoryError('Should not allocate when the device is frozen.')
+#
+#         addr = hidet.cuda.malloc_async(nbytes)
+#         if addr == 0 and nbytes != 0:
+#             # out of memory
+#             return 0
+#         self._allocated_memory += nbytes
+#         self._peak_allocated_memory = max(self._peak_allocated_memory, self._allocated_memory)
+#         self.addr2nbytes[addr] = nbytes
+#         return addr
+#
+#     def free(self, addr):
+#         if self.froze:
+#             raise MemoryError('Should not free when the device is frozen.')
+#
+#         hidet.cuda.free_async(addr)
+#         self._allocated_memory -= self.addr2nbytes.pop(addr)
+#
+#     def allocated_memory(self) -> int:
+#         return self._allocated_memory
+#
+#     def peak_allocated_memory(self) -> int:
+#         return self._peak_allocated_memory
+#
+#     def free_memory(self) -> int:
+#         return hidet.cuda.memory_info()[0]
+#
+#     def total_memory(self) -> int:
+#         return hidet.cuda.memory_info()[1]
+#
+#
+# class CpuStorageDevice(StorageDevice):
+#     def __init__(self, device: Device):
+#         super().__init__(device)
+#         self.addr2nbytes = {}
+#         self._allocated_memory = 0
+#         self._peak_allocated_memory = 0
+#
+#     def allocate(self, nbytes):
+#         if self.froze:
+#             raise MemoryError('Should not allocate when the device is frozen.')
+#
+#         addr = hidet.cuda.malloc_host(nbytes)
+#         if addr == 0 and nbytes != 0:
+#             return 0
+#         self._allocated_memory += nbytes
+#         self._peak_allocated_memory = max(self._peak_allocated_memory, self._allocated_memory)
+#         self.addr2nbytes[addr] = nbytes
+#         return addr
+#
+#     def free(self, addr):
+#         if self.froze:
+#             raise MemoryError('Should not free when the device is frozen.')
+#
+#         hidet.cuda.free_host(addr)
+#         self._allocated_memory -= self.addr2nbytes.pop(addr)
+#
+#     def allocated_memory(self) -> int:
+#         return self._allocated_memory
+#
+#     def peak_allocated_memory(self) -> int:
+#         return self._peak_allocated_memory
+#
+#     def free_memory(self) -> int:
+#         raise NotImplementedError()
+#
+#     def total_memory(self) -> int:
+#         raise NotImplementedError()
 
 
 class Storage:
     def __init__(self, device, addr, num_bytes, free_handler):
-        self.device: str = device
+        self.device: Device = device
         self.addr: int = addr
         self.num_bytes: int = num_bytes
         self.free_handler: Callable[[Storage], None] = free_handler
@@ -155,11 +207,30 @@ class Storage:
     def __setstate__(self, state):
         raise ValueError()
 
+    @staticmethod
+    def new(device: Device, num_bytes: int) -> Storage:
+        return current_memory_pool(device).malloc(num_bytes)
+
+    @staticmethod
+    def _convert(src: Storage, dst_device: Device, non_blocking: bool, stream: Optional[Stream] = None) -> Storage:
+        if src.device == dst_device:
+            return src
+        elif src.device.is_cuda() and dst_device.is_cuda() and src.device.id != dst_device.id:
+            # peer to peer copy among cuda devices
+            pass
+        else:
+            pass
+
+        if src.device.type == dst_device.type:
+            pass
+        else:
+            pass
+
     def cpu(self) -> Storage:
-        if self.device == 'cpu':
+        if self.device.is_cpu():
             return self
-        elif self.device == 'cuda':
-            host_storage = self.new('cpu', self.num_bytes)
+        elif self.device.is_cuda():
+            host_storage = self.new(Device('cpu'), self.num_bytes)
             hidet.cuda.memcpy(dst=host_storage.addr, src=self.addr, num_bytes=self.num_bytes)
             return host_storage
         else:
@@ -175,7 +246,7 @@ class Storage:
         else:
             raise NotImplementedError()
 
-    def cuda(self) -> Storage:
+    def cuda(self, dst_id: int) -> Storage:
         if self.device == 'cuda':
             return self
         elif self.device == 'cpu':
@@ -185,7 +256,7 @@ class Storage:
         else:
             raise NotImplementedError()
 
-    def cuda_async(self, stream: Optional[Stream] = None):
+    def cuda_async(self, dst_id: int, stream: Optional[Stream] = None):
         if self.device == 'cuda':
             return self
         elif self.device == 'cpu':
@@ -205,15 +276,6 @@ class Storage:
         storage = Storage.new(self.device, self.num_bytes)
         hidet.cuda.memcpy_async(dst=storage.addr, src=self.addr, num_bytes=self.num_bytes, stream=stream)
         return storage
-
-    @staticmethod
-    def new(device: str, num_bytes: int) -> Storage:
-        if device == 'cpu':
-            return CpuMemoryPool.current().allocate(nbytes=num_bytes)
-        elif device == 'cuda':
-            return CudaMemoryPool.current().allocate(nbytes=num_bytes)
-        else:
-            raise ValueError("Unrecognized device '{}', candidates: {}".format(device, ['cpu', 'cuda']))
 
     def as_array(self, num_elements: int, dtype: Union[str, DataType] = 'float32', share_mem=True) -> np.ndarray:
         """
@@ -301,7 +363,7 @@ class MemoryPool:
         self.active_blocks = 0
         self.memory_blocks: Dict[int, List[Storage]] = defaultdict(list)
 
-    def allocate(self, nbytes: int) -> Storage:
+    def malloc(self, nbytes: int) -> Storage:
         allocated = (nbytes + self.block_size - 1) // self.block_size * self.block_size
         block_list = self.memory_blocks[allocated]
         if len(block_list) > 0:
@@ -309,20 +371,20 @@ class MemoryPool:
             addr = storage.addr
             self.reserved_size -= storage.num_bytes
         else:
-            addr = self.storage_device.allocate(allocated)
+            addr = self.storage_device.malloc(allocated)
             if addr == 0 and allocated != 0:
                 # out of memory
                 self.clear()
-                addr = self.storage_device.allocate(allocated)
+                addr = self.storage_device.malloc(allocated)
                 if addr == 0:
                     raise MemoryError(
-                        f'Can not allocate memory from {self.storage_device.name()} device, '
+                        f'Can not allocate memory from {self.storage_device.device} device, '
                         f'total {nbytes2str(self.storage_device.total_memory())}, '
                         f'hidet allocated {nbytes2str(self.storage_device.allocated_memory())}, '
                         f'free {nbytes2str(self.storage_device.free_memory())}, '
                         f'requesting {nbytes2str(allocated)}.'
                     )
-        return Storage(device=self.storage_device.name(), addr=addr, num_bytes=allocated, free_handler=self.free)
+        return Storage(device=self.storage_device.device, addr=addr, num_bytes=allocated, free_handler=self.free)
 
     def free(self, storage: Storage):
         self.memory_blocks[storage.num_bytes].append(storage)
@@ -362,10 +424,8 @@ class MemoryPool:
 
 
 class CudaMemoryPool(MemoryPool):
-    stack = []
-
-    def __init__(self, block_size: int = 4096, max_reserve_size: int = 4 * 1024**3):
-        super().__init__(CudaStorageDevice(), block_size, max_reserve_size)
+    def __init__(self, device_id: int, block_size: int = 4096, max_reserve_size: int = 4 * 1024**3):
+        super().__init__(CudaStorageDevice(Device('cuda', device_id)), block_size, max_reserve_size)
 
     def __enter__(self):
         CudaMemoryPool.stack.append(self)
@@ -374,18 +434,15 @@ class CudaMemoryPool(MemoryPool):
         CudaMemoryPool.stack.pop()
 
     @staticmethod
-    def current() -> CudaMemoryPool:
-        return CudaMemoryPool.stack[-1]
-
-
-CudaMemoryPool.stack.append(CudaMemoryPool())
+    def current(device_id: int) -> CudaMemoryPool:
+        return _device2pool[Device('cuda', device_id)]
 
 
 class CpuMemoryPool(MemoryPool):
     stack = []
 
     def __init__(self, block_size: int = 4096, max_reserve_size: int = 512 * 1024**2):
-        super().__init__(CpuStorageDevice(), block_size, max_reserve_size)
+        super().__init__(CpuStorageDevice(Device('cpu')), block_size, max_reserve_size)
 
     def __enter__(self):
         CpuMemoryPool.stack.append(self)
@@ -395,7 +452,29 @@ class CpuMemoryPool(MemoryPool):
 
     @staticmethod
     def current() -> CpuMemoryPool:
-        return CpuMemoryPool.stack[-1]
+        return _device2pool[Device('cpu')]
 
 
 CpuMemoryPool.stack.append(CpuMemoryPool())
+
+
+_device2pool: Dict[Device, MemoryPool] = {}
+
+
+@initialize()
+def initialize_memory_pools():
+    global _device2pool
+    _device2pool = {
+        Device('cpu'): MemoryPool(StorageDevice(Device('cpu')), block_size=4096, max_reserve_size=512 * 1024**2)
+    }
+    for device_id in range(hidet.cuda.device_count()):
+        device = Device('cuda', device_id)
+        _device2pool[device] = MemoryPool(StorageDevice(device), block_size=4096, max_reserve_size=4 * 1024**3)
+
+
+def current_memory_pool(device: Device) -> MemoryPool:
+    return _device2pool[device]
+
+
+def memory_pool(device: Device, pool: MemoryPool):
+    pass

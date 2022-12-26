@@ -1,8 +1,21 @@
 # pylint: disable=no-name-in-module, c-extension-no-member
-from typing import Tuple
+from typing import Tuple, Optional
 from functools import lru_cache
 from cuda import cudart
 from cuda.cudart import cudaDeviceProp
+
+
+class CudaDeviceContext:
+    def __init__(self, device_id: int):
+        self.device_id: int = device_id
+        self.prev_device_id: Optional[int] = None
+
+    def __enter__(self):
+        self.prev_device_id = current_device()
+        set_device(self.device_id)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        set_device(self.prev_device_id)
 
 
 @lru_cache(maxsize=1)
@@ -66,7 +79,7 @@ def set_device(device_id: int):
     assert err == 0, err
 
 
-def get_device() -> int:
+def current_device() -> int:
     """
     Get the current cuda device.
 
@@ -78,6 +91,24 @@ def get_device() -> int:
     err, device_id = cudart.cudaGetDevice()
     assert err == 0, err
     return device_id
+
+
+def device(device_id: int):
+    """
+    Context manager to set the current cuda device.
+
+    Parameters
+    ----------
+    device_id: int
+        The ID of the cuda device.
+
+    Examples
+    --------
+    >>> import hidet
+    >>> with hidet.cuda.device(0):
+    >>>     # do something on device 0
+    """
+    return CudaDeviceContext(device_id)
 
 
 def compute_capability(device_id: int = 0) -> Tuple[int, int]:

@@ -3,7 +3,8 @@ from typing import List, Sequence, Optional
 from cuda import cudart
 from cuda.cudart import cudaGraphExec_t
 from hidet.graph.tensor import Tensor, zeros_like, randn_like
-from hidet.runtime.storage import CudaMemoryPool
+from hidet.runtime.storage import MemoryPool
+from hidet.runtime.device import Device
 from hidet.utils import same_list
 from .stream import Stream, StreamContext, current_stream
 from .memory import memcpy_async
@@ -61,7 +62,7 @@ class CudaGraph:
 
         flow_graph: FlowGraph
 
-        self._memory_pool: CudaMemoryPool = CudaMemoryPool(block_size=4096, max_reserve_size=10 * 1024**3)
+        self._memory_pool: MemoryPool = MemoryPool(block_size=4096, max_reserve_size=10 * 1024**3)
         self._graph_capture: CudaGraphCapture = CudaGraphCapture()
         self._flow_graph: FlowGraph = flow_graph
         self._inputs: List[Tensor]

@@ -34,8 +34,8 @@ def generate_executor(flow_graph: FlowGraph) -> Callable:
 
     logger.info('schedule search space: %d', search_space)
 
-    has_cpu_tensor = any(tensor.device == 'cpu' for tensor in graph_opt.inputs + graph_opt.outputs)
-    has_cuda_tensor = any(tensor.device == 'cuda' for tensor in graph_opt.inputs + graph_opt.outputs)
+    has_cpu_tensor = any(tensor.device.type == 'cpu' for tensor in graph_opt.inputs + graph_opt.outputs)
+    has_cuda_tensor = any(tensor.device.type == 'cuda' for tensor in graph_opt.inputs + graph_opt.outputs)
 
     if has_cpu_tensor and has_cuda_tensor:
         raise RuntimeError('the flow graph contains both CPU and CUDA tensors, currently not supported by hidet')

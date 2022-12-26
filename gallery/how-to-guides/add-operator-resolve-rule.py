@@ -76,7 +76,7 @@ Before we start, let's have a look at the original behavior when there is no suc
 import hidet
 
 a = hidet.symbol(shape=[2, 3])
-b = hidet.ops.pow(a, hidet.array(3))
+b = hidet.ops.pow(a, hidet.asarray(3))
 graph = hidet.trace_from(b, inputs=[a])
 print('Original graph:')
 print(graph)

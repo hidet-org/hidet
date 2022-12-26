@@ -45,7 +45,7 @@ def get_onnx_model(
         seq_length = kwargs.get('seq_length', 128)
         input_names = ['input_ids', 'attention_mask', 'token_type_ids']
         input_tensors = [
-            hidet.array(np.random.randint(0, vocab_size - 1, size=[batch_size, seq_length], dtype=np.int64)),
+            hidet.asarray(np.random.randint(0, vocab_size - 1, size=[batch_size, seq_length], dtype=np.int64)),
             hidet.ones(shape=[batch_size, seq_length], dtype='int64'),
             hidet.zeros(shape=[batch_size, seq_length], dtype='int64'),
         ]
@@ -57,9 +57,9 @@ def get_onnx_model(
         seq_length = kwargs.get('seq_length', 128)
         input_names = ['input_ids', 'attention_mask', 'decoder_input_ids', 'decoder_attention_mask']
         input_tensors = [
-            hidet.array(np.random.randint(0, vocab_size - 1, size=[batch_size, seq_length], dtype=np.int64)),
+            hidet.asarray(np.random.randint(0, vocab_size - 1, size=[batch_size, seq_length], dtype=np.int64)),
             hidet.ones(shape=[batch_size, seq_length], dtype='int64'),
-            hidet.array(np.random.randint(0, vocab_size - 1, size=[batch_size, seq_length], dtype=np.int64)),
+            hidet.asarray(np.random.randint(0, vocab_size - 1, size=[batch_size, seq_length], dtype=np.int64)),
             hidet.ones(shape=[batch_size, seq_length], dtype='int64'),
         ]
         return model_path, input_names, input_tensors
@@ -70,7 +70,7 @@ def get_onnx_model(
         seq_length = kwargs.get('seq_length', 128)
         input_names = ['input_ids', 'attention_mask']
         input_tensors = [
-            hidet.array(np.random.randint(0, vocab_size - 1, size=[batch_size, seq_length], dtype=np.int64)),
+            hidet.asarray(np.random.randint(0, vocab_size - 1, size=[batch_size, seq_length], dtype=np.int64)),
             hidet.ones(shape=[batch_size, seq_length], dtype='int64'),
         ]
         return model_path, input_names, input_tensors

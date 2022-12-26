@@ -10,7 +10,7 @@ def check_transform(shape, numpy_op, hidet_op, dtype=np.float32, atol=0, rtol=0)
     # wrap np.array(...) in case shape = []
     data = np.array(np.random.randn(*shape)).astype(dtype)
     numpy_result = numpy_op(data)
-    hidet_result = hidet_op(hi.array(data).cuda()).cpu().numpy()
+    hidet_result = hidet_op(hi.asarray(data).cuda()).cpu().numpy()
     np.testing.assert_allclose(actual=hidet_result, desired=numpy_result, atol=atol, rtol=rtol)
 
 
@@ -79,7 +79,7 @@ def test_transpose(shape, axes):
 def test_concat(shapes, dtype, axis):
     data_list = [np.random.randn(*shape).astype(dtype) for shape in shapes]
     numpy_result = np.concatenate(data_list, axis)
-    hidet_result = ops.concat([hi.array(data).cuda() for data in data_list], axis).cpu().numpy()
+    hidet_result = ops.concat([hi.asarray(data).cuda() for data in data_list], axis).cpu().numpy()
     np.testing.assert_allclose(actual=hidet_result, desired=numpy_result, rtol=0, atol=0)
 
 
@@ -92,7 +92,7 @@ def test_cast(shape, src_type, dst_type):
 def test_take(shape, indices_shape, axis):
     dim_extent = shape[axis]
     indices = np.random.randint(0, dim_extent - 1, indices_shape).astype(np.int64)
-    check_transform(shape, lambda x: np.take(x, indices, axis), lambda x: ops.take(x, hi.array(indices).cuda(), axis))
+    check_transform(shape, lambda x: np.take(x, indices, axis), lambda x: ops.take(x, hi.asarray(indices).cuda(), axis))
 
 
 @pytest.mark.parametrize(

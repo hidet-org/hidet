@@ -215,7 +215,7 @@ class DLManagedTensorContext:
             data=tensor.storage.addr,
             device=DLDevice(
                 # todo: set device_id when we support multiple GPUs
-                device_type=DLDeviceType.kDLGPU if tensor.device == 'cuda' else DLDeviceType.kDLCPU,
+                device_type=DLDeviceType.kDLGPU if tensor.device.type == 'cuda' else DLDeviceType.kDLCPU,
                 device_id=0,
             ),
             ndim=ndim,
@@ -257,9 +257,9 @@ def to_dlpack(tensor: Tensor) -> ctypes.py_object:
 
 
 def to_dlpack_device(tensor: Tensor) -> Tuple[int, int]:
-    if tensor.device == 'cuda':
+    if tensor.device.type == 'cuda':
         return DLDeviceType.kDLGPU, 0
-    elif tensor.device == 'cpu':
+    elif tensor.device.type == 'cpu':
         # here, we use kDLCPU instead of kDLCPUPinned, because we pytorch doesn't support kDLCPUPinned
         # technically, we can think kDLCPUPinned as a special case of kDLCPU
         device_type = DLDeviceType.kDLCPU

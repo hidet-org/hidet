@@ -146,7 +146,7 @@ def truediv(x: Union[Tensor, int, float], y: Union[Tensor, int, float]):
 
     if is_integer(x) and is_integer(y):
         if isinstance(y, (int, float)):
-            y = hidet.array(y).to(device=x.device)
+            y = hidet.asarray(y).to(device=x.device)
         return x / ops.cast(y, 'float32')
     else:
         return x / y

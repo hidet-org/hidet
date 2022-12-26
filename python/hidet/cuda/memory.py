@@ -214,3 +214,56 @@ def memcpy_async(dst: int, src: int, num_bytes: int, stream: Optional[Union[Stre
         stream = current_stream()
     (err,) = cudart.cudaMemcpyAsync(dst, src, num_bytes, cudaMemcpyKind.cudaMemcpyDefault, int(stream))
     assert err == 0, err
+
+
+def memcpy_peer(dst: int, dst_id: int, src: int, src_id: int, num_bytes: int) -> None:
+    """
+    Copy gpu memory from one device to another.
+
+    Parameters
+    ----------
+    dst: int
+        The destination address.
+
+    dst_id: int
+        The id of the destination device.
+
+    src: int
+        The source address.
+
+    src_id: int
+        The id of the source device.
+
+    num_bytes: int
+        The number of bytes to copy.
+    """
+    (err,) = cudart.cudaMemcpyPeer(dst, dst_id, src, src_id, num_bytes)
+    assert err == 0, err
+
+
+def memcpy_peer_async(dst: int, dst_id: int, src: int, src_id: int, num_bytes: int, stream: Optional[Union[Stream, cudaStream_t, int]] = None) -> None:
+    """
+    Copy gpu memory from one device to another.
+
+    Parameters
+    ----------
+    dst: int
+        The destination address.
+
+    dst_id: int
+        The id of the destination device.
+
+    src: int
+        The source address.
+
+    src_id: int
+        The id of the source device.
+
+    num_bytes: int
+        The number of bytes to copy.
+
+    stream: Union[Stream, cudaStream_t, int], optional
+        The stream to use for the memcpy. If None, the current stream is used.
+    """
+    (err,) = cudart.cudaMemcpyPeer(dst, dst_id, src, src_id, num_bytes)
+    assert err == 0, err

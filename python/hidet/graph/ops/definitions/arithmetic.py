@@ -71,22 +71,6 @@ class VariadicElementwiseTask(Task):
         )
 
 
-class ConstantTask(Task):
-    def __init__(
-        self, name: str, shape: Sequence[int], value: Union[int, float, bool, Constant], dtype: Union[DataType, str]
-    ):
-        dtype: DataType = data_type(dtype)
-        value: Constant = dtype(value)
-        const_output = compute(name='c', shape=list(shape), fcompute=lambda *indices: value)
-        super().__init__(
-            name=name,
-            inputs=[],
-            outputs=[const_output],
-            inverse_map={},
-            attributes={'shape': shape, 'value': value.value, 'dtype': dtype.name},
-        )
-
-
 class WhereTask(Task):
     def __init__(self, cond: TensorNode, x: TensorNode, y: TensorNode):
         cond_shape = cond.const_shape()
@@ -298,36 +282,6 @@ class MinOp(Operator):
                 op=lambda *args: scalar_min(args),
             ),
             name='min',
-        )
-
-
-class ConstantOp(Operator):
-    def __init__(
-        self,
-        shape: Sequence[int],
-        value: Union[float, int, bool, Constant],
-        dtype: Optional[DataType] = None,
-        device: str = 'cpu',
-    ):
-        shape = [int(v) for v in shape]
-        if dtype is None:
-            if isinstance(value, int):
-                dtype = dtypes.int64
-            elif isinstance(value, float):
-                dtype = dtypes.float32
-            elif isinstance(value, bool):
-                dtype = dtypes.boolean
-            elif isinstance(value, Constant):
-                assert isinstance(value.type, DataType)
-                dtype = value.type
-            else:
-                raise ValueError(f'Unknown type for value {value}')
-
-        super().__init__(
-            inputs=[],
-            task=ConstantTask(name='const', shape=shape, value=value, dtype=dtype),
-            name='constant',
-            attributes={'shape': shape, 'value': value, 'dtype': dtype, 'device': device},
         )
 
 
@@ -554,10 +508,3 @@ def ceil(x: Tensor) -> Tensor:
     return CeilOp(x).get_output(0)
 
 
-def constant(
-    shape: Sequence[int],
-    value: Union[float, int, bool, Constant],
-    dtype: Optional[Union[DataType, str]] = None,
-    device: str = 'cpu',
-) -> Tensor:
-    return ConstantOp(shape, value, data_type(dtype), device).get_output(0)

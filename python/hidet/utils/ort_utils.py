@@ -28,7 +28,7 @@ def ort_inference(session: ort.InferenceSession, inputs: Dict[str, Tensor]) -> D
     io_binding = _prepare_io_binding(session, inputs)
     session.run_with_iobinding(iobinding=io_binding)
     outputs = {
-        output_node.name: hidet.array(value.numpy()).cuda()
+        output_node.name: hidet.asarray(value.numpy()).cuda()
         for output_node, value in zip(session.get_outputs(), io_binding.get_outputs())
     }
     return outputs

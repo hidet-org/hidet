@@ -39,16 +39,16 @@ class CompiledTaskCache:
     def __init__(self):
         self.cached: Dict[Tuple[str, int, str], CompiledFunction] = {}
 
-    def contains(self, device: str, space: int, task_str: str) -> bool:
-        key = CompiledTaskKey(device, space, task_str)
+    def contains(self, device_type: str, space: int, task_str: str) -> bool:
+        key = CompiledTaskKey(device_type, space, task_str)
         return key in self.cached
 
-    def get(self, device: str, space: int, task_str: str) -> Optional[CompiledFunction]:
-        key = CompiledTaskKey(device, space, task_str)
+    def get(self, device_type: str, space: int, task_str: str) -> Optional[CompiledFunction]:
+        key = CompiledTaskKey(device_type, space, task_str)
         return self.cached.get(key) if key in self.cached else None
 
-    def add(self, device: str, space: int, task_str: str, func: CompiledFunction):
-        key = CompiledTaskKey(device, space, task_str)
+    def add(self, device_type: str, space: int, task_str: str, func: CompiledFunction):
+        key = CompiledTaskKey(device_type, space, task_str)
         self.cached[key] = func
 
 

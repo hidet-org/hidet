@@ -11,23 +11,10 @@ import hidet.runtime.storage
 import hidet.cuda
 from hidet.ir import dtypes
 from hidet.ir.type import DataType, data_type
-from hidet.ir.expr import Constant
 from hidet.ir.layout import DataLayout, RowMajorLayout
 from hidet.runtime.storage import Storage
 from hidet.utils import prod
-
-
-def convert(v: Union[int, float, Constant], device: str, dtype: Optional[DataType] = None):
-    if isinstance(v, (int, float)):
-        if dtype is None:
-            dtype = {int: dtypes.int64, float: dtypes.float32}
-        return full(shape=[], fill_value=v, dtype=dtype, device=device)
-    elif isinstance(v, Constant):
-        if dtype is None:
-            dtype = v.type
-        return full(shape=[], fill_value=v.value, dtype=dtype, device=device)
-    else:
-        raise NotImplementedError()
+from hidet.runtime.device import Device, instantiate_device
 
 
 class Tensor:
@@ -35,45 +22,40 @@ class Tensor:
 
     This class defines an n-dimension array.
 
-    Attributes
+    Parameters
     ----------
-    shape: List[int]
+    shape: Sequence[int]
         The shape of the tensor.
 
-    dtype: DataType
+    dtype: DataType or str
         The data type of the tensor.
 
-    device: str
+    device: Device or str
         The device of the tensor.
 
-    layout: DataLayout
-        The data layout of the tensor.
-
-    storage: Optional[Storage]
+    storage: Storage, optional
         The storage of the tensor. None indicates it is a symbolic tensor.
 
-    trace: Optional[Tuple[Operator, int]]
+    layout: DataLayout, optional
+        The data layout of the tensor.
+
+    trace: Tuple[Operator, int], optional
         Where this tensor is derived from. A trace = (op, i) indicates that this tensor is the i-th output of the op
         operator.
     """
 
-    def __init__(
-        self,
-        shape: Sequence[int],
-        dtype: Union[str, DataType],
-        device: str,
-        storage: Optional[Storage],
-        layout: Optional[DataLayout] = None,
-        trace: Optional[Tuple['Operator', int]] = None,
-    ):
+    def __init__(self, shape, dtype, device, storage, layout=None, trace=None):
         from hidet.graph.operator import Operator
 
         self.shape: List[int] = [int(v) for v in shape]
         self.dtype: DataType = data_type(dtype)
-        self.device: str = device
+        self.device: Device = instantiate_device(device)
         self.storage: Optional[Storage] = storage
         self.layout: DataLayout = layout if layout else DataLayout.row_major(shape)
         self.trace: Optional[Tuple[Operator, int]] = trace
+
+    def __pos__(self):
+        return self
 
     def __neg__(self) -> Tensor:
         from .ops import neg
@@ -85,35 +67,194 @@ class Tensor:
 
         return add(self, other)
 
-    def __radd__(self, other):
-        from .ops import add
-
-        return add(other, self)
-
     def __sub__(self, other) -> Tensor:
         from .ops import sub
 
         return sub(self, other)
-
-    def __rsub__(self, other):
-        from .ops import sub
-
-        return sub(other, self)
 
     def __mul__(self, other) -> Tensor:
         from .ops import multiply
 
         return multiply(self, other)
 
+    def __truediv__(self, other) -> Tensor:
+        from .ops import divide
+
+        return divide(self, other)
+
+    def __floordiv__(self, other) -> Tensor:
+        raise NotImplementedError()
+
+    def __mod__(self, other) -> Tensor:
+        raise NotImplementedError()
+
+    def __pow__(self, power, modulo=None) -> Tensor:
+        raise NotImplementedError()
+
+    def __matmul__(self, other) -> Tensor:
+        from .ops import matmul
+
+        return matmul(self, other)
+
+    def __invert__(self) -> Tensor:
+        from .ops import bitwise_not
+
+        return bitwise_not(self)
+
+    def __and__(self, other) -> Tensor:
+        from .ops import bitwise_and
+
+        return bitwise_and(self, other)
+
+    def __or__(self, other):
+        from .ops import bitwise_or
+
+        return bitwise_or(self, other)
+
+    def __xor__(self, other):
+        from .ops import bitwise_xor
+
+        return bitwise_xor(self, other)
+
+    def __lshift__(self, other):
+        from .ops import leftshift
+
+        return leftshift(self, other)
+
+    def __rshift__(self, other):
+        from .ops import rightshift
+
+        return rightshift(self, other)
+
+    def __lt__(self, other):
+        from .ops import less_than
+
+        return less_than(self, other)
+
+    def __le__(self, other):
+        from .ops import less_or_equal
+
+        return less_or_equal(self, other)
+
+    def __gt__(self, other):
+        from .ops import greater_than
+
+        return greater_than(self, other)
+
+    def __eq__(self, other):
+        from .ops import equal
+
+        return equal(self, other)
+
+    def __ne__(self, other):
+        raise NotImplementedError()
+
+    def __iadd__(self, other):
+        raise NotImplementedError()
+
+    def __isub__(self, other):
+        raise NotImplementedError()
+
+    def __imul__(self, other):
+        raise NotImplementedError()
+
+    def __itruediv__(self, other):
+        raise NotImplementedError()
+
+    def __ifloordiv__(self, other):
+        raise NotImplementedError()
+
+    def __imod__(self, other):
+        raise NotImplementedError()
+
+    def __ipow__(self, other):
+        raise NotImplementedError()
+
+    def __imatmul__(self, other):
+        raise NotImplementedError()
+
+    def __iand__(self, other):
+        raise NotImplementedError()
+
+    def __ior__(self, other):
+        raise NotImplementedError()
+
+    def __ixor__(self, other):
+        raise NotImplementedError()
+
+    def __ilshift__(self, other):
+        raise NotImplementedError()
+
+    def __irshift__(self, other):
+        raise NotImplementedError()
+
+    def __radd__(self, other):
+        from .ops import add
+
+        return add(other, self)
+
+    def __rsub__(self, other):
+        from .ops import sub
+
+        return sub(other, self)
+
     def __rmul__(self, other):
         from .ops import multiply
 
         return multiply(other, self)
 
-    def __truediv__(self, other) -> Tensor:
-        from .ops import divide
+    def __rtruediv__(self, other):
+        raise NotImplementedError()
 
-        return divide(self, other)
+    def __rfloordiv__(self, other):
+        raise NotImplementedError()
+
+    def __rmod__(self, other):
+        raise NotImplementedError()
+
+    def __rpow__(self, other):
+        raise NotImplementedError()
+
+    def __rmatmul__(self, other):
+        raise NotImplementedError()
+
+    def __rand__(self, other):
+        raise NotImplementedError()
+
+    def __ror__(self, other):
+        raise NotImplementedError()
+
+    def __rxor__(self, other):
+        raise NotImplementedError()
+
+    def __rlshift__(self, other):
+        raise NotImplementedError()
+
+    def __rrshift__(self, other):
+        raise NotImplementedError()
+
+    def __abs__(self):
+        from .ops import abs
+
+        return abs(self)
+
+    def __bool__(self) -> bool:
+        raise NotImplementedError()
+
+    def __array_namespace__(self, *, api_version=None):
+        raise NotImplementedError()
+
+    def __complex__(self) -> complex:
+        raise NotImplementedError()
+
+    def __float__(self) -> float:
+        raise NotImplementedError()
+
+    def __index__(self) -> int:
+        raise NotImplementedError()
+
+    def __int__(self) -> int:
+        raise NotImplementedError()
 
     def __str__(self):
         head = self.signature()
@@ -150,7 +291,7 @@ class Tensor:
             ellipsis_index = item.index(Ellipsis)
             ellipsis_ndim = len(self.shape) - sum([1 if axis not in [None, Ellipsis] else 0 for axis in item])
             ellipsis_ndim = max(ellipsis_ndim, 0)
-            item = item[:ellipsis_index] + (slice(None),) * ellipsis_ndim + item[ellipsis_index + 1 :]
+            item = item[:ellipsis_index] + (slice(None),) * ellipsis_ndim + item[ellipsis_index + 1:]
 
         # process None
         # e.g., x[2, None, 3] -> x[2, 1, 3]
@@ -188,6 +329,9 @@ class Tensor:
                     steps.append(v.step if v.step is not None else 1)
             sliced = strided_slice(self, starts, ends, strides=steps).squeeze(squeeze_dims)
             return sliced
+
+    def __setitem__(self, key, value):
+        raise NotImplementedError()
 
     def __iter__(self):
         raise TypeError('hidet.Tensor does not support iteration.')
@@ -247,6 +391,9 @@ class Tensor:
         from .impl.dlpack import to_dlpack_device
 
         return to_dlpack_device(self)
+
+    def to_device(self, device, /, *, stream=None):
+        raise NotImplementedError()
 
     def signature(self) -> str:
         """Get the signature of the tensor.
@@ -531,7 +678,7 @@ class Tensor:
 
         return cast(self, dtype)
 
-    def to(self, dtype: Optional[str] = None, device: Optional[str] = None):
+    def to(self, dtype: Optional[str] = None, device: Optional[Union[Device, str]] = None):
         """Cast the data type of current tensor or move it to another device.
 
         Parameters
@@ -539,7 +686,7 @@ class Tensor:
         dtype: Optional[str]
             The target data type to convert to. None indicates unchanged.
 
-        device: Optional[str]
+        device: Union[Device, str], optional
             The target device to copy the tensor. None indicates unchanged.
 
         Returns
@@ -571,7 +718,7 @@ class Tensor:
         ret: Tensor
             The new tensor or self.
         """
-        if self.device == 'cpu':
+        if self.device.type == 'cpu':
             return self
         else:
             if self.trace is None:
@@ -589,12 +736,12 @@ class Tensor:
         ret: Tensor
             The new tensor or self.
         """
-        if self.device == 'cuda':
+        if self.device.type == 'cuda':
             return self
         else:
             if self.trace is None:
                 return Tensor(
-                    self.shape, self.dtype, 'cuda', self.storage.cuda() if self.storage else None, self.layout
+                    self.shape, self.dtype, instantiate_device('cuda'), self.storage.cuda() if self.storage else None, self.layout
                 )
             else:
                 raise ValueError('Please use .detach() to detach a trace variable first.')
@@ -664,7 +811,7 @@ class Tensor:
         ret: Tensor
             The tensor on CPU.
         """
-        if self.device == 'cpu':
+        if self.device.type == 'cpu':
             return self
         else:
             if self.trace is None:
@@ -689,7 +836,7 @@ class Tensor:
         ret: Tensor
             The tensor on GPU.
         """
-        if self.device == 'cuda':
+        if self.device.type == 'cuda':
             return self
         else:
             if self.trace is None:
@@ -721,7 +868,7 @@ class Tensor:
         ret: np.ndarray
             The numpy array.
         """
-        if self.device != 'cpu':
+        if self.device.type != 'cpu':
             return self.cpu().numpy()
         if self.dtype in [dtypes.bfloat16, dtypes.tfloat32]:
             warnings.warn('numpy does not support {}, converting to float32'.format(self.dtype.name))
@@ -867,7 +1014,7 @@ def full(shape, fill_value: Union[float, int], dtype='float32', device='cuda', l
     dtype: DataType or str
         The data type of element of the tensor.
 
-    device: str
+    device: Device or str
         The device of the new tensor is created on.
 
     layout: DataLayout or None
@@ -882,7 +1029,7 @@ def full(shape, fill_value: Union[float, int], dtype='float32', device='cuda', l
 
     assert layout is None, 'full is not implemented for non-row major layout'
     dtype = data_type(dtype)
-    return ops.constant(shape=shape, value=fill_value, dtype=dtype, device=device)
+    return ops.full(shape=shape, value=fill_value, dtype=dtype, device=device)
 
 
 def randn(shape, dtype='float32', mean=0.0, stddev=1.0, device='cuda', layout=None) -> Tensor:
@@ -939,7 +1086,7 @@ def randint(low: int, high=None, shape: Sequence[int] = (), dtype: str = 'int32'
     dtype_map = {'int32': np.int32, 'int64': np.int64}
     if dtype not in dtype_map:
         return randint(low=low, high=high, shape=shape, dtype='int32').cast(dtype)
-    return array(np.random.randint(low=low, high=high, size=shape, dtype=dtype_map[dtype]))
+    return asarray(np.random.randint(low=low, high=high, size=shape, dtype=dtype_map[dtype]))
 
 
 def _tensor_like(constructor, data: Tensor, shape, dtype, device, layout):
@@ -951,11 +1098,11 @@ def _tensor_like(constructor, data: Tensor, shape, dtype, device, layout):
 
 
 def empty_like(
-    data: Tensor,
-    shape: Optional[Sequence[int]] = None,
-    dtype: Optional[str] = None,
-    device: Optional[str] = None,
-    layout: Optional[DataLayout] = None,
+        data: Tensor,
+        shape: Optional[Sequence[int]] = None,
+        dtype: Optional[str] = None,
+        device: Optional[str] = None,
+        layout: Optional[DataLayout] = None,
 ) -> Tensor:
     return _tensor_like(empty, data, shape, dtype, device, layout)
 
@@ -989,54 +1136,54 @@ def symbol_like(data: Tensor, shape=None, dtype=None, device=None, layout=None):
 
 
 def zeros_like(
-    data: Tensor,
-    shape: Optional[Sequence[int]] = None,
-    dtype: Optional[str] = None,
-    device: Optional[str] = None,
-    layout: Optional[DataLayout] = None,
+        data: Tensor,
+        shape: Optional[Sequence[int]] = None,
+        dtype: Optional[str] = None,
+        device: Optional[str] = None,
+        layout: Optional[DataLayout] = None,
 ) -> Tensor:
     return _tensor_like(zeros, data, shape, dtype, device, layout)
 
 
 def ones_like(
-    data: Tensor,
-    shape: Optional[Sequence[int]] = None,
-    dtype: Optional[str] = None,
-    device: Optional[str] = None,
-    layout: Optional[DataLayout] = None,
+        data: Tensor,
+        shape: Optional[Sequence[int]] = None,
+        dtype: Optional[str] = None,
+        device: Optional[str] = None,
+        layout: Optional[DataLayout] = None,
 ) -> Tensor:
     return _tensor_like(ones, data, shape, dtype, device, layout)
 
 
 def full_like(
-    data: Tensor,
-    fill_value,
-    shape: Optional[Sequence[int]] = None,
-    dtype: Optional[str] = None,
-    device: Optional[str] = None,
-    layout: Optional[DataLayout] = None,
+        data: Tensor,
+        fill_value,
+        shape: Optional[Sequence[int]] = None,
+        dtype: Optional[str] = None,
+        device: Optional[str] = None,
+        layout: Optional[DataLayout] = None,
 ) -> Tensor:
     return _tensor_like(partial(full, fill_value=fill_value), data, shape, dtype, device, layout)
 
 
 def randn_like(
-    data: Tensor,
-    shape: Optional[Sequence[int]] = None,
-    dtype: Optional[str] = None,
-    device: Optional[str] = None,
-    layout: Optional[DataLayout] = None,
+        data: Tensor,
+        shape: Optional[Sequence[int]] = None,
+        dtype: Optional[str] = None,
+        device: Optional[str] = None,
+        layout: Optional[DataLayout] = None,
 ) -> Tensor:
     return _tensor_like(randn, data, shape, dtype, device, layout)
 
 
 def randint_like(
-    data: Tensor,
-    low: int,
-    high: Optional[int] = None,
-    shape: Optional[Sequence[int]] = None,
-    dtype: Optional[str] = None,
-    device: Optional[str] = None,
-    layout: Optional[DataLayout] = None,
+        data: Tensor,
+        low: int,
+        high: Optional[int] = None,
+        shape: Optional[Sequence[int]] = None,
+        dtype: Optional[str] = None,
+        device: Optional[str] = None,
+        layout: Optional[DataLayout] = None,
 ):
     return _tensor_like(partial(randint, low=low, high=high), data, shape, dtype, device, layout)
 
@@ -1094,13 +1241,20 @@ def from_torch(torch_tensor):
     return hidet.from_dlpack(torch_tensor)
 
 
-def array(obj: Union[float, int, List, Tuple, np.ndarray, Tensor]) -> Tensor:
-    """Convert a list, tuple, or numpy ndarray to a hidet tensor.
+def asarray(obj, /, *, dtype=None, device=None) -> Tensor:
+    """
+    Convert a list, tuple, or numpy ndarray to a hidet tensor.
 
     Parameters
     ----------
-    obj: Union[List, Tuple, np.ndarray, Tensor]
+    obj: Union[bool, int, float, List, Tuple, np.ndarray, Tensor]
         The object to be converted.
+
+    dtype: DataType, optional
+        The data type of the output tensor.
+
+    device: Device
+        The device of the output tensor.
 
     Returns
     -------
@@ -1108,8 +1262,22 @@ def array(obj: Union[float, int, List, Tuple, np.ndarray, Tensor]) -> Tensor:
         The hidet tensor converted from given object.
     """
     if isinstance(obj, np.ndarray):
-        return from_numpy(obj)
+        ret = from_numpy(obj)
     elif isinstance(obj, Tensor):
-        return obj
+        ret = obj
     else:
-        return from_numpy(np.array(obj))
+        ret = from_numpy(np.array(obj))
+    return ret.to(dtype=dtype, device=device)
+
+
+def arange(start, /, stop=None, step=1, *, dtype=None, device=None) -> Tensor:
+    raise NotImplementedError()
+
+
+def eye(n_rows, n_cols=None, /, *, k=0, dtype=None, device=None) -> Tensor:
+    raise NotImplementedError()
+
+
+def linspace(start, stop, /, num, *, dtype=None, device=None, endpoint=True) -> Tensor:
+    raise NotImplementedError()
+
