@@ -11,8 +11,8 @@ Contents
 
     hidet.cuda.available
     hidet.cuda.device_count
+    hidet.cuda.current_device
     hidet.cuda.set_device
-    hidet.cuda.get_device
     hidet.cuda.properties
     hidet.cuda.compute_capability
     hidet.cuda.synchronize
@@ -62,9 +62,9 @@ Device Management
 
 .. autofunction:: hidet.cuda.device_count
 
-.. autofunction:: hidet.cuda.set_device
+.. autofunction:: hidet.cuda.current_device
 
-.. autofunction:: hidet.cuda.get_device
+.. autofunction:: hidet.cuda.set_device
 
 .. autofunction:: hidet.cuda.properties
 

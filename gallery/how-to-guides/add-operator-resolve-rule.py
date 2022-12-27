@@ -75,8 +75,8 @@ Before we start, let's have a look at the original behavior when there is no suc
 """
 import hidet
 
-a = hidet.symbol(shape=[2, 3])
-b = hidet.ops.pow(a, hidet.asarray(3))
+a = hidet.symbol(shape=[2, 3], device='cuda')
+b = hidet.ops.pow(a, hidet.asarray(3, device='cuda'))
 graph = hidet.trace_from(b, inputs=[a])
 print('Original graph:')
 print(graph)

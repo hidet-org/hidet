@@ -1270,7 +1270,7 @@ def asarray(obj, /, *, dtype=None, device=None) -> Tensor:
     dtype: DataType, optional
         The data type of the output tensor.
 
-    device: Device
+    device: Device or str
         The device of the output tensor.
 
     Returns

@@ -84,7 +84,7 @@ output: hidet.Tensor = hidet_onnx_module(data)
 # check the output of hidet with pytorch
 torch_output = torch_model(torch_data).detach()
 np.testing.assert_allclose(
-    actual=output.numpy(), desired=torch_output.cpu().numpy(), rtol=1e-2, atol=1e-2
+    actual=output.cpu().numpy(), desired=torch_output.cpu().numpy(), rtol=1e-2, atol=1e-2
 )
 
 # %%
@@ -128,7 +128,10 @@ def bench_hidet_graph(graph: hidet.FlowGraph):
     cuda_graph = graph.cuda_graph()
     (output,) = cuda_graph.run([data])
     np.testing.assert_allclose(
-        actual=output.numpy(), desired=torch_output.cpu().numpy(), rtol=1e-2, atol=1e-2
+        actual=output.cpu().numpy(),
+        desired=torch_output.cpu().numpy(),
+        rtol=1e-2,
+        atol=1e-2,
     )
     print('  Hidet: {:.3f} ms'.format(benchmark_func(lambda: cuda_graph.run())))
 
