@@ -15,7 +15,7 @@ from .type import data_type, tensor_type
 
 from .expr import Expr, Var, Constant
 from .expr import BinaryOp, Condition, LessThan, LessEqual, Equal, NotEqual, Add, Sub, Multiply, Div, Mod, FloorDiv
-from .expr import Let, Cast, And, Or, TensorElement, Call, TensorSlice, Not, Neg
+from .expr import Let, Cast, LogicalAnd, LogicalOr, TensorElement, Call, TensorSlice, LogicalNot, Neg
 from .expr import BitwiseXor, BitwiseAnd, BitwiseNot, BitwiseOr, Dereference
 from .expr import var, scalar_var, tensor_var, is_one, is_zero, convert
 

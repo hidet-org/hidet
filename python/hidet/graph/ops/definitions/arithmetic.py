@@ -163,19 +163,24 @@ class ErfOp(UnaryElementwiseOp):
         super().__init__(x, op=lambda v: primitives.erf(v), name='erf')
 
 
-class TanhOp(UnaryElementwiseOp):
-    def __init__(self, x):
-        super().__init__(x, op=lambda v: primitives.tanh(v), name='tanh')
-
-
 class ExpOp(UnaryElementwiseOp):
     def __init__(self, x):
         super().__init__(x, op=lambda v: primitives.exp(v), name='exp')
 
 
+class Expm1Op(UnaryElementwiseOp):
+    def __init__(self, x):
+        super().__init__(x, op=lambda v: primitives.expm1(v), name='expm1')
+
+
 class LogOp(UnaryElementwiseOp):
     def __init__(self, x):
         super().__init__(x, op=lambda v: primitives.log(v), name='log')
+
+
+class Log1pOp(UnaryElementwiseOp):
+    def __init__(self, x):
+        super().__init__(x, op=lambda v: primitives.log1p(v), name='log1p')
 
 
 class RsqrtOp(UnaryElementwiseOp):
@@ -188,9 +193,9 @@ class PowOp(BinaryElementwiseOp):
         super().__init__(x, y, op=lambda x, y: primitives.pow(x, y), name='pow')
 
 
-class NegOp(UnaryElementwiseOp):
+class NegativeOp(UnaryElementwiseOp):
     def __init__(self, x):
-        super().__init__(x, op=lambda v: -v, name='neg')
+        super().__init__(x, op=lambda v: -v, name='negative')
 
 
 class ReciprocalOp(UnaryElementwiseOp):
@@ -203,9 +208,9 @@ class AddOp(BinaryElementwiseOp):
         super().__init__(x, y, op=lambda a, b: a + b, name='add')
 
 
-class SubOp(BinaryElementwiseOp):
+class SubtractOp(BinaryElementwiseOp):
     def __init__(self, x: Tensor, y: Tensor):
-        super().__init__(x, y, op=lambda a, b: a - b, name='sub')
+        super().__init__(x, y, op=lambda a, b: a - b, name='subtract')
 
 
 class MultiplyOp(BinaryElementwiseOp):
@@ -228,6 +233,61 @@ class CosOp(UnaryElementwiseOp):
         super().__init__(x, op=lambda a: primitives.cos(a), name='cos')
 
 
+class TanOp(UnaryElementwiseOp):
+    def __init__(self, x: Tensor):
+        super().__init__(x, op=lambda a: primitives.tan(a), name='tan')
+
+
+class SinhOp(UnaryElementwiseOp):
+    def __init__(self, x: Tensor):
+        super().__init__(x, op=lambda a: primitives.sinh(a), name='sinh')
+
+
+class CoshOp(UnaryElementwiseOp):
+    def __init__(self, x: Tensor):
+        super().__init__(x, op=lambda a: primitives.cosh(a), name='cosh')
+
+
+class TanhOp(UnaryElementwiseOp):
+    def __init__(self, x: Tensor):
+        super().__init__(x, op=lambda a: primitives.tanh(a), name='tanh')
+
+
+class AcosOp(UnaryElementwiseOp):
+    def __init__(self, x: Tensor):
+        super().__init__(x, op=lambda a: primitives.acos(a), name='acos')
+
+
+class AsinOp(UnaryElementwiseOp):
+    def __init__(self, x: Tensor):
+        super().__init__(x, op=lambda a: primitives.asin(a), name='asin')
+
+
+class AtanOp(UnaryElementwiseOp):
+    def __init__(self, x: Tensor):
+        super().__init__(x, op=lambda a: primitives.atan(a), name='atan')
+
+
+class Atan2Op(BinaryElementwiseOp):
+    def __init__(self, x: Tensor, y: Tensor):
+        super().__init__(x, y, op=lambda a, b: primitives.atan2(a, b), name='atan2')
+
+
+class AcoshOp(UnaryElementwiseOp):
+    def __init__(self, x: Tensor):
+        super().__init__(x, op=lambda a: primitives.acosh(a), name='acosh')
+
+
+class AsinhOp(UnaryElementwiseOp):
+    def __init__(self, x: Tensor):
+        super().__init__(x, op=lambda a: primitives.asinh(a), name='asinh')
+
+
+class AtanhOp(UnaryElementwiseOp):
+    def __init__(self, x: Tensor):
+        super().__init__(x, op=lambda a: primitives.atanh(a), name='atanh')
+
+
 class SquareOp(UnaryElementwiseOp):
     def __init__(self, x: Tensor):
         super().__init__(x, op=lambda a: a * a, name='square')
@@ -236,6 +296,87 @@ class SquareOp(UnaryElementwiseOp):
 class CubeOp(UnaryElementwiseOp):
     def __init__(self, x: Tensor):
         super().__init__(x, op=lambda a: a * a * a, name='cube')
+
+
+class AbsOp(UnaryElementwiseOp):
+    def __init__(self, x: Tensor):
+        super().__init__(x, op=lambda a: if_then_else(a >= x.dtype.zero, a, -a), name='abs')
+
+
+class FloorOp(UnaryElementwiseOp):
+    def __init__(self, x: Tensor):
+        super().__init__(x, op=lambda a: primitives.floor(a), name='floor')
+
+
+class RoundOp(UnaryElementwiseOp):
+    def __init__(self, x: Tensor):
+        super().__init__(x, op=lambda a: primitives.round(a), name='round')
+
+
+class CeilOp(UnaryElementwiseOp):
+    def __init__(self, x: Tensor):
+        super().__init__(x, op=lambda a: primitives.ceil(a), name='ceil')
+
+
+class IsFiniteOp(UnaryElementwiseOp):
+    def __init__(self, x: Tensor):
+        super().__init__(x, op=lambda a: primitives.isfinite(a), name='isfinite')
+
+
+class IsInfOp(UnaryElementwiseOp):
+    def __init__(self, x: Tensor):
+        super().__init__(x, op=lambda a: primitives.isinf(a), name='isinf')
+
+
+class IsNanOp(UnaryElementwiseOp):
+    def __init__(self, x: Tensor):
+        super().__init__(x, op=lambda a: primitives.isnan(a), name='isnan')
+
+
+class SignOp(UnaryElementwiseOp):
+    def __init__(self, x: Tensor):
+        super().__init__(
+            x,
+            op=lambda a: if_then_else(
+                a > x.dtype.zero, x.dtype.one, if_then_else(a < x.dtype.zero, -x.dtype.one, x.dtype.zero)
+            ),
+            name='sign',
+        )
+
+
+class RightShiftOp(BinaryElementwiseOp):
+    def __init__(self, x: Tensor, y: Tensor):
+        super().__init__(x, y, op=lambda a, b: expr.RightShift(a, b), name='rightshift')
+
+
+class LeftShiftOp(BinaryElementwiseOp):
+    def __init__(self, x: Tensor, y: Tensor):
+        super().__init__(x, y, op=lambda a, b: expr.LeftShift(a, b), name='leftshift')
+
+
+class BitwiseAndOp(BinaryElementwiseOp):
+    def __init__(self, x: Tensor, y: Tensor):
+        super().__init__(x, y, op=lambda a, b: a & b, name='bitwise_and')
+
+
+class BitwiseNotOp(UnaryElementwiseOp):
+    def __init__(self, x: Tensor):
+        super().__init__(x, op=lambda a: expr.BitwiseNot(a), name='bitwise_not')
+
+
+class BitwiseOrOp(BinaryElementwiseOp):
+    def __init__(self, x: Tensor, y: Tensor):
+        super().__init__(x, y, op=lambda a, b: a | b, name='bitwise_or')
+
+
+class BitwiseXorOp(BinaryElementwiseOp):
+    def __init__(self, x: Tensor, y: Tensor):
+        super().__init__(x, y, op=lambda a, b: a ^ b, name='bitwise_xor')
+
+
+class ModOp(BinaryElementwiseOp):
+    def __init__(self, x: Tensor, y: Tensor):
+        super().__init__(x, y, op=lambda a, b: primitives.mod(a, b), name='mod')
 
 
 class WhereOp(Operator):
@@ -283,46 +424,6 @@ class MinOp(Operator):
             ),
             name='min',
         )
-
-
-class AbsOp(UnaryElementwiseOp):
-    def __init__(self, x: Tensor):
-        super().__init__(x, op=lambda a: if_then_else(a >= x.dtype.zero, a, -a), name='abs')
-
-
-class RightShiftOp(BinaryElementwiseOp):
-    def __init__(self, x: Tensor, y: Tensor):
-        super().__init__(x, y, op=lambda a, b: expr.RightShift(a, b), name='rightshift')
-
-
-class LeftShiftOp(BinaryElementwiseOp):
-    def __init__(self, x: Tensor, y: Tensor):
-        super().__init__(x, y, op=lambda a, b: expr.LeftShift(a, b), name='leftshift')
-
-
-class BitwiseAndOp(BinaryElementwiseOp):
-    def __init__(self, x: Tensor, y: Tensor):
-        super().__init__(x, y, op=lambda a, b: a & b, name='bitwise_and')
-
-
-class BitwiseNotOp(UnaryElementwiseOp):
-    def __init__(self, x: Tensor):
-        super().__init__(x, op=lambda a: expr.BitwiseNot(a), name='bitwise_not')
-
-
-class BitwiseOrOp(BinaryElementwiseOp):
-    def __init__(self, x: Tensor, y: Tensor):
-        super().__init__(x, y, op=lambda a, b: a | b, name='bitwise_or')
-
-
-class BitwiseXorOp(BinaryElementwiseOp):
-    def __init__(self, x: Tensor, y: Tensor):
-        super().__init__(x, y, op=lambda a, b: a ^ b, name='bitwise_xor')
-
-
-class CeilOp(UnaryElementwiseOp):
-    def __init__(self, x: Tensor):
-        super().__init__(x, op=lambda a: primitives.ceil(a), name='ceil')
 
 
 def binary_arithmetic(
@@ -378,13 +479,13 @@ def add(x: Union[Tensor, float, int], y: Union[Tensor, float, int]) -> Tensor:
     )
 
 
-def sub(x: Union[Tensor, float, int], y: Union[Tensor, float, int]) -> Tensor:
+def subtract(x: Union[Tensor, float, int], y: Union[Tensor, float, int]) -> Tensor:
     return binary_arithmetic(
         x,
         y,
         lambda a, b: SubScalarOp(a, b).get_output(0),
         lambda a, b: RSubScalarOp(b, a).get_output(0),
-        lambda a, b: SubOp(a, b).get_output(0),
+        lambda a, b: SubtractOp(a, b).get_output(0),
     )
 
 
@@ -412,10 +513,6 @@ def sqrt(x: Tensor) -> Tensor:
     return SqrtOp(x).get_output(0)
 
 
-def tanh(x: Tensor) -> Tensor:
-    return TanhOp(x).get_output(0)
-
-
 def pow(x: Tensor, y: Tensor) -> Tensor:
     return PowOp(x, y).get_output(0)
 
@@ -428,16 +525,28 @@ def exp(x: Tensor) -> Tensor:
     return ExpOp(x).get_output(0)
 
 
+def expm1(x: Tensor) -> Tensor:
+    return Expm1Op(x).get_output(0)
+
+
 def log(x: Tensor) -> Tensor:
     return LogOp(x).get_output(0)
+
+
+def log1p(x: Tensor) -> Tensor:
+    return Log1pOp(x).get_output(0)
 
 
 def rsqrt(x: Tensor) -> Tensor:
     return RsqrtOp(x).get_output(0)
 
 
-def neg(x: Tensor) -> Tensor:
-    return NegOp(x).get_output(0)
+def negative(x: Tensor) -> Tensor:
+    return NegativeOp(x).get_output(0)
+
+
+def positive(x: Tensor) -> Tensor:
+    return x
 
 
 def reciprocal(x: Tensor) -> Tensor:
@@ -452,6 +561,50 @@ def cos(x: Tensor) -> Tensor:
     return CosOp(x).get_output(0)
 
 
+def tan(x: Tensor) -> Tensor:
+    return TanOp(x).get_output(0)
+
+
+def asin(x: Tensor) -> Tensor:
+    return AsinOp(x).get_output(0)
+
+
+def acos(x: Tensor) -> Tensor:
+    return AcosOp(x).get_output(0)
+
+
+def atan(x: Tensor) -> Tensor:
+    return AtanOp(x).get_output(0)
+
+
+def atan2(x: Tensor, y: Tensor) -> Tensor:
+    return Atan2Op(x, y).get_output(0)
+
+
+def sinh(x: Tensor) -> Tensor:
+    return SinhOp(x).get_output(0)
+
+
+def cosh(x: Tensor) -> Tensor:
+    return CoshOp(x).get_output(0)
+
+
+def tanh(x: Tensor) -> Tensor:
+    return TanhOp(x).get_output(0)
+
+
+def asinh(x: Tensor) -> Tensor:
+    return AsinhOp(x).get_output(0)
+
+
+def acosh(x: Tensor) -> Tensor:
+    return AcoshOp(x).get_output(0)
+
+
+def atanh(x: Tensor) -> Tensor:
+    return AtanhOp(x).get_output(0)
+
+
 def square(x: Tensor) -> Tensor:
     return SquareOp(x).get_output(0)
 
@@ -460,31 +613,54 @@ def cube(x: Tensor) -> Tensor:
     return CubeOp(x).get_output(0)
 
 
+def isfinite(x: Tensor) -> Tensor:
+    return IsFiniteOp(x).get_output(0)
+
+
+def isinf(x: Tensor) -> Tensor:
+    return IsInfOp(x).get_output(0)
+
+
+def isnan(x: Tensor) -> Tensor:
+    return IsNanOp(x).get_output(0)
+
+
+def sign(x: Tensor) -> Tensor:
+    return SignOp(x).get_output(0)
+
+
 def where(cond: Tensor, x: Tensor, y: Tensor) -> Tensor:
     if cond.dtype != dtypes.boolean:
         raise ValueError('The condition tensor must have dtype "bool", but got {}'.format(cond.dtype.name))
     return WhereOp(cond, x, y).get_output(0)
 
 
-def max(a: Tensor, b: Tensor, *others: Tensor) -> Tensor:
+def maximum(a: Tensor, b: Tensor, *others: Tensor) -> Tensor:
     args = [a, b] + list(others)
     return MaxOp(args).get_output(0)
 
 
-def min(a: Tensor, b: Tensor, *others: Tensor) -> Tensor:
+def minimum(a: Tensor, b: Tensor, *others: Tensor) -> Tensor:
     args = [a, b] + list(others)
     return MinOp(args).get_output(0)
+
+
+def mod(x: Tensor, y: Tensor) -> Tensor:
+    return ModOp(x, y).get_output(0)
+
+
+remainder = mod
 
 
 def abs(x: Tensor) -> Tensor:
     return AbsOp(x).get_output(0)
 
 
-def rightshift(x: Tensor, y: Tensor) -> Tensor:
+def bitwise_right_shift(x: Tensor, y: Tensor) -> Tensor:
     return RightShiftOp(x, y).get_output(0)
 
 
-def leftshift(x: Tensor, y: Tensor) -> Tensor:
+def bitwise_left_shift(x: Tensor, y: Tensor) -> Tensor:
     return LeftShiftOp(x, y).get_output(0)
 
 
@@ -492,7 +668,7 @@ def bitwise_and(x: Tensor, y: Tensor) -> Tensor:
     return BitwiseAndOp(x, y).get_output(0)
 
 
-def bitwise_not(x: Tensor) -> Tensor:
+def bitwise_invert(x: Tensor) -> Tensor:
     return BitwiseNotOp(x).get_output(0)
 
 
@@ -504,5 +680,26 @@ def bitwise_xor(x: Tensor, y: Tensor) -> Tensor:
     return BitwiseXorOp(x, y).get_output(0)
 
 
+def floor(x: Tensor) -> Tensor:
+    return FloorOp(x).get_output(0)
+
+
 def ceil(x: Tensor) -> Tensor:
     return CeilOp(x).get_output(0)
+
+
+def round(x: Tensor) -> Tensor:
+    return RoundOp(x).get_output(0)
+
+
+def trunc(x: Tensor) -> Tensor:
+    raise NotImplementedError()
+
+
+def floor_divide(x: Tensor, y: Tensor) -> Tensor:
+    raise NotImplementedError()
+
+
+def logaddexp(x: Tensor, y: Tensor) -> Tensor:
+    max_val = maximum(x, y)
+    return log(exp(x - max_val) + exp(y - max_val)) + max_val

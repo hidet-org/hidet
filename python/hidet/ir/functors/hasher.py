@@ -1,7 +1,18 @@
 from hidet.ir.compute import TensorNode, ScalarNode
 from hidet.ir.dialects.pattern import AnyExpr
 from hidet.ir.expr import Expr, Var, Constant, Add, Sub, Multiply, Div, Mod, FloorDiv, Neg, LessThan, LessEqual
-from hidet.ir.expr import NotEqual, Equal, IfThenElse, And, Or, Not, BitwiseAnd, BitwiseOr, BitwiseNot, BitwiseXor
+from hidet.ir.expr import (
+    NotEqual,
+    Equal,
+    IfThenElse,
+    LogicalAnd,
+    LogicalOr,
+    LogicalNot,
+    BitwiseAnd,
+    BitwiseOr,
+    BitwiseNot,
+    BitwiseXor,
+)
 from hidet.ir.expr import LeftShift, RightShift, TensorElement, Cast, Dereference, Address, Reference, Call, Let
 from hidet.ir.expr import TensorSlice
 from hidet.ir.functors import ExprFunctor, TypeFunctor, NodeFunctor
@@ -76,13 +87,13 @@ class ExprHash(ExprFunctor, TypeFunctor):
     def visit_IfThenElse(self, e: IfThenElse):
         return self(e.cond) + self(e.then_expr) + self(e.else_expr) + e.class_index()
 
-    def visit_And(self, e: And):
+    def visit_And(self, e: LogicalAnd):
         return (self(e.a) & self(e.b)) + e.class_index()
 
-    def visit_Or(self, e: Or):
+    def visit_Or(self, e: LogicalOr):
         return (self(e.a) & self(e.b)) + e.class_index()
 
-    def visit_Not(self, e: Not):
+    def visit_Not(self, e: LogicalNot):
         return self(e.a) + e.class_index()
 
     def visit_BitwiseAnd(self, e: BitwiseAnd):

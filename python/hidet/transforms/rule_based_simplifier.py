@@ -3,7 +3,20 @@ from typing import Dict
 from itertools import product
 
 from hidet.ir.dialects.pattern import AnyExpr, match
-from hidet.ir.expr import Add, convert, Sub, Multiply, Mod, LessThan, LessEqual, Equal, BinaryOp, And, IfThenElse, Or
+from hidet.ir.expr import (
+    Add,
+    convert,
+    Sub,
+    Multiply,
+    Mod,
+    LessThan,
+    LessEqual,
+    Equal,
+    BinaryOp,
+    LogicalAnd,
+    IfThenElse,
+    LogicalOr,
+)
 from hidet.ir.expr import Div, Constant, Expr
 from hidet.ir.functors import FuncStmtExprRewriter, StmtExprRewriter, rewrite
 from hidet.transforms.base import FunctionPass
@@ -56,7 +69,7 @@ class ConstExprSimplifier(StmtExprRewriter):
                 return Constant(c, numeric_promotion(e.a.type, e.b.type))
         return e
 
-    def visit_And(self, e: And):
+    def visit_And(self, e: LogicalAnd):
         e = StmtExprRewriter.visit_Binary(self, e)
         a_val = e.a.const().value if e.a.is_const() else None
         b_val = e.b.const().value if e.b.is_const() else None
@@ -124,10 +137,10 @@ class RuleBasedSimplifier(FuncStmtExprRewriter):
             (c1 <= e1 - c2, c1 + c2 <= e1),
             (c1 <= e1 + c2, c1 - c2 <= e1),
             # and/or
-            (And(ec1, True), ec1),
-            (And(ec1, False), convert(False)),
-            (Or(ec1, True), convert(True)),
-            (Or(ec1, False), ec1),
+            (LogicalAnd(ec1, True), ec1),
+            (LogicalAnd(ec1, False), convert(False)),
+            (LogicalOr(ec1, True), convert(True)),
+            (LogicalOr(ec1, False), ec1),
             # if then else
             (IfThenElse(True, ec1, ec2), ec1),
             (IfThenElse(False, ec1, ec2), ec2),

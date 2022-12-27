@@ -8,6 +8,7 @@ from hidet.ir.primitives.math import MathFunctionSet, register_math_function_set
 
 
 class CUDAInt64MathFunctionSet(MathFunctionSet):
+    # pylint: disable=abstract-method
     def register(self):
         entries = {'min': ['min', 2], 'max': ['max', 2]}
 

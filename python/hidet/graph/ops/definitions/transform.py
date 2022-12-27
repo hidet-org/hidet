@@ -1,6 +1,6 @@
 from typing import List, Optional, Union, Sequence
 from hidet.ir.type import DataType, data_type
-from hidet.ir.expr import And, if_then_else, convert
+from hidet.ir.expr import LogicalAnd, if_then_else, convert
 from hidet.ir.layout import RowMajorLayout, ColumnMajorLayout
 from hidet.ir.utils import index_deserialize, index_serialize
 from hidet.utils import prod
@@ -249,7 +249,7 @@ class PadTask(Task):
 
         def fmap(*indices):
             indices = [idx - beg for idx, beg in zip(indices, pads[:rank])]
-            cond = And.join_list([And(0 <= idx, idx < shape[i]) for i, idx in enumerate(indices)])
+            cond = LogicalAnd.join_list([LogicalAnd(0 <= idx, idx < shape[i]) for i, idx in enumerate(indices)])
             return if_then_else(cond, data[indices], value)
 
         out = compute('out', shape=out_shape, fcompute=fmap)
@@ -387,7 +387,7 @@ class FlattenOp(Operator):
             return Operator.imperative_run(self, inputs)
 
 
-class TransposeOp(Operator):
+class PermuteDimsOp(Operator):
     def __init__(self, x: Tensor, axes: Optional[List[int]] = None):
         if axes and len(axes) != len(x.shape):
             msg = 'Transpose tensor with shape {} expect a permutation of axes with length {}, got {}'.format(
@@ -578,7 +578,15 @@ def transpose(x: Tensor, axes: Optional[Sequence[int]] = None) -> Tensor:
             i += 1
         else:
             dims.append(j)
-    return TransposeOp(x, dims).get_output(0)
+    return PermuteDimsOp(x, dims).get_output(0)
+
+
+def permute_dims(x: Tensor, /, axes: Sequence[int]) -> Tensor:
+    return PermuteDimsOp(x, axes).get_output(0)
+
+
+def flip(x: Tensor, /, *, axis: Optional[Union[int, Sequence[int]]] = None) -> Tensor:
+    raise NotImplementedError()
 
 
 def concat(tensors: List[Tensor], axis: int) -> Tensor:
@@ -666,3 +674,26 @@ def split(data: Tensor, axis: int, parts: List[int]) -> List[Tensor]:
         end = start + parts[i]
         outputs.append(strided_slice(data, starts=[start], ends=[end], axes=[axis], strides=[1]))
     return outputs
+
+
+def tril(x: Tensor, /, *, k: int = 0) -> Tensor:
+    raise NotImplementedError()
+
+
+def triu(x: Tensor, /, *, k: int = 0) -> Tensor:
+    raise NotImplementedError()
+
+
+def expand_dims(x: Tensor, /, *, axis: int = 0) -> Tensor:
+    axis = normalize_dim(axis, len(x.shape) + 1)
+    new_shape = list(x.shape)
+    new_shape.insert(axis, 1)
+    return reshape(x, new_shape)
+
+
+def roll(x: Tensor, /, shift: int, *, axis: int = 0) -> Tensor:
+    raise NotImplementedError()
+
+
+def stack(tensors: Sequence[Tensor], /, *, axis: int = 0) -> Tensor:
+    raise NotImplementedError()

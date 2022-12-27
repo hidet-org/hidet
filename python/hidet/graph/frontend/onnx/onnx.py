@@ -285,7 +285,7 @@ class OnnxReduceMean(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         dims = self.attrs.get('axes')
         keep_dim = self.attrs.get('keepdims', 1) == 1
-        return [ops.reduce_mean(inputs[0], dims, keep_dim)]
+        return [ops.mean(inputs[0], dims, keep_dim)]
 
 
 @register_onnx_operator
@@ -347,7 +347,7 @@ class OnnxGlobalAveragePool(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         (x,) = inputs
         dims = list(range(2, len(x.shape)))
-        return [ops.reduce_mean(x, dims=dims, keep_dim=True)]
+        return [ops.mean(x, dims=dims, keep_dim=True)]
 
 
 @register_onnx_operator
@@ -679,28 +679,28 @@ class OnnxEqual(OnnxOperator):
 class OnnxLess(OnnxOperator):
     def run_v9(self, inputs: List[Tensor]) -> List[Tensor]:
         a, b = inputs
-        return [ops.less_than(a, b)]
+        return [ops.less(a, b)]
 
 
 @register_onnx_operator
 class OnnxGreater(OnnxOperator):
     def run_v7(self, inputs: List[Tensor]) -> List[Tensor]:
         a, b = inputs
-        return [ops.greater_than(a, b)]
+        return [ops.greater(a, b)]
 
 
 @register_onnx_operator
 class OnnxGreaterOrEqual(OnnxOperator):
     def run_v12(self, inputs: List[Tensor]) -> List[Tensor]:
         a, b = inputs
-        return [ops.greater_or_equal(a, b)]
+        return [ops.greater_equal(a, b)]
 
 
 @register_onnx_operator
 class OnnxLessOrEqual(OnnxOperator):
     def run_v12(self, inputs: List[Tensor]) -> List[Tensor]:
         a, b = inputs
-        return [ops.less_or_equal(a, b)]
+        return [ops.less_equal(a, b)]
 
 
 @register_onnx_operator
@@ -747,7 +747,7 @@ class OnnxReduceSum(OnnxOperator):
         axes = self.attrs['axes']
         keepdims = self.attrs.get('keepdims', True)
         data = inputs[0]
-        return [ops.reduce_sum(data, dims=axes, keep_dim=keepdims)]
+        return [ops.sum(data, dims=axes, keep_dim=keepdims)]
 
     def run_v13(self, inputs: List[Tensor]) -> List[Tensor]:
         keepdims = self.attrs.get('keepdims', True)
@@ -760,7 +760,7 @@ class OnnxReduceSum(OnnxOperator):
                 axes = list(range(len(data.shape)))
         else:
             axes = self.tensor2list(inputs[1])
-        return [ops.reduce_sum(data, dims=axes, keep_dim=keepdims)]
+        return [ops.sum(data, dims=axes, keep_dim=keepdims)]
 
 
 @register_onnx_operator
@@ -769,7 +769,7 @@ class OnnxReduceMin(OnnxOperator):
         axes = self.attrs['axes']
         keepdims = self.attrs.get('keepdims', True)
         data = inputs[0]
-        return [ops.reduce_min(data, dims=axes, keep_dim=keepdims)]
+        return [ops.min(data, dims=axes, keep_dim=keepdims)]
 
 
 @register_onnx_operator
@@ -778,13 +778,13 @@ class OnnxReduceMax(OnnxOperator):
         axes = self.attrs['axes']
         keepdims = self.attrs.get('keepdims', True)
         data = inputs[0]
-        return [ops.reduce_max(data, dims=axes, keep_dim=keepdims)]
+        return [ops.max(data, dims=axes, keep_dim=keepdims)]
 
 
 @register_onnx_operator
 class OnnxMax(OnnxOperator):
     def run_v6(self, inputs: List[Tensor]) -> List[Tensor]:
-        return [ops.max(*inputs)]
+        return [ops.maximum(*inputs)]
 
     def run_v1(self, inputs: List[Tensor]) -> List[Tensor]:
         raise NotImplementedError()
@@ -793,7 +793,7 @@ class OnnxMax(OnnxOperator):
 @register_onnx_operator
 class OnnxMin(OnnxOperator):
     def run_v6(self, inputs: List[Tensor]) -> List[Tensor]:
-        return [ops.min(*inputs)]
+        return [ops.minimum(*inputs)]
 
 
 @register_onnx_operator
@@ -817,7 +817,7 @@ class OnnxLog(OnnxOperator):
 @register_onnx_operator
 class OnnxNeg(OnnxOperator):
     def run_v1(self, inputs: List[Tensor]) -> List[Tensor]:
-        return [ops.neg(inputs[0])]
+        return [ops.negative(inputs[0])]
 
 
 @register_onnx_operator
@@ -847,7 +847,7 @@ class OnnxIf(OnnxOperator):
 @register_onnx_operator
 class OnnxNot(OnnxOperator):
     def run_v1(self, inputs: List[Tensor]) -> List[Tensor]:
-        return [ops.cond_not(inputs[0])]
+        return [ops.logical_not(inputs[0])]
 
 
 @register_onnx_operator
@@ -943,7 +943,7 @@ class OnnxAbs(OnnxOperator):
 @register_onnx_operator
 class OnnxAnd(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
-        return [ops.cond_and(inputs[0], inputs[1])]
+        return [ops.logical_and(inputs[0], inputs[1])]
 
 
 @register_onnx_operator
@@ -951,9 +951,9 @@ class OnnxBitShift(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         direction = self.attrs.get('direction', 'RIGHT')
         if direction == 'RIGHT':
-            return [ops.rightshift(inputs[0], inputs[1])]
+            return [ops.bitwise_right_shift(inputs[0], inputs[1])]
         else:
-            return [ops.leftshift(inputs[0], inputs[1])]
+            return [ops.bitwise_left_shift(inputs[0], inputs[1])]
 
 
 @register_onnx_operator
@@ -965,7 +965,7 @@ class OnnxBitwiseAnd(OnnxOperator):
 @register_onnx_operator
 class OnnxBitwiseNot(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
-        return [ops.bitwise_not(inputs[0])]
+        return [ops.bitwise_invert(inputs[0])]
 
 
 @register_onnx_operator
@@ -997,7 +997,7 @@ class OnnxReduceL2(OnnxOperator):
         if axes is None:
             axes = list(range(rank))
         axes: List[int] = [ops.utils.normalize_dim(axis, rank) for axis in axes]
-        return [ops.sqrt(ops.reduce_sum(ops.square(data), axes, keep_dim=bool(keepdims)))]
+        return [ops.sqrt(ops.sum(ops.square(data), axes, keep_dim=bool(keepdims)))]
 
     def run_v18(self, inputs: List[Tensor]) -> List[Tensor]:
         keepdims: int = self.attrs.get('keepdims', 1)
@@ -1010,7 +1010,7 @@ class OnnxReduceL2(OnnxOperator):
                 axes: List[int] = list(range(len(data.shape)))
         else:
             axes: List[int] = self.tensor2list(axes_tensor)
-        return [ops.sqrt(ops.reduce_sum(ops.square(data), axes, keep_dim=bool(keepdims)))]
+        return [ops.sqrt(ops.sum(ops.square(data), axes, keep_dim=bool(keepdims)))]
 
 
 def dispatch(node, op_sets: List[int]) -> OnnxOperator:

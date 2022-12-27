@@ -4,7 +4,7 @@ from typing import List, Tuple, Union, Optional
 import hidet.cuda
 from hidet import option
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
-from hidet.ir.expr import Var, And, Cast, if_then_else, convert, Expr, cast
+from hidet.ir.expr import Var, LogicalAnd, Cast, if_then_else, convert, Expr, cast
 from hidet.ir.func import IRModule
 from hidet.ir.functors import simplify_to_int
 from hidet.ir.mapping import TaskMapping, row_spatial, row_repeat
@@ -319,7 +319,7 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, schedule: Mat
                 gmem_a[block_idx('y'), block_offset[0] :, :],
                 regs_a_ldg,
                 sch.a_g2s_map,
-                src_predicate=lambda i, k: And.join(block_offset[0] + i < m_size, k < first_k_tile),
+                src_predicate=lambda i, k: LogicalAnd.join(block_offset[0] + i < m_size, k < first_k_tile),
                 default_value=a_default_value,
                 cast_dtype=a_dtype,
             )
@@ -328,7 +328,7 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, schedule: Mat
                 gmem_b[block_idx('y'), :, block_offset[1] :],
                 regs_b_ldg,
                 sch.b_g2s_map,
-                src_predicate=lambda k, j: And.join(k < first_k_tile, block_offset[1] + j < n_size),
+                src_predicate=lambda k, j: LogicalAnd.join(k < first_k_tile, block_offset[1] + j < n_size),
                 default_value=b_default_value,
                 cast_dtype=b_dtype,
             )
@@ -407,7 +407,7 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, schedule: Mat
                     src=smem_c[offset_x:, offset_y:],
                     dst=gmem_c[block_idx('y'), block_offset[0] + offset_x :, block_offset[1] + offset_y :],
                     layout=get_task_map(task_shape=(wmma_m, wmma_n), num_workers=32, ranks=[0, 1]),
-                    dst_predicate=lambda i, j: And(
+                    dst_predicate=lambda i, j: LogicalAnd(
                         block_offset[0] + offset_x + i < m_size, block_offset[1] + offset_y + j < n_size
                     ),
                     worker_idx=thread_idx() % warp_size,

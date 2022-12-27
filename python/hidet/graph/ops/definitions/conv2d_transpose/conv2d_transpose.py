@@ -1,5 +1,5 @@
 from typing import Sequence, Union, Tuple
-from hidet.ir.expr import if_then_else, And
+from hidet.ir.expr import if_then_else, LogicalAnd
 from hidet.ir.compute import compute, reduce
 from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, TensorNode
 from hidet.graph.ops.definitions.utils import input_like, normalize_stride, normalize_padding
@@ -38,7 +38,7 @@ class Conv2dTransposeTask(Task):
             fcompute=lambda ni, ci, hi, wi: reduce(
                 shape=[og, kx, ky],
                 fcompute=lambda ogi, kxi, kyi: if_then_else(
-                    cond=And.join(
+                    cond=LogicalAnd.join(
                         hi + px0 >= kxi,
                         hi + px0 < p * sx + kxi,
                         (hi + px0 - kxi) % sx == 0,

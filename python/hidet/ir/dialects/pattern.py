@@ -3,7 +3,7 @@ from contextlib import ExitStack
 from hidet.ir.node import Node
 from hidet.ir.type import TypeNode, DataType, TensorType, FuncType, data_type
 from hidet.ir.expr import Expr, Constant, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, Equal, LessEqual
-from hidet.ir.expr import TensorElement, IfThenElse, Call, Var, And, Or, BinaryOp, convert, var
+from hidet.ir.expr import TensorElement, IfThenElse, Call, Var, LogicalAnd, LogicalOr, BinaryOp, convert, var
 from hidet.ir.compute import TensorNode, ScalarNode, ReduceOperation, ReduceCompute
 from hidet.ir.stmt import DeclareScope
 from hidet.ir.layout import StridesLayout, DataLayout
@@ -161,8 +161,8 @@ class PatternMatcher:
                 Call: PatternMatcher.match_Call,
                 Var: PatternMatcher.match_Var,
                 Constant: PatternMatcher.match_Constant,
-                And: PatternMatcher.match_CommutativeBinary,
-                Or: PatternMatcher.match_CommutativeBinary,
+                LogicalAnd: PatternMatcher.match_CommutativeBinary,
+                LogicalOr: PatternMatcher.match_CommutativeBinary,
                 # type
                 DataType: PatternMatcher.match_DataType,
                 TensorType: PatternMatcher.match_TensorType,

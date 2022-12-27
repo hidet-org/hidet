@@ -5,8 +5,32 @@ from hidet.ir.dialects.pattern import AnyExpr
 from hidet.ir import dtypes
 from hidet.ir.type import DataType, PointerType, TensorPointerType, ReferenceType, TensorType, TypeNode, FuncType
 from hidet.ir.type import VoidType
-from hidet.ir.expr import Var, Expr, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, Neg, NotEqual, Equal, And, Or
-from hidet.ir.expr import Not, BitwiseAnd, BitwiseOr, BitwiseXor, BitwiseNot, LeftShift, RightShift, TensorElement
+from hidet.ir.expr import (
+    Var,
+    Expr,
+    Add,
+    Sub,
+    Multiply,
+    Div,
+    Mod,
+    FloorDiv,
+    LessThan,
+    Neg,
+    NotEqual,
+    Equal,
+    LogicalAnd,
+    LogicalOr,
+)
+from hidet.ir.expr import (
+    LogicalNot,
+    BitwiseAnd,
+    BitwiseOr,
+    BitwiseXor,
+    BitwiseNot,
+    LeftShift,
+    RightShift,
+    TensorElement,
+)
 from hidet.ir.expr import IfThenElse, Cast, Address, Reference, Dereference, Call, Let, Constant, TensorSlice, convert
 from hidet.ir.stmt import Stmt, DeclareScope, DeclareStmt, EvaluateStmt, BufferStoreStmt, AssignStmt, LetStmt, ForStmt
 from hidet.ir.stmt import ForTaskStmt, WhileStmt, BreakStmt, ContinueStmt, IfStmt, ReturnStmt, AssertStmt, AsmStmt
@@ -245,13 +269,13 @@ class Codegen(StmtExprFunctor, TypeFunctor):
     def visit_Equal(self, e: Equal):
         return Text('(') + self(e.a) + ' == ' + self(e.b) + ')'
 
-    def visit_And(self, e: And):
+    def visit_And(self, e: LogicalAnd):
         return Text('(') + self(e.a) + ' && ' + self(e.b) + ')'
 
-    def visit_Or(self, e: Or):
+    def visit_Or(self, e: LogicalOr):
         return Text('(') + self(e.a) + ' || ' + self(e.b) + ')'
 
-    def visit_Not(self, e: Not):
+    def visit_Not(self, e: LogicalNot):
         return Text('!') + self(e.a)
 
     def visit_BitwiseAnd(self, e: BitwiseAnd):

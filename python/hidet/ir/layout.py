@@ -172,9 +172,9 @@ class StridesLayout(DataLayout):
         return sum(v * self.strides[i] for i, v in enumerate(args))
 
     def global2cond(self, *args: Int) -> Bool:
-        from hidet.ir.expr import And
+        from hidet.ir.expr import LogicalAnd
 
-        return And.join_list([v < s for s, v in zip(self.shape, args)])
+        return LogicalAnd.join_list([v < s for s, v in zip(self.shape, args)])
 
     @staticmethod
     def storage_size(shape, strides) -> Expr:
@@ -220,9 +220,9 @@ class LocalLayout(DataLayout):
         return 0
 
     def global2cond(self, *args: Int) -> Bool:
-        from hidet.ir.expr import And
+        from hidet.ir.expr import LogicalAnd
 
-        return And.join_list([v < s for s, v in zip(self.shape, args)])
+        return LogicalAnd.join_list([v < s for s, v in zip(self.shape, args)])
 
 
 class SwizzleDataLayout(DataLayout):
@@ -434,11 +434,11 @@ class ProductDataLayout(DataLayout):
         return self.outer(*outer_args) * self.inner.size + self.inner(*inner_args)
 
     def global2cond(self, *args: Int) -> Bool:
-        from hidet.ir.expr import And
+        from hidet.ir.expr import LogicalAnd
 
         outer_args = [v // b for v, b in zip(args, self.inner.shape)]
         inner_args = [v % b for v, b in zip(args, self.inner.shape)]
-        return And(self.outer.within_bound(*outer_args), self.inner.within_bound(*inner_args))
+        return LogicalAnd(self.outer.within_bound(*outer_args), self.inner.within_bound(*inner_args))
 
 
 class ConcatDataLayout(DataLayout):
@@ -453,11 +453,11 @@ class ConcatDataLayout(DataLayout):
         return self.lhs(*lhs_args) * self.rhs.size + self.rhs(*rhs_args)
 
     def global2cond(self, *args: Int) -> Bool:
-        from hidet.ir.expr import And
+        from hidet.ir.expr import LogicalAnd
 
         lhs_args = args[: len(self.lhs.shape)]
         rhs_args = args[len(self.lhs.shape) :]
-        return And(self.lhs.within_bound(*lhs_args), self.rhs.within_bound(*rhs_args))
+        return LogicalAnd(self.lhs.within_bound(*lhs_args), self.rhs.within_bound(*rhs_args))
 
 
 def row_layout(*shape: int):

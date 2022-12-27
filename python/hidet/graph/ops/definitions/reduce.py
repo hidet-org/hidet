@@ -1,6 +1,6 @@
 from typing import List, Union
 
-from .arithmetic import square
+from .arithmetic import square, sqrt
 from .utils import Task, Operator, Tensor, TensorNode, IRModule, compute, reduce, input_like, normalize_dim, arg_reduce
 
 
@@ -124,7 +124,7 @@ class ArgReduceBaseOp(Operator):
 
 class ReduceMeanOp(ReduceBaseOp):
     def __init__(self, x: Tensor, dims: List[int], keep_dim: bool = False):
-        super().__init__(x, dims, keep_dim, 'avg')
+        super().__init__(x, dims, keep_dim, 'mean')
 
 
 class ReduceSumOp(ReduceBaseOp):
@@ -142,6 +142,11 @@ class ReduceMinOp(ReduceBaseOp):
         super().__init__(x, dims, keep_dim, 'min')
 
 
+class ReduceProdOp(ReduceBaseOp):
+    def __init__(self, x: Tensor, dims: List[int], keep_dim: bool = False):
+        super().__init__(x, dims, keep_dim, 'prod')
+
+
 class ArgMinOp(ArgReduceBaseOp):
     def __init__(self, x: Tensor, dim: int, keep_dim: bool):
         super().__init__(x, dim, keep_dim, 'min')
@@ -152,33 +157,43 @@ class ArgMaxOp(ArgReduceBaseOp):
         super().__init__(x, dim, keep_dim, 'max')
 
 
-def reduce_mean(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -> Tensor:
+def mean(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -> Tensor:
     if isinstance(dims, int):
         dims = [dims]
     return ReduceMeanOp(x, dims, keep_dim).get_output(0)
 
 
-def reduce_sum(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -> Tensor:
+def sum(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -> Tensor:
     if isinstance(dims, int):
         dims = [dims]
     return ReduceSumOp(x, dims, keep_dim).get_output(0)
 
 
-def reduce_max(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -> Tensor:
+def max(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -> Tensor:
     if isinstance(dims, int):
         dims = [dims]
     return ReduceMaxOp(x, dims, keep_dim).get_output(0)
 
 
-def reduce_min(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -> Tensor:
+def min(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -> Tensor:
     if isinstance(dims, int):
         dims = [dims]
     return ReduceMinOp(x, dims, keep_dim).get_output(0)
 
 
-def reduce_var(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -> Tensor:
+def var(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -> Tensor:
     x = x - x.mean(dims=dims, keep_dim=True)
     return square(x).mean(dims=dims, keep_dim=keep_dim)
+
+
+def std(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -> Tensor:
+    return sqrt(var(x, dims=dims, keep_dim=keep_dim))
+
+
+def prod(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -> Tensor:
+    if isinstance(dims, int):
+        dims = [dims]
+    return ReduceProdOp(x, dims, keep_dim).get_output(0)
 
 
 def argmin(x: Tensor, dim: int, keep_dim: bool = False) -> Tensor:
@@ -187,3 +202,11 @@ def argmin(x: Tensor, dim: int, keep_dim: bool = False) -> Tensor:
 
 def argmax(x: Tensor, dim: int, keep_dim: bool = False) -> Tensor:
     return ArgMaxOp(x, dim, keep_dim).get_output(0)
+
+
+def all(x: Tensor, /, *, axis=None, keepdims=False) -> Tensor:
+    raise NotImplementedError()
+
+
+def any(x: Tensor, /, *, axis=None, keepdims=False) -> Tensor:
+    raise NotImplementedError()

@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import List, Optional, Dict, Union, Tuple, Type
 from hidet.graph.ir.flow_graph import Operator, Tensor
-from hidet.graph.ops.definitions.arithmetic import AddOp, SubOp, MultiplyOp, NegOp
+from hidet.graph.ops.definitions.arithmetic import AddOp, SubtractOp, MultiplyOp, NegativeOp
 
 
 class TensorPattern:
@@ -35,13 +35,13 @@ class TensorPattern:
         return OperatorPattern(AddOp, inputs=[self, other]).outputs[0]
 
     def __sub__(self, other):
-        return OperatorPattern(SubOp, inputs=[self, other]).outputs[0]
+        return OperatorPattern(SubtractOp, inputs=[self, other]).outputs[0]
 
     def __mul__(self, other):
         return OperatorPattern(MultiplyOp, inputs=[self, other]).outputs[0]
 
     def __neg__(self):
-        return OperatorPattern(NegOp, inputs=[self]).outputs[0]
+        return OperatorPattern(NegativeOp, inputs=[self]).outputs[0]
 
     def op(self) -> Optional[OperatorPattern]:
         if self.trace is None:
@@ -76,8 +76,8 @@ class OperatorPattern:
 
     def __repr__(self):
         input_items = [str(v) for v in self.inputs]
-        unary_ops = {NegOp: '-'}
-        binary_ops = {AddOp: '+', SubOp: '-', MultiplyOp: '*'}
+        unary_ops = {NegativeOp: '-'}
+        binary_ops = {AddOp: '+', SubtractOp: '-', MultiplyOp: '*'}
         if self.op_cls in unary_ops:
             return '({}{})'.format(unary_ops[self.op_cls], input_items[0])
         elif self.op_cls in binary_ops:
