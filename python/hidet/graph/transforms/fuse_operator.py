@@ -72,8 +72,8 @@ def fuse_epilogue_operators(anchors: Sequence[Operator], usage: Usage, belong: D
                     continue
 
                 if len(user.inputs) > 1:
-                    other_inputs: List[Tensor] = [tensor for tensor in user.inputs if tensor != output_tensor]
-                    if any(tensor in sub_graph.output_tensors for tensor in other_inputs):
+                    other_inputs: List[Tensor] = [tensor for tensor in user.inputs if tensor is not output_tensor]
+                    if any(any(tensor is v for v in sub_graph.output_tensors) for tensor in other_inputs):
                         # the user operator has other inputs that read the output of the sub_graph, skip
                         continue
 
@@ -93,7 +93,7 @@ def fuse_epilogue_operators(anchors: Sequence[Operator], usage: Usage, belong: D
                 [
                     tensor
                     for tensor in unique(user.inputs)
-                    if (tensor not in sub_graph.input_tensors and tensor is not found_output_tensor)
+                    if (all(tensor is not v for v in sub_graph.input_tensors) and tensor is not found_output_tensor)
                 ]
             )
             belong[user] = sub_graph
@@ -139,9 +139,9 @@ def fuse_prologue_operators(anchors: Sequence[Operator], usage: Usage, belong: D
                 break
             producer: Operator = found_input_tensor.trace[0]
             sub_graph.operators.insert(0, producer)
-            sub_graph.input_tensors.remove(found_input_tensor)
+            sub_graph.input_tensors = [v for v in sub_graph.input_tensors if v is not found_input_tensor]
             sub_graph.input_tensors.extend(
-                [tensor for tensor in unique(producer.inputs) if tensor not in sub_graph.input_tensors]
+                [tensor for tensor in unique(producer.inputs) if all(tensor is not v for v in sub_graph.input_tensors)]
             )
             belong[producer] = sub_graph
             # continue the while loop to fuse more operators
@@ -185,19 +185,19 @@ def sanity_check_partition(graph: FlowGraph, partition: List[FusibleGraph], belo
             if producer_subgraph is consumer_subgraph:
                 # it is an intra-sub-graph edge
                 sub_graph = producer_subgraph
-                assert (
-                    input_tensor not in sub_graph.input_tensors
+                assert all(
+                    input_tensor is not v for v in sub_graph.input_tensors
                 ), "intra-sub-graph edge should not be an input tensor of its sub-graph"
-                assert (
-                    input_tensor not in sub_graph.output_tensors
+                assert all(
+                    input_tensor is not v for v in sub_graph.output_tensors
                 ), "intra-sub-graph edge should not be an output tensor of its sub-graph"
             else:
                 # it is an inter-sub-graph edge
-                assert (
-                    input_tensor in producer_subgraph.output_tensors
+                assert any(
+                    input_tensor is v for v in producer_subgraph.output_tensors
                 ), "inter-sub-graph edge does not start in producer subgraph's output_tensors"
-                assert (
-                    input_tensor in consumer_subgraph.input_tensors
+                assert any(
+                    input_tensor is v for v in consumer_subgraph.input_tensors
                 ), "inter-sub-graph edge does not end in consumer subgraph's input_tensors"
 
 

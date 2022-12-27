@@ -5,6 +5,7 @@ from ctypes import pythonapi
 import hidet.ir
 from hidet.ir import DataType, dtypes
 from hidet.utils import initialize, prod
+from hidet.runtime.device import Device
 from hidet.runtime.storage import Storage
 from hidet.ir.type import data_type
 from hidet.graph.tensor import Tensor
@@ -126,7 +127,7 @@ def initialize_pythonapi_restype():
 
 class DLPackStorage(Storage):
     def __init__(
-        self, device: str, addr: int, num_bytes: int, managed_tensor_addr: int, deleter: Callable[[int], None]
+        self, device: Device, addr: int, num_bytes: int, managed_tensor_addr: int, deleter: Callable[[int], None]
     ):
         super().__init__(
             device=device, addr=addr, num_bytes=num_bytes, free_handler=lambda storage: deleter(managed_tensor_addr)
@@ -161,15 +162,13 @@ def from_dlpack_capsule(dltensor) -> Tensor:
         dtype: DataType = DLDataType.to_dtype(tensor.dtype)
 
         # device
-        device_type = tensor.device.device_type
-        device_id = tensor.device.device_id
+        device_type: str = tensor.device.device_type
+        device_id: int = tensor.device.device_id
         if device_type in [DLDeviceType.kDLCPU, DLDeviceType.kDLCPUPinned]:
-            device = 'cpu'
+            device = Device('cpu')
             assert device_id == 0
         elif device_type == DLDeviceType.kDLGPU:
-            device = 'cuda'
-            if device_id > 0:
-                raise ValueError('from_dlpack: currently, hidet only supports a single GPU.')
+            device = Device('cuda', device_id)
         else:
             raise ValueError('from_dlpack: currently, hidet only supports only CPU and GPU tensors.')
 
@@ -211,13 +210,13 @@ class DLManagedTensorContext:
         self.shape = (ctypes.c_uint64 * ndim)(*tensor.shape)
 
         self.tensor = tensor
+        if tensor.device.is_cuda():
+            dl_device = DLDevice(DLDeviceType.kDLGPU, tensor.device.id)
+        else:
+            dl_device = DLDevice(DLDeviceType.kDLCPU, 0)
         dl_tensor = DLTensor(
             data=tensor.storage.addr,
-            device=DLDevice(
-                # todo: set device_id when we support multiple GPUs
-                device_type=DLDeviceType.kDLGPU if tensor.device.type == 'cuda' else DLDeviceType.kDLCPU,
-                device_id=0,
-            ),
+            device=dl_device,
             ndim=ndim,
             dtype=DLDataType.from_dtype(tensor.dtype),
             shape=ctypes.cast(self.shape, ctypes.POINTER(ctypes.c_int64)),
@@ -225,31 +224,16 @@ class DLManagedTensorContext:
             byte_offset=0,
         )
         self.allocated.add(self)
-        self.managed_tensor = DLManagedTensor(
-            dl_tensor=dl_tensor, manager_ctx=0, deleter=DLTensorDeleter(lambda _: self.allocated.remove(self))
-        )
+
+        def deleter(dl_managed_tensor_addr: int):
+            _ = dl_managed_tensor_addr  # unused
+            self.tensor = None  # free the tensor
+            self.allocated.remove(self)
+
+        self.managed_tensor = DLManagedTensor(dl_tensor=dl_tensor, manager_ctx=0, deleter=DLTensorDeleter(deleter))
 
     def capsuled_dltensor(self) -> ctypes.py_object:
         return pythonapi.PyCapsule_New(ctypes.byref(self.managed_tensor), b'dltensor', None)
-
-
-def from_dlpack(dltensor) -> Tensor:
-    """
-    Create a hidet tensor from an object that implements the __dlpack__ protocol.
-
-    Parameters
-    ----------
-    dltensor: an object that implements the DLPack protocol.
-        The object must have the method `__dlpack__` that returns a PyCapsule object with name `dltensor`.
-
-    Returns
-    -------
-    ret: Tensor
-        The hidet tensor that shares the same storage with the DLPack tensor.
-    """
-    if not hasattr(dltensor, '__dlpack__'):
-        raise RuntimeError('Expect a dltensor that implements __dlpack__ method.')
-    return from_dlpack_capsule(dltensor.__dlpack__())
 
 
 def to_dlpack(tensor: Tensor) -> ctypes.py_object:

@@ -3,11 +3,34 @@ from typing import List, Sequence, Optional
 from cuda import cudart
 from cuda.cudart import cudaGraphExec_t
 from hidet.graph.tensor import Tensor, zeros_like, randn_like
-from hidet.runtime.storage import MemoryPool
+from hidet.runtime.storage import MemoryPool, CudaMemoryAPI, memory_pool
 from hidet.runtime.device import Device
 from hidet.utils import same_list
+from .device import current_device
 from .stream import Stream, StreamContext, current_stream
 from .memory import memcpy_async
+
+
+class FreezableMemoryAPI(CudaMemoryAPI):
+    def __init__(self, device: Device):
+        super().__init__(device)
+        self.frozen: bool = False
+
+    def malloc(self, nbytes: int) -> int:
+        if self.frozen:
+            raise RuntimeError('Cannot malloc when the memory device is frozen')
+        return super().malloc(nbytes)
+
+    def free(self, addr: int):
+        if self.frozen:
+            raise RuntimeError('Cannot free when the memory device is frozen')
+        super().free(addr)
+
+    def freeze(self):
+        self.frozen = True
+
+    def unfreeze(self):
+        self.frozen = False
 
 
 class CudaGraphCapture:
@@ -62,13 +85,16 @@ class CudaGraph:
 
         flow_graph: FlowGraph
 
-        self._memory_pool: MemoryPool = MemoryPool(block_size=4096, max_reserve_size=10 * 1024**3)
+        self._memory_api: FreezableMemoryAPI = FreezableMemoryAPI(Device('cuda', current_device()))
+        self._memory_pool: MemoryPool = MemoryPool(
+            memory_api=self._memory_api, block_size=4096, max_reserve_size=10 * 1024**3
+        )
         self._graph_capture: CudaGraphCapture = CudaGraphCapture()
         self._flow_graph: FlowGraph = flow_graph
         self._inputs: List[Tensor]
         self._outputs: List[Tensor]
 
-        with self._memory_pool:
+        with memory_pool(self._memory_pool):
             # update the nodes and inputs of the flow graph
             flow_graph.update_nodes()
 
@@ -87,7 +113,7 @@ class CudaGraph:
             # run and capture the graph execution
             flow_graph.forward(*self._inputs)  # warm up, avoid memory allocation during capturing
             flow_graph.forward(*self._inputs)
-            self._memory_pool.storage_device.freeze(True)
+            self._memory_api.freeze()
             with self._graph_capture:
                 outputs = flow_graph.forward(*self._inputs)
 
@@ -106,9 +132,10 @@ class CudaGraph:
     def __del__(self):
         if cudart is None:  # cudart has been unloaded
             return
-        (err,) = cudart.cudaGraphExecDestroy(self._graph_exec)
-        assert err == 0, err
-        self._memory_pool.storage_device.freeze(False)
+        if hasattr(self, '_graph_exec'):
+            (err,) = cudart.cudaGraphExecDestroy(self._graph_exec)
+            assert err == 0, err
+            self._memory_api.unfreeze()
 
     def copy_inputs(self, inputs: Sequence[Tensor], stream: Optional[Stream]):
         if len(inputs) != len(self._inputs):

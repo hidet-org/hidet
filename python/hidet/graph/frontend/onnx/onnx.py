@@ -432,7 +432,7 @@ class OnnxGemm(OnnxOperator):
         d = ops.matmul(a, b)
         if alpha != 1.0:
             d = d * alpha
-        if c and beta != 0.0:
+        if c is not None and beta != 0.0:
             d = d + c * beta
         return [d]
 
@@ -509,8 +509,8 @@ class OnnxSlice(OnnxOperator):
         steps = inputs[4] if len(inputs) > 4 else None
         starts = self.tensor2list(starts)
         ends = self.tensor2list(ends)
-        axes = self.tensor2list(axes) if axes else None
-        steps = self.tensor2list(steps) if steps else None
+        axes = self.tensor2list(axes) if axes is not None else None
+        steps = self.tensor2list(steps) if steps is not None else None
         return [ops.strided_slice(data, starts, ends, axes, steps)]
 
 

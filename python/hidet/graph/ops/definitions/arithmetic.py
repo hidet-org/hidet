@@ -1,9 +1,9 @@
 # pylint: disable=redefined-builtin, unnecessary-lambda
-from typing import List, Callable, Any, Union, Optional, Dict, Sequence
+from typing import List, Callable, Any, Union, Optional, Dict
 
 from hidet.ir import primitives
 from hidet.ir import expr, dtypes
-from hidet.ir.type import DataType, data_type
+from hidet.ir.type import DataType
 from hidet.ir.expr import Constant, if_then_else
 from hidet.utils import prod
 from .utils import Task, Operator, Tensor, TensorNode, InverseMap, compute, input_like
@@ -506,5 +506,3 @@ def bitwise_xor(x: Tensor, y: Tensor) -> Tensor:
 
 def ceil(x: Tensor) -> Tensor:
     return CeilOp(x).get_output(0)
-
-

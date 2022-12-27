@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import ctypes
-from functools import partial
 from typing import List, Optional, Tuple, Sequence, Union
 import warnings
 
@@ -291,7 +289,7 @@ class Tensor:
             ellipsis_index = item.index(Ellipsis)
             ellipsis_ndim = len(self.shape) - sum([1 if axis not in [None, Ellipsis] else 0 for axis in item])
             ellipsis_ndim = max(ellipsis_ndim, 0)
-            item = item[:ellipsis_index] + (slice(None),) * ellipsis_ndim + item[ellipsis_index + 1:]
+            item = item[:ellipsis_index] + (slice(None),) * ellipsis_ndim + item[ellipsis_index + 1 :]
 
         # process None
         # e.g., x[2, None, 3] -> x[2, 1, 3]
@@ -335,6 +333,20 @@ class Tensor:
 
     def __iter__(self):
         raise TypeError('hidet.Tensor does not support iteration.')
+
+    def __hash__(self):
+        """
+        Notes
+        -----
+        This is a hack to make hidet.Tensor hashable. There are some places where we need to use tensor as the key
+        of a dictionary, (e.g., in a graph optimization pass or graph execution). However, to implement a correct
+        protocol for hashable objects, we need to implement __eq__ as well to compare two objects when their hash
+        values are equal. But as a tensor, the __eq__ method is used to do element-wise comparison, and it returns
+        a tensor instead of a boolean value. Thus, there will be a problem when the dict that takes Tensor as key type
+        has other kinds of objects (e.g., int). We deliberately ignore this problem here in exchange for the convenience
+        of using tensor as the key of a dict.
+        """
+        return id(self)
 
     def __getstate__(self):
         if self.storage:
@@ -436,7 +448,7 @@ class Tensor:
 
         Returns
         -------
-        ret: Optional[hidet.graph.operator.Operator]
+        ret: hidet.graph.operator.Operator, optional
             The operator that produces this tensor. None indicates it is not traced.
         """
         return self.trace[0] if self.trace else None
@@ -454,7 +466,7 @@ class Tensor:
         """
         if len(self.shape) != 0:
             raise ValueError('Can not convert a Tensor with shape {} to a scalar.'.format(self.shape))
-        value = self.numpy().tolist()
+        value = self.cpu().numpy().tolist()
         assert isinstance(value, (int, float))
         return value
 
@@ -683,7 +695,7 @@ class Tensor:
 
         Parameters
         ----------
-        dtype: Optional[str]
+        dtype: str, optional
             The target data type to convert to. None indicates unchanged.
 
         device: Union[Device, str], optional
@@ -700,10 +712,11 @@ class Tensor:
         if dtype is not None:
             tensor = cast(tensor, dtype)
         if device is not None:
-            if device == 'cpu':
+            device = instantiate_device(device)
+            if device.is_cpu():
                 tensor = tensor.cpu()
-            elif device == 'cuda':
-                tensor = tensor.cuda()
+            elif device.is_cuda():
+                tensor = tensor.cuda(device)
             else:
                 raise ValueError('Cannot recognize device {}'.format(device))
         return tensor
@@ -726,22 +739,30 @@ class Tensor:
             else:
                 raise ValueError('Please use .detach() to detach a trace variable first.')
 
-    def cuda(self):
+    def cuda(self, device=None):
         """Create a copy of self tensor on cuda device.
 
         If the current tensor is already on cuda device, self is returned.
+
+        Parameters
+        ----------
+        device: Device, optional
+            The target cuda device. None indicates the current cuda device.
 
         Returns
         -------
         ret: Tensor
             The new tensor or self.
         """
-        if self.device.type == 'cuda':
+        if device is None:
+            device = 'cuda'
+        device = instantiate_device(device)
+        if self.device == device:
             return self
         else:
             if self.trace is None:
                 return Tensor(
-                    self.shape, self.dtype, instantiate_device('cuda'), self.storage.cuda() if self.storage else None, self.layout
+                    self.shape, self.dtype, device, self.storage.cuda(device.id) if self.storage else None, self.layout
                 )
             else:
                 raise ValueError('Please use .detach() to detach a trace variable first.')
@@ -822,46 +843,47 @@ class Tensor:
             else:
                 raise ValueError('Please use .detach() to detach a trace variable first.')
 
-    def cuda_async(self, stream=None):
+    def cuda_async(self, device=None, stream=None):
         """
         Copy the tensor to GPU asynchronously.
 
         Parameters
         ----------
+        device: Device, optional
+            The target cuda device. None indicates the current cuda device.
+
         stream: hidet.cuda.Stream, optional
-            The stream to copy the tensor to GPU on.
+            The stream to copy the tensor to GPU on. None indicates the current stream.
 
         Returns
         -------
         ret: Tensor
             The tensor on GPU.
         """
-        if self.device.type == 'cuda':
+        if device is None:
+            device = 'cuda'
+        device = instantiate_device(device)
+        if self.device == 'cuda':
             return self
         else:
             if self.trace is None:
                 ret = Tensor(
                     self.shape,
                     self.dtype,
-                    'cuda',
-                    self.storage.cuda_async(stream) if self.storage else None,
+                    device,
+                    self.storage.cuda_async(device.id, stream) if self.storage else None,
                     self.layout,
                 )
                 return ret
             else:
                 raise ValueError('Please use .detach() to detach a trace variable first.')
 
-    def numpy(self, share_mem=True) -> np.ndarray:
+    def numpy(self) -> np.ndarray:
         """
         Convert the tensor to a numpy array.
 
-        If this is a cpu tensor and share_mem is True, the numpy array will share the memory with the tensor when
-        possible.
-
-        Parameters
-        ----------
-        share_mem: bool
-            Whether to share the memory with the tensor when possible.
+        The tensor must be on CPU device. Otherwise, a RuntimeError will be raised. The returned numpy array will share
+        the same memory with the tensor.
 
         Returns
         -------
@@ -869,15 +891,19 @@ class Tensor:
             The numpy array.
         """
         if self.device.type != 'cpu':
-            return self.cpu().numpy()
+            raise RuntimeError('Cannot convert a tensor on {} to numpy array.'.format(self.device))
         if self.dtype in [dtypes.bfloat16, dtypes.tfloat32]:
             warnings.warn('numpy does not support {}, converting to float32'.format(self.dtype.name))
             return self.cast(dtypes.float32).numpy()
-
-        storage = self.contiguous().storage  # convert if this tensor is not in row major layout
-        np_array = storage.as_array(num_elements=prod(self.shape), dtype=self.dtype, share_mem=share_mem)
-        np_array: np.ndarray = np_array.reshape(self.shape)
-        return np_array
+        if self.dtype == dtypes.boolean:
+            # workaround for numpy not supporting exporting boolean to dlpack
+            return np.from_dlpack(self.to(dtype='uint8')).astype(np.bool)
+        else:
+            return np.from_dlpack(self)
+        # storage = self.contiguous().storage  # convert if this tensor is not in row major layout
+        # np_array = storage.as_array(num_elements=prod(self.shape), dtype=self.dtype, share_mem=share_mem)
+        # np_array: np.ndarray = np_array.reshape(self.shape)
+        # return np_array
 
     def torch(self):
         """
@@ -893,7 +919,7 @@ class Tensor:
         return torch.from_dlpack(self)
 
 
-def empty(shape, dtype: Union[DataType, str] = 'float32', device: str = 'cuda', layout: Optional[DataLayout] = None):
+def empty(shape, dtype='float32', device='cuda', layout=None):
     """Create an uninitialized tensor.
 
     Parameters
@@ -904,11 +930,11 @@ def empty(shape, dtype: Union[DataType, str] = 'float32', device: str = 'cuda', 
     dtype: str or DataType
         The data type of element of the tensor.
 
-    device: str
+    device: Device or str
         The device of the new tensor is created on.
 
-    layout: Optional[DataLayout]
-        The data layout of the tensor.
+    layout: DataLayout, optional
+        The layout of the new tensor. None indicates the default layout (row-major layout).
 
     Returns
     -------
@@ -918,7 +944,7 @@ def empty(shape, dtype: Union[DataType, str] = 'float32', device: str = 'cuda', 
     dtype = data_type(dtype)
     num_bytes = prod(shape) * dtype.nbytes
     storage = Storage.new(device, num_bytes)
-    return Tensor(shape, dtype, device, storage, layout)
+    return Tensor(shape=shape, dtype=dtype, device=device, storage=storage, layout=layout)
 
 
 def symbol(shape: Sequence[int], dtype='float32', device='cuda', layout=None) -> Tensor:
@@ -935,8 +961,8 @@ def symbol(shape: Sequence[int], dtype='float32', device='cuda', layout=None) ->
     device: str
         The device of the new tensor is created on.
 
-    layout: Optional[DataLayout]
-        The data layout of the tensor.
+    layout: DataLayout, optional
+        The layout of the new tensor. None indicates the default layout (row-major layout).
 
     Returns
     -------
@@ -944,10 +970,10 @@ def symbol(shape: Sequence[int], dtype='float32', device='cuda', layout=None) ->
         The created tensor.
 
     """
-    return Tensor(shape, dtype, device, None, layout)
+    return Tensor(shape=shape, dtype=dtype, device=device, storage=None, layout=layout)
 
 
-def zeros(shape: Sequence[int], dtype='float32', device='cuda', layout=None) -> Tensor:
+def zeros(shape: Sequence[int], dtype='float32', device='cuda') -> Tensor:
     """Create a tensor initialized with zero.
 
     Parameters
@@ -961,20 +987,17 @@ def zeros(shape: Sequence[int], dtype='float32', device='cuda', layout=None) -> 
     device: str
         The device of the new tensor is created on.
 
-    layout: Optional[DataLayout]
-        The data layout of the tensor.
-
     Returns
     -------
     ret: Tensor
         The created tensor.
     """
-    tensor = empty(shape, dtype, device, layout)
+    tensor = empty(shape, dtype, device)
     hidet.cuda.memset_async(addr=tensor.storage.addr, num_bytes=tensor.nbytes, value=0)
     return tensor
 
 
-def ones(shape, dtype='float32', device='cuda', layout=None) -> Tensor:
+def ones(shape, dtype='float32', device='cuda') -> Tensor:
     """Create a tensor initialized with one.
 
     Parameters
@@ -988,19 +1011,16 @@ def ones(shape, dtype='float32', device='cuda', layout=None) -> Tensor:
     device: str
         The device of the new tensor is created on.
 
-    layout: DataLayout or None
-        The data layout of the tensor.
-
     Returns
     -------
     ret: Tensor
         The created tensor.
     """
     dtype = data_type(dtype)
-    return full(shape, dtype.one, dtype, device, layout)
+    return full(shape, dtype.one, dtype, device)
 
 
-def full(shape, fill_value: Union[float, int], dtype='float32', device='cuda', layout=None) -> Tensor:
+def full(shape, fill_value: Union[float, int], dtype='float32', device='cuda') -> Tensor:
     """Create a tensor initialized with given constant.
 
     Parameters
@@ -1008,7 +1028,7 @@ def full(shape, fill_value: Union[float, int], dtype='float32', device='cuda', l
     shape: Sequence[int]
         The shape of new tensor.
 
-    fill_value: Union[float, int]
+    fill_value: float or int or hidet.ir.Constant
         The constant to initialize the new tensor.
 
     dtype: DataType or str
@@ -1017,9 +1037,6 @@ def full(shape, fill_value: Union[float, int], dtype='float32', device='cuda', l
     device: Device or str
         The device of the new tensor is created on.
 
-    layout: DataLayout or None
-        The data layout of the tensor.
-
     Returns
     -------
     ret: Tensor
@@ -1027,12 +1044,11 @@ def full(shape, fill_value: Union[float, int], dtype='float32', device='cuda', l
     """
     from hidet import ops
 
-    assert layout is None, 'full is not implemented for non-row major layout'
     dtype = data_type(dtype)
     return ops.full(shape=shape, value=fill_value, dtype=dtype, device=device)
 
 
-def randn(shape, dtype='float32', mean=0.0, stddev=1.0, device='cuda', layout=None) -> Tensor:
+def randn(shape, dtype='float32', mean=0.0, stddev=1.0, device='cuda') -> Tensor:
     """Create a tensor with uniformly distributed values.
 
     Parameters
@@ -1051,9 +1067,6 @@ def randn(shape, dtype='float32', mean=0.0, stddev=1.0, device='cuda', layout=No
 
     device: str
         The device of the new tensor is created on.
-
-    layout: DataLayout or None
-        The data layout of the tensor.
 
     Returns
     -------
@@ -1089,22 +1102,19 @@ def randint(low: int, high=None, shape: Sequence[int] = (), dtype: str = 'int32'
     return asarray(np.random.randint(low=low, high=high, size=shape, dtype=dtype_map[dtype]))
 
 
-def _tensor_like(constructor, data: Tensor, shape, dtype, device, layout):
-    shape = data.shape if shape is None else shape
-    dtype = data.dtype if dtype is None else dtype
-    device = data.device if device is None else device
-    layout = data.layout if layout is None else layout
-    return constructor(shape=shape, dtype=dtype, device=device, layout=layout)
-
-
 def empty_like(
-        data: Tensor,
-        shape: Optional[Sequence[int]] = None,
-        dtype: Optional[str] = None,
-        device: Optional[str] = None,
-        layout: Optional[DataLayout] = None,
+    data: Tensor,
+    shape: Optional[Sequence[int]] = None,
+    dtype: Optional[str] = None,
+    device: Optional[str] = None,
+    layout: Optional[DataLayout] = None,
 ) -> Tensor:
-    return _tensor_like(empty, data, shape, dtype, device, layout)
+    return empty(
+        shape=shape if shape is not None else data.shape,
+        dtype=dtype if dtype is not None else data.dtype,
+        device=device if device is not None else data.device,
+        layout=layout if layout is not None else data.layout,
+    )
 
 
 def symbol_like(data: Tensor, shape=None, dtype=None, device=None, layout=None):
@@ -1115,16 +1125,16 @@ def symbol_like(data: Tensor, shape=None, dtype=None, device=None, layout=None):
     data: Tensor
         The information of this tensor will be used to create the symbol tensor.
 
-    shape: Optional[Sequence[int]]
+    shape: Sequence[int], optional
         The shape of the new tensor.
 
-    dtype: Optional[str]
+    dtype: str, optional
         The data type of the new tensor.
 
-    device: Optional[str]
+    device: str, optional
         The device of the new tensor.
 
-    layout: Optional[DataLayout]
+    layout: DataLayout, optional
         The data layout of the new tensor.
 
     Returns
@@ -1132,88 +1142,90 @@ def symbol_like(data: Tensor, shape=None, dtype=None, device=None, layout=None):
     ret: Tensor
         The created symbol tensor.
     """
-    return _tensor_like(symbol, data, shape, dtype, device, layout)
+    return symbol(
+        shape=shape if shape is not None else data.shape,
+        dtype=dtype if dtype is not None else data.dtype,
+        device=device if device is not None else data.device,
+        layout=layout if layout is not None else data.layout,
+    )
 
 
 def zeros_like(
-        data: Tensor,
-        shape: Optional[Sequence[int]] = None,
-        dtype: Optional[str] = None,
-        device: Optional[str] = None,
-        layout: Optional[DataLayout] = None,
+    data: Tensor, shape: Optional[Sequence[int]] = None, dtype: Optional[str] = None, device: Optional[str] = None
 ) -> Tensor:
-    return _tensor_like(zeros, data, shape, dtype, device, layout)
+    return zeros(
+        shape=data.shape if shape is None else shape,
+        dtype=data.dtype if dtype is None else dtype,
+        device=data.device if device is None else device,
+    )
 
 
 def ones_like(
-        data: Tensor,
-        shape: Optional[Sequence[int]] = None,
-        dtype: Optional[str] = None,
-        device: Optional[str] = None,
-        layout: Optional[DataLayout] = None,
+    data: Tensor, shape: Optional[Sequence[int]] = None, dtype: Optional[str] = None, device: Optional[str] = None
 ) -> Tensor:
-    return _tensor_like(ones, data, shape, dtype, device, layout)
+    return ones(
+        shape=data.shape if shape is None else shape,
+        dtype=data.dtype if dtype is None else dtype,
+        device=data.device if device is None else device,
+    )
 
 
 def full_like(
-        data: Tensor,
-        fill_value,
-        shape: Optional[Sequence[int]] = None,
-        dtype: Optional[str] = None,
-        device: Optional[str] = None,
-        layout: Optional[DataLayout] = None,
+    data: Tensor,
+    fill_value,
+    shape: Optional[Sequence[int]] = None,
+    dtype: Optional[str] = None,
+    device: Optional[str] = None,
 ) -> Tensor:
-    return _tensor_like(partial(full, fill_value=fill_value), data, shape, dtype, device, layout)
+    return full(
+        shape=data.shape if shape is None else shape,
+        fill_value=fill_value,
+        dtype=data.dtype if dtype is None else dtype,
+        device=data.device if device is None else device,
+    )
 
 
 def randn_like(
-        data: Tensor,
-        shape: Optional[Sequence[int]] = None,
-        dtype: Optional[str] = None,
-        device: Optional[str] = None,
-        layout: Optional[DataLayout] = None,
+    data: Tensor, shape: Optional[Sequence[int]] = None, dtype: Optional[str] = None, device: Optional[str] = None
 ) -> Tensor:
-    return _tensor_like(randn, data, shape, dtype, device, layout)
-
-
-def randint_like(
-        data: Tensor,
-        low: int,
-        high: Optional[int] = None,
-        shape: Optional[Sequence[int]] = None,
-        dtype: Optional[str] = None,
-        device: Optional[str] = None,
-        layout: Optional[DataLayout] = None,
-):
-    return _tensor_like(partial(randint, low=low, high=high), data, shape, dtype, device, layout)
-
-
-def void_pointer_to_uint64(p):
-    ret = ctypes.cast(ctypes.addressof(p), ctypes.POINTER(ctypes.c_uint64)).contents
-    return ret.value
+    return randn(
+        shape=data.shape if shape is None else shape,
+        dtype=data.dtype if dtype is None else dtype,
+        device=data.device if device is None else device,
+    )
 
 
 def from_numpy(nparray: np.ndarray) -> Tensor:
-    dtype_convert = {
-        np.dtype(np.float64): 'float64',
-        np.dtype(np.float32): 'float32',
-        np.dtype(np.int64): 'int64',
-        np.dtype(np.int32): 'int32',
-        np.dtype(np.float16): 'float16',
-        np.dtype(np.bool_): 'bool',
-        np.dtype(np.uint8): 'uint8',
-        np.dtype(np.uint32): 'uint32',
-    }
-    if nparray.dtype not in dtype_convert:
-        raise NotImplementedError("Do not support convert np.ndarray with data type '{}'.".format(nparray.dtype))
-    nparray = nparray.copy(order='C')  # make the data layout like C, which is contiguous
-    tensor = empty(shape=nparray.shape, dtype=dtype_convert[nparray.dtype], device='cpu')
-    hidet.cuda.memcpy(
-        dst=tensor.storage.addr,
-        src=void_pointer_to_uint64(nparray.ctypes.data_as(ctypes.c_void_p)),
-        num_bytes=tensor.nbytes,
-    )
-    return tensor
+    if not isinstance(nparray, np.ndarray):
+        raise TypeError('nparray must be a numpy array')
+    if not nparray.flags['WRITEABLE']:
+        # make a copy if the array is read-only
+        nparray = nparray.copy()
+    if nparray.dtype == np.bool:
+        return from_dlpack(nparray.astype(np.uint8)).to(dtype='bool')
+    else:
+        return from_dlpack(nparray)
+
+
+def from_dlpack(dltensor) -> Tensor:
+    """
+    Create a hidet tensor from an object that implements the __dlpack__ protocol.
+
+    Parameters
+    ----------
+    dltensor: an object that implements the DLPack protocol.
+        The object must have the method `__dlpack__` that returns a PyCapsule object with name `dltensor`.
+
+    Returns
+    -------
+    ret: Tensor
+        The hidet tensor that shares the same storage with the DLPack tensor.
+    """
+    from .impl.dlpack import from_dlpack_capsule
+
+    if not hasattr(dltensor, '__dlpack__'):
+        raise RuntimeError('Expect a dltensor that implements __dlpack__ method.')
+    return from_dlpack_capsule(dltensor.__dlpack__())
 
 
 def from_torch(torch_tensor):
@@ -1238,7 +1250,12 @@ def from_torch(torch_tensor):
         raise ValueError('Expect a torch.Tensor, got {}'.format(type(torch_tensor)))
     if torch_tensor.requires_grad:
         raise ValueError('Please first call .detach() on the pytorch tensor before converting it to hidet.')
-    return hidet.from_dlpack(torch_tensor)
+    assert isinstance(torch_tensor, torch.Tensor)
+    if torch_tensor.dtype == torch.bool:
+        # exporting torch.bool to dlpack is not supported by pytorch yet
+        return from_dlpack(torch_tensor.to(dtype=torch.uint8)).to(dtype='bool')
+    else:
+        return from_dlpack(torch_tensor)
 
 
 def asarray(obj, /, *, dtype=None, device=None) -> Tensor:
@@ -1247,7 +1264,7 @@ def asarray(obj, /, *, dtype=None, device=None) -> Tensor:
 
     Parameters
     ----------
-    obj: Union[bool, int, float, List, Tuple, np.ndarray, Tensor]
+    obj: Union[bool, int, float, List, Tuple, Tensor, np.ndarray]
         The object to be converted.
 
     dtype: DataType, optional
@@ -1261,9 +1278,7 @@ def asarray(obj, /, *, dtype=None, device=None) -> Tensor:
     ret: Tensor
         The hidet tensor converted from given object.
     """
-    if isinstance(obj, np.ndarray):
-        ret = from_numpy(obj)
-    elif isinstance(obj, Tensor):
+    if isinstance(obj, Tensor):
         ret = obj
     else:
         ret = from_numpy(np.array(obj))
@@ -1280,4 +1295,3 @@ def eye(n_rows, n_cols=None, /, *, k=0, dtype=None, device=None) -> Tensor:
 
 def linspace(start, stop, /, num, *, dtype=None, device=None, endpoint=True) -> Tensor:
     raise NotImplementedError()
-

@@ -3,14 +3,12 @@ from typing import Union, Optional, Sequence
 from hidet.ir import dtypes
 from hidet.ir.expr import Constant
 from hidet.ir.type import DataType, data_type
-from .utils import Task, Operator, Tensor, compute
 from hidet.runtime.device import Device
+from .utils import Task, Operator, Tensor, compute
 
 
 class FullTask(Task):
-    def __init__(
-            self, shape: Sequence[int], value: Union[int, float, bool, Constant], dtype: Union[DataType, str]
-    ):
+    def __init__(self, shape: Sequence[int], value: Union[int, float, bool, Constant], dtype: Union[DataType, str]):
         dtype: DataType = data_type(dtype)
         value: Constant = dtype(value)
         const_output = compute(name='c', shape=list(shape), fcompute=lambda *indices: value)
@@ -23,21 +21,13 @@ class FullTask(Task):
         )
 
 
-class ArangeTask(Task):
-    def __init__(
-            self, start: Union[int, float], stop: Union[int, float], step: Union[int, float] = 1,
-            dtype: Optional[DataType] = None, device: Optional[str] = None
-    ):
-        pass
-
-
 class FullOp(Operator):
     def __init__(
-            self,
-            shape: Sequence[int],
-            value: Union[float, int, bool, Constant],
-            dtype: Optional[DataType] = None,
-            device: str = 'cpu',
+        self,
+        shape: Sequence[int],
+        value: Union[float, int, bool, Constant],
+        dtype: Optional[DataType] = None,
+        device: str = 'cpu',
     ):
         shape = [int(v) for v in shape]
         if dtype is None:
@@ -62,9 +52,9 @@ class FullOp(Operator):
 
 
 def full(
-        shape: Sequence[int],
-        value: Union[float, int, bool, Constant],
-        dtype: Optional[Union[DataType, str]] = None,
-        device: Union[Device, str] = 'cpu',
+    shape: Sequence[int],
+    value: Union[float, int, bool, Constant],
+    dtype: Optional[Union[DataType, str]] = None,
+    device: Union[Device, str] = 'cpu',
 ) -> Tensor:
     return FullOp(shape, value, data_type(dtype), device).get_output(0)

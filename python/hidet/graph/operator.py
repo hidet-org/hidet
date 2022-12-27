@@ -35,7 +35,6 @@ class Operator:
         self.outputs: Optional[List[Tensor]] = outputs
         self.name: str = get_operator_name(self, name)
 
-
         assert all(isinstance(v, Tensor) for v in inputs)
 
         # cache
@@ -130,7 +129,6 @@ class Operator:
         new_op.inputs = inputs
         new_op.task = self.task
         new_op.attrs = attributes
-        new_op.device = self.device
         new_op.outputs = new_op.run()
         new_op.task_func = None
         return new_op.outputs

@@ -21,7 +21,7 @@ def test_cuda_graph():
     cuda_graph: CudaGraph = graph.cuda_graph()
     (actual,) = cuda_graph.run(inputs=[x])
     expected = graph(x)
-    numpy.testing.assert_allclose(actual=actual.numpy(), desired=expected.numpy(), atol=0.0, rtol=0.0)
+    numpy.testing.assert_allclose(actual=actual.cpu().numpy(), desired=expected.cpu().numpy(), atol=0.0, rtol=0.0)
 
 
 if __name__ == '__main__':
