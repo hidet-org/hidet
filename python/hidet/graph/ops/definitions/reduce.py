@@ -124,7 +124,7 @@ class ArgReduceBaseOp(Operator):
 
 class ReduceMeanOp(ReduceBaseOp):
     def __init__(self, x: Tensor, dims: List[int], keep_dim: bool = False):
-        super().__init__(x, dims, keep_dim, 'mean')
+        super().__init__(x, dims, keep_dim, 'avg')
 
 
 class ReduceSumOp(ReduceBaseOp):
