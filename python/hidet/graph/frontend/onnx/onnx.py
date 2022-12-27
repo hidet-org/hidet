@@ -432,7 +432,7 @@ class OnnxGemm(OnnxOperator):
         d = ops.matmul(a, b)
         if alpha != 1.0:
             d = d * alpha
-        if c and beta != 0.0:
+        if c is not None and beta != 0.0:
             d = d + c * beta
         return [d]
 
@@ -480,7 +480,7 @@ class OnnxShape(OnnxOperator):
             end = rank
         start = max(min(start, rank), 0)
         end = max(min(end, rank), 0)
-        return [hidet.array(x.shape[start:end]).cuda()]
+        return [hidet.asarray(x.shape[start:end]).cuda()]
 
 
 @register_onnx_operator
@@ -509,8 +509,8 @@ class OnnxSlice(OnnxOperator):
         steps = inputs[4] if len(inputs) > 4 else None
         starts = self.tensor2list(starts)
         ends = self.tensor2list(ends)
-        axes = self.tensor2list(axes) if axes else None
-        steps = self.tensor2list(steps) if steps else None
+        axes = self.tensor2list(axes) if axes is not None else None
+        steps = self.tensor2list(steps) if steps is not None else None
         return [ops.strided_slice(data, starts, ends, axes, steps)]
 
 
@@ -619,7 +619,7 @@ class OnnxRange(OnnxOperator):
     def run_v11(self, inputs: List[Tensor]) -> List[Tensor]:
         start, limit, delta = [self.tensor2list(t) for t in inputs]
         array = np.arange(start=start, stop=limit, step=delta)
-        array = hidet.array(array).cuda().cast(dtype=inputs[0].dtype)
+        array = hidet.asarray(array).cuda().cast(dtype=inputs[0].dtype)
         return [array]
 
 
@@ -1072,7 +1072,7 @@ def run_trt(node: OnnxOperator, inputs: List[Tensor]) -> List[Tensor]:
     outputs = session.run(
         node.output_names, input_feed={name: tensor.cpu().numpy() for name, tensor in zip(node.input_names, inputs)}
     )
-    return [hidet.array(output).cuda() for output in outputs]
+    return [hidet.asarray(output).cuda() for output in outputs]
 
 
 class OnnxGraph(nn.Module):

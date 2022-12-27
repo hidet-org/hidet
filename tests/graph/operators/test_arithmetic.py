@@ -12,7 +12,7 @@ def check_binary(a_shape, b_shape, dtype, op, hidet_op=None, a_positive=False, b
     numpy_c = op(a, b)
     if hidet_op is None:
         hidet_op = op
-    hidet_c = hidet_op(hidet.array(a).cuda(), hidet.array(b).cuda()).cpu().numpy()
+    hidet_c = hidet_op(hidet.asarray(a).cuda(), hidet.asarray(b).cuda()).cpu().numpy()
     np.testing.assert_allclose(actual=hidet_c, desired=numpy_c, atol=1e-5, rtol=1e-5)
 
 
@@ -20,7 +20,7 @@ def check_unary(shape, dtype, numpy_op, hidet_op, positive=False):
     a = np.random.rand(*shape).astype(dtype)
     a = np.abs(a) if positive else a
     numpy_b = numpy_op(a)
-    hidet_b = hidet_op(hidet.array(a).cuda()).cpu().numpy()
+    hidet_b = hidet_op(hidet.asarray(a).cuda()).cpu().numpy()
     np.testing.assert_allclose(actual=hidet_b, desired=numpy_b, atol=1e-5, rtol=1e-5)
 
 

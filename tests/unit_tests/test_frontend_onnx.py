@@ -16,12 +16,12 @@ def check_model(model_path: str, input_names: List[str], input_tensors: List[Ten
         model_path, providers=['CPUExecutionProvider']
     )  # use cpu executor for high accuracy
     onnx_outputs = onnx_session.run(
-        None, input_feed={name: tensor.numpy() for name, tensor in zip(input_names, input_tensors)}
+        None, input_feed={name: tensor.cpu().numpy() for name, tensor in zip(input_names, input_tensors)}
     )
 
     # hidet
     hidet_model = hidet.graph.frontend.from_onnx(model_path)
-    hidet_inputs = [hidet.array(tensor).cuda() for tensor in input_tensors]
+    hidet_inputs = [hidet.asarray(tensor).cuda() for tensor in input_tensors]
 
     if mode == 'imperative':
         hidet_outputs = hidet_model(*hidet_inputs)
@@ -39,7 +39,7 @@ def check_model(model_path: str, input_names: List[str], input_tensors: List[Ten
 
     if isinstance(hidet_outputs, Tensor):
         hidet_outputs = [hidet_outputs]
-    hidet_outputs = [tensor.numpy() for tensor in hidet_outputs]
+    hidet_outputs = [tensor.cpu().numpy() for tensor in hidet_outputs]
 
     assert len(onnx_outputs) == len(hidet_outputs)
     tol = {'float32': 1e-4, 'float16': 5e-2}[dtype]

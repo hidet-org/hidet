@@ -46,5 +46,10 @@ sname2dtype = {
 }
 
 
+default_int_dtype = int32
+default_index_dtype = int64
+default_float_dtype = float32
+
+
 def support(name: str) -> bool:
     return name in name2dtype

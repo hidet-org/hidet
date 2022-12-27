@@ -1,9 +1,9 @@
 # pylint: disable=redefined-builtin, unnecessary-lambda
-from typing import List, Callable, Any, Union, Optional, Dict, Sequence
+from typing import List, Callable, Any, Union, Optional, Dict
 
 from hidet.ir import primitives
 from hidet.ir import expr, dtypes
-from hidet.ir.type import DataType, data_type
+from hidet.ir.type import DataType
 from hidet.ir.expr import Constant, if_then_else
 from hidet.utils import prod
 from .utils import Task, Operator, Tensor, TensorNode, InverseMap, compute, input_like
@@ -68,22 +68,6 @@ class VariadicElementwiseTask(Task):
                 for v, v_shape in zip(args, shapes)
                 if prod(v_shape) == prod(out_shape)
             },
-        )
-
-
-class ConstantTask(Task):
-    def __init__(
-        self, name: str, shape: Sequence[int], value: Union[int, float, bool, Constant], dtype: Union[DataType, str]
-    ):
-        dtype: DataType = data_type(dtype)
-        value: Constant = dtype(value)
-        const_output = compute(name='c', shape=list(shape), fcompute=lambda *indices: value)
-        super().__init__(
-            name=name,
-            inputs=[],
-            outputs=[const_output],
-            inverse_map={},
-            attributes={'shape': shape, 'value': value.value, 'dtype': dtype.name},
         )
 
 
@@ -298,36 +282,6 @@ class MinOp(Operator):
                 op=lambda *args: scalar_min(args),
             ),
             name='min',
-        )
-
-
-class ConstantOp(Operator):
-    def __init__(
-        self,
-        shape: Sequence[int],
-        value: Union[float, int, bool, Constant],
-        dtype: Optional[DataType] = None,
-        device: str = 'cpu',
-    ):
-        shape = [int(v) for v in shape]
-        if dtype is None:
-            if isinstance(value, int):
-                dtype = dtypes.int64
-            elif isinstance(value, float):
-                dtype = dtypes.float32
-            elif isinstance(value, bool):
-                dtype = dtypes.boolean
-            elif isinstance(value, Constant):
-                assert isinstance(value.type, DataType)
-                dtype = value.type
-            else:
-                raise ValueError(f'Unknown type for value {value}')
-
-        super().__init__(
-            inputs=[],
-            task=ConstantTask(name='const', shape=shape, value=value, dtype=dtype),
-            name='constant',
-            attributes={'shape': shape, 'value': value, 'dtype': dtype, 'device': device},
         )
 
 
@@ -552,12 +506,3 @@ def bitwise_xor(x: Tensor, y: Tensor) -> Tensor:
 
 def ceil(x: Tensor) -> Tensor:
     return CeilOp(x).get_output(0)
-
-
-def constant(
-    shape: Sequence[int],
-    value: Union[float, int, bool, Constant],
-    dtype: Optional[Union[DataType, str]] = None,
-    device: str = 'cpu',
-) -> Tensor:
-    return ConstantOp(shape, value, data_type(dtype), device).get_output(0)

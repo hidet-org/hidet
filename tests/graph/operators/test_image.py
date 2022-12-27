@@ -8,7 +8,7 @@ import pytest
 import hidet
 from hidet import ops
 from hidet.testing import check_binary
-from hidet.graph.tensor import array
+from hidet.graph.tensor import asarray
 from hidet.utils.ort_utils import create_ort_session, ort_inference
 
 
@@ -89,7 +89,7 @@ def test_resize2d(
 
     hidet_result_cuda = (
         ops.resize2d(
-            array(data).to(device='cuda'),
+            asarray(data).to(device='cuda'),
             size,
             method,
             coordinate_transformation_mode,

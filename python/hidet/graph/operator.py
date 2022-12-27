@@ -5,6 +5,7 @@ from hidet.ir.task import Task
 from hidet.runtime.module import CompiledFunction
 from hidet.graph.tensor import empty, empty_like, Tensor
 from hidet.ffi.ffi import get_last_error, BackendException
+from hidet.runtime.device import Device, instantiate_device
 
 
 def get_operator_name(op, given_name: Optional[str] = None):
@@ -34,8 +35,6 @@ class Operator:
         self.outputs: Optional[List[Tensor]] = outputs
         self.name: str = get_operator_name(self, name)
 
-        self.device: str = inputs[0].device if len(inputs) > 0 else attributes['device']
-
         assert all(isinstance(v, Tensor) for v in inputs)
 
         # cache
@@ -45,6 +44,19 @@ class Operator:
         arguments = ['{}: {}{}'.format(i, t.dtype.name, t.shape) for i, t in enumerate(self.inputs)]
         attributes = ['{}={}'.format(name, str(value)) for name, value in self.attrs.items()]
         return '{}({})'.format(self.name, ', '.join(arguments + attributes))
+
+    @property
+    def device(self) -> Device:
+        if len(self.inputs) == 0:
+            # this is an operator that create a tensor like hidet.full
+            # get the device from the operator attributes
+            assert 'device' in self.attrs
+            return instantiate_device(self.attrs['device'])
+        else:
+            # when the operator has inputs, get the device from the inputs
+            if not all(t.device == self.inputs[0].device for t in self.inputs):
+                raise ValueError('All inputs of an operator must be on the same device')
+            return self.inputs[0].device
 
     def run(self) -> List[Tensor]:
         if all(t.storage is not None for t in self.inputs):
@@ -117,7 +129,6 @@ class Operator:
         new_op.inputs = inputs
         new_op.task = self.task
         new_op.attrs = attributes
-        new_op.device = self.device
         new_op.outputs = new_op.run()
         new_op.task_func = None
         return new_op.outputs
@@ -156,4 +167,4 @@ class Operator:
         from hidet.driver import build_task
 
         if self.task_func is None:
-            self.task_func = build_task(self.task, target_device=self.device, load=True)
+            self.task_func = build_task(self.task, target_device=self.device.type, load=True)

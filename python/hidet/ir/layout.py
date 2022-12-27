@@ -79,13 +79,16 @@ class DataLayout(Node):
     def __str__(self):
         import numpy as np
 
-        shape = [int(v) for v in self.shape]
-        table = np.zeros(shape=shape, dtype=np.int)
-        ranges = [range(v) for v in shape]
-        for indices in itertools.product(*ranges):
-            local_index = self.global2local(*indices)
-            table[indices] = int(local_index)
-        return np.array_str(table, max_line_width=120)
+        if int(self.size) > 1024:
+            return '{}(shape={}, size={})'.format(self.__class__.__name__, self.shape, self.size)
+        else:
+            shape = [int(v) for v in self.shape]
+            table = np.zeros(shape=shape, dtype=np.int)
+            ranges = [range(v) for v in shape]
+            for indices in itertools.product(*ranges):
+                local_index = self.global2local(*indices)
+                table[indices] = int(local_index)
+            return np.array_str(table, max_line_width=120)
 
     def const_shape(self) -> List[int]:
         return [int(v) for v in self.shape]

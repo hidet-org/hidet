@@ -324,7 +324,7 @@ class FlowGraph:
         if self.inputs:
             if len(inputs) != len(self.inputs):
                 raise ValueError('Found {} symbol inputs, but {} given'.format(len(inputs), len(self.inputs)))
-            if any(a not in self.inputs for a in inputs):
+            if any(all(a is not v for v in self.inputs) for a in inputs):
                 raise ValueError('There is a symbol tensor not given in inputs')
         else:
             if len(inputs) > 1:
@@ -438,7 +438,7 @@ class FlowGraph:
             nodes.append(op)
             for it in op.inputs:
                 if it.op is None:
-                    if it.storage is None and it not in inputs:
+                    if it.storage is None and all(it is not v for v in inputs):
                         # input
                         inputs.append(it)
                 else:

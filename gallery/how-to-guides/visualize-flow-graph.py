@@ -68,8 +68,8 @@ print(model)
 
 graph = model.flow_graph_for(
     inputs=[
-        hidet.randn([1, 128, 768], device='cpu'),
-        hidet.ones([1, 128], dtype='int32', device='cpu'),
+        hidet.randn([1, 128, 768], device='cuda'),
+        hidet.ones([1, 128], dtype='int32', device='cuda'),
     ]
 )
 print(graph)

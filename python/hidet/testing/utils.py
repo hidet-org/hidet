@@ -1,7 +1,7 @@
 from typing import List, Union, Sequence
 import time
 import numpy as np
-from hidet.graph.tensor import array
+from hidet.graph.tensor import asarray
 
 
 def benchmark_func(run_func, warmup=1, number=5, repeat=5, median=True) -> Union[List[float], float]:
@@ -66,7 +66,7 @@ def check_unary(
     # wrap np.array(...) in case shape = []
     data = np.array(np.random.randn(*shape)).astype(dtype)
     numpy_result = numpy_op(data)
-    hidet_result = hidet_op(array(data).to(device=device)).cpu().numpy()
+    hidet_result = hidet_op(asarray(data).to(device=device)).cpu().numpy()
     np.testing.assert_allclose(actual=hidet_result, desired=numpy_result, atol=atol, rtol=rtol)
 
 
@@ -88,7 +88,7 @@ def check_binary(
     a = np.array(np.random.randn(*a_shape)).astype(dtype)
     b = np.array(np.random.randn(*b_shape)).astype(dtype)
     numpy_result = numpy_op(a, b)
-    hidet_result = hidet_op(array(a).to(device=device), array(b).to(device=device)).cpu().numpy()
+    hidet_result = hidet_op(asarray(a).to(device=device), asarray(b).to(device=device)).cpu().numpy()
     np.testing.assert_allclose(actual=hidet_result, desired=numpy_result, atol=atol, rtol=rtol)
 
 

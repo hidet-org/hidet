@@ -39,11 +39,11 @@ def dummy_inputs_from_task(task: Task, target_device: str) -> List[Tensor]:
         dtype = param_type.dtype.name
         shape = [int(s) for s in param_type.shape]
         if dtype in ['float32', 'float16', 'bfloat16']:
-            x = randn(shape, dtype, device=target_device, layout=param_type.layout)
+            x = randn(shape, dtype, device=target_device)
         elif dtype in ['int64', 'int32', 'int8', 'uint64', 'uint32', 'uint8']:
-            x = zeros(shape, dtype, device=target_device, layout=param_type.layout)
+            x = zeros(shape, dtype, device=target_device)
         elif dtype == 'bool':
-            x = ones(shape, dtype, device=target_device, layout=param_type.layout)
+            x = ones(shape, dtype, device=target_device)
         else:
             raise ValueError('Currently do not support generate random array for data type {}'.format(dtype))
         inputs.append(x)
