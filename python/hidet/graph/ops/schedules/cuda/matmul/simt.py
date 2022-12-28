@@ -39,7 +39,7 @@ import os
 import hidet.cuda
 from hidet import option
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
-from hidet.ir.expr import Var, And, Equal, Cast, if_then_else, convert, Expr
+from hidet.ir.expr import Var, LogicalAnd, Equal, Cast, if_then_else, convert, Expr
 from hidet.ir.func import IRModule
 from hidet.ir.functors import simplify_to_int
 from hidet.ir.mapping import TaskMapping
@@ -397,7 +397,7 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, schedule: Mat
                 gmem_a[block_idx('y'), block_offset[0] :, :],
                 regs_a_ldg,
                 schedule.a_g2s_layout,
-                src_predicate=lambda i, k: And.join(block_offset[0] + i < m_size, k < first_k_tile),
+                src_predicate=lambda i, k: LogicalAnd.join(block_offset[0] + i < m_size, k < first_k_tile),
                 default_value=a_default_value,
             )
             sb += copy(regs_a_ldg, smem_a[0], layout=schedule.a_g2s_layout)
@@ -405,7 +405,7 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, schedule: Mat
                 gmem_b[block_idx('y'), :, block_offset[1] :],
                 regs_b_ldg,
                 schedule.b_g2s_layout,
-                src_predicate=lambda k, j: And.join(k < first_k_tile, block_offset[1] + j < n_size),
+                src_predicate=lambda k, j: LogicalAnd.join(k < first_k_tile, block_offset[1] + j < n_size),
                 default_value=b_default_value,
             )
             sb += copy(regs_b_ldg, smem_b[0], layout=schedule.b_g2s_layout)
@@ -453,7 +453,7 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, schedule: Mat
                 src=regs_c,
                 dst=gmem_c[block_idx('y'), block_offset[0] :, block_offset[1] :],
                 layout=schedule.block_layout,
-                dst_predicate=lambda i, j: And(block_offset[0] + i < m_size, block_offset[1] + j < n_size),
+                dst_predicate=lambda i, j: LogicalAnd(block_offset[0] + i < m_size, block_offset[1] + j < n_size),
             )
         # set body
         fb.set_body(sb.finish())

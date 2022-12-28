@@ -19,6 +19,7 @@ def cuda_bf16_tanh_func() -> Function:
 
 
 class CUDABFloat16MathFunctionSet(MathFunctionSet):
+    # pylint: disable=abstract-method
     def register(self):
         entries = {
             'sin': ['hsin', 1],

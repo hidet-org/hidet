@@ -56,9 +56,9 @@ class Tensor:
         return self
 
     def __neg__(self) -> Tensor:
-        from .ops import neg
+        from .ops import negative
 
-        return neg(self)
+        return negative(self)
 
     def __add__(self, other) -> Tensor:
         from .ops import add
@@ -66,9 +66,9 @@ class Tensor:
         return add(self, other)
 
     def __sub__(self, other) -> Tensor:
-        from .ops import sub
+        from .ops import subtract
 
-        return sub(self, other)
+        return subtract(self, other)
 
     def __mul__(self, other) -> Tensor:
         from .ops import multiply
@@ -95,9 +95,9 @@ class Tensor:
         return matmul(self, other)
 
     def __invert__(self) -> Tensor:
-        from .ops import bitwise_not
+        from .ops import bitwise_invert
 
-        return bitwise_not(self)
+        return bitwise_invert(self)
 
     def __and__(self, other) -> Tensor:
         from .ops import bitwise_and
@@ -115,29 +115,29 @@ class Tensor:
         return bitwise_xor(self, other)
 
     def __lshift__(self, other):
-        from .ops import leftshift
+        from .ops import bitwise_left_shift
 
-        return leftshift(self, other)
+        return bitwise_left_shift(self, other)
 
     def __rshift__(self, other):
-        from .ops import rightshift
+        from .ops import bitwise_right_shift
 
-        return rightshift(self, other)
+        return bitwise_right_shift(self, other)
 
     def __lt__(self, other):
-        from .ops import less_than
+        from .ops import less
 
-        return less_than(self, other)
+        return less(self, other)
 
     def __le__(self, other):
-        from .ops import less_or_equal
+        from .ops import less_equal
 
-        return less_or_equal(self, other)
+        return less_equal(self, other)
 
     def __gt__(self, other):
-        from .ops import greater_than
+        from .ops import greater
 
-        return greater_than(self, other)
+        return greater(self, other)
 
     def __eq__(self, other):
         from .ops import equal
@@ -192,9 +192,9 @@ class Tensor:
         return add(other, self)
 
     def __rsub__(self, other):
-        from .ops import sub
+        from .ops import subtract
 
-        return sub(other, self)
+        return subtract(other, self)
 
     def __rmul__(self, other):
         from .ops import multiply
@@ -633,9 +633,9 @@ class Tensor:
         ret: Tensor
             The reduced tensor.
         """
-        from .ops import reduce_sum
+        from .ops import sum
 
-        return reduce_sum(self, dims=dims, keep_dim=keep_dim)
+        return sum(self, dims=dims, keep_dim=keep_dim)
 
     def mean(self, dims: Union[int, List[int]], keep_dim: bool = False):
         """Create a mean reduced tensor.
@@ -655,9 +655,9 @@ class Tensor:
         ret: Tensor
             The reduced tensor.
         """
-        from .ops import reduce_mean
+        from .ops import mean
 
-        return reduce_mean(self, dims=dims, keep_dim=keep_dim)
+        return mean(self, dims=dims, keep_dim=keep_dim)
 
     def rsqrt(self):
         """Compute the ``1/sqrt(x)`` of current tensor x.
@@ -1294,4 +1294,40 @@ def eye(n_rows, n_cols=None, /, *, k=0, dtype=None, device=None) -> Tensor:
 
 
 def linspace(start, stop, /, num, *, dtype=None, device=None, endpoint=True) -> Tensor:
+    raise NotImplementedError()
+
+
+def astype(x: Tensor, dtype, /, *, copy: bool = True) -> Tensor:
+    raise NotImplementedError()
+
+
+def can_cast(from_, to, /) -> bool:
+    raise NotImplementedError()
+
+
+def finfo(type, /):
+    raise NotImplementedError()
+
+
+def iinfo(type, /):
+    raise NotImplementedError()
+
+
+def isdtype(dtype: DataType, kind) -> bool:
+    raise NotImplementedError()
+
+
+def result_type(*arrays_and_dtypes) -> DataType:
+    raise NotImplementedError()
+
+
+def broadcast_arrays(*arrays: Tensor) -> List[Tensor]:
+    raise NotImplementedError()
+
+
+def broadcast_to(array: Tensor, /, shape: Sequence[int]) -> Tensor:
+    raise NotImplementedError()
+
+
+def meshgrid(*arrays: Tensor, indexing: str = 'xy') -> List[Tensor]:
     raise NotImplementedError()

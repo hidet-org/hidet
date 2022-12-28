@@ -2,8 +2,31 @@
 from typing import Any, Union, Mapping, Sequence, Type, List
 from hidet.ir.node import Node
 from hidet.ir.type import DataType, TensorType, PointerType, TensorPointerType, ReferenceType, VoidType
-from hidet.ir.expr import Add, Sub, Multiply, Div, Mod, FloorDiv, Neg, LessThan, LessEqual, Equal, NotEqual, And, Or
-from hidet.ir.expr import Not, BitwiseAnd, BitwiseOr, BitwiseNot, BitwiseXor, LeftShift, RightShift, TensorElement
+from hidet.ir.expr import (
+    Add,
+    Sub,
+    Multiply,
+    Div,
+    Mod,
+    FloorDiv,
+    Neg,
+    LessThan,
+    LessEqual,
+    Equal,
+    NotEqual,
+    LogicalAnd,
+    LogicalOr,
+)
+from hidet.ir.expr import (
+    LogicalNot,
+    BitwiseAnd,
+    BitwiseOr,
+    BitwiseNot,
+    BitwiseXor,
+    LeftShift,
+    RightShift,
+    TensorElement,
+)
 from hidet.ir.expr import TensorSlice, IfThenElse, Call, Let, Var, Constant, Cast, Dereference, Address, Reference
 from hidet.ir.expr import BinaryOp, Expr
 from hidet.ir.stmt import EvaluateStmt, DeclareStmt, BufferStoreStmt, AssignStmt, LetStmt, ForStmt, ForTaskStmt, SeqStmt
@@ -81,9 +104,9 @@ class ExprFunctor(NodeFunctor):
             LessEqual: cls.visit_LessEqual,
             Equal: cls.visit_Equal,
             NotEqual: cls.visit_NotEqual,
-            And: cls.visit_And,
-            Or: cls.visit_Or,
-            Not: cls.visit_Not,
+            LogicalAnd: cls.visit_And,
+            LogicalOr: cls.visit_Or,
+            LogicalNot: cls.visit_Not,
             BitwiseAnd: cls.visit_BitwiseAnd,
             BitwiseOr: cls.visit_BitwiseOr,
             BitwiseNot: cls.visit_BitwiseNot,
@@ -136,16 +159,16 @@ class ExprFunctor(NodeFunctor):
     def visit_NotEqual(self, e: NotEqual):
         raise NotImplementedError()
 
-    def visit_And(self, e: And):
+    def visit_And(self, e: LogicalAnd):
         raise NotImplementedError()
 
-    def visit_Or(self, e: Or):
+    def visit_Or(self, e: LogicalOr):
         raise NotImplementedError()
 
     def visit_Neg(self, e: Neg):
         raise NotImplementedError()
 
-    def visit_Not(self, e: Not):
+    def visit_Not(self, e: LogicalNot):
         raise NotImplementedError()
 
     def visit_BitwiseAnd(self, e: BitwiseAnd):
@@ -250,18 +273,18 @@ class ExprVisitor(ExprFunctor):
         self.visit(e.a)
         self.visit(e.b)
 
-    def visit_And(self, e: And):
+    def visit_And(self, e: LogicalAnd):
         self.visit(e.a)
         self.visit(e.b)
 
-    def visit_Or(self, e: Or):
+    def visit_Or(self, e: LogicalOr):
         self.visit(e.a)
         self.visit(e.b)
 
     def visit_Neg(self, e: Neg):
         self.visit(e.a)
 
-    def visit_Not(self, e: Not):
+    def visit_Not(self, e: LogicalNot):
         self.visit(e.a)
 
     def visit_BitwiseAnd(self, e: BitwiseAnd):
@@ -396,10 +419,10 @@ class ExprRewriter(ExprFunctor):
     def visit_NotEqual(self, e: NotEqual):
         return self.visit_Binary(e)
 
-    def visit_And(self, e: And):
+    def visit_And(self, e: LogicalAnd):
         return self.visit_Binary(e)
 
-    def visit_Or(self, e: Or):
+    def visit_Or(self, e: LogicalOr):
         return self.visit_Binary(e)
 
     def visit_Neg(self, e: Neg):
@@ -409,12 +432,12 @@ class ExprRewriter(ExprFunctor):
         else:
             return Neg(a)
 
-    def visit_Not(self, e: Not):
+    def visit_Not(self, e: LogicalNot):
         a = self(e.a)
         if a is e.a:
             return e
         else:
-            return Not(a)
+            return LogicalNot(a)
 
     def visit_BitwiseAnd(self, e: BitwiseAnd):
         return self.visit_Binary(e)

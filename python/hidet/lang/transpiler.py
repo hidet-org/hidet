@@ -600,16 +600,16 @@ class PythonToHidetTranslator(PythonAstFunctor):
     def visit_BoolOp(self, expr: BoolOp):
         values = [self.visit(v) for v in expr.values]
         if isinstance(expr.op, And):
-            return ir.And.join_list(values)
+            return ir.LogicalAnd.join_list(values)
         else:
             assert isinstance(expr.op, Or)
-            return ir.Or.join_list(values)
+            return ir.LogicalOr.join_list(values)
 
     def visit_Compare(self, expr: Compare):
         front = self.visit(expr.left)
         op_dict = {
-            And: ir.And,
-            Or: ir.Or,
+            And: ir.LogicalAnd,
+            Or: ir.LogicalOr,
             Eq: ir.Equal,
             Gt: lambda a, b: ir.LessThan(b, a),  # pylint: disable=arguments-out-of-order
             Lt: ir.LessThan,
@@ -621,7 +621,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
         comparators = [self.visit(v) for v in expr.comparators]
         for op, current in zip(expr.ops, comparators):
             cur_cond = op_dict[type(op)](front, current)
-            cond = ir.And(cond, cur_cond) if cond is not None else cur_cond
+            cond = ir.LogicalAnd(cond, cur_cond) if cond is not None else cur_cond
             front = current
         return cond
 
@@ -629,7 +629,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
         value = self.visit(expr.operand)
         if isinstance(expr.op, Not):
             # not v
-            return ir.Not(value)
+            return ir.LogicalNot(value)
         elif isinstance(expr.op, Invert):
             # there are two cases for a ~ operator: ~something
             # case 1: get the address of an expression

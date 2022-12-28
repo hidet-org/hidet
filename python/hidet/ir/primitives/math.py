@@ -37,10 +37,43 @@ class MathFunctionSet:
     def cos(self, a: Expr) -> Expr:
         raise NotImplementedError()
 
+    def tan(self, a: Expr) -> Expr:
+        raise NotImplementedError()
+
+    def sinh(self, a: Expr) -> Expr:
+        raise NotImplementedError()
+
+    def cosh(self, a: Expr) -> Expr:
+        raise NotImplementedError()
+
     def tanh(self, a: Expr) -> Expr:
         raise NotImplementedError()
 
+    def asin(self, a: Expr) -> Expr:
+        raise NotImplementedError()
+
+    def acos(self, a: Expr) -> Expr:
+        raise NotImplementedError()
+
+    def atan(self, a: Expr) -> Expr:
+        raise NotImplementedError()
+
+    def asinh(self, a: Expr) -> Expr:
+        raise NotImplementedError()
+
+    def acosh(self, a: Expr) -> Expr:
+        raise NotImplementedError()
+
+    def atanh(self, a: Expr) -> Expr:
+        raise NotImplementedError()
+
+    def atan2(self, a: Expr, b: Expr) -> Expr:
+        raise NotImplementedError()
+
     def exp(self, a: Expr) -> Expr:
+        raise NotImplementedError()
+
+    def expm1(self, a: Expr) -> Expr:
         raise NotImplementedError()
 
     def erf(self, a: Expr) -> Expr:
@@ -55,7 +88,13 @@ class MathFunctionSet:
     def log(self, a: Expr) -> Expr:
         raise NotImplementedError()
 
+    def log1p(self, a: Expr) -> Expr:
+        raise NotImplementedError()
+
     def round(self, a: Expr) -> Expr:
+        raise NotImplementedError()
+
+    def trunc(self, a: Expr) -> Expr:
         raise NotImplementedError()
 
     def ceil(self, a: Expr) -> Expr:
@@ -69,6 +108,9 @@ class MathFunctionSet:
         raise NotImplementedError()
 
     def max(self, a: Expr, b: Expr) -> Expr:
+        raise NotImplementedError()
+
+    def mod(self, a: Expr, b: Expr) -> Expr:
         raise NotImplementedError()
 
     def pow(self, a: Expr, b: Expr) -> Expr:
@@ -120,11 +162,44 @@ class MathFunctionSetGeneric(MathFunctionSet):
     def cos(self, a: Expr) -> Expr:
         return self.call('cos', a)
 
+    def tan(self, a: Expr) -> Expr:
+        return self.call('tan', a)
+
+    def sinh(self, a: Expr) -> Expr:
+        return self.call('sinh', a)
+
+    def cosh(self, a: Expr) -> Expr:
+        return self.call('cosh', a)
+
     def tanh(self, a: Expr) -> Expr:
         return self.call('tanh', a)
 
+    def asin(self, a: Expr) -> Expr:
+        return self.call('asin', a)
+
+    def acos(self, a: Expr) -> Expr:
+        return self.call('acos', a)
+
+    def atan(self, a: Expr) -> Expr:
+        return self.call('atan', a)
+
+    def asinh(self, a: Expr) -> Expr:
+        return self.call('asinh', a)
+
+    def acosh(self, a: Expr) -> Expr:
+        return self.call('acosh', a)
+
+    def atanh(self, a: Expr) -> Expr:
+        return self.call('atanh', a)
+
+    def atan2(self, a: Expr, b: Expr) -> Expr:
+        return self.call('atan2', a, b)
+
     def exp(self, a: Expr) -> Expr:
         return self.call('exp', a)
+
+    def expm1(self, a: Expr) -> Expr:
+        return self.call('expm1', a)
 
     def erf(self, a: Expr) -> Expr:
         return self.call('erf', a)
@@ -138,6 +213,9 @@ class MathFunctionSetGeneric(MathFunctionSet):
     def log(self, a: Expr) -> Expr:
         return self.call('log', a)
 
+    def log1p(self, a: Expr) -> Expr:
+        return self.call('log1p', a)
+
     def round(self, a: Expr) -> Expr:
         return self.call('round', a)
 
@@ -147,17 +225,32 @@ class MathFunctionSetGeneric(MathFunctionSet):
     def floor(self, a: Expr) -> Expr:
         return self.call('floor', a)
 
+    def trunc(self, a: Expr) -> Expr:
+        return self.call('trunc', a)
+
     def min(self, a: Expr, b: Expr) -> Expr:
         return self.call('min', a, b)
 
     def max(self, a: Expr, b: Expr) -> Expr:
         return self.call('max', a, b)
 
+    def mod(self, a: Expr, b: Expr) -> Expr:
+        return self.call('mod', a, b)
+
     def pow(self, a: Expr, b: Expr) -> Expr:
         return self.call('pow', a, b)
 
     def fma(self, a: Expr, b: Expr, c: Expr) -> Expr:
         return self.call('fma', a, b, c)
+
+    def isfinite(self, a: Expr) -> Expr:
+        return self.call('isfinite', a)
+
+    def isinf(self, a: Expr) -> Expr:
+        return self.call('isinf', a)
+
+    def isnan(self, a: Expr) -> Expr:
+        return self.call('isnan', a)
 
 
 generic_math_function_set = MathFunctionSetGeneric()
@@ -172,12 +265,56 @@ def cos(a: Expr) -> Expr:
     return generic_math_function_set.cos(a)
 
 
+def tan(a: Expr) -> Expr:
+    return generic_math_function_set.tan(a)
+
+
+def sinh(a: Expr) -> Expr:
+    return generic_math_function_set.sinh(a)
+
+
+def cosh(a: Expr) -> Expr:
+    return generic_math_function_set.cosh(a)
+
+
 def tanh(a: Expr) -> Expr:
     return generic_math_function_set.tanh(a)
 
 
+def asin(a: Expr) -> Expr:
+    return generic_math_function_set.asin(a)
+
+
+def acos(a: Expr) -> Expr:
+    return generic_math_function_set.acos(a)
+
+
+def atan(a: Expr) -> Expr:
+    return generic_math_function_set.atan(a)
+
+
+def atan2(a: Expr, b: Expr) -> Expr:
+    return generic_math_function_set.atan2(a, b)
+
+
+def asinh(a: Expr) -> Expr:
+    return generic_math_function_set.asinh(a)
+
+
+def acosh(a: Expr) -> Expr:
+    return generic_math_function_set.acosh(a)
+
+
+def atanh(a: Expr) -> Expr:
+    return generic_math_function_set.atanh(a)
+
+
 def exp(a: Expr) -> Expr:
     return generic_math_function_set.exp(a)
+
+
+def expm1(a: Expr) -> Expr:
+    return generic_math_function_set.expm1(a)
 
 
 def erf(a: Expr) -> Expr:
@@ -208,6 +345,10 @@ def floor(a: Expr) -> Expr:
     return generic_math_function_set.floor(a)
 
 
+def trunc(a: Expr) -> Expr:
+    return generic_math_function_set.trunc(a)
+
+
 def min(a: Expr, b: Expr) -> Expr:
     return generic_math_function_set.min(a, b)
 
@@ -216,9 +357,25 @@ def max(a: Expr, b: Expr) -> Expr:
     return generic_math_function_set.max(a, b)
 
 
+def mod(a: Expr, b: Expr) -> Expr:
+    return generic_math_function_set.mod(a, b)
+
+
 def pow(a: Expr, b: Expr) -> Expr:
     return generic_math_function_set.pow(a, b)
 
 
 def fma(a: Expr, b: Expr, c: Expr) -> Expr:
     return generic_math_function_set.fma(a, b, c)
+
+
+def isfinite(a: Expr) -> Expr:
+    return generic_math_function_set.isfinite(a)
+
+
+def isinf(a: Expr) -> Expr:
+    return generic_math_function_set.isinf(a)
+
+
+def isnan(a: Expr) -> Expr:
+    return generic_math_function_set.isnan(a)

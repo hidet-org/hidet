@@ -6,7 +6,7 @@ import os
 import hidet.cuda
 from hidet import option
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
-from hidet.ir.expr import Var, And, Equal, if_then_else, convert, Expr, tensor_var, cast, TensorSlice
+from hidet.ir.expr import Var, LogicalAnd, Equal, if_then_else, convert, Expr, tensor_var, cast, TensorSlice
 from hidet.ir.expr import tensor_pointer_var
 from hidet.ir.func import IRModule
 from hidet.ir.primitives import syncthreads, thread_idx, block_idx
@@ -242,7 +242,7 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, sch: MatmulMm
                 gmem_a[block_offset_m:, :],
                 regs_ldg_a,
                 sch.a_g2s_map,
-                src_pred=lambda i, k: And(block_offset_m + i < m_size, k < k_size),
+                src_pred=lambda i, k: LogicalAnd(block_offset_m + i < m_size, k < k_size),
                 def_value=a_zero,
                 cast_dtype=a_dtype,
             )
@@ -251,7 +251,7 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, sch: MatmulMm
                 gmem_b[:, block_offset_n:],
                 regs_ldg_b,
                 sch.b_g2s_map,
-                src_pred=lambda k, j: And(k < k_size, block_offset_n + j < n_size),
+                src_pred=lambda k, j: LogicalAnd(k < k_size, block_offset_n + j < n_size),
                 def_value=b_zero,
                 cast_dtype=b_dtype,
             )
@@ -271,7 +271,9 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, sch: MatmulMm
                                 gmem_a[block_offset_m:, block_offset_k:],
                                 regs_ldg_a,
                                 sch.a_g2s_map,
-                                src_pred=lambda i, k: And(block_offset_m + i < m_size, block_offset_k + k < k_size),
+                                src_pred=lambda i, k: LogicalAnd(
+                                    block_offset_m + i < m_size, block_offset_k + k < k_size
+                                ),
                                 def_value=a_zero,
                                 cast_dtype=a_dtype,
                             )
@@ -279,7 +281,9 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, sch: MatmulMm
                                 gmem_b[block_offset_k:, block_offset_n:],
                                 regs_ldg_b,
                                 sch.b_g2s_map,
-                                src_pred=lambda k, j: And(block_offset_k + k < k_size, block_offset_n + j < n_size),
+                                src_pred=lambda k, j: LogicalAnd(
+                                    block_offset_k + k < k_size, block_offset_n + j < n_size
+                                ),
                                 def_value=b_zero,
                                 cast_dtype=b_dtype,
                             )
@@ -374,7 +378,7 @@ def write_back(regs_c, smem_c, gmem_c, bound_m, bound_n, sch: MatmulMmaSchedule)
                     for p, (ii, jj) in enumerate(sch.mma_config.c_store_map.on(lane_id)):
                         i = warp_i * sch.warp_m + mma_i * sch.mma_m + ii
                         j = warp_j * sch.warp_n + mma_j * sch.mma_n + jj
-                        with sb.if_then(And(i < bound_m, j < bound_n)):
+                        with sb.if_then(LogicalAnd(i < bound_m, j < bound_n)):
                             if sch.warp_count_k == 1:
                                 sb += BufferStoreStmt(gmem_c, [i, j], regs_c[mma_i, mma_j, p])
                             else:

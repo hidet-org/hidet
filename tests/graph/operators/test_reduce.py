@@ -12,7 +12,7 @@ def test_reduce_mean(shape, dims, keep_dim: bool):
     check_unary(
         shape,
         numpy_op=lambda x: np.mean(x, dims, keepdims=keep_dim),
-        hidet_op=lambda x: ops.reduce_mean(x, dims, keep_dim),
+        hidet_op=lambda x: ops.mean(x, dims, keep_dim),
         atol=1e-5,
         rtol=1e-5,
     )
@@ -32,7 +32,7 @@ def test_var(shape, axis, keep_dim: bool):
     check_unary(
         shape,
         numpy_op=lambda x: np.var(x, axis, keepdims=keep_dim),
-        hidet_op=lambda x: ops.reduce_var(x, axis, keep_dim),
+        hidet_op=lambda x: ops.var(x, axis, keep_dim),
         atol=1e-5,
         rtol=1e-5,
     )

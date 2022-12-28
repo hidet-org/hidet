@@ -76,7 +76,7 @@ def test_rsqrt(shape):
 
 @pytest.mark.parametrize("shape", unary_op_shapes)
 def test_neg(shape):
-    check_unary(shape, np.float32, np.negative, ops.neg)
+    check_unary(shape, np.float32, np.negative, ops.negative)
 
 
 @pytest.mark.parametrize("shape", unary_op_shapes)
@@ -86,12 +86,12 @@ def test_abs(shape):
 
 @pytest.mark.parametrize("a_shape, b_shape", binary_op_shapes)
 def test_rightshift(a_shape, b_shape):
-    check_binary(a_shape, b_shape, np.uint32, np.right_shift, ops.rightshift)
+    check_binary(a_shape, b_shape, np.uint32, np.right_shift, ops.bitwise_right_shift)
 
 
 @pytest.mark.parametrize("a_shape, b_shape", binary_op_shapes)
 def test_leftshift(a_shape, b_shape):
-    check_binary(a_shape, b_shape, np.uint32, np.left_shift, ops.leftshift)
+    check_binary(a_shape, b_shape, np.uint32, np.left_shift, ops.bitwise_left_shift)
 
 
 @pytest.mark.parametrize("a_shape, b_shape", binary_op_shapes)
@@ -101,7 +101,7 @@ def test_bitwise_and(a_shape, b_shape):
 
 @pytest.mark.parametrize("a_shape", unary_op_shapes)
 def test_bitwise_not(a_shape):
-    check_unary(a_shape, np.int32, np.invert, ops.bitwise_not)
+    check_unary(a_shape, np.int32, np.invert, ops.bitwise_invert)
 
 
 @pytest.mark.parametrize("a_shape, b_shape", binary_op_shapes)

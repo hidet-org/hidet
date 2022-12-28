@@ -243,7 +243,7 @@ class NotEqual(Condition, BinaryOp):
         super().__init__(a, b)
 
 
-class And(Condition, BinaryOp):
+class LogicalAnd(Condition, BinaryOp):
     def __init__(self, a, b):
         super().__init__(a, b)
 
@@ -251,15 +251,15 @@ class And(Condition, BinaryOp):
     def join(*conds):
         cond = None
         for c in conds:
-            cond = And(cond, convert(c)) if cond is not None else convert(c)
+            cond = LogicalAnd(cond, convert(c)) if cond is not None else convert(c)
         return cond
 
     @staticmethod
     def join_list(conds: Sequence[Condition]):
-        return And.join(*conds)
+        return LogicalAnd.join(*conds)
 
 
-class Or(Condition, BinaryOp):
+class LogicalOr(Condition, BinaryOp):
     def __init__(self, a, b):
         super().__init__(a, b)
 
@@ -267,15 +267,15 @@ class Or(Condition, BinaryOp):
     def join(*conds):
         cond = None
         for c in conds:
-            cond = Or(cond, convert(c)) if cond is not None else convert(c)
+            cond = LogicalOr(cond, convert(c)) if cond is not None else convert(c)
         return cond
 
     @staticmethod
     def join_list(conds: Sequence[Condition]):
-        return Or.join(*conds)
+        return LogicalOr.join(*conds)
 
 
-class Not(Condition, UnaryOp):
+class LogicalNot(Condition, UnaryOp):
     def __init__(self, a):
         super().__init__(a)
 

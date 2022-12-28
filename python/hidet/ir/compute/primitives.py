@@ -3,7 +3,7 @@ from typing import Union, Sequence, Tuple, Optional, List
 
 from hidet.ir.node import Node
 from hidet.ir.type import DataType, TensorType, tensor_type, data_type
-from hidet.ir.expr import Expr, convert, Var, var, And, if_then_else
+from hidet.ir.expr import Expr, convert, Var, var, LogicalAnd, if_then_else
 from hidet.ir.layout import DataLayout
 from .reduce_operations import ReduceOperation
 
@@ -56,7 +56,7 @@ class TensorNode(ComputeNode):
         for index, extent in zip(indices, self.ttype.shape):
             conds.append(0 <= index)
             conds.append(index < extent)
-        return if_then_else(And.join(*conds), self[indices], default_value)
+        return if_then_else(LogicalAnd.join(*conds), self[indices], default_value)
 
 
 class ComputePrimitive(Node):

@@ -17,7 +17,7 @@ from hidet.ir.expr import (
     BitwiseOr,
     BitwiseXor,
 )
-from hidet.ir.expr import And, Or, Not, is_one, is_zero, is_true, is_false, convert
+from hidet.ir.expr import LogicalAnd, LogicalOr, LogicalNot, is_one, is_zero, is_true, is_false, convert
 from hidet.ir.stmt import Stmt, IfStmt, SeqStmt, ForStmt
 from hidet.ir.functors import StmtExprRewriter, rewrite
 
@@ -56,14 +56,14 @@ class Simplifier(StmtExprRewriter):
             pass
         elif isinstance(e, Equal):
             pass
-        elif isinstance(e, And):
+        elif isinstance(e, LogicalAnd):
             if is_false(a) or is_false(b):
                 return convert(False)
             if is_true(a):
                 return b
             if is_true(b):
                 return a
-        elif isinstance(e, Or):
+        elif isinstance(e, LogicalOr):
             if is_true(a) or is_true(b):
                 return convert(True)
             if is_false(a):
@@ -96,9 +96,9 @@ class Simplifier(StmtExprRewriter):
                     return convert(a.value // b.value, 'int32')
                 else:
                     return convert(op_dict[e.__class__](a.value, b.value))
-            elif isinstance(e, And):
+            elif isinstance(e, LogicalAnd):
                 return convert(a.value and b.value)
-            elif isinstance(e, Or):
+            elif isinstance(e, LogicalOr):
                 return convert(a.value or b.value)
             else:
                 raise ValueError()
@@ -106,14 +106,14 @@ class Simplifier(StmtExprRewriter):
             return e
         return e.__class__(a, b)
 
-    def visit_Not(self, e: Not):
+    def visit_Not(self, e: LogicalNot):
         a = self(e.a)
         if isinstance(a, Constant):
             return convert(not a.value)
         if a is e.a:
             return e
         else:
-            return Not(a)
+            return LogicalNot(a)
 
     def visit_IfStmt(self, stmt: IfStmt):
         cond = self.visit_expr(stmt.cond)

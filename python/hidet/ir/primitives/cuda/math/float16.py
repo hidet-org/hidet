@@ -48,6 +48,7 @@ def reinterpret_f16_as_u16(a: ExprFloat16) -> ExprInt16:
 
 
 class CUDAFloat16MathFunctionSet(MathFunctionSet):
+    # pylint: disable=abstract-method
     def register(self):
         entries = {
             'sin': ['hsin', 1],

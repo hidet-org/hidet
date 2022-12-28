@@ -1,16 +1,16 @@
-from hidet.ir import expr
+from hidet.ir import Expr, expr
 from .arithmetic import BinaryElementwiseOp, UnaryElementwiseOp
 from .utils import Tensor
-
-
-class NotOp(UnaryElementwiseOp):
-    def __init__(self, x: Tensor):
-        super().__init__(x, lambda a: expr.Not(a), name='not')
 
 
 class EqualOp(BinaryElementwiseOp):
     def __init__(self, x: Tensor, y: Tensor):
         super().__init__(x, y, lambda a, b: expr.Equal(a, b), name='eq')
+
+
+class NotEqualOp(BinaryElementwiseOp):
+    def __init__(self, x: Tensor, y: Tensor):
+        super().__init__(x, y, lambda a, b: expr.NotEqual(a, b), name='ne')
 
 
 class LessOp(BinaryElementwiseOp):
@@ -23,46 +23,76 @@ class GreaterOp(BinaryElementwiseOp):
         super().__init__(x, y, lambda a, b: a > b, name='gt')
 
 
-class LessOrEqual(BinaryElementwiseOp):
+class LessEqualOp(BinaryElementwiseOp):
     def __init__(self, x: Tensor, y: Tensor):
         super().__init__(x, y, lambda a, b: a <= b, name='le')
 
 
-class GreaterOrEqual(BinaryElementwiseOp):
+class GreaterEqualOp(BinaryElementwiseOp):
     def __init__(self, x: Tensor, y: Tensor):
         super().__init__(x, y, lambda a, b: a >= b, name='ge')
 
 
-class AndOp(BinaryElementwiseOp):
+class LogicalNotOp(UnaryElementwiseOp):
+    def __init__(self, x: Tensor):
+        super().__init__(x, lambda a: expr.LogicalNot(a), name='not')
+
+
+class LogicalAndOp(BinaryElementwiseOp):
     def __init__(self, x: Tensor, y: Tensor):
-        super().__init__(x, y, lambda a, b: expr.And(a, b), name='and')
+        super().__init__(x, y, lambda a, b: expr.LogicalAnd(a, b), name='and')
 
 
-def cond_not(x: Tensor) -> Tensor:
-    return NotOp(x).get_output(0)
+class LogicalOrOp(BinaryElementwiseOp):
+    def __init__(self, x: Tensor, y: Tensor):
+        super().__init__(x, y, lambda a, b: expr.LogicalOr(a, b), name='or')
+
+
+class LogicalXorOp(BinaryElementwiseOp):
+    def __init__(self, x: Tensor, y: Tensor):
+        def expr_logical_xor(a: Expr, b: Expr) -> Expr:
+            x = expr.LogicalAnd(a, expr.LogicalNot(b))
+            y = expr.LogicalAnd(expr.LogicalNot(a), b)
+            return expr.LogicalOr(x, y)
+
+        super().__init__(x, y, lambda a, b: expr_logical_xor(a, b), name='xor')
 
 
 def equal(x: Tensor, y: Tensor) -> Tensor:
-    # if x.dtype != y.dtype:
-    #     raise ValueError('Can only compare tensors with the same dtype, but got {} and {}'.format(x.dtype, y.dtype))
     return EqualOp(x, y).get_output(0)
 
 
-def less_than(x: Tensor, y: Tensor) -> Tensor:
+def not_equal(x: Tensor, y: Tensor) -> Tensor:
+    return NotEqualOp(x, y).get_output(0)
+
+
+def less(x: Tensor, y: Tensor) -> Tensor:
     return LessOp(x, y).get_output(0)
 
 
-def greater_than(x: Tensor, y: Tensor) -> Tensor:
+def greater(x: Tensor, y: Tensor) -> Tensor:
     return GreaterOp(x, y).get_output(0)
 
 
-def less_or_equal(x: Tensor, y: Tensor) -> Tensor:
-    return LessOrEqual(x, y).get_output(0)
+def less_equal(x: Tensor, y: Tensor) -> Tensor:
+    return LessEqualOp(x, y).get_output(0)
 
 
-def greater_or_equal(x: Tensor, y: Tensor) -> Tensor:
-    return GreaterOrEqual(x, y).get_output(0)
+def greater_equal(x: Tensor, y: Tensor) -> Tensor:
+    return GreaterEqualOp(x, y).get_output(0)
 
 
-def cond_and(x: Tensor, y: Tensor) -> Tensor:
-    return AndOp(x, y).get_output(0)
+def logical_not(x: Tensor) -> Tensor:
+    return LogicalNotOp(x).get_output(0)
+
+
+def logical_or(x: Tensor, y: Tensor) -> Tensor:
+    return LogicalOrOp(x, y).get_output(0)
+
+
+def logical_and(x: Tensor, y: Tensor) -> Tensor:
+    return LogicalAndOp(x, y).get_output(0)
+
+
+def logical_xor(x: Tensor, y: Tensor) -> Tensor:
+    return LogicalXorOp(x, y).get_output(0)

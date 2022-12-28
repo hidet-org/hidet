@@ -1,6 +1,6 @@
 from typing import Sequence
 from hidet.ir import Stmt, Expr, TensorElement, BufferStoreStmt, IfStmt, convert
-from hidet.ir.expr import And, IfThenElse
+from hidet.ir.expr import LogicalAnd, IfThenElse
 from hidet.ir.type import TensorType, TensorPointerType
 from hidet.transforms.base import Pass, FunctionBodyPass
 from hidet.ir.functors import StmtExprRewriter, infer_type
@@ -10,8 +10,8 @@ def bound_checking_condition(buf: Expr, indices: Sequence[Expr]) -> Expr:
     shape = get_buffer_shape(buf)
     conditions = []
     for idx, extent in zip(indices, shape):
-        conditions.append(And(0 <= idx, idx < extent))
-    return And.join_list(conditions)
+        conditions.append(LogicalAnd(0 <= idx, idx < extent))
+    return LogicalAnd.join_list(conditions)
 
 
 def get_buffer_shape(buf: Expr):

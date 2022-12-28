@@ -5,6 +5,7 @@ from hidet.ir.primitives.math import MathFunctionSet, register_math_function_set
 
 
 class CUDAFloat32MathFunctionSet(MathFunctionSet):
+    # pylint: disable=abstract-method
     def register(self):
         entries = {
             'sin': ['sinf', 1],

@@ -3,7 +3,19 @@ from hidet.ir.node import Node
 from hidet.ir.func import IRModule, Function
 from hidet.ir.type import DataType, TensorType, TypeNode, VoidType, PointerType, ReferenceType, TensorPointerType
 from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div
-from hidet.ir.expr import Sub, Not, Or, And, Let, IfThenElse, TensorSlice, RightShift, LeftShift, BitwiseNot, BitwiseOr
+from hidet.ir.expr import (
+    Sub,
+    LogicalNot,
+    LogicalOr,
+    LogicalAnd,
+    Let,
+    IfThenElse,
+    TensorSlice,
+    RightShift,
+    LeftShift,
+    BitwiseNot,
+    BitwiseOr,
+)
 from hidet.ir.expr import BitwiseAnd, Neg, Cast, NotEqual, BitwiseXor, Reference, Dereference, Address
 from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt
 from hidet.ir.stmt import BlackBoxStmt, AsmStmt, ReturnStmt, LetStmt, DeclareStmt, ForTaskStmt, WhileStmt, ContinueStmt
@@ -134,13 +146,13 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
     def visit_Equal(self, e: Equal):
         return Text('(') + self(e.a) + ' == ' + self(e.b) + ')'
 
-    def visit_And(self, e: And):
+    def visit_And(self, e: LogicalAnd):
         return Text('(') + self(e.a) + ' && ' + self(e.b) + ')'
 
-    def visit_Or(self, e: Or):
+    def visit_Or(self, e: LogicalOr):
         return Text('(') + self(e.a) + ' || ' + self(e.b) + ')'
 
-    def visit_Not(self, e: Not):
+    def visit_Not(self, e: LogicalNot):
         return Text('!') + self(e.a)
 
     def visit_BitwiseAnd(self, e: BitwiseAnd):

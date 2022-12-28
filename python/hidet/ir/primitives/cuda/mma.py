@@ -274,7 +274,7 @@ def mma_sync(config: MmaConfig, a_addr: Expr, b_addr: Expr, c_addr: Expr):
 
 def _print_segment(mapping: TaskMapping, dtype: DataType, addr: Expr, worker_id: Expr, precision: int, msg: str):
     from hidet.ir.dtypes import int32, float32
-    from hidet.ir.expr import And, var
+    from hidet.ir.expr import LogicalAnd, var
     from hidet.ir.primitives import printf, syncwarp
     from hidet.ir.builders import StmtBuilder
 
@@ -289,7 +289,7 @@ def _print_segment(mapping: TaskMapping, dtype: DataType, addr: Expr, worker_id:
                 p = var('p', int32)
                 sb += DeclareStmt(p, int32(0))
                 with sb.for_mapping(['ii', 'jj'], mapping, worker_id) as (ii, jj):
-                    with sb.if_then(And(ii == i, jj == j)):
+                    with sb.if_then(LogicalAnd(ii == i, jj == j)):
                         sb += printf('%.{}f '.format(precision), cast(seg[p], float32))
                     sb += syncwarp()
                     sb += AssignStmt(p, p + 1)
