@@ -1,12 +1,13 @@
-from typing import List, Union
+from typing import List, Union, Optional, Sequence
 
 from .arithmetic import square, sqrt
-from .utils import Task, Operator, Tensor, TensorNode, IRModule, compute, reduce, input_like, normalize_dim, arg_reduce
+from .utils import Task, Operator, Tensor, TensorNode, IRModule, ReduceType
+from .utils import compute, reduce, input_like, normalize_dim, arg_reduce
 
 
 class ReduceTask(Task):
     def __init__(
-        self, x: TensorNode, dims: List[int], keep_dim: bool, reduce_type: str, accumulate_dtype: str = 'float32'
+        self, x: TensorNode, dims: List[int], keep_dim: bool, reduce_type: ReduceType, accumulate_dtype: str = 'float32'
     ):
         x_shape = x.const_shape()
         y_shape = []
@@ -43,7 +44,7 @@ class ReduceTask(Task):
 
         self.dims: List[int] = dims
         self.keep_dim: bool = keep_dim
-        self.reduce_type: str = reduce_type
+        self.reduce_type: ReduceType = reduce_type
 
         super().__init__(
             name='reduce_{}'.format(reduce_type),
@@ -71,7 +72,7 @@ class ReduceTask(Task):
 
 
 class ArgReduceTask(Task):
-    def __init__(self, x: TensorNode, dim: int, keep_dim: bool, reduce_type: str):
+    def __init__(self, x: TensorNode, dim: int, keep_dim: bool, reduce_type: ReduceType):
         x_shape = x.const_shape()
         y_shape = []
         for i, extent in enumerate(x_shape):
@@ -100,61 +101,72 @@ class ArgReduceTask(Task):
 
 
 class ReduceBaseOp(Operator):
-    def __init__(self, x: Tensor, dims: List[int], keep_dim: bool, reduce_type: str):
-        if reduce_type not in ['avg', 'max', 'min', 'sum']:
-            raise NotImplementedError('Do not support reduce type: {}'.format(reduce_type))
-        dims = normalize_dim(dims, rank=len(x.shape))
+    def __init__(self, x: Tensor, dims: Optional[Sequence[int]], keep_dim: bool, reduce_type: ReduceType):
+        rank = len(x.shape)
+        if dims is None:
+            dims = list(range(rank))
+        dims = normalize_dim(dims, rank=rank)
         super().__init__(
             inputs=[x],
             task=ReduceTask(input_like(x, 'x'), dims, keep_dim, reduce_type),
-            attributes={'dims': dims, 'keep_dim': keep_dim},
+            attributes={'dims': dims, 'keepdims': keep_dim},
         )
 
 
 class ArgReduceBaseOp(Operator):
-    def __init__(self, x: Tensor, dim: int, keep_dim: bool, reduce_type: str):
-        if reduce_type not in ['min', 'max']:
-            raise NotImplementedError('Do not support reduce type: {}'.format(reduce_type))
+    def __init__(self, x: Tensor, dim: int, keep_dim: bool, reduce_type: ReduceType):
+        if reduce_type not in [ReduceType.Min, ReduceType.Max]:
+            raise NotImplementedError('Do not support arg reduce type: {}'.format(reduce_type))
         super().__init__(
             inputs=[x],
             task=ArgReduceTask(input_like(x, 'x'), dim, keep_dim, reduce_type),
-            attributes={'dim': dim, 'keep_dim': keep_dim},
+            attributes={'dim': dim, 'keepdims': keep_dim},
         )
 
 
 class ReduceMeanOp(ReduceBaseOp):
-    def __init__(self, x: Tensor, dims: List[int], keep_dim: bool = False):
-        super().__init__(x, dims, keep_dim, 'avg')
+    def __init__(self, x: Tensor, dims: Optional[Sequence[int]], keepdims: bool = False):
+        super().__init__(x, dims, keepdims, ReduceType.Average)
 
 
 class ReduceSumOp(ReduceBaseOp):
-    def __init__(self, x: Tensor, dims: List[int], keep_dim: bool = False):
-        super().__init__(x, dims, keep_dim, 'sum')
+    def __init__(self, x: Tensor, dims: Optional[Sequence[int]], keepdims: bool = False):
+        super().__init__(x, dims, keepdims, ReduceType.Sum)
 
 
 class ReduceMaxOp(ReduceBaseOp):
-    def __init__(self, x: Tensor, dims: List[int], keep_dim: bool = False):
-        super().__init__(x, dims, keep_dim, 'max')
+    def __init__(self, x: Tensor, dims: Optional[Sequence[int]], keepdims: bool = False):
+        super().__init__(x, dims, keepdims, ReduceType.Max)
 
 
 class ReduceMinOp(ReduceBaseOp):
-    def __init__(self, x: Tensor, dims: List[int], keep_dim: bool = False):
-        super().__init__(x, dims, keep_dim, 'min')
+    def __init__(self, x: Tensor, dims: Optional[Sequence[int]], keepdims: bool = False):
+        super().__init__(x, dims, keepdims, ReduceType.Min)
+
+
+class ReduceOrOp(ReduceBaseOp):
+    def __init__(self, x: Tensor, dims: Optional[Sequence[int]], keepdims: bool = False):
+        super().__init__(x, dims, keepdims, ReduceType.Or)
+
+
+class ReduceAndOp(ReduceBaseOp):
+    def __init__(self, x: Tensor, dims: Optional[Sequence[int]], keepdims: bool = False):
+        super().__init__(x, dims, keepdims, ReduceType.And)
 
 
 class ReduceProdOp(ReduceBaseOp):
-    def __init__(self, x: Tensor, dims: List[int], keep_dim: bool = False):
-        super().__init__(x, dims, keep_dim, 'prod')
+    def __init__(self, x: Tensor, dims: Optional[Sequence[int]], keepdims: bool = False):
+        super().__init__(x, dims, keepdims, ReduceType.Product)
 
 
 class ArgMinOp(ArgReduceBaseOp):
-    def __init__(self, x: Tensor, dim: int, keep_dim: bool):
-        super().__init__(x, dim, keep_dim, 'min')
+    def __init__(self, x: Tensor, dim: int, keepdims: bool):
+        super().__init__(x, dim, keepdims, ReduceType.Min)
 
 
 class ArgMaxOp(ArgReduceBaseOp):
-    def __init__(self, x: Tensor, dim: int, keep_dim: bool):
-        super().__init__(x, dim, keep_dim, 'max')
+    def __init__(self, x: Tensor, dim: int, keepdims: bool):
+        super().__init__(x, dim, keepdims, ReduceType.Max)
 
 
 def mean(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -> Tensor:
@@ -205,8 +217,52 @@ def argmax(x: Tensor, dim: int, keep_dim: bool = False) -> Tensor:
 
 
 def all(x: Tensor, /, *, axis=None, keepdims=False) -> Tensor:
-    raise NotImplementedError()
+    """
+    Check if all of the elements on the given axis evaluates to True.
+
+    Parameters
+    ----------
+    x: Tensor
+        The input tensor.
+
+    axis: int or Sequence[int], optional
+        The axis or axes along which to perform the logical AND. None indicates to perform the reduction on the whole
+        tensor. When an integer or a sequence of integers are given, they must be in range [-N, N), where N is the
+        rank of the input tensor.
+
+    keepdims: bool, default=False
+        Whehter to keep the dimension.
+
+    Returns
+    -------
+    ret: Tensor
+        The result of logical AND reduction with bool data type.
+    """
+    x = x.cast('bool')
+    return ReduceAndOp(x, dims=axis, keepdims=keepdims).get_output(0)
 
 
 def any(x: Tensor, /, *, axis=None, keepdims=False) -> Tensor:
-    raise NotImplementedError()
+    """
+    Check if any of the elements on the given axis evaluates to True.
+
+    Parameters
+    ----------
+    x: Tensor
+        The input tensor.
+
+    axis: int or Sequence[int], optional
+        The axis or axes along which to perform the logical OR. None indicates to perform the reduction on the whole
+        tensor. When an integer or a sequence of integers are given, they must be in range [-N, N), where N is the
+        rank of the input tensor.
+
+    keepdims: bool, default=False
+        Whehter to keep the dimension.
+
+    Returns
+    -------
+    ret: Tensor
+        The result of logical OR reduction with bool data type.
+    """
+    x = x.cast('bool')
+    return ReduceOrOp(x, dims=axis, keepdims=keepdims).get_output(0)

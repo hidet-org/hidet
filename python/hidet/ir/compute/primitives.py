@@ -1,11 +1,10 @@
 from __future__ import annotations
 from typing import Union, Sequence, Tuple, Optional, List
-
 from hidet.ir.node import Node
 from hidet.ir.type import DataType, TensorType, tensor_type, data_type
 from hidet.ir.expr import Expr, convert, Var, var, LogicalAnd, if_then_else
 from hidet.ir.layout import DataLayout
-from .reduce_operations import ReduceOperation
+from .reduce_operations import ReduceOperation, ReduceType
 
 
 class ComputeNode(Expr):
@@ -166,9 +165,7 @@ def tensor_input(name, dtype, shape: Sequence[Union[Expr, int]], layout: Optiona
     return TensorNode(name, ttype, tensor_compute=None)
 
 
-def reduce(
-    shape: Sequence[Union[int, Expr]], fcompute, reduce_type: str, accumulate_dtype: str = 'float32'
-) -> ScalarNode:
+def reduce(shape: Sequence[Union[int, Expr]], fcompute, reduce_type, accumulate_dtype: str = 'float32') -> ScalarNode:
     """
     Define a reduction node.
 
@@ -178,8 +175,8 @@ def reduce(
         The domain of the reduction.
     fcompute: Callable[[Sequence[Var]], Expr]
         The compute function. It takes a list of reduction variables and returns the reduction value.
-    reduce_type: str
-        The type of the reduction. Can be 'sum', 'max', 'min', 'avg'.
+    reduce_type: ReduceType or str
+        The type of the reduction.
     accumulate_dtype: str
         The data type of the accumulator.
 
@@ -190,11 +187,13 @@ def reduce(
     """
     from hidet.ir.functors import infer_type, simplify, collect  # pylint: disable=import-outside-toplevel
 
+    reduce_type = ReduceType(reduce_type)
+
     shape = [convert(v) for v in shape]
     axes = [var() for _ in shape]
     value = simplify(convert(fcompute(*axes)))
     return ScalarNode(
-        name=f'acc_{reduce_type}',
+        name=f'acc_{reduce_type.name}',
         dtype=infer_type(value),
         reduce_compute=ReduceCompute(
             input_tensors=collect(value, TensorNode, stop_when_found=True),
@@ -247,7 +246,7 @@ def compute(name, shape: Sequence[Union[int, Expr]], fcompute, layout=None) -> T
     )
 
 
-def arg_reduce(extent: Union[int, Expr], fcompute, reduce_type: str, index_dtype: str = 'int32') -> ScalarNode:
+def arg_reduce(extent: Union[int, Expr], fcompute, reduce_type, index_dtype: str = 'int32') -> ScalarNode:
     """
     Define an arg reduction node.
 
@@ -257,8 +256,8 @@ def arg_reduce(extent: Union[int, Expr], fcompute, reduce_type: str, index_dtype
         The domain of the reduction.
     fcompute: Callable[[Var], Expr]
         The compute function. It takes a reduction variable and returns the value to compare.
-    reduce_type: str
-        The type of the reduction. Can be 'max', 'min'.
+    reduce_type: str or ReduceType
+        The type of the reduction.
     index_dtype: str
         The data type of the index.
 
@@ -269,11 +268,13 @@ def arg_reduce(extent: Union[int, Expr], fcompute, reduce_type: str, index_dtype
     """
     from hidet.ir.functors import collect, simplify  # pylint: disable=import-outside-toplevel
 
+    reduce_type = ReduceType(reduce_type)
+
     extent = convert(extent)
     axis = var()
     value = simplify(convert(fcompute(axis)))
     return ScalarNode(
-        name='arg_{}'.format(reduce_type),
+        name='arg_{}'.format(reduce_type.name),
         dtype=data_type(index_dtype),
         reduce_compute=ArgReduceCompute(
             input_tensors=collect(value, TensorNode, stop_when_found=True),

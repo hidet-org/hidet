@@ -113,7 +113,7 @@ class MatmulResolveRule(ResolveRule):
         assert isinstance(op, MatmulOp)
         a: Tensor = op.inputs[0]
         b: Tensor = op.inputs[1]
-        c_shape = op.outputs[0].shape
+        c_shape = list(op.outputs[0].shape)
 
         if len(a.shape) == 1:  # shape: [a]
             a = a.unsqueeze([0, 1])  # [1, 1, a]
@@ -143,11 +143,11 @@ class MatmulResolveRule(ResolveRule):
         else:
             # example: [a, b, c] x [c, d] -> [a, b, d]
             assert len(a.shape) >= 2 and len(b.shape) >= 2
-            a_head = a.shape[:-2]
-            b_head = b.shape[:-2]
+            a_head = list(a.shape[:-2])
+            b_head = list(b.shape[:-2])
             c_head = broadcast_shapes([a_head, b_head, [1]])  # [1] is used to make sure len(c_head) > 0
-            a_broadcast_shape = c_head + a.shape[-2:]
-            b_broadcast_shape = c_head + b.shape[-2:]
+            a_broadcast_shape = c_head + list(a.shape[-2:])
+            b_broadcast_shape = c_head + list(b.shape[-2:])
             a = broadcast(a, a_broadcast_shape).flatten(start_dim=0, end_dim=-3)
             b = broadcast(b, b_broadcast_shape).flatten(start_dim=0, end_dim=-3)
             c = self.run_batch_matmul(a, b)

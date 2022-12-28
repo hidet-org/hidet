@@ -7,7 +7,7 @@ from hidet.utils import prod
 from .utils import Task, InverseMap, Operator, Tensor, TensorNode, compute, input_like, normalize_dim, can_broadcast
 
 
-def same_shape(shape_a: List[int], shape_b: List[int]) -> bool:
+def same_shape(shape_a: Sequence[int], shape_b: Sequence[int]) -> bool:
     return len(shape_a) == len(shape_b) and all(a == b for a, b in zip(shape_a, shape_b))
 
 
@@ -101,7 +101,7 @@ class RearrangeTask(Task):
                     x_indices[j] = x_index
             for i, x_index in enumerate(x_indices):
                 if x_index is None:
-                    if x_shape[i] != 1:
+                    if x_shape[i] > 1:
                         msg = 'Rearrange plan {} on tensor {} leave non-one dimension {} not been accessed'.format(
                             plan, x_shape, i
                         )
@@ -438,10 +438,10 @@ class StridedSliceOp(Operator):
     def __init__(
         self,
         data: Tensor,
-        starts: List[int],
-        ends: List[int],
-        axes: Optional[List[int]] = None,
-        strides: Optional[List[int]] = None,
+        starts: Sequence[Optional[int]],
+        ends: Sequence[Optional[int]],
+        axes: Optional[Sequence[Optional[int]]] = None,
+        strides: Optional[Sequence[Optional[int]]] = None,
     ):
         starts, ends, axes, strides = self.normalize(data.shape, starts, ends, axes, strides)
         task = StridedSliceTask(input_like(data, 'data'), starts, ends, axes, strides)
@@ -450,26 +450,55 @@ class StridedSliceOp(Operator):
         )
 
     @staticmethod
-    def normalize(shape, starts, ends, axes: Optional[List[int]], strides: Optional[List[int]]):
-        # follow: https://github.com/onnx/onnx/blob/main/docs/Operators.md#slice to normalize
-        rank = len(shape)
+    def normalize(data_shape, starts, ends, axes: Optional[List[int]], strides: Optional[List[Optional[int]]]):
+        # follow: https://data-apis.org/array-api/latest/API_specification/indexing.html
         if axes is None:
             axes = [i for i in range(len(starts))]
-        axes = normalize_dim(axes, rank)
+        axes = normalize_dim(axes, len(data_shape))
         if strides is None:
             strides = [1 for _ in range(len(starts))]
-        shape = [shape[i] for i in axes]
+        shape = [data_shape[i] for i in axes]
         assert len(shape) == len(starts) == len(ends) == len(axes) == len(strides)
-        for i in range(len(axes)):
-            starts[i] = starts[i] + shape[i] if starts[i] < 0 else starts[i]
-            ends[i] = ends[i] + shape[i] if ends[i] < 0 else ends[i]
-            if strides[i] > 0:
-                starts[i] = max(0, min(shape[i], starts[i]))
-                ends[i] = max(0, min(shape[i], ends[i]))
+
+        ii, jj, kk = [], [], []
+        for i, j, k, n in zip(starts, ends, strides, shape):
+            if k is None:
+                k = 1
+            if k > 0:
+                i = i if i is not None else 0
+                j = j if j is not None else n
+                if not (-n <= i <= n and -n <= j <= n):
+                    raise IndexError('Invalid slice')
+                if i < 0:
+                    i += n
+                if j < 0:
+                    j += n
+            elif k < 0:
+                i = i if i is not None else n - 1
+                j = j if j is not None else -n - 1
+                if i < 0:
+                    i += n
+                if j < -1:
+                    j += n
+                if not (-n <= i <= n and -n - 1 <= j <= max(0, n - 1)):
+                    raise IndexError('Invalid slice')
             else:
-                starts[i] = max(0, min(shape[i] - 1, starts[i]))
-                ends[i] = max(-1, min(shape[i] - 1, ends[i]))
-        return starts, ends, axes, strides
+                raise IndexError('slice step cannot be zero')
+            ii.append(i)
+            jj.append(j)
+            kk.append(k)
+        return ii, jj, axes, kk
+        #
+        # for i in range(len(axes)):
+        #     if strides[i] > 0:
+        #         starts[i] = starts[i] + shape[i] if starts[i] < 0 else starts[i]
+        #         ends[i] = ends[i] + shape[i] if ends[i] < 0 else ends[i]
+        #         starts[i] = max(0, min(shape[i], starts[i]))
+        #         ends[i] = max(0, min(shape[i], ends[i]))
+        #     else:
+        #         starts[i] = max(-1, min(shape[i] - 1, starts[i]))
+        #         ends[i] = max(-1, min(shape[i] - 1, ends[i]))
+        # return starts, ends, axes, strides
 
 
 class BroadcastOp(Operator):
@@ -585,10 +614,6 @@ def permute_dims(x: Tensor, /, axes: Sequence[int]) -> Tensor:
     return PermuteDimsOp(x, axes).get_output(0)
 
 
-def flip(x: Tensor, /, *, axis: Optional[Union[int, Sequence[int]]] = None) -> Tensor:
-    raise NotImplementedError()
-
-
 def concat(tensors: List[Tensor], axis: int) -> Tensor:
     if not isinstance(tensors, (list, tuple)) or any(not isinstance(t, Tensor) for t in tensors):
         raise ValueError('concat: expect a sequence of tensors, but got: {}'.format(type(tensors)))
@@ -614,10 +639,10 @@ def take(data: Tensor, indices: Tensor, axis: int = 0) -> Tensor:
 
 def strided_slice(
     data: Tensor,
-    starts: List[int],
-    ends: List[int],
-    axes: Optional[List[int]] = None,
-    strides: Optional[List[int]] = None,
+    starts: Sequence[Optional[int]],
+    ends: Sequence[Optional[int]],
+    axes: Optional[Sequence[int]] = None,
+    strides: Optional[Sequence[Optional[int]]] = None,
 ) -> Tensor:
     return StridedSliceOp(data, starts, ends, axes, strides).get_output(0)
 
@@ -676,6 +701,13 @@ def split(data: Tensor, axis: int, parts: List[int]) -> List[Tensor]:
     return outputs
 
 
+def expand_dims(x: Tensor, /, *, axis: int = 0) -> Tensor:
+    axis = normalize_dim(axis, len(x.shape) + 1)
+    new_shape = list(x.shape)
+    new_shape.insert(axis, 1)
+    return reshape(x, new_shape)
+
+
 def tril(x: Tensor, /, *, k: int = 0) -> Tensor:
     raise NotImplementedError()
 
@@ -684,16 +716,17 @@ def triu(x: Tensor, /, *, k: int = 0) -> Tensor:
     raise NotImplementedError()
 
 
-def expand_dims(x: Tensor, /, *, axis: int = 0) -> Tensor:
-    axis = normalize_dim(axis, len(x.shape) + 1)
-    new_shape = list(x.shape)
-    new_shape.insert(axis, 1)
-    return reshape(x, new_shape)
-
-
 def roll(x: Tensor, /, shift: int, *, axis: int = 0) -> Tensor:
     raise NotImplementedError()
 
 
 def stack(tensors: Sequence[Tensor], /, *, axis: int = 0) -> Tensor:
+    raise NotImplementedError()
+
+
+def flip(x: Tensor, /, *, axis: Optional[Union[int, Sequence[int]]] = None) -> Tensor:
+    raise NotImplementedError()
+
+
+def meshgrid(*arrays: Tensor, indexing: str = 'xy') -> List[Tensor]:
     raise NotImplementedError()

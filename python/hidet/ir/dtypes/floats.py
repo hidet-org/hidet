@@ -1,15 +1,28 @@
 from typing import Any
+from dataclasses import dataclass
 import warnings
 import numpy as np
 from hidet.ir.type import DataType
 
 
+@dataclass
+class FloatInfo:
+    bits: int
+    eps: float
+    max: float
+    min: float
+    smallest_normal: float
+    dtype: DataType
+
+
 class FloatType(DataType):
-    def __init__(self, name, short_name, nbytes, min_value, max_value):
+    def __init__(self, name, short_name, nbytes, min_value, max_value, eps, smallest_normal):
         super().__init__(name, short_name, nbytes)
 
         self._min_value: float = min_value
         self._max_value: float = max_value
+        self._eps: float = eps
+        self._smallest_normal: float = smallest_normal
 
     def is_float(self) -> bool:
         return True
@@ -63,12 +76,46 @@ class FloatType(DataType):
     def max_value(self):
         return self.constant(self._max_value)
 
+    def finfo(self) -> FloatInfo:
+        return FloatInfo(
+            bits=self.nbytes * 8,
+            eps=self._eps,
+            max=self._max_value,
+            min=self._min_value,
+            smallest_normal=self._smallest_normal,
+            dtype=self,
+        )
 
-float16 = FloatType('float16', 'f16', 2, np.finfo(np.float16).min, np.finfo(np.float16).max)
-float32 = FloatType('float32', 'f32', 4, np.finfo(np.float32).min, np.finfo(np.float32).max)
-float64 = FloatType('float64', 'f64', 8, np.finfo(np.float64).min, np.finfo(np.float64).max)
-bfloat16 = FloatType('bfloat16', 'bf16', 2, -3.4e38, 3.4e38)
-tfloat32 = FloatType('tfloat32', 'tf32', 4, -3.4e38, 3.4e38)
+
+float16 = FloatType(
+    'float16',
+    'f16',
+    2,
+    np.finfo(np.float16).min,
+    np.finfo(np.float16).max,
+    np.finfo(np.float16).eps,
+    np.finfo(np.float16).smallest_normal,
+)
+float32 = FloatType(
+    'float32',
+    'f32',
+    4,
+    np.finfo(np.float32).min,
+    np.finfo(np.float32).max,
+    np.finfo(np.float32).eps,
+    np.finfo(np.float32).smallest_normal,
+)
+float64 = FloatType(
+    'float64',
+    'f64',
+    8,
+    np.finfo(np.float64).min,
+    np.finfo(np.float64).max,
+    np.finfo(np.float64).eps,
+    np.finfo(np.float64).smallest_normal,
+)
+bfloat16 = FloatType('bfloat16', 'bf16', 2, -3.4e38, 3.4e38, None, None)  # TODO: find correct values
+tfloat32 = FloatType('tfloat32', 'tf32', 4, -3.4e38, 3.4e38, None, None)
 
 f16 = float16
 f32 = float32

@@ -7,7 +7,7 @@ from hidet.ir.type import TensorType, tensor_type, DataType
 from hidet.ir.task import Task, InverseMap
 from hidet.ir.func import IRModule
 from hidet.graph.operator import Operator, Tensor
-from hidet.ir.compute import TensorNode, tensor_input, compute, reduce, arg_reduce
+from hidet.ir.compute import TensorNode, ReduceType, tensor_input, compute, reduce, arg_reduce
 
 
 def input_like(tensor: Tensor, name: str) -> TensorNode:

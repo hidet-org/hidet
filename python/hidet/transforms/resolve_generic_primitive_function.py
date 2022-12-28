@@ -54,7 +54,13 @@ class ResolveGenericPrimitiveFuncRewriter(StmtExprRewriter):
                     func_set = registered_math_function_sets[key]
                     assert hasattr(func_set, func_name)
                     func = getattr(func_set, func_name)
-                    return func(*args)
+                    try:
+                        return func(*args)
+                    except NotImplementedError as err:
+                        msg = 'Math function {} for {} data has not been implemented for device {}'.format(
+                            green(e.func_var.hint.replace('generic_', '')), green(dtype), green(self.device)
+                        )
+                        raise NotImplementedError(msg) from err
 
         return StmtExprRewriter.visit_Call(self, e)
 

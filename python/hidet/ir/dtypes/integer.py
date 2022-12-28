@@ -1,6 +1,15 @@
 from typing import Any
+from dataclasses import dataclass
 import warnings
 from hidet.ir.type import DataType
+
+
+@dataclass
+class IntInfo:
+    bits: int
+    max: int
+    min: int
+    dtype: DataType
 
 
 class IntegerType(DataType):
@@ -46,6 +55,9 @@ class IntegerType(DataType):
     @property
     def max_value(self):
         return self.constant(self._max_value)
+
+    def iinfo(self) -> IntInfo:
+        return IntInfo(self.nbytes * 8, self._max_value, self._min_value, self)
 
 
 int8 = IntegerType('int8', 'i8', 1, -128, 127)

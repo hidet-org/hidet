@@ -3,19 +3,8 @@ from hidet.ir.node import Node
 from hidet.ir.func import IRModule, Function
 from hidet.ir.type import DataType, TensorType, TypeNode, VoidType, PointerType, ReferenceType, TensorPointerType
 from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div
-from hidet.ir.expr import (
-    Sub,
-    LogicalNot,
-    LogicalOr,
-    LogicalAnd,
-    Let,
-    IfThenElse,
-    TensorSlice,
-    RightShift,
-    LeftShift,
-    BitwiseNot,
-    BitwiseOr,
-)
+from hidet.ir.expr import Sub, LogicalNot, LogicalOr, LogicalAnd, Let, IfThenElse, TensorSlice
+from hidet.ir.expr import RightShift, LeftShift, BitwiseNot, BitwiseOr
 from hidet.ir.expr import BitwiseAnd, Neg, Cast, NotEqual, BitwiseXor, Reference, Dereference, Address
 from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt
 from hidet.ir.stmt import BlackBoxStmt, AsmStmt, ReturnStmt, LetStmt, DeclareStmt, ForTaskStmt, WhileStmt, ContinueStmt
@@ -437,7 +426,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
             Text('inputs: ') + '[' + doc_join([self.namer.get_name(v) for v in e.inputs], ', ') + ']',
             Text('outputs: ') + '[' + doc_join([self.namer.get_name(v) for v in e.outputs], ', ') + ']',
             Text('computations: ') + self.print_tensor_nodes(e.outputs).indent(),
-            Text('attributes: {') + self(e.attributes) + '}',
+            Text('attributes: {') + self({k: str(v) for k, v in e.attributes.items()}) + '}',
         ]
         if len(e.task_graph.nodes) > 1:
             lines.append(Text('task_graph: ') + self(e.task_graph))
@@ -462,7 +451,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
                 # task_input = task_graph.consume[task_input] if task_input in task_graph.consume else task_input
                 # arg_items.append(self(task_input) + '=' + )
             for name, value in task.attributes.items():
-                arg_items.append(self(name) + '=' + self(value))
+                arg_items.append(self(name) + '=' + self(str(value)))
             args = doc_join(arg_items, ', ')
             assign_line = self(task.outputs) + ' = ' + task.name + '(' + args + ')'
             if task is task_graph.anchor:

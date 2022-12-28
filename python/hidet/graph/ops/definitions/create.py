@@ -58,3 +58,15 @@ def full(
     device: Union[Device, str] = 'cpu',
 ) -> Tensor:
     return FullOp(shape, value, data_type(dtype), device).get_output(0)
+
+
+def arange(start, /, stop=None, step=1, *, dtype=None, device=None) -> Tensor:
+    raise NotImplementedError()
+
+
+def eye(n_rows, n_cols=None, /, *, k=0, dtype=None, device=None) -> Tensor:
+    raise NotImplementedError()
+
+
+def linspace(start, stop, /, num, *, dtype=None, device=None, endpoint=True) -> Tensor:
+    raise NotImplementedError()

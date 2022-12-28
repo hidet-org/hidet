@@ -32,9 +32,9 @@ class FunctionBuilder(StmtBuilder):
         self.attrs: Dict[str] = attrs if attrs else {}
         self.label = label
 
-        if grid_dim:
+        if grid_dim is not None:
             self.attrs['cuda_grid_dim'] = grid_dim
-        if block_dim:
+        if block_dim is not None:
             self.attrs['cuda_block_dim'] = block_dim
         if dynamic_smem_bytes:
             self.attrs['cuda_dynamic_smem_bytes'] = dynamic_smem_bytes

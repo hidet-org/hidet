@@ -178,6 +178,16 @@ class LogOp(UnaryElementwiseOp):
         super().__init__(x, op=lambda v: primitives.log(v), name='log')
 
 
+class Log2Op(UnaryElementwiseOp):
+    def __init__(self, x):
+        super().__init__(x, op=lambda v: primitives.log2(v), name='log2')
+
+
+class Log10Op(UnaryElementwiseOp):
+    def __init__(self, x):
+        super().__init__(x, op=lambda v: primitives.log10(v), name='log10')
+
+
 class Log1pOp(UnaryElementwiseOp):
     def __init__(self, x):
         super().__init__(x, op=lambda v: primitives.log1p(v), name='log1p')
@@ -531,6 +541,14 @@ def expm1(x: Tensor) -> Tensor:
 
 def log(x: Tensor) -> Tensor:
     return LogOp(x).get_output(0)
+
+
+def log2(x: Tensor) -> Tensor:
+    return Log2Op(x).get_output(0)
+
+
+def log10(x: Tensor) -> Tensor:
+    return Log10Op(x).get_output(0)
 
 
 def log1p(x: Tensor) -> Tensor:

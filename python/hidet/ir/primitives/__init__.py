@@ -3,7 +3,8 @@ from .func import register_primitive_function, is_primitive_function, lookup_pri
 # base primitive functions
 # pylint: disable=redefined-builtin
 from .math import sin, cos, tan, sinh, cosh, tanh, asin, acos, atan, asinh, acosh, atanh, expm1
-from .math import max, min, exp, pow, sqrt, rsqrt, erf, ceil, log, round, floor
+from .math import max, min, exp, pow, sqrt, rsqrt, erf, ceil, log, log2, log10, log1p, round, floor
+from .math import isfinite, isinf, isnan
 
 # function used to debug
 from .debug import printf

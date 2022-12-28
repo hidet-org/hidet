@@ -97,10 +97,14 @@ def compile_source(src_path: str, out_lib_path: str, keep_ptx=False) -> None:
         # shared cuda runtime library is used (.so), instead of static one (.a). used to reduce binary size.
         '--cudart',
         'shared',
-        # supress warming no 177 like: "warning #177-D: variable "xxx" was declared but never referenced"
+        # supress some warnings
         # see https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#generic-tool-options-diag-suppress
-        '--diag-suppress',
-        '177',
+        # supress warming no 177 like: "warning #177-D: variable "xxx" was declared but never referenced"
+        '--diag-suppress 177',
+        # supress warning no 179 like: "warning #179-D: right operand of "%" is zero"
+        '--diag-suppress 179',
+        # supress warning no 39 like: "warning #39-D: division by zero"
+        '--diag-suppress 39',
         # generate shared library (lib.so).
         '--shared',
         # the source path.

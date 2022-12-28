@@ -10,10 +10,10 @@ from .definitions.softmax import softmax
 from .definitions.activation import relu, leaky_relu, sigmoid, clip, relu6, prelu, gelu
 from .definitions.norm import batch_norm_infer, instance_norm, layer_norm
 from .definitions.image import resize2d
-from .definitions.create import full
+from .definitions.create import full, arange, eye, linspace
 from .definitions.arithmetic import add, subtract, multiply, divide, mod, remainder, negative, positive, square
-from .definitions.arithmetic import floor, ceil, round, trunc, floor_divide, logaddexp, sqrt, rsqrt, pow, abs
-from .definitions.arithmetic import reciprocal, exp, expm1, log, log1p, erf
+from .definitions.arithmetic import floor, ceil, round, trunc, floor_divide, sqrt, rsqrt, pow, abs
+from .definitions.arithmetic import reciprocal, exp, expm1, log, log2, log10, log1p, logaddexp, erf
 from .definitions.arithmetic import bitwise_right_shift, bitwise_left_shift, bitwise_and, bitwise_invert, bitwise_or
 from .definitions.arithmetic import bitwise_xor, maximum, minimum
 from .definitions.arithmetic import isfinite, isinf, isnan, sign, where

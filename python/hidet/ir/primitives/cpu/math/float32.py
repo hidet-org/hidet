@@ -5,81 +5,158 @@ from hidet.ir.primitives.math import MathFunctionSet, register_math_function_set
 
 
 class CPUFloat32MathFunctionSet(MathFunctionSet):
-    # pylint: disable=abstract-method
-    def register(self):
-        entries = {
-            'sin': ['sinf', 1],
-            'cos': ['cosf', 1],
-            'tanh': ['tanhf', 1],
-            'exp': ['expf', 1],
-            'erf': ['erff', 1],
-            'sqrt': ['sqrtf', 1],
-            'rsqrt': ['rsqrtf', 1],
-            'log': ['logf', 1],
-            'round': ['roundf', 1],
-            'ceil': ['ceilf', 1],
-            'floor': ['floorf', 1],
-            'min': ['fminf', 2],
-            'max': ['fmaxf', 2],
-            'pow': ['powf', 2],
-            'fma': ['fmaf', 3],
+    @staticmethod
+    def register():
+        unary_funcs = {
+            'sin': 'sinf',
+            'cos': 'cosf',
+            'tan': 'tanf',
+            'sinh': 'sinhf',
+            'cosh': 'coshf',
+            'tanh': 'tanhf',
+            'asin': 'asinf',
+            'acos': 'acosf',
+            'atan': 'atanf',
+            'asinh': 'asinhf',
+            'acosh': 'acoshf',
+            'atanh': 'atanhf',
+            'exp': 'expf',
+            'erf': 'erff',
+            'sqrt': 'sqrtf',
+            'rsqrt': 'rsqrtf',
+            'log': 'logf',
+            'round': 'roundf',
+            'ceil': 'ceilf',
+            'floor': 'floorf',
+            'expm1': 'expm1f',
+            'log2': 'log2f',
+            'log10': 'log10f',
+            'log1p': 'log1pf',
+            'trunc': 'truncf',
+            'isfinite': 'isfinite',
+            'isinf': 'isinf',
+            'isnan': 'isnan',
         }
+        binary_funcs = {'min': 'fminf', 'max': 'fmaxf', 'pow': 'powf', 'mod': 'fmodf', 'atan2': 'atan2f'}
+        ternary_funcs = {'fma': 'fmaf'}
 
-        for name, (codegen_name, num_args) in entries.items():
-            register_primitive_function(
-                name='cpu_f32_{}'.format(name),
-                codegen_name=codegen_name,
-                func_or_type=FuncType(param_types=['float32'] * num_args, ret_type='float32'),
-            )
+        for name_map, num_args in zip([unary_funcs, binary_funcs, ternary_funcs], [1, 2, 3]):
+            for name, codegen_name in name_map.items():
+                register_primitive_function(
+                    name='cpu_f32_{}'.format(name),
+                    codegen_name=codegen_name,
+                    func_or_type=FuncType(
+                        param_types=['float32'] * num_args,
+                        ret_type='float32' if name not in ['isfinite', 'isinf', 'isnan'] else 'bool',
+                    ),
+                )
 
-    def call(self, name: str, *args) -> Expr:
-        entry = primitive_func_pool.lookup_by_name(name)
+    @staticmethod
+    def call(name: str, *args) -> Expr:
+        entry = primitive_func_pool.lookup_by_name('cpu_f32_{}'.format(name))
         return Call(entry.var, args)
 
     def sin(self, a: Expr) -> Expr:
-        return self.call('cpu_f32_sin', a)
+        return self.call('sin', a)
 
     def cos(self, a: Expr) -> Expr:
-        return self.call('cpu_f32_cos', a)
+        return self.call('cos', a)
 
     def tanh(self, a: Expr) -> Expr:
-        return self.call('cpu_f32_tanh', a)
+        return self.call('tanh', a)
 
     def exp(self, a: Expr) -> Expr:
-        return self.call('cpu_f32_exp', a)
+        return self.call('exp', a)
 
     def erf(self, a: Expr) -> Expr:
-        return self.call('cpu_f32_erf', a)
+        return self.call('erf', a)
 
     def sqrt(self, a: Expr) -> Expr:
-        return self.call('cpu_f32_sqrt', a)
+        return self.call('sqrt', a)
 
     def rsqrt(self, a: Expr) -> Expr:
-        return self.call('cpu_f32_rsqrt', a)
+        return self.call('rsqrt', a)
 
     def log(self, a: Expr) -> Expr:
-        return self.call('cpu_f32_log', a)
+        return self.call('log', a)
 
     def round(self, a: Expr) -> Expr:
-        return self.call('cpu_f32_round', a)
+        return self.call('round', a)
 
     def ceil(self, a: Expr) -> Expr:
-        return self.call('cpu_f32_ceil', a)
+        return self.call('ceil', a)
 
     def floor(self, a: Expr) -> Expr:
-        return self.call('cpu_f32_floor', a)
+        return self.call('floor', a)
+
+    def tan(self, a: Expr) -> Expr:
+        return self.call('tan', a)
+
+    def sinh(self, a: Expr) -> Expr:
+        return self.call('sinh', a)
+
+    def cosh(self, a: Expr) -> Expr:
+        return self.call('cosh', a)
+
+    def asin(self, a: Expr) -> Expr:
+        return self.call('asin', a)
+
+    def acos(self, a: Expr) -> Expr:
+        return self.call('acos', a)
+
+    def atan(self, a: Expr) -> Expr:
+        return self.call('atan', a)
+
+    def asinh(self, a: Expr) -> Expr:
+        return self.call('asinh', a)
+
+    def acosh(self, a: Expr) -> Expr:
+        return self.call('acosh', a)
+
+    def atanh(self, a: Expr) -> Expr:
+        return self.call('atanh', a)
+
+    def expm1(self, a: Expr) -> Expr:
+        return self.call('expm1', a)
+
+    def log2(self, a: Expr) -> Expr:
+        return self.call('log2', a)
+
+    def log10(self, a: Expr) -> Expr:
+        return self.call('log10', a)
+
+    def log1p(self, a: Expr) -> Expr:
+        return self.call('log1p', a)
+
+    def trunc(self, a: Expr) -> Expr:
+        return self.call('trunc', a)
+
+    def isfinite(self, a: Expr) -> Expr:
+        return self.call('isfinite', a)
+
+    def isinf(self, a: Expr) -> Expr:
+        return self.call('isinf', a)
+
+    def isnan(self, a: Expr) -> Expr:
+        return self.call('isnan', a)
 
     def min(self, a: Expr, b: Expr) -> Expr:
-        return self.call('cpu_f32_min', a, b)
+        return self.call('min', a, b)
 
     def max(self, a: Expr, b: Expr) -> Expr:
-        return self.call('cpu_f32_max', a, b)
+        return self.call('max', a, b)
 
     def pow(self, a: Expr, b: Expr) -> Expr:
-        return self.call('cpu_f32_pow', a, b)
+        return self.call('pow', a, b)
+
+    def mod(self, a: Expr, b: Expr) -> Expr:
+        return self.call('mod', a, b)
+
+    def atan2(self, a: Expr, b: Expr) -> Expr:
+        return self.call('atan2', a, b)
 
     def fma(self, a: Expr, b: Expr, c: Expr) -> Expr:
-        return self.call('cpu_f32_fma', a, b, c)
+        return self.call('fma', a, b, c)
 
 
 cpu_f32_math_function_set = CPUFloat32MathFunctionSet()

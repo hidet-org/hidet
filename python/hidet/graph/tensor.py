@@ -45,12 +45,20 @@ class Tensor:
     def __init__(self, shape, dtype, device, storage, layout=None, trace=None):
         from hidet.graph.operator import Operator
 
-        self.shape: List[int] = [int(v) for v in shape]
+        self._shape: List[int] = [int(v) for v in shape]
         self.dtype: DataType = data_type(dtype)
         self.device: Device = instantiate_device(device)
         self.storage: Optional[Storage] = storage
         self.layout: DataLayout = layout if layout else DataLayout.row_major(shape)
         self.trace: Optional[Tuple[Operator, int]] = trace
+
+    @property
+    def shape(self) -> Tuple[int, ...]:
+        return tuple(self._shape)
+
+    @property
+    def size(self) -> int:
+        return prod(self._shape)
 
     def __pos__(self):
         return self
@@ -237,7 +245,9 @@ class Tensor:
         return abs(self)
 
     def __bool__(self) -> bool:
-        raise NotImplementedError()
+        if self.size > 1:
+            raise RuntimeError('Boolean value of Tensor with more than one value is ambiguous')
+        return bool(self.item())
 
     def __array_namespace__(self, *, api_version=None):
         raise NotImplementedError()
@@ -246,13 +256,19 @@ class Tensor:
         raise NotImplementedError()
 
     def __float__(self) -> float:
-        raise NotImplementedError()
+        if self.size > 1:
+            raise RuntimeError('only one element tensors can be converted to Python scalars')
+        return float(self.item())
 
     def __index__(self) -> int:
-        raise NotImplementedError()
+        if self.size > 1:
+            raise RuntimeError('only one element tensors can be converted to Python scalars')
+        return int(self.item())
 
     def __int__(self) -> int:
-        raise NotImplementedError()
+        if self.size > 1:
+            raise RuntimeError('only one element tensors can be converted to Python scalars')
+        return int(self.item())
 
     def __str__(self):
         head = self.signature()
@@ -303,30 +319,40 @@ class Tensor:
 
         assert None not in item
 
+        # normalize index
+        normalized_item = []
+        for i, v in enumerate(item):
+            if isinstance(v, int):
+                if v < 0:
+                    v += self.shape[i]
+                if v < 0 or v >= self.shape[i]:
+                    raise IndexError(
+                        'index {} is out of bound for dimension {} with size {}'.format(v, i, self.shape[i])
+                    )
+                normalized_item.append(v)
+            else:
+                normalized_item.append(v)
+        item = tuple(normalized_item)
+
         # process slice and integer index
         rank = len(self.shape)
-        if all(not isinstance(v, slice) for v in item) and len(item) == rank:
-            # element access, return a python scalar
-            return strided_slice(self, starts=list(item), ends=[v + 1 for v in item]).numpy().flatten()[0]
-        else:
-            # slice access, return a hidet tensor
-            while len(item) < rank:
-                item = item + (slice(None),)
-            starts, ends, steps = [], [], []
-            squeeze_dims = []
-            for dim, v in enumerate(item):
-                if isinstance(v, int):
-                    squeeze_dims.append(dim)
-                    starts.append(v)
-                    ends.append(v + 1)
-                    steps.append(1)
-                else:
-                    assert isinstance(v, slice)
-                    starts.append(v.start if v.start is not None else 0)
-                    ends.append(v.stop if v.stop is not None else self.shape[dim])
-                    steps.append(v.step if v.step is not None else 1)
-            sliced = strided_slice(self, starts, ends, strides=steps).squeeze(squeeze_dims)
-            return sliced
+        while len(item) < rank:
+            item = item + (slice(None),)
+        starts, ends, steps = [], [], []
+        squeeze_dims = []
+        for dim, v in enumerate(item):
+            if isinstance(v, int):
+                squeeze_dims.append(dim)
+                starts.append(v)
+                ends.append(v + 1)
+                steps.append(1)
+            else:
+                assert isinstance(v, slice)
+                starts.append(v.start)
+                ends.append(v.stop)
+                steps.append(v.step)
+        sliced = strided_slice(self, starts, ends, strides=steps).squeeze(squeeze_dims)
+        return sliced
 
     def __setitem__(self, key, value):
         raise NotImplementedError()
@@ -404,8 +430,17 @@ class Tensor:
 
         return to_dlpack_device(self)
 
+    def tolist(self):
+        return self.cpu().numpy().tolist()
+
     def to_device(self, device, /, *, stream=None):
         raise NotImplementedError()
+
+    def item(self) -> Union[int, float, bool]:
+        if prod(self._shape) == 1:
+            return self.squeeze(dims=list(range(len(self.shape)))).tolist()
+        else:
+            raise RuntimeError('Only support .item() method for tensor with only one element')
 
     def signature(self) -> str:
         """Get the signature of the tensor.
@@ -1086,14 +1121,6 @@ def randn(shape, dtype='float32', mean=0.0, stddev=1.0, device='cuda') -> Tensor
     hidet_tensor = from_numpy(np_tensor)
     return hidet_tensor.to(device=device, dtype=dtype)
 
-    # if device != 'cuda' or dtype != 'float32':
-    #     return randn(shape, 'float32', mean, stddev, 'cuda', layout).to(device=device, dtype=dtype)
-    #
-    # assert device == 'cuda' and dtype == 'float32'
-    # tensor = empty(shape, dtype='float32', device='cuda', layout=layout)
-    # cuda.generate_normal(tensor.storage.addr, num_elements=prod(tensor.shape), mean=mean, stddev=stddev)
-    # return tensor
-
 
 def randint(low: int, high=None, shape: Sequence[int] = (), dtype: str = 'int32') -> Tensor:
     dtype_map = {'int32': np.int32, 'int64': np.int64}
@@ -1280,21 +1307,15 @@ def asarray(obj, /, *, dtype=None, device=None) -> Tensor:
     """
     if isinstance(obj, Tensor):
         ret = obj
+    elif isinstance(obj, np.ndarray):
+        ret = from_numpy(obj)
     else:
-        ret = from_numpy(np.array(obj))
+        array = np.array(obj)
+        if array.dtype == np.float64:
+            # numpy uses float64 as the default float data type, convert it to float32 as hidet takes float32 as default
+            array = array.astype(np.float32)
+        ret = from_numpy(array)
     return ret.to(dtype=dtype, device=device)
-
-
-def arange(start, /, stop=None, step=1, *, dtype=None, device=None) -> Tensor:
-    raise NotImplementedError()
-
-
-def eye(n_rows, n_cols=None, /, *, k=0, dtype=None, device=None) -> Tensor:
-    raise NotImplementedError()
-
-
-def linspace(start, stop, /, num, *, dtype=None, device=None, endpoint=True) -> Tensor:
-    raise NotImplementedError()
 
 
 def astype(x: Tensor, dtype, /, *, copy: bool = True) -> Tensor:
@@ -1305,12 +1326,76 @@ def can_cast(from_, to, /) -> bool:
     raise NotImplementedError()
 
 
-def finfo(type, /):
-    raise NotImplementedError()
+def finfo(dtype, /):
+    """
+    Machine limits for integer data types.
+
+    Parameters
+    ----------
+    dtype: DataType or Tensor or str
+        The integer data type to get the limits information.
+
+    Returns
+    -------
+    ret: hidet.ir.dtypes.floats.FloatInfo
+        - **bits**: *int*
+          number of bits occupied by the real-valued floating-point data type.
+        - **eps**: *float*
+          difference between 1.0 and the next smallest representable real-valued floating-point number larger than 1.0.
+        - **max**: *float*
+          largest representable real-valued number.
+        - **min**: *float*
+          smallest representable real-valued number.
+        - **smallest_normal**: *float*
+          smallest positive real-valued floating-point number with full precision.
+        - **dtype**: dtype
+          real-valued floating-point data type.
+    """
+    from hidet.ir.dtypes.floats import FloatType
+
+    if isinstance(dtype, Tensor):
+        dtype = dtype.dtype
+    elif isinstance(dtype, str):
+        dtype = data_type(dtype)
+    if isinstance(dtype, FloatType):
+        return dtype.finfo()
+    else:
+        raise TypeError('Expect a tensor or float data type, got {}'.format(type(dtype)))
 
 
-def iinfo(type, /):
-    raise NotImplementedError()
+def iinfo(dtype, /):
+    """
+    Machine limits for integer data types.
+
+    Parameters
+    ----------
+    type: Tensor or DataType or str
+        The kind of integer data type about which to get information.
+
+    Returns
+    -------
+    ret: hidet.ir.dtypes.integer.IntInfo
+        An object having the following attributes:
+        - **bits**: int
+            number of bits occupied by the type.
+        - **max**: int
+            largest representable number.
+        - **min**: int
+            smallest representable number.
+        - **dtype**: dtype
+            integer data type.
+
+    """
+    from hidet.ir.dtypes.integer import IntegerType
+
+    if isinstance(dtype, Tensor):
+        dtype = dtype.dtype
+    elif isinstance(dtype, str):
+        dtype = data_type(dtype)
+    if isinstance(dtype, IntegerType):
+        return dtype.iinfo()
+    else:
+        raise TypeError('Expect an integer tensor or data type, got {}'.format(type(dtype)))
 
 
 def isdtype(dtype: DataType, kind) -> bool:
@@ -1326,8 +1411,4 @@ def broadcast_arrays(*arrays: Tensor) -> List[Tensor]:
 
 
 def broadcast_to(array: Tensor, /, shape: Sequence[int]) -> Tensor:
-    raise NotImplementedError()
-
-
-def meshgrid(*arrays: Tensor, indexing: str = 'xy') -> List[Tensor]:
     raise NotImplementedError()
