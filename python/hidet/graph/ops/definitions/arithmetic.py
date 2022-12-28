@@ -323,6 +323,11 @@ class RoundOp(UnaryElementwiseOp):
         super().__init__(x, op=lambda a: primitives.round(a), name='round')
 
 
+class TruncOp(UnaryElementwiseOp):
+    def __init__(self, x: Tensor):
+        super().__init__(x, op=lambda a: primitives.trunc(a), name='trunc')
+
+
 class CeilOp(UnaryElementwiseOp):
     def __init__(self, x: Tensor):
         super().__init__(x, op=lambda a: primitives.ceil(a), name='ceil')
@@ -711,11 +716,7 @@ def round(x: Tensor) -> Tensor:
 
 
 def trunc(x: Tensor) -> Tensor:
-    raise NotImplementedError()
-
-
-def floor_divide(x: Tensor, y: Tensor) -> Tensor:
-    raise NotImplementedError()
+    return TruncOp(x).get_output(0)
 
 
 def logaddexp(x: Tensor, y: Tensor) -> Tensor:

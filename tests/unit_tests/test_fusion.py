@@ -6,10 +6,10 @@ def test_fusion_v1():
     def func(a: hidet.Tensor, b: hidet.Tensor):
         c = hidet.ops.equal(a, b)
         d = hidet.ops.logical_not(c)
-        e = d.cast('int32')
+        e = d.astype('int32')
         f = hidet.ops.cumsum(e, dim=1)
         g = f * e
-        h = g.cast('int64')
+        h = g.astype('int64')
         i = h + 1
         return i
 

@@ -79,28 +79,29 @@ class Tensor:
         return subtract(self, other)
 
     def __mul__(self, other) -> Tensor:
-        from .ops import multiply
+        from .ops import multiply, utils
 
-        return multiply(self, other)
+        return multiply(self, utils.convert_to_tensor(other, self))
 
     def __truediv__(self, other) -> Tensor:
-        from .ops import divide
+        from .ops import divide, utils
 
-        return divide(self, other)
-
-    def __floordiv__(self, other) -> Tensor:
-        raise NotImplementedError()
+        return divide(self, utils.convert_to_tensor(other, self))
 
     def __mod__(self, other) -> Tensor:
-        raise NotImplementedError()
+        from .ops import mod, utils
+
+        return mod(self, utils.convert_to_tensor(other, self))
 
     def __pow__(self, power, modulo=None) -> Tensor:
-        raise NotImplementedError()
+        from .ops import pow, utils
+
+        return pow(self, utils.convert_to_tensor(power, self))
 
     def __matmul__(self, other) -> Tensor:
-        from .ops import matmul
+        from .ops import matmul, utils
 
-        return matmul(self, other)
+        return matmul(self, utils.convert_to_tensor(other, self))
 
     def __invert__(self) -> Tensor:
         from .ops import bitwise_invert
@@ -108,91 +109,54 @@ class Tensor:
         return bitwise_invert(self)
 
     def __and__(self, other) -> Tensor:
-        from .ops import bitwise_and
+        from .ops import bitwise_and, utils
 
-        return bitwise_and(self, other)
+        return bitwise_and(self, utils.convert_to_tensor(other, self))
 
     def __or__(self, other):
-        from .ops import bitwise_or
+        from .ops import bitwise_or, utils
 
-        return bitwise_or(self, other)
+        return bitwise_or(self, utils.convert_to_tensor(other, self))
 
     def __xor__(self, other):
-        from .ops import bitwise_xor
+        from .ops import bitwise_xor, utils
 
-        return bitwise_xor(self, other)
+        return bitwise_xor(self, utils.convert_to_tensor(other, self))
 
     def __lshift__(self, other):
-        from .ops import bitwise_left_shift
+        from .ops import bitwise_left_shift, utils
 
-        return bitwise_left_shift(self, other)
+        return bitwise_left_shift(self, utils.convert_to_tensor(other, self))
 
     def __rshift__(self, other):
-        from .ops import bitwise_right_shift
+        from .ops import bitwise_right_shift, utils
 
-        return bitwise_right_shift(self, other)
+        return bitwise_right_shift(self, utils.convert_to_tensor(other, self))
 
     def __lt__(self, other):
-        from .ops import less
+        from .ops import less, utils
 
-        return less(self, other)
+        return less(self, utils.convert_to_tensor(other, self))
 
     def __le__(self, other):
-        from .ops import less_equal
+        from .ops import less_equal, utils
 
-        return less_equal(self, other)
+        return less_equal(self, utils.convert_to_tensor(other, self))
 
     def __gt__(self, other):
-        from .ops import greater
+        from .ops import greater, utils
 
-        return greater(self, other)
+        return greater(self, utils.convert_to_tensor(other, self))
 
     def __eq__(self, other):
-        from .ops import equal
+        from .ops import equal, utils
 
-        return equal(self, other)
+        return equal(self, utils.convert_to_tensor(other, self))
 
     def __ne__(self, other):
-        raise NotImplementedError()
+        from .ops import not_equal, utils
 
-    def __iadd__(self, other):
-        raise NotImplementedError()
-
-    def __isub__(self, other):
-        raise NotImplementedError()
-
-    def __imul__(self, other):
-        raise NotImplementedError()
-
-    def __itruediv__(self, other):
-        raise NotImplementedError()
-
-    def __ifloordiv__(self, other):
-        raise NotImplementedError()
-
-    def __imod__(self, other):
-        raise NotImplementedError()
-
-    def __ipow__(self, other):
-        raise NotImplementedError()
-
-    def __imatmul__(self, other):
-        raise NotImplementedError()
-
-    def __iand__(self, other):
-        raise NotImplementedError()
-
-    def __ior__(self, other):
-        raise NotImplementedError()
-
-    def __ixor__(self, other):
-        raise NotImplementedError()
-
-    def __ilshift__(self, other):
-        raise NotImplementedError()
-
-    def __irshift__(self, other):
-        raise NotImplementedError()
+        return not_equal(self, utils.convert_to_tensor(other, self))
 
     def __radd__(self, other):
         from .ops import add
@@ -209,36 +173,6 @@ class Tensor:
 
         return multiply(other, self)
 
-    def __rtruediv__(self, other):
-        raise NotImplementedError()
-
-    def __rfloordiv__(self, other):
-        raise NotImplementedError()
-
-    def __rmod__(self, other):
-        raise NotImplementedError()
-
-    def __rpow__(self, other):
-        raise NotImplementedError()
-
-    def __rmatmul__(self, other):
-        raise NotImplementedError()
-
-    def __rand__(self, other):
-        raise NotImplementedError()
-
-    def __ror__(self, other):
-        raise NotImplementedError()
-
-    def __rxor__(self, other):
-        raise NotImplementedError()
-
-    def __rlshift__(self, other):
-        raise NotImplementedError()
-
-    def __rrshift__(self, other):
-        raise NotImplementedError()
-
     def __abs__(self):
         from .ops import abs
 
@@ -248,12 +182,6 @@ class Tensor:
         if self.size > 1:
             raise RuntimeError('Boolean value of Tensor with more than one value is ambiguous')
         return bool(self.item())
-
-    def __array_namespace__(self, *, api_version=None):
-        raise NotImplementedError()
-
-    def __complex__(self) -> complex:
-        raise NotImplementedError()
 
     def __float__(self) -> float:
         if self.size > 1:
@@ -354,9 +282,6 @@ class Tensor:
         sliced = strided_slice(self, starts, ends, strides=steps).squeeze(squeeze_dims)
         return sliced
 
-    def __setitem__(self, key, value):
-        raise NotImplementedError()
-
     def __iter__(self):
         raise TypeError('hidet.Tensor does not support iteration.')
 
@@ -400,7 +325,7 @@ class Tensor:
         else:
             storage = None
 
-        self.shape = state['shape']
+        self._shape = state['shape']
         self.dtype = state['dtype']
         self.device = state['device']
         self.storage = storage
@@ -438,7 +363,10 @@ class Tensor:
 
     def item(self) -> Union[int, float, bool]:
         if prod(self._shape) == 1:
-            return self.squeeze(dims=list(range(len(self.shape)))).tolist()
+            ret = self.squeeze(dims=list(range(len(self.shape)))).tolist()
+            if not isinstance(ret, (int, float, bool)):
+                raise TypeError('Cannot convert tensor to scalar.')
+            return ret
         else:
             raise RuntimeError('Only support .item() method for tensor with only one element')
 
@@ -636,20 +564,6 @@ class Tensor:
 
         return transpose(self, axes)
 
-    def barrier(self) -> Tensor:
-        """Create a fusion barrier toward current tensor.
-
-        See Also :func:`hidet.graph.ops.barrier`.
-
-        Returns
-        -------
-        ret: Tensor
-            The same tensor after barrier.
-        """
-        from .ops import barrier
-
-        return barrier(self)
-
     def sum(self, dims: Union[int, List[int]], keep_dim: bool = False):
         """Create a sum reduced tensor.
 
@@ -708,7 +622,7 @@ class Tensor:
 
         return rsqrt(self)
 
-    def cast(self, dtype):
+    def astype(self, dtype):
         """Cast the data type of current tensor.
 
         Parameters
@@ -929,7 +843,7 @@ class Tensor:
             raise RuntimeError('Cannot convert a tensor on {} to numpy array.'.format(self.device))
         if self.dtype in [dtypes.bfloat16, dtypes.tfloat32]:
             warnings.warn('numpy does not support {}, converting to float32'.format(self.dtype.name))
-            return self.cast(dtypes.float32).numpy()
+            return self.astype(dtypes.float32).numpy()
         if self.dtype == dtypes.boolean:
             # workaround for numpy not supporting exporting boolean to dlpack
             return np.from_dlpack(self.to(dtype='uint8')).astype(np.bool)
@@ -1125,7 +1039,7 @@ def randn(shape, dtype='float32', mean=0.0, stddev=1.0, device='cuda') -> Tensor
 def randint(low: int, high=None, shape: Sequence[int] = (), dtype: str = 'int32') -> Tensor:
     dtype_map = {'int32': np.int32, 'int64': np.int64}
     if dtype not in dtype_map:
-        return randint(low=low, high=high, shape=shape, dtype='int32').cast(dtype)
+        return randint(low=low, high=high, shape=shape, dtype='int32').astype(dtype)
     return asarray(np.random.randint(low=low, high=high, size=shape, dtype=dtype_map[dtype]))
 
 
@@ -1305,110 +1219,16 @@ def asarray(obj, /, *, dtype=None, device=None) -> Tensor:
     ret: Tensor
         The hidet tensor converted from given object.
     """
+    from hidet.ir.dtypes import dtype_to_numpy
+
     if isinstance(obj, Tensor):
         ret = obj
     elif isinstance(obj, np.ndarray):
         ret = from_numpy(obj)
     else:
-        array = np.array(obj)
+        array = np.array(obj, dtype=dtype_to_numpy(dtype) if dtype else None)
         if array.dtype == np.float64:
             # numpy uses float64 as the default float data type, convert it to float32 as hidet takes float32 as default
             array = array.astype(np.float32)
         ret = from_numpy(array)
     return ret.to(dtype=dtype, device=device)
-
-
-def astype(x: Tensor, dtype, /, *, copy: bool = True) -> Tensor:
-    raise NotImplementedError()
-
-
-def can_cast(from_, to, /) -> bool:
-    raise NotImplementedError()
-
-
-def finfo(dtype, /):
-    """
-    Machine limits for integer data types.
-
-    Parameters
-    ----------
-    dtype: DataType or Tensor or str
-        The integer data type to get the limits information.
-
-    Returns
-    -------
-    ret: hidet.ir.dtypes.floats.FloatInfo
-        - **bits**: *int*
-          number of bits occupied by the real-valued floating-point data type.
-        - **eps**: *float*
-          difference between 1.0 and the next smallest representable real-valued floating-point number larger than 1.0.
-        - **max**: *float*
-          largest representable real-valued number.
-        - **min**: *float*
-          smallest representable real-valued number.
-        - **smallest_normal**: *float*
-          smallest positive real-valued floating-point number with full precision.
-        - **dtype**: dtype
-          real-valued floating-point data type.
-    """
-    from hidet.ir.dtypes.floats import FloatType
-
-    if isinstance(dtype, Tensor):
-        dtype = dtype.dtype
-    elif isinstance(dtype, str):
-        dtype = data_type(dtype)
-    if isinstance(dtype, FloatType):
-        return dtype.finfo()
-    else:
-        raise TypeError('Expect a tensor or float data type, got {}'.format(type(dtype)))
-
-
-def iinfo(dtype, /):
-    """
-    Machine limits for integer data types.
-
-    Parameters
-    ----------
-    type: Tensor or DataType or str
-        The kind of integer data type about which to get information.
-
-    Returns
-    -------
-    ret: hidet.ir.dtypes.integer.IntInfo
-        An object having the following attributes:
-        - **bits**: int
-            number of bits occupied by the type.
-        - **max**: int
-            largest representable number.
-        - **min**: int
-            smallest representable number.
-        - **dtype**: dtype
-            integer data type.
-
-    """
-    from hidet.ir.dtypes.integer import IntegerType
-
-    if isinstance(dtype, Tensor):
-        dtype = dtype.dtype
-    elif isinstance(dtype, str):
-        dtype = data_type(dtype)
-    if isinstance(dtype, IntegerType):
-        return dtype.iinfo()
-    else:
-        raise TypeError('Expect an integer tensor or data type, got {}'.format(type(dtype)))
-
-
-def isdtype(dtype: DataType, kind) -> bool:
-    raise NotImplementedError()
-
-
-def result_type(*arrays_and_dtypes) -> DataType:
-    raise NotImplementedError()
-
-
-def broadcast_arrays(*arrays: Tensor) -> List[Tensor]:
-    raise NotImplementedError()
-
-
-def broadcast_to(array: Tensor, /, shape: Sequence[int]) -> Tensor:
-    raise NotImplementedError()

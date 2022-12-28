@@ -238,7 +238,7 @@ def all(x: Tensor, /, *, axis=None, keepdims=False) -> Tensor:
     ret: Tensor
         The result of logical AND reduction with bool data type.
     """
-    x = x.cast('bool')
+    x = x.astype('bool')
     return ReduceAndOp(x, dims=axis, keepdims=keepdims).get_output(0)
 
 
@@ -264,5 +264,5 @@ def any(x: Tensor, /, *, axis=None, keepdims=False) -> Tensor:
     ret: Tensor
         The result of logical OR reduction with bool data type.
     """
-    x = x.cast('bool')
+    x = x.astype('bool')
     return ReduceOrOp(x, dims=axis, keepdims=keepdims).get_output(0)

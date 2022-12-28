@@ -28,6 +28,7 @@ from .graph import trace_from, load_graph, save_graph
 from .graph import jit
 from .graph import from_dlpack
 from .graph import frontend
+from .graph.ops import arange, linspace
 
 from .graph.frontend import torch
 from .graph.frontend import onnx

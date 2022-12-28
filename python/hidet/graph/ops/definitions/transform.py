@@ -706,27 +706,3 @@ def expand_dims(x: Tensor, /, *, axis: int = 0) -> Tensor:
     new_shape = list(x.shape)
     new_shape.insert(axis, 1)
     return reshape(x, new_shape)
-
-
-def tril(x: Tensor, /, *, k: int = 0) -> Tensor:
-    raise NotImplementedError()
-
-
-def triu(x: Tensor, /, *, k: int = 0) -> Tensor:
-    raise NotImplementedError()
-
-
-def roll(x: Tensor, /, shift: int, *, axis: int = 0) -> Tensor:
-    raise NotImplementedError()
-
-
-def stack(tensors: Sequence[Tensor], /, *, axis: int = 0) -> Tensor:
-    raise NotImplementedError()
-
-
-def flip(x: Tensor, /, *, axis: Optional[Union[int, Sequence[int]]] = None) -> Tensor:
-    raise NotImplementedError()
-
-
-def meshgrid(*arrays: Tensor, indexing: str = 'xy') -> List[Tensor]:
-    raise NotImplementedError()

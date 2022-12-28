@@ -92,7 +92,7 @@ class DLDataType(ctypes.Structure):
             if dtype_bits != 8:
                 raise ValueError('from_dlpack: hidet only supports bool dtype with 8 bits.')
             dtype = dtype_name
-        if not hidet.ir.dtypes.support(dtype):
+        if not hidet.ir.dtypes.supported(dtype):
             raise ValueError('from_dlpack: dtype {} is not supported for hidet'.format(dtype))
         return data_type(dtype)
 

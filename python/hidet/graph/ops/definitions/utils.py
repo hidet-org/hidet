@@ -159,3 +159,20 @@ def broadcast_indices(
         if int(dim) == 1:
             indices[idx] = 0
     return indices
+
+
+def convert_to_tensor(value: Union[int, float, bool, Tensor], involved_tensor: Tensor) -> Tensor:
+    from hidet.graph.tensor import full_like
+
+    if isinstance(value, Tensor):
+        return value
+
+    if involved_tensor.dtype.is_float():
+        return full_like(involved_tensor, fill_value=value, shape=[])
+    elif involved_tensor.dtype.is_integer():
+        if isinstance(value, (bool, int)):
+            return full_like(involved_tensor, fill_value=value, shape=[])
+        else:
+            return full_like(involved_tensor, fill_value=value, shape=[], dtype='float32')
+    else:
+        raise ValueError('Can not recognize dtype {}'.format(involved_tensor.dtype))

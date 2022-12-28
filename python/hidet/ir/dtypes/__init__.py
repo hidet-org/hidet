@@ -6,6 +6,8 @@ from .floats import f16, f32, f64, bf16, tf32
 from .boolean import boolean
 from .vector import float16x2, float32x4
 from .vector import f16x2, f32x4
+from .promotion import promote_type
+from .utils import dtype_to_numpy, finfo, iinfo
 
 name2dtype = {
     'float64': float64,
@@ -51,5 +53,5 @@ default_index_dtype = int64
 default_float_dtype = float32
 
 
-def support(name: str) -> bool:
+def supported(name: str) -> bool:
     return name in name2dtype

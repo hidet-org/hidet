@@ -1,9 +1,10 @@
 from typing import Union, Optional, Sequence
+import warnings
 
 from hidet.ir import dtypes
 from hidet.ir.expr import Constant
 from hidet.ir.type import DataType, data_type
-from hidet.runtime.device import Device
+from hidet.runtime.device import Device, instantiate_device
 from .utils import Task, Operator, Tensor, compute
 
 
@@ -21,15 +22,86 @@ class FullTask(Task):
         )
 
 
+class ArangeTask(Task):
+    def __init__(self, start, stop, step, dtype: DataType):
+        start: Constant = dtype(start)
+        stop: Constant = dtype(stop)
+        step: Constant = dtype(step)
+        count = int((stop.value - start.value) // step.value)
+        super().__init__(
+            name='arange',
+            inputs=[],
+            outputs=[compute(name='c', shape=[count], fcompute=lambda idx: dtype(start + step * idx))],
+            attributes={'start': start.value, 'stop': stop.value, 'step': step.value, 'dtype': dtype.name},
+        )
+
+
+class LinSpaceTask(Task):
+    def __init__(self, start, stop, num, endpoint: bool, dtype: DataType):
+        start: Constant = dtype(start)
+        stop: Constant = dtype(stop)
+        num: int = int(num)
+        if endpoint:
+            step = (stop - start) / (num - 1)
+        else:
+            step = (stop - start) / num
+
+        c = compute(name='c', shape=[num], fcompute=lambda idx: dtype(start + step * idx))
+
+        super().__init__(
+            name='linspace',
+            inputs=[],
+            outputs=[c],
+            attributes={
+                'start': start.value,
+                'stop': stop.value,
+                'num': num,
+                'endpoint': endpoint,
+                'dtype': dtype.name,
+            },
+        )
+
+
+class LinSpaceOp(Operator):
+    def __init__(self, start, stop, num, *, dtype: DataType, device, endpoint=True):
+        device = instantiate_device(device)
+        super().__init__(
+            name='linspace',
+            inputs=[],
+            task=LinSpaceTask(start, stop, num, endpoint, dtype),
+            attributes={'dtype': dtype, 'device': device},
+        )
+
+
+class ArangeOp(Operator):
+    def __init__(self, start, stop, step, dtype, device):
+        if stop is None:
+            stop = start
+            start = 0
+        if dtype is None:
+            if all(isinstance(v, int) for v in [start, stop, step]):
+                dtype = dtypes.int32
+            else:
+                dtype = dtypes.float32
+        device = instantiate_device(device)
+        super().__init__(
+            name='arange',
+            inputs=[],
+            task=ArangeTask(start, stop, step, dtype),
+            attributes={'start': start, 'stop': stop, 'step': step, 'dtype': dtype, 'device': device},
+        )
+
+
 class FullOp(Operator):
     def __init__(
         self,
         shape: Sequence[int],
         value: Union[float, int, bool, Constant],
         dtype: Optional[DataType] = None,
-        device: str = 'cpu',
+        device: Union[Device, str] = 'cpu',
     ):
         shape = [int(v) for v in shape]
+        device: Device = instantiate_device(device)
         if dtype is None:
             if isinstance(value, int):
                 dtype = dtypes.int64
@@ -44,9 +116,9 @@ class FullOp(Operator):
                 raise ValueError(f'Unknown type for value {value}')
 
         super().__init__(
+            name='constant',
             inputs=[],
             task=FullTask(shape=shape, value=value, dtype=dtype),
-            name='constant',
             attributes={'shape': shape, 'value': value, 'dtype': dtype, 'device': device},
         )
 
@@ -60,13 +132,15 @@ def full(
     return FullOp(shape, value, data_type(dtype), device).get_output(0)
 
 
-def arange(start, /, stop=None, step=1, *, dtype=None, device=None) -> Tensor:
-    raise NotImplementedError()
+def arange(start, /, stop=None, step=1, *, dtype=None, device='cpu') -> Tensor:
+    return ArangeOp(start, stop, step, dtype=dtype, device=device).get_output(0)
 
 
-def eye(n_rows, n_cols=None, /, *, k=0, dtype=None, device=None) -> Tensor:
-    raise NotImplementedError()
-
-
-def linspace(start, stop, /, num, *, dtype=None, device=None, endpoint=True) -> Tensor:
-    raise NotImplementedError()
+def linspace(start, stop, /, num, *, dtype=None, device='cpu', endpoint=True) -> Tensor:
+    if dtype is None:
+        dtype = dtypes.float32
+    dtype = data_type(dtype)
+    if dtype.is_integer():
+        warnings.warn('linspace with integer dtype is not supported, changed to float32')
+        dtype = dtypes.float32
+    return LinSpaceOp(start, stop, num, dtype=dtype, device=device, endpoint=endpoint).get_output(0)

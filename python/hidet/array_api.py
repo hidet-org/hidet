@@ -9,23 +9,8 @@ nan: float = float("nan")
 pi: float = 3.141592653589793
 
 # creation functions
-from .graph.tensor import (
-    asarray,
-    arange,
-    empty,
-    empty_like,
-    eye,
-    from_dlpack,
-    full,
-    full_like,
-    linspace,
-    meshgrid,
-    ones,
-    ones_like,
-    zeros,
-    zeros_like,
-)
-from .graph.ops import tril, triu
+from .graph.tensor import asarray, empty, empty_like, from_dlpack, full, full_like, ones, ones_like, zeros, zeros_like
+from .graph.ops import arange, eye, meshgrid, linspace, tril, triu
 
 # data type functions
 from .graph.tensor import astype, can_cast, finfo, iinfo, result_type

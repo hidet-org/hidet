@@ -10,9 +10,9 @@ from .definitions.softmax import softmax
 from .definitions.activation import relu, leaky_relu, sigmoid, clip, relu6, prelu, gelu
 from .definitions.norm import batch_norm_infer, instance_norm, layer_norm
 from .definitions.image import resize2d
-from .definitions.create import full, arange, eye, linspace
+from .definitions.create import full, arange, linspace
 from .definitions.arithmetic import add, subtract, multiply, divide, mod, remainder, negative, positive, square
-from .definitions.arithmetic import floor, ceil, round, trunc, floor_divide, sqrt, rsqrt, pow, abs
+from .definitions.arithmetic import floor, ceil, round, trunc, sqrt, rsqrt, pow, abs
 from .definitions.arithmetic import reciprocal, exp, expm1, log, log2, log10, log1p, logaddexp, erf
 from .definitions.arithmetic import bitwise_right_shift, bitwise_left_shift, bitwise_and, bitwise_invert, bitwise_or
 from .definitions.arithmetic import bitwise_xor, maximum, minimum
@@ -23,8 +23,8 @@ from .definitions.compare import logical_not, logical_and, logical_or, logical_x
 from .definitions.reduce import mean, sum, var, min, max, std, prod, argmin, argmax, all, any
 from .definitions.cumulative import cumsum
 from .definitions.transform import squeeze, unsqueeze, flatten, concat, cast, take, rearrange, strided_slice, reshape
-from .definitions.transform import transpose, broadcast, pad, tile, split, conv_pad, tril, triu, expand_dims, flip
-from .definitions.transform import permute_dims, roll, stack
+from .definitions.transform import transpose, broadcast, pad, tile, split, conv_pad, expand_dims
+from .definitions.transform import permute_dims
 from .definitions.special import barrier
 
 from .definitions import utils

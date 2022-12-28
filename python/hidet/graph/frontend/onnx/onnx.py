@@ -619,7 +619,7 @@ class OnnxRange(OnnxOperator):
     def run_v11(self, inputs: List[Tensor]) -> List[Tensor]:
         start, limit, delta = [self.tensor2list(t) for t in inputs]
         array = np.arange(start=start, stop=limit, step=delta)
-        array = hidet.asarray(array).cuda().cast(dtype=inputs[0].dtype)
+        array = hidet.asarray(array).cuda().astype(dtype=inputs[0].dtype)
         return [array]
 
 
