@@ -1,6 +1,6 @@
 from typing import List, Dict, Tuple, Optional
 from hidet.ir.expr import Expr, Call
-from hidet.ir.type import FuncType, DataType
+from hidet.ir.type import FuncType, DataType, data_type
 from hidet.ir.utils.type_utils import numeric_promotion
 from hidet.ir.primitives.func import register_primitive_function, lookup_primitive_function
 
@@ -88,6 +88,12 @@ class MathFunctionSet:
     def log(self, a: Expr) -> Expr:
         raise NotImplementedError()
 
+    def log2(self, a: Expr) -> Expr:
+        raise NotImplementedError()
+
+    def log10(self, a: Expr) -> Expr:
+        raise NotImplementedError()
+
     def log1p(self, a: Expr) -> Expr:
         raise NotImplementedError()
 
@@ -101,6 +107,15 @@ class MathFunctionSet:
         raise NotImplementedError()
 
     def floor(self, a: Expr) -> Expr:
+        raise NotImplementedError()
+
+    def isfinite(self, a: Expr) -> Expr:
+        raise NotImplementedError()
+
+    def isinf(self, a: Expr) -> Expr:
+        raise NotImplementedError()
+
+    def isnan(self, a: Expr) -> Expr:
         raise NotImplementedError()
 
     # binary math functions
@@ -140,19 +155,39 @@ def type_infer_func(arg_types: List[DataType]) -> DataType:
 
 
 class MathFunctionSetGeneric(MathFunctionSet):
-    def register(self):
-        unary_names = ['sin', 'cos', 'tanh', 'exp', 'round', 'floor', 'ceil', 'rsqrt', 'sqrt', 'erf', 'log']
-        binary_names = ['min', 'max', 'pow']
+    @staticmethod
+    def register():
+        unary_names = [
+            'sin',
+            'cos',
+            'tanh',
+            'exp',
+            'round',
+            'floor',
+            'ceil',
+            'rsqrt',
+            'sqrt',
+            'erf',
+            'log',
+            'log2',
+            'log10',
+            'log1p',
+            'trunc',
+            'isfinite',
+            'isinf',
+            'isnan',
+        ]
+        binary_names = ['min', 'max', 'pow', 'mod', 'atan2']
         ternary_names = ['fma']
         for name in unary_names + binary_names + ternary_names:
-            register_primitive_function(
-                name=f'generic_{name}',
-                codegen_name=None,
-                func_or_type=FuncType(type_infer_func=type_infer_func),
-                generic=True,
-            )
+            if name in ['isfinite', 'isinf', 'isnan']:
+                func_type = FuncType(type_infer_func=lambda _: data_type('bool'))
+            else:
+                func_type = FuncType(type_infer_func=type_infer_func)
+            register_primitive_function(name=f'generic_{name}', codegen_name=None, func_or_type=func_type, generic=True)
 
-    def call(self, name, *args) -> Expr:
+    @staticmethod
+    def call(name, *args) -> Expr:
         entry = lookup_primitive_function(f'generic_{name}')
         return Call(entry.var, args)
 
@@ -213,6 +248,12 @@ class MathFunctionSetGeneric(MathFunctionSet):
     def log(self, a: Expr) -> Expr:
         return self.call('log', a)
 
+    def log2(self, a: Expr) -> Expr:
+        return self.call('log2', a)
+
+    def log10(self, a: Expr) -> Expr:
+        return self.call('log10', a)
+
     def log1p(self, a: Expr) -> Expr:
         return self.call('log1p', a)
 
@@ -228,6 +269,15 @@ class MathFunctionSetGeneric(MathFunctionSet):
     def trunc(self, a: Expr) -> Expr:
         return self.call('trunc', a)
 
+    def isfinite(self, a: Expr) -> Expr:
+        return self.call('isfinite', a)
+
+    def isinf(self, a: Expr) -> Expr:
+        return self.call('isinf', a)
+
+    def isnan(self, a: Expr) -> Expr:
+        return self.call('isnan', a)
+
     def min(self, a: Expr, b: Expr) -> Expr:
         return self.call('min', a, b)
 
@@ -242,15 +292,6 @@ class MathFunctionSetGeneric(MathFunctionSet):
 
     def fma(self, a: Expr, b: Expr, c: Expr) -> Expr:
         return self.call('fma', a, b, c)
-
-    def isfinite(self, a: Expr) -> Expr:
-        return self.call('isfinite', a)
-
-    def isinf(self, a: Expr) -> Expr:
-        return self.call('isinf', a)
-
-    def isnan(self, a: Expr) -> Expr:
-        return self.call('isnan', a)
 
 
 generic_math_function_set = MathFunctionSetGeneric()
@@ -331,6 +372,18 @@ def rsqrt(a: Expr) -> Expr:
 
 def log(a: Expr) -> Expr:
     return generic_math_function_set.log(a)
+
+
+def log2(a: Expr) -> Expr:
+    return generic_math_function_set.log2(a)
+
+
+def log10(a: Expr) -> Expr:
+    return generic_math_function_set.log10(a)
+
+
+def log1p(a: Expr) -> Expr:
+    return generic_math_function_set.log1p(a)
 
 
 def round(a: Expr) -> Expr:

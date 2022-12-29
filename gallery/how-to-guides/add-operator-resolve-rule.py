@@ -100,7 +100,7 @@ class PowResolveRule(ResolveRule):
     def resolve(self, op: PowOp) -> Optional[List[Tensor]]:
         a: Tensor = op.inputs[0]  # get the base tensor
         b: Tensor = op.inputs[1]  # get the exponent tensor
-        if not b.is_symbolic() and len(b.shape) == 0 and int(b.scalar()) == 3:
+        if not b.is_symbolic() and len(b.shape) == 0 and int(b) == 3:
             # if the exponent is a constant integer 3, resolve the operator to a * a * a
             return [a * a * a]
         # otherwise, return None to indicate that the operator cannot be resolved

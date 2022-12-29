@@ -53,7 +53,9 @@ class HidetMaxPool2d(HidetModule):
 class HidetLinear(HidetModule):
     def __init__(self, torch_module: torch.nn.Module):
         super().__init__(torch_module)
-        self.transposed_weight = self.param('weight').transpose([1, 0])
+        from hidet import ops
+
+        self.transposed_weight = ops.transpose(self.param('weight'), [1, 0])
 
     def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, torch.nn.Linear)

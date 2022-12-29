@@ -4,56 +4,56 @@ from hidet.ir.primitives.func import register_primitive_function, primitive_func
 from hidet.ir.primitives.math import MathFunctionSet, register_math_function_set
 
 
-class CPUFloat32MathFunctionSet(MathFunctionSet):
+class CPUFloat64MathFunctionSet(MathFunctionSet):
     @staticmethod
     def register():
         unary_funcs = {
-            'sin': 'sinf',
-            'cos': 'cosf',
-            'tan': 'tanf',
-            'sinh': 'sinhf',
-            'cosh': 'coshf',
-            'tanh': 'tanhf',
-            'asin': 'asinf',
-            'acos': 'acosf',
-            'atan': 'atanf',
-            'asinh': 'asinhf',
-            'acosh': 'acoshf',
-            'atanh': 'atanhf',
-            'exp': 'expf',
-            'erf': 'erff',
-            'sqrt': 'sqrtf',
-            'rsqrt': 'rsqrtf',
-            'log': 'logf',
-            'round': 'roundf',
-            'ceil': 'ceilf',
-            'floor': 'floorf',
-            'expm1': 'expm1f',
-            'log2': 'log2f',
-            'log10': 'log10f',
-            'log1p': 'log1pf',
-            'trunc': 'truncf',
+            'sin': 'sin',
+            'cos': 'cos',
+            'tan': 'tan',
+            'sinh': 'sinh',
+            'cosh': 'cosh',
+            'tanh': 'tanh',
+            'asin': 'asin',
+            'acos': 'acos',
+            'atan': 'atan',
+            'asinh': 'asinh',
+            'acosh': 'acosh',
+            'atanh': 'atanh',
+            'exp': 'exp',
+            'erf': 'erf',
+            'sqrt': 'sqrt',
+            'rsqrt': 'rsqrt',
+            'log': 'log',
+            'round': 'round',
+            'ceil': 'ceil',
+            'floor': 'floor',
+            'expm1': 'expm1',
+            'log2': 'log2',
+            'log10': 'log10',
+            'log1p': 'log1p',
+            'trunc': 'trunc',
             'isfinite': 'isfinite',
-            'isinf': 'isinf',
+            'isinf': 'isin',
             'isnan': 'isnan',
         }
-        binary_funcs = {'min': 'fminf', 'max': 'fmaxf', 'pow': 'powf', 'mod': 'fmodf', 'atan2': 'atan2f'}
-        ternary_funcs = {'fma': 'fmaf'}
+        binary_funcs = {'min': 'fmin', 'max': 'fmax', 'pow': 'pow', 'mod': 'fmod', 'atan2': 'atan2'}
+        ternary_funcs = {'fma': 'fma'}
 
         for name_map, num_args in zip([unary_funcs, binary_funcs, ternary_funcs], [1, 2, 3]):
             for name, codegen_name in name_map.items():
                 register_primitive_function(
-                    name='cpu_f32_{}'.format(name),
+                    name='cpu_f64_{}'.format(name),
                     codegen_name=codegen_name,
                     func_or_type=FuncType(
-                        param_types=['float32'] * num_args,
-                        ret_type='float32' if name not in ['isfinite', 'isinf', 'isnan'] else 'bool',
+                        param_types=['float64'] * num_args,
+                        ret_type='float64' if name not in ['isfinite', 'isinf', 'isnan'] else 'bool',
                     ),
                 )
 
     @staticmethod
     def call(name: str, *args) -> Expr:
-        entry = primitive_func_pool.lookup_by_name('cpu_f32_{}'.format(name))
+        entry = primitive_func_pool.lookup_by_name('cpu_f64_{}'.format(name))
         return Call(entry.var, args)
 
     def sin(self, a: Expr) -> Expr:
@@ -159,6 +159,6 @@ class CPUFloat32MathFunctionSet(MathFunctionSet):
         return self.call('fma', a, b, c)
 
 
-cpu_f32_math_function_set = CPUFloat32MathFunctionSet()
-cpu_f32_math_function_set.register()
-register_math_function_set('cpu', 'float32', cpu_f32_math_function_set)
+cpu_f64_math_function_set = CPUFloat64MathFunctionSet()
+cpu_f64_math_function_set.register()
+register_math_function_set('cpu', 'float64', cpu_f64_math_function_set)

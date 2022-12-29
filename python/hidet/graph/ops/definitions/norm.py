@@ -1,12 +1,12 @@
 from typing import List
 from .utils import Tensor, normalize_dim
-from .arithmetic import square
+from .arithmetic import square, rsqrt
 
 
 def normalize(x: Tensor, dims: List[int], epsilon: float = 1e-5) -> Tensor:
     x = x - x.mean(dims, keep_dim=True)
     variance = square(x).mean(dims, keep_dim=True)
-    return x * (variance + epsilon).rsqrt()
+    return x * rsqrt(variance + epsilon)
 
 
 def batch_norm_infer(x: Tensor, running_mean: Tensor, running_var: Tensor, epsilon=1e-5, axis=1) -> Tensor:
@@ -18,7 +18,7 @@ def batch_norm_infer(x: Tensor, running_mean: Tensor, running_var: Tensor, epsil
 
     running_mean = running_mean.unsqueeze([dim for dim in range(rank) if dim != axis])
     running_var = running_var.unsqueeze([dim for dim in range(rank) if dim != axis])
-    return (x - running_mean) * (running_var + epsilon).rsqrt()
+    return (x - running_mean) * rsqrt(running_var + epsilon)
 
 
 def instance_norm(x: Tensor, axis: int = 1, epsilon: float = 1e-5) -> Tensor:

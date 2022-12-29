@@ -233,8 +233,8 @@ def batch_matmul_fp16(a: Tensor, b: Tensor) -> Tensor:
 
 
 def demo_usage():
-    a = hidet.randn([1, 2, 2], dtype='float16')
-    b = hidet.randn([1, 2, 2], dtype='float16')
+    a = hidet.randn([1, 2, 2], dtype='float16', device='cuda')
+    b = hidet.randn([1, 2, 2], dtype='float16', device='cuda')
     c = batch_matmul_fp16(a, b)
     print(a)
     print(b)
@@ -249,8 +249,8 @@ demo_usage()
 # If you are interested in the generated source code, here it is:
 
 # sphinx_gallery_start_ignore
-a = hidet.randn([1, 2, 2], dtype='float16')
-b = hidet.randn([1, 2, 2], dtype='float16')
+a = hidet.randn([1, 2, 2], dtype='float16', device='cuda')
+b = hidet.randn([1, 2, 2], dtype='float16', device='cuda')
 op = BatchMatmulFp16Op(a, b)
 c = op.get_output(0)
 func = op.task_func

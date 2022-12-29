@@ -7,7 +7,7 @@ from hidet.ir.type import TensorType, tensor_type, DataType
 from hidet.ir.task import Task, InverseMap
 from hidet.ir.func import IRModule
 from hidet.graph.operator import Operator, Tensor
-from hidet.ir.compute import TensorNode, tensor_input, compute, reduce, arg_reduce
+from hidet.ir.compute import TensorNode, ReduceType, tensor_input, compute, reduce, arg_reduce
 
 
 def input_like(tensor: Tensor, name: str) -> TensorNode:
@@ -159,3 +159,20 @@ def broadcast_indices(
         if int(dim) == 1:
             indices[idx] = 0
     return indices
+
+
+def convert_to_tensor(value: Union[int, float, bool, Tensor], involved_tensor: Tensor) -> Tensor:
+    from hidet.graph.tensor import full_like
+
+    if isinstance(value, Tensor):
+        return value
+
+    if involved_tensor.dtype.is_float():
+        return full_like(involved_tensor, fill_value=value, shape=[])
+    elif involved_tensor.dtype.is_integer():
+        if isinstance(value, (bool, int)):
+            return full_like(involved_tensor, fill_value=value, shape=[])
+        else:
+            return full_like(involved_tensor, fill_value=value, shape=[], dtype='float32')
+    else:
+        raise ValueError('Can not recognize dtype {}'.format(involved_tensor.dtype))

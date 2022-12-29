@@ -45,7 +45,7 @@ class SelfAttention(nn.Module):
         query = self.transpose_for_scores(self.query_layer(hidden_states))
         key = self.transpose_for_scores(self.key_layer(hidden_states))
         value = self.transpose_for_scores(self.value_layer(hidden_states))
-        attention_scores = ops.matmul(query, key.transpose([-1, -2])) / math.sqrt(
+        attention_scores = ops.matmul(query, ops.transpose(key, [-1, -2])) / math.sqrt(
             self.attention_head_size
         )
         attention_scores = attention_scores + attention_mask

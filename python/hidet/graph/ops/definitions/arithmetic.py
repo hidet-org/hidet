@@ -178,6 +178,16 @@ class LogOp(UnaryElementwiseOp):
         super().__init__(x, op=lambda v: primitives.log(v), name='log')
 
 
+class Log2Op(UnaryElementwiseOp):
+    def __init__(self, x):
+        super().__init__(x, op=lambda v: primitives.log2(v), name='log2')
+
+
+class Log10Op(UnaryElementwiseOp):
+    def __init__(self, x):
+        super().__init__(x, op=lambda v: primitives.log10(v), name='log10')
+
+
 class Log1pOp(UnaryElementwiseOp):
     def __init__(self, x):
         super().__init__(x, op=lambda v: primitives.log1p(v), name='log1p')
@@ -311,6 +321,11 @@ class FloorOp(UnaryElementwiseOp):
 class RoundOp(UnaryElementwiseOp):
     def __init__(self, x: Tensor):
         super().__init__(x, op=lambda a: primitives.round(a), name='round')
+
+
+class TruncOp(UnaryElementwiseOp):
+    def __init__(self, x: Tensor):
+        super().__init__(x, op=lambda a: primitives.trunc(a), name='trunc')
 
 
 class CeilOp(UnaryElementwiseOp):
@@ -450,14 +465,14 @@ def binary_arithmetic(
     elif isinstance(x, float):
         x = dtypes.float32(x)
     elif isinstance(x, Tensor) and len(x.shape) == 0:
-        x = x.dtype(x.scalar())
+        x = x.dtype(x.item())
 
     if isinstance(y, int):
         y = dtypes.int32(y)
     elif isinstance(y, float):
         y = dtypes.float32(y)
     elif isinstance(y, Tensor) and len(y.shape) == 0:
-        y = y.dtype(y.scalar())
+        y = y.dtype(y.item())
 
     if isinstance(x, Tensor) and isinstance(y, Tensor):
         return tensor_tensor_op(x, y)
@@ -531,6 +546,14 @@ def expm1(x: Tensor) -> Tensor:
 
 def log(x: Tensor) -> Tensor:
     return LogOp(x).get_output(0)
+
+
+def log2(x: Tensor) -> Tensor:
+    return Log2Op(x).get_output(0)
+
+
+def log10(x: Tensor) -> Tensor:
+    return Log10Op(x).get_output(0)
 
 
 def log1p(x: Tensor) -> Tensor:
@@ -693,11 +716,7 @@ def round(x: Tensor) -> Tensor:
 
 
 def trunc(x: Tensor) -> Tensor:
-    raise NotImplementedError()
-
-
-def floor_divide(x: Tensor, y: Tensor) -> Tensor:
-    raise NotImplementedError()
+    return TruncOp(x).get_output(0)
 
 
 def logaddexp(x: Tensor, y: Tensor) -> Tensor:

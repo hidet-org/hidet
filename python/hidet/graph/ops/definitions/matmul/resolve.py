@@ -10,7 +10,7 @@ from hidet.utils.py import gcd, factorize, prod, cdiv
 from .matmul import MatmulOp
 from .batch_matmul import batch_matmul
 from .matmul_f16 import matmul_f16
-from ..transform import broadcast
+from ..transform import broadcast, flatten
 from ..utils import broadcast_shapes
 
 
@@ -113,7 +113,7 @@ class MatmulResolveRule(ResolveRule):
         assert isinstance(op, MatmulOp)
         a: Tensor = op.inputs[0]
         b: Tensor = op.inputs[1]
-        c_shape = op.outputs[0].shape
+        c_shape = list(op.outputs[0].shape)
 
         if len(a.shape) == 1:  # shape: [a]
             a = a.unsqueeze([0, 1])  # [1, 1, a]
@@ -125,7 +125,7 @@ class MatmulResolveRule(ResolveRule):
             else:
                 assert len(b.shape) >= 3  # shape example: [b, c, a, d]
                 # [a] x [b, c, a, d] -> [b, c, d]
-                b = b.flatten(start_dim=0, end_dim=-3)  # [b * c, a, d]
+                b = flatten(b, start_dim=0, end_dim=-3)  # [b * c, a, d]
                 c = self.run_batch_matmul(a, b)  # [b * c, 1, d]
                 c = c.reshape(c_shape)  # [b, c, d]
         elif len(b.shape) == 1:  # shape: [b]
@@ -137,19 +137,19 @@ class MatmulResolveRule(ResolveRule):
             else:
                 assert len(a.shape) >= 3  # shape example: [a, c, d, b]
                 # [a, c, d, b] x [b] -> [a, c, d]
-                a = a.flatten(start_dim=0, end_dim=-3)  # [a * c, d, b]
+                a = flatten(a, start_dim=0, end_dim=-3)  # [a * c, d, b]
                 c = self.run_batch_matmul(a, b)  # [a * c, d, 1]
                 c = c.reshape(c_shape)  # [a, c, d]
         else:
             # example: [a, b, c] x [c, d] -> [a, b, d]
             assert len(a.shape) >= 2 and len(b.shape) >= 2
-            a_head = a.shape[:-2]
-            b_head = b.shape[:-2]
+            a_head = list(a.shape[:-2])
+            b_head = list(b.shape[:-2])
             c_head = broadcast_shapes([a_head, b_head, [1]])  # [1] is used to make sure len(c_head) > 0
-            a_broadcast_shape = c_head + a.shape[-2:]
-            b_broadcast_shape = c_head + b.shape[-2:]
-            a = broadcast(a, a_broadcast_shape).flatten(start_dim=0, end_dim=-3)
-            b = broadcast(b, b_broadcast_shape).flatten(start_dim=0, end_dim=-3)
+            a_broadcast_shape = c_head + list(a.shape[-2:])
+            b_broadcast_shape = c_head + list(b.shape[-2:])
+            a = flatten(broadcast(a, a_broadcast_shape), start_dim=0, end_dim=-3)
+            b = flatten(broadcast(b, b_broadcast_shape), start_dim=0, end_dim=-3)
             c = self.run_batch_matmul(a, b)
             c = c.reshape(c_shape)
         return [c]
