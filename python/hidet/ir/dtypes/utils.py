@@ -1,5 +1,5 @@
-from hidet.ir.type import DataType, data_type
 import numpy as np
+from hidet.ir.type import DataType, data_type
 
 _dtype_map = {
     'u8': np.uint8,
