@@ -8,7 +8,7 @@ from hidet.cuda.graph import CudaGraph
 
 
 def example_graph() -> Tuple[FlowGraph, Tensor]:
-    x = hidet.symbol([3, 4])
+    x = hidet.symbol([3, 4], device='cuda')
     y = x + 3.0
     y = hidet.ops.square(x) - y
     y = hidet.ops.square(y) - x

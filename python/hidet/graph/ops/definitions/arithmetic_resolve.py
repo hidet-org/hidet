@@ -15,7 +15,7 @@ class PowOpResolveRule(ResolveRule):
             return None
         if len(b.shape) != 0:
             return None
-        b: Union[float, int] = b.scalar()
+        b: Union[float, int, bool] = b.item()
         if b in [2.0, 2]:
             return [ops.square(a)]
         elif b in [1.0, 1]:

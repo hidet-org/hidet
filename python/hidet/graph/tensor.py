@@ -46,19 +46,105 @@ class Tensor:
         from hidet.graph.operator import Operator
 
         self._shape: List[int] = [int(v) for v in shape]
-        self.dtype: DataType = data_type(dtype)
-        self.device: Device = instantiate_device(device)
-        self.storage: Optional[Storage] = storage
-        self.layout: DataLayout = layout if layout else DataLayout.row_major(shape)
-        self.trace: Optional[Tuple[Operator, int]] = trace
+        self._dtype: DataType = data_type(dtype)
+        self._device: Device = instantiate_device(device)
+        self._storage: Optional[Storage] = storage
+        self._layout: DataLayout = layout if layout else DataLayout.row_major(shape)
+        self._trace: Optional[Tuple[Operator, int]] = trace
 
     @property
     def shape(self) -> Tuple[int, ...]:
+        """
+        The shape of the tensor.
+
+        The shape is a tuple of integers indicating the size of the tensor along each dimension.
+
+        Returns
+        -------
+        shape: Tuple[int, ...]
+            The shape of the tensor.
+        """
         return tuple(self._shape)
 
     @property
+    def dtype(self) -> DataType:
+        """
+        The data type of the tensor.
+
+        Returns
+        -------
+        dtype: DataType
+            The data type of the tensor.
+        """
+        return self._dtype
+
+    @property
+    def device(self) -> Device:
+        """
+        The device of the tensor.
+
+        Returns
+        -------
+        device: Device
+            The device of the tensor.
+        """
+        return self._device
+
+    @property
+    def storage(self) -> Optional[Storage]:
+        """
+        The storage of the tensor.
+
+        Returns
+        -------
+        storage: Storage
+            The storage of the tensor.
+        """
+        return self._storage
+
+    @property
+    def trace(self):
+        """
+        The producer and the index of outputs of the producer of this tensor.
+
+        This attribute is used to track how this tensor is computed. None indicates this is a leaf tensor where the
+        value will be given by the user. Otherwise, it will be a tuple with (operator, index) where operator is the
+        producer of this tensor and index is the index of the output of the operator.
+
+        Returns
+        -------
+        trace: Tuple[Operator, int]
+            The trace of this tensor.
+        """
+        return self._trace
+
+    @property
     def size(self) -> int:
+        """
+        The number of elements in the tensor.
+
+        Returns
+        -------
+        size: int
+            The number of elements in the tensor.
+        """
         return prod(self._shape)
+
+    @property
+    def layout(self) -> DataLayout:
+        """
+        The data layout of the tensor.
+
+        .. note::
+
+          This attribute is experimental and might change in the future.
+
+        Returns
+        -------
+        layout: DataLayout
+            The data layout of the tensor.
+        """
+        return self._layout
 
     def __pos__(self):
         return self
@@ -318,19 +404,17 @@ class Tensor:
         data = state['data']
         if data is not None:
             assert isinstance(data, np.ndarray)
-            tensor = from_numpy(data)
-            if state['device'] == 'cuda':
-                tensor = tensor.cuda()
+            tensor = from_numpy(data).to(device=state['device'])
             storage = tensor.storage
         else:
             storage = None
 
+        self._device = state['device']
         self._shape = state['shape']
-        self.dtype = state['dtype']
-        self.device = state['device']
-        self.storage = storage
-        self.layout = state['layout']
-        self.trace = state['trace']
+        self._dtype = state['dtype']
+        self._storage = storage
+        self._layout = state['layout']
+        self._trace = state['trace']
 
     def __dlpack__(self, stream: Optional[int] = None):
         """
@@ -356,12 +440,50 @@ class Tensor:
         return to_dlpack_device(self)
 
     def tolist(self):
+        """
+        Convert the tensor to a nested list of numbers.
+
+        Returns
+        -------
+        ret: the nested list of numbers
+            The nested list of numbers. The number of nested levels is equal to the rank of the tensor.
+        """
         return self.cpu().numpy().tolist()
 
     def to_device(self, device, /, *, stream=None):
-        raise NotImplementedError()
+        """
+        Move the tensor to the specified device.
+
+        Parameters
+        ----------
+        device: Device or str
+            The device to move the tensor to.
+
+        stream: Stream or None
+            The stream to use for the copy. If None, the current stream is used.
+
+        Returns
+        -------
+        ret: Tensor
+            The tensor on the specified device.
+        """
+        device = instantiate_device(device)
+        if device.is_cpu():
+            tensor = self.cpu()
+        elif device.is_cuda():
+            tensor = self.cuda_async(device, stream=stream)
+        else:
+            raise ValueError('Cannot recognize device {}'.format(device))
+        return tensor
 
     def item(self) -> Union[int, float, bool]:
+        """
+        Convert the tensor to a scalar value.
+
+        Returns
+        -------
+
+        """
         if prod(self._shape) == 1:
             ret = self.squeeze(dims=list(range(len(self.shape)))).tolist()
             if not isinstance(ret, (int, float, bool)):
@@ -381,6 +503,16 @@ class Tensor:
         return "Tensor(shape={}, dtype='{}', device='{}')".format(self.shape, self.dtype.name, self.device)
 
     def is_symbolic(self) -> bool:
+        """
+        Check if the tensor is symbolic.
+
+        A tensor is symbolic if it is not backed by any storage (i.e., ``self.storage is None``).
+
+        Returns
+        -------
+        ret: bool
+            True if the tensor is symbolic, False otherwise.
+        """
         return self.storage is None
 
     @property
@@ -415,23 +547,6 @@ class Tensor:
             The operator that produces this tensor. None indicates it is not traced.
         """
         return self.trace[0] if self.trace else None
-
-    def scalar(self) -> Union[float, int]:
-        """Get the scalar value.
-
-        If a tensor has shape ``[]`` (i.e., rank = 0), this tensor is a scalar. This function get the value of this
-        tensor.
-
-        Returns
-        -------
-        ret: Union[float, int]
-            The value of the tensor.
-        """
-        if len(self.shape) != 0:
-            raise ValueError('Can not convert a Tensor with shape {} to a scalar.'.format(self.shape))
-        value = self.cpu().numpy().tolist()
-        assert isinstance(value, (int, float))
-        return value
 
     def contiguous(self):
         """Create a tensor with contiguous row-major layout.
@@ -523,47 +638,6 @@ class Tensor:
 
         return rearrange(self, plan)
 
-    def flatten(self, start_dim=0, end_dim=-1):
-        """Create a flattened tensor.
-
-        See Also :func:`hidet.graph.ops.flatten`.
-
-        Parameters
-        ----------
-        start_dim: int
-            The start dimension to flatten.
-
-        end_dim: int
-            The end dimension (inclusive) to flatten.
-
-        Returns
-        -------
-        ret: Tensor
-            The flattened tensor.
-        """
-        from .ops import flatten
-
-        return flatten(self, start_dim, end_dim)
-
-    def transpose(self, axes: Optional[Sequence[int]]):
-        """Create a transposed tensor.
-
-        See Also :func:`hidet.graph.ops.transpose`.
-
-        Parameters
-        ----------
-        axes: Optional[Sequence[int]]
-            The axes to transpose.
-
-        Returns
-        -------
-        ret: Tensor
-            The transposed tensor.
-        """
-        from .ops import transpose
-
-        return transpose(self, axes)
-
     def sum(self, dims: Union[int, List[int]], keep_dim: bool = False):
         """Create a sum reduced tensor.
 
@@ -608,20 +682,6 @@ class Tensor:
 
         return mean(self, dims=dims, keep_dim=keep_dim)
 
-    def rsqrt(self):
-        """Compute the ``1/sqrt(x)`` of current tensor x.
-
-        See Also :func:`hidet.graph.ops.rsqrt`.
-
-        Returns
-        -------
-        ret: Tensor
-            The result tensor.
-        """
-        from .ops import rsqrt
-
-        return rsqrt(self)
-
     def astype(self, dtype):
         """Cast the data type of current tensor.
 
@@ -639,15 +699,15 @@ class Tensor:
 
         return cast(self, dtype)
 
-    def to(self, dtype: Optional[str] = None, device: Optional[Union[Device, str]] = None):
-        """Cast the data type of current tensor or move it to another device.
+    def to(self, dtype=None, device=None):
+        """Cast the data type of current tensor or/and move it to another device.
 
         Parameters
         ----------
-        dtype: str, optional
+        dtype: DataType or str, optional
             The target data type to convert to. None indicates unchanged.
 
-        device: Union[Device, str], optional
+        device: Device or str, optional
             The target device to copy the tensor. None indicates unchanged.
 
         Returns
@@ -735,7 +795,19 @@ class Tensor:
             trace=None,
         )
 
-    def copy_async(self, stream: Optional[hidet.cuda.Stream] = None) -> Tensor:
+    def copy_async(self, stream=None) -> Tensor:
+        """Create a copy of current tensor asynchronously.
+
+        Parameters
+        ----------
+        stream: hidet.cuda.Stream, optional
+            The stream to copy the tensor. None indicates the current stream of the device where self tensor is on.
+
+        Returns
+        -------
+        ret: Tensor
+            A new tensor with the same contents as the current one.
+        """
         if self.trace is not None:
             raise ValueError('Please use .detach() to detach a trace variable first before copying.')
         return Tensor(
@@ -846,13 +918,9 @@ class Tensor:
             return self.astype(dtypes.float32).numpy()
         if self.dtype == dtypes.boolean:
             # workaround for numpy not supporting exporting boolean to dlpack
-            return np.from_dlpack(self.to(dtype='uint8')).astype(np.bool)
+            return np.from_dlpack(self.to(dtype='uint8')).astype(np.bool_)
         else:
             return np.from_dlpack(self)
-        # storage = self.contiguous().storage  # convert if this tensor is not in row major layout
-        # np_array = storage.as_array(num_elements=prod(self.shape), dtype=self.dtype, share_mem=share_mem)
-        # np_array: np.ndarray = np_array.reshape(self.shape)
-        # return np_array
 
     def torch(self):
         """
@@ -868,7 +936,7 @@ class Tensor:
         return torch.from_dlpack(self)
 
 
-def empty(shape, dtype='float32', device='cuda', layout=None):
+def empty(shape, dtype='float32', device='cpu', layout=None):
     """Create an uninitialized tensor.
 
     Parameters
@@ -879,7 +947,7 @@ def empty(shape, dtype='float32', device='cuda', layout=None):
     dtype: str or DataType
         The data type of element of the tensor.
 
-    device: Device or str
+    device: Device or str, default 'cpu'
         The device of the new tensor is created on.
 
     layout: DataLayout, optional
@@ -896,7 +964,7 @@ def empty(shape, dtype='float32', device='cuda', layout=None):
     return Tensor(shape=shape, dtype=dtype, device=device, storage=storage, layout=layout)
 
 
-def symbol(shape: Sequence[int], dtype='float32', device='cuda', layout=None) -> Tensor:
+def symbol(shape: Sequence[int], dtype='float32', device='cpu', layout=None) -> Tensor:
     """Create a symbolic tensor.
 
     Parameters
@@ -907,7 +975,7 @@ def symbol(shape: Sequence[int], dtype='float32', device='cuda', layout=None) ->
     dtype: str
         The data type of element of the tensor.
 
-    device: str
+    device: Device or str, default 'cpu'
         The device of the new tensor is created on.
 
     layout: DataLayout, optional
@@ -922,7 +990,7 @@ def symbol(shape: Sequence[int], dtype='float32', device='cuda', layout=None) ->
     return Tensor(shape=shape, dtype=dtype, device=device, storage=None, layout=layout)
 
 
-def zeros(shape: Sequence[int], dtype='float32', device='cuda') -> Tensor:
+def zeros(shape: Sequence[int], dtype='float32', device='cpu') -> Tensor:
     """Create a tensor initialized with zero.
 
     Parameters
@@ -933,7 +1001,7 @@ def zeros(shape: Sequence[int], dtype='float32', device='cuda') -> Tensor:
     dtype: str
         The data type of element of the tensor.
 
-    device: str
+    device: Device or str, default 'cpu'
         The device of the new tensor is created on.
 
     Returns
@@ -946,7 +1014,7 @@ def zeros(shape: Sequence[int], dtype='float32', device='cuda') -> Tensor:
     return tensor
 
 
-def ones(shape, dtype='float32', device='cuda') -> Tensor:
+def ones(shape, dtype='float32', device='cpu') -> Tensor:
     """Create a tensor initialized with one.
 
     Parameters
@@ -954,10 +1022,10 @@ def ones(shape, dtype='float32', device='cuda') -> Tensor:
     shape: Sequence[int]
         The shape of new tensor.
 
-    dtype: str
+    dtype: DataType or str, default 'float32'
         The data type of element of the tensor.
 
-    device: str
+    device: Device or str, default 'cpu'
         The device of the new tensor is created on.
 
     Returns
@@ -969,7 +1037,7 @@ def ones(shape, dtype='float32', device='cuda') -> Tensor:
     return full(shape, dtype.one, dtype, device)
 
 
-def full(shape, fill_value: Union[float, int], dtype='float32', device='cuda') -> Tensor:
+def full(shape, fill_value: Union[float, int], dtype='float32', device='cpu') -> Tensor:
     """Create a tensor initialized with given constant.
 
     Parameters
@@ -980,10 +1048,10 @@ def full(shape, fill_value: Union[float, int], dtype='float32', device='cuda') -
     fill_value: float or int or hidet.ir.Constant
         The constant to initialize the new tensor.
 
-    dtype: DataType or str
+    dtype: DataType or str, default 'float32'
         The data type of element of the tensor.
 
-    device: Device or str
+    device: Device or str, default 'cpu'
         The device of the new tensor is created on.
 
     Returns
@@ -997,7 +1065,7 @@ def full(shape, fill_value: Union[float, int], dtype='float32', device='cuda') -
     return ops.full(shape=shape, value=fill_value, dtype=dtype, device=device)
 
 
-def randn(shape, dtype='float32', mean=0.0, stddev=1.0, device='cuda') -> Tensor:
+def randn(shape, dtype='float32', mean=0.0, stddev=1.0, device='cpu') -> Tensor:
     """Create a tensor with uniformly distributed values.
 
     Parameters
@@ -1005,16 +1073,16 @@ def randn(shape, dtype='float32', mean=0.0, stddev=1.0, device='cuda') -> Tensor
     shape: Sequence[int]
         The shape of new tensor.
 
-    dtype: str
+    dtype: DataType or str, default 'float32'
         The data type of element of the tensor.
 
-    mean: float
+    mean: float, default 0.0
         The mean of the uniform distribution.
 
-    stddev: float
+    stddev: float, default 1.0
         The standard deviation of the uniform distribution.
 
-    device: str
+    device: Device or str, default 'cpu'
         The device of the new tensor is created on.
 
     Returns
@@ -1030,7 +1098,7 @@ def randn(shape, dtype='float32', mean=0.0, stddev=1.0, device='cuda') -> Tensor
      [-0.37061226  0.562728    1.857547  ]]
     """
 
-    np_tensor = np.random.randn(*shape)
+    np_tensor = np.random.randn(*shape).astype(np.float32)
     np_tensor = np_tensor * stddev + mean
     hidet_tensor = from_numpy(np_tensor)
     return hidet_tensor.to(device=device, dtype=dtype)
@@ -1043,13 +1111,32 @@ def randint(low: int, high=None, shape: Sequence[int] = (), dtype: str = 'int32'
     return asarray(np.random.randint(low=low, high=high, size=shape, dtype=dtype_map[dtype]))
 
 
-def empty_like(
-    data: Tensor,
-    shape: Optional[Sequence[int]] = None,
-    dtype: Optional[str] = None,
-    device: Optional[str] = None,
-    layout: Optional[DataLayout] = None,
-) -> Tensor:
+def empty_like(data, shape=None, dtype=None, device=None, layout=None) -> Tensor:
+    """
+    Create an uninitialized tensor with the same shape, dtype, and device as the given tensor.
+
+    Parameters
+    ----------
+    data: Tensor
+        The tensor to copy shape, dtype, and device from.
+
+    shape: Sequence[int], optional
+        The shape of new tensor. If None, the shape of data is used.
+
+    dtype: DataType or str, optional
+        The data type of element of the tensor. If None, the dtype of data is used.
+
+    device: Device or str, optional
+        The device of the new tensor is created on. If None, the device of data is used.
+
+    layout: DataLayout, optional
+        The layout of the new tensor. If None, the layout of data is used.
+
+    Returns
+    -------
+    ret: Tensor
+        The created tensor.
+    """
     return empty(
         shape=shape if shape is not None else data.shape,
         dtype=dtype if dtype is not None else data.dtype,
@@ -1058,25 +1145,25 @@ def empty_like(
     )
 
 
-def symbol_like(data: Tensor, shape=None, dtype=None, device=None, layout=None):
+def symbol_like(data, shape=None, dtype=None, device=None, layout=None):
     """Create a symbol tensor like an existing tensor.
 
     Parameters
     ----------
     data: Tensor
-        The information of this tensor will be used to create the symbol tensor.
+        The tensor to copy shape, dtype, and device from.
 
     shape: Sequence[int], optional
-        The shape of the new tensor.
+        The shape of new tensor. If None, the shape of data is used.
 
-    dtype: str, optional
-        The data type of the new tensor.
+    dtype: DataType or str, optional
+        The data type of element of the tensor. If None, the dtype of data is used.
 
-    device: str, optional
-        The device of the new tensor.
+    device: Device or str, optional
+        The device of the new tensor is created on. If None, the device of data is used.
 
     layout: DataLayout, optional
-        The data layout of the new tensor.
+        The layout of the new tensor. If None, the layout of data is used.
 
     Returns
     -------
@@ -1091,9 +1178,29 @@ def symbol_like(data: Tensor, shape=None, dtype=None, device=None, layout=None):
     )
 
 
-def zeros_like(
-    data: Tensor, shape: Optional[Sequence[int]] = None, dtype: Optional[str] = None, device: Optional[str] = None
-) -> Tensor:
+def zeros_like(data, shape=None, dtype=None, device=None) -> Tensor:
+    """
+    Create a tensor initialized with zero with the same shape, dtype, and device as the given tensor.
+
+    Parameters
+    ----------
+    data: Tensor
+        The tensor to copy shape, dtype, and device from.
+
+    shape: Sequence[int], optional
+        The shape of new tensor. If None, the shape of data is used.
+
+    dtype: DataType or str, optional
+        The data type of element of the tensor. If None, the dtype of data is used.
+
+    device: Device or str, optional
+        The device of the new tensor is created on. If None, the device of data is used.
+
+    Returns
+    -------
+    ret: Tensor
+        The created tensor with all elements as zero.
+    """
     return zeros(
         shape=data.shape if shape is None else shape,
         dtype=data.dtype if dtype is None else dtype,
@@ -1101,9 +1208,29 @@ def zeros_like(
     )
 
 
-def ones_like(
-    data: Tensor, shape: Optional[Sequence[int]] = None, dtype: Optional[str] = None, device: Optional[str] = None
-) -> Tensor:
+def ones_like(data, shape=None, dtype=None, device=None) -> Tensor:
+    """
+    Create a tensor initialized with one with the same shape, dtype, and device as the given tensor.
+
+    Parameters
+    ----------
+    data: Tensor
+        The tensor to copy shape, dtype, and device from.
+
+    shape: Sequence[int], optional
+        The shape of new tensor. If None, the shape of data is used.
+
+    dtype: DataType or str, optional
+        The data type of element of the tensor. If None, the dtype of data is used.
+
+    device: Device or str, optional
+        The device of the new tensor is created on. If None, the device of data is used.
+
+    Returns
+    -------
+    ret: Tensor
+        The created tensor with all elements as one.
+    """
     return ones(
         shape=data.shape if shape is None else shape,
         dtype=data.dtype if dtype is None else dtype,
@@ -1118,6 +1245,31 @@ def full_like(
     dtype: Optional[str] = None,
     device: Optional[str] = None,
 ) -> Tensor:
+    """
+    Create a tensor initialized with fill_value with the same shape, dtype, and device as the given tensor.
+
+    Parameters
+    ----------
+    data: Tensor
+        The tensor to copy shape, dtype, and device from.
+
+    fill_value: int, float, or bool
+        The value to fill the tensor with.
+
+    shape: Sequence[int], optional
+        The shape of new tensor. If None, the shape of data is used.
+
+    dtype: DataType or str, optional
+        The data type of element of the tensor. If None, the dtype of data is used.
+
+    device: Device or str, optional
+        The device of the new tensor is created on. If None, the device of data is used.
+
+    Returns
+    -------
+    ret: Tensor
+        The created tensor with all elements as fill_value.
+    """
     return full(
         shape=data.shape if shape is None else shape,
         fill_value=fill_value,
@@ -1129,6 +1281,28 @@ def full_like(
 def randn_like(
     data: Tensor, shape: Optional[Sequence[int]] = None, dtype: Optional[str] = None, device: Optional[str] = None
 ) -> Tensor:
+    """
+    Create a randomly initialized tensor with the same shape, dtype, and device as the given tensor.
+
+    Parameters
+    ----------
+    data: Tensor
+        The tensor to copy shape, dtype, and device from.
+
+    shape: Sequence[int], optional
+        The shape of new tensor. If None, the shape of data is used.
+
+    dtype: DataType or str, optional
+        The data type of element of the tensor. If None, the dtype of data is used.
+
+    device: Device or str, optional
+        The device of the new tensor is created on. If None, the device of data is used.
+
+    Returns
+    -------
+    ret: Tensor
+        The created tensor with random values sampled from a normal distribution.
+    """
     return randn(
         shape=data.shape if shape is None else shape,
         dtype=data.dtype if dtype is None else dtype,
@@ -1137,12 +1311,25 @@ def randn_like(
 
 
 def from_numpy(nparray: np.ndarray) -> Tensor:
+    """
+    Create a tensor from a numpy array, sharing the memory with the numpy array when possible.
+
+    Parameters
+    ----------
+    nparray: numpy.ndarray
+        The numpy array to create the tensor from.
+
+    Returns
+    -------
+    ret: Tensor
+        The created tensor.
+    """
     if not isinstance(nparray, np.ndarray):
         raise TypeError('nparray must be a numpy array')
     if not nparray.flags['WRITEABLE']:
         # make a copy if the array is read-only
         nparray = nparray.copy()
-    if nparray.dtype == np.bool:
+    if nparray.dtype == np.bool_:
         return from_dlpack(nparray.astype(np.uint8)).to(dtype='bool')
     else:
         return from_dlpack(nparray)

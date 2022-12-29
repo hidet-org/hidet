@@ -18,13 +18,14 @@ setup(
     package_dir={"": "python"},
     include_package_data=True,
     install_requires=[
-        "numpy",
+        "numpy>=1.23",  # for from_dlpack
         "psutil",
         "tqdm",
         "nvtx",
         "tabulate",
         "astunparse",
-        "click"
+        "click",
+        "cuda-python"
     ],
     distclass=BinaryDistribution,
     entry_points={

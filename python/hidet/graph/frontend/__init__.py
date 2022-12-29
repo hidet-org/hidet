@@ -1,5 +1,8 @@
 from . import onnx
 from . import torch
 
-from .onnx import from_onnx
-from .torch import from_torch
+if onnx.available():
+    from .onnx import from_onnx
+
+if torch.available():
+    from .torch import from_torch

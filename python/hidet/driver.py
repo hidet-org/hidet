@@ -66,7 +66,7 @@ def build_task(task: Task, target_device='cuda', load=True) -> Optional[Compiled
                 compiled_func = load_task_func(lib_path, task)
                 compiled_task_cache.add(target_device, space_level, task_string, compiled_func)
         else:
-            logger.info(f"Compiling task {green(task.signature())}...")
+            logger.info(f"Compiling {green(target_device)} task {green(task.signature())}...")
             # build from scratch
             os.makedirs(task_dir, exist_ok=True)
             # write task

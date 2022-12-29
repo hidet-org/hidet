@@ -207,124 +207,124 @@ def load_lib_func(lib_path: str, func_name: str, func_type: FuncType) -> Compile
     return CompiledFunction(name=func_name, packed_func=packed_func)
 
 
-class BuildInstance:
-    def __init__(self, ir_module, output_dir, keep_ir=False, nvcc_keep=True, verbose=True):
-        """
-        The build instance.
-
-        Parameters
-        ----------
-        ir_module: IRModule
-            The ir module to build.
-        output_dir: str
-            The output directory for this build.
-        keep_ir: bool
-            Whether to keep the ir when lowering. If True, the ir will be stored in '{output_dir}/ir'. Default False.
-        nvcc_keep: bool
-            Whether to keep the ptx code in the same directory of output library., Default: True
-        verbose: bool
-            Whether to
-        verbose: bool
-            Reserved.
-        """
-        self.ir_module: IRModule = ir_module
-        self.output_dir: str = output_dir
-        self.keep_ir: bool = keep_ir
-        self.nvcc_keep: bool = nvcc_keep
-        self.verbose: bool = verbose
-
-
-def build_ir_module_job(build_instance: BuildInstance) -> Optional[str]:
-    """
-    Build an ir module in build instance.
-
-    Parameters
-    ----------
-    build_instance: BuildInstance
-        The build instance to build.
-
-    Returns
-    -------
-    lib_path: str
-        The path to the built dynamic linked library.
-    """
-    # pylint: disable=import-outside-toplevel
-    from hidet.transforms.instruments import SaveIRInstrument
-
-    src_path = os.path.join(build_instance.output_dir, 'source.cu')
-    lib_path = os.path.join(build_instance.output_dir, 'lib.so')
-
-    if os.path.exists(lib_path):
-        # skip if already built
-        return lib_path
-
-    instruments = []
-    os.makedirs(build_instance.output_dir, exist_ok=True)
-    if build_instance.keep_ir:
-        instruments.append(SaveIRInstrument(out_dir=os.path.join(build_instance.output_dir, 'ir')))
-    with PassContext(instruments=instruments):
-        ir_module = lower(build_instance.ir_module)
-    codegen(ir_module, src_out_path=src_path)
-    try:
-        compile_source(src_path, lib_path)
-    except subprocess.CalledProcessError:
-        print('Compilation failed for an instance')
-        return None
-    except CompilationFailed:
-        print('Compilation failed for an instance')
-        return None
-    return lib_path
-
-
-def batch_build_ir_modules(build_instances, parallel=True, verbose=False) -> List[Optional[CompiledFunction]]:
-    """
-    Build a batch of ir modules.
-
-    Parameters
-    ----------
-    build_instances: List[BuildInstance]
-        The batch of build instances to build.
-
-    parallel: bool
-        Whether build in parallel. Default True.
-
-    verbose: bool
-        Whether show the progress and summary. Default False.
-
-    Returns
-    -------
-    funcs:
-        The compiled functions, in the same order as build_instances.
-        When the build for a build instance failed, None for that instance is returned.
-    """
-    with Timer() as timer:
-        lib_paths = []
-        if parallel:
-            # Set the affinity of current process. Some package such as numpy will change affinity of current process,
-            # which might limit the parallelism of compilation.
-            os.sched_setaffinity(0, range(os.cpu_count()))
-            mem_for_worker = 1.5 * 1024 * 1024 * 1024  # 1.5 GiB
-            num_workers = min(max(int(psutil.virtual_memory().available // mem_for_worker), 1), psutil.cpu_count())
-            with multiprocessing.Pool(processes=num_workers) as pool:
-                for lib_path in tqdm(
-                    pool.imap(build_ir_module_job, build_instances),
-                    desc='Compiling',
-                    total=len(build_instances),
-                    disable=not verbose,
-                    ncols=80,
-                ):
-                    lib_paths.append(lib_path)
-        else:
-            lib_paths = map(build_ir_module_job, build_instances)
-        assert len(lib_paths) == len(build_instances)
-        funcs = [
-            load_task_func(lib_path, instance.ir_module.task) if lib_path else None
-            for lib_path, instance in zip(lib_paths, build_instances)
-        ]
-    if verbose:
-        print(
-            'Batch build {} modules within {:.3f} seconds, on average {:.1f} seconds per module.'.format(
-                len(build_instances), timer.elapsed_seconds(), timer.elapsed_seconds() / len(build_instances)
-            )
-        )
-    return funcs
+# class BuildInstance:
+#     def __init__(self, ir_module, output_dir, keep_ir=False, nvcc_keep=True, verbose=True):
+#         """
+#         The build instance.
+#
+#         Parameters
+#         ----------
+#         ir_module: IRModule
+#             The ir module to build.
+#         output_dir: str
+#             The output directory for this build.
+#         keep_ir: bool
+#             Whether to keep the ir when lowering. If True, the ir will be stored in '{output_dir}/ir'. Default False.
+#         nvcc_keep: bool
+#             Whether to keep the ptx code in the same directory of output library., Default: True
+#         verbose: bool
+#             Whether to
+#         verbose: bool
+#             Reserved.
+#         """
+#         self.ir_module: IRModule = ir_module
+#         self.output_dir: str = output_dir
+#         self.keep_ir: bool = keep_ir
+#         self.nvcc_keep: bool = nvcc_keep
+#         self.verbose: bool = verbose
+#
+#
+# def build_ir_module_job(build_instance: BuildInstance) -> Optional[str]:
+#     """
+#     Build an ir module in build instance.
+#
+#     Parameters
+#     ----------
+#     build_instance: BuildInstance
+#         The build instance to build.
+#
+#     Returns
+#     -------
+#     lib_path: str
+#         The path to the built dynamic linked library.
+#     """
+#     # pylint: disable=import-outside-toplevel
+#     from hidet.transforms.instruments import SaveIRInstrument
+#
+#     src_path = os.path.join(build_instance.output_dir, 'source.cu')
+#     lib_path = os.path.join(build_instance.output_dir, 'lib.so')
+#
+#     if os.path.exists(lib_path):
+#         # skip if already built
+#         return lib_path
+#
+#     instruments = []
+#     os.makedirs(build_instance.output_dir, exist_ok=True)
+#     if build_instance.keep_ir:
+#         instruments.append(SaveIRInstrument(out_dir=os.path.join(build_instance.output_dir, 'ir')))
+#     with PassContext(instruments=instruments):
+#         ir_module = lower(build_instance.ir_module)
+#     codegen(ir_module, src_out_path=src_path)
+#     try:
+#         compile_source(src_path, lib_path)
+#     except subprocess.CalledProcessError:
+#         print('Compilation failed for an instance')
+#         return None
+#     except CompilationFailed:
+#         print('Compilation failed for an instance')
+#         return None
+#     return lib_path
+#
+#
+# def batch_build_ir_modules(build_instances, parallel=True, verbose=False) -> List[Optional[CompiledFunction]]:
+#     """
+#     Build a batch of ir modules.
+#
+#     Parameters
+#     ----------
+#     build_instances: List[BuildInstance]
+#         The batch of build instances to build.
+#
+#     parallel: bool
+#         Whether build in parallel. Default True.
+#
+#     verbose: bool
+#         Whether show the progress and summary. Default False.
+#
+#     Returns
+#     -------
+#     funcs:
+#         The compiled functions, in the same order as build_instances.
+#         When the build for a build instance failed, None for that instance is returned.
+#     """
+#     with Timer() as timer:
+#         lib_paths = []
+#         if parallel:
+#             # Set the affinity of current process. Some package such as numpy will change affinity of current process,
+#             # which might limit the parallelism of compilation.
+#             os.sched_setaffinity(0, range(os.cpu_count()))
+#             mem_for_worker = 1.5 * 1024 * 1024 * 1024  # 1.5 GiB
+#             num_workers = min(max(int(psutil.virtual_memory().available // mem_for_worker), 1), psutil.cpu_count())
+#             with multiprocessing.Pool(processes=num_workers) as pool:
+#                 for lib_path in tqdm(
+#                     pool.imap(build_ir_module_job, build_instances),
+#                     desc='Compiling',
+#                     total=len(build_instances),
+#                     disable=not verbose,
+#                     ncols=80,
+#                 ):
+#                     lib_paths.append(lib_path)
+#         else:
+#             lib_paths = map(build_ir_module_job, build_instances)
+#         assert len(lib_paths) == len(build_instances)
+#         funcs = [
+#             load_task_func(lib_path, instance.ir_module.task) if lib_path else None
+#             for lib_path, instance in zip(lib_paths, build_instances)
+#         ]
+#     if verbose:
+#         print(
+#             'Batch build {} modules within {:.3f} seconds, on average {:.1f} seconds per module.'.format(
+#                 len(build_instances), timer.elapsed_seconds(), timer.elapsed_seconds() / len(build_instances)
+#             )
+#         )
+#     return funcs

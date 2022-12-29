@@ -144,8 +144,9 @@ bench_hidet_graph(graph)
 # To optimize the model, we set the level of operator schedule space to 2 with :func:`hidet.option.search_space`. We also
 # conduct graph level optimizations with :func:`hidet.graph.optimize`.
 
-# set the search space level for kernel tuning,
-hidet.option.search_space(2)
+# Set the search space level for kernel tuning. By default, the search space level is 0, which means no kernel tuning.
+# There are three choices: 0, 1, and 2. The higher the level, the better performance but the longer compilation time.
+hidet.option.search_space(0)
 
 # optimize the flow graph, such as operator fusion
 with hidet.graph.PassContext() as ctx:
