@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Union, Optional, Dict
 from cuda import cudart
 from cuda.cudart import cudaStream_t
+from hidet.utils import exiting
 from .event import Event
 from .device import CudaDeviceContext, device_count, current_device
 
@@ -88,8 +89,8 @@ class Stream:
             raise TypeError(f"cannot compare Stream with {type(other)}")
         return self._device_id == other._device_id and self._handle == other._handle
 
-    def __del__(self):
-        if cudart is None or cudart.cudaStreamDestroy is None:  # cudart has been unloaded
+    def __del__(self, is_exiting=exiting.is_exiting):
+        if is_exiting():
             return
         if not self._external:
             (err,) = cudart.cudaStreamDestroy(self._handle)

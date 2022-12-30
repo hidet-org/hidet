@@ -3,7 +3,7 @@ from typing import Callable, Dict, List, Optional, Union
 from collections import defaultdict
 import hidet.cuda
 from hidet.cuda.stream import Stream
-from hidet.utils import green, initialize
+from hidet.utils import green, initialize, exiting
 from hidet.runtime.device import Device, instantiate_device
 
 
@@ -482,7 +482,9 @@ class MemoryPool:
     def __str__(self):
         return self.status()
 
-    def __del__(self):
+    def __del__(self, is_shutting_down=exiting.is_exiting):
+        if is_shutting_down():
+            return
         self.clear()
 
 

@@ -17,16 +17,16 @@ The ResNet50 onnx model exported from PyTorch model zoo would be used as an exam
 # under current working directory.
 
 import os
-import warnings
 import torch
-import torchvision
 
 # the path to save the onnx model
 onnx_path = './resnet50.onnx'
 
-# load torchvision pretrained resnet50 and create a random input
-warnings.filterwarnings('ignore')
-torch_model = torchvision.models.resnet50(pretrained=True).eval().cuda()
+# load pretrained resnet50 and create a random input
+torch_model = torch.hub.load(
+    'pytorch/vision:v0.9.0', 'resnet50', pretrained=True, verbose=False
+)
+torch_model = torch_model.cuda().eval()
 torch_data = torch.randn([1, 3, 224, 224]).cuda()
 
 # export the pytorch model to onnx model 'resnet50.onnx'
@@ -53,11 +53,9 @@ print('PyTorch: {:.3f} ms'.format(benchmark_func(lambda: torch_model(torch_data)
 # %%
 # Load the onnx model with Hidet
 # ------------------------------
-# To run the onnx model, we should first load the # model with :func:`from_onnx()
-# <hidet.graph.frontend.onnx.from_onnx>` function by giving the path to the onnx model. This function returns a
-# :class:`OnnxModule <hidet.graph.frontend.onnx.OnnxModule>` object. The
-# :class:`OnnxModule <hidet.graph.frontend.onnx.OnnxModule>` object contains all the information we need to apply the
-# operators in the onnx model to given input tensor. The onnx model can be dynamic-shaped (e.g., in this example, the
+# To run the onnx model, we should first load the model with :func:`hidet.graph.frontend.from_onnx` function by giving
+# the path to the onnx model. This function returns callable object, which applies all operators in the onnx model to
+# the input argument and returns the output tensor(s). The onnx model can be dynamic-shaped (e.g., in this example, the
 # batch size is dynamic).
 import numpy as np
 import hidet
@@ -69,8 +67,8 @@ print('Input names:', hidet_onnx_module.input_names)
 print('Output names: ', hidet_onnx_module.output_names)
 
 # %%
-# Run the model
-# -------------
+# Imperatively run the model
+# --------------------------
 # To run the model, we first create a hidet tensor from torch tensor with :func:`hidet.from_torch`. We directly
 # call ``hidet_onnx_module`` to apply the operators in loaded onnx model to the given input tensor and get the output
 # tensor.
@@ -88,21 +86,14 @@ np.testing.assert_allclose(
 )
 
 # %%
-# Because the overhead to parse and translate the onnx model is large, the latency of directly use
-# :class:`OnnxModule <hidet.graph.frontend.onnx.OnnxModule>` to run the model is high.
-
-# benchmark
-print('  Hidet: {:.3f} ms'.format(benchmark_func(lambda: hidet_onnx_module(data))))
-
-# %%
 # Trace the model and run
 # -----------------------
-# A better way is to first trace the execution and get the static computation graph of the deep learning model. We
-# can use :func:`hidet.symbol_like` to create a symbol tensor. We can get the symbol tensor output by running the
-# model with the symbol tensor as input. The output is a symbol tensor that contains all information of how it is
-# derived. We can use :func:`hidet.trace_from` to create the static computation graph from the symbol output tensor.
-# In hidet, we use :class:`hidet.graph.FlowGraph` to represent such a computation graph, and it is also the basic
-# unit of graph-level optimizations.
+# A more efficient way to run the model is to first trace the execution and get the static computation graph of the deep
+# learning model. We can use :func:`hidet.symbol_like` to create a symbol tensor. We can get the symbol tensor output by
+# running the model with the symbol tensor as input. The output is a symbol tensor that contains all information of how
+# it is derived. We can use :func:`hidet.trace_from` to create the static computation graph from the symbol output
+# tensor. In hidet, we use :class:`hidet.graph.FlowGraph` to represent such a computation graph, and it is also the
+# basic unit of graph-level optimizations.
 
 symbol_data = hidet.symbol_like(data)
 symbol_output = hidet_onnx_module(symbol_data)
@@ -161,7 +152,7 @@ bench_hidet_graph(graph_opt)
 # Hidet is a DNN inference framework that accepts ONNX model. It conducts both graph-level and operator-level
 # optimizations. We follow the following steps to run an ONNX model in Hidet:
 #
-# 1. Load the model with :func:`hidet.graph.frontend.onnx.from_onnx`.
+# 1. Load the model with :func:`hidet.graph.frontend.from_onnx`.
 # 2. Run the model with symbolic inputs, and use :func:`hidet.trace_from` to create the :class:`hidet.graph.FlowGraph`.
-# 3. Create a :class:`hidet.runtime.cuda_graph.CudaGraph` using :func:`hidet.graph.FlowGraph.cuda_graph`.
+# 3. Create a :class:`hidet.cuda.graph.CudaGraph` using :func:`hidet.graph.FlowGraph.cuda_graph`.
 # 4. Run the cuda graph.

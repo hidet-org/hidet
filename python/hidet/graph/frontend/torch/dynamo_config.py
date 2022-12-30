@@ -15,10 +15,19 @@ class DynamoConfig:
     def search_space(self, level: int = 2):
         """
         The schedule search space for the operator kernel tuning
-        Candidates are: 0, 1, 2
-         - 0: Use the default schedule, without tuning.
-         - 1: Tune the schedule in a small search space. Usually takes less than one minute to tune a kernel.
-         - 2: Tune the schedule in a large search space. Usually achieves the best performance, but takes longer time.
+        Candidates are: ``0``, ``1``, ``2``
+
+        - ``0``:
+            Use the default schedule, without tuning.
+        - ``1``:
+            Tune the schedule in a small search space. Usually takes less than one minute to tune a kernel.
+        - ``2``:
+            Tune the schedule in a large search space. Usually achieves the best performance, but takes longer time.
+
+        Parameters
+        ----------
+        level: int
+            The search space level.
         """
         self._search_space = level
         return self
@@ -26,14 +35,20 @@ class DynamoConfig:
     def parallel_k(self, strategy="default"):
         """
         Parallelization on k dimension of the matrix multiplication
-        Candidates are: 'default', 'disabled', 'search'
-         - 'default':
+        Candidates are: ``default``, ``disabled``, ``search``
+
+        - ``default``:
             Default parallelization strategy. A heuristic strategy is used to decide whether to parallelize on k
             dimension and the size of split factor
-         - 'disabled':
+        - ``disabled``:
             Disable parallelization on k dimension
-         - 'search':
+        - ``search``:
             Search for the best parallelization strategy. Takes more time but usually achieves the best performance.
+
+        Parameters
+        ----------
+        strategy: str
+            The parallelization strategy.
         """
         self._parallel_k = strategy
 

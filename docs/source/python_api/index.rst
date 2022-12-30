@@ -1,6 +1,11 @@
 Python API
 ==========
 
+.. note::
+
+  We are actively working on adding more api documentation.
+
+
 .. toctree::
    :maxdepth: 1
    :caption: Python API
@@ -9,6 +14,8 @@ Python API
    option
    driver
    cuda
+   tensor
+   ops/index
    ir/index
    graph/index
    runtime/index

@@ -576,11 +576,11 @@ class OnnxResize(OnnxOperator):
         if roi is not None:
             roi = self.tensor2list(roi)
         target_size = None
-        if scales is not None and scales.num_elements > 0:
+        if scales is not None and scales.size > 0:
             scales = self.tensor2list(scales)
             assert len(x.shape) == len(scales)
             target_size = [int(a * b) for a, b in zip(x.shape, scales)]
-        elif sizes is not None and sizes.num_elements > 0:
+        elif sizes is not None and sizes.size > 0:
             sizes = self.tensor2list(sizes)
             target_size = [int(v) for v in sizes]
         else:

@@ -1,6 +1,6 @@
 from .availability import available, dynamo_available, imported
 from . import utils
-from .dynamo_config import dynamo_config
+from .dynamo_config import dynamo_config, DynamoConfig
 
 
 def from_torch(module, concrete_args=None):

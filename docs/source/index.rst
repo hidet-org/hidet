@@ -6,15 +6,12 @@
 Welcome to Hidet's Documentation
 ================================
 
-.. note::
-
-  Hidet has not been open-sourced yet. Please do not distribute this website.
-
 Hidet is an open-source DNN inference framework, it features
 
-- **Ease of Use**: Support end to end inference given a model in ONNX format.
+- **Ease of Use**: Support end to end inference for PyTorch and ONNX models.
 - **High Performance**: Graph-level optimizations and operator-level kernel tuning.
-- **Extensibility**: Easy to add new operators and new hardware backends.
+- **Extensibility**: Easy to add new operators, and fusion patterns.
+- **Python Oriented**: All core components are written in Python.
 
 
 .. toctree::
