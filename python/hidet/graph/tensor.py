@@ -539,7 +539,6 @@ class Tensor:
         """
         return self.storage is None
 
-
     def contiguous(self):
         """Create a tensor with contiguous row-major layout.
 

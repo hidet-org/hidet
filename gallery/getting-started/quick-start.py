@@ -22,7 +22,7 @@ This guide walks through the key functionality of Hidet for tensor computation.
 #   model_opt = torch.compile(model, backend='hidet')
 #
 # Next, we use resnet18 model as an example to show how to optimize a PyTorch model with Hidet.
-# 
+#
 # .. tip::
 #   :class: margin
 #

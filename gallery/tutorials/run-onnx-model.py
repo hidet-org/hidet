@@ -23,7 +23,9 @@ import torch
 onnx_path = './resnet50.onnx'
 
 # load pretrained resnet50 and create a random input
-torch_model = torch.hub.load('pytorch/vision:v0.9.0', 'resnet50', pretrained=True, verbose=False)
+torch_model = torch.hub.load(
+    'pytorch/vision:v0.9.0', 'resnet50', pretrained=True, verbose=False
+)
 torch_model = torch_model.cuda().eval()
 torch_data = torch.randn([1, 3, 224, 224]).cuda()
 
