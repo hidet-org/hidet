@@ -1009,9 +1009,8 @@ def zeros(shape: Sequence[int], dtype='float32', device='cpu') -> Tensor:
     ret: Tensor
         The created tensor.
     """
-    tensor = empty(shape, dtype, device)
-    hidet.cuda.memset_async(addr=tensor.storage.addr, num_bytes=tensor.nbytes, value=0)
-    return tensor
+    dtype = data_type(dtype)
+    return full(shape, dtype.zero, dtype, device)
 
 
 def ones(shape, dtype='float32', device='cpu') -> Tensor:

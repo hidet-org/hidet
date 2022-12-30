@@ -67,10 +67,7 @@ print(model)
 # Then we generate the flow graph of the model.
 
 graph = model.flow_graph_for(
-    inputs=[
-        hidet.randn([1, 128, 768], device='cuda'),
-        hidet.ones([1, 128], dtype='int32', device='cuda'),
-    ]
+    inputs=[hidet.randn([1, 128, 768]), hidet.ones([1, 128], dtype='int32')]
 )
 print(graph)
 
