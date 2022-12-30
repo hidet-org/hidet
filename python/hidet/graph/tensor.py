@@ -12,9 +12,11 @@ from hidet.ir.type import DataType, data_type
 from hidet.ir.layout import DataLayout, RowMajorLayout
 from hidet.runtime.storage import Storage
 from hidet.utils import prod
+from hidet.utils.overrides import set_module
 from hidet.runtime.device import Device, instantiate_device
 
 
+@set_module('hidet')
 class Tensor:
     """An n-dimension array, could be symbolic or concrete.
 
@@ -145,6 +147,28 @@ class Tensor:
             The data layout of the tensor.
         """
         return self._layout
+
+    @property
+    def nbytes(self):
+        """The number of bytes of the tensor.
+
+        Returns
+        -------
+        ret: int
+            The number of bytes.
+        """
+        return prod(self.shape) * self.dtype.nbytes
+
+    @property
+    def op(self):
+        """The operator that produces this tensor.
+
+        Returns
+        -------
+        ret: hidet.graph.operator.Operator, optional
+            The operator that produces this tensor. None indicates it is not traced.
+        """
+        return self.trace[0] if self.trace else None
 
     def __pos__(self):
         return self
@@ -515,38 +539,6 @@ class Tensor:
         """
         return self.storage is None
 
-    @property
-    def nbytes(self):
-        """The number of bytes of the tensor.
-
-        Returns
-        -------
-        ret: int
-            The number of bytes.
-        """
-        return prod(self.shape) * self.dtype.nbytes
-
-    @property
-    def num_elements(self):
-        """The number of elements of the tensor.
-
-        Returns
-        -------
-        ret: int
-            The number of elements.
-        """
-        return prod(self.shape)
-
-    @property
-    def op(self):
-        """The operator that produces this tensor.
-
-        Returns
-        -------
-        ret: hidet.graph.operator.Operator, optional
-            The operator that produces this tensor. None indicates it is not traced.
-        """
-        return self.trace[0] if self.trace else None
 
     def contiguous(self):
         """Create a tensor with contiguous row-major layout.

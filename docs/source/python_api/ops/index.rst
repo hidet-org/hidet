@@ -1,11 +1,11 @@
-hidet.graph.ops
-===============
+hidet.ops
+=========
 
 .. todo::
 
   We are still working on the documentation of operators.
 
-.. automodule:: hidet.graph.ops
+.. automodule:: hidet.ops
   :members:
   :undoc-members:
   :imported-members:

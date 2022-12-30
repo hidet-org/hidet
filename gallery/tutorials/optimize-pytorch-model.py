@@ -30,7 +30,8 @@ There are some operators that are compute-intensive and their scheduling is crit
 to search in a schedule space to find the best schedule for them to achieve the best performance on given input shapes.
 However, searching in a larger schedule space usually takes longer time to optimize the model. By default, hidet will
 use their default schedule to generate the kernel for all input shapes. To search in a larger schedule space to get
-better performance, you can configure the search space via
+better performance, you can configure the search space via :func:`~hidet.graph.frontend.torch.DynamoConfig.search_space`
+:
 
 .. code-block:: python
 
@@ -53,6 +54,7 @@ Check the correctness
 ---------------------
 It is important to make sure the optimized model is correct. Hidet provides a configuration to print the numerical
 difference between the hidet generated operator and the original pytorch operator. You can configure it via
+:func:`~hidet.graph.frontend.torch.DynamoConfig.correctness_report`:
 
 .. code-block:: python
 
@@ -66,16 +68,13 @@ not use the actual inputs). Let's take the resnet18 model as an example:
 import torch.backends.cudnn
 import hidet
 
+hidet.torch.register_dynamo_backends()  # register hidet backend to torch dynamo
+
 x = torch.randn(1, 3, 224, 224).cuda()
 model = torch.hub.load(
     'pytorch/vision:v0.9.0', 'resnet18', pretrained=True, verbose=False
 )
 model = model.cuda().eval()
-
-
-torch.backends.cudnn.allow_tf32 = (
-    False  # tf32 would harm the effective precision of torch's results
-)
 
 with torch.no_grad():
     hidet.torch.dynamo_config.correctness_report()
@@ -113,6 +112,7 @@ with torch.no_grad():
 # Hidet provides a configuration to use CUDA Graph to dispatch kernels. CUDA Graph is a new feature in CUDA 11.0
 # that allows us to record the kernel dispatches and replay them later. This feature is useful when we want to
 # dispatch the same kernels multiple times. Hidet will enable CUDA Graph by default. You can disable it via
+# :func:`~hidet.graph.frontend.torch.DynamoConfig.use_cuda_graph`:
 #
 # .. code-block:: python
 #
@@ -125,7 +125,8 @@ with torch.no_grad():
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #
 # Hidet provides a configuration to use low-precision data type. By default, hidet will use the same data type as
-# the original PyTorch model. You can configure it via
+# the original PyTorch model. You can configure it via :func:`~hidet.graph.frontend.torch.DynamoConfig.use_fp16` and
+# :func:`~hidet.graph.frontend.torch.DynamoConfig.use_fp16_reduction`:
 #
 # .. code-block:: python
 #
@@ -143,7 +144,7 @@ with torch.no_grad():
 # ~~~~~~~~~~~~~~~~~~~~~
 #
 # If you are interested in the graph that PyTorch dynamo dispatches to hidet backend, you can configure hidet to
-# print the graph via
+# print the graph via :func:`~hidet.graph.frontend.torch.DynamoConfig.print_input_graph`:
 #
 # .. code-block:: python
 #

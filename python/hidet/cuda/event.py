@@ -2,6 +2,7 @@
 from __future__ import annotations
 from cuda import cudart
 from cuda.cudart import cudaEvent_t
+from hidet.utils import exiting
 
 
 class Event:
@@ -30,8 +31,8 @@ class Event:
         err, self._handle = cudart.cudaEventCreateWithFlags(flags)
         assert err == 0, err
 
-    def __del__(self):
-        if cudart is None:  # cudart has been unloaded
+    def __del__(self, is_exiting=exiting.is_exiting):
+        if is_exiting():
             return
         (err,) = cudart.cudaEventDestroy(self._handle)
         assert err == 0, err

@@ -1,6 +1,5 @@
-hidet.graph.frontend
---------------------
+hidet.graph.frontend.onnx
+-------------------------
 
-.. automodule:: hidet.graph.frontend.onnx
-  :members:
-  :autosummary:
+.. autofunction:: hidet.graph.frontend.from_onnx
+

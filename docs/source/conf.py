@@ -88,6 +88,9 @@ autosummary_generate = True
 todo_include_todos = True
 
 autodoc_typehints = 'description'
+autodoc_default_options = {
+    'member-order': 'bysource',
+}
 
 bibtex_default_style = 'unsrt'
 bibtex_bibfiles = ['references.bib']

@@ -23,10 +23,10 @@ There are typical two scenarios that we need to resolve an operator to other ope
 
 - **Resolve a generic operator to specialized variants**: We can provide a generic operator and lots of its specialized
   variants. When optimizing the model, we can resolve the generic operator to the most suitable specialized operator.
-  For example, in Hidet, we provided a generic :py:func:`~hidet.graph.ops.matmul` operator with the same semantics as
+  For example, in Hidet, we provided a generic :py:func:`~hidet.ops.matmul` operator with the same semantics as
   the numpy equivalent :py:data:`numpy.matmul`. This operator is a generic operator and is scheduled automatically by
   our auto-scheduler, thus it is not very efficient. But we also provided a lot of specialized variants of the operators
-  such as highly-optimized :py:func:`~hidet.graph.ops.batch_matmul` that only accepts :math:`A=[B, M, K]` and
+  such as highly-optimized :py:func:`~hidet.ops.batch_matmul` that only accepts :math:`A=[B, M, K]` and
   :math:`B=[B, K, N]`. During the operator resolving, we first reshape and broadcast the input tensors to align the
   input shapes with the specialized operator, then use the specialized operator to compute the result, and finally
   reshape the output tensor to get the correct output shape.
@@ -35,7 +35,7 @@ There are typical two scenarios that we need to resolve an operator to other ope
   :class: margin
 
   During the operator resolving, we might introduce some extra operators to adjust the input tensors (e.g.,
-  :func:`~hidet.graph.ops.reshape`, :func:`~hidet.graph.ops.broadcast`, :func:`~hidet.graph.ops.transpose`, etc.).
+  :func:`~hidet.ops.reshape`, :func:`~hidet.ops.broadcast`, :func:`~hidet.ops.transpose`, etc.).
   These extra operators are usually fused into the resolved operators or surrounding operators of the original operator
   in the later optimization pass. Thus, the extra overhead is usually negligible.
 
@@ -53,12 +53,12 @@ There are typical two scenarios that we need to resolve an operator to other ope
     :align: center
     :scale: 70%
 
-    This rule resolves the generic :func:`~hidet.graph.ops.conv2d` operator to matrix multiplication using the img2col
+    This rule resolves the generic :func:`~hidet.ops.conv2d` operator to matrix multiplication using the img2col
     algorithm.
 
 The operator resolving pass would repeat the resolving process until no more operators can be resolved. Thus, in the
-conv2d example, we will first resolve :func:`~hidet.graph.ops.conv2d` to :func:`~hidet.graph.ops.matmul`, and then
-to :func:`~hidet.graph.ops.batch_matmul`.
+conv2d example, we will first resolve :func:`~hidet.ops.conv2d` to :func:`~hidet.ops.matmul`, and then
+to :func:`~hidet.ops.batch_matmul`.
 
 Add Operator Resolve Rule
 -------------------------
@@ -68,7 +68,7 @@ To add a resolve rule to an operator, we need to
 #. define a subclass of :class:`~hidet.graph.transforms.resolve_variant.ResolveRule` and then
 #. register the rule by decorating it with :func:`~hidet.graph.transforms.resolve_variant.register_resolve_rule`.
 
-In the following example, we resolve the :func:`~hidet.graph.ops.pow` operator to normal multiplications if the exponent
+In the following example, we resolve the :func:`~hidet.ops.pow` operator to normal multiplications if the exponent
 is a constant integer 3.
 
 Before we start, let's have a look at the original behavior when there is no such resolve rule.
@@ -86,7 +86,7 @@ graph_opt = hidet.graph.optimize(graph)
 print(graph_opt)
 
 # %%
-# The original graph contains a :func:`~hidet.graph.ops.pow` operator, and the optimized graph is the same as the
+# The original graph contains a :func:`~hidet.ops.pow` operator, and the optimized graph is the same as the
 # original graph. Now let's add the resolve rule and see what happens.
 
 from typing import Optional, List

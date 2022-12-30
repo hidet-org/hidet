@@ -7,10 +7,6 @@ Quick Start
 This guide walks through the key functionality of Hidet for tensor computation.
 """
 # %%
-# We should first import hidet.
-import hidet
-
-# %%
 # Optimize PyTorch model with Hidet
 # ---------------------------------
 # .. note::
@@ -26,11 +22,16 @@ import hidet
 #   model_opt = torch.compile(model, backend='hidet')
 #
 # Next, we use resnet18 model as an example to show how to optimize a PyTorch model with Hidet.
+# 
+# .. tip::
+#   :class: margin
+#
+#   Because tf32 is enabled by default for torch's cudnn backend, the torch's precision is slightly low.
+#   You could disable the tf32 via ``torch.backends.cudnn.allow_tf32 = False``. See also `PyTorch TF32`_.
+# .. _PyTorch TF32: https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices
 
-# disable tf32 to make the result of torch more accurate
-import torch.backends.cudnn
-
-torch.backends.cudnn.allow_tf32 = False
+import hidet
+import torch
 
 # take resnet18 as an example
 x = torch.randn(1, 3, 224, 224).cuda()
@@ -52,8 +53,8 @@ with torch.no_grad():
     y1 = model_opt(x)
     y2 = model(x)
 
-    # check the correctness (when tf32 is used, the error tolerance would go to 1e-3)
-    torch.testing.assert_close(actual=y1, expected=y2, rtol=1e-5, atol=1e-5)
+    # check the correctness
+    torch.testing.assert_close(actual=y1, expected=y2, rtol=1e-2, atol=1e-2)
 
 
 # benchmark the performance
@@ -96,29 +97,30 @@ for name, model in [('eager', model), ('hidet', model_opt)]:
 #
 #   Besides :func:`~hidet.randn`, we can also use :func:`~hidet.zeros`, :func:`~hidet.ones`, :func:`~hidet.full`,
 #   :func:`~hidet.empty` to create tensors with different initialized values. We can use :func:`~hidet.from_torch` to
-#   convert a PyTorch tensor to Hidet tensor that shares the same memory. We can also use :func:`~hidet.array` to
+#   convert a PyTorch tensor to Hidet tensor that shares the same memory. We can also use :func:`~hidet.asarray` to
 #   convert python list or numpy ndarray to Hidet tensor.
 #
 # A *tensor* is a n-dimension array. As other machine learning framework,
-# Hidet takes :class:`~hidet.graph.Tensor` as the core object to compute and manipulate.
+# Hidet takes :class:`~hidet.Tensor` as the core object to compute and manipulate.
 # The following code defines a tensor with randomly initialized tensor with :func:`hidet.randn`.
 
 a = hidet.randn([2, 3], device='cuda')
 print(a)
 
 # %%
-# Each :class:`~hidet.graph.Tensor` has :attr:`~hidet.graph.Tensor.dtype` to define the type of each tensor element,
-# and :attr:`~hidet.graph.Tensor.device` to tell which device this tensor resides on, and
-# :attr:`~hidet.graph.Tensor.shape` to indicate the size of each dimension. The example defines a ``float32`` tensor on
+# Each :class:`~hidet.Tensor` has :attr:`~hidet.Tensor.dtype` to define the type of each tensor element,
+# and :attr:`~hidet.Tensor.device` to tell which device this tensor resides on, and
+# :attr:`~hidet.Tensor.shape` to indicate the size of each dimension. The example defines a ``float32`` tensor on
 # ``cuda`` device with shape ``[2, 3]``.
 #
 
 # %%
 # Run operators
 # -------------
-# Hidet provides :mod:`a bunch of operators <hidet.graph.ops>` (e.g., :func:`~hidet.graph.ops.matmul` and
-# :func:`~hidet.graph.ops.conv2d`) to compute and manipulate tensors. We can do a matrix multiplication as follows:
-b, c = hidet.randn([3, 2], device='cuda'), hidet.randn([2], device='cuda')
+# Hidet provides :mod:`a bunch of operators <hidet.ops>` (e.g., :func:`~hidet.ops.matmul` and
+# :func:`~hidet.ops.conv2d`) to compute and manipulate tensors. We can do a matrix multiplication as follows:
+b = hidet.randn([3, 2], device='cuda')
+c = hidet.randn([2], device='cuda')
 d = hidet.ops.matmul(a, b)
 d = d + c  # 'd + c' is equivalent to 'hidet.ops.add(d, c)'
 print(d)
@@ -132,11 +134,11 @@ print(d)
 #
 # Symbolic tensor and flow graph
 # ------------------------------
-# In hidet, each tensor has an optional :attr:`~hidet.graph.Tensor.storage` attribute that represents a block of
+# In hidet, each tensor has an optional :attr:`~hidet.Tensor.storage` attribute that represents a block of
 # memory that stores the contents of the tensor. If the storage attribute is None, the tensor is a `symbolic` tensor.
 # We could use :func:`hidet.symbol_like` or :func:`hidet.symbol` to create a symbolic tensor. Symbolic tensors are
 # returned if any input tensor of an operator is symbolic. We could know how the symbolic tensor is computed via the
-# :attr:`~hidet.graph.Tensor.trace` attribute. It is a tuple ``(op, idx)`` where ``op`` is the operator produces this
+# :attr:`~hidet.Tensor.trace` attribute. It is a tuple ``(op, idx)`` where ``op`` is the operator produces this
 # tensor and ``idx`` is the index of this tensor in the operator's outputs.
 
 

@@ -4,8 +4,7 @@ hidet.graph
 .. toctree::
   :caption: Submodules
 
-  frontend/onnx
-  ops/index
+  frontend/index
   transforms/index
 
 
@@ -13,4 +12,5 @@ hidet.graph
   :members:
   :imported-members:
   :special-members: __call__
+  :exclude-members: Tensor
   :autosummary:

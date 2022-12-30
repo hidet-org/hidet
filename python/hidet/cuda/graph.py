@@ -5,7 +5,7 @@ from cuda.cudart import cudaGraphExec_t
 from hidet.graph.tensor import Tensor, zeros_like, randn_like
 from hidet.runtime.storage import MemoryPool, CudaMemoryAPI, memory_pool
 from hidet.runtime.device import Device
-from hidet.utils import same_list
+from hidet.utils import same_list, exiting
 from .device import current_device
 from .stream import Stream, StreamContext, current_stream
 from .memory import memcpy_async
@@ -52,8 +52,8 @@ class CudaGraphCapture:
         assert err == 0, err
         self.stream_context.__exit__(exc_type, exc_val, exc_tb)
 
-    def __del__(self):
-        if cudart is None:  # cudart has been unloaded
+    def __del__(self, is_shutting_down=exiting.is_exiting):
+        if is_shutting_down():
             return
         if self.captured_graph is not None:
             (err,) = cudart.cudaGraphDestroy(self.captured_graph)
@@ -129,8 +129,8 @@ class CudaGraph:
         else:
             return self.run(inputs)
 
-    def __del__(self):
-        if cudart is None:  # cudart has been unloaded
+    def __del__(self, is_shutting_down=exiting.is_exiting):
+        if is_shutting_down():
             return
         if hasattr(self, '_graph_exec'):
             (err,) = cudart.cudaGraphExecDestroy(self._graph_exec)
