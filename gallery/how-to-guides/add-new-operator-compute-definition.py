@@ -275,7 +275,7 @@ def run_task(task: Task, inputs: List[hidet.Tensor], outputs: List[hidet.Tensor]
     from hidet.runtime import CompiledFunction
 
     # build the task
-    func: CompiledFunction = hidet.driver.build_task(task, target_device='cuda')
+    func: CompiledFunction = hidet.driver.build_task(task, target_device='cpu')
     params = inputs + outputs
 
     # run the compiled task
