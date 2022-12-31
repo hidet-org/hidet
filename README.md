@@ -48,5 +48,5 @@ Hidet originates from the following research work. If you used **Hidet** in your
 - **Hidet: Task-Mapping Programming Paradigm for Deep Learning Tensor Programs.**  
   Yaoyao Ding, Cody Hao Yu, Bojian Zheng, Yizhi Liu, Yida Wang, and Gennady Pekhimenko. 
 
-## Support
-The development of Hidet is supported by [CentML Inc](https://centml.ai/).
+## Development and Contributing
+Hidet is currently under active development by a team at [CentML Inc](https://centml.ai/). We also welcome contributions from open-source community.
