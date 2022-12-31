@@ -1,8 +1,9 @@
 # Hidet: A compilation-based DNN inference framework
 [Documentation](http://docs.hidet.org:9000/)
 
-Hidet is an open-source DNN inference framework based on compilation. It takes an ONNX model as input, conducts a series 
-of graph-level and operator-level optimizations, and does inference. 
+Hidet is an open-source DNN inference framework based on compilation. 
+It supports end-to-end compilation of DNN models from PyTorch and ONNX to efficient cuda kernels.
+A series of graph-level and operator-level optimizations are applied to optimize the performance.
 
 ## Getting Started
 
@@ -23,7 +24,7 @@ import hidet
 hidet.torch.register_dynamo_backends()  
 
 # Define pytorch model
-model = torch.hub.load('pytorch/vision:v0.6.0', 'resnet18', pretrained=True).cuda.eval()
+model = torch.hub.load('pytorch/vision:v0.6.0', 'resnet18', pretrained=True).cuda().eval()
 x = torch.rand(1, 3, 224, 224).cuda()
 
 # Compile the model through Hidet
