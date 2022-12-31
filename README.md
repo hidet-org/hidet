@@ -41,16 +41,9 @@ See the following tutorials for more details and other usage:
 Hidet is released under the [Apache 2.0 license](LICENSE).
 
 ## Publication
-Hidet originates from the following research work. If you used Hidet in your research, welcome to cite our 
+Hidet originates from the following research work. If you used Hidet in your research, welcome to cite our
 [paper](https://arxiv.org/abs/2210.09603). 
-```text
-@misc{hidet,
-  title = {Hidet: Task Mapping Programming Paradigm for Deep Learning Tensor Programs},
-  author = {Ding, Yaoyao and Yu, Cody Hao and Zheng, Bojian and Liu, Yizhi 
-            and Wang, Yida and Pekhimenko, Gennady},
-  doi = {10.48550/ARXIV.2210.09603},
-  url = {https://arxiv.org/abs/2210.09603},
-  publisher = {arXiv},
-  year = {2022},
-}
-```
+
+- **Hidet: Task-Mapping Programming Paradigm for Deep Learning Tensor Programs.**
+ 
+  Ding, Yaoyao, Cody Hao Yu, Bojian Zheng, Yizhi Liu, Yida Wang, and Gennady Pekhimenko. 
