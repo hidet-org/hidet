@@ -1,8 +1,9 @@
-# Hidet: A compilation-based DNN inference framework
+# Hidet: A compilation-based deep learning framework
+[**Documentation**](http://docs.hidet.org:9000/)
 
-## Introduction
-Hidet is an open-source DNN inference framework based on compilation. It takes an ONNX model as input, conducts a series 
-of graph-level and operator-level optimizations, and does inference. 
+Hidet is an open-source DNN inference framework based on compilation. 
+It supports end-to-end compilation of DNN models from PyTorch and ONNX to efficient cuda kernels.
+A series of graph-level and operator-level optimizations are applied to optimize the performance.
 
 ## Getting Started
 
@@ -10,39 +11,42 @@ of graph-level and operator-level optimizations, and does inference.
 ```bash
 pip install hidet
 ```
-Please see the documentation for installing from source code.
+See [here](http://docs.hidet.org:9000/) for building from source.
 
-### Hello, world!
-Adding two tensors is a good start to learn a new DNN framework.
+### Usage
+
+Optimize a PyTorch model through hidet (require PyTorch 2.0):
 ```python
+import torch
 import hidet
 
-a = hidet.randn([3, 4], device='cuda')
-b = hidet.randn([3, 4], device='cuda')
-print(a + b)
-```
-The output of this problem
-```text
-Compiling task add...
-Tensor(shape=[3, 4], dtype='float32', device='cuda')
-[[ 1.0004374   0.5608922  -0.9226169   1.4127803 ]
- [ 2.0882926  -2.9668841  -1.4881673   1.4913353 ]
- [-1.2918147   0.2576717   0.59661216 -2.0760517 ]]
-```
+# Register hidet backends for pytorch dynamo, can be omitted if you import torch before hidet
+hidet.torch.register_dynamo_backends()  
 
-## Documentation
+# Define pytorch model
+model = torch.hub.load('pytorch/vision:v0.6.0', 'resnet18', pretrained=True).cuda().eval()
+x = torch.rand(1, 3, 224, 224).cuda()
 
-See the documentation to learn how to use Hidet.
+# Compile the model through Hidet
+model_opt = torch.compile(model, backend='hidet')  
+
+# Run the optimized model
+y = model_opt(x)
+```
+See the following tutorials to learn other usgae:
+- [Quick Start](http://docs.hidet.org:9000/gallery/getting-started/quick-start.html)
+- [Optimize PyTorch models](http://docs.hidet.org:9000/gallery/tutorials/optimize-pytorch-model.html)
+- [Optimize ONNX models](http://docs.hidet.org:9000/gallery/tutorials/run-onnx-model.html)
+
+## License
+Hidet is released under the [Apache 2.0 license](LICENSE).
 
 ## Publication
-Hidet originates from the following paper. If you use Hidet in your research, welcome to cite the paper.
-```text
-@misc{hidet,
-  title = {Hidet: Task Mapping Programming Paradigm for Deep Learning Tensor Programs},
-  author = {Ding, Yaoyao and Yu, Cody Hao and Zheng, Bojian and Liu, Yizhi and Wang, Yida and Pekhimenko, Gennady},
-  doi = {10.48550/ARXIV.2210.09603},
-  url = {https://arxiv.org/abs/2210.09603},
-  publisher = {arXiv},
-  year = {2022},
-}
-```
+Hidet originates from the following research work. If you used **Hidet** in your research, welcome to cite our
+[paper](https://arxiv.org/abs/2210.09603). 
+
+- **Hidet: Task-Mapping Programming Paradigm for Deep Learning Tensor Programs.**  
+  Yaoyao Ding, Cody Hao Yu, Bojian Zheng, Yizhi Liu, Yida Wang, and Gennady Pekhimenko. 
+
+## Development and Contributing
+Hidet is currently under active development by a team at [CentML Inc](https://centml.ai/). We also welcome contributions from open-source community.
