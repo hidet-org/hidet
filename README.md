@@ -1,4 +1,4 @@
-# Hidet: A compilation-based DNN inference framework
+# Hidet: A compilation-based deep learning framework
 [Documentation](http://docs.hidet.org:9000/)
 
 Hidet is an open-source DNN inference framework based on compilation. 
