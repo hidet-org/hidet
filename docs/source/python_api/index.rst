@@ -15,6 +15,7 @@ Python API
    driver
    cuda
    tensor
+   data_types
    ops/index
    ir/index
    graph/index

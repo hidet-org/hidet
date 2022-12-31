@@ -2,12 +2,18 @@ from __future__ import annotations
 from typing import Optional, Union, Sequence
 import operator
 import torch
-from hidet.graph.tensor import Tensor
+from hidet.graph.tensor import Tensor, full_like
 from hidet.graph import ops
 from hidet.utils import same_list
+from hidet.ir.type import DataType
+from hidet.runtime.device import Device
 from .interpreter import register_function, register_method
 from .interpreter import warnings
 from .utils import dtype_from_torch, device_from_torch
+
+Number = Union[int, float, bool]
+TorchDtype = torch.dtype
+TorchDevice = torch.device
 
 
 @register_function(torch.nn.functional.conv2d)
@@ -275,3 +281,87 @@ def transpose(x: Tensor, dim0: int, dim1: int):
     if dim0 < dim1:
         dim0, dim1 = dim1, dim0
     return ops.transpose(x, [dim0, dim1])
+
+
+@register_function(torch.nn.functional.dropout)
+@register_function(torch.nn.functional.dropout1d)
+@register_function(torch.nn.functional.dropout2d)
+@register_function(torch.nn.functional.dropout3d)
+def dropout(x: Tensor, p: float = 0.5, training: bool = True, inplace: bool = False):
+    _ = p
+    if training:
+        warnings.warn_once('hidet: Dropout/1D/2D/3D in training mode is not supported. Treating as in inference mode.')
+    if inplace:
+        warnings.warn_once("hidet: dropout(..., inplace=True) is not supported, treating as inplace=False")
+    return x
+
+
+@register_function(torch.nn.functional.relu6)
+def relu6(x: Tensor, inplace: bool = False):
+    if inplace:
+        warnings.warn_once("hidet: relu6(..., inplace=True) is not supported, treating as inplace=False")
+    return ops.relu6(x)
+
+
+@register_function(torch.arange)
+def arange(
+    start: Number,
+    end: Number,
+    step: Number = 1,
+    *,
+    out: Optional[Tensor] = None,
+    dtype: Optional[TorchDtype] = None,
+    layout: Optional = None,
+    device: Optional[Union[TorchDevice, str, None]] = None,
+    pin_memory: Optional[bool] = False,
+    requires_grad: Optional[bool] = False,
+):
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.arange(..., out=..., ...)")
+    if layout is not None:
+        raise NotImplementedError("hidet: does not support torch.arange(..., layout=..., ...)")
+    if requires_grad and torch.is_grad_enabled():
+        warnings.warn_once("hidet: requires_grad=True when torch.is_grad_enabled(), treating as requires_grad=False")
+    _ = pin_memory  # ignore here, as hidet's default cpu memory is always pinned
+    hidet_device: Device = device_from_torch(torch_device=device)
+    hidet_dtype: DataType = dtype_from_torch(torch_dtype=dtype)
+    return ops.arange(start, end, step, dtype=hidet_dtype, device=hidet_device)
+
+
+@register_function(torch.addmm)
+def addmm(
+    input: Tensor, mat1: Tensor, mat2: Tensor, *, beta: Number = 1, alpha: Number = 1, out: Optional[Tensor] = None
+):
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.addmm(..., out=..., ...)")
+    y = ops.matmul(mat1, mat2)
+    if alpha not in [1, 1.0]:
+        y = y * alpha
+    if beta not in [1, 1.0]:
+        input = input * beta
+    return y + input
+
+
+@register_function(torch.where)
+def where(condition: Tensor, x: Tensor, y: Tensor):
+    return ops.where(cond=condition, x=x, y=y)
+
+
+@register_function(torch.pow)
+def pow(base: Tensor, exponent: Union[Number, Tensor]):
+    if isinstance(exponent, (int, float, bool)):
+        exponent = full_like(base, exponent)
+    return ops.pow(base, exponent)
+
+
+@register_function(torch.full)
+def full(size, fill_value, *, out=None, dtype=None, layout=None, device=None, requires_grad=False):
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.full(..., out=..., ...)")
+    if layout not in [None, torch.strided]:
+        raise NotImplementedError("hidet: does not support torch.full(..., layout=..., ...)")
+    if requires_grad and torch.is_grad_enabled():
+        warnings.warn_once("hidet: requires_grad=True when torch.is_grad_enabled(), treating as requires_grad=False")
+    hidet_device: Device = device_from_torch(torch_device=device)
+    hidet_dtype: DataType = dtype_from_torch(torch_dtype=dtype)
+    return ops.full(size, fill_value, dtype=hidet_dtype, device=hidet_device)

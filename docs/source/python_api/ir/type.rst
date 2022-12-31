@@ -1,6 +1,6 @@
 hidet.ir.type
 =============
 
-.. automodule:: hidet.ir.type
-  :members:
-  :autosummary:
+.. autoclass:: hidet.ir.type.DataType
+
+.. autofunction:: hidet.ir.type.data_type

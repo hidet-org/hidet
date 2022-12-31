@@ -1,5 +1,5 @@
 from hidet.graph.frontend.torch import availability as torch_availability
-from .root import bench_group
+from .bench import bench_group
 
 if not torch_availability.dynamo_available():
     raise RuntimeError(

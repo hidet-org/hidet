@@ -1,7 +1,7 @@
 from __future__ import annotations
 import torch
 from hidet.graph.tensor import Tensor
-from .interpreter import HidetModule, register_module, warnings
+from .interpreter import HidetModule, register_module
 from . import register_functions as regs
 
 
@@ -85,11 +85,7 @@ class HidetBatchNorm2d(HidetModule):
 class HidetDropout2d(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, (torch.nn.Dropout, torch.nn.Dropout1d, torch.nn.Dropout2d, torch.nn.Dropout3d))
-        if self.mod.training:
-            warnings.warn_once(
-                'hidet: Dropout/1D/2D/3D in training mode is not supported. Treating as in inference mode.'
-            )
-        return x
+        return regs.dropout(x, self.mod.p, self.mod.training, self.mod.inplace)
 
 
 @register_module(torch.nn.LayerNorm)
@@ -125,3 +121,10 @@ class HidetEmbedding(HidetModule):
             scale_grad_by_freq=self.mod.scale_grad_by_freq,
             sparse=self.mod.sparse,
         )
+
+
+@register_module(torch.nn.ReLU6)
+class HidetReLU6(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.ReLU6)
+        return regs.relu6(x, self.mod.inplace)

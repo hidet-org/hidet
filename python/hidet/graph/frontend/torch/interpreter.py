@@ -186,7 +186,7 @@ class Interpreter:
         return Registry.registered_methods[torch_method]
 
     @staticmethod
-    def _raise_exception(exception: Exception, caused_callable: Any):
+    def _raise_exception(exception: Exception, caused_callable: Any, args, kwargs):
         if isinstance(caused_callable, HidetModule):
             func = dict(inspect.getmembers(caused_callable.__call__))['__func__']
             code = dict(inspect.getmembers(func))['__code__']
@@ -194,7 +194,11 @@ class Interpreter:
             code = dict(inspect.getmembers(caused_callable))['__code__']
         callable_name, filename, lineno = caused_callable.__name__, code.co_filename, code.co_firstlineno
         raise type(exception)(
-            f'{exception}, occurred in {callable_name}, defined at\n' f'  File "{filename}", line {lineno}'
+            f'{exception}, occurred when calling {callable_name} with \n'
+            f'    args: {args}\n'
+            f'  kwargs: {kwargs}\n'
+            f'{callable_name} is defined at\n'
+            f'  File "{filename}", line {lineno}'
         )
 
     def forward(self, *args):
@@ -233,7 +237,7 @@ class Interpreter:
                 try:
                     hidet_env[node.name] = hidet_func(*hidet_args, **hidet_kwargs)
                 except Exception as e:
-                    self._raise_exception(e, hidet_func)
+                    self._raise_exception(e, hidet_func, hidet_args, hidet_kwargs)
             elif node.op == "call_method":
                 args = load_arg(node.args, hidet_env)
                 kwargs = load_arg(node.kwargs, hidet_env)
@@ -246,7 +250,7 @@ class Interpreter:
                 try:
                     hidet_env[node.name] = hidet_method(*args, **kwargs)
                 except Exception as e:
-                    self._raise_exception(e, hidet_method)
+                    self._raise_exception(e, hidet_method, args, kwargs)
             elif node.op == "call_module":
                 hidet_module = self._lookup_hidet_module(node.target)
                 args = load_arg(node.args, hidet_env)
@@ -254,7 +258,7 @@ class Interpreter:
                 try:
                     hidet_env[node.name] = hidet_module(*args, **kwargs)
                 except Exception as e:
-                    self._raise_exception(e, hidet_module)
+                    self._raise_exception(e, hidet_module, args, kwargs)
             elif node.op == "output":
                 graph_hidet_output = hidet_env[node.name] = load_arg(node.args[0], hidet_env)
             else:
@@ -322,7 +326,7 @@ class Interpreter:
                 try:
                     hidet_env[node.name] = hidet_func(*hidet_args, **hidet_kwargs)
                 except Exception as e:
-                    self._raise_exception(e, hidet_func)
+                    self._raise_exception(e, hidet_func, hidet_args, hidet_kwargs)
 
                 readable_target = self._get_callable_name(torch_func)
             elif node.op == "call_method":
@@ -338,7 +342,7 @@ class Interpreter:
                 try:
                     hidet_env[node.name] = hidet_method(*hidet_args, **hidet_kwargs)
                 except Exception as e:
-                    self._raise_exception(e, hidet_method)
+                    self._raise_exception(e, hidet_method, hidet_args, hidet_kwargs)
 
                 readable_target = self._get_callable_name(torch_method)
             elif node.op == "call_module":
@@ -354,7 +358,7 @@ class Interpreter:
                 try:
                     hidet_env[node.name] = hidet_module(*hidet_args, **hidet_kwargs)
                 except Exception as e:
-                    self._raise_exception(e, hidet_module)
+                    self._raise_exception(e, hidet_module, hidet_args, hidet_kwargs)
 
                 readable_target = self._get_callable_name(torch_module)
             elif node.op == "output":
