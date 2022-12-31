@@ -1,5 +1,5 @@
 # Hidet: A compilation-based deep learning framework
-[Documentation](http://docs.hidet.org:9000/)
+[**Documentation**](http://docs.hidet.org:9000/)
 
 Hidet is an open-source DNN inference framework based on compilation. 
 It supports end-to-end compilation of DNN models from PyTorch and ONNX to efficient cuda kernels.
@@ -33,7 +33,8 @@ model_opt = torch.compile(model, backend='hidet')
 # Run the optimized model
 y = model_opt(x)
 ```
-See the following tutorials for more details and other usage:
+See the following tutorials to learn other usgae:
+- [Quick Start](http://docs.hidet.org:9000/gallery/getting-started/quick-start.html)
 - [Optimize PyTorch models](http://docs.hidet.org:9000/gallery/tutorials/optimize-pytorch-model.html)
 - [Optimize ONNX models](http://docs.hidet.org:9000/gallery/tutorials/run-onnx-model.html)
 
@@ -41,9 +42,11 @@ See the following tutorials for more details and other usage:
 Hidet is released under the [Apache 2.0 license](LICENSE).
 
 ## Publication
-Hidet originates from the following research work. If you used Hidet in your research, welcome to cite our
+Hidet originates from the following research work. If you used **Hidet** in your research, welcome to cite our
 [paper](https://arxiv.org/abs/2210.09603). 
 
-- **Hidet: Task-Mapping Programming Paradigm for Deep Learning Tensor Programs.**
- 
-  Ding, Yaoyao, Cody Hao Yu, Bojian Zheng, Yizhi Liu, Yida Wang, and Gennady Pekhimenko. 
+- **Hidet: Task-Mapping Programming Paradigm for Deep Learning Tensor Programs.**  
+  Yaoyao Ding, Cody Hao Yu, Bojian Zheng, Yizhi Liu, Yida Wang, and Gennady Pekhimenko. 
+
+## Support
+The development of Hidet is supported by [CentML Inc](https://centml.ai/).
