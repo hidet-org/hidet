@@ -30,7 +30,7 @@ x = torch.rand(1, 3, 224, 224).cuda()
 model_opt = torch.compile(model, backend='hidet')  
 
 # Run the optimized model
-y = model_opt(torch.randn(1, 3, 224, 224, device='cuda'))
+y = model_opt(x)
 ```
 See the following tutorials for more details and other usage:
 - [Optimize PyTorch models](http://docs.hidet.org:9000/gallery/tutorials/optimize-pytorch-model.html)
@@ -45,7 +45,8 @@ Hidet originates from the following research work. If you used Hidet in your res
 ```text
 @misc{hidet,
   title = {Hidet: Task Mapping Programming Paradigm for Deep Learning Tensor Programs},
-  author = {Ding, Yaoyao and Yu, Cody Hao and Zheng, Bojian and Liu, Yizhi and Wang, Yida and Pekhimenko, Gennady},
+  author = {Ding, Yaoyao and Yu, Cody Hao and Zheng, Bojian and Liu, Yizhi 
+            and Wang, Yida and Pekhimenko, Gennady},
   doi = {10.48550/ARXIV.2210.09603},
   url = {https://arxiv.org/abs/2210.09603},
   publisher = {arXiv},
