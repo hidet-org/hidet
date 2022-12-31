@@ -19,13 +19,20 @@ Optimize a PyTorch model through hidet (require PyTorch 2.0):
 import torch
 import hidet
 
-hidet.torch.register_dynamo_backends()  # register hidet backends for pytorch dynamo
+# Register hidet backends for pytorch dynamo, can be omitted if you import torch before hidet
+hidet.torch.register_dynamo_backends()  
 
-model = torch.hub.load('pytorch/vision:v0.6.0', 'resnet18', pretrained=True)
-model_opt = torch.compile(model, backend='hidet')  # Compile the model through Hidet
+# Define pytorch model
+model = torch.hub.load('pytorch/vision:v0.6.0', 'resnet18', pretrained=True).cuda.eval()
+x = torch.rand(1, 3, 224, 224).cuda()
+
+# Compile the model through Hidet
+model_opt = torch.compile(model, backend='hidet')  
+
+# Run the optimized model
 y = model_opt(torch.randn(1, 3, 224, 224, device='cuda'))
 ```
-See the following tutorials for more details:
+See the following tutorials for more details and other usage:
 - [Optimize PyTorch models](http://docs.hidet.org:9000/gallery/tutorials/optimize-pytorch-model.html)
 - [Optimize ONNX models](http://docs.hidet.org:9000/gallery/tutorials/run-onnx-model.html)
 
@@ -33,8 +40,8 @@ See the following tutorials for more details:
 Hidet is released under the [Apache 2.0 license](LICENSE).
 
 ## Publication
-Hidet originates from the following [paper](https://arxiv.org/abs/2210.09603). If you use Hidet in your research, 
-welcome to cite the paper.
+Hidet originates from the following research work. If you used Hidet in your research, welcome to cite our 
+[paper](https://arxiv.org/abs/2210.09603). 
 ```text
 @misc{hidet,
   title = {Hidet: Task Mapping Programming Paradigm for Deep Learning Tensor Programs},
