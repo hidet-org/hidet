@@ -1,35 +1,15 @@
-import torch
 import click
 from tabulate import tabulate
-from .model import BenchModel, all_registered_models, commonly_used_models
-
-
-class ResNet(BenchModel):
-    def __init__(self, model_name: str, batch_size, channels: int, height: int, width: int):
-        self.model_name = model_name
-        self.batch_size = batch_size
-        self.channels = channels
-        self.height = height
-        self.width = width
-
-    def __str__(self):
-        return self.model_name
-
-    def model(self):
-        return torch.hub.load('pytorch/vision:v0.6.0', self.model_name, pretrained=True, verbose=False)
-
-    def example_inputs(self):
-        args = (torch.randn(self.batch_size, self.channels, self.height, self.width),)
-        kwargs = {}
-        return args, kwargs
+from hidet.cli.bench.model import BenchModel, all_registered_models, commonly_used_models
+from .vision_model import VisionModel
 
 
 resnet_models = {
-    'resnet18': ResNet('resnet18', 1, 3, 224, 224),
-    'resnet34': ResNet('resnet34', 1, 3, 224, 224),
-    'resnet50': ResNet('resnet50', 1, 3, 224, 224),
-    'resnet101': ResNet('resnet101', 1, 3, 224, 224),
-    'resnet152': ResNet('resnet152', 1, 3, 224, 224),
+    'resnet18': VisionModel('resnet18', 1, 3, 224, 224),
+    'resnet34': VisionModel('resnet34', 1, 3, 224, 224),
+    'resnet50': VisionModel('resnet50', 1, 3, 224, 224),
+    'resnet101': VisionModel('resnet101', 1, 3, 224, 224),
+    'resnet152': VisionModel('resnet152', 1, 3, 224, 224),
 }
 
 
@@ -55,8 +35,9 @@ def bench_resnet(models: str, batch_size: int, channels: int, height: int, width
         if model not in resnet_models:
             raise ValueError('Unknown model: {}, candidates: {}'.format(model, list(resnet_models.keys())))
 
-    bench_models = [ResNet(model_name, batch_size, channels, height, width) for model_name in models]
+    bench_models = [VisionModel(model_name, batch_size, channels, height, width) for model_name in models]
     header = BenchModel.headers()
     result = [bench_model.benchmark() for bench_model in bench_models]
 
     click.echo(tabulate(result, headers=header, tablefmt='github', floatfmt='.3f', numalign='right', stralign='left'))
+    click.echo('(PyTorch backend: allow_tf32={})'.format(BenchModel.allow_tf32))

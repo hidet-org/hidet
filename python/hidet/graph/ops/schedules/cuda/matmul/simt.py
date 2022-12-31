@@ -147,11 +147,12 @@ class MatmulSchedule(Schedule):
         )
         # the number of registers allocated to each thread is a multiple of 8.
         used_num_regs_per_thread = (used_num_regs_per_thread + 7) // 8 * 8
-        resident_blocks = hidet.cuda.properties().regsPerBlock // (used_num_regs_per_thread * block_size)
+        resident_blocks = hidet.cuda.properties().regsPerMultiprocessor // (used_num_regs_per_thread * block_size)
 
         max_smem_bytes_per_block = (
             min(
-                hidet.cuda.properties().sharedMemPerMultiprocessor // resident_blocks,
+                # hidet.cuda.properties().sharedMemPerMultiprocessor // resident_blocks,
+                48 * 1024 // resident_blocks,
                 hidet.cuda.properties().sharedMemPerBlock,
             )
             // 128

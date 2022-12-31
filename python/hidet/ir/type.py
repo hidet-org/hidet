@@ -26,6 +26,7 @@ class DataType(TypeNode):
     """
     The data type that defines how to interpret the data in memory.
     """
+
     def __init__(self, name: str, short_name: str, nbytes: int):
         self._name = name
         self._short_name = short_name

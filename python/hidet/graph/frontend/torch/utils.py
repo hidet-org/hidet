@@ -1,15 +1,25 @@
-from typing import Tuple, Any, List, Union, Dict
+from typing import Tuple, Any, List, Union, Dict, Optional
 from hidet.graph.tensor import Tensor
 from hidet.ir.type import DataType
 from hidet.ir import dtypes
+from hidet.runtime.device import Device
 from .availability import available
 
 
-def dtype_from_torch(torch_dtype) -> DataType:
+def dtype_from_torch(torch_dtype) -> Optional[DataType]:
     if not available():
         raise RuntimeError('torch is not available')
 
+    if torch_dtype is None:
+        return None
+
+    if isinstance(torch_dtype, DataType):
+        return torch_dtype
+
     import torch
+
+    if isinstance(torch_dtype, str):
+        torch_dtype = getattr(torch, torch_dtype)
 
     mapping = {
         torch.float64: dtypes.float64,
@@ -29,20 +39,58 @@ def dtype_from_torch(torch_dtype) -> DataType:
     return mapping[torch_dtype]
 
 
-def device_from_torch(torch_device) -> str:
+def dtype_to_torch(dtype: DataType):
+    import torch
+
+    mapping = {
+        dtypes.float64: torch.float64,
+        dtypes.float32: torch.float32,
+        dtypes.bfloat16: torch.bfloat16,
+        dtypes.float16: torch.float16,
+        dtypes.int64: torch.int64,
+        dtypes.int32: torch.int32,
+        dtypes.int16: torch.int16,
+        dtypes.int8: torch.int8,
+        dtypes.uint8: torch.uint8,
+        dtypes.boolean: torch.bool,
+    }
+    return mapping[dtype]
+
+
+def device_from_torch(torch_device) -> Device:
+    """
+    Convert a device provided by torch to a hidet device.
+
+    Parameters
+    ----------
+    torch_device: Union[str, torch.device, Device], optional
+        The device to convert. If None, the default device is used.
+
+    Returns
+    -------
+    ret: Device, optional
+        The corresponding hidet device.
+    """
     if not available():
         raise RuntimeError('torch is not available')
 
+    if torch_device is None:
+        return Device('cpu')
+
+    if isinstance(torch_device, Device):
+        return torch_device
+
     import torch
+
+    if not isinstance(torch_device, torch.device):
+        torch_device = torch.device(torch_device)
 
     assert isinstance(torch_device, torch.device)
 
     if torch_device.type == 'cpu':
-        return 'cpu'
+        return Device('cpu')
     elif torch_device.type == 'cuda':
-        if torch_device.index != 0:
-            raise NotImplementedError('hidet currents only supports single gpu inference.')
-        return 'cuda'
+        return Device('cuda', torch_device.index)
     else:
         raise NotImplementedError(f'unsupported torch device {torch_device}')
 

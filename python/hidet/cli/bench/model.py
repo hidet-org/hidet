@@ -3,13 +3,11 @@ from typing import List, Any
 from hidet.testing import benchmark_func
 import hidet
 
-if hidet.torch.dynamo_available():
-    import torch._dynamo as dynamo
-else:
-    dynamo = None
-
 
 class BenchModel:
+    search_space = 0
+    allow_tf32 = False
+
     def __str__(self):
         raise NotImplementedError()
 
@@ -71,7 +69,16 @@ class BenchModel:
         return ', '.join(items)
 
     def bench_with_backend(self, backend: str, mode=None, passes=None, warmup=3, number=10, repeat=10):
-        import torch
+        import torch.backends.cudnn
+        import torch.backends.cuda
+
+        if not hidet.torch.dynamo_available():
+            raise RuntimeError('Torch Dynamo is not available, please install pytorch 2.0 or higher.')
+        import torch._dynamo as dynamo
+
+        hidet.torch.register_dynamo_backends()
+        torch.backends.cudnn.allow_tf32 = self.allow_tf32
+        torch.backends.cuda.matmul.allow_tf32 = self.allow_tf32
 
         model, (args, kwargs) = self.model(), self.example_inputs()
         model = model.cuda().eval()
@@ -86,14 +93,17 @@ class BenchModel:
         return latency
 
     def bench_eager(self) -> float:
+        print('Benchmarking {} with backend {}...'.format(self, 'eager'))
         return self.bench_with_backend('eager')
 
-    def bench_inductor(self) -> float:
-        return self.bench_with_backend('inductor', mode='max-autotune')
+    def bench_inductor(self, mode: str) -> float:
+        print('Benchmarking {} with backend {}...'.format(self, 'inductor(mode={})'.format(mode)))
+        return self.bench_with_backend('inductor', mode=mode)
 
-    def bench_hidet(self, use_cuda_graph=True, use_fp16=False, use_fp16_reduction=False, space=2) -> float:
+    def bench_hidet(self, use_cuda_graph=True, use_fp16=False, use_fp16_reduction=False) -> float:
+        print('Benchmarking {} with backend {}...'.format(self, 'hidet(space={})'.format(self.search_space)))
         config = hidet.torch.dynamo_config
-        config.search_space(space)
+        config.search_space(self.search_space)
         config.use_cuda_graph(use_cuda_graph)
         config.use_fp16(use_fp16)
         config.use_fp16_reduction(use_fp16_reduction)
@@ -101,16 +111,23 @@ class BenchModel:
 
     @staticmethod
     def headers() -> List[str]:
-        return ['model', 'inputs', 'eager', 'inductor', 'hidet', 'hidet_f16']
+        return [
+            'model',
+            'inputs',
+            'eager',
+            'inductor(mode=reduce-overhead)',
+            # 'inductor(mode=max-autotune)'
+            'hidet(space={})'.format(BenchModel.search_space),
+        ]
 
     def benchmark(self) -> List[Any]:
         return [
             str(self),
             self.inputs_str(),
             self.bench_eager(),
-            self.bench_inductor(),
+            self.bench_inductor('reduce-overhead'),
+            # self.bench_inductor('max-autotune'),
             self.bench_hidet(),
-            self.bench_hidet(use_fp16=True),
         ]
 
 
