@@ -458,6 +458,7 @@ disable=raw-checker-failed,
         missing-module-docstring,           # todo: enable this later
         invalid-name,                       # todo: enable this later
         global-statement,                   # todo: enable this later
+        no-name-in-module,                  # some modules are not installed in the CI, or the version is too low
 
 # Enable the message, report, category or checker with the given id(s). You can
 # either give multiple identifier separated by comma (,) or put this option
