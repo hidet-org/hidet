@@ -1,5 +1,5 @@
 # Hidet: A compilation-based deep learning framework
-[**Documentation**](http://docs.hidet.org:9000/)
+[**Documentation**](http://docs.hidet.org:9000/) 
 
 Hidet is an open-source DNN inference framework based on compilation. 
 It supports end-to-end compilation of DNN models from PyTorch and ONNX to efficient cuda kernels.
@@ -38,9 +38,6 @@ See the following tutorials to learn other usgae:
 - [Optimize PyTorch models](http://docs.hidet.org:9000/gallery/tutorials/optimize-pytorch-model.html)
 - [Optimize ONNX models](http://docs.hidet.org:9000/gallery/tutorials/run-onnx-model.html)
 
-## License
-Hidet is released under the [Apache 2.0 license](LICENSE).
-
 ## Publication
 Hidet originates from the following research work. If you used **Hidet** in your research, welcome to cite our
 [paper](https://arxiv.org/abs/2210.09603). 
@@ -48,5 +45,13 @@ Hidet originates from the following research work. If you used **Hidet** in your
 - **Hidet: Task-Mapping Programming Paradigm for Deep Learning Tensor Programs.**  
   Yaoyao Ding, Cody Hao Yu, Bojian Zheng, Yizhi Liu, Yida Wang, and Gennady Pekhimenko. 
 
-## Development and Contributing
-Hidet is currently under active development by a team at [CentML Inc](https://centml.ai/). We also welcome contributions from open-source community.
+## Development 
+Hidet is currently under active development by a team at [CentML Inc](https://centml.ai/). 
+
+## Contributing
+We welcome contributions from the community. Please see 
+[contribution guide](http://docs.hidet.org:9000/hidet/docs/build/html/developer-guides/contributing.html) 
+for more details.
+
+## License
+Hidet is released under the [Apache 2.0 license](LICENSE).
