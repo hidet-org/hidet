@@ -51,6 +51,16 @@ def generate_executor(flow_graph: FlowGraph) -> Callable:
     if has_cpu_tensor and has_cuda_tensor:
         raise RuntimeError('the flow graph contains both CPU and CUDA tensors, currently not supported by hidet')
 
+    def preprocess_inputs(inputs: Sequence[torch.Tensor]) -> List[hidet.Tensor]:
+        torch_inputs: List[torch.Tensor] = []
+        for x in inputs:
+            if not x.is_contiguous():
+                logger.warning('Hidet received a non-contiguous torch input tensor, converting it to contiguous')
+                x = x.contiguous()
+            torch_inputs.append(x)
+        hidet_inputs: List[hidet.Tensor] = [hidet.from_torch(tensor) for tensor in torch_inputs]
+        return hidet_inputs
+
     if use_cuda_graph and not has_cpu_tensor:
         with hidet.option.context():
             hidet.option.search_space(search_space)
@@ -59,7 +69,7 @@ def generate_executor(flow_graph: FlowGraph) -> Callable:
             logger.info('finish generating the cuda graph')
 
         def run(*inputs: torch.Tensor):
-            hidet_inputs: List[hidet.Tensor] = [hidet.from_torch(tensor) for tensor in inputs]
+            hidet_inputs = preprocess_inputs(inputs)
             hidet_outputs: List[hidet.Tensor] = cuda_graph.run_async(inputs=hidet_inputs)
             torch_outputs: List[torch.Tensor] = [tensor.torch() for tensor in hidet_outputs]
             return torch_outputs
@@ -73,13 +83,7 @@ def generate_executor(flow_graph: FlowGraph) -> Callable:
         logger.info('finish generating the executor without cuda graph')
 
         def run(*inputs: torch.Tensor):
-            torch_inputs: List[torch.Tensor] = []
-            for x in inputs:
-                if not x.is_contiguous():
-                    logger.warning('Hidet received a non-contiguous torch input tensor, converting it to contiguous')
-                    x = x.contiguous()
-                torch_inputs.append(x)
-            hidet_inputs: List[hidet.Tensor] = [hidet.from_torch(tensor) for tensor in torch_inputs]
+            hidet_inputs = preprocess_inputs(inputs)
             hidet_outputs: Union[List[hidet.Tensor], hidet.Tensor] = graph_opt(*hidet_inputs)
             if isinstance(hidet_outputs, hidet.Tensor):
                 hidet_outputs = [hidet_outputs]
