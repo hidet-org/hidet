@@ -376,3 +376,10 @@ def full(size, fill_value, *, out=None, dtype=None, layout=None, device=None, re
     hidet_device: Device = device_from_torch(torch_device=device)
     hidet_dtype: DataType = dtype_from_torch(torch_dtype=dtype)
     return ops.full(size, fill_value, dtype=hidet_dtype, device=hidet_device)
+
+
+@register_function(torch.bmm)
+def bmm(input: Tensor, mat2: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.bmm(..., out=...)")
+    return ops.matmul(input, mat2)
