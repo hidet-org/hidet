@@ -44,6 +44,7 @@ from hidet.ir.expr import (
 )
 from hidet.ir.expr import IfThenElse, Cast, Address, Reference, Dereference, Call, Let, Constant, TensorSlice, convert
 from hidet.ir.stmt import Stmt, DeclareScope, DeclareStmt, EvaluateStmt, BufferStoreStmt, AssignStmt, LetStmt, ForStmt
+from hidet.ir.stmt import LaunchKernelStmt
 from hidet.ir.stmt import ForTaskStmt, WhileStmt, BreakStmt, ContinueStmt, IfStmt, ReturnStmt, AssertStmt, AsmStmt
 from hidet.ir.stmt import BlackBoxStmt, SeqStmt
 from hidet.ir.func import IRModule, Function
@@ -587,6 +588,16 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             + ' : '
             + doc_join(input_docs, ', ')
             + ');'
+        )
+
+    def visit_LaunchKernelStmt(self, stmt: LaunchKernelStmt):
+        return NewLine() + Text('{}<<<dim3({}), dim3({}), {}, {}>>>({});').format(
+            self(stmt.func_var),
+            self(stmt.grid_dim),
+            self(stmt.block_dim),
+            self(stmt.shared_mem_bytes),
+            Text("(cudaStream_t)get_cuda_stream()"),
+            self(stmt.args),
         )
 
     def visit_BlackBoxStmt(self, stmt: BlackBoxStmt):

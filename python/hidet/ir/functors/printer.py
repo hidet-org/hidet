@@ -17,7 +17,17 @@ from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, Exp
 from hidet.ir.expr import Sub, LogicalNot, LogicalOr, LogicalAnd, Let, IfThenElse, TensorSlice
 from hidet.ir.expr import RightShift, LeftShift, BitwiseNot, BitwiseOr
 from hidet.ir.expr import BitwiseAnd, Neg, Cast, NotEqual, BitwiseXor, Reference, Dereference, Address
-from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt
+from hidet.ir.stmt import (
+    SeqStmt,
+    IfStmt,
+    ForStmt,
+    AssignStmt,
+    BufferStoreStmt,
+    EvaluateStmt,
+    Stmt,
+    AssertStmt,
+    LaunchKernelStmt,
+)
 from hidet.ir.stmt import BlackBoxStmt, AsmStmt, ReturnStmt, LetStmt, DeclareStmt, ForTaskStmt, WhileStmt, ContinueStmt
 from hidet.ir.stmt import BreakStmt, DeclareScope
 from hidet.ir.mapping import RepeatTaskMapping, SpatialTaskMapping, ComposedTaskMapping, TaskMapping
@@ -347,6 +357,19 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
             + ' : '
             + doc_join(input_docs, ', ')
             + ');'
+        )
+
+    def visit_LaunchKernelStmt(self, stmt: LaunchKernelStmt):
+        return Text("{}<<<dim3({}, {}, {}), dim3({}, {}, {}), {}>>>({});").format(
+            self(stmt.func_var),
+            self(stmt.grid_dim[0]),
+            self(stmt.grid_dim[1]),
+            self(stmt.grid_dim[2]),
+            self(stmt.block_dim[0]),
+            self(stmt.block_dim[1]),
+            self(stmt.block_dim[2]),
+            self(stmt.shared_mem_bytes),
+            self(stmt.args),
         )
 
     def visit_BlackBoxStmt(self, stmt: BlackBoxStmt):

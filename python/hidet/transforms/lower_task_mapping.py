@@ -15,7 +15,7 @@ from hidet.ir import Var, ForTaskStmt, Stmt, ForStmt, Expr, SeqStmt
 from hidet.ir.expr import var
 from hidet.ir.mapping import TaskMapping, SpatialTaskMapping, RepeatTaskMapping, ComposedTaskMapping
 from hidet.transforms.base import Pass, FunctionBodyPass
-from hidet.ir.functors import StmtExprRewriter, rewrite
+from hidet.ir.functors import StmtExprRewriter, rewrite, simplify
 from hidet.utils import prod
 
 Int = Union[Expr, int]
@@ -84,7 +84,7 @@ class TaskMappingExpander:
             task: List[Optional[Var]] = [None for _ in range(num_loops)]
             for i in range(num_loops):
                 dim = mapping.ranks.index(i)
-                extent = mapping.task_shape[dim]
+                extent = simplify(mapping.task_shape[dim])
                 loop_var = var('i')
                 self.loop_nests.append(ForStmt(loop_var=loop_var, extent=extent))
                 task[dim] = loop_var

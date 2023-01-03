@@ -80,7 +80,7 @@ class Event:
         assert err == 0, err
         return elapsed_time
 
-    def record(self, stream):
+    def record(self, stream=None):
         """
         Record the event in the given stream.
 
@@ -94,11 +94,13 @@ class Event:
 
         Parameters
         ----------
-        stream: Stream
+        stream: Stream, optional
             The stream where the event is recorded.
         """
-        from hidet.cuda.stream import Stream
+        from hidet.cuda.stream import Stream, current_stream
 
+        if stream is None:
+            stream = current_stream()
         if not isinstance(stream, Stream):
             raise TypeError("stream must be a Stream")
         (err,) = cudart.cudaEventRecord(self._handle, stream.handle())

@@ -9,7 +9,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from hidet.utils.bench import benchmark_func
+
 from . import models
 from . import utils
-
-from .utils import benchmark_func, check_unary, check_binary, check_torch_unary, check_torch_binary
+from .utils import check_unary, check_binary, check_torch_unary, check_torch_binary

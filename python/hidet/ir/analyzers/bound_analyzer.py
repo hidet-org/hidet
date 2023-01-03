@@ -14,6 +14,7 @@ import itertools
 import operator
 from collections import defaultdict
 
+from hidet.ir.type import DataType
 from hidet.ir.expr import Expr, Var, Add, Sub, Multiply, FloorDiv, Mod, Constant, Div
 from hidet.ir.func import Function
 from hidet.ir.functors import FuncStmtExprVisitor
@@ -192,7 +193,7 @@ class BoundInfo:
 Int = Union[int, Expr]
 
 
-def normalize_launch_dims(dims: Union[Int, Sequence[Int]]) -> List[int]:
+def normalize_launch_dims(dims: Union[Int, Sequence[Int]]) -> List[Union[Expr, int]]:
     if isinstance(dims, (list, tuple)):
         dims = list(dims)
         while len(dims) < 3:
@@ -204,9 +205,14 @@ def normalize_launch_dims(dims: Union[Int, Sequence[Int]]) -> List[int]:
         if isinstance(dim, int):
             ret.append(dim)
         elif isinstance(dim, Expr):
-            from hidet.ir.functors import simplify_to_int  # pylint: disable=import-outside-toplevel
+            from hidet.ir.functors import simplify  # pylint: disable=import-outside-toplevel
 
-            ret.append(simplify_to_int(dim))
+            simplified_dim = simplify(dim)
+            if isinstance(simplified_dim, Constant):
+                assert isinstance(simplified_dim.type, DataType) and simplified_dim.type.is_integer()
+                ret.append(simplified_dim.value)
+            else:
+                ret.append(simplified_dim)
         else:
             raise ValueError(dim)
     return ret
@@ -238,13 +244,15 @@ class BoundAnalyzer(FuncStmtExprVisitor):
             if 'cuda_block_dim' in func.attrs:
                 block_dims = normalize_launch_dims(func.attrs['cuda_block_dim'])
                 for block_dim, suffix in zip(block_dims, ['x', 'y', 'z']):
-                    bound_info = BoundInfo(min_value=0, max_value=int(block_dim) - 1)
-                    self.bound[extern_var_map['threadIdx.{}'.format(suffix)]] = bound_info
+                    if isinstance(block_dim, int):
+                        bound_info = BoundInfo(min_value=0, max_value=int(block_dim) - 1)
+                        self.bound[extern_var_map['threadIdx.{}'.format(suffix)]] = bound_info
             if 'cuda_grid_dim' in func.attrs:
                 grid_dims = normalize_launch_dims(func.attrs['cuda_grid_dim'])
                 for grid_dim, suffix in zip(grid_dims, ['x', 'y', 'z']):
-                    bound_info = BoundInfo(min_value=0, max_value=int(grid_dim) - 1)
-                    self.bound[extern_var_map['blockIdx.{}'.format(suffix)]] = bound_info
+                    if isinstance(grid_dim, int):
+                        bound_info = BoundInfo(min_value=0, max_value=int(grid_dim) - 1)
+                        self.bound[extern_var_map['blockIdx.{}'.format(suffix)]] = bound_info
         self.visit(func.body)
 
     def combine(self, e: Union[Add, Sub, Multiply, FloorDiv, Mod, Div]):

@@ -42,9 +42,13 @@ from hidet.ir.expr import TensorSlice, IfThenElse, Call, Let, Var, Constant, Cas
 from hidet.ir.expr import BinaryOp, Expr
 from hidet.ir.stmt import EvaluateStmt, DeclareStmt, BufferStoreStmt, AssignStmt, LetStmt, ForStmt, ForTaskStmt, SeqStmt
 from hidet.ir.stmt import WhileStmt, BreakStmt, ContinueStmt, IfStmt, ReturnStmt, AsmStmt, AssertStmt, BlackBoxStmt
+from hidet.ir.stmt import LaunchKernelStmt
 from hidet.ir.func import Function
 from hidet.ir.compute import TensorNode, ScalarNode, ReduceCompute, ArgReduceCompute, GridCompute
 from hidet.ir.dialects.pattern import AnyExpr
+
+# todo: current implementation of method dispatch is not very human readable, will consider refactoring to
+#       use if-elif-else chain
 
 
 class NodeFunctor:
@@ -644,6 +648,7 @@ class StmtFunctor(NodeFunctor):
             IfStmt: cls.visit_IfStmt,
             ReturnStmt: cls.visit_ReturnStmt,
             AsmStmt: cls.visit_AsmStmt,
+            LaunchKernelStmt: cls.visit_LaunchKernelStmt,
             AssertStmt: cls.visit_AssertStmt,
             BlackBoxStmt: cls.visit_BlackBoxStmt,
             SeqStmt: cls.visit_SeqStmt,
@@ -692,6 +697,9 @@ class StmtFunctor(NodeFunctor):
         raise NotImplementedError()
 
     def visit_AsmStmt(self, stmt: AsmStmt):
+        raise NotImplementedError()
+
+    def visit_LaunchKernelStmt(self, stmt: LaunchKernelStmt):
         raise NotImplementedError()
 
     def visit_BlackBoxStmt(self, stmt: BlackBoxStmt):
@@ -765,6 +773,16 @@ class StmtVisitor(StmtFunctor):
             self.visit_expr(expr)
         for expr in stmt.output_exprs:
             self.visit_expr(expr)
+
+    def visit_LaunchKernelStmt(self, stmt: LaunchKernelStmt):
+        self.visit_expr(stmt.func_var)
+        for arg in stmt.args:
+            self.visit_expr(arg)
+        for dim in stmt.grid_dim:
+            self.visit_expr(dim)
+        for dim in stmt.block_dim:
+            self.visit_expr(dim)
+        self.visit_expr(stmt.shared_mem_bytes)
 
     def visit_BlackBoxStmt(self, stmt: BlackBoxStmt):
         for expr in stmt.exprs:
@@ -889,6 +907,28 @@ class StmtRewriter(StmtFunctor):
                 list(zip(stmt.input_labels, input_exprs)),
                 stmt.is_volatile,
             )
+
+    def visit_LaunchKernelStmt(self, stmt: LaunchKernelStmt):
+        func_var = self.visit_expr(stmt.func_var)
+        args = [self.visit_expr(e) for e in stmt.args]
+        grid_dim = (
+            self.visit_expr(stmt.grid_dim[0]),
+            self.visit_expr(stmt.grid_dim[1]),
+            self.visit_expr(stmt.grid_dim[2]),
+        )
+        block_dim = (
+            self.visit_expr(stmt.block_dim[0]),
+            self.visit_expr(stmt.block_dim[1]),
+            self.visit_expr(stmt.block_dim[2]),
+        )
+        shared_mem_bytes = self.visit_expr(stmt.shared_mem_bytes)
+        if same_list(
+            [func_var, *args, *grid_dim, *block_dim, shared_mem_bytes],
+            [stmt.func_var, *stmt.args, *stmt.grid_dim, *stmt.block_dim, stmt.shared_mem_bytes],
+        ):
+            return stmt
+        else:
+            return LaunchKernelStmt(func_var, args, grid_dim, block_dim, shared_mem_bytes)
 
     def visit_BlackBoxStmt(self, stmt: BlackBoxStmt):
         exprs = [self.visit_expr(e) for e in stmt.exprs]
