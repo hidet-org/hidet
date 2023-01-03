@@ -38,7 +38,7 @@ def get_type_repr(value):
         return '{{{}}}'.format(', '.join('{}: {}'.format(k, v) for k, v in zip(keys, items)))
     elif isinstance(value, Tensor):
         shape_repr = ', '.join(str(v) for v in value.shape)
-        return '{}[{}]'.format(value.dtype.name, shape_repr)
+        return '{}:{}[{}]'.format(value.device, value.dtype.name, shape_repr)
     elif isinstance(value, np.ndarray):
         shape_repr = ', '.join(str(v) for v in value.shape)
         return 'np.{}[{}]'.format(value.dtype, shape_repr)

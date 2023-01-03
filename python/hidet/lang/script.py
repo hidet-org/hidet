@@ -45,6 +45,19 @@ def eliminate_decorators(source: str) -> Tuple[str, int]:
 
 
 def script(func: FunctionType) -> Function:
+    """
+    Decorator to convert a Python function to a Hidet function.
+
+    Parameters
+    ----------
+    func: FunctionType
+        The python function to be converted to a Hidet function.
+
+    Returns
+    -------
+    ret: Function
+        The hidet.ir.Function that is converted from the given Python function.
+    """
     # Extract the source code of given function
     lines, start_line = inspect.getsourcelines(func)
     file = inspect.getsourcefile(func)
@@ -76,6 +89,7 @@ def script(func: FunctionType) -> Function:
     ctx = ScriptModuleContext.current_context()
     if ctx:
         ctx.append_function(hidet_function)
+    assert isinstance(hidet_function, Function)
     return hidet_function
 
 

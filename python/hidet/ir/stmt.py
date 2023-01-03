@@ -180,6 +180,22 @@ class SeqStmt(Stmt):
             assert isinstance(stmt, Stmt), str(type(stmt))
 
 
+class LaunchKernelStmt(Stmt):
+    def __init__(
+        self,
+        func_var: Expr,
+        args: Sequence[Expr],
+        grid_dim: Tuple[Expr, Expr, Expr],
+        block_dim: Tuple[Expr, Expr, Expr],
+        shared_mem: Expr,
+    ):
+        self.func_var: Expr = func_var
+        self.args: List[Expr] = list(args)
+        self.grid_dim: Tuple[Expr, Expr, Expr] = grid_dim
+        self.block_dim: Tuple[Expr, Expr, Expr] = block_dim
+        self.shared_mem_bytes: Expr = shared_mem
+
+
 def asm(
     template: str,
     *,

@@ -56,6 +56,15 @@ def tensor_pointer(
     return ~tensor_type(dtype, shape, layout)
 
 
+def as_tensor_pointer(
+    expr: Expr,
+    dtype: Union[DataType, str],
+    shape: Optional[Sequence[ConstExpr]] = None,
+    layout: Optional[DataLayout] = None,
+) -> Expr:
+    return cast(expr, tensor_pointer(dtype, shape, layout))
+
+
 def grid(*dim_extents):
     raise ValueError('Please call this function within the @hidet.script decorated function.')
 

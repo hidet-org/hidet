@@ -101,6 +101,15 @@ class NewLine(Doc):
 
 
 class Text(Doc):
-    def __init__(self, s):
+    def __init__(self, s: str):
         super().__init__()
+        assert isinstance(s, str)
         self.docs.append(s)
+        self.format_str = s
+
+    def format(self, *args) -> Doc:
+        format_str: str = self.format_str
+        texts = format_str.split('{}')
+        if len(texts) != len(args) + 1:
+            raise ValueError(f'format string {format_str} does not match the number of args: {len(args)}')
+        return doc_join([Text(texts[i]) + args[i] for i in range(len(args))], "") + Text(texts[-1])
