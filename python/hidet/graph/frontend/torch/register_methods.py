@@ -47,9 +47,6 @@ def tensor_to(self: Tensor, *args, **kwargs) -> Tensor:
     See Also
         https://pytorch.org/docs/stable/generated/torch.Tensor.to.html
     """
-    if self.is_symbolic():
-        raise NotImplementedError('hidet: Tensor.to() is not supported for symbolic tensors.')
-
     dtype = kwargs.get('dtype', None)
     device = kwargs.get('device', None)
     non_blocking = kwargs.get('non_blocking', False)
@@ -60,6 +57,8 @@ def tensor_to(self: Tensor, *args, **kwargs) -> Tensor:
         if isinstance(arg, torch.dtype):
             dtype = arg
         elif isinstance(arg, torch.device):
+            if self.is_symbolic():
+                raise NotImplementedError('hidet: Tensor.to(..., device=...) is not supported for symbolic tensors.')
             device = arg
         else:
             raise ValueError(f'Unsupported argument type: {type(arg)}')
@@ -158,3 +157,13 @@ def tensor_type(self: Tensor, dtype: Union[str, torch.dtype], non_blocking: bool
     else:
         _ = non_blocking
         return ops.cast(self, dtype_from_torch(dtype))
+
+
+@register_method(torch.Tensor.expand)
+def tensor_expand(self: Tensor, *sizes: int) -> Tensor:
+    return ops.broadcast(self, sizes)
+
+
+@register_method(torch.Tensor.masked_fill)
+def tensor_masked_fill(self: Tensor, mask: Tensor, value: float) -> Tensor:
+    return ops.where(mask, ops.full([], value, dtype=self.dtype, device=self.device), self)
