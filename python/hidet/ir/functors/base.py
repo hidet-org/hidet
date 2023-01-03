@@ -909,8 +909,6 @@ class StmtRewriter(StmtFunctor):
             )
 
     def visit_LaunchKernelStmt(self, stmt: LaunchKernelStmt):
-        from hidet.utils.py import same_list
-
         func_var = self.visit_expr(stmt.func_var)
         args = [self.visit_expr(e) for e in stmt.args]
         grid_dim = (

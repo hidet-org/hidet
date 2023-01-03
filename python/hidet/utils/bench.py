@@ -1,6 +1,6 @@
 from typing import Union, List
-import numpy as np
 import time
+import numpy as np
 
 
 def benchmark_func(run_func, warmup=1, number=5, repeat=5, median=True) -> Union[List[float], float]:

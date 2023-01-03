@@ -74,9 +74,7 @@ def add_packed_func(ir_module: IRModule, func: Function, pack_func_name: str):
             else:
                 raise NotImplementedError('Unsupported type: {}'.format(param.type))
             param2arg[param] = arg_var
-            sb += AssertStmt(
-                arg_types[idx] == code.value, 'The {}-th argument should be {}'.format(idx, code.name, param.type)
-            )
+            sb += AssertStmt(arg_types[idx] == code.value, 'The {}-th argument should be {}'.format(idx, param.type))
             sb += DeclareStmt(arg_var, init=arg)
 
         if func.kind == 'cuda_kernel' and simplify_to_int(func.get_attr('cuda_dynamic_smem_bytes', 0)) > 48 * 1024:

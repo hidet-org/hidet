@@ -43,10 +43,10 @@ print('{}: {:.1f} MiB'.format(onnx_path, os.path.getsize(onnx_path) / (2**20)))
 
 # %%
 # Before going further, we first measure the latency of reset50 directly using PyTorch for inference.
-# The :func:`benchmark_func() <hidet.testing.benchmark_func>` function runs the given function multiple times to
+# The :func:`benchmark_func() <hidet.utils.benchmark_func>` function runs the given function multiple times to
 # get the median latency.
 
-from hidet.testing.utils import benchmark_func
+from hidet.utils import benchmark_func
 
 print('PyTorch: {:.3f} ms'.format(benchmark_func(lambda: torch_model(torch_data))))
 
