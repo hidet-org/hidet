@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # pylint: disable=no-name-in-module
-from typing import List, Callable, Sequence
+from typing import List, Callable, Sequence, Union
 import logging
 import torch
 import hidet.option
@@ -73,8 +73,16 @@ def generate_executor(flow_graph: FlowGraph) -> Callable:
         logger.info('finish generating the executor without cuda graph')
 
         def run(*inputs: torch.Tensor):
-            hidet_inputs: List[hidet.Tensor] = [hidet.from_torch(tensor) for tensor in inputs]
-            hidet_outputs: List[hidet.Tensor] = graph_opt(*hidet_inputs)
+            torch_inputs: List[torch.Tensor] = []
+            for x in inputs:
+                if not x.is_contiguous():
+                    logger.warning('Hidet received a non-contiguous torch input tensor, converting it to contiguous')
+                    x = x.contiguous()
+                torch_inputs.append(x)
+            hidet_inputs: List[hidet.Tensor] = [hidet.from_torch(tensor) for tensor in torch_inputs]
+            hidet_outputs: Union[List[hidet.Tensor], hidet.Tensor] = graph_opt(*hidet_inputs)
+            if isinstance(hidet_outputs, hidet.Tensor):
+                hidet_outputs = [hidet_outputs]
             torch_outputs: List[torch.Tensor] = [tensor.torch() for tensor in hidet_outputs]
             return torch_outputs
 
