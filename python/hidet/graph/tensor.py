@@ -886,7 +886,7 @@ class Tensor:
         if device is None:
             device = 'cuda'
         device = instantiate_device(device)
-        if self.device == 'cuda':
+        if self.device.is_cuda():
             return self
         else:
             if self.trace is None:
