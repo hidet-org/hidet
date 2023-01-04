@@ -9,6 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from __future__ import annotations
 from typing import Optional, Sequence
 from collections import OrderedDict
 from hidet.graph.tensor import symbol_like
@@ -83,3 +84,10 @@ class Module:
                 raise ValueError('Currently only support Tensor as input when automatically creating flow_graph.')
         symbol_outputs = self.forward(*symbol_inputs)
         return trace_from(symbol_outputs, symbol_inputs)
+
+    def to_cuda(self) -> Module:
+        for name, submodule in self.submodules.items():
+            submodule.to_cuda()
+        for name, parameter in self.parameters.items():
+            self.parameters[name] = parameter.cuda()
+        return self
