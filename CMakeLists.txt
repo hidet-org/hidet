@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.19)
 
 project(hidet C CXX)
 
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 # config hidet
 if(EXISTS "${CMAKE_BINARY_DIR}/config.cmake")
     include(${CMAKE_BINARY_DIR}/config.cmake)

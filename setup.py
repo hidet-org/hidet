@@ -9,21 +9,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from setuptools import setup, find_packages, Distribution
-
-
-class BinaryDistribution(Distribution):
-    def has_ext_modules(self):
-        return True
-
-    def is_pure(self):
-        return False
+from setuptools import setup, find_packages
 
 
 setup(
     name="hidet",
-    version="0.1",
+    version="0.1.2",
     description="Hidet: a compilation-based DNN inference framework.",
+    long_description=open("README.md").read(),
+    long_description_content_type="text/markdown",
     python_requires='>=3.8',
     packages=find_packages(where='python'),
     package_dir={"": "python"},
@@ -36,15 +30,16 @@ setup(
         "tabulate",
         "astunparse",
         "click",
-        "cuda-python"
+        "packaging",
+        "cuda-python",
     ],
-    distclass=BinaryDistribution,
+    platforms=["linux"],
     entry_points={
         'console_scripts': [
             'hidet = hidet.cli.main:main',
         ],
     },
-    url="docs.hidet.org",
+    url="https://docs.hidet.org",
     classifiers=[
         'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
