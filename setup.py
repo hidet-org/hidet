@@ -22,7 +22,7 @@ class BinaryDistribution(Distribution):
 
 setup(
     name="hidet",
-    version="0.1.dev0",
+    version="0.1",
     description="Hidet: a compilation-based DNN inference framework.",
     python_requires='>=3.8',
     packages=find_packages(where='python'),
@@ -59,10 +59,6 @@ setup(
         'Topic :: Software Development :: Libraries :: Python Modules',
         'Programming Language :: C++',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.8',
-        'Programming Language :: Python :: 3.9',
-        'Programming Language :: Python :: 3.10',
-        'Programming Language :: Python :: 3.11',
     ],
     license='Apache-2.0',
     keywords='deep learning, machine learning, neural network, inference, compiler',
