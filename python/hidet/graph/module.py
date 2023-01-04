@@ -84,7 +84,7 @@ class Module:
                 raise ValueError('Currently only support Tensor as input when automatically creating flow_graph.')
         symbol_outputs = self.forward(*symbol_inputs)
         return trace_from(symbol_outputs, symbol_inputs)
-    
+
     def to_cuda(self) -> Module:
         for name, submodule in self.submodules.items():
             submodule.to_cuda()
