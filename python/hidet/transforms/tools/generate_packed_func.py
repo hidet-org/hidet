@@ -86,7 +86,7 @@ def add_packed_func(ir_module: IRModule, func: Function, pack_func_name: str):
                 [param2arg[param] for param in func.params],
                 grid_dim=_rewrite_dim3(_normalize_dim3(func.get_attr('cuda_grid_dim')), param2arg),
                 block_dim=_rewrite_dim3(_normalize_dim3(func.get_attr('cuda_block_dim')), param2arg),
-                shared_mem=rewrite(int32(func.get_attr('shared_mem', 0)), param2arg),
+                shared_mem=rewrite(int32(func.get_attr('cuda_dynamic_smem_bytes', 0)), param2arg),
             )
         elif func.kind == 'host_kernel':
             sb += Call(func_var, [param2arg[param] for param in func.params])

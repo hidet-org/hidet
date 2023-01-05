@@ -72,10 +72,13 @@ class Function(Node):
     def __call__(self, *args, **kwargs) -> Call:
         raise ValueError('Can only call script function in another script function, or lower it to execute.')
 
-    def get_attr(self, attr_name, default=None):
+    def get_attr(self, attr_name, default=None, allow_missing=False):
         if attr_name in self.attrs:
             return self.attrs[attr_name]
-        return default
+        if allow_missing:
+            return default
+        else:
+            raise ValueError('Attribute {} is not found in function {}'.format(attr_name, self.name))
 
 
 class IRModule(Node):
