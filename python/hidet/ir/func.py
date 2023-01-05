@@ -73,17 +73,39 @@ class Function(Node):
         raise ValueError('Can only call script function in another script function, or lower it to execute.')
 
     def get_attr(self, attr_name, default=None, allow_missing=False):
+        """
+        Get attribute of this function.
+
+        When default is not None or allow_missing is True, this function will return the default value (in case
+        default is not None) or None (in case default is None) when the attribute is not found. Otherwise,
+        this function will raise a KeyError.
+
+        Parameters
+        ----------
+        attr_name: str
+            The name of attribute
+
+        default: Any, optional
+            The default value of attribute
+
+        allow_missing: bool, default False
+
+        Returns
+        -------
+        attr_value: Any
+            The value of attribute
+        """
         if attr_name in self.attrs:
             return self.attrs[attr_name]
-        if allow_missing:
+        if default is not None or allow_missing:
             return default
         else:
-            raise ValueError('Attribute {} is not found in function {}'.format(attr_name, self.name))
+            raise KeyError('Attribute {} is not found in function {}'.format(attr_name, self.name))
 
 
 class IRModule(Node):
     """
-    The intermidiate representation of tensor programs.
+    The intermediate representation of tensor programs.
 
     An IRModule contains one or more functions. It is the basic compilation unit of hidet.
     """

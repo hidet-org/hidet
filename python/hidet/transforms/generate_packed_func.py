@@ -28,11 +28,12 @@ class GeneratePackedFuncPass(Pass):
             if func.kind not in ['cuda_kernel', 'host_kernel']:
                 # only generate packed func for entry function
                 continue
-            if func.get_attr('packed_func', None) is not None:
+            if func.get_attr('packed_func', allow_missing=True) is not None:
                 # this function itself is a packed function
                 continue
             if any(
-                f.get_attr('packed_func', None) is ir_module.lookup_var(func.name) for f in ir_module.functions.values()
+                f.get_attr('packed_func', allow_missing=True) is ir_module.lookup_var(func.name)
+                for f in ir_module.functions.values()
             ):
                 # the packed function for current function has existed, skip
                 continue
