@@ -237,7 +237,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         doc += ') {'
 
         # comments
-        label = func.get_attr('label')
+        label = func.get_attr('label', default=None, allow_missing=True)
         if label:
             doc += (NewLine() + '// label: {}'.format(label)).indent()
 
