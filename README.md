@@ -1,5 +1,5 @@
 # Hidet: A compilation-based deep learning framework
-[**Documentation**](http://docs.hidet.org:9000/) 
+[**Documentation**](http://docs.hidet.org/) 
 
 Hidet is an open-source DNN inference framework based on compilation. 
 It supports end-to-end compilation of DNN models from PyTorch and ONNX to efficient cuda kernels.
@@ -11,7 +11,7 @@ A series of graph-level and operator-level optimizations are applied to optimize
 ```bash
 pip install hidet
 ```
-See [here](http://docs.hidet.org:9000/) for building from source.
+See [here](http://docs.hidet.org/) for building from source.
 
 ### Usage
 
@@ -34,9 +34,9 @@ model_opt = torch.compile(model, backend='hidet')
 y = model_opt(x)
 ```
 See the following tutorials to learn other usgae:
-- [Quick Start](http://docs.hidet.org:9000/gallery/getting-started/quick-start.html)
-- [Optimize PyTorch models](http://docs.hidet.org:9000/gallery/tutorials/optimize-pytorch-model.html)
-- [Optimize ONNX models](http://docs.hidet.org:9000/gallery/tutorials/run-onnx-model.html)
+- [Quick Start](http://docs.hidet.org/gallery/getting-started/quick-start.html)
+- [Optimize PyTorch models](http://docs.hidet.org/gallery/tutorials/optimize-pytorch-model.html)
+- [Optimize ONNX models](http://docs.hidet.org/gallery/tutorials/run-onnx-model.html)
 
 ## Publication
 Hidet originates from the following research work. If you used **Hidet** in your research, welcome to cite our
@@ -50,7 +50,7 @@ Hidet is currently under active development by a team at [CentML Inc](https://ce
 
 ## Contributing
 We welcome contributions from the community. Please see 
-[contribution guide](http://docs.hidet.org:9000/hidet/docs/build/html/developer-guides/contributing.html) 
+[contribution guide](http://docs.hidet.org/hidet/docs/build/html/developer-guides/contributing.html) 
 for more details.
 
 ## License
