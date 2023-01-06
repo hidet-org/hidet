@@ -66,13 +66,13 @@ jobs:
         run: |
           cd docs; make clean; make html
 
-      - name: Upload docs
-        uses: up9cloud/action-rsync@master
-        env:
-          VERBOSE: true
-          ARGS: -avzh
-          SOURCE: docs/build/html
-          HOST: ${{ secrets.DOCS_HOST }}
-          KEY: ${{ secrets.DOCS_DEPLOY_SSH_KEY }}
-          USER: ${{ secrets.DOCS_DEPLOY_USER }}
-          TARGET: ${{ secrets.DOCS_TARGET }}
+#      - name: Upload docs
+#        uses: up9cloud/action-rsync@master
+#        env:
+#          VERBOSE: true
+#          ARGS: -avzh
+#          SOURCE: docs/build/html
+#          HOST: ${{ secrets.DOCS_HOST }}
+#          KEY: ${{ secrets.DOCS_DEPLOY_SSH_KEY }}
+#          USER: ${{ secrets.DOCS_DEPLOY_USER }}
+#          TARGET: ${{ secrets.DOCS_TARGET }}
