@@ -34,9 +34,9 @@ model_opt = torch.compile(model, backend='hidet')
 y = model_opt(x)
 ```
 See the following tutorials to learn other usgae:
-- [Quick Start](http://docs.hidet.org/gallery/getting-started/quick-start.html)
-- [Optimize PyTorch models](http://docs.hidet.org/gallery/tutorials/optimize-pytorch-model.html)
-- [Optimize ONNX models](http://docs.hidet.org/gallery/tutorials/run-onnx-model.html)
+- [Quick Start](http://docs.hidet.org/stable/gallery/getting-started/quick-start.html)
+- [Optimize PyTorch models](http://docs.hidet.org/stable/gallery/tutorials/optimize-pytorch-model.html)
+- [Optimize ONNX models](http://docs.hidet.org/stable/gallery/tutorials/run-onnx-model.html)
 
 ## Publication
 Hidet originates from the following research work. If you used **Hidet** in your research, welcome to cite our
@@ -50,7 +50,7 @@ Hidet is currently under active development by a team at [CentML Inc](https://ce
 
 ## Contributing
 We welcome contributions from the community. Please see 
-[contribution guide](http://docs.hidet.org/hidet/docs/build/html/developer-guides/contributing.html) 
+[contribution guide](https://docs.hidet.org/stable/developer-guides/contributing.html)
 for more details.
 
 ## License
