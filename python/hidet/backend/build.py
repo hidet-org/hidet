@@ -13,7 +13,6 @@ from typing import Optional
 import functools
 import warnings
 import os
-import ctypes
 import shutil
 import tempfile
 import subprocess
@@ -25,6 +24,7 @@ from hidet.ir.type import FuncType
 from hidet.runtime import CompiledFunction
 from hidet.ffi import PackedFunc
 from hidet.ffi.ffi import library_paths
+from hidet.ffi.shared_lib import SharedLibrary
 
 
 class CompilationFailed(Exception):
@@ -181,7 +181,7 @@ def load_task_func(lib_path: str, task) -> CompiledFunction:
         The loaded function that can be directly called in python.
     """
     try:
-        lib = ctypes.CDLL(lib_path)
+        lib = SharedLibrary(lib_path)
     except OSError as e:
         print("Removed the file '{}'".format(lib_path))
         os.remove(lib_path)
@@ -201,7 +201,7 @@ def load_task_func(lib_path: str, task) -> CompiledFunction:
 
 def load_lib_func(lib_path: str, func_name: str, func_type: FuncType) -> CompiledFunction:
     try:
-        lib = ctypes.CDLL(lib_path)
+        lib = SharedLibrary(lib_path)
     except OSError as e:
         print("Removed the file '{}'".format(lib_path))
         os.remove(lib_path)
