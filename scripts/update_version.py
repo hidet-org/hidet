@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 """
 Update the version string in setup.py and python/hidet/version.py
 

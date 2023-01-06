@@ -1,4 +1,11 @@
 #!/bin/bash
+#
+# Build a wheel:
+#
+# $ bash scripts/build_wheel.sh
+#
+# would generate a .whl file in the scripts directory.
+#
 
 set -e  # exit immediately if a command exits with a non-zero status.
 
@@ -19,6 +26,7 @@ cd build; cmake ../..; make -j4; cd ..
 # copy the built libraries and headers to python module
 cp ../setup.py ./setup.py
 cp ../MANIFEST.in ./MANIFEST.in
+cp ../README.md ./README.md
 cp -r ../python ./
 cp -r ./build/lib ./python/hidet
 cp -r ../include ./python/hidet
@@ -31,3 +39,4 @@ rm -rf ./python
 rm -rf ./build
 rm ./setup.py
 rm ./MANIFEST.in
+rm ./README.md

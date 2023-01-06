@@ -2,7 +2,9 @@
 Writing Dynamic kernel
 ======================
 
-In this article, we will show how to write a matrix multiplication kernel in Hidet Script.
+.. todo::
+
+  More details about hidet script and how to write dynamic kernel are coming soon.
 
 """
 import numpy.testing
@@ -160,5 +162,7 @@ def main():
         print(f'{m}x{k}x{n}: hidet takes {hidet_latency:.2f} ms')
 
 
-if __name__ == '__main__':
-    main()
+# %%
+#
+
+main()
