@@ -11,11 +11,22 @@ $ python scripts/update_version.py 0.0.2
 """
 import os
 import argparse
-from packaging.version import InvalidVersion, parse
+import re
 
 parser = argparse.ArgumentParser('update_version.py')
 
-parser.add_argument('version', type=str, help='Version to update to')
+parser.add_argument(
+    '--root',
+    type=str,
+    default='./',
+    help='root directory of the project, under which setup.py is located. Default: ./'
+)
+parser.add_argument(
+    '--version',
+    type=str,
+    required=True,
+    help='Version to update to'
+)
 
 
 def update_setup_py(setup_py, version):
@@ -54,20 +65,32 @@ def update_version_py(version_py, version):
         f.writelines(lines)
 
 
+def check_version(version: str):
+    patterns = [
+        r'^\d+\.\d+(\.\d+)?$',  # 0.1.1 or 0.2
+        r'^\d+\.\d+(\.\d+)?(\.dev\d*)?$',  # 0.1.1.dev1 or 0.2.dev2 or 0.2.dev20220101
+    ]
+    for pattern in patterns:
+        if re.match(pattern, version):
+            return
+    raise ValueError('Invalid version: {}'.format(version))
+
+
 def main():
     args = parser.parse_args()
 
     version = args.version
 
-    try:
-        parse(version)
-    except InvalidVersion as e:
-        raise e
+    check_version(version)
 
     # Update version in setup.py
-    script_dir = os.path.dirname(os.path.realpath(__file__))
-    setup_py = os.path.realpath(os.path.join(script_dir, '..', 'setup.py'))
-    version_py = os.path.realpath(os.path.join(script_dir, '..', 'python', 'hidet', 'version.py'))
+    root_dir = os.path.abspath(os.path.expanduser(args.root))
+    setup_py = os.path.realpath(os.path.join(root_dir, 'setup.py'))
+    version_py = os.path.realpath(os.path.join(root_dir, 'python', 'hidet', 'version.py'))
+    if not os.path.exists(setup_py) or not os.path.isfile(setup_py):
+        raise FileNotFoundError(setup_py)
+    if not os.path.exists(version_py) or not os.path.isfile(version_py):
+        raise FileNotFoundError(version_py)
     update_setup_py(setup_py, version)
     update_version_py(version_py, version)
 
