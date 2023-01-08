@@ -232,6 +232,7 @@ class Resize2dOp(Operator):
                 extrapolation_value,
             ),
             attributes={
+                'size': size,
                 'method': method,
                 'coordinate_transformation_mode': coordinate_transformation_mode,
                 'rounding_method': rounding_method,
