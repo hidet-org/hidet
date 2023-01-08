@@ -29,8 +29,8 @@ cp $ROOT_DIR/setup.py ./setup.py
 cp $ROOT_DIR/MANIFEST.in ./MANIFEST.in
 cp $ROOT_DIR/README.md ./README.md
 cp -r $ROOT_DIR/python ./
-cp -r $ROOT_DIR/build/lib ./python/hidet
 cp -r $ROOT_DIR/include ./python/hidet
+cp -r $CURRENT_SCRIPT_DIR/build/lib ./python/hidet
 
 # update version if needed
 if [ $# -eq 1 ]; then
