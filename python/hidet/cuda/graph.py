@@ -73,7 +73,7 @@ class CudaGraphCapture:
     def instantiate(self) -> cudaGraphExec_t:
         if self.captured_graph is None:
             raise RuntimeError("cuda graph has not been captured yet")
-        err, graph_exec = cudart.cudaGraphInstantiate(self.captured_graph, 0)
+        err, graph_exec = cudart.cudaGraphInstantiateWithFlags(self.captured_graph, 0)
         if err != 0:
             raise RuntimeError("cudaGraphInstantiate failed with error: {}".format(err.name))
         return graph_exec
