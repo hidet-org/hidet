@@ -13,4 +13,4 @@ bash ./dockerfiles/manylinux1/build_image.sh
 echo $HIDET_DIR
 
 # run the docker image
-docker run --rm -v $HIDET_DIR:/io hidet-manylinux1-build bash /io/scripts/build_wheel.sh
+docker run --rm -v $HIDET_DIR:/io hidet-manylinux1-build bash /io/scripts/wheel/build_wheel.sh $1

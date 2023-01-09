@@ -41,8 +41,8 @@ jobs:
 
       - name: Build hidet
         run: |
-          bash scripts/build_wheel.sh
-          WHEEL=$(find ./scripts/ -maxdepth 1 -name '*.whl')
+          bash scripts/wheel/build_wheel.sh
+          WHEEL=$(find ./scripts/wheel/built_wheel -maxdepth 1 -name '*.whl')
           echo "WHEEL_NAME=$WHEEL" >> $GITHUB_ENV
           echo "Built wheel: ${{ env.WHEEL_NAME }}"
 
