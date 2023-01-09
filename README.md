@@ -1,6 +1,10 @@
 # Hidet: A compilation-based deep learning framework
 [**Documentation**](http://docs.hidet.org/) 
 
+![GitHub](https://img.shields.io/github/license/hidet-org/hidet)
+![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/hidet-org/hidet/tests.yaml)
+
+
 Hidet is an open-source DNN inference framework based on compilation. 
 It supports end-to-end compilation of DNN models from PyTorch and ONNX to efficient cuda kernels.
 A series of graph-level and operator-level optimizations are applied to optimize the performance.
