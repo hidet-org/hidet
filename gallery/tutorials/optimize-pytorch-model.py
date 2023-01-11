@@ -39,7 +39,7 @@ better performance, you can configure the search space via :func:`~hidet.graph.f
     # 0 - use default schedule, no search [Default]
     # 1 - search in a small schedule space (usually 1~30 schedules)
     # 2 - search in a large schedule space (usually more than 30 schedules)
-    hidet.torch.dynamo_config.set_search_space(2)
+    hidet.torch.dynamo_config.search_space(2)
 
     # After configure the search space, you can optimize the model
     model_opt = torch.compile(model, backend='hidet')
