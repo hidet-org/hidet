@@ -1,0 +1,37 @@
+name: Publish to PyPI
+
+on:
+  release:
+    types: [created]
+
+  pull_request:  # TODO: remove this line
+    branches: [main]
+
+jobs:
+  tests:
+    uses: .github/workflows/tests.yaml
+  publish:
+    name: publish
+    needs: [tests] # require tests to pass before deploy runs
+    if: github.event_name == 'release' && github.event.action == 'created' && startsWith(github.event.release.tag_name, 'v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v3
+      - name: Get the version
+        id: get_version
+        run: echo ::set-output name=VERSION::${GITHUB_REF#refs/tags/}
+      - name: Build package
+        uses: .github/actions/build-wheel
+        with:
+          version: ${{ steps.get_version.outputs.VERSION }}
+      - name: Show the wheel
+        run: |
+          ls scripts/wheel/built_wheel
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@v1.5.0
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_KEY }}
+          packages_dir: scripts/wheel/built_wheel
+          repository_url: https://test.pypi.org/legacy/
