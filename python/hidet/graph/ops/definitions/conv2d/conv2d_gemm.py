@@ -15,6 +15,7 @@ from hidet.graph.ops.definitions.matmul import matmul
 from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, compute, input_like, TensorNode
 from hidet.graph.ops.definitions.utils import normalize_kernel, normalize_stride
 from .utils import infer_conv2d_shape
+from math import floor
 
 
 class Conv2dGemmImageTransformTask(Task):
@@ -22,7 +23,8 @@ class Conv2dGemmImageTransformTask(Task):
         n, c, h, w = x.const_shape()
         kx, ky = kernel
         sx, sy = stride
-        p, q = (h - kx) // sx + 1, (w - ky) // sy + 1
+        dilx, dily = dilations
+        p, q = floor((h - dilx * (kx - 1) - 1) / sx + 1), floor((w - dily * (ky - 1) - 1) / sy + 1)
         if c % groups != 0:
             msg = 'Conv2d expect in_channels % groups == 0, but got in_channels {} and groups {}'.format(c, groups)
             raise ValueError(msg)
@@ -31,7 +33,7 @@ class Conv2dGemmImageTransformTask(Task):
             name='gemm_x',
             shape=[groups, n * p * q, gc * kx * ky],
             fcompute=lambda g, i, k: x[
-                i // (p * q), g * gc + k // (kx * ky), i // q % p * sx + k // ky % kx, i % q * sy + k % ky
+                i // (p * q), g * gc + k // (kx * ky), i // q % p * sx + k // ky % kx * dilx, i % q * sy + k % ky * dily
             ],
         )
         super().__init__(name='conv2d_gemm_image_transform', inputs=[x], outputs=[gemm_x])
