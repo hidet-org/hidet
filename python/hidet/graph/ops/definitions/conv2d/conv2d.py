@@ -12,6 +12,7 @@
 from typing import List, Union, Sequence
 from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, TensorNode
 from hidet.graph.ops.definitions.utils import compute, input_like, normalize_stride, reduce
+from math import floor
 
 
 class Conv2dTask(Task):
@@ -21,7 +22,7 @@ class Conv2dTask(Task):
         oc, wc, kx, ky = weight.const_shape()
         sx, sy = stride
         dilx, dily = dilations
-        p, q = (h - dilx * kx) // sx + 1, (w - dily * ky) // sy + 1
+        p, q = floor((h - dilx * (kx - 1) - 1) / sx + 1), floor((w - dily * (ky - 1) - 1) / sy + 1)
         if c % groups != 0 or oc % groups != 0:
             raise ValueError(
                 'Conv2d expect the in_channels % groups == 0 and out_channels % groups == 0, \n'
