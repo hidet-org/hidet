@@ -26,6 +26,7 @@ class Conv2dResolveRule(ResolveRule):
         assert isinstance(op, Conv2dOp)
         stride = ops.utils.normalize_stride(op.attrs['stride'])
         groups = op.attrs['groups']
+        dilations = op.attrs['dilations']
         channels = op.inputs[1].shape[0]
         if groups == channels:
             return None  # use depthwise schedule in the default Task
@@ -36,5 +37,5 @@ class Conv2dResolveRule(ResolveRule):
             out = ops.conv2d_winograd(data, weight)
         else:
             # implicit gemm algorithm
-            out = ops.conv2d_gemm(data, weight, stride, groups)
+            out = ops.conv2d_gemm(data, weight, stride, dilations, groups)
         return [out]

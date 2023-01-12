@@ -194,6 +194,7 @@ def register_onnx_operator(cls: Type[OnnxOperator]):
 @register_onnx_operator
 class OnnxConv(OnnxOperator):
     def run_v1(self, inputs: List[Tensor]) -> List[Tensor]:
+        dilations= self.attr.get('dilations', [1, 1])
         padding = self.attrs.get('pads', [0, 0, 0, 0])
         strides = self.attrs.get('strides', [1, 1])
         groups = self.attrs.get('group', 1)
@@ -203,7 +204,7 @@ class OnnxConv(OnnxOperator):
         else:
             x, w, bias = inputs
         x = ops.pad(x, ops.utils.normalize_padding(padding))
-        output = ops.conv2d(x, w, stride=strides, groups=groups)
+        output = ops.conv2d(x, w, stride=strides, dilations=dilations, groups=groups)
         if bias is not None:
             bias = ops.unsqueeze(bias, [0, 2, 3])
             output = output + bias
