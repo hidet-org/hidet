@@ -47,6 +47,7 @@ def numpy_conv2d(data: np.ndarray, weight: np.ndarray, padding: List[int], strid
     return output
 
 
+@pytest.mark.parametrize("hidet_op", [ops.conv2d, ops.conv2d_gemm])
 @pytest.mark.parametrize(
     "n, c, h, w, oc, kx, ky",
     [
@@ -58,28 +59,12 @@ def numpy_conv2d(data: np.ndarray, weight: np.ndarray, padding: List[int], strid
 @pytest.mark.parametrize("padding", [[0, 0, 0, 0], [1, 1, 1, 1], [2, 2, 2, 2]])
 @pytest.mark.parametrize("stride", [[1, 1], [3, 4]])
 @pytest.mark.parametrize("dilations", [[1, 1], [3, 4]])
-def test_conv2d(n, c, h, w, oc, kx, ky, padding, stride, dilations):
-    # Base ver.
+def test_conv2d(hidet_op, n, c, h, w, oc, kx, ky, padding, stride, dilations):
     check_binary(
         a_shape=[n, c, h, w],
         b_shape=[oc, c, kx, ky],
         numpy_op=lambda data, weight: torch_conv2d(data, weight, padding, stride, dilations),
-        hidet_op=lambda data, weight: ops.conv2d(
-            ops.conv_pad(data, padding), weight, stride=stride, dilations=dilations
-        ),
-        dtype='float32',
-        atol=2e-5,
-        rtol=2e-5,
-    )
-
-    # Gemm ver.
-    check_binary(
-        a_shape=[n, c, h, w],
-        b_shape=[oc, c, kx, ky],
-        numpy_op=lambda data, weight: torch_conv2d(data, weight, padding, stride, dilations),
-        hidet_op=lambda data, weight: ops.conv2d_gemm(
-            ops.conv_pad(data, padding), weight, stride=stride, dilations=dilations
-        ),
+        hidet_op=lambda data, weight: hidet_op(ops.conv_pad(data, padding), weight, stride=stride, dilations=dilations),
         dtype='float32',
         atol=2e-5,
         rtol=2e-5,

@@ -53,8 +53,10 @@ class Conv2dTask(Task):
 
 
 class Conv2dOp(Operator):
-    def __init__(self, x: Tensor, w: Tensor, stride: Sequence[int], dilations: Sequence[int], groups: int):
+    def __init__(self, x: Tensor, w: Tensor, stride: Sequence[int], dilations: Union[int, Sequence[int]], groups: int):
         stride = normalize_stride(stride)
+        if isinstance(dilations, int):
+            dilations = [dilations, dilations]
         super().__init__(
             inputs=[x, w],
             task=Conv2dTask(input_like(x, 'x'), input_like(w, 'w'), stride, dilations, groups),
