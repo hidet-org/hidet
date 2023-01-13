@@ -79,7 +79,7 @@ jobs:
         id: get_version
         run: echo ::set-output name=VERSION::${GITHUB_REF#refs/tags/}
       - name: Build package
-        uses: ./.github/actions/build-wheel
+        uses: ./.github/actions/build-wheel.yaml
         with:
           version: ${{ steps.get_version.outputs.VERSION }}
       - name: Show the wheel
