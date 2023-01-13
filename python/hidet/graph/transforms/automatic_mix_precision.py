@@ -68,6 +68,17 @@ class AutoMixPrecisionRewriter(GraphRewriter):
                 self.memo[original] = updated
             return None
 
+    def visit_FlowGraph(self, graph: FlowGraph):
+        # convert all outputs back to its original dtype
+        outputs = [self.visit(output) for output in graph.outputs]
+        converted_outputs = []
+        for output, orig_output in zip(outputs, graph.outputs):
+            if output.dtype != orig_output.dtype:
+                converted_outputs.append(self.cast_float(output, orig_output.dtype))
+            else:
+                converted_outputs.append(output)
+        return FlowGraph(outputs=converted_outputs, inputs=graph.inputs)
+
 
 class AutoMixPrecisionPass(GraphPass):
     def process_graph(self, graph: FlowGraph) -> FlowGraph:

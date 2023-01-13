@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from __future__ import annotations
+
 from typing import Dict, Any, Type, Callable, Optional, Tuple, Set, List
 import logging
 import inspect
@@ -198,12 +199,22 @@ class Interpreter:
 
     @staticmethod
     def _raise_exception(exception: Exception, caused_callable: Any, args, kwargs):
-        if isinstance(caused_callable, HidetModule):
+        # See https://docs.python.org/3/library/inspect.html for more information on the inspect module.
+        assert callable(caused_callable), 'Expected callable'
+        if inspect.ismethod(caused_callable):
+            func = dict(inspect.getmembers(caused_callable))['__func__']
+            code = dict(inspect.getmembers(func))['__code__']
+            callable_name = caused_callable.__qualname__
+        elif inspect.isfunction(caused_callable):
+            code = dict(inspect.getmembers(caused_callable))['__code__']
+            callable_name = caused_callable.__qualname__
+        else:
+            # an object with __call__ method
             func = dict(inspect.getmembers(caused_callable.__call__))['__func__']
             code = dict(inspect.getmembers(func))['__code__']
-        else:
-            code = dict(inspect.getmembers(caused_callable))['__code__']
-        callable_name, filename, lineno = caused_callable.__name__, code.co_filename, code.co_firstlineno
+            callable_name = caused_callable.__class__.__qualname__
+
+        filename, lineno = code.co_filename, code.co_firstlineno
         raise type(exception)(
             f'{exception}, occurred when calling {callable_name} with \n'
             f'    args: {args}\n'
@@ -360,7 +371,10 @@ class Interpreter:
                 torch_module = self.torch_modules[node.target]
                 torch_args = load_arg(node.args, torch_env)
                 torch_kwargs = load_arg(node.kwargs, torch_env)
-                torch_env[node.name] = torch_module(*torch_args, **torch_kwargs)
+                try:
+                    torch_env[node.name] = torch_module(*torch_args, **torch_kwargs)
+                except Exception as e:
+                    self._raise_exception(e, torch_module, torch_args, torch_kwargs)
 
                 hidet_module = self._lookup_hidet_module(node.target)
                 hidet_args = load_arg(node.args, hidet_env)
