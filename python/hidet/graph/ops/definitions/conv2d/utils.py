@@ -10,7 +10,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List, Union
-from math import floor
 from ..utils import normalize_stride
 
 
@@ -27,5 +26,5 @@ def infer_conv2d_shape(
     if oc % groups != 0:
         msg = 'Conv2d expects out_channels % groups == 0, got out_channels {} and groups {}'.format(oc, groups)
         raise ValueError(msg)
-    p, q = floor((h - dilx * (kx - 1) - 1) / sx + 1), floor((w - dily * (ky - 1) - 1) / sy + 1)
+    p, q = (h - dilx * (kx - 1) - 1) // sx + 1, (w - dily * (ky - 1) - 1) // sy + 1
     return [n, oc, p, q]

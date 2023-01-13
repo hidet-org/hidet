@@ -10,7 +10,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List
-from math import floor
 
 from hidet.graph.ops.definitions.matmul import matmul
 from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, compute, input_like, TensorNode
@@ -24,7 +23,7 @@ class Conv2dGemmImageTransformTask(Task):
         kx, ky = kernel
         sx, sy = stride
         dilx, dily = dilations
-        p, q = floor((h - dilx * (kx - 1) - 1) / sx + 1), floor((w - dily * (ky - 1) - 1) / sy + 1)
+        p, q = (h - dilx * (kx - 1) - 1) // sx + 1, (w - dily * (ky - 1) - 1) // sy + 1
         if c % groups != 0:
             msg = 'Conv2d expect in_channels % groups == 0, but got in_channels {} and groups {}'.format(c, groups)
             raise ValueError(msg)
