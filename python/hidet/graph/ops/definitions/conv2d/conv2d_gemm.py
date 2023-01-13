@@ -10,12 +10,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List
+from math import floor
 
 from hidet.graph.ops.definitions.matmul import matmul
 from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, compute, input_like, TensorNode
 from hidet.graph.ops.definitions.utils import normalize_kernel, normalize_stride
 from .utils import infer_conv2d_shape
-from math import floor
 
 
 class Conv2dGemmImageTransformTask(Task):
@@ -50,7 +50,9 @@ class Conv2dGemmImageTransformOp(Operator):
         )
 
 
-def conv2d_gemm_image_transform(x: Tensor, kernel: List[int], stride: List[int], dilations: List[int], groups: int = 1) -> Tensor:
+def conv2d_gemm_image_transform(
+    x: Tensor, kernel: List[int], stride: List[int], dilations: List[int], groups: int = 1
+) -> Tensor:
     return Conv2dGemmImageTransformOp(x, kernel, stride, dilations, groups).get_output(0)
 
 
@@ -79,7 +81,9 @@ def conv2d_gemm_inverse_transform(gemm_y: Tensor, out_height, out_width) -> Tens
 
 
 def conv2d_gemm(data: Tensor, weight: Tensor, stride, dilations: List[int], groups: int = 1) -> Tensor:
-    gemm_x = conv2d_gemm_image_transform(data, kernel=weight.shape[2:], stride=stride, dilations=dilations, groups=groups)
+    gemm_x = conv2d_gemm_image_transform(
+        data, kernel=weight.shape[2:], stride=stride, dilations=dilations, groups=groups
+    )
     gemm_w = conv2d_gemm_filter_transform(weight, groups=groups)
     gemm_y = matmul(gemm_x, gemm_w)
 

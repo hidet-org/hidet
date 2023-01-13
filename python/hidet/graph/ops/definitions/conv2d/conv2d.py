@@ -10,9 +10,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List, Union, Sequence
+from math import floor
 from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, TensorNode
 from hidet.graph.ops.definitions.utils import compute, input_like, normalize_stride, reduce
-from math import floor
 
 
 class Conv2dTask(Task):
@@ -62,5 +62,7 @@ class Conv2dOp(Operator):
         )
 
 
-def conv2d(data: Tensor, weight: Tensor, stride: Union[int, Sequence[int]], dilations: Sequence[int] = [1, 1], groups: int = 1) -> Tensor:
+def conv2d(
+    data: Tensor, weight: Tensor, stride: Union[int, Sequence[int]], dilations: Sequence[int] = (1, 1), groups: int = 1
+) -> Tensor:
     return Conv2dOp(data, weight, stride, dilations, groups).get_output(0)

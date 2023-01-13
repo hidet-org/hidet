@@ -194,7 +194,7 @@ def register_onnx_operator(cls: Type[OnnxOperator]):
 @register_onnx_operator
 class OnnxConv(OnnxOperator):
     def run_v1(self, inputs: List[Tensor]) -> List[Tensor]:
-        dilations= self.attrs.get('dilations', [1, 1])
+        dilations = self.attrs.get('dilations', [1, 1])
         padding = self.attrs.get('pads', [0, 0, 0, 0])
         strides = self.attrs.get('strides', [1, 1])
         groups = self.attrs.get('group', 1)

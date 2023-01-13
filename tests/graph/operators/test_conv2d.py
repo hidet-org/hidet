@@ -21,8 +21,11 @@ from hidet.testing import check_binary
 
 def torch_conv2d(data: np.ndarray, weight: np.ndarray, padding: List[int], stride: List[int], dilations: List[int]):
     data_torch, weight_torch = torch.from_numpy(data), torch.from_numpy(weight)
-    torch_out = torch.nn.functional.conv2d(data_torch, weight_torch, bias=None, stride=stride, padding=[padding[0], padding[2]], dilation=dilations)
+    torch_out = torch.nn.functional.conv2d(
+        data_torch, weight_torch, bias=None, stride=stride, padding=[padding[0], padding[2]], dilation=dilations
+    )
     return torch_out.numpy()
+
 
 def numpy_conv2d(data: np.ndarray, weight: np.ndarray, padding: List[int], stride: List[int]):
     n, c, h, w = data.shape
@@ -47,40 +50,23 @@ def numpy_conv2d(data: np.ndarray, weight: np.ndarray, padding: List[int], strid
 @pytest.mark.parametrize(
     "n, c, h, w, oc, kx, ky",
     [
-        [1, 3, 32, 32, 12, 3, 3],  # kernel 3, 
+        [1, 3, 32, 32, 12, 3, 3],  # kernel 3,
         [2, 3, 32, 32, 12, 7, 7],  # kernel 7, batch size 2
-        [1, 3, 32, 32, 12, 1, 1],  # kernel 1, 
+        [1, 3, 32, 32, 12, 1, 1],  # kernel 1,
     ],
 )
-@pytest.mark.parametrize(
-    "padding",
-    [
-        [0,0,0,0],
-        [1,1,1,1],
-        [2,2,2,2],
-    ],
-)
-@pytest.mark.parametrize(
-    "stride",
-    [
-        [1,1],
-        [3,4],
-    ],
-)
-@pytest.mark.parametrize(
-    "dilations",
-    [
-        [1,1],
-        [3,4],
-    ],
-)
+@pytest.mark.parametrize("padding", [[0, 0, 0, 0], [1, 1, 1, 1], [2, 2, 2, 2]])
+@pytest.mark.parametrize("stride", [[1, 1], [3, 4]])
+@pytest.mark.parametrize("dilations", [[1, 1], [3, 4]])
 def test_conv2d(n, c, h, w, oc, kx, ky, padding, stride, dilations):
     # Base ver.
     check_binary(
         a_shape=[n, c, h, w],
         b_shape=[oc, c, kx, ky],
         numpy_op=lambda data, weight: torch_conv2d(data, weight, padding, stride, dilations),
-        hidet_op=lambda data, weight: ops.conv2d(ops.conv_pad(data, padding), weight, stride=stride, dilations=dilations),
+        hidet_op=lambda data, weight: ops.conv2d(
+            ops.conv_pad(data, padding), weight, stride=stride, dilations=dilations
+        ),
         dtype='float32',
         atol=2e-5,
         rtol=2e-5,
@@ -91,7 +77,9 @@ def test_conv2d(n, c, h, w, oc, kx, ky, padding, stride, dilations):
         a_shape=[n, c, h, w],
         b_shape=[oc, c, kx, ky],
         numpy_op=lambda data, weight: torch_conv2d(data, weight, padding, stride, dilations),
-        hidet_op=lambda data, weight: ops.conv2d_gemm(ops.conv_pad(data, padding), weight, stride=stride, dilations=dilations),
+        hidet_op=lambda data, weight: ops.conv2d_gemm(
+            ops.conv_pad(data, padding), weight, stride=stride, dilations=dilations
+        ),
         dtype='float32',
         atol=2e-5,
         rtol=2e-5,
