@@ -12,5 +12,5 @@ runs:
   image: '../../scripts/wheel/dockerfiles/manylinux1/Dockerfile'
   args:
     - "bash"
-    - "./scripts/wheel/build_wheel_manylinux1.sh"
+    - "./scripts/wheel/build_wheel.sh"
     - ${{ inputs.version }}
