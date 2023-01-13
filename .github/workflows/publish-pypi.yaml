@@ -1,13 +1,15 @@
 name: Publish to PyPI
 
 on:
-#  release:
-#    types: [created]
+  release:
+    types: [created]
   pull_request:  # TODO: remove this line
+  workflow_dispatch:
 
 jobs:
   tests:
-    uses: ./.github/workflows/tests
+    - name: Tests before publishing
+      uses: ./.github/workflows/tests.yaml
   publish:
     name: publish
     needs: [tests] # require tests to pass before deploy runs
