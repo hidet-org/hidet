@@ -7,7 +7,7 @@ on:
 
 jobs:
   tests:
-    uses: .github/workflows/tests.yaml
+    uses: ./.github/workflows/tests.yaml
   publish:
     name: publish
     needs: [tests] # require tests to pass before deploy runs
