@@ -1,5 +1,6 @@
 name: 'Build wheel'
 description: 'Build a wheel with given version label'
+id: build_wheel
 inputs:
   version:
     description: 'version of the package, e.g., 0.1, 0.2.3'

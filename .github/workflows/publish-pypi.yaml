@@ -79,16 +79,17 @@ jobs:
         id: get_version
         run: echo ::set-output name=VERSION::${GITHUB_REF#refs/tags/}
       - name: Build package
-        uses: ./.github/actions/build-wheel.yaml
+        uses: ./.github/actions/
+        id: build_wheel
         with:
           version: ${{ steps.get_version.outputs.VERSION }}
       - name: Show the wheel
         run: |
           ls scripts/wheel/built_wheel
-      - name: Publish
-        uses: pypa/gh-action-pypi-publish@v1.5.0
-        with:
-          user: __token__
-          password: ${{ secrets.TEST_PYPI_TOKEN }}
-          packages_dir: scripts/wheel/built_wheel
-          repository_url: https://test.pypi.org/legacy/
+#      - name: Publish
+#        uses: pypa/gh-action-pypi-publish@v1.5.0
+#        with:
+#          user: __token__
+#          password: ${{ secrets.TEST_PYPI_TOKEN }}
+#          packages_dir: scripts/wheel/built_wheel
+#          repository_url: https://test.pypi.org/legacy/
