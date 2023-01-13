@@ -7,12 +7,68 @@ on:
   workflow_dispatch:
 
 jobs:
-  tests:
-    - name: Tests before publishing
-      uses: ./.github/workflows/tests.yaml
+  publish-tests:
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
+    runs-on: [self-hosted, Linux, X64, gpu]
+    container:
+      image: nvidia/cuda:11.8.0-devel-ubuntu20.04
+      options: --gpus all
+    steps:
+      - name: Install dependencies via apt
+        run: |
+          apt update && DEBIAN_FRONTEND=noninteractive apt install -y ccache git graphviz
+
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.8"
+
+      - name: Setup cmake
+        uses: jwlawson/actions-setup-cmake@v1.13
+        with:
+          cmake-version: '3.19.x'
+
+      - name: Install dependencies via pip
+        run: |
+          python -m pip install --upgrade pip
+          pip install --pre torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/nightly/cu116
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Build hidet
+        run: |
+          bash scripts/wheel/build_wheel.sh
+          WHEEL=$(find ./scripts/wheel/built_wheel -maxdepth 1 -name '*.whl')
+          echo "WHEEL_NAME=$WHEEL" >> $GITHUB_ENV
+          echo "Built wheel: ${{ env.WHEEL_NAME }}"
+
+      - name: Install hidet
+        run: |
+          pip install --no-deps --force-reinstall ${{ env.WHEEL_NAME }}
+
+      # Run tests
+
+      - name: Run tests with operator cache cleared
+        run: |
+          python -m pytest -v --durations=20 --clear-cache ./tests
+
+      # Build the docs
+
+      - name: Install docs dependencies
+        run: |
+          pip install -r docs/requirements.txt
+
+      - name: Build docs
+        run: |
+          cd docs; make clean; make html
+
   publish:
     name: publish
-    needs: [tests] # require tests to pass before deploy runs
+    needs: [publish-tests] # require tests to pass before deploy runs
     if: github.event_name == 'release' && github.event.action == 'created' && startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-latest
     steps:
@@ -22,7 +78,7 @@ jobs:
         id: get_version
         run: echo ::set-output name=VERSION::${GITHUB_REF#refs/tags/}
       - name: Build package
-        uses: .github/actions/build-wheel
+        uses: ./.github/actions/build-wheel
         with:
           version: ${{ steps.get_version.outputs.VERSION }}
       - name: Show the wheel
