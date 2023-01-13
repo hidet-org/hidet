@@ -3,7 +3,7 @@ name: Publish to PyPI
 on:
   release:
     types: [created]
-  pull_request:  # TODO: remove this line
+#  pull_request:  # TODO: remove this line
   workflow_dispatch:
 
 jobs:
@@ -69,8 +69,7 @@ jobs:
   publish:
     name: publish
 #    needs: [publish-tests] # require tests to pass before deploy runs
-#    if: github.event_name == 'release' && github.event.action == 'created' && startsWith(github.event.release.tag_name, 'v')
-#    if: github.event_name == 'release' && github.event.action == 'created' && startsWith(github.event.release.tag_name, 'v')
+    if: github.event_name == 'release' && github.event.action == 'created' && startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source
@@ -81,8 +80,7 @@ jobs:
       - name: Build package
         uses: ./.github/actions/
         with:
-#          version: ${{ steps.get_version.outputs.VERSION }}
-          version: 0.1.1.dev
+          version: ${{ steps.get_version.outputs.VERSION }}
       - name: Show the wheel
         run: |
           ls scripts/wheel/built_wheel
