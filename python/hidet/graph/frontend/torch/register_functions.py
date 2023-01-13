@@ -29,10 +29,8 @@ TorchDevice = torch.device
 
 @register_function(torch.nn.functional.conv2d)
 def conv2d(x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, dilation, groups):
-    if dilation != 1 and not same_list(dilation, [1, 1]):
-        raise NotImplementedError("dilation != 1")
     x = ops.conv_pad(x, padding)
-    y = ops.conv2d(x, weight, stride, groups)
+    y = ops.conv2d(x, weight, stride, dilation, groups)
     if bias is not None:
         y = y + ops.unsqueeze(bias, [0, 2, 3])
     return y

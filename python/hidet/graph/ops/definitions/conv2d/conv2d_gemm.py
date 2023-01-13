@@ -18,11 +18,12 @@ from .utils import infer_conv2d_shape
 
 
 class Conv2dGemmImageTransformTask(Task):
-    def __init__(self, x: TensorNode, kernel: List[int], stride: List[int], groups: int):
+    def __init__(self, x: TensorNode, kernel: List[int], stride: List[int], dilations: List[int], groups: int):
         n, c, h, w = x.const_shape()
         kx, ky = kernel
         sx, sy = stride
-        p, q = (h - kx) // sx + 1, (w - ky) // sy + 1
+        dilx, dily = dilations
+        p, q = (h - dilx * (kx - 1) - 1) // sx + 1, (w - dily * (ky - 1) - 1) // sy + 1
         if c % groups != 0:
             msg = 'Conv2d expect in_channels % groups == 0, but got in_channels {} and groups {}'.format(c, groups)
             raise ValueError(msg)
@@ -31,25 +32,27 @@ class Conv2dGemmImageTransformTask(Task):
             name='gemm_x',
             shape=[groups, n * p * q, gc * kx * ky],
             fcompute=lambda g, i, k: x[
-                i // (p * q), g * gc + k // (kx * ky), i // q % p * sx + k // ky % kx, i % q * sy + k % ky
+                i // (p * q), g * gc + k // (kx * ky), i // q % p * sx + k // ky % kx * dilx, i % q * sy + k % ky * dily
             ],
         )
         super().__init__(name='conv2d_gemm_image_transform', inputs=[x], outputs=[gemm_x])
 
 
 class Conv2dGemmImageTransformOp(Operator):
-    def __init__(self, x: Tensor, kernel, stride, groups):
+    def __init__(self, x: Tensor, kernel, stride, dilations, groups):
         kernel = normalize_kernel(kernel)
         stride = normalize_stride(stride)
         super().__init__(
             inputs=[x],
-            task=Conv2dGemmImageTransformTask(input_like(x, 'x'), kernel, stride, groups),
-            attributes={'kernel': kernel, 'stride': stride, 'groups': groups},
+            task=Conv2dGemmImageTransformTask(input_like(x, 'x'), kernel, stride, dilations, groups),
+            attributes={'kernel': kernel, 'stride': stride, 'groups': groups, 'dilations': dilations},
         )
 
 
-def conv2d_gemm_image_transform(x: Tensor, kernel: List[int], stride: List[int], groups: int = 1) -> Tensor:
-    return Conv2dGemmImageTransformOp(x, kernel, stride, groups).get_output(0)
+def conv2d_gemm_image_transform(
+    x: Tensor, kernel: List[int], stride: List[int], dilations: List[int], groups: int = 1
+) -> Tensor:
+    return Conv2dGemmImageTransformOp(x, kernel, stride, dilations, groups).get_output(0)
 
 
 def conv2d_gemm_filter_transform(w: Tensor, groups: int = 1) -> Tensor:
@@ -76,11 +79,13 @@ def conv2d_gemm_inverse_transform(gemm_y: Tensor, out_height, out_width) -> Tens
     return y
 
 
-def conv2d_gemm(data: Tensor, weight: Tensor, stride, groups: int = 1) -> Tensor:
-    gemm_x = conv2d_gemm_image_transform(data, kernel=weight.shape[2:], stride=stride, groups=groups)
+def conv2d_gemm(data: Tensor, weight: Tensor, stride, dilations: List[int], groups: int = 1) -> Tensor:
+    gemm_x = conv2d_gemm_image_transform(
+        data, kernel=weight.shape[2:], stride=stride, dilations=dilations, groups=groups
+    )
     gemm_w = conv2d_gemm_filter_transform(weight, groups=groups)
     gemm_y = matmul(gemm_x, gemm_w)
 
-    y_shape = infer_conv2d_shape(data.shape, weight.shape, stride, groups)
+    y_shape = infer_conv2d_shape(data.shape, weight.shape, stride, groups, dilations)
     y = conv2d_gemm_inverse_transform(gemm_y, out_height=y_shape[2], out_width=y_shape[3])
     return y

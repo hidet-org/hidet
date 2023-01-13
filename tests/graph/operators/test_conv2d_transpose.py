@@ -35,7 +35,7 @@ def test_conv2d_transpose(
     hidet_data = hidet.from_torch(torch_data)
     hidet_weight = hidet.from_torch(torch_weight)
     hidet_output = hidet.ops.conv_pad(hidet_data, pads)
-    hidet_output = hidet.ops.conv2d(hidet_output, hidet_weight, stride, groups)
+    hidet_output = hidet.ops.conv2d(hidet_output, hidet_weight, stride, groups=groups)
     np.testing.assert_allclose(hidet_output.cpu().numpy(), torch_output.cpu().numpy(), atol=1e-5)
     torch_transpose_output = torch.nn.functional.conv_transpose2d(
         torch_output,

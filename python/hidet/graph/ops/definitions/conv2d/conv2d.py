@@ -15,12 +15,13 @@ from hidet.graph.ops.definitions.utils import compute, input_like, normalize_str
 
 
 class Conv2dTask(Task):
-    def __init__(self, data: TensorNode, weight: TensorNode, stride: List[int], groups: int):
+    def __init__(self, data: TensorNode, weight: TensorNode, stride: List[int], dilations: List[int], groups: int):
         # pylint: disable=too-many-locals
         n, c, h, w = data.const_shape()
         oc, wc, kx, ky = weight.const_shape()
         sx, sy = stride
-        p, q = (h - kx) // sx + 1, (w - ky) // sy + 1
+        dilx, dily = dilations
+        p, q = (h - dilx * (kx - 1) - 1) // sx + 1, (w - dily * (ky - 1) - 1) // sy + 1
         if c % groups != 0 or oc % groups != 0:
             raise ValueError(
                 'Conv2d expect the in_channels % groups == 0 and out_channels % groups == 0, \n'
@@ -38,7 +39,7 @@ class Conv2dTask(Task):
             fcompute=lambda ni, oci, pi, qi: reduce(
                 shape=[wc, kx, ky],
                 fcompute=lambda wci, kxi, kyi: (
-                    data[ni, (oci // out_group_size) * wc + wci, pi * sx + kxi, qi * sy + kyi]
+                    data[ni, (oci // out_group_size) * wc + wci, pi * sx + kxi * dilx, qi * sy + kyi * dily]
                     * weight[oci, wci, kxi, kyi]
                 ),
                 reduce_type='sum',
@@ -51,14 +52,22 @@ class Conv2dTask(Task):
 
 
 class Conv2dOp(Operator):
-    def __init__(self, x: Tensor, w: Tensor, stride: Sequence[int], groups: int):
+    def __init__(self, x: Tensor, w: Tensor, stride: Sequence[int], dilations: Union[int, Sequence[int]], groups: int):
         stride = normalize_stride(stride)
+        if isinstance(dilations, int):
+            dilations = [dilations, dilations]
         super().__init__(
             inputs=[x, w],
-            task=Conv2dTask(input_like(x, 'x'), input_like(w, 'w'), stride, groups),
-            attributes={'stride': stride, 'groups': groups},
+            task=Conv2dTask(input_like(x, 'x'), input_like(w, 'w'), stride, dilations, groups),
+            attributes={'stride': stride, 'groups': groups, 'dilations': dilations},
         )
 
 
-def conv2d(data: Tensor, weight: Tensor, stride: Union[int, Sequence[int]], groups: int = 1) -> Tensor:
-    return Conv2dOp(data, weight, stride, groups).get_output(0)
+def conv2d(
+    data: Tensor,
+    weight: Tensor,
+    stride: Union[int, Sequence[int]],
+    dilations: Union[int, Sequence[int]] = (1, 1),
+    groups: int = 1,
+) -> Tensor:
+    return Conv2dOp(data, weight, stride, dilations, groups).get_output(0)
