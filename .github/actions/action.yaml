@@ -1,0 +1,16 @@
+name: 'Build wheel'
+description: 'Build a wheel with given version label'
+inputs:
+  version:
+    description: 'version of the package, e.g., 0.1, 0.2.3'
+    required: true
+outputs:
+  wheel_path:
+    description: 'the path to the generated wheel'
+runs:
+  using: 'docker'
+  image: '../../scripts/wheel/dockerfiles/manylinux1/Dockerfile'
+  args:
+    - "bash"
+    - "./scripts/wheel/build_wheel.sh"
+    - ${{ inputs.version }}
