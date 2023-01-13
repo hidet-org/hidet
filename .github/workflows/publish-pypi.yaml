@@ -1,16 +1,16 @@
 name: Publish to PyPI
 
 on:
-  release:
-    types: [created]
+#  release:
+#    types: [created]
   pull_request:  # TODO: remove this line
 
 jobs:
-#  tests:
-#    uses: .github/workflows/tests.yaml
+  tests:
+    uses: .github/workflows/tests.yaml
   publish:
     name: publish
-#    needs: [tests] # require tests to pass before deploy runs
+    needs: [tests] # require tests to pass before deploy runs
     if: github.event_name == 'release' && github.event.action == 'created' && startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-latest
     steps:
