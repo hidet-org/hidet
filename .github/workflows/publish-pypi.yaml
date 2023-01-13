@@ -80,8 +80,6 @@ jobs:
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
       - name: Build package
         uses: ./.github/actions/
-        working-directory: ./
-        id: build_wheel
         with:
 #          version: ${{ steps.get_version.outputs.VERSION }}
           version: 0.1.1.dev
