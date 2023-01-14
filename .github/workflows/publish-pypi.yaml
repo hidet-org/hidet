@@ -7,6 +7,7 @@ on:
 jobs:
   publish-tests:
     name: Release Tests
+    if: github.repository == 'hidet-org/hidet'
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
       cancel-in-progress: true
