@@ -101,6 +101,7 @@ class ReduceF16Task(Task):
         else:
             remain_shape = [v for i, v in enumerate(shape) if i not in dims]
         reduce_shape = [shape[i] for i in dims]
+        reduce_extent = prod(reduce_shape)
         shape_32bit = [s // 2 if i == len(shape) - 1 else s for i, s in enumerate(shape)]
         remain_layout = spatial(*remain_shape)
 
@@ -119,6 +120,8 @@ class ReduceF16Task(Task):
         task_layout = repeat(*repeat_shape) * spatial(*spatial_shape)
         grid_size = remain_layout.num_workers
         accumulate_dtype = self.attributes['accumulate_dtype']
+        reduce_type = self.attributes['reduce_type']
+        ro = ReduceOperation.from_name(reduce_type)
 
         with hidet.script_module() as module:
 
@@ -138,11 +141,11 @@ class ReduceF16Task(Task):
                 regs16 = tensor_pointer('float16', shape=[2])
                 regs16= reg32
                 rv = register_tensor(accumulate_dtype, [1])
-                rv[0] = 0.0
+                rv[0] = ro.initial_value(data_type(accumulate_dtype))
                 for indices in task_layout.on(threadIdx.x + blockIdx.x * block_size):
                     reg32[0] = x_f32.read(indices, protected=True)
-                    rv[0] += regs16[0]
-                    rv[0] += regs16[1]
+                    rv[0] = ro.combine(rv[0], regs16[0])
+                    rv[0] = ro.combine(rv[0], regs16[1])
                 # Warp reduce by shuffle down
                 delta = 16
                 mask = active_mask()
@@ -150,6 +153,7 @@ class ReduceF16Task(Task):
                     rv[0] += shfl_down_sync(mask, rv[0], delta, 32)
                     delta = delta // 2
                 rv[0] = shfl_sync(mask, rv[0], 0, 32)
+                rv[0] = ro.finalize(acc=rv[0], size=reduce_extent)
                 if threadIdx.x == 0:
                     for indices in remain_layout.on(blockIdx.x):
                         y.write(indices, rv[0], protected=True)
@@ -176,6 +180,8 @@ class ReduceF16Task(Task):
         # In this schedule, remain_shape[-1] == shape[-1], as the last dim is not reduced
         remain_shape_32bit = [s // 2 if i == len(remain_shape) - 1 else s for i, s in enumerate(remain_shape)]
         remain_extent = prod(remain_shape_32bit)
+        reduce_shape = [shape[i] for i in dims]
+        reduce_extent = prod(reduce_shape)
 
         block_size = min(256, remain_extent)
         remain_layout = spatial(*remain_shape_32bit)
@@ -195,6 +201,8 @@ class ReduceF16Task(Task):
 
         x_dtype = self.inputs[0].ttype.dtype
         accumulate_dtype = self.attributes['accumulate_dtype']
+        reduce_type = self.attributes['reduce_type']
+        ro = ReduceOperation.from_name(reduce_type)
         
         with hidet.script_module() as module:
             @hidet.script
@@ -216,14 +224,14 @@ class ReduceF16Task(Task):
                 regs16 = tensor_pointer('float16', shape=[2])
                 regs16= reg32
                 rv = register_tensor(accumulate_dtype, [2])
-                rv[0] = 0.0
-                rv[1] = 0.0
+                rv[0] = ro.initial_value(data_type(accumulate_dtype))
+                rv[1] = ro.initial_value(data_type(accumulate_dtype))
                 for indices in task_layout.on(threadIdx.x + blockIdx.x * block_size):
                     reg32[0] = x_f32.read(indices, protected=True)
-                    rv[0] += regs16[0]
-                    rv[1] += regs16[1]
-                regs16[0] = rv[0]
-                regs16[1] = rv[1]
+                    rv[0] = ro.combine(rv[0], regs16[0])
+                    rv[1] = ro.combine(rv[1], regs16[1])
+                regs16[0] = ro.finalize(acc=rv[0], size=reduce_extent)
+                regs16[1] = ro.finalize(acc=rv[1], size=reduce_extent)
                 for indices in remain_layout.on(threadIdx.x + blockIdx.x * block_size):
                     y_f32.write(indices, reg32[0], protected=True)
 
@@ -279,7 +287,6 @@ class ReduceProdF16Op(ReduceBaseF16Op):
         super().__init__(x, dims, keepdims, ReduceType.Product)
 
 def reduce_f16(x: Tensor, dims: Sequence[int], keepdims: bool, reduce_type: ReduceType) -> Tensor:
-    print("reduce_f16: reduce_type=", reduce_type)
     op_dict = {
         ReduceType.Sum: ReduceSumF16Op,
         ReduceType.Average: ReduceMeanF16Op,
