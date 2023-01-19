@@ -14,10 +14,10 @@ from typing import List, Optional, Callable, Any
 from hidet.ir import dtypes
 from hidet.graph.ir import Operator, Tensor
 from hidet.graph.transforms import ResolveRule, register_resolve_rule
-from hidet.utils.py import prod
 
 from .reduce import ReduceBaseOp
 from .reduce_f16 import reduce_f16
+
 
 @register_resolve_rule(ReduceBaseOp)
 class ReduceResolveRule(ResolveRule):
@@ -29,22 +29,19 @@ class ReduceResolveRule(ResolveRule):
         return the output of the f16 optimized reduce schedule. (Support of odd number will be added in the future)
     3) resolve_generic: Default case, return the output of the regular f32 reduce schedule.
     """
+
     def resolve_simplify(self, op: Operator) -> Optional[List[Tensor]]:
         dims = op.attrs['dims']
         keepdims = op.attrs['keepdims']
         x: Tensor = op.inputs[0]
         shape = x.shape
-        print("in resolve_simplify")
         if not all(shape[d] == 1 for d in dims):
             return None
         if keepdims:
-            print("returning self")
             return [x]
-        print("returning squeezed self")
         return [x.squeeze(dims)]
 
     def resolve_f16(self, op: Operator) -> Optional[List[Tensor]]:
-        print("in resolve_f16")
         dims = op.attrs['dims']
         keepdims = op.attrs['keepdims']
         reduce_type = op.task.attributes['reduce_type']
@@ -52,20 +49,16 @@ class ReduceResolveRule(ResolveRule):
         last_dim = x.shape[-1]
         if x.dtype != dtypes.float16 or last_dim % 2 != 0:
             return None
-        print("Resolving to Reduce F16")
         return [reduce_f16(x, dims, keepdims, reduce_type)]
 
     def resolve_generic(self, op: Operator) -> Optional[List[Tensor]]:
-        print("in resolve_generic")
         return op.outputs
 
     def resolve(self, op: Operator) -> Optional[List[Tensor]]:
         assert isinstance(op, ReduceBaseOp)
-        print("Resolving Reduce")
         resolve_funcs: List[Callable[[Operator], Any]] = [self.resolve_simplify, self.resolve_f16, self.resolve_generic]
         for resolve_func in resolve_funcs:
             outs = resolve_func(op)
             if outs is not None:
                 return outs
-        print("No resolve for Reduce")
         return None

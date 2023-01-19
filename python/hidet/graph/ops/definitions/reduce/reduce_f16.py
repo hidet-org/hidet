@@ -9,20 +9,31 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Callable, Any, Union, Optional, Dict, Sequence
+from typing import List, Union, Optional, Sequence
 from hidet.ir import IRModule
 from hidet.ir.primitives import active_mask, shfl_down_sync, shfl_sync
 from hidet.ir.compute import ReduceOperation, reduce
-from hidet.ir.layout import DataLayout, StridesLayout
-from hidet.ir.type import data_type, TensorType, TensorPointerType
-from hidet.lang import f16, f32, i32, spatial, repeat, tensor, attr, grid, printf, cast, tensor_pointer
-from hidet.lang.cuda import blockIdx, threadIdx, syncthreads, register_tensor
+from hidet.ir.type import data_type
+from hidet.lang import f16, f32, spatial, repeat, attr, tensor_pointer
+from hidet.lang.cuda import blockIdx, threadIdx, register_tensor
 from hidet.transforms.tools import add_packed_func
-from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, TensorNode, InverseMap, compute, input_like, broadcast_shape, broadcast_shapes, broadcast_indices, normalize_dim, ReduceType, reduce
+from hidet.graph.ops.definitions.utils import (
+    Task,
+    Operator,
+    Tensor,
+    TensorNode,
+    compute,
+    input_like,
+    normalize_dim,
+    ReduceType,
+)
 from hidet.utils import prod
 
+
 class ReduceF16Task(Task):
-    def __init__(self, x: TensorNode, dims: List[int], keep_dim: bool, reduce_type: ReduceType, accumulate_dtype: str = 'float32'):
+    def __init__(
+        self, x: TensorNode, dims: List[int], keep_dim: bool, reduce_type: ReduceType, accumulate_dtype: str = 'float32'
+    ):
 
         x_shape = x.const_shape()
         y_shape = []
@@ -82,12 +93,9 @@ class ReduceF16Task(Task):
 
     def cuda_schedule_reduce_by_warp(self) -> IRModule:
         import hidet
-        local_layout = DataLayout.local
-        row_major = DataLayout.row_major
-        col_major = DataLayout.column_major
+
         warp_size = 32
         block_size = warp_size
-
         x, y = self.inputs[0], self.outputs[0]
         shape: List[int] = x.const_shape()
         dims = self.dims
@@ -105,7 +113,7 @@ class ReduceF16Task(Task):
         for i in range(len(shape_32bit)):
             if i == len(shape_32bit) - 1:
                 spatial_shape.append(warp_size)
-                repeat_shape.append((shape_32bit[i] + warp_size - 1) // warp_size) # num warps per row
+                repeat_shape.append((shape_32bit[i] + warp_size - 1) // warp_size)  # num warps per row
             elif i in dims:
                 spatial_shape.append(1)
                 repeat_shape.append(shape_32bit[i])
@@ -121,10 +129,7 @@ class ReduceF16Task(Task):
         with hidet.script_module() as module:
 
             @hidet.script
-            def reduce_kernel(
-                x: f16[x.const_shape()],
-                y: f16[y.const_shape()]
-            ):
+            def reduce_kernel(x: f16[x.const_shape()], y: f16[y.const_shape()]):
                 attr.cuda_grid_dim = grid_size
                 attr.cuda_block_dim = block_size
                 attr.cuda_min_blocks = 1
@@ -134,7 +139,7 @@ class ReduceF16Task(Task):
 
                 reg32 = register_tensor(f32, [1])
                 regs16 = tensor_pointer('float16', shape=[2])
-                regs16= reg32
+                regs16 = reg32
                 rv = register_tensor(accumulate_dtype, [1])
                 rv[0] = ro.initial_value(data_type(accumulate_dtype))
                 for indices in task_layout.on(threadIdx.x + blockIdx.x * block_size):
@@ -142,26 +147,24 @@ class ReduceF16Task(Task):
                     rv[0] = ro.combine(rv[0], regs16[0])
                     rv[0] = ro.combine(rv[0], regs16[1])
                 # Warp reduce by shuffle down
-                delta = 16
                 mask = active_mask()
-                for i in range(5):
-                    rv[0] += shfl_down_sync(mask, rv[0], delta, 32)
-                    delta = delta // 2
+                rv[0] = ro.combine(rv[0], shfl_down_sync(mask, rv[0], 16, 32))
+                rv[0] = ro.combine(rv[0], shfl_down_sync(mask, rv[0], 8, 32))
+                rv[0] = ro.combine(rv[0], shfl_down_sync(mask, rv[0], 4, 32))
+                rv[0] = ro.combine(rv[0], shfl_down_sync(mask, rv[0], 2, 32))
+                rv[0] = ro.combine(rv[0], shfl_down_sync(mask, rv[0], 1, 32))
                 rv[0] = shfl_sync(mask, rv[0], 0, 32)
                 rv[0] = ro.finalize(acc=rv[0], size=reduce_extent)
                 if threadIdx.x == 0:
                     for indices in remain_layout.on(blockIdx.x):
                         y.write(indices, rv[0], protected=True)
+
         ir_module = module.ir_module()
         add_packed_func(ir_module, func=reduce_kernel, pack_func_name=self.name)
         return ir_module
 
     def cuda_schedule_reduce_by_default(self) -> IRModule:
         import hidet
-
-        local_layout = DataLayout.local
-        row_major = DataLayout.row_major
-        col_major = DataLayout.column_major
 
         x, y = self.inputs[0], self.outputs[0]
         dims = self.dims
@@ -196,13 +199,11 @@ class ReduceF16Task(Task):
         accumulate_dtype = self.attributes['accumulate_dtype']
         reduce_type = self.attributes['reduce_type']
         ro = ReduceOperation.from_name(reduce_type)
-        
+
         with hidet.script_module() as module:
+
             @hidet.script
-            def reduce_kernel(
-                x: f16[x.const_shape()],
-                y: f16[y.const_shape()]
-            ):
+            def reduce_kernel(x: f16[x.const_shape()], y: f16[y.const_shape()]):
                 # Each 256-thread ThreadBlock handles 512 columns
                 attr.cuda_grid_dim = grid_size
                 attr.cuda_block_dim = block_size
@@ -215,7 +216,7 @@ class ReduceF16Task(Task):
 
                 reg32 = register_tensor(f32, [1])
                 regs16 = tensor_pointer('float16', shape=[2])
-                regs16= reg32
+                regs16 = reg32
                 rv = register_tensor(accumulate_dtype, [2])
                 rv[0] = ro.initial_value(data_type(accumulate_dtype))
                 rv[1] = ro.initial_value(data_type(accumulate_dtype))
@@ -244,6 +245,7 @@ class ReduceBaseF16Op(Operator):
             task=ReduceF16Task(input_like(x, 'x'), dims, keep_dim, reduce_type),
             attributes={'dims': dims, 'keepdims': keep_dim},
         )
+
 
 class ReduceMeanF16Op(ReduceBaseF16Op):
     def __init__(self, x: Tensor, dims: Optional[Sequence[int]], keepdims: bool = False):
@@ -279,7 +281,10 @@ class ReduceProdF16Op(ReduceBaseF16Op):
     def __init__(self, x: Tensor, dims: Optional[Sequence[int]], keepdims: bool = False):
         super().__init__(x, dims, keepdims, ReduceType.Product)
 
-def reduce_f16(x: Tensor, dims: Sequence[int], keepdims: bool, reduce_type: ReduceType) -> Tensor:
+
+def reduce_f16(x: Tensor, dims: Union[int, Sequence[int]], keepdims: bool, reduce_type: ReduceType) -> Tensor:
+    if isinstance(dims, int):
+        dims = [dims]
     op_dict = {
         ReduceType.Sum: ReduceSumF16Op,
         ReduceType.Average: ReduceMeanF16Op,

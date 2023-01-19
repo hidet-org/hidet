@@ -12,4 +12,5 @@
 from .reduce import reduce, ReduceBaseOp, ReduceTask
 from .reduce import mean, sum, var, min, max, std, prod, argmin, argmax, all, any
 from .reduce import ReduceSumOp, ReduceMeanOp
+from .reduce_f16 import reduce_f16
 from . import resolve
