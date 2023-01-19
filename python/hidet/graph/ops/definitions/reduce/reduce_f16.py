@@ -11,16 +11,11 @@
 # limitations under the License.
 from typing import List, Callable, Any, Union, Optional, Dict, Sequence
 from hidet.ir import IRModule
-from hidet.ir.expr import Expr
 from hidet.ir.primitives import active_mask, shfl_down_sync, shfl_sync
 from hidet.ir.compute import ReduceOperation, reduce
 from hidet.ir.layout import DataLayout, StridesLayout
-from hidet.ir.mapping import TaskMapping
 from hidet.ir.type import data_type, TensorType, TensorPointerType
-from hidet.graph.ops.definitions.matmul.batch_matmul import BatchMatmulOp
-from hidet.transforms.tools import fuse_and_pack
 from hidet.lang import f16, f32, i32, spatial, repeat, tensor, attr, grid, printf, cast, tensor_pointer
-from hidet.lang.mapping import repeat, spatial
 from hidet.lang.cuda import blockIdx, threadIdx, syncthreads, register_tensor
 from hidet.transforms.tools import add_packed_func
 from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, TensorNode, InverseMap, compute, input_like, broadcast_shape, broadcast_shapes, broadcast_indices, normalize_dim, ReduceType, reduce
@@ -198,8 +193,6 @@ class ReduceF16Task(Task):
         task_layout = repeat(*repeat_shape) * spatial(*spatial_shape)
 
         grid_size = (remain_layout.num_workers + block_size - 1) // block_size
-
-        x_dtype = self.inputs[0].ttype.dtype
         accumulate_dtype = self.attributes['accumulate_dtype']
         reduce_type = self.attributes['reduce_type']
         ro = ReduceOperation.from_name(reduce_type)

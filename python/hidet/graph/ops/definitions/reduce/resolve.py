@@ -10,19 +10,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List, Optional, Callable, Any
-from functools import lru_cache
 
-import hidet.cuda
 from hidet.ir import dtypes
 from hidet.graph.ir import Operator, Tensor
 from hidet.graph.transforms import ResolveRule, register_resolve_rule
-from hidet.utils.py import gcd, factorize, prod, cdiv
+from hidet.utils.py import prod
 
 from .reduce import ReduceBaseOp
 from .reduce_f16 import reduce_f16
-from ..transform import broadcast, flatten
-from ..utils import broadcast_shapes
-
 
 @register_resolve_rule(ReduceBaseOp)
 class ReduceResolveRule(ResolveRule):
@@ -32,8 +27,7 @@ class ReduceResolveRule(ResolveRule):
         else return Squeeze(input, axis=reduce_dims).
     2) resolve_f16: If the input data type is float16, and the size of the last input dimension is an even number,
         return the output of the f16 optimized reduce schedule. (Support of odd number will be added in the future)
-    3) resolve_generic: Default case, return the output of the f32 optimized reduce schedule.
-        Currently those schedules
+    3) resolve_generic: Default case, return the output of the regular f32 reduce schedule.
     """
     def resolve_simplify(self, op: Operator) -> Optional[List[Tensor]]:
         dims = op.attrs['dims']
@@ -63,7 +57,6 @@ class ReduceResolveRule(ResolveRule):
 
     def resolve_generic(self, op: Operator) -> Optional[List[Tensor]]:
         print("in resolve_generic")
-        x: Tensor = op.inputs[0]
         return op.outputs
 
     def resolve(self, op: Operator) -> Optional[List[Tensor]]:
@@ -74,4 +67,5 @@ class ReduceResolveRule(ResolveRule):
             outs = resolve_func(op)
             if outs is not None:
                 return outs
+        print("No resolve for Reduce")
         return None
