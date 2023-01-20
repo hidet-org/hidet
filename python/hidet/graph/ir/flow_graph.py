@@ -473,7 +473,7 @@ class FlowGraph:
             nodes.append(op)
             for it in op.inputs:
                 if it.op is None:
-                    if it.storage is None and it not in free_vars:
+                    if it.storage is None and all(it is not v for v in free_vars):
                         # input
                         free_vars.append(it)
                 else:
