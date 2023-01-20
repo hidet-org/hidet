@@ -37,7 +37,6 @@ from .arithmetic import (
     bitwise_left_shift,
 )
 from .compare import equal, less, greater, less_equal, greater_equal, logical_not, logical_and
-from .reduce import mean, min, max, sum, var, argmin, argmax
 from .transform import squeeze, unsqueeze, flatten, concat, cast, take, rearrange, strided_slice, split, pad, conv_pad
 from .pool import avg_pool2d, adaptive_avg_pool1d, adaptive_avg_pool2d, adaptive_avg_pool3d
 from .pool import max_pool2d, adaptive_max_pool1d, adaptive_max_pool2d, adaptive_max_pool3d
@@ -56,6 +55,7 @@ from .conv2d import Conv2dOp
 from .arithmetic import ErfOp, PowOp, AddOp, SubtractOp, MultiplyOp, DivideOp, WhereOp
 from .compare import EqualOp
 from .reduce import ReduceSumOp, ReduceMeanOp
+from .reduce import mean, min, max, sum, var, argmin, argmax
 from .transform import PadOp, ConcatOp
 
 from . import utils

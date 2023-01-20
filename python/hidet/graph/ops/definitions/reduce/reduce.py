@@ -11,9 +11,9 @@
 # limitations under the License.
 from typing import List, Union, Optional, Sequence
 
-from .arithmetic import square, sqrt
-from .utils import Task, Operator, Tensor, TensorNode, IRModule, ReduceType
-from .utils import compute, reduce, input_like, normalize_dim, arg_reduce
+from ..arithmetic import square, sqrt
+from ..utils import Task, Operator, Tensor, TensorNode, IRModule, ReduceType
+from ..utils import compute, reduce, input_like, normalize_dim, arg_reduce
 
 
 class ReduceTask(Task):
@@ -71,7 +71,7 @@ class ReduceTask(Task):
 
     def implement_cuda(self, workding_dir: str) -> IRModule:
         # pylint: disable=import-outside-toplevel
-        from ..schedules import cuda_schedule_reduce_by_default, cuda_schedule_reduce_by_warp_reduce
+        from ...schedules import cuda_schedule_reduce_by_default, cuda_schedule_reduce_by_warp_reduce
 
         rank = len(self.inputs[0].const_shape())
         if rank - 1 in self.dims:

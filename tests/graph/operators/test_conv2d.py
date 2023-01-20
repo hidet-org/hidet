@@ -38,7 +38,7 @@ def torch_conv2d(data: np.ndarray, weight: np.ndarray, padding: List[int], strid
 )
 @pytest.mark.parametrize("padding", [[0, 0, 0, 0], [1, 1, 1, 1], [2, 2, 2, 2]])
 @pytest.mark.parametrize("stride", [[1, 1], [2, 2], [3, 4]])
-@pytest.mark.parametrize("dilations", [[1, 1], [3, 4]])
+@pytest.mark.parametrize("dilations", [[1, 1], [2, 2], [3, 4]])
 def test_conv2d(hidet_op, n, c, h, w, oc, kx, ky, padding, stride, dilations):
     check_binary(
         a_shape=[n, c, h, w],
