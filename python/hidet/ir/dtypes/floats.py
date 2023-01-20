@@ -105,7 +105,7 @@ float16 = FloatType(
     np.finfo(np.float16).min,
     np.finfo(np.float16).max,
     np.finfo(np.float16).eps,
-    np.finfo(np.float16).smallest_normal,
+    np.finfo(np.float16).tiny,
 )
 float32 = FloatType(
     'float32',
@@ -114,7 +114,7 @@ float32 = FloatType(
     np.finfo(np.float32).min,
     np.finfo(np.float32).max,
     np.finfo(np.float32).eps,
-    np.finfo(np.float32).smallest_normal,
+    np.finfo(np.float32).tiny,
 )
 float64 = FloatType(
     'float64',
@@ -123,7 +123,7 @@ float64 = FloatType(
     np.finfo(np.float64).min,
     np.finfo(np.float64).max,
     np.finfo(np.float64).eps,
-    np.finfo(np.float64).smallest_normal,
+    np.finfo(np.float64).tiny,
 )
 bfloat16 = FloatType('bfloat16', 'bf16', 2, -3.4e38, 3.4e38, None, None)  # TODO: find correct values
 tfloat32 = FloatType('tfloat32', 'tf32', 4, -3.4e38, 3.4e38, None, None)
