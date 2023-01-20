@@ -10,23 +10,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List, Union, Optional, Sequence
-from hidet.ir import IRModule
+from hidet.ir import IRModule, dtypes
 from hidet.ir.primitives import active_mask, shfl_down_sync, shfl_sync
 from hidet.ir.compute import ReduceOperation, reduce
 from hidet.ir.type import data_type
+from hidet.ir.layout import DataLayout
 from hidet.lang import f16, f32, spatial, repeat, attr, tensor_pointer
 from hidet.lang.cuda import blockIdx, threadIdx, register_tensor
 from hidet.transforms.tools import add_packed_func
-from hidet.graph.ops.definitions.utils import (
-    Task,
-    Operator,
-    Tensor,
-    TensorNode,
-    compute,
-    input_like,
-    normalize_dim,
-    ReduceType,
-)
+from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, TensorNode, ReduceType
+from hidet.graph.ops.definitions.utils import compute, input_like, normalize_dim
 from hidet.utils import prod
 
 
@@ -93,6 +86,7 @@ class ReduceF16Task(Task):
 
     def cuda_schedule_reduce_by_warp(self) -> IRModule:
         import hidet
+        row_major = DataLayout.row_major
 
         warp_size = 32
         block_size = warp_size
@@ -107,6 +101,7 @@ class ReduceF16Task(Task):
         reduce_extent = prod(reduce_shape)
         shape_32bit = [s // 2 if i == len(shape) - 1 else s for i, s in enumerate(shape)]
         remain_layout = spatial(*remain_shape)
+        x_f32_layout = row_major(shape_32bit)
 
         spatial_shape = []
         repeat_shape = []
@@ -143,9 +138,10 @@ class ReduceF16Task(Task):
                 rv = register_tensor(accumulate_dtype, [1])
                 rv[0] = ro.initial_value(data_type(accumulate_dtype))
                 for indices in task_layout.on(threadIdx.x + blockIdx.x * block_size):
-                    reg32[0] = x_f32.read(indices, protected=True)
-                    rv[0] = ro.combine(rv[0], regs16[0])
-                    rv[0] = ro.combine(rv[0], regs16[1])
+                    if x_f32_layout.within_bound(indices):
+                        reg32[0] = x_f32.read(indices, protected=False)
+                        rv[0] = ro.combine(rv[0], regs16[0])
+                        rv[0] = ro.combine(rv[0], regs16[1])
                 # Warp reduce by shuffle down
                 mask = active_mask()
                 rv[0] = ro.combine(rv[0], shfl_down_sync(mask, rv[0], 16, 32))
@@ -157,7 +153,7 @@ class ReduceF16Task(Task):
                 rv[0] = ro.finalize(acc=rv[0], size=reduce_extent)
                 if threadIdx.x == 0:
                     for indices in remain_layout.on(blockIdx.x):
-                        y.write(indices, rv[0], protected=True)
+                        y.write(indices, rv[0], protected=False)
 
         ir_module = module.ir_module()
         add_packed_func(ir_module, func=reduce_kernel, pack_func_name=self.name)
@@ -220,14 +216,16 @@ class ReduceF16Task(Task):
                 rv = register_tensor(accumulate_dtype, [2])
                 rv[0] = ro.initial_value(data_type(accumulate_dtype))
                 rv[1] = ro.initial_value(data_type(accumulate_dtype))
-                for indices in task_layout.on(threadIdx.x + blockIdx.x * block_size):
-                    reg32[0] = x_f32.read(indices, protected=True)
-                    rv[0] = ro.combine(rv[0], regs16[0])
-                    rv[1] = ro.combine(rv[1], regs16[1])
-                regs16[0] = ro.finalize(acc=rv[0], size=reduce_extent)
-                regs16[1] = ro.finalize(acc=rv[1], size=reduce_extent)
-                for indices in remain_layout.on(threadIdx.x + blockIdx.x * block_size):
-                    y_f32.write(indices, reg32[0], protected=True)
+
+                if threadIdx.x + blockIdx.x * block_size < remain_extent:
+                    for indices in task_layout.on(threadIdx.x + blockIdx.x * block_size):
+                        reg32[0] = x_f32.read(indices, protected=False)
+                        rv[0] = ro.combine(rv[0], regs16[0])
+                        rv[1] = ro.combine(rv[1], regs16[1])
+                    regs16[0] = ro.finalize(acc=rv[0], size=reduce_extent)
+                    regs16[1] = ro.finalize(acc=rv[1], size=reduce_extent)
+                    for indices in remain_layout.on(threadIdx.x + blockIdx.x * block_size):
+                        y_f32.write(indices, reg32[0], protected=False)
 
         ir_module = module.ir_module()
         add_packed_func(ir_module, func=reduce_kernel, pack_func_name=self.name)
@@ -283,6 +281,10 @@ class ReduceProdF16Op(ReduceBaseF16Op):
 
 
 def reduce_f16(x: Tensor, dims: Union[int, Sequence[int]], keepdims: bool, reduce_type: ReduceType) -> Tensor:
+    if x.dtype != dtypes.float16:
+        raise ValueError('reduce_f16 only support float16, got {}'.format(x.dtype))
+    if x.shape[-1] % 2 != 0:
+        raise ValueError('Expect the last dimension of the input tensors to be a multiple of 2')
     if isinstance(dims, int):
         dims = [dims]
     op_dict = {
