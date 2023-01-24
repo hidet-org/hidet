@@ -172,5 +172,5 @@ def simplify_to_int(node: Union[Expr, int], repeat_limit=10) -> int:
     if isinstance(node, int):
         return node
     node = simplify(node, repeat_limit)
-    assert isinstance(node, Constant) and node.type.name in ['int32', 'uint8'], "Invalid input. Input type must be one of [int32, uint8]."
+    assert isinstance(node, Constant) and node.type.name in ['int32', 'uint8'], 'Invalid input. Input type must be one of [int32, uint8].'
     return node.value
