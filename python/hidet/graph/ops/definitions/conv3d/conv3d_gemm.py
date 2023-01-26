@@ -71,7 +71,6 @@ def conv3d_gemm_filter_transform(w: Tensor, groups: int = 1) -> Tensor:
         raise ValueError('invalid conv3d groups {} for out channels {}'.format(groups, oc))
     ogc = oc // groups
     w = w.reshape([groups, ogc, c, kz, kx, ky])  # [groups, ogc, c, kz, kx, ky]
-    # w = w.rearrange([[0], [2, 3, 4], [1]])  # [groups, c * kx * ky, ogc]
     w = w.rearrange([[0], [2, 3, 4, 5], [1]])  # [groups, c * kz * kx * ky, ogc]
     return w
 
@@ -84,7 +83,6 @@ def conv3d_gemm_inverse_transform(gemm_y: Tensor, out_depth, out_height, out_wid
     assert nrpq % (r * p * q) == 0
     n = nrpq // (r * p * q)
     y = gemm_y.reshape([groups, n, r, p, q, ogc])
-    # y = y.rearrange([[1], [0, 4], [2], [3]])
     y = y.rearrange([[1], [0, 5], [2], [3], [4]])
     return y
 
