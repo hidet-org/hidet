@@ -22,8 +22,7 @@ class Conv3dResolveRule(ResolveRule):
 
     def resolve(self, op: Operator) -> Optional[List[Tensor]]:
         assert isinstance(op, Conv3dOp)
-        return None
-        stride = ops.utils.normalize_stride(op.attrs['stride'])
+        stride = ops.utils.normalize_stride(op.attrs['stride'], dim=3)
         groups = op.attrs['groups']
         dilations = op.attrs['dilations']
         channels = op.inputs[1].shape[0]
