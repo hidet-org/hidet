@@ -64,6 +64,25 @@ def test_max_pool2d(shape, kernel, stride, padding):
         rtol=0,
     )
 
+@pytest.mark.parametrize(
+    "shape, kernel, stride, padding",
+    [
+        [[1, 1, 1, 1, 1], [3, 3, 3], [1, 1, 1], [1, 1, 1, 1, 1, 1]],  # kernel 3, stride 1
+        [[1, 3, 32, 32, 32], [3, 3, 3], [1, 1, 1], [1, 1, 1, 1, 1, 1]],  # kernel 3, stride 1
+        [[1, 3, 32, 32, 32], [3, 3, 3], [2, 2, 2], [1, 1, 1, 1, 1, 1]],  # kernel 3, stride 2
+        [[1, 3, 32, 32, 32], [7, 7, 7], [1, 1, 1], [3, 3, 3, 3, 3, 3]],  # kernel 3, stride 1
+        [[1, 3, 32, 32, 32], [7, 7, 7], [2, 2, 2], [3, 3, 3, 3, 3, 3]],  # kernel 3, stride 2
+    ],
+)
+def test_max_pool3d(shape, kernel, stride, padding):
+    check_torch_unary(
+        shape,
+        lambda x: torch.nn.functional.max_pool3d(x, kernel_size=kernel, stride=stride,
+            padding=[padding[0],padding[1],padding[2]]),
+        lambda x: ops.max_pool3d(x, kernel, stride, padding),
+        atol=0,
+        rtol=0,
+    )
 
 @pytest.mark.parametrize(
     "shape, kernel, stride, padding",
@@ -84,6 +103,24 @@ def test_avg_pool2d(shape, kernel, stride, padding):
         rtol=1e-5,
     )
 
+@pytest.mark.parametrize(
+    "shape, kernel, stride, padding",
+    [
+        [[1, 3, 32, 32, 32], [3, 3, 3], [1, 1, 1], [1, 1, 1, 1, 1, 1]],  # kernel 3, stride 1
+        [[1, 3, 32, 32, 32], [3, 3, 3], [2, 2, 2], [1, 1, 1, 1, 1, 1]],  # kernel 3, stride 2
+        [[1, 3, 32, 32, 32], [7, 7, 7], [1, 1, 1], [3, 3, 3, 3, 3, 3]],  # kernel 3, stride 1
+        [[1, 3, 32, 32, 32], [7, 7, 7], [2, 2, 2], [3, 3, 3, 3, 3, 3]],  # kernel 3, stride 2
+    ],
+)
+def test_avg_pool3d(shape, kernel, stride, padding):
+    check_torch_unary(
+        shape,
+        lambda x: torch.nn.functional.avg_pool3d(x, kernel_size=kernel, stride=stride,
+            padding=[padding[0],padding[1],padding[2]]),
+        lambda x: ops.avg_pool3d(x, kernel, stride, padding),
+        atol=0,
+        rtol=0,
+    )
 
 @pytest.mark.parametrize('reduce_type', ['max', 'avg'])
 @pytest.mark.parametrize(

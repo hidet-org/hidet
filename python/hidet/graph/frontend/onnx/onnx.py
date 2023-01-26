@@ -203,11 +203,20 @@ class OnnxConv(OnnxOperator):
             bias = None
         else:
             x, w, bias = inputs
-        x = ops.pad(x, ops.utils.normalize_padding(padding))
-        output = ops.conv2d(x, w, stride=strides, dilations=dilations, groups=groups)
-        if bias is not None:
-            bias = ops.unsqueeze(bias, [0, 2, 3])
-            output = output + bias
+        if len(x.shape) == 4:
+            x = ops.pad(x, ops.utils.normalize_padding(padding))
+            output = ops.conv2d(x, w, stride=strides, dilations=dilations, groups=groups)
+            if bias is not None:
+                bias = ops.unsqueeze(bias, [0, 2, 3])
+                output = output + bias
+        elif len(x.shape) == 5:
+            x = ops.pad(x, ops.utils.normalize_padding(padding, dim=3))
+            output = ops.conv3d(x, w, stride=strides, dilations=dilations, groups=groups)
+            if bias is not None:
+                bias = ops.unsqueeze(bias, [0, 2, 3, 4])
+                output = output + bias
+        else:
+            raise NotImplementedError('Currently only support 2D and 3D convolution, got x {}.'.format(x.shape))
         return [output]
 
     def run_v11(self, inputs: List[Tensor]) -> List[Tensor]:
@@ -289,7 +298,13 @@ class OnnxMaxPool(OnnxOperator):
         kernel_size = list(self.attrs.get('kernel_shape'))
         padding = list(self.attrs.get('pads', [0, 0, 0, 0]))
         strides = list(self.attrs.get('strides'))
-        return [ops.max_pool2d(inputs[0], kernel_size, strides, padding)]
+        x = inputs[0]
+        if len(x.shape) == 4:
+            return [ops.max_pool2d(inputs[0], kernel_size, strides, padding)]
+        elif len(x.shape) == 5:
+            return [ops.max_pool3d(inputs[0], kernel_size, strides, padding)]
+        else:
+            raise NotImplementedError('Currently only support 2d and 3d max pooling')
 
 
 @register_onnx_operator
@@ -656,9 +671,12 @@ class OnnxAveragePool(OnnxOperator):
             raise NotImplementedError(self)
 
         x = inputs[0]
-        if len(x.shape) != 4:
-            raise NotImplementedError('Currently only support 2-d avg pooling')
-        x = ops.avg_pool2d(x, kernel_shape, strides, pads)
+        if len(x.shape) == 4:
+            x = ops.avg_pool2d(x, kernel_shape, strides, pads)
+        elif len(x.shape) == 5:
+            x = ops.avg_pool3d(x, kernel_shape, strides, pads)
+        else:
+            raise NotImplementedError('Currently only support 2d and 3d avg pooling')
         return [x]
 
 
