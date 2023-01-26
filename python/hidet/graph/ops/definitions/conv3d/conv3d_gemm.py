@@ -19,20 +19,21 @@ from .utils import infer_conv3d_shape
 
 class Conv3dGemmImageTransformTask(Task):
     def __init__(self, x: TensorNode, kernel: List[int], stride: List[int], dilations: List[int], groups: int):
-        n, c, h, w = x.const_shape()
-        kx, ky = kernel
-        sx, sy = stride
-        dilx, dily = dilations
-        p, q = (h - dilx * (kx - 1) - 1) // sx + 1, (w - dily * (ky - 1) - 1) // sy + 1
+        n, c, d, h, w = x.const_shape()
+        kz, kx, ky = kernel
+        sz, sx, sy = stride
+        dilz, dilx, dily = dilations
+        r, p, q = (d - dilz * (kz - 1) - 1) // sz + 1, (h - dilx * (kx - 1) - 1) // sx + 1, (w - dily * (ky - 1) - 1) // sy + 1
         if c % groups != 0:
-            msg = 'Conv2d expect in_channels % groups == 0, but got in_channels {} and groups {}'.format(c, groups)
+            msg = 'Conv3d expect in_channels % groups == 0, but got in_channels {} and groups {}'.format(c, groups)
             raise ValueError(msg)
         gc = c // groups  # group channels
         gemm_x = compute(
             name='gemm_x',
-            shape=[groups, n * p * q, gc * kx * ky],
+            shape=[groups, n * r * p * q, gc * kz * kx * ky],
             fcompute=lambda g, i, k: x[
-                i // (p * q), g * gc + k // (kx * ky), i // q % p * sx + k // ky % kx * dilx, i % q * sy + k % ky * dily
+                i // (r * p * q), g * gc + k // (kz * kx * ky), i // (p * q) % r * sz + k // (kx * ky) % kz * dilz, 
+                i // q % p * sx + k // ky % kx * dilx, i % q * sy + k % ky * dily
             ],
         )
         super().__init__(name='conv2d_gemm_image_transform', inputs=[x], outputs=[gemm_x])
@@ -56,26 +57,28 @@ def conv3d_gemm_image_transform(
 
 
 def conv3d_gemm_filter_transform(w: Tensor, groups: int = 1) -> Tensor:
-    # weight shape: [oc, c, kx, ky]
-    # output shape: [groups, c * kx * ky, ogc] where ogc = oc // groups
-    oc, c, kx, ky = w.shape
+    # weight shape: [oc, c, kz * kx, ky]
+    # output shape: [groups, c * kz * kx * ky, ogc] where ogc = oc // groups
+    oc, c, kz, kx, ky = w.shape
     if oc % groups != 0:
-        raise ValueError('invalid conv2d groups {} for out channels {}'.format(groups, oc))
+        raise ValueError('invalid conv3d groups {} for out channels {}'.format(groups, oc))
     ogc = oc // groups
-    w = w.reshape([groups, ogc, c, kx, ky])  # [groups, ogc, c, kx, ky]
-    w = w.rearrange([[0], [2, 3, 4], [1]])  # [groups, c * kx * ky, ogc]
+    w = w.reshape([groups, ogc, c, kz, kx, ky])  # [groups, ogc, c, kz, kx, ky]
+    # w = w.rearrange([[0], [2, 3, 4], [1]])  # [groups, c * kx * ky, ogc]
+    w = w.rearrange([[0], [2, 3, 4, 5], [1]])  # [groups, c * kz * kx * ky, ogc]
     return w
 
 
-def conv3d_gemm_inverse_transform(gemm_y: Tensor, out_height, out_width) -> Tensor:
-    # gemm_y shape: [groups, n * p * q, ogc]
-    # output shape: [n, oc, p, q] where oc = groups * ogc
-    p, q = out_height, out_width
-    groups, npq, ogc = gemm_y.shape
-    assert npq % (p * q) == 0
-    n = npq // (p * q)
-    y = gemm_y.reshape([groups, n, p, q, ogc])
-    y = y.rearrange([[1], [0, 4], [2], [3]])
+def conv3d_gemm_inverse_transform(gemm_y: Tensor, out_depth, out_height, out_width) -> Tensor:
+    # gemm_y shape: [groups, n * r * p * q, ogc]
+    # output shape: [n, oc, r, p, q] where oc = groups * ogc
+    r, p, q = out_depth, out_height, out_width
+    groups, nrpq, ogc = gemm_y.shape
+    assert nrpq % (r * p * q) == 0
+    n = nrpq // (r * p * q)
+    y = gemm_y.reshape([groups, n, r, p, q, ogc])
+    # y = y.rearrange([[1], [0, 4], [2], [3]])
+    y = y.rearrange([[1], [0, 5], [2], [3], [4]])
     return y
 
 
@@ -87,5 +90,5 @@ def conv3d_gemm(data: Tensor, weight: Tensor, stride, dilations: List[int], grou
     gemm_y = matmul(gemm_x, gemm_w)
 
     y_shape = infer_conv3d_shape(data.shape, weight.shape, stride, groups, dilations)
-    y = conv3d_gemm_inverse_transform(gemm_y, out_height=y_shape[2], out_width=y_shape[3])
+    y = conv3d_gemm_inverse_transform(gemm_y, out_depth=y_shape[2], out_height=y_shape[3], out_width=y_shape[4])
     return y

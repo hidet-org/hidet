@@ -18,7 +18,7 @@ def infer_conv3d_shape(
 ) -> List[int]:
     n, c, d, h, w = x_shape
     oc, gc, kz, kx, ky = w_shape
-    sz, sx, sy = normalize_stride(strides)
+    sz, sx, sy = normalize_stride(strides, dim=3)
     dilz, dilx, dily = dilations
     if gc * groups != c:
         msg = 'Conv3d: x has {} input channels, w has {} group channels, and groups={}'.format(c, gc, groups)

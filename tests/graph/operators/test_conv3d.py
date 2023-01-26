@@ -18,7 +18,7 @@ import pytest
 from hidet import ops
 from hidet.testing import check_torch_binary
 
-@pytest.mark.parametrize("hidet_op", [ops.conv3d])
+@pytest.mark.parametrize("hidet_op", [ops.conv3d, ops.conv3d_gemm])
 @pytest.mark.parametrize(
     "n, c, d, h, w, oc, kz, kx, ky",
     [
