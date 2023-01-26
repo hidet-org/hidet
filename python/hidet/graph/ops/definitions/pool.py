@@ -45,6 +45,7 @@ class Pool2dTask(Task):
         )
         super().__init__(name='{}_pool2d'.format(reduce_type), inputs=[x], outputs=[y])
 
+
 class Pool3dTask(Task):
     def __init__(self, x: TensorNode, kernel, strides, padding, reduce_type: str):
         assert reduce_type in ['max', 'avg']
@@ -73,6 +74,7 @@ class Pool3dTask(Task):
             ),
         )
         super().__init__(name='{}_pool3d'.format(reduce_type), inputs=[x], outputs=[y])
+
 
 class AdaptivePoolTask(Task):
     def __init__(self, x: TensorNode, output_size: Sequence[int], reduce_type: str):
@@ -133,6 +135,7 @@ class MaxPool2dOp(Operator):
             attributes={'kernel': kernel, 'stride': stride, 'padding': padding},
         )
 
+
 class MaxPool3dOp(Operator):
     def __init__(
         self,
@@ -161,6 +164,7 @@ class AvgPool2dOp(Operator):
             task=Pool2dTask(input_like(x, 'x'), kernel, stride, padding, reduce_type='avg'),
             attributes={'kernel': kernel, 'stride': stride, 'padding': padding},
         )
+
 
 class AvgPool3dOp(Operator):
     def __init__(
@@ -226,6 +230,7 @@ class AdaptiveMaxPool3dOp(AdaptivePoolOp):
 def max_pool2d(x: Tensor, kernel, stride, padding) -> Tensor:
     return MaxPool2dOp(x, kernel, stride, padding).get_output(0)
 
+
 def max_pool3d(x: Tensor, kernel, stride, padding) -> Tensor:
     return MaxPool3dOp(x, kernel, stride, padding).get_output(0)
 
@@ -233,8 +238,10 @@ def max_pool3d(x: Tensor, kernel, stride, padding) -> Tensor:
 def avg_pool2d(x: Tensor, kernel, stride, padding) -> Tensor:
     return AvgPool2dOp(x, kernel, stride, padding).get_output(0)
 
+
 def avg_pool3d(x: Tensor, kernel, stride, padding) -> Tensor:
     return AvgPool3dOp(x, kernel, stride, padding).get_output(0)
+
 
 def adaptive_avg_pool1d(x: Tensor, output_size: Union[int, Sequence[int]]) -> Tensor:
     return AdaptiveAvgPool1dOp(x, output_size).get_output(0)

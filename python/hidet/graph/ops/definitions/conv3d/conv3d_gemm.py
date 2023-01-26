@@ -23,7 +23,11 @@ class Conv3dGemmImageTransformTask(Task):
         kz, kx, ky = kernel
         sz, sx, sy = stride
         dilz, dilx, dily = dilations
-        r, p, q = (d - dilz * (kz - 1) - 1) // sz + 1, (h - dilx * (kx - 1) - 1) // sx + 1, (w - dily * (ky - 1) - 1) // sy + 1
+        r, p, q = (
+            (d - dilz * (kz - 1) - 1) // sz + 1,
+            (h - dilx * (kx - 1) - 1) // sx + 1,
+            (w - dily * (ky - 1) - 1) // sy + 1,
+        )
         if c % groups != 0:
             msg = 'Conv3d expect in_channels % groups == 0, but got in_channels {} and groups {}'.format(c, groups)
             raise ValueError(msg)
@@ -32,8 +36,11 @@ class Conv3dGemmImageTransformTask(Task):
             name='gemm_x',
             shape=[groups, n * r * p * q, gc * kz * kx * ky],
             fcompute=lambda g, i, k: x[
-                i // (r * p * q), g * gc + k // (kz * kx * ky), i // (p * q) % r * sz + k // (kx * ky) % kz * dilz, 
-                i // q % p * sx + k // ky % kx * dilx, i % q * sy + k % ky * dily
+                i // (r * p * q),
+                g * gc + k // (kz * kx * ky),
+                i // (p * q) % r * sz + k // (kx * ky) % kz * dilz,
+                i // q % p * sx + k // ky % kx * dilx,
+                i % q * sy + k % ky * dily,
             ],
         )
         super().__init__(name='conv2d_gemm_image_transform', inputs=[x], outputs=[gemm_x])

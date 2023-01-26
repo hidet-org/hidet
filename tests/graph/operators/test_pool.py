@@ -64,6 +64,7 @@ def test_max_pool2d(shape, kernel, stride, padding):
         rtol=0,
     )
 
+
 @pytest.mark.parametrize(
     "shape, kernel, stride, padding",
     [
@@ -77,12 +78,14 @@ def test_max_pool2d(shape, kernel, stride, padding):
 def test_max_pool3d(shape, kernel, stride, padding):
     check_torch_unary(
         shape,
-        lambda x: torch.nn.functional.max_pool3d(x, kernel_size=kernel, stride=stride,
-            padding=[padding[0],padding[1],padding[2]]),
+        lambda x: torch.nn.functional.max_pool3d(
+            x, kernel_size=kernel, stride=stride, padding=[padding[0], padding[1], padding[2]]
+        ),
         lambda x: ops.max_pool3d(x, kernel, stride, padding),
         atol=0,
         rtol=0,
     )
+
 
 @pytest.mark.parametrize(
     "shape, kernel, stride, padding",
@@ -103,6 +106,7 @@ def test_avg_pool2d(shape, kernel, stride, padding):
         rtol=1e-5,
     )
 
+
 @pytest.mark.parametrize(
     "shape, kernel, stride, padding",
     [
@@ -115,12 +119,14 @@ def test_avg_pool2d(shape, kernel, stride, padding):
 def test_avg_pool3d(shape, kernel, stride, padding):
     check_torch_unary(
         shape,
-        lambda x: torch.nn.functional.avg_pool3d(x, kernel_size=kernel, stride=stride,
-            padding=[padding[0],padding[1],padding[2]]),
+        lambda x: torch.nn.functional.avg_pool3d(
+            x, kernel_size=kernel, stride=stride, padding=[padding[0], padding[1], padding[2]]
+        ),
         lambda x: ops.avg_pool3d(x, kernel, stride, padding),
         atol=0,
         rtol=0,
     )
+
 
 @pytest.mark.parametrize('reduce_type', ['max', 'avg'])
 @pytest.mark.parametrize(

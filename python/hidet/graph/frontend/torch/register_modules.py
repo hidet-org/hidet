@@ -30,6 +30,7 @@ class HidetConv2d(HidetModule):
             groups=self.mod.groups,
         )
 
+
 @register_module(torch.nn.Conv3d)
 class HidetConv3d(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
@@ -43,6 +44,7 @@ class HidetConv3d(HidetModule):
             dilation=self.mod.dilation,
             groups=self.mod.groups,
         )
+
 
 @register_module(torch.nn.AdaptiveAvgPool2d)
 class HidetAdaptiveAvgPool2d(HidetModule):
@@ -71,6 +73,7 @@ class HidetMaxPool2d(HidetModule):
             ceil_mode=self.mod.ceil_mode,
             return_indices=self.mod.return_indices,
         )
+
 
 @register_module(torch.nn.MaxPool3d)
 class HidetMaxPool3d(HidetModule):

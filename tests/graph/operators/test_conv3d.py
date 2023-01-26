@@ -18,6 +18,7 @@ import pytest
 from hidet import ops
 from hidet.testing import check_torch_binary
 
+
 @pytest.mark.parametrize("hidet_op", [ops.conv3d, ops.conv3d_gemm])
 @pytest.mark.parametrize(
     "n, c, d, h, w, oc, kz, kx, ky",
@@ -34,13 +35,17 @@ def test_conv3d(hidet_op, n, c, d, h, w, oc, kz, kx, ky, padding, stride, dilati
     check_torch_binary(
         a_shape=[n, c, d, h, w],
         b_shape=[oc, c, kz, kx, ky],
-        torch_func=lambda data, weight: torch.nn.functional.conv3d(data, weight, bias=None, stride=stride,
-                        padding=[padding[0], padding[1], padding[2]], dilation=dilations),
-        hidet_func=lambda data, weight: hidet_op(ops.conv_pad(data, padding), weight, stride=stride, dilations=dilations),
+        torch_func=lambda data, weight: torch.nn.functional.conv3d(
+            data, weight, bias=None, stride=stride, padding=[padding[0], padding[1], padding[2]], dilation=dilations
+        ),
+        hidet_func=lambda data, weight: hidet_op(
+            ops.conv_pad(data, padding), weight, stride=stride, dilations=dilations
+        ),
         dtype='float32',
         atol=2e-1,
         rtol=2e-1,
     )
+
 
 if __name__ == '__main__':
     pytest.main([__file__])

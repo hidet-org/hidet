@@ -19,7 +19,6 @@ from .conv3d import Conv3dOp
 
 @register_resolve_rule(Conv3dOp)
 class Conv3dResolveRule(ResolveRule):
-
     def resolve(self, op: Operator) -> Optional[List[Tensor]]:
         assert isinstance(op, Conv3dOp)
         stride = ops.utils.normalize_stride(op.attrs['stride'], dim=3)

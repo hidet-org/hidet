@@ -26,5 +26,9 @@ def infer_conv3d_shape(
     if oc % groups != 0:
         msg = 'Conv3d expects out_channels % groups == 0, got out_channels {} and groups {}'.format(oc, groups)
         raise ValueError(msg)
-    r, p, q = (d - dilz * (kz - 1) - 1) // sz + 1, (h - dilx * (kx - 1) - 1) // sx + 1, (w - dily * (ky - 1) - 1) // sy + 1
+    r, p, q = (
+        (d - dilz * (kz - 1) - 1) // sz + 1,
+        (h - dilx * (kx - 1) - 1) // sx + 1,
+        (w - dily * (ky - 1) - 1) // sy + 1,
+    )
     return [n, oc, r, p, q]

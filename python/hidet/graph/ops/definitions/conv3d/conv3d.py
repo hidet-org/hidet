@@ -21,7 +21,11 @@ class Conv3dTask(Task):
         oc, wc, kz, kx, ky = weight.const_shape()
         sz, sx, sy = stride
         dilz, dilx, dily = dilations
-        r, p, q = (d - dilz * (kz - 1) - 1) // sz + 1, (h - dilx * (kx - 1) - 1) // sx + 1, (w - dily * (ky - 1) - 1) // sy + 1
+        r, p, q = (
+            (d - dilz * (kz - 1) - 1) // sz + 1,
+            (h - dilx * (kx - 1) - 1) // sx + 1,
+            (w - dily * (ky - 1) - 1) // sy + 1,
+        )
         if c % groups != 0 or oc % groups != 0:
             raise ValueError(
                 'Conv3d expect the in_channels % groups == 0 and out_channels % groups == 0, \n'
@@ -39,7 +43,13 @@ class Conv3dTask(Task):
             fcompute=lambda ni, oci, ri, pi, qi: reduce(
                 shape=[wc, kz, kx, ky],
                 fcompute=lambda wci, kzi, kxi, kyi: (
-                    data[ni, (oci // out_group_size) * wc + wci, ri * sz + kzi * dilz, pi * sx + kxi * dilx, qi * sy + kyi * dily]
+                    data[
+                        ni,
+                        (oci // out_group_size) * wc + wci,
+                        ri * sz + kzi * dilz,
+                        pi * sx + kxi * dilx,
+                        qi * sy + kyi * dily,
+                    ]
                     * weight[oci, wci, kzi, kxi, kyi]
                 ),
                 reduce_type='sum',
