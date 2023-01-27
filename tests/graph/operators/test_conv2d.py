@@ -22,7 +22,7 @@ from hidet.testing import check_binary
 def torch_conv2d(data: np.ndarray, weight: np.ndarray, padding: List[int], stride: List[int], dilations: List[int]):
     data_torch, weight_torch = torch.from_numpy(data), torch.from_numpy(weight)
     torch_out = torch.nn.functional.conv2d(
-        data_torch, weight_torch, bias=None, stride=stride, padding=[padding[0], padding[2]], dilation=dilations
+        data_torch, weight_torch, bias=None, stride=stride, padding=[padding[0], padding[1]], dilation=dilations
     )
     return torch_out.numpy()
 

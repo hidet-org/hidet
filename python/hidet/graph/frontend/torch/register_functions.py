@@ -36,6 +36,15 @@ def conv2d(x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, d
     return y
 
 
+@register_function(torch.nn.functional.conv3d)
+def conv3d(x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, dilation, groups):
+    x = ops.conv_pad(x, padding)
+    y = ops.conv3d(x, weight, stride, dilation, groups)
+    if bias is not None:
+        y = y + ops.unsqueeze(bias, [0, 2, 3, 4])
+    return y
+
+
 @register_function(torch.nn.functional.adaptive_avg_pool2d)
 def adaptive_avg_pool2d(x: Tensor, output_size):
     return ops.adaptive_avg_pool2d(x, output_size)
@@ -58,6 +67,18 @@ def max_pool2d(x: Tensor, kernel_size, stride, padding=0, dilation=1, ceil_mode=
     if return_indices:
         raise NotImplementedError("return_indices=True")
     y = ops.max_pool2d(x, kernel_size, stride, padding)
+    return y
+
+
+@register_function(torch.nn.functional.max_pool3d)
+def max_pool3d(x: Tensor, kernel_size, stride, padding=0, dilation=1, ceil_mode=False, return_indices=False):
+    if dilation != 1 and not same_list(dilation, [1, 1, 1]):
+        raise NotImplementedError("dilation != 1")
+    if ceil_mode:
+        raise NotImplementedError("ceil_mode=True")
+    if return_indices:
+        raise NotImplementedError("return_indices=True")
+    y = ops.max_pool3d(x, kernel_size, stride, padding)
     return y
 
 
@@ -149,6 +170,18 @@ def avg_pool2d(x: Tensor, kernel_size, stride, padding, ceil_mode=False, count_i
     if divisor_override is not None:
         raise NotImplementedError("divisor_override is not None")
     y = ops.avg_pool2d(x, kernel_size, stride, padding)
+    return y
+
+
+@register_function(torch.nn.functional.avg_pool3d)
+def avg_pool3d(x: Tensor, kernel_size, stride, padding, ceil_mode=False, count_include_pad=True, divisor_override=None):
+    if ceil_mode:
+        raise NotImplementedError("ceil_mode=True")
+    if not count_include_pad:
+        raise NotImplementedError("count_include_pad=False")
+    if divisor_override is not None:
+        raise NotImplementedError("divisor_override is not None")
+    y = ops.avg_pool3d(x, kernel_size, stride, padding)
     return y
 
 
