@@ -112,28 +112,25 @@ def onnx2hidet_backend(subgraph):
     return subgraph.wrap_returns(generate_executor(flow_graph))
 
 
-def hidet_backend(subgraph):
+def hidet_backend(graph_module, example_inputs):
     from hidet import Tensor
-    from torch._dynamo.optimizations.subgraph import SubGraph
     from .interpreter import Interpreter
     from .utils import symbol_like_torch
 
-    assert isinstance(subgraph, SubGraph)
+    assert isinstance(graph_module, torch.fx.GraphModule)
 
-    logger.info('received a subgraph with %d nodes to optimize', len(subgraph.model.graph.nodes))
-    logger.debug('graph: %s', subgraph.model.graph)
+    logger.info('received a subgraph with %d nodes to optimize', len(graph_module.graph.nodes))
+    logger.debug('graph: %s', graph_module.graph)
 
     if dynamo_config['print_input_graph']:
-        subgraph.model.graph.print_tabular()
+        graph_module.graph.print_tabular()
 
     # get the interpreter for the subgraph
-    assert isinstance(subgraph.model, torch.fx.GraphModule)
-    graph_module: torch.fx.GraphModule = subgraph.model
     interpreter: Interpreter = hidet.frontend.from_torch(graph_module)
 
     # prepare dummy and symbolic inputs for correctness and flow graph construction
     symbolic_inputs: List[Tensor] = []  # for flow graph construction
-    for example_input in subgraph.example_inputs:
+    for example_input in example_inputs:
         if isinstance(example_input, torch.Tensor):
             symbolic_input = symbol_like_torch(example_input)
             symbolic_inputs.append(symbolic_input)

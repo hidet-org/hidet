@@ -55,7 +55,7 @@ def register_dynamo_backends():
     By default, if torch has already been imported and dynamo is available, the backends will be registered immediately.
     Otherwise, the user can call this function to register the backends manually.
     """
-    from torch._dynamo.optimizations.backends import create_backend, BACKENDS
+    from torch._dynamo.optimizations.backends import create_backend, register_backend, BACKENDS
     from .dynamo_backends import onnx2hidet_backend, hidet_backend
 
     if 'onnx2hidet' not in BACKENDS:
@@ -64,7 +64,8 @@ def register_dynamo_backends():
 
     if 'hidet' not in BACKENDS:
         hidet_backend.__name__ = 'hidet'
-        create_backend(hidet_backend)
+
+        register_backend(hidet_backend)
 
 
 if imported() and dynamo_available():
