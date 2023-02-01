@@ -93,25 +93,6 @@ def generate_executor(flow_graph: FlowGraph) -> Callable:
     return run
 
 
-def onnx2hidet_backend(subgraph):
-    from torch._dynamo.optimizations.subgraph import SubGraph
-
-    assert isinstance(subgraph, SubGraph)
-    from hidet.graph import nn
-
-    if not subgraph.is_cuda:
-        # fallback to the default backend
-        logger.warning('fallback to the default backend as the subgraph is not on CUDA')
-        return subgraph.model
-
-    onnx_module: nn.Module = hidet.graph.frontend.from_onnx(subgraph.onnx_filename)
-    example_inputs: List[hidet.Tensor] = [hidet.from_torch(tensor) for tensor in subgraph.example_inputs]
-    symbolic_inputs: List[hidet.Tensor] = [hidet.symbol_like(tensor) for tensor in example_inputs]
-    symbolic_outputs = onnx_module(*symbolic_inputs)
-    flow_graph: FlowGraph = hidet.trace_from(symbolic_outputs, inputs=symbolic_inputs)
-    return subgraph.wrap_returns(generate_executor(flow_graph))
-
-
 def hidet_backend(graph_module, example_inputs):
     from hidet import Tensor
     from .interpreter import Interpreter
