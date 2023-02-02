@@ -38,6 +38,9 @@ setup(
         'console_scripts': [
             'hidet = hidet.cli.main:main',
         ],
+        'torch_dynamo_backends': [
+            'hidet = hidet.graph.frontend.torch.dynamo_backends:hidet_backend',
+        ]
     },
     url="https://docs.hidet.org",
     classifiers=[
