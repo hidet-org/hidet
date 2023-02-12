@@ -482,7 +482,7 @@ class OnnxCast(OnnxOperator):
         8: 'string',
         9: 'bool',
         10: 'float16',
-        11: 'double',
+        11: 'float64',
         12: 'uint32',
         13: 'uint64',
         14: 'complex64',
