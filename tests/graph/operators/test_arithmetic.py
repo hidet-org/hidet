@@ -125,6 +125,16 @@ def test_bitwise_xor(a_shape, b_shape):
     check_binary(a_shape, b_shape, np.int32, np.bitwise_xor, ops.bitwise_xor)
 
 
+@pytest.mark.parametrize("a_shape, b_shape", binary_op_shapes)
+def test_minimum(a_shape, b_shape):
+    check_binary(a_shape, b_shape, np.int32, np.minimum, ops.minimum)
+
+
+@pytest.mark.parametrize("a_shape, b_shape", binary_op_shapes)
+def test_maximum(a_shape, b_shape):
+    check_binary(a_shape, b_shape, np.int32, np.maximum, ops.maximum)
+
+
 @pytest.mark.parametrize("a_shape", unary_op_shapes)
 def test_ceil(a_shape):
     check_unary(a_shape, np.float32, np.ceil, ops.ceil)
