@@ -77,6 +77,18 @@ class ReduceF16Task(Task):
             },
         )
 
+    def allow_prologue(self) -> bool:
+        return False
+
+    def allow_epilogue(self) -> bool:
+        rank = len(self.inputs[0].const_shape())
+        if rank - 1 in self.dims:
+            # use self.cuda_schedule_reduce_by_warp
+            return True
+        else:
+            # use self.cuda_schedule_reduce_by_default
+            return False
+
     def implement_cuda(self, workding_dir: str) -> IRModule:
         rank = len(self.inputs[0].const_shape())
         if rank - 1 in self.dims:
