@@ -82,7 +82,7 @@ class ReduceF16Task(Task):
 
     def allow_epilogue(self) -> bool:
         rank = len(self.inputs[0].const_shape())
-        if rank - 1 in self.dims:
+        if rank - 1 in self.dims:   # pylint: disable=simplifiable-if-statement
             # use self.cuda_schedule_reduce_by_warp
             return True
         else:
