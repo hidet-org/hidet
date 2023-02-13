@@ -415,7 +415,7 @@ class WhereOp(Operator):
 
 
 class MaxOp(Operator):
-    def __init__(self, tensors: List[Tensor]):
+    def __init__(self, *tensors: Tensor):
         def scalar_max(args: List[expr.Expr]):
             if len(args) == 1:
                 return args[0]
@@ -434,12 +434,12 @@ class MaxOp(Operator):
 
 
 class MinOp(Operator):
-    def __init__(self, tensors: List[Tensor]):
+    def __init__(self, *tensors: Tensor):
         def scalar_min(args: List[expr.Expr]):
             if len(args) == 1:
                 return args[0]
             else:
-                return primitives.max(args[0], scalar_min(args[1:]))
+                return primitives.min(args[0], scalar_min(args[1:]))
 
         super().__init__(
             inputs=list(tensors),
@@ -671,12 +671,12 @@ def where(cond: Tensor, x: Tensor, y: Tensor) -> Tensor:
 
 def maximum(a: Tensor, b: Tensor, *others: Tensor) -> Tensor:
     args = [a, b] + list(others)
-    return MaxOp(args).get_output(0)
+    return MaxOp(*args).get_output(0)
 
 
 def minimum(a: Tensor, b: Tensor, *others: Tensor) -> Tensor:
     args = [a, b] + list(others)
-    return MinOp(args).get_output(0)
+    return MinOp(*args).get_output(0)
 
 
 def mod(x: Tensor, y: Tensor) -> Tensor:
