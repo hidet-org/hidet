@@ -168,6 +168,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         self.ir_module = module
         doc = Doc()
         # todo: only add necessary headers
+        doc += Text('#include <stdint.h>') + NewLine()
         doc += Text('#include <cuda_fp16.h>') + NewLine()
         doc += Text('#include <cuda_bf16.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cuda_context.h>') + NewLine()
@@ -329,21 +330,21 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             # short, int, unsigned int, long long, unsigned long long, but not for the types like int8_t, uint8_t,
             # int16_t, uint16_t, int32_t, uint32_t, int64_t, uint64_t, so we need to cast them here.
             if dst_dtype == dtypes.int64:
-                return '(long long)(' + self(e.expr) + ')'
+                return '(int64_t)(' + self(e.expr) + ')'
             elif dst_dtype == dtypes.uint64:
-                return '(unsigned long long)(' + self(e.expr) + ')'
+                return '(uint64_t)(' + self(e.expr) + ')'
             elif dst_dtype == dtypes.int32:
-                return '(int)(' + self(e.expr) + ')'
+                return '(int32_t)(' + self(e.expr) + ')'
             elif dst_dtype == dtypes.uint32:
-                return '(unsigned int)(' + self(e.expr) + ')'
+                return '(uint32_t)(' + self(e.expr) + ')'
             elif dst_dtype == dtypes.int16:
-                return '(short)(' + self(e.expr) + ')'
+                return '(int16_t)(' + self(e.expr) + ')'
             elif dst_dtype == dtypes.uint16:
-                return '(unsigned short)(' + self(e.expr) + ')'
+                return '(uint16_t)(' + self(e.expr) + ')'
             elif dst_dtype == dtypes.int8:
-                return '(char)(' + self(e.expr) + ')'
+                return '(int8_t)(' + self(e.expr) + ')'
             elif dst_dtype == dtypes.uint8:
-                return '(unsigned char)(' + self(e.expr) + ')'
+                return '(uint8_t)(' + self(e.expr) + ')'
             elif dst_dtype == dtypes.boolean:
                 return '(bool)(' + self(e.expr) + ')'
             elif dst_dtype == dtypes.float32:
@@ -440,7 +441,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         elif dtype == dtypes.bfloat16:
             ret = '__float2bfloat16({}f)'.format(float(value))
         elif dtype == dtypes.int64:
-            ret = '{}ll'.format(int(value))
+            ret = 'int64_t({}ll)'.format(int(value))
         elif dtype == dtypes.int32:
             ret = '{}'.format(int(value))
         elif dtype == dtypes.int16:
@@ -448,9 +449,9 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         elif dtype == dtypes.int8:
             ret = 'int8_t({})'.format(int(value))
         elif dtype == dtypes.uint64:
-            ret = '{}ull'.format(int(value))
+            ret = 'uint64_t({}ull)'.format(int(value))
         elif dtype == dtypes.uint32:
-            ret = '{}u'.format(int(value))
+            ret = 'uint32_t({}u)'.format(int(value))
         elif dtype == dtypes.uint16:
             ret = 'uint16_t({})'.format(int(value))
         elif dtype == dtypes.uint8:
