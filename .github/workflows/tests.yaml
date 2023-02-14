@@ -37,7 +37,7 @@ jobs:
       - name: Install dependencies via pip
         run: |
           python -m pip install --upgrade pip
-          pip install --pre torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/nightly/cu116
+          pip install --pre torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/nightly/cu118
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
 
@@ -65,6 +65,7 @@ jobs:
             include/**/*.h
             src/**/*
             python/hidet/backend/**/*.py
+            python/hidet/graph/ops/**/*.py
             python/hidet/transforms/**/*.py
             python/hidet/ir/**/*.py
 
