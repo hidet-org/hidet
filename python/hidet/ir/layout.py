@@ -259,7 +259,7 @@ class SwizzleDataLayout(DataLayout):
                 )
             self.regards_dim = 1 - dim
         else:
-            self.regards_dim = dim
+            self.regards_dim = regards_dim
         self.log_step = log_step
 
         if self.dim == self.regards_dim:
