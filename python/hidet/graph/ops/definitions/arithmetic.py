@@ -476,14 +476,16 @@ def binary_arithmetic(
     elif isinstance(x, float):
         x = dtypes.float32(x)
     elif isinstance(x, Tensor) and len(x.shape) == 0:
-        x = x.dtype(x.item())
+        if x.trace is None:
+            x = x.dtype(x.item())
 
     if isinstance(y, int):
         y = dtypes.int32(y)
     elif isinstance(y, float):
         y = dtypes.float32(y)
     elif isinstance(y, Tensor) and len(y.shape) == 0:
-        y = y.dtype(y.item())
+        if y.trace is None:
+            y = y.dtype(y.item())
 
     if isinstance(x, Tensor) and isinstance(y, Tensor):
         return tensor_tensor_op(x, y)
