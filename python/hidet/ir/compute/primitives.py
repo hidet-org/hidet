@@ -54,6 +54,10 @@ class TensorNode(ComputeNode):
         doc = printer.print_tensor_nodes([self])
         return str(doc.trim())
 
+    @property
+    def ndim(self) -> int:
+        return len(self.ttype.shape)
+
     def is_input(self) -> bool:
         return self.tensor_compute is None
 

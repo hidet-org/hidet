@@ -52,9 +52,11 @@ class InverseMap(Node):
 
     @staticmethod
     def from_lambda(func, num_args=None) -> InverseMap:
+        from hidet.ir.utils import as_expr
+
         num_args = num_args if num_args is not None else func.__code__.co_argcount
         axes = [var('v') for v in range(num_args)]
-        indices = list(func(*axes))
+        indices = [as_expr(index_expr) for index_expr in func(*axes)]
         return InverseMap(axes, indices)
 
     @staticmethod
@@ -134,6 +136,21 @@ class Task(Node):
         self.attributes: Dict[str, Union[str, float, int, bool]] = attributes
         self.inverse_map: Dict[TensorNode, InverseMap] = {a: InverseMap.from_obj(b) for a, b in inverse_map.items()}
         self.task_graph: Optional[TaskGraph] = TaskGraph.from_task(self)
+
+        # sanity check
+        for tn, im in self.inverse_map.items():
+            if len(im.axes) != tn.ndim:
+                raise ValueError(
+                    'InverseMap for tensor {} has {} input axes, but input tensor has {} axes'.format(
+                        tn.name, len(im.axes), tn.ndim
+                    )
+                )
+            if len(im.indices) != self.outputs[0].ndim:
+                raise ValueError(
+                    'InverseMap for tensor {} has {} output indices, but output tensor has {} axes'.format(
+                        tn.name, len(im.indices), self.outputs[0].ndim
+                    )
+                )
 
     def signature(self) -> str:
         params = []

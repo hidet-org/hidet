@@ -47,16 +47,15 @@ class BinaryElementwiseTask(Task):
             ),
         )
 
-        super().__init__(
-            name=name,
-            inputs=[x, y],
-            outputs=[z],
-            inverse_map={
-                v: InverseMap.identity(len(v_shape))
-                for v, v_shape in zip([x, y], [x_shape, y_shape])
-                if prod(v_shape) == prod(z_shape)
-            },
-        )
+        inverse_map = {}
+        for inp, inp_shape in zip([x, y], [x_shape, y_shape]):
+            if prod(inp_shape) == prod(z_shape):
+                inverse_map[inp] = InverseMap.from_lambda(
+                    lambda *indices: [0 for _ in range(len(z_shape) - len(inp_shape))] + list(indices),
+                    num_args=len(inp_shape),
+                )
+
+        super().__init__(name=name, inputs=[x, y], outputs=[z], inverse_map=inverse_map)
 
 
 class VariadicElementwiseTask(Task):
