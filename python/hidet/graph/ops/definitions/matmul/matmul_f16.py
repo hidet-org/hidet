@@ -74,7 +74,7 @@ class MatmulF16Task(Task):
         return False
 
     def allow_epilogue(self) -> bool:
-        return True
+        return False
 
     def implement_cuda(self, working_dir: str) -> IRModule:
         return tune.tune(self.schedule, task=self, target_device='cuda', working_dir=working_dir)
@@ -133,7 +133,6 @@ class MatmulF16Task(Task):
         tune.check(warp_m % mma_m == warp_n % mma_n == warp_k % mma_k == 0, 'mma dims divide warp dims')
         tune.check(threads <= 1024, 'threads in a block <= 1024')
         tune.check(dynamic_smem_bytes <= 49152, 'dynamic shared memory <= 49152')
-        tune.check(warp_count_k == 1)
 
         tune.check(block_n % 64 == 0, 'block_n must be multiple of 64, required by async gmem -> smem loading')
         tune.check(block_k % 8 == 0)
@@ -283,33 +282,24 @@ class MatmulF16Task(Task):
                 offset_m, offset_n = blockIdx.x * block_m, blockIdx.y * block_n
                 c_head_index = spatial(*c_head).map(blockIdx.z)
                 gmem_c = c[c_head_index][offset_m:, offset_n:]
-                for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
-                    for mi, mj in grid(mma_count_m, mma_count_n):
-                        p = 0
-                        for i, j in mma_config.c_store_map.on(lane_id):
-                            delta_m = wi * warp_m + mi * mma_m + i
-                            delta_n = wj * warp_n + mj * mma_n + j
-                            in_bound = (offset_m + delta_m < m_size) and (offset_n + delta_n < n_size)
-                            if in_bound:
-                                gmem_c[delta_m, delta_n] = regs_c[mi, mj, p]
-                            p += 1
-                # for k_round in range(warp_count_k):
-                #     for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
-                #         if wk == k_round:
-                #             for mi, mj in grid(mma_count_m, mma_count_n):
-                #                 p = 0
-                #                 for i, j in mma_config.c_store_map.on(lane_id):
-                #                     delta_m = wi * warp_m + mi * mma_m + i
-                #                     delta_n = wj * warp_n + mj * mma_n + j
-                #                     in_bound = (offset_m + delta_m < m_size) and (offset_n + delta_n < n_size)
-                #                     if in_bound:
-                #                         if k_round == 0:
-                #                             gmem_c[delta_m, delta_n] = regs_c[mi, mj, p]
-                #                         else:
-                #                             gmem_c[delta_m, delta_n] += regs_c[mi, mj, p]
-                #                     p += 1
-                #     if warp_count_k > 1:
-                #         syncthreads()
+
+                for k_round in range(warp_count_k):
+                    for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
+                        if wk == k_round:
+                            for mi, mj in grid(mma_count_m, mma_count_n):
+                                p = 0
+                                for i, j in mma_config.c_store_map.on(lane_id):
+                                    delta_m = wi * warp_m + mi * mma_m + i
+                                    delta_n = wj * warp_n + mj * mma_n + j
+                                    in_bound = (offset_m + delta_m < m_size) and (offset_n + delta_n < n_size)
+                                    if in_bound:
+                                        if k_round == 0:
+                                            gmem_c[delta_m, delta_n] = regs_c[mi, mj, p]
+                                        else:
+                                            gmem_c[delta_m, delta_n] += regs_c[mi, mj, p]
+                                    p += 1
+                    if warp_count_k > 1:
+                        syncthreads()
 
         ir_module = module.ir_module()
         assert isinstance(matmul_f16_kernel, Function)
