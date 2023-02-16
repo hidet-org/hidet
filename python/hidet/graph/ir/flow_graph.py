@@ -205,28 +205,11 @@ class FlowGraph:
             If there is only one output, it is returned directly. Otherwise, a list
             of output tensors are returned.
         """
-        outputs = self.dummy_outputs()
-        self.pure_forward(list(inputs), outputs)
-        return outputs[0] if len(outputs) == 1 else outputs
+        inputs: List[Tensor] = list(inputs)
 
-    def pure_forward(self, inputs: List[Tensor], outputs: List[Tensor]):
-        """Run the computation graph and store results to given tensors.
-
-        Parameters
-        ----------
-        inputs: List[Tensor]
-            The input tensors.
-
-        outputs: List[Tensor]
-            The output tensors to store the output results to.
-        """
         for idx, tensor in enumerate(inputs):
             if tensor.storage is None:
                 msg = 'Expect non-symbolic input tensors, got symbolic input {} ({}).'.format(idx, tensor.signature())
-                raise ValueError(msg)
-        for idx, tensor in enumerate(outputs):
-            if tensor.storage is None:
-                msg = 'Expect non-symbolic output tensors, got symbolic output {} ({}).'.format(idx, tensor.signature())
                 raise ValueError(msg)
         if any(v is None for v in [self.inputs, self.nodes, self.usage_count]):
             self.update_nodes()
@@ -285,9 +268,6 @@ class FlowGraph:
             else:
                 assert False
         return inputs
-
-    def dummy_outputs(self) -> List[Tensor]:
-        return [empty_like(tensor) if tensor.storage is None else tensor for tensor in self.outputs]
 
     def save(self, model_file: str):
         """Save the flow graph to a file.

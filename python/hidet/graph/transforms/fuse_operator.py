@@ -321,7 +321,7 @@ def operator_from_sub_graph(sub_graph: FusibleGraph, input_remap: Dict[Tensor, T
             name='Fused' + sub_graph.anchor.name,
             attributes={**sub_graph.anchor.attrs, 'fusion': ' '.join([op.name for op in sub_graph.operators])},
         )
-        op.outputs = op.lazy_run()
+        op.outputs = op.run()
         return op
 
 
