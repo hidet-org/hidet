@@ -7,8 +7,7 @@ import hidet
 
 
 def check_onnx_and_hidet(
-    torch_model: torch.nn.Module, inputs: Sequence[torch.Tensor], atol=1e-4, rtol=1e-4,
-    device='all'
+    torch_model: torch.nn.Module, inputs: Sequence[torch.Tensor], atol=1e-4, rtol=1e-4, device='all'
 ):
     if device == 'all':
         devices = ['cuda', 'cpu']
@@ -26,11 +25,7 @@ def check_onnx_and_hidet(
 
     # export to onnx
     onnx_path = hidet.utils.hidet_cache_file('./test_model.onnx')
-    torch.onnx.export(
-        torch_model,
-        args=tuple(inputs),
-        f=onnx_path,
-    )
+    torch.onnx.export(torch_model, args=tuple(inputs), f=onnx_path)
 
     # run onnx via hidet
     onnx_model = hidet.frontend.from_onnx(onnx_path)
@@ -47,4 +42,3 @@ def check_onnx_and_hidet(
         torch_output = torch_output.detach().cpu().numpy()
         hidet_output = hidet_output.cpu().numpy()
         numpy.testing.assert_allclose(torch_output, hidet_output, atol=atol, rtol=rtol)
-
