@@ -535,7 +535,15 @@ class OnnxGather(OnnxOperator):
 
 @register_onnx_operator
 class OnnxSlice(OnnxOperator):
-    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+    def run_v1(self, inputs: List[Tensor]) -> List[Tensor]:
+        data = inputs[0]
+        starts = self.attrs['starts']
+        ends = self.attrs['ends']
+        axes = self.attrs.get('axes', list(range(len(starts))))
+        ends = [min(end, data.shape[i]) for i, end in zip(axes, ends)]
+        return [ops.strided_slice(data, starts, ends, axes)]
+
+    def run_v10(self, inputs: List[Tensor]) -> List[Tensor]:
         data, starts, ends = inputs[:3]
         axes = inputs[3] if len(inputs) > 3 else None
         steps = inputs[4] if len(inputs) > 4 else None
@@ -543,6 +551,7 @@ class OnnxSlice(OnnxOperator):
         ends = self.tensor2list(ends)
         axes = self.tensor2list(axes) if axes is not None else None
         steps = self.tensor2list(steps) if steps is not None else None
+        ends = [min(end, data.shape[i]) for i, end in zip(axes, ends)]
         return [ops.strided_slice(data, starts, ends, axes, steps)]
 
 
