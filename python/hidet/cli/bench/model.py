@@ -79,7 +79,7 @@ class BenchModel:
             items.append('{}={}'.format(k, self.tensor_str(v)))
         return ', '.join(items)
 
-    def bench_with_backend(self, backend: str, mode=None, passes=None, warmup=3, number=10, repeat=10):
+    def bench_with_backend(self, backend: str, mode=None, warmup=3, number=10, repeat=10):
         import torch.backends.cudnn
         import torch.backends.cuda
 
@@ -97,7 +97,7 @@ class BenchModel:
         kwargs = {k: v.cuda() for k, v in kwargs.items()}
         dynamo.reset()
         with torch.no_grad():
-            model_opt = torch.compile(model, backend=backend, mode=mode, passes=passes)
+            model_opt = torch.compile(model, backend=backend, mode=mode)
             latency = benchmark_func(
                 run_func=lambda: model_opt(*args, **kwargs), warmup=warmup, number=number, repeat=repeat
             )

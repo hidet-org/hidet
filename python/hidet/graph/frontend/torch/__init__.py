@@ -49,5 +49,7 @@ def from_torch(module, concrete_args=None):
 
 
 def register_dynamo_backends():
-    print('Now, hidet will use the entry_points mechanism to register as a dynamo backend. \n'
-          'Feel free to remove the line `hidet.frontend.torch.register_dynamo_backends()` in your code.')
+    print(
+        'Now, hidet will use the entry_points mechanism to register as a dynamo backend. \n'
+        'Feel free to remove the line `hidet.frontend.torch.register_dynamo_backends()` in your code.'
+    )
