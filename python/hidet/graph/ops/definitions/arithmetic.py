@@ -476,7 +476,7 @@ def binary_arithmetic(
     elif isinstance(x, float):
         x = dtypes.float32(x)
     elif isinstance(x, Tensor) and len(x.shape) == 0:
-        if x.trace is None:
+        if x.trace is None and x.storage is not None:
             x = x.dtype(x.item())
 
     if isinstance(y, int):
@@ -484,7 +484,7 @@ def binary_arithmetic(
     elif isinstance(y, float):
         y = dtypes.float32(y)
     elif isinstance(y, Tensor) and len(y.shape) == 0:
-        if y.trace is None:
+        if y.trace is None and y.storage is not None:
             y = y.dtype(y.item())
 
     if isinstance(x, Tensor) and isinstance(y, Tensor):
