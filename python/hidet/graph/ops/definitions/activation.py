@@ -43,7 +43,7 @@ class ClipOp(UnaryElementwiseOp):
                 v = prim.min(v, x.dtype(max_val))
             return v
 
-        super().__init__(x, op=op, name='clip')
+        super().__init__(x, op=op, name='clip', attributes={'min_val': min_val, 'max_val': max_val})
 
 
 class GeluOp(UnaryElementwiseOp):
