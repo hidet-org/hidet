@@ -63,8 +63,11 @@ class PrologueEpilogueRewriter(FuncStmtExprRewriter):
                 self.input2task[input_tensor] = internal_task
 
         self.binding: Dict[TensorNode, Var] = {}
+        self.new_params: List[Var] = []
         self.anchor_inputs: List[Var] = []
         self.anchor_outputs: List[Var] = []
+        self.anchor_input_new_index: Dict[int, int] = {}
+        self.anchor_output_new_index: Dict[int, int] = {}
 
     def visit_Function(self, func: Function):
         anchor_num_inputs = len(self.task.inputs)
@@ -73,22 +76,58 @@ class PrologueEpilogueRewriter(FuncStmtExprRewriter):
         self.anchor_inputs: List[Var] = func.params[:anchor_num_inputs]
         self.anchor_outputs: List[Var] = func.params[anchor_num_inputs:]
 
+        for input_index in range(anchor_num_inputs):
+            tn = self.task.inputs[input_index]
+            while tn in self.task_graph.consume:
+                tn = self.task_graph.consume[tn]
+            if tn in self.task_graph.input_tensors:
+                self.anchor_input_new_index[input_index] = self.task_graph.input_tensors.index(tn)
+
+        for output_index in range(anchor_num_outputs):
+            tn = self.task.outputs[output_index]
+            if tn in self.task_graph.output_tensors:
+                self.anchor_output_new_index[output_index] = self.task_graph.output_tensors.index(tn)
+
         # create parameters for fused function, and bind task graph parameters to function parameters
         # todo: do not create new parameters for the inputs/outputs that have not been fused
-        new_params: List[Var] = []
+        self.new_params: List[Var] = []
         for tensor_node in self.task_graph.input_tensors + self.task_graph.output_tensors:
-            new_params.append(Var(tensor_node.name, tensor_node.ttype))
-            self.binding[tensor_node] = new_params[-1]
+            self.new_params.append(Var(tensor_node.name, tensor_node.ttype))
+            self.binding[tensor_node] = self.new_params[-1]
 
         return Function(
             name=func.name,
-            params=new_params,
+            params=self.new_params,
             body=self.visit(func.body),
             ret_type=func.ret_type,
             kind=func.kind,
             extern_vars=func.extern_vars,
             attrs=func.attrs,
         )
+
+    def visit_Var(self, e: Var):
+        if e in self.anchor_inputs:
+            input_index = self.anchor_inputs.index(e)
+            if input_index in self.anchor_input_new_index:
+                return self.new_params[self.anchor_input_new_index[input_index]]
+            else:
+                # we encounter a usage of an input tensor of the task other than TensorElement and BufferStoreStmt
+                raise ValueError(
+                    'Did you used a tensor in expression other than tensor[...] and tensor[...] = ...'
+                    ' while marking the task as allowing prologue?'
+                )
+        elif e in self.anchor_outputs:
+            output_index = self.anchor_outputs.index(e)
+            if output_index in self.anchor_output_new_index:
+                return self.new_params[len(self.task_graph.input_tensors) + self.anchor_output_new_index[output_index]]
+            else:
+                # we encounter a usage of an output tensor of the task other than TensorElement and BufferStoreStmt
+                raise ValueError(
+                    'Did you used a tensor in expression other than tensor[...] and tensor[...] = ...'
+                    ' while marking the task as allowing epilogue?'
+                )
+        else:
+            return e
 
     def visit_TensorElement(self, e: TensorElement):
         if isinstance(e.base, TensorNode):

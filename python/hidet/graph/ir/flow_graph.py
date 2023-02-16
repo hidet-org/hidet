@@ -346,7 +346,7 @@ class FlowGraph:
                     f'When there are multiple free '
                     f'variables, it is mandatory to specify the "inputs" argument explicitly when calling '
                     f'hidet.trace_from(...):\n'
-                    '    hidet.trace_from(..., free_vars=[tensor1, tensor2, ...])\n'
+                    '    hidet.trace_from(..., inputs=[tensor1, tensor2, ...])\n'
                 )
             self.inputs = free_vars
         return self

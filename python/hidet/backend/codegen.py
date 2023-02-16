@@ -592,8 +592,9 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         )
 
     def visit_LaunchKernelStmt(self, stmt: LaunchKernelStmt):
+        assert isinstance(stmt.func_var, Var)
         return NewLine() + Text('{}<<<dim3({}), dim3({}), {}, {}>>>({});').format(
-            self(stmt.func_var),
+            self.canonize_funcname(stmt.func_var.hint),
             self(stmt.grid_dim),
             self(stmt.block_dim),
             self(stmt.shared_mem_bytes),
