@@ -20,12 +20,12 @@ from collections import defaultdict
 import hidet.graph.operator
 import hidet.cuda
 from hidet import option
-from hidet.graph.tensor import Tensor, empty_like, zeros_like, randn_like
+from hidet.graph.tensor import Tensor, zeros_like, randn_like
 from hidet.graph.operator import Operator
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
 from hidet.utils.namer import Namer
 
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class GraphForwardInstrument:
@@ -221,8 +221,6 @@ class FlowGraph:
         tensor_map: Dict[Tensor, Tensor] = {}
         for st, at in zip(self.inputs, inputs):
             tensor_map[st] = at
-        for st, at in zip(self.outputs, outputs):
-            tensor_map[st] = at
 
         num_operators = len(self.nodes)
         for idx, node in enumerate(self.nodes):
@@ -240,23 +238,21 @@ class FlowGraph:
                     # constant input
                     node_inputs.append(node_input)
 
-            # prepare node outputs
-            node_outputs = node.dummy_outputs()
-            for i, symbolic_output in enumerate(node.outputs):
-                if symbolic_output in tensor_map:  # the output is a graph output
-                    node_outputs[i] = tensor_map[symbolic_output]
-                else:
-                    tensor_map[symbolic_output] = node_outputs[i]
-
             # run node
             GraphForwardContext.current()._trigger_before_operator(node, node_inputs)
-            log.debug('[%4d/%d] run operator %s', idx, num_operators, node.name)
-            log.debug('inputs: %s', [x.signature() for x in node_inputs])
-            log.debug('outputs: %s', [x.signature() for x in node_outputs])
-            node.pure_run(node_inputs, node_outputs)
+            logger.debug('[%4d/%d] run operator %s', idx, num_operators, node.name)
+            logger.debug('   inputs: %s', [x.signature() for x in node_inputs])
+            node_outputs = node.imperative_run(node_inputs)
+            logger.debug('  outputs: %s', [x.signature() for x in node_outputs])
             GraphForwardContext.current()._trigger_after_operator(node, node_inputs, node_outputs)
 
+            # update map
+            for node_output, symbolic_output in zip(node_outputs, node.outputs):
+                tensor_map[symbolic_output] = node_output
+
+        outputs = [tensor_map[x] for x in self.outputs]
         GraphForwardContext.current()._trigger_after_graph(self, inputs, outputs)
+        return outputs[0] if len(outputs) == 1 else outputs
 
     def dummy_inputs(self) -> List[Tensor]:
         inputs = []

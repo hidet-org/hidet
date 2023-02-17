@@ -73,7 +73,7 @@ class Operator:
         if all(t.storage is not None for t in self.inputs):
             return self.imperative_run(self.inputs)
         else:
-            self.outputs = self.lazy_run()
+            self.outputs = self.symbolic_run()
             return self.outputs
 
     def get_output(self, idx: int) -> Tensor:
@@ -91,10 +91,17 @@ class Operator:
             empty(shape=type.const_shape(), dtype=type.dtype.name, device=self.device, layout=type.layout)
             for type in output_types
         ]
-        self.pure_run(inputs, outputs)
+
+        self.task_func(*inputs, *outputs)
+
+        status = get_last_error()
+        if status is not None:
+            msg = 'Kernel for operator {} failed. Error:\n{}'.format(self.name, status)
+            raise BackendException(msg)
+
         return outputs
 
-    def lazy_run(self) -> List[Tensor]:
+    def symbolic_run(self) -> List[Tensor]:
         output_nodes = self.task.parameters[-len(self.task.outputs) :]
         output_types = [output_node.ttype for output_node in output_nodes]
         outputs = []
@@ -110,15 +117,6 @@ class Operator:
                 )
             )
         return outputs
-
-    def pure_run(self, inputs: List[Tensor], outputs: List[Tensor]):
-        self.build_task_func()
-        self.task_func(*inputs, *outputs)
-
-        status = get_last_error()
-        if status is not None:
-            msg = 'Kernel for operator {} failed. Error:\n{}'.format(self.name, status)
-            raise BackendException(msg)
 
     def reforward(self, inputs: List[Tensor], update_attributes: Optional[Dict[str, Any]] = None) -> List[Tensor]:
         cls = self.__class__
