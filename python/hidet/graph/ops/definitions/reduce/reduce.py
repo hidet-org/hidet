@@ -99,7 +99,7 @@ class ArgReduceTask(Task):
                 return x[x_indices]
 
             return arg_reduce(
-                extent=x_shape[dim], fcompute=reduce_fcompute, reduce_type=reduce_type, index_dtype='int32'
+                extent=x_shape[dim], fcompute=reduce_fcompute, reduce_type=reduce_type, index_dtype='int64'
             )
 
         y = compute(name='y', shape=y_shape, fcompute=fcompute)
