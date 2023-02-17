@@ -13,8 +13,8 @@ It supports end-to-end compilation of DNN models from PyTorch and ONNX to effici
 A series of graph-level and operator-level optimizations are applied to optimize the performance.
 
 ## News
-- We will host a tutorial about Hidet at [ASPLOS 2023](https://centml.github.io/asplos23-tutorial/) 
-  on March 25th. Welcome to attend and ask questions!
+- We will host a [tutorial](https://centml.github.io/asplos23-tutorial/) about Hidet at 
+  [ASPLOS 2023](https://asplos-conference.org/workshops-tutorials/) on March 25th. Welcome to attend and ask questions!
 
 ## Getting Started
 
