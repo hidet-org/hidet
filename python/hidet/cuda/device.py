@@ -29,7 +29,7 @@ class CudaDeviceContext:
         set_device(self.prev_device_id)
 
 
-@lru_cache(maxsize=1)
+@lru_cache(maxsize=None)
 def available() -> bool:
     """
     Returns True if CUDA is available, False otherwise.
@@ -42,7 +42,7 @@ def available() -> bool:
     return device_count() > 0
 
 
-@lru_cache(maxsize=1)
+@lru_cache(maxsize=None)
 def device_count() -> int:
     """
     Get the number of available CUDA devices.
@@ -122,20 +122,22 @@ def device(device_id: int):
     return CudaDeviceContext(device_id)
 
 
-def compute_capability(device_id: int = 0) -> Tuple[int, int]:
+def compute_capability(device_id: Optional[int] = None) -> Tuple[int, int]:
     """
     Get the compute capability of a CUDA device.
 
     Parameters
     ----------
-    device_id: int
-        The ID of the device.
+    device_id: int, optional
+        The ID of the device to query. If not specified, the current device will be used.
 
     Returns
     -------
     (major, minor): Tuple[int, int]
         The compute capability of the device.
     """
+    if device_id is None:
+        device_id = current_device()
     prop = properties(device_id)
     return prop.major, prop.minor
 
