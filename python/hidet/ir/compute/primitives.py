@@ -261,7 +261,7 @@ def compute(name, shape: Sequence[Union[int, Expr]], fcompute, layout=None) -> T
     )
 
 
-def arg_reduce(extent: Union[int, Expr], fcompute, reduce_type, index_dtype: str = 'int32') -> ScalarNode:
+def arg_reduce(extent: Union[int, Expr], fcompute, reduce_type, index_dtype: str = 'int64') -> ScalarNode:
     """
     Define an arg reduction node.
 

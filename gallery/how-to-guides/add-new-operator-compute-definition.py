@@ -371,7 +371,7 @@ def arg_max_example():
         ),
     )
     task = Task('arg_max', inputs=[a], outputs=[b])
-    run_task(task, [hidet.randn([4, 3])], [hidet.empty([4], dtype='int32')])
+    run_task(task, [hidet.randn([4, 3])], [hidet.empty([4], dtype='int64')])
 
 
 arg_max_example()
