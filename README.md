@@ -14,7 +14,7 @@ A series of graph-level and operator-level optimizations are applied to optimize
 
 ## News
 - We will host a tutorial about Hidet at [ASPLOS 2023](https://centml.github.io/asplos23-tutorial/) 
-  on March 25th. Welcome to attend the tutorial and ask questions!
+  on March 25th. Welcome to attend and ask questions!
 
 ## Getting Started
 
