@@ -250,7 +250,15 @@ class FlowGraph:
             for node_output, symbolic_output in zip(node_outputs, node.outputs):
                 tensor_map[symbolic_output] = node_output
 
-        outputs = [tensor_map[x] for x in self.outputs]
+        outputs = []
+        for graph_output in self.outputs:
+            if graph_output in tensor_map:
+                outputs.append(tensor_map[graph_output])
+            elif graph_output.storage is not None:
+                outputs.append(graph_output)  # constant output, not the graph input or produced by any operator
+            else:
+                raise RuntimeError('Graph output {} is not produced by any operator.'.format(graph_output.signature()))
+
         GraphForwardContext.current()._trigger_after_graph(self, inputs, outputs)
         return outputs[0] if len(outputs) == 1 else outputs
 
