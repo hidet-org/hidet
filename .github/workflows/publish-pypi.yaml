@@ -69,7 +69,7 @@ jobs:
   publish:
     name: Publish to PyPI
     needs: [publish-tests] # require tests to pass before deploy runs
-    if: github.event_name == 'release' && github.event.action == 'created' && startsWith(github.event.release.tag_name, 'v')
+    if: github.event_name == 'release' && github.event.action == 'published' && startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source
