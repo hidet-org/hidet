@@ -122,22 +122,21 @@ def device(device_id: int):
     return CudaDeviceContext(device_id)
 
 
-def compute_capability(device_id: Optional[int] = None) -> Tuple[int, int]:
+@lru_cache(maxsize=None)
+def compute_capability(device_id: int = 0) -> Tuple[int, int]:
     """
     Get the compute capability of a CUDA device.
 
     Parameters
     ----------
-    device_id: int, optional
-        The ID of the device to query. If not specified, the current device will be used.
+    device_id: int
+        The ID of the device to query.
 
     Returns
     -------
     (major, minor): Tuple[int, int]
         The compute capability of the device.
     """
-    if device_id is None:
-        device_id = current_device()
     prop = properties(device_id)
     return prop.major, prop.minor
 
@@ -180,3 +179,4 @@ def profiler_stop():
 if available():
     for i in range(device_count()):
         properties(i)
+        compute_capability(i)
