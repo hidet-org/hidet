@@ -9,10 +9,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from typing import Callable
 from hidet.ir.expr import Expr, Call, ExprInt64, ExprFloat16, ExprInt16
-from hidet.ir.type import FuncType
+from hidet.ir.type import FuncType, DataType
 from hidet.ir.func import Function
-from hidet.ir.dtypes import int16
+from hidet.ir.dtypes import int16, float16, float32, int64
 from hidet.ir.primitives.func import register_primitive_function, primitive_func_pool, call_primitive_func
 from hidet.ir.primitives.math import MathFunctionSet, register_math_function_set
 from hidet.utils import initialize
@@ -20,8 +21,6 @@ from hidet.utils import initialize
 
 @initialize()
 def register_float16_primitives():
-    from hidet.ir.dtypes import int64, float16
-
     register_primitive_function('cuda_i64_to_f16', FuncType([int64], float16), codegen_name='__ll2half_rn')
 
 
@@ -71,8 +70,8 @@ class CUDAFloat16MathFunctionSet(MathFunctionSet):
             'round': ['hrint', 1],
             'ceil': ['hceil', 1],
             'floor': ['hfloor', 1],
-            'min': ['__hmin', 2],
-            'max': ['__hmax', 2],
+            'min_sm80': ['__hmin', 2],
+            'max_sm80': ['__hmax', 2],
             'fma': ['__hfma', 3],
         }
 
@@ -83,6 +82,8 @@ class CUDAFloat16MathFunctionSet(MathFunctionSet):
                 func_or_type=FuncType(param_types=['float16'] * num_args, ret_type='float16'),
             )
 
+        self.register_via_delegate('min', float16, float32, min, 2)
+        self.register_via_delegate('max', float16, float32, max, 2)
         self._register_tanh()
 
     def _register_tanh(self):
@@ -101,6 +102,40 @@ class CUDAFloat16MathFunctionSet(MathFunctionSet):
         assert isinstance(cuda_f16_tanh, Function)
 
         register_primitive_function(name='cuda_f16_tanh', func_or_type=cuda_f16_tanh)
+
+    def register_via_delegate(
+        self, name: str, target_type: DataType, delegate_type: DataType, delegate: Callable, num_args: int
+    ):
+        from hidet.lang import script, cast, attr
+
+        if num_args == 1:
+
+            @script
+            def delegated_primitive(v: target_type) -> target_type:
+                attr.func_name = 'cuda_f16_{}'.format(name)
+                return cast(delegate(cast(v, delegate_type)), target_type)
+
+        elif num_args == 2:
+
+            @script
+            def delegated_primitive(a: target_type, b: target_type) -> target_type:
+                attr.func_name = 'cuda_f16_{}'.format(name)
+                return cast(delegate(cast(a, delegate_type), cast(b, delegate_type)), target_type)
+
+        elif num_args == 3:
+
+            @script
+            def delegated_primitive(a: target_type, b: target_type, c: target_type) -> target_type:
+                attr.func_name = 'cuda_f16_{}'.format(name)
+                return cast(
+                    delegate(cast(a, delegate_type), cast(b, delegate_type), cast(c, delegate_type)), target_type
+                )
+
+        else:
+            raise ValueError('Unsupported num_args: {}'.format(num_args))
+
+        assert isinstance(delegated_primitive, Function)
+        register_primitive_function(name='cuda_f16_{}'.format(name), func_or_type=delegated_primitive)
 
     def call(self, name: str, *args) -> Expr:
         entry = primitive_func_pool.lookup_by_name(name)
@@ -121,7 +156,6 @@ class CUDAFloat16MathFunctionSet(MathFunctionSet):
     def erf(self, a: Expr) -> Expr:
         # use float32 erf to delegate the float16 erf
         from hidet.ir.expr import cast
-        from hidet.ir.dtypes import float32, float16
         from hidet.ir.primitives.math import erf
 
         return cast(erf(cast(a, float32)), float16)
@@ -145,15 +179,24 @@ class CUDAFloat16MathFunctionSet(MathFunctionSet):
         return self.call('cuda_f16_floor', a)
 
     def min(self, a: Expr, b: Expr) -> Expr:
-        return self.call('cuda_f16_min', a, b)
+        from hidet.cuda import compute_capability
+
+        if compute_capability() >= (8, 0):
+            return self.call('cuda_f16_min_sm80', a, b)
+        else:
+            return self.call('cuda_f16_min', a, b)
 
     def max(self, a: Expr, b: Expr) -> Expr:
-        return self.call('cuda_f16_max', a, b)
+        from hidet.cuda import compute_capability
+
+        if compute_capability() >= (8, 0):
+            return self.call('cuda_f16_max_sm80', a, b)
+        else:
+            return self.call('cuda_f16_max', a, b)
 
     def pow(self, a: Expr, b: Expr) -> Expr:
         # use float32 pow to delegate the float16 pow
         from hidet.ir.expr import cast
-        from hidet.ir.dtypes import float32, float16
         from hidet.ir.primitives.math import pow
 
         a = cast(a, float32)

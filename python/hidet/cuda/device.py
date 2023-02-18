@@ -29,7 +29,7 @@ class CudaDeviceContext:
         set_device(self.prev_device_id)
 
 
-@lru_cache(maxsize=1)
+@lru_cache(maxsize=None)
 def available() -> bool:
     """
     Returns True if CUDA is available, False otherwise.
@@ -42,7 +42,7 @@ def available() -> bool:
     return device_count() > 0
 
 
-@lru_cache(maxsize=1)
+@lru_cache(maxsize=None)
 def device_count() -> int:
     """
     Get the number of available CUDA devices.
@@ -122,6 +122,7 @@ def device(device_id: int):
     return CudaDeviceContext(device_id)
 
 
+@lru_cache(maxsize=None)
 def compute_capability(device_id: int = 0) -> Tuple[int, int]:
     """
     Get the compute capability of a CUDA device.
@@ -129,7 +130,7 @@ def compute_capability(device_id: int = 0) -> Tuple[int, int]:
     Parameters
     ----------
     device_id: int
-        The ID of the device.
+        The ID of the device to query.
 
     Returns
     -------
@@ -178,3 +179,4 @@ def profiler_stop():
 if available():
     for i in range(device_count()):
         properties(i)
+        compute_capability(i)
