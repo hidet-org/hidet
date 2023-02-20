@@ -40,7 +40,7 @@ class OptionRegistry:
         name: str,
         type_hint: str,
         description: str,
-        defalut_value: Any,
+        default_value: Any,
         normalizer: Optional[Callable[[Any], Any]] = None,
         choices: Optional[Iterable[Any]] = None,
         checker: Optional[Callable[[Any], bool]] = None,
@@ -49,7 +49,7 @@ class OptionRegistry:
         if name in registered_options:
             raise KeyError(f'Option {name} has already been registered.')
         registered_options[name] = OptionRegistry(
-            name, type_hint, description, defalut_value, normalizer, choices, checker
+            name, type_hint, description, default_value, normalizer, choices, checker
         )
         return OptionRegistry
 
@@ -65,24 +65,24 @@ def register_hidet_options():
         type_hint='Tuple[int, int, int]',
         description='The (warmup, number, repeat) parameters for benchmarking. '
         'The benchmarking will run warmup + number * repeat times.',
-        defalut_value=(3, 10, 3),
+        default_value=(3, 10, 3),
     ).register_option(
         name='search_space',  #
         type_hint='int',
         description='The search space level.',
-        defalut_value=0,
+        default_value=0,
         choices=[0, 1, 2],
     ).register_option(
         name='cache_operator',
         type_hint='bool',
         description='Whether to enable operator cache on disk.',
-        defalut_value=True,
+        default_value=True,
         choices=[True, False],
     ).register_option(
         name='cache_dir',
         type_hint='path',
         description='The directory to store the cache.',
-        defalut_value=os.path.abspath(
+        default_value=os.path.abspath(
             os.path.join(git_utils.git_repo_root(), '.hidet_cache')  # developer mode
             if git_utils.in_git_repo()
             else os.path.join(os.path.expanduser('~'), '.hidet', 'cache')  # user mode
@@ -91,14 +91,20 @@ def register_hidet_options():
     ).register_option(
         name='parallel_build',
         type_hint='bool',
-        defalut_value=True,
+        default_value=True,
         description='Whether to build operators in parallel.',
         choices=[True, False],
     ).register_option(
         name='save_lower_ir',
         type_hint='bool',
-        defalut_value=False,
+        default_value=False,
         description='Whether to save the IR when lower an IRModule to the operator cache.',
+        choices=[True, False],
+    ).register_option(
+        name='debug_cache_tuning',
+        type_hint='bool',
+        default_value=False,
+        description='Whether to cache the generated kernels during tuning.',
         choices=[True, False],
     )
 
@@ -472,3 +478,20 @@ def get_save_lower_ir() -> bool:
         Whether to save the lower IR.
     """
     return OptionContext.current().get_option('save_lower_ir')
+
+
+def debug_cache_tuning(enabled: bool = True):
+    """
+    Whether to cache the generated kernels during tuning.
+
+    .. note::
+
+        This option is only used for debugging purpose. It will generate a lot of files in the cache directory
+        and take a lot of disk space.
+
+    Parameters
+    ----------
+    enabled: bool
+        Whether to debug cache tuning.
+    """
+    OptionContext.current().set_option('debug_cache_tuning', enabled)

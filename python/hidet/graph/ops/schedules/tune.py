@@ -12,6 +12,7 @@
 from typing import Union, Sequence, TypeVar, Any, Dict, List, Optional
 import os
 import itertools
+import shutil
 from tqdm import tqdm
 import numpy as np
 from hidet.ir.func import IRModule
@@ -143,8 +144,9 @@ def tune(template_func, task: Task, target_device: str, working_dir: str) -> IRM
         return ir_modules[0]
 
     # build ir modules into compiled functions
+    tuning_dir = os.path.join(working_dir, 'tuning')
     compiled_funcs: List[Optional[CompiledFunction]] = build_ir_module_batch(
-        ir_modules, func_name=task.name, output_dir=os.path.join(working_dir, 'tuning'), parallel=True, verbose=True
+        ir_modules, func_name=task.name, output_dir=tuning_dir, parallel=True, verbose=True
     )
     assert len(compiled_funcs) == len(ir_modules)
     if any(f is None for f in compiled_funcs):
@@ -162,6 +164,10 @@ def tune(template_func, task: Task, target_device: str, working_dir: str) -> IRM
             # this ir module failed in building, skip
             latency = 1e30
         latencies.append(latency)
+
+    # remove tuning directory
+    if not hidet.option.get_option('debug_cache_tuning'):
+        shutil.rmtree(tuning_dir)
 
     # generate summary
     summary = _generate_summary(ir_modules_kwargs, latencies)
