@@ -255,7 +255,7 @@ class FlowGraph:
             if graph_output in tensor_map:
                 outputs.append(tensor_map[graph_output])
             elif graph_output.storage is not None:
-                outputs.append(graph_output)    # constant output, not the graph input or produced by any operator
+                outputs.append(graph_output)  # constant output, not the graph input or produced by any operator
             else:
                 raise RuntimeError('Graph output {} is not produced by any operator.'.format(graph_output.signature()))
 
