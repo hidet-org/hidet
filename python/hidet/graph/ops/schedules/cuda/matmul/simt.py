@@ -52,7 +52,7 @@ from hidet import option
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.ir.expr import Var, LogicalAnd, Equal, Cast, if_then_else, convert, Expr
 from hidet.ir.func import IRModule
-from hidet.ir.functors import simplify_to_int
+from hidet.ir.tools import simplify_to_int
 from hidet.ir.mapping import TaskMapping
 from hidet.ir.layout import DataLayout, StridesLayout
 from hidet.ir.primitives import syncthreads, thread_idx, block_idx

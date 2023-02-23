@@ -377,7 +377,7 @@ class PatternMatcher:
 
 
 def reduce_pattern(shape: Sequence[Union[int, Expr]], fcompute, reduce_type: str):
-    from hidet.ir.functors import collect  # pylint: disable=import-outside-toplevel
+    from hidet.ir.tools import collect  # pylint: disable=import-outside-toplevel
 
     shape = convert(shape)
     axes = [var() for _ in shape]

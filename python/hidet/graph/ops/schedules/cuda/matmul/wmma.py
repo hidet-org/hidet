@@ -17,7 +17,7 @@ from hidet import option
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.ir.expr import Var, LogicalAnd, Cast, if_then_else, convert, Expr, cast
 from hidet.ir.func import IRModule
-from hidet.ir.functors import simplify_to_int
+from hidet.ir.tools import simplify_to_int
 from hidet.ir.mapping import TaskMapping, row_spatial, row_repeat
 from hidet.ir.layout import DataLayout, row_layout, local_layout, data_layout
 from hidet.ir.primitives import syncthreads, thread_idx, block_idx

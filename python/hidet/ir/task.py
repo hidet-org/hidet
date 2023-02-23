@@ -38,7 +38,7 @@ class Target:
 
 class InverseMap(Node):
     def __init__(self, axes: List[Var], indices: List[Expr]):
-        from hidet.ir.functors import simplify
+        from hidet.ir.tools import simplify
 
         self.axes: List[Var] = axes
         self.indices: List[Expr] = [simplify(e) for e in indices]
@@ -64,7 +64,7 @@ class InverseMap(Node):
         return InverseMap.from_lambda(lambda *indices: list(indices), num_args=num_args)
 
     def __add__(self, other) -> InverseMap:
-        from hidet.ir.functors import rewrite
+        from hidet.ir.tools import rewrite
 
         if not isinstance(other, InverseMap):
             raise ValueError('Can not concat InverseMap with {}'.format(type(other)))
@@ -99,7 +99,7 @@ class TaskGraph(Node):
         return TaskGraph(anchor=task, nodes=[task], consume={}, input_tensors=task.inputs, output_tensors=task.outputs)
 
     def absorb(self) -> Task:
-        from hidet.ir.functors import rewrite
+        from hidet.ir.tools import rewrite
 
         graph_input_tensors: List[TensorNode] = self.input_tensors
         update_map: Dict[TensorNode, TensorNode] = {a: a for a in graph_input_tensors}
@@ -206,7 +206,7 @@ class Task(Node):
         return True
 
     def is_injective_task(self) -> bool:
-        from hidet.ir.functors import collect
+        from hidet.ir.tools import collect
 
         if len(self.outputs) != 1 or not isinstance(self.outputs[0].tensor_compute, GridCompute):
             return False
@@ -251,7 +251,7 @@ def is_injective_task(task: Task) -> bool:
     ret: bool
         Whether the task is injective.
     """
-    from hidet.ir.functors import collect
+    from hidet.ir.tools import collect
 
     scalar_nodes: List[ScalarNode] = collect(task.outputs, ScalarNode, stop_when_found=False)
     return all(sn.scalar_compute is None for sn in scalar_nodes)

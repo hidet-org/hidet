@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import Union, Tuple, List, Optional, Sequence, Callable, Mapping
 import itertools
 import numpy as np
+from hidet.ir.node import Node
 from hidet.utils import prod, gcd
 
 Int = Union['Expr', int]
@@ -49,7 +50,7 @@ def strides_from_ranks(shape: Sequence[int], ranks: Sequence[int]) -> List[int]:
     return strides
 
 
-class TaskMapping:
+class TaskMapping(Node):
     registered = []
 
     def __init__(
@@ -59,7 +60,7 @@ class TaskMapping:
         worker2task: Optional[Callable[[Int], List[Tuple[Int, ...]]]] = None,
     ):
         from hidet.ir import Expr
-        from hidet.ir.functors import simplify_to_int
+        from hidet.ir.tools import simplify_to_int
 
         if isinstance(num_workers, Expr):
             num_workers = simplify_to_int(num_workers)
@@ -272,7 +273,7 @@ class TaskMappingExpander:
 
 
 def spatial_map(task_shape: Sequence[int], ranks: Optional[Sequence[int]] = None):
-    from hidet.ir.functors import simplify_to_int
+    from hidet.ir.tools import simplify_to_int
 
     task_shape = [simplify_to_int(v) for v in task_shape]
     if ranks is None:
@@ -289,7 +290,7 @@ def col_spatial(*task_shape: int):
 
 
 def repeat_map(task_shape: Sequence[int], ranks: Optional[Sequence[int]] = None):
-    from hidet.ir.functors import simplify_to_int
+    from hidet.ir.tools import simplify_to_int
 
     task_shape = [simplify_to_int(v) for v in task_shape]
     if ranks is None:

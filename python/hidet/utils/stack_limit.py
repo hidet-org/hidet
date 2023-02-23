@@ -9,8 +9,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from .reduce_operations import ReduceOperation
-from .primitives import TensorNode, ScalarNode
-from .primitives import ScalarInput, TensorInput
-from .primitives import GridCompute, ReduceCompute, ArgReduceCompute, ReduceType
-from .primitives import scalar_input, tensor_input, compute, reduce, arg_reduce
+"""
+Allow more stack space and recursion depth for python.
+"""
+import sys
+import resource
+
+# allow up to 128MB stack space
+resource.setrlimit(resource.RLIMIT_STACK, (2**29, -1))
+
+# allow up to 10^5 recursive python calls, increase this when needed
+sys.setrecursionlimit(100000)

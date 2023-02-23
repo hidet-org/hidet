@@ -236,7 +236,6 @@ def factorize(n):
 
 
 def same_list(lhs, rhs, use_equal=False):
-    assert isinstance(lhs, (tuple, list)) and isinstance(rhs, (tuple, list))
     if len(lhs) != len(rhs):
         return False
     for l, r in zip(lhs, rhs):

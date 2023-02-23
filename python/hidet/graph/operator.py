@@ -103,7 +103,7 @@ class Operator:
 
     def symbolic_run(self) -> List[Tensor]:
         output_nodes = self.task.parameters[-len(self.task.outputs) :]
-        output_types = [output_node.ttype for output_node in output_nodes]
+        output_types = [output_node.type for output_node in output_nodes]
         outputs = []
         for i, output_type in enumerate(output_types):
             outputs.append(
@@ -155,7 +155,7 @@ class Operator:
         return dummy_inputs
 
     def dummy_outputs(self) -> List[Tensor]:
-        output_types = [output.ttype for output in self.task.parameters[-len(self.task.outputs) :]]
+        output_types = [output.type for output in self.task.parameters[-len(self.task.outputs) :]]
         dummy_outputs = [
             empty(shape=type.const_shape(), dtype=type.dtype.name, device=self.device, layout=type.layout)
             for type in output_types

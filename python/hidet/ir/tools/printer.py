@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Optional, List
+from typing import Optional, List, Union, Dict, Tuple
 from hidet.ir.node import Node
 from hidet.ir.func import IRModule, Function
 from hidet.ir.type import DataType, TensorType, TypeNode, VoidType, PointerType, ReferenceType, TensorPointerType
@@ -17,21 +17,12 @@ from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, Exp
 from hidet.ir.expr import Sub, LogicalNot, LogicalOr, LogicalAnd, Let, IfThenElse, TensorSlice
 from hidet.ir.expr import RightShift, LeftShift, BitwiseNot, BitwiseOr
 from hidet.ir.expr import BitwiseAnd, Neg, Cast, NotEqual, BitwiseXor, Reference, Dereference, Address
-from hidet.ir.stmt import (
-    SeqStmt,
-    IfStmt,
-    ForStmt,
-    AssignStmt,
-    BufferStoreStmt,
-    EvaluateStmt,
-    Stmt,
-    AssertStmt,
-    LaunchKernelStmt,
-)
+from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt
 from hidet.ir.stmt import BlackBoxStmt, AsmStmt, ReturnStmt, LetStmt, DeclareStmt, ForTaskStmt, WhileStmt, ContinueStmt
-from hidet.ir.stmt import BreakStmt, DeclareScope
+from hidet.ir.stmt import BreakStmt, DeclareScope, LaunchKernelStmt
 from hidet.ir.mapping import RepeatTaskMapping, SpatialTaskMapping, ComposedTaskMapping, TaskMapping
-from hidet.ir.compute import TensorNode, ScalarNode, GridCompute, ArgReduceCompute, ReduceCompute
+from hidet.ir.compute import TensorNode, ScalarNode, GridCompute, ArgReduceCompute, ReduceCompute, TensorInput, \
+    ScalarInput
 from hidet.ir.dialects.pattern import AnyExpr
 from hidet.ir.layout import RowMajorLayout, ColumnMajorLayout
 from hidet.ir.task import Task, TaskGraph, InverseMap
@@ -39,10 +30,10 @@ from hidet.utils import same_list
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
 from hidet.utils.namer import Namer
 
-from .base import StmtExprFunctor, TypeFunctor, NodeFunctor
+from hidet.ir.functors import IRFunctor, TypeFunctor, BaseFunctor
 
 
-class IRPrinter(StmtExprFunctor, TypeFunctor):
+class IRPrinter(IRFunctor):
     def __init__(self):
         super().__init__()
         self.namer = Namer()
@@ -51,41 +42,45 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
     def __call__(self, node):
         return self.visit(node)
 
-    def visit(self, obj):  # pylint: disable=arguments-renamed, too-many-branches
-        # python builtin type
-        if isinstance(obj, (list, tuple)):
-            return doc_join([self(v) for v in obj], ', ')
-        elif isinstance(obj, dict):
-            return doc_join([self(k) + ': ' + self(v) for k, v in obj.items()], ', ')
-        elif isinstance(obj, str):
-            return Text(obj.replace('\n', '\\n').replace('\t', '\\t'))
-        elif isinstance(obj, (int, float)):
-            return Text(str(obj))
-        elif obj is None:
-            return Text('None')
-        # type node
-        elif isinstance(obj, TypeNode):
-            return TypeFunctor.visit(self, obj)
-        # function and ir module
-        elif isinstance(obj, Function):
-            return self.visit_Function(obj)
-        elif isinstance(obj, IRModule):
-            return self.visit_IRModule(obj)
-        # expression and statement
-        elif isinstance(obj, (Expr, Stmt)):
-            return NodeFunctor.visit(self, obj)
-        # task related
-        elif isinstance(obj, Task):
-            return self.visit_Task(obj)
-        elif isinstance(obj, TaskGraph):
-            return self.visit_TaskGraph(obj)
-        elif isinstance(obj, InverseMap):
-            return self.visit_InverseMap(obj)
-        # task mapping
-        elif isinstance(obj, TaskMapping):
-            return self.visit_TaskMapping(obj)
-        else:
-            raise ValueError('Do not support print object {}'.format(object.__repr__(obj)))
+    # def visit_dispatch(self, obj):  # pylint: disable=arguments-renamed, too-many-branches
+    #     # type node
+    #     if isinstance(obj, TypeNode):
+    #         return TypeFunctor.visit(self, obj)
+    #     # function and ir module
+    #     elif isinstance(obj, Function):
+    #         return self.visit_Function(obj)
+    #     elif isinstance(obj, IRModule):
+    #         return self.visit_IRModule(obj)
+    #     # expression and statement
+    #     elif isinstance(obj, (Expr, Stmt)):
+    #         return BaseFunctor.visit(self, obj)
+    #     # task related
+    #     elif isinstance(obj, Task):
+    #         return self.visit_Task(obj)
+    #     elif isinstance(obj, TaskGraph):
+    #         return self.visit_TaskGraph(obj)
+    #     elif isinstance(obj, InverseMap):
+    #         return self.visit_InverseMap(obj)
+    #     # task mapping
+    #     elif isinstance(obj, TaskMapping):
+    #         return self.visit_TaskMapping(obj)
+    #     else:
+    #         raise ValueError('Do not support print object {}'.format(object.__repr__(obj)))
+
+    def visit_Tuple(self, tp: Tuple):
+        return doc_join([self(v) for v in tp], ', ')
+
+    def visit_List(self, lst: List):
+        return doc_join([self(v) for v in lst], ', ')
+
+    def visit_Dict(self, d: Dict):
+        return doc_join([k + ': ' + self(v) for k, v in d.items()], ', ')
+
+    def visit_NotDispatchedNode(self, n: Node):
+        raise NotImplementedError('Do not support print node {}'.format(type(n)))
+
+    def visit_PyConstant(self, c: Union[str, int, float, None]):
+        return Text(str(c))
 
     def visit_Function(self, func: Function):
         self.namer.clear()
@@ -420,7 +415,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
         return Text('AnyExpr')
 
     def print_tensor_nodes(self, nodes: List[TensorNode], exclude_nodes: List[TensorNode] = None) -> Doc:
-        from hidet.ir.functors import collect  # pylint: disable=import-outside-toplevel
+        from hidet.ir.tools import collect  # pylint: disable=import-outside-toplevel
 
         if exclude_nodes is None:
             exclude_nodes = []
@@ -429,24 +424,16 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
         for node in reversed(nodes):
             if node in exclude_nodes:
                 continue
-            if node.tensor_compute is None:
+            if isinstance(node, TensorInput):
                 doc += NewLine() + self(node) + ': ' + self(node.ttype)
+            elif isinstance(node, GridCompute):
+                # example
+                # y: float32[10, 10] where y[i, j] = x[i, j] + 1
+                doc += NewLine()
+                doc += self(node) + ': ' + self(node.type.dtype) + '[' + self(node.type.shape) + ']'
+                doc += Text(' where ') + self(node) + '[' + self(node.axes) + '] = ' + self(node.value)
             else:
-                if isinstance(node.tensor_compute, GridCompute):
-                    # example
-                    # y: float32[10, 10] where y[i, j] = x[i, j] + 1
-                    gc = node.tensor_compute
-                    doc += NewLine()
-                    doc += self(node) + ': ' + self(node.ttype.dtype) + '[' + self(node.ttype.shape) + ']'
-                    doc += Text(' where ') + self(node) + '[' + self(gc.axes) + '] = ' + self(gc.value)
-                    # items = [
-                    #     '[' + self(gc.shape) + ']',
-                    #     'where ',
-                    #     '[' + self(gc.axes) + '] = ' + self(gc.value),
-                    # ]
-                    # doc += NewLine() + self.namer.get_name(node) + ': ' + 'grid(' + doc_join(items, ', ') + ')'
-                else:
-                    raise NotImplementedError()
+                raise NotImplementedError()
         return doc
 
     def visit_Task(self, e: Task):
@@ -455,7 +442,7 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
             Text('parameters: ')
             + (
                 NewLine()
-                + doc_join(['{}: {}'.format(self.namer.get_name(v), self(v.ttype)) for v in e.parameters], NewLine())
+                + doc_join(['{}: {}'.format(self.namer.get_name(v), self(v.type)) for v in e.parameters], NewLine())
             ).indent(),
             Text('inputs: ') + '[' + doc_join([self.namer.get_name(v) for v in e.inputs], ', ') + ']',
             Text('outputs: ') + '[' + doc_join([self.namer.get_name(v) for v in e.outputs], ', ') + ']',
@@ -469,7 +456,8 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
         if e.inverse_map:
             inverse_map_doc += NewLine() + Text('inverse_map:')
             for tensor, inverse_map in e.inverse_map.items():
-                inverse_map_doc += (NewLine() + self.namer.get_name(tensor) + ': ' + self(inverse_map)).indent()
+                inverse_map_body = 'InverseMap([' + self(inverse_map.axes) + '] => [' + self(inverse_map.indices) + '])'
+                inverse_map_doc += (NewLine() + self.namer.get_name(tensor) + ': ' + inverse_map_body).indent()
         return Text('Task(') + (NewLine() + front_part + inverse_map_doc).indent() + NewLine() + ')'
 
     def visit_TaskGraph(self, task_graph: TaskGraph):
@@ -482,8 +470,6 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
                     arg_items.append(self(task_input) + '=' + self(task_graph.consume[task_input]))
                 else:
                     arg_items.append(self(task_input))
-                # task_input = task_graph.consume[task_input] if task_input in task_graph.consume else task_input
-                # arg_items.append(self(task_input) + '=' + )
             for name, value in task.attributes.items():
                 arg_items.append(self(name) + '=' + self(str(value)))
             args = doc_join(arg_items, ', ')
@@ -505,47 +491,88 @@ class IRPrinter(StmtExprFunctor, TypeFunctor):
         tail = NewLine() + '}'
         return head + body + tail
 
-    def visit_InverseMap(self, e: InverseMap):
-        return 'InverseMap([' + self(e.axes) + '] => [' + self(e.indices) + '])'
-
-    def visit_ScalarNode(self, e: ScalarNode):
-        if e.scalar_compute is None:
-            return self.namer.get_name(e, e.name)
-        else:
-            sc = e.scalar_compute
-            if isinstance(sc, ReduceCompute):
-                items = [
-                    '[' + self(sc.shape) + ']',
-                    '(' + self(sc.axes) + ') => ' + self(sc.value),
-                    str(sc.reduce_operation),
-                ]
-                return 'reduce(' + doc_join(items, ', ') + ')'
-            elif isinstance(sc, ArgReduceCompute):
-                items = [
-                    '[' + self(sc.extent) + ']',
-                    '' + self(sc.axis) + ' => ' + self(sc.value),
-                    str(sc.reduce_operation),
-                ]
-                return 'arg_reduce(' + doc_join(items, ', ') + ')'
-            else:
-                raise NotImplementedError()
+    # def visit_InverseMap(self, e: InverseMap):
+    #     return 'InverseMap([' + self(e.axes) + '] => [' + self(e.indices) + '])'
+    #
+    # def visit_ScalarNode(self, e: ScalarNode):
+    #     if e.scalar_compute is None:
+    #         return self.namer.get_name(e, e.name)
+    #     else:
+    #         sc = e.scalar_compute
+    #         if isinstance(sc, ReduceCompute):
+    #             items = [
+    #                 '[' + self(sc.shape) + ']',
+    #                 '(' + self(sc.axes) + ') => ' + self(sc.value),
+    #                 str(sc.reduce_operation),
+    #             ]
+    #             return 'reduce(' + doc_join(items, ', ') + ')'
+    #         elif isinstance(sc, ArgReduceCompute):
+    #             items = [
+    #                 '[' + self(sc.extent) + ']',
+    #                 '' + self(sc.axis) + ' => ' + self(sc.value),
+    #                 str(sc.reduce_operation),
+    #             ]
+    #             return 'arg_reduce(' + doc_join(items, ', ') + ')'
+    #         else:
+    #             raise NotImplementedError()
 
     def visit_TensorNode(self, e: TensorNode):
         return self.namer.get_name(e)
 
-    def visit_TaskMapping(self, mapping: TaskMapping):
-        if isinstance(mapping, (RepeatTaskMapping, SpatialTaskMapping)):
-            name = 'repeat' if isinstance(mapping, RepeatTaskMapping) else 'spatial'
-            args = [self(mapping.task_shape)]
-            if not same_list(mapping.ranks, list(range(len(mapping.task_shape)))):
-                args.append('ranks=[' + self(mapping.ranks) + ']')
-            arg_doc = doc_join(args, ', ')
-            # something like: spatial(1, 3, ranks=[1, 0])
-            return doc_join([name, '(', arg_doc, ')'], '')
-        elif isinstance(mapping, ComposedTaskMapping):
-            return self(mapping.outer) + '.' + self(mapping.inner)
-        else:
-            raise NotImplementedError()
+    def visit_ScalarInput(self, node: ScalarInput):
+        return self.namer.get_name(node)
+
+    def visit_TensorInput(self, node: TensorInput):
+        return self.namer.get_name(node)
+
+    def visit_GridCompute(self, c: GridCompute):
+        return self.namer.get_name(c)
+
+    def visit_ReduceCompute(self, c: ReduceCompute):
+        items = [
+            '[' + self(c.shape) + ']',
+            '(' + self(c.axes) + ') => ' + self(c.value),
+            str(c.reduce_operation),
+        ]
+        return 'reduce(' + doc_join(items, ', ') + ')'
+
+    def visit_ArgReduceCompute(self, c: ArgReduceCompute):
+        items = [
+            '[' + self(c.extent) + ']',
+            self(c.axis) + ' => ' + self(c.value),
+            str(c.reduce_operation),
+        ]
+        return 'arg_reduce(' + doc_join(items, ', ') + ')'
+
+    #
+    # def visit_TaskMapping(self, mapping: TaskMapping):
+    #     if isinstance(mapping, (RepeatTaskMapping, SpatialTaskMapping)):
+    #         name = 'repeat' if isinstance(mapping, RepeatTaskMapping) else 'spatial'
+    #         args = [self(mapping.task_shape)]
+    #         if not same_list(mapping.ranks, list(range(len(mapping.task_shape)))):
+    #             args.append('ranks=[' + self(mapping.ranks) + ']')
+    #         arg_doc = doc_join(args, ', ')
+    #         # something like: spatial(1, 3, ranks=[1, 0])
+    #         return doc_join([name, '(', arg_doc, ')'], '')
+    #     elif isinstance(mapping, ComposedTaskMapping):
+    #         return self(mapping.outer) + '.' + self(mapping.inner)
+    #     else:
+    #         raise NotImplementedError()
+
+    def visit_SpatialTaskMapping(self, mapping: SpatialTaskMapping):
+        items = [self(mapping.task_shape)]
+        if not same_list(mapping.ranks, list(range(len(mapping.task_shape)))):
+            items.append('ranks=[' + self(mapping.ranks) + ']')
+        return 'spatial(' + doc_join(items, ', ') + ')'
+
+    def visit_RepeatTaskMapping(self, mapping: RepeatTaskMapping):
+        items = [self(mapping.task_shape)]
+        if not same_list(mapping.ranks, list(range(len(mapping.task_shape)))):
+            items.append('ranks=[' + self(mapping.ranks) + ']')
+        return 'repeat(' + doc_join(items, ', ') + ')'
+
+    def visit_ComposedTaskMapping(self, mapping: ComposedTaskMapping):
+        return self(mapping.outer) + '.' + self(mapping.inner)
 
 
 def astext(obj: Node) -> str:

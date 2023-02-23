@@ -16,7 +16,8 @@ from typing import Mapping, List, Union, Tuple
 from hidet.ir.compute import TensorNode, ScalarNode, GridCompute, ArgReduceCompute, ReduceCompute
 from hidet.ir.builders import StmtBuilder
 from hidet.ir.expr import Expr, Var, scalar_var, convert
-from hidet.ir.functors import infer_type, ExprRewriter
+from hidet.ir.functors import ExprRewriter
+from hidet.ir.tools import infer_type
 from hidet.ir.stmt import ForStmt, BufferStoreStmt, AssignStmt, DeclareStmt
 from hidet.ir.task import Task
 from hidet.utils import prod

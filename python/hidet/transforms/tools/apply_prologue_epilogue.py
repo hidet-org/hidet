@@ -10,12 +10,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Sequence, Dict, List
-from hidet.ir.compute import TensorNode, GridCompute, TensorCompute
+# from hidet.ir.compute import TensorNode, GridCompute, TensorCompute
+from hidet.ir.compute import TensorNode, GridCompute
 from hidet.ir.expr import Expr, Var, TensorElement
 from hidet.ir.stmt import BufferStoreStmt
 from hidet.ir.func import Function, IRModule
 from hidet.ir.task import Task, TaskGraph, InverseMap
-from hidet.ir.functors import FuncStmtExprRewriter, ExprRewriter, rewrite, collect
+from hidet.ir.functors import IRRewriter, ExprRewriter
+from hidet.ir.tools import rewrite, collect
 from hidet.utils import strict_zip
 
 
@@ -47,7 +49,7 @@ class PrologueIndexer(ExprRewriter):
             return ExprRewriter.visit_TensorElement(self, e)
 
 
-class PrologueEpilogueRewriter(FuncStmtExprRewriter):
+class PrologueEpilogueRewriter(IRRewriter):
     def __init__(self, task: Task):
         super().__init__()
         self.task: Task = task
@@ -155,7 +157,7 @@ class PrologueEpilogueRewriter(FuncStmtExprRewriter):
             input_index = self.anchor_inputs.index(e.base)
             return self.visit(TensorElement(self.task.inputs[input_index], e.indices))
         else:
-            return FuncStmtExprRewriter.visit_TensorElement(self, e)
+            return IRRewriter.visit_TensorElement(self, e)
 
     def visit_BufferStoreStmt(self, stmt: BufferStoreStmt):
         if isinstance(stmt.buf, TensorNode):
@@ -203,7 +205,8 @@ class PrologueEpilogueRewriter(FuncStmtExprRewriter):
 
                 # step 2
                 # replace index
-                tc: TensorCompute = consumer_output.tensor_compute
+                # tc: TensorCompute = consumer_output.tensor_compute
+                tc = consumer_output.tensor_compute
                 assert isinstance(tc, GridCompute), 'Only GridCompute is supported in epilogue, got {}.'.format(tc)
                 remap: Dict[Var, Expr] = {a: b for a, b in strict_zip(tc.axes, out_indices)}
                 value: Expr = rewrite(tc.value, remap)
@@ -227,7 +230,7 @@ class PrologueEpilogueRewriter(FuncStmtExprRewriter):
                 BufferStoreStmt(self.task.outputs[output_index], stmt.indices, stmt.value, stmt.protected)
             )
         else:
-            return FuncStmtExprRewriter.visit_BufferStoreStmt(self, stmt)
+            return IRRewriter.visit_BufferStoreStmt(self, stmt)
 
 
 def apply_prologue_epilogue(ir_module: IRModule, func: Function, task: Task) -> Function:

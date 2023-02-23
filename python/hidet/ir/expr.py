@@ -16,6 +16,7 @@ import string
 import numpy as np
 from .node import Node
 from .type import TypeNode, TensorType, DataType, TensorPointerType, PointerType, FuncType, tensor_type, data_type
+from .type import tensor_pointer_type
 
 PyScalar = Union[int, float]
 
@@ -140,7 +141,7 @@ class Expr(Node):
         return float(self)
 
     def __str__(self):
-        from hidet.ir.functors import astext
+        from hidet.ir.tools import astext
 
         return str(astext(self))
 
@@ -612,7 +613,7 @@ def const_tensor(value: np.ndarray) -> Constant:
 
 
 def tensor_pointer_var(hint: str, shape=None, dtype: Union[str, DataType] = 'float32', layout=None):
-    return Var(hint, TensorPointerType(dtype=dtype, shape=shape, layout=layout))
+    return Var(hint, tensor_pointer_type(dtype=dtype, shape=shape, layout=layout))
 
 
 def view(ptr: Expr, tp: TensorType) -> Expr:

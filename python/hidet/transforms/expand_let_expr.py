@@ -12,7 +12,7 @@
 from hidet.ir.expr import Let
 from hidet.ir.stmt import Stmt, LetStmt, EvaluateStmt, BufferStoreStmt, AssignStmt, ForStmt, IfStmt, AssertStmt, AsmStmt
 from hidet.ir.stmt import BlackBoxStmt
-from hidet.ir.functors import StmtExprRewriter
+from hidet.ir.functors import IRRewriter
 from hidet.transforms import Pass, FunctionBodyPass
 
 
@@ -35,7 +35,7 @@ def wrapper(stmt_visitor):
     return wrapped_visitor
 
 
-class LetExprExpander(StmtExprRewriter):
+class LetExprExpander(IRRewriter):
     def __init__(self):
         super().__init__()
         self.stmt_stack = []
@@ -52,39 +52,39 @@ class LetExprExpander(StmtExprRewriter):
 
     @wrapper
     def visit_EvaluateStmt(self, stmt: EvaluateStmt):
-        return StmtExprRewriter.visit_EvaluateStmt(self, stmt)
+        return IRRewriter.visit_EvaluateStmt(self, stmt)
 
     @wrapper
     def visit_BufferStoreStmt(self, stmt: BufferStoreStmt):
-        return StmtExprRewriter.visit_BufferStoreStmt(self, stmt)
+        return IRRewriter.visit_BufferStoreStmt(self, stmt)
 
     @wrapper
     def visit_AssignStmt(self, stmt: AssignStmt):
-        return StmtExprRewriter.visit_AssignStmt(self, stmt)
+        return IRRewriter.visit_AssignStmt(self, stmt)
 
     @wrapper
     def visit_LetStmt(self, stmt: LetStmt):
-        return StmtExprRewriter.visit_LetStmt(self, stmt)
+        return IRRewriter.visit_LetStmt(self, stmt)
 
     @wrapper
     def visit_ForStmt(self, stmt: ForStmt):
-        return StmtExprRewriter.visit_ForStmt(self, stmt)
+        return IRRewriter.visit_ForStmt(self, stmt)
 
     @wrapper
     def visit_IfStmt(self, stmt: IfStmt):
-        return StmtExprRewriter.visit_IfStmt(self, stmt)
+        return IRRewriter.visit_IfStmt(self, stmt)
 
     @wrapper
     def visit_AssertStmt(self, stmt: AssertStmt):
-        return StmtExprRewriter.visit_AssertStmt(self, stmt)
+        return IRRewriter.visit_AssertStmt(self, stmt)
 
     @wrapper
     def visit_AsmStmt(self, stmt: AsmStmt):
-        return StmtExprRewriter.visit_AsmStmt(self, stmt)
+        return IRRewriter.visit_AsmStmt(self, stmt)
 
     @wrapper
     def visit_BlackBoxStmt(self, stmt: BlackBoxStmt):
-        return StmtExprRewriter.visit_BlackBoxStmt(self, stmt)
+        return IRRewriter.visit_BlackBoxStmt(self, stmt)
 
 
 class ExpandLetExprPass(FunctionBodyPass):

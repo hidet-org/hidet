@@ -16,40 +16,18 @@ from hidet.ir.dialects.pattern import AnyExpr
 from hidet.ir import dtypes
 from hidet.ir.type import DataType, PointerType, TensorPointerType, ReferenceType, TensorType, TypeNode, FuncType
 from hidet.ir.type import VoidType
-from hidet.ir.expr import (
-    Var,
-    Expr,
-    Add,
-    Sub,
-    Multiply,
-    Div,
-    Mod,
-    FloorDiv,
-    LessThan,
-    Neg,
-    NotEqual,
-    Equal,
-    LogicalAnd,
-    LogicalOr,
-)
-from hidet.ir.expr import (
-    LogicalNot,
-    BitwiseAnd,
-    BitwiseOr,
-    BitwiseXor,
-    BitwiseNot,
-    LeftShift,
-    RightShift,
-    TensorElement,
-)
+from hidet.ir.expr import Var, Expr, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, Neg, NotEqual, Equal, LogicalAnd
+from hidet.ir.expr import LogicalOr, LogicalNot, BitwiseAnd, BitwiseOr, BitwiseXor, BitwiseNot, LeftShift, RightShift
 from hidet.ir.expr import IfThenElse, Cast, Address, Reference, Dereference, Call, Let, Constant, TensorSlice, convert
+from hidet.ir.expr import TensorElement
 from hidet.ir.stmt import Stmt, DeclareScope, DeclareStmt, EvaluateStmt, BufferStoreStmt, AssignStmt, LetStmt, ForStmt
 from hidet.ir.stmt import LaunchKernelStmt
 from hidet.ir.stmt import ForTaskStmt, WhileStmt, BreakStmt, ContinueStmt, IfStmt, ReturnStmt, AssertStmt, AsmStmt
 from hidet.ir.stmt import BlackBoxStmt, SeqStmt
 from hidet.ir.func import IRModule, Function
 from hidet.ir.compute import TensorNode, ScalarNode
-from hidet.ir.functors import StmtExprFunctor, TypeFunctor, TypeInfer
+from hidet.ir.functors import StmtFunctor, ExprFunctor, TypeFunctor
+from hidet.ir.tools import TypeInfer
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
 from hidet.ir.utils.call_graph import CallGraph
 from hidet.utils.namer import Namer
@@ -57,7 +35,7 @@ from hidet.utils import prod
 from hidet.ir.primitives import is_primitive_function, lookup_primitive_function
 
 
-class Codegen(StmtExprFunctor, TypeFunctor):
+class Codegen(StmtFunctor, ExprFunctor, TypeFunctor):
     def __init__(self):
         super().__init__()
         self.func_name_map = {}

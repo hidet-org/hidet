@@ -13,7 +13,7 @@ from typing import Union, List
 from collections import defaultdict
 from hidet.ir.expr import Call
 from hidet.ir.func import IRModule, Function
-from hidet.ir.functors import collect
+from hidet.ir.tools import collect
 
 
 class CallGraphNode:

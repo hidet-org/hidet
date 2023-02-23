@@ -12,7 +12,7 @@
 # pylint: disable=unused-variable
 from hidet.ir.expr import TensorElement, TensorSlice
 from hidet.ir.func import Function
-from hidet.ir.functors import FuncStmtExprRewriter
+from hidet.ir.functors import IRRewriter
 from hidet.ir.stmt import BufferStoreStmt
 from hidet.transforms import Pass
 
@@ -52,7 +52,7 @@ def concat_slices(lhs_indices, lhs_starts, lhs_ends, rhs_indices, rhs_starts=Non
     return indices, starts, ends
 
 
-class FlattenTensorSliceRewriter(FuncStmtExprRewriter):
+class FlattenTensorSliceRewriter(IRRewriter):
     # eliminate all TensorSlice
     # (A[:, 3])[2] will be converted to A[2, 3] and the slice op A[:, 3] will be eliminated.
     def visit_TensorSlice(self, e: TensorSlice):
@@ -64,7 +64,7 @@ class FlattenTensorSliceRewriter(FuncStmtExprRewriter):
             indices, starts, ends = concat_slices(base.indices, base.starts, base.ends, e_indices, e_starts, e_ends)
             return TensorSlice(base.base, indices, starts, ends)
         else:
-            return FuncStmtExprRewriter.visit_TensorSlice(self, e)
+            return IRRewriter.visit_TensorSlice(self, e)
 
     def visit_TensorElement(self, e: TensorElement):
         base = self.visit(e.base)
@@ -74,7 +74,7 @@ class FlattenTensorSliceRewriter(FuncStmtExprRewriter):
             assert not any(idx is None for idx in indices)
             return TensorElement(base.base, indices, e.protected)
         else:
-            return FuncStmtExprRewriter.visit_TensorElement(self, e)
+            return IRRewriter.visit_TensorElement(self, e)
 
     def visit_BufferStoreStmt(self, stmt: BufferStoreStmt):
         base = self.visit(stmt.buf)
@@ -84,7 +84,7 @@ class FlattenTensorSliceRewriter(FuncStmtExprRewriter):
             assert not any(idx is None for idx in indices)
             return BufferStoreStmt(base.base, indices, self.visit(stmt.value), stmt.protected)
         else:
-            return FuncStmtExprRewriter.visit_BufferStoreStmt(self, stmt)
+            return IRRewriter.visit_BufferStoreStmt(self, stmt)
 
 
 class FlattenTensorSlicePass(Pass):

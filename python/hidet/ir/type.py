@@ -39,9 +39,9 @@ class DataType(TypeNode):
     """
 
     def __init__(self, name: str, short_name: str, nbytes: int):
-        self._name = name
-        self._short_name = short_name
-        self._nbytes = nbytes
+        self._name: str = name
+        self._short_name: str = short_name
+        self._nbytes: int = nbytes
 
     def __str__(self):
         return 'hidet.{}'.format(self.name)
@@ -175,20 +175,11 @@ class ReferenceType(TypeNode):
 
 
 class TensorPointerType(TypeNode):
-    def __init__(self, dtype, shape, layout):
+    def __init__(self, ttype: TensorType):
         """
         A pointer type that points to tensor.
-
-        Parameters
-        ----------
-        dtype: DataType
-            The data type of the tensor.
-        shape: Tuple[Expr, ...]
-            The shape of the tensor.
-        layout: hidet.ir.layout.DataLayout
-            The layout of the tensor.
         """
-        self.tensor_type: TensorType = tensor_type(dtype, shape, layout)
+        self.tensor_type: TensorType = ttype
 
     @staticmethod
     def from_tensor_type(tp: TensorType) -> TensorPointerType:
@@ -286,8 +277,7 @@ def pointer_type(base_type):
 
 
 def tensor_pointer_type(dtype, shape=None, layout=None):
-    ttype = tensor_type(dtype, shape, layout)
-    return TensorPointerType(ttype.dtype, ttype.shape, ttype.layout)
+    return TensorPointerType(tensor_type(dtype, shape, layout))
 
 
 def void_pointer():

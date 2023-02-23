@@ -24,10 +24,12 @@ from hidet.ir import SeqStmt
 from hidet.ir.expr import Expr, Var, Address, Reference
 from hidet.ir.stmt import AssignStmt, DeclareStmt, LetStmt, Stmt, AsmStmt
 from hidet.transforms.base import Pass, FunctionBodyPass
-from hidet.ir.functors import StmtExprRewriter, collect
+from hidet.ir.functors import IRRewriter
+from hidet.ir.tools import collect
+from hidet.ir.tools import collect
 
 
-class DeclareToLetRewriter(StmtExprRewriter):
+class DeclareToLetRewriter(IRRewriter):
     def __init__(self):
         super().__init__()
         self.assigns: Dict[Var, int] = defaultdict(int)
