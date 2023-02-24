@@ -14,14 +14,18 @@ from hidet.ir.type import FuncType
 from hidet.utils import initialize
 
 
+def type_infer(arg_types):
+    return arg_types[1]
+
+
 @initialize()
 def register_primitive_functions():
     functions = [
         ('cuda_activemask', '__activemask', FuncType([], 'int32')),
         # T __shfl_sync(unsigned mask, T var, int srcLane, int width=warpSize)
-        ('cuda_shfl_sync', '__shfl_sync', FuncType(type_infer_func=lambda arg_types: arg_types[1])),
-        ('cuda_shfl_up_sync', '__shfl_up_sync', FuncType(type_infer_func=lambda arg_types: arg_types[1])),
-        ('cuda_shfl_down_sync', '__shfl_down_sync', FuncType(type_infer_func=lambda arg_types: arg_types[1])),
+        ('cuda_shfl_sync', '__shfl_sync', FuncType(type_infer_func=type_infer)),
+        ('cuda_shfl_up_sync', '__shfl_up_sync', FuncType(type_infer_func=type_infer)),
+        ('cuda_shfl_down_sync', '__shfl_down_sync', FuncType(type_infer_func=type_infer)),
     ]
     for name, codegen_name, func_type in functions:
         register_primitive_function(name=name, func_or_type=func_type, codegen_name=codegen_name)
