@@ -22,6 +22,12 @@ PyScalar = Union[int, float]
 
 
 class Expr(Node):
+    def __bool__(self):
+        raise TypeError(
+            "hidet.ir.Expr does not support pythonic logical operations (e.g., and, or, not, if(...)). "
+            "Please use hidet.ir.if_then_else, hidet.ir.LogicalAnd, hidet.ir.LogicalOr, hidet.ir.LogicalNot explicitly."
+        )
+
     def __neg__(self):
         return Neg(self)
 
@@ -591,7 +597,7 @@ def tensor_rank(v: Expr) -> int:
     elif isinstance(v, TensorSlice):
         return sum(1 if i is None else 0 for i in v.indices)
     elif isinstance(v, TensorNode):
-        return len(v.ttype.shape)
+        return len(v.type.shape)
     elif isinstance(v, Constant) and isinstance(v.type, TensorType):
         return len(v.type.shape)
     elif isinstance(v, Cast) and isinstance(v.target_type, PointerType):

@@ -18,6 +18,8 @@ from hidet.transforms import Pass
 
 
 def concat_slices(lhs_indices, lhs_starts, lhs_ends, rhs_indices, rhs_starts=None, rhs_ends=None):
+    # [...][...] => [...]
+    # e.g., [i, j:, :k, :][p, q] => [i, j + p, q, :]
     if rhs_starts is None:
         rhs_starts = [None] * len(rhs_indices)
     if rhs_ends is None:
@@ -36,11 +38,11 @@ def concat_slices(lhs_indices, lhs_starts, lhs_ends, rhs_indices, rhs_starts=Non
         else:
             assert i < len(rhs_indices)
             if rhs_indices[i] is not None:
-                indices.append(start + rhs_indices[i] if start else rhs_indices[i])
+                indices.append(start + rhs_indices[i] if start is not None else rhs_indices[i])
                 starts.append(None)
             elif rhs_starts[i] is not None:
                 indices.append(None)
-                starts.append(start + rhs_starts[i] if start else rhs_starts[i])
+                starts.append(start + rhs_starts[i] if start is not None else rhs_starts[i])
             else:
                 indices.append(None)
                 starts.append(None)
@@ -58,9 +60,9 @@ class FlattenTensorSliceRewriter(IRRewriter):
     def visit_TensorSlice(self, e: TensorSlice):
         base = self.visit(e.base)
         if isinstance(base, TensorSlice):
-            e_indices = [self.visit(i) if i else None for i in e.indices]
-            e_starts = [self.visit(s) if s else None for s in e.starts]
-            e_ends = [self.visit(e) if e else None for e in e.ends]
+            e_indices = [self.visit(i) if i is not None else None for i in e.indices]
+            e_starts = [self.visit(s) if s is not None else None for s in e.starts]
+            e_ends = [self.visit(e) if e is not None else None for e in e.ends]
             indices, starts, ends = concat_slices(base.indices, base.starts, base.ends, e_indices, e_starts, e_ends)
             return TensorSlice(base.base, indices, starts, ends)
         else:

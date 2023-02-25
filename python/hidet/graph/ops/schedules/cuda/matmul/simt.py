@@ -326,9 +326,9 @@ def batched_matmul_cuda_schedule_simt(task: BatchMatmulTask, working_dir: str) -
 def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, schedule: MatmulSchedule) -> IRModule:
     sch = schedule
 
-    a_dtype = task.inputs[0].ttype.dtype
-    b_dtype = task.inputs[1].ttype.dtype
-    c_dtype = task.outputs[0].ttype.dtype
+    a_dtype = task.inputs[0].type.dtype
+    b_dtype = task.inputs[1].type.dtype
+    c_dtype = task.outputs[0].type.dtype
 
     batch_size = task.batch_size
     m_size, k_size, n_size = task.m_size, task.k_size, task.n_size

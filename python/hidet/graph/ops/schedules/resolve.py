@@ -43,7 +43,7 @@ def dummy_inputs_from_task(task: Task, target_device: str) -> List[Tensor]:
     """
     inputs = []
     for param in task.parameters:
-        param_type = param.ttype
+        param_type = param.type
 
         if not isinstance(param_type, TensorType):
             raise ValueError('Currently, only support create dummy scalar inputs.')

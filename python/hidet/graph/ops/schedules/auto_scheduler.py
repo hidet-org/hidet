@@ -300,6 +300,9 @@ class ComputeExprLower(ExprRewriter, ComputeRewriter):
             raise ValueError('Expect scalar input "{}" in param_map.'.format(node))
 
     def visit_GridCompute(self, node: GridCompute):
+        if node in self.param_map:
+            return self.param_map[node]
+
         # declare intermediate tensor buffer
         buf = Var(node.name, node.type)
 

@@ -47,6 +47,13 @@ class TensorNode(ComputeNode):
             self._type = infer_type(self)
         return self._type
 
+    @property
+    def ndim(self) -> int:
+        return len(self.type.shape)
+
+    def const_shape(self) -> List[int]:
+        return [int(v) for v in self.type.shape]
+
 
 class ScalarInput(ScalarNode):
     def __init__(self, name: str, dtype: DataType):

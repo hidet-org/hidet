@@ -118,7 +118,7 @@ class StmtVisitor(StmtFunctor, BaseVisitor):
 
     def visit_DeclareStmt(self, stmt: DeclareStmt):
         self.visit(stmt.var)
-        if stmt.init:
+        if stmt.init is not None:
             self.visit(stmt.init)
 
     def visit_EvaluateStmt(self, stmt: EvaluateStmt):
@@ -200,7 +200,7 @@ class StmtRewriter(StmtFunctor, BaseRewriter):
 
     def visit_DeclareStmt(self, stmt: DeclareStmt):
         v = self.visit(stmt.var)
-        init = self.visit(stmt.init) if stmt.init else None
+        init = self.visit(stmt.init) if stmt.init is not None else None
         if v is stmt.var and init is stmt.init:
             return stmt
         else:

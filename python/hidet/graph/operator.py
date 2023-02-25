@@ -86,7 +86,7 @@ class Operator:
     def imperative_run(self, inputs: List[Tensor]) -> List[Tensor]:
         self.build_task_func()
         assert len(inputs) + len(self.task.outputs) == len(self.task.parameters)
-        output_types = [output.ttype for output in self.task.parameters[-len(self.task.outputs) :]]
+        output_types = [output.type for output in self.task.parameters[-len(self.task.outputs) :]]
         outputs = [
             empty(shape=type.const_shape(), dtype=type.dtype.name, device=self.device, layout=type.layout)
             for type in output_types

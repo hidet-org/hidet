@@ -21,6 +21,7 @@ from subprocess import PIPE
 import hidet.cuda
 from hidet.libinfo import get_include_dirs
 from hidet.ir.type import FuncType
+from hidet.ir.task import Task
 from hidet.runtime import CompiledFunction
 from hidet.ffi import PackedFunc
 from hidet.ffi.ffi import library_paths
@@ -172,7 +173,7 @@ def load_task_func(lib_path: str, task) -> CompiledFunction:
     ----------
     lib_path: str
         The dynamic library path.
-    task: hidet.graph.task.Task
+    task: Task
         The task that corresponds to the dynamic library.
 
     Returns
@@ -187,7 +188,7 @@ def load_task_func(lib_path: str, task) -> CompiledFunction:
         os.remove(lib_path)
         raise e
     func_name = 'hidet_{}'.format(task.name)
-    param_types = [param.ttype for param in task.parameters]
+    param_types = [param.type for param in task.parameters]
     packed_func = PackedFunc(param_types=param_types, c_func_pointer=lib[func_name])
 
     potential_src_path = os.path.join(os.path.dirname(lib_path), 'source.cu')

@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Optional
+from typing import Optional, List, Tuple, Dict, Union
 import os
 import numpy as np
 from hidet.ir.dialects.pattern import AnyExpr
@@ -26,7 +26,7 @@ from hidet.ir.stmt import ForTaskStmt, WhileStmt, BreakStmt, ContinueStmt, IfStm
 from hidet.ir.stmt import BlackBoxStmt, SeqStmt
 from hidet.ir.func import IRModule, Function
 from hidet.ir.compute import TensorNode, ScalarNode
-from hidet.ir.functors import StmtFunctor, ExprFunctor, TypeFunctor
+from hidet.ir.functors import ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor
 from hidet.ir.tools import TypeInfer
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
 from hidet.ir.utils.call_graph import CallGraph
@@ -35,7 +35,7 @@ from hidet.utils import prod
 from hidet.ir.primitives import is_primitive_function, lookup_primitive_function
 
 
-class Codegen(StmtFunctor, ExprFunctor, TypeFunctor):
+class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
     def __init__(self):
         super().__init__()
         self.func_name_map = {}
@@ -122,25 +122,45 @@ class Codegen(StmtFunctor, ExprFunctor, TypeFunctor):
         return self.visit(node)
 
     def visit(self, node):
-        # pylint: disable=too-many-return-statements
-        if isinstance(node, IRModule):
-            return self.visit_IRModule(node)
-        elif isinstance(node, Function):
-            return self.visit_Function(node)
-        elif isinstance(node, (Stmt, Expr)):
-            return StmtExprFunctor.visit(self, node)
-        elif isinstance(node, TypeNode):
-            return TypeFunctor.visit(self, node)
-        elif isinstance(node, (tuple, list)):
-            return doc_join([self(v) for v in node], ', ')
-        elif isinstance(node, (int, float, bool)):
-            return self(convert(node))
-        elif isinstance(node, str):
-            return Text(node)
-        elif isinstance(node, Doc):
+        if isinstance(node, Doc):
             return node
         else:
-            raise ValueError(type(node))
+            return super().visit(node)
+
+    # def visit(self, node):
+    #     # pylint: disable=too-many-return-statements
+    #     if isinstance(node, IRModule):
+    #         return self.visit_IRModule(node)
+    #     elif isinstance(node, Function):
+    #         return self.visit_Function(node)
+    #     elif isinstance(node, (Stmt, Expr)):
+    #         return StmtExprFunctor.visit(self, node)
+    #     elif isinstance(node, TypeNode):
+    #         return TypeFunctor.visit(self, node)
+    #     elif isinstance(node, (tuple, list)):
+    #         return doc_join([self(v) for v in node], ', ')
+    #     elif isinstance(node, (int, float, bool)):
+    #         return self(convert(node))
+    #     elif isinstance(node, str):
+    #         return Text(node)
+    #     elif isinstance(node, Doc):
+    #         return node
+    #     else:
+    #         raise ValueError(type(node))
+
+    def visit_List(self, lst: List):
+        return doc_join([self(v) for v in lst], ', ')
+
+    def visit_Tuple(self, tp: Tuple):
+        return doc_join([self(v) for v in tp], ', ')
+
+    def visit_Dict(self, dct: Dict):
+        raise RuntimeError('Dict is not supported in code generation')
+
+    def visit_PyConstant(self, c: Union[str, int, float, None]):
+        if c is None:
+            raise RuntimeError('None encountered during code generation')
+        return Text(str(c))
 
     def visit_IRModule(self, module: IRModule) -> Doc:
         self.ir_module = module
@@ -364,7 +384,7 @@ class Codegen(StmtFunctor, ExprFunctor, TypeFunctor):
                     dim3_str(func.attrs['cuda_block_dim']),  # block dimension
                     func.attrs.get('cuda_dynamic_smem_bytes', 0),  # dynamic shared memory size
                     # cuda stream (get_cuda_stream() function is defined in hidet/runtime.h)
-                    Text('(cudaStream_t)get_cuda_stream()'),
+                    '(cudaStream_t)get_cuda_stream()',
                 ]
                 launch_config = Text('<<<') + doc_join([self(v) for v in configs], sep=', ') + Text('>>>')
             else:

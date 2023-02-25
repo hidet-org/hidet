@@ -17,7 +17,7 @@ import pickle
 from hidet.ir.node import Node
 from hidet.ir.expr import Expr, Var, var
 from hidet.ir.func import IRModule
-from hidet.ir.compute import TensorNode, ScalarNode, GridCompute
+from hidet.ir.compute import ComputeNode, TensorNode, TensorInput, ScalarNode, ScalarInput, GridCompute
 
 
 class Target:
@@ -84,7 +84,7 @@ class TaskGraph(Node):
         self,
         anchor: Task,
         nodes: Sequence[Task],
-        consume: Dict[TensorNode, TensorNode],
+        consume: Dict[TensorInput, TensorNode],
         input_tensors: Sequence[TensorNode],
         output_tensors: Sequence[TensorNode],
     ):
@@ -92,7 +92,7 @@ class TaskGraph(Node):
         self.nodes: List[Task] = list(nodes)
         self.input_tensors: List[TensorNode] = list(input_tensors)
         self.output_tensors: List[TensorNode] = list(output_tensors)
-        self.consume: Dict[TensorNode, TensorNode] = consume
+        self.consume: Dict[TensorInput, TensorNode] = consume
 
     @staticmethod
     def from_task(task: Task) -> TaskGraph:
@@ -131,10 +131,10 @@ class Task(Node):
         if attributes is None:
             attributes = {}
         self.name: str = name
-        self.inputs: List[TensorNode] = inputs
+        self.inputs: List[TensorInput] = inputs
         self.outputs: List[TensorNode] = outputs
         self.attributes: Dict[str, Union[str, float, int, bool]] = attributes
-        self.inverse_map: Dict[TensorNode, InverseMap] = {a: InverseMap.from_obj(b) for a, b in inverse_map.items()}
+        self.inverse_map: Dict[TensorInput, InverseMap] = {a: InverseMap.from_obj(b) for a, b in inverse_map.items()}
         self.task_graph: Optional[TaskGraph] = TaskGraph.from_task(self)
 
         # sanity check
@@ -170,6 +170,13 @@ class Task(Node):
     @property
     def parameters(self) -> List[TensorNode]:
         return self.task_graph.input_tensors + self.task_graph.output_tensors
+
+    @property
+    def self_params(self) -> List[TensorNode]:
+        params: List[TensorNode] = []
+        params += self.inputs
+        params += self.outputs
+        return params
 
     def implement(self, target: Union[Target, str], workding_dir: str) -> IRModule:
         from hidet.graph.ops.schedules.cuda.auto_scheduler import CudaAutoScheduler
@@ -207,22 +214,10 @@ class Task(Node):
 
     def is_injective_task(self) -> bool:
         from hidet.ir.tools import collect
-
-        if len(self.outputs) != 1 or not isinstance(self.outputs[0].tensor_compute, GridCompute):
-            return False
-
-        scalar_nodes: List[ScalarNode] = collect(self.outputs, ScalarNode, stop_when_found=False)
-        for scalar_node in scalar_nodes:
-            if scalar_node.scalar_compute is not None:
-                return False
-
-        tensor_nodes: List[TensorNode] = collect(self.outputs, TensorNode, stop_when_found=False)
-        for tensor_node in tensor_nodes:
-            tensor_compute = tensor_node.tensor_compute
-            if tensor_compute is not None and not isinstance(tensor_compute, GridCompute):
-                return False
-
-        return True
+        allowed_nodes = (ScalarInput, TensorInput, GridCompute)
+        # if found other node like ReduceCompute and ArgReduceCompute, return False
+        found_nodes = collect(self.outputs, ComputeNode, stop_when_found=False)
+        return all(isinstance(node, allowed_nodes) for node in found_nodes)
 
     def save(self, fname: str):
         dirname = os.path.dirname(fname)

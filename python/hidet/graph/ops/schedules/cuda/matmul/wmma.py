@@ -168,9 +168,9 @@ class MatmulSchedule(Schedule):
         # choose a specific wmma type when needed
         if wmma_type == 'wmma':
             dtype_rank = {'float16': 0, 'bfloat16': 1, 'tfloat32': 2, 'float32': 4}
-            a_dtype = task.inputs[0].ttype.dtype.name
-            b_dtype = task.inputs[1].ttype.dtype.name
-            c_dtype = task.outputs[0].ttype.dtype.name
+            a_dtype = task.inputs[0].type.dtype.name
+            b_dtype = task.inputs[1].type.dtype.name
+            c_dtype = task.outputs[0].type.dtype.name
             ab_rank = max(dtype_rank[a_dtype], dtype_rank[b_dtype])
             if ab_rank <= dtype_rank['float16']:
                 if c_dtype == 'float32':
