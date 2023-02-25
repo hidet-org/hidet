@@ -50,7 +50,7 @@ class ModuleRewriter(ModuleFunctor, BaseRewriter):
     def visit_IRModule(self, module: IRModule):
         global_vars = self.visit(module.global_vars)
         functions = self.visit(module.functions)
-        if global_vars is module.global_vars and functions is module.functions:
+        if same_list(global_vars, module.global_vars) and functions is module.functions:
             return module
         else:
             return IRModule(global_vars, module.task, functions)
@@ -61,9 +61,12 @@ class ModuleRewriter(ModuleFunctor, BaseRewriter):
         ret_type = self.visit(func.ret_type)
         body = self.visit(func.body)
         attrs = self.visit(func.attrs)
-        if same_list(
-            (params, extern_vars, ret_type, body, attrs),
-            (func.params, func.extern_vars, func.ret_type, func.body, func.attrs)
+        if (
+            same_list(params, func.params) and
+            same_list(extern_vars, func.extern_vars) and
+            ret_type is func.ret_type and
+            body is func.body and
+            attrs is func.attrs
         ):
             return func
         else:

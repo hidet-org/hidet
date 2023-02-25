@@ -133,9 +133,11 @@ class ComputeRewriter(BaseRewriter, ComputeFunctor):
         layout = self.visit(node.layout)
         input_scalars = self.visit(node.input_scalars)
         input_tensors = self.visit(node.input_tensors)
-        if same_list(
-            (shape, axes, value, layout, input_scalars, input_tensors),
-            (node.shape, node.axes, node.value, node.layout, node.input_scalars, node.input_tensors)
+        if ((value is node.value and layout is node.layout)
+                and same_list(shape, node.shape)
+                and same_list(axes, node.axes)
+                and same_list(input_tensors, node.input_tensors)
+                and same_list(input_scalars, node.input_scalars)
         ):
             return node
         else:
@@ -148,9 +150,11 @@ class ComputeRewriter(BaseRewriter, ComputeFunctor):
         accumulate_dtype = self.visit(node.accumulate_dtype)
         input_scalars = self.visit(node.input_scalars)
         input_tensors = self.visit(node.input_tensors)
-        if same_list(
-            (shape, axes, value, accumulate_dtype, input_scalars, input_tensors),
-            (node.shape, node.axes, node.value, node.accumulate_dtype, node.input_scalars, node.input_tensors)
+        if (value is node.value and accumulate_dtype is node.accumulate_dtype
+                and same_list(shape, node.shape)
+                and same_list(axes, node.axes)
+                and same_list(input_tensors, node.input_tensors)
+                and same_list(input_scalars, node.input_scalars)
         ):
             return node
         else:
@@ -165,11 +169,11 @@ class ComputeRewriter(BaseRewriter, ComputeFunctor):
         index_dtype = self.visit(node.index_dtype)
         input_scalars = self.visit(node.input_scalars)
         input_tensors = self.visit(node.input_tensors)
-        if same_list(
-            (extent, axis, value, index_dtype, input_scalars, input_tensors),
-            (node.extent, node.axis, node.value, node.index_dtype, node.input_scalars, node.input_tensors)
+        if (value is node.value and index_dtype is node.index_dtype and extent is node.extent and axis is node.axis
+                and same_list(input_tensors, node.input_tensors)
+                and same_list(input_scalars, node.input_scalars)
         ):
-            return node
+                return node
         else:
             return ArgReduceCompute(
                 node.name, input_tensors, input_scalars, extent, axis, value, node.reduce_operation, index_dtype

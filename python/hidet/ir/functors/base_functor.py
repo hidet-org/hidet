@@ -28,6 +28,11 @@ class BaseFunctor:
 
         if self.memo is not None:
             self.memo[key] = ret
+        #
+        # from hidet.ir.functors import IRRewriter
+        # if isinstance(self, IRRewriter) and ret is not node:
+        #     print('Rewrite[{}]: {} -> {}'.format('*' if node is not ret else ' ', node, ret))
+        #
         return ret
 
     def visit_dispatch(self, node: Union[Node, Tuple, List, Dict[str, Any], str, int, float]):

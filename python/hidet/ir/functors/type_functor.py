@@ -83,7 +83,7 @@ class TypeRewriter(TypeFunctor, BaseRewriter):
         dtype = self.visit(t.dtype)
         shape = self.visit(t.shape)
         layout = self.visit(t.layout)
-        if same_list([dtype, shape, layout], [t.dtype, t.shape, t.layout]):
+        if same_list([dtype, layout], [t.dtype, t.layout]) and same_list(shape, t.shape):
             return t
         else:
             return TensorType(dtype, shape, layout)

@@ -80,7 +80,28 @@ def demo_bert():
     model = hidet.graph.frontend.from_onnx(model_path)
     input_tensors = [t.cuda() for t in input_tensors]
     graph = model.flow_graph_for(input_tensors)
-    print(graph)
+
+def demo_gather():
+    hidet.option.cache_operator(False)
+    a = hidet.asarray([1, 128, 768]).cuda()
+    b = hidet.asarray(2).cuda()
+    c = hidet.ops.take(a, b, axis=0).cuda()
+    print(a)
+    print(b)
+    print(c)
+
+def demo_functor():
+    from hidet.ir.task import Task
+    from hidet.ir.tools import rewrite
+    a = hidet.asarray([1, 128, 768]).cuda()
+    b = hidet.asarray(2).cuda()
+    # c = hidet.ops.take(a, b, axis=0).cuda()
+    c = hidet.ops.take(hidet.symbol_like(a), b, axis=0).cuda()
+    task: Task = c.op.task
+    node = task.outputs[0]
+    out = rewrite(node, {})
+    print(node is out)
+
 
 def main():
     # debug_simplier()
@@ -90,6 +111,8 @@ def main():
     # demo_maxpool()
     # test_bool()
     demo_bert()
+    # demo_gather()
+    # demo_functor()
 
 
 if __name__ == '__main__':
