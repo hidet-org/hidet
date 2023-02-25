@@ -21,11 +21,11 @@ from subprocess import PIPE
 import hidet.cuda
 from hidet.libinfo import get_include_dirs
 from hidet.ir.type import FuncType
-from hidet.ir.task import Task
 from hidet.runtime import CompiledFunction
 from hidet.ffi import PackedFunc
 from hidet.ffi.ffi import library_paths
 from hidet.ffi.shared_lib import SharedLibrary
+from hidet.ir.task import Task  # pylint: disable=unused-import
 
 
 class CompilationFailed(Exception):

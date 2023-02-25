@@ -17,7 +17,6 @@ from .base_functor import BaseFunctor, BaseVisitor, BaseRewriter
 
 
 class ModuleFunctor(BaseFunctor):
-
     def visit_dispatch(self, node):
         if isinstance(node, IRModule):
             return self.visit_IRModule(node)
@@ -62,13 +61,12 @@ class ModuleRewriter(ModuleFunctor, BaseRewriter):
         body = self.visit(func.body)
         attrs = self.visit(func.attrs)
         if (
-            same_list(params, func.params) and
-            same_list(extern_vars, func.extern_vars) and
-            ret_type is func.ret_type and
-            body is func.body and
-            attrs is func.attrs
+            same_list(params, func.params)
+            and same_list(extern_vars, func.extern_vars)
+            and ret_type is func.ret_type
+            and body is func.body
+            and attrs is func.attrs
         ):
             return func
         else:
             return Function(func.name, params, body, ret_type, func.kind, extern_vars, attrs)
-

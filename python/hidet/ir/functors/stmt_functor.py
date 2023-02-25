@@ -23,7 +23,6 @@ from .base_functor import BaseFunctor, BaseVisitor, BaseRewriter
 
 
 class StmtFunctor(BaseFunctor):
-
     def visit_dispatch(self, node: Node):
         if isinstance(node, EvaluateStmt):
             return self.visit_EvaluateStmt(node)
@@ -115,7 +114,6 @@ class StmtFunctor(BaseFunctor):
 
 
 class StmtVisitor(StmtFunctor, BaseVisitor):
-
     def visit_DeclareStmt(self, stmt: DeclareStmt):
         self.visit(stmt.var)
         if stmt.init is not None:
@@ -197,7 +195,6 @@ class StmtVisitor(StmtFunctor, BaseVisitor):
 
 
 class StmtRewriter(StmtFunctor, BaseRewriter):
-
     def visit_DeclareStmt(self, stmt: DeclareStmt):
         v = self.visit(stmt.var)
         init = self.visit(stmt.init) if stmt.init is not None else None
@@ -312,16 +309,8 @@ class StmtRewriter(StmtFunctor, BaseRewriter):
     def visit_LaunchKernelStmt(self, stmt: LaunchKernelStmt):
         func_var = self.visit(stmt.func_var)
         args = [self.visit(e) for e in stmt.args]
-        grid_dim = (
-            self.visit(stmt.grid_dim[0]),
-            self.visit(stmt.grid_dim[1]),
-            self.visit(stmt.grid_dim[2]),
-        )
-        block_dim = (
-            self.visit(stmt.block_dim[0]),
-            self.visit(stmt.block_dim[1]),
-            self.visit(stmt.block_dim[2]),
-        )
+        grid_dim = (self.visit(stmt.grid_dim[0]), self.visit(stmt.grid_dim[1]), self.visit(stmt.grid_dim[2]))
+        block_dim = (self.visit(stmt.block_dim[0]), self.visit(stmt.block_dim[1]), self.visit(stmt.block_dim[2]))
         shared_mem_bytes = self.visit(stmt.shared_mem_bytes)
         if same_list(
             [func_var, *args, *grid_dim, *block_dim, shared_mem_bytes],

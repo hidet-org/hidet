@@ -31,13 +31,10 @@ class Pool2dTask(Task):
             name='pad',
             shape=[batch_size, channels, height + padding[0] + padding[2], width + padding[1] + padding[3]],
             fcompute=lambda n, c, h, w: if_then_else(
-                LogicalAnd.join(
-                    padding[0] <= h, h < height + padding[0],
-                    padding[1] <= w, w < width + padding[1]
-                ),
-                x[n, c, h-padding[0], w-padding[1]],
-                pad_value
-            )
+                LogicalAnd.join(padding[0] <= h, h < height + padding[0], padding[1] <= w, w < width + padding[1]),
+                x[n, c, h - padding[0], w - padding[1]],
+                pad_value,
+            ),
         )
         y = compute(
             name='y',
@@ -69,18 +66,22 @@ class Pool3dTask(Task):
                 channels,
                 depth + padding[0] + padding[3],
                 height + padding[1] + padding[4],
-                width + padding[2] + padding[5]
+                width + padding[2] + padding[5],
             ],
             fcompute=lambda n, c, d, h, w: (
                 if_then_else(
                     LogicalAnd.join(
-                        padding[0] <= d, d < depth + padding[0],
-                        padding[1] <= h, h < height + padding[1],
-                        padding[2] <= w, w < width + padding[2]),
+                        padding[0] <= d,
+                        d < depth + padding[0],
+                        padding[1] <= h,
+                        h < height + padding[1],
+                        padding[2] <= w,
+                        w < width + padding[2],
+                    ),
                     x[n, c, d - padding[0], h - padding[1], w - padding[2]],
-                    pad_value
+                    pad_value,
                 )
-            )
+            ),
         )
         y = compute(
             name='y',
@@ -124,10 +125,7 @@ class AdaptivePoolTask(Task):
                 return x[x_indices]
 
             return reduce(
-                shape=reduce_shape,
-                fcompute=reduce_compute,
-                reduce_type=reduce_type,
-                accumulate_dtype=x.type.dtype.name,
+                shape=reduce_shape, fcompute=reduce_compute, reduce_type=reduce_type, accumulate_dtype=x.type.dtype.name
             )
 
         y = compute(name='y', shape=y_shape, fcompute=grid_compute)

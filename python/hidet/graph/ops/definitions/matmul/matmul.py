@@ -11,7 +11,7 @@
 # limitations under the License.
 from typing import List, Tuple
 from hidet.ir.expr import Expr, Var
-from ..utils import Task, Operator, Tensor, TensorNode, compute, reduce, input_like, broadcast_shape, broadcast_indices
+from ..utils import Task, Operator, Tensor, compute, reduce, input_like, broadcast_shape, broadcast_indices
 from ..utils import TensorInput
 
 

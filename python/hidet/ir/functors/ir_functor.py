@@ -9,14 +9,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# pylint: disable=bad-staticmethod-argument
+# pylint: disable=bad-staticmethod-argument, abstract-method, too-many-ancestors
 from .expr_functor import ExprFunctor, ExprRewriter, ExprVisitor
 from .compute_functor import ComputeFunctor, ComputeRewriter, ComputeVisitor
 from .stmt_functor import StmtFunctor, StmtRewriter, StmtVisitor
 from .type_functor import TypeFunctor, TypeRewriter, TypeVisitor
 from .mapping_functor import MappingFunctor, MappingRewriter, MappingVisitor
 from .module_functor import ModuleFunctor, ModuleRewriter, ModuleVisitor
-from .base_functor import BaseFunctor
 
 
 class IRFunctor(ModuleFunctor, StmtFunctor, ComputeFunctor, ExprFunctor, MappingFunctor, TypeFunctor):

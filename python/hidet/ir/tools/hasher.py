@@ -9,23 +9,20 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Union, Tuple, List, Dict, Any, Optional, Iterable, Callable
+from typing import Union, Tuple, Dict
 
 from hidet.ir import Node
-from hidet.ir.compute import TensorNode, ScalarNode
 from hidet.ir.dialects.pattern import AnyExpr
-from hidet.ir.expr import Expr, Var, Constant, Add, Sub, Multiply, Div, Mod, FloorDiv, Neg, LessThan, LessEqual
+from hidet.ir.expr import Var, Constant, Add, Sub, Multiply, Div, Mod, FloorDiv, Neg, LessThan, LessEqual
 from hidet.ir.expr import NotEqual, Equal, IfThenElse, LogicalAnd, LogicalOr, LogicalNot, BitwiseAnd, BitwiseOr
 from hidet.ir.expr import BitwiseNot, BitwiseXor, LeftShift, RightShift
 from hidet.ir.expr import TensorSlice, TensorElement, Cast, Dereference, Address, Reference, Call, Let
-from hidet.ir.stmt import Stmt
-from hidet.ir.type import TypeNode, ReferenceType, TensorPointerType, VoidType, PointerType, DataType, TensorType
+from hidet.ir.type import ReferenceType, TensorPointerType, VoidType, PointerType, DataType, TensorType
 from hidet.ir.utils.hash_sum import HashSum
 from hidet.ir.functors import ExprFunctor, TypeFunctor, BaseFunctor
 
 
 class ExprHash(ExprFunctor, TypeFunctor, BaseFunctor):
-
     def hash(self, expr):
         self.memo.clear()
         return self(expr)

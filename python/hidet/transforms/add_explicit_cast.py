@@ -98,11 +98,11 @@ class AddExplicitCastRewriter(IRRewriter):
             has_float16 = 'float16' in [source_type.name, target_type.name]
             has_bfloat16 = 'bfloat16' in [source_type.name, target_type.name]
             if has_float16 and has_bfloat16:
-                return Cast(Cast(source_value, 'float32'), target_type)
+                return cast(cast(source_value, 'float32'), target_type)
         if same_type(source_type, target_type):
             return source_value
         else:
-            return Cast(source_value, target_type)
+            return cast(source_value, target_type)
 
     def visit_Binary(self, e: BinaryOp):
         if isinstance(e, (Add, Sub, Multiply, Div)):

@@ -26,7 +26,6 @@ from hidet.ir.stmt import AssignStmt, DeclareStmt, LetStmt, Stmt, AsmStmt
 from hidet.transforms.base import Pass, FunctionBodyPass
 from hidet.ir.functors import IRRewriter
 from hidet.ir.tools import collect
-from hidet.ir.tools import collect
 
 
 class DeclareToLetRewriter(IRRewriter):

@@ -9,44 +9,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Sequence, Dict, List
-# from hidet.ir.compute import TensorNode, GridCompute, TensorCompute
+from typing import Dict, List
+
 from hidet.ir.compute import TensorNode, GridCompute, TensorInput
 from hidet.ir.expr import Expr, Var, TensorElement
 from hidet.ir.stmt import BufferStoreStmt
 from hidet.ir.func import Function, IRModule
 from hidet.ir.task import Task, TaskGraph, InverseMap
-from hidet.ir.functors import IRRewriter, ExprRewriter
+from hidet.ir.functors import IRRewriter
 from hidet.ir.tools import rewrite, collect
 from hidet.utils import strict_zip
-
-
-# class PrologueIndexer(ExprRewriter):
-#     def __init__(self):
-#         super().__init__()
-#         self.bind: Dict[TensorNode, Var] = {}
-#
-#     def init_bind(self, input_tensors: Sequence[TensorNode], param_tensors: Sequence[Var]):
-#         self.bind = {a: b for a, b in strict_zip(input_tensors, param_tensors)}
-#
-#     def tensor_index(self, buf: TensorNode, indices: Sequence[Expr]) -> Expr:
-#         tc = buf.tensor_compute
-#         if tc is None:
-#             if buf not in self.bind:
-#                 raise ValueError('Input tensor {} has not been bound.'.format(buf))
-#             return TensorElement(self.bind[buf], indices)
-#         elif isinstance(tc, GridCompute):
-#             gc: GridCompute = tc
-#             remap = {a: b for a, b in strict_zip(gc.axes, indices)}
-#             return self.visit(rewrite(gc.value, remap))
-#         else:
-#             raise ValueError('Prologue can only use GridCompute primitive.')
-#
-#     def visit_TensorElement(self, e: TensorElement):
-#         if isinstance(e.base, TensorNode):
-#             return self.tensor_index(e.base, e.indices)
-#         else:
-#             return ExprRewriter.visit_TensorElement(self, e)
 
 
 class PrologueEpilogueRewriter(IRRewriter):

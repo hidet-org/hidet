@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# pylint: disable=bad-staticmethod-argument
+# pylint: disable=bad-staticmethod-argument, too-many-boolean-expressions
 from typing import Any, Union, List, Dict, Tuple
 
 from hidet.ir.task import Task, TaskGraph
@@ -20,7 +20,6 @@ from .base_functor import BaseFunctor, BaseVisitor, BaseRewriter
 
 
 class ComputeFunctor(BaseFunctor):
-
     def visit_dispatch(self, node: Union[Node, Tuple, List, Dict[str, Any], str]):
         if isinstance(node, Task):
             return self.visit_Task(node)
@@ -62,7 +61,6 @@ class ComputeFunctor(BaseFunctor):
 
 
 class ComputeVisitor(BaseVisitor, ComputeFunctor):
-
     def visit_Task(self, task: Task):
         self.visit(task.inputs)
         self.visit(task.outputs)
@@ -105,7 +103,6 @@ class ComputeVisitor(BaseVisitor, ComputeFunctor):
 
 
 class ComputeRewriter(BaseRewriter, ComputeFunctor):
-
     def visit_Task(self, task: Task):
         return task
 
@@ -133,11 +130,13 @@ class ComputeRewriter(BaseRewriter, ComputeFunctor):
         layout = self.visit(node.layout)
         input_scalars = self.visit(node.input_scalars)
         input_tensors = self.visit(node.input_tensors)
-        if ((value is node.value and layout is node.layout)
-                and same_list(shape, node.shape)
-                and same_list(axes, node.axes)
-                and same_list(input_tensors, node.input_tensors)
-                and same_list(input_scalars, node.input_scalars)
+        if (
+            value is node.value
+            and layout is node.layout
+            and same_list(shape, node.shape)
+            and same_list(axes, node.axes)
+            and same_list(input_tensors, node.input_tensors)
+            and same_list(input_scalars, node.input_scalars)
         ):
             return node
         else:
@@ -150,11 +149,13 @@ class ComputeRewriter(BaseRewriter, ComputeFunctor):
         accumulate_dtype = self.visit(node.accumulate_dtype)
         input_scalars = self.visit(node.input_scalars)
         input_tensors = self.visit(node.input_tensors)
-        if (value is node.value and accumulate_dtype is node.accumulate_dtype
-                and same_list(shape, node.shape)
-                and same_list(axes, node.axes)
-                and same_list(input_tensors, node.input_tensors)
-                and same_list(input_scalars, node.input_scalars)
+        if (
+            value is node.value
+            and accumulate_dtype is node.accumulate_dtype
+            and same_list(shape, node.shape)
+            and same_list(axes, node.axes)
+            and same_list(input_tensors, node.input_tensors)
+            and same_list(input_scalars, node.input_scalars)
         ):
             return node
         else:
@@ -169,11 +170,15 @@ class ComputeRewriter(BaseRewriter, ComputeFunctor):
         index_dtype = self.visit(node.index_dtype)
         input_scalars = self.visit(node.input_scalars)
         input_tensors = self.visit(node.input_tensors)
-        if (value is node.value and index_dtype is node.index_dtype and extent is node.extent and axis is node.axis
-                and same_list(input_tensors, node.input_tensors)
-                and same_list(input_scalars, node.input_scalars)
+        if (
+            value is node.value
+            and index_dtype is node.index_dtype
+            and extent is node.extent
+            and axis is node.axis
+            and same_list(input_tensors, node.input_tensors)
+            and same_list(input_scalars, node.input_scalars)
         ):
-                return node
+            return node
         else:
             return ArgReduceCompute(
                 node.name, input_tensors, input_scalars, extent, axis, value, node.reduce_operation, index_dtype

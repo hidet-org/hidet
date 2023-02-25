@@ -386,7 +386,7 @@ def reduce_pattern(shape: Sequence[Union[int, Expr]], fcompute, reduce_type: str
     input_scalars = collect(value, ScalarNode, stop_when_found=True)
     reduce_operation = ReduceOperation.from_name(reduce_type)
     return ReduceCompute(
-        input_tensors, input_scalars, shape, axes, value, reduce_operation, accumulate_dtype=data_type('float32')
+        'reduce_pattern', input_tensors, input_scalars, shape, axes, value, reduce_operation, data_type('float32')
     )
 
 

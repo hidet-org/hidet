@@ -9,6 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# pylint: disable=import-outside-toplevel
 from __future__ import annotations
 from typing import Union, Sequence, Tuple, Optional, List
 from hidet.ir.type import DataType, TensorType, tensor_type, data_type
@@ -31,6 +32,7 @@ class ScalarNode(ComputeNode):
     def type(self) -> DataType:
         if self._type is None:
             from hidet.ir.tools import infer_type
+
             self._type = infer_type(self)
         return self._type
 
@@ -44,6 +46,7 @@ class TensorNode(ComputeNode):
     def type(self) -> TensorType:
         if self._type is None:
             from hidet.ir.tools import infer_type
+
             self._type = infer_type(self)
         return self._type
 

@@ -20,7 +20,6 @@ from .base_functor import BaseFunctor, BaseVisitor, BaseRewriter
 
 
 class ExprFunctor(BaseFunctor):
-
     def visit_dispatch(self, node):
         if isinstance(node, Add):
             return self.visit_Add(node)
@@ -189,7 +188,6 @@ class ExprFunctor(BaseFunctor):
 
 
 class ExprVisitor(ExprFunctor, BaseVisitor):
-
     def visit_Add(self, e: Add):
         self.visit(e.a)
         self.visit(e.b)
@@ -318,7 +316,6 @@ class ExprVisitor(ExprFunctor, BaseVisitor):
 
 
 class ExprRewriter(ExprFunctor, BaseRewriter):
-
     def rewrite(self, e):
         return self.visit(e)
 

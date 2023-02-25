@@ -13,7 +13,7 @@ from typing import Union, Mapping
 from hidet.ir.expr import Let, Var, Expr
 from hidet.ir.func import Function
 from hidet.ir.stmt import Stmt, ForStmt, LetStmt
-from hidet.ir.functors import StmtVisitor, ExprVisitor, StmtRewriter, ExprRewriter, ModuleVisitor, IRVisitor, IRRewriter
+from hidet.ir.functors import StmtVisitor, ExprVisitor, IRVisitor, IRRewriter
 
 
 class MapBasedRewriter(IRRewriter):

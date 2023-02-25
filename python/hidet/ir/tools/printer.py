@@ -12,25 +12,24 @@
 from typing import Optional, List, Union, Dict, Tuple
 from hidet.ir.node import Node
 from hidet.ir.func import IRModule, Function
-from hidet.ir.type import DataType, TensorType, TypeNode, VoidType, PointerType, ReferenceType, TensorPointerType
-from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, Expr, LessThan, FloorDiv, Mod, Equal, Div
+from hidet.ir.type import DataType, TensorType, VoidType, PointerType, ReferenceType, TensorPointerType
+from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, LessThan, FloorDiv, Mod, Equal, Div
 from hidet.ir.expr import Sub, LogicalNot, LogicalOr, LogicalAnd, Let, IfThenElse, TensorSlice
 from hidet.ir.expr import RightShift, LeftShift, BitwiseNot, BitwiseOr
 from hidet.ir.expr import BitwiseAnd, Neg, Cast, NotEqual, BitwiseXor, Reference, Dereference, Address
-from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, Stmt, AssertStmt
+from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, AssertStmt
 from hidet.ir.stmt import BlackBoxStmt, AsmStmt, ReturnStmt, LetStmt, DeclareStmt, ForTaskStmt, WhileStmt, ContinueStmt
 from hidet.ir.stmt import BreakStmt, DeclareScope, LaunchKernelStmt
-from hidet.ir.mapping import RepeatTaskMapping, SpatialTaskMapping, ComposedTaskMapping, TaskMapping
-from hidet.ir.compute import TensorNode, ScalarNode, GridCompute, ArgReduceCompute, ReduceCompute, TensorInput, \
-    ScalarInput
+from hidet.ir.mapping import RepeatTaskMapping, SpatialTaskMapping, ComposedTaskMapping
+from hidet.ir.compute import TensorNode, GridCompute, ArgReduceCompute, ReduceCompute, TensorInput, ScalarInput
 from hidet.ir.dialects.pattern import AnyExpr
 from hidet.ir.layout import RowMajorLayout, ColumnMajorLayout
-from hidet.ir.task import Task, TaskGraph, InverseMap
+from hidet.ir.task import Task, TaskGraph
 from hidet.utils import same_list
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
 from hidet.utils.namer import Namer
 
-from hidet.ir.functors import IRFunctor, TypeFunctor, BaseFunctor
+from hidet.ir.functors import IRFunctor
 
 
 class IRPrinter(IRFunctor):
@@ -529,19 +528,11 @@ class IRPrinter(IRFunctor):
         return self.namer.get_name(c)
 
     def visit_ReduceCompute(self, c: ReduceCompute):
-        items = [
-            '[' + self(c.shape) + ']',
-            '(' + self(c.axes) + ') => ' + self(c.value),
-            str(c.reduce_operation),
-        ]
+        items = ['[' + self(c.shape) + ']', '(' + self(c.axes) + ') => ' + self(c.value), str(c.reduce_operation)]
         return 'reduce(' + doc_join(items, ', ') + ')'
 
     def visit_ArgReduceCompute(self, c: ArgReduceCompute):
-        items = [
-            '[' + self(c.extent) + ']',
-            self(c.axis) + ' => ' + self(c.value),
-            str(c.reduce_operation),
-        ]
+        items = ['[' + self(c.extent) + ']', self(c.axis) + ' => ' + self(c.value), str(c.reduce_operation)]
         return 'arg_reduce(' + doc_join(items, ', ') + ')'
 
     #

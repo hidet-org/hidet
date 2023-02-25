@@ -16,7 +16,6 @@ from .base_functor import BaseFunctor, BaseVisitor, BaseRewriter
 
 
 class TypeFunctor(BaseFunctor):
-
     def visit_dispatch(self, node):
         if isinstance(node, DataType):
             return self.visit_ScalarType(node)
@@ -75,7 +74,6 @@ class TypeVisitor(TypeFunctor, BaseVisitor):
 
 
 class TypeRewriter(TypeFunctor, BaseRewriter):
-
     def visit_ScalarType(self, t: DataType):
         return t
 

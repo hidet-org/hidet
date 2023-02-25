@@ -29,7 +29,7 @@ from hidet.ir.expr import (
     LogicalOr,
 )
 from hidet.ir.expr import Div, Constant, Expr
-from hidet.ir.functors import IRRewriter, IRRewriter
+from hidet.ir.functors import IRRewriter
 from hidet.ir.tools import rewrite
 from hidet.transforms.base import FunctionPass
 from hidet.utils import prod, repeat_until_converge

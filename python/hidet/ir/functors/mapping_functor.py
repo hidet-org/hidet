@@ -3,7 +3,6 @@ from .base_functor import BaseFunctor, BaseVisitor, BaseRewriter
 
 
 class MappingFunctor(BaseFunctor):
-
     def visit_dispatch(self, node):
         if isinstance(node, SpatialTaskMapping):
             return self.visit_SpatialTaskMapping(node)

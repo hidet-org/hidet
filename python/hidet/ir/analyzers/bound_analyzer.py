@@ -9,6 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# pylint: disable=too-many-ancestors
 from typing import Optional, List, Set, Dict, Union, Mapping, Sequence
 import itertools
 import operator
@@ -19,9 +20,6 @@ from hidet.ir.expr import Expr, Var, Add, Sub, Multiply, FloorDiv, Mod, Constant
 from hidet.ir.func import Function
 from hidet.ir.functors import ModuleVisitor, StmtVisitor, ExprVisitor
 from hidet.ir.stmt import Stmt, ForStmt, LetStmt
-
-
-# from hidet.ir.task import Grid, ThreadBlock, Warp, Thread, Host
 
 
 class BoundInfo:

@@ -66,7 +66,6 @@ class BaseFunctor:
 
 
 class BaseVisitor(BaseFunctor):
-
     def visit_Tuple(self, t: Tuple):
         for v in t:
             self.visit(v)
@@ -87,7 +86,6 @@ class BaseVisitor(BaseFunctor):
 
 
 class BaseRewriter(BaseFunctor):
-
     def visit_Tuple(self, tp: Tuple):
         updated = tuple(self.visit(v) for v in tp)
         return tp if same_list(updated, tp) else updated
