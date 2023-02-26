@@ -15,7 +15,7 @@ from typing import Optional
 from hidet.ir.type import PointerType, TensorPointerType, data_type
 from hidet.ir.expr import Expr
 from hidet.ir.func import Function
-from hidet.ir.functors import infer_type
+from hidet.ir.tools import infer_type
 from hidet.ir.primitives.func import register_primitive_function, call_primitive_func
 from hidet.ir.type import DataType
 from hidet.utils import initialize

@@ -11,11 +11,12 @@
 # limitations under the License.
 from typing import List, Tuple
 from hidet.ir.expr import Expr, Var
-from ..utils import Task, Operator, Tensor, TensorNode, compute, reduce, input_like, broadcast_shape, broadcast_indices
+from ..utils import Task, Operator, Tensor, compute, reduce, input_like, broadcast_shape, broadcast_indices
+from ..utils import TensorInput
 
 
 class MatmulTask(Task):
-    def __init__(self, a: TensorNode, b: TensorNode):
+    def __init__(self, a: TensorInput, b: TensorInput):
         # The semantics of this operator is the same as the one in numpy
         # See Also https://numpy.org/doc/stable/reference/generated/numpy.matmul.html
         a_shape: List[int] = a.const_shape()

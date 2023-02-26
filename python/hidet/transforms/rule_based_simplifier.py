@@ -29,7 +29,8 @@ from hidet.ir.expr import (
     LogicalOr,
 )
 from hidet.ir.expr import Div, Constant, Expr
-from hidet.ir.functors import FuncStmtExprRewriter, StmtExprRewriter, rewrite
+from hidet.ir.functors import IRRewriter
+from hidet.ir.tools import rewrite
 from hidet.transforms.base import FunctionPass
 from hidet.utils import prod, repeat_until_converge
 from hidet.ir.func import Function
@@ -54,7 +55,7 @@ def c_div(a, b):
         return a / b
 
 
-class ConstExprSimplifier(StmtExprRewriter):
+class ConstExprSimplifier(IRRewriter):
     op_dict = {
         Add: operator.add,
         Sub: operator.sub,
@@ -69,7 +70,7 @@ class ConstExprSimplifier(StmtExprRewriter):
     def visit_Binary(self, e: BinaryOp):
         from hidet.ir.utils.type_utils import numeric_promotion
 
-        e = StmtExprRewriter.visit_Binary(self, e)
+        e = IRRewriter.visit_Binary(self, e)
         if e.a.is_const() and e.b.is_const() and e.__class__ in self.op_dict:
             assert isinstance(e.a, Constant) and isinstance(e.b, Constant)
             op = self.op_dict[e.__class__]
@@ -81,7 +82,7 @@ class ConstExprSimplifier(StmtExprRewriter):
         return e
 
     def visit_And(self, e: LogicalAnd):
-        e = StmtExprRewriter.visit_Binary(self, e)
+        e = IRRewriter.visit_Binary(self, e)
         a_val = e.a.const().value if e.a.is_const() else None
         b_val = e.b.const().value if e.b.is_const() else None
         if a_val and b_val:
@@ -96,7 +97,7 @@ class ConstExprSimplifier(StmtExprRewriter):
             return e
 
 
-class RuleBasedSimplifier(FuncStmtExprRewriter):
+class RuleBasedSimplifier(IRRewriter):
     _enumerate_limit = 256
 
     def __init__(self):
@@ -219,13 +220,13 @@ class RuleBasedSimplifier(FuncStmtExprRewriter):
         return e
 
     def visit(self, obj):
-        if obj in self.memo:
-            return self.memo[obj]
-        self.analyzer(obj)
-        if obj in self.bound and self.bound[obj].value is not None and not isinstance(obj, Constant):
-            return convert(self.bound[obj].value)
-        cur = FuncStmtExprRewriter.visit(self, obj)
-        if isinstance(cur, Expr):
+        if isinstance(obj, Expr):
+            if obj in self.memo:
+                return self.memo[obj]
+            self.analyzer(obj)
+            if obj in self.bound and self.bound[obj].value is not None and not isinstance(obj, Constant):
+                return convert(self.bound[obj].value)
+            cur = IRRewriter.visit(self, obj)
             while True:
                 orig_obj = cur
                 cur = self.apply_rule(cur)
@@ -234,14 +235,16 @@ class RuleBasedSimplifier(FuncStmtExprRewriter):
                 cur = self.const_expr_simplifier(cur)
                 if orig_obj is cur:
                     break
-        self.memo[obj] = cur
-        return cur
+            self.memo[obj] = cur
+            return cur
+        else:
+            return IRRewriter.visit(self, obj)
 
     def visit_Mod(self, e: Mod):
         ua, ub = self.bound[e.a], self.bound[e.b]
         if ua.is_zero() or ua < ub:
             return self(e.a)
-        return FuncStmtExprRewriter.visit_Mod(self, e)
+        return IRRewriter.visit_Mod(self, e)
 
     def visit_LessThan(self, e: LessThan):
         ua, ub = self.bound[e.a], self.bound[e.b]
@@ -249,7 +252,7 @@ class RuleBasedSimplifier(FuncStmtExprRewriter):
             return convert(True)
         if ub <= ua:
             return convert(False)
-        return FuncStmtExprRewriter.visit_LessThan(self, e)
+        return IRRewriter.visit_LessThan(self, e)
 
     def visit_LessEqual(self, e: LessEqual):
         ua, ub = self.bound[e.a], self.bound[e.b]
@@ -257,7 +260,7 @@ class RuleBasedSimplifier(FuncStmtExprRewriter):
             return convert(True)
         if ub < ua:
             return convert(False)
-        return FuncStmtExprRewriter.visit_LessEqual(self, e)
+        return IRRewriter.visit_LessEqual(self, e)
 
     def visit_Equal(self, e: Equal):
         ua, ub = self.bound[e.a], self.bound[e.b]
@@ -265,10 +268,10 @@ class RuleBasedSimplifier(FuncStmtExprRewriter):
             return convert(True)
         if ua < ub or ub < ua:
             return convert(False)
-        return FuncStmtExprRewriter.visit_Equal(self, e)
+        return IRRewriter.visit_Equal(self, e)
 
     def visit_Function(self, func: Function):
-        return FuncStmtExprRewriter.visit_Function(self, func)
+        return IRRewriter.visit_Function(self, func)
 
 
 class RuleBasedSimplifyPass(FunctionPass):

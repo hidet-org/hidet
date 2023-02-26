@@ -9,7 +9,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from hidet.ir.functors import StmtExprRewriter, TypeInfer
+from hidet.ir.functors import IRRewriter
+from hidet.ir.tools import TypeInfer
 from hidet.ir.stmt import Stmt, AssignStmt, BufferStoreStmt
 from hidet.ir.expr import Expr, Cast, Add, Sub, Multiply, Div, BinaryOp, cast
 from hidet.ir.type import DataType, TypeNode, TensorType, TensorPointerType, PointerType, ReferenceType, VoidType
@@ -84,7 +85,7 @@ def same_type(a: TypeNode, b: TypeNode) -> bool:
         return False
 
 
-class AddExplicitCastRewriter(StmtExprRewriter):
+class AddExplicitCastRewriter(IRRewriter):
     def __init__(self):
         super().__init__()
         self.type_infer = TypeInfer()
@@ -97,11 +98,11 @@ class AddExplicitCastRewriter(StmtExprRewriter):
             has_float16 = 'float16' in [source_type.name, target_type.name]
             has_bfloat16 = 'bfloat16' in [source_type.name, target_type.name]
             if has_float16 and has_bfloat16:
-                return Cast(Cast(source_value, 'float32'), target_type)
+                return cast(cast(source_value, 'float32'), target_type)
         if same_type(source_type, target_type):
             return source_value
         else:
-            return Cast(source_value, target_type)
+            return cast(source_value, target_type)
 
     def visit_Binary(self, e: BinaryOp):
         if isinstance(e, (Add, Sub, Multiply, Div)):
@@ -118,9 +119,9 @@ class AddExplicitCastRewriter(StmtExprRewriter):
                 else:
                     return op(cast(a, b_dtype), b)
             else:
-                return StmtExprRewriter.visit_Binary(self, e)
+                return IRRewriter.visit_Binary(self, e)
         else:
-            return StmtExprRewriter.visit_Binary(self, e)
+            return IRRewriter.visit_Binary(self, e)
 
     def visit_Cast(self, e: Cast):
         expr = self(e.expr)

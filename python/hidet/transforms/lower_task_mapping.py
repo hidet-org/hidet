@@ -15,7 +15,8 @@ from hidet.ir import Var, ForTaskStmt, Stmt, ForStmt, Expr, SeqStmt
 from hidet.ir.expr import var
 from hidet.ir.mapping import TaskMapping, SpatialTaskMapping, RepeatTaskMapping, ComposedTaskMapping
 from hidet.transforms.base import Pass, FunctionBodyPass
-from hidet.ir.functors import StmtExprRewriter, rewrite, simplify
+from hidet.ir.functors import IRRewriter
+from hidet.ir.tools import rewrite, simplify
 from hidet.utils import prod
 
 Int = Union[Expr, int]
@@ -103,7 +104,7 @@ class TaskMappingExpander:
         return tasks
 
 
-class LowerTaskMappingRewriter(StmtExprRewriter):
+class LowerTaskMappingRewriter(IRRewriter):
     def visit_ForTaskStmt(self, stmt: ForTaskStmt):
         body = self.visit(stmt.body)
         expander = TaskMappingExpander()

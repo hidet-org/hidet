@@ -172,7 +172,7 @@ def cp_async_wait_group(allow_on_fly_groups: Union[int, Expr]):
         Can be a python integer or a hidet constant expression.
     """
     if isinstance(allow_on_fly_groups, Expr):
-        from hidet.ir.functors.simplifier import simplify_to_int
+        from hidet.ir.tools.simplifier import simplify_to_int
 
         allow_on_fly_groups = simplify_to_int(allow_on_fly_groups)
     if not 0 <= allow_on_fly_groups < 10:

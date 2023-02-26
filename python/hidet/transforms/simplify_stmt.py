@@ -12,11 +12,11 @@
 from hidet.ir import Stmt
 from hidet.ir.expr import is_one, is_zero, is_true, is_false, convert
 from hidet.ir.stmt import IfStmt, ForStmt, SeqStmt
-from hidet.ir.functors import StmtExprRewriter
+from hidet.ir.functors import IRRewriter
 from hidet.transforms.base import FunctionBodyPass
 
 
-class StatementSimplifier(StmtExprRewriter):
+class StatementSimplifier(IRRewriter):
     def visit_IfStmt(self, stmt: IfStmt):
         if is_true(stmt.cond):
             then_body = self(stmt.then_body)
@@ -27,7 +27,7 @@ class StatementSimplifier(StmtExprRewriter):
             else:
                 return SeqStmt([])
         else:
-            return StmtExprRewriter.visit_IfStmt(self, stmt)
+            return IRRewriter.visit_IfStmt(self, stmt)
 
     def visit_ForStmt(self, stmt: ForStmt):
         if is_zero(stmt.extent):
@@ -36,7 +36,7 @@ class StatementSimplifier(StmtExprRewriter):
             self.memo[stmt.loop_var] = convert(0)
             return self(stmt.body)
         else:
-            return StmtExprRewriter.visit_ForStmt(self, stmt)
+            return IRRewriter.visit_ForStmt(self, stmt)
 
 
 class SimplifyStmtPass(FunctionBodyPass):

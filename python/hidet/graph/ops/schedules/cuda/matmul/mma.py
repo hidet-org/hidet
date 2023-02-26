@@ -116,7 +116,7 @@ class MatmulMmaSchedule(Schedule):
         mma_type = task.attributes['mma']  # like 'wmma_f16_f32' or 'wmma'
         if mma_type == 'mma':
             a, b, c = task.inputs[0], task.inputs[1], task.outputs[0]
-            a_dtype, b_dtype, c_dtype = [t.ttype.dtype for t in [a, b, c]]
+            a_dtype, b_dtype, c_dtype = [t.type.dtype for t in [a, b, c]]
             mma_type = MatmulMmaSchedule.resolve_mma_type(a_dtype, b_dtype, c_dtype)
 
         assert mma_type.startswith('mma')

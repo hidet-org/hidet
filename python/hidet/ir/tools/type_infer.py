@@ -9,33 +9,22 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from hidet.ir.type import DataType, TensorType, FuncType, PointerType, TensorPointerType, data_type
+from hidet.ir.type import DataType, TensorType, FuncType, PointerType, TensorPointerType, data_type, tensor_pointer_type
+from hidet.ir.type import tensor_type
 from hidet.ir.expr import BinaryOp, Add, Sub, Multiply, Div, Mod, FloorDiv, Condition, LessThan, Equal, IfThenElse
-from hidet.ir.expr import (
-    TensorSlice,
-    LogicalNot,
-    LogicalOr,
-    LogicalAnd,
-    LessEqual,
-    Let,
-    RightShift,
-    LeftShift,
-    BitwiseNot,
-    BitwiseOr,
-)
-from hidet.ir.expr import BitwiseAnd, Neg, NotEqual, BitwiseXor, Dereference, Reference, Address
+from hidet.ir.expr import TensorSlice, LogicalNot, LogicalOr, LogicalAnd, LessEqual, Let, RightShift, LeftShift
+from hidet.ir.expr import BitwiseAnd, Neg, NotEqual, BitwiseXor, Dereference, Reference, Address, BitwiseNot, BitwiseOr
 from hidet.ir.expr import Var, Constant, TensorElement, Call, Cast
-from hidet.ir.compute import TensorNode, ScalarNode
+from hidet.ir.compute import ArgReduceCompute, ReduceCompute, GridCompute, TensorInput, ScalarInput
+from hidet.ir.functors import ExprFunctor, ComputeFunctor
+from hidet.ir.dialects.pattern import AnyExpr
 
-from .base import ExprFunctor
-from ..dialects.pattern import AnyExpr
 
-
-def is_bool(tp):
+def is_bool(tp: DataType):
     return isinstance(tp, DataType) and tp.name == 'bool'
 
 
-class TypeInfer(ExprFunctor):
+class TypeInfer(ExprFunctor, ComputeFunctor):
     def visit_Address(self, e: Address):
         base_type = self(e.expr)
         return PointerType(base_type=base_type)
@@ -48,8 +37,7 @@ class TypeInfer(ExprFunctor):
 
         a_dtype: DataType = self.visit(e.a)
         b_dtype: DataType = self.visit(e.b)
-        # if not atype or not btype:
-        #     return ScalarType(name=None)
+
         if isinstance(e, (Add, Sub, Multiply, Div, Mod, FloorDiv)):
             return numeric_promotion(a_dtype, b_dtype)
         elif isinstance(e, Condition):
@@ -144,7 +132,9 @@ class TypeInfer(ExprFunctor):
                 if end is None:
                     end = base_type.shape[dim]
                 shape.append(end - start)
-        return TensorPointerType(dtype=base_type.dtype, shape=shape, layout=None)  # the layout of the slice is not used
+
+        # the layout of the slice is not used
+        return tensor_pointer_type(dtype=base_type.dtype, shape=shape, layout=None)
 
     def visit_IfThenElse(self, e: IfThenElse):
         cond_type = self.visit(e.cond)
@@ -197,14 +187,24 @@ class TypeInfer(ExprFunctor):
     def visit_Constant(self, e: Constant):
         return e.type
 
-    def visit_ScalarNode(self, e: ScalarNode):
-        return e.dtype
+    def visit_ScalarInput(self, node: ScalarInput):
+        return node.dtype
 
-    def visit_TensorNode(self, e: TensorNode):
-        return e.ttype
+    def visit_TensorInput(self, node: TensorInput):
+        return node.ttype
+
+    def visit_GridCompute(self, c: GridCompute):
+        dtype = self.visit(c.value)
+        return tensor_type(dtype, c.shape, c.layout)
+
+    def visit_ReduceCompute(self, c: ReduceCompute):
+        return self.visit(c.value)
+
+    def visit_ArgReduceCompute(self, c: ArgReduceCompute):
+        return c.index_dtype
 
     def visit_AnyExpr(self, e: AnyExpr):
-        raise ValueError('Can not infer type of an AnyExpr.')
+        raise NotImplementedError()
 
 
 def infer_type(expr):

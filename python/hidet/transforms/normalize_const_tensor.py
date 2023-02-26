@@ -13,7 +13,7 @@ from typing import List
 from hidet.ir import Function, Constant, TensorType, Var
 from hidet.ir.stmt import DeclareStmt, Stmt, SeqStmt
 from hidet.transforms.base import FunctionPass, Pass
-from hidet.ir.functors import collect, rewrite
+from hidet.ir.tools import collect, rewrite
 
 
 class NormalizeConstTensorPass(FunctionPass):

@@ -43,7 +43,7 @@ import astunparse
 from hidet import ir
 from hidet.ir.expr import Var
 from hidet.ir.stmt import DeclareScope
-from hidet.ir.functors import simplify
+from hidet.ir.tools import simplify
 from hidet.ir.builders import FunctionBuilder
 from hidet.utils import red, bold, blue, str_indent
 import hidet.lang.attr
@@ -420,14 +420,14 @@ class PythonToHidetTranslator(PythonAstFunctor):
                     if isinstance(arg_type, ir.TypeNode):
                         if isinstance(arg_type, ir.TensorType):
                             # we automatically change the tensor type of argument to a tensor pointer type.
-                            arg_type = ir.TensorPointerType(
+                            arg_type = ir.tensor_pointer_type(
                                 dtype=arg_type.dtype, shape=arg_type.shape, layout=arg_type.layout
                             )
                     elif isinstance(arg_type, TypeDecorator):
                         arg_type = arg_type.decorated_type
                         if isinstance(arg_type, ir.TensorType):
                             # we automatically change the tensor type of argument to a tensor pointer type.
-                            arg_type = ir.TensorPointerType(
+                            arg_type = ir.tensor_pointer_type(
                                 dtype=arg_type.dtype, shape=arg_type.shape, layout=arg_type.layout
                             )
                     elif arg_type in [int, float]:
@@ -867,7 +867,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
             # call python class method
             return func(*args, **kwargs)
         elif isinstance(func, ir.Expr):
-            from hidet.ir.functors import infer_type
+            from hidet.ir.tools import infer_type
 
             # call hidet function
             if len(kwargs) > 0:

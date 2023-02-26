@@ -16,7 +16,7 @@ from hidet.ir.type import DataType, TensorType, TensorPointerType, PointerType
 from hidet.ir.dtypes import int32
 from hidet.ir.expr import Expr, Var, Call
 from hidet.ir.stmt import Stmt, AssertStmt, LaunchKernelStmt, DeclareStmt
-from hidet.ir.functors import simplify_to_int, rewrite, simplify
+from hidet.ir.tools import simplify_to_int, rewrite, simplify
 from hidet.ir.builders import StmtBuilder
 
 

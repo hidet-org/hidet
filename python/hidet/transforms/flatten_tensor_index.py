@@ -13,12 +13,13 @@ from hidet.ir.type import TensorType, tensor_type, PointerType, TensorPointerTyp
 from hidet.ir.expr import Var, TensorElement, TensorSlice, Constant
 from hidet.ir.stmt import BufferStoreStmt, DeclareStmt
 from hidet.ir.func import Function
-from hidet.ir.functors import simplify_to_int, FuncStmtExprRewriter
+from hidet.ir.functors import IRRewriter
+from hidet.ir.tools import simplify_to_int
 from hidet.transforms import Pass
 from hidet.ir.layout import StridesLayout, DataLayout
 
 
-class FlattenTensorAccessRewriter(FuncStmtExprRewriter):
+class FlattenTensorAccessRewriter(IRRewriter):
     # flatten all high-dimension tensor access
     # A = int[3, 4]
     #   TensorElement:  A[2, 1]     ==> A[2 * 4 + 1]
@@ -57,7 +58,7 @@ class FlattenTensorAccessRewriter(FuncStmtExprRewriter):
             init = self(stmt.init) if stmt.init is not None else None
             return DeclareStmt(var, init, scope=stmt.scope)
         else:
-            return FuncStmtExprRewriter.visit_DeclareStmt(self, stmt)
+            return IRRewriter.visit_DeclareStmt(self, stmt)
 
     def visit_TensorElement(self, e: TensorElement):
         var = self(e.base)

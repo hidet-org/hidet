@@ -288,7 +288,7 @@ class ReshapeOp(Operator):
         super().__init__(inputs=[x], task=task, attributes={'shape': shape})
 
     @staticmethod
-    def normalize_shape(origin_shape: List[int], shape: List[int]):
+    def normalize_shape(origin_shape: Sequence[int], shape: Sequence[int]):
         # [1, 3, 224, 224], [1, -1, 224, 0] => [1, 3, 224, 224]
         shape = list(shape)
         for i in range(len(shape)):

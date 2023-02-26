@@ -18,10 +18,10 @@ from hidet.ir.type import TensorType, tensor_type, DataType
 from hidet.ir.task import Task, InverseMap
 from hidet.ir.func import IRModule
 from hidet.graph.operator import Operator, Tensor
-from hidet.ir.compute import TensorNode, ReduceType, tensor_input, compute, reduce, arg_reduce
+from hidet.ir.compute import TensorNode, TensorInput, ReduceType, tensor_input, compute, reduce, arg_reduce
 
 
-def input_like(tensor: Tensor, name: str) -> TensorNode:
+def input_like(tensor: Tensor, name: str) -> TensorInput:
     if not isinstance(tensor, Tensor):
         raise TypeError('Expect a hidet.Tensor, but got an object with type {}'.format(type(tensor)))
     return tensor_input(name, tensor.dtype, tensor.shape, tensor.layout)

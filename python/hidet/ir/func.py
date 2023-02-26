@@ -61,13 +61,13 @@ class Function(Node):
     def __init__(self, name: str, params, body, ret_type, kind: str, extern_vars=None, attrs=None):
         check_func_name(name)
         self.name: str = name
-        self.kind = kind
+        self.kind: str = kind
         assert isinstance(kind, str) and kind in ['cuda_device', 'cuda_kernel', 'host_kernel', 'packed_func']
         self.params: List[Var] = params
         self.body: Stmt = body
         self.ret_type: TypeNode = ret_type
         self.extern_vars: List[Var] = extern_vars if extern_vars else []
-        self.attrs = attrs if attrs else {}
+        self.attrs: Dict[str, Union[int, float, str, Node]] = attrs if attrs else {}
 
     def __call__(self, *args, **kwargs) -> Call:
         raise ValueError('Can only call script function in another script function, or lower it to execute.')

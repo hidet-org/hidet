@@ -12,7 +12,7 @@
 from typing import List
 from hidet.ir.expr import Call
 from hidet.ir.func import IRModule, Function
-from hidet.ir.functors import collect
+from hidet.ir.tools import collect
 from hidet.ir.primitives import is_primitive_function, lookup_primitive_function
 from hidet.transforms import Pass
 

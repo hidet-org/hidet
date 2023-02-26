@@ -13,11 +13,10 @@ from typing import Union, Mapping
 from hidet.ir.expr import Let, Var, Expr
 from hidet.ir.func import Function
 from hidet.ir.stmt import Stmt, ForStmt, LetStmt
+from hidet.ir.functors import StmtVisitor, ExprVisitor, IRVisitor, IRRewriter
 
-from .base import StmtExprVisitor, StmtExprRewriter, FuncStmtExprVisitor
 
-
-class StmtExprMapRewriter(StmtExprRewriter):
+class MapBasedRewriter(IRRewriter):
     def __init__(self, rmap):
         super().__init__()
         self.rmap = rmap
@@ -27,11 +26,11 @@ class StmtExprMapRewriter(StmtExprRewriter):
             if node in self.rmap:
                 self.memo[node] = self.rmap[node]
             else:
-                self.memo[node] = StmtExprRewriter.visit(self, node)
+                self.memo[node] = super().visit(node)
         return self.memo[node]
 
 
-class SubStmtExprCollector(FuncStmtExprVisitor):
+class IRCollector(IRVisitor):
     def __init__(self, expr_types, stop_when_found=False):
         super().__init__()
         self.expr_types = expr_types
@@ -46,15 +45,16 @@ class SubStmtExprCollector(FuncStmtExprVisitor):
     def visit(self, node):
         if node in self.memo:
             return self.memo[node]
+
         if isinstance(node, self.expr_types):
             self.exprs.append(node)
             if self.stop_when_found:
                 self.memo[node] = None
                 return None
-        return StmtExprVisitor.visit(self, node)
+        return super().visit(node)
 
 
-class FreeVarCollector(StmtExprVisitor):
+class FreeVarCollector(StmtVisitor, ExprVisitor):
     def __init__(self):
         super().__init__()
         self.defined = set()
@@ -75,7 +75,7 @@ class FreeVarCollector(StmtExprVisitor):
 
     def visit_ForStmt(self, stmt: ForStmt):
         self.defined.add(stmt.loop_var)
-        StmtExprVisitor.visit_ForStmt(self, stmt)
+        super().visit_ForStmt(stmt)
         self.defined.remove(stmt.loop_var)
 
     def visit_Var(self, e: Var):
@@ -83,7 +83,7 @@ class FreeVarCollector(StmtExprVisitor):
             self.free_vars.add(e)
 
 
-class CloneRewriter(StmtExprRewriter):
+class CloneRewriter(IRRewriter):
     def clone(self, obj: Union[Stmt, Expr]):
         return self(obj)
 
@@ -104,7 +104,7 @@ class CloneRewriter(StmtExprRewriter):
 
 def rewrite(node: Union[Expr, Stmt, tuple], rewrite_map: Mapping[Union[Stmt, Expr], Union[Stmt, Expr]]):
     assert isinstance(rewrite_map, dict)
-    rewriter = StmtExprMapRewriter(rewrite_map)
+    rewriter = MapBasedRewriter(rewrite_map)
     return rewriter.rewrite(node)
 
 
@@ -137,7 +137,7 @@ def collect(node: Union[Function, Expr, Stmt, list, tuple], node_types, stop_whe
     if isinstance(node, list):
         node = tuple(node)
 
-    collector = SubStmtExprCollector(node_types, stop_when_found)
+    collector = IRCollector(node_types, stop_when_found)
     collected = collector.collect(node)
     return collected
 
