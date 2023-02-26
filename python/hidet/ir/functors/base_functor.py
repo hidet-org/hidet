@@ -1,3 +1,14 @@
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 from typing import Any, Union, List, Dict, Tuple
 from hidet.ir.node import Node
 from hidet.utils import same_list
@@ -22,17 +33,15 @@ class BaseFunctor:
                 raise NotImplementedError("Can not dispatch object with type {}".format(type(node)))
             if 'visit_dispatch' not in cls.__dict__:
                 continue
-            ret = cls.visit_dispatch(self, node)
+            ret = cls.__dict__['visit_dispatch'](self, node)
             if ret is not NotImplemented:
                 break
+        else:
+            assert False  # should never reach here as object is always in the mro
 
         if self.memo is not None:
             self.memo[key] = ret
-        #
-        # from hidet.ir.functors import IRRewriter
-        # if isinstance(self, IRRewriter) and ret is not node:
-        #     print('Rewrite[{}]: {} -> {}'.format('*' if node is not ret else ' ', node, ret))
-        #
+
         return ret
 
     def visit_dispatch(self, node: Union[Node, Tuple, List, Dict[str, Any], str, int, float]):

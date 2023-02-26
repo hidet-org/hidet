@@ -38,7 +38,7 @@ def update_license(root: str, suffix, license_header: str, dry_run: bool = False
         with open(path, 'r') as f:
             content = f.read()
             if license_header in content:
-                print('[Skip] {}'.format(path))
+                # print('[Skip] {}'.format(path))
                 continue
         print('[Update] {}'.format(path))
         content = license_header + content
@@ -46,8 +46,8 @@ def update_license(root: str, suffix, license_header: str, dry_run: bool = False
             with open(path, 'w') as f:
                 f.write(content)
 
-def main(arg_string: str):
-    args = parser.parse_args(arg_string.split())
+def main():
+    args = parser.parse_args()
     root = args.root
     update_license(os.path.join(root, 'python'), 'py', py_license_header)
     update_license(os.path.join(root, 'tests'), 'py', py_license_header)
@@ -55,4 +55,4 @@ def main(arg_string: str):
     update_license(os.path.join(root, 'include'), 'h', cpp_license_header)
 
 if __name__ == '__main__':
-    main('--root ..')
+    main()
