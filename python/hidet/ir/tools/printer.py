@@ -321,7 +321,7 @@ class IRPrinter(IRFunctor):
 
     def visit_ReturnStmt(self, stmt: ReturnStmt):
         doc = NewLine() + Text('return')
-        if stmt.ret_value:
+        if stmt.ret_value is not None:
             doc += ' ' + self(stmt.ret_value)
         return doc
 
