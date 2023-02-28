@@ -11,7 +11,7 @@
 # limitations under the License.
 # pylint: disable=import-outside-toplevel
 from __future__ import annotations
-from typing import Any, Dict, List, Union, Optional, Sequence, Callable
+from typing import Any, Dict, List, Union, Optional, Sequence, Callable, Tuple
 import os
 import pickle
 from hidet.ir.node import Node
@@ -125,7 +125,7 @@ class Task(Node):
     A task defines the operator computation.
     """
 
-    def __init__(self, name, inputs, outputs, inverse_map=None, attributes=None):
+    def __init__(self, name, inputs, outputs, inverse_map=None, arguments=None, attributes=None):
         if inverse_map is None:
             inverse_map = {}
         if attributes is None:
@@ -134,6 +134,7 @@ class Task(Node):
         self.inputs: List[TensorInput] = inputs
         self.outputs: List[TensorNode] = outputs
         self.attributes: Dict[str, Union[str, float, int, bool]] = attributes
+        self.arguments: Optional[List[Expr]] = arguments
         self.inverse_map: Dict[TensorInput, InverseMap] = {a: InverseMap.from_obj(b) for a, b in inverse_map.items()}
         self.task_graph: Optional[TaskGraph] = TaskGraph.from_task(self)
 
@@ -177,6 +178,31 @@ class Task(Node):
         params += self.inputs
         params += self.outputs
         return params
+
+    def generate_arguments(self, params):
+        """
+        Generate arguments for the compiled function of this task given the tensor parameters.
+
+        Parameters
+        ----------
+        params: Sequence[Tensor]
+            The actual tensors.
+
+        Returns
+        -------
+        args: Sequence[Tensor or int]
+            The arguments for the compiled function.
+        """
+        if self.arguments is None:
+            return params
+        else:
+            remap = {}
+
+    def build(self, target: Union[str, Target]):
+        from hidet.driver import build_task
+        if isinstance(target, Target):
+            target = target.name
+        return build_task(self, target_device=target, load=True)
 
     def implement(self, target: Union[Target, str], workding_dir: str) -> IRModule:
         from hidet.graph.ops.schedules.cuda.auto_scheduler import CudaAutoScheduler
