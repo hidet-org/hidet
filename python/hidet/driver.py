@@ -110,7 +110,7 @@ def _build_task_job(args):
     try:
         task, target_device, dumped_options = args
         option.restore_options(dumped_options)
-        build_task(task, target_device, load=False)
+        task.build(target_device, load=False)
         return True
     except CompilationFailed as e:
         if option.get_option('parallel_build'):

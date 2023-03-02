@@ -18,6 +18,7 @@ from hidet.ir.node import Node
 from hidet.ir.expr import Expr, Var, var
 from hidet.ir.func import IRModule
 from hidet.ir.compute import ComputeNode, TensorNode, TensorInput, ScalarNode, ScalarInput, GridCompute
+from hidet.driver import build_task
 
 
 class Target:
@@ -177,6 +178,9 @@ class Task(Node):
         params += self.inputs
         params += self.outputs
         return params
+
+    def build(self, target_device='cuda', load=True) -> CompiledFunction:
+        return build_task(self, target_device=target_device, load=load)
 
     def implement(self, target: Union[Target, str], workding_dir: str) -> IRModule:
         from hidet.graph.ops.schedules.cuda.auto_scheduler import CudaAutoScheduler

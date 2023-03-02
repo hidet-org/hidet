@@ -173,7 +173,6 @@ class Operator:
         )
 
     def build_task_func(self):
-        from hidet.driver import build_task
 
         if self.task_func is None:
-            self.task_func = build_task(self.task, target_device=self.device.type, load=True)
+            self.task_func = self.task.build(target_device=self.device.type, load=True)
