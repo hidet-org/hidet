@@ -19,15 +19,7 @@ from hidet.ir.functors import StmtVisitor, ExprVisitor, IRVisitor, IRRewriter
 class MapBasedRewriter(IRRewriter):
     def __init__(self, rmap):
         super().__init__()
-        self.rmap = rmap
-
-    def visit(self, node):
-        if node not in self.memo:
-            if node in self.rmap:
-                self.memo[node] = self.rmap[node]
-            else:
-                self.memo[node] = super().visit(node)
-        return self.memo[node]
+        self.memo.update(rmap)
 
 
 class IRCollector(IRVisitor):
@@ -102,7 +94,7 @@ class CloneRewriter(IRRewriter):
         return Let(v, self(e.value), self(e.body))
 
 
-def rewrite(node: Union[Expr, Stmt, tuple], rewrite_map: Mapping[Union[Stmt, Expr], Union[Stmt, Expr]]):
+def rewrite(node: Union[Function, Expr, Stmt, tuple], rewrite_map: Mapping[Union[Stmt, Expr], Union[Stmt, Expr]]):
     assert isinstance(rewrite_map, dict)
     rewriter = MapBasedRewriter(rewrite_map)
     return rewriter.rewrite(node)
