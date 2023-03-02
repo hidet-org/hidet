@@ -146,9 +146,15 @@ class IRModule(Node):
         return self.global_vars[name]
 
     def update_function(self, func: Function):
+        from hidet.ir.tools import rewrite
+
         self.functions[func.name] = func
         if func.name in self.global_vars:
-            self.global_vars[func.name].type = func.name, FuncType.from_func(func)
+            old_var = self.global_vars[func.name]
+            new_var = Var(func.name, FuncType.from_func(func))
+            self.global_vars[func.name] = new_var
+            for name, f in self.functions.items():
+                self.functions[name] = rewrite(f, {old_var: new_var})
 
     def add(self, name, func: Function):
         if name in self.functions:

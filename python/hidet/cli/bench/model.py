@@ -87,7 +87,6 @@ class BenchModel:
             raise RuntimeError('Torch Dynamo is not available, please install pytorch 2.0 or higher.')
         import torch._dynamo as dynamo
 
-        hidet.torch.register_dynamo_backends()
         torch.backends.cudnn.allow_tf32 = self.allow_tf32
         torch.backends.cuda.matmul.allow_tf32 = self.allow_tf32
 
