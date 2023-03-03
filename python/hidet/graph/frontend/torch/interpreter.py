@@ -103,12 +103,12 @@ def tensor_from_torch(tensor: torch.Tensor) -> Tensor:
     import hidet.graph.tensor
 
     if tensor.requires_grad:
-        if torch.is_grad_enabled():
-            warnings.warn_once(
-                "hidet: a parameter with requires_grad=True used for computation while "
-                "torch.is_grad_enabled() is True.  Please consider use 'with torch.no_grad()' "
-                "to wrap the model execution."
-            )
+        # if torch.is_grad_enabled():
+        #     warnings.warn_once(
+        #         "hidet: a parameter with requires_grad=True used for computation while "
+        #         "torch.is_grad_enabled() is True.  Please consider use 'with torch.no_grad()' "
+        #         "to wrap the model execution."
+        #     )
         tensor = tensor.detach()
     return hidet.graph.tensor.from_torch(tensor)
 

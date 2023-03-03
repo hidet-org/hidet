@@ -10,6 +10,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from .reduce_operations import ReduceOperation
-from .primitives import TensorNode, ScalarNode, ScalarCompute, TensorCompute
+from .primitives import ComputeNode
+from .primitives import TensorNode, ScalarNode
+from .primitives import ScalarInput, TensorInput
 from .primitives import GridCompute, ReduceCompute, ArgReduceCompute, ReduceType
-from .primitives import tensor_input, compute, reduce, arg_reduce
+from .primitives import scalar_input, tensor_input, compute, reduce, arg_reduce

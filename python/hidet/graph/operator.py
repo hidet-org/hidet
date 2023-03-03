@@ -73,7 +73,7 @@ class Operator:
         if all(t.storage is not None for t in self.inputs):
             return self.imperative_run(self.inputs)
         else:
-            self.outputs = self.lazy_run()
+            self.outputs = self.symbolic_run()
             return self.outputs
 
     def get_output(self, idx: int) -> Tensor:
@@ -86,17 +86,24 @@ class Operator:
     def imperative_run(self, inputs: List[Tensor]) -> List[Tensor]:
         self.build_task_func()
         assert len(inputs) + len(self.task.outputs) == len(self.task.parameters)
-        output_types = [output.ttype for output in self.task.parameters[-len(self.task.outputs) :]]
+        output_types = [output.type for output in self.task.parameters[-len(self.task.outputs) :]]
         outputs = [
             empty(shape=type.const_shape(), dtype=type.dtype.name, device=self.device, layout=type.layout)
             for type in output_types
         ]
-        self.pure_run(inputs, outputs)
+
+        self.task_func(*inputs, *outputs)
+
+        status = get_last_error()
+        if status is not None:
+            msg = 'Kernel for operator {} failed. Error:\n{}'.format(self.name, status)
+            raise BackendException(msg)
+
         return outputs
 
-    def lazy_run(self) -> List[Tensor]:
+    def symbolic_run(self) -> List[Tensor]:
         output_nodes = self.task.parameters[-len(self.task.outputs) :]
-        output_types = [output_node.ttype for output_node in output_nodes]
+        output_types = [output_node.type for output_node in output_nodes]
         outputs = []
         for i, output_type in enumerate(output_types):
             outputs.append(
@@ -110,15 +117,6 @@ class Operator:
                 )
             )
         return outputs
-
-    def pure_run(self, inputs: List[Tensor], outputs: List[Tensor]):
-        self.build_task_func()
-        self.task_func(*inputs, *outputs)
-
-        status = get_last_error()
-        if status is not None:
-            msg = 'Kernel for operator {} failed. Error:\n{}'.format(self.name, status)
-            raise BackendException(msg)
 
     def reforward(self, inputs: List[Tensor], update_attributes: Optional[Dict[str, Any]] = None) -> List[Tensor]:
         cls = self.__class__
@@ -157,7 +155,7 @@ class Operator:
         return dummy_inputs
 
     def dummy_outputs(self) -> List[Tensor]:
-        output_types = [output.ttype for output in self.task.parameters[-len(self.task.outputs) :]]
+        output_types = [output.type for output in self.task.parameters[-len(self.task.outputs) :]]
         dummy_outputs = [
             empty(shape=type.const_shape(), dtype=type.dtype.name, device=self.device, layout=type.layout)
             for type in output_types

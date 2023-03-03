@@ -45,12 +45,13 @@ from hidet.ir.type import DataType
 from hidet.ir.stmt import Stmt
 from hidet.ir.expr import Cast, Expr
 from hidet.ir.func import Function
-from hidet.ir.functors import StmtExprRewriter, TypeInfer
+from hidet.ir.functors import IRRewriter
+from hidet.ir.tools import TypeInfer
 from hidet.transforms.base import FunctionBodyPass
 from hidet.ir.primitives.math import MathFunctionSet, registered_math_function_sets
 
 
-class LowerCastRewriter(StmtExprRewriter):
+class LowerCastRewriter(IRRewriter):
     def __init__(self, device: str):
         super().__init__()
         self.device: str = device
@@ -63,7 +64,7 @@ class LowerCastRewriter(StmtExprRewriter):
             src_dtype = self.type_infer(src_expr)
             if not isinstance(src_dtype, DataType):
                 # convert from non-dtype (e.g., pointer) to dtype
-                return StmtExprRewriter.visit_Cast(self, e)
+                return IRRewriter.visit_Cast(self, e)
             if (self.device, src_dtype.name) in registered_math_function_sets:
                 function_set: MathFunctionSet = registered_math_function_sets[(self.device, src_dtype.name)]
                 casted: Optional[Expr] = function_set.cast(src_expr, target_type)
@@ -71,11 +72,11 @@ class LowerCastRewriter(StmtExprRewriter):
                 # use default cast
                 casted = None
             if casted is None:
-                return StmtExprRewriter.visit_Cast(self, e)
+                return IRRewriter.visit_Cast(self, e)
             else:
                 return casted
 
-        return StmtExprRewriter.visit_Cast(self, e)
+        return IRRewriter.visit_Cast(self, e)
 
 
 class LowerSpecialCastPass(FunctionBodyPass):

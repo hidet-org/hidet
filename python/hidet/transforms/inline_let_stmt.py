@@ -12,13 +12,14 @@
 from collections import defaultdict
 
 from hidet.ir.expr import Var, Expr, Constant, Add, Sub
-from hidet.ir.functors import StmtExprRewriter, StmtExprVisitor, same_list
+from hidet.ir.functors import IRRewriter, IRVisitor
 from hidet.ir.type import TensorType, TensorPointerType
 from hidet.ir.stmt import Stmt, LetStmt
 from hidet.transforms import Pass, FunctionBodyPass, RepeatFunctionPass
+from hidet.utils import same_list
 
 
-class LetVarRefAnalyzer(StmtExprVisitor):
+class LetVarRefAnalyzer(IRVisitor):
     def __init__(self):
         super().__init__(use_memo=False)
         self.usage_count = None
@@ -32,7 +33,7 @@ class LetVarRefAnalyzer(StmtExprVisitor):
     def visit(self, node):
         if isinstance(node, Var):
             self.usage_count[node] += 1
-        return StmtExprVisitor.visit(self, node)
+        return IRVisitor.visit(self, node)
 
     def visit_LetStmt(self, stmt: LetStmt):
         for bind_var, bind_value in zip(stmt.bind_vars, stmt.bind_values):
@@ -41,7 +42,7 @@ class LetVarRefAnalyzer(StmtExprVisitor):
         self.visit(stmt.body)
 
 
-class NaiveLetStmtInlineRewriter(StmtExprRewriter):
+class NaiveLetStmtInlineRewriter(IRRewriter):
     def __init__(self, inline_factor=1, inline_all=False):
         super().__init__()
         self.inline_factor = inline_factor

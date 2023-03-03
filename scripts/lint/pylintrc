@@ -428,6 +428,7 @@ disable=raw-checker-failed,
         too-many-statements,
         too-many-instance-attributes,
         too-many-nested-blocks,
+        too-many-ancestors,                 # our ir functor may have many ancestors
         redefined-builtin,
         unsupported-assignment-operation,   # might happen in hidet script
         unsubscriptable-object,             # might happen in hidet script

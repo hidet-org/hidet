@@ -68,8 +68,6 @@ not use the actual inputs). Let's take the resnet18 model as an example:
 import torch.backends.cudnn
 import hidet
 
-hidet.torch.register_dynamo_backends()  # register hidet backend to torch dynamo
-
 x = torch.randn(1, 3, 224, 224).cuda()
 model = torch.hub.load(
     'pytorch/vision:v0.9.0', 'resnet18', pretrained=True, verbose=False

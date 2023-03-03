@@ -14,7 +14,7 @@ from hidet.ir.type import DataType, TensorType, VoidType, PointerType, TensorPoi
 from hidet.ir.expr import Var, Call, Equal, Cast, Dereference
 from hidet.ir.stmt import AssertStmt
 from hidet.ir.func import IRModule, Function
-from hidet.ir.functors import astext, simplify_to_int
+from hidet.ir.tools import astext, simplify_to_int
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.transforms import Pass
 from hidet.ir.primitives import set_kernel_max_dynamic_smem_bytes

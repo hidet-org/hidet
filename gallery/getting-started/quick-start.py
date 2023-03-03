@@ -40,21 +40,15 @@ model = torch.hub.load(
 )
 model = model.cuda().eval()
 
-# we should register the hidet backend for pytorch dynamo
-# only need to do this if you import hidet before torch. Otherwise, it is done automatically
-hidet.torch.register_dynamo_backends()
+# optimize the model with 'hidet' backend
+model_opt = torch.compile(model, backend='hidet')
 
-# currently, hidet only support inference
-with torch.no_grad():
-    # optimize the model with 'hidet' backend
-    model_opt = torch.compile(model, backend='hidet')
+# run the optimized model
+y1 = model_opt(x)
+y2 = model(x)
 
-    # run the optimized model
-    y1 = model_opt(x)
-    y2 = model(x)
-
-    # check the correctness
-    torch.testing.assert_close(actual=y1, expected=y2, rtol=1e-2, atol=1e-2)
+# check the correctness
+torch.testing.assert_close(actual=y1, expected=y2, rtol=1e-2, atol=1e-2)
 
 
 # benchmark the performance

@@ -9,6 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# pylint: disable=too-many-ancestors
 from typing import Optional, List, Set, Dict, Union, Mapping, Sequence
 import itertools
 import operator
@@ -17,11 +18,8 @@ from collections import defaultdict
 from hidet.ir.type import DataType
 from hidet.ir.expr import Expr, Var, Add, Sub, Multiply, FloorDiv, Mod, Constant, Div
 from hidet.ir.func import Function
-from hidet.ir.functors import FuncStmtExprVisitor
+from hidet.ir.functors import ModuleVisitor, StmtVisitor, ExprVisitor
 from hidet.ir.stmt import Stmt, ForStmt, LetStmt
-
-
-# from hidet.ir.task import Grid, ThreadBlock, Warp, Thread, Host
 
 
 class BoundInfo:
@@ -205,7 +203,7 @@ def normalize_launch_dims(dims: Union[Int, Sequence[Int]]) -> List[Union[Expr, i
         if isinstance(dim, int):
             ret.append(dim)
         elif isinstance(dim, Expr):
-            from hidet.ir.functors import simplify  # pylint: disable=import-outside-toplevel
+            from hidet.ir.tools import simplify  # pylint: disable=import-outside-toplevel
 
             simplified_dim = simplify(dim)
             if isinstance(simplified_dim, Constant):
@@ -218,7 +216,7 @@ def normalize_launch_dims(dims: Union[Int, Sequence[Int]]) -> List[Union[Expr, i
     return ret
 
 
-class BoundAnalyzer(FuncStmtExprVisitor):
+class BoundAnalyzer(ExprVisitor, StmtVisitor, ModuleVisitor):
     # we only infer bound based on variables from LetStmt and ForStmt, and the constants.
     # so the local variable with AssignStmt is not used infer bound.
     op_dict = {

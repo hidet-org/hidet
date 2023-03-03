@@ -47,16 +47,15 @@ class BinaryElementwiseTask(Task):
             ),
         )
 
-        super().__init__(
-            name=name,
-            inputs=[x, y],
-            outputs=[z],
-            inverse_map={
-                v: InverseMap.identity(len(v_shape))
-                for v, v_shape in zip([x, y], [x_shape, y_shape])
-                if prod(v_shape) == prod(z_shape)
-            },
-        )
+        inverse_map = {}
+        for inp, inp_shape in zip([x, y], [x_shape, y_shape]):
+            if prod(inp_shape) == prod(z_shape):
+                inverse_map[inp] = InverseMap.from_lambda(
+                    lambda *indices: [0 for _ in range(len(z_shape) - len(inp_shape))] + list(indices),
+                    num_args=len(inp_shape),
+                )
+
+        super().__init__(name=name, inputs=[x, y], outputs=[z], inverse_map=inverse_map)
 
 
 class VariadicElementwiseTask(Task):
@@ -415,7 +414,7 @@ class WhereOp(Operator):
 
 
 class MaxOp(Operator):
-    def __init__(self, tensors: List[Tensor]):
+    def __init__(self, *tensors: Tensor):
         def scalar_max(args: List[expr.Expr]):
             if len(args) == 1:
                 return args[0]
@@ -434,12 +433,12 @@ class MaxOp(Operator):
 
 
 class MinOp(Operator):
-    def __init__(self, tensors: List[Tensor]):
+    def __init__(self, *tensors: Tensor):
         def scalar_min(args: List[expr.Expr]):
             if len(args) == 1:
                 return args[0]
             else:
-                return primitives.max(args[0], scalar_min(args[1:]))
+                return primitives.min(args[0], scalar_min(args[1:]))
 
         super().__init__(
             inputs=list(tensors),
@@ -476,14 +475,16 @@ def binary_arithmetic(
     elif isinstance(x, float):
         x = dtypes.float32(x)
     elif isinstance(x, Tensor) and len(x.shape) == 0:
-        x = x.dtype(x.item())
+        if x.trace is None and x.storage is not None:
+            x = x.dtype(x.item())
 
     if isinstance(y, int):
         y = dtypes.int32(y)
     elif isinstance(y, float):
         y = dtypes.float32(y)
     elif isinstance(y, Tensor) and len(y.shape) == 0:
-        y = y.dtype(y.item())
+        if y.trace is None and y.storage is not None:
+            y = y.dtype(y.item())
 
     if isinstance(x, Tensor) and isinstance(y, Tensor):
         return tensor_tensor_op(x, y)
@@ -671,12 +672,12 @@ def where(cond: Tensor, x: Tensor, y: Tensor) -> Tensor:
 
 def maximum(a: Tensor, b: Tensor, *others: Tensor) -> Tensor:
     args = [a, b] + list(others)
-    return MaxOp(args).get_output(0)
+    return MaxOp(*args).get_output(0)
 
 
 def minimum(a: Tensor, b: Tensor, *others: Tensor) -> Tensor:
     args = [a, b] + list(others)
-    return MinOp(args).get_output(0)
+    return MinOp(*args).get_output(0)
 
 
 def mod(x: Tensor, y: Tensor) -> Tensor:

@@ -16,11 +16,18 @@ import string
 import numpy as np
 from .node import Node
 from .type import TypeNode, TensorType, DataType, TensorPointerType, PointerType, FuncType, tensor_type, data_type
+from .type import tensor_pointer_type
 
 PyScalar = Union[int, float]
 
 
 class Expr(Node):
+    def __bool__(self):
+        raise TypeError(
+            "hidet.ir.Expr does not support pythonic logical operations (e.g., and, or, not, if(...)). "
+            "Please use hidet.ir.if_then_else, hidet.ir.LogicalAnd, hidet.ir.LogicalOr, hidet.ir.LogicalNot explicitly."
+        )
+
     def __neg__(self):
         return Neg(self)
 
@@ -140,7 +147,7 @@ class Expr(Node):
         return float(self)
 
     def __str__(self):
-        from hidet.ir.functors import astext
+        from hidet.ir.tools import astext
 
         return str(astext(self))
 
@@ -590,7 +597,7 @@ def tensor_rank(v: Expr) -> int:
     elif isinstance(v, TensorSlice):
         return sum(1 if i is None else 0 for i in v.indices)
     elif isinstance(v, TensorNode):
-        return len(v.ttype.shape)
+        return len(v.type.shape)
     elif isinstance(v, Constant) and isinstance(v.type, TensorType):
         return len(v.type.shape)
     elif isinstance(v, Cast) and isinstance(v.target_type, PointerType):
@@ -612,7 +619,7 @@ def const_tensor(value: np.ndarray) -> Constant:
 
 
 def tensor_pointer_var(hint: str, shape=None, dtype: Union[str, DataType] = 'float32', layout=None):
-    return Var(hint, TensorPointerType(dtype=dtype, shape=shape, layout=layout))
+    return Var(hint, tensor_pointer_type(dtype=dtype, shape=shape, layout=layout))
 
 
 def view(ptr: Expr, tp: TensorType) -> Expr:

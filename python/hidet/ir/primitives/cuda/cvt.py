@@ -19,7 +19,7 @@ from hidet.lang import script
 
 
 def resolve_cvt_func_name(src: Union[Expr, DataType], dtype: DataType) -> str:
-    from hidet.ir.functors import infer_type
+    from hidet.ir.tools import infer_type
 
     if isinstance(src, DataType):
         src_dtype = src

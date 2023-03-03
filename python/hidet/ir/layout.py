@@ -148,9 +148,6 @@ class DataLayout(Node):
     def fuse(self, dim2fuse: Sequence[Union[Sequence[int], int]]):
         return FusedDataLayout(base=self, dim2fuse=dim2fuse)
 
-    def slice_out(self, dims: Sequence[int]):
-        return SliceOutDataLayout(base=self, dims=dims)
-
     @staticmethod
     def product(outer, inner):
         return ProductDataLayout(outer, inner)
@@ -190,7 +187,7 @@ class StridesLayout(DataLayout):
     @staticmethod
     def storage_size(shape, strides) -> Expr:
         # assume the strides are positive, but do not assume the tensor is contiguous.
-        from hidet.ir.functors import simplify
+        from hidet.ir.tools import simplify
 
         max_index = sum((a - 1) * b for a, b in zip(shape, strides)) + 1
         return simplify(max_index)
@@ -259,7 +256,7 @@ class SwizzleDataLayout(DataLayout):
                 )
             self.regards_dim = 1 - dim
         else:
-            self.regards_dim = dim
+            self.regards_dim = regards_dim
         self.log_step = log_step
 
         if self.dim == self.regards_dim:
@@ -391,39 +388,6 @@ class FusedDataLayout(DataLayout):
             for j, dim in enumerate(self.dims[i]):
                 original_args[dim] = args[i] // prod(dim_sizes[j + 1 :]) % dim_sizes[j]
         return original_args
-
-    def global2local(self, *args: Int) -> Int:
-        return self.base(*self.base_args(*args))
-
-    def global2cond(self, *args: Int) -> Bool:
-        return self.base.within_bound(*self.base_args(*args))
-
-
-class SliceOutDataLayout(DataLayout):
-    """
-    3-dimension tensor with shape [a, b, c]
-    after cut({0, 2}) got
-    1-dimension tensor with shape [b]
-    """
-
-    def __init__(self, base: DataLayout, dims: Sequence[int]):
-        assert all(d < len(base.shape) for d in dims)
-        self.base = base
-        self.dims = set(dims)
-        super().__init__(
-            shape=[s for r, s in enumerate(base.shape) if r not in dims], size=base.size
-        )  # todo: update size
-
-    def base_args(self, *args: Int):
-        merged_args = []
-        c = 0
-        for i in range(len(self.base.shape)):
-            if i in self.dims:
-                merged_args.append(0)
-            else:
-                merged_args.append(args[c])
-                c += 1
-        return merged_args
 
     def global2local(self, *args: Int) -> Int:
         return self.base(*self.base_args(*args))

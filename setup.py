@@ -14,7 +14,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="hidet",
-    version="0.2.1.dev",
+    version="0.2.2.dev",
     description="Hidet: a compilation-based DNN inference framework.",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
@@ -38,6 +38,9 @@ setup(
         'console_scripts': [
             'hidet = hidet.cli.main:main',
         ],
+        'torch_dynamo_backends': [
+            'hidet = hidet.graph.frontend.torch.dynamo_backends:hidet_backend',
+        ]
     },
     url="https://docs.hidet.org",
     classifiers=[

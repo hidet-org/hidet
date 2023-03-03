@@ -14,7 +14,8 @@ from hidet.ir import Stmt, Expr, TensorElement, BufferStoreStmt, IfStmt, convert
 from hidet.ir.expr import LogicalAnd, IfThenElse
 from hidet.ir.type import TensorType, TensorPointerType
 from hidet.transforms.base import Pass, FunctionBodyPass
-from hidet.ir.functors import StmtExprRewriter, infer_type
+from hidet.ir.functors import IRRewriter
+from hidet.ir.tools import infer_type
 
 
 def bound_checking_condition(buf: Expr, indices: Sequence[Expr]) -> Expr:
@@ -35,7 +36,7 @@ def get_buffer_shape(buf: Expr):
         raise ValueError('Expect TensorType or TensorPointerType, got {}'.format(buf_type))
 
 
-class LowerProtectAccessRewriter(StmtExprRewriter):
+class LowerProtectAccessRewriter(IRRewriter):
     def visit_TensorElement(self, e: TensorElement):
         if e.protected:
             base = self.visit(e.base)
@@ -46,7 +47,7 @@ class LowerProtectAccessRewriter(StmtExprRewriter):
                 else_expr=convert(0.0, dtype=infer_type(e)),
             )
         else:
-            return StmtExprRewriter.visit_TensorElement(self, e)
+            return IRRewriter.visit_TensorElement(self, e)
 
     def visit_BufferStoreStmt(self, stmt: BufferStoreStmt):
         if stmt.protected:
@@ -58,7 +59,7 @@ class LowerProtectAccessRewriter(StmtExprRewriter):
                 then_body=BufferStoreStmt(buf=buf, indices=indices, protected=False, value=value),
             )
         else:
-            return StmtExprRewriter.visit_BufferStoreStmt(self, stmt)
+            return IRRewriter.visit_BufferStoreStmt(self, stmt)
 
 
 class LowerProtectAccessPass(FunctionBodyPass):

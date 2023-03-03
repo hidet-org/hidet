@@ -26,17 +26,17 @@ Similar issue in cupy: https://github.com/cupy/cupy/pull/2809
 """
 import atexit
 
+
 _is_exiting = False
-
-
-def _at_exit():
-    global _is_exiting
-    _is_exiting = True
-
-
-atexit.register(_at_exit)
 
 
 def is_exiting():
     """Returns True if the python interpreter is exiting."""
-    return _is_exiting
+    return _is_exiting is None or _is_exiting is False
+
+
+def _at_exit():
+    _is_exiting = True
+
+
+atexit.register(_at_exit)

@@ -49,23 +49,7 @@ def from_torch(module, concrete_args=None):
 
 
 def register_dynamo_backends():
-    """
-    Register the 'hidet' and 'onnx2hidet' backends for torch dynamo.
-
-    By default, if torch has already been imported and dynamo is available, the backends will be registered immediately.
-    Otherwise, the user can call this function to register the backends manually.
-    """
-    from torch._dynamo.optimizations.backends import create_backend, BACKENDS
-    from .dynamo_backends import onnx2hidet_backend, hidet_backend
-
-    if 'onnx2hidet' not in BACKENDS:
-        onnx2hidet_backend.__name__ = 'onnx2hidet'
-        create_backend(onnx2hidet_backend)
-
-    if 'hidet' not in BACKENDS:
-        hidet_backend.__name__ = 'hidet'
-        create_backend(hidet_backend)
-
-
-if imported() and dynamo_available():
-    register_dynamo_backends()
+    print(
+        'Now, hidet will use the entry_points mechanism to register as a dynamo backend. \n'
+        'Feel free to remove the line `hidet.frontend.torch.register_dynamo_backends()` in your code.'
+    )

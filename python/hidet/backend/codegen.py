@@ -9,47 +9,25 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Optional
+from typing import Optional, List, Tuple, Dict, Union
 import os
 import numpy as np
 from hidet.ir.dialects.pattern import AnyExpr
 from hidet.ir import dtypes
-from hidet.ir.type import DataType, PointerType, TensorPointerType, ReferenceType, TensorType, TypeNode, FuncType
+from hidet.ir.type import DataType, PointerType, TensorPointerType, ReferenceType, TensorType, FuncType
 from hidet.ir.type import VoidType
-from hidet.ir.expr import (
-    Var,
-    Expr,
-    Add,
-    Sub,
-    Multiply,
-    Div,
-    Mod,
-    FloorDiv,
-    LessThan,
-    Neg,
-    NotEqual,
-    Equal,
-    LogicalAnd,
-    LogicalOr,
-)
-from hidet.ir.expr import (
-    LogicalNot,
-    BitwiseAnd,
-    BitwiseOr,
-    BitwiseXor,
-    BitwiseNot,
-    LeftShift,
-    RightShift,
-    TensorElement,
-)
+from hidet.ir.expr import Var, Expr, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, Neg, NotEqual, Equal, LogicalAnd
+from hidet.ir.expr import LogicalOr, LogicalNot, BitwiseAnd, BitwiseOr, BitwiseXor, BitwiseNot, LeftShift, RightShift
 from hidet.ir.expr import IfThenElse, Cast, Address, Reference, Dereference, Call, Let, Constant, TensorSlice, convert
-from hidet.ir.stmt import Stmt, DeclareScope, DeclareStmt, EvaluateStmt, BufferStoreStmt, AssignStmt, LetStmt, ForStmt
+from hidet.ir.expr import TensorElement
+from hidet.ir.stmt import DeclareScope, DeclareStmt, EvaluateStmt, BufferStoreStmt, AssignStmt, LetStmt, ForStmt
 from hidet.ir.stmt import LaunchKernelStmt
 from hidet.ir.stmt import ForTaskStmt, WhileStmt, BreakStmt, ContinueStmt, IfStmt, ReturnStmt, AssertStmt, AsmStmt
 from hidet.ir.stmt import BlackBoxStmt, SeqStmt
 from hidet.ir.func import IRModule, Function
 from hidet.ir.compute import TensorNode, ScalarNode
-from hidet.ir.functors import StmtExprFunctor, TypeFunctor, TypeInfer
+from hidet.ir.functors import ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor
+from hidet.ir.tools import TypeInfer
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
 from hidet.ir.utils.call_graph import CallGraph
 from hidet.utils.namer import Namer
@@ -57,7 +35,7 @@ from hidet.utils import prod
 from hidet.ir.primitives import is_primitive_function, lookup_primitive_function
 
 
-class Codegen(StmtExprFunctor, TypeFunctor):
+class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
     def __init__(self):
         super().__init__()
         self.func_name_map = {}
@@ -144,30 +122,51 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         return self.visit(node)
 
     def visit(self, node):
-        # pylint: disable=too-many-return-statements
-        if isinstance(node, IRModule):
-            return self.visit_IRModule(node)
-        elif isinstance(node, Function):
-            return self.visit_Function(node)
-        elif isinstance(node, (Stmt, Expr)):
-            return StmtExprFunctor.visit(self, node)
-        elif isinstance(node, TypeNode):
-            return TypeFunctor.visit(self, node)
-        elif isinstance(node, (tuple, list)):
-            return doc_join([self(v) for v in node], ', ')
-        elif isinstance(node, (int, float, bool)):
-            return self(convert(node))
-        elif isinstance(node, str):
-            return Text(node)
-        elif isinstance(node, Doc):
+        if isinstance(node, Doc):
             return node
         else:
-            raise ValueError(type(node))
+            return super().visit(node)
+
+    # def visit(self, node):
+    #     # pylint: disable=too-many-return-statements
+    #     if isinstance(node, IRModule):
+    #         return self.visit_IRModule(node)
+    #     elif isinstance(node, Function):
+    #         return self.visit_Function(node)
+    #     elif isinstance(node, (Stmt, Expr)):
+    #         return StmtExprFunctor.visit(self, node)
+    #     elif isinstance(node, TypeNode):
+    #         return TypeFunctor.visit(self, node)
+    #     elif isinstance(node, (tuple, list)):
+    #         return doc_join([self(v) for v in node], ', ')
+    #     elif isinstance(node, (int, float, bool)):
+    #         return self(convert(node))
+    #     elif isinstance(node, str):
+    #         return Text(node)
+    #     elif isinstance(node, Doc):
+    #         return node
+    #     else:
+    #         raise ValueError(type(node))
+
+    def visit_List(self, lst: List):
+        return doc_join([self(v) for v in lst], ', ')
+
+    def visit_Tuple(self, tp: Tuple):
+        return doc_join([self(v) for v in tp], ', ')
+
+    def visit_Dict(self, dct: Dict):
+        raise RuntimeError('Dict is not supported in code generation')
+
+    def visit_PyConstant(self, c: Union[str, int, float, None]):
+        if c is None:
+            raise RuntimeError('None encountered during code generation')
+        return Text(str(c))
 
     def visit_IRModule(self, module: IRModule) -> Doc:
         self.ir_module = module
         doc = Doc()
         # todo: only add necessary headers
+        doc += Text('#include <stdint.h>') + NewLine()
         doc += Text('#include <cuda_fp16.h>') + NewLine()
         doc += Text('#include <cuda_bf16.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cuda_context.h>') + NewLine()
@@ -329,21 +328,21 @@ class Codegen(StmtExprFunctor, TypeFunctor):
             # short, int, unsigned int, long long, unsigned long long, but not for the types like int8_t, uint8_t,
             # int16_t, uint16_t, int32_t, uint32_t, int64_t, uint64_t, so we need to cast them here.
             if dst_dtype == dtypes.int64:
-                return '(long long)(' + self(e.expr) + ')'
+                return '(int64_t)(' + self(e.expr) + ')'
             elif dst_dtype == dtypes.uint64:
-                return '(unsigned long long)(' + self(e.expr) + ')'
+                return '(uint64_t)(' + self(e.expr) + ')'
             elif dst_dtype == dtypes.int32:
-                return '(int)(' + self(e.expr) + ')'
+                return '(int32_t)(' + self(e.expr) + ')'
             elif dst_dtype == dtypes.uint32:
-                return '(unsigned int)(' + self(e.expr) + ')'
+                return '(uint32_t)(' + self(e.expr) + ')'
             elif dst_dtype == dtypes.int16:
-                return '(short)(' + self(e.expr) + ')'
+                return '(int16_t)(' + self(e.expr) + ')'
             elif dst_dtype == dtypes.uint16:
-                return '(unsigned short)(' + self(e.expr) + ')'
+                return '(uint16_t)(' + self(e.expr) + ')'
             elif dst_dtype == dtypes.int8:
-                return '(char)(' + self(e.expr) + ')'
+                return '(int8_t)(' + self(e.expr) + ')'
             elif dst_dtype == dtypes.uint8:
-                return '(unsigned char)(' + self(e.expr) + ')'
+                return '(uint8_t)(' + self(e.expr) + ')'
             elif dst_dtype == dtypes.boolean:
                 return '(bool)(' + self(e.expr) + ')'
             elif dst_dtype == dtypes.float32:
@@ -385,7 +384,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
                     dim3_str(func.attrs['cuda_block_dim']),  # block dimension
                     func.attrs.get('cuda_dynamic_smem_bytes', 0),  # dynamic shared memory size
                     # cuda stream (get_cuda_stream() function is defined in hidet/runtime.h)
-                    Text('(cudaStream_t)get_cuda_stream()'),
+                    '(cudaStream_t)get_cuda_stream()',
                 ]
                 launch_config = Text('<<<') + doc_join([self(v) for v in configs], sep=', ') + Text('>>>')
             else:
@@ -440,7 +439,7 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         elif dtype == dtypes.bfloat16:
             ret = '__float2bfloat16({}f)'.format(float(value))
         elif dtype == dtypes.int64:
-            ret = '{}ll'.format(int(value))
+            ret = 'int64_t({}ll)'.format(int(value))
         elif dtype == dtypes.int32:
             ret = '{}'.format(int(value))
         elif dtype == dtypes.int16:
@@ -448,9 +447,9 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         elif dtype == dtypes.int8:
             ret = 'int8_t({})'.format(int(value))
         elif dtype == dtypes.uint64:
-            ret = '{}ull'.format(int(value))
+            ret = 'uint64_t({}ull)'.format(int(value))
         elif dtype == dtypes.uint32:
-            ret = '{}u'.format(int(value))
+            ret = 'uint32_t({}u)'.format(int(value))
         elif dtype == dtypes.uint16:
             ret = 'uint16_t({})'.format(int(value))
         elif dtype == dtypes.uint8:
@@ -591,8 +590,9 @@ class Codegen(StmtExprFunctor, TypeFunctor):
         )
 
     def visit_LaunchKernelStmt(self, stmt: LaunchKernelStmt):
+        assert isinstance(stmt.func_var, Var)
         return NewLine() + Text('{}<<<dim3({}), dim3({}), {}, {}>>>({});').format(
-            self(stmt.func_var),
+            self.canonize_funcname(stmt.func_var.hint),
             self(stmt.grid_dim),
             self(stmt.block_dim),
             self(stmt.shared_mem_bytes),

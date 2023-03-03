@@ -12,6 +12,7 @@
 import os
 import time
 from typing import List, Optional
+import shutil
 import numpy as np
 from tqdm import tqdm
 
@@ -22,6 +23,7 @@ from hidet.ir.func import IRModule
 from hidet.ir.task import Task
 from hidet.utils import TableBuilder, strict_zip, error_tolerance
 from hidet.graph.tensor import randn, zeros, ones, Tensor
+from hidet.option import get_option
 from .common import Schedule
 
 
@@ -41,7 +43,7 @@ def dummy_inputs_from_task(task: Task, target_device: str) -> List[Tensor]:
     """
     inputs = []
     for param in task.parameters:
-        param_type = param.ttype
+        param_type = param.type
 
         if not isinstance(param_type, TensorType):
             raise ValueError('Currently, only support create dummy scalar inputs.')
@@ -124,12 +126,9 @@ def resolve_ir_modules(
     # compiled_funcs: List[Optional[CompiledFunction]] = batch_build_ir_modules(
     #     build_instances, parallel=parallel, verbose=verbose
     # )
+    resolve_dir = os.path.join(output_dir, 'resolve')
     compiled_funcs: List[Optional[CompiledFunction]] = build_ir_module_batch(
-        ir_modules,
-        func_name=func_name,
-        output_dir=os.path.join(output_dir, 'resolve'),
-        parallel=parallel,
-        verbose=verbose,
+        ir_modules, func_name=func_name, output_dir=resolve_dir, parallel=parallel, verbose=verbose
     )
     dummy_inputs = dummy_inputs_from_task(ir_modules[0].task, target_device)
     best_latency = 1e30
@@ -175,6 +174,10 @@ def resolve_ir_modules(
         if best_latency > latency:
             best_latency = latency
             best_ir_module = ir_module
+
+    # remove the resolve directory
+    if not get_option('debug_cache_tuning'):
+        shutil.rmtree(resolve_dir)
 
     # generate summary
     headers = ['idx'] + [v[0] for v in (schedules[0].keys() + schedules[0].derived_keys())] + ['Error', 'latency']

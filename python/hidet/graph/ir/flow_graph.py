@@ -20,12 +20,12 @@ from collections import defaultdict
 import hidet.graph.operator
 import hidet.cuda
 from hidet import option
-from hidet.graph.tensor import Tensor, empty_like, zeros_like, randn_like
+from hidet.graph.tensor import Tensor, zeros_like, randn_like
 from hidet.graph.operator import Operator
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
 from hidet.utils.namer import Namer
 
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class GraphForwardInstrument:
@@ -205,28 +205,11 @@ class FlowGraph:
             If there is only one output, it is returned directly. Otherwise, a list
             of output tensors are returned.
         """
-        outputs = self.dummy_outputs()
-        self.pure_forward(list(inputs), outputs)
-        return outputs[0] if len(outputs) == 1 else outputs
+        inputs: List[Tensor] = list(inputs)
 
-    def pure_forward(self, inputs: List[Tensor], outputs: List[Tensor]):
-        """Run the computation graph and store results to given tensors.
-
-        Parameters
-        ----------
-        inputs: List[Tensor]
-            The input tensors.
-
-        outputs: List[Tensor]
-            The output tensors to store the output results to.
-        """
         for idx, tensor in enumerate(inputs):
             if tensor.storage is None:
                 msg = 'Expect non-symbolic input tensors, got symbolic input {} ({}).'.format(idx, tensor.signature())
-                raise ValueError(msg)
-        for idx, tensor in enumerate(outputs):
-            if tensor.storage is None:
-                msg = 'Expect non-symbolic output tensors, got symbolic output {} ({}).'.format(idx, tensor.signature())
                 raise ValueError(msg)
         if any(v is None for v in [self.inputs, self.nodes, self.usage_count]):
             self.update_nodes()
@@ -237,8 +220,6 @@ class FlowGraph:
         usage_count = self.usage_count.copy()
         tensor_map: Dict[Tensor, Tensor] = {}
         for st, at in zip(self.inputs, inputs):
-            tensor_map[st] = at
-        for st, at in zip(self.outputs, outputs):
             tensor_map[st] = at
 
         num_operators = len(self.nodes)
@@ -257,23 +238,29 @@ class FlowGraph:
                     # constant input
                     node_inputs.append(node_input)
 
-            # prepare node outputs
-            node_outputs = node.dummy_outputs()
-            for i, symbolic_output in enumerate(node.outputs):
-                if symbolic_output in tensor_map:  # the output is a graph output
-                    node_outputs[i] = tensor_map[symbolic_output]
-                else:
-                    tensor_map[symbolic_output] = node_outputs[i]
-
             # run node
             GraphForwardContext.current()._trigger_before_operator(node, node_inputs)
-            log.debug('[%4d/%d] run operator %s', idx, num_operators, node.name)
-            log.debug('inputs: %s', [x.signature() for x in node_inputs])
-            log.debug('outputs: %s', [x.signature() for x in node_outputs])
-            node.pure_run(node_inputs, node_outputs)
+            logger.debug('[%4d/%d] run operator %s', idx, num_operators, node.name)
+            logger.debug('   inputs: %s', [x.signature() for x in node_inputs])
+            node_outputs = node.imperative_run(node_inputs)
+            logger.debug('  outputs: %s', [x.signature() for x in node_outputs])
             GraphForwardContext.current()._trigger_after_operator(node, node_inputs, node_outputs)
 
+            # update map
+            for node_output, symbolic_output in zip(node_outputs, node.outputs):
+                tensor_map[symbolic_output] = node_output
+
+        outputs = []
+        for graph_output in self.outputs:
+            if graph_output in tensor_map:
+                outputs.append(tensor_map[graph_output])
+            elif graph_output.storage is not None:
+                outputs.append(graph_output)  # constant output, not the graph input or produced by any operator
+            else:
+                raise RuntimeError('Graph output {} is not produced by any operator.'.format(graph_output.signature()))
+
         GraphForwardContext.current()._trigger_after_graph(self, inputs, outputs)
+        return outputs[0] if len(outputs) == 1 else outputs
 
     def dummy_inputs(self) -> List[Tensor]:
         inputs = []
@@ -285,9 +272,6 @@ class FlowGraph:
             else:
                 assert False
         return inputs
-
-    def dummy_outputs(self) -> List[Tensor]:
-        return [empty_like(tensor) if tensor.storage is None else tensor for tensor in self.outputs]
 
     def save(self, model_file: str):
         """Save the flow graph to a file.
@@ -346,7 +330,7 @@ class FlowGraph:
                     f'When there are multiple free '
                     f'variables, it is mandatory to specify the "inputs" argument explicitly when calling '
                     f'hidet.trace_from(...):\n'
-                    '    hidet.trace_from(..., free_vars=[tensor1, tensor2, ...])\n'
+                    '    hidet.trace_from(..., inputs=[tensor1, tensor2, ...])\n'
                 )
             self.inputs = free_vars
         return self

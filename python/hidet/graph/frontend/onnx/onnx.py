@@ -194,20 +194,32 @@ def register_onnx_operator(cls: Type[OnnxOperator]):
 @register_onnx_operator
 class OnnxConv(OnnxOperator):
     def run_v1(self, inputs: List[Tensor]) -> List[Tensor]:
-        dilations = self.attrs.get('dilations', [1, 1])
-        padding = self.attrs.get('pads', [0, 0, 0, 0])
-        strides = self.attrs.get('strides', [1, 1])
         groups = self.attrs.get('group', 1)
         if len(inputs) == 2:
             x, w = inputs
             bias = None
         else:
             x, w, bias = inputs
-        x = ops.pad(x, ops.utils.normalize_padding(padding))
-        output = ops.conv2d(x, w, stride=strides, dilations=dilations, groups=groups)
-        if bias is not None:
-            bias = ops.unsqueeze(bias, [0, 2, 3])
-            output = output + bias
+        if len(x.shape) == 4:
+            dilations = self.attrs.get('dilations', [1, 1])
+            padding = self.attrs.get('pads', [0, 0, 0, 0])
+            strides = self.attrs.get('strides', [1, 1])
+            x = ops.pad(x, ops.utils.normalize_padding(padding))
+            output = ops.conv2d(x, w, stride=strides, dilations=dilations, groups=groups)
+            if bias is not None:
+                bias = ops.unsqueeze(bias, [0, 2, 3])
+                output = output + bias
+        elif len(x.shape) == 5:
+            dilations = self.attrs.get('dilations', [1, 1, 1])
+            padding = self.attrs.get('pads', [0, 0, 0, 0, 0, 0])
+            strides = self.attrs.get('strides', [1, 1, 1])
+            x = ops.pad(x, ops.utils.normalize_padding(padding, dim=3))
+            output = ops.conv3d(x, w, stride=strides, dilations=dilations, groups=groups)
+            if bias is not None:
+                bias = ops.unsqueeze(bias, [0, 2, 3, 4])
+                output = output + bias
+        else:
+            raise NotImplementedError('Currently only support 2D and 3D convolution, got x {}.'.format(x.shape))
         return [output]
 
     def run_v11(self, inputs: List[Tensor]) -> List[Tensor]:
@@ -287,9 +299,17 @@ class OnnxTanh(OnnxOperator):
 class OnnxMaxPool(OnnxOperator):
     def run(self, inputs: List[Tensor]) -> List[Tensor]:
         kernel_size = list(self.attrs.get('kernel_shape'))
-        padding = list(self.attrs.get('pads', [0, 0, 0, 0]))
-        strides = list(self.attrs.get('strides'))
-        return [ops.max_pool2d(inputs[0], kernel_size, strides, padding)]
+        x = inputs[0]
+        if len(x.shape) == 4:
+            padding = list(self.attrs.get('pads', [0, 0, 0, 0]))
+            strides = list(self.attrs.get('strides', [1, 1]))
+            return [ops.max_pool2d(inputs[0], kernel_size, strides, padding)]
+        elif len(x.shape) == 5:
+            padding = list(self.attrs.get('pads', [0, 0, 0, 0, 0, 0]))
+            strides = list(self.attrs.get('strides', [1, 1, 1]))
+            return [ops.max_pool3d(inputs[0], kernel_size, strides, padding)]
+        else:
+            raise NotImplementedError('Currently only support 2d and 3d max pooling')
 
 
 @register_onnx_operator
@@ -462,7 +482,7 @@ class OnnxCast(OnnxOperator):
         8: 'string',
         9: 'bool',
         10: 'float16',
-        11: 'double',
+        11: 'float64',
         12: 'uint32',
         13: 'uint64',
         14: 'complex64',
@@ -515,7 +535,15 @@ class OnnxGather(OnnxOperator):
 
 @register_onnx_operator
 class OnnxSlice(OnnxOperator):
-    def run(self, inputs: List[Tensor]) -> List[Tensor]:
+    def run_v1(self, inputs: List[Tensor]) -> List[Tensor]:
+        data = inputs[0]
+        starts = self.attrs['starts']
+        ends = self.attrs['ends']
+        axes = self.attrs.get('axes', list(range(len(starts))))
+        ends = [min(end, data.shape[i]) for i, end in zip(axes, ends)]
+        return [ops.strided_slice(data, starts, ends, axes)]
+
+    def run_v10(self, inputs: List[Tensor]) -> List[Tensor]:
         data, starts, ends = inputs[:3]
         axes = inputs[3] if len(inputs) > 3 else None
         steps = inputs[4] if len(inputs) > 4 else None
@@ -523,6 +551,7 @@ class OnnxSlice(OnnxOperator):
         ends = self.tensor2list(ends)
         axes = self.tensor2list(axes) if axes is not None else None
         steps = self.tensor2list(steps) if steps is not None else None
+        ends = [min(end, data.shape[i]) for i, end in zip(axes, ends)]
         return [ops.strided_slice(data, starts, ends, axes, steps)]
 
 
@@ -650,15 +679,20 @@ class OnnxAveragePool(OnnxOperator):
         ceil_mode = self.attrs.get('ceil_mode', 0)
         count_include_pad = self.attrs.get('count_include_pad', 0)
         kernel_shape = self.attrs.get('kernel_shape')
-        pads = self.attrs.get('pads')
-        strides = self.attrs.get('strides')
         if auto_pad != 'NOTSET' or ceil_mode != 0 or count_include_pad != 0:
             raise NotImplementedError(self)
 
         x = inputs[0]
-        if len(x.shape) != 4:
-            raise NotImplementedError('Currently only support 2-d avg pooling')
-        x = ops.avg_pool2d(x, kernel_shape, strides, pads)
+        if len(x.shape) == 4:
+            pads = list(self.attrs.get('pads', [0, 0, 0, 0]))
+            strides = list(self.attrs.get('strides', [1, 1]))
+            x = ops.avg_pool2d(x, kernel_shape, strides, pads)
+        elif len(x.shape) == 5:
+            pads = list(self.attrs.get('pads', [0, 0, 0, 0, 0, 0]))
+            strides = list(self.attrs.get('strides', [1, 1, 1]))
+            x = ops.avg_pool3d(x, kernel_shape, strides, pads)
+        else:
+            raise NotImplementedError('Currently only support 2d and 3d avg pooling')
         return [x]
 
 

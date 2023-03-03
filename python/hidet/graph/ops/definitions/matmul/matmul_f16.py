@@ -74,7 +74,7 @@ class MatmulF16Task(Task):
         return False
 
     def allow_epilogue(self) -> bool:
-        return True
+        return False
 
     def implement_cuda(self, working_dir: str) -> IRModule:
         return tune.tune(self.schedule, task=self, target_device='cuda', working_dir=working_dir)
@@ -87,8 +87,8 @@ class MatmulF16Task(Task):
     @tune.space(2, 'warp_k', [8, 16, 32, 64])
     @tune.space(2, 'mma', ['m16n8k16'])
     @tune.space(1, 'block_m', [128])
-    @tune.space(1, 'block_n', [64])
-    @tune.space(1, 'block_k', [32])
+    @tune.space(1, 'block_n', [128])
+    @tune.space(1, 'block_k', [16])
     @tune.space(1, 'warp_m', [64])
     @tune.space(1, 'warp_n', [64])
     @tune.space(1, 'warp_k', [16])
@@ -105,7 +105,7 @@ class MatmulF16Task(Task):
         from hidet.lang.cuda import blockIdx, threadIdx, syncthreads, dynamic_shared_memory
         from hidet.lang.cuda import MmaConfig, mma_sync, cp_async, cp_async_wait_all, ldmatrix
         from hidet.lang.cuda import register_tensor
-        from hidet.transforms.tools import add_packed_func
+        from hidet.transforms.tools import fuse_and_pack
 
         # input shapes
         node_a, node_b, node_c = self.inputs[0], self.inputs[1], self.outputs[0]
@@ -282,6 +282,7 @@ class MatmulF16Task(Task):
                 offset_m, offset_n = blockIdx.x * block_m, blockIdx.y * block_n
                 c_head_index = spatial(*c_head).map(blockIdx.z)
                 gmem_c = c[c_head_index][offset_m:, offset_n:]
+
                 for k_round in range(warp_count_k):
                     for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
                         if wk == k_round:
@@ -302,7 +303,7 @@ class MatmulF16Task(Task):
 
         ir_module = module.ir_module()
         assert isinstance(matmul_f16_kernel, Function)
-        add_packed_func(ir_module, matmul_f16_kernel, self.name)
+        fuse_and_pack(ir_module, matmul_f16_kernel, task=self)
 
         return ir_module
 

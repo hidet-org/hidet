@@ -11,7 +11,7 @@
 # limitations under the License.
 from typing import Union, Sequence, List, Dict, Any
 
-from hidet.ir.expr import Expr, convert
+from hidet.ir.expr import Expr, LogicalAnd, convert, if_then_else
 
 from .utils import Task, Operator, Tensor, TensorNode, compute, reduce, input_like, normalize_stride, normalize_kernel
 from .utils import normalize_padding, normalize_output
@@ -26,12 +26,14 @@ class Pool2dTask(Task):
         batch_size, channels, height, width = x.const_shape()
         out_height = (height + padding[0] + padding[2] - kernel[0]) // strides[0] + 1
         out_width = (width + padding[1] + padding[3] - kernel[1]) // strides[1] + 1
-        pad_value = convert(0.0 if reduce_type == 'avg' else -1e30, dtype=x.ttype.dtype)
+        pad_value = convert(0.0 if reduce_type == 'avg' else -1e30, dtype=x.type.dtype)
         pad = compute(
             name='pad',
-            shape=[batch_size, channels, height + 2 * padding[0], width + 2 * padding[1]],
-            fcompute=lambda n, c, h, w: x.protect_read(
-                indices=[n, c, h - padding[0], w - padding[1]], default_value=pad_value
+            shape=[batch_size, channels, height + padding[0] + padding[2], width + padding[1] + padding[3]],
+            fcompute=lambda n, c, h, w: if_then_else(
+                LogicalAnd.join(padding[0] <= h, h < height + padding[0], padding[1] <= w, w < width + padding[1]),
+                x[n, c, h - padding[0], w - padding[1]],
+                pad_value,
             ),
         )
         y = compute(
@@ -44,6 +46,53 @@ class Pool2dTask(Task):
             ),
         )
         super().__init__(name='{}_pool2d'.format(reduce_type), inputs=[x], outputs=[y])
+
+
+class Pool3dTask(Task):
+    def __init__(self, x: TensorNode, kernel, strides, padding, reduce_type: str):
+        assert reduce_type in ['max', 'avg']
+        kernel = normalize_kernel(kernel, dim=3)
+        strides = normalize_stride(strides, dim=3)
+        padding = normalize_padding(padding, dim=3)
+        batch_size, channels, depth, height, width = x.const_shape()
+        out_depth = (depth + padding[0] + padding[3] - kernel[0]) // strides[0] + 1
+        out_height = (height + padding[1] + padding[4] - kernel[1]) // strides[1] + 1
+        out_width = (width + padding[2] + padding[5] - kernel[2]) // strides[2] + 1
+        pad_value = convert(0.0 if reduce_type == 'avg' else -1e30, dtype=x.type.dtype)
+        pad = compute(
+            name='pad',
+            shape=[
+                batch_size,
+                channels,
+                depth + padding[0] + padding[3],
+                height + padding[1] + padding[4],
+                width + padding[2] + padding[5],
+            ],
+            fcompute=lambda n, c, d, h, w: (
+                if_then_else(
+                    LogicalAnd.join(
+                        padding[0] <= d,
+                        d < depth + padding[0],
+                        padding[1] <= h,
+                        h < height + padding[1],
+                        padding[2] <= w,
+                        w < width + padding[2],
+                    ),
+                    x[n, c, d - padding[0], h - padding[1], w - padding[2]],
+                    pad_value,
+                )
+            ),
+        )
+        y = compute(
+            name='y',
+            shape=[batch_size, channels, out_depth, out_height, out_width],
+            fcompute=lambda n, c, d, h, w: reduce(
+                shape=[kernel[0], kernel[1], kernel[2]],
+                fcompute=lambda rz, rx, ry: pad[n, c, d * strides[0] + rz, h * strides[1] + rx, w * strides[2] + ry],
+                reduce_type=reduce_type,
+            ),
+        )
+        super().__init__(name='{}_pool3d'.format(reduce_type), inputs=[x], outputs=[y])
 
 
 class AdaptivePoolTask(Task):
@@ -76,10 +125,7 @@ class AdaptivePoolTask(Task):
                 return x[x_indices]
 
             return reduce(
-                shape=reduce_shape,
-                fcompute=reduce_compute,
-                reduce_type=reduce_type,
-                accumulate_dtype=x.ttype.dtype.name,
+                shape=reduce_shape, fcompute=reduce_compute, reduce_type=reduce_type, accumulate_dtype=x.type.dtype.name
             )
 
         y = compute(name='y', shape=y_shape, fcompute=grid_compute)
@@ -106,6 +152,21 @@ class MaxPool2dOp(Operator):
         )
 
 
+class MaxPool3dOp(Operator):
+    def __init__(
+        self,
+        x: Tensor,
+        kernel: Union[int, Sequence[int]],
+        stride: Union[int, Sequence[int]],
+        padding: Union[int, Sequence[int]],
+    ):
+        super().__init__(
+            inputs=[x],
+            task=Pool3dTask(input_like(x, 'x'), kernel, stride, padding, reduce_type='max'),
+            attributes={'kernel': kernel, 'stride': stride, 'padding': padding},
+        )
+
+
 class AvgPool2dOp(Operator):
     def __init__(
         self,
@@ -117,6 +178,21 @@ class AvgPool2dOp(Operator):
         super().__init__(
             inputs=[x],
             task=Pool2dTask(input_like(x, 'x'), kernel, stride, padding, reduce_type='avg'),
+            attributes={'kernel': kernel, 'stride': stride, 'padding': padding},
+        )
+
+
+class AvgPool3dOp(Operator):
+    def __init__(
+        self,
+        x: Tensor,
+        kernel: Union[int, Sequence[int]],
+        stride: Union[int, Sequence[int]],
+        padding: Union[int, Sequence[int]],
+    ):
+        super().__init__(
+            inputs=[x],
+            task=Pool3dTask(input_like(x, 'x'), kernel, stride, padding, reduce_type='avg'),
             attributes={'kernel': kernel, 'stride': stride, 'padding': padding},
         )
 
@@ -171,8 +247,16 @@ def max_pool2d(x: Tensor, kernel, stride, padding) -> Tensor:
     return MaxPool2dOp(x, kernel, stride, padding).get_output(0)
 
 
+def max_pool3d(x: Tensor, kernel, stride, padding) -> Tensor:
+    return MaxPool3dOp(x, kernel, stride, padding).get_output(0)
+
+
 def avg_pool2d(x: Tensor, kernel, stride, padding) -> Tensor:
     return AvgPool2dOp(x, kernel, stride, padding).get_output(0)
+
+
+def avg_pool3d(x: Tensor, kernel, stride, padding) -> Tensor:
+    return AvgPool3dOp(x, kernel, stride, padding).get_output(0)
 
 
 def adaptive_avg_pool1d(x: Tensor, output_size: Union[int, Sequence[int]]) -> Tensor:

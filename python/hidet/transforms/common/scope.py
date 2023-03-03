@@ -13,10 +13,10 @@ from typing import List, Dict, Optional, ContextManager
 
 from hidet.ir.type import FuncType, data_type
 from hidet.ir.expr import Expr, Var, BitwiseAnd, LeftShift, BitwiseOr
-from hidet.ir.functors import collect
+from hidet.ir.tools import collect
 from hidet.ir.stmt import LetStmt, ForStmt
 from hidet.ir.func import Function
-from hidet.ir.functors import FuncStmtExprRewriter
+from hidet.ir.functors import IRRewriter
 
 
 class Scope:
@@ -106,7 +106,7 @@ class ScopeStack:
         return self.scopes[-1]
 
 
-class FuncStmtExprRewriterWithScope(FuncStmtExprRewriter):
+class IRRewriterWithScope(IRRewriter):
     def __init__(self, use_memo=False):
         super().__init__(use_memo=use_memo)
         self.scope_stack = ScopeStack()

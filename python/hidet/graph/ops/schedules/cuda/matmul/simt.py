@@ -52,7 +52,7 @@ from hidet import option
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.ir.expr import Var, LogicalAnd, Equal, Cast, if_then_else, convert, Expr
 from hidet.ir.func import IRModule
-from hidet.ir.functors import simplify_to_int
+from hidet.ir.tools import simplify_to_int
 from hidet.ir.mapping import TaskMapping
 from hidet.ir.layout import DataLayout, StridesLayout
 from hidet.ir.primitives import syncthreads, thread_idx, block_idx
@@ -326,9 +326,9 @@ def batched_matmul_cuda_schedule_simt(task: BatchMatmulTask, working_dir: str) -
 def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, schedule: MatmulSchedule) -> IRModule:
     sch = schedule
 
-    a_dtype = task.inputs[0].ttype.dtype
-    b_dtype = task.inputs[1].ttype.dtype
-    c_dtype = task.outputs[0].ttype.dtype
+    a_dtype = task.inputs[0].type.dtype
+    b_dtype = task.inputs[1].type.dtype
+    c_dtype = task.outputs[0].type.dtype
 
     batch_size = task.batch_size
     m_size, k_size, n_size = task.m_size, task.k_size, task.n_size

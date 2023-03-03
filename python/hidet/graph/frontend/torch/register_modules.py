@@ -31,6 +31,21 @@ class HidetConv2d(HidetModule):
         )
 
 
+@register_module(torch.nn.Conv3d)
+class HidetConv3d(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.Conv3d)
+        return regs.conv3d(
+            x=x,
+            weight=self.param('weight'),
+            bias=self.param('bias', optional=True),
+            stride=self.mod.stride,
+            padding=self.mod.padding,
+            dilation=self.mod.dilation,
+            groups=self.mod.groups,
+        )
+
+
 @register_module(torch.nn.AdaptiveAvgPool2d)
 class HidetAdaptiveAvgPool2d(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
@@ -50,6 +65,21 @@ class HidetMaxPool2d(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, torch.nn.MaxPool2d)
         return regs.max_pool2d(
+            x=x,
+            kernel_size=self.mod.kernel_size,
+            stride=self.mod.stride,
+            padding=self.mod.padding,
+            dilation=self.mod.dilation,
+            ceil_mode=self.mod.ceil_mode,
+            return_indices=self.mod.return_indices,
+        )
+
+
+@register_module(torch.nn.MaxPool3d)
+class HidetMaxPool3d(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.MaxPool3d)
+        return regs.max_pool3d(
             x=x,
             kernel_size=self.mod.kernel_size,
             stride=self.mod.stride,

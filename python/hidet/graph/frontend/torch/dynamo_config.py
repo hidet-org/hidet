@@ -9,6 +9,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from typing import Optional
+
+
 class DynamoConfig:
     def __init__(self):
         self._search_space: int = 0
@@ -16,7 +19,9 @@ class DynamoConfig:
         self._use_fp16: bool = False
         self._use_fp16_reduction: bool = False
         self._use_cuda_graph: bool = True
+        self._use_tensor_core: bool = True
         self._print_input_graph: bool = False
+        self._dump_graph_ir: Optional[str] = None
         self._correctness_report: bool = False
 
     def __getitem__(self, item: str):
@@ -41,6 +46,13 @@ class DynamoConfig:
             The search space level.
         """
         self._search_space = level
+        return self
+
+    def use_tensor_core(self, flag=True):
+        """
+        Whether to use tensor core
+        """
+        self._use_tensor_core = flag
         return self
 
     def parallel_k(self, strategy="default"):
@@ -89,6 +101,18 @@ class DynamoConfig:
         Whether to print the input graph
         """
         self._print_input_graph = flag
+        return self
+
+    def dump_graph_ir(self, output_dir: str):
+        """
+        Whether to dump the graph ir
+
+        Parameters
+        ----------
+        output_dir: str
+            The output directory to dump the graph ir.
+        """
+        self._dump_graph_ir = output_dir
         return self
 
     def correctness_report(self, flag=True):

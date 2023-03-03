@@ -61,13 +61,13 @@ class Function(Node):
     def __init__(self, name: str, params, body, ret_type, kind: str, extern_vars=None, attrs=None):
         check_func_name(name)
         self.name: str = name
-        self.kind = kind
+        self.kind: str = kind
         assert isinstance(kind, str) and kind in ['cuda_device', 'cuda_kernel', 'host_kernel', 'packed_func']
         self.params: List[Var] = params
         self.body: Stmt = body
         self.ret_type: TypeNode = ret_type
         self.extern_vars: List[Var] = extern_vars if extern_vars else []
-        self.attrs = attrs if attrs else {}
+        self.attrs: Dict[str, Union[int, float, str, Node]] = attrs if attrs else {}
 
     def __call__(self, *args, **kwargs) -> Call:
         raise ValueError('Can only call script function in another script function, or lower it to execute.')
@@ -146,9 +146,15 @@ class IRModule(Node):
         return self.global_vars[name]
 
     def update_function(self, func: Function):
+        from hidet.ir.tools import rewrite
+
         self.functions[func.name] = func
         if func.name in self.global_vars:
-            self.global_vars[func.name].type = func.name, FuncType.from_func(func)
+            old_var = self.global_vars[func.name]
+            new_var = Var(func.name, FuncType.from_func(func))
+            self.global_vars[func.name] = new_var
+            for name, f in self.functions.items():
+                self.functions[name] = rewrite(f, {old_var: new_var})
 
     def add(self, name, func: Function):
         if name in self.functions:

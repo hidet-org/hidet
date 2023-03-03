@@ -11,4 +11,4 @@
 # limitations under the License.
 from . import scope
 
-from .scope import Scope, ScopeStack, FuncStmtExprRewriterWithScope
+from .scope import Scope, ScopeStack, IRRewriterWithScope

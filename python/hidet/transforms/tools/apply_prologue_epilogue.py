@@ -9,50 +9,24 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Sequence, Dict, List
-from hidet.ir.compute import TensorNode, GridCompute, TensorCompute
+from typing import Dict, List
+
+from hidet.ir.compute import TensorNode, GridCompute, TensorInput
 from hidet.ir.expr import Expr, Var, TensorElement
 from hidet.ir.stmt import BufferStoreStmt
 from hidet.ir.func import Function, IRModule
 from hidet.ir.task import Task, TaskGraph, InverseMap
-from hidet.ir.functors import FuncStmtExprRewriter, ExprRewriter, rewrite, collect
+from hidet.ir.functors import IRRewriter
+from hidet.ir.tools import rewrite, collect
 from hidet.utils import strict_zip
 
 
-class PrologueIndexer(ExprRewriter):
-    def __init__(self):
-        super().__init__()
-        self.bind: Dict[TensorNode, Var] = {}
-
-    def init_bind(self, input_tensors: Sequence[TensorNode], param_tensors: Sequence[Var]):
-        self.bind = {a: b for a, b in strict_zip(input_tensors, param_tensors)}
-
-    def tensor_index(self, buf: TensorNode, indices: Sequence[Expr]) -> Expr:
-        tc = buf.tensor_compute
-        if tc is None:
-            if buf not in self.bind:
-                raise ValueError('Input tensor {} has not been bound.'.format(buf))
-            return TensorElement(self.bind[buf], indices)
-        elif isinstance(tc, GridCompute):
-            gc: GridCompute = tc
-            remap = {a: b for a, b in strict_zip(gc.axes, indices)}
-            return self.visit(rewrite(gc.value, remap))
-        else:
-            raise ValueError('Prologue can only use GridCompute primitive.')
-
-    def visit_TensorElement(self, e: TensorElement):
-        if isinstance(e.base, TensorNode):
-            return self.tensor_index(e.base, e.indices)
-        else:
-            return ExprRewriter.visit_TensorElement(self, e)
-
-
-class PrologueEpilogueRewriter(FuncStmtExprRewriter):
+class PrologueEpilogueRewriter(IRRewriter):
     def __init__(self, task: Task):
         super().__init__()
         self.task: Task = task
         self.task_graph: TaskGraph = task.task_graph
-        self.reverse_consume: Dict[TensorNode, List[TensorNode]] = {}
+        self.reverse_consume: Dict[TensorNode, List[TensorInput]] = {}
         for a, b in self.task_graph.consume.items():
             if b not in self.reverse_consume:
                 self.reverse_consume[b] = []
@@ -63,8 +37,11 @@ class PrologueEpilogueRewriter(FuncStmtExprRewriter):
                 self.input2task[input_tensor] = internal_task
 
         self.binding: Dict[TensorNode, Var] = {}
+        self.new_params: List[Var] = []
         self.anchor_inputs: List[Var] = []
         self.anchor_outputs: List[Var] = []
+        self.anchor_input_new_index: Dict[int, int] = {}
+        self.anchor_output_new_index: Dict[int, int] = {}
 
     def visit_Function(self, func: Function):
         anchor_num_inputs = len(self.task.inputs)
@@ -73,16 +50,28 @@ class PrologueEpilogueRewriter(FuncStmtExprRewriter):
         self.anchor_inputs: List[Var] = func.params[:anchor_num_inputs]
         self.anchor_outputs: List[Var] = func.params[anchor_num_inputs:]
 
+        for input_index in range(anchor_num_inputs):
+            tn = self.task.inputs[input_index]
+            while tn in self.task_graph.consume:
+                tn = self.task_graph.consume[tn]
+            if tn in self.task_graph.input_tensors:
+                self.anchor_input_new_index[input_index] = self.task_graph.input_tensors.index(tn)
+
+        for output_index in range(anchor_num_outputs):
+            tn = self.task.outputs[output_index]
+            if tn in self.task_graph.output_tensors:
+                self.anchor_output_new_index[output_index] = self.task_graph.output_tensors.index(tn)
+
         # create parameters for fused function, and bind task graph parameters to function parameters
         # todo: do not create new parameters for the inputs/outputs that have not been fused
-        new_params: List[Var] = []
+        self.new_params: List[Var] = []
         for tensor_node in self.task_graph.input_tensors + self.task_graph.output_tensors:
-            new_params.append(Var(tensor_node.name, tensor_node.ttype))
-            self.binding[tensor_node] = new_params[-1]
+            self.new_params.append(Var(tensor_node.name, tensor_node.type))
+            self.binding[tensor_node] = self.new_params[-1]
 
         return Function(
             name=func.name,
-            params=new_params,
+            params=self.new_params,
             body=self.visit(func.body),
             ret_type=func.ret_type,
             kind=func.kind,
@@ -90,12 +79,40 @@ class PrologueEpilogueRewriter(FuncStmtExprRewriter):
             attrs=func.attrs,
         )
 
+    def visit_Var(self, e: Var):
+        if e in self.anchor_inputs:
+            input_index = self.anchor_inputs.index(e)
+            if input_index in self.anchor_input_new_index:
+                return self.new_params[self.anchor_input_new_index[input_index]]
+            else:
+                # we encounter a usage of an input tensor of the task other than TensorElement and BufferStoreStmt
+                raise ValueError(
+                    'Did you used a tensor in expression other than tensor[...] and tensor[...] = ...'
+                    ' while marking the task as allowing prologue?'
+                )
+        elif e in self.anchor_outputs:
+            output_index = self.anchor_outputs.index(e)
+            if output_index in self.anchor_output_new_index:
+                return self.new_params[len(self.task_graph.input_tensors) + self.anchor_output_new_index[output_index]]
+            else:
+                # we encounter a usage of an output tensor of the task other than TensorElement and BufferStoreStmt
+                raise ValueError(
+                    'Did you used a tensor in expression other than tensor[...] and tensor[...] = ...'
+                    ' while marking the task as allowing epilogue?'
+                )
+        else:
+            return e
+
     def visit_TensorElement(self, e: TensorElement):
-        if isinstance(e.base, TensorNode):
+        if e.base in self.anchor_inputs:
+            # access an input tensor in the anchor operator, replace it with the task input (i.e., InputTensor)
+            input_index = self.anchor_inputs.index(e.base)
+            return self.visit(TensorElement(self.task.inputs[input_index], e.indices))
+        elif isinstance(e.base, TensorNode):
             # apply prologue
             buf: TensorNode = e.base
             indices = [self.visit(v) for v in e.indices]
-            if buf.tensor_compute is None:
+            if isinstance(buf, TensorInput):
                 if buf in self.binding:
                     # buf is an input tensor of the task graph
                     return TensorElement(self.binding[buf], indices)
@@ -106,20 +123,22 @@ class PrologueEpilogueRewriter(FuncStmtExprRewriter):
                     return self.visit(buf[indices])
                 else:
                     raise ValueError('Input tensor {} has not been bound.'.format(buf))
-            elif isinstance(buf.tensor_compute, GridCompute):
-                gc: GridCompute = buf.tensor_compute
-                remap = {a: b for a, b in strict_zip(gc.axes, indices)}
-                return self.visit(rewrite(gc.value, remap))
+            elif isinstance(buf, GridCompute):
+                remap = {a: b for a, b in strict_zip(buf.axes, indices)}
+                return self.visit(rewrite(buf.value, remap))
             else:
                 raise ValueError('Prologue can only use GridCompute primitive.')
-        elif e.base in self.anchor_inputs:
-            input_index = self.anchor_inputs.index(e.base)
-            return self.visit(TensorElement(self.task.inputs[input_index], e.indices))
         else:
-            return FuncStmtExprRewriter.visit_TensorElement(self, e)
+            return IRRewriter.visit_TensorElement(self, e)
 
     def visit_BufferStoreStmt(self, stmt: BufferStoreStmt):
-        if isinstance(stmt.buf, TensorNode):
+        if stmt.buf in self.anchor_outputs:
+            # store a value to an output tensor with epilogue, replace it with the task output (i.e., TensorNode)
+            output_index = self.anchor_outputs.index(stmt.buf)
+            return self.visit(
+                BufferStoreStmt(self.task.outputs[output_index], stmt.indices, stmt.value, stmt.protected)
+            )
+        elif isinstance(stmt.buf, TensorNode):
             # apply epilogue
             buf: TensorNode = stmt.buf
             indices = [self.visit(v) for v in stmt.indices]
@@ -129,16 +148,17 @@ class PrologueEpilogueRewriter(FuncStmtExprRewriter):
             elif buf in self.reverse_consume:
                 # buf is an output tensor of an inner task of the task graph,
                 # but not an output tensor of task graph.
-                consumed_by: List[TensorNode] = self.reverse_consume[buf]
+                consumed_by: List[TensorInput] = self.reverse_consume[buf]
                 if len(consumed_by) != 1:
                     raise ValueError(
                         'Expect tensor {} to be consumed exactly once, got {}.'.format(buf, len(consumed_by))
                     )
-                consumer_input: TensorNode = consumed_by[0]
+                consumer_input: TensorInput = consumed_by[0]
                 consumer_task: Task = self.input2task[consumer_input]
                 inverse_map: InverseMap = consumer_task.inverse_map[consumer_input]
                 assert len(consumer_task.outputs) == 1, 'Expect consumer task to have exactly one output.'
                 consumer_output: TensorNode = consumer_task.outputs[0]
+                assert isinstance(consumer_output, GridCompute), 'Only GridCompute is supported in epilogue.'
 
                 # Example of what we are doing here:
                 # original indices:
@@ -164,15 +184,14 @@ class PrologueEpilogueRewriter(FuncStmtExprRewriter):
 
                 # step 2
                 # replace index
-                tc: TensorCompute = consumer_output.tensor_compute
-                assert isinstance(tc, GridCompute), 'Only GridCompute is supported in epilogue, got {}.'.format(tc)
-                remap: Dict[Var, Expr] = {a: b for a, b in strict_zip(tc.axes, out_indices)}
-                value: Expr = rewrite(tc.value, remap)
+                gc: GridCompute = consumer_output
+                remap: Dict[Var, Expr] = {a: b for a, b in strict_zip(gc.axes, out_indices)}
+                value: Expr = rewrite(gc.value, remap)
                 # replace out[i + 3, i + j] with value (in the example above)
                 tensor_elements: List[TensorElement] = collect(value, TensorElement, stop_when_found=False)
                 tensor_elements = [te for te in tensor_elements if te.base is consumer_input]
                 assert len(tensor_elements) == 1, (
-                    'Epilgoue can only index one time of the input tensor ' 'with inverse map'
+                    'Epilogue can only index one time of the input tensor ' 'with inverse map'
                 )
                 tensor_element: TensorElement = tensor_elements[0]
                 # in the context of above example, we replace 'out[i + 3, i + j]' by 'value'
@@ -182,13 +201,8 @@ class PrologueEpilogueRewriter(FuncStmtExprRewriter):
                 return self.visit(BufferStoreStmt(consumer_output, out_indices, value, stmt.protected))
             else:
                 raise ValueError('Output tensor {} has not been bound.'.format(buf))
-        elif stmt.buf in self.anchor_outputs:
-            output_index = self.anchor_outputs.index(stmt.buf)
-            return self.visit(
-                BufferStoreStmt(self.task.outputs[output_index], stmt.indices, stmt.value, stmt.protected)
-            )
         else:
-            return FuncStmtExprRewriter.visit_BufferStoreStmt(self, stmt)
+            return IRRewriter.visit_BufferStoreStmt(self, stmt)
 
 
 def apply_prologue_epilogue(ir_module: IRModule, func: Function, task: Task) -> Function:

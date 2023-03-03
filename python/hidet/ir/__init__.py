@@ -22,7 +22,7 @@ from . import task
 from .node import Node
 from .func import IRModule, Function
 from .type import TypeNode, TensorType, DataType, FuncType, VoidType, PointerType, TensorPointerType
-from .type import data_type, tensor_type
+from .type import data_type, tensor_type, tensor_pointer_type
 
 from .expr import Expr, Var, Constant
 from .expr import BinaryOp, Condition, LessThan, LessEqual, Equal, NotEqual, Add, Sub, Multiply, Div, Mod, FloorDiv
@@ -43,7 +43,7 @@ from .builders import FunctionBuilder, StmtBuilder
 
 from .task import Task, save_task, load_task
 
-from .functors import infer_type
+from .tools import infer_type
 
 from .utils import index_serialize, index_deserialize
 

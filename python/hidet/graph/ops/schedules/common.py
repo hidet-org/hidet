@@ -13,10 +13,11 @@
 from __future__ import annotations
 from typing import Mapping, List, Union, Tuple
 
-from hidet.ir.compute import TensorNode, ScalarNode, GridCompute, ArgReduceCompute, ReduceCompute
+from hidet.ir.compute import TensorNode, ScalarNode, GridCompute, ArgReduceCompute, ReduceCompute, TensorInput
 from hidet.ir.builders import StmtBuilder
 from hidet.ir.expr import Expr, Var, scalar_var, convert
-from hidet.ir.functors import infer_type, ExprRewriter
+from hidet.ir.functors import ExprRewriter
+from hidet.ir.tools import infer_type
 from hidet.ir.stmt import ForStmt, BufferStoreStmt, AssignStmt, DeclareStmt
 from hidet.ir.task import Task
 from hidet.utils import prod
@@ -168,4 +169,7 @@ def expand_loop(expr: Expr, input_map: Mapping[Union[ScalarNode, TensorNode], Va
 
 
 def params_from_task(task: Task) -> List[Var]:
-    return [Var(param.name, param.ttype) for param in task.inputs + task.outputs]
+    params_nodes: List[Union[TensorInput, TensorNode]] = []
+    params_nodes.extend(task.inputs)
+    params_nodes.extend(task.outputs)
+    return [Var(param.name, param.type) for param in params_nodes]

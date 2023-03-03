@@ -15,7 +15,8 @@ from hidet.ir.type import DataType
 from hidet.ir.stmt import Stmt
 from hidet.ir.expr import Call, Expr, BinaryOp, cast
 from hidet.ir.func import Function
-from hidet.ir.functors import StmtExprRewriter, infer_type, TypeInfer
+from hidet.ir.functors import IRRewriter
+from hidet.ir.tools import infer_type, TypeInfer
 from hidet.ir.primitives import is_primitive_function, lookup_primitive_function
 from hidet.ir.primitives.math import registered_math_function_sets
 from hidet.transforms import FunctionBodyPass
@@ -38,7 +39,7 @@ def cast_args(args: List[Expr], arg_dtypes: List[DataType], target_dtype: DataTy
     return casted_args
 
 
-class ResolveGenericPrimitiveFuncRewriter(StmtExprRewriter):
+class ResolveGenericPrimitiveFuncRewriter(IRRewriter):
     def __init__(self, device: str):
         super().__init__()
         self.type_infer = TypeInfer()
@@ -73,7 +74,7 @@ class ResolveGenericPrimitiveFuncRewriter(StmtExprRewriter):
                         )
                         raise NotImplementedError(msg) from err
 
-        return StmtExprRewriter.visit_Call(self, e)
+        return IRRewriter.visit_Call(self, e)
 
     def visit_Binary(self, e: BinaryOp):
         lhs = self.visit(e.a)
@@ -88,7 +89,7 @@ class ResolveGenericPrimitiveFuncRewriter(StmtExprRewriter):
             else:
                 return e.__class__(lhs, rhs)
         else:
-            return StmtExprRewriter.visit_Binary(self, e)
+            return IRRewriter.visit_Binary(self, e)
 
 
 class ResolveGenericPrimitiveFuncPass(FunctionBodyPass):

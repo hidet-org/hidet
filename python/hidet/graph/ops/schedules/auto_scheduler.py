@@ -17,8 +17,10 @@ from hidet.ir.stmt import Stmt, AssignStmt, ForStmt, DeclareStmt, BufferStoreStm
 from hidet.ir.task import Task
 from hidet.ir.func import IRModule, Function
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
-from hidet.ir.functors import ExprRewriter, ExprVisitor, collect, rewrite, infer_type, simplify_to_int
-from hidet.ir.compute import ScalarNode, TensorNode, GridCompute, ReduceCompute, ArgReduceCompute
+from hidet.ir.functors import ExprRewriter, ExprVisitor, ComputeVisitor, ComputeRewriter
+from hidet.ir.tools import collect, rewrite, infer_type, simplify_to_int
+from hidet.ir.compute import ScalarInput, TensorInput, GridCompute, ReduceCompute, ArgReduceCompute
+from hidet.ir.compute import TensorNode, ScalarNode
 from hidet.ir.primitives.runtime import request_cuda_workspace, request_cpu_workspace
 from hidet.ir.dtypes import uint8, int32
 from hidet.utils import prod, DirectedGraph
@@ -29,7 +31,7 @@ class ScalarComputeFound(Exception):
     pass
 
 
-class GridComputeInlineChecker(ExprVisitor):
+class GridComputeInlineChecker(ExprVisitor, ComputeVisitor):
     def check(self, gc: GridCompute) -> bool:
         """Check whether the grid compute can be inlined.
 
@@ -51,12 +53,20 @@ class GridComputeInlineChecker(ExprVisitor):
             return False
         return True
 
-    def visit_TensorNode(self, e: TensorNode):
+    def visit_TensorInput(self, node: TensorInput):
         return
 
-    def visit_ScalarNode(self, e: ScalarNode):
-        if e.scalar_compute is not None:
-            raise ScalarComputeFound()
+    def visit_GridCompute(self, e: GridCompute):
+        return
+
+    def visit_ScalarInput(self, e: ScalarInput):
+        return
+
+    def visit_ReduceCompute(self, e: ReduceCompute):
+        raise ScalarComputeFound()
+
+    def visit_ArgReduceCompute(self, e: ArgReduceCompute):
+        raise ScalarComputeFound()
 
 
 def can_inline_grid_compute(gc: GridCompute) -> bool:
@@ -67,13 +77,15 @@ class GridComputeInliner(ExprRewriter):
     def __init__(self):
         super().__init__()
 
+    def inline(self, node: TensorNode):
+        return self.visit(node)
+
     def visit_TensorElement(self, e: TensorElement):
         base = self(e.base)
         indices = [self(index) for index in e.indices]
-        if isinstance(base, TensorNode) and isinstance(base.tensor_compute, GridCompute):
-            gc = base.tensor_compute
-            if can_inline_grid_compute(gc):
-                return rewrite(gc.value, {axis: index for axis, index in zip(gc.axes, indices)})
+        if isinstance(base, GridCompute):
+            if can_inline_grid_compute(base):
+                return rewrite(base.value, {axis: index for axis, index in zip(base.axes, indices)})
         return ExprRewriter.visit_TensorElement(self, e)
 
 
@@ -105,7 +117,7 @@ def inline_grid_compute(nodes: List[TensorNode]) -> List[TensorNode]:
         The nodes after inlining.
     """
     inliner = GridComputeInliner()
-    return [inliner(node) for node in nodes]
+    return [inliner.inline(node) for node in nodes]
 
 
 class AutoScheduler:
@@ -115,16 +127,15 @@ class AutoScheduler:
 
     @staticmethod
     def get_accessed_nodes(node: TensorNode) -> List[TensorNode]:
-        tc = node.tensor_compute
-        if tc is None:
+        if isinstance(node, TensorInput):
             return []
-        elif isinstance(tc, GridCompute):
-            e = tc.value
+        elif isinstance(node, GridCompute):
+            e = node.value
+            accessed_nodes: List[TensorNode] = collect(e, TensorNode, stop_when_found=True)
+            accessed_nodes = list(set(accessed_nodes))  # remove duplicated ones
+            return accessed_nodes
         else:
             raise NotImplementedError()
-        accessed_nodes: List[TensorNode] = collect(e, TensorNode, stop_when_found=True)
-        accessed_nodes = list(set(accessed_nodes))  # remove duplicated ones
-        return accessed_nodes
 
     @staticmethod
     def build_dag(outputs: Sequence[TensorNode]) -> DirectedGraph:
@@ -154,7 +165,7 @@ class AutoScheduler:
             if tensor not in require_allocate:
                 continue
             buffer_offset[tensor] = allocated_bytes
-            allocated_bytes += simplify_to_int(tensor.ttype.storage_bytes())
+            allocated_bytes += simplify_to_int(tensor.type.storage_bytes())
             allocated_bytes = (allocated_bytes + alignment_bytes - 1) // alignment_bytes * alignment_bytes
         return allocated_bytes, buffer_offset
 
@@ -182,7 +193,7 @@ class AutoScheduler:
                 # this node is either an input or output tensor
                 continue
             assert buffer is not None
-            v = Var(node.name, ~node.ttype)
+            v = Var(node.name, ~node.type)
             node_map[node] = v
             fb += DeclareStmt(v, init=cast(~buffer[buffer_offset[node]], ~v.type.tensor_type.dtype))
 
@@ -218,7 +229,7 @@ class AutoScheduler:
             # extract the actual arguments from packed arguments
             params: List[Var] = []
             for idx, task_param in enumerate(task.inputs + task.outputs):
-                param = Var(task_param.name, ~task_param.ttype.dtype)
+                param = Var(task_param.name, ~task_param.type.dtype)
                 params.append(param)
                 fb += DeclareStmt(param, init=cast(args[idx], param.type))
 
@@ -227,22 +238,17 @@ class AutoScheduler:
             self.allocate_tensors(fb, device, buffer_bytes, buffer_offset, node_map)
 
             # schedule each tensor computation
-            for tensor in order:
-                if tensor.tensor_compute is None:
-                    # input tensor does not need scheduling, skip
-                    continue
-                fb += self.schedule_tensor_node(tensor, node_map)
+            for node in order:
+                if isinstance(node, TensorInput):
+                    pass  # input tensor does not need scheduling, skip
+                elif isinstance(node, GridCompute):
+                    fb += self.schedule_grid_compute(node, node_map)
+                else:
+                    raise NotImplementedError()
         func = fb.get()
         self.ir_module.add(func.name, func)
 
         return self.ir_module
-
-    def schedule_tensor_node(self, node: TensorNode, node_map: Dict[TensorNode, Expr]) -> Stmt:
-        tc = node.tensor_compute
-        if isinstance(tc, GridCompute):
-            return self.schedule_grid_compute(tc, node, node_map)
-        else:
-            raise ValueError('Cannot recognize tensor compute node: {}.'.format(type(tc).__name__))
 
     def add_function(self, func: Function) -> Var:
         """Add a function to current ir module.
@@ -265,11 +271,11 @@ class AutoScheduler:
         self.ir_module.add(func.name, func)
         return self.ir_module.lookup_var(func.name)
 
-    def schedule_grid_compute(self, gc: GridCompute, node: TensorNode, node_map: Dict[TensorNode, Expr]) -> Stmt:
+    def schedule_grid_compute(self, node: GridCompute, node_map: Dict[TensorNode, Expr]) -> Stmt:
         raise NotImplementedError()
 
 
-class ComputeExprLower(ExprRewriter):
+class ComputeExprLower(ExprRewriter, ComputeRewriter):
     def __init__(self, expr: Expr, param_map: Dict[Union[TensorNode, ScalarNode], Expr]):
         super().__init__()
         self.sb: StmtBuilder = StmtBuilder()
@@ -281,90 +287,83 @@ class ComputeExprLower(ExprRewriter):
         assert len(self.sb.scope_stack) == 1, "some scope has not been exited?"
         return self.sb.scope_stack[0], result
 
-    def visit_TensorNode(self, e: TensorNode):
-        if e in self.param_map:
-            return self.param_map[e]
-
-        if e.tensor_compute is None:
-            raise ValueError('Expect tensor input in param_map.')
-
-        tc = e.tensor_compute
-        if isinstance(tc, GridCompute):
-            grid_compute: GridCompute = tc
-            # declare intermediate tensor buffer
-            buf = Var(e.name, e.ttype)
-
-            # pylint: disable=unused-variable
-            shape, axes, value = grid_compute.shape, grid_compute.axes, grid_compute.value
-            # tensor compute loops
-            for i in range(len(shape)):
-                self.sb.enter_body(ForStmt(axes[i], shape[i]))
-
-            # at the innermost loop body
-            expr = self.visit(grid_compute.value)
-            self.sb.append(BufferStoreStmt(buf, axes, expr))
-
-            # exit loop scope
-            for i in range(len(shape)):
-                self.sb.exit_body()
-            return buf
+    def visit_TensorInput(self, node: TensorInput):
+        if node in self.param_map:
+            return self.param_map[node]
         else:
-            raise NotImplementedError('Compute pattern {}'.format(type(tc).__name__))
+            raise ValueError('Expect tensor input "{}" in param_map.'.format(node))
 
-    def visit_ScalarNode(self, e: ScalarNode):
-        if e in self.param_map:
-            return self.param_map[e]
+    def visit_ScalarInput(self, node: ScalarInput):
+        if node in self.param_map:
+            return self.param_map[node]
+        else:
+            raise ValueError('Expect scalar input "{}" in param_map.'.format(node))
 
-        if e.scalar_compute is None:
-            raise ValueError('Expect scalar input in param_map.')
+    def visit_GridCompute(self, node: GridCompute):
+        if node in self.param_map:
+            return self.param_map[node]
 
-        sc = e.scalar_compute
-        if isinstance(sc, ReduceCompute):
-            shape, axes, value = sc.shape, sc.axes, sc.value
-            # declare accumulator
-            acc = scalar_var(e.name, infer_type(value))
-            self.sb += DeclareStmt(acc, init=sc.reduce_operation.initial_value(e.dtype.name))
+        # declare intermediate tensor buffer
+        buf = Var(node.name, node.type)
 
-            # reduction loops
-            for i in range(len(shape)):
-                self.sb.enter_body(ForStmt(axes[i], shape[i]))
+        # tensor compute loops
+        for i in range(len(node.shape)):
+            self.sb.enter_body(ForStmt(node.axes[i], node.shape[i]))
 
-            # at the innermost loop body
-            expr = self.visit(value)
-            self.sb += AssignStmt(acc, sc.reduce_operation.combine(acc, expr))
+        # at the innermost loop body
+        expr = self.visit(node.value)
+        self.sb.append(BufferStoreStmt(buf, node.axes, expr))
 
-            # exit loop scope
-            for i in range(len(shape)):
-                self.sb.exit_body()
+        # exit loop scope
+        for i in range(len(node.shape)):
+            self.sb.exit_body()
+        return buf
 
-            # finalize
-            acc = sc.reduce_operation.finalize(acc, prod(shape))
+    def visit_ReduceCompute(self, node: ReduceCompute):
+        shape, axes, value = node.shape, node.axes, node.value
+        # declare accumulator
+        acc = scalar_var(node.name, infer_type(value))
+        self.sb += DeclareStmt(acc, init=node.reduce_operation.initial_value(node.type))
 
-            return acc
-        elif isinstance(sc, ArgReduceCompute):
-            extent, axis, value = sc.extent, sc.axis, sc.value
-            value_dtype = infer_type(value)
-            # declare index accumulator
-            acc_index = scalar_var(e.name + '_idx', sc.index_dtype)
-            acc_value = scalar_var(e.name + '_val', value_dtype)
+        # reduction loops
+        for i in range(len(shape)):
+            self.sb.enter_body(ForStmt(axes[i], shape[i]))
 
-            # init accumulator
-            self.sb += DeclareStmt(acc_index, init=convert(0))
-            self.sb += DeclareStmt(acc_value, init=sc.reduce_operation.initial_value(value_dtype))
-            self.sb += AssignStmt(acc_index, 0)
+        # at the innermost loop body
+        expr = self.visit(value)
+        self.sb += AssignStmt(acc, node.reduce_operation.combine(acc, expr))
 
-            # reduction loops
-            self.sb.enter_body(ForStmt(axis, extent))
-
-            # compare and update index
-            expr = self.visit(value)
-            with self.sb.if_then(sc.reduce_operation.arg_combine(lhs_value=expr, rhs_value=acc_value)):
-                self.sb += AssignStmt(acc_value, expr)
-                self.sb += AssignStmt(acc_index, axis)
-
-            # exit loop
+        # exit loop scope
+        for i in range(len(shape)):
             self.sb.exit_body()
 
-            return acc_index
-        else:
-            raise NotImplementedError('Compute pattern {}'.format(type(sc).__name__))
+        # finalize
+        acc = node.reduce_operation.finalize(acc, prod(shape))
+
+        return acc
+
+    def visit_ArgReduceCompute(self, node: ArgReduceCompute):
+        extent, axis, value = node.extent, node.axis, node.value
+        value_dtype = infer_type(value)
+        # declare index accumulator
+        acc_index = scalar_var(node.name + '_idx', node.index_dtype)
+        acc_value = scalar_var(node.name + '_val', value_dtype)
+
+        # init accumulator
+        self.sb += DeclareStmt(acc_index, init=convert(0))
+        self.sb += DeclareStmt(acc_value, init=node.reduce_operation.initial_value(value_dtype))
+        self.sb += AssignStmt(acc_index, 0)
+
+        # reduction loops
+        self.sb.enter_body(ForStmt(axis, extent))
+
+        # compare and update index
+        expr = self.visit(value)
+        with self.sb.if_then(node.reduce_operation.arg_combine(lhs_value=expr, rhs_value=acc_value)):
+            self.sb += AssignStmt(acc_value, expr)
+            self.sb += AssignStmt(acc_index, axis)
+
+        # exit loop
+        self.sb.exit_body()
+
+        return acc_index
