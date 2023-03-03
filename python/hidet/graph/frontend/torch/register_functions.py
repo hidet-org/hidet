@@ -395,3 +395,17 @@ def torch_tensor(
     else:
         tt = torch.tensor(data, dtype=dtype, device=device)
         return from_torch(tt)
+
+
+@register_function(torch.sigmoid)
+def sigmoid(input: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.sigmoid(..., out=...)")
+    return ops.sigmoid(input)
+
+
+@register_function(torch.nn.functional.hardsigmoid)
+def hardsigmoid(input: Tensor, inplace: bool):
+    if inplace:
+        warnings.warn_once('hidet: hardsigmoid with inplace=True is not supported. Treat as inplace=False.')
+    return ops.hardsigmoid(input)

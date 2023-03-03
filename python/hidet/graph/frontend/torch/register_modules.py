@@ -139,3 +139,17 @@ class HidetReLU6(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, torch.nn.ReLU6)
         return regs.relu6(x, self.mod.inplace)
+
+
+@register_module(torch.nn.Sigmoid)
+class HidetSigmoid(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.Sigmoid)
+        return regs.sigmoid(x)
+
+
+@register_module(torch.nn.Hardsigmoid)
+class HidetHardsigmoid(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.Hardsigmoid)
+        return regs.hardsigmoid(x, self.mod.inplace)

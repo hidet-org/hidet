@@ -34,6 +34,19 @@ class SigmoidOp(UnaryElementwiseOp):
         super().__init__(x, op=lambda v: x.dtype(1.0) / (x.dtype.one + prim.exp(-v)), name='sigmoid')
 
 
+class HardSigmoidOp(UnaryElementwiseOp):
+    def __init__(self, x: Tensor):
+        super().__init__(
+            x,
+            op=lambda v: if_then_else(
+                v <= x.dtype(-3),
+                x.dtype.zero,
+                if_then_else(v >= x.dtype(3), x.dtype.one, v / x.dtype(6) + x.dtype(0.5)),
+            ),
+            name='hardsigmoid',
+        )
+
+
 class ClipOp(UnaryElementwiseOp):
     def __init__(self, x: Tensor, min_val: Optional[float] = None, max_val: Optional[float] = None):
         def op(v):
@@ -69,6 +82,10 @@ def leaky_relu(x: Tensor, alpha: float) -> Tensor:
 
 def sigmoid(x: Tensor) -> Tensor:
     return SigmoidOp(x).get_output(0)
+
+
+def hardsigmoid(x: Tensor) -> Tensor:
+    return HardSigmoidOp(x).get_output(0)
 
 
 def clip(x: Tensor, min_val: Optional[float], max_val: Optional[float]) -> Tensor:
