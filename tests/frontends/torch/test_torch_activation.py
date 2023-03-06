@@ -11,19 +11,16 @@
 # limitations under the License.
 import pytest
 import torch
-
-from utils import check_onnx_and_hidet
-
-
-class SliceModule(torch.nn.Module):
-    def __init__(self, indices):
-        super().__init__()
-        self.indices = indices
-
-    def forward(self, x):
-        return x[self.indices]
+from hidet.testing.torch_utils import check_module
 
 
-@pytest.mark.parametrize('shape,indices', [((100,), slice(2, None))])
-def test_slice(shape, indices):
-    check_onnx_and_hidet(SliceModule(indices), [torch.randn(shape)])
+@pytest.mark.parametrize('shape', [
+    (1, 1, 1),
+    (33,),
+    (3, 1),
+])
+@pytest.mark.parametrize('dtype', [
+        torch.float32,
+])
+def test_relu(shape, dtype):
+    check_module(torch.nn.ReLU(), [torch.randn(shape, dtype=dtype)])
