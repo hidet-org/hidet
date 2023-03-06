@@ -11,7 +11,7 @@
 # limitations under the License.
 # pylint: disable=import-outside-toplevel
 from __future__ import annotations
-from typing import Any, Dict, List, Union, Optional, Sequence, Callable, Tuple
+from typing import Any, Dict, List, Union, Optional, Sequence, Callable
 import os
 import pickle
 from hidet.ir.node import Node
@@ -201,6 +201,7 @@ class Task(Node):
             return list(inputs) + list(outputs)
         else:
             from hidet.ir.tools import rewrite
+
             remap = {}
             for param, arg in zip(self.parameters, list(inputs) + list(outputs)):
                 remap[param] = arg
@@ -226,6 +227,7 @@ class Task(Node):
             The compiled function.
         """
         from hidet.driver import build_task
+
         if isinstance(target, Target):
             target = target.name
         return build_task(self, target_device=target, load=True)
@@ -343,8 +345,4 @@ def task_compiled_func_type(task: Task) -> FuncType:
     else:
         args = task.parameters
 
-    return FuncType(
-        param_types=[infer_type(t) for t in args],
-        ret_type=VoidType()
-    )
-
+    return FuncType(param_types=[infer_type(t) for t in args], ret_type=VoidType())

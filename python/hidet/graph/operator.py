@@ -170,9 +170,7 @@ class Operator:
         outputs = self.dummy_outputs()
         self.imperative_run(dummy_inputs)
         args = self.task.generate_arguments(dummy_inputs, outputs)
-        return benchmark_func(
-            lambda: self.task_func(*args), warmup=warmup, number=number, repeat=repeat, median=median
-        )
+        return benchmark_func(lambda: self.task_func(*args), warmup=warmup, number=number, repeat=repeat, median=median)
 
     def build_task_func(self):
         if self.task_func is None:
