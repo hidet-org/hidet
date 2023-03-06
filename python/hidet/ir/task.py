@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Union, Optional, Sequence, Callable, Tuple
 import os
 import pickle
 from hidet.ir.node import Node
+from hidet.ir.type import FuncType, VoidType
 from hidet.ir.expr import Expr, Var, var
 from hidet.ir.func import IRModule
 from hidet.ir.compute import ComputeNode, TensorNode, TensorInput, ScalarNode, ScalarInput, GridCompute
@@ -332,3 +333,18 @@ def save_task(task: Task, fname: str):
 
 def load_task(fname: str) -> Task:
     return Task.load(fname)
+
+
+def task_compiled_func_type(task: Task) -> FuncType:
+    from hidet.ir.tools import infer_type
+
+    if task.arguments:
+        args = task.arguments
+    else:
+        args = task.parameters
+
+    return FuncType(
+        param_types=[infer_type(t) for t in args],
+        ret_type=VoidType()
+    )
+
