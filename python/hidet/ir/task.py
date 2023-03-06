@@ -179,14 +179,17 @@ class Task(Node):
         params += self.outputs
         return params
 
-    def generate_arguments(self, params):
+    def generate_arguments(self, inputs, outputs):
         """
         Generate arguments for the compiled function of this task given the tensor parameters.
 
         Parameters
         ----------
-        params: Sequence[Tensor]
-            The actual tensors.
+        inputs: Sequence[Tensor]
+            The input tensors.
+
+        outputs: Sequence[Tensor]
+            The output tensors.
 
         Returns
         -------
@@ -194,11 +197,33 @@ class Task(Node):
             The arguments for the compiled function.
         """
         if self.arguments is None:
-            return params
+            return list(inputs) + list(outputs)
         else:
+            from hidet.ir.tools import rewrite
             remap = {}
+            for param, arg in zip(self.parameters, list(inputs) + list(outputs)):
+                remap[param] = arg
+                if param.ndim != len(arg.shape):
+                    raise ValueError(
+                        'Expect a tensor with {} dimensions, but got {} dimensions'.format(param.ndim, len(arg.shape))
+                    )
+                remap.update({param.type.shape[i]: arg.shape[i] for i in range(param.ndim)})
+            return [rewrite(arg, remap) for arg in self.arguments]
 
     def build(self, target: Union[str, Target]):
+        """
+        Build the task for the given target to a callable function.
+
+        Parameters
+        ----------
+        target: Union[str, Target]
+            The target device.
+
+        Returns
+        -------
+        func: hidet.runtime.CompiledFunction
+            The compiled function.
+        """
         from hidet.driver import build_task
         if isinstance(target, Target):
             target = target.name
