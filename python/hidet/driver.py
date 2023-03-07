@@ -178,7 +178,7 @@ def build_ir_module(
 
     if load:
         # load function
-        return load_lib_func(lib_path, func_name, func_type=func_type)
+        return load_lib_func(lib_path, 'hidet_' + func_name, func_type=func_type)
     else:
         return lib_path, func_name, func_type
 
@@ -261,7 +261,7 @@ def build_ir_module_batch(
         for build_result in build_results:
             if build_result is not None:
                 lib_path, func_name, func_type = build_result
-                funcs.append(load_lib_func(lib_path, func_name, func_type))
+                funcs.append(load_lib_func(lib_path, 'hidet_' + func_name, func_type))
             else:
                 funcs.append(None)
     if verbose:

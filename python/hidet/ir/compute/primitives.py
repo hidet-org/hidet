@@ -72,6 +72,10 @@ class TensorInput(TensorNode):
     def const_shape(self) -> List[int]:
         return [int(v) for v in self.ttype.shape]
 
+    @property
+    def shape(self) -> Tuple[Expr]:
+        return self.ttype.shape
+
 
 class ReduceCompute(ScalarNode):
     def __init__(

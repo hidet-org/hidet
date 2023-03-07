@@ -92,7 +92,8 @@ class Operator:
             for type in output_types
         ]
 
-        self.task_func(*inputs, *outputs)
+        args = self.task.generate_arguments(inputs, outputs)
+        self.task_func(*args)
 
         status = get_last_error()
         if status is not None:
@@ -168,12 +169,9 @@ class Operator:
         dummy_inputs = self.dummy_inputs()
         outputs = self.dummy_outputs()
         self.imperative_run(dummy_inputs)
-        return benchmark_func(
-            lambda: self.task_func(*dummy_inputs, *outputs), warmup=warmup, number=number, repeat=repeat, median=median
-        )
+        args = self.task.generate_arguments(dummy_inputs, outputs)
+        return benchmark_func(lambda: self.task_func(*args), warmup=warmup, number=number, repeat=repeat, median=median)
 
     def build_task_func(self):
-        from hidet.driver import build_task
-
         if self.task_func is None:
-            self.task_func = build_task(self.task, target_device=self.device.type, load=True)
+            self.task_func = self.task.build(target=self.device.type)

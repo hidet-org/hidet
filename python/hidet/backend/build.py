@@ -207,6 +207,5 @@ def load_lib_func(lib_path: str, func_name: str, func_type: FuncType) -> Compile
         print("Removed the file '{}'".format(lib_path))
         os.remove(lib_path)
         raise e
-    func_name = 'hidet_{}'.format(func_name)
     packed_func = PackedFunc(param_types=list(func_type.param_types), c_func_pointer=lib[func_name])
     return CompiledFunction(name=func_name, packed_func=packed_func)

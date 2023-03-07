@@ -25,6 +25,6 @@ def available():
     Returns
     -------
     ret: bool
-        True if torch is installed.
+        True if onnx is installed.
     """
     return _available
