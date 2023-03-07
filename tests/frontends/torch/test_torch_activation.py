@@ -14,13 +14,7 @@ import torch
 from hidet.testing.torch_utils import check_module
 
 
-@pytest.mark.parametrize('shape', [
-    (1, 1, 1),
-    (33,),
-    (3, 1),
-])
-@pytest.mark.parametrize('dtype', [
-        torch.float32,
-])
+@pytest.mark.parametrize('shape', [(1, 1, 1), (33,), (3, 1)])
+@pytest.mark.parametrize('dtype', [torch.float32])
 def test_relu(shape, dtype):
     check_module(torch.nn.ReLU(), [torch.randn(shape, dtype=dtype)])
