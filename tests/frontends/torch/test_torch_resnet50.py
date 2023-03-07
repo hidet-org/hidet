@@ -9,21 +9,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import pytest
 import torch
-
-from utils import check_onnx_and_hidet
-
-
-class SliceModule(torch.nn.Module):
-    def __init__(self, indices):
-        super().__init__()
-        self.indices = indices
-
-    def forward(self, x):
-        return x[self.indices]
+from hidet.testing.torch_utils import check_module
 
 
-@pytest.mark.parametrize('shape,indices', [((100,), slice(2, None))])
-def test_slice(shape, indices):
-    check_onnx_and_hidet(SliceModule(indices), [torch.randn(shape)])
+def test_resnet50():
+    model = torch.hub.load('pytorch/vision:v0.6.0', 'resnet50', pretrained=True)
+    x = torch.randn(1, 3, 224, 224)
+    check_module(model, [x], atol=1e-2, rtol=1e-2)
