@@ -11,17 +11,14 @@
 # limitations under the License.
 
 import pytest
-from hidet import ops
 import torch
-
-from hidet.testing import check_torch_unary
-from hidet.graph.frontend.torch.register_modules import HidetSigmoid
+from hidet.testing.torch_utils import check_module
 
 
-@pytest.mark.parametrize("shape", [[10, 10, 10], [15, 15, 15]])
-def test_sigmoid(shape):
-    sigmoid = HidetSigmoid(torch.nn.Sigmoid())
-    check_torch_unary(shape, lambda x: torch.sigmoid(x), lambda x: sigmoid(x), dtype='float32', atol=1e-5, rtol=1e-5)
+@pytest.mark.parametrize("shape", [(10, 20)])
+@pytest.mark.parametrize("dtype", [torch.float32])
+def test_sigmoid(shape, dtype):
+    check_module(torch.nn.Sigmoid(), [torch.randn(shape, dtype=dtype)])
 
 
 if __name__ == '__main__':
