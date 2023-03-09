@@ -227,6 +227,7 @@ class HidetSiLU(HidetModule):
         assert isinstance(self.mod, torch.nn.SiLU)
         return regs.silu(x, self.mod.inplace)
 
+
 # to implement identity
 @register_module(torch.nn.Identity)
 class HidetIdentity(HidetModule):
@@ -249,7 +250,8 @@ class HidetGroupNorm(HidetModule):
             affine=self.mod.affine,
         )
 
-# to implement multihead_attention 
+
+# to implement multihead_attention
 @register_module(torch.nn.MultiheadAttention)
 class HidetMultiheadAttention(torch.nn.MultiheadAttention):
     def __call__(self, x: Tensor) -> Tensor:
@@ -266,6 +268,7 @@ class HidetMultiheadAttention(torch.nn.MultiheadAttention):
             vdim=self.mod.vdim,
             batch_first=self.mod.batch_first,
         )
+
 
 # to implement conv_transpose2d
 @register_module(torch.nn.ConvTranspose2d)
