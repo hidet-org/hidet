@@ -183,3 +183,104 @@ class HidetHardsigmoid(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, torch.nn.Hardsigmoid)
         return regs.hardsigmoid(x, self.mod.inplace)
+
+
+@register_module(torch.nn.AvgPool2d)
+class HidetAvgPool2d(HidetModule):
+    def __call__(self, x=Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.AvgPool2d)
+        return regs.avg_pool2d(
+            x=x,
+            kernel_size=self.mod.kernel_size,
+            stride=self.mod.stride,
+            padding=self.mod.padding,
+            ceil_mode=self.mod.ceil_mode,
+            count_include_pad=self.mod.count_include_pad,
+            divisor_override=self.mod.divisor_override,
+        )
+
+
+@register_module(torch.nn.Flatten)
+class HidetFlatten(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.Flatten)
+        return regs.flatten(x, self.mod.start_dim, self.mod.end_dim)
+
+
+@register_module(torch.nn.Hardswish)
+class HidetHardswish(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.Hardswish)
+        return regs.hardswish(x, self.mod.inplace)
+
+
+@register_module(torch.nn.GELU)
+class HidetGELU(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.GELU)
+        return regs.gelu(x, self.mod.approximate)
+
+
+@register_module(torch.nn.SiLU)
+class HidetSiLU(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.SiLU)
+        return regs.silu(x, self.mod.inplace)
+
+# to implement identity
+@register_module(torch.nn.Identity)
+class HidetIdentity(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.Identity)
+        return regs.identity(x)
+
+
+@register_module(torch.nn.GroupNorm)
+class HidetGroupNorm(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.GroupNorm)
+        return regs.group_norm(
+            x=x,
+            num_groups=self.mod.num_groups,
+            num_channels=self.mod.num_channels,
+            weight=self.param('weight'),
+            bias=self.param('bias'),
+            eps=self.mod.eps,
+            affine=self.mod.affine,
+        )
+
+# to implement multihead_attention 
+@register_module(torch.nn.MultiheadAttention)
+class HidetMultiheadAttention(torch.nn.MultiheadAttention):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.MultiheadAttention)
+        return regs.multihead_attention(
+            x=x,
+            embed_dim=self.mod.embed_dim,
+            num_heads=self.mod.num_heads,
+            dropout=self.mod.dropout,
+            bias=self.param('bias'),
+            add_bias_attn=False,
+            add_zero_attn=self.mod.add_zero_attn,
+            kdim=self.mod.kdim,
+            vdim=self.mod.vdim,
+            batch_first=self.mod.batch_first,
+        )
+
+# to implement conv_transpose2d
+@register_module(torch.nn.ConvTranspose2d)
+class HidetConvTranspose2d(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.ConvTranspose2d)
+        return regs.conv_transpose2d(
+            x=x,
+            in_channels=self.mod.in_channels,
+            out_channels=self.mod.out_channels,
+            kernel_size=self.mod.kernel_size,
+            stride=self.mod.stride,
+            padding=self.mod.padding,
+            output_padding=self.mod.output_padding,
+            groups=self.mod.groups,
+            bias=self.param("bias"),
+            dilation=self.mod.dilation,
+        )

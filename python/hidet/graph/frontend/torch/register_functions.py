@@ -25,6 +25,7 @@ from .utils import dtype_from_torch, device_from_torch
 Number = Union[int, float, bool]
 TorchDtype = torch.dtype
 TorchDevice = torch.device
+TorchLayout = torch.layout
 
 
 @register_function(torch.nn.functional.conv2d)
@@ -221,9 +222,9 @@ def matmul(x: Tensor, y: Tensor):
 def ones(
     *size: Union[int, Sequence[int]],
     out: Optional[Tensor] = None,
-    dtype: Optional[torch.dtype] = None,
-    layout: Optional[torch.layout] = None,
-    device: Optional[Union[torch.device, str, None]] = None,
+    dtype: Optional[TorchDtype] = None,
+    layout: Optional[TorchLayout] = None,
+    device: Optional[Union[TorchDevice, str, None]] = None,
     pin_memory: Optional[bool] = False,
     requires_grad: Optional[bool] = False,
 ):
@@ -253,7 +254,9 @@ def ones(
 
 
 @register_function(torch.nn.functional.gelu)
-def gelu(x: Tensor):
+def gelu(x: Tensor, approximate=None):
+    if approximate is not None:
+        NotImplementedError("divisor_override is not None")
     return ops.gelu(x)
 
 
@@ -353,7 +356,7 @@ def arange(
     *,
     out: Optional[Tensor] = None,
     dtype: Optional[TorchDtype] = None,
-    layout: Optional = None,
+    layout: Optional[TorchLayout] = None,
     device: Optional[Union[TorchDevice, str, None]] = None,
     pin_memory: Optional[bool] = False,
     requires_grad: Optional[bool] = False,
@@ -418,7 +421,7 @@ def bmm(input: Tensor, mat2: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
 
 @register_function(torch.tensor)
 def torch_tensor(
-    data: Any, dtype: Optional[torch.dtype] = None, device: Optional[torch.device] = None, requires_grad: bool = False
+    data: Any, dtype: Optional[TorchDevice] = None, device: Optional[TorchDevice] = None, requires_grad: bool = False
 ) -> Tensor:
     if requires_grad and torch.is_grad_enabled():
         warnings.warn_once("hidet: requires_grad=True when torch.is_grad_enabled(), treating as requires_grad=False")
@@ -431,14 +434,50 @@ def torch_tensor(
 
 
 @register_function(torch.sigmoid)
-def sigmoid(input: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
+def sigmoid(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.sigmoid(..., out=...)")
-    return ops.sigmoid(input)
+    return ops.sigmoid(x)
 
 
 @register_function(torch.nn.functional.hardsigmoid)
-def hardsigmoid(input: Tensor, inplace: bool):
+def hardsigmoid(x: Tensor, inplace: bool):
     if inplace:
         warnings.warn_once('hidet: hardsigmoid with inplace=True is not supported. Treat as inplace=False.')
-    return ops.hardsigmoid(input)
+    return ops.hardsigmoid(x)
+
+
+@register_function(torch.nn.functional.silu)
+def silu(x: Tensor, inplace: bool):
+    if inplace:
+        warnings.warn_once('hidet: silu with inplace=True is not supported. Treat as inplace=False.')
+    return ops.silu(x)
+
+
+@register_function(torch.nn.functional.hardswish)
+def hardswish(x: Tensor, inplace: bool):
+    if inplace:
+        warnings.warn_once('hidet: hardswish with inplace=True is not supported. Treat as inplace=False.')
+    return ops.hardswish(x)
+
+
+@register_function(torch.nn.functional.group_norm)
+def group_norm(
+    x: Tensor,
+    num_groups: int,
+    num_channels: Optional[int] = None,
+    weight: Optional[Tensor] = None,
+    bias: Optional[Tensor] = None,
+    eps: float = 1e-5,
+    affine: Optional[bool] = True,
+):
+    y = ops.group_norm(x, num_groups, num_channels, eps)
+    if weight is not None:
+        if affine:
+            weights = torch.zeros(len(weights))
+        y = y * weight
+    if bias is not None:
+        if affine:
+            bias = torch.ones(len(bias))
+        y = y + bias
+    return y
