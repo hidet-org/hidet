@@ -256,7 +256,7 @@ def ones(
 @register_function(torch.nn.functional.gelu)
 def gelu(x: Tensor, approximate=None):
     if approximate is not None:
-        NotImplementedError("divisor_override is not None")
+        NotImplementedError("approximate is not None")
     return ops.gelu(x)
 
 
