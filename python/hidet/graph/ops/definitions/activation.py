@@ -31,7 +31,7 @@ class LeakyReluOp(UnaryElementwiseOp):
 
 class SigmoidOp(UnaryElementwiseOp):
     def __init__(self, x: Tensor):
-        super().__init__(x, op=lambda v: x.dtype(1.0) / (x.dtype.one + prim.exp(-v)), name='sigmoid')
+        super().__init__(x, op=lambda v: x.dtype(1.0) / (x.dtype(1.0) + prim.exp(-v)), name='sigmoid')
 
 
 class HardSigmoidOp(UnaryElementwiseOp):
@@ -68,7 +68,7 @@ class GeluOp(UnaryElementwiseOp):
 
 class SiluOp(UnaryElementwiseOp):
     def __init__(self, x: Tensor):
-        super().__init__(x, op=lambda v: v * (x.dtype(1.0) / (x.dtype.one + prim.exp(-v))), name='silu')
+        super().__init__(x, op=lambda v: v * (x.dtype(1.0) / (x.dtype(1.0) + prim.exp(-v))), name='silu')
 
 
 class PReluOp(BinaryElementwiseOp):

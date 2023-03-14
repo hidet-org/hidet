@@ -228,14 +228,6 @@ class HidetSiLU(HidetModule):
         return regs.silu(x, self.mod.inplace)
 
 
-# to implement identity
-@register_module(torch.nn.Identity)
-class HidetIdentity(HidetModule):
-    def __call__(self, x: Tensor) -> Tensor:
-        assert isinstance(self.mod, torch.nn.Identity)
-        return regs.identity(x)
-
-
 @register_module(torch.nn.GroupNorm)
 class HidetGroupNorm(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
@@ -247,43 +239,4 @@ class HidetGroupNorm(HidetModule):
             weight=self.param('weight'),
             bias=self.param('bias'),
             eps=self.mod.eps,
-            affine=self.mod.affine,
-        )
-
-
-# to implement multihead_attention
-@register_module(torch.nn.MultiheadAttention)
-class HidetMultiheadAttention(torch.nn.MultiheadAttention):
-    def __call__(self, x: Tensor) -> Tensor:
-        assert isinstance(self.mod, torch.nn.MultiheadAttention)
-        return regs.multihead_attention(
-            x=x,
-            embed_dim=self.mod.embed_dim,
-            num_heads=self.mod.num_heads,
-            dropout=self.mod.dropout,
-            bias=self.param('bias'),
-            add_bias_attn=False,
-            add_zero_attn=self.mod.add_zero_attn,
-            kdim=self.mod.kdim,
-            vdim=self.mod.vdim,
-            batch_first=self.mod.batch_first,
-        )
-
-
-# to implement conv_transpose2d
-@register_module(torch.nn.ConvTranspose2d)
-class HidetConvTranspose2d(HidetModule):
-    def __call__(self, x: Tensor) -> Tensor:
-        assert isinstance(self.mod, torch.nn.ConvTranspose2d)
-        return regs.conv_transpose2d(
-            x=x,
-            in_channels=self.mod.in_channels,
-            out_channels=self.mod.out_channels,
-            kernel_size=self.mod.kernel_size,
-            stride=self.mod.stride,
-            padding=self.mod.padding,
-            output_padding=self.mod.output_padding,
-            groups=self.mod.groups,
-            bias=self.param("bias"),
-            dilation=self.mod.dilation,
         )

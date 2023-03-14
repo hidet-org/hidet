@@ -12,27 +12,15 @@
 from typing import Union
 import numpy as np
 import pytest
+import torch.nn.functional as F
 
 import hidet as hi
 from hidet import ops
-from hidet.testing import check_unary
+from hidet.testing import check_unary, check_ternary, check_torch_unary
 from hidet.utils import prod
 
 
-def check_ternary(
-    a_shape, b_shape, c_shape, numpy_op, hidet_op, dtype: Union[str, np.dtype] = np.float32, atol=0.0, rtol=0.0
-):
-    np.random.seed(1)
-    a = np.array(np.random.randn(*a_shape)).astype(dtype)
-    b = np.array(np.random.randn(*b_shape)).astype(dtype)
-    c = np.array(np.random.randn(*c_shape)).astype(dtype)
-
-    c = np.abs(c)
-
-    numpy_result = numpy_op(a, b, c)
-    hidet_args = [hi.asarray(v).cuda() for v in [a, b, c]]
-    hidet_result = hidet_op(*hidet_args).cpu().numpy()
-    np.testing.assert_allclose(actual=hidet_result, desired=numpy_result, atol=atol, rtol=rtol)
+# hidet operators tested against numpy equivalent operators
 
 
 def numpy_batch_norm_2d(
@@ -74,3 +62,15 @@ def test_batch_norm_2d(shape):
 )
 def test_instance_norm(shape):
     check_unary(shape, numpy_op=numpy_instance_norm, hidet_op=ops.instance_norm, atol=1e-4, rtol=1e-4)
+
+
+# hidet operators tested against torch equivalent operators
+
+
+@pytest.mark.parametrize('shape', [[10, 3, 3, 3, 4]])
+def test_instance_norm(shape):
+    check_torch_unary(shape, lambda x: F.instance_norm(x), lambda x: ops.instance_norm(x), atol=1e-4, rtol=1e-4)
+
+
+if __name__ == '__main__':
+    pytest.main([__file__])
