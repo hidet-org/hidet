@@ -23,8 +23,6 @@ from .interpreter import warnings
 from .utils import dtype_from_torch, device_from_torch
 
 Number = Union[int, float, bool]
-TorchDtype = torch.dtype
-TorchDevice = torch.device
 
 
 @register_function(torch.nn.functional.conv2d)
@@ -253,7 +251,9 @@ def ones(
 
 
 @register_function(torch.nn.functional.gelu)
-def gelu(x: Tensor):
+def gelu(x: Tensor, approximate: Optional[str] = "none"):
+    if approximate is not None:
+        warnings.warn_once("approximate is not None")
     return ops.gelu(x)
 
 
@@ -352,9 +352,9 @@ def arange(
     step: Number = 1,
     *,
     out: Optional[Tensor] = None,
-    dtype: Optional[TorchDtype] = None,
-    layout: Optional = None,
-    device: Optional[Union[TorchDevice, str, None]] = None,
+    dtype: Optional[torch.dtype] = None,
+    layout: Optional[torch.layout] = None,
+    device: Optional[Union[torch.device, str, None]] = None,
     pin_memory: Optional[bool] = False,
     requires_grad: Optional[bool] = False,
 ):
@@ -428,3 +428,31 @@ def torch_tensor(
     else:
         tt = torch.tensor(data, dtype=dtype, device=device)
         return from_torch(tt)
+
+
+@register_function(torch.sigmoid)
+def sigmoid(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
+    if out is not None:
+        warnings.warn_once("hidet: does not support torch.sigmoid(..., out=...)")
+    return ops.sigmoid(x)
+
+
+@register_function(torch.nn.functional.hardsigmoid)
+def hardsigmoid(x: Tensor, inplace: bool):
+    if inplace:
+        warnings.warn_once('hidet: hardsigmoid with inplace=True is not supported. Treat as inplace=False.')
+    return ops.hardsigmoid(x)
+
+
+@register_function(torch.nn.functional.silu)
+def silu(x: Tensor, inplace: bool):
+    if inplace:
+        warnings.warn_once('hidet: silu with inplace=True is not supported. Treat as inplace=False.')
+    return ops.silu(x)
+
+
+@register_function(torch.nn.functional.hardswish)
+def hardswish(x: Tensor, inplace: bool):
+    if inplace:
+        warnings.warn_once('hidet: hardswish with inplace=True is not supported. Treat as inplace=False.')
+    return ops.hardswish(x)

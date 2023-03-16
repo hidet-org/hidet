@@ -31,7 +31,20 @@ class LeakyReluOp(UnaryElementwiseOp):
 
 class SigmoidOp(UnaryElementwiseOp):
     def __init__(self, x: Tensor):
-        super().__init__(x, op=lambda v: x.dtype(1.0) / (x.dtype.one + prim.exp(-v)), name='sigmoid')
+        super().__init__(x, op=lambda v: x.dtype(1.0) / (x.dtype(1.0) + prim.exp(-v)), name='sigmoid')
+
+
+class HardSigmoidOp(UnaryElementwiseOp):
+    def __init__(self, x: Tensor):
+        super().__init__(
+            x,
+            op=lambda v: if_then_else(
+                v <= x.dtype(-3),
+                x.dtype.zero,
+                if_then_else(v >= x.dtype(3), x.dtype.one, v / x.dtype(6) + x.dtype(0.5)),
+            ),
+            name='hardsigmoid',
+        )
 
 
 class ClipOp(UnaryElementwiseOp):
@@ -48,15 +61,30 @@ class ClipOp(UnaryElementwiseOp):
 
 class GeluOp(UnaryElementwiseOp):
     def __init__(self, x: Tensor):
-        dtype = x.dtype
         super().__init__(
-            x=x, op=lambda v: dtype(0.5) * v * (dtype.one + prim.erf(v * dtype(1 / math.sqrt(2)))), name='gelu'
+            x, op=lambda v: x.dtype(0.5) * v * (x.dtype.one + prim.erf(v * x.dtype(1 / math.sqrt(2)))), name='gelu'
         )
+
+
+class SiluOp(UnaryElementwiseOp):
+    def __init__(self, x: Tensor):
+        super().__init__(x, op=lambda v: v * (x.dtype(1.0) / (x.dtype(1.0) + prim.exp(-v))), name='silu')
 
 
 class PReluOp(BinaryElementwiseOp):
     def __init__(self, x, slope):
         super().__init__(x, slope, op=lambda a, b: if_then_else(a >= 0, a, a * b), name='prelu')
+
+
+class HardSwishOp(UnaryElementwiseOp):
+    def __init__(self, x: Tensor):
+        super().__init__(
+            x,
+            op=lambda v: if_then_else(
+                v <= x.dtype(-3), x.dtype.zero, if_then_else(v >= x.dtype(3), v, (v * (v + x.dtype(3))) / x.dtype(6))
+            ),
+            name='hardswish',
+        )
 
 
 def relu(x) -> Tensor:
@@ -71,6 +99,10 @@ def sigmoid(x: Tensor) -> Tensor:
     return SigmoidOp(x).get_output(0)
 
 
+def hardsigmoid(x: Tensor) -> Tensor:
+    return HardSigmoidOp(x).get_output(0)
+
+
 def clip(x: Tensor, min_val: Optional[float], max_val: Optional[float]) -> Tensor:
     return ClipOp(x, min_val, max_val).get_output(0)
 
@@ -83,5 +115,13 @@ def gelu(x: Tensor) -> Tensor:
     return GeluOp(x).get_output(0)
 
 
+def silu(x: Tensor) -> Tensor:
+    return SiluOp(x).get_output(0)
+
+
 def prelu(x: Tensor, slope: Tensor) -> Tensor:
     return PReluOp(x, slope).get_output(0)
+
+
+def hardswish(x: Tensor) -> Tensor:
+    return HardSwishOp(x).get_output(0)

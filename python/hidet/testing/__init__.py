@@ -13,4 +13,4 @@ from hidet.utils.bench import benchmark_func
 
 from . import models
 from . import utils
-from .utils import check_unary, check_binary, check_torch_unary, check_torch_binary
+from .utils import check_unary, check_binary, check_ternary, check_torch_unary, check_torch_binary, check_torch_ternary

@@ -78,9 +78,6 @@ class MathFunctionSet:
     def atanh(self, a: Expr) -> Expr:
         raise NotImplementedError()
 
-    def atan2(self, a: Expr, b: Expr) -> Expr:
-        raise NotImplementedError()
-
     def exp(self, a: Expr) -> Expr:
         raise NotImplementedError()
 
@@ -140,6 +137,9 @@ class MathFunctionSet:
         raise NotImplementedError()
 
     def pow(self, a: Expr, b: Expr) -> Expr:
+        raise NotImplementedError()
+
+    def atan2(self, a: Expr, b: Expr) -> Expr:
         raise NotImplementedError()
 
     # ternary math functions

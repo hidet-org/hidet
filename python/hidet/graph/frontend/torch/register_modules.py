@@ -169,3 +169,60 @@ class HidetReLU6(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, torch.nn.ReLU6)
         return regs.relu6(x, self.mod.inplace)
+
+
+@register_module(torch.nn.Sigmoid)
+class HidetSigmoid(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.Sigmoid)
+        return regs.sigmoid(x)
+
+
+@register_module(torch.nn.Hardsigmoid)
+class HidetHardsigmoid(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.Hardsigmoid)
+        return regs.hardsigmoid(x, self.mod.inplace)
+
+
+@register_module(torch.nn.AvgPool2d)
+class HidetAvgPool2d(HidetModule):
+    def __call__(self, x=Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.AvgPool2d)
+        return regs.avg_pool2d(
+            x=x,
+            kernel_size=self.mod.kernel_size,
+            stride=self.mod.stride,
+            padding=self.mod.padding,
+            ceil_mode=self.mod.ceil_mode,
+            count_include_pad=self.mod.count_include_pad,
+            divisor_override=self.mod.divisor_override,
+        )
+
+
+@register_module(torch.nn.Flatten)
+class HidetFlatten(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.Flatten)
+        return regs.flatten(x, self.mod.start_dim, self.mod.end_dim)
+
+
+@register_module(torch.nn.Hardswish)
+class HidetHardswish(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.Hardswish)
+        return regs.hardswish(x, self.mod.inplace)
+
+
+@register_module(torch.nn.GELU)
+class HidetGELU(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.GELU)
+        return regs.gelu(x, self.mod.approximate)
+
+
+@register_module(torch.nn.SiLU)
+class HidetSiLU(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.SiLU)
+        return regs.silu(x, self.mod.inplace)

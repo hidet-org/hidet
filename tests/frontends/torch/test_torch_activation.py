@@ -18,3 +18,25 @@ from hidet.testing.torch_utils import check_module
 @pytest.mark.parametrize('dtype', [torch.float32])
 def test_relu(shape, dtype):
     check_module(torch.nn.ReLU(), [torch.randn(shape, dtype=dtype)])
+
+
+@pytest.mark.parametrize("shape", [(10, 20)])
+@pytest.mark.parametrize("dtype", [torch.float32])
+def test_hardsigmoid(shape, dtype):
+    check_module(torch.nn.Hardsigmoid(), [torch.randn(shape, dtype=dtype)])
+
+
+@pytest.mark.parametrize("shape", [(10, 20)])
+@pytest.mark.parametrize("dtype", [torch.float32])
+def test_sigmoid(shape, dtype):
+    check_module(torch.nn.Sigmoid(), [torch.randn(shape, dtype=dtype)])
+
+
+@pytest.mark.parametrize("shape", [(10, 20)])
+@pytest.mark.parametrize("dtype", [torch.float32])
+def test_hardswish(shape, dtype):
+    check_module(torch.nn.Hardswish(), [torch.randn(shape, dtype=dtype)])
+
+
+if __name__ == '__main__':
+    pytest.main([__file__])

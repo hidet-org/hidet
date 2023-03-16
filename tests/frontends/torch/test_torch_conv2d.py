@@ -23,3 +23,7 @@ def test_conv2d(in_shape, w_shape, stride, padding, dtype):
         ),
         args=[torch.randn(in_shape, dtype=dtype)],
     )
+
+
+if __name__ == '__main__':
+    pytest.main([__file__])
