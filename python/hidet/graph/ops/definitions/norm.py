@@ -73,37 +73,3 @@ def layer_norm(x: Tensor, num_last_dims: int = 1, epsilon: float = 1e-5) -> Tens
     """
     dims = list(range(len(x.shape) - num_last_dims, len(x.shape)))
     return normalize(x, dims=dims, epsilon=epsilon)
-
-
-# def group_norm(x: Tensor, num_groups: int, num_channels: int, epsilon: float = 1e-5) -> Tensor:
-#     """
-#     Group norm.
-
-#     Parameters
-#     ----------
-#     x: Tensor
-#         The data to be normalized.
-#     num_groups: int
-#         Group of channels to be normalized.
-#     num_channels: int
-#         Number of channels in tensor
-#     epsilon: float
-#         The epsilon added to variance.
-
-#     Returns
-#     -------
-#     ret: Tensor
-#         The normalized tensor.
-#     """
-
-#     # to be fixed
-
-#     assert num_channels % num_groups == 0
-#     assert num_channels == x.shape[1]
-#     features, height, width = x.shape[0], x.shape[2], x.shape[3]
-#     x = x.reshape([num_channels * num_groups, -1])
-#     mean = x.mean(-1, keep_dim=True)
-#     var = square(x).mean(-1, keep_dim=True)
-#     x = (x - mean) * rsqrt(var + epsilon)
-#     x = x.reshape([features, num_channels, height, width])
-#     return x

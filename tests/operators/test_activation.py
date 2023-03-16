@@ -95,20 +95,5 @@ def test_hardswish_torch(shape, dtype):
     check_torch_unary(shape, lambda x: F.hardswish(x), lambda x: ops.hardswish(x), dtype=dtype, rtol=1e-5, atol=1e-5)
 
 
-@pytest.mark.parametrize("shape", [[9, 3, 3, 3]])
-@pytest.mark.parametrize("num_groups", [3])
-@pytest.mark.parametrize("num_channels", [3])
-@pytest.mark.parametrize("dtype", ["float32"])
-def test_group_norm_torch(shape, num_groups, num_channels, dtype):
-    check_torch_unary(
-        shape,
-        lambda x: F.group_norm(x, num_groups=num_groups),
-        lambda x: ops.group_norm(x, num_groups=num_groups, num_channels=num_channels),
-        dtype=dtype,
-        atol=1e-4,
-        rtol=1e-4,
-    )
-
-
 if __name__ == '__main__':
     pytest.main([__file__])

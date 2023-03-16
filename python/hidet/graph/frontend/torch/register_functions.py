@@ -253,7 +253,7 @@ def ones(
 @register_function(torch.nn.functional.gelu)
 def gelu(x: Tensor, approximate: Optional[str] = "none"):
     if approximate is not None:
-        NotImplementedError("approximate is not None")
+        warnings.warn_once("approximate is not None")
     return ops.gelu(x)
 
 
@@ -433,7 +433,7 @@ def torch_tensor(
 @register_function(torch.sigmoid)
 def sigmoid(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
     if out is not None:
-        raise NotImplementedError("hidet: does not support torch.sigmoid(..., out=...)")
+        warnings.warn_once("hidet: does not support torch.sigmoid(..., out=...)")
     return ops.sigmoid(x)
 
 
@@ -456,20 +456,3 @@ def hardswish(x: Tensor, inplace: bool):
     if inplace:
         warnings.warn_once('hidet: hardswish with inplace=True is not supported. Treat as inplace=False.')
     return ops.hardswish(x)
-
-
-@register_function(torch.nn.functional.group_norm)
-def group_norm(
-    x: Tensor,
-    num_groups: int,
-    num_channels: int,
-    weight: Optional[Tensor] = None,
-    bias: Optional[Tensor] = None,
-    eps: float = 1e-5,
-):
-    y = ops.group_norm(x, num_groups, num_channels, eps)
-    if weight is not None:
-        y = y * weight
-    if bias is not None:
-        y = y + bias
-    return y

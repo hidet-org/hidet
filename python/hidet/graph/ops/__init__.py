@@ -20,7 +20,7 @@ from .definitions.pool import avg_pool2d, avg_pool3d, adaptive_avg_pool1d, adapt
 from .definitions.pool import max_pool2d, max_pool3d, adaptive_max_pool1d, adaptive_max_pool2d, adaptive_max_pool3d
 from .definitions.softmax import softmax
 from .definitions.activation import relu, leaky_relu, sigmoid, hardsigmoid, clip, relu6, prelu, gelu, silu, hardswish
-from .definitions.norm import batch_norm_infer, instance_norm, layer_norm, group_norm
+from .definitions.norm import batch_norm_infer, instance_norm, layer_norm
 from .definitions.image import resize2d
 from .definitions.create import full, arange, linspace
 from .definitions.arithmetic import add, subtract, multiply, divide, mod, remainder, negative, positive, square

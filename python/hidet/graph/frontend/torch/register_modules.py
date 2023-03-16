@@ -226,17 +226,3 @@ class HidetSiLU(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, torch.nn.SiLU)
         return regs.silu(x, self.mod.inplace)
-
-
-@register_module(torch.nn.GroupNorm)
-class HidetGroupNorm(HidetModule):
-    def __call__(self, x: Tensor) -> Tensor:
-        assert isinstance(self.mod, torch.nn.GroupNorm)
-        return regs.group_norm(
-            x=x,
-            num_groups=self.mod.num_groups,
-            num_channels=self.mod.num_channels,
-            weight=self.param('weight'),
-            bias=self.param('bias'),
-            eps=self.mod.eps,
-        )
