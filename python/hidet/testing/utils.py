@@ -61,9 +61,9 @@ def check_ternary(
     c = np.abs(c)
 
     numpy_result = numpy_op(a, b, c)
-    import hidet
+    import hidet as hi
 
-    hidet_args = [hidet.asarray(v).cuda() for v in [a, b, c]]
+    hidet_args = [hi.asarray(v).cuda() for v in [a, b, c]]
     hidet_result = hidet_op(*hidet_args).cpu().numpy()
     np.testing.assert_allclose(actual=hidet_result, desired=numpy_result, atol=atol, rtol=rtol)
 

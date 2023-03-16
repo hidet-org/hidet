@@ -11,7 +11,7 @@
 # limitations under the License.
 from typing import List
 from .utils import Tensor, normalize_dim
-from .arithmetic import square, rsqrt, sqrt
+from .arithmetic import square, rsqrt
 
 
 def normalize(x: Tensor, dims: List[int], epsilon: float = 1e-5) -> Tensor:
@@ -29,7 +29,7 @@ def batch_norm_infer(x: Tensor, running_mean: Tensor, running_var: Tensor, epsil
 
     running_mean = running_mean.unsqueeze([dim for dim in range(rank) if dim != axis])
     running_var = running_var.unsqueeze([dim for dim in range(rank) if dim != axis])
-    return (x - running_mean) * sqrt(running_var + epsilon)
+    return (x - running_mean) * rsqrt(running_var + epsilon)
 
 
 def instance_norm(x: Tensor, axis: int = 1, epsilon: float = 1e-5) -> Tensor:
