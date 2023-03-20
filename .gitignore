@@ -204,3 +204,6 @@ build-release
 
 # intermediate files
 /gallery/**/*.json
+
+# vscode config
+.vscode/

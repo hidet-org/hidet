@@ -128,7 +128,12 @@ def resolve_ir_modules(
     # )
     resolve_dir = os.path.join(output_dir, 'resolve')
     compiled_funcs: List[Optional[CompiledFunction]] = build_ir_module_batch(
-        ir_modules, func_name=func_name, output_dir=resolve_dir, parallel=parallel, verbose=verbose
+        ir_modules,
+        func_name=func_name,
+        output_dir=resolve_dir,
+        parallel=parallel,
+        verbose=verbose,
+        target=target_device,
     )
     dummy_inputs = dummy_inputs_from_task(ir_modules[0].task, target_device)
     best_latency = 1e30

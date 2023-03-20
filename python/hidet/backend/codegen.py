@@ -163,89 +163,11 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
         return Text(str(c))
 
     def visit_IRModule(self, module: IRModule) -> Doc:
-        self.ir_module = module
-        doc = Doc()
-        # todo: only add necessary headers
-        doc += Text('#include <stdint.h>') + NewLine()
-        doc += Text('#include <cuda_fp16.h>') + NewLine()
-        doc += Text('#include <cuda_bf16.h>') + NewLine()
-        doc += Text('#include <hidet/runtime/cuda_context.h>') + NewLine()
-        doc += Text('#include <hidet/runtime/cpu_context.h>') + NewLine()
-
-        # nvcc use float to 'store' tfloat32 data
-        doc += Text('typedef float tfloat32_t;') + NewLine()
-
-        # According to here: https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#wmma-altfp
-        # there should be a function called '__float_to_tf32' in cuda c to convert float to tfloat32,
-        # but I did not find such a function. By looking at cutlass's implementation of converting
-        # float to tfloat32, it seems that we do not need to do anything to convert. Put a definition
-        # here in case nvidia add the definition in the future.
-        doc += Text('#define __float_to_tf32(x) (x)') + NewLine()
-
-        if module.task is not None:
-            doc += '/*' + NewLine()
-            doc += str(module.task) + NewLine()
-            doc += '*/' + NewLine()
-        doc += Text('extern "C" {') + NewLine()
-
-        call_graph = CallGraph(module)
-        for node in call_graph.reversed_order:
-            doc += self(node.func) + NewLine()
-
-        doc += NewLine() + '}'
-        return doc
+        raise NotImplementedError()
 
     def visit_Function(self, func: Function) -> Doc:
-        self.namer.clear()
-
-        doc = NewLine()
-
-        # ret
-        if func.kind == 'cuda_kernel':
-            doc += '__global__'
-        elif func.kind == 'cuda_device':
-            doc += '__device__ __forceinline__'
-        elif func.kind in ['packed_func', 'host_kernel']:
-            doc += '__host__'
-
-        doc += ' ' + self(func.ret_type)
-        # doc += ' void'
-
-        # launch bound for grid worker
-        if func.kind == 'cuda_kernel':
-            block_dim = func.attrs['cuda_block_dim']
-            if isinstance(block_dim, list):
-                block_dim = prod(block_dim)
-            if 'cuda_min_blocks' in func.attrs:
-                min_blocks = func.attrs['cuda_min_blocks']
-                doc += f' __launch_bounds__({block_dim}, {min_blocks})'
-            else:
-                doc += f' __launch_bounds__({block_dim})'
-
-        # func name
-        canonized_func_name = self.canonize_funcname(func.name)
-        doc += ' ' + canonized_func_name
-        self.func_name_map[func.name] = canonized_func_name
-
-        # parameters
-        doc += '('
-        param_docs = []
-        for param in func.params:
-            param_docs.append(self.param_declare(param))
-        doc += doc_join(param_docs, Text(', '))
-        doc += ') {'
-
-        # comments
-        label = func.get_attr('label', default=None, allow_missing=True)
-        if label:
-            doc += (NewLine() + '// label: {}'.format(label)).indent()
-
-        # body
-        doc += self(func.body).indent()
-
-        doc += NewLine() + '}'
-
-        return doc
+        # Implemented through different codegen subclass
+        raise NotImplementedError()
 
     def visit_Add(self, e: Add):
         return Text('(') + self(e.a) + ' + ' + self(e.b) + ')'
@@ -364,52 +286,7 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
         return Text('*') + self(e.expr)
 
     def visit_Call(self, e: Call):
-        func_name = e.func_var.hint
-        if func_name in self.ir_module.functions:
-            func = self.ir_module.lookup(func_name)
-            func_name = Text(self.canonize_funcname(func_name))
-            if func.kind == 'cuda_kernel':
-
-                if isinstance(func.attrs['cuda_block_dim'], int) and func.attrs['cuda_block_dim'] > 1024:
-                    raise ValueError('CUDA block dimension cannot be larger than 1024.')
-
-                def dim3_str(dims):
-                    if isinstance(dims, (int, Expr)):
-                        return self(dims)
-                    else:
-                        return Text('dim3(') + self(dims) + ')'
-
-                configs = [
-                    dim3_str(func.attrs['cuda_grid_dim']),  # grid dimension
-                    dim3_str(func.attrs['cuda_block_dim']),  # block dimension
-                    func.attrs.get('cuda_dynamic_smem_bytes', 0),  # dynamic shared memory size
-                    # cuda stream (get_cuda_stream() function is defined in hidet/runtime.h)
-                    '(cudaStream_t)get_cuda_stream()',
-                ]
-                launch_config = Text('<<<') + doc_join([self(v) for v in configs], sep=', ') + Text('>>>')
-            else:
-                launch_config = []
-            param_doc = Text('(') + doc_join([self(arg) for arg in e.args], Text(', ')) + ')'
-            return func_name + launch_config + param_doc
-        elif is_primitive_function(func_name):
-            entry = lookup_primitive_function(func_name)
-            if entry.function is not None:
-                msg = (
-                    f"Please use import_primitive_functions pass to import primitive function first: {entry.name}, "
-                    f"functions in current module:\n{list(self.ir_module.functions.keys())}."
-                )
-                raise ValueError(msg)
-            if entry.generic:
-                msg = (
-                    "Please use resolve_generic_primitive_function pass to lower "
-                    "the generic primitive function {}.".format(entry.name)
-                )
-                raise ValueError(msg)
-            # system-provided function, do not canonize the func name
-            return entry.codegen_name + (Text('(') + doc_join([self(arg) for arg in e.args], Text(', ')) + ')')
-        else:
-            msg = "Callee {} not found in current ir module, and it is not primitive function.".format(func_name)
-            raise ValueError(msg)
+        raise NotImplementedError()
 
     def visit_Let(self, e: Let):
         raise ValueError("please run 'expand_let_expr' pass before codegen")
@@ -475,7 +352,8 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             scope2specifier = {
                 DeclareScope.Shared: '__shared__ ',
                 DeclareScope.Global: '__global__ ',
-                DeclareScope.Register: '',  # we can not force nvcc to use register, but it will do so if possible
+                # we can not force nvcc to use register, but it will do so if possible
+                DeclareScope.Register: '',
             }
             doc += scope2specifier[stmt.scope]
         doc += self.local_var_declare(stmt.var)
@@ -663,8 +541,233 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
         raise ValueError()
 
 
-def codegen(ir_module: IRModule, src_out_path: Optional[str] = None) -> str:
-    gen = Codegen()
+class CUDACodegen(Codegen):
+    def __init__(self):
+        super().__init__()
+
+    def visit_Function(self, func: Function) -> Doc:
+        self.namer.clear()
+
+        doc = NewLine()
+
+        # ret
+        if func.kind == 'cuda_kernel':
+            doc += '__global__'
+        elif func.kind == 'cuda_device':
+            doc += '__device__ __forceinline__'
+        elif func.kind in ['packed_func', 'host_kernel']:
+            doc += '__host__'
+
+        doc += ' ' + self(func.ret_type)
+
+        # launch bound for grid worker
+        if func.kind == 'cuda_kernel':
+            block_dim = func.attrs['cuda_block_dim']
+            if isinstance(block_dim, list):
+                block_dim = prod(block_dim)
+            if 'cuda_min_blocks' in func.attrs:
+                min_blocks = func.attrs['cuda_min_blocks']
+                doc += f' __launch_bounds__({block_dim}, {min_blocks})'
+            else:
+                doc += f' __launch_bounds__({block_dim})'
+
+        # func name
+        canonized_func_name = self.canonize_funcname(func.name)
+        doc += ' ' + canonized_func_name
+        self.func_name_map[func.name] = canonized_func_name
+
+        # parameters
+        doc += '('
+        param_docs = []
+        for param in func.params:
+            param_docs.append(self.param_declare(param))
+        doc += doc_join(param_docs, Text(', '))
+        doc += ') {'
+
+        # comments
+        label = func.get_attr('label', default=None, allow_missing=True)
+        if label:
+            doc += (NewLine() + '// label: {}'.format(label)).indent()
+
+        # body
+        doc += self(func.body).indent()
+
+        doc += NewLine() + '}'
+
+        return doc
+
+    def visit_IRModule(self, module: IRModule) -> Doc:
+        self.ir_module = module
+        doc = Doc()
+        # todo: only add necessary headers
+        doc += Text('#include <stdint.h>') + NewLine()
+        doc += Text('#include <cuda_fp16.h>') + NewLine()
+        doc += Text('#include <cuda_bf16.h>') + NewLine()
+        doc += Text('#include <hidet/runtime/cuda_context.h>') + NewLine()
+        doc += Text('#include <hidet/runtime/cpu_context.h>') + NewLine()
+
+        # nvcc use float to 'store' tfloat32 data
+        doc += Text('typedef float tfloat32_t;') + NewLine()
+
+        # According to here: https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#wmma-altfp
+        # there should be a function called '__float_to_tf32' in cuda c to convert float to tfloat32,
+        # but I did not find such a function. By looking at cutlass's implementation of converting
+        # float to tfloat32, it seems that we do not need to do anything to convert. Put a definition
+        # here in case nvidia add the definition in the future.
+        doc += Text('#define __float_to_tf32(x) (x)') + NewLine()
+
+        if module.task is not None:
+            doc += '/*' + NewLine()
+            doc += str(module.task) + NewLine()
+            doc += '*/' + NewLine()
+        doc += Text('extern "C" {') + NewLine()
+
+        call_graph = CallGraph(module)
+        for node in call_graph.reversed_order:
+            doc += self(node.func) + NewLine()
+
+        doc += NewLine() + '}'
+        return doc
+
+    def visit_Call(self, e: Call):
+        func_name = e.func_var.hint
+        if func_name in self.ir_module.functions:
+            func = self.ir_module.lookup(func_name)
+            func_name = Text(self.canonize_funcname(func_name))
+            if func.kind == 'cuda_kernel':
+
+                if isinstance(func.attrs['cuda_block_dim'], int) and func.attrs['cuda_block_dim'] > 1024:
+                    raise ValueError('CUDA block dimension cannot be larger than 1024.')
+
+                def dim3_str(dims):
+                    if isinstance(dims, (int, Expr)):
+                        return self(dims)
+                    else:
+                        return Text('dim3(') + self(dims) + ')'
+
+                configs = [
+                    dim3_str(func.attrs['cuda_grid_dim']),  # grid dimension
+                    dim3_str(func.attrs['cuda_block_dim']),  # block dimension
+                    # dynamic shared memory size
+                    func.attrs.get('cuda_dynamic_smem_bytes', 0),
+                    # cuda stream (get_cuda_stream() function is defined in hidet/runtime.h)
+                    '(cudaStream_t)get_cuda_stream()',
+                ]
+                launch_config = Text('<<<') + doc_join([self(v) for v in configs], sep=', ') + Text('>>>')
+            else:
+                launch_config = []
+            param_doc = Text('(') + doc_join([self(arg) for arg in e.args], Text(', ')) + ')'
+            return func_name + launch_config + param_doc
+        elif is_primitive_function(func_name):
+            entry = lookup_primitive_function(func_name)
+            if entry.function is not None:
+                msg = (
+                    f"Please use import_primitive_functions pass to import primitive function first: {entry.name}, "
+                    f"functions in current module:\n{list(self.ir_module.functions.keys())}."
+                )
+                raise ValueError(msg)
+            if entry.generic:
+                msg = (
+                    "Please use resolve_generic_primitive_function pass to lower "
+                    "the generic primitive function {}.".format(entry.name)
+                )
+                raise ValueError(msg)
+            # system-provided function, do not canonize the func name
+            return entry.codegen_name + (Text('(') + doc_join([self(arg) for arg in e.args], Text(', ')) + ')')
+        else:
+            msg = "Callee {} not found in current ir module, and it is not primitive function.".format(func_name)
+            raise ValueError(msg)
+
+
+class CPUCodegen(Codegen):
+    def __init__(self):
+        super().__init__()
+
+    def visit_IRModule(self, module: IRModule) -> Doc:
+        self.ir_module = module
+        doc = Doc()
+        # todo: only add necessary headers
+        doc += Text('#include <stdint.h>') + NewLine()
+        doc += Text('#include <hidet/runtime/cpu_context.h>') + NewLine()
+        doc += Text('#include <math.h>') + NewLine()
+
+        if module.task is not None:
+            doc += '/*' + NewLine()
+            doc += str(module.task) + NewLine()
+            doc += '*/' + NewLine()
+        doc += Text('extern "C" {') + NewLine()
+
+        call_graph = CallGraph(module)
+        for node in call_graph.reversed_order:
+            doc += self(node.func) + NewLine()
+
+        doc += NewLine() + '}'
+        return doc
+
+    def visit_Function(self, func: Function) -> Doc:
+        self.namer.clear()
+
+        doc = NewLine()
+
+        doc += ' ' + self(func.ret_type)
+
+        # func name
+        canonized_func_name = self.canonize_funcname(func.name)
+        doc += ' ' + canonized_func_name
+        self.func_name_map[func.name] = canonized_func_name
+
+        # parameters
+        doc += '('
+        param_docs = []
+        for param in func.params:
+            param_docs.append(self.param_declare(param))
+        doc += doc_join(param_docs, Text(', '))
+        doc += ') {'
+
+        # comments
+        label = func.get_attr('label', default=None, allow_missing=True)
+        if label:
+            doc += (NewLine() + '// label: {}'.format(label)).indent()
+
+        # body
+        doc += self(func.body).indent()
+
+        doc += NewLine() + '}'
+
+        return doc
+
+    def visit_Call(self, e: Call):
+        func_name = e.func_var.hint
+        if func_name in self.ir_module.functions:
+            func_name = Text(self.canonize_funcname(func_name))
+            param_doc = Text('(') + doc_join([self(arg) for arg in e.args], Text(', ')) + ')'
+            return func_name + param_doc
+        elif is_primitive_function(func_name):
+            entry = lookup_primitive_function(func_name)
+            if entry.function is not None:
+                msg = (
+                    f"Please use import_primitive_functions pass to import primitive function first: {entry.name}, "
+                    f"functions in current module:\n{list(self.ir_module.functions.keys())}."
+                )
+                raise ValueError(msg)
+            if entry.generic:
+                msg = (
+                    "Please use resolve_generic_primitive_function pass to lower "
+                    "the generic primitive function {}.".format(entry.name)
+                )
+                raise ValueError(msg)
+            # system-provided function, do not canonize the func name
+            return entry.codegen_name + (Text('(') + doc_join([self(arg) for arg in e.args], Text(', ')) + ')')
+        else:
+            msg = "Callee {} not found in current ir module, and it is not primitive function.".format(func_name)
+            raise ValueError(msg)
+
+
+def codegen(ir_module: IRModule, src_out_path: Optional[str] = None, target='cuda') -> str:
+    if target == 'cpu':
+        gen = CPUCodegen()
+    else:
+        gen = CUDACodegen()
     doc = gen(ir_module)
     code = str(doc)
     if src_out_path is not None:

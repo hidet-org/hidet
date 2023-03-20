@@ -67,7 +67,10 @@ def build_task(task: Task, target_device='cuda', load=True) -> Optional[Compiled
         config_str = f'{target_device}_space_{space_level}'
         task_hash = sha256(task_string.encode()).hexdigest()[:16]
         task_dir = os.path.join(op_cache_dir, config_str, task.name, task_hash)
-        src_path = os.path.join(task_dir, 'source.cu')
+        if target_device == 'cuda':
+            src_path = os.path.join(task_dir, 'source.cu')
+        elif target_device == 'cpu':
+            src_path = os.path.join(task_dir, 'source.cpp')
         lib_path = os.path.join(task_dir, 'lib.so')
 
         # use previously generated library when available
@@ -96,9 +99,9 @@ def build_task(task: Task, target_device='cuda', load=True) -> Optional[Compiled
             with PassContext(instruments=instruments):
                 ir_module = lower(ir_module)
             # code generation
-            codegen(ir_module, src_out_path=src_path)
+            codegen(ir_module, src_out_path=src_path, target=target_device)
             # compile source code
-            compile_source(src_path, out_lib_path=lib_path, keep_ptx=False)
+            compile_source(src_path, out_lib_path=lib_path, target=target_device, keep_ptx=False)
             # load function
             if load:
                 compiled_func = load_task_func(lib_path, task)
@@ -145,12 +148,16 @@ def build_ir_module(
     profile_pass: bool = True,
     load: bool = True,
     use_hash_dir: bool = True,
+    target='cuda',
 ):
     if use_hash_dir:
         hash_dir = sha256(str(ir_module).encode()).hexdigest()[:16]
         output_dir = os.path.join(output_dir, hash_dir)
 
-    src_path = os.path.join(output_dir, 'source.cu')
+    if target == 'cuda':
+        src_path = os.path.join(output_dir, 'source.cu')
+    elif target == 'cpu':
+        src_path = os.path.join(output_dir, 'source.cpp')
     lib_path = os.path.join(output_dir, 'lib.so')
 
     # get function type
@@ -171,10 +178,10 @@ def build_ir_module(
         ir_module = lower(ir_module)
 
     # code generation
-    codegen(ir_module, src_out_path=src_path)
+    codegen(ir_module, src_out_path=src_path, target=target)
 
     # compile source code
-    compile_source(src_path, out_lib_path=lib_path, keep_ptx=False)
+    compile_source(src_path, out_lib_path=lib_path, keep_ptx=False, target=target)
 
     if load:
         # load function
@@ -184,11 +191,18 @@ def build_ir_module(
 
 
 def _build_ir_module_job(args) -> Optional[Tuple[str, str, FuncType]]:
-    ir_module, func_name, output_dir, dumped_options = args
+    ir_module, func_name, output_dir, dumped_options, target = args
     option.restore_options(dumped_options)
     try:
         return build_ir_module(
-            ir_module, func_name, output_dir, save_ir=False, profile_pass=False, load=False, use_hash_dir=False
+            ir_module,
+            func_name,
+            output_dir,
+            save_ir=False,
+            profile_pass=False,
+            load=False,
+            use_hash_dir=False,
+            target=target,
         )
     except subprocess.CalledProcessError:
         print('Failed launch subprocess to compile the lowered source code via nvcc.')
@@ -199,7 +213,7 @@ def _build_ir_module_job(args) -> Optional[Tuple[str, str, FuncType]]:
 
 
 def build_ir_module_batch(
-    ir_modules: Sequence[IRModule], func_name: str, output_dir: str, parallel=True, verbose=False
+    ir_modules: Sequence[IRModule], func_name: str, output_dir: str, parallel=True, verbose=False, target='cuda'
 ) -> List[Optional[CompiledFunction]]:
     """
     Build a batch of ir modules.
@@ -230,7 +244,7 @@ def build_ir_module_batch(
     with Timer() as timer:
         dumped_options = option.dump_options()
         jobs = [
-            (ir_module, func_name, os.path.join(output_dir, str(idx)), dumped_options)
+            (ir_module, func_name, os.path.join(output_dir, str(idx)), dumped_options, target)
             for idx, ir_module in enumerate(ir_modules)
         ]
         build_results = []

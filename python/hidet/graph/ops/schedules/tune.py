@@ -146,7 +146,7 @@ def tune(template_func, task: Task, target_device: str, working_dir: str) -> IRM
     # build ir modules into compiled functions
     tuning_dir = os.path.join(working_dir, 'tuning')
     compiled_funcs: List[Optional[CompiledFunction]] = build_ir_module_batch(
-        ir_modules, func_name=task.name, output_dir=tuning_dir, parallel=True, verbose=True
+        ir_modules, func_name=task.name, output_dir=tuning_dir, parallel=True, verbose=True, target=target_device
     )
     assert len(compiled_funcs) == len(ir_modules)
     if any(f is None for f in compiled_funcs):
