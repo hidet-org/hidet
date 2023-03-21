@@ -134,7 +134,7 @@ class FanoutTwoCast(SubgraphRewriteRule):
 
 class FanoutThreeCast(SubgraphRewriteRule):
     def __init__(self):
-        super().__init__('y1 = cast(x), y2 = cast(x) => y1 = y2 = z = cast(x)')
+        super().__init__('y1,2,3 = cast(x) => y1 = y2 = y3 = z = cast(x)')
         self.x = TensorPattern.tensor(is_symbolic=True)
         self.c1 = op_pattern(CastOp, [self.x])
         self.c2 = op_pattern(CastOp, [self.x])
@@ -162,8 +162,8 @@ class DoubleCast(SubgraphRewriteRule):
         return [self.c2]
 
     def target(self, matched: MatchDict) -> Optional[List[Tensor]]:
-        x, c1, c2 = [matched[v] for v in [self.x, self.c1, self.c2]]
-        if not (c2.dtype == x.dtype):
+        x, _, c2 = [matched[v] for v in [self.x, self.c1, self.c2]]
+        if not c2.dtype == x.dtype:
             return None
         return [x]
 
@@ -176,4 +176,3 @@ def transform_patterns():
     register_rewrite_rule(FanoutTwoCast())
     register_rewrite_rule(FanoutThreeCast())
     register_rewrite_rule(DoubleCast())
-
