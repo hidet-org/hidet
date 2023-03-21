@@ -73,7 +73,7 @@ def can_inline_grid_compute(gc: GridCompute) -> bool:
     return GridComputeInlineChecker().check(gc)
 
 
-class GridComputeInliner(ExprRewriter):
+class GridComputeInliner(ExprRewriter, ComputeRewriter):
     def __init__(self):
         super().__init__()
 
