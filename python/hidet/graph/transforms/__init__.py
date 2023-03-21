@@ -50,6 +50,7 @@ def optimize(graph: FlowGraph) -> FlowGraph:
         fold_const_pass(),
         subgraph_rewrite_pass(),
         automatic_mix_precision_pass(),
+        subgraph_rewrite_pass(),
         resolve_variant_pass(),
         fuse_operator_pass(),
         eliminate_barrier_pass(),
