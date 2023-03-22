@@ -208,4 +208,4 @@ def load_lib_func(lib_path: str, func_name: str, func_type: FuncType) -> Compile
         os.remove(lib_path)
         raise e
     packed_func = PackedFunc(param_types=list(func_type.param_types), c_func_pointer=lib[func_name])
-    return CompiledFunction(name=func_name, packed_func=packed_func)
+    return CompiledFunction(name=func_name, packed_func=packed_func, lib_path=lib_path)
