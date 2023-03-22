@@ -220,10 +220,10 @@ class RuleBasedSimplifier(IRRewriter):
         return e
 
     def visit(self, obj):
+        self.analyzer(obj)
         if isinstance(obj, Expr):
             if obj in self.memo:
                 return self.memo[obj]
-            self.analyzer(obj)
             if obj in self.bound and self.bound[obj].value is not None and not isinstance(obj, Constant):
                 return convert(self.bound[obj].value)
             cur = IRRewriter.visit(self, obj)
