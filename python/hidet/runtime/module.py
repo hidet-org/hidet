@@ -42,6 +42,12 @@ class CompiledFunction:
     def profile(self, *args, warmup=1, number=1, repeat=10):
         return self.packed_func.profile(*args, warmup=warmup, number=number, repeat=repeat)
 
+    def source(self) -> Optional[str]:
+        if self.src_path is None:
+            return None
+        with open(self.src_path, 'r') as f:
+            return f.read()
+
 
 CompiledTaskKey = namedtuple('CompiledTaskKey', ['device', 'space', 'task_str'])
 
