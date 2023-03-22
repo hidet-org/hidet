@@ -87,7 +87,14 @@ class CPUFloat64MathFunctionSet(MathFunctionSet):
         return self.call('sqrt', a)
 
     def rsqrt(self, a: Expr) -> Expr:
-        return self.call('rsqrt', a)
+        # no native rsqrt support in cpu
+        # use 1/sqrt to compute rsqrt
+        from hidet.ir.expr import Div, Constant
+        from hidet.ir.type import data_type
+
+        nom = Constant(1, data_type("float32"))
+        denom = self.call('sqrt', a)
+        return Div(nom, denom)
 
     def log(self, a: Expr) -> Expr:
         return self.call('log', a)

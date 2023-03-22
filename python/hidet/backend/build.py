@@ -131,8 +131,6 @@ def compile_command(src_path: str, out_lib_path: str, target='cuda', keep_ptx=Fa
             '-fPIC',
             # embed the debug information into the binary, allow Nsight Compute to get the source code for profiling.
             '-g',
-            # link the hidet runtime, all APIs for communication between kernels and host system are in hidet runtime.
-            '-lhidet_runtime',
             # 'shared',
             # generate shared library (lib.so).
             '-shared',
@@ -141,6 +139,10 @@ def compile_command(src_path: str, out_lib_path: str, target='cuda', keep_ptx=Fa
             # the output library path.
             '-o',
             out_lib_path,
+            # link the hidet runtime, all APIs for communication between kernels and host system are in hidet runtime.
+            # link runtime lib needs to follow the source that used it to avoid undefined symbol in .so
+            # https://stackoverflow.com/questions/19934889/undefined-symbols-in-so-after-compiling-despite-supplying-libs
+            '-lhidet_runtime',
         ]
         return command
 
