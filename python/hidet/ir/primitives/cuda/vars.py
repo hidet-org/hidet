@@ -42,7 +42,7 @@ def block_idx(dim='x') -> Var:
 
 def block_dim(dim='x') -> Var:
     assert dim in ['x', 'y', 'z']
-    name = 'blockIdx.{}'.format(dim)
+    name = 'blockDim.{}'.format(dim)
     if name not in _primitive_variables:
         _primitive_variables[name] = attach_pool(Var(hint=name, type=data_type('int32'), name=name))
     return _primitive_variables[name]
@@ -50,7 +50,7 @@ def block_dim(dim='x') -> Var:
 
 def grid_dim(dim='x') -> Var:
     assert dim in ['x', 'y', 'z']
-    name = 'gridIdx.{}'.format(dim)
+    name = 'gridDim.{}'.format(dim)
     if name not in _primitive_variables:
         _primitive_variables[name] = attach_pool(Var(hint=name, type=data_type('int32'), name=name))
     return _primitive_variables[name]
