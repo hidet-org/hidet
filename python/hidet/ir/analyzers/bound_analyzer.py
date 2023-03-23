@@ -245,12 +245,14 @@ class BoundAnalyzer(ExprVisitor, StmtVisitor, ModuleVisitor):
                     if isinstance(block_dim, int):
                         bound_info = BoundInfo(min_value=0, max_value=int(block_dim) - 1)
                         self.bound[extern_var_map['threadIdx.{}'.format(suffix)]] = bound_info
+                        self.bound[extern_var_map['blockDim.{}'.format(suffix)]] = BoundInfo(value=int(block_dim))
             if 'cuda_grid_dim' in func.attrs:
                 grid_dims = normalize_launch_dims(func.attrs['cuda_grid_dim'])
                 for grid_dim, suffix in zip(grid_dims, ['x', 'y', 'z']):
                     if isinstance(grid_dim, int):
                         bound_info = BoundInfo(min_value=0, max_value=int(grid_dim) - 1)
                         self.bound[extern_var_map['blockIdx.{}'.format(suffix)]] = bound_info
+                        self.bound[extern_var_map['gridDim.{}'.format(suffix)]] = BoundInfo(value=int(grid_dim))
         self.visit(func.body)
 
     def combine(self, e: Union[Add, Sub, Multiply, FloorDiv, Mod, Div]):
