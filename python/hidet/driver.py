@@ -178,7 +178,7 @@ def build_ir_module(
 
     if load:
         # load function
-        return load_lib_func(lib_path, 'hidet_' + func_name, func_type=func_type)
+        return load_lib_func(lib_path, 'hidet_' + func_name, func_type=func_type, src_path=src_path)
     else:
         return lib_path, func_name, func_type
 

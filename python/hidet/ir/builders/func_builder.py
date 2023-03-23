@@ -76,7 +76,8 @@ class FunctionBuilder(StmtBuilder):
         self.body = body
 
     def finish_func(self):
-        from hidet.ir.primitives.cuda.vars import block_idx, thread_idx  # pylint: disable=import-outside-toplevel
+        # pylint: disable=import-outside-toplevel
+        from hidet.ir.primitives.cuda.vars import block_idx, thread_idx, block_dim, grid_dim
 
         assert self.func is None
         if 'label' not in self.attrs:
@@ -84,6 +85,8 @@ class FunctionBuilder(StmtBuilder):
         if self.kind in ['cuda_kernel', 'cuda_device']:
             self.extend_extern_vars([block_idx(dim) for dim in ['x', 'y', 'z']])
             self.extend_extern_vars([thread_idx(dim) for dim in ['x', 'y', 'z']])
+            self.extend_extern_vars([block_dim(dim) for dim in ['x', 'y', 'z']])
+            self.extend_extern_vars([grid_dim(dim) for dim in ['x', 'y', 'z']])
         if self.body is None:
             self.body = self.finish()
         self.func = Function(

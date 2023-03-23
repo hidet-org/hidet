@@ -56,17 +56,10 @@ class ModuleRewriter(ModuleFunctor, BaseRewriter):
 
     def visit_Function(self, func: Function):
         params = self.visit(func.params)
-        extern_vars = self.visit(func.extern_vars)
         ret_type = self.visit(func.ret_type)
         body = self.visit(func.body)
         attrs = self.visit(func.attrs)
-        if (
-            same_list(params, func.params)
-            and same_list(extern_vars, func.extern_vars)
-            and ret_type is func.ret_type
-            and body is func.body
-            and attrs is func.attrs
-        ):
+        if same_list(params, func.params) and ret_type is func.ret_type and body is func.body and attrs is func.attrs:
             return func
         else:
-            return Function(func.name, params, body, ret_type, func.kind, extern_vars, attrs)
+            return Function(func.name, params, body, ret_type, func.kind, func.extern_vars, attrs)

@@ -12,8 +12,13 @@
 import numpy as np
 import pytest
 import torch.nn.functional as F
+import torch.nn.functional as F
 
 from hidet import ops
+from hidet.testing import check_unary, check_binary, check_torch_binary, check_torch_unary
+
+
+# hidet operators tested against numpy equivalent operators
 from hidet.testing import check_unary, check_binary, check_torch_binary, check_torch_unary
 
 
