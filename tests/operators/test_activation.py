@@ -12,8 +12,13 @@
 import numpy as np
 import pytest
 import torch.nn.functional as F
+import torch.nn.functional as F
 
 from hidet import ops
+from hidet.testing import check_unary, check_binary, check_torch_binary, check_torch_unary
+
+
+# hidet operators tested against numpy equivalent operators
 from hidet.testing import check_unary, check_binary, check_torch_binary, check_torch_unary
 
 
@@ -93,6 +98,115 @@ def test_gelu_torch(shape, dtype):
 @pytest.mark.parametrize("dtype", ["float32"])
 def test_hardswish_torch(shape, dtype):
     check_torch_unary(shape, lambda x: F.hardswish(x), lambda x: ops.hardswish(x), dtype=dtype, rtol=1e-5, atol=1e-5)
+
+
+@pytest.mark.parametrize("shape", [[33, 44]])
+@pytest.mark.parametrize("axis", [1])
+@pytest.mark.parametrize("dtype", ["float32"])
+def test_softmax_torch(shape, axis, dtype):
+    check_torch_unary(
+        shape, lambda x: F.softmax(x, axis), lambda x: ops.softmax(x, axis), dtype=dtype, rtol=1e-5, atol=1e-5
+    )
+
+
+@pytest.mark.parametrize("shape", [[33, 44]])
+@pytest.mark.parametrize("axis", [1])
+@pytest.mark.parametrize("dtype", ["float32"])
+def test_softmin_torch(shape, axis, dtype):
+    check_torch_unary(
+        shape, lambda x: F.softmin(x, axis), lambda x: ops.softmin(x, axis), dtype=dtype, rtol=1e-5, atol=1e-5
+    )
+
+
+@pytest.mark.parametrize("shape", [[33, 44]])
+@pytest.mark.parametrize("dtype", ["float32"])
+def test_logsigmoid_torch(shape, dtype):
+    check_torch_unary(shape, lambda x: F.logsigmoid(x), lambda x: ops.logsigmoid(x), dtype=dtype, rtol=1e-5, atol=1e-5)
+
+
+@pytest.mark.parametrize("shape", [[33, 44]])
+@pytest.mark.parametrize("alpha", [1])
+@pytest.mark.parametrize("dtype", ["float32"])
+def test_celu_torch(shape, alpha, dtype):
+    check_torch_unary(
+        shape, lambda x: F.celu(x, alpha), lambda x: ops.celu(x, alpha), dtype=dtype, rtol=1e-5, atol=1e-5
+    )
+
+
+@pytest.mark.parametrize("shape", [[33, 44]])
+@pytest.mark.parametrize("lambda_val", [0.5])
+@pytest.mark.parametrize("dtype", ["float32"])
+def test_hardshrink_torch(shape, lambda_val, dtype):
+    check_torch_unary(
+        shape,
+        lambda x: F.hardshrink(x, lambda_val),
+        lambda x: ops.hardshrink(x, lambda_val),
+        dtype=dtype,
+        rtol=1e-5,
+        atol=1e-5,
+    )
+
+
+@pytest.mark.parametrize("shape", [[33, 44]])
+@pytest.mark.parametrize("beta", [1])
+@pytest.mark.parametrize("threshold", [20])
+@pytest.mark.parametrize("dtype", ["float32"])
+def test_softplus_torch(shape, beta, threshold, dtype):
+    check_torch_unary(
+        shape,
+        lambda x: F.softplus(x, beta, threshold),
+        lambda x: ops.softplus(x, beta, threshold),
+        dtype=dtype,
+        rtol=1e-5,
+        atol=1e-5,
+    )
+
+
+@pytest.mark.parametrize("shape", [[33, 44]])
+@pytest.mark.parametrize("dtype", ["float32"])
+def test_softsign_torch(shape, dtype):
+    check_torch_unary(shape, lambda x: F.softsign(x), lambda x: ops.softsign(x), dtype=dtype, rtol=1e-5, atol=1e-5)
+
+
+@pytest.mark.parametrize("shape", [[33, 44]])
+@pytest.mark.parametrize("dtype", ["float32"])
+def test_tanh_torch(shape, dtype):
+    check_torch_unary(shape, lambda x: F.tanh(x), lambda x: ops.tanh(x), dtype=dtype, rtol=1e-5, atol=1e-5)
+
+
+@pytest.mark.parametrize("shape", [[33, 44]])
+@pytest.mark.parametrize("dtype", ["float32"])
+def test_tanhshrink_torch(shape, dtype):
+    check_torch_unary(shape, lambda x: F.tanhshrink(x), lambda x: ops.tanhshrink(x), dtype=dtype, rtol=1e-5, atol=1e-5)
+
+
+@pytest.mark.parametrize("shape", [[33, 44]])
+@pytest.mark.parametrize("min_val", [-1])
+@pytest.mark.parametrize("max_val", [1])
+@pytest.mark.parametrize("dtype", ["float32"])
+def test_hardtanh_torch(shape, min_val, max_val, dtype):
+    check_torch_unary(
+        shape,
+        lambda x: F.hardtanh(x, min_val, max_val),
+        lambda x: ops.hardtanh(x, min_val, max_val),
+        dtype=dtype,
+        rtol=1e-5,
+        atol=1e-5,
+    )
+
+
+@pytest.mark.parametrize("shape", [[33, 44]])
+@pytest.mark.parametrize("lambda_val", [0.5])
+@pytest.mark.parametrize("dtype", ["float32"])
+def test_softshrink_torch(shape, lambda_val, dtype):
+    check_torch_unary(
+        shape,
+        lambda x: F.softshrink(x, lambda_val),
+        lambda x: ops.softshrink(x, lambda_val),
+        dtype=dtype,
+        rtol=1e-5,
+        atol=1e-5,
+    )
 
 
 if __name__ == '__main__':

@@ -108,6 +108,9 @@ class MathFunctionSet:
     def round(self, a: Expr) -> Expr:
         raise NotImplementedError()
 
+    def abs(self, a: Expr) -> Expr:
+        raise NotImplementedError()
+
     def trunc(self, a: Expr) -> Expr:
         raise NotImplementedError()
 
@@ -174,10 +177,11 @@ class MathFunctionSetGeneric(MathFunctionSet):
             'tanh',
             'exp',
             'round',
+            'abs',
             'floor',
             'ceil',
-            'rsqrt',
             'sqrt',
+            'rsqrt',
             'erf',
             'log',
             'log2',
@@ -191,7 +195,7 @@ class MathFunctionSetGeneric(MathFunctionSet):
         binary_names = ['min', 'max', 'pow', 'mod', 'atan2']
         ternary_names = ['fma']
         for name in unary_names + binary_names + ternary_names:
-            if name in ['isfinite', 'isinf', 'isnan']:
+            if name in set(['isfinite', 'isinf', 'isnan']):
                 func_type = FuncType(type_infer_func=lambda _: data_type('bool'))
             else:
                 func_type = FuncType(type_infer_func=type_infer_func)
@@ -201,6 +205,8 @@ class MathFunctionSetGeneric(MathFunctionSet):
     def call(name, *args) -> Expr:
         entry = lookup_primitive_function(f'generic_{name}')
         return Call(entry.var, args)
+
+    # unary names
 
     def sin(self, a: Expr) -> Expr:
         return self.call('sin', a)
@@ -238,9 +244,6 @@ class MathFunctionSetGeneric(MathFunctionSet):
     def atanh(self, a: Expr) -> Expr:
         return self.call('atanh', a)
 
-    def atan2(self, a: Expr, b: Expr) -> Expr:
-        return self.call('atan2', a, b)
-
     def exp(self, a: Expr) -> Expr:
         return self.call('exp', a)
 
@@ -271,6 +274,9 @@ class MathFunctionSetGeneric(MathFunctionSet):
     def round(self, a: Expr) -> Expr:
         return self.call('round', a)
 
+    def abs(self, a: Expr) -> Expr:
+        return self.call('abs', a)
+
     def ceil(self, a: Expr) -> Expr:
         return self.call('ceil', a)
 
@@ -289,6 +295,11 @@ class MathFunctionSetGeneric(MathFunctionSet):
     def isnan(self, a: Expr) -> Expr:
         return self.call('isnan', a)
 
+    # binary names
+
+    def atan2(self, a: Expr, b: Expr) -> Expr:
+        return self.call('atan2', a, b)
+
     def min(self, a: Expr, b: Expr) -> Expr:
         return self.call('min', a, b)
 
@@ -300,6 +311,8 @@ class MathFunctionSetGeneric(MathFunctionSet):
 
     def pow(self, a: Expr, b: Expr) -> Expr:
         return self.call('pow', a, b)
+
+    # ternary names
 
     def fma(self, a: Expr, b: Expr, c: Expr) -> Expr:
         return self.call('fma', a, b, c)
@@ -399,6 +412,10 @@ def log1p(a: Expr) -> Expr:
 
 def round(a: Expr) -> Expr:
     return generic_math_function_set.round(a)
+
+
+def abs(a: Expr) -> Expr:
+    return generic_math_function_set.abs(a)
 
 
 def ceil(a: Expr) -> Expr:

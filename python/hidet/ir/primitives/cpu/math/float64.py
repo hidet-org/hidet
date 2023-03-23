@@ -37,6 +37,7 @@ class CPUFloat64MathFunctionSet(MathFunctionSet):
             'rsqrt': 'rsqrt',
             'log': 'log',
             'round': 'round',
+            'abs': 'abs',
             'ceil': 'ceil',
             'floor': 'floor',
             'expm1': 'expm1',
@@ -93,6 +94,9 @@ class CPUFloat64MathFunctionSet(MathFunctionSet):
 
     def round(self, a: Expr) -> Expr:
         return self.call('round', a)
+
+    def abs(self, a: Expr) -> Expr:
+        return self.call('abs', a)
 
     def ceil(self, a: Expr) -> Expr:
         return self.call('ceil', a)
