@@ -422,7 +422,7 @@ class Tensor:
 
     def __getstate__(self):
         if self.storage:
-            data = self.detach().numpy()
+            data = self.detach().cpu().numpy()
         else:
             data = None
 
