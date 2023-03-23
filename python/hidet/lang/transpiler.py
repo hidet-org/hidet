@@ -485,10 +485,18 @@ class PythonToHidetTranslator(PythonAstFunctor):
             ret_type=ret_type,
             kind=func_kind,
             extern_vars=[
-                thread_idx('x'), thread_idx('y'), thread_idx('z'),
-                block_idx('x'), block_idx('y'), block_idx('z'),
-                block_dim('x'), block_dim('y'), block_dim('z'),
-                grid_dim('x'), grid_dim('y'), grid_dim('z')
+                thread_idx('x'),
+                thread_idx('y'),
+                thread_idx('z'),
+                block_idx('x'),
+                block_idx('y'),
+                block_idx('z'),
+                block_dim('x'),
+                block_dim('y'),
+                block_dim('z'),
+                grid_dim('x'),
+                grid_dim('y'),
+                grid_dim('z'),
             ],
             attrs=func_attrs,
         )

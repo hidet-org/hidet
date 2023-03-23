@@ -51,17 +51,17 @@ class CompiledFunction:
 
         if color:
             import importlib.util
+
             if importlib.util.find_spec('pygments'):
                 from pygments import highlight
                 from pygments.lexers import CudaLexer
                 from pygments.formatters import Terminal256Formatter
+
                 # return highlight(src_code, CudaLexer(), Terminal256Formatter(style='solarized-light'))
                 return highlight(src_code, CudaLexer(), Terminal256Formatter(style='autumn'))
             else:
                 warnings.warn('pygments is not installed, please install it to enable colorized source code.')
         return src_code
-
-
 
 
 CompiledTaskKey = namedtuple('CompiledTaskKey', ['device', 'space', 'task_str'])
