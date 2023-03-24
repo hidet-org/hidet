@@ -142,6 +142,19 @@ class HidetLayerNorm(HidetModule):
         )
 
 
+@register_module(torch.nn.GroupNorm)
+class HidetGroupNorm(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.GroupNorm)
+        return regs.group_norm(
+            x=x,
+            normalized_shape=self.mod.normalized_shape,
+            weight=self.param('weight'),
+            bias=self.param('bias'),
+            eps=self.mod.eps,
+        )
+
+
 @register_module(torch.nn.Tanh)
 class HidetTanh(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:

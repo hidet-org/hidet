@@ -281,6 +281,23 @@ def layer_norm(
     return y
 
 
+@register_function(torch.nn.functional.group_norm)
+def group_norm(
+    x: Tensor,
+    num_groups: int,
+    num_channels: int,
+    weight: Optional[Tensor] = None,
+    bias: Optional[Tensor] = None,
+    eps: float = 1e-5,
+):
+    y = ops.layer_norm(x, num_last_dims=len(normalized_shape), epsilon=eps)
+    if weight is not None:
+        y = y * weight
+    if bias is not None:
+        y = y + bias
+    return y
+
+
 @register_function(torch.tanh)
 def tanh(x: Tensor):
     return ops.tanh(x)

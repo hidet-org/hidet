@@ -35,9 +35,12 @@ def tensor_cpu(self: Tensor) -> Tensor:
 
 @register_method(torch.Tensor.float)
 def tensor_float(self: Tensor) -> Tensor:
-    if self.is_symbolic():
-        raise NotImplementedError('hidet: torch.Tensor.cpu() is not supported for symbolic tensors.')
-    return self.to(dtype="float32", device=device_from_torch(self.device))
+    return ops.cast(self, "float32")
+
+
+@register_method(torch.Tensor.half)
+def tensor_half(self: Tensor) -> Tensor:
+    return ops.cast(self, "float16")
 
 
 @register_method(torch.Tensor.to)
