@@ -37,7 +37,7 @@ print('Build docs with under cache: {}'.format(hidet.option.get_cache_dir()))
 
 project = 'Hidet'
 author = 'Hidet Team'
-copyright = '2022, Hidet Authors'
+copyright = '2023, Hidet Authors'
 
 # The full version, including alpha/beta/rc tags
 release = '0.1'

@@ -88,6 +88,14 @@ def linear(x: Tensor, weight: Tensor, bias: Optional[Tensor]):
     return y
 
 
+@register_function(torch.nn.functional.bilinear)
+def bilinear(x_1: Tensor, x_2: Tensor, weight: Tensor, bias: Optional[Tensor]):
+    y = ops.matmul(x_1, ops.matmul(weight, x_2))
+    if bias is not None:
+        y = y + bias
+    return y
+
+
 @register_function(operator.add)
 def add(x: Tensor, y: Tensor):
     return ops.add(x, y)
@@ -456,3 +464,43 @@ def hardswish(x: Tensor, inplace: bool):
     if inplace:
         warnings.warn_once('hidet: hardswish with inplace=True is not supported. Treat as inplace=False.')
     return ops.hardswish(x)
+
+
+@register_function(torch.nn.functional.softmin)
+def softmin(x: Tensor, axis: int):
+    return ops.softmin(x, axis)
+
+
+@register_function(torch.nn.functional.softplus)
+def softplus(x: Tensor, beta: int, threshold: int):
+    return ops.softplus(x, beta, threshold)
+
+
+@register_function(torch.nn.functional.softshrink)
+def softshrink(x: Tensor, lambda_val: float):
+    return ops.softshrink(x, lambda_val)
+
+
+@register_function(torch.nn.functional.tanhshrink)
+def tanhshrink(x: Tensor):
+    return ops.tanhshrink(x)
+
+
+@register_function(torch.nn.functional.hardshrink)
+def hardshrink(x: Tensor, lambda_val: float):
+    return ops.hardshrink(x, lambda_val)
+
+
+@register_function(torch.nn.functional.softsign)
+def softsign(x: Tensor):
+    return ops.softsign(x)
+
+
+@register_function(torch.nn.functional.celu)
+def celu(x: Tensor, alpha: float):
+    return ops.celu(x, alpha)
+
+
+@register_function(torch.nn.functional.logsigmoid)
+def logsigmoid(x: Tensor):
+    return ops.logsigmoid(x)

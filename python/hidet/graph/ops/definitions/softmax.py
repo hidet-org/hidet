@@ -11,7 +11,7 @@
 # limitations under the License.
 from hidet.ir.func import IRModule
 from hidet.ir import primitives as prim
-from .utils import Task, Operator, Tensor, TensorNode, compute, input_like, normalize_dim, reduce
+from .utils import Task, TensorNode, compute, reduce
 
 
 class SoftmaxTask(Task):
@@ -62,13 +62,3 @@ class SoftmaxTask(Task):
         from hidet.graph.ops.schedules import softmax_cuda_schedule
 
         return softmax_cuda_schedule(self)
-
-
-class SoftmaxOp(Operator):
-    def __init__(self, x: Tensor, axis: int = 1):
-        axis = normalize_dim(axis, len(x.shape))
-        super().__init__(inputs=[x], task=SoftmaxTask(input_like(x, 'x'), axis), attributes={'axis': axis})
-
-
-def softmax(x: Tensor, axis=1) -> Tensor:
-    return SoftmaxOp(x, axis).get_output(0)

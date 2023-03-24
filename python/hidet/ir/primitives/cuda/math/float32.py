@@ -37,6 +37,7 @@ class CUDAFloat32MathFunctionSet(MathFunctionSet):
             'rsqrt': 'rsqrtf',
             'log': 'logf',
             'round': 'roundf',
+            'abs': 'fabsf',
             'ceil': 'ceilf',
             'floor': 'floorf',
             'expm1': 'expm1f',
@@ -93,6 +94,9 @@ class CUDAFloat32MathFunctionSet(MathFunctionSet):
 
     def round(self, a: Expr) -> Expr:
         return self.call('round', a)
+
+    def abs(self, a: Expr) -> Expr:
+        return self.call('abs', a)
 
     def ceil(self, a: Expr) -> Expr:
         return self.call('ceil', a)
