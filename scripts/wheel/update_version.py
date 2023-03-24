@@ -21,7 +21,7 @@ parser.add_argument(
     default="./",
     help="root directory of the project, under which setup.py is located. Default: ./",
 )
-parser.add_argument("--version", type=str, required=True, help="Version to update to")
+parser.add_argument("--version", type=str, required=True, help="Version to update to (e.g., 0.2.3 or 0.2.3.dev).")
 
 
 def update_setup_py(setup_py, version):
