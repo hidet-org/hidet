@@ -40,8 +40,9 @@ from .compare import equal, less, greater, less_equal, greater_equal, logical_no
 from .transform import squeeze, unsqueeze, flatten, concat, cast, take, rearrange, strided_slice, split, pad, conv_pad
 from .pool import avg_pool2d, adaptive_avg_pool1d, adaptive_avg_pool2d, adaptive_avg_pool3d
 from .pool import max_pool2d, adaptive_max_pool1d, adaptive_max_pool2d, adaptive_max_pool3d
-from .softmax import softmax
-from .activation import relu, sigmoid, relu6, clip, prelu
+from .activation import relu, leaky_relu, sigmoid, hardsigmoid, clip, relu6, prelu, gelu, silu, hardswish
+from .activation import logsigmoid, celu, hardshrink, softplus, softsign, tanhshrink, softshrink
+from .activation import softmax, softmin, hardtanh
 from .norm import batch_norm_infer, instance_norm
 from .image import resize2d
 from .cumulative import cumsum

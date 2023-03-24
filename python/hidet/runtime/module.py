@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Dict, Tuple, Optional
+import warnings
 from collections import namedtuple
 from hidet.ir.func import IRModule
 
@@ -41,6 +42,26 @@ class CompiledFunction:
 
     def profile(self, *args, warmup=1, number=1, repeat=10):
         return self.packed_func.profile(*args, warmup=warmup, number=number, repeat=repeat)
+
+    def source(self, color=False) -> Optional[str]:
+        if self.src_path is None:
+            return None
+        with open(self.src_path, 'r') as f:
+            src_code = f.read()
+
+        if color:
+            import importlib.util
+
+            if importlib.util.find_spec('pygments'):
+                from pygments import highlight
+                from pygments.lexers import CudaLexer
+                from pygments.formatters import Terminal256Formatter
+
+                # return highlight(src_code, CudaLexer(), Terminal256Formatter(style='solarized-light'))
+                return highlight(src_code, CudaLexer(), Terminal256Formatter(style='autumn'))
+            else:
+                warnings.warn('pygments is not installed, please install it to enable colorized source code.')
+        return src_code
 
 
 CompiledTaskKey = namedtuple('CompiledTaskKey', ['device', 'space', 'task_str'])

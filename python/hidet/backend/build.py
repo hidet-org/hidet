@@ -200,7 +200,9 @@ def load_task_func(lib_path: str, task) -> CompiledFunction:
     return CompiledFunction(name=task.name, packed_func=packed_func, lib_path=lib_path, src_path=src_path)
 
 
-def load_lib_func(lib_path: str, func_name: str, func_type: FuncType) -> CompiledFunction:
+def load_lib_func(
+    lib_path: str, func_name: str, func_type: FuncType, src_path: Optional[str] = None
+) -> CompiledFunction:
     try:
         lib = SharedLibrary(lib_path)
     except OSError as e:
@@ -208,4 +210,4 @@ def load_lib_func(lib_path: str, func_name: str, func_type: FuncType) -> Compile
         os.remove(lib_path)
         raise e
     packed_func = PackedFunc(param_types=list(func_type.param_types), c_func_pointer=lib[func_name])
-    return CompiledFunction(name=func_name, packed_func=packed_func, lib_path=lib_path)
+    return CompiledFunction(name=func_name, packed_func=packed_func, lib_path=lib_path, src_path=src_path)

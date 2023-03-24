@@ -226,3 +226,66 @@ class HidetSiLU(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, torch.nn.SiLU)
         return regs.silu(x, self.mod.inplace)
+
+
+@register_module(torch.nn.Softmax)
+class HidetSoftmax(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.Softmax)
+        return regs.softmax(x, self.mod.dim)
+
+
+@register_module(torch.nn.Softmin)
+class HidetSoftmin(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.Softmin)
+        return regs.softmin(x, self.mod.dim)
+
+
+@register_module(torch.nn.Softplus)
+class HidetSoftplus(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.Softplus)
+        return regs.softplus(x, self.mod.beta, self.mod.threshold)
+
+
+@register_module(torch.nn.Softsign)
+class HidetSoftsign(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.Softsign)
+        return regs.softsign(x)
+
+
+@register_module(torch.nn.Softshrink)
+class HidetSoftshrink(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.Softshrink)
+        return regs.softshrink(x, self.mod.lambd)
+
+
+@register_module(torch.nn.Tanhshrink)
+class HidetTanhshrink(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.Tanhshrink)
+        return regs.tanhshrink(x)
+
+
+@register_module(torch.nn.Hardshrink)
+class HidetHardshrink(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.Hardshrink)
+        return regs.hardshrink(x, self.mod.lambd)
+
+
+@register_module(torch.nn.CELU)
+class HidetCELU(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.CELU)
+        return regs.celu(x, self.mod.alpha)
+
+
+@register_module(torch.nn.LogSigmoid)
+class HidetLogSigmoid(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.LogSigmoid)
+        return regs.logsigmoid(x)
