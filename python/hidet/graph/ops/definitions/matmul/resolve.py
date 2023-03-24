@@ -173,6 +173,9 @@ class MatmulResolveRule(ResolveRule):
         if not (a.dtype == dtypes.float16 and b.dtype == dtypes.float16 and a.shape[-1] % 8 == b.shape[-1] % 8 == 0):
             return None
 
+        if hidet.cuda.compute_capability() < (8, 0):
+            return None
+
         parallel_k = self.get_config('parallel_k', default='default')  # 'default', 'search', 2, 4, ...
         if isinstance(parallel_k, str):
             if parallel_k == 'default':
@@ -215,7 +218,6 @@ class MatmulResolveRule(ResolveRule):
         return [c]
 
     def resolve(self, op: Operator) -> Optional[List[Tensor]]:
-        print(hidet.cuda.compute_capability())
         resolve_funcs: List[Callable[[Operator], Any]] = [self.resolve_f16, self.resolve_generic]
         for resolve_func in resolve_funcs:
             outs = resolve_func(op)
