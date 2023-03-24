@@ -195,7 +195,7 @@ class MathFunctionSetGeneric(MathFunctionSet):
         binary_names = ['min', 'max', 'pow', 'mod', 'atan2']
         ternary_names = ['fma']
         for name in unary_names + binary_names + ternary_names:
-            if name in set(['isfinite', 'isinf', 'isnan']):
+            if name in ['isfinite', 'isinf', 'isnan']:
                 func_type = FuncType(type_infer_func=lambda _: data_type('bool'))
             else:
                 func_type = FuncType(type_infer_func=type_infer_func)

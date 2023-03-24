@@ -12,7 +12,7 @@
 from typing import Optional
 import math
 from hidet.ir import primitives as prim
-from hidet.ir.expr import if_then_else
+from hidet.ir.expr import if_then_else, BitwiseAnd
 from .utils import Tensor, Operator, normalize_dim, input_like
 from .arithmetic import UnaryElementwiseOp, BinaryElementwiseOp
 from .softmax import SoftmaxTask
@@ -95,13 +95,7 @@ class ThresholdOp(UnaryElementwiseOp):
 
 class HardTanhOp(UnaryElementwiseOp):
     def __init__(self, x: Tensor, min_val: float = -1.0, max_val: float = 1.0) -> Tensor:
-        super().__init__(
-            x,
-            op=lambda v: if_then_else(
-                v > x.dtype(max_val), x.dtype(max_val), if_then_else(v < x.dtype(min_val), x.dtype(min_val), v)
-            ),
-            name='hardtanh',
-        )
+        super().__init__(x, op=lambda v: prim.min(x.dtype(max_val), prim.max(x.dtype(min_val), v)), name='hardtanh')
 
 
 class EluOp(UnaryElementwiseOp):
@@ -136,25 +130,16 @@ class CeluOp(UnaryElementwiseOp):
         )
 
 
-class RReluOp(UnaryElementwiseOp):
-    def __init__(self, x: Tensor, lower: float = 1 / 8, upper: float = 1 / 3) -> Tensor:
-        super().__init__(
-            x, op=lambda v: if_then_else(v >= 0, v, prim.random(x.dtype(lower), x.dtype(upper)) * v), name='rrelu'
-        )
-
-
 class LogSigmoidOp(UnaryElementwiseOp):
     def __init__(self, x: Tensor):
-        super().__init__(x, op=lambda v: prim.log(x.dtype(1.0) / (x.dtype(1.0) + prim.exp(-v))), name='logsigmoid')
+        super().__init__(x, op=lambda v: -(prim.log(x.dtype(1.0) + prim.exp(-v))), name='logsigmoid')
 
 
 class HardShrinkOp(UnaryElementwiseOp):
     def __init__(self, x: Tensor, lambda_val: float = 0.5):
         super().__init__(
             x,
-            op=lambda v: if_then_else(
-                v > x.dtype(lambda_val), v, if_then_else(v < x.dtype(-lambda_val), v, x.dtype(0.0))
-            ),
+            op=lambda v: if_then_else(BitwiseAnd(v >= x.dtype(-lambda_val), v <= x.dtype(lambda_val)), x.dtype(0), v),
             name='hardshrink',
         )
 
@@ -177,7 +162,7 @@ class SoftPlusOp(UnaryElementwiseOp):
             x,
             op=lambda v: if_then_else(
                 v * x.dtype(beta) <= x.dtype(threshold_val),
-                (x.dtype(1.0) / x.dtype(beta)) * prim.log(x.dtype(1.0) + prim.exp(x.dtype(beta) * v)),
+                (x.dtype(1.0 / beta)) * prim.log(x.dtype(1.0) + prim.exp(x.dtype(beta) * v)),
                 v,
             ),
             name='softplus',
@@ -202,14 +187,6 @@ class SoftmaxOp(Operator):
         axis = normalize_dim(axis, len(x.shape))
         super().__init__(
             inputs=[x], task=SoftmaxTask(input_like(x, 'x'), axis), attributes={'axis': axis}, name='softmax'
-        )
-
-
-class SoftminOp(Operator):
-    def __init__(self, x: Tensor, axis: int = 1):
-        axis = normalize_dim(axis, len(x.shape))
-        super().__init__(
-            inputs=[-x], task=SoftmaxTask(input_like(x, 'x'), axis), attributes={'axis': axis}, name='softmin'
         )
 
 
@@ -273,10 +250,6 @@ def celu(x: Tensor, alpha: float) -> Tensor:
     return CeluOp(x, alpha).get_output(0)
 
 
-def rrelu(x: Tensor, lower: float, upper: float) -> Tensor:
-    return RReluOp(x, lower, upper).get_output(0)
-
-
 def logsigmoid(x: Tensor) -> Tensor:
     return LogSigmoidOp(x).get_output(0)
 
@@ -306,4 +279,4 @@ def softmax(x: Tensor, axis=1) -> Tensor:
 
 
 def softmin(x: Tensor, axis: int) -> Tensor:
-    return SoftminOp(x, axis).get_output(0)
+    return SoftmaxOp(-x, axis).get_output(0)
