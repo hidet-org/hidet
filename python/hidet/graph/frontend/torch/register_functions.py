@@ -436,6 +436,11 @@ def sigmoid(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
         warnings.warn_once("hidet: does not support torch.sigmoid(..., out=...)")
     return ops.sigmoid(x)
 
+@register_function(torch.exp)
+def exp(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
+    if out is not None:
+        warnings.warn_once("hidet: does not support torch.exp(..., out=...)")
+    return ops.exp(x)
 
 @register_function(torch.nn.functional.hardsigmoid)
 def hardsigmoid(x: Tensor, inplace: bool):
