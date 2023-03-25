@@ -504,3 +504,8 @@ def celu(x: Tensor, alpha: float):
 @register_function(torch.nn.functional.logsigmoid)
 def logsigmoid(x: Tensor):
     return ops.logsigmoid(x)
+
+
+@register_function(torch.nn.functional.mish)
+def mish(x: Tensor):
+    return ops.mish(x)

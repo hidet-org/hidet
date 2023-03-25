@@ -289,3 +289,10 @@ class HidetLogSigmoid(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, torch.nn.LogSigmoid)
         return regs.logsigmoid(x)
+
+
+@register_module(torch.nn.Mish)
+class HidetMish(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.Mish)
+        return regs.mish(x)
