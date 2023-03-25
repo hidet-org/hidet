@@ -204,5 +204,11 @@ def test_softshrink_torch(shape, lambda_val, dtype):
     )
 
 
+@pytest.mark.parametrize("shape", [[33, 44]])
+@pytest.mark.parametrize("dtype", ["float32"])
+def test_mish_torch(shape, dtype):
+    check_torch_unary(shape, lambda x: F.mish(x), lambda x: ops.mish(x), dtype=dtype, rtol=1e-5, atol=1e-5)
+
+
 if __name__ == '__main__':
     pytest.main([__file__])
