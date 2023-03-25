@@ -36,6 +36,7 @@ from hidet.ir.primitives import is_primitive_function, lookup_primitive_function
 
 
 class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
+    # pylint: disable=abstract-method
     def __init__(self):
         super().__init__()
         self.func_name_map = {}
@@ -301,40 +302,6 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
                 name = self.canonize_funcname(name)
             return Text(name)
 
-    @staticmethod
-    def scalar_literal(value, dtype: DataType):
-        if dtype == dtypes.boolean:
-            ret = 'true' if value else 'false'
-        elif dtype == dtypes.float64:
-            ret = '{}'.format(float(value))
-        elif dtype == dtypes.float32:
-            ret = '{}f'.format(float(value))
-        elif dtype == dtypes.float16:
-            ret = 'half({}f)'.format(float(value))
-        elif dtype == dtypes.tfloat32:
-            ret = '__float_to_tf32({}f)'.format(float(value))
-        elif dtype == dtypes.bfloat16:
-            ret = '__float2bfloat16({}f)'.format(float(value))
-        elif dtype == dtypes.int64:
-            ret = 'int64_t({}ll)'.format(int(value))
-        elif dtype == dtypes.int32:
-            ret = '{}'.format(int(value))
-        elif dtype == dtypes.int16:
-            ret = 'int16_t({})'.format(int(value))
-        elif dtype == dtypes.int8:
-            ret = 'int8_t({})'.format(int(value))
-        elif dtype == dtypes.uint64:
-            ret = 'uint64_t({}ull)'.format(int(value))
-        elif dtype == dtypes.uint32:
-            ret = 'uint32_t({}u)'.format(int(value))
-        elif dtype == dtypes.uint16:
-            ret = 'uint16_t({})'.format(int(value))
-        elif dtype == dtypes.uint8:
-            ret = 'uint8_t({})'.format(int(value))
-        else:
-            raise NotImplementedError('Cannot recognize scalar literal {} with dtype {}'.format(value, dtype))
-        return Text(ret)
-
     def visit_Constant(self, e: Constant):
         if e.is_scalar():
             return self.scalar_literal(e.value, e.type)
@@ -494,23 +461,7 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
         return doc
 
     def visit_ScalarType(self, t: DataType):
-        scalar_type_map = {
-            'bool': 'bool',
-            'uint8': 'uint8_t',
-            'uint16': 'uint16_t',
-            'uint32': 'uint32_t',
-            'uint64': 'uint64_t',
-            'int8': 'int8_t',
-            'int16': 'int16_t',
-            'int32': 'int32_t',
-            'int64': 'int64_t',
-            'float16': 'half',
-            'float32': 'float',
-            'float64': 'double',
-            'bfloat16': 'nv_bfloat16',
-            'tfloat32': 'tfloat32_t',
-        }
-        return Text(scalar_type_map[t.name])
+        raise NotImplementedError()
 
     def visit_TensorType(self, t: TensorType):
         return Text('TensorType(') + self(t.dtype) + ', [' + doc_join([self(s) for s in t.shape], ", ") + '])'
@@ -542,8 +493,60 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
 
 
 class CUDACodegen(Codegen):
-    def __init__(self):
-        super().__init__()
+    # pylint: disable=abstract-method
+
+    @staticmethod
+    def scalar_literal(value, dtype: DataType):
+        if dtype == dtypes.boolean:
+            ret = 'true' if value else 'false'
+        elif dtype == dtypes.float64:
+            ret = '{}'.format(float(value))
+        elif dtype == dtypes.float32:
+            ret = '{}f'.format(float(value))
+        elif dtype == dtypes.float16:
+            ret = 'half({}f)'.format(float(value))
+        elif dtype == dtypes.tfloat32:
+            ret = '__float_to_tf32({}f)'.format(float(value))
+        elif dtype == dtypes.bfloat16:
+            ret = '__float2bfloat16({}f)'.format(float(value))
+        elif dtype == dtypes.int64:
+            ret = 'int64_t({}ll)'.format(int(value))
+        elif dtype == dtypes.int32:
+            ret = '{}'.format(int(value))
+        elif dtype == dtypes.int16:
+            ret = 'int16_t({})'.format(int(value))
+        elif dtype == dtypes.int8:
+            ret = 'int8_t({})'.format(int(value))
+        elif dtype == dtypes.uint64:
+            ret = 'uint64_t({}ull)'.format(int(value))
+        elif dtype == dtypes.uint32:
+            ret = 'uint32_t({}u)'.format(int(value))
+        elif dtype == dtypes.uint16:
+            ret = 'uint16_t({})'.format(int(value))
+        elif dtype == dtypes.uint8:
+            ret = 'uint8_t({})'.format(int(value))
+        else:
+            raise NotImplementedError('Cannot recognize scalar literal {} with dtype {}'.format(value, dtype))
+        return Text(ret)
+
+    def visit_ScalarType(self, t: DataType):
+        scalar_type_map = {
+            'bool': 'bool',
+            'uint8': 'uint8_t',
+            'uint16': 'uint16_t',
+            'uint32': 'uint32_t',
+            'uint64': 'uint64_t',
+            'int8': 'int8_t',
+            'int16': 'int16_t',
+            'int32': 'int32_t',
+            'int64': 'int64_t',
+            'float16': 'half',
+            'float32': 'float',
+            'float64': 'double',
+            'bfloat16': 'nv_bfloat16',
+            'tfloat32': 'tfloat32_t',
+        }
+        return Text(scalar_type_map[t.name])
 
     def visit_Function(self, func: Function) -> Doc:
         self.namer.clear()
@@ -680,8 +683,65 @@ class CUDACodegen(Codegen):
 
 
 class CPUCodegen(Codegen):
-    def __init__(self):
-        super().__init__()
+    # pylint: disable=abstract-method
+
+    @staticmethod
+    def scalar_literal(value, dtype: DataType):
+        if dtype == dtypes.boolean:
+            ret = 'true' if value else 'false'
+        elif dtype == dtypes.float64:
+            ret = '{}'.format(float(value))
+        elif dtype == dtypes.float32:
+            ret = '{}f'.format(float(value))
+        # current cpp doesn't support float16, bfloat16, tfloat32
+        # like cuda did, but there's proposal in c++ 23 to support:
+        # https://en.cppreference.com/w/cpp/header/stdfloat
+        elif dtype == dtypes.float16:
+            ret = '(float){}f'.format(float(value))
+        elif dtype == dtypes.tfloat32:
+            ret = '(float){}f'.format(float(value))
+        elif dtype == dtypes.bfloat16:
+            ret = '(float){}f'.format(float(value))
+        elif dtype == dtypes.int64:
+            ret = 'int64_t({}ll)'.format(int(value))
+        elif dtype == dtypes.int32:
+            ret = '{}'.format(int(value))
+        elif dtype == dtypes.int16:
+            ret = 'int16_t({})'.format(int(value))
+        elif dtype == dtypes.int8:
+            ret = 'int8_t({})'.format(int(value))
+        elif dtype == dtypes.uint64:
+            ret = 'uint64_t({}ull)'.format(int(value))
+        elif dtype == dtypes.uint32:
+            ret = 'uint32_t({}u)'.format(int(value))
+        elif dtype == dtypes.uint16:
+            ret = 'uint16_t({})'.format(int(value))
+        elif dtype == dtypes.uint8:
+            ret = 'uint8_t({})'.format(int(value))
+        else:
+            raise NotImplementedError('Cannot recognize scalar literal {} with dtype {}'.format(value, dtype))
+        return Text(ret)
+
+    def visit_ScalarType(self, t: DataType):
+        # float16, bfloat16 and tfloat32 are not supported on CPU yet
+        # https://moocaholic.medium.com/fp64-fp32-fp16-bfloat16-tf32-and-other-members-of-the-zoo-a1ca7897d407
+        scalar_type_map = {
+            'bool': 'bool',
+            'uint8': 'uint8_t',
+            'uint16': 'uint16_t',
+            'uint32': 'uint32_t',
+            'uint64': 'uint64_t',
+            'int8': 'int8_t',
+            'int16': 'int16_t',
+            'int32': 'int32_t',
+            'int64': 'int64_t',
+            'float16': 'float',
+            'float32': 'float',
+            'float64': 'double',
+            'bfloat16': 'float',
+            'tfloat32': 'float',
+        }
+        return Text(scalar_type_map[t.name])
 
     def visit_IRModule(self, module: IRModule) -> Doc:
         self.ir_module = module

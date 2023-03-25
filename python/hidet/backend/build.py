@@ -77,7 +77,8 @@ def compile_command(src_path: str, out_lib_path: str, target='cuda', keep_ptx=Fa
         cc = hidet.cuda.compute_capability()
         cc_code = '{}{}'.format(cc[0], cc[1])
         # The following command compiles the cuda source code to a shared library
-        # See https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html for more information about nvcc compilation.
+        # See https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html
+        # for more information about nvcc compilation.
         command = [
             # the path to nvcc compiler
             nvcc_path(),
