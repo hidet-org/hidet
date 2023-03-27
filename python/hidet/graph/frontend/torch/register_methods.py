@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from __future__ import annotations
+import math
 from typing import List, Union
 import torch
 from hidet.ir.type import DataType
@@ -141,6 +142,17 @@ def tensor_split(self: Tensor, split_size, dim=0) -> List[Tensor]:
         assert sum(parts) == self.shape[dim]
     return ops.split(self, axis=dim, parts=parts)
 
+
+@register_method(torch.Tensor.chunk)
+def tensor_chunk(self: Tensor, chunks, dim=0) -> List[Tensor]:
+    dim_size = self.shape[dim]
+    chunk_size = math.ceil(dim_size / chunks)
+    parts = []
+    for start in range(0, dim_size, chunk_size):
+        parts.append(min(chunk_size, dim_size - start))
+
+    assert sum(parts) == self.shape[dim]
+    return ops.split(self, axis=dim, parts=parts)
 
 @register_method(torch.Tensor.squeeze)
 def tensor_squeeze(self: Tensor, dim=None) -> Tensor:

@@ -13,6 +13,8 @@ from __future__ import annotations
 from typing import Optional, Union, Sequence, Any
 import operator
 import torch
+
+import hidet
 from hidet.graph.tensor import Tensor, full_like, from_torch
 from hidet.graph import ops
 from hidet.utils import same_list
@@ -212,6 +214,7 @@ def sub(x: Tensor, y: Tensor):
 
 
 @register_function(torch.nn.functional.softmax)
+@register_method(torch.Tensor.softmax)
 def softmax(x: Tensor, dim: int, dtype=None):
     if dtype is not None:
         raise NotImplementedError("dtype is not None")
@@ -290,11 +293,16 @@ def group_norm(
     bias: Optional[Tensor] = None,
     eps: float = 1e-5,
 ):
-    y = ops.layer_norm(x, num_last_dims=len(normalized_shape), epsilon=eps)
+    if x.shape[1] != num_channels:
+        raise ValueError("num_channels does not match tensor shape at index 2, expect {} but got {}".format(num_channels, x.shape[2]))
+    if num_channels % num_groups != 0:
+        raise ValueError("num_channels {} must be divisible by num_groups {}".format(num_channels, num_groups))
+
+    y = ops.group_norm(x, num_groups, num_last_dims=len(x.shape) - 2, epsilon=eps)
     if weight is not None:
-        y = y * weight
+        y = y * weight.reshape([num_channels, 1, 1])
     if bias is not None:
-        y = y + bias
+        y = y + bias.reshape([num_channels, 1, 1])
     return y
 
 
@@ -434,11 +442,39 @@ def full(size, fill_value, *, out=None, dtype=None, layout=None, device=None, re
     return ops.full(size, fill_value, dtype=hidet_dtype, device=hidet_device)
 
 
+@register_function(torch.empty)
+def empty(*size, out=None, dtype=None, layout=torch.strided, device=None, requires_grad=False,
+          pin_memory=False, memory_format=torch.contiguous_format):
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.empty(..., out=..., ...)")
+    if layout not in [None, torch.strided]:
+        raise NotImplementedError("hidet: does not support torch.empty(..., layout=..., ...)")
+    if requires_grad and torch.is_grad_enabled():
+        warnings.warn_once("hidet: requires_grad=True when torch.is_grad_enabled(), treating as requires_grad=False")
+    if pin_memory:
+        raise NotImplementedError("hidet: does not support torch.empty(..., pin_memory=True, ...)")
+    if memory_format != torch.contiguous_format:
+        raise NotImplementedError("hidet: does not support torch.empty(..., memory_format=..., ...)")
+
+    hidet_device: Device = device_from_torch(torch_device=device)
+    hidet_dtype: DataType = dtype_from_torch(torch_dtype=dtype)
+    if len(size) == 1 and isinstance(size[0], (tuple, list)):
+        size = size[0]
+    return hidet.empty(size, dtype=hidet_dtype, device=hidet_device)
+
+
 @register_function(torch.bmm)
 def bmm(input: Tensor, mat2: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.bmm(..., out=...)")
     return ops.matmul(input, mat2)
+
+
+@register_function(torch.baddbmm)
+def baddbmm(input, batch1, batch2, *, beta=1, alpha=1, out: Optional[Tensor] = None) -> Tensor:
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.bmm(..., out=...)")
+    return beta * input + alpha * ops.matmul(batch1, batch2)
 
 
 @register_function(torch.tensor)
@@ -526,3 +562,5 @@ def celu(x: Tensor, alpha: float):
 @register_function(torch.nn.functional.logsigmoid)
 def logsigmoid(x: Tensor):
     return ops.logsigmoid(x)
+
+

@@ -100,7 +100,7 @@ class HidetLinear(HidetModule):
 
     def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, torch.nn.Linear)
-        return regs.linear(x=x, weight=self.transposed_weight, bias=self.param('bias'))
+        return regs.linear(x=x, weight=self.transposed_weight, bias=self.param('bias', optional=True))
 
 
 @register_module(torch.nn.BatchNorm2d)
@@ -148,7 +148,8 @@ class HidetGroupNorm(HidetModule):
         assert isinstance(self.mod, torch.nn.GroupNorm)
         return regs.group_norm(
             x=x,
-            normalized_shape=self.mod.normalized_shape,
+            num_groups=self.mod.num_groups,
+            num_channels=self.mod.num_channels,
             weight=self.param('weight'),
             bias=self.param('bias'),
             eps=self.mod.eps,
