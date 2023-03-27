@@ -328,9 +328,9 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             # short, int, unsigned int, long long, unsigned long long, but not for the types like int8_t, uint8_t,
             # int16_t, uint16_t, int32_t, uint32_t, int64_t, uint64_t, so we need to cast them here.
             if dst_dtype == dtypes.int64:
-                return '(int64_t)(' + self(e.expr) + ')'
+                return '(int64_t)(__half2ll_rz(' + self(e.expr) + '))'
             elif dst_dtype == dtypes.uint64:
-                return '(uint64_t)(' + self(e.expr) + ')'
+                return '(uint64_t)(__half2ull_rz(' + self(e.expr) + '))'
             elif dst_dtype == dtypes.int32:
                 return '(int32_t)(' + self(e.expr) + ')'
             elif dst_dtype == dtypes.uint32:
@@ -340,9 +340,9 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             elif dst_dtype == dtypes.uint16:
                 return '(uint16_t)(' + self(e.expr) + ')'
             elif dst_dtype == dtypes.int8:
-                return '(int8_t)(' + self(e.expr) + ')'
+                return '(int8_t)(short)(' + self(e.expr) + ')'
             elif dst_dtype == dtypes.uint8:
-                return '(uint8_t)(' + self(e.expr) + ')'
+                return '(uint8_t)(short)(' + self(e.expr) + ')'
             elif dst_dtype == dtypes.boolean:
                 return '(bool)(' + self(e.expr) + ')'
             elif dst_dtype == dtypes.float32:
