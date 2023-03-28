@@ -16,7 +16,7 @@ import sys
 import resource
 
 # allow up to 128MB stack space
-#resource.setrlimit(resource.RLIMIT_STACK, (2**29, -1))
+# resource.setrlimit(resource.RLIMIT_STACK, (2**29, -1))
 
 # allow up to 10^5 recursive python calls, increase this when needed
 sys.setrecursionlimit(100000)

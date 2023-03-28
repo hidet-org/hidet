@@ -193,10 +193,69 @@ def avg_pool3d(x: Tensor, kernel_size, stride, padding, ceil_mode=False, count_i
     return y
 
 
+@register_function(torch.nn.functional.interpolate)
+def interpolate(
+    input: Tensor,
+    size=None,
+    scale_factor=None,
+    mode='nearest',
+    align_corners=None,
+    recompute_scale_factor=None,
+    antialias=False,
+):
+    if len(input.shape) != 4:
+        raise NotImplementedError("Currently only supports 4D inputs (NCHW)")
+
+    if antialias:
+        raise NotImplementedError("Currently does not support antialias=True")
+
+    if recompute_scale_factor:
+        raise NotImplementedError("Currently does not support recompute_scale_factor=True")
+
+    if size is None == scale_factor is None:
+        raise ValueError("Exactly one of size or scale_factor can be None")
+
+    target_size = None
+    if size is not None:
+        if isinstance(size, int):
+            target_size = [size, size]
+        else:
+            if len(size) != 2:
+                raise ValueError("Lengthof \"size\" must be of type int or tuple([int, int])")
+            target_size = list(size)
+    else:
+        if isinstance(scale_factor, float):
+            target_size = [i * scale_factor for i in input.shape[2:]]
+        else:
+            if len(scale_factor) != 2:
+                raise ValueError("Lengthof \"scale_factor\" must be of type int or tuple([int, int])")
+            target_size = [a * b for a, b in zip(input.shape[2:], scale_factor)]
+
+    supported_methods = {'nearest': 'nearest', 'bilinear': 'linear', 'bicubic': 'cubic'}
+    if mode not in supported_methods:
+        raise NotImplementedError("Mode not supported")
+
+    mode_hidet = supported_methods[mode]
+    if align_corners:
+        coordinate_transformation_mode = 'align_corners'
+    else:
+        coordinate_transformation_mode = 'pytorch_half_pixel'
+
+    return ops.resize2d(
+        input,
+        target_size,
+        mode_hidet,
+        coordinate_transformation_mode,
+        rounding_method='round',
+        roi=None,
+        cubic_alpha=-0.75,
+        cubic_exclude=0,
+        extrapolation_value=0.0,
+    )
+
+
 @register_function(operator.truediv)
 def truediv(x: Union[Tensor, int, float], y: Union[Tensor, int, float]):
-    import hidet
-
     def is_integer(v: Union[Tensor, int, float]) -> bool:
         return isinstance(v, int) or (isinstance(v, Tensor) and v.dtype.is_integer())
 
@@ -236,8 +295,6 @@ def ones(
     pin_memory: Optional[bool] = False,
     requires_grad: Optional[bool] = False,
 ):
-    import hidet
-
     if out is not None:
         raise NotImplementedError("out is not None")
     if layout is not None:
@@ -294,7 +351,9 @@ def group_norm(
     eps: float = 1e-5,
 ):
     if x.shape[1] != num_channels:
-        raise ValueError("num_channels does not match tensor shape at index 2, expect {} but got {}".format(num_channels, x.shape[2]))
+        raise ValueError(
+            "num_channels does not match tensor shape at index 2, expect {} but got {}".format(num_channels, x.shape[2])
+        )
     if num_channels % num_groups != 0:
         raise ValueError("num_channels {} must be divisible by num_groups {}".format(num_channels, num_groups))
 
@@ -321,8 +380,6 @@ def embedding(
     scale_grad_by_freq: bool = False,
     sparse: bool = False,
 ):
-    import hidet
-
     assert len(weight.shape) == 2
     if max_norm is not None:
         # normalize the whole embedding matrix, as we are doing inference
@@ -443,8 +500,16 @@ def full(size, fill_value, *, out=None, dtype=None, layout=None, device=None, re
 
 
 @register_function(torch.empty)
-def empty(*size, out=None, dtype=None, layout=torch.strided, device=None, requires_grad=False,
-          pin_memory=False, memory_format=torch.contiguous_format):
+def empty(
+    *size,
+    out=None,
+    dtype=None,
+    layout=torch.strided,
+    device=None,
+    requires_grad=False,
+    pin_memory=False,
+    memory_format=torch.contiguous_format,
+):
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.empty(..., out=..., ...)")
     if layout not in [None, torch.strided]:
@@ -497,11 +562,13 @@ def sigmoid(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
         warnings.warn_once("hidet: does not support torch.sigmoid(..., out=...)")
     return ops.sigmoid(x)
 
+
 @register_function(torch.exp)
 def exp(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
     if out is not None:
         warnings.warn_once("hidet: does not support torch.exp(..., out=...)")
     return ops.exp(x)
+
 
 @register_function(torch.nn.functional.hardsigmoid)
 def hardsigmoid(x: Tensor, inplace: bool):
@@ -562,5 +629,3 @@ def celu(x: Tensor, alpha: float):
 @register_function(torch.nn.functional.logsigmoid)
 def logsigmoid(x: Tensor):
     return ops.logsigmoid(x)
-
-

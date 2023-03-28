@@ -9,7 +9,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import math
 from typing import List, Optional, Union, Sequence
 from hidet.ir.type import DataType, data_type
 from hidet.ir.expr import LogicalAnd, if_then_else, convert
@@ -711,7 +710,6 @@ def split(data: Tensor, axis: int, parts: List[int]) -> List[Tensor]:
         end = start + parts[i]
         outputs.append(strided_slice(data, starts=[start], ends=[end], axes=[axis], strides=[1]))
     return outputs
-
 
 
 def expand_dims(x: Tensor, /, *, axis: int = 0) -> Tensor:

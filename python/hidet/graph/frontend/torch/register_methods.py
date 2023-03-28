@@ -154,6 +154,7 @@ def tensor_chunk(self: Tensor, chunks, dim=0) -> List[Tensor]:
     assert sum(parts) == self.shape[dim]
     return ops.split(self, axis=dim, parts=parts)
 
+
 @register_method(torch.Tensor.squeeze)
 def tensor_squeeze(self: Tensor, dim=None) -> Tensor:
     if dim is None:
