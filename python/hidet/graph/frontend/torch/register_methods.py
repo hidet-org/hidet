@@ -150,7 +150,6 @@ def tensor_chunk(self: Tensor, chunks, dim=0) -> List[Tensor]:
     parts = []
     for start in range(0, dim_size, chunk_size):
         parts.append(min(chunk_size, dim_size - start))
-
     assert sum(parts) == self.shape[dim]
     return ops.split(self, axis=dim, parts=parts)
 
