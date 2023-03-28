@@ -13,7 +13,6 @@ from __future__ import annotations
 from typing import Optional, Union, Sequence, Any
 import operator
 import torch
-
 from hidet.graph.tensor import Tensor, full_like, from_torch
 from hidet.graph import ops
 from hidet.utils import same_list
@@ -515,6 +514,8 @@ def empty(
     pin_memory=False,
     memory_format=torch.contiguous_format,
 ):
+    import hidet
+
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.empty(..., out=..., ...)")
     if layout not in [None, torch.strided]:
