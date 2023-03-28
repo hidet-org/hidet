@@ -14,7 +14,6 @@ from typing import Optional, Union, Sequence, Any
 import operator
 import torch
 
-import hidet
 from hidet.graph.tensor import Tensor, full_like, from_torch
 from hidet.graph import ops
 from hidet.utils import same_list
@@ -256,6 +255,8 @@ def interpolate(
 
 @register_function(operator.truediv)
 def truediv(x: Union[Tensor, int, float], y: Union[Tensor, int, float]):
+    import hidet
+
     def is_integer(v: Union[Tensor, int, float]) -> bool:
         return isinstance(v, int) or (isinstance(v, Tensor) and v.dtype.is_integer())
 
@@ -295,6 +296,8 @@ def ones(
     pin_memory: Optional[bool] = False,
     requires_grad: Optional[bool] = False,
 ):
+    import hidet
+
     if out is not None:
         raise NotImplementedError("out is not None")
     if layout is not None:
@@ -380,6 +383,8 @@ def embedding(
     scale_grad_by_freq: bool = False,
     sparse: bool = False,
 ):
+    import hidet
+
     assert len(weight.shape) == 2
     if max_norm is not None:
         # normalize the whole embedding matrix, as we are doing inference
