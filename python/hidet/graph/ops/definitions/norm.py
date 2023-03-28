@@ -98,6 +98,7 @@ def group_norm(x: Tensor, num_groups, num_last_dims: int = 1, epsilon: float = 1
     # first split out the group dimension
     x_shape = list(x.shape)
     new_shape = x_shape[:]
+
     grouped_rank = 1
     grouped_dim = new_shape[grouped_rank]
     assert grouped_dim % num_groups == 0
