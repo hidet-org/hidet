@@ -67,13 +67,7 @@ class Conv1dTransposeTask(Task):
 
 class Conv1dTransposeOp(Operator):
     def __init__(
-        self,
-        x: Tensor,
-        w: Tensor,
-        stride: Tuple[int],
-        padding: Tuple[int],
-        groups: int,
-        output_padding: Tuple[int],
+        self, x: Tensor, w: Tensor, stride: Tuple[int], padding: Tuple[int], groups: int, output_padding: Tuple[int]
     ):
         super().__init__(
             inputs=[x, w],
