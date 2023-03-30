@@ -12,6 +12,8 @@
 # pylint: disable=redefined-builtin
 from . import definitions
 
+from .definitions.conv1d import conv1d
+from .definitions.conv1d_transpose import conv1d_transpose
 from .definitions.conv2d import conv2d, conv2d_winograd, conv2d_gemm, conv2d_gemm_image_transform
 from .definitions.conv2d_transpose import conv2d_transpose, conv2d_transpose_gemm
 from .definitions.conv3d import conv3d, conv3d_gemm
