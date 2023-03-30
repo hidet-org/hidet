@@ -51,6 +51,8 @@ from .conv1d import conv1d
 from .conv1d_transpose import conv1d_transpose
 from .conv2d import conv2d
 from .conv2d_transpose import conv2d_transpose
+from .conv3d import conv3d
+from .conv3d_transpose import conv3d_transpose
 from .matmul import batch_matmul, matmul
 
 from .matmul import BatchMatmulOp, MatmulOp
