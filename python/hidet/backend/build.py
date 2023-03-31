@@ -128,6 +128,8 @@ def compile_command(src_path: str, out_lib_path: str, target='cuda', keep_ptx=Fa
             *['-I{}'.format(include_dir) for include_dir in include_dirs],
             # the library directories.
             *['-L{}'.format(library_dir) for library_dir in library_dirs],
+            # apply -O3 optimization.
+            '-O3',
             # compile into position independent code.
             '-fPIC',
             # embed the debug information into the binary, allow Nsight Compute to get the source code for profiling.
