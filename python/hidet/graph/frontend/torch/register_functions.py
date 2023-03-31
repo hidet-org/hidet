@@ -42,7 +42,7 @@ def conv1d_transpose(
     y = ops.conv1d(x, weight, stride, dilation, groups)
     if bias is not None:
         y = y + ops.unsqueeze(bias, [0, 2])
-    y_transpose = ops.conv1d_transpose(y, weight, stride, padding, output_padding, groups, dilation)
+    y_transpose = ops.conv1d_transpose(y, weight, stride, padding, output_padding, groups)
     return y_transpose
 
 
@@ -63,7 +63,7 @@ def conv2d_transpose(
     y = ops.conv2d(x, weight, stride, dilation, groups)
     if bias is not None:
         y = y + ops.unsqueeze(bias, [0, 2, 3])
-    y_transpose = ops.conv2d_transpose(y, weight, stride, padding, output_padding, groups, dilation)
+    y_transpose = ops.conv2d_transpose(y, weight, stride, padding, output_padding, groups)
     return y_transpose
 
 
@@ -84,7 +84,7 @@ def conv3d_transpose(
     y = ops.conv3d(x, weight, stride, dilation, groups)
     if bias is not None:
         y = y + ops.unsqueeze(bias, [0, 2, 3, 4])
-    y_transpose = ops.conv3d_transpose(y, weight, stride, padding, output_padding, groups, dilation)
+    y_transpose = ops.conv3d_transpose(y, weight, stride, padding, output_padding, groups)
     return y_transpose
 
 

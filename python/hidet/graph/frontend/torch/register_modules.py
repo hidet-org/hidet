@@ -36,9 +36,8 @@ class HidetConvTranspose1d(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, torch.nn.ConvTranspose1d)
         return regs.conv1d_transpose(
-            in_channels=self.param('in_channels'),
-            out_channels=self.param('out_channels'),
-            kernel_size=self.param('kernel_size'),
+            x=x,
+            weight=self.param('weight'),
             stride=self.mod.stride,
             padding=self.mod.padding,
             output_padding=self.mod.output_padding,
@@ -68,9 +67,8 @@ class HidetConvTranspose2d(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, torch.nn.ConvTranspose2d)
         return regs.conv2d_transpose(
-            in_channels=self.param('in_channels'),
-            out_channels=self.param('out_channels'),
-            kernel_size=self.param('kernel_size'),
+            x=x,
+            weight=self.param('weight'),
             stride=self.mod.stride,
             padding=self.mod.padding,
             output_padding=self.mod.output_padding,
@@ -100,9 +98,8 @@ class HidetConvTranspose3d(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, torch.nn.ConvTranspose3d)
         return regs.conv3d_transpose(
-            in_channels=self.param('in_channels'),
-            out_channels=self.param('out_channels'),
-            kernel_size=self.param('kernel_size'),
+            x=x,
+            weight=self.param('weight'),
             stride=self.mod.stride,
             padding=self.mod.padding,
             output_padding=self.mod.output_padding,
