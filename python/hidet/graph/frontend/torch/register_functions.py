@@ -25,6 +25,27 @@ from .utils import dtype_from_torch, device_from_torch
 Number = Union[int, float, bool]
 
 
+@register_function(torch.nn.functional.conv1d)
+def conv1d(x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, dilation, groups):
+    x = ops.conv_pad(x, padding)
+    y = ops.conv1d(x, weight, stride, dilation, groups)
+    if bias is not None:
+        y = y + ops.unsqueeze(bias, [0, 2])
+    return y
+
+
+@register_function(torch.nn.functional.conv_transpose1d)
+def conv1d_transpose(
+    x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, output_padding, groups, dilation
+):
+    x = ops.conv_pad(x, padding)
+    y = ops.conv1d(x, weight, stride, dilation, groups)
+    if bias is not None:
+        y = y + ops.unsqueeze(bias, [0, 2])
+    y_transpose = ops.conv1d_transpose(y, weight, stride, padding, output_padding, groups, dilation)
+    return y_transpose
+
+
 @register_function(torch.nn.functional.conv2d)
 def conv2d(x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, dilation, groups):
     x = ops.conv_pad(x, padding)
@@ -34,6 +55,18 @@ def conv2d(x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, d
     return y
 
 
+@register_function(torch.nn.functional.conv_transpose2d)
+def conv2d_transpose(
+    x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, output_padding, groups, dilation
+):
+    x = ops.conv_pad(x, padding)
+    y = ops.conv2d(x, weight, stride, dilation, groups)
+    if bias is not None:
+        y = y + ops.unsqueeze(bias, [0, 2, 3])
+    y_transpose = ops.conv2d_transpose(y, weight, stride, padding, output_padding, groups, dilation)
+    return y_transpose
+
+
 @register_function(torch.nn.functional.conv3d)
 def conv3d(x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, dilation, groups):
     x = ops.conv_pad(x, padding)
@@ -41,6 +74,18 @@ def conv3d(x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, d
     if bias is not None:
         y = y + ops.unsqueeze(bias, [0, 2, 3, 4])
     return y
+
+
+@register_function(torch.nn.functional.conv_transpose3d)
+def conv3d_transpose(
+    x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, output_padding, groups, dilation
+):
+    x = ops.conv_pad(x, padding)
+    y = ops.conv3d(x, weight, stride, dilation, groups)
+    if bias is not None:
+        y = y + ops.unsqueeze(bias, [0, 2, 3, 4])
+    y_transpose = ops.conv3d_transpose(y, weight, stride, padding, output_padding, groups, dilation)
+    return y_transpose
 
 
 @register_function(torch.nn.functional.adaptive_avg_pool2d)
