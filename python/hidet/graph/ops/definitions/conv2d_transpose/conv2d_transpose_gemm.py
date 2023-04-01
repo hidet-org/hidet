@@ -31,8 +31,8 @@ class Conv2dTransposeGemmImageTask(Task):
         kx, ky = kernel
         sx, sy = stride
         px0, py0, px1, py1 = padding
-        h = (p - 1) * sx + -px0 - px1 + kx + output_padding[0]
-        w = (q - 1) * sy + -py0 - py1 + ky + output_padding[1]
+        h = (p - 1) * sx - px0 - px1 + kx + output_padding[0]
+        w = (q - 1) * sy - py0 - py1 + ky + output_padding[1]
         og = oc // groups  # output channels in each group
 
         def fcompute(b, i, k):

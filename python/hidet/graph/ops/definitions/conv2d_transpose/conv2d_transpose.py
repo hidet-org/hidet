@@ -31,8 +31,8 @@ class Conv2dTransposeTask(Task):
         c = wc * groups
         sx, sy = stride
         px0, py0, px1, py1 = padding
-        h = (p - 1) * sx + -px0 - px1 + kx + output_padding[0]
-        w = (q - 1) * sy + -py0 - py1 + ky + output_padding[1]
+        h = (p - 1) * sx - px0 - px1 + kx + output_padding[0]
+        w = (q - 1) * sy - py0 - py1 + ky + output_padding[1]
 
         if output_padding[0] >= stride[0] or output_padding[1] >= stride[1]:
             raise ValueError(
