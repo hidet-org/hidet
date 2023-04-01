@@ -342,7 +342,7 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             elif dst_dtype == dtypes.int8:
                 return '(int8_t)(short)(' + self(e.expr) + ')'
             elif dst_dtype == dtypes.uint8:
-                return '(uint8_t)(short)(' + self(e.expr) + ')'
+                return '(uint8_t)(unsigned short)(' + self(e.expr) + ')'
             elif dst_dtype == dtypes.boolean:
                 return '(bool)(' + self(e.expr) + ')'
             elif dst_dtype == dtypes.float32:
