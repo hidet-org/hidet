@@ -38,12 +38,10 @@ def conv1d(x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, d
 def conv1d_transpose(
     x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, output_padding, groups, dilation
 ):
-    x = ops.conv_pad(x, padding)
-    y = ops.conv1d(x, weight, stride, dilation, groups)
+    y = ops.conv1d_transpose(x, weight, stride, padding, output_padding, groups)
     if bias is not None:
         y = y + ops.unsqueeze(bias, [0, 2])
-    y_transpose = ops.conv1d_transpose(y, weight, stride, padding, output_padding, groups)
-    return y_transpose
+    return y
 
 
 @register_function(torch.nn.functional.conv2d)
@@ -59,12 +57,10 @@ def conv2d(x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, d
 def conv2d_transpose(
     x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, output_padding, groups, dilation
 ):
-    x = ops.conv_pad(x, padding)
-    y = ops.conv2d(x, weight, stride, dilation, groups)
+    y = ops.conv2d_transpose(x, weight, stride, padding, output_padding, groups)
     if bias is not None:
         y = y + ops.unsqueeze(bias, [0, 2, 3])
-    y_transpose = ops.conv2d_transpose(y, weight, stride, padding, output_padding, groups)
-    return y_transpose
+    return y
 
 
 @register_function(torch.nn.functional.conv3d)
@@ -80,12 +76,10 @@ def conv3d(x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, d
 def conv3d_transpose(
     x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, output_padding, groups, dilation
 ):
-    x = ops.conv_pad(x, padding)
-    y = ops.conv3d(x, weight, stride, dilation, groups)
+    y = ops.conv3d_transpose(x, weight, stride, padding, output_padding, groups)
     if bias is not None:
         y = y + ops.unsqueeze(bias, [0, 2, 3, 4])
-    y_transpose = ops.conv3d_transpose(y, weight, stride, padding, output_padding, groups)
-    return y_transpose
+    return y
 
 
 @register_function(torch.nn.functional.adaptive_avg_pool2d)

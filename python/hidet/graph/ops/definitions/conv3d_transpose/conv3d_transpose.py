@@ -31,9 +31,9 @@ class Conv3dTransposeTask(Task):
         c = wc * groups
         sz, sx, sy = stride
         pz0, px0, py0, pz1, px1, py1 = padding
-        z = (r - 1) * sz + -pz0 - pz1 + kz + output_padding[0]
-        h = (p - 1) * sx + -px0 - px1 + kx + output_padding[1]
-        w = (q - 1) * sy + -py0 - py1 + ky + output_padding[2]
+        z = (r - 1) * sz - pz0 - pz1 + kz + output_padding[0]
+        h = (p - 1) * sx - px0 - px1 + kx + output_padding[1]
+        w = (q - 1) * sy - py0 - py1 + ky + output_padding[2]
 
         if output_padding[0] >= stride[0] or output_padding[1] >= stride[1] or output_padding[2] >= stride[2]:
             raise ValueError(

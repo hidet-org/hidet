@@ -195,13 +195,7 @@ class MishOp(UnaryElementwiseOp):
         super().__init__(
             x,
             op=lambda v: v
-            * prim.tanh(
-                if_then_else(
-                    v * x.dtype(1.0) <= x.dtype(20.0),
-                    (x.dtype(1.0)) * prim.log(x.dtype(1.0) + prim.exp(x.dtype(1.0) * v)),
-                    v,
-                )
-            ),
+            * prim.tanh(if_then_else(v <= x.dtype(20.0), prim.log(x.dtype(1.0) + prim.exp(x.dtype(1.0) * v)), v)),
             name='mish',
         )
 
