@@ -13,6 +13,8 @@ from __future__ import annotations
 from typing import Optional, Union, Sequence, Any
 import operator
 import torch
+
+import hidet
 from hidet.graph.tensor import Tensor, full_like, from_torch
 from hidet.graph import ops
 from hidet.utils import same_list
@@ -544,7 +546,22 @@ def bmm(input: Tensor, mat2: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
 @register_function(torch.baddbmm)
 def baddbmm(input, batch1, batch2, *, beta=1, alpha=1, out: Optional[Tensor] = None) -> Tensor:
     if out is not None:
-        raise NotImplementedError("hidet: does not support torch.bmm(..., out=...)")
+        raise NotImplementedError("hidet: does not support torch.baddbmm(..., out=...)")
+    if alpha == 0 and beta == 0:
+        size = batch1.shape[0:2] + [batch2.shape[-1]]
+        return hidet.zeros(shape=size, dtype=input.dtype, device=input.device)
+    elif alpha == 0:
+        return beta * input
+    elif beta == 0:
+        return alpha * ops.matmul(batch1, batch2)
+
+    if alpha == 1 and beta == 1:
+        return input + ops.matmul(batch1, batch2)
+    elif alpha == 1:
+        return beta * input + ops.matmul(batch1, batch2)
+    elif beta == 1:
+        return input + alpha * ops.matmul(batch1, batch2)
+
     return beta * input + alpha * ops.matmul(batch1, batch2)
 
 
