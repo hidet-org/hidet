@@ -361,7 +361,7 @@ def group_norm(
     if num_channels % num_groups != 0:
         raise ValueError("num_channels {} must be divisible by num_groups {}".format(num_channels, num_groups))
 
-    y = ops.group_norm(x, num_groups, num_last_dims=len(x.shape) - 2, epsilon=eps)
+    y = ops.group_norm(x, num_groups, epsilon=eps)
     if weight is not None:
         y = y * weight.reshape([num_channels, 1, 1])
     if bias is not None:

@@ -72,5 +72,15 @@ def test_instance_norm(shape):
     check_torch_unary(shape, lambda x: F.instance_norm(x), lambda x: ops.instance_norm(x), atol=1e-4, rtol=1e-4)
 
 
+@pytest.mark.parametrize('shape, num_groups', [[[1, 32, 64], 4], [[32, 4, 32], 4],  [[32, 4, 32], 1]])
+def test_group_norm(shape, num_groups):
+    check_torch_unary(
+        shape,
+        lambda x: F.group_norm(x, num_groups),
+        lambda x: ops.group_norm(x, num_groups),
+        atol=1e-4, rtol=1e-4)
+
+
+
 if __name__ == '__main__':
     pytest.main([__file__])
