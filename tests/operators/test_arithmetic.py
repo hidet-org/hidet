@@ -140,5 +140,20 @@ def test_ceil(a_shape):
     check_unary(a_shape, np.float32, np.ceil, ops.ceil)
 
 
+@pytest.mark.parametrize("a_shape", unary_op_shapes)
+def test_cast_from_fp16(a_shape):
+    check_unary(a_shape, np.float16, np.int8, lambda x: ops.cast(x, "int8"))
+    check_unary(a_shape, np.float16, np.uint8, lambda x: ops.cast(x, "uint8"))
+
+    check_unary(a_shape, np.float16, np.int16, lambda x: ops.cast(x, "int16"))
+    check_unary(a_shape, np.float16, np.uint16, lambda x: ops.cast(x, "uint16"))
+
+    check_unary(a_shape, np.float16, np.int32, lambda x: ops.cast(x, "int32"))
+    check_unary(a_shape, np.float16, np.uint32, lambda x: ops.cast(x, "uint32"))
+
+    check_unary(a_shape, np.float16, np.int64, lambda x: ops.cast(x, "int64"))
+    check_unary(a_shape, np.float16, np.uint64, lambda x: ops.cast(x, "uint64"))
+
+
 if __name__ == '__main__':
     pytest.main([__file__])
