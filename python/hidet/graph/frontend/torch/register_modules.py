@@ -358,4 +358,4 @@ class HidetLogSigmoid(HidetModule):
 class HidetMish(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, torch.nn.Mish)
-        return regs.mish(x)
+        return regs.mish(x, self.mod.inplace)

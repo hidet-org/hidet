@@ -190,16 +190,6 @@ class SoftmaxOp(Operator):
         )
 
 
-class MishOp(UnaryElementwiseOp):
-    def __init__(self, x: Tensor):
-        super().__init__(
-            x,
-            op=lambda v: v
-            * prim.tanh(if_then_else(v <= x.dtype(20.0), prim.log(x.dtype(1.0) + prim.exp(x.dtype(1.0) * v)), v)),
-            name='mish',
-        )
-
-
 def relu(x) -> Tensor:
     return ReluOp(x).get_output(0)
 
@@ -290,7 +280,3 @@ def softmax(x: Tensor, axis=1) -> Tensor:
 
 def softmin(x: Tensor, axis: int) -> Tensor:
     return SoftmaxOp(-x, axis).get_output(0)
-
-
-def mish(x: Tensor) -> Tensor:
-    return MishOp(x).get_output(0)

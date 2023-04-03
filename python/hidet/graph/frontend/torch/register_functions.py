@@ -38,6 +38,8 @@ def conv1d(x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, d
 def conv1d_transpose(
     x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, output_padding, groups, dilation
 ):
+    if dilation != 1 and not same_list(dilation, [1]):
+        raise NotImplementedError("dilation != 1")
     y = ops.conv1d_transpose(x, weight, stride, padding, output_padding, groups)
     if bias is not None:
         y = y + ops.unsqueeze(bias, [0, 2])
@@ -57,6 +59,8 @@ def conv2d(x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, d
 def conv2d_transpose(
     x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, output_padding, groups, dilation
 ):
+    if dilation != 1 and not same_list(dilation, [1, 1]):
+        raise NotImplementedError("dilation != 1")
     y = ops.conv2d_transpose(x, weight, stride, padding, output_padding, groups)
     if bias is not None:
         y = y + ops.unsqueeze(bias, [0, 2, 3])
@@ -76,6 +80,8 @@ def conv3d(x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, d
 def conv3d_transpose(
     x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, output_padding, groups, dilation
 ):
+    if dilation != 1 and not same_list(dilation, [1, 1, 1]):
+        raise NotImplementedError("dilation != 1")
     y = ops.conv3d_transpose(x, weight, stride, padding, output_padding, groups)
     if bias is not None:
         y = y + ops.unsqueeze(bias, [0, 2, 3, 4])
@@ -546,5 +552,7 @@ def logsigmoid(x: Tensor):
 
 
 @register_function(torch.nn.functional.mish)
-def mish(x: Tensor):
-    return ops.mish(x)
+def mish(x: Tensor, inplace: bool):
+    if inplace:
+        warnings.warn_once('hidet: mish with inplace=True is not supported. Treat as inplace=False.')
+    return ops.tanh(ops.softplus(x, 1.0, 20.0))
