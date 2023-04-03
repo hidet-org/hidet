@@ -31,7 +31,6 @@ class Conv1dTransposeTask(Task):
         channels_in = wc * groups
         sx = stride[0]
         px = padding[0]
-        print(px, kernel_size, length_in, output_padding, type(sx))
         l = (length_in - 1) * sx - px - px + kernel_size + output_padding[0]
 
         if output_padding >= stride or output_padding[0] >= stride[0]:
