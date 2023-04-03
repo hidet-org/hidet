@@ -14,7 +14,10 @@ import torch
 from hidet.testing.torch_utils import check_module
 
 
-@pytest.mark.parametrize('in_shape,w_shape,stride,padding,output_padding', [[[1, 3, 224], [42, 3, 7], 4, 3, 3], [[1, 3, 224], [42, 3, 1], 2, 3, 1]])
+@pytest.mark.parametrize(
+    'in_shape,w_shape,stride,padding,output_padding',
+    [[[1, 3, 224], [42, 3, 7], 4, 3, 3], [[1, 3, 224], [42, 3, 1], 2, 3, 1]],
+)
 @pytest.mark.parametrize('groups', [3, 1])
 @pytest.mark.parametrize('dtype', [torch.float32])
 def test_conv1d_transpose(in_shape, w_shape, stride, padding, output_padding, groups, dtype):
@@ -26,7 +29,7 @@ def test_conv1d_transpose(in_shape, w_shape, stride, padding, output_padding, gr
             stride=stride,
             padding=padding,
             output_padding=output_padding,
-            groups=groups
+            groups=groups,
         ),
         args=[torch.randn(in_shape, dtype=dtype)],
     )
