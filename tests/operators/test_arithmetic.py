@@ -14,8 +14,6 @@ import hidet
 import numpy as np
 from hidet import ops
 
-hidet.option.cache_dir("temp")
-
 
 def check_binary(a_shape, b_shape, dtype, op, hidet_op=None, a_positive=False, b_positive=False):
     a = np.random.rand(*a_shape).astype(dtype)
