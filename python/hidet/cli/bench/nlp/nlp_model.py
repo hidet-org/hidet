@@ -36,3 +36,6 @@ class NLPModel(BenchModel):
         args = (tokens_tensor,)
         kwargs = {'token_type_ids': segments_tensors}
         return args, kwargs
+
+    def inputs_str(self) -> str:
+        return f'bs={self.batch_size},seq={self.sequence_length},dtype={self.dtype}'

@@ -9,6 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from typing import Optional
 import click
 import torch
 from hidet.utils import initialize
@@ -43,6 +44,11 @@ from .bench_all import bench_all
     help='Whether to use tensor core in hidet.'
 )
 @click.option(
+    '--report',
+    type=click.Path(exists=False, dir_okay=False, writable=True),
+    help='Report file path.',
+)
+@click.option(
     '--disable-torch-cudnn-tf32',
     default=False,
     is_flag=True,
@@ -56,12 +62,20 @@ from .bench_all import bench_all
     type=bool,
     help='Set torch.backends.cuda.matmul.allow_tf32=True.',
 )
-def bench_group(space: str, dtype: str, tensor_core: bool, disable_torch_cudnn_tf32: bool, enable_torch_cublas_tf32: bool):
+def bench_group(
+    space: str,
+    dtype: str,
+    tensor_core: bool,
+    report: Optional[click.Path],
+    disable_torch_cudnn_tf32: bool,
+    enable_torch_cublas_tf32: bool
+):
     BenchModel.search_space = int(space)
     BenchModel.dtype = getattr(torch, dtype)
     BenchModel.tensor_core = tensor_core
     BenchModel.disable_torch_cudnn_tf32 = disable_torch_cudnn_tf32
     BenchModel.enable_torch_cublas_tf32 = enable_torch_cublas_tf32
+    BenchModel.report_path = report
 
 
 @initialize()

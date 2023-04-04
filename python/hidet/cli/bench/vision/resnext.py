@@ -47,4 +47,6 @@ def bench_resnext(models: str, batch_size: int, channels: int, height: int, widt
     header = BenchModel.headers()
     result = [bench_model.benchmark() for bench_model in bench_models]
 
-    click.echo(tabulate(result, headers=header, tablefmt='github', floatfmt='.3f', numalign='right', stralign='left'))
+    BenchModel.report_table(
+        tabulate(result, headers=header, tablefmt='github', floatfmt='.3f', numalign='right', stralign='left')
+    )
