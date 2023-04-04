@@ -11,13 +11,17 @@
 # limitations under the License.
 # pylint: disable=ungrouped-imports, no-name-in-module
 from typing import List, Any
+import torch
 from hidet.testing import benchmark_func
 import hidet
 
 
 class BenchModel:
     search_space = 0
-    allow_tf32 = False
+    dtype: torch.dtype = torch.float32
+    tensor_core: bool = False
+    disable_torch_cudnn_tf32 = False
+    enable_torch_cublas_tf32 = False
 
     def __str__(self):
         raise NotImplementedError()
@@ -87,13 +91,13 @@ class BenchModel:
             raise RuntimeError('Torch Dynamo is not available, please install pytorch 2.0 or higher.')
         import torch._dynamo as dynamo
 
-        torch.backends.cudnn.allow_tf32 = self.allow_tf32
-        torch.backends.cuda.matmul.allow_tf32 = self.allow_tf32
+        torch.backends.cudnn.allow_tf32 = not self.disable_torch_cudnn_tf32
+        torch.backends.cuda.matmul.allow_tf32 = self.enable_torch_cublas_tf32
 
         model, (args, kwargs) = self.model(), self.example_inputs()
-        model = model.cuda().eval()
-        args = [arg.cuda() for arg in args]
-        kwargs = {k: v.cuda() for k, v in kwargs.items()}
+        model = model.cuda().eval().to(dtype=BenchModel.dtype)
+        args = [arg.cuda().to(dtype=BenchModel.dtype) for arg in args]
+        kwargs = {k: v.cuda().to(dtype=BenchModel.dtype) for k, v in kwargs.items()}
         dynamo.reset()
         with torch.no_grad():
             model_opt = torch.compile(model, backend=backend, mode=mode)
@@ -115,6 +119,7 @@ class BenchModel:
         config = hidet.torch.dynamo_config
         config.search_space(self.search_space)
         config.use_cuda_graph(use_cuda_graph)
+        config.use_tensor_core(self.tensor_core)
         config.use_fp16(use_fp16)
         config.use_fp16_reduction(use_fp16_reduction)
         return self.bench_with_backend('hidet')
@@ -124,9 +129,9 @@ class BenchModel:
         return [
             'model',
             'inputs',
-            'eager',
-            'inductor(mode=reduce-overhead)',
-            # 'inductor(mode=max-autotune)'
+            'dynamo(mode=eager)',
+            'dynamo(mode=reduce-overhead)',
+            'dynamo(mode=max-autotune)',
             'hidet(space={})'.format(BenchModel.search_space),
         ]
 
@@ -136,7 +141,7 @@ class BenchModel:
             self.inputs_str(),
             self.bench_eager(),
             self.bench_inductor('reduce-overhead'),
-            # self.bench_inductor('max-autotune'),
+            self.bench_inductor('max-autotune'),
             self.bench_hidet(),
         ]
 

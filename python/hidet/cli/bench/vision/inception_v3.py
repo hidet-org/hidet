@@ -33,4 +33,3 @@ def bench_inception_v3(batch_size: int, channels: int, height: int, width: int):
     result = [bench_model.benchmark() for bench_model in bench_models]
 
     click.echo(tabulate(result, headers=header, tablefmt='github', floatfmt='.3f', numalign='right', stralign='left'))
-    click.echo('(PyTorch backend: allow_tf32={})'.format(BenchModel.allow_tf32))

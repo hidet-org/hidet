@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import click
+import torch
 from hidet.utils import initialize
 from . import vision
 from . import nlp
@@ -27,15 +28,40 @@ from .bench_all import bench_all
     help='Schedule space. 0: default schedule. 1: small schedule space. 2: large schedule space.',
 )
 @click.option(
-    '--torch-tf32',
+    '--dtype',
+    default='float32',
+    show_default=True,
+    type=click.Choice(['float32', 'float16']),
+    help='Data type to use.',
+)
+@click.option(
+    '--tensor-core',
     default=False,
     show_default=True,
+    is_flag=True,
     type=bool,
-    help='Enable torch.backends.cuda.matmul.allow_tf32 and torch.backends.cudnn.allow_tf32.',
+    help='Whether to use tensor core in hidet.'
 )
-def bench_group(space: str, torch_tf32: bool):
+@click.option(
+    '--disable-torch-cudnn-tf32',
+    default=False,
+    is_flag=True,
+    type=bool,
+    help='Set torch.backends.cudnn.allow_tf32=False.',
+)
+@click.option(
+    '--enable-torch-cublas-tf32',
+    default=False,
+    is_flag=True,
+    type=bool,
+    help='Set torch.backends.cuda.matmul.allow_tf32=True.',
+)
+def bench_group(space: str, dtype: str, tensor_core: bool, disable_torch_cudnn_tf32: bool, enable_torch_cublas_tf32: bool):
     BenchModel.search_space = int(space)
-    BenchModel.allow_tf32 = torch_tf32
+    BenchModel.dtype = getattr(torch, dtype)
+    BenchModel.tensor_core = tensor_core
+    BenchModel.disable_torch_cudnn_tf32 = disable_torch_cudnn_tf32
+    BenchModel.enable_torch_cublas_tf32 = enable_torch_cublas_tf32
 
 
 @initialize()
