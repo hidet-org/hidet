@@ -153,10 +153,10 @@ class BenchModel:
         return [
             'model',
             'inputs',
-            'dynamo(mode=eager)',
-            'dynamo(mode=reduce-overhead)',
-            'dynamo(mode=max-autotune)',
-            'hidet(space={})'.format(BenchModel.search_space),
+            'eager',
+            'reduce-overhead',
+            'max-autotune',
+            'hidet({})'.format(BenchModel.search_space),
         ]
 
     def benchmark(self) -> List[Any]:
