@@ -19,6 +19,7 @@ def reinstall_hidet():
     subprocess.run(['mkdir', '-p', 'build'], check=True)
     subprocess.run(['rm', '-rf', 'build/*'], check=True)
     subprocess.run(['cmake', '-S', '.', '-B', 'build'], check=True)
+    subprocess.run(['cmake', '--build', 'build'], check=True)
     subprocess.run(['pip', 'install', '-e', '.'], check=True)
 
 
