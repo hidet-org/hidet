@@ -25,13 +25,9 @@ class NLPModel(BenchModel):
         return '{}/{}'.format(self.model_name, self.label)
 
     def model(self):
-        import torch
-
         return torch.hub.load(self.repo_name, self.model_name, self.label)
 
     def example_inputs(self):
-        import torch
-
         tokens_tensor = torch.zeros((self.batch_size, self.sequence_length), dtype=torch.long, device='cuda')
         segments_tensors = torch.zeros((self.batch_size, self.sequence_length), dtype=torch.long, device='cuda')
         args = (tokens_tensor,)

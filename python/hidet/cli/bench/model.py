@@ -111,7 +111,7 @@ class BenchModel:
         click.echo(table_str)
 
     def bench_with_backend(self, backend: str, mode=None, warmup=3, number=10, repeat=10):
-        import torch.backends.cudnn
+        import torch.backends.cudnn  # pylint: disable=redefined-outer-name
         import torch.backends.cuda
 
         if not hidet.torch.dynamo_available():

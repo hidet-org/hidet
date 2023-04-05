@@ -29,11 +29,7 @@ from .bench_all import bench_all
     help='Schedule space. 0: default schedule. 1: small schedule space. 2: large schedule space.',
 )
 @click.option(
-    '--dtype',
-    default='float32',
-    show_default=True,
-    type=click.Choice(['float32', 'float16']),
-    help='Data type to use.',
+    '--dtype', default='float32', show_default=True, type=click.Choice(['float32', 'float16']), help='Data type to use.'
 )
 @click.option(
     '--tensor-core',
@@ -41,13 +37,9 @@ from .bench_all import bench_all
     show_default=True,
     is_flag=True,
     type=bool,
-    help='Whether to use tensor core in hidet.'
+    help='Whether to use tensor core in hidet.',
 )
-@click.option(
-    '--report',
-    type=click.Path(exists=False, dir_okay=False, writable=True),
-    help='Report file path.',
-)
+@click.option('--report', type=click.Path(exists=False, dir_okay=False, writable=True), help='Report file path.')
 @click.option(
     '--disable-torch-cudnn-tf32',
     default=False,
@@ -68,7 +60,7 @@ def bench_group(
     tensor_core: bool,
     report: Optional[click.Path],
     disable_torch_cudnn_tf32: bool,
-    enable_torch_cublas_tf32: bool
+    enable_torch_cublas_tf32: bool,
 ):
     BenchModel.search_space = int(space)
     BenchModel.dtype = getattr(torch, dtype)
