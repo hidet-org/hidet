@@ -1,9 +1,13 @@
+import os
 import argparse
 import datetime
 import subprocess
 import time
 import pytz
 import hidet
+
+hidet.option.cache_dir(os.path.join(hidet.option.get_cache_dir(), 'benchmark'))
+hidet.utils.hidet_clear_op_cache()
 
 
 parser = argparse.ArgumentParser('Benchmark hidet performance.')
