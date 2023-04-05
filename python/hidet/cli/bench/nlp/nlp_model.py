@@ -9,6 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import torch
 from hidet.cli.bench.model import BenchModel
 
 
@@ -24,15 +25,22 @@ class NLPModel(BenchModel):
         return '{}/{}'.format(self.model_name, self.label)
 
     def model(self):
-        import torch
-
         return torch.hub.load(self.repo_name, self.model_name, self.label)
 
     def example_inputs(self):
-        import torch
-
         tokens_tensor = torch.zeros((self.batch_size, self.sequence_length), dtype=torch.long, device='cuda')
         segments_tensors = torch.zeros((self.batch_size, self.sequence_length), dtype=torch.long, device='cuda')
         args = (tokens_tensor,)
         kwargs = {'token_type_ids': segments_tensors}
         return args, kwargs
+
+    def inputs_str(self) -> str:
+        if self.dtype == torch.float16:
+            dtype = 'f16'
+        elif self.dtype == torch.float32:
+            dtype = 'f32'
+        elif self.dtype == torch.float64:
+            dtype = 'f64'
+        else:
+            raise ValueError('Unknown dtype: {}'.format(self.dtype))
+        return f'{dtype}, bs={self.batch_size}, seq={self.sequence_length}'

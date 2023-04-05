@@ -10,14 +10,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # pylint: disable=ungrouped-imports, no-name-in-module
-from typing import List, Any
+from typing import List, Any, Optional
+import click
+import torch
 from hidet.testing import benchmark_func
 import hidet
 
 
 class BenchModel:
     search_space = 0
-    allow_tf32 = False
+    dtype: torch.dtype = torch.float32
+    tensor_core: bool = False
+    disable_torch_cudnn_tf32 = False
+    enable_torch_cublas_tf32 = False
+    report_path: Optional[str] = None
 
     def __str__(self):
         raise NotImplementedError()
@@ -43,6 +49,24 @@ class BenchModel:
             The inputs to pass to the model.
         """
         raise NotImplementedError()
+
+    def converted_model(self):
+        model = self.model().eval()
+        model = model.to(dtype=BenchModel.dtype)
+        model = model.cuda()
+        return model
+
+    def converted_inputs(self):
+        args, kwargs = self.example_inputs()
+
+        def convert_f32(arg):
+            if arg.dtype == torch.float32:
+                return arg.to(dtype=BenchModel.dtype)
+            return arg
+
+        args = [convert_f32(arg.cuda()) for arg in args]
+        kwargs = {k: convert_f32(v.cuda()) for k, v in kwargs.items()}
+        return args, kwargs
 
     @staticmethod
     def tensor_str(tensor) -> str:
@@ -71,7 +95,7 @@ class BenchModel:
         ret: str
             The string representation of the inputs to the model.
         """
-        args, kwargs = self.example_inputs()
+        args, kwargs = self.converted_inputs()
         items = []
         for arg in args:
             items.append(self.tensor_str(arg))
@@ -79,21 +103,25 @@ class BenchModel:
             items.append('{}={}'.format(k, self.tensor_str(v)))
         return ', '.join(items)
 
+    @classmethod
+    def report_table(cls, table_str):
+        if cls.report_path is not None:
+            with open(cls.report_path, 'w') as f:
+                click.echo(table_str, file=f)
+        click.echo(table_str)
+
     def bench_with_backend(self, backend: str, mode=None, warmup=3, number=10, repeat=10):
-        import torch.backends.cudnn
+        import torch.backends.cudnn  # pylint: disable=redefined-outer-name
         import torch.backends.cuda
 
         if not hidet.torch.dynamo_available():
             raise RuntimeError('Torch Dynamo is not available, please install pytorch 2.0 or higher.')
         import torch._dynamo as dynamo
 
-        torch.backends.cudnn.allow_tf32 = self.allow_tf32
-        torch.backends.cuda.matmul.allow_tf32 = self.allow_tf32
+        torch.backends.cudnn.allow_tf32 = not self.disable_torch_cudnn_tf32
+        torch.backends.cuda.matmul.allow_tf32 = self.enable_torch_cublas_tf32
 
-        model, (args, kwargs) = self.model(), self.example_inputs()
-        model = model.cuda().eval()
-        args = [arg.cuda() for arg in args]
-        kwargs = {k: v.cuda() for k, v in kwargs.items()}
+        model, (args, kwargs) = self.converted_model(), self.converted_inputs()
         dynamo.reset()
         with torch.no_grad():
             model_opt = torch.compile(model, backend=backend, mode=mode)
@@ -115,6 +143,7 @@ class BenchModel:
         config = hidet.torch.dynamo_config
         config.search_space(self.search_space)
         config.use_cuda_graph(use_cuda_graph)
+        config.use_tensor_core(self.tensor_core)
         config.use_fp16(use_fp16)
         config.use_fp16_reduction(use_fp16_reduction)
         return self.bench_with_backend('hidet')
@@ -125,9 +154,9 @@ class BenchModel:
             'model',
             'inputs',
             'eager',
-            'inductor(mode=reduce-overhead)',
-            # 'inductor(mode=max-autotune)'
-            'hidet(space={})'.format(BenchModel.search_space),
+            'reduce-overhead',
+            'max-autotune',
+            'hidet({})'.format(BenchModel.search_space),
         ]
 
     def benchmark(self) -> List[Any]:
@@ -136,7 +165,7 @@ class BenchModel:
             self.inputs_str(),
             self.bench_eager(),
             self.bench_inductor('reduce-overhead'),
-            # self.bench_inductor('max-autotune'),
+            self.bench_inductor('max-autotune'),
             self.bench_hidet(),
         ]
 
