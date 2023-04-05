@@ -4,6 +4,9 @@ import datetime
 import subprocess
 import time
 import pytz
+import distro
+from cuda import cudart
+import torch
 import hidet
 
 hidet.option.cache_dir(os.path.join(hidet.option.get_cache_dir(), 'benchmark'))
@@ -16,12 +19,25 @@ parser.add_argument('--space', default=0, type=int, help='Search space of hidet.
 parser.add_argument('--report', default='./report.txt', type=str, help='Report file path.')
 
 
+def nvidia_gpu_driver() -> str:
+    with open('/proc/driver/nvidia/version', 'r') as f:
+        return f.readline().split('Module')[1].split()[0]
+
+
+def nvidia_cuda_version() -> str:
+    v = cudart.cudaRuntimeGetVersion()[1]
+    return '{}.{}'.format(v // 1000, v % 1000 // 10)
+
+
 def info(args) -> str:
     envs = [
         '# {}'.format(datetime.datetime.now(pytz.timezone('US/Eastern')).strftime('%Y-%m-%d')),
         '- Hidet version: {}'.format(hidet.__version__),
         '- Git commit: {}'.format(args.git_commit),
-        '',
+        '- PyTorch version: {}'.format(torch.__version__),
+        '- OS: {}'.format(distro.name(pretty=True)),
+        '- GPU: {}'.format(cudart.cudaGetDeviceProperties(0)[1].name.decode('utf-8')),
+        '- GPU driver: {} ({})'.format(nvidia_gpu_driver(), nvidia_cuda_version()),
     ]
     return '\n'.join(envs)
 
