@@ -49,6 +49,9 @@ def main():
     args = parser.parse_args()
     if not os.path.exists('./scripts/bench/benchmark.py'):
         raise RuntimeError('Please run this script from the root directory of the repository.')
+
+    install_dependencies()
+
     while True:
         t1 = time.time()
         try:
