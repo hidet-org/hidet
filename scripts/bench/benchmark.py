@@ -14,7 +14,8 @@ hidet.utils.hidet_clear_op_cache()
 
 
 parser = argparse.ArgumentParser('Benchmark hidet performance.')
-parser.add_argument('--git-commit', default=None, type=str, help='Git commit hash.')
+parser.add_argument('--git-prev-commit', default=None, type=str, help='Previous git commit hash.')
+parser.add_argument('--git-commit', type=str, help='Git commit hash.')
 parser.add_argument('--space', default=0, type=int, help='Search space of hidet.')
 parser.add_argument('--report', default='./report.txt', type=str, help='Report file path.')
 
@@ -33,12 +34,20 @@ def info(args) -> str:
     envs = [
         '# {}'.format(datetime.datetime.now(pytz.timezone('US/Eastern')).strftime('%Y-%m-%d')),
         '- Hidet version: {}'.format(hidet.__version__),
-        '- Git commit: {}'.format(args.git_commit),
         '- PyTorch version: {}'.format(torch.__version__),
         '- OS: {}'.format(distro.name(pretty=True)),
         '- GPU: {}'.format(cudart.cudaGetDeviceProperties(0)[1].name.decode('utf-8')),
         '- GPU driver: {} ({})'.format(nvidia_gpu_driver(), nvidia_cuda_version()),
     ]
+    if args.git_prev_commit and args.git_commit:
+        envs += [
+            '- Git diff: {}'.format(args.git_prev_commit + '...' + args.git_commit),
+        ]
+    else:
+        envs += [
+            '- Git commit: {}'.format(args.git_commit),
+        ]
+    envs.append('')
     return '\n'.join(envs)
 
 
