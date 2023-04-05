@@ -21,10 +21,14 @@ def test_conv2d(in_shape, w_shape, stride, padding, dtype):
     torch.backends.cudnn.allow_tf32 = False  # disable tf32 for accuracy
     check_module(
         model=torch.nn.Conv2d(
-            in_channels=in_shape[1], out_channels=w_shape[0], kernel_size=w_shape[2:], stride=stride, padding=padding,
-            bias=False
+            in_channels=in_shape[1],
+            out_channels=w_shape[0],
+            kernel_size=w_shape[2:],
+            stride=stride,
+            padding=padding,
+            bias=False,
         ),
-        args=[torch.randn(in_shape, dtype=dtype)]
+        args=[torch.randn(in_shape, dtype=dtype)],
     )
     torch.backends.cudnn.allow_tf32 = True
 
