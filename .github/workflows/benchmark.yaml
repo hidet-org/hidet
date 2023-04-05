@@ -60,7 +60,7 @@ jobs:
           echo "::set-output name=result::$(cat result.txt)"
 
       - name: Post result
-        uses: peter-evans/create-or-update-comment@v1.2.3
+        uses: peter-evans/create-or-update-comment@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
