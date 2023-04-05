@@ -19,7 +19,7 @@ class DynamoConfig:
         self._use_fp16: bool = False
         self._use_fp16_reduction: bool = False
         self._use_cuda_graph: bool = True
-        self._use_tensor_core: bool = True
+        self._use_tensor_core: bool = False
         self._print_input_graph: bool = False
         self._dump_graph_ir: Optional[str] = None
         self._correctness_report: bool = False

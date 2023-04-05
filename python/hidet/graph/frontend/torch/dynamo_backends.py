@@ -32,12 +32,18 @@ def generate_executor(flow_graph: FlowGraph) -> Callable:
     use_cuda_graph = dynamo_config['use_cuda_graph']
     search_space = dynamo_config['search_space']
     parallel_k = dynamo_config['parallel_k']
+    tensor_core = dynamo_config['use_tensor_core']
+    save_dir = dynamo_config['dump_graph_ir']
 
     with PassContext() as ctx:
         if use_fp16:
             ctx.set_precision('float16')
         if use_fp16 and use_fp16_reduction:
             ctx.set_reduce_precision('float16')
+        if save_dir:
+            ctx.save_graph_instrument(save_dir)
+        if tensor_core:
+            ctx.set_mma('mma' if tensor_core else 'simt')
         ctx.set_parallel_k(disabled=(parallel_k == 'disabled'), search=(parallel_k == 'search'))
         logger.info('start to optimize the flow graph')
         graph_opt: FlowGraph = optimize(flow_graph)

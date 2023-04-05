@@ -15,6 +15,7 @@ import torch
 
 
 def check_module(model: torch.nn.Module, args: Sequence[torch.Tensor], atol=1e-4, rtol=1e-4):
+    model = torch.nn.Sequential(model)
     model = model.cuda()
     model.eval()
     args = [x.cuda() for x in args]
