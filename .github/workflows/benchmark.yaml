@@ -57,7 +57,6 @@ jobs:
       - name: Run benchmark
         run: |
           python scripts/ci/benchmark.py --report result.txt --space 0 --git-commit ${{ github.sha }}
-          echo "::set-output name=result::$(cat result.txt)"
 
       - name: Post result
         uses: peter-evans/create-or-update-comment@v2
@@ -65,5 +64,4 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           issue-number: 154
-          body: |
-            ${{ steps.run_benchmark.outputs.result }}
+          body-file: ./result.txt
