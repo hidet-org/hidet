@@ -56,7 +56,7 @@ jobs:
 
       - name: Run benchmark
         run: |
-          python scripts/ci/benchmark.py --report result.txt --space 0 --git-commit ${{ github.sha }}
+          python scripts/ci/benchmark.py --report result.txt --space 2 --git-commit ${{ github.sha }}
 
       - name: Post result
         uses: peter-evans/create-or-update-comment@v2
