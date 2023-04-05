@@ -2,13 +2,22 @@ import os
 import time
 import argparse
 import subprocess
+import schedule
 
 parser = argparse.ArgumentParser('Benchmark performance.')
-parser.add_argument('--issue-id', type=int, default=154, help='Issue id to send the benchmark result to.')
+parser.add_argument('--issue', type=int, default=154, help='Issue id to send the benchmark result to.')
+parser.add_argument(
+    '--schedule-time',
+    type=str,
+    default='03:00',
+    help='Schedule time to run the benchmark, default "3:00".'
+)
+
 
 def install_dependencies():
     subprocess.run(['pip', 'install', '-r', 'requirements.txt'], check=True)
     subprocess.run(['pip', 'install', '-r', 'requirements-dev.txt'], check=True)
+
 
 def pull_repo():
     subprocess.run(['git', 'pull'], check=True)
@@ -39,6 +48,7 @@ def run_bench_script(report_file):
     with open('scripts/bench/prev_commit.txt', 'w') as f:
         f.write(current_commit)
 
+
 def send_report(issue_id, result_file):
     command = 'gh issue comment {issue_id} -F {result_file} -R hidet-org/hidet'.format(
         issue_id=issue_id, result_file=result_file
@@ -46,30 +56,32 @@ def send_report(issue_id, result_file):
     subprocess.run(command.split(), check=True)
 
 
+def bench_job(args):
+    report_file = './scripts/bench/report.txt'
+    try:
+        pull_repo()
+        reinstall_hidet()
+        run_bench_script(report_file)
+        send_report(args.issue_id, report_file)
+    except Exception as e:
+        print('Error: {}'.format(e))
+
+
 def main():
     args = parser.parse_args()
     if not os.path.exists('./scripts/bench/benchmark.py'):
         raise RuntimeError('Please run this script from the root directory of the repository.')
+    if not (0 <= int(args.schedule_time.split(':')[0]) <= 23 and 0 <= int(args.schedule_time.split(':')[1]) <= 59):
+        raise RuntimeError('Schedule time should be in the format of "HH:MM".')
 
     install_dependencies()
 
+    print(args.schedule_time)
+    schedule.every().day.at(args.schedule_time).do(bench_job, args=args)
+
     while True:
-        t1 = time.time()
-        try:
-            report_file = './scripts/bench/report.txt'
-            pull_repo()
-            reinstall_hidet()
-            run_bench_script(report_file)
-            send_report(args.issue_id, report_file)
-        except Exception as e:
-            print('Error: {}'.format(e))
-            time.sleep(60 * 60) # wait for 1 hour
-        else:
-            # run the benchmark once every day
-            t2 = time.time()
-            print('Elapsed time: {} seconds'.format(t2 - t1))
-            if t2 - t1 < 60 * 60 * 24:
-                time.sleep(60 * 60 * 24 - (t2 - t1))
+        schedule.run_pending()
+        time.sleep(1)
 
 
 if __name__ == '__main__':
