@@ -47,4 +47,4 @@ class NLPModel(BenchModel):
             dtype = 'f64'
         else:
             raise ValueError('Unknown dtype: {}'.format(self.dtype))
-        return f'{dtype}[{self.batch_size}, {self.sequence_length}]'
+        return f'{dtype}, bs={self.batch_size}, seq={self.sequence_length}'
