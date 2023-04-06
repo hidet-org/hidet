@@ -1,7 +1,6 @@
 from __future__ import annotations
-from typing import Sequence, List, Dict, Union, Tuple, Optional
+from typing import Sequence, List, Dict, Union, Tuple
 from collections import defaultdict
-from hidet.ir.node import Node
 from hidet.ir.task import Task, Target
 from hidet.ir.func import IRModule
 from hidet.ir.compute import TensorNode, TensorInput
@@ -14,13 +13,19 @@ from hidet.utils import same_list, index_of
 
 
 class FusedTask(Task):
-    def __init__(self, fused_graph: FlowGraph, anchor: Operator):
+    def __init__(self, fused_graph: FlowGraph, anchor: int):
         inputs, outputs = self._computation(fused_graph)
         super().__init__(
             name='fused', inputs=inputs, outputs=outputs, attributes={'fused_ops': self._fused_name(fused_graph)}
         )
         self.fused_graph: FlowGraph = fused_graph
-        self.anchor: Operator = anchor
+        self.anchor: int = anchor
+
+    def allow_prologue(self) -> bool:
+        return False
+
+    def allow_epilogue(self) -> bool:
+        return False
 
     def _fused_name(self, flow_graph: FlowGraph):
         names = []
@@ -66,13 +71,15 @@ class FusedTask(Task):
         if isinstance(target, str):
             target = Target.from_string(target)
 
+        anchor_op = self.fused_graph.nodes[self.anchor]
+
         if target.name == 'cpu':
-            anchor_module: Union[NotImplemented, IRModule] = self.anchor.task.implement_cpu(working_dir)
+            anchor_module: Union[NotImplemented, IRModule] = anchor_op.task.implement_cpu(working_dir)
             if anchor_module is NotImplemented:
                 auto_scheduler = CpuAutoScheduler()
                 return auto_scheduler.schedule_task(self, 'cuda')
         elif target.name == 'cuda':
-            anchor_module: Union[NotImplemented, IRModule] = self.anchor.task.implement_cuda(working_dir)
+            anchor_module: Union[NotImplemented, IRModule] = anchor_op.task.implement_cuda(working_dir)
             if anchor_module is NotImplemented:
                 auto_scheduler = CudaAutoScheduler()
                 return auto_scheduler.schedule_task(self, 'cuda')
@@ -85,18 +92,18 @@ class FusedTask(Task):
 
 
 class FusedOperator(Operator):
-    def __init__(self, *inputs: Tensor, fused_graph: FlowGraph, anchor: Operator):
+    def __init__(self, *inputs: Tensor, fused_graph: FlowGraph, anchor: int):
         task = FusedTask(fused_graph, anchor)
         super().__init__(
             inputs=list(inputs),
             task=task,
-            name=f'Fused{anchor.name}',
+            name=f'Fused{fused_graph.nodes[anchor].name}',
             attributes={'fused_graph': fused_graph, 'anchor': anchor},
         )
 
-        self._check(inputs, fused_graph)
+        self._check(inputs, fused_graph, anchor)
 
-    def _check(self, inputs: Sequence[Tensor], fused_graph: FlowGraph):
+    def _check(self, inputs: Sequence[Tensor], fused_graph: FlowGraph, anchor_idx: int):
         # check the input shapes and dtypes match
         if len(inputs) != len(fused_graph.inputs):
             raise ValueError('number of inputs mismatch')
@@ -106,11 +113,18 @@ class FusedOperator(Operator):
             if a.dtype != b.dtype:
                 raise ValueError('Arg {} dtype mismatch: {} vs {}'.format(idx, a.dtype, b.dtype))
 
-        # check the subgraph is valid
-        # todo
+        # check the anchor operator's prologue & epilogue requirement is satisfied
+        nodes: List[Operator] = fused_graph.nodes
+        anchor: Operator = fused_graph.nodes[anchor_idx]
+        if anchor not in nodes:
+            raise ValueError('anchor operator not in the subgraph')
+        if any(x not in fused_graph.inputs for x in anchor.inputs) and not anchor.task.allow_prologue():
+            raise ValueError('found prologue but it is not allowed for anchor operator')
+        if any(x not in fused_graph.outputs for x in anchor.outputs) and not anchor.task.allow_epilogue():
+            raise ValueError('found epilogue but it is not allowed for anchor operator')
 
 
-def fused_operator(*inputs: Tensor, fused_graph: FlowGraph, anchor: Operator) -> Union[Tensor, List[Tensor]]:
+def fused_operator(*inputs: Tensor, fused_graph: FlowGraph, anchor: int) -> Union[Tensor, List[Tensor]]:
     op = FusedOperator(*inputs, fused_graph=fused_graph, anchor=anchor)
     outputs = []
     for i in range(len(fused_graph.outputs)):

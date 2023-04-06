@@ -60,6 +60,8 @@ def optimize(graph: FlowGraph) -> FlowGraph:
         inst.before_all_passes(graph)
     for optimize_pass in passes:
         graph = optimize_pass(graph)
+        print('After pass: {}'.format(optimize_pass.__class__.__name__))
+        print(graph)
     for inst in reversed(ctx.instruments):
         inst.after_all_passes(graph)
     return graph.update_nodes()

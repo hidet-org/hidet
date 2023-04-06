@@ -66,7 +66,7 @@ class PrologueEpilogueRewriter(IRRewriter):
             self.graph_output_to_var[output_compute] = self.tensor2var[output_tensor]
 
     def visit_Function(self, func: Function):
-        if func.kind != 'cuda_kernel' and func.kind != 'host_kernel':
+        if func.kind not in ['cuda_kernel', 'host_kernel']:
             return func
         else:
             # extract inputs and outputs of the anchor function
@@ -216,7 +216,7 @@ class PrologueEpilogueRewriter(IRRewriter):
 def apply_prologue_epilogue(ir_module: IRModule, fused_task: FusedTask) -> IRModule:
     anchor_function: Optional[Function] = None
     for func in ir_module.functions.values():
-        if func.kind == 'cuda_kernel' or func.kind == 'host_kernel':
+        if func.kind in ['cuda_kernel', 'host_kernel']:
             if anchor_function is not None:
                 raise RuntimeError('More than one function found.')
             anchor_function = func

@@ -116,7 +116,7 @@ class FlowGraph:
         def get_tensor_sig(x: Tensor) -> Doc:
             return Text(x.dtype.name) + '[' + doc_join([str(v) for v in x.shape], ', ') + ']'
 
-        def get_attr_repr(value: Union[float, int, bool, str, list, tuple]) -> Doc:
+        def get_attr_repr(value: Union[float, int, bool, str, list, tuple, FlowGraph]) -> Doc:
             if isinstance(value, (float, int, bool)):
                 return Text(str(value))
             elif isinstance(value, str):
@@ -125,6 +125,8 @@ class FlowGraph:
                 return '[' + doc_join([get_attr_repr(v) for v in value], ', ') + ']'
             elif isinstance(value, tuple):
                 return '(' + doc_join([get_attr_repr(v) for v in value], ', ') + ')'
+            elif isinstance(value, FlowGraph):
+                return Text('FlowGraph({})'.format(', '.join(u.name for u in value.nodes)))
             else:
                 return Text(str(value))
 
@@ -151,7 +153,6 @@ class FlowGraph:
             output: Tensor = outputs[0]
             line_doc = Doc()
             line_doc += namer(output) + ': ' + get_tensor_sig(output) + ' = '
-            # line_doc += op.name + ('*' if len(op.task.task_graph.nodes) > 1 else '') + '('
             line_doc += op.name + '('
             line_doc += doc_join([namer(x) for x in op.inputs], sep=', ')
             if op.attrs:
@@ -299,7 +300,7 @@ class FlowGraph:
         # before save, clear the packed func cache because ctypes object can not be pickled
         for node in self.nodes:
             node.task_func = None
-        self.usage_count, self.nodes = None, None
+        self._usage_count, self._nodes = None, None
 
         dirname = os.path.dirname(model_file)
         os.makedirs(dirname, exist_ok=True)

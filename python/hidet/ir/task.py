@@ -227,13 +227,16 @@ class Task(Node):
     def allow_epilogue(self) -> bool:
         return True
 
-    def is_injective_task(self) -> bool:
+    def is_injective(self) -> bool:
         from hidet.ir.tools import collect
 
         allowed_nodes = (ScalarInput, TensorInput, GridCompute)
         # if found other node like ReduceCompute and ArgReduceCompute, return False
         found_nodes = collect(self.outputs, ComputeNode, stop_when_found=False)
         return all(isinstance(node, allowed_nodes) for node in found_nodes)
+
+    def is_bijective(self) -> bool:
+        return self.is_injective() and len(self.inverse_map) > 0
 
     def save(self, fname: str):
         dirname = os.path.dirname(fname)
