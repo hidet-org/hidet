@@ -19,7 +19,6 @@ from hidet.graph.ops.definitions.conv2d.conv2d import Conv2dTask
 from hidet.graph.ops.schedules.common import Schedule, NotSupportedError
 from hidet.graph.ops.schedules.resolve import resolve_ir_modules
 from hidet.utils import prod
-from hidet.transforms.tools import fuse_and_pack
 
 
 T = TypeVar('T', bound=Tuple)
@@ -260,4 +259,4 @@ def schedule_depthwise_conv2d_kernel(
                     if gn < batch_size and gc < channels and gh < height and gw < width:
                         gmem_y[gn, gc, gh, gw] = regs_y[rn, rc, rh, rw]
 
-    return fuse_and_pack(script_module.ir_module(), conv2d_grid, task)
+    return script_module.ir_module()

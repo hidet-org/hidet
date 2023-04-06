@@ -11,7 +11,7 @@
 # limitations under the License.
 from typing import List, Sequence, Dict, Tuple, Optional, Set
 import copy
-from hidet.ir.task import Task, TaskGraph, TensorNode
+from hidet.ir.task import Task, TensorNode
 from hidet.graph.ops.definitions.utils import input_like
 from hidet.graph.ir import FlowGraph, Operator, Tensor
 from hidet.graph.ops.definitions.special import BarrierOp

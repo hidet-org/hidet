@@ -21,7 +21,6 @@ from hidet.ir.stmt import AssignStmt, BufferStoreStmt, DeclareStmt
 from hidet.ir.layout import row_layout, local_layout
 from hidet.graph.ops.definitions.softmax import SoftmaxTask
 from hidet.graph.ops.schedules.common import params_from_task
-from hidet.transforms.tools import fuse_and_pack
 from .common import warp_reduce
 
 
@@ -88,4 +87,4 @@ def softmax_cuda_schedule(task: SoftmaxTask) -> IRModule:
         fb.set_body(sb.finish())
     func = fb.get()
     ir_module = IRModule(funcs={func.name: func}, task=task)
-    return fuse_and_pack(ir_module, func, task)
+    return ir_module

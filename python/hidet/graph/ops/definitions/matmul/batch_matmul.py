@@ -36,15 +36,15 @@ class BatchMatmulTask(Task):
             attributes={'batch_size': batch_size, 'm_size': m_size, 'n_size': n_size, 'k_size': k_size, 'mma': mma},
         )
 
-    def implement_cuda(self, workding_dir: str) -> IRModule:
+    def implement_cuda(self, working_dir: str) -> IRModule:
         from hidet.graph.ops.schedules.cuda import matmul as matmul_schedule  # pylint: disable=import-outside-toplevel
 
         if self.mma == 'simt':
-            return matmul_schedule.batched_matmul_cuda_schedule_simt(self, workding_dir)
+            return matmul_schedule.batched_matmul_cuda_schedule_simt(self, working_dir)
         elif self.mma.startswith('wmma'):
-            return matmul_schedule.batched_matmul_cuda_schedule_wmma(self, workding_dir)
+            return matmul_schedule.batched_matmul_cuda_schedule_wmma(self, working_dir)
         elif self.mma.startswith('mma'):
-            return matmul_schedule.batched_matmul_cuda_schedule_mma(self, workding_dir)
+            return matmul_schedule.batched_matmul_cuda_schedule_mma(self, working_dir)
         else:
             raise ValueError('Can not recognize mma type {}, candidates: {}'.format(self.mma, ['simt', 'wmma', 'mma']))
 

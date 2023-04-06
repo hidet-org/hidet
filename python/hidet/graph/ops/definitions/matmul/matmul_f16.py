@@ -105,7 +105,6 @@ class MatmulF16Task(Task):
         from hidet.lang.cuda import blockIdx, threadIdx, syncthreads, dynamic_shared_memory
         from hidet.lang.cuda import MmaConfig, mma_sync, cp_async, cp_async_wait_all, ldmatrix
         from hidet.lang.cuda import register_tensor
-        from hidet.transforms.tools import fuse_and_pack
 
         # input shapes
         node_a, node_b, node_c = self.inputs[0], self.inputs[1], self.outputs[0]
@@ -303,7 +302,6 @@ class MatmulF16Task(Task):
 
         ir_module = module.ir_module()
         assert isinstance(matmul_f16_kernel, Function)
-        fuse_and_pack(ir_module, matmul_f16_kernel, task=self)
 
         return ir_module
 

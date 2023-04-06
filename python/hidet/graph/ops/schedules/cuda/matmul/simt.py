@@ -61,7 +61,6 @@ from hidet.ir.type import data_type, tensor_type, PointerType, tensor_pointer_ty
 from hidet.graph.ops.definitions.matmul import BatchMatmulTask
 from hidet.graph.ops.schedules.resolve import resolve_ir_modules
 from hidet.graph.ops.schedules.common import params_from_task, Schedule, NotSupportedError
-from hidet.transforms.tools import fuse_and_pack
 
 
 class MatmulSchedule(Schedule):
@@ -472,7 +471,7 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, schedule: Mat
 
     func = fb.get()
     ir_module = IRModule(funcs={func.name: func}, task=task)
-    return fuse_and_pack(ir_module, func, task)
+    return ir_module
 
 
 def init(dst, init_value, layout):

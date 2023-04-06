@@ -84,7 +84,7 @@ def build_task(task: Task, target_device='cuda', load=True) -> Optional[Compiled
             with open(os.path.join(task_dir, 'task.txt'), 'w') as f:
                 f.write(task_string)
             # implement task
-            ir_module = task.implement(target=target_device, workding_dir=task_dir)
+            ir_module = task.implement(target=target_device, working_dir=task_dir)
             # lower ir module
             if option.get_option('save_lower_ir'):
                 instruments = [

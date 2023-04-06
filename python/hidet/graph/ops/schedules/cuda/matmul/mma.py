@@ -31,7 +31,6 @@ from hidet.graph.ops.definitions.matmul import BatchMatmulTask
 from hidet.graph.ops.schedules.resolve import resolve_ir_modules
 from hidet.graph.ops.schedules.common import params_from_task, Schedule, NotSupportedError
 from hidet.graph.ops.schedules.cuda.common import get_transfer_task_map
-from hidet.transforms.tools import fuse_and_pack
 
 T = TypeVar('T', bound=Tuple)
 
@@ -329,7 +328,7 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, sch: MatmulMm
 
     func = fb.func
     ir_module = IRModule(funcs={func.name: func}, task=task)
-    return fuse_and_pack(ir_module, func, task)
+    return ir_module
 
 
 def load_regs_a(smem_a: Union[Var, TensorSlice], regs_a: Var, sch: MatmulMmaSchedule) -> Stmt:

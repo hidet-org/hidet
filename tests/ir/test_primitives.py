@@ -20,7 +20,6 @@ from hidet.ir.func import IRModule
 from hidet.ir.primitives import lds128, sts128
 from hidet.ir.stmt import BlackBoxStmt, AssignStmt, BufferStoreStmt, DeclareStmt, DeclareScope
 from hidet.driver import build_ir_module
-from hidet.transforms.tools import fuse_and_pack
 
 
 def test_lds128(capfd):
@@ -41,7 +40,6 @@ def test_lds128(capfd):
 
     func = fb.get()
     ir_module = IRModule({func.name: func}, task=None)
-    fuse_and_pack(ir_module, func, pack_func_name='test_lds128')
     compiled_func = build_ir_module(ir_module, func_name='test_lds128', output_dir='./outs/')
     compiled_func()
     hidet.cuda.synchronize()
@@ -72,7 +70,6 @@ def test_sts128(capfd):
 
     func = fb.get()
     ir_module = IRModule({func.name: func}, task=None)
-    fuse_and_pack(ir_module, func, pack_func_name='test_sts128')
     compiled_func = build_ir_module(ir_module, func_name='test_sts128', output_dir='./outs/')
     compiled_func()
     hidet.cuda.synchronize()
