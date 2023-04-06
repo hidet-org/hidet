@@ -110,9 +110,12 @@ class FusedOperator(Operator):
         # todo
 
 
-def fused_operator(*inputs: Tensor, fused_graph: FlowGraph, anchor: Operator) -> List[Tensor]:
+def fused_operator(*inputs: Tensor, fused_graph: FlowGraph, anchor: Operator) -> Union[Tensor, List[Tensor]]:
     op = FusedOperator(*inputs, fused_graph=fused_graph, anchor=anchor)
     outputs = []
     for i in range(len(fused_graph.outputs)):
         outputs.append(op.get_output(i))
-    return outputs
+    if len(outputs) == 1:
+        return outputs[0]
+    else:
+        return outputs

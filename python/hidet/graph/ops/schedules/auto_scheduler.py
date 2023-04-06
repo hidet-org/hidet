@@ -200,8 +200,6 @@ class AutoScheduler:
     def schedule_task(self, task: Task, device: str) -> IRModule:
         # pylint: disable=too-many-locals, unnecessary-comprehension
         # absorb the prologue and epilogue into a single task
-        task = task.task_graph.absorb()
-
         self.ir_module.task = task
 
         # Inline the grid compute that does not contain reduce
