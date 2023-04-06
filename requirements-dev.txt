@@ -1,3 +1,6 @@
+pytz
+distro
+
 # python test
 pytest==7.2
 
@@ -11,6 +14,8 @@ pylint==2.13.9
 torch
 torchvision
 transformers
+sentencepiece
+sacremoses
 
 # check the correctness with onnxruntime
 onnx
