@@ -67,6 +67,7 @@ class FusedTask(Task):
         from hidet.graph.ops.schedules.cuda.auto_scheduler import CudaAutoScheduler
         from hidet.graph.ops.schedules.cpu.auto_scheduler import CpuAutoScheduler
         from .apply_prologue_epilogue import apply_prologue_epilogue
+        from hidet.graph.ops.schedules.tune import tune
 
         if isinstance(target, str):
             target = Target.from_string(target)
@@ -74,21 +75,34 @@ class FusedTask(Task):
         anchor_op = self.fused_graph.nodes[self.anchor]
 
         if target.name == 'cpu':
-            anchor_module: Union[NotImplemented, IRModule] = anchor_op.task.implement_cpu(working_dir)
-            if anchor_module is NotImplemented:
+            anchor_modules: Union[NotImplemented, IRModule] = anchor_op.task.implement_cpu(working_dir)
+            if anchor_modules is NotImplemented:
                 auto_scheduler = CpuAutoScheduler()
                 return auto_scheduler.schedule_task(self, 'cpu')
         elif target.name == 'cuda':
-            anchor_module: Union[NotImplemented, IRModule] = anchor_op.task.implement_cuda(working_dir)
-            if anchor_module is NotImplemented:
+            anchor_modules: Union[NotImplemented, IRModule] = anchor_op.task.implement_cuda(working_dir)
+            if anchor_modules is NotImplemented:
                 auto_scheduler = CudaAutoScheduler()
                 return auto_scheduler.schedule_task(self, 'cuda')
         else:
             raise ValueError('unsupported target: {}'.format(target))
 
-        # we have scheduled the anchor operator, now we need to fuse the rest of the graph
-        fused_module: IRModule = apply_prologue_epilogue(anchor_module, self)
-        return fused_module
+        if isinstance(anchor_modules, IRModule):
+            anchor_modules = [anchor_modules]
+
+        fused_modules: List[IRModule] = [apply_prologue_epilogue(m, self) for m in anchor_modules]
+        for fused_module, anchor_module in zip(fused_modules, anchor_modules):
+            if hasattr(anchor_module, '_tuning_kwargs'):
+                setattr(fused_module, '_tuning_kwargs', getattr(anchor_module, '_tuning_kwargs'))
+
+        if len(fused_modules) == 1:
+            return fused_modules[0]
+
+        return tune(
+            fused_modules,
+            dummy_inputs=self.dummy_arguments(target.name),
+            working_dir=working_dir
+        )
 
 
 class FusedOperator(Operator):

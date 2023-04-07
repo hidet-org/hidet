@@ -197,7 +197,12 @@ class FlowGraph:
                 if task_key in task_keys:
                     continue
                 task_keys.add(task_key)
-                if search_space == 0 or 'implement_cuda' not in node.task.__class__.__dict__:
+                if (search_space == 0 or
+                    all(
+                        method not in node.task.__class__.__dict__ for method in
+                        ['implement_cuda', 'implement_cpu', 'implement']
+                    )
+                ):
                     tasks.append(node.task)
                 else:
                     tunable_tasks.append(node.task)

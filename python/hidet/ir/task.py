@@ -173,6 +173,28 @@ class Task(Node):
                 remap.update({param.type.shape[i]: arg.shape[i] for i in range(param.ndim)})
             return [rewrite(arg, remap) for arg in self.arguments]
 
+    def dummy_arguments(self, device: str):
+        """
+        Generate dummy arguments for the compiled function of this task.
+
+        Parameters
+        ----------
+        device: str
+            The target device.
+
+        Returns
+        -------
+        args: Sequence[Tensor or int]
+            The arguments for the compiled function.
+        """
+        import hidet
+        from hidet.graph.tensor import Tensor
+
+        arguments: List[Tensor] = []
+        for param in self.parameters:
+            arguments.append(hidet.randn(param.const_shape(), param.type.dtype, device=device))
+        return arguments
+
     def build(self, target: Union[str, Target]):
         """
         Build the task for the given target to a callable function.
@@ -196,6 +218,7 @@ class Task(Node):
     def implement(self, target: Union[Target, str], working_dir: str) -> IRModule:
         from hidet.graph.ops.schedules.cuda.auto_scheduler import CudaAutoScheduler
         from hidet.graph.ops.schedules.cpu.auto_scheduler import CpuAutoScheduler
+        from hidet.graph.ops.schedules.tune import tune
 
         if isinstance(target, str):
             target = Target.from_string(target)
@@ -211,14 +234,28 @@ class Task(Node):
                 ret = auto_scheduler.schedule_task(self, 'cpu')
         else:
             raise ValueError()
-        if not isinstance(ret, IRModule):
-            raise AssertionError(f'The task implement function should return an IRModule, but got a {type(ret)}.')
-        return ret
+        if isinstance(ret, IRModule):
+            return ret
 
-    def implement_cuda(self, working_dir: str) -> IRModule:
+        ir_modules: List[IRModule] = ret
+
+        if not all(isinstance(m, IRModule) for m in ir_modules):
+            raise AssertionError(
+                f'The task implement function should return an IRModule or a sequence of IRModule, '
+                f'but got a {type(ir_modules)}.'
+            )
+        dummy_args = self.dummy_arguments(target.name)
+        best_ir_module = tune(
+            ir_modules,
+            dummy_inputs=dummy_args,
+            working_dir=working_dir
+        )
+        return best_ir_module
+
+    def implement_cuda(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
         return NotImplemented
 
-    def implement_cpu(self, working_dir: str) -> IRModule:
+    def implement_cpu(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
         return NotImplemented
 
     def allow_prologue(self) -> bool:

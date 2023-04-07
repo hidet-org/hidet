@@ -305,20 +305,21 @@ class MatmulSchedule(Schedule):
         return settings
 
 
-def batched_matmul_cuda_schedule_simt(task: BatchMatmulTask, working_dir: str) -> IRModule:
+def batched_matmul_cuda_schedule_simt(task: BatchMatmulTask, working_dir: str) -> List[IRModule]:
     all_schedules = MatmulSchedule.schedules(space_level=option.get_option('search_space'))
-    resolve_out_dir = os.path.join(working_dir, './resolve')
-    ir_modules = []
-    for schedule in all_schedules:
-        ir_modules.append(batched_matmul_cuda_with_given_schedule(task, schedule))
-    return resolve_ir_modules(
-        ir_modules=ir_modules,
-        schedules=all_schedules,
-        target_device='cuda',
-        output_dir=resolve_out_dir,
-        parallel=True,
-        verbose=True,
-    )
+    # resolve_out_dir = os.path.join(working_dir, './resolve')
+    return [batched_matmul_cuda_with_given_schedule(task, schedule) for schedule in all_schedules]
+    # ir_modules = []
+    # for schedule in all_schedules:
+    #     ir_modules.append(batched_matmul_cuda_with_given_schedule(task, schedule))
+    # return resolve_ir_modules(
+    #     ir_modules=ir_modules,
+    #     schedules=all_schedules,
+    #     target_device='cuda',
+    #     output_dir=resolve_out_dir,
+    #     parallel=True,
+    #     verbose=True,
+    # )
 
 
 def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, schedule: MatmulSchedule) -> IRModule:

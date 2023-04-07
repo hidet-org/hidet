@@ -9,6 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from typing import List
 from hidet.ir.func import IRModule
 from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, TensorNode, compute, reduce, input_like
 
@@ -36,7 +37,7 @@ class BatchMatmulTask(Task):
             attributes={'batch_size': batch_size, 'm_size': m_size, 'n_size': n_size, 'k_size': k_size, 'mma': mma},
         )
 
-    def implement_cuda(self, working_dir: str) -> IRModule:
+    def implement_cuda(self, working_dir: str) -> List[IRModule]:
         from hidet.graph.ops.schedules.cuda import matmul as matmul_schedule  # pylint: disable=import-outside-toplevel
 
         if self.mma == 'simt':

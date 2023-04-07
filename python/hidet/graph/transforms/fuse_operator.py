@@ -372,7 +372,6 @@ class FuseOperatorPass(GraphPass):
         usage: Usage = analyze_usage(graph)
         partition: List[FusibleGraph] = partition_graph(graph, usage)
         fused_graph = construct_fused_graph(graph, partition, usage)
-        print(fused_graph)
         fused_graph.update_nodes()
         return fused_graph
 

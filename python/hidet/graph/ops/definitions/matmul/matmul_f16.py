@@ -76,8 +76,8 @@ class MatmulF16Task(Task):
     def allow_epilogue(self) -> bool:
         return False
 
-    def implement_cuda(self, working_dir: str) -> IRModule:
-        return tune.tune(self.schedule, task=self, target_device='cuda', working_dir=working_dir)
+    def implement_cuda(self, working_dir: str) -> List[IRModule]:
+        return tune.extract_ir_modules(self.schedule)
 
     @tune.space(2, 'block_m', [32, 64, 128, 256])
     @tune.space(2, 'block_n', [32, 64, 128, 256])
