@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Sequence, List, Dict, Union, Tuple
+from typing import Sequence, List, Dict, Union, Tuple, Optional
 from collections import defaultdict
 from hidet.ir.task import Task, Target
 from hidet.ir.func import IRModule
@@ -16,7 +16,10 @@ class FusedTask(Task):
     def __init__(self, fused_graph: FlowGraph, anchor: int):
         inputs, outputs = self._computation(fused_graph)
         super().__init__(
-            name='fused', inputs=inputs, outputs=outputs, attributes={'fused_ops': self._fused_name(fused_graph)}
+            name='fused',
+            inputs=inputs,
+            outputs=outputs,
+            attributes={'fused_ops': self._fused_name(fused_graph), 'anchor': fused_graph.nodes[anchor].task.name},
         )
         self.fused_graph: FlowGraph = fused_graph
         self.anchor: int = anchor
@@ -27,7 +30,8 @@ class FusedTask(Task):
     def allow_epilogue(self) -> bool:
         return False
 
-    def _fused_name(self, flow_graph: FlowGraph):
+    @staticmethod
+    def _fused_name(flow_graph: FlowGraph):
         names = []
         for op in flow_graph.nodes:
             names.append(op.task.name)
@@ -113,7 +117,8 @@ class FusedOperator(Operator):
 
         self._check(inputs, fused_graph, anchor)
 
-    def _check(self, inputs: Sequence[Tensor], fused_graph: FlowGraph, anchor_idx: int):
+    @staticmethod
+    def _check(inputs: Sequence[Tensor], fused_graph: FlowGraph, anchor_idx: int):
         # check the input shapes and dtypes match
         if len(inputs) != len(fused_graph.inputs):
             raise ValueError('number of inputs mismatch')
@@ -134,7 +139,21 @@ class FusedOperator(Operator):
             raise ValueError('found epilogue but it is not allowed for anchor operator')
 
 
-def fused_operator(*inputs: Tensor, fused_graph: FlowGraph, anchor: int) -> Union[Tensor, List[Tensor]]:
+def _anchor_op_idx(fused_graph: FlowGraph) -> int:
+    non_injective_ops = [i for i, op in enumerate(fused_graph.nodes) if not op.task.is_injective()]
+    if len(non_injective_ops) == 0:
+        return len(fused_graph.nodes) - 1
+    elif len(non_injective_ops) == 1:
+        return non_injective_ops[0]
+    else:
+        raise ValueError('multiple non-injective operators found in the fused graph')
+
+
+def fused_operator(
+    *inputs: Tensor, fused_graph: FlowGraph, anchor: Optional[int] = None
+) -> Union[Tensor, List[Tensor]]:
+    if anchor is None:
+        anchor = _anchor_op_idx(fused_graph)
     op = FusedOperator(*inputs, fused_graph=fused_graph, anchor=anchor)
     outputs = []
     for i in range(len(fused_graph.outputs)):
