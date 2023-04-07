@@ -239,6 +239,9 @@ class Task(Node):
 
         ir_modules: List[IRModule] = ret
 
+        if len(ir_modules) == 1:
+            return ir_modules[0]
+
         if not all(isinstance(m, IRModule) for m in ir_modules):
             raise AssertionError(
                 f'The task implement function should return an IRModule or a sequence of IRModule, '
