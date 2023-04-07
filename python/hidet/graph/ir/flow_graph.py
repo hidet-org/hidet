@@ -98,11 +98,12 @@ def forward_context() -> GraphForwardContext:
 class FlowGraph:
     """The computation graph representation."""
 
-    def __init__(self, outputs: Sequence[Tensor], inputs: Sequence[Tensor], nodes=None):
+    def __init__(self, outputs: Sequence[Tensor], inputs: Optional[Sequence[Tensor]] = None, nodes=None):
         self.outputs: List[Tensor] = list(outputs)
-        self.inputs: Optional[List[Tensor]] = list(inputs)
+        self.inputs: Optional[List[Tensor]] = list(inputs) if inputs is not None else None
         self._nodes: Optional[List[Operator]] = nodes
         self._usage_count: Optional[Dict[Tensor, int]] = None
+        self.update_nodes()
 
     def __call__(self, *inputs: Tensor) -> Union[List[Tensor], Tensor]:
         """Run the computation graph.
