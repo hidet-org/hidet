@@ -140,7 +140,6 @@ def schedule_depthwise_conv2d(task: Conv2dTask, workding_dir: str) -> IRModule:
     return resolve_ir_modules(
         ir_modules=ir_modules,
         schedules=schedules,
-        func_name=task.name,
         target_device='cuda',
         output_dir=os.path.join(workding_dir, './resolve'),
         parallel=True,

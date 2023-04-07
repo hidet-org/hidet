@@ -77,7 +77,7 @@ class FusedTask(Task):
             anchor_module: Union[NotImplemented, IRModule] = anchor_op.task.implement_cpu(working_dir)
             if anchor_module is NotImplemented:
                 auto_scheduler = CpuAutoScheduler()
-                return auto_scheduler.schedule_task(self, 'cuda')
+                return auto_scheduler.schedule_task(self, 'cpu')
         elif target.name == 'cuda':
             anchor_module: Union[NotImplemented, IRModule] = anchor_op.task.implement_cuda(working_dir)
             if anchor_module is NotImplemented:

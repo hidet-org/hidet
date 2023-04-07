@@ -40,7 +40,7 @@ def test_lds128(capfd):
 
     func = fb.get()
     ir_module = IRModule({func.name: func}, task=None)
-    compiled_func = build_ir_module(ir_module, func_name='test_lds128', output_dir='./outs/')
+    compiled_func = build_ir_module(ir_module, output_dir='./outs/')
     compiled_func()
     hidet.cuda.synchronize()
     captured = capfd.readouterr()
@@ -70,7 +70,7 @@ def test_sts128(capfd):
 
     func = fb.get()
     ir_module = IRModule({func.name: func}, task=None)
-    compiled_func = build_ir_module(ir_module, func_name='test_sts128', output_dir='./outs/')
+    compiled_func = build_ir_module(ir_module, output_dir='./outs/')
     compiled_func()
     hidet.cuda.synchronize()
     captured = capfd.readouterr()

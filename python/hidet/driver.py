@@ -139,7 +139,6 @@ def build_task_batch(tasks: List[Task], target_device: str = 'cuda', raise_on_er
 
 def build_ir_module(
     ir_module: IRModule,
-    func_name: str,
     output_dir='./outs/ir_module',
     save_ir: bool = True,
     profile_pass: bool = True,
@@ -153,14 +152,6 @@ def build_ir_module(
     src_path = os.path.join(output_dir, 'source.cu')
     lib_path = os.path.join(output_dir, 'lib.so')
 
-    # get function type
-    func: Function = ir_module.lookup(func_name)
-    if func.kind == 'packed_func':
-        packed_func = ir_module.lookup(func.attrs['packed_func'])
-        func_type = FuncType.from_func(packed_func)
-    else:
-        func_type = FuncType.from_func(func)
-
     # lower ir module
     instruments = []
     if save_ir:
@@ -170,6 +161,11 @@ def build_ir_module(
     with PassContext(instruments=instruments):
         ir_module = lower(ir_module)
 
+    # get function type
+    func: Function = ir_module.lookup('launch')
+    kernel_func = ir_module.lookup(func.attrs['packed_func'])
+    func_type = FuncType.from_func(kernel_func)
+
     # code generation
     codegen(ir_module, src_out_path=src_path)
 
@@ -178,18 +174,16 @@ def build_ir_module(
 
     if load:
         # load function
-        return load_lib_func(lib_path, 'hidet_' + func_name, func_type=func_type, src_path=src_path)
+        return load_lib_func(lib_path, 'hidet_launch', func_type=func_type, src_path=src_path)
     else:
-        return lib_path, func_name, func_type
+        return lib_path, func_type
 
 
-def _build_ir_module_job(args) -> Optional[Tuple[str, str, FuncType]]:
-    ir_module, func_name, output_dir, dumped_options = args
+def _build_ir_module_job(args) -> Optional[Tuple[str, FuncType]]:
+    ir_module, output_dir, dumped_options = args
     option.restore_options(dumped_options)
     try:
-        return build_ir_module(
-            ir_module, func_name, output_dir, save_ir=False, profile_pass=False, load=False, use_hash_dir=False
-        )
+        return build_ir_module(ir_module, output_dir, save_ir=False, profile_pass=False, load=False, use_hash_dir=False)
     except subprocess.CalledProcessError:
         print('Failed launch subprocess to compile the lowered source code via nvcc.')
         return None
@@ -199,7 +193,7 @@ def _build_ir_module_job(args) -> Optional[Tuple[str, str, FuncType]]:
 
 
 def build_ir_module_batch(
-    ir_modules: Sequence[IRModule], func_name: str, output_dir: str, parallel=True, verbose=False
+    ir_modules: Sequence[IRModule], output_dir: str, parallel=True, verbose=False
 ) -> List[Optional[CompiledFunction]]:
     """
     Build a batch of ir modules.
@@ -208,9 +202,6 @@ def build_ir_module_batch(
     ----------
     ir_modules: Sequence[IRModule]
         A sequence of ir modules to build.
-
-    func_name: str
-        The name of the function to load after building.
 
     output_dir: str
         The output directory to save the compiled library and source code (lib.so and source.cu).
@@ -230,8 +221,7 @@ def build_ir_module_batch(
     with Timer() as timer:
         dumped_options = option.dump_options()
         jobs = [
-            (ir_module, func_name, os.path.join(output_dir, str(idx)), dumped_options)
-            for idx, ir_module in enumerate(ir_modules)
+            (ir_module, os.path.join(output_dir, str(idx)), dumped_options) for idx, ir_module in enumerate(ir_modules)
         ]
         build_results = []
         if parallel:
@@ -260,8 +250,8 @@ def build_ir_module_batch(
         funcs: List[Optional[CompiledFunction]] = []
         for build_result in build_results:
             if build_result is not None:
-                lib_path, func_name, func_type = build_result
-                funcs.append(load_lib_func(lib_path, 'hidet_' + func_name, func_type))
+                lib_path, func_type = build_result
+                funcs.append(load_lib_func(lib_path, 'hidet_launch', func_type))
             else:
                 funcs.append(None)
     if verbose:

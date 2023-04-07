@@ -314,7 +314,6 @@ def batched_matmul_cuda_schedule_simt(task: BatchMatmulTask, working_dir: str) -
     return resolve_ir_modules(
         ir_modules=ir_modules,
         schedules=all_schedules,
-        func_name=task.name,
         target_device='cuda',
         output_dir=resolve_out_dir,
         parallel=True,

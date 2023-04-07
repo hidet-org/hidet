@@ -101,10 +101,10 @@ def add_packed_func(ir_module: IRModule, func: Function, pack_func_name: str):
         def packed_func(num_args: i32, arg_types: ~i32, args: ~void_p):
             attr.func_name = pack_func_name
             attr.func_kind = 'packed_func'
+            attr.packed_func = func_var
             extract_params_and_call(num_args, arg_types, args)
 
     assert isinstance(packed_func, Function)
-    packed_func.attrs['packed_func'] = ir_module.lookup_var(func.name)
     ir_module.add(packed_func.name, packed_func)
 
 

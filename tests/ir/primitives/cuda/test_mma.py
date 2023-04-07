@@ -77,7 +77,7 @@ def test_mma(config: MmaConfig):
         if (config.m, config.n, config.k) in [(16, 8, 16)]:
             pytest.skip('tensor core with shape m16n8k16 is supported on device with sm80 or higher')
     ir_module = matmul_mma_tensor_core(config)
-    func = build_ir_module(ir_module, func_name='matmul_mma')
+    func = build_ir_module(ir_module)
     m, n, k = config.m, config.n, config.k
     a = hidet.randint(3, shape=[1, m, k]).to(data_type(config.input_dtype).name).cuda()
     b = hidet.randint(3, shape=[1, k, n]).to(data_type(config.input_dtype).name).cuda()

@@ -29,7 +29,7 @@ class PrologueEpilogueRewriter(IRRewriter):
         super().__init__()
         self.fused_task: FusedTask = fused_task
         self.fused_graph: FlowGraph = fused_task.fused_graph
-        self.anchor_operator: Operator = fused_task.anchor
+        self.anchor_operator: Operator = fused_task.fused_graph.nodes[fused_task.anchor]
         self.anchor_task: Task = self.anchor_operator.task
         self.anchor_inputs: List[Var] = []
         self.anchor_outputs: List[Var] = []
