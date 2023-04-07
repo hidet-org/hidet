@@ -13,6 +13,7 @@ from typing import List
 
 import numpy as np
 import torch
+from torch.nn import functional as F
 import torchvision as tv
 import pytest
 
@@ -21,6 +22,8 @@ from hidet import ops
 from hidet.testing import check_binary
 from hidet.graph.tensor import asarray
 from hidet.utils.ort_utils import create_ort_session, ort_inference
+from hidet.testing import check_torch_unary
+from hidet.graph.frontend.torch import register_functions as regs
 
 
 class TorchResizeModel(torch.nn.Module):
@@ -114,6 +117,28 @@ def test_resize2d(
         .numpy()
     )
     np.testing.assert_allclose(actual=hidet_result_cuda, desired=torch_result, atol=2e-5, rtol=2e-5)
+
+
+@pytest.mark.parametrize(
+    "input_size, size, scale_factor, mode",
+    [
+        [[1, 3, 32, 32], [16, 16], None, 'nearest'],  # 4D, resize down, nearest
+        [[1, 3, 32, 32], [16, 16], None, 'bilinear'],  # 4D, resize down, bilinear
+        [[1, 3, 32, 32], [16, 16], None, 'bicubic'],  # 4D, resize down, bicubic
+        [[1, 3, 32, 32], [64, 64], None, 'nearest'],  # 4D, resize up, nearest
+        [[1, 3, 32, 32], None, 0.5, 'nearest'],  # 4D, resize down, nearest
+    ],
+)
+def test_interpolate(input_size, size, scale_factor, mode):
+    dtype = 'float32'
+    check_torch_unary(
+        input_size,
+        lambda x: F.interpolate(x, size, scale_factor, mode),
+        lambda x: regs.interpolate(x, size, scale_factor, mode),
+        dtype=dtype,
+        rtol=1e-5,
+        atol=1e-5,
+    )
 
 
 if __name__ == '__main__':

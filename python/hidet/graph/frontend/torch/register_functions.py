@@ -220,14 +220,14 @@ def interpolate(
             target_size = [size, size]
         else:
             if len(size) != 2:
-                raise ValueError("Lengthof \"size\" must be of type int or tuple([int, int])")
+                raise ValueError("Length of \"size\" must be of type int or tuple([int, int])")
             target_size = list(size)
     else:
-        if isinstance(scale_factor, float):
-            target_size = [i * scale_factor for i in input.shape[2:]]
+        if isinstance(scale_factor, (int, float)):
+            target_size = [int(i * scale_factor) for i in input.shape[2:]]
         else:
             if len(scale_factor) != 2:
-                raise ValueError("Lengthof \"scale_factor\" must be of type int or tuple([int, int])")
+                raise ValueError("Length of \"scale_factor\" must be of type int or tuple([int, int])")
             target_size = [a * b for a, b in zip(input.shape[2:], scale_factor)]
 
     supported_methods = {'nearest': 'nearest', 'bilinear': 'linear', 'bicubic': 'cubic'}
@@ -245,7 +245,7 @@ def interpolate(
         target_size,
         mode_hidet,
         coordinate_transformation_mode,
-        rounding_method='round',
+        rounding_method='round_prefer_floor',
         roi=None,
         cubic_alpha=-0.75,
         cubic_exclude=0,
