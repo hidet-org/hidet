@@ -12,8 +12,8 @@
 from typing import Union, List, Dict, Sequence, Tuple, Set
 
 from hidet.ir.type import tensor_pointer_type, void_pointer
-from hidet.ir.expr import TensorElement, Expr, Var, scalar_var, convert, cast
-from hidet.ir.stmt import Stmt, AssignStmt, ForStmt, DeclareStmt, BufferStoreStmt
+from hidet.ir.expr import TensorElement, Expr, Var, Constant, scalar_var, convert, cast
+from hidet.ir.stmt import Stmt, AssignStmt, ForStmt, DeclareStmt, BufferStoreStmt, AssertStmt
 from hidet.ir.task import Task
 from hidet.ir.func import IRModule, Function
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
@@ -173,9 +173,10 @@ class AutoScheduler:
     def allocate_tensors(
         fb: FunctionBuilder,
         device: str,
-        buffer_bytes: int,
-        buffer_offset: Dict[TensorNode, int],
+        buffer_bytes: Union[Expr, int],
+        buffer_offset: Dict[TensorNode, Union[int, Expr]],
         node_map: Dict[TensorNode, Var],
+        scalar_map: Dict[Var, Var]
     ):
         if buffer_bytes > 0:
             buffer = Var('buffer', tensor_pointer_type(dtype='uint8', shape=[buffer_bytes]))
@@ -199,6 +200,8 @@ class AutoScheduler:
 
     def schedule_task(self, task: Task, device: str) -> IRModule:
         # pylint: disable=too-many-locals, unnecessary-comprehension
+        from hidet.ffi.packedfunc import ArgTypeCode
+
         # absorb the prologue and epilogue into a single task
         self.ir_module.task = task
 
@@ -224,23 +227,48 @@ class AutoScheduler:
             args = Var('args', ~void_pointer())
             fb.extend_params([num_args, arg_types, args])
 
-            # extract the actual arguments from packed arguments
-            params: List[Var] = []
-            for idx, task_param in enumerate(task.inputs + task.outputs):
+            # extract the pointers of tensor input/output from packed arguments
+            param_count = 0
+            node_map: Dict[TensorNode, Var] = {}
+            for task_param in task.inputs + task.outputs:
                 param = Var(task_param.name, ~task_param.type.dtype)
-                params.append(param)
-                fb += DeclareStmt(param, init=cast(args[idx], param.type))
+                node_map[task_param] = param
+                fb += AssertStmt(
+                    cond=(arg_types[param_count] == ArgTypeCode.POINTER.value),
+                    msg='The type of argument {} must be a pointer'.format(param_count)
+                )
+                fb += DeclareStmt(param, init=cast(args[param_count], param.type))
+                param_count += 1
+
+            # extract the dynamic dimensions from packed arguments
+            scalar_map: Dict[Var, Var] = {}
+            for task_input in task.inputs:
+                for idx, dim in enumerate(task_input.ttype.shape):
+                    if isinstance(dim, Var):
+                        param = Var('{}_dim{}'.format(task_input.name, idx), type=dim.type)
+                        scalar_map[dim] = param
+                        fb += AssertStmt(
+                            cond=(arg_types[param_count] == ArgTypeCode.from_type(dim.type).value),
+                            msg='The type of argument {} must be a {}'.format(param_count, dim.type)
+                        )
+                        fb += DeclareStmt(param, init=cast(args[param_count], param.type))
+                        param_count += 1
+                    elif isinstance(dim, (int, Constant)):
+                        # constant dimension, skip
+                        pass
+                    else:
+                        msg = 'The input dimension must be either a Var or a Constant, but got {}'.format(type(dim))
+                        raise ValueError(msg)
 
             # allocate memory space for intermediate tensors
-            node_map: Dict[TensorNode, Var] = {a: b for a, b in zip(task.inputs + outputs, params)}
-            self.allocate_tensors(fb, device, buffer_bytes, buffer_offset, node_map)
+            self.allocate_tensors(fb, device, buffer_bytes, buffer_offset, node_map, scalar_map)
 
             # schedule each tensor computation
             for node in order:
                 if isinstance(node, TensorInput):
                     pass  # input tensor does not need scheduling, skip
                 elif isinstance(node, GridCompute):
-                    fb += self.schedule_grid_compute(node, node_map)
+                    fb += self.schedule_grid_compute(node, node_map, scalar_map)
                 else:
                     raise NotImplementedError()
         func = fb.get()
@@ -269,7 +297,9 @@ class AutoScheduler:
         self.ir_module.add(func.name, func)
         return self.ir_module.lookup_var(func.name)
 
-    def schedule_grid_compute(self, node: GridCompute, node_map: Dict[TensorNode, Expr]) -> Stmt:
+    def schedule_grid_compute(
+        self, node: GridCompute, node_map: Dict[TensorNode, Expr], scalar_map: Dict[Var, Var]
+    ) -> Stmt:
         raise NotImplementedError()
 
 

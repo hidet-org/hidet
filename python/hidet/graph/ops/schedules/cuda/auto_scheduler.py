@@ -14,14 +14,16 @@ from typing import List, Dict
 from hidet.ir.builders import FunctionBuilder
 from hidet.ir.compute import TensorNode, GridCompute
 from hidet.ir.expr import Call, Expr, Var
-from hidet.ir.tools import collect, rewrite, simplify_to_int
+from hidet.ir.tools import collect, rewrite, simplify
 from hidet.ir.stmt import Stmt, BufferStoreStmt, EvaluateStmt
 from hidet.utils import prod
 from ..auto_scheduler import AutoScheduler, ComputeExprLower
 
 
 class CudaAutoScheduler(AutoScheduler):
-    def schedule_grid_compute(self, node: GridCompute, node_map: Dict[TensorNode, Expr]) -> Stmt:
+    def schedule_grid_compute(
+        self, node: GridCompute, node_map: Dict[TensorNode, Expr], scalar_map: Dict[Var, Var]
+    ) -> Stmt:
         # pylint: disable=unnecessary-comprehension, import-outside-toplevel
         from hidet.ir.primitives.cuda import threadIdx, blockIdx
         from hidet.ir.mapping import row_spatial, TaskMapping
@@ -30,8 +32,8 @@ class CudaAutoScheduler(AutoScheduler):
         param_tensors: List[TensorNode] = used_tensors + [node]
         params: List[Var] = [Var(tensor.name, tensor.type) for tensor in param_tensors]
 
-        block_dim = 500
-        grid_dim: int = simplify_to_int((prod(node.shape) + block_dim - 1) // block_dim)
+        block_dim = 512
+        grid_dim: Expr = simplify((prod(node.shape) + block_dim - 1) // block_dim)
 
         with FunctionBuilder(
             name=f'compute_{node.name}', kind='cuda_kernel', grid_dim=grid_dim, block_dim=block_dim

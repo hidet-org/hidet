@@ -9,6 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from __future__ import annotations
 from typing import Sequence, List
 import time
 import ctypes
@@ -23,11 +24,27 @@ c_int32_p = POINTER(c_int32)
 c_float_p = POINTER(c_float)
 
 
-class ArgType(Enum):
+class ArgTypeCode(Enum):
     INT32 = 1
     FLOAT32 = 2
     POINTER = 3
     FLOAT16 = 4
+
+    @staticmethod
+    def from_type(type_node: TypeNode) -> ArgTypeCode:
+        if isinstance(type_node, DataType):
+            if type_node.name == 'int32':
+                return ArgTypeCode.INT32
+            elif type_node.name == 'float32':
+                return ArgTypeCode.FLOAT32
+            elif type_node.name == 'float16':
+                return ArgTypeCode.FLOAT16
+            else:
+                raise NotImplementedError('Unsupported scalar type: {}'.format(type_node.name))
+        elif isinstance(type_node, (TensorType, PointerType, TensorPointerType)):
+            return ArgTypeCode.POINTER
+        else:
+            raise NotImplementedError('Unsupported type: {}'.format(type_node))
 
 
 class CPackedFunc(Structure):
@@ -35,21 +52,7 @@ class CPackedFunc(Structure):
 
 
 def make_c_packed_func(param_types: Sequence[TypeNode], c_func_pointer) -> CPackedFunc:
-    type_codes = []
-    for param_type in param_types:
-        if isinstance(param_type, DataType):
-            if param_type.name == 'int32':
-                type_codes.append(ArgType.INT32.value)
-            elif param_type.name == 'float32':
-                type_codes.append(ArgType.FLOAT32.value)
-            elif param_type.name == 'float16':
-                type_codes.append(ArgType.FLOAT16.value)
-            else:
-                raise NotImplementedError('Unsupported scalar type: {}'.format(param_type.name))
-        elif isinstance(param_type, (TensorType, PointerType, TensorPointerType)):
-            type_codes.append(ArgType.POINTER.value)
-        else:
-            raise NotImplementedError('Unsupported type: {}'.format(param_type))
+    type_codes = [ArgTypeCode.from_type(param_type).value for param_type in param_types]
     n = len(type_codes)
     num_args = c_int32(n)
     arg_types = cast(pointer((c_int32 * n)(*type_codes)), POINTER(c_int32))
