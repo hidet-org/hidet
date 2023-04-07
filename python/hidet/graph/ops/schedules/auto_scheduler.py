@@ -200,8 +200,6 @@ class AutoScheduler:
     def schedule_task(self, task: Task, device: str) -> IRModule:
         # pylint: disable=too-many-locals, unnecessary-comprehension
         # absorb the prologue and epilogue into a single task
-        task = task.task_graph.absorb()
-
         self.ir_module.task = task
 
         # Inline the grid compute that does not contain reduce
@@ -219,7 +217,7 @@ class AutoScheduler:
         buffer_bytes, buffer_offset = self.plan_memory(dag, order, require_allocate)
 
         # Allocate the memory for intermediate tensors, get the mapping from node to tensor var or tensor pointer var
-        with FunctionBuilder(name=task.name, kind='packed_func') as fb:
+        with FunctionBuilder(name='launch', kind='packed_func') as fb:
             # packed function arguments, packed_func(num_args: int32, arg_types: *int32, args: **void)
             num_args = scalar_var('num_args', 'int32')
             arg_types = Var('arg_types', ~int32)

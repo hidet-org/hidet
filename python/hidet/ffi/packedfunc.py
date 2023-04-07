@@ -17,7 +17,6 @@ from enum import Enum
 from ctypes import c_int32, c_void_p, pointer, c_float, cast
 from ctypes import POINTER, Structure
 from hidet.ir.type import TypeNode, DataType, TensorType, PointerType, TensorPointerType
-from hidet.utils.py import same_list
 from .ffi import _LIB
 
 c_int32_p = POINTER(c_int32)
@@ -103,24 +102,21 @@ class PackedFunc:
             elif isinstance(arg, Tensor):
                 if isinstance(param_type, TensorType):
                     expect_dtype = param_type.dtype
-                    expect_shape = param_type.const_shape()
                 elif isinstance(param_type, TensorPointerType):
                     expect_dtype = param_type.tensor_type.dtype
-                    expect_shape = param_type.tensor_type.const_shape()
                 elif isinstance(param_type, PointerType):
                     isinstance(param_type.base_type, DataType)
                     expect_dtype = param_type.base_type
-                    expect_shape = None
                 else:
                     raise ValueError(
                         'The callee expects the {}-th element to be a {}, but got a {}.'.format(
                             i + 1, param_type, type(arg)
                         )
                     )
-                if arg.dtype != expect_dtype or (expect_shape is not None and not same_list(arg.shape, expect_shape)):
+                if arg.dtype != expect_dtype:
                     raise ValueError(
-                        'The callee expects the {}-th element to be a {}{}, but got a {}{}.'.format(
-                            i + 1, expect_dtype, expect_shape if expect_shape else " tensor", arg.dtype, arg.shape
+                        'The callee expects the {}-th element to be a {} tensor, but got a {} tensor.'.format(
+                            i + 1, expect_dtype, arg.dtype
                         )
                     )
                 converted_args.append(cast(arg.storage.addr, c_void_p))

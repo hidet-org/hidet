@@ -12,9 +12,7 @@
 from . import call_graph
 from . import hash_sum
 from . import index_transform
-from . import task_utils
 from . import expr_utils
 
 from .index_transform import index_serialize, index_deserialize
-from .task_utils import validate_schedule
 from .expr_utils import as_expr

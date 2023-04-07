@@ -16,10 +16,8 @@ import shutil
 from tqdm import tqdm
 import numpy as np
 from hidet.ir.func import IRModule
-from hidet.ir.task import Task
 import hidet.option
 from hidet.utils import prod
-from .resolve import dummy_inputs_from_task
 
 Choice = TypeVar('Choice')
 
@@ -90,7 +88,7 @@ def space(level: int, names: str, choices: Sequence[Union[Choice, Sequence[Choic
     return wrapper
 
 
-def _generate_summary(kwargs_list: List[Dict[str, Any]], latencies: List[float]) -> str:
+def _generate_summary(kwargs_list: Sequence[Dict[str, Any]], latencies: Sequence[float]) -> str:
     # sort by latency
     indices, kwargs_list, latencies = zip(
         *sorted(zip(range(len(latencies)), kwargs_list, latencies), key=lambda x: x[-1])
@@ -112,10 +110,7 @@ def _generate_summary(kwargs_list: List[Dict[str, Any]], latencies: List[float])
     return summary
 
 
-def tune(template_func, task: Task, target_device: str, working_dir: str) -> IRModule:
-    from hidet.driver import build_ir_module_batch
-    from hidet.runtime import CompiledFunction
-
+def extract_ir_modules(template_func) -> List[IRModule]:
     # get ir modules to tune
     if hasattr(template_func, '_tuning_space'):
         tuning_space: TuningSpace = getattr(template_func, '_tuning_space')
@@ -128,14 +123,22 @@ def tune(template_func, task: Task, target_device: str, working_dir: str) -> IRM
         )
 
     ir_modules = []
-    ir_modules_kwargs = []
     for kwargs in kwargs_list:
         try:
-            ir_modules.append(template_func(**kwargs))
-            ir_modules_kwargs.append(kwargs)
+            ir_module = template_func(**kwargs)
+            ir_modules.append(ir_module)
+            setattr(ir_module, '_tuning_kwargs', kwargs)  # workaround to pass kwargs to the tune function
         except ScheduleError:
             # the schedule is invalid, skip it
             continue
+    return ir_modules
+
+
+def tune(ir_modules: Sequence[IRModule], dummy_inputs: Sequence[Any], working_dir: str) -> IRModule:
+    from hidet.driver import build_ir_module_batch
+    from hidet.runtime import CompiledFunction
+
+    ir_modules = list(ir_modules)
 
     if len(ir_modules) == 0:
         raise ValueError('No valid schedule is found.')
@@ -146,14 +149,13 @@ def tune(template_func, task: Task, target_device: str, working_dir: str) -> IRM
     # build ir modules into compiled functions
     tuning_dir = os.path.join(working_dir, 'tuning')
     compiled_funcs: List[Optional[CompiledFunction]] = build_ir_module_batch(
-        ir_modules, func_name=task.name, output_dir=tuning_dir, parallel=True, verbose=True
+        ir_modules, output_dir=tuning_dir, parallel=True, verbose=True
     )
     assert len(compiled_funcs) == len(ir_modules)
     if any(f is None for f in compiled_funcs):
         raise ValueError('All ir modules failed to build.')
 
     # benchmark
-    dummy_inputs = dummy_inputs_from_task(task, target_device=target_device)
     latencies = []
     warmup, number, repeat = hidet.option.get_option('bench_config')
     for compiled_func in tqdm(compiled_funcs, desc='Benchmarking', total=len(ir_modules), ncols=80):
@@ -170,9 +172,11 @@ def tune(template_func, task: Task, target_device: str, working_dir: str) -> IRM
         shutil.rmtree(tuning_dir)
 
     # generate summary
-    summary = _generate_summary(ir_modules_kwargs, latencies)
-    with open(os.path.join(working_dir, 'tuning_summary.txt'), 'w') as f:
-        f.write(summary)
+    if all(hasattr(ir_module, '_tuning_kwargs') for ir_module in ir_modules):
+        ir_modules_kwargs = [getattr(ir_module, '_tuning_kwargs') for ir_module in ir_modules]
+        summary = _generate_summary(ir_modules_kwargs, latencies)
+        with open(os.path.join(working_dir, 'tuning_summary.txt'), 'w') as f:
+            f.write(summary)
 
     # select the best schedule and return
     return ir_modules[np.argmin(latencies)]

@@ -17,7 +17,6 @@ from hidet.ir.type import data_type
 from hidet.ir.layout import DataLayout
 from hidet.lang import f16, f32, spatial, repeat, attr, tensor_pointer
 from hidet.lang.cuda import blockIdx, threadIdx, register_tensor
-from hidet.transforms.tools import add_packed_func, fuse_and_pack
 from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, TensorNode, ReduceType
 from hidet.graph.ops.definitions.utils import compute, input_like, normalize_dim
 from hidet.utils import prod
@@ -90,7 +89,7 @@ class ReduceF16Task(Task):
             # use self.cuda_schedule_reduce_by_default
             return False
 
-    def implement_cuda(self, workding_dir: str) -> IRModule:
+    def implement_cuda(self, working_dir: str) -> IRModule:
         rank = len(self.inputs[0].const_shape())
         if rank - 1 in self.dims:
             return self.cuda_schedule_reduce_by_warp()
@@ -170,7 +169,6 @@ class ReduceF16Task(Task):
                         y.write(indices, rv[0], protected=False)
 
         ir_module = module.ir_module()
-        fuse_and_pack(ir_module, reduce_kernel, task=self)
         return ir_module
 
     def cuda_schedule_reduce_by_default(self) -> IRModule:
@@ -242,7 +240,6 @@ class ReduceF16Task(Task):
                         y_f32.write(indices, reg32[0], protected=False)
 
         ir_module = module.ir_module()
-        add_packed_func(ir_module, func=reduce_kernel, pack_func_name=self.name)
         return ir_module
 
 

@@ -9,10 +9,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Sequence, Dict, Tuple, Optional, Set
-import copy
-from hidet.ir.task import Task, TaskGraph, TensorNode
-from hidet.graph.ops.definitions.utils import input_like
+from typing import List, Sequence, Dict, Tuple, Optional, Set, Union
+
+import hidet
 from hidet.graph.ir import FlowGraph, Operator, Tensor
 from hidet.graph.ops.definitions.special import BarrierOp
 from hidet.graph.ir.functors import analyze_usage
@@ -42,6 +41,24 @@ class FusibleGraph:
         body += NewLine() + 'return ' + doc_join([namer(t) for t in self.output_tensors], ', ')
         tail = NewLine() + '}'
         return str(head + body.indent() + tail)
+
+    def flow_graph_and_anchor(self) -> Tuple[FlowGraph, int]:
+        from hidet.graph import symbol_like
+
+        graph_inputs: List[Tensor] = [symbol_like(x) for x in self.input_tensors]
+        remap: Dict[Tensor, Tensor] = {x: y for x, y in zip(self.input_tensors, graph_inputs)}
+        updated_anchor: int = -1
+        for idx, op in enumerate(self.operators):
+            inputs = [remap[x] for x in op.inputs]
+            outputs = op.reforward(inputs)
+            if op is self.anchor:
+                updated_anchor = idx
+            for x, y in zip(op.outputs, outputs):
+                remap[x] = y
+        graph_outputs = [remap[x] for x in self.output_tensors]
+        flow_graph = hidet.trace_from(graph_outputs, graph_inputs)
+        assert updated_anchor != -1
+        return flow_graph, updated_anchor
 
 
 Usage = Dict[Tensor, List[Tuple[Operator, int]]]
@@ -222,7 +239,7 @@ def partition_graph(graph: FlowGraph, usage: Usage) -> List[FusibleGraph]:
 
     # first, we find all non-injective operators as the anchor operators,
     # and create a sub-graph for each such operator.
-    anchors: List[Operator] = [op for op in graph.nodes if not op.task.is_injective_task()]
+    anchors: List[Operator] = [op for op in graph.nodes if not op.task.is_injective()]
     for anchor in anchors:
         belong[anchor] = FusibleGraph(anchor)
 
@@ -251,48 +268,48 @@ def partition_graph(graph: FlowGraph, usage: Usage) -> List[FusibleGraph]:
     return partition
 
 
-def task_from_sub_graph(sub_graph: FusibleGraph, usage: Usage) -> Task:
-    mapping: Dict[Tensor, TensorNode] = {}
-    task_graph_inputs: List[TensorNode] = []
-    for tensor in sub_graph.input_tensors:
-        user, idx = usage[tensor][0]
-        # Because the name is just a hint, we can choose one we like.
-        if user is None:
-            # this tensor is also a graph output.
-            name = 'out'
-        else:
-            # we use the name from one of its user task.
-            name = user.task.inputs[idx].name
-        task_graph_inputs.append(input_like(tensor, name))
-        mapping[tensor] = task_graph_inputs[-1]
-
-    nodes: List[Task] = []
-    consume: Dict[TensorNode, TensorNode] = {}
-    for op in sub_graph.operators:
-        task = op.task
-        nodes.append(task)
-        num_inputs, num_outputs = len(op.inputs), len(op.outputs)
-        for i in range(num_inputs):
-            consume[task.inputs[i]] = mapping[op.inputs[i]]
-        for i in range(num_outputs):
-            mapping[op.outputs[i]] = task.outputs[i]
-    task_graph_outputs: List[TensorNode] = [mapping[tensor] for tensor in sub_graph.output_tensors]
-
-    anchor_task = copy.copy(sub_graph.anchor.task)
-    nodes[nodes.index(sub_graph.anchor.task)] = anchor_task
-    task_graph = TaskGraph(
-        anchor=anchor_task,
-        nodes=nodes,
-        consume=consume,
-        input_tensors=task_graph_inputs,
-        output_tensors=task_graph_outputs,
-    )
-
-    anchor_task.task_graph = task_graph
-
-    return anchor_task
-
-
+# def task_from_sub_graph(sub_graph: FusibleGraph, usage: Usage) -> Task:
+#     mapping: Dict[Tensor, TensorNode] = {}
+#     task_graph_inputs: List[TensorNode] = []
+#     for tensor in sub_graph.input_tensors:
+#         user, idx = usage[tensor][0]
+#         # Because the name is just a hint, we can choose one we like.
+#         if user is None:
+#             # this tensor is also a graph output.
+#             name = 'out'
+#         else:
+#             # we use the name from one of its user task.
+#             name = user.task.inputs[idx].name
+#         task_graph_inputs.append(input_like(tensor, name))
+#         mapping[tensor] = task_graph_inputs[-1]
+#
+#     nodes: List[Task] = []
+#     consume: Dict[TensorNode, TensorNode] = {}
+#     for op in sub_graph.operators:
+#         task = op.task
+#         nodes.append(task)
+#         num_inputs, num_outputs = len(op.inputs), len(op.outputs)
+#         for i in range(num_inputs):
+#             consume[task.inputs[i]] = mapping[op.inputs[i]]
+#         for i in range(num_outputs):
+#             mapping[op.outputs[i]] = task.outputs[i]
+#     task_graph_outputs: List[TensorNode] = [mapping[tensor] for tensor in sub_graph.output_tensors]
+#
+#     anchor_task = copy.copy(sub_graph.anchor.task)
+#     nodes[nodes.index(sub_graph.anchor.task)] = anchor_task
+#     task_graph = TaskGraph(
+#         anchor=anchor_task,
+#         nodes=nodes,
+#         consume=consume,
+#         input_tensors=task_graph_inputs,
+#         output_tensors=task_graph_outputs,
+#     )
+#
+#     anchor_task.task_graph = task_graph
+#
+#     return anchor_task
+#
+#
 def operator_from_sub_graph(sub_graph: FusibleGraph, input_remap: Dict[Tensor, Tensor], usage: Usage) -> Operator:
     if len(sub_graph.operators) == 1:
         # if there is only one operator in the sub-graph, we just update its inputs.
@@ -306,23 +323,33 @@ def operator_from_sub_graph(sub_graph: FusibleGraph, input_remap: Dict[Tensor, T
                 'For now, this pass expects to accept a graph without fused operators.\n'
                 'Have you run this pass twice?'
             )
-        outs = origin_op.reforward(updated_inputs)
+        outs: List[Tensor] = origin_op.reforward(updated_inputs)
         updated_op = outs[0].trace[0]
         return updated_op
     else:
         # otherwise, create a new operator from the sub-graph.
+        # updated_inputs: List[Tensor] = [
+        #     input_remap[tensor] if tensor in input_remap else tensor for tensor in sub_graph.input_tensors
+        # ]
+        # task: Task = task_from_sub_graph(sub_graph, usage)
+        # op = Operator(
+        #     inputs=updated_inputs,
+        #     task=task,
+        #     name='Fused' + sub_graph.anchor.name,
+        #     attributes={**sub_graph.anchor.attrs, 'fusion': ' '.join([op.name for op in sub_graph.operators])},
+        # )
+        # op.outputs = op.run()
+        # return op
+        from hidet.graph.ops.definitions.fusion.fused_operator import fused_operator
+
+        fused_graph, anchor = sub_graph.flow_graph_and_anchor()
         updated_inputs: List[Tensor] = [
             input_remap[tensor] if tensor in input_remap else tensor for tensor in sub_graph.input_tensors
         ]
-        task: Task = task_from_sub_graph(sub_graph, usage)
-        op = Operator(
-            inputs=updated_inputs,
-            task=task,
-            name='Fused' + sub_graph.anchor.name,
-            attributes={**sub_graph.anchor.attrs, 'fusion': ' '.join([op.name for op in sub_graph.operators])},
-        )
-        op.outputs = op.run()
-        return op
+        outs: Union[List[Tensor], Tensor] = fused_operator(*updated_inputs, fused_graph=fused_graph, anchor=anchor)
+        if isinstance(outs, Tensor):
+            outs = [outs]
+        return outs[0].trace[0]
 
 
 def construct_fused_graph(graph: FlowGraph, sub_graphs: Sequence[FusibleGraph], usage: Usage) -> FlowGraph:
@@ -344,7 +371,9 @@ class FuseOperatorPass(GraphPass):
     def process_graph(self, graph: FlowGraph) -> FlowGraph:
         usage: Usage = analyze_usage(graph)
         partition: List[FusibleGraph] = partition_graph(graph, usage)
-        return construct_fused_graph(graph, partition, usage)
+        fused_graph = construct_fused_graph(graph, partition, usage)
+        fused_graph.update_nodes()
+        return fused_graph
 
 
 def fuse_operator_pass() -> GraphPass:

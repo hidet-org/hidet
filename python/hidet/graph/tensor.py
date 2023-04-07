@@ -269,10 +269,10 @@ class Tensor:
 
         return greater(self, utils.convert_to_tensor(other, self))
 
-    def __eq__(self, other):
-        from .ops import equal, utils
-
-        return equal(self, utils.convert_to_tensor(other, self))
+    # def __eq__(self, other):
+    #     from .ops import equal, utils
+    #
+    #     return equal(self, utils.convert_to_tensor(other, self))
 
     def __ne__(self, other):
         from .ops import not_equal, utils

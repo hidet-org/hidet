@@ -23,7 +23,6 @@ from hidet.ir.utils import index_deserialize
 from hidet.graph.ops.definitions.reduce import ReduceTask
 from hidet.graph.ops.schedules.common import params_from_task
 from hidet.utils import prod
-from hidet.transforms.tools import fuse_and_pack
 from .common import warp_reduce
 
 
@@ -103,7 +102,7 @@ def cuda_schedule_reduce_by_warp_reduce(task: ReduceTask) -> IRModule:
         fb.set_body(fb.finish())
     func = fb.get()
     ir_module = IRModule(funcs={func.name: func}, task=task)
-    return fuse_and_pack(ir_module, func, task)
+    return ir_module
 
 
 def cuda_schedule_reduce_by_default(task: ReduceTask) -> IRModule:
@@ -159,4 +158,4 @@ def cuda_schedule_reduce_by_default(task: ReduceTask) -> IRModule:
 
     func = fb.get()
     ir_module = IRModule(funcs={func.name: func}, task=task)
-    return fuse_and_pack(ir_module, func, task)
+    return ir_module

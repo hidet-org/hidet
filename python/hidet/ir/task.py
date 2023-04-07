@@ -11,7 +11,7 @@
 # limitations under the License.
 # pylint: disable=import-outside-toplevel
 from __future__ import annotations
-from typing import Any, Dict, List, Union, Optional, Sequence, Callable
+from typing import Any, Dict, List, Union, Optional, Callable
 import os
 import pickle
 from hidet.ir.node import Node
@@ -80,47 +80,6 @@ class InverseMap(Node):
         return InverseMap(lhs.axes, indices)
 
 
-class TaskGraph(Node):
-    def __init__(
-        self,
-        anchor: Task,
-        nodes: Sequence[Task],
-        consume: Dict[TensorInput, TensorNode],
-        input_tensors: Sequence[TensorNode],
-        output_tensors: Sequence[TensorNode],
-    ):
-        self.anchor: Task = anchor
-        self.nodes: List[Task] = list(nodes)
-        self.input_tensors: List[TensorNode] = list(input_tensors)
-        self.output_tensors: List[TensorNode] = list(output_tensors)
-        self.consume: Dict[TensorInput, TensorNode] = consume
-
-    @staticmethod
-    def from_task(task: Task) -> TaskGraph:
-        return TaskGraph(anchor=task, nodes=[task], consume={}, input_tensors=task.inputs, output_tensors=task.outputs)
-
-    def absorb(self) -> Task:
-        from hidet.ir.tools import rewrite
-
-        graph_input_tensors: List[TensorNode] = self.input_tensors
-        update_map: Dict[TensorNode, TensorNode] = {a: a for a in graph_input_tensors}
-        for task in self.nodes:
-            remap: Dict[TensorNode, TensorNode] = {}
-            for task_input_tensor in task.inputs:
-                if task_input_tensor not in self.consume:
-                    assert task_input_tensor in graph_input_tensors, 'must be graph input tensor'
-                    # do not need to rewrite, skip
-                else:
-                    remap[task_input_tensor] = update_map[self.consume[task_input_tensor]]
-            for task_output_tensor in task.outputs:
-                update_map[task_output_tensor] = rewrite(task_output_tensor, remap)
-                # original_output_tensor = task_output_tensor
-                # updated_output = rewrite(task_output_tensor, remap)
-                # update_map[original_output_tensor] = updated_output
-        graph_output_tensors: List[TensorNode] = [update_map[tensor] for tensor in self.output_tensors]
-        return Task(name=self.anchor.name, inputs=graph_input_tensors, outputs=graph_output_tensors)
-
-
 class Task(Node):
     """
     A task defines the operator computation.
@@ -137,7 +96,6 @@ class Task(Node):
         self.attributes: Dict[str, Union[str, float, int, bool]] = attributes
         self.arguments: Optional[List[Expr]] = arguments
         self.inverse_map: Dict[TensorInput, InverseMap] = {a: InverseMap.from_obj(b) for a, b in inverse_map.items()}
-        self.task_graph: Optional[TaskGraph] = TaskGraph.from_task(self)
 
         # sanity check
         for tn, im in self.inverse_map.items():
@@ -162,16 +120,19 @@ class Task(Node):
             shape = tensor.const_shape()
             params.append('{}={}{}'.format(name, dtype, shape))
         for name, value in self.attributes.items():
-            params.append('{}={}'.format(name, value))
+            params.append('{}={}'.format(name, repr(value)))
         param_doc = ', '.join(params)
         fuse_doc = ''
-        if len(self.task_graph.nodes) > 1:
-            fuse_doc = ' ({} fused)'.format(len(self.task_graph.nodes) - 1)
+        # if len(self.task_graph.nodes) > 1:
+        #     fuse_doc = ' ({} fused)'.format(len(self.task_graph.nodes) - 1)
         return ''.join([self.name, '(', param_doc, ')', fuse_doc])
 
     @property
     def parameters(self) -> List[TensorNode]:
-        return self.task_graph.input_tensors + self.task_graph.output_tensors
+        params: List[TensorNode] = []
+        params += self.inputs
+        params += self.outputs
+        return params
 
     @property
     def self_params(self) -> List[TensorNode]:
@@ -212,6 +173,28 @@ class Task(Node):
                 remap.update({param.type.shape[i]: arg.shape[i] for i in range(param.ndim)})
             return [rewrite(arg, remap) for arg in self.arguments]
 
+    def dummy_arguments(self, device: str):
+        """
+        Generate dummy arguments for the compiled function of this task.
+
+        Parameters
+        ----------
+        device: str
+            The target device.
+
+        Returns
+        -------
+        args: Sequence[Tensor or int]
+            The arguments for the compiled function.
+        """
+        import hidet
+        from hidet.graph.tensor import Tensor
+
+        arguments: List[Tensor] = []
+        for param in self.parameters:
+            arguments.append(hidet.randn(param.const_shape(), param.type.dtype, device=device))
+        return arguments
+
     def build(self, target: Union[str, Target]):
         """
         Build the task for the given target to a callable function.
@@ -232,32 +215,46 @@ class Task(Node):
             target = target.name
         return build_task(self, target_device=target, load=True)
 
-    def implement(self, target: Union[Target, str], workding_dir: str) -> IRModule:
+    def implement(self, target: Union[Target, str], working_dir: str) -> IRModule:
         from hidet.graph.ops.schedules.cuda.auto_scheduler import CudaAutoScheduler
         from hidet.graph.ops.schedules.cpu.auto_scheduler import CpuAutoScheduler
+        from hidet.graph.ops.schedules.tune import tune
 
         if isinstance(target, str):
             target = Target.from_string(target)
         if target.name == 'cuda':
-            ret = self.implement_cuda(workding_dir)
+            ret = self.implement_cuda(working_dir)
             if ret is NotImplemented:
                 auto_scheduler = CudaAutoScheduler()
                 ret = auto_scheduler.schedule_task(self, 'cuda')
         elif target.name == 'cpu':
-            ret = self.implement_cpu(workding_dir)
+            ret = self.implement_cpu(working_dir)
             if ret is NotImplemented:
                 auto_scheduler = CpuAutoScheduler()
                 ret = auto_scheduler.schedule_task(self, 'cpu')
         else:
             raise ValueError()
-        if not isinstance(ret, IRModule):
-            raise AssertionError(f'The task implement function should return an IRModule, but got a {type(ret)}.')
-        return ret
+        if isinstance(ret, IRModule):
+            return ret
 
-    def implement_cuda(self, workding_dir: str) -> IRModule:
+        ir_modules: List[IRModule] = ret
+
+        if len(ir_modules) == 1:
+            return ir_modules[0]
+
+        if not all(isinstance(m, IRModule) for m in ir_modules):
+            raise AssertionError(
+                f'The task implement function should return an IRModule or a sequence of IRModule, '
+                f'but got a {type(ir_modules)}.'
+            )
+        dummy_args = self.dummy_arguments(target.name)
+        best_ir_module = tune(ir_modules, dummy_inputs=dummy_args, working_dir=working_dir)
+        return best_ir_module
+
+    def implement_cuda(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
         return NotImplemented
 
-    def implement_cpu(self, workding_dir: str) -> IRModule:
+    def implement_cpu(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
         return NotImplemented
 
     def allow_prologue(self) -> bool:
@@ -266,13 +263,16 @@ class Task(Node):
     def allow_epilogue(self) -> bool:
         return True
 
-    def is_injective_task(self) -> bool:
+    def is_injective(self) -> bool:
         from hidet.ir.tools import collect
 
         allowed_nodes = (ScalarInput, TensorInput, GridCompute)
         # if found other node like ReduceCompute and ArgReduceCompute, return False
         found_nodes = collect(self.outputs, ComputeNode, stop_when_found=False)
         return all(isinstance(node, allowed_nodes) for node in found_nodes)
+
+    def is_bijective(self) -> bool:
+        return self.is_injective() and len(self.inverse_map) > 0
 
     def save(self, fname: str):
         dirname = os.path.dirname(fname)

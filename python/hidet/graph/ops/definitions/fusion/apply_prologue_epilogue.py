@@ -9,95 +9,103 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from hidet.ir.compute import TensorNode, GridCompute, TensorInput
-from hidet.ir.expr import Expr, Var, TensorElement
+from hidet.ir.expr import Expr, Var, TensorElement, tensor_var
 from hidet.ir.stmt import BufferStoreStmt
 from hidet.ir.func import Function, IRModule
-from hidet.ir.task import Task, TaskGraph, InverseMap
+from hidet.ir.task import Task, InverseMap
 from hidet.ir.functors import IRRewriter
 from hidet.ir.tools import rewrite, collect
+from hidet.graph.ir import FlowGraph, Operator, Tensor
 from hidet.utils import strict_zip
+from hidet.transforms.flatten_tensor_slice import FlattenTensorSliceRewriter
+from .fused_operator import FusedTask
 
 
 class PrologueEpilogueRewriter(IRRewriter):
-    def __init__(self, task: Task):
+    def __init__(self, fused_task: FusedTask):
         super().__init__()
-        self.task: Task = task
-        self.task_graph: TaskGraph = task.task_graph
+        self.fused_task: FusedTask = fused_task
+        self.fused_graph: FlowGraph = fused_task.fused_graph
+        self.anchor_operator: Operator = fused_task.fused_graph.nodes[fused_task.anchor]
+        self.anchor_task: Task = self.anchor_operator.task
+        self.anchor_inputs: List[Var] = []
+        self.anchor_outputs: List[Var] = []
+
+        # declare inputs and outputs of the fused function
+        self.graph_params: List[Var] = []
+        self.tensor2var: Dict[Tensor, Var] = {}
+        for tn, tensor in zip(fused_task.parameters, self.fused_graph.inputs + self.fused_graph.outputs):
+            var = tensor_var(tn.name, shape=tensor.shape, dtype=tensor.dtype)
+            self.graph_params.append(var)
+            self.tensor2var[tensor] = var
+
+        # computation relation
+        self.graph_input_to_var: Dict[TensorNode, Var] = {}
+        self.graph_output_to_var: Dict[TensorNode, Var] = {}
+        self.consume: Dict[TensorInput, TensorNode] = {}
         self.reverse_consume: Dict[TensorNode, List[TensorInput]] = {}
-        for a, b in self.task_graph.consume.items():
+        self.input2task: Dict[TensorInput, Task] = {}
+        for node in self.fused_graph.nodes:
+            for tensor, tensor_node in zip(node.inputs, node.task.inputs):
+                if tensor.op is None:
+                    self.graph_input_to_var[tensor_node] = self.tensor2var[tensor]
+                else:
+                    producer: Operator = tensor.op
+                    self.consume[tensor_node] = producer.task.outputs[tensor.trace[1]]
+                self.input2task[tensor_node] = node.task
+        for a, b in self.consume.items():
             if b not in self.reverse_consume:
                 self.reverse_consume[b] = []
             self.reverse_consume[b].append(a)
-        self.input2task: Dict[TensorNode, Task] = {}
-        for internal_task in self.task_graph.nodes:
-            for input_tensor in internal_task.inputs:
-                self.input2task[input_tensor] = internal_task
-
-        self.binding: Dict[TensorNode, Var] = {}
-        self.new_params: List[Var] = []
-        self.anchor_inputs: List[Var] = []
-        self.anchor_outputs: List[Var] = []
-        self.anchor_input_new_index: Dict[int, int] = {}
-        self.anchor_output_new_index: Dict[int, int] = {}
+        for output_tensor in self.fused_graph.outputs:
+            node, op_output_idx = output_tensor.trace
+            output_compute: TensorNode = node.task.outputs[op_output_idx]
+            self.graph_output_to_var[output_compute] = self.tensor2var[output_tensor]
 
     def visit_Function(self, func: Function):
-        anchor_num_inputs = len(self.task.inputs)
-        anchor_num_outputs = len(self.task.outputs)
-        assert len(func.params) == anchor_num_inputs + anchor_num_outputs
-        self.anchor_inputs: List[Var] = func.params[:anchor_num_inputs]
-        self.anchor_outputs: List[Var] = func.params[anchor_num_inputs:]
+        if func.kind not in ['cuda_kernel', 'host_kernel']:
+            return func
+        else:
+            # extract inputs and outputs of the anchor function
+            anchor_num_inputs = len(self.anchor_task.inputs)
+            anchor_num_outputs = len(self.anchor_task.outputs)
+            assert len(func.params) == anchor_num_inputs + anchor_num_outputs
+            self.anchor_inputs: List[Var] = func.params[:anchor_num_inputs]
+            self.anchor_outputs: List[Var] = func.params[anchor_num_inputs:]
 
-        for input_index in range(anchor_num_inputs):
-            tn = self.task.inputs[input_index]
-            while tn in self.task_graph.consume:
-                tn = self.task_graph.consume[tn]
-            if tn in self.task_graph.input_tensors:
-                self.anchor_input_new_index[input_index] = self.task_graph.input_tensors.index(tn)
-
-        for output_index in range(anchor_num_outputs):
-            tn = self.task.outputs[output_index]
-            if tn in self.task_graph.output_tensors:
-                self.anchor_output_new_index[output_index] = self.task_graph.output_tensors.index(tn)
-
-        # create parameters for fused function, and bind task graph parameters to function parameters
-        # todo: do not create new parameters for the inputs/outputs that have not been fused
-        self.new_params: List[Var] = []
-        for tensor_node in self.task_graph.input_tensors + self.task_graph.output_tensors:
-            self.new_params.append(Var(tensor_node.name, tensor_node.type))
-            self.binding[tensor_node] = self.new_params[-1]
-
-        return Function(
-            name=func.name,
-            params=self.new_params,
-            body=self.visit(func.body),
-            ret_type=func.ret_type,
-            kind=func.kind,
-            extern_vars=func.extern_vars,
-            attrs=func.attrs,
-        )
+            return Function(
+                name=func.name,
+                params=self.graph_params,
+                body=self.visit(func.body),
+                ret_type=func.ret_type,
+                kind=func.kind,
+                extern_vars=func.extern_vars,
+                attrs=func.attrs,
+            )
 
     def visit_Var(self, e: Var):
         if e in self.anchor_inputs:
             input_index = self.anchor_inputs.index(e)
-            if input_index in self.anchor_input_new_index:
-                return self.new_params[self.anchor_input_new_index[input_index]]
+
+            if self.anchor_operator.inputs[input_index].op is None:
+                return self.tensor2var[self.anchor_operator.inputs[input_index]]
             else:
                 # we encounter a usage of an input tensor of the task other than TensorElement and BufferStoreStmt
                 raise ValueError(
-                    'Did you used a tensor in expression other than tensor[...] and tensor[...] = ...'
+                    'Did you used a tensor in expression other than pure tensor indexing (e.g., tensor[...])'
                     ' while marking the task as allowing prologue?'
                 )
         elif e in self.anchor_outputs:
             output_index = self.anchor_outputs.index(e)
-            if output_index in self.anchor_output_new_index:
-                return self.new_params[len(self.task_graph.input_tensors) + self.anchor_output_new_index[output_index]]
+            if self.anchor_operator.outputs[output_index] in self.fused_graph.outputs:
+                return self.tensor2var[self.anchor_operator.outputs[output_index]]
             else:
                 # we encounter a usage of an output tensor of the task other than TensorElement and BufferStoreStmt
                 raise ValueError(
-                    'Did you used a tensor in expression other than tensor[...] and tensor[...] = ...'
+                    'Did you used a tensor in expression other than tensor storing (e.g., tensor[...] = ...)'
                     ' while marking the task as allowing epilogue?'
                 )
         else:
@@ -107,19 +115,19 @@ class PrologueEpilogueRewriter(IRRewriter):
         if e.base in self.anchor_inputs:
             # access an input tensor in the anchor operator, replace it with the task input (i.e., InputTensor)
             input_index = self.anchor_inputs.index(e.base)
-            return self.visit(TensorElement(self.task.inputs[input_index], e.indices))
+            return self.visit(TensorElement(self.anchor_task.inputs[input_index], e.indices))
         elif isinstance(e.base, TensorNode):
             # apply prologue
             buf: TensorNode = e.base
             indices = [self.visit(v) for v in e.indices]
             if isinstance(buf, TensorInput):
-                if buf in self.binding:
-                    # buf is an input tensor of the task graph
-                    return TensorElement(self.binding[buf], indices)
-                elif buf in self.task_graph.consume:
-                    # buf is an input tensor of an inner task of the task graph,
-                    # but not an input tensor of task graph.
-                    buf = self.task_graph.consume[buf]
+                if buf in self.graph_input_to_var:
+                    # buf is an input tensor of the fused graph
+                    return TensorElement(self.graph_input_to_var[buf], indices)
+                elif buf in self.consume:
+                    # buf is an input tensor of an inner task of the fused graph,
+                    # but not an input tensor of fused graph.
+                    buf = self.consume[buf]
                     return self.visit(buf[indices])
                 else:
                     raise ValueError('Input tensor {} has not been bound.'.format(buf))
@@ -136,15 +144,15 @@ class PrologueEpilogueRewriter(IRRewriter):
             # store a value to an output tensor with epilogue, replace it with the task output (i.e., TensorNode)
             output_index = self.anchor_outputs.index(stmt.buf)
             return self.visit(
-                BufferStoreStmt(self.task.outputs[output_index], stmt.indices, stmt.value, stmt.protected)
+                BufferStoreStmt(self.anchor_task.outputs[output_index], stmt.indices, stmt.value, stmt.protected)
             )
         elif isinstance(stmt.buf, TensorNode):
             # apply epilogue
             buf: TensorNode = stmt.buf
             indices = [self.visit(v) for v in stmt.indices]
-            if buf in self.task_graph.output_tensors:
+            if buf in self.graph_output_to_var:
                 # buf is an output tensor of the task graph
-                return BufferStoreStmt(self.binding[buf], indices, self.visit(stmt.value), stmt.protected)
+                return BufferStoreStmt(self.graph_output_to_var[buf], indices, self.visit(stmt.value), stmt.protected)
             elif buf in self.reverse_consume:
                 # buf is an output tensor of an inner task of the task graph,
                 # but not an output tensor of task graph.
@@ -205,11 +213,16 @@ class PrologueEpilogueRewriter(IRRewriter):
             return IRRewriter.visit_BufferStoreStmt(self, stmt)
 
 
-def apply_prologue_epilogue(ir_module: IRModule, func: Function, task: Task) -> Function:
-    from hidet.transforms.flatten_tensor_slice import FlattenTensorSliceRewriter
+def apply_prologue_epilogue(ir_module: IRModule, fused_task: FusedTask) -> IRModule:
+    anchor_function: Optional[Function] = None
+    for func in ir_module.functions.values():
+        if func.kind in ['cuda_kernel', 'host_kernel']:
+            if anchor_function is not None:
+                raise RuntimeError('More than one function found.')
+            anchor_function = func
+    if anchor_function is None:
+        raise RuntimeError('No kernel function found.')
 
     rewriter1 = FlattenTensorSliceRewriter()
-    rewriter2 = PrologueEpilogueRewriter(task)
-    fused_func = rewriter2(rewriter1(func))
-    ir_module.update_function(fused_func)
-    return fused_func
+    rewriter2 = PrologueEpilogueRewriter(fused_task)
+    return rewriter2(rewriter1(ir_module))

@@ -12,8 +12,6 @@
 import contextlib
 from typing import List, Tuple, Union, Optional, Sequence, TypeVar
 
-import os
-
 import hidet.cuda
 from hidet import option
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
@@ -28,10 +26,8 @@ from hidet.ir.stmt import BufferStoreStmt, IfStmt, Stmt, DeclareStmt, DeclareSco
 from hidet.ir.type import DataType, data_type
 from hidet.utils import prod
 from hidet.graph.ops.definitions.matmul import BatchMatmulTask
-from hidet.graph.ops.schedules.resolve import resolve_ir_modules
 from hidet.graph.ops.schedules.common import params_from_task, Schedule, NotSupportedError
 from hidet.graph.ops.schedules.cuda.common import get_transfer_task_map
-from hidet.transforms.tools import fuse_and_pack
 
 T = TypeVar('T', bound=Tuple)
 
@@ -178,21 +174,21 @@ class MatmulMmaSchedule(Schedule):
         ]
 
 
-def batched_matmul_cuda_schedule_mma(task: BatchMatmulTask, working_dir: str) -> IRModule:
+def batched_matmul_cuda_schedule_mma(task: BatchMatmulTask, working_dir: str) -> List[IRModule]:
     all_schedules = MatmulMmaSchedule.schedules(task, space_level=option.get_option('search_space'))
-    ir_modules = []
-    for sch in all_schedules:
-        ir_modules.append(batched_matmul_cuda_with_given_schedule(task, sch))
-
-    return resolve_ir_modules(
-        ir_modules=ir_modules,
-        schedules=all_schedules,
-        func_name=task.name,
-        target_device='cuda',
-        output_dir=os.path.join(working_dir, './resolve'),
-        parallel=True,
-        verbose=True,
-    )
+    return [batched_matmul_cuda_with_given_schedule(task, sch) for sch in all_schedules]
+    # ir_modules = []
+    # for sch in all_schedules:
+    #     ir_modules.append(batched_matmul_cuda_with_given_schedule(task, sch))
+    #
+    # return resolve_ir_modules(
+    #     ir_modules=ir_modules,
+    #     schedules=all_schedules,
+    #     target_device='cuda',
+    #     output_dir=os.path.join(working_dir, './resolve'),
+    #     parallel=True,
+    #     verbose=True,
+    # )
 
 
 def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, sch: MatmulMmaSchedule) -> IRModule:
@@ -329,7 +325,7 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, sch: MatmulMm
 
     func = fb.func
     ir_module = IRModule(funcs={func.name: func}, task=task)
-    return fuse_and_pack(ir_module, func, task)
+    return ir_module
 
 
 def load_regs_a(smem_a: Union[Var, TensorSlice], regs_a: Var, sch: MatmulMmaSchedule) -> Stmt:
