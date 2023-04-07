@@ -98,11 +98,7 @@ class FusedTask(Task):
         if len(fused_modules) == 1:
             return fused_modules[0]
 
-        return tune(
-            fused_modules,
-            dummy_inputs=self.dummy_arguments(target.name),
-            working_dir=working_dir
-        )
+        return tune(fused_modules, dummy_inputs=self.dummy_arguments(target.name), working_dir=working_dir)
 
 
 class FusedOperator(Operator):

@@ -9,7 +9,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import os
 from typing import List, Tuple, Union, Optional
 
 import hidet.cuda
@@ -28,7 +27,6 @@ from hidet.ir.type import data_type, tensor_type, PointerType, tensor_pointer_ty
 from hidet.graph.ops.definitions.matmul import BatchMatmulTask
 from hidet.graph.ops.schedules.common import params_from_task, Schedule, NotSupportedError
 from hidet.graph.ops.schedules.cuda.common import get_task_map, get_transfer_task_map
-from hidet.graph.ops.schedules.resolve import resolve_ir_modules
 from hidet.utils import prod
 
 

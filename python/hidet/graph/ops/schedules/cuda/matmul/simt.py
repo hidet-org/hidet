@@ -45,8 +45,6 @@ write back
 """
 from typing import List, Tuple, Union, Optional
 
-import os
-
 import hidet.cuda
 from hidet import option
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
@@ -59,7 +57,6 @@ from hidet.ir.primitives import syncthreads, thread_idx, block_idx
 from hidet.ir.stmt import BufferStoreStmt, IfStmt, DeclareStmt, DeclareScope
 from hidet.ir.type import data_type, tensor_type, PointerType, tensor_pointer_type
 from hidet.graph.ops.definitions.matmul import BatchMatmulTask
-from hidet.graph.ops.schedules.resolve import resolve_ir_modules
 from hidet.graph.ops.schedules.common import params_from_task, Schedule, NotSupportedError
 
 

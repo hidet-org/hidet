@@ -9,17 +9,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Union, Sequence, TypeVar, Any, Dict, List, Optional, Tuple
+from typing import Union, Sequence, TypeVar, Any, Dict, List, Optional
 import os
 import itertools
 import shutil
 from tqdm import tqdm
 import numpy as np
 from hidet.ir.func import IRModule
-from hidet.ir.task import Task
 import hidet.option
 from hidet.utils import prod
-from .resolve import dummy_inputs_from_task
 
 Choice = TypeVar('Choice')
 
@@ -129,18 +127,14 @@ def extract_ir_modules(template_func) -> List[IRModule]:
         try:
             ir_module = template_func(**kwargs)
             ir_modules.append(ir_module)
-            setattr(ir_module, '_tuning_kwargs', kwargs)    # workaround to pass kwargs to the tune function
+            setattr(ir_module, '_tuning_kwargs', kwargs)  # workaround to pass kwargs to the tune function
         except ScheduleError:
             # the schedule is invalid, skip it
             continue
     return ir_modules
 
 
-def tune(
-    ir_modules: Sequence[IRModule],
-    dummy_inputs: Sequence[Any],
-    working_dir: str
-) -> IRModule:
+def tune(ir_modules: Sequence[IRModule], dummy_inputs: Sequence[Any], working_dir: str) -> IRModule:
     from hidet.driver import build_ir_module_batch
     from hidet.runtime import CompiledFunction
 

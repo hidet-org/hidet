@@ -12,8 +12,6 @@
 import contextlib
 from typing import List, Tuple, Union, Optional, Sequence, TypeVar
 
-import os
-
 import hidet.cuda
 from hidet import option
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
@@ -28,7 +26,6 @@ from hidet.ir.stmt import BufferStoreStmt, IfStmt, Stmt, DeclareStmt, DeclareSco
 from hidet.ir.type import DataType, data_type
 from hidet.utils import prod
 from hidet.graph.ops.definitions.matmul import BatchMatmulTask
-from hidet.graph.ops.schedules.resolve import resolve_ir_modules
 from hidet.graph.ops.schedules.common import params_from_task, Schedule, NotSupportedError
 from hidet.graph.ops.schedules.cuda.common import get_transfer_task_map
 
