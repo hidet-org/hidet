@@ -17,12 +17,12 @@ from hidet.ir.stmt import Stmt, AssignStmt, ForStmt, DeclareStmt, BufferStoreStm
 from hidet.ir.task import Task
 from hidet.ir.func import IRModule, Function
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
-from hidet.ir.functors import ExprRewriter, ExprVisitor, ComputeVisitor, ComputeRewriter
-from hidet.ir.tools import collect, rewrite, infer_type, simplify_to_int
+from hidet.ir.functors import ExprRewriter, ExprVisitor, ComputeVisitor, ComputeRewriter, TypeRewriter
+from hidet.ir.tools import collect, rewrite, infer_type, simplify_to_int, simplify
 from hidet.ir.compute import ScalarInput, TensorInput, GridCompute, ReduceCompute, ArgReduceCompute
 from hidet.ir.compute import TensorNode, ScalarNode
 from hidet.ir.primitives.runtime import request_cuda_workspace, request_cpu_workspace
-from hidet.ir.dtypes import uint8, int32
+from hidet.ir.dtypes import uint8, int32, int64
 from hidet.utils import prod, DirectedGraph
 from hidet.utils.namer import Namer
 
@@ -156,29 +156,28 @@ class AutoScheduler:
         dag: DirectedGraph,  # pylint: disable=unused-argument
         order: Sequence[TensorNode],
         require_allocate: Set[TensorNode],
-    ) -> Tuple[int, Dict[TensorNode, int]]:
+    ) -> Tuple[Expr, Dict[TensorNode, Expr]]:
         # dag has not been used in this simple plan.
         alignment_bytes: int = 128  # make sure each buffer aligns with 128 bytes
-        allocated_bytes: int = 0
-        buffer_offset: Dict[TensorNode, int] = {}
+        allocated_bytes: Expr = int64(0)
+        buffer_offset: Dict[TensorNode, Expr] = {}
         for tensor in order:
             if tensor not in require_allocate:
                 continue
             buffer_offset[tensor] = allocated_bytes
-            allocated_bytes += simplify_to_int(tensor.type.storage_bytes())
-            allocated_bytes = (allocated_bytes + alignment_bytes - 1) // alignment_bytes * alignment_bytes
+            allocated_bytes = allocated_bytes + simplify(tensor.type.storage_bytes())
+            allocated_bytes = (allocated_bytes + (alignment_bytes - 1)) // alignment_bytes * alignment_bytes
         return allocated_bytes, buffer_offset
 
     @staticmethod
     def allocate_tensors(
         fb: FunctionBuilder,
         device: str,
-        buffer_bytes: Union[Expr, int],
-        buffer_offset: Dict[TensorNode, Union[int, Expr]],
+        buffer_bytes: Expr,
+        buffer_offset: Dict[TensorNode, Expr],
         node_map: Dict[TensorNode, Var],
-        scalar_map: Dict[Var, Var]
     ):
-        if buffer_bytes > 0:
+        if not (isinstance(buffer_bytes, Constant) and int(buffer_bytes) == 0):
             buffer = Var('buffer', tensor_pointer_type(dtype='uint8', shape=[buffer_bytes]))
             if device == 'cuda':
                 space_ptr: Expr = request_cuda_workspace(nbytes=buffer_bytes, require_clean=False)
@@ -228,9 +227,9 @@ class AutoScheduler:
             args = Var('args', ~void_pointer())
             fb.extend_params([num_args, arg_types, args])
 
-            # extract the pointers of tensor input/output from packed arguments
-            node_map: Dict[TensorNode, Var] = {}
-            scalar_map: Dict[Var, Var] = {}
+            # extract the packed arguments
+            node_map: Dict[TensorNode, Var] = {}    # tensor arguments
+            scalar_map: Dict[Var, Var] = {}         # scalar arguments
             for idx, task_param in enumerate(task.params):
                 if isinstance(task_param, Var):
                     param = Var(task_param.name, task_param.type)
@@ -243,12 +242,12 @@ class AutoScheduler:
                     node_map[task_param] = param
                 fb += AssertStmt(
                     cond=(arg_types[idx] == expect_type_code),
-                    msg='The type of argument {} must be a pointer'.format(idx)
+                    msg='Argument {} expects a {}'.format(idx, ArgTypeCode(expect_type_code).name.lower())
                 )
                 fb += DeclareStmt(param, init=cast(args[idx], param.type))
 
             # allocate memory space for intermediate tensors
-            self.allocate_tensors(fb, device, buffer_bytes, buffer_offset, node_map, scalar_map)
+            self.allocate_tensors(fb, device, buffer_bytes, buffer_offset, node_map)
 
             # schedule each tensor computation
             for node in order:
@@ -285,17 +284,18 @@ class AutoScheduler:
         return self.ir_module.lookup_var(func.name)
 
     def schedule_grid_compute(
-        self, node: GridCompute, node_map: Dict[TensorNode, Expr], scalar_map: Dict[Var, Var]
+        self, node: GridCompute, node_map: Dict[TensorNode, Var], scalar_map: Dict[Var, Var]
     ) -> Stmt:
         raise NotImplementedError()
 
 
-class ComputeExprLower(ExprRewriter, ComputeRewriter):
-    def __init__(self, expr: Expr, param_map: Dict[Union[TensorNode, ScalarNode], Expr]):
+class ComputeExprLower(ExprRewriter, ComputeRewriter, TypeRewriter):
+    def __init__(self, expr: Expr, param_map: Dict[Union[TensorNode, ScalarNode, Var], Expr]):
         super().__init__()
         self.sb: StmtBuilder = StmtBuilder()
         self.compute_expr: Expr = expr
         self.param_map: Dict[Union[TensorNode, ScalarNode], Expr] = param_map
+        self.memo.update(param_map)
 
     def lower(self) -> Tuple[List[Stmt], Expr]:
         result = self.visit(self.compute_expr)
@@ -303,27 +303,18 @@ class ComputeExprLower(ExprRewriter, ComputeRewriter):
         return self.sb.scope_stack[0], result
 
     def visit_TensorInput(self, node: TensorInput):
-        if node in self.param_map:
-            return self.param_map[node]
-        else:
-            raise ValueError('Expect tensor input "{}" in param_map.'.format(node))
+        raise ValueError('Expect tensor input "{}" in param_map.'.format(node))
 
     def visit_ScalarInput(self, node: ScalarInput):
-        if node in self.param_map:
-            return self.param_map[node]
-        else:
-            raise ValueError('Expect scalar input "{}" in param_map.'.format(node))
+        raise ValueError('Expect scalar input "{}" in param_map.'.format(node))
 
     def visit_GridCompute(self, node: GridCompute):
-        if node in self.param_map:
-            return self.param_map[node]
-
         # declare intermediate tensor buffer
         buf = Var(node.name, node.type)
 
         # tensor compute loops
         for i in range(len(node.shape)):
-            self.sb.enter_body(ForStmt(node.axes[i], node.shape[i]))
+            self.sb.enter_body(ForStmt(node.axes[i], self.visit(node.shape[i])))
 
         # at the innermost loop body
         expr = self.visit(node.value)
@@ -342,7 +333,7 @@ class ComputeExprLower(ExprRewriter, ComputeRewriter):
 
         # reduction loops
         for i in range(len(shape)):
-            self.sb.enter_body(ForStmt(axes[i], shape[i]))
+            self.sb.enter_body(ForStmt(axes[i], self.visit(shape[i])))
 
         # at the innermost loop body
         expr = self.visit(value)
@@ -358,7 +349,7 @@ class ComputeExprLower(ExprRewriter, ComputeRewriter):
         return acc
 
     def visit_ArgReduceCompute(self, node: ArgReduceCompute):
-        extent, axis, value = node.extent, node.axis, node.value
+        extent, axis, value = self.visit(node.extent), node.axis, node.value
         value_dtype = infer_type(value)
         # declare index accumulator
         acc_index = scalar_var(node.name + '_idx', node.index_dtype)

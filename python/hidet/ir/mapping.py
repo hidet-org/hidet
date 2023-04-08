@@ -285,16 +285,17 @@ def repeat_map(task_shape: Sequence[Int], ranks: Optional[Sequence[int]] = None)
     return RepeatTaskMapping(task_shape, ranks)
 
 
-def row_repeat(*task_shape: int):
+def row_repeat(*task_shape: Expr):
     return repeat_map(task_shape)
 
 
-def col_repeat(*task_shape: int):
+def col_repeat(*task_shape: Expr):
     return repeat_map(task_shape, ranks=list(reversed(range(len(task_shape)))))
 
 
-def auto_map(*task_shape: int, workers: int, ranks: Optional[Sequence[int]] = None) -> TaskMapping:
-    task_shape: List[int] = list(task_shape)
+def auto_map(*task_shape: Expr, workers: Expr, ranks: Optional[Sequence[int]] = None) -> TaskMapping:
+    from hidet.ir.tools import simplify_to_int
+    task_shape: List[Expr] = list(task_shape)
     num_tasks = prod(task_shape)
     if num_tasks % workers != 0:
         raise ValueError(
@@ -313,7 +314,7 @@ def auto_map(*task_shape: int, workers: int, ranks: Optional[Sequence[int]] = No
     remain = workers
     for rank in reversed(range(num_dims)):
         dim = ranks.index(rank)
-        spatial_shape[dim] = gcd(remain, task_shape[dim])
+        spatial_shape[dim] = gcd(simplify_to_int(remain), simplify_to_int(task_shape[dim]))
         repeat_shape[dim] = task_shape[dim] // spatial_shape[dim]
         remain //= spatial_shape[dim]
     return repeat_map(repeat_shape, ranks) * spatial_map(spatial_shape, ranks)
