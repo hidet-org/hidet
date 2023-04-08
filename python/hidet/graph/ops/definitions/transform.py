@@ -285,7 +285,7 @@ class ReshapeOp(Operator):
     def __init__(self, x: Tensor, shape):
         shape = self.normalize_shape(x.shape, shape)
         task = ReshapeTask(input_like(x, 'x'), shape)
-        super().__init__(inputs=[x], task=task, attributes={'shape': shape})
+        super().__init__(inputs=[x], attributes={'shape': shape}, task=task)
 
     @staticmethod
     def normalize_shape(origin_shape: Sequence[int], shape: Sequence[int]):
@@ -329,15 +329,15 @@ class ReshapeOp(Operator):
 
 class RearrangeOp(Operator):
     def __init__(self, x: Tensor, plan: List[List[int]]):
-        super().__init__(inputs=[x], task=RearrangeTask(input_like(x, 'x'), plan=plan), attributes={'plan': plan})
+        super().__init__(inputs=[x], attributes={'plan': plan}, task=RearrangeTask(input_like(x, 'x'), plan=plan))
 
 
 class SqueezeOp(Operator):
     def __init__(self, x: Tensor, dims: List[int]):
         super().__init__(
             inputs=[x],
-            task=RearrangeTask(input_like(x, 'x'), plan=[[i] for i in range(len(x.shape)) if i not in dims]),
             attributes={'dims': dims},
+            task=RearrangeTask(input_like(x, 'x'), plan=[[i] for i in range(len(x.shape)) if i not in dims]),
         )
 
     def imperative_run(self, inputs: Optional[List[Tensor]] = None) -> List[Tensor]:
@@ -362,7 +362,7 @@ class UnsqueezeOp(Operator):
                 plan.append([c])
                 c += 1
         assert c == len(x.shape)
-        super().__init__(inputs=[x], task=RearrangeTask(input_like(x, 'x'), plan=plan), attributes={'dims': dims})
+        super().__init__(inputs=[x], attributes={'dims': dims}, task=RearrangeTask(input_like(x, 'x'), plan=plan))
 
     def imperative_run(self, inputs: Optional[List[Tensor]] = None) -> List[Tensor]:
         x = inputs[0] if inputs else self.inputs[0]
@@ -384,8 +384,8 @@ class FlattenOp(Operator):
         plan = [[v] for v in dims[:start_dim]] + [dims[start_dim : end_dim + 1]] + [[v] for v in dims[end_dim + 1 :]]
         super().__init__(
             inputs=[x],
-            task=RearrangeTask(input_like(x, 'x'), plan=plan),
             attributes={'start_dim': start_dim, 'end_dim': end_dim},
+            task=RearrangeTask(input_like(x, 'x'), plan=plan),
         )
 
     def imperative_run(self, inputs: List[Tensor]) -> List[Tensor]:
@@ -408,7 +408,7 @@ class PermuteDimsOp(Operator):
         if axes is None:
             axes = list(reversed(range(len(x.shape))))
         plan = [[v] for v in axes]
-        super().__init__(inputs=[x], task=RearrangeTask(input_like(x, 'x'), plan), attributes={'axes': axes})
+        super().__init__(inputs=[x], attributes={'axes': axes}, task=RearrangeTask(input_like(x, 'x'), plan))
 
 
 class CastOp(Operator):
@@ -418,8 +418,8 @@ class CastOp(Operator):
 
         super().__init__(
             inputs=[x],
-            task=UnaryElementwiseTask('cast', input_like(x, 'x'), op=lambda v: Cast(v, dtype)),
             attributes={'dtype': dtype},
+            task=UnaryElementwiseTask('cast', input_like(x, 'x'), op=lambda v: Cast(v, dtype)),
         )
 
 
@@ -431,8 +431,8 @@ class ConcatOp(Operator):
         axis = normalize_dim(axis, len(tensors[0].shape))
         super().__init__(
             inputs=tensors,
-            task=ConcatTask([input_like(tensor, 'x{}'.format(idx)) for idx, tensor in enumerate(tensors)], axis=axis),
             attributes={'axis': axis},
+            task=ConcatTask([input_like(tensor, 'x{}'.format(idx)) for idx, tensor in enumerate(tensors)], axis=axis),
         )
 
 
@@ -440,8 +440,8 @@ class TakeOp(Operator):
     def __init__(self, data: Tensor, indices: Tensor, axis: int):
         super().__init__(
             inputs=[data, indices],
-            task=TakeTask(input_like(data, 'data'), input_like(indices, 'indices'), axis=axis),
             attributes={'axis': axis},
+            task=TakeTask(input_like(data, 'data'), input_like(indices, 'indices'), axis=axis),
         )
 
 
@@ -457,7 +457,7 @@ class StridedSliceOp(Operator):
         starts, ends, axes, strides = self.normalize(data.shape, starts, ends, axes, strides)
         task = StridedSliceTask(input_like(data, 'data'), starts, ends, axes, strides)
         super().__init__(
-            inputs=[data], task=task, attributes={'starts': starts, 'ends': ends, 'axes': axes, 'strides': strides}
+            inputs=[data], attributes={'starts': starts, 'ends': ends, 'axes': axes, 'strides': strides}, task=task
         )
 
     @staticmethod
@@ -515,7 +515,9 @@ class StridedSliceOp(Operator):
 class BroadcastOp(Operator):
     def __init__(self, data: Tensor, shape: List[int]):
         super().__init__(
-            inputs=[data], task=BroadcastTask(input_like(data, 'data'), shape), attributes={'shape': shape}
+            inputs=[data],
+            attributes={'shape': shape},
+            task=BroadcastTask(input_like(data, 'data'), shape),
         )
 
 
@@ -530,8 +532,8 @@ class PadOp(Operator):
             raise NotImplementedError("Padding mode '{}' has not been implemented yet.".format(mode))
         super().__init__(
             inputs=[data],
-            task=PadTask(input_like(data, 'data'), pads, value),
             attributes={'pads': pads, 'mode': mode, 'value': value},
+            task=PadTask(input_like(data, 'data'), pads, value),
         )
 
 
@@ -543,7 +545,9 @@ class TileOp(Operator):
                 "same length as data shape. shape: {}, repeats: {}".format(data.shape, repeats)
             )
         super().__init__(
-            inputs=[data], task=TileTask(input_like(data, 'data'), repeats), attributes={'repeats': repeats}
+            inputs=[data],
+            attributes={'repeats': repeats},
+            task=TileTask(input_like(data, 'data'), repeats)
         )
 
 

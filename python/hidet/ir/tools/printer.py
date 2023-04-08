@@ -441,12 +441,12 @@ class IRPrinter(IRFunctor):
             Text('parameters: ')
             + (
                 NewLine()
-                + doc_join(['{}: {}'.format(self.namer.get_name(v), self(v.type)) for v in e.parameters], NewLine())
+                + doc_join(['{}: {}'.format(self.namer.get_name(v), self(v.type)) for v in e.params], NewLine())
             ).indent(),
             Text('inputs: ') + '[' + doc_join([self.namer.get_name(v) for v in e.inputs], ', ') + ']',
             Text('outputs: ') + '[' + doc_join([self.namer.get_name(v) for v in e.outputs], ', ') + ']',
             Text('computations: ') + self.print_tensor_nodes(e.outputs).indent(),
-            Text('attributes: {') + self({k: str(v) for k, v in e.attributes.items()}) + '}',
+            Text('attributes: {') + self({k: str(v) for k, v in e.attrs.items()}) + '}',
         ]
         # if len(e.task_graph.nodes) > 1:
         #     lines.append(Text('task_graph: ') + self(e.task_graph))

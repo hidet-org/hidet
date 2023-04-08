@@ -12,8 +12,8 @@
 from typing import Union, Mapping
 from hidet.ir.expr import Let, Var, Expr
 from hidet.ir.func import Function
-from hidet.ir.stmt import Stmt, ForStmt, LetStmt
-from hidet.ir.functors import StmtVisitor, ExprVisitor, IRVisitor, IRRewriter
+from hidet.ir.stmt import Stmt, ForStmt, LetStmt, SeqStmt, DeclareStmt
+from hidet.ir.functors import StmtVisitor, ExprVisitor, IRVisitor, IRRewriter, ComputeVisitor
 
 
 class MapBasedRewriter(IRRewriter):
@@ -45,34 +45,6 @@ class IRCollector(IRVisitor):
                 return None
         return super().visit(node)
 
-
-class FreeVarCollector(StmtVisitor, ExprVisitor):
-    def __init__(self):
-        super().__init__()
-        self.defined = set()
-        self.free_vars = set()
-
-    def collect(self, e):
-        self.defined.clear()
-        self.visit(e)
-        return self.free_vars
-
-    def visit_LetStmt(self, stmt: LetStmt):
-        for bind_var, bind_value in zip(stmt.bind_vars, stmt.bind_values):
-            self.visit(bind_value)
-            self.defined.add(bind_var)
-        self.visit(stmt.body)
-        for bind_var in stmt.bind_vars:
-            self.defined.remove(bind_var)
-
-    def visit_ForStmt(self, stmt: ForStmt):
-        self.defined.add(stmt.loop_var)
-        super().visit_ForStmt(stmt)
-        self.defined.remove(stmt.loop_var)
-
-    def visit_Var(self, e: Var):
-        if e not in self.defined:
-            self.free_vars.add(e)
 
 
 class CloneRewriter(IRRewriter):
@@ -138,6 +110,3 @@ def clone(node: Union[Stmt, Expr]) -> Union[Stmt, Expr]:
     return CloneRewriter()(node)
 
 
-def collect_free_vars(node: Union[Expr, Stmt]):
-    collector = FreeVarCollector()
-    return collector.collect(node)

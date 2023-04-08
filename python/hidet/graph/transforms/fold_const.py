@@ -26,7 +26,7 @@ class FoldConstantRewriter(GraphRewriter):
             if utils.same_list(inputs, op.inputs):
                 return None
             else:
-                updated_outputs = op.reforward(inputs)
+                updated_outputs = op.rerun(inputs)
                 for original, updated in zip(op.outputs, updated_outputs):
                     self.memo[original] = updated
                 return None

@@ -52,8 +52,8 @@ class Conv3dGemmImageTransformOp(Operator):
         stride = normalize_stride(stride, dim=3)
         super().__init__(
             inputs=[x],
-            task=Conv3dGemmImageTransformTask(input_like(x, 'x'), kernel, stride, dilations, groups),
             attributes={'kernel': kernel, 'stride': stride, 'groups': groups, 'dilations': dilations},
+            task=Conv3dGemmImageTransformTask(input_like(x, 'x'), kernel, stride, dilations, groups),
         )
 
 

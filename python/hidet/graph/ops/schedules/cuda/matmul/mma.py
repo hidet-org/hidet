@@ -109,7 +109,7 @@ class MatmulMmaSchedule(Schedule):
         if ta or tb:
             raise NotImplementedError()
 
-        mma_type = task.attributes['mma']  # like 'wmma_f16_f32' or 'wmma'
+        mma_type = task.attrs['mma']  # like 'wmma_f16_f32' or 'wmma'
         if mma_type == 'mma':
             a, b, c = task.inputs[0], task.inputs[1], task.outputs[0]
             a_dtype, b_dtype, c_dtype = [t.type.dtype for t in [a, b, c]]

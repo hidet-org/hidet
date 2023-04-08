@@ -160,7 +160,7 @@ class MatmulSchedule(Schedule):
 
     @staticmethod
     def schedules(task: Task, space_level: int = 0):
-        wmma_type = task.attributes['mma']  # like 'wmma_f16_f32' or 'wmma'
+        wmma_type = task.attrs['mma']  # like 'wmma_f16_f32' or 'wmma'
 
         # choose a specific wmma type when needed
         if wmma_type == 'wmma':

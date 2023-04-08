@@ -50,7 +50,7 @@ class FusibleGraph:
         updated_anchor: int = -1
         for idx, op in enumerate(self.operators):
             inputs = [remap[x] for x in op.inputs]
-            outputs = op.reforward(inputs)
+            outputs = op.rerun(inputs)
             if op is self.anchor:
                 updated_anchor = idx
             for x, y in zip(op.outputs, outputs):
@@ -323,7 +323,7 @@ def operator_from_sub_graph(sub_graph: FusibleGraph, input_remap: Dict[Tensor, T
                 'For now, this pass expects to accept a graph without fused operators.\n'
                 'Have you run this pass twice?'
             )
-        outs: List[Tensor] = origin_op.reforward(updated_inputs)
+        outs: List[Tensor] = origin_op.rerun(updated_inputs)
         updated_op = outs[0].trace[0]
         return updated_op
     else:

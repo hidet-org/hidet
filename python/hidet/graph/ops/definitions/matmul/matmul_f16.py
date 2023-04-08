@@ -113,7 +113,7 @@ class MatmulF16Task(Task):
         c_shape: List[int] = node_c.const_shape()
         m_size, n_size, k_size = a_shape[-2], b_shape[-1], a_shape[-1]
         a_head, b_head, c_head = a_shape[:-2], b_shape[:-2], c_shape[:-2]
-        k_parts = self.attributes['parallel_k_parts']
+        k_parts = self.attrs['parallel_k_parts']
         k_part_extent = cdiv(cdiv(k_size, k_parts), 8) * 8
 
         # schedule parameters
@@ -310,8 +310,8 @@ class MatmulF16Op(Operator):
     def __init__(self, a: Tensor, b: Tensor, parallel_k_parts=1):
         super().__init__(
             inputs=[a, b],
-            task=MatmulF16Task(input_like(a, 'a'), input_like(b, 'b'), parallel_k_parts),
             attributes={'parallel_k_parts': parallel_k_parts},
+            task=MatmulF16Task(input_like(a, 'a'), input_like(b, 'b'), parallel_k_parts),
         )
 
 

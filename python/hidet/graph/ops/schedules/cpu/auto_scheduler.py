@@ -20,7 +20,9 @@ from ..auto_scheduler import AutoScheduler, ComputeExprLower
 
 
 class CpuAutoScheduler(AutoScheduler):
-    def schedule_grid_compute(self, node: GridCompute, node_map: Dict[TensorNode, Expr]) -> Stmt:
+    def schedule_grid_compute(
+        self, node: GridCompute, node_map: Dict[TensorNode, Expr], scalar_map: Dict[Var, Var]
+    ) -> Stmt:
         # pylint: disable=too-many-locals, import-outside-toplevel, unnecessary-comprehension
         from hidet.ir.mapping import row_repeat, TaskMapping
 

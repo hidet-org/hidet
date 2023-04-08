@@ -20,11 +20,26 @@ import hidet.runtime.storage
 import hidet.cuda
 from hidet.ir import dtypes
 from hidet.ir.type import DataType, data_type
+from hidet.ir.expr import Var, Expr, Constant
 from hidet.ir.layout import DataLayout, RowMajorLayout
 from hidet.runtime.storage import Storage
 from hidet.utils import prod
 from hidet.utils.overrides import set_module
 from hidet.runtime.device import Device, instantiate_device
+
+
+def _simplify_dim(dim: Union[int, Expr]) -> Union[int, Var]:
+    from hidet.ir.tools import simplify
+    if isinstance(dim, (int, Var)):
+        return dim
+    elif isinstance(dim, Constant):
+        return int(dim)
+    else:
+        dim = simplify(dim)
+        if isinstance(dim, (int, Var, Constant)):
+            return _simplify_dim(dim)
+        else:
+            raise ValueError(f"Cannot simplify {dim} to a constant integer or variable.")
 
 
 @set_module('hidet')
@@ -58,7 +73,7 @@ class Tensor:
     def __init__(self, shape, dtype, device, storage, layout=None, trace=None):
         from hidet.graph.operator import Operator
 
-        self._shape: List[int] = [int(v) for v in shape]
+        self._shape: List[Union[Var, int]] = [_simplify_dim(dim) for dim in shape]
         self._dtype: DataType = data_type(dtype)
         self._device: Device = instantiate_device(device)
         self._storage: Optional[Storage] = storage
@@ -66,7 +81,7 @@ class Tensor:
         self._trace: Optional[Tuple[Operator, int]] = trace
 
     @property
-    def shape(self) -> Tuple[int, ...]:
+    def shape(self) -> Tuple[Union[int, Var], ...]:
         """
         The shape of the tensor.
 

@@ -63,7 +63,7 @@ class AutoMixPrecisionRewriter(GraphRewriter):
         if same_list(casted_inputs, op.inputs):
             return op
         else:
-            updated_outputs = op.reforward(casted_inputs)
+            updated_outputs = op.rerun(casted_inputs)
             for original, updated in zip(op.outputs, updated_outputs):
                 self.memo[original] = updated
             return None

@@ -202,7 +202,6 @@ class AutoScheduler:
         # pylint: disable=too-many-locals, unnecessary-comprehension
         from hidet.ffi.packedfunc import ArgTypeCode
 
-        # absorb the prologue and epilogue into a single task
         self.ir_module.task = task
 
         # Inline the grid compute that does not contain reduce
@@ -216,10 +215,12 @@ class AutoScheduler:
         order: List[TensorNode] = dag.topological_order()
 
         # Plan the memory for intermediate tensors
+        # only allocate the memory for intermediate tensors
         require_allocate = set(node for node in order if node not in task.inputs and node not in outputs)
+        # plan the memory for intermediate tensors
         buffer_bytes, buffer_offset = self.plan_memory(dag, order, require_allocate)
 
-        # Allocate the memory for intermediate tensors, get the mapping from node to tensor var or tensor pointer var
+        # Construct the function body
         with FunctionBuilder(name='launch', kind='packed_func') as fb:
             # packed function arguments, packed_func(num_args: int32, arg_types: *int32, args: **void)
             num_args = scalar_var('num_args', 'int32')
@@ -228,37 +229,23 @@ class AutoScheduler:
             fb.extend_params([num_args, arg_types, args])
 
             # extract the pointers of tensor input/output from packed arguments
-            param_count = 0
             node_map: Dict[TensorNode, Var] = {}
-            for task_param in task.inputs + task.outputs:
-                param = Var(task_param.name, ~task_param.type.dtype)
-                node_map[task_param] = param
-                fb += AssertStmt(
-                    cond=(arg_types[param_count] == ArgTypeCode.POINTER.value),
-                    msg='The type of argument {} must be a pointer'.format(param_count)
-                )
-                fb += DeclareStmt(param, init=cast(args[param_count], param.type))
-                param_count += 1
-
-            # extract the dynamic dimensions from packed arguments
             scalar_map: Dict[Var, Var] = {}
-            for task_input in task.inputs:
-                for idx, dim in enumerate(task_input.ttype.shape):
-                    if isinstance(dim, Var):
-                        param = Var('{}_dim{}'.format(task_input.name, idx), type=dim.type)
-                        scalar_map[dim] = param
-                        fb += AssertStmt(
-                            cond=(arg_types[param_count] == ArgTypeCode.from_type(dim.type).value),
-                            msg='The type of argument {} must be a {}'.format(param_count, dim.type)
-                        )
-                        fb += DeclareStmt(param, init=cast(args[param_count], param.type))
-                        param_count += 1
-                    elif isinstance(dim, (int, Constant)):
-                        # constant dimension, skip
-                        pass
-                    else:
-                        msg = 'The input dimension must be either a Var or a Constant, but got {}'.format(type(dim))
-                        raise ValueError(msg)
+            for idx, task_param in enumerate(task.params):
+                if isinstance(task_param, Var):
+                    param = Var(task_param.name, task_param.type)
+                    expect_type_code = ArgTypeCode.from_type(task_param.type).value
+                    scalar_map[task_param] = param
+                else:
+                    assert isinstance(task_param, TensorNode)
+                    param = Var(task_param.name, ~task_param.type.dtype)
+                    expect_type_code = ArgTypeCode.POINTER.value
+                    node_map[task_param] = param
+                fb += AssertStmt(
+                    cond=(arg_types[idx] == expect_type_code),
+                    msg='The type of argument {} must be a pointer'.format(idx)
+                )
+                fb += DeclareStmt(param, init=cast(args[idx], param.type))
 
             # allocate memory space for intermediate tensors
             self.allocate_tensors(fb, device, buffer_bytes, buffer_offset, node_map, scalar_map)

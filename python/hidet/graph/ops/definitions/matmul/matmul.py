@@ -66,7 +66,7 @@ class MatmulTask(Task):
 class MatmulOp(Operator):
     def __init__(self, a: Tensor, b: Tensor):
         task = MatmulTask(input_like(a, 'a'), input_like(b, 'b'))
-        super().__init__(inputs=[a, b], task=task)
+        super().__init__(inputs=[a, b], attributes={}, task=task)
 
 
 def matmul(a: Tensor, b: Tensor) -> Tensor:

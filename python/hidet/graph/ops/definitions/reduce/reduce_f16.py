@@ -130,8 +130,8 @@ class ReduceF16Task(Task):
                 repeat_shape.append(1)
         task_layout = repeat(*repeat_shape) * spatial(*spatial_shape)
         grid_size = remain_layout.num_workers
-        accumulate_dtype = self.attributes['accumulate_dtype']
-        reduce_type = self.attributes['reduce_type']
+        accumulate_dtype = self.attrs['accumulate_dtype']
+        reduce_type = self.attrs['reduce_type']
         ro = ReduceOperation.from_name(reduce_type)
 
         with hidet.script_module() as module:
@@ -204,8 +204,8 @@ class ReduceF16Task(Task):
         task_layout = repeat(*repeat_shape) * spatial(*spatial_shape)
 
         grid_size = (remain_layout.num_workers + block_size - 1) // block_size
-        accumulate_dtype = self.attributes['accumulate_dtype']
-        reduce_type = self.attributes['reduce_type']
+        accumulate_dtype = self.attrs['accumulate_dtype']
+        reduce_type = self.attrs['reduce_type']
         ro = ReduceOperation.from_name(reduce_type)
 
         with hidet.script_module() as module:
@@ -251,8 +251,8 @@ class ReduceBaseF16Op(Operator):
         dims = normalize_dim(dims, rank=rank)
         super().__init__(
             inputs=[x],
-            task=ReduceF16Task(input_like(x, 'x'), dims, keep_dim, reduce_type),
             attributes={'dims': dims, 'keepdims': keep_dim},
+            task=ReduceF16Task(input_like(x, 'x'), dims, keep_dim, reduce_type),
         )
 
 

@@ -202,8 +202,6 @@ class GraphForwardBenchmarkInstrument(GraphForwardInstrument):
         if not self.benchmarking:
             return
 
-        if op.task_func is None:
-            op.build_task_func()
         task_func: CompiledFunction = op.task_func
         latency: List[float] = task_func.profile(
             *inputs, *outputs, warmup=self.warmup, number=self.number, repeat=self.repeat

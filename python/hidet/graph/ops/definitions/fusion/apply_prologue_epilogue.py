@@ -37,7 +37,7 @@ class PrologueEpilogueRewriter(IRRewriter):
         # declare inputs and outputs of the fused function
         self.graph_params: List[Var] = []
         self.tensor2var: Dict[Tensor, Var] = {}
-        for tn, tensor in zip(fused_task.parameters, self.fused_graph.inputs + self.fused_graph.outputs):
+        for tn, tensor in zip(fused_task.tensor_params, self.fused_graph.inputs + self.fused_graph.outputs):
             var = tensor_var(tn.name, shape=tensor.shape, dtype=tensor.dtype)
             self.graph_params.append(var)
             self.tensor2var[tensor] = var
