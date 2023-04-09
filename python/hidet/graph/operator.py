@@ -47,7 +47,7 @@ class Operator:
         # cache
         self._task_func: Optional[CompiledFunction] = None
 
-        self.outputs = self.run()
+        self.outputs = self._run()
 
     def __str__(self):
         arguments = ['{}: {}{}'.format(i, t.dtype.name, t.shape) for i, t in enumerate(self.inputs)]
@@ -73,7 +73,7 @@ class Operator:
             self._task_func = self.task.build(target=self.device.type)
         return self._task_func
 
-    def run(self) -> List[Tensor]:
+    def _run(self) -> List[Tensor]:
         from hidet.ir.tools import rewrite, simplify
 
         if all(t.storage is not None for t in self.inputs):
@@ -99,7 +99,7 @@ class Operator:
 
     def get_output(self, idx: int) -> Tensor:
         if self.outputs is None:
-            outputs = self.run()
+            outputs = self._run()
         else:
             outputs = self.outputs
         return outputs[idx]
@@ -136,28 +136,29 @@ class Operator:
 
         return outputs
 
-    def rerun(self, inputs: List[Tensor], update_attributes: Optional[Dict[str, Any]] = None) -> List[Tensor]:
+    def reforward(self, inputs: List[Tensor], update_attributes: Optional[Dict[str, Any]] = None) -> List[Tensor]:
         cls = self.__class__
         attributes = self.attrs.copy()
         if update_attributes is not None:
             attributes.update(update_attributes)
-        return cls(*inputs, **attributes).run()
+        return cls(*inputs, **attributes).outputs
 
     def clone(self, inputs: List[Tensor], update_attributes: Optional[Dict[str, Any]] = None) -> List[Tensor]:
-        # todo: remove this method, use rerun instead
-        cls = self.__class__
-        attributes = self.attrs.copy()
-        if update_attributes is not None:
-            attributes.update(update_attributes)
-
-        new_op = cls.__new__(cls)
-        new_op.name = self.name
-        new_op.inputs = inputs
-        new_op.task = self.task
-        new_op.attrs = attributes
-        new_op.outputs = new_op.run()
-        new_op._task_func = None    # pylint: disable=protected-access
-        return new_op.outputs
+        return self.reforward(inputs, update_attributes)
+        # # todo: remove this method, use rerun instead
+        # cls = self.__class__
+        # attributes = self.attrs.copy()
+        # if update_attributes is not None:
+        #     attributes.update(update_attributes)
+        #
+        # new_op = cls.__new__(cls)
+        # new_op.name = self.name
+        # new_op.inputs = inputs
+        # new_op.task = self.task
+        # new_op.attrs = attributes
+        # new_op.outputs = new_op._run()
+        # new_op._task_func = None    # pylint: disable=protected-access
+        # return new_op.outputs
 
     def dummy_inputs(self) -> List[Tensor]:
         dummy_inputs = []

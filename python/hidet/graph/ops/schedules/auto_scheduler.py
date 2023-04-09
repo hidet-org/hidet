@@ -205,6 +205,8 @@ class AutoScheduler:
 
         # Inline the grid compute that does not contain reduce
         outputs: List[TensorNode] = inline_grid_compute(task.outputs)
+        output_remap: Dict[TensorNode, TensorNode] = {a: b for a, b in zip(task.outputs, outputs)}
+        updated_params = [output_remap[p] if p in output_remap else p for p in task.params]
 
         # Taking the TensorNode as node to construct the computation directed-acyclic-graph (DAG)
         # In the DAG, each node is a TensorNode and each edge (src, dst) indicates src is accessed by dst.
@@ -230,7 +232,7 @@ class AutoScheduler:
             # extract the packed arguments
             node_map: Dict[TensorNode, Var] = {}  # tensor arguments
             scalar_map: Dict[Var, Var] = {}  # scalar arguments
-            for idx, task_param in enumerate(task.params):
+            for idx, task_param in enumerate(updated_params):
                 if isinstance(task_param, Var):
                     param = Var(task_param.name, task_param.type)
                     expect_type_code = ArgTypeCode.from_type(task_param.type).value

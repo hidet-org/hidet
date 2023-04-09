@@ -47,18 +47,20 @@ class FusibleGraph:
 
         graph_inputs: List[Tensor] = [symbol_like(x) for x in self.input_tensors]
         remap: Dict[Tensor, Tensor] = {x: y for x, y in zip(self.input_tensors, graph_inputs)}
-        updated_anchor: int = -1
-        for idx, op in enumerate(self.operators):
+        updated_anchor: Optional[Operator] = None
+        for op in self.operators:
             inputs = [remap[x] for x in op.inputs]
-            outputs = op.rerun(inputs)
+            outputs = op.reforward(inputs)
             if op is self.anchor:
-                updated_anchor = idx
+                updated_anchor = outputs[0].op
             for x, y in zip(op.outputs, outputs):
                 remap[x] = y
         graph_outputs = [remap[x] for x in self.output_tensors]
         flow_graph = hidet.trace_from(graph_outputs, graph_inputs)
-        assert updated_anchor != -1
-        return flow_graph, updated_anchor
+
+        assert updated_anchor is not None
+        anchor_idx = flow_graph.nodes.index(updated_anchor)
+        return flow_graph, anchor_idx
 
 
 Usage = Dict[Tensor, List[Tuple[Operator, int]]]
@@ -323,7 +325,7 @@ def operator_from_sub_graph(sub_graph: FusibleGraph, input_remap: Dict[Tensor, T
                 'For now, this pass expects to accept a graph without fused operators.\n'
                 'Have you run this pass twice?'
             )
-        outs: List[Tensor] = origin_op.rerun(updated_inputs)
+        outs: List[Tensor] = origin_op.reforward(updated_inputs)
         updated_op = outs[0].trace[0]
         return updated_op
     else:

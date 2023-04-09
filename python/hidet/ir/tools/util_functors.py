@@ -68,7 +68,7 @@ class CloneRewriter(IRRewriter):
 
 
 def rewrite(
-    node: Union[Function, Expr, Stmt, TypeNode, tuple], rewrite_map: Mapping[Union[Stmt, Expr], Union[Stmt, Expr]]
+    node: Union[Function, Expr, Stmt, TypeNode, tuple, list], rewrite_map: Mapping[Union[Stmt, Expr], Union[Stmt, Expr]]
 ):
     assert isinstance(rewrite_map, dict)
     rewriter = MapBasedRewriter(rewrite_map)

@@ -112,6 +112,8 @@ class WhereTask(Task):
 
 class UnaryElementwiseOp(Operator):
     def __init__(self, x: Tensor, op, name: str, attributes: Optional[Dict[str, Any]] = None):
+        if attributes is None:
+            attributes = {}
         super().__init__(inputs=[x], attributes=attributes, task=UnaryElementwiseTask(name, input_like(x, 'x'), op=op))
 
 

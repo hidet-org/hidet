@@ -38,6 +38,19 @@ class FusedTask(Task):
         return ' '.join(names)
 
     def _computation(self, fused_graph: FlowGraph) -> Tuple[List[TensorInput], List[TensorNode]]:
+        """
+        Get the computation definition of the fused subgraph.
+
+        Parameters
+        ----------
+        fused_graph: FlowGraph
+            The fused subgraph
+
+        Returns
+        -------
+        inputs, outputs: List[TensorInput], List[TensorNode]
+            The inputs and outputs of the fused subgraph in the compute IR defined in hidet.ir.compute module.
+        """
         inputs: List[TensorInput] = []
         consumer: Dict[Tensor, List[Operator]] = defaultdict(list)
         tensor_map: Dict[Tensor, TensorNode] = {}

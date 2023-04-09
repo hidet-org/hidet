@@ -132,7 +132,7 @@ class ResolveVariantRewriter(GraphRewriter):
         if same_list(inputs, op.inputs):
             resolve_op = op
         else:
-            updated_outputs = op.rerun(inputs)
+            updated_outputs = op.reforward(inputs)
             resolve_op = updated_outputs[0].op
         outs = self.rule_chain.resolve(resolve_op)
 

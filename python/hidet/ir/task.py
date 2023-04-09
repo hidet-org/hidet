@@ -118,7 +118,7 @@ class Task(Node):
         from hidet.ir.tools import collect_free_vars
 
         free_vars: List[Var] = collect_free_vars(self.outputs)
-        if any(v not in self.params for v in free_vars):
+        if any(v not in self.params and not isinstance(v.type, FuncType) for v in free_vars):
             raise ValueError('Some free variables are not in params: {}'.format(free_vars))
 
     def signature(self) -> str:
