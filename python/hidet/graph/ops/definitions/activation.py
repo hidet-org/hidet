@@ -185,11 +185,7 @@ class SoftShrinkOp(UnaryElementwiseOp):
 class SoftmaxOp(Operator):
     def __init__(self, x: Tensor, axis: int = 1):
         axis = normalize_dim(axis, len(x.shape))
-        super().__init__(
-            inputs=[x],
-            attributes={'axis': axis},
-            task=SoftmaxTask(input_like(x, 'x'), axis)
-        )
+        super().__init__(inputs=[x], attributes={'axis': axis}, task=SoftmaxTask(input_like(x, 'x'), axis))
 
 
 def relu(x) -> Tensor:

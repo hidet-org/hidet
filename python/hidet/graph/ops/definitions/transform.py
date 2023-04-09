@@ -515,9 +515,7 @@ class StridedSliceOp(Operator):
 class BroadcastOp(Operator):
     def __init__(self, data: Tensor, shape: List[int]):
         super().__init__(
-            inputs=[data],
-            attributes={'shape': shape},
-            task=BroadcastTask(input_like(data, 'data'), shape),
+            inputs=[data], attributes={'shape': shape}, task=BroadcastTask(input_like(data, 'data'), shape)
         )
 
 
@@ -545,9 +543,7 @@ class TileOp(Operator):
                 "same length as data shape. shape: {}, repeats: {}".format(data.shape, repeats)
             )
         super().__init__(
-            inputs=[data],
-            attributes={'repeats': repeats},
-            task=TileTask(input_like(data, 'data'), repeats)
+            inputs=[data], attributes={'repeats': repeats}, task=TileTask(input_like(data, 'data'), repeats)
         )
 
 

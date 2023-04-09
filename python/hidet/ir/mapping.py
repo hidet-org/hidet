@@ -11,9 +11,8 @@
 # limitations under the License.
 # pylint: disable=import-outside-toplevel
 from __future__ import annotations
-from typing import Union, Tuple, List, Optional, Sequence, Callable, Mapping, Dict
+from typing import Union, Tuple, List, Optional, Sequence, Callable, Dict
 import itertools
-import numpy as np
 from hidet.ir.node import Node
 from hidet.ir.expr import Expr
 from hidet.utils import prod, gcd
@@ -61,6 +60,7 @@ class TaskMapping(Node):
         worker2task: Optional[Callable[[Int], List[Tuple[Int, ...]]]] = None,
     ):
         from hidet.ir.tools import simplify
+
         self.num_workers: Int = simplify(num_workers)
         self.task_shape: Tuple[Int, ...] = tuple(simplify(v) for v in task_shape)
         self.worker2task: Callable[[Int], List[Tuple[Int]]] = worker2task
@@ -112,6 +112,7 @@ class TaskMapping(Node):
 class RepeatTaskMapping(TaskMapping):
     def __init__(self, task_shape: Sequence[Int], ranks: Optional[Sequence[int]]):
         from hidet.ir.tools import simplify
+
         super().__init__(num_workers=1, task_shape=tuple(task_shape), worker2task=self._worker2task)
         self.ranks: List[int] = list(ranks)
         self.strides: List[Int] = [simplify(v) for v in strides_from_ranks(task_shape, ranks)]
@@ -130,6 +131,7 @@ class RepeatTaskMapping(TaskMapping):
 class SpatialTaskMapping(TaskMapping):
     def __init__(self, task_shape: Sequence[int], ranks: Sequence[int]):
         from hidet.ir.tools import simplify
+
         super().__init__(num_workers=prod(task_shape), task_shape=tuple(task_shape), worker2task=self._worker2task)
         self.ranks: List[int] = list(ranks)
         self.strides: List[Int] = [simplify(v) for v in strides_from_ranks(task_shape, ranks)]
@@ -295,6 +297,7 @@ def col_repeat(*task_shape: Expr):
 
 def auto_map(*task_shape: Expr, workers: Expr, ranks: Optional[Sequence[int]] = None) -> TaskMapping:
     from hidet.ir.tools import simplify_to_int
+
     task_shape: List[Expr] = list(task_shape)
     num_tasks = prod(task_shape)
     if num_tasks % workers != 0:

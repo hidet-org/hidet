@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Union, Callable
 import os
 import pickle
 from hidet.ir.node import Node
-from hidet.ir.type import FuncType, VoidType, TensorType
+from hidet.ir.type import FuncType, VoidType
 from hidet.ir.expr import Expr, Var, var
 from hidet.ir.func import IRModule
 from hidet.ir.compute import ComputeNode, TensorNode, TensorInput, ScalarInput, GridCompute
@@ -116,6 +116,7 @@ class Task(Node):
                 )
 
         from hidet.ir.tools import collect_free_vars
+
         free_vars: List[Var] = collect_free_vars(self.outputs)
         if any(v not in self.params for v in free_vars):
             raise ValueError('Some free variables are not in params: {}'.format(free_vars))
@@ -356,4 +357,5 @@ def load_task(fname: str) -> Task:
 
 def task_compiled_func_type(task: Task) -> FuncType:
     from hidet.ir.tools import infer_type
+
     return FuncType(param_types=[infer_type(t) for t in task.params], ret_type=VoidType())

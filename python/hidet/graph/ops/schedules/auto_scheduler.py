@@ -12,13 +12,13 @@
 from typing import Union, List, Dict, Sequence, Tuple, Set
 
 from hidet.ir.type import tensor_pointer_type, void_pointer
-from hidet.ir.expr import TensorElement, Expr, Var, Constant, scalar_var, convert, cast
+from hidet.ir.expr import TensorElement, Expr, Var, Constant, scalar_var, convert, cast, deref
 from hidet.ir.stmt import Stmt, AssignStmt, ForStmt, DeclareStmt, BufferStoreStmt, AssertStmt
 from hidet.ir.task import Task
 from hidet.ir.func import IRModule, Function
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.ir.functors import ExprRewriter, ExprVisitor, ComputeVisitor, ComputeRewriter, TypeRewriter
-from hidet.ir.tools import collect, rewrite, infer_type, simplify_to_int, simplify
+from hidet.ir.tools import collect, rewrite, infer_type, simplify
 from hidet.ir.compute import ScalarInput, TensorInput, GridCompute, ReduceCompute, ArgReduceCompute
 from hidet.ir.compute import TensorNode, ScalarNode
 from hidet.ir.primitives.runtime import request_cuda_workspace, request_cpu_workspace
@@ -228,23 +228,25 @@ class AutoScheduler:
             fb.extend_params([num_args, arg_types, args])
 
             # extract the packed arguments
-            node_map: Dict[TensorNode, Var] = {}    # tensor arguments
-            scalar_map: Dict[Var, Var] = {}         # scalar arguments
+            node_map: Dict[TensorNode, Var] = {}  # tensor arguments
+            scalar_map: Dict[Var, Var] = {}  # scalar arguments
             for idx, task_param in enumerate(task.params):
                 if isinstance(task_param, Var):
                     param = Var(task_param.name, task_param.type)
                     expect_type_code = ArgTypeCode.from_type(task_param.type).value
                     scalar_map[task_param] = param
+                    init = deref(cast(args[idx], ~task_param.type))
                 else:
                     assert isinstance(task_param, TensorNode)
                     param = Var(task_param.name, ~task_param.type.dtype)
                     expect_type_code = ArgTypeCode.POINTER.value
                     node_map[task_param] = param
+                    init = cast(args[idx], param.type)
                 fb += AssertStmt(
                     cond=(arg_types[idx] == expect_type_code),
-                    msg='Argument {} expects a {}'.format(idx, ArgTypeCode(expect_type_code).name.lower())
+                    msg='Argument {} expects a {}'.format(idx, ArgTypeCode(expect_type_code).name.lower()),
                 )
-                fb += DeclareStmt(param, init=cast(args[idx], param.type))
+                fb += DeclareStmt(param, init=init)
 
             # allocate memory space for intermediate tensors
             self.allocate_tensors(fb, device, buffer_bytes, buffer_offset, node_map)
@@ -282,6 +284,33 @@ class AutoScheduler:
         func.name = name
         self.ir_module.add(func.name, func)
         return self.ir_module.lookup_var(func.name)
+
+    def grid_compute_params_and_args(
+        self, node: GridCompute, node_map: Dict[TensorNode, Var], scalar_map: Dict[Var, Var]
+    ) -> Tuple[List[Var], Dict[Union[TensorNode, Var], Var], List[Expr]]:
+        # collect used tensors and scalars
+        used_scalars: List[Var] = collect(node.value, Var)
+        used_tensors: List[TensorNode] = collect(node.value, TensorNode, stop_when_found=True)
+
+        # get the scalar and tensor parameters
+        param_scalars: List[Var] = [v for v in used_scalars if v in scalar_map]
+        param_tensors: List[TensorNode] = used_tensors + [node]
+
+        # declare the parameter variables
+        params: List[Var] = []
+        # first declare the scalar parameters
+        params.extend([Var(scalar.name, scalar.type) for scalar in param_scalars])
+        param_map: Dict[Union[TensorNode, Var], Var] = {scalar: param for scalar, param in zip(param_scalars, params)}
+        params.extend([Var(tensor.name, rewrite(tensor.type, param_map)) for tensor in param_tensors])
+        # the tensor shape and layout may use the scalar parameters, so we need to rewrite them to use the param vars
+        param_map.update({tensor: param for tensor, param in zip(param_tensors, params[len(param_scalars) :])})
+
+        # construct the call arguments
+        call_args: List[Expr] = []
+        call_args.extend([scalar_map[param_scalar] for param_scalar in param_scalars])
+        call_args.extend([node_map[param_tensor] for param_tensor in param_tensors])
+
+        return params, param_map, call_args
 
     def schedule_grid_compute(
         self, node: GridCompute, node_map: Dict[TensorNode, Var], scalar_map: Dict[Var, Var]

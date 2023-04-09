@@ -112,11 +112,7 @@ class WhereTask(Task):
 
 class UnaryElementwiseOp(Operator):
     def __init__(self, x: Tensor, op, name: str, attributes: Optional[Dict[str, Any]] = None):
-        super().__init__(
-            inputs=[x],
-            attributes=attributes,
-            task=UnaryElementwiseTask(name, input_like(x, 'x'), op=op)
-        )
+        super().__init__(inputs=[x], attributes=attributes, task=UnaryElementwiseTask(name, input_like(x, 'x'), op=op))
 
 
 class BinaryElementwiseOp(Operator):
@@ -124,7 +120,7 @@ class BinaryElementwiseOp(Operator):
         super().__init__(
             inputs=[x, y],
             attributes={},
-            task=BinaryElementwiseTask(name, input_like(x, 'x'), input_like(y, 'y'), op=op)
+            task=BinaryElementwiseTask(name, input_like(x, 'x'), input_like(y, 'y'), op=op),
         )
 
 

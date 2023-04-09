@@ -108,12 +108,8 @@ class FusedTask(Task):
 class FusedOperator(Operator):
     def __init__(self, *inputs: Tensor, fused_graph: FlowGraph, anchor: int):
         task = FusedTask(fused_graph, anchor)
-        super().__init__(
-            inputs=list(inputs),
-            attributes={'fused_graph': fused_graph, 'anchor': anchor},
-            task=task,
-        )
-        self.name = f'Fused{fused_graph.nodes[anchor].name}',
+        super().__init__(inputs=list(inputs), attributes={'fused_graph': fused_graph, 'anchor': anchor}, task=task)
+        self.name = (f'Fused{fused_graph.nodes[anchor].name}',)
         self._check(inputs, fused_graph, anchor)
 
     @staticmethod

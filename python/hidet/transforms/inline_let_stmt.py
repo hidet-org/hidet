@@ -25,10 +25,10 @@ class LetVarRefAnalyzer(IRVisitor):
         self.usage_count = None
         self.var2value = None
 
-    def analyze(self, expr):
+    def analyze(self, stmt):
         self.usage_count = defaultdict(int)
         self.var2value = {}
-        self.visit(expr)
+        self.visit(stmt)
 
     def visit(self, node):
         if isinstance(node, Var):

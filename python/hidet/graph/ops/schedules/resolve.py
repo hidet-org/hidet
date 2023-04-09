@@ -17,12 +17,9 @@ import numpy as np
 from tqdm import tqdm
 
 from hidet import option
-from hidet.ir.type import TensorType
-from hidet.ir.expr import Constant
 from hidet.ir.func import IRModule
-from hidet.ir.task import Task
 from hidet.utils import TableBuilder, strict_zip, error_tolerance
-from hidet.graph.tensor import randn, zeros, ones, Tensor
+from hidet.graph.tensor import Tensor
 from hidet.option import get_option
 from .common import Schedule
 

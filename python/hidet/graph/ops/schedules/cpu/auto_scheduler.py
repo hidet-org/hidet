@@ -9,12 +9,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Dict, Union
+from typing import Dict
 
 from hidet.ir.builders import FunctionBuilder
 from hidet.ir.compute import TensorNode, GridCompute
-from hidet.ir.expr import Call, Expr, Var, convert
-from hidet.ir.tools import collect, rewrite
+from hidet.ir.expr import Call, Var, convert
+from hidet.ir.tools import rewrite
 from hidet.ir.stmt import Stmt, BufferStoreStmt, EvaluateStmt
 from ..auto_scheduler import AutoScheduler, ComputeExprLower
 
@@ -26,17 +26,7 @@ class CpuAutoScheduler(AutoScheduler):
         # pylint: disable=too-many-locals, import-outside-toplevel, unnecessary-comprehension
         from hidet.ir.mapping import row_repeat, TaskMapping
 
-        used_tensors: List[TensorNode] = collect(node.value, TensorNode, stop_when_found=True)
-        param_tensors: List[TensorNode] = used_tensors + [node]
-        param_scalars: List[Var] = [v for v in collect(node.value, Var) if v in scalar_map]
-
-        params: List[Var] = []
-        params.extend([Var(tensor.name, tensor.type) for tensor in param_tensors])
-        params.extend([Var(scalar.name, scalar.type) for scalar in param_scalars])
-        param_map: Dict[Union[TensorNode, Var], Var] = {
-            **{tensor: param for tensor, param in zip(param_tensors, params[:len(param_tensors)])},
-            **{scalar: param for scalar, param in zip(param_scalars, params[len(param_tensors):])},
-        }
+        params, param_map, call_args = self.grid_compute_params_and_args(node, node_map, scalar_map)
 
         with FunctionBuilder(name=f'compute_{node.name}', kind='host_kernel') as fb:
             # set function parameters
@@ -56,7 +46,4 @@ class CpuAutoScheduler(AutoScheduler):
         func_var = self.add_function(func)
 
         # call the created function in the launch function
-        call_args: List[Expr] = []
-        call_args.extend([node_map[param_tensor] for param_tensor in param_tensors])
-        call_args.extend([scalar_map[param_scalar] for param_scalar in param_scalars])
         return EvaluateStmt(Call(func_var, args=call_args))

@@ -18,6 +18,7 @@ from enum import Enum
 from ctypes import c_int32, c_void_p, pointer, c_float, cast
 from ctypes import POINTER, Structure
 from hidet.ir.type import TypeNode, DataType, TensorType, PointerType, TensorPointerType
+from hidet.ir.expr import Constant
 from .ffi import _LIB
 
 c_int32_p = POINTER(c_int32)
@@ -87,6 +88,13 @@ class PackedFunc:
 
         converted_args: List[ctypes.c_void_p] = []
         for i, (param_type, arg) in enumerate(zip(self.param_types, args)):
+            if isinstance(arg, Constant):
+                if arg.is_scalar():
+                    arg = arg.value
+                else:
+                    assert arg.is_tensor()
+                    raise NotImplementedError('Constant tensor is not supported.')
+
             if isinstance(arg, (float, int)):
                 if not isinstance(param_type, DataType):
                     raise ValueError(

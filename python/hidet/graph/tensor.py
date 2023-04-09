@@ -30,6 +30,7 @@ from hidet.runtime.device import Device, instantiate_device
 
 def _simplify_dim(dim: Union[int, Expr]) -> Union[int, Var]:
     from hidet.ir.tools import simplify
+
     if isinstance(dim, (int, Var)):
         return dim
     elif isinstance(dim, Constant):

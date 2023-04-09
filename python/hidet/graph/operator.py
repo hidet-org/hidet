@@ -35,12 +35,7 @@ def get_operator_name(op, given_name: Optional[str] = None):
 class Operator:
     """An operator that takes tensor as input and output."""
 
-    def __init__(
-        self,
-        inputs: List[Tensor],
-        attributes: Dict[str, Any],
-        task: Optional[Task],
-    ):
+    def __init__(self, inputs: List[Tensor], attributes: Dict[str, Any], task: Optional[Task]):
         assert all(isinstance(v, Tensor) for v in inputs)
 
         self.name: str = get_operator_name(self)
@@ -98,13 +93,7 @@ class Operator:
                 symbol_shape = [simplify(rewrite(d, remap)) for d in output_type.shape]
                 shape = [int(d) if isinstance(d, Constant) else var(f'd{i}') for i, d in enumerate(symbol_shape)]
                 outputs.append(
-                    Tensor(
-                        shape=shape,
-                        dtype=output_type.dtype.name,
-                        device=self.device,
-                        storage=None,
-                        trace=(self, i),
-                    )
+                    Tensor(shape=shape, dtype=output_type.dtype.name, device=self.device, storage=None, trace=(self, i))
                 )
             return outputs
 
@@ -117,6 +106,7 @@ class Operator:
 
     def imperative_run(self, inputs: List[Tensor]) -> List[Tensor]:
         from hidet.ir.tools import rewrite, simplify_to_int
+
         remap: Dict[Var, Constant] = {}
         for ta, tb in zip(self.task.inputs, inputs):
             for d1, d2 in zip(ta.type.shape, tb.shape):
@@ -127,8 +117,7 @@ class Operator:
             [simplify_to_int(rewrite(d, remap)) for d in output.type.shape] for output in self.task.outputs
         ]
         outputs: List[Tensor] = [
-            empty(shape=shape, dtype=dtype, device=self.device)
-            for shape, dtype in zip(output_shapes, output_dtypes)
+            empty(shape=shape, dtype=dtype, device=self.device) for shape, dtype in zip(output_shapes, output_dtypes)
         ]
 
         arg_remap: Dict[Union[Var, TensorNode], Union[Constant, Tensor]] = remap
@@ -167,7 +156,7 @@ class Operator:
         new_op.task = self.task
         new_op.attrs = attributes
         new_op.outputs = new_op.run()
-        new_op._task_func = None
+        new_op._task_func = None    # pylint: disable=protected-access
         return new_op.outputs
 
     def dummy_inputs(self) -> List[Tensor]:

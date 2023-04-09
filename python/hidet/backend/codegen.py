@@ -369,7 +369,7 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             func = self.ir_module.lookup(func_name)
             func_name = Text(self.canonize_funcname(func_name))
             if func.kind == 'cuda_kernel':
-
+                assert False
                 if isinstance(func.attrs['cuda_block_dim'], int) and func.attrs['cuda_block_dim'] > 1024:
                     raise ValueError('CUDA block dimension cannot be larger than 1024.')
 
