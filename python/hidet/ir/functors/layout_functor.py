@@ -67,7 +67,7 @@ class LayoutRewriter(BaseRewriter, LayoutFunctor):
         size = self.visit(layout.size)
         shape = self.visit(layout.shape)
         strides = self.visit(layout.strides)
-        if size is layout.size and same_list(shape, layout.shape) and same_list(strides, layout.strides):
+        if same_list([size], [layout.size]) and same_list(shape, layout.shape) and same_list(strides, layout.strides):
             return layout
         else:
             return StridesLayout(shape, strides)

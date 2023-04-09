@@ -86,12 +86,9 @@ class Task(Node):
     """
 
     def __init__(self, name, inputs, outputs, *, params=None, inverse_map=None, attributes=None):
-        if params is None:
-            params = list(inputs) + list(outputs)
-        if inverse_map is None:
-            inverse_map = {}
-        if attributes is None:
-            attributes = {}
+        params = params if params else list(inputs) + list(outputs)
+        inverse_map = inverse_map if inverse_map else {}
+        attributes = attributes if attributes else {}
         self.name: str = name
         self.inputs: List[TensorInput] = list(inputs)
         self.outputs: List[TensorNode] = list(outputs)
