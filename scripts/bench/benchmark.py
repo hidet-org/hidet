@@ -55,9 +55,9 @@ def info(args) -> str:
 def main():
     args = parser.parse_args()
     commands = [
-        f'hidet bench --cache-dir {cache_dir} --space {args.space} --dtype float32 --report resnet50_f32.txt --tensor-core resnet --models resnet50',
-        f'hidet bench --cache-dir {cache_dir} --space {args.space} --dtype float16 --report resnet50_f16.txt --tensor-core resnet --models resnet50',
-        f'hidet bench --cache-dir {cache_dir} --space {args.space} --dtype float32 --report bert-seq128-f32.txt --tensor-core nlp --seq-length 128 --models bert-base-uncased',
+        # f'hidet bench --cache-dir {cache_dir} --space {args.space} --dtype float32 --report resnet50_f32.txt --tensor-core resnet --models resnet50',
+        # f'hidet bench --cache-dir {cache_dir} --space {args.space} --dtype float16 --report resnet50_f16.txt --tensor-core resnet --models resnet50',
+        # f'hidet bench --cache-dir {cache_dir} --space {args.space} --dtype float32 --report bert-seq128-f32.txt --tensor-core nlp --seq-length 128 --models bert-base-uncased',
         f'hidet bench --cache-dir {cache_dir} --space {args.space} --dtype float16 --report bert-seq128-f16.txt --tensor-core nlp --seq-length 128 --models bert-base-uncased',
     ]
     with open(args.report, 'w') as f:

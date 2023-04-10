@@ -14,9 +14,9 @@ from hidet.ffi.packedfunc import ArgTypeCode
 from hidet.ir.func import Function, IRModule
 from hidet.ir.type import DataType, TensorType, TensorPointerType, PointerType
 from hidet.ir.dtypes import int32
-from hidet.ir.expr import Expr, Var, Call
+from hidet.ir.expr import Expr, Var, Call, Constant
 from hidet.ir.stmt import Stmt, AssertStmt, LaunchKernelStmt, DeclareStmt
-from hidet.ir.tools import simplify_to_int, rewrite, simplify
+from hidet.ir.tools import rewrite, simplify
 from hidet.ir.builders import StmtBuilder
 from hidet.transforms import Pass
 
@@ -78,16 +78,23 @@ def add_packed_func(ir_module: IRModule, func: Function, pack_func_name: str):
             sb += AssertStmt(arg_types[idx] == code.value, 'The {}-th argument should be {}'.format(idx, param.type))
             sb += DeclareStmt(arg_var, init=arg)
 
-        if func.kind == 'cuda_kernel' and simplify_to_int(func.get_attr('cuda_dynamic_smem_bytes', 0)) > 48 * 1024:
-            dynamic_smem_bytes = simplify_to_int(func.get_attr('cuda_dynamic_smem_bytes', 0))
-            sb += set_kernel_max_dynamic_smem_bytes(func_var, dynamic_smem_bytes)
         if func.kind == 'cuda_kernel':
+            smem_bytes: Union[Expr, int] = simplify(func.get_attr('cuda_dynamic_smem_bytes', 0))
+            if isinstance(smem_bytes, (int, Constant)):
+                # compiled-time known size of shared memory
+                if int(smem_bytes) > 48 * 1024:
+                    sb += set_kernel_max_dynamic_smem_bytes(func_var, smem_bytes)
+            else:
+                # run-time known size of shared memory
+                smem_bytes = rewrite(smem_bytes, param2arg)
+                with sb.if_then(smem_bytes > 48 * 1024):
+                    sb += set_kernel_max_dynamic_smem_bytes(func_var, smem_bytes)
             sb += LaunchKernelStmt(
                 func_var,
                 [param2arg[param] for param in func.params],
                 grid_dim=_rewrite_dim3(_normalize_dim3(func.get_attr('cuda_grid_dim')), param2arg),
                 block_dim=_rewrite_dim3(_normalize_dim3(func.get_attr('cuda_block_dim')), param2arg),
-                shared_mem=rewrite(int32(func.get_attr('cuda_dynamic_smem_bytes', 0)), param2arg),
+                shared_mem=smem_bytes,
             )
         elif func.kind == 'host_kernel':
             sb += Call(func_var, [param2arg[param] for param in func.params])

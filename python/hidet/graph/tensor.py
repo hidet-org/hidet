@@ -1296,7 +1296,12 @@ def full_like(
 
 
 def randn_like(
-    data: Tensor, shape: Optional[Sequence[int]] = None, dtype: Optional[str] = None, device: Optional[str] = None
+    data: Tensor,
+    mean: float = 0.0,
+    stddev: float = 1.0,
+    shape: Optional[Sequence[int]] = None,
+    dtype: Optional[str] = None,
+    device: Optional[str] = None,
 ) -> Tensor:
     """
     Create a randomly initialized tensor with the same shape, dtype, and device as the given tensor.
@@ -1305,6 +1310,12 @@ def randn_like(
     ----------
     data: Tensor
         The tensor to copy shape, dtype, and device from.
+
+    mean: float, optional
+        The mean of the normal distribution.
+
+    stddev: float, optional
+        The standard deviation of the normal distribution.
 
     shape: Sequence[int], optional
         The shape of new tensor. If None, the shape of data is used.
@@ -1324,6 +1335,8 @@ def randn_like(
         shape=data.shape if shape is None else shape,
         dtype=data.dtype if dtype is None else dtype,
         device=data.device if device is None else device,
+        mean=mean,
+        stddev=stddev,
     )
 
 
