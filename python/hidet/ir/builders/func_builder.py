@@ -65,10 +65,6 @@ class FunctionBuilder(StmtBuilder):
     def extend_extern_vars(self, extern_vars: List[Var]):
         self.extern_vars.extend(extern_vars)
 
-    # def extend_local_vars(self, local_vars: List[Var]):
-    #     assert isinstance(local_vars, (tuple, list))
-    #     self.local_vars.extend(local_vars)
-
     def extend_attrs(self, new_attrs: Dict[str, object]):
         self.attrs.update(new_attrs)
 

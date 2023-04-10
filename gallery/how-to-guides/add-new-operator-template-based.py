@@ -80,10 +80,10 @@ def batch_matmul_mma_fp16_schedule(task: BatchMatmulFp16Task) -> IRModule:
     from hidet.lang.cuda import MmaConfig, mma_sync
 
     # get the workload size
-    bs = task.attributes['batch_size']
-    m_size = task.attributes['m_size']
-    n_size = task.attributes['n_size']
-    k_size = task.attributes['k_size']
+    bs = task.attrs['batch_size']
+    m_size = task.attrs['m_size']
+    n_size = task.attrs['n_size']
+    k_size = task.attrs['k_size']
 
     # define the template hyper-parameters
     mma_config = MmaConfig.m16n8k8_f16_f16()
@@ -220,6 +220,7 @@ class BatchMatmulFp16Op(Operator):
         assert a.dtype == hidet.float16 and b.dtype == hidet.float16
         super().__init__(
             inputs=[a, b],
+            attributes={},
             task=BatchMatmulFp16Task(input_like(a, 'a'), input_like(b, 'b')),
         )
 

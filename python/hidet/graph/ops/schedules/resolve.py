@@ -17,50 +17,47 @@ import numpy as np
 from tqdm import tqdm
 
 from hidet import option
-from hidet.ir.type import TensorType
-from hidet.ir.expr import Constant
 from hidet.ir.func import IRModule
-from hidet.ir.task import Task
 from hidet.utils import TableBuilder, strict_zip, error_tolerance
-from hidet.graph.tensor import randn, zeros, ones, Tensor
+from hidet.graph.tensor import Tensor
 from hidet.option import get_option
 from .common import Schedule
 
 
-def dummy_inputs_from_task(task: Task, target_device: str) -> List[Tensor]:
-    """
-    Create dummy inputs values for given task.
-
-    Parameters
-    ----------
-    task: Task
-        The task to generate dummy inputs for.
-
-    Returns
-    -------
-    ret: List[Tensor]
-        The dummy input tensors.
-    """
-    inputs = []
-    for param in task.parameters:
-        param_type = param.type
-
-        if not isinstance(param_type, TensorType):
-            raise ValueError('Currently, only support create dummy scalar inputs.')
-        if any(not isinstance(s, Constant) for s in param_type.shape):
-            raise ValueError('Currently, only support create dummy values for static tensor inputs.')
-        dtype = param_type.dtype.name
-        shape = [int(s) for s in param_type.shape]
-        if dtype in ['float32', 'float16', 'bfloat16']:
-            x = randn(shape, dtype, device=target_device)
-        elif dtype in ['int64', 'int32', 'int8', 'uint64', 'uint32', 'uint8']:
-            x = zeros(shape, dtype, device=target_device)
-        elif dtype == 'bool':
-            x = ones(shape, dtype, device=target_device)
-        else:
-            raise ValueError('Currently do not support generate random array for data type {}'.format(dtype))
-        inputs.append(x)
-    return inputs
+# def dummy_inputs_from_task(task: Task, target_device: str) -> List[Tensor]:
+#     """
+#     Create dummy inputs values for given task.
+#
+#     Parameters
+#     ----------
+#     task: Task
+#         The task to generate dummy inputs for.
+#
+#     Returns
+#     -------
+#     ret: List[Tensor]
+#         The dummy input tensors.
+#     """
+#     inputs = []
+#     for param in task.parameters:
+#         param_type = param.type
+#
+#         if not isinstance(param_type, TensorType):
+#             raise ValueError('Currently, only support create dummy scalar inputs.')
+#         if any(not isinstance(s, Constant) for s in param_type.shape):
+#             raise ValueError('Currently, only support create dummy values for static tensor inputs.')
+#         dtype = param_type.dtype.name
+#         shape = [int(s) for s in param_type.shape]
+#         if dtype in ['float32', 'float16', 'bfloat16']:
+#             x = randn(shape, dtype, device=target_device)
+#         elif dtype in ['int64', 'int32', 'int8', 'uint64', 'uint32', 'uint8']:
+#             x = zeros(shape, dtype, device=target_device)
+#         elif dtype == 'bool':
+#             x = ones(shape, dtype, device=target_device)
+#         else:
+#             raise ValueError('Currently do not support generate random array for data type {}'.format(dtype))
+#         inputs.append(x)
+#     return inputs
 
 
 def resolve_ir_modules(
@@ -116,7 +113,8 @@ def resolve_ir_modules(
     compiled_funcs: List[Optional[CompiledFunction]] = build_ir_module_batch(
         ir_modules, output_dir=resolve_dir, parallel=parallel, verbose=verbose
     )
-    dummy_inputs = dummy_inputs_from_task(ir_modules[0].task, target_device)
+    # dummy_inputs = dummy_inputs_from_task(ir_modules[0].task, target_device)
+    dummy_inputs = ir_modules[0].task.dummy_arguments(target_device)
     best_latency = 1e30
     best_ir_module = None
     latencies = []

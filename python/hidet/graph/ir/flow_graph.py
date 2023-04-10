@@ -480,6 +480,8 @@ class FlowGraph:
                         # input
                         free_vars.append(it)
                 else:
+                    if it is not it.op.outputs[it.trace[1]]:
+                        raise ValueError('The trace is broken')
                     out_degree[it.op] -= 1
                     if out_degree[it.op] == 0:
                         stack.append(it.op)

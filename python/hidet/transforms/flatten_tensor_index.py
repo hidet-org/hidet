@@ -14,7 +14,7 @@ from hidet.ir.expr import Var, TensorElement, TensorSlice, Constant
 from hidet.ir.stmt import BufferStoreStmt, DeclareStmt
 from hidet.ir.func import Function
 from hidet.ir.functors import IRRewriter
-from hidet.ir.tools import simplify_to_int
+from hidet.ir.tools import simplify
 from hidet.transforms import Pass
 from hidet.ir.layout import StridesLayout, DataLayout
 
@@ -27,7 +27,7 @@ class FlattenTensorAccessRewriter(IRRewriter):
     def visit_Function(self, func: Function):
         for var in func.params:
             if isinstance(var.type, TensorType):
-                size = simplify_to_int(var.type.layout.size)
+                size = simplify(var.type.layout.size)
                 self.memo[var] = Var(var.hint, tensor_type(var.type.dtype, [size], DataLayout.row_major([size])))
             elif isinstance(var.type, TensorPointerType):
                 self.memo[var] = var
@@ -52,7 +52,7 @@ class FlattenTensorAccessRewriter(IRRewriter):
 
     def visit_DeclareStmt(self, stmt: DeclareStmt):
         if isinstance(stmt.var.type, TensorType):
-            size = simplify_to_int(stmt.var.type.layout.size)
+            size = simplify(stmt.var.type.layout.size)
             var = Var(stmt.var.hint, tensor_type(stmt.var.type.dtype, [size], DataLayout.row_major([size])))
             self.memo[stmt.var] = var
             init = self(stmt.init) if stmt.init is not None else None

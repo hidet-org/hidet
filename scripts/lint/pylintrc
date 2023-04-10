@@ -454,6 +454,7 @@ disable=raw-checker-failed,
         no-else-raise,                      # same as above
         fixme,                              # we allow the project has todo items
         consider-using-f-string,            # sometimes, "".format() has better readability than f-string.
+        not-callable,                       # too many false positives
         missing-function-docstring,         # todo: enable this later
         missing-class-docstring,            # todo: enable this later
         missing-module-docstring,           # todo: enable this later

@@ -11,7 +11,7 @@
 # limitations under the License.
 from .ffi import _LIB
 from .packedfunc import PackedFunc
-from .packedfunc import ArgType
+from .packedfunc import ArgTypeCode
 
 from .runtime_api import runtime_api
 from . import callbacks

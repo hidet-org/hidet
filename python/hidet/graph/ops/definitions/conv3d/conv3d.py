@@ -68,8 +68,8 @@ class Conv3dOp(Operator):
             dilations = [dilations, dilations, dilations]
         super().__init__(
             inputs=[x, w],
-            task=Conv3dTask(input_like(x, 'x'), input_like(w, 'w'), stride, dilations, groups),
             attributes={'stride': stride, 'groups': groups, 'dilations': dilations},
+            task=Conv3dTask(input_like(x, 'x'), input_like(w, 'w'), stride, dilations, groups),
         )
 
 

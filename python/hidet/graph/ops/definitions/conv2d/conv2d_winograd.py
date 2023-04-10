@@ -124,8 +124,8 @@ class Conv2dWinogradImageTransformOp(Operator):
         assert len(ms) == 2
         super().__init__(
             inputs=[x],
-            task=Conv2dWinogradImageTransformTask(input_like(x, 'x'), kernel, ms),
             attributes={'kernel': kernel, 'ms': ms},
+            task=Conv2dWinogradImageTransformTask(input_like(x, 'x'), kernel, ms),
         )
 
 
@@ -133,7 +133,7 @@ class Conv2dWinogradFilterTransformOp(Operator):
     def __init__(self, w: Tensor, ms):
         assert len(ms) == 2
         super().__init__(
-            inputs=[w], task=Conv2dWinogradFilterTransformTask(input_like(w, 'w'), ms), attributes={'ms': ms}
+            inputs=[w], attributes={'ms': ms}, task=Conv2dWinogradFilterTransformTask(input_like(w, 'w'), ms)
         )
 
 
@@ -142,8 +142,8 @@ class Conv2dWinogradInverseTransformOp(Operator):
         kernel = normalize_kernel(kernel, dim=2)
         super().__init__(
             inputs=[y],
-            task=Conv2dWinogradInverseTransformTask(input_like(y, 'y'), input_shape, kernel, ms),
             attributes={'input_shape': input_shape, 'kernel': kernel, 'ms': ms},
+            task=Conv2dWinogradInverseTransformTask(input_like(y, 'y'), input_shape, kernel, ms),
         )
 
 

@@ -55,7 +55,7 @@ def cuda_schedule_reduce_by_warp_reduce(task: ReduceTask) -> IRModule:
     block_layout = TaskMapping.full_layout([warp_extent]) * TaskMapping.row_major([warp_size])
 
     x_dtype = task.inputs[0].ttype.dtype
-    accumulate_dtype = task.attributes['accumulate_dtype']
+    accumulate_dtype = task.attrs['accumulate_dtype']
 
     with FunctionBuilder(
         name=task.name + '_grid',
@@ -122,7 +122,7 @@ def cuda_schedule_reduce_by_default(task: ReduceTask) -> IRModule:
     grid_size = (remain_layout.num_workers + block_size - 1) // block_size
 
     x_dtype = task.inputs[0].ttype.dtype
-    accumulate_dtype = task.attributes['accumulate_dtype']
+    accumulate_dtype = task.attrs['accumulate_dtype']
 
     with FunctionBuilder(
         name=task.name + '_grid', kind='cuda_kernel', grid_dim=grid_size, block_dim=block_size, label='reduce schedule'

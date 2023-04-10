@@ -28,6 +28,9 @@ class ReduceType(Enum):
     def __str__(self):
         return self.value
 
+    def __repr__(self):
+        return self.value
+
 
 class ReduceOperation:
     @staticmethod
@@ -47,7 +50,7 @@ class ReduceOperation:
         return name2operation[name]()
 
     def __str__(self):
-        return self.__class__.__name__.lower()
+        return self.__class__.__name__.lower()[:-6]
 
     def initial_value(self, dtype: Union[DataType, str]) -> Constant:
         """

@@ -220,6 +220,16 @@ class Resize2dOp(Operator):
 
         super().__init__(
             inputs=[data],
+            attributes={
+                'size': size,
+                'method': method,
+                'coordinate_transformation_mode': coordinate_transformation_mode,
+                'rounding_method': rounding_method,
+                'roi': roi,
+                'cubic_alpha': cubic_alpha,
+                'cubic_exclude': cubic_exclude,
+                'extrapolation_value': extrapolation_value,
+            },
             task=Resize2dTask(
                 input_like(data, 'data'),
                 size,
@@ -231,16 +241,6 @@ class Resize2dOp(Operator):
                 cubic_exclude,
                 extrapolation_value,
             ),
-            attributes={
-                'size': size,
-                'method': method,
-                'coordinate_transformation_mode': coordinate_transformation_mode,
-                'rounding_method': rounding_method,
-                'roi': roi,
-                'cubic_alpha': cubic_alpha,
-                'cubic_exclude': cubic_exclude,
-                'extrapolation_value': extrapolation_value,
-            },
         )
 
 

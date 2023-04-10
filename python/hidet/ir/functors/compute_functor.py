@@ -59,7 +59,6 @@ class ComputeVisitor(BaseVisitor, ComputeFunctor):
     def visit_Task(self, task: Task):
         self.visit(task.inputs)
         self.visit(task.outputs)
-        self.visit(task.task_graph)
 
     def visit_ScalarInput(self, node: ScalarInput):
         self.visit(node.dtype)

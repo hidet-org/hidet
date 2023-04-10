@@ -119,8 +119,8 @@ class ReduceBaseOp(Operator):
         dims = normalize_dim(dims, rank=rank)
         super().__init__(
             inputs=[x],
-            task=ReduceTask(input_like(x, 'x'), dims, keep_dim, reduce_type),
             attributes={'dims': dims, 'keepdims': keep_dim},
+            task=ReduceTask(input_like(x, 'x'), dims, keep_dim, reduce_type),
         )
 
 
@@ -130,8 +130,8 @@ class ArgReduceBaseOp(Operator):
             raise NotImplementedError('Do not support arg reduce type: {}'.format(reduce_type))
         super().__init__(
             inputs=[x],
-            task=ArgReduceTask(input_like(x, 'x'), dim, keep_dim, reduce_type),
             attributes={'dim': dim, 'keepdims': keep_dim},
+            task=ArgReduceTask(input_like(x, 'x'), dim, keep_dim, reduce_type),
         )
 
 

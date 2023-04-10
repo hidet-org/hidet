@@ -37,7 +37,7 @@ class PrologueEpilogueRewriter(IRRewriter):
         # declare inputs and outputs of the fused function
         self.graph_params: List[Var] = []
         self.tensor2var: Dict[Tensor, Var] = {}
-        for tn, tensor in zip(fused_task.parameters, self.fused_graph.inputs + self.fused_graph.outputs):
+        for tn, tensor in zip(fused_task.tensor_params, self.fused_graph.inputs + self.fused_graph.outputs):
             var = tensor_var(tn.name, shape=tensor.shape, dtype=tensor.dtype)
             self.graph_params.append(var)
             self.tensor2var[tensor] = var
@@ -69,12 +69,14 @@ class PrologueEpilogueRewriter(IRRewriter):
         if func.kind not in ['cuda_kernel', 'host_kernel']:
             return func
         else:
-            # extract inputs and outputs of the anchor function
-            anchor_num_inputs = len(self.anchor_task.inputs)
-            anchor_num_outputs = len(self.anchor_task.outputs)
-            assert len(func.params) == anchor_num_inputs + anchor_num_outputs
-            self.anchor_inputs: List[Var] = func.params[:anchor_num_inputs]
-            self.anchor_outputs: List[Var] = func.params[anchor_num_inputs:]
+            # extract tensor inputs and outputs of the anchor function
+            param_dict: Dict[TensorNode, Var] = {
+                task_param: func_param
+                for task_param, func_param in zip(self.anchor_task.params, func.params)
+                if isinstance(task_param, TensorNode)
+            }
+            self.anchor_inputs: List[Var] = [param_dict[task_input] for task_input in self.anchor_task.inputs]
+            self.anchor_outputs: List[Var] = [param_dict[task_output] for task_output in self.anchor_task.outputs]
 
             return Function(
                 name=func.name,

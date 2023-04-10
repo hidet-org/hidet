@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Dict, Tuple, Sequence, Union
-from hidet.ffi.packedfunc import ArgType
+from hidet.ffi.packedfunc import ArgTypeCode
 from hidet.ir.func import Function, IRModule
 from hidet.ir.type import DataType, TensorType, TensorPointerType, PointerType
 from hidet.ir.dtypes import int32
@@ -54,22 +54,22 @@ def add_packed_func(ir_module: IRModule, func: Function, pack_func_name: str):
         for idx, param in enumerate(func.params):
             assert isinstance(param, Var)
             if isinstance(param.type, DataType):
-                name2code = {'int32': ArgType.INT32, 'float32': ArgType.FLOAT32, 'float16': ArgType.FLOAT16}
+                name2code = {'int32': ArgTypeCode.INT32, 'float32': ArgTypeCode.FLOAT32, 'float16': ArgTypeCode.FLOAT16}
                 if param.type.name not in name2code:
                     raise NotImplementedError('Unsupported scalar type: {}'.format(param.type.name))
-                code: ArgType = name2code[param.type.name]
+                code: ArgTypeCode = name2code[param.type.name]
                 arg: Expr = deref(cast(args[idx], ~param.type))
                 arg_var: Var = Var(param.hint, param.type)
             elif isinstance(param.type, TensorType):
-                code: ArgType = ArgType.POINTER
+                code: ArgTypeCode = ArgTypeCode.POINTER
                 arg: Expr = cast(args[idx], ~param.type.dtype)
                 arg_var: Var = Var(param.hint, ~param.type.dtype)
             elif isinstance(param.type, TensorPointerType):
-                code: ArgType = ArgType.POINTER
+                code: ArgTypeCode = ArgTypeCode.POINTER
                 arg: Expr = cast(args[idx], ~param.type.tensor_type.dtype)
                 arg_var: Var = Var(param.hint, ~param.type.tensor_type.dtype)
             elif isinstance(param.type, PointerType):
-                code: ArgType = ArgType.POINTER
+                code: ArgTypeCode = ArgTypeCode.POINTER
                 arg: Expr = cast(args[idx], param.type)
                 arg_var: Var = Var(param.hint, param.type)
             else:

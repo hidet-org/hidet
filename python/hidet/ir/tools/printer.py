@@ -34,37 +34,12 @@ from hidet.ir.functors import IRFunctor
 
 class IRPrinter(IRFunctor):
     def __init__(self):
-        super().__init__()
+        super().__init__(use_memo=False)
         self.namer = Namer()
         self.ir_module: Optional[IRModule] = None
 
     def __call__(self, node):
         return self.visit(node)
-
-    # def visit_dispatch(self, obj):  # pylint: disable=arguments-renamed, too-many-branches
-    #     # type node
-    #     if isinstance(obj, TypeNode):
-    #         return TypeFunctor.visit(self, obj)
-    #     # function and ir module
-    #     elif isinstance(obj, Function):
-    #         return self.visit_Function(obj)
-    #     elif isinstance(obj, IRModule):
-    #         return self.visit_IRModule(obj)
-    #     # expression and statement
-    #     elif isinstance(obj, (Expr, Stmt)):
-    #         return BaseFunctor.visit(self, obj)
-    #     # task related
-    #     elif isinstance(obj, Task):
-    #         return self.visit_Task(obj)
-    #     elif isinstance(obj, TaskGraph):
-    #         return self.visit_TaskGraph(obj)
-    #     elif isinstance(obj, InverseMap):
-    #         return self.visit_InverseMap(obj)
-    #     # task mapping
-    #     elif isinstance(obj, TaskMapping):
-    #         return self.visit_TaskMapping(obj)
-    #     else:
-    #         raise ValueError('Do not support print object {}'.format(object.__repr__(obj)))
 
     def visit_Tuple(self, tp: Tuple):
         return doc_join([self(v) for v in tp], ', ')
@@ -111,7 +86,7 @@ class IRPrinter(IRFunctor):
         doc = Doc()
         self.ir_module = ir_module
         if ir_module.task is not None:
-            doc += str(ir_module.task)
+            doc += self(ir_module.task)
         doc += NewLine()
         for name, func in ir_module.functions.items():
             doc += ['def ', name, ' ', self(func), NewLine(), NewLine()]
@@ -354,7 +329,7 @@ class IRPrinter(IRFunctor):
         )
 
     def visit_LaunchKernelStmt(self, stmt: LaunchKernelStmt):
-        return Text("{}<<<dim3({}, {}, {}), dim3({}, {}, {}), {}>>>({});").format(
+        return NewLine() + Text("{}<<<dim3({}, {}, {}), dim3({}, {}, {}), {}>>>({});").format(
             self(stmt.func_var),
             self(stmt.grid_dim[0]),
             self(stmt.grid_dim[1]),
@@ -441,12 +416,12 @@ class IRPrinter(IRFunctor):
             Text('parameters: ')
             + (
                 NewLine()
-                + doc_join(['{}: {}'.format(self.namer.get_name(v), self(v.type)) for v in e.parameters], NewLine())
+                + doc_join(['{}: {}'.format(self.namer.get_name(v), self(v.type)) for v in e.params], NewLine())
             ).indent(),
             Text('inputs: ') + '[' + doc_join([self.namer.get_name(v) for v in e.inputs], ', ') + ']',
             Text('outputs: ') + '[' + doc_join([self.namer.get_name(v) for v in e.outputs], ', ') + ']',
             Text('computations: ') + self.print_tensor_nodes(e.outputs).indent(),
-            Text('attributes: {') + self({k: str(v) for k, v in e.attributes.items()}) + '}',
+            Text('attributes: {') + self({k: str(v) for k, v in e.attrs.items()}) + '}',
         ]
         # if len(e.task_graph.nodes) > 1:
         #     lines.append(Text('task_graph: ') + self(e.task_graph))

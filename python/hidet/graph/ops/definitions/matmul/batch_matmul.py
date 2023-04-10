@@ -58,7 +58,7 @@ class BatchMatmulOp(Operator):
                 + ', got {} and {}'.format(a.shape, b.shape)
             )
         task = BatchMatmulTask(input_like(a, 'a'), input_like(b, 'b'), mma)
-        super().__init__(inputs=[a, b], task=task, attributes={'mma': mma})
+        super().__init__(inputs=[a, b], attributes={'mma': mma}, task=task)
 
 
 def batch_matmul(a: Tensor, b: Tensor, mma: str = 'simt') -> Tensor:

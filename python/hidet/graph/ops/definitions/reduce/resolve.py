@@ -44,7 +44,7 @@ class ReduceResolveRule(ResolveRule):
     def resolve_f16(self, op: Operator) -> Optional[List[Tensor]]:
         dims = op.attrs['dims']
         keepdims = op.attrs['keepdims']
-        reduce_type = op.task.attributes['reduce_type']
+        reduce_type = op.task.attrs['reduce_type']
         x: Tensor = op.inputs[0]
         last_dim = x.shape[-1]
         if x.dtype != dtypes.float16 or last_dim % 2 != 0:

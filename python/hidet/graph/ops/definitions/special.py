@@ -23,7 +23,7 @@ class BarrierTask(Task):
 
 class BarrierOp(Operator):
     def __init__(self, x: Tensor):
-        super().__init__(inputs=[x], task=BarrierTask(input_like(x, 'x')))
+        super().__init__(inputs=[x], attributes={}, task=BarrierTask(input_like(x, 'x')))
 
 
 def barrier(x: Tensor) -> Tensor:
