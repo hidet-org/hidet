@@ -71,7 +71,8 @@ class PrologueEpilogueRewriter(IRRewriter):
         else:
             # extract tensor inputs and outputs of the anchor function
             param_dict: Dict[TensorNode, Var] = {
-                task_param: func_param for task_param, func_param in zip(self.anchor_task.params, func.params)
+                task_param: func_param
+                for task_param, func_param in zip(self.anchor_task.params, func.params)
                 if isinstance(task_param, TensorNode)
             }
             self.anchor_inputs: List[Var] = [param_dict[task_input] for task_input in self.anchor_task.inputs]

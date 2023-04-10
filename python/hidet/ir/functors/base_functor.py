@@ -36,7 +36,7 @@ class BaseFunctor:
             # slow path
             # iterate through the mro of the class to find a visit_dispatch method that can handle the node
             for cls in type(self).__mro__:
-                dispatch_func = cls.__dict__.get('visit_dispatch', None)    # do not use getattr here
+                dispatch_func = cls.__dict__.get('visit_dispatch', None)  # do not use getattr here
                 if dispatch_func is None:
                     continue
                 ret = dispatch_func(self, node)
