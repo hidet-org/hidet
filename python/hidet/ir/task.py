@@ -120,10 +120,10 @@ class Task(Node):
 
     def signature(self) -> str:
         params = []
-        for tensor in self.inputs:
+        for tensor in self.tensor_params:
             name = tensor.name
-            dtype = tensor.ttype.dtype.name
-            params.append('{}={}{}'.format(name, dtype, tensor.shape))
+            dtype = tensor.type.dtype.name
+            params.append('{}={}{}'.format(name, dtype, tensor.type.shape))
         for name, value in self.attrs.items():
             params.append('{}={}'.format(name, repr(value)))
         param_doc = ', '.join(params)

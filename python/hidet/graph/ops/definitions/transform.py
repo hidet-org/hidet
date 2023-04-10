@@ -30,7 +30,7 @@ class ReshapeTask(Task):
                 'Can not reshape {} to {} because they have different number '
                 'of elements: {} vs {}'.format(x_shape, y_shape, prod(x_shape), prod(y_shape))
             )
-        if not isinstance(x.ttype.layout, RowMajorLayout):
+        if not isinstance(x.type.layout, RowMajorLayout):
             raise NotImplementedError(
                 'currently, only support row major layout. Please use '
                 '.contiguous() to transfer the given tensor into row major layout first.'
