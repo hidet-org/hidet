@@ -166,17 +166,3 @@ def profiler_stop():
     """
     (err,) = cudart.cudaProfilerStop()
     assert err == 0, err
-
-
-# We intentionally put the properties of all devices to the cache here.
-#
-# Reasons:
-#   Hidet relies on the multiprocessing to parallelize the compilation. During the process, the forked process will
-#   query the properties of the device. If we do not cache the properties, the forked process will query the device
-#   via the cuda runtime API. However, the cuda runtime API does not work when the multiprocessing package is working
-#   in the fork mode. With the properties of all the GPUs cached, the forked process will not run any cuda runtime API
-#   and will not cause any problem.
-if available():
-    for i in range(device_count()):
-        properties(i)
-        compute_capability(i)

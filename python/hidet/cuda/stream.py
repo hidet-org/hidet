@@ -16,7 +16,7 @@ from cuda import cudart
 from cuda.cudart import cudaStream_t
 from hidet.utils import exiting
 from .event import Event
-from .device import CudaDeviceContext, device_count, current_device
+from .device import CudaDeviceContext, current_device
 
 
 def _get_device_id(device) -> int:
@@ -168,9 +168,7 @@ class ExternalStream(Stream):
         super().__init__(handle=handle, device=device_id)
 
 
-_current_streams: Dict[int, Stream] = {
-    device_id: ExternalStream(handle=0, device_id=device_id) for device_id in range(device_count())
-}
+_current_streams: Dict[int, Stream] = {}
 
 
 class StreamContext:
@@ -212,6 +210,9 @@ def current_stream(device=None) -> Stream:
     stream: Stream
         The current stream.
     """
+    device_id = _get_device_id(device)
+    if device_id not in _current_streams:
+        _current_streams[device_id] = ExternalStream(handle=0, device_id=device_id)
     return _current_streams[_get_device_id(device)]
 
 
