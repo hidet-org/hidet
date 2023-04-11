@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import Union, Tuple, List, Optional, Sequence, Callable, Dict
 import itertools
 from hidet.ir.node import Node
-from hidet.ir.expr import Expr
+from hidet.ir.expr import Expr, convert
 from hidet.utils import prod, gcd
 
 Int = Union[Expr, int]
@@ -270,11 +270,11 @@ def spatial_map(task_shape: Sequence[Int], ranks: Optional[Sequence[int]] = None
     return SpatialTaskMapping(task_shape, ranks)
 
 
-def row_spatial(*task_shape: int):
+def row_spatial(*task_shape: Int):
     return spatial_map(task_shape)
 
 
-def col_spatial(*task_shape: int):
+def col_spatial(*task_shape: Int):
     return spatial_map(task_shape, ranks=list(reversed(range(len(task_shape)))))
 
 
@@ -287,25 +287,81 @@ def repeat_map(task_shape: Sequence[Int], ranks: Optional[Sequence[int]] = None)
     return RepeatTaskMapping(task_shape, ranks)
 
 
-def row_repeat(*task_shape: Expr):
+def row_repeat(*task_shape: Int):
     return repeat_map(task_shape)
 
 
-def col_repeat(*task_shape: Expr):
+def col_repeat(*task_shape: Int):
     return repeat_map(task_shape, ranks=list(reversed(range(len(task_shape)))))
 
 
-def auto_map(*task_shape: Expr, workers: Expr, ranks: Optional[Sequence[int]] = None) -> TaskMapping:
+def auto_map(
+    *task_shape: Int,
+    workers: Int,
+    on_fail: Optional[Callable[[str], None]] = None,
+    ranks: Optional[Sequence[int]] = None,
+) -> Optional[TaskMapping]:
+    """
+    Automatically generate a task mapping composed by spatial and repeat mappings.
+
+    Given the task shape [d1, d2, ..., dn] and the number of workers m, this function tries to find a task mapping
+    composed by spatial and repeat mappings that distribute the tasks to different workers. The goal is to make the
+    contiguous workers to process contiguous tasks. The number of tasks must be a multiple of the number of workers.
+
+    Some examples:
+        - the default ranks will be used if not specified:
+        auto_map(8, 32, workers=64) = repeat(4, 1).spatial(2, 32)
+        auto_map(8, 64, workers=64) = repeat(8, 1).spatial(1, 64)
+        auto_map(8, 96, workers=64) = repeat(4, 3).spatial(2, 32)
+        auto_map(8, 128, workers=64) = repeat(8, 2).spatial(1, 64)
+
+        - the ranks specify the order of dimensions to be mapped for contiguous workers:
+        auto_map(8, 96, workers=64, ranks=[1, 0]) = repeat(1, 12).spatial(8, 8)
+        auto_map(64, 8, workers=64, ranks=[1, 0]) = repeat(1, 8).spatial(64, 1)
+
+        - on_fail will be called if the task shape cannot be mapped to the number of workers:
+        auto_map(8, 41, workers=64) = None (on_fail will be called with an error message)
+
+        - task shape can have arbitrary dimensions:
+        auto_map(8, 16, 24, workers=32) = repeat(8, 4, 3).spatial(1, 4, 8)
+
+    Parameters
+    ----------
+    task_shape: Sequence[Expr or int]
+        The task shape.
+    workers: Expr or int
+        The number of workers.
+    on_fail: Callable[[str], None], optional
+        The callback function to be called when the task shape cannot be mapped to the number of workers.
+        This function it not necessarily to return (e.g., it can raise an exception).
+        The default is None, which means no callback function will be called, but a RuntimeError will be raised.
+    ranks:
+        The ranks of the task shape to be mapped to the workers. If not specified, the ranks will be
+        [0, 1, ..., n-1], where n is the number of dimensions.
+
+    Returns
+    -------
+    ret: Optional[TaskMapping]
+        The task mapping. If the task shape cannot be mapped to the number of workers and on_fail returns, None will be
+        returned.
+    """
     from hidet.ir.tools import simplify_to_int
 
-    task_shape: List[Expr] = list(task_shape)
+    # automatic mapping requires both task shape and number of workers to be constant
+    task_shape: List[int] = [simplify_to_int(v) for v in task_shape]
+    workers: int = simplify_to_int(workers)
+
     num_tasks = prod(task_shape)
     if num_tasks % workers != 0:
-        raise ValueError(
-            'Expect the number of tasks {} in task shape {} be a multiple of number of workers {}.'.format(
-                num_tasks, task_shape, workers
-            )
+        msg = 'Expect the number of tasks {} in task shape {} be a multiple of number of workers {}.'.format(
+            num_tasks, task_shape, workers
         )
+        if on_fail is None:
+            raise RuntimeError(msg)
+        else:
+            on_fail(msg)
+        return None
+
     num_dims = len(task_shape)
     if ranks is None:
         ranks = list(range(num_dims))
@@ -314,10 +370,49 @@ def auto_map(*task_shape: Expr, workers: Expr, ranks: Optional[Sequence[int]] = 
     spatial_shape = [0] * num_dims
     repeat_shape = [0] * num_dims
 
-    remain = workers
+    remain: int = workers
     for rank in reversed(range(num_dims)):
         dim = ranks.index(rank)
-        spatial_shape[dim] = gcd(simplify_to_int(remain), simplify_to_int(task_shape[dim]))
+        spatial_shape[dim] = gcd(remain, task_shape[dim])
         repeat_shape[dim] = task_shape[dim] // spatial_shape[dim]
         remain //= spatial_shape[dim]
     return repeat_map(repeat_shape, ranks) * spatial_map(spatial_shape, ranks)
+
+
+def predicated_auto_map(
+    *task_shape: Int, workers: Int, ranks: Optional[Sequence[int]] = None
+) -> Tuple[TaskMapping, Callable[[Expr], Expr]]:
+    from hidet.ir.tools import simplify_to_int
+
+    # automatic mapping requires both task shape and number of workers to be constant
+    task_shape: List[int] = [simplify_to_int(v) for v in task_shape]
+    workers: int = simplify_to_int(workers)
+
+    num_dims: int = len(task_shape)
+    ranks: List[int]
+    if ranks is None:
+        ranks = list(range(num_dims))
+    else:
+        ranks = list(ranks)
+    spatial_shape: List[int] = [0] * num_dims
+    repeat_shape: List[int] = [0] * num_dims
+
+    remain: int = workers
+    for rank in reversed(range(num_dims)):
+        dim = ranks.index(rank)
+
+        if remain >= task_shape[dim]:
+            spatial_shape[dim] = task_shape[dim]
+            repeat_shape[dim] = 1
+            remain //= task_shape[dim]
+        else:
+            spatial_shape[dim] = gcd(remain, task_shape[dim])
+            repeat_shape[dim] = task_shape[dim] // spatial_shape[dim]
+            remain = 1
+
+    used_workers: int = prod(spatial_shape)
+
+    def predicate(worker_idx: Union[Expr, int]) -> Expr:
+        return convert(worker_idx < used_workers, dtype='bool')
+
+    return repeat_map(repeat_shape, ranks) * spatial_map(spatial_shape, ranks), predicate
