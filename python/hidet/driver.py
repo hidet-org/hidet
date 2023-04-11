@@ -131,7 +131,7 @@ def _lazy_initialize_cuda():
     #   runtime API and will not cause any problem.
     if getattr(_lazy_initialize_cuda, '_initialized', False):
         return
-    _lazy_initialize_cuda._initialized = True   # pylint: disable=protected-access
+    _lazy_initialize_cuda._initialized = True  # pylint: disable=protected-access
     if hidet.cuda.available():
         for i in range(hidet.cuda.device_count()):
             hidet.cuda.properties(i)
