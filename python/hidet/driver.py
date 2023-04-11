@@ -18,6 +18,7 @@ from hashlib import sha256
 import psutil
 from tqdm import tqdm
 
+import hidet.cuda
 from hidet import option
 from hidet.transforms import lower, PassContext, SaveIRInstrument, ProfileInstrument
 from hidet.backend import codegen, compile_source, load_task_func, load_lib_func
@@ -119,10 +120,29 @@ def _build_task_job(args):
             raise e
 
 
+def _lazy_initialize_cuda():
+    # We intentionally query the cuda device information to put the properties of all devices to the lru_cache.
+    #
+    # Reasons:
+    #   Hidet relies on the multiprocessing to parallelize the compilation. During the process, the forked process will
+    #   query the properties of the device. If we do not cache the properties, the forked process will query the device
+    #   via the cuda runtime API. However, the cuda runtime API does not work when the multiprocessing package is
+    #   working in the fork mode. With the properties of all the GPUs cached, the forked process will not run any cuda
+    #   runtime API and will not cause any problem.
+    if getattr(_lazy_initialize_cuda, '_initialized', False):
+        return
+    _lazy_initialize_cuda._initialized = True  # pylint: disable=protected-access
+    if hidet.cuda.available():
+        for i in range(hidet.cuda.device_count()):
+            hidet.cuda.properties(i)
+            hidet.cuda.compute_capability(i)
+
+
 def build_task_batch(tasks: List[Task], target_device: str = 'cuda', raise_on_error: bool = True):
     dumped_options = option.dump_options()
     jobs = [(task, target_device, dumped_options) for task in tasks]
     if option.get_option('parallel_build') and len(jobs) > 1:
+        _lazy_initialize_cuda()
         with multiprocessing.Pool() as pool:
             status_list = list(pool.map(_build_task_job, jobs))
     else:
@@ -233,6 +253,7 @@ def build_ir_module_batch(
             mem_for_worker = 1.5 * 1024 * 1024 * 1024  # 1.5 GiB
             num_workers = min(max(int(psutil.virtual_memory().available // mem_for_worker), 1), psutil.cpu_count())
 
+            _lazy_initialize_cuda()
             with multiprocessing.Pool(processes=num_workers) as pool:
                 for build_result in tqdm(
                     pool.imap(_build_ir_module_job, jobs),
@@ -244,6 +265,8 @@ def build_ir_module_batch(
                     build_results.append(build_result)
         else:
             # sequential build
+            for job in tqdm(jobs, desc='Compiling', disable=not verbose, ncols=80):
+                build_results.append(_build_ir_module_job(job))
             build_results = list(map(_build_ir_module_job, jobs))
 
         # load compiled functions
