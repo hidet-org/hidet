@@ -51,16 +51,16 @@ class MatMulTask(Task):
     @tune.space(2, 'warp_outer', [(1, 1), (1, 2), (2, 1), (2, 2), (1, 3), (3, 1), (2, 3), (3, 2), (3, 3)])
     @tune.space(2, 'warp_mid', [spatial(4, 8), spatial(2, 16), spatial(16, 2), spatial(1, 32), spatial(32, 1), spatial(2, 1) * spatial(1, 8) * spatial(2, 1)])
     @tune.space(2, 'warp_inner', [(4, 4)])
-    # @tune.space(1, 'block_warps_k', [8])
-    # @tune.space(1, 'block_warps', [(1, 1), (1, 2), (2, 2), (2, 4)])
-    # @tune.space(1, 'warp_outer', [(1, 1), (1, 2), (2, 1), (2, 2)])
-    # @tune.space(1, 'warp_mid', [spatial(4, 8)])
-    # @tune.space(1, 'warp_inner', [(4, 4), (4, 8), (8, 4)])
     @tune.space(1, 'block_warps_k', [8])
-    @tune.space(1, 'block_warps', [(2, 4)])
-    @tune.space(1, 'warp_outer', [(1, 1)])
+    @tune.space(1, 'block_warps', [(1, 1), (1, 2), (2, 2), (2, 4)])
+    @tune.space(1, 'warp_outer', [(1, 1), (1, 2), (2, 1), (2, 2)])
     @tune.space(1, 'warp_mid', [spatial(4, 8)])
-    @tune.space(1, 'warp_inner', [(4, 4)])
+    @tune.space(1, 'warp_inner', [(4, 4), (4, 8), (8, 4)])
+    # @tune.space(1, 'block_warps_k', [8])
+    # @tune.space(1, 'block_warps', [(2, 4)])
+    # @tune.space(1, 'warp_outer', [(1, 1)])
+    # @tune.space(1, 'warp_mid', [spatial(4, 8)])
+    # @tune.space(1, 'warp_inner', [(4, 4)])
     def cuda_schedule_matmul(
             self,
             block_warps_k=8,
@@ -325,7 +325,7 @@ class MatMulTask(Task):
                     [2, block_m, block_k], perm=[0, 2, 1]))
                 smem_b = tensor_pointer('float32', layout=StridesLayout.from_shape(
                     [2, block_k, block_n], perm=[0, 1, 2]))
-                smem_a_bytes = used_smem_bytes_per_block / 2
+                smem_a_bytes = smem_a.type.tensor_type.storage_bytes()
                 smem_a = ~smem[0]
                 smem_b = ~smem[smem_a_bytes]
 
@@ -403,7 +403,7 @@ class MatMulOp(Operator):
             x, 'x'), input_like(y, 'y')), attributes={})
 
 
-hidet.option.search_space(1)
+hidet.option.search_space(2)
 hidet.option.save_lower_ir(True)
 hidet.option.cache_dir('.')
 
