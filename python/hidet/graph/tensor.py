@@ -1008,7 +1008,7 @@ def symbol(shape: Sequence[int], dtype='float32', device='cpu', layout=None) -> 
     return Tensor(shape=shape, dtype=dtype, device=device, storage=None, layout=layout)
 
 
-def zeros(shape: Sequence[int], dtype='float32', device='cpu') -> Tensor:
+def zeros(shape: Sequence[int], dtype: Union[DataType, str] = 'float32', device='cpu') -> Tensor:
     """Create a tensor initialized with zero.
 
     Parameters
@@ -1016,7 +1016,7 @@ def zeros(shape: Sequence[int], dtype='float32', device='cpu') -> Tensor:
     shape: Sequence[int]
         The shape of new tensor.
 
-    dtype: str
+    dtype: str or DataType
         The data type of element of the tensor.
 
     device: Device or str, default 'cpu'
@@ -1114,9 +1114,11 @@ def randn(shape, dtype='float32', mean=0.0, stddev=1.0, device='cpu') -> Tensor:
     [[ 0.10720467 -1.6906018   0.06347568]
      [-0.37061226  0.562728    1.857547  ]]
     """
+    np_tensor = np.random.randn(*shape) * stddev + mean
 
-    np_tensor = np.random.randn(*shape).astype(np.float32)
-    np_tensor = np_tensor * stddev + mean
+    if isinstance(np_tensor, float):  # shape = []
+        np_tensor = np.array(np_tensor)
+
     hidet_tensor = from_numpy(np_tensor)
     return hidet_tensor.to(device=device, dtype=dtype)
 

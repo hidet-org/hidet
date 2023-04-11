@@ -111,24 +111,30 @@ class BenchModel:
         click.echo(table_str)
 
     def bench_with_backend(self, backend: str, mode=None, warmup=3, number=10, repeat=10):
-        import torch.backends.cudnn  # pylint: disable=redefined-outer-name
-        import torch.backends.cuda
+        try:
+            import torch.backends.cudnn  # pylint: disable=redefined-outer-name
+            import torch.backends.cuda
 
-        if not hidet.torch.dynamo_available():
-            raise RuntimeError('Torch Dynamo is not available, please install pytorch 2.0 or higher.')
-        import torch._dynamo as dynamo
+            if not hidet.torch.dynamo_available():
+                raise RuntimeError('Torch Dynamo is not available, please install pytorch 2.0 or higher.')
+            import torch._dynamo as dynamo
 
-        torch.backends.cudnn.allow_tf32 = not self.disable_torch_cudnn_tf32
-        torch.backends.cuda.matmul.allow_tf32 = self.enable_torch_cublas_tf32
+            torch.backends.cudnn.allow_tf32 = not self.disable_torch_cudnn_tf32
+            torch.backends.cuda.matmul.allow_tf32 = self.enable_torch_cublas_tf32
 
-        model, (args, kwargs) = self.converted_model(), self.converted_inputs()
-        dynamo.reset()
-        with torch.no_grad():
-            model_opt = torch.compile(model, backend=backend, mode=mode)
-            latency = benchmark_func(
-                run_func=lambda: model_opt(*args, **kwargs), warmup=warmup, number=number, repeat=repeat
-            )
-        return latency
+            model, (args, kwargs) = self.converted_model(), self.converted_inputs()
+            dynamo.reset()
+            with torch.no_grad():
+                model_opt = torch.compile(model, backend=backend, mode=mode)
+                latency = benchmark_func(
+                    run_func=lambda: model_opt(*args, **kwargs), warmup=warmup, number=number, repeat=repeat
+                )
+            return latency
+        except Exception as e:  # pylint: disable=broad-except
+            from traceback import format_exc
+
+            print('Failed to benchmark {} with {}: {}\nTraceback:\n{}'.format(self, backend, e, format_exc()))
+            return float('NaN')
 
     def bench_eager(self) -> float:
         print('Benchmarking {} with backend {}...'.format(self, 'eager'))
