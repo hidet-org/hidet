@@ -17,17 +17,20 @@ from hidet.graph.ops.definitions.utils import ReduceType
 from hidet.graph.ops.definitions.reduce import reduce_f16
 
 
+@pytest.mark.parametrize('dtype', [np.float64, np.float32, np.float16])
 @pytest.mark.parametrize(
     'shape, dims, keep_dim',
     [[[11, 22, 33], 1, False], [[11, 22, 33], 1, True], [[11, 22, 33], (0, 2), False], [[11, 22, 33], (0, 2), True]],
 )
-def test_reduce_mean(shape, dims, keep_dim: bool):
+def test_reduce_mean(dtype, shape, dims, keep_dim: bool):
     check_unary(
         shape,
         numpy_op=lambda x: np.mean(x, dims, keepdims=keep_dim),
         hidet_op=lambda x: ops.mean(x, dims, keep_dim),
+        dtype=dtype,
         atol=1e-5,
         rtol=1e-5,
+        device='all' if dtype != np.float16 else 'cuda',
     )
 
 
