@@ -205,7 +205,12 @@ class Task(Node):
             if isinstance(param, Var):
                 arguments.append(10)
             elif isinstance(param, TensorNode):
-                arguments.append(hidet.randn(param.const_shape(), param.type.dtype, device=device))
+                if param.type.dtype.is_integer():
+                    arguments.append(hidet.zeros(param.const_shape(), dtype=param.type.dtype, device=device))
+                elif param.type.dtype.is_float():
+                    arguments.append(hidet.randn(param.const_shape(), dtype=param.type.dtype, device=device))
+                else:
+                    raise ValueError('Unknown dtype: {}'.format(param.type.dtype))
             else:
                 raise ValueError('Unknown parameter type: {}'.format(type(param)))
         return arguments
