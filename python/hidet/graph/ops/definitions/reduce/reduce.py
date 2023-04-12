@@ -73,6 +73,9 @@ class ReduceTask(Task):
         # pylint: disable=import-outside-toplevel
         from ...schedules import cuda_schedule_reduce_by_default, cuda_schedule_reduce_by_warp_reduce
 
+        if self.inputs[0].type.dtype.name == 'float64':
+            return NotImplemented  # use auto-scheduler
+
         rank = len(self.inputs[0].const_shape())
         if rank - 1 in self.dims:
             # reduce over last dimension

@@ -14,9 +14,7 @@ import numpy as np
 from hidet.graph.tensor import asarray
 
 
-def check_unary(
-    shape, numpy_op, hidet_op, device: str = 'all', dtype: Union[str, np.dtype] = np.float32, atol=0, rtol=0
-):
+def check_unary(shape, numpy_op, hidet_op, device: str = 'all', dtype=np.float32, atol=0, rtol=0):
     if device == 'all':
         for dev in ['cuda', 'cpu']:
             check_unary(shape, numpy_op, hidet_op, dev, dtype, atol, rtol)
