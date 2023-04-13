@@ -35,7 +35,7 @@ def get_operator_name(op, given_name: Optional[str] = None):
 class Operator:
     """An operator that takes tensor as input and output."""
 
-    def __init__(self, inputs: List[Tensor], attributes: Dict[str, Any], task: Optional[Task]):
+    def __init__(self, inputs: List[Tensor], attributes: Optional[Dict[str, Any]] = None, task: Optional[Task] = None):
         assert all(isinstance(v, Tensor) for v in inputs)
 
         self.name: str = get_operator_name(self)
@@ -126,7 +126,7 @@ class Operator:
         for a, b in zip(self.task.outputs, outputs):
             arg_remap[a] = b
 
-        args = [remap[param] for param in self.task.params]
+        args = [remap.get(param, param) for param in self.task.params]
         self.task_func(*args)
 
         status = get_last_error()

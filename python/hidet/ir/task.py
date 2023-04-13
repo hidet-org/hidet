@@ -174,7 +174,7 @@ class Task(Node):
         """
         remap = {a: b for a, b in zip(self.inputs, inputs)}
         remap.update({a: b for a, b in zip(self.outputs, outputs)})
-        return [remap[arg] for arg in self.params]
+        return [remap.get(arg, arg) for arg in self.params]
 
     @property
     def tensor_params(self) -> List[TensorNode]:
