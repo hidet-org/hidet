@@ -105,7 +105,7 @@ class DynamoConfig:
         self._use_fp16_reduction = flag
         return self
 
-    def use_fp16_reduction(self, flag=True):
+    def use_attention(self, flag=True):
         """
         Whether to use fused attention schedule
         """

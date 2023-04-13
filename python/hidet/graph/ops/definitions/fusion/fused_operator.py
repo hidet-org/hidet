@@ -84,7 +84,7 @@ class FusedTask(Task):
         from hidet.graph.ops.schedules.cuda.auto_scheduler import CudaAutoScheduler
         from hidet.graph.ops.schedules.cpu.auto_scheduler import CpuAutoScheduler
         from .apply_prologue_epilogue import apply_prologue_epilogue
-        from hidet.graph.ops.schedules.tune import tune
+        from hidet.graph.ops.definitions.utils.tune import tune
 
         if isinstance(target, str):
             target = Target.from_string(target)

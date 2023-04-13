@@ -41,8 +41,7 @@ def generate_executor(flow_graph: FlowGraph) -> Callable:
             ctx.set_precision('float16')
         if use_fp16 and use_fp16_reduction:
             ctx.set_reduce_precision('float16')
-        if use_attention:
-            ctx.set_use_attention()
+        ctx.set_use_attention(use_attention)
         if save_dir:
             ctx.save_graph_instrument(save_dir)
         if tensor_core:

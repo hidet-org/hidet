@@ -238,7 +238,7 @@ class Task(Node):
     def implement(self, target: Union[Target, str], working_dir: str) -> IRModule:
         from hidet.graph.ops.schedules.cuda.auto_scheduler import CudaAutoScheduler
         from hidet.graph.ops.schedules.cpu.auto_scheduler import CpuAutoScheduler
-        from hidet.graph.ops.schedules.tune import tune
+        from hidet.graph.ops.definitions.utils.tune import tune
 
         if isinstance(target, str):
             target = Target.from_string(target)

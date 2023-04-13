@@ -151,12 +151,16 @@ class PassContext:
         self.configs['reduce_precision'] = dtype
         return self
 
-    def set_use_attention(self) -> PassContext:
+    def set_use_attention(self, flag=True) -> PassContext:
         """
         Set to use fused attention schedule
 
         """
-        self.configs['use_attention'] = True
+        from ..transforms.graph_patterns import attn_patterns
+
+        self.configs['use_attention'] = flag
+        if flag:
+            attn_patterns()
         return self
 
     def set_verbose(self) -> PassContext:
