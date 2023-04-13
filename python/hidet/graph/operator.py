@@ -126,7 +126,7 @@ class Operator:
         for a, b in zip(self.task.outputs, outputs):
             arg_remap[a] = b
 
-        args = [remap.get(param, param) for param in self.task.params]
+        args = [arg_remap[param] for param in self.task.params]
         self.task_func(*args)
 
         status = get_last_error()
