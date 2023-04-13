@@ -24,13 +24,7 @@ class AttnMaskAddTask(Task):
         n_size = q_shape[-2]
         d_size = q_shape[-1]
         o_shape = broadcast_shapes([q_shape[:-2], k_shape[:-2], v_shape[:-2]]) + [n_size, d_size]
-        o_head, q_head, k_head, v_head, mask_head = (
-            o_shape[:-2],
-            q_shape[:-2],
-            k_shape[:-2],
-            v_shape[:-2],
-            mask_shape[:-2],
-        )
+        o_head, q_head, k_head, v_head = (o_shape[:-2], q_shape[:-2], k_shape[:-2], v_shape[:-2])
         qk_head = broadcast_shape(q_head, k_head)
         mask_shape = mask.const_shape()
 
@@ -45,13 +39,14 @@ class AttnMaskAddTask(Task):
             ),
         )
 
+        qk_shape = qk.const_shape()
+
         qk_masked = compute(
             name='qk_masked',
-            shape=qk_head + [n_size, n_size],
-            fcompute=lambda *indices: mask[mask_head + [0, indices[-1]]] + qk[indices],
+            shape=qk_shape,
+            fcompute=lambda *indices: mask[broadcast_indices(indices, mask_shape, qk_shape)] + qk[indices],
         )
 
-        qk_shape = qk.const_shape()
         axis = len(qk_shape) - 1
         axis_extent = qk_shape[axis]
         reduced_shape = qk_shape[:axis] + qk_shape[axis + 1 :]
@@ -378,10 +373,6 @@ class AttnMaskAddTask(Task):
                     src_size = 0 if (i >= d_size or offset_j + j >= n_size) else min(n_size - j, 8)
                     if threadIdx.x < k_g2s_layout.num_workers and i < smem_k_type.shape[0]:
                         cp_async(~smem_k[i, j], ~gmem_k[i, j], cp_size=16, src_size=src_size * 2, cache_level='global')
-                # cp_async_wait_all()
-                # syncthreads()
-                # for i, j in k_norm_layout.on(threadIdx.x):
-                #     smem_k[i, j] = smem_k[i, j] / prim.sqrt(f16(d_size))
 
             @hidet.script
             def copy_v_g2s(v: f16[v_head + [n_size, d_size]], smem_v: smem_v_type, offset_j: i32):
@@ -635,13 +626,18 @@ class AttnMaskAddTask(Task):
                             for mma_i, mma_j in grid(mmas_per_warp_m, mmas_per_warp_n):
                                 warp_mma(~regs_q[mma_i, 0], ~regs_k[mma_k, mma_j, 0], ~regs_acc[mma_i, mma_j, 0])
                         # Apply Masking
+                        qk_head_index = list(spatial(*qk_head).map(blockIdx.y))
                         for mma_i, mma_j in grid(mmas_per_warp_m, mmas_per_warp_n):
                             wi, wj, wk = spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id)[0]
                             p = 0
-                            for _, tj in mma_config.c_store_map.on(lane_id):
-                                # delta_m = wi * warp_elems_m + mma_i * mma_m + i
+                            for ti, tj in mma_config.c_store_map.on(lane_id):
+                                delta_m = wi * warp_elems_m + mma_i * mma_m + ti
                                 delta_n = wj * warp_elems_n + mma_j * mma_n + tj
-                                regs_acc[mma_i, mma_j, p] += mask[0, 0, 0, delta_n]
+                                regs_acc[mma_i, mma_j, p] += mask[
+                                    broadcast_indices(
+                                        qk_head_index + [delta_m, delta_n], mask_shape, qk_head + [n_size, n_size]
+                                    )
+                                ]
                                 p += 1
                         qk_softmax_reduce(smem_qk, smem_mij, smem_lij, regs_acc)
                         # Load Oi into Smem

@@ -7,11 +7,12 @@ from hidet.ir.type import tensor_type
 from hidet.ir import primitives as prim
 from hidet.ir.primitives import active_mask, shfl_down_sync
 from hidet.graph.ops.definitions.utils import tune
-from hidet.lang import f16, f32, i32, u32, boolean, spatial, repeat, tensor
+from hidet.lang import f16, f32, i32, u32, spatial, repeat, tensor
 from hidet.lang import attr, grid, tensor_pointer, view, col_spatial
 from hidet.lang.cuda import blockIdx, threadIdx, syncthreads, dynamic_shared_memory, register_tensor
 from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, TensorNode, compute, input_like
 from hidet.graph.ops.definitions.utils import broadcast_shape, broadcast_shapes, broadcast_indices
+from hidet.graph.ops.definitions.utils import can_broadcast
 from hidet.utils.py import cdiv, prod
 from .attention_mask import AttnMaskAddOp
 
@@ -349,10 +350,6 @@ class AttnTask(Task):
                     src_size = 0 if (i >= d_size or offset_j + j >= n_size) else min(n_size - j, 8)
                     if threadIdx.x < k_g2s_layout.num_workers and i < smem_k_type.shape[0]:
                         cp_async(~smem_k[i, j], ~gmem_k[i, j], cp_size=16, src_size=src_size * 2, cache_level='global')
-                # cp_async_wait_all()
-                # syncthreads()
-                # for i, j in k_norm_layout.on(threadIdx.x):
-                #     smem_k[i, j] = smem_k[i, j] / prim.sqrt(f16(d_size))
 
             @hidet.script
             def copy_v_g2s(v: f16[v_head + [n_size, d_size]], smem_v: smem_v_type, offset_j: i32):
@@ -676,12 +673,15 @@ def attention(q: Tensor, k: Tensor, v: Tensor, mask: Optional[Tensor] = None) ->
     if mask is None:
         return AttnOp(q, k, v).get_output(0)
 
+    q_shape = q.shape
+    k_shape = k.shape
     mask_shape = mask.shape
     seq_len = q.shape[-2]
-    if mask_shape[-1] != seq_len or not all(s == 1 for s in mask_shape[:-1]):
+
+    q_head, k_head = (q_shape[:-2], k_shape[:-2])
+    qk_head = broadcast_shape(q_head, k_head)
+    qk_shape = qk_head + [seq_len, seq_len]
+    if not can_broadcast(mask_shape, qk_shape):
         raise ValueError("Invalid mask dimension: {}".format(mask_shape))
 
-    if mask.dtype == boolean:
-        return AttnMaskWhereOp(q, k, v, mask).get_output(0)
-    else:
-        return AttnMaskAddOp(q, k, v, mask).get_output(0)
+    return AttnMaskAddOp(q, k, v, mask).get_output(0)
