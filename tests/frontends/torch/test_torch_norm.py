@@ -21,5 +21,12 @@ def test_layer_norm(shape, normalized_shape, dtype):
     check_module(torch.nn.LayerNorm(normalized_shape=normalized_shape), [torch.randn(shape, dtype=dtype)])
 
 
+@pytest.mark.parametrize('shape', [[1, 32, 128, 128]])
+@pytest.mark.parametrize('num_groups', [1, 4, 32])
+@pytest.mark.parametrize('dtype', [torch.float32])
+def test_group_norm(shape, num_groups, dtype):
+    check_module(torch.nn.GroupNorm(num_groups=num_groups, num_channels=shape[1]), [torch.randn(shape, dtype=dtype)])
+
+
 if __name__ == '__main__':
     pytest.main([__file__])

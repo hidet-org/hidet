@@ -58,8 +58,8 @@ class Conv2dOp(Operator):
             dilations = [dilations, dilations]
         super().__init__(
             inputs=[x, w],
-            task=Conv2dTask(input_like(x, 'x'), input_like(w, 'w'), stride, dilations, groups),
             attributes={'stride': stride, 'groups': groups, 'dilations': dilations},
+            task=Conv2dTask(input_like(x, 'x'), input_like(w, 'w'), stride, dilations, groups),
         )
 
 

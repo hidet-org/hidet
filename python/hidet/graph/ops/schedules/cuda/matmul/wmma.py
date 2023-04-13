@@ -9,7 +9,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import os
 from typing import List, Tuple, Union, Optional
 
 import hidet.cuda
@@ -28,9 +27,7 @@ from hidet.ir.type import data_type, tensor_type, PointerType, tensor_pointer_ty
 from hidet.graph.ops.definitions.matmul import BatchMatmulTask
 from hidet.graph.ops.schedules.common import params_from_task, Schedule, NotSupportedError
 from hidet.graph.ops.schedules.cuda.common import get_task_map, get_transfer_task_map
-from hidet.graph.ops.schedules.resolve import resolve_ir_modules
 from hidet.utils import prod
-from hidet.transforms.tools import fuse_and_pack
 
 
 def shape_prod(a_shape: List[int], b_shape: List[int]) -> List[int]:
@@ -163,7 +160,7 @@ class MatmulSchedule(Schedule):
 
     @staticmethod
     def schedules(task: Task, space_level: int = 0):
-        wmma_type = task.attributes['mma']  # like 'wmma_f16_f32' or 'wmma'
+        wmma_type = task.attrs['mma']  # like 'wmma_f16_f32' or 'wmma'
 
         # choose a specific wmma type when needed
         if wmma_type == 'wmma':
@@ -232,20 +229,20 @@ class MatmulSchedule(Schedule):
             raise ValueError('Space level {} must in [0, 1, 2].'.format(space_level))
 
 
-def batched_matmul_cuda_schedule_wmma(task: BatchMatmulTask, working_dir: str) -> IRModule:
+def batched_matmul_cuda_schedule_wmma(task: BatchMatmulTask, working_dir: str) -> List[IRModule]:
     all_schedules = MatmulSchedule.schedules(task, space_level=option.get_option('search_space'))
-    ir_modules = []
-    for schedule in all_schedules:
-        ir_modules.append(batched_matmul_cuda_with_given_schedule(task, schedule))
-    return resolve_ir_modules(
-        ir_modules=ir_modules,
-        schedules=all_schedules,
-        func_name=task.name,
-        target_device='cuda',
-        output_dir=os.path.join(working_dir, './resolve'),
-        parallel=True,
-        verbose=True,
-    )
+    return [batched_matmul_cuda_with_given_schedule(task, schedule) for schedule in all_schedules]
+    # ir_modules = []
+    # for schedule in all_schedules:
+    #     ir_modules.append(batched_matmul_cuda_with_given_schedule(task, schedule))
+    # return resolve_ir_modules(
+    #     ir_modules=ir_modules,
+    #     schedules=all_schedules,
+    #     target_device='cuda',
+    #     output_dir=os.path.join(working_dir, './resolve'),
+    #     parallel=True,
+    #     verbose=True,
+    # )
 
 
 def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, schedule: MatmulSchedule) -> IRModule:
@@ -426,7 +423,7 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, schedule: Mat
 
     func = fb.get()
     ir_module = IRModule(funcs={func.name: func}, task=task)
-    return fuse_and_pack(ir_module, func, task)
+    return ir_module
 
 
 def init(dst, init_value, sch):

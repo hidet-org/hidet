@@ -77,6 +77,7 @@ class BatchMatmulOp(Operator):
         # call the parent class constructor to initialize the operator
         super().__init__(
             inputs=[a, b],  # the input tensors
+            attributes={},
             task=BatchMatmulTask(  # the task of the operator
                 # create tensor nodes (TensorNode) with the same shape and dtype as the tensors (Tensor)
                 input_like(a, 'a'),

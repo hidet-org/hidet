@@ -252,3 +252,27 @@ def asm(
         constraint = get_register_type(x)
         updated_inputs.append((constraint, convert(x)))
     return AsmStmt(template, updated_outputs, updated_inputs, is_volatile)
+
+
+Int = Union[Expr, int]
+
+
+def launch_kernel(
+    func_var: Var,
+    args: Sequence[Expr],
+    grid_dim: Union[Sequence[Int], Int],
+    block_dim: Union[Sequence[Int], Int],
+    shared_mem: Optional[Int] = 0,
+) -> LaunchKernelStmt:
+    launch_config: List[Tuple[Expr, Expr, Expr]] = []
+    for dims in [grid_dim, block_dim]:
+        if not isinstance(dims, (list, tuple)):
+            dims = [dims]
+        dims = list(dims)
+        if len(dims) > 3:
+            raise ValueError('Grid/Block dimension must be 3 or less.')
+        while len(dims) < 3:
+            dims.append(1)
+        launch_config.append(convert(dims))
+    grid_dim, block_dim = launch_config
+    return LaunchKernelStmt(func_var, args, grid_dim, block_dim, convert(shared_mem))

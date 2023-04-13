@@ -35,6 +35,7 @@ from .lower_special_cast import lower_special_cast_pass
 def lower(ir_module: IRModule) -> IRModule:
     transforms = [
         # necessary passes
+        generate_packed_func_pass(),
         flatten_tensor_slice_pass(),
         lower_protect_access_pass(),
         lower_task_mapping_pass(),

@@ -63,9 +63,6 @@ class Conv2dTransposeGemmImageOp(Operator):
     ):
         super().__init__(
             inputs=[data],
-            task=Conv2dTransposeGemmImageTask(
-                input_like(data, 'data'), kernel, stride, padding, groups, output_padding
-            ),
             attributes={
                 'kernel': kernel,
                 'stride': stride,
@@ -73,6 +70,9 @@ class Conv2dTransposeGemmImageOp(Operator):
                 'groups': groups,
                 'output_padding': output_padding,
             },
+            task=Conv2dTransposeGemmImageTask(
+                input_like(data, 'data'), kernel, stride, padding, groups, output_padding
+            ),
         )
 
 

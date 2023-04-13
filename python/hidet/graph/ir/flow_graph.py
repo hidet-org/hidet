@@ -98,11 +98,12 @@ def forward_context() -> GraphForwardContext:
 class FlowGraph:
     """The computation graph representation."""
 
-    def __init__(self, outputs: List[Tensor], inputs=None, nodes=None):
-        self.outputs: List[Tensor] = outputs
-        self.inputs: Optional[List[Tensor]] = inputs
-        self.nodes: Optional[List[Operator]] = nodes
-        self.usage_count: Optional[Dict[Tensor, int]] = None
+    def __init__(self, outputs: Sequence[Tensor], inputs: Optional[Sequence[Tensor]] = None, nodes=None):
+        self.outputs: List[Tensor] = list(outputs)
+        self.inputs: Optional[List[Tensor]] = list(inputs) if inputs is not None else None
+        self._nodes: Optional[List[Operator]] = nodes
+        self._usage_count: Optional[Dict[Tensor, int]] = None
+        self.update_nodes()
 
     def __call__(self, *inputs: Tensor) -> Union[List[Tensor], Tensor]:
         """Run the computation graph.
@@ -111,14 +112,12 @@ class FlowGraph:
         return self.forward(*inputs)
 
     def __str__(self):
-        if any(v is None for v in [self.inputs, self.nodes, self.usage_count]):
-            self.update_nodes()
         namer = Namer()
 
         def get_tensor_sig(x: Tensor) -> Doc:
             return Text(x.dtype.name) + '[' + doc_join([str(v) for v in x.shape], ', ') + ']'
 
-        def get_attr_repr(value: Union[float, int, bool, str, list, tuple]) -> Doc:
+        def get_attr_repr(value: Union[float, int, bool, str, list, tuple, FlowGraph]) -> Doc:
             if isinstance(value, (float, int, bool)):
                 return Text(str(value))
             elif isinstance(value, str):
@@ -127,6 +126,8 @@ class FlowGraph:
                 return '[' + doc_join([get_attr_repr(v) for v in value], ', ') + ']'
             elif isinstance(value, tuple):
                 return '(' + doc_join([get_attr_repr(v) for v in value], ', ') + ')'
+            elif isinstance(value, FlowGraph):
+                return Text('FlowGraph({})'.format(', '.join(u.name for u in value.nodes)))
             else:
                 return Text(str(value))
 
@@ -153,7 +154,7 @@ class FlowGraph:
             output: Tensor = outputs[0]
             line_doc = Doc()
             line_doc += namer(output) + ': ' + get_tensor_sig(output) + ' = '
-            line_doc += op.name + ('*' if len(op.task.task_graph.nodes) > 1 else '') + '('
+            line_doc += op.name + '('
             line_doc += doc_join([namer(x) for x in op.inputs], sep=', ')
             if op.attrs:
                 line_doc += ', ' + doc_join(
@@ -168,6 +169,24 @@ class FlowGraph:
         graph_doc = head_doc + '{' + const_doc.indent() + body_doc.indent() + NewLine() + '}'
         return str(graph_doc)
 
+    @property
+    def nodes(self) -> List[Operator]:
+        """The list of operators in the computation graph."""
+        if self._nodes is None:
+            self.update_nodes()
+        return self._nodes
+
+    @property
+    def usage_count(self) -> Dict[Tensor, int]:
+        """The usage count of each tensor in the computation graph."""
+        if self._usage_count is None:
+            self.update_nodes()
+        return self._usage_count.copy()
+
+    def invalid_cache(self):
+        self._nodes = None
+        self._usage_count = None
+
     def build(self):
         tasks = []
         tunable_tasks = []
@@ -179,7 +198,10 @@ class FlowGraph:
                 if task_key in task_keys:
                     continue
                 task_keys.add(task_key)
-                if search_space == 0 or 'implement_cuda' not in node.task.__class__.__dict__:
+                if search_space == 0 or all(
+                    method not in node.task.__class__.__dict__
+                    for method in ['implement_cuda', 'implement_cpu', 'implement']
+                ):
                     tasks.append(node.task)
                 else:
                     tunable_tasks.append(node.task)
@@ -211,8 +233,6 @@ class FlowGraph:
             if tensor.storage is None:
                 msg = 'Expect non-symbolic input tensors, got symbolic input {} ({}).'.format(idx, tensor.signature())
                 raise ValueError(msg)
-        if any(v is None for v in [self.inputs, self.nodes, self.usage_count]):
-            self.update_nodes()
         self.build()
 
         GraphForwardContext.current()._trigger_before_graph(self, inputs)
@@ -284,7 +304,7 @@ class FlowGraph:
         # before save, clear the packed func cache because ctypes object can not be pickled
         for node in self.nodes:
             node.task_func = None
-        self.usage_count, self.nodes = None, None
+        self._usage_count, self._nodes = None, None
 
         dirname = os.path.dirname(model_file)
         os.makedirs(dirname, exist_ok=True)
@@ -311,11 +331,10 @@ class FlowGraph:
             ret = pickle.load(f)
         if not isinstance(ret, FlowGraph):
             raise TypeError('Expect to load FlowGraph, got {}'.format(type(ret)))
-        ret.update_nodes()
         return ret
 
     def update_nodes(self):
-        free_vars, self.nodes, self.usage_count = self._analyze(self.outputs)
+        free_vars, self._nodes, self._usage_count = self._analyze(self.outputs)
         if self.inputs:
             non_bound_free_vars: Set[Tensor] = set(free_vars) - set(self.inputs)
             if len(non_bound_free_vars) > 0:
@@ -461,6 +480,8 @@ class FlowGraph:
                         # input
                         free_vars.append(it)
                 else:
+                    if it is not it.op.outputs[it.trace[1]]:
+                        raise ValueError('The trace is broken')
                     out_degree[it.op] -= 1
                     if out_degree[it.op] == 0:
                         stack.append(it.op)

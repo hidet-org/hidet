@@ -262,12 +262,13 @@ def tensor_type(dtype, shape: Optional[Sequence[Union[int, Expr]]] = None, layou
     else:
         assert isinstance(layout, DataLayout)
         assert isinstance(shape, (list, tuple))
-        for a, b in zip(shape, layout.shape):
-            if int(a) != int(b):
-                raise ValueError(
-                    'The shape of tensor and the shape of layout are not compatible, '
-                    '{} vs {}'.format(list(shape), list(layout.shape))
-                )
+        assert len(shape) == len(layout.shape)
+        # for a, b in zip(shape, layout.shape):
+        #     if int(a) != int(b):
+        #         raise ValueError(
+        #             'The shape of tensor and the shape of layout are not compatible, '
+        #             '{} vs {}'.format(list(shape), list(layout.shape))
+        #         )
     shape = convert(shape)
     return TensorType(dtype, shape, layout)
 

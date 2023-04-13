@@ -133,24 +133,24 @@ class DataLayout(Node):
         cond = concat_let_expr(var2value=var2value, body=cond)
         return cond
 
-    def tile(self, inner_shape: Sequence[Int]):
-        return TiledDataLayout(base=self, inner_shape=inner_shape)
+    # def tile(self, inner_shape: Sequence[Int]):
+    #     return TiledDataLayout(base=self, inner_shape=inner_shape)
 
-    def split(self, dim2factor: Mapping[int, Int]):
-        return SplitDataLayout(base=self, dim2factor=dim2factor)
+    # def split(self, dim2factor: Mapping[int, Int]):
+    #     return SplitDataLayout(base=self, dim2factor=dim2factor)
 
-    def reorder(self, order: Sequence[int]):
-        return self.fuse(order)
+    # def reorder(self, order: Sequence[int]):
+    #     return self.fuse(order)
 
     def swizzle(self, dim: int, regards_dim: Optional[int] = None, log_step: int = 0):
-        return SwizzleDataLayout(base=self, dim=dim, regards_dim=regards_dim, log_step=log_step)
+        return SwizzleLayout(base=self, dim=dim, regards_dim=regards_dim, log_step=log_step)
 
-    def fuse(self, dim2fuse: Sequence[Union[Sequence[int], int]]):
-        return FusedDataLayout(base=self, dim2fuse=dim2fuse)
+    # def fuse(self, dim2fuse: Sequence[Union[Sequence[int], int]]):
+    #     return FusedDataLayout(base=self, dim2fuse=dim2fuse)
 
     @staticmethod
     def product(outer, inner):
-        return ProductDataLayout(outer, inner)
+        return ComposedLayout(outer, inner)
 
     @staticmethod
     def concat(lhs, rhs):
@@ -233,7 +233,7 @@ class LocalLayout(DataLayout):
         return LogicalAnd.join_list([v < s for s, v in zip(self.shape, args)])
 
 
-class SwizzleDataLayout(DataLayout):
+class SwizzleLayout(DataLayout):
     """
     Swizzle a layout (called base layout) to get a swizzled data layout. The shape of swizzled layout is the same as
     the base layout.
@@ -396,7 +396,7 @@ class FusedDataLayout(DataLayout):
         return self.base.within_bound(*self.base_args(*args))
 
 
-class ProductDataLayout(DataLayout):
+class ComposedLayout(DataLayout):
     def __init__(self, outer: DataLayout, inner: DataLayout):
         assert len(outer.shape) == len(inner.shape)
         super().__init__(shape=[a * b for a, b in zip(outer.shape, inner.shape)], size=outer.size * inner.size)

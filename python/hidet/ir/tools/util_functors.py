@@ -10,10 +10,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Union, Mapping
+from hidet.ir.type import TypeNode
 from hidet.ir.expr import Let, Var, Expr
 from hidet.ir.func import Function
-from hidet.ir.stmt import Stmt, ForStmt, LetStmt
-from hidet.ir.functors import StmtVisitor, ExprVisitor, IRVisitor, IRRewriter
+from hidet.ir.stmt import Stmt, LetStmt
+from hidet.ir.functors import IRVisitor, IRRewriter
 
 
 class MapBasedRewriter(IRRewriter):
@@ -35,8 +36,9 @@ class IRCollector(IRVisitor):
         return self.exprs
 
     def visit(self, node):
-        if node in self.memo:
-            return self.memo[node]
+        key = id(node) if isinstance(node, (list, dict)) else node
+        if key in self.memo:
+            return self.memo[key]
 
         if isinstance(node, self.expr_types):
             self.exprs.append(node)
@@ -44,35 +46,6 @@ class IRCollector(IRVisitor):
                 self.memo[node] = None
                 return None
         return super().visit(node)
-
-
-class FreeVarCollector(StmtVisitor, ExprVisitor):
-    def __init__(self):
-        super().__init__()
-        self.defined = set()
-        self.free_vars = set()
-
-    def collect(self, e):
-        self.defined.clear()
-        self.visit(e)
-        return self.free_vars
-
-    def visit_LetStmt(self, stmt: LetStmt):
-        for bind_var, bind_value in zip(stmt.bind_vars, stmt.bind_values):
-            self.visit(bind_value)
-            self.defined.add(bind_var)
-        self.visit(stmt.body)
-        for bind_var in stmt.bind_vars:
-            self.defined.remove(bind_var)
-
-    def visit_ForStmt(self, stmt: ForStmt):
-        self.defined.add(stmt.loop_var)
-        super().visit_ForStmt(stmt)
-        self.defined.remove(stmt.loop_var)
-
-    def visit_Var(self, e: Var):
-        if e not in self.defined:
-            self.free_vars.add(e)
 
 
 class CloneRewriter(IRRewriter):
@@ -94,7 +67,9 @@ class CloneRewriter(IRRewriter):
         return Let(v, self(e.value), self(e.body))
 
 
-def rewrite(node: Union[Function, Expr, Stmt, tuple], rewrite_map: Mapping[Union[Stmt, Expr], Union[Stmt, Expr]]):
+def rewrite(
+    node: Union[Function, Expr, Stmt, TypeNode, tuple, list], rewrite_map: Mapping[Union[Stmt, Expr], Union[Stmt, Expr]]
+):
     assert isinstance(rewrite_map, dict)
     rewriter = MapBasedRewriter(rewrite_map)
     return rewriter.rewrite(node)
@@ -136,8 +111,3 @@ def collect(node: Union[Function, Expr, Stmt, list, tuple], node_types, stop_whe
 
 def clone(node: Union[Stmt, Expr]) -> Union[Stmt, Expr]:
     return CloneRewriter()(node)
-
-
-def collect_free_vars(node: Union[Expr, Stmt]):
-    collector = FreeVarCollector()
-    return collector.collect(node)

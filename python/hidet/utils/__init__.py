@@ -18,7 +18,7 @@ from . import structure
 from . import stack_limit
 
 from .py import prod, Timer, repeat_until_converge, COLORS, get_next_file_index, factorize, HidetProfiler, TableBuilder
-from .py import same_list, strict_zip, initialize, gcd, lcm, error_tolerance, green, red, cyan, bold, blue
+from .py import same_list, strict_zip, index_of, initialize, gcd, lcm, error_tolerance, green, red, cyan, bold, blue
 from .py import str_indent, unique
 from .bench import benchmark_func
 from .structure import DirectedGraph

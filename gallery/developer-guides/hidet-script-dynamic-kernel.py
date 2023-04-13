@@ -12,7 +12,6 @@ import hidet
 
 
 def matmul_simt_kernel():
-    from hidet.transforms.tools import add_packed_func
     from hidet.lang import attr
     from hidet.lang import float32, int32
     from hidet.lang import as_tensor_pointer, tensor
@@ -134,9 +133,8 @@ def matmul_simt_kernel():
     assert isinstance(matmul_kernel, hidet.ir.Function)  # matmul is a hidet.ir.Function
 
     ir_module = script_module.ir_module()
-    add_packed_func(ir_module, matmul_kernel, pack_func_name='matmul')
     compiled_function: hidet.runtime.CompiledFunction = hidet.driver.build_ir_module(
-        ir_module, func_name='matmul'
+        ir_module
     )
     return compiled_function
 

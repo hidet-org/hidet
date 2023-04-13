@@ -147,8 +147,8 @@ class MaxPool2dOp(Operator):
     ):
         super().__init__(
             inputs=[x],
-            task=Pool2dTask(input_like(x, 'x'), kernel, stride, padding, reduce_type='max'),
             attributes={'kernel': kernel, 'stride': stride, 'padding': padding},
+            task=Pool2dTask(input_like(x, 'x'), kernel, stride, padding, reduce_type='max'),
         )
 
 
@@ -162,8 +162,8 @@ class MaxPool3dOp(Operator):
     ):
         super().__init__(
             inputs=[x],
-            task=Pool3dTask(input_like(x, 'x'), kernel, stride, padding, reduce_type='max'),
             attributes={'kernel': kernel, 'stride': stride, 'padding': padding},
+            task=Pool3dTask(input_like(x, 'x'), kernel, stride, padding, reduce_type='max'),
         )
 
 
@@ -177,8 +177,8 @@ class AvgPool2dOp(Operator):
     ):
         super().__init__(
             inputs=[x],
-            task=Pool2dTask(input_like(x, 'x'), kernel, stride, padding, reduce_type='avg'),
             attributes={'kernel': kernel, 'stride': stride, 'padding': padding},
+            task=Pool2dTask(input_like(x, 'x'), kernel, stride, padding, reduce_type='avg'),
         )
 
 
@@ -192,8 +192,8 @@ class AvgPool3dOp(Operator):
     ):
         super().__init__(
             inputs=[x],
-            task=Pool3dTask(input_like(x, 'x'), kernel, stride, padding, reduce_type='avg'),
             attributes={'kernel': kernel, 'stride': stride, 'padding': padding},
+            task=Pool3dTask(input_like(x, 'x'), kernel, stride, padding, reduce_type='avg'),
         )
 
 
@@ -208,8 +208,8 @@ class AdaptivePoolOp(Operator):
         output_size = normalize_output(output_size, spatial_ndim)
         super().__init__(
             inputs=[x],
-            task=AdaptivePoolTask(input_like(x, 'x'), output_size, reduce_type=reduce_type),
             attributes=attrs,
+            task=AdaptivePoolTask(input_like(x, 'x'), output_size, reduce_type=reduce_type),
         )
 
 

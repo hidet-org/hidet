@@ -1,4 +1,5 @@
 pytz
+distro
 
 # python test
 pytest==7.2

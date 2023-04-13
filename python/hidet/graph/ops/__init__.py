@@ -24,7 +24,7 @@ from .definitions.pool import max_pool2d, max_pool3d, adaptive_max_pool1d, adapt
 from .definitions.activation import relu, leaky_relu, sigmoid, hardsigmoid, clip, relu6, prelu, gelu, silu, hardswish
 from .definitions.activation import logsigmoid, celu, hardshrink, softplus, softsign, tanhshrink
 from .definitions.activation import softshrink, softmax, softmin, hardtanh
-from .definitions.norm import batch_norm_infer, instance_norm, layer_norm
+from .definitions.norm import batch_norm_infer, instance_norm, layer_norm, group_norm
 from .definitions.image import resize2d
 from .definitions.create import full, arange, linspace
 from .definitions.arithmetic import add, subtract, multiply, divide, mod, remainder, negative, positive, square
@@ -41,6 +41,7 @@ from .definitions.cumulative import cumsum
 from .definitions.transform import squeeze, unsqueeze, flatten, concat, cast, take, rearrange, strided_slice, reshape
 from .definitions.transform import transpose, broadcast, pad, tile, split, conv_pad, expand_dims
 from .definitions.transform import permute_dims
+from .definitions.fusion import fused_operator
 from .definitions.special import barrier
 
 from .definitions import utils

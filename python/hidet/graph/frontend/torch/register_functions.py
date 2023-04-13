@@ -236,6 +236,67 @@ def avg_pool3d(x: Tensor, kernel_size, stride, padding, ceil_mode=False, count_i
     return y
 
 
+@register_function(torch.nn.functional.interpolate)
+def interpolate(
+    input: Tensor,
+    size=None,
+    scale_factor=None,
+    mode='nearest',
+    align_corners=None,
+    recompute_scale_factor=None,
+    antialias=False,
+):
+    if len(input.shape) != 4:
+        raise NotImplementedError("Currently only supports 4D inputs (NCHW)")
+
+    if antialias:
+        raise NotImplementedError("Currently does not support antialias=True")
+
+    if recompute_scale_factor:
+        raise NotImplementedError("Currently does not support recompute_scale_factor=True")
+
+    if size is None == scale_factor is None:
+        raise ValueError("Exactly one of size or scale_factor can be None")
+
+    target_size = None
+    if size is not None:
+        if isinstance(size, int):
+            target_size = [size, size]
+        else:
+            if len(size) != 2:
+                raise ValueError("Length of \"size\" must be of type int or tuple([int, int])")
+            target_size = list(size)
+    else:
+        if isinstance(scale_factor, (int, float)):
+            target_size = [int(i * scale_factor) for i in input.shape[2:]]
+        else:
+            if len(scale_factor) != 2:
+                raise ValueError("Length of \"scale_factor\" must be of type int or tuple([int, int])")
+            target_size = [a * b for a, b in zip(input.shape[2:], scale_factor)]
+
+    supported_methods = {'nearest': 'nearest', 'bilinear': 'linear', 'bicubic': 'cubic'}
+    if mode not in supported_methods:
+        raise NotImplementedError("Mode not supported")
+
+    mode_hidet = supported_methods[mode]
+    if align_corners:
+        coordinate_transformation_mode = 'align_corners'
+    else:
+        coordinate_transformation_mode = 'pytorch_half_pixel'
+
+    return ops.resize2d(
+        input,
+        target_size,
+        mode_hidet,
+        coordinate_transformation_mode,
+        rounding_method='round_prefer_floor',
+        roi=None,
+        cubic_alpha=-0.75,
+        cubic_exclude=0,
+        extrapolation_value=0.0,
+    )
+
+
 @register_function(operator.truediv)
 def truediv(x: Union[Tensor, int, float], y: Union[Tensor, int, float]):
     import hidet
@@ -257,6 +318,7 @@ def sub(x: Tensor, y: Tensor):
 
 
 @register_function(torch.nn.functional.softmax)
+@register_method(torch.Tensor.softmax)
 def softmax(x: Tensor, dim: int, dtype=None):
     if dtype is not None:
         raise NotImplementedError("dtype is not None")
@@ -323,6 +385,30 @@ def layer_norm(
         y = y * weight
     if bias is not None:
         y = y + bias
+    return y
+
+
+@register_function(torch.nn.functional.group_norm)
+def group_norm(
+    x: Tensor,
+    num_groups: int,
+    num_channels: int,
+    weight: Optional[Tensor] = None,
+    bias: Optional[Tensor] = None,
+    eps: float = 1e-5,
+):
+    if x.shape[1] != num_channels:
+        raise ValueError(
+            "num_channels does not match tensor shape at index 2, expect {} but got {}".format(num_channels, x.shape[2])
+        )
+    if num_channels % num_groups != 0:
+        raise ValueError("num_channels {} must be divisible by num_groups {}".format(num_channels, num_groups))
+
+    y = ops.group_norm(x, num_groups, epsilon=eps)
+    if weight is not None:
+        y = y * weight.reshape([num_channels, 1, 1])
+    if bias is not None:
+        y = y + bias.reshape([num_channels, 1, 1])
     return y
 
 
@@ -462,11 +548,67 @@ def full(size, fill_value, *, out=None, dtype=None, layout=None, device=None, re
     return ops.full(size, fill_value, dtype=hidet_dtype, device=hidet_device)
 
 
+@register_function(torch.empty)
+def empty(
+    *size,
+    out=None,
+    dtype=None,
+    layout=torch.strided,
+    device=None,
+    requires_grad=False,
+    pin_memory=False,
+    memory_format=torch.contiguous_format,
+):
+    import hidet
+
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.empty(..., out=..., ...)")
+    if layout not in [None, torch.strided]:
+        raise NotImplementedError("hidet: does not support torch.empty(..., layout=..., ...)")
+    if requires_grad and torch.is_grad_enabled():
+        warnings.warn_once("hidet: requires_grad=True when torch.is_grad_enabled(), treating as requires_grad=False")
+    if pin_memory:
+        raise NotImplementedError("hidet: does not support torch.empty(..., pin_memory=True, ...)")
+    if memory_format != torch.contiguous_format:
+        raise NotImplementedError("hidet: does not support torch.empty(..., memory_format=..., ...)")
+
+    hidet_device: Device = device_from_torch(torch_device=device)
+    hidet_dtype: DataType = dtype_from_torch(torch_dtype=dtype)
+    if len(size) == 1 and isinstance(size[0], (tuple, list)):
+        size = size[0]
+    return hidet.empty(size, dtype=hidet_dtype, device=hidet_device)
+
+
 @register_function(torch.bmm)
 def bmm(input: Tensor, mat2: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.bmm(..., out=...)")
     return ops.matmul(input, mat2)
+
+
+@register_function(torch.baddbmm)
+def baddbmm(input, batch1, batch2, *, beta=1, alpha=1, out: Optional[Tensor] = None) -> Tensor:
+    import hidet
+
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.baddbmm(..., out=...)")
+
+    if alpha == 0 and beta == 0:
+        size = batch1.shape[0:2] + [batch2.shape[-1]]
+        return hidet.zeros(shape=size, dtype=input.dtype, device=input.device)
+    elif alpha == 0:
+        return beta * input
+    elif beta == 0:
+        return alpha * ops.matmul(batch1, batch2)
+
+    if alpha == 1 and beta == 1:
+        return input + ops.matmul(batch1, batch2)
+    elif alpha == 1:
+        return beta * input + ops.matmul(batch1, batch2)
+    elif beta == 1:
+        return input + alpha * ops.matmul(batch1, batch2)
+
+    return beta * input + alpha * ops.matmul(batch1, batch2)
 
 
 @register_function(torch.tensor)
@@ -488,6 +630,13 @@ def sigmoid(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
     if out is not None:
         warnings.warn_once("hidet: does not support torch.sigmoid(..., out=...)")
     return ops.sigmoid(x)
+
+
+@register_function(torch.exp)
+def exp(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
+    if out is not None:
+        warnings.warn_once("hidet: does not support torch.exp(..., out=...)")
+    return ops.exp(x)
 
 
 @register_function(torch.nn.functional.hardsigmoid)

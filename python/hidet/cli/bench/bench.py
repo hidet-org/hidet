@@ -12,6 +12,7 @@
 from typing import Optional
 import click
 import torch
+import hidet
 from hidet.utils import initialize
 from . import vision
 from . import nlp
@@ -54,6 +55,12 @@ from .bench_all import bench_all
     type=bool,
     help='Set torch.backends.cuda.matmul.allow_tf32=True.',
 )
+@click.option(
+    '--cache-dir',
+    default=None,
+    type=click.Path(dir_okay=True, file_okay=False, writable=True),
+    help='The cache directory to store the generated kernels.',
+)
 def bench_group(
     space: str,
     dtype: str,
@@ -61,6 +68,7 @@ def bench_group(
     report: Optional[click.Path],
     disable_torch_cudnn_tf32: bool,
     enable_torch_cublas_tf32: bool,
+    cache_dir: Optional[click.Path],
 ):
     BenchModel.search_space = int(space)
     BenchModel.dtype = getattr(torch, dtype)
@@ -68,6 +76,8 @@ def bench_group(
     BenchModel.disable_torch_cudnn_tf32 = disable_torch_cudnn_tf32
     BenchModel.enable_torch_cublas_tf32 = enable_torch_cublas_tf32
     BenchModel.report_path = report
+    if cache_dir:
+        hidet.option.cache_dir(str(cache_dir))
 
 
 @initialize()

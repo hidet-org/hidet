@@ -20,11 +20,27 @@ import hidet.runtime.storage
 import hidet.cuda
 from hidet.ir import dtypes
 from hidet.ir.type import DataType, data_type
+from hidet.ir.expr import Var, Expr, Constant
 from hidet.ir.layout import DataLayout, RowMajorLayout
 from hidet.runtime.storage import Storage
 from hidet.utils import prod
 from hidet.utils.overrides import set_module
 from hidet.runtime.device import Device, instantiate_device
+
+
+def _simplify_dim(dim: Union[int, Expr]) -> Union[int, Var]:
+    from hidet.ir.tools import simplify
+
+    if isinstance(dim, (int, Var)):
+        return dim
+    elif isinstance(dim, Constant):
+        return int(dim)
+    else:
+        dim = simplify(dim)
+        if isinstance(dim, (int, Var, Constant)):
+            return _simplify_dim(dim)
+        else:
+            raise ValueError(f"Cannot simplify {dim} to a constant integer or variable.")
 
 
 @set_module('hidet')
@@ -58,7 +74,7 @@ class Tensor:
     def __init__(self, shape, dtype, device, storage, layout=None, trace=None):
         from hidet.graph.operator import Operator
 
-        self._shape: List[int] = [int(v) for v in shape]
+        self._shape: List[Union[Var, int]] = [_simplify_dim(dim) for dim in shape]
         self._dtype: DataType = data_type(dtype)
         self._device: Device = instantiate_device(device)
         self._storage: Optional[Storage] = storage
@@ -66,7 +82,7 @@ class Tensor:
         self._trace: Optional[Tuple[Operator, int]] = trace
 
     @property
-    def shape(self) -> Tuple[int, ...]:
+    def shape(self) -> Tuple[Union[int, Var], ...]:
         """
         The shape of the tensor.
 
@@ -269,10 +285,10 @@ class Tensor:
 
         return greater(self, utils.convert_to_tensor(other, self))
 
-    def __eq__(self, other):
-        from .ops import equal, utils
-
-        return equal(self, utils.convert_to_tensor(other, self))
+    # def __eq__(self, other):
+    #     from .ops import equal, utils
+    #
+    #     return equal(self, utils.convert_to_tensor(other, self))
 
     def __ne__(self, other):
         from .ops import not_equal, utils
@@ -992,7 +1008,7 @@ def symbol(shape: Sequence[int], dtype='float32', device='cpu', layout=None) -> 
     return Tensor(shape=shape, dtype=dtype, device=device, storage=None, layout=layout)
 
 
-def zeros(shape: Sequence[int], dtype='float32', device='cpu') -> Tensor:
+def zeros(shape: Sequence[int], dtype: Union[DataType, str] = 'float32', device='cpu') -> Tensor:
     """Create a tensor initialized with zero.
 
     Parameters
@@ -1000,7 +1016,7 @@ def zeros(shape: Sequence[int], dtype='float32', device='cpu') -> Tensor:
     shape: Sequence[int]
         The shape of new tensor.
 
-    dtype: str
+    dtype: str or DataType
         The data type of element of the tensor.
 
     device: Device or str, default 'cpu'
@@ -1098,9 +1114,11 @@ def randn(shape, dtype='float32', mean=0.0, stddev=1.0, device='cpu') -> Tensor:
     [[ 0.10720467 -1.6906018   0.06347568]
      [-0.37061226  0.562728    1.857547  ]]
     """
+    np_tensor = np.random.randn(*shape) * stddev + mean
 
-    np_tensor = np.random.randn(*shape).astype(np.float32)
-    np_tensor = np_tensor * stddev + mean
+    if isinstance(np_tensor, float):  # shape = []
+        np_tensor = np.array(np_tensor)
+
     hidet_tensor = from_numpy(np_tensor)
     return hidet_tensor.to(device=device, dtype=dtype)
 
@@ -1280,7 +1298,12 @@ def full_like(
 
 
 def randn_like(
-    data: Tensor, shape: Optional[Sequence[int]] = None, dtype: Optional[str] = None, device: Optional[str] = None
+    data: Tensor,
+    mean: float = 0.0,
+    stddev: float = 1.0,
+    shape: Optional[Sequence[int]] = None,
+    dtype: Optional[str] = None,
+    device: Optional[str] = None,
 ) -> Tensor:
     """
     Create a randomly initialized tensor with the same shape, dtype, and device as the given tensor.
@@ -1289,6 +1312,12 @@ def randn_like(
     ----------
     data: Tensor
         The tensor to copy shape, dtype, and device from.
+
+    mean: float, optional
+        The mean of the normal distribution.
+
+    stddev: float, optional
+        The standard deviation of the normal distribution.
 
     shape: Sequence[int], optional
         The shape of new tensor. If None, the shape of data is used.
@@ -1308,6 +1337,8 @@ def randn_like(
         shape=data.shape if shape is None else shape,
         dtype=data.dtype if dtype is None else dtype,
         device=data.device if device is None else device,
+        mean=mean,
+        stddev=stddev,
     )
 
 

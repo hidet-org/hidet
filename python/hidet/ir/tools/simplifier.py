@@ -142,7 +142,7 @@ class Simplifier(StmtRewriter, ExprRewriter, BaseRewriter):
                 return ForStmt(loop_var, extent, stmt.unroll, body)
 
 
-def simplify(node: Union[Stmt, Expr], repeat_limit=10):
+def simplify(node: Union[Stmt, Expr, int, float], repeat_limit=10):
     if isinstance(node, (int, float)):
         return node
     simplifier = Simplifier()
@@ -158,8 +158,6 @@ def simplify_to_int(node: Union[Expr, int], repeat_limit=10) -> int:
     if isinstance(node, int):
         return node
     node = simplify(node, repeat_limit)
-    assert isinstance(node, Constant) and node.type.name in [
-        'int32',
-        'uint8',
-    ], 'Invalid input. Input type must be one of [int32, uint8].'
+    if not (isinstance(node, Constant) and node.type.is_integer()):
+        raise ValueError('Can not simplify expression {} to an integer'.format(node))
     return node.value

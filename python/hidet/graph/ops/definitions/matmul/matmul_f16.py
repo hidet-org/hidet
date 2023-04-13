@@ -29,7 +29,7 @@ class MatmulF16Task(Task):
         a_shape = a.const_shape()
         b_shape = b.const_shape()
 
-        if not a.ttype.dtype == float16 or not b.ttype.dtype == float16:
+        if not a.type.dtype == float16 or not b.type.dtype == float16:
             raise ValueError('Both inputs must be float16 tensors')
 
         if len(a_shape) < 2 or len(b_shape) < 2:
@@ -74,10 +74,10 @@ class MatmulF16Task(Task):
         return False
 
     def allow_epilogue(self) -> bool:
-        return False
+        return True
 
-    def implement_cuda(self, working_dir: str) -> IRModule:
-        return tune.tune(self.schedule, task=self, target_device='cuda', working_dir=working_dir)
+    def implement_cuda(self, working_dir: str) -> List[IRModule]:
+        return tune.extract_ir_modules(self.schedule)
 
     @tune.space(2, 'block_m', [32, 64, 128, 256])
     @tune.space(2, 'block_n', [32, 64, 128, 256])
@@ -101,11 +101,10 @@ class MatmulF16Task(Task):
         from hidet.ir.type import tensor_type
         from hidet.lang import attr, col_spatial, view, u32, tensor_pointer, grid
         from hidet.lang.layout import row_layout
-        from hidet.lang.mapping import repeat, spatial
+        from hidet.lang.mapping import spatial, auto_map
         from hidet.lang.cuda import blockIdx, threadIdx, syncthreads, dynamic_shared_memory
         from hidet.lang.cuda import MmaConfig, mma_sync, cp_async, cp_async_wait_all, ldmatrix
         from hidet.lang.cuda import register_tensor
-        from hidet.transforms.tools import fuse_and_pack
 
         # input shapes
         node_a, node_b, node_c = self.inputs[0], self.inputs[1], self.outputs[0]
@@ -114,7 +113,7 @@ class MatmulF16Task(Task):
         c_shape: List[int] = node_c.const_shape()
         m_size, n_size, k_size = a_shape[-2], b_shape[-1], a_shape[-1]
         a_head, b_head, c_head = a_shape[:-2], b_shape[:-2], c_shape[:-2]
-        k_parts = self.attributes['parallel_k_parts']
+        k_parts = self.attrs['parallel_k_parts']
         k_part_extent = cdiv(cdiv(k_size, k_parts), 8) * 8
 
         # schedule parameters
@@ -127,20 +126,22 @@ class MatmulF16Task(Task):
         mma_count_m, mma_count_n, mma_count_k = warp_m // mma_m, warp_n // mma_n, warp_k // mma_k
         threads = warp_count_m * warp_count_n * warp_count_k * 32
         grid_dim: Tuple[int, int, int] = cdiv(m_size, block_m), cdiv(n_size, block_n), prod(c_head)
-        dynamic_smem_bytes = 2 * (block_m + block_n) * block_k * 2
+        dynamic_smem_bytes = max(2 * (block_m + block_n) * block_k * 2, block_m * block_n * 2)
 
         tune.check(block_m % warp_m == block_n % warp_n == block_k % warp_k == 0, 'warp dims divide block dims')
         tune.check(warp_m % mma_m == warp_n % mma_n == warp_k % mma_k == 0, 'mma dims divide warp dims')
         tune.check(threads <= 1024, 'threads in a block <= 1024')
-        tune.check(dynamic_smem_bytes <= 49152, 'dynamic shared memory <= 49152')
+        # maximum_smem_bytes = hidet.cuda.properties().sharedMemPerBlock
+        maximum_smem_bytes = 49152
+        tune.check(dynamic_smem_bytes <= maximum_smem_bytes, 'dynamic shared memory <= 49152')
 
         tune.check(block_n % 64 == 0, 'block_n must be multiple of 64, required by async gmem -> smem loading')
         tune.check(block_k % 8 == 0)
         tune.check(is_power_of_two(block_k // 8))
-        tune.check(threads % (block_k // 8) == 0)
-        tune.check(threads % (block_n // 8) == 0)
-        tune.check(block_m % (threads // (block_k // 8)) == 0)
-        tune.check(block_k % (threads // (block_n // 8)) == 0)
+        # tune.check(threads % (block_k // 8) == 0)
+        # tune.check(threads % (block_n // 8) == 0)
+        # tune.check(block_m % (threads // (block_k // 8)) == 0)
+        # tune.check(block_k % (threads // (block_n // 8)) == 0)
         smem_a_type = tensor_type(
             'float16', shape=[block_m, block_k], layout=row_layout(block_m, block_k // 8).swizzle(1) * row_layout(1, 8)
         )
@@ -149,12 +150,15 @@ class MatmulF16Task(Task):
             shape=[block_k, block_n],
             layout=row_layout(block_k // 8, block_n // 64) * row_layout(8, 8).swizzle(1) * row_layout(1, 8),
         )
-        load_smem_a_map = repeat(block_m // (threads // (block_k // 8)), 1).spatial(
-            threads // (block_k // 8), block_k // 8
-        )
-        load_smem_b_map = repeat(block_k // (threads // (block_n // 8)), 1).spatial(
-            threads // (block_n // 8), block_n // 8
-        )
+        load_smem_a_map = auto_map(block_m, block_k // 8, workers=threads, on_fail=lambda msg: tune.check(False, msg))
+        load_smem_b_map = auto_map(block_k, block_n // 8, workers=threads, on_fail=lambda msg: tune.check(False, msg))
+        # load_smem_a_map = repeat(block_m // (threads // (block_k // 8)), 1).spatial(
+        #     threads // (block_k // 8), block_k // 8
+        # )
+        # load_smem_b_map = repeat(block_k // (threads // (block_n // 8)), 1).spatial(
+        #     threads // (block_n // 8), block_n // 8
+        # )
+        store_smem_c_map = auto_map(block_m, block_n, workers=threads, on_fail=lambda msg: tune.check(False, msg))
 
         with hidet.script_module() as module:
 
@@ -221,12 +225,6 @@ class MatmulF16Task(Task):
                     )
                     cp_async(~smem_b[k, j], ~gmem_b[k, j], cp_size=16, src_size=src_size * 2, cache_level='global')
 
-            # @hidet.script
-            # def store_c(
-            #         regs_c: float16[mma_count_m, mma_count_n, mma_config.c_elements],
-            #         c: float16[c_head + [m_size, n_size]]
-            # ):
-
             @hidet.script
             def matmul_f16_kernel(
                 a: float16[a_head + [m_size, k_size]],
@@ -283,27 +281,44 @@ class MatmulF16Task(Task):
                 c_head_index = spatial(*c_head).map(blockIdx.z)
                 gmem_c = c[c_head_index][offset_m:, offset_n:]
 
-                for k_round in range(warp_count_k):
+                if warp_count_k == 1:
                     for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
-                        if wk == k_round:
-                            for mi, mj in grid(mma_count_m, mma_count_n):
-                                p = 0
-                                for i, j in mma_config.c_store_map.on(lane_id):
-                                    delta_m = wi * warp_m + mi * mma_m + i
-                                    delta_n = wj * warp_n + mj * mma_n + j
-                                    in_bound = (offset_m + delta_m < m_size) and (offset_n + delta_n < n_size)
-                                    if in_bound:
-                                        if k_round == 0:
-                                            gmem_c[delta_m, delta_n] = regs_c[mi, mj, p]
-                                        else:
-                                            gmem_c[delta_m, delta_n] += regs_c[mi, mj, p]
-                                    p += 1
-                    if warp_count_k > 1:
-                        syncthreads()
+                        for mi, mj in grid(mma_count_m, mma_count_n):
+                            p = 0
+                            for i, j in mma_config.c_store_map.on(lane_id):
+                                delta_m = wi * warp_m + mi * mma_m + i
+                                delta_n = wj * warp_n + mj * mma_n + j
+                                in_bound = (offset_m + delta_m < m_size) and (offset_n + delta_n < n_size)
+                                if in_bound:
+                                    gmem_c[delta_m, delta_n] = regs_c[mi, mj, p]
+                                p += 1
+                else:
+                    smem_c = tensor_pointer('float16', shape=[block_m, block_n])
+                    smem_c = dynamic_shared_memory(byte_offset=0, dtype=float16)
+
+                    for k_round in range(warp_count_k):
+                        for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
+                            if wk == k_round:
+                                for mi, mj in grid(mma_count_m, mma_count_n):
+                                    p = 0
+                                    for i, j in mma_config.c_store_map.on(lane_id):
+                                        delta_m = wi * warp_m + mi * mma_m + i
+                                        delta_n = wj * warp_n + mj * mma_n + j
+                                        in_bound = (offset_m + delta_m < m_size) and (offset_n + delta_n < n_size)
+                                        if in_bound:
+                                            if k_round == 0:
+                                                smem_c[delta_m, delta_n] = regs_c[mi, mj, p]
+                                            else:
+                                                smem_c[delta_m, delta_n] += regs_c[mi, mj, p]
+                                        p += 1
+                        if warp_count_k > 1:
+                            syncthreads()
+                    for i, j in store_smem_c_map.on(threadIdx.x):
+                        if offset_m + i < m_size and offset_n + j < n_size:
+                            gmem_c[i, j] = smem_c[i, j]
 
         ir_module = module.ir_module()
         assert isinstance(matmul_f16_kernel, Function)
-        fuse_and_pack(ir_module, matmul_f16_kernel, task=self)
 
         return ir_module
 
@@ -312,8 +327,8 @@ class MatmulF16Op(Operator):
     def __init__(self, a: Tensor, b: Tensor, parallel_k_parts=1):
         super().__init__(
             inputs=[a, b],
-            task=MatmulF16Task(input_like(a, 'a'), input_like(b, 'b'), parallel_k_parts),
             attributes={'parallel_k_parts': parallel_k_parts},
+            task=MatmulF16Task(input_like(a, 'a'), input_like(b, 'b'), parallel_k_parts),
         )
 
 
