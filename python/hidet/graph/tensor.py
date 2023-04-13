@@ -951,6 +951,10 @@ class Tensor:
         """
         import torch
 
+        if self.dtype == dtypes.boolean:
+            # workaround for torch not supporting exporting boolean to dlpack
+            return torch.from_dlpack(self.to(dtype='uint8')).bool()
+
         return torch.from_dlpack(self)
 
 
@@ -1016,7 +1020,7 @@ def zeros(shape: Sequence[int], dtype='float32', device='cpu') -> Tensor:
     shape: Sequence[int]
         The shape of new tensor.
 
-    dtype: str
+    dtype: str or DataType
         The data type of element of the tensor.
 
     device: Device or str, default 'cpu'

@@ -106,6 +106,11 @@ def iadd(x: Tensor, y: Tensor):
     return ops.add(x, y)
 
 
+@register_function(operator.neg)
+def neg(x: Tensor):
+    return -x
+
+
 @register_function(torch.sin)
 def sin(x: Tensor):
     return ops.sin(x)
@@ -283,6 +288,27 @@ def softmax(x: Tensor, dim: int, dtype=None):
 @register_function(torch.matmul)
 def matmul(x: Tensor, y: Tensor):
     return ops.matmul(x, y)
+
+
+@register_function(torch.zeros)
+def zeros(*size, out=None, dtype=None, layout=None, device=None, pin_memory=False, requires_grad=False):
+    import hidet
+
+    if out is not None:
+        raise NotImplementedError("out is not None")
+    if layout is not None:
+        raise NotImplementedError("layout is not None")
+    if len(size) == 1:
+        if isinstance(size[0], (list, tuple)):
+            size = size[0]
+    shape = [int(v) for v in size]
+    if dtype is None:
+        dtype = torch.get_default_dtype()
+
+    _ = pin_memory
+    _ = requires_grad
+
+    return hidet.zeros(shape, dtype=dtype_from_torch(dtype), device=device_from_torch(device))
 
 
 @register_function(torch.ones)
@@ -653,3 +679,12 @@ def celu(x: Tensor, alpha: float):
 @register_function(torch.nn.functional.logsigmoid)
 def logsigmoid(x: Tensor):
     return ops.logsigmoid(x)
+
+
+@register_function(torch.gather)
+def gather(x: Tensor, dim: int, index: Tensor, *, sparse_grad=False, out=None):
+    if sparse_grad:
+        warnings.warn_once('hidet: gather with sparse_grad=True is not supported. Treat as sparse_grad=False.')
+    if out is not None:
+        raise NotImplementedError('hidet: gather with out=... is not supported')
+    return ops.gather(x, index, axis=dim)
