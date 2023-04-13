@@ -73,6 +73,9 @@ class PassContext:
             # target reduce precision:
             # [None, 'float16', 'float32']
             'reduce_precision': None,
+            # use attention or not
+            # [True, False]
+            'use_attention': True,
             # mma primitive:
             # ['simt', 'wmma', 'mma']
             'mma': 'simt',
@@ -146,6 +149,14 @@ class PassContext:
               Use 'float32' to accumulate.
         """
         self.configs['reduce_precision'] = dtype
+        return self
+
+    def set_use_attention(self) -> PassContext:
+        """
+        Set to use fused attention schedule
+
+        """
+        self.configs['use_attention'] = True
         return self
 
     def set_verbose(self) -> PassContext:
