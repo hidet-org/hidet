@@ -36,7 +36,7 @@ from .definitions.compare import logical_not, logical_and, logical_or, logical_x
 from .definitions.reduce import mean, sum, var, min, max, std, prod, argmin, argmax, all, any
 from .definitions.cumulative import cumsum
 from .definitions.transform import squeeze, unsqueeze, flatten, concat, cast, take, rearrange, strided_slice, reshape
-from .definitions.transform import transpose, broadcast, pad, tile, split, conv_pad, expand_dims
+from .definitions.transform import transpose, broadcast, pad, tile, split, conv_pad, expand_dims, gather
 from .definitions.transform import permute_dims
 from .definitions.fusion import fused_operator
 from .definitions.special import barrier

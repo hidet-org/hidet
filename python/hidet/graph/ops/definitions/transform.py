@@ -16,6 +16,7 @@ from hidet.ir.layout import RowMajorLayout, ColumnMajorLayout
 from hidet.ir.utils import index_deserialize, index_serialize
 from hidet.utils import prod
 from .utils import Task, InverseMap, Operator, Tensor, TensorNode, compute, input_like, normalize_dim, can_broadcast
+from .utils import TensorInput
 
 
 def same_shape(shape_a: Sequence[int], shape_b: Sequence[int]) -> bool:
@@ -185,6 +186,22 @@ class TakeTask(Task):
 
         output = compute(name='output', shape=output_shape, fcompute=lambda *output_indices: fmap(*output_indices))
         super().__init__(name='take', inputs=[data, indices], outputs=[output])
+
+
+class GatherTask(Task):
+    def __init__(self, data: TensorInput, indices: TensorInput, axis=0):
+        data_shape = data.const_shape()
+        indices_shape = indices.const_shape()
+        output_shape = data_shape[:axis] + [indices_shape[axis]] + data_shape[axis + 1 :]
+
+        def fmap(*output_indices):
+            index_value = indices[output_indices]
+            index_value = if_then_else(index_value < 0, index_value + data_shape[axis], index_value)
+            data_indices = output_indices[:axis] + (index_value,) + output_indices[axis + 1 :]
+            return data[data_indices]
+
+        output = compute(name='output', shape=output_shape, fcompute=lambda *output_indices: fmap(*output_indices))
+        super().__init__(name='gather', inputs=[data, indices], outputs=[output])
 
 
 class StridedSliceTask(Task):
@@ -445,6 +462,15 @@ class TakeOp(Operator):
         )
 
 
+class GatherOp(Operator):
+    def __init__(self, data: Tensor, indices: Tensor, axis: int):
+        super().__init__(
+            inputs=[data, indices],
+            attributes={'axis': axis},
+            task=GatherTask(input_like(data, 'data'), input_like(indices, 'indices'), axis=axis),
+        )
+
+
 class StridedSliceOp(Operator):
     def __init__(
         self,
@@ -478,8 +504,9 @@ class StridedSliceOp(Operator):
             if k > 0:
                 i = i if i is not None else 0
                 j = j if j is not None else n
-                if not (-n <= i <= n and -n <= j <= n):
+                if not (-n <= i <= n and -n <= j):
                     raise IndexError('Invalid slice')
+                j = min(j, n)
                 if i < 0:
                     i += n
                 if j < 0:
@@ -646,6 +673,10 @@ def cast(x: Tensor, dtype: Union[str, DataType]) -> Tensor:
 
 def take(data: Tensor, indices: Tensor, axis: int = 0) -> Tensor:
     return TakeOp(data, indices, axis).get_output(0)
+
+
+def gather(data: Tensor, indices: Tensor, axis: int = 0) -> Tensor:
+    return GatherOp(data, indices, axis).outputs[0]
 
 
 def strided_slice(

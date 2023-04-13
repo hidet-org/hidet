@@ -44,6 +44,11 @@ def tensor_half(self: Tensor) -> Tensor:
     return ops.cast(self, "float16")
 
 
+@register_method(torch.Tensor.bool)
+def tensor_bool(self: Tensor) -> Tensor:
+    return ops.cast(self, "bool")
+
+
 @register_method(torch.Tensor.to)
 def tensor_to(self: Tensor, *args, **kwargs) -> Tensor:
     """
