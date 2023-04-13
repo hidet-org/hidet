@@ -15,15 +15,13 @@ import pytest
 import hidet
 from hidet import int32
 from hidet.ir.func import IRModule, Function
-from hidet.transforms.tools import add_packed_func
 from hidet.lang import attr, printf, grid, spatial
 
 
 def run(kernel: Function, shape: List[int]) -> hidet.Tensor:
     ir_module = IRModule()
     ir_module.add(kernel.name, kernel)
-    add_packed_func(ir_module, kernel, 'func')
-    func = hidet.driver.build_ir_module(ir_module, func_name='func')
+    func = hidet.driver.build_ir_module(ir_module)
 
     a = hidet.empty(shape, dtype=hidet.int32).cpu()
     func(a)

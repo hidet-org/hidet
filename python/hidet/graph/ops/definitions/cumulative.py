@@ -57,8 +57,8 @@ class CumulativeBaseOp(Operator):
         dim = normalize_dim(dim, rank=len(x.shape))
         super().__init__(
             inputs=[x],
-            task=CumulativeTask(input_like(x, 'x'), dim, reduce_type, exclusive, reverse),
             attributes={'dim': dim, 'exclusive': exclusive, 'reverse': reverse},
+            task=CumulativeTask(input_like(x, 'x'), dim, reduce_type, exclusive, reverse),
         )
 
 

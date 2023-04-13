@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Any, Union, List, Dict, Tuple
+from typing import Any, Union, List, Dict, Tuple, Type
 from hidet.ir.node import Node
 from hidet.utils import same_list
 
@@ -26,18 +26,29 @@ class BaseFunctor:
         if self.memo is not None and key in self.memo:
             return self.memo[key]
 
-        # iterate through the mro of the class to find a visit_dispatch method
-        for cls in type(self).__mro__:
-            if cls is object:
-                # we have reached the end of the mro but still not found a visit_dispatch method to dispatch the node
-                raise NotImplementedError("Can not dispatch object with type {}".format(type(node)))
-            if 'visit_dispatch' not in cls.__dict__:
-                continue
-            ret = cls.__dict__['visit_dispatch'](self, node)
-            if ret is not NotImplemented:
-                break
+        functor_cls: Type[BaseFunctor] = type(self)
+        node_cls = type(node)
+        dispatch_table = getattr(functor_cls, '__dispatch_table', None)
+        if dispatch_table and node_cls in dispatch_table:
+            # fast path
+            ret = dispatch_table[node_cls](self, node)
         else:
-            assert False  # should never reach here as object is always in the mro
+            # slow path
+            # iterate through the mro of the class to find a visit_dispatch method that can handle the node
+            for cls in type(self).__mro__:
+                dispatch_func = cls.__dict__.get('visit_dispatch', None)  # do not use getattr here
+                if dispatch_func is None:
+                    continue
+                ret = dispatch_func(self, node)
+                if ret is not NotImplemented:
+                    # record the dispatch function to the dispatch table of the functor class for fast path
+                    if dispatch_table is None:
+                        dispatch_table = {}
+                        setattr(functor_cls, '__dispatch_table', dispatch_table)
+                    dispatch_table[node_cls] = dispatch_func
+                    break
+            else:
+                raise NotImplementedError("Can not dispatch object with type {}".format(type(node)))
 
         if self.memo is not None:
             self.memo[key] = ret

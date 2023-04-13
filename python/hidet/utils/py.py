@@ -248,6 +248,16 @@ def same_list(lhs, rhs, use_equal=False):
     return True
 
 
+def index_of(value: object, lst: Sequence, allow_missing=True) -> int:
+    for i, v in enumerate(lst):
+        if v is value:
+            return i
+    if allow_missing:
+        return -1
+    else:
+        raise ValueError('value not found in list')
+
+
 class HidetProfiler:
     def __init__(self, display_on_exit=True):
         self.pr = cProfile.Profile()

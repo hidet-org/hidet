@@ -6,6 +6,7 @@ import schedule
 
 parser = argparse.ArgumentParser('Benchmark performance.')
 parser.add_argument('--issue', type=int, default=154, help='Issue id to send the benchmark result to.')
+parser.add_argument('--space', type=int, default=2, help='Search space.')
 parser.add_argument(
     '--schedule-time',
     type=str,
@@ -17,6 +18,7 @@ parser.add_argument(
 def install_dependencies():
     subprocess.run(['pip', 'install', '-r', 'requirements.txt'], check=True)
     subprocess.run(['pip', 'install', '-r', 'requirements-dev.txt'], check=True)
+    subprocess.run(['pip', 'install', '-r', 'scripts/bench/requirements.txt'], check=True)
 
 
 def pull_repo():
@@ -32,10 +34,10 @@ def reinstall_hidet():
     subprocess.run(['pip', 'install', '-e', '.'], check=True)
 
 
-def run_bench_script(report_file):
+def run_bench_script(space, report_file):
     current_commit = subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode('utf-8').strip()
-    command = 'python scripts/bench/benchmark.py --git-commit {commit} --report {report_file}'.format(
-        commit=current_commit, report_file=report_file
+    command = 'python scripts/bench/benchmark.py --git-commit {commit} --space {space} --report {report_file}'.format(
+        commit=current_commit, report_file=report_file, space=space
     )
 
     if os.path.exists('scripts/bench/prev_commit.txt'):
@@ -49,9 +51,9 @@ def run_bench_script(report_file):
         f.write(current_commit)
 
 
-def send_report(issue_id, result_file):
-    command = 'gh issue comment {issue_id} -F {result_file} -R hidet-org/hidet'.format(
-        issue_id=issue_id, result_file=result_file
+def send_report(issue, result_file):
+    command = 'gh issue comment {issue} -F {result_file} -R hidet-org/hidet'.format(
+        issue=issue, result_file=result_file
     )
     subprocess.run(command.split(), check=True)
 
@@ -61,8 +63,8 @@ def bench_job(args):
     try:
         pull_repo()
         reinstall_hidet()
-        run_bench_script(report_file)
-        send_report(args.issue_id, report_file)
+        run_bench_script(args.space, report_file)
+        send_report(args.issue, report_file)
     except Exception as e:
         print('Error: {}'.format(e))
 

@@ -11,14 +11,14 @@
 # limitations under the License.
 # pylint: disable=import-outside-toplevel
 from __future__ import annotations
-from typing import Any, Dict, List, Union, Optional, Sequence, Callable
+from typing import Any, Dict, List, Union, Callable
 import os
 import pickle
 from hidet.ir.node import Node
 from hidet.ir.type import FuncType, VoidType
 from hidet.ir.expr import Expr, Var, var
 from hidet.ir.func import IRModule
-from hidet.ir.compute import ComputeNode, TensorNode, TensorInput, ScalarNode, ScalarInput, GridCompute
+from hidet.ir.compute import ComputeNode, TensorNode, TensorInput, ScalarInput, GridCompute
 
 
 class Target:
@@ -80,64 +80,22 @@ class InverseMap(Node):
         return InverseMap(lhs.axes, indices)
 
 
-class TaskGraph(Node):
-    def __init__(
-        self,
-        anchor: Task,
-        nodes: Sequence[Task],
-        consume: Dict[TensorInput, TensorNode],
-        input_tensors: Sequence[TensorNode],
-        output_tensors: Sequence[TensorNode],
-    ):
-        self.anchor: Task = anchor
-        self.nodes: List[Task] = list(nodes)
-        self.input_tensors: List[TensorNode] = list(input_tensors)
-        self.output_tensors: List[TensorNode] = list(output_tensors)
-        self.consume: Dict[TensorInput, TensorNode] = consume
-
-    @staticmethod
-    def from_task(task: Task) -> TaskGraph:
-        return TaskGraph(anchor=task, nodes=[task], consume={}, input_tensors=task.inputs, output_tensors=task.outputs)
-
-    def absorb(self) -> Task:
-        from hidet.ir.tools import rewrite
-
-        graph_input_tensors: List[TensorNode] = self.input_tensors
-        update_map: Dict[TensorNode, TensorNode] = {a: a for a in graph_input_tensors}
-        for task in self.nodes:
-            remap: Dict[TensorNode, TensorNode] = {}
-            for task_input_tensor in task.inputs:
-                if task_input_tensor not in self.consume:
-                    assert task_input_tensor in graph_input_tensors, 'must be graph input tensor'
-                    # do not need to rewrite, skip
-                else:
-                    remap[task_input_tensor] = update_map[self.consume[task_input_tensor]]
-            for task_output_tensor in task.outputs:
-                update_map[task_output_tensor] = rewrite(task_output_tensor, remap)
-                # original_output_tensor = task_output_tensor
-                # updated_output = rewrite(task_output_tensor, remap)
-                # update_map[original_output_tensor] = updated_output
-        graph_output_tensors: List[TensorNode] = [update_map[tensor] for tensor in self.output_tensors]
-        return Task(name=self.anchor.name, inputs=graph_input_tensors, outputs=graph_output_tensors)
-
-
 class Task(Node):
     """
     A task defines the operator computation.
     """
 
-    def __init__(self, name, inputs, outputs, inverse_map=None, arguments=None, attributes=None):
-        if inverse_map is None:
-            inverse_map = {}
-        if attributes is None:
-            attributes = {}
+    def __init__(self, name, inputs, outputs, *, params=None, inverse_map=None, attributes=None):
+        params = params if params else list(inputs) + list(outputs)
+        inverse_map = inverse_map if inverse_map else {}
+        attributes = attributes if attributes else {}
         self.name: str = name
-        self.inputs: List[TensorInput] = inputs
-        self.outputs: List[TensorNode] = outputs
-        self.attributes: Dict[str, Union[str, float, int, bool]] = attributes
-        self.arguments: Optional[List[Expr]] = arguments
+        self.inputs: List[TensorInput] = list(inputs)
+        self.outputs: List[TensorNode] = list(outputs)
+        self.params: List[Union[Var, TensorNode]] = params
         self.inverse_map: Dict[TensorInput, InverseMap] = {a: InverseMap.from_obj(b) for a, b in inverse_map.items()}
-        self.task_graph: Optional[TaskGraph] = TaskGraph.from_task(self)
+        self.attrs: Dict[str, Union[str, float, int, bool]] = attributes
+        self.specialization: Dict[Var, int] = {}
 
         # sanity check
         for tn, im in self.inverse_map.items():
@@ -154,31 +112,48 @@ class Task(Node):
                     )
                 )
 
+        from hidet.ir.tools import collect_free_vars
+
+        free_vars: List[Var] = collect_free_vars(self.outputs)
+        if any(v not in self.params and not isinstance(v.type, FuncType) for v in free_vars):
+            raise ValueError('Some free variables are not in params: {}'.format(free_vars))
+
     def signature(self) -> str:
         params = []
-        for tensor in self.inputs:
+        for tensor in self.tensor_params:
             name = tensor.name
-            dtype = tensor.ttype.dtype.name
-            shape = tensor.const_shape()
-            params.append('{}={}{}'.format(name, dtype, shape))
-        for name, value in self.attributes.items():
-            params.append('{}={}'.format(name, value))
+            dtype = tensor.type.dtype.name
+            params.append('{}={}{}'.format(name, dtype, tensor.type.shape))
+        for name, value in self.attrs.items():
+            params.append('{}={}'.format(name, repr(value)))
         param_doc = ', '.join(params)
         fuse_doc = ''
-        if len(self.task_graph.nodes) > 1:
-            fuse_doc = ' ({} fused)'.format(len(self.task_graph.nodes) - 1)
         return ''.join([self.name, '(', param_doc, ')', fuse_doc])
 
-    @property
-    def parameters(self) -> List[TensorNode]:
-        return self.task_graph.input_tensors + self.task_graph.output_tensors
+    def specialize_for(self, inputs):
+        """
+        Specialize this task for the given inputs.
 
-    @property
-    def self_params(self) -> List[TensorNode]:
-        params: List[TensorNode] = []
-        params += self.inputs
-        params += self.outputs
-        return params
+        Parameters
+        ----------
+        inputs: Sequence[hidet.graph.Tensor]
+            The input tensors.
+
+        Returns
+        -------
+        task: hidet.ir.Task
+            Self task specialized for the given inputs.
+        """
+        remap: Dict[Var, int] = {}
+        for a, b in zip(self.inputs, inputs):
+            for d1, d2 in zip(a.shape, b.shape):
+                if isinstance(d1, Var) and isinstance(d2, int):
+                    remap[d1] = d2
+        self.specialization.clear()
+        for param in self.params:
+            if isinstance(param, Var) and param in remap:
+                self.specialization[param] = remap[param]
+        return self
 
     def generate_arguments(self, inputs, outputs):
         """
@@ -197,20 +172,48 @@ class Task(Node):
         args: Sequence[Tensor or int]
             The arguments for the compiled function.
         """
-        if self.arguments is None:
-            return list(inputs) + list(outputs)
-        else:
-            from hidet.ir.tools import rewrite
+        remap = {a: b for a, b in zip(self.inputs, inputs)}
+        remap.update({a: b for a, b in zip(self.outputs, outputs)})
+        return [remap[arg] for arg in self.params]
 
-            remap = {}
-            for param, arg in zip(self.parameters, list(inputs) + list(outputs)):
-                remap[param] = arg
-                if param.ndim != len(arg.shape):
-                    raise ValueError(
-                        'Expect a tensor with {} dimensions, but got {} dimensions'.format(param.ndim, len(arg.shape))
-                    )
-                remap.update({param.type.shape[i]: arg.shape[i] for i in range(param.ndim)})
-            return [rewrite(arg, remap) for arg in self.arguments]
+    @property
+    def tensor_params(self) -> List[TensorNode]:
+        ret: List[TensorNode] = []
+        ret.extend(self.inputs)
+        ret.extend(self.outputs)
+        return ret
+
+    def dummy_arguments(self, device: str):
+        """
+        Generate dummy arguments for the compiled function of this task.
+
+        Parameters
+        ----------
+        device: str
+            The target device.
+
+        Returns
+        -------
+        args: Sequence[Tensor or int]
+            The arguments for the compiled function.
+        """
+        import hidet
+        from hidet.graph.tensor import Tensor
+
+        arguments: List[Union[Tensor, int]] = []
+        for param in self.params:
+            if isinstance(param, Var):
+                arguments.append(10)
+            elif isinstance(param, TensorNode):
+                if param.type.dtype.is_integer():
+                    arguments.append(hidet.zeros(param.const_shape(), dtype=param.type.dtype, device=device))
+                elif param.type.dtype.is_float():
+                    arguments.append(hidet.randn(param.const_shape(), dtype=param.type.dtype, device=device))
+                else:
+                    raise ValueError('Unknown dtype: {}'.format(param.type.dtype))
+            else:
+                raise ValueError('Unknown parameter type: {}'.format(type(param)))
+        return arguments
 
     def build(self, target: Union[str, Target]):
         """
@@ -232,32 +235,46 @@ class Task(Node):
             target = target.name
         return build_task(self, target_device=target, load=True)
 
-    def implement(self, target: Union[Target, str], workding_dir: str) -> IRModule:
+    def implement(self, target: Union[Target, str], working_dir: str) -> IRModule:
         from hidet.graph.ops.schedules.cuda.auto_scheduler import CudaAutoScheduler
         from hidet.graph.ops.schedules.cpu.auto_scheduler import CpuAutoScheduler
+        from hidet.graph.ops.schedules.tune import tune
 
         if isinstance(target, str):
             target = Target.from_string(target)
         if target.name == 'cuda':
-            ret = self.implement_cuda(workding_dir)
+            ret = self.implement_cuda(working_dir)
             if ret is NotImplemented:
                 auto_scheduler = CudaAutoScheduler()
                 ret = auto_scheduler.schedule_task(self, 'cuda')
         elif target.name == 'cpu':
-            ret = self.implement_cpu(workding_dir)
+            ret = self.implement_cpu(working_dir)
             if ret is NotImplemented:
                 auto_scheduler = CpuAutoScheduler()
                 ret = auto_scheduler.schedule_task(self, 'cpu')
         else:
             raise ValueError()
-        if not isinstance(ret, IRModule):
-            raise AssertionError(f'The task implement function should return an IRModule, but got a {type(ret)}.')
-        return ret
+        if isinstance(ret, IRModule):
+            return ret
 
-    def implement_cuda(self, workding_dir: str) -> IRModule:
+        ir_modules: List[IRModule] = ret
+
+        if len(ir_modules) == 1:
+            return ir_modules[0]
+
+        if not all(isinstance(m, IRModule) for m in ir_modules):
+            raise AssertionError(
+                f'The task implement function should return an IRModule or a sequence of IRModule, '
+                f'but got a {type(ir_modules)}.'
+            )
+        dummy_args = self.dummy_arguments(target.name)
+        best_ir_module = tune(ir_modules, dummy_inputs=dummy_args, working_dir=working_dir)
+        return best_ir_module
+
+    def implement_cuda(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
         return NotImplemented
 
-    def implement_cpu(self, workding_dir: str) -> IRModule:
+    def implement_cpu(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
         return NotImplemented
 
     def allow_prologue(self) -> bool:
@@ -266,13 +283,16 @@ class Task(Node):
     def allow_epilogue(self) -> bool:
         return True
 
-    def is_injective_task(self) -> bool:
+    def is_injective(self) -> bool:
         from hidet.ir.tools import collect
 
         allowed_nodes = (ScalarInput, TensorInput, GridCompute)
         # if found other node like ReduceCompute and ArgReduceCompute, return False
         found_nodes = collect(self.outputs, ComputeNode, stop_when_found=False)
         return all(isinstance(node, allowed_nodes) for node in found_nodes)
+
+    def is_bijective(self) -> bool:
+        return self.is_injective() and len(self.inverse_map) > 0
 
     def save(self, fname: str):
         dirname = os.path.dirname(fname)
@@ -286,47 +306,47 @@ class Task(Node):
             return pickle.load(f)
 
 
-def is_injective_task(task: Task) -> bool:
-    """
-    Check whether a task is an injective task. A task is injective if and only if there is no reduce compute in
-    the task.
-
-    Parameters
-    ----------
-    task: Task
-        The task to check.
-
-    Returns
-    -------
-    ret: bool
-        Whether the task is injective.
-    """
-    from hidet.ir.tools import collect
-
-    scalar_nodes: List[ScalarNode] = collect(task.outputs, ScalarNode, stop_when_found=False)
-    return all(sn.scalar_compute is None for sn in scalar_nodes)
-
-
-def is_unary_injective_task(task: Task) -> bool:
-    return len(task.inputs) == 1 and len(task.outputs) == 1 and is_injective_task(task)
-
-
-def is_elementwise_task(task: Task) -> bool:
-    """
-    Check whether a task is an elementwise task. A task is elementwise if and only if it is a unary injective and
-    invertible.
-
-    Parameters
-    ----------
-    task: Task
-        The task to check.
-
-    Returns
-    -------
-    ret: bool
-        Whether the task is elementwise.
-    """
-    return is_unary_injective_task(task) and len(task.inverse_map) > 0
+# def is_injective_task(task: Task) -> bool:
+#     """
+#     Check whether a task is an injective task. A task is injective if and only if there is no reduce compute in
+#     the task.
+#
+#     Parameters
+#     ----------
+#     task: Task
+#         The task to check.
+#
+#     Returns
+#     -------
+#     ret: bool
+#         Whether the task is injective.
+#     """
+#     from hidet.ir.tools import collect
+#
+#     scalar_nodes: List[ScalarNode] = collect(task.outputs, ScalarNode, stop_when_found=False)
+#     return all(sn.scalar_compute is None for sn in scalar_nodes)
+#
+#
+# def is_unary_injective_task(task: Task) -> bool:
+#     return len(task.inputs) == 1 and len(task.outputs) == 1 and is_injective_task(task)
+#
+#
+# def is_elementwise_task(task: Task) -> bool:
+#     """
+#     Check whether a task is an elementwise task. A task is elementwise if and only if it is a unary injective and
+#     invertible.
+#
+#     Parameters
+#     ----------
+#     task: Task
+#         The task to check.
+#
+#     Returns
+#     -------
+#     ret: bool
+#         Whether the task is elementwise.
+#     """
+#     return is_unary_injective_task(task) and len(task.inverse_map) > 0
 
 
 def save_task(task: Task, fname: str):
@@ -340,9 +360,4 @@ def load_task(fname: str) -> Task:
 def task_compiled_func_type(task: Task) -> FuncType:
     from hidet.ir.tools import infer_type
 
-    if task.arguments:
-        args = task.arguments
-    else:
-        args = task.parameters
-
-    return FuncType(param_types=[infer_type(t) for t in args], ret_type=VoidType())
+    return FuncType(param_types=[infer_type(t) for t in task.params], ret_type=VoidType())

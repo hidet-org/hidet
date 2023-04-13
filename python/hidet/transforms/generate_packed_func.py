@@ -9,87 +9,129 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from hidet.ffi import ArgType
-from hidet.ir.type import DataType, TensorType, VoidType, PointerType, TensorPointerType, data_type
-from hidet.ir.expr import Var, Call, Equal, Cast, Dereference
-from hidet.ir.stmt import AssertStmt
-from hidet.ir.func import IRModule, Function
-from hidet.ir.tools import astext, simplify_to_int
-from hidet.ir.builders import FunctionBuilder, StmtBuilder
+from typing import Dict, Tuple, Sequence, Union
+from hidet.ffi.packedfunc import ArgTypeCode
+from hidet.ir.func import Function, IRModule
+from hidet.ir.type import DataType, TensorType, TensorPointerType, PointerType
+from hidet.ir.dtypes import int32
+from hidet.ir.expr import Expr, Var, Call, Constant
+from hidet.ir.stmt import Stmt, AssertStmt, LaunchKernelStmt, DeclareStmt
+from hidet.ir.tools import rewrite, simplify
+from hidet.ir.builders import StmtBuilder
 from hidet.transforms import Pass
-from hidet.ir.primitives import set_kernel_max_dynamic_smem_bytes
+
+
+def _normalize_dim3(dim3: Union[int, Expr, Sequence[Union[int, Expr]]]) -> Tuple[Expr, Expr, Expr]:
+    if isinstance(dim3, int):
+        return int32(dim3), int32(1), int32(1)
+    elif isinstance(dim3, Expr):
+        return simplify(dim3), int32(1), int32(1)
+    elif isinstance(dim3, Sequence):
+        dim3 = [simplify(int32(v)) for v in dim3]
+        assert len(dim3) <= 3
+        while len(dim3) < 3:
+            dim3.append(int32(1))
+        return dim3[0], dim3[1], dim3[2]
+    else:
+        raise TypeError('Unsupported type: {}'.format(type(dim3)))
+
+
+def _rewrite_dim3(dim3: Tuple[Expr, Expr, Expr], param2arg: Dict[Expr, Expr]) -> Tuple[Expr, Expr, Expr]:
+    return rewrite(dim3[0], param2arg), rewrite(dim3[1], param2arg), rewrite(dim3[2], param2arg)
+
+
+def add_packed_func(ir_module: IRModule, func: Function, pack_func_name: str):
+    from hidet import lang
+    from hidet.lang import attr, i32, void_p, deref, cast
+    from hidet.lang.cuda import set_kernel_max_dynamic_smem_bytes
+
+    func_var = ir_module.lookup_var(func.name)
+
+    def extract_params_and_call(num_args: Expr, arg_types: Expr, args: Expr) -> Stmt:
+        sb = StmtBuilder()
+        sb += AssertStmt(num_args == len(func.params), 'Expect {} arguments'.format(len(func.params)))
+        param2arg: Dict[Var, Var] = {}
+        for idx, param in enumerate(func.params):
+            assert isinstance(param, Var)
+            if isinstance(param.type, DataType):
+                name2code = {'int32': ArgTypeCode.INT32, 'float32': ArgTypeCode.FLOAT32, 'float16': ArgTypeCode.FLOAT16}
+                if param.type.name not in name2code:
+                    raise NotImplementedError('Unsupported scalar type: {}'.format(param.type.name))
+                code: ArgTypeCode = name2code[param.type.name]
+                arg: Expr = deref(cast(args[idx], ~param.type))
+                arg_var: Var = Var(param.hint, param.type)
+            elif isinstance(param.type, TensorType):
+                code: ArgTypeCode = ArgTypeCode.POINTER
+                arg: Expr = cast(args[idx], ~param.type.dtype)
+                arg_var: Var = Var(param.hint, ~param.type.dtype)
+            elif isinstance(param.type, TensorPointerType):
+                code: ArgTypeCode = ArgTypeCode.POINTER
+                arg: Expr = cast(args[idx], ~param.type.tensor_type.dtype)
+                arg_var: Var = Var(param.hint, ~param.type.tensor_type.dtype)
+            elif isinstance(param.type, PointerType):
+                code: ArgTypeCode = ArgTypeCode.POINTER
+                arg: Expr = cast(args[idx], param.type)
+                arg_var: Var = Var(param.hint, param.type)
+            else:
+                raise NotImplementedError('Unsupported type: {}'.format(param.type))
+            param2arg[param] = arg_var
+            sb += AssertStmt(arg_types[idx] == code.value, 'The {}-th argument should be {}'.format(idx, param.type))
+            sb += DeclareStmt(arg_var, init=arg)
+
+        if func.kind == 'cuda_kernel':
+            smem_bytes: Union[Expr, int] = simplify(func.get_attr('cuda_dynamic_smem_bytes', 0))
+            if isinstance(smem_bytes, (int, Constant)):
+                # compiled-time known size of shared memory
+                if int(smem_bytes) > 48 * 1024:
+                    sb += set_kernel_max_dynamic_smem_bytes(func_var, smem_bytes)
+            else:
+                # run-time known size of shared memory
+                smem_bytes = rewrite(smem_bytes, param2arg)
+                with sb.if_then(smem_bytes > 48 * 1024):
+                    sb += set_kernel_max_dynamic_smem_bytes(func_var, smem_bytes)
+            sb += LaunchKernelStmt(
+                func_var,
+                [param2arg[param] for param in func.params],
+                grid_dim=_rewrite_dim3(_normalize_dim3(func.get_attr('cuda_grid_dim')), param2arg),
+                block_dim=_rewrite_dim3(_normalize_dim3(func.get_attr('cuda_block_dim')), param2arg),
+                shared_mem=smem_bytes,
+            )
+        elif func.kind == 'host_kernel':
+            sb += Call(func_var, [param2arg[param] for param in func.params])
+        else:
+            raise NotImplementedError('Unsupported function kind: {}'.format(func.kind))
+        return sb.finish()
+
+    with lang.script_module():
+
+        @lang.script
+        def packed_func(num_args: i32, arg_types: ~i32, args: ~void_p):
+            attr.func_name = pack_func_name
+            attr.func_kind = 'packed_func'
+            attr.packed_func = func_var
+            extract_params_and_call(num_args, arg_types, args)
+
+    assert isinstance(packed_func, Function)
+    ir_module.add(packed_func.name, packed_func)
 
 
 class GeneratePackedFuncPass(Pass):
     def process_module(self, ir_module: IRModule) -> IRModule:
-        new_ir_module = IRModule(task=ir_module.task)
-        for func in ir_module.functions.values():
-            new_ir_module.add(func.name, func)
-            if func.kind not in ['cuda_kernel', 'host_kernel']:
-                # only generate packed func for entry function
-                continue
-            if func.get_attr('packed_func', allow_missing=True) is not None:
-                # this function itself is a packed function
-                continue
-            if any(
-                f.get_attr('packed_func', allow_missing=True) is ir_module.lookup_var(func.name)
-                for f in ir_module.functions.values()
-            ):
-                # the packed function for current function has existed, skip
-                continue
-            if not func.name.endswith('_grid') and not func.name.endswith('_host'):
-                continue
-            packed_func = self.generate_packed_func(func, ir_module.lookup_var(func.name))
-            new_ir_module.add(packed_func.name, packed_func)
-        return new_ir_module
-
-    def generate_packed_func(self, func: Function, func_global_var: Var) -> Function:
-        assert isinstance(func.ret_type, VoidType)
-        assert isinstance(func.name, str) and (func.name.endswith('_grid') or func.name.endswith('_host'))
-        packed_name = func.name[:-5]
-        with FunctionBuilder(name=packed_name, kind='packed_func', attrs={'packed_func': func_global_var}) as fb:
-            # params
-            p_num_args = Var('num_args', data_type('int32'))
-            p_arg_types = Var('arg_types', PointerType(data_type('int32')))
-            p_args = Var('args', PointerType(PointerType(VoidType())))
-            fb.extend_params([p_num_args, p_arg_types, p_args])
-
-            # body
-            sb = StmtBuilder()
-            sb += AssertStmt(Equal(p_num_args, len(func.params)), "expect {} args".format(len(func.params)))
-            func_args = []
-            for idx, param in enumerate(func.params):
-                assert isinstance(param, Var)
-                if isinstance(param.type, DataType):
-                    if param.type.name == 'int32':
-                        code: ArgType = ArgType.INT32
-                    elif param.type.name == 'float32':
-                        code: ArgType = ArgType.FLOAT32
-                    else:
-                        raise NotImplementedError()
-                    func_args.append(Dereference(Cast(p_args[idx], PointerType(param.type))))
-                elif isinstance(param.type, (TensorPointerType, TensorType)):
-                    code: ArgType = ArgType.POINTER
-                    if isinstance(param.type, TensorType):
-                        dtype = param.type.dtype
-                    else:
-                        dtype = param.type.tensor_type.dtype
-                    func_args.append(Cast(p_args[idx], PointerType(dtype)))
-                elif isinstance(param.type, PointerType):
-                    code: ArgType = ArgType.POINTER
-                    func_args.append(Cast(p_args[idx], param.type))
-                else:
-                    raise NotImplementedError()
-                sb += AssertStmt(
-                    Equal(p_arg_types[idx], code), "The {} th arg should be {}".format(idx + 1, astext(param.type))
-                )
-            if func.kind == 'cuda_kernel' and simplify_to_int(func.get_attr('cuda_dynamic_smem_bytes', 0)) > 48 * 1024:
-                dynamic_smem_bytes = simplify_to_int(func.get_attr('cuda_dynamic_smem_bytes', 0))
-                sb += set_kernel_max_dynamic_smem_bytes(func_global_var, dynamic_smem_bytes)
-            sb += Call(func_global_var, func_args)
-            fb.set_body(sb.finish())
-        return fb.get()
+        if 'launch' in ir_module.functions:
+            # the launch function has already existed
+            return ir_module
+        kernel_functions: Dict[str, Function] = {
+            name: func for name, func in ir_module.functions.items() if func.kind in ['cuda_kernel', 'host_kernel']
+        }
+        if len(kernel_functions) == 0:
+            # no kernel function found in the module, do nothing
+            return ir_module
+        if len(kernel_functions) > 1:
+            raise NotImplementedError('Can only handle one kernel function in a module')
+        func = next(iter(kernel_functions.values()))
+        add_packed_func(ir_module, func, 'launch')
+        return ir_module
 
 
-def generate_packed_func_pass():
+def generate_packed_func_pass() -> Pass:
     return GeneratePackedFuncPass()

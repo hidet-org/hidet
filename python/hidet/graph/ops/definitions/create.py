@@ -77,10 +77,9 @@ class LinSpaceOp(Operator):
     def __init__(self, start, stop, num, *, dtype: DataType, device, endpoint=True):
         device = instantiate_device(device)
         super().__init__(
-            name='linspace',
             inputs=[],
-            task=LinSpaceTask(start, stop, num, endpoint, dtype),
             attributes={'dtype': dtype, 'device': device},
+            task=LinSpaceTask(start, stop, num, endpoint, dtype),
         )
 
 
@@ -96,10 +95,9 @@ class ArangeOp(Operator):
                 dtype = dtypes.float32
         device = instantiate_device(device)
         super().__init__(
-            name='arange',
             inputs=[],
-            task=ArangeTask(start, stop, step, dtype),
             attributes={'start': start, 'stop': stop, 'step': step, 'dtype': dtype, 'device': device},
+            task=ArangeTask(start, stop, step, dtype),
         )
 
 
@@ -127,10 +125,9 @@ class FullOp(Operator):
                 raise ValueError(f'Unknown type for value {value}')
 
         super().__init__(
-            name='constant',
             inputs=[],
-            task=FullTask(shape=shape, value=value, dtype=dtype),
             attributes={'shape': shape, 'value': value, 'dtype': dtype, 'device': device},
+            task=FullTask(shape=shape, value=value, dtype=dtype),
         )
 
 

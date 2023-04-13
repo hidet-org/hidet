@@ -18,6 +18,7 @@ from hashlib import sha256
 import psutil
 from tqdm import tqdm
 
+import hidet.cuda
 from hidet import option
 from hidet.transforms import lower, PassContext, SaveIRInstrument, ProfileInstrument
 from hidet.backend import codegen, compile_source, load_task_func, load_lib_func
@@ -84,7 +85,7 @@ def build_task(task: Task, target_device='cuda', load=True) -> Optional[Compiled
             with open(os.path.join(task_dir, 'task.txt'), 'w') as f:
                 f.write(task_string)
             # implement task
-            ir_module = task.implement(target=target_device, workding_dir=task_dir)
+            ir_module = task.implement(target=target_device, working_dir=task_dir)
             # lower ir module
             if option.get_option('save_lower_ir'):
                 instruments = [
@@ -119,10 +120,29 @@ def _build_task_job(args):
             raise e
 
 
+def _lazy_initialize_cuda():
+    # We intentionally query the cuda device information to put the properties of all devices to the lru_cache.
+    #
+    # Reasons:
+    #   Hidet relies on the multiprocessing to parallelize the compilation. During the process, the forked process will
+    #   query the properties of the device. If we do not cache the properties, the forked process will query the device
+    #   via the cuda runtime API. However, the cuda runtime API does not work when the multiprocessing package is
+    #   working in the fork mode. With the properties of all the GPUs cached, the forked process will not run any cuda
+    #   runtime API and will not cause any problem.
+    if getattr(_lazy_initialize_cuda, '_initialized', False):
+        return
+    _lazy_initialize_cuda._initialized = True  # pylint: disable=protected-access
+    if hidet.cuda.available():
+        for i in range(hidet.cuda.device_count()):
+            hidet.cuda.properties(i)
+            hidet.cuda.compute_capability(i)
+
+
 def build_task_batch(tasks: List[Task], target_device: str = 'cuda', raise_on_error: bool = True):
     dumped_options = option.dump_options()
     jobs = [(task, target_device, dumped_options) for task in tasks]
     if option.get_option('parallel_build') and len(jobs) > 1:
+        _lazy_initialize_cuda()
         with multiprocessing.Pool() as pool:
             status_list = list(pool.map(_build_task_job, jobs))
     else:
@@ -139,7 +159,6 @@ def build_task_batch(tasks: List[Task], target_device: str = 'cuda', raise_on_er
 
 def build_ir_module(
     ir_module: IRModule,
-    func_name: str,
     output_dir='./outs/ir_module',
     save_ir: bool = True,
     profile_pass: bool = True,
@@ -153,14 +172,6 @@ def build_ir_module(
     src_path = os.path.join(output_dir, 'source.cu')
     lib_path = os.path.join(output_dir, 'lib.so')
 
-    # get function type
-    func: Function = ir_module.lookup(func_name)
-    if func.kind == 'packed_func':
-        packed_func = ir_module.lookup(func.attrs['packed_func'])
-        func_type = FuncType.from_func(packed_func)
-    else:
-        func_type = FuncType.from_func(func)
-
     # lower ir module
     instruments = []
     if save_ir:
@@ -170,6 +181,11 @@ def build_ir_module(
     with PassContext(instruments=instruments):
         ir_module = lower(ir_module)
 
+    # get function type
+    func: Function = ir_module.lookup('launch')
+    kernel_func = ir_module.lookup(func.attrs['packed_func'])
+    func_type = FuncType.from_func(kernel_func)
+
     # code generation
     codegen(ir_module, src_out_path=src_path)
 
@@ -178,18 +194,16 @@ def build_ir_module(
 
     if load:
         # load function
-        return load_lib_func(lib_path, 'hidet_' + func_name, func_type=func_type, src_path=src_path)
+        return load_lib_func(lib_path, 'hidet_launch', func_type=func_type, src_path=src_path)
     else:
-        return lib_path, func_name, func_type
+        return lib_path, func_type
 
 
-def _build_ir_module_job(args) -> Optional[Tuple[str, str, FuncType]]:
-    ir_module, func_name, output_dir, dumped_options = args
+def _build_ir_module_job(args) -> Optional[Tuple[str, FuncType]]:
+    ir_module, output_dir, dumped_options = args
     option.restore_options(dumped_options)
     try:
-        return build_ir_module(
-            ir_module, func_name, output_dir, save_ir=False, profile_pass=False, load=False, use_hash_dir=False
-        )
+        return build_ir_module(ir_module, output_dir, save_ir=False, profile_pass=False, load=False, use_hash_dir=False)
     except subprocess.CalledProcessError:
         print('Failed launch subprocess to compile the lowered source code via nvcc.')
         return None
@@ -199,7 +213,7 @@ def _build_ir_module_job(args) -> Optional[Tuple[str, str, FuncType]]:
 
 
 def build_ir_module_batch(
-    ir_modules: Sequence[IRModule], func_name: str, output_dir: str, parallel=True, verbose=False
+    ir_modules: Sequence[IRModule], output_dir: str, parallel=True, verbose=False
 ) -> List[Optional[CompiledFunction]]:
     """
     Build a batch of ir modules.
@@ -208,9 +222,6 @@ def build_ir_module_batch(
     ----------
     ir_modules: Sequence[IRModule]
         A sequence of ir modules to build.
-
-    func_name: str
-        The name of the function to load after building.
 
     output_dir: str
         The output directory to save the compiled library and source code (lib.so and source.cu).
@@ -230,8 +241,7 @@ def build_ir_module_batch(
     with Timer() as timer:
         dumped_options = option.dump_options()
         jobs = [
-            (ir_module, func_name, os.path.join(output_dir, str(idx)), dumped_options)
-            for idx, ir_module in enumerate(ir_modules)
+            (ir_module, os.path.join(output_dir, str(idx)), dumped_options) for idx, ir_module in enumerate(ir_modules)
         ]
         build_results = []
         if parallel:
@@ -243,6 +253,7 @@ def build_ir_module_batch(
             mem_for_worker = 1.5 * 1024 * 1024 * 1024  # 1.5 GiB
             num_workers = min(max(int(psutil.virtual_memory().available // mem_for_worker), 1), psutil.cpu_count())
 
+            _lazy_initialize_cuda()
             with multiprocessing.Pool(processes=num_workers) as pool:
                 for build_result in tqdm(
                     pool.imap(_build_ir_module_job, jobs),
@@ -254,14 +265,16 @@ def build_ir_module_batch(
                     build_results.append(build_result)
         else:
             # sequential build
+            for job in tqdm(jobs, desc='Compiling', disable=not verbose, ncols=80):
+                build_results.append(_build_ir_module_job(job))
             build_results = list(map(_build_ir_module_job, jobs))
 
         # load compiled functions
         funcs: List[Optional[CompiledFunction]] = []
         for build_result in build_results:
             if build_result is not None:
-                lib_path, func_name, func_type = build_result
-                funcs.append(load_lib_func(lib_path, 'hidet_' + func_name, func_type))
+                lib_path, func_type = build_result
+                funcs.append(load_lib_func(lib_path, 'hidet_launch', func_type))
             else:
                 funcs.append(None)
     if verbose:

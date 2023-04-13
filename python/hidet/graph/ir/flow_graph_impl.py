@@ -17,7 +17,7 @@ from .flow_graph import FlowGraph, Operator, Tensor, GraphForwardInstrument
 
 
 class GraphForwardDebugInstrument(GraphForwardInstrument):
-    _template = '{:>5} {:>25} {:>3}   {:<25} {:>8} {:>8} {:>8} {:>10} {:>10} {:>10} {:>10}'
+    _template = '{:>5} {:>30} {:>3}   {:<25} {:>8} {:>8} {:>8} {:>10} {:>10} {:>10} {:>10}'
 
     def __init__(self, output_dir='./outs/debug', print_summary=False):
         self.output_dir: str = output_dir
@@ -62,7 +62,7 @@ class GraphForwardDebugInstrument(GraphForwardInstrument):
                 'Index', 'Operator', 'Arg', 'Shape', 'NaN', 'Inf', 'Zero', 'Min', 'Max', 'Mean', 'Std'
             )
             top_sep = '-' * len(head)
-            bot_sep = self._template.format(*['-' * extent for extent in [5, 25, 3, 25, 8, 8, 8, 10, 10, 10, 10]])
+            bot_sep = self._template.format(*['-' * extent for extent in [5, 30, 3, 25, 8, 8, 8, 10, 10, 10, 10]])
             f.write(''.join([top_sep, '\n', head, '\n', bot_sep, '\n']))
 
     @staticmethod
@@ -84,7 +84,7 @@ class GraphForwardDebugInstrument(GraphForwardInstrument):
 
         lines = []
         for idx, tensor in enumerate(inputs):
-            array: np.ndarray = tensor.numpy(share_mem=False)
+            array: np.ndarray = tensor.cpu().numpy()
             stats = self.tensor_stats(array)
             if idx == 0:
                 op_idx = str(self.operator_idx)
@@ -115,7 +115,7 @@ class GraphForwardDebugInstrument(GraphForwardInstrument):
         lines = []
         found_abnormal = False
         for idx, tensor in enumerate(outputs):
-            array: np.ndarray = tensor.numpy(share_mem=False)
+            array: np.ndarray = tensor.cpu().numpy()
             stats = self.tensor_stats(array)
             op_idx = op_name = ''
             line = self._template.format(
@@ -138,7 +138,7 @@ class GraphForwardDebugInstrument(GraphForwardInstrument):
             f.write('\n'.join(lines) + '\n')
 
         if found_abnormal:
-            arrays = [tensor.numpy(share_mem=False) for tensor in inputs + outputs]
+            arrays = [tensor.cpu().numpy() for tensor in inputs + outputs]
             names = ['x{}'.format(idx) for idx in range(len(inputs))] + [
                 'y{}'.format(idx) for idx in range(len(outputs))
             ]
@@ -202,8 +202,6 @@ class GraphForwardBenchmarkInstrument(GraphForwardInstrument):
         if not self.benchmarking:
             return
 
-        if op.task_func is None:
-            op.build_task_func()
         task_func: CompiledFunction = op.task_func
         latency: List[float] = task_func.profile(
             *inputs, *outputs, warmup=self.warmup, number=self.number, repeat=self.repeat

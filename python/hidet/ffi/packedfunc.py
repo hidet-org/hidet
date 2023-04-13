@@ -9,6 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from __future__ import annotations
 from typing import Sequence, List
 import time
 import ctypes
@@ -17,18 +18,34 @@ from enum import Enum
 from ctypes import c_int32, c_void_p, pointer, c_float, cast
 from ctypes import POINTER, Structure
 from hidet.ir.type import TypeNode, DataType, TensorType, PointerType, TensorPointerType
-from hidet.utils.py import same_list
+from hidet.ir.expr import Constant
 from .ffi import _LIB
 
 c_int32_p = POINTER(c_int32)
 c_float_p = POINTER(c_float)
 
 
-class ArgType(Enum):
+class ArgTypeCode(Enum):
     INT32 = 1
     FLOAT32 = 2
     POINTER = 3
     FLOAT16 = 4
+
+    @staticmethod
+    def from_type(type_node: TypeNode) -> ArgTypeCode:
+        if isinstance(type_node, DataType):
+            if type_node.name == 'int32':
+                return ArgTypeCode.INT32
+            elif type_node.name == 'float32':
+                return ArgTypeCode.FLOAT32
+            elif type_node.name == 'float16':
+                return ArgTypeCode.FLOAT16
+            else:
+                raise NotImplementedError('Unsupported scalar type: {}'.format(type_node.name))
+        elif isinstance(type_node, (TensorType, PointerType, TensorPointerType)):
+            return ArgTypeCode.POINTER
+        else:
+            raise NotImplementedError('Unsupported type: {}'.format(type_node))
 
 
 class CPackedFunc(Structure):
@@ -36,21 +53,7 @@ class CPackedFunc(Structure):
 
 
 def make_c_packed_func(param_types: Sequence[TypeNode], c_func_pointer) -> CPackedFunc:
-    type_codes = []
-    for param_type in param_types:
-        if isinstance(param_type, DataType):
-            if param_type.name == 'int32':
-                type_codes.append(ArgType.INT32.value)
-            elif param_type.name == 'float32':
-                type_codes.append(ArgType.FLOAT32.value)
-            elif param_type.name == 'float16':
-                type_codes.append(ArgType.FLOAT16.value)
-            else:
-                raise NotImplementedError('Unsupported scalar type: {}'.format(param_type.name))
-        elif isinstance(param_type, (TensorType, PointerType, TensorPointerType)):
-            type_codes.append(ArgType.POINTER.value)
-        else:
-            raise NotImplementedError('Unsupported type: {}'.format(param_type))
+    type_codes = [ArgTypeCode.from_type(param_type).value for param_type in param_types]
     n = len(type_codes)
     num_args = c_int32(n)
     arg_types = cast(pointer((c_int32 * n)(*type_codes)), POINTER(c_int32))
@@ -85,6 +88,13 @@ class PackedFunc:
 
         converted_args: List[ctypes.c_void_p] = []
         for i, (param_type, arg) in enumerate(zip(self.param_types, args)):
+            if isinstance(arg, Constant):
+                if arg.is_scalar():
+                    arg = arg.value
+                else:
+                    assert arg.is_tensor()
+                    raise NotImplementedError('Constant tensor is not supported.')
+
             if isinstance(arg, (float, int)):
                 if not isinstance(param_type, DataType):
                     raise ValueError(
@@ -103,24 +113,21 @@ class PackedFunc:
             elif isinstance(arg, Tensor):
                 if isinstance(param_type, TensorType):
                     expect_dtype = param_type.dtype
-                    expect_shape = param_type.const_shape()
                 elif isinstance(param_type, TensorPointerType):
                     expect_dtype = param_type.tensor_type.dtype
-                    expect_shape = param_type.tensor_type.const_shape()
                 elif isinstance(param_type, PointerType):
                     isinstance(param_type.base_type, DataType)
                     expect_dtype = param_type.base_type
-                    expect_shape = None
                 else:
                     raise ValueError(
                         'The callee expects the {}-th element to be a {}, but got a {}.'.format(
                             i + 1, param_type, type(arg)
                         )
                     )
-                if arg.dtype != expect_dtype or (expect_shape is not None and not same_list(arg.shape, expect_shape)):
+                if arg.dtype != expect_dtype:
                     raise ValueError(
-                        'The callee expects the {}-th element to be a {}{}, but got a {}{}.'.format(
-                            i + 1, expect_dtype, expect_shape if expect_shape else " tensor", arg.dtype, arg.shape
+                        'The callee expects the {}-th element to be a {} tensor, but got a {} tensor.'.format(
+                            i + 1, expect_dtype, arg.dtype
                         )
                     )
                 converted_args.append(cast(arg.storage.addr, c_void_p))

@@ -14,7 +14,7 @@ from typing import Callable, Dict, List, Optional, Union
 from collections import defaultdict
 import hidet.cuda
 from hidet.cuda.stream import Stream
-from hidet.utils import green, initialize, exiting
+from hidet.utils import green, exiting
 from hidet.runtime.device import Device, instantiate_device
 
 
@@ -335,15 +335,15 @@ class MemoryPoolContext:
 _device2pool: Dict[Device, MemoryPool] = {}
 
 
-@initialize()
-def initialize_memory_pools():
-    global _device2pool
-    _device2pool = {
-        Device('cpu'): MemoryPool(CpuMemoryAPI(Device('cpu')), block_size=4096, max_reserve_size=512 * 1024**2)
-    }
-    for device_id in range(hidet.cuda.device_count()):
-        device = Device('cuda', device_id)
-        _device2pool[device] = MemoryPool(CudaMemoryAPI(device), block_size=4096, max_reserve_size=4 * 1024**3)
+# @initialize()
+# def initialize_memory_pools():
+#     global _device2pool
+#     _device2pool = {
+#         Device('cpu'): MemoryPool(CpuMemoryAPI(Device('cpu')), block_size=4096, max_reserve_size=512 * 1024**2)
+#     }
+#     for device_id in range(hidet.cuda.device_count()):
+#         device = Device('cuda', device_id)
+#         _device2pool[device] = MemoryPool(CudaMemoryAPI(device), block_size=4096, max_reserve_size=4 * 1024**3)
 
 
 def current_memory_pool(device: Union[Device, str]) -> MemoryPool:
@@ -365,7 +365,12 @@ def current_memory_pool(device: Union[Device, str]) -> MemoryPool:
     """
     device = instantiate_device(device)
     if device not in _device2pool:
-        raise ValueError('No memory pool for device {}'.format(device))
+        if device.is_cuda():
+            _device2pool[device] = MemoryPool(CudaMemoryAPI(device), block_size=4096, max_reserve_size=4 * 1024**3)
+        elif device.is_cpu():
+            _device2pool[device] = MemoryPool(CpuMemoryAPI(device), block_size=4096, max_reserve_size=512 * 1024**2)
+        else:
+            raise ValueError('Unsupported device: {}'.format(device))
     return _device2pool[device]
 
 

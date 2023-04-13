@@ -81,8 +81,8 @@ class Conv2dTransposeOp(Operator):
     ):
         super().__init__(
             inputs=[x, w],
-            task=Conv2dTransposeTask(input_like(x, 'x'), input_like(w, 'w'), stride, padding, groups, output_padding),
             attributes={'stride': stride, 'padding': padding, 'groups': groups, 'output_padding': output_padding},
+            task=Conv2dTransposeTask(input_like(x, 'x'), input_like(w, 'w'), stride, padding, groups, output_padding),
         )
 
 
