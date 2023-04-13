@@ -11,6 +11,7 @@
 # limitations under the License.
 # pylint: disable=no-name-in-module
 from typing import List, Callable, Sequence, Union
+from pathlib import Path
 import logging
 import torch
 import hidet.option
@@ -20,13 +21,11 @@ from hidet.graph.transforms import PassContext, optimize
 from .utils import serialize_output, deserialize_output
 from .dynamo_config import dynamo_config
 
-
 logger = logging.getLogger(__name__)
 
 
 def generate_executor(flow_graph: FlowGraph) -> Callable:
     from hidet.cuda.graph import CudaGraph
-
     use_fp16 = dynamo_config['use_fp16']
     use_fp16_reduction = dynamo_config['use_fp16_reduction']
     use_cuda_graph = dynamo_config['use_cuda_graph']
@@ -41,7 +40,9 @@ def generate_executor(flow_graph: FlowGraph) -> Callable:
         if use_fp16 and use_fp16_reduction:
             ctx.set_reduce_precision('float16')
         if save_dir:
-            ctx.save_graph_instrument(save_dir)
+            generate_executor.graph_counter = getattr(generate_executor, 'graph_counter', 0) + 1
+            save_dir: Path = Path(save_dir)
+            ctx.save_graph_instrument(save_dir / "graph_{}".format(generate_executor.graph_counter))
         if tensor_core:
             ctx.set_mma('mma' if tensor_core else 'simt')
         ctx.set_parallel_k(disabled=(parallel_k == 'disabled'), search=(parallel_k == 'search'))
