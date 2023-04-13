@@ -21,11 +21,13 @@ from hidet.graph.transforms import PassContext, optimize
 from .utils import serialize_output, deserialize_output
 from .dynamo_config import dynamo_config
 
+
 logger = logging.getLogger(__name__)
 
 
 def generate_executor(flow_graph: FlowGraph) -> Callable:
     from hidet.cuda.graph import CudaGraph
+
     use_fp16 = dynamo_config['use_fp16']
     use_fp16_reduction = dynamo_config['use_fp16_reduction']
     use_cuda_graph = dynamo_config['use_cuda_graph']
