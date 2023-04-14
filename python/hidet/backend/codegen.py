@@ -751,6 +751,7 @@ class CPUCodegen(Codegen):
         doc += Text('#include <stdint.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cpu_context.h>') + NewLine()
         doc += Text('#include <math.h>') + NewLine()
+        # float16 and bfloat16 emulation
         doc += Text('#include <hidet/cpu/float16.h>') + NewLine()
         doc += Text('#include <hidet/cpu/bfloat16.h>') + NewLine()
 
@@ -769,7 +770,7 @@ class CPUCodegen(Codegen):
         doc += Text('extern "C" {') + NewLine()
 
         # add namespace to activate data type and function
-        doc += Text('using half_float::half;') + NewLine()
+        doc += Text('using float16::half;') + NewLine()
         doc += Text('using bfloat16::bfloat16_t;') + NewLine()
 
         call_graph = CallGraph(module)
