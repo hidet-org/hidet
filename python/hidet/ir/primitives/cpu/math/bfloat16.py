@@ -15,7 +15,6 @@ from hidet.ir.primitives.func import register_primitive_function, primitive_func
 from hidet.ir.primitives.math import MathFunctionSet, register_math_function_set
 
 
-
 class CPUBFloat16MathFunctionSet(MathFunctionSet):
     # pylint: disable=abstract-method
     def register(self):
@@ -43,7 +42,6 @@ class CPUBFloat16MathFunctionSet(MathFunctionSet):
                 codegen_name=codegen_name,
                 func_or_type=FuncType(param_types=['bfloat16'] * num_args, ret_type='bfloat16'),
             )
-
 
     def call(self, name: str, *args) -> Expr:
         entry = primitive_func_pool.lookup_by_name(name)

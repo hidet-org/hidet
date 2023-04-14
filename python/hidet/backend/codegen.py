@@ -755,7 +755,6 @@ class CPUCodegen(Codegen):
         doc += Text('#include <hidet/cpu/float16.h>') + NewLine()
         doc += Text('#include <hidet/cpu/bfloat16.h>') + NewLine()
 
-
         # use half library to enable float16
         # https://half.sourceforge.net/
 
@@ -763,9 +762,6 @@ class CPUCodegen(Codegen):
             doc += '/*' + NewLine()
             doc += str(module.task) + NewLine()
             doc += '*/' + NewLine()
-
-
-
 
         doc += Text('extern "C" {') + NewLine()
 
@@ -840,7 +836,7 @@ class CPUCodegen(Codegen):
 
 
 def codegen(ir_module: IRModule, src_out_path: Optional[str] = None, target='cuda') -> str:
-    gen = CUDACodegen()    
+    gen = CUDACodegen()
     doc = gen(ir_module)
     code = str(doc)
     if src_out_path is not None:
