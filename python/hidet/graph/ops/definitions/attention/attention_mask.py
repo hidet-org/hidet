@@ -232,6 +232,7 @@ class AttnMaskAddTask(Task):
         smem_bytes_m = sm_dtype.nbytes * i_rows_per_tb
         smem_bytes_lij = sm_dtype.nbytes * block_i
         smem_bytes_mij = sm_dtype.nbytes * block_i
+        tune.check(dtype_size * block_i * block_j <= smem_bytes_k) # smem_bytes_qk <= smem_bytes_k
 
         smem_bytes_offsets = {
             'q': 0,
@@ -540,7 +541,7 @@ class AttnMaskAddTask(Task):
                 q: f16[q_head + [n_size, d_size]],
                 k: f16[k_head + [d_size, n_size]],
                 v: f16[v_head + [n_size, d_size]],
-                mask: f16[mask_head + [1, n_size]],
+                mask: f16[mask_shape],
                 o: f16[o_head + [n_size, d_size]],
             ):
                 attr.cuda_grid_dim = (i_split, bs)
@@ -631,8 +632,8 @@ class AttnMaskAddTask(Task):
                             wi, wj, wk = spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id)[0]
                             p = 0
                             for ti, tj in mma_config.c_store_map.on(lane_id):
-                                delta_m = wi * warp_elems_m + mma_i * mma_m + ti
-                                delta_n = wj * warp_elems_n + mma_j * mma_n + tj
+                                delta_m = offset_i + wi * warp_elems_m + mma_i * mma_m + ti
+                                delta_n = offset_j + wj * warp_elems_n + mma_j * mma_n + tj
                                 regs_acc[mma_i, mma_j, p] += mask[
                                     broadcast_indices(
                                         qk_head_index + [delta_m, delta_n], mask_shape, qk_head + [n_size, n_size]

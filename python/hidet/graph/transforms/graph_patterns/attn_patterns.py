@@ -1,9 +1,9 @@
 from hidet.graph import ops
 from hidet.ir.dtypes import f16
 from hidet.graph.transforms.graph_patterns import MatchDict
-from hidet.graph.transforms.graph_patterns import op_pattern, register_rewrite_rule
+from hidet.graph.transforms.graph_patterns import op_pattern, register_rewrite_rule, deregister_rewrite_rule
 from hidet.graph.transforms.graph_patterns import TensorPattern, SubgraphRewriteRule
-from hidet.utils import same_list
+from hidet.utils import same_list, initialize
 from hidet.graph.ops.definitions.matmul import MatmulOp
 from hidet.graph.ops.definitions.arithmetic import AddOp, MultiplyScalarOp, DivideScalarOp
 from hidet.graph.ops.definitions.activation import SoftmaxOp
@@ -45,27 +45,6 @@ class ReorderDivScaleRewriteRule(SubgraphRewriteRule):
         c1 = div.op.attrs['scalar']
         qc = DivideScalarOp(q, c1).get_output(0)
         return [ops.matmul(qc, k)]
-
-
-# This may not be needed anymore, as it was added to Hidet
-class RemoveCastRewriteRule(SubgraphRewriteRule):
-    def __init__(self):
-        super().__init__(name="cast(cast(a, *), a.dtype) => a")
-        self.a = TensorPattern()
-        self.cast1 = op_pattern(CastOp, [self.a])
-        self.cast2 = op_pattern(CastOp, [self.cast1])
-
-    def source(self):
-        return [self.cast2]
-
-    def target(self, matched: MatchDict):
-        a, cast2 = [matched[t] for t in [self.a, self.cast2]]
-        atype = a.dtype
-        c2type = cast2.op.attrs['dtype']
-        if atype == c2type:
-            return [a]
-        else:
-            return None
 
 
 class AttentionRewriteRule(SubgraphRewriteRule):
@@ -124,8 +103,28 @@ class AttentionMaskAddRewriteRule(SubgraphRewriteRule):
             return None
 
 
+registered_attn_rules = []
+
+@initialize()
 def attn_patterns():
-    register_rewrite_rule(AttentionRewriteRule())
-    register_rewrite_rule(AttentionMaskAddRewriteRule())
-    register_rewrite_rule(ReorderMulScaleRewriteRule())
-    register_rewrite_rule(ReorderDivScaleRewriteRule())
+    registered_attn_rules.append(AttentionRewriteRule())
+    registered_attn_rules.append(AttentionMaskAddRewriteRule())
+    registered_attn_rules.append(ReorderMulScaleRewriteRule())
+    registered_attn_rules.append(ReorderDivScaleRewriteRule())
+    for attn_rule in registered_attn_rules:
+        register_rewrite_rule(attn_rule)
+
+def register_attn_patterns():
+    if len(registered_attn_rules) != 0:
+        return
+    registered_attn_rules.append(AttentionRewriteRule())
+    registered_attn_rules.append(AttentionMaskAddRewriteRule())
+    registered_attn_rules.append(ReorderMulScaleRewriteRule())
+    registered_attn_rules.append(ReorderDivScaleRewriteRule())
+    for attn_rule in registered_attn_rules:
+        register_rewrite_rule(attn_rule)
+
+def deregister_attn_patterns():
+    for attn_rule in registered_attn_rules:
+        deregister_rewrite_rule(attn_rule)
+    registered_attn_rules.clear()

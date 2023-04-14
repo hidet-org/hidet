@@ -156,11 +156,13 @@ class PassContext:
         Set to use fused attention schedule
 
         """
-        from ..transforms.graph_patterns import attn_patterns
+        from ..transforms.graph_patterns import register_attn_patterns, deregister_attn_patterns
 
         self.configs['use_attention'] = flag
         if flag:
-            attn_patterns()
+            register_attn_patterns()
+        else:
+            deregister_attn_patterns()
         return self
 
     def set_verbose(self) -> PassContext:
