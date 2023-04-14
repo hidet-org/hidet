@@ -730,6 +730,31 @@ namespace std
         return std::abs(float(a));
     }
 
+	inline half round(half a)
+	{
+		return std::round(float(a));
+	}
+
+	inline bool isinf(half a)
+	{
+		return std::isinf(float(a));
+	}
+
+	inline bool isnan(half a)
+	{
+		return std::isnan(float(a));
+	}
+
+	inline half pow(half a, float b)
+	{
+		return std::pow(float(a), b);
+	}
+
+	inline half pow(half a, int b)
+	{
+		return std::pow(float(a), b);
+	}
+
     inline half pow(half a, double b)
     {
         return std::pow(float(a), b);
@@ -743,6 +768,11 @@ namespace std
     {
         return std::fmod(float(a), float(b));
     }
+
+	inline half fma(half a, half b, half c)
+	{
+		return std::fma(float(a), float(b), float(c));
+	}
 
 	template <>
 	class numeric_limits<float16::half>

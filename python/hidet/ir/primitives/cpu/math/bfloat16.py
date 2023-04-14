@@ -15,163 +15,84 @@ from hidet.ir.primitives.func import register_primitive_function, primitive_func
 from hidet.ir.primitives.math import MathFunctionSet, register_math_function_set
 
 
+
 class CPUBFloat16MathFunctionSet(MathFunctionSet):
-    @staticmethod
-    def register():
-        unary_funcs = {
-            'sin': 'sin',
-            'cos': 'cos',
-            'tan': 'tan',
-            'sinh': 'sinh',
-            'cosh': 'cosh',
-            'tanh': 'tanh',
-            'asin': 'asin',
-            'acos': 'acos',
-            'atan': 'atan',
-            'asinh': 'asinh',
-            'acosh': 'acosh',
-            'atanh': 'atanh',
-            'exp': 'exp',
-            'erf': 'erf',
-            'sqrt': 'sqrt',
-            'rsqrt': 'rsqrt',
-            'log': 'log',
-            'round': 'round',
-            'abs': 'fabs',
-            'ceil': 'ceil',
-            'floor': 'floor',
-            'expm1': 'expm1',
-            'log2': 'log2',
-            'log10': 'log10',
-            'log1p': 'log1p',
-            'trunc': 'trunc',
-            'isfinite': 'isfinite',
-            'isinf': 'isinf',
-            'isnan': 'isnan',
+    # pylint: disable=abstract-method
+    def register(self):
+        entries = {
+            'sin': ['sin', 1],
+            'cos': ['cos', 1],
+            'exp': ['exp', 1],
+            'sqrt': ['sqrt', 1],
+            'rsqrt': ['rsqrt', 1],
+            'log': ['log', 1],
+            'round': ['round', 1],
+            'ceil': ['ceil', 1],
+            'floor': ['floor', 1],
+            'tanh': ['tanh', 1],
+            'erf': ['erf', 1],
+            'min': ['min', 2],
+            'max': ['max', 2],
+            'pow': ['pow', 2],
+            'fma': ['fma', 3],
         }
-        binary_funcs = {'min': 'fmin', 'max': 'fmax', 'pow': 'pow', 'mod': 'fmod', 'atan2': 'atan2'}
-        ternary_funcs = {'fma': 'fma'}
 
-        for name_map, num_args in zip([unary_funcs, binary_funcs, ternary_funcs], [1, 2, 3]):
-            for name, codegen_name in name_map.items():
-                register_primitive_function(
-                    name='cpu_bf16_{}'.format(name),
-                    codegen_name=codegen_name,
-                    func_or_type=FuncType(
-                        param_types=['bfloat16'] * num_args,
-                        ret_type='bfloat16' if name not in ['isfinite', 'isinf', 'isnan'] else 'bool',
-                    ),
-                )
+        for name, (codegen_name, num_args) in entries.items():
+            register_primitive_function(
+                name='cpu_bf16_{}'.format(name),
+                codegen_name=codegen_name,
+                func_or_type=FuncType(param_types=['bfloat16'] * num_args, ret_type='bfloat16'),
+            )
 
-    @staticmethod
-    def call(name: str, *args) -> Expr:
-        entry = primitive_func_pool.lookup_by_name('cpu_f16_{}'.format(name))
+
+    def call(self, name: str, *args) -> Expr:
+        entry = primitive_func_pool.lookup_by_name(name)
         return Call(entry.var, args)
 
     def sin(self, a: Expr) -> Expr:
-        return self.call('sin', a)
+        return self.call('cpu_bf16_sin', a)
 
     def cos(self, a: Expr) -> Expr:
-        return self.call('cos', a)
+        return self.call('cpu_bf16_cos', a)
 
     def tanh(self, a: Expr) -> Expr:
-        return self.call('tanh', a)
+        return self.call('cpu_bf16_tanh', a)
 
     def exp(self, a: Expr) -> Expr:
-        return self.call('exp', a)
+        return self.call('cpu_bf16_exp', a)
 
     def erf(self, a: Expr) -> Expr:
-        return self.call('erf', a)
+        return self.call('cpu_bf16_erf', a)
 
     def sqrt(self, a: Expr) -> Expr:
-        return self.call('sqrt', a)
+        return self.call('cpu_bf16_sqrt', a)
 
     def rsqrt(self, a: Expr) -> Expr:
-        return self.call('rsqrt', a)
+        return self.call('cpu_bf16_rsqrt', a)
 
     def log(self, a: Expr) -> Expr:
-        return self.call('log', a)
+        return self.call('cpu_bf16_log', a)
 
     def round(self, a: Expr) -> Expr:
-        return self.call('round', a)
-
-    def abs(self, a: Expr) -> Expr:
-        return self.call('abs', a)
+        return self.call('cpu_bf16_round', a)
 
     def ceil(self, a: Expr) -> Expr:
-        return self.call('ceil', a)
+        return self.call('cpu_bf16_ceil', a)
 
     def floor(self, a: Expr) -> Expr:
-        return self.call('floor', a)
-
-    def tan(self, a: Expr) -> Expr:
-        return self.call('tan', a)
-
-    def sinh(self, a: Expr) -> Expr:
-        return self.call('sinh', a)
-
-    def cosh(self, a: Expr) -> Expr:
-        return self.call('cosh', a)
-
-    def asin(self, a: Expr) -> Expr:
-        return self.call('asin', a)
-
-    def acos(self, a: Expr) -> Expr:
-        return self.call('acos', a)
-
-    def atan(self, a: Expr) -> Expr:
-        return self.call('atan', a)
-
-    def asinh(self, a: Expr) -> Expr:
-        return self.call('asinh', a)
-
-    def acosh(self, a: Expr) -> Expr:
-        return self.call('acosh', a)
-
-    def atanh(self, a: Expr) -> Expr:
-        return self.call('atanh', a)
-
-    def expm1(self, a: Expr) -> Expr:
-        return self.call('expm1', a)
-
-    def log2(self, a: Expr) -> Expr:
-        return self.call('log2', a)
-
-    def log10(self, a: Expr) -> Expr:
-        return self.call('log10', a)
-
-    def log1p(self, a: Expr) -> Expr:
-        return self.call('log1p', a)
-
-    def trunc(self, a: Expr) -> Expr:
-        return self.call('trunc', a)
-
-    def isfinite(self, a: Expr) -> Expr:
-        return self.call('isfinite', a)
-
-    def isinf(self, a: Expr) -> Expr:
-        return self.call('isinf', a)
-
-    def isnan(self, a: Expr) -> Expr:
-        return self.call('isnan', a)
+        return self.call('cpu_bf16_floor', a)
 
     def min(self, a: Expr, b: Expr) -> Expr:
-        return self.call('min', a, b)
+        return self.call('cpu_bf16_min', a, b)
 
     def max(self, a: Expr, b: Expr) -> Expr:
-        return self.call('max', a, b)
+        return self.call('cpu_bf16_max', a, b)
 
     def pow(self, a: Expr, b: Expr) -> Expr:
-        return self.call('pow', a, b)
-
-    def mod(self, a: Expr, b: Expr) -> Expr:
-        return self.call('mod', a, b)
-
-    def atan2(self, a: Expr, b: Expr) -> Expr:
-        return self.call('atan2', a, b)
+        return self.call('cpu_bf16_pow', a, b)
 
     def fma(self, a: Expr, b: Expr, c: Expr) -> Expr:
-        return self.call('fma', a, b, c)
+        return self.call('cpu_bf16_fma', a, b, c)
 
 
 cpu_bf16_math_function_set = CPUBFloat16MathFunctionSet()

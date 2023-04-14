@@ -587,6 +587,16 @@ namespace std
         return std::abs(float(a));
     }
 
+    inline bfloat16_t round(bfloat16_t a)
+    {
+        return std::round(float(a));
+    }
+
+    inline bool isinf(bfloat16_t a)
+    {
+        return std::isinf(float(a));
+    }
+
     inline bfloat16_t pow(bfloat16_t a, double b)
     {
         return std::pow(float(a), b);
@@ -599,6 +609,11 @@ namespace std
     inline bfloat16_t fmod(bfloat16_t a, bfloat16_t b)
     {
         return std::fmod(float(a), float(b));
+    }
+
+    inline bfloat16_t fma(bfloat16_t a, bfloat16_t b, bfloat16_t c)
+    {
+        return std::fma(float(a), float(b), float(c));
     }
 
     template <>
