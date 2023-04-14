@@ -36,7 +36,6 @@ from hidet.ir.primitives import is_primitive_function, lookup_primitive_function
 
 
 class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
-    # pylint: disable=abstract-method
     def __init__(self):
         super().__init__()
         self.func_name_map = {}
@@ -167,7 +166,6 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
         raise NotImplementedError()
 
     def visit_Function(self, func: Function) -> Doc:
-        # Implemented through different codegen subclass
         raise NotImplementedError()
 
     def visit_Add(self, e: Add):
@@ -251,9 +249,9 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             # short, int, unsigned int, long long, unsigned long long, but not for the types like int8_t, uint8_t,
             # int16_t, uint16_t, int32_t, uint32_t, int64_t, uint64_t, so we need to cast them here.
             if dst_dtype == dtypes.int64:
-                return '(int64_t)(' + self(e.expr) + ')'
+                return '(int64_t)((long long)(' + self(e.expr) + '))'
             elif dst_dtype == dtypes.uint64:
-                return '(uint64_t)(' + self(e.expr) + ')'
+                return '(uint64_t)((unsigned long long)(' + self(e.expr) + '))'
             elif dst_dtype == dtypes.int32:
                 return '(int32_t)(' + self(e.expr) + ')'
             elif dst_dtype == dtypes.uint32:
@@ -263,9 +261,9 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             elif dst_dtype == dtypes.uint16:
                 return '(uint16_t)(' + self(e.expr) + ')'
             elif dst_dtype == dtypes.int8:
-                return '(int8_t)(' + self(e.expr) + ')'
+                return '(int8_t)(short)(' + self(e.expr) + ')'
             elif dst_dtype == dtypes.uint8:
-                return '(uint8_t)(' + self(e.expr) + ')'
+                return '(uint8_t)(unsigned short)(' + self(e.expr) + ')'
             elif dst_dtype == dtypes.boolean:
                 return '(bool)(' + self(e.expr) + ')'
             elif dst_dtype == dtypes.float32:
@@ -287,7 +285,52 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
         return Text('*') + self(e.expr)
 
     def visit_Call(self, e: Call):
-        raise NotImplementedError()
+        func_name = e.func_var.hint
+        if func_name in self.ir_module.functions:
+            func = self.ir_module.lookup(func_name)
+            func_name = Text(self.canonize_funcname(func_name))
+            if func.kind == 'cuda_kernel':
+                assert False
+                if isinstance(func.attrs['cuda_block_dim'], int) and func.attrs['cuda_block_dim'] > 1024:
+                    raise ValueError('CUDA block dimension cannot be larger than 1024.')
+
+                def dim3_str(dims):
+                    if isinstance(dims, (int, Expr)):
+                        return self(dims)
+                    else:
+                        return Text('dim3(') + self(dims) + ')'
+
+                configs = [
+                    dim3_str(func.attrs['cuda_grid_dim']),  # grid dimension
+                    dim3_str(func.attrs['cuda_block_dim']),  # block dimension
+                    func.attrs.get('cuda_dynamic_smem_bytes', 0),  # dynamic shared memory size
+                    # cuda stream (get_cuda_stream() function is defined in hidet/runtime.h)
+                    '(cudaStream_t)get_cuda_stream()',
+                ]
+                launch_config = Text('<<<') + doc_join([self(v) for v in configs], sep=', ') + Text('>>>')
+            else:
+                launch_config = []
+            param_doc = Text('(') + doc_join([self(arg) for arg in e.args], Text(', ')) + ')'
+            return func_name + launch_config + param_doc
+        elif is_primitive_function(func_name):
+            entry = lookup_primitive_function(func_name)
+            if entry.function is not None:
+                msg = (
+                    f"Please use import_primitive_functions pass to import primitive function first: {entry.name}, "
+                    f"functions in current module:\n{list(self.ir_module.functions.keys())}."
+                )
+                raise ValueError(msg)
+            if entry.generic:
+                msg = (
+                    "Please use resolve_generic_primitive_function pass to lower "
+                    "the generic primitive function {}.".format(entry.name)
+                )
+                raise ValueError(msg)
+            # system-provided function, do not canonize the func name
+            return entry.codegen_name + (Text('(') + doc_join([self(arg) for arg in e.args], Text(', ')) + ')')
+        else:
+            msg = "Callee {} not found in current ir module, and it is not primitive function.".format(func_name)
+            raise ValueError(msg)
 
     def visit_Let(self, e: Let):
         raise ValueError("please run 'expand_let_expr' pass before codegen")
@@ -319,8 +362,7 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             scope2specifier = {
                 DeclareScope.Shared: '__shared__ ',
                 DeclareScope.Global: '__global__ ',
-                # we can not force nvcc to use register, but it will do so if possible
-                DeclareScope.Register: '',
+                DeclareScope.Register: '',  # we can not force nvcc to use register, but it will do so if possible
             }
             doc += scope2specifier[stmt.scope]
         doc += self.local_var_declare(stmt.var)
@@ -563,6 +605,7 @@ class CUDACodegen(Codegen):
             doc += '__host__'
 
         doc += ' ' + self(func.ret_type)
+        # doc += ' void'
 
         # launch bound for grid worker
         if func.kind == 'cuda_kernel':
@@ -633,55 +676,6 @@ class CUDACodegen(Codegen):
         doc += NewLine() + '}'
         return doc
 
-    def visit_Call(self, e: Call):
-        func_name = e.func_var.hint
-        if func_name in self.ir_module.functions:
-            func = self.ir_module.lookup(func_name)
-            func_name = Text(self.canonize_funcname(func_name))
-            if func.kind == 'cuda_kernel':
-
-                if isinstance(func.attrs['cuda_block_dim'], int) and func.attrs['cuda_block_dim'] > 1024:
-                    raise ValueError('CUDA block dimension cannot be larger than 1024.')
-
-                def dim3_str(dims):
-                    if isinstance(dims, (int, Expr)):
-                        return self(dims)
-                    else:
-                        return Text('dim3(') + self(dims) + ')'
-
-                configs = [
-                    dim3_str(func.attrs['cuda_grid_dim']),  # grid dimension
-                    dim3_str(func.attrs['cuda_block_dim']),  # block dimension
-                    # dynamic shared memory size
-                    func.attrs.get('cuda_dynamic_smem_bytes', 0),
-                    # cuda stream (get_cuda_stream() function is defined in hidet/runtime.h)
-                    '(cudaStream_t)get_cuda_stream()',
-                ]
-                launch_config = Text('<<<') + doc_join([self(v) for v in configs], sep=', ') + Text('>>>')
-            else:
-                launch_config = []
-            param_doc = Text('(') + doc_join([self(arg) for arg in e.args], Text(', ')) + ')'
-            return func_name + launch_config + param_doc
-        elif is_primitive_function(func_name):
-            entry = lookup_primitive_function(func_name)
-            if entry.function is not None:
-                msg = (
-                    f"Please use import_primitive_functions pass to import primitive function first: {entry.name}, "
-                    f"functions in current module:\n{list(self.ir_module.functions.keys())}."
-                )
-                raise ValueError(msg)
-            if entry.generic:
-                msg = (
-                    "Please use resolve_generic_primitive_function pass to lower "
-                    "the generic primitive function {}.".format(entry.name)
-                )
-                raise ValueError(msg)
-            # system-provided function, do not canonize the func name
-            return entry.codegen_name + (Text('(') + doc_join([self(arg) for arg in e.args], Text(', ')) + ')')
-        else:
-            msg = "Callee {} not found in current ir module, and it is not primitive function.".format(func_name)
-            raise ValueError(msg)
-
 
 class CPUCodegen(Codegen):
     # pylint: disable=abstract-method
@@ -694,9 +688,8 @@ class CPUCodegen(Codegen):
             ret = '{}'.format(float(value))
         elif dtype == dtypes.float32:
             ret = '{}f'.format(float(value))
-        # current cpp doesn't support float16, bfloat16, tfloat32
-        # like cuda did, but there's proposal in c++ 23 to support:
-        # https://en.cppreference.com/w/cpp/header/stdfloat
+        # current cpu has very poor support of float16, bfloat16
+        # like cuda did, we emulate them in include/cpu/float16.h and include/cpu/bfloat16.h
         elif dtype == dtypes.float16:
             ret = '(half){}f'.format(float(value))
         elif dtype == dtypes.tfloat32:
@@ -807,32 +800,6 @@ class CPUCodegen(Codegen):
         doc += NewLine() + '}'
 
         return doc
-
-    def visit_Call(self, e: Call):
-        func_name = e.func_var.hint
-        if func_name in self.ir_module.functions:
-            func_name = Text(self.canonize_funcname(func_name))
-            param_doc = Text('(') + doc_join([self(arg) for arg in e.args], Text(', ')) + ')'
-            return func_name + param_doc
-        elif is_primitive_function(func_name):
-            entry = lookup_primitive_function(func_name)
-            if entry.function is not None:
-                msg = (
-                    f"Please use import_primitive_functions pass to import primitive function first: {entry.name}, "
-                    f"functions in current module:\n{list(self.ir_module.functions.keys())}."
-                )
-                raise ValueError(msg)
-            if entry.generic:
-                msg = (
-                    "Please use resolve_generic_primitive_function pass to lower "
-                    "the generic primitive function {}.".format(entry.name)
-                )
-                raise ValueError(msg)
-            # system-provided function, do not canonize the func name
-            return entry.codegen_name + (Text('(') + doc_join([self(arg) for arg in e.args], Text(', ')) + ')')
-        else:
-            msg = "Callee {} not found in current ir module, and it is not primitive function.".format(func_name)
-            raise ValueError(msg)
 
 
 def codegen(ir_module: IRModule, src_out_path: Optional[str] = None, target='cuda') -> str:
