@@ -308,6 +308,7 @@ def register_rewrite_rule(rule: Union[SubgraphRewriteRule, Type[SubgraphRewriteR
     else:
         raise TypeError('rule should be a SubgraphRewriteRule or a subclass of SubgraphRewriteRule')
 
+
 def deregister_rewrite_rule(rule: SubgraphRewriteRule):
     """
     Remove a sub-graph rewrite rule from list of currently registered rules
@@ -315,7 +316,7 @@ def deregister_rewrite_rule(rule: SubgraphRewriteRule):
     Parameters
     ----------
     rule: SubgraphRewriteRule
-        The rule to be deregistered. 
+        The rule to be deregistered.
     """
     if isinstance(rule, SubgraphRewriteRule):
         registered_rewrite_rules.remove(rule)

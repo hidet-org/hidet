@@ -138,13 +138,7 @@ class AttnMaskAddTask(Task):
         v_shape: List[int] = node_v.const_shape()
         o_shape: List[int] = node_o.const_shape()
         mask_shape: List[int] = node_mask.const_shape()
-        o_head, q_head, k_head, v_head, mask_head = (
-            o_shape[:-2],
-            q_shape[:-2],
-            k_shape[:-2],
-            v_shape[:-2],
-            mask_shape[:-2],
-        )
+        o_head, q_head, k_head, v_head = (o_shape[:-2], q_shape[:-2], k_shape[:-2], v_shape[:-2])
         qk_head = broadcast_shape(q_head, k_head)
         bs_qk = prod(qk_head)
         bs = prod(o_head)
@@ -232,7 +226,7 @@ class AttnMaskAddTask(Task):
         smem_bytes_m = sm_dtype.nbytes * i_rows_per_tb
         smem_bytes_lij = sm_dtype.nbytes * block_i
         smem_bytes_mij = sm_dtype.nbytes * block_i
-        tune.check(dtype_size * block_i * block_j <= smem_bytes_k) # smem_bytes_qk <= smem_bytes_k
+        tune.check(dtype_size * block_i * block_j <= smem_bytes_k)  # smem_bytes_qk <= smem_bytes_k
 
         smem_bytes_offsets = {
             'q': 0,

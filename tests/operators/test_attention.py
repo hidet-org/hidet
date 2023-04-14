@@ -7,7 +7,6 @@ from hidet import ops
 
 
 def test_attn_mask_add():
-
     def attention_layer():
         q = hidet.symbol([2, 1, 512, 64], dtype='float16', device='cuda')
         k = hidet.symbol([2, 1, 64, 512], dtype='float16', device='cuda')
@@ -31,8 +30,8 @@ def test_attn_mask_add():
 
     numpy.testing.assert_allclose(cc1.cpu().numpy(), cc2.cpu().numpy(), atol=1e-2, rtol=1e-2)
 
-def test_attn():
 
+def test_attn():
     def attention_layer():
         q = hidet.symbol([3, 1, 2, 1024, 128], dtype='float16', device='cuda')
         k = hidet.symbol([3, 1, 2, 128, 1024], dtype='float16', device='cuda')
@@ -52,6 +51,7 @@ def test_attn():
     cc2 = graph(q, k, v)
 
     numpy.testing.assert_allclose(cc1.cpu().numpy(), cc2.cpu().numpy(), atol=1e-2, rtol=1e-2)
+
 
 if __name__ == '__main__':
     pytest.main([__file__])

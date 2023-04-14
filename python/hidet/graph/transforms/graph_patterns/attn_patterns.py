@@ -7,7 +7,6 @@ from hidet.utils import same_list, initialize
 from hidet.graph.ops.definitions.matmul import MatmulOp
 from hidet.graph.ops.definitions.arithmetic import AddOp, MultiplyScalarOp, DivideScalarOp
 from hidet.graph.ops.definitions.activation import SoftmaxOp
-from hidet.graph.ops.definitions.transform import CastOp
 from hidet.graph.ops.definitions.attention import attention
 
 
@@ -105,6 +104,7 @@ class AttentionMaskAddRewriteRule(SubgraphRewriteRule):
 
 registered_attn_rules = []
 
+
 @initialize()
 def attn_patterns():
     registered_attn_rules.append(AttentionRewriteRule())
@@ -113,6 +113,7 @@ def attn_patterns():
     registered_attn_rules.append(ReorderDivScaleRewriteRule())
     for attn_rule in registered_attn_rules:
         register_rewrite_rule(attn_rule)
+
 
 def register_attn_patterns():
     if len(registered_attn_rules) != 0:
@@ -123,6 +124,7 @@ def register_attn_patterns():
     registered_attn_rules.append(ReorderDivScaleRewriteRule())
     for attn_rule in registered_attn_rules:
         register_rewrite_rule(attn_rule)
+
 
 def deregister_attn_patterns():
     for attn_rule in registered_attn_rules:
