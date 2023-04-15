@@ -29,7 +29,7 @@ def cuda_bf16_tanh_func() -> Function:
     return cuda_bf16_tanh
 
 
-class CPUBFloat16MathFunctionSet(MathFunctionSet):
+class CUDABFloat16MathFunctionSet(MathFunctionSet):
     # pylint: disable=abstract-method
     def register(self):
         entries = {
@@ -106,6 +106,6 @@ class CPUBFloat16MathFunctionSet(MathFunctionSet):
         return self.call('cuda_bf16_fma', a, b, c)
 
 
-cpu_bf16_math_function_set = CPUBFloat16MathFunctionSet()
-cpu_bf16_math_function_set.register()
-register_math_function_set('cuda', 'bfloat16', cpu_bf16_math_function_set)
+cuda_bf16_math_function_set = CUDABFloat16MathFunctionSet()
+cuda_bf16_math_function_set.register()
+register_math_function_set('cuda', 'bfloat16', cuda_bf16_math_function_set)
