@@ -379,7 +379,7 @@ namespace float16
 		}
 	}
 
-	struct half
+	struct Half
 	{
 		unsigned short x;
 
@@ -391,11 +391,11 @@ namespace float16
 			return from_bits_t();
 		}
 
-		half() = default;
+		Half() = default;
 
 		/// Constructors
-		constexpr half(unsigned short bits, from_bits_t) : x(bits) {}
-		inline half(float value) : x(detail::fp16_ieee_from_fp32_value(value)) {}
+		constexpr Half(unsigned short bits, from_bits_t) : x(bits) {}
+		inline Half(float value) : x(detail::fp16_ieee_from_fp32_value(value)) {}
 
 		/// Implicit conversions
 		inline operator float() const
@@ -409,50 +409,50 @@ namespace float16
 
 	/// Arithmetic
 
-	inline half operator+(const half &a, const half &b)
+	inline Half operator+(const Half &a, const Half &b)
 	{
 		return static_cast<float>(a) + static_cast<float>(b);
 	}
 
-	inline half operator-(const half &a, const half &b)
+	inline Half operator-(const Half &a, const Half &b)
 	{
 		return static_cast<float>(a) - static_cast<float>(b);
 	}
 
-	inline half operator*(const half &a, const half &b)
+	inline Half operator*(const Half &a, const Half &b)
 	{
 		return static_cast<float>(a) * static_cast<float>(b);
 	}
 
-	inline half operator/(const half &a, const half &b)
+	inline Half operator/(const Half &a, const Half &b)
 	{
 		return static_cast<float>(a) / static_cast<float>(b);
 	}
 
-	inline half operator-(const half &a)
+	inline Half operator-(const Half &a)
 	{
 		return -static_cast<float>(a);
 	}
 
-	inline half &operator+=(half &a, const half &b)
+	inline Half &operator+=(Half &a, const Half &b)
 	{
 		a = a + b;
 		return a;
 	}
 
-	inline half &operator-=(half &a, const half &b)
+	inline Half &operator-=(Half &a, const Half &b)
 	{
 		a = a - b;
 		return a;
 	}
 
-	inline half &operator*=(half &a, const half &b)
+	inline Half &operator*=(Half &a, const Half &b)
 	{
 		a = a * b;
 		return a;
 	}
 
-	inline half &operator/=(half &a, const half &b)
+	inline Half &operator/=(Half &a, const Half &b)
 	{
 		a = a / b;
 		return a;
@@ -460,163 +460,163 @@ namespace float16
 
 	/// Arithmetic with floats
 
-	inline float operator+(half a, float b)
+	inline float operator+(Half a, float b)
 	{
 		return static_cast<float>(a) + b;
 	}
-	inline float operator-(half a, float b)
+	inline float operator-(Half a, float b)
 	{
 		return static_cast<float>(a) - b;
 	}
-	inline float operator*(half a, float b)
+	inline float operator*(Half a, float b)
 	{
 		return static_cast<float>(a) * b;
 	}
-	inline float operator/(half a, float b)
+	inline float operator/(Half a, float b)
 	{
 		return static_cast<float>(a) / b;
 	}
 
-	inline float operator+(float a, half b)
+	inline float operator+(float a, Half b)
 	{
 		return a + static_cast<float>(b);
 	}
-	inline float operator-(float a, half b)
+	inline float operator-(float a, Half b)
 	{
 		return a - static_cast<float>(b);
 	}
-	inline float operator*(float a, half b)
+	inline float operator*(float a, Half b)
 	{
 		return a * static_cast<float>(b);
 	}
-	inline float operator/(float a, half b)
+	inline float operator/(float a, Half b)
 	{
 		return a / static_cast<float>(b);
 	}
 
-	inline float &operator+=(float &a, const half &b)
+	inline float &operator+=(float &a, const Half &b)
 	{
 		return a += static_cast<float>(b);
 	}
-	inline float &operator-=(float &a, const half &b)
+	inline float &operator-=(float &a, const Half &b)
 	{
 		return a -= static_cast<float>(b);
 	}
-	inline float &operator*=(float &a, const half &b)
+	inline float &operator*=(float &a, const Half &b)
 	{
 		return a *= static_cast<float>(b);
 	}
-	inline float &operator/=(float &a, const half &b)
+	inline float &operator/=(float &a, const Half &b)
 	{
 		return a /= static_cast<float>(b);
 	}
 
 	/// Arithmetic with doubles
 
-	inline double operator+(half a, double b)
+	inline double operator+(Half a, double b)
 	{
 		return static_cast<double>(a) + b;
 	}
-	inline double operator-(half a, double b)
+	inline double operator-(Half a, double b)
 	{
 		return static_cast<double>(a) - b;
 	}
-	inline double operator*(half a, double b)
+	inline double operator*(Half a, double b)
 	{
 		return static_cast<double>(a) * b;
 	}
-	inline double operator/(half a, double b)
+	inline double operator/(Half a, double b)
 	{
 		return static_cast<double>(a) / b;
 	}
 
-	inline double operator+(double a, half b)
+	inline double operator+(double a, Half b)
 	{
 		return a + static_cast<double>(b);
 	}
-	inline double operator-(double a, half b)
+	inline double operator-(double a, Half b)
 	{
 		return a - static_cast<double>(b);
 	}
-	inline double operator*(double a, half b)
+	inline double operator*(double a, Half b)
 	{
 		return a * static_cast<double>(b);
 	}
-	inline double operator/(double a, half b)
+	inline double operator/(double a, Half b)
 	{
 		return a / static_cast<double>(b);
 	}
 
 	/// Arithmetic with ints
 
-	inline half operator+(half a, int b)
+	inline Half operator+(Half a, int b)
 	{
-		return a + static_cast<half>(b);
+		return a + static_cast<Half>(b);
 	}
-	inline half operator-(half a, int b)
+	inline Half operator-(Half a, int b)
 	{
-		return a - static_cast<half>(b);
+		return a - static_cast<Half>(b);
 	}
-	inline half operator*(half a, int b)
+	inline Half operator*(Half a, int b)
 	{
-		return a * static_cast<half>(b);
+		return a * static_cast<Half>(b);
 	}
-	inline half operator/(half a, int b)
+	inline Half operator/(Half a, int b)
 	{
-		return a / static_cast<half>(b);
+		return a / static_cast<Half>(b);
 	}
 
-	inline half operator+(int a, half b)
+	inline Half operator+(int a, Half b)
 	{
-		return static_cast<half>(a) + b;
+		return static_cast<Half>(a) + b;
 	}
-	inline half operator-(int a, half b)
+	inline Half operator-(int a, Half b)
 	{
-		return static_cast<half>(a) - b;
+		return static_cast<Half>(a) - b;
 	}
-	inline half operator*(int a, half b)
+	inline Half operator*(int a, Half b)
 	{
-		return static_cast<half>(a) * b;
+		return static_cast<Half>(a) * b;
 	}
-	inline half operator/(int a, half b)
+	inline Half operator/(int a, Half b)
 	{
-		return static_cast<half>(a) / b;
+		return static_cast<Half>(a) / b;
 	}
 
 	// Arithmetic with int64_t
 
-	inline half operator+(half a, int64_t b)
+	inline Half operator+(Half a, int64_t b)
 	{
-		return a + static_cast<half>(b);
+		return a + static_cast<Half>(b);
 	}
-	inline half operator-(half a, int64_t b)
+	inline Half operator-(Half a, int64_t b)
 	{
-		return a - static_cast<half>(b);
+		return a - static_cast<Half>(b);
 	}
-	inline half operator*(half a, int64_t b)
+	inline Half operator*(Half a, int64_t b)
 	{
-		return a * static_cast<half>(b);
+		return a * static_cast<Half>(b);
 	}
-	inline half operator/(half a, int64_t b)
+	inline Half operator/(Half a, int64_t b)
 	{
-		return a / static_cast<half>(b);
+		return a / static_cast<Half>(b);
 	}
 
-	inline half operator+(int64_t a, half b)
+	inline Half operator+(int64_t a, Half b)
 	{
-		return static_cast<half>(a) + b;
+		return static_cast<Half>(a) + b;
 	}
-	inline half operator-(int64_t a, half b)
+	inline Half operator-(int64_t a, Half b)
 	{
-		return static_cast<half>(a) - b;
+		return static_cast<Half>(a) - b;
 	}
-	inline half operator*(int64_t a, half b)
+	inline Half operator*(int64_t a, Half b)
 	{
-		return static_cast<half>(a) * b;
+		return static_cast<Half>(a) * b;
 	}
-	inline half operator/(int64_t a, half b)
+	inline Half operator/(int64_t a, Half b)
 	{
-		return static_cast<half>(a) / b;
+		return static_cast<Half>(a) / b;
 	}
 
 	/// NOTE: we do not define comparisons directly and instead rely on the implicit
@@ -626,156 +626,156 @@ namespace float16
 namespace std
 {
 
-	using float16::half;
+	using float16::Half;
 
 	/// emulate float16 math by float
-    inline half acos(half a)
+    inline Half acos(Half a)
     {
         return std::acos(float(a));
     }
-    inline half asin(half a)
+    inline Half asin(Half a)
     {
         return std::asin(float(a));
     }
-    inline half atan(half a)
+    inline Half atan(Half a)
     {
         return std::atan(float(a));
     }
-    inline half erf(half a)
+    inline Half erf(Half a)
     {
         return std::erf(float(a));
     }
-    inline half erfc(half a)
+    inline Half erfc(Half a)
     {
         return std::erfc(float(a));
     }
-    inline half exp(half a)
+    inline Half exp(Half a)
     {
         return std::exp(float(a));
     }
-    inline half expm1(half a)
+    inline Half expm1(Half a)
     {
         return std::expm1(float(a));
     }
-    inline half log(half a)
+    inline Half log(Half a)
     {
         return std::log(float(a));
     }
-    inline half log10(half a)
+    inline Half log10(Half a)
     {
         return std::log10(float(a));
     }
-    inline half log1p(half a)
+    inline Half log1p(Half a)
     {
         return std::log1p(float(a));
     }
-    inline half log2(half a)
+    inline Half log2(Half a)
     {
         return std::log2(float(a));
     }
-    inline half ceil(half a)
+    inline Half ceil(Half a)
     {
         return std::ceil(float(a));
     }
-    inline half cos(half a)
+    inline Half cos(Half a)
     {
         return std::cos(float(a));
     }
-    inline half floor(half a)
+    inline Half floor(Half a)
     {
         return std::floor(float(a));
     }
-    inline half nearbyint(half a)
+    inline Half nearbyint(Half a)
     {
         return std::nearbyint(float(a));
     }
-    inline half sin(half a)
+    inline Half sin(Half a)
     {
         return std::sin(float(a));
     }
-    inline half tan(half a)
+    inline Half tan(Half a)
     {
         return std::tan(float(a));
     }
-    inline half sinh(half a)
+    inline Half sinh(Half a)
     {
         return std::sinh(float(a));
     }
-    inline half cosh(half a)
+    inline Half cosh(Half a)
     {
         return std::cosh(float(a));
     }
-    inline half tanh(half a)
+    inline Half tanh(Half a)
     {
         return std::tanh(float(a));
     }
-    inline half trunc(half a)
+    inline Half trunc(Half a)
     {
         return std::trunc(float(a));
     }
-    inline half lgamma(half a)
+    inline Half lgamma(Half a)
     {
         return std::lgamma(float(a));
     }
-    inline half sqrt(half a)
+    inline Half sqrt(Half a)
     {
         return std::sqrt(float(a));
     }
-    inline half rsqrt(half a)
+    inline Half rsqrt(Half a)
     {
         return 1.0 / std::sqrt(float(a));
     }
-    inline half abs(half a)
+    inline Half abs(Half a)
     {
         return std::abs(float(a));
     }
 
-	inline half round(half a)
+	inline Half round(Half a)
 	{
 		return std::round(float(a));
 	}
 
-	inline bool isinf(half a)
+	inline bool isinf(Half a)
 	{
 		return std::isinf(float(a));
 	}
 
-	inline bool isnan(half a)
+	inline bool isnan(Half a)
 	{
 		return std::isnan(float(a));
 	}
 
-	inline half pow(half a, float b)
+	inline Half pow(Half a, float b)
 	{
 		return std::pow(float(a), b);
 	}
 
-	inline half pow(half a, int b)
+	inline Half pow(Half a, int b)
 	{
 		return std::pow(float(a), b);
 	}
 
-    inline half pow(half a, double b)
+    inline Half pow(Half a, double b)
     {
         return std::pow(float(a), b);
     }
 
-    inline half pow(half a, half b)
+    inline Half pow(Half a, Half b)
     {
         return std::pow(float(a), float(b));
     }
-    inline half fmod(half a, half b)
+    inline Half fmod(Half a, Half b)
     {
         return std::fmod(float(a), float(b));
     }
 
-	inline half fma(half a, half b, half c)
+	inline Half fma(Half a, Half b, Half c)
 	{
 		return std::fma(float(a), float(b), float(c));
 	}
 
 	template <>
-	class numeric_limits<float16::half>
+	class numeric_limits<float16::Half>
 	{
 	public:
 		static constexpr bool is_specialized = true;
@@ -803,41 +803,41 @@ namespace std
 		static constexpr auto traps = numeric_limits<float>::traps;
 		static constexpr auto tinyness_before =
 			numeric_limits<float>::tinyness_before;
-		static constexpr float16::half min()
+		static constexpr float16::Half min()
 		{
-			return float16::half(0x0400, float16::half::from_bits());
+			return float16::Half(0x0400, float16::Half::from_bits());
 		}
-		static constexpr float16::half lowest()
+		static constexpr float16::Half lowest()
 		{
-			return float16::half(0xFBFF, float16::half::from_bits());
+			return float16::Half(0xFBFF, float16::Half::from_bits());
 		}
-		static constexpr float16::half max()
+		static constexpr float16::Half max()
 		{
-			return float16::half(0x7BFF, float16::half::from_bits());
+			return float16::Half(0x7BFF, float16::Half::from_bits());
 		}
-		static constexpr float16::half epsilon()
+		static constexpr float16::Half epsilon()
 		{
-			return float16::half(0x1400, float16::half::from_bits());
+			return float16::Half(0x1400, float16::Half::from_bits());
 		}
-		static constexpr float16::half round_error()
+		static constexpr float16::Half round_error()
 		{
-			return float16::half(0x3800, float16::half::from_bits());
+			return float16::Half(0x3800, float16::Half::from_bits());
 		}
-		static constexpr float16::half infinity()
+		static constexpr float16::Half infinity()
 		{
-			return float16::half(0x7C00, float16::half::from_bits());
+			return float16::Half(0x7C00, float16::Half::from_bits());
 		}
-		static constexpr float16::half quiet_NaN()
+		static constexpr float16::Half quiet_NaN()
 		{
-			return float16::half(0x7E00, float16::half::from_bits());
+			return float16::Half(0x7E00, float16::Half::from_bits());
 		}
-		static constexpr float16::half signaling_NaN()
+		static constexpr float16::Half signaling_NaN()
 		{
-			return float16::half(0x7D00, float16::half::from_bits());
+			return float16::Half(0x7D00, float16::Half::from_bits());
 		}
-		static constexpr float16::half denorm_min()
+		static constexpr float16::Half denorm_min()
 		{
-			return float16::half(0x0001, float16::half::from_bits());
+			return float16::Half(0x0001, float16::Half::from_bits());
 		}
 	};
 }

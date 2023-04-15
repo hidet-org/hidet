@@ -759,8 +759,8 @@ class CPUCodegen(Codegen):
         doc += Text('extern "C" {') + NewLine()
 
         # add namespace to activate data type and function
-        doc += Text('using float16::half;') + NewLine()
-        doc += Text('using bfloat16::bfloat16_t;') + NewLine()
+        doc += Text('using float16::Half;') + NewLine()
+        doc += Text('using bfloat16::BFloat16;') + NewLine()
 
         call_graph = CallGraph(module)
         for node in call_graph.reversed_order:

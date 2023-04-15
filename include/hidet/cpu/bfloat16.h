@@ -130,7 +130,7 @@ namespace bfloat16
         }
     } // namespace detail
 
-    struct bfloat16_t
+    struct BFloat16
     {
         uint16_t x;
 
@@ -144,9 +144,9 @@ namespace bfloat16
             return from_bits_t();
         }
 
-        constexpr bfloat16_t(unsigned short bits, from_bits_t)
+        constexpr BFloat16(unsigned short bits, from_bits_t)
             : x(bits){};
-        inline bfloat16_t(float value) : x(detail::round_to_nearest_even(value))
+        inline BFloat16(float value) : x(detail::round_to_nearest_even(value))
         {
         }
         inline operator float() const
@@ -157,68 +157,68 @@ namespace bfloat16
 
     /// Arithmetic
 
-    inline bfloat16_t operator+(const bfloat16_t &a, const bfloat16_t &b)
+    inline BFloat16 operator+(const BFloat16 &a, const BFloat16 &b)
     {
         return static_cast<float>(a) + static_cast<float>(b);
     }
 
-    inline bfloat16_t operator-(const bfloat16_t &a, const bfloat16_t &b)
+    inline BFloat16 operator-(const BFloat16 &a, const BFloat16 &b)
     {
         return static_cast<float>(a) - static_cast<float>(b);
     }
 
-    inline bfloat16_t operator*(const bfloat16_t &a, const bfloat16_t &b)
+    inline BFloat16 operator*(const BFloat16 &a, const BFloat16 &b)
     {
         return static_cast<float>(a) * static_cast<float>(b);
     }
 
-    inline bfloat16_t operator/(const bfloat16_t &a, const bfloat16_t &b)
+    inline BFloat16 operator/(const BFloat16 &a, const BFloat16 &b)
     {
         return static_cast<float>(a) / static_cast<float>(b);
     }
 
-    inline bfloat16_t operator-(const bfloat16_t &a)
+    inline BFloat16 operator-(const BFloat16 &a)
     {
         return -static_cast<float>(a);
     }
 
-    inline bfloat16_t &operator+=(bfloat16_t &a, const bfloat16_t &b)
+    inline BFloat16 &operator+=(BFloat16 &a, const BFloat16 &b)
     {
         a = a + b;
         return a;
     }
 
-    inline bfloat16_t &operator-=(bfloat16_t &a, const bfloat16_t &b)
+    inline BFloat16 &operator-=(BFloat16 &a, const BFloat16 &b)
     {
         a = a - b;
         return a;
     }
 
-    inline bfloat16_t &operator*=(bfloat16_t &a, const bfloat16_t &b)
+    inline BFloat16 &operator*=(BFloat16 &a, const BFloat16 &b)
     {
         a = a * b;
         return a;
     }
 
-    inline bfloat16_t &operator/=(bfloat16_t &a, const bfloat16_t &b)
+    inline BFloat16 &operator/=(BFloat16 &a, const BFloat16 &b)
     {
         a = a / b;
         return a;
     }
 
-    inline bfloat16_t &operator|(bfloat16_t &a, const bfloat16_t &b)
+    inline BFloat16 &operator|(BFloat16 &a, const BFloat16 &b)
     {
         a.x = a.x | b.x;
         return a;
     }
 
-    inline bfloat16_t &operator^(bfloat16_t &a, const bfloat16_t &b)
+    inline BFloat16 &operator^(BFloat16 &a, const BFloat16 &b)
     {
         a.x = a.x ^ b.x;
         return a;
     }
 
-    inline bfloat16_t &operator&(bfloat16_t &a, const bfloat16_t &b)
+    inline BFloat16 &operator&(BFloat16 &a, const BFloat16 &b)
     {
         a.x = a.x & b.x;
         return a;
@@ -226,173 +226,173 @@ namespace bfloat16
 
     /// Arithmetic with floats
 
-    inline float operator+(bfloat16_t a, float b)
+    inline float operator+(BFloat16 a, float b)
     {
         return static_cast<float>(a) + b;
     }
-    inline float operator-(bfloat16_t a, float b)
+    inline float operator-(BFloat16 a, float b)
     {
         return static_cast<float>(a) - b;
     }
-    inline float operator*(bfloat16_t a, float b)
+    inline float operator*(BFloat16 a, float b)
     {
         return static_cast<float>(a) * b;
     }
-    inline float operator/(bfloat16_t a, float b)
+    inline float operator/(BFloat16 a, float b)
     {
         return static_cast<float>(a) / b;
     }
 
-    inline float operator+(float a, bfloat16_t b)
+    inline float operator+(float a, BFloat16 b)
     {
         return a + static_cast<float>(b);
     }
-    inline float operator-(float a, bfloat16_t b)
+    inline float operator-(float a, BFloat16 b)
     {
         return a - static_cast<float>(b);
     }
-    inline float operator*(float a, bfloat16_t b)
+    inline float operator*(float a, BFloat16 b)
     {
         return a * static_cast<float>(b);
     }
-    inline float operator/(float a, bfloat16_t b)
+    inline float operator/(float a, BFloat16 b)
     {
         return a / static_cast<float>(b);
     }
 
-    inline float &operator+=(float &a, const bfloat16_t &b)
+    inline float &operator+=(float &a, const BFloat16 &b)
     {
         return a += static_cast<float>(b);
     }
-    inline float &operator-=(float &a, const bfloat16_t &b)
+    inline float &operator-=(float &a, const BFloat16 &b)
     {
         return a -= static_cast<float>(b);
     }
-    inline float &operator*=(float &a, const bfloat16_t &b)
+    inline float &operator*=(float &a, const BFloat16 &b)
     {
         return a *= static_cast<float>(b);
     }
-    inline float &operator/=(float &a, const bfloat16_t &b)
+    inline float &operator/=(float &a, const BFloat16 &b)
     {
         return a /= static_cast<float>(b);
     }
 
     /// Arithmetic with doubles
 
-    inline double operator+(bfloat16_t a, double b)
+    inline double operator+(BFloat16 a, double b)
     {
         return static_cast<double>(a) + b;
     }
-    inline double operator-(bfloat16_t a, double b)
+    inline double operator-(BFloat16 a, double b)
     {
         return static_cast<double>(a) - b;
     }
-    inline double operator*(bfloat16_t a, double b)
+    inline double operator*(BFloat16 a, double b)
     {
         return static_cast<double>(a) * b;
     }
-    inline double operator/(bfloat16_t a, double b)
+    inline double operator/(BFloat16 a, double b)
     {
         return static_cast<double>(a) / b;
     }
 
-    inline double operator+(double a, bfloat16_t b)
+    inline double operator+(double a, BFloat16 b)
     {
         return a + static_cast<double>(b);
     }
-    inline double operator-(double a, bfloat16_t b)
+    inline double operator-(double a, BFloat16 b)
     {
         return a - static_cast<double>(b);
     }
-    inline double operator*(double a, bfloat16_t b)
+    inline double operator*(double a, BFloat16 b)
     {
         return a * static_cast<double>(b);
     }
-    inline double operator/(double a, bfloat16_t b)
+    inline double operator/(double a, BFloat16 b)
     {
         return a / static_cast<double>(b);
     }
 
     /// Arithmetic with ints
 
-    inline bfloat16_t operator+(bfloat16_t a, int b)
+    inline BFloat16 operator+(BFloat16 a, int b)
     {
-        return a + static_cast<bfloat16_t>(b);
+        return a + static_cast<BFloat16>(b);
     }
-    inline bfloat16_t operator-(bfloat16_t a, int b)
+    inline BFloat16 operator-(BFloat16 a, int b)
     {
-        return a - static_cast<bfloat16_t>(b);
+        return a - static_cast<BFloat16>(b);
     }
-    inline bfloat16_t operator*(bfloat16_t a, int b)
+    inline BFloat16 operator*(BFloat16 a, int b)
     {
-        return a * static_cast<bfloat16_t>(b);
+        return a * static_cast<BFloat16>(b);
     }
-    inline bfloat16_t operator/(bfloat16_t a, int b)
+    inline BFloat16 operator/(BFloat16 a, int b)
     {
-        return a / static_cast<bfloat16_t>(b);
+        return a / static_cast<BFloat16>(b);
     }
 
-    inline bfloat16_t operator+(int a, bfloat16_t b)
+    inline BFloat16 operator+(int a, BFloat16 b)
     {
-        return static_cast<bfloat16_t>(a) + b;
+        return static_cast<BFloat16>(a) + b;
     }
-    inline bfloat16_t operator-(int a, bfloat16_t b)
+    inline BFloat16 operator-(int a, BFloat16 b)
     {
-        return static_cast<bfloat16_t>(a) - b;
+        return static_cast<BFloat16>(a) - b;
     }
-    inline bfloat16_t operator*(int a, bfloat16_t b)
+    inline BFloat16 operator*(int a, BFloat16 b)
     {
-        return static_cast<bfloat16_t>(a) * b;
+        return static_cast<BFloat16>(a) * b;
     }
-    inline bfloat16_t operator/(int a, bfloat16_t b)
+    inline BFloat16 operator/(int a, BFloat16 b)
     {
-        return static_cast<bfloat16_t>(a) / b;
+        return static_cast<BFloat16>(a) / b;
     }
 
     //// Arithmetic with int64_t
 
-    inline bfloat16_t operator+(bfloat16_t a, int64_t b)
+    inline BFloat16 operator+(BFloat16 a, int64_t b)
     {
-        return a + static_cast<bfloat16_t>(b);
+        return a + static_cast<BFloat16>(b);
     }
-    inline bfloat16_t operator-(bfloat16_t a, int64_t b)
+    inline BFloat16 operator-(BFloat16 a, int64_t b)
     {
-        return a - static_cast<bfloat16_t>(b);
+        return a - static_cast<BFloat16>(b);
     }
-    inline bfloat16_t operator*(bfloat16_t a, int64_t b)
+    inline BFloat16 operator*(BFloat16 a, int64_t b)
     {
-        return a * static_cast<bfloat16_t>(b);
+        return a * static_cast<BFloat16>(b);
     }
-    inline bfloat16_t operator/(bfloat16_t a, int64_t b)
+    inline BFloat16 operator/(BFloat16 a, int64_t b)
     {
-        return a / static_cast<bfloat16_t>(b);
+        return a / static_cast<BFloat16>(b);
     }
 
-    inline bfloat16_t operator+(int64_t a, bfloat16_t b)
+    inline BFloat16 operator+(int64_t a, BFloat16 b)
     {
-        return static_cast<bfloat16_t>(a) + b;
+        return static_cast<BFloat16>(a) + b;
     }
-    inline bfloat16_t operator-(int64_t a, bfloat16_t b)
+    inline BFloat16 operator-(int64_t a, BFloat16 b)
     {
-        return static_cast<bfloat16_t>(a) - b;
+        return static_cast<BFloat16>(a) - b;
     }
-    inline bfloat16_t operator*(int64_t a, bfloat16_t b)
+    inline BFloat16 operator*(int64_t a, BFloat16 b)
     {
-        return static_cast<bfloat16_t>(a) * b;
+        return static_cast<BFloat16>(a) * b;
     }
-    inline bfloat16_t operator/(int64_t a, bfloat16_t b)
+    inline BFloat16 operator/(int64_t a, BFloat16 b)
     {
-        return static_cast<bfloat16_t>(a) / b;
+        return static_cast<BFloat16>(a) / b;
     }
 
     // Overloading < and > operators, because std::max and std::min use them.
 
-    inline bool operator>(bfloat16_t &lhs, bfloat16_t &rhs)
+    inline bool operator>(BFloat16 &lhs, BFloat16 &rhs)
     {
         return float(lhs) > float(rhs);
     }
 
-    inline bool operator<(bfloat16_t &lhs, bfloat16_t &rhs)
+    inline bool operator<(BFloat16 &lhs, BFloat16 &rhs)
     {
         return float(lhs) < float(rhs);
     }
@@ -420,14 +420,14 @@ namespace bfloat16
       SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
       ----------------------------------------------------------------------
      */
-    inline bfloat16_t nextafter(
-        bfloat16_t from,
-        bfloat16_t to)
+    inline BFloat16 nextafter(
+        BFloat16 from,
+        BFloat16 to)
     {
         // Reference:
         // https://git.musl-libc.org/cgit/musl/tree/src/math/nextafter.c
         using int_repr_t = uint16_t;
-        using float_t = bfloat16_t;
+        using float_t = BFloat16;
         constexpr uint8_t bits = 16;
         union
         {
@@ -483,141 +483,141 @@ namespace bfloat16
 
 namespace std
 {
-    using bfloat16::bfloat16_t;
+    using bfloat16::BFloat16;
     /// emulate bfloat16 math by float
     /// Used by vec256<bfloat16_t>::map
-    inline bfloat16_t acos(bfloat16_t a)
+    inline BFloat16 acos(BFloat16 a)
     {
         return std::acos(float(a));
     }
-    inline bfloat16_t asin(bfloat16_t a)
+    inline BFloat16 asin(BFloat16 a)
     {
         return std::asin(float(a));
     }
-    inline bfloat16_t atan(bfloat16_t a)
+    inline BFloat16 atan(BFloat16 a)
     {
         return std::atan(float(a));
     }
-    inline bfloat16_t erf(bfloat16_t a)
+    inline BFloat16 erf(BFloat16 a)
     {
         return std::erf(float(a));
     }
-    inline bfloat16_t erfc(bfloat16_t a)
+    inline BFloat16 erfc(BFloat16 a)
     {
         return std::erfc(float(a));
     }
-    inline bfloat16_t exp(bfloat16_t a)
+    inline BFloat16 exp(BFloat16 a)
     {
         return std::exp(float(a));
     }
-    inline bfloat16_t expm1(bfloat16_t a)
+    inline BFloat16 expm1(BFloat16 a)
     {
         return std::expm1(float(a));
     }
-    inline bfloat16_t log(bfloat16_t a)
+    inline BFloat16 log(BFloat16 a)
     {
         return std::log(float(a));
     }
-    inline bfloat16_t log10(bfloat16_t a)
+    inline BFloat16 log10(BFloat16 a)
     {
         return std::log10(float(a));
     }
-    inline bfloat16_t log1p(bfloat16_t a)
+    inline BFloat16 log1p(BFloat16 a)
     {
         return std::log1p(float(a));
     }
-    inline bfloat16_t log2(bfloat16_t a)
+    inline BFloat16 log2(BFloat16 a)
     {
         return std::log2(float(a));
     }
-    inline bfloat16_t ceil(bfloat16_t a)
+    inline BFloat16 ceil(BFloat16 a)
     {
         return std::ceil(float(a));
     }
-    inline bfloat16_t cos(bfloat16_t a)
+    inline BFloat16 cos(BFloat16 a)
     {
         return std::cos(float(a));
     }
-    inline bfloat16_t floor(bfloat16_t a)
+    inline BFloat16 floor(BFloat16 a)
     {
         return std::floor(float(a));
     }
-    inline bfloat16_t nearbyint(bfloat16_t a)
+    inline BFloat16 nearbyint(BFloat16 a)
     {
         return std::nearbyint(float(a));
     }
-    inline bfloat16_t sin(bfloat16_t a)
+    inline BFloat16 sin(BFloat16 a)
     {
         return std::sin(float(a));
     }
-    inline bfloat16_t tan(bfloat16_t a)
+    inline BFloat16 tan(BFloat16 a)
     {
         return std::tan(float(a));
     }
-    inline bfloat16_t sinh(bfloat16_t a)
+    inline BFloat16 sinh(BFloat16 a)
     {
         return std::sinh(float(a));
     }
-    inline bfloat16_t cosh(bfloat16_t a)
+    inline BFloat16 cosh(BFloat16 a)
     {
         return std::cosh(float(a));
     }
-    inline bfloat16_t tanh(bfloat16_t a)
+    inline BFloat16 tanh(BFloat16 a)
     {
         return std::tanh(float(a));
     }
-    inline bfloat16_t trunc(bfloat16_t a)
+    inline BFloat16 trunc(BFloat16 a)
     {
         return std::trunc(float(a));
     }
-    inline bfloat16_t lgamma(bfloat16_t a)
+    inline BFloat16 lgamma(BFloat16 a)
     {
         return std::lgamma(float(a));
     }
-    inline bfloat16_t sqrt(bfloat16_t a)
+    inline BFloat16 sqrt(BFloat16 a)
     {
         return std::sqrt(float(a));
     }
-    inline bfloat16_t rsqrt(bfloat16_t a)
+    inline BFloat16 rsqrt(BFloat16 a)
     {
         return 1.0 / std::sqrt(float(a));
     }
-    inline bfloat16_t abs(bfloat16_t a)
+    inline BFloat16 abs(BFloat16 a)
     {
         return std::abs(float(a));
     }
 
-    inline bfloat16_t round(bfloat16_t a)
+    inline BFloat16 round(BFloat16 a)
     {
         return std::round(float(a));
     }
 
-    inline bool isinf(bfloat16_t a)
+    inline bool isinf(BFloat16 a)
     {
         return std::isinf(float(a));
     }
 
-    inline bfloat16_t pow(bfloat16_t a, double b)
+    inline BFloat16 pow(BFloat16 a, double b)
     {
         return std::pow(float(a), b);
     }
 
-    inline bfloat16_t pow(bfloat16_t a, bfloat16_t b)
+    inline BFloat16 pow(BFloat16 a, BFloat16 b)
     {
         return std::pow(float(a), float(b));
     }
-    inline bfloat16_t fmod(bfloat16_t a, bfloat16_t b)
+    inline BFloat16 fmod(BFloat16 a, BFloat16 b)
     {
         return std::fmod(float(a), float(b));
     }
 
-    inline bfloat16_t fma(bfloat16_t a, bfloat16_t b, bfloat16_t c)
+    inline BFloat16 fma(BFloat16 a, BFloat16 b, BFloat16 c)
     {
         return std::fma(float(a), float(b), float(c));
     }
 
     template <>
-    class numeric_limits<bfloat16_t>
+    class numeric_limits<BFloat16>
     {
     public:
         static constexpr bool is_signed = true;
@@ -646,41 +646,41 @@ namespace std
         static constexpr auto tinyness_before =
             numeric_limits<float>::tinyness_before;
 
-        static constexpr bfloat16_t min()
+        static constexpr BFloat16 min()
         {
-            return bfloat16_t(0x0080, bfloat16_t::from_bits());
+            return BFloat16(0x0080, BFloat16::from_bits());
         }
-        static constexpr bfloat16_t lowest()
+        static constexpr BFloat16 lowest()
         {
-            return bfloat16_t(0xFF7F, bfloat16_t::from_bits());
+            return BFloat16(0xFF7F, BFloat16::from_bits());
         }
-        static constexpr bfloat16_t max()
+        static constexpr BFloat16 max()
         {
-            return bfloat16_t(0x7F7F, bfloat16_t::from_bits());
+            return BFloat16(0x7F7F, BFloat16::from_bits());
         }
-        static constexpr bfloat16_t epsilon()
+        static constexpr BFloat16 epsilon()
         {
-            return bfloat16_t(0x3C00, bfloat16_t::from_bits());
+            return BFloat16(0x3C00, BFloat16::from_bits());
         }
-        static constexpr bfloat16_t round_error()
+        static constexpr BFloat16 round_error()
         {
-            return bfloat16_t(0x3F00, bfloat16_t::from_bits());
+            return BFloat16(0x3F00, BFloat16::from_bits());
         }
-        static constexpr bfloat16_t infinity()
+        static constexpr BFloat16 infinity()
         {
-            return bfloat16_t(0x7F80, bfloat16_t::from_bits());
+            return BFloat16(0x7F80, BFloat16::from_bits());
         }
-        static constexpr bfloat16_t quiet_NaN()
+        static constexpr BFloat16 quiet_NaN()
         {
-            return bfloat16_t(0x7FC0, bfloat16_t::from_bits());
+            return BFloat16(0x7FC0, BFloat16::from_bits());
         }
-        static constexpr bfloat16_t signaling_NaN()
+        static constexpr BFloat16 signaling_NaN()
         {
-            return bfloat16_t(0x7F80, bfloat16_t::from_bits());
+            return BFloat16(0x7F80, BFloat16::from_bits());
         }
-        static constexpr bfloat16_t denorm_min()
+        static constexpr BFloat16 denorm_min()
         {
-            return bfloat16_t(0x0001, bfloat16_t::from_bits());
+            return BFloat16(0x0001, BFloat16::from_bits());
         }
     };
 }
