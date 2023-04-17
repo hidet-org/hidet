@@ -88,6 +88,8 @@ class MatMulTask(Task):
         num_warps =  warp_count_m * warp_count_n * warp_count_k
         block_size = num_threads = num_warps * 32
         tune.check(num_threads <= 1024)
+        tune.check(block_m * block_k % num_threads == 0)
+        tune.check(block_k * block_n % num_threads == 0)
 
         lines = block_size // block_k  # 256 // 8 = 32
 
@@ -101,9 +103,9 @@ class MatMulTask(Task):
         smem_a_layout = data_layout([2, block_m, block_k], ranks=[0, 1, 2])
         smem_b_layout = data_layout([2, block_k, block_n], ranks=[0, 1, 2])
         smem_c_layout = data_layout([block_m, block_n], ranks=[0, 1])
-        regs_a_layout = row_major(2, mma_count_m, mma_config.a_elements)
-        regs_b_layout = row_major(2, mma_count_n, mma_config.b_elements)
-        regs_c_layout = row_major(mma_count_m, mma_count_n, mma_config.c_elements)
+        regs_a_layout = row_major([2, mma_count_m, mma_config.a_elements])
+        regs_b_layout = row_major([2, mma_count_n, mma_config.b_elements])
+        regs_c_layout = row_major([mma_count_m, mma_count_n, mma_config.c_elements])
         smem_storage_nbytes = max(
             (smem_a_layout.size + smem_b_layout.size) * data_type(mma_config.input_dtype).nbytes,
             smem_c_layout.size * data_type(mma_config.output_dtype).nbytes,
@@ -147,7 +149,7 @@ class MatMulTask(Task):
             ):
                 gmem_a = a[blockIdx.y, offset_m:, offset_k:]
                 for i, k in a_g2s_layout.on(threadIdx.x):
-                    if offset_m + i < m_size and k < k_size:
+                    if offset_m + i < m_size and offset_k + k < k_size:
                         regs_a_ldg[i, k] = gmem_a.read([i,k], protected=True)
                     else:
                         regs_a_ldg[i, k] = 0.0
@@ -163,18 +165,16 @@ class MatMulTask(Task):
 
             @hidet.script
             def copy_a_s2r(
-                smem_a: TensorType(dtype=a_dtype, layout=smem_a_layout),
+                smem_a: TensorType(dtype=a_dtype, shape=[block_m, block_k]),
                 regs_a: TensorType(dtype=a_dtype, layout=regs_a_layout),
-                smem_buffer_idx: i32,
                 regs_buffer_idx: i32,
             ):
-                smem_a_start = smem_a[smem_buffer_idx, :, :]
                 warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
                 for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
                     for mma_i in range(mma_count_m):
                         p = 0
                         for i, k in mma_config.a_load_map.on(lane_id):
-                            regs_a[regs_buffer_idx, mma_i, p] = smem_a_start[wi * warp_m + mma_i * mma_m + i, wk * warp_k + k]
+                            regs_a[regs_buffer_idx, mma_i, p] = smem_a[wi * warp_m + mma_i * mma_m + i, wk * warp_k + k]
                             p += 1
 
             @hidet.script
@@ -186,7 +186,7 @@ class MatMulTask(Task):
             ):
                 gmem_b = b[blockIdx.y, offset_k:, offset_n:]
                 for k, j in b_g2s_layout.on(threadIdx.x):
-                    if offset_n + j < n_size and k < k_size:
+                    if offset_n + j < n_size and offset_k + k < k_size:
                         regs_b_ldg[k, j] = gmem_b.read([k, j], protected=True)
                     else:
                         regs_b_ldg[k, j] = 0.0
@@ -203,49 +203,65 @@ class MatMulTask(Task):
         
             @hidet.script
             def copy_b_s2r(
-                smem_b: TensorType(dtype=b_dtype, layout=smem_b_layout),
+                smem_b: TensorType(dtype=b_dtype, shape=[block_k, block_n]),
                 regs_b: TensorType(dtype=b_dtype, layout=regs_b_layout),
-                smem_buffer_idx: i32,
                 regs_buffer_idx: i32,
             ):
-                smem_b_start = smem_b[smem_buffer_idx, :, :]
                 warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
                 for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
                     for mma_j in range(mma_count_n):
                         p = 0
-                        for k, j in mma_config.a_load_map.on(lane_id):
-                            regs_b[regs_buffer_idx, mma_j, p] = smem_b_start[wk * warp_k + k, wj * warp_n + mma_j * mma_n + j]
+                        for k, j in mma_config.b_load_map.on(lane_id):
+                            regs_b[regs_buffer_idx, mma_j, p] = smem_b[wk * warp_k + k, wj * warp_n + mma_j * mma_n + j]
                             p += 1
             
             @hidet.script
             def copy_c_r2g(
-                regs_c: TensorType(dtype='float32', layout=regs_c_layout),
-                c: f32[bs, m_size, n_size],
+                regs_c: TensorType(dtype=c_dtype, layout=regs_c_layout),
+                c: c_dtype[bs, m_size, n_size],
+                smem_c: TensorType(dtype=c_dtype, layout=smem_c_layout),
                 offset_m: i32,
                 offset_n: i32
             ):
                 gmem_c = c[blockIdx.y, offset_m:, offset_n:]
-                for i, j in block_layout.on(threadIdx.x):
-                    if offset_m + i < m_size and offset_n + j < n_size:
-                        gmem_c.write([i, j], regs_c[i, j], protected=True)
+                warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
+                for warp_k_round in range(warp_count_k):
+                    for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
+                        if wk == warp_k_round:
+                            for mma_i, mma_j in grid(mma_count_m, mma_count_n):
+                                p = 0
+                                for i, j in mma_config.c_store_map.on(lane_id):
+                                    delta_m = wi * warp_m + mma_i * mma_m + i
+                                    delta_n = wj * warp_n + mma_j * mma_n + j
+                                    if delta_m < m_size - offset_m and delta_n < n_size - offset_n:
+                                        if warp_count_k == 1:
+                                            gmem_c.write([delta_m, delta_n], regs_c[mma_i, mma_j, p])
+                                        else:
+                                            if warp_k_round == 0:
+                                                smem_c[delta_m, delta_n] = regs_c[mma_i, mma_j, p]
+                                            elif warp_k_round < warp_count_k - 1:
+                                                smem_c[delta_m, delta_n] += regs_c[mma_i, mma_j, p]
+                                            else:
+                                                gmem_c.write([delta_m, delta_n], smem_c[delta_m, delta_n] + regs_c[mma_i, mma_j, p])
+                                    p += 1
+                    if warp_k_round + 1 != warp_count_k:
+                        syncthreads()
 
             @hidet.script
             def mma(
-                regs_a: TensorType(dtype='float32', layout=regs_a_layout),
-                regs_b: TensorType(dtype='float32', layout=regs_b_layout),
-                regs_c: TensorType(dtype='float32', layout=regs_c_layout),
+                regs_a: TensorType(dtype=a_dtype, layout=regs_a_layout),
+                regs_b: TensorType(dtype=b_dtype, layout=regs_b_layout),
+                regs_c: TensorType(dtype=c_dtype, layout=regs_c_layout),
                 buffer_idx: i32
             ):
-                for i, j in block_layout.on(threadIdx.x):
-                    for k in range(warp_k):
-                        regs_c[i, j] += (regs_a[buffer_idx, i, k] * regs_b[buffer_idx, k, j])
-
+                for mma_i, mma_j in grid(mma_count_m, mma_count_n):
+                    mma_sync(mma_config, ~regs_a[buffer_idx, mma_i, 0], ~regs_b[buffer_idx, mma_j, 0], ~regs_c[mma_j, mma_j, 0])
 
             @hidet.script
             def mm_kernel(
-                a: a_dtype[bs, m_size, k_size],
-                b: b_dtype[bs, k_size, n_size],
-                c: c_dtype[bs, m_size, n_size]
+                a: f32[bs, m_size, k_size],
+                b: f32[bs, k_size, n_size],
+                c: f32[bs, m_size, n_size]
             ):
                 attr.cuda_grid_dim = (m_tiles * n_tiles, bs)
                 attr.cuda_block_dim = block_size
@@ -284,51 +300,31 @@ class MatMulTask(Task):
                 copy_b_r2s(regs_b_ldg, smem_b, 0)
                 syncthreads()
                 # Copy first k-tile from shared to local
-                copy_a_s2r(smem_a, regs_a, 0, 0)
-                copy_b_s2r(smem_b, regs_b, 0, 0)
+                copy_a_s2r(~smem_a[0, 0, 0], regs_a, 0)
+                copy_b_s2r(~smem_b[0, 0, 0], regs_b, 0)
 
-                # Main k-tile loop
-                for k in range(k_tiles - 1):
-                    offset_k = k * block_k + first_k_tile_size
-                    # pragma unroll
-                    for k_frag in range(block_warps_k):
-                        if k_frag == block_warps_k - 1:
-                            # Store next AB tile from local into shared
-                            copy_a_r2s(regs_a_ldg, smem_a, (k + 1) % 2)
-                            copy_b_r2s(regs_b_ldg, smem_b, (k + 1) % 2)
+                for k0 in range(k_tiles):
+                    ko = 0
+                    if mma_count_k % 2 != 0 and k0 % 2 != 0:
+                        ko = 1
+                    for k1 in range(mma_count_k):
+                        if k1 == 0:
+                            offset_k = (k0 + 1) * block_k
+                            copy_a_g2r(a, regs_a_ldg, offset_m, offset_k)
+                            copy_b_g2r(b, regs_b_ldg, offset_k, offset_n)
+                        if k1 == mma_count_k - 1:
+                            copy_a_r2s(regs_a_ldg, smem_a, (k0 + 1) % 2)
+                            copy_b_r2s(regs_b_ldg, smem_b, (k0 + 1) % 2)
                             syncthreads()
-                            # Load next k-fragment (from next k-tile) from shared to local
-                            copy_a_s2r(smem_a, regs_a, (k + 1) % 2,(k_frag + 1) % 2, 0)
-                            copy_b_s2r(smem_b, regs_b, (k + 1) % 2,(k_frag + 1) % 2, 0)
-                            pass
+                            copy_a_s2r(~smem_a[(k0 + 1) % 2, 0, 0], regs_a, (k1 + ko + 1) % 2)
+                            copy_b_s2r(~smem_b[(k0 + 1) % 2, 0, 0], regs_b, (k1 + ko + 1) % 2)
                         else:
-                            # Load next k-fragment from shared to local
-                            copy_a_s2r(smem_a, regs_a, k % 2,(k_frag + 1) % 2, k_frag + 1)
-                            copy_b_s2r(smem_b, regs_b, k % 2,(k_frag + 1) % 2, k_frag + 1)
-                            pass
-                        if k_frag == 0:
-                            # Load next AB tile from global into local
-                            copy_a_g2r(a, regs_a_ldg, offset_m, offset_k, 0)
-                            copy_b_g2r(b, regs_b_ldg, offset_k, offset_n, 0)
-                            pass
-                        # Perform MMA
-                        mma(regs_a, regs_b, regs_c, k_frag % 2)
-                # Perform MMA for last k-tile
-                last_k = k_tiles - 1
-                for k_frag in range(block_warps_k):
-                    if k_frag < block_warps_k - 1:
-                        # Load next k-fragment from shared to local
-                        copy_a_s2r(smem_a, regs_a, (last_k) % 2,(k_frag + 1) % 2, k_frag + 1)
-                        copy_b_s2r(smem_b, regs_b, (last_k) % 2,(k_frag + 1) % 2, k_frag + 1)
-                        pass
-                    # Perform MMA
-                    mma(regs_a, regs_b, regs_c, (k_frag) % 2)
-
-                # Store results from regs_c into C
-                copy_c_r2g(regs_c, c, offset_m, offset_n) 
+                            copy_a_s2r(~smem_a[k0 % 2, 0, (k1 + 1) * mma_k], regs_a, (k1 + ko + 1) % 2)
+                            copy_b_s2r(~smem_b[k0 % 2, (k1 + 1) * mma_k, 0], regs_b, (k1 + ko + 1) % 2)
+                        mma(regs_a, regs_b, regs_c, (k1 + ko) % 2)
+                copy_c_r2g(regs_c, c, smem_c, offset_m, offset_n)
 
         ir_module = module.ir_module()
-        #add_packed_func(ir_module, func=mm_kernel, pack_func_name=task.name)
         return ir_module
 
 
@@ -338,7 +334,7 @@ class MatMulOp(Operator):
             x, 'x'), input_like(y, 'y')), attributes={})
 
 
-hidet.option.search_space(2)
+hidet.option.search_space(0)
 hidet.option.save_lower_ir(True)
 hidet.option.cache_dir('.')
 
@@ -347,10 +343,10 @@ b = hidet.randn([1, 4096, 4096], dtype='float32', device='cuda')
 
 numpy_c = np.matmul(a.cpu().numpy(), b.cpu().numpy())
 
-print("Ref: ", BatchMatmulOp(a, b).latency())
-c = BatchMatmulOp(a, b).get_output(0)
+print("Ref: ", BatchMatmulOp(a, b, mma='mma').latency())
+c = BatchMatmulOp(a, b, mma='mma').get_output(0)
 np.testing.assert_allclose(actual=c.cpu().numpy(),
-                           desired=numpy_c, atol=1e-3, rtol=1e-3)
+                           desired=numpy_c, atol=1e-1, rtol=1e-1)
 print("Mine: ", MatMulOp(a, b).latency())
 c = MatMulOp(a, b).get_output(0)
 np.testing.assert_allclose(actual=c.cpu().numpy(),
