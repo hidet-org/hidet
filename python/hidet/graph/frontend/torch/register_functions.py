@@ -279,7 +279,7 @@ def sub(x: Tensor, y: Tensor):
 
 @register_function(torch.nn.functional.softmax)
 @register_method(torch.Tensor.softmax)
-def softmax(x: Tensor, dim: int, dtype=None):
+def softmax(x: Tensor, dim: int, _stacklevel: int = 3, dtype=None):
     if dtype is not None:
         raise NotImplementedError("dtype is not None")
     return ops.softmax(x, dim)
