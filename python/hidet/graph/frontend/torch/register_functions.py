@@ -356,27 +356,6 @@ def zeros(*size, out=None, dtype=None, layout=None, device=None, pin_memory=Fals
     return hidet.zeros(shape, dtype=dtype_from_torch(dtype), device=device_from_torch(device))
 
 
-@register_function(torch.zeros)
-def zeros(*size, out=None, dtype=None, layout=None, device=None, pin_memory=False, requires_grad=False):
-    import hidet
-
-    if out is not None:
-        raise NotImplementedError("out is not None")
-    if layout is not None:
-        raise NotImplementedError("layout is not None")
-    if len(size) == 1:
-        if isinstance(size[0], (list, tuple)):
-            size = size[0]
-    shape = [int(v) for v in size]
-    if dtype is None:
-        dtype = torch.get_default_dtype()
-
-    _ = pin_memory
-    _ = requires_grad
-
-    return hidet.zeros(shape, dtype=dtype_from_torch(dtype), device=device_from_torch(device))
-
-
 @register_function(torch.ones)
 def ones(
     *size: Union[int, Sequence[int]],
@@ -752,15 +731,6 @@ def mish(x: Tensor, inplace: bool):
     if inplace:
         warnings.warn_once('hidet: mish with inplace=True is not supported. Treat as inplace=False.')
     return ops.multiply(x, ops.tanh(ops.softplus(x, 1.0, 20.0)))
-
-
-@register_function(torch.gather)
-def gather(x: Tensor, dim: int, index: Tensor, *, sparse_grad=False, out=None):
-    if sparse_grad:
-        warnings.warn_once('hidet: gather with sparse_grad=True is not supported. Treat as sparse_grad=False.')
-    if out is not None:
-        raise NotImplementedError('hidet: gather with out=... is not supported')
-    return ops.gather(x, index, axis=dim)
 
 
 @register_function(torch.gather)
