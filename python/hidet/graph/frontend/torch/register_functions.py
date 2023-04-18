@@ -25,6 +25,27 @@ from .utils import dtype_from_torch, device_from_torch
 Number = Union[int, float, bool]
 
 
+@register_function(torch.nn.functional.conv1d)
+def conv1d(x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, dilation, groups):
+    x = ops.conv_pad(x, padding)
+    y = ops.conv1d(x, weight, stride=stride, dilations=dilation, groups=groups)
+    if bias is not None:
+        y = y + ops.unsqueeze(bias, [0, 2])
+    return y
+
+
+@register_function(torch.nn.functional.conv_transpose1d)
+def conv1d_transpose(
+    x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, output_padding, groups, dilation
+):
+    if dilation != 1 and not same_list(dilation, [1]):
+        raise NotImplementedError("dilation != 1")
+    y = ops.conv1d_transpose(x, weight, stride, padding, groups, output_padding)
+    if bias is not None:
+        y = y + ops.unsqueeze(bias, [0, 2])
+    return y
+
+
 @register_function(torch.nn.functional.conv2d)
 def conv2d(x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, dilation, groups):
     x = ops.conv_pad(x, padding)
@@ -34,10 +55,34 @@ def conv2d(x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, d
     return y
 
 
+@register_function(torch.nn.functional.conv_transpose2d)
+def conv2d_transpose(
+    x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, output_padding, groups, dilation
+):
+    if dilation != 1 and not same_list(dilation, [1, 1]):
+        raise NotImplementedError("dilation != 1")
+    y = ops.conv2d_transpose(x, weight, stride, padding, groups, output_padding)
+    if bias is not None:
+        y = y + ops.unsqueeze(bias, [0, 2, 3])
+    return y
+
+
 @register_function(torch.nn.functional.conv3d)
 def conv3d(x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, dilation, groups):
     x = ops.conv_pad(x, padding)
     y = ops.conv3d(x, weight, stride, dilation, groups)
+    if bias is not None:
+        y = y + ops.unsqueeze(bias, [0, 2, 3, 4])
+    return y
+
+
+@register_function(torch.nn.functional.conv_transpose3d)
+def conv3d_transpose(
+    x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, output_padding, groups, dilation
+):
+    if dilation != 1 and not same_list(dilation, [1, 1, 1]):
+        raise NotImplementedError("dilation != 1")
+    y = ops.conv3d_transpose(x, weight, stride, padding, groups, output_padding)
     if bias is not None:
         y = y + ops.unsqueeze(bias, [0, 2, 3, 4])
     return y
@@ -679,6 +724,24 @@ def celu(x: Tensor, alpha: float):
 @register_function(torch.nn.functional.logsigmoid)
 def logsigmoid(x: Tensor):
     return ops.logsigmoid(x)
+
+
+@register_function(torch.gather)
+def gather(x: Tensor, dim: int, index: Tensor, *, sparse_grad=False, out=None):
+    if sparse_grad:
+        warnings.warn_once('hidet: gather with sparse_grad=True is not supported. Treat as sparse_grad=False.')
+    if out is not None:
+        raise NotImplementedError('hidet: gather with out=... is not supported')
+    return ops.gather(x, index, axis=dim)
+
+
+@register_function(torch.gather)
+def gather(x: Tensor, dim: int, index: Tensor, *, sparse_grad=False, out=None):
+    if sparse_grad:
+        warnings.warn_once('hidet: gather with sparse_grad=True is not supported. Treat as sparse_grad=False.')
+    if out is not None:
+        raise NotImplementedError('hidet: gather with out=... is not supported')
+    return ops.gather(x, index, axis=dim)
 
 
 @register_function(torch.gather)
