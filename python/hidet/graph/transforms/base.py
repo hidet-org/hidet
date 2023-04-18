@@ -75,7 +75,7 @@ class PassContext:
             'reduce_precision': None,
             # use attention or not
             # [True, False]
-            'use_attention': True,
+            'use_attention': False,
             # mma primitive:
             # ['simt', 'wmma', 'mma']
             'mma': 'simt',
@@ -91,6 +91,9 @@ class PassContext:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        from ..transforms.graph_patterns import deregister_attn_patterns
+
+        deregister_attn_patterns()
         popped = self._stack.pop()
         assert popped == self
 
@@ -151,7 +154,7 @@ class PassContext:
         self.configs['reduce_precision'] = dtype
         return self
 
-    def set_use_attention(self, flag=True) -> PassContext:
+    def set_use_attention(self, flag=False) -> PassContext:
         """
         Set to use fused attention schedule
 
