@@ -30,6 +30,7 @@ def generate_executor(flow_graph: FlowGraph) -> Callable:
     use_fp16 = dynamo_config['use_fp16']
     use_fp16_reduction = dynamo_config['use_fp16_reduction']
     use_cuda_graph = dynamo_config['use_cuda_graph']
+    use_attention = dynamo_config['use_attention']
     search_space = dynamo_config['search_space']
     parallel_k = dynamo_config['parallel_k']
     tensor_core = dynamo_config['use_tensor_core']
@@ -40,6 +41,7 @@ def generate_executor(flow_graph: FlowGraph) -> Callable:
             ctx.set_precision('float16')
         if use_fp16 and use_fp16_reduction:
             ctx.set_reduce_precision('float16')
+        ctx.set_use_attention(use_attention)
         if save_dir:
             ctx.save_graph_instrument(save_dir)
         if tensor_core:
