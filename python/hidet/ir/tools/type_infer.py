@@ -195,7 +195,7 @@ class TypeInfer(ExprFunctor, ComputeFunctor):
 
     def visit_GridCompute(self, c: GridCompute):
         dtype = self.visit(c.value)
-        return tensor_type(dtype, c.shape, c.layout)
+        return tensor_type(dtype, c._shape, c.layout)   # pylint: disable=protected-access
 
     def visit_ReduceCompute(self, c: ReduceCompute):
         return self.visit(c.value)
@@ -203,7 +203,7 @@ class TypeInfer(ExprFunctor, ComputeFunctor):
     def visit_ArgReduceCompute(self, c: ArgReduceCompute):
         return c.index_dtype
 
-    def visit_AnyExpr(self, e: PlaceholderExpr):
+    def visit_PlaceholderExpr(self, e: PlaceholderExpr):
         raise NotImplementedError()
 
 

@@ -27,21 +27,20 @@ class ReduceF16Task(Task):
         self, x: TensorNode, dims: List[int], keep_dim: bool, reduce_type: ReduceType, accumulate_dtype: str = 'float32'
     ):
 
-        x_shape = x.const_shape()
         y_shape = []
-        for i in range(len(x_shape)):
+        for i in range(len(x.shape)):
             if i in dims:
                 if keep_dim:
                     y_shape.append(1)
             else:
-                y_shape.append(x_shape[i])
+                y_shape.append(x.shape[i])
 
         def fcompute(*indices):
             def reduce_fcompute(*reduce_indices):
                 x_indices = []
                 p = 0
                 q = 0
-                for i in range(len(x_shape)):
+                for i in range(len(x.shape)):
                     if i not in dims:
                         x_indices.append(indices[p])
                         p += 1
@@ -53,7 +52,7 @@ class ReduceF16Task(Task):
                 assert p == len(indices) and q == len(reduce_indices)
                 return x[x_indices]
 
-            reduce_shape = [x_shape[i] for i in dims]
+            reduce_shape = [x.shape[i] for i in dims]
             return reduce(
                 shape=reduce_shape, fcompute=reduce_fcompute, reduce_type=reduce_type, accumulate_dtype=accumulate_dtype
             )
@@ -81,7 +80,7 @@ class ReduceF16Task(Task):
 
     def allow_epilogue(self) -> bool:
         # return False
-        rank = len(self.inputs[0].const_shape())
+        rank = len(self.inputs[0].shape)
         if rank - 1 in self.dims:  # pylint: disable=simplifiable-if-statement
             # use self.cuda_schedule_reduce_by_warp
             return True
@@ -90,7 +89,7 @@ class ReduceF16Task(Task):
             return False
 
     def implement_cuda(self, working_dir: str) -> IRModule:
-        rank = len(self.inputs[0].const_shape())
+        rank = len(self.inputs[0].shape)
         if rank - 1 in self.dims:
             return self.cuda_schedule_reduce_by_warp()
         else:
@@ -104,7 +103,7 @@ class ReduceF16Task(Task):
         warp_size = 32
         block_size = warp_size
         x, y = self.inputs[0], self.outputs[0]
-        shape: List[int] = x.const_shape()
+        shape: List[int] = list(x.const_shape)
         dims = self.dims
         if self.keep_dim:
             remain_shape = [v if i not in dims else 1 for i, v in enumerate(shape)]
@@ -137,7 +136,7 @@ class ReduceF16Task(Task):
         with hidet.script_module() as module:
 
             @hidet.script
-            def reduce_kernel(x: f16[x.const_shape()], y: f16[y.const_shape()]):
+            def reduce_kernel(x: f16[x.const_shape], y: f16[y.const_shape]):
                 attr.cuda_grid_dim = grid_size
                 attr.cuda_block_dim = block_size
                 attr.cuda_min_blocks = 1
@@ -176,7 +175,7 @@ class ReduceF16Task(Task):
 
         x, y = self.inputs[0], self.outputs[0]
         dims = self.dims
-        shape: List[int] = x.const_shape()
+        shape: List[int] = list(x.const_shape)
 
         if self.keep_dim:
             remain_shape = [v if i not in dims else 1 for i, v in enumerate(shape)]
@@ -211,7 +210,7 @@ class ReduceF16Task(Task):
         with hidet.script_module() as module:
 
             @hidet.script
-            def reduce_kernel(x: f16[x.const_shape()], y: f16[y.const_shape()]):
+            def reduce_kernel(x: f16[x.const_shape], y: f16[y.const_shape]):
                 # Each 256-thread ThreadBlock handles 512 columns
                 attr.cuda_grid_dim = grid_size
                 attr.cuda_block_dim = block_size

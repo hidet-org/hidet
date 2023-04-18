@@ -12,6 +12,7 @@
 from __future__ import annotations
 from typing import Sequence, List, Dict, Union, Tuple, Optional
 from collections import defaultdict
+from hidet.ir.expr import Var, Expr
 from hidet.ir.task import Task, Target
 from hidet.ir.func import IRModule
 from hidet.ir.compute import TensorNode, TensorInput
@@ -65,6 +66,7 @@ class FusedTask(Task):
         inputs: List[TensorInput] = []
         consumer: Dict[Tensor, List[Operator]] = defaultdict(list)
         tensor_map: Dict[Tensor, TensorNode] = {}
+        scalar_map: Dict[Var, Expr] = {}
 
         for op in fused_graph.nodes:
             if isinstance(op, FusedOperator):
@@ -85,7 +87,11 @@ class FusedTask(Task):
         for op in fused_graph.nodes:
             task: Task = op.task
             remap: Dict[TensorNode, TensorNode] = {a: tensor_map[b] for a, b in zip(op.task.inputs, op.inputs)}
-            op_outputs: List[TensorNode] = [rewrite(x, remap) for x in task.outputs]
+            op_outputs: List[TensorNode] = [rewrite(rewrite(x, remap), scalar_map) for x in task.outputs]
+            for a, b in zip(op.task.outputs, op.outputs):
+                for a_dim, b_dim in zip(a.shape, b.shape):
+                    if isinstance(b_dim, Var):
+                        scalar_map[b_dim] = a_dim
             tensor_map.update({a: b for a, b in zip(op.outputs, op_outputs)})
 
         outputs: List[TensorNode] = [tensor_map[x] for x in fused_graph.outputs]
@@ -142,7 +148,10 @@ class FusedOperator(Operator):
         if len(inputs) != len(fused_graph.inputs):
             raise ValueError('number of inputs mismatch')
         for idx, (a, b) in enumerate(zip(inputs, fused_graph.inputs)):
-            if not same_list(a.shape, b.shape):
+            if (
+                any(isinstance(va, int) and isinstance(vb, int) and va != vb for va, vb in zip(a.shape, b.shape))
+                or len(a.shape) != len(b.shape)
+            ):
                 raise ValueError('Arg {} shape mismatch: {} vs {}'.format(idx, a.shape, b.shape))
             if a.dtype != b.dtype:
                 raise ValueError('Arg {} dtype mismatch: {} vs {}'.format(idx, a.dtype, b.dtype))

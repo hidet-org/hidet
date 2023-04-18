@@ -49,7 +49,7 @@ class DepthwiseConv2dSchedule(Schedule):
         self.blocks = prod(self.block_count)
         self.threads = prod(self.thread_count)
         strides = task.stride
-        kernels = task.inputs[1].const_shape()[2:]
+        kernels = task.inputs[1].const_shape[2:]
         self.smem_nbytes = (
             block_shape[0]
             * block_shape[1]
@@ -65,7 +65,7 @@ class DepthwiseConv2dSchedule(Schedule):
     @staticmethod
     def schedules_for(task: Conv2dTask):
         # pylint: disable=too-many-nested-blocks
-        task_shape: Tuple[int, int, int, int] = tuple(task.outputs[0].const_shape())
+        task_shape: Tuple[int, int, int, int] = task.outputs[0].const_shape
         space_level = option.get_option('search_space')
         if space_level == 0:
             sch = DepthwiseConv2dSchedule(
@@ -115,9 +115,9 @@ class DepthwiseConv2dSchedule(Schedule):
 def schedule_depthwise_conv2d(task: Conv2dTask, workding_dir: str) -> IRModule:
     data, weight, output = task.inputs[0], task.inputs[1], task.outputs[0]
     stride_height, stride_width = task.stride
-    batch_size, channels, in_height, in_width = data.const_shape()
-    _, _, height, width = output.const_shape()
-    _, _, kernel_height, kernel_width = weight.const_shape()
+    batch_size, channels, in_height, in_width = data.const_shape
+    _, _, height, width = output.const_shape
+    _, _, kernel_height, kernel_width = weight.const_shape
     # print(batch_size, channels, height, width, stride_height, kernel_height, in_height, in_width)
     schedules = DepthwiseConv2dSchedule.schedules_for(task)
     ir_modules = [

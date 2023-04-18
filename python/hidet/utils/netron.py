@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Union
+from typing import List, Union, Sequence
 import json
 from collections import defaultdict
 
@@ -65,10 +65,10 @@ class Parameter:
 
 
 class Argument:
-    def __init__(self, name, data_type, shape: Union[str, List[int]], has_initializer=False, scalar_value=None):
+    def __init__(self, name, data_type, shape: Union[str, Sequence[Union['Var', int]]], has_initializer=False, scalar_value=None):
         self.name: str = name
         self.data_type: str = data_type
-        self.shape: Union[str, List[int]] = shape
+        self.shape: Union[str, List[int]] = shape if isinstance(shape, str) else [str(v) for v in shape]
         self.has_initializer: bool = has_initializer
         self.scalar_value = scalar_value
 
@@ -225,4 +225,5 @@ def dump(flow_graph, fp):
     graph = Graph(inputs, outputs, nodes, name="")
     model = Model(graph, source='Hidet', description='Converted from FlowGraph')
 
-    json.dump(model.export(), fp, indent=2)
+    exported = model.export()
+    json.dump(exported, fp, indent=2)

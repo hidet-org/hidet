@@ -9,9 +9,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Union, Sequence, List, Dict, Any
+from typing import Union, Sequence, List, Dict, Any, Tuple
 
-from hidet.ir.expr import Expr, convert, if_then_else, logical_and
+from hidet.ir.expr import Expr, Int, convert, if_then_else, logical_and
 
 from .utils import Task, Operator, Tensor, TensorNode, compute, reduce, input_like, normalize_stride, normalize_kernel
 from .utils import normalize_padding, normalize_output
@@ -23,7 +23,8 @@ class Pool2dTask(Task):
         kernel = normalize_kernel(kernel)
         strides = normalize_stride(strides)
         padding = normalize_padding(padding)
-        batch_size, channels, height, width = x.const_shape()
+        batch_size, channels, height, width = x.shape
+        channels, height, width = int(channels), int(height), int(width)
         out_height = (height + padding[0] + padding[2] - kernel[0]) // strides[0] + 1
         out_width = (width + padding[1] + padding[3] - kernel[1]) // strides[1] + 1
         pad_value = convert(0.0 if reduce_type == 'avg' else -1e30, dtype=x.type.dtype)
@@ -54,7 +55,7 @@ class Pool3dTask(Task):
         kernel = normalize_kernel(kernel, dim=3)
         strides = normalize_stride(strides, dim=3)
         padding = normalize_padding(padding, dim=3)
-        batch_size, channels, depth, height, width = x.const_shape()
+        batch_size, channels, depth, height, width = x.shape
         out_depth = (depth + padding[0] + padding[3] - kernel[0]) // strides[0] + 1
         out_height = (height + padding[1] + padding[4] - kernel[1]) // strides[1] + 1
         out_width = (width + padding[2] + padding[5] - kernel[2]) // strides[2] + 1
@@ -98,9 +99,9 @@ class Pool3dTask(Task):
 class AdaptivePoolTask(Task):
     def __init__(self, x: TensorNode, output_size: Sequence[int], reduce_type: str):
         assert reduce_type in ['max', 'avg']
-        x_shape: List[int] = x.const_shape()  # [N, C, D1, D2, ...]
-        output_size: List[int] = normalize_output(output_size, len(x_shape) - 2)
-        y_shape: List[int] = x_shape[:2] + output_size
+        x_shape: Tuple[Expr, ...] = x.shape  # [N, C, D1, D2, ...]
+        output_size: Tuple[Expr, ...] = tuple(normalize_output(output_size, len(x_shape) - 2))
+        y_shape: Tuple[Int, ...] = x_shape[:2] + output_size
         spatial_ndim = len(output_size)
 
         def start_index(y_indices: Sequence[Expr], spatial_dim: int) -> Expr:

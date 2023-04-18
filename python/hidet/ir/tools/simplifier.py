@@ -12,7 +12,7 @@
 from typing import Union
 import operator
 from hidet.ir.expr import Expr, BinaryExpr, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, LessEqual, Equal, Constant
-from hidet.ir.expr import BitwiseAnd, BitwiseOr, BitwiseXor
+from hidet.ir.expr import BitwiseAnd, BitwiseOr, BitwiseXor, NotEqual, LeftShift, RightShift
 from hidet.ir.expr import LogicalAnd, LogicalOr, LogicalNot, is_one, is_zero, is_true, is_false, convert
 from hidet.ir.stmt import Stmt, IfStmt, SeqStmt, ForStmt
 from hidet.ir.tools import rewrite
@@ -47,11 +47,7 @@ class Simplifier(StmtRewriter, ExprRewriter, BaseRewriter):
         elif isinstance(e, FloorDiv):
             if is_one(b):
                 return a
-        elif isinstance(e, LessThan):
-            pass
-        elif isinstance(e, LessEqual):
-            pass
-        elif isinstance(e, Equal):
+        elif isinstance(e, (LessThan, LessEqual, Equal, NotEqual)):
             pass
         elif isinstance(e, LogicalAnd):
             if is_false(a) or is_false(b):
@@ -72,6 +68,10 @@ class Simplifier(StmtRewriter, ExprRewriter, BaseRewriter):
         elif isinstance(e, BitwiseOr):
             pass
         elif isinstance(e, BitwiseXor):
+            pass
+        elif isinstance(e, LeftShift):
+            pass
+        elif isinstance(e, RightShift):
             pass
         else:
             raise ValueError()

@@ -13,12 +13,14 @@
 from typing import Tuple, List, Union, Sequence, Optional
 import builtins
 from hidet.ir.layout import DataLayout
-from hidet.ir.expr import Var, Expr
+from hidet.ir.type import Int
+from hidet.ir.expr import Var, Expr, Constant
 from hidet.ir.type import TensorType, tensor_type, DataType
 from hidet.ir.task import Task, InverseMap
 from hidet.ir.func import IRModule
 from hidet.graph.operator import Operator, Tensor
 from hidet.ir.compute import TensorNode, TensorInput, ReduceType, tensor_input, compute, reduce, arg_reduce
+from hidet.ir.dtypes import int32
 
 
 def input_like(tensor: Tensor, name: str) -> TensorInput:
@@ -27,8 +29,8 @@ def input_like(tensor: Tensor, name: str) -> TensorInput:
     return tensor_input(name, tensor.dtype, tensor.shape, tensor.layout)
 
 
-def normalize_stride(stride: Union[int, Sequence[int]], dim=2) -> List[int]:
-    if isinstance(stride, int):
+def normalize_stride(stride: Union[Int, Sequence[Int]], dim=2) -> List[Int]:
+    if isinstance(stride, (int, Expr)):
         return [stride for _ in range(dim)]
     elif isinstance(stride, (list, tuple)):
         if len(stride) == 1:
@@ -55,8 +57,8 @@ def normalize_dilations(dilations: Union[int, Sequence[int]], dim=2) -> List[int
     raise ValueError(msg)
 
 
-def normalize_kernel(kernel: Union[int, Sequence[int]], dim=2) -> List[int]:
-    if isinstance(kernel, int):
+def normalize_kernel(kernel: Union[Int, Sequence[Int]], dim=2) -> List[Int]:
+    if isinstance(kernel, (int, Expr)):
         return [kernel for _ in range(dim)]
     elif isinstance(kernel, (list, tuple)):
         if len(kernel) == 1:
@@ -69,13 +71,13 @@ def normalize_kernel(kernel: Union[int, Sequence[int]], dim=2) -> List[int]:
     raise ValueError(msg)
 
 
-def normalize_output(output: Union[int, Sequence[int]], dim=2) -> List[int]:
+def normalize_output(output: Union[Int, Sequence[Int]], dim=2) -> List[Int]:
     # same as normalize_kernel
     return normalize_kernel(output, dim)
 
 
-def normalize_padding(padding: Union[int, Sequence[int]], dim=2) -> List[int]:
-    if isinstance(padding, int):
+def normalize_padding(padding: Union[Int, Sequence[Int]], dim=2) -> List[Int]:
+    if isinstance(padding, (int, Expr)):
         return [padding for _ in range(dim * 2)]
     elif isinstance(padding, (list, tuple)):
         if len(padding) == 1:
@@ -90,7 +92,7 @@ def normalize_padding(padding: Union[int, Sequence[int]], dim=2) -> List[int]:
     )
 
 
-def normalize_dim(dim: Optional[Union[int, Sequence[int]]], rank: int) -> Union[int, List[int]]:
+def normalize_dim(dim: Optional[Union[Int, Sequence[Int]]], rank: int) -> Union[Int, List[Int]]:
     """
     normalize a dim from [-rank, rank] or None to [0, rank].
     """
@@ -100,9 +102,9 @@ def normalize_dim(dim: Optional[Union[int, Sequence[int]]], rank: int) -> Union[
         original_dim = dim
         if dim is None:
             dim = rank
-        if dim < 0:
+        if isinstance(dim, Constant) and int(dim) < 0:
             dim += rank
-        if not 0 <= dim <= rank:
+        if isinstance(dim, Constant) and not 0 <= int(dim) <= rank:
             raise ValueError('Given dim {} is not a valid dim for rank {}'.format(original_dim, rank))
         return dim
 
@@ -132,26 +134,30 @@ def resolve_out_dtype(input_dtypes: Sequence[Union[DataType, str]]) -> str:
     return out_dtype.name
 
 
-def can_broadcast(src_shape: Sequence[int], dst_shape: Sequence[int]) -> bool:
+def can_broadcast(src_shape: Sequence[Int], dst_shape: Sequence[Int]) -> bool:
     if len(dst_shape) < len(src_shape):
         return False
     src_shape = [1 for _ in range(len(dst_shape) - len(src_shape))] + list(src_shape)
     for a, b in zip(src_shape, dst_shape):
-        if a not in [1, b]:
+        if isinstance(a, (Constant, int)) and isinstance(b, (Constant, int)) and a not in [1, b]:
             return False
     return True
 
 
-def can_mutually_broadcast(x_shape: Sequence[int], y_shape: Sequence[int]) -> bool:
+def can_mutually_broadcast(x_shape: Sequence[Int], y_shape: Sequence[Int]) -> bool:
     x_shape, y_shape = list(x_shape), list(y_shape)
     while len(x_shape) < len(y_shape):
         x_shape = [1] + x_shape
     while len(y_shape) < len(x_shape):
         y_shape = [1] + y_shape
-    return all(p == q or p == 1 or q == 1 for p, q in zip(x_shape, y_shape))
+    return all(
+        p == q or p == 1 or q == 1
+        for p, q in zip(x_shape, y_shape)
+        if isinstance(p, (int, Constant)) and isinstance(q, (int, Constant))
+    )
 
 
-def broadcast_shape(x_shape: Sequence[int], y_shape: Sequence[int]) -> List[int]:
+def broadcast_shape(x_shape: Sequence[Int], y_shape: Sequence[Int]) -> List[Int]:
     """
     Broadcast two shapes with the same rule as numpy.
     Please refer to https://numpy.org/doc/stable/user/basics.broadcasting.html for details.
@@ -159,18 +165,27 @@ def broadcast_shape(x_shape: Sequence[int], y_shape: Sequence[int]) -> List[int]
     x_shape, y_shape = list(x_shape), list(y_shape)
     orig_shapes = x_shape, y_shape
     while len(x_shape) < len(y_shape):
-        x_shape = [1] + x_shape
+        x_shape = [int32(1)] + x_shape
     while len(y_shape) < len(x_shape):
-        y_shape = [1] + y_shape
+        y_shape = [int32(1)] + y_shape
     result_shape = []
     for p, q in zip(x_shape, y_shape):
-        if p != q and p != 1 and q != 1:
-            raise ValueError('can not broadcast two arrays with shape {} and {}'.format(orig_shapes[0], orig_shapes[1]))
-        result_shape.append(builtins.max(p, q))
+        if isinstance(p, Constant) and int(p) == 1:
+            result_shape.append(q)
+        elif isinstance(q, Constant) and int(q) == 1:
+            result_shape.append(p)
+        elif isinstance(p, Constant) and isinstance(q, Constant):
+            if int(p) != int(q):
+                raise ValueError(
+                    'can not broadcast two arrays with shape {} and {}'.format(orig_shapes[0], orig_shapes[1])
+                )
+            result_shape.append(p)
+        else:
+            result_shape.append(p if isinstance(p, Constant) else q)
     return result_shape
 
 
-def broadcast_shapes(shapes: Sequence[Sequence[int]]) -> List[int]:
+def broadcast_shapes(shapes: Sequence[Sequence[Int]]) -> List[Int]:
     assert len(shapes) >= 1
     expanded_shape = list(shapes[0])
     for shape in shapes:
@@ -178,16 +193,14 @@ def broadcast_shapes(shapes: Sequence[Sequence[int]]) -> List[int]:
     return expanded_shape
 
 
-def broadcast_indices(
-    indices: Sequence[Union[Expr, int]], shape: Sequence[int], out_shape: Sequence[int]
-) -> List[Expr]:
+def broadcast_indices(indices: Sequence[Int], shape: Sequence[Int], out_shape: Sequence[Int]) -> List[Expr]:
     if len(indices) != len(out_shape):
         raise ValueError('Number of indices {} does not match the output shape {}'.format(indices, out_shape))
 
     pad_dim = len(out_shape) - len(shape)
     indices = list(indices[pad_dim:])
     for idx, dim in enumerate(shape):
-        if int(dim) == 1:
+        if isinstance(dim, Constant) and int(dim) == 1:
             indices[idx] = 0
     return indices
 

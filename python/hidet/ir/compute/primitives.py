@@ -11,9 +11,9 @@
 # limitations under the License.
 # pylint: disable=import-outside-toplevel
 from __future__ import annotations
-from typing import Union, Sequence, Tuple, Optional, List
+from typing import Union, Sequence, Tuple, Optional
 from hidet.ir.type import DataType, TensorType, tensor_type, data_type
-from hidet.ir.expr import Expr, convert, Var, var
+from hidet.ir.expr import Expr, convert, Var, Constant, var
 from hidet.ir.layout import DataLayout
 from .reduce_operations import ReduceOperation, ReduceType
 
@@ -54,8 +54,19 @@ class TensorNode(ComputeNode):
     def ndim(self) -> int:
         return len(self.type.shape)
 
-    def const_shape(self) -> List[int]:
-        return [int(v) for v in self.type.shape]
+    @property
+    def const_shape(self) -> Tuple[int, ...]:
+        return tuple(int(v) for v in self.type.shape)
+
+    @property
+    def shape(self) -> Tuple[Expr, ...]:
+        return self.type.shape
+
+    def is_concrete(self) -> bool:
+        return all(isinstance(v, Constant) for v in self.shape)
+
+    def is_symbolic(self) -> bool:
+        return not self.is_concrete()
 
 
 class ScalarInput(ScalarNode):
@@ -68,13 +79,6 @@ class TensorInput(TensorNode):
     def __init__(self, name: str, ttype: TensorType):
         super().__init__(name)
         self.ttype: TensorType = ttype
-
-    def const_shape(self) -> List[int]:
-        return [int(v) for v in self.ttype.shape]
-
-    @property
-    def shape(self) -> Tuple[Expr]:
-        return self.ttype.shape
 
 
 class ReduceCompute(ScalarNode):
@@ -100,9 +104,6 @@ class ReduceCompute(ScalarNode):
 
         assert all(isinstance(v, TensorNode) for v in self.input_tensors)
         assert all(isinstance(v, ScalarNode) for v in self.input_scalars)
-
-    def const_shape(self) -> List[int]:
-        return [int(v) for v in self.shape]
 
 
 class ArgReduceCompute(ScalarNode):
@@ -144,16 +145,13 @@ class GridCompute(TensorNode):
         super().__init__(name)
         self.input_tensors: Tuple[TensorNode] = tuple(input_tensors)
         self.input_scalars: Tuple[ScalarNode] = tuple(input_scalars)
-        self.shape: Tuple[Expr] = tuple(shape)
+        self._shape: Tuple[Expr] = tuple(shape)
         self.axes: Tuple[Var] = tuple(axes)
         self.value: Expr = value
         self.layout: Optional[DataLayout] = layout
 
         assert all(isinstance(v, TensorNode) for v in self.input_tensors)
         assert all(isinstance(v, ScalarNode) for v in self.input_scalars)
-
-    def const_shape(self) -> List[int]:
-        return [int(v) for v in self.shape]
 
 
 # class ScalarNode(ComputeNode):

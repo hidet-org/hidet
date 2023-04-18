@@ -94,7 +94,7 @@ class GraphRewriter:
         if same_list(inputs, op.inputs):
             return
         else:
-            updated_outputs = op.clone(inputs)
+            updated_outputs = op.reforward(inputs)
             for original, updated in zip(op.outputs, updated_outputs):
                 self.memo[original] = updated
 
@@ -120,7 +120,7 @@ class GraphCloneRewriter(GraphRewriter):
 
     def visit_Operator(self, op: Operator):
         inputs = [self(x) for x in op.inputs]
-        updated_outputs = op.clone(inputs)
+        updated_outputs = op.reforward(inputs)
         for original, updated in zip(op.outputs, updated_outputs):
             self.memo[original] = updated
 

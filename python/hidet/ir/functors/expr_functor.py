@@ -86,7 +86,7 @@ class ExprFunctor(BaseFunctor):
         elif isinstance(node, Reference):
             return self.visit_Reference(node)
         elif isinstance(node, PlaceholderExpr):
-            return self.visit_AnyExpr(node)
+            return self.visit_PlaceholderExpr(node)
         else:
             return NotImplemented
 
@@ -183,7 +183,7 @@ class ExprFunctor(BaseFunctor):
     def visit_Constant(self, e: Constant):
         raise NotImplementedError()
 
-    def visit_AnyExpr(self, e: PlaceholderExpr):
+    def visit_PlaceholderExpr(self, e: PlaceholderExpr):
         raise NotImplementedError()
 
 
@@ -311,7 +311,7 @@ class ExprVisitor(ExprFunctor, BaseVisitor):
     def visit_Reference(self, e: Reference):
         self.visit(e.expr)
 
-    def visit_AnyExpr(self, e: PlaceholderExpr):
+    def visit_PlaceholderExpr(self, e: PlaceholderExpr):
         pass
 
 
@@ -487,5 +487,5 @@ class ExprRewriter(ExprFunctor, BaseRewriter):
     def visit_Constant(self, e: Constant):
         return e
 
-    def visit_AnyExpr(self, e: PlaceholderExpr):
+    def visit_PlaceholderExpr(self, e: PlaceholderExpr):
         return e

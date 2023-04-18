@@ -22,8 +22,8 @@ from hidet.ir.func import IRModule
 
 class BatchMatmulFp16Task(Task):
     def __init__(self, a: TensorNode, b: TensorNode):
-        batch_size, m_size, k_size = a.const_shape()
-        batch_size, k_size, n_size = b.const_shape()
+        batch_size, m_size, k_size = a.shape
+        batch_size, k_size, n_size = b.shape
         c = compute(
             name='c',
             shape=[batch_size, m_size, n_size],

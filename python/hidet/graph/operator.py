@@ -82,7 +82,12 @@ class Operator:
     def _run(self) -> List[Tensor]:
         from hidet.ir.tools import rewrite, simplify
 
-        if all(t.storage is not None for t in self.inputs):
+        if (
+            all(t.storage is not None for t in self.inputs)
+            # the following condition is an ad-hoc solution for the case when the operator has no tensor input but has
+            # symbolic params like (hidet.ops.arange(symbolic_dim) where symbolic_dim is a Var)
+            and not (len(self.inputs) == 0 and len(self.task.params) > 1)
+        ):
             return self.imperative_run(self.inputs)
         else:
             output_types: List[TensorType] = [output_node.type for output_node in self.task.outputs]
@@ -110,23 +115,23 @@ class Operator:
             outputs = self.outputs
         return outputs[idx]
 
-    def imperative_run(self, inputs: List[Tensor]) -> List[Tensor]:
+    def imperative_run(self, inputs: List[Tensor], remap: Optional[Dict[Var, Constant]] = None) -> List[Tensor]:
         from hidet.ir.tools import rewrite, simplify_to_int
 
-        remap: Dict[Var, Constant] = {}
+        arg_remap: Dict[Union[Var, TensorNode], Union[Constant, Tensor]] = {}
+        if remap is not None:
+            arg_remap.update(remap)
         for ta, tb in zip(self.task.inputs, inputs):
             for d1, d2 in zip(ta.type.shape, tb.shape):
                 if isinstance(d1, Var):
-                    remap[d1] = int32(d2)
+                    arg_remap[d1] = int32(d2)
         output_dtypes: List[DataType] = [output.type.dtype for output in self.task.outputs]
         output_shapes: List[List[int]] = [
-            [simplify_to_int(rewrite(d, remap)) for d in output.type.shape] for output in self.task.outputs
+            [simplify_to_int(rewrite(d, arg_remap)) for d in output.type.shape] for output in self.task.outputs
         ]
         outputs: List[Tensor] = [
             empty(shape=shape, dtype=dtype, device=self.device) for shape, dtype in zip(output_shapes, output_dtypes)
         ]
-
-        arg_remap: Dict[Union[Var, TensorNode], Union[Constant, Tensor]] = remap
         for a, b in zip(self.task.inputs, inputs):
             arg_remap[a] = b
         for a, b in zip(self.task.outputs, outputs):
@@ -148,23 +153,6 @@ class Operator:
         if update_attributes is not None:
             attributes.update(update_attributes)
         return cls(*inputs, **attributes).outputs
-
-    def clone(self, inputs: List[Tensor], update_attributes: Optional[Dict[str, Any]] = None) -> List[Tensor]:
-        return self.reforward(inputs, update_attributes)
-        # # todo: remove this method, use rerun instead
-        # cls = self.__class__
-        # attributes = self.attrs.copy()
-        # if update_attributes is not None:
-        #     attributes.update(update_attributes)
-        #
-        # new_op = cls.__new__(cls)
-        # new_op.name = self.name
-        # new_op.inputs = inputs
-        # new_op.task = self.task
-        # new_op.attrs = attributes
-        # new_op.outputs = new_op._run()
-        # new_op._task_func = None    # pylint: disable=protected-access
-        # return new_op.outputs
 
     def dummy_inputs(self) -> List[Tensor]:
         dummy_inputs = []
