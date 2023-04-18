@@ -769,9 +769,11 @@ class PythonToHidetTranslator(PythonAstFunctor):
             #    ...
             # Will be translated to nested for loops (i.e., ForStmt).
             call = stmt.iter
-            unrolls: list[Union[None, int, bool]] = []
+            unrolls: list[Union[None, int, bool]] = None
             for keyword in call.keywords:
                 if keyword.arg == 'unroll':
+                    assert unrolls is None
+                    unrolls = []
                     value = self.visit(keyword.value)
                     if value is None:
                         unrolls.extend([None] * len(call.args))
@@ -796,6 +798,8 @@ class PythonToHidetTranslator(PythonAstFunctor):
                         raise HidetProgramError(self, call, 'Can not recognize keyword argument.')
                 else:
                     raise HidetProgramError(self, call, 'Can not recognize keyword argument.')
+            if unrolls is None:
+                unrolls = [None] * len(call.args)
             extents = [self.visit(arg) for arg in call.args]
             declare_loop_vars(num=len(extents))
             body = visit_body()
