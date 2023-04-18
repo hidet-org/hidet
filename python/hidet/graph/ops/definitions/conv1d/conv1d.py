@@ -11,12 +11,13 @@
 # limitations under the License.
 from typing import List, Union, Sequence
 from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, TensorNode
-from hidet.graph.ops.definitions.utils import compute, input_like, normalize_stride, reduce
+from hidet.graph.ops.definitions.utils import compute, input_like, normalize_stride, normalize_dilations, reduce
+import pdb
 
 
 class Conv1dTask(Task):
     def __init__(self, data: TensorNode, weight: TensorNode, stride: List[int], dilations: List[int], groups: int):
-        # pylint: disable=too-many-locals
+        # pdb.set_trace()
         n, c, l = data.const_shape()
         oc, wc, k = weight.const_shape()
         s = stride[0]
@@ -52,9 +53,8 @@ class Conv1dTask(Task):
 
 class Conv1dOp(Operator):
     def __init__(self, x: Tensor, w: Tensor, stride: Sequence[int], dilations: Union[int, Sequence[int]], groups: int):
-        stride = normalize_stride(stride)
-        if isinstance(dilations, int):
-            dilations = [dilations]
+        stride = normalize_stride(stride, dim=1)
+        dilations = normalize_dilations(dilations, dim=1)
         super().__init__(
             inputs=[x, w],
             task=Conv1dTask(input_like(x, 'x'), input_like(w, 'w'), stride, dilations, groups),
@@ -65,8 +65,8 @@ class Conv1dOp(Operator):
 def conv1d(
     data: Tensor,
     weight: Tensor,
-    stride: Union[int, Sequence[int]] = 1,
-    dilations: Union[int, Sequence[int]] = 1,
+    stride: Union[int, Sequence[int]] = (1),
+    dilations: Union[int, Sequence[int]] = (1),
     groups: int = 1,
 ) -> Tensor:
     return Conv1dOp(data, weight, stride, dilations, groups).get_output(0)

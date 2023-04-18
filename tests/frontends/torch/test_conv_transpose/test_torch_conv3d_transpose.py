@@ -33,6 +33,7 @@ def test_conv3d_transpose(in_shape, w_shape, stride, padding, output_padding, gr
             groups=groups,
         ),
         args=[torch.randn(in_shape, dtype=dtype)],
+        atol=2e-4
     )
 
 

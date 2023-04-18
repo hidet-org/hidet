@@ -22,7 +22,7 @@ from hidet.testing import check_binary
 def torch_conv2d(data: np.ndarray, weight: np.ndarray, padding: List[int], stride: List[int], dilations: List[int]):
     data_torch, weight_torch = torch.from_numpy(data), torch.from_numpy(weight)
     torch_out = torch.nn.functional.conv2d(
-        data_torch, weight_torch, bias=None, stride=stride, padding=[padding[0], padding[1]], dilation=dilations
+        data_torch, weight_torch, bias=None, stride=stride, padding=padding, dilation=dilations
     )
     return torch_out.numpy()
 
@@ -36,7 +36,7 @@ def torch_conv2d(data: np.ndarray, weight: np.ndarray, padding: List[int], strid
         [1, 3, 32, 32, 12, 1, 1],  # kernel 1,
     ],
 )
-@pytest.mark.parametrize("padding", [[0, 0, 0, 0], [1, 2, 1, 2]])
+@pytest.mark.parametrize("padding", [[0, 0], [1, 2]])
 @pytest.mark.parametrize("stride", [[1, 1], [2, 3]])
 @pytest.mark.parametrize("dilations", [[1, 1], [2, 3]])
 def test_conv2d(hidet_op, n, c, h, w, oc, kx, ky, padding, stride, dilations):

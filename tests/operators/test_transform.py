@@ -12,6 +12,7 @@
 from typing import Optional, List
 import pytest
 import numpy as np
+import torch
 import hidet as hi
 from hidet import ops
 from hidet.utils import prod
@@ -23,6 +24,13 @@ def check_transform(shape, numpy_op, hidet_op, dtype=np.float32, atol=0, rtol=0)
     numpy_result = numpy_op(data)
     hidet_result = hidet_op(hi.asarray(data).cuda()).cpu().numpy()
     np.testing.assert_allclose(actual=hidet_result, desired=numpy_result, atol=atol, rtol=rtol)
+
+
+def check_transform_torch(shape, torch_op, hidet_op, dtype=np.float32, atol=0, rtol=0):
+    data = torch.asarray(np.array(np.random.randn(*shape)).astype(dtype))
+    torch_result = torch_op(data)
+    hidet_result = hidet_op(hi.asarray(data).cuda()).cpu().numpy()
+    np.testing.assert_allclose(actual=hidet_result, desired=torch_result.cpu().numpy(), atol=atol, rtol=rtol)
 
 
 @pytest.mark.parametrize(
@@ -104,6 +112,17 @@ def test_take(shape, indices_shape, axis):
     dim_extent = shape[axis]
     indices = np.random.randint(0, dim_extent - 1, indices_shape).astype(np.int64)
     check_transform(shape, lambda x: np.take(x, indices, axis), lambda x: ops.take(x, hi.asarray(indices).cuda(), axis))
+
+
+@pytest.mark.parametrize("shape, indices_shape, axis", [[[1234, 512], [2100, 512], 0], [[12, 34, 56], [12, 1, 56], 1]])
+def test_gather(shape, indices_shape, axis):
+    dim_extent = shape[axis]
+    indices = np.random.randint(0, dim_extent - 1, indices_shape).astype(np.int64)
+    check_transform_torch(
+        shape,
+        lambda x: torch.gather(x, axis, torch.asarray(indices)),
+        lambda x: ops.gather(x, hi.asarray(indices).cuda(), axis),
+    )
 
 
 @pytest.mark.parametrize(

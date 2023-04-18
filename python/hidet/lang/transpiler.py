@@ -54,7 +54,7 @@ class HidetProgramError(Exception):
     def __init__(
         self,
         translator: PythonAstFunctor,
-        obj: Union[ast.AST, ast.expr, ast.arg, ast.stmt, ast.Attribute, ast.Name],
+        obj: Union[ast.AST, ast.expr, ast.arg, ast.stmt, ast.Attribute, ast.Name, ast.Call],
         msg: str,
     ):
         super().__init__()
@@ -687,6 +687,8 @@ class PythonToHidetTranslator(PythonAstFunctor):
             return expr.value
         elif isinstance(expr.value, str):
             return expr.value
+        elif expr.value is None:
+            return expr.value
         else:
             raise HidetProgramError(self, expr, 'Can not recognize Constant {}'.format(repr(expr.value)))
 
@@ -767,11 +769,42 @@ class PythonToHidetTranslator(PythonAstFunctor):
             #    ...
             # Will be translated to nested for loops (i.e., ForStmt).
             call = stmt.iter
+            unrolls: list[Union[None, int, bool]] = None
+            for keyword in call.keywords:
+                if keyword.arg == 'unroll':
+                    assert unrolls is None
+                    unrolls = []
+                    value = self.visit(keyword.value)
+                    if value is None:
+                        unrolls.extend([None] * len(call.args))
+                    elif isinstance(value, bool):
+                        unrolls.extend([value] * len(call.args))
+                    elif isinstance(value, int):
+                        if len(call.args) == 1:
+                            unrolls.append(value)
+                        else:
+                            raise HidetProgramError(
+                                self, call, 'Can not use int as unroll argument when there are multiple extents.'
+                            )
+                    elif isinstance(value, (list, tuple)):
+                        if len(value) != len(call.args):
+                            raise HidetProgramError(
+                                self, call, 'Unroll argument must have the same length as the number of extents.'
+                            )
+                        unrolls.extend(value)
+                        if not all(isinstance(v, (int, bool, type(None))) for v in unrolls):
+                            raise HidetProgramError(self, call, 'Unroll argument must be int, bool or None.')
+                    else:
+                        raise HidetProgramError(self, call, 'Can not recognize keyword argument.')
+                else:
+                    raise HidetProgramError(self, call, 'Can not recognize keyword argument.')
+            if unrolls is None:
+                unrolls = [None] * len(call.args)
             extents = [self.visit(arg) for arg in call.args]
             declare_loop_vars(num=len(extents))
             body = visit_body()
-            for loop_var, extent in zip(reversed(loop_vars), reversed(extents)):
-                body = ir.ForStmt(loop_var=loop_var, extent=extent, body=body)
+            for loop_var, extent, unroll in zip(reversed(loop_vars), reversed(extents), reversed(unrolls)):
+                body = ir.ForStmt(loop_var=loop_var, extent=extent, body=body, unroll=unroll)
             self.current_scope.append(body)
         elif isinstance(stmt.iter, Call) and isinstance(stmt.iter.func, Attribute) and stmt.iter.func.attr == 'on':
             # case 3:

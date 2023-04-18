@@ -106,6 +106,11 @@ def iadd(x: Tensor, y: Tensor):
     return ops.add(x, y)
 
 
+@register_function(operator.neg)
+def neg(x: Tensor):
+    return -x
+
+
 @register_function(torch.sin)
 def sin(x: Tensor):
     return ops.sin(x)
@@ -272,14 +277,9 @@ def sub(x: Tensor, y: Tensor):
     return x - y
 
 
-@register_function(operator.neg)
-def neg(x: Tensor):
-    return -x
-
-
 @register_function(torch.nn.functional.softmax)
 @register_method(torch.Tensor.softmax)
-def softmax(x: Tensor, dim: int, dtype=None):
+def softmax(x: Tensor, dim: int, _stacklevel: int = 3, dtype=None):
     if dtype is not None:
         raise NotImplementedError("dtype is not None")
     return ops.softmax(x, dim)
@@ -288,6 +288,27 @@ def softmax(x: Tensor, dim: int, dtype=None):
 @register_function(torch.matmul)
 def matmul(x: Tensor, y: Tensor):
     return ops.matmul(x, y)
+
+
+@register_function(torch.zeros)
+def zeros(*size, out=None, dtype=None, layout=None, device=None, pin_memory=False, requires_grad=False):
+    import hidet
+
+    if out is not None:
+        raise NotImplementedError("out is not None")
+    if layout is not None:
+        raise NotImplementedError("layout is not None")
+    if len(size) == 1:
+        if isinstance(size[0], (list, tuple)):
+            size = size[0]
+    shape = [int(v) for v in size]
+    if dtype is None:
+        dtype = torch.get_default_dtype()
+
+    _ = pin_memory
+    _ = requires_grad
+
+    return hidet.zeros(shape, dtype=dtype_from_torch(dtype), device=device_from_torch(device))
 
 
 @register_function(torch.ones)
@@ -375,11 +396,6 @@ def group_norm(
 @register_function(torch.tanh)
 def tanh(x: Tensor):
     return ops.tanh(x)
-
-
-@register_function(torch.nn.functional.hardtanh)
-def hardtanh(x: Tensor, min_val: float, max_val: float):
-    return ops.hardtanh(x, min_val, max_val)
 
 
 @register_function(torch.nn.functional.embedding)
@@ -498,18 +514,6 @@ def pow(base: Tensor, exponent: Union[Number, Tensor]):
     if isinstance(exponent, (int, float, bool)):
         exponent = full_like(base, exponent)
     return ops.pow(base, exponent)
-
-
-@register_function(torch.gather)
-def gather(x: Tensor, index: Tensor, dim: int):
-    if len(x.shape) != len(index.shape):
-        warnings.warn_once("index tensor shape must match input tensor shape.")
-    if len(x.shape) == 3 and (dim > 2 or dim < -3):
-        warnings.warn_once("invalid value for dim, must be between -3 and 2")
-    if len(x.shape) == 2 and (dim > 1 or dim < -2):
-        warnings.warn_once("invalid value for dim, must be between -2 and 1")
-
-    return ops.take(data=x, indices=index, axis=dim)
 
 
 @register_function(torch.full)
@@ -677,8 +681,10 @@ def logsigmoid(x: Tensor):
     return ops.logsigmoid(x)
 
 
-@register_function(torch.nn.functional.mish)
-def mish(x: Tensor, inplace: bool):
-    if inplace:
-        warnings.warn_once('hidet: mish with inplace=True is not supported. Treat as inplace=False.')
-    return ops.multiply(x, ops.tanh(ops.softplus(x, 1.0, 20.0)))
+@register_function(torch.gather)
+def gather(x: Tensor, dim: int, index: Tensor, *, sparse_grad=False, out=None):
+    if sparse_grad:
+        warnings.warn_once('hidet: gather with sparse_grad=True is not supported. Treat as sparse_grad=False.')
+    if out is not None:
+        raise NotImplementedError('hidet: gather with out=... is not supported')
+    return ops.gather(x, index, axis=dim)
