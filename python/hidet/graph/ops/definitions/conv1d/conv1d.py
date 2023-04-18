@@ -16,7 +16,7 @@ import pdb
 
 
 class Conv1dTask(Task):
-    def __init__(self, data: TensorNode, weight: TensorNode, stride: List[int], dilations: List[int], groups: int):
+    def __init__(self, data: TensorNode, weight: TensorNode, stride: List[int], padding: List[int], dilations: List[int], groups: int):
         # pdb.set_trace()
         n, c, l = data.const_shape()
         oc, wc, k = weight.const_shape()
@@ -53,7 +53,7 @@ class Conv1dTask(Task):
 
 
 class Conv1dOp(Operator):
-    def __init__(self, x: Tensor, w: Tensor, stride: Sequence[int], dilations: Union[int, Sequence[int]], groups: int):
+    def __init__(self, x: Tensor, w: Tensor, stride: Sequence[int], padding: Sequence[int], dilations: Union[int, Sequence[int]], groups: int):
         stride = normalize_stride(stride, dim=1)
         dilations = normalize_dilations(dilations, dim=1)
         super().__init__(
@@ -67,6 +67,7 @@ def conv1d(
     data: Tensor,
     weight: Tensor,
     stride: Union[int, Sequence[int]] = (1),
+    padding: Union[int, Sequence[int]] = (0),
     dilations: Union[int, Sequence[int]] = (1),
     groups: int = 1,
 ) -> Tensor:
