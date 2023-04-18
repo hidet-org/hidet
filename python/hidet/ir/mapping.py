@@ -96,7 +96,7 @@ class TaskMapping(Node):
 
     @staticmethod
     def full_layout(task_shape: Sequence[int]):
-        return RepeatTaskMapping(task_shape, ranks=list(range(len(task_shape))))
+        return row_repeat(*task_shape)
 
     def projection(self, dim2value: Dict[int, Int]) -> TaskMapping:
         return ProjectedTaskMapping(base=self, dim2value=dim2value)
@@ -110,12 +110,13 @@ class TaskMapping(Node):
 
 
 class RepeatTaskMapping(TaskMapping):
-    def __init__(self, task_shape: Sequence[Int], ranks: Optional[Sequence[int]]):
+    def __init__(self, task_shape: Sequence[Int], ranks: Sequence[int], unroll: Sequence[Union[bool, int]]):
         from hidet.ir.tools import simplify
 
         super().__init__(num_workers=1, task_shape=tuple(task_shape), worker2task=self._worker2task)
         self.ranks: List[int] = list(ranks)
         self.strides: List[Int] = [simplify(v) for v in strides_from_ranks(task_shape, ranks)]
+        self.unroll: List[Union[bool, int]] = list(unroll)
 
     # noinspection PyUnusedLocal
     def _worker2task(self, w: Int) -> List[Tuple[Int]]:  # pylint: disable=unused-argument
@@ -278,21 +279,37 @@ def col_spatial(*task_shape: Int):
     return spatial_map(task_shape, ranks=list(reversed(range(len(task_shape)))))
 
 
-def repeat_map(task_shape: Sequence[Int], ranks: Optional[Sequence[int]] = None):
+def repeat_map(task_shape: Sequence[Int], ranks: Optional[Sequence[int]] = None, unroll=None):
     from hidet.ir.tools import simplify
 
     task_shape = [simplify(v) for v in task_shape]
     if ranks is None:
         ranks = list(range(len(task_shape)))
-    return RepeatTaskMapping(task_shape, ranks)
+    if unroll is None:
+        unroll = [None] * len(task_shape)
+    elif isinstance(unroll, bool):
+        unroll = [unroll] * len(task_shape)
+    elif isinstance(unroll, int):
+        if len(task_shape) > 1:
+            raise ValueError('unroll cannot be a int when task_shape has more than one dimension')
+        unroll = [unroll]
+    elif isinstance(unroll, (list, tuple)):
+        if len(unroll) != len(task_shape):
+            raise ValueError('unroll must have the same length as task_shape')
+        else:
+            unroll = list(unroll)
+    else:
+        raise ValueError('unroll must be a bool, None, or list/tuple of bool/int/None')
+
+    return RepeatTaskMapping(task_shape, ranks, unroll=unroll)
 
 
-def row_repeat(*task_shape: Int):
-    return repeat_map(task_shape)
+def row_repeat(*task_shape: Int, unroll=None):
+    return repeat_map(task_shape, unroll=unroll)
 
 
-def col_repeat(*task_shape: Int):
-    return repeat_map(task_shape, ranks=list(reversed(range(len(task_shape)))))
+def col_repeat(*task_shape: Int, unroll=None):
+    return repeat_map(task_shape, ranks=list(reversed(range(len(task_shape)))), unroll=unroll)
 
 
 def auto_map(

@@ -65,7 +65,26 @@ def as_tensor_pointer(
     return cast(expr, tensor_pointer(dtype, shape, layout))
 
 
-def grid(*dim_extents):
+def grid(*dim_extents, unroll=None):
+    """
+    Iterate over the grid.
+
+    Parameters
+    ----------
+    dim_extents: Sequence[Expr or int]
+        The length of each dimension.
+
+    unroll: Sequence[bool or int] or int or bool, optional
+        Whether to unroll the loop for each dimension.
+        If None, the loop will not be unrolled.
+        If a bool, all dimensions will be unrolled if True, or none will be unrolled if False.
+        If a sequence of bool, each dimension will be unrolled if the corresponding element is True.
+
+    Returns
+    -------
+    indices: Sequence[Tuple[Expr, ...]]
+        The sequence of indices in the grid to be iterated.
+    """
     raise ValueError('Please call this function within the @hidet.script decorated function.')
 
 
