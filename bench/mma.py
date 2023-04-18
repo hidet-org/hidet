@@ -152,7 +152,7 @@ class MatMulTask(Task):
                     if offset_m + i < m_size and offset_k + k < k_size:
                         regs_a_ldg[i, k] = gmem_a.read([i,k], protected=True)
                     else:
-                        regs_a_ldg[i, k] = 0.0
+                        regs_a_ldg[i, k] = a_zero
 
             @hidet.script
             def copy_a_r2s(
@@ -189,7 +189,7 @@ class MatMulTask(Task):
                     if offset_n + j < n_size and offset_k + k < k_size:
                         regs_b_ldg[k, j] = gmem_b.read([k, j], protected=True)
                     else:
-                        regs_b_ldg[k, j] = 0.0
+                        regs_b_ldg[k, j] = b_zero
             
 
             @hidet.script
@@ -288,7 +288,7 @@ class MatMulTask(Task):
                                 layout=regs_b_ldg_layout)
                 # Initialize regs C
                 for i, j, p in grid(mma_count_m, mma_count_n, mma_config.c_elements):
-                    regs_c[i, j, p] = 0.0
+                    regs_c[i, j, p] = c_zero
 
                 offset_m, offset_n = blockIdx.x // n_tiles * \
                     block_m, blockIdx.x % n_tiles * block_n
@@ -338,10 +338,17 @@ hidet.option.search_space(0)
 hidet.option.save_lower_ir(True)
 hidet.option.cache_dir('.')
 
-a = hidet.randn([1, 4096, 4096], dtype='float32', device='cuda')
-b = hidet.randn([1, 4096, 4096], dtype='float32', device='cuda')
+# a = hidet.randn([1, 4096, 4096], dtype='float32', device='cuda')
+# b = hidet.randn([1, 4096, 4096], dtype='float32', device='cuda')
+a = hidet.randn([1,16,16], dtype='float32', device='cuda')
+b = hidet.randn([1,16,16], dtype='float32', device='cuda')
 
 numpy_c = np.matmul(a.cpu().numpy(), b.cpu().numpy())
+c = BatchMatmulOp(a, b, mma='mma').get_output(0)
+hidet.cuda.synchronize()
+print("------------------------------------")
+c = MatMulOp(a, b).get_output(0)
+exit()
 
 print("Ref: ", BatchMatmulOp(a, b, mma='mma').latency())
 c = BatchMatmulOp(a, b, mma='mma').get_output(0)
