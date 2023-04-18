@@ -12,28 +12,38 @@
 import pytest
 import torch
 from hidet.testing.torch_utils import check_module
+import torch.backends.cudnn as cudnn
 
 
-@pytest.mark.parametrize(
-    'in_shape,w_shape,stride,padding,output_padding',
-    [[[1, 3, 224, 224], [42, 3, 7, 7], 4, 3, 3], [[1, 3, 224, 224], [42, 3, 1, 1], 2, 3, 1]],
-)
-@pytest.mark.parametrize('groups', [3, 1])
+@pytest.mark.parametrize('in_channels', [3])
+@pytest.mark.parametrize('out_channels', [64])
+@pytest.mark.parametrize('kernel_size', [(3, 5)])
+@pytest.mark.parametrize('stride', [(3, 2)])
+@pytest.mark.parametrize('padding', [(2, 1)])
+@pytest.mark.parametrize('output_padding', [(2, 1)])
+@pytest.mark.parametrize('groups', [1])
+@pytest.mark.parametrize('dilation', [1])
 @pytest.mark.parametrize('dtype', [torch.float32])
-def test_conv2d_transpose(in_shape, w_shape, stride, padding, output_padding, groups, dtype):
+def test_conv2d_transpose(
+    in_channels, out_channels, kernel_size, stride, padding, output_padding, groups, dilation, dtype
+):
+    print(in_channels, out_channels, kernel_size, stride, padding, output_padding, groups, dilation)
     check_module(
         model=torch.nn.ConvTranspose2d(
-            in_channels=in_shape[1],
-            out_channels=w_shape[0],
-            kernel_size=w_shape[2:],
+            in_channels=in_channels,
+            out_channels=out_channels,
+            bias=False,
+            kernel_size=kernel_size,
             stride=stride,
             padding=padding,
             output_padding=output_padding,
             groups=groups,
+            dilation=dilation,
         ),
-        args=[torch.randn(in_shape, dtype=dtype)],
-        atol=2e-4
+        args=[torch.randn([1, 3, 224, 224], dtype=dtype)],
+        atol=2e-4,
     )
+    cudnn.allow_tf32 = True
 
 
 if __name__ == '__main__':

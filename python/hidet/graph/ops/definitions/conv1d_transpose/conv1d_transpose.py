@@ -21,28 +21,29 @@ class Conv1dTransposeTask(Task):
         self,
         data: TensorNode,
         weight: TensorNode,
-        stride: Tuple[int],
-        padding: Tuple[int],
-        groups: int,
-        output_padding: Tuple[int],
+        stride: Optional[int],
+        padding: Optional[int],
+        groups: Optional[int],
+        output_padding: Optional[int],
+        dilation: Optional[int],
     ):
         num_channels, out_channels, length_in = data.const_shape()
         out_channels, wc, kernel_size = weight.const_shape()
-        channels_in = wc * groups
-        sx = stride[0]
-        px = padding[0]
-        l = (length_in - 1) * sx - px - px + kernel_size + output_padding[0]
+        if (type(padding) and type(stride) and type(dilation) and type(groups)) is not int:
+            px, sx, dil, g = padding[0], stride[0], dilation[0], groups[0]
+        else:
+            px, sx, dil, g = padding, stride, dilation, groups
+        channels_in = wc * g
+        l = (length_in - 1) * sx - 2 * px + dil * (kernel_size - 1) + output_padding + 1
 
-        if output_padding >= stride or output_padding[0] >= stride[0]:
+        if output_padding >= sx:
             raise ValueError(
                 'Convd1dTranspose expects: output_padding < stride, \n'
-                f'but got output_padding, stride: {output_padding}, {stride}'
+                f'but got output_padding, stride: {output_padding}, {sx}'
             )
-        if any(p < 0 for p in padding):
-            raise ValueError('Negative padding is not supported.')
 
         # output channels per group
-        og = out_channels // groups
+        og = out_channels // g
 
         # output
         output = compute(
@@ -66,24 +67,41 @@ class Conv1dTransposeTask(Task):
 
 class Conv1dTransposeOp(Operator):
     def __init__(
-        self, x: Tensor, w: Tensor, stride: Tuple[int], padding: Tuple[int], groups: int, output_padding: Tuple[int]
+        self,
+        x: Tensor,
+        w: Tensor,
+        stride: Optional[int],
+        padding: Optional[int],
+        groups: Optional[int],
+        output_padding: Optional[int],
+        dilation: Optional[int],
     ):
         super().__init__(
             inputs=[x, w],
-            task=Conv1dTransposeTask(input_like(x, 'x'), input_like(w, 'w'), stride, padding, groups, output_padding),
-            attributes={'stride': stride, 'padding': padding, 'groups': groups, 'output_padding': output_padding},
+            task=Conv1dTransposeTask(
+                input_like(x, 'x'), input_like(w, 'w'), stride, padding, groups, output_padding, dilation
+            ),
+            attributes={
+                'stride': stride,
+                'padding': padding,
+                'groups': groups,
+                'output_padding': output_padding,
+                'dilation': dilation,
+            },
         )
 
 
 def conv1d_transpose(
     data: Tensor,
     weight: Tensor,
-    stride: Optional[Union[int, Sequence[int]]] = 1,
-    padding: Optional[Union[int, Sequence[int]]] = 0,
+    stride: Optional[int] = 1,
+    padding: Optional[int] = 0,
     groups: Optional[int] = 1,
-    output_padding: Optional[Union[int, Sequence[int]]] = 0,
+    output_padding: Optional[int] = 0,
+    dilation: Optional[int] = 1,
 ) -> Tensor:
-    sx = normalize_stride(stride)
-    px = normalize_padding(padding)
-    opx = normalize_stride(output_padding)  # normalize output padding same as stride
-    return Conv1dTransposeOp(data, weight, (sx), (px), groups, (opx)).get_output(0)
+    sx = stride
+    px = padding
+    opx = output_padding
+    dil = dilation
+    return Conv1dTransposeOp(data, weight, sx, px, groups, opx, dil).get_output(0)

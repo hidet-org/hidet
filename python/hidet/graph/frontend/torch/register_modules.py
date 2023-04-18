@@ -38,11 +38,11 @@ class HidetConvTranspose1d(HidetModule):
         return regs.conv1d_transpose(
             x=x,
             weight=self.param('weight'),
+            bias=self.param('bias', optional=True),
             stride=self.mod.stride,
             padding=self.mod.padding,
             output_padding=self.mod.output_padding,
             groups=self.mod.groups,
-            bias=self.param('bias', optional=True),
             dilation=self.mod.dilation,
         )
 
@@ -66,14 +66,15 @@ class HidetConv2d(HidetModule):
 class HidetConvTranspose2d(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, torch.nn.ConvTranspose2d)
+        print("groups mod", self.mod.groups)
         return regs.conv2d_transpose(
             x=x,
             weight=self.param('weight'),
+            bias=self.param('bias', optional=True),
             stride=self.mod.stride,
             padding=self.mod.padding,
             output_padding=self.mod.output_padding,
             groups=self.mod.groups,
-            bias=self.param('bias', optional=True),
             dilation=self.mod.dilation,
         )
 
@@ -100,11 +101,11 @@ class HidetConvTranspose3d(HidetModule):
         return regs.conv3d_transpose(
             x=x,
             weight=self.param('weight'),
+            bias=self.param('bias', optional=True),
             stride=self.mod.stride,
             padding=self.mod.padding,
             output_padding=self.mod.output_padding,
             groups=self.mod.groups,
-            bias=self.param('bias', optional=True),
             dilation=self.mod.dilation,
         )
 
@@ -224,6 +225,13 @@ class HidetTanh(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, torch.nn.Tanh)
         return regs.tanh(x)
+
+
+@register_module(torch.nn.Hardtanh)
+class HidetHardtanh(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.Hardtanh)
+        return regs.hardtanh(x, self.mod.min_val, self.mod.max_val)
 
 
 @register_module(torch.nn.Embedding)

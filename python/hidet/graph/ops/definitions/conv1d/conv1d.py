@@ -20,9 +20,10 @@ class Conv1dTask(Task):
         # pdb.set_trace()
         n, c, l = data.const_shape()
         oc, wc, k = weight.const_shape()
-        s = stride[0]
-        dil = dilations[0]
-        len_in = (l - dil * (k - 1) - 1) // s + 1
+        s = stride
+        p = padding
+        dil = dilations
+        len_in = (l + 2 * p - dil * (k - 1) - 1) // s + 1
         if c % groups != 0 or oc % groups != 0:
             raise ValueError(
                 'Conv1d expects: in_channels % groups == 0 and out_channels % groups == 0, \n'
@@ -57,8 +58,8 @@ class Conv1dOp(Operator):
         dilations = normalize_dilations(dilations, dim=1)
         super().__init__(
             inputs=[x, w],
-            task=Conv1dTask(input_like(x, 'x'), input_like(w, 'w'), stride, dilations, groups),
-            attributes={'stride': stride, 'groups': groups, 'dilations': dilations},
+            task=Conv1dTask(input_like(x, 'x'), input_like(w, 'w'), padding, stride, dilations, groups),
+            attributes={'padding': padding, 'stride': stride, 'groups': groups, 'dilations': dilations},
         )
 
 
@@ -69,4 +70,4 @@ def conv1d(
     dilations: Union[int, Sequence[int]] = (1),
     groups: int = 1,
 ) -> Tensor:
-    return Conv1dOp(data, weight, stride, dilations, groups).get_output(0)
+    return Conv1dOp(data, weight, padding, stride, dilations, groups).get_output(0)

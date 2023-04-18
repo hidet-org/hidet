@@ -33,6 +33,7 @@ class Conv2dTransposeGemmImageTask(Task):
         px0, py0, px1, py1 = padding
         h = (p - 1) * sx - px0 - px1 + kx + output_padding[0]
         w = (q - 1) * sy - py0 - py1 + ky + output_padding[1]
+        print("groups", groups)
         og = oc // groups  # output channels in each group
 
         def fcompute(b, i, k):
@@ -123,7 +124,7 @@ def conv2d_transpose_gemm(
     gemm_y = matmul(gemm_x, gemm_w)
 
     p, q = data.shape[2:]
-    h = (p - 1) * sx + -px0 - px1 + kx + output_padding[0]
-    w = (q - 1) * sy + -py0 - py1 + ky + output_padding[1]
+    h = (p - 1) * sx - px0 - px1 + kx + output_padding[0]
+    w = (q - 1) * sy - py0 - py1 + ky + output_padding[1]
     y = conv2d_transpose_gemm_inverse(gemm_y, h, w)
     return y

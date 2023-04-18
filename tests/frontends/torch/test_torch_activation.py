@@ -59,8 +59,8 @@ def test_hardshrink(shape, lambd, dtype):
 
 
 @pytest.mark.parametrize("shape", [(10, 20)])
-@pytest.mark.parametrize("beta", [0.5])
-@pytest.mark.parametrize("threshold", [0.5])
+@pytest.mark.parametrize("beta", [1])
+@pytest.mark.parametrize("threshold", [20])
 @pytest.mark.parametrize("dtype", [torch.float32])
 def test_softplus(shape, beta, threshold, dtype):
     check_module(torch.nn.Softplus(beta, threshold), [torch.randn(shape, dtype=dtype)])

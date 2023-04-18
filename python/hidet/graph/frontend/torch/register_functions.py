@@ -322,6 +322,11 @@ def sub(x: Tensor, y: Tensor):
     return x - y
 
 
+@register_function(operator.neg)
+def neg(x: Tensor):
+    return -x
+
+
 @register_function(torch.nn.functional.softmax)
 @register_method(torch.Tensor.softmax)
 def softmax(x: Tensor, dim: int, _stacklevel: int = 3, dtype=None):
@@ -441,6 +446,11 @@ def group_norm(
 @register_function(torch.tanh)
 def tanh(x: Tensor):
     return ops.tanh(x)
+
+
+@register_function(torch.nn.functional.hardtanh)
+def hardtanh(x: Tensor, min_val: float, max_val: float):
+    return ops.hardtanh(x, min_val, max_val)
 
 
 @register_function(torch.nn.functional.embedding)
