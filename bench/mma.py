@@ -5,7 +5,7 @@ from hidet.ir import IRModule
 from hidet.ir.compute import ReduceOperation, reduce
 from hidet.ir.layout import DataLayout, StridesLayout, data_layout
 from hidet.ir.mapping import TaskMapping, auto_map
-from hidet.ir.type import data_type, TensorType, TensorPointerType
+from hidet.ir.type import data_type, TensorType, TensorPointerType, DataType
 from hidet.ir.primitives.cuda.mma import MmaConfig, mma_sync
 from hidet.graph.ops.definitions.matmul.batch_matmul import BatchMatmulOp
 from hidet.lang import f16, f32, i32, spatial, repeat, tensor, attr, grid, printf, cast, tensor_pointer
@@ -53,7 +53,7 @@ class MatMulTask(Task):
     @tune.space(2, 'warp_m', [16, 32, 64])
     @tune.space(2, 'warp_n', [8, 16, 32, 64])
     @tune.space(2, 'warp_k', [8, 16, 32])
-    @tune.space(2, 'mma_config', [MmaConfig.m16n8k8_tf32_f32()])
+    @tune.space(2, 'mma_config', [MmaConfig.m16n8k8_bf16_f32(), MmaConfig.m16n8k16_bf16_f32(), MmaConfig.m16n8k4_tf32_f32(), MmaConfig.m16n8k8_tf32_f32()])
     @tune.space(1, 'block_m', [64, 128, 256])
     @tune.space(1, 'block_n', [64, 128])
     @tune.space(1, 'block_k', [8, 16, 32])
@@ -71,11 +71,30 @@ class MatMulTask(Task):
             warp_k=16,
             mma_config=MmaConfig.m16n8k8_tf32_f32(),
             ) -> IRModule:
+
+        def resolve_mma_type(a_dtype: DataType, b_dtype: DataType, c_dtype: DataType):
+            dtype_rank = {'float16': 0, 'bfloat16': 1, 'tfloat32': 2, 'float32': 4}
+            ab_rank = max(dtype_rank[a_dtype.name], dtype_rank[b_dtype.name])
+            if ab_rank <= dtype_rank['float16']:
+                if c_dtype == 'float32':
+                    return 'mma_f16_f32'
+                else:
+                    return 'mma_f16_f16'
+            elif ab_rank <= dtype_rank['bfloat16']:
+                return 'mma_bf16_f32'
+            else:
+                return 'mma_tf32_f32'
+
         task = self
         local_layout = DataLayout.local
         row_major = DataLayout.row_major
         col_major = DataLayout.column_major
 
+        input_a, input_b, input_c = task.inputs[0], task.inputs[1], task.outputs[0]
+        input_a_dtype, input_b_dtype, input_c_dtype = [t.type.dtype for t in [input_a, input_b, input_c]]
+        mma_type = resolve_mma_type(input_a_dtype, input_b_dtype, input_c_dtype)
+        head, input_dtype, output_dtype = mma_type.split('_')  # pylint: disable=unused-variable
+        tune.check(mma_config.input_dtype == input_dtype and mma_config.output_dtype == output_dtype)
 
         block_shape = (block_m, block_n, block_k)
         warp_shape = (warp_m, warp_n, warp_k)
@@ -255,7 +274,7 @@ class MatMulTask(Task):
                 buffer_idx: i32
             ):
                 for mma_i, mma_j in grid(mma_count_m, mma_count_n):
-                    mma_sync(mma_config, ~regs_a[buffer_idx, mma_i, 0], ~regs_b[buffer_idx, mma_j, 0], ~regs_c[mma_j, mma_j, 0])
+                    mma_sync(mma_config, ~regs_a[buffer_idx, mma_i, 0], ~regs_b[buffer_idx, mma_j, 0], ~regs_c[mma_i, mma_j, 0])
 
             @hidet.script
             def mm_kernel(
@@ -334,21 +353,14 @@ class MatMulOp(Operator):
             x, 'x'), input_like(y, 'y')), attributes={})
 
 
-hidet.option.search_space(0)
+hidet.option.search_space(2)
 hidet.option.save_lower_ir(True)
 hidet.option.cache_dir('.')
 
-# a = hidet.randn([1, 4096, 4096], dtype='float32', device='cuda')
-# b = hidet.randn([1, 4096, 4096], dtype='float32', device='cuda')
-a = hidet.randn([1,16,16], dtype='float32', device='cuda')
-b = hidet.randn([1,16,16], dtype='float32', device='cuda')
+a = hidet.randn([1, 4096, 4096], dtype='float32', device='cuda')
+b = hidet.randn([1, 4096, 4096], dtype='float32', device='cuda')
 
 numpy_c = np.matmul(a.cpu().numpy(), b.cpu().numpy())
-c = BatchMatmulOp(a, b, mma='mma').get_output(0)
-hidet.cuda.synchronize()
-print("------------------------------------")
-c = MatMulOp(a, b).get_output(0)
-exit()
 
 print("Ref: ", BatchMatmulOp(a, b, mma='mma').latency())
 c = BatchMatmulOp(a, b, mma='mma').get_output(0)
@@ -357,5 +369,5 @@ np.testing.assert_allclose(actual=c.cpu().numpy(),
 print("Mine: ", MatMulOp(a, b).latency())
 c = MatMulOp(a, b).get_output(0)
 np.testing.assert_allclose(actual=c.cpu().numpy(),
-                           desired=numpy_c, atol=1e-3, rtol=1e-3)
+                           desired=numpy_c, atol=1e-1, rtol=1e-1)
 
