@@ -12,12 +12,10 @@
 from typing import List, Union, Sequence
 from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, TensorNode
 from hidet.graph.ops.definitions.utils import compute, input_like, normalize_stride, normalize_dilations, reduce
-import pdb
 
 
 class Conv1dTask(Task):
     def __init__(self, data: TensorNode, weight: TensorNode, stride: List[int], padding: List[int], dilations: List[int], groups: int):
-        # pdb.set_trace()
         n, c, l = data.const_shape()
         oc, wc, k = weight.const_shape()
         s = stride

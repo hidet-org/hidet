@@ -25,18 +25,16 @@ class Conv2dTransposeTask(Task):
         padding: Optional[Tuple[int, int]],
         groups: int,
         output_padding: Optional[Tuple[int, int]],
-        dilation: int,
     ):
         n, oc, p, q = data.const_shape()
         oc, wc, kx, ky = weight.const_shape()
-        dil = dilation
         g = groups
         c = wc * g
         sx, sy = stride
         px, py = padding
         opx, opy = output_padding
-        h = (p - 1) * sx - 2 * px + dil * (kx - 1) + opx + 1
-        w = (q - 1) * sy - 2 * py + dil * (ky - 1) + opy + 1
+        h = (p - 1) * sx - 2 * px + kx + opx
+        w = (q - 1) * sy - 2 * py + ky + opy
 
         if opx >= sx or opy >= sy:
             raise ValueError(
@@ -83,7 +81,6 @@ class Conv2dTransposeOp(Operator):
         padding: Optional[Tuple[int, int]],
         groups: int,
         output_padding: Optional[Tuple[int, int]],
-        dilation: int,
     ):
         super().__init__(
             inputs=[x, w],
@@ -97,8 +94,6 @@ class Conv2dTransposeOp(Operator):
                 'output_padding': output_padding,
                 'dilation': dilation,
             },
-            attributes={'stride': stride, 'padding': padding, 'groups': groups, 'output_padding': output_padding},
-            task=Conv2dTransposeTask(input_like(x, 'x'), input_like(w, 'w'), stride, padding, groups, output_padding),
         )
 
 
@@ -109,10 +104,8 @@ def conv2d_transpose(
     padding: Optional[Tuple[int, int]] = (0, 0),
     groups: Optional[int] = 1,
     output_padding: Optional[Tuple[int, int]] = (0, 0),
-    dilaton: Optional[int] = 1,
 ) -> Tensor:
     sx, sy = stride
     px, py = padding
     opx, opy = output_padding
-    dil = dilaton
-    return Conv2dTransposeOp(data, weight, (sx, sy), (px, py), groups, (opx, opy), dil).get_output(0)
+    return Conv2dTransposeOp(data, weight, (sx, sy), (px, py), groups, (opx, opy)).get_output(0)
