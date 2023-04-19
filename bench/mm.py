@@ -11,7 +11,7 @@ from hidet.lang import f16, f32, i32, spatial, repeat, tensor, attr, grid, print
 from hidet.lang.mapping import repeat, spatial
 from hidet.lang.cuda import blockIdx, threadIdx, syncthreads
 from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, TensorNode, InverseMap, compute, input_like, broadcast_shape, broadcast_shapes, broadcast_indices
-from hidet.graph.ops.schedules import tune
+from hidet.graph.ops.definitions.utils import tune
 
 
 
@@ -356,7 +356,7 @@ class MatMulTask(Task):
                 for k in range(k_tiles - 1):
                     offset_k = k * block_k + first_k_tile_size
                     # pragma unroll
-                    for k_frag in range(block_warps_k):
+                    for k_frag in grid(block_warps_k, unroll=True):
                         if k_frag == block_warps_k - 1:
                             # Store next AB tile from local into shared
                             copy_a_r2s(regs_a_ldg, smem_a, (k + 1) % 2)
@@ -380,7 +380,7 @@ class MatMulTask(Task):
                         mma(regs_a, regs_b, regs_c, k_frag % 2)
                 # Perform MMA for last k-tile
                 last_k = k_tiles - 1
-                for k_frag in range(block_warps_k):
+                for k_frag in grid(block_warps_k, unroll=True):
                     if k_frag < block_warps_k - 1:
                         # Load next k-fragment from shared to local
                         copy_a_s2r(smem_a, regs_a, (last_k) % 2,(k_frag + 1) % 2, k_frag + 1)
