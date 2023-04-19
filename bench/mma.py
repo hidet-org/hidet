@@ -11,7 +11,7 @@ from hidet.graph.ops.definitions.matmul.batch_matmul import BatchMatmulOp
 from hidet.lang import f16, f32, i32, spatial, repeat, tensor, attr, grid, printf, cast, tensor_pointer
 from hidet.lang.cuda import blockIdx, threadIdx, syncthreads
 from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, TensorNode, InverseMap, compute, input_like, broadcast_shape, broadcast_shapes, broadcast_indices
-from hidet.graph.ops.schedules import tune
+from hidet.graph.ops.definitions.utils import tune
 from hidet.graph.ops.schedules.cuda.common import get_transfer_task_map
 
 
@@ -322,11 +322,11 @@ class MatMulTask(Task):
                 copy_a_s2r(~smem_a[0, 0, 0], regs_a, 0)
                 copy_b_s2r(~smem_b[0, 0, 0], regs_b, 0)
 
-                for k0 in range(k_tiles):
+                for k0 in grid(k_tiles, unroll=True):
                     ko = 0
                     if mma_count_k % 2 != 0 and k0 % 2 != 0:
                         ko = 1
-                    for k1 in range(mma_count_k):
+                    for k1 in grid(mma_count_k, unroll=True):
                         if k1 == 0:
                             offset_k = (k0 + 1) * block_k
                             copy_a_g2r(a, regs_a_ldg, offset_m, offset_k)
@@ -359,6 +359,9 @@ hidet.option.cache_dir('.')
 
 a = hidet.randn([1, 4096, 4096], dtype='float32', device='cuda')
 b = hidet.randn([1, 4096, 4096], dtype='float32', device='cuda')
+# c = MatMulOp(a, b).get_output(0)
+# c = BatchMatmulOp(a, b, mma='mma').get_output(0)
+# exit()
 
 numpy_c = np.matmul(a.cpu().numpy(), b.cpu().numpy())
 
