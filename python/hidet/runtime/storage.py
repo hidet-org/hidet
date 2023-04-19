@@ -332,7 +332,29 @@ class MemoryPoolContext:
         _device2pool[self.device] = self.prev_memory_pool
 
 
-_device2pool: Dict[Device, MemoryPool] = {}
+class DeviceMemoryPools:
+    def __init__(self):
+        self.device2pool: Dict[Device, MemoryPool] = {}
+
+    def __getitem__(self, device: Device) -> MemoryPool:
+        if device not in self.device2pool:
+            if device.is_cuda():
+                self.device2pool[device] = MemoryPool(
+                    CudaMemoryAPI(device), block_size=4096, max_reserve_size=4 * 1024**3
+                )
+            elif device.is_cpu():
+                self.device2pool[device] = MemoryPool(
+                    CpuMemoryAPI(device), block_size=4096, max_reserve_size=512 * 1024**2
+                )
+            else:
+                raise ValueError('Unsupported device: {}'.format(device))
+        return self.device2pool[device]
+
+    def __setitem__(self, device: Device, pool: MemoryPool):
+        self.device2pool[device] = pool
+
+
+_device2pool: DeviceMemoryPools = DeviceMemoryPools()
 
 
 # @initialize()
@@ -364,13 +386,6 @@ def current_memory_pool(device: Union[Device, str]) -> MemoryPool:
         Current memory pool for the given device.
     """
     device = instantiate_device(device)
-    if device not in _device2pool:
-        if device.is_cuda():
-            _device2pool[device] = MemoryPool(CudaMemoryAPI(device), block_size=4096, max_reserve_size=4 * 1024**3)
-        elif device.is_cpu():
-            _device2pool[device] = MemoryPool(CpuMemoryAPI(device), block_size=4096, max_reserve_size=512 * 1024**2)
-        else:
-            raise ValueError('Unsupported device: {}'.format(device))
     return _device2pool[device]
 
 

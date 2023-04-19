@@ -10,7 +10,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List, Dict, Sequence, Union, Optional
-import itertools
 from hidet.ir import Var, ForTaskStmt, Stmt, ForStmt, Expr, SeqStmt
 from hidet.ir.expr import var
 from hidet.ir.mapping import TaskMapping, SpatialTaskMapping, RepeatTaskMapping, ComposedTaskMapping
@@ -69,27 +68,16 @@ class TaskMappingExpander:
     def visit_Repeat(self, mapping: RepeatTaskMapping, worker: Expr) -> List[TaskIndex]:
         # pylint: disable=unused-argument
         # worker is unused because there is only a single worker with index 0
-        unroll = False
-        if unroll:
-
-            def global_index(task: Sequence[int], strides: Sequence[int]) -> int:
-                return sum(a * b for a, b in zip(task, strides))
-
-            strides = strides_from_ranks(shape=mapping.task_shape, ranks=mapping.ranks)
-            ranges = [range(s) for s in mapping.task_shape]
-            tasks = list(tuple(task) for task in itertools.product(*ranges))
-            tasks = sorted(tasks, key=lambda task: global_index(task, strides))
-            return [list(task) for task in tasks]
-        else:
-            num_loops = len(mapping.task_shape)
-            task: List[Optional[Var]] = [None for _ in range(num_loops)]
-            for i in range(num_loops):
-                dim = mapping.ranks.index(i)
-                extent = simplify(mapping.task_shape[dim])
-                loop_var = var('i')
-                self.loop_nests.append(ForStmt(loop_var=loop_var, extent=extent))
-                task[dim] = loop_var
-            return [task]
+        num_loops = len(mapping.task_shape)
+        task: List[Optional[Var]] = [None for _ in range(num_loops)]
+        for i in range(num_loops):
+            dim = mapping.ranks.index(i)
+            extent = simplify(mapping.task_shape[dim])
+            unroll = mapping.unroll[dim]
+            loop_var = var('i')
+            self.loop_nests.append(ForStmt(loop_var=loop_var, extent=extent, unroll=unroll))
+            task[dim] = loop_var
+        return [task]
 
     def visit_Composed(self, mapping: ComposedTaskMapping, worker: Expr) -> List[TaskIndex]:
         outer, inner = mapping.outer, mapping.inner

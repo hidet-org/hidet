@@ -25,6 +25,7 @@ from .norm import batch_norm_infer, instance_norm
 from .image import resize2d
 from .cumulative import cumsum
 from .special import barrier
+from .attention import attention
 from .conv2d import conv2d
 from .conv2d_transpose import conv2d_transpose
 from .matmul import batch_matmul, matmul

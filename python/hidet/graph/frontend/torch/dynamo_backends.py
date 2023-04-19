@@ -31,6 +31,7 @@ def generate_executor(flow_graph: FlowGraph) -> Callable:
     use_fp16 = dynamo_config['use_fp16']
     use_fp16_reduction = dynamo_config['use_fp16_reduction']
     use_cuda_graph = dynamo_config['use_cuda_graph']
+    use_attention = dynamo_config['use_attention']
     search_space = dynamo_config['search_space']
     parallel_k = dynamo_config['parallel_k']
     tensor_core = dynamo_config['use_tensor_core']
@@ -41,6 +42,7 @@ def generate_executor(flow_graph: FlowGraph) -> Callable:
             ctx.set_precision('float16')
         if use_fp16 and use_fp16_reduction:
             ctx.set_reduce_precision('float16')
+        ctx.set_use_attention(use_attention)
         if save_dir:
             graph_dir = resolve_save_dir_multigraph(save_dir)
             ctx.save_graph_instrument(graph_dir)
@@ -54,10 +56,9 @@ def generate_executor(flow_graph: FlowGraph) -> Callable:
     logger.info('schedule search space: %d', search_space)
 
     has_cpu_tensor = any(tensor.device.type == 'cpu' for tensor in graph_opt.inputs + graph_opt.outputs)
-    has_cuda_tensor = any(tensor.device.type == 'cuda' for tensor in graph_opt.inputs + graph_opt.outputs)
-
-    if has_cpu_tensor and has_cuda_tensor:
-        raise RuntimeError('the flow graph contains both CPU and CUDA tensors, currently not supported by hidet')
+    # has_cuda_tensor = any(tensor.device.type == 'cuda' for tensor in graph_opt.inputs + graph_opt.outputs)
+    # if has_cpu_tensor and has_cuda_tensor:
+    #     raise RuntimeError('the flow graph contains both CPU and CUDA tensors, currently not supported by hidet')
 
     def preprocess_inputs(inputs: Sequence[torch.Tensor]) -> List[hidet.Tensor]:
         torch_inputs: List[torch.Tensor] = []
