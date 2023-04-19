@@ -27,7 +27,6 @@ import torch.backends.cudnn as cudnn
 def test_conv2d_transpose(
     in_channels, out_channels, kernel_size, stride, padding, output_padding, groups, dilation, dtype
 ):
-    print(in_channels, out_channels, kernel_size, stride, padding, output_padding, groups, dilation)
     check_module(
         model=torch.nn.ConvTranspose2d(
             in_channels=in_channels,
@@ -44,7 +43,6 @@ def test_conv2d_transpose(
         atol=2e-4,
     )
     cudnn.allow_tf32 = True
-
 
 if __name__ == '__main__':
     pytest.main([__file__])
