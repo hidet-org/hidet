@@ -35,12 +35,12 @@ def get_operator_name(op, given_name: Optional[str] = None):
 class Operator:
     """An operator that takes tensor as input and output."""
 
-    def __init__(self, inputs: List[Tensor], attributes: Optional[Dict[str, Any]] = None, task: Optional[Task] = None):
+    def __init__(self, inputs: List[Tensor], attributes: Dict[str, Any], task: Optional[Task] = None):
         assert all(isinstance(v, Tensor) for v in inputs)
 
         self.name: str = get_operator_name(self)
         self.inputs: List[Tensor] = inputs
-        self.attrs: Dict[str, Any] = attributes if attributes is not None else {}
+        self.attrs: Dict[str, Any] = attributes
         self.task: Optional[Task] = task.specialize_for(self.inputs)
         self.outputs: List[Tensor] = []
 

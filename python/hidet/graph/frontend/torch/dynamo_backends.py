@@ -11,7 +11,6 @@
 # limitations under the License.
 # pylint: disable=no-name-in-module
 from typing import List, Callable, Sequence, Union
-from pathlib import Path
 import logging
 import torch
 import hidet.option

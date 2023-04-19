@@ -253,6 +253,4 @@ def resolve_save_dir_multigraph(save_dir: str) -> str:
     if not hasattr(func, 'counter'):
         func.counter = {}
     func.counter[save_dir] = func.counter.get(save_dir, 0) + 1
-    print(func.counter)
     return str(Path(save_dir) / "graph_{}".format(func.counter[save_dir]))
-
