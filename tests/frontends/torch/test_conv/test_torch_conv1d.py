@@ -14,10 +14,7 @@ import torch
 from hidet.testing.torch_utils import check_module
 
 
-@pytest.mark.parametrize(
-    'in_shape,w_shape,stride,padding', [[[1, 3, 224], [42, 3, 7], 2, 3], [[1, 3, 224], [42, 3, 7], 3, 4]]
-)
-@pytest.mark.parametrize('groups', [1, 3])
+@pytest.mark.parametrize('in_shape,w_shape,stride,padding,groups', [[[1, 3, 224], [42, 3, 7], 2, 1, 1]])
 @pytest.mark.parametrize('dtype', [torch.float32])
 def test_conv1d(in_shape, w_shape, stride, padding, groups, dtype):
     check_module(

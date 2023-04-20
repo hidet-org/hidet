@@ -30,6 +30,8 @@ class Conv3dTransposeTask(Task):
         oc, wc, kz, kx, ky = weight.const_shape()
         c = wc * groups
         sz, sx, sy = stride
+        print(padding)
+        print(normalize_padding(padding, dim=3))
         pz0, px0, py0, pz1, px1, py1 = padding
         z = (r - 1) * sz - pz0 - pz1 + kz + output_padding[0]
         h = (p - 1) * sx - px0 - px1 + kx + output_padding[1]
@@ -99,14 +101,14 @@ class Conv3dTransposeOp(Operator):
 def conv3d_transpose(
     data: Tensor,
     weight: Tensor,
-    stride: Union[int, Sequence[int]],
-    padding: Union[int, Sequence[int]],
+    stride: Union[int, Sequence[int]] = (1, 1, 1),
+    padding: Union[int, Sequence[int]] = (0, 0, 0),
     groups: int = 1,
     output_padding: Union[int, Sequence[int]] = 0,
 ) -> Tensor:
     sz, sx, sy = normalize_stride(stride, dim=3)
     pz0, px0, py0, pz1, px1, py1 = normalize_padding(padding, dim=3)
-    opz, opx, opy = normalize_stride(output_padding, dim=3)  # normalize output padding same as stride
+    opz, opx, opy = normalize_stride(output_padding, dim=3)
     return Conv3dTransposeOp(
         data, weight, (sz, sx, sy), (pz0, px0, py0, pz1, px1, py1), groups, (opz, opx, opy)
     ).get_output(0)

@@ -13,7 +13,7 @@ from typing import Union, Optional, Sequence
 
 from hidet.ir.stmt import Stmt, ForStmt, IfStmt, EvaluateStmt, SeqStmt, LetStmt, ForTaskStmt
 from hidet.ir.expr import Expr, Var, var, convert
-from hidet.ir.mapping import TaskMapping, TaskMappingExpander
+from hidet.ir.mapping import TaskMapping
 
 ScopedStmt = Union[IfStmt, ForStmt, LetStmt, ForTaskStmt]
 
@@ -85,11 +85,11 @@ class StmtBuilder:
         iter_names = [var(name) for name in iter_names]
         return StmtScope(self, stmts=ForTaskStmt(iter_names, mapping, worker, None), ret=iter_names)
 
-    def for_task(self, worker_index: Expr, task_layout: TaskMapping):
-        # replaced by for_mapping, todo: remove this function and rewrite all its usage
-        expander = TaskMappingExpander()
-        fields = expander.expand(worker_index, task_layout)
-        return StmtScope(self, stmts=expander.stmts, ret=fields)
+    # def for_task(self, worker_index: Expr, task_layout: TaskMapping):
+    #     # replaced by for_mapping, todo: remove this function and rewrite all its usage
+    #     expander = TaskMappingExpander()
+    #     fields = expander.expand(worker_index, task_layout)
+    #     return StmtScope(self, stmts=expander.stmts, ret=fields)
 
     def append(self, stmt: Union[Stmt, Expr, Sequence[Stmt]]):
         if stmt is None:

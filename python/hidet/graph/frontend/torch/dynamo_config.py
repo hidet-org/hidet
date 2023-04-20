@@ -18,6 +18,7 @@ class DynamoConfig:
         self._parallel_k: str = 'default'
         self._use_fp16: bool = False
         self._use_fp16_reduction: bool = False
+        self._use_attention: bool = False
         self._use_cuda_graph: bool = True
         self._use_tensor_core: bool = False
         self._print_input_graph: bool = False
@@ -27,6 +28,21 @@ class DynamoConfig:
     def __getitem__(self, item: str):
         assert isinstance(item, str)
         return getattr(self, f"_{item}")
+
+    def reset(self):
+        """
+        Reset the configuration to the default values
+        """
+        self._search_space: int = 0
+        self._parallel_k: str = 'default'
+        self._use_fp16: bool = False
+        self._use_fp16_reduction: bool = False
+        self._use_attention: bool = False
+        self._use_cuda_graph: bool = True
+        self._use_tensor_core: bool = False
+        self._print_input_graph: bool = False
+        self._dump_graph_ir: Optional[str] = None
+        self._correctness_report: bool = False
 
     def search_space(self, level: int = 2):
         """
@@ -87,6 +103,13 @@ class DynamoConfig:
         Whether to use float16 data type for reduction
         """
         self._use_fp16_reduction = flag
+        return self
+
+    def use_attention(self, flag=False):
+        """
+        Whether to use fused attention schedule
+        """
+        self._use_attention = flag
         return self
 
     def use_cuda_graph(self, flag=True):

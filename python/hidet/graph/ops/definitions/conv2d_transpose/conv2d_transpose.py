@@ -9,11 +9,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Sequence, Union, Tuple
+from typing import Tuple, Union, Sequence
 from hidet.ir.expr import if_then_else, LogicalAnd
 from hidet.ir.compute import compute, reduce
 from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, TensorNode
-from hidet.graph.ops.definitions.utils import input_like, normalize_stride, normalize_padding
+from hidet.graph.ops.definitions.utils import input_like
 
 
 class Conv2dTransposeTask(Task):
@@ -30,19 +30,21 @@ class Conv2dTransposeTask(Task):
         oc, wc, kx, ky = weight.const_shape()
         c = wc * groups
         sx, sy = stride
-        px0, py0, px1, py1 = padding
-        h = (p - 1) * sx - px0 - px1 + kx + output_padding[0]
-        w = (q - 1) * sy - py0 - py1 + ky + output_padding[1]
+        px, py = padding
+        opx, opy = output_padding
+        h = (p - 1) * sx - 2 * px + kx + opx
+        w = (q - 1) * sy - 2 * py + ky + opy
 
-        if output_padding[0] >= stride[0] or output_padding[1] >= stride[1]:
+        if opx >= sx or opy >= sy:
             raise ValueError(
                 'Conv2dTranspose expect the output_padding < stride, \n'
-                'but got output_padding, stride: {}, {}'.format(output_padding, stride)
+                'but got output_padding, stride: {}, {}'.format((opx, opy), (sx, sy))
             )
         if any(p < 0 for p in padding):
             raise ValueError('Negative padding is not supported.')
 
         og = oc // groups  # output channels in each group
+
         output = compute(
             name='out',
             shape=[n, c, h, w],
@@ -50,15 +52,15 @@ class Conv2dTransposeTask(Task):
                 shape=[og, kx, ky],
                 fcompute=lambda ogi, kxi, kyi: if_then_else(
                     cond=LogicalAnd.join(
-                        hi + px0 >= kxi,
-                        hi + px0 < p * sx + kxi,
-                        (hi + px0 - kxi) % sx == 0,
-                        wi + py0 >= kyi,
-                        wi + py0 < q * sy + kyi,
-                        (wi + py0 - kyi) % sy == 0,
+                        hi + px >= kxi,
+                        hi + px < p * sx + kxi,
+                        (hi + px - kxi) % sx == 0,
+                        wi + py >= kyi,
+                        wi + py < q * sy + kyi,
+                        (wi + py - kyi) % sy == 0,
                     ),
                     then_expr=(
-                        data[ni, (ci // wc) * og + ogi, (hi + px0 - kxi) // sx, (wi + py0 - kyi) // sy]
+                        data[ni, (ci // wc) * og + ogi, (hi + px - kxi) // sx, (wi + py - kyi) // sy]
                         * weight[(ci // wc) * og + ogi, ci % wc, kxi, kyi]
                     ),
                     else_expr=0.0,
@@ -72,8 +74,8 @@ class Conv2dTransposeTask(Task):
 class Conv2dTransposeOp(Operator):
     def __init__(
         self,
-        x: Tensor,
-        w: Tensor,
+        x: TensorNode,
+        w: TensorNode,
         stride: Tuple[int, int],
         padding: Tuple[int, int, int, int],
         groups: int,
@@ -89,12 +91,12 @@ class Conv2dTransposeOp(Operator):
 def conv2d_transpose(
     data: Tensor,
     weight: Tensor,
-    stride: Union[int, Sequence[int]],
-    padding: Union[int, Sequence[int]],
+    stride: Union[int, Sequence[int]] = (1, 1),
+    padding: Union[int, Sequence[int]] = (0, 0),
     groups: int = 1,
     output_padding: Union[int, Sequence[int]] = 0,
 ) -> Tensor:
-    sx, sy = normalize_stride(stride)
-    px0, py0, px1, py1 = normalize_padding(padding)
-    opx, opy = normalize_stride(output_padding)  # normalize output padding same as stride
-    return Conv2dTransposeOp(data, weight, (sx, sy), (px0, py0, px1, py1), groups, (opx, opy)).get_output(0)
+    sx, sy = stride  # normalize_stride(stride)
+    px, py = padding  # normalize_padding(padding)
+    opx, opy = output_padding  # normalize_padding(output_padding)
+    return Conv2dTransposeOp(data, weight, (sx, sy), (px, py), groups, (opx, opy)).get_output(0)

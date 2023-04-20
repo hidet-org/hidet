@@ -9,11 +9,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Sequence, Union, Tuple, Optional
+from typing import Optional
 from hidet.ir.expr import if_then_else, LogicalAnd
 from hidet.ir.compute import compute, reduce
 from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, TensorNode
-from hidet.graph.ops.definitions.utils import input_like, normalize_stride, normalize_padding
+from hidet.graph.ops.definitions.utils import input_like, normalize_stride, normalize_padding, normalize_kernel
 
 
 class Conv1dTransposeTask(Task):
@@ -21,25 +21,26 @@ class Conv1dTransposeTask(Task):
         self,
         data: TensorNode,
         weight: TensorNode,
-        stride: Tuple[int],
-        padding: Tuple[int],
-        groups: int,
-        output_padding: Tuple[int],
+        stride: Optional[int],
+        padding: Optional[int],
+        groups: Optional[int],
+        output_padding: Optional[int],
     ):
         num_channels, out_channels, length_in = data.const_shape()
         out_channels, wc, kernel_size = weight.const_shape()
+        s = normalize_stride(stride, dim=1)[0]
+        p = normalize_padding(padding, dim=1)[0]
+        k = normalize_kernel(kernel_size, dim=1)[0]
+        op = normalize_padding(output_padding, dim=1)[0]
         channels_in = wc * groups
-        sx = stride[0]
-        px = padding[0]
-        l = (length_in - 1) * sx - px - px + kernel_size + output_padding[0]
+        print(s, p, op, k)
+        l = (length_in - 1) * s - 2 * p + k + op
 
-        if output_padding >= stride or output_padding[0] >= stride[0]:
+        if op >= s:
             raise ValueError(
                 'Convd1dTranspose expects: output_padding < stride, \n'
-                f'but got output_padding, stride: {output_padding}, {stride}'
+                f'but got output_padding, stride: {output_padding}, {s}'
             )
-        if any(p < 0 for p in padding):
-            raise ValueError('Negative padding is not supported.')
 
         # output channels per group
         og = out_channels // groups
@@ -51,10 +52,9 @@ class Conv1dTransposeTask(Task):
             fcompute=lambda ni, ci, li: reduce(
                 shape=[og, kernel_size],
                 fcompute=lambda ogi, ki: if_then_else(
-                    cond=LogicalAnd.join(li + px >= ki, li + px < length_in * sx + ki, (li + px - ki) % sx == 0),
+                    cond=LogicalAnd.join(li + p >= ki, li + p < length_in * s + ki, (li + p - ki) % s == 0),
                     then_expr=(
-                        data[ni, (ci // wc) * og + ogi, (li + px - ki) // sx]
-                        * weight[(ci // wc) * og + ogi, ci % wc, ki]
+                        data[ni, (ci // wc) * og + ogi, (li + p - ki) // s] * weight[(ci // wc) * og + ogi, ci % wc, ki]
                     ),
                     else_expr=0.0,
                 ),
@@ -66,7 +66,13 @@ class Conv1dTransposeTask(Task):
 
 class Conv1dTransposeOp(Operator):
     def __init__(
-        self, x: Tensor, w: Tensor, stride: Tuple[int], padding: Tuple[int], groups: int, output_padding: Tuple[int]
+        self,
+        x: Tensor,
+        w: Tensor,
+        stride: Optional[int],
+        padding: Optional[int],
+        groups: Optional[int],
+        output_padding: Optional[int],
     ):
         super().__init__(
             inputs=[x, w],
@@ -78,12 +84,12 @@ class Conv1dTransposeOp(Operator):
 def conv1d_transpose(
     data: Tensor,
     weight: Tensor,
-    stride: Optional[Union[int, Sequence[int]]] = 1,
-    padding: Optional[Union[int, Sequence[int]]] = 0,
+    stride: Optional[int] = 1,
+    padding: Optional[int] = 0,
     groups: Optional[int] = 1,
-    output_padding: Optional[Union[int, Sequence[int]]] = 0,
+    output_padding: Optional[int] = 0,
 ) -> Tensor:
-    sx = normalize_stride(stride)
-    px = normalize_padding(padding)
-    opx = normalize_stride(output_padding)  # normalize output padding same as stride
-    return Conv1dTransposeOp(data, weight, (sx), (px), groups, (opx)).get_output(0)
+    s = stride
+    p = padding
+    op = output_padding
+    return Conv1dTransposeOp(data, weight, s, p, groups, op).get_output(0)

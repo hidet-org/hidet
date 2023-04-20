@@ -16,6 +16,7 @@ from hidet.ir.layout import RowMajorLayout, ColumnMajorLayout
 from hidet.ir.utils import index_deserialize, index_serialize
 from hidet.utils import prod
 from .utils import Task, InverseMap, Operator, Tensor, TensorNode, compute, input_like, normalize_dim, can_broadcast
+from .utils import TensorInput
 
 
 def same_shape(shape_a: Sequence[int], shape_b: Sequence[int]) -> bool:
@@ -30,7 +31,7 @@ class ReshapeTask(Task):
                 'Can not reshape {} to {} because they have different number '
                 'of elements: {} vs {}'.format(x_shape, y_shape, prod(x_shape), prod(y_shape))
             )
-        if not isinstance(x.ttype.layout, RowMajorLayout):
+        if not isinstance(x.type.layout, RowMajorLayout):
             raise NotImplementedError(
                 'currently, only support row major layout. Please use '
                 '.contiguous() to transfer the given tensor into row major layout first.'
@@ -187,6 +188,22 @@ class TakeTask(Task):
         super().__init__(name='take', inputs=[data, indices], outputs=[output])
 
 
+class GatherTask(Task):
+    def __init__(self, data: TensorInput, indices: TensorInput, axis=0):
+        data_shape = data.const_shape()
+        indices_shape = indices.const_shape()
+        output_shape = data_shape[:axis] + [indices_shape[axis]] + data_shape[axis + 1 :]
+
+        def fmap(*output_indices):
+            index_value = indices[output_indices]
+            index_value = if_then_else(index_value < 0, index_value + data_shape[axis], index_value)
+            data_indices = output_indices[:axis] + (index_value,) + output_indices[axis + 1 :]
+            return data[data_indices]
+
+        output = compute(name='output', shape=output_shape, fcompute=lambda *output_indices: fmap(*output_indices))
+        super().__init__(name='gather', inputs=[data, indices], outputs=[output])
+
+
 class StridedSliceTask(Task):
     def __init__(
         self,
@@ -285,7 +302,7 @@ class ReshapeOp(Operator):
     def __init__(self, x: Tensor, shape):
         shape = self.normalize_shape(x.shape, shape)
         task = ReshapeTask(input_like(x, 'x'), shape)
-        super().__init__(inputs=[x], task=task, attributes={'shape': shape})
+        super().__init__(inputs=[x], attributes={'shape': shape}, task=task)
 
     @staticmethod
     def normalize_shape(origin_shape: Sequence[int], shape: Sequence[int]):
@@ -329,15 +346,15 @@ class ReshapeOp(Operator):
 
 class RearrangeOp(Operator):
     def __init__(self, x: Tensor, plan: List[List[int]]):
-        super().__init__(inputs=[x], task=RearrangeTask(input_like(x, 'x'), plan=plan), attributes={'plan': plan})
+        super().__init__(inputs=[x], attributes={'plan': plan}, task=RearrangeTask(input_like(x, 'x'), plan=plan))
 
 
 class SqueezeOp(Operator):
     def __init__(self, x: Tensor, dims: List[int]):
         super().__init__(
             inputs=[x],
-            task=RearrangeTask(input_like(x, 'x'), plan=[[i] for i in range(len(x.shape)) if i not in dims]),
             attributes={'dims': dims},
+            task=RearrangeTask(input_like(x, 'x'), plan=[[i] for i in range(len(x.shape)) if i not in dims]),
         )
 
     def imperative_run(self, inputs: Optional[List[Tensor]] = None) -> List[Tensor]:
@@ -362,7 +379,7 @@ class UnsqueezeOp(Operator):
                 plan.append([c])
                 c += 1
         assert c == len(x.shape)
-        super().__init__(inputs=[x], task=RearrangeTask(input_like(x, 'x'), plan=plan), attributes={'dims': dims})
+        super().__init__(inputs=[x], attributes={'dims': dims}, task=RearrangeTask(input_like(x, 'x'), plan=plan))
 
     def imperative_run(self, inputs: Optional[List[Tensor]] = None) -> List[Tensor]:
         x = inputs[0] if inputs else self.inputs[0]
@@ -384,8 +401,8 @@ class FlattenOp(Operator):
         plan = [[v] for v in dims[:start_dim]] + [dims[start_dim : end_dim + 1]] + [[v] for v in dims[end_dim + 1 :]]
         super().__init__(
             inputs=[x],
-            task=RearrangeTask(input_like(x, 'x'), plan=plan),
             attributes={'start_dim': start_dim, 'end_dim': end_dim},
+            task=RearrangeTask(input_like(x, 'x'), plan=plan),
         )
 
     def imperative_run(self, inputs: List[Tensor]) -> List[Tensor]:
@@ -408,7 +425,7 @@ class PermuteDimsOp(Operator):
         if axes is None:
             axes = list(reversed(range(len(x.shape))))
         plan = [[v] for v in axes]
-        super().__init__(inputs=[x], task=RearrangeTask(input_like(x, 'x'), plan), attributes={'axes': axes})
+        super().__init__(inputs=[x], attributes={'axes': axes}, task=RearrangeTask(input_like(x, 'x'), plan))
 
 
 class CastOp(Operator):
@@ -418,8 +435,8 @@ class CastOp(Operator):
 
         super().__init__(
             inputs=[x],
-            task=UnaryElementwiseTask('cast', input_like(x, 'x'), op=lambda v: Cast(v, dtype)),
             attributes={'dtype': dtype},
+            task=UnaryElementwiseTask('cast', input_like(x, 'x'), op=lambda v: Cast(v, dtype)),
         )
 
 
@@ -431,8 +448,8 @@ class ConcatOp(Operator):
         axis = normalize_dim(axis, len(tensors[0].shape))
         super().__init__(
             inputs=tensors,
-            task=ConcatTask([input_like(tensor, 'x{}'.format(idx)) for idx, tensor in enumerate(tensors)], axis=axis),
             attributes={'axis': axis},
+            task=ConcatTask([input_like(tensor, 'x{}'.format(idx)) for idx, tensor in enumerate(tensors)], axis=axis),
         )
 
 
@@ -440,8 +457,17 @@ class TakeOp(Operator):
     def __init__(self, data: Tensor, indices: Tensor, axis: int):
         super().__init__(
             inputs=[data, indices],
-            task=TakeTask(input_like(data, 'data'), input_like(indices, 'indices'), axis=axis),
             attributes={'axis': axis},
+            task=TakeTask(input_like(data, 'data'), input_like(indices, 'indices'), axis=axis),
+        )
+
+
+class GatherOp(Operator):
+    def __init__(self, data: Tensor, indices: Tensor, axis: int):
+        super().__init__(
+            inputs=[data, indices],
+            attributes={'axis': axis},
+            task=GatherTask(input_like(data, 'data'), input_like(indices, 'indices'), axis=axis),
         )
 
 
@@ -457,7 +483,7 @@ class StridedSliceOp(Operator):
         starts, ends, axes, strides = self.normalize(data.shape, starts, ends, axes, strides)
         task = StridedSliceTask(input_like(data, 'data'), starts, ends, axes, strides)
         super().__init__(
-            inputs=[data], task=task, attributes={'starts': starts, 'ends': ends, 'axes': axes, 'strides': strides}
+            inputs=[data], attributes={'starts': starts, 'ends': ends, 'axes': axes, 'strides': strides}, task=task
         )
 
     @staticmethod
@@ -478,8 +504,9 @@ class StridedSliceOp(Operator):
             if k > 0:
                 i = i if i is not None else 0
                 j = j if j is not None else n
-                if not (-n <= i <= n and -n <= j <= n):
+                if not (-n <= i <= n and -n <= j):
                     raise IndexError('Invalid slice')
+                j = min(j, n)
                 if i < 0:
                     i += n
                 if j < 0:
@@ -515,7 +542,7 @@ class StridedSliceOp(Operator):
 class BroadcastOp(Operator):
     def __init__(self, data: Tensor, shape: List[int]):
         super().__init__(
-            inputs=[data], task=BroadcastTask(input_like(data, 'data'), shape), attributes={'shape': shape}
+            inputs=[data], attributes={'shape': shape}, task=BroadcastTask(input_like(data, 'data'), shape)
         )
 
 
@@ -530,8 +557,8 @@ class PadOp(Operator):
             raise NotImplementedError("Padding mode '{}' has not been implemented yet.".format(mode))
         super().__init__(
             inputs=[data],
-            task=PadTask(input_like(data, 'data'), pads, value),
             attributes={'pads': pads, 'mode': mode, 'value': value},
+            task=PadTask(input_like(data, 'data'), pads, value),
         )
 
 
@@ -543,7 +570,7 @@ class TileOp(Operator):
                 "same length as data shape. shape: {}, repeats: {}".format(data.shape, repeats)
             )
         super().__init__(
-            inputs=[data], task=TileTask(input_like(data, 'data'), repeats), attributes={'repeats': repeats}
+            inputs=[data], attributes={'repeats': repeats}, task=TileTask(input_like(data, 'data'), repeats)
         )
 
 
@@ -646,6 +673,10 @@ def cast(x: Tensor, dtype: Union[str, DataType]) -> Tensor:
 
 def take(data: Tensor, indices: Tensor, axis: int = 0) -> Tensor:
     return TakeOp(data, indices, axis).get_output(0)
+
+
+def gather(data: Tensor, indices: Tensor, axis: int = 0) -> Tensor:
+    return GatherOp(data, indices, axis).outputs[0]
 
 
 def strided_slice(

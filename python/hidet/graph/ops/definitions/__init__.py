@@ -11,31 +11,9 @@
 # limitations under the License.
 # pylint: disable=redefined-builtin
 from .create import full
-from .arithmetic import (
-    add,
-    subtract,
-    multiply,
-    divide,
-    negative,
-    sqrt,
-    rsqrt,
-    where,
-    maximum,
-    minimum,
-    reciprocal,
-    exp,
-    log,
-    abs,
-)
-from .arithmetic import (
-    bitwise_and,
-    bitwise_invert,
-    bitwise_or,
-    bitwise_xor,
-    ceil,
-    bitwise_right_shift,
-    bitwise_left_shift,
-)
+from .arithmetic import add, subtract, multiply, divide, negative, sqrt, rsqrt, where, maximum, minimum, reciprocal
+from .arithmetic import bitwise_and, bitwise_invert, bitwise_or, bitwise_xor, bitwise_right_shift, bitwise_left_shift
+from .arithmetic import ceil, exp, log, abs
 from .compare import equal, less, greater, less_equal, greater_equal, logical_not, logical_and
 from .transform import squeeze, unsqueeze, flatten, concat, cast, take, rearrange, strided_slice, split, pad, conv_pad
 from .pool import avg_pool2d, adaptive_avg_pool1d, adaptive_avg_pool2d, adaptive_avg_pool3d
@@ -49,6 +27,7 @@ from .cumulative import cumsum
 from .special import barrier
 from .conv1d import conv1d
 from .conv1d_transpose import conv1d_transpose
+from .attention import attention
 from .conv2d import conv2d
 from .conv2d_transpose import conv2d_transpose
 from .conv3d import conv3d

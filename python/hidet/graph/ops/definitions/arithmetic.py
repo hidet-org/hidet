@@ -112,12 +112,18 @@ class WhereTask(Task):
 
 class UnaryElementwiseOp(Operator):
     def __init__(self, x: Tensor, op, name: str, attributes: Optional[Dict[str, Any]] = None):
-        super().__init__(inputs=[x], task=UnaryElementwiseTask(name, input_like(x, 'x'), op=op), attributes=attributes)
+        if attributes is None:
+            attributes = {}
+        super().__init__(inputs=[x], attributes=attributes, task=UnaryElementwiseTask(name, input_like(x, 'x'), op=op))
 
 
 class BinaryElementwiseOp(Operator):
     def __init__(self, x: Tensor, y: Tensor, op, name: str):
-        super().__init__(inputs=[x, y], task=BinaryElementwiseTask(name, input_like(x, 'x'), input_like(y, 'y'), op=op))
+        super().__init__(
+            inputs=[x, y],
+            attributes={},
+            task=BinaryElementwiseTask(name, input_like(x, 'x'), input_like(y, 'y'), op=op),
+        )
 
 
 def resolve_dtype(tensor_dtype: DataType, scalar_dtype: DataType) -> DataType:
@@ -408,8 +414,8 @@ class WhereOp(Operator):
     def __init__(self, cond: Tensor, x: Tensor, y: Tensor):
         super().__init__(
             inputs=[cond, x, y],
+            attributes={},
             task=WhereTask(input_like(cond, 'cond'), input_like(x, 'x'), input_like(y, 'y')),
-            name='where',
         )
 
 
@@ -423,12 +429,12 @@ class MaxOp(Operator):
 
         super().__init__(
             inputs=list(tensors),
+            attributes={},
             task=VariadicElementwiseTask(
                 name='max',
                 args=[input_like(x, f'x{idx}') for idx, x in enumerate(tensors)],
                 op=lambda *args: scalar_max(args),
             ),
-            name='max',
         )
 
 
@@ -442,12 +448,12 @@ class MinOp(Operator):
 
         super().__init__(
             inputs=list(tensors),
+            attributes={},
             task=VariadicElementwiseTask(
                 name='min',
                 args=[input_like(x, f'x{idx}') for idx, x in enumerate(tensors)],
                 op=lambda *args: scalar_min(args),
             ),
-            name='min',
         )
 
 

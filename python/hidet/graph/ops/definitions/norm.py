@@ -73,3 +73,38 @@ def layer_norm(x: Tensor, num_last_dims: int = 1, epsilon: float = 1e-5) -> Tens
     """
     dims = list(range(len(x.shape) - num_last_dims, len(x.shape)))
     return normalize(x, dims=dims, epsilon=epsilon)
+
+
+def group_norm(x: Tensor, num_groups, epsilon: float = 1e-5):
+    """
+    Group norm.
+
+    Parameters
+    ----------
+    x: Tensor
+        The data to be normalized.
+    num_groups: int
+        The number of groups
+    epsilon: float
+        The epsilon added to variance.
+
+    Returns
+    -------
+    ret: Tensor
+        The normalized tensor.
+    """
+    # first split out the group dimension
+    x_shape = list(x.shape)
+    new_shape = x_shape[:]
+    grouped_rank = 1
+    grouped_dim = new_shape[grouped_rank]
+    assert grouped_dim % num_groups == 0
+
+    new_shape[grouped_rank] = int(grouped_dim // num_groups)
+    new_shape.insert(grouped_rank, num_groups)
+
+    x = x.reshape(new_shape)
+    dims = list(range(2, len(x.shape)))
+    normed = normalize(x, dims=dims, epsilon=epsilon)
+
+    return normed.reshape(x_shape)

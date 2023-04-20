@@ -23,7 +23,6 @@ from hidet.ir.utils import index_deserialize
 from hidet.graph.ops.definitions.reduce import ReduceTask
 from hidet.graph.ops.schedules.common import params_from_task
 from hidet.utils import prod
-from hidet.transforms.tools import fuse_and_pack
 from .common import warp_reduce
 
 
@@ -56,7 +55,7 @@ def cuda_schedule_reduce_by_warp_reduce(task: ReduceTask) -> IRModule:
     block_layout = TaskMapping.full_layout([warp_extent]) * TaskMapping.row_major([warp_size])
 
     x_dtype = task.inputs[0].ttype.dtype
-    accumulate_dtype = task.attributes['accumulate_dtype']
+    accumulate_dtype = task.attrs['accumulate_dtype']
 
     with FunctionBuilder(
         name=task.name + '_grid',
@@ -103,7 +102,7 @@ def cuda_schedule_reduce_by_warp_reduce(task: ReduceTask) -> IRModule:
         fb.set_body(fb.finish())
     func = fb.get()
     ir_module = IRModule(funcs={func.name: func}, task=task)
-    return fuse_and_pack(ir_module, func, task)
+    return ir_module
 
 
 def cuda_schedule_reduce_by_default(task: ReduceTask) -> IRModule:
@@ -123,7 +122,7 @@ def cuda_schedule_reduce_by_default(task: ReduceTask) -> IRModule:
     grid_size = (remain_layout.num_workers + block_size - 1) // block_size
 
     x_dtype = task.inputs[0].ttype.dtype
-    accumulate_dtype = task.attributes['accumulate_dtype']
+    accumulate_dtype = task.attrs['accumulate_dtype']
 
     with FunctionBuilder(
         name=task.name + '_grid', kind='cuda_kernel', grid_dim=grid_size, block_dim=block_size, label='reduce schedule'
@@ -159,4 +158,4 @@ def cuda_schedule_reduce_by_default(task: ReduceTask) -> IRModule:
 
     func = fb.get()
     ir_module = IRModule(funcs={func.name: func}, task=task)
-    return fuse_and_pack(ir_module, func, task)
+    return ir_module

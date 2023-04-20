@@ -12,7 +12,7 @@
 # pylint: disable=bad-staticmethod-argument, too-many-boolean-expressions
 from typing import Any, Union, List, Dict, Tuple
 
-from hidet.ir.task import Task, TaskGraph
+from hidet.ir.task import Task
 from hidet.ir.compute import TensorInput, ScalarInput, ReduceCompute, ArgReduceCompute, GridCompute
 from hidet.ir.node import Node
 from hidet.utils import same_list
@@ -23,8 +23,6 @@ class ComputeFunctor(BaseFunctor):
     def visit_dispatch(self, node: Union[Node, Tuple, List, Dict[str, Any], str]):
         if isinstance(node, Task):
             return self.visit_Task(node)
-        elif isinstance(node, TaskGraph):
-            return self.visit_TaskGraph(node)
         elif isinstance(node, ScalarInput):
             return self.visit_ScalarInput(node)
         elif isinstance(node, TensorInput):
@@ -39,9 +37,6 @@ class ComputeFunctor(BaseFunctor):
             return NotImplemented
 
     def visit_Task(self, task: Task):
-        raise NotImplementedError()
-
-    def visit_TaskGraph(self, task_graph: TaskGraph):
         raise NotImplementedError()
 
     def visit_ScalarInput(self, node: ScalarInput):
@@ -64,12 +59,6 @@ class ComputeVisitor(BaseVisitor, ComputeFunctor):
     def visit_Task(self, task: Task):
         self.visit(task.inputs)
         self.visit(task.outputs)
-        self.visit(task.task_graph)
-
-    def visit_TaskGraph(self, task_graph: TaskGraph):
-        for node in task_graph.nodes:
-            if node is not task_graph.anchor:
-                self.visit(node)
 
     def visit_ScalarInput(self, node: ScalarInput):
         self.visit(node.dtype)
@@ -105,9 +94,6 @@ class ComputeVisitor(BaseVisitor, ComputeFunctor):
 class ComputeRewriter(BaseRewriter, ComputeFunctor):
     def visit_Task(self, task: Task):
         return task
-
-    def visit_TaskGraph(self, task_graph: TaskGraph):
-        return task_graph
 
     def visit_ScalarInput(self, node: ScalarInput):
         dtype = self.visit(node.dtype)

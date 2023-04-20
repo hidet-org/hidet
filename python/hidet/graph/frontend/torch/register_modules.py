@@ -38,11 +38,11 @@ class HidetConvTranspose1d(HidetModule):
         return regs.conv1d_transpose(
             x=x,
             weight=self.param('weight'),
+            bias=self.param('bias', optional=True),
             stride=self.mod.stride,
             padding=self.mod.padding,
             output_padding=self.mod.output_padding,
             groups=self.mod.groups,
-            bias=self.param('bias', optional=True),
             dilation=self.mod.dilation,
         )
 
@@ -66,14 +66,15 @@ class HidetConv2d(HidetModule):
 class HidetConvTranspose2d(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, torch.nn.ConvTranspose2d)
+        print("groups mod", self.mod.groups)
         return regs.conv2d_transpose(
             x=x,
             weight=self.param('weight'),
+            bias=self.param('bias', optional=True),
             stride=self.mod.stride,
             padding=self.mod.padding,
             output_padding=self.mod.output_padding,
             groups=self.mod.groups,
-            bias=self.param('bias', optional=True),
             dilation=self.mod.dilation,
         )
 
@@ -100,11 +101,11 @@ class HidetConvTranspose3d(HidetModule):
         return regs.conv3d_transpose(
             x=x,
             weight=self.param('weight'),
+            bias=self.param('bias', optional=True),
             stride=self.mod.stride,
             padding=self.mod.padding,
             output_padding=self.mod.output_padding,
             groups=self.mod.groups,
-            bias=self.param('bias', optional=True),
             dilation=self.mod.dilation,
         )
 
@@ -163,7 +164,7 @@ class HidetLinear(HidetModule):
 
     def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, torch.nn.Linear)
-        return regs.linear(x=x, weight=self.transposed_weight, bias=self.param('bias'))
+        return regs.linear(x=x, weight=self.transposed_weight, bias=self.param('bias', optional=True))
 
 
 @register_module(torch.nn.BatchNorm2d)
@@ -205,11 +206,32 @@ class HidetLayerNorm(HidetModule):
         )
 
 
+@register_module(torch.nn.GroupNorm)
+class HidetGroupNorm(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.GroupNorm)
+        return regs.group_norm(
+            x=x,
+            num_groups=self.mod.num_groups,
+            num_channels=self.mod.num_channels,
+            weight=self.param('weight'),
+            bias=self.param('bias'),
+            eps=self.mod.eps,
+        )
+
+
 @register_module(torch.nn.Tanh)
 class HidetTanh(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, torch.nn.Tanh)
         return regs.tanh(x)
+
+
+@register_module(torch.nn.Hardtanh)
+class HidetHardtanh(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.Hardtanh)
+        return regs.hardtanh(x, self.mod.min_val, self.mod.max_val)
 
 
 @register_module(torch.nn.Embedding)

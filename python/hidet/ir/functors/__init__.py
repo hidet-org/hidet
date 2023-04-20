@@ -12,6 +12,7 @@
 from .base_functor import BaseFunctor, BaseVisitor, BaseRewriter
 from .type_functor import TypeFunctor, TypeVisitor, TypeRewriter
 from .mapping_functor import MappingFunctor, MappingVisitor, MappingRewriter
+from .layout_functor import LayoutFunctor, LayoutVisitor, LayoutRewriter
 from .expr_functor import ExprFunctor, ExprVisitor, ExprRewriter
 from .stmt_functor import StmtFunctor, StmtVisitor, StmtRewriter
 from .compute_functor import ComputeFunctor, ComputeVisitor, ComputeRewriter

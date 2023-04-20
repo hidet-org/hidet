@@ -15,17 +15,20 @@ from .compute_functor import ComputeFunctor, ComputeRewriter, ComputeVisitor
 from .stmt_functor import StmtFunctor, StmtRewriter, StmtVisitor
 from .type_functor import TypeFunctor, TypeRewriter, TypeVisitor
 from .mapping_functor import MappingFunctor, MappingRewriter, MappingVisitor
+from .layout_functor import LayoutFunctor, LayoutRewriter, LayoutVisitor
 from .module_functor import ModuleFunctor, ModuleRewriter, ModuleVisitor
 
 
-class IRFunctor(ModuleFunctor, StmtFunctor, ComputeFunctor, ExprFunctor, MappingFunctor, TypeFunctor):
+class IRFunctor(ModuleFunctor, StmtFunctor, ComputeFunctor, ExprFunctor, MappingFunctor, LayoutFunctor, TypeFunctor):
     pass
 
 
-class IRVisitor(ModuleVisitor, StmtVisitor, ComputeVisitor, ExprVisitor, MappingVisitor, TypeVisitor):
+class IRVisitor(ModuleVisitor, StmtVisitor, ComputeVisitor, ExprVisitor, MappingVisitor, LayoutVisitor, TypeVisitor):
     pass
 
 
-class IRRewriter(ModuleRewriter, StmtRewriter, ComputeRewriter, ExprRewriter, MappingRewriter, TypeRewriter):
+class IRRewriter(
+    ModuleRewriter, StmtRewriter, ComputeRewriter, ExprRewriter, MappingRewriter, LayoutRewriter, TypeRewriter
+):
     def rewrite(self, node):
         return self.visit(node)
