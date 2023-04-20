@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Tuple, Any, List, Union, Dict, Optional
+from pathlib import Path
 from hidet.graph.tensor import Tensor
 from hidet.ir.type import DataType
 from hidet.ir import dtypes
@@ -245,3 +246,11 @@ def relative_absolute_error(actual, expected) -> float:
     actual: torch.Tensor = actual.detach()
     expected: torch.Tensor = expected.detach()
     return float(torch.max(torch.abs(actual - expected) / (torch.abs(expected) + 1.0)))
+
+
+def resolve_save_dir_multigraph(save_dir: str) -> str:
+    func = resolve_save_dir_multigraph
+    if not hasattr(func, 'counter'):
+        func.counter = {}
+    func.counter[save_dir] = func.counter.get(save_dir, 0) + 1
+    return str(Path(save_dir) / "graph_{}".format(func.counter[save_dir]))
