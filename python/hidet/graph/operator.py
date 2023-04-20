@@ -40,7 +40,7 @@ class Operator:
 
         self.name: str = get_operator_name(self)
         self.inputs: List[Tensor] = inputs
-        self.attrs: Dict[str, Any] = attributes if attributes is not None else {}
+        self.attrs: Dict[str, Any] = attributes
         self.task: Optional[Task] = task.specialize_for(self.inputs)
         self.outputs: List[Tensor] = []
 
@@ -126,7 +126,7 @@ class Operator:
         for a, b in zip(self.task.outputs, outputs):
             arg_remap[a] = b
 
-        args = [remap[param] for param in self.task.params]
+        args = [arg_remap[param] for param in self.task.params]
         self.task_func(*args)
 
         status = get_last_error()

@@ -17,7 +17,7 @@ import hidet.option
 from hidet.ir.type import data_type
 from hidet.graph.ir.flow_graph import FlowGraph
 from hidet.graph.transforms import PassContext, optimize
-from .utils import serialize_output, deserialize_output
+from .utils import serialize_output, deserialize_output, resolve_save_dir_multigraph
 from .dynamo_config import dynamo_config
 
 
@@ -43,7 +43,8 @@ def generate_executor(flow_graph: FlowGraph) -> Callable:
             ctx.set_reduce_precision('float16')
         ctx.set_use_attention(use_attention)
         if save_dir:
-            ctx.save_graph_instrument(save_dir)
+            graph_dir = resolve_save_dir_multigraph(save_dir)
+            ctx.save_graph_instrument(graph_dir)
         if tensor_core:
             ctx.set_mma('mma' if tensor_core else 'simt')
         ctx.set_parallel_k(disabled=(parallel_k == 'disabled'), search=(parallel_k == 'search'))
