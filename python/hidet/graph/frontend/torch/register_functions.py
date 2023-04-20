@@ -46,27 +46,6 @@ def conv1d_transpose(
     return y
 
 
-@register_function(torch.nn.functional.conv1d)
-def conv1d(x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, dilation, groups):
-    x = ops.conv_pad(x, padding)
-    y = ops.conv1d(x, weight, stride, dilation, groups)
-    if bias is not None:
-        y = y + ops.unsqueeze(bias, [0, 2])
-    return y
-
-
-@register_function(torch.nn.functional.conv_transpose1d)
-def conv1d_transpose(
-    x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, output_padding, groups, dilation
-):
-    if dilation != 1 and not same_list(dilation, [1]):
-        raise NotImplementedError("dilation != 1")
-    y = ops.conv1d_transpose(x, weight, stride, padding, groups, output_padding, dilation)
-    if bias is not None:
-        y = y + ops.unsqueeze(bias, [0, 2])
-    return y
-
-
 @register_function(torch.nn.functional.conv2d)
 def conv2d(x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, dilation, groups):
     x = ops.conv_pad(x, padding)
@@ -170,11 +149,6 @@ def add(x: Tensor, y: Tensor):
 @register_function(operator.iadd)
 def iadd(x: Tensor, y: Tensor):
     return ops.add(x, y)
-
-
-@register_function(operator.neg)
-def neg(x: Tensor):
-    return -x
 
 
 @register_function(torch.sin)

@@ -15,13 +15,13 @@ from hidet.graph.ops.definitions.utils import compute, input_like, normalize_str
 
 
 class Conv1dTask(Task):
-    def __init__(self, data: TensorNode, weight: TensorNode, stride: List[int], padding: List[int], dilations: List[int], groups: int):
+    def __init__(self, data: TensorNode, weight: TensorNode, stride: List[int], dilations: List[int], groups: int):
         n, c, l = data.const_shape()
         oc, wc, k = weight.const_shape()
-        s = stride
-        p = padding
-        dil = dilations
-        len_in = (l + 2 * p - dil * (k - 1) - 1) // s + 1
+        s = normalize_stride(stride, dim=1)[0]
+        dil = normalize_dilations(dilations, dim=1)[0]
+        len_in = (l - dil * (k - 1) - 1) // s + 1
+        print(len_in)
         if c % groups != 0 or oc % groups != 0:
             raise ValueError(
                 'Conv1d expects: in_channels % groups == 0 and out_channels % groups == 0, \n'
@@ -29,7 +29,7 @@ class Conv1dTask(Task):
             )
         if wc * groups != c:
             raise ValueError(
-                'Conv1d expect the weight has shape [out_channels, in_channels / groups, kx, ky], \n'
+                'Conv1d expects the weight tensor has shape [out_channels, in_channels / groups, kernel_size], \n'
                 f'got weight shape {[oc, wc, k]}, in_channels {c} and groups {groups}'
             )
         out_group_size = oc // groups
@@ -45,19 +45,17 @@ class Conv1dTask(Task):
             ),
         )
         self.channels = c
-        self.stride = stride
+        self.stride = s
         self.groups = groups
         super().__init__(name='conv1d', inputs=[data, weight], outputs=[output])
 
 
 class Conv1dOp(Operator):
-    def __init__(self, x: Tensor, w: Tensor, stride: Sequence[int], padding: Sequence[int], dilations: Union[int, Sequence[int]], groups: int):
-        stride = normalize_stride(stride, dim=1)
-        dilations = normalize_dilations(dilations, dim=1)
+    def __init__(self, x: Tensor, w: Tensor, stride: Sequence[int], dilations: Union[int, Sequence[int]], groups: int):
         super().__init__(
             inputs=[x, w],
-            task=Conv1dTask(input_like(x, 'x'), input_like(w, 'w'), padding, stride, dilations, groups),
-            attributes={'padding': padding, 'stride': stride, 'groups': groups, 'dilations': dilations},
+            task=Conv1dTask(input_like(x, 'x'), input_like(w, 'w'), stride, dilations, groups),
+            attributes={'stride': stride, 'groups': groups, 'dilations': dilations},
         )
 
 
@@ -65,8 +63,7 @@ def conv1d(
     data: Tensor,
     weight: Tensor,
     stride: Union[int, Sequence[int]] = (1),
-    padding: Union[int, Sequence[int]] = (0),
     dilations: Union[int, Sequence[int]] = (1),
     groups: int = 1,
 ) -> Tensor:
-    return Conv1dOp(data, weight, padding, stride, dilations, groups).get_output(0)
+    return Conv1dOp(data, weight, stride, dilations, groups).get_output(0)

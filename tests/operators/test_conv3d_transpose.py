@@ -18,11 +18,22 @@ import hidet
 
 @pytest.mark.parametrize("hidet_op", [hidet.ops.conv3d_transpose])
 @pytest.mark.parametrize(
-    'in_channels, out_channels, kernel_size, stride, pads, groups, depth, height, width, output_padding',
-    [[10, 20, (5, 5, 5), (3, 2, 2), (2, 1, 1), 5, 12, 11, 10, (1, 1, 1)]],
+    'in_channels, out_channels, kernel_size, stride, pads, dilations, groups, depth, height, width, output_padding',
+    [[10, 20, (5, 5, 5), (3, 2, 2), (2, 1, 1), (1, 1, 1), 5, 12, 11, 10, (1, 1, 1)]],
 )
 def test_conv3d_transpose(
-    hidet_op, in_channels, out_channels, kernel_size, stride, pads, groups, depth, height, width, output_padding
+    hidet_op,
+    in_channels,
+    out_channels,
+    kernel_size,
+    stride,
+    pads,
+    dilations,
+    groups,
+    depth,
+    height,
+    width,
+    output_padding,
 ):
     torch_data = torch.ones(1, in_channels, depth, height, width, dtype=torch.float32).cuda()
     torch_weight = torch.ones(
@@ -35,7 +46,7 @@ def test_conv3d_transpose(
     hidet_data = hidet.from_torch(torch_data)
     hidet_weight = hidet.from_torch(torch_weight)
     hidet_output = hidet.ops.conv_pad(hidet_data, pads)
-    hidet_output = hidet.ops.conv3d(hidet_output, hidet_weight, stride, groups=groups)
+    hidet_output = hidet.ops.conv3d(hidet_output, hidet_weight, stride, dilations, groups=groups)
     np.testing.assert_allclose(hidet_output.cpu().numpy(), torch_output.cpu().numpy(), atol=1e-5)
     torch_transpose_output = torch.nn.functional.conv_transpose3d(
         torch_output,

@@ -19,7 +19,9 @@ from hidet import ops
 from hidet.testing import check_binary
 
 
-def torch_conv1d(data: np.ndarray, weight: np.ndarray, padding: List[int], stride: List[int], dilations: List[int], groups: int):
+def torch_conv1d(
+    data: np.ndarray, weight: np.ndarray, padding: List[int], stride: List[int], dilations: List[int], groups: int
+):
     data_torch, weight_torch = torch.from_numpy(data), torch.from_numpy(weight)
     torch_out = torch.nn.functional.conv1d(
         data_torch, weight_torch, bias=None, stride=stride, padding=[padding[0]], dilation=dilations, groups=groups

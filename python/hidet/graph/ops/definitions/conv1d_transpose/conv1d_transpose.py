@@ -9,11 +9,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Sequence, Union, Tuple, Optional
+from typing import Optional
 from hidet.ir.expr import if_then_else, LogicalAnd
 from hidet.ir.compute import compute, reduce
 from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, TensorNode
-from hidet.graph.ops.definitions.utils import input_like, normalize_stride, normalize_padding
+from hidet.graph.ops.definitions.utils import input_like, normalize_stride, normalize_padding, normalize_kernel
 
 
 class Conv1dTransposeTask(Task):
@@ -25,25 +25,25 @@ class Conv1dTransposeTask(Task):
         padding: Optional[int],
         groups: Optional[int],
         output_padding: Optional[int],
-        dilation: Optional[int],
     ):
         num_channels, out_channels, length_in = data.const_shape()
         out_channels, wc, kernel_size = weight.const_shape()
-        if (type(padding) and type(stride) and type(dilation) and type(groups)) is not int:
-            px, sx, dil, g = padding[0], stride[0], dilation[0], groups[0]
-        else:
-            px, sx, dil, g = padding, stride, dilation, groups
-        channels_in = wc * g
-        l = (length_in - 1) * sx - 2 * px + dil * (kernel_size - 1) + output_padding + 1
+        s = normalize_stride(stride, dim=1)[0]
+        p = normalize_padding(padding, dim=1)[0]
+        k = normalize_kernel(kernel_size, dim=1)[0]
+        op = normalize_padding(output_padding, dim=1)[0]
+        channels_in = wc * groups
+        print(s, p, op, k)
+        l = (length_in - 1) * s - 2 * p + k + op
 
-        if output_padding >= sx:
+        if op >= s:
             raise ValueError(
                 'Convd1dTranspose expects: output_padding < stride, \n'
-                f'but got output_padding, stride: {output_padding}, {sx}'
+                f'but got output_padding, stride: {output_padding}, {s}'
             )
 
         # output channels per group
-        og = out_channels // g
+        og = out_channels // groups
 
         # output
         output = compute(
@@ -52,10 +52,9 @@ class Conv1dTransposeTask(Task):
             fcompute=lambda ni, ci, li: reduce(
                 shape=[og, kernel_size],
                 fcompute=lambda ogi, ki: if_then_else(
-                    cond=LogicalAnd.join(li + px >= ki, li + px < length_in * sx + ki, (li + px - ki) % sx == 0),
+                    cond=LogicalAnd.join(li + p >= ki, li + p < length_in * s + ki, (li + p - ki) % s == 0),
                     then_expr=(
-                        data[ni, (ci // wc) * og + ogi, (li + px - ki) // sx]
-                        * weight[(ci // wc) * og + ogi, ci % wc, ki]
+                        data[ni, (ci // wc) * og + ogi, (li + p - ki) // s] * weight[(ci // wc) * og + ogi, ci % wc, ki]
                     ),
                     else_expr=0.0,
                 ),
@@ -74,20 +73,11 @@ class Conv1dTransposeOp(Operator):
         padding: Optional[int],
         groups: Optional[int],
         output_padding: Optional[int],
-        dilation: Optional[int],
     ):
         super().__init__(
             inputs=[x, w],
-            task=Conv1dTransposeTask(
-                input_like(x, 'x'), input_like(w, 'w'), stride, padding, groups, output_padding, dilation
-            ),
-            attributes={
-                'stride': stride,
-                'padding': padding,
-                'groups': groups,
-                'output_padding': output_padding,
-                'dilation': dilation,
-            },
+            task=Conv1dTransposeTask(input_like(x, 'x'), input_like(w, 'w'), stride, padding, groups, output_padding),
+            attributes={'stride': stride, 'padding': padding, 'groups': groups, 'output_padding': output_padding},
         )
 
 
@@ -98,10 +88,8 @@ def conv1d_transpose(
     padding: Optional[int] = 0,
     groups: Optional[int] = 1,
     output_padding: Optional[int] = 0,
-    dilation: Optional[int] = 1,
 ) -> Tensor:
-    sx = stride
-    px = padding
-    opx = output_padding
-    dil = dilation
-    return Conv1dTransposeOp(data, weight, sx, px, groups, opx, dil).get_output(0)
+    s = stride
+    p = padding
+    op = output_padding
+    return Conv1dTransposeOp(data, weight, s, p, groups, op).get_output(0)

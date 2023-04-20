@@ -30,17 +30,10 @@ def test_conv1d_transpose(
     torch_output = F.conv1d(torch_data, torch_weight, stride=stride, padding=pads, dilation=1, groups=groups, bias=None)
     hidet_data = hidet.from_torch(torch_data)
     hidet_weight = hidet.from_torch(torch_weight)
-    hidet_output = hidet.ops.conv1d(hidet_data, hidet_weight, pads, stride, dilation, groups=groups)
+    hidet_output = hidet.ops.conv1d(hidet_data, hidet_weight, stride, dilation, groups=groups)
     np.testing.assert_allclose(hidet_output.cpu().numpy(), torch_output.cpu().numpy(), atol=1e-5)
     torch_transpose_output = torch.nn.functional.conv_transpose1d(
-        torch_output,
-        torch_weight,
-        stride=stride,
-        padding=pads,
-        output_padding=output_padding,
-        groups=groups,
-        bias=None,
-        dilation=1,
+        torch_output, torch_weight, stride=stride, padding=pads, output_padding=output_padding, groups=groups, bias=None
     )
     hidet_transpose_output = hidet_op(hidet_output, hidet_weight, stride, pads, groups, output_padding=output_padding)
     np.testing.assert_allclose(hidet_transpose_output.cpu().numpy(), torch_transpose_output.cpu().numpy(), atol=1e-5)

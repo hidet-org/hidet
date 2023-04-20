@@ -19,7 +19,7 @@ import hidet
 @pytest.mark.parametrize("hidet_op", [hidet.ops.conv2d_transpose, hidet.ops.conv2d_transpose_gemm])
 @pytest.mark.parametrize(
     'in_channels, out_channels, kernel_size, stride, pads, dilation, groups, height, width, output_padding',
-    [[10, 20, (5, 5), (3, 2), (2, 1), 1, 5, 11, 10, (2, 1)]],
+    [[10, 20, (5, 5), (3, 2), (2, 1), (1, 1), 5, 11, 10, (2, 1)]],
 )
 def test_conv2d_transpose(
     hidet_op, in_channels, out_channels, kernel_size, stride, pads, dilation, groups, height, width, output_padding
