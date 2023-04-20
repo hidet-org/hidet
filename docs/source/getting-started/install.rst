@@ -19,8 +19,7 @@ To verify the installation, run the following command:
 
   .. code-block:: console
 
-    $ pip install -i https://download.hidet.org/whl hidet
-
+    $ pip install --pre --extra-index-url https://download.hidet.org/whl hidet
 
 If you want, you can also :doc:`build from source </getting-started/build-from-source>`.
 
