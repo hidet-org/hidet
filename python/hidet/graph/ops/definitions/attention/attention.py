@@ -580,6 +580,10 @@ class AttnTask(Task):
                     init_o_gmem(o, offset_i)
                 init_lm_smem(smem_l, smem_m)
 
+                # Load Qi into Smem, it stays there forever
+                offset_i = offset_n + i * block_i
+                copy_q_g2s(q, smem_q, offset_i)
+
                 for j in range(j_tiles):
                     # Load Kj, Vj into Smem
                     offset_j = block_j * j  # 256j
@@ -597,9 +601,6 @@ class AttnTask(Task):
                         for mma_j in range(mmas_per_warp_n):
                             copy_k_s2r(mma_j, mma_k, ~regs_k[mma_k, mma_j, 0], smem_k)
                     for i in range(i_tiles_per_tb):
-                        # Load Qi into Smem
-                        offset_i = offset_n + i * block_i
-                        copy_q_g2s(q, smem_q, offset_i)
                         # Compute QK = Qi * Kj
                         # Init regs_acc to 0
                         for a, b, c in grid(mmas_per_warp_m, mmas_per_warp_n, mma_config.c_elements):
