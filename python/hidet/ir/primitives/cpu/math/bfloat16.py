@@ -44,53 +44,53 @@ class CPUBFloat16MathFunctionSet(MathFunctionSet):
             )
 
     def call(self, name: str, *args) -> Expr:
-        entry = primitive_func_pool.lookup_by_name(name)
+        entry = primitive_func_pool.lookup_by_name('cpu_bf16_{}'.format(name))
         return Call(entry.var, args)
 
     def sin(self, a: Expr) -> Expr:
-        return self.call('cpu_bf16_sin', a)
+        return self.call('sin', a)
 
     def cos(self, a: Expr) -> Expr:
-        return self.call('cpu_bf16_cos', a)
+        return self.call('cos', a)
 
     def tanh(self, a: Expr) -> Expr:
-        return self.call('cpu_bf16_tanh', a)
+        return self.call('tanh', a)
 
     def exp(self, a: Expr) -> Expr:
-        return self.call('cpu_bf16_exp', a)
+        return self.call('exp', a)
 
     def erf(self, a: Expr) -> Expr:
-        return self.call('cpu_bf16_erf', a)
+        return self.call('erf', a)
 
     def sqrt(self, a: Expr) -> Expr:
-        return self.call('cpu_bf16_sqrt', a)
+        return self.call('sqrt', a)
 
     def rsqrt(self, a: Expr) -> Expr:
-        return self.call('cpu_bf16_rsqrt', a)
+        return self.call('rsqrt', a)
 
     def log(self, a: Expr) -> Expr:
-        return self.call('cpu_bf16_log', a)
+        return self.call('log', a)
 
     def round(self, a: Expr) -> Expr:
-        return self.call('cpu_bf16_round', a)
+        return self.call('round', a)
 
     def ceil(self, a: Expr) -> Expr:
-        return self.call('cpu_bf16_ceil', a)
+        return self.call('ceil', a)
 
     def floor(self, a: Expr) -> Expr:
-        return self.call('cpu_bf16_floor', a)
+        return self.call('floor', a)
 
     def min(self, a: Expr, b: Expr) -> Expr:
-        return self.call('cpu_bf16_min', a, b)
+        return self.call('min', a, b)
 
     def max(self, a: Expr, b: Expr) -> Expr:
-        return self.call('cpu_bf16_max', a, b)
+        return self.call('max', a, b)
 
     def pow(self, a: Expr, b: Expr) -> Expr:
-        return self.call('cpu_bf16_pow', a, b)
+        return self.call('pow', a, b)
 
     def fma(self, a: Expr, b: Expr, c: Expr) -> Expr:
-        return self.call('cpu_bf16_fma', a, b, c)
+        return self.call('fma', a, b, c)
 
 
 cpu_bf16_math_function_set = CPUBFloat16MathFunctionSet()

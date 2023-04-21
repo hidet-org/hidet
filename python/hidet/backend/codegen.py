@@ -748,9 +748,6 @@ class CPUCodegen(Codegen):
         doc += Text('#include <hidet/cpu/float16.h>') + NewLine()
         doc += Text('#include <hidet/cpu/bfloat16.h>') + NewLine()
 
-        # use half library to enable float16
-        # https://half.sourceforge.net/
-
         if module.task is not None:
             doc += '/*' + NewLine()
             doc += str(module.task) + NewLine()
@@ -761,6 +758,10 @@ class CPUCodegen(Codegen):
         # add namespace to activate data type and function
         doc += Text('using float16::Half;') + NewLine()
         doc += Text('using bfloat16::BFloat16;') + NewLine()
+
+        # use typedef to map half and bfloat16 type
+        doc += Text('typedef Half half;') + NewLine()
+        doc += Text('typedef BFloat16 bfloat16_t;') + NewLine()
 
         call_graph = CallGraph(module)
         for node in call_graph.reversed_order:
