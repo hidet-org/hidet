@@ -17,6 +17,8 @@ from enum import Enum
 
 from ctypes import c_int32, c_void_p, pointer, c_float, cast
 from ctypes import POINTER, Structure
+
+import hidet.graph.frontend.torch
 from hidet.ir.type import TypeNode, DataType, TensorType, PointerType, TensorPointerType
 from hidet.ir.expr import Constant
 from .ffi import _LIB
@@ -94,6 +96,9 @@ class PackedFunc:
                 else:
                     assert arg.is_tensor()
                     raise NotImplementedError('Constant tensor is not supported.')
+            if not isinstance(arg, Tensor) and arg.__class__.__name__ == 'Tensor':
+                if hidet.graph.frontend.torch.available() and arg.__class__.__name__ == 'Tensor':
+                    arg = hidet.from_torch(arg)
 
             if isinstance(arg, (float, int)):
                 if not isinstance(param_type, DataType):
