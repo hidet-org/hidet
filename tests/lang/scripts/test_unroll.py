@@ -17,27 +17,33 @@ def test_unroll():
     from hidet.lang import printf, attr, grid, repeat
 
     with hidet.script_module() as script_module:
+
         @hidet.script
         def example():
             attr.func_kind = 'host_kernel'
 
-            for i in grid(10, unroll=True):
+            for i in grid(10, attrs='u'):  # unroll
                 printf("i = %d\n", i)
 
-            for i in grid(10, unroll=2):
+            for i in grid(10, attrs='u+'):  # unroll explicitly
                 printf("i = %d\n", i)
 
-            for i, j in grid(2, 5, unroll=[True, None]):
+            for i in grid(10, attrs='u2'):  # unroll with factor 2
+                printf("i = %d\n", i)
+
+            for i, j in grid(2, 5, attrs='u.'):  # unroll the first loop while keep the second loop unchanged
                 printf("i = %d, j = %d\n", i, j)
 
             for w in range(32):
-                for i, j in repeat(2, 8, unroll=[True, None]).spatial(4, 8).on(w):
+                # unroll the first loop while keep the second loop unchanged in the repeat task mapping
+                for i, j in repeat(2, 8, attrs='u.').spatial(4, 8).on(w):
                     printf("i = %d, j = %d\n", i, j)
 
     ir_module = script_module.ir_module()
     func = hidet.driver.build_ir_module(ir_module)
     source_code = func.source()
     assert "#pragma unroll" in source_code
+    return func
 
 
 if __name__ == '__main__':

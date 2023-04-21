@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List, Dict, Sequence, Union, Optional
-from hidet.ir import Var, ForTaskStmt, Stmt, ForStmt, Expr, SeqStmt
+from hidet.ir import Var, ForMappingStmt, Stmt, ForStmt, Expr, SeqStmt
 from hidet.ir.expr import var
 from hidet.ir.mapping import TaskMapping, SpatialTaskMapping, RepeatTaskMapping, ComposedTaskMapping
 from hidet.transforms.base import Pass, FunctionBodyPass
@@ -73,9 +73,9 @@ class TaskMappingExpander:
         for i in range(num_loops):
             dim = mapping.ranks.index(i)
             extent = simplify(mapping.task_shape[dim])
-            unroll = mapping.unroll[dim]
+            attr = mapping.attrs[dim]
             loop_var = var('i')
-            self.loop_nests.append(ForStmt(loop_var=loop_var, extent=extent, unroll=unroll))
+            self.loop_nests.append(ForStmt(loop_var=loop_var, extent=extent, attr=attr))
             task[dim] = loop_var
         return [task]
 
@@ -93,7 +93,7 @@ class TaskMappingExpander:
 
 
 class LowerTaskMappingRewriter(IRRewriter):
-    def visit_ForTaskStmt(self, stmt: ForTaskStmt):
+    def visit_ForTaskStmt(self, stmt: ForMappingStmt):
         body = self.visit(stmt.body)
         expander = TaskMappingExpander()
         return expander.expand(mapping=stmt.mapping, worker=stmt.worker, loop_vars=stmt.loop_vars, body=body)

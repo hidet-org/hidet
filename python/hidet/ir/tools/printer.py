@@ -18,7 +18,16 @@ from hidet.ir.expr import Sub, LogicalNot, LogicalOr, LogicalAnd, Let, IfThenEls
 from hidet.ir.expr import RightShift, LeftShift, BitwiseNot, BitwiseOr
 from hidet.ir.expr import BitwiseAnd, Neg, Cast, NotEqual, BitwiseXor, Reference, Dereference, Address
 from hidet.ir.stmt import SeqStmt, IfStmt, ForStmt, AssignStmt, BufferStoreStmt, EvaluateStmt, AssertStmt
-from hidet.ir.stmt import BlackBoxStmt, AsmStmt, ReturnStmt, LetStmt, DeclareStmt, ForTaskStmt, WhileStmt, ContinueStmt
+from hidet.ir.stmt import (
+    BlackBoxStmt,
+    AsmStmt,
+    ReturnStmt,
+    LetStmt,
+    DeclareStmt,
+    ForMappingStmt,
+    WhileStmt,
+    ContinueStmt,
+)
 from hidet.ir.stmt import BreakStmt, DeclareScope, LaunchKernelStmt
 from hidet.ir.mapping import RepeatTaskMapping, SpatialTaskMapping, ComposedTaskMapping
 from hidet.ir.compute import TensorNode, GridCompute, ArgReduceCompute, ReduceCompute, TensorInput, ScalarInput
@@ -262,15 +271,15 @@ class IRPrinter(IRFunctor):
     def visit_ForStmt(self, stmt: ForStmt):
         rng = Text('range(') + self(stmt.extent) + ')'
         doc = NewLine() + Text('for ') + self(stmt.loop_var) + ' in ' + rng
-        if stmt.unroll is not None:
-            if stmt.unroll:
+        if stmt.attr.unroll is not None:
+            if stmt.attr.unroll:
                 doc += '[unroll]'
             else:
                 doc += '[no-unroll]'
         doc += self(stmt.body).indent(4)
         return doc
 
-    def visit_ForTaskStmt(self, stmt: ForTaskStmt):
+    def visit_ForTaskStmt(self, stmt: ForMappingStmt):
         doc = NewLine() + Text('for ') + self(stmt.loop_vars) + ' in ' + self(stmt.mapping) + ' on ' + self(stmt.worker)
         doc += self(stmt.body).indent(4)
         return doc

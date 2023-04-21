@@ -139,7 +139,7 @@ class Simplifier(StmtRewriter, ExprRewriter, BaseRewriter):
             if loop_var is stmt.loop_var and body is stmt.body:
                 return stmt
             else:
-                return ForStmt(loop_var, extent, stmt.unroll, body)
+                return ForStmt(loop_var, extent, body=body, attr=stmt.attr)
 
 
 def simplify(node: Union[Stmt, Expr, int, float], repeat_limit=10):

@@ -11,16 +11,16 @@
 # limitations under the License.
 from typing import Union, Optional, Sequence
 
-from hidet.ir.stmt import Stmt, ForStmt, IfStmt, EvaluateStmt, SeqStmt, LetStmt, ForTaskStmt
+from hidet.ir.stmt import Stmt, ForStmt, IfStmt, EvaluateStmt, SeqStmt, LetStmt, ForMappingStmt, ForStmtAttr
 from hidet.ir.expr import Expr, Var, var, convert
 from hidet.ir.mapping import TaskMapping
 
-ScopedStmt = Union[IfStmt, ForStmt, LetStmt, ForTaskStmt]
+ScopedStmt = Union[IfStmt, ForStmt, LetStmt, ForMappingStmt]
 
 
 class StmtScope:
     def __init__(self, sb: 'StmtBuilder', stmts: Union[Sequence[ScopedStmt], ScopedStmt], ret=None):
-        if isinstance(stmts, (IfStmt, ForStmt, LetStmt, ForTaskStmt)):
+        if isinstance(stmts, (IfStmt, ForStmt, LetStmt, ForMappingStmt)):
             stmts = [stmts]
         self.sb = sb
         self.stmts = stmts
@@ -68,7 +68,7 @@ class StmtBuilder:
     def for_loop(self, v: Union[str, Var], extent: Union[int, Expr], unroll: Optional[bool] = None) -> StmtScope:
         if isinstance(v, str):
             v = var(v)
-        return StmtScope(self, stmts=ForStmt(v, extent, unroll), ret=v)
+        return StmtScope(self, stmts=ForStmt(v, extent, attr=ForStmtAttr(unroll)), ret=v)
 
     def if_then(self, cond: Union[bool, Expr]) -> StmtScope:
         return StmtScope(self, stmts=[IfStmt(cond)], ret=None)
@@ -83,7 +83,7 @@ class StmtBuilder:
 
     def for_mapping(self, iter_names: Sequence[str], mapping: TaskMapping, worker: Expr) -> StmtScope:
         iter_names = [var(name) for name in iter_names]
-        return StmtScope(self, stmts=ForTaskStmt(iter_names, mapping, worker, None), ret=iter_names)
+        return StmtScope(self, stmts=ForMappingStmt(iter_names, mapping, worker, None), ret=iter_names)
 
     # def for_task(self, worker_index: Expr, task_layout: TaskMapping):
     #     # replaced by for_mapping, todo: remove this function and rewrite all its usage
@@ -120,7 +120,7 @@ class StmtBuilder:
             else:
                 assert last_stmt.else_body is None
                 last_stmt.else_body = body
-        elif isinstance(last_stmt, ForTaskStmt):
+        elif isinstance(last_stmt, ForMappingStmt):
             last_stmt.body = body
         else:
             assert False

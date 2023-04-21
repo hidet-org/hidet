@@ -110,13 +110,14 @@ class TaskMapping(Node):
 
 
 class RepeatTaskMapping(TaskMapping):
-    def __init__(self, task_shape: Sequence[Int], ranks: Sequence[int], unroll: Sequence[Union[bool, int]]):
+    def __init__(self, task_shape: Sequence[Int], ranks: Sequence[int], attrs):
+        from hidet.ir.stmt import ForStmtAttr
         from hidet.ir.tools import simplify
 
         super().__init__(num_workers=1, task_shape=tuple(task_shape), worker2task=self._worker2task)
         self.ranks: List[int] = list(ranks)
         self.strides: List[Int] = [simplify(v) for v in strides_from_ranks(task_shape, ranks)]
-        self.unroll: List[Union[bool, int]] = list(unroll)
+        self.attrs: List[ForStmtAttr] = list(attrs)
 
     # noinspection PyUnusedLocal
     def _worker2task(self, w: Int) -> List[Tuple[Int]]:  # pylint: disable=unused-argument
@@ -187,103 +188,6 @@ class ComposedTaskMapping(TaskMapping):
         return tasks
 
 
-# class TaskMappingExpander:
-#     def __init__(self):
-#         from hidet.ir.stmt import ForStmt, LetStmt
-#
-#         self.stmts: List[Union[LetStmt, ForStmt]] = []
-#
-#     def variablize(self, e):
-#         from hidet.ir import LetStmt
-#
-#         if is_atom(e):
-#             return e
-#         else:
-#             v = var('p')
-#             self.stmts.append(LetStmt(v, e))
-#             return v
-#
-#     def expand(self, w: Int, task_layout: TaskMapping) -> List[Sequence[Int]]:
-#         vtable = {
-#             RepeatTaskMapping: self.expand_full,
-#             SpatialTaskMapping: self.expand_grid,
-#             ComposedTaskMapping: self.expand_composed,
-#             ProjectedTaskMapping: self.expand_projected,
-#             TaskMapping: self.expand_atom,
-#         }
-#         w = self.variablize(w)
-#         # noinspection PyArgumentList
-#         return vtable[task_layout.__class__](w, task_layout)
-#
-#     def expand_composed(self, w: Int, layout: ComposedTaskMapping):
-#         outer_w = self.variablize(w // layout.inner.num_workers)
-#         inner_w = self.variablize(w % layout.inner.num_workers)
-#         outer_fields = self.expand(outer_w, layout.outer)
-#         inner_fields = self.expand(inner_w, layout.inner)
-#         fields = []
-#         for outer_field in outer_fields:
-#             scaled_outer_field = [self.variablize(a * b) for a, b in zip(outer_field, layout.inner.task_shape)]
-#             for inner_field in inner_fields:
-#                 fields.append(tuple(a + b for a, b in zip(scaled_outer_field, inner_field)))
-#         return fields
-#
-#     def expand_projected(self, w: Int, layout: ProjectedTaskMapping):
-#         rank = len(layout.task_shape)
-#         base_fields = self.expand(w, layout.base)
-#         projected_fields = []
-#         for field in base_fields:
-#             projected_fields.append(
-#                 tuple(layout.dim2value[i] if i in layout.dim2value else field[i] for i in range(rank))
-#             )
-#         return projected_fields
-#
-#     def expand_grid(self, w: Int, layout: SpatialTaskMapping):
-#         return [[self.variablize(v) for v in layout(w)[0]]]
-#
-#     def expand_full(self, w: Int, layout: RepeatTaskMapping):
-#         unroll_limit = 1024
-#         if prod(layout.task_shape) < unroll_limit:
-#             # unroll automatically
-#             return layout(w)
-#         else:
-#             # do not expand, use for loop
-#             from hidet.ir import ForStmt
-#
-#             shape = layout.task_shape
-#             axes = []
-#             for i, s in enumerate(shape):
-#                 axis = var(chr(ord('i') + i))
-#                 self.stmts.append(ForStmt(loop_var=axis, extent=s))
-#                 axes.append(axis)
-#             return [axes]
-#
-#     @staticmethod
-#     def expand_atom(w: Int, layout: TaskMapping):
-#         return layout(w)
-
-def parse_unroll(
-    unroll: str, num_loops: Optional[int] = None
-) -> List[Union[str, int]]:
-    """
-    Parse unroll string.
-
-    unroll-string:
-      unroll-spec ([','] unroll-spec)*
-    unroll-spec:
-
-
-    Parameters
-    ----------
-    unroll
-    num_loops
-
-    Returns
-    -------
-
-    """
-    pass
-
-
 def spatial_map(task_shape: Sequence[Int], ranks: Optional[Sequence[int]] = None):
     from hidet.ir.tools import simplify
 
@@ -301,37 +205,27 @@ def col_spatial(*task_shape: Int):
     return spatial_map(task_shape, ranks=list(reversed(range(len(task_shape)))))
 
 
-def repeat_map(task_shape: Sequence[Int], ranks: Optional[Sequence[int]] = None, unroll=None):
+def repeat_map(task_shape: Sequence[Int], ranks: Optional[Sequence[int]] = None, attrs: Optional[str] = None):
+    from hidet.ir.stmt import ForStmtAttr
     from hidet.ir.tools import simplify
 
     task_shape = [simplify(v) for v in task_shape]
     if ranks is None:
         ranks = list(range(len(task_shape)))
-    if unroll is None:
-        unroll = [None] * len(task_shape)
-    elif isinstance(unroll, bool):
-        unroll = [unroll] * len(task_shape)
-    elif isinstance(unroll, int):
-        if len(task_shape) > 1:
-            raise ValueError('unroll cannot be a int when task_shape has more than one dimension')
-        unroll = [unroll]
-    elif isinstance(unroll, (list, tuple)):
-        if len(unroll) != len(task_shape):
-            raise ValueError('unroll must have the same length as task_shape')
-        else:
-            unroll = list(unroll)
+    if attrs is None:
+        attrs = [ForStmtAttr() for _ in range(len(task_shape))]
     else:
-        raise ValueError('unroll must be a bool, None, or list/tuple of bool/int/None')
-
-    return RepeatTaskMapping(task_shape, ranks, unroll=unroll)
-
-
-def row_repeat(*task_shape: Int, unroll=None):
-    return repeat_map(task_shape, unroll=unroll)
+        assert isinstance(attrs, str)
+        attrs: List[ForStmtAttr] = ForStmtAttr.parse(attrs)
+    return RepeatTaskMapping(task_shape, ranks, attrs)
 
 
-def col_repeat(*task_shape: Int, unroll=None):
-    return repeat_map(task_shape, ranks=list(reversed(range(len(task_shape)))), unroll=unroll)
+def row_repeat(*task_shape: Int, attrs: Optional[str] = None):
+    return repeat_map(task_shape, attrs=attrs)
+
+
+def col_repeat(*task_shape: Int, attrs: Optional[str] = None):
+    return repeat_map(task_shape, ranks=list(reversed(range(len(task_shape)))), attrs=attrs)
 
 
 def auto_map(
