@@ -14,7 +14,16 @@ from typing import List
 
 from hidet.ir.node import Node
 from hidet.ir.expr import Expr, Var
-from hidet.ir.stmt import EvaluateStmt, DeclareStmt, BufferStoreStmt, AssignStmt, LetStmt, ForStmt, ForTaskStmt, SeqStmt
+from hidet.ir.stmt import (
+    EvaluateStmt,
+    DeclareStmt,
+    BufferStoreStmt,
+    AssignStmt,
+    LetStmt,
+    ForStmt,
+    ForMappingStmt,
+    SeqStmt,
+)
 from hidet.ir.stmt import WhileStmt, BreakStmt, ContinueStmt, IfStmt, ReturnStmt, AsmStmt, AssertStmt, BlackBoxStmt
 from hidet.ir.stmt import LaunchKernelStmt
 from hidet.utils import same_list
@@ -36,7 +45,7 @@ class StmtFunctor(BaseFunctor):
             return self.visit_LetStmt(node)
         elif isinstance(node, ForStmt):
             return self.visit_ForStmt(node)
-        elif isinstance(node, ForTaskStmt):
+        elif isinstance(node, ForMappingStmt):
             return self.visit_ForTaskStmt(node)
         elif isinstance(node, WhileStmt):
             return self.visit_WhileStmt(node)
@@ -79,7 +88,7 @@ class StmtFunctor(BaseFunctor):
     def visit_ForStmt(self, stmt: ForStmt):
         raise NotImplementedError()
 
-    def visit_ForTaskStmt(self, stmt: ForTaskStmt):
+    def visit_ForTaskStmt(self, stmt: ForMappingStmt):
         raise NotImplementedError()
 
     def visit_WhileStmt(self, stmt: WhileStmt):
@@ -141,7 +150,7 @@ class StmtVisitor(StmtFunctor, BaseVisitor):
         self.visit(stmt.extent)
         self.visit(stmt.body)
 
-    def visit_ForTaskStmt(self, stmt: ForTaskStmt):
+    def visit_ForTaskStmt(self, stmt: ForMappingStmt):
         for loop_var in stmt.loop_vars:
             self.visit(loop_var)
         self.visit(stmt.worker)
@@ -242,9 +251,9 @@ class StmtRewriter(StmtFunctor, BaseRewriter):
         if loop_var is stmt.loop_var and extent is stmt.extent and body is stmt.body:
             return stmt
         else:
-            return ForStmt(loop_var, extent, stmt.unroll, body)
+            return ForStmt(loop_var, extent, body=body, attr=stmt.attr)
 
-    def visit_ForTaskStmt(self, stmt: ForTaskStmt):
+    def visit_ForTaskStmt(self, stmt: ForMappingStmt):
         loop_vars: List[Expr] = [self.visit(v) for v in stmt.loop_vars]
         # todo: visit expressions in task mapping
         worker = self.visit(stmt.worker)
@@ -254,7 +263,7 @@ class StmtRewriter(StmtFunctor, BaseRewriter):
         else:
             assert all(isinstance(v, Var) for v in loop_vars)
             asserted_loop_vars: List[Var] = [v for v in loop_vars if isinstance(v, Var)]  # avoid IDE warning
-            return ForTaskStmt(loop_vars=asserted_loop_vars, mapping=stmt.mapping, worker=worker, body=body)
+            return ForMappingStmt(loop_vars=asserted_loop_vars, mapping=stmt.mapping, worker=worker, body=body)
 
     def visit_WhileStmt(self, stmt: WhileStmt):
         cond = self.visit(stmt.cond)

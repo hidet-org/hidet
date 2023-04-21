@@ -9,6 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from __future__ import annotations
 from typing import Sequence, Tuple, Any, List, Union, Optional
 import enum
 from hidet.ir.node import Node
@@ -97,20 +98,100 @@ class LetStmt(Stmt):
         self.body: Optional[Stmt] = body
 
 
+class ForStmtAttr:
+    def __init__(self, unroll=None, explicit_unroll=False):
+        self.unroll: Union[int, bool, None] = unroll
+        self.explicit_unroll: bool = explicit_unroll
+
+    def __str__(self):
+        if self.unroll is None:
+            return '.'
+        elif isinstance(self.unroll, bool):
+            if self.explicit_unroll:
+                return 'u+'
+            else:
+                return 'u'
+        else:
+            if self.explicit_unroll:
+                return f'u{self.unroll}+'
+            else:
+                return f'u{self.unroll}'
+
+    @staticmethod
+    def parse(attr: str) -> List[ForStmtAttr]:
+        """
+        Parse the attribute string and return a list of ForStmtAttr.
+
+        attr-string: attr+
+        attr:
+             | unroll
+             | default
+        unroll:
+             | 'u'          # unroll
+             | 'u' INT+     # unroll with factor, e.g., u1 u2 u3. u1 indicates unroll with factor 1 (i.e., no unroll)
+             | 'u' '+'      # explicit unroll, will be unrolled by hidet instead of underlying compiler
+        default: '.'
+
+
+        Parameters
+        ----------
+        attr: str
+            The attribute string.
+
+        Returns
+        -------
+        attrs: List[ForStmtAttr]
+            The list of ForStmtAttr.
+        """
+        s = attr.replace(' ', '')
+        idx = 0
+
+        def cur() -> Optional[str]:
+            if idx >= len(s):
+                return None
+            return s[idx]
+
+        attrs: List[ForStmtAttr] = []
+        while idx < len(s):
+            if s[idx] == '.':
+                idx += 1
+                attrs.append(ForStmtAttr(unroll=None, explicit_unroll=False))
+            elif s[idx] == 'u':
+                idx += 1
+                c = cur()
+                if c == '+':
+                    attrs.append(ForStmtAttr(unroll=True, explicit_unroll=True))
+                    idx += 1
+                elif c and c.isdigit():
+                    unroll = 0
+                    while c and c.isdigit():
+                        unroll = unroll * 10 + int(c)
+                        idx += 1
+                        c = cur()
+                    if unroll == 0:
+                        raise ValueError(f"Invalid attribute string: {attr}")
+                    attrs.append(ForStmtAttr(unroll=unroll, explicit_unroll=False))
+                else:
+                    attrs.append(ForStmtAttr(unroll=True, explicit_unroll=False))
+            else:
+                raise ValueError(f"Invalid attribute string: {attr}")
+        return attrs
+
+
 class ForStmt(Stmt):
     DEFAULT_UNROLL_LIMIT = 32
 
-    def __init__(self, loop_var, extent, unroll: Optional[Union[int, bool]] = None, body=None):
+    def __init__(self, loop_var, extent, body=None, *, attr: Optional[ForStmtAttr] = None):
         from hidet.ir.tools import simplify  # pylint: disable=import-outside-toplevel
 
         super().__init__()
         self.loop_var: Var = loop_var
         self.extent: Expr = simplify(convert(extent))
-        self.unroll: Optional[Union[int, bool]] = unroll
         self.body: Optional[Stmt] = body
+        self.attr: ForStmtAttr = attr if attr else ForStmtAttr()
 
 
-class ForTaskStmt(Stmt):
+class ForMappingStmt(Stmt):
     def __init__(self, loop_vars: Sequence[Var], mapping: TaskMapping, worker: Expr, body: Stmt):
         self.loop_vars: List[Var] = list(loop_vars)
         self.mapping: TaskMapping = mapping
@@ -202,7 +283,7 @@ def asm(
     outputs: Sequence[Any] = (),
     output_inputs: Sequence[Any] = (),
     inputs: Sequence[Any] = (),
-    is_volatile=False
+    is_volatile=False,
 ):
     from hidet.ir.tools import infer_type  # pylint: disable=import-outside-toplevel
 
