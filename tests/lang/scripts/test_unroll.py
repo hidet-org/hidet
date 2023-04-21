@@ -28,7 +28,13 @@ def test_unroll():
             for i in grid(10, attrs='u+'):  # unroll explicitly
                 printf("i = %d\n", i)
 
-            for i in grid(10, attrs='u2'):  # unroll with factor 2
+            for i in grid(5, attrs='u+'):
+                for j in grid(i, attrs='u'):
+                    for k in grid(2, attrs='u+'):
+                        printf("i = %d, j = %d, k = %d\n", i, j, k)
+
+            extent = 10
+            for i in grid(extent, attrs='u+'):  # explicit unroll, extent must be a compilation-time constant
                 printf("i = %d\n", i)
 
             for i, j in grid(2, 5, attrs='u.'):  # unroll the first loop while keep the second loop unchanged

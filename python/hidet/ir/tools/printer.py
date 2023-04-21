@@ -272,10 +272,7 @@ class IRPrinter(IRFunctor):
         rng = Text('range(') + self(stmt.extent) + ')'
         doc = NewLine() + Text('for ') + self(stmt.loop_var) + ' in ' + rng
         if stmt.attr.unroll is not None:
-            if stmt.attr.unroll:
-                doc += '[unroll]'
-            else:
-                doc += '[no-unroll]'
+            doc += '  # ' + str(stmt.attr)
         doc += self(stmt.body).indent(4)
         return doc
 

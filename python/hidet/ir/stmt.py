@@ -103,6 +103,20 @@ class ForStmtAttr:
         self.unroll: Union[int, bool, None] = unroll
         self.explicit_unroll: bool = explicit_unroll
 
+    def __str__(self):
+        if self.unroll is None:
+            return '.'
+        elif isinstance(self.unroll, bool):
+            if self.explicit_unroll:
+                return 'u+'
+            else:
+                return 'u'
+        else:
+            if self.explicit_unroll:
+                return f'u{self.unroll}+'
+            else:
+                return f'u{self.unroll}'
+
     @staticmethod
     def parse(attr: str) -> List[ForStmtAttr]:
         """
@@ -167,7 +181,7 @@ class ForStmtAttr:
 class ForStmt(Stmt):
     DEFAULT_UNROLL_LIMIT = 32
 
-    def __init__(self, loop_var, extent, *, body=None, attr: Optional[ForStmtAttr] = None):
+    def __init__(self, loop_var, extent, body=None, *, attr: Optional[ForStmtAttr] = None):
         from hidet.ir.tools import simplify  # pylint: disable=import-outside-toplevel
 
         super().__init__()

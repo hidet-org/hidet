@@ -40,10 +40,10 @@ def lower(ir_module: IRModule) -> IRModule:
         flatten_tensor_slice_pass(),
         lower_protect_access_pass(),
         lower_task_mapping_pass(),
-        explicit_unroll_pass(),
         normalize_const_tensor_pass(),
         declare_to_let_pass(),
         rule_based_simplify_pass(),  # make ir more readable
+        explicit_unroll_pass(),
         flatten_tensor_index_pass(),
         lower_special_cast_pass(),
         resolve_primitive_func_pass(),
