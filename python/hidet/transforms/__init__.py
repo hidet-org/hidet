@@ -17,6 +17,7 @@ from .instruments import PassInstrument, SaveIRInstrument, ProfileInstrument
 from .flatten_tensor_slice import flatten_tensor_slice_pass
 from .flatten_tensor_index import flatten_tensor_index_pass
 from .generate_packed_func import generate_packed_func_pass
+from .explicit_unroll import explicit_unroll_pass
 from .import_primitive_functions import import_primitive_functions_pass
 from .simplify_stmt import simplify_stmt_pass
 from .expand_let_expr import expand_let_expr_pass
@@ -42,6 +43,7 @@ def lower(ir_module: IRModule) -> IRModule:
         normalize_const_tensor_pass(),
         declare_to_let_pass(),
         rule_based_simplify_pass(),  # make ir more readable
+        explicit_unroll_pass(),
         flatten_tensor_index_pass(),
         lower_special_cast_pass(),
         resolve_primitive_func_pass(),

@@ -139,7 +139,7 @@ class IRRewriterWithScope(IRRewriter):
             self.visit(stmt.extent)
             scope.declare(stmt.loop_var)
             body = scope.wrap(self.visit(stmt.body))
-            return ForStmt(stmt.loop_var, stmt.extent, stmt.unroll, body)
+            return ForStmt(stmt.loop_var, stmt.extent, body=body, attr=stmt.attr)
 
     def visit_LetStmt(self, stmt: LetStmt):
         with self.new_scope(stmt) as scope:

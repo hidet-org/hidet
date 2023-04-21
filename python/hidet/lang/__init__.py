@@ -65,7 +65,7 @@ def as_tensor_pointer(
     return cast(expr, tensor_pointer(dtype, shape, layout))
 
 
-def grid(*dim_extents, unroll=None):
+def grid(*dim_extents, attrs: Optional[str] = None):
     """
     Iterate over the grid.
 
@@ -74,11 +74,8 @@ def grid(*dim_extents, unroll=None):
     dim_extents: Sequence[Expr or int]
         The length of each dimension.
 
-    unroll: Sequence[bool or int] or int or bool, optional
-        Whether to unroll the loop for each dimension.
-        If None, the loop will not be unrolled.
-        If a bool, all dimensions will be unrolled if True, or none will be unrolled if False.
-        If a sequence of bool, each dimension will be unrolled if the corresponding element is True.
+    attrs: Optional[str]
+        The attributes of each loop. See ForStmtAttr for more information.
 
     Returns
     -------

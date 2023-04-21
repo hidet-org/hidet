@@ -22,7 +22,7 @@ from hidet.ir.expr import IfThenElse, Cast, Address, Reference, Dereference, Cal
 from hidet.ir.expr import TensorElement
 from hidet.ir.stmt import DeclareScope, DeclareStmt, EvaluateStmt, BufferStoreStmt, AssignStmt, LetStmt, ForStmt
 from hidet.ir.stmt import LaunchKernelStmt
-from hidet.ir.stmt import ForTaskStmt, WhileStmt, BreakStmt, ContinueStmt, IfStmt, ReturnStmt, AssertStmt, AsmStmt
+from hidet.ir.stmt import ForMappingStmt, WhileStmt, BreakStmt, ContinueStmt, IfStmt, ReturnStmt, AssertStmt, AsmStmt
 from hidet.ir.stmt import BlackBoxStmt, SeqStmt
 from hidet.ir.func import IRModule, Function
 from hidet.ir.compute import TensorNode, ScalarNode
@@ -513,21 +513,22 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
         cond_doc = self(v < stmt.extent)
         update_doc = self(v) + ' = ' + self(v + 1)
         doc = Text('')
-        if stmt.unroll is not None:
-            if isinstance(stmt.unroll, bool):
-                if stmt.unroll:
+        if stmt.attr.unroll is not None:
+            assert not stmt.attr.explicit_unroll, 'explicit_unroll should be lowered before codegen'
+            if isinstance(stmt.attr.unroll, bool):
+                if stmt.attr.unroll:
                     doc += NewLine() + '#pragma unroll'  # complete unroll
                 else:
                     doc += NewLine() + '#pragma unroll 1'  # prevent from unrolling
             else:
-                assert isinstance(stmt.unroll, int)
-                doc += NewLine() + '#pragma unroll {}'.format(stmt.unroll)
+                assert isinstance(stmt.attr.unroll, int)
+                doc += NewLine() + '#pragma unroll {}'.format(stmt.attr.unroll)
         doc += NewLine() + Text('for (') + init_doc + '; ' + cond_doc + '; ' + update_doc + ') '
         body_doc = self(stmt.body)
         doc += Text('{') + body_doc.indent() + NewLine() + Text('} ')
         return doc
 
-    def visit_ForTaskStmt(self, stmt: ForTaskStmt):
+    def visit_ForTaskStmt(self, stmt: ForMappingStmt):
         raise ValueError('ForTaskStmt should be lowered to ForStmt in lower_task_mapping pass before code generation.')
 
     def visit_WhileStmt(self, stmt: WhileStmt):

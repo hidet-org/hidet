@@ -35,7 +35,8 @@ from .layout import DataLayout
 from .mapping import TaskMapping
 
 from .stmt import Stmt, DeclareStmt, EvaluateStmt, BufferStoreStmt, AssignStmt, ForStmt, IfStmt, AssertStmt, SeqStmt
-from .stmt import LetStmt, ForTaskStmt, ReturnStmt, WhileStmt, BreakStmt, ContinueStmt
+from .stmt import LetStmt, ForMappingStmt, ReturnStmt, WhileStmt, BreakStmt, ContinueStmt
+from .stmt import ForStmtAttr
 
 from .compute import TensorNode, ScalarNode
 
