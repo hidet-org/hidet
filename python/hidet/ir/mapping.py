@@ -261,6 +261,28 @@ class ComposedTaskMapping(TaskMapping):
 #     def expand_atom(w: Int, layout: TaskMapping):
 #         return layout(w)
 
+def parse_unroll(
+    unroll: str, num_loops: Optional[int] = None
+) -> List[Union[str, int]]:
+    """
+    Parse unroll string.
+
+    unroll-string:
+      unroll-spec ([','] unroll-spec)*
+    unroll-spec:
+
+
+    Parameters
+    ----------
+    unroll
+    num_loops
+
+    Returns
+    -------
+
+    """
+    pass
+
 
 def spatial_map(task_shape: Sequence[Int], ranks: Optional[Sequence[int]] = None):
     from hidet.ir.tools import simplify
