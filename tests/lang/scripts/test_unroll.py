@@ -41,8 +41,16 @@ def test_unroll():
                 printf("i = %d, j = %d\n", i, j)
 
             for w in range(32):
-                # unroll the first loop while keep the second loop unchanged in the repeat task mapping
+                for i, j in repeat(2, 8).spatial(4, 8).on(w):
+                    printf("i = %d, j = %d\n", i, j)
+
                 for i, j in repeat(2, 8, attrs='u.').spatial(4, 8).on(w):
+                    printf("i = %d, j = %d\n", i, j)
+
+                for i, j in repeat(2, 8, attrs='u+').spatial(4, 8).on(w):
+                    printf("i = %d, j = %d\n", i, j)
+
+                for i, j in repeat(2, 8, attrs='u').spatial(4, 8).on(w):
                     printf("i = %d, j = %d\n", i, j)
 
     ir_module = script_module.ir_module()

@@ -776,7 +776,10 @@ class PythonToHidetTranslator(PythonAstFunctor):
                     attr_string = self.visit(keyword.value)
                 else:
                     raise HidetProgramError(self, call, 'Can not recognize keyword argument: {}.'.format(keyword.arg))
-            attrs = ForStmtAttr.parse(attr_string)
+            if attr_string is None:
+                attrs = [ForStmtAttr() for _ in range(len(call.args))]
+            else:
+                attrs = ForStmtAttr.parse(attr_string)
             extents = [self.visit(arg) for arg in call.args]
             declare_loop_vars(num=len(extents))
             body = visit_body()
