@@ -217,6 +217,8 @@ def repeat_map(task_shape: Sequence[Int], ranks: Optional[Sequence[int]] = None,
     else:
         assert isinstance(attrs, str)
         attrs: List[ForStmtAttr] = ForStmtAttr.parse(attrs)
+        if len(attrs) != len(task_shape):
+            raise ValueError(f"Invalid number of attributes: {len(attrs)} vs {len(task_shape)}")
     return RepeatTaskMapping(task_shape, ranks, attrs)
 
 

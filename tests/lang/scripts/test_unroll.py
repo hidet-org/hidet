@@ -47,10 +47,10 @@ def test_unroll():
                 for i, j in repeat(2, 8, attrs='u.').spatial(4, 8).on(w):
                     printf("i = %d, j = %d\n", i, j)
 
-                for i, j in repeat(2, 8, attrs='u+').spatial(4, 8).on(w):
+                for i, j in repeat(2, 8, attrs='u+.').spatial(4, 8).on(w):
                     printf("i = %d, j = %d\n", i, j)
 
-                for i, j in repeat(2, 8, attrs='u').spatial(4, 8).on(w):
+                for i, j in repeat(2, 8, attrs='.u+').spatial(4, 8).on(w):
                     printf("i = %d, j = %d\n", i, j)
 
     ir_module = script_module.ir_module()
