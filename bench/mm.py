@@ -89,10 +89,10 @@ class MatMulTask(Task):
 
 
         # Task Layouts
-        warp_inner_layout = repeat(*warp_inner)
+        warp_inner_layout = repeat(*warp_inner, attrs='u+u+')
         #warp_mid_layout = spatial(*warp_mid)
         warp_mid_layout = warp_mid
-        warp_outer_layout = repeat(*warp_outer)
+        warp_outer_layout = repeat(*warp_outer, attrs='u+u+')
         warp_layout = warp_outer_layout * warp_mid_layout * warp_inner_layout
         block_warps_layout = spatial(*block_warps)
         block_layout = block_warps_layout * warp_layout
@@ -105,21 +105,21 @@ class MatMulTask(Task):
         lines = block_size // block_k  # 256 // 8 = 32
         # spatial(32x8) x repeat(4x1)
         a_g2s_layout = spatial(lines, block_k) * \
-            repeat(block_shape[0] // lines, 1)
+            repeat(block_shape[0] // lines, 1, attrs='u+.')
         # repeat(1x4) x spatial(8x32)
         b_g2s_layout = repeat(
-            1, block_shape[1] // lines) * spatial(block_k, lines)
+            1, block_shape[1] // lines, attrs='.u+') * spatial(block_k, lines)
         a_s2r_layout = (     # spatial(4x2) x repeat(2x1) x spatial(4x8) x repeat(4x1)
             block_warps_layout
-            * repeat(warp_outer[0], warp_k)
+            * repeat(warp_outer[0], warp_k, attrs='u+u+')
             * warp_mid_layout
-            * repeat(warp_inner[0], warp_k)
+            * repeat(warp_inner[0], warp_k, attrs='u+u+')
         )
         b_s2r_layout = (     # spatial(4x2) x repeat(1x2) x spatial(4x8) x repeat(1x4)
             block_warps_layout
-            * repeat(warp_k, warp_outer[1])
+            * repeat(warp_k, warp_outer[1], attrs='u+u+')
             * warp_mid_layout
-            * repeat(warp_k, warp_inner[1])
+            * repeat(warp_k, warp_inner[1], attrs='u+u+')
         )
 
         # Data Layouts
@@ -210,10 +210,9 @@ class MatMulTask(Task):
             ):
                 gmem_a = a[blockIdx.y, offset_m:, offset_k:]
                 for i, k in a_g2s_layout.on(threadIdx.x):
-                    # regs_a_ldg[i, k] = gmem_a.read([i,k], protected=True)
                     k_predicate = ((first_k_tile_size == 0) or k < first_k_tile_size)
                     if offset_m + i < m_size and k_predicate:
-                        regs_a_ldg[i, k] = gmem_a.read([i,k], protected=True)
+                        regs_a_ldg[i, k] = gmem_a.read([i,k], protected=False)
                     else:
                         regs_a_ldg[i, k] = 0.0
 
@@ -253,7 +252,7 @@ class MatMulTask(Task):
                 for k, j in b_g2s_layout.on(threadIdx.x):
                     k_predicate = ((first_k_tile_size == 0) or k < first_k_tile_size)
                     if offset_n + j < n_size and k_predicate:
-                        regs_b_ldg[k, j] = gmem_b.read([k, j], protected=True)
+                        regs_b_ldg[k, j] = gmem_b.read([k, j], protected=False)
                     else:
                         regs_b_ldg[k, j] = 0.0
             
@@ -291,7 +290,7 @@ class MatMulTask(Task):
                 gmem_c = c[blockIdx.y, offset_m:, offset_n:]
                 for i, j in block_layout.on(threadIdx.x):
                     if offset_m + i < m_size and offset_n + j < n_size:
-                        gmem_c.write([i, j], regs_c[i, j], protected=True)
+                        gmem_c.write([i, j], regs_c[i, j], protected=False)
 
             @hidet.script
             def mma(
@@ -356,7 +355,7 @@ class MatMulTask(Task):
                 for k in range(k_tiles - 1):
                     offset_k = k * block_k + first_k_tile_size
                     # pragma unroll
-                    for k_frag in grid(block_warps_k, unroll=True):
+                    for k_frag in grid(block_warps_k, attrs='u+'):
                         if k_frag == block_warps_k - 1:
                             # Store next AB tile from local into shared
                             copy_a_r2s(regs_a_ldg, smem_a, (k + 1) % 2)
@@ -380,7 +379,7 @@ class MatMulTask(Task):
                         mma(regs_a, regs_b, regs_c, k_frag % 2)
                 # Perform MMA for last k-tile
                 last_k = k_tiles - 1
-                for k_frag in grid(block_warps_k, unroll=True):
+                for k_frag in grid(block_warps_k, attrs='u+'):
                     if k_frag < block_warps_k - 1:
                         # Load next k-fragment from shared to local
                         copy_a_s2r(smem_a, regs_a, (last_k) % 2,(k_frag + 1) % 2, k_frag + 1)

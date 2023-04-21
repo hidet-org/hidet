@@ -237,11 +237,12 @@ class MatMulTask(Task):
                     block_m, blockIdx.x % n_tiles * block_n
 
                 # Copy first k-tile from global to shared
+                first_k_tile_size = k_size - (k_tiles - 1) * block_k
                 # copy_a_g2r(a, regs_a_ldg, offset_m, 0)
                 gmem_a = a[blockIdx.y, offset_m:, :]
                 for i, k in a_g2s_layout.on(threadIdx.x):
-                    if offset_m + i < m_size and k < k_size:
-                        regs_a_ldg[i, k] = gmem_a.read([i,k], protected=True)
+                    if offset_m + i < m_size and k < first_k_tile_size:
+                        regs_a_ldg[i, k] = gmem_a.read([i,k], protected=False)
                     else:
                         regs_a_ldg[i, k] = a_zero
                 # copy_a_r2s(regs_a_ldg, smem_a, 0)
@@ -250,8 +251,8 @@ class MatMulTask(Task):
                 # copy_b_g2r(b, regs_b_ldg, 0, offset_n)
                 gmem_b = b[blockIdx.y, :, offset_n:]
                 for k, j in b_g2s_layout.on(threadIdx.x):
-                    if offset_n + j < n_size and k < k_size:
-                        regs_b_ldg[k, j] = gmem_b.read([k, j], protected=True)
+                    if offset_n + j < n_size and k < first_k_tile_size:
+                        regs_b_ldg[k, j] = gmem_b.read([k, j], protected=False)
                     else:
                         regs_b_ldg[k, j] = b_zero
                 # copy_b_r2s(regs_b_ldg, smem_b, 0)
@@ -262,38 +263,38 @@ class MatMulTask(Task):
                 # copy_a_s2r(~smem_a[0, 0, 0], regs_a, 0)
                 warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
                 for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
-                    for mma_i in grid(mma_count_m, unroll=True):
+                    for mma_i in grid(mma_count_m, attrs='u+'):
                         p = 0
                         for i, k in mma_config.a_load_map.on(lane_id):
                             regs_a[0, mma_i, p] = smem_a[0, wi * warp_m + mma_i * mma_m + i, wk * warp_k + k]
                             p += 1
                 # copy_b_s2r(~smem_b[0, 0, 0], regs_b, 0)
                 for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
-                    for mma_j in grid(mma_count_n, unroll=True):
+                    for mma_j in grid(mma_count_n, attrs='u+'):
                         p = 0
                         for k, j in mma_config.b_load_map.on(lane_id):
                             regs_b[0, mma_j, p] = smem_b[0, wk * warp_k + k, wj * warp_n + mma_j * mma_n + j]
                             p += 1
 
-                for k0 in range(k_tiles):
+                for k0 in range(k_tiles - 1):
                     ko = 0
                     if mma_count_k % 2 != 0 and k0 % 2 != 0:
                         ko = 1
-                    for k1 in range(mma_count_k):
+                    for k1 in grid(mma_count_k, attrs='u+'):
                         if k1 == 0:
-                            offset_k = (k0 + 1) * block_k
+                            offset_k = k0 * block_k + first_k_tile_size
                             # copy_a_g2r(a, regs_a_ldg, offset_m, offset_k)
                             gmem_a = a[blockIdx.y, offset_m:, offset_k:]
                             for i, k in a_g2s_layout.on(threadIdx.x):
                                 if offset_m + i < m_size and offset_k + k < k_size:
-                                    regs_a_ldg[i, k] = gmem_a.read([i,k], protected=True)
+                                    regs_a_ldg[i, k] = gmem_a.read([i,k], protected=False)
                                 else:
                                     regs_a_ldg[i, k] = a_zero
                             # copy_b_g2r(b, regs_b_ldg, offset_k, offset_n)
                             gmem_b = b[blockIdx.y, offset_k:, offset_n:]
                             for k, j in b_g2s_layout.on(threadIdx.x):
                                 if offset_n + j < n_size and offset_k + k < k_size:
-                                    regs_b_ldg[k, j] = gmem_b.read([k, j], protected=True)
+                                    regs_b_ldg[k, j] = gmem_b.read([k, j], protected=False)
                                 else:
                                     regs_b_ldg[k, j] = b_zero
                         if k1 == mma_count_k - 1:
@@ -306,14 +307,14 @@ class MatMulTask(Task):
                             syncthreads()
                             # copy_a_s2r(~smem_a[(k0 + 1) % 2, 0, 0], regs_a, (k1 + ko + 1) % 2)
                             for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
-                                for mma_i in grid(mma_count_m, unroll=True):
+                                for mma_i in grid(mma_count_m, attrs='u+'):
                                     p = 0
                                     for i, k in mma_config.a_load_map.on(lane_id):
                                         regs_a[(k1 + ko + 1) % 2, mma_i, p] = smem_a[(k0 + 1) % 2, wi * warp_m + mma_i * mma_m + i, wk * warp_k + k]
                                         p += 1
                             # copy_b_s2r(~smem_b[(k0 + 1) % 2, 0, 0], regs_b, (k1 + ko + 1) % 2)
                             for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
-                                for mma_j in grid(mma_count_n, unroll=True):
+                                for mma_j in grid(mma_count_n, attrs='u+'):
                                     p = 0
                                     for k, j in mma_config.b_load_map.on(lane_id):
                                         regs_b[(k1 + ko + 1) % 2, mma_j, p] = smem_b[(k0 + 1) % 2, wk * warp_k + k, wj * warp_n + mma_j * mma_n + j]
@@ -321,21 +322,45 @@ class MatMulTask(Task):
                         else:
                             # copy_a_s2r(~smem_a[k0 % 2, 0, (k1 + 1) * mma_k], regs_a, (k1 + ko + 1) % 2)
                             for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
-                                for mma_i in grid(mma_count_m, unroll=True):
+                                for mma_i in grid(mma_count_m, attrs='u+'):
                                     p = 0
                                     for i, k in mma_config.a_load_map.on(lane_id):
                                         regs_a[(k1 + ko + 1) % 2, mma_i, p] = smem_a[k0 % 2, wi * warp_m + mma_i * mma_m + i, (k1 + 1) * mma_k + wk * warp_k + k]
                                         p += 1
                             # copy_b_s2r(~smem_b[k0 % 2, (k1 + 1) * mma_k, 0], regs_b, (k1 + ko + 1) % 2)
                             for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
-                                for mma_j in grid(mma_count_n, unroll=True):
+                                for mma_j in grid(mma_count_n, attrs='u+'):
                                     p = 0
                                     for k, j in mma_config.b_load_map.on(lane_id):
                                         regs_b[(k1 + ko + 1) % 2, mma_j, p] = smem_b[k0 % 2, (k1 + 1) * mma_k + wk * warp_k + k, wj * warp_n + mma_j * mma_n + j]
                                         p += 1
                         # mma(regs_a, regs_b, regs_c, (k1 + ko) % 2)
-                        for mma_i, mma_j in grid(mma_count_m, mma_count_n, unroll=True):
+                        for mma_i, mma_j in grid(mma_count_m, mma_count_n, attrs='u+u+'):
                             mma_sync(mma_config, ~regs_a[(k1 + ko) % 2, mma_i, 0], ~regs_b[(k1 + ko) % 2, mma_j, 0], ~regs_c[mma_i, mma_j, 0])
+                last_k = k_tiles - 1
+                ko = 0
+                if mma_count_k % 2 != 0 and last_k % 2 != 0:
+                    ko = 1
+                for k1 in grid(mma_count_k, attrs='u+'):
+                    if k1 < mma_count_k - 1:
+                        # copy_a_s2r(~smem_a[k0 % 2, 0, (k1 + 1) * mma_k], regs_a, (k1 + ko + 1) % 2)
+                        for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
+                            for mma_i in grid(mma_count_m, attrs='u+'):
+                                p = 0
+                                for i, k in mma_config.a_load_map.on(lane_id):
+                                    regs_a[(k1 + ko + 1) % 2, mma_i, p] = smem_a[last_k % 2, wi * warp_m + mma_i * mma_m + i, (k1 + 1) * mma_k + wk * warp_k + k]
+                                    p += 1
+                        # copy_b_s2r(~smem_b[k0 % 2, (k1 + 1) * mma_k, 0], regs_b, (k1 + ko + 1) % 2)
+                        for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
+                            for mma_j in grid(mma_count_n, attrs='u+'):
+                                p = 0
+                                for k, j in mma_config.b_load_map.on(lane_id):
+                                    regs_b[(k1 + ko + 1) % 2, mma_j, p] = smem_b[last_k % 2, (k1 + 1) * mma_k + wk * warp_k + k, wj * warp_n + mma_j * mma_n + j]
+                                    p += 1
+                    # mma(regs_a, regs_b, regs_c, (k1 + ko) % 2)
+                    for mma_i, mma_j in grid(mma_count_m, mma_count_n, attrs='u+u+'):
+                        mma_sync(mma_config, ~regs_a[(k1 + ko) % 2, mma_i, 0], ~regs_b[(k1 + ko) % 2, mma_j, 0], ~regs_c[mma_i, mma_j, 0])
+
                 copy_c_r2g(regs_c, c, smem_c, offset_m, offset_n)
 
         ir_module = module.ir_module()
@@ -348,7 +373,7 @@ class MatMulOp(Operator):
             x, 'x'), input_like(y, 'y')), attributes={})
 
 
-hidet.option.search_space(1)
+hidet.option.search_space(2)
 hidet.option.save_lower_ir(True)
 hidet.option.cache_dir('.')
 
@@ -357,7 +382,7 @@ b = hidet.randn([1, 4096, 4096], dtype='float32', device='cuda')
 
 numpy_c = np.matmul(a.cpu().numpy(), b.cpu().numpy())
 
-# print("Ref: ", BatchMatmulOp(a, b, mma='mma').latency())
+print("Ref: ", BatchMatmulOp(a, b, mma='mma').latency())
 # c = BatchMatmulOp(a, b, mma='mma').get_output(0)
 # np.testing.assert_allclose(actual=c.cpu().numpy(),
                         #    desired=numpy_c, atol=1e-1, rtol=1e-1)

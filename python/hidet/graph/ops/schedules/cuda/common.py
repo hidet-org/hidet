@@ -134,6 +134,6 @@ def get_transfer_task_map(
 ) -> Tuple[TaskMapping, DataLayout]:
     grid_shape, repeat_shape = _get_shapes(task_shape, num_workers, ranks)
 
-    task_map = row_repeat(*repeat_shape) * spatial_map(grid_shape, ranks=ranks)
+    task_map = row_repeat(*repeat_shape, attrs='u+u+') * spatial_map(grid_shape, ranks=ranks)
     data_layout = row_layout(*repeat_shape) * local_layout(*grid_shape)
     return task_map, data_layout

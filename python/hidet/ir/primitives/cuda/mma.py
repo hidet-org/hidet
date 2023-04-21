@@ -108,9 +108,9 @@ def register_mma_configs():
                     k=8,
                     input_dtype='f16',
                     output_dtype=output_dtype,
-                    a_load_map=row_repeat(2, 1) * row_spatial(8, 4) * row_repeat(1, 2),
-                    b_load_map=col_spatial(4, 8) * col_repeat(2, 1),
-                    c_store_map=row_repeat(2, 1) * row_spatial(8, 4) * row_repeat(1, 2),
+                    a_load_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
+                    b_load_map=col_spatial(4, 8) * col_repeat(2, 1, attrs='u+u+'),
+                    c_store_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
                 ),
                 'm16n8k16_f16_{}'.format(output_dtype): MmaConfig(
                     m=16,
@@ -118,9 +118,9 @@ def register_mma_configs():
                     k=16,
                     input_dtype='f16',
                     output_dtype=output_dtype,
-                    a_load_map=col_repeat(2, 2) * row_spatial(8, 4) * row_repeat(1, 2),
-                    b_load_map=col_repeat(2, 1) * col_spatial(4, 8) * col_repeat(2, 1),
-                    c_store_map=row_repeat(2, 1) * row_spatial(8, 4) * row_repeat(1, 2),
+                    a_load_map=col_repeat(2, 2, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
+                    b_load_map=col_repeat(2, 1, attrs='u+u+') * col_spatial(4, 8) * col_repeat(2, 1, attrs='u+u+'),
+                    c_store_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
                 ),
             }
         )
@@ -133,9 +133,9 @@ def register_mma_configs():
                 k=8,
                 input_dtype='bf16',
                 output_dtype='f32',
-                a_load_map=row_repeat(2, 1) * row_spatial(8, 4) * row_repeat(1, 2),
-                b_load_map=col_spatial(4, 8) * col_repeat(2, 1),
-                c_store_map=row_repeat(2, 1) * row_spatial(8, 4) * row_repeat(1, 2),
+                a_load_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
+                b_load_map=col_spatial(4, 8) * col_repeat(2, 1, attrs='u+u+'),
+                c_store_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
             ),
             'm16n8k16_bf16_f32': MmaConfig(
                 m=16,
@@ -143,9 +143,9 @@ def register_mma_configs():
                 k=16,
                 input_dtype='bf16',
                 output_dtype='f32',
-                a_load_map=col_repeat(2, 2) * row_spatial(8, 4) * row_repeat(1, 2),
-                b_load_map=col_repeat(2, 1) * col_spatial(4, 8) * col_repeat(2, 1),
-                c_store_map=row_repeat(2, 1) * row_spatial(8, 4) * row_repeat(1, 2),
+                a_load_map=col_repeat(2, 2, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
+                b_load_map=col_repeat(2, 1, attrs='u+u+') * col_spatial(4, 8) * col_repeat(2, 1, attrs='u+u+'),
+                c_store_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
             ),
         }
     )
@@ -158,9 +158,9 @@ def register_mma_configs():
                 k=4,
                 input_dtype='tf32',
                 output_dtype='f32',
-                a_load_map=row_repeat(2, 1) * row_spatial(8, 4),
+                a_load_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4),
                 b_load_map=col_spatial(4, 8),
-                c_store_map=row_repeat(2, 1) * row_spatial(8, 4) * row_repeat(1, 2),
+                c_store_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
             ),
             'm16n8k8_tf32_f32': MmaConfig(
                 m=16,
@@ -168,9 +168,9 @@ def register_mma_configs():
                 k=8,
                 input_dtype='tf32',
                 output_dtype='f32',
-                a_load_map=col_repeat(2, 2) * row_spatial(8, 4),
-                b_load_map=col_repeat(2, 1) * col_spatial(4, 8),
-                c_store_map=row_repeat(2, 1) * row_spatial(8, 4) * row_repeat(1, 2),
+                a_load_map=col_repeat(2, 2, attrs='u+u+') * row_spatial(8, 4),
+                b_load_map=col_repeat(2, 1, attrs='u+u+') * col_spatial(4, 8),
+                c_store_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
             ),
         }
     )
