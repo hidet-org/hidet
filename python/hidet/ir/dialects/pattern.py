@@ -14,6 +14,7 @@ from contextlib import ExitStack
 from hidet.ir.node import Node
 from hidet.ir.type import TypeNode, DataType, TensorType, FuncType, data_type
 from hidet.ir.expr import Expr, Constant, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, Equal, LessEqual
+from hidet.ir.expr import BitwiseXor
 from hidet.ir.expr import TensorElement, IfThenElse, Call, Var, LogicalAnd, LogicalOr, BinaryOp, convert, var
 from hidet.ir.compute import TensorNode, ScalarNode, ReduceOperation, ReduceCompute
 from hidet.ir.stmt import DeclareScope
@@ -122,7 +123,10 @@ class MatchContext:
                 self.dispatch[DataType](self.matcher, self.pattern, self.target)
             else:
                 # noinspection PyArgumentList
-                self.dispatch[self.pattern.__class__](self.matcher, self.pattern, self.target)
+                dispatched = self.dispatch.get(self.pattern.__class__, None)
+                if dispatched is None:
+                    raise NotImplementedError(f'Pattern {self.pattern} is not implemented')
+                dispatched(self.matcher, self.pattern, self.target)
         except NotMatchedError as e:
             # error from current <pattern, target>
             del self.matched[self.pattern]
@@ -163,6 +167,7 @@ class PatternMatcher:
                 Multiply: PatternMatcher.match_CommutativeBinary,
                 Div: PatternMatcher.match_Binary,
                 Mod: PatternMatcher.match_Binary,
+                BitwiseXor: PatternMatcher.match_Binary,
                 FloorDiv: PatternMatcher.match_Binary,
                 LessThan: PatternMatcher.match_Binary,
                 Equal: PatternMatcher.match_Binary,

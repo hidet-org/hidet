@@ -14,20 +14,8 @@ from typing import Dict
 from itertools import product
 
 from hidet.ir.dialects.pattern import AnyExpr, match
-from hidet.ir.expr import (
-    Add,
-    convert,
-    Sub,
-    Multiply,
-    Mod,
-    LessThan,
-    LessEqual,
-    Equal,
-    BinaryOp,
-    LogicalAnd,
-    IfThenElse,
-    LogicalOr,
-)
+from hidet.ir.expr import Add, convert, Sub, Multiply, Mod, LessThan, LessEqual, Equal, BinaryOp, LogicalAnd, IfThenElse
+from hidet.ir.expr import LogicalOr, BitwiseXor, BitwiseAnd, BitwiseOr, BitwiseNot
 from hidet.ir.expr import Div, Constant, Expr
 from hidet.ir.functors import IRRewriter
 from hidet.ir.tools import rewrite
@@ -61,6 +49,10 @@ class ConstExprSimplifier(IRRewriter):
         Sub: operator.sub,
         Multiply: operator.mul,
         Div: c_div,
+        BitwiseOr: operator.or_,
+        BitwiseAnd: operator.and_,
+        BitwiseXor: operator.xor,
+        BitwiseNot: operator.invert,
         Mod: operator.mod,
         LessThan: operator.lt,
         LessEqual: operator.le,
@@ -117,6 +109,7 @@ class RuleBasedSimplifier(IRRewriter):
             (e1 * one, e1),
             (e1 * zero, zero),
             (e1 // one, e1),
+            (e1 ^ zero, e1),
             # add
             ((c1 + e1) + e2, (e1 + e2) + c1),
             ((e1 + c1) + c2, e1 + (c1 + c2)),

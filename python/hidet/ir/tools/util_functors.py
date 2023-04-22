@@ -9,18 +9,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Union, Mapping
-from hidet.ir.type import TypeNode
+from typing import Union
+
 from hidet.ir.expr import Let, Var, Expr
 from hidet.ir.func import Function
-from hidet.ir.stmt import Stmt, LetStmt
 from hidet.ir.functors import IRVisitor, IRRewriter
-
-
-class MapBasedRewriter(IRRewriter):
-    def __init__(self, rmap):
-        super().__init__()
-        self.memo.update(rmap)
+from hidet.ir.stmt import Stmt, LetStmt
 
 
 class IRCollector(IRVisitor):
@@ -65,14 +59,6 @@ class CloneRewriter(IRRewriter):
         v = Var(e.var.hint, e.var.type)
         self.memo[e.var] = v
         return Let(v, self(e.value), self(e.body))
-
-
-def rewrite(
-    node: Union[Function, Expr, Stmt, TypeNode, tuple, list], rewrite_map: Mapping[Union[Stmt, Expr], Union[Stmt, Expr]]
-):
-    assert isinstance(rewrite_map, dict)
-    rewriter = MapBasedRewriter(rewrite_map)
-    return rewriter.rewrite(node)
 
 
 def collect(node: Union[Function, Expr, Stmt, list, tuple], node_types, stop_when_found=False) -> list:

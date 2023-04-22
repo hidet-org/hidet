@@ -41,6 +41,8 @@ from hidet.utils.namer import Namer
 
 from hidet.ir.functors import IRFunctor
 
+_show_var_id = False
+
 
 class IRPrinter(IRFunctor):
     def __init__(self):
@@ -68,29 +70,25 @@ class IRPrinter(IRFunctor):
 
     def visit_Function(self, func: Function):
         self.namer.clear()
-        doc = Doc()
 
         # parameters
-        doc += 'fn('
-        param_docs = []
+        head_doc = Doc()
+        head_doc += Text('def ') + func.name + '('
         for i, param in enumerate(func.params):
-            line = []
-            if i != 0:
-                line.append(NewLine())
-            line.extend([self(param), ': ', self(param.type)])
-            param_docs.append(line)
-        doc += doc_join(param_docs, Text(', '))
-        doc += ')'
-        doc = doc.indent(3)
+            head_doc += (NewLine() + self(param) + ': ' + self(param.type)).indent(4)
+            if i < len(func.params) - 1:
+                head_doc += ','
+        head_doc += NewLine() + ')'
 
         # attributes
+        attr_doc = Doc()
         for attr_name, attr_value in func.attrs.items():
-            doc += (NewLine() + '# {}: {}'.format(attr_name, attr_value)).indent(4)
+            attr_doc += (NewLine() + '# {}: {}'.format(attr_name, attr_value)).indent(4)
 
         # body
-        doc += self(func.body).indent(4)
+        body_doc = self(func.body).indent(4)
 
-        return doc
+        return head_doc + attr_doc + body_doc + NewLine()
 
     def visit_IRModule(self, ir_module: IRModule):
         doc = Doc()
@@ -98,8 +96,8 @@ class IRPrinter(IRFunctor):
         if ir_module.task is not None:
             doc += self(ir_module.task)
         doc += NewLine()
-        for name, func in ir_module.functions.items():
-            doc += ['def ', name, ' ', self(func), NewLine(), NewLine()]
+        for func in ir_module.functions.values():
+            doc += self(func) + NewLine()
         return doc
 
     def visit_Add(self, e: Add):
@@ -217,6 +215,8 @@ class IRPrinter(IRFunctor):
         return Text('&') + self(e.expr)
 
     def visit_Var(self, e: Var):
+        if _show_var_id:
+            return Text('{}@{}'.format(self.namer.get_name(e), e.id))
         return Text(self.namer.get_name(e))
 
     def visit_Constant(self, e: Constant):
@@ -481,11 +481,7 @@ class IRPrinter(IRFunctor):
             return Text('strides(') + self(layout.strides) + ')'
 
     def visit_SwizzleLayout(self, layout: SwizzleLayout):
-        items = [
-            self(layout.base),
-            Text('dim=') + self(layout.dim),
-            Text('regards=') + self(layout.regards_dim),
-        ]
+        items = [self(layout.base), Text('dim=') + self(layout.dim), Text('regards=') + self(layout.regards_dim)]
         if layout.log_step != 0:
             items.append(Text('log_step=') + self(layout.log_step))
         return Text('swizzle(') + doc_join(items, ', ') + ')'

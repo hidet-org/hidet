@@ -22,6 +22,7 @@ from .import_primitive_functions import import_primitive_functions_pass
 from .simplify_stmt import simplify_stmt_pass
 from .expand_let_expr import expand_let_expr_pass
 from .resolve_generic_primitive_function import resolve_primitive_func_pass
+from .inline_function import inline_function_pass
 from .add_explicit_cast import add_explicit_cast_pass
 from .inline_let_stmt import inline_let_stmt_pass
 from .rule_based_simplifier import rule_based_simplify_pass
@@ -46,6 +47,7 @@ def lower(ir_module: IRModule) -> IRModule:
         explicit_unroll_pass(),
         flatten_tensor_index_pass(),
         lower_special_cast_pass(),
+        inline_function_pass(),
         resolve_primitive_func_pass(),
         import_primitive_functions_pass(),
         resolve_primitive_func_pass(),
@@ -57,6 +59,7 @@ def lower(ir_module: IRModule) -> IRModule:
         expand_let_expr_pass(),
         inline_let_stmt_pass(inline_all=False),
         rule_based_simplify_pass(),
+        inline_let_stmt_pass(inline_all=False),
         simplify_stmt_pass(),
     ]
 
