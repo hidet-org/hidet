@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from hidet.ir.type import TensorType, tensor_type, PointerType, TensorPointerType
+from hidet.ir.type import TensorType, tensor_type, tensor_pointer_type, PointerType, TensorPointerType
 from hidet.ir.expr import Var, TensorElement, TensorSlice, Constant
 from hidet.ir.stmt import BufferStoreStmt, DeclareStmt
 from hidet.ir.func import Function
@@ -28,9 +28,10 @@ class FlattenTensorAccessRewriter(IRRewriter):
         for var in func.params:
             if isinstance(var.type, TensorType):
                 size = simplify(var.type.layout.size)
-                self.memo[var] = Var(var.hint, tensor_type(var.type.dtype, [size], DataLayout.row_major([size])))
+                self.memo[var] = Var(var.hint, tensor_pointer_type(var.type.dtype, [size]))
             elif isinstance(var.type, TensorPointerType):
-                self.memo[var] = var
+                size = simplify(var.type.tensor_type.layout.size)
+                self.memo[var] = Var(var.hint, tensor_pointer_type(var.type.tensor_type.dtype, [size]))
         body = self(func.body)
         params = [self(p) for p in func.params]
         return Function(

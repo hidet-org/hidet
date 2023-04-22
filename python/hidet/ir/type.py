@@ -32,6 +32,18 @@ class TypeNode(Node):
         else:
             raise ValueError('Can not recognize type {}'.format(self))
 
+    def is_void(self):
+        return isinstance(self, VoidType)
+
+    def is_tensor(self):
+        return isinstance(self, TensorType)
+
+    def is_pointer(self):
+        return isinstance(self, (PointerType, TensorPointerType))
+
+    def is_data_type(self):
+        return isinstance(self, DataType)
+
 
 class DataType(TypeNode):
     """
