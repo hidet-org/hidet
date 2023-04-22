@@ -156,7 +156,7 @@ class DataLayout(Node):
     def concat(lhs, rhs):
         lhs = to_data_layout(lhs)
         rhs = to_data_layout(rhs)
-        return ConcatDataLayout(lhs, rhs)
+        return ConcatLayout(lhs, rhs)
 
     @staticmethod
     def local(shape: Sequence[Int]):
@@ -416,7 +416,7 @@ class ComposedLayout(DataLayout):
         return LogicalAnd(self.outer.within_bound(*outer_args), self.inner.within_bound(*inner_args))
 
 
-class ConcatDataLayout(DataLayout):
+class ConcatLayout(DataLayout):
     def __init__(self, lhs: DataLayout, rhs: DataLayout):
         super().__init__(shape=list(lhs.shape) + list(rhs.shape), size=lhs.size * rhs.size)
         self.lhs = lhs

@@ -10,7 +10,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from .type_infer import infer_type, TypeInfer
-from .util_functors import rewrite, collect, clone
+from .util_functors import collect, clone
+from .rewriter import rewrite
 from .free_var_collector import collect_free_vars
 from .printer import astext
 from .simplifier import simplify, simplify_to_int

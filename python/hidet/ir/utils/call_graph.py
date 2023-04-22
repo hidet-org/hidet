@@ -32,7 +32,7 @@ class CallGraphNode:
 
 
 class CallGraph:
-    def __init__(self, ir_module: IRModule):
+    def __init__(self, ir_module: IRModule, allow_missing: bool = False):
         # pylint: disable=import-outside-toplevel
         from hidet.ir.primitives import is_primitive_function, lookup_primitive_function
 
@@ -54,6 +54,8 @@ class CallGraph:
                     entry = lookup_primitive_function(call.func_var.hint)
                     if entry.function is not None:
                         name = call.func_var.hint
+                        if name not in ir_module.functions and allow_missing:
+                            continue
                         callee = ir_module.lookup(name)
                     else:
                         continue

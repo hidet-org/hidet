@@ -16,7 +16,7 @@ from hidet.ir.dialects.pattern import AnyExpr
 from hidet.ir import dtypes
 from hidet.ir.type import DataType, PointerType, TensorPointerType, ReferenceType, TensorType, FuncType
 from hidet.ir.type import VoidType
-from hidet.ir.expr import Var, Expr, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, Neg, NotEqual, Equal, LogicalAnd
+from hidet.ir.expr import Var, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, Neg, NotEqual, Equal, LogicalAnd
 from hidet.ir.expr import LogicalOr, LogicalNot, BitwiseAnd, BitwiseOr, BitwiseXor, BitwiseNot, LeftShift, RightShift
 from hidet.ir.expr import IfThenElse, Cast, Address, Reference, Dereference, Call, Let, Constant, TensorSlice, convert
 from hidet.ir.expr import TensorElement
@@ -46,6 +46,9 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
     @staticmethod
     def canonize_funcname(name: str):
         return 'hidet_' + name.replace('.', '_')
+
+    def scalar_literal(self, value, dtype: DataType):
+        raise NotImplementedError()
 
     def param_declare(self, v: Var):
         v_type = v.type
@@ -290,28 +293,9 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             func = self.ir_module.lookup(func_name)
             func_name = Text(self.canonize_funcname(func_name))
             if func.kind == 'cuda_kernel':
-                assert False
-                if isinstance(func.attrs['cuda_block_dim'], int) and func.attrs['cuda_block_dim'] > 1024:
-                    raise ValueError('CUDA block dimension cannot be larger than 1024.')
-
-                def dim3_str(dims):
-                    if isinstance(dims, (int, Expr)):
-                        return self(dims)
-                    else:
-                        return Text('dim3(') + self(dims) + ')'
-
-                configs = [
-                    dim3_str(func.attrs['cuda_grid_dim']),  # grid dimension
-                    dim3_str(func.attrs['cuda_block_dim']),  # block dimension
-                    func.attrs.get('cuda_dynamic_smem_bytes', 0),  # dynamic shared memory size
-                    # cuda stream (get_cuda_stream() function is defined in hidet/runtime.h)
-                    '(cudaStream_t)get_cuda_stream()',
-                ]
-                launch_config = Text('<<<') + doc_join([self(v) for v in configs], sep=', ') + Text('>>>')
-            else:
-                launch_config = []
+                raise RuntimeError('Call to cuda kernel should be lowered to LaunchKernelStmt.')
             param_doc = Text('(') + doc_join([self(arg) for arg in e.args], Text(', ')) + ')'
-            return func_name + launch_config + param_doc
+            return func_name + param_doc
         elif is_primitive_function(func_name):
             entry = lookup_primitive_function(func_name)
             if entry.function is not None:
@@ -538,8 +522,7 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
 class CUDACodegen(Codegen):
     # pylint: disable=abstract-method
 
-    @staticmethod
-    def scalar_literal(value, dtype: DataType):
+    def scalar_literal(self, value, dtype: DataType):
         if dtype == dtypes.boolean:
             ret = 'true' if value else 'false'
         elif dtype == dtypes.float64:
@@ -680,8 +663,7 @@ class CUDACodegen(Codegen):
 class CPUCodegen(Codegen):
     # pylint: disable=abstract-method
 
-    @staticmethod
-    def scalar_literal(value, dtype: DataType):
+    def scalar_literal(self, value, dtype: DataType):
         if dtype == dtypes.boolean:
             ret = 'true' if value else 'false'
         elif dtype == dtypes.float64:
