@@ -11,7 +11,7 @@
 # limitations under the License.
 from typing import Union, Sequence, Optional, List
 from hidet.ir.type import TypeNode, DataType, TensorType, PointerType, VoidType, ReferenceType, void_p, data_type
-from hidet.ir.expr import Expr, Var, cast, view, Dereference
+from hidet.ir.expr import Expr, Var, cast, view, address, Dereference
 from hidet.ir.mapping import row_spatial, row_repeat, col_repeat, col_spatial, TaskMapping, auto_map
 from hidet.ir.layout import DataLayout
 from hidet.ir.primitives import printf

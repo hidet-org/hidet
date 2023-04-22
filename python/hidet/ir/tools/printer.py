@@ -29,10 +29,11 @@ from hidet.ir.stmt import (
     ContinueStmt,
 )
 from hidet.ir.stmt import BreakStmt, DeclareScope, LaunchKernelStmt
+from hidet.ir.layout import StridesLayout, ConcatLayout, LocalLayout, SwizzleLayout, ComposedLayout, RowMajorLayout
+from hidet.ir.layout import ColumnMajorLayout
 from hidet.ir.mapping import RepeatTaskMapping, SpatialTaskMapping, ComposedTaskMapping
 from hidet.ir.compute import TensorNode, GridCompute, ArgReduceCompute, ReduceCompute, TensorInput, ScalarInput
 from hidet.ir.dialects.pattern import AnyExpr
-from hidet.ir.layout import RowMajorLayout, ColumnMajorLayout
 from hidet.ir.task import Task
 from hidet.utils import same_list
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
@@ -365,25 +366,23 @@ class IRPrinter(IRFunctor):
     def visit_ScalarType(self, t: DataType):
         return Text('{}'.format(t.name))
 
-    def visit_TensorType(self, t: TensorType):
+    def _tensor_type(self, t: TensorType):
         items = [self(t.dtype), '[' + self(t.shape) + ']']
-        if isinstance(t.layout, RowMajorLayout):
+        if isinstance(t.layout, RowMajorLayout) or t.layout is None:
             # default layout, do not print
             pass
-        elif isinstance(t.layout, ColumnMajorLayout):
-            items.append(Text('col_major'))
-        elif t.layout is None:
-            # skip None
-            pass
         else:
-            items.append(Text(type(t.layout).__name__))
-        return Text('tensor(') + doc_join(items, ', ') + ')'
+            items.append(self(t.layout))
+        return doc_join(items, ', ')
+
+    def visit_TensorType(self, t: TensorType):
+        return Text('tensor(') + self._tensor_type(t) + ')'
 
     def visit_PointerType(self, t: PointerType):
         return Text('PointerType(') + self(t.base_type) + ')'
 
     def visit_TensorPointerType(self, t: TensorPointerType):
-        return Text('TensorPointerType(') + self(t.tensor_type) + ')'
+        return Text('tensor_pointer(') + self._tensor_type(t.tensor_type) + ')'
 
     def visit_ReferenceType(self, t: ReferenceType):
         return Text('ReferenceType(') + self(t.base_type) + ')'
@@ -429,8 +428,6 @@ class IRPrinter(IRFunctor):
             Text('computations: ') + self.print_tensor_nodes(e.outputs).indent(),
             Text('attributes: {') + self({k: str(v) for k, v in e.attrs.items()}) + '}',
         ]
-        # if len(e.task_graph.nodes) > 1:
-        #     lines.append(Text('task_graph: ') + self(e.task_graph))
         front_part = doc_join(lines, NewLine())
         inverse_map_doc = Doc()
         if e.inverse_map:
@@ -439,37 +436,6 @@ class IRPrinter(IRFunctor):
                 inverse_map_body = 'InverseMap([' + self(inverse_map.axes) + '] => [' + self(inverse_map.indices) + '])'
                 inverse_map_doc += (NewLine() + self.namer.get_name(tensor) + ': ' + inverse_map_body).indent()
         return Text('Task(') + (NewLine() + front_part + inverse_map_doc).indent() + NewLine() + ')'
-
-    # def visit_TaskGraph(self, task_graph: TaskGraph):
-    #     head = Text('TaskGraph(') + self(task_graph.input_tensors) + ') {'
-    #     body = []
-    #     for task in task_graph.nodes:
-    #         arg_items = []
-    #         for task_input in task.inputs:
-    #             if task_input in task_graph.consume:
-    #                 arg_items.append(self(task_input) + '=' + self(task_graph.consume[task_input]))
-    #             else:
-    #                 arg_items.append(self(task_input))
-    #         for name, value in task.attributes.items():
-    #             arg_items.append(self(name) + '=' + self(str(value)))
-    #         args = doc_join(arg_items, ', ')
-    #         assign_line = self(task.outputs) + ' = ' + task.name + '(' + args + ')'
-    #         if task is task_graph.anchor:
-    #             assign_line = assign_line + ' [anchor]'
-    #         if task is task_graph.anchor:
-    #             compute_body = Doc()
-    #         else:
-    #             compute_body = self.print_tensor_nodes(task.outputs, exclude_nodes=task.inputs).indent()
-    #         body.append(assign_line + compute_body)
-    #
-    #     body.append(
-    #         'return '
-    #         + self([task_graph.consume[v] if v in task_graph.consume else v for v in task_graph.output_tensors])
-    #     )
-    #
-    #     body = (NewLine() + doc_join(body, NewLine())).indent()
-    #     tail = NewLine() + '}'
-    #     return head + body + tail
 
     def visit_TensorNode(self, e: TensorNode):
         return self.namer.get_name(e)
@@ -505,6 +471,33 @@ class IRPrinter(IRFunctor):
 
     def visit_ComposedTaskMapping(self, mapping: ComposedTaskMapping):
         return self(mapping.outer) + '.' + self(mapping.inner)
+
+    def visit_StridesLayout(self, layout: StridesLayout):
+        if isinstance(layout, RowMajorLayout):
+            return Text('row(') + self(layout.shape) + ')'
+        elif isinstance(layout, ColumnMajorLayout):
+            return Text('column(') + self(layout.shape) + ')'
+        else:
+            return Text('strides(') + self(layout.strides) + ')'
+
+    def visit_SwizzleLayout(self, layout: SwizzleLayout):
+        items = [
+            self(layout.base),
+            Text('dim=') + self(layout.dim),
+            Text('regards=') + self(layout.regards_dim),
+        ]
+        if layout.log_step != 0:
+            items.append(Text('log_step=') + self(layout.log_step))
+        return Text('swizzle(') + doc_join(items, ', ') + ')'
+
+    def visit_LocalLayout(self, layout: LocalLayout):
+        return Text('local(') + self(layout.shape) + ')'
+
+    def visit_ComposedLayout(self, layout: ComposedLayout):
+        return self(layout.outer) + ' * ' + self(layout.inner)
+
+    def visit_ConcatLayout(self, layout: ConcatLayout):
+        return Text('concat(') + self(layout.lhs) + ', ' + self(layout.rhs) + ')'
 
 
 def astext(obj: Node) -> str:
