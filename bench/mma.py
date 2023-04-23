@@ -340,6 +340,7 @@ class MatMulTask(Task):
                     if mma_count_k % 2 != 0 and k0 % 2 != 0:
                         ko = 1
                     for k1 in grid(mma_count_k, attrs='u+'):
+                    # for k1 in grid(mma_count_k):
                         if k1 == 0:
                             offset_k = k0 * block_k + first_k_tile_size
                             copy_a_g2r(a, regs_a_ldg, offset_m, offset_k)
@@ -359,6 +360,7 @@ class MatMulTask(Task):
                 if mma_count_k % 2 != 0 and last_k % 2 != 0:
                     ko = 1
                 for k1 in grid(mma_count_k, attrs='u+'):
+                # for k1 in grid(mma_count_k):
                     if k1 < mma_count_k - 1:
                         copy_a_s2r(~smem_a[last_k % 2, 0, (k1 + 1) * mma_k], regs_a, (k1 + ko + 1) % 2)
                         copy_b_s2r(~smem_b[last_k % 2, (k1 + 1) * mma_k, 0], regs_b, (k1 + ko + 1) % 2)

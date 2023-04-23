@@ -355,7 +355,8 @@ class MatMulTask(Task):
                 for k in range(k_tiles - 1):
                     offset_k = k * block_k + first_k_tile_size
                     # pragma unroll
-                    for k_frag in grid(block_warps_k, attrs='u+'):
+                    # for k_frag in grid(block_warps_k, attrs='u+'):
+                    for k_frag in grid(block_warps_k):
                         if k_frag == block_warps_k - 1:
                             # Store next AB tile from local into shared
                             copy_a_r2s(regs_a_ldg, smem_a, (k + 1) % 2)
@@ -379,7 +380,8 @@ class MatMulTask(Task):
                         mma(regs_a, regs_b, regs_c, k_frag % 2)
                 # Perform MMA for last k-tile
                 last_k = k_tiles - 1
-                for k_frag in grid(block_warps_k, attrs='u+'):
+                # for k_frag in grid(block_warps_k, attrs='u+'):
+                for k_frag in grid(block_warps_k):
                     if k_frag < block_warps_k - 1:
                         # Load next k-fragment from shared to local
                         copy_a_s2r(smem_a, regs_a, (last_k) % 2,(k_frag + 1) % 2, k_frag + 1)
