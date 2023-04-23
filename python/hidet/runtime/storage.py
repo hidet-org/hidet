@@ -17,7 +17,6 @@ from hidet.cuda.stream import Stream
 from hidet.utils import green, exiting
 from hidet.runtime.device import Device, instantiate_device
 
-
 def nbytes2str(nbytes: int) -> str:
     if nbytes > 1024 * 1024:
         size = nbytes // 1024 // 1024
@@ -70,7 +69,7 @@ class CudaMemoryAPI(MemoryAPI):
         return hidet.cuda.memory_info()
 
 
-class CpuMemoryAPI(MemoryAPI):
+class CUDAHostMemoryAPI(MemoryAPI):
     def malloc(self, nbytes: int) -> int:
         addr = hidet.cuda.malloc_host(nbytes)
         if addr == 0 and nbytes != 0:
@@ -82,6 +81,26 @@ class CpuMemoryAPI(MemoryAPI):
 
     def free(self, addr: int):
         hidet.cuda.free_host(addr)
+        self.allocated -= self.addr2nbytes.pop(addr)
+
+    def memory_info(self) -> (int, int):
+        raise NotImplementedError()
+    
+
+class CPUMemoryAPI(MemoryAPI):
+    def malloc(self, nbytes: int) -> int:
+        from hidet.ffi import libc_malloc
+        addr = libc_malloc(nbytes)
+        if addr == 0 and nbytes != 0:
+            return 0
+        self.allocated += nbytes
+        self.peak_allocated = max(self.peak_allocated, self.allocated)
+        self.addr2nbytes[addr] = nbytes
+        return addr
+
+    def free(self, addr: int):
+        from hidet.ffi import libc_free
+        libc_free(addr)
         self.allocated -= self.addr2nbytes.pop(addr)
 
     def memory_info(self) -> (int, int):
@@ -344,7 +363,7 @@ class DeviceMemoryPools:
                 )
             elif device.is_cpu():
                 self.device2pool[device] = MemoryPool(
-                    CpuMemoryAPI(device), block_size=4096, max_reserve_size=512 * 1024**2
+                    CUDAHostMemoryAPI(device), block_size=4096, max_reserve_size=512 * 1024**2
                 )
             else:
                 raise ValueError('Unsupported device: {}'.format(device))

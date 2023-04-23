@@ -14,4 +14,5 @@ from .packedfunc import PackedFunc
 from .packedfunc import ArgTypeCode
 
 from .runtime_api import runtime_api
+from .crt import libc_malloc, libc_free
 from . import callbacks
