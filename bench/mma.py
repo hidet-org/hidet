@@ -244,10 +244,10 @@ class MatMulTask(Task):
             ):
                 gmem_c = c[blockIdx.y, offset_m:, offset_n:]
                 warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
-                for warp_k_round in range(warp_count_k):
+                for warp_k_round in grid(warp_count_k, attrs='u+'):
                     for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
                         if wk == warp_k_round:
-                            for mma_i, mma_j in grid(mma_count_m, mma_count_n):
+                            for mma_i, mma_j in grid(mma_count_m, mma_count_n, attrs='u+u+'):
                                 p = 0
                                 for i, j in mma_config.c_store_map.on(lane_id):
                                     delta_m = wi * warp_m + mma_i * mma_m + i
@@ -335,7 +335,7 @@ class MatMulTask(Task):
                 copy_a_s2r(~smem_a[0, 0, 0], regs_a, 0)
                 copy_b_s2r(~smem_b[0, 0, 0], regs_b, 0)
 
-                for k0 in grid(k_tiles - 1):
+                for k0 in grid(k_tiles - 1, attrs='u2'):
                     ko = 0
                     if mma_count_k % 2 != 0 and k0 % 2 != 0:
                         ko = 1
@@ -380,6 +380,7 @@ class MatMulOp(Operator):
 hidet.option.search_space(2)
 hidet.option.save_lower_ir(True)
 hidet.option.cache_dir('.')
+hidet.option.debug_cache_tuning(True)
 
 a = hidet.randn([1, 4096, 4096], dtype='float32', device='cuda')
 b = hidet.randn([1, 4096, 4096], dtype='float32', device='cuda')
