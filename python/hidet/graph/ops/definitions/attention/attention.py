@@ -112,11 +112,7 @@ class AttnTask(Task):
     @tune.space(2, 'block_j', [128, 256])
     @tune.space(2, 'block_i', [16, 32])
     @tune.space(2, 'i_split', [s for s in range(1, 31)])
-    @tune.space(0, 'block_size', [128])
-    @tune.space(0, 'block_j', [256])
-    @tune.space(0, 'block_i', [16])
-    @tune.space(0, 'i_split', [2])
-    def cuda_schedule_attn(self, i_split=2, block_i=16, block_j=256, block_size=128) -> IRModule:
+    def cuda_schedule_attn(self, i_split=2, block_i=128, block_j=128, block_k=16, warp_elems_m=32, warp_elems_n=64, warp_elems_k=16) -> IRModule:
         def calc_swizzle_size(d):
             powers_of_two = [128, 64, 32, 16, 8]
             for n in powers_of_two:
@@ -144,6 +140,7 @@ class AttnTask(Task):
         row_major = DataLayout.row_major
         n_size = q_shape[-2]
         d_size = q_shape[-1]
+        dpad_size = 32 * cdiv(d_size, 32)
         dtype = task.inputs[0].ttype.dtype
         dtype_size = dtype.nbytes
         warp_size = 32
@@ -156,25 +153,22 @@ class AttnTask(Task):
         sm_dtype = f32
         mma_configs = {'m16n8k16f32': MmaConfig.m16n8k16_f16_f32(), 'm16n8k16f16': MmaConfig.m16n8k16_f16_f16()}
         mma_config = mma_configs['m16n8k16f16'] if acc_dtype == f16 else mma_configs['m16n8k16f32']
-        # mma_config = MmaConfig.m16n8k8_f16_f16()
         mma_m = mma_config.m
         mma_n = mma_config.n
         mma_k = mma_config.k
 
-        block_k = 32 * cdiv(d_size, 32)
         swizzle_unit, swizzle_repeat = calc_swizzle_size(block_k)
         tune.check(swizzle_repeat > 0)
 
-        num_warps = block_size // warp_size
 
-        # Number of elements each warp handles in a dimension. 16, 64, 64
-        warp_elems_m, warp_elems_n, warp_elems_k = block_i, block_j // num_warps, mma_k * cdiv(block_k, mma_k)
         # Number of warps in each dimension. 1, 4, 1
         warp_count_m, warp_count_n, warp_count_k = (
-            block_i // warp_elems_m,
-            block_j // warp_elems_n,
-            cdiv(block_k, warp_elems_k),
+            cdiv(block_i, warp_elems_m),
+            cdiv(block_j, warp_elems_n),
+            cdiv(block_k, warp_elems_k)
         )
+        num_warps = warp_count_m * warp_count_n * warp_count_k
+        block_size = num_warps * warp_size
         # Number of m16n8k16 mma's each warp performs in each dim. 1, 8, 4
         mmas_per_warp_m, mmas_per_warp_n, mmas_per_warp_k = (
             warp_elems_m // mma_m,
@@ -182,17 +176,20 @@ class AttnTask(Task):
             warp_elems_k // mma_k,
         )
 
-        # Number of warps in each dimension. 1, 4, 1
         warp_count_m_o, warp_count_k_o = warp_count_m, 1
         warp_count_n_o = num_warps // (warp_count_m_o * warp_count_k_o)
-        # Number of elements each warp handles in a dimension. 16, 16, 256
-        assert block_k % warp_count_n_o == 0
+        block_i_o , block_j_o, block_k_o = block_i, dpad_size , block_k
+        tune.check(block_i_o % warp_count_m_o == 0)
+        tune.check(block_j_o % warp_count_n_o == 0)
+        tune.check(block_k_o % warp_count_k_o == 0)
         warp_elems_m_o, warp_elems_n_o, warp_elems_k_o = (
-            block_i // warp_count_m_o,
-            mma_n * cdiv(block_k // warp_count_n_o, mma_n),
-            block_j // warp_count_k_o,
+            block_i_o // warp_count_m_o,
+            block_j_o // warp_count_n_o,
+            block_k_o // warp_count_k_o,
         )
-        # Number of m16n8k16 mma's each warp performs in each dim. 1, 2, 16
+        tune.check(warp_elems_m_o % mma_m == 0)
+        tune.check(warp_elems_n_o % mma_n == 0)
+        tune.check(warp_elems_k_o % mma_k == 0)
         mmas_per_warp_m_o, mmas_per_warp_n_o, mmas_per_warp_k_o = (
             warp_elems_m_o // mma_m,
             warp_elems_n_o // mma_n,
@@ -207,15 +204,16 @@ class AttnTask(Task):
         tune.check(block_j % (64) == 0)
         tune.check(block_size >= block_k)
 
-        n_tiles = (n_size + block_i - 1) // block_i
-        i_tiles_per_tb = cdiv(n_tiles, i_split)
+        n_tiles = cdiv(n_size, block_i)
+        i_split = n_tiles
+        i_tiles_per_tb = 1 #cdiv(n_tiles, i_split)
         i_rows_per_tb = i_tiles_per_tb * block_i
-        j_tiles = (n_size + block_j - 1) // block_j
+        j_tiles = cdiv(n_size, block_j)
 
-        smem_bytes_q = dtype_size * block_i * block_k
+        smem_bytes_q = dtype_size * block_i * dpad_size
         smem_bytes_k = dtype_size * block_k * block_j
-        smem_bytes_v = 0
-        smem_bytes_qk = 0
+        smem_bytes_v = dtype_size * block_j * block_k
+        smem_bytes_qk = dtype_size * block_i * block_j
         smem_bytes_l = sm_dtype.nbytes * i_rows_per_tb
         smem_bytes_m = sm_dtype.nbytes * i_rows_per_tb
         smem_bytes_lij = sm_dtype.nbytes * block_i
@@ -580,9 +578,6 @@ class AttnTask(Task):
                     init_o_gmem(o, offset_i)
                 init_lm_smem(smem_l, smem_m)
 
-                # Load Qi into Smem, it stays there forever
-                offset_i = offset_n + i * block_i
-                copy_q_g2s(q, smem_q, offset_i)
 
                 for j in range(j_tiles):
                     # Load Kj, Vj into Smem
@@ -601,6 +596,9 @@ class AttnTask(Task):
                         for mma_j in range(mmas_per_warp_n):
                             copy_k_s2r(mma_j, mma_k, ~regs_k[mma_k, mma_j, 0], smem_k)
                     for i in range(i_tiles_per_tb):
+                        # Load Qi into Smem, it stays there forever
+                        offset_i = offset_n + i * block_i
+                        copy_q_g2s(q, smem_q, offset_i)
                         # Compute QK = Qi * Kj
                         # Init regs_acc to 0
                         for a, b, c in grid(mmas_per_warp_m, mmas_per_warp_n, mma_config.c_elements):
