@@ -306,7 +306,7 @@ class AttnTask(Task):
         o_g2s_layout = q_g2s_layout
 
         with hidet.script_module() as module:
-
+            # --------------- helper functions ---------------------------------------------------------------------
             @hidet.script
             def resolve_ldmatrix(regs: ~f16, smem_addr: ~f16, is_A: hidet.lang.boolean):
                 if mma_k == 16:
@@ -403,11 +403,11 @@ class AttnTask(Task):
                                     p += 1
 
             @hidet.script
-            def copy_q_s2r(mma_i: int, k1: int, regs_q: f16[mma_config.a_elements], smem_q: smem_q_type):
+            def copy_q_s2r(mma_i: int, mma_k0: int, offset_k: int, regs_q: f16[mma_config.a_elements], smem_q: smem_q_type):
                 warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
                 for wi, _, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
                     p, q = col_spatial(16, 2).map(lane_id)
-                    row_addr = ~smem_q[wi * warp_elems_m + mma_i * mma_m + p, wk * warp_elems_k + k1 * mma_k + q * 8]
+                    row_addr = ~smem_q[wi * warp_elems_m + mma_i * mma_m + p, offset_k + wk * warp_elems_k + mma_k0 * mma_k + q * 8]
                     resolve_ldmatrix(regs_q, row_addr, True)
 
             @hidet.script
@@ -419,13 +419,13 @@ class AttnTask(Task):
                     resolve_ldmatrix(regs_k, row_addr, False)
 
             @hidet.script
-            def copy_qk_s2r(mma_i: int, k1: int, regs_qk: f16[mma_config.a_elements], smem_qk: smem_qk_type):
+            def copy_qk_s2r(mma_i: int, mma_k0: int, offset_k: int, regs_qk: f16[mma_config.a_elements], smem_qk: smem_qk_type):
                 warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
                 for wi, _, wk in spatial(warp_count_m_o, warp_count_n_o, warp_count_k_o).on(warp_id):
                     if not warp_id >= spatial(warp_count_m_o, warp_count_n_o, warp_count_k_o).num_workers:
                         p, q = col_spatial(16, 2).map(lane_id)
                         row_addr = ~smem_qk[
-                            wi * warp_elems_m_o + mma_i * mma_m + p, wk * warp_elems_k_o + k1 * mma_k + q * 8
+                            wi * warp_elems_m_o + mma_i * mma_m + p, offset_k + wk * warp_elems_k_o + mma_k0 * mma_k + q * 8
                         ]
                         resolve_ldmatrix(regs_qk, row_addr, True)
 
@@ -524,7 +524,8 @@ class AttnTask(Task):
                 regs_c: acc_dtype[mma_config.c_elements],
             ):
                 mma_sync(mma_config, regs_a, regs_b, regs_c)
-
+            
+            # -------------- main function ---------------------------------------------------------------
             @hidet.script
             def attn_kernel(
                 q: f16[q_head + [n_size, d_size]],
@@ -605,18 +606,14 @@ class AttnTask(Task):
                         for mma_k in range(mmas_per_warp_k):
                             for mma_j in range(mmas_per_warp_n):
                                 copy_k_s2r(mma_j, mma_k, ~regs_k[mma_k, mma_j, 0], smem_k)
+                            for mma_i in range(mmas_per_warp_m):
+                                copy_q_s2r(mma_i, mma_k, k0 * block_k,  ~regs_q[mma_i, 0], smem_q)
+                            for mma_i, mma_j in grid(mmas_per_warp_m, mmas_per_warp_n):
+                                warp_mma(~regs_q[mma_i, 0], ~regs_k[mma_k, mma_j, 0], ~regs_acc[mma_i, mma_j, 0])
                             syncthreads()
-                            for mma_k in range(mmas_per_warp_k):
-                                for mma_i in range(mmas_per_warp_m):
-                                    copy_q_s2r(mma_i, mma_k, ~regs_q[mma_i, 0], smem_q)
-                                for mma_i, mma_j in grid(mmas_per_warp_m, mmas_per_warp_n):
-                                    warp_mma(~regs_q[mma_i, 0], ~regs_k[mma_k, mma_j, 0], ~regs_acc[mma_i, mma_j, 0])
                     qk_softmax_reduce(smem_qk, smem_mij, smem_lij, regs_acc)
                     # ----------------------------
 
-
-                    # # Load Oi into Smem
-                    # copy_o_g2s(o, smem_o, offset_i)
 
                     # ----------------------------
                     # Compute O = QK * V
@@ -630,15 +627,15 @@ class AttnTask(Task):
                         for mma_k in range(mmas_per_warp_k_o):
                             for mma_j in range(mmas_per_warp_n_o):
                                 copy_v_s2r(mma_j, mma_k, ~regs_v[mma_k, mma_j, 0], smem_v)
-                        syncthreads()
-                        for mma_k in range(mmas_per_warp_k_o):
                             for mma_i in range(mmas_per_warp_m_o):
-                                copy_qk_s2r(mma_i, mma_k, ~regs_qk[mma_i, 0], smem_qk)
+                                copy_qk_s2r(mma_i, mma_k, k1 * block_k_o, ~regs_qk[mma_i, 0], smem_qk)
                             for mma_i, mma_j in grid(mmas_per_warp_m_o, mmas_per_warp_n_o):
                                 warp_mma(~regs_qk[mma_i, 0], ~regs_v[mma_k, mma_j, 0], ~regs_acc_o[mma_i, mma_j, 0])
-                        syncthreads()
+                            syncthreads()
                     # ----------------------------
 
+                    # ----------------------------
+                    # Compute final O based on previous and current softmax
                     offset_lm_i = 0 #i * block_i
                     warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
                     for k_round in range(warp_count_k):
@@ -676,8 +673,10 @@ class AttnTask(Task):
                                             regs_mi_new[delta_m, 0] * regs_o[mma_i, mma_j, p]
                                             + regs_exp_mij[delta_m, 0] * regs_acc_o[mma_i, mma_j, p]
                                         ) / regs_li_new[delta_m, 0]
+                                        # regs_o[mma_i, mma_j, p] += regs_acc_o[mma_i, mma_j, p]
                                         p += 1
                     syncthreads()
+                    # ----------------------------
                 # } end of main k tile loop
 
                 copy_o_r2g(o, regs_o, offset_i)
