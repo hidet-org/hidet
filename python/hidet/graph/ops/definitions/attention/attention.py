@@ -271,7 +271,7 @@ class AttnTask(Task):
         smem_k_type = tensor_type('float16', shape=[block_k, block_j], layout=smem_k_layout)
         smem_qk_type = tensor_type('float16', shape=[block_i, block_j], layout=smem_qk_layout)
         smem_v_type = tensor_type('float16', shape=[block_k_o, block_j_o], layout=smem_v_layout)
-        regs_o_type = tensor_type('float16', shape=[mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements])
+        regs_o_type = tensor_type(acc_dtype, shape=[mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements])
 
         n_size_per_thread = cdiv(i_rows_per_tb, block_size) # 128 / 256 = 1
         lm_layout = repeat(n_size_per_thread) * spatial(min(i_rows_per_tb, block_size)) # spatial(128)
@@ -585,9 +585,9 @@ class AttnTask(Task):
                 # Load Qi into Smem, it stays there forever
                 copy_q_g2s(q, smem_q, offset_i)
 
-                # init regs_acc_o to 0
                 for a, b, c in grid(mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements):
                     regs_acc_o[a, b, c] = acc_dtype.zero
+                    regs_o[a, b, c] = acc_dtype.zero
 
                 for j in range(j_tiles):
                     offset_j = block_j * j  # 256j
@@ -595,6 +595,8 @@ class AttnTask(Task):
                     # ----------------------------
                     # Compute QK = Qi * Kj
                     # Init regs_acc to 0
+                    for a, b, c in grid(mmas_per_warp_m, mmas_per_warp_n, mma_config.c_elements):
+                        regs_acc[a, b, c] = acc_dtype.zero
                     for k0 in range(k_tiles):
                         # Load Kj into Smem
                         copy_k_g2s(k, smem_k, offset_j, k0 * block_k)
@@ -603,8 +605,6 @@ class AttnTask(Task):
                         for mma_k in range(mmas_per_warp_k):
                             for mma_j in range(mmas_per_warp_n):
                                 copy_k_s2r(mma_j, mma_k, ~regs_k[mma_k, mma_j, 0], smem_k)
-                            for a, b, c in grid(mmas_per_warp_m, mmas_per_warp_n, mma_config.c_elements):
-                                regs_acc[a, b, c] = acc_dtype.zero
                             syncthreads()
                             for mma_k in range(mmas_per_warp_k):
                                 for mma_i in range(mmas_per_warp_m):
@@ -620,6 +620,8 @@ class AttnTask(Task):
 
                     # ----------------------------
                     # Compute O = QK * V
+                    for a, b, c in grid(mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements):
+                        regs_acc_o[a, b, c] = acc_dtype.zero
                     for k1 in range(k_tiles_o):
                         # Load Vj into Smem
                         copy_v_g2s(v, smem_v, offset_j + k1 * block_k_o)
