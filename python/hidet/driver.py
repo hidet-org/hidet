@@ -132,7 +132,7 @@ def _lazy_initialize_cuda():
     if getattr(_lazy_initialize_cuda, '_initialized', False):
         return
     _lazy_initialize_cuda._initialized = True  # pylint: disable=protected-access
-    if hidet.cuda.available():
+    if hidet.cuda.is_cuda_available():
         for i in range(hidet.cuda.device_count()):
             hidet.cuda.properties(i)
             hidet.cuda.compute_capability(i)

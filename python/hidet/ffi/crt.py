@@ -1,4 +1,5 @@
 import ctypes
+from typing import Optional
 
 
 class LibCAPI:

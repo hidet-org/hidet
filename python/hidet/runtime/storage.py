@@ -87,7 +87,7 @@ class CUDAHostMemoryAPI(MemoryAPI):
         raise NotImplementedError()
     
 
-class CPUMemoryAPI(MemoryAPI):
+class CpuMemoryAPI(MemoryAPI):
     def malloc(self, nbytes: int) -> int:
         from hidet.ffi import libc_malloc
         addr = libc_malloc(nbytes)
@@ -357,16 +357,24 @@ class DeviceMemoryPools:
 
     def __getitem__(self, device: Device) -> MemoryPool:
         if device not in self.device2pool:
-            if device.is_cuda():
-                self.device2pool[device] = MemoryPool(
-                    CudaMemoryAPI(device), block_size=4096, max_reserve_size=4 * 1024**3
-                )
-            elif device.is_cpu():
-                self.device2pool[device] = MemoryPool(
-                    CUDAHostMemoryAPI(device), block_size=4096, max_reserve_size=512 * 1024**2
-                )
+            if hidet.cuda.is_cuda_available():
+                if device.is_cuda():
+                    self.device2pool[device] = MemoryPool(
+                        CudaMemoryAPI(device), block_size=4096, max_reserve_size=4 * 1024**3
+                    )
+                elif device.is_cpu():
+                    self.device2pool[device] = MemoryPool(
+                        CUDAHostMemoryAPI(device), block_size=4096, max_reserve_size=512 * 1024**2
+                    )
+                else:
+                    raise ValueError('Unsupported device: {}'.format(device))
             else:
-                raise ValueError('Unsupported device: {}'.format(device))
+                if device.is_cpu():
+                    self.device2pool[device] = MemoryPool(
+                        CpuMemoryAPI(device), block_size=4096, max_reserve_size=512 * 1024**2
+                    )
+                else:
+                    raise ValueError('Unsupported device: {}'.format(device))
         return self.device2pool[device]
 
     def __setitem__(self, device: Device, pool: MemoryPool):

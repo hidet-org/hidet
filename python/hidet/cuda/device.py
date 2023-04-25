@@ -43,6 +43,26 @@ def available() -> bool:
 
 
 @lru_cache(maxsize=None)
+def is_cuda_available() -> bool:
+    """
+    Returns True if CUDA is available, False otherwise.
+    Use ctypes to check if libcuda.so is available instead of calling cudart directly.
+
+    Returns
+    -------
+    ret: bool
+        Whether CUDA is available.
+    """
+    from ctypes.util import find_library
+    # find libcuda.so with ctypes.findlibrary
+    if find_library("libcuda.so"):
+        return True
+    return False
+
+
+
+
+@lru_cache(maxsize=None)
 def device_count() -> int:
     """
     Get the number of available CUDA devices.

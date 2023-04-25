@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from .device import available, device_count, synchronize, compute_capability, properties, profiler_start, profiler_stop
+from .device import available, device_count, synchronize, compute_capability, properties, profiler_start, profiler_stop, is_cuda_available
 from .device import cudaDeviceProp, set_device, current_device, device
 from .stream import Stream, ExternalStream, stream, default_stream, current_stream
 from .memory import malloc, free, malloc_async, free_async, malloc_host, free_host, memcpy_peer, memcpy_peer_async
