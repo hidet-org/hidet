@@ -14,6 +14,7 @@ import torch
 from hidet.testing.torch_utils import check_module
 import torch.backends.cudnn as cudnn
 
+
 @pytest.mark.parametrize(
     'in_shape,w_shape,stride,padding',
     [[[1, 3, 224, 224, 10], [42, 3, 7, 7, 7], 2, 3], [[1, 3, 224, 224, 10], [42, 3, 7, 7, 7], 2, 3]],
@@ -34,6 +35,7 @@ def test_conv3d(in_shape, w_shape, stride, padding, groups, dtype, cudnn_allow_t
         args=[torch.randn(in_shape, dtype=dtype)],
     )
     cudnn.allow_tf32 = cudnn_allow_tf32
+
 
 if __name__ == '__main__':
     pytest.main([__file__])
