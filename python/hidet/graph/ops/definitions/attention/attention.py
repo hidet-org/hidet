@@ -182,6 +182,10 @@ class AttnTask(Task):
         tune.check(block_i_o % warp_count_m_o == 0)
         tune.check(block_j_o % warp_count_n_o == 0)
         tune.check(block_k_o % warp_count_k_o == 0)
+        tune.check(dpad_size % block_k == 0)
+        tune.check(block_j % block_k_o == 0)
+        k_tiles = cdiv(dpad_size, block_k)
+        k_tiles_o = cdiv(block_j, block_k_o)
         warp_elems_m_o, warp_elems_n_o, warp_elems_k_o = (
             block_i_o // warp_count_m_o,
             block_j_o // warp_count_n_o,
@@ -267,6 +271,7 @@ class AttnTask(Task):
         smem_k_type = tensor_type('float16', shape=[block_k, block_j], layout=smem_k_layout)
         smem_qk_type = tensor_type('float16', shape=[block_i, block_j], layout=smem_qk_layout)
         smem_v_type = tensor_type('float16', shape=[block_k_o, block_j_o], layout=smem_v_layout)
+        regs_o_type = tensor_type('float16', shape=[mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements])
 
         n_size_per_thread = cdiv(i_rows_per_tb, block_size) # 128 / 256 = 1
         lm_layout = repeat(n_size_per_thread) * spatial(min(i_rows_per_tb, block_size)) # spatial(128)
@@ -281,9 +286,9 @@ class AttnTask(Task):
         q_elems_per_thread = block_i * dpad_size // block_size
         q_elems_per_thread = 8 * cdiv(q_elems_per_thread, 8)
 
-        o_s2g_layout = spatial(cdiv(block_i, q_elems_per_thread), dpad_size) * repeat(
-            q_elems_per_thread, 1
-        )  # 16 x 64, 8 elems per thread
+        # o_s2g_layout = spatial(cdiv(block_i, q_elems_per_thread), dpad_size) * repeat(
+        #     q_elems_per_thread, 1
+        # )
         t_per_block_k_8_floor = block_size // (dpad_size // 8) # 256 / (64 / 8) = 32
         if block_i < t_per_block_k_8_floor:
             q_g2s_layout = spatial(block_i, dpad_size // 8)
@@ -326,13 +331,13 @@ class AttnTask(Task):
                         b32_regs = view(regs, u32[1])
                         ldmatrix(regs=[b32_regs[0]], smem_addr=smem_addr, trans=True)
 
-            @hidet.script
-            def init_o_gmem(o: f16[o_head + [n_size, d_size]], offset_i: i32):
-                o_head_index = spatial(*o_head).map(blockIdx.y)
-                gmem_o = o[o_head_index][offset_i:, :]
-                for i, j in o_s2g_layout.on(threadIdx.x):
-                    if threadIdx.x < o_s2g_layout.num_workers and i < smem_o_type.shape[0]:
-                        gmem_o.write([i, j], f16.zero, protected=True)
+            # @hidet.script
+            # def init_o_gmem(o: f16[o_head + [n_size, d_size]], offset_i: i32):
+            #     o_head_index = spatial(*o_head).map(blockIdx.y)
+            #     gmem_o = o[o_head_index][offset_i:, :]
+            #     for i, j in o_s2g_layout.on(threadIdx.x):
+            #         if threadIdx.x < o_s2g_layout.num_workers and i < smem_o_type.shape[0]:
+            #             gmem_o.write([i, j], f16.zero, protected=True)
 
             @hidet.script
             def init_lm_smem(smem_l: smem_l_type, smem_m: smem_m_type):
@@ -342,12 +347,12 @@ class AttnTask(Task):
                         smem_m[i] = smem_m_type.dtype.min_value
 
             @hidet.script
-            def copy_k_g2s(k: f16[k_head + [d_size, n_size]], smem_k: smem_k_type, offset_j: i32):
+            def copy_k_g2s(k: f16[k_head + [d_size, n_size]], smem_k: smem_k_type, offset_j: i32, offset_k: i32):
                 o_head_index = spatial(*o_head).map(blockIdx.y)
-                gmem_k = k[broadcast_indices(o_head_index, k_head, o_head)][:, offset_j:]
+                gmem_k = k[broadcast_indices(o_head_index, k_head, o_head)][offset_k:, offset_j:]
                 for i, j_seg in k_g2s_layout.on(threadIdx.x):
                     j = j_seg * 8
-                    src_size = 0 if (i >= d_size or offset_j + j >= n_size) else min(n_size - j, 8)
+                    src_size = 0 if (offset_k + i >= d_size or offset_j + j >= n_size) else min(n_size - j, 8)
                     if threadIdx.x < k_g2s_layout.num_workers and i < smem_k_type.shape[0]:
                         cp_async(~smem_k[i, j], ~gmem_k[i, j], cp_size=16, src_size=src_size * 2, cache_level='global')
 
@@ -382,12 +387,20 @@ class AttnTask(Task):
                         cp_async(~smem_o[i, j], ~gmem_o[i, j], cp_size=16, src_size=src_size * 2, cache_level='global')
 
             @hidet.script
-            def copy_o_s2g(o: f16[o_head + [n_size, d_size]], smem_o: smem_o_type, offset_i: i32):
+            def copy_o_r2g(o: f16[o_head + [n_size, d_size]], regs_o: regs_o_type, offset_i: i32):
+                warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
                 o_head_index = spatial(*o_head).map(blockIdx.y)
                 gmem_o = o[o_head_index][offset_i:, :]
-                for i, j in o_s2g_layout.on(threadIdx.x):
-                    if threadIdx.x < o_s2g_layout.num_workers and i < smem_o_type.shape[0]:
-                        gmem_o.write([i, j], smem_o[i, j], protected=True)
+                for k_round in range(warp_count_k):
+                    for wi, wj, wk in spatial(warp_count_m_o, warp_count_n_o, warp_count_k_o).on(warp_id):
+                        if wk == k_round:
+                            for mma_i, mma_j in grid(mmas_per_warp_m_o, mmas_per_warp_n_o):
+                                p = 0
+                                for ti, tj in mma_config.c_store_map.on(lane_id):
+                                    delta_m = wi * warp_elems_m_o + mma_i * mma_m + ti
+                                    delta_n = wj * warp_elems_n_o + mma_j * mma_n + tj
+                                    gmem_o[delta_m, delta_n] = regs_o[mma_i, mma_j, p] 
+                                    p += 1
 
             @hidet.script
             def copy_q_s2r(mma_i: int, k1: int, regs_q: f16[mma_config.a_elements], smem_q: smem_q_type):
@@ -524,7 +537,7 @@ class AttnTask(Task):
                 attr.cuda_min_blocks = 1
                 attr.cuda_dynamic_smem_bytes = dynamic_smem_bytes
 
-                offset_n = blockIdx.x * i_rows_per_tb
+                offset_i = blockIdx.x * i_rows_per_tb
 
                 smem_q = tensor_pointer('float16', shape=smem_q_type.shape, layout=smem_q_type.layout)
                 smem_o = tensor_pointer('float16', shape=smem_o_type.shape, layout=smem_o_type.layout)
@@ -560,102 +573,113 @@ class AttnTask(Task):
                 regs_acc_o = tensor(
                     'register', dtype=acc_dtype, shape=[mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements]
                 )
+                regs_o = tensor('register', dtype=acc_dtype, shape=regs_o_type.shape)
                 regs_li_new = tensor('register', dtype=smem_l_type.dtype, layout=regs_li_new_layout)
                 regs_mi_new = tensor('register', dtype=smem_m_type.dtype, layout=regs_mi_new_layout)
                 regs_exp_mij = tensor('register', dtype=smem_mij_type.dtype, layout=regs_exp_mij_layout)
 
-                for i in range(i_tiles_per_tb):
-                    offset_i = offset_n + i * block_i
-                    init_o_gmem(o, offset_i)
+                # for i in range(i_tiles_per_tb):
+                #     offset_i = offset_n + i * block_i
+                #     init_o_gmem(o, offset_i)
                 init_lm_smem(smem_l, smem_m)
+                # Load Qi into Smem, it stays there forever
+                copy_q_g2s(q, smem_q, offset_i)
 
+                # init regs_acc_o to 0
+                for a, b, c in grid(mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements):
+                    regs_acc_o[a, b, c] = acc_dtype.zero
 
                 for j in range(j_tiles):
-                    # Load Kj, Vj into Smem
                     offset_j = block_j * j  # 256j
-                    copy_v_g2s(v, smem_v, offset_j)
-                    cp_async_wait_all()
-                    syncthreads()
-                    for mma_k in range(mmas_per_warp_k_o):
-                        for mma_j in range(mmas_per_warp_n_o):
-                            copy_v_s2r(mma_j, mma_k, ~regs_v[mma_k, mma_j, 0], smem_v)
-                    syncthreads()
-                    copy_k_g2s(k, smem_k, offset_j)
-                    cp_async_wait_all()
-                    syncthreads()
-                    for mma_k in range(mmas_per_warp_k):
-                        for mma_j in range(mmas_per_warp_n):
-                            copy_k_s2r(mma_j, mma_k, ~regs_k[mma_k, mma_j, 0], smem_k)
-                    for i in range(i_tiles_per_tb):
-                        # Load Qi into Smem, it stays there forever
-                        offset_i = offset_n + i * block_i
-                        copy_q_g2s(q, smem_q, offset_i)
-                        # Compute QK = Qi * Kj
-                        # Init regs_acc to 0
-                        for a, b, c in grid(mmas_per_warp_m, mmas_per_warp_n, mma_config.c_elements):
-                            regs_acc[a, b, c] = acc_dtype.zero
+
+                    # ----------------------------
+                    # Compute QK = Qi * Kj
+                    # Init regs_acc to 0
+                    for k0 in range(k_tiles):
+                        # Load Kj into Smem
+                        copy_k_g2s(k, smem_k, offset_j, k0 * block_k)
                         cp_async_wait_all()
                         syncthreads()
                         for mma_k in range(mmas_per_warp_k):
-                            for mma_i in range(mmas_per_warp_m):
-                                copy_q_s2r(mma_i, mma_k, ~regs_q[mma_i, 0], smem_q)
-                            for mma_i, mma_j in grid(mmas_per_warp_m, mmas_per_warp_n):
-                                warp_mma(~regs_q[mma_i, 0], ~regs_k[mma_k, mma_j, 0], ~regs_acc[mma_i, mma_j, 0])
-                        qk_softmax_reduce(smem_qk, smem_mij, smem_lij, regs_acc)
-                        # Load Oi into Smem
-                        copy_o_g2s(o, smem_o, offset_i)
-                        for a, b, c in grid(mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements):
-                            regs_acc_o[a, b, c] = acc_dtype.zero
+                            for mma_j in range(mmas_per_warp_n):
+                                copy_k_s2r(mma_j, mma_k, ~regs_k[mma_k, mma_j, 0], smem_k)
+                            for a, b, c in grid(mmas_per_warp_m, mmas_per_warp_n, mma_config.c_elements):
+                                regs_acc[a, b, c] = acc_dtype.zero
+                            syncthreads()
+                            for mma_k in range(mmas_per_warp_k):
+                                for mma_i in range(mmas_per_warp_m):
+                                    copy_q_s2r(mma_i, mma_k, ~regs_q[mma_i, 0], smem_q)
+                                for mma_i, mma_j in grid(mmas_per_warp_m, mmas_per_warp_n):
+                                    warp_mma(~regs_q[mma_i, 0], ~regs_k[mma_k, mma_j, 0], ~regs_acc[mma_i, mma_j, 0])
+                    qk_softmax_reduce(smem_qk, smem_mij, smem_lij, regs_acc)
+                    # ----------------------------
+
+
+                    # # Load Oi into Smem
+                    # copy_o_g2s(o, smem_o, offset_i)
+
+                    # ----------------------------
+                    # Compute O = QK * V
+                    for k1 in range(k_tiles_o):
+                        # Load Vj into Smem
+                        copy_v_g2s(v, smem_v, offset_j + k1 * block_k_o)
+                        cp_async_wait_all()
+                        syncthreads()
+                        for mma_k in range(mmas_per_warp_k_o):
+                            for mma_j in range(mmas_per_warp_n_o):
+                                copy_v_s2r(mma_j, mma_k, ~regs_v[mma_k, mma_j, 0], smem_v)
+                        syncthreads()
                         for mma_k in range(mmas_per_warp_k_o):
                             for mma_i in range(mmas_per_warp_m_o):
                                 copy_qk_s2r(mma_i, mma_k, ~regs_qk[mma_i, 0], smem_qk)
                             for mma_i, mma_j in grid(mmas_per_warp_m_o, mmas_per_warp_n_o):
                                 warp_mma(~regs_qk[mma_i, 0], ~regs_v[mma_k, mma_j, 0], ~regs_acc_o[mma_i, mma_j, 0])
-                        cp_async_wait_all()
                         syncthreads()
-                        offset_lm_i = i * block_i
-                        warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
-                        for k_round in range(warp_count_k):
-                            for wi, wj, wk in spatial(warp_count_m_o, warp_count_n_o, warp_count_k_o).on(warp_id):
-                                if wk == k_round:
-                                    for mma_i, mma_j in grid(mmas_per_warp_m_o, 1):
-                                        c_store_map = repeat(2, 1) * spatial(8, 4)
-                                        for ti, _ in c_store_map.on(lane_id):
-                                            delta_m = wi * warp_elems_m_o + mma_i * mma_m + ti
-                                            mi = smem_m[offset_lm_i + delta_m]
-                                            mij = smem_mij[delta_m]
-                                            li = smem_l[offset_lm_i + delta_m]
-                                            lij = smem_lij[delta_m]
-                                            syncthreads()
-                                            regs_mi_new[delta_m, 0] = prim.max(mi, mij)
-                                            smem_m[offset_lm_i + delta_m] = regs_mi_new[delta_m, 0]
-                                            exp_mi = prim.exp(mi - regs_mi_new[delta_m, 0])
-                                            exp_mij = prim.exp(mij - regs_mi_new[delta_m, 0])
-                                            # reuse regs_mi_new
-                                            regs_mi_new[delta_m, 0] = exp_mi * li
-                                            regs_li_new[delta_m, 0] = exp_mi * li + exp_mij * lij
-                                            smem_l[offset_lm_i + delta_m] = regs_li_new[delta_m, 0]
-                                            regs_exp_mij[delta_m, 0] = exp_mij
-                                            syncthreads()
+                    # ----------------------------
 
-                        for k_round in range(warp_count_k):
-                            for wi, wj, wk in spatial(warp_count_m_o, warp_count_n_o, warp_count_k_o).on(warp_id):
-                                if wk == k_round:
-                                    for mma_i, mma_j in grid(mmas_per_warp_m_o, mmas_per_warp_n_o):
-                                        p = 0
-                                        for ti, tj in mma_config.c_store_map.on(lane_id):
-                                            delta_m = wi * warp_elems_m_o + mma_i * mma_m + ti
-                                            delta_n = wj * warp_elems_n_o + mma_j * mma_n + tj
-                                            smem_o[delta_m, delta_n] = (
-                                                regs_mi_new[delta_m, 0] * smem_o[delta_m, delta_n]
-                                                + regs_exp_mij[delta_m, 0] * regs_acc_o[mma_i, mma_j, p]
-                                            ) / regs_li_new[delta_m, 0]
-                                            # smem_o[delta_m, delta_n] +=  regs_acc_o[mma_i, mma_j, p]
-                                            p += 1
+                    offset_lm_i = 0 #i * block_i
+                    warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
+                    for k_round in range(warp_count_k):
+                        for wi, wj, wk in spatial(warp_count_m_o, warp_count_n_o, warp_count_k_o).on(warp_id):
+                            if wk == k_round:
+                                for mma_i, mma_j in grid(mmas_per_warp_m_o, 1):
+                                    c_store_map = repeat(2, 1) * spatial(8, 4)
+                                    for ti, _ in c_store_map.on(lane_id):
+                                        delta_m = wi * warp_elems_m_o + mma_i * mma_m + ti
+                                        mi = smem_m[offset_lm_i + delta_m]
+                                        mij = smem_mij[delta_m]
+                                        li = smem_l[offset_lm_i + delta_m]
+                                        lij = smem_lij[delta_m]
+                                        syncthreads()
+                                        regs_mi_new[delta_m, 0] = prim.max(mi, mij)
+                                        smem_m[offset_lm_i + delta_m] = regs_mi_new[delta_m, 0]
+                                        exp_mi = prim.exp(mi - regs_mi_new[delta_m, 0])
+                                        exp_mij = prim.exp(mij - regs_mi_new[delta_m, 0])
+                                        # reuse regs_mi_new
+                                        regs_mi_new[delta_m, 0] = exp_mi * li
+                                        regs_li_new[delta_m, 0] = exp_mi * li + exp_mij * lij
+                                        smem_l[offset_lm_i + delta_m] = regs_li_new[delta_m, 0]
+                                        regs_exp_mij[delta_m, 0] = exp_mij
+                                        syncthreads()
 
-                        syncthreads()
-                        copy_o_s2g(o, smem_o, offset_i)
-                        syncthreads()
+                    for k_round in range(warp_count_k):
+                        for wi, wj, wk in spatial(warp_count_m_o, warp_count_n_o, warp_count_k_o).on(warp_id):
+                            if wk == k_round:
+                                for mma_i, mma_j in grid(mmas_per_warp_m_o, mmas_per_warp_n_o):
+                                    p = 0
+                                    for ti, tj in mma_config.c_store_map.on(lane_id):
+                                        delta_m = wi * warp_elems_m_o + mma_i * mma_m + ti
+                                        delta_n = wj * warp_elems_n_o + mma_j * mma_n + tj
+                                        regs_o[mma_i, mma_j, p] = (
+                                            regs_mi_new[delta_m, 0] * regs_o[mma_i, mma_j, p]
+                                            + regs_exp_mij[delta_m, 0] * regs_acc_o[mma_i, mma_j, p]
+                                        ) / regs_li_new[delta_m, 0]
+                                        p += 1
+                    syncthreads()
+                # } end of main k tile loop
+
+                copy_o_r2g(o, regs_o, offset_i)
+                syncthreads()
 
         ir_module = module.ir_module()
         return ir_module
