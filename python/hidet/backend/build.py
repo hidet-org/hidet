@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Optional
+from typing import Optional, List
 import functools
 import warnings
 import os
@@ -52,6 +52,199 @@ def nvcc_path() -> str:
     raise FileNotFoundError('Can not find nvcc compiler.')
 
 
+@functools.lru_cache()
+def gpp_path() -> str:
+    path: Optional[str] = shutil.which('g++')
+    if path is not None:
+        return path
+    raise FileNotFoundError('Can not find g++ compiler.')
+
+
+class SourceCompiler:
+    """
+    The base class of source compiler. This is a wrapper for invoking the actual compiler of backends.
+    """
+
+    def __init__(self, src_path: str, out_lib_path: str, include_dirs: List[str], library_dirs: List[str]) -> None:
+        self.src_path = src_path
+        self.out_lib_path = out_lib_path
+        self.include_dirs = include_dirs
+        self.library_dirs = library_dirs
+
+    def compile(self) -> None:
+        raise NotImplementedError()
+
+
+class CudaSourceCompiler(SourceCompiler):
+    def __init__(
+        self, src_path: str, out_lib_path: str, include_dirs: List[str], library_dirs: List[str], keep_ptx=False
+    ) -> None:
+        super().__init__(src_path, out_lib_path, include_dirs, library_dirs)
+        self.keep_ptx = keep_ptx
+
+    def compile(self) -> None:
+        # pylint: disable=too-many-locals
+        cc = hidet.cuda.compute_capability()
+
+        cc_code = '{}{}'.format(cc[0], cc[1])
+        # The following command compiles the cuda source code to a shared library
+        # See https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html
+        # for more information about nvcc compilation.
+        command = [
+            # the path to nvcc compiler
+            nvcc_path(),
+            # the included directories.
+            *['-I{}'.format(include_dir) for include_dir in self.include_dirs],
+            # the library directories.
+            *['-L{}'.format(library_dir) for library_dir in self.library_dirs],
+            # keep option will keep the intermediate results during compilation, including PTX.
+            '-keep' if self.keep_ptx else '',
+            # the target PTX and SASS version.
+            '-gencode',
+            f'arch=compute_{cc_code},code=sm_{cc_code}',
+            # allow ptxas (PTX assembler) to output information like register/smem usage.
+            '--ptxas-options=-v',
+            # compile into position independent code.
+            '--compiler-options',
+            "'-fPIC'",
+            # embed the line information into the binary, allow Nsight Compute to get the source code for profiling.
+            '-lineinfo',
+            # link the hidet runtime, all APIs for communication between kernels and host system are in hidet runtime.
+            '-lhidet_runtime',
+            # shared cuda runtime library is used (.so), instead of static one (.a). used to reduce binary size.
+            '--cudart',
+            'shared',
+            # supress some warnings
+            # see https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#generic-tool-options-diag-suppress
+            # supress warming no 177 like: "warning #177-D: variable "xxx" was declared but never referenced"
+            '--diag-suppress 177',
+            # supress warning no 179 like: "warning #179-D: right operand of "%" is zero"
+            '--diag-suppress 179',
+            # supress warning no 39 like: "warning #39-D: division by zero"
+            '--diag-suppress 39',
+            # generate shared library (lib.so).
+            '--shared',
+            # the source path.
+            self.src_path,
+            # the output library path.
+            '-o',
+            self.out_lib_path,
+        ]
+
+        try:
+            # the directory to store the library "lib.so"
+            out_lib_dir = os.path.dirname(self.out_lib_path)
+
+            # write the compilation command to "compile.sh"
+            with open(os.path.join(out_lib_dir, 'compile.sh'), 'w') as f:
+                f.write("#!/bin/bash\n\n")
+                f.write(" ".join(command))
+                f.write("\n")
+
+            # run the compilation command
+            with tempfile.TemporaryDirectory() as working_dir:
+                result = subprocess.run(
+                    " ".join(command).split(), stderr=PIPE, stdout=PIPE, cwd=working_dir, check=False
+                )
+                if result.returncode:
+                    message = "Command: " + " ".join(command) + "\n"
+                    if result.stdout:
+                        message += result.stdout.decode().strip() + '\n'
+                    if result.stderr:
+                        message += result.stderr.decode().strip()
+                    ptx_name = os.path.basename(self.src_path).replace('.cu', '.ptx')
+                    if self.keep_ptx and os.path.exists(os.path.join(working_dir, ptx_name)):
+                        ptx_path = os.path.join(working_dir, ptx_name)
+                        target_ptx_path = os.path.join(out_lib_dir, ptx_name)
+                        shutil.move(ptx_path, target_ptx_path)
+                    raise CompilationFailed(self.src_path, message)
+                if self.keep_ptx:
+                    ptx_name = os.path.basename(self.src_path).replace('.cu', '.ptx')
+                    ptx_path = os.path.join(working_dir, ptx_name)
+                    target_ptx_path = os.path.join(out_lib_dir, ptx_name)
+                    shutil.move(ptx_path, target_ptx_path)
+                    # os.rename(ptx_path, target_ptx_path)
+                with open(os.path.join(out_lib_dir, 'nvcc_log.txt'), 'w') as f:
+                    output = '\n'.join([result.stdout.decode('utf-8').strip(), result.stderr.decode('utf-8').strip()])
+                    f.write(output)
+
+                    lines = output.split('\n')
+                    warning_lines = [line for line in lines if 'warning' in line]
+                    warning_lines = warning_lines[: len(warning_lines) // 2]  # nvcc would print the same warning twice
+                    if len(warning_lines) > 0:
+                        warnings.warn('Compilation warnings:\n' + '\n'.join(warning_lines))
+        except subprocess.CalledProcessError as e:
+            print(' '.join(command))
+            print(e.stderr.decode('utf-8'))
+            raise e
+
+
+class CpuSourceCompiler(SourceCompiler):
+    def compile(self) -> None:
+        command = [
+            # the path to nvcc compiler
+            gpp_path(),
+            # the included directories.
+            *['-I{}'.format(include_dir) for include_dir in self.include_dirs],
+            # the library directories.
+            *['-L{}'.format(library_dir) for library_dir in self.library_dirs],
+            # apply -O3 optimization.
+            '-O3',
+            # compile into position independent code.
+            '-fPIC',
+            # embed the debug information into the binary, allow Nsight Compute to get the source code for profiling.
+            '-g',
+            # 'shared',
+            # generate shared library (lib.so).
+            '-shared',
+            # the source path.
+            self.src_path,
+            # the output library path.
+            '-o',
+            self.out_lib_path,
+            # link the hidet runtime, all APIs for communication between kernels and host system are in hidet runtime.
+            # link runtime lib needs to follow the source that used it to avoid undefined symbol in .so
+            # https://stackoverflow.com/questions/19934889/undefined-symbols-in-so-after-compiling-despite-supplying-libs
+            '-lhidet_runtime',
+        ]
+
+        try:
+            # the directory to store the library "lib.so"
+            out_lib_dir = os.path.dirname(self.out_lib_path)
+
+            # write the compilation command to "compile.sh"
+            with open(os.path.join(out_lib_dir, 'compile.sh'), 'w') as f:
+                f.write("#!/bin/bash\n\n")
+                f.write(" ".join(command))
+                f.write("\n")
+
+            # run the compilation command
+            with tempfile.TemporaryDirectory() as working_dir:
+                result = subprocess.run(
+                    " ".join(command).split(), stderr=PIPE, stdout=PIPE, cwd=working_dir, check=False
+                )
+                if result.returncode:
+                    message = "Command: " + " ".join(command) + "\n"
+                    if result.stdout:
+                        message += result.stdout.decode().strip() + '\n'
+                    if result.stderr:
+                        message += result.stderr.decode().strip()
+                    raise CompilationFailed(self.src_path, message)
+
+                with open(os.path.join(out_lib_dir, 'g++_log.txt'), 'w') as f:
+                    output = '\n'.join([result.stdout.decode('utf-8').strip(), result.stderr.decode('utf-8').strip()])
+                    f.write(output)
+
+                    lines = output.split('\n')
+                    warning_lines = [line for line in lines if 'warning' in line]
+                    if len(warning_lines) > 0:
+                        warnings.warn('Compilation warnings:\n' + '\n'.join(warning_lines))
+        except subprocess.CalledProcessError as e:
+            print(' '.join(command))
+            print(e.stderr.decode('utf-8'))
+            raise e
+
+
 def compile_source(src_path: str, out_lib_path: str, keep_ptx=False) -> None:
     """
     Compile the source code in 'src_path' file and output the library to 'out_lib_path'.
@@ -68,101 +261,18 @@ def compile_source(src_path: str, out_lib_path: str, keep_ptx=False) -> None:
     # pylint: disable=too-many-locals
     src_path = os.path.abspath(src_path)
     out_lib_path = os.path.abspath(out_lib_path)
-    cc = hidet.cuda.compute_capability()
 
     # dir contains the runtime header file 'hidet/runtime.h'
     include_dirs = get_include_dirs()
     # dir contains the runtime library 'libhidet_runtime.so'
     library_dirs = [os.path.dirname(library_paths['hidet_runtime'])]
 
-    cc_code = '{}{}'.format(cc[0], cc[1])
-    # The following command compiles the cuda source code to a shared library
-    # See https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html for more information about nvcc compilation.
-    command = [
-        # the path to nvcc compiler
-        nvcc_path(),
-        # the included directories.
-        *['-I{}'.format(include_dir) for include_dir in include_dirs],
-        # the library directories.
-        *['-L{}'.format(library_dir) for library_dir in library_dirs],
-        # keep option will keep the intermediate results during compilation, including PTX.
-        '-keep' if keep_ptx else '',
-        # the target PTX and SASS version.
-        '-gencode',
-        f'arch=compute_{cc_code},code=sm_{cc_code}',
-        # allow ptxas (PTX assembler) to output information like register/smem usage.
-        '--ptxas-options=-v',
-        # compile into position independent code.
-        '--compiler-options',
-        "'-fPIC'",
-        # embed the line information into the binary, allow Nsight Compute to get the source code for profiling.
-        '-lineinfo',
-        # link the hidet runtime, all APIs for communication between kernels and host system are in hidet runtime.
-        '-lhidet_runtime',
-        # shared cuda runtime library is used (.so), instead of static one (.a). used to reduce binary size.
-        '--cudart',
-        'shared',
-        # supress some warnings
-        # see https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#generic-tool-options-diag-suppress
-        # supress warming no 177 like: "warning #177-D: variable "xxx" was declared but never referenced"
-        '--diag-suppress 177',
-        # supress warning no 179 like: "warning #179-D: right operand of "%" is zero"
-        '--diag-suppress 179',
-        # supress warning no 39 like: "warning #39-D: division by zero"
-        '--diag-suppress 39',
-        # generate shared library (lib.so).
-        '--shared',
-        # the source path.
-        src_path,
-        # the output library path.
-        '-o',
-        out_lib_path,
-    ]
+    if hidet.cuda.is_cuda_available():
+        compiler = CudaSourceCompiler(src_path, out_lib_path, include_dirs, library_dirs, keep_ptx)
+    else:
+        compiler = CpuSourceCompiler(src_path, out_lib_path, include_dirs, library_dirs)
 
-    try:
-        # the directory to store the library "lib.so"
-        out_lib_dir = os.path.dirname(out_lib_path)
-
-        # write the compilation command to "compile.sh"
-        with open(os.path.join(out_lib_dir, 'compile.sh'), 'w') as f:
-            f.write("#!/bin/bash\n\n")
-            f.write(" ".join(command))
-            f.write("\n")
-
-        # run the compilation command
-        with tempfile.TemporaryDirectory() as working_dir:
-            result = subprocess.run(" ".join(command).split(), stderr=PIPE, stdout=PIPE, cwd=working_dir, check=False)
-            if result.returncode:
-                message = "Command: " + " ".join(command) + "\n"
-                if result.stdout:
-                    message += result.stdout.decode().strip() + '\n'
-                if result.stderr:
-                    message += result.stderr.decode().strip()
-                ptx_name = os.path.basename(src_path).replace('.cu', '.ptx')
-                if keep_ptx and os.path.exists(os.path.join(working_dir, ptx_name)):
-                    ptx_path = os.path.join(working_dir, ptx_name)
-                    target_ptx_path = os.path.join(out_lib_dir, ptx_name)
-                    shutil.move(ptx_path, target_ptx_path)
-                raise CompilationFailed(src_path, message)
-            if keep_ptx:
-                ptx_name = os.path.basename(src_path).replace('.cu', '.ptx')
-                ptx_path = os.path.join(working_dir, ptx_name)
-                target_ptx_path = os.path.join(out_lib_dir, ptx_name)
-                shutil.move(ptx_path, target_ptx_path)
-                # os.rename(ptx_path, target_ptx_path)
-            with open(os.path.join(out_lib_dir, 'nvcc_log.txt'), 'w') as f:
-                output = '\n'.join([result.stdout.decode('utf-8').strip(), result.stderr.decode('utf-8').strip()])
-                f.write(output)
-
-                lines = output.split('\n')
-                warning_lines = [line for line in lines if 'warning' in line]
-                warning_lines = warning_lines[: len(warning_lines) // 2]  # nvcc would print the same warning twice
-                if len(warning_lines) > 0:
-                    warnings.warn('Compilation warnings:\n' + '\n'.join(warning_lines))
-    except subprocess.CalledProcessError as e:
-        print(' '.join(command))
-        print(e.stderr.decode('utf-8'))
-        raise e
+    compiler.compile()
 
 
 def load_task_func(lib_path: str, task) -> CompiledFunction:

@@ -68,7 +68,10 @@ def build_task(task: Task, target_device='cuda', load=True) -> Optional[Compiled
         config_str = f'{target_device}_space_{space_level}'
         task_hash = sha256(task_string.encode()).hexdigest()[:16]
         task_dir = os.path.join(op_cache_dir, config_str, task.name, task_hash)
-        src_path = os.path.join(task_dir, 'source.cu')
+        if hidet.cuda.is_cuda_available():
+            src_path = os.path.join(task_dir, 'source.cu')
+        else:
+            src_path = os.path.join(task_dir, 'source.cpp')
         lib_path = os.path.join(task_dir, 'lib.so')
 
         # use previously generated library when available

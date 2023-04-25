@@ -54,12 +54,10 @@ def is_cuda_available() -> bool:
         Whether CUDA is available.
     """
     from ctypes.util import find_library
-    # find libcuda.so with ctypes.findlibrary
-    if find_library("libcuda.so"):
+
+    if find_library('cuda'):
         return True
     return False
-
-
 
 
 @lru_cache(maxsize=None)
