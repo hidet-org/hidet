@@ -157,7 +157,7 @@ class AttnTask(Task):
         mma_n = mma_config.n
         mma_k = mma_config.k
 
-        swizzle_unit, swizzle_repeat = calc_swizzle_size(block_k)
+        swizzle_unit, swizzle_repeat = calc_swizzle_size(dpad_size)
         tune.check(swizzle_repeat > 0)
 
 
@@ -212,7 +212,8 @@ class AttnTask(Task):
 
         smem_bytes_q = dtype_size * block_i * dpad_size
         smem_bytes_k = dtype_size * block_k * block_j
-        smem_bytes_v = dtype_size * block_j * block_k
+        smem_bytes_v = dtype_size * block_k_o * block_j_o
+        smem_bytes_k_v = max(smem_bytes_k, smem_bytes_v)
         smem_bytes_qk = dtype_size * block_i * block_j
         smem_bytes_l = sm_dtype.nbytes * i_rows_per_tb
         smem_bytes_m = sm_dtype.nbytes * i_rows_per_tb
@@ -223,16 +224,13 @@ class AttnTask(Task):
             'q': 0,
             'o': 0,
             'k': smem_bytes_q,
-            # 'v': smem_bytes_q + smem_bytes_k,
             'v': smem_bytes_q,
-            # 'qk': smem_bytes_q + smem_bytes_k + smem_bytes_v,
-            'qk': smem_bytes_q,
-            'l': smem_bytes_q + smem_bytes_k + smem_bytes_v + smem_bytes_qk,
-            'm': smem_bytes_q + smem_bytes_k + smem_bytes_v + smem_bytes_qk + smem_bytes_l,
-            'lij': smem_bytes_q + smem_bytes_k + smem_bytes_v + smem_bytes_qk + smem_bytes_l + smem_bytes_m,
+            'qk': smem_bytes_q + smem_bytes_k_v,
+            'l': smem_bytes_q + smem_bytes_k_v + smem_bytes_qk,
+            'm': smem_bytes_q + smem_bytes_k_v + smem_bytes_qk + smem_bytes_l,
+            'lij': smem_bytes_q + smem_bytes_k_v + smem_bytes_qk + smem_bytes_l + smem_bytes_m,
             'mij': smem_bytes_q
-            + smem_bytes_k
-            + smem_bytes_v
+            + smem_bytes_k_v
             + smem_bytes_qk
             + smem_bytes_l
             + smem_bytes_m
@@ -241,9 +239,8 @@ class AttnTask(Task):
 
         dynamic_smem_bytes = (
             smem_bytes_q
-            + smem_bytes_k
+            + smem_bytes_k_v
             + smem_bytes_qk
-            + smem_bytes_v
             + smem_bytes_l
             + smem_bytes_m
             + smem_bytes_lij
@@ -257,31 +254,22 @@ class AttnTask(Task):
         smem_lij_type = tensor_type(sm_dtype, shape=[block_i])
         smem_mij_type = tensor_type(sm_dtype, shape=[block_i])
 
-        smem_o_layout = (
+        smem_q_layout = (
             row_major((1, swizzle_repeat)) * row_major((block_i, swizzle_unit // 8)).swizzle(1) * row_major((1, 8))
         )
-        # smem_o_layout = row_major((block_i, block_k))
 
         smem_k_layout = row_major((block_k // 8, block_j // 64)) * row_major((8, 8)).swizzle(1) * row_major((1, 8))
-        # smem_k_layout = row_major((block_k, block_j))
         smem_qk_layout = row_major((block_i, block_j // 8)).swizzle(1) * row_major((1, 8))
-        # smem_qk_layout = row_major((block_i, block_j))
-        # smem_v_layout = (
-        #     row_major((block_j // 8, block_k // 64))
-        #     * row_major((8,8)).swizzle(1)
-        #     * row_major((1,8))
-        # )
-        smem_v_layout = row_major((block_j // 8, block_k // 8)) * row_major((8, 1)).swizzle(1) * row_major((1, 8))
-        # smem_v_layout = row_major((block_j, block_k))
+        smem_v_layout = row_major((block_k_o // 8, block_j_o // 8)) * row_major((8, 1)).swizzle(1) * row_major((1, 8))
 
-        smem_o_type = tensor_type('float16', shape=[block_i, block_k], layout=smem_o_layout)
-        smem_q_type = smem_o_type
+        smem_q_type = tensor_type('float16', shape=[block_i, dpad_size], layout=smem_q_layout)
+        smem_o_type = smem_q_type
         smem_k_type = tensor_type('float16', shape=[block_k, block_j], layout=smem_k_layout)
         smem_qk_type = tensor_type('float16', shape=[block_i, block_j], layout=smem_qk_layout)
-        smem_v_type = tensor_type('float16', shape=[block_j, block_k], layout=smem_v_layout)
+        smem_v_type = tensor_type('float16', shape=[block_k_o, block_j_o], layout=smem_v_layout)
 
-        n_size_per_thread = (i_rows_per_tb + block_size - 1) // block_size
-        lm_layout = repeat(n_size_per_thread) * spatial(min(i_rows_per_tb, block_size))
+        n_size_per_thread = cdiv(i_rows_per_tb, block_size) # 128 / 256 = 1
+        lm_layout = repeat(n_size_per_thread) * spatial(min(i_rows_per_tb, block_size)) # spatial(128)
 
         rows_per_thread_mma_o = 2 * mmas_per_warp_m_o
         # regs_li_new should be 2x1, it is accessed via [r] ([~16])
@@ -290,23 +278,26 @@ class AttnTask(Task):
         regs_exp_mij_layout = regs_li_new_layout
 
         # Round up to nearest multiple of 8
-        q_elems_per_thread = block_i * block_k // block_size
+        q_elems_per_thread = block_i * dpad_size // block_size
         q_elems_per_thread = 8 * cdiv(q_elems_per_thread, 8)
 
-        o_s2g_layout = spatial(cdiv(block_i, q_elems_per_thread), block_k) * repeat(
+        o_s2g_layout = spatial(cdiv(block_i, q_elems_per_thread), dpad_size) * repeat(
             q_elems_per_thread, 1
         )  # 16 x 64, 8 elems per thread
-        t_per_block_k_8_floor = block_size // (block_k // 8)
+        t_per_block_k_8_floor = block_size // (dpad_size // 8) # 256 / (64 / 8) = 32
         if block_i < t_per_block_k_8_floor:
-            q_g2s_layout = spatial(block_i, block_k // 8)
+            q_g2s_layout = spatial(block_i, dpad_size // 8)
         else:
             q_g2s_layout = repeat(cdiv(block_i, t_per_block_k_8_floor), 1) * spatial(
-                t_per_block_k_8_floor, block_k // 8
+                t_per_block_k_8_floor, dpad_size // 8
             )
         k_g2s_layout = repeat(cdiv(block_k, (block_size // (block_j // 8))), 1) * spatial(
             block_size // (block_j // 8), block_j // 8
         )
-        v_g2s_layout = repeat(cdiv(block_j, t_per_block_k_8_floor), 1) * spatial(t_per_block_k_8_floor, block_k // 8)
+        if block_k_o < t_per_block_k_8_floor:
+            v_g2s_layout = spatial(block_k_o, block_j_o // 8)
+        else:
+            v_g2s_layout = repeat(cdiv(block_k_o, t_per_block_k_8_floor), 1) * spatial(t_per_block_k_8_floor, block_j_o // 8)
         o_g2s_layout = q_g2s_layout
 
         with hidet.script_module() as module:
