@@ -10,3 +10,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from . import math
+
+from .avx import avx_f32x4_broadcast, avx_f32x4_fmadd, avx_f32x4_load, avx_f32x4_store

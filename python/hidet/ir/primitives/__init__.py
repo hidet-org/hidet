@@ -22,9 +22,11 @@ from .debug import printf
 
 # cpu primitive functions
 from . import cpu
+from .cpu import avx_f32x4_store, avx_f32x4_broadcast, avx_f32x4_fmadd, avx_f32x4_load
 
 # cuda primitive functions and variables
 from . import cuda
 from .cuda import thread_idx, block_idx
 from .cuda import syncthreads, syncwarp, lds128, sts128, shfl_sync, shfl_up_sync, shfl_down_sync, shfl_xor_sync
 from .cuda import active_mask, set_kernel_max_dynamic_smem_bytes
+
