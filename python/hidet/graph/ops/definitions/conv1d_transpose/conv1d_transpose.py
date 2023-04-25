@@ -33,7 +33,6 @@ class Conv1dTransposeTask(Task):
         k = normalize_kernel(kernel_size, dim=1)[0]
         op = normalize_padding(output_padding, dim=1)[0]
         channels_in = wc * groups
-        print(s, p, op, k)
         l = (length_in - 1) * s - 2 * p + k + op
 
         if op >= s:
@@ -56,7 +55,7 @@ class Conv1dTransposeTask(Task):
                     then_expr=(
                         data[ni, (ci // wc) * og + ogi, (li + p - ki) // s] * weight[(ci // wc) * og + ogi, ci % wc, ki]
                     ),
-                    else_expr=0.0,
+                    else_expr=data.type.dtype(0.0),
                 ),
                 reduce_type='sum',
             ),
@@ -89,7 +88,5 @@ def conv1d_transpose(
     groups: Optional[int] = 1,
     output_padding: Optional[int] = 0,
 ) -> Tensor:
-    s = stride
-    p = padding
-    op = output_padding
+    s, p, op = stride, padding, output_padding
     return Conv1dTransposeOp(data, weight, s, p, groups, op).get_output(0)

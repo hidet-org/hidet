@@ -12,6 +12,7 @@
 import pytest
 import torch
 from hidet.testing.torch_utils import check_module
+import torch.backends.cudnn as cudnn
 
 
 @pytest.mark.parametrize('in_shape', [(1, 3, 224, 224, 1)])
@@ -21,7 +22,8 @@ from hidet.testing.torch_utils import check_module
 @pytest.mark.parametrize('output_padding', [3])
 @pytest.mark.parametrize('groups', [1])
 @pytest.mark.parametrize('dtype', [torch.float32])
-def test_conv3d_transpose(in_shape, w_shape, stride, padding, output_padding, groups, dtype):
+@pytest.mark.parametrize('cudnn_allow_tf32', [True, False])
+def test_conv3d_transpose(in_shape, w_shape, stride, padding, output_padding, groups, dtype, cudnn_allow_tf32):
     check_module(
         model=torch.nn.ConvTranspose3d(
             in_channels=in_shape[1],
@@ -35,6 +37,7 @@ def test_conv3d_transpose(in_shape, w_shape, stride, padding, output_padding, gr
         args=[torch.randn(in_shape, dtype=dtype)],
         atol=2e-4,
     )
+    cudnn.allow_tf32 = cudnn_allow_tf32
 
 
 if __name__ == '__main__':

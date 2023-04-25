@@ -66,7 +66,6 @@ class HidetConv2d(HidetModule):
 class HidetConvTranspose2d(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, torch.nn.ConvTranspose2d)
-        print("groups mod", self.mod.groups)
         return regs.conv2d_transpose(
             x=x,
             weight=self.param('weight'),

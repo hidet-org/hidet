@@ -732,7 +732,7 @@ def logsigmoid(x: Tensor):
 
 
 @register_function(torch.nn.functional.mish)
-def mish(x: Tensor, inplace: bool):
+def mish(x: Tensor, inplace: bool = False):
     if inplace:
         warnings.warn_once('hidet: mish with inplace=True is not supported. Treat as inplace=False.')
     return ops.multiply(x, ops.tanh(ops.softplus(x, 1.0, 20.0)))

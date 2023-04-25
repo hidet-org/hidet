@@ -12,7 +12,7 @@
 import pytest
 import torch
 from hidet.testing.torch_utils import check_module
-
+import torch.backends.cudnn as cudnn
 
 @pytest.mark.parametrize(
     'in_shape,w_shape,stride,padding',
@@ -20,7 +20,8 @@ from hidet.testing.torch_utils import check_module
 )
 @pytest.mark.parametrize('groups', [1, 3])
 @pytest.mark.parametrize('dtype', [torch.float32])
-def test_conv3d(in_shape, w_shape, stride, padding, groups, dtype):
+@pytest.mark.parametrize('cudnn_allow_tf32', [True, False])
+def test_conv3d(in_shape, w_shape, stride, padding, groups, dtype, cudnn_allow_tf32):
     check_module(
         model=torch.nn.Conv3d(
             in_channels=in_shape[1],
@@ -32,7 +33,7 @@ def test_conv3d(in_shape, w_shape, stride, padding, groups, dtype):
         ),
         args=[torch.randn(in_shape, dtype=dtype)],
     )
-
+    cudnn.allow_tf32 = cudnn_allow_tf32
 
 if __name__ == '__main__':
     pytest.main([__file__])
