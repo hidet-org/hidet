@@ -17,8 +17,8 @@ import torch.backends.cudnn as cudnn
 
 @pytest.mark.parametrize('in_shape,w_shape,stride,padding,groups', [[[1, 3, 224], [42, 3, 7], 2, 1, 1]])
 @pytest.mark.parametrize('dtype', [torch.float32])
-@pytest.mark.parametrize('cudnn_allow_tf32', [True, False])
-def test_conv1d(in_shape, w_shape, stride, padding, groups, dtype, cudnn_allow_tf32):
+def test_conv1d(in_shape, w_shape, stride, padding, groups, dtype):
+    cudnn.allow_tf32 = False
     check_module(
         model=torch.nn.Conv1d(
             in_channels=in_shape[1],
@@ -30,7 +30,7 @@ def test_conv1d(in_shape, w_shape, stride, padding, groups, dtype, cudnn_allow_t
         ),
         args=[torch.randn(in_shape, dtype=dtype)],
     )
-    cudnn.allow_tf32 = cudnn_allow_tf32
+    cudnn.allow_tf32 = True
 
 
 if __name__ == '__main__':
