@@ -13,10 +13,10 @@ from typing import Union
 
 from hidet.ir.expr import Expr, Call
 from hidet.ir.type import FuncType, VoidType, PointerType
-from hidet.ir.primitives import initialize
 from hidet.ir.primitives.func import register_primitive_function
 from hidet.utils import initialize
 from hidet.ir.primitives.func import call_primitive_func
+
 
 @initialize()
 def register_primitive_functions():
@@ -39,7 +39,7 @@ def avx_f32x4_fmadd(a: Expr, b: Expr, c: Expr) -> Call:
 
 
 def avx_f32x4_load(addr: Expr) -> Call:
-    return call_primitive_func('avx_x86_float32x4_laod', [addr])
+    return call_primitive_func('avx_x86_float32x4_load', [addr])
 
 
 def avx_f32x4_store(addr: Expr, src: Expr) -> Call:

@@ -732,6 +732,9 @@ class CPUCodegen(Codegen):
         doc += Text('#include <hidet/cpu/float16.h>') + NewLine()
         doc += Text('#include <hidet/cpu/bfloat16.h>') + NewLine()
 
+        # Headers for avx intrinsics
+        doc += Text('#include <immintrin.h>') + NewLine()
+
         if module.task is not None:
             doc += '/*' + NewLine()
             doc += str(module.task) + NewLine()
@@ -788,7 +791,12 @@ class CPUCodegen(Codegen):
 
 
 def codegen(ir_module: IRModule, src_out_path: Optional[str] = None, target='cuda') -> str:
-    gen = CUDACodegen()
+    if target == 'cuda':
+        gen = CUDACodegen()
+    elif target == 'cpu':
+        gen = CPUCodegen()
+    else:
+        raise ValueError("codegen: unknown target {}".format(target))
     doc = gen(ir_module)
     code = str(doc)
     if src_out_path is not None:
