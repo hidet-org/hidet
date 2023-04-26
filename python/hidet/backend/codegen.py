@@ -716,6 +716,8 @@ class CPUCodegen(Codegen):
             'float64': 'double',
             'bfloat16': 'bfloat16_t',
             'tfloat32': 'float',
+            'float32x4': '__m128',
+            'float32x8': '__m256'
         }
         return Text(scalar_type_map[t.name])
 
