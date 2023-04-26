@@ -59,60 +59,74 @@ def matmul_kernel5():
 
                             for pp in range(pb):
                                 pi = p + pp
-                                bb = b[pi, jj]
-                                bb1 = b[pi, jj+1]
-                                bb2 = b[pi, jj+2]
-                                bb3 = b[pi, jj+3]
+                                # bb = b[pi, jj]
+                                # bb1 = b[pi, jj+1]
+                                # bb2 = b[pi, jj+2]
+                                # bb3 = b[pi, jj+3]
 
-                                
+                                bb_0123 = avx_f32x4_load(~b[pi, jj]) 
 
-                                aa = a[i+ii, pi]
-                                c00 += aa * bb
-                                c01 += aa * bb1
-                                c02 += aa * bb2
-                                c03 += aa * bb3
+                                # aa = a[i+ii, pi]
+                                aidx = i + ii
+                                aa = avx_f32x4_broadcast(~a[aidx, pi])
 
-                                aa = a[i+ii+1, pi]
-                                c10 += aa * bb
-                                c11 += aa * bb1
-                                c12 += aa * bb2
-                                c13 += aa * bb3
+                                # c00 += aa * bb
+                                # c01 += aa * bb1
+                                # c02 += aa * bb2
+                                # c03 += aa * bb3
+                                c0_0123 = avx_f32x4_fmadd(aa, bb_0123, c0_0123)
 
-                                aa = a[i+ii+2, pi]
-                                c20 += aa * bb
-                                c21 += aa * bb1
-                                c22 += aa * bb2
-                                c23 += aa * bb3
+                                # aa = a[i+ii+1, pi]
+                                # c10 += aa * bb
+                                # c11 += aa * bb1
+                                # c12 += aa * bb2
+                                # c13 += aa * bb3
+                                aa = avx_f32x4_broadcast(~a[aidx+1, pi])
+                                c1_0123 = avx_f32x4_fmadd(aa, bb_0123, c1_0123)
 
-                                aa = a[i+ii+3, pi]
-                                c30 += aa * bb
-                                c31 += aa * bb1
-                                c32 += aa * bb2
-                                c33 += aa * bb3
+                                # aa = a[i+ii+2, pi]
+                                # c20 += aa * bb
+                                # c21 += aa * bb1
+                                # c22 += aa * bb2
+                                # c23 += aa * bb3
+                                aa = avx_f32x4_broadcast(~a[aidx+2, pi])
+                                c2_0123 = avx_f32x4_fmadd(aa, bb_0123, c2_0123)
+
+                                # aa = a[i+ii+3, pi]
+                                # c30 += aa * bb
+                                # c31 += aa * bb1
+                                # c32 += aa * bb2
+                                # c33 += aa * bb3
+                                aa = avx_f32x4_broadcast(~a[aidx+3, pi])
+                                c3_0123 = avx_f32x4_fmadd(aa, bb_0123, c3_0123)
 
                             idx = i + ii
-                            c[idx, jj] += c00
-                            c[idx, jj+1] += c01
-                            c[idx, jj+2] += c02
-                            c[idx, jj+3] += c03
+                            # c[idx, jj] += c00
+                            # c[idx, jj+1] += c01
+                            # c[idx, jj+2] += c02
+                            # c[idx, jj+3] += c03
+                            avx_f32x4_store(~c[idx, jj], c0_0123)
 
-                            idx += 1
-                            c[idx, jj] += c10
-                            c[idx, jj+1] += c11
-                            c[idx, jj+2] += c12
-                            c[idx, jj+3] += c13
+                            # idx += 1
+                            # c[idx, jj] += c10
+                            # c[idx, jj+1] += c11
+                            # c[idx, jj+2] += c12
+                            # c[idx, jj+3] += c13
+                            avx_f32x4_store(~c[idx+1, jj], c1_0123)
 
-                            idx += 1
-                            c[idx, jj] += c20
-                            c[idx, jj+1] += c21
-                            c[idx, jj+2] += c22
-                            c[idx, jj+3] += c23
+                            # idx += 1
+                            # c[idx, jj] += c20
+                            # c[idx, jj+1] += c21
+                            # c[idx, jj+2] += c22
+                            # c[idx, jj+3] += c23
+                            avx_f32x4_store(~c[idx+2, jj], c2_0123)
 
-                            idx += 1
-                            c[idx, jj] += c30
-                            c[idx, jj+1] += c31
-                            c[idx, jj+2] += c32
-                            c[idx, jj+3] += c33
+                            # idx += 1
+                            # c[idx, jj] += c30
+                            # c[idx, jj+1] += c31
+                            # c[idx, jj+2] += c32
+                            # c[idx, jj+3] += c33
+                            avx_f32x4_store(~c[idx+3, jj], c3_0123)
 
                             ii += 4
                         jj += 4
