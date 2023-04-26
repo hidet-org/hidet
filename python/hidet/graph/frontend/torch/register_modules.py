@@ -16,6 +16,37 @@ from .interpreter import HidetModule, register_module
 from . import register_functions as regs
 
 
+@register_module(torch.nn.Conv1d)
+class HidetConv1d(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.Conv1d)
+        return regs.conv1d(
+            x=x,
+            weight=self.param('weight'),
+            bias=self.param('bias', optional=True),
+            stride=self.mod.stride,
+            padding=self.mod.padding,
+            dilation=self.mod.dilation,
+            groups=self.mod.groups,
+        )
+
+
+@register_module(torch.nn.ConvTranspose1d)
+class HidetConvTranspose1d(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.ConvTranspose1d)
+        return regs.conv1d_transpose(
+            x=x,
+            weight=self.param('weight'),
+            bias=self.param('bias', optional=True),
+            stride=self.mod.stride,
+            padding=self.mod.padding,
+            output_padding=self.mod.output_padding,
+            groups=self.mod.groups,
+            dilation=self.mod.dilation,
+        )
+
+
 @register_module(torch.nn.Conv2d)
 class HidetConv2d(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
@@ -31,6 +62,22 @@ class HidetConv2d(HidetModule):
         )
 
 
+@register_module(torch.nn.ConvTranspose2d)
+class HidetConvTranspose2d(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.ConvTranspose2d)
+        return regs.conv2d_transpose(
+            x=x,
+            weight=self.param('weight'),
+            bias=self.param('bias', optional=True),
+            stride=self.mod.stride,
+            padding=self.mod.padding,
+            output_padding=self.mod.output_padding,
+            groups=self.mod.groups,
+            dilation=self.mod.dilation,
+        )
+
+
 @register_module(torch.nn.Conv3d)
 class HidetConv3d(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
@@ -43,6 +90,22 @@ class HidetConv3d(HidetModule):
             padding=self.mod.padding,
             dilation=self.mod.dilation,
             groups=self.mod.groups,
+        )
+
+
+@register_module(torch.nn.ConvTranspose3d)
+class HidetConvTranspose3d(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.ConvTranspose3d)
+        return regs.conv3d_transpose(
+            x=x,
+            weight=self.param('weight'),
+            bias=self.param('bias', optional=True),
+            stride=self.mod.stride,
+            padding=self.mod.padding,
+            output_padding=self.mod.output_padding,
+            groups=self.mod.groups,
+            dilation=self.mod.dilation,
         )
 
 
@@ -161,6 +224,13 @@ class HidetTanh(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, torch.nn.Tanh)
         return regs.tanh(x)
+
+
+@register_module(torch.nn.Hardtanh)
+class HidetHardtanh(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.Hardtanh)
+        return regs.hardtanh(x, self.mod.min_val, self.mod.max_val)
 
 
 @register_module(torch.nn.Embedding)
@@ -303,3 +373,10 @@ class HidetLogSigmoid(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, torch.nn.LogSigmoid)
         return regs.logsigmoid(x)
+
+
+@register_module(torch.nn.Mish)
+class HidetMish(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.Mish)
+        return regs.mish(x, self.mod.inplace)

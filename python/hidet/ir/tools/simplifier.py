@@ -159,5 +159,5 @@ def simplify_to_int(node: Union[Expr, int], repeat_limit=10) -> int:
         return node
     node = simplify(node, repeat_limit)
     if not (isinstance(node, Constant) and node.type.is_integer()):
-        raise ValueError('Can not simplify expression {} to an integer'.format(node))
+        raise ValueError(f'Can not simplify expression {node} to an integer')
     return node.value

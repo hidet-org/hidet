@@ -14,58 +14,55 @@ from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, TensorNode
 from hidet.graph.ops.definitions.utils import compute, input_like, normalize_stride, normalize_dilations, reduce
 
 
-class Conv2dTask(Task):
+class Conv1dTask(Task):
     def __init__(self, data: TensorNode, weight: TensorNode, stride: List[int], dilations: List[int], groups: int):
-        n, c, h, w = data.const_shape()
-        oc, wc, kx, ky = weight.const_shape()
-        sx, sy = stride
-        dilx, dily = dilations
-        p, q = (h - dilx * (kx - 1) - 1) // sx + 1, (w - dily * (ky - 1) - 1) // sy + 1
+        n, c, l = data.const_shape()
+        oc, wc, k = weight.const_shape()
+        s = normalize_stride(stride, dim=1)[0]
+        dil = normalize_dilations(dilations, dim=1)[0]
+        len_in = (l - dil * (k - 1) - 1) // s + 1
         if c % groups != 0 or oc % groups != 0:
             raise ValueError(
-                'Conv2d expect the in_channels % groups == 0 and out_channels % groups == 0, \n'
+                'Conv1d expects: in_channels % groups == 0 and out_channels % groups == 0, \n'
                 'but got in_channels, out_channels, groups: {}, {}, {}'.format(c, oc, groups)
             )
         if wc * groups != c:
             raise ValueError(
-                'Conv2d expect the weight has shape [out_channels, in_channels / groups, kx, ky], \n'
-                'got weight shape {}, in_channels {} and groups {}'.format([oc, wc, kx, ky], c, groups)
+                'Conv1d expects the weight tensor has shape [out_channels, in_channels / groups, kernel_size], \n'
+                'got weight shape {}, in_channels {} and groups {}'.format([oc, wc, k], c, groups)
             )
         out_group_size = oc // groups
         output = compute(
             name='out',
-            shape=[n, oc, p, q],
-            fcompute=lambda ni, oci, pi, qi: reduce(
-                shape=[wc, kx, ky],
-                fcompute=lambda wci, kxi, kyi: (
-                    data[ni, (oci // out_group_size) * wc + wci, pi * sx + kxi * dilx, qi * sy + kyi * dily]
-                    * weight[oci, wci, kxi, kyi]
+            shape=[n, oc, len_in],
+            fcompute=lambda ni, oci, li: reduce(
+                shape=[wc, k],
+                fcompute=lambda wci, ki: (
+                    data[ni, (oci // out_group_size) * wc + wci, li * s + ki * dil] * weight[oci, wci, ki]
                 ),
                 reduce_type='sum',
             ),
         )
         self.channels = c
-        self.stride = stride
+        self.stride = s
         self.groups = groups
-        super().__init__(name='conv2d', inputs=[data, weight], outputs=[output])
+        super().__init__(name='conv1d', inputs=[data, weight], outputs=[output])
 
 
-class Conv2dOp(Operator):
+class Conv1dOp(Operator):
     def __init__(self, x: Tensor, w: Tensor, stride: Sequence[int], dilations: Union[int, Sequence[int]], groups: int):
-        stride = normalize_stride(stride)
-        dilations = normalize_dilations(dilations)
         super().__init__(
             inputs=[x, w],
+            task=Conv1dTask(input_like(x, 'x'), input_like(w, 'w'), stride, dilations, groups),
             attributes={'stride': stride, 'groups': groups, 'dilations': dilations},
-            task=Conv2dTask(input_like(x, 'x'), input_like(w, 'w'), stride, dilations, groups),
         )
 
 
-def conv2d(
+def conv1d(
     data: Tensor,
     weight: Tensor,
-    stride: Union[int, Sequence[int]] = (1, 1),
-    dilations: Union[int, Sequence[int]] = (1, 1),
+    stride: Union[int, Sequence[int]] = (1),
+    dilations: Union[int, Sequence[int]] = (1),
     groups: int = 1,
 ) -> Tensor:
-    return Conv2dOp(data, weight, stride, dilations, groups).get_output(0)
+    return Conv1dOp(data, weight, stride, dilations, groups).get_output(0)
