@@ -35,7 +35,23 @@ def normalize_stride(stride: Union[int, Sequence[int]], dim=2) -> List[int]:
             return stride * dim
         elif len(stride) == dim:
             return stride
-    msg = 'Stride must be an integer or a list of integer with length 1 or {}, but got {}'.format(dim, stride)
+    msg = 'Stride must be an integer or a list of integer with length 1 or {}, but got {} of length {}'.format(
+        dim, stride, len(stride)
+    )
+    raise ValueError(msg)
+
+
+def normalize_dilations(dilations: Union[int, Sequence[int]], dim=2) -> List[int]:
+    if isinstance(dilations, int):
+        return [dilations for _ in range(dim)]
+    elif isinstance(dilations, (list, tuple)):
+        if len(dilations) == 1:
+            return dilations * dim
+        elif len(dilations) == dim:
+            return dilations
+    msg = 'Dilations must be an integer or a list of integer with length 1 or {}, but got {} of length {}'.format(
+        dim, dilations, len(dilations)
+    )
     raise ValueError(msg)
 
 
@@ -47,7 +63,9 @@ def normalize_kernel(kernel: Union[int, Sequence[int]], dim=2) -> List[int]:
             return list(kernel * dim)
         elif len(kernel) == dim:
             return list(kernel)
-    msg = 'Kernel size must be an integer or a list of integer with length 1 or {}, but got {}'.format(dim, kernel)
+    msg = 'Kernel size must be an integer or a list of integer with length 1 or {}, but got {} of length {}'.format(
+        dim, kernel, len(kernel)
+    )
     raise ValueError(msg)
 
 

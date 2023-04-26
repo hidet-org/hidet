@@ -25,6 +25,27 @@ from .utils import dtype_from_torch, device_from_torch
 Number = Union[int, float, bool]
 
 
+@register_function(torch.nn.functional.conv1d)
+def conv1d(x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, dilation, groups):
+    x = ops.conv_pad(x, padding)
+    y = ops.conv1d(x, weight, stride=stride, dilations=dilation, groups=groups)
+    if bias is not None:
+        y = y + ops.unsqueeze(bias, [0, 2])
+    return y
+
+
+@register_function(torch.nn.functional.conv_transpose1d)
+def conv1d_transpose(
+    x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, output_padding, groups, dilation
+):
+    if dilation != 1 and not same_list(dilation, [1]):
+        raise NotImplementedError("dilation != 1")
+    y = ops.conv1d_transpose(x, weight, stride, padding, groups, output_padding)
+    if bias is not None:
+        y = y + ops.unsqueeze(bias, [0, 2])
+    return y
+
+
 @register_function(torch.nn.functional.conv2d)
 def conv2d(x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, dilation, groups):
     x = ops.conv_pad(x, padding)
@@ -34,10 +55,34 @@ def conv2d(x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, d
     return y
 
 
+@register_function(torch.nn.functional.conv_transpose2d)
+def conv2d_transpose(
+    x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, output_padding, groups, dilation
+):
+    if dilation != 1 and not same_list(dilation, [1, 1]):
+        raise NotImplementedError("dilation != 1")
+    y = ops.conv2d_transpose(x, weight, stride, padding, groups, output_padding)
+    if bias is not None:
+        y = y + ops.unsqueeze(bias, [0, 2, 3])
+    return y
+
+
 @register_function(torch.nn.functional.conv3d)
 def conv3d(x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, dilation, groups):
     x = ops.conv_pad(x, padding)
     y = ops.conv3d(x, weight, stride, dilation, groups)
+    if bias is not None:
+        y = y + ops.unsqueeze(bias, [0, 2, 3, 4])
+    return y
+
+
+@register_function(torch.nn.functional.conv_transpose3d)
+def conv3d_transpose(
+    x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, output_padding, groups, dilation
+):
+    if dilation != 1 and not same_list(dilation, [1, 1, 1]):
+        raise NotImplementedError("dilation != 1")
+    y = ops.conv3d_transpose(x, weight, stride, padding, groups, output_padding)
     if bias is not None:
         y = y + ops.unsqueeze(bias, [0, 2, 3, 4])
     return y
@@ -104,11 +149,6 @@ def add(x: Tensor, y: Tensor):
 @register_function(operator.iadd)
 def iadd(x: Tensor, y: Tensor):
     return ops.add(x, y)
-
-
-@register_function(operator.neg)
-def neg(x: Tensor):
-    return -x
 
 
 @register_function(torch.sin)
@@ -277,6 +317,11 @@ def sub(x: Tensor, y: Tensor):
     return x - y
 
 
+@register_function(operator.neg)
+def neg(x: Tensor):
+    return -x
+
+
 @register_function(torch.nn.functional.softmax)
 @register_method(torch.Tensor.softmax)
 def softmax(x: Tensor, dim: int, _stacklevel: int = 3, dtype=None):
@@ -396,6 +441,11 @@ def group_norm(
 @register_function(torch.tanh)
 def tanh(x: Tensor):
     return ops.tanh(x)
+
+
+@register_function(torch.nn.functional.hardtanh)
+def hardtanh(x: Tensor, min_val: float, max_val: float):
+    return ops.hardtanh(x, min_val, max_val)
 
 
 @register_function(torch.nn.functional.embedding)
@@ -679,6 +729,13 @@ def celu(x: Tensor, alpha: float):
 @register_function(torch.nn.functional.logsigmoid)
 def logsigmoid(x: Tensor):
     return ops.logsigmoid(x)
+
+
+@register_function(torch.nn.functional.mish)
+def mish(x: Tensor, inplace: bool = False):
+    if inplace:
+        warnings.warn_once('hidet: mish with inplace=True is not supported. Treat as inplace=False.')
+    return ops.multiply(x, ops.tanh(ops.softplus(x, 1.0, 20.0)))
 
 
 @register_function(torch.gather)

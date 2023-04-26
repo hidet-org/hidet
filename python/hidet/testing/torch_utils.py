@@ -12,9 +12,11 @@
 from typing import Sequence
 import numpy.testing
 import torch
+import hidet
 
 
 def check_module(model: torch.nn.Module, args: Sequence[torch.Tensor], atol=1e-4, rtol=1e-4):
+    hidet.torch.dynamo_config.print_input_graph(True)
     model = torch.nn.Sequential(model)
     model = model.cuda()
     model.eval()

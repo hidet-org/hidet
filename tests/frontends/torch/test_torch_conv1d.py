@@ -15,16 +15,12 @@ from hidet.testing.torch_utils import check_module
 import torch.backends.cudnn as cudnn
 
 
-@pytest.mark.parametrize(
-    'in_shape,w_shape,stride,padding',
-    [[[1, 3, 224, 224], [42, 3, 7, 7], 2, 3], [[1, 3, 224, 224], [42, 3, 7, 7], 3, 4]],
-)
-@pytest.mark.parametrize('groups', [1, 3])
+@pytest.mark.parametrize('in_shape,w_shape,stride,padding,groups', [[[1, 3, 224], [42, 3, 7], 2, 1, 1]])
 @pytest.mark.parametrize('dtype', [torch.float32])
-def test_conv2d(in_shape, w_shape, stride, padding, groups, dtype):
+def test_conv1d(in_shape, w_shape, stride, padding, groups, dtype):
     cudnn.allow_tf32 = False
     check_module(
-        model=torch.nn.Conv2d(
+        model=torch.nn.Conv1d(
             in_channels=in_shape[1],
             out_channels=w_shape[0],
             kernel_size=w_shape[2:],

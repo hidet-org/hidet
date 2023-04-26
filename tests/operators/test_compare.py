@@ -16,12 +16,97 @@ from hidet import ops
 from hidet.testing import check_unary, check_binary
 
 
-@pytest.mark.parametrize("a_shape, b_shape, dtype", [[[33, 44], [44], "bool"]])
-def test_and(a_shape, b_shape, dtype):
+# hidet operators tested against numpy equivalent operators
+
+
+@pytest.mark.parametrize("a_shape", [[33, 44]])
+@pytest.mark.parametrize("b_shape", [[44]])
+@pytest.mark.parametrize("dtype", ["bool"])
+def test_logical_and_numpy(a_shape, b_shape, dtype):
     # without broadcast
     check_binary(a_shape, a_shape, lambda a, b: np.logical_and(a, b), lambda a, b: ops.logical_and(a, b), dtype=dtype)
     # with broadcast
     check_binary(a_shape, b_shape, lambda a, b: np.logical_and(a, b), lambda a, b: ops.logical_and(a, b), dtype=dtype)
+
+
+@pytest.mark.parametrize("a_shape", [[33, 44]])
+@pytest.mark.parametrize("b_shape", [[44]])
+@pytest.mark.parametrize("dtype", ["bool"])
+def test_logical_or_numpy(a_shape, b_shape, dtype):
+    # without broadcast
+    check_binary(a_shape, a_shape, lambda a, b: np.logical_or(a, b), lambda a, b: ops.logical_or(a, b), dtype=dtype)
+    # with broadcast
+    check_binary(a_shape, b_shape, lambda a, b: np.logical_or(a, b), lambda a, b: ops.logical_or(a, b), dtype=dtype)
+
+
+@pytest.mark.parametrize("a_shape", [[33, 44]])
+@pytest.mark.parametrize("b_shape", [[44]])
+@pytest.mark.parametrize("dtype", ["bool"])
+def test_logical_xor_numpy(a_shape, b_shape, dtype):
+    # without broadcast
+    check_binary(a_shape, a_shape, lambda a, b: np.logical_xor(a, b), lambda a, b: ops.logical_xor(a, b), dtype=dtype)
+    # with broadcast
+    check_binary(a_shape, b_shape, lambda a, b: np.logical_xor(a, b), lambda a, b: ops.logical_xor(a, b), dtype=dtype)
+
+
+@pytest.mark.parametrize("a_shape", [[33, 44]])
+@pytest.mark.parametrize("dtype", ["bool"])
+def test_logical_not_numpy(a_shape, dtype):
+    check_unary(a_shape, lambda a: np.logical_not(a), lambda a: ops.logical_not(a), dtype=dtype)
+
+
+@pytest.mark.parametrize("a_shape", [[33, 44]])
+@pytest.mark.parametrize("b_shape", [[44]])
+@pytest.mark.parametrize("dtype", ["bool"])
+def test_equal_numpy(a_shape, b_shape, dtype):
+    # without broadcast
+    check_binary(a_shape, a_shape, lambda a, b: np.equal(a, b), lambda a, b: ops.equal(a, b), dtype=dtype)
+    # with broadcast
+    check_binary(a_shape, b_shape, lambda a, b: np.equal(a, b), lambda a, b: ops.equal(a, b), dtype=dtype)
+
+
+@pytest.mark.parametrize("a_shape", [[33, 44]])
+@pytest.mark.parametrize("b_shape", [[44]])
+@pytest.mark.parametrize("dtype", ["bool"])
+def test_less_than_equal_numpy(a_shape, b_shape, dtype):
+    # without broadcast
+    check_binary(a_shape, a_shape, lambda a, b: np.less_equal(a, b), lambda a, b: ops.less_equal(a, b), dtype=dtype)
+    # with broadcast
+    check_binary(a_shape, b_shape, lambda a, b: np.less_equal(a, b), lambda a, b: ops.less_equal(a, b), dtype=dtype)
+
+
+@pytest.mark.parametrize("a_shape", [[33, 44]])
+@pytest.mark.parametrize("b_shape", [[44]])
+@pytest.mark.parametrize("dtype", ["bool"])
+def test_less_than_numpy(a_shape, b_shape, dtype):
+    # without broadcast
+    check_binary(a_shape, a_shape, lambda a, b: np.less(a, b), lambda a, b: ops.less(a, b), dtype=dtype)
+    # with broadcast
+    check_binary(a_shape, b_shape, lambda a, b: np.less(a, b), lambda a, b: ops.less(a, b), dtype=dtype)
+
+
+@pytest.mark.parametrize("a_shape", [[33, 44]])
+@pytest.mark.parametrize("b_shape", [[44]])
+@pytest.mark.parametrize("dtype", ["bool"])
+def test_greater_than_equal_numpy(a_shape, b_shape, dtype):
+    # without broadcast
+    check_binary(
+        a_shape, a_shape, lambda a, b: np.greater_equal(a, b), lambda a, b: ops.greater_equal(a, b), dtype=dtype
+    )
+    # with broadcast
+    check_binary(
+        a_shape, b_shape, lambda a, b: np.greater_equal(a, b), lambda a, b: ops.greater_equal(a, b), dtype=dtype
+    )
+
+
+@pytest.mark.parametrize("a_shape", [[33, 44]])
+@pytest.mark.parametrize("b_shape", [[44]])
+@pytest.mark.parametrize("dtype", ["bool"])
+def test_greater_than_numpy(a_shape, b_shape, dtype):
+    # without broadcast
+    check_binary(a_shape, a_shape, lambda a, b: np.greater(a, b), lambda a, b: ops.greater(a, b), dtype=dtype)
+    # with broadcast
+    check_binary(a_shape, b_shape, lambda a, b: np.greater(a, b), lambda a, b: ops.greater(a, b), dtype=dtype)
 
 
 if __name__ == '__main__':

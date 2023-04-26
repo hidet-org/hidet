@@ -16,36 +16,47 @@ import torch.nn.functional
 import hidet
 
 
-@pytest.mark.parametrize("hidet_op", [hidet.ops.conv2d_transpose, hidet.ops.conv2d_transpose_gemm])
+@pytest.mark.parametrize("hidet_op", [hidet.ops.conv3d_transpose])
 @pytest.mark.parametrize(
-    'in_channels, out_channels, kernel_size, stride, pads, dilation, groups, height, width, output_padding',
-    [[10, 20, (5, 5), (3, 2), (2, 1), (1, 1), 5, 11, 10, (2, 1)]],
+    'in_channels, out_channels, kernel_size, stride, pads, dilations, groups, depth, height, width, output_padding',
+    [[10, 20, (5, 5, 5), (3, 2, 2), (2, 1, 1), (1, 1, 1), 5, 12, 11, 10, (1, 1, 1)]],
 )
-def test_conv2d_transpose(
-    hidet_op, in_channels, out_channels, kernel_size, stride, pads, dilation, groups, height, width, output_padding
+def test_conv3d_transpose(
+    hidet_op,
+    in_channels,
+    out_channels,
+    kernel_size,
+    stride,
+    pads,
+    dilations,
+    groups,
+    depth,
+    height,
+    width,
+    output_padding,
 ):
-    torch_data = torch.ones(1, in_channels, height, width, dtype=torch.float32).cuda()
+    torch_data = torch.ones(1, in_channels, depth, height, width, dtype=torch.float32).cuda()
     torch_weight = torch.ones(
-        out_channels, in_channels // groups, kernel_size[0], kernel_size[1], dtype=torch.float32
+        out_channels, in_channels // groups, kernel_size[0], kernel_size[1], kernel_size[2], dtype=torch.float32
     ).cuda()
 
-    torch_output = torch.nn.functional.conv2d(
-        torch_data, torch_weight, stride=stride, padding=pads, dilation=1, groups=groups, bias=None
+    torch_output = torch.nn.functional.conv3d(
+        torch_data, torch_weight, stride=stride, padding=pads, groups=groups, bias=None, dilation=1
     )
     hidet_data = hidet.from_torch(torch_data)
     hidet_weight = hidet.from_torch(torch_weight)
     hidet_output = hidet.ops.conv_pad(hidet_data, pads)
-    hidet_output = hidet.ops.conv2d(hidet_output, hidet_weight, stride, dilation, groups=groups)
+    hidet_output = hidet.ops.conv3d(hidet_output, hidet_weight, stride, dilations, groups=groups)
     np.testing.assert_allclose(hidet_output.cpu().numpy(), torch_output.cpu().numpy(), atol=1e-5)
-    torch_transpose_output = torch.nn.functional.conv_transpose2d(
+    torch_transpose_output = torch.nn.functional.conv_transpose3d(
         torch_output,
         torch_weight,
         stride=stride,
         padding=pads,
         groups=groups,
         bias=None,
-        output_padding=output_padding,
         dilation=1,
+        output_padding=output_padding,
     )
     hidet_transpose_output = hidet_op(hidet_output, hidet_weight, stride, pads, groups, output_padding=output_padding)
     np.testing.assert_allclose(hidet_transpose_output.cpu().numpy(), torch_transpose_output.cpu().numpy(), atol=1e-5)
