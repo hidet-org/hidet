@@ -95,6 +95,7 @@ def compile_source(src_path: str, out_lib_path: str, keep_ptx=False) -> None:
         # compile into position independent code.
         '--compiler-options',
         "'-fPIC'",
+        '-Xcompiler -m64,-mavx2,-march=native',
         # embed the line information into the binary, allow Nsight Compute to get the source code for profiling.
         '-lineinfo',
         # link the hidet runtime, all APIs for communication between kernels and host system are in hidet runtime.
