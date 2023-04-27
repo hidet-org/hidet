@@ -90,9 +90,9 @@ class CUDAHostMemoryAPI(MemoryAPI):
 
 class CpuMemoryAPI(MemoryAPI):
     def malloc(self, nbytes: int) -> int:
-        from hidet.ffi import libc_malloc
+        from hidet.ffi import crt
 
-        addr = libc_malloc(nbytes)
+        addr = crt.malloc(nbytes)
         if addr == 0 and nbytes != 0:
             return 0
         self.allocated += nbytes
@@ -101,9 +101,9 @@ class CpuMemoryAPI(MemoryAPI):
         return addr
 
     def free(self, addr: int):
-        from hidet.ffi import libc_free
+        from hidet.ffi import crt
 
-        libc_free(addr)
+        crt.free(addr)
         self.allocated -= self.addr2nbytes.pop(addr)
 
     def memory_info(self) -> (int, int):
@@ -386,17 +386,6 @@ class DeviceMemoryPools:
 
 
 _device2pool: DeviceMemoryPools = DeviceMemoryPools()
-
-
-# @initialize()
-# def initialize_memory_pools():
-#     global _device2pool
-#     _device2pool = {
-#         Device('cpu'): MemoryPool(CpuMemoryAPI(Device('cpu')), block_size=4096, max_reserve_size=512 * 1024**2)
-#     }
-#     for device_id in range(hidet.cuda.device_count()):
-#         device = Device('cuda', device_id)
-#         _device2pool[device] = MemoryPool(CudaMemoryAPI(device), block_size=4096, max_reserve_size=4 * 1024**3)
 
 
 def current_memory_pool(device: Union[Device, str]) -> MemoryPool:
