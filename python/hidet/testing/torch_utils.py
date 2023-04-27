@@ -16,20 +16,18 @@ import hidet
 
 
 def check_module(model: torch.nn.Module, args: Sequence[torch.Tensor], atol=1e-4, rtol=1e-4):
-    # print(type(model))
-    with torch.no_grad():
-        hidet.torch.dynamo_config.print_input_graph(True)
-        model = torch.nn.Sequential(model)
-        model = model.cuda()
-        model.eval()
-        args = [x.cuda() for x in args]
-        model_opt = torch.compile(model, backend='hidet')
-        torch_outputs = model(*args)
-        hidet_outputs = model_opt(*args)
-        if isinstance(torch_outputs, torch.Tensor):
-            torch_outputs = (torch_outputs,)
-        if isinstance(hidet_outputs, torch.Tensor):
-            hidet_outputs = (hidet_outputs,)
+    hidet.torch.dynamo_config.print_input_graph(True)
+    model = torch.nn.Sequential(model)
+    model = model.cuda()
+    model.eval()
+    args = [x.cuda() for x in args]
+    model_opt = torch.compile(model, backend='hidet')
+    torch_outputs = model(*args)
+    hidet_outputs = model_opt(*args)
+    if isinstance(torch_outputs, torch.Tensor):
+        torch_outputs = (torch_outputs,)
+    if isinstance(hidet_outputs, torch.Tensor):
+        hidet_outputs = (hidet_outputs,)
 
         if len(torch_outputs) != len(hidet_outputs):
             raise ValueError('torch_outputs and hidet_outputs have different length')

@@ -21,16 +21,15 @@ class Conv1dTask(Task):
         s = normalize_stride(stride, dim=1)[0]
         dil = normalize_dilations(dilations, dim=1)[0]
         len_in = (l - dil * (k - 1) - 1) // s + 1
-        print(len_in)
         if c % groups != 0 or oc % groups != 0:
             raise ValueError(
                 'Conv1d expects: in_channels % groups == 0 and out_channels % groups == 0, \n'
-                f'but got in_channels, out_channels, groups: {c}, {oc}, {groups}'
+                'but got in_channels, out_channels, groups: {}, {}, {}'.format(c, oc, groups)
             )
         if wc * groups != c:
             raise ValueError(
                 'Conv1d expects the weight tensor has shape [out_channels, in_channels / groups, kernel_size], \n'
-                f'got weight shape {[oc, wc, k]}, in_channels {c} and groups {groups}'
+                'got weight shape {}, in_channels {} and groups {}'.format([oc, wc, k], c, groups)
             )
         out_group_size = oc // groups
         output = compute(

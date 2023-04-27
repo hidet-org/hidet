@@ -30,8 +30,6 @@ class Conv3dTransposeTask(Task):
         oc, wc, kz, kx, ky = weight.const_shape()
         c = wc * groups
         sz, sx, sy = stride
-        print(padding)
-        print(normalize_padding(padding, dim=3))
         pz0, px0, py0, pz1, px1, py1 = padding
         z = (r - 1) * sz - pz0 - pz1 + kz + output_padding[0]
         h = (p - 1) * sx - px0 - px1 + kx + output_padding[1]
@@ -40,7 +38,7 @@ class Conv3dTransposeTask(Task):
         if output_padding[0] >= stride[0] or output_padding[1] >= stride[1] or output_padding[2] >= stride[2]:
             raise ValueError(
                 'Conv3dTranspose expect the output_padding < stride, \n'
-                f'but got output_padding, stride: {output_padding}, {stride}'
+                'but got output_padding, stride: {}, {}'.format(output_padding, stride)
             )
         if any(p < 0 for p in padding):
             raise ValueError('Negative padding is not supported.')
