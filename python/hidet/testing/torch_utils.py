@@ -29,10 +29,10 @@ def check_module(model: torch.nn.Module, args: Sequence[torch.Tensor], atol=1e-4
     if isinstance(hidet_outputs, torch.Tensor):
         hidet_outputs = (hidet_outputs,)
 
-        if len(torch_outputs) != len(hidet_outputs):
-            raise ValueError('torch_outputs and hidet_outputs have different length')
+    if len(torch_outputs) != len(hidet_outputs):
+        raise ValueError('torch_outputs and hidet_outputs have different length')
 
-        for torch_output, hidet_output in zip(torch_outputs, hidet_outputs):
-            torch_output = torch_output.detach().cpu().numpy()
-            hidet_output = hidet_output.detach().cpu().numpy()
-            numpy.testing.assert_allclose(torch_output, hidet_output, atol=atol, rtol=rtol)
+    for torch_output, hidet_output in zip(torch_outputs, hidet_outputs):
+        torch_output = torch_output.detach().cpu().numpy()
+        hidet_output = hidet_output.detach().cpu().numpy()
+        numpy.testing.assert_allclose(torch_output, hidet_output, atol=atol, rtol=rtol)

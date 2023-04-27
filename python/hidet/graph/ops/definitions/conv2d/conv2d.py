@@ -24,12 +24,12 @@ class Conv2dTask(Task):
         if c % groups != 0 or oc % groups != 0:
             raise ValueError(
                 'Conv2d expect the in_channels % groups == 0 and out_channels % groups == 0, \n'
-                f'but got in_channels, out_channels, groups: {c}, {oc}, {groups}'
+                'but got in_channels, out_channels, groups: {}, {}, {}'.format(c, oc, groups)
             )
         if wc * groups != c:
             raise ValueError(
                 'Conv2d expect the weight has shape [out_channels, in_channels / groups, kx, ky], \n'
-                f'got weight shape {[oc, wc, kx, ky]}, in_channels {c} and groups {groups}'
+                'got weight shape {}, in_channels {} and groups {}'.format([oc, wc, kx, ky], c, groups)
             )
         out_group_size = oc // groups
         output = compute(
