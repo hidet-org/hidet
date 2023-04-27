@@ -188,93 +188,429 @@ class SoftmaxOp(Operator):
         super().__init__(inputs=[x], attributes={'axis': axis}, task=SoftmaxTask(input_like(x, 'x'), axis))
 
 
+"""
+ReLU operator.
+
+Parameters
+----------
+x: Tensor
+    The input tensor.
+
+Returns
+-------
+ret: Tensor
+    The output tensor.
+"""
 def relu(x) -> Tensor:
     return ReluOp(x).get_output(0)
 
+"""
+The LeakReLU operator is a variant of ReLU that allows a small gradient when the unit is not active.
 
+Parameters
+----------
+x: Tensor
+    The input tensor.
+
+alpha: float
+    The slope of the negative part.
+
+Returns
+-------
+ret: Tensor
+    The output tensor.
+"""
 def leaky_relu(x: Tensor, alpha: float) -> Tensor:
     return LeakyReluOp(x, alpha).get_output(0)
 
+"""
+Sigmoid operator.
 
+Parameters
+----------
+x: Tensor
+    The input tensor.
+    
+Returns
+-------
+ret: Tensor
+    The output tensor.
+"""
 def sigmoid(x: Tensor) -> Tensor:
     return SigmoidOp(x).get_output(0)
 
+"""
+The HardSigmoid operator is an approximation of sigmoid.
 
+Parameters
+----------
+x: Tensor
+    The input tensor.
+
+Returns
+-------
+ret: Tensor
+    The output tensor.
+"""
 def hardsigmoid(x: Tensor) -> Tensor:
     return HardSigmoidOp(x).get_output(0)
 
+"""
+The Clip operator limits the given input within an interval.
 
+Parameters
+----------
+x: Tensor
+    The input tensor.
+
+min_val: Optional[float]
+    The minimum value to clip to.
+
+max_val: Optional[float]
+    The maximum value to clip to.
+
+Returns
+-------
+ret: Tensor
+    The output tensor.
+"""
 def clip(x: Tensor, min_val: Optional[float], max_val: Optional[float]) -> Tensor:
     return ClipOp(x, min_val, max_val).get_output(0)
 
+"""
+The ReLU6 operator is equivalent to ReLU but with a upper bound of 6.
 
+Parameters
+----------
+x: Tensor
+    The input tensor.
+
+Returns
+-------
+ret: Tensor
+    The output tensor.
+"""
 def relu6(x: Tensor) -> Tensor:
     return clip(x, 0.0, 6.0)
 
+"""
+The Gelu operator is a variant smoothed variant of ReLU.
 
+Parameters
+----------
+x: Tensor
+    The input tensor.
+
+Returns
+-------
+ret: Tensor
+    The output tensor.
+"""
 def gelu(x: Tensor) -> Tensor:
     return GeluOp(x).get_output(0)
 
+"""
+The SiLU operator is a non-monotonically increasing function that is self-stabilizing.
 
+Parameters
+----------
+x: Tensor
+    The input tensor.
+    
+Returns
+-------
+ret: Tensor
+    The output tensor.
+"""
 def silu(x: Tensor) -> Tensor:
     return SiluOp(x).get_output(0)
 
+"""
+The PReLU operator is a variant of ReLU that allows a learnable slope when the unit is not active.
 
+Parameters
+----------
+x: Tensor
+    The input tensor.
+
+slope: Tensor
+    The slope of the negative part.
+
+Returns
+-------
+ret: Tensor
+    The output tensor.
+"""
 def prelu(x: Tensor, slope: Tensor) -> Tensor:
     return PReluOp(x, slope).get_output(0)
 
+"""
+The HardSwish operator is a variant of Swish that uses a piecewise function that bounds the output between 0 and the input value.
+The Swish operator matches the composition of SiLU when the trainable parameter beta is set to 1. 
 
+Parameters
+----------
+x: Tensor
+    The input tensor.
+
+Returns
+-------
+ret: Tensor
+    The output tensor.
+"""
 def hardswish(x: Tensor) -> Tensor:
     return HardSwishOp(x).get_output(0)
 
+"""
+The Threshold operator determines whether a neuron should be activated or not based on a threshold.
 
+Parameters
+----------
+x: Tensor
+    The input tensor.
+
+threshold_val: float
+    The threshold value.
+
+value: float
+    The value to replace the input tensor with if it is below the threshold.
+
+Returns
+-------
+ret: Tensor
+    The output tensor.
+"""
 def threshold(x: Tensor, threshold_val: float, value: float) -> Tensor:
     return ThresholdOp(x, threshold_val, value).get_output(0)
 
+"""
+The HardTanh operator is a variant of Tanh that uses a piecewise function to bound the output between a minimum and maximum value.
 
+Parameters
+----------
+x: Tensor
+    The input tensor.
+
+min_val: float
+    The minimum value to clip to.
+
+max_val: float
+    The maximum value to clip to.
+
+Returns
+-------
+ret: Tensor
+    The output tensor.
+"""
 def hardtanh(x: Tensor, min_val: float, max_val: float) -> Tensor:
     return HardTanhOp(x, min_val, max_val).get_output(0)
 
+"""
+The ELU operator is a variant of ReLU that has an logarithmic relationship bound by alpha for negative values.
 
+Parameters
+----------
+x: Tensor
+    The input tensor.
+
+alpha: float
+    The slope of the negative part.
+
+Returns
+-------
+ret: Tensor
+    The output tensor.
+"""
 def elu(x: Tensor, alpha: float) -> Tensor:
     return EluOp(x, alpha).get_output(0)
 
+"""
+The SeLU operator is a parametric and scaled variant of ELU that uses a fixed alpha and lambda value.
 
+Parameters
+----------
+x: Tensor
+    The input tensor.
+
+alpha: float
+    The fixed alpha value.
+
+scale: float
+    The fixed scaling factor.
+
+Returns
+-------
+ret: Tensor
+    The output tensor.
+"""
 def selu(x: Tensor, alpha: float, scale: float) -> Tensor:
     return SeluOp(x, alpha, scale).get_output(0)
 
+"""
+The CELU operator evaluates the continously differentiable exponential linear units on the passed inputs.
 
+Parameters
+----------
+x: Tensor
+    The input tensor.
+
+alpha: float
+    The value for CELU's formulation.
+
+Returns
+-------
+ret: Tensor
+    The output tensor.
+"""
 def celu(x: Tensor, alpha: float) -> Tensor:
     return CeluOp(x, alpha).get_output(0)
 
+"""
+The LogSigmoid operator.
 
+Parameters
+----------
+x: Tensor
+    The input tensor.
+
+Returns
+-------
+ret: Tensor
+    The output tensor.
+"""
 def logsigmoid(x: Tensor) -> Tensor:
     return LogSigmoidOp(x).get_output(0)
 
+"""
+The HardShrink operator is a switch that is zero when the input is within a range and otherwise equal to the input.
+The range is defined by a lower bound of negative lambda and an upper bound of lambda.
 
+Parameters
+----------
+x: Tensor
+    The input tensor.
+
+lambda_val: float
+    The value for the lower and upper bounds.
+
+Returns
+-------
+ret: Tensor
+    The output tensor.
+"""
 def hardshrink(x: Tensor, lambda_val: float) -> Tensor:
     return HardShrinkOp(x, lambda_val).get_output(0)
 
+"""
+The TanhShrink operator evaluates as the difference between the input value and Tanh of the input value.
 
+Parameters
+----------
+x: Tensor
+    The input tensor.
+
+Returns
+-------
+ret: Tensor
+    The output tensor.
+"""
 def tanhshrink(x: Tensor) -> Tensor:
     return TanhShrinkOp(x).get_output(0)
 
+"""
+The Softsign operator evaluates as x / (1 + |x|).
 
+Parameters
+----------
+x: Tensor
+    The input tensor.
+
+Returns
+-------
+ret: Tensor
+    The output tensor.
+"""
 def softsign(x: Tensor) -> Tensor:
     return SoftSignOp(x).get_output(0)
 
+"""
+The Softplus operator is an approximation of the ReLU operator that is constrained to be strictly positive.
+If the input multiplied by the beta parameter is greater than the threshold value, the output is equal to the input.
 
+Parameters
+----------
+x: Tensor
+    The input tensor.
+
+beta: int
+    The beta value for the Softplus formulation.
+
+threshold_val: int
+    The threshold value for the Softplus formulation.
+
+Returns
+-------
+ret: Tensor
+    The output tensor.
+"""
 def softplus(x: Tensor, beta: int, threshold_val: int) -> Tensor:
     return SoftPlusOp(x, beta, threshold_val).get_output(0)
 
+"""
+The Softshrink operator is a switch function that is zero when the input is within a range and otherwise equal to the input minus the lower bound or plus the upper bound.
+The range is defined by a lower bound of negative lambda and an upper bound of lambda.
+The output is the input minus lambda if the input is greater than lambda and the input plus lambda if the input is less than negative lambda.
 
+Parameters
+----------
+x: Tensor
+    The input tensor.
+    
+lambda_val: float
+    The value for the lower and upper bounds.
+
+Returns
+-------
+ret: Tensor
+    The output tensor.
+"""
 def softshrink(x: Tensor, lambda_val: float) -> Tensor:
     return SoftShrinkOp(x, lambda_val).get_output(0)
 
+"""
+The Softmax operator.
 
+Parameters
+----------
+x: Tensor
+    The input tensor.
+
+axis: int
+    The axis along which to perform the softmax.
+
+Returns
+-------
+ret: Tensor
+    The output tensor.
+"""
 def softmax(x: Tensor, axis=1) -> Tensor:
     return SoftmaxOp(x, axis).get_output(0)
 
+"""
+The Softmin operator.
 
+Parameters
+----------
+x: Tensor
+    The input tensor.
+
+axis: int
+    The axis along which to perform the softmin.
+
+Returns
+-------
+ret: Tensor
+    The output tensor.
+"""
 def softmin(x: Tensor, axis: int) -> Tensor:
     return SoftmaxOp(-x, axis).get_output(0)
