@@ -12,11 +12,22 @@
 """
 Allow more stack space and recursion depth for python.
 """
+from typing import Tuple
+import warnings
 import sys
 import resource
 
-# allow up to 128MB stack space
-resource.setrlimit(resource.RLIMIT_STACK, (2**29, -1))
+# allow up to 512 MiB stack space
+expected_stack_size = 2**29  # 512 MiB
+stack_limit: Tuple[int, int] = resource.getrlimit(resource.RLIMIT_STACK)
+if stack_limit[1] != resource.RLIM_INFINITY and stack_limit[1] < expected_stack_size:
+    msg = 'The hard limit for stack size is too small ({:.1f} MiB), we recommend to increase it to {:.1f} MiB.'.format(
+        stack_limit[1] / 2**20, expected_stack_size / 2**20
+    )
+    warnings.warn(msg)
+    resource.setrlimit(resource.RLIMIT_STACK, (stack_limit[1], stack_limit[1]))
+else:
+    resource.setrlimit(resource.RLIMIT_STACK, (expected_stack_size, stack_limit[1]))
 
 # allow up to 10^5 recursive python calls, increase this when needed
 sys.setrecursionlimit(100000)
