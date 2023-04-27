@@ -785,8 +785,13 @@ class CPUCodegen(Codegen):
         return doc
 
 
-def codegen(ir_module: IRModule, src_out_path: Optional[str] = None, target='cuda') -> str:
-    gen = CUDACodegen()
+def codegen(ir_module: IRModule, src_out_path: Optional[str] = None) -> str:
+    from hidet.cuda import available
+
+    if available():
+        gen = CUDACodegen()
+    else:
+        gen = CPUCodegen()
     doc = gen(ir_module)
     code = str(doc)
     if src_out_path is not None:
