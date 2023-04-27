@@ -16,8 +16,7 @@ from .device import (
     compute_capability,
     properties,
     profiler_start,
-    profiler_stop,
-    is_cuda_available,
+    profiler_stop
 )
 from .device import cudaDeviceProp, set_device, current_device, device
 from .stream import Stream, ExternalStream, stream, default_stream, current_stream

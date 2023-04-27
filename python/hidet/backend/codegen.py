@@ -786,9 +786,9 @@ class CPUCodegen(Codegen):
 
 
 def codegen(ir_module: IRModule, src_out_path: Optional[str] = None) -> str:
-    from hidet.cuda import is_cuda_available
+    from hidet.cuda import available
 
-    if is_cuda_available():
+    if available():
         gen = CUDACodegen()
     else:
         gen = CPUCodegen()

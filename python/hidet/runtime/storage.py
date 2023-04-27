@@ -308,7 +308,7 @@ class MemoryPool:
             self.clear()
 
     def clear(self):
-        if hidet.cuda.is_cuda_available():
+        if hidet.cuda.available():
             hidet.cuda.synchronize()
         for block_list in self.memory_blocks.values():
             for storage in block_list:
@@ -361,7 +361,7 @@ class DeviceMemoryPools:
 
     def __getitem__(self, device: Device) -> MemoryPool:
         if device not in self.device2pool:
-            if hidet.cuda.is_cuda_available():
+            if hidet.cuda.available():
                 if device.is_cuda():
                     self.device2pool[device] = MemoryPool(
                         CudaMemoryAPI(device), block_size=4096, max_reserve_size=4 * 1024**3

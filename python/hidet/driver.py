@@ -68,7 +68,7 @@ def build_task(task: Task, target_device='cuda', load=True) -> Optional[Compiled
         config_str = f'{target_device}_space_{space_level}'
         task_hash = sha256(task_string.encode()).hexdigest()[:16]
         task_dir = os.path.join(op_cache_dir, config_str, task.name, task_hash)
-        if hidet.cuda.is_cuda_available():
+        if hidet.cuda.available():
             src_path = os.path.join(task_dir, 'source.cu')
         else:
             src_path = os.path.join(task_dir, 'source.cpp')
@@ -102,7 +102,7 @@ def build_task(task: Task, target_device='cuda', load=True) -> Optional[Compiled
             # code generation
             codegen(ir_module, src_out_path=src_path)
             # compile source code
-            compile_source(src_path, out_lib_path=lib_path, keep_ptx=False)
+            compile_source(src_path, out_lib_path=lib_path)
             # load function
             if load:
                 compiled_func = load_task_func(lib_path, task)
@@ -135,7 +135,7 @@ def _lazy_initialize_cuda():
     if getattr(_lazy_initialize_cuda, '_initialized', False):
         return
     _lazy_initialize_cuda._initialized = True  # pylint: disable=protected-access
-    if hidet.cuda.is_cuda_available():
+    if hidet.cuda.available():
         for i in range(hidet.cuda.device_count()):
             hidet.cuda.properties(i)
             hidet.cuda.compute_capability(i)
@@ -193,7 +193,7 @@ def build_ir_module(
     codegen(ir_module, src_out_path=src_path)
 
     # compile source code
-    compile_source(src_path, out_lib_path=lib_path, keep_ptx=False)
+    compile_source(src_path, out_lib_path=lib_path)
 
     if load:
         # load function
