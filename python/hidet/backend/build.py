@@ -71,7 +71,7 @@ class SourceCompiler:
                         message += result.stderr.decode().strip()
                     raise CompilationFailed(src_path, message)
 
-                # write the compilation log to "nvcc_log.txt"
+                # write the compilation log
                 with open(os.path.join(out_lib_dir, 'compiler.log'), 'w') as f:
                     output = '\n'.join([result.stdout.decode('utf-8').strip(), result.stderr.decode('utf-8').strip()])
                     f.write(output.strip())
