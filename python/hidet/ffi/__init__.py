@@ -15,3 +15,4 @@ from .packedfunc import ArgTypeCode
 
 from .runtime_api import runtime_api
 from . import callbacks
+from . import crt
