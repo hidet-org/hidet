@@ -1,4 +1,4 @@
-# Hidet: An Open-Source Deep Learning Framework
+# Hidet: An Open-Source Deep Learning Compiler
 [**Documentation**](http://docs.hidet.org/)  |
 [**Research Paper**](https://dl.acm.org/doi/10.1145/3575693.3575702)  |
 [**Releases**](https://github.com/hidet-org/hidet/releases) |
@@ -8,11 +8,11 @@
 ![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/hidet-org/hidet/tests.yaml)
 
 
-Hidet is an open-source deep learning inference framework based on compilation. 
+Hidet is an open-source deep learning compiler, written in Python. 
 It supports end-to-end compilation of DNN models from PyTorch and ONNX to efficient cuda kernels.
 A series of graph-level and operator-level optimizations are applied to optimize the performance.
 
-Currently, hidet focuses optimizing the inference workloads on NVIDIA GPUs, and requires
+Currently, hidet focuses on optimizing the inference workloads on NVIDIA GPUs, and requires
 - Linux OS
 - CUDA Toolkit 11.6+
 - Python 3.8+
