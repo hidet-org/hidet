@@ -216,6 +216,8 @@ class PrologueEpilogueRewriter(IRRewriter):
 
 
 def apply_prologue_epilogue(ir_module: IRModule, fused_task: FusedTask) -> IRModule:
+    from hidet.transforms import inline_function_pass, declare_to_let_pass, inline_let_stmt_pass
+
     anchor_function: Optional[Function] = None
     for func in ir_module.functions.values():
         if func.kind in ['cuda_kernel', 'host_kernel']:
@@ -225,6 +227,16 @@ def apply_prologue_epilogue(ir_module: IRModule, fused_task: FusedTask) -> IRMod
     if anchor_function is None:
         raise RuntimeError('No kernel function found.')
 
-    rewriter1 = FlattenTensorSliceRewriter()
-    rewriter2 = PrologueEpilogueRewriter(fused_task)
-    return rewriter2(rewriter1(ir_module))
+    transforms = [
+        FlattenTensorSliceRewriter(),
+        inline_function_pass(),
+        declare_to_let_pass(),
+        inline_let_stmt_pass(inline_all=False),
+        PrologueEpilogueRewriter(fused_task),
+    ]
+
+    for transform in transforms:
+        ir_module = transform(ir_module)
+        print('After applying {}'.format(transform.__class__.__name__))
+        print(ir_module)
+    return ir_module

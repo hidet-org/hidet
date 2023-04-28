@@ -57,9 +57,9 @@ def lower(ir_module: IRModule) -> IRModule:
         declare_to_let_pass(),
         # simplification
         expand_let_expr_pass(),
-        inline_let_stmt_pass(inline_all=False),
+        inline_let_stmt_pass(),
         rule_based_simplify_pass(),
-        inline_let_stmt_pass(inline_all=False),
+        inline_let_stmt_pass(),
         simplify_stmt_pass(),
     ]
 

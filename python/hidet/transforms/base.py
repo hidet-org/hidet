@@ -20,8 +20,8 @@ class PassContext:
     stack: List['PassContext'] = []
 
     def __init__(self, instruments: Optional[List[PassInstrument]] = None, verbose: bool = False):
-        self.instruments = instruments
-        self.verbose = verbose
+        self.instruments: List[PassInstrument] = instruments if instruments else []
+        self.verbose: bool = verbose
 
     @classmethod
     def current(cls):
