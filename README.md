@@ -1,4 +1,4 @@
-# Hidet: An open-source deep learning framework
+# Hidet: An Open-Source Deep Learning Framework
 [**Documentation**](http://docs.hidet.org/)  |
 [**Research Paper**](https://dl.acm.org/doi/10.1145/3575693.3575702)  |
 [**Releases**](https://github.com/hidet-org/hidet/releases) |
@@ -12,13 +12,18 @@ Hidet is an open-source deep learning inference framework based on compilation.
 It supports end-to-end compilation of DNN models from PyTorch and ONNX to efficient cuda kernels.
 A series of graph-level and operator-level optimizations are applied to optimize the performance.
 
+Currently, hidet focuses optimizing the inference workloads on NVIDIA GPUs, and requires
+- Linux OS
+- CUDA Toolkit 11.6+
+- Python 3.8+
+
 ## Getting Started
 
 ### Installation
 ```bash
 pip install hidet
 ```
-See [here](http://docs.hidet.org/) for building from source.
+You can also try the [nightly build version](https://docs.hidet.org/stable/getting-started/install.html) or [build from source](https://docs.hidet.org/stable/getting-started/build-from-source.html#).
 
 ### Usage
 
@@ -46,11 +51,11 @@ See the following tutorials to learn other usages:
 - [Optimize ONNX models](http://docs.hidet.org/stable/gallery/tutorials/run-onnx-model.html)
 
 ## Publication
-Hidet originates from the following research work. 
+Hidet originates from the following research work:
 
 >  **Hidet: Task-Mapping Programming Paradigm for Deep Learning Tensor Programs**  
 >  Yaoyao Ding, Cody Hao Yu, Bojian Zheng, Yizhi Liu, Yida Wang, and Gennady Pekhimenko.  
->  To appear in [ASPLOS 2023](https://asplos-conference.org/program/).
+>  ASPLOS '23
 
 If you used **Hidet** in your research, welcome to cite our
 [paper](https://dl.acm.org/doi/10.1145/3575693.3575702).
