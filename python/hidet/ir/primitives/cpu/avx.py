@@ -24,24 +24,54 @@ def register_primitive_functions():
         ('avx_x86_float32x4_broadcast', '_mm_broadcast_ss', FuncType([PointerType('float32')], 'float32x4')),
         ('avx_x86_float32x4_fmadd', '_mm_fmadd_ps', FuncType(['float32x4', 'float32x4', 'float32x4'], 'float32x4')),
         ('avx_x86_float32x4_load', '_mm_load_ps', FuncType([PointerType('float32')], 'float32x4')),
-        ('avx_x86_float32x4_store', '_mm_store_ps', FuncType([PointerType('float32'), 'float32x4'], VoidType()))
+        ('avx_x86_float32x4_store', '_mm_store_ps', FuncType([PointerType('float32'), 'float32x4'], VoidType())),
+        ('avx_x86_float32x4_setzero', '_mm_setzero_ps', FuncType([], 'float32x4')),
+        ('avx_x86_float32x8_broadcast', '_mm256_broadcast_ss', FuncType([PointerType('float32')], 'float32x8')),
+        ('avx_x86_float32x8_fmadd', '_mm256_fmadd_ps', FuncType(['float32x8', 'float32x8', 'float32x8'], 'float32x8')),
+        ('avx_x86_float32x8_load', '_mm256_load_ps', FuncType([PointerType('float32')], 'float32x8')),
+        ('avx_x86_float32x8_store', '_mm256_store_ps', FuncType([PointerType('float32'), 'float32x8'], VoidType())),
+        ('avx_x86_float32x8_setzero', '_mm256_setzero_ps', FuncType([], 'float32x8'))
     ]
     for name, codegen_name, func_type in functions:
         register_primitive_function(name=name, func_or_type=func_type, codegen_name=codegen_name)
+
+
+def avx_f32x4_setzero() -> Call:
+    return call_primitive_func('avx_x86_float32x4_setzero', [])
+
+
+def avx_f32x8_setzero() -> Call:
+    return call_primitive_func('avx_x86_float32x8_setzero', [])
 
 
 def avx_f32x4_broadcast(addr: Expr) -> Call:
     return call_primitive_func('avx_x86_float32x4_broadcast', [addr])
 
 
+def avx_f32x8_broadcast(addr: Expr) -> Call:
+    return call_primitive_func('avx_x86_float32x8_broadcast', [addr])
+
+
 def avx_f32x4_fmadd(a: Expr, b: Expr, c: Expr) -> Call:
     return call_primitive_func('avx_x86_float32x4_fmadd', [a, b, c])
+
+
+def avx_f32x8_fmadd(a: Expr, b: Expr, c: Expr) -> Call:
+    return call_primitive_func('avx_x86_float32x8_fmadd', [a, b, c])
 
 
 def avx_f32x4_load(addr: Expr) -> Call:
     return call_primitive_func('avx_x86_float32x4_load', [addr])
 
 
+def avx_f32x8_load(addr: Expr) -> Call:
+    return call_primitive_func('avx_x86_float32x8_load', [addr])
+
+
 def avx_f32x4_store(addr: Expr, src: Expr) -> Call:
     return call_primitive_func('avx_x86_float32x4_store', [addr, src])
+
+
+def avx_f32x8_store(addr: Expr, src: Expr) -> Call:
+    return call_primitive_func('avx_x86_float32x8_store', [addr, src])
 

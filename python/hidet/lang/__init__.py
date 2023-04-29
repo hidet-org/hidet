@@ -65,6 +65,13 @@ def as_tensor_pointer(
     return cast(expr, tensor_pointer(dtype, shape, layout))
 
 
+def as_pointer(
+    expr: Expr,
+    dtype: DataType,
+) -> Expr:
+    return cast(expr, ~dtype)
+
+
 def grid(*dim_extents, attrs: Optional[str] = None):
     """
     Iterate over the grid.
