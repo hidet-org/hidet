@@ -427,6 +427,21 @@ class Constant(Expr):
         self.value: Optional[np.ndarray, float, int, complex] = value
         self.type: Optional[Union[DataType, TensorType]] = const_type
 
+        # normalize value
+        if isinstance(self.type, DataType):
+            if self.type.is_complex():
+                self.value = complex(self.value)
+            elif self.type.is_float():
+                self.value = float(self.value)
+            elif self.type.is_integer():
+                self.value = int(self.value)
+            elif self.type.is_vector():
+                self.value = tuple(self.value)
+            else:
+                raise ValueError(f"Invalid data type {self.type}")
+        else:
+            self.value = np.array(self.value)
+
     def is_scalar(self) -> bool:
         return self.type and isinstance(self.type, DataType)
 

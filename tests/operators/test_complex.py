@@ -16,30 +16,56 @@ import torch
 
 @pytest.mark.parametrize("shape", [[33, 44]])
 @pytest.mark.parametrize("dtype", [torch.complex64, torch.complex128])
-def test_real(shape, dtype):
-    a = torch.randn(shape, dtype=dtype)
+@pytest.mark.parametrize("device", ['cpu', 'cuda'])
+def test_real(shape, dtype, device):
+    a = torch.randn(shape, dtype=dtype, device=device)
     a_hidet = hidet.from_torch(a)
 
-    assert torch.allclose(hidet.ops.real(a_hidet).torch(), torch.real(a))
+    torch.testing.assert_allclose(hidet.ops.real(a_hidet).torch(), torch.real(a))
 
 
 @pytest.mark.parametrize("shape", [[33, 44]])
 @pytest.mark.parametrize("dtype", [torch.complex64, torch.complex128])
-def test_imag(shape, dtype):
-    a = torch.randn(shape, dtype=dtype)
+@pytest.mark.parametrize("device", ['cpu', 'cuda'])
+def test_imag(shape, dtype, device):
+    a = torch.randn(shape, dtype=dtype, device=device)
     a_hidet = hidet.from_torch(a)
 
-    assert torch.allclose(hidet.ops.imag(a_hidet).torch(), torch.imag(a))
+    torch.testing.assert_allclose(hidet.ops.imag(a_hidet).torch(), torch.imag(a))
 
 
 @pytest.mark.parametrize("shape", [[33, 44]])
 @pytest.mark.parametrize("dtype", [torch.complex64, torch.complex128])
-def test_conj(shape, dtype):
-    a = torch.randn(shape, dtype=dtype)
+@pytest.mark.parametrize("device", ['cpu', 'cuda'])
+def test_conj(shape, dtype, device):
+    a = torch.randn(shape, dtype=dtype, device=device)
     a_hidet = hidet.from_torch(a)
 
-    assert torch.allclose(hidet.ops.conj(a_hidet).torch(), torch.conj(a))
+    torch.testing.assert_allclose(hidet.ops.conj(a_hidet).torch(), torch.conj(a))
 
 
-def test_make_complex():
-    pass
+@pytest.mark.parametrize("shape", [[33, 44]])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+@pytest.mark.parametrize("device", ['cpu', 'cuda'])
+def test_make_complex(shape, dtype, device):
+    real = torch.randn(shape, dtype=dtype, device=device)
+    imag = torch.randn(shape, dtype=dtype, device=device)
+    a = torch.complex(real, imag)
+    b = hidet.ops.make_complex(hidet.from_torch(real), hidet.from_torch(imag))
+
+    torch.testing.assert_allclose(b.torch(), a)
+
+
+@pytest.mark.parametrize("a_shape,b_shape", [[[1, 33, 44], [1, 44, 55]]])
+@pytest.mark.parametrize("dtype", [torch.complex64, torch.complex128])
+@pytest.mark.parametrize("device", ['cpu', 'cuda'])
+def test_complex_matmul(a_shape, b_shape, dtype, device):
+    a = torch.randn(a_shape, dtype=dtype, device=device)
+    b = torch.randn(b_shape, dtype=dtype, device=device)
+    c = torch.matmul(a, b)
+
+    a_hidet = hidet.from_torch(a)
+    b_hidet = hidet.from_torch(b)
+    c_hidet = hidet.ops.batch_matmul(a_hidet, b_hidet, mma='simt')
+
+    torch.testing.assert_allclose(c_hidet.torch(), c, atol=1e-5, rtol=1e-5)

@@ -80,7 +80,7 @@ class DataType(TypeNode):
         """
         from hidet.ir import expr
 
-        if isinstance(value, (int, float, bool, list, tuple)):
+        if isinstance(value, (int, float, bool, complex, list, tuple)):
             return self.constant(value)
         elif isinstance(value, expr.Constant):
             return self.constant(value.value)

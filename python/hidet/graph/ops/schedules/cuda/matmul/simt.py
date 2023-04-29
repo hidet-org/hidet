@@ -392,9 +392,9 @@ def batched_matmul_cuda_with_given_schedule(task: BatchMatmulTask, schedule: Mat
         sb += DeclareStmt(regs_a_ldg)
         sb += DeclareStmt(regs_b_ldg)
 
-        a_default_value = convert(0.0, a_dtype)
-        b_default_value = convert(0.0, b_dtype)
-        acc_default_value = convert(0.0, c_dtype)
+        a_default_value = convert(0, a_dtype)
+        b_default_value = convert(0, b_dtype)
+        acc_default_value = convert(0, c_dtype)
 
         with sb.lets(['bi', 'bj'], grid_blocks_layout(block_idx())[0]) as (bi, bj):
             block_k_tiles = (k_size + sch.block_k - 1) // sch.block_k

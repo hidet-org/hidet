@@ -80,12 +80,15 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             ret = 'uint16_t({})'.format(int(value))
         elif dtype == dtypes.uint8:
             ret = 'uint8_t({})'.format(int(value))
-        elif dtype == dtypes.complex64:
-            assert isinstance(value, complex)
-            ret = 'complex64_t({}, {})'.format(value.real, value.imag)
-        elif dtype == dtypes.complex128:
-            assert isinstance(value, complex)
-            ret = 'complex128_t({}, {})'.format(value.real, value.imag)
+        elif dtype.is_complex():
+            if not isinstance(value, complex):
+                raise ValueError('Cannot recognize scalar literal {} with dtype {}'.format(value, dtype))
+            if dtype == dtypes.complex64:
+                ret = 'complex64_t({}, {})'.format(value.real, value.imag)
+            elif dtype == dtypes.complex128:
+                ret = 'complex128_t({}, {})'.format(value.real, value.imag)
+            else:
+                raise NotImplementedError('Cannot recognize scalar literal {} with dtype {}'.format(value, dtype))
         else:
             raise NotImplementedError('Cannot recognize scalar literal {} with dtype {}'.format(value, dtype))
         return Text(ret)

@@ -537,7 +537,7 @@ class Tensor:
         """
         if prod(self._shape) == 1:
             ret = self.squeeze(dims=list(range(len(self.shape)))).tolist()
-            if not isinstance(ret, (int, float, bool)):
+            if not isinstance(ret, (int, float, bool, complex)):
                 raise TypeError('Cannot convert tensor to scalar.')
             return ret
         else:
@@ -1118,13 +1118,20 @@ def randn(shape, dtype='float32', mean=0.0, stddev=1.0, device='cpu') -> Tensor:
     [[ 0.10720467 -1.6906018   0.06347568]
      [-0.37061226  0.562728    1.857547  ]]
     """
-    np_tensor = np.random.randn(*shape) * stddev + mean
+    if dtype.is_complex():
+        assert isinstance(dtype, dtypes.complex.ComplexType)
+        real = hidet.randn(shape, dtype=dtype.base_dtype, mean=mean, stddev=stddev, device=device)
+        imag = hidet.randn(shape, dtype=dtype.base_dtype, mean=mean, stddev=stddev, device=device)
+        return real + imag * 1j
+    else:
+        np_tensor = np.random.randn(*shape) * stddev + mean
+        dtype = data_type(dtype)
 
-    if isinstance(np_tensor, float):  # shape = []
-        np_tensor = np.array(np_tensor)
+        if isinstance(np_tensor, float):  # shape = []
+            np_tensor = np.array(np_tensor)
 
-    hidet_tensor = from_numpy(np_tensor)
-    return hidet_tensor.to(device=device, dtype=dtype)
+        hidet_tensor = from_numpy(np_tensor)
+        return hidet_tensor.to(device=device, dtype=dtype)
 
 
 def randint(low: int, high=None, shape: Sequence[int] = (), dtype: str = 'int32') -> Tensor:
@@ -1265,7 +1272,7 @@ def full_like(
     data: Tensor,
     fill_value,
     shape: Optional[Sequence[int]] = None,
-    dtype: Optional[str] = None,
+    dtype: Optional[Union[str, DataType]] = None,
     device: Optional[str] = None,
 ) -> Tensor:
     """
@@ -1428,7 +1435,7 @@ def asarray(obj, /, *, dtype=None, device=None) -> Tensor:
 
     Parameters
     ----------
-    obj: Union[bool, int, float, List, Tuple, Tensor, np.ndarray]
+    obj: bool, int, float, List, Tuple, Tensor, or np.ndarray
         The object to be converted.
 
     dtype: DataType, optional

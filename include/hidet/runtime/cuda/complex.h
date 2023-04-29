@@ -6,6 +6,7 @@ template <typename T>
 struct Complex {
     T real, imag;
     Complex() = default;
+    HIDET_HOST_DEVICE Complex(T real) : real(real), imag(0) {}
     HIDET_HOST_DEVICE Complex(T real, T imag) : real(real), imag(imag) {}
 };
 

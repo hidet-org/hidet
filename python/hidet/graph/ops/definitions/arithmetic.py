@@ -29,7 +29,7 @@ class UnaryElementwiseTask(Task):
             name=name,
             inputs=[x],
             outputs=[y],
-            inverse_map={x: InverseMap.from_lambda(lambda *indices: list(indices), num_args=len(x.ttype.shape))},
+            inverse_map={x: InverseMap.from_lambda(lambda *indices: list(indices), num_args=len(x.type.shape))},
         )
 
 
@@ -127,7 +127,9 @@ class BinaryElementwiseOp(Operator):
 
 
 def resolve_dtype(tensor_dtype: DataType, scalar_dtype: DataType) -> DataType:
-    if tensor_dtype.is_integer() and scalar_dtype.is_float():
+    if tensor_dtype.is_integer() and (scalar_dtype.is_float() or scalar_dtype.is_complex()):
+        return scalar_dtype
+    elif tensor_dtype.is_float() and scalar_dtype.is_complex():
         return scalar_dtype
     else:
         return tensor_dtype
