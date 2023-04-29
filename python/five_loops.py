@@ -16,6 +16,7 @@ def matmul_kernel5():
 
 
     with hidet.lang.script_module() as script_module:
+
         @hidet.lang.script
         def matmul_kernel(
                 a_ptr: ~float32,
@@ -29,61 +30,79 @@ def matmul_kernel5():
             b = as_tensor_pointer(b_ptr, float32, [k_size, n_size])
             c = as_tensor_pointer(c_ptr, float32, [m_size, n_size])
 
-            mblk: int32 = 256
-            kblk: int32 = 256
-            p = 0
-            while p < k_size:
-                pb = min(k_size - p, kblk)
-                i = 0
-                while i < m_size:
-                    ib = min(m_size - i, mblk)
-                    jj = 0
-                    while jj < n_size:
-                        ii = 0
-                        while ii < ib:
+            MC: int32 = 264
+            NC: int32 = 2016
+            KC: int32 = 48
 
-                            iidx = i+ii
+            MR: int32 = 4
+            NR: int32 = 4
 
-                            c0_0123 = avx_f32x4_load(~c[iidx, jj])
-                            c1_0123 = avx_f32x4_load(~c[iidx+1, jj])
-                            c2_0123 = avx_f32x4_load(~c[iidx+2, jj])
-                            c3_0123 = avx_f32x4_load(~c[iidx+3, jj])
+            j = 0
+            while j < n_size:
+                jb = min(NC, n_size - j)
+                # Loop 4
+                b_col = j
+                c_col = j
 
-                            for pp in range(pb):
-                                pi = p + pp
+                p = 0
+                while p < k_size:
+                    pb = min(KC, k_size - p)
+                    # Loop 3
+                    a_col = p
+                    b_row = p
+                    i = 0
+                    while i < m_size:
+                        ib = min(MC, m_size - i)
+                        a_row = i
+                        c_row = i
+                        # Loop 2
+                        jj = 0
+                        while jj < jb:
+                            jb2 = min(NR, jb - jj)
 
-                                bb_0123 = avx_f32x4_load(~b[pi, jj]) 
+                            # Loop 1
+                            ii = 0
+                            while ii < ib:
+                                ib2 = min(MR, ib - ii)
 
-                                aidx = i + ii
-                                aa = avx_f32x4_broadcast(~a[aidx, pi])
+                                # micro-kernel
+                                c0_0123 = avx_f32x4_load(~c[c_row, c_col])
 
-                                c0_0123 = avx_f32x4_fmadd(aa, bb_0123, c0_0123)
+                                c1_0123 = avx_f32x4_load(~c[c_row+1, c_col])
 
-                                aa = avx_f32x4_broadcast(~a[aidx+1, pi])
-                                c1_0123 = avx_f32x4_fmadd(aa, bb_0123, c1_0123)
+                                c2_0123 = avx_f32x4_load(~c[c_row+2, c_col])
 
-                                aa = avx_f32x4_broadcast(~a[aidx+2, pi])
-                                c2_0123 = avx_f32x4_fmadd(aa, bb_0123, c2_0123)
+                                c3_0123 = avx_f32x4_load(~c[c_row+3, c_col])
 
-                                aa = avx_f32x4_broadcast(~a[aidx+3, pi])
-                                c3_0123 = avx_f32x4_fmadd(aa, bb_0123, c3_0123)
+                                aa_col = a_col
+                                bb_row = b_row
+                                for pp in range(pb):
+                                    bb_0123 = avx_f32x4_load(~b[bb_row, b_col])
+                                    aa = avx_f32x4_broadcast(~a[a_row, aa_col])
+                                    c0_0123 = avx_f32x4_fmadd(aa, bb_0123, c0_0123)
+                                    aa = avx_f32x4_broadcast(~a[a_row+1, aa_col])
+                                    c1_0123 = avx_f32x4_fmadd(aa, bb_0123, c1_0123)
+                                    aa = avx_f32x4_broadcast(~a[a_row+2, aa_col])
+                                    c2_0123 = avx_f32x4_fmadd(aa, bb_0123, c2_0123)
+                                    aa = avx_f32x4_broadcast(~a[a_row+3, aa_col])
+                                    c3_0123 = avx_f32x4_fmadd(aa, bb_0123, c3_0123)
+                                    aa_col += 1
+                                    bb_row += 1
+                                avx_f32x4_store(~c[a_row, jj], c0_0123)
+                                avx_f32x4_store(~c[a_row+1, jj], c1_0123)
+                                avx_f32x4_store(~c[a_row+2, jj], c2_0123)
+                                avx_f32x4_store(~c[a_row+3, jj], c3_0123)
+                                a_row += 1
+                                c_row += 1
+                                ii += MR
+                            b_col += 1
+                            c_col += 1
+                            jj += NR
+                        i += MC
 
-                            idx = i + ii
+                    p += KC
 
-                            avx_f32x4_store(~c[idx, jj], c0_0123)
-
-                            avx_f32x4_store(~c[idx+1, jj], c1_0123)
-
-                            avx_f32x4_store(~c[idx+2, jj], c2_0123)
-
-                            avx_f32x4_store(~c[idx+3, jj], c3_0123)
-
-                            ii += 4
-                        jj += 4
-                    i += mblk
-                p += kblk
-
-
+                j += NC
 
 #################################################3
     assert isinstance(matmul_kernel, hidet.ir.Function)
