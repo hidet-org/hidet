@@ -126,18 +126,18 @@ def ff():
 ff()
 
 #     256 x 256 x 256: hidet takes 1.73 ms
-#     256 x 256 x 256: numpy takes  0.16 ms
-#     512 x 512 x 512: hidet takes 11.73 ms
-#     512 x 512 x 512: numpy takes  0.57 ms
-#     1024 x 1024 x 1024: hidet takes 181.92 ms
-#     1024 x 1024 x 1024: numpy takes  3.38 ms
-#     1024 x 768 x 512: hidet takes 35.10 ms
-#     1024 x 768 x 512: numpy takes  1.44 ms
-#     333 x 555 x 444: hidet takes 5.92 ms
-#     333 x 555 x 444: numpy takes  0.73 ms
-#     480 x 480 x 480: hidet takes 7.98 ms
-#     480 x 480 x 480: numpy takes  0.60 ms
-#     720 x 720 x 720: hidet takes 27.06 ms
-#     720 x 720 x 720: numpy takes  1.40 ms
-#     720 x 1440 x 960: hidet takes 73.55 ms
-#     720 x 1440 x 960: numpy takes  2.83 ms
+#     256 x 256 x 256: numpy takes  0.13 ms
+#     512 x 512 x 512: hidet takes 11.84 ms
+#     512 x 512 x 512: numpy takes  0.47 ms
+# s   1024 x 1024 x 1024: hidet takes 183.12 ms
+#     1024 x 1024 x 1024: numpy takes  2.42 ms
+#     1024 x 768 x 512: hidet takes 35.28 ms
+#     1024 x 768 x 512: numpy takes  1.13 ms
+#     333 x 555 x 444: hidet takes 6.00 ms
+#     333 x 555 x 444: numpy takes  0.63 ms
+#     480 x 480 x 480: hidet takes 8.13 ms
+#     480 x 480 x 480: numpy takes  0.56 ms
+#     720 x 720 x 720: hidet takes 26.99 ms
+#     720 x 720 x 720: numpy takes  2.28 ms
+#     720 x 1440 x 960: hidet takes 74.25 ms
+#     720 x 1440 x 960: numpy takes  2.86 ms
