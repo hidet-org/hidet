@@ -268,7 +268,10 @@ class Task(Node):
                 f'but got a {type(ir_modules)}.'
             )
         dummy_args = self.dummy_arguments(target.name)
-        best_ir_module = tune(ir_modules, dummy_inputs=dummy_args, working_dir=working_dir)
+        try:
+            best_ir_module = tune(ir_modules, dummy_inputs=dummy_args, working_dir=working_dir)
+        except ValueError as e:
+            raise RuntimeError(f'Failed to tune the task: {self}') from e
         return best_ir_module
 
     def implement_cuda(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
