@@ -35,7 +35,7 @@ def matmul_kernel5():
             NC: int32 = 256
             KC: int32 = 256
 
-            MR: int32 = 4
+            MR: int32 = 8
             NR: int32 = 8
 
             j = 0
@@ -64,8 +64,11 @@ def matmul_kernel5():
                                 c1_0to7 = avx_f32x8_load(~c[iidx+1, jidx])
 
                                 c2_0to7 = avx_f32x8_load(~c[iidx+2, jidx])
-
                                 c3_0to7 = avx_f32x8_load(~c[iidx+3, jidx])
+                                c4_0to7 = avx_f32x8_load(~c[iidx+4, jidx])
+                                c5_0to7 = avx_f32x8_load(~c[iidx+5, jidx])
+                                c6_0to7 = avx_f32x8_load(~c[iidx+6, jidx])
+                                c7_0to7 = avx_f32x8_load(~c[iidx+7, jidx])
 
                                 for pp in range(pb):
                                     pi = p + pp
@@ -78,11 +81,23 @@ def matmul_kernel5():
                                     c2_0to7 = avx_f32x8_fmadd(aa, bb_0to7, c2_0to7)
                                     aa = avx_f32x8_broadcast(~a[iidx+3, pi])
                                     c3_0to7 = avx_f32x8_fmadd(aa, bb_0to7, c3_0to7)
+                                    aa = avx_f32x8_broadcast(~a[iidx+4, pi])
+                                    c4_0to7 = avx_f32x8_fmadd(aa, bb_0to7, c4_0to7)
+                                    aa = avx_f32x8_broadcast(~a[iidx+5, pi])
+                                    c5_0to7 = avx_f32x8_fmadd(aa, bb_0to7, c5_0to7)
+                                    aa = avx_f32x8_broadcast(~a[iidx+6, pi])
+                                    c6_0to7 = avx_f32x8_fmadd(aa, bb_0to7, c6_0to7)
+                                    aa = avx_f32x8_broadcast(~a[iidx+7, pi])
+                                    c7_0to7 = avx_f32x8_fmadd(aa, bb_0to7, c7_0to7)
 
                                 avx_f32x8_store(~c[iidx, jidx], c0_0to7)
                                 avx_f32x8_store(~c[iidx+1, jidx], c1_0to7)
                                 avx_f32x8_store(~c[iidx+2, jidx], c2_0to7)
                                 avx_f32x8_store(~c[iidx+3, jidx], c3_0to7)
+                                avx_f32x8_store(~c[iidx+4, jidx], c4_0to7)
+                                avx_f32x8_store(~c[iidx+5, jidx], c5_0to7)
+                                avx_f32x8_store(~c[iidx+6, jidx], c6_0to7)
+                                avx_f32x8_store(~c[iidx+7, jidx], c7_0to7)
 
                                 ii += MR
                             jj += NR
@@ -131,18 +146,18 @@ def ff():
 ff()
 
 #### -O3
-# 256 x 256 x 256: hidet takes 1.05 ms
-# 256 x 256 x 256: numpy takes  0.18 ms
-# 512 x 512 x 512: hidet takes 9.14 ms
-# 512 x 512 x 512: numpy takes  0.69 ms
-# 1024 x 1024 x 1024: hidet takes 75.51 ms
-# 1024 x 1024 x 1024: numpy takes  3.63 ms
-# 1024 x 768 x 512: hidet takes 21.92 ms
+# 256 x 256 x 256: hidet takes 0.73 ms
+# 256 x 256 x 256: numpy takes  0.16 ms
+# 512 x 512 x 512: hidet takes 5.74 ms
+# 512 x 512 x 512: numpy takes  0.43 ms
+# 1024 x 1024 x 1024: hidet takes 44.61 ms
+# 1024 x 1024 x 1024: numpy takes  2.44 ms
+# 1024 x 768 x 512: hidet takes 14.64 ms
 # 1024 x 768 x 512: numpy takes  1.10 ms
-# 480 x 480 x 480: hidet takes 7.23 ms
-# 480 x 480 x 480: numpy takes  0.58 ms
-# 720 x 720 x 720: hidet takes 17.23 ms
-# 720 x 720 x 720: numpy takes  1.40 ms
-# 720 x 1440 x 960: hidet takes 44.92 ms
-# 720 x 1440 x 960: numpy takes  2.86 ms
+# 480 x 480 x 480: hidet takes 4.25 ms
+# 480 x 480 x 480: numpy takes  0.57 ms
+# 720 x 720 x 720: hidet takes 11.78 ms
+# 720 x 720 x 720: numpy takes  1.46 ms
+# 720 x 1440 x 960: hidet takes 27.56 ms
+# 720 x 1440 x 960: numpy takes  2.90 ms
 
