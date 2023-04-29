@@ -42,7 +42,7 @@ class CompilationFailed(Exception):
 @functools.lru_cache()
 def nvcc_path() -> str:
     path: Optional[str] = shutil.which('nvcc')
-    if path is not None:
+    if path:
         return path
     try_dirs = ['/usr/local/cuda/bin/', '/usr/bin']
     for try_dir in try_dirs:
