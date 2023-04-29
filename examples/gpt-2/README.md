@@ -21,14 +21,16 @@ The computer is a machine that can perform complex calculations, and it can perf
 
 ## Configs
 ```bash
-$ python main.py --help
 Usage: main.py [OPTIONS]
 
 Options:
   --max-num-tokens INTEGER        Max number of total tokens to process and
-                                  generate
+                                  generate  [default: 40]
   --use-fp16                      Use fp16
   --model-size [124M|355M|774M|1558M]
+                                  [default: 124M]
+  --tune                          Tune the operators for better performance.
+                                  May take several minutes.
   --help                          Show this message and exit.
 ```
 
