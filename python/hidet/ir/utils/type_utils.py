@@ -13,16 +13,19 @@ from hidet.ir.type import DataType, data_type
 
 
 def numeric_promotion(a_dtype: DataType, b_dtype: DataType) -> DataType:
-    if a_dtype.is_float() and b_dtype.is_float():
-        return a_dtype if a_dtype.nbytes >= b_dtype.nbytes else b_dtype
-    elif a_dtype.is_integer() and b_dtype.is_integer():
-        return a_dtype if a_dtype.nbytes >= b_dtype.nbytes else b_dtype
-    elif a_dtype.is_integer() and b_dtype.is_float():
-        return b_dtype
-    elif a_dtype.is_float() and b_dtype.is_integer():
-        return a_dtype
-    else:
-        raise ValueError('Cannot do numeric promotion for {} and {}.'.format(a_dtype, b_dtype))
+    from hidet.ir.dtypes.promotion import promote_type
+
+    return promote_type(a_dtype, b_dtype)
+    # if a_dtype.is_float() and b_dtype.is_float():
+    #     return a_dtype if a_dtype.nbytes >= b_dtype.nbytes else b_dtype
+    # elif a_dtype.is_integer() and b_dtype.is_integer():
+    #     return a_dtype if a_dtype.nbytes >= b_dtype.nbytes else b_dtype
+    # elif a_dtype.is_integer() and b_dtype.is_float():
+    #     return b_dtype
+    # elif a_dtype.is_float() and b_dtype.is_integer():
+    #     return a_dtype
+    # else:
+    #     raise ValueError('Cannot do numeric promotion for {} and {}.'.format(a_dtype, b_dtype))
 
 
 def numeric_promotion_for_all(*dtypes: DataType) -> DataType:

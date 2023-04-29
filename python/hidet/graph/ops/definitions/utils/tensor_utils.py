@@ -192,14 +192,19 @@ def broadcast_indices(
     return indices
 
 
-def convert_to_tensor(value: Union[int, float, bool, Tensor], involved_tensor: Tensor) -> Tensor:
+def convert_to_tensor(value: Union[int, float, bool, complex, Tensor], involved_tensor: Tensor) -> Tensor:
     from hidet.graph.tensor import full_like
 
     if isinstance(value, Tensor):
         return value
 
-    if involved_tensor.dtype.is_float():
-        return full_like(involved_tensor, fill_value=value, shape=[])
+    if involved_tensor.dtype.is_complex():
+        return full_like(involved_tensor, fill_value=value, shape=[], dtype=involved_tensor.dtype)
+    elif involved_tensor.dtype.is_float():
+        if isinstance(value, (bool, int, float)):
+            return full_like(involved_tensor, fill_value=value, shape=[])
+        else:
+            return full_like(involved_tensor, fill_value=value, shape=[], dtype='complex64')
     elif involved_tensor.dtype.is_integer():
         if isinstance(value, (bool, int)):
             return full_like(involved_tensor, fill_value=value, shape=[])

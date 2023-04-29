@@ -125,6 +125,8 @@ class MatmulResolveRule(ResolveRule):
         a: Tensor = op.inputs[0]
         b: Tensor = op.inputs[1]
         c_shape = list(op.outputs[0].shape)
+        if a.dtype.nbytes > 4 or b.dtype.nbytes > 4:
+            return None
 
         if len(a.shape) == 1:  # shape: [a]
             a = a.unsqueeze([0, 1])  # [1, 1, a]

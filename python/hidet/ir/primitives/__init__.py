@@ -17,6 +17,8 @@ from .math import sin, cos, tan, sinh, cosh, tanh, asin, acos, atan, asinh, acos
 from .math import max, min, exp, pow, sqrt, rsqrt, erf, ceil, log, log2, log10, log1p, round, floor, trunc
 from .math import isfinite, isinf, isnan
 
+from .complex import real, imag, conj, make_complex
+
 # function used to debug
 from .debug import printf
 

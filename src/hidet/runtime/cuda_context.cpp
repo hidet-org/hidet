@@ -10,7 +10,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include <hidet/runtime/callbacks.h>
-#include <hidet/runtime/cuda_context.h>
+#include <hidet/runtime/cuda/context.h>
 #include <hidet/runtime/logging.h>
 
 CudaContext *CudaContext::global() {

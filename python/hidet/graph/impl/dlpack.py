@@ -53,7 +53,7 @@ class DLDevice(ctypes.Structure):
 
 
 class DLDataType(ctypes.Structure):
-    _fields_ = [('code', ctypes.c_int8), ('bits', ctypes.c_int8), ('lanes', ctypes.c_int16)]
+    _fields_ = [('code', ctypes.c_uint8), ('bits', ctypes.c_uint8), ('lanes', ctypes.c_int16)]
     _dtype_map = {
         dtypes.int8: (DLDataTypeCode.kDLInt, 8, 1),
         dtypes.int16: (DLDataTypeCode.kDLInt, 16, 1),
@@ -68,6 +68,8 @@ class DLDataType(ctypes.Structure):
         dtypes.float64: (DLDataTypeCode.kDLFloat, 64, 1),
         dtypes.bfloat16: (DLDataTypeCode.kDLBfloat, 16, 1),
         dtypes.boolean: (DLDataTypeCode.kDLBool, 8, 1),
+        dtypes.complex64: (DLDataTypeCode.kDLComplex, 64, 1),
+        dtypes.complex128: (DLDataTypeCode.kDLComplex, 128, 1),
     }
 
     @staticmethod
@@ -92,7 +94,7 @@ class DLDataType(ctypes.Structure):
         elif dtype_code == DLDataTypeCode.kDLBfloat:
             dtype_name = 'bfloat'
         elif dtype_code == DLDataTypeCode.kDLComplex:
-            raise ValueError('from_dlpack: complex is not supported for hidet')
+            dtype_name = 'complex'
         elif dtype_code == DLDataTypeCode.kDLBool:
             dtype_name = 'bool'
         else:

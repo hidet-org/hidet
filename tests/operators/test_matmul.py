@@ -46,7 +46,8 @@ def test_batch_matmul(a_shape, b_shape, dtype, mma):
 
 
 @pytest.mark.parametrize(
-    "a_shape, b_shape, dtype", [[[1, 128, 128], [128, 128], "float32"], [[333, 444], [444], "float32"]]
+    "a_shape, b_shape, dtype",
+    [[[1, 128, 128], [128, 128], "float32"], [[333, 444], [444], "float32"], [[129, 443], [443], "complex64"]],
 )
 def test_matmul(a_shape, b_shape, dtype):
     check_binary(

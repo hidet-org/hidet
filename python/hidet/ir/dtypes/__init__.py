@@ -15,6 +15,7 @@ from .integer import i8, i16, i32, i64, u8, u16, u32, u64
 from .floats import float16, float32, float64, bfloat16, tfloat32
 from .floats import f16, f32, f64, bf16, tf32
 from .boolean import boolean
+from .complex import complex64, complex128
 from .vector import float16x2, float32x4
 from .vector import f16x2, f32x4
 from .promotion import promote_type
@@ -35,6 +36,8 @@ name2dtype = {
     'uint16': uint16,
     'uint8': uint8,
     'bool': boolean,
+    'complex64': complex64,
+    'complex128': complex128,
     'float32x4': float32x4,
     'float16x2': float16x2,
 }
@@ -54,6 +57,8 @@ sname2dtype = {
     'u16': uint16,
     'u8': uint8,
     'bool': boolean,
+    'c64': complex64,
+    'c128': complex128,
     'f32x4': f32x4,
     'f16x2': f16x2,
 }
