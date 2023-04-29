@@ -66,6 +66,6 @@ def test_complex_matmul(a_shape, b_shape, dtype, device):
 
     a_hidet = hidet.from_torch(a)
     b_hidet = hidet.from_torch(b)
-    c_hidet = hidet.ops.batch_matmul(a_hidet, b_hidet, mma='simt')
+    c_hidet = hidet.ops.matmul(a_hidet, b_hidet)
 
     torch.testing.assert_allclose(c_hidet.torch(), c, atol=1e-5, rtol=1e-5)

@@ -1118,6 +1118,7 @@ def randn(shape, dtype='float32', mean=0.0, stddev=1.0, device='cpu') -> Tensor:
     [[ 0.10720467 -1.6906018   0.06347568]
      [-0.37061226  0.562728    1.857547  ]]
     """
+    dtype: DataType = data_type(dtype)
     if dtype.is_complex():
         assert isinstance(dtype, dtypes.complex.ComplexType)
         real = hidet.randn(shape, dtype=dtype.base_dtype, mean=mean, stddev=stddev, device=device)
