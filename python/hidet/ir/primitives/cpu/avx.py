@@ -30,10 +30,26 @@ def register_primitive_functions():
         ('avx_x86_float32x8_fmadd', '_mm256_fmadd_ps', FuncType(['float32x8', 'float32x8', 'float32x8'], 'float32x8')),
         ('avx_x86_float32x8_load', '_mm256_load_ps', FuncType([PointerType('float32')], 'float32x8')),
         ('avx_x86_float32x8_store', '_mm256_store_ps', FuncType([PointerType('float32'), 'float32x8'], VoidType())),
-        ('avx_x86_float32x8_setzero', '_mm256_setzero_ps', FuncType([], 'float32x8'))
+        ('avx_x86_float32x8_setzero', '_mm256_setzero_ps', FuncType([], 'float32x8')),
+        ('avx_x86_malloc', '_mm_malloc', FuncType(['uint64', 'uint64'], PointerType(VoidType()))),
+        ('avx_x86_free', '_mm_free', FuncType([PointerType(VoidType())], VoidType())),
+        ('x86_memset', 'memset', FuncType([PointerType(VoidType()), 'int32', 'uint64'], PointerType(VoidType()))),
+        ('x86_memcpy', 'memcpy', FuncType([PointerType(VoidType()), PointerType(VoidType()), 'uint64'], PointerType(VoidType())))
     ]
     for name, codegen_name, func_type in functions:
         register_primitive_function(name=name, func_or_type=func_type, codegen_name=codegen_name)
+
+
+def x86_memcpy(dst: Expr, src: Expr, num: Union[Expr, int]) -> Call:
+    return call_primitive_func('x86_memcpy', [dst, src, num])
+
+
+def avx_malloc(size: Union[Expr, int], align: Union[Expr, int]) -> Call:
+    return call_primitive_func('avx_x86_malloc', [size, align])
+
+
+def avx_free(p: Expr) -> Call:
+    return call_primitive_func('avx_x86_free', [p])
 
 
 def avx_f32x4_setzero() -> Call:
