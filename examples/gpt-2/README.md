@@ -1,16 +1,19 @@
 # GPT-2 Demo
 
 This example demonstrates how to use Hidet to compile and run a GPT-2 model. 
+
+## Requirements
+
 This example requires a nightly build version of hidet before we release the next version (v0.2.4) to PyPI:
-```angular2html
+Run the following commands under the `examples/gpt-2` directory to install the required packages:
+```console
 $ pip install --pre --extra-index-url https://download.hidet.org/whl hidet
+$ pip install -r requirements.txt
 ```
 
 ## Usage
 
 ```bash
-$ # under hidet/examples/gpt-2 folder
-$ pip install -r requirements.txt
 $ python main.py
 >>> Alan Turing theorized that computers would one day become
 generating: 100%|██████████████████████████████| 30/30 [00:00<00:00, 128.30it/s]
