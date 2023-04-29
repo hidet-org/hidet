@@ -841,3 +841,5 @@ namespace std
 		}
 	};
 }
+
+typedef float16::Half half;

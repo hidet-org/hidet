@@ -14,6 +14,7 @@ import os
 import numpy as np
 from hidet.ir.dialects.pattern import AnyExpr
 from hidet.ir import dtypes
+from hidet.ir.node import Node
 from hidet.ir.type import DataType, PointerType, TensorPointerType, ReferenceType, TensorType, FuncType
 from hidet.ir.type import VoidType
 from hidet.ir.expr import Var, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, Neg, NotEqual, Equal, LogicalAnd
@@ -43,12 +44,51 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
         self.namer = Namer()
         self.type_infer = TypeInfer()
 
+    def __call__(self, node) -> Doc:
+        return self.visit(node)
+
     @staticmethod
     def canonize_funcname(name: str):
         return 'hidet_' + name.replace('.', '_')
 
     def scalar_literal(self, value, dtype: DataType):
-        raise NotImplementedError()
+        if dtype == dtypes.boolean:
+            ret = 'true' if value else 'false'
+        elif dtype == dtypes.float64:
+            ret = '{}'.format(float(value))
+        elif dtype == dtypes.float32:
+            ret = '{}f'.format(float(value))
+        elif dtype == dtypes.float16:
+            ret = '(half){}f'.format(float(value))
+        elif dtype == dtypes.tfloat32:
+            ret = '(float){}f'.format(float(value))
+        elif dtype == dtypes.bfloat16:
+            ret = '(bfloat16_t){}f'.format(float(value))
+        elif dtype == dtypes.int64:
+            ret = 'int64_t({}ll)'.format(int(value))
+        elif dtype == dtypes.int32:
+            ret = '{}'.format(int(value))
+        elif dtype == dtypes.int16:
+            ret = 'int16_t({})'.format(int(value))
+        elif dtype == dtypes.int8:
+            ret = 'int8_t({})'.format(int(value))
+        elif dtype == dtypes.uint64:
+            ret = 'uint64_t({}ull)'.format(int(value))
+        elif dtype == dtypes.uint32:
+            ret = 'uint32_t({}u)'.format(int(value))
+        elif dtype == dtypes.uint16:
+            ret = 'uint16_t({})'.format(int(value))
+        elif dtype == dtypes.uint8:
+            ret = 'uint8_t({})'.format(int(value))
+        elif dtype == dtypes.complex64:
+            assert isinstance(value, complex)
+            ret = 'complex64_t({}, {})'.format(value.real, value.imag)
+        elif dtype == dtypes.complex128:
+            assert isinstance(value, complex)
+            ret = 'complex128_t({}, {})'.format(value.real, value.imag)
+        else:
+            raise NotImplementedError('Cannot recognize scalar literal {} with dtype {}'.format(value, dtype))
+        return Text(ret)
 
     def param_declare(self, v: Var):
         v_type = v.type
@@ -81,12 +121,6 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             dtype = v_type.dtype
             base_type_doc = self(dtype)
             return base_type_doc + ' *' + ' __restrict__ ' + name_doc
-            # dtype_doc = self(v_type.scalar_type)
-            # name_doc = self(v)
-            # shape_doc = Doc()
-            # for s in v_type.shape:
-            #     shape_doc += '[' + self(s) + ']'
-            # return dtype_doc + ' ' + '__restrict__' + name_doc + shape_doc
         else:
             raise ValueError()
 
@@ -121,35 +155,14 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
         else:
             assert False
 
-    def __call__(self, node) -> Doc:
-        return self.visit(node)
+    def require_headers(self) -> Doc:
+        return Doc()
 
     def visit(self, node):
         if isinstance(node, Doc):
             return node
         else:
             return super().visit(node)
-
-    # def visit(self, node):
-    #     # pylint: disable=too-many-return-statements
-    #     if isinstance(node, IRModule):
-    #         return self.visit_IRModule(node)
-    #     elif isinstance(node, Function):
-    #         return self.visit_Function(node)
-    #     elif isinstance(node, (Stmt, Expr)):
-    #         return StmtExprFunctor.visit(self, node)
-    #     elif isinstance(node, TypeNode):
-    #         return TypeFunctor.visit(self, node)
-    #     elif isinstance(node, (tuple, list)):
-    #         return doc_join([self(v) for v in node], ', ')
-    #     elif isinstance(node, (int, float, bool)):
-    #         return self(convert(node))
-    #     elif isinstance(node, str):
-    #         return Text(node)
-    #     elif isinstance(node, Doc):
-    #         return node
-    #     else:
-    #         raise ValueError(type(node))
 
     def visit_List(self, lst: List):
         return doc_join([self(v) for v in lst], ', ')
@@ -166,7 +179,19 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
         return Text(str(c))
 
     def visit_IRModule(self, module: IRModule) -> Doc:
-        raise NotImplementedError()
+        self.ir_module = module
+        doc = Doc()
+
+        doc += self.require_headers()
+
+        doc += Text('extern "C" {') + NewLine()
+
+        call_graph = CallGraph(module)
+        for node in call_graph.reversed_order:
+            doc += self(node.func) + NewLine()
+
+        doc += NewLine() + '}'
+        return doc
 
     def visit_Function(self, func: Function) -> Doc:
         raise NotImplementedError()
@@ -282,7 +307,7 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
         return Text('&') + self.visit(e.expr)
 
     def visit_Reference(self, e: Reference):
-        raise NotImplementedError()
+        raise ValueError()
 
     def visit_Dereference(self, e: Dereference):
         return Text('*') + self(e.expr)
@@ -488,7 +513,25 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
         return doc
 
     def visit_ScalarType(self, t: DataType):
-        raise NotImplementedError()
+        scalar_type_map = {
+            'bool': 'bool',
+            'uint8': 'uint8_t',
+            'uint16': 'uint16_t',
+            'uint32': 'uint32_t',
+            'uint64': 'uint64_t',
+            'int8': 'int8_t',
+            'int16': 'int16_t',
+            'int32': 'int32_t',
+            'int64': 'int64_t',
+            'float16': 'half',
+            'float32': 'float',
+            'float64': 'double',
+            'bfloat16': 'bfloat16_t',
+            'tfloat32': 'tfloat32_t',
+            'complex64': 'complex64_t',
+            'complex128': 'complex128_t',
+        }
+        return Text(scalar_type_map[t.name])
 
     def visit_TensorType(self, t: TensorType):
         return Text('TensorType(') + self(t.dtype) + ', [' + doc_join([self(s) for s in t.shape], ", ") + '])'
@@ -518,61 +561,26 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
     def visit_AnyExpr(self, e: AnyExpr):
         raise ValueError()
 
+    def visit_NotDispatchedNode(self, n: Node):
+        raise ValueError()
+
 
 class CUDACodegen(Codegen):
-    # pylint: disable=abstract-method
+    def require_headers(self) -> Doc:
+        doc = Doc()
+        doc += Text('#include <stdint.h>') + NewLine()
+        doc += Text('#include <cuda_fp16.h>') + NewLine()
+        doc += Text('#include <cuda_bf16.h>') + NewLine()
+        doc += Text('#include <hidet/runtime/cpu/context.h>') + NewLine()
+        doc += Text('#include <hidet/runtime/cuda/complex.h>') + NewLine()
+        doc += Text('#include <hidet/runtime/cuda/context.h>') + NewLine()
 
-    def scalar_literal(self, value, dtype: DataType):
-        if dtype == dtypes.boolean:
-            ret = 'true' if value else 'false'
-        elif dtype == dtypes.float64:
-            ret = '{}'.format(float(value))
-        elif dtype == dtypes.float32:
-            ret = '{}f'.format(float(value))
-        elif dtype == dtypes.float16:
-            ret = 'half({}f)'.format(float(value))
-        elif dtype == dtypes.tfloat32:
-            ret = '__float_to_tf32({}f)'.format(float(value))
-        elif dtype == dtypes.bfloat16:
-            ret = '__float2bfloat16({}f)'.format(float(value))
-        elif dtype == dtypes.int64:
-            ret = 'int64_t({}ll)'.format(int(value))
-        elif dtype == dtypes.int32:
-            ret = '{}'.format(int(value))
-        elif dtype == dtypes.int16:
-            ret = 'int16_t({})'.format(int(value))
-        elif dtype == dtypes.int8:
-            ret = 'int8_t({})'.format(int(value))
-        elif dtype == dtypes.uint64:
-            ret = 'uint64_t({}ull)'.format(int(value))
-        elif dtype == dtypes.uint32:
-            ret = 'uint32_t({}u)'.format(int(value))
-        elif dtype == dtypes.uint16:
-            ret = 'uint16_t({})'.format(int(value))
-        elif dtype == dtypes.uint8:
-            ret = 'uint8_t({})'.format(int(value))
-        else:
-            raise NotImplementedError('Cannot recognize scalar literal {} with dtype {}'.format(value, dtype))
-        return Text(ret)
+        # nvcc use float to 'store' tfloat32 data
+        doc += Text('typedef float tfloat32_t;') + NewLine()
+        doc += Text('typedef __nv_bfloat16 bfloat16_t;') + NewLine()
 
-    def visit_ScalarType(self, t: DataType):
-        scalar_type_map = {
-            'bool': 'bool',
-            'uint8': 'uint8_t',
-            'uint16': 'uint16_t',
-            'uint32': 'uint32_t',
-            'uint64': 'uint64_t',
-            'int8': 'int8_t',
-            'int16': 'int16_t',
-            'int32': 'int32_t',
-            'int64': 'int64_t',
-            'float16': 'half',
-            'float32': 'float',
-            'float64': 'double',
-            'bfloat16': 'nv_bfloat16',
-            'tfloat32': 'tfloat32_t',
-        }
-        return Text(scalar_type_map[t.name])
+        doc += NewLine()
+        return doc
 
     def visit_Function(self, func: Function) -> Doc:
         self.namer.clear()
@@ -588,7 +596,6 @@ class CUDACodegen(Codegen):
             doc += '__host__'
 
         doc += ' ' + self(func.ret_type)
-        # doc += ' void'
 
         # launch bound for grid worker
         if func.kind == 'cuda_kernel':
@@ -626,130 +633,17 @@ class CUDACodegen(Codegen):
 
         return doc
 
-    def visit_IRModule(self, module: IRModule) -> Doc:
-        self.ir_module = module
-        doc = Doc()
-        # todo: only add necessary headers
-        doc += Text('#include <stdint.h>') + NewLine()
-        doc += Text('#include <cuda_fp16.h>') + NewLine()
-        doc += Text('#include <cuda_bf16.h>') + NewLine()
-        doc += Text('#include <hidet/runtime/cuda_context.h>') + NewLine()
-        doc += Text('#include <hidet/runtime/cpu_context.h>') + NewLine()
-
-        # nvcc use float to 'store' tfloat32 data
-        doc += Text('typedef float tfloat32_t;') + NewLine()
-
-        # According to here: https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#wmma-altfp
-        # there should be a function called '__float_to_tf32' in cuda c to convert float to tfloat32,
-        # but I did not find such a function. By looking at cutlass's implementation of converting
-        # float to tfloat32, it seems that we do not need to do anything to convert. Put a definition
-        # here in case nvidia add the definition in the future.
-        doc += Text('#define __float_to_tf32(x) (x)') + NewLine()
-
-        if module.task is not None:
-            doc += '/*' + NewLine()
-            doc += str(module.task) + NewLine()
-            doc += '*/' + NewLine()
-        doc += Text('extern "C" {') + NewLine()
-
-        call_graph = CallGraph(module)
-        for node in call_graph.reversed_order:
-            doc += self(node.func) + NewLine()
-
-        doc += NewLine() + '}'
-        return doc
-
 
 class CPUCodegen(Codegen):
-    # pylint: disable=abstract-method
-
-    def scalar_literal(self, value, dtype: DataType):
-        if dtype == dtypes.boolean:
-            ret = 'true' if value else 'false'
-        elif dtype == dtypes.float64:
-            ret = '{}'.format(float(value))
-        elif dtype == dtypes.float32:
-            ret = '{}f'.format(float(value))
-        # current cpu has very poor support of float16, bfloat16
-        # like cuda did, we emulate them in include/cpu/float16.h and include/cpu/bfloat16.h
-        elif dtype == dtypes.float16:
-            ret = '(half){}f'.format(float(value))
-        elif dtype == dtypes.tfloat32:
-            ret = '(float){}f'.format(float(value))
-        elif dtype == dtypes.bfloat16:
-            ret = '(bfloat16_t){}f'.format(float(value))
-        elif dtype == dtypes.int64:
-            ret = 'int64_t({}ll)'.format(int(value))
-        elif dtype == dtypes.int32:
-            ret = '{}'.format(int(value))
-        elif dtype == dtypes.int16:
-            ret = 'int16_t({})'.format(int(value))
-        elif dtype == dtypes.int8:
-            ret = 'int8_t({})'.format(int(value))
-        elif dtype == dtypes.uint64:
-            ret = 'uint64_t({}ull)'.format(int(value))
-        elif dtype == dtypes.uint32:
-            ret = 'uint32_t({}u)'.format(int(value))
-        elif dtype == dtypes.uint16:
-            ret = 'uint16_t({})'.format(int(value))
-        elif dtype == dtypes.uint8:
-            ret = 'uint8_t({})'.format(int(value))
-        else:
-            raise NotImplementedError('Cannot recognize scalar literal {} with dtype {}'.format(value, dtype))
-        return Text(ret)
-
-    def visit_ScalarType(self, t: DataType):
-        # float16, bfloat16 and tfloat32 are not supported on CPU yet
-        # https://moocaholic.medium.com/fp64-fp32-fp16-bfloat16-tf32-and-other-members-of-the-zoo-a1ca7897d407
-        scalar_type_map = {
-            'bool': 'bool',
-            'uint8': 'uint8_t',
-            'uint16': 'uint16_t',
-            'uint32': 'uint32_t',
-            'uint64': 'uint64_t',
-            'int8': 'int8_t',
-            'int16': 'int16_t',
-            'int32': 'int32_t',
-            'int64': 'int64_t',
-            'float16': 'half',
-            'float32': 'float',
-            'float64': 'double',
-            'bfloat16': 'bfloat16_t',
-            'tfloat32': 'float',
-        }
-        return Text(scalar_type_map[t.name])
-
-    def visit_IRModule(self, module: IRModule) -> Doc:
-        self.ir_module = module
+    def require_headers(self) -> Doc:
         doc = Doc()
-        # todo: only add necessary headers
         doc += Text('#include <stdint.h>') + NewLine()
-        doc += Text('#include <hidet/runtime/cpu_context.h>') + NewLine()
         doc += Text('#include <math.h>') + NewLine()
-        # float16 and bfloat16 emulation
-        doc += Text('#include <hidet/cpu/float16.h>') + NewLine()
-        doc += Text('#include <hidet/cpu/bfloat16.h>') + NewLine()
-
-        if module.task is not None:
-            doc += '/*' + NewLine()
-            doc += str(module.task) + NewLine()
-            doc += '*/' + NewLine()
-
-        doc += Text('extern "C" {') + NewLine()
-
-        # add namespace to activate data type and function
-        doc += Text('using float16::Half;') + NewLine()
-        doc += Text('using bfloat16::BFloat16;') + NewLine()
-
-        # use typedef to map half and bfloat16 type
-        doc += Text('typedef Half half;') + NewLine()
-        doc += Text('typedef BFloat16 bfloat16_t;') + NewLine()
-
-        call_graph = CallGraph(module)
-        for node in call_graph.reversed_order:
-            doc += self(node.func) + NewLine()
-
-        doc += NewLine() + '}'
+        doc += Text('#include <hidet/runtime/cpu/context.h>') + NewLine()
+        doc += Text('#include <hidet/runtime/cpu/float16.h>') + NewLine()
+        doc += Text('#include <hidet/runtime/cpu/bfloat16.h>') + NewLine()
+        doc += Text('#include <hidet/runtime/cpu/complex.h>') + NewLine()
+        doc += NewLine()
         return doc
 
     def visit_Function(self, func: Function) -> Doc:

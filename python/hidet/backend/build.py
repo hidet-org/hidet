@@ -127,15 +127,15 @@ class NVCC(SourceCompiler):
             # allow ptxas (PTX assembler) to output information like register/smem usage.
             '--ptxas-options=-v',
             # compile into position independent code.
-            '--compiler-options',
-            "'-fPIC'",
+            '--compiler-options -fPIC',
             # embed the line information into the binary, allow Nsight Compute to get the source code for profiling.
             '-lineinfo',
             # link the hidet runtime, all APIs for communication between kernels and host system are in hidet runtime.
             '-lhidet_runtime',
             # shared cuda runtime library is used (.so), instead of static one (.a). used to reduce binary size.
-            '--cudart',
-            'shared',
+            '--cudart shared',
+            # allow constexpr function to be called from device code.
+            # '--expt-relaxed-constexpr',
             # supress some warnings
             # see https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#generic-tool-options-diag-suppress
             # supress warming no 177 like: "warning #177-D: variable "xxx" was declared but never referenced"

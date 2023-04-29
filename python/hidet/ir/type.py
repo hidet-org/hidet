@@ -112,6 +112,9 @@ class DataType(TypeNode):
     def is_integer(self) -> bool:
         raise NotImplementedError()
 
+    def is_complex(self) -> bool:
+        raise NotImplementedError()
+
     def is_vector(self) -> bool:
         raise NotImplementedError()
 

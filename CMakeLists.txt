@@ -30,5 +30,6 @@ add_library(hidet SHARED
         src/hidet/packedfunc.cpp
 )
 target_include_directories(hidet PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_include_directories(hidet PRIVATE /usr/local/cuda/include)
 set_target_properties(hidet PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 target_link_libraries(hidet "-Wl,--no-as-needed" hidet_runtime)

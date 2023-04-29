@@ -424,7 +424,7 @@ class Constant(Expr):
     def __init__(self, value=None, const_type=None):
         if const_type and isinstance(const_type, str):
             const_type = data_type(const_type)
-        self.value: Optional[np.ndarray, float, int] = value
+        self.value: Optional[np.ndarray, float, int, complex] = value
         self.type: Optional[Union[DataType, TensorType]] = const_type
 
     def is_scalar(self) -> bool:

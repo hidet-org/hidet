@@ -12,9 +12,10 @@
 from hidet.ir.type import DataType
 from .integer import u8, u16, u32, u64, i8, i16, i32, i64
 from .floats import f16, bf16, tf32, f32, f64
+from .complex import c64, c128
 
 
-_float_promotion_table = {
+_promotion_table = {
     (f16, f16): f16,
     (f16, bf16): bf16,
     (f16, tf32): tf32,
@@ -40,9 +41,13 @@ _float_promotion_table = {
     (f64, tf32): f64,
     (f64, f32): f64,
     (f64, f64): f64,
-}
-
-_integer_promotion_table = {
+    # complex related
+    (f32, c64): c64,
+    (f64, c128): c128,
+    (c64, f32): c64,
+    (c64, c64): c64,
+    (c128, f64): c128,
+    (c128, c128): c128,
     # signed integer <op> signed integer
     (i8, i8): i8,
     (i8, i16): i16,
@@ -118,13 +123,12 @@ def promote_type(t1: DataType, t2: DataType) -> DataType:
     if t1.is_vector() or t2.is_vector():
         raise NotImplementedError("vector type promotion is not implemented")
 
-    if t1.is_float() and t2.is_float():
-        return _float_promotion_table[(t1, t2)]
+    if t1.is_integer() and t2.is_float():
+        return t2
     elif t1.is_float() and t2.is_integer():
         return t1
-    elif t1.is_integer() and t2.is_float():
-        return t2
-    elif t1.is_integer() and t2.is_integer():
-        return _integer_promotion_table[(t1, t2)]
     else:
-        raise NotImplementedError("type promotion for {} and {} is not implemented".format(t1, t2))
+        pair = (t1, t2)
+        if pair not in _promotion_table:
+            raise ValueError('Can not promote type {} and {}'.format(t1, t2))
+        return _promotion_table[pair]

@@ -602,3 +602,5 @@ namespace std
         }
     };
 }
+
+typedef bfloat16::BFloat16 bfloat16_t;

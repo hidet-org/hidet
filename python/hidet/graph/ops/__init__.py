@@ -34,6 +34,7 @@ from .definitions.arithmetic import bitwise_right_shift, bitwise_left_shift, bit
 from .definitions.arithmetic import bitwise_xor, maximum, minimum
 from .definitions.arithmetic import isfinite, isinf, isnan, sign, where
 from .definitions.arithmetic import sin, cos, tan, sinh, cosh, tanh, asin, acos, atan, asinh, acosh, atanh, atan2
+from .definitions.complex import real, imag, conj, make_complex
 from .definitions.compare import equal, not_equal, less, greater, less_equal, greater_equal
 from .definitions.compare import logical_not, logical_and, logical_or, logical_xor
 from .definitions.reduce import mean, sum, var, min, max, std, prod, argmin, argmax, all, any
