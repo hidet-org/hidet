@@ -303,7 +303,7 @@ class FlowGraph:
         """
         # before save, clear the packed func cache because ctypes object can not be pickled
         for node in self.nodes:
-            node.task_func = None
+            node._task_func = None
         self._usage_count, self._nodes = None, None
 
         dirname = os.path.dirname(model_file)

@@ -728,13 +728,23 @@ def tile(data: Tensor, repeats: List[int]) -> Tensor:
     return TileOp(data, repeats).get_output(0)
 
 
-def split(data: Tensor, axis: int, parts: List[int]) -> List[Tensor]:
+def split(data: Tensor, parts_or_sections: Union[Sequence[int], int], axis: int = 0) -> List[Tensor]:
+    if isinstance(parts_or_sections, int):
+        if data.shape[axis] % parts_or_sections != 0:
+            raise ValueError(
+                'split operator expects the extent of given axis is divisible by number of sections, '
+                'but got shape {}, axis {} and sections {}'.format(data.shape, axis, parts_or_sections)
+            )
+        parts = [data.shape[axis] // parts_or_sections] * parts_or_sections
+    else:
+        parts = parts_or_sections
+        if sum(parts) != data.shape[axis]:
+            raise ValueError(
+                'split operator expects the sum(parts) parameter equals the the extent of given axis'
+                ', but got shape {}, axis {} and parts {}'.format(data.shape, axis, parts)
+            )
+
     axis = normalize_dim(axis, len(data.shape))
-    if sum(parts) != data.shape[axis]:
-        raise ValueError(
-            'split operator expects the sum(parts) parameter equals the the extent of given axis'
-            ', but got shape {}, axis {} and parts {}'.format(data.shape, axis, parts)
-        )
     outputs = []
     for i in range(len(parts)):
         start = sum(parts[:i])

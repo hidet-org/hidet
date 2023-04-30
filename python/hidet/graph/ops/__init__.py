@@ -24,6 +24,7 @@ from .definitions.pool import max_pool2d, max_pool3d, adaptive_max_pool1d, adapt
 from .definitions.activation import relu, leaky_relu, sigmoid, hardsigmoid, clip, relu6, prelu, gelu, silu, hardswish
 from .definitions.activation import logsigmoid, celu, hardshrink, softplus, softsign, tanhshrink
 from .definitions.activation import softshrink, softmax, softmin, hardtanh
+from .definitions.attention import attention
 from .definitions.norm import batch_norm_infer, instance_norm, layer_norm, group_norm
 from .definitions.image import resize2d
 from .definitions.create import full, arange, linspace

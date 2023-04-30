@@ -1457,7 +1457,7 @@ def asarray(obj, /, *, dtype=None, device=None) -> Tensor:
     elif isinstance(obj, np.ndarray):
         ret = from_numpy(obj)
     else:
-        array = np.array(obj, dtype=dtype_to_numpy(dtype) if dtype else None)
+        array = np.array(obj, dtype=dtype_to_numpy(data_type(dtype)) if dtype else None)
         if array.dtype == np.float64:
             # numpy uses float64 as the default float data type, convert it to float32 as hidet takes float32 as default
             array = array.astype(np.float32)

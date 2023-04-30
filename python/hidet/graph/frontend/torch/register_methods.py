@@ -145,7 +145,7 @@ def tensor_split(self: Tensor, split_size, dim=0) -> List[Tensor]:
         assert isinstance(split_size, (list, tuple))
         parts = [int(v) for v in split_size]
         assert sum(parts) == self.shape[dim]
-    return ops.split(self, axis=dim, parts=parts)
+    return ops.split(self, axis=dim, parts_or_sections=parts)
 
 
 @register_method(torch.Tensor.chunk)
@@ -156,7 +156,7 @@ def tensor_chunk(self: Tensor, chunks, dim=0) -> List[Tensor]:
     for start in range(0, dim_size, chunk_size):
         parts.append(min(chunk_size, dim_size - start))
     assert sum(parts) == self.shape[dim]
-    return ops.split(self, axis=dim, parts=parts)
+    return ops.split(self, axis=dim, parts_or_sections=parts)
 
 
 @register_method(torch.Tensor.squeeze)

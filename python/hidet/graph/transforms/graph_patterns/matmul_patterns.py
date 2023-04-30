@@ -36,7 +36,7 @@ class TwoMatmulFusionPattern(SubgraphRewriteRule):
             c = ops.concat([c1, c2], axis=-1)
             y = ops.matmul(x, c)
             # pylint: disable=unbalanced-tuple-unpacking
-            new_y1, new_y2 = ops.split(y, axis=-1, parts=[c1.shape[-1], c2.shape[-1]])
+            new_y1, new_y2 = ops.split(y, axis=-1, parts_or_sections=[c1.shape[-1], c2.shape[-1]])
             return [new_y1, new_y2]
         else:
             return None
@@ -63,7 +63,9 @@ class ThreeMatmulFusionPattern(SubgraphRewriteRule):
                 c = ops.concat([c1, c2, c3], axis=-1)
                 y = ops.matmul(x, c)
                 # pylint: disable=unbalanced-tuple-unpacking
-                new_y1, new_y2, new_y3 = ops.split(y, axis=-1, parts=[c1.shape[-1], c2.shape[-1], c3.shape[-1]])
+                new_y1, new_y2, new_y3 = ops.split(
+                    y, axis=-1, parts_or_sections=[c1.shape[-1], c2.shape[-1], c3.shape[-1]]
+                )
                 return [new_y1, new_y2, new_y3]
         return None
 
@@ -98,7 +100,9 @@ class ThreeMatmulBiasFusionPattern(SubgraphRewriteRule):
                         b = ops.concat([b1, b2, b3], axis=-1)
                         y = ops.matmul(x, c) + b
                         # pylint: disable=unbalanced-tuple-unpacking
-                        new_y1, new_y2, new_y3 = ops.split(y, axis=-1, parts=[y1.shape[-1], y2.shape[-1], y3.shape[-1]])
+                        new_y1, new_y2, new_y3 = ops.split(
+                            y, axis=-1, parts_or_sections=[y1.shape[-1], y2.shape[-1], y3.shape[-1]]
+                        )
                         return [new_y1, new_y2, new_y3]
         return None
 
