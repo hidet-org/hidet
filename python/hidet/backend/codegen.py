@@ -477,16 +477,16 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
         for label, expr in zip(stmt.input_labels, stmt.input_exprs):
             input_docs.append(Text(f'"{label}"') + '(' + self(expr) + ')')
         return (
-            NewLine()
-            + 'asm '
-            + volatile_doc
-            + '('
-            + template_doc
-            + ' : '
-            + doc_join(output_docs, ', ')
-            + ' : '
-            + doc_join(input_docs, ', ')
-            + ');'
+                NewLine()
+                + 'asm '
+                + volatile_doc
+                + '('
+                + template_doc
+                + ' : '
+                + doc_join(output_docs, ', ')
+                + ' : '
+                + doc_join(input_docs, ', ')
+                + ');'
         )
 
     def visit_LaunchKernelStmt(self, stmt: LaunchKernelStmt):
@@ -533,6 +533,8 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             'tfloat32': 'tfloat32_t',
             'complex64': 'complex64_t',
             'complex128': 'complex128_t',
+            'float32x4': '__m128',
+            'float32x8': '__m256'
         }
         return Text(scalar_type_map[t.name])
 
@@ -577,6 +579,8 @@ class CUDACodegen(Codegen):
         doc += Text('#include <hidet/runtime/cpu/context.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cuda/complex.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cuda/context.h>') + NewLine()
+
+        doc += Text('#include <immintrin.h>') + NewLine()
 
         # nvcc use float to 'store' tfloat32 data
         doc += Text('typedef float tfloat32_t;') + NewLine()
@@ -654,22 +658,22 @@ class CPUCodegen(Codegen):
         # float16, bfloat16 and tfloat32 are not supported on CPU yet
         # https://moocaholic.medium.com/fp64-fp32-fp16-bfloat16-tf32-and-other-members-of-the-zoo-a1ca7897d407
         scalar_type_map = {
-        'bool': 'bool',
-        'uint8': 'uint8_t',
-        'uint16': 'uint16_t',
-        'uint32': 'uint32_t',
-        'uint64': 'uint64_t',
-        'int8': 'int8_t',
-        'int16': 'int16_t',
-        'int32': 'int32_t',
-        'int64': 'int64_t',
-        'float16': 'half',
-        'float32': 'float',
-        'float64': 'double',
-        'bfloat16': 'bfloat16_t',
-        'tfloat32': 'float',
-        'float32x4': '__m128',
-        'float32x8': '__m256'
+            'bool': 'bool',
+            'uint8': 'uint8_t',
+            'uint16': 'uint16_t',
+            'uint32': 'uint32_t',
+            'uint64': 'uint64_t',
+            'int8': 'int8_t',
+            'int16': 'int16_t',
+            'int32': 'int32_t',
+            'int64': 'int64_t',
+            'float16': 'half',
+            'float32': 'float',
+            'float64': 'double',
+            'bfloat16': 'bfloat16_t',
+            'tfloat32': 'float',
+            'float32x4': '__m128',
+            'float32x8': '__m256'
         }
         return Text(scalar_type_map[t.name])
 

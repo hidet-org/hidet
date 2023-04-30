@@ -192,7 +192,7 @@ def build_ir_module(
     codegen_target = 'cpu' if kernel_func.kind == 'host_kernel' else 'cuda'
 
     # code generation
-    codegen(ir_module, src_out_path=src_path, target=codegen_target)
+    codegen(ir_module, src_out_path=src_path)
 
     # compile source code
     compile_source(src_path, out_lib_path=lib_path)
