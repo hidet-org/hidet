@@ -47,6 +47,12 @@ def matmul_kernel5():
                 layout=row_layout(32, 1) * col_layout(8, 256)
             )
 
+            bpj_packed = tensor(
+                scope=DeclareScope.Default,
+                dtype=float32,
+                layout=col_layout(1, 32) * row_layout(256, 8)
+            )
+
             i = 0
             while i < m_size:
                 ib = min(MC, m_size - i)
@@ -70,6 +76,14 @@ def matmul_kernel5():
                     j = 0
                     while j < n_size:
                         jb = min(NC, n_size - j)
+                        # TODO: back the block of B into contiguous memory
+                        blockB_col_offset = 0
+                        while blockB_col_offset < jb:
+                            for blockB_row in range(pb):
+                                for blockB_column in range(NR):
+                                    bpj_packed[blockB_row, blockB_column+blockB_col_offset] = b[p+blockB_row, j+blockB_column+blockB_col_offset]
+                            blockB_col_offset += NR
+
                         # Loop 2
                         ii = 0
                         while ii < ib:
@@ -90,7 +104,8 @@ def matmul_kernel5():
 
                                 for pp in range(pb):
                                     pi = p + pp
-                                    bb_0to7 = avx_f32x8_load(~b[pi, jidx])
+                                    # bb_0to7 = avx_f32x8_load(~b[pi, jidx])
+                                    bb_0to7 = avx_f32x8_load(~b[pp, jj])
                                     # aa = avx_f32x8_broadcast(~a[iidx, pi])
                                     aa = avx_f32x8_broadcast(~aip_packed[ii, pp])
                                     c0_0to7 = avx_f32x8_fmadd(aa, bb_0to7, c0_0to7)
