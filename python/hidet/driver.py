@@ -68,7 +68,10 @@ def build_task(task: Task, target_device='cuda', load=True) -> Optional[Compiled
         config_str = f'{target_device}_space_{space_level}'
         task_hash = sha256(task_string.encode()).hexdigest()[:16]
         task_dir = os.path.join(op_cache_dir, config_str, task.name, task_hash)
-        src_path = os.path.join(task_dir, 'source.cu')
+        if hidet.cuda.available():
+            src_path = os.path.join(task_dir, 'source.cu')
+        else:
+            src_path = os.path.join(task_dir, 'source.cpp')
         lib_path = os.path.join(task_dir, 'lib.so')
 
         # use previously generated library when available
@@ -99,7 +102,7 @@ def build_task(task: Task, target_device='cuda', load=True) -> Optional[Compiled
             # code generation
             codegen(ir_module, src_out_path=src_path)
             # compile source code
-            compile_source(src_path, out_lib_path=lib_path, keep_ptx=False)
+            compile_source(src_path, out_lib_path=lib_path)
             # load function
             if load:
                 compiled_func = load_task_func(lib_path, task)
@@ -192,7 +195,7 @@ def build_ir_module(
     codegen(ir_module, src_out_path=src_path, target=codegen_target)
 
     # compile source code
-    compile_source(src_path, out_lib_path=lib_path, keep_ptx=False)
+    compile_source(src_path, out_lib_path=lib_path)
 
     if load:
         # load function

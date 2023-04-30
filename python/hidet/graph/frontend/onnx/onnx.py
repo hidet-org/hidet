@@ -762,7 +762,7 @@ class OnnxSplit(OnnxOperator):
         axis = self.attrs.get('axis', 0)
         parts = self.attrs['split']
         data = inputs[0]
-        return ops.split(data, axis, parts)
+        return ops.split(data, parts, axis)
 
     def run_v13(self, inputs: List[Tensor]) -> List[Tensor]:
         data = inputs[0]
@@ -784,7 +784,7 @@ class OnnxSplit(OnnxOperator):
                 'Expect the input of Split operator have 1 or 2 inputs, but got {} inputs. See:\n'.format(len(inputs))
                 + 'https://github.com/onnx/onnx/blob/main/docs/Operators.md#Split'
             )
-        return ops.split(data, axis, parts)
+        return ops.split(data, parts, axis)
 
 
 @register_onnx_operator

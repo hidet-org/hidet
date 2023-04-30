@@ -264,7 +264,7 @@ class IRPrinter(IRFunctor):
     def visit_LetStmt(self, stmt: LetStmt):
         doc = Doc()
         for bind_var, bind_value in zip(stmt.bind_vars, stmt.bind_values):
-            doc += NewLine() + 'let ' + self(bind_var) + ' = ' + self(bind_value)
+            doc += NewLine() + 'let ' + self(bind_var) + ': ' + self(bind_var.type) + ' = ' + self(bind_value)
         doc += self(stmt.body)
         # doc += self(stmt.body).indent()
         return doc

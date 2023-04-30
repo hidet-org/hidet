@@ -40,6 +40,9 @@ class BatchMatmulTask(Task):
     def implement_cuda(self, working_dir: str) -> List[IRModule]:
         from hidet.graph.ops.schedules.cuda import matmul as matmul_schedule  # pylint: disable=import-outside-toplevel
 
+        if self.inputs[0].type.dtype.nbytes > 4:
+            raise ValueError('Only support data type <= 4 bytes for now')
+
         if self.mma == 'simt':
             return matmul_schedule.batched_matmul_cuda_schedule_simt(self, working_dir)
         elif self.mma.startswith('wmma'):

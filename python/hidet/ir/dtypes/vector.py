@@ -35,6 +35,9 @@ class VectorType(DataType):
     def is_vector(self) -> bool:
         return True
 
+    def is_complex(self) -> bool:
+        return False
+
     @property
     def num_lanes(self) -> int:
         return self._num_lanes

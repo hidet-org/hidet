@@ -11,14 +11,18 @@
 # limitations under the License.
 import pytest
 import torch
-import torch.backends.cudnn
 from hidet.testing.torch_utils import check_module
+import torch.backends.cudnn as cudnn
 
 
-@pytest.mark.parametrize('in_shape,w_shape,stride,padding', [[[1, 3, 224, 224], [64, 3, 7, 7], 2, 3]])
+@pytest.mark.parametrize(
+    'in_shape,w_shape,stride,padding',
+    [[[1, 3, 224, 224], [42, 3, 7, 7], 2, 3], [[1, 3, 224, 224], [42, 3, 7, 7], 3, 4]],
+)
+@pytest.mark.parametrize('groups', [1, 3])
 @pytest.mark.parametrize('dtype', [torch.float32])
-def test_conv2d(in_shape, w_shape, stride, padding, dtype):
-    torch.backends.cudnn.allow_tf32 = False  # disable tf32 for accuracy
+def test_conv2d(in_shape, w_shape, stride, padding, groups, dtype):
+    cudnn.allow_tf32 = False
     check_module(
         model=torch.nn.Conv2d(
             in_channels=in_shape[1],
@@ -26,11 +30,11 @@ def test_conv2d(in_shape, w_shape, stride, padding, dtype):
             kernel_size=w_shape[2:],
             stride=stride,
             padding=padding,
-            bias=False,
+            groups=groups,
         ),
         args=[torch.randn(in_shape, dtype=dtype)],
     )
-    torch.backends.cudnn.allow_tf32 = True
+    cudnn.allow_tf32 = True
 
 
 if __name__ == '__main__':

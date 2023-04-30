@@ -10,7 +10,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Dict, List, Optional
+import os
 
+import hidet.option
 from hidet.ir.compute import TensorNode, GridCompute, TensorInput
 from hidet.ir.expr import Expr, Var, TensorElement, tensor_var
 from hidet.ir.stmt import BufferStoreStmt
@@ -18,9 +20,9 @@ from hidet.ir.func import Function, IRModule
 from hidet.ir.task import Task, InverseMap
 from hidet.ir.functors import IRRewriter
 from hidet.ir.tools import rewrite, collect
+from hidet.transforms import FunctionPass
 from hidet.graph.ir import FlowGraph, Operator, Tensor
 from hidet.utils import strict_zip
-from hidet.transforms.flatten_tensor_slice import FlattenTensorSliceRewriter
 from .fused_operator import FusedTask
 
 
@@ -215,7 +217,23 @@ class PrologueEpilogueRewriter(IRRewriter):
             return IRRewriter.visit_BufferStoreStmt(self, stmt)
 
 
-def apply_prologue_epilogue(ir_module: IRModule, fused_task: FusedTask) -> IRModule:
+class FusePrologueEpiloguePass(FunctionPass):
+    def __init__(self, fused_task: FusedTask):
+        super().__init__()
+        self.rewriter = PrologueEpilogueRewriter(fused_task)
+
+    def process_func(self, func: Function) -> Function:
+        return self.rewriter.visit(func)
+
+
+def fuse_prologue_epilogue_pass(fused_task: FusedTask):
+    return FusePrologueEpiloguePass(fused_task)
+
+
+def apply_prologue_epilogue(ir_module: IRModule, fused_task: FusedTask, working_dir: str) -> IRModule:
+    from hidet.transforms import inline_function_pass, declare_to_let_pass, inline_let_stmt_pass
+    from hidet.transforms import flatten_tensor_slice_pass, lower_with, PassContext, SaveIRInstrument
+
     anchor_function: Optional[Function] = None
     for func in ir_module.functions.values():
         if func.kind in ['cuda_kernel', 'host_kernel']:
@@ -225,6 +243,18 @@ def apply_prologue_epilogue(ir_module: IRModule, fused_task: FusedTask) -> IRMod
     if anchor_function is None:
         raise RuntimeError('No kernel function found.')
 
-    rewriter1 = FlattenTensorSliceRewriter()
-    rewriter2 = PrologueEpilogueRewriter(fused_task)
-    return rewriter2(rewriter1(ir_module))
+    transforms = [
+        flatten_tensor_slice_pass(),
+        inline_function_pass(),
+        declare_to_let_pass(),
+        inline_let_stmt_pass(inline_all=False),
+        fuse_prologue_epilogue_pass(fused_task),
+    ]
+    instruments = []
+    if hidet.option.get_save_lower_ir():
+        instruments.append(SaveIRInstrument(out_dir=os.path.join(working_dir, 'fuse_ir')))
+
+    with PassContext(instruments=instruments):
+        ir_module = lower_with(ir_module, transforms)
+
+    return ir_module

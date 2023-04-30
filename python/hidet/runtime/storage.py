@@ -70,7 +70,7 @@ class CudaMemoryAPI(MemoryAPI):
         return hidet.cuda.memory_info()
 
 
-class CpuMemoryAPI(MemoryAPI):
+class CUDAHostMemoryAPI(MemoryAPI):
     def malloc(self, nbytes: int) -> int:
         addr = hidet.cuda.malloc_host(nbytes)
         if addr == 0 and nbytes != 0:
@@ -82,6 +82,28 @@ class CpuMemoryAPI(MemoryAPI):
 
     def free(self, addr: int):
         hidet.cuda.free_host(addr)
+        self.allocated -= self.addr2nbytes.pop(addr)
+
+    def memory_info(self) -> (int, int):
+        raise NotImplementedError()
+
+
+class CpuMemoryAPI(MemoryAPI):
+    def malloc(self, nbytes: int) -> int:
+        from hidet.ffi import crt
+
+        addr = crt.malloc(nbytes)
+        if addr == 0 and nbytes != 0:
+            return 0
+        self.allocated += nbytes
+        self.peak_allocated = max(self.peak_allocated, self.allocated)
+        self.addr2nbytes[addr] = nbytes
+        return addr
+
+    def free(self, addr: int):
+        from hidet.ffi import crt
+
+        crt.free(addr)
         self.allocated -= self.addr2nbytes.pop(addr)
 
     def memory_info(self) -> (int, int):
@@ -286,7 +308,8 @@ class MemoryPool:
             self.clear()
 
     def clear(self):
-        hidet.cuda.synchronize()
+        if hidet.cuda.available():
+            hidet.cuda.synchronize()
         for block_list in self.memory_blocks.values():
             for storage in block_list:
                 self.memory_api.free(storage.addr)
@@ -338,16 +361,24 @@ class DeviceMemoryPools:
 
     def __getitem__(self, device: Device) -> MemoryPool:
         if device not in self.device2pool:
-            if device.is_cuda():
-                self.device2pool[device] = MemoryPool(
-                    CudaMemoryAPI(device), block_size=4096, max_reserve_size=4 * 1024**3
-                )
-            elif device.is_cpu():
-                self.device2pool[device] = MemoryPool(
-                    CpuMemoryAPI(device), block_size=4096, max_reserve_size=512 * 1024**2
-                )
+            if hidet.cuda.available():
+                if device.is_cuda():
+                    self.device2pool[device] = MemoryPool(
+                        CudaMemoryAPI(device), block_size=4096, max_reserve_size=4 * 1024**3
+                    )
+                elif device.is_cpu():
+                    self.device2pool[device] = MemoryPool(
+                        CUDAHostMemoryAPI(device), block_size=4096, max_reserve_size=512 * 1024**2
+                    )
+                else:
+                    raise ValueError('Unsupported device: {}'.format(device))
             else:
-                raise ValueError('Unsupported device: {}'.format(device))
+                if device.is_cpu():
+                    self.device2pool[device] = MemoryPool(
+                        CpuMemoryAPI(device), block_size=4096, max_reserve_size=512 * 1024**2
+                    )
+                else:
+                    raise ValueError('Unsupported device: {}'.format(device))
         return self.device2pool[device]
 
     def __setitem__(self, device: Device, pool: MemoryPool):
@@ -355,17 +386,6 @@ class DeviceMemoryPools:
 
 
 _device2pool: DeviceMemoryPools = DeviceMemoryPools()
-
-
-# @initialize()
-# def initialize_memory_pools():
-#     global _device2pool
-#     _device2pool = {
-#         Device('cpu'): MemoryPool(CpuMemoryAPI(Device('cpu')), block_size=4096, max_reserve_size=512 * 1024**2)
-#     }
-#     for device_id in range(hidet.cuda.device_count()):
-#         device = Device('cuda', device_id)
-#         _device2pool[device] = MemoryPool(CudaMemoryAPI(device), block_size=4096, max_reserve_size=4 * 1024**3)
 
 
 def current_memory_pool(device: Union[Device, str]) -> MemoryPool:

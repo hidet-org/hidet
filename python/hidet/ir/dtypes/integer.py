@@ -35,6 +35,9 @@ class IntegerType(DataType):
     def is_integer(self) -> bool:
         return True
 
+    def is_complex(self) -> bool:
+        return False
+
     def is_vector(self) -> bool:
         return False
 

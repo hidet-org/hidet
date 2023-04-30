@@ -12,15 +12,19 @@
 # pylint: disable=redefined-builtin
 from . import definitions
 
+from .definitions.conv1d import conv1d
+from .definitions.conv1d_transpose import conv1d_transpose
 from .definitions.conv2d import conv2d, conv2d_winograd, conv2d_gemm, conv2d_gemm_image_transform
 from .definitions.conv2d_transpose import conv2d_transpose, conv2d_transpose_gemm
 from .definitions.conv3d import conv3d, conv3d_gemm
+from .definitions.conv3d_transpose import conv3d_transpose
 from .definitions.matmul import batch_matmul, matmul
 from .definitions.pool import avg_pool2d, avg_pool3d, adaptive_avg_pool1d, adaptive_avg_pool2d, adaptive_avg_pool3d
 from .definitions.pool import max_pool2d, max_pool3d, adaptive_max_pool1d, adaptive_max_pool2d, adaptive_max_pool3d
 from .definitions.activation import relu, leaky_relu, sigmoid, hardsigmoid, clip, relu6, prelu, gelu, silu, hardswish
 from .definitions.activation import logsigmoid, celu, hardshrink, softplus, softsign, tanhshrink
 from .definitions.activation import softshrink, softmax, softmin, hardtanh
+from .definitions.attention import attention
 from .definitions.norm import batch_norm_infer, instance_norm, layer_norm, group_norm
 from .definitions.image import resize2d
 from .definitions.create import full, arange, linspace
@@ -31,6 +35,7 @@ from .definitions.arithmetic import bitwise_right_shift, bitwise_left_shift, bit
 from .definitions.arithmetic import bitwise_xor, maximum, minimum
 from .definitions.arithmetic import isfinite, isinf, isnan, sign, where
 from .definitions.arithmetic import sin, cos, tan, sinh, cosh, tanh, asin, acos, atan, asinh, acosh, atanh, atan2
+from .definitions.complex import real, imag, conj, make_complex
 from .definitions.compare import equal, not_equal, less, greater, less_equal, greater_equal
 from .definitions.compare import logical_not, logical_and, logical_or, logical_xor
 from .definitions.reduce import mean, sum, var, min, max, std, prod, argmin, argmax, all, any

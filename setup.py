@@ -31,7 +31,7 @@ setup(
         "astunparse",
         "click",
         "packaging",
-        "cuda-python>=11.6.1",
+        "cuda-python>=11.6.1; platform_system=='Linux'",
     ],
     platforms=["linux"],
     entry_points={

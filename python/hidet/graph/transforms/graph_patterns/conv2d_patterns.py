@@ -60,7 +60,7 @@ class TwoConv2dFusionPattern(SubgraphRewriteRule):
                     w = ops.concat([w1, w2], axis=0)
                     y = ops.conv2d(x, w, stride=op1.attrs['stride'], groups=1)
                     # pylint: disable=unbalanced-tuple-unpacking
-                    new_y1, new_y2 = ops.split(y, axis=1, parts=[w1.shape[0], w2.shape[0]])
+                    new_y1, new_y2 = ops.split(y, axis=1, parts_or_sections=[w1.shape[0], w2.shape[0]])
                     return [new_y1, new_y2]
         return None
 
@@ -91,7 +91,9 @@ class ThreeConv2dFusionPattern(SubgraphRewriteRule):
                         w = ops.concat([w1, w2, w3], axis=0)
                         y = ops.conv2d(x, w, stride=op1.attrs['stride'], groups=1)
                         # pylint: disable=unbalanced-tuple-unpacking
-                        new_y1, new_y2, new_y3 = ops.split(y, axis=1, parts=[w1.shape[0], w2.shape[0], w3.shape[0]])
+                        new_y1, new_y2, new_y3 = ops.split(
+                            y, axis=1, parts_or_sections=[w1.shape[0], w2.shape[0], w3.shape[0]]
+                        )
                         return [new_y1, new_y2, new_y3]
         return None
 

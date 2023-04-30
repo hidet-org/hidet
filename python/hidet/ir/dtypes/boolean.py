@@ -25,6 +25,9 @@ class Boolean(DataType):
         # True for 1, False for 0
         return True
 
+    def is_complex(self) -> bool:
+        return False
+
     def is_vector(self) -> bool:
         return False
 

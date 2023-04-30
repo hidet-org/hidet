@@ -80,7 +80,7 @@ class DataType(TypeNode):
         """
         from hidet.ir import expr
 
-        if isinstance(value, (int, float, bool, list, tuple)):
+        if isinstance(value, (int, float, bool, complex, list, tuple)):
             return self.constant(value)
         elif isinstance(value, expr.Constant):
             return self.constant(value.value)
@@ -110,6 +110,9 @@ class DataType(TypeNode):
         raise NotImplementedError()
 
     def is_integer(self) -> bool:
+        raise NotImplementedError()
+
+    def is_complex(self) -> bool:
         raise NotImplementedError()
 
     def is_vector(self) -> bool:
