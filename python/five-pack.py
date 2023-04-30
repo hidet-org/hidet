@@ -29,9 +29,11 @@ def matmul_kernel5():
             b = as_tensor_pointer(b_ptr, float32, [k_size, n_size])
             c = as_tensor_pointer(c_ptr, float32, [m_size, n_size])
 
+            ap = a + 1
+
             MC: int32 = 256
             NC: int32 = 256
-            KC: int32 = 512
+            KC: int32 = 256
 
             MR: int32 = 8
             NR: int32 = 8
@@ -44,8 +46,11 @@ def matmul_kernel5():
                 dtype=float32,
                 # layout=row_layout(32, 1) * col_layout(MR, KC) TODO: Why cannot found MR, KC?
                 # layout=row_layout(32, 1) * col_layout(MR, KC)
-                layout=row_layout(32, 1) * col_layout(8, 512)
+                layout=row_layout(32, 1) * col_layout(8, 256)
             )
+
+            aip = ~aip_packed[0, 1]
+            aip = aip + 1
 
             i = 0
             while i < m_size:
