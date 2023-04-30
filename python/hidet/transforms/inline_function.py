@@ -89,10 +89,13 @@ class InlineFunctionRewriter(IRRewriter):
             param_vars: List[Var] = []
             remap: Dict[Var, Expr] = {}
             for arg, param in zip(args, callee.params):
-                param_var = Var(param.hint, rewrite(param.type, remap, clone_internal_var=True))
-                param_vars.append(param_var)
-                self.stmts.append(DeclareStmt(param_var, init=arg))
-                remap[param] = param_var
+                if isinstance(arg, Var) and arg.type.is_tensor():
+                    remap[param] = arg
+                else:
+                    param_var = Var(param.hint, rewrite(param.type, remap, clone_internal_var=True))
+                    param_vars.append(param_var)
+                    self.stmts.append(DeclareStmt(param_var, init=arg))
+                    remap[param] = param_var
             callee_body = rewrite(callee.body, remap, clone_internal_var=True)
             self.stmts.append(callee_body)
             return None

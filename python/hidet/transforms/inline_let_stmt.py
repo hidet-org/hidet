@@ -11,9 +11,9 @@
 # limitations under the License.
 from collections import defaultdict
 
+from hidet.ir.type import TensorPointerType, TensorType
 from hidet.ir.expr import Var, Expr, Constant, Add, Sub
 from hidet.ir.functors import IRRewriter, IRVisitor
-from hidet.ir.type import TensorType, TensorPointerType
 from hidet.ir.stmt import Stmt, LetStmt
 from hidet.transforms import Pass, FunctionBodyPass, RepeatFunctionPass
 from hidet.utils import same_list
@@ -61,9 +61,8 @@ class NaiveLetStmtInlineRewriter(IRRewriter):
 
     def should_inline(self, var: Var, expr: Expr) -> bool:
         if isinstance(var.type, (TensorPointerType, TensorType)):
-            # do not inline tensor or tensor type
-            return False
-        if isinstance(expr, (Var, Constant)):
+            return isinstance(expr, (Var, Constant))
+        elif isinstance(expr, (Var, Constant)):
             # let v1 = v2
             # let v1 = constant
             return True
@@ -73,7 +72,8 @@ class NaiveLetStmtInlineRewriter(IRRewriter):
         elif isinstance(expr, (Add, Sub)) and (isinstance(expr.a, Constant) or isinstance(expr.b, Constant)):
             # let v1 = expr + constant
             return True
-        return False
+        else:
+            return False
 
     def visit_LetStmt(self, stmt: LetStmt):
         bind_vars = []
