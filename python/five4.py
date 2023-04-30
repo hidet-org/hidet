@@ -4,9 +4,10 @@ from hidet.ir.stmt import DeclareScope
 
 import hidet
 
+
 def matmul_kernel5():
     from hidet.transforms.generate_packed_func import add_packed_func
-    from hidet.lang import attr
+    import hidet.lang
     from hidet.lang import float32, int32
     from hidet.lang import as_tensor_pointer, tensor
     from hidet.lang.mapping import repeat, spatial, auto_map
@@ -14,7 +15,6 @@ def matmul_kernel5():
 
     from hidet.lang.avx import avx_f32x4_broadcast, avx_f32x4_fmadd, avx_f32x4_load, avx_f32x4_store
     from hidet.lang.avx import avx_f32x8_store, avx_f32x8_broadcast, avx_f32x8_fmadd, avx_f32x8_load
-
 
     with hidet.lang.script_module() as script_module:
 
@@ -109,11 +109,13 @@ def matmul_kernel5():
     compiled_function = hidet.driver.build_ir_module(ir_module)
     return compiled_function
 
+
 def ff():
     func = matmul_kernel5()
 
-    for m, n, k in [(64, 64, 64), (256, 256, 256), (512, 512, 512), (1024, 1024, 1024), (1024, 512, 768),
-                    (480, 480, 480), (720, 720, 720), (720, 960, 1440)]:
+    # for m, n, k in [(64, 64, 64), (72, 72, 72), (88, 88, 88), (128, 128, 128), (100, 88, 100), (256, 256, 256), (512, 512, 512), (1024, 1024, 1024), (1024, 512, 768),
+    #                 (480, 480, 480), (720, 720, 720), (720, 960, 1440)]:
+    for m, n, k in [(256, 256, 256), (512, 512, 512), (1024, 1024, 1024), (768, 768, 768), (768, 512, 1024)]:
         a = hidet.randn([m, k], dtype='float32').cpu()
         b = hidet.randn([k, n], dtype='float32').cpu()
         c = hidet.zeros([m, n]).cpu()
@@ -141,17 +143,39 @@ def ff():
 ff()
 
 #### -O3
-# 256 x 256 x 256: hidet takes 0.62 ms
-# 256 x 256 x 256: numpy takes  0.23 ms
-# 512 x 512 x 512: hidet takes 5.27 ms
-# 512 x 512 x 512: numpy takes  0.78 ms
-# 1024 x 1024 x 1024: hidet takes 38.82 ms
-# 1024 x 1024 x 1024: numpy takes  2.32 ms
-# 1024 x 768 x 512: hidet takes 13.60 ms
-# 1024 x 768 x 512: numpy takes  1.13 ms
-# 480 x 480 x 480: hidet takes 4.22 ms
-# 480 x 480 x 480: numpy takes  0.56 ms
-# 720 x 720 x 720: hidet takes 11.49 ms
-# 720 x 720 x 720: numpy takes  1.42 ms
-# 720 x 1440 x 960: hidet takes 25.72 ms
-# 720 x 1440 x 960: numpy takes  4.75 ms
+# 64 x 64 x 64: hidet takes 0.02 ms
+# 64 x 64 x 64: numpy takes  0.04 ms
+# 72 x 72 x 72: hidet takes 0.04 ms
+# 72 x 72 x 72: numpy takes  0.13 ms
+# 88 x 88 x 88: hidet takes 0.05 ms
+# 88 x 88 x 88: numpy takes  0.14 ms
+# 128 x 128 x 128: hidet takes 0.10 ms
+# 128 x 128 x 128: numpy takes  0.14 ms
+# 100 x 100 x 88: hidet takes 0.06 ms
+# 100 x 100 x 88: numpy takes  0.15 ms
+# 256 x 256 x 256: hidet takes 0.63 ms
+# 256 x 256 x 256: numpy takes  0.17 ms
+# 512 x 512 x 512: hidet takes 5.21 ms
+# 512 x 512 x 512: numpy takes  0.60 ms
+# 1024 x 1024 x 1024: hidet takes 38.78 ms
+# 1024 x 1024 x 1024: numpy takes  2.30 ms
+# 1024 x 768 x 512: hidet takes 13.65 ms
+# 1024 x 768 x 512: numpy takes  1.10 ms
+# 480 x 480 x 480: hidet takes 4.28 ms
+# 480 x 480 x 480: numpy takes  0.59 ms
+# 720 x 720 x 720: hidet takes 11.52 ms
+# 720 x 720 x 720: numpy takes  1.51 ms
+# 720 x 1440 x 960: hidet takes 25.67 ms
+# 720 x 1440 x 960: numpy takes  2.86 ms
+
+### Omitting some to compare to packing:
+# 256 x 256 x 256: hidet takes 0.61 ms
+# 256 x 256 x 256: numpy takes  0.16 ms
+# 512 x 512 x 512: hidet takes 5.42 ms
+# 512 x 512 x 512: numpy takes  0.63 ms
+# 1024 x 1024 x 1024: hidet takes 39.28 ms
+# 1024 x 1024 x 1024: numpy takes  2.67 ms
+# 768 x 768 x 768: hidet takes 13.39 ms
+# 768 x 768 x 768: numpy takes  1.43 ms
+# 768 x 1024 x 512: hidet takes 14.00 ms
+# 768 x 1024 x 512: numpy takes  1.11 ms

@@ -15,9 +15,7 @@ def matmul_kernel5():
     from hidet.lang.avx import avx_f32x4_broadcast, avx_f32x4_fmadd, avx_f32x4_load, avx_f32x4_store
     from hidet.lang.avx import avx_f32x8_store, avx_f32x8_broadcast, avx_f32x8_fmadd, avx_f32x8_load
 
-
     with hidet.lang.script_module() as script_module:
-
         @hidet.lang.script
         def matmul_kernel(
                 a_ptr: ~float32,
@@ -33,15 +31,20 @@ def matmul_kernel5():
 
             MC: int32 = 256
             NC: int32 = 256
-            KC: int32 = 256
+            KC: int32 = 512
 
             MR: int32 = 8
             NR: int32 = 8
 
+            MR = MR
+            KC = KC
+
             aip_packed = tensor(
                 scope=DeclareScope.Default,
                 dtype=float32,
-                layout=row_layout(int(MC / MR), 1) * col_layout(MR, KC)
+                # layout=row_layout(32, 1) * col_layout(MR, KC) TODO: Why cannot found MR, KC?
+                # layout=row_layout(32, 1) * col_layout(MR, KC)
+                layout=row_layout(32, 1) * col_layout(8, 512)
             )
 
             i = 0
@@ -51,16 +54,15 @@ def matmul_kernel5():
                 p = 0
                 while p < k_size:
                     pb = min(KC, k_size - p)
-                    # TODO: pack the column panel of A
-                    # panelA_start_row = i
+                    # # TODO: pack the column panel of A
+                    # # panelA_start_row = i
                     panelA_row_offset = 0
                     # panelA_start_col = p
                     while panelA_row_offset < ib:
-                        micropanel_start_row = i + panelA_row_offset
                         # panelA_row = panelA_start_row + panelA_row_offset
                         for micropanelA_col in range(pb):
                             for micropanelA_row in range(MR):
-                                aip_packed[micropanel_start_row+micropanelA_row, micropanelA_col] = a[i+micropanel_start_row+micropanelA_row, p+micropanelA_col]
+                                aip_packed[panelA_row_offset + micropanelA_row, micropanelA_col] = a[i+micropanelA_row + panelA_row_offset, p+micropanelA_col]
 
                         panelA_row_offset += MR
                     ## End of packing A
@@ -89,21 +91,29 @@ def matmul_kernel5():
                                 for pp in range(pb):
                                     pi = p + pp
                                     bb_0to7 = avx_f32x8_load(~b[pi, jidx])
-                                    aa = avx_f32x8_broadcast(~a[iidx, pi])
+                                    # aa = avx_f32x8_broadcast(~a[iidx, pi])
+                                    aa = avx_f32x8_broadcast(~aip_packed[ii, pp])
                                     c0_0to7 = avx_f32x8_fmadd(aa, bb_0to7, c0_0to7)
-                                    aa = avx_f32x8_broadcast(~a[iidx+1, pi])
+                                    # aa = avx_f32x8_broadcast(~a[iidx+1, pi])
+                                    aa = avx_f32x8_broadcast(~aip_packed[ii+1, pp])
                                     c1_0to7 = avx_f32x8_fmadd(aa, bb_0to7, c1_0to7)
-                                    aa = avx_f32x8_broadcast(~a[iidx+2, pi])
+                                    # aa = avx_f32x8_broadcast(~a[iidx+2, pi])
+                                    aa = avx_f32x8_broadcast(~aip_packed[ii+2, pp])
                                     c2_0to7 = avx_f32x8_fmadd(aa, bb_0to7, c2_0to7)
-                                    aa = avx_f32x8_broadcast(~a[iidx+3, pi])
+                                    # aa = avx_f32x8_broadcast(~a[iidx+3, pi])
+                                    aa = avx_f32x8_broadcast(~aip_packed[ii+3, pp])
                                     c3_0to7 = avx_f32x8_fmadd(aa, bb_0to7, c3_0to7)
-                                    aa = avx_f32x8_broadcast(~a[iidx+4, pi])
+                                    # aa = avx_f32x8_broadcast(~a[iidx+4, pi])
+                                    aa = avx_f32x8_broadcast(~aip_packed[ii+4, pp])
                                     c4_0to7 = avx_f32x8_fmadd(aa, bb_0to7, c4_0to7)
-                                    aa = avx_f32x8_broadcast(~a[iidx+5, pi])
+                                    # aa = avx_f32x8_broadcast(~a[iidx+5, pi])
+                                    aa = avx_f32x8_broadcast(~aip_packed[ii+5, pp])
                                     c5_0to7 = avx_f32x8_fmadd(aa, bb_0to7, c5_0to7)
-                                    aa = avx_f32x8_broadcast(~a[iidx+6, pi])
+                                    # aa = avx_f32x8_broadcast(~a[iidx+6, pi])
+                                    aa = avx_f32x8_broadcast(~aip_packed[ii+6, pp])
                                     c6_0to7 = avx_f32x8_fmadd(aa, bb_0to7, c6_0to7)
-                                    aa = avx_f32x8_broadcast(~a[iidx+7, pi])
+                                    # aa = avx_f32x8_broadcast(~a[iidx+7, pi])
+                                    aa = avx_f32x8_broadcast(~aip_packed[ii+7, pp])
                                     c7_0to7 = avx_f32x8_fmadd(aa, bb_0to7, c7_0to7)
                                 avx_f32x8_store(~c[iidx, jidx], c0_0to7)
                                 avx_f32x8_store(~c[iidx + 1, jidx], c1_0to7)
