@@ -52,11 +52,11 @@ def matmul_kernel5():
                 while p < k_size:
                     pb = min(KC, k_size - p)
                     # TODO: pack the column panel of A
-                    panelA_start_row = i
+                    # panelA_start_row = i
                     panelA_row_offset = 0
-                    panelA_start_col = p
+                    # panelA_start_col = p
                     while panelA_row_offset < ib:
-                        micropanel_start_row = panelA_start_row + panelA_row_offset
+                        micropanel_start_row = i + panelA_row_offset
                         # panelA_row = panelA_start_row + panelA_row_offset
                         for micropanelA_col in range(pb):
                             for micropanelA_row in range(MR):
