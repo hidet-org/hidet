@@ -118,7 +118,7 @@ class FusedTask(Task):
         if isinstance(anchor_modules, IRModule):
             anchor_modules = [anchor_modules]
 
-        fused_modules: List[IRModule] = [apply_prologue_epilogue(m, self) for m in anchor_modules]
+        fused_modules: List[IRModule] = [apply_prologue_epilogue(m, self, working_dir) for m in anchor_modules]
         for fused_module, anchor_module in zip(fused_modules, anchor_modules):
             if hasattr(anchor_module, '_tuning_kwargs'):
                 setattr(fused_module, '_tuning_kwargs', getattr(anchor_module, '_tuning_kwargs'))

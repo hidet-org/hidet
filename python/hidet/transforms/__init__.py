@@ -9,6 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from typing import Sequence
 from hidet.ir.func import IRModule
 
 from .base import Pass, FunctionPass, FunctionBodyPass, SequencePass, RepeatFunctionPass, PassContext
@@ -32,6 +33,18 @@ from .lower_protect_access import lower_protect_access_pass
 from .declare_to_let import declare_to_let_pass
 from .propogate_launch_bound import propagate_launch_bound_pass
 from .lower_special_cast import lower_special_cast_pass
+
+
+def lower_with(ir_module: IRModule, transforms: Sequence[Pass]) -> IRModule:
+    ctx = PassContext.current()
+    for instrument in ctx.instruments:
+        instrument.before_all_passes(ir_module)
+    for transform in transforms:
+        ir_module = transform(ir_module)
+    for instrument in ctx.instruments:
+        instrument.after_all_passes(ir_module)
+
+    return ir_module
 
 
 def lower(ir_module: IRModule) -> IRModule:
@@ -62,13 +75,4 @@ def lower(ir_module: IRModule) -> IRModule:
         inline_let_stmt_pass(),
         simplify_stmt_pass(),
     ]
-
-    ctx = PassContext.current()
-    for instrument in ctx.instruments:
-        instrument.before_all_passes(ir_module)
-    for transform in transforms:
-        ir_module = transform(ir_module)
-    for instrument in ctx.instruments:
-        instrument.after_all_passes(ir_module)
-
-    return ir_module
+    return lower_with(ir_module, transforms)
