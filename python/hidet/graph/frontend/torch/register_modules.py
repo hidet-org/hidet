@@ -380,3 +380,10 @@ class HidetMish(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, torch.nn.Mish)
         return regs.mish(x, self.mod.inplace)
+
+
+@register_module(torch.nn.Identity)
+class HidetIdentity(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.Identity)
+        return x

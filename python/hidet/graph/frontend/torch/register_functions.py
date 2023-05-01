@@ -239,7 +239,7 @@ def avg_pool3d(x: Tensor, kernel_size, stride, padding, ceil_mode=False, count_i
 @register_function(torch.nn.functional.interpolate)
 def interpolate(
     input: Tensor,
-    size=None,
+    size: Union[int, Sequence[int]] = None,
     scale_factor=None,
     mode='nearest',
     align_corners=None,
@@ -252,27 +252,8 @@ def interpolate(
     if antialias:
         raise NotImplementedError("Currently does not support antialias=True")
 
-    if recompute_scale_factor:
-        raise NotImplementedError("Currently does not support recompute_scale_factor=True")
-
-    if size is None == scale_factor is None:
+    if (size is None) == (scale_factor is None):
         raise ValueError("Exactly one of size or scale_factor can be None")
-
-    target_size = None
-    if size is not None:
-        if isinstance(size, int):
-            target_size = [size, size]
-        else:
-            if len(size) != 2:
-                raise ValueError("Length of \"size\" must be of type int or tuple([int, int])")
-            target_size = list(size)
-    else:
-        if isinstance(scale_factor, (int, float)):
-            target_size = [int(i * scale_factor) for i in input.shape[2:]]
-        else:
-            if len(scale_factor) != 2:
-                raise ValueError("Length of \"scale_factor\" must be of type int or tuple([int, int])")
-            target_size = [a * b for a, b in zip(input.shape[2:], scale_factor)]
 
     supported_methods = {'nearest': 'nearest', 'bilinear': 'linear', 'bicubic': 'cubic'}
     if mode not in supported_methods:
@@ -284,16 +265,20 @@ def interpolate(
     else:
         coordinate_transformation_mode = 'pytorch_half_pixel'
 
+    round_method_map = {'bilinear': 'half_pixel', 'bicubic': 'half_pixel', 'nearest': 'floor'}
+
     return ops.resize2d(
         input,
-        target_size,
-        mode_hidet,
-        coordinate_transformation_mode,
-        rounding_method='round_prefer_floor',
+        size=size,
+        scale_factor=scale_factor,
+        method=mode_hidet,
+        coordinate_transformation_mode=coordinate_transformation_mode,
+        rounding_method=round_method_map[mode],
         roi=None,
         cubic_alpha=-0.75,
-        cubic_exclude=0,
+        cubic_exclude=False,
         extrapolation_value=0.0,
+        recompute_scale_factor=recompute_scale_factor,
     )
 
 
@@ -330,6 +315,7 @@ def softmax(x: Tensor, dim: int, _stacklevel: int = 3, dtype=None):
     return ops.softmax(x, dim)
 
 
+@register_function(operator.matmul)
 @register_function(torch.matmul)
 def matmul(x: Tensor, y: Tensor):
     return ops.matmul(x, y)
@@ -393,8 +379,8 @@ def ones(
 
 @register_function(torch.nn.functional.gelu)
 def gelu(x: Tensor, approximate: Optional[str] = "none"):
-    if approximate is not None:
-        warnings.warn_once("approximate is not None")
+    if approximate is not None and approximate != "none":
+        warnings.warn_once("hidet: gelu with approximate {repr(approximate)} is not supported. Treat as 'none'.")
     return ops.gelu(x)
 
 

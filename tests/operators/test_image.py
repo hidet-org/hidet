@@ -72,14 +72,18 @@ def torch_resize2d(data: np.ndarray, size: List[int], method: str):
 # In Pytorch, 'linear' and 'cubic' modes use 'half_pixel' coordinate transformation mode,
 # while 'nearest' mode uses 'asymmetric' and 'floor'
 @pytest.mark.parametrize(
-    "n, c, h, w, size, method, coordinate_transformation_mode, rounding_method, roi, cubic_alpha, cubic_exclude, extrapolation_value",
+    "n, c, h, w, size, scale_factor, method, coordinate_transformation_mode, rounding_method, "
+    "roi, cubic_alpha, cubic_exclude, extrapolation_value, recompute_scale_factor",
     [
-        [1, 1, 32, 32, [50, 60], 'nearest', 'asymmetric', 'floor', [], -0.75, 0, 0.0],  # nearest upsample
-        [1, 1, 32, 32, [20, 15], 'nearest', 'asymmetric', 'floor', [], -0.75, 0, 0.0],  # nearest downsample
-        [1, 3, 32, 32, [50, 60], 'linear', 'half_pixel', 'floor', [], -0.75, 0, 0.0],  # linear upsample
-        [1, 3, 32, 32, [20, 15], 'linear', 'half_pixel', 'floor', [], -0.75, 0, 0.0],  # linear downsample
-        [1, 3, 32, 32, [50, 60], 'cubic', 'half_pixel', 'floor', [], -0.75, 0, 0.0],  # cubic upsample
-        [1, 3, 32, 32, [20, 15], 'cubic', 'half_pixel', 'floor', [], -0.75, 0, 0.0],  # cubic downsample
+        [1, 1, 32, 32, [50, 60], None, 'nearest', 'asymmetric', 'floor', [], -0.75, 0, 0.0, None],  # nearest upsample
+        [1, 1, 32, 32, None, 1.5, 'nearest', 'asymmetric', 'floor', [], -0.75, 0, 0.0, None],  # nearest upsample
+        [1, 1, 32, 32, [20, 15], None, 'nearest', 'asymmetric', 'floor', [], -0.75, 0, 0.0, None],  # nearest downsample
+        [1, 3, 32, 32, [50, 60], None, 'linear', 'half_pixel', 'floor', [], -0.75, 0, 0.0, None],  # linear upsample
+        [1, 3, 32, 32, [20, 15], None, 'linear', 'half_pixel', 'floor', [], -0.75, 0, 0.0, None],  # linear downsample
+        [1, 3, 32, 32, [50, 60], None, 'cubic', 'half_pixel', 'floor', [], -0.75, 0, 0.0, None],  # cubic upsample
+        [1, 3, 32, 32, [20, 15], None, 'cubic', 'half_pixel', 'floor', [], -0.75, 0, 0.0, None],  # cubic downsample
+        [1, 1, 37, 37, [16, 16], None, 'cubic', 'half_pixel', 'floor', [], -0.75, 0, 0.0, None],  # cubic downsample
+        [1, 1, 37, 37, None, 0.4781, 'cubic', 'half_pixel', 'floor', [], -0.75, 0, 0.0, None],  # cubic downsample
     ],
 )
 def test_resize2d(
@@ -88,30 +92,38 @@ def test_resize2d(
     h,
     w,
     size,
-    method,
-    coordinate_transformation_mode,
-    rounding_method,
+    scale_factor,
+    method: str,
+    coordinate_transformation_mode: str,
+    rounding_method: str,
     roi,
-    cubic_alpha,
-    cubic_exclude,
-    extrapolation_value,
+    cubic_alpha: float,
+    cubic_exclude: bool,
+    extrapolation_value: float,
+    recompute_scale_factor: bool,
 ):
     data_shape = [n, c, h, w]
     dtype = 'float32'
     data = np.array(np.random.randn(*data_shape)).astype(dtype)
-    torch_result = torch_resize2d(data, size, method)
+    # torch_result = torch_resize2d(data, size, method)
+
+    method_rename = {'nearest': 'nearest', 'linear': 'bilinear', 'cubic': 'bicubic'}
+    torch_result = torch.nn.functional.interpolate(
+        torch.from_numpy(data), size=size, scale_factor=scale_factor, mode=method_rename[method]
+    )
 
     hidet_result_cuda = (
         ops.resize2d(
             asarray(data).to(device='cuda'),
-            size,
-            method,
-            coordinate_transformation_mode,
-            rounding_method,
-            roi,
-            cubic_alpha,
-            cubic_exclude,
-            extrapolation_value,
+            size=size,
+            scale_factor=scale_factor,
+            method=method,
+            coordinate_transformation_mode=coordinate_transformation_mode,
+            rounding_method=rounding_method,
+            roi=roi,
+            cubic_alpha=cubic_alpha,
+            cubic_exclude=cubic_exclude,
+            extrapolation_value=extrapolation_value,
         )
         .cpu()
         .numpy()
