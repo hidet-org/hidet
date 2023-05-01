@@ -29,30 +29,29 @@ def matmul_kernel5():
             b = as_tensor_pointer(b_ptr, float32, [k_size, n_size])
             c = as_tensor_pointer(c_ptr, float32, [m_size, n_size])
 
-            # a = a + 1
+            MC = 256
+            NC = 256
+            KC = 256
 
-            MC: int32 = 256
-            NC: int32 = 256
-            KC: int32 = 256
+            MR = 8
+            NR = 8
 
-            MR: int32 = 8
-            NR: int32 = 8
-
-            MR = MR
+            MC = MC
+            NC = NC
             KC = KC
+            MR = MR
+            NR = NR
 
             aip_packed = tensor(
                 scope=DeclareScope.Default,
                 dtype=float32,
-                # layout=row_layout(32, 1) * col_layout(MR, KC) TODO: Why cannot found MR, KC?
-                # layout=row_layout(32, 1) * col_layout(MR, KC)
                 layout=row_layout(32, 1) * col_layout(8, 256)
             )
 
             bpj_packed = tensor(
                 scope=DeclareScope.Default,
                 dtype=float32,
-                layout=col_layout(1, 32) * row_layout(256, 8)
+                layout=row_layout(1, 32) * row_layout(KC, NR)
             )
 
             i = 0
@@ -65,7 +64,6 @@ def matmul_kernel5():
                     # # TODO: pack the column panel of A
                     # # panelA_start_row = i
                     panelA_row_offset = 0
-                    # panelA_start_col = p
                     while panelA_row_offset < ib:
                         # panelA_row = panelA_start_row + panelA_row_offset
                         for micropanelA_col in range(pb):
@@ -105,33 +103,22 @@ def matmul_kernel5():
                                 c7_0to7 = avx_f32x8_load(~c[iidx+7, jidx])
 
                                 for pp in range(pb):
-                                    pi = p + pp
-                                    bb_0to7 = avx_f32x8_load(~b[pi, jidx])
-                                    assert ((((pp / 256) * 32) + (jj / 8)) * 2048) + ((pp % 256) + ((jj % 8) * 256)) < 65536 - 8
-                                    # bb_0to7 = avx_f32x8_load(~bpj_packed[pp, jj])
+                                    bb_0to7 = avx_f32x8_load(~bpj_packed[pp, jj])
 
-                                    # aa = avx_f32x8_broadcast(~a[iidx, pi])
                                     aa = avx_f32x8_broadcast(~aip_packed[ii, pp])
                                     c0_0to7 = avx_f32x8_fmadd(aa, bb_0to7, c0_0to7)
-                                    # aa = avx_f32x8_broadcast(~a[iidx+1, pi])
                                     aa = avx_f32x8_broadcast(~aip_packed[ii+1, pp])
                                     c1_0to7 = avx_f32x8_fmadd(aa, bb_0to7, c1_0to7)
-                                    # aa = avx_f32x8_broadcast(~a[iidx+2, pi])
                                     aa = avx_f32x8_broadcast(~aip_packed[ii+2, pp])
                                     c2_0to7 = avx_f32x8_fmadd(aa, bb_0to7, c2_0to7)
-                                    # aa = avx_f32x8_broadcast(~a[iidx+3, pi])
                                     aa = avx_f32x8_broadcast(~aip_packed[ii+3, pp])
                                     c3_0to7 = avx_f32x8_fmadd(aa, bb_0to7, c3_0to7)
-                                    # aa = avx_f32x8_broadcast(~a[iidx+4, pi])
                                     aa = avx_f32x8_broadcast(~aip_packed[ii+4, pp])
                                     c4_0to7 = avx_f32x8_fmadd(aa, bb_0to7, c4_0to7)
-                                    # aa = avx_f32x8_broadcast(~a[iidx+5, pi])
                                     aa = avx_f32x8_broadcast(~aip_packed[ii+5, pp])
                                     c5_0to7 = avx_f32x8_fmadd(aa, bb_0to7, c5_0to7)
-                                    # aa = avx_f32x8_broadcast(~a[iidx+6, pi])
                                     aa = avx_f32x8_broadcast(~aip_packed[ii+6, pp])
                                     c6_0to7 = avx_f32x8_fmadd(aa, bb_0to7, c6_0to7)
-                                    # aa = avx_f32x8_broadcast(~a[iidx+7, pi])
                                     aa = avx_f32x8_broadcast(~aip_packed[ii+7, pp])
                                     c7_0to7 = avx_f32x8_fmadd(aa, bb_0to7, c7_0to7)
                                 avx_f32x8_store(~c[iidx, jidx], c0_0to7)
@@ -190,17 +177,13 @@ def ff():
 ff()
 
 #### -O3
-# 256 x 256 x 256: hidet takes 0.62 ms
-# 256 x 256 x 256: numpy takes  0.23 ms
-# 512 x 512 x 512: hidet takes 5.27 ms
-# 512 x 512 x 512: numpy takes  0.78 ms
-# 1024 x 1024 x 1024: hidet takes 38.82 ms
-# 1024 x 1024 x 1024: numpy takes  2.32 ms
-# 1024 x 768 x 512: hidet takes 13.60 ms
-# 1024 x 768 x 512: numpy takes  1.13 ms
-# 480 x 480 x 480: hidet takes 4.22 ms
-# 480 x 480 x 480: numpy takes  0.56 ms
-# 720 x 720 x 720: hidet takes 11.49 ms
-# 720 x 720 x 720: numpy takes  1.42 ms
-# 720 x 1440 x 960: hidet takes 25.72 ms
-# 720 x 1440 x 960: numpy takes  4.75 ms
+# 256 x 256 x 256: hidet takes 0.59 ms
+# 256 x 256 x 256: numpy takes  0.14 ms
+# 512 x 512 x 512: hidet takes 4.68 ms
+# 512 x 512 x 512: numpy takes  0.48 ms
+# 1024 x 1024 x 1024: hidet takes 26.53 ms
+# 1024 x 1024 x 1024: numpy takes  3.36 ms
+# 768 x 768 x 768: hidet takes 12.56 ms
+# 768 x 768 x 768: numpy takes  1.02 ms
+# 768 x 1024 x 512: hidet takes 11.78 ms
+# 768 x 1024 x 512: numpy takes  1.55 ms

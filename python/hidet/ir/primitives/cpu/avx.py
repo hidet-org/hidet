@@ -44,6 +44,10 @@ def x86_memcpy(dst: Expr, src: Expr, num: Union[Expr, int]) -> Call:
     return call_primitive_func('x86_memcpy', [dst, src, num])
 
 
+def x86_memset(dst: Expr, val: Union[int, Expr], num: Union[Expr, int]) -> Call:
+    return call_primitive_func('x86_memset', [dst, val, num])
+
+
 def avx_malloc(size: Union[Expr, int], align: Union[Expr, int]) -> Call:
     return call_primitive_func('avx_x86_malloc', [size, align])
 

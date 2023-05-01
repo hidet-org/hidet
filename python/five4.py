@@ -31,8 +31,8 @@ def matmul_kernel5():
             b = as_tensor_pointer(b_ptr, float32, [k_size, n_size])
             c = as_tensor_pointer(c_ptr, float32, [m_size, n_size])
 
-            MC: int32 = 256
-            NC: int32 = 256
+            MC: int32 = 128
+            NC: int32 = 64
             KC: int32 = 256
 
             MR: int32 = 8
