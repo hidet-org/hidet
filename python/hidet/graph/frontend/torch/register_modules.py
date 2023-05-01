@@ -387,3 +387,17 @@ class HidetIdentity(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, torch.nn.Identity)
         return x
+
+
+@register_module(torch.nn.Upsample)
+class HidetUpsample(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.Upsample)
+        return regs.interpolate(
+            x,
+            size=self.mod.size,
+            scale_factor=self.mod.scale_factor,
+            mode=self.mod.mode,
+            align_corners=self.mod.align_corners,
+            recompute_scale_factor=self.mod.recompute_scale_factor,
+        )

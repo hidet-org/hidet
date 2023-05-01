@@ -246,6 +246,9 @@ def interpolate(
     recompute_scale_factor=None,
     antialias=False,
 ):
+    # please refer to the way that pytorch converts its interpolate function to onnx's resize operator
+    # https://github.com/pytorch/pytorch/blob/940662c4dcaa090f20e39a63a8e319a58ca1460f/torch/onnx/symbolic_helper.py#L1133
+    # for the details of how to convert pytorch's interpolate to hidet's resize operator as we are similar to onnx
     if len(input.shape) != 4:
         raise NotImplementedError("Currently only supports 4D inputs (NCHW)")
 
@@ -255,17 +258,18 @@ def interpolate(
     if (size is None) == (scale_factor is None):
         raise ValueError("Exactly one of size or scale_factor can be None")
 
-    supported_methods = {'nearest': 'nearest', 'bilinear': 'linear', 'bicubic': 'cubic'}
-    if mode not in supported_methods:
-        raise NotImplementedError("Mode not supported")
+    mode_hidet = mode
+    if 'cubic' in mode:
+        mode_hidet = 'cubic'
+    if 'linear' in mode:
+        mode_hidet = 'linear'
 
-    mode_hidet = supported_methods[mode]
-    if align_corners:
+    if mode == 'nearest':
+        coordinate_transformation_mode = 'asymmetric'
+    elif align_corners:
         coordinate_transformation_mode = 'align_corners'
     else:
-        coordinate_transformation_mode = 'pytorch_half_pixel'
-
-    round_method_map = {'bilinear': 'half_pixel', 'bicubic': 'half_pixel', 'nearest': 'floor'}
+        coordinate_transformation_mode = 'half_pixel'
 
     return ops.resize2d(
         input,
@@ -273,7 +277,7 @@ def interpolate(
         scale_factor=scale_factor,
         method=mode_hidet,
         coordinate_transformation_mode=coordinate_transformation_mode,
-        rounding_method=round_method_map[mode],
+        rounding_method='floor',
         roi=None,
         cubic_alpha=-0.75,
         cubic_exclude=False,
