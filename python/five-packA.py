@@ -29,6 +29,8 @@ def matmul_kernel5():
             b = as_tensor_pointer(b_ptr, float32, [k_size, n_size])
             c = as_tensor_pointer(c_ptr, float32, [m_size, n_size])
 
+            # a = a + 1
+
             MC: int32 = 256
             NC: int32 = 256
             KC: int32 = 256
@@ -104,8 +106,10 @@ def matmul_kernel5():
 
                                 for pp in range(pb):
                                     pi = p + pp
-                                    # bb_0to7 = avx_f32x8_load(~b[pi, jidx])
-                                    bb_0to7 = avx_f32x8_load(~b[pp, jj])
+                                    bb_0to7 = avx_f32x8_load(~b[pi, jidx])
+                                    assert ((((pp / 256) * 32) + (jj / 8)) * 2048) + ((pp % 256) + ((jj % 8) * 256)) < 65536 - 8
+                                    # bb_0to7 = avx_f32x8_load(~bpj_packed[pp, jj])
+
                                     # aa = avx_f32x8_broadcast(~a[iidx, pi])
                                     aa = avx_f32x8_broadcast(~aip_packed[ii, pp])
                                     c0_0to7 = avx_f32x8_fmadd(aa, bb_0to7, c0_0to7)
