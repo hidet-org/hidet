@@ -572,33 +572,42 @@ class BatchMatmulTask(Task):
             def copy_c_r2g(
                 regs_c: TensorType(dtype=c_dtype, layout=regs_c_layout),
                 c: c_dtype[bs, m_size, n_size],
-                smem_c: TensorType(dtype=c_dtype, layout=smem_c_layout),
                 offset_m: i32,
                 offset_n: i32
             ):
                 gmem_c = c[blockIdx.y, offset_m:, offset_n:]
                 warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
-                for warp_k_round in grid(warp_count_k, attrs='u+'):
-                    for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
-                        if wk == warp_k_round:
-                            for mma_i, mma_j in grid(mma_count_m, mma_count_n, attrs='u+u+'):
-                                p = 0
-                                for i, j in mma_config.c_store_map.on(lane_id):
-                                    delta_m = wi * warp_m + mma_i * mma_m + i
-                                    delta_n = wj * warp_n + mma_j * mma_n + j
-                                    if delta_m < m_size - offset_m and delta_n < n_size - offset_n:
-                                        if warp_count_k == 1:
-                                            gmem_c.write([delta_m, delta_n], regs_c[mma_i, mma_j, p])
-                                        else:
+                if warp_count_k == 1:
+                    for wi, wj in spatial(warp_count_m, warp_count_n).on(warp_id):
+                        for mma_i, mma_j in grid(mma_count_m, mma_count_n, attrs='u+u+'):
+                            p = 0
+                            for i, j in mma_config.c_store_map.on(lane_id):
+                                delta_m = wi * warp_m + mma_i * mma_m + i
+                                delta_n = wj * warp_n + mma_j * mma_n + j
+                                if delta_m < m_size - offset_m and delta_n < n_size - offset_n:
+                                    gmem_c.write([delta_m, delta_n], regs_c[mma_i, mma_j, p])
+                else:
+                    smem = tensor('shared', 'int8', shape=[smem_storage_nbytes])
+                    smem_c = tensor_pointer(c_dtype, layout=smem_c_layout)
+                    smem_c = ~smem[0]
+                    for warp_k_round in grid(warp_count_k, attrs='u+'):
+                        for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
+                            if wk == warp_k_round:
+                                for mma_i, mma_j in grid(mma_count_m, mma_count_n, attrs='u+u+'):
+                                    p = 0
+                                    for i, j in mma_config.c_store_map.on(lane_id):
+                                        delta_m = wi * warp_m + mma_i * mma_m + i
+                                        delta_n = wj * warp_n + mma_j * mma_n + j
+                                        if delta_m < m_size - offset_m and delta_n < n_size - offset_n:
                                             if warp_k_round == 0:
                                                 smem_c[delta_m, delta_n] = regs_c[mma_i, mma_j, p]
                                             elif warp_k_round < warp_count_k - 1:
                                                 smem_c[delta_m, delta_n] += regs_c[mma_i, mma_j, p]
                                             else:
                                                 gmem_c.write([delta_m, delta_n], smem_c[delta_m, delta_n] + regs_c[mma_i, mma_j, p])
-                                    p += 1
-                    if warp_k_round + 1 != warp_count_k:
-                        syncthreads()
+                                        p += 1
+                        if warp_k_round + 1 != warp_count_k:
+                            syncthreads()
 
             @hidet.script
             def mma(
@@ -626,11 +635,9 @@ class BatchMatmulTask(Task):
                 smem = tensor('shared', 'int8', shape=[smem_storage_nbytes])
                 smem_a = tensor_pointer(a_dtype, layout=smem_a_layout)
                 smem_b = tensor_pointer(b_dtype, layout=smem_b_layout)
-                smem_c = tensor_pointer(c_dtype, layout=smem_c_layout)
                 smem_a_bytes = smem_a.type.tensor_type.storage_bytes()
                 smem_a = ~smem[0]
                 smem_b = ~smem[smem_a_bytes]
-                smem_c = ~smem[0]
 
                 regs_a = tensor('register', a_dtype, layout=regs_a_layout)
                 regs_b = tensor('register', b_dtype, layout=regs_b_layout)
@@ -697,7 +704,7 @@ class BatchMatmulTask(Task):
                         copy_a_s2r(~smem_a[last_k % 2, 0, (k1 + 1) * mma_k], regs_a, (k1 + ko + 1) % 2)
                         copy_b_s2r(~smem_b[last_k % 2, (k1 + 1) * mma_k, 0], regs_b, (k1 + ko + 1) % 2)
                     mma(regs_a, regs_b, regs_c, (k1 + ko) % 2)
-                copy_c_r2g(regs_c, c, smem_c, offset_m, offset_n)
+                copy_c_r2g(regs_c, c, offset_m, offset_n)
 
         ir_module = module.ir_module()
         return ir_module
