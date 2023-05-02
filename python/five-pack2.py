@@ -197,11 +197,11 @@ ff()
 #### -O3
 # 256 x 256 x 256: hidet takes 0.58 ms
 # 256 x 256 x 256: numpy takes  0.14 ms
-# 512 x 512 x 512: hidet takes 4.43 ms
-# 512 x 512 x 512: numpy takes  0.48 ms
-# 1024 x 1024 x 1024: hidet takes 24.77 ms
+# 512 x 512 x 512: hidet takes 4.42 ms
+# 512 x 512 x 512: numpy takes  0.51 ms
+# 1024 x 1024 x 1024: hidet takes 24.68 ms
 # 1024 x 1024 x 1024: numpy takes  2.46 ms
-# 768 x 768 x 768: hidet takes 11.98 ms
-# 768 x 768 x 768: numpy takes  1.12 ms
-# 768 x 1024 x 512: hidet takes 11.27 ms
-# 768 x 1024 x 512: numpy takes  1.22 ms
+# 768 x 768 x 768: hidet takes 12.01 ms
+# 768 x 768 x 768: numpy takes  1.19 ms
+# 768 x 1024 x 512: hidet takes 11.28 ms
+# 768 x 1024 x 512: numpy takes  1.20 ms
