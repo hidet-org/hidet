@@ -15,7 +15,6 @@ def matmul_kernel5():
     from hidet.lang.avx import avx_f32x4_broadcast, avx_f32x4_fmadd, avx_f32x4_load, avx_f32x4_store
     from hidet.lang.avx import avx_f32x8_store, avx_f32x8_broadcast, avx_f32x8_fmadd, avx_f32x8_load
 
-
     with hidet.lang.script_module() as script_module:
         @hidet.lang.script
         def matmul_kernel(
@@ -26,12 +25,11 @@ def matmul_kernel5():
                 n_size: int32,
                 k_size: int32
         ):
-
             a = as_tensor_pointer(a_ptr, float32, [m_size, k_size])
             b = as_tensor_pointer(b_ptr, float32, [k_size, n_size])
             c = as_tensor_pointer(c_ptr, float32, [m_size, n_size])
 
-            MC = 256
+            MC = 1024
             NC = 256
             KC = 256
 
@@ -185,13 +183,13 @@ def ff():
 ff()
 
 #### -O3
-# 256 x 256 x 256: hidet takes 0.59 ms
+# 256 x 256 x 256: hidet takes 0.58 ms
 # 256 x 256 x 256: numpy takes  0.14 ms
-# 512 x 512 x 512: hidet takes 4.68 ms
+# 512 x 512 x 512: hidet takes 4.43 ms
 # 512 x 512 x 512: numpy takes  0.48 ms
-# 1024 x 1024 x 1024: hidet takes 26.53 ms
-# 1024 x 1024 x 1024: numpy takes  3.36 ms
-# 768 x 768 x 768: hidet takes 12.56 ms
-# 768 x 768 x 768: numpy takes  1.02 ms
-# 768 x 1024 x 512: hidet takes 11.78 ms
-# 768 x 1024 x 512: numpy takes  1.55 ms
+# 1024 x 1024 x 1024: hidet takes 24.77 ms
+# 1024 x 1024 x 1024: numpy takes  2.46 ms
+# 768 x 768 x 768: hidet takes 11.98 ms
+# 768 x 768 x 768: numpy takes  1.12 ms
+# 768 x 1024 x 512: hidet takes 11.27 ms
+# 768 x 1024 x 512: numpy takes  1.22 ms
