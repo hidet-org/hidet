@@ -50,25 +50,13 @@ def matmul_kernel5():
             aip_outer_rows = aip_outer_rows
             bip_outer_cols = bip_outer_cols
 
-            aip_packed = tensor(
-                scope=DeclareScope.Default,
-                dtype=float32,
-                layout=row_layout(aip_outer_rows, 1) * col_layout(MR, KC)
-            )
+            aip_alloc = avx_malloc(MC * KC * 4, 64)
+            bpj_alloc = avx_malloc(KC * NC * 4, 64)
 
-            bpj_packed = tensor(
-                scope=DeclareScope.Default,
-                dtype=float32,
-                layout=row_layout(1, bip_outer_cols) * row_layout(KC, NR)
-            )
-
-            # aip_alloc = avx_malloc(MC * KC * 4, 64)
-            # bpj_alloc = avx_malloc(KC * NC * 4, 64)
-            #
-            # aip_packed = as_tensor_pointer(aip_alloc, dtype=float32,
-            #                                layout=row_layout(aip_outer_rows, 1) * col_layout(MR, KC))
-            # bpj_packed = as_tensor_pointer(bpj_alloc, dtype=float32,
-            #                                layout=row_layout(1, bip_outer_cols) * row_layout(KC, NR))
+            aip_packed = as_tensor_pointer(aip_alloc, dtype=float32,
+                                           layout=row_layout(aip_outer_rows, 1) * col_layout(MR, KC))
+            bpj_packed = as_tensor_pointer(bpj_alloc, dtype=float32,
+                                           layout=row_layout(1, bip_outer_cols) * row_layout(KC, NR))
 
             i = 0
             while i < m_size:
@@ -152,6 +140,8 @@ def matmul_kernel5():
                         j += NC
                     p += KC
                 i += MC
+            avx_free(aip_alloc)
+            avx_free(bpj_alloc)
 
     #################################################3
     assert isinstance(matmul_kernel, hidet.ir.Function)
@@ -195,13 +185,13 @@ def ff():
 ff()
 
 #### -O3
-# 256 x 256 x 256: hidet takes 0.58 ms
+# 256 x 256 x 256: hidet takes 0.65 ms
 # 256 x 256 x 256: numpy takes  0.14 ms
 # 512 x 512 x 512: hidet takes 4.43 ms
-# 512 x 512 x 512: numpy takes  0.48 ms
-# 1024 x 1024 x 1024: hidet takes 24.77 ms
-# 1024 x 1024 x 1024: numpy takes  2.46 ms
-# 768 x 768 x 768: hidet takes 11.98 ms
-# 768 x 768 x 768: numpy takes  1.12 ms
-# 768 x 1024 x 512: hidet takes 11.27 ms
-# 768 x 1024 x 512: numpy takes  1.22 ms
+# 512 x 512 x 512: numpy takes  0.46 ms
+# 1024 x 1024 x 1024: hidet takes 25.34 ms
+# 1024 x 1024 x 1024: numpy takes  2.29 ms
+# 768 x 768 x 768: hidet takes 11.95 ms
+# 768 x 768 x 768: numpy takes  1.06 ms
+# 768 x 1024 x 512: hidet takes 11.24 ms
+# 768 x 1024 x 512: numpy takes  1.05 ms
