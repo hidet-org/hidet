@@ -387,7 +387,7 @@ class BatchMatmulTask(Task):
     @tune.space(2, 'warp_m', [16, 32, 64])
     @tune.space(2, 'warp_n', [8, 16, 32, 64])
     @tune.space(2, 'warp_k', [8, 16, 32])
-    @tune.space(2, 'mma_config', [MmaConfig.m16n8k8_bf16_f32(), MmaConfig.m16n8k16_bf16_f32(), MmaConfig.m16n8k4_tf32_f32(), MmaConfig.m16n8k8_tf32_f32()])
+    @tune.space(2, 'mma_config', MmaConfig.all())
     @tune.space(1, 'block_m', [64, 128, 256])
     @tune.space(1, 'block_n', [64, 128])
     @tune.space(1, 'block_k', [8, 16, 32])
