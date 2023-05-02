@@ -1436,7 +1436,7 @@ def asarray(obj, /, *, dtype=None, device=None) -> Tensor:
 
     Parameters
     ----------
-    obj: bool, int, float, List, Tuple, Tensor, or np.ndarray
+    obj: bool, int, float, List, Tuple, Tensor, np.ndarray
         The object to be converted.
 
     dtype: DataType, optional
