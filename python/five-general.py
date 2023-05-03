@@ -123,7 +123,6 @@ def matmul_kernel5():
                                     remain_col += 1
                         # End of packing B into contiguous memory
                         # Start of the macro-kernel
-
                         mpanels = (ib + MR - 1) // MR
                         npanels = (jb + NR - 1) // NR
                         _mr = ib % MR

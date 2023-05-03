@@ -39,19 +39,19 @@ def matmul_kernel5():
     with hidet.lang.script_module() as script_module:
         @hidet.lang.script
         def macro_kernel(
-                a: ~float32,
-                b: ~float32,
-                c: ~float32,
+                a_ptr: ~float32,
+                b_ptr: ~float32,
+                c_ptr: ~float32,
                 ib: int32,
                 jb: int32,
                 pb: int32,
-                i: int32, j: int32, p: int32  # TODO: This should not be necessary; change later!
+                i: int32, j: int32, p: int32, m_size: int32, n_size: int32  # TODO: This should not be necessary; change later!
         ):
-            a = as_tensor_pointer(a, dtype=float32,
+            a = as_tensor_pointer(a_ptr, dtype=float32,
                                   layout=row_layout(aip_outer_rows, 1) * col_layout(MR, KC))
-            b = as_tensor_pointer(b, dtype=float32,
+            b = as_tensor_pointer(b_ptr, dtype=float32,
                                   layout=row_layout(1, bip_outer_cols) * row_layout(KC, NR))
-            c = as_tensor_pointer()
+            c = as_tensor_pointer(c_ptr, dtype=float32, shape=[m_size, n_size])
 
             mpanels = (ib + MR - 1) // MR
             npanels = (jb + NR - 1) // NR
@@ -238,7 +238,7 @@ def matmul_kernel5():
                                     remain_col += 1
                         # End of packing B into contiguous memory
                         # Start of the macro-kernel
-                        macro_kernel(aip_packed, bpj_packed, c, ib, jb, pb, i, j, p)
+                        macro_kernel(aip_packed, bpj_packed, c, ib, jb, pb, i, j, p, m_size, n_size)
                         j += NC
                     p += KC
                 i += MC
