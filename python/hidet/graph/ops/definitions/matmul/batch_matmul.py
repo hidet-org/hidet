@@ -82,7 +82,6 @@ class BatchMatmulTask(Task):
         row_major = DataLayout.row_major
         col_major = DataLayout.column_major
         dtype = task.inputs[0].type.dtype
-        # Fixed params
         warp_k = 1
 
         # Task Layouts
@@ -295,7 +294,7 @@ class BatchMatmulTask(Task):
 
 
             @hidet.script
-            def mm_kernel(
+            def batch_matmul_kernel(
                 a: dtype[bs, m_size, k_size],
                 b: dtype[bs, k_size, n_size],
                 c: dtype[bs, m_size, n_size]
@@ -394,7 +393,7 @@ class BatchMatmulTask(Task):
     @tune.space(1, 'warp_m', [32, 64])
     @tune.space(1, 'warp_n', [32, 64])
     @tune.space(1, 'warp_k', [8, 16, 32])
-    @tune.space(1, 'mma_config', [MmaConfig.m16n8k8_tf32_f32()])
+    @tune.space(1, 'mma_config', MmaConfig.all())
     def schedule_mma(
             self,
             block_m=64,
@@ -403,7 +402,7 @@ class BatchMatmulTask(Task):
             warp_m=32,
             warp_n=32,
             warp_k=16,
-            mma_config=MmaConfig.m16n8k8_tf32_f32(),
+            mma_config=None
             ) -> IRModule:
 
         def resolve_mma_type(a_dtype: DataType, b_dtype: DataType, c_dtype: DataType):
@@ -427,6 +426,19 @@ class BatchMatmulTask(Task):
         input_a, input_b, input_c = task.inputs[0], task.inputs[1], task.outputs[0]
         input_a_dtype, input_b_dtype, input_c_dtype = [t.type.dtype for t in [input_a, input_b, input_c]]
         mma_type = resolve_mma_type(input_a_dtype, input_b_dtype, input_c_dtype)
+
+        # Resolve parameters when space level is 0
+        if mma_config is None:
+            default_schedule = {
+                'mma_f16_f16': ([64, 128, 16], [64, 64, 16], MmaConfig.m16n8k8_f16_f16()),
+                'mma_f16_f32': ([128, 64, 16], [64, 64, 16], MmaConfig.m16n8k8_f16_f32()),
+                'mma_bf16_f32': ([128, 64, 16], [64, 64, 16], MmaConfig.m16n8k8_bf16_f32()),
+                'mma_tf32_f32': ([64, 64, 16], [32, 32, 16], MmaConfig.m16n8k8_tf32_f32()),
+            }
+            block_m, block_n, block_k = default_schedule[mma_type][0]
+            warp_m, warp_n, warp_k = default_schedule[mma_type][1]
+            mma_config = default_schedule[mma_type][2]
+
         head, input_dtype, output_dtype = mma_type.split('_')  # pylint: disable=unused-variable
         tune.check(mma_config.input_dtype == input_dtype and mma_config.output_dtype == output_dtype)
 
@@ -586,6 +598,7 @@ class BatchMatmulTask(Task):
                                 delta_n = wj * warp_n + mma_j * mma_n + j
                                 if delta_m < m_size - offset_m and delta_n < n_size - offset_n:
                                     gmem_c.write([delta_m, delta_n], regs_c[mma_i, mma_j, p])
+                                p += 1
                 else:
                     smem = tensor('shared', 'int8', shape=[smem_storage_nbytes])
                     smem_c = tensor_pointer(c_dtype, layout=smem_c_layout)
@@ -620,10 +633,10 @@ class BatchMatmulTask(Task):
                     mma_sync(mma_config, ~regs_a[buffer_idx, mma_i, 0], ~regs_b[buffer_idx, mma_j, 0], ~regs_c[mma_i, mma_j, 0])
 
             @hidet.script
-            def mm_kernel(
-                a: f32[bs, m_size, k_size],
-                b: f32[bs, k_size, n_size],
-                c: f32[bs, m_size, n_size]
+            def batch_matmul_kernel(
+                a: input_a_dtype[bs, m_size, k_size],
+                b: input_b_dtype[bs, k_size, n_size],
+                c: input_c_dtype[bs, m_size, n_size]
             ):
                 attr.cuda_grid_dim = (m_tiles * n_tiles, bs)
                 attr.cuda_block_dim = block_size
@@ -737,8 +750,6 @@ def batch_matmul(a: Tensor, b: Tensor, mma: str = 'simt') -> Tensor:
 
         - 'simt':
            Use cuda core to do the warp-level mma (simt stands for single-instruction-multiple-threads).
-        - 'wmma':
-           Use wmma instruction.
         - 'mma':
            Use mma instruction.
 
