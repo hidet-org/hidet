@@ -9,7 +9,7 @@ def matmul_kernel5():
     from hidet.transforms.generate_packed_func import add_packed_func
     from hidet.lang import attr
     from hidet.lang import float32, int32
-    from hidet.lang import as_tensor_pointer, tensor
+    from hidet.lang import as_tensor_pointer, tensor, grid
     from hidet.lang.mapping import repeat, spatial, auto_map
     from hidet.lang.layout import row_layout, local_layout, col_layout
 
@@ -24,17 +24,17 @@ def matmul_kernel5():
     MR = 8
     NR = 8
 
-    MC = MC
-    NC = NC
-    KC = KC
-    MR = MR
-    NR = NR
+    # MC = MC
+    # NC = NC
+    # KC = KC
+    # MR = MR
+    # NR = NR
 
     aip_outer_rows = MC // MR
     bip_outer_cols = NC // NR
 
-    aip_outer_rows = aip_outer_rows
-    bip_outer_cols = bip_outer_cols
+    # aip_outer_rows = aip_outer_rows
+    # bip_outer_cols = bip_outer_cols
 
     with hidet.lang.script_module() as script_module:
         @hidet.lang.script
@@ -59,6 +59,8 @@ def matmul_kernel5():
             _mr = ib % MR
             _nr = jb % NR
             # Loop 2
+            # for mpanel in range(mpanels):
+
             for mpanel in range(mpanels):
                 mr = MR if mpanel != mpanels - 1 or _mr == 0 else _mr
                 ii = mpanel * MR
@@ -268,11 +270,11 @@ def ff():
         )
 
         hidet_latency = hidet.utils.benchmark_func(
-            lambda: func(a, b, c, m, n, k), repeat=2
+            lambda: func(a, b, c, m, n, k), repeat=10
         )
 
         np_latency = hidet.utils.benchmark_func(
-            lambda: a.cpu().numpy() @ b.cpu().numpy()
+            lambda: a.cpu().numpy() @ b.cpu().numpy(), repeat=10
         )
 
         print(f'{m} x {k} x {n}: hidet takes {hidet_latency:.2f} ms')
@@ -282,35 +284,37 @@ def ff():
 ff()
 
 #### -O3
-# 1 x 1 x 74: hidet takes 0.03 ms
-# 1 x 1 x 74: numpy takes  0.03 ms
+# 1 x 1 x 74: hidet takes 0.02 ms
+# 1 x 1 x 74: numpy takes  0.02 ms
 # 64 x 64 x 64: hidet takes 0.03 ms
 # 64 x 64 x 64: numpy takes  0.03 ms
 # 110 x 111 x 111: hidet takes 0.09 ms
-# 110 x 111 x 111: numpy takes  0.11 ms
+# 110 x 111 x 111: numpy takes  0.14 ms
 # 101 x 37 x 101: hidet takes 0.05 ms
 # 101 x 37 x 101: numpy takes  0.10 ms
 # 111 x 369 x 367: hidet takes 0.65 ms
-# 111 x 369 x 367: numpy takes  0.20 ms
+# 111 x 369 x 367: numpy takes  0.21 ms
 # 224 x 325 x 562: hidet takes 1.61 ms
-# 224 x 325 x 562: numpy takes  0.30 ms
+# 224 x 325 x 562: numpy takes  0.29 ms
 # 256 x 256 x 256: hidet takes 0.68 ms
-# 256 x 256 x 256: numpy takes  0.14 ms
-# 333 x 555 x 444: hidet takes 3.18 ms
-# 333 x 555 x 444: numpy takes  0.48 ms
-# 512 x 512 x 512: hidet takes 4.96 ms
-# 512 x 512 x 512: numpy takes  0.48 ms
-# 1024 x 1024 x 1024: hidet takes 25.48 ms
-# 1024 x 1024 x 1024: numpy takes  2.65 ms
-# 1024 x 768 x 512: hidet takes 12.01 ms
-# 1024 x 768 x 512: numpy takes  1.52 ms
-# 480 x 480 x 480: hidet takes 4.14 ms
-# 480 x 480 x 480: numpy takes  0.59 ms
-# 720 x 720 x 720: hidet takes 11.39 ms
-# 720 x 720 x 720: numpy takes  1.50 ms
-# 720 x 1440 x 960: hidet takes 24.26 ms
-# 720 x 1440 x 960: numpy takes  3.01 ms
-# 1111 x 1111 x 1111: hidet takes 32.14 ms
-# 1111 x 1111 x 1111: numpy takes  5.39 ms
-# 1111 x 533 x 1314: hidet takes 19.55 ms
-# 1111 x 533 x 1314: numpy takes  2.93 ms
+# 256 x 256 x 256: numpy takes  0.15 ms
+# 333 x 555 x 444: hidet takes 2.78 ms
+# 333 x 555 x 444: numpy takes  0.82 ms
+# 512 x 512 x 512: hidet takes 3.12 ms
+# 512 x 512 x 512: numpy takes  0.61 ms
+# 1024 x 1024 x 1024: hidet takes 24.26 ms
+# 1024 x 1024 x 1024: numpy takes  2.81 ms
+# 1024 x 768 x 512: hidet takes 9.12 ms
+# 1024 x 768 x 512: numpy takes  1.33 ms
+# 480 x 480 x 480: hidet takes 2.64 ms
+# 480 x 480 x 480: numpy takes  0.63 ms
+# 720 x 720 x 720: hidet takes 8.46 ms
+# 720 x 720 x 720: numpy takes  1.52 ms
+# 720 x 1440 x 960: hidet takes 22.07 ms
+# 720 x 1440 x 960: numpy takes  2.95 ms
+# 1111 x 1111 x 1111: hidet takes 30.87 ms
+# 1111 x 1111 x 1111: numpy takes  3.62 ms
+# 1111 x 533 x 1314: hidet takes 17.68 ms
+# 1111 x 533 x 1314: numpy takes  3.64 ms
+#
+# Process finished with exit code 0
