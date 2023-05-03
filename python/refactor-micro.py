@@ -278,7 +278,7 @@ ff()
 # 111 x 369 x 367: numpy takes  0.21 ms
 # 224 x 325 x 562: hidet takes 1.60 ms
 # 224 x 325 x 562: numpy takes  0.28 ms
-# 256 x 256 x 256: hidet takes 0.68 ms
+# 256  x 256 x 256: hidet takes 0.68 ms
 # 256 x 256 x 256: numpy takes  0.14 ms
 # 333 x 555 x 444: hidet takes 2.78 ms
 # 333 x 555 x 444: numpy takes  1.00 ms
