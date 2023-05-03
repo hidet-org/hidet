@@ -52,9 +52,6 @@ def matmul_kernel5():
             aip_outer_rows = aip_outer_rows
             bip_outer_cols = bip_outer_cols
 
-            msize_b = (m_size + MC - 1) // MC
-            nsize_b = (n_size + NC - 1) // NC
-            ksize_b = (k_size + KC - 1) // KC
             _mc = m_size % MC
             _nc = n_size % NC
             _kc = k_size % KC
@@ -86,9 +83,10 @@ def matmul_kernel5():
                             for micropanel_row in range(MR):
                                 aip_packed[panel_row_start + micropanel_row, micropanel_col] = \
                                         a[i+micropanel_row+panel_row_start, p+micropanel_col]
-                    # TODO: pack the remaining if the shape is not 'nice'
+                    # # TODO: pack the remaining if the shape is not 'nice'
                     if mr > 0:
                         remain_start_row = mp * MR
+                        # assert remain_start_row + mr == m_size
                         for remain_col in range(pb):
                             for remain_row in range(mr):
                                 aip_packed[remain_start_row + remain_row, remain_col] = \
@@ -114,16 +112,18 @@ def matmul_kernel5():
                                             b[p+micropanel_row, j+micropanel_col+panel_col_start]
                         if nr > 0:
                             remain_col_start = np * NR
+                            # assert remain_col_start + nr == n_size
                             for remain_row in range(pb):
                                 for remain_col in range(nr):
                                     bpj_packed[remain_row, remain_col+remain_col_start] = \
-                                        b[i+remain_row, p+remain_col+remain_col_start]
+                                        b[p+remain_row, j+remain_col+remain_col_start]
                                 remain_col = nr
                                 while remain_col < NR:
                                     bpj_packed[remain_row, remain_col_start+remain_col] = 0.0
                                     remain_col += 1
                         # End of packing B into contiguous memory
                         # Start of the macro-kernel
+
                         mpanels = (ib + MR - 1) // MR
                         npanels = (jb + NR - 1) // NR
                         _mr = ib % MR
@@ -168,23 +168,63 @@ def matmul_kernel5():
                                         aa = avx_f32x8_broadcast(~aip_packed[ii + 7, pp])
                                         c7_0to7 = avx_f32x8_fmadd(aa, bb_0to7, c7_0to7)
                                     avx_f32x8_store(~c[midx, nidx], c0_0to7)
-                                    avx_f32x8_store(~c[midx + 1, nidx], c1_0to7)
+                                    avx_f32x8_store(~c[midx + 1, nidx], c1_0to7) # TODO: Segfault here???
                                     avx_f32x8_store(~c[midx + 2, nidx], c2_0to7)
                                     avx_f32x8_store(~c[midx + 3, nidx], c3_0to7)
                                     avx_f32x8_store(~c[midx + 4, nidx], c4_0to7)
                                     avx_f32x8_store(~c[midx + 5, nidx], c5_0to7)
                                     avx_f32x8_store(~c[midx + 6, nidx], c6_0to7)
                                     avx_f32x8_store(~c[midx + 7, nidx], c7_0to7)
+                                else:
+                                    temp_c = tensor(
+                                        scope=DeclareScope.Default,
+                                        dtype=float32,
+                                        layout=row_layout(MR, NR)
+                                    )
+                                    for tempi in range(MR):
+                                        for tempj in range(NR):
+                                            temp_c[tempi, tempj] = 0.0
+                                    c0 = avx_f32x8_load(~temp_c[0, 0])
+                                    c1 = avx_f32x8_load(~temp_c[1, 0])
+                                    c2 = avx_f32x8_load(~temp_c[2, 0])
+                                    c3 = avx_f32x8_load(~temp_c[3, 0])
+                                    c4 = avx_f32x8_load(~temp_c[4, 0])
+                                    c5 = avx_f32x8_load(~temp_c[5, 0])
+                                    c6 = avx_f32x8_load(~temp_c[6, 0])
+                                    c7 = avx_f32x8_load(~temp_c[7, 0])
+                                    for pp in range(pb):
+                                        bb_0to7 = avx_f32x8_load(~bpj_packed[pp, jj])
+                                        aa = avx_f32x8_broadcast(~aip_packed[ii, pp])
+                                        c0 = avx_f32x8_fmadd(aa, bb_0to7, c0)
+                                        aa = avx_f32x8_broadcast(~aip_packed[ii+1, pp])
+                                        c1 = avx_f32x8_fmadd(aa, bb_0to7, c1)
+                                        aa = avx_f32x8_broadcast(~aip_packed[ii+2, pp])
+                                        c2 = avx_f32x8_fmadd(aa, bb_0to7, c2)
+                                        aa = avx_f32x8_broadcast(~aip_packed[ii+3, pp])
+                                        c3 = avx_f32x8_fmadd(aa, bb_0to7, c3)
+                                        aa = avx_f32x8_broadcast(~aip_packed[ii+4, pp])
+                                        c4 = avx_f32x8_fmadd(aa, bb_0to7, c4)
+                                        aa = avx_f32x8_broadcast(~aip_packed[ii+5, pp])
+                                        c5 = avx_f32x8_fmadd(aa, bb_0to7, c5)
+                                        aa = avx_f32x8_broadcast(~aip_packed[ii+6, pp])
+                                        c6 = avx_f32x8_fmadd(aa, bb_0to7, c6)
+                                        aa = avx_f32x8_broadcast(~aip_packed[ii+7, pp])
+                                        c7 = avx_f32x8_fmadd(aa, bb_0to7, c7)
+                                    avx_f32x8_store(~temp_c[0, 0], c0)
+                                    avx_f32x8_store(~temp_c[1, 0], c1)
+                                    avx_f32x8_store(~temp_c[2, 0], c2)
+                                    avx_f32x8_store(~temp_c[3, 0], c3)
+                                    avx_f32x8_store(~temp_c[4, 0], c4)
+                                    avx_f32x8_store(~temp_c[5, 0], c5)
+                                    avx_f32x8_store(~temp_c[6, 0], c6)
+                                    avx_f32x8_store(~temp_c[7, 0], c7)
+
+                                    for remain_row in range(mr):
+                                        for remain_col in range(nr):
+                                            c[midx + remain_row, nidx + remain_col] += temp_c[remain_row, remain_col]
                         j += NC
                     p += KC
                 i += MC
-
-
-
-
-
-
-
     #################################################
     assert isinstance(matmul_kernel, hidet.ir.Function)
     matmul_kernel.kind = 'host_kernel'
@@ -198,9 +238,8 @@ def matmul_kernel5():
 def ff():
     func = matmul_kernel5()
 
-    # for m, n, k in [(64, 64, 64), (256, 256, 256), (512, 512, 512), (1024, 1024, 1024), (1024, 512, 768),
-    #                 (480, 480, 480), (720, 720, 720), (720, 960, 1440)]:
-    for m, n, k in [(256, 256, 256), (512, 512, 512), (1024, 1024, 1024), (768, 768, 768), (768, 512, 1024)]:
+    for m, n, k in [(64, 64, 64), (110, 111, 111), (101, 101, 37), (111, 367, 369), (224, 562, 325), (256, 256, 256), (512, 512, 512), (1024, 1024, 1024), (1024, 512, 768),
+                    (480, 480, 480), (720, 720, 720), (720, 960, 1440), (1111, 1314, 533)]:
         a = hidet.randn([m, k], dtype='float32').cpu()
         b = hidet.randn([k, n], dtype='float32').cpu()
         c = hidet.zeros([m, n]).cpu()
@@ -227,13 +266,29 @@ def ff():
 ff()
 
 #### -O3
-# 256 x 256 x 256: hidet takes 0.58 ms
-# 256 x 256 x 256: numpy takes  0.14 ms
-# 512 x 512 x 512: hidet takes 4.42 ms
-# 512 x 512 x 512: numpy takes  0.51 ms
-# 1024 x 1024 x 1024: hidet takes 24.68 ms
-# 1024 x 1024 x 1024: numpy takes  2.46 ms
-# 768 x 768 x 768: hidet takes 12.01 ms
-# 768 x 768 x 768: numpy takes  1.19 ms
-# 768 x 1024 x 512: hidet takes 11.28 ms
-# 768 x 1024 x 512: numpy takes  1.20 ms
+# 110 x 111 x 111: hidet takes 0.09 ms
+# 110 x 111 x 111: numpy takes  0.18 ms
+# 101 x 37 x 101: hidet takes 0.05 ms
+# 101 x 37 x 101: numpy takes  0.22 ms
+# 111 x 369 x 367: hidet takes 0.57 ms
+# 111 x 369 x 367: numpy takes  0.50 ms
+# 224 x 325 x 562: hidet takes 5.11 ms
+# 224 x 325 x 562: numpy takes  0.43 ms
+# 256 x 256 x 256: hidet takes 0.62 ms
+# 256 x 256 x 256: numpy takes  0.16 ms
+# 512 x 512 x 512: hidet takes 4.33 ms
+# 512 x 512 x 512: numpy takes  0.59 ms
+# 1024 x 1024 x 1024: hidet takes 24.69 ms
+# 1024 x 1024 x 1024: numpy takes  3.51 ms
+# 1024 x 768 x 512: hidet takes 11.19 ms
+# 1024 x 768 x 512: numpy takes  1.61 ms
+# 480 x 480 x 480: hidet takes 3.77 ms
+# 480 x 480 x 480: numpy takes  0.95 ms
+# 720 x 720 x 720: hidet takes 10.68 ms
+# 720 x 720 x 720: numpy takes  1.44 ms
+# 720 x 1440 x 960: hidet takes 23.14 ms
+# 720 x 1440 x 960: numpy takes  3.01 ms
+# 1111 x 533 x 1314: hidet takes 18.79 ms
+# 1111 x 533 x 1314: numpy takes  1.96 ms
+
+

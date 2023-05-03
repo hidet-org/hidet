@@ -86,7 +86,6 @@ def matmul_kernel5():
                             for micropanelA_row in range(MR):
                                 aip_packed[panelA_row_offset + micropanelA_row, micropanelA_col] = a[
                                     i + micropanelA_row + panelA_row_offset, p + micropanelA_col]
-
                         panelA_row_offset += MR
                     ## End of packing A
                     # loop 3
