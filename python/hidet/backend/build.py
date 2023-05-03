@@ -122,6 +122,8 @@ class NVCC(SourceCompiler):
             *['-I{}'.format(include_dir) for include_dir in self.include_dirs],
             # the library directories.
             *['-L{}'.format(library_dir) for library_dir in self.library_dirs],
+            # enable openmp support for cpu kernels
+            '-Xcompiler -fopenmp',
             # the target PTX and SASS version.
             '-gencode arch=compute_{cc},code=sm_{cc}'.format(cc=cc_code),
             # allow ptxas (PTX assembler) to output information like register/smem usage.
@@ -181,6 +183,8 @@ class GCC(SourceCompiler):
             '-O3',
             # compile into position independent code.
             '-fPIC',
+            # enable OpenMP.
+            '-fopenmp',
             # link the hidet runtime, all APIs for communication between kernels and host system are in hidet runtime.
             '-lhidet_runtime',
             # generate shared library (lib.so).

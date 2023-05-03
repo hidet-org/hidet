@@ -71,11 +71,11 @@ def grid(*dim_extents, attrs: Optional[str] = None):
 
     Parameters
     ----------
-    dim_extents: Sequence[Expr or int]
-        The length of each dimension.
+    dim_extents: Sequence[Expr or int or str]
+        The length of each dimension. The last one can be the attrs.
 
     attrs: Optional[str]
-        The attributes of each loop. See ForStmtAttr for more information.
+        The attributes of each loop. See hidet.stmt.ForStmtAttr for more information.
 
     Returns
     -------

@@ -412,16 +412,17 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
         cond_doc = self(v < stmt.extent)
         update_doc = self(v) + ' = ' + self(v + 1)
         doc = Text('')
-        if stmt.attr.unroll is not None:
-            assert not stmt.attr.explicit_unroll, 'explicit_unroll should be lowered before codegen'
-            if isinstance(stmt.attr.unroll, bool):
-                if stmt.attr.unroll:
-                    doc += NewLine() + '#pragma unroll'  # complete unroll
-                else:
-                    doc += NewLine() + '#pragma unroll 1'  # prevent from unrolling
+        if stmt.attr.unroll:
+            assert not stmt.attr.unroll_explicit, 'explicit_unroll should be lowered before codegen'
+            if stmt.attr.unroll_factor:
+                doc += NewLine() + '#pragma unroll {}'.format(stmt.attr.unroll_factor)
             else:
-                assert isinstance(stmt.attr.unroll, int)
-                doc += NewLine() + '#pragma unroll {}'.format(stmt.attr.unroll)
+                doc += NewLine() + '#pragma unroll'
+        elif stmt.attr.parallel:
+            if stmt.attr.parallel_threads:
+                doc += NewLine() + '#pragma omp parallel for num_threads({})'.format(stmt.attr.parallel_threads)
+            else:
+                doc += NewLine() + '#pragma omp parallel for'
         doc += NewLine() + Text('for (') + init_doc + '; ' + cond_doc + '; ' + update_doc + ') '
         body_doc = self(stmt.body)
         doc += Text('{') + body_doc.indent() + NewLine() + Text('} ')
