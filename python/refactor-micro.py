@@ -17,7 +17,7 @@ def matmul_kernel5():
     from hidet.lang.avx import avx_f32x8_store, avx_f32x8_broadcast, avx_f32x8_fmadd, avx_f32x8_load
     from hidet.lang.avx import avx_free, avx_malloc, x86_memset
 
-    MC = 1024
+    MC = 2048
     NC = 256
     KC = 256
 
