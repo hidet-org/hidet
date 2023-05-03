@@ -237,8 +237,8 @@ def matmul_kernel5():
 def ff():
     func = matmul_kernel5()
 
-    for m, n, k in [(1, 74, 1), (64, 64, 64), (110, 111, 111), (101, 101, 37), (111, 367, 369), (224, 562, 325), (256, 256, 256), (512, 512, 512), (1024, 1024, 1024), (1024, 512, 768),
-                    (480, 480, 480), (720, 720, 720), (720, 960, 1440), (1111, 1314, 533)]:
+    for m, n, k in [(1, 74, 1), (64, 64, 64), (110, 111, 111), (101, 101, 37), (111, 367, 369), (224, 562, 325), (256, 256, 256), (333, 444, 555), (512, 512, 512), (1024, 1024, 1024), (1024, 512, 768),
+                    (480, 480, 480), (720, 720, 720), (720, 960, 1440), (1111, 1111, 1111), (1111, 1314, 533)]:
         a = hidet.randn([m, k], dtype='float32').cpu()
         b = hidet.randn([k, n], dtype='float32').cpu()
         c = hidet.zeros([m, n]).cpu()
@@ -265,29 +265,39 @@ def ff():
 ff()
 
 #### -O3
-# 110 x 111 x 111: hidet takes 0.09 ms
-# 110 x 111 x 111: numpy takes  0.18 ms
+# 1 x 1 x 74: hidet takes 0.03 ms
+# 1 x 1 x 74: numpy takes  0.03 ms
+# 64 x 64 x 64: hidet takes 0.03 ms
+# 64 x 64 x 64: numpy takes  0.04 ms
+# 110 x 111 x 111: hidet takes 0.08 ms
+# 110 x 111 x 111: numpy takes  0.21 ms
 # 101 x 37 x 101: hidet takes 0.05 ms
-# 101 x 37 x 101: numpy takes  0.22 ms
-# 111 x 369 x 367: hidet takes 0.57 ms
-# 111 x 369 x 367: numpy takes  0.50 ms
-# 224 x 325 x 562: hidet takes 5.11 ms
-# 224 x 325 x 562: numpy takes  0.43 ms
+# 101 x 37 x 101: numpy takes  0.10 ms
+# 111 x 369 x 367: hidet takes 0.60 ms
+# 111 x 369 x 367: numpy takes  0.20 ms
+# 224 x 325 x 562: hidet takes 1.47 ms
+# 224 x 325 x 562: numpy takes  0.30 ms
 # 256 x 256 x 256: hidet takes 0.62 ms
 # 256 x 256 x 256: numpy takes  0.16 ms
-# 512 x 512 x 512: hidet takes 4.33 ms
-# 512 x 512 x 512: numpy takes  0.59 ms
-# 1024 x 1024 x 1024: hidet takes 24.69 ms
-# 1024 x 1024 x 1024: numpy takes  3.51 ms
-# 1024 x 768 x 512: hidet takes 11.19 ms
-# 1024 x 768 x 512: numpy takes  1.61 ms
-# 480 x 480 x 480: hidet takes 3.77 ms
-# 480 x 480 x 480: numpy takes  0.95 ms
-# 720 x 720 x 720: hidet takes 10.68 ms
-# 720 x 720 x 720: numpy takes  1.44 ms
-# 720 x 1440 x 960: hidet takes 23.14 ms
-# 720 x 1440 x 960: numpy takes  3.01 ms
-# 1111 x 533 x 1314: hidet takes 18.79 ms
-# 1111 x 533 x 1314: numpy takes  1.96 ms
+# 333 x 555 x 444: hidet takes 2.91 ms
+# 333 x 555 x 444: numpy takes  0.48 ms
+# 512 x 512 x 512: hidet takes 4.49 ms
+# 512 x 512 x 512: numpy takes  0.48 ms
+# 1024 x 1024 x 1024: hidet takes 24.56 ms
+# 1024 x 1024 x 1024: numpy takes  3.65 ms
+# 1024 x 768 x 512: hidet takes 11.21 ms
+# 1024 x 768 x 512: numpy takes  1.58 ms
+# 480 x 480 x 480: hidet takes 3.78 ms
+# 480 x 480 x 480: numpy takes  0.94 ms
+# 720 x 720 x 720: hidet takes 10.67 ms
+# 720 x 720 x 720: numpy takes  1.51 ms
+# 720 x 1440 x 960: hidet takes 23.12 ms
+# 720 x 1440 x 960: numpy takes  2.96 ms
+# 1111 x 1111 x 1111: hidet takes 30.70 ms
+# 1111 x 1111 x 1111: numpy takes  3.53 ms
+# 1111 x 533 x 1314: hidet takes 18.61 ms
+# 1111 x 533 x 1314: numpy takes  2.00 ms
+
+
 
 
