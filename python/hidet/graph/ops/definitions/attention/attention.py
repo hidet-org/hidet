@@ -21,6 +21,7 @@ from hidet.graph.ops.definitions.utils import tune
 from hidet.lang import f16, f32, i32, u32, spatial, repeat, tensor
 from hidet.lang import attr, grid, tensor_pointer, view, col_spatial
 from hidet.lang.cuda import blockIdx, threadIdx, syncthreads, dynamic_shared_memory, register_tensor
+from hidet.lang.cuda import MmaConfig, mma_sync, cp_async, ldmatrix, cp_async_wait_all
 from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, TensorNode, compute, input_like
 from hidet.graph.ops.definitions.utils import broadcast_shape, broadcast_shapes, broadcast_indices
 from hidet.graph.ops.definitions.utils import can_broadcast
@@ -108,18 +109,14 @@ class AttnTask(Task):
     def implement_cuda(self, working_dir: str) -> Union[List[IRModule], IRModule]:
         return tune.extract_ir_modules(self.cuda_schedule_attn)
 
-    # @tune.space(2, 'block_size', [128, 256])
-    # @tune.space(2, 'block_j', [128, 256])
-    # @tune.space(2, 'block_i', [16, 32])
-    # @tune.space(2, 'i_split', [s for s in range(1, 31)])
-    @tune.space(2, 'i_split', [2])
-    @tune.space(2, 'block_i', [128, 64, 256])
-    @tune.space(2, 'block_j', [128, 64, 256])
-    @tune.space(2, 'block_k', [16])
-    @tune.space(2, 'warp_elems_m', [32, 64])
-    @tune.space(2, 'warp_elems_n', [64, 32])
-    @tune.space(2, 'warp_elems_k', [16])
-    def cuda_schedule_attn(self, i_split=2, block_i=128, block_j=128, block_k=16, warp_elems_m=32, warp_elems_n=64, warp_elems_k=16) -> IRModule:
+    @tune.space(2, 'block_i', [128, 64, 256, 512])
+    @tune.space(2, 'block_j', [128, 64, 256, 512])
+    @tune.space(2, 'block_k', [16, 32, 64])
+    @tune.space(2, 'warp_elems_m', [16, 32, 64, 128])
+    @tune.space(2, 'warp_elems_n', [16, 32, 64, 128])
+    @tune.space(2, 'warp_elems_k', [16, 32, 64])
+    @tune.space(2, 'mma_config', [MmaConfig.m16n8k8_f16_f16(), MmaConfig.m16n8k16_f16_f16()])
+    def cuda_schedule_attn(self, block_i=128, block_j=128, block_k=16, warp_elems_m=32, warp_elems_n=64, warp_elems_k=16, mma_config = MmaConfig.m16n8k8_f16_f16()) -> IRModule:
         def calc_swizzle_size(d):
             powers_of_two = [128, 64, 32, 16, 8]
             for n in powers_of_two:
@@ -141,7 +138,6 @@ class AttnTask(Task):
         bs = prod(o_head)
         assert bs == bs_qk
 
-        from hidet.lang.cuda import MmaConfig, mma_sync, cp_async, ldmatrix, cp_async_wait_all
 
         local_layout = DataLayout.local
         row_major = DataLayout.row_major
@@ -158,15 +154,15 @@ class AttnTask(Task):
 
         acc_dtype = f16
         sm_dtype = f32
-        mma_configs = {'m16n8k16f32': MmaConfig.m16n8k16_f16_f32(), 'm16n8k16f16': MmaConfig.m16n8k16_f16_f16()}
-        mma_config = mma_configs['m16n8k16f16'] if acc_dtype == f16 else mma_configs['m16n8k16f32']
         mma_m = mma_config.m
         mma_n = mma_config.n
         mma_k = mma_config.k
 
         swizzle_unit, swizzle_repeat = calc_swizzle_size(dpad_size)
         tune.check(swizzle_repeat > 0)
-
+        tune.check(block_k == warp_elems_k)
+        tune.check(block_i % warp_elems_m == 0)
+        tune.check(block_j % warp_elems_n == 0)
 
         # Number of warps in each dimension. 1, 4, 1
         warp_count_m, warp_count_n, warp_count_k = (
@@ -176,6 +172,7 @@ class AttnTask(Task):
         )
         num_warps = warp_count_m * warp_count_n * warp_count_k
         block_size = num_warps * warp_size
+        tune.check(block_size <= 1024)
         # Number of m16n8k16 mma's each warp performs in each dim. 1, 8, 4
         mmas_per_warp_m, mmas_per_warp_n, mmas_per_warp_k = (
             warp_elems_m // mma_m,
