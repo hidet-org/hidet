@@ -284,6 +284,7 @@ class AttnTask(Task):
         smem_k_db_type = tensor_type('float16', shape=[2, block_k, block_j], layout=row_major([2]) + smem_k_layout)
         smem_qk_type = tensor_type('float16', shape=[block_i, block_j], layout=smem_qk_layout)
         smem_v_type = tensor_type('float16', shape=[block_k_o, block_j_o], layout=smem_v_layout)
+        smem_v_db_type = tensor_type('float16', shape=[2, block_k_o, block_j_o], layout=row_major([2]) + smem_v_layout)
         regs_o_type = tensor_type(acc_dtype, shape=[mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements])
 
         n_size_per_thread = cdiv(i_rows_per_tb, block_size) # 128 / 256 = 1
@@ -558,15 +559,13 @@ class AttnTask(Task):
                 # smem_o = tensor_pointer('float16', shape=smem_o_type.shape, layout=smem_o_type.layout)
                 smem_k = tensor_pointer('float16', shape=smem_k_db_type.shape, layout=smem_k_db_type.layout)
                 smem_qk = tensor_pointer('float16', shape=smem_qk_type.shape, layout=smem_qk_type.layout)
-                smem_v = tensor_pointer('float16', shape=smem_v_type.shape, layout=smem_v_type.layout)
-                # smem_v = tensor_pointer('float16', shape=[2] + smem_v_type.shape, layout=row_major((2)) + smem_v_type.layout)
+                smem_v = tensor_pointer('float16', shape=smem_v_db_type.shape, layout=smem_v_db_type.layout)
                 smem_l = tensor_pointer(smem_l_type.dtype, shape=smem_l_type.shape)
                 smem_m = tensor_pointer(smem_m_type.dtype, shape=smem_m_type.shape)
                 smem_lij = tensor_pointer(smem_lij_type.dtype, shape=smem_lij_type.shape)
                 smem_mij = tensor_pointer(smem_mij_type.dtype, shape=smem_mij_type.shape)
 
                 smem_q = dynamic_shared_memory(byte_offset=smem_bytes_offsets['q'], dtype=f16)
-                # smem_o = dynamic_shared_memory(byte_offset=smem_bytes_offsets['o'], dtype=f16)
                 smem_k = dynamic_shared_memory(byte_offset=smem_bytes_offsets['k'], dtype=f16)
                 smem_qk = dynamic_shared_memory(byte_offset=smem_bytes_offsets['qk'], dtype=f16)
                 smem_v = dynamic_shared_memory(byte_offset=smem_bytes_offsets['v'], dtype=f16)
@@ -582,10 +581,9 @@ class AttnTask(Task):
                 regs_acc = tensor(
                     'register', dtype=acc_dtype, shape=[mmas_per_warp_m, mmas_per_warp_n, mma_config.c_elements]
                 )
-                regs_qk = tensor('register', dtype='float16', shape=[mmas_per_warp_m_o, mma_config.a_elements])
+                regs_qk = tensor('register', dtype='float16', shape=[2, mmas_per_warp_m_o, mma_config.a_elements])
                 regs_v = tensor(
-                    'register', dtype='float16', shape=[mmas_per_warp_k_o, mmas_per_warp_n_o, mma_config.b_elements]
-                    # 'register', dtype='float16', shape=[2, mmas_per_warp_n_o, mma_config.b_elements]
+                    'register', dtype='float16', shape=[2, mmas_per_warp_n_o, mma_config.b_elements]
                 )
                 regs_acc_o = tensor(
                     'register', dtype=acc_dtype, shape=[mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements]
@@ -630,7 +628,7 @@ class AttnTask(Task):
                         for mma_k in range(mmas_per_warp_k):
                             if mma_k + 1 < mmas_per_warp_k:
                                 for mma_j in range(mmas_per_warp_n):
-                                    copy_k_s2r(mma_j, mma_k + 1, ~regs_k[(mma_k + 1) % 2, mma_j, 0], ~smem_k[k0, 0, 0])
+                                    copy_k_s2r(mma_j, mma_k + 1, ~regs_k[(mma_k + 1) % 2, mma_j, 0], ~smem_k[k0 % 2, 0, 0])
                                 for mma_i in range(mmas_per_warp_m):
                                     copy_q_s2r(mma_i, mma_k + 1, k0 * block_k,  ~regs_q[(mma_k + 1) % 2, mma_i, 0], smem_q)
                             for mma_i, mma_j in grid(mmas_per_warp_m, mmas_per_warp_n):
@@ -645,19 +643,29 @@ class AttnTask(Task):
                     # Compute O = QK * V
                     for a, b, c in grid(mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements):
                         regs_acc_o[a, b, c] = acc_dtype.zero
+
+                    # Copy first tile of k into shared memory
+                    copy_v_g2s(v, ~smem_v[0, 0, 0], offset_j)
+                    cp_async_wait_all()
+                    syncthreads()
+
                     for k1 in range(k_tiles_o):
                         # Load Vj into Smem
-                        copy_v_g2s(v, smem_v, offset_j + k1 * block_k_o)
+                        copy_v_g2s(v, ~smem_v[(k1 + 1) % 2, 0, 0], offset_j + (k1 + 1) * block_k_o)
+                        for mma_j in range(mmas_per_warp_n_o):
+                            copy_v_s2r(mma_j, 0, ~regs_v[0, mma_j, 0], ~smem_v[k1 % 2, 0, 0])
+                        for mma_i in range(mmas_per_warp_m_o):
+                            copy_qk_s2r(mma_i, 0, k1 * block_k_o, ~regs_qk[0, mma_i, 0], smem_qk)
+                        for mma_k in range(mmas_per_warp_k_o):
+                            if mma_k + 1 < mmas_per_warp_k:
+                                for mma_j in range(mmas_per_warp_n_o):
+                                    copy_v_s2r(mma_j, mma_k + 1, ~regs_v[(mma_k + 1) % 2, mma_j, 0], ~smem_v[k1 % 2, 0, 0])
+                                for mma_i in range(mmas_per_warp_m_o):
+                                    copy_qk_s2r(mma_i, mma_k + 1, k1 * block_k_o, ~regs_qk[(mma_k + 1) % 2, mma_i, 0], smem_qk)
+                            for mma_i, mma_j in grid(mmas_per_warp_m_o, mmas_per_warp_n_o):
+                                warp_mma(~regs_qk[mma_k % 2, mma_i, 0], ~regs_v[mma_k % 2, mma_j, 0], ~regs_acc_o[mma_i, mma_j, 0])
                         cp_async_wait_all()
                         syncthreads()
-                        for mma_k in range(mmas_per_warp_k_o):
-                            for mma_j in range(mmas_per_warp_n_o):
-                                copy_v_s2r(mma_j, mma_k, ~regs_v[mma_k, mma_j, 0], smem_v)
-                            for mma_i in range(mmas_per_warp_m_o):
-                                copy_qk_s2r(mma_i, mma_k, k1 * block_k_o, ~regs_qk[mma_i, 0], smem_qk)
-                            for mma_i, mma_j in grid(mmas_per_warp_m_o, mmas_per_warp_n_o):
-                                warp_mma(~regs_qk[mma_i, 0], ~regs_v[mma_k, mma_j, 0], ~regs_acc_o[mma_i, mma_j, 0])
-                            syncthreads()
                     # ----------------------------
 
                     # ----------------------------
