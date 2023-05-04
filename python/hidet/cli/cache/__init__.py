@@ -9,11 +9,4 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from hidet.graph.frontend.torch import availability as torch_availability
-from .bench import hidet_bench_group
-
-if not torch_availability.dynamo_available():
-    raise RuntimeError(
-        'PyTorch version is less than 2.0. Please upgrade PyTorch to 2.0 or higher to enable torch dynamo'
-        'which is required by the benchmark scripts.'
-    )
+from .entry import hidet_cache_group

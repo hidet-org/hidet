@@ -9,11 +9,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from hidet.graph.frontend.torch import availability as torch_availability
-from .bench import hidet_bench_group
+import click
+from .status import hidet_cache_status
+from .clear import hidet_cache_clear
 
-if not torch_availability.dynamo_available():
-    raise RuntimeError(
-        'PyTorch version is less than 2.0. Please upgrade PyTorch to 2.0 or higher to enable torch dynamo'
-        'which is required by the benchmark scripts.'
-    )
+
+@click.group(name='cache', help='Manage hidet cache.')
+def hidet_cache_group():
+    pass
+
+
+for command in [hidet_cache_status, hidet_cache_clear]:
+    assert isinstance(command, click.Command)
+    hidet_cache_group.add_command(command)
