@@ -42,6 +42,107 @@ class DeclareScope(enum.Enum):
             return DeclareScope.Default
 
 
+class ForStmtAttr:
+    def __init__(self, unroll=False, unroll_factor=None, unroll_explicit=False, parallel=False, parallel_threads=None):
+        self.unroll: bool = unroll
+        self.unroll_factor: Optional[int] = unroll_factor
+        self.unroll_explicit: bool = unroll_explicit
+        self.parallel: bool = parallel
+        self.parallel_threads: Optional[int] = parallel_threads
+
+    def __str__(self):
+        if self.unroll is None:
+            return '.'
+        elif isinstance(self.unroll, bool):
+            if self.unroll_explicit:
+                return 'u+'
+            else:
+                return 'u'
+        else:
+            if self.unroll_explicit:
+                return f'u{self.unroll}+'
+            else:
+                return f'u{self.unroll}'
+
+    @staticmethod
+    def parse(attr: str) -> List[ForStmtAttr]:
+        """
+        Parse the attribute string and return a list of ForStmtAttr.
+
+        attr-string: attr+
+        attr:
+             | unroll
+             | parallel
+             | default
+        unroll:
+             | 'u'          # unroll
+             | 'u' INT+     # unroll with factor, e.g., u1 u2 u3. u1 indicates unroll with factor 1 (i.e., no unroll)
+             | 'u' '+'      # explicit unroll, will be unrolled by hidet instead of underlying compiler
+        parallel:
+             | 'p'          # parallel with available number of threads
+             | 'p' INT+     # parallel with specified number of threads
+        default: '.'
+
+
+        Parameters
+        ----------
+        attr: str
+            The attribute string.
+
+        Returns
+        -------
+        attrs: List[ForStmtAttr]
+            The list of ForStmtAttr.
+        """
+        s = attr.replace(' ', '')
+        idx = 0
+
+        def cur() -> Optional[str]:
+            if idx >= len(s):
+                return None
+            return s[idx]
+
+        attrs: List[ForStmtAttr] = []
+        while idx < len(s):
+            if s[idx] == '.':
+                idx += 1
+                attrs.append(ForStmtAttr())
+            elif s[idx] == 'u':
+                idx += 1
+                c = cur()
+                if c == '+':
+                    attrs.append(ForStmtAttr(unroll=True, unroll_explicit=True))
+                    idx += 1
+                elif c and c.isdigit():
+                    unroll_factor = 0
+                    while c and c.isdigit():
+                        unroll_factor = unroll_factor * 10 + int(c)
+                        idx += 1
+                        c = cur()
+                    if unroll_factor == 0:
+                        raise ValueError(f"Invalid attribute string: {attr}")
+                    attrs.append(ForStmtAttr(unroll=True, unroll_factor=unroll_factor))
+                else:
+                    attrs.append(ForStmtAttr(unroll=True, unroll_explicit=False))
+            elif s[idx] == 'p':
+                idx += 1
+                c = cur()
+                if c and c.isdigit():
+                    parallel_threads = 0
+                    while c and c.isdigit():
+                        parallel_threads = parallel_threads * 10 + int(c)
+                        idx += 1
+                        c = cur()
+                    if parallel_threads == 0:
+                        raise ValueError(f"Invalid attribute string: {attr}")
+                    attrs.append(ForStmtAttr(parallel=True, parallel_threads=parallel_threads))
+                else:
+                    attrs.append(ForStmtAttr(parallel=True))
+            else:
+                raise ValueError(f"Invalid attribute string: {attr}")
+        return attrs
+
+
 class Stmt(Node):
     pass
 
@@ -96,86 +197,6 @@ class LetStmt(Stmt):
         self.bind_vars: List[Var] = bind_vars
         self.bind_values: List[Expr] = bind_values
         self.body: Optional[Stmt] = body
-
-
-class ForStmtAttr:
-    def __init__(self, unroll=None, explicit_unroll=False):
-        self.unroll: Union[int, bool, None] = unroll
-        self.explicit_unroll: bool = explicit_unroll
-
-    def __str__(self):
-        if self.unroll is None:
-            return '.'
-        elif isinstance(self.unroll, bool):
-            if self.explicit_unroll:
-                return 'u+'
-            else:
-                return 'u'
-        else:
-            if self.explicit_unroll:
-                return f'u{self.unroll}+'
-            else:
-                return f'u{self.unroll}'
-
-    @staticmethod
-    def parse(attr: str) -> List[ForStmtAttr]:
-        """
-        Parse the attribute string and return a list of ForStmtAttr.
-
-        attr-string: attr+
-        attr:
-             | unroll
-             | default
-        unroll:
-             | 'u'          # unroll
-             | 'u' INT+     # unroll with factor, e.g., u1 u2 u3. u1 indicates unroll with factor 1 (i.e., no unroll)
-             | 'u' '+'      # explicit unroll, will be unrolled by hidet instead of underlying compiler
-        default: '.'
-
-
-        Parameters
-        ----------
-        attr: str
-            The attribute string.
-
-        Returns
-        -------
-        attrs: List[ForStmtAttr]
-            The list of ForStmtAttr.
-        """
-        s = attr.replace(' ', '')
-        idx = 0
-
-        def cur() -> Optional[str]:
-            if idx >= len(s):
-                return None
-            return s[idx]
-
-        attrs: List[ForStmtAttr] = []
-        while idx < len(s):
-            if s[idx] == '.':
-                idx += 1
-                attrs.append(ForStmtAttr(unroll=None, explicit_unroll=False))
-            elif s[idx] == 'u':
-                idx += 1
-                c = cur()
-                if c == '+':
-                    attrs.append(ForStmtAttr(unroll=True, explicit_unroll=True))
-                    idx += 1
-                elif c and c.isdigit():
-                    unroll = 0
-                    while c and c.isdigit():
-                        unroll = unroll * 10 + int(c)
-                        idx += 1
-                        c = cur()
-                    if unroll == 0:
-                        raise ValueError(f"Invalid attribute string: {attr}")
-                    attrs.append(ForStmtAttr(unroll=unroll, explicit_unroll=False))
-                else:
-                    attrs.append(ForStmtAttr(unroll=True, explicit_unroll=False))
-            else:
-                raise ValueError(f"Invalid attribute string: {attr}")
-        return attrs
 
 
 class ForStmt(Stmt):
