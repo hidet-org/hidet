@@ -9,7 +9,7 @@ def matmul_kernel5():
     from hidet.transforms.generate_packed_func import add_packed_func
     from hidet.lang import attr
     from hidet.lang import float32, int32
-    from hidet.lang import as_tensor_pointer, tensor
+    from hidet.lang import as_tensor_pointer, tensor, grid
     from hidet.lang.mapping import repeat, spatial, auto_map
     from hidet.lang.layout import row_layout, local_layout, col_layout
 
@@ -39,11 +39,11 @@ def matmul_kernel5():
     with hidet.lang.script_module() as script_module:
         @hidet.lang.script
         def micro_kernel_6x16(a_ptr: ~float32,
-                             b_ptr: ~float32,
-                             c_ptr: ~float32,
-                             pb: int32,
-                             m_size: int32,
-                             n_size: int32):
+                              b_ptr: ~float32,
+                              c_ptr: ~float32,
+                              pb: int32,
+                              m_size: int32,
+                              n_size: int32):
             a = as_tensor_pointer(a_ptr, dtype=float32,
                                   layout=row_layout(aip_outer_rows, 1) * col_layout(MR, KC))
             b = as_tensor_pointer(b_ptr, dtype=float32,
@@ -62,8 +62,6 @@ def matmul_kernel5():
             c48 = avx_f32x8_load(~c[4, 8])
             c5 = avx_f32x8_load(~c[5, 0])
             c58 = avx_f32x8_load(~c[5, 8])
-            c6 = avx_f32x8_load(~c[6, 0])
-            c68 = avx_f32x8_load(~c[6, 8])
 
             for pp in range(pb):
                 bb_0to7 = avx_f32x8_load(~b[pp, 0])
@@ -101,7 +99,6 @@ def matmul_kernel5():
             avx_f32x8_store(~c[5, 0], c5)
             avx_f32x8_store(~c[5, 8], c58)
 
-
         @hidet.lang.script
         def macro_kernel(
                 a_ptr: ~float32,
@@ -134,7 +131,7 @@ def matmul_kernel5():
                     # micro-kernel
                     if mr == MR and nr == NR:
                         micro_kernel_6x16(~a[ii, 0], ~b[0, jj], ~c[ii, jj],
-                                         pb, m_size, n_size)
+                                          pb, m_size, n_size)
                     else:
                         temp_c = tensor(
                             scope=DeclareScope.Default,
@@ -145,10 +142,9 @@ def matmul_kernel5():
                             for tempj in range(NR):
                                 temp_c[tempi, tempj] = 0.0
                         micro_kernel_6x16(~a[ii, 0], ~b[0, jj], temp_c,
-                                         pb, MR, NR)
-                        for remain_row in range(mr):
-                            for remain_col in range(nr):
-                                c[ii + remain_row, jj+remain_col] += temp_c[remain_row, remain_col]
+                                          pb, MR, NR)
+                        for remain_row, remain_col in grid(mr, nr):
+                            c[ii + remain_row, jj + remain_col] += temp_c[remain_row, remain_col]
 
         @hidet.lang.script
         def matmul_kernel(
@@ -313,4 +309,3 @@ ff()
 # 1111 x 1111 x 1111: numpy takes  3.48 ms
 # 1111 x 533 x 1314: hidet takes 14.58 ms
 # 1111 x 533 x 1314: numpy takes  1.98 ms
-
