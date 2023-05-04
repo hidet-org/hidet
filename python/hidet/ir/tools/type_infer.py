@@ -101,10 +101,10 @@ class TypeInfer(ExprFunctor, ComputeFunctor):
         return self.visit(e.a)
 
     def visit_LeftShift(self, e: LeftShift):
-        return self.visit(e.base)
+        return self.visit(e.a)
 
     def visit_RightShift(self, e: RightShift):
-        return self.visit(e.base)
+        return self.visit(e.a)
 
     def visit_TensorElement(self, e: TensorElement):
         base_type = self.visit(e.base)

@@ -11,7 +11,7 @@
 # limitations under the License.
 from typing import List, Optional, Union, Sequence
 from hidet.ir.type import DataType, data_type
-from hidet.ir.expr import LogicalAnd, if_then_else, convert
+from hidet.ir.expr import LogicalAnd, if_then_else, convert, cast as ir_cast
 from hidet.ir.layout import RowMajorLayout, ColumnMajorLayout
 from hidet.ir.utils import index_deserialize, index_serialize
 from hidet.utils import prod
@@ -436,7 +436,7 @@ class CastOp(Operator):
         super().__init__(
             inputs=[x],
             attributes={'dtype': dtype},
-            task=UnaryElementwiseTask('cast', input_like(x, 'x'), op=lambda v: Cast(v, dtype)),
+            task=UnaryElementwiseTask('cast', input_like(x, 'x'), op=lambda v: ir_cast(v, dtype)),
         )
 
 

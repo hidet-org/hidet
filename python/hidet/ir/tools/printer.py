@@ -155,10 +155,10 @@ class IRPrinter(IRFunctor):
         return '(~' + self(e.a) + ')'
 
     def visit_LeftShift(self, e: LeftShift):
-        return '(' + self(e.base) + ' << ' + self(e.cnt) + ')'
+        return '(' + self(e.a) + ' << ' + self(e.b) + ')'
 
     def visit_RightShift(self, e: RightShift):
-        return '(' + self(e.base) + ' >> ' + self(e.cnt) + ')'
+        return '(' + self(e.a) + ' >> ' + self(e.b) + ')'
 
     def visit_TensorElement(self, e: TensorElement):
         if e.protected:

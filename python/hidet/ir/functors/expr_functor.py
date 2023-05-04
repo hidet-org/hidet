@@ -258,12 +258,12 @@ class ExprVisitor(ExprFunctor, BaseVisitor):
         self.visit(e.a)
 
     def visit_LeftShift(self, e: LeftShift):
-        self.visit(e.base)
-        self.visit(e.cnt)
+        self.visit(e.a)
+        self.visit(e.b)
 
     def visit_RightShift(self, e: RightShift):
-        self.visit(e.base)
-        self.visit(e.cnt)
+        self.visit(e.a)
+        self.visit(e.b)
 
     def visit_TensorElement(self, e: TensorElement):
         self.visit(e.base)
@@ -394,17 +394,17 @@ class ExprRewriter(ExprFunctor, BaseRewriter):
             return BitwiseNot(base)
 
     def visit_LeftShift(self, e: LeftShift):
-        base = self.visit(e.base)
-        cnt = self.visit(e.cnt)
-        if base is e.base and cnt is e.cnt:
+        base = self.visit(e.a)
+        cnt = self.visit(e.b)
+        if base is e.a and cnt is e.b:
             return e
         else:
             return LeftShift(base, cnt)
 
     def visit_RightShift(self, e: RightShift):
-        base = self.visit(e.base)
-        cnt = self.visit(e.cnt)
-        if base is e.base and cnt is e.cnt:
+        base = self.visit(e.a)
+        cnt = self.visit(e.b)
+        if base is e.a and cnt is e.b:
             return e
         else:
             return RightShift(base, cnt)

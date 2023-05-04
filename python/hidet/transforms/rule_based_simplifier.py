@@ -14,6 +14,7 @@ from typing import Dict
 from itertools import product
 
 from hidet.ir.dialects.pattern import PlaceholderExpr, match
+from hidet.ir.dtypes import boolean
 from hidet.ir.expr import (
     Add,
     convert,
@@ -26,6 +27,7 @@ from hidet.ir.expr import (
     BinaryExpr,
     LogicalAnd,
     IfThenElse,
+    if_then_else
 )
 from hidet.ir.expr import LogicalOr, BitwiseXor, BitwiseAnd, BitwiseOr, BitwiseNot
 from hidet.ir.expr import Div, Constant, Expr
@@ -152,12 +154,12 @@ class RuleBasedSimplifier(IRRewriter):
             (c1 <= e1 + c2, c1 - c2 <= e1),
             # and/or
             (LogicalAnd(ec1, True), ec1),
-            (LogicalAnd(ec1, False), convert(False)),
-            (LogicalOr(ec1, True), convert(True)),
+            (LogicalAnd(ec1, False), boolean.false),
+            (LogicalOr(ec1, True), boolean.true),
             (LogicalOr(ec1, False), ec1),
             # if then else
-            (IfThenElse(True, ec1, ec2), ec1),
-            (IfThenElse(False, ec1, ec2), ec2),
+            (if_then_else(True, ec1, ec2), ec1),
+            (if_then_else(True, ec1, ec2), ec2),
         ]
         self.bound_patterns = [
             # ((pattern_args, pattern_func, target_args, target_func)

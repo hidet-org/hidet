@@ -11,7 +11,8 @@
 # limitations under the License.
 # pylint: disable=import-outside-toplevel, useless-parent-delegation, redefined-outer-name, redefined-builtin
 # pylint: disable=useless-super-delegation
-from typing import Optional, Union, Sequence, Tuple
+from __future__ import annotations
+from typing import Optional, Union, Sequence, Tuple, Dict, Type, Callable
 import string
 import operator
 import numpy as np
@@ -132,7 +133,7 @@ class Expr(Node):
                 indices.append(None)
                 starts.append(None)
                 ends.append(None)
-            return TensorSlice(base=self, indices=indices, starts=starts, ends=ends)
+            return tensor_slice(base=self, indices=indices, starts=starts, ends=ends)
         else:
             return TensorElement(base=self, indices=indices)
 
@@ -158,7 +159,7 @@ class Expr(Node):
     def is_const(self):
         return isinstance(self, Constant)
 
-    def const(self) -> 'Constant':
+    def const(self) -> Constant:
         assert isinstance(self, Constant)
         return self
 
@@ -177,116 +178,55 @@ class Expr(Node):
             raise ValueError('expect element indexing, but got slicing.')
         return BufferStoreStmt(self, te.indices, value, protected)
 
-
-# the following are used as type hints
-# if a primitive function expect an int8 expression, we should use ExprInt8 instead of Expr
-# to explicit tell the reader that this function expect an int8 expression
-# but this is not enforced by the type system of python
-# ExprInt8 should be read as "expression with int8 type"
-# Usage example:
-#
-#   def cuda_i64_to_f16(a: ExprInt64) -> ExprFloat16:
-#       ...
-# Above function expects an int64 expression and returns a float16 value.
-
-ExprInt8 = ExprInt16 = ExprInt32 = ExprInt64 = Expr
-ExprUInt8 = ExprUInt16 = ExprUInt32 = ExprUInt64 = Expr
-ExprFloat16 = ExprFloat32 = ExprFloat64 = ExprBFloat16 = ExprTFloat32 = Expr
-
-
-class BinaryExpr(Expr):
-    op_dict = {}
-
-    def __new__(cls, a, b):
-        if (isinstance(a, Expr) and not isinstance(a, Constant)) or (
-            isinstance(b, Expr) and not isinstance(b, Constant)
-        ):
-            return super().__new__(cls)
-        else:
-            from hidet.ir.dtypes import promote_type
-
+    @staticmethod
+    def _unary(cls, a):
+        if not isinstance(a, Expr):
             a = convert(a)
+        if isinstance(a, Constant):
+            if cls is Neg:
+                return Constant(-a.value, a.type)
+            elif cls is LogicalNot:
+                return Constant(not a.value, a.type)
+            elif cls is BitwiseNot:
+                return Constant(~a.value, a.type)
+            else:
+                raise ValueError('unknown unary operator {}'.format(cls))
+        else:
+            return cls(a)
+
+    @staticmethod
+    def _binary(cls, a, b):
+        if not isinstance(a, Expr):
+            a = convert(a)
+        if not isinstance(b, Expr):
             b = convert(b)
-            if not (isinstance(a, Constant) and isinstance(b, Constant)):
-                raise ValueError('expect two constants, but got {} and {}'.format(a, b))
-            if len(BinaryExpr.op_dict) == 0:
-                BinaryExpr.op_dict = {
-                    Add: operator.add,
-                    Sub: operator.sub,
-                    Multiply: operator.mul,
-                    Div: lambda a, b: a // b if isinstance(a, int) and isinstance(b, int) else a / b,
-                    Mod: operator.mod,
-                    BitwiseOr: operator.or_,
-                    BitwiseAnd: operator.and_,
-                    BitwiseXor: operator.xor,
-                    Equal: operator.eq,
-                    NotEqual: operator.ne,
-                    LessThan: operator.lt,
-                    LessEqual: operator.le,
-                    LogicalAnd: lambda a, b: a and b,
-                    LogicalOr: lambda a, b: a or b,
-                }
-            if cls not in BinaryExpr.op_dict:
-                raise ValueError('unsupported binary operator {} for const folding'.format(cls))
-            value = BinaryExpr.op_dict[cls](a.value, b.value)
+        if isinstance(a, Constant) and isinstance(b, Constant):
+            from hidet.ir.dtypes import promote_type
+            value = _operator_dict[cls](a.value, b.value)
             if cls in [Equal, NotEqual, LessThan, LessEqual]:
                 return Constant(value, const_type='bool')
             elif cls in [LogicalAnd, LogicalOr]:
                 return Constant(value, const_type='bool')
             else:
                 return Constant(value, promote_type(a.type, b.type))
+        else:
+            return cls(a, b)
 
-    def __init__(self, a, b):
-        self.a = convert(a)
-        self.b = convert(b)
+
+class BinaryExpr(Expr):
+    def __init__(self, a: Expr, b: Expr):
+        self.a: Expr = a
+        self.b: Expr = b
+
+        assert isinstance(a, Expr)
+        assert isinstance(b, Expr)
 
 
 class UnaryExpr(Expr):
-    op_dict = {}
+    def __init__(self, a: Expr):
+        self.a: Expr = convert(a)
 
-    def __new__(cls, a):
-        if isinstance(a, Expr) and not isinstance(a, Constant):
-            return super().__new__(cls)
-        else:
-            a = convert(a)
-            assert isinstance(a, Constant)
-            if cls is LogicalNot:
-                return Constant(not a.value, const_type='bool')
-            elif cls is Neg:
-                return Constant(-a.value, a.type)
-            elif cls is BitwiseNot:
-                return Constant(~a.value, a.type)
-            else:
-                raise ValueError('expect an unary expression, but got {}'.format(type(a)))
-
-    def __init__(self, a):
-        self.a = convert(a)
-
-
-def convert(
-    obj: Optional[Union[Expr, PyScalar, tuple, Sequence]], dtype: Optional[Union[str, DataType]] = None
-) -> Optional[Union[Expr, tuple]]:
-    if isinstance(obj, Expr):
-        return obj
-
-    if dtype is not None:
-        if isinstance(obj, (bool, int, float)):
-            return Constant(obj, dtype)
-        else:
-            raise ValueError('Can not convert {} to {}.'.format(obj, dtype))
-
-    if isinstance(obj, bool):
-        return Constant(obj, data_type('bool'))
-    elif isinstance(obj, int):
-        return Constant(obj, data_type('int32'))
-    elif isinstance(obj, float):
-        return Constant(obj, data_type('float32'))
-    elif isinstance(obj, (tuple, list)):
-        return tuple(convert(v) for v in obj)
-    elif obj is None:
-        return None
-    else:
-        raise NotImplementedError(type(obj))
+        assert isinstance(a, Expr)
 
 
 class Condition(Expr):
@@ -423,25 +363,26 @@ class BitwiseXor(BinaryExpr):
         super().__init__(a, b)
 
 
-class LeftShift(Expr):
-    def __init__(self, base, cnt):
-        super().__init__()
-        self.base = convert(base)
-        self.cnt = convert(cnt)
+class LeftShift(BinaryExpr):
+    def __init__(self, a, b):
+        super().__init__(a, b)
 
 
-class RightShift(Expr):
-    def __init__(self, base, cnt):
-        super().__init__()
-        self.base = base
-        self.cnt = cnt
+class RightShift(BinaryExpr):
+    def __init__(self, a, b):
+        super().__init__(a, b)
 
 
 class TensorElement(Expr):
     def __init__(self, base, indices, protected=False):
-        self.base = base
-        self.indices = convert(indices)
+        self.base: Expr = base
+        self.indices: Tuple[Expr, ...] = indices
         self.protected: bool = protected
+
+        assert isinstance(base, Expr)
+        assert isinstance(indices, tuple)
+        for idx in indices:
+            assert isinstance(idx, Expr)
 
 
 class TensorSlice(Expr):
@@ -451,38 +392,36 @@ class TensorSlice(Expr):
         # indices: [3, None, None, None]
         # starts: [None, 4, None, None]
         # ends: [None, None, 5, None]
-        self.base = base
-        self.indices: Tuple = convert(indices)
-        self.starts: Tuple = convert(starts)
-        self.ends: Tuple = convert(ends)
-        if self.base is not None:
-            assert len(self.indices) == tensor_rank(base)
+        self.base: Expr = base
+        self.indices: Tuple[Optional[Expr], ...] = indices
+        self.starts: Tuple[Optional[Expr], ...] = starts
+        self.ends: Tuple[Optional[Expr], ...] = ends
+
+        assert len(self.indices) == tensor_rank(base)
+        assert isinstance(indices, tuple)
+        assert isinstance(starts, tuple)
+        assert isinstance(ends, tuple)
 
 
 class Call(Expr):
     def __init__(self, func_var, args):
         self.func_var: Var = func_var
-        self.args = convert(args)
+        self.args: Tuple[Expr, ...] = args
 
 
 class Let(Expr):
     def __init__(self, var, value, body):
-        self.var = var
-        self.value = convert(value)
-        self.body = convert(body)
+        self.var: Expr = var
+        self.value: Expr = value
+        self.body: Expr = body
 
 
 class Cast(Expr):
-    def __new__(cls, expr, target_type: TypeNode):
-        if isinstance(expr, Constant) and isinstance(expr.type, DataType) and isinstance(target_type, DataType):
-            return Constant(expr.value, target_type)
-        else:
-            return super().__new__(cls)
-
     def __init__(self, expr, target_type: TypeNode):
-        assert isinstance(target_type, TypeNode)
-        self.expr = expr
+        self.expr: Expr = expr
         self.target_type: TypeNode = target_type
+
+        assert isinstance(target_type, TypeNode)
 
 
 class Constant(Expr):
@@ -545,26 +484,30 @@ class IfThenElse(Expr):
         The expression to be evaluated if the condition is false.
     """
 
-    def __init__(self, cond: Union[Expr, PyScalar], then_expr: Union[Expr, PyScalar], else_expr: Union[Expr, PyScalar]):
-        self.cond = convert(cond)
-        self.then_expr = convert(then_expr)
-        self.else_expr = convert(else_expr)
+    def __init__(self, cond: Expr, then_expr: Expr, else_expr: Expr):
+        self.cond: Expr = cond
+        self.then_expr: Expr = then_expr
+        self.else_expr: Expr = else_expr
+
+        assert isinstance(cond, Expr)
+        assert isinstance(then_expr, Expr)
+        assert isinstance(else_expr, Expr)
 
 
 class Dereference(Expr):
-    def __init__(self, expr):
-        self.expr = expr
+    def __init__(self, expr: Expr):
+        self.expr: Expr = expr
 
 
 class Address(Expr):
-    def __init__(self, expr):
-        self.expr = expr
+    def __init__(self, expr: Expr):
+        self.expr: Expr = expr
 
 
 class Reference(Expr):
-    def __init__(self, expr):
+    def __init__(self, expr: Expr):
         assert isinstance(expr, (TensorElement, Var)), "only l-value can be referenced."
-        self.expr = expr
+        self.expr: Expr = expr
 
 
 class Var(Expr):
@@ -584,10 +527,10 @@ class Var(Expr):
         Id is used to track the allocation of Var object in python, which is only used to help us to distinguish
         different Var in python debugger.
         """
-        self.hint = hint
-        self.name = name
+        self.hint: Optional[str] = hint
+        self.name: Optional[str] = name
         self.type: Union[TypeNode, TensorType, TensorPointerType, FuncType] = type
-        self.id = self.new_id()
+        self.id: int = self.new_id()
 
     @staticmethod
     def new_id():
@@ -597,6 +540,77 @@ class Var(Expr):
     @staticmethod
     def reset_id_counter():
         Var.id_clock = 0
+
+
+# the following are used as type hints
+# if a primitive function expect an int8 expression, we should use ExprInt8 instead of Expr
+# to explicit tell the reader that this function expect an int8 expression
+# but this is not enforced by the type system of python
+# ExprInt8 should be read as "expression with int8 type"
+# Usage example:
+#
+#   def cuda_i64_to_f16(a: ExprInt64) -> ExprFloat16:
+#       ...
+# Above function expects an int64 expression and returns a float16 value.
+
+ExprInt8 = ExprInt16 = ExprInt32 = ExprInt64 = Expr
+ExprUInt8 = ExprUInt16 = ExprUInt32 = ExprUInt64 = Expr
+ExprFloat16 = ExprFloat32 = ExprFloat64 = ExprBFloat16 = ExprTFloat32 = Expr
+Int = Union[int, Expr]
+
+
+"""
+The following are the mapping from hidet expression class to corresponding python operator.
+Used by compilation-time constant folding.
+"""
+_operator_dict: Dict[Type[Expr], Callable] = {
+    # unary arithmetic
+    Neg: operator.neg,
+    LogicalNot: operator.not_,
+    BitwiseNot: operator.invert,
+
+    # binary arithmetic
+    Add: operator.add,
+    Sub: operator.sub,
+    Multiply: operator.mul,
+    Div: lambda a, b: a // b if isinstance(a, int) and isinstance(b, int) else a / b,
+    Mod: operator.mod,
+    BitwiseOr: operator.or_,
+    BitwiseAnd: operator.and_,
+    BitwiseXor: operator.xor,
+    Equal: operator.eq,
+    NotEqual: operator.ne,
+    LessThan: operator.lt,
+    LessEqual: operator.le,
+    LogicalAnd: lambda a, b: a and b,
+    LogicalOr: lambda a, b: a or b,
+}
+
+
+def convert(
+    obj: Optional[Union[Expr, PyScalar, tuple, Sequence]], dtype: Optional[Union[str, DataType]] = None
+) -> Optional[Union[Expr, tuple]]:
+    if isinstance(obj, Expr):
+        return obj
+
+    if dtype is not None:
+        if isinstance(obj, (bool, int, float)):
+            return Constant(obj, dtype)
+        else:
+            raise ValueError('Can not convert {} to {}.'.format(obj, dtype))
+
+    if isinstance(obj, bool):
+        return Constant(obj, data_type('bool'))
+    elif isinstance(obj, int):
+        return Constant(obj, data_type('int32'))
+    elif isinstance(obj, float):
+        return Constant(obj, data_type('float32'))
+    elif isinstance(obj, (tuple, list)):
+        return tuple(convert(v) for v in obj)
+    elif obj is None:
+        return None
+    else:
+        raise NotImplementedError(type(obj))
 
 
 def var(hint: str = None, dtype='int32'):
@@ -659,17 +673,6 @@ def if_then_else(
     return IfThenElse(convert(cond), convert(then_expr), convert(else_expr))
 
 
-def is_tensor(v: Expr) -> bool:
-    if not isinstance(v, Var):
-        return False
-    return isinstance(v.type, (TensorType, TensorPointerType))
-
-
-def get_tensor_layout(v: Expr):
-    assert isinstance(v, Var) and isinstance(v.type, (TensorType, TensorPointerType))
-    return v.type.layout if isinstance(v.type, TensorType) else v.type.tensor_type.layout
-
-
 def tensor_rank(v: Expr) -> int:
     from hidet.ir.compute import TensorNode
 
@@ -694,10 +697,55 @@ def tensor_rank(v: Expr) -> int:
         raise ValueError('Can not infer the tensor rank of "{}"'.format(v))
 
 
+def tensor_slice(
+    base: Expr, indices: Sequence[Optional[Int]], starts: Sequence[Optional[Int]], ends: Sequence[Optional[Int]]
+) -> TensorSlice:
+    """
+    Create a tensor slice expression.
+
+    Parameters
+    ----------
+    base: Expr
+        The base tensor expression.
+
+    indices: Sequence[Optional[Int]]
+        The indices of the tensor slice.
+
+    starts: Sequence[Optional[Int]]
+        The start indices of the tensor slice.
+
+    ends: Sequence[Optional[Int]]
+        The end indices of the tensor slice.
+
+    Returns
+    -------
+    ret: TensorSlice
+        The tensor slice expression.
+    """
+    if len(indices) != len(starts) or len(indices) != len(ends):
+        raise ValueError('The length of indices, starts and ends should be the same.')
+
+    indices = tuple(convert(i) for i in indices)
+    starts = tuple(convert(i) for i in starts)
+    ends = tuple(convert(i) for i in ends)
+    return TensorSlice(base, indices, starts, ends)
+
+
+def tensor_element():
+    pass
+
+
 def cast(v: Expr, dtype: Union[str, DataType, TypeNode]):
+    if not isinstance(v, Expr):
+        raise ValueError('Expect an expression, got {}'.format(type(v).__name__))
+
     if isinstance(dtype, str):
         dtype = data_type(dtype)
-    return Cast(v, dtype)
+
+    if isinstance(v, Constant):
+        return Constant(v.value, dtype)
+    else:
+        return Cast(v, dtype)
 
 
 def const_tensor(value: np.ndarray) -> Constant:

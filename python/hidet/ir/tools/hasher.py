@@ -106,10 +106,10 @@ class ExprHash(ExprFunctor, TypeFunctor, BaseFunctor):
         return (self(e.a) & self(e.b)) + hash(BitwiseXor)
 
     def visit_LeftShift(self, e: LeftShift):
-        return (self(e.base) + self(e.cnt)) + hash(LeftShift)
+        return (self(e.a) + self(e.b)) + hash(LeftShift)
 
     def visit_RightShift(self, e: RightShift):
-        return (self(e.base) + self(e.cnt)) + hash(RightShift)
+        return (self(e.a) + self(e.b)) + hash(RightShift)
 
     def visit_TensorElement(self, e: TensorElement):
         return self(e.base) + self(e.indices) + hash(TensorElement)
