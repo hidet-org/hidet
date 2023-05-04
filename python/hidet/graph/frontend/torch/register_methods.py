@@ -188,9 +188,21 @@ def tensor_type(self: Tensor, dtype: Union[str, torch.dtype], non_blocking: bool
 
 @register_method(torch.Tensor.expand)
 def tensor_expand(self: Tensor, *sizes: int) -> Tensor:
+    sizes: List[int] = list(sizes)
+    assert len(sizes) >= len(self.shape)
+    for i in range(len(sizes)):
+        if sizes[i] == -1:
+            ri = len(sizes) - 1 - i
+            assert ri < len(self.shape)
+            sizes[i] = int(self.shape[len(self.shape) - 1 - ri])
     return ops.broadcast(self, sizes)
 
 
 @register_method(torch.Tensor.masked_fill)
 def tensor_masked_fill(self: Tensor, mask: Tensor, value: float) -> Tensor:
     return ops.where(mask, ops.full([], value, dtype=self.dtype, device=self.device), self)
+
+
+@register_method(torch.Tensor.flatten)
+def tensor_flatten(self: Tensor, start_dim=0, end_dim=-1):
+    return ops.flatten(self, start_dim=start_dim, end_dim=end_dim)

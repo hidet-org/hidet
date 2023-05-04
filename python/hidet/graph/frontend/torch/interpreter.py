@@ -215,10 +215,16 @@ class Interpreter:
             callable_name = caused_callable.__class__.__qualname__
 
         filename, lineno = code.co_filename, code.co_firstlineno
+        lines = []
+        lines.append(f'{exception}, occurred when calling ')
+        argument_strings = []
+        for arg in args:
+            argument_strings.append(arg.signature() if isinstance(arg, Tensor) else repr(arg))
+        for key, value in kwargs.items():
+            argument_strings.append(f'{key}={value.signature() if isinstance(value, Tensor) else repr(value)}')
         raise type(exception)(
-            f'{exception}, occurred when calling {callable_name} with \n'
-            f'    args: {args}\n'
-            f'  kwargs: {kwargs}\n'
+            f'{exception}, occurred when calling\n'
+            f'  {callable_name}({", ".join(argument_strings)})\n'
             f'{callable_name} is defined at\n'
             f'  File "{filename}", line {lineno}'
         )

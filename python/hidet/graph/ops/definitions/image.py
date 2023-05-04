@@ -9,8 +9,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Optional, List
+from typing import Optional, List, Sequence, Union
 
+from hidet.ir.dtypes import int32
 from hidet.ir.expr import Expr, if_then_else, convert, cast, LogicalAnd, LogicalOr
 from hidet.ir import primitives as prim
 from .utils import Task, Operator, Tensor, TensorNode, compute, input_like
@@ -19,14 +20,15 @@ from .utils import Task, Operator, Tensor, TensorNode, compute, input_like
 # Acknowledgement: take TVM resize topi implementation as a reference
 
 
-def get_origin_index(x: Expr, image_width: int, target_width: int, coordinate_transformation_mode: str) -> Expr:
-    scale = image_width / target_width
+def get_origin_index(
+    xx: Expr, image_width: int, target_width: int, scale: float, coordinate_transformation_mode: str
+) -> Expr:
     func_map = {
-        'half_pixel': lambda x: (x + 0.5) * scale - 0.5,
+        'half_pixel': lambda x: (x + 0.5) / scale - 0.5,
         'align_corners': lambda x: x * ((image_width - 1) / (target_width - 1)),
-        'asymmetric': lambda x: x * scale,
-        'pytorch_half_pixel': lambda x: (x + 0.5) * scale - 0.5 if target_width > 1 else convert(0.0),
-        'tf_half_pixel_for_nn': lambda x: (x + 0.5) * scale,
+        'asymmetric': lambda x: x / scale,
+        'pytorch_half_pixel': lambda x: (x + 0.5) / scale - 0.5 if target_width > 1 else convert(0.0),
+        'tf_half_pixel_for_nn': lambda x: (x + 0.5) / scale,
     }
     if coordinate_transformation_mode not in func_map:
         raise ValueError(
@@ -34,10 +36,10 @@ def get_origin_index(x: Expr, image_width: int, target_width: int, coordinate_tr
                 coordinate_transformation_mode, func_map.keys()
             )
         )
-    return func_map[coordinate_transformation_mode](x)
+    return func_map[coordinate_transformation_mode](xx)
 
 
-def get_closest_index(x: Expr, rounding_method: str) -> Expr:
+def get_closest_index(xx: Expr, rounding_method: str) -> Expr:
     func_map = {
         'round': lambda x: cast(prim.round(x), 'int32'),
         'round_prefer_floor': lambda x: cast(prim.ceil(x - 0.5), 'int32'),
@@ -47,13 +49,13 @@ def get_closest_index(x: Expr, rounding_method: str) -> Expr:
     }
     if rounding_method not in func_map:
         raise ValueError('Unsupported rounding_method: {}, candidates: {}'.format(rounding_method, func_map.keys()))
-    return func_map[rounding_method](x)
+    return func_map[rounding_method](xx)
 
 
 def get_2d_pixel(data: TensorNode, n, c, h, w) -> Expr:
     height, width = data.const_shape()[2:]
-    h = prim.max(0, prim.min(height - 1, h))
-    w = prim.max(0, prim.min(width - 1, w))
+    h = prim.max(int32(0), prim.min(height - 1, h))
+    w = prim.max(int32(0), prim.min(width - 1, w))
     return data[n, c, h, w]
 
 
@@ -61,7 +63,7 @@ def linear_interpolate(a, b, ratio):
     return a * (1.0 - ratio) + b * ratio
 
 
-def get_cubic_weights(s, a):
+def get_cubic_weights(s, a) -> List[int]:
     # See equations (4)-(6) in https://ieeexplore.ieee.org/document/1163711
     s2 = s * s
     s3 = s * s * s
@@ -76,25 +78,67 @@ def cubic_interpolate(inputs, weights):
     return sum(inputs_i * weights_i for inputs_i, weights_i in zip(inputs, weights))
 
 
+def _normalize(value: Union[int, float, Sequence], require_num: int) -> Optional[List[Union[int, float]]]:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return [value] * require_num
+    elif isinstance(value, (list, tuple)):
+        if len(value) != require_num:
+            raise ValueError(
+                'Expect value to be list or tuple with length {}, but got {}'.format(require_num, len(value))
+            )
+        return list(value)
+    else:
+        raise ValueError('Expect value to be int, float, list or tuple, but got {}'.format(type(value)))
+
+
 def resize2d_nchw_compute(
     data: TensorNode,
-    size: List[int],
+    *,
+    size: Optional[Sequence[int]],
+    scale_factor: Optional[Union[float, Sequence[float]]],
     method: str,
-    coordinate_transformation_mode,
-    rounding_method,
-    roi,
-    cubic_alpha,
-    cubic_exclude,
-    extrapolation_value,
+    coordinate_transformation_mode: str,
+    rounding_method: str,
+    roi: Optional,
+    cubic_alpha: Optional[float],
+    cubic_exclude: Optional[bool],
+    extrapolation_value: Optional[float],
+    recompute_scale_factor: Optional[bool],
 ):  # pylint: disable=unused-argument
+    _ = roi  # not supported yet
     image_size = data.const_shape()[2:]
-    target_size = size
+
+    scale_factor = _normalize(scale_factor, 2)
+    size = _normalize(size, 2)
+
+    if size is not None and scale_factor is None:
+        target_size = size
+    elif size is None and scale_factor is not None:
+        target_size = [int(image_size[i] * scale_factor[i]) for i in range(2)]
+    else:
+        raise ValueError('Only one of size or scale_factor should be set.')
+
+    if recompute_scale_factor is None:
+        if scale_factor is not None:
+            scales = scale_factor
+        else:
+            scales = [target_size[i] / image_size[i] for i in range(2)]
+    else:
+        if scale_factor is None:
+            raise ValueError('scale_factor should be set when recompute_scale_factor is not None.')
+        if recompute_scale_factor:
+            scales = [target_size[i] / image_size[i] for i in range(2)]
+        else:
+            scales = scale_factor
+
     image_height = image_size[0]
     image_width = image_size[1]
 
     def fmap(n, c, h, w):
-        h = get_origin_index(h, image_size[0], target_size[0], coordinate_transformation_mode)
-        w = get_origin_index(w, image_size[1], target_size[1], coordinate_transformation_mode)
+        h = get_origin_index(h, image_size[0], target_size[0], scales[0], coordinate_transformation_mode)
+        w = get_origin_index(w, image_size[1], target_size[1], scales[1], coordinate_transformation_mode)
         if method == 'nearest':
             h = get_closest_index(h, rounding_method)
             w = get_closest_index(w, rounding_method)
@@ -154,25 +198,30 @@ class Resize2dTask(Task):
     def __init__(
         self,
         data: TensorNode,
-        size: List[int],
+        *,
+        size: Optional[Sequence[int]],
+        scale_factor: Optional[Union[float, Sequence[float]]],
         method: str,
-        coordinate_transformation_mode,
-        rounding_method,
-        roi,
-        cubic_alpha,
-        cubic_exclude,
-        extrapolation_value,
+        coordinate_transformation_mode: str,
+        rounding_method: str,
+        roi: Optional,
+        cubic_alpha: Optional[float],
+        cubic_exclude: Optional[bool],
+        extrapolation_value: Optional[float],
+        recompute_scale_factor: Optional[bool],
     ):
         out = resize2d_nchw_compute(
             data,
-            size,
-            method,
-            coordinate_transformation_mode,
-            rounding_method,
-            roi,
-            cubic_alpha,
-            cubic_exclude,
-            extrapolation_value,
+            size=size,
+            scale_factor=scale_factor,
+            method=method,
+            coordinate_transformation_mode=coordinate_transformation_mode,
+            rounding_method=rounding_method,
+            roi=roi,
+            cubic_alpha=cubic_alpha,
+            cubic_exclude=cubic_exclude,
+            extrapolation_value=extrapolation_value,
+            recompute_scale_factor=recompute_scale_factor,
         )
         super().__init__(name='resize2d', inputs=[data], outputs=[out])
 
@@ -191,15 +240,18 @@ class Resize2dOp(Operator):
 
     def __init__(
         self,
-        data,
-        size: List[int],
+        data: Tensor,
+        *,
+        size: Optional[Sequence[int]],
+        scale_factor: Optional[Union[float, Sequence[float]]],
         method: str,
         coordinate_transformation_mode: str,
         rounding_method: str,
         roi: Optional,
-        cubic_alpha: Optional,
-        cubic_exclude: Optional,
-        extrapolation_value: Optional,
+        cubic_alpha: Optional[float],
+        cubic_exclude: Optional[bool],
+        extrapolation_value: Optional[float],
+        recompute_scale_factor: Optional[bool],
     ):
         if method not in self.supported_methods:
             raise ValueError("Resize only support methods: {}, but got {}.".format(self.supported_methods, method))
@@ -215,13 +267,14 @@ class Resize2dOp(Operator):
                     self.supported_rounding_methods, rounding_method
                 )
             )
-        if len(size) != 2:
+        if isinstance(size, (list, tuple)) and len(size) != 2:
             raise ValueError('Resize2d expect size has 2 elements (height, width), got {}'.format(size))
 
         super().__init__(
             inputs=[data],
             attributes={
                 'size': size,
+                'scale_factor': scale_factor,
                 'method': method,
                 'coordinate_transformation_mode': coordinate_transformation_mode,
                 'rounding_method': rounding_method,
@@ -229,40 +282,48 @@ class Resize2dOp(Operator):
                 'cubic_alpha': cubic_alpha,
                 'cubic_exclude': cubic_exclude,
                 'extrapolation_value': extrapolation_value,
+                'recompute_scale_factor': recompute_scale_factor,
             },
             task=Resize2dTask(
                 input_like(data, 'data'),
-                size,
-                method,
-                coordinate_transformation_mode,
-                rounding_method,
-                roi,
-                cubic_alpha,
-                cubic_exclude,
-                extrapolation_value,
+                size=size,
+                scale_factor=scale_factor,
+                method=method,
+                coordinate_transformation_mode=coordinate_transformation_mode,
+                rounding_method=rounding_method,
+                roi=roi,
+                cubic_alpha=cubic_alpha,
+                cubic_exclude=cubic_exclude,
+                extrapolation_value=extrapolation_value,
+                recompute_scale_factor=recompute_scale_factor,
             ),
         )
 
 
 def resize2d(
     data: Tensor,
-    size: List[int],
-    method: str,
-    coordinate_transformation_mode: str,
-    rounding_method: str,
-    roi: Optional,
-    cubic_alpha: Optional,
-    cubic_exclude: Optional,
-    extrapolation_value: Optional,
+    *,
+    size: Optional[Sequence[int]] = None,
+    scale_factor: Optional[Union[float, Sequence[float]]] = None,
+    method: str = 'nearest',
+    coordinate_transformation_mode: str = 'half_pixel',
+    rounding_method: str = 'round_prefer_floor',
+    roi: Optional = None,
+    cubic_alpha: Optional[float] = -0.75,
+    cubic_exclude: Optional[bool] = False,
+    extrapolation_value: Optional[float] = None,
+    recompute_scale_factor: Optional[bool] = None,
 ) -> Tensor:
     return Resize2dOp(
         data,
-        size,
-        method,
-        coordinate_transformation_mode,
-        rounding_method,
-        roi,
-        cubic_alpha,
-        cubic_exclude,
-        extrapolation_value,
+        size=size,
+        scale_factor=scale_factor,
+        method=method,
+        coordinate_transformation_mode=coordinate_transformation_mode,
+        rounding_method=rounding_method,
+        roi=roi,
+        cubic_alpha=cubic_alpha,
+        cubic_exclude=cubic_exclude,
+        extrapolation_value=extrapolation_value,
+        recompute_scale_factor=recompute_scale_factor,
     ).get_output(0)
