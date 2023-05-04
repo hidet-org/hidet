@@ -77,7 +77,7 @@ class PassContext:
             # [True, False]
             'use_attention': False,
             # mma primitive:
-            # ['simt', 'wmma', 'mma']
+            # ['simt', 'mma']
             'mma': 'simt',
             # parallel k
             # ['default', 'disabled', 'search', 2, 4, ...]
@@ -187,8 +187,6 @@ class PassContext:
 
             - 'simt'
                Use cuda cores.
-            - 'wmma'
-               Use wmma instructions.
             - 'mma'
                Use mma instructions.
         """

@@ -422,6 +422,8 @@ class Cast(Expr):
 
 class Constant(Expr):
     def __init__(self, value=None, const_type=None):
+        from hidet.ir.dtypes import boolean
+
         if const_type and isinstance(const_type, str):
             const_type = data_type(const_type)
         self.value: Optional[np.ndarray, float, int, complex] = value
@@ -434,7 +436,10 @@ class Constant(Expr):
             elif self.type.is_float():
                 self.value = float(self.value)
             elif self.type.is_integer():
-                self.value = int(self.value)
+                if self.type == boolean:
+                    self.value = bool(self.value)
+                else:
+                    self.value = int(self.value)
             elif self.type.is_vector():
                 self.value = tuple(self.value)
             else:

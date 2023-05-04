@@ -93,7 +93,7 @@ def build_task(task: Task, target_device='cuda', load=True) -> Optional[Compiled
             if option.get_option('save_lower_ir'):
                 instruments = [
                     SaveIRInstrument(out_dir=os.path.join(task_dir, './ir')),
-                    ProfileInstrument(log_file=os.path.join(task_dir, './lower_time.txt')),
+                    ProfileInstrument(log_file=os.path.join(task_dir, './ir/profile.txt')),
                 ]
             else:
                 instruments = []

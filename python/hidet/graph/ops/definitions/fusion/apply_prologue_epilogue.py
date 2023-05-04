@@ -232,7 +232,7 @@ def fuse_prologue_epilogue_pass(fused_task: FusedTask):
 
 def apply_prologue_epilogue(ir_module: IRModule, fused_task: FusedTask, working_dir: str) -> IRModule:
     from hidet.transforms import inline_function_pass, declare_to_let_pass, inline_let_stmt_pass
-    from hidet.transforms import flatten_tensor_slice_pass, lower_with, PassContext, SaveIRInstrument
+    from hidet.transforms import flatten_tensor_slice_pass, lower_with, PassContext, SaveIRInstrument, ProfileInstrument
 
     anchor_function: Optional[Function] = None
     for func in ir_module.functions.values():
@@ -252,7 +252,8 @@ def apply_prologue_epilogue(ir_module: IRModule, fused_task: FusedTask, working_
     ]
     instruments = []
     if hidet.option.get_save_lower_ir():
-        instruments.append(SaveIRInstrument(out_dir=os.path.join(working_dir, 'fuse_ir')))
+        instruments.append(SaveIRInstrument(out_dir=os.path.join(working_dir, './fuse_ir')))
+        instruments.append(ProfileInstrument(log_file=os.path.join(working_dir, './fuse_ir/profile.txt')))
 
     with PassContext(instruments=instruments):
         ir_module = lower_with(ir_module, transforms)

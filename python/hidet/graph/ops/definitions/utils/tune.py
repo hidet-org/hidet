@@ -27,7 +27,7 @@ class ScheduleError(Exception):
 
 
 class TuningSpace:
-    MAX_SPACE_SIZE = 12000
+    MAX_SPACE_SIZE = 1200000
 
     def __init__(self):
         self.spaces: Dict[int, Dict[str, Any]] = {}
@@ -111,6 +111,7 @@ def _generate_summary(kwargs_list: Sequence[Dict[str, Any]], latencies: Sequence
 
 
 def extract_ir_modules(template_func) -> List[IRModule]:
+    MAX_VALID_SPACE_SIZE = 2000
     # get ir modules to tune
     if hasattr(template_func, '_tuning_space'):
         tuning_space: TuningSpace = getattr(template_func, '_tuning_space')
@@ -127,6 +128,12 @@ def extract_ir_modules(template_func) -> List[IRModule]:
         try:
             ir_module = template_func(**kwargs)
             ir_modules.append(ir_module)
+            if len(ir_modules) > MAX_VALID_SPACE_SIZE:
+                raise ValueError(
+                    f'The tune space has {len(ir_modules)} valid schedules, '
+                    f'which is larger than the predefined limit {MAX_VALID_SPACE_SIZE}. '
+                    f'Please consider to reduce the search space.'
+                )
             setattr(ir_module, '_tuning_kwargs', kwargs)  # workaround to pass kwargs to the tune function
         except ScheduleError:
             # the schedule is invalid, skip it
