@@ -226,8 +226,9 @@ class AttnTask(Task):
         j_tiles = cdiv(n_size, block_j)
 
         smem_bytes_q = dtype_size * block_i * dpad_size
-        smem_bytes_k = dtype_size * block_k * block_j
-        smem_bytes_v = dtype_size * block_k_o * block_j_o
+        # k and v requires double memory for double buffering pipeline
+        smem_bytes_k = dtype_size * block_k * block_j * 2
+        smem_bytes_v = dtype_size * block_k_o * block_j_o * 2
         smem_bytes_k_v = max(smem_bytes_k, smem_bytes_v)
         smem_bytes_qk = dtype_size * block_i * block_j
         smem_bytes_l = sm_dtype.nbytes * i_rows_per_tb
@@ -280,6 +281,7 @@ class AttnTask(Task):
         smem_q_type = tensor_type('float16', shape=[block_i, dpad_size], layout=smem_q_layout)
         # smem_o_type = smem_q_type
         smem_k_type = tensor_type('float16', shape=[block_k, block_j], layout=smem_k_layout)
+        smem_k_db_type = tensor_type('float16', shape=[2, block_k, block_j], layout=row_major([2]) + smem_k_layout)
         smem_qk_type = tensor_type('float16', shape=[block_i, block_j], layout=smem_qk_layout)
         smem_v_type = tensor_type('float16', shape=[block_k_o, block_j_o], layout=smem_v_layout)
         regs_o_type = tensor_type(acc_dtype, shape=[mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements])
@@ -554,9 +556,10 @@ class AttnTask(Task):
 
                 smem_q = tensor_pointer('float16', shape=smem_q_type.shape, layout=smem_q_type.layout)
                 # smem_o = tensor_pointer('float16', shape=smem_o_type.shape, layout=smem_o_type.layout)
-                smem_k = tensor_pointer('float16', shape=smem_k_type.shape, layout=smem_k_type.layout)
+                smem_k = tensor_pointer('float16', shape=smem_k_db_type.shape, layout=smem_k_db_type.layout)
                 smem_qk = tensor_pointer('float16', shape=smem_qk_type.shape, layout=smem_qk_type.layout)
                 smem_v = tensor_pointer('float16', shape=smem_v_type.shape, layout=smem_v_type.layout)
+                # smem_v = tensor_pointer('float16', shape=[2] + smem_v_type.shape, layout=row_major((2)) + smem_v_type.layout)
                 smem_l = tensor_pointer(smem_l_type.dtype, shape=smem_l_type.shape)
                 smem_m = tensor_pointer(smem_m_type.dtype, shape=smem_m_type.shape)
                 smem_lij = tensor_pointer(smem_lij_type.dtype, shape=smem_lij_type.shape)
@@ -572,9 +575,9 @@ class AttnTask(Task):
                 smem_lij = dynamic_shared_memory(byte_offset=smem_bytes_offsets['lij'], dtype=smem_lij_type.dtype)
                 smem_mij = dynamic_shared_memory(byte_offset=smem_bytes_offsets['mij'], dtype=smem_mij_type.dtype)
 
-                regs_q = tensor('register', dtype='float16', shape=[mmas_per_warp_m, mma_config.a_elements])
+                regs_q = tensor('register', dtype='float16', shape=[2, mmas_per_warp_m, mma_config.a_elements])
                 regs_k = tensor(
-                    'register', dtype='float16', shape=[mmas_per_warp_k, mmas_per_warp_n, mma_config.b_elements]
+                    'register', dtype='float16', shape=[2, mmas_per_warp_n, mma_config.b_elements]
                 )
                 regs_acc = tensor(
                     'register', dtype=acc_dtype, shape=[mmas_per_warp_m, mmas_per_warp_n, mma_config.c_elements]
@@ -582,6 +585,7 @@ class AttnTask(Task):
                 regs_qk = tensor('register', dtype='float16', shape=[mmas_per_warp_m_o, mma_config.a_elements])
                 regs_v = tensor(
                     'register', dtype='float16', shape=[mmas_per_warp_k_o, mmas_per_warp_n_o, mma_config.b_elements]
+                    # 'register', dtype='float16', shape=[2, mmas_per_warp_n_o, mma_config.b_elements]
                 )
                 regs_acc_o = tensor(
                     'register', dtype=acc_dtype, shape=[mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements]
@@ -610,19 +614,29 @@ class AttnTask(Task):
                     # Init regs_acc to 0
                     for a, b, c in grid(mmas_per_warp_m, mmas_per_warp_n, mma_config.c_elements):
                         regs_acc[a, b, c] = acc_dtype.zero
+
+                    # Copy first tile of k into shared memory
+                    copy_k_g2s(k, ~smem_k[0, 0, 0], offset_j, 0)
+                    cp_async_wait_all()
+                    syncthreads()
+
                     for k0 in range(k_tiles):
-                        # Load Kj into Smem
-                        copy_k_g2s(k, smem_k, offset_j, k0 * block_k)
+                        # Load next tile of k
+                        copy_k_g2s(k, ~smem_k[(k0 + 1) % 2, 0, 0], offset_j, (k0 + 1) * block_k)
+                        for mma_j in range(mmas_per_warp_n):
+                            copy_k_s2r(mma_j, 0, ~regs_k[0, mma_j, 0], ~smem_k[k0 % 2, 0, 0])
+                        for mma_i in range(mmas_per_warp_m):
+                            copy_q_s2r(mma_i, 0, k0 * block_k,  ~regs_q[0, mma_i, 0], smem_q)
+                        for mma_k in range(mmas_per_warp_k):
+                            if mma_k + 1 < mmas_per_warp_k:
+                                for mma_j in range(mmas_per_warp_n):
+                                    copy_k_s2r(mma_j, mma_k + 1, ~regs_k[(mma_k + 1) % 2, mma_j, 0], ~smem_k[k0, 0, 0])
+                                for mma_i in range(mmas_per_warp_m):
+                                    copy_q_s2r(mma_i, mma_k + 1, k0 * block_k,  ~regs_q[(mma_k + 1) % 2, mma_i, 0], smem_q)
+                            for mma_i, mma_j in grid(mmas_per_warp_m, mmas_per_warp_n):
+                                warp_mma(~regs_q[mma_k % 2, mma_i, 0], ~regs_k[mma_k % 2, mma_j, 0], ~regs_acc[mma_i, mma_j, 0])
                         cp_async_wait_all()
                         syncthreads()
-                        for mma_k in range(mmas_per_warp_k):
-                            for mma_j in range(mmas_per_warp_n):
-                                copy_k_s2r(mma_j, mma_k, ~regs_k[mma_k, mma_j, 0], smem_k)
-                            for mma_i in range(mmas_per_warp_m):
-                                copy_q_s2r(mma_i, mma_k, k0 * block_k,  ~regs_q[mma_i, 0], smem_q)
-                            for mma_i, mma_j in grid(mmas_per_warp_m, mmas_per_warp_n):
-                                warp_mma(~regs_q[mma_i, 0], ~regs_k[mma_k, mma_j, 0], ~regs_acc[mma_i, mma_j, 0])
-                            syncthreads()
                     qk_softmax_reduce(smem_qk, smem_mij, smem_lij, regs_acc)
                     # ----------------------------
 
