@@ -24,7 +24,7 @@ TaskIndex = List[Int]
 
 class ExplicitUnrollRewriter(IRRewriter):
     def visit_ForStmt(self, stmt: ForStmt):
-        if stmt.attr.unroll and stmt.attr.explicit_unroll:
+        if stmt.attr.unroll and stmt.attr.unroll_explicit:
             if not isinstance(stmt.attr.unroll, bool):
                 raise NotImplementedError('Explicit unroll with unroll factor is not supported yet')
             extent_expr: Expr = simplify(stmt.extent)

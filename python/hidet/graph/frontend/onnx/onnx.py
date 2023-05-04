@@ -632,14 +632,14 @@ class OnnxResize(OnnxOperator):
             return [
                 ops.resize2d(
                     x,
-                    target_size[2:],
-                    mode,
-                    coordinate_transformation_mode,
-                    nearest_mode,
-                    roi,
-                    cubic_coeff_a,
-                    exclude_outside,
-                    extrapolation_value,
+                    size=target_size[2:],
+                    method=mode,
+                    coordinate_transformation_mode=coordinate_transformation_mode,
+                    rounding_method=nearest_mode,
+                    roi=roi,
+                    cubic_alpha=cubic_coeff_a,
+                    cubic_exclude=exclude_outside,
+                    extrapolation_value=extrapolation_value,
                 )
             ]
         else:
