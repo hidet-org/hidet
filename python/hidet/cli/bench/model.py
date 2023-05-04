@@ -12,14 +12,13 @@
 # pylint: disable=ungrouped-imports, no-name-in-module
 from typing import List, Any, Optional
 import click
-import torch
 from hidet.testing import benchmark_func
 import hidet
 
 
 class BenchModel:
     search_space = 0
-    dtype: torch.dtype = torch.float32
+    dtype = None  # torch.float32
     tensor_core: bool = False
     disable_torch_cudnn_tf32 = False
     enable_torch_cublas_tf32 = False
@@ -51,12 +50,18 @@ class BenchModel:
         raise NotImplementedError()
 
     def converted_model(self):
+        import torch
+
+        if BenchModel.dtype is None:
+            BenchModel.dtype = torch.float32
         model = self.model().eval()
         model = model.to(dtype=BenchModel.dtype)
         model = model.cuda()
         return model
 
     def converted_inputs(self):
+        import torch
+
         args, kwargs = self.example_inputs()
 
         def convert_f32(arg):
