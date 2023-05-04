@@ -14,7 +14,7 @@ from hidet.ir.expr import Add, Sub, Multiply, Div, Mod, FloorDiv, Neg, LessThan,
 from hidet.ir.expr import LogicalOr, LogicalNot, BitwiseAnd, BitwiseOr, BitwiseNot, BitwiseXor, LeftShift, RightShift
 from hidet.ir.expr import Reference, BinaryOp
 from hidet.ir.expr import TensorElement, TensorSlice, IfThenElse, Call, Let, Var, Constant, Cast, Dereference, Address
-from hidet.ir.dialects.pattern import AnyExpr
+from hidet.ir.dialects.pattern import PlaceholderExpr
 from hidet.utils import same_list
 from .base_functor import BaseFunctor, BaseVisitor, BaseRewriter
 
@@ -85,7 +85,7 @@ class ExprFunctor(BaseFunctor):
             return self.visit_Address(node)
         elif isinstance(node, Reference):
             return self.visit_Reference(node)
-        elif isinstance(node, AnyExpr):
+        elif isinstance(node, PlaceholderExpr):
             return self.visit_AnyExpr(node)
         else:
             return NotImplemented
@@ -183,7 +183,7 @@ class ExprFunctor(BaseFunctor):
     def visit_Constant(self, e: Constant):
         raise NotImplementedError()
 
-    def visit_AnyExpr(self, e: AnyExpr):
+    def visit_AnyExpr(self, e: PlaceholderExpr):
         raise NotImplementedError()
 
 
@@ -311,7 +311,7 @@ class ExprVisitor(ExprFunctor, BaseVisitor):
     def visit_Reference(self, e: Reference):
         self.visit(e.expr)
 
-    def visit_AnyExpr(self, e: AnyExpr):
+    def visit_AnyExpr(self, e: PlaceholderExpr):
         pass
 
 
@@ -487,5 +487,5 @@ class ExprRewriter(ExprFunctor, BaseRewriter):
     def visit_Constant(self, e: Constant):
         return e
 
-    def visit_AnyExpr(self, e: AnyExpr):
+    def visit_AnyExpr(self, e: PlaceholderExpr):
         return e

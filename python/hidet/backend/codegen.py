@@ -12,7 +12,7 @@
 from typing import Optional, List, Tuple, Dict, Union
 import os
 import numpy as np
-from hidet.ir.dialects.pattern import AnyExpr
+from hidet.ir.dialects.pattern import PlaceholderExpr
 from hidet.ir import dtypes
 from hidet.ir.node import Node
 from hidet.ir.type import DataType, PointerType, TensorPointerType, ReferenceType, TensorType, FuncType
@@ -562,7 +562,7 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
     def visit_TensorNode(self, e: TensorNode):
         raise ValueError()
 
-    def visit_AnyExpr(self, e: AnyExpr):
+    def visit_AnyExpr(self, e: PlaceholderExpr):
         raise ValueError()
 
     def visit_NotDispatchedNode(self, n: Node):

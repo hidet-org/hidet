@@ -10,9 +10,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import pytest
-from hidet.ir.expr import *
-from hidet.ir.compute import compute
-from hidet.ir.dialects.pattern import match, AnyExpr, UnionPattern, any_const_int
+from hidet.ir.expr import var, Add
+from hidet.ir.dialects.pattern import match, PlaceholderExpr
 
 
 def check_pairs(pairs):
@@ -27,7 +26,8 @@ def check_pairs(pairs):
 
 
 def test_normal_expr():
-    a, b, c, d = var('a'), var('b'), var('c'), var('d')
+    a, b = PlaceholderExpr(), PlaceholderExpr()
+    c, d = var('c'), var('d')
 
     pairs = [
         (Add(a, b), Add(c, d), {a: c, b: d}),
@@ -39,35 +39,12 @@ def test_normal_expr():
 
 
 def test_any_pattern():
-    a, b, c, d = var('a'), var('b'), var('c'), var('d')
+    a, c, d = var('a'), var('c'), var('d')
+    b = PlaceholderExpr()
     s = Add(a, b)
-    m = Multiply(a, b)
-    any_expr = AnyExpr()
-    any_var = AnyExpr(Var)
-    any_add = AnyExpr(Add)
+    any_expr = PlaceholderExpr()
 
-    pairs = [
-        (any_expr, s, {any_expr: s}),
-        (Add(any_expr, b), Add(c, d), {any_expr: c, b: d}),
-        (any_var, Add(c, d), None),
-        (any_add, s, {any_add: s}),
-        (any_add, m, None),
-    ]
-    check_pairs(pairs)
-
-
-def test_union_pattern():
-    a, b, c, d = var('a'), var('b'), var('c'), var('d')
-    add_cd = Add(c, d)
-    mul_cd = Multiply(c, d)
-    union = UnionPattern([Add(a, b), Multiply(a, b), a])
-
-    pairs = [
-        (union, c, {union: c, a: c}),
-        (union, add_cd, {union: add_cd, a: c, b: d}),
-        (union, mul_cd, {union: mul_cd, a: c, b: d}),
-        (union, Mod(c, d), None),
-    ]
+    pairs = [(any_expr, s, {any_expr: s}), (Add(any_expr, b), Add(c, d), {any_expr: c, b: d})]
     check_pairs(pairs)
 
 

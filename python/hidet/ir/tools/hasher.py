@@ -12,7 +12,7 @@
 from typing import Union, Tuple, Dict
 
 from hidet.ir import Node
-from hidet.ir.dialects.pattern import AnyExpr
+from hidet.ir.dialects.pattern import PlaceholderExpr
 from hidet.ir.expr import Var, Constant, Add, Sub, Multiply, Div, Mod, FloorDiv, Neg, LessThan, LessEqual
 from hidet.ir.expr import NotEqual, Equal, IfThenElse, LogicalAnd, LogicalOr, LogicalNot, BitwiseAnd, BitwiseOr
 from hidet.ir.expr import BitwiseNot, BitwiseXor, LeftShift, RightShift
@@ -153,5 +153,5 @@ class ExprHash(ExprFunctor, TypeFunctor, BaseFunctor):
     def visit_TensorSlice(self, e: TensorSlice):
         return self(e.base) + self(e.indices) + self(e.starts) + self(e.ends) + hash(TensorSlice)
 
-    def visit_AnyExpr(self, e: AnyExpr):
-        return HashSum(e) + hash(AnyExpr)
+    def visit_AnyExpr(self, e: PlaceholderExpr):
+        return HashSum(e) + hash(PlaceholderExpr)

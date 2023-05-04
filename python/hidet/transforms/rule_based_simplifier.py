@@ -13,7 +13,7 @@ import operator
 from typing import Dict
 from itertools import product
 
-from hidet.ir.dialects.pattern import AnyExpr, match
+from hidet.ir.dialects.pattern import PlaceholderExpr, match
 from hidet.ir.expr import Add, convert, Sub, Multiply, Mod, LessThan, LessEqual, Equal, BinaryOp, LogicalAnd, IfThenElse
 from hidet.ir.expr import LogicalOr, BitwiseXor, BitwiseAnd, BitwiseOr, BitwiseNot
 from hidet.ir.expr import Div, Constant, Expr
@@ -26,14 +26,11 @@ from hidet.ir.analyzers import BoundAnalyzer, BoundInfo
 
 
 def any_expr(allow_const):
-    if allow_const:
-        return AnyExpr()
-    else:
-        return AnyExpr(exclude_cls=Constant)
+    return PlaceholderExpr(require_non_const=not allow_const)
 
 
 def any_constant():
-    return Constant(value=None)
+    return PlaceholderExpr(require_const=True)
 
 
 def c_div(a, b):

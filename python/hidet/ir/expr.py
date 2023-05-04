@@ -13,6 +13,7 @@
 # pylint: disable=useless-super-delegation
 from typing import Optional, Union, Sequence, Tuple
 import string
+import operator
 import numpy as np
 from .node import Node
 from .type import TypeNode, TensorType, DataType, TensorPointerType, PointerType, FuncType, tensor_type, data_type
@@ -194,6 +195,36 @@ ExprFloat16 = ExprFloat32 = ExprFloat64 = ExprBFloat16 = ExprTFloat32 = Expr
 
 
 class BinaryOp(Expr):
+    op_dict = {}
+
+    def __new__(cls, a, b):
+        if (isinstance(a, Expr) and not isinstance(a, Constant)) or (
+            isinstance(b, Expr) and not isinstance(b, Constant)
+        ):
+            return super().__new__(cls)
+        else:
+            from hidet.ir.dtypes import promote_type
+
+            a = convert(a)
+            b = convert(b)
+            if not (isinstance(a, Constant) and isinstance(b, Constant)):
+                raise ValueError('expect two constants, but got {} and {}'.format(a, b))
+            if len(BinaryOp.op_dict) == 0:
+                BinaryOp.op_dict = {
+                    Add: operator.add,
+                    Sub: operator.sub,
+                    Multiply: operator.mul,
+                    Div: lambda a, b: a // b if isinstance(a, int) and isinstance(b, int) else a / b,
+                    Mod: operator.mod,
+                    LessThan: operator.lt,
+                    LessEqual: operator.le,
+                    Equal: operator.eq,
+                    BitwiseOr: operator.or_,
+                    BitwiseAnd: operator.and_,
+                    BitwiseXor: operator.xor,
+                }
+            return Constant(BinaryOp.op_dict[cls](a.value, b.value), promote_type(a.type, b.type))
+
     def __init__(self, a, b):
         self.a = convert(a)
         self.b = convert(b)
@@ -326,6 +357,7 @@ class Div(BinaryOp):
 class FloorDiv(BinaryOp):
     def __init__(self, a, b):
         super().__init__(a, b)
+        raise ValueError('FloorDiv is not supported in hidet by design from now on.')
 
 
 class Mod(BinaryOp):
@@ -414,6 +446,12 @@ class Let(Expr):
 
 
 class Cast(Expr):
+    def __new__(cls, expr, target_type: TypeNode):
+        if isinstance(expr, Constant) and isinstance(expr.type, DataType) and isinstance(target_type, DataType):
+            return Constant(expr.value, target_type)
+        else:
+            return super().__new__(cls)
+
     def __init__(self, expr, target_type: TypeNode):
         assert isinstance(target_type, TypeNode)
         self.expr = expr
@@ -421,13 +459,13 @@ class Cast(Expr):
 
 
 class Constant(Expr):
-    def __init__(self, value=None, const_type=None):
+    def __init__(self, value: Union[np.ndarray, float, int, complex], const_type: Union[str, DataType, TensorType]):
         from hidet.ir.dtypes import boolean
 
         if const_type and isinstance(const_type, str):
             const_type = data_type(const_type)
-        self.value: Optional[np.ndarray, float, int, complex] = value
-        self.type: Optional[Union[DataType, TensorType]] = const_type
+        self.value: Union[np.ndarray, float, int, complex] = value
+        self.type: Union[DataType, TensorType] = const_type
 
         # normalize value
         if isinstance(self.type, DataType):

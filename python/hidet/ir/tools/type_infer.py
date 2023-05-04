@@ -17,7 +17,7 @@ from hidet.ir.expr import BitwiseAnd, Neg, NotEqual, BitwiseXor, Dereference, Re
 from hidet.ir.expr import Var, Constant, TensorElement, Call, Cast
 from hidet.ir.compute import ArgReduceCompute, ReduceCompute, GridCompute, TensorInput, ScalarInput
 from hidet.ir.functors import ExprFunctor, ComputeFunctor
-from hidet.ir.dialects.pattern import AnyExpr
+from hidet.ir.dialects.pattern import PlaceholderExpr
 
 
 def is_bool(tp: DataType):
@@ -203,7 +203,7 @@ class TypeInfer(ExprFunctor, ComputeFunctor):
     def visit_ArgReduceCompute(self, c: ArgReduceCompute):
         return c.index_dtype
 
-    def visit_AnyExpr(self, e: AnyExpr):
+    def visit_AnyExpr(self, e: PlaceholderExpr):
         raise NotImplementedError()
 
 
