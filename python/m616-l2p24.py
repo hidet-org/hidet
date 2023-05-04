@@ -121,8 +121,7 @@ def matmul_kernel5():
             _mr = ib % MR
             _nr = jb % NR
             # Loop 2
-            # for mpanel in range(mpanels):
-            for mpanel in grid(mpanels, attrs='p32'):
+            for mpanel in grid(mpanels, attrs='p24'):
                 mr = MR if mpanel != mpanels - 1 or _mr == 0 else _mr
                 ii = mpanel * MR
                 # Loop 1
@@ -180,8 +179,6 @@ def matmul_kernel5():
             nbs = (n_size + NC - 1) // NC
             kbs = (k_size + KC - 1) // KC
 
-            # i = 0
-            # while i < m_size:
             for mb in grid(mbs):
                 i = mb * MC
                 ib = min(MC, m_size - i)
@@ -191,7 +188,7 @@ def matmul_kernel5():
                     pb = min(KC, k_size - p)
                     mp = ib // MR
                     mr = ib % MR
-                    for micropanel_idx in range(mp):
+                    for micropanel_idx in grid(mp):
                         panel_row_start = micropanel_idx * MR
                         for micropanel_col in range(pb):
                             for micropanel_row in range(MR):
