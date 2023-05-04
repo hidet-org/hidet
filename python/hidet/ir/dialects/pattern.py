@@ -16,7 +16,7 @@ from hidet.ir.node import Node
 from hidet.ir.type import TypeNode
 from hidet.ir.expr import Expr, Constant, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, Equal, LessEqual
 from hidet.ir.expr import BitwiseXor
-from hidet.ir.expr import IfThenElse, LogicalAnd, LogicalOr, BinaryOp
+from hidet.ir.expr import IfThenElse, LogicalAnd, LogicalOr, BinaryExpr
 
 
 class PlaceholderExpr(Expr):
@@ -114,7 +114,7 @@ class PatternMatcher:
         else:
             raise NotImplementedError(f'Pattern {type(pattern)} is not implemented')
 
-    def match_CommutativeBinary(self, pattern: BinaryOp, target: Expr):
+    def match_CommutativeBinary(self, pattern: BinaryExpr, target: Expr):
         if not isinstance(target, type(pattern)):
             raise NotMatchedError(pattern, target, "Commutative binary op has not matched")
         try:
@@ -136,7 +136,7 @@ class PatternMatcher:
 
         raise NotMatchedError(pattern, target, "Commutative binary op has not matched")
 
-    def match_Binary(self, pattern: BinaryOp, target: Expr):
+    def match_Binary(self, pattern: BinaryExpr, target: Expr):
         if not isinstance(target, type(pattern)):
             raise NotMatchedError(pattern, target, "Binary op has not matched")
         with ExitStack() as stack:

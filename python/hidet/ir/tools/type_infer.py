@@ -11,7 +11,7 @@
 # limitations under the License.
 from hidet.ir.type import DataType, TensorType, FuncType, PointerType, TensorPointerType, data_type, tensor_pointer_type
 from hidet.ir.type import tensor_type
-from hidet.ir.expr import BinaryOp, Add, Sub, Multiply, Div, Mod, FloorDiv, Condition, LessThan, Equal, IfThenElse
+from hidet.ir.expr import BinaryExpr, Add, Sub, Multiply, Div, Mod, FloorDiv, Condition, LessThan, Equal, IfThenElse
 from hidet.ir.expr import TensorSlice, LogicalNot, LogicalOr, LogicalAnd, LessEqual, Let, RightShift, LeftShift
 from hidet.ir.expr import BitwiseAnd, Neg, NotEqual, BitwiseXor, Dereference, Reference, Address, BitwiseNot, BitwiseOr
 from hidet.ir.expr import Var, Constant, TensorElement, Call, Cast
@@ -32,7 +32,7 @@ class TypeInfer(ExprFunctor, ComputeFunctor):
     def visit_Reference(self, e: Reference):
         return self(e.expr)
 
-    def visit_Binary(self, e: BinaryOp):
+    def visit_Binary(self, e: BinaryExpr):
         from hidet.ir.utils.type_utils import numeric_promotion
 
         a_dtype: DataType = self.visit(e.a)
@@ -98,7 +98,7 @@ class TypeInfer(ExprFunctor, ComputeFunctor):
         return self.visit(e.a)
 
     def visit_BitwiseNot(self, e: BitwiseNot):
-        return self.visit(e.base)
+        return self.visit(e.a)
 
     def visit_LeftShift(self, e: LeftShift):
         return self.visit(e.base)

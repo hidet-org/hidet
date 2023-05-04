@@ -14,7 +14,19 @@ from typing import Dict
 from itertools import product
 
 from hidet.ir.dialects.pattern import PlaceholderExpr, match
-from hidet.ir.expr import Add, convert, Sub, Multiply, Mod, LessThan, LessEqual, Equal, BinaryOp, LogicalAnd, IfThenElse
+from hidet.ir.expr import (
+    Add,
+    convert,
+    Sub,
+    Multiply,
+    Mod,
+    LessThan,
+    LessEqual,
+    Equal,
+    BinaryExpr,
+    LogicalAnd,
+    IfThenElse,
+)
 from hidet.ir.expr import LogicalOr, BitwiseXor, BitwiseAnd, BitwiseOr, BitwiseNot
 from hidet.ir.expr import Div, Constant, Expr
 from hidet.ir.functors import IRRewriter
@@ -56,7 +68,7 @@ class ConstExprSimplifier(IRRewriter):
         Equal: operator.eq,
     }
 
-    def visit_Binary(self, e: BinaryOp):
+    def visit_Binary(self, e: BinaryExpr):
         from hidet.ir.utils.type_utils import numeric_promotion
 
         e = IRRewriter.visit_Binary(self, e)

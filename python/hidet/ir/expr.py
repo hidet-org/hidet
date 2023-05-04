@@ -194,7 +194,7 @@ ExprUInt8 = ExprUInt16 = ExprUInt32 = ExprUInt64 = Expr
 ExprFloat16 = ExprFloat32 = ExprFloat64 = ExprBFloat16 = ExprTFloat32 = Expr
 
 
-class BinaryOp(Expr):
+class BinaryExpr(Expr):
     op_dict = {}
 
     def __new__(cls, a, b):
@@ -209,28 +209,56 @@ class BinaryOp(Expr):
             b = convert(b)
             if not (isinstance(a, Constant) and isinstance(b, Constant)):
                 raise ValueError('expect two constants, but got {} and {}'.format(a, b))
-            if len(BinaryOp.op_dict) == 0:
-                BinaryOp.op_dict = {
+            if len(BinaryExpr.op_dict) == 0:
+                BinaryExpr.op_dict = {
                     Add: operator.add,
                     Sub: operator.sub,
                     Multiply: operator.mul,
                     Div: lambda a, b: a // b if isinstance(a, int) and isinstance(b, int) else a / b,
                     Mod: operator.mod,
-                    LessThan: operator.lt,
-                    LessEqual: operator.le,
-                    Equal: operator.eq,
                     BitwiseOr: operator.or_,
                     BitwiseAnd: operator.and_,
                     BitwiseXor: operator.xor,
+                    Equal: operator.eq,
+                    NotEqual: operator.ne,
+                    LessThan: operator.lt,
+                    LessEqual: operator.le,
+                    LogicalAnd: lambda a, b: a and b,
+                    LogicalOr: lambda a, b: a or b,
                 }
-            return Constant(BinaryOp.op_dict[cls](a.value, b.value), promote_type(a.type, b.type))
+            if cls not in BinaryExpr.op_dict:
+                raise ValueError('unsupported binary operator {} for const folding'.format(cls))
+            value = BinaryExpr.op_dict[cls](a.value, b.value)
+            if cls in [Equal, NotEqual, LessThan, LessEqual]:
+                return Constant(value, const_type='bool')
+            elif cls in [LogicalAnd, LogicalOr]:
+                return Constant(value, const_type='bool')
+            else:
+                return Constant(value, promote_type(a.type, b.type))
 
     def __init__(self, a, b):
         self.a = convert(a)
         self.b = convert(b)
 
 
-class UnaryOp(Expr):
+class UnaryExpr(Expr):
+    op_dict = {}
+
+    def __new__(cls, a):
+        if isinstance(a, Expr) and not isinstance(a, Constant):
+            return super().__new__(cls)
+        else:
+            a = convert(a)
+            assert isinstance(a, Constant)
+            if cls is LogicalNot:
+                return Constant(not a.value, const_type='bool')
+            elif cls is Neg:
+                return Constant(-a.value, a.type)
+            elif cls is BitwiseNot:
+                return Constant(~a.value, a.type)
+            else:
+                raise ValueError('expect an unary expression, but got {}'.format(type(a)))
+
     def __init__(self, a):
         self.a = convert(a)
 
@@ -265,17 +293,17 @@ class Condition(Expr):
     pass
 
 
-class LessThan(Condition, BinaryOp):
+class LessThan(Condition, BinaryExpr):
     def __init__(self, a, b):
         super().__init__(a, b)
 
 
-class LessEqual(Condition, BinaryOp):
+class LessEqual(Condition, BinaryExpr):
     def __init__(self, a, b):
         super().__init__(a, b)
 
 
-class Equal(Condition, BinaryOp):
+class Equal(Condition, BinaryExpr):
     def __init__(self, a, b):
         super().__init__(a, b)
 
@@ -287,12 +315,12 @@ class Equal(Condition, BinaryOp):
             return True
 
 
-class NotEqual(Condition, BinaryOp):
+class NotEqual(Condition, BinaryExpr):
     def __init__(self, a, b):
         super().__init__(a, b)
 
 
-class LogicalAnd(Condition, BinaryOp):
+class LogicalAnd(Condition, BinaryExpr):
     def __init__(self, a, b):
         super().__init__(a, b)
 
@@ -308,7 +336,7 @@ class LogicalAnd(Condition, BinaryOp):
         return LogicalAnd.join(*conds)
 
 
-class LogicalOr(Condition, BinaryOp):
+class LogicalOr(Condition, BinaryExpr):
     def __init__(self, a, b):
         super().__init__(a, b)
 
@@ -324,59 +352,58 @@ class LogicalOr(Condition, BinaryOp):
         return LogicalOr.join(*conds)
 
 
-class LogicalNot(Condition, UnaryOp):
+class LogicalNot(Condition, UnaryExpr):
     def __init__(self, a):
         super().__init__(a)
 
 
-class Neg(UnaryOp):
+class Neg(UnaryExpr):
     def __init__(self, a):
         super().__init__(a)
 
 
-class Add(BinaryOp):
+class Add(BinaryExpr):
     def __init__(self, a, b):
         super().__init__(a, b)
 
 
-class Sub(BinaryOp):
+class Sub(BinaryExpr):
     def __init__(self, a, b):
         super().__init__(a, b)
 
 
-class Multiply(BinaryOp):
+class Multiply(BinaryExpr):
     def __init__(self, a, b):
         super().__init__(a, b)
 
 
-class Div(BinaryOp):
+class Div(BinaryExpr):
     def __init__(self, a, b):
         super().__init__(a, b)
 
 
-class FloorDiv(BinaryOp):
+class FloorDiv(BinaryExpr):
     def __init__(self, a, b):
         super().__init__(a, b)
         raise ValueError('FloorDiv is not supported in hidet by design from now on.')
 
 
-class Mod(BinaryOp):
+class Mod(BinaryExpr):
     def __init__(self, a, b):
         super().__init__(a, b)
 
 
-class BitwiseNot(Expr):
-    def __init__(self, base):
-        super().__init__()
-        self.base = base
+class BitwiseNot(UnaryExpr):
+    def __init__(self, a):
+        super().__init__(a)
 
 
-class BitwiseAnd(BinaryOp):
+class BitwiseAnd(BinaryExpr):
     def __init__(self, a, b):
         super().__init__(a, b)
 
 
-class BitwiseOr(BinaryOp):
+class BitwiseOr(BinaryExpr):
     def __init__(self, a, b):
         super().__init__(a, b)
 
@@ -391,7 +418,7 @@ class BitwiseOr(BinaryOp):
             return current
 
 
-class BitwiseXor(BinaryOp):
+class BitwiseXor(BinaryExpr):
     def __init__(self, a, b):
         super().__init__(a, b)
 
@@ -496,6 +523,9 @@ class Constant(Expr):
 
     def __float__(self):
         return float(self.value)
+
+    def __bool__(self):
+        return bool(self.value)
 
     def array(self) -> np.ndarray:
         return self.value

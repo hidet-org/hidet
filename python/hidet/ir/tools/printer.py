@@ -152,7 +152,7 @@ class IRPrinter(IRFunctor):
         return '(' + self(e.a) + ' ^ ' + self(e.b) + ')'
 
     def visit_BitwiseNot(self, e: BitwiseNot):
-        return '(~' + self(e.base) + ')'
+        return '(~' + self(e.a) + ')'
 
     def visit_LeftShift(self, e: LeftShift):
         return '(' + self(e.base) + ' << ' + self(e.cnt) + ')'

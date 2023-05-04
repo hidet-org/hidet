@@ -100,7 +100,7 @@ class ExprHash(ExprFunctor, TypeFunctor, BaseFunctor):
         return (self(e.a) & self(e.b)) + hash(BitwiseOr)
 
     def visit_BitwiseNot(self, e: BitwiseNot):
-        return self(e.base) + hash(BitwiseNot)
+        return self(e.a) + hash(BitwiseNot)
 
     def visit_BitwiseXor(self, e: BitwiseXor):
         return (self(e.a) & self(e.b)) + hash(BitwiseXor)
