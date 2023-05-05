@@ -344,8 +344,7 @@ class TensorElement(Expr):
         self.indices: Tuple[Expr, ...] = indices
         self.protected: bool = protected
 
-        assert isinstance(base, Expr)
-        assert isinstance(indices, tuple)
+        assert isinstance(base, Expr) and isinstance(indices, tuple)
         for idx in indices:
             assert isinstance(idx, Expr)
 
@@ -362,10 +361,13 @@ class TensorSlice(Expr):
         self.starts: Tuple[Optional[Expr], ...] = starts
         self.ends: Tuple[Optional[Expr], ...] = ends
 
-        assert len(self.indices) == tensor_rank(base)
-        assert isinstance(indices, tuple)
-        assert isinstance(starts, tuple)
-        assert isinstance(ends, tuple)
+        assert isinstance(indices, tuple) and isinstance(starts, tuple) and isinstance(ends, tuple)
+        for idx in indices:
+            assert idx is None or isinstance(idx, Expr)
+        for start in starts:
+            assert start is None or isinstance(start, Expr)
+        for end in ends:
+            assert end is None or isinstance(end, Expr)
 
 
 class Call(Expr):
@@ -373,12 +375,18 @@ class Call(Expr):
         self.func_var: Var = func_var
         self.args: Tuple[Expr, ...] = args
 
+        assert isinstance(func_var, Var) and isinstance(args, tuple)
+        for arg in args:
+            assert isinstance(arg, Expr)
+
 
 class Let(Expr):
     def __init__(self, var, value, body):
         self.var: Expr = var
         self.value: Expr = value
         self.body: Expr = body
+
+        assert isinstance(var, Var) and isinstance(value, Expr) and isinstance(body, Expr)
 
 
 class Cast(Expr):
@@ -457,25 +465,28 @@ class IfThenElse(Expr):
         self.then_expr: Expr = then_expr
         self.else_expr: Expr = else_expr
 
-        assert isinstance(cond, Expr)
-        assert isinstance(then_expr, Expr)
-        assert isinstance(else_expr, Expr)
+        assert isinstance(cond, Expr) and isinstance(then_expr, Expr) and isinstance(else_expr, Expr)
 
 
 class Dereference(Expr):
     def __init__(self, expr: Expr):
         self.expr: Expr = expr
 
+        assert isinstance(expr, Expr)
+
 
 class Address(Expr):
     def __init__(self, expr: Expr):
         self.expr: Expr = expr
 
+        assert isinstance(expr, Expr)
+
 
 class Reference(Expr):
     def __init__(self, expr: Expr):
-        assert isinstance(expr, (TensorElement, Var)), "only l-value can be referenced."
         self.expr: Expr = expr
+
+        assert isinstance(expr, Expr)
 
 
 class Var(Expr):
