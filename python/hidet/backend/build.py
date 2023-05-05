@@ -111,6 +111,8 @@ class NVCC(SourceCompiler):
     def compile(self, src_path: str, out_lib_path: str, options: Optional[Dict[str, str]] = None) -> None:
         cc = hidet.cuda.compute_capability()
         cc_code = '{}{}'.format(cc[0], cc[1])
+        from hidet.graph import PassContext
+        use_fast_math = PassContext.current().configs.get('use_fast_math')
 
         # The following command compiles the cuda source code to a shared library
         # See https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html
@@ -132,6 +134,8 @@ class NVCC(SourceCompiler):
             '--compiler-options -fPIC',
             # embed the line information into the binary, allow Nsight Compute to get the source code for profiling.
             '-lineinfo',
+            # use fast math instrinsics, may reduce precision
+            '-use_fast_math' if use_fast_math else '',
             # link the hidet runtime, all APIs for communication between kernels and host system are in hidet runtime.
             '-lhidet_runtime',
             # shared cuda runtime library is used (.so), instead of static one (.a). used to reduce binary size.

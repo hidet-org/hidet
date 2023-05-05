@@ -76,6 +76,9 @@ class PassContext:
             # use attention or not
             # [True, False]
             'use_attention': False,
+            # use fast math or not
+            # [True, False]
+            'use_fast_math': True,
             # mma primitive:
             # ['simt', 'mma']
             'mma': 'simt',
@@ -166,6 +169,14 @@ class PassContext:
             register_attn_patterns()
         else:
             deregister_attn_patterns()
+        return self
+
+    def set_use_fast_math(self, flag=True) -> PassContext:
+        """
+        Set to add -use_fast_math to nvcc compilation options
+
+        """
+        self.configs['use_fast_math'] = flag
         return self
 
     def set_verbose(self) -> PassContext:

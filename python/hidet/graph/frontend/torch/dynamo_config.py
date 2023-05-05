@@ -19,6 +19,7 @@ class DynamoConfig:
         self._use_fp16: bool = False
         self._use_fp16_reduction: bool = False
         self._use_attention: bool = False
+        self._use_fast_math: bool = True
         self._use_cuda_graph: bool = True
         self._use_tensor_core: bool = False
         self._print_input_graph: bool = False
@@ -38,6 +39,7 @@ class DynamoConfig:
         self._use_fp16: bool = False
         self._use_fp16_reduction: bool = False
         self._use_attention: bool = False
+        self._use_fast_math: bool = True
         self._use_cuda_graph: bool = True
         self._use_tensor_core: bool = False
         self._print_input_graph: bool = False
@@ -110,6 +112,13 @@ class DynamoConfig:
         Whether to use fused attention schedule
         """
         self._use_attention = flag
+        return self
+
+    def use_fast_math(self, flag=True):
+        """
+        Whether to use fused attention schedule
+        """
+        self._use_fast_math = flag
         return self
 
     def use_cuda_graph(self, flag=True):
