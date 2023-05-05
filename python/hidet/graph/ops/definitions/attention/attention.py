@@ -27,6 +27,7 @@ from hidet.graph.ops.definitions.utils import broadcast_shape, broadcast_shapes,
 from hidet.graph.ops.definitions.utils import can_broadcast
 from hidet.utils.py import cdiv, prod
 from .attention_mask import AttnMaskAddOp
+from hidet.lang import printf
 
 
 class AttnTask(Task):
@@ -111,11 +112,18 @@ class AttnTask(Task):
 
     @tune.space(2, 'block_i', [128, 64, 256, 512])
     @tune.space(2, 'block_j', [128, 64, 256, 512])
-    @tune.space(2, 'block_k', [16, 32, 64])
+    @tune.space(2, 'block_k', [8, 16, 32, 64])
     @tune.space(2, 'warp_elems_m', [16, 32, 64, 128])
     @tune.space(2, 'warp_elems_n', [16, 32, 64, 128])
-    @tune.space(2, 'warp_elems_k', [16, 32, 64])
+    @tune.space(2, 'warp_elems_k', [8, 16, 32, 64])
     @tune.space(2, 'mma_config', [MmaConfig.m16n8k8_f16_f16(), MmaConfig.m16n8k16_f16_f16()])
+    @tune.space(1, 'block_i', [64])
+    @tune.space(1, 'block_j', [128])
+    @tune.space(1, 'block_k', [32])
+    @tune.space(1, 'warp_elems_m', [16])
+    @tune.space(1, 'warp_elems_n', [128])
+    @tune.space(1, 'warp_elems_k', [32])
+    @tune.space(1, 'mma_config', [MmaConfig.m16n8k16_f16_f16()])
     def cuda_schedule_attn(self, block_i=128, block_j=128, block_k=16, warp_elems_m=32, warp_elems_n=64, warp_elems_k=16, mma_config = MmaConfig.m16n8k8_f16_f16()) -> IRModule:
         def calc_swizzle_size(d):
             powers_of_two = [128, 64, 32, 16, 8]
