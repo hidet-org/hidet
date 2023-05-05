@@ -12,7 +12,7 @@
 from typing import Optional, List, Tuple, Dict, Union
 import os
 import numpy as np
-from hidet.ir.dialects.pattern import AnyExpr
+from hidet.ir.dialects.pattern import PlaceholderExpr
 from hidet.ir import dtypes
 from hidet.ir.node import Node
 from hidet.ir.type import DataType, PointerType, TensorPointerType, ReferenceType, TensorType, FuncType
@@ -251,13 +251,13 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
         return '(' + self(e.a) + ' ^ ' + self(e.b) + ')'
 
     def visit_BitwiseNot(self, e: BitwiseNot):
-        return '(~' + self(e.base) + ')'
+        return '(~' + self(e.a) + ')'
 
     def visit_LeftShift(self, e: LeftShift):
-        return '(' + self(e.base) + ' << ' + self(e.cnt) + ')'
+        return '(' + self(e.a) + ' << ' + self(e.b) + ')'
 
     def visit_RightShift(self, e: RightShift):
-        return '(' + self(e.base) + ' >> ' + self(e.cnt) + ')'
+        return '(' + self(e.a) + ' >> ' + self(e.b) + ')'
 
     def visit_TensorElement(self, e: TensorElement):
         if e.protected:
@@ -562,7 +562,7 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
     def visit_TensorNode(self, e: TensorNode):
         raise ValueError()
 
-    def visit_AnyExpr(self, e: AnyExpr):
+    def visit_AnyExpr(self, e: PlaceholderExpr):
         raise ValueError()
 
     def visit_NotDispatchedNode(self, n: Node):

@@ -12,7 +12,7 @@
 from hidet.ir.functors import IRRewriter
 from hidet.ir.tools import TypeInfer
 from hidet.ir.stmt import Stmt, AssignStmt, BufferStoreStmt
-from hidet.ir.expr import Expr, Cast, Add, Sub, Multiply, Div, BinaryOp, cast
+from hidet.ir.expr import Expr, Cast, Add, Sub, Multiply, Div, BinaryExpr, cast
 from hidet.ir.type import DataType, TypeNode, TensorType, TensorPointerType, PointerType, ReferenceType, VoidType
 from .base import FunctionBodyPass, Pass
 
@@ -104,7 +104,7 @@ class AddExplicitCastRewriter(IRRewriter):
         else:
             return cast(source_value, target_type)
 
-    def visit_Binary(self, e: BinaryOp):
+    def visit_Binary(self, e: BinaryExpr):
         if isinstance(e, (Add, Sub, Multiply, Div)):
             from hidet.ir.utils.type_utils import numeric_promotion
 

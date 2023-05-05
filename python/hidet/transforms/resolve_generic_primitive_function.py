@@ -13,7 +13,7 @@ from typing import List, Optional, Tuple
 
 from hidet.ir.type import DataType
 from hidet.ir.stmt import Stmt
-from hidet.ir.expr import Call, Expr, BinaryOp, cast
+from hidet.ir.expr import Call, Expr, BinaryExpr, cast
 from hidet.ir.func import Function
 from hidet.ir.functors import IRRewriter
 from hidet.ir.tools import infer_type, TypeInfer
@@ -76,7 +76,7 @@ class ResolveGenericPrimitiveFuncRewriter(IRRewriter):
 
         return IRRewriter.visit_Call(self, e)
 
-    def visit_Binary(self, e: BinaryOp):
+    def visit_Binary(self, e: BinaryExpr):
         lhs = self.visit(e.a)
         rhs = self.visit(e.b)
         lhs_dtype = self.type_infer(lhs)

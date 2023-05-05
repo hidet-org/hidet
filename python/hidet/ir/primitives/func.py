@@ -11,7 +11,7 @@
 # limitations under the License.
 from typing import Dict, Union, Optional, List
 
-from hidet.ir.expr import Var, Expr, Call
+from hidet.ir.expr import Var, Expr, Call, call
 from hidet.ir.func import Function
 from hidet.ir.type import FuncType
 
@@ -147,4 +147,4 @@ def call_primitive_func(func_name, args: List[Expr]) -> Call:
                 'The number of arguments does not match the number of parameters of function {}, '
                 'got {} and expect {}.'.format(func_name, len(args), len(entry.func_type.param_types))
             )
-    return Call(entry.var, args)
+    return call(entry.var, args)
