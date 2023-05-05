@@ -12,7 +12,7 @@
 from typing import List, Dict, Optional, ContextManager
 
 from hidet.ir.type import FuncType, data_type
-from hidet.ir.expr import Expr, Var, BitwiseAnd, LeftShift, BitwiseOr
+from hidet.ir.expr import Expr, Var, BitwiseAnd, bitwise_or, left_shift
 from hidet.ir.tools import collect
 from hidet.ir.stmt import LetStmt, ForStmt
 from hidet.ir.func import Function
@@ -77,7 +77,7 @@ class Scope:
         bind_values = [self.var2value[var] for var in bind_vars]
         for p_var, p_exprs in zip(self.predicate_vars, self.defined_predicates):
             bind_vars.append(p_var)
-            bind_values.append(BitwiseOr.join_list([LeftShift(p, idx) for idx, p in enumerate(p_exprs)]))
+            bind_values.append(bitwise_or(*[left_shift(p, idx) for idx, p in enumerate(p_exprs)]))
         if len(bind_vars) > 0:
             ret = LetStmt(bind_vars, bind_values, body)
         else:

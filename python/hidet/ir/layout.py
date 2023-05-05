@@ -180,9 +180,9 @@ class StridesLayout(DataLayout):
         return sum(v * self.strides[i] for i, v in enumerate(args))
 
     def global2cond(self, *args: Int) -> Bool:
-        from hidet.ir.expr import LogicalAnd
+        from hidet.ir.expr import logical_and
 
-        return LogicalAnd.join_list([v < s for s, v in zip(self.shape, args)])
+        return logical_and(*[v < s for s, v in zip(self.shape, args)])
 
     @staticmethod
     def storage_size(shape, strides) -> Expr:
@@ -228,9 +228,9 @@ class LocalLayout(DataLayout):
         return 0
 
     def global2cond(self, *args: Int) -> Bool:
-        from hidet.ir.expr import LogicalAnd
+        from hidet.ir.expr import logical_and
 
-        return LogicalAnd.join_list([v < s for s, v in zip(self.shape, args)])
+        return logical_and(*[v < s for s, v in zip(self.shape, args)])
 
 
 class SwizzleLayout(DataLayout):

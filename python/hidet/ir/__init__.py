@@ -29,6 +29,7 @@ from .expr import BinaryExpr, Condition, LessThan, LessEqual, Equal, NotEqual, A
 from .expr import Let, Cast, LogicalAnd, LogicalOr, TensorElement, Call, TensorSlice, LogicalNot, Neg
 from .expr import BitwiseXor, BitwiseAnd, BitwiseNot, BitwiseOr, Dereference
 from .expr import var, scalar_var, tensor_var, is_one, is_zero, convert
+from .expr import logical_and, logical_or, logical_not, equal, less_equal, less_than, not_equal
 
 from .layout import DataLayout
 

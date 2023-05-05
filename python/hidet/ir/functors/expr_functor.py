@@ -411,7 +411,7 @@ class ExprRewriter(ExprFunctor, BaseRewriter):
 
     def visit_TensorElement(self, e: TensorElement):
         base = self(e.base)
-        indices = [self(idx) if idx is not None else None for idx in e.indices]
+        indices = tuple(self(idx) if idx is not None else None for idx in e.indices)
         if base is e.base and same_list(indices, e.indices):
             return e
         else:
@@ -466,7 +466,7 @@ class ExprRewriter(ExprFunctor, BaseRewriter):
 
     def visit_Call(self, e: Call):
         func_var = self(e.func_var)
-        args = [self(arg) for arg in e.args]
+        args = tuple(self(arg) for arg in e.args)
         if func_var is e.func_var and same_list(args, e.args):
             return e
         else:

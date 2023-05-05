@@ -20,7 +20,7 @@ from .node import Node
 from .type import TypeNode, TensorType, DataType, TensorPointerType, PointerType, FuncType, tensor_type, data_type
 from .type import tensor_pointer_type
 
-PyScalar = Union[int, float]
+PyScalar = Union[bool, int, float, complex]
 
 
 class Expr(Node):
@@ -30,86 +30,100 @@ class Expr(Node):
             "Please use hidet.ir.if_then_else, hidet.ir.LogicalAnd, hidet.ir.LogicalOr, hidet.ir.LogicalNot explicitly."
         )
 
+    def __call__(self, *args, **kwargs):
+        if len(kwargs) > 0:
+            raise ValueError("Keyword arguments are not supported in hidet function calls.")
+        if isinstance(self, Var) and self.type.is_func_type():
+            return call(self, args)
+        else:
+            raise ValueError("Only function variable can be called.")
+
     def __neg__(self):
-        return Neg(self)
+        return self._unary(Neg, self)
 
     def __add__(self, other):
-        return Add(self, other)
+        return self._binary(Add, self, other)
 
     def __radd__(self, other):
-        return Add(other, self)
+        return self._binary(Add, other, self)
 
     def __sub__(self, other):
-        return Sub(self, other)
+        return self._binary(Sub, self, other)
 
     def __rsub__(self, other):
-        return Sub(other, self)
+        return self._binary(Sub, other, self)
 
     def __mul__(self, other):
-        return Multiply(self, other)
+        return self._binary(Multiply, self, other)
 
     def __rmul__(self, other):
-        return Multiply(other, self)
+        return self._binary(Multiply, other, self)
 
     def __truediv__(self, other):
-        return Div(self, other)
+        return self._binary(Div, self, other)
 
     def __rtruediv__(self, other):
-        return Div(other, self)
+        return self._binary(Div, other, self)
 
     def __floordiv__(self, other):
-        return Div(self, other)
+        return self._binary(Div, self, other)
 
     def __rfloordiv__(self, other):
-        return Div(other, self)
+        return self._binary(Div, other, self)
 
     def __mod__(self, other):
-        return Mod(self, other)
+        return self._binary(Mod, self, other)
 
     def __rmod__(self, other):
-        return Mod(other, self)
+        return self._binary(Mod, other, self)
 
     def __lt__(self, other):
-        return LessThan(self, other)
+        return self._binary(LessThan, self, other)
 
     def __le__(self, other):
-        return LessEqual(self, other)
+        return self._binary(LessEqual, self, other)
 
     def __eq__(self, other):
-        return Equal(self, other)
+        return self._binary(Equal, self, other)
+
+    def __ne__(self, other):
+        return self._binary(NotEqual, self, other)
+
+    def __lshift__(self, other):
+        return self._binary(LeftShift, self, other)
+
+    def __rshift__(self, other):
+        return self._binary(RightShift, self, other)
 
     def __hash__(self):
         return id(self)
 
     def __gt__(self, other):
-        return LessThan(other, self)
+        return self._binary(LessThan, other, self)
 
     def __ge__(self, other):
-        return LessEqual(other, self)
+        return self._binary(LessEqual, other, self)
 
     def __invert__(self):
-        """
-        We override the invert operator ~a as the addressing operator.
-        """
-        return Address(self)
+        return Address(self)  # We override the invert operator `~a` as the addressing operator.
 
     def __or__(self, other):
-        return BitwiseOr(self, other)
+        return self._binary(BitwiseOr, self, other)
 
     def __ror__(self, other):
-        return BitwiseOr(other, self)
+        return self._binary(BitwiseOr, other, self)
 
     def __and__(self, other):
-        return BitwiseAnd(self, other)
+        return self._binary(BitwiseAnd, self, other)
 
     def __rand__(self, other):
-        return BitwiseAnd(other, self)
+        return self._binary(BitwiseAnd, other, self)
 
     def __xor__(self, other):
-        return BitwiseXor(self, other)
+        return self._binary(BitwiseXor, self, other)
 
     def __rxor__(self, other):
-        return BitwiseXor(other, self)
+        return self._binary(BitwiseXor, other, self)
 
     def __getitem__(self, items):
         if not isinstance(items, (tuple, list)):
@@ -135,33 +149,15 @@ class Expr(Node):
                 ends.append(None)
             return tensor_slice(base=self, indices=indices, starts=starts, ends=ends)
         else:
-            return TensorElement(base=self, indices=indices)
+            return tensor_element(base=self, indices=indices)
 
     def __setitem__(self, key, value):
         raise ValueError()
-
-    def __int__(self):
-        assert isinstance(self, Constant), 'Expect a Constant, got {} with type {}'.format(self, type(self))
-        return int(self)
-
-    def __float__(self):
-        assert isinstance(self, Constant), 'Expect a Constant, got {} with type {}'.format(self, type(self))
-        return float(self)
 
     def __str__(self):
         from hidet.ir.tools import astext
 
         return str(astext(self))
-
-    def equals(self, other):
-        return Equal(self, other)
-
-    def is_const(self):
-        return isinstance(self, Constant)
-
-    def const(self) -> Constant:
-        assert isinstance(self, Constant)
-        return self
 
     def read(self, items, protected=True):
         te = self[items]
@@ -179,7 +175,7 @@ class Expr(Node):
         return BufferStoreStmt(self, te.indices, value, protected)
 
     @staticmethod
-    def _unary(cls, a):
+    def _unary(cls, a):  # pylint: disable=bad-staticmethod-argument
         if not isinstance(a, Expr):
             a = convert(a)
         if isinstance(a, Constant):
@@ -195,18 +191,19 @@ class Expr(Node):
             return cls(a)
 
     @staticmethod
-    def _binary(cls, a, b):
+    def _binary(cls, a, b):  # pylint: disable=bad-staticmethod-argument
         if not isinstance(a, Expr):
             a = convert(a)
         if not isinstance(b, Expr):
             b = convert(b)
         if isinstance(a, Constant) and isinstance(b, Constant):
             from hidet.ir.dtypes import promote_type
+
             value = _operator_dict[cls](a.value, b.value)
-            if cls in [Equal, NotEqual, LessThan, LessEqual]:
+            if cls in [Equal, NotEqual, LessThan, LessEqual, LogicalAnd, LogicalOr]:
                 return Constant(value, const_type='bool')
-            elif cls in [LogicalAnd, LogicalOr]:
-                return Constant(value, const_type='bool')
+            elif cls in [LeftShift, RightShift]:
+                return Constant(value, a.type)
             else:
                 return Constant(value, promote_type(a.type, b.type))
         else:
@@ -264,32 +261,10 @@ class LogicalAnd(Condition, BinaryExpr):
     def __init__(self, a, b):
         super().__init__(a, b)
 
-    @staticmethod
-    def join(*conds):
-        cond = None
-        for c in conds:
-            cond = LogicalAnd(cond, convert(c)) if cond is not None else convert(c)
-        return cond
-
-    @staticmethod
-    def join_list(conds: Sequence[Condition]):
-        return LogicalAnd.join(*conds)
-
 
 class LogicalOr(Condition, BinaryExpr):
     def __init__(self, a, b):
         super().__init__(a, b)
-
-    @staticmethod
-    def join(*conds):
-        cond = None
-        for c in conds:
-            cond = LogicalOr(cond, convert(c)) if cond is not None else convert(c)
-        return cond
-
-    @staticmethod
-    def join_list(conds: Sequence[Condition]):
-        return LogicalOr.join(*conds)
 
 
 class LogicalNot(Condition, UnaryExpr):
@@ -346,16 +321,6 @@ class BitwiseAnd(BinaryExpr):
 class BitwiseOr(BinaryExpr):
     def __init__(self, a, b):
         super().__init__(a, b)
-
-    @staticmethod
-    def join_list(lst):
-        if len(lst) == 0:
-            return convert(0)
-        else:
-            current = lst[0]
-            for v in lst[1:]:
-                current = BitwiseOr(current, v)
-            return current
 
 
 class BitwiseXor(BinaryExpr):
@@ -466,6 +431,9 @@ class Constant(Expr):
     def __bool__(self):
         return bool(self.value)
 
+    def __complex__(self):
+        return complex(self.value)
+
     def array(self) -> np.ndarray:
         return self.value
 
@@ -521,10 +489,10 @@ class Var(Expr):
         same hint. If two vars have the same hint such as 'x', the final name would be like 'x1', 'x2'.
 
         OUTDATED:
-        Name is the determined name in the final code. Used by primitive varaibles such as 'threadIdx.x'. No variable
+        Name is the determined name in the final code. Used by primitive variables such as 'threadIdx.x'. No variable
         should have a same name as primitive objects (including primitive variables and primitive functions).
 
-        Id is used to track the allocation of Var object in python, which is only used to help us to distinguish
+        ID is used to track the allocation of Var object in python, which is only used to help us to distinguish
         different Var in python debugger.
         """
         self.hint: Optional[str] = hint
@@ -568,7 +536,6 @@ _operator_dict: Dict[Type[Expr], Callable] = {
     Neg: operator.neg,
     LogicalNot: operator.not_,
     BitwiseNot: operator.invert,
-
     # binary arithmetic
     Add: operator.add,
     Sub: operator.sub,
@@ -584,6 +551,8 @@ _operator_dict: Dict[Type[Expr], Callable] = {
     LessEqual: operator.le,
     LogicalAnd: lambda a, b: a and b,
     LogicalOr: lambda a, b: a or b,
+    LeftShift: operator.lshift,
+    RightShift: operator.rshift,
 }
 
 
@@ -731,8 +700,81 @@ def tensor_slice(
     return TensorSlice(base, indices, starts, ends)
 
 
-def tensor_element():
-    pass
+def tensor_element(base: Expr, indices: Sequence[Int], protected=False):
+    indices = tuple(convert(i) for i in indices)
+    return TensorElement(base, indices, protected)
+
+
+def _chain_binary_op(op, operands, default):
+    if len(operands) == 0:
+        return convert(default)
+    elif len(operands) == 1:
+        return convert(operands[0])
+    else:
+        a = _chain_binary_op(op, operands[:-1], default)
+        b = convert(operands[-1])
+        return op(a, b)
+
+
+def logical_and(*args: Union[Expr, bool]) -> LogicalAnd:
+    return _chain_binary_op(LogicalAnd, args, True)
+
+
+def logical_or(*args: Union[Expr, bool]) -> LogicalOr:
+    return _chain_binary_op(LogicalOr, args, False)
+
+
+def logical_not(a: Union[Expr, PyScalar]) -> LogicalNot:
+    a = convert(a)
+    return LogicalNot(a)
+
+
+def equal(a: Union[Expr, PyScalar], b: Union[Expr, PyScalar]) -> Equal:
+    a = convert(a)
+    b = convert(b)
+    return Equal(a, b)
+
+
+def less_than(a: Union[Expr, PyScalar], b: Union[Expr, PyScalar]) -> LessThan:
+    a = convert(a)
+    b = convert(b)
+    return LessThan(a, b)
+
+
+def less_equal(a: Union[Expr, PyScalar], b: Union[Expr, PyScalar]) -> LessEqual:
+    a = convert(a)
+    b = convert(b)
+    return LessEqual(a, b)
+
+
+def not_equal(a: Union[Expr, PyScalar], b: Union[Expr, PyScalar]) -> NotEqual:
+    a = convert(a)
+    b = convert(b)
+    return NotEqual(a, b)
+
+
+def left_shift(a: Union[Expr, int], b: Union[Expr, int]) -> LeftShift:
+    a = convert(a)
+    b = convert(b)
+    return LeftShift(a, b)
+
+
+def right_shift(a: Union[Expr, int], b: Union[Expr, int]) -> RightShift:
+    a = convert(a)
+    b = convert(b)
+    return RightShift(a, b)
+
+
+def bitwise_and(*args: Union[Expr, int]) -> BitwiseAnd:
+    return _chain_binary_op(BitwiseAnd, args, -1)
+
+
+def bitwise_or(*args: Union[Expr, int]) -> BitwiseOr:
+    return _chain_binary_op(BitwiseOr, args, 0)
+
+
+def bitwise_xor(*args: Union[Expr, int]) -> BitwiseXor:
+    return _chain_binary_op(BitwiseXor, args, 0)
 
 
 def cast(v: Expr, dtype: Union[str, DataType, TypeNode]):
@@ -746,6 +788,11 @@ def cast(v: Expr, dtype: Union[str, DataType, TypeNode]):
         return Constant(v.value, dtype)
     else:
         return Cast(v, dtype)
+
+
+def call(func: Var, args: Sequence[Union[Expr, PyScalar]]) -> Call:
+    args = tuple(convert(a) for a in args)
+    return Call(func, args)
 
 
 def const_tensor(value: np.ndarray) -> Constant:

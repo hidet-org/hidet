@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from hidet.ir.expr import Expr, Call
+from hidet.ir.expr import Expr
 from hidet.ir.type import FuncType
 from hidet.ir.primitives.func import register_primitive_function, primitive_func_pool
 from hidet.ir.primitives.math import MathFunctionSet, register_math_function_set
@@ -66,7 +66,7 @@ class CPUFloat32MathFunctionSet(MathFunctionSet):
     @staticmethod
     def call(name: str, *args) -> Expr:
         entry = primitive_func_pool.lookup_by_name('cpu_f32_{}'.format(name))
-        return Call(entry.var, args)
+        return entry.var(*args)
 
     def sin(self, a: Expr) -> Expr:
         return self.call('sin', a)

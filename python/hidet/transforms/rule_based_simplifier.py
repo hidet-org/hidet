@@ -15,22 +15,9 @@ from itertools import product
 
 from hidet.ir.dialects.pattern import PlaceholderExpr, match
 from hidet.ir.dtypes import boolean
-from hidet.ir.expr import (
-    Add,
-    convert,
-    Sub,
-    Multiply,
-    Mod,
-    LessThan,
-    LessEqual,
-    Equal,
-    BinaryExpr,
-    LogicalAnd,
-    IfThenElse,
-    if_then_else
-)
-from hidet.ir.expr import LogicalOr, BitwiseXor, BitwiseAnd, BitwiseOr, BitwiseNot
-from hidet.ir.expr import Div, Constant, Expr
+from hidet.ir.expr import Add, convert, Sub, Multiply, Mod, LessThan, LessEqual, Equal, BinaryExpr, LogicalAnd
+from hidet.ir.expr import BitwiseXor, BitwiseAnd, BitwiseOr, BitwiseNot
+from hidet.ir.expr import Div, Constant, Expr, logical_and, logical_or, if_then_else
 from hidet.ir.functors import IRRewriter
 from hidet.ir.tools import rewrite
 from hidet.transforms.base import FunctionPass
@@ -74,10 +61,10 @@ class ConstExprSimplifier(IRRewriter):
         from hidet.ir.utils.type_utils import numeric_promotion
 
         e = IRRewriter.visit_Binary(self, e)
-        if e.a.is_const() and e.b.is_const() and e.__class__ in self.op_dict:
+        if isinstance(e.a, Constant) and isinstance(e.b, Constant) and e.__class__ in self.op_dict:
             assert isinstance(e.a, Constant) and isinstance(e.b, Constant)
             op = self.op_dict[e.__class__]
-            c = op(e.a.const().value, e.b.const().value)
+            c = op(e.a.value, e.b.value)
             if isinstance(c, bool):
                 return Constant(c, 'bool')
             else:
@@ -86,8 +73,8 @@ class ConstExprSimplifier(IRRewriter):
 
     def visit_And(self, e: LogicalAnd):
         e = IRRewriter.visit_Binary(self, e)
-        a_val = e.a.const().value if e.a.is_const() else None
-        b_val = e.b.const().value if e.b.is_const() else None
+        a_val = e.a.value if isinstance(e.a, Constant) else None
+        b_val = e.b.value if isinstance(e.b, Constant) else None
         if a_val and b_val:
             return convert(True)
         elif a_val is False or b_val is False:
@@ -153,10 +140,10 @@ class RuleBasedSimplifier(IRRewriter):
             (c1 <= e1 - c2, c1 + c2 <= e1),
             (c1 <= e1 + c2, c1 - c2 <= e1),
             # and/or
-            (LogicalAnd(ec1, True), ec1),
-            (LogicalAnd(ec1, False), boolean.false),
-            (LogicalOr(ec1, True), boolean.true),
-            (LogicalOr(ec1, False), ec1),
+            (logical_and(ec1, True), ec1),
+            (logical_and(ec1, False), boolean.false),
+            (logical_or(ec1, True), boolean.true),
+            (logical_or(ec1, False), ec1),
             # if then else
             (if_then_else(True, ec1, ec2), ec1),
             (if_then_else(True, ec1, ec2), ec2),

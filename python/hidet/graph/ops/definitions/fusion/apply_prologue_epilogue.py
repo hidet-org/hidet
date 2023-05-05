@@ -14,7 +14,7 @@ import os
 
 import hidet.option
 from hidet.ir.compute import TensorNode, GridCompute, TensorInput
-from hidet.ir.expr import Expr, Var, TensorElement, tensor_var
+from hidet.ir.expr import Expr, Var, TensorElement, tensor_var, tensor_element
 from hidet.ir.stmt import BufferStoreStmt
 from hidet.ir.func import Function, IRModule
 from hidet.ir.task import Task, InverseMap
@@ -119,15 +119,15 @@ class PrologueEpilogueRewriter(IRRewriter):
         if e.base in self.anchor_inputs:
             # access an input tensor in the anchor operator, replace it with the task input (i.e., InputTensor)
             input_index = self.anchor_inputs.index(e.base)
-            return self.visit(TensorElement(self.anchor_task.inputs[input_index], e.indices))
+            return self.visit(tensor_element(self.anchor_task.inputs[input_index], e.indices))
         elif isinstance(e.base, TensorNode):
             # apply prologue
             buf: TensorNode = e.base
-            indices = [self.visit(v) for v in e.indices]
+            indices = tuple(self.visit(v) for v in e.indices)
             if isinstance(buf, TensorInput):
                 if buf in self.graph_input_to_var:
                     # buf is an input tensor of the fused graph
-                    return TensorElement(self.graph_input_to_var[buf], indices)
+                    return tensor_element(self.graph_input_to_var[buf], indices)
                 elif buf in self.consume:
                     # buf is an input tensor of an inner task of the fused graph,
                     # but not an input tensor of fused graph.
@@ -205,9 +205,9 @@ class PrologueEpilogueRewriter(IRRewriter):
                 assert len(tensor_elements) == 1, (
                     'Epilogue can only index one time of the input tensor ' 'with inverse map'
                 )
-                tensor_element: TensorElement = tensor_elements[0]
+                te: TensorElement = tensor_elements[0]
                 # in the context of above example, we replace 'out[i + 3, i + j]' by 'value'
-                self.memo[tensor_element] = self.visit(stmt.value)
+                self.memo[te] = self.visit(stmt.value)
 
                 # step 3
                 return self.visit(BufferStoreStmt(consumer_output, out_indices, value, stmt.protected))
