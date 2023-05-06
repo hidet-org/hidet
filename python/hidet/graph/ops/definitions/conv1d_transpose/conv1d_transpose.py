@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Optional
-from hidet.ir.expr import if_then_else, LogicalAnd
+from hidet.ir.expr import if_then_else, logical_and
 from hidet.ir.compute import compute, reduce
 from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, TensorNode
 from hidet.graph.ops.definitions.utils import input_like, normalize_stride, normalize_padding, normalize_kernel
@@ -51,7 +51,7 @@ class Conv1dTransposeTask(Task):
             fcompute=lambda ni, ci, li: reduce(
                 shape=[og, kernel_size],
                 fcompute=lambda ogi, ki: if_then_else(
-                    cond=LogicalAnd.join(li + p >= ki, li + p < length_in * s + ki, (li + p - ki) % s == 0),
+                    cond=logical_and(li + p >= ki, li + p < length_in * s + ki, (li + p - ki) % s == 0),
                     then_expr=(
                         data[ni, (ci // wc) * og + ogi, (li + p - ki) // s] * weight[(ci // wc) * og + ogi, ci % wc, ki]
                     ),

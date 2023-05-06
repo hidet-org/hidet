@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Callable
-from hidet.ir.expr import Expr, Call, ExprInt64, ExprFloat16, ExprInt16
+from hidet.ir.expr import Expr, ExprInt64, ExprFloat16, ExprInt16
 from hidet.ir.type import FuncType, DataType
 from hidet.ir.func import Function
 from hidet.ir.dtypes import int16, float16, float32, int64
@@ -139,7 +139,7 @@ class CUDAFloat16MathFunctionSet(MathFunctionSet):
 
     def call(self, name: str, *args) -> Expr:
         entry = primitive_func_pool.lookup_by_name(name)
-        return Call(entry.var, args)
+        return entry.var(*args)
 
     def sin(self, a: Expr) -> Expr:
         return self.call('cuda_f16_sin', a)

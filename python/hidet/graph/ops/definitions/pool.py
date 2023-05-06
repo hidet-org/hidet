@@ -11,7 +11,7 @@
 # limitations under the License.
 from typing import Union, Sequence, List, Dict, Any
 
-from hidet.ir.expr import Expr, LogicalAnd, convert, if_then_else
+from hidet.ir.expr import Expr, convert, if_then_else, logical_and
 
 from .utils import Task, Operator, Tensor, TensorNode, compute, reduce, input_like, normalize_stride, normalize_kernel
 from .utils import normalize_padding, normalize_output
@@ -31,7 +31,7 @@ class Pool2dTask(Task):
             name='pad',
             shape=[batch_size, channels, height + padding[0] + padding[2], width + padding[1] + padding[3]],
             fcompute=lambda n, c, h, w: if_then_else(
-                LogicalAnd.join(padding[0] <= h, h < height + padding[0], padding[1] <= w, w < width + padding[1]),
+                logical_and(padding[0] <= h, h < height + padding[0], padding[1] <= w, w < width + padding[1]),
                 x[n, c, h - padding[0], w - padding[1]],
                 pad_value,
             ),
@@ -70,7 +70,7 @@ class Pool3dTask(Task):
             ],
             fcompute=lambda n, c, d, h, w: (
                 if_then_else(
-                    LogicalAnd.join(
+                    logical_and(
                         padding[0] <= d,
                         d < depth + padding[0],
                         padding[1] <= h,

@@ -11,7 +11,7 @@
 # limitations under the License.
 from typing import List, Optional, Union, Sequence
 from hidet.ir.type import DataType, data_type
-from hidet.ir.expr import LogicalAnd, if_then_else, convert
+from hidet.ir.expr import if_then_else, convert, cast as ir_cast, logical_and
 from hidet.ir.layout import RowMajorLayout, ColumnMajorLayout
 from hidet.ir.utils import index_deserialize, index_serialize
 from hidet.utils import prod
@@ -273,11 +273,11 @@ class PadTask(Task):
         assert rank * 2 == len(pads)
         out_shape = [a + b + c for a, b, c in zip(pads[:rank], shape, pads[rank:])]
 
-        value = convert(value, dtype=data.ttype.dtype.name)
+        value = convert(value, dtype=data.type.dtype.name)
 
         def fmap(*indices):
             indices = [idx - beg for idx, beg in zip(indices, pads[:rank])]
-            cond = LogicalAnd.join_list([LogicalAnd(0 <= idx, idx < shape[i]) for i, idx in enumerate(indices)])
+            cond = logical_and(*[logical_and(0 <= idx, idx < shape[i]) for i, idx in enumerate(indices)])
             return if_then_else(cond, data[indices], value)
 
         out = compute('out', shape=out_shape, fcompute=fmap)
@@ -430,13 +430,12 @@ class PermuteDimsOp(Operator):
 
 class CastOp(Operator):
     def __init__(self, x: Tensor, dtype: DataType):
-        from hidet.ir.expr import Cast
         from .arithmetic import UnaryElementwiseTask
 
         super().__init__(
             inputs=[x],
             attributes={'dtype': dtype},
-            task=UnaryElementwiseTask('cast', input_like(x, 'x'), op=lambda v: Cast(v, dtype)),
+            task=UnaryElementwiseTask('cast', input_like(x, 'x'), op=lambda v: ir_cast(v, dtype)),
         )
 
 

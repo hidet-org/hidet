@@ -9,6 +9,4 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from .simt import batched_matmul_cuda_schedule_simt
-from .wmma import batched_matmul_cuda_schedule_wmma
-from .mma import batched_matmul_cuda_schedule_mma
+from .entry import hidet_cache_group

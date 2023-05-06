@@ -96,7 +96,7 @@ class MatmulResolveRule(ResolveRule):
 
     def run_batch_matmul(self, a: Tensor, b: Tensor) -> Tensor:
         parallel_k = self.get_config('parallel_k', default='default')  # 'default', 'search', 2, 4, ...
-        mma = self.get_config('mma', default='simt')  # 'simt', 'mma', 'wmma'
+        mma = self.get_config('mma', default='simt')  # 'simt', 'mma'
 
         batch_size, m_size, n_size, k_size = a.shape[0], a.shape[1], b.shape[2], a.shape[2]
         if parallel_k == 'default':

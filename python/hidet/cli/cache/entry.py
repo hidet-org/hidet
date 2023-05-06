@@ -9,6 +9,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import click
+from .status import hidet_cache_status
+from .clear import hidet_cache_clear
 
-from .softmax import softmax_cuda_schedule
-from .reduce import cuda_schedule_reduce_by_default
+
+@click.group(name='cache', help='Manage hidet cache.')
+def hidet_cache_group():
+    pass
+
+
+for command in [hidet_cache_status, hidet_cache_clear]:
+    assert isinstance(command, click.Command)
+    hidet_cache_group.add_command(command)

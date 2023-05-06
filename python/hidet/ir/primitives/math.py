@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List, Dict, Tuple, Optional
-from hidet.ir.expr import Expr, Call
+from hidet.ir.expr import Expr
 from hidet.ir.type import FuncType, DataType, data_type
 from hidet.ir.utils.type_utils import numeric_promotion
 from hidet.ir.primitives.func import register_primitive_function, lookup_primitive_function
@@ -204,7 +204,7 @@ class MathFunctionSetGeneric(MathFunctionSet):
     @staticmethod
     def call(name, *args) -> Expr:
         entry = lookup_primitive_function(f'generic_{name}')
-        return Call(entry.var, args)
+        return entry.var(*args)
 
     # unary names
 

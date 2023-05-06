@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from hidet.ir.type import TensorType, tensor_type, tensor_pointer_type, PointerType, TensorPointerType
-from hidet.ir.expr import Var, TensorElement, TensorSlice, Constant
+from hidet.ir.expr import Var, TensorElement, TensorSlice, Constant, tensor_element
 from hidet.ir.stmt import BufferStoreStmt, DeclareStmt
 from hidet.ir.func import Function
 from hidet.ir.functors import IRRewriter
@@ -72,7 +72,7 @@ class FlattenTensorAccessRewriter(IRRewriter):
                 )
             )
         global_index = layout(*indices)
-        return TensorElement(var, [global_index])
+        return tensor_element(var, (global_index,))
 
     def visit_BufferStoreStmt(self, stmt: BufferStoreStmt):
         var = self(stmt.buf)

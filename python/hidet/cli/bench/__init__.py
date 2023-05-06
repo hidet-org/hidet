@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from hidet.graph.frontend.torch import availability as torch_availability
-from .bench import bench_group
+from .bench import hidet_bench_group
 
 if not torch_availability.dynamo_available():
     raise RuntimeError(

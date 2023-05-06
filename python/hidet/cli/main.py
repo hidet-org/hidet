@@ -10,7 +10,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import click
-from hidet.cli.bench import bench_group
+from hidet.cli.bench import hidet_bench_group
+from hidet.cli.cache import hidet_cache_group
 from hidet.utils import initialize
 
 
@@ -21,7 +22,7 @@ def main():
 
 @initialize()
 def register_commands():
-    for group in [bench_group]:
+    for group in [hidet_bench_group, hidet_cache_group]:
         assert isinstance(group, click.Command)
         main.add_command(group)
 
