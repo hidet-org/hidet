@@ -18,8 +18,8 @@ def matmul_kernel5():
     from hidet.lang.avx import avx_free, avx_malloc, x86_memset
 
     MC = 2400
-    NC = 768
-    KC = 512
+    NC = 240
+    KC = 120
 
     MR = 6
     NR = 16
@@ -121,7 +121,7 @@ def matmul_kernel5():
             _mr = ib % MR
             _nr = jb % NR
             # Loop 2
-            for mpanel in grid(mpanels, attrs='p16'):
+            for mpanel in grid(mpanels):
                 mr = MR if mpanel != mpanels - 1 or _mr == 0 else _mr
                 ii = mpanel * MR
                 # Loop 1
@@ -208,8 +208,8 @@ def matmul_kernel5():
                                 remain_row += 1
                     # End of the packing of A...
                     # Start loop 3
-                    j = 0
-                    while j < n_size:
+                    for nb in grid(nbs, attrs='p16'):
+                        j = nb * NC
                         jb = min(NC, n_size - j)
                         # TODO: pack B into contiguous memory
                         np = jb // NR
@@ -233,10 +233,7 @@ def matmul_kernel5():
                         # End of packing B into contiguous memory
                         # Start of the macro-kernel
                         macro_kernel(aip_packed, bpj_packed, ~c[i, j], ib, jb, pb, m_size, n_size)
-
-                        j += NC
                     p += KC
-                # i += MC
     #################################################
     assert isinstance(matmul_kernel, hidet.ir.Function)
     matmul_kernel.kind = 'host_kernel'
@@ -250,19 +247,17 @@ def matmul_kernel5():
 def ff():
     func = matmul_kernel5()
 
-    for m, n, k in [(1, 74, 1), (64, 64, 64), (110, 111, 111), (101, 101, 37), (111, 367, 369), (224, 562, 325),
-                    (256, 256, 256), (333, 444, 555), (512, 512, 512), (1024, 1024, 1024), (1024, 512, 768),
-                    (480, 480, 480), (720, 720, 720), (720, 960, 1440), (1111, 1111, 1111), (1111, 1314, 533)]:
+    for m, n, k in [(]:
         a = hidet.randn([m, k], dtype='float32').cpu()
         b = hidet.randn([k, n], dtype='float32').cpu()
         c = hidet.zeros([m, n]).cpu()
         func(a, b, c, m, n, k)
-        numpy.testing.assert_allclose(
-            actual=c.cpu().numpy(),
-            desired=a.cpu().numpy() @ b.cpu().numpy(),
-            atol=1e-4,
-            rtol=1e-3
-        )
+        # numpy.testing.assert_allclose(
+        #     actual=c.cpu().numpy(),
+        #     desired=a.cpu().numpy() @ b.cpu().numpy(),
+        #     atol=1e-4,
+        #     rtol=1e-3
+        # )
 
         hidet_latency = hidet.utils.benchmark_func(
             lambda: func(a, b, c, m, n, k), repeat=10

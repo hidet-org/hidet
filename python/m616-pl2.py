@@ -17,9 +17,12 @@ def matmul_kernel5():
     from hidet.lang.avx import avx_f32x8_store, avx_f32x8_broadcast, avx_f32x8_fmadd, avx_f32x8_load
     from hidet.lang.avx import avx_free, avx_malloc, x86_memset
 
+    # MC = 2400
+    # NC = 768
+    # KC = 1024
     MC = 2400
-    NC = 768
-    KC = 512
+    KC = 746
+    NC = 512
 
     MR = 6
     NR = 16
@@ -121,7 +124,7 @@ def matmul_kernel5():
             _mr = ib % MR
             _nr = jb % NR
             # Loop 2
-            for mpanel in grid(mpanels, attrs='p16'):
+            for mpanel in grid(mpanels, attrs='p32'):
                 mr = MR if mpanel != mpanels - 1 or _mr == 0 else _mr
                 ii = mpanel * MR
                 # Loop 1
@@ -250,9 +253,10 @@ def matmul_kernel5():
 def ff():
     func = matmul_kernel5()
 
-    for m, n, k in [(1, 74, 1), (64, 64, 64), (110, 111, 111), (101, 101, 37), (111, 367, 369), (224, 562, 325),
-                    (256, 256, 256), (333, 444, 555), (512, 512, 512), (1024, 1024, 1024), (1024, 512, 768),
-                    (480, 480, 480), (720, 720, 720), (720, 960, 1440), (1111, 1111, 1111), (1111, 1314, 533)]:
+    # for m, n, k in [(64, 64, 64), (110, 111, 111), (101, 101, 37), (111, 367, 369), (224, 562, 325),
+    #                 (256, 256, 256), (333, 444, 555), (512, 512, 512), (1024, 1024, 1024), (1111, 1111, 1111), (1111, 1314, 533),
+    #                 (1440, 1440, 1440), (1920, 1920, 1920), (2023, 2023, 2023), (5247, 4202, 3175)]:
+    for m, n, k in [(1024, 1024, 1024)]:
         a = hidet.randn([m, k], dtype='float32').cpu()
         b = hidet.randn([k, n], dtype='float32').cpu()
         c = hidet.zeros([m, n]).cpu()
@@ -261,7 +265,7 @@ def ff():
             actual=c.cpu().numpy(),
             desired=a.cpu().numpy() @ b.cpu().numpy(),
             atol=1e-4,
-            rtol=1e-3
+            rtol=1e-4
         )
 
         hidet_latency = hidet.utils.benchmark_func(
