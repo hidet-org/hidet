@@ -21,8 +21,8 @@ def matmul_kernel5():
     # NC = 768
     # KC = 1024
     MC = 2400
-    KC = 746
-    NC = 512
+    KC = 768
+    NC = 384
 
     MR = 6
     NR = 16
@@ -186,7 +186,9 @@ def matmul_kernel5():
                 i = mb * MC
                 ib = min(MC, m_size - i)
                 p = 0
-                while p < k_size:
+                # while p < k_size:
+                for kb in range(kbs):
+                    p = kb * KC
                     # pack A into contiguous memory
                     pb = min(KC, k_size - p)
                     mp = ib // MR
@@ -211,8 +213,10 @@ def matmul_kernel5():
                                 remain_row += 1
                     # End of the packing of A...
                     # Start loop 3
-                    j = 0
-                    while j < n_size:
+                    # j = 0
+                    # while j < n_size:
+                    for nb in range(nbs):
+                        j = nb * NC
                         jb = min(NC, n_size - j)
                         # TODO: pack B into contiguous memory
                         np = jb // NR
@@ -236,10 +240,6 @@ def matmul_kernel5():
                         # End of packing B into contiguous memory
                         # Start of the macro-kernel
                         macro_kernel(aip_packed, bpj_packed, ~c[i, j], ib, jb, pb, m_size, n_size)
-
-                        j += NC
-                    p += KC
-                # i += MC
     #################################################
     assert isinstance(matmul_kernel, hidet.ir.Function)
     matmul_kernel.kind = 'host_kernel'
