@@ -73,7 +73,7 @@ class MatmulF32Taskx86(Task):
     def schedule(self, block_m=2014, block_n=512, block_k=768, micro_ker: str = '6x16', nthreads=8) -> IRModule:
         import hidet
         from hidet.ir.type import tensor_type
-        from hidet.lang import attr, col_spatial, view, u32, tensor_pointer, grid, as_tensor_pointer
+        from hidet.lang import attr, col_spatial, tensor, u32, tensor_pointer, grid, as_tensor_pointer
         from hidet.lang.layout import row_layout, col_layout
         from hidet.lang.mapping import spatial, auto_map
         from hidet.lang.avx import avx_f32x8_store, avx_f32x8_fmadd, avx_f32x8_load, avx_f32x8_broadcast
@@ -103,8 +103,6 @@ class MatmulF32Taskx86(Task):
         c_type = tensor_type(
             'float32', shape=[m_size, n_size]
         )
-
-        temp_c = tensor_type
 
         # TODO: Do I need any mappings? Since I think the coordination is automatically done
         # TODO: by openmp
@@ -259,6 +257,24 @@ class MatmulF32Taskx86(Task):
                         if mr == tile_m and nr == tile_n:
                             micro_kernel(~a[ii, 0], ~b[0, jj], ~c[ii, jj], pb)
                         else:
+                            temp_c = tensor(
+                                scope='default',
+                                dtype='float32',
+                                layout=row_layout(tile_m, tile_n)
+                            )
+                            for tempi in range(tile_m):
+                                for tempj in range(tile_n):
+                                    temp_c[tempi, tempj] = 0.0
+                            micro_kernel(~a[ii, 0], ~b[0, jj], temp_c, pb)
+                            for remain_row, remain_col in grid(mr, nr):
+                                c[ii+remain_row, jj+remain_col] += temp_c[remain_row, remain_col]
+
+            @hidet.script
+            def matmul_kernel_x86(
+                    a: float32[m_size, k_size], b: float32[k_size, n_size], c: float32[m_size, n_size]
+            ):
+                mbs = (m_size + block_m - 1) // block_m
+                nbs = ()
 
 
 
