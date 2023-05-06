@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from hidet.ir.expr import Expr, Call
+from hidet.ir.expr import Expr
 from hidet.ir.type import FuncType
 from hidet.ir.func import Function
 from hidet.ir.primitives.func import register_primitive_function, primitive_func_pool
@@ -58,7 +58,7 @@ class CUDABFloat16MathFunctionSet(MathFunctionSet):
 
     def call(self, name: str, *args) -> Expr:
         entry = primitive_func_pool.lookup_by_name(name)
-        return Call(entry.var, args)
+        return entry.var(*args)
 
     def sin(self, a: Expr) -> Expr:
         return self.call('cuda_bf16_sin', a)

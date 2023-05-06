@@ -16,12 +16,12 @@ from .utils import Tensor
 
 class EqualOp(BinaryElementwiseOp):
     def __init__(self, x: Tensor, y: Tensor):
-        super().__init__(x, y, lambda a, b: expr.Equal(a, b), name='eq')
+        super().__init__(x, y, lambda a, b: a == b, name='eq')
 
 
 class NotEqualOp(BinaryElementwiseOp):
     def __init__(self, x: Tensor, y: Tensor):
-        super().__init__(x, y, lambda a, b: expr.NotEqual(a, b), name='ne')
+        super().__init__(x, y, lambda a, b: a != b, name='ne')
 
 
 class LessOp(BinaryElementwiseOp):
@@ -46,25 +46,25 @@ class GreaterEqualOp(BinaryElementwiseOp):
 
 class LogicalNotOp(UnaryElementwiseOp):
     def __init__(self, x: Tensor):
-        super().__init__(x, lambda a: expr.LogicalNot(a), name='not')
+        super().__init__(x, lambda a: expr.logical_not(a), name='not')
 
 
 class LogicalAndOp(BinaryElementwiseOp):
     def __init__(self, x: Tensor, y: Tensor):
-        super().__init__(x, y, lambda a, b: expr.LogicalAnd(a, b), name='and')
+        super().__init__(x, y, lambda a, b: expr.logical_and(a, b), name='and')
 
 
 class LogicalOrOp(BinaryElementwiseOp):
     def __init__(self, x: Tensor, y: Tensor):
-        super().__init__(x, y, lambda a, b: expr.LogicalOr(a, b), name='or')
+        super().__init__(x, y, lambda a, b: expr.logical_or(a, b), name='or')
 
 
 class LogicalXorOp(BinaryElementwiseOp):
     def __init__(self, x: Tensor, y: Tensor):
         def expr_logical_xor(a: Expr, b: Expr) -> Expr:
-            x = expr.LogicalAnd(a, expr.LogicalNot(b))
-            y = expr.LogicalAnd(expr.LogicalNot(a), b)
-            return expr.LogicalOr(x, y)
+            x = expr.logical_and(a, expr.logical_not(b))
+            y = expr.logical_and(expr.logical_not(a), b)
+            return expr.logical_or(x, y)
 
         super().__init__(x, y, lambda a, b: expr_logical_xor(a, b), name='xor')
 

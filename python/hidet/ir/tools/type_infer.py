@@ -11,13 +11,13 @@
 # limitations under the License.
 from hidet.ir.type import DataType, TensorType, FuncType, PointerType, TensorPointerType, data_type, tensor_pointer_type
 from hidet.ir.type import tensor_type
-from hidet.ir.expr import BinaryOp, Add, Sub, Multiply, Div, Mod, FloorDiv, Condition, LessThan, Equal, IfThenElse
+from hidet.ir.expr import BinaryExpr, Add, Sub, Multiply, Div, Mod, FloorDiv, Condition, LessThan, Equal, IfThenElse
 from hidet.ir.expr import TensorSlice, LogicalNot, LogicalOr, LogicalAnd, LessEqual, Let, RightShift, LeftShift
 from hidet.ir.expr import BitwiseAnd, Neg, NotEqual, BitwiseXor, Dereference, Reference, Address, BitwiseNot, BitwiseOr
 from hidet.ir.expr import Var, Constant, TensorElement, Call, Cast
 from hidet.ir.compute import ArgReduceCompute, ReduceCompute, GridCompute, TensorInput, ScalarInput
 from hidet.ir.functors import ExprFunctor, ComputeFunctor
-from hidet.ir.dialects.pattern import AnyExpr
+from hidet.ir.dialects.pattern import PlaceholderExpr
 
 
 def is_bool(tp: DataType):
@@ -32,7 +32,7 @@ class TypeInfer(ExprFunctor, ComputeFunctor):
     def visit_Reference(self, e: Reference):
         return self(e.expr)
 
-    def visit_Binary(self, e: BinaryOp):
+    def visit_Binary(self, e: BinaryExpr):
         from hidet.ir.utils.type_utils import numeric_promotion
 
         a_dtype: DataType = self.visit(e.a)
@@ -98,13 +98,13 @@ class TypeInfer(ExprFunctor, ComputeFunctor):
         return self.visit(e.a)
 
     def visit_BitwiseNot(self, e: BitwiseNot):
-        return self.visit(e.base)
+        return self.visit(e.a)
 
     def visit_LeftShift(self, e: LeftShift):
-        return self.visit(e.base)
+        return self.visit(e.a)
 
     def visit_RightShift(self, e: RightShift):
-        return self.visit(e.base)
+        return self.visit(e.a)
 
     def visit_TensorElement(self, e: TensorElement):
         base_type = self.visit(e.base)
@@ -203,7 +203,7 @@ class TypeInfer(ExprFunctor, ComputeFunctor):
     def visit_ArgReduceCompute(self, c: ArgReduceCompute):
         return c.index_dtype
 
-    def visit_AnyExpr(self, e: AnyExpr):
+    def visit_AnyExpr(self, e: PlaceholderExpr):
         raise NotImplementedError()
 
 

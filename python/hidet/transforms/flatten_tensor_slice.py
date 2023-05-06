@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # pylint: disable=unused-variable
-from hidet.ir.expr import TensorElement, TensorSlice
+from hidet.ir.expr import TensorElement, TensorSlice, tensor_element, tensor_slice
 from hidet.ir.func import Function
 from hidet.ir.functors import IRRewriter
 from hidet.ir.stmt import BufferStoreStmt
@@ -64,7 +64,7 @@ class FlattenTensorSliceRewriter(IRRewriter):
             e_starts = [self.visit(s) if s is not None else None for s in e.starts]
             e_ends = [self.visit(e) if e is not None else None for e in e.ends]
             indices, starts, ends = concat_slices(base.indices, base.starts, base.ends, e_indices, e_starts, e_ends)
-            return TensorSlice(base.base, indices, starts, ends)
+            return tensor_slice(base.base, indices, starts, ends)
         else:
             return IRRewriter.visit_TensorSlice(self, e)
 
@@ -74,7 +74,7 @@ class FlattenTensorSliceRewriter(IRRewriter):
             e_indices = [self.visit(idx) for idx in e.indices]
             indices, starts, ends = concat_slices(base.indices, base.starts, base.ends, e_indices)
             assert not any(idx is None for idx in indices)
-            return TensorElement(base.base, indices, e.protected)
+            return tensor_element(base.base, indices, e.protected)
         else:
             return IRRewriter.visit_TensorElement(self, e)
 

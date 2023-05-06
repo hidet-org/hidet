@@ -16,7 +16,13 @@ from hidet.ir.stmt import AssignStmt, Stmt
 from hidet.utils import gcd, prod
 from hidet.ir.mapping import TaskMapping, row_repeat, spatial_map
 from hidet.ir.layout import DataLayout, row_layout, local_layout
-from hidet.graph.ops.schedules.common import NotSupportedError
+
+
+class NotSupportedError(Exception):
+    def __init__(self, obj: object, msg: str = ""):
+        super().__init__()
+        self.obj = obj
+        self.msg = msg
 
 
 def warp_reduce(v, op) -> Stmt:

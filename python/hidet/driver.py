@@ -73,9 +73,17 @@ def build_task(task: Task, target_device='cuda', load=True) -> Optional[Compiled
         else:
             src_path = os.path.join(task_dir, 'source.cpp')
         lib_path = os.path.join(task_dir, 'lib.so')
+        version_path = os.path.join(task_dir, 'version.txt')
+
+        version_matched = False
+        if os.path.exists(version_path):
+            with open(version_path, 'r') as f:
+                version = f.read()
+                if version.strip() == hidet.__version__:
+                    version_matched = True
 
         # use previously generated library when available
-        if use_cache and os.path.exists(lib_path):
+        if use_cache and os.path.exists(lib_path) and version_matched:
             logger.debug(f"Load cached task binary {green(task.name)} from path: \n{cyan(lib_path)}")
             if load:
                 compiled_func = load_task_func(lib_path, task)
@@ -87,13 +95,16 @@ def build_task(task: Task, target_device='cuda', load=True) -> Optional[Compiled
             # write task
             with open(os.path.join(task_dir, 'task.txt'), 'w') as f:
                 f.write(task_string)
+            # write version
+            with open(version_path, 'w') as f:
+                f.write(hidet.__version__)
             # implement task
             ir_module = task.implement(target=target_device, working_dir=task_dir)
             # lower ir module
             if option.get_option('save_lower_ir'):
                 instruments = [
                     SaveIRInstrument(out_dir=os.path.join(task_dir, './ir')),
-                    ProfileInstrument(log_file=os.path.join(task_dir, './lower_time.txt')),
+                    ProfileInstrument(log_file=os.path.join(task_dir, './ir/profile.txt')),
                 ]
             else:
                 instruments = []

@@ -45,6 +45,5 @@ def register_binary_dialect_primitive_function(func_name, generic_func, target_d
 
 
 def call_cuda(func_name, args: List[Expr]) -> Call:
-    # todo: replace all usage of this function to call_primitive_func
     entry = primitive_func_pool.lookup_by_name('cuda_{}'.format(func_name))
-    return Call(entry.var, args)
+    return entry.var(*args)

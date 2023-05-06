@@ -12,9 +12,9 @@
 # pylint: disable=bad-staticmethod-argument
 from hidet.ir.expr import Add, Sub, Multiply, Div, Mod, FloorDiv, Neg, LessThan, LessEqual, Equal, NotEqual, LogicalAnd
 from hidet.ir.expr import LogicalOr, LogicalNot, BitwiseAnd, BitwiseOr, BitwiseNot, BitwiseXor, LeftShift, RightShift
-from hidet.ir.expr import Reference, BinaryOp
+from hidet.ir.expr import Reference, BinaryExpr
 from hidet.ir.expr import TensorElement, TensorSlice, IfThenElse, Call, Let, Var, Constant, Cast, Dereference, Address
-from hidet.ir.dialects.pattern import AnyExpr
+from hidet.ir.dialects.pattern import PlaceholderExpr
 from hidet.utils import same_list
 from .base_functor import BaseFunctor, BaseVisitor, BaseRewriter
 
@@ -85,7 +85,7 @@ class ExprFunctor(BaseFunctor):
             return self.visit_Address(node)
         elif isinstance(node, Reference):
             return self.visit_Reference(node)
-        elif isinstance(node, AnyExpr):
+        elif isinstance(node, PlaceholderExpr):
             return self.visit_AnyExpr(node)
         else:
             return NotImplemented
@@ -183,7 +183,7 @@ class ExprFunctor(BaseFunctor):
     def visit_Constant(self, e: Constant):
         raise NotImplementedError()
 
-    def visit_AnyExpr(self, e: AnyExpr):
+    def visit_AnyExpr(self, e: PlaceholderExpr):
         raise NotImplementedError()
 
 
@@ -255,15 +255,15 @@ class ExprVisitor(ExprFunctor, BaseVisitor):
         self.visit(e.b)
 
     def visit_BitwiseNot(self, e: BitwiseNot):
-        self.visit(e.base)
+        self.visit(e.a)
 
     def visit_LeftShift(self, e: LeftShift):
-        self.visit(e.base)
-        self.visit(e.cnt)
+        self.visit(e.a)
+        self.visit(e.b)
 
     def visit_RightShift(self, e: RightShift):
-        self.visit(e.base)
-        self.visit(e.cnt)
+        self.visit(e.a)
+        self.visit(e.b)
 
     def visit_TensorElement(self, e: TensorElement):
         self.visit(e.base)
@@ -311,7 +311,7 @@ class ExprVisitor(ExprFunctor, BaseVisitor):
     def visit_Reference(self, e: Reference):
         self.visit(e.expr)
 
-    def visit_AnyExpr(self, e: AnyExpr):
+    def visit_AnyExpr(self, e: PlaceholderExpr):
         pass
 
 
@@ -319,7 +319,7 @@ class ExprRewriter(ExprFunctor, BaseRewriter):
     def rewrite(self, e):
         return self.visit(e)
 
-    def visit_Binary(self, e: BinaryOp):
+    def visit_Binary(self, e: BinaryExpr):
         a = self(e.a)
         b = self(e.b)
         if a is e.a and b is e.b:
@@ -387,31 +387,31 @@ class ExprRewriter(ExprFunctor, BaseRewriter):
         return self.visit_Binary(e)
 
     def visit_BitwiseNot(self, e: BitwiseNot):
-        base = self.visit(e.base)
-        if base is e.base:
+        base = self.visit(e.a)
+        if base is e.a:
             return e
         else:
             return BitwiseNot(base)
 
     def visit_LeftShift(self, e: LeftShift):
-        base = self.visit(e.base)
-        cnt = self.visit(e.cnt)
-        if base is e.base and cnt is e.cnt:
+        base = self.visit(e.a)
+        cnt = self.visit(e.b)
+        if base is e.a and cnt is e.b:
             return e
         else:
             return LeftShift(base, cnt)
 
     def visit_RightShift(self, e: RightShift):
-        base = self.visit(e.base)
-        cnt = self.visit(e.cnt)
-        if base is e.base and cnt is e.cnt:
+        base = self.visit(e.a)
+        cnt = self.visit(e.b)
+        if base is e.a and cnt is e.b:
             return e
         else:
             return RightShift(base, cnt)
 
     def visit_TensorElement(self, e: TensorElement):
         base = self(e.base)
-        indices = [self(idx) if idx is not None else None for idx in e.indices]
+        indices = tuple(self(idx) if idx is not None else None for idx in e.indices)
         if base is e.base and same_list(indices, e.indices):
             return e
         else:
@@ -466,7 +466,7 @@ class ExprRewriter(ExprFunctor, BaseRewriter):
 
     def visit_Call(self, e: Call):
         func_var = self(e.func_var)
-        args = [self(arg) for arg in e.args]
+        args = tuple(self(arg) for arg in e.args)
         if func_var is e.func_var and same_list(args, e.args):
             return e
         else:
@@ -487,5 +487,5 @@ class ExprRewriter(ExprFunctor, BaseRewriter):
     def visit_Constant(self, e: Constant):
         return e
 
-    def visit_AnyExpr(self, e: AnyExpr):
+    def visit_AnyExpr(self, e: PlaceholderExpr):
         return e
