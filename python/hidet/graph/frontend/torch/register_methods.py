@@ -13,23 +13,26 @@ from __future__ import annotations
 import math
 from typing import List, Union
 import torch
+
+import hidet.runtime.device
 from hidet.ir.type import DataType
 from hidet.graph.tensor import Tensor
 from hidet.graph import ops
+from hidet.runtime.device import instantiate_device
 from .interpreter import register_method
 from .utils import dtype_from_torch, device_from_torch, dtype_to_torch
 
 
 @register_method(torch.Tensor.cuda)
 def tensor_cuda(self: Tensor) -> Tensor:
-    if self.is_symbolic():
+    if self.is_symbolic() and not self.device.is_cuda():
         raise NotImplementedError('hidet: torch.Tensor.cuda() is not supported for symbolic tensors.')
     return self.cuda()
 
 
 @register_method(torch.Tensor.cpu)
 def tensor_cpu(self: Tensor) -> Tensor:
-    if self.is_symbolic():
+    if self.is_symbolic() and not self.device.is_cpu():
         raise NotImplementedError('hidet: torch.Tensor.cpu() is not supported for symbolic tensors.')
     return self.cpu()
 
@@ -73,7 +76,7 @@ def tensor_to(self: Tensor, *args, **kwargs) -> Tensor:
         if isinstance(arg, torch.dtype):
             dtype = arg
         elif isinstance(arg, torch.device):
-            if self.is_symbolic():
+            if self.is_symbolic() and instantiate_device(device_from_torch(arg)) != self.device:
                 raise NotImplementedError('hidet: Tensor.to(..., device=...) is not supported for symbolic tensors.')
             device = arg
         else:
