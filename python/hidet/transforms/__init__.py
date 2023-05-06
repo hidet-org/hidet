@@ -57,7 +57,6 @@ def lower(ir_module: IRModule) -> IRModule:
         normalize_const_tensor_pass(),
         declare_to_let_pass(),
         rule_based_simplify_pass(),  # make ir more readable
-        explicit_unroll_pass(),
         flatten_tensor_index_pass(),
         lower_special_cast_pass(),
         inline_function_pass(),
@@ -71,6 +70,7 @@ def lower(ir_module: IRModule) -> IRModule:
         # simplification
         expand_let_expr_pass(),
         inline_let_stmt_pass(),
+        explicit_unroll_pass(),
         rule_based_simplify_pass(),
         inline_let_stmt_pass(),
         simplify_stmt_pass(),

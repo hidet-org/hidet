@@ -11,7 +11,6 @@
 # limitations under the License.
 from typing import Optional
 import click
-import torch
 import hidet
 from hidet.utils import initialize
 from . import vision
@@ -61,7 +60,7 @@ from .bench_all import bench_all
     type=click.Path(dir_okay=True, file_okay=False, writable=True),
     help='The cache directory to store the generated kernels.',
 )
-def bench_group(
+def hidet_bench_group(
     space: str,
     dtype: str,
     tensor_core: bool,
@@ -70,6 +69,8 @@ def bench_group(
     enable_torch_cublas_tf32: bool,
     cache_dir: Optional[click.Path],
 ):
+    import torch
+
     BenchModel.search_space = int(space)
     BenchModel.dtype = getattr(torch, dtype)
     BenchModel.tensor_core = tensor_core
@@ -92,4 +93,4 @@ def register_commands():
         nlp.bench_nlp,
     ]:
         assert isinstance(command, click.Command)
-        bench_group.add_command(command)
+        hidet_bench_group.add_command(command)

@@ -19,6 +19,7 @@ from hidet.ir.func import IRModule, Function
 from hidet.ir.type import FuncType
 from hidet.ir.expr import Var
 from hidet.lang.transpiler import PythonToHidetTranslator
+from hidet.runtime.module import CompiledFunction
 
 
 def eliminate_indent(source: str) -> Tuple[str, int]:
@@ -124,6 +125,12 @@ class ScriptModuleContext:
 
     def ir_module(self) -> IRModule:
         return IRModule(funcs={func.name: func for func in self.functions}, task=self.task, global_vars=self.name2var)
+
+    def build(self) -> CompiledFunction:
+        from hidet.driver import build_ir_module
+
+        ir_module = self.ir_module()
+        return build_ir_module(ir_module)
 
 
 def script_module(task: Optional[Task] = None) -> ScriptModuleContext:

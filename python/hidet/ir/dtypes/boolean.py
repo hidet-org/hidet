@@ -48,6 +48,14 @@ class Boolean(DataType):
         return self.constant(False)
 
     @property
+    def true(self):
+        return self.constant(True)
+
+    @property
+    def false(self):
+        return self.constant(False)
+
+    @property
     def min_value(self):
         raise ValueError('Boolean type has no minimum value.')
 

@@ -12,7 +12,7 @@
 from typing import Optional
 
 import hidet.ir.primitives.cuda.math.float16
-from hidet.ir.expr import Expr, ExprInt64, Call
+from hidet.ir.expr import Expr, ExprInt64
 from hidet.ir.type import FuncType, DataType
 from hidet.ir.primitives.func import register_primitive_function, primitive_func_pool
 from hidet.ir.primitives.math import MathFunctionSet, register_math_function_set
@@ -32,7 +32,7 @@ class CUDAInt64MathFunctionSet(MathFunctionSet):
 
     def call(self, name: str, *args) -> Expr:
         entry = primitive_func_pool.lookup_by_name(name)
-        return Call(entry.var, args)
+        return entry.var(*args)
 
     def cast(self, a: ExprInt64, cast_dtype: DataType) -> Optional[Expr]:
         if cast_dtype.name == 'float16':

@@ -44,6 +44,9 @@ class TypeNode(Node):
     def is_data_type(self):
         return isinstance(self, DataType)
 
+    def is_func_type(self):
+        return isinstance(self, FuncType)
+
 
 class DataType(TypeNode):
     """

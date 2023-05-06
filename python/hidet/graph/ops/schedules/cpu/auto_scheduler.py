@@ -13,7 +13,7 @@ from typing import Dict
 
 from hidet.ir.builders import FunctionBuilder
 from hidet.ir.compute import TensorNode, GridCompute
-from hidet.ir.expr import Call, Var, convert
+from hidet.ir.expr import Var, convert, call
 from hidet.ir.tools import rewrite
 from hidet.ir.stmt import Stmt, BufferStoreStmt, EvaluateStmt
 from ..auto_scheduler import AutoScheduler, ComputeExprLower
@@ -46,4 +46,4 @@ class CpuAutoScheduler(AutoScheduler):
         func_var = self.add_function(func)
 
         # call the created function in the launch function
-        return EvaluateStmt(Call(func_var, args=call_args))
+        return EvaluateStmt(call(func_var, args=call_args))

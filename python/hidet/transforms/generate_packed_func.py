@@ -14,7 +14,7 @@ from hidet.ffi.packedfunc import ArgTypeCode
 from hidet.ir.func import Function, IRModule
 from hidet.ir.type import DataType, TensorType, TensorPointerType, PointerType
 from hidet.ir.dtypes import int32
-from hidet.ir.expr import Expr, Var, Call, Constant
+from hidet.ir.expr import Expr, Var, Constant
 from hidet.ir.stmt import Stmt, AssertStmt, LaunchKernelStmt, DeclareStmt
 from hidet.ir.tools import rewrite, simplify
 from hidet.ir.builders import StmtBuilder
@@ -97,7 +97,7 @@ def add_packed_func(ir_module: IRModule, func: Function, pack_func_name: str):
                 shared_mem=smem_bytes,
             )
         elif func.kind == 'host_kernel':
-            sb += Call(func_var, [param2arg[param] for param in func.params])
+            sb += func_var(*[param2arg[param] for param in func.params])
         else:
             raise NotImplementedError('Unsupported function kind: {}'.format(func.kind))
         return sb.finish()

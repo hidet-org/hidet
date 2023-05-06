@@ -12,7 +12,7 @@
 from typing import Optional, List, Sequence, Union
 
 from hidet.ir.dtypes import int32
-from hidet.ir.expr import Expr, if_then_else, convert, cast, LogicalAnd, LogicalOr
+from hidet.ir.expr import Expr, if_then_else, convert, cast, logical_or, logical_and
 from hidet.ir import primitives as prim
 from .utils import Task, Operator, Tensor, TensorNode, compute, input_like
 
@@ -164,10 +164,10 @@ def resize2d_nchw_compute(
             if cubic_exclude:
                 for i in range(4):
                     weight_w[i] = if_then_else(
-                        LogicalOr.join((w_int - 1 + i) < 0, (w_int + i) > image_width), 0.0, weight_w[i]
+                        logical_or((w_int - 1 + i) < 0, (w_int + i) > image_width), 0.0, weight_w[i]
                     )
                     weight_h[i] = if_then_else(
-                        LogicalOr.join((h_int - 1 + i) < 0, (h_int + i) > image_height), 0.0, weight_h[i]
+                        logical_or((h_int - 1 + i) < 0, (h_int + i) > image_height), 0.0, weight_h[i]
                     )
                 sum_weight_w = sum(weight_w)
                 sum_weight_h = sum(weight_h)
@@ -185,7 +185,7 @@ def resize2d_nchw_compute(
             )
         if coordinate_transformation_mode == 'tf_half_pixel_for_nn':
             value = if_then_else(
-                LogicalAnd.join(0 <= h, h < image_size[0], 0 <= w, w < image_size[1]), value, extrapolation_value
+                logical_and(0 <= h, h < image_size[0], 0 <= w, w < image_size[1]), value, extrapolation_value
             )
         return value
 

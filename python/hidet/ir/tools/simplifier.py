@@ -11,7 +11,7 @@
 # limitations under the License.
 from typing import Union
 import operator
-from hidet.ir.expr import Expr, BinaryOp, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, LessEqual, Equal, Constant
+from hidet.ir.expr import Expr, BinaryExpr, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, LessEqual, Equal, Constant
 from hidet.ir.expr import BitwiseAnd, BitwiseOr, BitwiseXor
 from hidet.ir.expr import LogicalAnd, LogicalOr, LogicalNot, is_one, is_zero, is_true, is_false, convert
 from hidet.ir.stmt import Stmt, IfStmt, SeqStmt, ForStmt
@@ -20,7 +20,7 @@ from hidet.ir.functors import StmtRewriter, ExprRewriter, BaseRewriter
 
 
 class Simplifier(StmtRewriter, ExprRewriter, BaseRewriter):
-    def visit_Binary(self, e: BinaryOp):  # pylint: disable=too-many-branches
+    def visit_Binary(self, e: BinaryExpr):  # pylint: disable=too-many-branches
         a = self(e.a)
         b = self(e.b)
         if isinstance(e, Add):

@@ -11,7 +11,7 @@
 # limitations under the License.
 from typing import Sequence
 from hidet.ir import Stmt, Expr, TensorElement, BufferStoreStmt, IfStmt, convert
-from hidet.ir.expr import LogicalAnd, IfThenElse
+from hidet.ir.expr import IfThenElse, tensor_element, logical_and
 from hidet.ir.type import TensorType, TensorPointerType
 from hidet.transforms.base import Pass, FunctionBodyPass
 from hidet.ir.functors import IRRewriter
@@ -22,8 +22,8 @@ def bound_checking_condition(buf: Expr, indices: Sequence[Expr]) -> Expr:
     shape = get_buffer_shape(buf)
     conditions = []
     for idx, extent in zip(indices, shape):
-        conditions.append(LogicalAnd(0 <= idx, idx < extent))
-    return LogicalAnd.join_list(conditions)
+        conditions.append(logical_and(0 <= idx, idx < extent))
+    return logical_and(*conditions)
 
 
 def get_buffer_shape(buf: Expr):
@@ -43,7 +43,7 @@ class LowerProtectAccessRewriter(IRRewriter):
             indices = [self.visit(v) for v in e.indices]
             return IfThenElse(
                 cond=bound_checking_condition(base, indices),
-                then_expr=TensorElement(base, indices, protected=False),
+                then_expr=tensor_element(base, indices, protected=False),
                 else_expr=convert(0.0, dtype=infer_type(e)),
             )
         else:

@@ -33,7 +33,7 @@ from hidet.ir.layout import StridesLayout, ConcatLayout, LocalLayout, SwizzleLay
 from hidet.ir.layout import ColumnMajorLayout
 from hidet.ir.mapping import RepeatTaskMapping, SpatialTaskMapping, ComposedTaskMapping
 from hidet.ir.compute import TensorNode, GridCompute, ArgReduceCompute, ReduceCompute, TensorInput, ScalarInput
-from hidet.ir.dialects.pattern import AnyExpr
+from hidet.ir.dialects.pattern import PlaceholderExpr
 from hidet.ir.task import Task
 from hidet.utils import same_list
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
@@ -152,13 +152,13 @@ class IRPrinter(IRFunctor):
         return '(' + self(e.a) + ' ^ ' + self(e.b) + ')'
 
     def visit_BitwiseNot(self, e: BitwiseNot):
-        return '(~' + self(e.base) + ')'
+        return '(~' + self(e.a) + ')'
 
     def visit_LeftShift(self, e: LeftShift):
-        return '(' + self(e.base) + ' << ' + self(e.cnt) + ')'
+        return '(' + self(e.a) + ' << ' + self(e.b) + ')'
 
     def visit_RightShift(self, e: RightShift):
-        return '(' + self(e.base) + ' >> ' + self(e.cnt) + ')'
+        return '(' + self(e.a) + ' >> ' + self(e.b) + ')'
 
     def visit_TensorElement(self, e: TensorElement):
         if e.protected:
@@ -390,7 +390,7 @@ class IRPrinter(IRFunctor):
     def visit_VoidType(self, t: VoidType):
         return Text('VoidType')
 
-    def visit_AnyExpr(self, e: AnyExpr):
+    def visit_AnyExpr(self, e: PlaceholderExpr):
         return Text('AnyExpr')
 
     def print_tensor_nodes(self, nodes: List[TensorNode], exclude_nodes: List[TensorNode] = None) -> Doc:

@@ -13,6 +13,7 @@
 from __future__ import annotations
 import types
 import builtins
+import operator
 
 from typing import Optional, Dict, Any, Union
 import os.path
@@ -589,15 +590,15 @@ class PythonToHidetTranslator(PythonAstFunctor):
             return lhs + rhs
         elif isinstance(lhs, (ir.Expr, float, int)) and isinstance(rhs, (ir.Expr, float, int)):
             op_dict = {
-                Add: ir.Add,
-                Sub: ir.Sub,
-                Mult: ir.Multiply,
-                Div: ir.Div,
-                FloorDiv: ir.Div,  # we treat Div and FloorDiv equivalently with the same semantics as in C/C++
-                Mod: ir.Mod,
-                BitXor: ir.BitwiseXor,
-                BitOr: ir.BitwiseOr,
-                BitAnd: ir.BitwiseAnd,
+                Add: operator.add,
+                Sub: operator.sub,
+                Mult: operator.mul,
+                Div: operator.truediv,
+                FloorDiv: operator.floordiv,
+                Mod: operator.mod,
+                BitXor: operator.xor,
+                BitOr: operator.or_,
+                BitAnd: operator.and_,
             }
             # pylint: disable=import-outside-toplevel
             from hidet.ir import primitives
@@ -617,22 +618,22 @@ class PythonToHidetTranslator(PythonAstFunctor):
     def visit_BoolOp(self, expr: BoolOp):
         values = [self.visit(v) for v in expr.values]
         if isinstance(expr.op, And):
-            return ir.LogicalAnd.join_list(values)
+            return ir.logical_and(*values)
         else:
             assert isinstance(expr.op, Or)
-            return ir.LogicalOr.join_list(values)
+            return ir.logical_or(*values)
 
     def visit_Compare(self, expr: Compare):
         front = self.visit(expr.left)
         op_dict = {
-            And: ir.LogicalAnd,
-            Or: ir.LogicalOr,
-            Eq: ir.Equal,
-            Gt: lambda a, b: ir.LessThan(b, a),  # pylint: disable=arguments-out-of-order
-            Lt: ir.LessThan,
-            GtE: lambda a, b: ir.LessEqual(b, a),  # pylint: disable=arguments-out-of-order
-            LtE: ir.LessEqual,
-            NotEq: ir.NotEqual,
+            And: ir.logical_and,
+            Or: ir.logical_or,
+            Eq: ir.equal,
+            Gt: lambda a, b: ir.less_than(b, a),  # pylint: disable=arguments-out-of-order
+            Lt: ir.less_than,
+            GtE: lambda a, b: ir.less_equal(b, a),  # pylint: disable=arguments-out-of-order
+            LtE: ir.less_equal,
+            NotEq: ir.not_equal,
         }
         cond = None
         comparators = [self.visit(v) for v in expr.comparators]
@@ -831,12 +832,12 @@ class PythonToHidetTranslator(PythonAstFunctor):
             # raise NotImplementedError()
         value = self.visit(stmt.value)
         op_dict = {
-            Add: ir.Add,
-            Sub: ir.Sub,
-            Mult: ir.Multiply,
-            Div: ir.Div,
-            FloorDiv: ir.Div,  # we treat Div and FloorDiv equivalently with the same semantics as in C/C++
-            Mod: ir.Mod,
+            Add: operator.add,
+            Sub: operator.sub,
+            Mult: operator.mul,
+            Div: operator.truediv,
+            FloorDiv: operator.floordiv,
+            Mod: operator.mod,
         }
         result_value = op_dict[type(stmt.op)](var_value, value)
         assert isinstance(stmt.target, (Name, Subscript))
@@ -891,7 +892,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
         elif isinstance(func, types.MethodType):
             # call python class method
             return func(*args, **kwargs)
-        elif isinstance(func, ir.Expr):
+        elif isinstance(func, ir.Var):
             from hidet.ir.tools import infer_type
 
             # call hidet function
@@ -902,7 +903,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
             if len(func_type.param_types) != len(args):
                 msg = 'The number of parameters of callee and given arguments does not match.'
                 raise HidetProgramError(self, expr, msg)
-            return ir.Call(func, args)
+            return func(*args)
         elif isinstance(func, ir.Function):
             # call a function defined as hidet script, like
             # @hidet.script
@@ -916,7 +917,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
                 raise HidetProgramError(self, expr, 'Call undefined function.')
             if len(kwargs) > 0:
                 raise HidetProgramError(self, expr, 'Hidet do not support call with keyword.')
-            return ir.Call(func_var, args)
+            return func_var(*args)
         elif isinstance(func, (types.BuiltinMethodType, types.BuiltinFunctionType)):
             # call python builtin method, such "a string".format(...) or max, min
             from hidet.ir import primitives
