@@ -14,7 +14,6 @@ import math
 from typing import List, Union
 import torch
 
-import hidet.runtime.device
 from hidet.ir.type import DataType
 from hidet.graph.tensor import Tensor
 from hidet.graph import ops
