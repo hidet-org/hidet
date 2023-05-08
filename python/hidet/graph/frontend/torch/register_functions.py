@@ -9,14 +9,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from __future__ import annotations
-from typing import Optional, Union, Sequence, Any
+from typing import Optional, Union, Sequence, Any, Tuple, List
 import operator
 import torch
 from hidet.graph.tensor import Tensor, full_like, from_torch
 from hidet.graph import ops
 from hidet.utils import same_list
 from hidet.ir.type import DataType
+from hidet.ir.expr import Int
 from hidet.runtime.device import Device
 from .interpreter import register_function, register_method
 from .interpreter import warnings
@@ -203,7 +203,7 @@ def mul(x: Tensor, y: Tensor):
 
 
 @register_function(torch.cat)
-def cat(tensors: list[Tensor], dim: int):
+def cat(tensors: List[Tensor], dim: int):
     return ops.concat(tensors, dim)
 
 
@@ -725,7 +725,7 @@ def logsigmoid(x: Tensor):
 def mish(x: Tensor, inplace: bool = False):
     if inplace:
         warnings.warn_once('hidet: mish with inplace=True is not supported. Treat as inplace=False.')
-    return ops.multiply(x, ops.tanh(ops.softplus(x, 1.0, 20.0)))
+    return ops.multiply(x, ops.tanh(ops.softplus(x, 1, 20)))
 
 
 @register_function(torch.gather)
@@ -735,3 +735,77 @@ def gather(x: Tensor, dim: int, index: Tensor, *, sparse_grad=False, out=None):
     if out is not None:
         raise NotImplementedError('hidet: gather with out=... is not supported')
     return ops.gather(x, index, axis=dim)
+
+
+@register_function(torch.maximum)
+def maximum(x: Tensor, other: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.maximum(..., out=...)")
+    return ops.maximum(x, other)
+
+
+@register_function(torch.minimum)
+def minimum(x: Tensor, other: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.minimum(..., out=...)")
+    return ops.minimum(x, other)
+
+
+@register_function(torch.max)
+def torch_max_v1(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.max(..., out=...)")
+    return ops.max(x, dims=list(range(len(x.shape))), keep_dim=True)
+
+
+@register_function(torch.max)
+def torch_max_v2(
+    x: Tensor, other: Union[Tensor, int], *, out: Optional[Tensor] = None
+) -> Union[Tensor, Tuple[Tensor, Tensor]]:
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.max(..., out=...)")
+    if isinstance(other, Tensor):
+        return ops.maximum(x, other)
+    else:
+        return torch_max_v3(x, other)
+
+
+@register_function(torch.max)
+def torch_max_v3(
+    x: Tensor, dim: Int, keepdim: bool = False, *, out: Union[Tensor, Tuple[Tensor, ...], List[Tensor]] = None
+) -> Tuple[Tensor, Tensor]:
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.max(..., out=...)")
+    values = ops.max(x, dims=dim, keep_dim=keepdim)
+    indices = ops.argmax(x, dim=dim, keep_dim=keepdim)
+    return values, indices
+
+
+@register_function(torch.min)
+def torch_min_v1(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.min(..., out=...)")
+    return ops.min(x, dims=list(range(len(x.shape))), keep_dim=True)
+
+
+@register_function(torch.min)
+def torch_min_v2(
+    x: Tensor, other: Union[Tensor, int], *, out: Optional[Tensor] = None
+) -> Union[Tensor, Tuple[Tensor, Tensor]]:
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.min(..., out=...)")
+    if isinstance(other, Tensor):
+        return ops.minimum(x, other)
+    else:
+        return torch_min_v3(x, other)
+
+
+@register_function(torch.min)
+def torch_min_v3(
+    x: Tensor, dim: Int, keepdim: bool = False, *, out: Union[Tensor, Tuple[Tensor, ...], List[Tensor]] = None
+) -> Tuple[Tensor, Tensor]:
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.min(..., out=...)")
+    values = ops.min(x, dims=dim, keep_dim=keepdim)
+    indices = ops.argmin(x, dim=dim, keep_dim=keepdim)
+    return values, indices
