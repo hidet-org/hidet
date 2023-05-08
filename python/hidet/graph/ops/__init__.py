@@ -46,6 +46,8 @@ from .definitions.transform import permute_dims
 from .definitions.fusion import fused_operator
 from .definitions.special import barrier
 
+from .definitions.matmul import matmul_x86
+
 from .definitions import utils
 
 from . import schedules

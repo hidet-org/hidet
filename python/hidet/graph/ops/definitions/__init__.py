@@ -34,7 +34,7 @@ from .conv3d import conv3d
 from .conv3d_transpose import conv3d_transpose
 from .matmul import batch_matmul, matmul
 
-from .matmul import BatchMatmulOp, MatmulOp
+from .matmul import BatchMatmulOp, MatmulOp, Matmulx86Op
 from .conv2d import Conv2dOp
 from .arithmetic import ErfOp, PowOp, AddOp, SubtractOp, MultiplyOp, DivideOp, WhereOp
 from .compare import EqualOp

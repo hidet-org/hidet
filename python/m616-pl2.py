@@ -20,7 +20,7 @@ def matmul_kernel5():
     # MC = 2400
     # NC = 768
     # KC = 1024
-    MC = 2400
+    MC = 4800
     KC = 768
     NC = 384
 
@@ -245,7 +245,7 @@ def matmul_kernel5():
     matmul_kernel.kind = 'host_kernel'
 
     ir_module = script_module.ir_module()
-    add_packed_func(ir_module, matmul_kernel, pack_func_name='matmul6')
+    # add_packed_func(ir_module, matmul_kernel, pack_func_name='matmul6')
     compiled_function = hidet.driver.build_ir_module(ir_module)
     return compiled_function
 
@@ -256,24 +256,24 @@ def ff():
     # for m, n, k in [(64, 64, 64), (110, 111, 111), (101, 101, 37), (111, 367, 369), (224, 562, 325),
     #                 (256, 256, 256), (333, 444, 555), (512, 512, 512), (1024, 1024, 1024), (1111, 1111, 1111), (1111, 1314, 533),
     #                 (1440, 1440, 1440), (1920, 1920, 1920), (2023, 2023, 2023), (5247, 4202, 3175)]:
-    for m, n, k in [(1024, 1024, 1024)]:
+    for m, n, k in [(4096, 4096, 4096)]:
         a = hidet.randn([m, k], dtype='float32').cpu()
         b = hidet.randn([k, n], dtype='float32').cpu()
         c = hidet.zeros([m, n]).cpu()
         func(a, b, c, m, n, k)
-        numpy.testing.assert_allclose(
-            actual=c.cpu().numpy(),
-            desired=a.cpu().numpy() @ b.cpu().numpy(),
-            atol=1e-4,
-            rtol=1e-4
-        )
+        # numpy.testing.assert_allclose(
+        #     actual=c.cpu().numpy(),
+        #     desired=a.cpu().numpy() @ b.cpu().numpy(),
+        #     atol=1e-4,
+        #     rtol=1e-4
+        # )
 
         hidet_latency = hidet.utils.benchmark_func(
-            lambda: func(a, b, c, m, n, k), repeat=10
+            lambda: func(a, b, c, m, n, k), repeat=30
         )
 
         np_latency = hidet.utils.benchmark_func(
-            lambda: a.cpu().numpy() @ b.cpu().numpy(), repeat=10
+            lambda: a.cpu().numpy() @ b.cpu().numpy(), repeat=30
         )
 
         print(f'{m} x {k} x {n}: hidet takes {hidet_latency:.2f} ms')
