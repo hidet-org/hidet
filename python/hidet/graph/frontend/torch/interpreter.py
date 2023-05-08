@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from __future__ import annotations
+# from __future__ import annotations
 
 from typing import Dict, Any, Type, Callable, Optional, Tuple, Set, List
 import logging
@@ -26,9 +26,38 @@ from .utils import relative_absolute_error
 logger = logging.getLogger(__name__)
 
 
+class OverloadedFunction:
+    def __init__(self):
+        from inspect import Signature
+
+        self.signatures: List[Signature] = []
+        self.functions: List[Callable] = []
+
+    def __call__(self, *args, **kwargs):
+        dispatched = self.resolve(*args, **kwargs)
+        if dispatched is None:
+            raise RuntimeError('Can not dispatch function')
+        return dispatched(*args, **kwargs)
+
+    def resolve(self, *args, **kwargs) -> Optional[Callable]:
+        for sig, func in zip(self.signatures, self.functions):
+            try:
+                sig.bind(*args, **kwargs)
+            except TypeError:
+                continue
+            else:
+                return func
+        return None
+
+    def overload(self, func: Callable):
+        self.functions.append(func)
+        self.signatures.append(inspect.signature(func))
+        return self
+
+
 class Registry:
-    registered_modules: Dict[Type[torch.nn.Module], Type[HidetModule]] = {}
-    registered_functions: Dict[Callable, Callable] = {}
+    registered_modules: Dict[Type[torch.nn.Module], Type['HidetModule']] = {}
+    registered_functions: Dict[Callable, OverloadedFunction] = {}
     registered_methods: Dict[Callable, Callable] = {}
 
 
@@ -85,7 +114,9 @@ def register_module(torch_cls: Type[torch.nn.Module]):
 
 def register_function(func: Callable):
     def decorator(hidet_func):
-        Registry.registered_functions[func] = hidet_func
+        if func not in Registry.registered_functions:
+            Registry.registered_functions[func] = OverloadedFunction()
+        Registry.registered_functions[func].overload(hidet_func)
         return hidet_func
 
     return decorator
@@ -198,36 +229,56 @@ class Interpreter:
         return Registry.registered_methods[torch_method]
 
     @staticmethod
-    def _raise_exception(exception: Exception, caused_callable: Any, args, kwargs):
-        # See https://docs.python.org/3/library/inspect.html for more information on the inspect module.
-        assert callable(caused_callable), 'Expected callable'
-        if inspect.ismethod(caused_callable):
-            func = dict(inspect.getmembers(caused_callable))['__func__']
+    def _callable_info(f: Callable) -> Tuple[str, str, int]:
+        if inspect.ismethod(f):
+            func = dict(inspect.getmembers(f))['__func__']
             code = dict(inspect.getmembers(func))['__code__']
-            callable_name = caused_callable.__qualname__
-        elif inspect.isfunction(caused_callable):
-            code = dict(inspect.getmembers(caused_callable))['__code__']
-            callable_name = caused_callable.__qualname__
+            callable_name = f.__qualname__
+        elif inspect.isfunction(f):
+            code = dict(inspect.getmembers(f))['__code__']
+            callable_name = f.__qualname__
         else:
             # an object with __call__ method
-            func = dict(inspect.getmembers(caused_callable.__call__))['__func__']
+            func = dict(inspect.getmembers(getattr(f, '__call__')))['__func__']
             code = dict(inspect.getmembers(func))['__code__']
-            callable_name = caused_callable.__class__.__qualname__
+            callable_name = getattr(f, '__class__').__qualname__
 
         filename, lineno = code.co_filename, code.co_firstlineno
-        lines = []
-        lines.append(f'{exception}, occurred when calling ')
+        return callable_name, filename, lineno
+
+    @staticmethod
+    def _raise_exception(exception: Exception, target, caused_callable: Any, args, kwargs):
+        # See https://docs.python.org/3/library/inspect.html for more information on the inspect module.
+        assert callable(caused_callable), 'Expected callable'
+        target_name = Interpreter._get_callable_name(target)
+
         argument_strings = []
         for arg in args:
-            argument_strings.append(arg.signature() if isinstance(arg, Tensor) else repr(arg))
+            argument_strings.append('tensor(...)' if isinstance(arg, Tensor) else repr(arg))
         for key, value in kwargs.items():
             argument_strings.append(f'{key}={value.signature() if isinstance(value, Tensor) else repr(value)}')
+        args_string = ", ".join(argument_strings)
+
+        if isinstance(caused_callable, OverloadedFunction):
+            dispatched = caused_callable.resolve(*args, **kwargs)
+            if dispatched is None:
+                msg = ['Can not interpreting {} given arguments: '.format(target_name)]
+                msg.append('  {}({})'.format(target_name, args_string))
+                msg.append('Possible candidates are: ')
+                for overload, sig in zip(caused_callable.functions, caused_callable.signatures):
+                    name, fname, lineno = Interpreter._callable_info(overload)
+                    msg.append('  {}{}'.format(name, sig))
+                    msg.append('    File "{}", line {}'.format(fname, lineno))
+                raise RuntimeError('\n'.join(msg))
+            caused_callable = dispatched
+
+        callable_name, filename, lineno = Interpreter._callable_info(caused_callable)
         raise type(exception)(
-            f'{exception}, occurred when calling\n'
+            f'{exception}, occurred when interpreting {target_name} with\n'
             f'  {callable_name}({", ".join(argument_strings)})\n'
             f'{callable_name} is defined at\n'
             f'  File "{filename}", line {lineno}'
-        )
+        ) from exception
 
     def forward(self, *args):
         # pylint: disable=broad-except
@@ -265,7 +316,7 @@ class Interpreter:
                 try:
                     hidet_env[node.name] = hidet_func(*hidet_args, **hidet_kwargs)
                 except Exception as e:
-                    self._raise_exception(e, hidet_func, hidet_args, hidet_kwargs)
+                    self._raise_exception(e, node.target, hidet_func, hidet_args, hidet_kwargs)
             elif node.op == "call_method":
                 args = load_arg(node.args, hidet_env)
                 kwargs = load_arg(node.kwargs, hidet_env)
@@ -278,7 +329,7 @@ class Interpreter:
                 try:
                     hidet_env[node.name] = hidet_method(*args, **kwargs)
                 except Exception as e:
-                    self._raise_exception(e, hidet_method, args, kwargs)
+                    self._raise_exception(e, node.target, hidet_method, args, kwargs)
             elif node.op == "call_module":
                 hidet_module = self._lookup_hidet_module(node.target)
                 args = load_arg(node.args, hidet_env)
@@ -286,7 +337,7 @@ class Interpreter:
                 try:
                     hidet_env[node.name] = hidet_module(*args, **kwargs)
                 except Exception as e:
-                    self._raise_exception(e, hidet_module, args, kwargs)
+                    self._raise_exception(e, node.target, hidet_module, args, kwargs)
             elif node.op == "output":
                 graph_hidet_output = hidet_env[node.name] = load_arg(node.args[0], hidet_env)
             else:
@@ -354,7 +405,7 @@ class Interpreter:
                 try:
                     hidet_env[node.name] = hidet_func(*hidet_args, **hidet_kwargs)
                 except Exception as e:
-                    self._raise_exception(e, hidet_func, hidet_args, hidet_kwargs)
+                    self._raise_exception(e, node.target, hidet_func, hidet_args, hidet_kwargs)
 
                 readable_target = self._get_callable_name(torch_func)
             elif node.op == "call_method":
@@ -370,7 +421,7 @@ class Interpreter:
                 try:
                     hidet_env[node.name] = hidet_method(*hidet_args, **hidet_kwargs)
                 except Exception as e:
-                    self._raise_exception(e, hidet_method, hidet_args, hidet_kwargs)
+                    self._raise_exception(e, node.target, hidet_method, hidet_args, hidet_kwargs)
 
                 readable_target = self._get_callable_name(torch_method)
             elif node.op == "call_module":
@@ -380,7 +431,7 @@ class Interpreter:
                 try:
                     torch_env[node.name] = torch_module(*torch_args, **torch_kwargs)
                 except Exception as e:
-                    self._raise_exception(e, torch_module, torch_args, torch_kwargs)
+                    self._raise_exception(e, node.target, torch_module, torch_args, torch_kwargs)
 
                 hidet_module = self._lookup_hidet_module(node.target)
                 hidet_args = load_arg(node.args, hidet_env)
@@ -389,7 +440,7 @@ class Interpreter:
                 try:
                     hidet_env[node.name] = hidet_module(*hidet_args, **hidet_kwargs)
                 except Exception as e:
-                    self._raise_exception(e, hidet_module, hidet_args, hidet_kwargs)
+                    self._raise_exception(e, node.target, hidet_module, hidet_args, hidet_kwargs)
 
                 readable_target = self._get_callable_name(torch_module)
             elif node.op == "output":
