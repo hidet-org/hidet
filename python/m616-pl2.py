@@ -20,9 +20,9 @@ def matmul_kernel5():
     # MC = 2400
     # NC = 768
     # KC = 1024
-    MC = 4800
+    MC = 1200
     KC = 768
-    NC = 384
+    NC = 1024
 
     MR = 6
     NR = 16
@@ -124,7 +124,7 @@ def matmul_kernel5():
             _mr = ib % MR
             _nr = jb % NR
             # Loop 2
-            for mpanel in grid(mpanels, attrs='p32'):
+            for mpanel in grid(mpanels, attrs='p8'):
                 mr = MR if mpanel != mpanels - 1 or _mr == 0 else _mr
                 ii = mpanel * MR
                 # Loop 1
@@ -256,17 +256,18 @@ def ff():
     # for m, n, k in [(64, 64, 64), (110, 111, 111), (101, 101, 37), (111, 367, 369), (224, 562, 325),
     #                 (256, 256, 256), (333, 444, 555), (512, 512, 512), (1024, 1024, 1024), (1111, 1111, 1111), (1111, 1314, 533),
     #                 (1440, 1440, 1440), (1920, 1920, 1920), (2023, 2023, 2023), (5247, 4202, 3175)]:
-    for m, n, k in [(4096, 4096, 4096)]:
+    # for m, n, k in [(4096, 4096, 4096)]:
+    for m, n, k in [(1024, 1024, 1024)]:
         a = hidet.randn([m, k], dtype='float32').cpu()
         b = hidet.randn([k, n], dtype='float32').cpu()
         c = hidet.zeros([m, n]).cpu()
         func(a, b, c, m, n, k)
-        # numpy.testing.assert_allclose(
-        #     actual=c.cpu().numpy(),
-        #     desired=a.cpu().numpy() @ b.cpu().numpy(),
-        #     atol=1e-4,
-        #     rtol=1e-4
-        # )
+        numpy.testing.assert_allclose(
+            actual=c.cpu().numpy(),
+            desired=a.cpu().numpy() @ b.cpu().numpy(),
+            atol=1e-4,
+            rtol=1e-4
+        )
 
         hidet_latency = hidet.utils.benchmark_func(
             lambda: func(a, b, c, m, n, k), repeat=30
