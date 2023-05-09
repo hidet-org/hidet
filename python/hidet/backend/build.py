@@ -111,9 +111,9 @@ class NVCC(SourceCompiler):
     def compile(self, src_path: str, out_lib_path: str, options: Optional[Dict[str, str]] = None) -> None:
         cc = hidet.cuda.compute_capability()
         cc_code = '{}{}'.format(cc[0], cc[1])
-        from hidet.graph import PassContext
 
-        use_fast_math = PassContext.current().configs.get('use_fast_math')
+        # todo: Add Hidet option to allow user to disable fast math
+        use_fast_math = True
 
         # The following command compiles the cuda source code to a shared library
         # See https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html
