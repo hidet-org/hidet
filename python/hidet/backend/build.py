@@ -112,6 +112,7 @@ class NVCC(SourceCompiler):
         cc = hidet.cuda.compute_capability()
         cc_code = '{}{}'.format(cc[0], cc[1])
         from hidet.graph import PassContext
+
         use_fast_math = PassContext.current().configs.get('use_fast_math')
 
         # The following command compiles the cuda source code to a shared library
