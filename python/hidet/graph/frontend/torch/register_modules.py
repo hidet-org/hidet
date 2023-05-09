@@ -271,7 +271,7 @@ class HidetHardsigmoid(HidetModule):
 
 @register_module(torch.nn.AvgPool2d)
 class HidetAvgPool2d(HidetModule):
-    def __call__(self, x=Tensor) -> Tensor:
+    def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, torch.nn.AvgPool2d)
         return regs.avg_pool2d(
             x=x,

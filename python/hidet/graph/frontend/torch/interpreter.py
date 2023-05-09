@@ -58,7 +58,7 @@ class OverloadedFunction:
 class Registry:
     registered_modules: Dict[Type[torch.nn.Module], Type['HidetModule']] = {}
     registered_functions: Dict[Callable, OverloadedFunction] = {}
-    registered_methods: Dict[Callable, Callable] = {}
+    registered_methods: Dict[Callable, OverloadedFunction] = {}
 
 
 class ExpectedRegistry:
@@ -124,7 +124,9 @@ def register_function(func: Callable):
 
 def register_method(method: Callable):
     def decorator(hidet_method):
-        Registry.registered_methods[method] = hidet_method
+        if method not in Registry.registered_functions:
+            Registry.registered_methods[method] = OverloadedFunction()
+        Registry.registered_methods[method].overload(hidet_method)
         return hidet_method
 
     return decorator
@@ -306,7 +308,7 @@ class Interpreter:
                 attr = self.graph_module
                 for i, atom in enumerate(target_atoms):
                     if not hasattr(attr, atom):
-                        raise RuntimeError(f"Node referenced nonexistent target {target_atoms[:i]} not")
+                        raise RuntimeError(f"Node referenced nonexistent target {target_atoms[:i]}")
                     attr = getattr(attr, atom)
                 hidet_env[node.name] = tensor_from_torch(attr) if isinstance(attr, torch.Tensor) else attr
             elif node.op == "call_function":

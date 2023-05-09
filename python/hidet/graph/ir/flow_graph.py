@@ -193,7 +193,7 @@ class FlowGraph:
         task_keys = set()
         search_space = hidet.option.get_option('search_space')
         for node in self.nodes:
-            if node.task_func is None:
+            if node._task_func is None:
                 task_key = hash(str(node.task))
                 if task_key in task_keys:
                     continue

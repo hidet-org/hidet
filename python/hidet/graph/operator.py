@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List, Optional, Dict, Any, Union
+import logging
 
 from hidet.ir.type import TensorType, DataType
 from hidet.ir.expr import Var, Constant, var
@@ -20,6 +21,9 @@ from hidet.runtime.module import CompiledFunction
 from hidet.graph.tensor import empty, empty_like, Tensor
 from hidet.ffi.ffi import get_last_error, BackendException
 from hidet.runtime.device import Device, instantiate_device
+
+
+logger = logging.getLogger(__name__)
 
 
 def get_operator_name(op, given_name: Optional[str] = None):
@@ -48,6 +52,8 @@ class Operator:
         self._task_func: Optional[CompiledFunction] = None
 
         self.outputs = self._run()
+
+        logger.debug('Operator: %s', self)
 
     def __str__(self):
         arguments = ['{}: {}{}'.format(i, t.dtype.name, t.shape) for i, t in enumerate(self.inputs)]
