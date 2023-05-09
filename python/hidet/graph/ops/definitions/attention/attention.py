@@ -453,7 +453,7 @@ class AttnTask(Task):
                 smem_lij: smem_lij_type,
                 regs_acc: acc_dtype[mmas_per_warp_m, mmas_per_warp_n, mma_config.c_elements],
             ):
-                mask = active_mask()
+                warp_mask = active_mask()
                 warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
                 # Each thread holds c elements in 2 rows in mma
                 rv = register_tensor(acc_dtype, [2])
@@ -471,10 +471,10 @@ class AttnTask(Task):
                         rv[0] = prim.max(rv[0], regs_acc[mma_i, mma_j, 1])
                         rv[1] = prim.max(rv[1], regs_acc[mma_i, mma_j, 2])
                         rv[1] = prim.max(rv[1], regs_acc[mma_i, mma_j, 3])
-                    rv[0] = prim.max(rv[0], shfl_down_sync(mask, rv[0], 2, 4))
-                    rv[0] = prim.max(rv[0], shfl_down_sync(mask, rv[0], 1, 2))
-                    rv[1] = prim.max(rv[1], shfl_down_sync(mask, rv[1], 2, 4))
-                    rv[1] = prim.max(rv[1], shfl_down_sync(mask, rv[1], 1, 2))
+                    rv[0] = prim.max(rv[0], shfl_down_sync(warp_mask, rv[0], 2, 4))
+                    rv[0] = prim.max(rv[0], shfl_down_sync(warp_mask, rv[0], 1, 2))
+                    rv[1] = prim.max(rv[1], shfl_down_sync(warp_mask, rv[1], 2, 4))
+                    rv[1] = prim.max(rv[1], shfl_down_sync(warp_mask, rv[1], 1, 2))
                     for n_round in range(warp_count_n):
                         if n_round == wj:
                             if threadIdx.x % 4 == 0:
@@ -508,10 +508,10 @@ class AttnTask(Task):
                         rv[0] = rv[0] + regs_acc[mma_i, mma_j, 1]
                         rv[1] = rv[1] + regs_acc[mma_i, mma_j, 2]
                         rv[1] = rv[1] + regs_acc[mma_i, mma_j, 3]
-                    rv[0] = rv[0] + shfl_down_sync(mask, rv[0], 2, 4)
-                    rv[0] = rv[0] + shfl_down_sync(mask, rv[0], 1, 2)
-                    rv[1] = rv[1] + shfl_down_sync(mask, rv[1], 2, 4)
-                    rv[1] = rv[1] + shfl_down_sync(mask, rv[1], 1, 2)
+                    rv[0] = rv[0] + shfl_down_sync(warp_mask, rv[0], 2, 4)
+                    rv[0] = rv[0] + shfl_down_sync(warp_mask, rv[0], 1, 2)
+                    rv[1] = rv[1] + shfl_down_sync(warp_mask, rv[1], 2, 4)
+                    rv[1] = rv[1] + shfl_down_sync(warp_mask, rv[1], 1, 2)
                     for n_round in range(warp_count_n):
                         if n_round == wj:
                             if threadIdx.x % 4 == 0:
