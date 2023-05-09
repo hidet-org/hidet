@@ -9,9 +9,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Optional, Union, Sequence, Tuple
+from typing import List, Optional, Union, Sequence, Tuple, Dict
 from hidet.ir.type import DataType, data_type
-from hidet.ir.expr import Expr, Constant, if_then_else, convert, cast as ir_cast, logical_and
+from hidet.ir.expr import Expr, Constant, Var, if_then_else, convert, cast as ir_cast, logical_and, is_constant
 from hidet.ir.layout import RowMajorLayout, ColumnMajorLayout
 from hidet.ir.utils import index_deserialize, index_serialize
 from hidet.utils import prod
@@ -150,11 +150,7 @@ class ConcatTask(Task):
         for i in range(1, n):
             if len(shapes[0]) != len(shapes[i]):
                 raise ValueError('Concat: all shapes must have the same rank, got {}'.format(shapes))
-            if any(
-                isinstance(a, Constant) and isinstance(b, Constant) and a != b
-                for j, (a, b) in enumerate(zip(shapes[0], shapes[i]))
-                if j != axis
-            ):
+            if any(is_constant(a, b) and a != b for j, (a, b) in enumerate(zip(shapes[0], shapes[i])) if j != axis):
                 raise ValueError(
                     'Concat: all tensors must have the same shape except axis dimension, '
                     'got {}, axis {}'.format(shapes, axis)
@@ -334,7 +330,7 @@ class ReshapeOp(Operator):
         else:
             raise ValueError('Can not infer the shape when there are multiple -1: {}'.format(shape))
 
-    def imperative_run(self, inputs: List[Tensor]) -> List[Tensor]:
+    def imperative_run(self, inputs: List[Tensor], remap: Optional[Dict[Var, Constant]] = None) -> List[Tensor]:
         x = inputs[0]
         if isinstance(x.layout, (RowMajorLayout, ColumnMajorLayout)):
             shape = [int(v) for v in self.task.outputs[0].shape]

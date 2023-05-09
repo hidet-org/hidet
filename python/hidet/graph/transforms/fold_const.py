@@ -18,7 +18,9 @@ from hidet import utils
 class FoldConstantRewriter(GraphRewriter):
     def visit_Operator(self, op: Operator):
         inputs = [self(input) for input in op.inputs]
-        if all(input.storage is not None for input in inputs) and all(isinstance(v, TensorNode) for v in op.task.params):
+        if all(input.storage is not None for input in inputs) and all(
+            isinstance(v, TensorNode) for v in op.task.params
+        ):
             outputs = Operator.imperative_run(op, inputs)
             for original, updated in zip(op.outputs, outputs):
                 self.memo[original] = updated

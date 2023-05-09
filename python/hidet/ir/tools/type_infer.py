@@ -195,7 +195,7 @@ class TypeInfer(ExprFunctor, ComputeFunctor):
 
     def visit_GridCompute(self, c: GridCompute):
         dtype = self.visit(c.value)
-        return tensor_type(dtype, c._shape, c.layout)   # pylint: disable=protected-access
+        return tensor_type(dtype, c._shape, c.layout)  # pylint: disable=protected-access
 
     def visit_ReduceCompute(self, c: ReduceCompute):
         return self.visit(c.value)

@@ -161,13 +161,19 @@ class Expr(Node):
         return str(astext(self))
 
     def __int__(self):
-        raise TypeError("Cannot convert {} ({}) to int.".format(type(self), self))
+        from hidet.ir.dtypes import int32
+
+        return cast(self, int32)
 
     def __float__(self):
-        raise TypeError("Cannot convert {} ({}) to float.".format(type(self), self))
+        from hidet.ir.dtypes import float32
+
+        return cast(self, float32)
 
     def __complex__(self):
-        raise TypeError("Cannot convert {} ({}) to complex.".format(type(self), self))
+        from hidet.ir.dtypes import complex64
+
+        return cast(self, complex64)
 
     def read(self, items, protected=True):
         te = self[items]
@@ -834,6 +840,7 @@ def address(v: Expr) -> Expr:
 
 def deref(v: Expr) -> Expr:
     return Dereference(v)
+
 
 def is_constant(e: Union[Expr, PyScalar], *other: Union[Expr, PyScalar]) -> bool:
     if isinstance(e, Expr) and not isinstance(e, Constant):

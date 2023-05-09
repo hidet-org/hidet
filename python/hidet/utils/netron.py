@@ -65,7 +65,9 @@ class Parameter:
 
 
 class Argument:
-    def __init__(self, name, data_type, shape: Union[str, Sequence[Union['Var', int]]], has_initializer=False, scalar_value=None):
+    def __init__(
+        self, name, data_type, shape: Union[str, Sequence[Union['Var', int]]], has_initializer=False, scalar_value=None
+    ):
         self.name: str = name
         self.data_type: str = data_type
         self.shape: Union[str, List[int]] = shape if isinstance(shape, str) else [str(v) for v in shape]

@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Optional
+from typing import List, Optional, Union
 import hidet
 from hidet.ir import IRModule
 from hidet.ir.compute import reduce
@@ -30,9 +30,9 @@ from .attention_mask import AttnMaskAddOp
 
 class AttnTask(Task):
     def __init__(self, name: str, q: TensorNode, k: TensorNode, v: TensorNode):
-        q_shape = q.const_shape()
-        k_shape = k.const_shape()
-        v_shape = v.const_shape()
+        q_shape = q.const_shape
+        k_shape = k.const_shape
+        v_shape = v.const_shape
         n_size = q_shape[-2]
         d_size = q_shape[-1]
         o_shape = broadcast_shapes([q_shape[:-2], k_shape[:-2], v_shape[:-2]]) + [n_size, d_size]
@@ -50,7 +50,7 @@ class AttnTask(Task):
             ),
         )
 
-        qk_shape = qk.const_shape()
+        qk_shape = qk.const_shape
         axis = len(qk_shape) - 1
         axis_extent = qk_shape[axis]
         reduced_shape = qk_shape[:axis] + qk_shape[axis + 1 :]
@@ -105,7 +105,7 @@ class AttnTask(Task):
     def allow_epilogue(self) -> bool:
         return False
 
-    def implement_cuda(self, working_dir: str) -> IRModule:
+    def implement_cuda(self, working_dir: str) -> Union[List[IRModule], IRModule]:
         return tune.extract_ir_modules(self.cuda_schedule_attn)
 
     @tune.space(2, 'block_size', [128, 256])
@@ -128,10 +128,10 @@ class AttnTask(Task):
 
         task = self
         node_q, node_k, node_v, node_o = task.inputs[0], task.inputs[1], task.inputs[2], task.outputs[0]
-        q_shape: List[int] = node_q.const_shape()
-        k_shape: List[int] = node_k.const_shape()
-        v_shape: List[int] = node_v.const_shape()
-        o_shape: List[int] = node_o.const_shape()
+        q_shape: List[int] = list(node_q.const_shape)
+        k_shape: List[int] = list(node_k.const_shape)
+        v_shape: List[int] = list(node_v.const_shape)
+        o_shape: List[int] = list(node_o.const_shape)
         q_head, k_head, v_head, o_head = q_shape[:-2], k_shape[:-2], v_shape[:-2], o_shape[:-2]
         qk_head = broadcast_shape(q_head, k_head)
         bs_qk = prod(qk_head)

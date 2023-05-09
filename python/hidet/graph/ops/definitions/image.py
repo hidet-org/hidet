@@ -12,7 +12,7 @@
 from typing import Optional, List, Sequence, Union
 
 from hidet.ir.dtypes import int32
-from hidet.ir.expr import Expr, Int, if_then_else, convert, cast, logical_or, logical_and
+from hidet.ir.expr import Expr, Int, if_then_else, cast, logical_or, logical_and
 from hidet.ir import primitives as prim
 from .utils import Task, Operator, Tensor, TensorNode, compute, input_like
 
@@ -25,9 +25,9 @@ def get_origin_index(
 ) -> Expr:
     func_map = {
         'half_pixel': lambda x: (x + 0.5) / scale - 0.5,
-        'align_corners': lambda x: x * ((image_width - 1) / (target_width - 1)),
+        'align_corners': lambda x: x * (image_width - 1) / (target_width - 1),
         'asymmetric': lambda x: x / scale,
-        'pytorch_half_pixel': lambda x: (x + 0.5) / scale - 0.5 if target_width > 1 else convert(0.0),
+        'pytorch_half_pixel': lambda x: if_then_else(target_width > 1, (x + 0.5) / scale - 0.5, 0.0),
         'tf_half_pixel_for_nn': lambda x: (x + 0.5) / scale,
     }
     if coordinate_transformation_mode not in func_map:
@@ -124,12 +124,12 @@ def resize2d_nchw_compute(
         if scale_factor is not None:
             scales = scale_factor
         else:
-            scales = [target_size[i] / image_size[i] for i in range(2)]
+            scales = [float(target_size[i]) / image_size[i] for i in range(2)]
     else:
         if scale_factor is None:
             raise ValueError('scale_factor should be set when recompute_scale_factor is not None.')
         if recompute_scale_factor:
-            scales = [target_size[i] / image_size[i] for i in range(2)]
+            scales = [float(target_size[i]) / image_size[i] for i in range(2)]
         else:
             scales = scale_factor
 

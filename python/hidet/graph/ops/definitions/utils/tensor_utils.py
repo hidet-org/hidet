@@ -14,7 +14,7 @@ from typing import Tuple, List, Union, Sequence, Optional
 import builtins
 from hidet.ir.layout import DataLayout
 from hidet.ir.type import Int
-from hidet.ir.expr import Var, Expr, Constant
+from hidet.ir.expr import Var, Expr, Constant, is_constant
 from hidet.ir.type import TensorType, tensor_type, DataType
 from hidet.ir.task import Task, InverseMap
 from hidet.ir.func import IRModule
@@ -102,9 +102,9 @@ def normalize_dim(dim: Optional[Union[Int, Sequence[Int]]], rank: int) -> Union[
         original_dim = dim
         if dim is None:
             dim = rank
-        if isinstance(dim, Constant) and int(dim) < 0:
+        if is_constant(dim) and int(dim) < 0:
             dim += rank
-        if isinstance(dim, Constant) and not 0 <= int(dim) <= rank:
+        if is_constant(dim) and not 0 <= int(dim) <= rank:
             raise ValueError('Given dim {} is not a valid dim for rank {}'.format(original_dim, rank))
         return dim
 
@@ -139,7 +139,7 @@ def can_broadcast(src_shape: Sequence[Int], dst_shape: Sequence[Int]) -> bool:
         return False
     src_shape = [1 for _ in range(len(dst_shape) - len(src_shape))] + list(src_shape)
     for a, b in zip(src_shape, dst_shape):
-        if isinstance(a, (Constant, int)) and isinstance(b, (Constant, int)) and a not in [1, b]:
+        if is_constant(a, b) and a not in [1, b]:
             return False
     return True
 
@@ -150,11 +150,7 @@ def can_mutually_broadcast(x_shape: Sequence[Int], y_shape: Sequence[Int]) -> bo
         x_shape = [1] + x_shape
     while len(y_shape) < len(x_shape):
         y_shape = [1] + y_shape
-    return all(
-        p == q or p == 1 or q == 1
-        for p, q in zip(x_shape, y_shape)
-        if isinstance(p, (int, Constant)) and isinstance(q, (int, Constant))
-    )
+    return all(p == q or p == 1 or q == 1 for p, q in zip(x_shape, y_shape) if is_constant(p, q))
 
 
 def broadcast_shape(x_shape: Sequence[Int], y_shape: Sequence[Int]) -> List[Int]:
@@ -170,18 +166,18 @@ def broadcast_shape(x_shape: Sequence[Int], y_shape: Sequence[Int]) -> List[Int]
         y_shape = [int32(1)] + y_shape
     result_shape = []
     for p, q in zip(x_shape, y_shape):
-        if isinstance(p, Constant) and int(p) == 1:
+        if is_constant(p) and p == 1:
             result_shape.append(q)
-        elif isinstance(q, Constant) and int(q) == 1:
+        elif is_constant(q) and q == 1:
             result_shape.append(p)
-        elif isinstance(p, Constant) and isinstance(q, Constant):
-            if int(p) != int(q):
+        elif is_constant(p, q):
+            if p != q:
                 raise ValueError(
                     'can not broadcast two arrays with shape {} and {}'.format(orig_shapes[0], orig_shapes[1])
                 )
             result_shape.append(p)
         else:
-            result_shape.append(p if isinstance(p, Constant) else q)
+            result_shape.append(p if is_constant(p) else q)
     return result_shape
 
 
@@ -200,7 +196,7 @@ def broadcast_indices(indices: Sequence[Int], shape: Sequence[Int], out_shape: S
     pad_dim = len(out_shape) - len(shape)
     indices = list(indices[pad_dim:])
     for idx, dim in enumerate(shape):
-        if isinstance(dim, Constant) and int(dim) == 1:
+        if is_constant(dim) and dim == 1:
             indices[idx] = 0
     return indices
 

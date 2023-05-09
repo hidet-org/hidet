@@ -21,7 +21,7 @@ from hidet.graph.operator import Operator
 from hidet.graph.ir import FlowGraph
 from hidet.graph.ops.definitions.utils import input_like
 from hidet.ir.tools import rewrite
-from hidet.utils import same_list, index_of
+from hidet.utils import index_of
 
 
 class FusedTask(Task):
@@ -148,10 +148,9 @@ class FusedOperator(Operator):
         if len(inputs) != len(fused_graph.inputs):
             raise ValueError('number of inputs mismatch')
         for idx, (a, b) in enumerate(zip(inputs, fused_graph.inputs)):
-            if (
-                any(isinstance(va, int) and isinstance(vb, int) and va != vb for va, vb in zip(a.shape, b.shape))
-                or len(a.shape) != len(b.shape)
-            ):
+            if any(isinstance(va, int) and isinstance(vb, int) and va != vb for va, vb in zip(a.shape, b.shape)) or len(
+                a.shape
+            ) != len(b.shape):
                 raise ValueError('Arg {} shape mismatch: {} vs {}'.format(idx, a.shape, b.shape))
             if a.dtype != b.dtype:
                 raise ValueError('Arg {} dtype mismatch: {} vs {}'.format(idx, a.dtype, b.dtype))
