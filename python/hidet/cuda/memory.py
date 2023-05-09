@@ -78,11 +78,13 @@ def malloc_async(num_bytes: int, stream: Optional[Union[Stream, cudaStream_t, in
     Returns
     -------
     addr: int
-        The address of the allocated memory.
+        The address of the allocated memory. When the allocation failed due to insufficient memory, 0 is returned.
     """
     if stream is None:
         stream = current_stream()
     err, addr = cudart.cudaMallocAsync(num_bytes, int(stream))
+    if err == cudart.cudaError_t.cudaErrorMemoryAllocation:
+        return 0
     assert err == 0, err
     return addr
 
@@ -122,6 +124,8 @@ def malloc_host(num_bytes: int) -> int:
     """
     err, addr = cudart.cudaMallocHost(num_bytes)
     assert err == 0, err
+    if err == cudart.cudaError_t.cudaErrorMemoryAllocation:
+        return 0
     return addr
 
 

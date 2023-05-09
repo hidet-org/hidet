@@ -285,7 +285,7 @@ class PadTask(Task):
 
 
 class TileTask(Task):
-    def __init__(self, data: TensorNode, repeats: List[int]):
+    def __init__(self, data: TensorNode, repeats: Sequence[int]):
         shape = data.const_shape()
         assert len(shape) == len(repeats)
         out_shape = [a * b for a, b in zip(shape, repeats)]
@@ -562,7 +562,7 @@ class PadOp(Operator):
 
 
 class TileOp(Operator):
-    def __init__(self, data: Tensor, repeats: List[int]):
+    def __init__(self, data: Tensor, repeats: Sequence[int]):
         if len(repeats) != len(data.shape):
             raise ValueError(
                 "The length of 'repeats' parameter of Tile operator expects to have the "
@@ -707,7 +707,7 @@ def conv_pad(data: Tensor, pads: Union[int, List[int]]) -> Tensor:
     return pad(data, pads)
 
 
-def tile(data: Tensor, repeats: List[int]) -> Tensor:
+def tile(data: Tensor, repeats: Sequence[int]) -> Tensor:
     """
     Tile a tensor. See https://numpy.org/doc/stable/reference/generated/numpy.tile.html.
 
@@ -715,7 +715,7 @@ def tile(data: Tensor, repeats: List[int]) -> Tensor:
     ----------
     data: Tensor
         The input tensor to be tiled.
-    repeats: List[int]
+    repeats: Sequence[int]
         A list of integers to represent the number of repeats for each dimension.
         Must have len(repeats) == len(data.shape).
 

@@ -11,6 +11,7 @@
 # limitations under the License.
 # pylint: disable=unused-import
 from typing import List, Optional, Dict, Tuple, Set
+import logging
 
 from hidet.graph.ir import functors
 from hidet.graph.ir.flow_graph import FlowGraph, Operator, Tensor
@@ -20,6 +21,9 @@ from hidet.utils import strict_zip
 from .fold_const import fold_const_pass
 from .graph_patterns import SubgraphRewriteRule, TensorPattern, OperatorPattern, MatchDict, Usage, graph_pattern_match
 from .graph_patterns.base import registered_rewrite_rules, register_rewrite_rule
+
+
+logger = logging.getLogger(__name__)
 
 
 class SubgraphRewritePass(GraphPass):
@@ -119,6 +123,7 @@ class SubgraphRewritePass(GraphPass):
                 # apply the graph transform
                 if PassContext.current().configs['verbose']:
                     print('Applying transform: {}'.format(graph_pattern.name))
+                logger.debug('Applying transform: %s', graph_pattern.name)
                 source_output_pattern_tensors = graph_pattern.source()
                 source_output_tensors = [matched[t] for t in source_output_pattern_tensors]
                 for source_tensor, target_tensor in strict_zip(source_output_tensors, target_output_tensors):

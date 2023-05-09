@@ -47,6 +47,12 @@ def to_file(filename: str, level: Optional[int] = logging.DEBUG):
     logger.addHandler(handler)
 
 
+DEBUG = logging.DEBUG
+INFO = logging.INFO
+WARNING = logging.WARNING
+ERROR = logging.ERROR
+
+
 def setConsoleLevel(level: int):
     """
     Set the logging level of the console handler (to stderr) in the hidet root logger

@@ -105,12 +105,18 @@ class FullOp(Operator):
     def __init__(
         self,
         shape: Sequence[int],
-        value: Union[float, int, bool, Constant],
+        value: Union[float, int, bool, Constant, Tensor],
         dtype: Optional[DataType] = None,
         device: Union[Device, str] = 'cpu',
     ):
         shape = [int(v) for v in shape]
         device: Device = instantiate_device(device)
+
+        if isinstance(value, Tensor):
+            if value.is_symbolic():
+                raise NotImplementedError('Currently, we do not support symbolic tensor as value in full op')
+            value = value.item()
+
         if dtype is None:
             if isinstance(value, int):
                 dtype = dtypes.int64
@@ -133,11 +139,11 @@ class FullOp(Operator):
 
 def full(
     shape: Sequence[int],
-    value: Union[float, int, bool, Constant],
+    value: Union[float, int, bool, Constant, Tensor],
     dtype: Optional[Union[DataType, str]] = None,
     device: Union[Device, str] = 'cpu',
 ) -> Tensor:
-    return FullOp(shape, value, data_type(dtype), device).get_output(0)
+    return FullOp(shape, value, data_type(dtype) if dtype is not None else dtype, device).get_output(0)
 
 
 def arange(start, /, stop=None, step=1, *, dtype=None, device='cpu') -> Tensor:
