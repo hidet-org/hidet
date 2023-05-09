@@ -28,6 +28,7 @@ class FreeVarCollector(IRVisitor):
         return self.free_vars
 
     def visit_GridCompute(self, node: GridCompute):
+        self.visit(node.shape)
         for v in node.axes:
             self.defined.add(v)
         self.visit(node.value)
@@ -35,6 +36,7 @@ class FreeVarCollector(IRVisitor):
             self.defined.remove(v)
 
     def visit_ReduceCompute(self, node: ReduceCompute):
+        self.visit(node.shape)
         for v in node.axes:
             self.defined.add(v)
         self.visit(node.value)
@@ -42,6 +44,7 @@ class FreeVarCollector(IRVisitor):
             self.defined.remove(v)
 
     def visit_ArgReduceCompute(self, node: ArgReduceCompute):
+        self.visit(node.extent)
         self.defined.add(node.axis)
         self.visit(node.value)
         self.defined.remove(node.axis)

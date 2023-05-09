@@ -251,6 +251,7 @@ class AutoScheduler:
                 fb += DeclareStmt(param, init=init)
 
             # allocate memory space for intermediate tensors
+            buffer_bytes = rewrite(buffer_bytes, scalar_map)
             self.allocate_tensors(fb, device, buffer_bytes, buffer_offset, node_map)
 
             # schedule each tensor computation

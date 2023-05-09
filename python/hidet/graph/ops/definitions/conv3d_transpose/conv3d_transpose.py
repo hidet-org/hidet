@@ -26,8 +26,8 @@ class Conv3dTransposeTask(Task):
         groups: int,
         output_padding: Tuple[int, int, int],
     ):
-        n, oc, r, p, q = data.const_shape()
-        oc, wc, kz, kx, ky = weight.const_shape()
+        n, oc, r, p, q = data.const_shape
+        oc, wc, kz, kx, ky = weight.const_shape
         c = wc * groups
         sz, sx, sy = stride
         pz0, px0, py0, pz1, px1, py1 = padding

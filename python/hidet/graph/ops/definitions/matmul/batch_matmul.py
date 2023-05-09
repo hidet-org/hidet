@@ -25,8 +25,8 @@ from hidet.ir.primitives.cuda.mma import MmaConfig, mma_sync
 
 class BatchMatmulTask(Task):
     def __init__(self, a: TensorNode, b: TensorNode, mma: str = 'simt'):
-        batch_size, m_size, k_size = a.const_shape()
-        batch_size, k_size, n_size = b.const_shape()
+        batch_size, m_size, k_size = a.const_shape
+        batch_size, k_size, n_size = b.const_shape
         self.batch_size: int = batch_size
         self.m_size: int = m_size
         self.k_size: int = k_size

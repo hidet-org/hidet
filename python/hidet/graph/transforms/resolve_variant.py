@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Type, List, Optional, Dict
+from hidet.ir.expr import is_constant
 from hidet.graph.ir import FlowGraph, GraphRewriter, Tensor, Operator
 from hidet.utils import strict_zip, same_list, repeat_until_converge
 from .base import GraphPass, PassContext
@@ -158,7 +159,7 @@ class ResolveVariantRewriter(GraphRewriter):
                 )
             for i, (original, updated) in enumerate(strict_zip(op.outputs, outs)):
                 assert original not in self.memo
-                if (original.dtype, tuple(original.shape)) != (updated.dtype, tuple(updated.shape)):
+                if not self.is_compatible_output(original, updated):
                     raise ValueError(
                         (
                             "The resolve rule of operator '{}' should return tensors with the same dtype and "
@@ -166,6 +167,17 @@ class ResolveVariantRewriter(GraphRewriter):
                         ).format(op.name, i, original.dtype, list(original.shape), updated.dtype, list(updated.shape))
                     )
                 self.memo[original] = updated
+
+    @staticmethod
+    def is_compatible_output(a: Tensor, b: Tensor):
+        if a.dtype != b.dtype:
+            return False
+        if len(a.shape) != len(b.shape):
+            return False
+        for va, vb in zip(a.shape, b.shape):
+            if is_constant(va, vb) and va != vb:
+                return False
+        return True
 
 
 class ResolveVariantPass(GraphPass):

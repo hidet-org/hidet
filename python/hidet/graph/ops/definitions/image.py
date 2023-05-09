@@ -12,7 +12,7 @@
 from typing import Optional, List, Sequence, Union
 
 from hidet.ir.dtypes import int32
-from hidet.ir.expr import Expr, if_then_else, convert, cast, logical_or, logical_and
+from hidet.ir.expr import Expr, Int, if_then_else, cast, logical_or, logical_and
 from hidet.ir import primitives as prim
 from .utils import Task, Operator, Tensor, TensorNode, compute, input_like
 
@@ -21,13 +21,13 @@ from .utils import Task, Operator, Tensor, TensorNode, compute, input_like
 
 
 def get_origin_index(
-    xx: Expr, image_width: int, target_width: int, scale: float, coordinate_transformation_mode: str
+    xx: Expr, image_width: Int, target_width: Int, scale: float, coordinate_transformation_mode: str
 ) -> Expr:
     func_map = {
         'half_pixel': lambda x: (x + 0.5) / scale - 0.5,
-        'align_corners': lambda x: x * ((image_width - 1) / (target_width - 1)),
+        'align_corners': lambda x: x * (image_width - 1) / (target_width - 1),
         'asymmetric': lambda x: x / scale,
-        'pytorch_half_pixel': lambda x: (x + 0.5) / scale - 0.5 if target_width > 1 else convert(0.0),
+        'pytorch_half_pixel': lambda x: if_then_else(target_width > 1, (x + 0.5) / scale - 0.5, 0.0),
         'tf_half_pixel_for_nn': lambda x: (x + 0.5) / scale,
     }
     if coordinate_transformation_mode not in func_map:
@@ -53,7 +53,7 @@ def get_closest_index(xx: Expr, rounding_method: str) -> Expr:
 
 
 def get_2d_pixel(data: TensorNode, n, c, h, w) -> Expr:
-    height, width = data.const_shape()[2:]
+    height, width = data.shape[2:]
     h = prim.max(int32(0), prim.min(height - 1, h))
     w = prim.max(int32(0), prim.min(width - 1, w))
     return data[n, c, h, w]
@@ -108,7 +108,7 @@ def resize2d_nchw_compute(
     recompute_scale_factor: Optional[bool],
 ):  # pylint: disable=unused-argument
     _ = roi  # not supported yet
-    image_size = data.const_shape()[2:]
+    image_size = data.shape[2:]
 
     scale_factor = _normalize(scale_factor, 2)
     size = _normalize(size, 2)
@@ -124,12 +124,12 @@ def resize2d_nchw_compute(
         if scale_factor is not None:
             scales = scale_factor
         else:
-            scales = [target_size[i] / image_size[i] for i in range(2)]
+            scales = [float(target_size[i]) / image_size[i] for i in range(2)]
     else:
         if scale_factor is None:
             raise ValueError('scale_factor should be set when recompute_scale_factor is not None.')
         if recompute_scale_factor:
-            scales = [target_size[i] / image_size[i] for i in range(2)]
+            scales = [float(target_size[i]) / image_size[i] for i in range(2)]
         else:
             scales = scale_factor
 
@@ -189,7 +189,7 @@ def resize2d_nchw_compute(
             )
         return value
 
-    output_shape = data.const_shape()[:2] + list(target_size)
+    output_shape = data.shape[:2] + tuple(target_size)
     out = compute('out', shape=output_shape, fcompute=fmap)
     return out
 

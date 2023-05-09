@@ -23,7 +23,7 @@ from .utils import broadcast_shape, broadcast_shapes, broadcast_indices
 
 class UnaryElementwiseTask(Task):
     def __init__(self, name: str, x: TensorNode, op: Callable[[Any], Any]):
-        shape = x.const_shape()
+        shape = x.shape
         y = compute(name='y', shape=shape, fcompute=lambda *indices: op(x.__getitem__(indices)))
         super().__init__(
             name=name,
@@ -35,20 +35,18 @@ class UnaryElementwiseTask(Task):
 
 class BinaryElementwiseTask(Task):
     def __init__(self, name: str, x: TensorNode, y: TensorNode, op: Callable[[Any, Any], Any]):
-        x_shape = x.const_shape()
-        y_shape = y.const_shape()
-        z_shape = broadcast_shape(x_shape, y_shape)
+        z_shape = broadcast_shape(x.shape, y.shape)
 
         z = compute(
             name='z',
             shape=z_shape,
             fcompute=lambda *indices: op(
-                x[broadcast_indices(indices, x_shape, z_shape)], y[broadcast_indices(indices, y_shape, z_shape)]
+                x[broadcast_indices(indices, x.shape, z_shape)], y[broadcast_indices(indices, y.shape, z_shape)]
             ),
         )
 
         inverse_map = {}
-        for inp, inp_shape in zip([x, y], [x_shape, y_shape]):
+        for inp, inp_shape in zip([x, y], [x.shape, y.shape]):
             if prod(inp_shape) == prod(z_shape):
                 inverse_map[inp] = InverseMap.from_lambda(
                     lambda *indices: [0 for _ in range(len(z_shape) - len(inp_shape))] + list(indices),
@@ -60,7 +58,7 @@ class BinaryElementwiseTask(Task):
 
 class VariadicElementwiseTask(Task):
     def __init__(self, name: str, args: List[TensorNode], op: Callable[[Any], Any]):
-        shapes = [arg.const_shape() for arg in args]
+        shapes = [arg.shape for arg in args]
         out_shape = broadcast_shapes(shapes)
         out = compute(
             name='out',
@@ -83,9 +81,9 @@ class VariadicElementwiseTask(Task):
 
 class WhereTask(Task):
     def __init__(self, cond: TensorNode, x: TensorNode, y: TensorNode):
-        cond_shape = cond.const_shape()
-        x_shape = x.const_shape()
-        y_shape = y.const_shape()
+        cond_shape = cond.shape
+        x_shape = x.shape
+        y_shape = y.shape
         z_shape = broadcast_shape(cond_shape, broadcast_shape(x_shape, y_shape))
 
         z = compute(

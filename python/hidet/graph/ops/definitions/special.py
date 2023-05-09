@@ -17,7 +17,7 @@ from .utils import Task, Operator, Tensor, TensorNode, compute, input_like
 
 class BarrierTask(Task):
     def __init__(self, x: TensorNode):
-        y = compute(name='y', shape=x.const_shape(), fcompute=lambda *indices: x[indices])
+        y = compute(name='y', shape=x.shape, fcompute=lambda *indices: x[indices])
         super().__init__(name='barrier', inputs=[x], outputs=[y])
 
 

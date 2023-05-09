@@ -125,7 +125,7 @@ class RepeatTaskMapping(TaskMapping):
             global_index = sum(a * b for a, b in zip(task, self.strides))
             return global_index
 
-        ranges = [range(s) for s in self.task_shape]
+        ranges = [range(int(s)) for s in self.task_shape]
         tasks = list(tuple(task) for task in itertools.product(*ranges))
         return list(sorted(tasks, key=key_func))
 

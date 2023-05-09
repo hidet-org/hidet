@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List, Tuple
-from hidet.ir.expr import Expr, Var
+from hidet.ir.expr import Expr, Var, Constant
 from ..utils import Task, Operator, Tensor, compute, reduce, input_like, broadcast_shape, broadcast_indices
 from ..utils import TensorInput
 
@@ -19,22 +19,22 @@ class MatmulTask(Task):
     def __init__(self, a: TensorInput, b: TensorInput):
         # The semantics of this operator is the same as the one in numpy
         # See Also https://numpy.org/doc/stable/reference/generated/numpy.matmul.html
-        a_shape: List[int] = a.const_shape()
-        b_shape: List[int] = b.const_shape()
+        a_shape: List[Expr] = list(a.shape)
+        b_shape: List[Expr] = list(b.shape)
         if len(a_shape) <= 1 and len(b_shape) <= 1:
             raise ValueError('At least one of the inputs must have rank > 1')
         elif len(a_shape) == 1:
-            if a_shape[0] != b_shape[-2]:
+            if isinstance(a_shape[0], Constant) and isinstance(b_shape[-2], Constant) and a_shape[0] != b_shape[-2]:
                 raise ValueError('Cannot multiply matrices with shape {} and {}.'.format(a_shape, b_shape))
             reduce_extent = a_shape[0]
             c_shape = b_shape[:-2] + b_shape[-1:]
         elif len(b_shape) == 1:
-            if a_shape[-1] != b_shape[0]:
+            if isinstance(a_shape[-1], Constant) and isinstance(b_shape[0], Constant) and a_shape[-1] != b_shape[0]:
                 raise ValueError('Cannot multiply matrices with shape {} and {}.'.format(a_shape, b_shape))
             reduce_extent = a_shape[-1]
             c_shape = a_shape[:-1]
         else:
-            if a_shape[-1] != b_shape[-2]:
+            if isinstance(a_shape[-1], Constant) and isinstance(b_shape[-2], Constant) and a_shape[-1] != b_shape[-2]:
                 raise ValueError('Cannot multiply matrices with shape {} and {}.'.format(a_shape, b_shape))
             reduce_extent = a_shape[-1]
             c_shape = broadcast_shape(a_shape[:-2], b_shape[:-2]) + [a_shape[-2], b_shape[-1]]

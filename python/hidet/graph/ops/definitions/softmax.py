@@ -16,10 +16,10 @@ from .utils import Task, TensorNode, compute, reduce
 
 class SoftmaxTask(Task):
     def __init__(self, x: TensorNode, axis: int):
-        self.x_shape = x.const_shape()
+        self.x_shape = x.shape
         self.axis = axis
 
-        shape = x.const_shape()
+        shape = x.shape
         axis_extent = shape[axis]
         reduced_shape = shape[:axis] + shape[axis + 1 :]
 

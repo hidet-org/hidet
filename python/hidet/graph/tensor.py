@@ -1284,7 +1284,7 @@ def full_like(
     data: Tensor
         The tensor to copy shape, dtype, and device from.
 
-    fill_value: int, float, or bool
+    fill_value: int, float, bool, complex
         The value to fill the tensor with.
 
     shape: Sequence[int], optional

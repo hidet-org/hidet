@@ -27,7 +27,7 @@ class Conv2dTransposeGemmImageTask(Task):
         groups: int,
         output_padding: Sequence[int],  # [opx, opy]
     ):
-        n, oc, p, q = data.const_shape()
+        n, oc, p, q = data.shape
         kx, ky = kernel
         sx, sy = stride
         px0, py0, px1, py1 = padding

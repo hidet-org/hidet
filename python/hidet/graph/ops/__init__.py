@@ -27,7 +27,7 @@ from .definitions.activation import softshrink, softmax, softmin, hardtanh
 from .definitions.attention import attention
 from .definitions.norm import batch_norm_infer, instance_norm, layer_norm, group_norm
 from .definitions.image import resize2d
-from .definitions.create import full, arange, linspace
+from .definitions.create import full, arange, linspace, tri
 from .definitions.arithmetic import add, subtract, multiply, divide, mod, remainder, negative, positive, square
 from .definitions.arithmetic import floor, ceil, round, trunc, sqrt, rsqrt, pow, abs
 from .definitions.arithmetic import reciprocal, exp, expm1, log, log2, log10, log1p, logaddexp, erf
