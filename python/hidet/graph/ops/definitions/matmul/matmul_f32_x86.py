@@ -78,9 +78,9 @@ class MatmulF32Taskx86(Task):
     # @tune.space(0, 'block_k', [768])
     # @tune.space(0, 'nthreads', [32])
     @tune.space(2, 'micro_ker', [(6, 16), (8, 8), (4, 8), (4, 4)])
-    @tune.space(2, 'block_m', [1200, 2000])
-    @tune.space(2, 'block_n', [144, 256, 384, 512, 768, 960])
-    @tune.space(2, 'block_k', [128, 384, 512, 768])
+    @tune.space(2, 'block_m', [1200, 2400])
+    @tune.space(2, 'block_n', [384, 512, 768, 960])
+    @tune.space(2, 'block_k', [384, 512, 768])
     @tune.space(2, 'nthreads', [4, 8, 16, 32])
     def schedule_matmulf32_x86(self, block_m=1200, block_n=768, block_k=512, micro_ker=(6, 16),
                                nthreads=16) -> IRModule:
