@@ -13,7 +13,7 @@ from typing import Union, Optional, Sequence
 import warnings
 
 from hidet.ir import dtypes
-from hidet.ir.expr import Constant, Int, if_then_else
+from hidet.ir.expr import Constant, Expr, Int, if_then_else
 from hidet.ir.type import DataType, data_type
 from hidet.runtime.device import Device, instantiate_device
 from .utils import Task, Operator, Tensor, compute
@@ -94,16 +94,27 @@ class ArangeOp(Operator):
             stop = start
             start = 0
         if dtype is None:
-            if all(isinstance(v, int) for v in [start, stop, step]):
-                dtype = dtypes.int32
-            else:
-                dtype = dtypes.float32
+            dtype = self.infer_dtype(start, stop, step)
         device = instantiate_device(device)
         super().__init__(
             inputs=[],
             attributes={'start': start, 'stop': stop, 'step': step, 'dtype': dtype, 'device': device},
             task=ArangeTask(start, stop, step, dtype),
         )
+
+    def infer_dtype(self, start, stop, step):
+        from hidet.ir.expr import convert
+        from hidet.ir.tools import infer_type
+        from hidet.ir.dtypes import promote_type
+
+        dtype = None
+        for v in [start, stop, step]:
+            v = convert(v)
+            assert isinstance(v, Expr)
+            v_dtype = infer_type(v)
+            assert isinstance(v_dtype, DataType)
+            dtype = v_dtype if dtype is None else promote_type(dtype, v_dtype)
+        return dtype
 
 
 class FullOp(Operator):

@@ -28,19 +28,24 @@ from hidet.utils.overrides import set_module
 from hidet.runtime.device import Device, instantiate_device
 
 
-def _simplify_dim(dim: Union[int, Expr]) -> Union[int, Var]:
+def _simplify_dim(dim: Union[int, Expr]) -> Union[int, SizeVar]:
     from hidet.ir.tools import simplify
 
-    if isinstance(dim, (int, Var)):
+    if isinstance(dim, (int, SizeVar)):
         return dim
     elif isinstance(dim, Constant):
         return int(dim)
     else:
         dim = simplify(dim)
-        if isinstance(dim, (int, Var, Constant)):
+        if isinstance(dim, (int, SizeVar, Constant)):
             return _simplify_dim(dim)
         else:
             raise ValueError(f"Cannot simplify {dim} to a constant integer or variable.")
+
+
+class SizeVar(Var):
+    def __init__(self, hint='d'):
+        super().__init__(hint=hint, type=dtypes.int32)
 
 
 @set_module('hidet')
@@ -74,15 +79,15 @@ class Tensor:
     def __init__(self, shape, dtype, device, storage, layout=None, trace=None):
         from hidet.graph.operator import Operator
 
-        self._shape: List[Union[Var, int]] = [_simplify_dim(dim) for dim in shape]
+        self._shape: List[Union[SizeVar, int]] = [_simplify_dim(dim) for dim in shape]
         self._dtype: DataType = data_type(dtype)
         self._device: Device = instantiate_device(device)
         self._storage: Optional[Storage] = storage
-        self._layout: DataLayout = layout if layout else DataLayout.row_major(shape)
+        self._layout: DataLayout = layout if layout else DataLayout.row_major(self._shape)
         self._trace: Optional[Tuple[Operator, int]] = trace
 
     @property
-    def shape(self) -> Tuple[Union[int, Var], ...]:
+    def shape(self) -> Tuple[Union[int, SizeVar], ...]:
         """
         The shape of the tensor.
 
@@ -986,15 +991,16 @@ def empty(shape, dtype='float32', device='cpu', layout=None):
     return Tensor(shape=shape, dtype=dtype, device=device, storage=storage, layout=layout)
 
 
-def symbol(shape: Sequence[int], dtype='float32', device='cpu', layout=None) -> Tensor:
+def symbol(shape: Sequence[Union[int, SizeVar, None, str]], dtype='float32', device='cpu', layout=None) -> Tensor:
     """Create a symbolic tensor.
 
     Parameters
     ----------
-    shape: Sequence[int]
-        The shape of new tensor.
+    shape: Sequence[Union[int, SizeVar, None, str]]
+        The shape of new tensor. The shape can contain symbolic variables. None indicates the corresponding dimension
+        is symbolic. str indicates the corresponding dimension is a symbolic variable with the given name.
 
-    dtype: str
+    dtype: str or DataType
         The data type of element of the tensor.
 
     device: Device or str, default 'cpu'
@@ -1009,7 +1015,21 @@ def symbol(shape: Sequence[int], dtype='float32', device='cpu', layout=None) -> 
         The created tensor.
 
     """
-    return Tensor(shape=shape, dtype=dtype, device=device, storage=None, layout=layout)
+    updated_shape = []
+    name2shape_var = {}
+    for d in shape:
+        if d is None:
+            updated_shape.append(SizeVar('d'))
+        elif isinstance(d, str):
+            if d in name2shape_var:
+                updated_shape.append(name2shape_var[d])
+            else:
+                name2shape_var[d] = SizeVar(d)
+                updated_shape.append(name2shape_var[d])
+        else:
+            assert isinstance(d, (int, SizeVar, Constant))
+            updated_shape.append(d)
+    return Tensor(shape=updated_shape, dtype=dtype, device=device, storage=None, layout=layout)
 
 
 def zeros(shape: Sequence[int], dtype: Union[DataType, str] = 'float32', device='cpu') -> Tensor:
@@ -1125,7 +1145,11 @@ def randn(shape, dtype='float32', mean=0.0, stddev=1.0, device='cpu') -> Tensor:
         imag = hidet.randn(shape, dtype=dtype.base_dtype, mean=mean, stddev=stddev, device=device)
         return real + imag * 1j
     else:
-        np_tensor = np.random.randn(*shape) * stddev + mean
+        if any(not isinstance(d, int) for d in shape):
+            raise RuntimeError('shape must be a sequence of integers, got {}'.format(repr(shape)))
+        np_tensor = np.array(np.random.randn(*shape) * stddev + mean).astype(
+            np.float32
+        )  # wrap np.array(...) for shape=[]
         dtype = data_type(dtype)
 
         if isinstance(np_tensor, float):  # shape = []
@@ -1464,3 +1488,7 @@ def asarray(obj, /, *, dtype=None, device=None) -> Tensor:
             array = array.astype(np.float32)
         ret = from_numpy(array)
     return ret.to(dtype=dtype, device=device)
+
+
+def symbolic_size(hint: str) -> SizeVar:
+    return SizeVar(hint)

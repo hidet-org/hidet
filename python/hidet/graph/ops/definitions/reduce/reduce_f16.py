@@ -290,21 +290,25 @@ class ReduceProdF16Op(ReduceBaseF16Op):
         super().__init__(x, dims, keepdims, ReduceType.Product)
 
 
-def reduce_f16(x: Tensor, dims: Union[int, Sequence[int]], keepdims: bool, reduce_type: ReduceType) -> Tensor:
+def reduce_f16(
+    x: Tensor, dims: Union[int, Sequence[int]], keepdims: bool, reduce_type: Union[ReduceType, str]
+) -> Tensor:
     if x.dtype != dtypes.float16:
         raise ValueError('reduce_f16 only support float16, got {}'.format(x.dtype))
     if x.shape[-1] % 2 != 0:
         raise ValueError('Expect the last dimension of the input tensors to be a multiple of 2')
     if isinstance(dims, int):
         dims = [dims]
+    if isinstance(reduce_type, ReduceType):
+        reduce_type = reduce_type.value
     op_dict = {
-        ReduceType.Sum: ReduceSumF16Op,
-        ReduceType.Average: ReduceMeanF16Op,
-        ReduceType.Max: ReduceMaxF16Op,
-        ReduceType.Min: ReduceMinF16Op,
-        ReduceType.Product: ReduceProdF16Op,
-        ReduceType.Or: ReduceOrF16Op,
-        ReduceType.And: ReduceAndF16Op,
+        ReduceType.Sum.value: ReduceSumF16Op,
+        ReduceType.Average.value: ReduceMeanF16Op,
+        ReduceType.Max.value: ReduceMaxF16Op,
+        ReduceType.Min.value: ReduceMinF16Op,
+        ReduceType.Product.value: ReduceProdF16Op,
+        ReduceType.Or.value: ReduceOrF16Op,
+        ReduceType.And.value: ReduceAndF16Op,
     }
     op = op_dict[reduce_type]
     return op(x, dims, keepdims).get_output(0)

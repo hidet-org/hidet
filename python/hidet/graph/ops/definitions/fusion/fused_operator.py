@@ -15,6 +15,7 @@ from collections import defaultdict
 from hidet.ir.expr import Var, Expr
 from hidet.ir.task import Task, Target
 from hidet.ir.func import IRModule
+from hidet.ir.tools import simplify
 from hidet.ir.compute import TensorNode, TensorInput
 from hidet.graph.tensor import Tensor
 from hidet.graph.operator import Operator
@@ -87,12 +88,13 @@ class FusedTask(Task):
         for op in fused_graph.nodes:
             task: Task = op.task
             remap: Dict[TensorNode, TensorNode] = {a: tensor_map[b] for a, b in zip(op.task.inputs, op.inputs)}
-            op_outputs: List[TensorNode] = [rewrite(rewrite(x, remap), scalar_map) for x in task.outputs]
-            for a, b in zip(op.task.outputs, op.outputs):
+            task_outputs: List[TensorNode] = [rewrite(rewrite(x, remap), scalar_map) for x in task.outputs]
+            for a, b in zip(task_outputs, op.outputs):
                 for a_dim, b_dim in zip(a.shape, b.shape):
-                    if isinstance(b_dim, Var):
+                    a_dim = simplify(a_dim)
+                    if isinstance(b_dim, Var) and b_dim not in scalar_map:
                         scalar_map[b_dim] = a_dim
-            tensor_map.update({a: b for a, b in zip(op.outputs, op_outputs)})
+            tensor_map.update({a: b for a, b in zip(op.outputs, task_outputs)})
 
         outputs: List[TensorNode] = [tensor_map[x] for x in fused_graph.outputs]
         return inputs, outputs
@@ -107,6 +109,19 @@ class FusedTask(Task):
             target = Target.from_string(target)
 
         anchor_op = self.fused_graph.nodes[self.anchor]
+
+        # # DEBUG vvv
+        # import hidet
+        #
+        # hidet.ir.tools.printer._show_var_id = False
+        #
+        # with open(os.path.join(working_dir, 'graph.txt'), 'w') as f:
+        #     f.write(str(self.fused_graph))
+        #
+        # with open(os.path.join(working_dir, 'graph.json'), 'w') as f:
+        #     hidet.utils.netron.dump(self.fused_graph, f)
+        # hidet.ir.tools.printer._show_var_id = False
+        # # DEBUG ^^^
 
         if target.name == 'cpu':
             anchor_modules: Union[NotImplemented, IRModule] = anchor_op.task.implement_cpu(working_dir)

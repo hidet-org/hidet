@@ -323,6 +323,8 @@ class MatmulF16Task(Task):
 
 class MatmulF16Op(Operator):
     def __init__(self, a: Tensor, b: Tensor, parallel_k_parts=1):
+        if not (isinstance(parallel_k_parts, int) and not isinstance(parallel_k_parts, bool)):
+            raise ValueError('parallel_k_parts must be an integer, got {}'.format(parallel_k_parts))
         super().__init__(
             inputs=[a, b],
             attributes={'parallel_k_parts': parallel_k_parts},

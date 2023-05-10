@@ -11,9 +11,10 @@
 # limitations under the License.
 from typing import Union
 import operator
+from hidet.ir.type import DataType
 from hidet.ir.expr import Expr, BinaryExpr, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, LessEqual, Equal, Constant
-from hidet.ir.expr import BitwiseAnd, BitwiseOr, BitwiseXor, NotEqual, LeftShift, RightShift
-from hidet.ir.expr import LogicalAnd, LogicalOr, LogicalNot, is_one, is_zero, is_true, is_false, convert
+from hidet.ir.expr import BitwiseAnd, BitwiseOr, BitwiseXor, NotEqual, LeftShift, RightShift, Cast, Neg
+from hidet.ir.expr import LogicalAnd, LogicalOr, LogicalNot, is_one, is_zero, is_true, is_false, convert, cast
 from hidet.ir.stmt import Stmt, IfStmt, SeqStmt, ForStmt
 from hidet.ir.tools import rewrite
 from hidet.ir.functors import StmtRewriter, ExprRewriter, BaseRewriter
@@ -85,7 +86,14 @@ class Simplifier(StmtRewriter, ExprRewriter, BaseRewriter):
                 Mod: operator.mod,
                 FloorDiv: operator.floordiv,
                 LessThan: operator.lt,
+                LessEqual: operator.le,
                 Equal: operator.eq,
+                NotEqual: operator.ne,
+                BitwiseAnd: operator.and_,
+                BitwiseOr: operator.or_,
+                BitwiseXor: operator.xor,
+                LeftShift: operator.lshift,
+                RightShift: operator.rshift,
             }
             if e.__class__ in op_dict:
                 if a.type.name == 'int32' and b.type.name == 'int32' and isinstance(e, Div):
@@ -111,6 +119,25 @@ class Simplifier(StmtRewriter, ExprRewriter, BaseRewriter):
             return e
         else:
             return LogicalNot(a)
+
+    def visit_Neg(self, e: Neg):
+        a = self(e.a)
+        if isinstance(a, Constant):
+            return convert(-a.value)
+        if a is e.a:
+            return e
+        else:
+            return Neg(a)
+
+    def visit_Cast(self, e: Cast):
+        expr = self.visit(e.expr)
+        if isinstance(expr, Constant) and expr.type.is_data_type():
+            assert isinstance(e.target_type, DataType)
+            return Constant(expr.value, e.target_type)
+        elif expr is e.expr:
+            return e
+        else:
+            return cast(expr, e.target_type)
 
     def visit_IfStmt(self, stmt: IfStmt):
         cond = self.visit(stmt.cond)

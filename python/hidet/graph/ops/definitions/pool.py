@@ -24,7 +24,6 @@ class Pool2dTask(Task):
         strides = normalize_stride(strides)
         padding = normalize_padding(padding)
         batch_size, channels, height, width = x.shape
-        channels, height, width = int(channels), int(height), int(width)
         out_height = (height + padding[0] + padding[2] - kernel[0]) // strides[0] + 1
         out_width = (width + padding[1] + padding[3] - kernel[1]) // strides[1] + 1
         pad_value = convert(0.0 if reduce_type == 'avg' else -1e30, dtype=x.type.dtype)

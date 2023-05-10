@@ -71,24 +71,18 @@ class ComputeVisitor(BaseVisitor, ComputeFunctor):
         self.visit(node.axes)
         self.visit(node.value)
         self.visit(node.layout)
-        self.visit(node.input_scalars)
-        self.visit(node.input_tensors)
 
     def visit_ReduceCompute(self, node: ReduceCompute):
         self.visit(node.shape)
         self.visit(node.axes)
         self.visit(node.value)
         self.visit(node.accumulate_dtype)
-        self.visit(node.input_scalars)
-        self.visit(node.input_tensors)
 
     def visit_ArgReduceCompute(self, node: ArgReduceCompute):
         self.visit(node.extent)
         self.visit(node.axis)
         self.visit(node.value)
         self.visit(node.index_dtype)
-        self.visit(node.input_scalars)
-        self.visit(node.input_tensors)
 
 
 class ComputeRewriter(BaseRewriter, ComputeFunctor):
@@ -114,58 +108,38 @@ class ComputeRewriter(BaseRewriter, ComputeFunctor):
         axes = self.visit(node.axes)
         value = self.visit(node.value)
         layout = self.visit(node.layout)
-        input_scalars = self.visit(node.input_scalars)
-        input_tensors = self.visit(node.input_tensors)
         if (
             value is node.value
             and layout is node.layout
             and same_list(shape, node.shape)
             and same_list(axes, node.axes)
-            and same_list(input_tensors, node.input_tensors)
-            and same_list(input_scalars, node.input_scalars)
         ):
             return node
         else:
-            return GridCompute(node.name, input_tensors, input_scalars, shape, axes, value, layout)
+            return GridCompute(node.name, shape, axes, value, layout)
 
     def visit_ReduceCompute(self, node: ReduceCompute):
         shape = self.visit(node.shape)
         axes = self.visit(node.axes)
         value = self.visit(node.value)
         accumulate_dtype = self.visit(node.accumulate_dtype)
-        input_scalars = self.visit(node.input_scalars)
-        input_tensors = self.visit(node.input_tensors)
         if (
             value is node.value
             and accumulate_dtype is node.accumulate_dtype
             and same_list(shape, node.shape)
             and same_list(axes, node.axes)
-            and same_list(input_tensors, node.input_tensors)
-            and same_list(input_scalars, node.input_scalars)
         ):
             return node
         else:
-            return ReduceCompute(
-                node.name, input_tensors, input_scalars, shape, axes, value, node.reduce_operation, accumulate_dtype
-            )
+
+            return ReduceCompute(node.name, shape, axes, value, node.reduce_operation, accumulate_dtype)
 
     def visit_ArgReduceCompute(self, node: ArgReduceCompute):
         extent = self.visit(node.extent)
         axis = self.visit(node.axis)
         value = self.visit(node.value)
         index_dtype = self.visit(node.index_dtype)
-        input_scalars = self.visit(node.input_scalars)
-        input_tensors = self.visit(node.input_tensors)
-        if (
-            value is node.value
-            and index_dtype is node.index_dtype
-            and extent is node.extent
-            and axis is node.axis
-            and same_list(input_tensors, node.input_tensors)
-            and same_list(input_scalars, node.input_scalars)
-        ):
+        if value is node.value and index_dtype is node.index_dtype and extent is node.extent and axis is node.axis:
             return node
         else:
-            return ArgReduceCompute(
-                node.name, input_tensors, input_scalars, extent, axis, value, node.reduce_operation, index_dtype
-            )
+            return ArgReduceCompute(node.name, extent, axis, value, node.reduce_operation, index_dtype)
