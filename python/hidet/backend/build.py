@@ -123,13 +123,13 @@ class NVCC(SourceCompiler):
             # the library directories.
             *['-L{}'.format(library_dir) for library_dir in self.library_dirs],
             # enable openmp support for cpu kernels
-            '-Xcompiler -fopenmp',
+            '-Xcompiler -fopenmp,-fPIC,-m64,-mavx2,-march=native,-O3',
             # the target PTX and SASS version.
             '-gencode arch=compute_{cc},code=sm_{cc}'.format(cc=cc_code),
             # allow ptxas (PTX assembler) to output information like register/smem usage.
             '--ptxas-options=-v',
             # compile into position independent code.
-            '--compiler-options -fPIC,-m64,-mavx2,-march=native, -O3',
+            # '--compiler-options -fPIC,-m64,-mavx2,-march=native, -O3',
             # embed the line information into the binary, allow Nsight Compute to get the source code for profiling.
             '-lineinfo',
             # link the hidet runtime, all APIs for communication between kernels and host system are in hidet runtime.

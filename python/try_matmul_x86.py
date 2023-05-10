@@ -2,14 +2,28 @@ import numpy as np
 import pytest
 
 import hidet
-from hidet import ops
+from hidet.graph.ops import matmul_x86
 from hidet.testing import check_binary
+from hidet.option import debug_cache_tuning
 
-for m, k, n in [(1024, 1024, 1024)]:
-# for m, k, n in [(333, 444, 555), (1, 123, 3), (13, 17, 381), (423, 432, 233), (1024, 1024, 1024), (373, 367, 311)]:
+debug_cache_tuning(True)
+hidet.option.search_space(2)
+for m, k, n in [(256, 256, 256), (373, 367, 311), (384, 384, 512), (1369, 48, 256), (2048, 2048, 2048), (4096, 4096, 4096),
+                (3136, 64, 64), (2500, 32, 27), (3329, 192, 720)]:
     a = hidet.randn([m, k], device='cpu')
     b = hidet.randn([k, n], device='cpu')
-    c = ops.matmul_x86(a, b)
+    # c = matmul_x86(a, b)
+    x1 = hidet.symbol_like(a)
+    x2 = hidet.symbol_like(b)
+    y = matmul_x86(x1, x2)
+    graph: hidet.FlowGraph = hidet.trace_from(y, inputs=[x1, x2])
+    opt_graph = hidet.graph.optimize(graph)
+    compiled_func = opt_graph.nodes[0].task_func
+
+    c = hidet.zeros([m, n], device='cpu')
+
+    compiled_func(a, b, c)
+
     np.testing.assert_allclose(
         actual=c.numpy(),
         desired=a.numpy() @ b.numpy(),
@@ -17,26 +31,13 @@ for m, k, n in [(1024, 1024, 1024)]:
         atol=1e-3
     )
     hidet_latency = hidet.utils.benchmark_func(
-        lambda: ops.matmul_x86(a, b), repeat=30
+        lambda: compiled_func(a, b, c), repeat=30
     )
-    print(f'm={m}, n={n}, k={k}: hidet takes {hidet_latency:.2f} ms')
+    np_latency = hidet.utils.benchmark_func(
+        lambda: a.numpy() @ b.numpy(), repeat=30
+    )
+
+    print(f'm={m}, k={k}, n={n}: hidet takes {hidet_latency:.2f} ms')
+    print(f'm={m}, k={k}, n={n}: numpy takes {np_latency:.2f} ms')
 
 
-# @pytest.mark.parametrize(
-#     "a_shape, b_shape", [[[333, 444], [444, 555]], [[12, 333], [333, 512]]]
-# )
-# def test_matmul_x86(a_shape, b_shape):
-#     check_binary(
-#         a_shape,
-#         b_shape,
-#         lambda x, y: np.matmul(x, y),
-#         lambda x, y: ops.matmul_x86(x, y),
-#         device='cpu',
-#         dtype='float32',
-#         atol=1e-3,
-#         rtol=1e-3
-#     )
-#
-#
-# if __name__ == '__main__':
-#     pytest.main([__file__])
