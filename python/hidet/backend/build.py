@@ -112,9 +112,6 @@ class NVCC(SourceCompiler):
         cc = hidet.cuda.compute_capability()
         cc_code = '{}{}'.format(cc[0], cc[1])
 
-        # todo: Add Hidet option to allow user to disable fast math
-        use_fast_math = True
-
         # The following command compiles the cuda source code to a shared library
         # See https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html
         # for more information about nvcc compilation.
@@ -135,8 +132,9 @@ class NVCC(SourceCompiler):
             '--compiler-options -fPIC',
             # embed the line information into the binary, allow Nsight Compute to get the source code for profiling.
             '-lineinfo',
-            # use fast math instrinsics, may reduce precision
-            '-use_fast_math' if use_fast_math else '',
+            # ftz=true and prec-div=false for fast math
+            '-ftz=true',
+            '-prec-div=false',
             # link the hidet runtime, all APIs for communication between kernels and host system are in hidet runtime.
             '-lhidet_runtime',
             # shared cuda runtime library is used (.so), instead of static one (.a). used to reduce binary size.
