@@ -1421,7 +1421,8 @@ def from_torch(torch_tensor):
     if not isinstance(torch_tensor, torch.Tensor):
         raise ValueError('Expect a torch.Tensor, got {}'.format(type(torch_tensor)))
     if torch_tensor.requires_grad:
-        raise ValueError('Please first call .detach() on the pytorch tensor before converting it to hidet.')
+        torch_tensor = torch_tensor.detach()
+        # raise ValueError('Please first call .detach() on the pytorch tensor before converting it to hidet.')
     assert isinstance(torch_tensor, torch.Tensor)
     if torch_tensor.dtype == torch.bool:
         # exporting torch.bool to dlpack is not supported by pytorch yet
