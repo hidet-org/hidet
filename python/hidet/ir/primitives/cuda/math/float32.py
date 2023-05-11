@@ -31,7 +31,7 @@ class CUDAFloat32MathFunctionSet(MathFunctionSet):
             'asinh': 'asinhf',
             'acosh': 'acoshf',
             'atanh': 'atanhf',
-            'exp': '__expf', # fast math
+            'exp': '__expf',  # fast math
             'erf': 'erff',
             'sqrt': 'sqrtf',
             'rsqrt': 'rsqrtf',
