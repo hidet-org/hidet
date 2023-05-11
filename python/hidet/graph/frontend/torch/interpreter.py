@@ -58,10 +58,8 @@ class OverloadedFunction:
 class Registry:
     # registered modules, like torch.nn.Conv2d, torch.nn.Linear.
     registered_modules: Dict[Type[torch.nn.Module], Type['HidetModule']] = {}
-    # registered functions, like torch.add, torch.mul, torch.nn.functional.relu.
-    # we also put the registration for torch.ops.aten.add.Tensor, torch.ops.aten.cos in this dict.
-    # in this case, the key is the function name (e.g., 'aten.add.Tensor')
-    registered_functions: Dict[Union[Callable, str], OverloadedFunction] = {}
+    # registered functions, like torch.add, torch.mul, torch.nn.functional.relu, and torch.ops.aten.cos.
+    registered_functions: Dict[Callable, OverloadedFunction] = {}
     # registered methods, like torch.Tensor.add, torch.Tensor.mul, torch.Tensor.relu.
     registered_methods: Dict[Callable, OverloadedFunction] = {}
 
