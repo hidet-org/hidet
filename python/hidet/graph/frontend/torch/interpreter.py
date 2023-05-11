@@ -11,7 +11,7 @@
 # limitations under the License.
 # from __future__ import annotations
 
-from typing import Dict, Any, Type, Callable, Optional, Tuple, Set, List
+from typing import Dict, Any, Type, Callable, Optional, Tuple, Set, List, Union
 import logging
 import inspect
 import operator
@@ -56,8 +56,13 @@ class OverloadedFunction:
 
 
 class Registry:
+    # registered modules, like torch.nn.Conv2d, torch.nn.Linear.
     registered_modules: Dict[Type[torch.nn.Module], Type['HidetModule']] = {}
-    registered_functions: Dict[Callable, OverloadedFunction] = {}
+    # registered functions, like torch.add, torch.mul, torch.nn.functional.relu.
+    # we also put the registration for torch.ops.aten.add.Tensor, torch.ops.aten.cos in this dict.
+    # in this case, the key is the function name (e.g., 'aten.add.Tensor')
+    registered_functions: Dict[Union[Callable, str], OverloadedFunction] = {}
+    # registered methods, like torch.Tensor.add, torch.Tensor.mul, torch.Tensor.relu.
     registered_methods: Dict[Callable, OverloadedFunction] = {}
 
 
@@ -112,7 +117,7 @@ def register_module(torch_cls: Type[torch.nn.Module]):
     return decorator
 
 
-def register_function(func: Callable):
+def register_function(func: Union[Callable, str]):
     def decorator(hidet_func):
         if func not in Registry.registered_functions:
             Registry.registered_functions[func] = OverloadedFunction()

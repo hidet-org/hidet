@@ -142,6 +142,7 @@ def bilinear(x_1: Tensor, x_2: Tensor, weight: Tensor, bias: Optional[Tensor]):
 
 
 @register_function(operator.add)
+@register_function(torch.ops.aten.add.Tensor)
 def add(x: Tensor, y: Tensor):
     return ops.add(x, y)
 
@@ -152,11 +153,13 @@ def iadd(x: Tensor, y: Tensor):
 
 
 @register_function(torch.sin)
+@register_function(torch.ops.aten.sin.default)
 def sin(x: Tensor):
     return ops.sin(x)
 
 
 @register_function(torch.cos)
+@register_function(torch.ops.aten.cos.default)
 def cos(x: Tensor):
     return ops.cos(x)
 
@@ -198,6 +201,8 @@ def getitem(x: Tensor, index):
 
 
 @register_function(operator.mul)
+@register_function(torch.mul)
+@register_function(torch.ops.aten.mul.Tensor)
 def mul(x: Tensor, y: Tensor):
     return x * y
 
@@ -307,6 +312,8 @@ def sub(x: Tensor, y: Tensor):
 
 
 @register_function(operator.neg)
+@register_function(torch.neg)
+@register_function(torch.ops.aten.neg.default)
 def neg(x: Tensor):
     return -x
 
