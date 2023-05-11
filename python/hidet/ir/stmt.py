@@ -65,6 +65,18 @@ class ForStmtAttr:
                 return f'u{self.unroll}'
 
     @staticmethod
+    def from_extent(extent: Union[int, Expr]):
+        if isinstance(extent, Expr):
+            if isinstance(extent, Constant):
+                extent = int(extent)
+            else:
+                return ForStmtAttr()
+        if extent < 4:
+            return ForStmtAttr(unroll=True, unroll_explicit=True)
+        else:
+            return ForStmtAttr()
+
+    @staticmethod
     def parse(attr: str) -> List[ForStmtAttr]:
         """
         Parse the attribute string and return a list of ForStmtAttr.
