@@ -1,6 +1,6 @@
 # Stable Diffusion demo
 
-This example is an ui demonstrating compilation time speed ups with hidet.
+This example is a basic ui demonstrating compilation of a stable diffusion model.
 
 ## Requirements
 
