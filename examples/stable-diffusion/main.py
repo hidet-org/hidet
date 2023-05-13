@@ -43,9 +43,9 @@ def infer(prompt, compile):
     
     time_text = ""
     if eager_time == 0:
-        time_text += "eagar time: ..."
+        time_text += "eager time: ..."
     else:
-        time_text += f"eagar time: {eager_time}"
+        time_text += f"eager time: {eager_time}"
     if compile_time == 0:
         time_text += " | compile time: ..."
     else:
@@ -94,7 +94,7 @@ with block as demo:
                     fp_16_red = gr.Checkbox(False, label="use fp16 reduction")
                     cuda_graph = gr.Checkbox(True, label="use cuda graph")
                     attn = gr.Checkbox(False, label="use fused attention schedule")
-            gr_time_text = gr.Text("eagar time: ... | compile time: ...", show_label=False)
+            gr_time_text = gr.Text("eager time: ... | compile time: ...", show_label=False)
         
         search_space.change(adjust_compile_opts, inputs=[search_space, fp_16, tensor_core, fp_16_red, cuda_graph, attn], outputs=[search_space])
         fp_16.change(adjust_compile_opts, inputs=[search_space, fp_16, tensor_core, fp_16_red, cuda_graph, attn])
