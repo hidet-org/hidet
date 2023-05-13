@@ -164,8 +164,8 @@ class AttnTask(Task):
         tune.check(n_size >= 64)
         block_j = min(block_j, n_size)
 
-        acc_dtype = f16
-        sm_dtype = f32
+        acc_dtype = f16 # must be f16 for now. f32 will fail to compile
+        sm_dtype = f32 # currently changing to f16 will not boost performance
         mma_m = mma_config.m
         mma_n = mma_config.n
         mma_k = mma_config.k
@@ -626,6 +626,8 @@ class AttnTask(Task):
                                 )
                         cp_async_wait_all()
                         syncthreads()
+                    # Preload first tile of v into shared memory
+                    copy_v_g2s(v, ~smem_v[0, 0, 0], offset_j)
                     qk_softmax_reduce(smem_qk, smem_mij, smem_lij, regs_acc)
                     # ----------------------------
 
@@ -634,11 +636,8 @@ class AttnTask(Task):
                     for a, b, c in grid(mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements):
                         regs_acc_o[a, b, c] = acc_dtype.zero
 
-                    # Copy first tile of k into shared memory
-                    copy_v_g2s(v, ~smem_v[0, 0, 0], offset_j)
                     cp_async_wait_all()
                     syncthreads()
-
                     for k1 in range(k_tiles_o):
                         # Load Vj into Smem
                         copy_v_g2s(v, ~smem_v[(k1 + 1) % 2, 0, 0], offset_j + (k1 + 1) * block_k_o)
