@@ -52,6 +52,11 @@ class BatchMatmulTask(Task):
         if self.mma == 'simt':
             return tune.extract_ir_modules(self.schedule_simt)
         elif self.mma.startswith('mma'):
+            cc = hidet.cuda.compute_capability()
+            if cc < (7, 5):
+                raise ValueError(
+                    "mma instructions are only supported on Compute Capability >= 75, got sm{}{}".format(*cc)
+                )
             return tune.extract_ir_modules(self.schedule_mma)
         else:
             raise ValueError('Can not recognize mma type {}, candidates: {}'.format(self.mma, ['simt', 'mma']))
@@ -367,14 +372,14 @@ class BatchMatmulTask(Task):
     @tune.space(2, 'warp_m', [16, 32, 64])
     @tune.space(2, 'warp_n', [8, 16, 32, 64])
     @tune.space(2, 'warp_k', [8, 16, 32])
-    @tune.space(2, 'mma_config', MmaConfig.all())
+    @tune.space(2, 'mma_config', MmaConfig.all(hidet.cuda.compute_capability()))
     @tune.space(1, 'block_m', [64, 128, 256])
     @tune.space(1, 'block_n', [64, 128])
     @tune.space(1, 'block_k', [8, 16, 32])
     @tune.space(1, 'warp_m', [32, 64])
     @tune.space(1, 'warp_n', [32, 64])
     @tune.space(1, 'warp_k', [8, 16, 32])
-    @tune.space(1, 'mma_config', MmaConfig.all())
+    @tune.space(1, 'mma_config', MmaConfig.all(hidet.cuda.compute_capability()))
     def schedule_mma(
         self, block_m=64, block_n=64, block_k=16, warp_m=32, warp_n=32, warp_k=16, mma_config=None
     ) -> IRModule:
