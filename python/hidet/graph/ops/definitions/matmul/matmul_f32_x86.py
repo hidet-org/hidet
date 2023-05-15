@@ -10,9 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List, Tuple, Union
-from hidet.ir import dtypes
 from hidet.ir.dtypes import float32, int32
-from hidet.ir.expr import if_then_else
 from hidet.ir.func import IRModule, Function
 from hidet.ir.compute import TensorNode
 from hidet.ir.stmt import DeclareScope
@@ -21,9 +19,7 @@ from hidet.ir.compute import compute, reduce
 from hidet.graph.ops.definitions.utils import input_like, broadcast_shape, can_mutually_broadcast
 from hidet.graph.ops.definitions.utils import tune
 from hidet.graph.operator import Operator, Tensor
-from hidet.utils.py import is_power_of_two, cdiv, prod
 from hidet.graph.ops.definitions.utils import broadcast_indices
-from hidet.ir.type import data_type, TensorType, DataType
 
 
 class MatmulF32Taskx86(Task):
@@ -72,26 +68,17 @@ class MatmulF32Taskx86(Task):
     def implement_cpu(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
         return tune.extract_ir_modules(self.schedule_matmulf32_x86)
 
-    # @tune.space(0, 'micro_ker', [(6, 16)])
-    # @tune.space(0, 'block_m', [2400])
-    # @tune.space(0, 'block_n', [384])
-    # @tune.space(0, 'block_k', [768])
-    # @tune.space(0, 'nthreads', [32])
     @tune.space(2, 'micro_ker', [(6, 16), (8, 8), (4, 8), (4, 4)])
     @tune.space(2, 'block_m', [1200, 2400])
     @tune.space(2, 'block_n', [384, 512, 768, 960])
-    @tune.space(2, 'block_k', [384, 512, 768])
+    @tune.space(2, 'block_k', [192, 256, 384, 512, 768])
     @tune.space(2, 'nthreads', [4, 8, 16, 32])
     def schedule_matmulf32_x86(self, block_m=1200, block_n=768, block_k=512, micro_ker=(6, 16),
                                nthreads=16) -> IRModule:
-        # @tune.space(2, 'micro_ker', [(6, 16)])
-        # @tune.space(2, 'block_n', [768])
-        # @tune.space(2, 'block_k', [512])
         import hidet
         from hidet.ir.type import tensor_type
-        from hidet.lang import attr, col_spatial, tensor, u32, tensor_pointer, grid, as_tensor_pointer
+        from hidet.lang import tensor, grid, as_tensor_pointer
         from hidet.lang.layout import row_layout, col_layout
-        from hidet.lang.mapping import spatial, auto_map
         from hidet.lang.avx import avx_f32x8_store, avx_f32x8_fmadd, avx_f32x8_load, avx_f32x8_broadcast
         from hidet.lang.avx import avx_f32x4_broadcast, avx_f32x4_fmadd, avx_f32x4_load, avx_f32x4_store
 
@@ -104,8 +91,6 @@ class MatmulF32Taskx86(Task):
 
         tile_m, tile_n = micro_ker
 
-        # micro_ker = (tile_m, tile_n)
-        # supported_microkers = ('6x16', '4x8', '8x8')
         supported_microkers = ((6, 16), (4, 8), (8, 8))
         tune.check(micro_ker in supported_microkers, "The size of the micro-kernel is not supported")
 
@@ -123,9 +108,6 @@ class MatmulF32Taskx86(Task):
 
         aip_outer_rows = block_m // tile_m
         bip_outer_cols = block_n // tile_n
-        #
-        # aip_outer_rows = aip_outer_rows
-        # bip_outer_cols = bip_outer_cols
 
         with hidet.script_module() as module:
             @hidet.script
@@ -135,10 +117,6 @@ class MatmulF32Taskx86(Task):
                                   pb: int32,
                                   msize: int32,
                                   nsize: int32):
-                # a = as_tensor_pointer(a_ptr, dtype=float32,
-                #                       layout=row_layout(aip_outer_rows, 1) * col_layout(tile_m, block_k))
-                # b = as_tensor_pointer(b_ptr, dtype=float32,
-                #                       layout=row_layout(1, bip_outer_cols) * row_layout(block_k, tile_n))
                 c = as_tensor_pointer(c_ptr, dtype=float32, shape=[msize, nsize])
 
                 c0 = avx_f32x8_load(~c[0, 0])

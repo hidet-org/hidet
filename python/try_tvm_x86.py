@@ -8,8 +8,8 @@ from tvm.autotvm.tuner import XGBTuner, GATuner, RandomTuner, GridSearchTuner
 from tvm.autotvm.graph_tuner import DPTuner, PBQPTuner
 import tvm.contrib.graph_executor as runtime
 
-x = relay.Var("x", tvm.relay.TensorType([1024, 1024]))
-y = relay.Var("y", tvm.relay.TensorType([1024, 1024]))
+x = relay.Var("x", tvm.relay.TensorType([512, 512]))
+y = relay.Var("y", tvm.relay.TensorType([512, 512]))
 
 params = {}
 
@@ -44,14 +44,14 @@ tuning_option = {
     "measure_option": autotvm.measure_option(
         builder=autotvm.LocalBuilder(),
         runner=autotvm.LocalRunner(
-            number=1, repeat=10, min_repeat_ms=0, enable_cpu_cache_flush=True
+            number=1, repeat=10, min_repeat_ms=0, enable_cpu_cache_flush=True, timeout=100
         )
     )
 }
 
 
 def tune_kernels(
-    tasks, measure_option, tuner="gridsearch", early_stopping=None, log_filename="tuning.log"
+    tasks, measure_option, tuner="gridsearch", early_stopping=None, log_filename=log_file
 ):
     for i, task in enumerate(tasks):
         prefix = "[Task %2d / %2d] " % (i + 1, len(tasks))
@@ -91,7 +91,7 @@ def tune_kernels(
             raise ValueError("Invalid tuner: " + tuner)
 
         # do tuning
-        max_ntrials = 1500
+        max_ntrials = 750
         n_trial = min(len(task.config_space), max_ntrials)
         # n_trial = 1500
         tuner_obj.tune(
@@ -130,7 +130,7 @@ def evaluate_performance(lib, data_shape):
 
     # evaluate
     print("Evaluate inference time cost...")
-    print(module.benchmark(dev, number=100, repeat=3))
+    print(module.benchmark(dev, number=20, repeat=3))
 
 
 def tune_and_evaluate(tuning_opt):
@@ -139,18 +139,18 @@ def tune_and_evaluate(tuning_opt):
         mod, target=target, params=params, ops=(relay.op.get("nn.dense"), )
     )
 
-    data_shape = [1024, 1024]
+    data_shape = [512, 512]
 
     # run tuning tasks
     tune_kernels(tasks, **tuning_opt)
     # tune_graph(mod, data_shape, log_file, graph_opt_sch_file)
 
     # compile kernels in default mode
-    print("Evaluation of the network compiled in 'default' mode without auto tune: ")
-    with tvm.transform.PassContext(opt_level=3):
-        print("Compile...")
-        lib = relay.build(mod, target=target, params=params)
-    evaluate_performance(lib, data_shape)
+    # print("Evaluation of the network compiled in 'default' mode without auto tune: ")
+    # with tvm.transform.PassContext(opt_level=3):
+    #     print("Compile...")
+    #     lib = relay.build(mod, target=target, params=params)
+    # evaluate_performance(lib, data_shape)
 
     # compile kernels in kernel tuned only mode
     print("\nEvaluation of the network been tuned on kernel level: ")
