@@ -6,6 +6,9 @@ from hidet.graph.ops import matmul_x86
 from hidet.testing import check_binary
 from hidet.option import debug_cache_tuning
 
+import tvm
+
+
 debug_cache_tuning(True)
 hidet.option.search_space(2)
 for m, k, n in [(18, 32, 96), (24, 64, 256), (24, 64, 512), (192, 64, 128), (192, 128, 128), (192, 256, 256), (784, 40, 120), (784, 120, 40), (480, 512, 16), (384, 384, 32), (784, 40, 120),
