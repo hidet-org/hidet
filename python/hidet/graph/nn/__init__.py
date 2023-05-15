@@ -14,3 +14,5 @@ from . import container
 from . import nn
 
 from .module import Module
+
+from .nn import Linear, Conv2d, BatchNorm2d, Relu, MaxPool2d
