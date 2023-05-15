@@ -46,12 +46,12 @@ def optimize(graph: FlowGraph) -> FlowGraph:
         The optimized flow graph.
     """
     passes = [
-        # subgraph_rewrite_pass(),
-        # automatic_mix_precision_pass(),
-        # subgraph_rewrite_pass(),
-        # resolve_variant_pass(),
+        subgraph_rewrite_pass(),
+        automatic_mix_precision_pass(),
+        subgraph_rewrite_pass(),
+        resolve_variant_pass(),
         fuse_operator_pass(),
-        # eliminate_barrier_pass(),
+        eliminate_barrier_pass(),
     ]
     ctx = PassContext.current()
     for inst in ctx.instruments:
