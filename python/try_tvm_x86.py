@@ -22,8 +22,8 @@ params = {}
 net = relay.nn.dense(x, y)
 mod = relay.Function(relay.analysis.free_vars(net), net)
 
-# target = "llvm -mcpu=core-avx2"
-target = "llvm"
+target = "llvm -mcpu=core-avx2"
+# target = "c"
 
 batch_size = 1
 dtype = "float32"
@@ -145,13 +145,6 @@ def tune_and_evaluate(tuning_opt):
     tune_kernels(tasks, **tuning_opt)
     # tune_graph(mod, data_shape, log_file, graph_opt_sch_file)
 
-    # compile kernels in default mode
-    # print("Evaluation of the network compiled in 'default' mode without auto tune: ")
-    # with tvm.transform.PassContext(opt_level=3):
-    #     print("Compile...")
-    #     lib = relay.build(mod, target=target, params=params)
-    # evaluate_performance(lib, data_shape)
-
     # compile kernels in kernel tuned only mode
     print("\nEvaluation of the network been tuned on kernel level: ")
     with autotvm.apply_history_best(log_file):
@@ -159,14 +152,6 @@ def tune_and_evaluate(tuning_opt):
         with tvm.transform.PassContext(opt_level=3):
             lib = relay.build(mod, target=target, params=params)
         evaluate_performance(lib, data_shape)
-
-    # # compile kernels with graph-level best records
-    # print("\nEvaluation of the network been tuned on graph level: ")
-    # with autotvm.apply_graph_best(graph_opt_sch_file):
-    #     print("Compile...")
-    #     with tvm.transform.PassContext(opt_level=3):
-    #         lib = relay.build_module.build(mod, target=target, params=params)
-    #     evaluate_performance(lib, data_shape)
 
 
 tune_and_evaluate(tuning_option)
