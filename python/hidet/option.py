@@ -95,6 +95,11 @@ def register_hidet_options():
         description='Whether to build operators in parallel.',
         choices=[True, False],
     ).register_option(
+        name='parallel_tune',
+        type_hint='int, float',
+        default_value=(-1, 1.5),
+        description='The number of parallel jobs and memory reserved for each job',
+    ).register_option(
         name='save_lower_ir',
         type_hint='bool',
         default_value=False,
@@ -454,6 +459,33 @@ def get_parallel_build() -> bool:
         Whether to build operators in parallel.
     """
     return OptionContext.current().get_option('parallel_build')
+
+
+def parallel_tune(num_jobs: int = -1, mem_gb_per_job: float = 1.5):
+    """
+    Whether to build operators in parallel.
+
+    Parameters
+    ----------
+    num_jobs: int
+        The maximum number of parallel jobs allowed, default -1 (decided by the system)
+    mem_gb_per_job: float
+        The minimum amount of memory (in GiB) reserved for each tuning job, default 1.5GiB.
+    """
+    OptionContext.current().set_option('parallel_tune', (num_jobs, mem_gb_per_job))
+
+
+def get_parallel_tune() -> Tuple[int, float]:
+    """
+    Get the option value of whether to build operators in parallel.
+
+    Returns
+    -------
+    ret: Tuple[int, float]
+        Get the maximum number of jobs and minumum amount of memory reserved for tuning.
+
+    """
+    return OptionContext.current().get_option('parallel_tune')
 
 
 def save_lower_ir(enabled: bool = True):
