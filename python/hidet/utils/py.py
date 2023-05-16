@@ -235,11 +235,22 @@ def factorize(n):
     return list(sorted(ret))
 
 
+def _is_immutable(obj):
+    from hidet.ir.expr import Constant
+    from hidet.graph.operator import Device
+
+    if isinstance(obj, (int, float, str, tuple)):
+        return True
+    if isinstance(obj, (Constant, Device)):
+        return True
+    return False
+
+
 def same_list(lhs, rhs, use_equal=False):
     if len(lhs) != len(rhs):
         return False
     for l, r in zip(lhs, rhs):
-        if use_equal or (isinstance(l, int) and isinstance(r, int)):
+        if use_equal or _is_immutable(l) and _is_immutable(r):
             if l != r:
                 return False
         else:

@@ -12,7 +12,7 @@
 # pylint: disable=bad-staticmethod-argument
 from hidet.ir.expr import Add, Sub, Multiply, Div, Mod, FloorDiv, Neg, LessThan, LessEqual, Equal, NotEqual, LogicalAnd
 from hidet.ir.expr import LogicalOr, LogicalNot, BitwiseAnd, BitwiseOr, BitwiseNot, BitwiseXor, LeftShift, RightShift
-from hidet.ir.expr import Reference, BinaryExpr
+from hidet.ir.expr import Reference, BinaryExpr, cast
 from hidet.ir.expr import TensorElement, TensorSlice, IfThenElse, Call, Let, Var, Constant, Cast, Dereference, Address
 from hidet.ir.dialects.pattern import PlaceholderExpr
 from hidet.utils import same_list
@@ -441,7 +441,7 @@ class ExprRewriter(ExprFunctor, BaseRewriter):
         if expr is e.expr:
             return e
         else:
-            return Cast(expr, e.target_type)
+            return cast(expr, e.target_type)
 
     def visit_Dereference(self, e: Dereference):
         expr = self(e.expr)

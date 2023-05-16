@@ -36,6 +36,9 @@ class CudaAutoScheduler(AutoScheduler):
         node_shape: List[Expr] = [simplify(rewrite(dim, param_map)) for dim in node.shape]
 
         block_dim = 512
+        # grid_dim will used in our `launch` function, thus we use `scalar_map` instead of `param_map`
+        # `scalar_map` stores the mapping to actual value in `launch` function, while `param_map` stores the mapping to
+        # the launched kernel function
         grid_dim: Expr = (prod(rewrite(node.shape, scalar_map)) + block_dim - 1) // block_dim
 
         with FunctionBuilder(

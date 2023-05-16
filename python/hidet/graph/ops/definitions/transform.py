@@ -11,9 +11,11 @@
 # limitations under the License.
 from typing import List, Optional, Union, Sequence, Tuple, Dict
 from hidet.ir.type import DataType, data_type
-from hidet.ir.expr import Expr, Constant, Var, if_then_else, convert, cast as ir_cast, logical_and, is_constant
-from hidet.ir.layout import RowMajorLayout, ColumnMajorLayout
+from hidet.ir.expr import Expr, Constant, if_then_else, convert, cast as ir_cast, logical_and, is_constant
+from hidet.ir.expr import Int
+from hidet.ir.layout import RowMajorLayout
 from hidet.ir.utils import index_deserialize, index_serialize
+from hidet.graph.operator import SizeVar
 from hidet.utils import prod
 from .utils import Task, InverseMap, Operator, Tensor, TensorNode, compute, input_like, normalize_dim, can_broadcast
 from .utils import TensorInput
@@ -24,7 +26,7 @@ def same_shape(shape_a: Sequence[int], shape_b: Sequence[int]) -> bool:
 
 
 class ReshapeTask(Task):
-    def __init__(self, x: TensorNode, y_shape: List[int]):
+    def __init__(self, x: TensorNode, y_shape: List[Int]):
         if x.is_concrete() and prod(x.shape) != prod(y_shape):
             raise ValueError(
                 'Can not reshape {} to {} because they have different number '
@@ -90,6 +92,7 @@ class ReshapeTask(Task):
             inputs=[x],
             outputs=[y],
             inverse_map={x: InverseMap.from_lambda(inverse_map, num_args=len(x.shape))},
+            attributes={'shape': y_shape},
         )
 
 
@@ -330,14 +333,14 @@ class ReshapeOp(Operator):
         else:
             raise ValueError('Can not infer the shape when there are multiple -1: {}'.format(shape))
 
-    def imperative_run(self, inputs: List[Tensor], remap: Optional[Dict[Var, Constant]] = None) -> List[Tensor]:
+    def imperative_run(self, inputs: List[Tensor], shape_map: Dict[SizeVar, int]) -> List[Tensor]:
         x = inputs[0]
-        if isinstance(x.layout, (RowMajorLayout, ColumnMajorLayout)):
-            shape = [int(v) for v in self.task.outputs[0].shape]
-            layout = x.layout.__class__(shape)
-            return [Tensor(shape=shape, dtype=x.dtype, device=x.device, storage=x.storage, layout=layout, trace=None)]
+        if isinstance(x.layout, RowMajorLayout):
+            outputs = self._imperative_run_prepare_outputs(inputs, shape_map)
+            outputs[0]._storage = x.storage  # pylint: disable=protected-access
+            return outputs
         else:
-            return Operator.imperative_run(self, inputs)
+            return Operator.imperative_run(self, inputs, shape_map)
 
 
 class RearrangeOp(Operator):

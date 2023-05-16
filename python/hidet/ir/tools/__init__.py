@@ -13,6 +13,6 @@ from .type_infer import infer_type, TypeInfer
 from .util_functors import collect, clone
 from .rewriter import rewrite
 from .free_var_collector import collect_free_vars
-from .printer import astext
+from .printer import IRPrinter, astext
 from .simplifier import simplify, simplify_to_int
 from .hasher import ExprHash

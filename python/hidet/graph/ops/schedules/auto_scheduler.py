@@ -9,16 +9,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Union, List, Dict, Sequence, Tuple, Set
+from typing import Union, List, Dict, Sequence, Tuple, Set, Optional
 
-from hidet.ir.type import tensor_pointer_type, void_pointer
+from hidet.ir.type import DataType, tensor_pointer_type, void_pointer
 from hidet.ir.expr import TensorElement, Expr, Var, Constant, scalar_var, convert, cast, deref
 from hidet.ir.stmt import Stmt, AssignStmt, ForStmt, DeclareStmt, BufferStoreStmt, AssertStmt
 from hidet.ir.task import Task
 from hidet.ir.func import IRModule, Function
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.ir.functors import ExprRewriter, ExprVisitor, ComputeVisitor, ComputeRewriter, TypeRewriter
-from hidet.ir.tools import collect, rewrite, infer_type, simplify
+from hidet.ir.tools import IRPrinter, collect, rewrite, infer_type, simplify, collect_free_vars
 from hidet.ir.compute import ScalarInput, TensorInput, GridCompute, ReduceCompute, ArgReduceCompute
 from hidet.ir.compute import TensorNode, ScalarNode
 from hidet.ir.primitives.runtime import request_cuda_workspace, request_cpu_workspace
@@ -123,6 +123,7 @@ def inline_grid_compute(nodes: List[TensorNode]) -> List[TensorNode]:
 class AutoScheduler:
     def __init__(self):
         super().__init__()
+        self.task: Optional[Task] = None
         self.ir_module: IRModule = IRModule()
 
     @staticmethod
@@ -193,14 +194,15 @@ class AutoScheduler:
                 # this node is either an input or output tensor
                 continue
             assert buffer is not None
-            v = Var(node.name, ~node.type)
+            v = Var(node.name, ~node.type.dtype)
             node_map[node] = v
-            fb += DeclareStmt(v, init=cast(~buffer[buffer_offset[node]], ~v.type.tensor_type.dtype))
+            fb += DeclareStmt(v, init=cast(~buffer[buffer_offset[node]], v.type))
 
     def schedule_task(self, task: Task, device: str) -> IRModule:
         # pylint: disable=too-many-locals, unnecessary-comprehension
         from hidet.ffi.packedfunc import ArgTypeCode
 
+        self.task = task
         self.ir_module.task = task
 
         # Inline the grid compute that does not contain reduce
@@ -252,6 +254,7 @@ class AutoScheduler:
 
             # allocate memory space for intermediate tensors
             buffer_bytes = rewrite(buffer_bytes, scalar_map)
+            buffer_offset = {k: rewrite(v, scalar_map) for k, v in buffer_offset.items()}
             self.allocate_tensors(fb, device, buffer_bytes, buffer_offset, node_map)
 
             # schedule each tensor computation
@@ -292,11 +295,18 @@ class AutoScheduler:
         self, node: GridCompute, node_map: Dict[TensorNode, Var], scalar_map: Dict[Var, Var]
     ) -> Tuple[List[Var], Dict[Union[TensorNode, Var], Var], List[Expr]]:
         # collect used tensors and scalars
-        used_scalars: List[Var] = collect(node.value, Var)
+        used_scalars: List[Var] = [v for v in collect_free_vars(node) if not v.type.is_func_type()]
         used_tensors: List[TensorNode] = collect(node.value, TensorNode, stop_when_found=True)
 
         # get the scalar and tensor parameters
-        param_scalars: List[Var] = [v for v in used_scalars if v in scalar_map]
+        for v in used_scalars:
+            if v not in scalar_map:
+                printer = IRPrinter()
+                msg = 'Scalar {} used in {}, but not found in the scalar map when scheduling {}'.format(
+                    printer(v), printer(node), printer(self.task)
+                )
+                raise ValueError(msg)
+        param_scalars: List[Var] = [v for v in used_scalars]
         param_tensors: List[TensorNode] = used_tensors + [node]
 
         # declare the parameter variables
@@ -358,14 +368,17 @@ class ComputeExprLower(ExprRewriter, ComputeRewriter, TypeRewriter):
         return buf
 
     def visit_ReduceCompute(self, node: ReduceCompute):
-        shape, axes, value = node.shape, node.axes, node.value
+        shape, axes, value = self.visit(node.shape), node.axes, node.value
+
         # declare accumulator
-        acc = scalar_var(node.name, infer_type(value))
+        dtype = infer_type(value)
+        assert isinstance(dtype, DataType)
+        acc = scalar_var(node.name, dtype)
         self.sb += DeclareStmt(acc, init=node.reduce_operation.initial_value(node.type))
 
         # reduction loops
         for i in range(len(shape)):
-            self.sb.enter_body(ForStmt(axes[i], self.visit(shape[i])))
+            self.sb.enter_body(ForStmt(axes[i], shape[i]))
 
         # at the innermost loop body
         expr = self.visit(value)
@@ -383,6 +396,7 @@ class ComputeExprLower(ExprRewriter, ComputeRewriter, TypeRewriter):
     def visit_ArgReduceCompute(self, node: ArgReduceCompute):
         extent, axis, value = self.visit(node.extent), node.axis, node.value
         value_dtype = infer_type(value)
+        assert isinstance(value_dtype, DataType)
         # declare index accumulator
         acc_index = scalar_var(node.name + '_idx', node.index_dtype)
         acc_value = scalar_var(node.name + '_val', value_dtype)

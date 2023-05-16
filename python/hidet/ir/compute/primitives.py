@@ -85,8 +85,6 @@ class ReduceCompute(ScalarNode):
     def __init__(
         self,
         name,
-        input_tensors: Sequence[TensorNode],
-        input_scalars: Sequence[ScalarNode],
         shape: Sequence[Expr],
         axes: Sequence[Var],
         value: Expr,
@@ -94,64 +92,34 @@ class ReduceCompute(ScalarNode):
         accumulate_dtype: DataType,
     ):
         super().__init__(name)
-        self.input_tensors: Tuple[TensorNode] = tuple(input_tensors)
-        self.input_scalars: Tuple[ScalarNode] = tuple(input_scalars)
         self.shape: Tuple[Expr] = tuple(shape)
         self.axes: Tuple[Var] = tuple(axes)
         self.value: Expr = value
         self.reduce_operation: ReduceOperation = reduce_operation
         self.accumulate_dtype: DataType = accumulate_dtype
 
-        assert all(isinstance(v, TensorNode) for v in self.input_tensors)
-        assert all(isinstance(v, ScalarNode) for v in self.input_scalars)
-
 
 class ArgReduceCompute(ScalarNode):
     def __init__(
-        self,
-        name,
-        input_tensors: Sequence[TensorNode],
-        input_scalars: Sequence[ScalarNode],
-        extent: Expr,
-        axis: Var,
-        value: Expr,
-        reduce_operation: ReduceOperation,
-        index_dtype: DataType,
+        self, name, extent: Expr, axis: Var, value: Expr, reduce_operation: ReduceOperation, index_dtype: DataType
     ):
         super().__init__(name)
-        self.input_tensors: Tuple[TensorNode] = tuple(input_tensors)
-        self.input_scalars: Tuple[ScalarNode] = tuple(input_scalars)
         self.extent: Expr = extent
         self.axis: Var = axis
         self.value: Expr = value
         self.reduce_operation: ReduceOperation = reduce_operation
         self.index_dtype: DataType = index_dtype
 
-        assert all(isinstance(v, TensorNode) for v in self.input_tensors)
-        assert all(isinstance(v, ScalarNode) for v in self.input_scalars)
-
 
 class GridCompute(TensorNode):
     def __init__(
-        self,
-        name: str,
-        input_tensors: Sequence[TensorNode],
-        input_scalars: Sequence[ScalarNode],
-        shape: Sequence[Expr],
-        axes: Sequence[Var],
-        value: Expr,
-        layout: Optional[DataLayout] = None,
+        self, name: str, shape: Sequence[Expr], axes: Sequence[Var], value: Expr, layout: Optional[DataLayout] = None
     ):
         super().__init__(name)
-        self.input_tensors: Tuple[TensorNode] = tuple(input_tensors)
-        self.input_scalars: Tuple[ScalarNode] = tuple(input_scalars)
         self._shape: Tuple[Expr] = tuple(shape)
         self.axes: Tuple[Var] = tuple(axes)
         self.value: Expr = value
         self.layout: Optional[DataLayout] = layout
-
-        assert all(isinstance(v, TensorNode) for v in self.input_tensors)
-        assert all(isinstance(v, ScalarNode) for v in self.input_scalars)
 
 
 # class ScalarNode(ComputeNode):
@@ -358,7 +326,7 @@ def reduce(shape, fcompute, reduce_type, accumulate_dtype='float32', name: Optio
     ret: ReduceCompute
         The reduction node.
     """
-    from hidet.ir.tools import simplify, collect  # pylint: disable=import-outside-toplevel
+    from hidet.ir.tools import simplify
 
     reduce_type = ReduceType(reduce_type)
     shape = [convert(v) for v in shape]
@@ -368,8 +336,6 @@ def reduce(shape, fcompute, reduce_type, accumulate_dtype='float32', name: Optio
         name = f'acc_{reduce_type.name}'
     return ReduceCompute(
         name=name,
-        input_tensors=collect(value, TensorNode, stop_when_found=True),
-        input_scalars=collect(value, ScalarNode, stop_when_found=True),
         shape=shape,
         axes=axes,
         value=value,
@@ -399,20 +365,12 @@ def compute(name, shape: Sequence[Union[int, Expr]], fcompute, layout=None) -> T
     ret: TensorNode
         The grid compute node.
     """
-    from hidet.ir.tools import simplify, collect  # pylint: disable=import-outside-toplevel
+    from hidet.ir.tools import simplify
 
     shape = [convert(v) for v in shape]
     axes = [var() for _ in shape]
     value = simplify(convert(fcompute(*axes)))
-    return GridCompute(
-        name=name,
-        input_tensors=collect(value, TensorNode, stop_when_found=True),
-        input_scalars=collect(value, ScalarNode, stop_when_found=True),
-        shape=shape,
-        axes=axes,
-        value=value,
-        layout=layout,
-    )
+    return GridCompute(name=name, shape=shape, axes=axes, value=value, layout=layout)
 
 
 def arg_reduce(extent, fcompute, reduce_type, index_dtype='int64', name=None) -> ScalarNode:
@@ -437,7 +395,7 @@ def arg_reduce(extent, fcompute, reduce_type, index_dtype='int64', name=None) ->
     ret: ScalarNode
         The arg reduction node.
     """
-    from hidet.ir.tools import collect, simplify  # pylint: disable=import-outside-toplevel
+    from hidet.ir.tools import simplify  # pylint: disable=import-outside-toplevel
 
     reduce_type = ReduceType(reduce_type)
     extent = convert(extent)
@@ -447,8 +405,6 @@ def arg_reduce(extent, fcompute, reduce_type, index_dtype='int64', name=None) ->
         name = f'arg_{reduce_type.name}'
     return ArgReduceCompute(
         name=name,
-        input_tensors=collect(value, TensorNode, stop_when_found=True),
-        input_scalars=collect(value, ScalarNode, stop_when_found=True),
         extent=extent,
         axis=axis,
         value=value,

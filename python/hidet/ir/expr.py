@@ -161,19 +161,13 @@ class Expr(Node):
         return str(astext(self))
 
     def __int__(self):
-        from hidet.ir.dtypes import int32
-
-        return cast(self, int32)
+        raise TypeError("Cannot convert hidet.ir.Expr to int.")
 
     def __float__(self):
-        from hidet.ir.dtypes import float32
-
-        return cast(self, float32)
+        raise TypeError("Cannot convert hidet.ir.Expr to float.")
 
     def __complex__(self):
-        from hidet.ir.dtypes import complex64
-
-        return cast(self, complex64)
+        raise TypeError("Cannot convert hidet.ir.Expr to complex.")
 
     def read(self, items, protected=True):
         te = self[items]
@@ -222,8 +216,13 @@ class Expr(Node):
                 return Constant(value, a.type)
             else:
                 return Constant(value, promote_type(a.type, b.type))
-        else:
-            return cls(a, b)
+        elif isinstance(b, Constant):
+            if b == 0 and cls in [Add, Sub]:
+                return a
+            elif b == 1 and cls in [Multiply, Div]:
+                return a
+
+        return cls(a, b)
 
 
 class BinaryExpr(Expr):
@@ -398,7 +397,7 @@ class Call(Expr):
 
 class Let(Expr):
     def __init__(self, var, value, body):
-        self.var: Expr = var
+        self.var: Var = var
         self.value: Expr = value
         self.body: Expr = body
 
@@ -809,6 +808,8 @@ def cast(v: Expr, dtype: Union[str, DataType, TypeNode]):
 
     if isinstance(v, Constant):
         return Constant(v.value, dtype)
+    elif isinstance(v, Var) and v.type.is_data_type() and dtype.is_data_type() and v.type == dtype:
+        return v
     else:
         return Cast(v, dtype)
 

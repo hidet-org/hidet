@@ -11,6 +11,7 @@
 # limitations under the License.
 from hidet.ir.func import IRModule
 from hidet.ir import primitives as prim
+from hidet.ir.expr import is_constant
 from .utils import Task, TensorNode, compute, reduce
 
 
@@ -60,5 +61,8 @@ class SoftmaxTask(Task):
 
     def implement_cuda(self, working_dir: str) -> IRModule:
         from hidet.graph.ops.schedules import softmax_cuda_schedule
+
+        if not all(is_constant(dim) for dim in self.inputs[0].shape):
+            return NotImplemented  # use auto-scheduler
 
         return softmax_cuda_schedule(self)

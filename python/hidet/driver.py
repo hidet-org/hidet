@@ -28,6 +28,7 @@ from hidet.ir.task import Task
 from hidet.ir.func import IRModule, Function
 from hidet.ir.type import FuncType
 from hidet.runtime.module import compiled_task_cache, CompiledFunction
+from hidet.runtime.device import Device
 
 logger = logging.Logger(__name__)
 logger.setLevel(logging.INFO)
@@ -42,7 +43,7 @@ def build_task(task: Task, target_device='cuda', load=True) -> Optional[Compiled
     ----------
     task: Task
         The task to be built.
-    target_device: str
+    target_device: str or Device
         The target device. Candidates are 'cuda' and 'cpu'.
     load: bool
         Whether to load the compiled function. If False, the compiled function will not be loaded, and None is returned.
@@ -54,6 +55,9 @@ def build_task(task: Task, target_device='cuda', load=True) -> Optional[Compiled
     """
     task_string: str = str(task)
     compiled_func: Optional[CompiledFunction] = None
+
+    if isinstance(target_device, Device):
+        target_device = target_device.type
 
     space_level = option.get_option('search_space')
     op_cache_dir = os.path.join(option.get_option('cache_dir'), './ops')
@@ -152,20 +156,35 @@ def _lazy_initialize_cuda():
             hidet.cuda.compute_capability(i)
 
 
-def build_task_batch(tasks: List[Task], target_device: str = 'cuda', raise_on_error: bool = True):
+def get_objects(obj, predicate, visited: set, path: list):
+    import gc
+
+    for referent in gc.get_referents(obj):
+        if id(referent) not in visited:
+            visited.add(id(referent))
+            if predicate(referent):
+                for p in path:
+                    print(p)
+                assert False
+            path.append(referent)
+            get_objects(referent, predicate, visited, path)
+            path.pop()
+
+
+def build_task_batch(task_device_pairs: List[Tuple[Task, Device]], raise_on_error: bool = True):
     dumped_options = option.dump_options()
-    jobs = [(task, target_device, dumped_options) for task in tasks]
+    jobs = [(task, device, dumped_options) for task, device in task_device_pairs]
     if option.get_option('parallel_build') and len(jobs) > 1:
         _lazy_initialize_cuda()
         with multiprocessing.Pool() as pool:
             status_list = list(pool.map(_build_task_job, jobs))
     else:
         status_list = list(map(_build_task_job, jobs))
-    if not all(status_list) and raise_on_error:
+    if not all(status_list) and option.get_option('parallel_build') and raise_on_error:
         msg = ['Failed to build {} tasks:'.format(sum(1 for s in status_list if not s))]
-        for task, status in zip(tasks, status_list):
+        for (task, device), status in zip(task_device_pairs, status_list):
             if not status:
-                msg.append(f'  {task.signature()}')
+                msg.append(f'  [{device}] {task.signature()}')
         msg.append('Please turn off parallel build to see the error message:')
         msg.append('  hidet.option.parallel_build(False)')
         raise RuntimeError('\n'.join(msg))

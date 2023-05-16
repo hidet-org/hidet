@@ -28,7 +28,7 @@ def init_hidet_root_logger():
 init_hidet_root_logger()
 
 
-def to_file(filename: str, level: Optional[int] = logging.DEBUG):
+def to_file(filename: str, level: Optional[int] = logging.DEBUG, mode: str = 'w'):
     """
     Add a file handler to the hidet root logger
 
@@ -38,10 +38,13 @@ def to_file(filename: str, level: Optional[int] = logging.DEBUG):
         The file to write to.
 
     level: int, optional
-        The logging level.
+        The logging level. Defaults to logging.DEBUG.
+
+    mode: str, optional
+        The mode to open the file in. Defaults to 'w'.
     """
     file_formatter = logging.Formatter(fmt='%(asctime)s %(name)s: [%(levelname)s] %(message)s')
-    handler = logging.FileHandler(filename)
+    handler = logging.FileHandler(filename, mode=mode)
     handler.setFormatter(file_formatter)
     handler.setLevel(level)
     logger.addHandler(handler)

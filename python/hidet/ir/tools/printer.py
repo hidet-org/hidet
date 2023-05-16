@@ -10,6 +10,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Optional, List, Union, Dict, Tuple
+
+import hidet.utils.structure
 from hidet.ir.node import Node
 from hidet.ir.func import IRModule, Function
 from hidet.ir.type import DataType, TensorType, VoidType, PointerType, ReferenceType, TensorPointerType, FuncType
@@ -32,14 +34,13 @@ from hidet.utils.namer import Namer
 
 from hidet.ir.functors import IRFunctor
 
-_show_var_id = False
-
 
 class IRPrinter(IRFunctor):
     def __init__(self):
         super().__init__(use_memo=False)
         self.namer = Namer()
         self.ir_module: Optional[IRModule] = None
+        self.show_var_id = hidet.option.get_option('debug_show_var_id')
 
     def __call__(self, node):
         return self.visit(node)
@@ -206,7 +207,7 @@ class IRPrinter(IRFunctor):
         return Text('&') + self(e.expr)
 
     def visit_Var(self, e: Var):
-        if _show_var_id:
+        if self.show_var_id:
             return Text('{}@{}'.format(self.namer.get_name(e), e.id))
         return Text(self.namer.get_name(e))
 
@@ -392,16 +393,30 @@ class IRPrinter(IRFunctor):
 
     def print_tensor_nodes(self, nodes: List[TensorNode], exclude_nodes: List[TensorNode] = None) -> Doc:
         from hidet.ir.tools import collect  # pylint: disable=import-outside-toplevel
+        from hidet.utils.structure import DirectedGraph
 
         if exclude_nodes is None:
             exclude_nodes = []
         nodes: List[TensorNode] = collect(nodes, TensorNode)
+        dag = DirectedGraph()
+        for node in nodes:
+            dag.add_node(node)
+            if isinstance(node, GridCompute):
+                depends = collect(node.value, TensorNode, stop_when_found=True)
+            elif isinstance(node, TensorInput):
+                depends = []
+            else:
+                raise NotImplementedError()
+            for depend_node in depends:
+                dag.add_edge(src=depend_node, dst=node)
+        order = dag.topological_order()
+
         doc = Doc()
-        for node in reversed(nodes):
+        for node in order:
             if node in exclude_nodes:
                 continue
             if isinstance(node, TensorInput):
-                doc += NewLine() + self(node) + ': ' + self(node.ttype)
+                pass
             elif isinstance(node, GridCompute):
                 # example
                 # y: float32[10, 10] where y[i, j] = x[i, j] + 1

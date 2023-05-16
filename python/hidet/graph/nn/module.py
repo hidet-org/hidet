@@ -85,9 +85,50 @@ class Module:
         symbol_outputs = self.forward(*symbol_inputs)
         return trace_from(symbol_outputs, symbol_inputs)
 
-    def to_cuda(self) -> Module:
+    def cpu(self) -> Module:
         for name, submodule in self.submodules.items():
-            submodule.to_cuda()
+            submodule.cpu()
+        for name, parameter in self.parameters.items():
+            self.parameters[name] = parameter.cpu()
+        return self
+
+    def cuda(self) -> Module:
+        for name, submodule in self.submodules.items():
+            submodule.cuda()
         for name, parameter in self.parameters.items():
             self.parameters[name] = parameter.cuda()
         return self
+
+
+_registered_modules = {}
+
+
+def register_module(torch_module_cls):
+    from torch import nn
+
+    assert isinstance(torch_module_cls, nn.Module)
+
+    def decorator(cls):
+        assert isinstance(cls, Module)
+        _registered_modules[torch_module_cls] = cls
+        return cls
+
+    return decorator
+
+
+def from_torch(torch_module_or_tensor):
+    import torch
+    from torch import nn
+
+    if isinstance(torch_module_or_tensor, nn.Module):
+        torch_module = torch_module_or_tensor
+        cls = type(torch_module)
+        if cls not in _registered_modules:
+            raise ValueError('Module {} is not registered.'.format(cls))
+        return _registered_modules[cls].from_torch(torch_module)
+    elif isinstance(torch_module_or_tensor, torch.Tensor):
+        import hidet.graph.tensor
+
+        return hidet.graph.tensor.from_torch(torch_module_or_tensor)
+    else:
+        raise ValueError('Expect torch.nn.Module or torch.Tensor, got {}.'.format(type(torch_module_or_tensor)))

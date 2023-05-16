@@ -9,8 +9,3 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-def concat_op_name(lhs: str, rhs: str) -> str:
-    # lhs = lhs[5:] if lhs.startswith('Fused') else lhs
-    # rhs = rhs[5:] if rhs.startswith('Fused') else rhs
-    # return 'Fused{}{}'.format(lhs, rhs)
-    return '{} {}'.format(lhs, rhs)

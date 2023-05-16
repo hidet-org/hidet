@@ -98,6 +98,8 @@ class Task(Node):
         self.specialization: Dict[Var, int] = {}
 
         # sanity check
+        from hidet.ir.tools import collect_free_vars, collect
+
         for tn, im in self.inverse_map.items():
             if len(im.axes) != tn.ndim:
                 raise ValueError(
@@ -112,11 +114,14 @@ class Task(Node):
                     )
                 )
 
-        from hidet.ir.tools import collect_free_vars
-
         free_vars: List[Var] = collect_free_vars(self.outputs)
         if any(v not in self.params and not isinstance(v.type, FuncType) for v in free_vars):
             raise ValueError('Some free variables are not in params: {}'.format(free_vars))
+
+        # check all TensorInput used in outputs are placed in inputs
+        used_inputs = collect(self.outputs, TensorInput)
+        if any(x not in self.inputs for x in used_inputs):
+            raise ValueError('Some TensorInput used in outputs are not placed in inputs: {}'.format(used_inputs))
 
     @staticmethod
     def _generate_default_params(
