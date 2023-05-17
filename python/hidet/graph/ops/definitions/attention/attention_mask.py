@@ -557,10 +557,10 @@ class AttnMaskAddTask(Task):
                 mask: f16[mask_shape],
                 o: f16[o_head + [n_size, d_size]],
             ):
-                attrs.cuda_grid_dim = (i_split, bs)
-                attrs.cuda_block_dim = block_size
-                attrs.cuda_min_blocks = 1
-                attrs.cuda_dynamic_smem_bytes = dynamic_smem_bytes
+                attrs.cuda.grid_dim = (i_split, bs)
+                attrs.cuda.block_dim = block_size
+                attrs.cuda.min_blocks = 1
+                attrs.cuda.dynamic_smem_bytes = dynamic_smem_bytes
 
                 offset_i = blockIdx.x * i_rows_per_tb
 

@@ -287,10 +287,10 @@ class BatchMatmulTask(Task):
             def batch_matmul_kernel(
                 a: dtype[bs, m_size, k_size], b: dtype[bs, k_size, n_size], c: dtype[bs, m_size, n_size]
             ):
-                attrs.cuda_grid_dim = (m_tiles * n_tiles, bs)
-                attrs.cuda_block_dim = block_size
-                attrs.cuda_dynamic_smem_bytes = cuda_dynamic_smem_bytes
-                attrs.cuda_min_blocks = min_thread_blocks
+                attrs.cuda.grid_dim = (m_tiles * n_tiles, bs)
+                attrs.cuda.block_dim = block_size
+                attrs.cuda.dynamic_smem_bytes = cuda_dynamic_smem_bytes
+                attrs.cuda.min_blocks = min_thread_blocks
 
                 offset_m, offset_n = blockIdx.x // n_tiles * block_m, blockIdx.x % n_tiles * block_n
 
@@ -605,8 +605,8 @@ class BatchMatmulTask(Task):
                 b: input_b_dtype[bs, k_size, n_size],
                 c: input_c_dtype[bs, m_size, n_size],
             ):
-                attrs.cuda_grid_dim = (m_tiles * n_tiles, bs)
-                attrs.cuda_block_dim = block_size
+                attrs.cuda.grid_dim = (m_tiles * n_tiles, bs)
+                attrs.cuda.block_dim = block_size
 
                 gmem_a = a[blockIdx.y, :, :]
                 gmem_b = b[blockIdx.y, :, :]

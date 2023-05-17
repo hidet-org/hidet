@@ -193,8 +193,8 @@ def schedule_depthwise_conv2d_kernel(
             gmem_y: f32[batch_size, channels, height, width],
         ):
             attrs.func_name = func_name
-            attrs.cuda_grid_dim = sch.blocks
-            attrs.cuda_block_dim = sch.threads
+            attrs.cuda.grid_dim = sch.blocks
+            attrs.cuda.block_dim = sch.threads
 
             smem_x = tensor(
                 'shared',
