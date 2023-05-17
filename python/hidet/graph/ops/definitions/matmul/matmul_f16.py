@@ -26,29 +26,27 @@ from hidet.graph.ops.definitions.utils import broadcast_indices
 
 class MatmulF16Task(Task):
     def __init__(self, a: TensorNode, b: TensorNode, parallel_k_parts: int = 1):
-        a_shape = a.const_shape()
-        b_shape = b.const_shape()
-
         if not a.type.dtype == float16 or not b.type.dtype == float16:
             raise ValueError('Both inputs must be float16 tensors')
 
-        if len(a_shape) < 2 or len(b_shape) < 2:
-            raise ValueError('Matrix multiplication expect at least 2D tensor, got {} and {}'.format(a_shape, b_shape))
+        if len(a.shape) < 2 or len(b.shape) < 2:
+            raise ValueError('Matrix multiplication expect at least 2D tensor, got {} and {}'.format(a.shape, b.shape))
 
-        if a_shape[-1] != b_shape[-2]:
+        if a.shape[-1] != b.shape[-2]:
             raise ValueError(
                 'Matrix multiplication expect tensor A and B with shape [..., M, K] and [..., K, N]'
-                ', got {} and {}'.format(a_shape, b_shape)
+                ', got {} and {}'.format(a.shape, b.shape)
             )
 
-        if not can_mutually_broadcast(a_shape[:-2], b_shape[:-2]):
+        if not can_mutually_broadcast(a.shape[:-2], b.shape[:-2]):
             raise ValueError(
                 'Matrix multiplication expect tensor A and B with compatible broadcast shape, '
-                'got {} and {}'.format(a_shape, b_shape)
+                'got {} and {}'.format(a.shape, b.shape)
             )
-
-        k_size = a_shape[-1]
-        c_shape = [parallel_k_parts] + broadcast_shape(a_shape[:-2], b_shape[:-2]) + [a_shape[-2], b_shape[-1]]
+        a_shape = a.const_shape
+        b_shape = b.const_shape
+        k_size = int(a.shape[-1])
+        c_shape = [parallel_k_parts] + broadcast_shape(a.shape[:-2], b.shape[:-2]) + [a_shape[-2], b_shape[-1]]
         k_part_extent = cdiv(k_size, parallel_k_parts)
 
         c = compute(
@@ -58,8 +56,8 @@ class MatmulF16Task(Task):
                 shape=[k_part_extent],
                 fcompute=lambda k: if_then_else(
                     k_part * k_part_extent + k < k_size,
-                    a[broadcast_indices(indices[:-2], a_shape[:-2], c_shape[1:-2]) + [indices[-2], k]]
-                    * b[broadcast_indices(indices[:-2], b_shape[:-2], c_shape[1:-2]) + [k, indices[-1]]],
+                    a[broadcast_indices(indices[:-2], a.shape[:-2], c_shape[1:-2]) + [indices[-2], k]]
+                    * b[broadcast_indices(indices[:-2], b.shape[:-2], c_shape[1:-2]) + [k, indices[-1]]],
                     float16(0.0),
                 ),
                 reduce_type='sum',
@@ -108,11 +106,11 @@ class MatmulF16Task(Task):
 
         # input shapes
         node_a, node_b, node_c = self.inputs[0], self.inputs[1], self.outputs[0]
-        a_shape: List[int] = node_a.const_shape()
-        b_shape: List[int] = node_b.const_shape()
-        c_shape: List[int] = node_c.const_shape()
+        a_shape: Tuple[int, ...] = node_a.const_shape
+        b_shape: Tuple[int, ...] = node_b.const_shape
+        c_shape: Tuple[int, ...] = node_c.const_shape
         m_size, n_size, k_size = a_shape[-2], b_shape[-1], a_shape[-1]
-        a_head, b_head, c_head = a_shape[:-2], b_shape[:-2], c_shape[:-2]
+        a_head, b_head, c_head = list(a_shape[:-2]), list(b_shape[:-2]), list(c_shape[:-2])
         k_parts = self.attrs['parallel_k_parts']
         k_part_extent = cdiv(cdiv(k_size, k_parts), 8) * 8
 
@@ -325,6 +323,8 @@ class MatmulF16Task(Task):
 
 class MatmulF16Op(Operator):
     def __init__(self, a: Tensor, b: Tensor, parallel_k_parts=1):
+        if not (isinstance(parallel_k_parts, int) and not isinstance(parallel_k_parts, bool)):
+            raise ValueError('parallel_k_parts must be an integer, got {}'.format(parallel_k_parts))
         super().__init__(
             inputs=[a, b],
             attributes={'parallel_k_parts': parallel_k_parts},

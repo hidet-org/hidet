@@ -9,6 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import math
 import pytest
 import hidet
 import numpy as np
@@ -77,7 +78,7 @@ def test_tanh(shape):
 
 @pytest.mark.parametrize("shape", unary_op_shapes)
 def test_erf(shape):
-    check_unary(shape, np.float32, np.tanh, ops.tanh)
+    check_unary(shape, np.float32, np.vectorize(math.erf), ops.erf)
 
 
 @pytest.mark.parametrize("shape", unary_op_shapes)

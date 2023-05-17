@@ -86,8 +86,11 @@ class MmaConfig:
         return mma_configs['m16n8k8_tf32_f32']
 
     @staticmethod
-    def all():
-        return list(mma_configs.values())
+    def all(compute_capability=None):
+        if compute_capability is None:
+            return list(mma_configs.values())
+        else:
+            return filter_mma_by_cc(compute_capability)
 
     def __str__(self):
         return self.inst_name()
@@ -216,6 +219,29 @@ def register_mma_instructions():
                 is_volatile=False,
             )
         register_primitive_function(name=func_name, func_or_type=fb.func)
+
+
+def filter_mma_by_cc(compute_capability):
+    supported_configs = []
+    for config_name, config in mma_configs.items():
+        if compute_capability < (7, 0):
+            continue
+        if compute_capability < (7, 5):
+            if 'm16n8k8' in config_name and config.input_dtype == 'f16':
+                continue
+        elif compute_capability < (8, 0):
+            if 'm8n8k4' in config_name and config.input_dtype == 'f64':
+                continue
+            if 'm16n8k16' in config_name and config.input_dtype == 'f16':
+                continue
+            if ('m16n8k8' in config_name or 'm16n8k16' in config_name) and config.input_dtype == 'bf16':
+                continue
+            if ('m16n8k4' in config_name or 'm16n8k8' in config_name) and config.input_dtype == 'tf32':
+                continue
+
+        supported_configs.append(config)
+
+    return supported_configs
 
 
 def resolve_ldmatrix_func_name(num: int, shared_space_addr: bool = False, trans=False) -> str:

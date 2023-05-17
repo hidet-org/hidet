@@ -42,8 +42,8 @@ from hidet.ir.task import Task
 class BatchMatmulTask(Task):
     def __init__(self, a: TensorNode, b: TensorNode):
         # get the input sizes
-        batch_size, m_size, k_size = a.const_shape()
-        batch_size, k_size, n_size = b.const_shape()
+        batch_size, m_size, k_size = a.shape
+        batch_size, k_size, n_size = b.shape
 
         # define the computation
         c = compute(

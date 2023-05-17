@@ -89,8 +89,9 @@ class DataLayout(Node):
 
     def __str__(self):
         import numpy as np
+        from hidet.ir.expr import Constant
 
-        if int(self.size) > 1024:
+        if not isinstance(self.size, (int, Constant)) or int(self.size) > 1024:
             return '{}(shape={}, size={})'.format(self.__class__.__name__, self.shape, self.size)
         else:
             shape = [int(v) for v in self.shape]

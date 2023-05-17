@@ -26,8 +26,8 @@ class Conv1dTransposeTask(Task):
         groups: Optional[int],
         output_padding: Optional[int],
     ):
-        num_channels, out_channels, length_in = data.const_shape()
-        out_channels, wc, kernel_size = weight.const_shape()
+        num_channels, out_channels, length_in = data.const_shape
+        out_channels, wc, kernel_size = weight.const_shape
         s = normalize_stride(stride, dim=1)[0]
         p = normalize_padding(padding, dim=1)[0]
         k = normalize_kernel(kernel_size, dim=1)[0]

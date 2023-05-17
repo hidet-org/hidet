@@ -19,7 +19,7 @@ from hidet.ir.expr import Add, convert, Sub, Multiply, Mod, LessThan, LessEqual,
 from hidet.ir.expr import BitwiseXor, BitwiseAnd, BitwiseOr, BitwiseNot
 from hidet.ir.expr import Div, Constant, Expr, logical_and, logical_or, if_then_else
 from hidet.ir.functors import IRRewriter
-from hidet.ir.tools import rewrite
+from hidet.ir.tools import rewrite, simplify
 from hidet.transforms.base import FunctionPass
 from hidet.utils import prod, repeat_until_converge
 from hidet.ir.func import Function
@@ -122,9 +122,12 @@ class RuleBasedSimplifier(IRRewriter):
             (e1 - (e2 - c1), (e1 - e2) + c1),
             ((e1 - c1) - c2, e1 - (c1 + c2)),
             # mul
-            ((e1 + c1) * c2, c1 * c2 + e1 * c2),
-            ((c1 - e1) * c2, c1 * c2 - e1 * c2),
-            ((e1 - c1) * c2, e1 * c2 - c1 * c2),
+            # for the following three pattern rules, the third item is the condition to apply the pattern rules.
+            # they are used to avoid arithmetic overflow in cases like (1-(j <= i ? 1.0 : 0.0)) * (-1e9).
+            # because 1 + 1e9 - 1e9 becomes 0 for float32 data type
+            ((e1 + c1) * c2, c1 * c2 + e1 * c2, logical_and(c2 <= 1e5, -c2 <= 1e5)),
+            ((c1 - e1) * c2, c1 * c2 - e1 * c2, logical_and(c2 <= 1e5, -c2 <= 1e5)),
+            ((e1 - c1) * c2, e1 * c2 - c1 * c2, logical_and(c2 <= 1e5, -c2 <= 1e5)),
             ((e1 * c1) * c2, e1 * (c1 * c2)),
             # div
             (((e1 * c1) + (e2 % c1)) // c1, e1),
@@ -167,14 +170,22 @@ class RuleBasedSimplifier(IRRewriter):
         ]
 
     def apply_rule(self, e):
-        for pattern, target in self.patterns:
+        for items in self.patterns:
+            if len(items) == 2:
+                pattern, target = items
+                condition = boolean.true
+            else:
+                pattern, target, condition = items
             if pattern.__class__ is not e.__class__:
                 continue
             mapping, _ = match(pattern, e)
             if mapping:
-                mapping = {a: b for a, b in mapping.items() if a in self.args}
-                ret = rewrite(target, rewrite_map=mapping)
-                return ret
+                condition = simplify(rewrite(condition, rewrite_map=mapping))
+                assert isinstance(condition, Constant)
+                if bool(condition):
+                    mapping = {a: b for a, b in mapping.items() if a in self.args}
+                    ret = rewrite(target, rewrite_map=mapping)
+                    return ret
         return e
 
     def apply_bound_aware_rule(self, e):

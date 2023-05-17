@@ -26,7 +26,7 @@ import onnx
 import onnx.numpy_helper
 import onnx.external_data_helper
 import hidet
-from hidet.graph.modules import nn
+from hidet.graph.nn import nn
 from hidet.graph import ops
 from hidet.graph.tensor import Tensor, from_numpy, randn
 from . import utils

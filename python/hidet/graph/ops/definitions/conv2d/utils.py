@@ -9,12 +9,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Union
+from typing import List, Union, Sequence
 from ..utils import normalize_stride
 
 
 def infer_conv2d_shape(
-    x_shape: List[int], w_shape: List[int], strides: Union[int, List[int]], groups: int, dilations: List[int]
+    x_shape: Sequence[int],
+    w_shape: Sequence[int],
+    strides: Union[int, Sequence[int]],
+    groups: int,
+    dilations: Sequence[int],
 ) -> List[int]:
     n, c, h, w = x_shape
     oc, gc, kx, ky = w_shape

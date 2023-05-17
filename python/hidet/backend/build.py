@@ -132,6 +132,9 @@ class NVCC(SourceCompiler):
             '--compiler-options -fPIC,-m64,-mavx2,-march=native,-O3',
             # embed the line information into the binary, allow Nsight Compute to get the source code for profiling.
             '-lineinfo',
+            # ftz=true and prec-div=false for fast math
+            '-ftz=true',
+            '-prec-div=false',
             # link the hidet runtime, all APIs for communication between kernels and host system are in hidet runtime.
             '-lhidet_runtime',
             # shared cuda runtime library is used (.so), instead of static one (.a). used to reduce binary size.

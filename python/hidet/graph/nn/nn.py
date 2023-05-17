@@ -9,13 +9,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# pylint: disable=unused-import
 from typing import Union, List
 import math
 from hidet.graph import ops
 from hidet.graph.common import normalize
-from hidet.graph.module import Module, Tensor
-from hidet.graph.tensor import randn, zeros, ones
-from hidet.graph.modules.container import Sequential, ModuleList  # pylint: disable=unused-import
+from hidet.graph.nn.module import Module
+from hidet.graph.tensor import Tensor, randn, zeros, ones
+from hidet.graph.nn.container import Sequential, ModuleList
 
 
 class Conv2d(Module):

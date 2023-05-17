@@ -19,6 +19,7 @@ from hidet.graph.ir.flow_graph import FlowGraph
 from hidet.graph.transforms import PassContext, optimize
 from .utils import serialize_output, deserialize_output, resolve_save_dir_multigraph
 from .dynamo_config import dynamo_config
+from .interpreter import warnings
 
 
 logger = logging.getLogger(__name__)
@@ -63,7 +64,7 @@ def generate_executor(flow_graph: FlowGraph) -> Callable:
         torch_inputs: List[torch.Tensor] = []
         for x in inputs:
             if not x.is_contiguous():
-                logger.warning('Hidet received a non-contiguous torch input tensor, converting it to contiguous')
+                warnings.warn_once('Hidet received a non-contiguous torch input tensor, converting it to contiguous')
                 x = x.contiguous()
             torch_inputs.append(x)
         hidet_inputs: List[hidet.Tensor] = [hidet.from_torch(tensor) for tensor in torch_inputs]

@@ -14,7 +14,7 @@ from .utils import Task, Operator, Tensor, TensorNode, compute, reduce, input_li
 
 class CumulativeTask(Task):
     def __init__(self, x: TensorNode, dim: int, reduce_type: str, exclusive: bool, reverse: bool):
-        x_shape = x.const_shape()
+        x_shape = x.shape
         y_shape = x_shape
 
         if not reverse:
@@ -25,7 +25,7 @@ class CumulativeTask(Task):
                     shape=[indices[dim] + (0 if exclusive else 1)],
                     fcompute=lambda k: x[indices[:dim] + (k,) + indices[dim + 1 :]],
                     reduce_type=reduce_type,
-                    accumulate_dtype=x.ttype.dtype.name,
+                    accumulate_dtype=x.type.dtype.name,
                 ),
             )
         else:

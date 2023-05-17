@@ -22,6 +22,10 @@ class BaseFunctor:
         return self.visit(node)
 
     def visit(self, node: Union[Node, Tuple, List, Dict[str, Any], str, int, float]):
+        if isinstance(node, (str, bool, int, float, complex, type(None))):
+            # we do not need to memoize the python constants because hash(1.0) == hash(1) == hash(True)
+            return self.visit_PyConstant(node)
+
         key = id(node) if isinstance(node, (list, dict)) else node
         if self.memo is not None and key in self.memo:
             return self.memo[key]
@@ -55,19 +59,19 @@ class BaseFunctor:
 
         return ret
 
-    def visit_dispatch(self, node: Union[Node, Tuple, List, Dict[str, Any], str, int, float]):
+    def visit_dispatch(self, node: Union[Node, Tuple, List, Dict[str, Any], str, int, float, Any]):
         if isinstance(node, tuple):
             return self.visit_Tuple(node)
         elif isinstance(node, list):
             return self.visit_List(node)
         elif isinstance(node, dict):
             return self.visit_Dict(node)
-        elif isinstance(node, (str, int, float)) or node is None:
+        elif isinstance(node, (str, int, float, complex)) or node is None:
             return self.visit_PyConstant(node)
         elif isinstance(node, Node):
             return self.visit_NotDispatchedNode(node)
         else:
-            return NotImplemented
+            return self.visit_NotDispatched(node)
 
     def visit_Tuple(self, tp: Tuple):
         raise NotImplementedError()
@@ -83,6 +87,9 @@ class BaseFunctor:
 
     def visit_PyConstant(self, c: Union[str, int, float, None]):
         raise NotImplementedError()
+
+    def visit_NotDispatched(self, val: Any):
+        raise ValueError("Encounter unsupported type {} in the IR functor.".format(type(val)))
 
 
 class BaseVisitor(BaseFunctor):
@@ -123,5 +130,5 @@ class BaseRewriter(BaseFunctor):
     def visit_NotDispatchedNode(self, n: Node):
         return n
 
-    def visit_PyConstant(self, c: Union[str, int, float, None]):
+    def visit_PyConstant(self, c: Union[str, int, float, complex, None]):
         return c

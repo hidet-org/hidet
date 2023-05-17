@@ -16,8 +16,9 @@ from hidet.graph.ops.definitions.utils import compute, input_like, normalize_str
 
 class Conv2dTask(Task):
     def __init__(self, data: TensorNode, weight: TensorNode, stride: List[int], dilations: List[int], groups: int):
-        n, c, h, w = data.const_shape()
-        oc, wc, kx, ky = weight.const_shape()
+        # pylint: disable=too-many-locals
+        n, c, h, w = data.shape
+        oc, wc, kx, ky = weight.shape
         sx, sy = stride
         dilx, dily = dilations
         p, q = (h - dilx * (kx - 1) - 1) // sx + 1, (w - dily * (ky - 1) - 1) // sy + 1

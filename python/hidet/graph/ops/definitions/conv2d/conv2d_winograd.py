@@ -36,8 +36,8 @@ def winograd_transform_matrices(m: int, r: int) -> Tuple[Constant, Constant, Con
 class Conv2dWinogradImageTransformTask(Task):
     def __init__(self, x: TensorNode, kernel: List[int], ms: List[int]):
         # pylint: disable=too-many-locals
-        assert len(kernel) == 2 and len(x.const_shape()) == 4
-        n, c, h, w = x.const_shape()
+        assert len(kernel) == 2 and len(x.shape) == 4
+        n, c, h, w = x.shape
         rx, ry = kernel
         mx, my = ms  # output size per tile
         oh, ow = h - rx + 1, w - ry + 1  # output size of image
@@ -51,7 +51,7 @@ class Conv2dWinogradImageTransformTask(Task):
         )
         BH = winograd_transform_matrices(mx, rx)[1]
         BW = winograd_transform_matrices(my, ry)[1]
-        dtype = x.ttype.dtype
+        dtype = x.type.dtype
         y = compute(
             name='y',
             shape=[alpha_x, alpha_y, c, p],
@@ -66,13 +66,17 @@ class Conv2dWinogradImageTransformTask(Task):
 
 class Conv2dWinogradFilterTransformTask(Task):
     def __init__(self, w: TensorNode, ms: List[int]):
-        assert len(w.const_shape()) == 4
-        oc, c, rx, ry = w.const_shape()
+        assert len(w.shape) == 4
+        oc, c, rx, ry = w.shape
         mx, my = ms
+        if not rx.is_const():
+            raise ValueError('winograd filter transform: rx must be const')
+        if not ry.is_const():
+            raise ValueError('winograd filter transform: ry must be const')
         alpha_x, alpha_y = mx + rx - 1, my + ry - 1
-        GH = winograd_transform_matrices(mx, rx)[0]
-        GW = winograd_transform_matrices(my, ry)[0]
-        dtype = w.ttype.dtype
+        GH = winograd_transform_matrices(mx, int(rx))[0]
+        GW = winograd_transform_matrices(my, int(ry))[0]
+        dtype = w.type.dtype
         y = compute(
             name='y',
             shape=[alpha_x, alpha_y, oc, c],
@@ -87,8 +91,8 @@ class Conv2dWinogradFilterTransformTask(Task):
 
 class Conv2dWinogradInverseTransformTask(Task):
     def __init__(self, y: TensorNode, input_shape, kernel, ms):
-        assert len(y.const_shape()) == 4
-        alpha_x, alpha_y, oc, p = y.const_shape()
+        assert len(y.shape) == 4
+        alpha_x, alpha_y, oc, p = y.shape
         n, c, h, w = input_shape  # pylint: disable=unused-variable
         rx, ry = kernel
         mx, my = ms
@@ -96,7 +100,7 @@ class Conv2dWinogradInverseTransformTask(Task):
         nh, nw = (oh + mx - 1) // mx, (ow + my - 1) // my  # number of tiles on each image dimension
         AH = winograd_transform_matrices(mx, rx)[2]
         AW = winograd_transform_matrices(my, ry)[2]
-        dtype = y.ttype.dtype
+        dtype = y.type.dtype
         inverse = compute(
             name='inverse',
             shape=[mx, my, oc, p],
