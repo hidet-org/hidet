@@ -13,6 +13,8 @@ y = relay.Var("y", tvm.relay.TensorType([512, 512]))
 
 params = {}
 
+max_ntrials = 20
+
 # mod = relay.Function(
 #     [x, y],
 #     relay.nn.dense(x, y)
@@ -22,8 +24,12 @@ params = {}
 net = relay.nn.dense(x, y)
 mod = relay.Function(relay.analysis.free_vars(net), net)
 
-target = "llvm -mcpu=core-avx2"
-# target = "c"
+mod = tvm.IRModule.from_expr(mod)
+
+# target = tvm.target.Target("c")
+# target = tvm.target.cuda()
+target = tvm.target.Target("llvm -mcpu=core-avx2")
+# target = tvm.target.Target("llvm -mcpu=skylake-avx512")
 
 batch_size = 1
 dtype = "float32"
@@ -91,7 +97,6 @@ def tune_kernels(
             raise ValueError("Invalid tuner: " + tuner)
 
         # do tuning
-        max_ntrials = 750
         n_trial = min(len(task.config_space), max_ntrials)
         # n_trial = 1500
         tuner_obj.tune(
@@ -130,6 +135,7 @@ def evaluate_performance(lib, data_shape):
 
     # evaluate
     print("Evaluate inference time cost...")
+
     print(module.benchmark(dev, number=20, repeat=3))
 
 
@@ -151,7 +157,14 @@ def tune_and_evaluate(tuning_opt):
         print("Compile...")
         with tvm.transform.PassContext(opt_level=3):
             lib = relay.build(mod, target=target, params=params)
+        runtime_module: tvm.runtime.Module = lib.get_lib()
+        outdir = "./out/"
+        os.makedirs(outdir, exist_ok=True)
+        with open(os.path.join(outdir, 'tvm_host_512x512x512_module'), 'w') as f:
+            f.write(str(runtime_module))
+
         evaluate_performance(lib, data_shape)
+        # print(str(lib.get_source()))
 
 
 tune_and_evaluate(tuning_option)
