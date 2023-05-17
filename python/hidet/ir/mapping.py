@@ -76,6 +76,7 @@ class TaskMapping(Node):
 
     def on(self, w: Int):
         from hidet.lang.constructs.loops import TaskMappingLoopIterable
+
         return TaskMappingLoopIterable(self, w)
 
     def map(self, w: Int) -> Tuple[Int, ...]:

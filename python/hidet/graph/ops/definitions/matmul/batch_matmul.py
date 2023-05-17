@@ -14,7 +14,6 @@ import hidet
 from hidet.ir import IRModule
 from hidet.ir.compute import reduce
 from hidet.ir.layout import DataLayout, StridesLayout, data_layout
-from hidet.ir.mapping import TaskMapping
 from hidet.ir.type import data_type, TensorType, DataType
 from hidet.lang import i32, spatial, repeat, tensor, attrs, grid, tensor_pointer
 from hidet.lang.cuda import blockIdx, threadIdx, syncthreads
@@ -83,12 +82,7 @@ class BatchMatmulTask(Task):
     @tune.space(1, 'warp_mid', [spatial(4, 8)])
     @tune.space(1, 'warp_inner', [(4, 4), (4, 8), (8, 4)])
     def schedule_simt(
-        self,
-        block_warps_k=8,
-        block_warps=(4, 2),
-        warp_outer=(2, 2),
-        warp_mid=spatial(4, 8),
-        warp_inner=(4, 4),
+        self, block_warps_k=8, block_warps=(4, 2), warp_outer=(2, 2), warp_mid=spatial(4, 8), warp_inner=(4, 4)
     ) -> IRModule:
         task = self
         local_layout = DataLayout.local

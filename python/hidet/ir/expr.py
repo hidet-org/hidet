@@ -728,6 +728,7 @@ def tensor_element(base: Expr, indices: Sequence[Int], protected=False):
 
 
 def _chain_binary_op(op: Type[BinaryExpr], operands, default):
+    # pylint: disable=protected-access
     if len(operands) == 0:
         return convert(default)
     elif len(operands) == 1:
@@ -747,6 +748,7 @@ def logical_or(*args: Union[Expr, bool]) -> LogicalOr:
 
 
 def logical_not(a: Union[Expr, PyScalar]):
+    # pylint: disable=protected-access
     a = convert(a)
     return Expr._unary(LogicalNot, a)
 

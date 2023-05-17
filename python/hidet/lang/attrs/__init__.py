@@ -1,3 +1,4 @@
+# pylint: disable=pointless-string-statement
 from typing import Optional
 from hidet.ir.expr import Var
 from hidet.lang.attrs import cuda

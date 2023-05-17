@@ -230,10 +230,10 @@ class MatmulF16Task(Task):
                 c: float16[c_head + [m_size, n_size]],
             ):
                 # matrix multiplication, using mma instruction
-                attr.cuda_grid_dim = grid_dim
-                attr.cuda_block_dim = threads
+                attrs.cuda_grid_dim = grid_dim
+                attrs.cuda_block_dim = threads
                 # the second 2 means '2 bytes per float16'
-                attr.cuda_dynamic_smem_bytes = dynamic_smem_bytes
+                attrs.cuda_dynamic_smem_bytes = dynamic_smem_bytes
                 # smem_storage = dyn_smem_storage
                 smem_a = tensor_pointer(
                     'float16', shape=[2, block_m, block_k], layout=row_layout(2) + smem_a_type.layout

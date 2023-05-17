@@ -15,7 +15,6 @@ import types
 import math
 import builtins
 import operator
-import contextlib
 
 from typing import Optional, Dict, Any, Union
 import os.path
@@ -46,7 +45,7 @@ from ast import Index
 import astunparse
 from hidet import ir
 from hidet.ir.expr import Var
-from hidet.ir.stmt import DeclareScope, ForStmtAttr
+from hidet.ir.stmt import DeclareScope
 from hidet.ir.tools import simplify
 from hidet.ir.builders import FunctionBuilder
 from hidet.utils import red, bold, blue, str_indent
@@ -95,9 +94,10 @@ class HidetProgramError(Exception):
 class PythonAstFunctor:
     """
     A base functor for Python AST nodes.
-    
+
     Please refers to https://docs.python.org/3/library/ast.html for more details about Python AST.
     """
+
     def __init__(self, file: str, start_lineno: int, start_column: int):
         self.file: str = file
         self.start_lineno: int = start_lineno
@@ -729,41 +729,6 @@ class PythonToHidetTranslator(PythonAstFunctor):
                 raise HidetProgramError(self, stmt, 'For loop target must be a name.')
             iter_targets.append(stmt.target)
 
-        loop_vars: list[Var] = []
-        host_vars: Dict[str, Any] = {}
-
-        def visit_body() -> ir.Stmt:
-            with self.scope() as for_scope:
-                for var in loop_vars:
-                    for_scope.define_var(name=var.hint, v=var)
-                for name, value in host_vars.items():
-                    for_scope.define_host_var(name, value)
-                for s in stmt.body:
-                    self.visit(s)
-            return for_scope.flush_stmts()
-
-        def declare_loop_vars(num: int):
-            p = len(iter_targets)
-            q = num
-
-            # for i_1, ..., i_p in grid(n_1, ..., n_q):
-            #    ...
-            # we mush have either
-            #  1. p == q,
-            #  2. or p == 1 and q > 1
-
-            if p not in (1, q):
-                raise HidetProgramError(self, stmt, f'Expect {num} loop variables, but got {len(iter_targets)}.')
-
-            if p == q:
-                for target in iter_targets:
-                    loop_vars.append(Var(target.id, type=ir.data_type('int32')))
-            else:
-                name = iter_targets[0].id
-                for i in range(q):
-                    loop_vars.append(Var(f'_{name}_{i}', type=ir.data_type('int32')))
-                host_vars[name] = list(loop_vars)
-
         # construct for body
         stmt_iter = self.visit(stmt.iter)
         if isinstance(stmt_iter, HidetLoopIterable):
@@ -810,87 +775,6 @@ class PythonToHidetTranslator(PythonAstFunctor):
                 '      ...'
             )
             raise HidetProgramError(self, stmt.iter, msg)
-
-        # if (
-        #     isinstance(stmt.iter, Call)
-        #     and isinstance(stmt.iter.func, Name)
-        #     and self.visit(stmt.iter.func) is builtins.range
-        # ):  # and stmt.iter.func.id == 'range':
-        #     # case 1:
-        #     #   for i in range(...):
-        #     #     ...
-        #     # Will be translated to a single for loop (i.e., ForStmt).
-        #     call = stmt.iter
-        #
-        #     # get extent
-        #     if len(call.args) > 1:
-        #         msg = 'Current we only support range(extent), will add range(start, stop, step) when needed.'
-        #         raise NotImplementedError(msg)
-        #     declare_loop_vars(num=1)
-        #     extent = self.visit(call.args[0])
-        #     self.current_scope.append(ir.ForStmt(loop_var=loop_vars[0], extent=extent, body=visit_body()))
-        # elif (
-        #     isinstance(stmt.iter, Call)
-        #     and isinstance(stmt.iter.func, Name)
-        #     and self.visit(stmt.iter.func) is hidet.lang.grid
-        # ):
-        #     # case 2:
-        #     #  for i, j in grid(3, 4):
-        #     #    ...
-        #     # Will be translated to nested for loops (i.e., ForStmt).
-        #     call = stmt.iter
-        #     attr_string: Optional[str] = None
-        #     for keyword in call.keywords:
-        #         if keyword.arg == 'attrs':
-        #             assert attr_string is None
-        #             attr_string = self.visit(keyword.value)
-        #         else:
-        #             raise HidetProgramError(self, call, 'Can not recognize keyword argument: {}.'.format(keyword.arg))
-        #     extents = [self.visit(arg) for arg in call.args]
-        #     if len(extents) > 0 and isinstance(extents[-1], str):
-        #         if attr_string is not None:
-        #             raise HidetProgramError(
-        #                 self, call, 'Can not specify attrs in both positional and keyword arguments.'
-        #             )
-        #         attr_string = extents.pop()
-        #     if attr_string is None:
-        #         attrs = [ForStmtAttr() for _ in range(len(call.args))]
-        #     else:
-        #         attrs = ForStmtAttr.parse(attr_string)
-        #     declare_loop_vars(num=len(extents))
-        #     body = visit_body()
-        #     for loop_var, extent, attr in zip(reversed(loop_vars), reversed(extents), reversed(attrs)):
-        #         body = ir.ForStmt(loop_var=loop_var, extent=extent, body=body, attr=attr)
-        #     self.current_scope.append(body)
-        # elif isinstance(stmt.iter, Call) and isinstance(stmt.iter.func, Attribute) and stmt.iter.func.attr == 'on':
-        #     # case 3:
-        #     #  for a, b in row_spatial(3, 4).on(thread_x):
-        #     #    ...
-        #     # Will be translated to ForTaskStmt
-        #     if len(stmt.iter.args) != 1:
-        #         raise HidetProgramError(self, stmt.iter, 'Expect a single expression representing worker index.')
-        #     worker = ir.convert(self.visit(stmt.iter.args[0]))
-        #     mapping = self.visit(stmt.iter.func.value)
-        #     if not isinstance(mapping, ir.TaskMapping):
-        #         raise HidetProgramError(self, stmt.iter.func.value, 'Expect task mapping here.')
-        #     declare_loop_vars(num=len(mapping.task_shape))
-        #     self.current_scope.append(
-        #         ir.ForMappingStmt(loop_vars=loop_vars, mapping=mapping, worker=worker, body=visit_body())
-        #     )
-        # else:
-        #     msg = (
-        #         'Cannot recognize the for loop statement. Currently, we support two types of for loop statements:\n'
-        #         '  for i in range(extent):\n'
-        #         '    body(i)\n'
-        #         'and\n'
-        #         '  for i, j in mapping.on(worker):\n'
-        #         '    body(i, j)\n'
-        #         '  (here the mapping can be arbitrary task mapping, or their composition with arbitrary dimensions).'
-        #     )
-        #     raise HidetProgramError(self, stmt.iter, msg)
-        #
-        # if len(stmt.orelse) > 0:
-        #     raise HidetProgramError(self, stmt.orelse[0], 'Hidet does not support else clause in for loop.')
 
     def visit_AugAssign(self, stmt: AugAssign):
         if isinstance(stmt.target, Name):
@@ -1033,7 +917,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
                     raise HidetProgramError(
                         self,
                         expr,
-                        'Currently, do not support calling python builtin function "{}".'.format(func.__qualname__)
+                        'Currently, do not support calling python builtin function "{}".'.format(func.__qualname__),
                     )
         else:
             return func(*args, **kwargs)
@@ -1120,7 +1004,9 @@ class PythonToHidetTranslator(PythonAstFunctor):
                     names.append(target.id)
             else:
                 raise HidetProgramError(
-                    self, generator.target, 'Hidet do not support generator target with type {}.'.format(type(generator.target))
+                    self,
+                    generator.target,
+                    'Hidet do not support generator target with type {}.'.format(type(generator.target)),
                 )
             result = []
             for it in iterator:

@@ -137,9 +137,9 @@ class ReduceF16Task(Task):
 
             @hidet.script
             def reduce_kernel(x: f16[x.const_shape], y: f16[y.const_shape]):
-                attr.cuda_grid_dim = grid_size
-                attr.cuda_block_dim = block_size
-                attr.cuda_min_blocks = 1
+                attrs.cuda_grid_dim = grid_size
+                attrs.cuda_block_dim = block_size
+                attrs.cuda_min_blocks = 1
 
                 x_f32 = tensor_pointer('float32', shape=shape_32bit)
                 x_f32 = x
@@ -212,9 +212,9 @@ class ReduceF16Task(Task):
             @hidet.script
             def reduce_kernel(x: f16[x.const_shape], y: f16[y.const_shape]):
                 # Each 256-thread ThreadBlock handles 512 columns
-                attr.cuda_grid_dim = grid_size
-                attr.cuda_block_dim = block_size
-                attr.cuda_min_blocks = 1
+                attrs.cuda_grid_dim = grid_size
+                attrs.cuda_block_dim = block_size
+                attrs.cuda_min_blocks = 1
 
                 x_f32 = tensor_pointer('float32', shape=shape_32bit)
                 y_f32 = tensor_pointer('float32', shape=remain_shape_32bit)
