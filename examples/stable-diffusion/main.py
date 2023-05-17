@@ -59,6 +59,9 @@ def adjust_compile_opts(search_space=0, fp16=True, tensor_core=True, fp_16_red=F
     hidet.torch.dynamo_config.search_space(search_space)
     hidet.torch.dynamo_config.use_fp16(fp16)
     hidet.torch.dynamo_config.use_tensor_core(flag=tensor_core)
+    hidet.torch.dynamo_config.use_fp16_reduction(fp_16_red)
+    hidet.torch.dynamo_config.use_cuda_graph(cuda_graph)
+    hidet.torch.dynamo_config.use_attention(attn)
 
     compiled_unet = torch.compile(unet, backend='hidet')
     return search_space
