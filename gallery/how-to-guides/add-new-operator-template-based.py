@@ -74,7 +74,7 @@ class BatchMatmulFp16Task(Task):
 
 
 def batch_matmul_mma_fp16_schedule(task: BatchMatmulFp16Task) -> IRModule:
-    from hidet.lang import f16, spatial, repeat, tensor, attr, grid, printf, cast
+    from hidet.lang import f16, spatial, repeat, tensor, attrs, grid, printf, cast
     from hidet.lang.mapping import repeat, spatial
     from hidet.lang.cuda import blockIdx, threadIdx, syncthreads
     from hidet.lang.cuda import MmaConfig, mma_sync

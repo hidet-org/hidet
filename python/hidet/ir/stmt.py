@@ -77,11 +77,11 @@ class ForStmtAttr:
             return ForStmtAttr()
 
     @staticmethod
-    def parse(attr: str) -> List[ForStmtAttr]:
+    def parse(attr: Optional[str], num_loops: int) -> List[ForStmtAttr]:
         """
         Parse the attribute string and return a list of ForStmtAttr.
 
-        attr-string: attr+
+        attr-string: attr*
         attr:
              | unroll
              | parallel
@@ -101,11 +101,16 @@ class ForStmtAttr:
         attr: str
             The attribute string.
 
+        num_loops: int
+            The number of loops this attr string describe.
+
         Returns
         -------
         attrs: List[ForStmtAttr]
             The list of ForStmtAttr.
         """
+        if attr is None:
+            attr = ''
         s = attr.replace(' ', '')
         idx = 0
 
@@ -152,6 +157,12 @@ class ForStmtAttr:
                     attrs.append(ForStmtAttr(parallel=True))
             else:
                 raise ValueError(f"Invalid attribute string: {attr}")
+        if len(attrs) == 0:
+            attrs = [ForStmtAttr() for _ in range(num_loops)]
+        elif len(attrs) == 1:
+            attrs = attrs * num_loops
+        elif len(attrs) != num_loops:
+            raise ValueError("Invalid attribute string: {} for {} loops".format(attr, num_loops))
         return attrs
 
 
@@ -221,7 +232,7 @@ class ForStmt(Stmt):
         self.loop_var: Var = loop_var
         self.extent: Expr = simplify(convert(extent))
         self.body: Optional[Stmt] = body
-        self.attr: ForStmtAttr = attr if attr else ForStmtAttr()
+        self.attr: ForStmtAttr = attr if attr else ForStmtAttr.from_extent(extent)
 
 
 class ForMappingStmt(Stmt):

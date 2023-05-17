@@ -97,7 +97,7 @@ class MatmulF16Task(Task):
         # pylint: disable=unused-variable
         import hidet
         from hidet.ir.type import tensor_type
-        from hidet.lang import attr, col_spatial, view, u32, tensor_pointer, grid
+        from hidet.lang import attrs, col_spatial, view, u32, tensor_pointer, grid
         from hidet.lang.layout import row_layout
         from hidet.lang.mapping import spatial, auto_map
         from hidet.lang.cuda import blockIdx, threadIdx, syncthreads, dynamic_shared_memory

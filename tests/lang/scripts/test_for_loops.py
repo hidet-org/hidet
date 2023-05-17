@@ -15,7 +15,7 @@ import pytest
 import hidet
 from hidet import int32
 from hidet.ir.func import IRModule, Function
-from hidet.lang import attr, printf, grid, spatial
+from hidet.lang import attrs, printf, grid, spatial
 
 
 def run(kernel: Function, shape: List[int]) -> hidet.Tensor:

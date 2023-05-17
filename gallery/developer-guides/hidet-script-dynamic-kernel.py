@@ -12,7 +12,7 @@ import hidet
 
 
 def matmul_simt_kernel():
-    from hidet.lang import attr
+    from hidet.lang import attrs
     from hidet.lang import float32, int32
     from hidet.lang import as_tensor_pointer, tensor
     from hidet.lang.cuda import threadIdx, blockIdx, syncthreads

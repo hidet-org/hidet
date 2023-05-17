@@ -15,7 +15,7 @@ import hidet
 
 
 def test_parallel():
-    from hidet.lang import printf, attr, grid, repeat, tensor
+    from hidet.lang import printf, attrs, grid, repeat, tensor
 
     with hidet.script_module() as script_module:
 
@@ -59,7 +59,7 @@ def test_parallel():
 
 
 def matmul(m_size, n_size, k_size):
-    from hidet.lang import grid, attr, f32
+    from hidet.lang import grid, attrs, f32
     from hidet.lang.mapping import spatial
 
     with hidet.script_module() as script_module:

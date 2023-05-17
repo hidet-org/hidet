@@ -14,6 +14,7 @@ from __future__ import annotations
 import types
 import builtins
 import operator
+import contextlib
 
 from typing import Optional, Dict, Any, Union
 import os.path
@@ -28,6 +29,7 @@ from ast import Continue
 from ast import Constant, Num, Str, NameConstant
 from ast import BoolOp, BinOp, UnaryOp, Lambda, IfExp, Compare, Call, Attribute, Subscript, Starred, Name, Tuple, Slice
 from ast import ExtSlice, List
+from ast import ListComp, DictComp, SetComp, GeneratorExp, comprehension
 
 # expr context
 from ast import Load, Store, Del
@@ -47,18 +49,15 @@ from hidet.ir.stmt import DeclareScope, ForStmtAttr
 from hidet.ir.tools import simplify
 from hidet.ir.builders import FunctionBuilder
 from hidet.utils import red, bold, blue, str_indent
-import hidet.lang.attr
-from hidet.lang.type_utils import TypeDecorator
+import hidet.lang.attrs
+from hidet.lang.constructs.loops import HidetLoopIterable
+from hidet.lang.constructs.type import TypeDecorator
 
 
 class HidetProgramError(Exception):
-    def __init__(
-        self,
-        translator: PythonAstFunctor,
-        obj: Union[ast.AST, ast.expr, ast.arg, ast.stmt, ast.Attribute, ast.Name, ast.Call],
-        msg: str,
-    ):
+    def __init__(self, translator: PythonAstFunctor, obj, msg: str):
         super().__init__()
+        assert isinstance(obj, ast.AST)
         self.file = translator.file
         self.lineno = translator.start_lineno + obj.lineno
         self.column = translator.start_column + obj.col_offset
@@ -93,6 +92,11 @@ class HidetProgramError(Exception):
 
 
 class PythonAstFunctor:
+    """
+    A base functor for Python AST nodes.
+    
+    Please refers to https://docs.python.org/3/library/ast.html for more details about Python AST.
+    """
     def __init__(self, file: str, start_lineno: int, start_column: int):
         self.file: str = file
         self.start_lineno: int = start_lineno
@@ -222,6 +226,18 @@ class PythonAstFunctor:
     def visit_Index(self, expr: Index):
         raise NotImplementedError()
 
+    def visit_ListComp(self, expr: ListComp):
+        raise NotImplementedError()
+
+    def visit_SetComp(self, expr: SetComp):
+        raise NotImplementedError()
+
+    def visit_DictComp(self, expr: DictComp):
+        raise NotImplementedError()
+
+    def visit_GeneratorExp(self, expr: GeneratorExp):
+        raise NotImplementedError()
+
 
 HostTypes = (ir.TaskMapping, ir.DataLayout, float, int, type(None))
 
@@ -233,6 +249,12 @@ class Scope:
         self.name2host_var: Dict[str, Any] = {}
         self.stmts: list[ir.Stmt] = []
         self.attributes: dict[str, Any] = {}
+
+    @staticmethod
+    def default_top_level():
+        scope = Scope(None)
+        scope.define_host_var('range', hidet.lang.constructs.loops.range)
+        return scope
 
     def define_var(self, name: str, v: Var):
         self.name2var[name] = v
@@ -265,13 +287,10 @@ class Scope:
 
 class ScopeStack:
     def __init__(self):
-        self.scopes: list[Scope] = []
+        self.scopes: list[Scope] = [Scope.default_top_level()]
 
     def __enter__(self) -> Scope:
-        if len(self.scopes) == 0:
-            parent = None
-        else:
-            parent = self.scopes[-1]
+        parent = self.scopes[-1]
         scope = Scope(parent)
         self.scopes.append(scope)
         return scope
@@ -369,7 +388,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
         elif isinstance(lhs, Attribute):
             # example: attr.cuda_block_dim = 16, 16
             lhs_base = self.visit(lhs.value)
-            if lhs_base is hidet.lang.attr:
+            if lhs_base is hidet.lang.attrs:
                 attr_name = lhs.attr
                 if attr_name in ['cuda_block_dim', 'cuda_grid_dim', 'cuda_dynamic_smem_bytes']:
                     if isinstance(rhs, (tuple, list)):
@@ -645,28 +664,31 @@ class PythonToHidetTranslator(PythonAstFunctor):
 
     def visit_UnaryOp(self, expr: UnaryOp):
         value = self.visit(expr.operand)
-        if isinstance(expr.op, Not):
-            # not v
-            return ir.LogicalNot(value)
-        elif isinstance(expr.op, Invert):
-            # there are two cases for a ~ operator: ~something
-            # case 1: get the address of an expression
-            # case 2: get the pointer type that points to the given type
-            from hidet.ir.expr import Address
-            from hidet.ir.type import TypeNode
+        if isinstance(value, ir.Expr):
+            if isinstance(expr.op, Not):
+                # not v
+                return ir.LogicalNot(value)
+            elif isinstance(expr.op, Invert):
+                # there are two cases for a ~ operator: ~something
+                # case 1: get the address of an expression
+                # case 2: get the pointer type that points to the given type
+                from hidet.ir.expr import Address
+                from hidet.ir.type import TypeNode
 
-            if isinstance(value, TypeNode):
-                return ~value
+                if isinstance(value, TypeNode):
+                    return ~value
+                else:
+                    return Address(value)
+            elif isinstance(expr.op, UAdd):
+                # +v
+                return value
+            elif isinstance(expr.op, USub):
+                # -v
+                return ir.Neg(value)
             else:
-                return Address(value)
-        elif isinstance(expr.op, UAdd):
-            # +v
-            return value
-        elif isinstance(expr.op, USub):
-            # -v
-            return ir.Neg(value)
+                raise HidetProgramError(self, expr, 'Can not recognize unary operator.')
         else:
-            raise HidetProgramError(self, expr, 'Can not recognize unary operator.')
+            return operator.neg(value)
 
     def visit_If(self, stmt: If):
         cond = self.visit(stmt.test)
@@ -742,6 +764,45 @@ class PythonToHidetTranslator(PythonAstFunctor):
                 host_vars[name] = list(loop_vars)
 
         # construct for body
+        stmt_iter = self.visit(stmt.iter)
+        if isinstance(stmt_iter, HidetLoopIterable):
+            loop_vars: list[Var] = []
+            host_vars: Dict[str, Any] = {}
+
+            num_loop_vars: int = stmt_iter.num_loop_vars()
+            num_targets: int = len(iter_targets)
+
+            if num_targets == num_loop_vars:
+                for target in iter_targets:
+                    loop_vars.append(Var(target.id, type=ir.data_type('int32')))
+            elif num_targets == 1:
+                name = iter_targets[0].id
+                for i in range(num_loop_vars):
+                    loop_vars.append(Var(f'{name}{i}', type=ir.data_type('int32')))
+                host_vars[name] = list(loop_vars)
+            else:
+                raise HidetProgramError(
+                    self, stmt, f'Expect {num_loop_vars} loop variables, but got {len(iter_targets)}.'
+                )
+
+            with self.scope() as for_scope:
+                for var in loop_vars:
+                    for_scope.define_var(name=var.hint, v=var)
+                for name, value in host_vars.items():
+                    for_scope.define_host_var(name, value)
+                for s in stmt.body:
+                    self.visit(s)
+            body = for_scope.flush_stmts()
+            return stmt_iter.generate_loop_statement(loop_vars=loop_vars, body=body)
+        else:
+            msg = (
+                'For loop iterable must be a one of the following types: '
+                '  for ... in range(...): ...'
+                '  for ... in grid(...): ...'
+                '  for ... in task_mapping(...): ...'
+            )
+            raise HidetProgramError(self, stmt.iter, msg)
+
         if (
             isinstance(stmt.iter, Call)
             and isinstance(stmt.iter.func, Name)
@@ -1005,3 +1066,56 @@ class PythonToHidetTranslator(PythonAstFunctor):
 
     def visit_Lambda(self, expr: Lambda):
         raise HidetProgramError(self, expr, 'Hidet currently do not support lambda expression.')
+
+    def process_generator(self, elt, generators: list[comprehension]) -> list:
+        if len(generators) == 0:
+            return [self.visit(elt)]
+        else:
+            generator = generators[-1]
+            if generator.is_async:
+                raise HidetProgramError(self, generator, 'Hidet currently do not support async generator.')
+            assert isinstance(generator, comprehension)
+            iterator = self.visit(generator.iter)
+            names: list[str] = []
+            if isinstance(generator.target, Name):
+                names = [generator.target.id]
+            elif isinstance(generator.target, Tuple):
+                for target in generator.target.elts:
+                    if not isinstance(target, Name):
+                        raise HidetProgramError(
+                            self, target, "Hidet currently only support binding a single name or a tuple of names"
+                        )
+                    names.append(target.id)
+            else:
+                raise HidetProgramError(
+                    self, generator.target, 'Hidet do not support generator target with type {}.'.format(type(generator.target))
+                )
+            result = []
+            for it in iterator:
+                if len(names) == 1:
+                    self.current_scope.define_host_var(names[0], it)
+                else:
+                    if len(names) != len(it):
+                        raise HidetProgramError(
+                            self, generator, "Can not unpack {} values to {} names.".format(len(it), len(names))
+                        )
+                    for name, value in zip(names, it):
+                        self.current_scope.define_host_var(name, value)
+                if not all(self.visit(cond) for cond in generator.ifs):
+                    continue
+                result.extend(self.process_generator(elt, generators[:-1]))
+            return result
+
+    def visit_ListComp(self, expr: ListComp):
+        return self.process_generator(expr.elt, expr.generators)
+
+    def visit_DictComp(self, expr: DictComp):
+        kv_pairs = self.process_generator(expr.key, expr.generators)
+        return {k: v for k, v in kv_pairs}
+
+    def visit_SetComp(self, expr: SetComp):
+        values = self.process_generator(expr.elt, expr.generators)
+        return set(values)
+
+    def visit_GeneratorExp(self, expr: GeneratorExp):
+        return self.process_generator(expr.elt, expr.generators)

@@ -14,7 +14,7 @@ import hidet
 
 
 def test_unroll():
-    from hidet.lang import printf, attr, grid, repeat
+    from hidet.lang import printf, attrs, grid, repeat
 
     with hidet.script_module() as script_module:
 

@@ -32,7 +32,7 @@ def resolve_cvt_func_name(src: Union[Expr, DataType], dtype: DataType) -> str:
 
 @initialize()
 def register_cvta_instructions():
-    from hidet.lang import attr
+    from hidet.lang import attrs
     from hidet.lang import u8, u16, u32, u64, i8, i16, i32, i64, f16, f32, f64, bf16
 
     for src_dtype in [u8, u16, u32, u64, i8, i16, i32, i64, bf16, f16, f32, f64]:
@@ -47,8 +47,8 @@ def register_cvta_instructions():
 
             @script
             def cuda_cvt(src: src_dtype) -> dst_dtype:
-                attr.func_name = func_name
-                attr.func_kind = 'cuda_device'
+                attrs.func_name = func_name
+                attrs.func_kind = 'cuda_device'
                 ret = dst_dtype(0)
                 dst_name = dst_dtype.short_name.replace('i', 's')  # cuda use s8 to represents i8
                 src_name = src_dtype.short_name.replace('i', 's')

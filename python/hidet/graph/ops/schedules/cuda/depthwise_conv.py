@@ -161,7 +161,7 @@ def schedule_depthwise_conv2d_kernel(
     stride_width: int,
     stride_height: int,
 ) -> IRModule:
-    from hidet.lang import f32, tensor, attr, grid
+    from hidet.lang import f32, tensor, attrs, grid
     from hidet.lang.mapping import spatial, repeat
     from hidet.lang.cuda import threadIdx, blockIdx, syncthreads
 

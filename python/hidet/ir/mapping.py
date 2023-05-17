@@ -216,7 +216,7 @@ def repeat_map(task_shape: Sequence[Int], ranks: Optional[Sequence[int]] = None,
         attrs = [ForStmtAttr.from_extent(task_shape[i]) for i in range(len(task_shape))]
     else:
         assert isinstance(attrs, str)
-        attrs: List[ForStmtAttr] = ForStmtAttr.parse(attrs)
+        attrs: List[ForStmtAttr] = ForStmtAttr.parse(attrs, len(task_shape))
         if len(attrs) == 1:
             attrs = attrs * len(task_shape)
         if len(attrs) != len(task_shape):

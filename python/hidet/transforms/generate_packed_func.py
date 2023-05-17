@@ -42,7 +42,7 @@ def _rewrite_dim3(dim3: Tuple[Expr, Expr, Expr], param2arg: Dict[Expr, Expr]) ->
 
 def add_packed_func(ir_module: IRModule, func: Function, pack_func_name: str):
     from hidet import lang
-    from hidet.lang import attr, i32, void_p, deref, cast
+    from hidet.lang import attrs, i32, void_p, deref, cast
     from hidet.lang.cuda import set_kernel_max_dynamic_smem_bytes
 
     func_var = ir_module.lookup_var(func.name)
