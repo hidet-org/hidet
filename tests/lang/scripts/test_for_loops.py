@@ -31,7 +31,7 @@ def run(kernel: Function, shape: List[int]) -> hidet.Tensor:
 def test_for_range():
     @hidet.script
     def kernel(a: int32[10]):
-        attr.func_kind = 'host_kernel'
+        attrs.func_kind = 'host_kernel'
         p = 0
         for i in range(10):
             a[i] = p
@@ -44,7 +44,7 @@ def test_for_range():
 def test_for_grid():
     @hidet.script
     def kernel(a: int32[2, 3]):
-        attr.func_kind = 'host_kernel'
+        attrs.func_kind = 'host_kernel'
         p = 0
         for i, j in grid(2, 3):
             a[i, j] = p
@@ -57,7 +57,7 @@ def test_for_grid():
 def test_for_task_mapping():
     @hidet.script
     def kernel(a: int32[2, 3]):
-        attr.func_kind = 'host_kernel'
+        attrs.func_kind = 'host_kernel'
         p = 0
         for w in range(6):
             for i, j in spatial(2, 3).on(w):
@@ -71,7 +71,7 @@ def test_for_task_mapping():
 def test_tuple_as_index():
     @hidet.script
     def kernel(a: int32[2, 3]):
-        attr.func_kind = 'host_kernel'
+        attrs.func_kind = 'host_kernel'
         p = 0
         for axes in grid(2, 3):
             # the following three ways of indexing are equivalent

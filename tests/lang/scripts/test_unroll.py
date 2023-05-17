@@ -20,7 +20,7 @@ def test_unroll():
 
         @hidet.script
         def example():
-            attr.func_kind = 'host_kernel'
+            attrs.func_kind = 'host_kernel'
 
             for i in grid(10, attrs='u'):  # unroll
                 printf("i = %d\n", i)

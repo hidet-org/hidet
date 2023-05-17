@@ -74,8 +74,9 @@ class TaskMapping(Node):
     def __getitem__(self, w: Int) -> List[Tuple[Int, ...]]:
         return self.worker2task(w)
 
-    def on(self, w: Int) -> List[Tuple[Int, ...]]:
-        return self.worker2task(w)
+    def on(self, w: Int):
+        from hidet.lang.constructs.loops import TaskMappingLoopIterable
+        return TaskMappingLoopIterable(self, w)
 
     def map(self, w: Int) -> Tuple[Int, ...]:
         return self.single_task_of(w)

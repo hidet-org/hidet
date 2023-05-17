@@ -12,6 +12,7 @@
 # pylint: disable=import-outside-toplevel, too-many-branches, too-many-locals
 from __future__ import annotations
 import types
+import math
 import builtins
 import operator
 import contextlib
@@ -664,7 +665,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
 
     def visit_UnaryOp(self, expr: UnaryOp):
         value = self.visit(expr.operand)
-        if isinstance(value, ir.Expr):
+        if isinstance(value, hidet.ir.Node):
             if isinstance(expr.op, Not):
                 # not v
                 return ir.LogicalNot(value)
@@ -772,7 +773,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
             num_loop_vars: int = stmt_iter.num_loop_vars()
             num_targets: int = len(iter_targets)
 
-            if num_targets == num_loop_vars:
+            if num_targets == num_loop_vars > 1 or (num_targets == num_loop_vars == 1 and not stmt_iter.bind_tuple()):
                 for target in iter_targets:
                     loop_vars.append(Var(target.id, type=ir.data_type('int32')))
             elif num_targets == 1:
@@ -793,96 +794,103 @@ class PythonToHidetTranslator(PythonAstFunctor):
                 for s in stmt.body:
                     self.visit(s)
             body = for_scope.flush_stmts()
-            return stmt_iter.generate_loop_statement(loop_vars=loop_vars, body=body)
+            for_stmt = stmt_iter.generate_loop_statement(loop_vars=loop_vars, body=body)
+            self.current_scope.append(for_stmt)
         else:
             msg = (
-                'For loop iterable must be a one of the following types: '
-                '  for ... in range(...): ...'
-                '  for ... in grid(...): ...'
-                '  for ... in task_mapping(...): ...'
+                'For loop iterable must be a one of the following types: \n'
+                '1.\n'
+                '  for ... in range(...): \n'
+                '      ...\n'
+                '2.\n'
+                '  for ... in grid(...): \n'
+                '      ...\n'
+                '3.\n'
+                '  for ... in task_mapping.on(...): \n'
+                '      ...'
             )
             raise HidetProgramError(self, stmt.iter, msg)
 
-        if (
-            isinstance(stmt.iter, Call)
-            and isinstance(stmt.iter.func, Name)
-            and self.visit(stmt.iter.func) is builtins.range
-        ):  # and stmt.iter.func.id == 'range':
-            # case 1:
-            #   for i in range(...):
-            #     ...
-            # Will be translated to a single for loop (i.e., ForStmt).
-            call = stmt.iter
-
-            # get extent
-            if len(call.args) > 1:
-                msg = 'Current we only support range(extent), will add range(start, stop, step) when needed.'
-                raise NotImplementedError(msg)
-            declare_loop_vars(num=1)
-            extent = self.visit(call.args[0])
-            self.current_scope.append(ir.ForStmt(loop_var=loop_vars[0], extent=extent, body=visit_body()))
-        elif (
-            isinstance(stmt.iter, Call)
-            and isinstance(stmt.iter.func, Name)
-            and self.visit(stmt.iter.func) is hidet.lang.grid
-        ):
-            # case 2:
-            #  for i, j in grid(3, 4):
-            #    ...
-            # Will be translated to nested for loops (i.e., ForStmt).
-            call = stmt.iter
-            attr_string: Optional[str] = None
-            for keyword in call.keywords:
-                if keyword.arg == 'attrs':
-                    assert attr_string is None
-                    attr_string = self.visit(keyword.value)
-                else:
-                    raise HidetProgramError(self, call, 'Can not recognize keyword argument: {}.'.format(keyword.arg))
-            extents = [self.visit(arg) for arg in call.args]
-            if len(extents) > 0 and isinstance(extents[-1], str):
-                if attr_string is not None:
-                    raise HidetProgramError(
-                        self, call, 'Can not specify attrs in both positional and keyword arguments.'
-                    )
-                attr_string = extents.pop()
-            if attr_string is None:
-                attrs = [ForStmtAttr() for _ in range(len(call.args))]
-            else:
-                attrs = ForStmtAttr.parse(attr_string)
-            declare_loop_vars(num=len(extents))
-            body = visit_body()
-            for loop_var, extent, attr in zip(reversed(loop_vars), reversed(extents), reversed(attrs)):
-                body = ir.ForStmt(loop_var=loop_var, extent=extent, body=body, attr=attr)
-            self.current_scope.append(body)
-        elif isinstance(stmt.iter, Call) and isinstance(stmt.iter.func, Attribute) and stmt.iter.func.attr == 'on':
-            # case 3:
-            #  for a, b in row_spatial(3, 4).on(thread_x):
-            #    ...
-            # Will be translated to ForTaskStmt
-            if len(stmt.iter.args) != 1:
-                raise HidetProgramError(self, stmt.iter, 'Expect a single expression representing worker index.')
-            worker = ir.convert(self.visit(stmt.iter.args[0]))
-            mapping = self.visit(stmt.iter.func.value)
-            if not isinstance(mapping, ir.TaskMapping):
-                raise HidetProgramError(self, stmt.iter.func.value, 'Expect task mapping here.')
-            declare_loop_vars(num=len(mapping.task_shape))
-            self.current_scope.append(
-                ir.ForMappingStmt(loop_vars=loop_vars, mapping=mapping, worker=worker, body=visit_body())
-            )
-        else:
-            msg = (
-                'Cannot recognize the for loop statement. Currently, we support two types of for loop statements:\n'
-                '  for i in range(extent):\n'
-                '    body(i)\n'
-                'and\n'
-                '  for i, j in mapping.on(worker):\n'
-                '    body(i, j)\n'
-                '  (here the mapping can be arbitrary task mapping, or their composition with arbitrary dimensions).'
-            )
-            raise HidetProgramError(self, stmt.iter, msg)
-
-        if len(stmt.orelse) > 0:
-            raise HidetProgramError(self, stmt.orelse[0], 'Hidet does not support else clause in for loop.')
+        # if (
+        #     isinstance(stmt.iter, Call)
+        #     and isinstance(stmt.iter.func, Name)
+        #     and self.visit(stmt.iter.func) is builtins.range
+        # ):  # and stmt.iter.func.id == 'range':
+        #     # case 1:
+        #     #   for i in range(...):
+        #     #     ...
+        #     # Will be translated to a single for loop (i.e., ForStmt).
+        #     call = stmt.iter
+        #
+        #     # get extent
+        #     if len(call.args) > 1:
+        #         msg = 'Current we only support range(extent), will add range(start, stop, step) when needed.'
+        #         raise NotImplementedError(msg)
+        #     declare_loop_vars(num=1)
+        #     extent = self.visit(call.args[0])
+        #     self.current_scope.append(ir.ForStmt(loop_var=loop_vars[0], extent=extent, body=visit_body()))
+        # elif (
+        #     isinstance(stmt.iter, Call)
+        #     and isinstance(stmt.iter.func, Name)
+        #     and self.visit(stmt.iter.func) is hidet.lang.grid
+        # ):
+        #     # case 2:
+        #     #  for i, j in grid(3, 4):
+        #     #    ...
+        #     # Will be translated to nested for loops (i.e., ForStmt).
+        #     call = stmt.iter
+        #     attr_string: Optional[str] = None
+        #     for keyword in call.keywords:
+        #         if keyword.arg == 'attrs':
+        #             assert attr_string is None
+        #             attr_string = self.visit(keyword.value)
+        #         else:
+        #             raise HidetProgramError(self, call, 'Can not recognize keyword argument: {}.'.format(keyword.arg))
+        #     extents = [self.visit(arg) for arg in call.args]
+        #     if len(extents) > 0 and isinstance(extents[-1], str):
+        #         if attr_string is not None:
+        #             raise HidetProgramError(
+        #                 self, call, 'Can not specify attrs in both positional and keyword arguments.'
+        #             )
+        #         attr_string = extents.pop()
+        #     if attr_string is None:
+        #         attrs = [ForStmtAttr() for _ in range(len(call.args))]
+        #     else:
+        #         attrs = ForStmtAttr.parse(attr_string)
+        #     declare_loop_vars(num=len(extents))
+        #     body = visit_body()
+        #     for loop_var, extent, attr in zip(reversed(loop_vars), reversed(extents), reversed(attrs)):
+        #         body = ir.ForStmt(loop_var=loop_var, extent=extent, body=body, attr=attr)
+        #     self.current_scope.append(body)
+        # elif isinstance(stmt.iter, Call) and isinstance(stmt.iter.func, Attribute) and stmt.iter.func.attr == 'on':
+        #     # case 3:
+        #     #  for a, b in row_spatial(3, 4).on(thread_x):
+        #     #    ...
+        #     # Will be translated to ForTaskStmt
+        #     if len(stmt.iter.args) != 1:
+        #         raise HidetProgramError(self, stmt.iter, 'Expect a single expression representing worker index.')
+        #     worker = ir.convert(self.visit(stmt.iter.args[0]))
+        #     mapping = self.visit(stmt.iter.func.value)
+        #     if not isinstance(mapping, ir.TaskMapping):
+        #         raise HidetProgramError(self, stmt.iter.func.value, 'Expect task mapping here.')
+        #     declare_loop_vars(num=len(mapping.task_shape))
+        #     self.current_scope.append(
+        #         ir.ForMappingStmt(loop_vars=loop_vars, mapping=mapping, worker=worker, body=visit_body())
+        #     )
+        # else:
+        #     msg = (
+        #         'Cannot recognize the for loop statement. Currently, we support two types of for loop statements:\n'
+        #         '  for i in range(extent):\n'
+        #         '    body(i)\n'
+        #         'and\n'
+        #         '  for i, j in mapping.on(worker):\n'
+        #         '    body(i, j)\n'
+        #         '  (here the mapping can be arbitrary task mapping, or their composition with arbitrary dimensions).'
+        #     )
+        #     raise HidetProgramError(self, stmt.iter, msg)
+        #
+        # if len(stmt.orelse) > 0:
+        #     raise HidetProgramError(self, stmt.orelse[0], 'Hidet does not support else clause in for loop.')
 
     def visit_AugAssign(self, stmt: AugAssign):
         if isinstance(stmt.target, Name):
@@ -988,21 +996,45 @@ class PythonToHidetTranslator(PythonAstFunctor):
                 return func(*args, **kwargs)
             else:
                 # overload hidet primitive, such as max, min
+                func_map = {
+                    builtins.max: (2, primitives.max),
+                    builtins.min: (2, primitives.min),
+                    math.exp: (1, primitives.exp),
+                    math.log: (1, primitives.log),
+                    math.sqrt: (1, primitives.sqrt),
+                    math.sin: (1, primitives.sin),
+                    math.cos: (1, primitives.cos),
+                    math.tan: (1, primitives.tan),
+                    math.asin: (1, primitives.asin),
+                    math.acos: (1, primitives.acos),
+                    math.atan: (1, primitives.atan),
+                    math.sinh: (1, primitives.sinh),
+                    math.cosh: (1, primitives.cosh),
+                    math.tanh: (1, primitives.tanh),
+                    math.asinh: (1, primitives.asinh),
+                    math.acosh: (1, primitives.acosh),
+                    math.atanh: (1, primitives.atanh),
+                    math.ceil: (1, primitives.ceil),
+                    math.floor: (1, primitives.floor),
+                    math.trunc: (1, primitives.trunc),
+                    math.isnan: (1, primitives.isnan),
+                    math.isinf: (1, primitives.isinf),
+                }
                 if len(kwargs) > 0:
                     msg = 'Hidet do not support calling builtin function with keyword argument.'
                     raise HidetProgramError(self, expr, msg)
-                if func is builtins.max:
-                    if len(args) != 2:
-                        msg = 'Hidet builtin function "max" takes two arguments.'
+                if func in func_map:
+                    arity, hidet_func = func_map[func]
+                    if len(args) != arity:
+                        msg = f'Hidet builtin function "{func.__name__}" takes {arity} arguments.'
                         raise HidetProgramError(self, expr, msg)
-                    return primitives.max(args[0], args[1])
-                elif func is builtins.min:
-                    if len(args) != 2:
-                        msg = 'Hidet builtin function "min" takes two arguments.'
-                        raise HidetProgramError(self, expr, msg)
-                    return primitives.min(args[0], args[1])
+                    return hidet_func(*args)
                 else:
-                    raise HidetProgramError(self, expr, 'Currently, do not support calling python builtin function.')
+                    raise HidetProgramError(
+                        self,
+                        expr,
+                        'Currently, do not support calling python builtin function "{}".'.format(func.__qualname__)
+                    )
         else:
             return func(*args, **kwargs)
 

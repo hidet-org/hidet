@@ -51,18 +51,20 @@ class ForStmtAttr:
         self.parallel_threads: Optional[int] = parallel_threads
 
     def __str__(self):
-        if self.unroll is None:
-            return '.'
-        elif isinstance(self.unroll, bool):
+        if self.unroll:
             if self.unroll_explicit:
                 return 'u+'
+            elif self.unroll_factor:
+                return f'u{self.unroll_factor}'
             else:
                 return 'u'
-        else:
-            if self.unroll_explicit:
-                return f'u{self.unroll}+'
+        elif self.parallel:
+            if self.parallel_threads:
+                return f'p{self.parallel_threads}'
             else:
-                return f'u{self.unroll}'
+                return 'p'
+        else:
+            return '.'
 
     @staticmethod
     def from_extent(extent: Union[int, Expr]):
