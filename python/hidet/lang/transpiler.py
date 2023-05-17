@@ -56,7 +56,7 @@ from hidet.lang.constructs.type import TypeDecorator
 
 class HidetProgramError(Exception):
     def __init__(self, translator: PythonAstFunctor, obj, msg: str):
-        super().__init__()
+        super().__init__(translator, obj, msg)  # make this exception picklable
         assert isinstance(obj, ast.AST)
         self.file = translator.file
         self.lineno = translator.start_lineno + obj.lineno

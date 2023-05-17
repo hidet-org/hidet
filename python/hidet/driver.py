@@ -131,11 +131,11 @@ def _build_task_job(args):
         option.restore_options(dumped_options)
         build_task(task, target_device, load=False)
         return True
-    except CompilationFailed as e:
+    except Exception as e:
         if option.get_option('parallel_build'):
             return False
         else:
-            raise e
+            raise
 
 
 def _lazy_initialize_cuda():
@@ -184,7 +184,7 @@ def build_task_batch(task_device_pairs: List[Tuple[Task, Device]], raise_on_erro
         msg = ['Failed to build {} tasks:'.format(sum(1 for s in status_list if not s))]
         for (task, device), status in zip(task_device_pairs, status_list):
             if not status:
-                msg.append(f'  [{device}] {task.signature()}')
+                msg.append(f'  [{device.type}] {task.signature()}')
         msg.append('Please turn off parallel build to see the error message:')
         msg.append('  hidet.option.parallel_build(False)')
         raise RuntimeError('\n'.join(msg))
