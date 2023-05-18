@@ -79,7 +79,7 @@ class Tensor:
     def __init__(self, shape, dtype, device, storage, layout=None, trace=None):
         from hidet.graph.operator import Operator
 
-        self._shape: List[Union[SizeVar, int]] = [_simplify_dim(dim) for dim in shape]
+        self._shape: Tuple[Union[Expr, int], ...] = tuple(_simplify_dim(dim) for dim in shape)
         self._dtype: DataType = data_type(dtype)
         self._device: Device = instantiate_device(device)
         self._storage: Optional[Storage] = storage
@@ -87,7 +87,7 @@ class Tensor:
         self._trace: Optional[Tuple[Operator, int]] = trace
 
     @property
-    def shape(self) -> Tuple[Union[int, SizeVar], ...]:
+    def shape(self) -> Tuple[Union[int, Expr], ...]:
         """
         The shape of the tensor.
 
@@ -98,7 +98,7 @@ class Tensor:
         shape: Tuple[int, ...]
             The shape of the tensor.
         """
-        return tuple(self._shape)
+        return self._shape
 
     @property
     def dtype(self) -> DataType:
@@ -290,10 +290,7 @@ class Tensor:
 
         return greater(self, utils.convert_to_tensor(other, self))
 
-    # def __eq__(self, other):
-    #     from .ops import equal, utils
-    #
-    #     return equal(self, utils.convert_to_tensor(other, self))
+    # we do not define __eq__ method for Tensor
 
     def __ne__(self, other):
         from .ops import not_equal, utils

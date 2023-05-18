@@ -98,21 +98,10 @@ class Operator:
             remap: Dict[Var, Constant] = {}
             for i, (a, b) in enumerate(zip(self.task.inputs, self.inputs)):
                 for d1, d2 in zip(a.type.shape, b.shape):
-                    if isinstance(d2, int) and isinstance(d1, Var):
-                        if d1 in remap:
-                            assert int(remap[d1]) == d2
-                            continue
-                        remap[d1] = int32(d2)
+                    if isinstance(d1, Var) and not (d1 in remap and isinstance(remap[d1], Constant)):
+                        remap[d1] = d2
             for i, output_type in enumerate(output_types):
-                symbol_shape = [simplify(rewrite(d, remap)) for d in output_type.shape]
-                shape = []
-                for idx, d in enumerate(symbol_shape):
-                    if isinstance(d, Constant):
-                        shape.append(int(d))
-                    elif isinstance(d, SizeVar):
-                        shape.append(d)
-                    else:
-                        shape.append(SizeVar('d{}'.format(idx)))
+                shape = [simplify(rewrite(d, remap)) for d in output_type.shape]
                 outputs.append(
                     Tensor(shape=shape, dtype=output_type.dtype.name, device=self.device, storage=None, trace=(self, i))
                 )
@@ -125,29 +114,22 @@ class Operator:
             outputs = self.outputs
         return outputs[idx]
 
-    def _imperative_run_prepare_outputs(self, inputs: List[Tensor], shape_map: Dict[SizeVar, int]) -> List[Tensor]:
-        from hidet.ir.tools import rewrite, collect, simplify_to_int
-
-        if len(inputs) != len(self.task.inputs):
-            raise RuntimeError(
-                'The number of inputs does not match. Expected: {}, Actual: {}'.format(
-                    len(self.task.inputs), len(inputs)
-                )
-            )
+    def _imperative_run_prepare_outputs(self, shape_map: Dict[SizeVar, int]) -> List[Tensor]:
+        from hidet.ir.tools import simplify
 
         # get the mapping from size var to the actual size
-        symbolic_output_shapes: Tuple[Tuple[Expr, ...], ...] = tuple(
-            tuple(d for d in output.type.shape) for output in self.task.outputs
-        )
-        size_vars: List[SizeVar] = collect(symbolic_output_shapes, SizeVar)
-        remap: Dict[SizeVar, Constant] = {}
-        for v in size_vars:
-            if v not in shape_map:
-                raise RuntimeError('The size variable {} is not bound when executing "{}"'.format(v, self.name))
-            remap[v] = int32(shape_map[v])
+        symbolic_shapes = tuple(tuple(d for d in output.type.shape) for output in self.task.outputs)
+        output_shapes = simplify(symbolic_shapes, {k: int32(v) for k, v in shape_map.items()})
+
+        # check if all the output shapes are constant
+        for shape in output_shapes:
+            for d in shape:
+                if isinstance(d, Constant):
+                    raise RuntimeError(
+                        'The output shape "{}" of "{}" can not be reduced to a constant'.format(d, self.name)
+                    )
 
         # create the output tensors
-        output_shapes = [[simplify_to_int(rewrite(d, remap)) for d in shape] for shape in symbolic_output_shapes]
         output_dtypes: List[DataType] = [output.type.dtype for output in self.task.outputs]
         outputs: List[Tensor] = [
             empty(shape=shape, dtype=dtype, device=self.device) for shape, dtype in zip(output_shapes, output_dtypes)
@@ -156,7 +138,7 @@ class Operator:
         return outputs
 
     def imperative_run(self, inputs: List[Tensor], shape_map: Dict[SizeVar, int]) -> List[Tensor]:
-        outputs = self._imperative_run_prepare_outputs(inputs, shape_map)
+        outputs = self._imperative_run_prepare_outputs(shape_map)
 
         tensor_map = {param: input_tensor for param, input_tensor in zip(self.task.tensor_params, inputs + outputs)}
 

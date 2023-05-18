@@ -169,7 +169,7 @@ class Simplifier(StmtRewriter, ExprRewriter, BaseRewriter):
                 return ForStmt(loop_var, extent, body=body, attr=stmt.attr)
 
 
-def simplify(node: Union[Stmt, Expr, int, float], repeat_limit=10):
+def simplify(node: Union[Stmt, Expr, int, float, list, tuple], repeat_limit=10):
     if isinstance(node, (int, float)):
         return node
     simplifier = Simplifier()
