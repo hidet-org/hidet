@@ -603,11 +603,11 @@ class CUDACodegen(Codegen):
 
         # launch bound for grid worker
         if func.kind == 'cuda_kernel':
-            block_dim = func.attrs['cuda_block_dim']
+            block_dim = func.attrs['cuda.block_dim']
             if isinstance(block_dim, list):
                 block_dim = prod(block_dim)
-            if 'cuda_min_blocks' in func.attrs:
-                min_blocks = func.attrs['cuda_min_blocks']
+            if 'cuda.min_blocks' in func.attrs:
+                min_blocks = func.attrs['cuda.min_blocks']
                 doc += f' __launch_bounds__({block_dim}, {min_blocks})'
             else:
                 doc += f' __launch_bounds__({block_dim})'

@@ -131,7 +131,7 @@ def _build_task_job(args):
         option.restore_options(dumped_options)
         build_task(task, target_device, load=False)
         return True
-    except Exception as e:
+    except Exception:  # pylint: disable=broad-except
         if option.get_option('parallel_build'):
             return False
         else:

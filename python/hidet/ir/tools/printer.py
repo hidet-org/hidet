@@ -186,7 +186,7 @@ class IRPrinter(IRFunctor):
         if self.ir_module and func_name in self.ir_module.functions:
             func = self.ir_module.functions[func_name]
             if func.kind == 'cuda_kernel':
-                doc += '<<<' + self(func.attrs['cuda_grid_dim']) + ', ' + self(func.attrs['cuda_block_dim']) + '>>>'
+                doc += '<<<' + self(func.attrs['cuda.grid_dim']) + ', ' + self(func.attrs['cuda.block_dim']) + '>>>'
         # params
         doc += '(' + self(e.args) + ')'
         return doc

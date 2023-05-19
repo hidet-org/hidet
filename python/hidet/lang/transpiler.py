@@ -387,11 +387,12 @@ class PythonToHidetTranslator(PythonAstFunctor):
                 indices = [indices]
             self.current_scope.append(ir.BufferStoreStmt(buf=base, indices=indices, value=rhs))
         elif isinstance(lhs, Attribute):
-            # example: attr.cuda_block_dim = 16, 16
+            # example: attr.cuda.block_dim = 16, 16
             lhs_base = self.visit(lhs.value)
-            if lhs_base is hidet.lang.attrs:
-                attr_name = lhs.attr
-                if attr_name in ['cuda_block_dim', 'cuda_grid_dim', 'cuda_dynamic_smem_bytes']:
+            namespace = {hidet.lang.attrs: '', hidet.lang.attrs.cuda: 'cuda.'}
+            if lhs_base in namespace:
+                attr_name = namespace[lhs_base] + lhs.attr
+                if attr_name in ['cuda.block_dim', 'cuda.grid_dim', 'cuda.dynamic_smem_bytes']:
                     if isinstance(rhs, (tuple, list)):
                         rhs = [simplify(v) for v in rhs]
                     else:
@@ -489,10 +490,10 @@ class PythonToHidetTranslator(PythonAstFunctor):
             func_attrs: Dict[str, Any] = scope.attributes.copy()
             if 'func_kind' in func_attrs:
                 func_kind = func_attrs['func_kind']
-            elif 'cuda_grid_dim' in func_attrs or 'cuda_block_dim' in func_attrs:
-                if not all(name in func_attrs for name in ['cuda_grid_dim', 'cuda_block_dim']):
+            elif 'cuda.grid_dim' in func_attrs or 'cuda.block_dim' in func_attrs:
+                if not all(name in func_attrs for name in ['cuda.grid_dim', 'cuda.block_dim']):
                     raise HidetProgramError(
-                        self, func_def, 'CUDA kernel expects to have both attrs.cuda_grid_dim and attrs.cuda_block_dim.'
+                        self, func_def, 'CUDA kernel expects to have both attrs.cuda.grid_dim and attrs.cuda.block_dim.'
                     )
                 func_kind = 'cuda_kernel'
             else:

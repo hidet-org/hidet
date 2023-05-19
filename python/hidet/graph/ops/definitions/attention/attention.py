@@ -461,7 +461,7 @@ class AttnTask(Task):
                 # Reduce mij
                 rv[0] = acc_dtype.min_value
                 rv[1] = acc_dtype.min_value
-                wi, wj, _ = spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id)[0]
+                wi, wj, _ = spatial(warp_count_m, warp_count_n, warp_count_k).map(warp_id)
                 c_map = repeat(2, 1) * spatial(8, 4)
                 for mma_i in range(mmas_per_warp_m):
                     rv[0] = acc_dtype.min_value

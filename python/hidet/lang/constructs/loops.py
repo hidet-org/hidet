@@ -1,3 +1,14 @@
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 from typing import List, Optional, Sequence, Union
 import itertools
 import builtins
@@ -33,7 +44,7 @@ class TaskMappingLoopIterable(HidetLoopIterable):
         self.worker: Expr = worker
 
     def __iter__(self):
-        raise NotImplementedError("TaskMappingLoopIterable is not iterable for now.")
+        return iter(self.task_mapping.worker2task(self.worker))
 
     def generate_loop_statement(self, loop_vars: List[Var], body: Stmt) -> Stmt:
         assert len(loop_vars) == len(self.task_mapping.task_shape)
@@ -86,6 +97,27 @@ class RangeLoopIterable(HidetLoopIterable):
 def grid(*dim_extents, attrs: Optional[str] = None):
     """
     Iterate over the grid.
+
+    Usage 1: specify the grid dimensions with positional arguments.
+      for i, j in grid(2, 3):
+          printf("%d %d\n", i, j)
+
+      for indices in grid(2, 3):
+          printf("%d %d\n", indices[0], indices[1])
+
+      for i in grid(2):
+          printf("%d\n", i)
+
+    Usage 2: specify the grid dimensions with a list or tuple.
+      for indices in grid([2, 3]):
+          printf("%d %d\n", indices[0], indices[1])
+
+      for indices in grid([2]):  # indices is a tuple with one element
+          printf("%d %d\n", indices[0])
+
+    Usage 3: specify the loop attribute
+      for i, j in grid(2, 3, attrs='up'):   # loop i is unrolled while loop j is parallelized
+          printf("%d %d\n", i, j)
 
     Parameters
     ----------

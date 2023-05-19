@@ -26,16 +26,6 @@ def check_func_name(name: str):
 
 
 class Function(Node):
-    valid_attrs = [
-        'kind',
-        'packed_func',
-        'label',
-        'kind',
-        'cuda_grid_dim',
-        'cuda_block_dim',
-        'cuda_dynamic_smem_bytes',
-        'cuda_min_blocks',
-    ]
     """
     Valid Attrs:
         'kind': str, candidates: 'cuda_device', 'cuda_kernel', 'host_kernel', 'packed_func'
@@ -44,13 +34,13 @@ class Function(Node):
                 - 'cuda_kernel': this is a cuda kernel function
                 - 'host_kernel': this is a cpu kernel function
                 - 'packed_func': this is a packed function that wraps kernel function(s)
-        'cuda_grid_dim': Union[int, List[int]]
+        'cuda.grid_dim': Union[int, List[int]]
             the grid dimension in cuda launch configuration
-        'cuda_block_dim': Union[int, List[int]]
+        'cuda.block_dim': Union[int, List[int]]
             the block dimension in cuda launch configuration
-        'cuda_dynamic_smem_bytes': int
+        'cuda.dynamic_smem_bytes': int
             the dynamic shared memory in cuda launch configuration
-        'cuda_min_blocks': int
+        'cuda.min_blocks': int
             the minimal number of thread blocks in launch bound of cuda kernel function
         'packed_func': Var
             the var of target function that this packed_func has packed. valid when attrs['kind'] == 'packed_func'

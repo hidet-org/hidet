@@ -11,6 +11,7 @@
 # limitations under the License.
 from typing import List
 import numpy as np
+import numpy.testing
 import pytest
 import hidet
 from hidet import int32
@@ -82,3 +83,50 @@ def test_tuple_as_index():
 
     expected = np.array([[0, 1, 2], [3, 4, 5]])
     assert np.all(run(kernel, [2, 3]).numpy() == expected)
+
+
+def demo_softmax(shape: List[int], axis: int):
+    from hidet.lang import f32
+    from hidet.lang import attrs
+    from hidet.lang import tensor
+    from hidet.lang import grid
+    import math
+
+    with hidet.script_module() as script_module:
+
+        @hidet.script
+        def kernel(x: f32[shape], y: f32[shape]):
+            attrs.func_kind = 'host_kernel'
+            spatial_shape = shape[:axis] + shape[axis + 1 :]
+            reduce_extent = shape[axis]
+
+            max_value = tensor('default', f32, shape=spatial_shape)  # max(x, axis)
+            exp_value = tensor('default', f32, shape=shape)  # exp(x - max)
+            sum_value = tensor('default', f32, shape=spatial_shape)  # sum(exp(x - max), axis)
+
+            # max value
+            for indices in grid(spatial_shape):
+                max_value[indices] = -1e10
+                for k in range(reduce_extent):
+                    max_value[indices] = max(max_value[indices], x[indices[:axis] + (k,) + indices[axis:]])
+
+            # exp(x - max)
+            for indices in grid(shape):
+                exp_value[indices] = math.exp(x[indices] - max_value[indices[:axis] + indices[axis + 1 :]])
+
+            # sum(exp(x - max))
+            for indices in grid(spatial_shape):
+                sum_value[indices] = 0.0
+                for k in range(reduce_extent):
+                    sum_value[indices] += exp_value[indices[:axis] + (k,) + indices[axis:]]
+
+            # exp(x - max) / sum(exp(x - max))
+            for indices in grid(shape):
+                y[indices] = exp_value[indices] / sum_value[indices[:axis] + indices[axis + 1 :]]
+
+    func = script_module.build()
+    x = hidet.randn(shape)
+    y1 = hidet.ops.softmax(x, axis)
+    y2 = hidet.empty(shape)
+    func(x, y2)
+    numpy.testing.assert_allclose(y1.numpy(), y2.numpy(), rtol=1e-5, atol=1e-5)
