@@ -727,7 +727,8 @@ def tensor_element(base: Expr, indices: Sequence[Int], protected=False):
     return TensorElement(base, indices, protected)
 
 
-def _chain_binary_op(op, operands, default):
+def _chain_binary_op(op: Type[BinaryExpr], operands, default):
+    # pylint: disable=protected-access
     if len(operands) == 0:
         return convert(default)
     elif len(operands) == 1:
@@ -735,7 +736,7 @@ def _chain_binary_op(op, operands, default):
     else:
         a = _chain_binary_op(op, operands[:-1], default)
         b = convert(operands[-1])
-        return op(a, b)
+        return Expr._binary(op, a, b)
 
 
 def logical_and(*args: Union[Expr, bool]) -> LogicalAnd:
@@ -746,45 +747,46 @@ def logical_or(*args: Union[Expr, bool]) -> LogicalOr:
     return _chain_binary_op(LogicalOr, args, False)
 
 
-def logical_not(a: Union[Expr, PyScalar]) -> LogicalNot:
+def logical_not(a: Union[Expr, PyScalar]):
+    # pylint: disable=protected-access
     a = convert(a)
-    return LogicalNot(a)
+    return Expr._unary(LogicalNot, a)
 
 
-def equal(a: Union[Expr, PyScalar], b: Union[Expr, PyScalar]) -> Equal:
-    a = convert(a)
-    b = convert(b)
-    return Equal(a, b)
-
-
-def less_than(a: Union[Expr, PyScalar], b: Union[Expr, PyScalar]) -> LessThan:
+def equal(a: Union[Expr, PyScalar], b: Union[Expr, PyScalar]):
     a = convert(a)
     b = convert(b)
-    return LessThan(a, b)
+    return a == b
 
 
-def less_equal(a: Union[Expr, PyScalar], b: Union[Expr, PyScalar]) -> LessEqual:
+def less_than(a: Union[Expr, PyScalar], b: Union[Expr, PyScalar]):
     a = convert(a)
     b = convert(b)
-    return LessEqual(a, b)
+    return a < b
 
 
-def not_equal(a: Union[Expr, PyScalar], b: Union[Expr, PyScalar]) -> NotEqual:
+def less_equal(a: Union[Expr, PyScalar], b: Union[Expr, PyScalar]):
     a = convert(a)
     b = convert(b)
-    return NotEqual(a, b)
+    return a <= b
+
+
+def not_equal(a: Union[Expr, PyScalar], b: Union[Expr, PyScalar]):
+    a = convert(a)
+    b = convert(b)
+    return a != b
 
 
 def left_shift(a: Union[Expr, int], b: Union[Expr, int]) -> LeftShift:
     a = convert(a)
     b = convert(b)
-    return LeftShift(a, b)
+    return a << b
 
 
 def right_shift(a: Union[Expr, int], b: Union[Expr, int]) -> RightShift:
     a = convert(a)
     b = convert(b)
-    return RightShift(a, b)
+    return a >> b
 
 
 def bitwise_and(*args: Union[Expr, int]) -> BitwiseAnd:

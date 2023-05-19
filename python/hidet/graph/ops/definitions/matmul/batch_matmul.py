@@ -14,9 +14,8 @@ import hidet
 from hidet.ir import IRModule
 from hidet.ir.compute import reduce
 from hidet.ir.layout import DataLayout, StridesLayout, data_layout
-from hidet.ir.mapping import TaskMapping
 from hidet.ir.type import data_type, TensorType, DataType
-from hidet.lang import i32, spatial, repeat, tensor, attr, grid, tensor_pointer
+from hidet.lang import i32, spatial, repeat, tensor, attrs, grid, tensor_pointer
 from hidet.lang.cuda import blockIdx, threadIdx, syncthreads
 from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, TensorNode, compute
 from hidet.graph.ops.definitions.utils import input_like, tune, schedule_utils
@@ -83,13 +82,7 @@ class BatchMatmulTask(Task):
     @tune.space(1, 'warp_mid', [spatial(4, 8)])
     @tune.space(1, 'warp_inner', [(4, 4), (4, 8), (8, 4)])
     def schedule_simt(
-        self,
-        block_warps_k=8,
-        block_warps=(4, 2),
-        warp_outer=(2, 2),
-        atom_layout=TaskMapping.row_major([4, 8]),
-        warp_mid=spatial(4, 8),
-        warp_inner=(4, 4),
+        self, block_warps_k=8, block_warps=(4, 2), warp_outer=(2, 2), warp_mid=spatial(4, 8), warp_inner=(4, 4)
     ) -> IRModule:
         task = self
         local_layout = DataLayout.local
@@ -294,10 +287,10 @@ class BatchMatmulTask(Task):
             def batch_matmul_kernel(
                 a: dtype[bs, m_size, k_size], b: dtype[bs, k_size, n_size], c: dtype[bs, m_size, n_size]
             ):
-                attr.cuda_grid_dim = (m_tiles * n_tiles, bs)
-                attr.cuda_block_dim = block_size
-                attr.cuda_dynamic_smem_bytes = cuda_dynamic_smem_bytes
-                attr.cuda_min_blocks = min_thread_blocks
+                attrs.cuda.grid_dim = (m_tiles * n_tiles, bs)
+                attrs.cuda.block_dim = block_size
+                attrs.cuda.dynamic_smem_bytes = cuda_dynamic_smem_bytes
+                attrs.cuda.min_blocks = min_thread_blocks
 
                 offset_m, offset_n = blockIdx.x // n_tiles * block_m, blockIdx.x % n_tiles * block_n
 
@@ -612,8 +605,8 @@ class BatchMatmulTask(Task):
                 b: input_b_dtype[bs, k_size, n_size],
                 c: input_c_dtype[bs, m_size, n_size],
             ):
-                attr.cuda_grid_dim = (m_tiles * n_tiles, bs)
-                attr.cuda_block_dim = block_size
+                attrs.cuda.grid_dim = (m_tiles * n_tiles, bs)
+                attrs.cuda.block_dim = block_size
 
                 gmem_a = a[blockIdx.y, :, :]
                 gmem_b = b[blockIdx.y, :, :]

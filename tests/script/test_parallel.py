@@ -15,13 +15,13 @@ import hidet
 
 
 def test_parallel():
-    from hidet.lang import printf, attr, grid, repeat, tensor
+    from hidet.lang import printf, attrs, grid, repeat, tensor
 
     with hidet.script_module() as script_module:
 
         @hidet.script
         def example():
-            attr.func_kind = 'host_kernel'
+            attrs.func_kind = 'host_kernel'
             a = tensor('global', 'float32', shape=[10])
 
             for i in grid(10, attrs='p'):  # unroll
@@ -59,14 +59,14 @@ def test_parallel():
 
 
 def matmul(m_size, n_size, k_size):
-    from hidet.lang import grid, attr, f32
+    from hidet.lang import grid, attrs, f32
     from hidet.lang.mapping import spatial
 
     with hidet.script_module() as script_module:
 
         @hidet.script
         def matmul(a: f32[m_size, k_size], b: f32[k_size, n_size], c: f32[m_size, n_size]):
-            attr.func_kind = 'host_kernel'
+            attrs.func_kind = 'host_kernel'
             ij_size = m_size * n_size
             for ij in grid(ij_size, 'p'):
                 for i, j in spatial(m_size, n_size).on(ij):

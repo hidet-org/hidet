@@ -17,11 +17,15 @@ from hidet.ir.layout import DataLayout
 from hidet.ir.primitives import printf
 from hidet.lang.script import script, script_module
 from hidet.ir.stmt import asm, DeclareScope
+from hidet.ir.stmt import ForStmtAttr
+from hidet.ir.expr import deref
 from hidet.ir.func import Function
-from hidet.lang.type_utils import static, with_scope
 from hidet.ir.dtypes import int8, int16, int32, int64, uint8, uint16, uint32, uint64, float16, float32, float64, boolean
 from hidet.ir.dtypes import i8, i16, i32, i64, u8, u16, u32, u64, f16, f32, f64
 from hidet.ir.dtypes import bfloat16, tfloat32, bf16, tf32
+
+from hidet.lang.constructs.loops import range, grid
+from hidet.lang.constructs.type import tensor, tensor_pointer, as_tensor_pointer, register_tensor, shared_tensor
 
 
 ref_u32 = ReferenceType(u32)
@@ -32,71 +36,14 @@ void = VoidType()
 spatial = row_spatial
 repeat = row_repeat
 
-
-ConstExpr = Union[Expr, int]
-
-
-def tensor(
-    scope: Union[DeclareScope, str],
-    dtype: Union[DataType, str],
-    shape: Optional[Sequence[ConstExpr]] = None,
-    layout: Optional[DataLayout] = None,
-):
-    from hidet.ir.type import tensor_type
-
-    return with_scope(scope, tensor_type(dtype, shape, layout))
-
-
-def tensor_pointer(
-    dtype: Union[DataType, str], shape: Optional[Sequence[ConstExpr]] = None, layout: Optional[DataLayout] = None
-):
-    # pylint: disable=import-outside-toplevel
-    from hidet.ir.type import tensor_type
-
-    return ~tensor_type(dtype, shape, layout)
-
-
-def as_tensor_pointer(
-    expr: Expr,
-    dtype: Union[DataType, str],
-    shape: Optional[Sequence[ConstExpr]] = None,
-    layout: Optional[DataLayout] = None,
-) -> Expr:
-    return cast(expr, tensor_pointer(dtype, shape, layout))
-
-
-def grid(*dim_extents, attrs: Optional[str] = None):
-    """
-    Iterate over the grid.
-
-    Parameters
-    ----------
-    dim_extents: Sequence[Expr or int or str]
-        The length of each dimension. The last one can be the attrs.
-
-    attrs: Optional[str]
-        The attributes of each loop. See hidet.stmt.ForStmtAttr for more information.
-
-    Returns
-    -------
-    indices: Sequence[Tuple[Expr, ...]]
-        The sequence of indices in the grid to be iterated.
-    """
-    raise ValueError('Please call this function within the @hidet.script decorated function.')
-
-
-def deref(addr: Expr):
-    return Dereference(addr)
-
-
-def var_of_function(func: Function) -> Var:
-    # pylint: disable=import-outside-toplevel
-    from hidet.lang.script import ScriptModuleContext
-
-    if not isinstance(func, Function):
-        raise ValueError('Expect a hidet.ir.Function, got {}.'.format(type(func).__name__))
-    ctx = ScriptModuleContext.current_context()
-    func_var: Optional[Var] = ctx.lookup(func.name)
-    if func_var is None:
-        raise ValueError('Function has not been defined in current script module.')
-    return func_var
+# def var_of_function(func: Function) -> Var:
+#     # pylint: disable=import-outside-toplevel
+#     from hidet.lang.script import ScriptModuleContext
+#
+#     if not isinstance(func, Function):
+#         raise ValueError('Expect a hidet.ir.Function, got {}.'.format(type(func).__name__))
+#     ctx = ScriptModuleContext.current_context()
+#     func_var: Optional[Var] = ctx.lookup(func.name)
+#     if func_var is None:
+#         raise ValueError('Function has not been defined in current script module.')
+#     return func_var

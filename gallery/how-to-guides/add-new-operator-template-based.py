@@ -74,7 +74,7 @@ class BatchMatmulFp16Task(Task):
 
 
 def batch_matmul_mma_fp16_schedule(task: BatchMatmulFp16Task) -> IRModule:
-    from hidet.lang import f16, spatial, repeat, tensor, attr, grid, printf, cast
+    from hidet.lang import f16, spatial, repeat, tensor, attrs, grid, printf, cast
     from hidet.lang.mapping import repeat, spatial
     from hidet.lang.cuda import blockIdx, threadIdx, syncthreads
     from hidet.lang.cuda import MmaConfig, mma_sync
@@ -172,12 +172,12 @@ def batch_matmul_mma_fp16_schedule(task: BatchMatmulFp16Task) -> IRModule:
             c: f16[bs, m_size, n_size],
         ):
             """Batch matrix multiplication kernel."""
-            attr.cuda_grid_dim = (
+            attrs.cuda.grid_dim = (
                 (m_size + block_m - 1) // block_m,
                 (n_size + block_n - 1) // block_n,
                 bs,
             )
-            attr.cuda_block_dim = threads
+            attrs.cuda.block_dim = threads
             offset_m, offset_n = blockIdx.x * block_m, blockIdx.y * block_n
             smem_a = tensor('shared', 'float16', [block_m, block_k])
             smem_b = tensor('shared', 'float16', [block_k, block_n])

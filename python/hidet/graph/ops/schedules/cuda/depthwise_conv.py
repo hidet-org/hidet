@@ -161,7 +161,7 @@ def schedule_depthwise_conv2d_kernel(
     stride_width: int,
     stride_height: int,
 ) -> IRModule:
-    from hidet.lang import f32, tensor, attr, grid
+    from hidet.lang import f32, tensor, attrs, grid
     from hidet.lang.mapping import spatial, repeat
     from hidet.lang.cuda import threadIdx, blockIdx, syncthreads
 
@@ -192,9 +192,9 @@ def schedule_depthwise_conv2d_kernel(
             gmem_w: f32[channels, 1, kernel_height, kernel_width],
             gmem_y: f32[batch_size, channels, height, width],
         ):
-            attr.func_name = func_name
-            attr.cuda_grid_dim = sch.blocks
-            attr.cuda_block_dim = sch.threads
+            attrs.func_name = func_name
+            attrs.cuda.grid_dim = sch.blocks
+            attrs.cuda.block_dim = sch.threads
 
             smem_x = tensor(
                 'shared',

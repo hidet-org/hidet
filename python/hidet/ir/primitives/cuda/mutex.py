@@ -19,13 +19,13 @@ from hidet.utils import initialize
 
 @initialize()
 def register_functions():
-    from hidet.lang import script, i32, attr
+    from hidet.lang import script, i32, attrs
     from hidet.lang.cuda import syncthreads_and, threadIdx, atomic_cas, syncthreads
 
     @script
     def cuda_acquire_lock(mutex_lock: ~i32):
-        attr.func_kind = 'cuda_device'
-        attr.func_name = 'cuda_acquire_lock'
+        attrs.func_kind = 'cuda_device'
+        attrs.func_name = 'cuda_acquire_lock'
         status: i32 = 1
         while syncthreads_and(status == 1):
             if threadIdx.x == 0:
@@ -36,8 +36,8 @@ def register_functions():
 
     @script
     def cuda_release_lock(mutex_lock: ~i32):
-        attr.func_kind = 'cuda_device'
-        attr.func_name = 'cuda_release_lock'
+        attrs.func_kind = 'cuda_device'
+        attrs.func_name = 'cuda_release_lock'
         syncthreads()
         if threadIdx.x == 0:
             atomic_cas(mutex_lock, 1, 0)
@@ -47,8 +47,8 @@ def register_functions():
 
     @script
     def cuda_acquire_seq_semaphore(semaphore: ~i32, expect_status: i32):
-        attr.func_kind = 'cuda_device'
-        attr.func_name = 'cuda_acquire_seq_semaphore'
+        attrs.func_kind = 'cuda_device'
+        attrs.func_name = 'cuda_acquire_seq_semaphore'
         actual_status = load(semaphore, space='global', sync='acquire', scope='gpu')
         while syncthreads_and(actual_status != expect_status):
             if threadIdx.x == 0:
@@ -59,8 +59,8 @@ def register_functions():
 
     @script
     def cuda_release_seq_semaphore(semaphore: ~i32, status: i32):
-        attr.func_kind = 'cuda_device'
-        attr.func_name = 'cuda_release_seq_semaphore'
+        attrs.func_kind = 'cuda_device'
+        attrs.func_name = 'cuda_release_seq_semaphore'
         syncthreads()
         if threadIdx.x == 0:
             store(semaphore, status, space='global', sync='release', scope='gpu')

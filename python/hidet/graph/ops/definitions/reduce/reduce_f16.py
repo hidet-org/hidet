@@ -15,7 +15,7 @@ from hidet.ir.primitives import active_mask, shfl_down_sync, shfl_sync
 from hidet.ir.compute import ReduceOperation, reduce
 from hidet.ir.type import data_type
 from hidet.ir.layout import DataLayout
-from hidet.lang import f16, f32, spatial, repeat, attr, tensor_pointer
+from hidet.lang import f16, f32, spatial, repeat, attrs, tensor_pointer
 from hidet.lang.cuda import blockIdx, threadIdx, register_tensor
 from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, TensorNode, ReduceType
 from hidet.graph.ops.definitions.utils import compute, input_like, normalize_dim
@@ -137,9 +137,9 @@ class ReduceF16Task(Task):
 
             @hidet.script
             def reduce_kernel(x: f16[x.const_shape], y: f16[y.const_shape]):
-                attr.cuda_grid_dim = grid_size
-                attr.cuda_block_dim = block_size
-                attr.cuda_min_blocks = 1
+                attrs.cuda.grid_dim = grid_size
+                attrs.cuda.block_dim = block_size
+                attrs.cuda.min_blocks = 1
 
                 x_f32 = tensor_pointer('float32', shape=shape_32bit)
                 x_f32 = x
@@ -212,9 +212,9 @@ class ReduceF16Task(Task):
             @hidet.script
             def reduce_kernel(x: f16[x.const_shape], y: f16[y.const_shape]):
                 # Each 256-thread ThreadBlock handles 512 columns
-                attr.cuda_grid_dim = grid_size
-                attr.cuda_block_dim = block_size
-                attr.cuda_min_blocks = 1
+                attrs.cuda.grid_dim = grid_size
+                attrs.cuda.block_dim = block_size
+                attrs.cuda.min_blocks = 1
 
                 x_f32 = tensor_pointer('float32', shape=shape_32bit)
                 y_f32 = tensor_pointer('float32', shape=remain_shape_32bit)

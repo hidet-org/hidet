@@ -14,13 +14,13 @@ import hidet
 
 
 def test_unroll():
-    from hidet.lang import printf, attr, grid, repeat
+    from hidet.lang import printf, attrs, grid, repeat
 
     with hidet.script_module() as script_module:
 
         @hidet.script
         def example():
-            attr.func_kind = 'host_kernel'
+            attrs.func_kind = 'host_kernel'
 
             for i in grid(10, attrs='u'):  # unroll
                 printf("i = %d\n", i)

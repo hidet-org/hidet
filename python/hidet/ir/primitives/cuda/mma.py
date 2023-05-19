@@ -254,7 +254,7 @@ def resolve_ldmatrix_func_name(num: int, shared_space_addr: bool = False, trans=
 
 @initialize()
 def register_ldmatrix_instructions():
-    from hidet.lang import script, u32, void_pointer, attr, ref_u32
+    from hidet.lang import script, u32, void_pointer, attrs, ref_u32
 
     for num in [1, 2, 4]:
         for trans in [False, True]:
@@ -271,8 +271,8 @@ def register_ldmatrix_instructions():
 
                     @script
                     def cuda_ldmatrix(reg0: ref_u32, smem: smem_type):
-                        attr.func_name = func_name
-                        attr.func_kind = 'cuda_device'
+                        attrs.func_name = func_name
+                        attrs.func_kind = 'cuda_device'
                         asm(template, outputs=[reg0], inputs=[smem], is_volatile=True)
 
                     assert isinstance(cuda_ldmatrix, Function)
@@ -283,8 +283,8 @@ def register_ldmatrix_instructions():
 
                     @script
                     def cuda_ldmatrix(reg0: ref_u32, reg1: ref_u32, smem: smem_type):
-                        attr.func_name = func_name
-                        attr.func_kind = 'cuda_device'
+                        attrs.func_name = func_name
+                        attrs.func_kind = 'cuda_device'
                         asm(template, outputs=[reg0, reg1], inputs=[smem], is_volatile=True)
 
                     assert isinstance(cuda_ldmatrix, Function)
@@ -294,8 +294,8 @@ def register_ldmatrix_instructions():
 
                     @script
                     def cuda_ldmatrix(reg0: ref_u32, reg1: ref_u32, reg2: ref_u32, reg3: ref_u32, smem: smem_type):
-                        attr.func_name = func_name
-                        attr.func_kind = 'cuda_device'
+                        attrs.func_name = func_name
+                        attrs.func_kind = 'cuda_device'
                         asm(template, outputs=[reg0, reg1, reg2, reg3], inputs=[smem], is_volatile=True)
 
                     assert isinstance(cuda_ldmatrix, Function)

@@ -57,7 +57,7 @@ def resolve_store_inst_name(dtype: str, space: str, sync: Optional[str], scope: 
 
 @initialize()
 def register_functions():
-    from hidet.lang import attr, script, asm  # pylint: disable=import-outside-toplevel
+    from hidet.lang import attrs, script, asm  # pylint: disable=import-outside-toplevel
 
     registered = set()
     for dtype in ['uint8', 'uint16', 'uint32', 'uint64', 'int8', 'int32', 'int64', 'float16', 'float32']:
@@ -72,8 +72,8 @@ def register_functions():
 
                     @script
                     def cuda_load(addr: ~data_type(dtype)) -> data_type(dtype):
-                        attr.func_kind = 'cuda_device'
-                        attr.func_name = func_name
+                        attrs.func_kind = 'cuda_device'
+                        attrs.func_name = func_name
                         template = inst_name + ' %0, [%1];'
                         ret: data_type(dtype) = 0  # define a variable used to store the loaded data
                         asm(template, outputs=[ret], inputs=[addr], is_volatile=True)
@@ -94,8 +94,8 @@ def register_functions():
 
                     @script
                     def cuda_store(addr: ~data_type(dtype), value: data_type(dtype)):
-                        attr.func_kind = 'cuda_device'
-                        attr.func_name = func_name
+                        attrs.func_kind = 'cuda_device'
+                        attrs.func_name = func_name
                         template = inst_name + ' [%0], %1;'
                         asm(template, inputs=[addr, value], is_volatile=True)
 

@@ -12,6 +12,7 @@
 # pylint: disable=import-outside-toplevel, too-many-branches, too-many-locals
 from __future__ import annotations
 import types
+import math
 import builtins
 import operator
 
@@ -28,6 +29,7 @@ from ast import Continue
 from ast import Constant, Num, Str, NameConstant
 from ast import BoolOp, BinOp, UnaryOp, Lambda, IfExp, Compare, Call, Attribute, Subscript, Starred, Name, Tuple, Slice
 from ast import ExtSlice, List
+from ast import ListComp, DictComp, SetComp, GeneratorExp, comprehension
 
 # expr context
 from ast import Load, Store, Del
@@ -43,22 +45,19 @@ from ast import Index
 import astunparse
 from hidet import ir
 from hidet.ir.expr import Var
-from hidet.ir.stmt import DeclareScope, ForStmtAttr
+from hidet.ir.stmt import DeclareScope
 from hidet.ir.tools import simplify
 from hidet.ir.builders import FunctionBuilder
 from hidet.utils import red, bold, blue, str_indent
-import hidet.lang.attr
-from hidet.lang.type_utils import TypeDecorator
+import hidet.lang.attrs
+from hidet.lang.constructs.loops import HidetLoopIterable
+from hidet.lang.constructs.type import TypeDecorator
 
 
 class HidetProgramError(Exception):
-    def __init__(
-        self,
-        translator: PythonAstFunctor,
-        obj: Union[ast.AST, ast.expr, ast.arg, ast.stmt, ast.Attribute, ast.Name, ast.Call],
-        msg: str,
-    ):
-        super().__init__()
+    def __init__(self, translator: PythonAstFunctor, obj, msg: str):
+        super().__init__(translator, obj, msg)  # make this exception picklable
+        assert isinstance(obj, ast.AST)
         self.file = translator.file
         self.lineno = translator.start_lineno + obj.lineno
         self.column = translator.start_column + obj.col_offset
@@ -93,6 +92,12 @@ class HidetProgramError(Exception):
 
 
 class PythonAstFunctor:
+    """
+    A base functor for Python AST nodes.
+
+    Please refers to https://docs.python.org/3/library/ast.html for more details about Python AST.
+    """
+
     def __init__(self, file: str, start_lineno: int, start_column: int):
         self.file: str = file
         self.start_lineno: int = start_lineno
@@ -222,6 +227,18 @@ class PythonAstFunctor:
     def visit_Index(self, expr: Index):
         raise NotImplementedError()
 
+    def visit_ListComp(self, expr: ListComp):
+        raise NotImplementedError()
+
+    def visit_SetComp(self, expr: SetComp):
+        raise NotImplementedError()
+
+    def visit_DictComp(self, expr: DictComp):
+        raise NotImplementedError()
+
+    def visit_GeneratorExp(self, expr: GeneratorExp):
+        raise NotImplementedError()
+
 
 HostTypes = (ir.TaskMapping, ir.DataLayout, float, int, type(None))
 
@@ -233,6 +250,12 @@ class Scope:
         self.name2host_var: Dict[str, Any] = {}
         self.stmts: list[ir.Stmt] = []
         self.attributes: dict[str, Any] = {}
+
+    @staticmethod
+    def default_top_level():
+        scope = Scope(None)
+        scope.define_host_var('range', hidet.lang.constructs.loops.range)
+        return scope
 
     def define_var(self, name: str, v: Var):
         self.name2var[name] = v
@@ -265,13 +288,10 @@ class Scope:
 
 class ScopeStack:
     def __init__(self):
-        self.scopes: list[Scope] = []
+        self.scopes: list[Scope] = [Scope.default_top_level()]
 
     def __enter__(self) -> Scope:
-        if len(self.scopes) == 0:
-            parent = None
-        else:
-            parent = self.scopes[-1]
+        parent = self.scopes[-1]
         scope = Scope(parent)
         self.scopes.append(scope)
         return scope
@@ -301,7 +321,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
     def process_assign(self, lhs: Union[Attribute, Subscript, Name], rhs, type_annotation: Optional[ast.expr] = None):
         # pylint: disable=too-many-locals, too-many-branches, too-many-statements
         # check the rhs value, must be an instance of allowed_types or a list of these kinds of elements.
-        host_var_types = (ir.TaskMapping, ir.DataLayout, ir.TensorSlice, ir.Function, str, list, tuple)
+        host_var_types = (ir.TaskMapping, ir.DataLayout, ir.TensorSlice, ir.Function, str, list, tuple, dict)
         allowed_types = (ir.Expr, ir.TypeNode, TypeDecorator, float, int, str, type(None))
         allowed_types += host_var_types
         assert isinstance(rhs, allowed_types) or (
@@ -367,11 +387,12 @@ class PythonToHidetTranslator(PythonAstFunctor):
                 indices = [indices]
             self.current_scope.append(ir.BufferStoreStmt(buf=base, indices=indices, value=rhs))
         elif isinstance(lhs, Attribute):
-            # example: attr.cuda_block_dim = 16, 16
+            # example: attr.cuda.block_dim = 16, 16
             lhs_base = self.visit(lhs.value)
-            if lhs_base is hidet.lang.attr:
-                attr_name = lhs.attr
-                if attr_name in ['cuda_block_dim', 'cuda_grid_dim', 'cuda_dynamic_smem_bytes']:
+            namespace = {hidet.lang.attrs: '', hidet.lang.attrs.cuda: 'cuda.'}
+            if lhs_base in namespace:
+                attr_name = namespace[lhs_base] + lhs.attr
+                if attr_name in ['cuda.block_dim', 'cuda.grid_dim', 'cuda.dynamic_smem_bytes']:
                     if isinstance(rhs, (tuple, list)):
                         rhs = [simplify(v) for v in rhs]
                     else:
@@ -469,10 +490,10 @@ class PythonToHidetTranslator(PythonAstFunctor):
             func_attrs: Dict[str, Any] = scope.attributes.copy()
             if 'func_kind' in func_attrs:
                 func_kind = func_attrs['func_kind']
-            elif 'cuda_grid_dim' in func_attrs or 'cuda_block_dim' in func_attrs:
-                if not all(name in func_attrs for name in ['cuda_grid_dim', 'cuda_block_dim']):
+            elif 'cuda.grid_dim' in func_attrs or 'cuda.block_dim' in func_attrs:
+                if not all(name in func_attrs for name in ['cuda.grid_dim', 'cuda.block_dim']):
                     raise HidetProgramError(
-                        self, func_def, 'CUDA kernel expects to have both attrs.cuda_grid_dim and attrs.cuda_block_dim.'
+                        self, func_def, 'CUDA kernel expects to have both attrs.cuda.grid_dim and attrs.cuda.block_dim.'
                     )
                 func_kind = 'cuda_kernel'
             else:
@@ -645,28 +666,31 @@ class PythonToHidetTranslator(PythonAstFunctor):
 
     def visit_UnaryOp(self, expr: UnaryOp):
         value = self.visit(expr.operand)
-        if isinstance(expr.op, Not):
-            # not v
-            return ir.LogicalNot(value)
-        elif isinstance(expr.op, Invert):
-            # there are two cases for a ~ operator: ~something
-            # case 1: get the address of an expression
-            # case 2: get the pointer type that points to the given type
-            from hidet.ir.expr import Address
-            from hidet.ir.type import TypeNode
+        if isinstance(value, hidet.ir.Node):
+            if isinstance(expr.op, Not):
+                # not v
+                return ir.LogicalNot(value)
+            elif isinstance(expr.op, Invert):
+                # there are two cases for a ~ operator: ~something
+                # case 1: get the address of an expression
+                # case 2: get the pointer type that points to the given type
+                from hidet.ir.expr import Address
+                from hidet.ir.type import TypeNode
 
-            if isinstance(value, TypeNode):
-                return ~value
+                if isinstance(value, TypeNode):
+                    return ~value
+                else:
+                    return Address(value)
+            elif isinstance(expr.op, UAdd):
+                # +v
+                return value
+            elif isinstance(expr.op, USub):
+                # -v
+                return ir.Neg(value)
             else:
-                return Address(value)
-        elif isinstance(expr.op, UAdd):
-            # +v
-            return value
-        elif isinstance(expr.op, USub):
-            # -v
-            return ir.Neg(value)
+                raise HidetProgramError(self, expr, 'Can not recognize unary operator.')
         else:
-            raise HidetProgramError(self, expr, 'Can not recognize unary operator.')
+            return operator.neg(value)
 
     def visit_If(self, stmt: If):
         cond = self.visit(stmt.test)
@@ -706,10 +730,28 @@ class PythonToHidetTranslator(PythonAstFunctor):
                 raise HidetProgramError(self, stmt, 'For loop target must be a name.')
             iter_targets.append(stmt.target)
 
-        loop_vars: list[Var] = []
-        host_vars: Dict[str, Any] = {}
+        # construct for body
+        stmt_iter = self.visit(stmt.iter)
+        if isinstance(stmt_iter, HidetLoopIterable):
+            loop_vars: list[Var] = []
+            host_vars: Dict[str, Any] = {}
 
-        def visit_body() -> ir.Stmt:
+            num_loop_vars: int = stmt_iter.num_loop_vars()
+            num_targets: int = len(iter_targets)
+
+            if num_targets == num_loop_vars > 1 or (num_targets == num_loop_vars == 1 and not stmt_iter.bind_tuple()):
+                for target in iter_targets:
+                    loop_vars.append(Var(target.id, type=ir.data_type('int32')))
+            elif num_targets == 1:
+                name = iter_targets[0].id
+                for i in range(num_loop_vars):
+                    loop_vars.append(Var(f'{name}{i}', type=ir.data_type('int32')))
+                host_vars[name] = list(loop_vars)
+            else:
+                raise HidetProgramError(
+                    self, stmt, f'Expect {num_loop_vars} loop variables, but got {len(iter_targets)}.'
+                )
+
             with self.scope() as for_scope:
                 for var in loop_vars:
                     for_scope.define_var(name=var.hint, v=var)
@@ -717,111 +759,23 @@ class PythonToHidetTranslator(PythonAstFunctor):
                     for_scope.define_host_var(name, value)
                 for s in stmt.body:
                     self.visit(s)
-            return for_scope.flush_stmts()
-
-        def declare_loop_vars(num: int):
-            p = len(iter_targets)
-            q = num
-
-            # for i_1, ..., i_p in grid(n_1, ..., n_q):
-            #    ...
-            # we mush have either
-            #  1. p == q,
-            #  2. or p == 1 and q > 1
-
-            if p not in (1, q):
-                raise HidetProgramError(self, stmt, f'Expect {num} loop variables, but got {len(iter_targets)}.')
-
-            if p == q:
-                for target in iter_targets:
-                    loop_vars.append(Var(target.id, type=ir.data_type('int32')))
-            else:
-                name = iter_targets[0].id
-                for i in range(q):
-                    loop_vars.append(Var(f'_{name}_{i}', type=ir.data_type('int32')))
-                host_vars[name] = list(loop_vars)
-
-        # construct for body
-        if (
-            isinstance(stmt.iter, Call)
-            and isinstance(stmt.iter.func, Name)
-            and self.visit(stmt.iter.func) is builtins.range
-        ):  # and stmt.iter.func.id == 'range':
-            # case 1:
-            #   for i in range(...):
-            #     ...
-            # Will be translated to a single for loop (i.e., ForStmt).
-            call = stmt.iter
-
-            # get extent
-            if len(call.args) > 1:
-                msg = 'Current we only support range(extent), will add range(start, stop, step) when needed.'
-                raise NotImplementedError(msg)
-            declare_loop_vars(num=1)
-            extent = self.visit(call.args[0])
-            self.current_scope.append(ir.ForStmt(loop_var=loop_vars[0], extent=extent, body=visit_body()))
-        elif (
-            isinstance(stmt.iter, Call)
-            and isinstance(stmt.iter.func, Name)
-            and self.visit(stmt.iter.func) is hidet.lang.grid
-        ):
-            # case 2:
-            #  for i, j in grid(3, 4):
-            #    ...
-            # Will be translated to nested for loops (i.e., ForStmt).
-            call = stmt.iter
-            attr_string: Optional[str] = None
-            for keyword in call.keywords:
-                if keyword.arg == 'attrs':
-                    assert attr_string is None
-                    attr_string = self.visit(keyword.value)
-                else:
-                    raise HidetProgramError(self, call, 'Can not recognize keyword argument: {}.'.format(keyword.arg))
-            extents = [self.visit(arg) for arg in call.args]
-            if len(extents) > 0 and isinstance(extents[-1], str):
-                if attr_string is not None:
-                    raise HidetProgramError(
-                        self, call, 'Can not specify attrs in both positional and keyword arguments.'
-                    )
-                attr_string = extents.pop()
-            if attr_string is None:
-                attrs = [ForStmtAttr() for _ in range(len(call.args))]
-            else:
-                attrs = ForStmtAttr.parse(attr_string)
-            declare_loop_vars(num=len(extents))
-            body = visit_body()
-            for loop_var, extent, attr in zip(reversed(loop_vars), reversed(extents), reversed(attrs)):
-                body = ir.ForStmt(loop_var=loop_var, extent=extent, body=body, attr=attr)
-            self.current_scope.append(body)
-        elif isinstance(stmt.iter, Call) and isinstance(stmt.iter.func, Attribute) and stmt.iter.func.attr == 'on':
-            # case 3:
-            #  for a, b in row_spatial(3, 4).on(thread_x):
-            #    ...
-            # Will be translated to ForTaskStmt
-            if len(stmt.iter.args) != 1:
-                raise HidetProgramError(self, stmt.iter, 'Expect a single expression representing worker index.')
-            worker = ir.convert(self.visit(stmt.iter.args[0]))
-            mapping = self.visit(stmt.iter.func.value)
-            if not isinstance(mapping, ir.TaskMapping):
-                raise HidetProgramError(self, stmt.iter.func.value, 'Expect task mapping here.')
-            declare_loop_vars(num=len(mapping.task_shape))
-            self.current_scope.append(
-                ir.ForMappingStmt(loop_vars=loop_vars, mapping=mapping, worker=worker, body=visit_body())
-            )
+            body = for_scope.flush_stmts()
+            for_stmt = stmt_iter.generate_loop_statement(loop_vars=loop_vars, body=body)
+            self.current_scope.append(for_stmt)
         else:
             msg = (
-                'Cannot recognize the for loop statement. Currently, we support two types of for loop statements:\n'
-                '  for i in range(extent):\n'
-                '    body(i)\n'
-                'and\n'
-                '  for i, j in mapping.on(worker):\n'
-                '    body(i, j)\n'
-                '  (here the mapping can be arbitrary task mapping, or their composition with arbitrary dimensions).'
+                'For loop iterable must be a one of the following types: \n'
+                '1.\n'
+                '  for ... in range(...): \n'
+                '      ...\n'
+                '2.\n'
+                '  for ... in grid(...): \n'
+                '      ...\n'
+                '3.\n'
+                '  for ... in task_mapping.on(...): \n'
+                '      ...'
             )
             raise HidetProgramError(self, stmt.iter, msg)
-
-        if len(stmt.orelse) > 0:
-            raise HidetProgramError(self, stmt.orelse[0], 'Hidet does not support else clause in for loop.')
 
     def visit_AugAssign(self, stmt: AugAssign):
         if isinstance(stmt.target, Name):
@@ -927,21 +881,45 @@ class PythonToHidetTranslator(PythonAstFunctor):
                 return func(*args, **kwargs)
             else:
                 # overload hidet primitive, such as max, min
+                func_map = {
+                    builtins.max: (2, primitives.max),
+                    builtins.min: (2, primitives.min),
+                    math.exp: (1, primitives.exp),
+                    math.log: (1, primitives.log),
+                    math.sqrt: (1, primitives.sqrt),
+                    math.sin: (1, primitives.sin),
+                    math.cos: (1, primitives.cos),
+                    math.tan: (1, primitives.tan),
+                    math.asin: (1, primitives.asin),
+                    math.acos: (1, primitives.acos),
+                    math.atan: (1, primitives.atan),
+                    math.sinh: (1, primitives.sinh),
+                    math.cosh: (1, primitives.cosh),
+                    math.tanh: (1, primitives.tanh),
+                    math.asinh: (1, primitives.asinh),
+                    math.acosh: (1, primitives.acosh),
+                    math.atanh: (1, primitives.atanh),
+                    math.ceil: (1, primitives.ceil),
+                    math.floor: (1, primitives.floor),
+                    math.trunc: (1, primitives.trunc),
+                    math.isnan: (1, primitives.isnan),
+                    math.isinf: (1, primitives.isinf),
+                }
                 if len(kwargs) > 0:
                     msg = 'Hidet do not support calling builtin function with keyword argument.'
                     raise HidetProgramError(self, expr, msg)
-                if func is builtins.max:
-                    if len(args) != 2:
-                        msg = 'Hidet builtin function "max" takes two arguments.'
+                if func in func_map:
+                    arity, hidet_func = func_map[func]
+                    if len(args) != arity:
+                        msg = f'Hidet builtin function "{func.__name__}" takes {arity} arguments.'
                         raise HidetProgramError(self, expr, msg)
-                    return primitives.max(args[0], args[1])
-                elif func is builtins.min:
-                    if len(args) != 2:
-                        msg = 'Hidet builtin function "min" takes two arguments.'
-                        raise HidetProgramError(self, expr, msg)
-                    return primitives.min(args[0], args[1])
+                    return hidet_func(*args)
                 else:
-                    raise HidetProgramError(self, expr, 'Currently, do not support calling python builtin function.')
+                    raise HidetProgramError(
+                        self,
+                        expr,
+                        'Currently, do not support calling python builtin function "{}".'.format(func.__qualname__),
+                    )
         else:
             return func(*args, **kwargs)
 
@@ -1005,3 +983,60 @@ class PythonToHidetTranslator(PythonAstFunctor):
 
     def visit_Lambda(self, expr: Lambda):
         raise HidetProgramError(self, expr, 'Hidet currently do not support lambda expression.')
+
+    def process_generator(self, elt, generators: list[comprehension]) -> list:
+        if len(generators) == 0:
+            return [self.visit(elt)]
+        else:
+            generator = generators[-1]
+            if generator.is_async:
+                raise HidetProgramError(self, generator, 'Hidet currently do not support async generator.')
+            assert isinstance(generator, comprehension)
+            iterator = self.visit(generator.iter)
+            names: list[str] = []
+            if isinstance(generator.target, Name):
+                names = [generator.target.id]
+            elif isinstance(generator.target, Tuple):
+                for target in generator.target.elts:
+                    if not isinstance(target, Name):
+                        raise HidetProgramError(
+                            self, target, "Hidet currently only support binding a single name or a tuple of names"
+                        )
+                    names.append(target.id)
+            else:
+                raise HidetProgramError(
+                    self,
+                    generator.target,
+                    'Hidet do not support generator target with type {}.'.format(type(generator.target)),
+                )
+            result = []
+            for it in iterator:
+                if len(names) == 1:
+                    self.current_scope.define_host_var(names[0], it)
+                else:
+                    if len(names) != len(it):
+                        raise HidetProgramError(
+                            self, generator, "Can not unpack {} values to {} names.".format(len(it), len(names))
+                        )
+                    for name, value in zip(names, it):
+                        self.current_scope.define_host_var(name, value)
+                if not all(self.visit(cond) for cond in generator.ifs):
+                    continue
+                result.extend(self.process_generator(elt, generators[:-1]))
+            return result
+
+    def visit_ListComp(self, expr: ListComp):
+        return self.process_generator(expr.elt, expr.generators)
+
+    def visit_DictComp(self, expr: DictComp):
+        kv_pair = Tuple()
+        kv_pair.elts = [expr.key, expr.value]
+        kv_pairs = self.process_generator(kv_pair, expr.generators)
+        return {k: v for k, v in kv_pairs}
+
+    def visit_SetComp(self, expr: SetComp):
+        values = self.process_generator(expr.elt, expr.generators)
+        return set(values)
+
+    def visit_GeneratorExp(self, expr: GeneratorExp):
+        return self.process_generator(expr.elt, expr.generators)

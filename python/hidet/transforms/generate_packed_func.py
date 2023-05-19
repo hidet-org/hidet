@@ -42,7 +42,7 @@ def _rewrite_dim3(dim3: Tuple[Expr, Expr, Expr], param2arg: Dict[Expr, Expr]) ->
 
 def add_packed_func(ir_module: IRModule, func: Function, pack_func_name: str):
     from hidet import lang
-    from hidet.lang import attr, i32, void_p, deref, cast
+    from hidet.lang import attrs, i32, void_p, deref, cast
     from hidet.lang.cuda import set_kernel_max_dynamic_smem_bytes
 
     func_var = ir_module.lookup_var(func.name)
@@ -79,7 +79,7 @@ def add_packed_func(ir_module: IRModule, func: Function, pack_func_name: str):
             sb += DeclareStmt(arg_var, init=arg)
 
         if func.kind == 'cuda_kernel':
-            smem_bytes: Union[Expr, int] = simplify(func.get_attr('cuda_dynamic_smem_bytes', 0))
+            smem_bytes: Union[Expr, int] = simplify(func.get_attr('cuda.dynamic_smem_bytes', 0))
             if isinstance(smem_bytes, (int, Constant)):
                 # compiled-time known size of shared memory
                 if int(smem_bytes) > 48 * 1024:
@@ -92,8 +92,8 @@ def add_packed_func(ir_module: IRModule, func: Function, pack_func_name: str):
             sb += LaunchKernelStmt(
                 func_var,
                 [param2arg[param] for param in func.params],
-                grid_dim=_rewrite_dim3(_normalize_dim3(func.get_attr('cuda_grid_dim')), param2arg),
-                block_dim=_rewrite_dim3(_normalize_dim3(func.get_attr('cuda_block_dim')), param2arg),
+                grid_dim=_rewrite_dim3(_normalize_dim3(func.get_attr('cuda.grid_dim')), param2arg),
+                block_dim=_rewrite_dim3(_normalize_dim3(func.get_attr('cuda.block_dim')), param2arg),
                 shared_mem=smem_bytes,
             )
         elif func.kind == 'host_kernel':
@@ -106,9 +106,9 @@ def add_packed_func(ir_module: IRModule, func: Function, pack_func_name: str):
 
         @lang.script
         def packed_func(num_args: i32, arg_types: ~i32, args: ~void_p):
-            attr.func_name = pack_func_name
-            attr.func_kind = 'packed_func'
-            attr.packed_func = func_var
+            attrs.func_name = pack_func_name
+            attrs.func_kind = 'packed_func'
+            attrs.packed_func = func_var
             extract_params_and_call(num_args, arg_types, args)
 
     assert isinstance(packed_func, Function)

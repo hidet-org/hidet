@@ -23,8 +23,8 @@ def register_functions():
     #
     # @script
     # def cuda_nano_sleep(nano_seconds: u32):
-    #     attr.func_kind = 'cuda_device'
-    #     attr.func_name = 'cuda_nano_sleep'
+    #     attrs.func_kind = 'cuda_device'
+    #     attrs.func_name = 'cuda_nano_sleep'
     #     asm('nanosleep.u32 %0;', inputs=[nano_seconds], is_volatile=True)
     #
     # assert isinstance(cuda_nano_sleep, Function)
