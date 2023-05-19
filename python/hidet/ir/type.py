@@ -175,6 +175,10 @@ class VoidType(TypeNode):
     pass
 
 
+class StringType(TypeNode):
+    pass
+
+
 class PointerType(TypeNode):
     def __init__(self, base_type, specifiers: Optional[Sequence[str]] = None, use_bracket: bool = False):
         super().__init__()
@@ -301,6 +305,10 @@ def tensor_pointer_type(dtype, shape=None, layout=None):
 
 def void_pointer():
     return PointerType(VoidType())
+
+
+def string_type():
+    return StringType()
 
 
 def data_type(dtype: Union[str, DataType]) -> DataType:

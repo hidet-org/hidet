@@ -17,10 +17,10 @@ import string
 import operator
 import numpy as np
 from .node import Node
-from .type import TypeNode, TensorType, DataType, TensorPointerType, PointerType, FuncType, tensor_type, data_type
-from .type import tensor_pointer_type
+from .type import TypeNode, TensorType, DataType, TensorPointerType, PointerType, FuncType, StringType
+from .type import tensor_pointer_type, string_type, tensor_type, data_type
 
-PyScalar = Union[bool, int, float, complex]
+PyScalar = Union[bool, int, float, complex, str]
 
 
 class Expr(Node):
@@ -413,7 +413,7 @@ class Cast(Expr):
 
 
 class Constant(Expr):
-    def __init__(self, value: Union[np.ndarray, float, int, complex], const_type: Union[str, DataType, TensorType]):
+    def __init__(self, value: Union[np.ndarray, float, int, complex, str], const_type: Union[str, DataType, TensorType]):
         from hidet.ir.dtypes import boolean
 
         if const_type and isinstance(const_type, str):
@@ -440,10 +440,13 @@ class Constant(Expr):
             self.value = np.array(self.value)
 
     def is_scalar(self) -> bool:
-        return self.type and isinstance(self.type, DataType)
+        return isinstance(self.type, DataType)
 
     def is_tensor(self) -> bool:
-        return self.type and isinstance(self.type, TensorType)
+        return isinstance(self.type, TensorType)
+
+    def is_string(self) -> bool:
+        return isinstance(self.type, StringType)
 
     def __int__(self):
         return int(self.value)
@@ -453,6 +456,9 @@ class Constant(Expr):
 
     def __bool__(self):
         return bool(self.value)
+
+    def __str__(self):
+        return str(self.value)
 
     def __complex__(self):
         return complex(self.value)
@@ -536,6 +542,14 @@ class Var(Expr):
         Var.id_clock = 0
 
 
+class SizeVar(Var):
+    name2symbol: Dict[str, SizeVar] = {}
+
+    def __init__(self, name='d'):
+        from hidet.ir.dtypes import int32
+        super().__init__(hint=None, type=int32, name=name)
+
+
 # the following are used as type hints
 # if a primitive function expect an int8 expression, we should use ExprInt8 instead of Expr
 # to explicit tell the reader that this function expect an int8 expression
@@ -600,6 +614,8 @@ def convert(
         return Constant(obj, data_type('int32'))
     elif isinstance(obj, float):
         return Constant(obj, data_type('float32'))
+    elif isinstance(obj, str):
+        return Constant(obj, string_type())
     elif isinstance(obj, (tuple, list)):
         return tuple(convert(v) for v in obj)
     elif obj is None:
@@ -851,3 +867,9 @@ def is_constant(e: Union[Expr, PyScalar], *other: Union[Expr, PyScalar]) -> bool
     if len(other) > 0:
         return is_constant(*other)
     return True
+
+
+def symbolic_size(name: str) -> SizeVar:
+    if name not in SizeVar.name2symbol:
+        SizeVar.name2symbol[name] = SizeVar(name)
+    return SizeVar.name2symbol[name]

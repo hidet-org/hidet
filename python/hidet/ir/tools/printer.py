@@ -216,6 +216,8 @@ class IRPrinter(IRFunctor):
             return self('Constant(None, type=') + self(e.type) + ')'
         if e.is_tensor():
             return 'ConstTensor({}, {})'.format(e.value.shape, e.type)
+        elif e.is_string():
+            return Text('"{}"'.format(str(e.value)))
         else:
             dtype = e.type.name
             if dtype == 'float32':

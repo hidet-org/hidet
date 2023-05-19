@@ -25,7 +25,7 @@ static void reserve_cuda_workspace(Workspace &workspace, size_t nbytes) {
         }
         workspace.base = reinterpret_cast<void*>(allocate_cuda_storage(nbytes));
         if(workspace.base == nullptr) {
-            throw HidetException(__FILE__, __LINE__, "allocate workspace failed.");
+            LOG(FATAL) << "allocate workspace failed.";
         }
 
         cuda_memset(reinterpret_cast<uint64_t>(workspace.base), 0, nbytes);

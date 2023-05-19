@@ -55,7 +55,7 @@ class Operator:
         self.name: str = get_operator_name(self)
         self.inputs: List[Tensor] = inputs
         self.attrs: Dict[str, AttrValue] = attributes
-        self.task: Optional[Task] = task.specialize_for(self.inputs)
+        self.task: Optional[Task] = task
         self.outputs: List[Tensor] = []
 
         # cache

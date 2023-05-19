@@ -20,7 +20,7 @@ import hidet.runtime.storage
 import hidet.cuda
 from hidet.ir import dtypes
 from hidet.ir.type import DataType, data_type
-from hidet.ir.expr import Var, Expr, Constant
+from hidet.ir.expr import Var, Expr, Constant, SizeVar
 from hidet.ir.layout import DataLayout, RowMajorLayout
 from hidet.runtime.storage import Storage
 from hidet.utils import prod
@@ -41,11 +41,6 @@ def _simplify_dim(dim: Union[int, Expr]) -> Union[int, SizeVar]:
             return _simplify_dim(dim)
         else:
             raise ValueError(f"Cannot simplify {dim} to a constant integer or variable.")
-
-
-class SizeVar(Var):
-    def __init__(self, hint='d'):
-        super().__init__(hint=hint, type=dtypes.int32)
 
 
 @set_module('hidet')
@@ -1486,6 +1481,3 @@ def asarray(obj, /, *, dtype=None, device=None) -> Tensor:
         ret = from_numpy(array)
     return ret.to(dtype=dtype, device=device)
 
-
-def symbolic_size(hint: str) -> SizeVar:
-    return SizeVar(hint)

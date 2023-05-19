@@ -12,9 +12,9 @@
 from typing import Union
 
 from hidet.ir.expr import Expr
-from hidet.ir.type import FuncType, void_p
+from hidet.ir.type import FuncType, void_p, string_type
 from hidet.ir.primitives.func import register_primitive_function, call_primitive_func
-from hidet.ir.dtypes import int64, boolean
+from hidet.ir.dtypes import int64, boolean, int32
 from hidet.utils import initialize
 
 
@@ -33,6 +33,16 @@ def register_functions():
         func_or_type=FuncType([int64, boolean], void_p),
         codegen_name='request_cpu_workspace',
     )
+    register_primitive_function(
+        name='get_symbol_value',
+        func_or_type=FuncType([string_type()], int32),
+        codegen_name='get_symbol_value'
+    )
+    register_primitive_function(
+        name='set_symbol_value',
+        func_or_type=FuncType([string_type(), int32], void_p),
+        codegen_name='set_symbol_value'
+    )
 
 
 def get_cuda_stream() -> void_p:
@@ -45,3 +55,11 @@ def request_cuda_workspace(nbytes: Union[int, Expr], require_clean: Union[bool, 
 
 def request_cpu_workspace(nbytes: Union[int, Expr], require_clean: Union[bool, Expr]) -> void_p:
     return call_primitive_func('request_cpu_workspace', [nbytes, require_clean])
+
+
+def get_symbol_value(name: Union[str, Expr]) -> int32:
+    return call_primitive_func('get_symbol_value', [name])
+
+
+def set_symbol_value(name: Union[str, Expr], value: Union[int, Expr]):
+    return call_primitive_func('set_symbol_value', [name, value])

@@ -358,7 +358,9 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             return Text(name)
 
     def visit_Constant(self, e: Constant):
-        if e.is_scalar():
+        if e.is_string():
+            return Text('"{}"'.format(e.value))
+        elif e.is_scalar():
             return self.scalar_literal(e.value, e.type)
         else:
             assert isinstance(e.type, TensorType)
@@ -575,6 +577,7 @@ class CUDACodegen(Codegen):
         doc += Text('#include <stdint.h>') + NewLine()
         doc += Text('#include <cuda_fp16.h>') + NewLine()
         doc += Text('#include <cuda_bf16.h>') + NewLine()
+        doc += Text('#include <hidet/runtime/symbols.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cpu/context.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cuda/complex.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cuda/context.h>') + NewLine()
@@ -643,6 +646,7 @@ class CPUCodegen(Codegen):
         doc = Doc()
         doc += Text('#include <stdint.h>') + NewLine()
         doc += Text('#include <math.h>') + NewLine()
+        doc += Text('#include <hidet/runtime/symbols.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cpu/context.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cpu/float16.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cpu/bfloat16.h>') + NewLine()

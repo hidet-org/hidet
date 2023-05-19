@@ -16,7 +16,7 @@ import os
 import pickle
 from hidet.ir.node import Node
 from hidet.ir.type import FuncType, VoidType
-from hidet.ir.expr import Expr, Var, Constant, var
+from hidet.ir.expr import Expr, Var, SizeVar, Constant, var
 from hidet.ir.func import IRModule
 from hidet.ir.compute import ComputeNode, TensorNode, TensorInput, ScalarInput, GridCompute
 
@@ -85,19 +85,22 @@ class Task(Node):
     A task defines the operator computation.
     """
 
-    def __init__(self, name, inputs, outputs, *, params=None, inverse_map=None, attributes=None):
-        params = params if params else self._generate_default_params(inputs, outputs)
+    def __init__(self, name, inputs, outputs, *, inverse_map=None, attributes=None):
         inverse_map = inverse_map if inverse_map else {}
         attributes = attributes if attributes else {}
         self.name: str = name
         self.inputs: List[TensorInput] = list(inputs)
         self.outputs: List[TensorNode] = list(outputs)
-        self.params: List[Union[Var, TensorNode]] = params
         self.inverse_map: Dict[TensorInput, InverseMap] = {a: InverseMap.from_obj(b) for a, b in inverse_map.items()}
         self.attrs: Dict[str, Union[str, float, int, bool]] = attributes
-        self.specialization: Dict[Var, int] = {}
 
-        # sanity check
+        self._sanity_check()
+
+    @property
+    def params(self) -> List[TensorNode]:
+        return [*self.inputs, *self.outputs]
+
+    def _sanity_check(self):
         from hidet.ir.tools import collect_free_vars, collect
 
         for tn, im in self.inverse_map.items():
@@ -115,7 +118,7 @@ class Task(Node):
                 )
 
         free_vars: List[Var] = collect_free_vars(self.outputs)
-        if any(v not in self.params and not isinstance(v.type, FuncType) for v in free_vars):
+        if any(v not in self.params and not isinstance(v.type, FuncType) and not isinstance(v, SizeVar) for v in free_vars):
             raise ValueError('Some free variables are not in params: {}'.format(free_vars))
 
         # check all TensorInput used in outputs are placed in inputs
@@ -123,26 +126,9 @@ class Task(Node):
         if any(x not in self.inputs for x in used_inputs):
             raise ValueError('Some TensorInput used in outputs are not placed in inputs: {}'.format(used_inputs))
 
-    @staticmethod
-    def _generate_default_params(
-        inputs: Sequence[TensorNode], outputs: Sequence[TensorNode]
-    ) -> List[Union[Var, TensorNode]]:
-        from hidet.ir.tools import collect_free_vars
-
-        params = []
-        for tn in list(inputs) + list(outputs):
-            for dim_var in tn.shape:
-                if isinstance(dim_var, Var) and dim_var not in params:
-                    params.append(dim_var)
-        for v in collect_free_vars(outputs):
-            if isinstance(v, Var) and not v.type.is_func_type() and v not in params:
-                params.append(v)
-        params.extend(inputs)
-        params.extend(outputs)
-        return params
-
     def has_symbolic_shape(self) -> bool:
-        return any(isinstance(p, Var) for p in self.params)
+        from hidet.ir.tools import collect
+        return len(collect(self.outputs, SizeVar)) > 0
 
     def signature(self) -> str:
         params = []
@@ -155,31 +141,6 @@ class Task(Node):
         param_doc = ', '.join(params)
         fuse_doc = ''
         return ''.join([self.name, '(', param_doc, ')', fuse_doc])
-
-    def specialize_for(self, inputs):
-        """
-        Specialize this task for the given inputs.
-
-        Parameters
-        ----------
-        inputs: Sequence[hidet.graph.Tensor]
-            The input tensors.
-
-        Returns
-        -------
-        task: hidet.ir.Task
-            Self task specialized for the given inputs.
-        """
-        remap: Dict[Var, int] = {}
-        for a, b in zip(self.inputs, inputs):
-            for d1, d2 in zip(a.shape, b.shape):
-                if isinstance(d1, Var) and isinstance(d2, Constant):
-                    remap[d1] = int(d2)
-        self.specialization.clear()
-        for param in self.params:
-            if isinstance(param, Var) and param in remap:
-                self.specialization[param] = remap[param]
-        return self
 
     def generate_arguments(self, inputs, outputs):
         """
@@ -333,49 +294,6 @@ class Task(Node):
     def load(fname: str) -> Task:
         with open(fname, 'rb') as f:
             return pickle.load(f)
-
-
-# def is_injective_task(task: Task) -> bool:
-#     """
-#     Check whether a task is an injective task. A task is injective if and only if there is no reduce compute in
-#     the task.
-#
-#     Parameters
-#     ----------
-#     task: Task
-#         The task to check.
-#
-#     Returns
-#     -------
-#     ret: bool
-#         Whether the task is injective.
-#     """
-#     from hidet.ir.tools import collect
-#
-#     scalar_nodes: List[ScalarNode] = collect(task.outputs, ScalarNode, stop_when_found=False)
-#     return all(sn.scalar_compute is None for sn in scalar_nodes)
-#
-#
-# def is_unary_injective_task(task: Task) -> bool:
-#     return len(task.inputs) == 1 and len(task.outputs) == 1 and is_injective_task(task)
-#
-#
-# def is_elementwise_task(task: Task) -> bool:
-#     """
-#     Check whether a task is an elementwise task. A task is elementwise if and only if it is a unary injective and
-#     invertible.
-#
-#     Parameters
-#     ----------
-#     task: Task
-#         The task to check.
-#
-#     Returns
-#     -------
-#     ret: bool
-#         Whether the task is elementwise.
-#     """
-#     return is_unary_injective_task(task) and len(task.inverse_map) > 0
 
 
 def save_task(task: Task, fname: str):
