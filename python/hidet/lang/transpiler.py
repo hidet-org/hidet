@@ -321,7 +321,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
     def process_assign(self, lhs: Union[Attribute, Subscript, Name], rhs, type_annotation: Optional[ast.expr] = None):
         # pylint: disable=too-many-locals, too-many-branches, too-many-statements
         # check the rhs value, must be an instance of allowed_types or a list of these kinds of elements.
-        host_var_types = (ir.TaskMapping, ir.DataLayout, ir.TensorSlice, ir.Function, str, list, tuple)
+        host_var_types = (ir.TaskMapping, ir.DataLayout, ir.TensorSlice, ir.Function, str, list, tuple, dict)
         allowed_types = (ir.Expr, ir.TypeNode, TypeDecorator, float, int, str, type(None))
         allowed_types += host_var_types
         assert isinstance(rhs, allowed_types) or (
@@ -1029,7 +1029,9 @@ class PythonToHidetTranslator(PythonAstFunctor):
         return self.process_generator(expr.elt, expr.generators)
 
     def visit_DictComp(self, expr: DictComp):
-        kv_pairs = self.process_generator(expr.key, expr.generators)
+        kv_pair = Tuple()
+        kv_pair.elts = [expr.key, expr.value]
+        kv_pairs = self.process_generator(kv_pair, expr.generators)
         return {k: v for k, v in kv_pairs}
 
     def visit_SetComp(self, expr: SetComp):
