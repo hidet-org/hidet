@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from hidet.ir.type import DataType, TensorType, FuncType, PointerType, TensorPointerType, data_type, tensor_pointer_type
-from hidet.ir.type import tensor_type
+from hidet.ir.type import TypeNode, tensor_type
 from hidet.ir.expr import BinaryExpr, Add, Sub, Multiply, Div, Mod, FloorDiv, Condition, LessThan, Equal, IfThenElse
 from hidet.ir.expr import TensorSlice, LogicalNot, LogicalOr, LogicalAnd, LessEqual, Let, RightShift, LeftShift
 from hidet.ir.expr import BitwiseAnd, Neg, NotEqual, BitwiseXor, Dereference, Reference, Address, BitwiseNot, BitwiseOr
@@ -195,7 +195,7 @@ class TypeInfer(ExprFunctor, ComputeFunctor):
 
     def visit_GridCompute(self, c: GridCompute):
         dtype = self.visit(c.value)
-        return tensor_type(dtype, c.shape, c.layout)
+        return tensor_type(dtype, c._shape, c.layout)  # pylint: disable=protected-access
 
     def visit_ReduceCompute(self, c: ReduceCompute):
         return self.visit(c.value)
@@ -203,10 +203,10 @@ class TypeInfer(ExprFunctor, ComputeFunctor):
     def visit_ArgReduceCompute(self, c: ArgReduceCompute):
         return c.index_dtype
 
-    def visit_AnyExpr(self, e: PlaceholderExpr):
+    def visit_PlaceholderExpr(self, e: PlaceholderExpr):
         raise NotImplementedError()
 
 
-def infer_type(expr):
+def infer_type(expr) -> TypeNode:
     infer = TypeInfer()
     return infer(expr)

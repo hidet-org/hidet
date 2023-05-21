@@ -9,8 +9,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List
+from typing import List, Sequence
 
+from hidet.ir.expr import is_constant
 from hidet.graph.ops.definitions.matmul import matmul
 from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, compute, input_like, TensorNode
 from hidet.graph.ops.definitions.utils import normalize_kernel, normalize_stride
@@ -19,7 +20,7 @@ from .utils import infer_conv2d_shape
 
 class Conv2dGemmImageTransformTask(Task):
     def __init__(self, x: TensorNode, kernel: List[int], stride: List[int], dilations: List[int], groups: int):
-        n, c, h, w = x.const_shape()
+        n, c, h, w = x.shape
         kx, ky = kernel
         sx, sy = stride
         dilx, dily = dilations
@@ -50,7 +51,7 @@ class Conv2dGemmImageTransformOp(Operator):
 
 
 def conv2d_gemm_image_transform(
-    x: Tensor, kernel: List[int], stride: List[int], dilations: List[int], groups: int = 1
+    x: Tensor, kernel: Sequence[int], stride: Sequence[int], dilations: Sequence[int], groups: int = 1
 ) -> Tensor:
     return Conv2dGemmImageTransformOp(x, kernel, stride, dilations, groups).get_output(0)
 
@@ -59,7 +60,7 @@ def conv2d_gemm_filter_transform(w: Tensor, groups: int = 1) -> Tensor:
     # weight shape: [oc, c, kx, ky]
     # output shape: [groups, c * kx * ky, ogc] where ogc = oc // groups
     oc, c, kx, ky = w.shape
-    if oc % groups != 0:
+    if is_constant(oc, groups) and oc % groups != 0:
         raise ValueError('invalid conv2d groups {} for out channels {}'.format(groups, oc))
     ogc = oc // groups
     w = w.reshape([groups, ogc, c, kx, ky])  # [groups, ogc, c, kx, ky]
@@ -72,7 +73,8 @@ def conv2d_gemm_inverse_transform(gemm_y: Tensor, out_height, out_width) -> Tens
     # output shape: [n, oc, p, q] where oc = groups * ogc
     p, q = out_height, out_width
     groups, npq, ogc = gemm_y.shape
-    assert npq % (p * q) == 0
+    if is_constant(npq, p, q) and npq % (p * q) != 0:
+        raise ValueError('invalid conv2d output shape {} for height {} and width {}'.format(npq, p, q))
     n = npq // (p * q)
     y = gemm_y.reshape([groups, n, p, q, ogc])
     y = y.rearrange([[1], [0, 4], [2], [3]])

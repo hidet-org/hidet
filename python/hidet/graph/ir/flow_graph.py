@@ -20,10 +20,10 @@ from collections import defaultdict
 import hidet.graph.operator
 import hidet.cuda
 from hidet import option
+from hidet.ir.expr import Var
+from hidet.ir.task import Task
 from hidet.graph.tensor import Tensor, zeros_like, randn_like
-from hidet.graph.operator import Operator
-from hidet.utils.doc import Doc, NewLine, Text, doc_join
-from hidet.utils.namer import Namer
+from hidet.graph.operator import Operator, SizeVar
 
 logger = logging.getLogger(__name__)
 
@@ -35,10 +35,12 @@ class GraphForwardInstrument:
     def after_graph(self, graph: FlowGraph, inputs: List[Tensor], outputs: List[Tensor]) -> None:
         pass
 
-    def before_operator(self, op: Operator, inputs: List[Tensor]) -> None:
+    def before_operator(self, op: Operator, inputs: List[Tensor], shape_map: Dict[SizeVar, int]) -> None:
         pass
 
-    def after_operator(self, op: Operator, inputs: List[Tensor], outputs: List[Tensor]) -> None:
+    def after_operator(
+        self, op: Operator, inputs: List[Tensor], shape_map: Dict[SizeVar, int], outputs: List[Tensor]
+    ) -> None:
         pass
 
 
@@ -61,32 +63,42 @@ class GraphForwardContext:
             GraphForwardContext._stack.append(GraphForwardContext())
         return GraphForwardContext._stack[-1]
 
-    def _trigger_before_graph(self, graph: FlowGraph, inputs: List[Tensor]) -> None:
-        for instrument in self.instruments:
+    @staticmethod
+    def before_graph(graph: FlowGraph, inputs: List[Tensor]) -> None:
+        ctx = GraphForwardContext.current()
+        for instrument in ctx.instruments:
             instrument.before_graph(graph, inputs)
 
-    def _trigger_after_graph(self, graph: FlowGraph, inputs: List[Tensor], outputs: List[Tensor]) -> None:
-        for instrument in self.instruments:
+    @staticmethod
+    def after_graph(graph: FlowGraph, inputs: List[Tensor], outputs: List[Tensor]) -> None:
+        ctx = GraphForwardContext.current()
+        for instrument in ctx.instruments:
             instrument.after_graph(graph, inputs, outputs)
 
-    def _trigger_before_operator(self, op: Operator, inputs: List[Tensor]) -> None:
-        for instrument in self.instruments:
-            instrument.before_operator(op, inputs)
+    @staticmethod
+    def before_operator(op: Operator, inputs: List[Tensor], shape_map: Dict[SizeVar, int]) -> None:
+        ctx = GraphForwardContext.current()
+        for instrument in ctx.instruments:
+            instrument.before_operator(op, inputs, shape_map)
 
-    def _trigger_after_operator(self, op: Operator, inputs: List[Tensor], outputs: List[Tensor]) -> None:
-        for instrument in self.instruments:
-            instrument.after_operator(op, inputs, outputs)
+    @staticmethod
+    def after_operator(
+        op: Operator, inputs: List[Tensor], shape_map: Dict[SizeVar, int], outputs: List[Tensor]
+    ) -> None:
+        ctx = GraphForwardContext.current()
+        for instrument in ctx.instruments:
+            instrument.after_operator(op, inputs, shape_map, outputs)
 
     def append_instrument(self, instrument: GraphForwardInstrument):
         self.instruments.append(instrument)
 
-    def debug(self, output_dir='./outs/debug', print_summary: bool = False):
-        from .flow_graph_impl import GraphForwardDebugInstrument
+    def debug(self, output_dir='./outs/debug', print_summary: bool = False, dump_outputs: bool = False):
+        from .instruments import GraphForwardDebugInstrument
 
-        self.instruments.append(GraphForwardDebugInstrument(output_dir, print_summary))
+        self.instruments.append(GraphForwardDebugInstrument(output_dir, print_summary, dump_outputs))
 
     def benchmark(self, output_dir='./outs/benchmark', print_summary: bool = False, warmup=3, number=10, repeat=3):
-        from .flow_graph_impl import GraphForwardBenchmarkInstrument
+        from .instruments import GraphForwardBenchmarkInstrument
 
         self.instruments.append(GraphForwardBenchmarkInstrument(output_dir, print_summary, warmup, number, repeat))
 
@@ -106,68 +118,26 @@ class FlowGraph:
         self.update_nodes()
 
     def __call__(self, *inputs: Tensor) -> Union[List[Tensor], Tensor]:
-        """Run the computation graph.
-        See Also :func:`FlowGraph.forward`.
         """
-        return self.forward(*inputs)
+        Run the computation graph.
+
+        Parameters
+        ----------
+        inputs : Sequence[Tensor]
+            The input tensors.
+
+        Returns
+        -------
+        ret: Union[List[Tensor], Tensor]
+            The output tensors. If there is only one output, return it directly.
+        """
+        outputs = self.forward(*inputs)
+        return outputs[0] if len(outputs) == 1 else outputs
 
     def __str__(self):
-        namer = Namer()
+        from .flow_graph_impl import flow_graph_as_text
 
-        def get_tensor_sig(x: Tensor) -> Doc:
-            return Text(x.dtype.name) + '[' + doc_join([str(v) for v in x.shape], ', ') + ']'
-
-        def get_attr_repr(value: Union[float, int, bool, str, list, tuple, FlowGraph]) -> Doc:
-            if isinstance(value, (float, int, bool)):
-                return Text(str(value))
-            elif isinstance(value, str):
-                return Text('"{}"'.format(value))
-            elif isinstance(value, list):
-                return '[' + doc_join([get_attr_repr(v) for v in value], ', ') + ']'
-            elif isinstance(value, tuple):
-                return '(' + doc_join([get_attr_repr(v) for v in value], ', ') + ')'
-            elif isinstance(value, FlowGraph):
-                return Text('FlowGraph({})'.format(', '.join(u.name for u in value.nodes)))
-            else:
-                return Text(str(value))
-
-        param_docs = []
-        for x in self.inputs:
-            name = namer(x)
-            param_docs.append(Text(name) + ': ' + get_tensor_sig(x))
-
-        # head
-        head_doc = 'Graph(' + doc_join(param_docs, ', ') + ')'
-
-        # body
-        body_doc = Doc()
-        const_doc = Doc()
-        for op in self.nodes:
-            # const inputs
-            for x in op.inputs:
-                if x not in namer.obj_name:
-                    assert x.storage is not None
-                    const_doc += NewLine() + namer.get_name(x, hint='c') + ' = Constant(' + get_tensor_sig(x) + ')'
-            outputs = op.outputs
-            if len(outputs) > 1:
-                raise NotImplementedError()
-            output: Tensor = outputs[0]
-            line_doc = Doc()
-            line_doc += namer(output) + ': ' + get_tensor_sig(output) + ' = '
-            line_doc += op.name + '('
-            line_doc += doc_join([namer(x) for x in op.inputs], sep=', ')
-            if op.attrs:
-                line_doc += ', ' + doc_join(
-                    [Text(name) + '=' + get_attr_repr(value) for name, value in op.attrs.items()], ', '
-                )
-            line_doc += ')  '
-            body_doc += NewLine() + line_doc
-
-        # return statement
-        body_doc += NewLine() + Text('return ') + doc_join([namer(x) for x in self.outputs], ', ')
-
-        graph_doc = head_doc + '{' + const_doc.indent() + body_doc.indent() + NewLine() + '}'
-        return str(graph_doc)
+        return flow_graph_as_text(self)
 
     @property
     def nodes(self) -> List[Operator]:
@@ -187,13 +157,15 @@ class FlowGraph:
         self._nodes = None
         self._usage_count = None
 
-    def build(self):
-        tasks = []
-        tunable_tasks = []
+    def _build(self):
+        from hidet.runtime.device import Device
+
+        tasks: List[Tuple[Task, Device]] = []
+        tunable_tasks: List[Tuple[Task, Device]] = []
         task_keys = set()
         search_space = hidet.option.get_option('search_space')
         for node in self.nodes:
-            if node.task_func is None:
+            if node._task_func is None:
                 task_key = hash(str(node.task))
                 if task_key in task_keys:
                     continue
@@ -202,9 +174,9 @@ class FlowGraph:
                     method not in node.task.__class__.__dict__
                     for method in ['implement_cuda', 'implement_cpu', 'implement']
                 ):
-                    tasks.append(node.task)
+                    tasks.append((node.task, node.device))
                 else:
-                    tunable_tasks.append(node.task)
+                    tunable_tasks.append((node.task, node.device))
 
         hidet.driver.build_task_batch(tasks)
 
@@ -223,26 +195,32 @@ class FlowGraph:
 
         Returns
         -------
-        output: Union[List[Tensor], Tensor]
-            If there is only one output, it is returned directly. Otherwise, a list
-            of output tensors are returned.
+        output: List[Tensor]
+            The output tensors of the computation graph.
         """
         inputs: List[Tensor] = list(inputs)
 
+        # the input tensors should be non-symbolic
         for idx, tensor in enumerate(inputs):
             if tensor.storage is None:
                 msg = 'Expect non-symbolic input tensors, got symbolic input {} ({}).'.format(idx, tensor.signature())
                 raise ValueError(msg)
-        self.build()
 
-        GraphForwardContext.current()._trigger_before_graph(self, inputs)
+        # build the kernel for each operator in the graph
+        self._build()
 
+        GraphForwardContext.before_graph(self, inputs)
+
+        # count the usage of each tensor. We use this count to determine whether
+        # a tensor should be freed after running an operator.
         usage_count = self.usage_count.copy()
-        tensor_map: Dict[Tensor, Tensor] = {}
+        tensor_map: Dict[Tensor, Tensor] = {}  # symbolic tensor -> actual tensor during the forward process
+        shape_map: Dict[SizeVar, int] = {}  # symbolic dimension ->  actual shape dimension for the symbolic tensors
         for st, at in zip(self.inputs, inputs):
             tensor_map[st] = at
+            shape_map.update({dim: at.shape[idx] for idx, dim in enumerate(st.shape) if isinstance(dim, Var)})
 
-        num_operators = len(self.nodes)
+        # run each operator in the graph in a topological order
         for idx, node in enumerate(self.nodes):
             # prepare node inputs
             node_inputs = []
@@ -251,24 +229,32 @@ class FlowGraph:
                     # symbolic input
                     node_inputs.append(tensor_map[node_input])
                     usage_count[node_input] -= 1
-                    if usage_count[node_input] == 0:
+                    if usage_count[node_input] == 0:  # this temporary tensor is no longer needed
                         # free the memory
                         del tensor_map[node_input]
                 else:
                     # constant input
                     node_inputs.append(node_input)
+            node_inputs = node_inputs[: len(node.inputs)]
 
             # run node
-            GraphForwardContext.current()._trigger_before_operator(node, node_inputs)
-            logger.debug('[%4d/%d] run operator %s', idx, num_operators, node.name)
+            GraphForwardContext.before_operator(node, node_inputs, shape_map)
+            logger.debug('[%4d/%d] run operator %s, %s', idx, len(self.nodes), node.name, node.task)
             logger.debug('   inputs: %s', [x.signature() for x in node_inputs])
-            node_outputs = node.imperative_run(node_inputs)
+            node_outputs = node.imperative_run(node_inputs, shape_map=shape_map)
             logger.debug('  outputs: %s', [x.signature() for x in node_outputs])
-            GraphForwardContext.current()._trigger_after_operator(node, node_inputs, node_outputs)
+            GraphForwardContext.after_operator(node, node_inputs, shape_map, node_outputs)
 
             # update map
             for node_output, symbolic_output in zip(node_outputs, node.outputs):
                 tensor_map[symbolic_output] = node_output
+                shape_map.update(
+                    {
+                        dim: node_output.shape[idx]
+                        for idx, dim in enumerate(symbolic_output.shape)
+                        if isinstance(dim, Var)
+                    }
+                )
 
         outputs = []
         for graph_output in self.outputs:
@@ -279,8 +265,8 @@ class FlowGraph:
             else:
                 raise RuntimeError('Graph output {} is not produced by any operator.'.format(graph_output.signature()))
 
-        GraphForwardContext.current()._trigger_after_graph(self, inputs, outputs)
-        return outputs[0] if len(outputs) == 1 else outputs
+        GraphForwardContext.after_graph(self, inputs, outputs)
+        return outputs
 
     def dummy_inputs(self) -> List[Tensor]:
         inputs = []
@@ -443,10 +429,10 @@ class FlowGraph:
 
         def find_all_nodes(u: Operator):
             all_nodes.add(u)
-            for it in u.inputs:
-                if it.op is None:
+            for x in u.inputs:
+                if x.op is None:
                     continue
-                v: Operator = it.op
+                v: Operator = x.op
                 if v not in all_nodes:
                     find_all_nodes(v)
 
@@ -458,7 +444,7 @@ class FlowGraph:
         out_degree: Dict[Operator, int] = {u: 0 for u in all_nodes}
         for u in all_nodes:
             for it in u.inputs:
-                if it.op is None:
+                if it.op is None or it.op not in all_nodes:
                     continue
                 out_degree[it.op] += 1
         for u in outputs:
@@ -479,6 +465,8 @@ class FlowGraph:
                     if it.storage is None and all(it is not v for v in free_vars):
                         # input
                         free_vars.append(it)
+                elif it.op not in all_nodes:
+                    pass
                 else:
                     if it is not it.op.outputs[it.trace[1]]:
                         raise ValueError('The trace is broken')

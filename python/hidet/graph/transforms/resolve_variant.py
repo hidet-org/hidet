@@ -10,9 +10,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Type, List, Optional, Dict
+import logging
+from hidet.ir.expr import is_constant
 from hidet.graph.ir import FlowGraph, GraphRewriter, Tensor, Operator
 from hidet.utils import strict_zip, same_list, repeat_until_converge
 from .base import GraphPass, PassContext
+
+
+logger = logging.getLogger(__name__)
 
 
 class ResolveRule:
@@ -31,7 +36,7 @@ class ResolveRule:
 
         Returns
         -------
-        ret: Optional[List[Tensor]]
+        ret: List[Tensor], optional
             This function should return a list of tensors if the operator can be resolved, otherwise return None.
             In the first case, the returned tensors will be used to replace the outputs of the original operator, thus
             the number of tensors should be the same as the number of outputs of the original operator.
@@ -129,20 +134,21 @@ class ResolveVariantRewriter(GraphRewriter):
             GraphRewriter.visit_Operator(self, op)
             return
         inputs = [self(x) for x in op.inputs]
-        if same_list(inputs, op.inputs):
+        attrs = {k: self.attr_rewriter(v) for k, v in op.attrs.items()}
+        if same_list(inputs, op.inputs) and same_list(attrs.values(), op.attrs.values()):
             resolve_op = op
         else:
-            updated_outputs = op.reforward(inputs)
+            updated_outputs = op.reforward(inputs, attrs)
             resolve_op = updated_outputs[0].op
         outs = self.rule_chain.resolve(resolve_op)
 
         if outs is None:
             # keep the original operator
             # we still need to update memo in case inputs changed
-            for original, updated in strict_zip(op.outputs, resolve_op.outputs):
-                assert original not in self.memo
-                self.memo[original] = updated
+            assert all(original not in self.memo for original in op.outputs)
+            self.update_outputs(op.outputs, resolve_op.outputs)
         else:
+            logger.debug("Resolve operator %s", op.name)
             # update output of resolved operator
             if not isinstance(outs, (list, tuple)):
                 raise ValueError(
@@ -158,14 +164,25 @@ class ResolveVariantRewriter(GraphRewriter):
                 )
             for i, (original, updated) in enumerate(strict_zip(op.outputs, outs)):
                 assert original not in self.memo
-                if (original.dtype, tuple(original.shape)) != (updated.dtype, tuple(updated.shape)):
+                if not self.is_compatible_output(original, updated):
                     raise ValueError(
                         (
                             "The resolve rule of operator '{}' should return tensors with the same dtype and "
                             "shape as the original ones. The {}-th tensor expect {}{} but got {}{}"
                         ).format(op.name, i, original.dtype, list(original.shape), updated.dtype, list(updated.shape))
                     )
-                self.memo[original] = updated
+            self.update_outputs(op.outputs, outs)
+
+    @staticmethod
+    def is_compatible_output(a: Tensor, b: Tensor):
+        if a.dtype != b.dtype:
+            return False
+        if len(a.shape) != len(b.shape):
+            return False
+        for va, vb in zip(a.shape, b.shape):
+            if is_constant(va, vb) and va != vb:
+                return False
+        return True
 
 
 class ResolveVariantPass(GraphPass):

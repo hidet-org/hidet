@@ -13,7 +13,7 @@ from typing import Union, Optional, Sequence
 import warnings
 
 from hidet.ir import dtypes
-from hidet.ir.expr import Constant
+from hidet.ir.expr import Constant, Expr, Int, if_then_else
 from hidet.ir.type import DataType, data_type
 from hidet.runtime.device import Device, instantiate_device
 from .utils import Task, Operator, Tensor, compute
@@ -35,16 +35,21 @@ class FullTask(Task):
 
 class ArangeTask(Task):
     def __init__(self, start, stop, step, dtype: DataType):
-        start: Constant = dtype(start)
-        stop: Constant = dtype(stop)
-        step: Constant = dtype(step)
-        count = int((stop.value - start.value) // step.value)
+        count = dtypes.int32((stop - start) // step)
         super().__init__(
             name='arange',
             inputs=[],
             outputs=[compute(name='c', shape=[count], fcompute=lambda idx: dtype(start + step * idx))],
-            attributes={'start': start.value, 'stop': stop.value, 'step': step.value, 'dtype': dtype.name},
+            attributes={'start': start, 'stop': stop, 'step': step, 'dtype': dtype.name},
         )
+
+
+class TriTask(Task):
+    def __init__(self, n: Int, m: Int, k: Int, dtype: DataType):
+        if m is None:
+            m = n
+        out = compute(name='out', shape=[n, m], fcompute=lambda i, j: if_then_else(j <= i + k, dtype.one, dtype.zero))
+        super().__init__(name='tri', inputs=[], outputs=[out], attributes={'n': n, 'm': m, 'k': k, 'dtype': dtype.name})
 
 
 class LinSpaceTask(Task):
@@ -89,10 +94,7 @@ class ArangeOp(Operator):
             stop = start
             start = 0
         if dtype is None:
-            if all(isinstance(v, int) for v in [start, stop, step]):
-                dtype = dtypes.int32
-            else:
-                dtype = dtypes.float32
+            dtype = self.infer_dtype(start, stop, step)
         device = instantiate_device(device)
         super().__init__(
             inputs=[],
@@ -100,17 +102,37 @@ class ArangeOp(Operator):
             task=ArangeTask(start, stop, step, dtype),
         )
 
+    def infer_dtype(self, start, stop, step):
+        from hidet.ir.expr import convert
+        from hidet.ir.tools import infer_type
+        from hidet.ir.dtypes import promote_type
+
+        dtype = None
+        for v in [start, stop, step]:
+            v = convert(v)
+            assert isinstance(v, Expr)
+            v_dtype = infer_type(v)
+            assert isinstance(v_dtype, DataType)
+            dtype = v_dtype if dtype is None else promote_type(dtype, v_dtype)
+        return dtype
+
 
 class FullOp(Operator):
     def __init__(
         self,
         shape: Sequence[int],
-        value: Union[float, int, bool, Constant],
+        value: Union[float, int, bool, Constant, Tensor],
         dtype: Optional[DataType] = None,
         device: Union[Device, str] = 'cpu',
     ):
         shape = [int(v) for v in shape]
         device: Device = instantiate_device(device)
+
+        if isinstance(value, Tensor):
+            if value.is_symbolic():
+                raise NotImplementedError('Currently, we do not support symbolic tensor as value in full op')
+            value = value.item()
+
         if dtype is None:
             if isinstance(value, int):
                 dtype = dtypes.int64
@@ -131,13 +153,34 @@ class FullOp(Operator):
         )
 
 
+class TriOp(Operator):
+    def __init__(
+        self,
+        n: Int,
+        m: Optional[Int] = None,
+        k: Int = 0,
+        dtype: Optional[DataType] = None,
+        device: Union[Device, str] = 'cpu',
+    ):
+        if m is None:
+            m = n
+        if dtype is None:
+            dtype = dtypes.float32
+        device = instantiate_device(device)
+        super().__init__(
+            inputs=[],
+            attributes={'n': n, 'm': m, 'k': k, 'dtype': dtype, 'device': device},
+            task=TriTask(n, m, k, dtype),
+        )
+
+
 def full(
     shape: Sequence[int],
-    value: Union[float, int, bool, Constant],
+    value: Union[float, int, bool, Constant, Tensor],
     dtype: Optional[Union[DataType, str]] = None,
     device: Union[Device, str] = 'cpu',
 ) -> Tensor:
-    return FullOp(shape, value, data_type(dtype), device).get_output(0)
+    return FullOp(shape, value, data_type(dtype) if dtype is not None else dtype, device).get_output(0)
 
 
 def arange(start, /, stop=None, step=1, *, dtype=None, device='cpu') -> Tensor:
@@ -152,3 +195,11 @@ def linspace(start, stop, /, num, *, dtype=None, device='cpu', endpoint=True) ->
         warnings.warn('linspace with integer dtype is not supported, changed to float32')
         dtype = dtypes.float32
     return LinSpaceOp(start, stop, num, dtype=dtype, device=device, endpoint=endpoint).get_output(0)
+
+
+def tri(
+    n: Int, m: Optional[Int] = None, k: Int = 0, dtype: DataType = dtypes.float32, device: Union[str, Device] = 'cpu'
+) -> Tensor:
+    if m is None:
+        m = n
+    return TriOp(n, m, k, dtype, device).outputs[0]

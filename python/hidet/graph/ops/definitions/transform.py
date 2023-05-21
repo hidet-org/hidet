@@ -9,11 +9,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Optional, Union, Sequence
+from typing import List, Optional, Union, Sequence, Tuple, Dict
 from hidet.ir.type import DataType, data_type
-from hidet.ir.expr import if_then_else, convert, cast as ir_cast, logical_and
-from hidet.ir.layout import RowMajorLayout, ColumnMajorLayout
+from hidet.ir.expr import Expr, Constant, if_then_else, convert, cast as ir_cast, logical_and, is_constant
+from hidet.ir.expr import Int
+from hidet.ir.layout import RowMajorLayout
 from hidet.ir.utils import index_deserialize, index_serialize
+from hidet.graph.operator import SizeVar
 from hidet.utils import prod
 from .utils import Task, InverseMap, Operator, Tensor, TensorNode, compute, input_like, normalize_dim, can_broadcast
 from .utils import TensorInput
@@ -24,12 +26,11 @@ def same_shape(shape_a: Sequence[int], shape_b: Sequence[int]) -> bool:
 
 
 class ReshapeTask(Task):
-    def __init__(self, x: TensorNode, y_shape: List[int]):
-        x_shape = x.const_shape()
-        if prod(x_shape) != prod(y_shape):
+    def __init__(self, x: TensorNode, y_shape: List[Int]):
+        if x.is_concrete() and prod(x.shape) != prod(y_shape):
             raise ValueError(
                 'Can not reshape {} to {} because they have different number '
-                'of elements: {} vs {}'.format(x_shape, y_shape, prod(x_shape), prod(y_shape))
+                'of elements: {} vs {}'.format(x.shape, y_shape, prod(x.shape), prod(y_shape))
             )
         if not isinstance(x.type.layout, RowMajorLayout):
             raise NotImplementedError(
@@ -40,32 +41,34 @@ class ReshapeTask(Task):
         def index_map(dst_indices, src_shape, dst_shape):
             src_groups = []
             dst_groups = []
-            i, j = 0, 0
-            while i < len(src_shape) and j < len(dst_shape):
-                src_group = [i]
-                dst_group = [j]
-                x_size, y_size = src_shape[i], dst_shape[j]
-                i += 1
-                j += 1
-                while x_size != y_size:
-                    if x_size < y_size:
-                        x_size *= src_shape[i]
-                        src_group.append(i)
-                        i += 1
-                    else:
-                        y_size *= dst_shape[j]
-                        dst_group.append(j)
-                        j += 1
-                src_groups.append(src_group)
-                dst_groups.append(dst_group)
-            if i < len(src_shape):
-                assert prod(src_shape[i:]) == 1
-                src_groups.append(list(range(i, len(src_shape))))
-                dst_groups.append([])
-            if j < len(dst_shape):
-                assert prod(dst_shape[j:]) == 1
-                src_groups.append([])
-                dst_groups.append(list(range(j, len(dst_shape))))
+            if any(isinstance(v, Expr) for v in list(src_shape) + list(dst_shape)):
+                src_groups = [list(range(len(src_shape)))]
+                dst_groups = [list(range(len(dst_shape)))]
+            else:
+                i, j = 0, 0
+                while i < len(src_shape) and j < len(dst_shape):
+                    src_group = [i]
+                    dst_group = [j]
+                    x_size, y_size = src_shape[i], dst_shape[j]
+                    i += 1
+                    j += 1
+                    while x_size != y_size:
+                        if x_size < y_size:
+                            x_size *= src_shape[i]
+                            src_group.append(i)
+                            i += 1
+                        else:
+                            y_size *= dst_shape[j]
+                            dst_group.append(j)
+                            j += 1
+                    src_groups.append(src_group)
+                    dst_groups.append(dst_group)
+                if i < len(src_shape):
+                    src_groups.append(list(range(i, len(src_shape))))
+                    dst_groups.append([])
+                if j < len(dst_shape):
+                    src_groups.append([])
+                    dst_groups.append(list(range(j, len(dst_shape))))
             src_indices = []
             for src_group, dst_group in zip(src_groups, dst_groups):
                 x_group_shape = [src_shape[r] for r in src_group]
@@ -77,24 +80,25 @@ class ReshapeTask(Task):
             return src_indices
 
         def inverse_map(*x_indices):
-            return index_map(x_indices, src_shape=y_shape, dst_shape=x_shape)
+            return index_map(x_indices, src_shape=y_shape, dst_shape=x.shape)
 
         y = compute(
             name='y',
             shape=y_shape,
-            fcompute=lambda *indices: x[index_map(indices, src_shape=x_shape, dst_shape=y_shape)],
+            fcompute=lambda *indices: x[index_map(indices, src_shape=x.shape, dst_shape=y_shape)],
         )
         super().__init__(
             name='reshape',
             inputs=[x],
             outputs=[y],
-            inverse_map={x: InverseMap.from_lambda(inverse_map, num_args=len(x_shape))},
+            inverse_map={x: InverseMap.from_lambda(inverse_map, num_args=len(x.shape))},
+            attributes={'shape': y_shape},
         )
 
 
 class RearrangeTask(Task):
     def __init__(self, x: TensorNode, plan: List[List[int]]):
-        x_shape = x.const_shape()
+        x_shape = x.shape
         y_shape = [prod([x_shape[i] for i in dims]) for dims in plan]
 
         def index_split(total_index, dim_sizes: List[int]) -> List:
@@ -113,7 +117,7 @@ class RearrangeTask(Task):
                     x_indices[j] = x_index
             for i, x_index in enumerate(x_indices):
                 if x_index is None:
-                    if x_shape[i] > 1:
+                    if isinstance(x_shape[i], Constant) and int(x_shape[i]) > 1:
                         msg = 'Rearrange plan {} on tensor {} leave non-one dimension {} not been accessed'.format(
                             plan, x_shape, i
                         )
@@ -143,13 +147,13 @@ class RearrangeTask(Task):
 
 class ConcatTask(Task):
     def __init__(self, inputs: List[TensorNode], axis: int):
-        shapes = [t.const_shape() for t in inputs]
+        shapes: List[Tuple[Expr, ...]] = [t.shape for t in inputs]
         n = len(shapes)
         assert n > 0
         for i in range(1, n):
             if len(shapes[0]) != len(shapes[i]):
                 raise ValueError('Concat: all shapes must have the same rank, got {}'.format(shapes))
-            if any(a != b for j, (a, b) in enumerate(zip(shapes[0], shapes[i])) if j != axis):
+            if any(is_constant(a, b) and a != b for j, (a, b) in enumerate(zip(shapes[0], shapes[i])) if j != axis):
                 raise ValueError(
                     'Concat: all tensors must have the same shape except axis dimension, '
                     'got {}, axis {}'.format(shapes, axis)
@@ -172,16 +176,14 @@ class ConcatTask(Task):
 
 class TakeTask(Task):
     def __init__(self, data: TensorNode, indices: TensorNode, axis=0):
-        data_shape = data.const_shape()
-        indices_shape = indices.const_shape()
-        output_shape = data_shape[:axis] + indices_shape + data_shape[axis + 1 :]
-        assert 0 <= axis < len(data_shape)
+        output_shape = data.shape[:axis] + indices.shape + data.shape[axis + 1 :]
+        assert 0 <= axis < len(data.shape)
 
         def fmap(*output_indices):
-            indices_indices = output_indices[axis : axis + len(indices_shape)]
+            indices_indices = output_indices[axis : axis + len(indices.shape)]
             index_value = indices[indices_indices]
-            index_value = if_then_else(index_value < 0, index_value + data_shape[axis], index_value)
-            data_indices = output_indices[:axis] + (index_value,) + output_indices[axis + len(indices_shape) :]
+            index_value = if_then_else(index_value < 0, index_value + data.shape[axis], index_value)
+            data_indices = output_indices[:axis] + (index_value,) + output_indices[axis + len(indices.shape) :]
             return data[data_indices]
 
         output = compute(name='output', shape=output_shape, fcompute=lambda *output_indices: fmap(*output_indices))
@@ -190,13 +192,11 @@ class TakeTask(Task):
 
 class GatherTask(Task):
     def __init__(self, data: TensorInput, indices: TensorInput, axis=0):
-        data_shape = data.const_shape()
-        indices_shape = indices.const_shape()
-        output_shape = data_shape[:axis] + [indices_shape[axis]] + data_shape[axis + 1 :]
+        output_shape = data.shape[:axis] + (indices.shape[axis],) + data.shape[axis + 1 :]
 
         def fmap(*output_indices):
             index_value = indices[output_indices]
-            index_value = if_then_else(index_value < 0, index_value + data_shape[axis], index_value)
+            index_value = if_then_else(index_value < 0, index_value + data.shape[axis], index_value)
             data_indices = output_indices[:axis] + (index_value,) + output_indices[axis + 1 :]
             return data[data_indices]
 
@@ -216,8 +216,7 @@ class StridedSliceTask(Task):
         assert len(starts) == len(ends) == len(axes) == len(strides)
         if len(axes) != len(set(axes)):
             raise ValueError('Duplicated axes in slice, axes: {}'.format(axes))
-        data_shape = data.const_shape()
-        output_shape = list(data_shape)
+        output_shape = list(data.shape)
         axis2info = {}
         for axis, start, end, stride in zip(axes, starts, ends, strides):
             if stride == 0:
@@ -252,14 +251,14 @@ class StridedSliceTask(Task):
 
 class BroadcastTask(Task):
     def __init__(self, data: TensorNode, shape: List[int]):
-        data_shape = data.const_shape()
+        data_shape = data.shape
         if not can_broadcast(data_shape, shape):
             raise ValueError('Can not broadcast a tensor with shape {} to {}'.format(data_shape, shape))
 
         def fmap(*indices):
             expanded = len(shape) - len(data_shape)
             indices = indices[expanded:]
-            indices = [v if data_shape[i] != 1 else 0 for i, v in enumerate(indices)]
+            indices = [if_then_else(data_shape[i] != 1, v, 0) for i, v in enumerate(indices)]
             return data[indices]
 
         out = compute('out', shape=shape, fcompute=fmap)
@@ -268,7 +267,7 @@ class BroadcastTask(Task):
 
 class PadTask(Task):
     def __init__(self, data: TensorNode, pads: List[int], value: float):
-        shape = data.const_shape()
+        shape = data.shape
         rank = len(shape)
         assert rank * 2 == len(pads)
         out_shape = [a + b + c for a, b, c in zip(pads[:rank], shape, pads[rank:])]
@@ -285,13 +284,12 @@ class PadTask(Task):
 
 
 class TileTask(Task):
-    def __init__(self, data: TensorNode, repeats: List[int]):
-        shape = data.const_shape()
-        assert len(shape) == len(repeats)
-        out_shape = [a * b for a, b in zip(shape, repeats)]
+    def __init__(self, data: TensorNode, repeats: Sequence[int]):
+        assert len(data.shape) == len(repeats)
+        out_shape = [a * b for a, b in zip(data.shape, repeats)]
 
         def fmap(*indices):
-            indices = [idx % shape[i] for i, idx in enumerate(indices)]
+            indices = [idx % data.shape[i] for i, idx in enumerate(indices)]
             return data[indices]
 
         out = compute(name='out', shape=out_shape, fcompute=fmap)
@@ -309,16 +307,17 @@ class ReshapeOp(Operator):
         # [1, 3, 224, 224], [1, -1, 224, 0] => [1, 3, 224, 224]
         shape = list(shape)
         for i in range(len(shape)):
-            if shape[i] == 0:
+            if isinstance(shape[i], int) and shape[i] == 0:
                 if i >= len(origin_shape):
                     raise ValueError(
                         '0 is used outside original shape: ' 'origin {} target {}'.format(origin_shape, shape)
                     )
                 shape[i] = origin_shape[i]
         size = prod(origin_shape)
-        cnt = sum(1 for v in shape if v == -1)
+        cnt = sum(1 for v in shape if isinstance(v, int) and v == -1)
         if cnt == 0:
-            if prod(shape) != size:
+            total = prod(shape)
+            if isinstance(total, int) and total != size:
                 raise ValueError(
                     'Reshape: given shape has different size with input tensor: '
                     'shape {} and size {}'.format(shape, size)
@@ -326,7 +325,7 @@ class ReshapeOp(Operator):
             return shape
         elif cnt == 1:
             remain_size = prod([v for v in shape if v != -1])
-            if size % remain_size != 0:
+            if isinstance(remain_size, int) and size % remain_size != 0:
                 raise ValueError(
                     'Given shape is incompatible with input tensor: ' 'shape {} and size {}'.format(shape, size)
                 )
@@ -334,14 +333,14 @@ class ReshapeOp(Operator):
         else:
             raise ValueError('Can not infer the shape when there are multiple -1: {}'.format(shape))
 
-    def imperative_run(self, inputs: List[Tensor]) -> List[Tensor]:
+    def imperative_run(self, inputs: List[Tensor], shape_map: Dict[SizeVar, int]) -> List[Tensor]:
         x = inputs[0]
-        if isinstance(x.layout, (RowMajorLayout, ColumnMajorLayout)):
-            shape = self.task.outputs[0].const_shape()
-            layout = x.layout.__class__(shape)
-            return [Tensor(shape=shape, dtype=x.dtype, device=x.device, storage=x.storage, layout=layout, trace=None)]
+        if isinstance(x.layout, RowMajorLayout):
+            outputs = self._imperative_run_prepare_outputs(inputs, shape_map)
+            outputs[0]._storage = x.storage  # pylint: disable=protected-access
+            return outputs
         else:
-            return Operator.imperative_run(self, inputs)
+            return Operator.imperative_run(self, inputs, shape_map)
 
 
 class RearrangeOp(Operator):
@@ -357,14 +356,13 @@ class SqueezeOp(Operator):
             task=RearrangeTask(input_like(x, 'x'), plan=[[i] for i in range(len(x.shape)) if i not in dims]),
         )
 
-    def imperative_run(self, inputs: Optional[List[Tensor]] = None) -> List[Tensor]:
-        x = inputs[0] if inputs else self.inputs[0]
-        if isinstance(x.layout, (RowMajorLayout, ColumnMajorLayout)):
-            shape = self.task.outputs[0].const_shape()
-            layout = x.layout.__class__(shape)
-            return [Tensor(shape=shape, dtype=x.dtype, device=x.device, storage=x.storage, layout=layout, trace=None)]
-        else:
-            return Operator.imperative_run(self, inputs)
+    # def imperative_run(self, inputs: Optional[List[Tensor]] = None) -> List[Tensor]:
+    #     x = inputs[0] if inputs else self.inputs[0]
+    #     if isinstance(x.layout, RowMajorLayout):
+    #         shape = self.task.outputs[0].const_shape()
+    #         return [Tensor(shape=shape, dtype=x.dtype, device=x.device, storage=x.storage, trace=None)]
+    #     else:
+    #         return Operator.imperative_run(self, inputs)
 
 
 class UnsqueezeOp(Operator):
@@ -381,14 +379,14 @@ class UnsqueezeOp(Operator):
         assert c == len(x.shape)
         super().__init__(inputs=[x], attributes={'dims': dims}, task=RearrangeTask(input_like(x, 'x'), plan=plan))
 
-    def imperative_run(self, inputs: Optional[List[Tensor]] = None) -> List[Tensor]:
-        x = inputs[0] if inputs else self.inputs[0]
-        if isinstance(x.layout, (RowMajorLayout, ColumnMajorLayout)):
-            shape = self.task.outputs[0].const_shape()
-            layout = x.layout.__class__(shape)
-            return [Tensor(shape=shape, dtype=x.dtype, device=x.device, storage=x.storage, layout=layout, trace=None)]
-        else:
-            return Operator.imperative_run(self, inputs)
+    # def imperative_run(self, inputs: Optional[List[Tensor]] = None) -> List[Tensor]:
+    #     x = inputs[0] if inputs else self.inputs[0]
+    #     if isinstance(x.layout, (RowMajorLayout, ColumnMajorLayout)):
+    #         shape = self.task.outputs[0].const_shape()
+    #         layout = x.layout.__class__(shape)
+    #         return [Tensor(shape=shape, dtype=x.dtype, device=x.device, storage=x.storage, layout=layout, trace=None)]
+    #     else:
+    #         return Operator.imperative_run(self, inputs)
 
 
 class FlattenOp(Operator):
@@ -405,14 +403,14 @@ class FlattenOp(Operator):
             task=RearrangeTask(input_like(x, 'x'), plan=plan),
         )
 
-    def imperative_run(self, inputs: List[Tensor]) -> List[Tensor]:
-        x = inputs[0] if inputs else self.inputs[0]
-        if isinstance(x.layout, (RowMajorLayout, ColumnMajorLayout)):
-            shape = self.task.outputs[0].const_shape()
-            layout = x.layout.__class__(shape)
-            return [Tensor(shape=shape, dtype=x.dtype, device=x.device, storage=x.storage, layout=layout, trace=None)]
-        else:
-            return Operator.imperative_run(self, inputs)
+    # def imperative_run(self, inputs: List[Tensor]) -> List[Tensor]:
+    #     x = inputs[0] if inputs else self.inputs[0]
+    #     if isinstance(x.layout, (RowMajorLayout, ColumnMajorLayout)):
+    #         shape = self.task.outputs[0].const_shape()
+    #         layout = x.layout.__class__(shape)
+    #         return [Tensor(shape=shape, dtype=x.dtype, device=x.device, storage=x.storage, layout=layout, trace=None)]
+    #     else:
+    #         return Operator.imperative_run(self, inputs)
 
 
 class PermuteDimsOp(Operator):
@@ -562,7 +560,7 @@ class PadOp(Operator):
 
 
 class TileOp(Operator):
-    def __init__(self, data: Tensor, repeats: List[int]):
+    def __init__(self, data: Tensor, repeats: Sequence[int]):
         if len(repeats) != len(data.shape):
             raise ValueError(
                 "The length of 'repeats' parameter of Tile operator expects to have the "
@@ -707,7 +705,7 @@ def conv_pad(data: Tensor, pads: Union[int, List[int]]) -> Tensor:
     return pad(data, pads)
 
 
-def tile(data: Tensor, repeats: List[int]) -> Tensor:
+def tile(data: Tensor, repeats: Sequence[int]) -> Tensor:
     """
     Tile a tensor. See https://numpy.org/doc/stable/reference/generated/numpy.tile.html.
 
@@ -715,7 +713,7 @@ def tile(data: Tensor, repeats: List[int]) -> Tensor:
     ----------
     data: Tensor
         The input tensor to be tiled.
-    repeats: List[int]
+    repeats: Sequence[int]
         A list of integers to represent the number of repeats for each dimension.
         Must have len(repeats) == len(data.shape).
 

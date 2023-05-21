@@ -13,7 +13,6 @@ from hidet.graph.ir import FlowGraph
 
 from .base import GraphPass, PassContext, logger
 from .instruments import GraphPassInstrument, SaveGraphInstrument, ProfileInstrument
-from .fold_const import fold_const_pass
 from .subgraph_rewrite import subgraph_rewrite_pass
 from .automatic_mix_precision import automatic_mix_precision_pass
 from .resolve_variant import resolve_variant_pass
@@ -47,7 +46,6 @@ def optimize(graph: FlowGraph) -> FlowGraph:
         The optimized flow graph.
     """
     passes = [
-        fold_const_pass(),
         subgraph_rewrite_pass(),
         automatic_mix_precision_pass(),
         subgraph_rewrite_pass(),

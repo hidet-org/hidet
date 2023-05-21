@@ -41,7 +41,7 @@ def merge_indices(grid_indices: List[Expr], reduce_indices: List[Expr], reduce_d
 def cuda_schedule_reduce_by_warp_reduce(task: ReduceTask) -> IRModule:
     x, y = task.inputs[0], task.outputs[0]
 
-    shape: List[int] = x.const_shape()
+    shape: List[int] = list(x.const_shape)
     dims = task.dims
 
     grid_shape = [v for i, v in enumerate(shape) if i not in dims]
@@ -108,7 +108,7 @@ def cuda_schedule_reduce_by_warp_reduce(task: ReduceTask) -> IRModule:
 def cuda_schedule_reduce_by_default(task: ReduceTask) -> IRModule:
     x, y = task.inputs[0], task.outputs[0]
 
-    shape: List[int] = x.const_shape()
+    shape: List[int] = list(x.const_shape)
     dims = task.dims
 
     remain_shape = [v for i, v in enumerate(shape) if i not in dims]

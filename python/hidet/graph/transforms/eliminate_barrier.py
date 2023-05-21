@@ -17,15 +17,11 @@ from .utils import is_barrier
 
 class EliminateBarrierRewriter(GraphRewriter):
     def visit_Operator(self, op: Operator):
-        inputs = [self(x) for x in op.inputs]
-
         if is_barrier(op):
-            outputs = inputs
-            for original, updated in zip(op.outputs, outputs):
-                self.memo[original] = updated
-            return None
+            inputs = [self(x) for x in op.inputs]
+            self.update_outputs(op.outputs, inputs)
         else:
-            return GraphRewriter.visit_Operator(self, op)
+            GraphRewriter.visit_Operator(self, op)
 
 
 class EliminateBarrierPass(GraphPass):

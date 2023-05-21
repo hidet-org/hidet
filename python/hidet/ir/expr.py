@@ -27,7 +27,8 @@ class Expr(Node):
     def __bool__(self):
         raise TypeError(
             "hidet.ir.Expr does not support pythonic logical operations (e.g., and, or, not, if(...)). "
-            "Please use hidet.ir.if_then_else, hidet.ir.LogicalAnd, hidet.ir.LogicalOr, hidet.ir.LogicalNot explicitly."
+            "Please use hidet.ir.if_then_else, hidet.ir.logical_and, hidet.ir.logical_or, hidet.ir.logical_or "
+            "explicitly."
         )
 
     def __call__(self, *args, **kwargs):
@@ -159,6 +160,15 @@ class Expr(Node):
 
         return str(astext(self))
 
+    def __int__(self):
+        raise TypeError("Cannot convert hidet.ir.Expr to int.")
+
+    def __float__(self):
+        raise TypeError("Cannot convert hidet.ir.Expr to float.")
+
+    def __complex__(self):
+        raise TypeError("Cannot convert hidet.ir.Expr to complex.")
+
     def read(self, items, protected=True):
         te = self[items]
         if not isinstance(te, TensorElement):
@@ -206,8 +216,13 @@ class Expr(Node):
                 return Constant(value, a.type)
             else:
                 return Constant(value, promote_type(a.type, b.type))
-        else:
-            return cls(a, b)
+        elif isinstance(b, Constant):
+            if b == 0 and cls in [Add, Sub]:
+                return a
+            elif b == 1 and cls in [Multiply, Div]:
+                return a
+
+        return cls(a, b)
 
 
 class BinaryExpr(Expr):
@@ -382,7 +397,7 @@ class Call(Expr):
 
 class Let(Expr):
     def __init__(self, var, value, body):
-        self.var: Expr = var
+        self.var: Var = var
         self.value: Expr = value
         self.body: Expr = body
 
@@ -624,10 +639,6 @@ def is_false(v: Expr) -> bool:
     return isinstance(v, Constant) and v.type.name == 'bool' and v.value is False
 
 
-def is_const_int(v: Expr) -> bool:
-    return isinstance(v, Constant) and v.type.name == 'int32'
-
-
 def if_then_else(
     cond: Union[Expr, PyScalar], then_expr: Union[Expr, PyScalar], else_expr: Union[Expr, PyScalar]
 ) -> IfThenElse:
@@ -797,6 +808,8 @@ def cast(v: Expr, dtype: Union[str, DataType, TypeNode]):
 
     if isinstance(v, Constant):
         return Constant(v.value, dtype)
+    elif isinstance(v, Var) and v.type.is_data_type() and dtype.is_data_type() and v.type == dtype:
+        return v
     else:
         return Cast(v, dtype)
 
@@ -828,3 +841,11 @@ def address(v: Expr) -> Expr:
 
 def deref(v: Expr) -> Expr:
     return Dereference(v)
+
+
+def is_constant(e: Union[Expr, PyScalar], *other: Union[Expr, PyScalar]) -> bool:
+    if isinstance(e, Expr) and not isinstance(e, Constant):
+        return False
+    if len(other) > 0:
+        return is_constant(*other)
+    return True

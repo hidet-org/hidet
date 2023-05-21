@@ -125,7 +125,7 @@ class RepeatTaskMapping(TaskMapping):
             global_index = sum(a * b for a, b in zip(task, self.strides))
             return global_index
 
-        ranges = [range(s) for s in self.task_shape]
+        ranges = [range(int(s)) for s in self.task_shape]
         tasks = list(tuple(task) for task in itertools.product(*ranges))
         return list(sorted(tasks, key=key_func))
 
@@ -213,7 +213,7 @@ def repeat_map(task_shape: Sequence[Int], ranks: Optional[Sequence[int]] = None,
     if ranks is None:
         ranks = list(range(len(task_shape)))
     if attrs is None:
-        attrs = [ForStmtAttr() for _ in range(len(task_shape))]
+        attrs = [ForStmtAttr.from_extent(task_shape[i]) for i in range(len(task_shape))]
     else:
         assert isinstance(attrs, str)
         attrs: List[ForStmtAttr] = ForStmtAttr.parse(attrs)

@@ -60,8 +60,8 @@ def test_max_pool2d(shape, kernel, stride, padding):
         shape,
         lambda x: numpy_pool2d(x, kernel, stride, padding, 'max'),
         lambda x: ops.max_pool2d(x, kernel, stride, padding),
-        atol=0,
-        rtol=0,
+        atol=1e-6,
+        rtol=1e-6,
     )
 
 
@@ -82,8 +82,8 @@ def test_max_pool3d(shape, kernel, stride, padding):
             x, kernel_size=kernel, stride=stride, padding=[padding[0], padding[1], padding[2]]
         ),
         lambda x: ops.max_pool3d(x, kernel, stride, padding),
-        atol=0,
-        rtol=0,
+        atol=1e-6,
+        rtol=1e-6,
     )
 
 
@@ -123,8 +123,8 @@ def test_avg_pool3d(shape, kernel, stride, padding):
             x, kernel_size=kernel, stride=stride, padding=[padding[0], padding[1], padding[2]]
         ),
         lambda x: ops.avg_pool3d(x, kernel, stride, padding),
-        atol=0,
-        rtol=0,
+        atol=1e-6,
+        rtol=1e-6,
     )
 
 

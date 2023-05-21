@@ -208,3 +208,13 @@ def tensor_masked_fill(self: Tensor, mask: Tensor, value: float) -> Tensor:
 @register_method(torch.Tensor.flatten)
 def tensor_flatten(self: Tensor, start_dim=0, end_dim=-1):
     return ops.flatten(self, start_dim=start_dim, end_dim=end_dim)
+
+
+@register_method(torch.Tensor.masked_fill_)
+def tensor_masked_fill_(self: Tensor, mask: Tensor, value: float) -> Tensor:
+    return ops.where(mask, ops.full([], value, dtype=self.dtype, device=self.device), self)
+
+
+@register_method(torch.Tensor.repeat)
+def tensor_repeat(self: Tensor, *sizes: int) -> Tensor:
+    return ops.tile(self, sizes)

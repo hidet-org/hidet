@@ -98,17 +98,20 @@ class MatmulResolveRule(ResolveRule):
         parallel_k = self.get_config('parallel_k', default='default')  # 'default', 'search', 2, 4, ...
         mma = self.get_config('mma', default='simt')  # 'simt', 'mma'
 
-        batch_size, m_size, n_size, k_size = a.shape[0], a.shape[1], b.shape[2], a.shape[2]
-        if parallel_k == 'default':
-            nparts = parallel_k_heuristic_nparts(batch_size, m_size, n_size, k_size)
-        elif parallel_k == 'search':
-            nparts = parallel_k_search_nparts(a.dtype.name, mma, batch_size, m_size, n_size, k_size)
-        elif parallel_k == 'disabled':
+        if any(not isinstance(v, int) for v in a.shape):
             nparts = 1
-        elif isinstance(parallel_k, int):
-            nparts = gcd(parallel_k, k_size)
         else:
-            raise ValueError(f'invalid parallel_k: {parallel_k}')
+            batch_size, m_size, n_size, k_size = a.shape[0], a.shape[1], b.shape[2], a.shape[2]
+            if parallel_k == 'default':
+                nparts = parallel_k_heuristic_nparts(batch_size, m_size, n_size, k_size)
+            elif parallel_k == 'search':
+                nparts = parallel_k_search_nparts(a.dtype.name, mma, batch_size, m_size, n_size, k_size)
+            elif parallel_k == 'disabled':
+                nparts = 1
+            elif isinstance(parallel_k, int):
+                nparts = gcd(parallel_k, k_size)
+            else:
+                raise ValueError(f'invalid parallel_k: {parallel_k}')
 
         if nparts == 1:
             c = batch_matmul(a, b, mma=mma)
@@ -220,6 +223,10 @@ class MatmulResolveRule(ResolveRule):
         return [c]
 
     def resolve(self, op: Operator) -> Optional[List[Tensor]]:
+        if op.task.has_symbolic_shape():
+            # for now, only support static shape
+            return None
+
         resolve_funcs: List[Callable[[Operator], Any]] = [self.resolve_f16, self.resolve_generic]
         for resolve_func in resolve_funcs:
             outs = resolve_func(op)

@@ -11,12 +11,12 @@
 # limitations under the License.
 # pylint: disable=import-outside-toplevel
 from __future__ import annotations
-from typing import Any, Dict, List, Union, Callable
+from typing import Any, Dict, List, Union, Callable, Sequence
 import os
 import pickle
 from hidet.ir.node import Node
 from hidet.ir.type import FuncType, VoidType
-from hidet.ir.expr import Expr, Var, var
+from hidet.ir.expr import Expr, Var, Constant, var
 from hidet.ir.func import IRModule
 from hidet.ir.compute import ComputeNode, TensorNode, TensorInput, ScalarInput, GridCompute
 
@@ -86,7 +86,7 @@ class Task(Node):
     """
 
     def __init__(self, name, inputs, outputs, *, params=None, inverse_map=None, attributes=None):
-        params = params if params else list(inputs) + list(outputs)
+        params = params if params else self._generate_default_params(inputs, outputs)
         inverse_map = inverse_map if inverse_map else {}
         attributes = attributes if attributes else {}
         self.name: str = name
@@ -98,6 +98,8 @@ class Task(Node):
         self.specialization: Dict[Var, int] = {}
 
         # sanity check
+        from hidet.ir.tools import collect_free_vars, collect
+
         for tn, im in self.inverse_map.items():
             if len(im.axes) != tn.ndim:
                 raise ValueError(
@@ -112,11 +114,35 @@ class Task(Node):
                     )
                 )
 
-        from hidet.ir.tools import collect_free_vars
-
         free_vars: List[Var] = collect_free_vars(self.outputs)
         if any(v not in self.params and not isinstance(v.type, FuncType) for v in free_vars):
             raise ValueError('Some free variables are not in params: {}'.format(free_vars))
+
+        # check all TensorInput used in outputs are placed in inputs
+        used_inputs = collect(self.outputs, TensorInput)
+        if any(x not in self.inputs for x in used_inputs):
+            raise ValueError('Some TensorInput used in outputs are not placed in inputs: {}'.format(used_inputs))
+
+    @staticmethod
+    def _generate_default_params(
+        inputs: Sequence[TensorNode], outputs: Sequence[TensorNode]
+    ) -> List[Union[Var, TensorNode]]:
+        from hidet.ir.tools import collect_free_vars
+
+        params = []
+        for tn in list(inputs) + list(outputs):
+            for dim_var in tn.shape:
+                if isinstance(dim_var, Var) and dim_var not in params:
+                    params.append(dim_var)
+        for v in collect_free_vars(outputs):
+            if isinstance(v, Var) and not v.type.is_func_type() and v not in params:
+                params.append(v)
+        params.extend(inputs)
+        params.extend(outputs)
+        return params
+
+    def has_symbolic_shape(self) -> bool:
+        return any(isinstance(p, Var) for p in self.params)
 
     def signature(self) -> str:
         params = []
@@ -147,8 +173,8 @@ class Task(Node):
         remap: Dict[Var, int] = {}
         for a, b in zip(self.inputs, inputs):
             for d1, d2 in zip(a.shape, b.shape):
-                if isinstance(d1, Var) and isinstance(d2, int):
-                    remap[d1] = d2
+                if isinstance(d1, Var) and isinstance(d2, Constant):
+                    remap[d1] = int(d2)
         self.specialization.clear()
         for param in self.params:
             if isinstance(param, Var) and param in remap:
@@ -206,9 +232,9 @@ class Task(Node):
                 arguments.append(10)
             elif isinstance(param, TensorNode):
                 if param.type.dtype.is_integer():
-                    arguments.append(hidet.zeros(param.const_shape(), dtype=param.type.dtype, device=device))
+                    arguments.append(hidet.zeros(param.const_shape, dtype=param.type.dtype, device=device))
                 elif param.type.dtype.is_float():
-                    arguments.append(hidet.randn(param.const_shape(), dtype=param.type.dtype, device=device))
+                    arguments.append(hidet.randn(param.const_shape, dtype=param.type.dtype, device=device))
                 else:
                     raise ValueError('Unknown dtype: {}'.format(param.type.dtype))
             else:

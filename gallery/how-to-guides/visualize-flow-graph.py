@@ -117,17 +117,6 @@ with hidet.graph.PassContext() as ctx:
 print(graph_opt)
 
 # %%
-# The dumped netron graphs that can be visualized:
-#
-# :download:`Download 1_FoldConstantPass.json <../../../../gallery/how-to-guides/outs/1_FoldConstantPass.json>`
-#
-# :download:`Download 2_PatternTransformPass.json <../../../../gallery/how-to-guides/outs/2_SubgraphRewritePass.json>`
-#
-# :download:`Download 4_ResolveVariantPass.json <../../../../gallery/how-to-guides/outs/4_ResolveVariantPass.json>`
-#
-# :download:`Download 5_FuseOperatorPass.json <../../../../gallery/how-to-guides/outs/5_FuseOperatorPass.json>`
-
-# %%
 # Summary
 # -------
 # This tutorial shows how to visualize the flow graph of a model and the intermediate graphs of the optimization passes.
