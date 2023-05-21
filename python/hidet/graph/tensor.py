@@ -20,7 +20,7 @@ import hidet.runtime.storage
 import hidet.cuda
 from hidet.ir import dtypes
 from hidet.ir.type import DataType, data_type
-from hidet.ir.expr import Var, Expr, Constant, SizeVar
+from hidet.ir.expr import Expr, Constant, SymbolVar, symbol_var
 from hidet.ir.layout import DataLayout, RowMajorLayout
 from hidet.runtime.storage import Storage
 from hidet.utils import prod
@@ -28,19 +28,15 @@ from hidet.utils.overrides import set_module
 from hidet.runtime.device import Device, instantiate_device
 
 
-def _simplify_dim(dim: Union[int, Expr]) -> Union[int, SizeVar]:
+def _simplify_dim(dim: Union[int, Expr]) -> Union[int, SymbolVar]:
     from hidet.ir.tools import simplify
 
-    if isinstance(dim, (int, SizeVar)):
+    if isinstance(dim, (int, SymbolVar)):
         return dim
     elif isinstance(dim, Constant):
         return int(dim)
     else:
-        dim = simplify(dim)
-        if isinstance(dim, (int, SizeVar, Constant)):
-            return _simplify_dim(dim)
-        else:
-            raise ValueError(f"Cannot simplify {dim} to a constant integer or variable.")
+        return simplify(dim)
 
 
 @set_module('hidet')
@@ -978,19 +974,19 @@ def empty(shape, dtype='float32', device='cpu', layout=None):
         The created tensor.
     """
     dtype = data_type(dtype)
-    num_bytes = prod(shape) * dtype.nbytes
+    num_bytes = int(prod(shape) * dtype.nbytes)
     storage = Storage.new(device, num_bytes)
     return Tensor(shape=shape, dtype=dtype, device=device, storage=storage, layout=layout)
 
 
-def symbol(shape: Sequence[Union[int, SizeVar, None, str]], dtype='float32', device='cpu', layout=None) -> Tensor:
+def symbol(shape: Sequence[Union[int, str]], dtype='float32', device='cpu', layout=None) -> Tensor:
     """Create a symbolic tensor.
 
     Parameters
     ----------
-    shape: Sequence[Union[int, SizeVar, None, str]]
-        The shape of new tensor. The shape can contain symbolic variables. None indicates the corresponding dimension
-        is symbolic. str indicates the corresponding dimension is a symbolic variable with the given name.
+    shape: Sequence[Union[int, str]]
+        The shape of new tensor. The shape can contain symbolic variables. str indicates the corresponding dimension is
+        a symbolic variable with the given name.
 
     dtype: str or DataType
         The data type of element of the tensor.
@@ -1008,18 +1004,11 @@ def symbol(shape: Sequence[Union[int, SizeVar, None, str]], dtype='float32', dev
 
     """
     updated_shape = []
-    name2shape_var = {}
     for d in shape:
-        if d is None:
-            updated_shape.append(SizeVar('d'))
-        elif isinstance(d, str):
-            if d in name2shape_var:
-                updated_shape.append(name2shape_var[d])
-            else:
-                name2shape_var[d] = SizeVar(d)
-                updated_shape.append(name2shape_var[d])
+        if isinstance(d, str):
+            updated_shape.append(symbol_var(d))
         else:
-            assert isinstance(d, (int, SizeVar, Constant))
+            assert isinstance(d, (int, Constant))
             updated_shape.append(d)
     return Tensor(shape=updated_shape, dtype=dtype, device=device, storage=None, layout=layout)
 
@@ -1480,4 +1469,3 @@ def asarray(obj, /, *, dtype=None, device=None) -> Tensor:
             array = array.astype(np.float32)
         ret = from_numpy(array)
     return ret.to(dtype=dtype, device=device)
-

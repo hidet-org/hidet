@@ -32,15 +32,15 @@ class ComplexType(DataType):
         return True
 
     def constant(self, value: Any):
-        from hidet.ir.expr import Constant
+        from hidet.ir.expr import Constant, constant
 
         if isinstance(value, Constant):
             value = value.value
 
         if isinstance(value, complex):
-            return Constant(value, const_type=self)
+            return constant(value, const_type=self)
         elif isinstance(value, (int, float)):
-            return Constant(complex(value, 0.0), const_type=self)
+            return constant(complex(value, 0.0), const_type=self)
         else:
             raise RuntimeError("Invalid constant value for complex type: {}".format(value))
 

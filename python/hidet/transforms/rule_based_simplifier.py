@@ -17,7 +17,7 @@ from hidet.ir.dialects.pattern import PlaceholderExpr, match
 from hidet.ir.dtypes import boolean
 from hidet.ir.expr import Add, convert, Sub, Multiply, Mod, LessThan, LessEqual, Equal, BinaryExpr, LogicalAnd
 from hidet.ir.expr import BitwiseXor, BitwiseAnd, BitwiseOr, BitwiseNot
-from hidet.ir.expr import Div, Constant, Expr, logical_and, logical_or, if_then_else
+from hidet.ir.expr import Div, Constant, Expr, logical_and, logical_or, if_then_else, constant
 from hidet.ir.functors import IRRewriter
 from hidet.ir.tools import rewrite, simplify
 from hidet.transforms.base import FunctionPass
@@ -66,9 +66,9 @@ class ConstExprSimplifier(IRRewriter):
             op = self.op_dict[e.__class__]
             c = op(e.a.value, e.b.value)
             if isinstance(c, bool):
-                return Constant(c, 'bool')
+                return constant(c, 'bool')
             else:
-                return Constant(c, numeric_promotion(e.a.type, e.b.type))
+                return constant(c, numeric_promotion(e.a.type, e.b.type))
         return e
 
     def visit_And(self, e: LogicalAnd):
@@ -98,16 +98,8 @@ class RuleBasedSimplifier(IRRewriter):
         e1, e2 = any_expr(allow_const=False), any_expr(allow_const=False)
         c1, c2 = any_constant(), any_constant()
         ec1, ec2 = any_expr(allow_const=True), any_expr(allow_const=True)
-        zero = convert(0)
-        one = convert(1)
         self.args = {e1, e2, c1, c2, ec1, ec2}
         self.patterns = [
-            (e1 + zero, e1),
-            (e1 - zero, e1),
-            (e1 * one, e1),
-            (e1 * zero, zero),
-            (e1 // one, e1),
-            (e1 ^ zero, e1),
             # add
             ((c1 + e1) + e2, (e1 + e2) + c1),
             ((e1 + c1) + c2, e1 + (c1 + c2)),

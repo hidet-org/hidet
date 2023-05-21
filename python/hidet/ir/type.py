@@ -47,6 +47,11 @@ class TypeNode(Node):
     def is_func_type(self):
         return isinstance(self, FuncType)
 
+    def as_data_type(self) -> DataType:
+        if not isinstance(self, DataType):
+            raise ValueError('Can not convert {} to DataType'.format(self))
+        return self
+
 
 class DataType(TypeNode):
     """

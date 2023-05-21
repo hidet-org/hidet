@@ -12,7 +12,7 @@
 # pylint: disable=bad-staticmethod-argument
 from hidet.ir.expr import Add, Sub, Multiply, Div, Mod, FloorDiv, Neg, LessThan, LessEqual, Equal, NotEqual, LogicalAnd
 from hidet.ir.expr import LogicalOr, LogicalNot, BitwiseAnd, BitwiseOr, BitwiseNot, BitwiseXor, LeftShift, RightShift
-from hidet.ir.expr import Reference, BinaryExpr, cast
+from hidet.ir.expr import Expr, Reference, BinaryExpr, SymbolVar, cast
 from hidet.ir.expr import TensorElement, TensorSlice, IfThenElse, Call, Let, Var, Constant, Cast, Dereference, Address
 from hidet.ir.dialects.pattern import PlaceholderExpr
 from hidet.utils import same_list
@@ -21,7 +21,9 @@ from .base_functor import BaseFunctor, BaseVisitor, BaseRewriter
 
 class ExprFunctor(BaseFunctor):
     def visit_dispatch(self, node):
-        if isinstance(node, Add):
+        if isinstance(node, Var):
+            return self.visit_Var(node)
+        elif isinstance(node, Add):
             return self.visit_Add(node)
         elif isinstance(node, Add):
             return self.visit_Add(node)
@@ -73,8 +75,6 @@ class ExprFunctor(BaseFunctor):
             return self.visit_Call(node)
         elif isinstance(node, Let):
             return self.visit_Let(node)
-        elif isinstance(node, Var):
-            return self.visit_Var(node)
         elif isinstance(node, Constant):
             return self.visit_Constant(node)
         elif isinstance(node, Cast):
@@ -325,7 +325,7 @@ class ExprRewriter(ExprFunctor, BaseRewriter):
         if a is e.a and b is e.b:
             return e
         else:
-            return e.__class__(a, b)
+            return Expr._binary(e.__class__, a, b)  # pylint: disable=protected-access
 
     def visit_Add(self, e: Add):
         return self.visit_Binary(e)
@@ -482,7 +482,12 @@ class ExprRewriter(ExprFunctor, BaseRewriter):
             return Let(v, value, body)
 
     def visit_Var(self, e: Var):
-        return e
+        tp = self(e.type)
+        if tp is e.type:
+            return e
+        else:
+            assert not isinstance(tp, SymbolVar)
+            return Var(e.hint, tp, e.name)
 
     def visit_Constant(self, e: Constant):
         return e

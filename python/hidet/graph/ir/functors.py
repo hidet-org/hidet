@@ -12,7 +12,7 @@
 from typing import Union, Type, Dict, List, Tuple, Optional, Any, Sequence
 from collections import defaultdict
 from hidet.graph.ir.flow_graph import FlowGraph, Operator, Tensor
-from hidet.graph.operator import Device, SizeVar
+from hidet.graph.operator import Device, SymbolVar
 from hidet.utils import same_list
 from hidet.ir.expr import Var, Expr
 from hidet.ir.functors import IRRewriter
@@ -205,7 +205,7 @@ class GraphFreeSizeVarCollector(GraphVisitor):
         from hidet.ir.tools import collect
 
         GraphVisitor.visit_Operator(self, op)
-        size_vars = set(collect(op.attrs, SizeVar))
+        size_vars = set(collect(op.attrs, SymbolVar))
         self.free_size_vars.update(size_vars - self.defined_size_vars)
 
 
@@ -240,5 +240,5 @@ def graph_collect(obj: Union[FlowGraph, Operator, Tensor], cls: Type[Union[Opera
     return [v for v in visitor.memo if isinstance(v, cls)]
 
 
-def collect_free_size_vars(graph: FlowGraph) -> List[SizeVar]:
+def collect_free_size_vars(graph: FlowGraph) -> List[SymbolVar]:
     return list(GraphFreeSizeVarCollector().collect(graph))

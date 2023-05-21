@@ -42,7 +42,7 @@ class IntegerType(DataType):
         return False
 
     def constant(self, value: Any):
-        from hidet.ir.expr import Constant
+        from hidet.ir.expr import Constant, constant
 
         if isinstance(value, Constant):
             value = value.value
@@ -52,7 +52,7 @@ class IntegerType(DataType):
 
         if not self._min_value <= value <= self._max_value:
             raise ValueError('Value {} is out of range for {}.'.format(value, self.name))
-        return Constant(value, self)
+        return constant(value, self)
 
     @property
     def one(self):

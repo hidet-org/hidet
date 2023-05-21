@@ -34,14 +34,10 @@ def register_functions():
         codegen_name='request_cpu_workspace',
     )
     register_primitive_function(
-        name='get_symbol_value',
-        func_or_type=FuncType([string_type()], int32),
-        codegen_name='get_symbol_value'
+        name='get_symbol_value', func_or_type=FuncType([string_type()], int32), codegen_name='get_symbol_value'
     )
     register_primitive_function(
-        name='set_symbol_value',
-        func_or_type=FuncType([string_type(), int32], void_p),
-        codegen_name='set_symbol_value'
+        name='set_symbol_value', func_or_type=FuncType([string_type(), int32], void_p), codegen_name='set_symbol_value'
     )
 
 

@@ -9,12 +9,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Union
+from typing import Union, Dict, Tuple, Callable, Type
 import operator
 from hidet.ir.type import DataType
 from hidet.ir.expr import Expr, BinaryExpr, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, LessEqual, Equal, Constant
 from hidet.ir.expr import BitwiseAnd, BitwiseOr, BitwiseXor, NotEqual, LeftShift, RightShift, Cast, Neg
-from hidet.ir.expr import LogicalAnd, LogicalOr, LogicalNot, is_one, is_zero, is_true, is_false, convert, cast
+from hidet.ir.expr import LogicalAnd, LogicalOr, LogicalNot, is_one, is_zero, is_true, is_false, convert, cast, constant
 from hidet.ir.stmt import Stmt, IfStmt, SeqStmt, ForStmt
 from hidet.ir.tools import rewrite
 from hidet.ir.functors import StmtRewriter, ExprRewriter, BaseRewriter
@@ -78,6 +78,7 @@ class Simplifier(StmtRewriter, ExprRewriter, BaseRewriter):
             raise ValueError()
 
         if isinstance(a, Constant) and isinstance(b, Constant):
+            # a op b
             op_dict = {
                 Add: operator.add,
                 Sub: operator.sub,
@@ -107,6 +108,35 @@ class Simplifier(StmtRewriter, ExprRewriter, BaseRewriter):
                 return convert(a.value or b.value)
             else:
                 raise ValueError()
+        elif isinstance(a, Constant) and not isinstance(b, Constant):
+            # aa op bb (aa is constant)
+            op = e.__class__
+            mapping: Dict[Type, Tuple[Callable, Callable]] = {
+                Add: (lambda: True, lambda: b + a),
+                Multiply: (lambda: True, lambda: b * a),
+            }
+            if op in mapping:
+                condition, result = mapping[op]
+                if condition():
+                    return result()
+        elif isinstance(a, BinaryExpr) and isinstance(a.b, Constant) and isinstance(b, Constant):
+            # (aa op1 bb) op2 cc
+            op1 = a.__class__
+            op2 = e.__class__
+            aa, bb, cc = a.a, a.b, b
+            btype, ctype = bb.type, cc.type
+            mapping: Dict[Tuple, Tuple[Callable, Callable]] = {  # (op1, op2) -> (condition, result)
+                (Add, Add): (lambda: True, lambda: aa + (bb + cc) if bb + cc > 0 else aa - (-(bb + cc))),
+                (Add, Sub): (lambda: True, lambda: aa + (bb - cc) if bb - cc > 0 else aa - (-(bb - cc))),
+                (Sub, Add): (lambda: True, lambda: aa - (bb - cc) if bb - cc > 0 else aa + (-(bb - cc))),
+                (Sub, Sub): (lambda: True, lambda: aa - (bb + cc) if bb + cc > 0 else aa + (-(bb + cc))),
+                (Div, Div): (lambda: btype.is_integer() and ctype.is_integer(), lambda: aa // (bb * cc)),
+            }
+            if (op1, op2) in mapping:
+                condition, result = mapping[(op1, op2)]
+                if condition():
+                    return result()
+
         if a is e.a and b is e.b:
             return e
         return e.__class__(a, b)
@@ -133,7 +163,7 @@ class Simplifier(StmtRewriter, ExprRewriter, BaseRewriter):
         expr = self.visit(e.expr)
         if isinstance(expr, Constant) and expr.type.is_data_type():
             assert isinstance(e.target_type, DataType)
-            return Constant(expr.value, e.target_type)
+            return constant(expr.value, e.target_type)
         elif expr is e.expr:
             return e
         else:
@@ -169,7 +199,7 @@ class Simplifier(StmtRewriter, ExprRewriter, BaseRewriter):
                 return ForStmt(loop_var, extent, body=body, attr=stmt.attr)
 
 
-def simplify(node: Union[Stmt, Expr, int, float, list, tuple], repeat_limit=10):
+def simplify(node: Union[Stmt, Expr, int, float, list, tuple], *, repeat_limit=10):
     if isinstance(node, (int, float)):
         return node
     simplifier = Simplifier()
@@ -184,7 +214,7 @@ def simplify(node: Union[Stmt, Expr, int, float, list, tuple], repeat_limit=10):
 def simplify_to_int(node: Union[Expr, int], repeat_limit=10) -> int:
     if isinstance(node, int):
         return node
-    node = simplify(node, repeat_limit)
+    node = simplify(node, repeat_limit=repeat_limit)
     if not (isinstance(node, Constant) and node.type.is_integer()):
         raise ValueError(f'Can not simplify expression {node} to an integer')
     return node.value

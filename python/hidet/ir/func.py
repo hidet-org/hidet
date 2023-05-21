@@ -48,7 +48,7 @@ class Function(Node):
             the label of this function when it is in a function group
     """
 
-    def __init__(self, name: str, params, body, ret_type, kind: str, extern_vars=None, attrs=None):
+    def __init__(self, name: str, params, body, ret_type, kind: str, attrs=None):
         check_func_name(name)
         self.name: str = name
         self.kind: str = kind
@@ -56,7 +56,7 @@ class Function(Node):
         self.params: List[Var] = params
         self.body: Stmt = body
         self.ret_type: TypeNode = ret_type
-        self.extern_vars: List[Var] = extern_vars if extern_vars else []
+        # self.extern_vars: List[Var] = extern_vars if extern_vars else []
         self.attrs: Dict[str, Union[int, float, str, Node]] = attrs if attrs else {}
 
     def __call__(self, *args, **kwargs) -> Call:
@@ -113,7 +113,7 @@ class IRModule(Node):
 
     def lookup(self, name_or_var: Union[str, Var]):
         if isinstance(name_or_var, Var):
-            name = name_or_var.hint
+            name = name_or_var.name
         else:
             name = name_or_var
         if name not in self.functions:
@@ -129,7 +129,7 @@ class IRModule(Node):
         if name not in self.global_vars:
             func = self.functions[name]
             if isinstance(func, Function):
-                self.global_vars[name] = Var(name, FuncType.from_func(func))
+                self.global_vars[name] = Var(hint=None, type=FuncType.from_func(func), name=name)
             else:
                 raise ValueError()
 

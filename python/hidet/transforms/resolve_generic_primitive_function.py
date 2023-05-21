@@ -46,8 +46,8 @@ class ResolveGenericPrimitiveFuncRewriter(IRRewriter):
         self.device: str = device
 
     def visit_Call(self, e: Call):
-        if is_primitive_function(e.func_var.hint):
-            entry = lookup_primitive_function(e.func_var.hint)
+        if is_primitive_function(e.func_var.name):
+            entry = lookup_primitive_function(e.func_var.name)
             if entry.generic:
                 args = [self(arg) for arg in e.args]
                 arg_types = [infer_type(arg) for arg in args]
@@ -70,7 +70,7 @@ class ResolveGenericPrimitiveFuncRewriter(IRRewriter):
                         return func(*args)
                     except NotImplementedError as err:
                         msg = 'Math function {} for {} data has not been implemented for device {}'.format(
-                            green(e.func_var.hint.replace('generic_', '')), green(dtype), green(self.device)
+                            green(e.func_var.name.replace('generic_', '')), green(dtype), green(self.device)
                         )
                         raise NotImplementedError(msg) from err
 

@@ -39,8 +39,8 @@ class Namer:
             return self.obj_name[e]
         if hint:
             orig_name = hint
-        elif isinstance(e, Var) and e.hint is not None:
-            orig_name = e.hint
+        elif isinstance(e, Var) and (e.name or e.hint):
+            orig_name = e.name if e.name else e.hint
         elif isinstance(e, (ScalarNode, TensorNode)):
             orig_name = e.name
         else:

@@ -13,10 +13,10 @@ from typing import List, Optional, Dict, Any, Union, Tuple
 from hidet.ir.type import TensorType, DataType
 from hidet.ir.expr import Var, Constant, Expr
 from hidet.ir.compute import TensorNode
-from hidet.ir.dtypes import float16, bfloat16, float32, int32
+from hidet.ir.dtypes import float16, bfloat16, float32
 from hidet.ir.task import Task
 from hidet.runtime.module import CompiledFunction
-from hidet.graph.tensor import empty, empty_like, Tensor, SizeVar
+from hidet.graph.tensor import empty, empty_like, Tensor, SymbolVar
 from hidet.ffi.ffi import get_last_error, BackendException
 from hidet.runtime.device import Device, instantiate_device
 
@@ -91,7 +91,7 @@ class Operator:
         from hidet.ir.tools import rewrite, simplify
 
         if all(t.storage is not None for t in self.inputs) and all(isinstance(t, TensorNode) for t in self.task.params):
-            return self.imperative_run(self.inputs, {})
+            return self.imperative_run(self.inputs)
         else:
             output_types: List[TensorType] = [output_node.type for output_node in self.task.outputs]
             outputs: List[Tensor] = []
@@ -114,17 +114,26 @@ class Operator:
             outputs = self.outputs
         return outputs[idx]
 
-    def _imperative_run_prepare_outputs(self, shape_map: Dict[SizeVar, int]) -> List[Tensor]:
-        from hidet.ir.tools import simplify
+    def _imperative_run_prepare_outputs(self) -> List[Tensor]:
+        from hidet.ir.tools import simplify, collect, rewrite
+        from hidet.ffi import runtime_api
 
         # get the mapping from size var to the actual size
         symbolic_shapes = tuple(tuple(d for d in output.type.shape) for output in self.task.outputs)
-        output_shapes = simplify(symbolic_shapes, {k: int32(v) for k, v in shape_map.items()})
+        used_symbols: List[SymbolVar] = collect(symbolic_shapes, SymbolVar)
+        remap: Dict[SymbolVar, Constant] = {}
+        for used_symbol in used_symbols:
+            try:
+                dtype: DataType = used_symbol.type.as_data_type()
+                remap[used_symbol] = dtype(runtime_api.get_symbol_value(used_symbol.name))
+            except BackendException as e:
+                raise RuntimeError('Failed to get the symbol value of "{}"'.format(used_symbol)) from e
+        output_shapes = simplify(rewrite(symbolic_shapes, remap))
 
         # check if all the output shapes are constant
         for shape in output_shapes:
             for d in shape:
-                if isinstance(d, Constant):
+                if not isinstance(d, Constant):
                     raise RuntimeError(
                         'The output shape "{}" of "{}" can not be reduced to a constant'.format(d, self.name)
                     )
@@ -137,21 +146,10 @@ class Operator:
 
         return outputs
 
-    def imperative_run(self, inputs: List[Tensor], shape_map: Dict[SizeVar, int]) -> List[Tensor]:
-        outputs = self._imperative_run_prepare_outputs(shape_map)
+    def imperative_run(self, inputs: List[Tensor]) -> List[Tensor]:
+        outputs: List[Tensor] = self._imperative_run_prepare_outputs()
 
-        tensor_map = {param: input_tensor for param, input_tensor in zip(self.task.tensor_params, inputs + outputs)}
-
-        args = []
-        for param in self.task.params:
-            if isinstance(param, SizeVar):
-                args.append(shape_map[param])
-            elif isinstance(param, TensorNode):
-                args.append(tensor_map[param])
-            else:
-                raise RuntimeError('Unsupported param type: {}'.format(type(param)))
-
-        self.task_func(*args)
+        self.task_func(*inputs, *outputs)
 
         status = get_last_error()
         if status is not None:
@@ -180,11 +178,11 @@ class Operator:
         return dummy_inputs
 
     def latency(
-        self, warmup=3, number=20, repeat=5, median=True, shape_map: Optional[Dict[SizeVar, int]] = None
+        self, warmup=3, number=20, repeat=5, median=True, shape_map: Optional[Dict[SymbolVar, int]] = None
     ) -> Union[List[float], float]:
         from hidet.testing import benchmark_func
 
         dummy_inputs = self.dummy_inputs()
-        outputs = self.imperative_run(dummy_inputs, {} if shape_map is None else shape_map)
+        outputs = self.imperative_run(dummy_inputs)
         args = self.task.generate_arguments(dummy_inputs, outputs)
         return benchmark_func(lambda: self.task_func(*args), warmup=warmup, number=number, repeat=repeat, median=median)

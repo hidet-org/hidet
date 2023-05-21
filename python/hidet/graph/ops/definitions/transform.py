@@ -9,13 +9,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Optional, Union, Sequence, Tuple, Dict
+from typing import List, Optional, Union, Sequence, Tuple
 from hidet.ir.type import DataType, data_type
 from hidet.ir.expr import Expr, Constant, if_then_else, convert, cast as ir_cast, logical_and, is_constant
 from hidet.ir.expr import Int
 from hidet.ir.layout import RowMajorLayout
 from hidet.ir.utils import index_deserialize, index_serialize
-from hidet.graph.operator import SizeVar
 from hidet.utils import prod
 from .utils import Task, InverseMap, Operator, Tensor, TensorNode, compute, input_like, normalize_dim, can_broadcast
 from .utils import TensorInput
@@ -333,14 +332,14 @@ class ReshapeOp(Operator):
         else:
             raise ValueError('Can not infer the shape when there are multiple -1: {}'.format(shape))
 
-    def imperative_run(self, inputs: List[Tensor], shape_map: Dict[SizeVar, int]) -> List[Tensor]:
+    def imperative_run(self, inputs: List[Tensor]) -> List[Tensor]:
         x = inputs[0]
         if isinstance(x.layout, RowMajorLayout):
-            outputs = self._imperative_run_prepare_outputs(inputs, shape_map)
+            outputs = self._imperative_run_prepare_outputs()
             outputs[0]._storage = x.storage  # pylint: disable=protected-access
             return outputs
         else:
-            return Operator.imperative_run(self, inputs, shape_map)
+            return Operator.imperative_run(self, inputs)
 
 
 class RearrangeOp(Operator):

@@ -22,6 +22,7 @@ from .explicit_unroll import explicit_unroll_pass
 from .import_primitive_functions import import_primitive_functions_pass
 from .simplify_stmt import simplify_stmt_pass
 from .expand_let_expr import expand_let_expr_pass
+from .instantiate_symbols import instantiate_symbols_pass
 from .resolve_generic_primitive_function import resolve_primitive_func_pass
 from .inline_function import inline_function_pass
 from .add_explicit_cast import add_explicit_cast_pass
@@ -67,6 +68,7 @@ def lower(ir_module: IRModule) -> IRModule:
         propagate_launch_bound_pass(),
         add_explicit_cast_pass(),
         declare_to_let_pass(),
+        instantiate_symbols_pass(),
         # simplification
         expand_let_expr_pass(),
         inline_let_stmt_pass(),

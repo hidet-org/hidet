@@ -28,6 +28,7 @@ from .ir import Task, save_task, load_task
 from .ir import dtypes
 from .ir.dtypes import int8, int16, int32, int64, uint8, uint16, uint32, uint64, float16, float32, float64, boolean
 from .ir.dtypes import bfloat16, tfloat32, complex64, complex128
+from .ir.expr import symbol_var
 
 from .runtime.device import Device, device
 
@@ -36,7 +37,6 @@ from .graph import nn
 from .graph import ops
 from .graph import empty, randn, zeros, ones, full, randint, symbol, asarray, from_torch
 from .graph import empty_like, randn_like, zeros_like, ones_like, symbol_like, full_like
-from .graph import symbolic_size
 from .graph import trace_from, load_graph, save_graph
 from .graph import jit
 from .graph import from_dlpack

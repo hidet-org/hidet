@@ -50,17 +50,17 @@ class CallGraph:
         for func in ir_module.functions.values():
             caller = func
             for call in collect(func.body, Call):
-                if is_primitive_function(call.func_var.hint):
-                    entry = lookup_primitive_function(call.func_var.hint)
+                if is_primitive_function(call.func_var.name):
+                    entry = lookup_primitive_function(call.func_var.name)
                     if entry.function is not None:
-                        name = call.func_var.hint
+                        name = call.func_var.name
                         if name not in ir_module.functions and allow_missing:
                             continue
                         callee = ir_module.lookup(name)
                     else:
                         continue
                 else:
-                    callee = ir_module.lookup(call.func_var.hint)
+                    callee = ir_module.lookup(call.func_var.name)
                 self._add_edge(caller, callee)
 
         self._init_order()

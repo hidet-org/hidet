@@ -11,12 +11,12 @@
 # limitations under the License.
 # pylint: disable=import-outside-toplevel
 from __future__ import annotations
-from typing import Any, Dict, List, Union, Callable, Sequence
+from typing import Any, Dict, List, Union, Callable
 import os
 import pickle
 from hidet.ir.node import Node
 from hidet.ir.type import FuncType, VoidType
-from hidet.ir.expr import Expr, Var, SizeVar, Constant, var
+from hidet.ir.expr import Expr, Var, SymbolVar, var
 from hidet.ir.func import IRModule
 from hidet.ir.compute import ComputeNode, TensorNode, TensorInput, ScalarInput, GridCompute
 
@@ -118,7 +118,10 @@ class Task(Node):
                 )
 
         free_vars: List[Var] = collect_free_vars(self.outputs)
-        if any(v not in self.params and not isinstance(v.type, FuncType) and not isinstance(v, SizeVar) for v in free_vars):
+        if any(
+            v not in self.params and not isinstance(v.type, FuncType) and not isinstance(v, SymbolVar)
+            for v in free_vars
+        ):
             raise ValueError('Some free variables are not in params: {}'.format(free_vars))
 
         # check all TensorInput used in outputs are placed in inputs
@@ -128,7 +131,8 @@ class Task(Node):
 
     def has_symbolic_shape(self) -> bool:
         from hidet.ir.tools import collect
-        return len(collect(self.outputs, SizeVar)) > 0
+
+        return len(collect(self.outputs, SymbolVar)) > 0
 
     def signature(self) -> str:
         params = []

@@ -32,12 +32,12 @@ class Boolean(DataType):
         return False
 
     def constant(self, value: Any):
-        from hidet.ir.expr import Constant
+        from hidet.ir.expr import constant
 
         if isinstance(value, float):
             warnings.warn('Converting float to boolean when creating constant.')
         value = bool(value)
-        return Constant(value, self)
+        return constant(value, self)
 
     @property
     def one(self):

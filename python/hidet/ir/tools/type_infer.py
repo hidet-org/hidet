@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from hidet.ir.type import DataType, TensorType, FuncType, PointerType, TensorPointerType, data_type, tensor_pointer_type
-from hidet.ir.type import TypeNode, tensor_type
+from hidet.ir.type import tensor_type
 from hidet.ir.expr import BinaryExpr, Add, Sub, Multiply, Div, Mod, FloorDiv, Condition, LessThan, Equal, IfThenElse
 from hidet.ir.expr import TensorSlice, LogicalNot, LogicalOr, LogicalAnd, LessEqual, Let, RightShift, LeftShift
 from hidet.ir.expr import BitwiseAnd, Neg, NotEqual, BitwiseXor, Dereference, Reference, Address, BitwiseNot, BitwiseOr
@@ -207,6 +207,6 @@ class TypeInfer(ExprFunctor, ComputeFunctor):
         raise NotImplementedError()
 
 
-def infer_type(expr) -> TypeNode:
+def infer_type(expr):
     infer = TypeInfer()
     return infer(expr)

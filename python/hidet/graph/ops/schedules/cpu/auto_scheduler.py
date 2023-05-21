@@ -20,26 +20,24 @@ from ..auto_scheduler import AutoScheduler, ComputeExprLower
 
 
 class CpuAutoScheduler(AutoScheduler):
-    def schedule_grid_compute(
-        self, node: GridCompute, node_map: Dict[TensorNode, Var], scalar_map: Dict[Var, Var]
-    ) -> Stmt:
+    def schedule_grid_compute(self, node: GridCompute, tensor_map: Dict[TensorNode, Var]) -> Stmt:
         # pylint: disable=too-many-locals, import-outside-toplevel, unnecessary-comprehension
         from hidet.ir.mapping import row_repeat, TaskMapping
 
-        params, param_map, call_args = self.grid_compute_params_and_args(node, node_map, scalar_map)
+        params, param_map, call_args = self.grid_compute_params_and_args(node, tensor_map)
 
         with FunctionBuilder(name=f'compute_{node.name}', kind='host_kernel') as fb:
             # set function parameters
             fb.extend_params(params)
 
-            mapping: TaskMapping = row_repeat(*[rewrite(d, param_map) for d in node.shape])
+            mapping: TaskMapping = row_repeat(*node.shape)
             iter_names = [f'i{i}' for i in range(len(node.shape))]
             with fb.for_mapping(iter_names, mapping, convert(0)) as task_index:
                 out_param: Var = param_map[node]
                 compute_lower = ComputeExprLower(node.value, param_map=param_map)
                 stmts, value = compute_lower.lower()
                 rmap = {axis: axis_value for axis, axis_value in zip(node.axes, task_index)}
-                stmts, value = [rewrite(stmt, rmap) for stmt in stmts], rewrite(value, rmap)
+                stmts, value = rewrite([stmts, value], rmap)
                 fb += stmts
                 fb += BufferStoreStmt(out_param, task_index, value)
         func = fb.get()

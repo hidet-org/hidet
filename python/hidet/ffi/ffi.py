@@ -46,7 +46,7 @@ def get_last_error() -> Optional[str]:
     if func is None:
         func = _LIB['hidet_get_last_error']
         func.restype = ctypes.c_char_p
-        get_last_error._func = func
+        setattr(get_last_error, '_func', func)
     ret = func()
     if isinstance(ret, bytes):
         return ret.decode('utf-8')
