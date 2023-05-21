@@ -25,8 +25,8 @@ from hidet.ir.primitives.math import sqrt, pow
 
 class MatmulF32Taskx86(Task):
     def __init__(self, a: TensorNode, b: TensorNode):
-        a_shape = a.const_shape()
-        b_shape = b.const_shape()
+        a_shape = a.const_shape
+        b_shape = b.const_shape
 
         if not a.type.dtype == float32 or not b.type.dtype == float32:
             raise ValueError('Both inputs must be float32 tensors')
@@ -84,9 +84,9 @@ class MatmulF32Taskx86(Task):
         from hidet.lang.avx import avx_f32x4_broadcast, avx_f32x4_fmadd, avx_f32x4_load, avx_f32x4_store
 
         node_a, node_b, node_c = self.inputs[0], self.inputs[1], self.outputs[0]
-        a_shape: List[int] = node_a.const_shape()
-        b_shape: List[int] = node_b.const_shape()
-        c_shape: List[int] = node_c.const_shape()
+        a_shape: List[int] = node_a.const_shape
+        b_shape: List[int] = node_b.const_shape
+        c_shape: List[int] = node_c.const_shape
         m_size, n_size, k_size = a_shape[-2], b_shape[-1], a_shape[-1]
         a_head, b_head, c_head = a_shape[:-2], b_shape[:-2], c_shape[:-2]
 
@@ -119,7 +119,7 @@ class MatmulF32Taskx86(Task):
                                   msize: int32,
                                   nsize: int32):
                 c = as_tensor_pointer(c_ptr, dtype=float32, shape=[msize, nsize])
-                five = sqrt(msize) // 1
+                five = int32(sqrt(float32(25)))
 
                 c0 = avx_f32x8_load(~c[0, 0])
                 c08 = avx_f32x8_load(~c[0, 8])
@@ -131,8 +131,8 @@ class MatmulF32Taskx86(Task):
                 c38 = avx_f32x8_load(~c[3, 8])
                 c4 = avx_f32x8_load(~c[4, 0])
                 c48 = avx_f32x8_load(~c[4, 8])
-                c5 = avx_f32x8_load(~c[5, 0])
-                c58 = avx_f32x8_load(~c[5, 8])
+                c5 = avx_f32x8_load(~c[five, 0])
+                c58 = avx_f32x8_load(~c[five, 8])
 
                 for pp in range(pb):
                     bb0to7 = avx_f32x8_load(~b[pp, 0])

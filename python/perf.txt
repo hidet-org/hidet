@@ -1,4 +1,0 @@
-m=1024, k=1024, n=1024: hidet takes 4.98 ms
-m=1024, k=1024, n=1024: numpy takes 3.35 ms
-m=1920, k=1920, n=1920: hidet takes 26.07 ms
-m=1920, k=1920, n=1920: numpy takes 24.75 ms

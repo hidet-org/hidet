@@ -25,8 +25,8 @@ from hidet.graph.ops.definitions.arithmetic import sqrt
 
 class MatmulF32Taskx86V2(Task):
     def __init__(self, a: TensorNode, b: TensorNode):
-        a_shape = a.const_shape()
-        b_shape = b.const_shape()
+        a_shape = a.const_shape
+        b_shape = b.const_shape
 
         if not a.type.dtype == float32 or not b.type.dtype == float32:
             raise ValueError('Both inputs must be float32 tensors')
@@ -74,9 +74,9 @@ class MatmulF32Taskx86V2(Task):
         from hidet.lang.avx import avx_f32x8_store, avx_f32x8_fmadd, avx_f32x8_load, avx_f32x8_broadcast
 
         node_a, node_b, node_c = self.inputs[0], self.inputs[1], self.outputs[0]
-        a_shape: List[int] = node_a.const_shape()
-        b_shape: List[int] = node_b.const_shape()
-        c_shape: List[int] = node_c.const_shape()
+        a_shape: Tuple[int] = node_a.const_shape
+        b_shape: Tuple[int] = node_b.const_shape
+        c_shape: Tuple[int] = node_c.const_shape
         m_size, n_size, k_size = a_shape[-2], b_shape[-1], a_shape[-1]
 
         tile_m, tile_n = micro_ker
@@ -129,6 +129,28 @@ class MatmulF32Taskx86V2(Task):
                         nthr_m += 1
                     else:
                         nthr_n += 1
+
+                if nthr_m * nthr_n > nthr and nthr_m > 1 and nthr_n > 1:
+                    if nthr_m <= nthr_n:
+                        nthr_m = int32(sqrt(float32(nthr)))
+                        if nthr_m > (m + BM_SMALL_NOCOPY_AVX - 1) // BM_SMALL_NOCOPY_AVX:
+                            nthr_m = (m + BM_SMALL_NOCOPY_AVX - 1) // BM_SMALL_NOCOPY_AVX
+                        nthr_n = nthr // nthr_m
+
+                        while nthr_m > 1 and nthr_m * nthr_n != nthr:
+                            nthr_m -= 1
+                            nthr_n = nthr // nthr_m
+                    else:
+                        nthr_n = int32(sqrt(float32(nthr)))
+                        if nthr_n > (n + BN_SMALL_NOCOPY_AVX - 1) // BN_SMALL_NOCOPY_AVX:
+                            nthr_n = (n + BN_SMALL_NOCOPY_AVX - 1) // BN_SMALL_NOCOPY_AVX
+                        nthr_m = nthr // nthr_n
+
+                        while nthr_n > 1 and nthr_m * nthr_n != nthr:
+                            nthr_n -= 1
+                            nthr_m = nthr // nthr_n
+
+                # TODO: Finish the resting starting with MB = ... tomorrow!
 
 
 
