@@ -137,7 +137,7 @@ class SpatialTaskMapping(TaskMapping):
         from hidet.ir.tools import simplify
 
         super().__init__(num_workers=prod(task_shape), task_shape=tuple(task_shape), worker2task=self._worker2task)
-        self.ranks: List[int] = list(ranks)
+        self.ranks: List[Int] = list(ranks)
         self.strides: List[Int] = [simplify(v) for v in strides_from_ranks(task_shape, ranks)]
 
         assert len(task_shape) == len(ranks)

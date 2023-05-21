@@ -46,13 +46,7 @@ class PropagateLaunchBoundPass(FunctionPass):
             attrs['cuda.block_dim'] = self.kernel_function.attrs['cuda.block_dim']
             attrs['cuda.grid_dim'] = self.kernel_function.attrs['cuda.grid_dim']
             func = Function(
-                name=func.name,
-                params=func.params,
-                body=func.body,
-                ret_type=func.ret_type,
-                kind=func.kind,
-                extern_vars=func.extern_vars,
-                attrs=attrs,
+                name=func.name, params=func.params, body=func.body, ret_type=func.ret_type, kind=func.kind, attrs=attrs
             )
         return func
 

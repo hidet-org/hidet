@@ -25,6 +25,7 @@ class PlaceholderExpr(Expr):
         self.required_type: Optional[TypeNode] = required_type
         self.require_const: bool = require_const
         self.require_non_const: bool = require_non_const
+        assert not (self.require_const and self.require_non_const), 'require placeholder to be both const & non-const'
 
 
 class NotMatchedError(Exception):

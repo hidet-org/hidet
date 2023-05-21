@@ -78,11 +78,11 @@ class InlineFunctionRewriter(IRRewriter):
             return super().visit(node)
 
     def visit_Call(self, e: Call):
-        if e.func_var.hint not in self.ir_module.functions:
+        if e.func_var.name not in self.ir_module.functions:
             # primitive function that has not been imported yet
             return super().visit_Call(e)
 
-        callee: Function = self.ir_module.functions[e.func_var.hint]
+        callee: Function = self.ir_module.functions[e.func_var.name]
         if self.should_inline(callee):
             assert len(e.args) == len(callee.params)
             args: List[Expr] = [self.visit(arg) for arg in e.args]

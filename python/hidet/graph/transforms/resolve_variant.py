@@ -134,11 +134,10 @@ class ResolveVariantRewriter(GraphRewriter):
             GraphRewriter.visit_Operator(self, op)
             return
         inputs = [self(x) for x in op.inputs]
-        attrs = {k: self.attr_rewriter(v) for k, v in op.attrs.items()}
-        if same_list(inputs, op.inputs) and same_list(attrs.values(), op.attrs.values()):
+        if same_list(inputs, op.inputs):
             resolve_op = op
         else:
-            updated_outputs = op.reforward(inputs, attrs)
+            updated_outputs = op.reforward(inputs)
             resolve_op = updated_outputs[0].op
         outs = self.rule_chain.resolve(resolve_op)
 
@@ -146,7 +145,8 @@ class ResolveVariantRewriter(GraphRewriter):
             # keep the original operator
             # we still need to update memo in case inputs changed
             assert all(original not in self.memo for original in op.outputs)
-            self.update_outputs(op.outputs, resolve_op.outputs)
+            for original, updated in zip(op.outputs, resolve_op.outputs):
+                self.memo[original] = updated
         else:
             logger.debug("Resolve operator %s", op.name)
             # update output of resolved operator
@@ -171,7 +171,8 @@ class ResolveVariantRewriter(GraphRewriter):
                             "shape as the original ones. The {}-th tensor expect {}{} but got {}{}"
                         ).format(op.name, i, original.dtype, list(original.shape), updated.dtype, list(updated.shape))
                     )
-            self.update_outputs(op.outputs, outs)
+            for original, updated in zip(op.outputs, outs):
+                self.memo[original] = updated
 
     @staticmethod
     def is_compatible_output(a: Tensor, b: Tensor):

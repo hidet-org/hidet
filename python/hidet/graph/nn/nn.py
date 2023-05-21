@@ -17,6 +17,7 @@ from hidet.graph.common import normalize
 from hidet.graph.nn.module import Module
 from hidet.graph.tensor import Tensor, randn, zeros, ones
 from hidet.graph.nn.container import Sequential, ModuleList
+from hidet.utils import prod
 
 
 class Conv2d(Module):
@@ -29,7 +30,9 @@ class Conv2d(Module):
         self.stride = normalize(stride)
         self.groups = groups
         self.weight = randn(
-            shape=[out_channels, in_channels, *self.kernel], dtype='float32', stddev=1.0 / math.sqrt(out_channels)
+            shape=[out_channels, in_channels, *self.kernel],
+            dtype='float32',
+            stddev=1.0 / math.sqrt(in_channels * prod(self.kernel)),
         )
 
     def extra_str(self) -> str:

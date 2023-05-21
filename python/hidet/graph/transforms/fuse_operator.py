@@ -14,7 +14,7 @@ from typing import List, Sequence, Dict, Tuple, Optional, Set, Union
 import hidet
 from hidet.graph.ir import FlowGraph, Operator, Tensor
 from hidet.graph.ops.definitions.special import BarrierOp
-from hidet.graph.ir.functors import analyze_usage, AttributeRewriter
+from hidet.graph.ir.functors import analyze_usage
 from hidet.graph.transforms.base import GraphPass
 from hidet.utils.structure import DirectedGraph
 from hidet.utils.doc import Doc, Text, NewLine, doc_join
@@ -42,27 +42,20 @@ class FusibleGraph:
         tail = NewLine() + '}'
         return str(head + body.indent() + tail)
 
-    def flow_graph_and_anchor(self, attr_rewriter: AttributeRewriter) -> Tuple[FlowGraph, int]:
+    def flow_graph_and_anchor(self) -> Tuple[FlowGraph, int]:
         from hidet.graph import symbol_like
 
-        local_rewriter = AttributeRewriter(remap=attr_rewriter.memo)
-        graph_inputs: List[Tensor] = [
-            symbol_like(x, shape=local_rewriter.rewrite(x.shape), layout=local_rewriter.rewrite(x.layout))
-            for x in self.input_tensors
-        ]
-        local_rewriter.update_with_outputs(self.input_tensors, graph_inputs)
+        graph_inputs: List[Tensor] = [symbol_like(x, shape=x.shape, layout=x.layout) for x in self.input_tensors]
 
         remap: Dict[Tensor, Tensor] = {x: y for x, y in zip(self.input_tensors, graph_inputs)}
         updated_anchor: Optional[Operator] = None
         for op in self.operators:
             inputs = [remap[x] for x in op.inputs]
-            attrs = {k: local_rewriter(v) for k, v in op.attrs.items()}
-            outputs = op.reforward(inputs, attrs)
+            outputs = op.reforward(inputs)
             if op is self.anchor:
                 updated_anchor = outputs[0].op
             for x, y in zip(op.outputs, outputs):
                 remap[x] = y
-            local_rewriter.update_with_outputs(op.outputs, outputs)
         graph_outputs = [remap[x] for x in self.output_tensors]
         flow_graph = hidet.trace_from(graph_outputs, graph_inputs)
 
@@ -278,24 +271,21 @@ def partition_graph(graph: FlowGraph, usage: Usage) -> List[FusibleGraph]:
     return partition
 
 
-def operator_from_sub_graph(
-    sub_graph: FusibleGraph, tensor_remap: Dict[Tensor, Tensor], attr_rewriter: AttributeRewriter
-) -> Operator:
+def operator_from_sub_graph(sub_graph: FusibleGraph, tensor_remap: Dict[Tensor, Tensor]) -> Operator:
     if len(sub_graph.operators) == 1:
         # if there is only one operator in the sub-graph, we just update its inputs.
         origin_op = sub_graph.operators[0]
         updated_inputs: List[Tensor] = [
             tensor_remap[tensor] if tensor in tensor_remap else tensor for tensor in origin_op.inputs
         ]
-        attrs = {k: attr_rewriter(v) for k, v in origin_op.attrs.items()}
-        outs: List[Tensor] = origin_op.reforward(updated_inputs, attrs)
+        outs: List[Tensor] = origin_op.reforward(updated_inputs)
         updated_op = outs[0].trace[0]
         return updated_op
     else:
         # otherwise, create a new operator from the sub-graph.
         from hidet.graph.ops.definitions.fusion.fused_operator import fused_operator
 
-        fused_graph, anchor = sub_graph.flow_graph_and_anchor(attr_rewriter)
+        fused_graph, anchor = sub_graph.flow_graph_and_anchor()
         updated_inputs: List[Tensor] = [
             tensor_remap[tensor] if tensor in tensor_remap else tensor for tensor in sub_graph.input_tensors
         ]
@@ -309,12 +299,12 @@ def construct_fused_graph(graph: FlowGraph, sub_graphs: Sequence[FusibleGraph]) 
     graph_input_tensors: List[Tensor] = graph.inputs
     graph_nodes: List[Operator] = []
     tensor_remap: Dict[Tensor, Tensor] = {}
-    attr_rewriter = AttributeRewriter()
 
     for sub_graph in sub_graphs:
-        op = operator_from_sub_graph(sub_graph, tensor_remap, attr_rewriter)
+        op = operator_from_sub_graph(sub_graph, tensor_remap)
         tensor_remap.update({a: b for a, b in zip(sub_graph.output_tensors, op.outputs)})
-        attr_rewriter.update_with_outputs(sub_graph.output_tensors, op.outputs)
+        for original, updated in zip(sub_graph.output_tensors, op.outputs):
+            tensor_remap[original] = updated
         graph_nodes.append(op)
 
     graph_output_tensors: List[Tensor] = [

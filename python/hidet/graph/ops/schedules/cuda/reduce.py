@@ -15,7 +15,7 @@ from hidet.ir import IRModule
 from hidet.ir.builders import FunctionBuilder
 from hidet.ir.expr import scalar_var, convert, Expr, cast, equal, logical_and
 from hidet.ir.mapping import TaskMapping
-from hidet.ir.primitives import block_idx, thread_idx
+from hidet.ir.primitives import threadIdx, blockIdx
 from hidet.ir.compute import ReduceOperation
 from hidet.ir.stmt import AssignStmt, BufferStoreStmt, DeclareStmt
 from hidet.ir.type import data_type
@@ -75,10 +75,10 @@ def cuda_schedule_reduce_by_warp_reduce(task: ReduceTask) -> IRModule:
         fb += DeclareStmt(rv, init=ro.initial_value(data_type(accumulate_dtype)))
 
         # body
-        grid_indices = grid_layout.worker2task(block_idx())[0]
+        grid_indices = grid_layout.worker2task(blockIdx.x)[0]
 
         # get the reduced value along reduce dimensions
-        for (r,) in block_layout.worker2task(thread_idx()):
+        for (r,) in block_layout.worker2task(threadIdx.x):
             with fb.if_then(r < reduce_extent):
                 reduce_indices = index_deserialize(r, shape=reduce_shape)
                 input_indices = merge_indices(grid_indices, reduce_indices, reduce_dims=task.dims)
@@ -88,7 +88,7 @@ def cuda_schedule_reduce_by_warp_reduce(task: ReduceTask) -> IRModule:
         fb += AssignStmt(rv, ro.finalize(acc=rv, size=reduce_extent))
 
         # write back
-        for (r,) in block_layout.worker2task(thread_idx()):
+        for (r,) in block_layout.worker2task(threadIdx.x):
             with fb.if_then(r < reduce_extent):
                 reduce_indices = index_deserialize(r, shape=reduce_shape)
                 with fb.if_then(logical_and(*[equal(reduce_index, 0) for reduce_index in reduce_indices])):
@@ -138,7 +138,7 @@ def cuda_schedule_reduce_by_default(task: ReduceTask) -> IRModule:
         fb += DeclareStmt(rv, init=ro.initial_value(data_type(accumulate_dtype)))
 
         # body
-        remain_indices = remain_layout.worker2task(thread_idx() + block_idx() * block_size)[0]
+        remain_indices = remain_layout.worker2task(threadIdx.x + blockIdx.x * block_size)[0]
         with fb.if_then(
             logical_and(*[remain_index < remain_shape[i] for i, remain_index in enumerate(remain_indices)])
         ):

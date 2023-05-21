@@ -13,7 +13,7 @@ from typing import List, Optional, Dict
 import os
 import numpy as np
 
-from hidet.graph.ir.flow_graph import FlowGraph, Operator, Tensor, GraphForwardInstrument, SizeVar
+from hidet.graph.ir.flow_graph import FlowGraph, Operator, Tensor, GraphForwardInstrument, SymbolVar
 
 
 class GraphForwardDebugInstrument(GraphForwardInstrument):
@@ -69,7 +69,7 @@ class GraphForwardDebugInstrument(GraphForwardInstrument):
             'std': '{:8.2e}'.format(np.std(double_array)),
         }
 
-    def before_operator(self, op: Operator, inputs: List[Tensor], shape_map: Dict[SizeVar, int]) -> None:
+    def before_operator(self, op: Operator, inputs: List[Tensor], shape_map: Dict[SymbolVar, int]) -> None:
         if not self.debugging:
             return
 
@@ -106,7 +106,7 @@ class GraphForwardDebugInstrument(GraphForwardInstrument):
             f.write('\n'.join(lines) + '\n')
 
     def after_operator(
-        self, op: Operator, inputs: List[Tensor], shape_map: Dict[SizeVar, int], outputs: List[Tensor]
+        self, op: Operator, inputs: List[Tensor], shape_map: Dict[SymbolVar, int], outputs: List[Tensor]
     ) -> None:
         if not self.debugging:
             return

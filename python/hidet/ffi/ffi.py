@@ -42,8 +42,11 @@ def load_library():
 
 
 def get_last_error() -> Optional[str]:
-    func = _LIB['hidet_get_last_error']
-    func.restype = ctypes.c_char_p
+    func = getattr(get_last_error, '_func', None)
+    if func is None:
+        func = _LIB['hidet_get_last_error']
+        func.restype = ctypes.c_char_p
+        setattr(get_last_error, '_func', func)
     ret = func()
     if isinstance(ret, bytes):
         return ret.decode('utf-8')
