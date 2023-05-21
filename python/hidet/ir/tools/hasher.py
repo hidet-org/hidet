@@ -132,7 +132,7 @@ class ExprHash(ExprFunctor, TypeFunctor, BaseFunctor):
     def visit_Let(self, e: Let):
         return self(e.var) + self(e.value) + self(e.body) + hash(Let)
 
-    def visit_ScalarType(self, t: DataType):
+    def visit_DataType(self, t: DataType):
         return self(t.name) + hash(DataType)
 
     def visit_TensorType(self, t: TensorType):

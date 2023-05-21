@@ -256,15 +256,15 @@ class StmtRewriter(StmtFunctor, BaseRewriter):
 
     def visit_ForTaskStmt(self, stmt: ForMappingStmt):
         loop_vars: List[Expr] = [self.visit(v) for v in stmt.loop_vars]
-        # todo: visit expressions in task mapping
+        mapping = self.visit(stmt.mapping)
         worker = self.visit(stmt.worker)
         body = self.visit(stmt.body)
-        if same_list(loop_vars, stmt.loop_vars) and worker is stmt.worker and body is stmt.body:
+        if same_list(loop_vars, stmt.loop_vars) and worker is stmt.worker and body is stmt.body and mapping is stmt.mapping:
             return stmt
         else:
             assert all(isinstance(v, Var) for v in loop_vars)
             asserted_loop_vars: List[Var] = [v for v in loop_vars if isinstance(v, Var)]  # avoid IDE warning
-            return ForMappingStmt(loop_vars=asserted_loop_vars, mapping=stmt.mapping, worker=worker, body=body)
+            return ForMappingStmt(loop_vars=asserted_loop_vars, mapping=mapping, worker=worker, body=body)
 
     def visit_WhileStmt(self, stmt: WhileStmt):
         cond = self.visit(stmt.cond)

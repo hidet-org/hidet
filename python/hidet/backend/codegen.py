@@ -519,7 +519,7 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             doc += self(s)
         return doc
 
-    def visit_ScalarType(self, t: DataType):
+    def visit_DataType(self, t: DataType):
         scalar_type_map = {
             'bool': 'bool',
             'uint8': 'uint8_t',

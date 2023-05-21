@@ -18,7 +18,7 @@ from .base_functor import BaseFunctor, BaseVisitor, BaseRewriter
 class TypeFunctor(BaseFunctor):
     def visit_dispatch(self, node):
         if isinstance(node, DataType):
-            return self.visit_ScalarType(node)
+            return self.visit_DataType(node)
         elif isinstance(node, TensorType):
             return self.visit_TensorType(node)
         elif isinstance(node, PointerType):
@@ -32,7 +32,7 @@ class TypeFunctor(BaseFunctor):
         else:
             return NotImplemented
 
-    def visit_ScalarType(self, t: DataType):
+    def visit_DataType(self, t: DataType):
         raise NotImplementedError()
 
     def visit_TensorType(self, t: TensorType):
@@ -55,7 +55,7 @@ class TypeFunctor(BaseFunctor):
 
 
 class TypeVisitor(TypeFunctor, BaseVisitor):
-    def visit_ScalarType(self, t: DataType):
+    def visit_DataType(self, t: DataType):
         pass
 
     def visit_TensorType(self, t: TensorType):
@@ -80,7 +80,7 @@ class TypeVisitor(TypeFunctor, BaseVisitor):
 
 
 class TypeRewriter(TypeFunctor, BaseRewriter):
-    def visit_ScalarType(self, t: DataType):
+    def visit_DataType(self, t: DataType):
         return t
 
     def visit_TensorType(self, t: TensorType):

@@ -357,7 +357,7 @@ class IRPrinter(IRFunctor):
             doc += self(s)
         return doc
 
-    def visit_ScalarType(self, t: DataType):
+    def visit_DataType(self, t: DataType):
         return Text('{}'.format(t.name))
 
     def _tensor_type(self, t: TensorType):

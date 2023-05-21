@@ -44,25 +44,6 @@ class IRCollector(IRVisitor):
         return super().visit(node)
 
 
-class CloneRewriter(IRRewriter):
-    def clone(self, obj: Union[Stmt, Expr]):
-        return self(obj)
-
-    def visit_LetStmt(self, stmt: LetStmt):
-        bind_vars = []
-        bind_values = []
-        for bind_var, bind_value in zip(stmt.bind_vars, stmt.bind_values):
-            bind_vars.append(Var(bind_var.hint, bind_var.type))
-            self.memo[bind_var] = bind_vars[-1]
-            bind_values.append(self(bind_value))
-        return LetStmt(bind_vars, bind_values, self(stmt.body))
-
-    def visit_Let(self, e: Let):
-        v = Var(e.var.hint, e.var.type)
-        self.memo[e.var] = v
-        return Let(v, self(e.value), self(e.body))
-
-
 def collect(node, node_types, stop_when_found=False) -> list:
     """
     Collect sub-nodes in given node with specific types.
@@ -93,7 +74,3 @@ def collect(node, node_types, stop_when_found=False) -> list:
     collector = IRCollector(node_types, stop_when_found)
     collected = collector.collect(node)
     return collected
-
-
-def clone(node: Union[Stmt, Expr]) -> Union[Stmt, Expr]:
-    return CloneRewriter()(node)
