@@ -16,7 +16,7 @@ from itertools import product
 from hidet.ir.dialects.pattern import PlaceholderExpr, match
 from hidet.ir.dtypes import boolean
 from hidet.ir.expr import Add, convert, Sub, Multiply, Mod, LessThan, LessEqual, Equal, BinaryExpr, LogicalAnd
-from hidet.ir.expr import BitwiseXor, BitwiseAnd, BitwiseOr, BitwiseNot
+from hidet.ir.expr import BitwiseXor, BitwiseAnd, BitwiseOr, BitwiseNot, Var
 from hidet.ir.expr import Div, Constant, Expr, logical_and, logical_or, if_then_else, constant
 from hidet.ir.stmt import LetStmt, ForStmt
 from hidet.ir.functors import IRRewriter
@@ -266,16 +266,18 @@ class RuleBasedSimplifier(IRRewriter):
         return IRRewriter.visit_Equal(self, e)
 
     def visit_LetStmt(self, stmt: LetStmt):
-        bind_vars = stmt.bind_vars
+        bind_vars = self(stmt.bind_vars)
         bind_values = [self.visit(bind_value) for bind_value in stmt.bind_values]
         body = self.visit(stmt.body)
+        bind_vars = [updated if isinstance(updated, Var) else original for original, updated in zip(stmt.bind_vars, bind_vars)]
         if same_list(bind_vars, stmt.bind_vars) and same_list(bind_values, stmt.bind_values) and body is stmt.body:
             return stmt
         else:
             return LetStmt(bind_vars, bind_values, body)
 
     def visit_ForStmt(self, stmt: ForStmt):
-        loop_var = stmt.loop_var
+        loop_var = self(stmt.loop_var)
+        loop_var = loop_var if isinstance(loop_var, Var) else stmt.loop_var
         extent = self.visit(stmt.extent)
         body = self.visit(stmt.body)
         if loop_var is stmt.loop_var and extent is stmt.extent and body is stmt.body:

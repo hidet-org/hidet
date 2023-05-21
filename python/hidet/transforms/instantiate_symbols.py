@@ -108,9 +108,11 @@ class InstantiateSymbolsRewriter(IRRewriter):
 
         callee_func_symbols: FuncSymbols = self.func_symbols[call.func_var.name]
         caller_func_symbols: FuncSymbols = self.func_symbols[self.current_func]
+        args = list(call.args)
         for callee_used_symbol in callee_func_symbols.symbols:
             assert callee_used_symbol in caller_func_symbols.symbol2param
-            call.args.append(caller_func_symbols.symbol2param[callee_used_symbol])
+            args.append(caller_func_symbols.symbol2param[callee_used_symbol])
+        call.args = tuple(args)
         return call
 
 

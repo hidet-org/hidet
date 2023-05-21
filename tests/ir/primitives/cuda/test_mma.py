@@ -17,7 +17,7 @@ from hidet.driver import build_ir_module
 from hidet.ir.builders import FunctionBuilder
 from hidet.ir.expr import Var, tensor_var
 from hidet.ir.func import IRModule
-from hidet.ir.primitives.cuda import thread_idx
+from hidet.ir.primitives.cuda import threadIdx
 from hidet.ir.primitives.cuda.mma import MmaConfig, mma_sync, mma_configs
 from hidet.ir.stmt import BufferStoreStmt, DeclareStmt, DeclareScope
 from hidet.ir.type import tensor_pointer_type, FuncType, data_type
@@ -40,7 +40,7 @@ def matmul_mma_tensor_core(config: MmaConfig):
         fb += DeclareStmt(regs_c)
 
         # body
-        w = thread_idx()
+        w = threadIdx.x
         for p in range(config.c_elements):
             fb += BufferStoreStmt(regs_c, [p], 0.0)
         for p, (i, k) in enumerate(config.a_load_map(w)):

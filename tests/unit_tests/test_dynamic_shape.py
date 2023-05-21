@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Optional
+from typing import Optional, Union
 import pytest
 import numpy as np
 import numpy.testing
@@ -26,7 +26,7 @@ def test_attention(device):
     w1 = hidet.randn([768, 768 * 3], device=device)
     b1 = hidet.randn([768 * 3], device=device)
 
-    def get_graph(seq: Optional[int] = None) -> FlowGraph:
+    def get_graph(seq: Union[int, str]) -> FlowGraph:
         n_head = 12
         ids = hidet.symbol([seq], dtype='int32', device=device)
         x = hidet.ops.take(wte, ids) + hidet.ops.take(wpe, hidet.ops.arange(ids.shape[0], device=device))
@@ -38,7 +38,7 @@ def test_attention(device):
         x = ops.softmax(q @ ops.transpose(k, [-1, -2]) / float(np.sqrt(q.shape[-1])) + causal_mask, axis=-1) @ v
         return hidet.trace_from(x)
 
-    graph_dynamic = get_graph()
+    graph_dynamic = get_graph('seq')
     graph_dynamic_opt = hidet.graph.optimize(graph_dynamic)
 
     for seq in [1, 2, 3, 4, 8]:
