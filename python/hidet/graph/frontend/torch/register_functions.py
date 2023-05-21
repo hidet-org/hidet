@@ -9,14 +9,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from __future__ import annotations
-from typing import Optional, Union, Sequence, Any
+from typing import Optional, Union, Sequence, Any, Tuple, List
 import operator
 import torch
 from hidet.graph.tensor import Tensor, full_like, from_torch
 from hidet.graph import ops
 from hidet.utils import same_list
 from hidet.ir.type import DataType
+from hidet.ir.expr import Int
 from hidet.runtime.device import Device
 from .interpreter import register_function, register_method
 from .interpreter import warnings
@@ -142,6 +142,7 @@ def bilinear(x_1: Tensor, x_2: Tensor, weight: Tensor, bias: Optional[Tensor]):
 
 
 @register_function(operator.add)
+@register_function(torch.ops.aten.add.Tensor)
 def add(x: Tensor, y: Tensor):
     return ops.add(x, y)
 
@@ -152,11 +153,13 @@ def iadd(x: Tensor, y: Tensor):
 
 
 @register_function(torch.sin)
+@register_function(torch.ops.aten.sin.default)
 def sin(x: Tensor):
     return ops.sin(x)
 
 
 @register_function(torch.cos)
+@register_function(torch.ops.aten.cos.default)
 def cos(x: Tensor):
     return ops.cos(x)
 
@@ -198,12 +201,14 @@ def getitem(x: Tensor, index):
 
 
 @register_function(operator.mul)
+@register_function(torch.mul)
+@register_function(torch.ops.aten.mul.Tensor)
 def mul(x: Tensor, y: Tensor):
     return x * y
 
 
 @register_function(torch.cat)
-def cat(tensors: list[Tensor], dim: int):
+def cat(tensors: List[Tensor], dim: int):
     return ops.concat(tensors, dim)
 
 
@@ -307,6 +312,8 @@ def sub(x: Tensor, y: Tensor):
 
 
 @register_function(operator.neg)
+@register_function(torch.neg)
+@register_function(torch.ops.aten.neg.default)
 def neg(x: Tensor):
     return -x
 
@@ -315,7 +322,7 @@ def neg(x: Tensor):
 @register_method(torch.Tensor.softmax)
 def softmax(x: Tensor, dim: int, _stacklevel: int = 3, dtype=None):
     if dtype is not None:
-        raise NotImplementedError("dtype is not None")
+        x = ops.cast(x, dtype_from_torch(dtype))
     return ops.softmax(x, dim)
 
 
@@ -508,7 +515,7 @@ def relu6(x: Tensor, inplace: bool = False):
 @register_function(torch.arange)
 def arange(
     start: Number,
-    end: Number,
+    end: Number = None,
     step: Number = 1,
     *,
     out: Optional[Tensor] = None,
@@ -518,6 +525,9 @@ def arange(
     pin_memory: Optional[bool] = False,
     requires_grad: Optional[bool] = False,
 ):
+    if end is None:
+        end = start
+        start = 0
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.arange(..., out=..., ...)")
     if layout is not None:
@@ -661,39 +671,39 @@ def exp(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
 
 
 @register_function(torch.nn.functional.hardsigmoid)
-def hardsigmoid(x: Tensor, inplace: bool):
+def hardsigmoid(x: Tensor, inplace: bool = False):
     if inplace:
         warnings.warn_once('hidet: hardsigmoid with inplace=True is not supported. Treat as inplace=False.')
     return ops.hardsigmoid(x)
 
 
 @register_function(torch.nn.functional.silu)
-def silu(x: Tensor, inplace: bool):
+def silu(x: Tensor, inplace: bool = False):
     if inplace:
         warnings.warn_once('hidet: silu with inplace=True is not supported. Treat as inplace=False.')
     return ops.silu(x)
 
 
 @register_function(torch.nn.functional.hardswish)
-def hardswish(x: Tensor, inplace: bool):
+def hardswish(x: Tensor, inplace: bool = False):
     if inplace:
         warnings.warn_once('hidet: hardswish with inplace=True is not supported. Treat as inplace=False.')
     return ops.hardswish(x)
 
 
 @register_function(torch.nn.functional.softmin)
-def softmin(x: Tensor, axis: int):
-    return ops.softmin(x, axis)
+def softmin(x: Tensor, dim: int):
+    return ops.softmin(x, dim)
 
 
 @register_function(torch.nn.functional.softplus)
-def softplus(x: Tensor, beta: int, threshold: int):
+def softplus(x: Tensor, beta: int = 1, threshold: int = 20):
     return ops.softplus(x, beta, threshold)
 
 
 @register_function(torch.nn.functional.softshrink)
-def softshrink(x: Tensor, lambda_val: float):
-    return ops.softshrink(x, lambda_val)
+def softshrink(x: Tensor, lambd=0.5):
+    return ops.softshrink(x, lambd)
 
 
 @register_function(torch.nn.functional.tanhshrink)
@@ -702,8 +712,8 @@ def tanhshrink(x: Tensor):
 
 
 @register_function(torch.nn.functional.hardshrink)
-def hardshrink(x: Tensor, lambda_val: float):
-    return ops.hardshrink(x, lambda_val)
+def hardshrink(x: Tensor, lambd=0.5):
+    return ops.hardshrink(x, lambd)
 
 
 @register_function(torch.nn.functional.softsign)
@@ -712,7 +722,9 @@ def softsign(x: Tensor):
 
 
 @register_function(torch.nn.functional.celu)
-def celu(x: Tensor, alpha: float):
+def celu(x: Tensor, alpha: float = 1.0, inplace: bool = False):
+    if inplace:
+        warnings.warn_once('hidet: celu with inplace=True is not supported. Treat as inplace=False.')
     return ops.celu(x, alpha)
 
 
@@ -725,7 +737,7 @@ def logsigmoid(x: Tensor):
 def mish(x: Tensor, inplace: bool = False):
     if inplace:
         warnings.warn_once('hidet: mish with inplace=True is not supported. Treat as inplace=False.')
-    return ops.multiply(x, ops.tanh(ops.softplus(x, 1.0, 20.0)))
+    return ops.multiply(x, ops.tanh(ops.softplus(x, 1, 20)))
 
 
 @register_function(torch.gather)
@@ -735,3 +747,159 @@ def gather(x: Tensor, dim: int, index: Tensor, *, sparse_grad=False, out=None):
     if out is not None:
         raise NotImplementedError('hidet: gather with out=... is not supported')
     return ops.gather(x, index, axis=dim)
+
+
+@register_function(torch.maximum)
+def maximum(x: Tensor, other: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
+    a, b = x, other
+    if len(a.shape) == 0 and a.device.is_cpu() and b.device.is_cuda() and not a.is_symbolic():
+        a = a.cuda()
+    if len(b.shape) == 0 and b.device.is_cpu() and a.device.is_cuda() and not b.is_symbolic():
+        b = b.cuda()
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.maximum(..., out=...)")
+    return ops.maximum(a, b)
+
+
+@register_function(torch.minimum)
+def minimum(x: Tensor, other: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
+    a, b = x, other
+    if len(a.shape) == 0 and a.device.is_cpu() and b.device.is_cuda() and not a.is_symbolic():
+        a = a.cuda()
+    if len(b.shape) == 0 and b.device.is_cpu() and a.device.is_cuda() and not b.is_symbolic():
+        b = b.cuda()
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.minimum(..., out=...)")
+    return ops.minimum(a, b)
+
+
+@register_function(torch.max)
+def torch_max_v1(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.max(..., out=...)")
+    return ops.max(x, dims=list(range(len(x.shape))), keep_dim=True)
+
+
+@register_function(torch.max)
+def torch_max_v2(
+    x: Tensor, other: Union[Tensor, int], *, out: Optional[Tensor] = None
+) -> Union[Tensor, Tuple[Tensor, Tensor]]:
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.max(..., out=...)")
+    if isinstance(other, Tensor):
+        return maximum(x, other)
+    else:
+        return torch_max_v3(x, other)
+
+
+@register_function(torch.max)
+def torch_max_v3(
+    x: Tensor, dim: Int, keepdim: bool = False, *, out: Union[Tensor, Tuple[Tensor, ...], List[Tensor]] = None
+) -> Tuple[Tensor, Tensor]:
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.max(..., out=...)")
+    values = ops.max(x, dims=dim, keep_dim=keepdim)
+    indices = ops.argmax(x, dim=dim, keep_dim=keepdim)
+    return values, indices
+
+
+@register_function(torch.min)
+def torch_min_v1(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.min(..., out=...)")
+    return ops.min(x, dims=list(range(len(x.shape))), keep_dim=True)
+
+
+@register_function(torch.min)
+def torch_min_v2(
+    x: Tensor, other: Union[Tensor, int], *, out: Optional[Tensor] = None
+) -> Union[Tensor, Tuple[Tensor, Tensor]]:
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.min(..., out=...)")
+    if isinstance(other, Tensor):
+        return minimum(x, other)
+    else:
+        return torch_min_v3(x, other)
+
+
+@register_function(torch.min)
+def torch_min_v3(
+    x: Tensor, dim: Int, keepdim: bool = False, *, out: Union[Tensor, Tuple[Tensor, ...], List[Tensor]] = None
+) -> Tuple[Tensor, Tensor]:
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.min(..., out=...)")
+    values = ops.min(x, dims=dim, keep_dim=keepdim)
+    indices = ops.argmin(x, dim=dim, keep_dim=keepdim)
+    return values, indices
+
+
+@register_function(operator.lt)
+def lt(a: Tensor, b: Tensor) -> Tensor:
+    return ops.less(a, b)
+
+
+@register_function(operator.le)
+def le(a: Tensor, b: Tensor) -> Tensor:
+    return ops.less_equal(a, b)
+
+
+@register_function(operator.gt)
+def gt(a: Tensor, b: Tensor) -> Tensor:
+    return ops.greater(a, b)
+
+
+@register_function(operator.ge)
+def ge(a: Tensor, b: Tensor) -> Tensor:
+    return ops.greater_equal(a, b)
+
+
+@register_function(operator.eq)
+def eq(a: Tensor, b: Tensor) -> Tensor:
+    return ops.equal(a, b)
+
+
+@register_function(operator.ne)
+def ne(a: Tensor, b: Tensor) -> Tensor:
+    return ops.not_equal(a, b)
+
+
+@register_function(torch.rsqrt)
+def rsqrt(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.rsqrt(..., out=...)")
+    return ops.rsqrt(x)
+
+
+@register_function(torch.pow)
+@register_method(torch.Tensor.pow)
+def tensor_pow(self: Union[Tensor, Number], exponent: Union[Tensor, Number]) -> Tensor:
+    if isinstance(self, Tensor) and isinstance(exponent, Tensor):
+        return ops.pow(self, exponent)
+    elif isinstance(self, Tensor):
+        return ops.pow(self, ops.full([], value=exponent, dtype=self.dtype, device=self.device))
+    elif isinstance(exponent, Tensor):
+        return ops.pow(ops.full([], value=self, dtype=exponent.dtype, device=exponent.device), exponent)
+    else:
+        return operator.pow(self, exponent)
+
+
+@register_function(torch.mean)
+@register_method(torch.Tensor.mean)
+def torch_mean_v1(x: Tensor, *, dtype: Optional[DataType] = None) -> Tensor:
+    output = ops.mean(x, dims=list(range(len(x.shape))), keep_dim=True)
+    if dtype:
+        output = output.astype(dtype_from_torch(dtype))
+    return output
+
+
+@register_function(torch.mean)
+@register_method(torch.Tensor.mean)
+def torch_mean_v2(
+    x: Tensor, dim, keepdim=False, *, dtype: Optional[DataType] = None, out: Optional[Tensor] = None
+) -> Tensor:
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.mean(..., out=...)")
+    output = ops.mean(x, dims=dim, keep_dim=keepdim)
+    if dtype:
+        output = output.astype(dtype_from_torch(dtype))
+    return output

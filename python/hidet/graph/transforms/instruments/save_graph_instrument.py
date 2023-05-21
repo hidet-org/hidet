@@ -32,9 +32,13 @@ class SaveGraphInstrument(GraphPassInstrument):
                 os.remove(fpath)
         with open(os.path.join(self.out_dir, '0_Origin.json'), 'w') as f:
             utils.netron.dump(graph, f)
+        with open(os.path.join(self.out_dir, '0_Origin.txt'), 'w') as f:
+            f.write(str(graph))
             self.index += 1
 
     def after_pass(self, pass_name: str, graph: FlowGraph):
         with open(os.path.join(self.out_dir, '{}_{}.json'.format(self.index, pass_name)), 'w') as f:
             utils.netron.dump(graph, f)
-            self.index += 1
+        with open(os.path.join(self.out_dir, '{}_{}.txt'.format(self.index, pass_name)), 'w') as f:
+            f.write(str(graph))
+        self.index += 1

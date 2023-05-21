@@ -9,24 +9,27 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Union, Sequence
+from typing import Union, Sequence
+from hidet.ir.expr import is_constant
 from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, TensorNode
 from hidet.graph.ops.definitions.utils import compute, input_like, normalize_stride, normalize_dilations, reduce
 
 
 class Conv1dTask(Task):
-    def __init__(self, data: TensorNode, weight: TensorNode, stride: List[int], dilations: List[int], groups: int):
-        n, c, l = data.const_shape()
-        oc, wc, k = weight.const_shape()
+    def __init__(
+        self, data: TensorNode, weight: TensorNode, stride: Sequence[int], dilations: Sequence[int], groups: int
+    ):
+        n, c, l = data.shape
+        oc, wc, k = weight.shape
         s = normalize_stride(stride, dim=1)[0]
         dil = normalize_dilations(dilations, dim=1)[0]
         len_in = (l - dil * (k - 1) - 1) // s + 1
-        if c % groups != 0 or oc % groups != 0:
+        if is_constant(c, oc, groups) and c % groups != 0 or oc % groups != 0:
             raise ValueError(
                 'Conv1d expects: in_channels % groups == 0 and out_channels % groups == 0, \n'
                 'but got in_channels, out_channels, groups: {}, {}, {}'.format(c, oc, groups)
             )
-        if wc * groups != c:
+        if is_constant(wc, groups, c) and wc * groups != c:
             raise ValueError(
                 'Conv1d expects the weight tensor has shape [out_channels, in_channels / groups, kernel_size], \n'
                 'got weight shape {}, in_channels {} and groups {}'.format([oc, wc, k], c, groups)

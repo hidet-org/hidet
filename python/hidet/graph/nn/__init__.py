@@ -9,10 +9,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from .type_infer import infer_type, TypeInfer
-from .util_functors import collect, clone
-from .rewriter import rewrite
-from .free_var_collector import collect_free_vars
-from .printer import IRPrinter, astext
-from .simplifier import simplify, simplify_to_int
-from .hasher import ExprHash
+from . import module
+from . import container
+from . import nn
+
+from .module import Module
+
+from .nn import Linear, Conv2d, BatchNorm2d, Relu, MaxPool2d

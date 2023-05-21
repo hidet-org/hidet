@@ -53,31 +53,10 @@ jobs:
           pip install --no-deps --force-reinstall ${{ env.WHEEL_NAME }}
 
       # Run tests
-      
-      - name: Fix ownership of the repo
-        run: |
-          git config --global --add safe.directory `pwd`
 
-      - name: Diff against main
-        uses: technote-space/get-diff-action@v6
-        with:
-          PATTERNS: |
-            include/**/*.h
-            src/**/*
-            python/hidet/backend/**/*.py
-            python/hidet/graph/ops/**/*.py
-            python/hidet/transforms/**/*.py
-            python/hidet/ir/**/*.py
-
-      - name: Run tests with operator cache cleared
+      - name: Run tests
         run: |
           python -m pytest -v --durations=20 --clear-cache ./tests
-        if: env.GIT_DIFF
-
-      - name: Run tests with operator cache
-        run: |
-          python -m pytest -v --durations=20 ./tests
-        if: "!env.GIT_DIFF"
 
       # Build the docs
 

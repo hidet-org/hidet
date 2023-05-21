@@ -153,5 +153,5 @@ class ExprHash(ExprFunctor, TypeFunctor, BaseFunctor):
     def visit_TensorSlice(self, e: TensorSlice):
         return self(e.base) + self(e.indices) + self(e.starts) + self(e.ends) + hash(TensorSlice)
 
-    def visit_AnyExpr(self, e: PlaceholderExpr):
+    def visit_PlaceholderExpr(self, e: PlaceholderExpr):
         return HashSum(e) + hash(PlaceholderExpr)

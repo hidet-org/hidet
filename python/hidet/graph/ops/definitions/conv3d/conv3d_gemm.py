@@ -19,7 +19,7 @@ from .utils import infer_conv3d_shape
 
 class Conv3dGemmImageTransformTask(Task):
     def __init__(self, x: TensorNode, kernel: List[int], stride: List[int], dilations: List[int], groups: int):
-        n, c, d, h, w = x.const_shape()
+        n, c, d, h, w = x.shape
         kz, kx, ky = kernel
         sz, sx, sy = stride
         dilz, dilx, dily = dilations

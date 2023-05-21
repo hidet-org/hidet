@@ -12,16 +12,26 @@
 from typing import Sequence
 import numpy.testing
 import torch
+from torch import nn
 import hidet
+
+
+class FunctionalModule(nn.Module):
+    def __init__(self, op):
+        super().__init__()
+        self.op = op
+
+    def forward(self, *args, **kwargs):
+        return self.op(*args, **kwargs)
 
 
 def check_module(model: torch.nn.Module, args: Sequence[torch.Tensor], atol=1e-4, rtol=1e-4):
     hidet.torch.dynamo_config.print_input_graph(True)
-    model = torch.nn.Sequential(model)
     model = model.cuda()
     model.eval()
-    args = [x.cuda() for x in args]
-    model_opt = torch.compile(model, backend='hidet')
+    args = [x.cuda() if isinstance(x, torch.Tensor) else x for x in args]
+    # we use a lambda to make sure the model is compiled by pytorch
+    model_opt = torch.compile(lambda *args, **kwargs: model(*args, **kwargs), backend='hidet')
     torch_outputs = model(*args)
     hidet_outputs = model_opt(*args)
     if isinstance(torch_outputs, torch.Tensor):

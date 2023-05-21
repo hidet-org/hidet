@@ -12,7 +12,7 @@
 from __future__ import annotations
 from typing import Iterable
 from collections import OrderedDict
-from hidet.graph.module import Module
+from .module import Module
 
 
 class Sequential(Module):

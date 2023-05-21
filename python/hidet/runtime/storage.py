@@ -18,7 +18,7 @@ from hidet.utils import green, exiting
 from hidet.runtime.device import Device, instantiate_device
 
 
-def nbytes2str(nbytes: int) -> str:
+def nbytes2str(nbytes: int, color: bool = True) -> str:
     if nbytes > 1024 * 1024:
         size = nbytes // 1024 // 1024
         unit = 'MiB'
@@ -28,7 +28,10 @@ def nbytes2str(nbytes: int) -> str:
     else:
         size = nbytes
         unit = 'Bytes'
-    return green('{} {}'.format(size, unit))
+    if color:
+        return green('{} {}'.format(size, unit))
+    else:
+        return '{} {}'.format(size, unit)
 
 
 class MemoryAPI:
@@ -291,13 +294,9 @@ class MemoryPool:
                 self.clear()
                 addr = self.memory_api.malloc(allocated)
                 if addr == 0:
-                    free, total = self.memory_api.memory_info()
                     raise MemoryError(
-                        f'Can not allocate memory from {self.memory_api.device} device, '
-                        f'total {nbytes2str(total)}, '
-                        f'hidet allocated {nbytes2str(self.memory_api.allocated)}, '
-                        f'free {nbytes2str(free)}, '
-                        f'requesting {nbytes2str(allocated)}.'
+                        f'Can not allocate {nbytes2str(allocated, True)} from {self.memory_api.device} device. '
+                        + self.status(color=True)
                     )
         return Storage(device=self.memory_api.device, addr=addr, num_bytes=allocated, free_handler=self.free)
 
@@ -317,7 +316,7 @@ class MemoryPool:
         self.memory_blocks.clear()
         self.reserved_size = 0
 
-    def status(self) -> str:
+    def status(self, color=False) -> str:
         allocated = self.memory_api.allocated
         peak_allocated = self.memory_api.peak_allocated
         items = [
@@ -328,12 +327,12 @@ class MemoryPool:
         ]
         lines = [
             'Status of {} memory pool'.format(self.memory_api.device),
-            *['{:>12}: {}'.format(name, nbytes2str(nbytes)) for name, nbytes in items],
+            *['{:>12}: {}'.format(name, nbytes2str(nbytes, color)) for name, nbytes in items],
         ]
         return '\n'.join(lines)
 
     def __str__(self):
-        return self.status()
+        return self.status(color=True)
 
     def __del__(self, is_shutting_down=exiting.is_exiting):
         if is_shutting_down():

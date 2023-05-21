@@ -564,7 +564,7 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
     def visit_TensorNode(self, e: TensorNode):
         raise ValueError()
 
-    def visit_AnyExpr(self, e: PlaceholderExpr):
+    def visit_PlaceholderExpr(self, e: PlaceholderExpr):
         raise ValueError()
 
     def visit_NotDispatchedNode(self, n: Node):

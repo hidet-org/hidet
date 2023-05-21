@@ -12,7 +12,6 @@
 from typing import Union
 
 from hidet.ir.expr import Let, Var, Expr
-from hidet.ir.func import Function
 from hidet.ir.functors import IRVisitor, IRRewriter
 from hidet.ir.stmt import Stmt, LetStmt
 
@@ -28,6 +27,9 @@ class IRCollector(IRVisitor):
         self.exprs.clear()
         self.visit(e)
         return self.exprs
+
+    def visit_NotDispatched(self, node):
+        pass
 
     def visit(self, node):
         key = id(node) if isinstance(node, (list, dict)) else node
@@ -61,13 +63,13 @@ class CloneRewriter(IRRewriter):
         return Let(v, self(e.value), self(e.body))
 
 
-def collect(node: Union[Function, Expr, Stmt, list, tuple], node_types, stop_when_found=False) -> list:
+def collect(node, node_types, stop_when_found=False) -> list:
     """
     Collect sub-nodes in given node with specific types.
 
     Parameters
     ----------
-    node: Union[Function, Expr, Stmt, list, tuple]
+    node: Any
         The root node to start collecting.
     node_types: Sequence[Type[Union[Stmt, Expr]]], or Type[Stmt], or Type[Expr]
         The node types to collect, can be arbitrary subclass of Expr and Stmt
@@ -83,10 +85,8 @@ def collect(node: Union[Function, Expr, Stmt, list, tuple], node_types, stop_whe
     if not isinstance(node_types, tuple):
         if isinstance(node_types, list):
             node_types = tuple(node_types)
-        elif issubclass(node_types, (Stmt, Expr)):
-            node_types = (node_types,)
         else:
-            raise ValueError()
+            node_types = (node_types,)
     if isinstance(node, list):
         node = tuple(node)
 

@@ -17,7 +17,7 @@ from hidet.ir.node import Node
 
 # typing forward declaration
 Expr = 'Expr'
-Int = Union['Expr', int]
+Int = Union[int, Expr]
 
 
 class TypeNode(Node):
@@ -158,7 +158,7 @@ class TensorType(TypeNode):
         from hidet.ir.layout import DataLayout
 
         self.dtype: DataType = dtype
-        self.shape: Tuple[Expr] = shape
+        self.shape: Tuple[Expr, ...] = shape
         self.layout: DataLayout = layout
 
     def __invert__(self):

@@ -66,19 +66,22 @@ def register_hidet_options():
         description='The (warmup, number, repeat) parameters for benchmarking. '
         'The benchmarking will run warmup + number * repeat times.',
         default_value=(3, 10, 3),
-    ).register_option(
+    )
+    register_option(
         name='search_space',  #
         type_hint='int',
         description='The search space level.',
         default_value=0,
         choices=[0, 1, 2],
-    ).register_option(
+    )
+    register_option(
         name='cache_operator',
         type_hint='bool',
         description='Whether to enable operator cache on disk.',
         default_value=True,
         choices=[True, False],
-    ).register_option(
+    )
+    register_option(
         name='cache_dir',
         type_hint='path',
         description='The directory to store the cache.',
@@ -88,23 +91,40 @@ def register_hidet_options():
             else os.path.join(os.path.expanduser('~'), '.hidet', 'cache')  # user mode
         ),
         normalizer=os.path.abspath,
-    ).register_option(
+    )
+    register_option(
         name='parallel_build',
         type_hint='bool',
         default_value=True,
         description='Whether to build operators in parallel.',
         choices=[True, False],
-    ).register_option(
+    )
+    register_option(
         name='save_lower_ir',
         type_hint='bool',
         default_value=False,
         description='Whether to save the IR when lower an IRModule to the operator cache.',
         choices=[True, False],
-    ).register_option(
+    )
+    register_option(
         name='debug_cache_tuning',
         type_hint='bool',
         default_value=False,
         description='Whether to cache the generated kernels during tuning.',
+        choices=[True, False],
+    )
+    register_option(
+        name='debug_show_var_id',
+        type_hint='bool',
+        default_value=False,
+        description='Whether to show the variable id in the IR.',
+        choices=[True, False],
+    )
+    register_option(
+        name='debug_show_verbose_flow_graph',
+        type_hint='bool',
+        default_value=False,
+        description='Whether to show the verbose flow graph.',
         choices=[True, False],
     )
 
@@ -471,11 +491,6 @@ def save_lower_ir(enabled: bool = True):
 def get_save_lower_ir() -> bool:
     """
     Get the option value of whether to save the lower IR.
-
-    Returns
-    -------
-    ret: bool
-        Whether to save the lower IR.
     """
     return OptionContext.current().get_option('save_lower_ir')
 
@@ -495,3 +510,29 @@ def debug_cache_tuning(enabled: bool = True):
         Whether to debug cache tuning.
     """
     OptionContext.current().set_option('debug_cache_tuning', enabled)
+
+
+def debug_show_var_id(enable: bool = True):
+    """
+    Whether to show the var id in the IR.
+
+    When this option is enabled, the IR will show the var id with the format `var@id`, like `x@1` and `d_1@1732`.
+    Variable (i.e., hidet.ir.Var) a and b is the same var if and only if `a is b` evaluates to True in Python).
+
+    Parameters
+    ----------
+    enable: bool
+        Whether to show the var id in the IR.
+    """
+    OptionContext.current().set_option('debug_show_var_id', enable)
+
+
+def debug_show_verbose_flow_graph(enable: bool = True):
+    """Whether to show verbose information (like task) when we convert flow graph in to human-readable text.
+
+    Parameters
+    ----------
+    enable: bool
+        Whether to show verbose information when we convert flow graph in to human-readable text.
+    """
+    OptionContext.current().set_option('debug_show_verbose_flow_graph', enable)

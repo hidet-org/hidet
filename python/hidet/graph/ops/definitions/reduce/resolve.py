@@ -51,12 +51,9 @@ class ReduceResolveRule(ResolveRule):
             return None
         return [reduce_f16(x, dims, keepdims, reduce_type)]
 
-    def resolve_generic(self, op: Operator) -> Optional[List[Tensor]]:
-        return op.outputs
-
     def resolve(self, op: Operator) -> Optional[List[Tensor]]:
         assert isinstance(op, ReduceBaseOp)
-        resolve_funcs: List[Callable[[Operator], Any]] = [self.resolve_simplify, self.resolve_f16, self.resolve_generic]
+        resolve_funcs: List[Callable[[Operator], Any]] = [self.resolve_simplify, self.resolve_f16]
         for resolve_func in resolve_funcs:
             outs = resolve_func(op)
             if outs is not None:
