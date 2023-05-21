@@ -269,7 +269,9 @@ class RuleBasedSimplifier(IRRewriter):
         bind_vars = self(stmt.bind_vars)
         bind_values = [self.visit(bind_value) for bind_value in stmt.bind_values]
         body = self.visit(stmt.body)
-        bind_vars = [updated if isinstance(updated, Var) else original for original, updated in zip(stmt.bind_vars, bind_vars)]
+        bind_vars = [
+            updated if isinstance(updated, Var) else original for original, updated in zip(stmt.bind_vars, bind_vars)
+        ]
         if same_list(bind_vars, stmt.bind_vars) and same_list(bind_values, stmt.bind_values) and body is stmt.body:
             return stmt
         else:
