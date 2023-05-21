@@ -20,6 +20,7 @@ from hidet.graph.ops.definitions.utils import input_like, broadcast_shape, can_m
 from hidet.graph.ops.definitions.utils import tune
 from hidet.graph.operator import Operator, Tensor
 from hidet.graph.ops.definitions.utils import broadcast_indices
+from hidet.ir.primitives.math import sqrt, pow
 
 
 class MatmulF32Taskx86(Task):
@@ -68,11 +69,11 @@ class MatmulF32Taskx86(Task):
     def implement_cpu(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
         return tune.extract_ir_modules(self.schedule_matmulf32_x86)
 
-    @tune.space(2, 'micro_ker', [(6, 16), (8, 8), (4, 8), (4, 4)])
+    @tune.space(2, 'micro_ker', [(6, 16)])
     @tune.space(2, 'block_m', [1200, 2400])
-    @tune.space(2, 'block_n', [384, 512, 768, 960])
-    @tune.space(2, 'block_k', [192, 256, 384, 512, 768])
-    @tune.space(2, 'nthreads', [4, 8, 16, 32])
+    @tune.space(2, 'block_n', [192, 384, 512])
+    @tune.space(2, 'block_k', [256, 384, 512, 768])
+    @tune.space(2, 'nthreads', [2, 4, 8, 16, 32])
     def schedule_matmulf32_x86(self, block_m=1200, block_n=768, block_k=512, micro_ker=(6, 16),
                                nthreads=16) -> IRModule:
         import hidet
@@ -118,6 +119,7 @@ class MatmulF32Taskx86(Task):
                                   msize: int32,
                                   nsize: int32):
                 c = as_tensor_pointer(c_ptr, dtype=float32, shape=[msize, nsize])
+                five = sqrt(msize) // 1
 
                 c0 = avx_f32x8_load(~c[0, 0])
                 c08 = avx_f32x8_load(~c[0, 8])

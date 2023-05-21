@@ -123,7 +123,7 @@ class NVCC(SourceCompiler):
             # the library directories.
             *['-L{}'.format(library_dir) for library_dir in self.library_dirs],
             # enable openmp support for cpu kernels
-            '-Xcompiler -fopenmp,-fPIC,-m64,-mavx2,-march=native,-O3',
+            '-Xcompiler -fopenmp,-fPIC,-m64,-mavx2,-march=native,-O3,-funroll-loops,-ffast-math',
             # the target PTX and SASS version.
             '-gencode arch=compute_{cc},code=sm_{cc}'.format(cc=cc_code),
             # allow ptxas (PTX assembler) to output information like register/smem usage.

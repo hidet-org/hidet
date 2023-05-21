@@ -193,7 +193,6 @@ def matmul_kernel5():
                     # # TODO: pack the remaining if the shape is not 'nice'
                     if mr > 0:
                         remain_start_row = mp * MR
-                        # assert remain_start_row + mr == m_size
                         for remain_col in range(pb):
                             for remain_row in range(mr):
                                 aip_packed[remain_start_row + remain_row, remain_col] = \

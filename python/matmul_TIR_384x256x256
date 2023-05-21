@@ -1,0 +1,26 @@
+# from tvm.script import ir as I
+# from tvm.script import tir as T
+
+@I.ir_module
+class Module:
+    @T.prim_func
+    def main(A: T.Buffer((384, 256), "float32"), B: T.Buffer((256, 256), "float32"), matmul_ansor: T.Buffer((384, 256), "float32")):
+        T.func_attr({"from_legacy_te_schedule": T.bool(True), "global_symbol": "main", "tir.noalias": T.bool(True)})
+        auto_scheduler_layout_transform = T.allocate([65536], "float32", "global")
+        auto_scheduler_layout_transform_1 = T.Buffer((65536,), data=auto_scheduler_layout_transform)
+        for ax0_ax1_fused_ax2_fused in T.parallel(16):
+            for ax4, ax6, ax7 in T.grid(64, 4, 16):
+                B_1 = T.Buffer((65536,), data=B.data)
+                auto_scheduler_layout_transform_1[ax0_ax1_fused_ax2_fused * 4096 + ax4 * 64 + ax6 * 16 + ax7] = B_1[ax4 * 1024 + ax6 * 256 + ax0_ax1_fused_ax2_fused * 16 + ax7]
+        for i_outer_outer_j_outer_outer_fused in T.parallel(16):
+            matmul_ansor_local = T.allocate([4], "float32x16", "local")
+            for i_outer_inner in range(96):
+                matmul_ansor_local_1 = T.Buffer((4,), "float32x16", data=matmul_ansor_local, scope="local")
+                for i_c_outer_inner_init in range(4):
+                    matmul_ansor_local_1[i_c_outer_inner_init] = T.Broadcast(T.float32(0), 16)
+                for k_outer, i_c_outer_inner, k_inner in T.grid(64, 4, 4):
+                    A_1 = T.Buffer((98304,), data=A.data)
+                    matmul_ansor_local_1[i_c_outer_inner] = matmul_ansor_local_1[i_c_outer_inner] + T.Broadcast(A_1[i_outer_inner * 1024 + i_c_outer_inner * 256 + k_outer * 4 + k_inner], 16) * auto_scheduler_layout_transform_1[i_outer_outer_j_outer_outer_fused * 4096 + k_outer * 64 + k_inner * 16:i_outer_outer_j_outer_outer_fused * 4096 + k_outer * 64 + k_inner * 16 + 16]
+                for i_inner in range(4):
+                    matmul_ansor_1 = T.Buffer((98304,), data=matmul_ansor.data)
+                    matmul_ansor_1[i_outer_inner * 1024 + i_inner * 256 + i_outer_outer_j_outer_outer_fused * 16:i_outer_inner * 1024 + i_inner * 256 + i_outer_outer_j_outer_outer_fused * 16 + 16] = matmul_ansor_local_1[i_inner]
