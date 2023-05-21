@@ -473,13 +473,13 @@ class ExprRewriter(ExprFunctor, BaseRewriter):
             return Call(func_var, args)
 
     def visit_Let(self, e: Let):
-        v = e.var
+        var = self(e.var)
         value = self(e.value)
         body = self(e.body)
-        if same_list([v, value, body], [e.var, e.value, e.body]):
+        if same_list([var, value, body], [e.var, e.value, e.body]):
             return e
         else:
-            return Let(v, value, body)
+            return Let(var, value, body)
 
     def visit_Var(self, e: Var):
         tp = self(e.type)

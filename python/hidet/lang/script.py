@@ -116,7 +116,7 @@ class ScriptModuleContext:
 
     def append_function(self, function: Function):
         self.functions.append(function)
-        self.name2var[function.name] = Var(hint=function.name, type=FuncType.from_func(function))
+        self.name2var[function.name] = Var(hint=None, type=FuncType.from_func(function), name=function.name)
 
     def lookup(self, name: str) -> Optional[Var]:
         if name not in self.name2var:

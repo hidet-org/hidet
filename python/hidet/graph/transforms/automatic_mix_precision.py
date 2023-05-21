@@ -65,7 +65,8 @@ class AutoMixPrecisionRewriter(GraphRewriter):
             pass  # no change
         else:
             updated_outputs = op.reforward(casted_inputs, attrs)
-            self.update_outputs(op.outputs, updated_outputs)
+            for original, updated in zip(op.outputs, updated_outputs):
+                self.memo[original] = updated
 
     def visit_FlowGraph(self, graph: FlowGraph):
         # convert all outputs back to its original dtype

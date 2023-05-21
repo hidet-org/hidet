@@ -979,12 +979,12 @@ def empty(shape, dtype='float32', device='cpu', layout=None):
     return Tensor(shape=shape, dtype=dtype, device=device, storage=storage, layout=layout)
 
 
-def symbol(shape: Sequence[Union[int, str]], dtype='float32', device='cpu', layout=None) -> Tensor:
+def symbol(shape: Sequence[Union[int, str, Expr]], dtype='float32', device='cpu', layout=None) -> Tensor:
     """Create a symbolic tensor.
 
     Parameters
     ----------
-    shape: Sequence[Union[int, str]]
+    shape: Sequence[Union[int, str, Expr]]
         The shape of new tensor. The shape can contain symbolic variables. str indicates the corresponding dimension is
         a symbolic variable with the given name.
 
@@ -1008,7 +1008,6 @@ def symbol(shape: Sequence[Union[int, str]], dtype='float32', device='cpu', layo
         if isinstance(d, str):
             updated_shape.append(symbol_var(d))
         else:
-            assert isinstance(d, (int, Constant))
             updated_shape.append(d)
     return Tensor(shape=updated_shape, dtype=dtype, device=device, storage=None, layout=layout)
 
