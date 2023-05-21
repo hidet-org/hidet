@@ -246,7 +246,7 @@ class StmtRewriter(StmtFunctor, BaseRewriter):
             return LetStmt(bind_vars, bind_values, body)
 
     def visit_ForStmt(self, stmt: ForStmt):
-        loop_var = stmt.loop_var
+        loop_var = self.visit(stmt.loop_var)
         extent = self.visit(stmt.extent)
         body = self.visit(stmt.body)
         if loop_var is stmt.loop_var and extent is stmt.extent and body is stmt.body:
@@ -259,7 +259,12 @@ class StmtRewriter(StmtFunctor, BaseRewriter):
         mapping = self.visit(stmt.mapping)
         worker = self.visit(stmt.worker)
         body = self.visit(stmt.body)
-        if same_list(loop_vars, stmt.loop_vars) and worker is stmt.worker and body is stmt.body and mapping is stmt.mapping:
+        if (
+            same_list(loop_vars, stmt.loop_vars)
+            and worker is stmt.worker
+            and body is stmt.body
+            and mapping is stmt.mapping
+        ):
             return stmt
         else:
             assert all(isinstance(v, Var) for v in loop_vars)

@@ -483,7 +483,7 @@ class ExprRewriter(ExprFunctor, BaseRewriter):
 
     def visit_Var(self, e: Var):
         tp = self(e.type)
-        if tp is e.type:
+        if tp == e.type:
             return e
         else:
             assert not isinstance(tp, SymbolVar)

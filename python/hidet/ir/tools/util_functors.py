@@ -9,11 +9,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Union
 
-from hidet.ir.expr import Let, Var, Expr
-from hidet.ir.functors import IRVisitor, IRRewriter
-from hidet.ir.stmt import Stmt, LetStmt
+from hidet.ir.functors import IRVisitor
 
 
 class IRCollector(IRVisitor):

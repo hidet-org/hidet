@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from hidet.ir.mapping import SpatialTaskMapping, RepeatTaskMapping, ComposedTaskMapping
-from .base_functor import BaseFunctor, BaseVisitor, BaseRewriter
+from hidet.ir.functors.base_functor import BaseFunctor, BaseVisitor, BaseRewriter
 from hidet.utils.py import same_list
 
 

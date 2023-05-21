@@ -87,28 +87,28 @@ class TypeRewriter(TypeFunctor, BaseRewriter):
         dtype = self.visit(t.dtype)
         shape = self.visit(t.shape)
         layout = self.visit(t.layout)
-        if same_list([dtype, layout], [t.dtype, t.layout]) and same_list(shape, t.shape):
+        if dtype == t.dtype and layout is t.layout and same_list(shape, t.shape):
             return t
         else:
             return TensorType(dtype, shape, layout)
 
     def visit_PointerType(self, t: PointerType):
         base_type = self.visit(t.base_type)
-        if base_type is t.base_type:
+        if base_type == t.base_type:
             return t
         else:
             return PointerType(base_type)
 
     def visit_TensorPointerType(self, t: TensorPointerType):
         tensor_type = self.visit(t.tensor_type)
-        if tensor_type is t.tensor_type:
+        if tensor_type == t.tensor_type:
             return t
         else:
             return TensorPointerType(tensor_type)
 
     def visit_ReferenceType(self, t: ReferenceType):
         base_type = self.visit(t.base_type)
-        if base_type is t.base_type:
+        if base_type == t.base_type:
             return t
         else:
             return ReferenceType(base_type)

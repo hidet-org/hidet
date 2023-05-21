@@ -80,6 +80,9 @@ class GridComputeInliner(ExprRewriter, ComputeRewriter):
     def inline(self, node: TensorNode):
         return self.visit(node)
 
+    def visit_TensorInput(self, node: TensorInput):
+        return node
+
     def visit_TensorElement(self, e: TensorElement):
         base = self(e.base)
         indices = [self(index) for index in e.indices]
@@ -209,6 +212,7 @@ class AutoScheduler:
         outputs: List[TensorNode] = inline_grid_compute(task.outputs)
         output_remap: Dict[TensorNode, TensorNode] = {a: b for a, b in zip(task.outputs, outputs)}
         task_params: List[TensorNode] = [output_remap[p] if p in output_remap else p for p in task.params]
+        assert all(ti in task_params for ti in collect(task_params, TensorInput))
 
         # Taking the TensorNode as node to construct the computation directed-acyclic-graph (DAG)
         # In the DAG, each node is a TensorNode and each edge (src, dst) indicates src is accessed by dst.

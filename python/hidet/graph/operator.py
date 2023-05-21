@@ -12,7 +12,6 @@
 from typing import List, Optional, Dict, Any, Union, Tuple
 from hidet.ir.type import TensorType, DataType
 from hidet.ir.expr import Var, Constant, Expr
-from hidet.ir.compute import TensorNode
 from hidet.ir.dtypes import float16, bfloat16, float32
 from hidet.ir.task import Task
 from hidet.runtime.module import CompiledFunction

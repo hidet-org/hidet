@@ -18,10 +18,11 @@ from hidet.ir.dtypes import boolean
 from hidet.ir.expr import Add, convert, Sub, Multiply, Mod, LessThan, LessEqual, Equal, BinaryExpr, LogicalAnd
 from hidet.ir.expr import BitwiseXor, BitwiseAnd, BitwiseOr, BitwiseNot
 from hidet.ir.expr import Div, Constant, Expr, logical_and, logical_or, if_then_else, constant
+from hidet.ir.stmt import LetStmt, ForStmt
 from hidet.ir.functors import IRRewriter
 from hidet.ir.tools import rewrite, simplify
 from hidet.transforms.base import FunctionPass
-from hidet.utils import prod, repeat_until_converge
+from hidet.utils import prod, repeat_until_converge, same_list
 from hidet.ir.func import Function
 from hidet.ir.analyzers import BoundAnalyzer, BoundInfo
 
@@ -263,6 +264,24 @@ class RuleBasedSimplifier(IRRewriter):
         if ua < ub or ub < ua:
             return convert(False)
         return IRRewriter.visit_Equal(self, e)
+
+    def visit_LetStmt(self, stmt: LetStmt):
+        bind_vars = stmt.bind_vars
+        bind_values = [self.visit(bind_value) for bind_value in stmt.bind_values]
+        body = self.visit(stmt.body)
+        if same_list(bind_vars, stmt.bind_vars) and same_list(bind_values, stmt.bind_values) and body is stmt.body:
+            return stmt
+        else:
+            return LetStmt(bind_vars, bind_values, body)
+
+    def visit_ForStmt(self, stmt: ForStmt):
+        loop_var = stmt.loop_var
+        extent = self.visit(stmt.extent)
+        body = self.visit(stmt.body)
+        if loop_var is stmt.loop_var and extent is stmt.extent and body is stmt.body:
+            return stmt
+        else:
+            return ForStmt(loop_var, extent, body=body, attr=stmt.attr)
 
     def visit_Function(self, func: Function):
         return IRRewriter.visit_Function(self, func)
