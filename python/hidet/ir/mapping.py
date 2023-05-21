@@ -74,8 +74,10 @@ class TaskMapping(Node):
     def __getitem__(self, w: Int) -> List[Tuple[Int, ...]]:
         return self.worker2task(w)
 
-    def on(self, w: Int) -> List[Tuple[Int, ...]]:
-        return self.worker2task(w)
+    def on(self, w: Int):
+        from hidet.lang.constructs.loops import TaskMappingLoopIterable
+
+        return TaskMappingLoopIterable(self, w)
 
     def map(self, w: Int) -> Tuple[Int, ...]:
         return self.single_task_of(w)
@@ -216,7 +218,7 @@ def repeat_map(task_shape: Sequence[Int], ranks: Optional[Sequence[int]] = None,
         attrs = [ForStmtAttr.from_extent(task_shape[i]) for i in range(len(task_shape))]
     else:
         assert isinstance(attrs, str)
-        attrs: List[ForStmtAttr] = ForStmtAttr.parse(attrs)
+        attrs: List[ForStmtAttr] = ForStmtAttr.parse(attrs, len(task_shape))
         if len(attrs) == 1:
             attrs = attrs * len(task_shape)
         if len(attrs) != len(task_shape):

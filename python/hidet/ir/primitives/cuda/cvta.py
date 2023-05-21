@@ -24,7 +24,7 @@ def resolve_cvta_func_name(src_space: str, dst_space: str) -> str:
 
 @initialize()
 def register_cvta_instructions():
-    from hidet.lang import attr, u32
+    from hidet.lang import attrs, u32
 
     for src_space in ['generic']:
         for dst_space in ['shared']:
@@ -34,7 +34,7 @@ def register_cvta_instructions():
 
             @script
             def cvta(src: PointerType(VoidType())) -> u32:
-                attr.func_name = func_name
+                attrs.func_name = func_name
                 ret: u32 = 0
                 asm(
                     template="{.reg.u64 smem_ptr; cvta.to.shared.u64 smem_ptr, %1; cvt.u32.u64 %0, smem_ptr;}",

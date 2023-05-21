@@ -29,8 +29,8 @@ from hidet.ir.type import data_type, TensorType, DataType
 
 class MatmulF32Taskx86(Task):
     def __init__(self, a: TensorNode, b: TensorNode):
-        a_shape = a.const_shape()
-        b_shape = b.const_shape()
+        a_shape = a.const_shape
+        b_shape = b.const_shape
 
         if not a.type.dtype == float32 or not b.type.dtype == float32:
             raise ValueError('Both inputs must be float32 tensors')
@@ -90,16 +90,16 @@ class MatmulF32Taskx86(Task):
                                nthreads=8) -> IRModule:
         import hidet
         from hidet.ir.type import tensor_type
-        from hidet.lang import attr, col_spatial, tensor, u32, tensor_pointer, grid, as_tensor_pointer
+        from hidet.lang import col_spatial, tensor, u32, tensor_pointer, grid, as_tensor_pointer
         from hidet.lang.layout import row_layout, col_layout
         from hidet.lang.mapping import spatial, auto_map
         from hidet.lang.avx import avx_f32x8_store, avx_f32x8_fmadd, avx_f32x8_load, avx_f32x8_broadcast
         from hidet.lang.avx import avx_f32x4_broadcast, avx_f32x4_fmadd, avx_f32x4_load
 
         node_a, node_b, node_c = self.inputs[0], self.inputs[1], self.outputs[0]
-        a_shape: List[int] = node_a.const_shape()
-        b_shape: List[int] = node_b.const_shape()
-        c_shape: List[int] = node_c.const_shape()
+        a_shape: List[int] = node_a.const_shape
+        b_shape: List[int] = node_b.const_shape
+        c_shape: List[int] = node_c.const_shape
         m_size, n_size, k_size = a_shape[-2], b_shape[-1], a_shape[-1]
         a_head, b_head, c_head = a_shape[:-2], b_shape[:-2], c_shape[:-2]
 

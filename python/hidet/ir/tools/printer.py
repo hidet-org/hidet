@@ -186,7 +186,7 @@ class IRPrinter(IRFunctor):
         if self.ir_module and func_name in self.ir_module.functions:
             func = self.ir_module.functions[func_name]
             if func.kind == 'cuda_kernel':
-                doc += '<<<' + self(func.attrs['cuda_grid_dim']) + ', ' + self(func.attrs['cuda_block_dim']) + '>>>'
+                doc += '<<<' + self(func.attrs['cuda.grid_dim']) + ', ' + self(func.attrs['cuda.block_dim']) + '>>>'
         # params
         doc += '(' + self(e.args) + ')'
         return doc
@@ -264,7 +264,7 @@ class IRPrinter(IRFunctor):
     def visit_ForStmt(self, stmt: ForStmt):
         rng = Text('range(') + self(stmt.extent) + ')'
         doc = NewLine() + Text('for ') + self(stmt.loop_var) + ' in ' + rng
-        if stmt.attr.unroll is not None:
+        if stmt.attr.unroll or stmt.attr.parallel:
             doc += '  # ' + str(stmt.attr)
         doc += self(stmt.body).indent(4)
         return doc

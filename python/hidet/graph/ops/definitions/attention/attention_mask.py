@@ -19,7 +19,7 @@ from hidet.ir import primitives as prim
 from hidet.ir.primitives import active_mask, shfl_down_sync
 from hidet.graph.ops.definitions.utils import tune
 from hidet.lang import f16, f32, i32, u32, spatial, repeat, tensor
-from hidet.lang import attr, grid, tensor_pointer, view, col_spatial
+from hidet.lang import attrs, grid, tensor_pointer, view, col_spatial
 from hidet.lang.cuda import blockIdx, threadIdx, syncthreads, dynamic_shared_memory, register_tensor
 from hidet.lang.cuda import MmaConfig, mma_sync, cp_async, ldmatrix, cp_async_wait_all
 from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, TensorNode, compute, input_like
@@ -478,7 +478,7 @@ class AttnMaskAddTask(Task):
                 # Reduce mij
                 rv[0] = acc_dtype.min_value
                 rv[1] = acc_dtype.min_value
-                wi, wj, _ = spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id)[0]
+                wi, wj, _ = spatial(warp_count_m, warp_count_n, warp_count_k).map(warp_id)
                 c_map = repeat(2, 1) * spatial(8, 4)
                 for mma_i in range(mmas_per_warp_m):
                     rv[0] = acc_dtype.min_value
@@ -557,10 +557,10 @@ class AttnMaskAddTask(Task):
                 mask: f16[mask_shape],
                 o: f16[o_head + [n_size, d_size]],
             ):
-                attr.cuda_grid_dim = (i_split, bs)
-                attr.cuda_block_dim = block_size
-                attr.cuda_min_blocks = 1
-                attr.cuda_dynamic_smem_bytes = dynamic_smem_bytes
+                attrs.cuda.grid_dim = (i_split, bs)
+                attrs.cuda.block_dim = block_size
+                attrs.cuda.min_blocks = 1
+                attrs.cuda.dynamic_smem_bytes = dynamic_smem_bytes
 
                 offset_i = blockIdx.x * i_rows_per_tb
 
@@ -648,7 +648,7 @@ class AttnMaskAddTask(Task):
                     qk_head_index = list(spatial(*qk_head).map(blockIdx.y))
                     for mma_i, mma_j in grid(mmas_per_warp_m, mmas_per_warp_n):
                         warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
-                        wi, wj, wk = spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id)[0]
+                        wi, wj, wk = spatial(warp_count_m, warp_count_n, warp_count_k).map(warp_id)
                         p = 0
                         for ti, tj in mma_config.c_store_map.on(lane_id):
                             delta_m = offset_i + wi * warp_elems_m + mma_i * mma_m + ti

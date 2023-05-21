@@ -22,7 +22,7 @@ from hidet.utils import initialize
 
 @initialize()
 def register_functions():
-    from hidet.lang import script, attr, cast
+    from hidet.lang import script, attrs, cast
 
     for dtype in ['uint8', 'uint32', 'int32', 'float16', 'float32']:
         func_name = f'cuda_dynamic_shared_memory_{dtype}'
@@ -30,8 +30,8 @@ def register_functions():
 
         @script
         def cuda_dynamic_shared_memory(byte_offset: int) -> ~dtype:
-            attr.func_kind = 'cuda_device'
-            attr.func_name = func_name
+            attrs.func_kind = 'cuda_device'
+            attrs.func_name = func_name
             dynamic_smem = PointerType(base_type='uint8', specifiers=['extern', '__shared__'], use_bracket=True)
             return cast(~dynamic_smem[byte_offset], ~dtype)
 

@@ -95,6 +95,7 @@ class ArangeOp(Operator):
             start = 0
         if dtype is None:
             dtype = self.infer_dtype(start, stop, step)
+        dtype = data_type(dtype)
         device = instantiate_device(device)
         super().__init__(
             inputs=[],

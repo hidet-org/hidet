@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-Propagate the launch configuration cuda_block_dim and cuda_grid_dim from cuda_kernel functions
+Propagate the launch configuration cuda.block_dim and cuda.grid_dim from cuda_kernel functions
 to cuda_device functions.
 """
 from typing import Optional
@@ -43,8 +43,8 @@ class PropagateLaunchBoundPass(FunctionPass):
     def process_func(self, func: Function) -> Function:
         if func.kind == 'cuda_device':
             attrs = func.attrs.copy()
-            attrs['cuda_block_dim'] = self.kernel_function.attrs['cuda_block_dim']
-            attrs['cuda_grid_dim'] = self.kernel_function.attrs['cuda_grid_dim']
+            attrs['cuda.block_dim'] = self.kernel_function.attrs['cuda.block_dim']
+            attrs['cuda.grid_dim'] = self.kernel_function.attrs['cuda.grid_dim']
             func = Function(
                 name=func.name,
                 params=func.params,

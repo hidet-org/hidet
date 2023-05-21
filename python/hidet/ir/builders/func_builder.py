@@ -44,13 +44,13 @@ class FunctionBuilder(StmtBuilder):
         self.label = label
 
         if grid_dim is not None:
-            self.attrs['cuda_grid_dim'] = grid_dim
+            self.attrs['cuda.grid_dim'] = grid_dim
         if block_dim is not None:
-            self.attrs['cuda_block_dim'] = block_dim
+            self.attrs['cuda.block_dim'] = block_dim
         if dynamic_smem_bytes:
-            self.attrs['cuda_dynamic_smem_bytes'] = dynamic_smem_bytes
+            self.attrs['cuda.dynamic_smem_bytes'] = dynamic_smem_bytes
         if min_blocks:
-            self.attrs['cuda_min_blocks'] = min_blocks
+            self.attrs['cuda.min_blocks'] = min_blocks
 
     def __enter__(self):
         return self

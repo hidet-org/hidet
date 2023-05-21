@@ -9,8 +9,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Union, Optional
-from hidet.ir.type import TypeNode
+from typing import Union, Optional, Sequence
+from hidet.ir.type import TypeNode, DataType, tensor_type
+from hidet.ir.layout import DataLayout
+from hidet.ir.expr import Expr, cast
 from hidet.ir.stmt import DeclareScope
 
 
@@ -47,3 +49,39 @@ def register_scope(tp: Union[TypeNode, TypeDecorator]):
 
 def global_scope(tp: Union[TypeNode, TypeDecorator]):
     return with_scope(DeclareScope.Global, tp)
+
+
+def tensor(
+    scope: Union[DeclareScope, str],
+    dtype: Union[DataType, str],
+    shape: Optional[Sequence[Union[Expr, int]]] = None,
+    layout: Optional[DataLayout] = None,
+):
+    return with_scope(scope, tensor_type(dtype, shape, layout))
+
+
+def tensor_pointer(
+    dtype: Union[DataType, str], shape: Optional[Sequence[Union[Expr, int]]] = None, layout: Optional[DataLayout] = None
+):
+    return ~tensor_type(dtype, shape, layout)
+
+
+def as_tensor_pointer(
+    expr: Expr,
+    dtype: Union[DataType, str],
+    shape: Optional[Sequence[Union[Expr, int]]] = None,
+    layout: Optional[DataLayout] = None,
+) -> Expr:
+    return cast(expr, tensor_pointer(dtype, shape, layout))
+
+
+def shared_tensor(
+    dtype: Union[DataType, str], shape: Optional[Sequence[Union[Expr, int]]] = None, layout: Optional[DataLayout] = None
+):
+    return shared_scope(tensor_type(dtype, shape, layout))
+
+
+def register_tensor(
+    dtype: Union[DataType, str], shape: Optional[Sequence[Union[Expr, int]]] = None, layout: Optional[DataLayout] = None
+):
+    return register_scope(tensor_type(dtype, shape, layout))
