@@ -88,9 +88,9 @@ class Operator:
         return self._task_func
 
     def _run(self) -> List[Tensor]:
-        from hidet.ir.tools import rewrite, simplify
+        from hidet.ir.tools import rewrite, simplify, collect
 
-        if all(t.storage is not None for t in self.inputs) and all(isinstance(t, TensorNode) for t in self.task.params):
+        if all(t.storage is not None for t in self.inputs) and len(collect(self.task, SymbolVar)) == 0:
             return self.imperative_run(self.inputs)
         else:
             output_types: List[TensorType] = [output_node.type for output_node in self.task.outputs]
