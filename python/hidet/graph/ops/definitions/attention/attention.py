@@ -25,12 +25,13 @@ from hidet.lang.cuda import MmaConfig, mma_sync, cp_async, ldmatrix, cp_async_wa
 from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, TensorNode, compute, input_like
 from hidet.graph.ops.definitions.utils import broadcast_shape, broadcast_shapes, broadcast_indices
 from hidet.graph.ops.definitions.utils import can_broadcast
+from hidet.utils import same_list
 from hidet.utils.py import cdiv, prod
 from .attention_mask import AttnMaskAddOp
 
 
 class AttnTask(Task):
-    def __init__(self, name: str, q: TensorNode, k: TensorNode, v: TensorNode):
+    def __init__(self, name: str, q: TensorNode, k: TensorNode, v: TensorNode, is_causal: bool):
         q_shape = q.const_shape
         k_shape = k.const_shape
         v_shape = v.const_shape
@@ -40,6 +41,7 @@ class AttnTask(Task):
         o_head, q_head, k_head, v_head = o_shape[:-2], q_shape[:-2], k_shape[:-2], v_shape[:-2]
         qk_head = broadcast_shape(q_head, k_head)
 
+        # ToDo: Add causal mask to compute definition (Will not affect results since schedule template will be used)
         qk = compute(
             name='qk',
             shape=qk_head + [n_size, n_size],
@@ -95,7 +97,7 @@ class AttnTask(Task):
                 reduce_type='sum',
             ),
         )
-        super().__init__(name=name, inputs=[q, k, v], outputs=[o])
+        super().__init__(name=name, inputs=[q, k, v], outputs=[o], attributes={'is_causal': is_causal})
 
     def allow_prologue(self) -> bool:
         return False
@@ -140,6 +142,7 @@ class AttnTask(Task):
             return -1, -1
 
         task = self
+        is_causal = task.attrs['is_causal']
         node_q, node_k, node_v, node_o = task.inputs[0], task.inputs[1], task.inputs[2], task.outputs[0]
         q_shape: List[int] = list(node_q.const_shape)
         k_shape: List[int] = list(node_k.const_shape)
@@ -228,7 +231,6 @@ class AttnTask(Task):
         i_split = n_tiles
         i_tiles_per_tb = 1
         i_rows_per_tb = i_tiles_per_tb * block_i
-        j_tiles = cdiv(n_size, block_j)
 
         smem_bytes_q = dtype_size * block_i * dpad_size
         # k and v requires double memory for double buffering pipeline
@@ -587,9 +589,11 @@ class AttnTask(Task):
                     regs_acc_o[a, b, c] = acc_dtype.zero
                     regs_o[a, b, c] = acc_dtype.zero
                 
-                j_tiles = cdiv((blockIdx.x + 1) * block_i, block_j)
+                j_tiles = cdiv(n_size, block_j)
+                if is_causal:
+                    j_tiles = cdiv((blockIdx.x + 1) * block_i, block_j)
                 for j in range(j_tiles):
-                    offset_j = block_j * j  # 256j
+                    offset_j = block_j * j
 
                     # ----------------------------
                     # Compute QK = Qi * Kj
@@ -631,18 +635,20 @@ class AttnTask(Task):
                     copy_v_g2s(v, ~smem_v[0, 0, 0], offset_j)
 
                     # Apply Causal Masking
-                    qk_head_index = list(spatial(*qk_head).map(blockIdx.y))
-                    for mma_i, mma_j in grid(mmas_per_warp_m, mmas_per_warp_n):
-                        warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
-                        wi, wj, wk = spatial(warp_count_m, warp_count_n, warp_count_k).map(warp_id)
-                        p = 0
-                        for ti, tj in mma_config.c_store_map.on(lane_id):
-                            delta_m = offset_i + wi * warp_elems_m + mma_i * mma_m + ti
-                            delta_n = offset_j + wj * warp_elems_n + mma_j * mma_n + tj
-                            if delta_n > delta_m:
-                                regs_acc[mma_i, mma_j, p] = acc_dtype.min_value
-                            p += 1
+                    if is_causal:
+                        qk_head_index = list(spatial(*qk_head).map(blockIdx.y))
+                        for mma_i, mma_j in grid(mmas_per_warp_m, mmas_per_warp_n):
+                            warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
+                            wi, wj, wk = spatial(warp_count_m, warp_count_n, warp_count_k).map(warp_id)
+                            p = 0
+                            for ti, tj in mma_config.c_store_map.on(lane_id):
+                                delta_m = offset_i + wi * warp_elems_m + mma_i * mma_m + ti
+                                delta_n = offset_j + wj * warp_elems_n + mma_j * mma_n + tj
+                                if delta_n > delta_m:
+                                    regs_acc[mma_i, mma_j, p] = acc_dtype.min_value
+                                p += 1
 
+                    # Iterative softmax, and write result matrix into shared memory
                     qk_softmax_reduce(smem_qk, smem_mij, smem_lij, regs_acc)
                     # ----------------------------
 
@@ -733,24 +739,40 @@ class AttnTask(Task):
 
 
 class AttnOp(Operator):
-    def __init__(self, q: Tensor, k: Tensor, v: Tensor):
+    def __init__(self, q: Tensor, k: Tensor, v: Tensor, is_causal: bool = False):
         super().__init__(
             inputs=[q, k, v],
-            task=AttnTask('attn', input_like(q, 'q'), input_like(k, 'k'), input_like(v, 'v')),
-            attributes={},
+            task=AttnTask('attn', input_like(q, 'q'), input_like(k, 'k'), input_like(v, 'v'), is_causal),
+            attributes={'is_causal': is_causal},
         )
 
 
-def attention(q: Tensor, k: Tensor, v: Tensor, mask: Optional[Tensor] = None) -> Tensor:
-    if mask is None:
-        return AttnOp(q, k, v).get_output(0)
+def attention(q: Tensor, k: Tensor, v: Tensor, mask: Optional[Tensor] = None, is_causal: bool = False) -> Tensor:
+    if mask is not None and is_causal is True:
+        raise ValueError("mask and is_causal cannot be set at the same time")
+    
+    if not (q.dtype == k.dtype == v.dtype == f16):
+        raise ValueError("Attention only supports float16 inputs")
 
-    q_shape = q.shape
-    k_shape = k.shape
+    if not (
+        same_list(q.shape, v.shape)
+        and len(q.shape) == len(k.shape)
+        and (q.shape[-2], q.shape[-1]) == (k.shape[-1], k.shape[-2])
+    ):
+        raise ValueError(
+            'Attention expect tensor Q[..., S, D], K[..., D, S], V[..., S, D]'
+            + ', got Q {}, K {}, V {}'.format(q.shape, k.shape, v.shape)
+        )
+    
+    if q.shape[-1] > 160:
+        raise ValueError('Attention only supports head dim <= 160, got {}'.format(q.shape[-1]))
+
+    if mask is None:
+        return AttnOp(q, k, v, is_causal).get_output(0)
+
     mask_shape = mask.shape
     seq_len = q.shape[-2]
-
-    q_head, k_head = (q_shape[:-2], k_shape[:-2])
+    q_head, k_head = (q.shape[:-2], k.shape[:-2])
     qk_head = broadcast_shape(q_head, k_head)
     qk_shape = qk_head + [seq_len, seq_len]
     if not can_broadcast(mask_shape, qk_shape):
