@@ -79,7 +79,7 @@ class AttentionRewriteRule(SubgraphRewriteRule):
             and (q.shape[-2], q.shape[-1]) == (k.shape[-1], k.shape[-2])
             and q.shape[-1] <= 160
         ):
-            return [attention(q, k, v, is_causal=True)]
+            return [attention(q, k, v)]
         else:
             return None
 
