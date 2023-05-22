@@ -15,7 +15,7 @@ from hidet.ir import IRModule
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.ir.expr import scalar_var, if_then_else, tensor_var
 from hidet.ir.mapping import TaskMapping
-from hidet.ir.primitives import block_idx, thread_idx
+from hidet.ir.primitives import blockIdx, threadIdx
 from hidet.ir import primitives as prim
 from hidet.ir.stmt import AssignStmt, BufferStoreStmt, DeclareStmt
 from hidet.ir.layout import row_layout, local_layout
@@ -62,25 +62,25 @@ def softmax_cuda_schedule(task: SoftmaxTask) -> IRModule:
 
         # get the max value along c dimension
         sb += AssignStmt(rv, x_dtype.min_value)
-        other_indices = grid_layout.worker2task(block_idx())[0]
-        for (r,) in block_layout.worker2task(thread_idx()):
+        other_indices = grid_layout.worker2task(blockIdx.x)[0]
+        for (r,) in block_layout.worker2task(threadIdx.x):
             with sb.if_then(r < reduce_extent):
                 sb += BufferStoreStmt(buf, [r], x[other_indices[:axis] + (r,) + other_indices[axis:]])
                 sb += AssignStmt(rv, prim.max(rv, buf[r]))
         sb += warp_reduce(rv, prim.max)
 
         # calculate exp(v-max)
-        for (r,) in block_layout.worker2task(thread_idx()):
+        for (r,) in block_layout.worker2task(threadIdx.x):
             sb += AssignStmt(buf[r], prim.exp(buf[r] - rv))
 
         # calculate sum(exp(v-max))
         sb += AssignStmt(rv, x_dtype.zero)
-        for (r,) in block_layout.worker2task(thread_idx()):
+        for (r,) in block_layout.worker2task(threadIdx.x):
             sb += AssignStmt(rv, rv + if_then_else(r < reduce_extent, buf[r], x_dtype.zero))
         sb += warp_reduce(rv, lambda a, b: a + b)
 
         # calculate exp(v-max) / sum(exp(vv-max))
-        for (r,) in block_layout.worker2task(thread_idx()):
+        for (r,) in block_layout.worker2task(threadIdx.x):
             with sb.if_then(r < reduce_extent):
                 sb += BufferStoreStmt(y, other_indices[:axis] + (r,) + other_indices[axis:], buf[r] / rv)
 

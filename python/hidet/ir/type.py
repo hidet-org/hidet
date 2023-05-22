@@ -47,6 +47,11 @@ class TypeNode(Node):
     def is_func_type(self):
         return isinstance(self, FuncType)
 
+    def as_data_type(self) -> DataType:
+        if not isinstance(self, DataType):
+            raise ValueError('Can not convert {} to DataType'.format(self))
+        return self
+
 
 class DataType(TypeNode):
     """
@@ -172,6 +177,10 @@ class TensorType(TypeNode):
 
 
 class VoidType(TypeNode):
+    pass
+
+
+class StringType(TypeNode):
     pass
 
 
@@ -301,6 +310,10 @@ def tensor_pointer_type(dtype, shape=None, layout=None):
 
 def void_pointer():
     return PointerType(VoidType())
+
+
+def string_type():
+    return StringType()
 
 
 def data_type(dtype: Union[str, DataType]) -> DataType:

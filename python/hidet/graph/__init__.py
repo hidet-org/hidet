@@ -17,7 +17,7 @@ from . import ir
 from . import frontend
 
 from .tensor import Tensor
-from .operator import Operator, SizeVar
+from .operator import Operator, SymbolVar
 from .ir import FlowGraph
 from .transforms import GraphPass, PassContext, GraphPassInstrument
 from .ir.flow_graph import GraphForwardContext, GraphForwardInstrument
@@ -27,7 +27,6 @@ from .nn import Module
 from .tensor import asarray, randn, empty, zeros, ones, symbol, randint, randn_like, empty_like, zeros_like, ones_like
 from .tensor import symbol_like, full, full_like
 from .tensor import from_numpy, from_dlpack, from_torch
-from .tensor import symbolic_size
 from .ir import trace_from, load_graph, save_graph, forward_context
 from .transforms import optimize
 from .jit import jit

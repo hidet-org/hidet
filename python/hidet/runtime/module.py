@@ -38,7 +38,15 @@ class CompiledFunction:
         self.src_path: Optional[str] = src_path
 
     def __call__(self, *args):
+        from hidet.ffi.ffi import BackendException, get_last_error
+
         self.packed_func(*args)
+
+        status = get_last_error()
+        if status is not None:
+            name = '{} in "{}"'.format(self.name, self.src_path) if self.src_path else self.name
+            msg = 'Calling {} with arguments {} failed. error:\n{}'.format(name, args, status)
+            raise BackendException(msg)
 
     def profile(self, *args, warmup=1, number=1, repeat=10):
         return self.packed_func.profile(*args, warmup=warmup, number=number, repeat=repeat)

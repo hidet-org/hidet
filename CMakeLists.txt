@@ -21,6 +21,7 @@ add_library(hidet_runtime SHARED
         src/hidet/runtime/cpu_context.cpp
         src/hidet/runtime/callbacks.cpp
         src/hidet/runtime/logging.cpp
+        src/hidet/runtime/symbols.cpp
         )
 target_include_directories(hidet_runtime PRIVATE ${CMAKE_SOURCE_DIR}/include /usr/include)
 set_target_properties(hidet_runtime PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)

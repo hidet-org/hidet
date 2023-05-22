@@ -16,7 +16,7 @@ from hidet.ir.dialects.pattern import PlaceholderExpr
 from hidet.ir import dtypes
 from hidet.ir.node import Node
 from hidet.ir.type import DataType, PointerType, TensorPointerType, ReferenceType, TensorType, FuncType
-from hidet.ir.type import VoidType
+from hidet.ir.type import VoidType, StringType
 from hidet.ir.expr import Var, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, Neg, NotEqual, Equal, LogicalAnd
 from hidet.ir.expr import LogicalOr, LogicalNot, BitwiseAnd, BitwiseOr, BitwiseXor, BitwiseNot, LeftShift, RightShift
 from hidet.ir.expr import IfThenElse, Cast, Address, Reference, Dereference, Call, Let, Constant, TensorSlice, convert
@@ -316,7 +316,8 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
         return Text('*') + self(e.expr)
 
     def visit_Call(self, e: Call):
-        func_name = e.func_var.hint
+        func_name: str = e.func_var.name
+        assert isinstance(func_name, str)
         if func_name in self.ir_module.functions:
             func = self.ir_module.lookup(func_name)
             func_name = Text(self.canonize_funcname(func_name))
@@ -358,7 +359,9 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             return Text(name)
 
     def visit_Constant(self, e: Constant):
-        if e.is_scalar():
+        if e.is_string():
+            return Text('"{}"'.format(e.value))
+        elif e.is_scalar():
             return self.scalar_literal(e.value, e.type)
         else:
             assert isinstance(e.type, TensorType)
@@ -493,7 +496,7 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
     def visit_LaunchKernelStmt(self, stmt: LaunchKernelStmt):
         assert isinstance(stmt.func_var, Var)
         return NewLine() + Text('{}<<<dim3({}), dim3({}), {}, {}>>>({});').format(
-            self.canonize_funcname(stmt.func_var.hint),
+            self.canonize_funcname(stmt.func_var.name),
             self(stmt.grid_dim),
             self(stmt.block_dim),
             self(stmt.shared_mem_bytes),
@@ -516,7 +519,7 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             doc += self(s)
         return doc
 
-    def visit_ScalarType(self, t: DataType):
+    def visit_DataType(self, t: DataType):
         scalar_type_map = {
             'bool': 'bool',
             'uint8': 'uint8_t',
@@ -554,6 +557,9 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
     def visit_VoidType(self, t: VoidType):
         return Text('void')
 
+    def visit_StringType(self, t: StringType):
+        return Text('char*')
+
     # the following expressions should not remain to codegen
     def visit_TensorSlice(self, e: TensorSlice):
         raise ValueError()
@@ -577,6 +583,7 @@ class CUDACodegen(Codegen):
         doc += Text('#include <stdint.h>') + NewLine()
         doc += Text('#include <cuda_fp16.h>') + NewLine()
         doc += Text('#include <cuda_bf16.h>') + NewLine()
+        doc += Text('#include <hidet/runtime/symbols.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cpu/context.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cuda/complex.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cuda/context.h>') + NewLine()
@@ -647,6 +654,7 @@ class CPUCodegen(Codegen):
         doc = Doc()
         doc += Text('#include <stdint.h>') + NewLine()
         doc += Text('#include <math.h>') + NewLine()
+        doc += Text('#include <hidet/runtime/symbols.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cpu/context.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cpu/float16.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cpu/bfloat16.h>') + NewLine()

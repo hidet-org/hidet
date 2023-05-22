@@ -39,7 +39,6 @@ class FunctionBuilder(StmtBuilder):
         self.ret_type = ret_type
         self.func: Optional[Function] = None
         self.body: Optional[Stmt] = None
-        self.extern_vars = []
         self.attrs: Dict[str] = attrs if attrs else {}
         self.label = label
 
@@ -62,9 +61,6 @@ class FunctionBuilder(StmtBuilder):
     def extend_params(self, params: List[Var]):
         self.params.extend(params)
 
-    def extend_extern_vars(self, extern_vars: List[Var]):
-        self.extern_vars.extend(extern_vars)
-
     def extend_attrs(self, new_attrs: Dict[str, object]):
         self.attrs.update(new_attrs)
 
@@ -73,26 +69,13 @@ class FunctionBuilder(StmtBuilder):
 
     def finish_func(self):
         # pylint: disable=import-outside-toplevel
-        from hidet.ir.primitives.cuda.vars import block_idx, thread_idx, block_dim, grid_dim
-
         assert self.func is None
         if 'label' not in self.attrs:
             self.attrs['label'] = self.label
-        if self.kind in ['cuda_kernel', 'cuda_device']:
-            self.extend_extern_vars([block_idx(dim) for dim in ['x', 'y', 'z']])
-            self.extend_extern_vars([thread_idx(dim) for dim in ['x', 'y', 'z']])
-            self.extend_extern_vars([block_dim(dim) for dim in ['x', 'y', 'z']])
-            self.extend_extern_vars([grid_dim(dim) for dim in ['x', 'y', 'z']])
         if self.body is None:
             self.body = self.finish()
         self.func = Function(
-            self.name,
-            kind=self.kind,
-            params=self.params,
-            body=self.body,
-            ret_type=self.ret_type,
-            extern_vars=self.extern_vars,
-            attrs=self.attrs,
+            self.name, kind=self.kind, params=self.params, body=self.body, ret_type=self.ret_type, attrs=self.attrs
         )
 
     def get(self) -> Function:

@@ -15,6 +15,7 @@ from hidet.ir.func import IRModule
 from .base import Pass, FunctionPass, FunctionBodyPass, SequencePass, RepeatFunctionPass, PassContext
 from .instruments import PassInstrument, SaveIRInstrument, ProfileInstrument
 
+from .unify_global_objects import unify_global_objects_pass
 from .flatten_tensor_slice import flatten_tensor_slice_pass
 from .flatten_tensor_index import flatten_tensor_index_pass
 from .generate_packed_func import generate_packed_func_pass
@@ -22,6 +23,7 @@ from .explicit_unroll import explicit_unroll_pass
 from .import_primitive_functions import import_primitive_functions_pass
 from .simplify_stmt import simplify_stmt_pass
 from .expand_let_expr import expand_let_expr_pass
+from .instantiate_symbols import instantiate_symbols_pass
 from .resolve_generic_primitive_function import resolve_primitive_func_pass
 from .inline_function import inline_function_pass
 from .add_explicit_cast import add_explicit_cast_pass
@@ -50,6 +52,7 @@ def lower_with(ir_module: IRModule, transforms: Sequence[Pass]) -> IRModule:
 def lower(ir_module: IRModule) -> IRModule:
     transforms = [
         # necessary passes
+        unify_global_objects_pass(),
         generate_packed_func_pass(),
         flatten_tensor_slice_pass(),
         lower_protect_access_pass(),
@@ -67,6 +70,7 @@ def lower(ir_module: IRModule) -> IRModule:
         propagate_launch_bound_pass(),
         add_explicit_cast_pass(),
         declare_to_let_pass(),
+        instantiate_symbols_pass(),
         # simplification
         expand_let_expr_pass(),
         inline_let_stmt_pass(),

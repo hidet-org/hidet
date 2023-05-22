@@ -44,8 +44,6 @@ class AutoMixPrecisionRewriter(GraphRewriter):
 
     def visit_Operator(self, op: Operator):
         recv_inputs: List[Tensor] = [self(v) for v in op.inputs]
-        attrs = {k: self.attr_rewriter(v) for k, v in op.attrs.items()}
-
         # if type(op) in self.policy.always:
         #     decision = 'always'
         if type(op) in self.policy.never:
@@ -61,11 +59,12 @@ class AutoMixPrecisionRewriter(GraphRewriter):
                 casted_inputs.append(self.cast_float(recv_input, orig_input.dtype))
             else:
                 casted_inputs.append(recv_input)
-        if same_list(casted_inputs, op.inputs) and same_list(attrs, op.attrs):
+        if same_list(casted_inputs, op.inputs):
             pass  # no change
         else:
-            updated_outputs = op.reforward(casted_inputs, attrs)
-            self.update_outputs(op.outputs, updated_outputs)
+            updated_outputs = op.reforward(casted_inputs)
+            for original, updated in zip(op.outputs, updated_outputs):
+                self.memo[original] = updated
 
     def visit_FlowGraph(self, graph: FlowGraph):
         # convert all outputs back to its original dtype

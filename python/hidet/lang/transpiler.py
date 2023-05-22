@@ -413,8 +413,6 @@ class PythonToHidetTranslator(PythonAstFunctor):
 
     def visit_FunctionDef(self, func_def: FunctionDef):
         # pylint: disable=too-many-locals, too-many-branches, too-many-statements, import-outside-toplevel
-        from hidet.ir.primitives.cuda.vars import thread_idx, block_idx, block_dim, grid_dim
-
         func_params = []
         with self.scope() as env_scope:
             for name, value in self.env.items():
@@ -506,20 +504,6 @@ class PythonToHidetTranslator(PythonAstFunctor):
             body=scope.flush_stmts(),
             ret_type=ret_type,
             kind=func_kind,
-            extern_vars=[
-                thread_idx('x'),
-                thread_idx('y'),
-                thread_idx('z'),
-                block_idx('x'),
-                block_idx('y'),
-                block_idx('z'),
-                block_dim('x'),
-                block_dim('y'),
-                block_dim('z'),
-                grid_dim('x'),
-                grid_dim('y'),
-                grid_dim('z'),
-            ],
             attrs=func_attrs,
         )
 

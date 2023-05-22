@@ -14,7 +14,7 @@ import os
 import numpy as np
 
 from hidet.runtime import CompiledFunction
-from hidet.graph.ir.flow_graph import FlowGraph, Operator, Tensor, GraphForwardInstrument, SizeVar
+from hidet.graph.ir.flow_graph import FlowGraph, Operator, Tensor, GraphForwardInstrument, SymbolVar
 
 
 class GraphForwardBenchmarkInstrument(GraphForwardInstrument):
@@ -54,7 +54,7 @@ class GraphForwardBenchmarkInstrument(GraphForwardInstrument):
         os.makedirs(self.run_dir, exist_ok=True)
 
     def after_operator(
-        self, op: Operator, inputs: List[Tensor], shape_map: Dict[SizeVar, int], outputs: List[Tensor]
+        self, op: Operator, inputs: List[Tensor], shape_map: Dict[SymbolVar, int], outputs: List[Tensor]
     ) -> None:
         if not self.benchmarking:
             return

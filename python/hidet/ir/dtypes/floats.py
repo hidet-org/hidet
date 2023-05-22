@@ -48,7 +48,7 @@ class FloatType(DataType):
         return False
 
     def constant(self, value: Any):
-        from hidet.ir.expr import Constant
+        from hidet.ir.expr import Constant, constant
 
         if isinstance(value, Constant):
             value = value.value
@@ -72,7 +72,7 @@ class FloatType(DataType):
             )
             value = self._min_value
 
-        return Constant(value, self)
+        return constant(value, self)
 
     @property
     def one(self):

@@ -179,10 +179,10 @@ class IRPrinter(IRFunctor):
 
     def visit_Call(self, e: Call):
         doc = Doc()
+        func_name = e.func_var.name
         # name
-        doc += e.func_var.hint
+        doc += func_name
         # launch
-        func_name = e.func_var.hint
         if self.ir_module and func_name in self.ir_module.functions:
             func = self.ir_module.functions[func_name]
             if func.kind == 'cuda_kernel':
@@ -216,6 +216,8 @@ class IRPrinter(IRFunctor):
             return self('Constant(None, type=') + self(e.type) + ')'
         if e.is_tensor():
             return 'ConstTensor({}, {})'.format(e.value.shape, e.type)
+        elif e.is_string():
+            return Text('"{}"'.format(str(e.value)))
         else:
             dtype = e.type.name
             if dtype == 'float32':
@@ -355,7 +357,7 @@ class IRPrinter(IRFunctor):
             doc += self(s)
         return doc
 
-    def visit_ScalarType(self, t: DataType):
+    def visit_DataType(self, t: DataType):
         return Text('{}'.format(t.name))
 
     def _tensor_type(self, t: TensorType):
@@ -389,7 +391,19 @@ class IRPrinter(IRFunctor):
             return Text('FuncType(params={}, ret={})'.format(self(t.param_types), self(t.ret_type)))
 
     def visit_PlaceholderExpr(self, e: PlaceholderExpr):
-        return Text('PlaceholderExpr')
+        if e.required_type:
+            type_doc = self(e.required_type) + '_'
+        else:
+            type_doc = ''
+
+        if e.require_const:
+            base = 'const'
+        elif e.require_non_const:
+            base = 'expr'
+        else:
+            base = 'any'
+
+        return Text(type_doc + base)
 
     def print_tensor_nodes(self, nodes: List[TensorNode], exclude_nodes: List[TensorNode] = None) -> Doc:
         from hidet.ir.tools import collect  # pylint: disable=import-outside-toplevel

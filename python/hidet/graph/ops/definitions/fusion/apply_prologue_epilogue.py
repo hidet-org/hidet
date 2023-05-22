@@ -86,7 +86,6 @@ class PrologueEpilogueRewriter(IRRewriter):
                 body=self.visit(func.body),
                 ret_type=func.ret_type,
                 kind=func.kind,
-                extern_vars=func.extern_vars,
                 attrs=func.attrs,
             )
 

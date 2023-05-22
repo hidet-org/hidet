@@ -12,7 +12,6 @@
 import subprocess
 from typing import List, Optional, Sequence, Tuple
 import os
-import multiprocessing
 import logging
 from hashlib import sha256
 import psutil
@@ -29,6 +28,7 @@ from hidet.ir.func import IRModule, Function
 from hidet.ir.type import FuncType
 from hidet.runtime.module import compiled_task_cache, CompiledFunction
 from hidet.runtime.device import Device
+from hidet.utils.multiprocess import parallel_imap
 
 logger = logging.Logger(__name__)
 logger.setLevel(logging.INFO)
@@ -125,19 +125,6 @@ def build_task(task: Task, target_device='cuda', load=True) -> Optional[Compiled
     return compiled_func
 
 
-def _build_task_job(args):
-    try:
-        task, target_device, dumped_options = args
-        option.restore_options(dumped_options)
-        build_task(task, target_device, load=False)
-        return True
-    except Exception:  # pylint: disable=broad-except
-        if option.get_option('parallel_build'):
-            return False
-        else:
-            raise
-
-
 def _lazy_initialize_cuda():
     # We intentionally query the cuda device information to put the properties of all devices to the lru_cache.
     #
@@ -174,12 +161,24 @@ def get_objects(obj, predicate, visited: set, path: list):
 def build_task_batch(task_device_pairs: List[Tuple[Task, Device]], raise_on_error: bool = True):
     dumped_options = option.dump_options()
     jobs = [(task, device, dumped_options) for task, device in task_device_pairs]
+
+    def build_job(args):
+        try:
+            task, target_device, dumped_options = args
+            option.restore_options(dumped_options)
+            build_task(task, target_device, load=False)
+            return True
+        except Exception:  # pylint: disable=broad-except
+            if option.get_option('parallel_build'):
+                return False
+            else:
+                raise
+
     if option.get_option('parallel_build') and len(jobs) > 1:
         _lazy_initialize_cuda()
-        with multiprocessing.Pool() as pool:
-            status_list = list(pool.map(_build_task_job, jobs))
+        status_list = list(parallel_imap(build_job, jobs))
     else:
-        status_list = list(map(_build_task_job, jobs))
+        status_list = list(map(build_job, jobs))
     if not all(status_list) and option.get_option('parallel_build') and raise_on_error:
         msg = ['Failed to build {} tasks:'.format(sum(1 for s in status_list if not s))]
         for (task, device), status in zip(task_device_pairs, status_list):
@@ -234,19 +233,6 @@ def build_ir_module(
         return lib_path, func_type
 
 
-def _build_ir_module_job(args) -> Optional[Tuple[str, FuncType]]:
-    ir_module, output_dir, dumped_options = args
-    option.restore_options(dumped_options)
-    try:
-        return build_ir_module(ir_module, output_dir, save_ir=False, profile_pass=False, load=False, use_hash_dir=False)
-    except subprocess.CalledProcessError:
-        print('Failed launch subprocess to compile the lowered source code via nvcc.')
-        return None
-    except CompilationFailed:
-        print('Failed to compile the lowered source code via nvcc.')
-        return None
-
-
 def build_ir_module_batch(
     ir_modules: Sequence[IRModule], output_dir: str, parallel=True, verbose=False
 ) -> List[Optional[CompiledFunction]]:
@@ -273,6 +259,21 @@ def build_ir_module_batch(
         The compiled functions, in the same order as build_instances.
         When the build for a build instance failed, None for that instance is returned.
     """
+
+    def build_job(args) -> Optional[Tuple[str, FuncType]]:
+        ir_module, output_dir, dumped_options = args
+        option.restore_options(dumped_options)
+        try:
+            return build_ir_module(
+                ir_module, output_dir, save_ir=False, profile_pass=False, load=False, use_hash_dir=False
+            )
+        except subprocess.CalledProcessError:
+            print('Failed launch subprocess to compile the lowered source code via nvcc.')
+            return None
+        except CompilationFailed:
+            print('Failed to compile the lowered source code via nvcc.')
+            return None
+
     with Timer() as timer:
         dumped_options = option.dump_options()
         jobs = [
@@ -289,20 +290,19 @@ def build_ir_module_batch(
             num_workers = min(max(int(psutil.virtual_memory().available // mem_for_worker), 1), psutil.cpu_count())
 
             _lazy_initialize_cuda()
-            with multiprocessing.Pool(processes=num_workers) as pool:
-                for build_result in tqdm(
-                    pool.imap(_build_ir_module_job, jobs),
-                    desc='Compiling',
-                    total=len(jobs),
-                    disable=not verbose,
-                    ncols=80,
-                ):
-                    build_results.append(build_result)
+            for build_result in tqdm(
+                parallel_imap(build_job, jobs, num_workers),
+                desc='Compiling',
+                total=len(jobs),
+                disable=not verbose,
+                ncols=80,
+            ):
+                build_results.append(build_result)
         else:
             # sequential build
             for job in tqdm(jobs, desc='Compiling', disable=not verbose, ncols=80):
-                build_results.append(_build_ir_module_job(job))
-            build_results = list(map(_build_ir_module_job, jobs))
+                build_results.append(build_job(job))
+            build_results = list(map(build_job, jobs))
 
         # load compiled functions
         funcs: List[Optional[CompiledFunction]] = []

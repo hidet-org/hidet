@@ -19,7 +19,8 @@ class EliminateBarrierRewriter(GraphRewriter):
     def visit_Operator(self, op: Operator):
         if is_barrier(op):
             inputs = [self(x) for x in op.inputs]
-            self.update_outputs(op.outputs, inputs)
+            for original, updated in zip(op.outputs, inputs):
+                self.memo[original] = updated
         else:
             GraphRewriter.visit_Operator(self, op)
 
