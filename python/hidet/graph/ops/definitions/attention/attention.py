@@ -586,7 +586,8 @@ class AttnTask(Task):
                 for a, b, c in grid(mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements):
                     regs_acc_o[a, b, c] = acc_dtype.zero
                     regs_o[a, b, c] = acc_dtype.zero
-
+                
+                j_tiles = cdiv((blockIdx.x + 1) * block_i, block_j)
                 for j in range(j_tiles):
                     offset_j = block_j * j  # 256j
 
@@ -628,6 +629,20 @@ class AttnTask(Task):
                         syncthreads()
                     # Preload first tile of v into shared memory
                     copy_v_g2s(v, ~smem_v[0, 0, 0], offset_j)
+
+                    # Apply Causal Masking
+                    qk_head_index = list(spatial(*qk_head).map(blockIdx.y))
+                    for mma_i, mma_j in grid(mmas_per_warp_m, mmas_per_warp_n):
+                        warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
+                        wi, wj, wk = spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id)[0]
+                        p = 0
+                        for ti, tj in mma_config.c_store_map.on(lane_id):
+                            delta_m = offset_i + wi * warp_elems_m + mma_i * mma_m + ti
+                            delta_n = offset_j + wj * warp_elems_n + mma_j * mma_n + tj
+                            if delta_n > delta_m:
+                                regs_acc[mma_i, mma_j, p] = acc_dtype.min_value
+                            p += 1
+
                     qk_softmax_reduce(smem_qk, smem_mij, smem_lij, regs_acc)
                     # ----------------------------
 
