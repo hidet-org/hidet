@@ -10,9 +10,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from .ffi import _LIB
-from .packedfunc import PackedFunc
-from .packedfunc import ArgTypeCode
-
 from .runtime_api import runtime_api
+
 from . import callbacks
 from . import crt
+from . import utils

@@ -21,7 +21,7 @@ def test_parallel():
 
         @hidet.script
         def example():
-            attrs.func_kind = 'host_kernel'
+            attrs.func_kind = 'cpu_kernel'
             a = tensor('global', 'float32', shape=[10])
 
             for i in grid(10, attrs='p'):  # unroll
@@ -66,7 +66,7 @@ def matmul(m_size, n_size, k_size):
 
         @hidet.script
         def matmul(a: f32[m_size, k_size], b: f32[k_size, n_size], c: f32[m_size, n_size]):
-            attrs.func_kind = 'host_kernel'
+            attrs.func_kind = 'cpu_kernel'
             ij_size = m_size * n_size
             for ij in grid(ij_size, 'p'):
                 for i, j in spatial(m_size, n_size).on(ij):

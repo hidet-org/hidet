@@ -11,7 +11,7 @@
 # limitations under the License.
 from __future__ import annotations
 from typing import List, Optional, Dict, Union, Tuple, Type
-from hidet.graph.ir.flow_graph import Operator, Tensor
+from hidet.graph.flow_graph import Operator, Tensor
 from hidet.graph.ops.definitions.arithmetic import AddOp, SubtractOp, MultiplyOp, NegativeOp
 
 

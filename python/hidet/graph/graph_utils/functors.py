@@ -11,7 +11,7 @@
 # limitations under the License.
 from typing import Union, Type, Dict, List, Tuple, Optional
 from collections import defaultdict
-from hidet.graph.ir.flow_graph import FlowGraph, Operator, Tensor
+from hidet.graph.flow_graph import FlowGraph, Operator, Tensor
 from hidet.graph.operator import SymbolVar
 from hidet.utils import same_list
 

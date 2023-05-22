@@ -13,7 +13,7 @@ from typing import List, Optional, Dict
 import os
 import numpy as np
 
-from hidet.graph.ir.flow_graph import FlowGraph, Operator, Tensor, GraphForwardInstrument, SymbolVar
+from hidet.graph.flow_graph import FlowGraph, Operator, Tensor, GraphForwardInstrument, SymbolVar
 
 
 class GraphForwardDebugInstrument(GraphForwardInstrument):

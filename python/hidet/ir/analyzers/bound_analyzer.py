@@ -239,7 +239,7 @@ class BoundAnalyzer(ExprVisitor, StmtVisitor, ModuleVisitor):
         # note: we use the vars in func.extern_vars instead of hidet.ir.primitives.thread_idx for multiprocessing
         from hidet.ir.primitives.vars import lookup_primitive_variable
 
-        if func.kind in ['cuda_kernel', 'cuda_device']:
+        if func.kind in ['cuda_kernel', 'cuda_internal']:
             if 'cuda.block_dim' in func.attrs:
                 block_dims = normalize_launch_dims(func.attrs['cuda.block_dim'])
                 for block_dim, suffix in zip(block_dims, ['x', 'y', 'z']):

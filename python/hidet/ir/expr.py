@@ -17,7 +17,7 @@ import string
 import operator
 import numpy as np
 from .node import Node
-from .type import BaseType, TensorType, DataType, TensorPointerType, PointerType, FuncType, StringType
+from .type import BaseType, TensorType, DataType, TensorPointerType, PointerType, FuncType, StringType, ArrayType
 from .type import tensor_pointer_type, string_type, tensor_type, data_type
 
 PyScalar = Union[bool, int, float, complex, str]
@@ -248,6 +248,17 @@ class Expr(Node):
                     return promote_type(infer_type(a), b.type)(0)
             elif b == 1 and cls in [Multiply, Div]:
                 return a
+        elif isinstance(a, Constant):
+            from hidet.ir.dtypes import promote_type
+            from hidet.ir.tools import infer_type
+
+            if a == 0:
+                if cls in [Add, BitwiseXor, BitwiseOr]:
+                    return b
+                elif cls is Multiply:
+                    return promote_type(infer_type(b), a.type)(0)
+            elif a == 1 and cls is Multiply:
+                return b
 
         return cls(a, b)
 
@@ -420,8 +431,6 @@ class Call(Expr):
         assert isinstance(func_var, Var) and isinstance(args, tuple)
         for arg in args:
             assert isinstance(arg, Expr)
-        if func_var.name is None:
-            raise ValueError('Function name must be specified.')
 
 
 class Let(Expr):
@@ -636,7 +645,9 @@ def convert(
 def var(hint: str = None, dtype='int32'):
     if isinstance(hint, str):
         assert set(hint) <= set(string.ascii_letters + '_.' + string.digits)
-    return Var(hint, data_type(dtype))
+    if isinstance(dtype, str):
+        dtype = data_type(dtype)
+    return Var(hint, dtype)
 
 
 def scalar_var(hint: str, dtype: Union[str, DataType] = 'float32') -> Var:
@@ -698,6 +709,8 @@ def tensor_rank(v: Expr) -> int:
         elif isinstance(v.type, TensorPointerType):
             return len(v.type.tensor_type.shape)
         elif isinstance(v.type, PointerType):
+            return 1
+        elif isinstance(v.type, ArrayType):
             return 1
         else:
             raise ValueError(v)

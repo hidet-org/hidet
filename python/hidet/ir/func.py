@@ -28,12 +28,13 @@ def check_func_name(name: str):
 class Function(Node):
     """
     Valid Attrs:
-        'kind': str, candidates: 'cuda_device', 'cuda_kernel', 'host_kernel', 'packed_func'
+        'kind': str,
             the kind of this function.
-                - 'cuda_device': this is a cuda device function, can only be called by cuda function
+                - 'cuda_internal': this is a cuda device function, can only be called by cuda function
                 - 'cuda_kernel': this is a cuda kernel function
-                - 'host_kernel': this is a cpu kernel function
-                - 'packed_func': this is a packed function that wraps kernel function(s)
+                - 'cpu_kernel': this is a cpu kernel function
+                - 'cpu_internal': this is a cpu function but not a kernel
+                - 'public': this is a packed function that wraps kernel function(s)
         'cuda.grid_dim': Union[int, List[int]]
             the grid dimension in cuda launch configuration
         'cuda.block_dim': Union[int, List[int]]
@@ -42,17 +43,19 @@ class Function(Node):
             the dynamic shared memory in cuda launch configuration
         'cuda.min_blocks': int
             the minimal number of thread blocks in launch bound of cuda kernel function
-        'packed_func': Var
-            the var of target function that this packed_func has packed. valid when attrs['kind'] == 'packed_func'
-        'label': str
-            the label of this function when it is in a function group
     """
 
     def __init__(self, name: str, params, body, ret_type, kind: str, attrs=None):
         check_func_name(name)
         self.name: str = name
         self.kind: str = kind
-        assert isinstance(kind, str) and kind in ['cuda_device', 'cuda_kernel', 'host_kernel', 'packed_func']
+        assert isinstance(kind, str) and kind in [
+            'cuda_kernel',
+            'cuda_internal',
+            'cpu_kernel',
+            'cpu_internal',
+            'public',
+        ]
         self.params: List[Var] = params
         self.body: Stmt = body
         self.ret_type: BaseType = ret_type

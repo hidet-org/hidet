@@ -11,6 +11,7 @@
 # limitations under the License.
 # pylint: disable=bad-staticmethod-argument
 from hidet.ir.type import DataType, TensorType, PointerType, TensorPointerType, ReferenceType, VoidType, StringType
+from hidet.ir.type import ArrayType, FuncType
 from hidet.utils import same_list
 from .base_functor import BaseFunctor, BaseVisitor, BaseRewriter
 
@@ -27,8 +28,14 @@ class TypeFunctor(BaseFunctor):
             return self.visit_TensorPointerType(node)
         elif isinstance(node, ReferenceType):
             return self.visit_ReferenceType(node)
+        elif isinstance(node, StringType):
+            return self.visit_StringType(node)
+        elif isinstance(node, ArrayType):
+            return self.visit_ArrayType(node)
         elif isinstance(node, VoidType):
             return self.visit_VoidType(node)
+        elif isinstance(node, FuncType):
+            return self.visit_FuncType(node)
         else:
             return NotImplemented
 
@@ -36,6 +43,9 @@ class TypeFunctor(BaseFunctor):
         raise NotImplementedError()
 
     def visit_TensorType(self, t: TensorType):
+        raise NotImplementedError()
+
+    def visit_ArrayType(self, t: ArrayType):
         raise NotImplementedError()
 
     def visit_PointerType(self, t: PointerType):
@@ -53,6 +63,9 @@ class TypeFunctor(BaseFunctor):
     def visit_VoidType(self, t: VoidType):
         raise NotImplementedError()
 
+    def visit_FuncType(self, t: FuncType):
+        raise NotImplementedError()
+
 
 class TypeVisitor(TypeFunctor, BaseVisitor):
     def visit_DataType(self, t: DataType):
@@ -62,6 +75,9 @@ class TypeVisitor(TypeFunctor, BaseVisitor):
         self.visit(t.dtype)
         self.visit(t.shape)
         self.visit(t.layout)
+
+    def visit_ArrayType(self, t: ArrayType):
+        self.visit(t.base_type)
 
     def visit_PointerType(self, t: PointerType):
         self.visit(t.base_type)
@@ -78,6 +94,11 @@ class TypeVisitor(TypeFunctor, BaseVisitor):
     def visit_VoidType(self, t: VoidType):
         pass
 
+    def visit_FuncType(self, t: FuncType):
+        self.visit(t.ret_type)
+        for param_type in t.param_types:
+            self.visit(param_type)
+
 
 class TypeRewriter(TypeFunctor, BaseRewriter):
     def visit_DataType(self, t: DataType):
@@ -91,6 +112,13 @@ class TypeRewriter(TypeFunctor, BaseRewriter):
             return t
         else:
             return TensorType(dtype, shape, layout)
+
+    def visit_ArrayType(self, t: ArrayType):
+        base_type = self.visit(t.base_type)
+        if base_type == t.base_type:
+            return t
+        else:
+            return ArrayType(base_type, t.size)
 
     def visit_PointerType(self, t: PointerType):
         base_type = self.visit(t.base_type)
@@ -118,3 +146,14 @@ class TypeRewriter(TypeFunctor, BaseRewriter):
 
     def visit_VoidType(self, t: VoidType):
         return t
+
+    def visit_FuncType(self, t: FuncType):
+        if t.type_infer_func is not None:
+            return t
+        else:
+            ret_type = self.visit(t.ret_type)
+            param_types = [self.visit(param_type) for param_type in t.param_types]
+            if ret_type == t.ret_type and same_list(param_types, t.param_types):
+                return t
+            else:
+                return FuncType(param_types, ret_type)

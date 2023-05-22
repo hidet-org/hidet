@@ -59,8 +59,11 @@ class CallGraph:
                         callee = ir_module.lookup(name)
                     else:
                         continue
-                else:
+                elif call.func_var.name in ir_module.functions:
                     callee = ir_module.lookup(call.func_var.name)
+                else:
+                    # call a function pointer or a function that is not defined in this module
+                    continue
                 self._add_edge(caller, callee)
 
         self._init_order()

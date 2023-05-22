@@ -24,7 +24,7 @@ def register_functions():
 
     @script
     def cuda_acquire_lock(mutex_lock: ~i32):
-        attrs.func_kind = 'cuda_device'
+        attrs.func_kind = 'cuda_internal'
         attrs.func_name = 'cuda_acquire_lock'
         status: i32 = 1
         while syncthreads_and(status == 1):
@@ -36,7 +36,7 @@ def register_functions():
 
     @script
     def cuda_release_lock(mutex_lock: ~i32):
-        attrs.func_kind = 'cuda_device'
+        attrs.func_kind = 'cuda_internal'
         attrs.func_name = 'cuda_release_lock'
         syncthreads()
         if threadIdx.x == 0:
@@ -47,7 +47,7 @@ def register_functions():
 
     @script
     def cuda_acquire_seq_semaphore(semaphore: ~i32, expect_status: i32):
-        attrs.func_kind = 'cuda_device'
+        attrs.func_kind = 'cuda_internal'
         attrs.func_name = 'cuda_acquire_seq_semaphore'
         actual_status = load(semaphore, space='global', sync='acquire', scope='gpu')
         while syncthreads_and(actual_status != expect_status):
@@ -59,7 +59,7 @@ def register_functions():
 
     @script
     def cuda_release_seq_semaphore(semaphore: ~i32, status: i32):
-        attrs.func_kind = 'cuda_device'
+        attrs.func_kind = 'cuda_internal'
         attrs.func_name = 'cuda_release_seq_semaphore'
         syncthreads()
         if threadIdx.x == 0:

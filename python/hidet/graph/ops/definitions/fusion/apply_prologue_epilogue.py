@@ -21,7 +21,7 @@ from hidet.ir.task import Task, InverseMap
 from hidet.ir.functors import IRRewriter
 from hidet.ir.tools import rewrite, collect
 from hidet.transforms import FunctionPass
-from hidet.graph.ir import FlowGraph, Operator, Tensor
+from hidet.graph import FlowGraph, Operator, Tensor
 from hidet.utils import strict_zip
 from .fused_operator import FusedTask
 
@@ -68,7 +68,7 @@ class PrologueEpilogueRewriter(IRRewriter):
             self.graph_output_to_var[output_compute] = self.tensor2var[output_tensor]
 
     def visit_Function(self, func: Function):
-        if func.kind not in ['cuda_kernel', 'host_kernel']:
+        if func.kind not in ['cuda_kernel', 'cpu_kernel']:
             return func
         else:
             # extract tensor inputs and outputs of the anchor function
@@ -235,7 +235,7 @@ def apply_prologue_epilogue(ir_module: IRModule, fused_task: FusedTask, working_
 
     anchor_function: Optional[Function] = None
     for func in ir_module.functions.values():
-        if func.kind in ['cuda_kernel', 'host_kernel']:
+        if func.kind in ['cuda_kernel', 'cpu_kernel']:
             if anchor_function is not None:
                 raise RuntimeError('More than one function found.')
             anchor_function = func

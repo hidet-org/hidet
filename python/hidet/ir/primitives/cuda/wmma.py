@@ -106,7 +106,7 @@ def register_wmma_load_instructions():
         )
         func_name = 'cuda_' + inst_name.replace('.', '_')
         dtype: DataType = data_type(dtype_short2long[short_dtype])
-        with FunctionBuilder(name=func_name, kind='cuda_device') as fb:
+        with FunctionBuilder(name=func_name, kind='cuda_internal') as fb:
             # parameters: dst, src, stride
             dst = Var('dst', PointerType(data_type('uint32')))
             src = Var('src', PointerType(dtype))
@@ -162,7 +162,7 @@ def register_wmma_mma_instructions():
             )
         func_name = 'cuda_' + inst_name.replace('.', '_')
         uint32_dtype = data_type('uint32')
-        with FunctionBuilder(name=func_name, kind='cuda_device') as fb:
+        with FunctionBuilder(name=func_name, kind='cuda_internal') as fb:
             # parameters: a, b, c
             a = Var('a', PointerType(uint32_dtype))
             b = Var('b', PointerType(uint32_dtype))
@@ -204,7 +204,7 @@ def register_wmma_store_instructions():
         )
         func_name = 'cuda_' + inst_name.replace('.', '_')
         dtype = data_type(dtype_short2long[dtype])
-        with FunctionBuilder(name=func_name, kind='cuda_device') as fb:
+        with FunctionBuilder(name=func_name, kind='cuda_internal') as fb:
             # parameters: dst, src
             dst = Var('dst', PointerType(dtype))
             src = Var('src', PointerType(data_type('uint32')))

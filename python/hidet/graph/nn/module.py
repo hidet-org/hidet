@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import Optional, Sequence
 from collections import OrderedDict
 from hidet.graph.tensor import symbol_like
-from hidet.graph.ir.flow_graph import FlowGraph, trace_from
+from hidet.graph.flow_graph import FlowGraph, trace_from
 from hidet.graph.tensor import Tensor
 
 

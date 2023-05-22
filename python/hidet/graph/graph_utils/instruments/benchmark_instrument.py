@@ -14,7 +14,7 @@ import os
 import numpy as np
 
 from hidet.runtime import CompiledFunction
-from hidet.graph.ir.flow_graph import FlowGraph, Operator, Tensor, GraphForwardInstrument, SymbolVar
+from hidet.graph.flow_graph import FlowGraph, Operator, Tensor, GraphForwardInstrument, SymbolVar
 
 
 class GraphForwardBenchmarkInstrument(GraphForwardInstrument):

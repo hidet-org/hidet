@@ -12,7 +12,7 @@
 from typing import Type, Union, List
 
 import hidet
-from hidet.graph.nn import nn
+from hidet.graph import nn
 
 
 def conv1x1(in_channels, out_channels, stride=1) -> nn.Conv2d:

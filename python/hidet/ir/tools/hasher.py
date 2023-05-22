@@ -18,6 +18,7 @@ from hidet.ir.expr import NotEqual, Equal, IfThenElse, LogicalAnd, LogicalOr, Lo
 from hidet.ir.expr import BitwiseNot, BitwiseXor, LeftShift, RightShift
 from hidet.ir.expr import TensorSlice, TensorElement, Cast, Dereference, Address, Reference, Call, Let
 from hidet.ir.type import ReferenceType, TensorPointerType, VoidType, PointerType, DataType, TensorType, StringType
+from hidet.ir.type import ArrayType, FuncType
 from hidet.ir.utils.hash_sum import HashSum
 from hidet.ir.functors import ExprFunctor, TypeFunctor, BaseFunctor
 
@@ -158,3 +159,9 @@ class ExprHash(ExprFunctor, TypeFunctor, BaseFunctor):
 
     def visit_StringType(self, t: StringType):
         return hash(StringType)
+
+    def visit_ArrayType(self, t: ArrayType):
+        return hash(ArrayType) + self(t.base_type) + self(t.size)
+
+    def visit_FuncType(self, t: FuncType):
+        return hash(FuncType) + self(t.param_types) + self(t.ret_type)

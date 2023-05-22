@@ -12,7 +12,7 @@
 from typing import List, Optional
 
 from hidet.graph import ops
-from hidet.graph.ir.flow_graph import Tensor
+from hidet.graph.flow_graph import Tensor
 from hidet.graph.ops.definitions.transform import ReshapeOp, SqueezeOp, CastOp
 from hidet.utils import prod, initialize
 from .base import SubgraphRewriteRule, TensorPattern, MatchDict, op_pattern, register_rewrite_rule

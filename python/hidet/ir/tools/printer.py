@@ -15,6 +15,7 @@ import hidet.utils.structure
 from hidet.ir.node import Node
 from hidet.ir.func import IRModule, Function
 from hidet.ir.type import DataType, TensorType, VoidType, PointerType, ReferenceType, TensorPointerType, FuncType
+from hidet.ir.type import ArrayType
 from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, LessThan, FloorDiv, Mod, Equal, Div
 from hidet.ir.expr import Sub, LogicalNot, LogicalOr, LogicalAnd, Let, IfThenElse, TensorSlice
 from hidet.ir.expr import RightShift, LeftShift, BitwiseNot, BitwiseOr
@@ -70,7 +71,9 @@ class IRPrinter(IRFunctor):
             head_doc += (NewLine() + self(param) + ': ' + self(param.type)).indent(4)
             if i < len(func.params) - 1:
                 head_doc += ','
-        head_doc += NewLine() + ')'
+            else:
+                head_doc += NewLine()
+        head_doc += ')'
 
         # attributes
         attr_doc = Doc()
@@ -86,8 +89,11 @@ class IRPrinter(IRFunctor):
         doc = Doc()
         self.ir_module = ir_module
         if ir_module.task is not None:
-            doc += self(ir_module.task)
-        doc += NewLine()
+            doc += self(ir_module.task) + NewLine()
+        for name, var in ir_module.global_vars.items():
+            if name in ir_module.functions:
+                continue
+            doc += Text('declare ') + self(var) + Text(': ') + self(var.type) + NewLine() + NewLine()
         for func in ir_module.functions.values():
             doc += self(func) + NewLine()
         return doc
@@ -179,7 +185,7 @@ class IRPrinter(IRFunctor):
 
     def visit_Call(self, e: Call):
         doc = Doc()
-        func_name = e.func_var.name
+        func_name = e.func_var.name if e.func_var.name else e.func_var.hint
         # name
         doc += func_name
         # launch
@@ -307,7 +313,7 @@ class IRPrinter(IRFunctor):
 
     def visit_AssertStmt(self, stmt: AssertStmt):
         if stmt.msg:
-            return NewLine() + 'assert(' + self(stmt.cond) + ', ' + stmt.msg + ')'
+            return NewLine() + 'assert(' + self(stmt.cond) + ', ' + repr(stmt.msg) + ')'
         else:
             return NewLine() + 'assert(' + self(stmt.cond) + ')'
 
@@ -376,7 +382,12 @@ class IRPrinter(IRFunctor):
     def visit_TensorType(self, t: TensorType):
         return Text('tensor(') + self._tensor_type(t) + ')'
 
+    def visit_ArrayType(self, t: ArrayType):
+        return Text('array(') + self(t.base_type) + ', size=' + self(t.size) + ')'
+
     def visit_PointerType(self, t: PointerType):
+        if isinstance(t.base_type, VoidType):
+            return Text('void*')
         return Text('PointerType(') + self(t.base_type) + ')'
 
     def visit_TensorPointerType(self, t: TensorPointerType):
