@@ -634,7 +634,7 @@ class AttnTask(Task):
                     qk_head_index = list(spatial(*qk_head).map(blockIdx.y))
                     for mma_i, mma_j in grid(mmas_per_warp_m, mmas_per_warp_n):
                         warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
-                        wi, wj, wk = spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id)[0]
+                        wi, wj, wk = spatial(warp_count_m, warp_count_n, warp_count_k).map(warp_id)
                         p = 0
                         for ti, tj in mma_config.c_store_map.on(lane_id):
                             delta_m = offset_i + wi * warp_elems_m + mma_i * mma_m + ti
