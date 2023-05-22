@@ -195,7 +195,7 @@ class PointerType(BaseType):
         self.use_bracket: bool = use_bracket
 
     def __call__(self, x):
-        from hidet.ir.expr import Constant, Expr, constant, cast    # pylint: disable=redefined-outer-name
+        from hidet.ir.expr import Constant, Expr, constant, cast  # pylint: disable=redefined-outer-name
 
         if isinstance(x, int):
             return constant(x, self)
