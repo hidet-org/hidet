@@ -11,7 +11,7 @@
 # limitations under the License.
 from typing import Union, List, Dict, Sequence, Tuple, Set, Optional
 
-from hidet.ir.type import DataType, tensor_pointer_type, void_pointer
+from hidet.ir.type import DataType, tensor_pointer_type, void_p
 from hidet.ir.expr import TensorElement, Expr, Var, SymbolVar, Constant, scalar_var, convert, cast
 from hidet.ir.stmt import Stmt, AssignStmt, ForStmt, DeclareStmt, BufferStoreStmt, AssertStmt
 from hidet.ir.task import Task
@@ -232,7 +232,7 @@ class AutoScheduler:
             # packed function arguments, packed_func(num_args: int32, arg_types: *int32, args: **void)
             num_args = scalar_var('num_args', 'int32')
             arg_types = Var('arg_types', ~int32)
-            args = Var('args', ~void_pointer())
+            args = Var('args', ~void_p)
             fb.extend_params([num_args, arg_types, args])
 
             # extract the packed arguments

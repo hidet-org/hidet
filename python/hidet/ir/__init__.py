@@ -21,7 +21,7 @@ from . import task
 
 from .node import Node
 from .func import IRModule, Function
-from .type import TypeNode, TensorType, DataType, FuncType, VoidType, PointerType, TensorPointerType
+from .type import BaseType, TensorType, DataType, FuncType, VoidType, PointerType, TensorPointerType
 from .type import data_type, tensor_type, tensor_pointer_type
 
 from .expr import Expr, Var, Constant
