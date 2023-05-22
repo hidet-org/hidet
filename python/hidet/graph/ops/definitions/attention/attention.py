@@ -167,8 +167,8 @@ class AttnTask(Task):
         tune.check(n_size >= 64)
         block_j = min(block_j, n_size)
 
-        acc_dtype = f16 # must be f16 for now. f32 will fail to compile
-        sm_dtype = f32 # currently changing to f16 will not boost performance
+        acc_dtype = f16  # must be f16 for now. f32 will fail to compile
+        sm_dtype = f32  # currently changing to f16 will not boost performance
         mma_m = mma_config.m
         mma_n = mma_config.n
         mma_k = mma_config.k
@@ -588,7 +588,7 @@ class AttnTask(Task):
                 for a, b, c in grid(mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements):
                     regs_acc_o[a, b, c] = acc_dtype.zero
                     regs_o[a, b, c] = acc_dtype.zero
-                
+
                 j_tiles = cdiv(n_size, block_j)
                 if is_causal:
                     j_tiles = cdiv((blockIdx.x + 1) * block_i, block_j)
@@ -637,7 +637,6 @@ class AttnTask(Task):
 
                     # Apply Causal Masking
                     if is_causal:
-                        qk_head_index = list(spatial(*qk_head).map(blockIdx.y))
                         for mma_i, mma_j in grid(mmas_per_warp_m, mmas_per_warp_n):
                             warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
                             wi, wj, wk = spatial(warp_count_m, warp_count_n, warp_count_k).map(warp_id)
@@ -751,8 +750,8 @@ class AttnOp(Operator):
 def attention(q: Tensor, k: Tensor, v: Tensor, mask: Optional[Tensor] = None, is_causal: bool = False) -> Tensor:
     if mask is not None and is_causal is True:
         raise ValueError("mask and is_causal cannot be set at the same time")
-    
-    if not (q.dtype == k.dtype == v.dtype == f16):
+
+    if not q.dtype == k.dtype == v.dtype == f16:
         raise ValueError("Attention only supports float16 inputs")
 
     if not (
@@ -764,7 +763,7 @@ def attention(q: Tensor, k: Tensor, v: Tensor, mask: Optional[Tensor] = None, is
             'Attention expect tensor Q[..., S, D], K[..., D, S], V[..., S, D]'
             + ', got Q {}, K {}, V {}'.format(q.shape, k.shape, v.shape)
         )
-    
+
     if q.shape[-1] > 160:
         raise ValueError('Attention only supports head dim <= 160, got {}'.format(q.shape[-1]))
 
