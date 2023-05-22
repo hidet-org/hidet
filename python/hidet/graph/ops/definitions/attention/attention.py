@@ -631,6 +631,7 @@ class AttnTask(Task):
                                 )
                         cp_async_wait_all()
                         syncthreads()
+
                     # Preload first tile of v into shared memory
                     copy_v_g2s(v, ~smem_v[0, 0, 0], offset_j)
 
