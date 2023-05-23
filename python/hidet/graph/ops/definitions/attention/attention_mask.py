@@ -644,6 +644,10 @@ class AttnMaskAddTask(Task):
                                 )
                         cp_async_wait_all()
                         syncthreads()
+
+                    # Preload first tile of v into shared memory
+                    copy_v_g2s(v, ~smem_v[0, 0, 0], offset_j)
+
                     # Apply Masking
                     qk_head_index = list(spatial(*qk_head).map(blockIdx.y))
                     for mma_i, mma_j in grid(mmas_per_warp_m, mmas_per_warp_n):
@@ -659,6 +663,8 @@ class AttnMaskAddTask(Task):
                                 )
                             ]
                             p += 1
+
+                    # Iterative softmax, and write result matrix into shared memory
                     qk_softmax_reduce(smem_qk, smem_mij, smem_lij, regs_acc)
                     # ----------------------------
 
@@ -667,11 +673,8 @@ class AttnMaskAddTask(Task):
                     for a, b, c in grid(mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements):
                         regs_acc_o[a, b, c] = acc_dtype.zero
 
-                    # Copy first tile of k into shared memory
-                    copy_v_g2s(v, ~smem_v[0, 0, 0], offset_j)
                     cp_async_wait_all()
                     syncthreads()
-
                     for k1 in range(k_tiles_o):
                         # Load Vj into Smem
                         copy_v_g2s(v, ~smem_v[(k1 + 1) % 2, 0, 0], offset_j + (k1 + 1) * block_k_o)
