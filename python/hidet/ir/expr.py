@@ -228,6 +228,13 @@ class Expr(Node):
                 return constant(a.value + b.value, a.type)
             elif a.type.is_data_type() and b.type.is_pointer():
                 return constant(a.value + b.value, b.type)
+            elif a.type.is_string_type() and b.type.is_string_type():
+                if cls is Add:
+                    return constant(a.value + b.value, a.type)
+                elif cls in [Equal, NotEqual]:
+                    return constant(operator_dict[cls](a.value, b.value), 'bool')
+                else:
+                    raise ValueError('unknown binary operator {}'.format(cls))
             else:
                 raise ValueError('unknown binary operator {}'.format(cls))
         elif isinstance(b, Constant) and b.type.is_data_type():
@@ -896,6 +903,8 @@ def constant(value, const_type: Union[str, BaseType]) -> Constant:
         value = np.array(value)
     elif isinstance(const_type, PointerType):
         value = int(value)
+    elif isinstance(const_type, StringType):
+        value = str(value)
     else:
         raise ValueError(f"Invalid const_type {const_type}")
 

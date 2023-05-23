@@ -47,6 +47,9 @@ class BaseType(Node):
     def is_func_type(self):
         return isinstance(self, FuncType)
 
+    def is_string_type(self):
+        return isinstance(self, StringType)
+
     def as_data_type(self) -> Optional[DataType]:
         if not isinstance(self, DataType):
             return None
