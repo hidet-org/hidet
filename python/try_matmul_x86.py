@@ -44,7 +44,7 @@ for m, n, k in [(384, 256, 256), (512, 512, 512), (1024, 1024, 1024)]:
     y = matmul_x86(x1, x2)
     graph: hidet.FlowGraph = hidet.trace_from(y, inputs=[x1, x2])
     opt_graph = hidet.graph.optimize(graph)
-    compiled_func = opt_graph.nodes[0].task_fun
+    compiled_func = opt_graph.nodes[0].task_func
 
     c = hidet.zeros([m, n], device='cpu')
 
