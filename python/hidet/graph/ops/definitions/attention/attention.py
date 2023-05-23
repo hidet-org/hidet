@@ -24,7 +24,7 @@ from hidet.lang.cuda import blockIdx, threadIdx, syncthreads, dynamic_shared_mem
 from hidet.lang.cuda import MmaConfig, mma_sync, cp_async, ldmatrix, cp_async_wait_all
 from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, TensorNode, compute, input_like
 from hidet.graph.ops.definitions.utils import broadcast_shape, broadcast_shapes, broadcast_indices
-from hidet.graph.ops.definitions.utils import can_broadcast
+from hidet.graph.ops.definitions.utils import can_broadcast, schedule_utils
 from hidet.utils import same_list
 from hidet.utils.py import cdiv, prod
 from .attention_mask import AttnMaskAddOp
@@ -103,7 +103,7 @@ class AttnTask(Task):
         return False
 
     def allow_epilogue(self) -> bool:
-        return False
+        return True 
 
     def implement_cuda(self, working_dir: str) -> Union[List[IRModule], IRModule]:
         return tune.extract_ir_modules(self.cuda_schedule_attn)
@@ -121,7 +121,7 @@ class AttnTask(Task):
     @tune.space(1, 'warp_elems_m', [16])
     @tune.space(1, 'warp_elems_n', [128])
     @tune.space(1, 'warp_elems_k', [32])
-    @tune.space(1, 'mma_config', [MmaConfig.m16n8k16_f16_f16()])
+    @tune.space(1, 'mma_config', [MmaConfig.m16n8k8_f16_f16()])
     def cuda_schedule_attn(
         self,
         block_i=128,
@@ -140,6 +140,12 @@ class AttnTask(Task):
                 if d % n == 0:
                     return n, d // n
             return -1, -1
+
+        compute_capability = hidet.cuda.compute_capability()
+        compute_capability = compute_capability[0] * 10 + compute_capability[1]
+        if compute_capability < 80:
+            # hack: sm75 only supports m16n8k8, not m16n8k16
+            tune.check(mma_config.k == 8)
 
         task = self
         is_causal = task.attrs['is_causal']
@@ -326,6 +332,16 @@ class AttnTask(Task):
                 t_per_block_k_8_floor, block_j_o // 8
             )
 
+        q_g2s_layout_sm75, _ = schedule_utils.get_transfer_task_map(
+            task_shape=[block_i, dpad_size], num_workers=min(block_i * dpad_size, block_size), ranks=[0, 1]
+        )
+        k_g2s_layout_sm75, _ = schedule_utils.get_transfer_task_map(
+            task_shape=[block_k, block_j], num_workers=min(block_k * block_j, block_size), ranks=[0, 1]
+        )
+        v_g2s_layout_sm75, _ = schedule_utils.get_transfer_task_map(
+            task_shape=[block_k_o, block_j_o], num_workers=min(block_k_o, block_j_o, block_size), ranks=[0, 1]
+        )
+
         with hidet.script_module() as module:
             # --------------- helper functions ---------------------------------------------------------------------
             @hidet.script
@@ -351,6 +367,11 @@ class AttnTask(Task):
                     else:
                         b32_regs = view(regs, u32[1])
                         ldmatrix(regs=[b32_regs[0]], smem_addr=smem_addr, trans=True)
+            
+            @hidet.script
+            def cp_async_sync():
+                if compute_capability >= 80:
+                    cp_async_wait_all()
 
             @hidet.script
             def init_lm_smem(smem_l: smem_l_type, smem_m: smem_m_type):
@@ -360,7 +381,7 @@ class AttnTask(Task):
                         smem_m[i] = smem_m_type.dtype.min_value
 
             @hidet.script
-            def copy_k_g2s(k: f16[k_head + [d_size, n_size]], smem_k: smem_k_type, offset_j: i32, offset_k: i32):
+            def copy_k_g2s_sm80(k: f16[k_head + [d_size, n_size]], smem_k: smem_k_type, offset_j: i32, offset_k: i32):
                 o_head_index = spatial(*o_head).map(blockIdx.y)
                 gmem_k = k[broadcast_indices(o_head_index, k_head, o_head)][offset_k:, offset_j:]
                 for i, j_seg in k_g2s_layout.on(threadIdx.x):
@@ -370,7 +391,7 @@ class AttnTask(Task):
                         cp_async(~smem_k[i, j], ~gmem_k[i, j], cp_size=16, src_size=src_size * 2, cache_level='global')
 
             @hidet.script
-            def copy_v_g2s(v: f16[v_head + [n_size, d_size]], smem_v: smem_v_type, offset_j: i32):
+            def copy_v_g2s_sm80(v: f16[v_head + [n_size, d_size]], smem_v: smem_v_type, offset_j: i32):
                 o_head_index = spatial(*o_head).map(blockIdx.y)
                 gmem_v = v[broadcast_indices(o_head_index, v_head, o_head)][offset_j:, :]
                 for i, j_seg in v_g2s_layout.on(threadIdx.x):
@@ -380,7 +401,7 @@ class AttnTask(Task):
                         cp_async(~smem_v[i, j], ~gmem_v[i, j], cp_size=16, src_size=src_size * 2, cache_level='global')
 
             @hidet.script
-            def copy_q_g2s(q: f16[q_head + [n_size, d_size]], smem_q: smem_q_type, offset_i: i32):
+            def copy_q_g2s_sm80(q: f16[q_head + [n_size, d_size]], smem_q: smem_q_type, offset_i: i32):
                 o_head_index = spatial(*o_head).map(blockIdx.y)
                 gmem_q = q[broadcast_indices(o_head_index, q_head, o_head)][offset_i:, :]
                 for i, j_seg in q_g2s_layout.on(threadIdx.x):
@@ -388,6 +409,60 @@ class AttnTask(Task):
                     src_size = 0 if (offset_i + i >= n_size or j >= d_size) else min(d_size - j, 8)
                     if threadIdx.x < q_g2s_layout.num_workers and i < smem_q_type.shape[0]:
                         cp_async(~smem_q[i, j], ~gmem_q[i, j], cp_size=16, src_size=src_size * 2, cache_level='global')
+
+            @hidet.script
+            def copy_k_g2s_sm75(k: f16[k_head + [d_size, n_size]], smem_k: smem_k_type, offset_j: i32, offset_k: i32):
+                o_head_index = spatial(*o_head).map(blockIdx.y)
+                gmem_k = k[broadcast_indices(o_head_index, k_head, o_head)][offset_k:, offset_j:]
+                for i, j in k_g2s_layout_sm75.on(threadIdx.x):
+                    if threadIdx.x < k_g2s_layout_sm75.num_workers and i < smem_k_type.shape[0]:
+                        if offset_k + i < d_size and offset_j + j < n_size:
+                            smem_k[i, j] = gmem_k.read([i, j], protected=False)
+                        else:
+                            smem_k[i, j] = f16.zero
+
+            @hidet.script
+            def copy_v_g2s_sm75(v: f16[v_head + [n_size, d_size]], smem_v: smem_v_type, offset_j: i32):
+                o_head_index = spatial(*o_head).map(blockIdx.y)
+                gmem_v = v[broadcast_indices(o_head_index, v_head, o_head)][offset_j:, :]
+                for i, j in v_g2s_layout_sm75.on(threadIdx.x):
+                    if threadIdx.x < v_g2s_layout_sm75.num_workers and i < smem_v_type.shape[0]:
+                        if offset_j + i < n_size and j < d_size:
+                            smem_v[i, j] = gmem_v.read([i, j], protected=False)
+                        else:
+                            smem_v[i, j] = f16.zero
+
+            @hidet.script
+            def copy_q_g2s_sm75(q: f16[q_head + [n_size, d_size]], smem_q: smem_q_type, offset_i: i32):
+                o_head_index = spatial(*o_head).map(blockIdx.y)
+                gmem_q = q[broadcast_indices(o_head_index, q_head, o_head)][offset_i:, :]
+                for i, j in q_g2s_layout_sm75.on(threadIdx.x):
+                    if threadIdx.x < q_g2s_layout_sm75.num_workers and i < smem_q_type.shape[0]:
+                        if offset_i + i < n_size and j < d_size:
+                            smem_q[i, j] = gmem_q.read([i, j], protected=False)
+                        else:
+                            smem_q[i, j] = f16.zero
+
+            @hidet.script
+            def copy_k_g2s(k: f16[k_head + [d_size, n_size]], smem_k: smem_k_type, offset_j: i32, offset_k: i32):
+                if compute_capability >= 80:
+                    copy_k_g2s_sm80(k, smem_k, offset_j, offset_k)
+                else:
+                    copy_k_g2s_sm75(k, smem_k, offset_j, offset_k)
+
+            @hidet.script
+            def copy_v_g2s(v: f16[v_head + [n_size, d_size]], smem_v: smem_v_type, offset_j: i32):
+                if compute_capability >= 80:
+                    copy_v_g2s_sm80(v, smem_v, offset_j)
+                else:
+                    copy_v_g2s_sm75(v, smem_v, offset_j)
+
+            @hidet.script
+            def copy_q_g2s(q: f16[q_head + [n_size, d_size]], smem_q: smem_q_type, offset_i: i32):
+                if compute_capability >= 80:
+                    copy_q_g2s_sm80(q, smem_q, offset_i)
+                else:
+                    copy_q_g2s_sm75(q, smem_q, offset_i)
 
             @hidet.script
             def copy_o_r2g(o: f16[o_head + [n_size, d_size]], regs_o: regs_o_type, offset_i: i32):
@@ -603,7 +678,7 @@ class AttnTask(Task):
 
                     # Copy first tile of k into shared memory
                     copy_k_g2s(k, ~smem_k[0, 0, 0], offset_j, 0)
-                    cp_async_wait_all()
+                    cp_async_sync()
                     syncthreads()
 
                     for k0 in range(k_tiles):
@@ -629,7 +704,7 @@ class AttnTask(Task):
                                     ~regs_k[mma_k % 2, mma_j, 0],
                                     ~regs_acc[mma_i, mma_j, 0],
                                 )
-                        cp_async_wait_all()
+                        cp_async_sync()
                         syncthreads()
 
                     # Preload first tile of v into shared memory
@@ -657,7 +732,7 @@ class AttnTask(Task):
                     for a, b, c in grid(mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements):
                         regs_acc_o[a, b, c] = acc_dtype.zero
 
-                    cp_async_wait_all()
+                    cp_async_sync()
                     syncthreads()
                     for k1 in range(k_tiles_o):
                         # Load Vj into Smem
@@ -682,7 +757,7 @@ class AttnTask(Task):
                                     ~regs_v[mma_k % 2, mma_j, 0],
                                     ~regs_acc_o[mma_i, mma_j, 0],
                                 )
-                        cp_async_wait_all()
+                        cp_async_sync()
                         syncthreads()
                     # ----------------------------
 
