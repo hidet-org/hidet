@@ -21,6 +21,7 @@ from hidet.graph.ops.definitions.utils import tune
 from hidet.graph.operator import Operator, Tensor
 from hidet.graph.ops.definitions.utils import broadcast_indices
 from hidet.graph.ops.definitions.arithmetic import sqrt
+from hidet.ir.type import void_p
 
 
 class MatmulF32Taskx86V2(Task):
@@ -86,6 +87,9 @@ class MatmulF32Taskx86V2(Task):
         PAGE_4K = 4096
 
         with hidet.script_module() as module:
+            NULL = int32(0)
+            nullptr = ~NULL
+
             @hidet.script
             def div_up(a: int32, b: int32):
                 assert b != 0, "division by 0"
@@ -100,12 +104,7 @@ class MatmulF32Taskx86V2(Task):
                 return (a // b) * b
 
             @hidet.script
-            def calc_nthr_nocopy_avx(m: int, n: int, k: int):
-
-                # returns: (nthrs_m, nthrs_n, nthrs_k, BM, BN, BK
-                if nthrs == 1:
-                    return 1, 1, 1, 1, 1, 1
-
+            def calc_nthr_nocopy_avx():
                 BM_NOCOPY_AVX = 64
                 BN_NOCOPY_AVX = 48
                 BK_NOCOPY_AVX = 384
@@ -115,13 +114,15 @@ class MatmulF32Taskx86V2(Task):
                 BK_SMALL_NOCOPY_AVX = 4
 
                 nthr = nthrs
-                nthr_m = (m + BM_NOCOPY_AVX - 1) // BM_NOCOPY_AVX
-                nthr_n = (n + BN_NOCOPY_AVX - 1) // BN_NOCOPY_AVX
+                nthr_m = (m_size + BM_NOCOPY_AVX - 1) // BM_NOCOPY_AVX
+                nthr_n = (n_size + BN_NOCOPY_AVX - 1) // BN_NOCOPY_AVX
                 nthr_k = 1
-                # Partition along K dimension if that's beneficial
+
+                # Partitioning along K dimension
+                # TODO: The ref_gemm.cpp checks dnnl_thr_syncable(), but we only use OpenMP for now
                 nthr_other = nthr_k = 1
                 while nthr_m * nthr_n * nthr_other < nthr and \
-                        k // (nthr_other + 1) > BK_NOCOPY_AVX:
+                            k_size // (nthr_other + 1) > BK_NOCOPY_AVX:
                     nthr_other += 1
                     if (nthr // nthr_other) * nthr_other > 0.9 * nthr:
                         nthr_k = nthr_other
@@ -131,7 +132,6 @@ class MatmulF32Taskx86V2(Task):
                     nthr_n = nthr
                 if nthr_n == 1:
                     nthr_m = nthr
-
                 # Simple partition reduction
                 while nthr_m * nthr_n > nthr:
                     if nthr_m > nthr_n:
@@ -139,16 +139,16 @@ class MatmulF32Taskx86V2(Task):
                     else:
                         nthr_n -= 1
                 while nthr_m * nthr_n < nthr:
-                    if nthr_m < nthr_n:
-                        nthr_m += 1
-                    else:
-                        nthr_n += 1
-
+                    if nthr_m * nthr_n < nthr:
+                        if nthr_m < nthr_n:
+                            nthr_m += 1
+                        else:
+                            nthr_n += 1
                 if nthr_m * nthr_n > nthr and nthr_m > 1 and nthr_n > 1:
                     if nthr_m <= nthr_n:
                         nthr_m = int32(sqrt(float32(nthr)))
-                        if nthr_m > (m + BM_SMALL_NOCOPY_AVX - 1) // BM_SMALL_NOCOPY_AVX:
-                            nthr_m = (m + BM_SMALL_NOCOPY_AVX - 1) // BM_SMALL_NOCOPY_AVX
+                        if nthr_m > (m_size + BM_SMALL_NOCOPY_AVX - 1) // BM_SMALL_NOCOPY_AVX:
+                            nthr_m = (m_size + BM_SMALL_NOCOPY_AVX - 1) // BM_SMALL_NOCOPY_AVX
                         nthr_n = nthr // nthr_m
 
                         while nthr_m > 1 and nthr_m * nthr_n != nthr:
@@ -156,64 +156,50 @@ class MatmulF32Taskx86V2(Task):
                             nthr_n = nthr // nthr_m
                     else:
                         nthr_n = int32(sqrt(float32(nthr)))
-                        if nthr_n > (n + BN_SMALL_NOCOPY_AVX - 1) // BN_SMALL_NOCOPY_AVX:
-                            nthr_n = (n + BN_SMALL_NOCOPY_AVX - 1) // BN_SMALL_NOCOPY_AVX
+                        if nthr_n > (n_size + BN_SMALL_NOCOPY_AVX - 1) // BN_SMALL_NOCOPY_AVX:
+                            nthr_n = (n_size + BN_SMALL_NOCOPY_AVX - 1) // BN_SMALL_NOCOPY_AVX
                         nthr_m = nthr // nthr_n
 
                         while nthr_n > 1 and nthr_m * nthr_n != nthr:
                             nthr_n -= 1
                             nthr_m = nthr // nthr_n
 
-                # TODO: Finish the resting starting with MB = ... tomorrow!
-                MB = (m + nthr_m - 1) // nthr_m + BM_SMALL_NOCOPY_AVX - 1
+                MB = (m_size + nthr_m - 1) // nthr_m + BM_SMALL_NOCOPY_AVX - 1
                 MB -= MB % BM_SMALL_NOCOPY_AVX
-                NB = (n + nthr_n - 1) // nthr_n + BN_SMALL_NOCOPY_AVX - 1
+                NB = (n_size + nthr_n - 1) // nthr_n + BN_SMALL_NOCOPY_AVX - 1
                 NB -= NB % BN_SMALL_NOCOPY_AVX
-                KB = (k + nthr_k - 1) // nthr_k + BK_SMALL_NOCOPY_AVX - 1
+                KB = (k_size + nthr_k - 1) // nthr_k + BK_SMALL_NOCOPY_AVX - 1
                 KB -= KB % BK_SMALL_NOCOPY_AVX
 
-                if MB * nthr_m > m:
-                    nthr_m = (m + MB - 1) // MB
-                if NB * nthr_n > n:
-                    nthr_n = (n + NB - 1) // NB
-                if KB * nthr_k > k:
-                    nthr_k = (k + KB - 1) // KB
+                if MB * nthr_m > m_size:
+                    nthr_m = (m_size + MB - 1) // MB
+                if NB * nthr_n > n_size:
+                    nthr_n = (n_size + NB - 1) // NB
+                if KB * nthr_k > k_size:
+                    nthr_k = (k_size + KB - 1) // KB
 
                 return nthr_m, nthr_n, nthr_k, MB, NB, KB
 
-            nthr_m, nthr_n, nthr_k, MB, NB, KB = calc_nthr_nocopy_avx(m_size, n_size, k_size)
-
-            # Some more variables that would be needed in later function calls
-            need_c_buffers: bool = nthr_k > 1
-            need_ws_buffers: bool = False
-
-            do_copy: bool = NB // tile_n > 3
-            nthr_mn = nthr_m * nthr_n
-            nthr_to_use = nthr_mn * nthr_k
-            ws_elem_per_thr = k_size * tile_m
-            ws_size_per_thr = rnd_up(ws_elem_per_thr * float_size, PAGE_4K)
-
-            if do_copy:
-                ws_buffers = as_tensor_pointer(
-                    aligned_alloc(PAGE_4K, nthr_to_use * ws_size_per_thr),
-                    shape=[nthr_to_use, ws_elem_per_thr], dtype=float32
-                )
-            else:
-                ws_buffers = tensor(scope=DeclareScope.Default, dtype=float32,
-                                    layout=row_layout(1, 1))
 
 
             @hidet.script
-            def individual_thread_job(ithr: int32, nthr: int32, nthr_mn: int32, ithr_mn: int32,
-                                      nthr_m: int32, nthr_k: int32):
-                ithr_mn: int32 = ithr % nthr_mn
-                ithr_m: int32 = ithr_mn % nthr_m
-                ithr_n: int32 = ithr_mn // nthr_m
-                ithr_k: int32 = ithr // nthr_mn
+            def matmul_kernel_onednn(
+                    a_ptr: ~float32, b_ptr: ~float32, c_ptr: ~float32
+            ):
+                a = as_tensor_pointer(a_ptr, dtype=float32, shape=[m_size, k_size])
+                b = as_tensor_pointer(b_ptr, dtype=float32, shape=[k_size, n_size])
+                c = as_tensor_pointer(b_ptr, dtype=float32, shape=[m_size, n_size])
+
+                nthr_m, nthr_n, nthr_k, MB, NB, KB = calc_nthr_nocopy_avx()
 
 
 
 
+
+        assert isinstance(matmul_kernel_onednn, hidet.ir.Function)
+        matmul_kernel_onednn.kind = 'host_kernel'
+        ir_module = module.ir_module()
+        return ir_module
 
 
 

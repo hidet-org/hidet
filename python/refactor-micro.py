@@ -7,9 +7,8 @@ import hidet
 
 def matmul_kernel5():
     from hidet.transforms.generate_packed_func import add_packed_func
-    from hidet.lang import attr
     from hidet.lang import float32, int32
-    from hidet.lang import as_tensor_pointer, tensor
+    from hidet.lang import as_tensor_pointer, tensor, tensor_pointer
     from hidet.lang.mapping import repeat, spatial, auto_map
     from hidet.lang.layout import row_layout, local_layout, col_layout
 
@@ -35,6 +34,7 @@ def matmul_kernel5():
 
     aip_outer_rows = aip_outer_rows
     bip_outer_cols = bip_outer_cols
+
 
     with hidet.lang.script_module() as script_module:
         @hidet.lang.script

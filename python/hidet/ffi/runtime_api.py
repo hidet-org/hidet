@@ -21,7 +21,7 @@ class RuntimeAPI:
     _register_callback = get_func('register_callback', [c_char_p, c_void_p], None)
     _allocate_cuda_storage = get_func('allocate_cuda_storage', [c_uint64], c_uint64)
     _free_cuda_storage = get_func('free_cuda_storage', [c_uint64], None)
-    _reset_symbol_table = get_func('reset_symbol_table', [], None)
+    # _reset_symbol_table = get_func('reset_symbol_table', [], None)
     _get_symbol_value = get_func('get_symbol_value', [c_char_p], c_int32)
     _set_symbol_value = get_func('set_symbol_value', [c_char_p, c_int32], None)
 

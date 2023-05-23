@@ -6,7 +6,6 @@ import hidet
 
 def matmul_kernel5():
     from hidet.transforms.generate_packed_func import add_packed_func
-    from hidet.lang import attr
     from hidet.lang import float32, int32
     from hidet.lang import as_tensor_pointer, tensor
     from hidet.lang.mapping import repeat, spatial, auto_map

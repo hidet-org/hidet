@@ -29,7 +29,8 @@ target = tvm.target.Target("llvm -mcpu=core-avx2")
 
 
 debug_cache_tuning(True)
-hidet.option.search_space(2)
+hidet.option.search_space(0)
+hidet.option.parallel_build(False)
 # for m, k, n in [(18, 32, 96), (24, 64, 256), (24, 64, 512), (192, 64, 128), (192, 128, 128), (192, 256, 256), (784, 40, 120), (784, 120, 40), (480, 512, 16), (384, 384, 32), (784, 40, 120),
 #                 (256, 256, 256), (384, 256, 256),
 #                 (384, 384, 512), (512, 512, 512), (1369, 48, 256),
