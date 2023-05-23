@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # pylint: disable=bad-staticmethod-argument
-from hidet.ir.type import DataType, TensorType, PointerType, TensorPointerType, ReferenceType, VoidType
+from hidet.ir.type import DataType, TensorType, PointerType, TensorPointerType, ReferenceType, VoidType, StringType
 from hidet.utils import same_list
 from .base_functor import BaseFunctor, BaseVisitor, BaseRewriter
 
@@ -18,7 +18,7 @@ from .base_functor import BaseFunctor, BaseVisitor, BaseRewriter
 class TypeFunctor(BaseFunctor):
     def visit_dispatch(self, node):
         if isinstance(node, DataType):
-            return self.visit_ScalarType(node)
+            return self.visit_DataType(node)
         elif isinstance(node, TensorType):
             return self.visit_TensorType(node)
         elif isinstance(node, PointerType):
@@ -32,7 +32,7 @@ class TypeFunctor(BaseFunctor):
         else:
             return NotImplemented
 
-    def visit_ScalarType(self, t: DataType):
+    def visit_DataType(self, t: DataType):
         raise NotImplementedError()
 
     def visit_TensorType(self, t: TensorType):
@@ -47,12 +47,15 @@ class TypeFunctor(BaseFunctor):
     def visit_ReferenceType(self, t: ReferenceType):
         raise NotImplementedError()
 
+    def visit_StringType(self, t: StringType):
+        raise NotImplementedError()
+
     def visit_VoidType(self, t: VoidType):
         raise NotImplementedError()
 
 
 class TypeVisitor(TypeFunctor, BaseVisitor):
-    def visit_ScalarType(self, t: DataType):
+    def visit_DataType(self, t: DataType):
         pass
 
     def visit_TensorType(self, t: TensorType):
@@ -69,43 +72,49 @@ class TypeVisitor(TypeFunctor, BaseVisitor):
     def visit_ReferenceType(self, t: ReferenceType):
         self.visit(t.base_type)
 
+    def visit_StringType(self, t: StringType):
+        pass
+
     def visit_VoidType(self, t: VoidType):
         pass
 
 
 class TypeRewriter(TypeFunctor, BaseRewriter):
-    def visit_ScalarType(self, t: DataType):
+    def visit_DataType(self, t: DataType):
         return t
 
     def visit_TensorType(self, t: TensorType):
         dtype = self.visit(t.dtype)
         shape = self.visit(t.shape)
         layout = self.visit(t.layout)
-        if same_list([dtype, layout], [t.dtype, t.layout]) and same_list(shape, t.shape):
+        if dtype == t.dtype and layout is t.layout and same_list(shape, t.shape):
             return t
         else:
             return TensorType(dtype, shape, layout)
 
     def visit_PointerType(self, t: PointerType):
         base_type = self.visit(t.base_type)
-        if base_type is t.base_type:
+        if base_type == t.base_type:
             return t
         else:
             return PointerType(base_type)
 
     def visit_TensorPointerType(self, t: TensorPointerType):
         tensor_type = self.visit(t.tensor_type)
-        if tensor_type is t.tensor_type:
+        if tensor_type == t.tensor_type:
             return t
         else:
             return TensorPointerType(tensor_type)
 
     def visit_ReferenceType(self, t: ReferenceType):
         base_type = self.visit(t.base_type)
-        if base_type is t.base_type:
+        if base_type == t.base_type:
             return t
         else:
             return ReferenceType(base_type)
+
+    def visit_StringType(self, t: StringType):
+        return t
 
     def visit_VoidType(self, t: VoidType):
         return t

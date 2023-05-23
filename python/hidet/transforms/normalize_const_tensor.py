@@ -35,9 +35,7 @@ class NormalizeConstTensorPass(FunctionPass):
         else:
             body = SeqStmt(tuple(declares) + (body,))
 
-        return Function(
-            func.name, func.params, body, func.ret_type, kind=func.kind, extern_vars=func.extern_vars, attrs=func.attrs
-        )
+        return Function(func.name, func.params, body, func.ret_type, kind=func.kind, attrs=func.attrs)
 
 
 def normalize_const_tensor_pass() -> Pass:

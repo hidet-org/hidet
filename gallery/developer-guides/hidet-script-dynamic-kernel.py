@@ -12,7 +12,7 @@ import hidet
 
 
 def matmul_simt_kernel():
-    from hidet.lang import attr
+    from hidet.lang import attrs
     from hidet.lang import float32, int32
     from hidet.lang import as_tensor_pointer, tensor
     from hidet.lang.cuda import threadIdx, blockIdx, syncthreads
@@ -44,9 +44,9 @@ def matmul_simt_kernel():
             n_size: int32,
             k_size: int32,
         ):
-            attr.func_name = 'matmul_kernel'
-            attr.cuda_block_dim = num_threads
-            attr.cuda_grid_dim = (
+            attrs.func_name = 'matmul_kernel'
+            attrs.cuda.block_dim = num_threads
+            attrs.cuda.grid_dim = (
                 (m_size + block_m_size - 1) // block_m_size,
                 (n_size + block_n_size - 1) // block_n_size,
             )

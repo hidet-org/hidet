@@ -74,8 +74,10 @@ class TaskMapping(Node):
     def __getitem__(self, w: Int) -> List[Tuple[Int, ...]]:
         return self.worker2task(w)
 
-    def on(self, w: Int) -> List[Tuple[Int, ...]]:
-        return self.worker2task(w)
+    def on(self, w: Int):
+        from hidet.lang.constructs.loops import TaskMappingLoopIterable
+
+        return TaskMappingLoopIterable(self, w)
 
     def map(self, w: Int) -> Tuple[Int, ...]:
         return self.single_task_of(w)
@@ -135,7 +137,7 @@ class SpatialTaskMapping(TaskMapping):
         from hidet.ir.tools import simplify
 
         super().__init__(num_workers=prod(task_shape), task_shape=tuple(task_shape), worker2task=self._worker2task)
-        self.ranks: List[int] = list(ranks)
+        self.ranks: List[Int] = list(ranks)
         self.strides: List[Int] = [simplify(v) for v in strides_from_ranks(task_shape, ranks)]
 
         assert len(task_shape) == len(ranks)
@@ -216,7 +218,7 @@ def repeat_map(task_shape: Sequence[Int], ranks: Optional[Sequence[int]] = None,
         attrs = [ForStmtAttr.from_extent(task_shape[i]) for i in range(len(task_shape))]
     else:
         assert isinstance(attrs, str)
-        attrs: List[ForStmtAttr] = ForStmtAttr.parse(attrs)
+        attrs: List[ForStmtAttr] = ForStmtAttr.parse(attrs, len(task_shape))
         if len(attrs) == 1:
             attrs = attrs * len(task_shape)
         if len(attrs) != len(task_shape):

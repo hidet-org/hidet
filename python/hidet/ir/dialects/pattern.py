@@ -13,18 +13,19 @@ from __future__ import annotations
 from typing import Any, Tuple, Optional, Dict, ContextManager
 from contextlib import ExitStack
 from hidet.ir.node import Node
-from hidet.ir.type import TypeNode
+from hidet.ir.type import BaseType
 from hidet.ir.expr import Expr, Constant, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, Equal, LessEqual
 from hidet.ir.expr import BitwiseXor
 from hidet.ir.expr import IfThenElse, LogicalAnd, LogicalOr, BinaryExpr
 
 
 class PlaceholderExpr(Expr):
-    def __init__(self, required_type: Optional[TypeNode] = None, require_const=False, require_non_const=False):
+    def __init__(self, required_type: Optional[BaseType] = None, require_const=False, require_non_const=False):
         super().__init__()
-        self.required_type: Optional[TypeNode] = required_type
+        self.required_type: Optional[BaseType] = required_type
         self.require_const: bool = require_const
         self.require_non_const: bool = require_non_const
+        assert not (self.require_const and self.require_non_const), 'require placeholder to be both const & non-const'
 
 
 class NotMatchedError(Exception):

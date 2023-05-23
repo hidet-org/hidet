@@ -1,5 +1,6 @@
 pytz
 distro
+importlib_metadata
 
 # python test
 pytest==7.2

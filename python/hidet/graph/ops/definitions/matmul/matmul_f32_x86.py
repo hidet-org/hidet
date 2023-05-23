@@ -78,7 +78,7 @@ class MatmulF32Taskx86(Task):
                                nthreads=16) -> IRModule:
         import hidet
         from hidet.ir.type import tensor_type
-        from hidet.lang import tensor, grid, as_tensor_pointer
+        from hidet.lang import col_spatial, tensor, u32, tensor_pointer, grid, as_tensor_pointer
         from hidet.lang.layout import row_layout, col_layout
         from hidet.lang.avx import avx_f32x8_store, avx_f32x8_fmadd, avx_f32x8_load, avx_f32x8_broadcast
         from hidet.lang.avx import avx_f32x4_broadcast, avx_f32x4_fmadd, avx_f32x4_load, avx_f32x4_store

@@ -10,7 +10,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from hidet.ir.mapping import SpatialTaskMapping, RepeatTaskMapping, ComposedTaskMapping
-from .base_functor import BaseFunctor, BaseVisitor, BaseRewriter
+from hidet.ir.functors.base_functor import BaseFunctor, BaseVisitor, BaseRewriter
+from hidet.utils.py import same_list
 
 
 class MappingFunctor(BaseFunctor):
@@ -36,10 +37,10 @@ class MappingFunctor(BaseFunctor):
 
 class MappingVisitor(BaseVisitor, MappingFunctor):
     def visit_SpatialTaskMapping(self, mapping: SpatialTaskMapping):
-        pass
+        self.visit(mapping.task_shape)
 
     def visit_RepeatTaskMapping(self, mapping: RepeatTaskMapping):
-        pass
+        self.visit(mapping.task_shape)
 
     def visit_ComposedTaskMapping(self, mapping: ComposedTaskMapping):
         self.visit(mapping.outer)
@@ -48,10 +49,18 @@ class MappingVisitor(BaseVisitor, MappingFunctor):
 
 class MappingRewriter(BaseRewriter, MappingFunctor):
     def visit_SpatialTaskMapping(self, mapping: SpatialTaskMapping):
-        return mapping
+        shape = self.visit(mapping.task_shape)
+        if same_list(shape, mapping.task_shape):
+            return mapping
+        else:
+            return SpatialTaskMapping(shape, mapping.ranks)
 
     def visit_RepeatTaskMapping(self, mapping: RepeatTaskMapping):
-        return mapping
+        shape = self.visit(mapping.task_shape)
+        if same_list(shape, mapping.task_shape):
+            return mapping
+        else:
+            return RepeatTaskMapping(shape, mapping.ranks, mapping.attrs)
 
     def visit_ComposedTaskMapping(self, mapping: ComposedTaskMapping):
         outer = self.visit(mapping.outer)

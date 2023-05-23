@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Union
-from ctypes import c_void_p, c_char_p, c_uint64
+from ctypes import c_void_p, c_char_p, c_uint64, c_int32
 from hidet.cuda import Stream
 from .ffi import get_func
 
@@ -21,6 +21,9 @@ class RuntimeAPI:
     _register_callback = get_func('register_callback', [c_char_p, c_void_p], None)
     _allocate_cuda_storage = get_func('allocate_cuda_storage', [c_uint64], c_uint64)
     _free_cuda_storage = get_func('free_cuda_storage', [c_uint64], None)
+    _reset_symbol_table = get_func('reset_symbol_table', [], None)
+    _get_symbol_value = get_func('get_symbol_value', [c_char_p], c_int32)
+    _set_symbol_value = get_func('set_symbol_value', [c_char_p, c_int32], None)
 
     @staticmethod
     def set_current_stream(stream: Union[Stream, int]) -> None:
@@ -43,6 +46,20 @@ class RuntimeAPI:
     @staticmethod
     def free_cuda_storage(addr: int) -> None:
         return RuntimeAPI._free_cuda_storage(addr)
+
+    @staticmethod
+    def reset_symbol_table() -> None:
+        RuntimeAPI._reset_symbol_table()
+
+    @staticmethod
+    def get_symbol_value(name: str) -> int:
+        name = name.encode('utf-8')
+        return RuntimeAPI._get_symbol_value(name)
+
+    @staticmethod
+    def set_symbol_value(name: str, value: int) -> None:
+        name = name.encode('utf-8')
+        RuntimeAPI._set_symbol_value(name, value)
 
 
 runtime_api = RuntimeAPI()

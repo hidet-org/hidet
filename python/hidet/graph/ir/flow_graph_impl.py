@@ -19,10 +19,10 @@ from hidet.graph.ir.flow_graph import FlowGraph, Operator, Tensor
 def flow_graph_as_text(graph: FlowGraph) -> str:
     from hidet.ir.tools.printer import IRPrinter
     from hidet.ir.expr import Expr
-    from hidet.graph.operator import SizeVar
+    from hidet.graph.operator import SymbolVar
 
     printer = IRPrinter()
-    size_var_equivalence: Dict[SizeVar, SizeVar] = {}
+    size_var_equivalence: Dict[SymbolVar, SymbolVar] = {}
 
     def get_tensor_sig(x: Tensor) -> Doc:
         shape_items = []
@@ -33,7 +33,7 @@ def flow_graph_as_text(graph: FlowGraph) -> str:
                 op: Operator
                 op, idx = x.trace
                 task_out_dim = op.task.outputs[idx].shape[i]
-                if isinstance(task_out_dim, SizeVar) and task_out_dim in size_var_equivalence:
+                if isinstance(task_out_dim, SymbolVar) and task_out_dim in size_var_equivalence:
                     shape_items.append(printer(size_var_equivalence[task_out_dim]))
                 else:
                     shape_items.append(printer(x.shape[i]))
@@ -60,7 +60,7 @@ def flow_graph_as_text(graph: FlowGraph) -> str:
         items = []
         for out, task_output in zip(op.outputs, op.task.outputs):
             for dim, task_dim in zip(out.shape, task_output.shape):
-                if isinstance(dim, SizeVar) and task_dim not in size_var_equivalence:
+                if isinstance(dim, SymbolVar) and task_dim not in size_var_equivalence:
                     items.append('{}={}'.format(printer(dim), printer(task_dim)))
         if len(items) > 0:
             return Text('# ') + doc_join(items, ', ')
@@ -77,7 +77,7 @@ def flow_graph_as_text(graph: FlowGraph) -> str:
 
     for graph_input in graph.inputs:
         for dim in graph_input.shape:
-            if isinstance(dim, SizeVar):
+            if isinstance(dim, SymbolVar):
                 size_var_equivalence[dim] = dim
 
     # body
@@ -102,7 +102,7 @@ def flow_graph_as_text(graph: FlowGraph) -> str:
             items.append(name + '=' + get_attr_repr(value))
         for op_out, task_out in zip(op.outputs, op.task.outputs):
             for a, b in zip(op_out.shape, task_out.shape):
-                if isinstance(b, SizeVar):
+                if isinstance(b, SymbolVar):
                     size_var_equivalence[a] = size_var_equivalence[b] if b in size_var_equivalence else b
         line_doc += op.name + '(' + doc_join(items, ', ') + ')  ' + get_comment(op)
         body_doc += NewLine() + line_doc

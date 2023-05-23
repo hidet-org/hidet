@@ -34,9 +34,7 @@ class FlattenTensorAccessRewriter(IRRewriter):
                 self.memo[var] = Var(var.hint, tensor_pointer_type(var.type.tensor_type.dtype, [size]))
         body = self(func.body)
         params = [self(p) for p in func.params]
-        return Function(
-            func.name, params, body, func.ret_type, kind=func.kind, extern_vars=func.extern_vars, attrs=func.attrs
-        )
+        return Function(func.name, params, body, func.ret_type, kind=func.kind, attrs=func.attrs)
 
     @staticmethod
     def get_layout(e) -> DataLayout:

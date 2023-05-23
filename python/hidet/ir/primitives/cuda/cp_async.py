@@ -35,7 +35,7 @@ def resolve_name_async_wait_group() -> str:
 
 @initialize()
 def register_cp_async():
-    from hidet.lang import script, i32, attr
+    from hidet.lang import script, i32, attrs
     from hidet.ir.primitives.cuda.cvta import cvta_generic_to_shared
 
     for cp_size in [4, 8, 16]:
@@ -52,8 +52,8 @@ def register_cp_async():
 
                 @script
                 def cuda_cp_async(dst: PointerType(VoidType()), src: PointerType(VoidType()), src_size: i32):
-                    attr.func_name = func_name
-                    attr.func_kind = 'cuda_device'
+                    attrs.func_name = func_name
+                    attrs.func_kind = 'cuda_device'
                     dst_smem_ptr = cvta_generic_to_shared(dst)
                     asm(template=template_string, inputs=[dst_smem_ptr, src, cp_size, src_size])
 
@@ -63,12 +63,12 @@ def register_cp_async():
 
 @initialize()
 def register_cp_async_commit_group():
-    from hidet.lang import script, attr
+    from hidet.lang import script, attrs
 
     @script
     def cuda_cp_async_commit_group():
-        attr.func_name = 'cuda_cp_async_commit_group'
-        attr.func_kind = 'cuda_device'
+        attrs.func_name = 'cuda_cp_async_commit_group'
+        attrs.func_kind = 'cuda_device'
         asm('cp.async.commit_group;')
 
     assert isinstance(cuda_cp_async_commit_group, Function)
@@ -77,15 +77,15 @@ def register_cp_async_commit_group():
 
 @initialize()
 def register_cp_async_wait_group():
-    from hidet.lang import script, attr
+    from hidet.lang import script, attrs
 
     for groups in range(10):
         func_name = 'cuda_cp_async_wait_group_{}'.format(groups)
 
         @script
         def cuda_cp_async_wait_group():
-            attr.func_name = func_name
-            attr.func_kind = 'cuda_device'
+            attrs.func_name = func_name
+            attrs.func_kind = 'cuda_device'
             asm('cp.async.wait_group {};'.format(groups))
 
         assert isinstance(cuda_cp_async_wait_group, Function)
@@ -94,12 +94,12 @@ def register_cp_async_wait_group():
 
 @initialize()
 def register_cp_async_wait_all():
-    from hidet.lang import script, attr
+    from hidet.lang import script, attrs
 
     @script
     def cuda_cp_async_wait_all():
-        attr.func_name = 'cuda_cp_async_wait_all'
-        attr.func_kind = 'cuda_device'
+        attrs.func_name = 'cuda_cp_async_wait_all'
+        attrs.func_kind = 'cuda_device'
         asm('cp.async.wait_all;')
 
     assert isinstance(cuda_cp_async_wait_all, Function)

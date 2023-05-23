@@ -23,7 +23,7 @@ class ImportPrimitiveFunctionPass(Pass):
         for func in ir_module.functions.values():
             calls: List[Call] = collect(func.body, Call)
             for call in calls:
-                callee_name: str = call.func_var.hint
+                callee_name: str = call.func_var.name
                 if is_primitive_function(callee_name):
                     used_primitive_funcs.add(callee_name)
 

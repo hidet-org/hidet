@@ -30,7 +30,7 @@ from hidet.ir.task import Task  # pylint: disable=unused-import
 
 class CompilationFailed(Exception):
     def __init__(self, source_path: str, msg: str):
-        super().__init__()
+        super().__init__(source_path, msg)
         self.source_path = source_path
         self.msg = msg
 

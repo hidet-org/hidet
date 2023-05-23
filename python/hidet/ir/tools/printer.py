@@ -179,14 +179,14 @@ class IRPrinter(IRFunctor):
 
     def visit_Call(self, e: Call):
         doc = Doc()
+        func_name = e.func_var.name
         # name
-        doc += e.func_var.hint
+        doc += func_name
         # launch
-        func_name = e.func_var.hint
         if self.ir_module and func_name in self.ir_module.functions:
             func = self.ir_module.functions[func_name]
             if func.kind == 'cuda_kernel':
-                doc += '<<<' + self(func.attrs['cuda_grid_dim']) + ', ' + self(func.attrs['cuda_block_dim']) + '>>>'
+                doc += '<<<' + self(func.attrs['cuda.grid_dim']) + ', ' + self(func.attrs['cuda.block_dim']) + '>>>'
         # params
         doc += '(' + self(e.args) + ')'
         return doc
@@ -216,7 +216,9 @@ class IRPrinter(IRFunctor):
             return self('Constant(None, type=') + self(e.type) + ')'
         if e.is_tensor():
             return 'ConstTensor({}, {})'.format(e.value.shape, e.type)
-        else:
+        elif e.is_string():
+            return Text('"{}"'.format(str(e.value)))
+        elif e.is_scalar():
             dtype = e.type.name
             if dtype == 'float32':
                 ret = '{}f'.format(float(e.value))
@@ -227,6 +229,10 @@ class IRPrinter(IRFunctor):
             else:
                 ret = '{}({})'.format(dtype, e.value)
             return Text(ret)
+        elif isinstance(e.type, PointerType):
+            return Text('({}){}'.format(self(e.type), self(e.value)))
+        else:
+            raise NotImplementedError("Unknown constant type: {}".format(e.type))
 
     def visit_DeclareStmt(self, stmt: DeclareStmt):
         doc = NewLine() + Text('declare ') + self(stmt.var) + Text(': ') + self(stmt.var.type)
@@ -264,7 +270,7 @@ class IRPrinter(IRFunctor):
     def visit_ForStmt(self, stmt: ForStmt):
         rng = Text('range(') + self(stmt.extent) + ')'
         doc = NewLine() + Text('for ') + self(stmt.loop_var) + ' in ' + rng
-        if stmt.attr.unroll is not None:
+        if stmt.attr.unroll or stmt.attr.parallel:
             doc += '  # ' + str(stmt.attr)
         doc += self(stmt.body).indent(4)
         return doc
@@ -355,7 +361,7 @@ class IRPrinter(IRFunctor):
             doc += self(s)
         return doc
 
-    def visit_ScalarType(self, t: DataType):
+    def visit_DataType(self, t: DataType):
         return Text('{}'.format(t.name))
 
     def _tensor_type(self, t: TensorType):
@@ -389,7 +395,19 @@ class IRPrinter(IRFunctor):
             return Text('FuncType(params={}, ret={})'.format(self(t.param_types), self(t.ret_type)))
 
     def visit_PlaceholderExpr(self, e: PlaceholderExpr):
-        return Text('PlaceholderExpr')
+        if e.required_type:
+            type_doc = self(e.required_type) + '_'
+        else:
+            type_doc = ''
+
+        if e.require_const:
+            base = 'const'
+        elif e.require_non_const:
+            base = 'expr'
+        else:
+            base = 'any'
+
+        return Text(type_doc + base)
 
     def print_tensor_nodes(self, nodes: List[TensorNode], exclude_nodes: List[TensorNode] = None) -> Doc:
         from hidet.ir.tools import collect  # pylint: disable=import-outside-toplevel

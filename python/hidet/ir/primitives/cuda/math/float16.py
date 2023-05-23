@@ -106,27 +106,27 @@ class CUDAFloat16MathFunctionSet(MathFunctionSet):
     def register_via_delegate(
         self, name: str, target_type: DataType, delegate_type: DataType, delegate: Callable, num_args: int
     ):
-        from hidet.lang import script, cast, attr
+        from hidet.lang import script, cast, attrs
 
         if num_args == 1:
 
             @script
             def delegated_primitive(v: target_type) -> target_type:
-                attr.func_name = 'cuda_f16_{}'.format(name)
+                attrs.func_name = 'cuda_f16_{}'.format(name)
                 return cast(delegate(cast(v, delegate_type)), target_type)
 
         elif num_args == 2:
 
             @script
             def delegated_primitive(a: target_type, b: target_type) -> target_type:
-                attr.func_name = 'cuda_f16_{}'.format(name)
+                attrs.func_name = 'cuda_f16_{}'.format(name)
                 return cast(delegate(cast(a, delegate_type), cast(b, delegate_type)), target_type)
 
         elif num_args == 3:
 
             @script
             def delegated_primitive(a: target_type, b: target_type, c: target_type) -> target_type:
-                attr.func_name = 'cuda_f16_{}'.format(name)
+                attrs.func_name = 'cuda_f16_{}'.format(name)
                 return cast(
                     delegate(cast(a, delegate_type), cast(b, delegate_type), cast(c, delegate_type)), target_type
                 )

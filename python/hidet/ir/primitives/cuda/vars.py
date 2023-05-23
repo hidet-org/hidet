@@ -10,65 +10,35 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from collections import namedtuple
-from typing import Dict, Optional, List
 
 from hidet.ir.expr import Var
-from hidet.ir.type import data_type
+from hidet.ir.dtypes import int32
+from hidet.ir.primitives.vars import register_primitive_variable, lookup_primitive_variable
+from hidet.utils.py import initialize
 
-_primitive_variables: Dict[str, Var] = {}
 
-
-def attach_pool(var):
-    if '_primitive_variables' not in var.__dict__:
-        var.__dict__['_primitive_variables'] = _primitive_variables
-    return var
+@initialize()
+def register_cuda_primitive_variables():
+    for base in ['threadIdx', 'blockIdx', 'blockDim', 'gridDim']:
+        for suffix in ['x', 'y', 'z']:
+            name = '{}.{}'.format(base, suffix)
+            register_primitive_variable(name=name, dtype=int32)
 
 
 def thread_idx(dim='x') -> Var:
-    assert dim in ['x', 'y', 'z']
-    name = 'threadIdx.{}'.format(dim)
-    if name not in _primitive_variables:
-        _primitive_variables[name] = attach_pool(Var(hint=name, type=data_type('int32'), name=name))
-    return _primitive_variables[name]
+    return lookup_primitive_variable('threadIdx.{}'.format(dim))
 
 
 def block_idx(dim='x') -> Var:
-    assert dim in ['x', 'y', 'z']
-    name = 'blockIdx.{}'.format(dim)
-    if name not in _primitive_variables:
-        _primitive_variables[name] = attach_pool(Var(hint=name, type=data_type('int32'), name=name))
-    return _primitive_variables[name]
+    return lookup_primitive_variable('blockIdx.{}'.format(dim))
 
 
 def block_dim(dim='x') -> Var:
-    assert dim in ['x', 'y', 'z']
-    name = 'blockDim.{}'.format(dim)
-    if name not in _primitive_variables:
-        _primitive_variables[name] = attach_pool(Var(hint=name, type=data_type('int32'), name=name))
-    return _primitive_variables[name]
+    return lookup_primitive_variable('blockDim.{}'.format(dim))
 
 
 def grid_dim(dim='x') -> Var:
-    assert dim in ['x', 'y', 'z']
-    name = 'gridDim.{}'.format(dim)
-    if name not in _primitive_variables:
-        _primitive_variables[name] = attach_pool(Var(hint=name, type=data_type('int32'), name=name))
-    return _primitive_variables[name]
-
-
-def is_primitive_variable(name: str) -> bool:
-    return name in _primitive_variables
-
-
-def get_primitive_variable(name: str) -> Optional[Var]:
-    if name in _primitive_variables:
-        return _primitive_variables[name]
-    else:
-        return None
-
-
-def get_all_primitive_vars() -> List[Var]:
-    return list(_primitive_variables.values())
+    return lookup_primitive_variable('gridDim.{}'.format(dim))
 
 
 dim3 = namedtuple('dim3', field_names=['x', 'y', 'z'])

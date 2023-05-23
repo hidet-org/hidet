@@ -237,15 +237,16 @@ class StmtRewriter(StmtFunctor, BaseRewriter):
             return AssignStmt(v, value)
 
     def visit_LetStmt(self, stmt: LetStmt):
+        bind_vars = [self.visit(bind_var) for bind_var in stmt.bind_vars]
         bind_values = [self.visit(bind_value) for bind_value in stmt.bind_values]
         body = self.visit(stmt.body)
-        if same_list(bind_values, stmt.bind_values) and body is stmt.body:
+        if same_list(bind_vars, stmt.bind_vars) and same_list(bind_values, stmt.bind_values) and body is stmt.body:
             return stmt
         else:
-            return LetStmt(stmt.bind_vars, bind_values, body)
+            return LetStmt(bind_vars, bind_values, body)
 
     def visit_ForStmt(self, stmt: ForStmt):
-        loop_var = stmt.loop_var
+        loop_var = self.visit(stmt.loop_var)
         extent = self.visit(stmt.extent)
         body = self.visit(stmt.body)
         if loop_var is stmt.loop_var and extent is stmt.extent and body is stmt.body:
@@ -255,15 +256,20 @@ class StmtRewriter(StmtFunctor, BaseRewriter):
 
     def visit_ForTaskStmt(self, stmt: ForMappingStmt):
         loop_vars: List[Expr] = [self.visit(v) for v in stmt.loop_vars]
-        # todo: visit expressions in task mapping
+        mapping = self.visit(stmt.mapping)
         worker = self.visit(stmt.worker)
         body = self.visit(stmt.body)
-        if same_list(loop_vars, stmt.loop_vars) and worker is stmt.worker and body is stmt.body:
+        if (
+            same_list(loop_vars, stmt.loop_vars)
+            and worker is stmt.worker
+            and body is stmt.body
+            and mapping is stmt.mapping
+        ):
             return stmt
         else:
             assert all(isinstance(v, Var) for v in loop_vars)
             asserted_loop_vars: List[Var] = [v for v in loop_vars if isinstance(v, Var)]  # avoid IDE warning
-            return ForMappingStmt(loop_vars=asserted_loop_vars, mapping=stmt.mapping, worker=worker, body=body)
+            return ForMappingStmt(loop_vars=asserted_loop_vars, mapping=mapping, worker=worker, body=body)
 
     def visit_WhileStmt(self, stmt: WhileStmt):
         cond = self.visit(stmt.cond)

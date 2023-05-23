@@ -14,6 +14,8 @@
 #include <sstream>
 #include <hidet/runtime/common.h>
 
+#define LOG(Level, ...) Level##Message(__FILE__, __LINE__).stream()
+
 struct ErrorState {
     bool has_error;
     std::string error_msg;
@@ -22,16 +24,31 @@ struct ErrorState {
 };
 
 struct HidetException: std::exception {
-    std::string file;
-    int line;
     std::string msg;
 
-    HidetException(std::string file, int line, std::string msg):file(file), line(line), msg(msg){}
+    HidetException(std::string msg): msg(msg){}
 
     const char * what() const noexcept override {
         static std::string what_msg;
-        what_msg = this->file + ":" + std::to_string(this->line) + " " + this->msg;
+        what_msg = this->msg;
         return what_msg.c_str();
+    }
+};
+
+
+class FATALMessage {
+    std::ostringstream stream_;
+public:
+    FATALMessage(const char* file, int line) {
+        this->stream_ << file << ":" << line << ": ";
+    }
+
+    std::ostringstream &stream() {
+        return this->stream_;
+    }
+
+    [[noreturn]] ~FATALMessage() noexcept(false) {
+        throw HidetException(this->stream_.str().c_str());
     }
 };
 

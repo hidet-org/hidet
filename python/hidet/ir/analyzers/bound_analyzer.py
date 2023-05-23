@@ -237,22 +237,27 @@ class BoundAnalyzer(ExprVisitor, StmtVisitor, ModuleVisitor):
 
     def visit_Function(self, func: Function):
         # note: we use the vars in func.extern_vars instead of hidet.ir.primitives.thread_idx for multiprocessing
-        extern_var_map = {var.name: var for var in func.extern_vars}
+        from hidet.ir.primitives.vars import lookup_primitive_variable
+
         if func.kind in ['cuda_kernel', 'cuda_device']:
-            if 'cuda_block_dim' in func.attrs:
-                block_dims = normalize_launch_dims(func.attrs['cuda_block_dim'])
+            if 'cuda.block_dim' in func.attrs:
+                block_dims = normalize_launch_dims(func.attrs['cuda.block_dim'])
                 for block_dim, suffix in zip(block_dims, ['x', 'y', 'z']):
                     if isinstance(block_dim, int):
                         bound_info = BoundInfo(min_value=0, max_value=int(block_dim) - 1)
-                        self.bound[extern_var_map['threadIdx.{}'.format(suffix)]] = bound_info
-                        self.bound[extern_var_map['blockDim.{}'.format(suffix)]] = BoundInfo(value=int(block_dim))
-            if 'cuda_grid_dim' in func.attrs:
-                grid_dims = normalize_launch_dims(func.attrs['cuda_grid_dim'])
+                        self.bound[lookup_primitive_variable('threadIdx.{}'.format(suffix))] = bound_info
+                        self.bound[lookup_primitive_variable('blockDim.{}'.format(suffix))] = BoundInfo(
+                            value=int(block_dim)
+                        )
+            if 'cuda.grid_dim' in func.attrs:
+                grid_dims = normalize_launch_dims(func.attrs['cuda.grid_dim'])
                 for grid_dim, suffix in zip(grid_dims, ['x', 'y', 'z']):
                     if isinstance(grid_dim, int):
                         bound_info = BoundInfo(min_value=0, max_value=int(grid_dim) - 1)
-                        self.bound[extern_var_map['blockIdx.{}'.format(suffix)]] = bound_info
-                        self.bound[extern_var_map['gridDim.{}'.format(suffix)]] = BoundInfo(value=int(grid_dim))
+                        self.bound[lookup_primitive_variable('blockIdx.{}'.format(suffix))] = bound_info
+                        self.bound[lookup_primitive_variable('gridDim.{}'.format(suffix))] = BoundInfo(
+                            value=int(grid_dim)
+                        )
         self.visit(func.body)
 
     def combine(self, e: Union[Add, Sub, Multiply, FloorDiv, Mod, Div]):

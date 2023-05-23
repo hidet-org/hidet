@@ -19,7 +19,7 @@ from ctypes import c_int32, c_void_p, pointer, c_float, cast
 from ctypes import POINTER, Structure
 
 import hidet.graph.frontend.torch
-from hidet.ir.type import TypeNode, DataType, TensorType, PointerType, TensorPointerType
+from hidet.ir.type import BaseType, DataType, TensorType, PointerType, TensorPointerType
 from hidet.ir.expr import Constant
 from .ffi import _LIB
 
@@ -34,7 +34,7 @@ class ArgTypeCode(Enum):
     FLOAT16 = 4
 
     @staticmethod
-    def from_type(type_node: TypeNode) -> ArgTypeCode:
+    def from_type(type_node: BaseType) -> ArgTypeCode:
         if isinstance(type_node, DataType):
             if type_node.name == 'int32':
                 return ArgTypeCode.INT32
@@ -54,7 +54,7 @@ class CPackedFunc(Structure):
     _fields_ = [("num_args", c_int32), ("arg_types", c_int32_p), ("func_pointer", c_void_p)]
 
 
-def make_c_packed_func(param_types: Sequence[TypeNode], c_func_pointer) -> CPackedFunc:
+def make_c_packed_func(param_types: Sequence[BaseType], c_func_pointer) -> CPackedFunc:
     type_codes = [ArgTypeCode.from_type(param_type).value for param_type in param_types]
     n = len(type_codes)
     num_args = c_int32(n)
@@ -64,8 +64,8 @@ def make_c_packed_func(param_types: Sequence[TypeNode], c_func_pointer) -> CPack
 
 
 class PackedFunc:
-    def __init__(self, param_types: Sequence[TypeNode], c_func_pointer):
-        self.param_types: List[TypeNode] = list(param_types)
+    def __init__(self, param_types: Sequence[BaseType], c_func_pointer):
+        self.param_types: List[BaseType] = list(param_types)
         self.c_packed_func: CPackedFunc = make_c_packed_func(param_types, c_func_pointer)
 
     def convert_args(self, args: Sequence):

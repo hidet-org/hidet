@@ -25,7 +25,7 @@ class PrimitiveFunctionRegistry:
         function: Optional[Function] = None,
         generic: bool = False,
     ):
-        self.var = Var(hint=name, type=func_type)
+        self.var = Var(hint=None, type=func_type, name=name)
         self.name: str = name
         self.codegen_name: str = codegen_name
         self.func_type: FuncType = func_type

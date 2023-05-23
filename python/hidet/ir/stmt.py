@@ -51,18 +51,20 @@ class ForStmtAttr:
         self.parallel_threads: Optional[int] = parallel_threads
 
     def __str__(self):
-        if self.unroll is None:
-            return '.'
-        elif isinstance(self.unroll, bool):
+        if self.unroll:
             if self.unroll_explicit:
                 return 'u+'
+            elif self.unroll_factor:
+                return f'u{self.unroll_factor}'
             else:
                 return 'u'
-        else:
-            if self.unroll_explicit:
-                return f'u{self.unroll}+'
+        elif self.parallel:
+            if self.parallel_threads:
+                return f'p{self.parallel_threads}'
             else:
-                return f'u{self.unroll}'
+                return 'p'
+        else:
+            return '.'
 
     @staticmethod
     def from_extent(extent: Union[int, Expr]):
@@ -77,11 +79,11 @@ class ForStmtAttr:
             return ForStmtAttr()
 
     @staticmethod
-    def parse(attr: str) -> List[ForStmtAttr]:
+    def parse(attr: Optional[str], num_loops: int) -> List[ForStmtAttr]:
         """
         Parse the attribute string and return a list of ForStmtAttr.
 
-        attr-string: attr+
+        attr-string: attr*
         attr:
              | unroll
              | parallel
@@ -101,11 +103,16 @@ class ForStmtAttr:
         attr: str
             The attribute string.
 
+        num_loops: int
+            The number of loops this attr string describe.
+
         Returns
         -------
         attrs: List[ForStmtAttr]
             The list of ForStmtAttr.
         """
+        if attr is None:
+            attr = ''
         s = attr.replace(' ', '')
         idx = 0
 
@@ -152,6 +159,12 @@ class ForStmtAttr:
                     attrs.append(ForStmtAttr(parallel=True))
             else:
                 raise ValueError(f"Invalid attribute string: {attr}")
+        if len(attrs) == 0:
+            attrs = [ForStmtAttr() for _ in range(num_loops)]
+        elif len(attrs) == 1:
+            attrs = attrs * num_loops
+        elif len(attrs) != num_loops:
+            raise ValueError("Invalid attribute string: {} for {} loops".format(attr, num_loops))
         return attrs
 
 
@@ -221,7 +234,7 @@ class ForStmt(Stmt):
         self.loop_var: Var = loop_var
         self.extent: Expr = simplify(convert(extent))
         self.body: Optional[Stmt] = body
-        self.attr: ForStmtAttr = attr if attr else ForStmtAttr()
+        self.attr: ForStmtAttr = attr if attr else ForStmtAttr.from_extent(extent)
 
 
 class ForMappingStmt(Stmt):
@@ -297,17 +310,19 @@ class SeqStmt(Stmt):
 class LaunchKernelStmt(Stmt):
     def __init__(
         self,
-        func_var: Expr,
+        func_var: Var,
         args: Sequence[Expr],
         grid_dim: Tuple[Expr, Expr, Expr],
         block_dim: Tuple[Expr, Expr, Expr],
         shared_mem: Expr,
     ):
-        self.func_var: Expr = func_var
+        self.func_var: Var = func_var
         self.args: List[Expr] = list(args)
         self.grid_dim: Tuple[Expr, Expr, Expr] = grid_dim
         self.block_dim: Tuple[Expr, Expr, Expr] = block_dim
         self.shared_mem_bytes: Expr = shared_mem
+
+        assert func_var.name is not None
 
 
 def asm(

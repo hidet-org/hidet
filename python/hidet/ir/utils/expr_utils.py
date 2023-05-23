@@ -10,17 +10,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Union
-from hidet.ir.expr import Expr, Constant
+from hidet.ir.expr import Expr, constant
 
 
 def as_expr(e: Union[int, float, bool, Expr]):
     if isinstance(e, Expr):
         return e
     elif isinstance(e, int):
-        return Constant(value=e, const_type='int32')
+        return constant(value=e, const_type='int32')
     elif isinstance(e, float):
-        return Constant(value=e, const_type='float32')
+        return constant(value=e, const_type='float32')
     elif isinstance(e, bool):
-        return Constant(value=e, const_type='bool')
+        return constant(value=e, const_type='bool')
     else:
         raise ValueError('Cannot convert {} to hidet.ir.Expr.'.format(e))

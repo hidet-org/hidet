@@ -86,15 +86,7 @@ class FunctionBodyPass(FunctionPass):
         if body is func.body:
             return func
         else:
-            return Function(
-                func.name,
-                func.params,
-                body,
-                func.ret_type,
-                kind=func.kind,
-                extern_vars=func.extern_vars,
-                attrs=func.attrs,
-            )
+            return Function(func.name, func.params, body, func.ret_type, kind=func.kind, attrs=func.attrs)
 
     def process_body(self, stmt: Stmt) -> Stmt:
         raise NotImplementedError()

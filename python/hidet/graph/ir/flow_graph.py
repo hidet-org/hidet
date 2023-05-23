@@ -23,7 +23,7 @@ from hidet import option
 from hidet.ir.expr import Var
 from hidet.ir.task import Task
 from hidet.graph.tensor import Tensor, zeros_like, randn_like
-from hidet.graph.operator import Operator, SizeVar
+from hidet.graph.operator import Operator, SymbolVar
 
 logger = logging.getLogger(__name__)
 
@@ -35,11 +35,11 @@ class GraphForwardInstrument:
     def after_graph(self, graph: FlowGraph, inputs: List[Tensor], outputs: List[Tensor]) -> None:
         pass
 
-    def before_operator(self, op: Operator, inputs: List[Tensor], shape_map: Dict[SizeVar, int]) -> None:
+    def before_operator(self, op: Operator, inputs: List[Tensor], shape_map: Dict[SymbolVar, int]) -> None:
         pass
 
     def after_operator(
-        self, op: Operator, inputs: List[Tensor], shape_map: Dict[SizeVar, int], outputs: List[Tensor]
+        self, op: Operator, inputs: List[Tensor], shape_map: Dict[SymbolVar, int], outputs: List[Tensor]
     ) -> None:
         pass
 
@@ -76,14 +76,14 @@ class GraphForwardContext:
             instrument.after_graph(graph, inputs, outputs)
 
     @staticmethod
-    def before_operator(op: Operator, inputs: List[Tensor], shape_map: Dict[SizeVar, int]) -> None:
+    def before_operator(op: Operator, inputs: List[Tensor], shape_map: Dict[SymbolVar, int]) -> None:
         ctx = GraphForwardContext.current()
         for instrument in ctx.instruments:
             instrument.before_operator(op, inputs, shape_map)
 
     @staticmethod
     def after_operator(
-        op: Operator, inputs: List[Tensor], shape_map: Dict[SizeVar, int], outputs: List[Tensor]
+        op: Operator, inputs: List[Tensor], shape_map: Dict[SymbolVar, int], outputs: List[Tensor]
     ) -> None:
         ctx = GraphForwardContext.current()
         for instrument in ctx.instruments:
@@ -198,6 +198,8 @@ class FlowGraph:
         output: List[Tensor]
             The output tensors of the computation graph.
         """
+        from hidet.ffi import runtime_api
+
         inputs: List[Tensor] = list(inputs)
 
         # the input tensors should be non-symbolic
@@ -209,13 +211,19 @@ class FlowGraph:
         # build the kernel for each operator in the graph
         self._build()
 
+        # set the symbol values
+        for expect_input, actual_input in zip(self.inputs, inputs):
+            for expect_dim, actual_dim in zip(expect_input.shape, actual_input.shape):
+                if isinstance(expect_dim, SymbolVar):
+                    runtime_api.set_symbol_value(expect_dim.name, int(actual_dim))
+
         GraphForwardContext.before_graph(self, inputs)
 
         # count the usage of each tensor. We use this count to determine whether
         # a tensor should be freed after running an operator.
         usage_count = self.usage_count.copy()
         tensor_map: Dict[Tensor, Tensor] = {}  # symbolic tensor -> actual tensor during the forward process
-        shape_map: Dict[SizeVar, int] = {}  # symbolic dimension ->  actual shape dimension for the symbolic tensors
+        shape_map: Dict[SymbolVar, int] = {}  # symbolic dimension ->  actual shape dimension for the symbolic tensors
         for st, at in zip(self.inputs, inputs):
             tensor_map[st] = at
             shape_map.update({dim: at.shape[idx] for idx, dim in enumerate(st.shape) if isinstance(dim, Var)})
@@ -241,7 +249,7 @@ class FlowGraph:
             GraphForwardContext.before_operator(node, node_inputs, shape_map)
             logger.debug('[%4d/%d] run operator %s, %s', idx, len(self.nodes), node.name, node.task)
             logger.debug('   inputs: %s', [x.signature() for x in node_inputs])
-            node_outputs = node.imperative_run(node_inputs, shape_map=shape_map)
+            node_outputs = node.imperative_run(node_inputs)
             logger.debug('  outputs: %s', [x.signature() for x in node_outputs])
             GraphForwardContext.after_operator(node, node_inputs, shape_map, node_outputs)
 

@@ -16,12 +16,13 @@ from itertools import product
 from hidet.ir.dialects.pattern import PlaceholderExpr, match
 from hidet.ir.dtypes import boolean
 from hidet.ir.expr import Add, convert, Sub, Multiply, Mod, LessThan, LessEqual, Equal, BinaryExpr, LogicalAnd
-from hidet.ir.expr import BitwiseXor, BitwiseAnd, BitwiseOr, BitwiseNot
-from hidet.ir.expr import Div, Constant, Expr, logical_and, logical_or, if_then_else
+from hidet.ir.expr import BitwiseXor, BitwiseAnd, BitwiseOr, BitwiseNot, Var
+from hidet.ir.expr import Div, Constant, Expr, logical_and, logical_or, if_then_else, constant
+from hidet.ir.stmt import LetStmt, ForStmt
 from hidet.ir.functors import IRRewriter
 from hidet.ir.tools import rewrite, simplify
 from hidet.transforms.base import FunctionPass
-from hidet.utils import prod, repeat_until_converge
+from hidet.utils import prod, repeat_until_converge, same_list
 from hidet.ir.func import Function
 from hidet.ir.analyzers import BoundAnalyzer, BoundInfo
 
@@ -66,9 +67,9 @@ class ConstExprSimplifier(IRRewriter):
             op = self.op_dict[e.__class__]
             c = op(e.a.value, e.b.value)
             if isinstance(c, bool):
-                return Constant(c, 'bool')
+                return constant(c, 'bool')
             else:
-                return Constant(c, numeric_promotion(e.a.type, e.b.type))
+                return constant(c, numeric_promotion(e.a.type, e.b.type))
         return e
 
     def visit_And(self, e: LogicalAnd):
@@ -98,16 +99,8 @@ class RuleBasedSimplifier(IRRewriter):
         e1, e2 = any_expr(allow_const=False), any_expr(allow_const=False)
         c1, c2 = any_constant(), any_constant()
         ec1, ec2 = any_expr(allow_const=True), any_expr(allow_const=True)
-        zero = convert(0)
-        one = convert(1)
         self.args = {e1, e2, c1, c2, ec1, ec2}
         self.patterns = [
-            (e1 + zero, e1),
-            (e1 - zero, e1),
-            (e1 * one, e1),
-            (e1 * zero, zero),
-            (e1 // one, e1),
-            (e1 ^ zero, e1),
             # add
             ((c1 + e1) + e2, (e1 + e2) + c1),
             ((e1 + c1) + c2, e1 + (c1 + c2)),
@@ -271,6 +264,28 @@ class RuleBasedSimplifier(IRRewriter):
         if ua < ub or ub < ua:
             return convert(False)
         return IRRewriter.visit_Equal(self, e)
+
+    def visit_LetStmt(self, stmt: LetStmt):
+        bind_vars = self(stmt.bind_vars)
+        bind_values = [self.visit(bind_value) for bind_value in stmt.bind_values]
+        body = self.visit(stmt.body)
+        bind_vars = [
+            updated if isinstance(updated, Var) else original for original, updated in zip(stmt.bind_vars, bind_vars)
+        ]
+        if same_list(bind_vars, stmt.bind_vars) and same_list(bind_values, stmt.bind_values) and body is stmt.body:
+            return stmt
+        else:
+            return LetStmt(bind_vars, bind_values, body)
+
+    def visit_ForStmt(self, stmt: ForStmt):
+        loop_var = self(stmt.loop_var)
+        loop_var = loop_var if isinstance(loop_var, Var) else stmt.loop_var
+        extent = self.visit(stmt.extent)
+        body = self.visit(stmt.body)
+        if loop_var is stmt.loop_var and extent is stmt.extent and body is stmt.body:
+            return stmt
+        else:
+            return ForStmt(loop_var, extent, body=body, attr=stmt.attr)
 
     def visit_Function(self, func: Function):
         return IRRewriter.visit_Function(self, func)

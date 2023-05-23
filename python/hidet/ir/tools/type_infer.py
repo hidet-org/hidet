@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from hidet.ir.type import DataType, TensorType, FuncType, PointerType, TensorPointerType, data_type, tensor_pointer_type
-from hidet.ir.type import TypeNode, tensor_type
+from hidet.ir.type import tensor_type, BaseType
 from hidet.ir.expr import BinaryExpr, Add, Sub, Multiply, Div, Mod, FloorDiv, Condition, LessThan, Equal, IfThenElse
 from hidet.ir.expr import TensorSlice, LogicalNot, LogicalOr, LogicalAnd, LessEqual, Let, RightShift, LeftShift
 from hidet.ir.expr import BitwiseAnd, Neg, NotEqual, BitwiseXor, Dereference, Reference, Address, BitwiseNot, BitwiseOr
@@ -35,15 +35,35 @@ class TypeInfer(ExprFunctor, ComputeFunctor):
     def visit_Binary(self, e: BinaryExpr):
         from hidet.ir.utils.type_utils import numeric_promotion
 
-        a_dtype: DataType = self.visit(e.a)
-        b_dtype: DataType = self.visit(e.b)
+        a_type: BaseType = self.visit(e.a)
+        b_type: BaseType = self.visit(e.b)
+        if a_type.is_data_type() and b_type.is_data_type():
+            a_dtype: DataType = a_type.as_data_type()
+            b_dtype: DataType = b_type.as_data_type()
 
-        if isinstance(e, (Add, Sub, Multiply, Div, Mod, FloorDiv)):
-            return numeric_promotion(a_dtype, b_dtype)
-        elif isinstance(e, Condition):
-            return data_type('bool')
+            if isinstance(e, (Add, Sub, Multiply, Div, Mod, FloorDiv)):
+                return numeric_promotion(a_dtype, b_dtype)
+            elif isinstance(e, Condition):
+                return data_type('bool')
+            else:
+                raise NotImplementedError('Binary operator type infer {}'.format(type(e)))
+        elif a_type.is_pointer() and b_type.is_pointer():
+            if isinstance(e, Sub):
+                return data_type('int32')
+            else:
+                raise TypeError("Can only do pointer subtraction, got {}".format(type(e)))
+        elif a_type.is_pointer() and b_type.is_data_type():
+            if isinstance(e, (Sub, Add)):
+                return a_type
+            else:
+                raise TypeError("Can only pointer +/- integer, got {} {} {}".format(a_type, type(e), b_type))
+        elif a_type.is_data_type() and b_type.is_pointer():
+            if isinstance(e, Add):
+                return b_type
+            else:
+                raise TypeError("Can only integer + pointer, got {} {} {}".format(a_type, type(e), b_type))
         else:
-            raise NotImplementedError('Binary op type infer {}'.format(type(e)))
+            raise NotImplementedError('Binary operator type infer {} {} {}'.format(a_type, type(e), b_type))
 
     def visit_Neg(self, e: Neg):
         return self(e.a)
@@ -207,6 +227,6 @@ class TypeInfer(ExprFunctor, ComputeFunctor):
         raise NotImplementedError()
 
 
-def infer_type(expr) -> TypeNode:
+def infer_type(expr):
     infer = TypeInfer()
     return infer(expr)

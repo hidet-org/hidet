@@ -47,12 +47,12 @@ class VectorType(DataType):
         return self._lane_type
 
     def constant(self, value: Sequence[Any]):
-        from hidet.ir.expr import Constant
+        from hidet.ir.expr import constant
 
         value = [self.lane_type.constant(v) for v in value]
         if len(value) != self.num_lanes:
             raise ValueError('Invalid vector constant, expect {} elements, got {}'.format(self.num_lanes, len(value)))
-        return Constant(value, self)
+        return constant(value, self)
 
     @property
     def one(self):

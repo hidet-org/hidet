@@ -19,7 +19,7 @@ from hidet.ir import primitives as prim
 from hidet.ir.primitives import active_mask, shfl_down_sync
 from hidet.graph.ops.definitions.utils import tune
 from hidet.lang import f16, f32, i32, u32, spatial, repeat, tensor
-from hidet.lang import attr, grid, tensor_pointer, view, col_spatial
+from hidet.lang import attrs, grid, tensor_pointer, view, col_spatial
 from hidet.lang.cuda import blockIdx, threadIdx, syncthreads, dynamic_shared_memory, register_tensor
 from hidet.lang.cuda import MmaConfig, mma_sync, cp_async, ldmatrix, cp_async_wait_all
 from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, TensorNode, compute, input_like
@@ -461,7 +461,7 @@ class AttnTask(Task):
                 # Reduce mij
                 rv[0] = acc_dtype.min_value
                 rv[1] = acc_dtype.min_value
-                wi, wj, _ = spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id)[0]
+                wi, wj, _ = spatial(warp_count_m, warp_count_n, warp_count_k).map(warp_id)
                 c_map = repeat(2, 1) * spatial(8, 4)
                 for mma_i in range(mmas_per_warp_m):
                     rv[0] = acc_dtype.min_value
@@ -539,10 +539,10 @@ class AttnTask(Task):
                 v: f16[v_head + [n_size, d_size]],
                 o: f16[o_head + [n_size, d_size]],
             ):
-                attr.cuda_grid_dim = (i_split, bs)
-                attr.cuda_block_dim = block_size
-                attr.cuda_min_blocks = 1
-                attr.cuda_dynamic_smem_bytes = dynamic_smem_bytes
+                attrs.cuda.grid_dim = (i_split, bs)
+                attrs.cuda.block_dim = block_size
+                attrs.cuda.min_blocks = 1
+                attrs.cuda.dynamic_smem_bytes = dynamic_smem_bytes
 
                 offset_i = blockIdx.x * i_rows_per_tb
 
