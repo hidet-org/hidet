@@ -79,11 +79,12 @@ class NaiveLetStmtInlineRewriter(IRRewriter):
         bind_vars = []
         bind_values = []
         for bind_var, bind_value in zip(stmt.bind_vars, stmt.bind_values):
+            updated_var = self(bind_var)
             updated_value = self(bind_value)
-            if self.should_inline(bind_var, updated_value):
+            if self.should_inline(updated_var, updated_value):
                 self.memo[bind_var] = updated_value
             else:
-                bind_vars.append(bind_var)
+                bind_vars.append(updated_var)
                 bind_values.append(updated_value)
         body = self(stmt.body)
         if same_list(bind_vars, stmt.bind_vars) and same_list(bind_values, stmt.bind_values) and body is stmt.body:
