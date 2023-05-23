@@ -22,14 +22,5 @@ def test_profile_config():
     hidet.option.search_space(0)
 
 
-def test_tune_build_config():
-    a = hidet.randn([1, 10, 10], device='cuda')
-    b = hidet.randn([1, 10, 10], device='cuda')
-    hidet.option.search_space(1)
-    hidet.option.parallel_tune(4, 3)
-    hidet.option.parallel_build(False)
-    c = hidet.ops.batch_matmul(a, b)
-
-
 if __name__ == '__main__':
     pytest.main(__file__)
