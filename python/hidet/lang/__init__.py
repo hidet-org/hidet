@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Union, Sequence, Optional, List
-from hidet.ir.type import TypeNode, DataType, TensorType, PointerType, VoidType, ReferenceType, void_p, data_type
+from hidet.ir.type import BaseType, DataType, TensorType, PointerType, VoidType, ReferenceType, void_p, data_type
 from hidet.ir.expr import Expr, Var, cast, view, address, Dereference
 from hidet.ir.mapping import row_spatial, row_repeat, col_repeat, col_spatial, TaskMapping, auto_map
 from hidet.ir.layout import DataLayout
@@ -30,7 +30,6 @@ from hidet.lang.constructs.type import tensor, tensor_pointer, as_tensor_pointer
 
 ref_u32 = ReferenceType(u32)
 
-void_pointer = PointerType(VoidType())
 void = VoidType()
 
 spatial = row_spatial

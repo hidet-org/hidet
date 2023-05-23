@@ -363,11 +363,14 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             return Text('"{}"'.format(e.value))
         elif e.is_scalar():
             return self.scalar_literal(e.value, e.type)
-        else:
-            assert isinstance(e.type, TensorType)
+        elif e.is_tensor():
             dtype = e.type.dtype
             items = [self.scalar_literal(v, dtype) for v in np.array(e.value).flatten()]
             return '{' + doc_join(items, ', ') + '}'
+        elif isinstance(e.type, PointerType):
+            return '(' + self(e.type) + ')' + str(int(e.value))
+        else:
+            raise ValueError("invalid constant type: {}".format(e))
 
     def visit_DeclareStmt(self, stmt: DeclareStmt):
         doc = NewLine()

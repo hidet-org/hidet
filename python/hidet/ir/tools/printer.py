@@ -218,7 +218,7 @@ class IRPrinter(IRFunctor):
             return 'ConstTensor({}, {})'.format(e.value.shape, e.type)
         elif e.is_string():
             return Text('"{}"'.format(str(e.value)))
-        else:
+        elif e.is_scalar():
             dtype = e.type.name
             if dtype == 'float32':
                 ret = '{}f'.format(float(e.value))
@@ -229,6 +229,10 @@ class IRPrinter(IRFunctor):
             else:
                 ret = '{}({})'.format(dtype, e.value)
             return Text(ret)
+        elif isinstance(e.type, PointerType):
+            return Text('({}){}'.format(self(e.type), self(e.value)))
+        else:
+            raise NotImplementedError("Unknown constant type: {}".format(e.type))
 
     def visit_DeclareStmt(self, stmt: DeclareStmt):
         doc = NewLine() + Text('declare ') + self(stmt.var) + Text(': ') + self(stmt.var.type)

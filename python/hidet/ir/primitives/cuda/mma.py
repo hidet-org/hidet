@@ -254,7 +254,7 @@ def resolve_ldmatrix_func_name(num: int, shared_space_addr: bool = False, trans=
 
 @initialize()
 def register_ldmatrix_instructions():
-    from hidet.lang import script, u32, void_pointer, attrs, ref_u32
+    from hidet.lang import script, u32, void_p, attrs, ref_u32
 
     for num in [1, 2, 4]:
         for trans in [False, True]:
@@ -265,7 +265,7 @@ def register_ldmatrix_instructions():
                 inst_name = 'ldmatrix.sync.aligned.m8n8{num}{trans}{ss}.b16'.format(
                     num=f'.x{num}', trans='.trans' if trans else '', ss='.shared' if shared_space_addr else ''
                 )
-                smem_type = u32 if shared_space_addr else void_pointer
+                smem_type = u32 if shared_space_addr else void_p
                 if num == 1:
                     template = '{inst_name} {{%0}}, [%1];'.format(inst_name=inst_name)
 

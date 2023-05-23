@@ -322,7 +322,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
         # pylint: disable=too-many-locals, too-many-branches, too-many-statements
         # check the rhs value, must be an instance of allowed_types or a list of these kinds of elements.
         host_var_types = (ir.TaskMapping, ir.DataLayout, ir.TensorSlice, ir.Function, str, list, tuple, dict)
-        allowed_types = (ir.Expr, ir.TypeNode, TypeDecorator, float, int, str, type(None))
+        allowed_types = (ir.Expr, ir.BaseType, TypeDecorator, float, int, str, type(None))
         allowed_types += host_var_types
         assert isinstance(rhs, allowed_types) or (
             isinstance(rhs, list) and all(isinstance(v, allowed_types) for v in rhs)
@@ -360,7 +360,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
                         init_value = None
                         is_static = False
                         scope = DeclareScope.Default
-                        if isinstance(rhs, ir.TypeNode):
+                        if isinstance(rhs, ir.BaseType):
                             var_type = rhs
                         elif isinstance(rhs, TypeDecorator):
                             var_type = rhs.decorated_type
@@ -437,7 +437,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
                     if arg_name not in self.func_annotations:
                         raise HidetProgramError(self, arg, 'Hidet expects type annotation for each function argument.')
                     arg_type = self.func_annotations[arg_name]
-                    if isinstance(arg_type, ir.TypeNode):
+                    if isinstance(arg_type, ir.BaseType):
                         if isinstance(arg_type, ir.TensorType):
                             # we automatically change the tensor type of argument to a tensor pointer type.
                             arg_type = ir.tensor_pointer_type(
@@ -481,7 +481,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
                 ret_type = ir.VoidType()
             else:
                 ret_type = self.visit(func_def.returns)
-                if not isinstance(ret_type, ir.TypeNode):
+                if not isinstance(ret_type, ir.BaseType):
                     raise HidetProgramError(self, func_def.returns, 'Expect a type of function return value.')
 
             # get function attributes
@@ -659,9 +659,9 @@ class PythonToHidetTranslator(PythonAstFunctor):
                 # case 1: get the address of an expression
                 # case 2: get the pointer type that points to the given type
                 from hidet.ir.expr import Address
-                from hidet.ir.type import TypeNode
+                from hidet.ir.type import BaseType
 
-                if isinstance(value, TypeNode):
+                if isinstance(value, BaseType):
                     return ~value
                 else:
                     return Address(value)
