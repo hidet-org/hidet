@@ -13,7 +13,7 @@ from hidet.ir.functors import IRRewriter
 from hidet.ir.tools import TypeInfer
 from hidet.ir.stmt import Stmt, AssignStmt, BufferStoreStmt
 from hidet.ir.expr import Expr, Cast, Add, Sub, Multiply, Div, BinaryExpr, cast
-from hidet.ir.type import DataType, TypeNode, TensorType, TensorPointerType, PointerType, ReferenceType, VoidType
+from hidet.ir.type import DataType, BaseType, TensorType, TensorPointerType, PointerType, ReferenceType, VoidType
 from .base import FunctionBodyPass, Pass
 
 
@@ -26,7 +26,7 @@ class TypeNotMatch(Exception):
 
 
 class TypeChecker:
-    def visit(self, a: TypeNode, b: TypeNode):
+    def visit(self, a: BaseType, b: BaseType):
         if isinstance(a, DataType):
             return self.visit_ScalarType(a, b)
         elif isinstance(a, TensorType):
@@ -47,37 +47,37 @@ class TypeChecker:
         if not cond:
             raise TypeNotMatch(a, b, msg)
 
-    def visit_ScalarType(self, a: DataType, b: TypeNode):
+    def visit_ScalarType(self, a: DataType, b: BaseType):
         self.check(a, b, isinstance(b, DataType))
         assert isinstance(b, DataType)
         self.check(a, b, a.name == b.name)
 
-    def visit_TensorType(self, a: TensorType, b: TypeNode):
+    def visit_TensorType(self, a: TensorType, b: BaseType):
         self.check(a, b, isinstance(b, TensorType))
         assert isinstance(b, TensorType)
         self.visit(a.dtype, b.dtype)
         # todo: check data layout and shape
 
-    def visit_PointerType(self, a: PointerType, b: TypeNode):
+    def visit_PointerType(self, a: PointerType, b: BaseType):
         self.check(a, b, isinstance(b, PointerType))
         assert isinstance(b, PointerType)
         self.visit(a.base_type, b.base_type)
 
-    def visit_TensorPointerType(self, a: TensorPointerType, b: TypeNode):
+    def visit_TensorPointerType(self, a: TensorPointerType, b: BaseType):
         self.check(a, b, isinstance(b, TensorPointerType))
         assert isinstance(b, TensorPointerType)
         self.visit(a.tensor_type, b.tensor_type)
 
-    def visit_ReferenceType(self, a: ReferenceType, b: TypeNode):
+    def visit_ReferenceType(self, a: ReferenceType, b: BaseType):
         self.check(a, b, isinstance(b, ReferenceType))
         assert isinstance(b, ReferenceType)
         self.visit(a.base_type, b.base_type)
 
-    def visit_VoidType(self, a: VoidType, b: TypeNode):
+    def visit_VoidType(self, a: VoidType, b: BaseType):
         self.check(a, b, isinstance(b, VoidType))
 
 
-def same_type(a: TypeNode, b: TypeNode) -> bool:
+def same_type(a: BaseType, b: BaseType) -> bool:
     try:
         TypeChecker().visit(a, b)
         return True
@@ -91,7 +91,7 @@ class AddExplicitCastRewriter(IRRewriter):
         self.type_infer = TypeInfer()
 
     @staticmethod
-    def convert(source_type: TypeNode, target_type: TypeNode, source_value: Expr) -> Expr:
+    def convert(source_type: BaseType, target_type: BaseType, source_value: Expr) -> Expr:
         if isinstance(source_type, DataType) and isinstance(target_type, DataType):
             # because there is no implicit conversion function between bfloat16 and float16
             # in the underlying cuda c library, we use 'float32' as a bridge type
@@ -105,12 +105,14 @@ class AddExplicitCastRewriter(IRRewriter):
             return cast(source_value, target_type)
 
     def visit_Binary(self, e: BinaryExpr):
-        if isinstance(e, (Add, Sub, Multiply, Div)):
+        a, b = self(e.a), self(e.b)
+        a_type: BaseType = self.type_infer(a)
+        b_type: BaseType = self.type_infer(b)
+        if a_type.is_data_type() and b_type.is_data_type() and isinstance(e, (Add, Sub, Multiply, Div)):
             from hidet.ir.utils.type_utils import numeric_promotion
 
-            a, b = self(e.a), self(e.b)
-            a_dtype: DataType = self.type_infer(a)
-            b_dtype: DataType = self.type_infer(b)
+            a_dtype: DataType = a_type.as_data_type()
+            b_dtype: DataType = b_type.as_data_type()
             if a_dtype.name != b_dtype.name:
                 op = e.__class__
                 c_dtype = numeric_promotion(a_dtype, b_dtype)

@@ -12,7 +12,7 @@
 from typing import Dict, List, Union, Optional
 import string
 from hidet.ir.node import Node
-from hidet.ir.type import TypeNode, FuncType
+from hidet.ir.type import BaseType, FuncType
 from hidet.ir.expr import Var, Call
 from hidet.ir.stmt import Stmt
 
@@ -55,7 +55,7 @@ class Function(Node):
         assert isinstance(kind, str) and kind in ['cuda_device', 'cuda_kernel', 'host_kernel', 'packed_func']
         self.params: List[Var] = params
         self.body: Stmt = body
-        self.ret_type: TypeNode = ret_type
+        self.ret_type: BaseType = ret_type
         # self.extern_vars: List[Var] = extern_vars if extern_vars else []
         self.attrs: Dict[str, Union[int, float, str, Node]] = attrs if attrs else {}
 

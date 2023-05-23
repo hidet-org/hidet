@@ -17,7 +17,7 @@ import string
 import operator
 import numpy as np
 from .node import Node
-from .type import TypeNode, TensorType, DataType, TensorPointerType, PointerType, FuncType, StringType
+from .type import BaseType, TensorType, DataType, TensorPointerType, PointerType, FuncType, StringType
 from .type import tensor_pointer_type, string_type, tensor_type, data_type
 
 PyScalar = Union[bool, int, float, complex, str]
@@ -201,7 +201,7 @@ class Expr(Node):
             return cls(a)
 
     @staticmethod
-    def _binary(cls, a, b):  # pylint: disable=bad-staticmethod-argument
+    def _binary(cls, a: Expr, b: Expr):  # pylint: disable=bad-staticmethod-argument
         if not isinstance(a, Expr):
             a = convert(a)
         if not isinstance(b, Expr):
@@ -209,14 +209,35 @@ class Expr(Node):
         if isinstance(a, Constant) and isinstance(b, Constant):
             from hidet.ir.dtypes import promote_type
 
-            value = operator_dict[cls](a.value, b.value)
-            if cls in [Equal, NotEqual, LessThan, LessEqual, LogicalAnd, LogicalOr]:
-                return constant(value, const_type='bool')
-            elif cls in [LeftShift, RightShift]:
-                return constant(value, a.type)
+            if a.type.is_data_type() and b.type.is_data_type():
+                value = operator_dict[cls](a.value, b.value)
+                if cls in [Equal, NotEqual, LessThan, LessEqual, LogicalAnd, LogicalOr]:
+                    return constant(value, const_type='bool')
+                elif cls in [LeftShift, RightShift]:
+                    return constant(value, a.type)
+                else:
+                    return constant(value, promote_type(a.type, b.type))
+            elif a.type.is_pointer() and b.type.is_pointer():
+                if cls is Sub:
+                    return constant(a.value - b.value, 'uint64')
+                elif cls in [Equal, NotEqual]:
+                    return constant(operator_dict[cls](a.value, b.value), 'bool')
+                else:
+                    raise ValueError('unknown binary operator {}'.format(cls))
+            elif a.type.is_pointer() and b.type.is_data_type():
+                return constant(a.value + b.value, a.type)
+            elif a.type.is_data_type() and b.type.is_pointer():
+                return constant(a.value + b.value, b.type)
+            elif a.type.is_string_type() and b.type.is_string_type():
+                if cls is Add:
+                    return constant(a.value + b.value, a.type)
+                elif cls in [Equal, NotEqual]:
+                    return constant(operator_dict[cls](a.value, b.value), 'bool')
+                else:
+                    raise ValueError('unknown binary operator {}'.format(cls))
             else:
-                return constant(value, promote_type(a.type, b.type))
-        elif isinstance(b, Constant):
+                raise ValueError('unknown binary operator {}'.format(cls))
+        elif isinstance(b, Constant) and b.type.is_data_type():
             from hidet.ir.dtypes import promote_type
             from hidet.ir.tools import infer_type
 
@@ -413,11 +434,11 @@ class Let(Expr):
 
 
 class Cast(Expr):
-    def __init__(self, expr, target_type: TypeNode):
+    def __init__(self, expr, target_type: BaseType):
         self.expr: Expr = expr
-        self.target_type: TypeNode = target_type
+        self.target_type: BaseType = target_type
 
-        assert isinstance(target_type, TypeNode)
+        assert isinstance(target_type, BaseType)
 
 
 class Constant(Expr):
@@ -425,10 +446,12 @@ class Constant(Expr):
     _constant_pool: Dict[Tuple[Union[int, float, bool], str], Constant] = {}
 
     def __init__(
-        self, value: Union[np.ndarray, float, int, complex, str], const_type: Union[DataType, StringType, TensorType]
+        self,
+        value: Union[np.ndarray, float, int, complex, str],
+        const_type: Union[DataType, StringType, TensorType, PointerType],
     ):
         self.value: Union[np.ndarray, float, int, complex, str] = value
-        self.type: Union[DataType, StringType, TensorType] = const_type
+        self.type: Union[DataType, StringType, TensorType, PointerType] = const_type
 
     def is_scalar(self) -> bool:
         return isinstance(self.type, DataType)
@@ -447,9 +470,6 @@ class Constant(Expr):
 
     def __bool__(self):
         return bool(self.value)
-
-    def __str__(self):
-        return str(self.value)
 
     def __complex__(self):
         return complex(self.value)
@@ -504,7 +524,7 @@ class Reference(Expr):
 class Var(Expr):
     id_clock = 0
 
-    def __init__(self, hint: Optional[str], type: TypeNode, name: Optional[str] = None):
+    def __init__(self, hint: Optional[str], type: BaseType, name: Optional[str] = None):
         """
         A variable may have a hint, name, and id.
 
@@ -520,7 +540,7 @@ class Var(Expr):
         """
         self.hint: Optional[str] = hint
         self.name: Optional[str] = name
-        self.type: Union[TypeNode, TensorType, TensorPointerType, FuncType] = type
+        self.type: Union[BaseType, TensorType, TensorPointerType, FuncType] = type
         self.id: int = self.new_id()
 
     @staticmethod
@@ -555,7 +575,6 @@ ExprInt8 = ExprInt16 = ExprInt32 = ExprInt64 = Expr
 ExprUInt8 = ExprUInt16 = ExprUInt32 = ExprUInt64 = Expr
 ExprFloat16 = ExprFloat32 = ExprFloat64 = ExprBFloat16 = ExprTFloat32 = Expr
 Int = Union[int, Expr]
-
 
 """
 The following are the mapping from hidet expression class to corresponding python operator.
@@ -807,7 +826,7 @@ def bitwise_xor(*args: Union[Expr, int]) -> BitwiseXor:
     return _chain_binary_op(BitwiseXor, args, 0)
 
 
-def cast(v: Expr, dtype: Union[str, DataType, TypeNode]):
+def cast(v: Expr, dtype: Union[str, DataType, BaseType]):
     if not isinstance(v, Expr):
         raise ValueError('Expect an expression, got {}'.format(type(v).__name__))
 
@@ -859,7 +878,7 @@ def is_constant(e: Union[Expr, PyScalar], *other: Union[Expr, PyScalar]) -> bool
     return True
 
 
-def constant(value, const_type) -> Constant:
+def constant(value, const_type: Union[str, BaseType]) -> Constant:
     from hidet.ir.dtypes import boolean
 
     if const_type and isinstance(const_type, str):
@@ -880,10 +899,18 @@ def constant(value, const_type) -> Constant:
             value = tuple(value)
         else:
             raise ValueError(f"Invalid data const_type {const_type}")
-    else:
+    elif isinstance(const_type, TensorType):
         value = np.array(value)
+    elif isinstance(const_type, PointerType):
+        value = int(value)
+    elif isinstance(const_type, StringType):
+        value = str(value)
+    else:
+        raise ValueError(f"Invalid const_type {const_type}")
 
-    if (isinstance(value, int) and -128 <= value <= 128) or (isinstance(value, float) and value in [-1.0, 0.0, 1.0]):
+    if const_type.is_data_type() and (
+        (isinstance(value, int) and -128 <= value <= 128) or (isinstance(value, float) and value in [-1.0, 0.0, 1.0])
+    ):
         # pylint: disable=protected-access
         if (value, const_type.name) not in Constant._constant_pool:
             Constant._constant_pool[(value, const_type.name)] = Constant(value, const_type)

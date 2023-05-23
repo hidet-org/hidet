@@ -20,8 +20,8 @@ Expr = 'Expr'
 Int = Union[int, Expr]
 
 
-class TypeNode(Node):
-    def __invert__(self) -> TypeNode:
+class BaseType(Node):
+    def __invert__(self) -> BaseType:
         # get the pointer type that points to current type
         if isinstance(self, TensorType):
             return TensorPointerType.from_tensor_type(self)
@@ -47,13 +47,16 @@ class TypeNode(Node):
     def is_func_type(self):
         return isinstance(self, FuncType)
 
-    def as_data_type(self) -> DataType:
+    def is_string_type(self):
+        return isinstance(self, StringType)
+
+    def as_data_type(self) -> Optional[DataType]:
         if not isinstance(self, DataType):
-            raise ValueError('Can not convert {} to DataType'.format(self))
+            return None
         return self
 
 
-class DataType(TypeNode):
+class DataType(BaseType):
     """
     The data type that defines how to interpret the data in memory.
     """
@@ -146,7 +149,7 @@ class DataType(TypeNode):
         raise NotImplementedError()
 
 
-class TensorType(TypeNode):
+class TensorType(BaseType):
     def __init__(self, dtype=None, shape=None, layout=None):
         """
         A tensor type.
@@ -176,32 +179,44 @@ class TensorType(TypeNode):
         return [int(v) for v in self.shape]
 
 
-class VoidType(TypeNode):
+class VoidType(BaseType):
     pass
 
 
-class StringType(TypeNode):
+class StringType(BaseType):
     pass
 
 
-class PointerType(TypeNode):
+class PointerType(BaseType):
     def __init__(self, base_type, specifiers: Optional[Sequence[str]] = None, use_bracket: bool = False):
         super().__init__()
         if isinstance(base_type, str):
             base_type = data_type(base_type)
-        self.base_type: TypeNode = base_type
+        self.base_type: BaseType = base_type
         # todo: move the following attributes to DeclareStmt
         self.specifiers: List[str] = list(specifiers) if specifiers else []
         self.use_bracket: bool = use_bracket
 
+    def __call__(self, x):
+        from hidet.ir.expr import Constant, Expr, constant, cast  # pylint: disable=redefined-outer-name
 
-class ReferenceType(TypeNode):
+        if isinstance(x, int):
+            return constant(x, self)
+        elif isinstance(x, Constant):
+            return constant(x.value, self)
+        elif isinstance(x, Expr):
+            return cast(x, self)
+        else:
+            raise ValueError('Can not convert {} to {}'.format(x, self))
+
+
+class ReferenceType(BaseType):
     def __init__(self, base_type):
         super().__init__()
         self.base_type = base_type
 
 
-class TensorPointerType(TypeNode):
+class TensorPointerType(BaseType):
     def __init__(self, ttype: TensorType):
         """
         A pointer type that points to tensor.
@@ -215,15 +230,15 @@ class TensorPointerType(TypeNode):
         return tpt
 
 
-TypeLike = Union[str, TypeNode]
+TypeLike = Union[str, BaseType]
 
 
-class FuncType(TypeNode):
+class FuncType(BaseType):
     def __init__(
         self,
         param_types: Optional[List[TypeLike]] = None,
         ret_type: Optional[TypeLike] = None,
-        type_infer_func: Optional[Callable] = None,  # Callable[[a number of TypeNode], TypeNode]
+        type_infer_func: Optional[Callable] = None,  # Callable[[a number of BaseType], BaseType]
     ):
         self.param_types = [self._convert_type(tp) for tp in param_types] if param_types is not None else None
         self.ret_type = self._convert_type(ret_type) if ret_type is not None else None
@@ -231,14 +246,14 @@ class FuncType(TypeNode):
         msg = 'Please provide either a static type or a type infer func'
         assert not all(v is None for v in [ret_type, type_infer_func]), msg
 
-    def ret_type_on(self, arg_types: List[TypeNode]) -> TypeNode:
+    def ret_type_on(self, arg_types: List[BaseType]) -> BaseType:
         if self.ret_type is not None:
             # todo: add type checking
             return self.ret_type
         else:
             return self.type_infer_func(arg_types)
 
-    def _convert_type(self, tp: Union[str, TypeNode]):
+    def _convert_type(self, tp: Union[str, BaseType]):
         if isinstance(tp, str):
             return data_type(tp)
         else:
@@ -306,10 +321,6 @@ def pointer_type(base_type):
 
 def tensor_pointer_type(dtype, shape=None, layout=None):
     return TensorPointerType(tensor_type(dtype, shape, layout))
-
-
-def void_pointer():
-    return PointerType(VoidType())
 
 
 def string_type():
