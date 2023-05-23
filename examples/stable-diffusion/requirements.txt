@@ -1,0 +1,5 @@
+hidet
+torch
+gradio
+diffusers==0.11
+transformers
