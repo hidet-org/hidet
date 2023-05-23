@@ -84,10 +84,8 @@ class SoftmaxTask(Task):
         other_inds = list(grid_layout.worker2task(blockIdx.x)[0])
         xdtype = self.inputs[0].type.dtype
 
-        # hack to get around not being able to execute some python code under
-        # the script module itself
-        def interpolate_warp(rv):
-            return warp_reduce(rv, lambda a, b: a + b)
+        def sum_expr(a, b):
+            return a + b
 
         with hidet.script_module() as module:
 
@@ -121,7 +119,7 @@ class SoftmaxTask(Task):
                     idx = threadIdx.x + k * warp_size
                     if idx < reduce_extent:
                         rv += temp[k]
-                interpolate_warp(rv)
+                warp_reduce(rv, sum_expr)
 
                 for k in range(outer_extent):
                     idx = threadIdx.x + k * warp_size
