@@ -48,7 +48,6 @@ for m, n, k in [(1920, 1920, 1920)]:
     opt_graph = hidet.graph.optimize(graph)
     compiled_func = opt_graph.nodes[0].task_func
 
-
     c = hidet.zeros([m, n], device='cpu')
 
     compiled_func(a, b, c)
@@ -102,45 +101,6 @@ for m, n, k in [(1920, 1920, 1920)]:
         f.write(f'm={m}, k={k}, n={n}: hidet takes {hidet_latency:.2f} ms\n')
         f.write(f'm={m}, k={k}, n={n}: numpy takes {np_latency:.2f} ms\n')
         # f.write(f'm={m}, k={k}, n={n}: ansor takes {ansor_latency:.2f} ms\n')
-
-# =======
-#     ansor_task = tvm.auto_scheduler.SearchTask(func=matmul_ansor, args=(m, k, n, "float32"), target=target)
-#     log_file = f"matmul_{m}x{k}x{k}.json"
-#     tune_option = auto_scheduler.TuningOptions(
-#         num_measure_trials=1000,
-#         measure_callbacks=[auto_scheduler.RecordToFile(log_file)],
-#         verbose=2,
-#     )
-#
-#     ansor_task.tune(tune_option)
-#     sch, args = ansor_task.apply_best(log_file)
-#
-#     with open(f"./matmul_TIR_{m}x{k}x{n}", 'w') as f:
-#         f.write(str(tvm.lower(sch, args, simple_mode=True)))
-#     ansor_func = tvm.build(sch, args, target)
-#     dev = tvm.cpu()
-#     a_tvm = tvm.nd.array(a.numpy(), device=dev)
-#     b_tvm = tvm.nd.array(b.numpy(), device=dev)
-#     c_tvm = tvm.nd.empty((m, n), device=dev)
-#
-#     ansor_func(a_tvm, b_tvm, c_tvm)
-#
-#     np.testing.assert_allclose(
-#         actual=c_tvm.numpy(),
-#         desired=a_tvm.numpy() @ b_tvm.numpy(),
-#         rtol=1e-3,
-#         atol=1e-3
-#     )
-#
-#     ansor_latency = hidet.utils.benchmark_func(
-#         lambda: ansor_func(a_tvm, b_tvm, c_tvm), repeat=30
-#     )
-#
-#     with open(f"./perf_{m}x{k}x{n}.txt", 'w') as f:
-#         f.write(f'm={m}, k={k}, n={n}: hidet takes {hidet_latency:.2f} ms\n')
-#         f.write(f'm={m}, k={k}, n={n}: numpy takes {np_latency:.2f} ms\n')
-#         f.write(f'm={m}, k={k}, n={n}: ansor takes {ansor_latency:.2f} ms\n')
-# >>>>>>> main
 
 
 
