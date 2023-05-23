@@ -1,4 +1,5 @@
 # Hidet: An Open-Source Deep Learning Compiler
+
 [**Documentation**](http://docs.hidet.org/)  |
 [**Research Paper**](https://dl.acm.org/doi/10.1145/3575693.3575702)  |
 [**Releases**](https://github.com/hidet-org/hidet/releases) |
