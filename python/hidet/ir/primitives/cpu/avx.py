@@ -34,10 +34,20 @@ def register_primitive_functions():
         ('avx_x86_malloc', '_mm_malloc', FuncType(['uint64', 'uint64'], PointerType(VoidType()))),
         ('avx_x86_free', '_mm_free', FuncType([PointerType(VoidType())], VoidType())),
         ('x86_memset', 'memset', FuncType([PointerType(VoidType()), 'int32', 'uint64'], PointerType(VoidType()))),
-        ('x86_memcpy', 'memcpy', FuncType([PointerType(VoidType()), PointerType(VoidType()), 'uint64'], PointerType(VoidType())))
+        ('x86_memcpy', 'memcpy', FuncType([PointerType(VoidType()), PointerType(VoidType()), 'uint64'], PointerType(VoidType()))),
+        ('aligned_alloc', 'aligned_alloc', FuncType(['int32', 'int32'], PointerType(VoidType()))),
+        ('free', 'free', FuncType([PointerType(VoidType())], VoidType())),
     ]
     for name, codegen_name, func_type in functions:
         register_primitive_function(name=name, func_or_type=func_type, codegen_name=codegen_name)
+
+
+def aligned_alloc(alignment: Union[int, Expr], size: Union[int, Expr]):
+    return call_primitive_func('aligned_alloc', [alignment, size])
+
+
+def free(addr: Expr):
+    return call_primitive_func('free', [addr])
 
 
 def x86_memcpy(dst: Expr, src: Expr, num: Union[Expr, int]) -> Call:

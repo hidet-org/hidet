@@ -61,10 +61,8 @@ class MatmulF32Taskx86V2(Task):
             }
         )
 
-
     def implement_cpu(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
         return tune.extract_ir_modules(self.schedule_matmulf32_x86)
-
 
     def schedule_matmulf32_x86(self, block_m=4032, block_n=96, block_k=96, nthrs=32, micro_ker=(6, 16)):
         import hidet
@@ -72,6 +70,7 @@ class MatmulF32Taskx86V2(Task):
         from hidet.lang import tensor, grid, as_tensor_pointer
         from hidet.lang.layout import row_layout, col_layout
         from hidet.lang.avx import avx_f32x8_store, avx_f32x8_fmadd, avx_f32x8_load, avx_f32x8_broadcast
+        from hidet.lang.avx import aligned_alloc
 
         node_a, node_b, node_c = self.inputs[0], self.inputs[1], self.outputs[0]
         a_shape: Tuple[int] = node_a.const_shape
@@ -83,8 +82,23 @@ class MatmulF32Taskx86V2(Task):
         tune.check(block_m % tile_m == block_n % tile_n == 0, 'Tile size must divide the corresponding block size')
 
         # TODO: Do I still want to pack it? If so add variables here
+        float_size = 4
+        PAGE_4K = 4096
 
         with hidet.script_module() as module:
+            @hidet.script
+            def div_up(a: int32, b: int32):
+                assert b != 0, "division by 0"
+                return (a + b - 1) // b
+
+            @hidet.script
+            def rnd_up(a: int32, b: int32):
+                return div_up(a, b) * b
+
+            @hidet.script
+            def rnd_dn(a: int32, b: int32):
+                return (a // b) * b
+
             @hidet.script
             def calc_nthr_nocopy_avx(m: int, n: int, k: int):
 
@@ -107,7 +121,7 @@ class MatmulF32Taskx86V2(Task):
                 # Partition along K dimension if that's beneficial
                 nthr_other = nthr_k = 1
                 while nthr_m * nthr_n * nthr_other < nthr and \
-                    k // (nthr_other + 1) > BK_NOCOPY_AVX:
+                        k // (nthr_other + 1) > BK_NOCOPY_AVX:
                     nthr_other += 1
                     if (nthr // nthr_other) * nthr_other > 0.9 * nthr:
                         nthr_k = nthr_other
@@ -151,17 +165,51 @@ class MatmulF32Taskx86V2(Task):
                             nthr_m = nthr // nthr_n
 
                 # TODO: Finish the resting starting with MB = ... tomorrow!
+                MB = (m + nthr_m - 1) // nthr_m + BM_SMALL_NOCOPY_AVX - 1
+                MB -= MB % BM_SMALL_NOCOPY_AVX
+                NB = (n + nthr_n - 1) // nthr_n + BN_SMALL_NOCOPY_AVX - 1
+                NB -= NB % BN_SMALL_NOCOPY_AVX
+                KB = (k + nthr_k - 1) // nthr_k + BK_SMALL_NOCOPY_AVX - 1
+                KB -= KB % BK_SMALL_NOCOPY_AVX
+
+                if MB * nthr_m > m:
+                    nthr_m = (m + MB - 1) // MB
+                if NB * nthr_n > n:
+                    nthr_n = (n + NB - 1) // NB
+                if KB * nthr_k > k:
+                    nthr_k = (k + KB - 1) // KB
+
+                return nthr_m, nthr_n, nthr_k, MB, NB, KB
+
+            nthr_m, nthr_n, nthr_k, MB, NB, KB = calc_nthr_nocopy_avx(m_size, n_size, k_size)
+
+            # Some more variables that would be needed in later function calls
+            need_c_buffers: bool = nthr_k > 1
+            need_ws_buffers: bool = False
+
+            do_copy: bool = NB // tile_n > 3
+            nthr_mn = nthr_m * nthr_n
+            nthr_to_use = nthr_mn * nthr_k
+            ws_elem_per_thr = k_size * tile_m
+            ws_size_per_thr = rnd_up(ws_elem_per_thr * float_size, PAGE_4K)
+
+            if do_copy:
+                ws_buffers = as_tensor_pointer(
+                    aligned_alloc(PAGE_4K, nthr_to_use * ws_size_per_thr),
+                    shape=[nthr_to_use, ws_elem_per_thr], dtype=float32
+                )
+            else:
+                ws_buffers = tensor(scope=DeclareScope.Default, dtype=float32,
+                                    layout=row_layout(1, 1))
 
 
-
-
-
-
-
-
-
-
-
+            @hidet.script
+            def individual_thread_job(ithr: int32, nthr: int32, nthr_mn: int32, ithr_mn: int32,
+                                      nthr_m: int32, nthr_k: int32):
+                ithr_mn: int32 = ithr % nthr_mn
+                ithr_m: int32 = ithr_mn % nthr_m
+                ithr_n: int32 = ithr_mn // nthr_m
+                ithr_k: int32 = ithr // nthr_mn
 
 
 

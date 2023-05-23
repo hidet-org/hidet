@@ -7,4 +7,4 @@ from hidet.lang.type_utils import shared_scope, register_scope
 
 from hidet.ir.primitives.cpu import avx_f32x4_broadcast, avx_f32x4_fmadd, avx_f32x4_load, avx_f32x4_store, avx_f32x4_setzero
 from hidet.ir.primitives.cpu import avx_f32x8_broadcast, avx_f32x8_fmadd, avx_f32x8_load, avx_f32x8_store, avx_f32x8_setzero
-from hidet.ir.primitives.cpu import avx_free, avx_malloc, x86_memcpy, x86_memset
+from hidet.ir.primitives.cpu import avx_free, avx_malloc, x86_memcpy, x86_memset, aligned_alloc
