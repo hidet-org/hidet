@@ -281,7 +281,7 @@ def build_ir_module_batch(
         if parallel:
             cpu_count = os.cpu_count()
             max_jobs, mem_for_worker = option.get_parallel_tune()
-            max_jobs = cpu_count if max_jobs == -1 else min(num_jobs, cpu_count)
+            max_jobs = cpu_count if max_jobs == -1 else min(max_jobs, cpu_count)
             mem_for_worker *= 1024**3
             # Set the affinity of current process. Some package such as numpy will change affinity of current process,
             # which might limit the parallelism of compilation.
