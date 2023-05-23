@@ -196,6 +196,7 @@ class MatmulF32Taskx86V2(Task):
 
 
 
+
         assert isinstance(matmul_kernel_onednn, hidet.ir.Function)
         matmul_kernel_onednn.kind = 'host_kernel'
         ir_module = module.ir_module()
