@@ -740,6 +740,48 @@ def mish(x: Tensor, inplace: bool = False):
     return ops.multiply(x, ops.tanh(ops.softplus(x, 1, 20)))
 
 
+@register_function(torch.nn.functional.scaled_dot_product_attention)
+def scaled_dot_product_attention(
+    q: Tensor, k: Tensor, v: Tensor, attn_mask: Tensor = None, dropout_p: float = 0.0, is_causal: bool = False
+):
+    import math
+
+    if not math.isclose(dropout_p, 0.0):
+        warnings.warn_once('hidet: attention dropout is not supported. Treat as dropout_p=0.0')
+
+    k_rank = len(k.shape)
+    # transpose last 2 dimensions of k, and normalize by sqrt(head_dim)
+    k_transpose_scaled = ops.transpose(k, [i for i in range(k_rank - 2)] + [k_rank - 1, k_rank - 2]) / math.sqrt(
+        k.shape[-1]
+    )
+
+    from hidet import boolean, float16
+
+    type_match = (
+        q.dtype == k.dtype == v.dtype == float16
+        and same_list(q.shape, v.shape)
+        and len(q.shape) == len(k_transpose_scaled.shape)
+        and (q.shape[-2], q.shape[-1]) == (k_transpose_scaled.shape[-1], k_transpose_scaled.shape[-2])
+    )
+    fmha_requirements = q.shape[-1] <= 160 and (
+        attn_mask is None or attn_mask is not None and attn_mask.dtype == float16
+    )
+    if type_match and fmha_requirements:
+        return ops.attention(q, k_transpose_scaled, v, attn_mask, is_causal)
+
+    qk = ops.matmul(q, k_transpose_scaled)
+    if attn_mask is not None:
+        if attn_mask.dtype.is_float():
+            qk = qk + attn_mask
+        elif attn_mask.dtype == boolean:
+            neginfs = ops.full(qk.shape, value=qk.dtype.min_value, dtype=qk.dtype, device=qk.device)
+            qk = ops.where(attn_mask, qk, neginfs)
+        else:
+            raise NotImplementedError('hidet: attention mask must be bool or float')
+    out = ops.matmul(ops.softmax(qk, axis=-1), v)
+    return out
+
+
 @register_function(torch.gather)
 def gather(x: Tensor, dim: int, index: Tensor, *, sparse_grad=False, out=None):
     if sparse_grad:
