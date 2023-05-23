@@ -13,6 +13,6 @@ from . import module
 from . import container
 from . import nn
 
-from .module import Module
+from .module import Module, ModuleList
 
-from .nn import Linear, Conv2d, BatchNorm2d, Relu, MaxPool2d
+from .nn import Linear, Conv2d, BatchNorm2d, Relu, MaxPool2d, Embedding

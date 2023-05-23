@@ -232,7 +232,7 @@ class Tensor:
         return pow(self, utils.convert_to_tensor(power, self))
 
     def __matmul__(self, other) -> Tensor:
-        from .ops import matmul, utils
+        from .ops import utils
 
         return matmul(self, utils.convert_to_tensor(other, self))
 
@@ -950,6 +950,48 @@ class Tensor:
 
         return torch.from_dlpack(self)
 
+    def masked_fill(self, mask, value):
+        """
+        Fills the tensor with value where mask is True
+
+        Parameters
+        ----------
+        mask: Tensor
+            The target cuda device. None indicates the current cuda device.
+
+        value: Union[float, int]
+            The stream to copy the tensor to GPU on. None indicates the current stream.
+
+        Returns
+        -------
+        ret: Tensor
+        """
+        from .ops import where
+
+        return where(mask, full([], value, dtype=self.dtype, device=self.device), self)
+
+    def expand(self, *sizes: int) -> Tensor:
+        from .ops import broadcast
+
+        sizes: List[int] = list(sizes)
+        assert len(sizes) >= len(self.shape)
+        for i in range(len(sizes)):
+            if sizes[i] == -1:
+                ri = len(sizes) - 1 - i
+                assert ri < len(self.shape)
+                sizes[i] = int(self.shape[len(self.shape) - 1 - ri])
+        return broadcast(self, sizes)
+
+    def float(self) -> Tensor:
+        return self.to(dtype=hidet.float32)
+
+    def transpose(self, dim0: int, dim1: int):
+        from .ops import transpose
+
+        if dim0 < dim1:
+            dim0, dim1 = dim1, dim0
+        return transpose(self, [dim0, dim1])
+
 
 def empty(shape, dtype='float32', device='cpu', layout=None):
     """Create an uninitialized tensor.
@@ -1468,3 +1510,25 @@ def asarray(obj, /, *, dtype=None, device=None) -> Tensor:
             array = array.astype(np.float32)
         ret = from_numpy(array)
     return ret.to(dtype=dtype, device=device)
+
+
+def cat(tensors: List[Tensor], dim: int):
+    """
+    Concatenates the list of Tensors along dim.
+
+    Requires
+    --------
+    All shapes for the list of tensors are equal except for dim.
+    """
+    from .ops import concat
+
+    return concat(tensors, dim)
+
+
+def matmul(a: Tensor, b: Tensor) -> Tensor:
+    """
+    Performs matrix multiplication between a and b
+
+    """
+    from .ops import matmul
+    return matmul(a, b)

@@ -21,7 +21,13 @@ class Module:
     def __init__(self):
         self.name = None
         self.parameters: OrderedDict[str, Optional[Tensor]] = OrderedDict()
+        self.buffers: OrderedDict[str, Optional[Tensor]] = OrderedDict()
         self.submodules: OrderedDict[str, Optional[Module]] = OrderedDict()
+
+    def register_buffer(self, key, value):
+        assert isinstance(value, Tensor), "expected a hidet.Tensor object"
+        value.name = key
+        self.buffers[key] = value
 
     def __setattr__(self, key, value):
         parameters = self.__dict__.get('parameters')
@@ -43,6 +49,8 @@ class Module:
         assert cnt <= 1, 'duplicated definition of {}'.format(key)
 
     def __getattr__(self, item):
+        if item in self.buffers:
+            return self.buffers[item]
         if item in self.parameters:
             return self.parameters[item]
         if item in self.submodules:
@@ -66,13 +74,13 @@ class Module:
             lines = [' ' * indent + line for line in lines]
             return '{}(\n{}\n)'.format(name, '\n'.join(lines))
 
-    def __call__(self, *args):
-        return self.forward(*args)
+    def __call__(self, *args, **kwargs):
+        return self.forward(*args, **kwargs)
 
     def extra_str(self) -> str:
         return ''
 
-    def forward(self, *args):
+    def forward(self, *args, **kwargs):
         raise NotImplementedError()
 
     def flow_graph_for(self, inputs: Sequence[Tensor]) -> FlowGraph:
@@ -90,6 +98,8 @@ class Module:
             submodule.cpu()
         for name, parameter in self.parameters.items():
             self.parameters[name] = parameter.cpu()
+        for name, buffer in self.buffers.items():
+            self.buffers[name] = buffer.cpu()
         return self
 
     def cuda(self) -> Module:
@@ -97,7 +107,20 @@ class Module:
             submodule.cuda()
         for name, parameter in self.parameters.items():
             self.parameters[name] = parameter.cuda()
+        for name, buffer in self.buffers.items():
+            self.buffers[name] = buffer.cuda()
         return self
+
+
+class ModuleList(Module, list):
+    def __init__(self, modules: Sequence[Module]):
+        super().__init__()
+        for i, mod in enumerate(modules):
+            self.__setattr__(str(i), mod)
+            self.append(mod)
+
+    def forward(self, *args, **kwargs):
+        raise NotImplementedError()
 
 
 _registered_modules = {}

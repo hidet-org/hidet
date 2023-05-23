@@ -37,6 +37,7 @@ from .graph import nn
 from .graph import ops
 from .graph import empty, randn, zeros, ones, full, randint, symbol, asarray, from_torch
 from .graph import empty_like, randn_like, zeros_like, ones_like, symbol_like, full_like
+from .graph import cat, matmul
 from .graph import trace_from, load_graph, save_graph
 from .graph import jit
 from .graph import from_dlpack
