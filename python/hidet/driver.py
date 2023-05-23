@@ -279,12 +279,13 @@ def build_ir_module_batch(
         ]
         build_results = []
         if parallel:
+            cpu_count = os.cpu_count()
             max_jobs, mem_for_worker = option.get_parallel_tune()
-            max_jobs = os.cpu_count() if max_jobs == -1 else max_jobs
+            max_jobs = cpu_count if max_jobs == -1 else min(num_jobs, cpu_count)
             mem_for_worker *= 1024**3
             # Set the affinity of current process. Some package such as numpy will change affinity of current process,
             # which might limit the parallelism of compilation.
-            os.sched_setaffinity(0, range(os.cpu_count()))
+            os.sched_setaffinity(0, range(cpu_count))
 
             num_workers = min(max(int(psutil.virtual_memory().available // mem_for_worker), 1), max_jobs)
 
