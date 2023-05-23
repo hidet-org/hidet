@@ -1532,3 +1532,4 @@ def matmul(a: Tensor, b: Tensor) -> Tensor:
     """
     from .ops import matmul
     return matmul(a, b)
+
