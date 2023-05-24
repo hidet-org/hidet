@@ -279,13 +279,15 @@ def build_ir_module_batch(
         ]
         build_results = []
         if parallel:
+            cpu_count = os.cpu_count()
+            max_jobs, mem_for_worker = option.get_parallel_tune()
+            max_jobs = cpu_count if max_jobs == -1 else min(max_jobs, cpu_count)
+            mem_for_worker *= 1024**3
             # Set the affinity of current process. Some package such as numpy will change affinity of current process,
             # which might limit the parallelism of compilation.
-            os.sched_setaffinity(0, range(os.cpu_count()))
+            os.sched_setaffinity(0, range(cpu_count))
 
-            # the maximum number of processes is limited by the number of cores and memory
-            mem_for_worker = 1.5 * 1024 * 1024 * 1024  # 1.5 GiB
-            num_workers = min(max(int(psutil.virtual_memory().available // mem_for_worker), 1), psutil.cpu_count())
+            num_workers = min(max(int(psutil.virtual_memory().available // mem_for_worker), 1), max_jobs)
 
             _lazy_initialize_cuda()
             for build_result in tqdm(
