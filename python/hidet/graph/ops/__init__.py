@@ -47,6 +47,7 @@ from .definitions.fusion import fused_operator
 from .definitions.special import barrier
 
 from .definitions.matmul import matmul_x86
+from .definitions.matmul import matmul_x86_onednn
 
 from .definitions import utils
 
