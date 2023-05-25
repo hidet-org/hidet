@@ -628,11 +628,14 @@ def get_model(args, hf_config):
 
     raise ValueError(f"Unsupported model: {model_name}")
 
+
 def small_model_loading_test():
     from transformers import LlamaForCausalLM as hfLlamaModel, LlamaConfig as hfLlamaConfig
     configuration = hfLlamaConfig(vocab_size=512, hidden_size=512, intermediate_size=512, num_attention_heads=8, num_hidden_layers=2)
     hf_model = hfLlamaModel(configuration)
 
+
+    ###### use the local LlamaConfig
     config = LlamaConfig(vocab_size=512, hidden_size=512, intermediate_size=512, num_attention_heads=8, num_hidden_layers=2)
     # Get a list of parameters in advance, then delete the model to save memory
     param_list = [param for _, param in hf_model.named_parameters()]
@@ -644,6 +647,8 @@ def small_model_loading_test():
         ).to(config.dtype)
     
     # construct the new model without duplicating the weights
+    # since the hidet model is isomorphic to the original torch model
+    # this only works if we add .register_buffer(...)
     orig_set_attr = hidet.nn.Module.__setattr__
     def my_setattr(self, key, value):
         # the order of the defined weights are the same
