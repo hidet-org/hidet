@@ -103,7 +103,7 @@ class AttnTask(Task):
         return False
 
     def allow_epilogue(self) -> bool:
-        return True 
+        return False
 
     def implement_cuda(self, working_dir: str) -> Union[List[IRModule], IRModule]:
         return tune.extract_ir_modules(self.cuda_schedule_attn)
