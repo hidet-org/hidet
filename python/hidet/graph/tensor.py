@@ -1530,6 +1530,6 @@ def matmul(a: Tensor, b: Tensor) -> Tensor:
     Performs matrix multiplication between a and b
 
     """
-    from .ops import matmul
-    return matmul(a, b)
+    from .ops import matmul as _matmul
 
+    return _matmul(a, b)

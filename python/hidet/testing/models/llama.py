@@ -1,4 +1,7 @@
 # %%
+# pylint: skip-file
+# since this is just a testing file, remove later
+
 import numpy as np
 from dataclasses import dataclass
 from typing import Any, Optional, Tuple, List
@@ -51,16 +54,14 @@ class LlamaConfig:
         self.kwargs = kwargs
 
 
-def _make_causal_mask(
-    input_ids_shape, dtype, device, past_key_values_length: int = 0
-):
+def _make_causal_mask(input_ids_shape, dtype, device, past_key_values_length: int = 0):
     """
     Make causal mask used for bi-directional self-attention.
     """
     bsz, tgt_len = input_ids_shape
     mask = hidet.full((tgt_len, tgt_len), float(dtype._min_value), dtype)
     mask_cond = hidet.arange(tgt_len)
-    
+
     mask = mask.masked_fill(mask_cond < (mask_cond + 1).reshape([tgt_len, 1]), 0)
     mask = mask.to(dtype)
 
@@ -68,7 +69,8 @@ def _make_causal_mask(
         mask = hidet.cat([hidet.zeros(tgt_len, past_key_values_length, dtype=dtype, device=device), mask], dim=-1)
     return mask[None, None, :, :].expand(bsz, 1, tgt_len, tgt_len + past_key_values_length)
 
-def _expand_mask(mask: hidet.Tensor, dtype, tgt_len = None):
+
+def _expand_mask(mask: hidet.Tensor, dtype, tgt_len=None):
     """
     Expands attention_mask from `[bsz, seq_len]` to `[bsz, 1, tgt_seq_len, src_seq_len]`.
     """
@@ -80,6 +82,7 @@ def _expand_mask(mask: hidet.Tensor, dtype, tgt_len = None):
     inverted_mask = 1.0 - expanded_mask
 
     return inverted_mask.masked_fill(inverted_mask.to(hidet.dtypes.boolean), float(dtype._min_value))
+
 
 class LlamaRMSNorm(nn.Module):
     def __init__(self, hidden_size: int, eps=1e-6):
@@ -104,9 +107,11 @@ class LlamaRMSNorm(nn.Module):
 class LlamaRotaryEmbedding(nn.Module):
     def __init__(self, dim, max_position_embeddings=2048, base=10000, device=None):
         super().__init__()
-        inv_freq = hidet.asarray(1.0).to(device) / (hidet.asarray(base).to(device) ** (hidet.arange(0, dim, 2).float().to(device) / dim))
+        inv_freq = hidet.asarray(1.0).to(device) / (
+            hidet.asarray(base).to(device) ** (hidet.arange(0, dim, 2).float().to(device) / dim)
+        )
         self.register_buffer("inv_freq", inv_freq)
-        
+
         # Build here to make `torch.jit.trace` work.
         self.max_seq_len_cached = max_position_embeddings
         t = hidet.arange(self.max_seq_len_cached, device=self.inv_freq.device, dtype=self.inv_freq.dtype)
@@ -134,7 +139,7 @@ class LlamaRotaryEmbedding(nn.Module):
             self.cos_cached[:, :, :seq_len, ...].to(dtype=x.dtype),
             self.sin_cached[:, :, :seq_len, ...].to(dtype=x.dtype),
         )
-    
+
 
 def rotate_half(x):
     """Rotates half the hidden dims of the input."""
@@ -155,11 +160,7 @@ def apply_rotary_pos_emb(q, k, cos, sin, position_ids):
 
 
 class LlamaMLP(nn.Module):
-    def __init__(
-        self,
-        hidden_size: int,
-        intermediate_size: int,
-    ):
+    def __init__(self, hidden_size: int, intermediate_size: int):
         super().__init__()
         self.gate_proj = nn.Linear(hidden_size, intermediate_size, bias=False)
         self.down_proj = nn.Linear(intermediate_size, hidden_size, bias=False)
@@ -266,10 +267,7 @@ class LlamaDecoderLayer(nn.Module):
         super().__init__()
         self.hidden_size = config.hidden_size
         self.self_attn = LlamaAttention(config=config)
-        self.mlp = LlamaMLP(
-            hidden_size=self.hidden_size,
-            intermediate_size=config.intermediate_size,
-        )
+        self.mlp = LlamaMLP(hidden_size=self.hidden_size, intermediate_size=config.intermediate_size)
         self.input_layernorm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.post_attention_layernorm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 
@@ -326,6 +324,7 @@ class LlamaDecoderLayer(nn.Module):
             outputs += (present_key_value,)
 
         return outputs
+
 
 class LlamaModel(nn.Module):
     """
@@ -410,7 +409,6 @@ class LlamaModel(nn.Module):
         if past_key_values is not None:
             past_key_values_length = past_key_values[0][0].shape[2]
             seq_length_with_past = seq_length_with_past + past_key_values_length
-
 
         if inputs_embeds is None:
             inputs_embeds = self.embed_tokens(input_ids)
@@ -602,24 +600,23 @@ def get_model(args, hf_config):
         if max_seq_len != -1:
             config.max_sequence_length = max_seq_len
 
-        
         hf_model = AutoModelForCausalLM.from_pretrained(model_path)
         # Get a list of parameters in advance, then delete the model to save memory
         param_list = [param for _, param in hf_model.named_parameters()]
         del hf_model
 
         for i, param in enumerate(param_list):
-            param_list[i] = hidet.from_torch(
-                param.detach()
-            ).to(config.dtype)
-        
+            param_list[i] = hidet.from_torch(param.detach()).to(config.dtype)
+
         # construct the new model without duplicating the weights
         orig_set_attr = nn.Module.__setattr__
+
         def my_setattr(self, key, value):
             # the order of the defined weights are the same
             if isinstance(value, hidet.Tensor):
                 value = param_list.pop(0)
             orig_set_attr(self, key, value)
+
         hidet.nn.Module.__setattr__ = my_setattr
         hidet_model = LlamaForCausalLM(config)
         hidet.nn.Module.__setattr__ = orig_set_attr
@@ -631,30 +628,34 @@ def get_model(args, hf_config):
 
 def small_model_loading_test():
     from transformers import LlamaForCausalLM as hfLlamaModel, LlamaConfig as hfLlamaConfig
-    configuration = hfLlamaConfig(vocab_size=512, hidden_size=512, intermediate_size=512, num_attention_heads=8, num_hidden_layers=2)
+
+    configuration = hfLlamaConfig(
+        vocab_size=512, hidden_size=512, intermediate_size=512, num_attention_heads=8, num_hidden_layers=2
+    )
     hf_model = hfLlamaModel(configuration)
 
-
     ###### use the local LlamaConfig
-    config = LlamaConfig(vocab_size=512, hidden_size=512, intermediate_size=512, num_attention_heads=8, num_hidden_layers=2)
+    config = LlamaConfig(
+        vocab_size=512, hidden_size=512, intermediate_size=512, num_attention_heads=8, num_hidden_layers=2
+    )
     # Get a list of parameters in advance, then delete the model to save memory
     param_list = [param for _, param in hf_model.named_parameters()]
     del hf_model
 
     for i, param in enumerate(param_list):
-        param_list[i] = hidet.from_torch(
-            param.detach()
-        ).to(config.dtype)
-    
+        param_list[i] = hidet.from_torch(param.detach()).to(config.dtype)
+
     # construct the new model without duplicating the weights
     # since the hidet model is isomorphic to the original torch model
     # this only works if we add .register_buffer(...)
     orig_set_attr = hidet.nn.Module.__setattr__
+
     def my_setattr(self, key, value):
         # the order of the defined weights are the same
         if isinstance(value, hidet.Tensor):
             value = param_list.pop(0)
         orig_set_attr(self, key, value)
+
     hidet.nn.Module.__setattr__ = my_setattr
     hidet_model = LlamaForCausalLM(config)
     hidet.nn.Module.__setattr__ = orig_set_attr
