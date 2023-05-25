@@ -69,12 +69,17 @@ class MatmulF32Taskx86(Task):
     def implement_cpu(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
         return tune.extract_ir_modules(self.schedule_matmulf32_x86)
 
-    @tune.space(2, 'micro_ker', [(6, 16)])
-    @tune.space(2, 'block_m', [1200, 2400])
-    @tune.space(2, 'block_n', [192, 384, 512])
-    @tune.space(2, 'block_k', [256, 384, 512, 768])
-    @tune.space(2, 'nthreads', [2, 4, 8, 16, 32])
-    def schedule_matmulf32_x86(self, block_m=1200, block_n=768, block_k=512, micro_ker=(6, 16),
+    # @tune.space(2, 'micro_ker', [(6, 16)])
+    # @tune.space(2, 'block_m', [1200, 2400])
+    # @tune.space(2, 'block_n', [96, 192, 384, 512])
+    # @tune.space(2, 'block_k', [128, 256, 384, 512])
+    # @tune.space(2, 'nthreads', [2, 4, 8, 16, 32])
+    # @tune.space(2, 'block_m', [2016])
+    @tune.space(2, 'block_n', [48, 72, 144, 196, 256, 288, 360])
+    @tune.space(2, 'block_k', [64, 72, 96, 128, 256, 512])
+    @tune.space(2, 'block_m', [2016, 3000])
+    @tune.space(2, 'nthreads', [4, 8, 16, 32])
+    def schedule_matmulf32_x86(self, block_m=2016, block_n=360, block_k=512, micro_ker=(6, 16),
                                nthreads=16) -> IRModule:
         import hidet
         from hidet.ir.type import tensor_type
@@ -84,11 +89,9 @@ class MatmulF32Taskx86(Task):
         from hidet.lang.avx import avx_f32x4_broadcast, avx_f32x4_fmadd, avx_f32x4_load, avx_f32x4_store
 
         node_a, node_b, node_c = self.inputs[0], self.inputs[1], self.outputs[0]
-        a_shape: List[int] = node_a.const_shape
-        b_shape: List[int] = node_b.const_shape
-        c_shape: List[int] = node_c.const_shape
+        a_shape = node_a.const_shape
+        b_shape = node_b.const_shape
         m_size, n_size, k_size = a_shape[-2], b_shape[-1], a_shape[-1]
-        a_head, b_head, c_head = a_shape[:-2], b_shape[:-2], c_shape[:-2]
 
         tile_m, tile_n = micro_ker
 

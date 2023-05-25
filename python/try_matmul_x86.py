@@ -29,7 +29,7 @@ target = tvm.target.Target("llvm -mcpu=core-avx2")
 
 
 debug_cache_tuning(True)
-hidet.option.search_space(0)
+hidet.option.search_space(2)
 hidet.option.parallel_build(False)
 # for m, k, n in [(18, 32, 96), (24, 64, 256), (24, 64, 512), (192, 64, 128), (192, 128, 128), (192, 256, 256), (784, 40, 120), (784, 120, 40), (480, 512, 16), (384, 384, 32), (784, 40, 120),
 #                 (256, 256, 256), (384, 256, 256),
@@ -37,7 +37,7 @@ hidet.option.parallel_build(False)
 #                 (1024, 1024, 1024), (2048, 2048, 2048), (1024, 3072, 512), (512, 3072, 1024), (1369, 64, 288), (4096, 4096, 4096),
 #                 (22500, 32, 27), (22201, 32, 288),
 #                 (3136, 64, 64), (2500, 32, 27), (3329, 192, 720)]:
-for m, n, k in [(1920, 1920, 1920)]:
+for m, n, k in [(1920, 1920, 1920), (1024, 1024, 1024)]:
     a = hidet.randn([m, k], device='cpu')
     b = hidet.randn([k, n], device='cpu')
     # c = matmul_x86(a, b)
@@ -59,10 +59,10 @@ for m, n, k in [(1920, 1920, 1920)]:
         atol=1e-3
     )
     hidet_latency = hidet.utils.benchmark_func(
-        lambda: compiled_func(a, b, c), repeat=30
+        lambda: compiled_func(a, b, c), repeat=50
     )
     np_latency = hidet.utils.benchmark_func(
-        lambda: a.numpy() @ b.numpy(), repeat=30
+        lambda: a.numpy() @ b.numpy(), repeat=50
     )
 
     # ansor_task = tvm.auto_scheduler.SearchTask(func=matmul_ansor, args=(m, k, n, "float32"), target=target)
@@ -97,7 +97,7 @@ for m, n, k in [(1920, 1920, 1920)]:
     #     lambda: ansor_func(a_tvm, b_tvm, c_tvm), repeat=30
     # )
 
-    with open(f"./perf.txt", 'a+') as f:
+    with open(f"./perf_dynamic.txt", 'a+') as f:
         f.write(f'm={m}, k={k}, n={n}: hidet takes {hidet_latency:.2f} ms\n')
         f.write(f'm={m}, k={k}, n={n}: numpy takes {np_latency:.2f} ms\n')
         # f.write(f'm={m}, k={k}, n={n}: ansor takes {ansor_latency:.2f} ms\n')
