@@ -19,7 +19,6 @@ class SoftmaxTask(Task):
     def __init__(self, x: TensorNode, axis: int):
         self.x_shape = x.shape
         self.axis = axis
-        self.dtype = x.type.dtype
 
         shape = x.shape
         axis_extent = shape[axis]
@@ -63,9 +62,10 @@ class SoftmaxTask(Task):
     def implement_cuda(self, working_dir: str) -> IRModule:
         if not all(is_constant(dim) for dim in self.inputs[0].shape):
             return NotImplemented  # use auto-scheduler
+
         import math
         import hidet
-        from hidet.lang import as_tensor_pointer, tensor
+        from hidet.lang import tensor
         from hidet.lang import attrs
 
         from hidet.ir.mapping import TaskMapping
@@ -90,13 +90,10 @@ class SoftmaxTask(Task):
         with hidet.script_module() as module:
 
             @hidet.script
-            def softmax_kernel(x_ptr: ~xdtype, y_ptr: ~xdtype):
+            def softmax_kernel(xs: xdtype[shape], ys: xdtype[shape]):
                 attrs.func_name = "softmax_kernel"
                 attrs.cuda.block_dim = warp_size
                 attrs.cuda.grid_dim = n_reduce
-
-                xs = as_tensor_pointer(x_ptr, dtype=xdtype, shape=shape)
-                ys = as_tensor_pointer(y_ptr, dtype=xdtype, shape=shape)
 
                 temp = tensor('register', xdtype, shape=[outer_extent])
 
