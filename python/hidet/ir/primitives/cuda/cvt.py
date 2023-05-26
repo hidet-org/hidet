@@ -48,7 +48,7 @@ def register_cvta_instructions():
             @script
             def cuda_cvt(src: src_dtype) -> dst_dtype:
                 attrs.func_name = func_name
-                attrs.func_kind = 'cuda_device'
+                attrs.func_kind = 'cuda_internal'
                 ret = dst_dtype(0)
                 dst_name = dst_dtype.short_name.replace('i', 's')  # cuda use s8 to represents i8
                 src_name = src_dtype.short_name.replace('i', 's')

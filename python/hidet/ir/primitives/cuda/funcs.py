@@ -20,7 +20,7 @@ from hidet.ir.primitives.func import register_primitive_function, primitive_func
 
 
 def register_unary_dialect_primitive_function(func_name, generic_func, target_dtype: str, dialect_dtype: str):
-    with FunctionBuilder(func_name, kind='cuda_device', ret_type=data_type(target_dtype)) as fb:
+    with FunctionBuilder(func_name, kind='cuda_internal', ret_type=data_type(target_dtype)) as fb:
         # params
         x = Var('x', type=data_type(target_dtype))
         fb.extend_params([x])
@@ -32,7 +32,7 @@ def register_unary_dialect_primitive_function(func_name, generic_func, target_dt
 
 
 def register_binary_dialect_primitive_function(func_name, generic_func, target_dtype: str, dialect_dtype: str):
-    with FunctionBuilder(func_name, kind='cuda_device', ret_type=data_type(target_dtype)) as fb:
+    with FunctionBuilder(func_name, kind='cuda_internal', ret_type=data_type(target_dtype)) as fb:
         # params
         x = Var('x', type=data_type(target_dtype))
         y = Var('y', type=data_type(target_dtype))

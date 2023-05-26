@@ -85,7 +85,13 @@ class LowerSpecialCastPass(FunctionBodyPass):
         self.device: Optional[str] = None
 
     def process_func(self, func: Function) -> Function:
-        func_kind_to_device = {'host_kernel': 'cpu', 'packed_func': 'cpu', 'cuda_kernel': 'cuda', 'cuda_device': 'cuda'}
+        func_kind_to_device = {
+            'cuda_kernel': 'cuda',
+            'cuda_internal': 'cuda',
+            'cpu_kernel': 'cpu',
+            'cpu_internal': 'cpu',
+            'public': 'cpu',
+        }
         self.device = func_kind_to_device[func.kind]
         return FunctionBodyPass.process_func(self, func)
 

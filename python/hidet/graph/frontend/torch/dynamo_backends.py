@@ -15,7 +15,7 @@ import logging
 import torch
 import hidet.option
 from hidet.ir.type import data_type
-from hidet.graph.ir.flow_graph import FlowGraph
+from hidet.graph.flow_graph import FlowGraph
 from hidet.graph.transforms import PassContext, optimize
 from .utils import serialize_output, deserialize_output, resolve_save_dir_multigraph
 from .dynamo_config import dynamo_config

@@ -9,10 +9,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from typing import List, Optional, Sequence, Tuple, Dict
 import subprocess
-from typing import List, Optional, Sequence, Tuple
 import os
 import logging
+import pickle
 from hashlib import sha256
 import psutil
 from tqdm import tqdm
@@ -20,13 +21,13 @@ from tqdm import tqdm
 import hidet.cuda
 from hidet import option
 from hidet.transforms import lower, PassContext, SaveIRInstrument, ProfileInstrument
-from hidet.backend import codegen, compile_source, load_task_func, load_lib_func
+from hidet.backend import codegen, compile_source
 from hidet.backend.build import CompilationFailed
 from hidet.utils.py import cyan, green, Timer
 from hidet.ir.task import Task
 from hidet.ir.func import IRModule, Function
 from hidet.ir.type import FuncType
-from hidet.runtime.module import compiled_task_cache, CompiledFunction
+from hidet.runtime.module import compiled_task_cache, CompiledModule, load_compiled_module, compiled_module_exists
 from hidet.runtime.device import Device
 from hidet.utils.multiprocess import parallel_imap
 
@@ -35,7 +36,7 @@ logger.setLevel(logging.INFO)
 logger.addHandler(logging.StreamHandler())
 
 
-def build_task(task: Task, target_device='cuda', load=True) -> Optional[CompiledFunction]:
+def build_task(task: Task, target_device='cuda', load=True) -> Optional[CompiledModule]:
     """
     Build a task into a compiled function.
 
@@ -50,11 +51,11 @@ def build_task(task: Task, target_device='cuda', load=True) -> Optional[Compiled
         Otherwise, the compiled function is loaded and returned.
     Returns
     -------
-    compiled_func:
+    ret: CompiledModule
         When load is True, the compiled function is returned. Otherwise, None is returned.
     """
     task_string: str = str(task)
-    compiled_func: Optional[CompiledFunction] = None
+    compiled_module: Optional[CompiledModule] = None
 
     if isinstance(target_device, Device):
         target_device = target_device.type
@@ -66,16 +67,12 @@ def build_task(task: Task, target_device='cuda', load=True) -> Optional[Compiled
     # check in-memory cache
     if compiled_task_cache.contains(target_device, space_level, task_string):
         if load:
-            compiled_func = compiled_task_cache.get(target_device, space_level, task_string)
+            compiled_module = compiled_task_cache.get(target_device, space_level, task_string)
     else:
         # check on-disk cache
         config_str = f'{target_device}_space_{space_level}'
         task_hash = sha256(task_string.encode()).hexdigest()[:16]
         task_dir = os.path.join(op_cache_dir, config_str, task.name, task_hash)
-        if hidet.cuda.available():
-            src_path = os.path.join(task_dir, 'source.cu')
-        else:
-            src_path = os.path.join(task_dir, 'source.cpp')
         lib_path = os.path.join(task_dir, 'lib.so')
         version_path = os.path.join(task_dir, 'version.txt')
 
@@ -87,42 +84,40 @@ def build_task(task: Task, target_device='cuda', load=True) -> Optional[Compiled
                     version_matched = True
 
         # use previously generated library when available
-        if use_cache and os.path.exists(lib_path) and version_matched:
+        if use_cache and version_matched and compiled_module_exists(task_dir):
             logger.debug(f"Load cached task binary {green(task.name)} from path: \n{cyan(lib_path)}")
             if load:
-                compiled_func = load_task_func(lib_path, task)
-                compiled_task_cache.add(target_device, space_level, task_string, compiled_func)
+                compiled_module = load_compiled_module(task_dir)
+                compiled_task_cache.add(target_device, space_level, task_string, compiled_module)
         else:
             logger.info(f"Compiling {target_device} task {green(task.signature())}...")
+
             # build from scratch
             os.makedirs(task_dir, exist_ok=True)
+
             # write task
             with open(os.path.join(task_dir, 'task.txt'), 'w') as f:
                 f.write(task_string)
+
             # write version
             with open(version_path, 'w') as f:
                 f.write(hidet.__version__)
+
             # implement task
             ir_module = task.implement(target=target_device, working_dir=task_dir)
-            # lower ir module
-            if option.get_option('save_lower_ir'):
-                instruments = [
-                    SaveIRInstrument(out_dir=os.path.join(task_dir, './ir')),
-                    ProfileInstrument(log_file=os.path.join(task_dir, './ir/profile.txt')),
-                ]
-            else:
-                instruments = []
-            with PassContext(instruments=instruments):
-                ir_module = lower(ir_module)
-            # code generation
-            codegen(ir_module, src_out_path=src_path)
-            # compile source code
-            compile_source(src_path, out_lib_path=lib_path)
-            # load function
+
+            # compile ir module
+            build_ir_module(
+                ir_module,
+                output_dir=task_dir,
+                save_ir=option.get_option('save_lower_ir'),
+                load=False,
+                use_hash_dir=False,
+            )
             if load:
-                compiled_func = load_task_func(lib_path, task)
-                compiled_task_cache.add(target_device, space_level, task_string, compiled_func)
-    return compiled_func
+                compiled_module = load_compiled_module(task_dir)
+                compiled_task_cache.add(target_device, space_level, task_string, compiled_module)
+    return compiled_module
 
 
 def _lazy_initialize_cuda():
@@ -141,21 +136,6 @@ def _lazy_initialize_cuda():
         for i in range(hidet.cuda.device_count()):
             hidet.cuda.properties(i)
             hidet.cuda.compute_capability(i)
-
-
-def get_objects(obj, predicate, visited: set, path: list):
-    import gc
-
-    for referent in gc.get_referents(obj):
-        if id(referent) not in visited:
-            visited.add(id(referent))
-            if predicate(referent):
-                for p in path:
-                    print(p)
-                assert False
-            path.append(referent)
-            get_objects(referent, predicate, visited, path)
-            path.pop()
 
 
 def build_task_batch(task_device_pairs: List[Tuple[Task, Device]], raise_on_error: bool = True):
@@ -193,26 +173,27 @@ def build_ir_module(
     ir_module: IRModule,
     output_dir='./outs/ir_module',
     save_ir: bool = True,
-    profile_pass: bool = True,
     load: bool = True,
     use_hash_dir: bool = True,
-):
+) -> Optional[CompiledModule]:
     if use_hash_dir:
         hash_dir = sha256(str(ir_module).encode()).hexdigest()[:16]
         output_dir = os.path.join(output_dir, hash_dir)
 
-    src_path = os.path.join(output_dir, 'source.cu')
+    src_path = (
+        os.path.join(output_dir, 'source.cu') if hidet.cuda.available() else os.path.join(output_dir, 'source.cc')
+    )
     lib_path = os.path.join(output_dir, 'lib.so')
 
     # lower ir module
     instruments = []
     if save_ir:
         instruments.append(SaveIRInstrument(out_dir=os.path.join(output_dir, './ir')))
-    if profile_pass:
         instruments.append(ProfileInstrument(log_file=os.path.join(output_dir, './lower_time.txt')))
     with PassContext(instruments=instruments):
         ir_module = lower(ir_module)
 
+# <<<<<<< HEAD
     # get function type
     func: Function = ir_module.lookup('launch')
     kernel_func = ir_module.lookup(func.attrs['packed_func'])
@@ -220,22 +201,31 @@ def build_ir_module(
 
     codegen_target = 'cpu' if kernel_func.kind == 'host_kernel' else 'cuda'
 
+# =======
+# >>>>>>> main
     # code generation
     codegen(ir_module, src_out_path=src_path)
 
     # compile source code
     compile_source(src_path, out_lib_path=lib_path)
 
+    # write the function types
+    func_types: Dict[str, FuncType] = {
+        func.name: FuncType.from_func(func) for func in ir_module.functions.values() if func.kind == 'public'
+    }
+    with open(os.path.join(output_dir, 'func_types.pickle'), 'wb') as f:
+        pickle.dump(func_types, f)
+
+    # load the compiled module, if needed
     if load:
-        # load function
-        return load_lib_func(lib_path, 'hidet_launch', func_type=func_type, src_path=src_path)
+        return load_compiled_module(output_dir)
     else:
-        return lib_path, func_type
+        return None
 
 
 def build_ir_module_batch(
     ir_modules: Sequence[IRModule], output_dir: str, parallel=True, verbose=False
-) -> List[Optional[CompiledFunction]]:
+) -> List[Optional[CompiledModule]]:
     """
     Build a batch of ir modules.
 
@@ -255,39 +245,39 @@ def build_ir_module_batch(
 
     Returns
     -------
-    funcs:
-        The compiled functions, in the same order as build_instances.
-        When the build for a build instance failed, None for that instance is returned.
+    ret:
+        The compiled modules, in the same order as ir_modules.
+        When the build failed for an ir module, None for that ir module is returned.
     """
 
-    def build_job(args) -> Optional[Tuple[str, FuncType]]:
+    def build_job(args) -> bool:
         ir_module, output_dir, dumped_options = args
         option.restore_options(dumped_options)
         try:
-            return build_ir_module(
-                ir_module, output_dir, save_ir=False, profile_pass=False, load=False, use_hash_dir=False
-            )
+            build_ir_module(ir_module, output_dir, save_ir=False, load=False, use_hash_dir=False)
+            return True
         except subprocess.CalledProcessError:
             print('Failed launch subprocess to compile the lowered source code via nvcc.')
-            return None
+            return False
         except CompilationFailed:
             print('Failed to compile the lowered source code via nvcc.')
-            return None
+            return False
 
     with Timer() as timer:
         dumped_options = option.dump_options()
-        jobs = [
-            (ir_module, os.path.join(output_dir, str(idx)), dumped_options) for idx, ir_module in enumerate(ir_modules)
-        ]
-        build_results = []
+        output_dirs: List[str] = [os.path.join(output_dir, str(idx)) for idx in range(len(ir_modules))]
+        jobs = [(ir_module, output_dir, dumped_options) for ir_module, output_dir in zip(ir_modules, output_dirs)]
+        build_results: List[bool] = []
         if parallel:
+            cpu_count = os.cpu_count()
+            max_jobs, mem_for_worker = option.get_parallel_tune()
+            max_jobs = cpu_count if max_jobs == -1 else min(max_jobs, cpu_count)
+            mem_for_worker *= 1024**3
             # Set the affinity of current process. Some package such as numpy will change affinity of current process,
             # which might limit the parallelism of compilation.
-            os.sched_setaffinity(0, range(os.cpu_count()))
+            os.sched_setaffinity(0, range(cpu_count))
 
-            # the maximum number of processes is limited by the number of cores and memory
-            mem_for_worker = 1.5 * 1024 * 1024 * 1024  # 1.5 GiB
-            num_workers = min(max(int(psutil.virtual_memory().available // mem_for_worker), 1), psutil.cpu_count())
+            num_workers = min(max(int(psutil.virtual_memory().available // mem_for_worker), 1), max_jobs)
 
             _lazy_initialize_cuda()
             for build_result in tqdm(
@@ -305,17 +295,17 @@ def build_ir_module_batch(
             build_results = list(map(build_job, jobs))
 
         # load compiled functions
-        funcs: List[Optional[CompiledFunction]] = []
-        for build_result in build_results:
-            if build_result is not None:
-                lib_path, func_type = build_result
-                funcs.append(load_lib_func(lib_path, 'hidet_launch', func_type))
+        modules: List[Optional[CompiledModule]] = []
+        for build_result, module_dir in zip(build_results, output_dirs):
+            if build_result:
+                # successfully built the module
+                modules.append(load_compiled_module(module_dir))
             else:
-                funcs.append(None)
+                modules.append(None)
     if verbose:
         print(
             'Batch build {} modules within {:.3f} seconds, on average {:.1f} seconds per module.'.format(
                 len(jobs), timer.elapsed_seconds(), timer.elapsed_seconds() / len(jobs)
             )
         )
-    return funcs
+    return modules

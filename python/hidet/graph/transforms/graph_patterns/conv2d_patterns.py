@@ -12,7 +12,7 @@
 from typing import List, Optional
 
 from hidet.graph import ops
-from hidet.graph.ir.flow_graph import Tensor, Operator
+from hidet.graph.flow_graph import Tensor, Operator
 from hidet.graph.ops.definitions.conv2d import Conv2dOp
 from hidet.utils import same_list, initialize
 from .base import SubgraphRewriteRule, TensorPattern, MatchDict, op_pattern, register_rewrite_rule

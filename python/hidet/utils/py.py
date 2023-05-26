@@ -241,6 +241,8 @@ def _is_immutable(obj):
 
     if isinstance(obj, (int, float, str, tuple)):
         return True
+    if isinstance(obj, Constant) and obj.type.is_tensor():
+        return False
     if isinstance(obj, (Constant, Device)):
         return True
     return False

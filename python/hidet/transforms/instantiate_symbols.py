@@ -65,29 +65,35 @@ class InstantiateSymbolsRewriter(IRRewriter):
             symbol2param={symbol: param for symbol, param in zip(ordered_symbols, symbol_params)},
         )
 
-        for symbol, symbol_param in zip(ordered_symbols, symbol_params):
-            self.memo[symbol] = symbol_param
-        self.current_func = func.name
-
-        params = self.visit(func.params)
-        body = self.visit(func.body)
-        ret_type = self.visit(func.ret_type)
-        attrs = self.visit(func.attrs)
-
-        if func.kind == 'packed_func':
-            # for packed function, we call the runtime primitive functions to get the symbol values
-            symbol_values = [get_symbol_value(symbol.name) for symbol in ordered_symbols]
-            if len(symbol_params) > 0:
-                body = LetStmt(bind_vars=symbol_params, bind_values=symbol_values, body=body)
+        if len(ordered_symbols) == 0:
+            # no symbol vars, no need to instantiate
+            return func
         else:
-            # for other functions, we just pass via the parameters
-            params = params + symbol_params
+            for symbol, symbol_param in zip(ordered_symbols, symbol_params):
+                self.memo[symbol] = symbol_param
+            self.current_func = func.name
 
-        for symbol, symbol_param in zip(ordered_symbols, symbol_params):
-            del self.memo[symbol]
-        self.current_func = None
+            params = self.visit(func.params)
+            body = self.visit(func.body)
+            ret_type = self.visit(func.ret_type)
+            attrs = self.visit(func.attrs)
 
-        return Function(func.name, params, body, ret_type, func.kind, attrs=attrs)
+            if func.kind == 'public':
+                # for public function, we call the runtime primitive functions to get the symbol values
+                symbol_values = [get_symbol_value(symbol.name) for symbol in ordered_symbols]
+                if len(symbol_params) > 0:
+                    body = LetStmt(bind_vars=symbol_params, bind_values=symbol_values, body=body)
+            elif func.kind in ['cuda_kernel', 'cuda_internal', 'cpu_kernel', 'cpu_internal']:
+                # for kernel functions, we just pass via the parameters
+                params = params + symbol_params
+            else:
+                raise NotImplementedError()
+
+            for symbol, symbol_param in zip(ordered_symbols, symbol_params):
+                del self.memo[symbol]
+            self.current_func = None
+
+            return Function(func.name, params, body, ret_type, func.kind, attrs=attrs)
 
     def visit_LaunchKernelStmt(self, stmt: LaunchKernelStmt):
         stmt = super().visit_LaunchKernelStmt(stmt)

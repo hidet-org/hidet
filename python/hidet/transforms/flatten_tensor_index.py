@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from hidet.ir.type import TensorType, tensor_type, tensor_pointer_type, PointerType, TensorPointerType
+from hidet.ir.type import TensorType, tensor_type, tensor_pointer_type, PointerType, TensorPointerType, ArrayType
 from hidet.ir.expr import Var, TensorElement, TensorSlice, Constant, tensor_element
 from hidet.ir.stmt import BufferStoreStmt, DeclareStmt
 from hidet.ir.func import Function
@@ -45,6 +45,8 @@ class FlattenTensorAccessRewriter(IRRewriter):
                 return e.type.tensor_type.layout
             elif isinstance(e.type, PointerType):
                 return StridesLayout(shape=[0], strides=[1])
+            elif isinstance(e.type, ArrayType):
+                return StridesLayout(shape=[0], strides=[1])
         elif isinstance(e, Constant) and isinstance(e.type, TensorType):
             return e.type.layout
         raise ValueError("Can not infer layout from '{}' (expression {})".format(type(e), e))
@@ -55,7 +57,7 @@ class FlattenTensorAccessRewriter(IRRewriter):
             var = Var(stmt.var.hint, tensor_type(stmt.var.type.dtype, [size], DataLayout.row_major([size])))
             self.memo[stmt.var] = var
             init = self(stmt.init) if stmt.init is not None else None
-            return DeclareStmt(var, init, scope=stmt.scope)
+            return DeclareStmt(var, init, is_static=stmt.is_static, scope=stmt.scope)
         else:
             return IRRewriter.visit_DeclareStmt(self, stmt)
 

@@ -143,7 +143,7 @@ def extract_ir_modules(template_func) -> List[IRModule]:
 
 def tune(ir_modules: Sequence[IRModule], dummy_inputs: Sequence[Any], working_dir: str) -> IRModule:
     from hidet.driver import build_ir_module_batch
-    from hidet.runtime import CompiledFunction
+    from hidet.runtime import CompiledModule
 
     ir_modules = list(ir_modules)
 
@@ -155,19 +155,19 @@ def tune(ir_modules: Sequence[IRModule], dummy_inputs: Sequence[Any], working_di
 
     # build ir modules into compiled functions
     tuning_dir = os.path.join(working_dir, 'tuning')
-    compiled_funcs: List[Optional[CompiledFunction]] = build_ir_module_batch(
+    compiled_modules: List[Optional[CompiledModule]] = build_ir_module_batch(
         ir_modules, output_dir=tuning_dir, parallel=True, verbose=True
     )
-    assert len(compiled_funcs) == len(ir_modules)
-    if any(f is None for f in compiled_funcs):
+    assert len(compiled_modules) == len(ir_modules)
+    if any(f is None for f in compiled_modules):
         raise ValueError('All ir modules failed to build.')
 
     # benchmark
     latencies = []
     warmup, number, repeat = hidet.option.get_option('bench_config')
-    for compiled_func in tqdm(compiled_funcs, desc='Benchmarking', total=len(ir_modules), ncols=80):
-        if compiled_func:
-            repeat_latency = compiled_func.profile(*dummy_inputs, warmup=warmup, number=number, repeat=repeat)
+    for compiled_module in tqdm(compiled_modules, desc='Benchmarking', total=len(ir_modules), ncols=80):
+        if compiled_module:
+            repeat_latency = compiled_module.profile(*dummy_inputs, warmup=warmup, number=number, repeat=repeat)
             latency = float(np.median(repeat_latency))
         else:
             # this ir module failed in building, skip

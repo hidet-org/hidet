@@ -11,8 +11,12 @@
 # limitations under the License.
 from . import module
 from . import container
-from . import nn
 
 from .module import Module
-
-from .nn import Linear, Conv2d, BatchNorm2d, Relu, MaxPool2d
+from .container import Sequential, ModuleList
+from .activations import Relu, Gelu, Tanh
+from .convolutions import Conv2d
+from .linear import Linear
+from .norms import BatchNorm2d, LayerNorm
+from .poolings import MaxPool2d, AvgPool2d, AdaptiveAvgPool2d
+from .transforms import Embedding

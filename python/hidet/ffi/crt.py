@@ -80,4 +80,4 @@ def malloc(size: int) -> int:
 
 def free(ptr: int) -> None:
     lazy_load_libc()
-    _LIBCAPI.free(ctypes.c_void_p(ptr))
+    _LIBCAPI.free(ptr)

@@ -32,7 +32,7 @@ def run(kernel: Function, shape: List[int]) -> hidet.Tensor:
 def test_for_range():
     @hidet.script
     def kernel(a: int32[10]):
-        attrs.func_kind = 'host_kernel'
+        attrs.func_kind = 'cpu_kernel'
         p = 0
         for i in range(10):
             a[i] = p
@@ -45,7 +45,7 @@ def test_for_range():
 def test_for_grid():
     @hidet.script
     def kernel(a: int32[2, 3]):
-        attrs.func_kind = 'host_kernel'
+        attrs.func_kind = 'cpu_kernel'
         p = 0
         for i, j in grid(2, 3):
             a[i, j] = p
@@ -58,7 +58,7 @@ def test_for_grid():
 def test_for_task_mapping():
     @hidet.script
     def kernel(a: int32[2, 3]):
-        attrs.func_kind = 'host_kernel'
+        attrs.func_kind = 'cpu_kernel'
         p = 0
         for w in range(6):
             for i, j in spatial(2, 3).on(w):
@@ -72,7 +72,7 @@ def test_for_task_mapping():
 def test_tuple_as_index():
     @hidet.script
     def kernel(a: int32[2, 3]):
-        attrs.func_kind = 'host_kernel'
+        attrs.func_kind = 'cpu_kernel'
         p = 0
         for axes in grid(2, 3):
             # the following three ways of indexing are equivalent
@@ -85,7 +85,8 @@ def test_tuple_as_index():
     assert np.all(run(kernel, [2, 3]).numpy() == expected)
 
 
-def demo_softmax(shape: List[int], axis: int):
+@pytest.mark.parametrize('shape,axis', [([2, 3], 0), ([2, 3], 1), ([2, 3, 4], 1)])
+def test_softmax(shape: List[int], axis: int):
     from hidet.lang import f32
     from hidet.lang import attrs
     from hidet.lang import tensor
@@ -96,7 +97,7 @@ def demo_softmax(shape: List[int], axis: int):
 
         @hidet.script
         def kernel(x: f32[shape], y: f32[shape]):
-            attrs.func_kind = 'host_kernel'
+            attrs.func_kind = 'cpu_kernel'
             spatial_shape = shape[:axis] + shape[axis + 1 :]
             reduce_extent = shape[axis]
 

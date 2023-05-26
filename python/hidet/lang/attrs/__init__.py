@@ -28,9 +28,9 @@ function attributes
 # Please set this attribute if we want to have a different name
 func_name: Optional[str] = None
 
-# The kind of this function. Candidates: 'cuda_kernel', 'cuda_device', 'host_kernel', 'packed_func'
+# The kind of this function. Candidates: 'cuda_kernel', 'cuda_internal', 'cpu_kernel', 'packed_func'
 func_kind: Optional[str] = None
 
 
 # If the func_kind == packed_func, then this attribute should be set to the var to function to be packed.
-packed_func: Optional[Var] = None
+# packed_func: Optional[Var] = None

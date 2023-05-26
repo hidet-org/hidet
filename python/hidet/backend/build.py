@@ -20,12 +20,7 @@ from subprocess import PIPE
 
 import hidet.cuda
 from hidet.libinfo import get_include_dirs
-from hidet.ir.type import FuncType
-from hidet.runtime import CompiledFunction
-from hidet.ffi import PackedFunc
 from hidet.ffi.ffi import library_paths
-from hidet.ffi.shared_lib import SharedLibrary
-from hidet.ir.task import Task  # pylint: disable=unused-import
 
 
 class CompilationFailed(Exception):
@@ -47,7 +42,8 @@ class SourceCompiler:
     def compile(self, src_path: str, out_lib_path: str, options: Optional[Dict[str, str]] = None) -> None:
         raise NotImplementedError()
 
-    def run_compile_command(self, command: str, src_path, out_lib_path: str):
+    @staticmethod
+    def run_compile_command(command: str, src_path, out_lib_path: str):
         try:
             # the directory to store the library "lib.so"
             out_lib_dir = os.path.dirname(out_lib_path)
@@ -122,6 +118,8 @@ class NVCC(SourceCompiler):
             *['-I{}'.format(include_dir) for include_dir in self.include_dirs],
             # the library directories.
             *['-L{}'.format(library_dir) for library_dir in self.library_dirs],
+            # optimize host side code via -O3
+            '-O3',
             # enable openmp support for cpu kernels
             '-Xcompiler -fopenmp,-fPIC,-m64,-mavx2,-march=native,-O3,-funroll-loops,-ffast-math',
             # the target PTX and SASS version.
@@ -168,7 +166,9 @@ class GCC(SourceCompiler):
         self.include_dirs: List[str] = get_include_dirs()
         self.library_dirs: List[str] = [os.path.dirname(library_paths['hidet_runtime'])]
 
-    def _resolve_gcc_path(self):
+    @staticmethod
+    @functools.lru_cache(maxsize=None)
+    def _resolve_gcc_path():
         path: Optional[str] = shutil.which('g++')
         if path is not None:
             return path
@@ -226,51 +226,3 @@ def compile_source(src_path: str, out_lib_path: str) -> None:
         compiler = GCC()
 
     compiler.compile(src_path, out_lib_path)
-
-
-def load_task_func(lib_path: str, task) -> CompiledFunction:
-    """
-    Load task's entry function from dynamic linked library.
-
-    Parameters
-    ----------
-    lib_path: str
-        The dynamic library path.
-    task: Task
-        The task that corresponds to the dynamic library.
-
-    Returns
-    -------
-    ret: CompiledFunction
-        The loaded function that can be directly called in python.
-    """
-    try:
-        lib = SharedLibrary(lib_path)
-    except OSError as e:
-        print("Removed the file '{}'".format(lib_path))
-        os.remove(lib_path)
-        raise e
-    func_name = 'hidet_launch'
-    param_types = [param.type for param in task.params]
-    packed_func = PackedFunc(param_types=param_types, c_func_pointer=lib[func_name])
-
-    potential_src_path = os.path.join(os.path.dirname(lib_path), 'source.cu')
-    if os.path.isfile(potential_src_path):
-        src_path = potential_src_path
-    else:
-        src_path = None
-
-    return CompiledFunction(name=task.name, packed_func=packed_func, lib_path=lib_path, src_path=src_path)
-
-
-def load_lib_func(
-    lib_path: str, func_name: str, func_type: FuncType, src_path: Optional[str] = None
-) -> CompiledFunction:
-    try:
-        lib = SharedLibrary(lib_path)
-    except OSError as e:
-        print("Removed the file '{}'".format(lib_path))
-        os.remove(lib_path)
-        raise e
-    packed_func = PackedFunc(param_types=list(func_type.param_types), c_func_pointer=lib[func_name])
-    return CompiledFunction(name=func_name, packed_func=packed_func, lib_path=lib_path, src_path=src_path)

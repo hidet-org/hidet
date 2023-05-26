@@ -9,8 +9,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from hidet.graph.ir import FlowGraph, Operator, GraphRewriter
+from hidet.graph.flow_graph import FlowGraph, Operator
 from hidet.graph.transforms import GraphPass
+from hidet.graph.graph_utils.functors import GraphRewriter
 
 from .utils import is_barrier
 

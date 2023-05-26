@@ -13,20 +13,19 @@ from . import tensor
 from . import operator
 from . import nn
 from . import ops
-from . import ir
+from . import flow_graph
 from . import frontend
 
 from .tensor import Tensor
-from .operator import Operator, SymbolVar
-from .ir import FlowGraph
+from .operator import Operator
+from .flow_graph import FlowGraph
 from .transforms import GraphPass, PassContext, GraphPassInstrument
-from .ir.flow_graph import GraphForwardContext, GraphForwardInstrument
-from .ir.instruments import GraphForwardBenchmarkInstrument, GraphForwardDebugInstrument
+from .flow_graph import GraphForwardContext, GraphForwardInstrument
 from .nn import Module
+from .graph_utils.instruments import GraphForwardBenchmarkInstrument, GraphForwardDebugInstrument
 
 from .tensor import asarray, randn, empty, zeros, ones, symbol, randint, randn_like, empty_like, zeros_like, ones_like
 from .tensor import symbol_like, full, full_like
 from .tensor import from_numpy, from_dlpack, from_torch
-from .ir import trace_from, load_graph, save_graph, forward_context
+from .flow_graph import trace_from, load_graph, save_graph, forward_context
 from .transforms import optimize
-from .jit import jit

@@ -11,6 +11,8 @@
 # limitations under the License.
 import pytest
 import torch
+
+import hidet.option
 from hidet.testing.torch_utils import check_module
 
 

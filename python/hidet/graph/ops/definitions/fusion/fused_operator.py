@@ -19,7 +19,7 @@ from hidet.ir.tools import simplify
 from hidet.ir.compute import TensorNode, TensorInput
 from hidet.graph.tensor import Tensor
 from hidet.graph.operator import Operator
-from hidet.graph.ir import FlowGraph
+from hidet.graph.flow_graph import FlowGraph
 from hidet.graph.ops.definitions.utils import input_like
 from hidet.ir.tools import rewrite
 from hidet.utils import index_of

@@ -93,12 +93,12 @@ class GraphForwardContext:
         self.instruments.append(instrument)
 
     def debug(self, output_dir='./outs/debug', print_summary: bool = False, dump_outputs: bool = False):
-        from .instruments import GraphForwardDebugInstrument
+        from .graph_utils.instruments import GraphForwardDebugInstrument
 
         self.instruments.append(GraphForwardDebugInstrument(output_dir, print_summary, dump_outputs))
 
     def benchmark(self, output_dir='./outs/benchmark', print_summary: bool = False, warmup=3, number=10, repeat=3):
-        from .instruments import GraphForwardBenchmarkInstrument
+        from .graph_utils.instruments import GraphForwardBenchmarkInstrument
 
         self.instruments.append(GraphForwardBenchmarkInstrument(output_dir, print_summary, warmup, number, repeat))
 
@@ -135,7 +135,7 @@ class FlowGraph:
         return outputs[0] if len(outputs) == 1 else outputs
 
     def __str__(self):
-        from .flow_graph_impl import flow_graph_as_text
+        from .graph_utils import flow_graph_as_text
 
         return flow_graph_as_text(self)
 
@@ -157,7 +157,7 @@ class FlowGraph:
         self._nodes = None
         self._usage_count = None
 
-    def _build(self):
+    def _build_nodes(self):
         from hidet.runtime.device import Device
 
         tasks: List[Tuple[Task, Device]] = []
@@ -209,7 +209,7 @@ class FlowGraph:
                 raise ValueError(msg)
 
         # build the kernel for each operator in the graph
-        self._build()
+        self._build_nodes()
 
         # set the symbol values
         for expect_input, actual_input in zip(self.inputs, inputs):
@@ -347,6 +347,19 @@ class FlowGraph:
                 )
             self.inputs = free_vars
         return self
+
+    def build(self):
+        """
+        Build the flow graph to a compiled model (hidet.runtime.CompiledModel).
+
+        Returns
+        -------
+        ret: hidet.runtime.model.CompiledModel
+            The compiled model.
+        """
+        from hidet.graph.graph_utils.build import flow_graph_build
+
+        return flow_graph_build(self)
 
     def cuda_graph(self):
         """Create a CudaGraph from FlowGraph.
