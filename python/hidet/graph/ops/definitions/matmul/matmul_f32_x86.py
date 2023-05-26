@@ -70,17 +70,11 @@ class MatmulF32Taskx86(Task):
     def implement_cpu(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
         return tune.extract_ir_modules(self.schedule_matmulf32_x86)
 
-    # @tune.space(2, 'micro_ker', [(6, 16)])
-    # @tune.space(2, 'block_m', [1200, 2400])
-    # @tune.space(2, 'block_n', [96, 192, 384, 512])
-    # @tune.space(2, 'block_k', [128, 256, 384, 512])
-    # @tune.space(2, 'nthreads', [2, 4, 8, 16, 32])
-    # @tune.space(2, 'block_m', [2016])
-    @tune.space(2, 'block_n', [48, 80, 144, 192, 256, 384])
-    @tune.space(2, 'block_k', [64, 72, 96, 128, 256, 512])
-    @tune.space(2, 'block_m', [1008, 2016])
+    @tune.space(2, 'block_m', [2016, 1008])
+    @tune.space(2, 'block_n', [64, 144, 192, 256, 384, 512, 592, 672, 752, 896, 1024])
+    @tune.space(2, 'block_k', [96, 128, 256, 384, 512, 560, 688, 784])
     @tune.space(2, 'nthreads', [4, 8, 16, 32])
-    def schedule_matmulf32_x86(self, block_m=2016, block_n=144, block_k=128, micro_ker=(6, 16),
+    def schedule_matmulf32_x86(self, block_m=2016, block_n=896, block_k=512, micro_ker=(6, 16),
                                nthreads=16) -> IRModule:
         import hidet
         from hidet.ir.type import tensor_type
@@ -415,7 +409,7 @@ class MatmulF32Taskx86(Task):
                         mp = ib // tile_m
                         mr = ib % tile_m
 
-                        packeda_ptr = cast(packed_a, ~float32)
+                        packeda_ptr = cast(~packed_a[0, 0], ~float32)
                         for micropanel_idx in range(mp):
                             panel_row_start = micropanel_idx * tile_m
                             for micropanel_col in range(pb):
@@ -423,8 +417,9 @@ class MatmulF32Taskx86(Task):
                                     packed_a[panel_row_start + micropanel_row, micropanel_col] = \
                                         a[i + micropanel_row + panel_row_start, p + micropanel_col]
                                     # packeda_ptr[0] = a[i + micropanel_row + panel_row_start, p + micropanel_col]
-                                    # packeda_ptr = packeda_ptr + 1
+                                    # packeda_ptr = ~packeda_ptr[1]
                         if mr > 0:
+                            assert False
                             remain_start_row = mp * tile_m
                             for remain_col in range(pb):
                                 for remain_row in range(mr):
@@ -451,6 +446,7 @@ class MatmulF32Taskx86(Task):
                                         # packedb_ptr = packedb_ptr + 1
                             if nr > 0:
                                 # TODO: change this to arithmetic as well if it's working
+                                assert False
                                 remain_col_start = np * tile_n
                                 for remain_row in range(pb):
                                     for remain_col in range(nr):
