@@ -15,7 +15,7 @@ from hidet.ir.primitives import active_mask, shfl_down_sync, shfl_sync
 from hidet.ir.compute import ReduceOperation, reduce
 from hidet.ir.type import data_type
 from hidet.ir.layout import DataLayout
-from hidet.lang import f16, f32, spatial, repeat, attr, tensor_pointer
+from hidet.lang import f16, f32, spatial, repeat, attrs, tensor_pointer
 from hidet.lang.cuda import blockIdx, threadIdx, register_tensor
 from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, TensorNode, ReduceType
 from hidet.graph.ops.definitions.utils import compute, input_like, normalize_dim
@@ -130,19 +130,22 @@ class NormalizeTask(Task):
         spatial_layout = spatial(*(spatial_shape + ([1] * len(reduce_shape))))
 
         # We can only reduce 1024 numbers in a threadblock at once
-        repeat_reduction = math.ceil(reduce_extent  / block_size)
+        repeat_reduction = math.ceil(reduce_extent / block_size)
         reduction_layout = repeat(repeat_reduction, 1) * spatial(block_size)
-
 
         task_layout = repeat(*repeat_shape) * spatial(*spatial_shape)
         grid_size = spatial_layout.num_workers
         accumulate_dtype = self.attrs['accumulate_dtype']
 
         dtype = self.inputs[0].type.dtype
-        used_smem_bytes_per_block = match.ceil(block_size / warp_size)  * dtype.nbytes
-        smem_mean = tensor('shared', 'int8', shape=[used_smem_bytes_per_block])
-        smem_var = tensor('shared', 'int8', shape=[used_smem_bytes_per_block])
 
+        shm_count = match.ceil(block_size / warp_size)
+        used_smem_bytes_per_block = shm_count  * dtype.nbytes
+        smem_mean = tensor('shared', 'int8', shape=[used_smem_bytes_per_block])
+        smem_m2 = tensor('shared', 'int8', shape=[used_smem_bytes_per_block])
+
+        stages = math.ceil(block_size / warp_size)
+        assert stages <= 2
         with hidet.script_module() as module:
 
             @hidet.script
@@ -151,6 +154,7 @@ class NormalizeTask(Task):
                 delta = mean_b - mean_a
                 mean = mean_a + delta * count_b / count
                 m2 = m2_a + m2_b + delta * delta * count_a * count_b / count
+                return mean, m2, count
 
             @hidet.script
             def norm_kernel(x: f16[x.const_shape], y: f16[y.const_shape]):
@@ -164,6 +168,8 @@ class NormalizeTask(Task):
                 reg32 = register_tensor(f32, [1])
                 mean = register_tensor(accumulate_dtype, [1])
                 m2 = register_tensor(accumulate_dtype, [1])
+                count = register_tensor('int32', [1])
+
                 mean = data_type(accumulate_dtype).zero
                 m2 = data_type(accumulate_dtype).zero
                 count = data_type('int32').zero
@@ -171,19 +177,45 @@ class NormalizeTask(Task):
                 for indices in task_layout.on(threadIdx.x + blockIdx.x * block_size):
                     if x_f32_layout.within_bound(indices):
                         reg32[0] = x_f32.read(indices, protected=False)
+                        mean[0] = reg32[0]
+                        m2[0] = reg32[0] * reg32[0]
+                        count[0] = 1
 
-                # Warp reduce by shuffle down
-                mask = active_mask()
-                rv[0] = ro.combine(rv[0], shfl_down_sync(mask, rv[0], 16, 32))
-                rv[0] = ro.combine(rv[0], shfl_down_sync(mask, rv[0], 8, 32))
-                rv[0] = ro.combine(rv[0], shfl_down_sync(mask, rv[0], 4, 32))
-                rv[0] = ro.combine(rv[0], shfl_down_sync(mask, rv[0], 2, 32))
-                rv[0] = ro.combine(rv[0], shfl_down_sync(mask, rv[0], 1, 32))
-                rv[0] = shfl_sync(mask, rv[0], 0, 32)
-                rv[0] = ro.finalize(acc=rv[0], size=reduce_extent)
-                if threadIdx.x == 0:
-                    for indices in remain_layout.on(blockIdx.x):
-                        y.write(indices, rv[0], protected=False)
+                    # Warp reduce by shuffle down
+                    mask = active_mask()
+                    for k1 in grid(5, attrs='u+'):
+                        offset = 16 >> k1
+                        other_mean = shfl_down_sync(mask, mean[0], offset, 32)
+                        other_m2 = shfl_down_sync(mask, m2[0], offset, 32)
+                        other_count = shfl_down_sync(mask, count[0], offset, 32)
+                        mean[0], m2[0], count[0] = welford_combine(mean[0], m2[0], count[0],
+                                                                   other_mean[0], other_m2[0], other_count[0])
+
+                if threadIdx.x % warp_size == 0:
+                    smem_mean[threadIdx // warp_size] = mean[0]
+                    smem_m2[threadIdx // warp_size] = m2[0]
+
+                __syncthreads()
+
+                # reduce shared memory
+                if stages > 1 and threadIdx.x < warp_size:
+                    mean[0] = smem_mean[threadIdx.x] if threadIdx.x < shm_count else 0
+                    m2[0] = smem_m2[threadIdx.x] if threadIdx.x < shm_count else 0
+                    count = warp_size if threadIdx.x < shm_count else 0
+
+                for k1 in grid(5, attrs='u+'):
+                    offset = 16 >> k1
+                    other_mean = shfl_down_sync(mask, mean[0], offset, 32)
+                    other_m2 = shfl_down_sync(mask, m2[0], offset, 32)
+                    other_count = shfl_down_sync(mask, count[0], offset, 32)
+                    mean[0], m2[0], count[0] = welford_combine(mean[0], m2[0], count[0],
+                                                               other_mean[0], other_m2[0], other_count[0])
+
+                # we have mean and var here
+                for indices in task_layout.on(threadIdx.x + blockIdx.x * block_size):
+                    val =
+                    y_f32.write(indices, reg32[0], protected=False)
+
 
         ir_module = module.ir_module()
         return ir_module
