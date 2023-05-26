@@ -441,7 +441,9 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
                 doc += NewLine() + '#pragma unroll'
         elif stmt.attr.parallel:
             if stmt.attr.parallel_threads:
-                doc += NewLine() + '#pragma omp parallel for schedule(dynamic) num_threads({})'.format(stmt.attr.parallel_threads)
+                doc += NewLine() + '#pragma omp parallel for schedule(dynamic) num_threads({})'.format(
+                    stmt.attr.parallel_threads
+                )
             else:
                 doc += NewLine() + '#pragma omp parallel for'
         doc += NewLine() + Text('for (') + init_doc + '; ' + cond_doc + '; ' + update_doc + ') '
@@ -499,16 +501,16 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
         for label, expr in zip(stmt.input_labels, stmt.input_exprs):
             input_docs.append(Text(f'"{label}"') + '(' + self(expr) + ')')
         return (
-                NewLine()
-                + 'asm '
-                + volatile_doc
-                + '('
-                + template_doc
-                + ' : '
-                + doc_join(output_docs, ', ')
-                + ' : '
-                + doc_join(input_docs, ', ')
-                + ');'
+            NewLine()
+            + 'asm '
+            + volatile_doc
+            + '('
+            + template_doc
+            + ' : '
+            + doc_join(output_docs, ', ')
+            + ' : '
+            + doc_join(input_docs, ', ')
+            + ');'
         )
 
     def visit_LaunchKernelStmt(self, stmt: LaunchKernelStmt):
@@ -556,7 +558,7 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             'complex64': 'complex64_t',
             'complex128': 'complex128_t',
             'float32x4': '__m128',
-            'float32x8': '__m256'
+            'float32x8': '__m256',
         }
         return Text(scalar_type_map[t.name])
 
@@ -711,7 +713,7 @@ class CPUCodegen(Codegen):
             'bfloat16': 'bfloat16_t',
             'tfloat32': 'float',
             'float32x4': '__m128',
-            'float32x8': '__m256'
+            'float32x8': '__m256',
         }
         return Text(scalar_type_map[t.name])
 
