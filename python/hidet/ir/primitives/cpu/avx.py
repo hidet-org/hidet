@@ -46,7 +46,7 @@ def aligned_alloc(alignment: Union[int, Expr], size: Union[int, Expr]):
     return call_primitive_func('aligned_alloc', [alignment, size])
 
 
-def free(addr: Expr):
+def cpu_free(addr: Expr):
     return call_primitive_func('free', [addr])
 
 

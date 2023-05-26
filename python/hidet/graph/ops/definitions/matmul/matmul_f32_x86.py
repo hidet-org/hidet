@@ -416,10 +416,12 @@ class MatmulF32Taskx86(Task):
                                 for micropanel_row in range(tile_m):
                                     packed_a[panel_row_start + micropanel_row, micropanel_col] = \
                                         a[i + micropanel_row + panel_row_start, p + micropanel_col]
+
+                                    # TODO: really strange; the index is indeed incremented by 1 each iteration,
+                                    # TODO: but I just can't get this to pass the test...
                                     # packeda_ptr[0] = a[i + micropanel_row + panel_row_start, p + micropanel_col]
                                     # packeda_ptr = ~packeda_ptr[1]
                         if mr > 0:
-                            assert False
                             remain_start_row = mp * tile_m
                             for remain_col in range(pb):
                                 for remain_row in range(mr):
@@ -445,8 +447,6 @@ class MatmulF32Taskx86(Task):
                                         # packedb_ptr[0] = b[p + micropanel_row, j + micropanel_col + panel_col_start]
                                         # packedb_ptr = packedb_ptr + 1
                             if nr > 0:
-                                # TODO: change this to arithmetic as well if it's working
-                                assert False
                                 remain_col_start = np * tile_n
                                 for remain_row in range(pb):
                                     for remain_col in range(nr):
