@@ -18,7 +18,7 @@ from .instruments import PassInstrument, SaveIRInstrument, ProfileInstrument
 from .unify_global_objects import unify_global_objects_pass
 from .flatten_tensor_slice import flatten_tensor_slice_pass
 from .flatten_tensor_index import flatten_tensor_index_pass
-from .generate_packed_func import generate_packed_func_pass
+from .generate_launch_func import generate_launch_func_pass
 from .explicit_unroll import explicit_unroll_pass
 from .import_primitive_functions import import_primitive_functions_pass
 from .simplify_stmt import simplify_stmt_pass
@@ -53,7 +53,7 @@ def lower(ir_module: IRModule) -> IRModule:
     transforms = [
         # necessary passes
         unify_global_objects_pass(),
-        generate_packed_func_pass(),
+        generate_launch_func_pass(),
         flatten_tensor_slice_pass(),
         lower_protect_access_pass(),
         lower_task_mapping_pass(),

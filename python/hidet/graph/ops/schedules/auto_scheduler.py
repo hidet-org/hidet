@@ -11,9 +11,9 @@
 # limitations under the License.
 from typing import Union, List, Dict, Sequence, Tuple, Set, Optional
 
-from hidet.ir.type import DataType, tensor_pointer_type, void_p
+from hidet.ir.type import DataType, tensor_pointer_type
 from hidet.ir.expr import TensorElement, Expr, Var, SymbolVar, Constant, scalar_var, convert, cast
-from hidet.ir.stmt import Stmt, AssignStmt, ForStmt, DeclareStmt, BufferStoreStmt, AssertStmt
+from hidet.ir.stmt import Stmt, AssignStmt, ForStmt, DeclareStmt, BufferStoreStmt
 from hidet.ir.task import Task
 from hidet.ir.func import IRModule, Function
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
@@ -22,7 +22,7 @@ from hidet.ir.tools import IRPrinter, collect, rewrite, infer_type, simplify, co
 from hidet.ir.compute import ScalarInput, TensorInput, GridCompute, ReduceCompute, ArgReduceCompute
 from hidet.ir.compute import TensorNode, ScalarNode
 from hidet.ir.primitives.runtime import request_cuda_workspace, request_cpu_workspace
-from hidet.ir.dtypes import uint8, int32, int64
+from hidet.ir.dtypes import uint8, int64
 from hidet.utils import prod, DirectedGraph
 from hidet.utils.namer import Namer
 
@@ -202,9 +202,6 @@ class AutoScheduler:
             fb += DeclareStmt(v, init=cast(~buffer[buffer_offset[node]], v.type))
 
     def schedule_task(self, task: Task, device: str) -> IRModule:
-        # pylint: disable=too-many-locals, unnecessary-comprehension
-        from hidet.ffi.packedfunc import ArgTypeCode
-
         self.task = task
         self.ir_module.task = task
 
@@ -228,31 +225,22 @@ class AutoScheduler:
         buffer_bytes, buffer_offset = self.plan_memory(dag, order, require_allocate)
 
         # Construct the function body
-        with FunctionBuilder(name='launch', kind='packed_func') as fb:
-            # packed function arguments, packed_func(num_args: int32, arg_types: *int32, args: **void)
-            num_args = scalar_var('num_args', 'int32')
-            arg_types = Var('arg_types', ~int32)
-            args = Var('args', ~void_p)
-            fb.extend_params([num_args, arg_types, args])
-
-            # extract the packed arguments
+        # cuda_kernel cuda_internal cpu_kernel cpu_internal public
+        with FunctionBuilder(name='launch', kind='public') as fb:
+            # define the function arguments: input_0, input_1, ..., output_0, output_1, ...
+            params: List[Var] = []
             tensor_map: Dict[TensorNode, Var] = {}  # tensor arguments
-            for idx, task_param in enumerate(task_params):
+            for task_param in task_params:
                 assert isinstance(task_param, TensorNode)
                 param = Var(task_param.name, ~task_param.type.dtype)
-                expect_type_code = ArgTypeCode.POINTER.value
+                params.append(param)
                 tensor_map[task_param] = param
-                init = cast(args[idx], param.type)
-                fb += AssertStmt(
-                    cond=(arg_types[idx] == expect_type_code),
-                    msg='Argument {} expects a {}'.format(idx, ArgTypeCode(expect_type_code).name.lower()),
-                )
-                fb += DeclareStmt(param, init=init)
+            fb.extend_params(params)
 
-            # allocate memory space for intermediate tensors
+            # allocate the memory for intermediate tensors, and bind them to the tensor_map
             self.allocate_tensors(fb, device, buffer_bytes, buffer_offset, tensor_map)
 
-            # schedule each tensor computation
+            # schedule the tensor computations
             for node in order:
                 if isinstance(node, TensorInput):
                     pass  # input tensor does not need scheduling, skip
@@ -260,6 +248,7 @@ class AutoScheduler:
                     fb += self.schedule_grid_compute(node, tensor_map)
                 else:
                     raise NotImplementedError()
+
         func = fb.get()
         self.ir_module.add(func.name, func)
 

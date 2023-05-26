@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from hidet.ir.type import TensorType, tensor_type, tensor_pointer_type, PointerType, TensorPointerType
+from hidet.ir.type import TensorType, tensor_type, tensor_pointer_type, PointerType, TensorPointerType, ArrayType
 from hidet.ir.expr import Var, TensorElement, TensorSlice, Constant, tensor_element
 from hidet.ir.stmt import BufferStoreStmt, DeclareStmt
 from hidet.ir.func import Function
@@ -44,6 +44,8 @@ class FlattenTensorAccessRewriter(IRRewriter):
             elif isinstance(e.type, TensorPointerType):
                 return e.type.tensor_type.layout
             elif isinstance(e.type, PointerType):
+                return StridesLayout(shape=[0], strides=[1])
+            elif isinstance(e.type, ArrayType):
                 return StridesLayout(shape=[0], strides=[1])
         elif isinstance(e, Constant) and isinstance(e.type, TensorType):
             return e.type.layout

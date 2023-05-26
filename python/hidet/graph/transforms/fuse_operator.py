@@ -12,9 +12,9 @@
 from typing import List, Sequence, Dict, Tuple, Optional, Set, Union
 
 import hidet
-from hidet.graph.ir import FlowGraph, Operator, Tensor
+from hidet.graph.flow_graph import FlowGraph, Operator, Tensor
 from hidet.graph.ops.definitions.special import BarrierOp
-from hidet.graph.ir.functors import analyze_usage
+from hidet.graph.graph_utils.functors import analyze_usage
 from hidet.graph.transforms.base import GraphPass
 from hidet.utils.structure import DirectedGraph
 from hidet.utils.doc import Doc, Text, NewLine, doc_join

@@ -92,7 +92,7 @@ class CudaGraph:
     """
 
     def __init__(self, flow_graph):
-        from hidet.graph.ir.flow_graph import FlowGraph
+        from hidet.graph.flow_graph import FlowGraph
 
         flow_graph: FlowGraph
 

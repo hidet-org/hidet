@@ -14,3 +14,4 @@ from . import storage
 
 from .module import CompiledModule, CompiledFunction
 from .storage import Storage
+from .model import save_model, load_model

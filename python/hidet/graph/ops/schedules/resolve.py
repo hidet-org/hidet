@@ -127,7 +127,7 @@ def resolve_ir_modules(
     errors: List[float] = []
     if validate:
         task = ir_modules[0].task
-        num_inputs, num_outputs = len(task.inputs), len(task.outputs)  # pylint: disable=unused-variable
+        num_inputs, num_outputs = len(task.input_signatures), len(task.outputs)  # pylint: disable=unused-variable
         inputs, outputs = dummy_inputs[:num_inputs], dummy_inputs[num_inputs:]
         example_outputs: Optional[List[Tensor]] = None
         for func in compiled_funcs:

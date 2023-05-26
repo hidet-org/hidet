@@ -9,12 +9,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Optional, Dict, Any, Union, Tuple
+from typing import List, Optional, Dict, Any, Union
 from hidet.ir.type import TensorType, DataType
-from hidet.ir.expr import Var, Constant, Expr
+from hidet.ir.expr import Var, Constant
 from hidet.ir.dtypes import float16, bfloat16, float32
 from hidet.ir.task import Task
-from hidet.runtime.module import CompiledFunction
+from hidet.runtime.module import CompiledFunction, CompiledModule
 from hidet.graph.tensor import empty, empty_like, Tensor, SymbolVar
 from hidet.ffi.ffi import get_last_error, BackendException
 from hidet.runtime.device import Device, instantiate_device
@@ -30,30 +30,15 @@ def get_operator_name(op, given_name: Optional[str] = None):
         return cls_name
 
 
-AttrValue = Union[
-    bool,
-    int,
-    float,
-    str,
-    None,
-    Expr,
-    Device,
-    'FlowGraph',  # hidet.graph.FlowGraph
-    List['AttrValue'],
-    Tuple['AttrValue', ...],
-    Dict[str, 'AttrValue'],
-]
-
-
 class Operator:
     """An operator that takes tensor as input and output."""
 
-    def __init__(self, inputs: List[Tensor], attributes: Dict[str, AttrValue], task: Optional[Task]):
+    def __init__(self, inputs: List[Tensor], attributes: Dict[str, Any], task: Optional[Task]):
         assert all(isinstance(v, Tensor) for v in inputs)
 
         self.name: str = get_operator_name(self)
         self.inputs: List[Tensor] = inputs
-        self.attrs: Dict[str, AttrValue] = attributes
+        self.attrs: Dict[str, Any] = attributes
         self.task: Optional[Task] = task
         self.outputs: List[Tensor] = []
 
@@ -81,7 +66,7 @@ class Operator:
             return self.inputs[0].device
 
     @property
-    def task_func(self) -> CompiledFunction:
+    def task_func(self) -> CompiledModule:
         if self._task_func is None:
             self._task_func = self.task.build(target=self.device.type)
         return self._task_func
@@ -176,9 +161,7 @@ class Operator:
                     raise ValueError('Can not generate dummy input for dtype {}'.format(x.dtype))
         return dummy_inputs
 
-    def latency(
-        self, warmup=3, number=20, repeat=5, median=True, shape_map: Optional[Dict[SymbolVar, int]] = None
-    ) -> Union[List[float], float]:
+    def latency(self, warmup=3, number=20, repeat=5, median=True) -> Union[List[float], float]:
         from hidet.testing import benchmark_func
 
         dummy_inputs = self.dummy_inputs()

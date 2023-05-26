@@ -14,7 +14,8 @@ from functools import lru_cache
 
 import hidet.cuda
 from hidet.ir import dtypes
-from hidet.graph.ir import Operator, Tensor
+from hidet.graph.tensor import Tensor
+from hidet.graph.operator import Operator
 from hidet.graph.transforms import ResolveRule, register_resolve_rule
 from hidet.utils.py import gcd, factorize, prod, cdiv
 
