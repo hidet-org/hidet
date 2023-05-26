@@ -141,7 +141,7 @@ def test_ceil(a_shape):
     check_unary(a_shape, np.float32, np.ceil, ops.ceil)
 
 
-@pytest.mark.parametrize("a_shape", [20])
+@pytest.mark.parametrize("a_shape", [[20]])
 def test_cast_from_fp16(a_shape):
     check_unary(a_shape, np.float16, np.int8, lambda x: ops.cast(x, "int8"))
     check_unary(a_shape, np.float16, np.uint8, lambda x: ops.cast(x, "uint8"))
