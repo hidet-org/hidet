@@ -120,7 +120,7 @@ class NVCC(SourceCompiler):
             *['-L{}'.format(library_dir) for library_dir in self.library_dirs],
             # optimize host side code via -O3
             '-O3',
-            # enable openmp support for cpu kernels
+            # host compiler options: enable openmp, avx2, unroll loops and fast math
             '-Xcompiler -fopenmp,-fPIC,-m64,-mavx2,-march=native,-O3,-funroll-loops,-ffast-math',
             # the target PTX and SASS version.
             '-gencode arch=compute_{cc},code=sm_{cc}'.format(cc=cc_code),
