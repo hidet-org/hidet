@@ -31,6 +31,7 @@ def test_matmul_x86(a_shape, b_shape):
         device="cpu",
     )
 
+
 @pytest.mark.parametrize(
     "a_shape, b_shape, dtype", [[[1, 333, 444], [1, 444, 555], "float32"], [[1, 333, 444], [1, 444, 555], "float16"]]
 )
@@ -60,7 +61,6 @@ def test_matmul(a_shape, b_shape, dtype):
     check_binary(
         a_shape, b_shape, lambda x, y: np.matmul(x, y), lambda x, y: ops.matmul(x, y), dtype=dtype, atol=1e-4, rtol=1e-4
     )
-
 
 
 if __name__ == '__main__':
