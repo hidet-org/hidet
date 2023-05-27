@@ -65,13 +65,23 @@ class MatmulF32Taskx86(Task):
             attributes={'m_size': a_shape[-2], 'n_size': b_shape[-1], 'k_size': a_shape[-1]},
         )
 
+    def allow_epilogue(self) -> bool:
+        return True
+
+    def allow_prologue(self) -> bool:
+        return False
+
     def implement_cpu(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
         return tune.extract_ir_modules(self.schedule_matmulf32_x86)
 
-    @tune.space(2, 'block_m', [2016, 1008])
+    @tune.space(2, 'block_m', [2016, 3024])
     @tune.space(2, 'block_n', [64, 144, 192, 256, 384, 512, 592, 672, 752, 896, 1024])
     @tune.space(2, 'block_k', [96, 128, 256, 384, 512, 560, 688, 784])
     @tune.space(2, 'nthreads', [4, 8, 16, 32])
+    @tune.space(1, 'block_m', [2016])
+    @tune.space(1, 'block_n', [256, 384, 512])
+    @tune.space(1, 'block_k', [384, 512, 560])
+    @tune.space(1, 'nthreads', [8, 16])
     def schedule_matmulf32_x86(
         self, block_m=2016, block_n=896, block_k=512, micro_ker=(6, 16), nthreads=16
     ) -> IRModule:
@@ -79,8 +89,8 @@ class MatmulF32Taskx86(Task):
         from hidet.ir.type import tensor_type
         from hidet.lang import tensor, grid, as_tensor_pointer
         from hidet.lang.layout import row_layout, col_layout
-        from hidet.lang import avx_f32x8_store, avx_f32x8_fmadd, avx_f32x8_load, avx_f32x8_broadcast
-        from hidet.lang import avx_f32x4_broadcast, avx_f32x4_fmadd, avx_f32x4_load, avx_f32x4_store
+        from hidet.lang.cpu import avx_f32x8_store, avx_f32x8_fmadd, avx_f32x8_load, avx_f32x8_broadcast
+        from hidet.lang.cpu import avx_f32x4_broadcast, avx_f32x4_fmadd, avx_f32x4_load, avx_f32x4_store
 
         node_a, node_b = self.inputs[0], self.inputs[1]
         a_shape = node_a.const_shape
@@ -96,7 +106,6 @@ class MatmulF32Taskx86(Task):
 
         packed_a_type = tensor_type('float32', layout=row_layout(block_m // tile_m, 1) * col_layout(tile_m, block_k))
         packed_b_type = tensor_type('float32', layout=row_layout(1, block_n // tile_n) * row_layout(block_k, tile_n))
-        c_type = tensor_type('float32', shape=[m_size, n_size])
 
         aip_outer_rows = block_m // tile_m
         bip_outer_cols = block_n // tile_n
@@ -167,8 +176,6 @@ class MatmulF32Taskx86(Task):
                 avx_f32x8_store(~c[5, 0], c5)
                 avx_f32x8_store(~c[5, 8], c58)
 
-            # TODO: When the current bug is fixed, change those three micro kernels to using
-            # TODO: pointer arithmetics as well
             @hidet.script
             def micro_kernel_4x8(
                 a: packed_a_type, b: packed_b_type, c_ptr: ~float32, pb: int32, msize: int32, nsize: int32
@@ -275,7 +282,9 @@ class MatmulF32Taskx86(Task):
                 micro_kernel = micro_kernel_4x4
 
             @hidet.script
-            def macro_kernel(a: packed_a_type, b: packed_b_type, c_in_macro: c_type, ib: int32, jb: int32, pb: int32):
+            def macro_kernel(
+                a: packed_a_type, b: packed_b_type, c_in_macro: float32[m_size, n_size], ib: int32, jb: int32, pb: int32
+            ):
                 mpanels = (ib + tile_m - 1) // tile_m
                 npanels = (jb + tile_n - 1) // tile_n
                 _mr = ib % tile_m
@@ -305,10 +314,7 @@ class MatmulF32Taskx86(Task):
                                 c_in_macro[ii + remain_row, jj + remain_col] += temp_c[remain_row, remain_col]
 
             @hidet.script
-            def matmul_kernel_x86(a_ptr: ~float32, b_ptr: ~float32, c_ptr: ~float32):
-                a = as_tensor_pointer(a_ptr, dtype=float32, shape=[m_size, k_size])
-                b = as_tensor_pointer(b_ptr, dtype=float32, shape=[k_size, n_size])
-                c = as_tensor_pointer(c_ptr, dtype=float32, shape=[m_size, n_size])
+            def matmul_kernel_x86(a: float32[m_size, k_size], b: float32[k_size, n_size], c: float32[m_size, n_size]):
                 mbs = (m_size + block_m - 1) // block_m
                 nbs = (n_size + block_n - 1) // block_n
                 kbs = (k_size + block_k - 1) // block_k

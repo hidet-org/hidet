@@ -31,23 +31,6 @@ from hidet.lang.constructs.loops import range, grid
 from hidet.lang.constructs.type import tensor, tensor_pointer, as_tensor_pointer, register_tensor, shared_tensor
 
 
-from hidet.ir.primitives.cpu import (
-    avx_f32x4_broadcast,
-    avx_f32x4_fmadd,
-    avx_f32x4_load,
-    avx_f32x4_store,
-    avx_f32x4_setzero,
-)
-from hidet.ir.primitives.cpu import (
-    avx_f32x8_broadcast,
-    avx_f32x8_fmadd,
-    avx_f32x8_load,
-    avx_f32x8_store,
-    avx_f32x8_setzero,
-)
-from hidet.ir.primitives.cpu import avx_free, avx_malloc, x86_memcpy, x86_memset, aligned_alloc
-
-
 ref_u32 = ReferenceType(u32)
 
 void = VoidType()

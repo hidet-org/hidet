@@ -694,65 +694,6 @@ class CPUCodegen(Codegen):
         doc += NewLine()
         return doc
 
-    def visit_ScalarType(self, t: DataType):
-        # float16, bfloat16 and tfloat32 are not supported on CPU yet
-        # https://moocaholic.medium.com/fp64-fp32-fp16-bfloat16-tf32-and-other-members-of-the-zoo-a1ca7897d407
-        scalar_type_map = {
-            'bool': 'bool',
-            'uint8': 'uint8_t',
-            'uint16': 'uint16_t',
-            'uint32': 'uint32_t',
-            'uint64': 'uint64_t',
-            'int8': 'int8_t',
-            'int16': 'int16_t',
-            'int32': 'int32_t',
-            'int64': 'int64_t',
-            'float16': 'half',
-            'float32': 'float',
-            'float64': 'double',
-            'bfloat16': 'bfloat16_t',
-            'tfloat32': 'float',
-            'float32x4': '__m128',
-            'float32x8': '__m256',
-        }
-        return Text(scalar_type_map[t.name])
-
-    def visit_IRModule(self, module: IRModule) -> Doc:
-        self.ir_module = module
-        doc = Doc()
-        # todo: only add necessary headers
-        doc += Text('#include <stdint.h>') + NewLine()
-        doc += Text('#include <hidet/runtime/cpu_context.h>') + NewLine()
-        doc += Text('#include <math.h>') + NewLine()
-        # float16 and bfloat16 emulation
-        doc += Text('#include <hidet/cpu/float16.h>') + NewLine()
-        doc += Text('#include <hidet/cpu/bfloat16.h>') + NewLine()
-
-        # Headers for avx intrinsics
-        doc += Text('#include <immintrin.h>') + NewLine()
-
-        if module.task is not None:
-            doc += '/*' + NewLine()
-            doc += str(module.task) + NewLine()
-            doc += '*/' + NewLine()
-
-        doc += Text('extern "C" {') + NewLine()
-
-        # add namespace to activate data type and function
-        doc += Text('using float16::Half;') + NewLine()
-        doc += Text('using bfloat16::BFloat16;') + NewLine()
-
-        # use typedef to map half and bfloat16 type
-        doc += Text('typedef Half half;') + NewLine()
-        doc += Text('typedef BFloat16 bfloat16_t;') + NewLine()
-
-        call_graph = CallGraph(module)
-        for node in call_graph.reversed_order:
-            doc += self(node.func) + NewLine()
-
-        doc += NewLine() + '}'
-        return doc
-
     def visit_Function(self, func: Function) -> Doc:
         self.namer.clear()
 
