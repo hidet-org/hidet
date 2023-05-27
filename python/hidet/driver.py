@@ -25,7 +25,7 @@ from hidet.backend import codegen, compile_source
 from hidet.backend.build import CompilationFailed
 from hidet.utils.py import cyan, green, Timer
 from hidet.ir.task import Task
-from hidet.ir.func import IRModule, Function
+from hidet.ir.func import IRModule
 from hidet.ir.type import FuncType
 from hidet.runtime.module import compiled_task_cache, CompiledModule, load_compiled_module, compiled_module_exists
 from hidet.runtime.device import Device
@@ -193,16 +193,6 @@ def build_ir_module(
     with PassContext(instruments=instruments):
         ir_module = lower(ir_module)
 
-# <<<<<<< HEAD
-    # get function type
-    func: Function = ir_module.lookup('launch')
-    kernel_func = ir_module.lookup(func.attrs['packed_func'])
-    func_type = FuncType.from_func(kernel_func)
-
-    codegen_target = 'cpu' if kernel_func.kind == 'host_kernel' else 'cuda'
-
-# =======
-# >>>>>>> main
     # code generation
     codegen(ir_module, src_out_path=src_path)
 

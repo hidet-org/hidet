@@ -12,7 +12,7 @@
 from typing import List, Tuple, Union
 from hidet.ir.dtypes import float32, int32
 from hidet.ir.expr import cast
-from hidet.ir.func import IRModule, Function
+from hidet.ir.func import IRModule
 from hidet.ir.compute import TensorNode
 from hidet.ir.stmt import DeclareScope
 from hidet.ir.task import Task
@@ -21,7 +21,6 @@ from hidet.graph.ops.definitions.utils import input_like, broadcast_shape, can_m
 from hidet.graph.ops.definitions.utils import tune
 from hidet.graph.operator import Operator, Tensor
 from hidet.graph.ops.definitions.utils import broadcast_indices
-from hidet.ir.primitives.math import sqrt, pow
 
 
 class MatmulF32Taskx86(Task):
@@ -78,7 +77,7 @@ class MatmulF32Taskx86(Task):
                                nthreads=16) -> IRModule:
         import hidet
         from hidet.ir.type import tensor_type
-        from hidet.lang import col_spatial, tensor, u32, tensor_pointer, grid, as_tensor_pointer
+        from hidet.lang import tensor, grid, as_tensor_pointer
         from hidet.lang.layout import row_layout, col_layout
         from hidet.lang.avx import avx_f32x8_store, avx_f32x8_fmadd, avx_f32x8_load, avx_f32x8_broadcast
         from hidet.lang.avx import avx_f32x4_broadcast, avx_f32x4_fmadd, avx_f32x4_load, avx_f32x4_store
@@ -134,33 +133,30 @@ class MatmulF32Taskx86(Task):
                 b_ptr = cast(b, ~float32)
 
                 for pp in range(pb):
-                    # bb0to7 = avx_f32x8_load(~b[pp, 0])
-                    # bb8to15 = avx_f32x8_load(~b[pp, 8])
                     bb0to7 = avx_f32x8_load(b_ptr)
                     bb8to15 = avx_f32x8_load(b_ptr + 8)
                     b_ptr = b_ptr + 16
 
-                    # aa = avx_f32x8_broadcast(~a[0, pp])
                     aa = avx_f32x8_broadcast(a_ptr)
                     c0 = avx_f32x8_fmadd(aa, bb0to7, c0)
                     c08 = avx_f32x8_fmadd(aa, bb8to15, c08)
-                    # aa = avx_f32x8_broadcast(~a[1, pp])
+
                     aa = avx_f32x8_broadcast(a_ptr + 1)
                     c1 = avx_f32x8_fmadd(aa, bb0to7, c1)
                     c18 = avx_f32x8_fmadd(aa, bb8to15, c18)
-                    # aa = avx_f32x8_broadcast(~a[2, pp])
+
                     aa = avx_f32x8_broadcast(a_ptr + 2)
                     c2 = avx_f32x8_fmadd(aa, bb0to7, c2)
                     c28 = avx_f32x8_fmadd(aa, bb8to15, c28)
-                    # aa = avx_f32x8_broadcast(~a[3, pp])
+
                     aa = avx_f32x8_broadcast(a_ptr + 3)
                     c3 = avx_f32x8_fmadd(aa, bb0to7, c3)
                     c38 = avx_f32x8_fmadd(aa, bb8to15, c38)
-                    # aa = avx_f32x8_broadcast(~a[4, pp])
+
                     aa = avx_f32x8_broadcast(a_ptr + 4)
                     c4 = avx_f32x8_fmadd(aa, bb0to7, c4)
                     c48 = avx_f32x8_fmadd(aa, bb8to15, c48)
-                    # aa = avx_f32x8_broadcast(~a[5, pp])
+
                     aa = avx_f32x8_broadcast(a_ptr + 5)
                     c5 = avx_f32x8_fmadd(aa, bb0to7, c5)
                     c58 = avx_f32x8_fmadd(aa, bb8to15, c58)
@@ -179,6 +175,8 @@ class MatmulF32Taskx86(Task):
                 avx_f32x8_store(~c[5, 0], c5)
                 avx_f32x8_store(~c[5, 8], c58)
 
+            # TODO: When the current bug is fixed, change those three micro kernels to using
+            # TODO: pointer arithmetics as well
             @hidet.script
             def micro_kernel_4x8(a: packed_a_type,
                                  b: packed_b_type,
@@ -226,9 +224,6 @@ class MatmulF32Taskx86(Task):
                 c5 = avx_f32x8_load(~c[5, 0])
                 c6 = avx_f32x8_load(~c[6, 0])
                 c7 = avx_f32x8_load(~c[7, 0])
-
-                a_ptr = cast(a, ~float32)
-                b_ptr = cast(b, ~float32)
 
                 for pp in range(pb):
                     bb = avx_f32x8_load(~b[pp, 0])
@@ -329,53 +324,6 @@ class MatmulF32Taskx86(Task):
                             for remain_row, remain_col in grid(mr, nr):
                                 c_in_macro[ii + remain_row, jj + remain_col] += temp_c[remain_row, remain_col]
 
-            # @hidet.script
-            # def pack_a(a_ptr: ~float32, packed_a: packed_a_type, ib: int32, pb: int32):
-            #     a = as_tensor_pointer(a_ptr, dtype=float32,
-            #                           shape=[m_size, k_size])
-            #
-            #     mp = ib // tile_m
-            #     mr = ib % tile_m
-            #     for micropanel_idx in range(mp):
-            #         panel_row_start = micropanel_idx * tile_m
-            #         for micropanel_col in range(pb):
-            #             for micropanel_row in range(tile_m):
-            #                 packed_a[micropanel_row + panel_row_start, micropanel_col] = \
-            #                     a[micropanel_row + panel_row_start, micropanel_col]
-            #     # pack the remaining if the shape is not nice
-            #     if mr > 0:
-            #         remain_start_row = mp * tile_m
-            #         for remain_col in range(pb):
-            #             for remain_row in range(mr):
-            #                 packed_a[remain_start_row + remain_row, remain_col] = \
-            #                     a[remain_start_row + remain_row, remain_col]
-            #             remain_row = mr
-            #             while remain_row < tile_m:
-            #                 packed_a[remain_start_row + remain_row, remain_col] = 0.0
-            #                 remain_row += 1
-            #
-            # @hidet.script
-            # def pack_b(b_ptr: ~float32, packed_b: packed_b_type, jb: int32, pb: int32):
-            #     np = jb // tile_n
-            #     nr = jb % tile_n
-            #     b = as_tensor_pointer(b_ptr, dtype=float32, shape=[k_size, n_size])
-            #     for micropanel_idx in range(np):
-            #         panel_col_start = micropanel_idx * tile_n
-            #         for micropanel_row in range(pb):
-            #             for micropanel_col in range(tile_n):
-            #                 packed_b[micropanel_row, micropanel_col + panel_col_start] = \
-            #                     b[micropanel_row, micropanel_col + panel_col_start]
-            #     if nr > 0:
-            #         remain_col_start = np * tile_n
-            #         for remain_row in range(pb):
-            #             for remain_col in range(nr):
-            #                 packed_b[remain_row, remain_col + remain_col_start] = \
-            #                     b[remain_row, remain_col + remain_col_start]
-            #             remain_col = nr
-            #             while remain_col < tile_n:
-            #                 packed_b[remain_row, remain_col + remain_col_start] = 0.0
-            #                 remain_col += 1
-
             @hidet.script
             def matmul_kernel_x86(
                     a_ptr: ~float32, b_ptr: ~float32, c_ptr: ~float32
@@ -409,7 +357,9 @@ class MatmulF32Taskx86(Task):
                         mp = ib // tile_m
                         mr = ib % tile_m
 
-                        packeda_ptr = cast(~packed_a[0, 0], ~float32)
+                        # Should be working? But error in really strange ways....
+                        packeda_ptr = cast(packed_a, ~float32)
+                        idx = 0
                         for micropanel_idx in range(mp):
                             panel_row_start = micropanel_idx * tile_m
                             for micropanel_col in range(pb):
@@ -419,8 +369,8 @@ class MatmulF32Taskx86(Task):
 
                                     # TODO: really strange; the index is indeed incremented by 1 each iteration,
                                     # TODO: but I just can't get this to pass the test...
-                                    # packeda_ptr[0] = a[i + micropanel_row + panel_row_start, p + micropanel_col]
-                                    # packeda_ptr = ~packeda_ptr[1]
+                                    # packeda_ptr[idx] = a[i + micropanel_row + panel_row_start, p + micropanel_col]
+                                    # idx += 1
                         if mr > 0:
                             remain_start_row = mp * tile_m
                             for remain_col in range(pb):
@@ -437,15 +387,18 @@ class MatmulF32Taskx86(Task):
                             jb = min(block_n, n_size - j)
                             np = jb // tile_n
                             nr = jb % tile_n
+
                             packedb_ptr = cast(packed_b, ~float32)
+                            idx = 0
                             for micropanel_idx in range(np):
                                 panel_col_start = micropanel_idx * tile_n
                                 for micropanel_row in range(pb):
                                     for micropanel_col in range(tile_n):
                                         packed_b[micropanel_row, micropanel_col + panel_col_start] = \
                                             b[p + micropanel_row, j + micropanel_col + panel_col_start]
-                                        # packedb_ptr[0] = b[p + micropanel_row, j + micropanel_col + panel_col_start]
-                                        # packedb_ptr = packedb_ptr + 1
+                                        # TODO: same as above... why isn't this working?
+                                        # packedb_ptr[idx] = b[p + micropanel_row, j + micropanel_col + panel_col_start]
+                                        # idx += 1
                             if nr > 0:
                                 remain_col_start = np * tile_n
                                 for remain_row in range(pb):
@@ -458,7 +411,7 @@ class MatmulF32Taskx86(Task):
                                         remain_col += 1
                             macro_kernel(packed_a, packed_b, ~c[i, j], ib, jb, pb)
         assert isinstance(matmul_kernel_x86, hidet.ir.Function)
-        matmul_kernel_x86.kind = "host_kernel"
+        matmul_kernel_x86.kind = "cpu_kernel"
         ir_module = module.ir_module()
         return ir_module
 
