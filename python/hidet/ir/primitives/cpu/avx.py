@@ -34,7 +34,11 @@ def register_primitive_functions():
         ('avx_x86_malloc', '_mm_malloc', FuncType(['uint64', 'uint64'], PointerType(VoidType()))),
         ('avx_x86_free', '_mm_free', FuncType([PointerType(VoidType())], VoidType())),
         ('x86_memset', 'memset', FuncType([PointerType(VoidType()), 'int32', 'uint64'], PointerType(VoidType()))),
-        ('x86_memcpy', 'memcpy', FuncType([PointerType(VoidType()), PointerType(VoidType()), 'uint64'], PointerType(VoidType()))),
+        (
+            'x86_memcpy',
+            'memcpy',
+            FuncType([PointerType(VoidType()), PointerType(VoidType()), 'uint64'], PointerType(VoidType())),
+        ),
     ]
     for name, codegen_name, func_type in functions:
         register_primitive_function(name=name, func_or_type=func_type, codegen_name=codegen_name)
@@ -98,4 +102,3 @@ def avx_f32x4_store(addr: Expr, src: Expr) -> Call:
 
 def avx_f32x8_store(addr: Expr, src: Expr) -> Call:
     return call_primitive_func('avx_x86_float32x8_store', [addr, src])
-
