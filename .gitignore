@@ -204,4 +204,3 @@ build-release
 
 # intermediate files
 /gallery/**/*.json
-/python/opt9.py
