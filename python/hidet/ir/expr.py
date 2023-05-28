@@ -697,13 +697,16 @@ def if_then_else(
     ret: Expr
         The if-then-else expression.
     """
+    cond = convert(cond)
+    then_expr = convert(then_expr)
+    else_expr = convert(else_expr)
     if is_constant(cond):
         if bool(cond):
-            return convert(then_expr)
+            return then_expr
         else:
-            return convert(else_expr)
+            return else_expr
     else:
-        return IfThenElse(convert(cond), convert(then_expr), convert(else_expr))
+        return IfThenElse(cond, then_expr, else_expr)
 
 
 def tensor_rank(v: Expr) -> int:
@@ -845,14 +848,16 @@ def bitwise_xor(*args: Union[Expr, int]) -> BitwiseXor:
     return _chain_binary_op(BitwiseXor, args, 0)
 
 
-def cast(v: Expr, dtype: Union[str, DataType, BaseType]):
+def cast(v: Union[Expr, int, bool, float], dtype: Union[str, DataType, BaseType]):
+    if isinstance(v, (bool, int, float)):
+        v = convert(v)
     if not isinstance(v, Expr):
         raise ValueError('Expect an expression, got {}'.format(type(v).__name__))
 
     if isinstance(dtype, str):
         dtype = data_type(dtype)
 
-    if isinstance(v, Constant):
+    if isinstance(v, Constant) and v.is_scalar():
         return constant(v.value, dtype)
     elif isinstance(v, Var) and v.type.is_data_type() and dtype.is_data_type() and v.type == dtype:
         return v

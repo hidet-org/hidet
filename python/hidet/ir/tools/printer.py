@@ -15,7 +15,7 @@ import hidet.utils.structure
 from hidet.ir.node import Node
 from hidet.ir.func import IRModule, Function
 from hidet.ir.type import DataType, TensorType, VoidType, PointerType, ReferenceType, TensorPointerType, FuncType
-from hidet.ir.type import ArrayType
+from hidet.ir.type import ArrayType, StringType
 from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, LessThan, FloorDiv, Mod, Equal, Div
 from hidet.ir.expr import Sub, LogicalNot, LogicalOr, LogicalAnd, Let, IfThenElse, TensorSlice
 from hidet.ir.expr import RightShift, LeftShift, BitwiseNot, BitwiseOr
@@ -232,6 +232,8 @@ class IRPrinter(IRFunctor):
                 ret = 'half({})'.format(float(e.value))
             elif dtype == 'int32':
                 ret = '{}'.format(int(e.value))
+            elif dtype == 'bool':
+                ret = 'true' if e.value else 'false'
             else:
                 ret = '{}({})'.format(dtype, e.value)
             return Text(ret)
@@ -384,6 +386,9 @@ class IRPrinter(IRFunctor):
 
     def visit_ArrayType(self, t: ArrayType):
         return Text('array(') + self(t.base_type) + ', size=' + self(t.size) + ')'
+
+    def visit_StringType(self, t: StringType):
+        return Text('char*')
 
     def visit_PointerType(self, t: PointerType):
         if isinstance(t.base_type, VoidType):

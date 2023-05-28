@@ -13,7 +13,7 @@ from typing import Union, Dict, Tuple, Callable, Type
 import operator
 from hidet.ir.type import DataType
 from hidet.ir.expr import Expr, BinaryExpr, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, LessEqual, Equal, Constant
-from hidet.ir.expr import BitwiseAnd, BitwiseOr, BitwiseXor, NotEqual, LeftShift, RightShift, Cast, Neg
+from hidet.ir.expr import BitwiseAnd, BitwiseOr, BitwiseXor, NotEqual, LeftShift, RightShift, Cast, Neg, IfThenElse
 from hidet.ir.expr import LogicalAnd, LogicalOr, LogicalNot, is_one, is_zero, is_true, is_false, convert, cast, constant
 from hidet.ir.stmt import Stmt, IfStmt, SeqStmt, ForStmt
 from hidet.ir.tools import rewrite
@@ -197,6 +197,20 @@ class Simplifier(StmtRewriter, ExprRewriter, BaseRewriter):
                 return stmt
             else:
                 return ForStmt(loop_var, extent, body=body, attr=stmt.attr)
+
+    def visit_IfThenElse(self, e: IfThenElse):
+        cond = self.visit(e.cond)
+        then_expr = self.visit(e.then_expr)
+        else_expr = self.visit(e.else_expr)
+        if is_true(cond):
+            return then_expr
+        elif is_false(cond):
+            return else_expr
+        else:
+            if cond is e.cond and then_expr is e.then_expr and else_expr is e.else_expr:
+                return e
+            else:
+                return IfThenElse(cond, then_expr, else_expr)
 
 
 def simplify(node: Union[Stmt, Expr, int, float, list, tuple], *, repeat_limit=10):

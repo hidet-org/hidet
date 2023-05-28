@@ -20,7 +20,7 @@ from collections import defaultdict
 import hidet.graph.operator
 import hidet.cuda
 from hidet import option
-from hidet.ir.expr import Var
+from hidet.ir.expr import is_constant
 from hidet.ir.task import Task
 from hidet.graph.tensor import Tensor, zeros_like, randn_like
 from hidet.graph.operator import Operator, SymbolVar
@@ -35,12 +35,10 @@ class GraphForwardInstrument:
     def after_graph(self, graph: FlowGraph, inputs: List[Tensor], outputs: List[Tensor]) -> None:
         pass
 
-    def before_operator(self, op: Operator, inputs: List[Tensor], shape_map: Dict[SymbolVar, int]) -> None:
+    def before_operator(self, op: Operator, inputs: List[Tensor]) -> None:
         pass
 
-    def after_operator(
-        self, op: Operator, inputs: List[Tensor], shape_map: Dict[SymbolVar, int], outputs: List[Tensor]
-    ) -> None:
+    def after_operator(self, op: Operator, inputs: List[Tensor], outputs: List[Tensor]) -> None:
         pass
 
 
@@ -64,30 +62,28 @@ class GraphForwardContext:
         return GraphForwardContext._stack[-1]
 
     @staticmethod
-    def before_graph(graph: FlowGraph, inputs: List[Tensor]) -> None:
+    def _before_graph(graph: FlowGraph, inputs: List[Tensor]) -> None:
         ctx = GraphForwardContext.current()
         for instrument in ctx.instruments:
             instrument.before_graph(graph, inputs)
 
     @staticmethod
-    def after_graph(graph: FlowGraph, inputs: List[Tensor], outputs: List[Tensor]) -> None:
+    def _after_graph(graph: FlowGraph, inputs: List[Tensor], outputs: List[Tensor]) -> None:
         ctx = GraphForwardContext.current()
         for instrument in ctx.instruments:
             instrument.after_graph(graph, inputs, outputs)
 
     @staticmethod
-    def before_operator(op: Operator, inputs: List[Tensor], shape_map: Dict[SymbolVar, int]) -> None:
+    def _before_operator(op: Operator, inputs: List[Tensor]) -> None:
         ctx = GraphForwardContext.current()
         for instrument in ctx.instruments:
-            instrument.before_operator(op, inputs, shape_map)
+            instrument.before_operator(op, inputs)
 
     @staticmethod
-    def after_operator(
-        op: Operator, inputs: List[Tensor], shape_map: Dict[SymbolVar, int], outputs: List[Tensor]
-    ) -> None:
+    def _after_operator(op: Operator, inputs: List[Tensor], outputs: List[Tensor]) -> None:
         ctx = GraphForwardContext.current()
         for instrument in ctx.instruments:
-            instrument.after_operator(op, inputs, shape_map, outputs)
+            instrument.after_operator(op, inputs, outputs)
 
     def append_instrument(self, instrument: GraphForwardInstrument):
         self.instruments.append(instrument)
@@ -213,20 +209,26 @@ class FlowGraph:
 
         # set the symbol values
         for expect_input, actual_input in zip(self.inputs, inputs):
+            if expect_input.device != actual_input.device:
+                raise ValueError(
+                    'Expect input {} to have device {}, got {}.'.format(
+                        expect_input, expect_input.device, actual_input.device
+                    )
+                )
             for expect_dim, actual_dim in zip(expect_input.shape, actual_input.shape):
                 if isinstance(expect_dim, SymbolVar):
                     runtime_api.set_symbol_value(expect_dim.name, int(actual_dim))
+                else:
+                    assert is_constant(actual_dim, expect_dim) and expect_dim == actual_dim
 
-        GraphForwardContext.before_graph(self, inputs)
+        GraphForwardContext._before_graph(self, inputs)
 
         # count the usage of each tensor. We use this count to determine whether
         # a tensor should be freed after running an operator.
         usage_count = self.usage_count.copy()
         tensor_map: Dict[Tensor, Tensor] = {}  # symbolic tensor -> actual tensor during the forward process
-        shape_map: Dict[SymbolVar, int] = {}  # symbolic dimension ->  actual shape dimension for the symbolic tensors
         for st, at in zip(self.inputs, inputs):
             tensor_map[st] = at
-            shape_map.update({dim: at.shape[idx] for idx, dim in enumerate(st.shape) if isinstance(dim, Var)})
 
         # run each operator in the graph in a topological order
         for idx, node in enumerate(self.nodes):
@@ -246,23 +248,16 @@ class FlowGraph:
             node_inputs = node_inputs[: len(node.inputs)]
 
             # run node
-            GraphForwardContext.before_operator(node, node_inputs, shape_map)
+            GraphForwardContext._before_operator(node, node_inputs)
             logger.debug('[%4d/%d] run operator %s, %s', idx, len(self.nodes), node.name, node.task)
             logger.debug('   inputs: %s', [x.signature() for x in node_inputs])
             node_outputs = node.imperative_run(node_inputs)
             logger.debug('  outputs: %s', [x.signature() for x in node_outputs])
-            GraphForwardContext.after_operator(node, node_inputs, shape_map, node_outputs)
+            GraphForwardContext._after_operator(node, node_inputs, node_outputs)
 
             # update map
             for node_output, symbolic_output in zip(node_outputs, node.outputs):
                 tensor_map[symbolic_output] = node_output
-                shape_map.update(
-                    {
-                        dim: node_output.shape[idx]
-                        for idx, dim in enumerate(symbolic_output.shape)
-                        if isinstance(dim, Var)
-                    }
-                )
 
         outputs = []
         for graph_output in self.outputs:
@@ -273,7 +268,7 @@ class FlowGraph:
             else:
                 raise RuntimeError('Graph output {} is not produced by any operator.'.format(graph_output.signature()))
 
-        GraphForwardContext.after_graph(self, inputs, outputs)
+        GraphForwardContext._after_graph(self, inputs, outputs)
         return outputs
 
     def dummy_inputs(self) -> List[Tensor]:
@@ -348,7 +343,7 @@ class FlowGraph:
             self.inputs = free_vars
         return self
 
-    def build(self):
+    def build(self, allow_hook=False):
         """
         Build the flow graph to a compiled model (hidet.runtime.CompiledModel).
 
@@ -359,7 +354,7 @@ class FlowGraph:
         """
         from hidet.graph.graph_utils.build import flow_graph_build
 
-        return flow_graph_build(self)
+        return flow_graph_build(self, allow_hook=allow_hook)
 
     def cuda_graph(self):
         """Create a CudaGraph from FlowGraph.

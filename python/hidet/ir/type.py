@@ -346,6 +346,10 @@ def string_type():
     return StringType()
 
 
+def func_type(param_types, ret_type) -> FuncType:
+    return FuncType(param_types, ret_type)
+
+
 def data_type(dtype: Union[str, DataType]) -> DataType:
     from hidet.ir.dtypes import name2dtype, sname2dtype
 

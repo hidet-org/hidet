@@ -1,9 +1,9 @@
 from typing import List, Set, Dict
 
 import hidet
-from hidet.ir.type import FuncType, void, byte_p
+from hidet.ir.type import FuncType, void, byte_p, func_type
 from hidet.ir.expr import SymbolVar, Var, Expr, var
-from hidet.ir.stmt import AssignStmt, DeclareStmt
+from hidet.ir.stmt import AssignStmt, DeclareStmt, BufferStoreStmt
 from hidet.graph.tensor import Tensor
 from hidet.graph.flow_graph import FlowGraph
 from hidet.runtime.module import CompiledModule
@@ -61,7 +61,7 @@ def get_graph_meta_data(graph: FlowGraph) -> ModelMetaData:
     )
 
 
-def flow_graph_build(graph) -> CompiledModel:
+def flow_graph_build(graph, allow_hook=False) -> CompiledModel:
     from hidet.lang import void_p, attrs, int32, int64, meta, cast
     from hidet.ir.primitives.runtime import memory_planner_init, memory_planner_allocate, memory_planner_free
     from hidet.ir.primitives.runtime import memory_planner_used
@@ -79,10 +79,12 @@ def flow_graph_build(graph) -> CompiledModel:
         workspace = var('workspace', byte_p)
         weights = var('weights', void_p[len(graph_weights)])
         kernels = var('kernels', void_p[len(graph_nodes)])
+        exec_hook = var('exec_hook', func_type([~int64], void))
 
         script_module.define_global_var(workspace)
         script_module.define_global_var(weights)
         script_module.define_global_var(kernels)
+        script_module.define_global_var(exec_hook)
 
         @hidet.script
         def init(num_kernels: int, p_kernels: ~void_p, num_weights: int, p_weights: ~void_p):
@@ -133,6 +135,48 @@ def flow_graph_build(graph) -> CompiledModel:
 
             AssignStmt(workspace, space)
 
+        @hidet.script
+        def register_hook(hook: void_p):
+            attrs.func_kind = 'public'
+
+            assert allow_hook, "Hook is not allowed when building the graph"
+            nonlocal exec_hook
+            exec_hook = hook
+
+        def call_exec_hook(idx: int, node_params: List[Expr]):
+            sb = hidet.ir.builders.StmtBuilder()
+
+            with sb.if_then(exec_hook != 0):
+                args = []
+                args.append(idx)  # kernel index
+
+                tensors: List[Tensor]
+                if idx < len(graph_nodes):
+                    args.append(len(graph_nodes[idx].inputs))
+                    args.append(len(graph_nodes[idx].outputs))
+                    tensors = graph_nodes[idx].inputs + graph_nodes[idx].outputs
+                else:
+                    args.append(len(graph.inputs))
+                    args.append(len(graph.outputs))
+                    tensors = graph.inputs + graph.outputs
+
+                assert len(tensors) == len(node_params), "Expect {} parameters, got {}".format(
+                    len(tensors), len(node_params)
+                )
+
+                for tensor, param in zip(tensors, node_params):
+                    args.append(tensor.dtype.name)
+                    args.append(len(tensor.shape))
+                    args.extend([cast(d, 'int64') for d in tensor.shape])
+                    args.append(param)
+
+                args_var = var('args', int64[len(args)])
+                sb += DeclareStmt(args_var)
+                for i in range(len(args)):
+                    sb += BufferStoreStmt(args_var, [i], args[i])
+                sb += exec_hook(args_var)
+            return sb.finish()
+
         def launch_impl(inputs: List[Var], outputs: List[Var]):
             sb = hidet.ir.builders.StmtBuilder()
             usage_count = graph.usage_count
@@ -160,15 +204,19 @@ def flow_graph_build(graph) -> CompiledModel:
                     else:
                         raise RuntimeError("Unknown tensor {}".format(y))
 
-                func_type = FuncType([void_p for _ in node_params], void)
-                kernel_var = var("kernel_{}".format(idx), func_type)
-                with sb.let(kernel_var, cast(kernels[idx], func_type)):
+                kernel_type = FuncType([void_p for _ in node_params], void)
+                kernel_var = var("k{}_{}".format(idx, graph_nodes[idx].name), kernel_type)
+                with sb.let(kernel_var, cast(kernels[idx], kernel_type)):
                     sb += kernel_var(*node_params)
+                    if allow_hook:
+                        sb += call_exec_hook(idx, node_params)
 
                 for x in node.inputs:
                     usage_count[x] -= 1
                     if usage_count[x] == 0 and x in graph_intermediates:
                         sb += memory_planner_free(tensor_ptr[x])
+            if allow_hook:
+                sb += call_exec_hook(len(graph_nodes), inputs + outputs)
             return sb.finish()
 
         @hidet.script

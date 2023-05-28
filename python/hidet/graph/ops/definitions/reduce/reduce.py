@@ -134,6 +134,7 @@ class ArgReduceBaseOp(Operator):
     def __init__(self, x: Tensor, dim: int, keep_dim: bool, reduce_type: str):
         if reduce_type not in [ReduceType.Min.value, ReduceType.Max.value]:
             raise NotImplementedError('Do not support arg reduce type: {}'.format(reduce_type))
+        dim = normalize_dim(dim, rank=len(x.shape))
         super().__init__(
             inputs=[x],
             attributes={'dim': dim, 'keepdims': keep_dim},
