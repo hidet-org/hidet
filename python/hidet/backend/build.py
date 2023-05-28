@@ -120,14 +120,14 @@ class NVCC(SourceCompiler):
             *['-L{}'.format(library_dir) for library_dir in self.library_dirs],
             # optimize host side code via -O3
             '-O3',
-            # enable openmp support for cpu kernels
-            '-Xcompiler -fopenmp',
+            # host compiler options: enable openmp, avx2, unroll loops and fast math
+            '-Xcompiler -fopenmp,-fPIC,-m64,-mavx2,-march=native,-O3,-funroll-loops,-ffast-math',
             # the target PTX and SASS version.
             '-gencode arch=compute_{cc},code=sm_{cc}'.format(cc=cc_code),
             # allow ptxas (PTX assembler) to output information like register/smem usage.
             '--ptxas-options=-v',
             # compile into position independent code.
-            '--compiler-options -fPIC',
+            # '--compiler-options -fPIC,-m64,-mavx2,-march=native, -O3',
             # embed the line information into the binary, allow Nsight Compute to get the source code for profiling.
             '-lineinfo',
             # ftz=true and prec-div=false for fast math
@@ -184,6 +184,10 @@ class GCC(SourceCompiler):
             *['-L{}'.format(library_dir) for library_dir in self.library_dirs],
             # apply -O3 optimization.
             '-O3',
+            # support avx intrinsics
+            '-mavx2',
+            '-m64',
+            '-march=native',
             # compile into position independent code.
             '-fPIC',
             # enable OpenMP.

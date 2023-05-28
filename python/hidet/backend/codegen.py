@@ -441,7 +441,9 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
                 doc += NewLine() + '#pragma unroll'
         elif stmt.attr.parallel:
             if stmt.attr.parallel_threads:
-                doc += NewLine() + '#pragma omp parallel for num_threads({})'.format(stmt.attr.parallel_threads)
+                doc += NewLine() + '#pragma omp parallel for schedule(dynamic) num_threads({})'.format(
+                    stmt.attr.parallel_threads
+                )
             else:
                 doc += NewLine() + '#pragma omp parallel for'
         doc += NewLine() + Text('for (') + init_doc + '; ' + cond_doc + '; ' + update_doc + ') '
@@ -555,6 +557,8 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             'tfloat32': 'tfloat32_t',
             'complex64': 'complex64_t',
             'complex128': 'complex128_t',
+            'float32x4': '__m128',
+            'float32x8': '__m256',
         }
         return Text(scalar_type_map[t.name])
 
@@ -612,6 +616,8 @@ class CUDACodegen(Codegen):
         doc += Text('#include <hidet/runtime/cpu/context.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cuda/complex.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cuda/context.h>') + NewLine()
+
+        doc += Text('#include <immintrin.h>') + NewLine()
 
         # nvcc use float to 'store' tfloat32 data
         doc += Text('typedef float tfloat32_t;') + NewLine()
@@ -684,6 +690,7 @@ class CPUCodegen(Codegen):
         doc += Text('#include <hidet/runtime/cpu/float16.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cpu/bfloat16.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cpu/complex.h>') + NewLine()
+        doc += Text('#include <immintrin.h>')
         doc += NewLine()
         return doc
 

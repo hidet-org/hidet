@@ -9,10 +9,20 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from .matmul import matmul, MatmulOp, MatmulTask
-from .batch_matmul import batch_matmul, BatchMatmulOp, BatchMatmulTask
-from . import resolve
+# pylint: disable=unused-import
 
-from .matmul_f32_x86 import matmul_x86
-
-from .matmul_f32_x86 import MatmulF32Taskx86, Matmulx86Op
+from hidet.ir.primitives.cpu import (
+    avx_f32x4_broadcast,
+    avx_f32x4_fmadd,
+    avx_f32x4_load,
+    avx_f32x4_store,
+    avx_f32x4_setzero,
+)
+from hidet.ir.primitives.cpu import (
+    avx_f32x8_broadcast,
+    avx_f32x8_fmadd,
+    avx_f32x8_load,
+    avx_f32x8_store,
+    avx_f32x8_setzero,
+)
+from hidet.ir.primitives.cpu import avx_free, avx_malloc, x86_memcpy, x86_memset, aligned_alloc
