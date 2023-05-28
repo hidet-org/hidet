@@ -119,7 +119,7 @@ class NVCC(SourceCompiler):
             # the library directories.
             *['-L{}'.format(library_dir) for library_dir in self.library_dirs],
             # optimize host side code via -O3
-            '-O3',
+            # '-O3',
             # host compiler options: enable openmp, avx2, unroll loops and fast math
             '-Xcompiler -fopenmp,-fPIC,-m64,-mavx2,-march=native,-O2,-funroll-loops,-ffast-math',
             # the target PTX and SASS version.
