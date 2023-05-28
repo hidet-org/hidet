@@ -16,20 +16,20 @@ import hidet
 from hidet import ops
 from hidet.testing import check_binary
 
-#
-# @pytest.mark.parametrize("a_shape, b_shape", [[[367, 369], [369, 470]], [[133, 1], [1, 177]]])
-# def test_matmul_x86(a_shape, b_shape):
-#     # TODO: Doesn't support broadcasting yet; need to add it later?
-#     check_binary(
-#         a_shape,
-#         b_shape,
-#         lambda x, y: np.matmul(x, y),
-#         lambda x, y: ops.matmul_x86(x, y),
-#         dtype="float32",
-#         atol=1e-4,
-#         rtol=1e-4,
-#         device="cpu",
-#     )
+
+@pytest.mark.parametrize("a_shape, b_shape", [[[367, 369], [369, 470]], [[133, 1], [1, 177]]])
+def test_matmul_x86(a_shape, b_shape):
+    # TODO: Doesn't support broadcasting yet; need to add it later?
+    check_binary(
+        a_shape,
+        b_shape,
+        lambda x, y: np.matmul(x, y),
+        lambda x, y: ops.matmul_x86(x, y),
+        dtype="float32",
+        atol=1e-4,
+        rtol=1e-4,
+        device="cpu",
+    )
 
 
 @pytest.mark.parametrize(
