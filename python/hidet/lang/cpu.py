@@ -24,5 +24,11 @@ from hidet.ir.primitives.cpu import (
     avx_f32x8_load,
     avx_f32x8_store,
     avx_f32x8_setzero,
+    avx_f32x8_shuffle,
+    avx_f32x8_unpackhi,
+    avx_f32x8_unpacklo,
+    avx_f32x8_permute2f32x4,
+    avx_f32x8_cast_f32x4,
+    avx_f32x8_insert_f32x4,
 )
 from hidet.ir.primitives.cpu import avx_free, avx_malloc, x86_memcpy, x86_memset, aligned_alloc
