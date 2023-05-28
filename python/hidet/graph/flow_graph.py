@@ -174,11 +174,11 @@ class FlowGraph:
                 else:
                     tunable_tasks.append((node.task, node.device))
 
-        hidet.driver.build_task_batch(tasks)
+        hidet.drivers.build_task_batch(tasks)
 
         with option.context():
             hidet.option.parallel_build(False)
-            hidet.driver.build_task_batch(tunable_tasks)  # build tunable tasks one by one
+            hidet.drivers.build_task_batch(tunable_tasks)  # build tunable tasks one by one
 
     def forward(self, *inputs: Tensor) -> Union[List[Tensor], Tensor]:
         """Run the computation graph.
@@ -343,18 +343,32 @@ class FlowGraph:
             self.inputs = free_vars
         return self
 
-    def build(self, allow_hook=False):
+    def build(self, *, space=0, allow_hook=False):
         """
         Build the flow graph to a compiled model (hidet.runtime.CompiledModel).
 
+        Parameters
+        ----------
+        space: int
+            The space to allocate for the compiled model. Candidates are 0, 1 and 2.
+            Space 0 means each operator will be compiled with the default schedule. Space 1 means each operator will be
+            compiled with a small set of schedules. Space 2 means each operator will be compiled with a large set of
+            schedules. The larger the space, the more schedules will be tried, and the better the performance will be,
+            with the cost of longer compilation and tuning time.
+
+        allow_hook: bool
+            Whether to allow hooking the compiled model. If True, the compiled model can be registered with a hook
+            to get the intermediate results of each operator. This is useful for debugging and testing. By default,
+            this is False.
+
         Returns
         -------
-        ret: hidet.runtime.model.CompiledModel
+        ret: hidet.runtime.CompiledGraph
             The compiled model.
         """
-        from hidet.graph.graph_utils.build import flow_graph_build
+        from hidet.drivers.build_graph import build_flow_graph
 
-        return flow_graph_build(self, allow_hook=allow_hook)
+        return build_flow_graph(self, space=space, allow_hook=allow_hook)
 
     def cuda_graph(self):
         """Create a CudaGraph from FlowGraph.

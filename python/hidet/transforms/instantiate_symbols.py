@@ -12,7 +12,8 @@
 from typing import List, Dict, Optional, Set
 
 from hidet.ir.expr import Var, SymbolVar, Call
-from hidet.ir.func import IRModule, Function
+from hidet.ir.func import Function
+from hidet.ir.module import IRModule
 from hidet.ir.functors import IRRewriter
 from hidet.ir.primitives.runtime import get_symbol_value
 from hidet.ir.stmt import LetStmt, LaunchKernelStmt
@@ -34,7 +35,7 @@ class InstantiateSymbolsRewriter(IRRewriter):
         self.current_func: Optional[str] = None
 
     def visit_IRModule(self, module: IRModule):
-        updated_module = IRModule()
+        updated_module = IRModule(namespace=module.namespace, extern_functions=module.extern_functions)
         call_graph = CallGraph(module, allow_missing=True)
         for node in call_graph.reversed_order:
             updated_module.functions[node.func.name] = self.visit(node.func)

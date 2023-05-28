@@ -10,7 +10,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Dict, Tuple, Sequence, Union
-from hidet.ir.func import Function, IRModule
+from hidet.ir.func import Function
+from hidet.ir.module import IRModule
 from hidet.ir.dtypes import int32
 from hidet.ir.expr import Expr, Var
 from hidet.ir.stmt import LaunchKernelStmt
@@ -68,12 +69,12 @@ def add_launch_func(ir_module: IRModule, kernel_func: Function):
             raise NotImplementedError('Unsupported function kind: {}'.format(kernel_func.kind))
 
     launch: Function = fb.func
-    ir_module.add(launch.name, launch)
+    ir_module.add_function(launch.name, launch)
 
 
 class GenerateLaunchFuncPass(Pass):
     def process_module(self, ir_module: IRModule) -> IRModule:
-        if 'launch' in ir_module.functions:
+        if any(func.name.startswith('launch') for func in ir_module.functions.values() if func.kind == 'public'):
             # the launch function has already existed
             return ir_module
         kernel_functions: Dict[str, Function] = {
@@ -87,6 +88,10 @@ class GenerateLaunchFuncPass(Pass):
         kernel_func = next(iter(kernel_functions.values()))
         add_launch_func(ir_module, kernel_func)
         return ir_module
+
+
+def generate_launch_func(ir_module: IRModule) -> IRModule:
+    return GenerateLaunchFuncPass().process_module(ir_module)
 
 
 def generate_launch_func_pass() -> Pass:

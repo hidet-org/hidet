@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Sequence
-from hidet.ir.func import IRModule
+from hidet.ir.module import IRModule
 
 from .base import Pass, FunctionPass, FunctionBodyPass, SequencePass, RepeatFunctionPass, PassContext
 from .instruments import PassInstrument, SaveIRInstrument, ProfileInstrument

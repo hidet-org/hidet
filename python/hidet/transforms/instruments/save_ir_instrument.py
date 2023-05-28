@@ -11,7 +11,7 @@
 # limitations under the License.
 import os
 
-from hidet.ir.func import IRModule
+from hidet.ir.module import IRModule
 from .base import PassInstrument
 
 

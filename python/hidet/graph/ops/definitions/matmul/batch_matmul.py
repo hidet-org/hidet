@@ -13,6 +13,7 @@ from typing import List
 import hidet
 from hidet.ir import IRModule
 from hidet.ir.compute import reduce
+from hidet.ir.expr import is_constant
 from hidet.ir.layout import DataLayout, StridesLayout, data_layout
 from hidet.ir.type import data_type, TensorType, DataType, void_p
 from hidet.lang import i32, spatial, repeat, tensor, attrs, grid, tensor_pointer
@@ -24,12 +25,12 @@ from hidet.ir.primitives.cuda.mma import MmaConfig, mma_sync
 
 class BatchMatmulTask(Task):
     def __init__(self, a: TensorNode, b: TensorNode, mma: str = 'simt'):
-        batch_size, m_size, k_size = a.const_shape
-        batch_size, k_size, n_size = b.const_shape
-        self.batch_size: int = batch_size
-        self.m_size: int = m_size
-        self.k_size: int = k_size
-        self.n_size: int = n_size
+        batch_size, m_size, k_size = a.shape
+        batch_size, k_size, n_size = b.shape
+        self.batch_size = batch_size
+        self.m_size = m_size
+        self.k_size = k_size
+        self.n_size = n_size
         self.mma: str = mma
         c = compute(
             name='c',
@@ -60,27 +61,33 @@ class BatchMatmulTask(Task):
         else:
             raise ValueError('Can not recognize mma type {}, candidates: {}'.format(self.mma, ['simt', 'mma']))
 
-    @tune.space(2, 'block_warps_k', [4, 8])
-    @tune.space(2, 'block_warps', [(1, 1), (1, 2), (2, 1), (2, 2), (2, 4), (4, 2)])
-    @tune.space(2, 'warp_outer', [(1, 1), (1, 2), (2, 1), (2, 2), (1, 3), (3, 1), (2, 3), (3, 2), (3, 3)])
     @tune.space(
         2,
-        'warp_mid',
-        [
-            spatial(4, 8),
-            spatial(2, 16),
-            spatial(16, 2),
-            spatial(1, 32),
-            spatial(32, 1),
-            spatial(2, 1) * spatial(1, 8) * spatial(2, 1),
-        ],
+        {
+            'block_warps_k': [4, 8],
+            'block_warps': [(1, 1), (1, 2), (2, 1), (2, 2), (2, 4), (4, 2)],
+            'warp_outer': [(1, 1), (1, 2), (2, 1), (2, 2), (1, 3), (3, 1), (2, 3), (3, 2), (3, 3)],
+            'warp_mid': [
+                spatial(4, 8),
+                spatial(2, 16),
+                spatial(16, 2),
+                spatial(1, 32),
+                spatial(32, 1),
+                spatial(2, 1) * spatial(1, 8) * spatial(2, 1),
+            ],
+            'warp_inner': [(4, 4)],
+        },
     )
-    @tune.space(2, 'warp_inner', [(4, 4)])
-    @tune.space(1, 'block_warps_k', [8])
-    @tune.space(1, 'block_warps', [(1, 1), (1, 2), (2, 2), (2, 4)])
-    @tune.space(1, 'warp_outer', [(1, 1), (1, 2), (2, 1), (2, 2)])
-    @tune.space(1, 'warp_mid', [spatial(4, 8)])
-    @tune.space(1, 'warp_inner', [(4, 4), (4, 8), (8, 4)])
+    @tune.space(
+        1,
+        {
+            'block_warps_k': [8],
+            'block_warps': [(1, 1), (1, 2), (2, 2), (2, 4)],
+            'warp_outer': [(1, 1), (1, 2), (2, 1), (2, 2)],
+            'warp_mid': [spatial(4, 8)],
+            'warp_inner': [(4, 4), (4, 8), (8, 4)],
+        },
+    )
     def schedule_simt(
         self, block_warps_k=8, block_warps=(4, 2), warp_outer=(2, 2), warp_mid=spatial(4, 8), warp_inner=(4, 4)
     ) -> IRModule:
@@ -92,9 +99,9 @@ class BatchMatmulTask(Task):
         warp_k = 1
 
         # Task Layouts
-        warp_inner_layout = repeat(*warp_inner, attrs='u+u+')
+        warp_inner_layout = repeat(*warp_inner)
         warp_mid_layout = warp_mid
-        warp_outer_layout = repeat(*warp_outer, attrs='u+u+')
+        warp_outer_layout = repeat(*warp_outer)
         warp_layout = warp_outer_layout * warp_mid_layout * warp_inner_layout
         block_warps_layout = spatial(*block_warps)
         block_layout = block_warps_layout * warp_layout
@@ -105,19 +112,13 @@ class BatchMatmulTask(Task):
         block_size = block_layout.num_workers
 
         lines = block_size // block_k
-        a_g2s_layout = spatial(lines, block_k) * repeat(block_shape[0] // lines, 1, attrs='u+.')
-        b_g2s_layout = repeat(1, block_shape[1] // lines, attrs='.u+') * spatial(block_k, lines)
+        a_g2s_layout = spatial(lines, block_k) * repeat(block_shape[0] // lines, 1)
+        b_g2s_layout = repeat(1, block_shape[1] // lines) * spatial(block_k, lines)
         a_s2r_layout = (
-            block_warps_layout
-            * repeat(warp_outer[0], warp_k, attrs='u+u+')
-            * warp_mid_layout
-            * repeat(warp_inner[0], warp_k, attrs='u+u+')
+            block_warps_layout * repeat(warp_outer[0], warp_k) * warp_mid_layout * repeat(warp_inner[0], warp_k)
         )
         b_s2r_layout = (
-            block_warps_layout
-            * repeat(warp_k, warp_outer[1], attrs='u+u+')
-            * warp_mid_layout
-            * repeat(warp_k, warp_inner[1], attrs='u+u+')
+            block_warps_layout * repeat(warp_k, warp_outer[1]) * warp_mid_layout * repeat(warp_k, warp_inner[1])
         )
 
         # Data Layouts
@@ -349,9 +350,9 @@ class BatchMatmulTask(Task):
                 last_k = k_tiles - 1
                 for k_frag in grid(block_warps_k):
                     if k_frag < block_warps_k - 1:
-                        copy_a_s2r(smem_a, regs_a, (last_k) % 2, (k_frag + 1) % 2, k_frag + 1)
-                        copy_b_s2r(smem_b, regs_b, (last_k) % 2, (k_frag + 1) % 2, k_frag + 1)
-                    mma(regs_a, regs_b, regs_c, (k_frag) % 2)
+                        copy_a_s2r(smem_a, regs_a, last_k % 2, (k_frag + 1) % 2, k_frag + 1)
+                        copy_b_s2r(smem_b, regs_b, last_k % 2, (k_frag + 1) % 2, k_frag + 1)
+                    mma(regs_a, regs_b, regs_c, k_frag % 2)
 
                 # Store results from regs_c into C
                 copy_c_r2g(regs_c, c, offset_m, offset_n)
@@ -359,20 +360,30 @@ class BatchMatmulTask(Task):
         ir_module = module.ir_module()
         return ir_module
 
-    @tune.space(2, 'block_m', [32, 64, 128, 256])
-    @tune.space(2, 'block_n', [16, 32, 64, 128])
-    @tune.space(2, 'block_k', [8, 16, 32])
-    @tune.space(2, 'warp_m', [16, 32, 64])
-    @tune.space(2, 'warp_n', [16, 32, 64])
-    @tune.space(2, 'warp_k', [8, 16, 32])
-    @tune.space(2, 'mma_config', MmaConfig.all())
-    @tune.space(1, 'block_m', [64, 128, 256])
-    @tune.space(1, 'block_n', [64, 128])
-    @tune.space(1, 'block_k', [8, 16, 32])
-    @tune.space(1, 'warp_m', [32, 64])
-    @tune.space(1, 'warp_n', [32, 64])
-    @tune.space(1, 'warp_k', [8, 16, 32])
-    @tune.space(1, 'mma_config', MmaConfig.all())
+    @tune.space(
+        2,
+        {
+            'block_m': [32, 64, 128, 256],
+            'block_n': [16, 32, 64, 128],
+            'block_k': [8, 16, 32],
+            'warp_m': [16, 32, 64],
+            'warp_n': [16, 32, 64],
+            'warp_k': [8, 16, 32],
+            'mma_config': MmaConfig.all(),
+        },
+    )
+    @tune.space(
+        1,
+        {
+            'block_m': [64, 128, 256],
+            'block_n': [64, 128],
+            'block_k': [8, 16, 32],
+            'warp_m': [32, 64],
+            'warp_n': [32, 64],
+            'warp_k': [8, 16, 32],
+            'mma_config': MmaConfig.all(),
+        },
+    )
     def schedule_mma(
         self, block_m=64, block_n=64, block_k=16, warp_m=32, warp_n=32, warp_k=16, mma_config: MmaConfig = None
     ) -> IRModule:
@@ -703,7 +714,11 @@ class BatchMatmulTask(Task):
 
 class BatchMatmulOp(Operator):
     def __init__(self, a: Tensor, b: Tensor, mma: str = 'simt'):
-        if not (len(a.shape) == len(b.shape) == 3 and a.shape[0] == b.shape[0] and a.shape[2] == b.shape[1]):
+        if not (
+            len(a.shape) == len(b.shape) == 3
+            and (not is_constant(a.shape[0], b.shape[0]) or a.shape[0] == b.shape[0])
+            and (not is_constant(a.shape[2], b.shape[1]) or a.shape[2] == b.shape[1])
+        ):
             raise ValueError(
                 'Matrix multiplication expect tensor A and B with shape [B, M, K] and [B, K, N]'
                 + ', got {} and {}'.format(a.shape, b.shape)

@@ -14,21 +14,21 @@ import shutil
 import hidet.option
 
 
-def hidet_cache_dir(category='./') -> str:
+def cache_dir(*items: str) -> str:
     root = hidet.option.get_cache_dir()
-    ret = os.path.abspath(os.path.join(root, category))
+    ret = os.path.abspath(os.path.join(root, *items))
     os.makedirs(ret, exist_ok=True)
     return ret
 
 
-def hidet_cache_file(*items: str) -> str:
-    root_dir = hidet_cache_dir('./')
-    ret_path = os.path.abspath(os.path.join(root_dir, *items))
-    os.makedirs(os.path.dirname(ret_path), exist_ok=True)
-    return ret_path
+def cache_file(*items: str) -> str:
+    root_dir = cache_dir('./')
+    ret = os.path.abspath(os.path.join(root_dir, *items))
+    os.makedirs(os.path.dirname(ret), exist_ok=True)
+    return ret
 
 
-def hidet_clear_op_cache():
-    op_cache = hidet_cache_dir('ops')
+def clear_op_cache():
+    op_cache = cache_dir('ops')
     print('Clearing operator cache: {}'.format(op_cache))
     shutil.rmtree(op_cache, ignore_errors=True)

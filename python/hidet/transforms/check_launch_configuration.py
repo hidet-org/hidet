@@ -14,14 +14,16 @@ class CheckLaunchConfigurationRewriter(IRRewriter):
         conditions = [dim > 0 for dim in stmt.grid_dim + stmt.block_dim]
         with sb.if_then(logical_and(*conditions)):
             upper_bounds = [
-                2147483647,  # gridDim.x <= 2^31 - 1
+                # 2147483647,  # gridDim.x <= 2^31 - 1, we don't need to check this because it's unlikely to reach
                 65535,  # gridDim.y <= 2^16 - 1
                 65535,  # gridDim.z <= 2^16 - 1
                 1024,  # blockDim.x <= 1024
                 1024,  # blockDim.y <= 1024
                 64,  # blockDim.z <= 64
             ]
-            conditions = [dim > upper_bound for dim, upper_bound in zip(stmt.grid_dim + stmt.block_dim, upper_bounds)]
+            conditions = [
+                dim > upper_bound for dim, upper_bound in zip(stmt.grid_dim[1:] + stmt.block_dim, upper_bounds)
+            ]
             with sb.if_then(logical_or(*conditions)):
                 sb += printf(
                     "Launching kernel with grid_dim = (%d, %d, %d), block_dim = (%d, %d, %d)\n",

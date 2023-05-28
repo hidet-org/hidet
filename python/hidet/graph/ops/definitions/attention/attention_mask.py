@@ -117,20 +117,30 @@ class AttnMaskAddTask(Task):
     def implement_cuda(self, working_dir: str) -> Union[List[IRModule], IRModule]:
         return tune.extract_ir_modules(self.cuda_schedule_attn)
 
-    @tune.space(2, 'block_i', [128, 64, 256, 512])
-    @tune.space(2, 'block_j', [128, 64, 256, 512])
-    @tune.space(2, 'block_k', [8, 16, 32, 64])
-    @tune.space(2, 'warp_elems_m', [16, 32, 64, 128])
-    @tune.space(2, 'warp_elems_n', [16, 32, 64, 128])
-    @tune.space(2, 'warp_elems_k', [8, 16, 32, 64])
-    @tune.space(2, 'mma_config', [MmaConfig.m16n8k8_f16_f16(), MmaConfig.m16n8k16_f16_f16()])
-    @tune.space(1, 'block_i', [64])
-    @tune.space(1, 'block_j', [128])
-    @tune.space(1, 'block_k', [32])
-    @tune.space(1, 'warp_elems_m', [16])
-    @tune.space(1, 'warp_elems_n', [128])
-    @tune.space(1, 'warp_elems_k', [32])
-    @tune.space(1, 'mma_config', [MmaConfig.m16n8k8_f16_f16()])
+    @tune.space(
+        2,
+        {
+            'block_i': [128, 64, 256, 512],
+            'block_j': [128, 64, 256, 512],
+            'block_k': [8, 16, 32, 64],
+            'warp_elems_m': [16, 32, 64, 128],
+            'warp_elems_n': [16, 32, 64, 128],
+            'warp_elems_k': [8, 16, 32, 64],
+            'mma_config': [MmaConfig.m16n8k8_f16_f16(), MmaConfig.m16n8k16_f16_f16()],
+        },
+    )
+    @tune.space(
+        1,
+        {
+            'block_i': [64],
+            'block_j': [128],
+            'block_k': [32],
+            'warp_elems_m': [16],
+            'warp_elems_n': [128],
+            'warp_elems_k': [32],
+            'mma_config': [MmaConfig.m16n8k8_f16_f16()],
+        },
+    )
     def cuda_schedule_attn(
         self,
         block_i=128,

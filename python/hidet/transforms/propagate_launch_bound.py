@@ -15,7 +15,8 @@ to cuda_internal functions.
 """
 from typing import Optional
 
-from hidet.ir.func import Function, IRModule
+from hidet.ir.func import Function
+from hidet.ir.module import IRModule
 from hidet.transforms.base import Pass, FunctionPass
 
 

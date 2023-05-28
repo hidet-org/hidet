@@ -9,13 +9,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Dict, Tuple, Optional, Callable
+from typing import Dict, Optional, Callable
 import os
 import pickle
 import time
 import warnings
 import ctypes
-from collections import namedtuple
 from hidet.ir.type import FuncType, PointerType, DataType, BaseType, VoidType, TensorPointerType
 from hidet.ffi.shared_lib import SharedLibrary
 from hidet.ffi.utils import c_pointer_compatible
@@ -23,62 +22,6 @@ from hidet.ffi.utils import c_pointer_compatible
 
 class CompiledModuleLoadError(Exception):
     pass
-
-
-class CompiledModule:
-    def __init__(self, module_dir: str):
-        self.module_dir: str = module_dir
-        self.shared_library: SharedLibrary = self._load_shared_library()
-        self.functions: Dict[str, CompiledFunction] = self._load_functions()
-
-    def __call__(self, *args):
-        if 'launch' not in self.functions:
-            raise RuntimeError('Launch function not found.')
-        return self.functions['launch'](*args)
-
-    def __getitem__(self, item: str):
-        return self.functions[item]
-
-    def _load_shared_library(self):
-        lib_path = os.path.join(self.module_dir, 'lib.so')
-        if not os.path.exists(lib_path):
-            raise CompiledModuleLoadError('Shared library {} does not exist.'.format(lib_path))
-        return SharedLibrary(lib_path)
-
-    def _load_functions(self):
-        func_types_path = os.path.join(self.module_dir, 'func_types.pickle')
-        if not os.path.exists(func_types_path):
-            raise CompiledModuleLoadError('Function types {} does not exist.'.format(func_types_path))
-        with open(func_types_path, 'rb') as f:
-            func_types: Dict[str, FuncType] = pickle.load(f)
-        functions: Dict[str, CompiledFunction] = {}
-        for name, func_type in func_types.items():
-            functions[name] = CompiledFunction(name, func_type, self.shared_library['hidet_' + name])
-        return functions
-
-    def source(self, color=False) -> Optional[str]:
-        src_path = os.path.join(self.module_dir, 'source.cu')
-
-        if src_path is None:
-            return None
-        with open(src_path, 'r') as f:
-            src_code = f.read()
-
-        if color:
-            import importlib.util
-
-            if importlib.util.find_spec('pygments'):
-                from pygments import highlight
-                from pygments.lexers import CudaLexer
-                from pygments.formatters import Terminal256Formatter
-
-                return highlight(src_code, CudaLexer(), Terminal256Formatter(style='autumn'))
-            else:
-                warnings.warn('pygments is not installed, please install it to enable colorized source code.')
-        return src_code
-
-    def profile(self, *args, warmup=1, number=2, repeat=10):
-        return self['launch'].profile(*args, warmup=warmup, number=number, repeat=repeat)
 
 
 class CompiledFunction:
@@ -158,27 +101,65 @@ class CompiledFunction:
         return results
 
 
-CompiledTaskKey = namedtuple('CompiledTaskKey', ['device', 'space', 'task_str'])
+class CompiledModule:
+    def __init__(self, module_dir: str):
+        self.module_dir: str = module_dir
+        self.shared_library: SharedLibrary = self._load_shared_library()
+        self.functions: Dict[str, CompiledFunction] = self._load_functions()
 
+    def __call__(self, *args):
+        if 'launch' not in self.functions:
+            raise RuntimeError('Launch function not found.')
+        return self.functions['launch'](*args)
 
-class CompiledTaskCache:
-    def __init__(self):
-        self.cached: Dict[Tuple[str, int, str], CompiledModule] = {}
+    def __getitem__(self, item: str) -> CompiledFunction:
+        return self.functions[item]
 
-    def contains(self, device_type: str, space: int, task_str: str) -> bool:
-        key = CompiledTaskKey(device_type, space, task_str)
-        return key in self.cached
+    def _load_shared_library(self):
+        lib_path = os.path.join(self.module_dir, 'lib.so')
+        if not os.path.exists(lib_path):
+            raise CompiledModuleLoadError('Shared library {} does not exist.'.format(lib_path))
+        return SharedLibrary(lib_path)
 
-    def get(self, device_type: str, space: int, task_str: str) -> Optional[CompiledModule]:
-        key = CompiledTaskKey(device_type, space, task_str)
-        return self.cached.get(key) if key in self.cached else None
+    def _load_functions(self):
+        func_types_path = os.path.join(self.module_dir, 'func_types.pickle')
+        if not os.path.exists(func_types_path):
+            raise CompiledModuleLoadError('Function types {} does not exist.'.format(func_types_path))
+        with open(func_types_path, 'rb') as f:
+            func_types: Dict[str, FuncType] = pickle.load(f)
+        functions: Dict[str, CompiledFunction] = {}
+        for name, func_type in func_types.items():
+            functions[name] = CompiledFunction(name, func_type, self.shared_library['hidet_' + name])
+        return functions
 
-    def add(self, device_type: str, space: int, task_str: str, module: CompiledModule):
-        key = CompiledTaskKey(device_type, space, task_str)
-        self.cached[key] = module
+    def source(self, color=False) -> Optional[str]:
+        if os.path.exists(os.path.join(self.module_dir, 'source.cc')):
+            src_path = os.path.join(self.module_dir, 'source.cc')
+        elif os.path.exists(os.path.join(self.module_dir, 'source.cu')):
+            src_path = os.path.join(self.module_dir, 'source.cu')
+        else:
+            src_path = None
 
+        if src_path is None:
+            return None
+        with open(src_path, 'r') as f:
+            src_code = f.read()
 
-compiled_task_cache = CompiledTaskCache()
+        if color:
+            import importlib.util
+
+            if importlib.util.find_spec('pygments'):
+                from pygments import highlight
+                from pygments.lexers import CudaLexer
+                from pygments.formatters import Terminal256Formatter
+
+                return highlight(src_code, CudaLexer(), Terminal256Formatter(style='autumn'))
+            else:
+                warnings.warn('pygments is not installed, please install it to enable colorized source code.')
+        return src_code
+
+    def profile(self, *args, warmup=1, number=2, repeat=10):
+        return self['launch'].profile(*args, warmup=warmup, number=number, repeat=repeat)
 
 
 def load_compiled_module(module_dir: str) -> CompiledModule:

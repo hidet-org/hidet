@@ -1,3 +1,3 @@
 import conf
 
-conf.hidet.utils.hidet_clear_op_cache()
+conf.hidet.utils.clear_op_cache()

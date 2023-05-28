@@ -17,7 +17,7 @@ can be override when we define a new task.
 import hidet
 from hidet.ir.compute import TensorNode, compute, reduce
 from hidet.ir.task import Task
-from hidet.ir.func import IRModule
+from hidet.ir.module import IRModule
 
 
 class BatchMatmulFp16Task(Task):
@@ -239,16 +239,6 @@ def demo_usage():
 
 
 demo_usage()
-
-# %%
-# Generated Source Code
-# ---------------------
-# If you are interested in the generated source code, here it is:
-
-a = hidet.randn([1, 2, 2], dtype='float16', device='cuda')
-b = hidet.randn([1, 2, 2], dtype='float16', device='cuda')
-op = BatchMatmulFp16Op(a, b)
-print(op.task_func.source(color=True))
 
 # %%
 # Summary

@@ -18,19 +18,19 @@ def test_load_save(device: str):
     graph = hidet.graph.optimize(graph)
 
     # build the graph
-    model = graph.build()
+    compiled_graph = graph.build()
 
     # save the model
-    model.save('./model.hidet')
+    compiled_graph.save('./model.hidet')
 
     # load the model
-    loaded_model = hidet.load_model('./model.hidet')
+    loaded_compiled_graph = hidet.load_compiled_graph('./model.hidet')
 
     # compare the results
     xx = hidet.randn([2, 3], device=device)
     y1 = graph(xx)
-    y2 = model(xx)
-    y3 = loaded_model(xx)
+    y2 = compiled_graph(xx)
+    y3 = loaded_compiled_graph(xx)
 
     numpy.testing.assert_allclose(y1.cpu().numpy(), y2.cpu().numpy())
     numpy.testing.assert_allclose(y1.cpu().numpy(), y3.cpu().numpy())

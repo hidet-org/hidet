@@ -15,7 +15,8 @@ from hidet.ir.type import DataType, tensor_pointer_type
 from hidet.ir.expr import TensorElement, Expr, Var, SymbolVar, Constant, scalar_var, convert, cast
 from hidet.ir.stmt import Stmt, AssignStmt, ForStmt, DeclareStmt, BufferStoreStmt
 from hidet.ir.task import Task
-from hidet.ir.func import IRModule, Function
+from hidet.ir.func import Function
+from hidet.ir.module import IRModule
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.ir.functors import ExprRewriter, ExprVisitor, ComputeVisitor, ComputeRewriter, TypeRewriter
 from hidet.ir.tools import IRPrinter, collect, rewrite, infer_type, simplify, collect_free_vars
@@ -250,7 +251,7 @@ class AutoScheduler:
                     raise NotImplementedError()
 
         func = fb.get()
-        self.ir_module.add(func.name, func)
+        self.ir_module.add_function(func.name, func)
 
         return self.ir_module
 
@@ -272,7 +273,7 @@ class AutoScheduler:
         """
         name = Namer.unique_name_among(func.name, self.ir_module.functions.keys())
         func.name = name
-        self.ir_module.add(func.name, func)
+        self.ir_module.add_function(func.name, func)
         return self.ir_module.lookup_var(func.name)
 
     def grid_compute_params_and_args(

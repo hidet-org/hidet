@@ -85,7 +85,7 @@ def gpt2_forward(ids, wte, wpe, blocks, ln_f, n_head):  # [n_seq] -> [n_seq, n_v
 
 
 def gpt2(model_size: str = "124M", seq_length: Optional[int] = 1000, use_fp16=False) -> FlowGraph:
-    cache_dir = hidet.utils.hidet_cache_dir('./examples/gpt-2/')
+    cache_dir = hidet.utils.cache_dir('./examples/gpt-2/')
     model_name = 'model_{}_seq{}_{}.hf'.format(model_size, seq_length, 'fp16' if use_fp16 else 'fp32')
     hf_path = os.path.join(cache_dir, model_name)
     if os.path.exists(hf_path):
