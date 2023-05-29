@@ -45,7 +45,7 @@ class NormalizeF16Task(NormalizeTask):
 
         reduce_extent = prod(reduce_shape)
 
-        warp_size = 64  # coleased loads
+        warp_size = 32  # coleased loads
         block_size = min(max(warp_size, reduce_extent), 1024)
         repeat_reduction = math.ceil(reduce_extent / block_size)
 
@@ -221,7 +221,7 @@ class NormalizeF16Task(NormalizeTask):
                         welford_combine(mean_final, m2_final, count_final, mean, m2, count)
 
                 # end of mean and var calculation, perform write back
-                m2_final[0] = m2_final[0] / cast(count_final[0], f16)
+                m2_final[0] = m2_final[0] / cast(count_final[0], accumulate_dtype)
 
                 for spatial_idxs in task_layout.on(blockIdx.x, bind_tuple=True):
                     ele_idx = spatial_idxs + dim_zeros
@@ -232,7 +232,7 @@ class NormalizeF16Task(NormalizeTask):
                     for reduction_idx in reduce_mapping.on(threadIdx.x):
                         if reduction_idx < reduce_extent:
                             val = regs_repeat[reduction_idx // block_size]
-                            normed = (val - mean_final[0]) * prim.rsqrt(m2_final[0] + self.attrs['epsilon'])
+                            normed = (val - mean_final[0]) * prim.rsqrt(m2_final[0] + cast(self.attrs['epsilon'], accumulate_dtype))
                             flat_tensor[reduction_idx] = normed
 
         ir_module = module.ir_module()
