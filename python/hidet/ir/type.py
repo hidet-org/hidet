@@ -32,6 +32,14 @@ class BaseType(Node):
         else:
             raise ValueError('Can not recognize type {}'.format(self))
 
+    def __getitem__(self, item):
+        if isinstance(item, (tuple, list)):
+            if len(item) == 1:
+                item = item[0]
+            else:
+                raise ValueError('Currently, only support 1-d array, but got {}'.format(item))
+        return array_type(self, int(item))
+
     def is_void(self):
         return isinstance(self, VoidType)
 
@@ -230,6 +238,16 @@ class TensorPointerType(BaseType):
         return tpt
 
 
+class ArrayType(BaseType):
+    def __init__(self, base_type, size: int):
+        super().__init__()
+        self.base_type: BaseType = base_type
+        self.size: int = size
+
+        assert isinstance(base_type, BaseType) and not isinstance(base_type, (ArrayType, TensorType))
+        assert isinstance(size, int) and size > 0
+
+
 TypeLike = Union[str, BaseType]
 
 
@@ -240,15 +258,18 @@ class FuncType(BaseType):
         ret_type: Optional[TypeLike] = None,
         type_infer_func: Optional[Callable] = None,  # Callable[[a number of BaseType], BaseType]
     ):
-        self.param_types = [self._convert_type(tp) for tp in param_types] if param_types is not None else None
-        self.ret_type = self._convert_type(ret_type) if ret_type is not None else None
-        self.type_infer_func = type_infer_func
+        self.param_types: Optional[List[BaseType]] = (
+            [self._convert_type(tp) for tp in param_types] if param_types is not None else None
+        )
+        self.ret_type: Optional[BaseType] = self._convert_type(ret_type) if ret_type is not None else None
+        self.type_infer_func: Optional[Callable[[List[BaseType]], BaseType]] = type_infer_func
         msg = 'Please provide either a static type or a type infer func'
         assert not all(v is None for v in [ret_type, type_infer_func]), msg
 
     def ret_type_on(self, arg_types: List[BaseType]) -> BaseType:
         if self.ret_type is not None:
             # todo: add type checking
+            assert isinstance(self.ret_type, BaseType)
             return self.ret_type
         else:
             return self.type_infer_func(arg_types)
@@ -305,14 +326,12 @@ def tensor_type(dtype, shape: Optional[Sequence[Union[int, Expr]]] = None, layou
         assert isinstance(layout, DataLayout)
         assert isinstance(shape, (list, tuple))
         assert len(shape) == len(layout.shape)
-        # for a, b in zip(shape, layout.shape):
-        #     if int(a) != int(b):
-        #         raise ValueError(
-        #             'The shape of tensor and the shape of layout are not compatible, '
-        #             '{} vs {}'.format(list(shape), list(layout.shape))
-        #         )
     shape = convert(shape)
     return TensorType(dtype, shape, layout)
+
+
+def array_type(base_type: BaseType, size: int):
+    return ArrayType(base_type, size)
 
 
 def pointer_type(base_type):
@@ -344,3 +363,5 @@ def data_type(dtype: Union[str, DataType]) -> DataType:
 
 
 void_p = PointerType(VoidType())
+byte_p = PointerType(data_type('uint8'))
+void = VoidType()

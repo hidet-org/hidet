@@ -11,8 +11,8 @@
 # limitations under the License.
 from collections import defaultdict
 
-from hidet.ir.type import TensorPointerType, TensorType
-from hidet.ir.expr import Var, Expr, Constant, Add, Sub
+from hidet.ir.type import TensorPointerType, TensorType, ArrayType, FuncType
+from hidet.ir.expr import Var, Expr, Constant, Add, Sub, Call
 from hidet.ir.functors import IRRewriter, IRVisitor
 from hidet.ir.stmt import Stmt, LetStmt
 from hidet.transforms import Pass, FunctionBodyPass, RepeatFunctionPass
@@ -59,19 +59,34 @@ class NaiveLetStmtInlineRewriter(IRRewriter):
         # inline
         return self.visit(stmt)
 
+    def has_side_effect(self, expr):
+        from hidet.ir.tools import collect
+
+        return len(collect(expr, Call)) > 0
+
     def should_inline(self, var: Var, expr: Expr) -> bool:
         if isinstance(var.type, (TensorPointerType, TensorType)):
-            return isinstance(expr, (Var, Constant))
-        elif isinstance(expr, (Var, Constant)):
+            if isinstance(expr, Var):
+                return True
+            elif isinstance(expr, Constant):
+                return not isinstance(expr.type, (TensorType, ArrayType))
+            else:
+                return False
+        elif isinstance(expr, Var):
             # let v1 = v2
+            return True
+        elif isinstance(expr, Constant):
             # let v1 = constant
-            return True
-        elif self.usage_count[var] <= self.inline_factor or self.inline_all:
-            # let v1 = expr and v1 is only used with in self.inline_factor times
-            return True
+            return not isinstance(expr.type, (TensorType, ArrayType))
         elif isinstance(expr, (Add, Sub)) and (isinstance(expr.a, Constant) or isinstance(expr.b, Constant)):
             # let v1 = expr + constant
             return True
+        elif self.usage_count[var] <= self.inline_factor or self.inline_all:
+            # let v1 = expr and v1 is only used with in self.inline_factor times
+            if isinstance(var.type, FuncType) or self.has_side_effect(expr):
+                return False
+            else:
+                return True
         else:
             return False
 
@@ -79,11 +94,12 @@ class NaiveLetStmtInlineRewriter(IRRewriter):
         bind_vars = []
         bind_values = []
         for bind_var, bind_value in zip(stmt.bind_vars, stmt.bind_values):
+            updated_var = self(bind_var)
             updated_value = self(bind_value)
-            if self.should_inline(bind_var, updated_value):
+            if self.should_inline(updated_var, updated_value):
                 self.memo[bind_var] = updated_value
             else:
-                bind_vars.append(bind_var)
+                bind_vars.append(updated_var)
                 bind_values.append(updated_value)
         body = self(stmt.body)
         if same_list(bind_vars, stmt.bind_vars) and same_list(bind_values, stmt.bind_values) and body is stmt.body:

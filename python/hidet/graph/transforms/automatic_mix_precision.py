@@ -10,8 +10,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List, Union
-from hidet.graph.ir.functors import GraphRewriter
-from hidet.graph.ir.flow_graph import FlowGraph, Operator, Tensor
+from hidet.graph.graph_utils.functors import GraphRewriter
+from hidet.graph.flow_graph import FlowGraph, Operator, Tensor
 from hidet.graph import ops
 from hidet.ir.type import DataType, data_type
 from hidet.utils import strict_zip, same_list

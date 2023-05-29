@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import List, Optional, Dict, Any
 import logging
 
-from hidet.graph.ir.flow_graph import FlowGraph
+from hidet.graph.flow_graph import FlowGraph
 from .instruments import GraphPassInstrument
 
 logger = logging.Logger(name='hidet.graph.transforms', level=logging.INFO)

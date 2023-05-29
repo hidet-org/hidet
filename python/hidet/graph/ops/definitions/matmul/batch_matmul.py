@@ -14,7 +14,7 @@ import hidet
 from hidet.ir import IRModule
 from hidet.ir.compute import reduce
 from hidet.ir.layout import DataLayout, StridesLayout, data_layout
-from hidet.ir.type import data_type, TensorType, DataType
+from hidet.ir.type import data_type, TensorType, DataType, void_p
 from hidet.lang import i32, spatial, repeat, tensor, attrs, grid, tensor_pointer
 from hidet.lang.cuda import blockIdx, threadIdx, syncthreads
 from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, TensorNode, compute
@@ -545,6 +545,7 @@ class BatchMatmulTask(Task):
                 c: c_dtype[bs, m_size, n_size],
                 offset_m: i32,
                 offset_n: i32,
+                smem: void_p,
             ):
                 gmem_c = c[blockIdx.y, offset_m:, offset_n:]
                 warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
@@ -559,9 +560,8 @@ class BatchMatmulTask(Task):
                                     gmem_c.write([delta_m, delta_n], regs_c[mma_i, mma_j, p])
                                 p += 1
                 else:
-                    smem = tensor('shared', 'int8', shape=[smem_storage_nbytes])
                     smem_c = tensor_pointer(c_dtype, layout=smem_c_layout)
-                    smem_c = ~smem[0]
+                    smem_c = smem
                     for warp_k_round in grid(warp_count_k, attrs='u+'):
                         for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
                             if wk == warp_k_round:
@@ -680,7 +680,7 @@ class BatchMatmulTask(Task):
                         copy_a_s2r(~smem_a[last_k % 2, 0, (k1 + 1) * mma_k], regs_a, (k1 + ko + 1) % 2)
                         copy_b_s2r(~smem_b[last_k % 2, (k1 + 1) * mma_k, 0], regs_b, (k1 + ko + 1) % 2)
                     mma(regs_a, regs_b, regs_c, (k1 + ko) % 2)
-                copy_c_r2g(regs_c, c, offset_m, offset_n)
+                copy_c_r2g(regs_c, c, offset_m, offset_n, smem)
 
         ir_module = module.ir_module()
         return ir_module

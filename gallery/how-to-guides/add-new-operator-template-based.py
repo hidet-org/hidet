@@ -245,26 +245,10 @@ demo_usage()
 # ---------------------
 # If you are interested in the generated source code, here it is:
 
-# sphinx_gallery_start_ignore
 a = hidet.randn([1, 2, 2], dtype='float16', device='cuda')
 b = hidet.randn([1, 2, 2], dtype='float16', device='cuda')
 op = BatchMatmulFp16Op(a, b)
-c = op.get_output(0)
-func = op.task_func
-import os
-
-relative_path = os.path.relpath(
-    func.src_path, os.path.dirname(hidet.utils.hidet_cache_dir())
-)
-source_path = func.src_path
-# sphinx_gallery_end_ignore
-
-# we hide the code to get the source path for simplicity
-print('Generated source path (relative to hidet cache root): \n{}'.format(relative_path))
-print()
-print('Generated source code:')
-with open(source_path, 'r') as f:
-    print(f.read())
+print(op.task_func.source(color=True))
 
 # %%
 # Summary

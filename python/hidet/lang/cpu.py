@@ -9,8 +9,20 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from . import flow_graph
-from . import functors
+# pylint: disable=unused-import
 
-from .flow_graph import FlowGraph, Tensor, Operator, trace_from, load_graph, save_graph, forward_context
-from .functors import GraphRewriter, GraphVisitor
+from hidet.ir.primitives.cpu import (
+    avx_f32x4_broadcast,
+    avx_f32x4_fmadd,
+    avx_f32x4_load,
+    avx_f32x4_store,
+    avx_f32x4_setzero,
+)
+from hidet.ir.primitives.cpu import (
+    avx_f32x8_broadcast,
+    avx_f32x8_fmadd,
+    avx_f32x8_load,
+    avx_f32x8_store,
+    avx_f32x8_setzero,
+)
+from hidet.ir.primitives.cpu import avx_free, avx_malloc, x86_memcpy, x86_memset, aligned_alloc

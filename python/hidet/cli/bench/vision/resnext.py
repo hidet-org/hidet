@@ -31,7 +31,7 @@ commonly_used_models.append(resnext_models['resnext50_32x4d'])
     type=str,
     default='resnext50_32x4d',
     show_default=True,
-    help='Comma separated models to benchmark. Available models: {}'.format(', '.join(list(resnext_models.keys()))),
+    help='Comma-separated models to benchmark. Available models: {}'.format(', '.join(list(resnext_models.keys()))),
 )
 @click.option('-n', '--batch-size', default=1, show_default=True, help='Batch size')
 @click.option('-c', '--channels', default=3, show_default=True, help='Input channels')

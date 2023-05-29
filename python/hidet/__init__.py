@@ -31,6 +31,7 @@ from .ir.dtypes import bfloat16, tfloat32, complex64, complex128
 from .ir.expr import symbol_var
 
 from .runtime.device import Device, device
+from .runtime.model import save_model, load_model
 
 from .graph import Tensor, Operator, Module, FlowGraph
 from .graph import nn
@@ -38,7 +39,6 @@ from .graph import ops
 from .graph import empty, randn, zeros, ones, full, randint, symbol, asarray, from_torch
 from .graph import empty_like, randn_like, zeros_like, ones_like, symbol_like, full_like
 from .graph import trace_from, load_graph, save_graph
-from .graph import jit
 from .graph import from_dlpack
 from .graph import frontend
 from .graph.ops import arange, linspace

@@ -217,8 +217,8 @@ class Task(Node):
 
         Returns
         -------
-        func: hidet.runtime.CompiledFunction
-            The compiled function.
+        func: hidet.runtime.CompiledModule
+            The compiled module.
         """
         from hidet.driver import build_task
 
