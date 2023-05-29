@@ -216,7 +216,7 @@ class ReduceTask(Task):
                         rv[0] = ro.combine(rv[0], x.read(indices, protected=False))
                     rv[0] = ro.finalize(acc=rv[0], size=reduce_extent)
                     for indices in remain_layout.on(threadIdx.x + blockIdx.x * block_size):
-                        y.write(indices, rv[0], protected=False)
+                        y[indices] = rv[0]
 
         ir_module = module.ir_module()
         return ir_module
