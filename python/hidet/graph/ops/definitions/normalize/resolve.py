@@ -45,6 +45,7 @@ class NormalizeResolveRule(ResolveRule):
         x: Tensor = op.inputs[0]
         if not is_contiguous_norm(dims, len(x.shape)):
             from hidet.graph.ops import square, rsqrt
+
             epsilon = op.attrs['epsilon']
             x = x - x.mean(dims, keep_dim=True)
             variance = square(x).mean(dims, keep_dim=True)

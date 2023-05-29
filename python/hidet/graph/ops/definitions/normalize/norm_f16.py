@@ -72,6 +72,8 @@ class NormalizeF16Task(NormalizeTask):
                 count_b: TensorType(dtype=i32, shape=[1]),
             ):
                 count = count_a[0] + count_b[0]
+                if count == 0:
+                    return
                 delta = mean_b[0] - mean_a[0]
 
                 mean_a[0] = mean_a[0] + delta * cast(count_b[0], accumulate_dtype) / cast(count, accumulate_dtype)
@@ -109,7 +111,7 @@ class NormalizeF16Task(NormalizeTask):
                 m2_final[0] = accumulate_dtype.zero
                 count_final[0] = dtypes.int32.zero
 
-                for spatial_idxs in task_layout.on(blockIdx.x):
+                for spatial_idxs in task_layout.on(blockIdx.x, bind_tuple=True):
                     ele_idx = spatial_idxs + dim_zeros
                     norm_tensor = ~x[ele_idx]
                     flat_tensor = view(norm_tensor, f16[reduce_extent])
@@ -161,7 +163,7 @@ class NormalizeF16Task(NormalizeTask):
                         other_count[0] = shfl_down_sync(mask, count[0], 1, 32)
                         welford_combine(mean, m2, count, other_mean, other_m2, other_count)
 
-                        if threadIdx.x % warp_size == 0:
+                        if stages > 1 and threadIdx.x % warp_size == 0:
                             smem_mean[threadIdx.x // warp_size] = mean[0]
                             smem_m2[threadIdx.x // warp_size] = m2[0]
                             smem_count[threadIdx.x // warp_size] = count[0]
@@ -219,9 +221,9 @@ class NormalizeF16Task(NormalizeTask):
                         welford_combine(mean_final, m2_final, count_final, mean, m2, count)
 
                 # end of mean and var calculation, perform write back
-                m2_final[0] = m2_final[0] / cast(count_final[0] - 1, f16)
+                m2_final[0] = m2_final[0] / cast(count_final[0], f16)
 
-                for spatial_idxs in task_layout.on(blockIdx.x):
+                for spatial_idxs in task_layout.on(blockIdx.x, bind_tuple=True):
                     ele_idx = spatial_idxs + dim_zeros
                     norm_tensor = ~y[ele_idx]
                     flat_tensor = view(norm_tensor, f16[reduce_extent])
