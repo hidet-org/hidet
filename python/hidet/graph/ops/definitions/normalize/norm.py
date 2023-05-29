@@ -201,7 +201,7 @@ class NormalizeTask(Task):
                         regs_repeat[reduction_idx // block_size] = reg32[0]
 
                         mean[0] = reg32[0]
-                        m2[0] = f32.zero  # reg32[0] * reg32[0]
+                        m2[0] = f32.zero
 
                         # Warp reduce by shuffle down
                         mask = active_mask()

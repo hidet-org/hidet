@@ -12,11 +12,10 @@
 from typing import List, Optional, Callable, Any
 
 from hidet.ir import dtypes
-from hidet.graph.ir import Operator, Tensor
+from hidet.graph.operator import Operator, Tensor
 from hidet.graph.transforms import ResolveRule, register_resolve_rule
 from hidet.graph.ops.definitions.utils import is_contiguous_norm
 from hidet.utils import prod
-from hidet.graph.ops import square, rsqrt
 
 
 from .norm import NormalizeOp
@@ -43,9 +42,10 @@ class NormalizeResolveRule(ResolveRule):
 
     def resolve_generic(self, op: Operator) -> Optional[List[Tensor]]:
         dims = op.attrs['dims']
-        epsilon = op.attrs['epsilon']
         x: Tensor = op.inputs[0]
         if not is_contiguous_norm(dims, len(x.shape)):
+            from hidet.graph.ops import square, rsqrt
+            epsilon = op.attrs['epsilon']
             x = x - x.mean(dims, keep_dim=True)
             variance = square(x).mean(dims, keep_dim=True)
             return [x * rsqrt(variance + epsilon)]
