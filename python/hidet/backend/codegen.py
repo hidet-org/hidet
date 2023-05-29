@@ -44,6 +44,12 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
         self.namer = Namer()
         self.type_infer = TypeInfer()
 
+        self.require_immintrin = False
+        self.require_complex = False
+        self.require_fp16 = False
+        self.require_bf16 = False
+        self.require_tf32 = False
+
     def __call__(self, node) -> Doc:
         return self.visit(node)
 
@@ -193,10 +199,6 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
         self.ir_module = module
         doc = Doc()
 
-        doc += self.require_headers()
-
-        doc += Text('extern "C" {') + NewLine()
-
         # define global variables
         for name, var in module.global_vars.items():
             if name in module.functions:
@@ -208,7 +210,8 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
         for node in call_graph.reversed_order:
             doc += self(node.func) + NewLine()
 
-        doc += NewLine() + '}'
+        doc = self.require_headers() + doc
+
         return doc
 
     def visit_Function(self, func: Function) -> Doc:
@@ -560,6 +563,13 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             'float32x4': '__m128',
             'float32x8': '__m256',
         }
+
+        self.require_complex = self.require_complex or t.name in ['complex64', 'complex128']
+        self.require_immintrin = self.require_immintrin or t.name in ['float32x4', 'float32x8']
+        self.require_bf16 = self.require_bf16 or t.name == 'bfloat16'
+        self.require_fp16 = self.require_fp16 or t.name == 'float16'
+        self.require_tf32 = self.require_tf32 or t.name == 'tfloat32'
+
         return Text(scalar_type_map[t.name])
 
     def visit_TensorType(self, t: TensorType):
@@ -609,19 +619,24 @@ class CUDACodegen(Codegen):
     def require_headers(self) -> Doc:
         doc = Doc()
         doc += Text('#include <stdint.h>') + NewLine()
-        doc += Text('#include <cuda_fp16.h>') + NewLine()
-        doc += Text('#include <cuda_bf16.h>') + NewLine()
+        if self.require_immintrin:
+            doc += Text('#include <immintrin.h>') + NewLine()
+        if self.require_fp16:
+            doc += Text('#include <cuda_fp16.h>') + NewLine()
+        if self.require_bf16:
+            doc += Text('#include <cuda_bf16.h>') + NewLine()
         doc += Text('#include <hidet/runtime/symbols.h>') + NewLine()
         doc += Text('#include <hidet/runtime/memory_planner.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cpu/context.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cuda/complex.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cuda/context.h>') + NewLine()
 
-        doc += Text('#include <immintrin.h>') + NewLine()
+        if self.require_tf32:
+            # nvcc use float to 'store' tfloat32 data
+            doc += Text('typedef float tfloat32_t;') + NewLine()
 
-        # nvcc use float to 'store' tfloat32 data
-        doc += Text('typedef float tfloat32_t;') + NewLine()
-        doc += Text('typedef __nv_bfloat16 bfloat16_t;') + NewLine()
+        if self.require_bf16:
+            doc += Text('typedef __nv_bfloat16 bfloat16_t;') + NewLine()
 
         doc += NewLine()
         return doc
@@ -641,7 +656,7 @@ class CUDACodegen(Codegen):
         elif func.kind == 'cpu_internal':
             doc += '__forceinline__ '
         elif func.kind == 'public':
-            doc += ''
+            doc += 'DLL '
         else:
             raise ValueError(f'Unknown function kind: {func.kind}')
 
@@ -684,13 +699,17 @@ class CPUCodegen(Codegen):
         doc = Doc()
         doc += Text('#include <stdint.h>') + NewLine()
         doc += Text('#include <math.h>') + NewLine()
+        if self.require_immintrin:
+            doc += Text('#include <immintrin.h>')
         doc += Text('#include <hidet/runtime/symbols.h>') + NewLine()
         doc += Text('#include <hidet/runtime/memory_planner.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cpu/context.h>') + NewLine()
-        doc += Text('#include <hidet/runtime/cpu/float16.h>') + NewLine()
-        doc += Text('#include <hidet/runtime/cpu/bfloat16.h>') + NewLine()
-        doc += Text('#include <hidet/runtime/cpu/complex.h>') + NewLine()
-        doc += Text('#include <immintrin.h>')
+        if self.require_complex:
+            doc += Text('#include <hidet/runtime/cpu/complex.h>') + NewLine()
+        if self.require_fp16:
+            doc += Text('#include <hidet/runtime/cpu/float16.h>') + NewLine()
+        if self.require_bf16:
+            doc += Text('#include <hidet/runtime/cpu/bfloat16.h>') + NewLine()
         doc += NewLine()
         return doc
 
@@ -716,11 +735,6 @@ class CPUCodegen(Codegen):
             param_docs.append(self.param_declare(param))
         doc += doc_join(param_docs, Text(', '))
         doc += ') {'
-
-        # comments
-        label = func.get_attr('label', default=None, allow_missing=True)
-        if label:
-            doc += (NewLine() + '// label: {}'.format(label)).indent()
 
         # body
         doc += self(func.body).indent()
