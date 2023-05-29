@@ -91,7 +91,6 @@ class SoftmaxTask(Task):
 
             @hidet.script
             def softmax_kernel(xs: xdtype[shape], ys: xdtype[shape]):
-                attrs.func_name = "softmax_kernel"
                 attrs.cuda.block_dim = warp_size
                 attrs.cuda.grid_dim = n_reduce
 
