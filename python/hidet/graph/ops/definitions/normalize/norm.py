@@ -131,11 +131,10 @@ class NormalizeTask(Task):
         task_layout = spatial(*spatial_shape)
         grid_size = task_layout.num_workers
 
-        dtype = self.inputs[0].type.dtype
         accumulate_dtype = data_type(self.attrs['accumulate_dtype'])
 
         shm_count = math.ceil(block_size / warp_size)
-        used_smem_bytes_per_block = shm_count * i32.nbytes
+        used_smem_bytes_per_block = shm_count
 
         stages = math.ceil(math.log(block_size) / math.log(warp_size))
         assert stages <= 2
@@ -155,9 +154,10 @@ class NormalizeTask(Task):
                 delta = mean_b[0] - mean_a[0]
 
                 mean_a[0] = mean_a[0] + delta * cast(count_b[0], f32) / cast(count, f32)
-                m2_a[0] = m2_a[0] + m2_b[0] + delta * delta * cast(count_a[0], f32) * cast(count_b[0], f32) / cast(count, f32)
+                m2_a[0] = (
+                    m2_a[0] + m2_b[0] + delta * delta * cast(count_a[0], f32) * cast(count_b[0], f32) / cast(count, f32)
+                )
                 count_a[0] = count
-
 
             @hidet.script
             def norm_kernel(x: f32[x.const_shape], y: f32[y.const_shape]):
@@ -166,12 +166,12 @@ class NormalizeTask(Task):
                 attrs.cuda.min_blocks = 1
 
                 # this is used for multi-level reduction
-                smem_mean = tensor('shared', dtype, shape=[used_smem_bytes_per_block])
-                smem_m2 = tensor('shared', dtype, shape=[used_smem_bytes_per_block])
+                smem_mean = tensor('shared', accumulate_dtype, shape=[used_smem_bytes_per_block])
+                smem_m2 = tensor('shared', accumulate_dtype, shape=[used_smem_bytes_per_block])
                 smem_count = tensor('shared', i32, shape=[used_smem_bytes_per_block])
 
                 # cache repeated loads
-                regs_repeat = tensor('register', dtype, shape=[repeat_reduction])
+                regs_repeat = tensor('register', f32, shape=[repeat_reduction])
 
                 reg32 = register_tensor(f32, [1])
                 mean_final = register_tensor(accumulate_dtype, [1])
@@ -180,9 +180,10 @@ class NormalizeTask(Task):
 
                 mean_final[0] = accumulate_dtype.zero
                 m2_final[0] = accumulate_dtype.zero
-                count_final[0] = dtypes.int32.zero
+                count_final[0] = i32.zero
 
                 for spatial_idxs in task_layout.on(blockIdx.x):
+                    # note, this is evaluated at compile time
                     ele_idx = spatial_idxs + dim_zeros
                     norm_tensor = ~x[ele_idx]
                     flat_tensor = view(norm_tensor, f32[reduce_extent])
@@ -205,7 +206,7 @@ class NormalizeTask(Task):
                         regs_repeat[reduction_idx // block_size] = reg32[0]
 
                         mean[0] = reg32[0]
-                        m2[0] = f32.zero # reg32[0] * reg32[0]
+                        m2[0] = f32.zero  # reg32[0] * reg32[0]
 
                         # Warp reduce by shuffle down
                         mask = active_mask()
