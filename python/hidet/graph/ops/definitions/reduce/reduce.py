@@ -155,7 +155,7 @@ class ReduceTask(Task):
 
                 if threadIdx.x == 0:
                     for indices in remain_layout.on(blockIdx.x):
-                        y.write(indices, cast(rv, xdtype), protected=False)
+                        y[indices] = cast(rv, xdtype)
 
         ir_module = module.ir_module()
         return ir_module
@@ -213,10 +213,10 @@ class ReduceTask(Task):
 
                 if threadIdx.x + blockIdx.x * block_size < remain_extent:
                     for indices in task_layout.on(threadIdx.x + blockIdx.x * block_size):
-                        rv[0] = ro.combine(rv[0], x.read(indices, protected=False))
+                        rv[0] = ro.combine(rv[0], x[indices])
                     rv[0] = ro.finalize(acc=rv[0], size=reduce_extent)
                     for indices in remain_layout.on(threadIdx.x + blockIdx.x * block_size):
-                        y.write(indices, rv[0], protected=False)
+                        y[indices] = rv[0]
 
         ir_module = module.ir_module()
         return ir_module
