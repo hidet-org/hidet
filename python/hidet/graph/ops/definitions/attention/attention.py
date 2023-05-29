@@ -271,7 +271,9 @@ class AttnTask(Task):
             + smem_bytes_mij
         )
         used_smem_bytes_per_block = dynamic_smem_bytes
-        tune.check(used_smem_bytes_per_block <= 99000)
+        smem_limits = {70: 96000, 72: 96000, 75: 64000, 80: 163000, 86: 99000, 87: 163000, 89: 99000, 90: 227000}
+        max_smem = 99000 if compute_capability > 90 else smem_limits[compute_capability]
+        tune.check(used_smem_bytes_per_block <= max_smem)
 
         smem_l_type = tensor_type(sm_dtype, shape=[i_rows_per_tb])
         smem_m_type = tensor_type(sm_dtype, shape=[i_rows_per_tb])
