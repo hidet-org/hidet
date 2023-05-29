@@ -37,3 +37,26 @@ def test_meta_range():
 
     module = script_module.build()
     module()
+
+
+def test_if_then_else():
+    from hidet.lang import attrs, tensor
+
+    dims = [2, 3]
+
+    with hidet.script_module() as script_module:
+
+        @hidet.script
+        def launch():
+            attrs.func_kind = 'public'
+
+            a = tensor('default', 'float32', shape=[2, 3, 4, 5])
+            indices = [0, 1, 2, 3]
+            updated_indices = [indices[i] if i in dims else 0 for i in range(len(indices))]
+            a[updated_indices] = 1.0
+
+            updated_indices = [indices[i] if i not in dims else 0 for i in range(len(indices))]
+            a[updated_indices] = 2.0
+
+    cm = script_module.build()
+    cm()

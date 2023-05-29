@@ -131,3 +131,35 @@ def test_softmax(shape: List[int], axis: int):
     y2 = hidet.empty(shape)
     func(x, y2)
     numpy.testing.assert_allclose(y1.numpy(), y2.numpy(), rtol=1e-5, atol=1e-5)
+
+
+def test_bind_tuple():
+    from hidet.lang import attrs
+    from hidet.lang.mapping import spatial, repeat
+    from hidet.lang import printf, grid
+
+    with hidet.script_module() as script_module:
+
+        @hidet.script
+        def launch():
+            attrs.func_kind = 'public'
+
+            for w in grid(3, attrs='p'):
+                for indices in repeat(2).spatial(3).on(w, bind_tuple=True):
+                    printf("%d %d\n", w, indices[0])
+
+            for w in grid(3, attrs='p'):
+                for i in repeat(2).spatial(3).on(w):
+                    printf("%d %d\n", w, i)
+
+            for indices in grid(3, bind_tuple=True):
+                printf("%d\n", indices[0])
+
+            for indices in grid([3]):
+                printf("%d\n", indices[0])
+
+            for i in grid(3):
+                printf("%d\n", i)
+
+    cm = script_module.build()
+    cm()

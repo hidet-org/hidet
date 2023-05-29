@@ -28,6 +28,7 @@ from ast import Continue
 # expressions
 from ast import Constant, Num, Str, NameConstant
 from ast import BoolOp, BinOp, UnaryOp, Lambda, IfExp, Compare, Call, Attribute, Subscript, Starred, Name, Tuple, Slice
+from ast import In, NotIn
 from ast import ExtSlice, List
 from ast import ListComp, DictComp, SetComp, GeneratorExp, comprehension
 
@@ -656,11 +657,31 @@ class PythonToHidetTranslator(PythonAstFunctor):
             LtE: ir.less_equal,
             NotEq: ir.not_equal,
         }
+        py_op_dict = {
+            And: operator.and_,
+            Or: operator.or_,
+            Eq: operator.eq,
+            Gt: operator.gt,
+            Lt: operator.lt,
+            GtE: operator.ge,
+            LtE: operator.le,
+            NotEq: operator.ne,
+            In: lambda a, b: a in b,
+            NotIn: lambda a, b: a not in b,
+        }
         cond = None
         comparators = [self.visit(v) for v in expr.comparators]
         for op, current in zip(expr.ops, comparators):
-            cur_cond = op_dict[type(op)](front, current)
-            cond = ir.LogicalAnd(cond, cur_cond) if cond is not None else cur_cond
+            op_kind = type(op)
+            if isinstance(front, ir.Node) or isinstance(current, ir.Node):
+                if op_kind not in op_dict:
+                    raise HidetProgramError(
+                        self, expr, 'Currently, we do not support {} operator for hidet vars.'.format(op_kind.__name__)
+                    )
+                cur_cond = op_dict[op_kind](front, current)
+            else:
+                cur_cond = py_op_dict[op_kind](front, current)
+            cond = ir.logical_and(cond, cur_cond) if cond is not None else cur_cond
             front = current
         return cond
 
