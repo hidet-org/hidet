@@ -141,7 +141,7 @@ class ReduceTask(Task):
                 rv = ro.initial_value(data_type(accumulate_dtype))
                 for indices in task_layout.on(threadIdx.x + blockIdx.x * block_size):
                     if layout.within_bound(indices):
-                        k = x.read(indices, protected=False)
+                        k = x[indices]
                         rv = ro.combine(rv, cast(k, accumulate_dtype))
                 # Warp reduce by shuffle down
                 mask = active_mask()
