@@ -40,8 +40,8 @@ class NormalizeF16Task(NormalizeTask):
         input_shape: List[Expr] = list(x.shape)
         dims = self.dims
 
-        spatial_shape = [v for i, v in enumerate(input_shape) if i not in dims]
-        reduce_shape = [input_shape[i] for i in dims]
+        spatial_shape = [int(v) for i, v in enumerate(input_shape) if i not in dims]
+        reduce_shape = [int(input_shape[i]) for i in dims]
         dim_zeros = [0] * len(dims)
 
         reduce_extent = prod(reduce_shape)
