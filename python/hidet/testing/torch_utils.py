@@ -13,7 +13,6 @@ from typing import Sequence
 import numpy.testing
 import torch
 from torch import nn
-import hidet
 
 
 class FunctionalModule(nn.Module):
@@ -26,7 +25,6 @@ class FunctionalModule(nn.Module):
 
 
 def check_module(model: torch.nn.Module, args: Sequence[torch.Tensor], atol=1e-4, rtol=1e-4):
-    hidet.torch.dynamo_config.print_input_graph(True)
     model = model.cuda()
     model.eval()
     args = [x.cuda() if isinstance(x, torch.Tensor) else x for x in args]
