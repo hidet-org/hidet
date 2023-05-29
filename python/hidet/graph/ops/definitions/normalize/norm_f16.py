@@ -9,18 +9,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Union, Optional, Sequence
+from typing import List
 from hidet.ir import IRModule, dtypes
-from hidet.ir.primitives import active_mask, shfl_down_sync, shfl_sync
-from hidet.ir.compute import ReduceOperation, reduce
-from hidet.ir.type import data_type
-from hidet.ir.layout import DataLayout
-from hidet.lang import spatial, repeat, grid, view, cast
-from hidet.lang import data_type, TensorType, i32, f16, attrs, tensor, tensor_pointer
+from hidet.ir.primitives import active_mask, shfl_down_sync
+from hidet.lang import spatial, repeat, view, cast
+from hidet.lang import data_type, TensorType, i32, f16, attrs, tensor
 from hidet.lang.cuda import blockIdx, threadIdx, register_tensor, syncthreads
-from hidet.graph.ops.definitions.utils import Task, Operator, Tensor, TensorNode, ReduceType, normalize_dim
-from hidet.graph.ops.definitions.utils import compute, input_like, normalize_dim
-from hidet.graph.ops.definitions.arithmetic import square, rsqrt
+from hidet.graph.ops.definitions.utils import Operator, Tensor, normalize_dim
+from hidet.graph.ops.definitions.utils import input_like
 from hidet.utils import prod
 from hidet.ir import primitives as prim
 from .norm import NormalizeTask
@@ -41,14 +37,12 @@ class NormalizeF16Task(NormalizeTask):
 
         x, y = self.inputs[0], self.outputs[0]
         input_shape: List[int] = list(x.const_shape)
-        rank = len(input_shape)
         dims = self.dims
 
         spatial_shape = [v for i, v in enumerate(input_shape) if i not in dims]
         reduce_shape = [input_shape[i] for i in dims]
         dim_zeros = [0] * len(dims)
 
-        spatial_extent = prod(spatial_shape)
         reduce_extent = prod(reduce_shape)
 
         warp_size = 64  # coleased loads
@@ -58,7 +52,6 @@ class NormalizeF16Task(NormalizeTask):
         task_layout = spatial(*spatial_shape)
         grid_size = task_layout.num_workers
 
-        dtype = self.inputs[0].type.dtype
         accumulate_dtype = data_type(self.attrs['accumulate_dtype'])
 
         shm_count = math.ceil(block_size / warp_size)

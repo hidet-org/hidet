@@ -14,10 +14,12 @@ from typing import List, Optional, Callable, Any
 from hidet.ir import dtypes
 from hidet.graph.ir import Operator, Tensor
 from hidet.graph.transforms import ResolveRule, register_resolve_rule
-from hidet.graph.ops.definitions.utils import normalize_dim, is_contiguous_norm
+from hidet.graph.ops.definitions.utils import is_contiguous_norm
 from hidet.utils import prod
+from hidet.graph.ops import square, rsqrt
 
-from .norm import normalize, NormalizeOp
+
+from .norm import NormalizeOp
 from .norm_f16 import normalize_f16
 
 
@@ -35,13 +37,13 @@ class NormalizeResolveRule(ResolveRule):
         x: Tensor = op.inputs[0]
         if not is_contiguous_norm(dims, len(x.shape)):
             return None
-        last_dim = x.shape[-1]
         if x.dtype != dtypes.float16 or prod([x.shape[dd] for dd in dims]) % 2 != 0:
             return None
         return [normalize_f16(x, dims)]
 
     def resolve_generic(self, op: Operator) -> Optional[List[Tensor]]:
         dims = op.attrs['dims']
+        epsilon = op.attrs['epsilon']
         x: Tensor = op.inputs[0]
         if not is_contiguous_norm(dims, len(x.shape)):
             x = x - x.mean(dims, keep_dim=True)
