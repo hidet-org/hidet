@@ -38,10 +38,11 @@ class HidetLoopIterable:
 
 
 class TaskMappingLoopIterable(HidetLoopIterable):
-    def __init__(self, task_mapping: TaskMapping, worker):
+    def __init__(self, task_mapping: TaskMapping, worker, bind_tuple=False):
         super().__init__()
         self.task_mapping: TaskMapping = task_mapping
         self.worker: Expr = worker
+        self._bind_tuple: bool = bind_tuple
 
     def __iter__(self):
         return iter(self.task_mapping.worker2task(self.worker))
@@ -52,6 +53,9 @@ class TaskMappingLoopIterable(HidetLoopIterable):
 
     def num_loop_vars(self) -> int:
         return len(self.task_mapping.task_shape)
+
+    def bind_tuple(self) -> bool:
+        return self._bind_tuple
 
 
 class GridLoopIterable(HidetLoopIterable):
@@ -94,7 +98,7 @@ class RangeLoopIterable(HidetLoopIterable):
         return 1
 
 
-def grid(*dim_extents, attrs: Optional[str] = None):
+def grid(*dim_extents, attrs: Optional[str] = None, bind_tuple=False):
     """
     Iterate over the grid.
 
@@ -115,6 +119,9 @@ def grid(*dim_extents, attrs: Optional[str] = None):
       for indices in grid([2]):  # indices is a tuple with one element
           printf("%d %d\n", indices[0])
 
+      for indices in grid(2, bind_tuple=True):  # indices is a tuple with one element
+          printf("%d %d\n", indices[0])
+
     Usage 3: specify the loop attribute
       for i, j in grid(2, 3, attrs='up'):   # loop i is unrolled while loop j is parallelized
           printf("%d %d\n", i, j)
@@ -133,7 +140,6 @@ def grid(*dim_extents, attrs: Optional[str] = None):
         The sequence of indices in the grid to be iterated. (This is the semantics of hidet script, not this python
         function.)
     """
-    bind_tuple = False
     if len(dim_extents) == 1 and isinstance(dim_extents[0], (list, tuple)):
         dim_extents = dim_extents[0]
         bind_tuple = True
