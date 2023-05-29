@@ -121,6 +121,7 @@ class SoftmaxTask(Task):
                     idx = threadIdx.x + k * warp_size
                     if idx < reduce_extent:
                         ys[other_inds[:axis] + [idx] + other_inds[axis:]] = temp[k] / rv
+
         assert isinstance(softmax_kernel, hidet.ir.Function)
         ir_module = module.ir_module()
 
