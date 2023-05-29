@@ -12,6 +12,7 @@
 from typing import List
 from hidet.ir import IRModule, dtypes
 from hidet.ir.primitives import active_mask, shfl_down_sync
+from hidet.ir.expr import Expr
 from hidet.lang import spatial, repeat, view, cast
 from hidet.lang import data_type, TensorType, i32, f16, attrs, tensor
 from hidet.lang.cuda import blockIdx, threadIdx, register_tensor, syncthreads
@@ -36,7 +37,7 @@ class NormalizeF16Task(NormalizeTask):
         import math
 
         x, y = self.inputs[0], self.outputs[0]
-        input_shape: List[int] = list(x.const_shape)
+        input_shape: List[Expr] = list(x.shape)
         dims = self.dims
 
         spatial_shape = [v for i, v in enumerate(input_shape) if i not in dims]
@@ -90,7 +91,7 @@ class NormalizeF16Task(NormalizeTask):
                 count_a[0] = count
 
             @hidet.script
-            def norm_kernel(x: f16[x.const_shape], y: f16[y.const_shape]):
+            def norm_kernel(x: f16[x.shape], y: f16[y.shape]):
                 attrs.cuda.grid_dim = grid_size
                 attrs.cuda.block_dim = block_size
                 attrs.cuda.min_blocks = 1
