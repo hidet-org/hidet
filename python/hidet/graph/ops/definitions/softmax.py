@@ -102,7 +102,7 @@ class SoftmaxTask(Task):
                 for k in range(outer_extent):
                     idx = threadIdx.x + k * warp_size
                     if idx < reduce_extent:
-                        temp[k] = xs.read(other_inds[:axis] + [idx] + other_inds[axis:], protected=False)
+                        temp[k] = xs[other_inds[:axis] + [idx] + other_inds[axis:]]
                         rv = prim.max(rv, temp[k])
                 warp_reduce(rv, prim.max)
 
@@ -120,8 +120,7 @@ class SoftmaxTask(Task):
                 for k in range(outer_extent):
                     idx = threadIdx.x + k * warp_size
                     if idx < reduce_extent:
-                        ys.write(other_inds[:axis] + [idx] + other_inds[axis:], temp[k] / rv, protected=False)
-
+                        ys[other_inds[:axis] + [idx] + other_inds[axis:]] = temp[k] / rv
         assert isinstance(softmax_kernel, hidet.ir.Function)
         ir_module = module.ir_module()
 
