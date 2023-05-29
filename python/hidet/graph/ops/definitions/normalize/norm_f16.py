@@ -47,6 +47,7 @@ class NormalizeF16Task(NormalizeTask):
 
         warp_size = 32  # TODO: improve coleased loads
         block_size = min(max(warp_size, reduce_extent), 1024)
+        block_size = math.ceil(block_size / warp_size) * warp_size
         repeat_reduction = math.ceil(reduce_extent / block_size)
 
         task_layout = spatial(*spatial_shape)

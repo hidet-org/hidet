@@ -38,7 +38,7 @@ def batch_norm_infer(x: Tensor, running_mean: Tensor, running_var: Tensor, epsil
     return (x - running_mean) * rsqrt(running_var + epsilon)
 
 
-def instance_norm(x: Tensor, axis: int = 1, epsilon: float = 1e-5, accumulate_dtype: str = 'float32') -> Tensor:
+def instance_norm(x: Tensor, epsilon: float = 1e-5, accumulate_dtype: str = 'float32') -> Tensor:
     """Instance norm.
 
     Parameters
@@ -57,7 +57,7 @@ def instance_norm(x: Tensor, axis: int = 1, epsilon: float = 1e-5, accumulate_dt
     ret: Tensor
         The normalized tensor.
     """
-    dims = [dim for dim in range(2, len(x.shape)) if dim != axis]
+    dims = [dim for dim in range(2, len(x.shape))]
     norm_func = resolve_norm_func(x.dtype)
     return norm_func(x, axis=dims, epsilon=epsilon, accumulate_dtype=accumulate_dtype)
 
