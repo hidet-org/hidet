@@ -34,6 +34,15 @@ static int64_t memory_planner_allocate(int64_t size) {
 //    max_segments = std::max(max_segments, (int)memory_planner.regions.size());
 //    printf("%d (%d)\n", (int)memory_planner.regions.size(), max_segments);
 //    memory_planner.print();
+
+//    auto ret = memory_planner.regions.begin()->start;
+//    memory_planner.regions.begin()->start += size;
+//    return ret;
+    if(size == 0) {
+        return -1;
+    }
+
+    size = (size + 127) / 128 * 128;    // ceil to 128 bytes
     for (auto it = memory_planner.regions.begin(); it != memory_planner.regions.end(); ++it) {
         if (it->size >= size) {
             auto region = *it;
@@ -59,6 +68,10 @@ static void memory_planner_free(int64_t ptr) {
 //    max_segments = std::max(max_segments, (int)memory_planner.regions.size());
 //    printf("%d (%d)\n", (int)memory_planner.regions.size(), max_segments);
 //    memory_planner.print();
+    if(ptr == -1) {
+        return;
+    }
+
     int64_t start = ptr;
     int64_t size = memory_planner.size_map[ptr];
     auto it = memory_planner.regions.begin();

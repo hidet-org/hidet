@@ -22,7 +22,7 @@ from .utils import broadcast_shape, broadcast_shapes, broadcast_indices
 
 
 class UnaryElementwiseTask(Task):
-    def __init__(self, name: str, x: TensorNode, op: Callable[[Any], Any]):
+    def __init__(self, name: str, x: TensorNode, op: Callable[[Any], Any], attrs=None):
         shape = x.shape
         y = compute(name='y', shape=shape, fcompute=lambda *indices: op(x.__getitem__(indices)))
         super().__init__(
@@ -30,6 +30,7 @@ class UnaryElementwiseTask(Task):
             inputs=[x],
             outputs=[y],
             inverse_map={x: InverseMap.from_lambda(lambda *indices: list(indices), num_args=len(x.type.shape))},
+            attributes={} if attrs is None else attrs,
         )
 
 
@@ -109,10 +110,14 @@ class WhereTask(Task):
 
 
 class UnaryElementwiseOp(Operator):
-    def __init__(self, x: Tensor, op, name: str, attributes: Optional[Dict[str, Any]] = None):
+    def __init__(self, x: Tensor, op, name: str, attributes: Optional[Dict[str, Any]] = None, task_attributes=None):
         if attributes is None:
             attributes = {}
-        super().__init__(inputs=[x], attributes=attributes, task=UnaryElementwiseTask(name, input_like(x, 'x'), op=op))
+        super().__init__(
+            inputs=[x],
+            attributes=attributes,
+            task=UnaryElementwiseTask(name, input_like(x, 'x'), op=op, attrs=task_attributes),
+        )
 
 
 class BinaryElementwiseOp(Operator):

@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from __future__ import annotations
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Iterator, Dict, Any
 from collections import OrderedDict
 from hidet.graph.tensor import symbol_like
 from hidet.graph.flow_graph import FlowGraph, trace_from
@@ -20,40 +20,44 @@ from hidet.graph.tensor import Tensor
 class Module:
     def __init__(self):
         self.name = None
-        self.parameters: OrderedDict[str, Optional[Tensor]] = OrderedDict()
-        self.submodules: OrderedDict[str, Optional[Module]] = OrderedDict()
+        self._parameters: OrderedDict[str, Optional[Tensor]] = OrderedDict()
+        self._submodules: OrderedDict[str, Optional[Module]] = OrderedDict()
 
     def __setattr__(self, key, value):
         parameters = self.__dict__.get('parameters')
         submodules = self.__dict__.get('submodules')
         if isinstance(value, Tensor):
             value.name = key
-            self.parameters[key] = value
+            self._parameters[key] = value
         elif isinstance(value, Module):
             value.name = '{}.{}'.format(self.name, key) if self.name else key
-            self.submodules[key] = value
+            self._submodules[key] = value
         elif parameters and submodules and value is None and (key in parameters or key in submodules):
-            if key in self.parameters:
-                self.parameters[key] = value
-            if key in self.submodules:
-                self.submodules[key] = value
+            if key in self._parameters:
+                self._parameters[key] = value
+            if key in self._submodules:
+                self._submodules[key] = value
         else:
             super().__setattr__(key, value)
         cnt = sum(1 for collection in [parameters, submodules, self.__dict__] if collection and key in collection)
         assert cnt <= 1, 'duplicated definition of {}'.format(key)
 
     def __getattr__(self, item):
-        if item in self.parameters:
-            return self.parameters[item]
-        if item in self.submodules:
-            return self.submodules[item]
+        if item == '_parameters':
+            return super().__getattribute__(item)
+        if item == '_submodules':
+            return super().__getattribute__(item)
+        if item in self._parameters:
+            return self._parameters[item]
+        if item in self._submodules:
+            return self._submodules[item]
         raise AttributeError(item)
 
     def __str__(self):
         lines = []
         args_lines = self.extra_str().split('\n')
         lines.extend([line for line in args_lines if len(line) > 0])
-        for key, submodule in self.submodules.items():
+        for key, submodule in self._submodules.items():
             substr = str(submodule)
             sub_lines = substr.split('\n')
             sub_lines[0] = '({}): {}'.format(key, sub_lines[0])
@@ -69,11 +73,34 @@ class Module:
     def __call__(self, *args):
         return self.forward(*args)
 
+    def state_dict(self) -> Dict[str, Any]:
+        state_dict = {}
+        for name, parameter in self.named_parameters():
+            state_dict[name] = parameter
+        return state_dict
+
+    def load_state_dict(self, state_dict: Dict[str, Any]):
+        for name, parameter in self.named_parameters():
+            parameter.copy_(state_dict[name])
+
     def extra_str(self) -> str:
         return ''
 
     def forward(self, *args):
         raise NotImplementedError()
+
+    def parameters(self, recursive: bool = True) -> Iterator[Tensor]:
+        for _, parameter in self.named_parameters(recursive=recursive):
+            yield parameter
+
+    def named_parameters(self, prefix='', recursive=True):
+        for name, parameter in self._parameters.items():
+            yield name, parameter
+        if recursive:
+            for module_name, submodule in self._submodules.items():
+                for name, parameter in submodule.named_parameters(prefix, recursive):
+                    param_name = '{}{}.{}'.format(prefix + '.' if prefix else '', module_name, name)
+                    yield param_name, parameter
 
     def flow_graph_for(self, inputs: Sequence[Tensor]) -> FlowGraph:
         symbol_inputs = []
@@ -86,49 +113,15 @@ class Module:
         return trace_from(symbol_outputs, symbol_inputs)
 
     def cpu(self) -> Module:
-        for name, submodule in self.submodules.items():
+        for name, submodule in self._submodules.items():
             submodule.cpu()
-        for name, parameter in self.parameters.items():
-            self.parameters[name] = parameter.cpu()
+        for name, parameter in self._parameters.items():
+            self._parameters[name] = parameter.cpu()
         return self
 
     def cuda(self) -> Module:
-        for name, submodule in self.submodules.items():
+        for name, submodule in self._submodules.items():
             submodule.cuda()
-        for name, parameter in self.parameters.items():
-            self.parameters[name] = parameter.cuda()
+        for name, parameter in self._parameters.items():
+            self._parameters[name] = parameter.cuda()
         return self
-
-
-_registered_modules = {}
-
-
-def register_module(torch_module_cls):
-    from torch import nn
-
-    assert isinstance(torch_module_cls, nn.Module)
-
-    def decorator(cls):
-        assert isinstance(cls, Module)
-        _registered_modules[torch_module_cls] = cls
-        return cls
-
-    return decorator
-
-
-def from_torch(torch_module_or_tensor):
-    import torch
-    from torch import nn
-
-    if isinstance(torch_module_or_tensor, nn.Module):
-        torch_module = torch_module_or_tensor
-        cls = type(torch_module)
-        if cls not in _registered_modules:
-            raise ValueError('Module {} is not registered.'.format(cls))
-        return _registered_modules[cls].from_torch(torch_module)
-    elif isinstance(torch_module_or_tensor, torch.Tensor):
-        import hidet.graph.tensor
-
-        return hidet.graph.tensor.from_torch(torch_module_or_tensor)
-    else:
-        raise ValueError('Expect torch.nn.Module or torch.Tensor, got {}.'.format(type(torch_module_or_tensor)))

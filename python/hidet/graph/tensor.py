@@ -20,7 +20,7 @@ import hidet.runtime.storage
 import hidet.cuda
 from hidet.ir import dtypes
 from hidet.ir.type import DataType, data_type
-from hidet.ir.expr import Expr, Constant, SymbolVar, symbol_var
+from hidet.ir.expr import Expr, Constant, SymbolVar, symbol_var, is_constant
 from hidet.ir.layout import DataLayout, RowMajorLayout
 from hidet.runtime.storage import Storage
 from hidet.utils import prod
@@ -382,8 +382,8 @@ class Tensor:
         for i, v in enumerate(item):
             if isinstance(v, int):
                 if v < 0:
-                    v += self.shape[i]
-                if v < 0 or v >= self.shape[i]:
+                    v = v + self.shape[i]
+                if is_constant(v, self.shape[i]) and (v < 0 or v >= self.shape[i]):
                     raise IndexError(
                         'index {} is out of bound for dimension {} with size {}'.format(v, i, self.shape[i])
                     )
@@ -399,7 +399,7 @@ class Tensor:
         starts, ends, steps = [], [], []
         squeeze_dims = []
         for dim, v in enumerate(item):
-            if isinstance(v, int):
+            if isinstance(v, (int, Expr)):
                 squeeze_dims.append(dim)
                 starts.append(v)
                 ends.append(v + 1)
@@ -805,6 +805,14 @@ class Tensor:
             layout=self.layout,
             trace=None,
         )
+
+    def copy_(self, src: Tensor):
+        src_converted = src.to(dtype=self.dtype, device=self.device)
+        if src_converted is src:
+            self._storage = src.storage.copy()
+        else:
+            self._storage = src.storage
+        return self
 
     def copy_async(self, stream=None) -> Tensor:
         """Create a copy of current tensor asynchronously.
@@ -1444,7 +1452,7 @@ def asarray(obj, /, *, dtype=None, device=None) -> Tensor:
     obj: bool, int, float, List, Tuple, Tensor, np.ndarray
         The object to be converted.
 
-    dtype: DataType, optional
+    dtype: DataType or str, optional
         The data type of the output tensor.
 
     device: Device or str

@@ -23,7 +23,7 @@ from ast import Module
 
 # statements
 from ast import FunctionDef, Return, Assign, AnnAssign, AugAssign, For, While, If, With, Assert, Expr, Pass, Break
-from ast import Continue
+from ast import Continue, Nonlocal, Global
 
 # expressions
 from ast import Constant, Num, Str, NameConstant
@@ -239,6 +239,9 @@ class PythonAstFunctor:
         raise NotImplementedError()
 
     def visit_GeneratorExp(self, expr: GeneratorExp):
+        raise NotImplementedError()
+
+    def visit_Nonlocal(self, stmt: Nonlocal):
         raise NotImplementedError()
 
 
@@ -1095,3 +1098,9 @@ class PythonToHidetTranslator(PythonAstFunctor):
 
     def visit_GeneratorExp(self, expr: GeneratorExp):
         return self.process_generator(expr.elt, expr.generators)
+
+    def visit_Nonlocal(self, stmt: Nonlocal):
+        pass
+
+    def visit_Global(self, stmt: Global):
+        pass

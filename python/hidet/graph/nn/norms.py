@@ -36,8 +36,8 @@ class LayerNorm(Module):
 
     def forward(self, x: Tensor) -> Tensor:
         x = ops.layer_norm(x)
-        if self.weight:
+        if self.weight is not None:
             x = x * self.weight
-        if self.bias:
+        if self.bias is not None:
             x = x + self.bias
         return x

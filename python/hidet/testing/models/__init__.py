@@ -9,4 +9,5 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from . import gpt2
 from .resnet import resnet18, resnet34, resnet50, resnet101, resnet152
