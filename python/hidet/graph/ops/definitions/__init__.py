@@ -21,7 +21,6 @@ from .pool import max_pool2d, adaptive_max_pool1d, adaptive_max_pool2d, adaptive
 from .activation import relu, leaky_relu, sigmoid, hardsigmoid, clip, relu6, prelu, gelu, silu, hardswish
 from .activation import logsigmoid, celu, hardshrink, softplus, softsign, tanhshrink, softshrink
 from .activation import softmax, softmin, hardtanh
-from .norm import batch_norm_infer, instance_norm
 from .image import resize2d
 from .cumulative import cumsum
 from .special import barrier

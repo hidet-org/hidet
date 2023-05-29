@@ -123,6 +123,11 @@ def normalize_index(index: Optional[int], dim_size, default) -> int:
         return dim_size
 
 
+def is_contiguous_norm(dims, rank):
+    dims = normalize_dim(dims, rank)
+    return max(dims) - min(dims) == len(dims) - 1 and max(dims) == rank - 1
+
+
 def resolve_out_dtype(input_dtypes: Sequence[Union[DataType, str]]) -> str:
     from hidet.ir.utils.type_utils import numeric_promotion
 

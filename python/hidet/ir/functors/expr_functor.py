@@ -419,9 +419,9 @@ class ExprRewriter(ExprFunctor, BaseRewriter):
 
     def visit_TensorSlice(self, e: TensorSlice):
         base = self(e.base)
-        indices = [self(idx) if idx is not None else None for idx in e.indices]
-        starts = [self(start) if start is not None else None for start in e.starts]
-        ends = [self(end) if end is not None else None for end in e.ends]
+        indices = tuple(self(idx) if idx is not None else None for idx in e.indices)
+        starts = tuple(self(start) if start is not None else None for start in e.starts)
+        ends = tuple(self(end) if end is not None else None for end in e.ends)
         if base is e.base and same_list(indices, e.indices) and same_list(starts, e.starts) and same_list(ends, e.ends):
             return e
         else:
