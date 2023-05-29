@@ -213,7 +213,7 @@ class ReduceTask(Task):
 
                 if threadIdx.x + blockIdx.x * block_size < remain_extent:
                     for indices in task_layout.on(threadIdx.x + blockIdx.x * block_size):
-                        rv[0] = ro.combine(rv[0], x.read(indices, protected=False))
+                        rv[0] = ro.combine(rv[0], x[indices])
                     rv[0] = ro.finalize(acc=rv[0], size=reduce_extent)
                     for indices in remain_layout.on(threadIdx.x + blockIdx.x * block_size):
                         y[indices] = rv[0]
