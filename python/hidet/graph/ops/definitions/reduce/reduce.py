@@ -155,7 +155,7 @@ class ReduceTask(Task):
 
                 if threadIdx.x == 0:
                     for indices in remain_layout.on(blockIdx.x):
-                        y.write(indices, cast(rv, xdtype), protected=False)
+                        y[indices] = cast(rv, xdtype)
 
         ir_module = module.ir_module()
         return ir_module
