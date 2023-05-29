@@ -19,7 +19,7 @@ from hidet.ir.func import IRModule, Function
 from hidet.ir.type import FuncType
 from hidet.ir.expr import Var
 from hidet.lang.transpiler import PythonToHidetTranslator
-from hidet.runtime.module import CompiledFunction
+from hidet.runtime.module import CompiledModule
 
 
 def eliminate_indent(source: str) -> Tuple[str, int]:
@@ -123,10 +123,15 @@ class ScriptModuleContext:
             return None
         return self.name2var[name]
 
+    def define_global_var(self, var: Var):
+        if var.hint in self.name2var:
+            raise ValueError(f'Global variable {var.hint} is already defined.')
+        self.name2var[var.hint] = var
+
     def ir_module(self) -> IRModule:
         return IRModule(funcs={func.name: func for func in self.functions}, task=self.task, global_vars=self.name2var)
 
-    def build(self) -> CompiledFunction:
+    def build(self) -> CompiledModule:
         from hidet.driver import build_ir_module
 
         ir_module = self.ir_module()

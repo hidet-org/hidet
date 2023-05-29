@@ -14,7 +14,7 @@ import time
 from typing import Optional, Dict
 
 from hidet import utils
-from hidet.graph.ir.flow_graph import FlowGraph
+from hidet.graph.flow_graph import FlowGraph
 
 from .base import GraphPassInstrument
 

@@ -100,6 +100,13 @@ def register_hidet_options():
         choices=[True, False],
     )
     register_option(
+        name='parallel_tune',
+        type_hint='int, float',
+        default_value=(-1, 1.5),
+        description='The pair (max_parallel_jobs, mem_gb_per_job) that describe '
+        'the maximum number of parallel jobs and memory reserved for each job',
+    )
+    register_option(
         name='save_lower_ir',
         type_hint='bool',
         default_value=False,
@@ -474,6 +481,35 @@ def get_parallel_build() -> bool:
         Whether to build operators in parallel.
     """
     return OptionContext.current().get_option('parallel_build')
+
+
+def parallel_tune(max_parallel_jobs: int = -1, mem_gb_per_job: float = 1.5):
+    """
+    Specify the maximum number of parallel compilation jobs to do,
+    and the number of GiB preserved for each job.
+
+    Parameters
+    ----------
+    max_parallel_jobs: int
+        The maximum number of parallel jobs allowed, default -1
+        (the number of available vcpu returned by `os.cpu_count()`).
+    mem_gb_per_job: float
+        The minimum amount of memory (in GiB) reserved for each tuning job, default 1.5GiB.
+    """
+    OptionContext.current().set_option('parallel_tune', (max_parallel_jobs, mem_gb_per_job))
+
+
+def get_parallel_tune() -> Tuple[int, float]:
+    """
+    Get the option value of whether to build operators in parallel.
+
+    Returns
+    -------
+    ret: Tuple[int, float]
+        Get the maximum number of jobs and minumum amount of memory reserved for tuning.
+
+    """
+    return OptionContext.current().get_option('parallel_tune')
 
 
 def save_lower_ir(enabled: bool = True):

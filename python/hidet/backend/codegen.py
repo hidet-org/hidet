@@ -16,7 +16,7 @@ from hidet.ir.dialects.pattern import PlaceholderExpr
 from hidet.ir import dtypes
 from hidet.ir.node import Node
 from hidet.ir.type import DataType, PointerType, TensorPointerType, ReferenceType, TensorType, FuncType
-from hidet.ir.type import VoidType, StringType
+from hidet.ir.type import VoidType, StringType, ArrayType
 from hidet.ir.expr import Var, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, Neg, NotEqual, Equal, LogicalAnd
 from hidet.ir.expr import LogicalOr, LogicalNot, BitwiseAnd, BitwiseOr, BitwiseXor, BitwiseNot, LeftShift, RightShift
 from hidet.ir.expr import IfThenElse, Cast, Address, Reference, Dereference, Call, Let, Constant, TensorSlice, convert
@@ -43,6 +43,12 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
         self.ir_module: Optional[IRModule] = None
         self.namer = Namer()
         self.type_infer = TypeInfer()
+
+        self.require_immintrin = False
+        self.require_complex = False
+        self.require_fp16 = False
+        self.require_bf16 = False
+        self.require_tf32 = False
 
     def __call__(self, node) -> Doc:
         return self.visit(node)
@@ -124,18 +130,20 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             dtype = v_type.dtype
             base_type_doc = self(dtype)
             return base_type_doc + ' *' + ' __restrict__ ' + name_doc
+        elif isinstance(v_type, ArrayType):
+            base_type_doc = self(v_type.base_type)
+            return base_type_doc + ' ' + name_doc + '[' + self(v_type.size) + ']'
         else:
             raise ValueError()
 
     def local_var_declare(self, v: Var):
         v_type = v.type
+        name_doc = self(v)
         if isinstance(v_type, DataType):
             dtype_doc = self(v_type)
-            name_doc = self(v)
             return dtype_doc + ' ' + name_doc
         elif isinstance(v_type, TensorType):
             dtype_doc = self(v_type.dtype)
-            name_doc = self(v)
             shape_doc = Doc()
             for s in v_type.shape:
                 shape_doc += '[' + self(s) + ']'
@@ -146,15 +154,25 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             else:
                 attr_doc = Doc()
             base_type_doc = self(v_type.base_type)
-            name_doc = self(v)
             if v_type.use_bracket:
                 return attr_doc + base_type_doc + ' ' + name_doc + '[]'
             else:
                 return attr_doc + base_type_doc + ' *' + name_doc
         elif isinstance(v_type, TensorPointerType):
             dtype_doc = self(v_type.tensor_type.dtype)
-            name_doc = self(v)
             return dtype_doc + ' *' + name_doc
+        elif isinstance(v_type, FuncType):
+            return_type_doc = self(v_type.ret_type)
+            args_doc = doc_join([self(param_type) for param_type in v_type.param_types], sep=', ')
+            return return_type_doc + ' (*' + name_doc + ')(' + args_doc + ')'
+        elif isinstance(v_type, ArrayType):
+            if isinstance(v_type.base_type, FuncType):
+                return_type_doc = self(v_type.base_type.ret_type)
+                args_doc = doc_join([self(param_type) for param_type in v_type.base_type.param_types], sep=', ')
+                return return_type_doc + ' (*' + name_doc + '[' + self(v_type.size) + '])(' + args_doc + ')'
+            else:
+                base_type_doc = self(v_type.base_type)
+                return base_type_doc + ' ' + name_doc + '[' + self(v_type.size) + ']'
         else:
             assert False
 
@@ -185,15 +203,19 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
         self.ir_module = module
         doc = Doc()
 
-        doc += self.require_headers()
+        # define global variables
+        for name, var in module.global_vars.items():
+            if name in module.functions:
+                continue
+            doc += self.local_var_declare(var) + ';' + NewLine()
 
-        doc += Text('extern "C" {') + NewLine()
-
+        # define functions
         call_graph = CallGraph(module)
         for node in call_graph.reversed_order:
             doc += self(node.func) + NewLine()
 
-        doc += NewLine() + '}'
+        doc = self.require_headers() + doc
+
         return doc
 
     def visit_Function(self, func: Function) -> Doc:
@@ -316,11 +338,11 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
         return Text('*') + self(e.expr)
 
     def visit_Call(self, e: Call):
-        func_name: str = e.func_var.name
+        func_name: str = e.func_var.name if e.func_var.name else e.func_var.hint
         assert isinstance(func_name, str)
         if func_name in self.ir_module.functions:
             func = self.ir_module.lookup(func_name)
-            func_name = Text(self.canonize_funcname(func_name))
+            func_name = self.canonize_funcname(func_name)
             if func.kind == 'cuda_kernel':
                 raise RuntimeError('Call to cuda kernel should be lowered to LaunchKernelStmt.')
             param_doc = Text('(') + doc_join([self(arg) for arg in e.args], Text(', ')) + ')'
@@ -342,8 +364,8 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             # system-provided function, do not canonize the func name
             return entry.codegen_name + (Text('(') + doc_join([self(arg) for arg in e.args], Text(', ')) + ')')
         else:
-            msg = "Callee {} not found in current ir module, and it is not primitive function.".format(func_name)
-            raise ValueError(msg)
+            # call a local function pointer variable
+            return self(e.func_var) + Text('(') + doc_join([self(arg) for arg in e.args], Text(', ')) + Text(')')
 
     def visit_Let(self, e: Let):
         raise ValueError("please run 'expand_let_expr' pass before codegen")
@@ -426,7 +448,9 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
                 doc += NewLine() + '#pragma unroll'
         elif stmt.attr.parallel:
             if stmt.attr.parallel_threads:
-                doc += NewLine() + '#pragma omp parallel for num_threads({})'.format(stmt.attr.parallel_threads)
+                doc += NewLine() + '#pragma omp parallel for schedule(dynamic) num_threads({})'.format(
+                    stmt.attr.parallel_threads
+                )
             else:
                 doc += NewLine() + '#pragma omp parallel for'
         doc += NewLine() + Text('for (') + init_doc + '; ' + cond_doc + '; ' + update_doc + ') '
@@ -540,11 +564,23 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             'tfloat32': 'tfloat32_t',
             'complex64': 'complex64_t',
             'complex128': 'complex128_t',
+            'float32x4': '__m128',
+            'float32x8': '__m256',
         }
+
+        self.require_complex = self.require_complex or t.name in ['complex64', 'complex128']
+        self.require_immintrin = self.require_immintrin or t.name in ['float32x4', 'float32x8']
+        self.require_bf16 = self.require_bf16 or t.name == 'bfloat16'
+        self.require_fp16 = self.require_fp16 or t.name == 'float16'
+        self.require_tf32 = self.require_tf32 or t.name == 'tfloat32'
+
         return Text(scalar_type_map[t.name])
 
     def visit_TensorType(self, t: TensorType):
-        return Text('TensorType(') + self(t.dtype) + ', [' + doc_join([self(s) for s in t.shape], ", ") + '])'
+        raise ValueError()
+
+    def visit_ArrayType(self, t: ArrayType):
+        raise ValueError()
 
     def visit_PointerType(self, t: PointerType):
         return self(t.base_type) + Text('*')
@@ -560,6 +596,11 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
 
     def visit_StringType(self, t: StringType):
         return Text('char*')
+
+    def visit_FuncType(self, t: FuncType):
+        ret_type_doc = self(t.ret_type)
+        param_type_docs = [self(p) for p in t.param_types]
+        return ret_type_doc + Text(' (*)( ') + doc_join(param_type_docs, ', ') + Text(')')
 
     # the following expressions should not remain to codegen
     def visit_TensorSlice(self, e: TensorSlice):
@@ -582,16 +623,24 @@ class CUDACodegen(Codegen):
     def require_headers(self) -> Doc:
         doc = Doc()
         doc += Text('#include <stdint.h>') + NewLine()
-        doc += Text('#include <cuda_fp16.h>') + NewLine()
-        doc += Text('#include <cuda_bf16.h>') + NewLine()
+        if self.require_immintrin:
+            doc += Text('#include <immintrin.h>') + NewLine()
+        if self.require_fp16:
+            doc += Text('#include <cuda_fp16.h>') + NewLine()
+        if self.require_bf16:
+            doc += Text('#include <cuda_bf16.h>') + NewLine()
         doc += Text('#include <hidet/runtime/symbols.h>') + NewLine()
+        doc += Text('#include <hidet/runtime/memory_planner.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cpu/context.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cuda/complex.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cuda/context.h>') + NewLine()
 
-        # nvcc use float to 'store' tfloat32 data
-        doc += Text('typedef float tfloat32_t;') + NewLine()
-        doc += Text('typedef __nv_bfloat16 bfloat16_t;') + NewLine()
+        if self.require_tf32:
+            # nvcc use float to 'store' tfloat32 data
+            doc += Text('typedef float tfloat32_t;') + NewLine()
+
+        if self.require_bf16:
+            doc += Text('typedef __nv_bfloat16 bfloat16_t;') + NewLine()
 
         doc += NewLine()
         return doc
@@ -603,13 +652,19 @@ class CUDACodegen(Codegen):
 
         # ret
         if func.kind == 'cuda_kernel':
-            doc += '__global__'
-        elif func.kind == 'cuda_device':
-            doc += '__device__ __forceinline__'
-        elif func.kind in ['packed_func', 'host_kernel']:
-            doc += '__host__'
+            doc += '__global__ '
+        elif func.kind == 'cuda_internal':
+            doc += '__device__ __forceinline__ '
+        elif func.kind == 'cpu_kernel':
+            doc += ''
+        elif func.kind == 'cpu_internal':
+            doc += '__forceinline__ '
+        elif func.kind == 'public':
+            doc += 'DLL '
+        else:
+            raise ValueError(f'Unknown function kind: {func.kind}')
 
-        doc += ' ' + self(func.ret_type)
+        doc += self(func.ret_type)
 
         # launch bound for grid worker
         if func.kind == 'cuda_kernel':
@@ -635,11 +690,6 @@ class CUDACodegen(Codegen):
         doc += doc_join(param_docs, Text(', '))
         doc += ') {'
 
-        # comments
-        label = func.get_attr('label', default=None, allow_missing=True)
-        if label:
-            doc += (NewLine() + '// label: {}'.format(label)).indent()
-
         # body
         doc += self(func.body).indent()
 
@@ -653,16 +703,25 @@ class CPUCodegen(Codegen):
         doc = Doc()
         doc += Text('#include <stdint.h>') + NewLine()
         doc += Text('#include <math.h>') + NewLine()
+        if self.require_immintrin:
+            doc += Text('#include <immintrin.h>')
         doc += Text('#include <hidet/runtime/symbols.h>') + NewLine()
+        doc += Text('#include <hidet/runtime/memory_planner.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cpu/context.h>') + NewLine()
-        doc += Text('#include <hidet/runtime/cpu/float16.h>') + NewLine()
-        doc += Text('#include <hidet/runtime/cpu/bfloat16.h>') + NewLine()
-        doc += Text('#include <hidet/runtime/cpu/complex.h>') + NewLine()
+        if self.require_complex:
+            doc += Text('#include <hidet/runtime/cpu/complex.h>') + NewLine()
+        if self.require_fp16:
+            doc += Text('#include <hidet/runtime/cpu/float16.h>') + NewLine()
+        if self.require_bf16:
+            doc += Text('#include <hidet/runtime/cpu/bfloat16.h>') + NewLine()
         doc += NewLine()
         return doc
 
     def visit_Function(self, func: Function) -> Doc:
         self.namer.clear()
+
+        if func.kind not in ['cpu_kernel', 'cpu_internal', 'public']:
+            raise ValueError(f'Unsupported function kind: {func.kind}')
 
         doc = NewLine()
 
@@ -680,11 +739,6 @@ class CPUCodegen(Codegen):
             param_docs.append(self.param_declare(param))
         doc += doc_join(param_docs, Text(', '))
         doc += ') {'
-
-        # comments
-        label = func.get_attr('label', default=None, allow_missing=True)
-        if label:
-            doc += (NewLine() + '// label: {}'.format(label)).indent()
 
         # body
         doc += self(func.body).indent()

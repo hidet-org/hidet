@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from hidet.ir.type import DataType, TensorType, FuncType, PointerType, TensorPointerType, data_type, tensor_pointer_type
-from hidet.ir.type import tensor_type, BaseType
+from hidet.ir.type import tensor_type, BaseType, ArrayType
 from hidet.ir.expr import BinaryExpr, Add, Sub, Multiply, Div, Mod, FloorDiv, Condition, LessThan, Equal, IfThenElse
 from hidet.ir.expr import TensorSlice, LogicalNot, LogicalOr, LogicalAnd, LessEqual, Let, RightShift, LeftShift
 from hidet.ir.expr import BitwiseAnd, Neg, NotEqual, BitwiseXor, Dereference, Reference, Address, BitwiseNot, BitwiseOr
@@ -134,6 +134,8 @@ class TypeInfer(ExprFunctor, ComputeFunctor):
             return base_type.base_type
         elif isinstance(base_type, TensorPointerType):
             return base_type.tensor_type.dtype
+        elif isinstance(base_type, ArrayType):
+            return base_type.base_type
         else:
             raise NotImplementedError()
 

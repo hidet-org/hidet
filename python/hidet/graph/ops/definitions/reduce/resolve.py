@@ -12,7 +12,7 @@
 from typing import List, Optional, Callable, Any
 
 from hidet.ir import dtypes
-from hidet.graph.ir import Operator, Tensor
+from hidet.graph.operator import Operator, Tensor
 from hidet.graph.transforms import ResolveRule, register_resolve_rule
 
 from .reduce import ReduceBaseOp

@@ -72,7 +72,7 @@ def register_functions():
 
                     @script
                     def cuda_load(addr: ~data_type(dtype)) -> data_type(dtype):
-                        attrs.func_kind = 'cuda_device'
+                        attrs.func_kind = 'cuda_internal'
                         attrs.func_name = func_name
                         template = inst_name + ' %0, [%1];'
                         ret: data_type(dtype) = 0  # define a variable used to store the loaded data
@@ -94,7 +94,7 @@ def register_functions():
 
                     @script
                     def cuda_store(addr: ~data_type(dtype), value: data_type(dtype)):
-                        attrs.func_kind = 'cuda_device'
+                        attrs.func_kind = 'cuda_internal'
                         attrs.func_name = func_name
                         template = inst_name + ' [%0], %1;'
                         asm(template, inputs=[addr, value], is_volatile=True)
@@ -112,7 +112,7 @@ def register_primitive_functions_with_body():
     from hidet.ir.builders import FunctionBuilder
 
     # lds128
-    with FunctionBuilder('cuda_lds128', kind='cuda_device') as fb:
+    with FunctionBuilder('cuda_lds128', kind='cuda_internal') as fb:
         # params
         regs_vars = [Var(f'reg{i}', ReferenceType(data_type('float32'))) for i in range(4)]
         smem_addr_var = Var('smem_addr', PointerType(data_type('float32')))
@@ -132,7 +132,7 @@ def register_primitive_functions_with_body():
     register_primitive_function(name='cuda_lds128', func_or_type=fb.get())
 
     # sts128
-    with FunctionBuilder('cuda_sts128', kind='cuda_device') as fb:
+    with FunctionBuilder('cuda_sts128', kind='cuda_internal') as fb:
         # params
         regs_vars = [Var(f'reg{i}', ReferenceType(data_type('float32'))) for i in range(4)]
         smem_addr_var = Var('smem_addr', PointerType(data_type('float32')))

@@ -390,9 +390,8 @@ def ones(
 
 @register_function(torch.nn.functional.gelu)
 def gelu(x: Tensor, approximate: Optional[str] = "none"):
-    if approximate is not None and approximate != "none":
-        warnings.warn_once("hidet: gelu with approximate {repr(approximate)} is not supported. Treat as 'none'.")
-    return ops.gelu(x)
+    approximate = {"none": False, "tanh": True}[approximate]
+    return ops.gelu(x, approximate=approximate)
 
 
 @register_function(torch.nn.functional.layer_norm)

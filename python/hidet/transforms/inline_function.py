@@ -52,7 +52,7 @@ class InlineFunctionRewriter(IRRewriter):
 
         if not callee.ret_type.is_void():
             ret = False
-        elif callee.kind in ['packed_func', 'host_kernel', 'cuda_kernel']:
+        elif callee.kind in ['public', 'cpu_kernel', 'cuda_kernel']:
             ret = False
         elif any(isinstance(arg.type, (ReferenceType, TensorType)) for arg in callee.params):
             ret = False
@@ -124,7 +124,7 @@ class PruneUnusedFunctionRewriter(IRRewriter):
         unused_func_names: Set[str] = set()
         for node in call_graph.nodes:
             func: Function = node.func
-            if func.kind in ['packed_func', 'host_kernel', 'cuda_kernel']:
+            if func.kind in ['public', 'cpu_kernel', 'cuda_kernel']:
                 continue
             if len(node.callers) == 0:
                 unused_func_names.add(func.name)
@@ -151,6 +151,11 @@ class InlineFunctionPass(Pass):
             updated_ir_module.functions[func.name] = func
 
         updated_ir_module = prune_unused_functions(updated_ir_module)
+
+        # add global variables that are not functions
+        updated_ir_module.global_vars.update(
+            {name: var for name, var in ir_module.global_vars.items() if name not in ir_module.functions}
+        )
 
         return updated_ir_module
 

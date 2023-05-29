@@ -78,6 +78,7 @@ class SharedLibrary:
             The loaded function.
         """
         ret = self.cdll[item]
+        # keep a reference to the library to prevent it from being unloaded before the function is deleted.
         ret._lib = self
         return ret
 

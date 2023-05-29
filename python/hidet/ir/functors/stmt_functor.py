@@ -210,7 +210,7 @@ class StmtRewriter(StmtFunctor, BaseRewriter):
         if v is stmt.var and init is stmt.init:
             return stmt
         else:
-            return DeclareStmt(v, init, stmt.is_static)
+            return DeclareStmt(v, init, stmt.is_static, stmt.scope)
 
     def visit_EvaluateStmt(self, stmt: EvaluateStmt):
         e = self.visit(stmt.expr)

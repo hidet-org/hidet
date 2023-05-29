@@ -21,7 +21,6 @@ from .pool import max_pool2d, adaptive_max_pool1d, adaptive_max_pool2d, adaptive
 from .activation import relu, leaky_relu, sigmoid, hardsigmoid, clip, relu6, prelu, gelu, silu, hardswish
 from .activation import logsigmoid, celu, hardshrink, softplus, softsign, tanhshrink, softshrink
 from .activation import softmax, softmin, hardtanh
-from .norm import batch_norm_infer, instance_norm
 from .image import resize2d
 from .cumulative import cumsum
 from .special import barrier
@@ -34,7 +33,7 @@ from .conv3d import conv3d
 from .conv3d_transpose import conv3d_transpose
 from .matmul import batch_matmul, matmul
 
-from .matmul import BatchMatmulOp, MatmulOp
+from .matmul import BatchMatmulOp, MatmulOp, Matmulx86Op
 from .conv2d import Conv2dOp
 from .arithmetic import ErfOp, PowOp, AddOp, SubtractOp, MultiplyOp, DivideOp, WhereOp
 from .compare import EqualOp

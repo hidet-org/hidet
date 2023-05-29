@@ -26,7 +26,7 @@ import onnx
 import onnx.numpy_helper
 import onnx.external_data_helper
 import hidet
-from hidet.graph.nn import nn
+from hidet.graph import nn
 from hidet.graph import ops
 from hidet.graph.tensor import Tensor, from_numpy, randn
 from . import utils
@@ -1128,8 +1128,8 @@ class OnnxGraph(nn.Module):
         self.name: str = graph.name
         for param in graph.initializer:
             numpy_array = onnx.numpy_helper.to_array(tensor=param)
-            self.parameters[param.name] = from_numpy(numpy_array).cuda()
-        self.input_names: List[str] = [input.name for input in graph.input if input.name not in self.parameters]
+            self._parameters[param.name] = from_numpy(numpy_array).cuda()
+        self.input_names: List[str] = [input.name for input in graph.input if input.name not in self._parameters]
         self.output_names: List[str] = [output.name for output in graph.output]
         self.operators: List[OnnxOperator] = dispatch_operators(graph.node, op_sets)
         # self.operators: List[OnnxOperator] = [dispatch(node, op_sets=self.op_sets) for node in graph.node]
@@ -1142,7 +1142,7 @@ class OnnxGraph(nn.Module):
             name2tensor.update(self.env_tensors)
         assert len(args) == len(self.input_names)
         # parameters
-        for name, param in self.parameters.items():
+        for name, param in self._parameters.items():
             name2tensor[name] = param
         # inputs
         for name, inp in zip(self.input_names, args):

@@ -19,8 +19,8 @@ def test_const_pointer():
     with hidet.script_module() as script_module:
 
         @hidet.script
-        def func():
-            attrs.func_kind = 'host_kernel'
+        def launch():
+            attrs.func_kind = 'public'
 
             v = int32(0)  # int32 v = 0;
             p_int32 = ~v  # int32* p_int32 = &v;

@@ -29,7 +29,7 @@ class Sequential(Module):
                 self.__setattr__(str(idx), module)
 
     def forward(self, x):  # pylint: disable=arguments-differ
-        for module in self.submodules.values():
+        for module in self._submodules.values():
             x = module(x)
         return x
 
@@ -38,7 +38,10 @@ class ModuleList(Module):
     def __init__(self, modules: Iterable[Module] = None):
         super().__init__()
         for idx, module in enumerate(modules):
-            self.submodules[str(idx)] = module
+            self._submodules[str(idx)] = module
+
+    def __iter__(self):
+        return iter(self._submodules.values())
 
     def forward(self, *args):
         raise ValueError('Should not forward ModuleList.')

@@ -20,7 +20,7 @@ def test_list_comprehension():
 
         @hidet.script
         def func():
-            attrs.func_kind = 'host_kernel'
+            attrs.func_kind = 'cpu_kernel'
             bs = 1.0 + 1
             shape = [bs, 3, 224, 224]
             a = [1, 2, 3]
@@ -42,7 +42,7 @@ def test_dict_comprehension():
 
         @hidet.script
         def func():
-            attrs.func_kind = 'host_kernel'
+            attrs.func_kind = 'cpu_kernel'
             bs = 1.0 + 1
             shape = [bs, 3, 224, 224]
             a = {k: v for k, v in enumerate(shape)}

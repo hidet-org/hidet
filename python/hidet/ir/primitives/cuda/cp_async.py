@@ -53,7 +53,7 @@ def register_cp_async():
                 @script
                 def cuda_cp_async(dst: PointerType(VoidType()), src: PointerType(VoidType()), src_size: i32):
                     attrs.func_name = func_name
-                    attrs.func_kind = 'cuda_device'
+                    attrs.func_kind = 'cuda_internal'
                     dst_smem_ptr = cvta_generic_to_shared(dst)
                     asm(template=template_string, inputs=[dst_smem_ptr, src, cp_size, src_size])
 
@@ -68,7 +68,7 @@ def register_cp_async_commit_group():
     @script
     def cuda_cp_async_commit_group():
         attrs.func_name = 'cuda_cp_async_commit_group'
-        attrs.func_kind = 'cuda_device'
+        attrs.func_kind = 'cuda_internal'
         asm('cp.async.commit_group;')
 
     assert isinstance(cuda_cp_async_commit_group, Function)
@@ -85,7 +85,7 @@ def register_cp_async_wait_group():
         @script
         def cuda_cp_async_wait_group():
             attrs.func_name = func_name
-            attrs.func_kind = 'cuda_device'
+            attrs.func_kind = 'cuda_internal'
             asm('cp.async.wait_group {};'.format(groups))
 
         assert isinstance(cuda_cp_async_wait_group, Function)
@@ -99,7 +99,7 @@ def register_cp_async_wait_all():
     @script
     def cuda_cp_async_wait_all():
         attrs.func_name = 'cuda_cp_async_wait_all'
-        attrs.func_kind = 'cuda_device'
+        attrs.func_kind = 'cuda_internal'
         asm('cp.async.wait_all;')
 
     assert isinstance(cuda_cp_async_wait_all, Function)

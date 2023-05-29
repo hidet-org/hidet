@@ -23,7 +23,7 @@ def register_functions():
     #
     # @script
     # def cuda_nano_sleep(nano_seconds: u32):
-    #     attrs.func_kind = 'cuda_device'
+    #     attrs.func_kind = 'cuda_internal'
     #     attrs.func_name = 'cuda_nano_sleep'
     #     asm('nanosleep.u32 %0;', inputs=[nano_seconds], is_volatile=True)
     #

@@ -20,16 +20,18 @@ from .utils import Task, Operator, Tensor, compute
 
 
 class FullTask(Task):
-    def __init__(self, shape: Sequence[int], value: Union[int, float, bool, Constant], dtype: Union[DataType, str]):
+    def __init__(
+        self, shape: Sequence[int], value: Union[int, float, bool, Constant, Expr], dtype: Union[DataType, str]
+    ):
         dtype: DataType = data_type(dtype)
-        value: Constant = dtype(value)
+        value: Constant = dtype(value) if isinstance(value, (int, float, bool)) else value
         const_output = compute(name='c', shape=list(shape), fcompute=lambda *indices: value)
         super().__init__(
             name='full',
             inputs=[],
             outputs=[const_output],
             inverse_map={},
-            attributes={'shape': shape, 'value': value.value, 'dtype': dtype.name},
+            attributes={'shape': shape, 'value': value, 'dtype': dtype.name},
         )
 
 

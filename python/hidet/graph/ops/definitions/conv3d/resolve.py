@@ -10,9 +10,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List, Optional
-from hidet.graph.ir import Operator, Tensor
-from hidet.graph import ops
+from hidet.graph.operator import Operator, Tensor
 from hidet.graph.transforms import ResolveRule, register_resolve_rule
+from hidet.graph import ops
 
 from .conv3d import Conv3dOp
 

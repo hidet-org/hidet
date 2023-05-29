@@ -13,7 +13,7 @@ from typing import Dict, Union
 
 import hidet.option
 from hidet.utils.doc import Doc, NewLine, Text, doc_join
-from hidet.graph.ir.flow_graph import FlowGraph, Operator, Tensor
+from hidet.graph.flow_graph import FlowGraph, Operator, Tensor
 
 
 def flow_graph_as_text(graph: FlowGraph) -> str:

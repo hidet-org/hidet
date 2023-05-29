@@ -184,7 +184,7 @@ def register_mma_instructions():
     for config in mma_configs.values():
         inst_name = config.inst_name()
         func_name = 'cuda_' + inst_name.replace('.', '_')
-        with FunctionBuilder(name=func_name, kind='cuda_device') as fb:
+        with FunctionBuilder(name=func_name, kind='cuda_internal') as fb:
             # parameters: a, b, c
             a = Var('a', PointerType(config.input_dtype))
             b = Var('b', PointerType(config.input_dtype))
@@ -272,7 +272,7 @@ def register_ldmatrix_instructions():
                     @script
                     def cuda_ldmatrix(reg0: ref_u32, smem: smem_type):
                         attrs.func_name = func_name
-                        attrs.func_kind = 'cuda_device'
+                        attrs.func_kind = 'cuda_internal'
                         asm(template, outputs=[reg0], inputs=[smem], is_volatile=True)
 
                     assert isinstance(cuda_ldmatrix, Function)
@@ -284,7 +284,7 @@ def register_ldmatrix_instructions():
                     @script
                     def cuda_ldmatrix(reg0: ref_u32, reg1: ref_u32, smem: smem_type):
                         attrs.func_name = func_name
-                        attrs.func_kind = 'cuda_device'
+                        attrs.func_kind = 'cuda_internal'
                         asm(template, outputs=[reg0, reg1], inputs=[smem], is_volatile=True)
 
                     assert isinstance(cuda_ldmatrix, Function)
@@ -295,7 +295,7 @@ def register_ldmatrix_instructions():
                     @script
                     def cuda_ldmatrix(reg0: ref_u32, reg1: ref_u32, reg2: ref_u32, reg3: ref_u32, smem: smem_type):
                         attrs.func_name = func_name
-                        attrs.func_kind = 'cuda_device'
+                        attrs.func_kind = 'cuda_internal'
                         asm(template, outputs=[reg0, reg1, reg2, reg3], inputs=[smem], is_volatile=True)
 
                     assert isinstance(cuda_ldmatrix, Function)

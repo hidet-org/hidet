@@ -12,7 +12,8 @@
 from typing import Type, List, Optional, Dict
 import logging
 from hidet.ir.expr import is_constant
-from hidet.graph.ir import FlowGraph, GraphRewriter, Tensor, Operator
+from hidet.graph.flow_graph import FlowGraph, Tensor, Operator
+from hidet.graph.graph_utils.functors import GraphRewriter
 from hidet.utils import strict_zip, same_list, repeat_until_converge
 from .base import GraphPass, PassContext
 

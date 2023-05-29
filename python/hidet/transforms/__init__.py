@@ -18,7 +18,7 @@ from .instruments import PassInstrument, SaveIRInstrument, ProfileInstrument
 from .unify_global_objects import unify_global_objects_pass
 from .flatten_tensor_slice import flatten_tensor_slice_pass
 from .flatten_tensor_index import flatten_tensor_index_pass
-from .generate_packed_func import generate_packed_func_pass
+from .generate_launch_func import generate_launch_func_pass
 from .explicit_unroll import explicit_unroll_pass
 from .import_primitive_functions import import_primitive_functions_pass
 from .simplify_stmt import simplify_stmt_pass
@@ -33,7 +33,8 @@ from .normalize_const_tensor import normalize_const_tensor_pass
 from .lower_task_mapping import lower_task_mapping_pass
 from .lower_protect_access import lower_protect_access_pass
 from .declare_to_let import declare_to_let_pass
-from .propogate_launch_bound import propagate_launch_bound_pass
+from .propagate_launch_bound import propagate_launch_bound_pass
+from .check_launch_configuration import check_launch_configuration_pass
 from .lower_special_cast import lower_special_cast_pass
 
 
@@ -53,7 +54,7 @@ def lower(ir_module: IRModule) -> IRModule:
     transforms = [
         # necessary passes
         unify_global_objects_pass(),
-        generate_packed_func_pass(),
+        generate_launch_func_pass(),
         flatten_tensor_slice_pass(),
         lower_protect_access_pass(),
         lower_task_mapping_pass(),
@@ -71,6 +72,7 @@ def lower(ir_module: IRModule) -> IRModule:
         add_explicit_cast_pass(),
         declare_to_let_pass(),
         instantiate_symbols_pass(),
+        check_launch_configuration_pass(),
         # simplification
         expand_let_expr_pass(),
         inline_let_stmt_pass(),

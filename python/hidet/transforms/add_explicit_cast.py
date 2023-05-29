@@ -14,6 +14,7 @@ from hidet.ir.tools import TypeInfer
 from hidet.ir.stmt import Stmt, AssignStmt, BufferStoreStmt
 from hidet.ir.expr import Expr, Cast, Add, Sub, Multiply, Div, BinaryExpr, cast
 from hidet.ir.type import DataType, BaseType, TensorType, TensorPointerType, PointerType, ReferenceType, VoidType
+from hidet.ir.type import ArrayType, StringType
 from .base import FunctionBodyPass, Pass
 
 
@@ -39,6 +40,8 @@ class TypeChecker:
             return self.visit_ReferenceType(a, b)
         elif isinstance(a, VoidType):
             return self.visit_VoidType(a, b)
+        elif isinstance(a, StringType):
+            return self.visit_StringType(a, b)
         else:
             raise ValueError('Can not recognize type {}'.format(a))
 
@@ -75,6 +78,9 @@ class TypeChecker:
 
     def visit_VoidType(self, a: VoidType, b: BaseType):
         self.check(a, b, isinstance(b, VoidType))
+
+    def visit_StringType(self, a: StringType, b: BaseType):
+        self.check(a, b, isinstance(b, StringType))
 
 
 def same_type(a: BaseType, b: BaseType) -> bool:
@@ -149,6 +155,8 @@ class AddExplicitCastRewriter(IRRewriter):
         elif isinstance(buffer_type, TensorPointerType):
             target_type = buffer_type.tensor_type.dtype
         elif isinstance(buffer_type, PointerType):
+            target_type = buffer_type.base_type
+        elif isinstance(buffer_type, ArrayType):
             target_type = buffer_type.base_type
         else:
             raise ValueError('Can not recognize the buffer type: {}'.format(buffer_type))

@@ -9,15 +9,21 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List
-from .utils import Tensor, normalize_dim
-from .arithmetic import square, rsqrt
+import hidet
+
+from ..utils import Tensor, normalize_dim
+from ..arithmetic import rsqrt
+from .norm import normalize
+from .norm_f16 import normalize_f16
 
 
-def normalize(x: Tensor, dims: List[int], epsilon: float = 1e-5) -> Tensor:
-    x = x - x.mean(dims, keep_dim=True)
-    variance = square(x).mean(dims, keep_dim=True)
-    return x * rsqrt(variance + epsilon)
+def resolve_norm_func(dtype):
+    if dtype == hidet.float32:
+        return normalize
+    elif dtype == hidet.float16:
+        return normalize_f16
+    else:
+        raise NotImplementedError("normalize function for dtype {} is not implemented".format(dtype))
 
 
 def batch_norm_infer(x: Tensor, running_mean: Tensor, running_var: Tensor, epsilon=1e-5, axis=1) -> Tensor:
@@ -32,7 +38,7 @@ def batch_norm_infer(x: Tensor, running_mean: Tensor, running_var: Tensor, epsil
     return (x - running_mean) * rsqrt(running_var + epsilon)
 
 
-def instance_norm(x: Tensor, axis: int = 1, epsilon: float = 1e-5) -> Tensor:
+def instance_norm(x: Tensor, epsilon: float = 1e-5, accumulate_dtype: str = 'float32') -> Tensor:
     """Instance norm.
 
     Parameters
@@ -43,17 +49,20 @@ def instance_norm(x: Tensor, axis: int = 1, epsilon: float = 1e-5) -> Tensor:
         The axis of channel dimension.
     epsilon: float
         The epsilon added to variance.
+    accumulate_dtype: str
+        The precision used for accumulation during reduction
 
     Returns
     -------
     ret: Tensor
         The normalized tensor.
     """
-    dims = [dim for dim in range(2, len(x.shape)) if dim != axis]
-    return normalize(x, dims=dims, epsilon=epsilon)
+    dims = [dim for dim in range(2, len(x.shape))]
+    norm_func = resolve_norm_func(x.dtype)
+    return norm_func(x, axis=dims, epsilon=epsilon, accumulate_dtype=accumulate_dtype)
 
 
-def layer_norm(x: Tensor, num_last_dims: int = 1, epsilon: float = 1e-5) -> Tensor:
+def layer_norm(x: Tensor, num_last_dims: int = 1, epsilon: float = 1e-5, accumulate_dtype: str = 'float32') -> Tensor:
     """
     Layer norm.
 
@@ -65,17 +74,20 @@ def layer_norm(x: Tensor, num_last_dims: int = 1, epsilon: float = 1e-5) -> Tens
         The number of dimensions to be normalized, starting from the end dimension of x.
     epsilon: float
         The epsilon added to variance.
+    accumulate_dtype: str
+        The precision used for accumulation during reduction
 
     Returns
     -------
     ret: Tensor
         The normalized tensor.
     """
+    norm_func = resolve_norm_func(x.dtype)
     dims = list(range(len(x.shape) - num_last_dims, len(x.shape)))
-    return normalize(x, dims=dims, epsilon=epsilon)
+    return norm_func(x, axis=dims, epsilon=epsilon, accumulate_dtype=accumulate_dtype)
 
 
-def group_norm(x: Tensor, num_groups, epsilon: float = 1e-5):
+def group_norm(x: Tensor, num_groups, epsilon: float = 1e-5, accumulate_dtype: str = 'float32'):
     """
     Group norm.
 
@@ -87,6 +99,8 @@ def group_norm(x: Tensor, num_groups, epsilon: float = 1e-5):
         The number of groups
     epsilon: float
         The epsilon added to variance.
+    accumulate_dtype: str
+        The precision used for accumulation during reduction
 
     Returns
     -------
@@ -105,6 +119,7 @@ def group_norm(x: Tensor, num_groups, epsilon: float = 1e-5):
 
     x = x.reshape(new_shape)
     dims = list(range(2, len(x.shape)))
-    normed = normalize(x, dims=dims, epsilon=epsilon)
+    norm_func = resolve_norm_func(x.dtype)
+    normed = norm_func(x, axis=dims, epsilon=epsilon, accumulate_dtype=accumulate_dtype)
 
     return normed.reshape(x_shape)
