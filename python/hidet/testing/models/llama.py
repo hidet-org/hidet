@@ -66,7 +66,7 @@ def _make_causal_mask(input_ids_shape, dtype, device, past_key_values_length: in
     mask = mask.to(dtype)
 
     if past_key_values_length > 0:
-        mask = hidet.cat([hidet.zeros(tgt_len, past_key_values_length, dtype=dtype, device=device), mask], dim=-1)
+        mask = hidet.ops.concat([hidet.zeros(tgt_len, past_key_values_length, dtype=dtype, device=device), mask], dim=-1)
     return mask[None, None, :, :].expand(bsz, 1, tgt_len, tgt_len + past_key_values_length)
 
 
@@ -118,7 +118,7 @@ class LlamaRotaryEmbedding(nn.Module):
         freqs = t[:, None] * self.inv_freq[None, :]
 
         # Different from paper, but it uses a different permutation in order to obtain the same calculation
-        emb = hidet.cat((freqs, freqs), dim=-1)
+        emb = hidet.ops.concat((freqs, freqs), axis=-1)
         self.register_buffer("cos_cached", hidet.ops.cos(emb)[None, None, :, :])
         self.register_buffer("sin_cached", hidet.ops.sin(emb)[None, None, :, :])
 
@@ -132,7 +132,7 @@ class LlamaRotaryEmbedding(nn.Module):
             t = hidet.arange(self.max_seq_len_cached, device=x.device, dtype=self.inv_freq.dtype)
             freqs = t[:, None] * self.inv_freq[None, :]
             # Different from paper, but it uses a different permutation in order to obtain the same calculation
-            emb = hidet.cat((freqs, freqs), dim=-1).to(x.device)
+            emb = hidet.ops.concat((freqs, freqs), dim=-1).to(x.device)
             self.cos_cached = hidet.ops.cos(emb)[None, None, :, :]
             self.sin_cached = hidet.ops.sin(emb)[None, None, :, :]
         return (
@@ -145,7 +145,7 @@ def rotate_half(x):
     """Rotates half the hidden dims of the input."""
     x1 = x[..., : x.shape[-1] // 2]
     x2 = x[..., x.shape[-1] // 2 :]
-    return hidet.cat((-x2, x1), dim=-1)
+    return hidet.ops.concat((-x2, x1), axis=-1)
 
 
 def apply_rotary_pos_emb(q, k, cos, sin, position_ids):
@@ -220,12 +220,12 @@ class LlamaAttention(nn.Module):
 
         if past_key_value is not None:
             # reuse k, v, self_attention
-            key_states = hidet.cat([past_key_value[0], key_states], dim=2)
-            value_states = hidet.cat([past_key_value[1], value_states], dim=2)
+            key_states = hidet.ops.concat([past_key_value[0], key_states], dim=2)
+            value_states = hidet.ops.concat([past_key_value[1], value_states], dim=2)
 
         past_key_value = (key_states, value_states) if use_cache else None
 
-        attn_weights = hidet.matmul(query_states, key_states.transpose(2, 3)) / math.sqrt(self.head_dim)
+        attn_weights = hidet.ops.matmul(query_states, key_states.transpose(2, 3)) / math.sqrt(self.head_dim)
 
         if attn_weights.shape != (bsz, self.num_heads, q_len, kv_seq_len):
             raise ValueError(
@@ -243,7 +243,7 @@ class LlamaAttention(nn.Module):
 
         # upcast attention to fp32
         attn_weights = hidet.ops.softmax(attn_weights, axis=-1).to(query_states.dtype)
-        attn_output = hidet.matmul(attn_weights, value_states)
+        attn_output = hidet.ops.matmul(attn_weights, value_states)
 
         if attn_output.shape != (bsz, self.num_heads, q_len, self.head_dim):
             raise ValueError(

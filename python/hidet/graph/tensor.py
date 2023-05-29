@@ -232,7 +232,7 @@ class Tensor:
         return pow(self, utils.convert_to_tensor(power, self))
 
     def __matmul__(self, other) -> Tensor:
-        from .ops import utils
+        from .ops import utils, matmul
 
         return matmul(self, utils.convert_to_tensor(other, self))
 
@@ -1510,26 +1510,3 @@ def asarray(obj, /, *, dtype=None, device=None) -> Tensor:
             array = array.astype(np.float32)
         ret = from_numpy(array)
     return ret.to(dtype=dtype, device=device)
-
-
-def cat(tensors: List[Tensor], dim: int):
-    """
-    Concatenates the list of Tensors along dim.
-
-    Requires
-    --------
-    All shapes for the list of tensors are equal except for dim.
-    """
-    from .ops import concat
-
-    return concat(tensors, dim)
-
-
-def matmul(a: Tensor, b: Tensor) -> Tensor:
-    """
-    Performs matrix multiplication between a and b
-
-    """
-    from .ops import matmul as _matmul
-
-    return _matmul(a, b)
