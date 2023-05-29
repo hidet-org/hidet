@@ -677,7 +677,7 @@ def is_false(v: Expr) -> bool:
 
 def if_then_else(
     cond: Union[Expr, PyScalar], then_expr: Union[Expr, PyScalar], else_expr: Union[Expr, PyScalar]
-) -> IfThenElse:
+) -> Expr:
     """
     Create an if-then-else expression.
 
@@ -694,10 +694,16 @@ def if_then_else(
 
     Returns
     -------
-    ret: IfThenElse
+    ret: Expr
         The if-then-else expression.
     """
-    return IfThenElse(convert(cond), convert(then_expr), convert(else_expr))
+    if is_constant(cond):
+        if bool(cond):
+            return convert(then_expr)
+        else:
+            return convert(else_expr)
+    else:
+        return IfThenElse(convert(cond), convert(then_expr), convert(else_expr))
 
 
 def tensor_rank(v: Expr) -> int:
