@@ -138,13 +138,12 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
 
     def local_var_declare(self, v: Var):
         v_type = v.type
+        name_doc = self(v)
         if isinstance(v_type, DataType):
             dtype_doc = self(v_type)
-            name_doc = self(v)
             return dtype_doc + ' ' + name_doc
         elif isinstance(v_type, TensorType):
             dtype_doc = self(v_type.dtype)
-            name_doc = self(v)
             shape_doc = Doc()
             for s in v_type.shape:
                 shape_doc += '[' + self(s) + ']'
@@ -155,20 +154,25 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             else:
                 attr_doc = Doc()
             base_type_doc = self(v_type.base_type)
-            name_doc = self(v)
             if v_type.use_bracket:
                 return attr_doc + base_type_doc + ' ' + name_doc + '[]'
             else:
                 return attr_doc + base_type_doc + ' *' + name_doc
         elif isinstance(v_type, TensorPointerType):
             dtype_doc = self(v_type.tensor_type.dtype)
-            name_doc = self(v)
             return dtype_doc + ' *' + name_doc
         elif isinstance(v_type, FuncType):
             return_type_doc = self(v_type.ret_type)
-            name_doc = self(v)
             args_doc = doc_join([self(param_type) for param_type in v_type.param_types], sep=', ')
             return return_type_doc + ' (*' + name_doc + ')(' + args_doc + ')'
+        elif isinstance(v_type, ArrayType):
+            if isinstance(v_type.base_type, FuncType):
+                return_type_doc = self(v_type.base_type.ret_type)
+                args_doc = doc_join([self(param_type) for param_type in v_type.base_type.param_types], sep=', ')
+                return return_type_doc + ' (*' + name_doc + '[' + self(v_type.size) + '])(' + args_doc + ')'
+            else:
+                base_type_doc = self(v_type.base_type)
+                return base_type_doc + ' ' + name_doc + '[' + self(v_type.size) + ']'
         else:
             assert False
 
@@ -203,7 +207,7 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
         for name, var in module.global_vars.items():
             if name in module.functions:
                 continue
-            doc += self.param_declare(var) + ';' + NewLine()
+            doc += self.local_var_declare(var) + ';' + NewLine()
 
         # define functions
         call_graph = CallGraph(module)

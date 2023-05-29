@@ -9,12 +9,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Optional, Dict, Tuple
+from typing import List, Optional, Tuple
 import os
 import numpy as np
 
-from hidet.runtime import CompiledFunction
-from hidet.graph.flow_graph import FlowGraph, Operator, Tensor, GraphForwardInstrument, SymbolVar
+from hidet.runtime import CompiledModule
+from hidet.graph.flow_graph import FlowGraph, Operator, Tensor, GraphForwardInstrument
 
 
 class GraphForwardBenchmarkInstrument(GraphForwardInstrument):
@@ -53,13 +53,11 @@ class GraphForwardBenchmarkInstrument(GraphForwardInstrument):
         self.latency_list = []
         os.makedirs(self.run_dir, exist_ok=True)
 
-    def after_operator(
-        self, op: Operator, inputs: List[Tensor], shape_map: Dict[SymbolVar, int], outputs: List[Tensor]
-    ) -> None:
+    def after_operator(self, op: Operator, inputs: List[Tensor], outputs: List[Tensor]) -> None:
         if not self.benchmarking:
             return
 
-        task_func: CompiledFunction = op.task_func
+        task_func: CompiledModule = op.task_func
         latency: List[float] = task_func.profile(
             *inputs, *outputs, warmup=self.warmup, number=self.number, repeat=self.repeat
         )

@@ -24,6 +24,8 @@ class c_pointer_compatible:
             return ctypes.cast(char_array, ctypes.c_void_p)
         elif isinstance(obj, str):
             return ctypes.c_char_p(obj.encode('utf-8'))
+        elif isinstance(obj, ctypes.c_void_p):
+            return obj
         else:
             raise ValueError(f"Argument type '{type(obj)}' can not converted to a pointer.")
 

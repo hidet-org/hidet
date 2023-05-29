@@ -1,5 +1,6 @@
-from typing import List, Optional, Tuple, Dict, Any, Union
+from typing import List, Optional, Tuple, Dict, Any, Union, Callable, Sequence
 import tempfile
+import functools
 import zipfile
 import os
 import json
@@ -8,20 +9,45 @@ from tabulate import tabulate
 
 import hidet
 from hidet.ffi.utils import Array, ctypes_func_pointer
-from hidet.ir.type import DataType, void_p, data_type
-from hidet.ir.dtypes import i8, i16, i32, i64, u8, u16, u32, u64, f32, f64
+from hidet.ir.type import void_p, data_type
+from hidet.ir.dtypes import i32
+from hidet.runtime.device import Device
 from hidet.runtime.module import CompiledModule
 from hidet.runtime.storage import Storage
 from hidet.ffi import runtime_api
 from hidet.utils import prod
 
-
-def get_type_code(dtype: DataType) -> int:
-    return {i8: 0, i16: 1, i32: 2, i64: 3, u8: 4, u16: 5, u32: 6, u64: 7, f32: 8, f64: 9}[dtype]
+ModelExecutionHook = Callable[[int, List['Tensor'], List['Tensor']], None]
 
 
-def from_type_code(code: int) -> DataType:
-    return {0: i8, 1: i16, 2: i32, 3: i64, 4: u8, 5: u16, 6: u32, 7: u64, 8: f32, 9: f64}[code]
+class ExternalStorage(Storage):
+    def __init__(self, device: str, addr: int, num_bytes: int):
+        super().__init__(Device(device), addr, num_bytes, lambda x: x)
+
+
+def hook_wrapper(args: Sequence[int], device, hook: ModelExecutionHook):
+    from hidet.graph.tensor import Tensor
+    from ctypes import c_char_p
+
+    cur = 0
+
+    def get():
+        nonlocal cur
+        cur += 1
+        return args[cur - 1]
+
+    idx: int = get()
+    num_inputs: int = get()
+    num_outputs: int = get()
+    params: List[Tensor] = []
+    for _ in range(num_inputs + num_outputs):
+        dtype: str = c_char_p(get()).value.decode('utf-8')
+        rank: int = get()
+        shape: List[int] = [get() for _ in range(rank)]
+        pointer: int = get()
+        storage = ExternalStorage('cpu', pointer, prod(shape) * data_type(dtype).nbytes)
+        params.append(Tensor(shape, dtype, device, storage))
+    hook(idx, params[:num_inputs], params[num_inputs:])
 
 
 class ModelMetaData:
@@ -66,10 +92,13 @@ class CompiledModel:
         from hidet.graph.tensor import Tensor
 
         self._init = graph_module['init']
+        self._register_hook = graph_module['register_hook']
         self._get_output_shape = graph_module['get_output_shape']
         self._set_workspace = graph_module['set_workspace']
         self._get_workspace_size = graph_module['get_workspace_size']
         self._launch = graph_module['launch']
+
+        self._registered_hook: Optional[Any] = None
 
         self.meta_data: ModelMetaData = meta_data
         self.graph_module: CompiledModule = graph_module
@@ -77,6 +106,7 @@ class CompiledModel:
         self.kernels: List[CompiledModule] = kernels
         self.workspace: Optional[Storage] = None
         self.is_dynamic: bool = len(self.meta_data.dynamic_dims) > 0
+        self.device: Device = self.weights[0].device if len(self.weights) > 0 else Device('cpu')
 
         self._init_weights_and_kernels()
 
@@ -154,7 +184,28 @@ class CompiledModel:
             for sig in self.meta_data.output_signatures:
                 dtypes.append(sig[0])
                 shapes.append(sig[1:])
-        return [empty(shape, dtype) for shape, dtype in zip(shapes, dtypes)]
+        return [empty(shape, dtype, device=self.device) for shape, dtype in zip(shapes, dtypes)]
+
+    def register_hook(self, hook: ModelExecutionHook):
+        """
+        Register a hook that will be called after each operator run.
+
+        Parameters
+        ----------
+        hook: ModelExecutionHook
+            The hook to be registered. It has the following signature:
+                hook(idx: int, inputs: List[Tensor], outputs: List[Tensor) -> None
+            The hook will be called after the idx-th (0-base) operator finishes execution, with the inputs and outputs
+            of the operator as arguments. When the whole model finishes execution, the hook will be called with
+            idx=len(operators). There is at most one hook can be registered at any time. Registering a new hook will
+            overwrite the previous one.
+        """
+        from ctypes import CFUNCTYPE, c_uint64, POINTER, cast, c_void_p
+
+        self._registered_hook = CFUNCTYPE(None, POINTER(c_uint64))(
+            functools.partial(hook_wrapper, device=self.device, hook=hook)
+        )
+        self._register_hook(cast(self._registered_hook, c_void_p))
 
     def run_async(self, inputs):
         """

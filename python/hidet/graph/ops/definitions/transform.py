@@ -227,7 +227,7 @@ class StridedSliceTask(Task):
                 output_shape[axis] = (end - start + stride - 1) // stride
             else:
                 output_shape[axis] = (start - end + (-stride) - 1) // (-stride)
-            if output_shape[axis] < 0:
+            if is_constant(output_shape[axis]) and output_shape[axis] < 0:
                 raise NotImplementedError(
                     'Slice result can not be: '
                     'starts {} ends {} axes {} strides {}'.format(starts, ends, axes, strides)
@@ -500,21 +500,21 @@ class StridedSliceOp(Operator):
             if k > 0:
                 i = i if i is not None else 0
                 j = j if j is not None else n
-                if not (-n <= i <= n and -n <= j):
+                if is_constant(i, j, n) and not (-n <= i <= n and -n <= j):
                     raise IndexError('Invalid slice')
-                j = min(j, n)
-                if i < 0:
-                    i += n
-                if j < 0:
-                    j += n
+                j = if_then_else(j < n, j, n)
+                if is_constant(i) and i < 0:
+                    i = i + n
+                if is_constant(j) and j < 0:
+                    j = j + n
             elif k < 0:
                 i = i if i is not None else n - 1
                 j = j if j is not None else -n - 1
-                if i < 0:
+                if is_constant(i) and i < 0:
                     i += n
-                if j < -1:
+                if is_constant(j) and j < -1:
                     j += n
-                if not (-n <= i <= n and -n - 1 <= j <= max(0, n - 1)):
+                if is_constant(i, j, n) and not (-n <= i <= n and -n - 1 <= j <= max(0, n - 1)):
                     raise IndexError('Invalid slice')
             else:
                 raise IndexError('slice step cannot be zero')
@@ -522,17 +522,6 @@ class StridedSliceOp(Operator):
             jj.append(j)
             kk.append(k)
         return ii, jj, axes, kk
-        #
-        # for i in range(len(axes)):
-        #     if strides[i] > 0:
-        #         starts[i] = starts[i] + shape[i] if starts[i] < 0 else starts[i]
-        #         ends[i] = ends[i] + shape[i] if ends[i] < 0 else ends[i]
-        #         starts[i] = max(0, min(shape[i], starts[i]))
-        #         ends[i] = max(0, min(shape[i], ends[i]))
-        #     else:
-        #         starts[i] = max(-1, min(shape[i] - 1, starts[i]))
-        #         ends[i] = max(-1, min(shape[i] - 1, ends[i]))
-        # return starts, ends, axes, strides
 
 
 class BroadcastOp(Operator):

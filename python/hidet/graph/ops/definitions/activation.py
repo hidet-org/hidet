@@ -61,9 +61,18 @@ class ClipOp(UnaryElementwiseOp):
 
 
 class GeluOp(UnaryElementwiseOp):
-    def __init__(self, x: Tensor):
+    def __init__(self, x: Tensor, approximate: bool = False):
+        dtype = x.dtype
+        if not approximate:
+            op = lambda v: dtype(0.5) * v * (1 + prim.erf(v * dtype(1 / math.sqrt(2))))
+        else:
+            op = (
+                lambda v: dtype(0.5)
+                * v
+                * (1 + prim.tanh(dtype(math.sqrt(2 / math.pi)) * (v + dtype(0.044715) * (v * v * v))))
+            )
         super().__init__(
-            x, op=lambda v: x.dtype(0.5) * v * (x.dtype.one + prim.erf(v * x.dtype(1 / math.sqrt(2)))), name='gelu'
+            x, op=op, name='gelu', attributes={'approximate': approximate}, task_attributes={'approximate': approximate}
         )
 
 
@@ -89,29 +98,24 @@ class HardSwishOp(UnaryElementwiseOp):
 
 
 class ThresholdOp(UnaryElementwiseOp):
-    def __init__(self, x: Tensor, threshold_val: float, value: float) -> Tensor:
+    def __init__(self, x: Tensor, threshold_val: float, value: float):
         super().__init__(x, op=lambda v: if_then_else(v > x.dtype(threshold_val), v, x.dtype(value)), name='threshold')
 
 
 class HardTanhOp(UnaryElementwiseOp):
-    def __init__(self, x: Tensor, min_val: float = -1.0, max_val: float = 1.0) -> Tensor:
+    def __init__(self, x: Tensor, min_val: float = -1.0, max_val: float = 1.0):
         super().__init__(x, op=lambda v: prim.min(x.dtype(max_val), prim.max(x.dtype(min_val), v)), name='hardtanh')
 
 
 class EluOp(UnaryElementwiseOp):
-    def __init__(self, x: Tensor, alpha: float = 1.0) -> Tensor:
+    def __init__(self, x: Tensor, alpha: float = 1.0):
         super().__init__(
             x, op=lambda v: if_then_else(v > 0, v, x.dtype(alpha) * (prim.exp(v) - x.dtype(1.0))), name='elu'
         )
 
 
 class SeluOp(UnaryElementwiseOp):
-    def __init__(
-        self,
-        x: Tensor,
-        alpha: float = 1.6732632423543772848170429916717,
-        scale: float = 1.0507009873554804934193349852946,
-    ) -> Tensor:
+    def __init__(self, x: Tensor, alpha: float = 1.6732632423543, scale: float = 1.0507009873554):
         super().__init__(
             x,
             op=lambda v: x.dtype(scale)
@@ -121,7 +125,7 @@ class SeluOp(UnaryElementwiseOp):
 
 
 class CeluOp(UnaryElementwiseOp):
-    def __init__(self, x: Tensor, alpha: float = 1.0) -> Tensor:
+    def __init__(self, x: Tensor, alpha: float = 1.0):
         super().__init__(
             x,
             op=lambda v: prim.max(x.dtype(0.0), v)
@@ -212,8 +216,8 @@ def relu6(x: Tensor) -> Tensor:
     return clip(x, 0.0, 6.0)
 
 
-def gelu(x: Tensor) -> Tensor:
-    return GeluOp(x).get_output(0)
+def gelu(x: Tensor, approximate: bool = False) -> Tensor:
+    return GeluOp(x, approximate).outputs[0]
 
 
 def silu(x: Tensor) -> Tensor:
