@@ -45,7 +45,7 @@ class NormalizeF16Task(NormalizeTask):
 
         reduce_extent = prod(reduce_shape)
 
-        warp_size = 32  # coleased loads
+        warp_size = 32  # TODO: improve coleased loads
         block_size = min(max(warp_size, reduce_extent), 1024)
         repeat_reduction = math.ceil(reduce_extent / block_size)
 
@@ -232,7 +232,9 @@ class NormalizeF16Task(NormalizeTask):
                     for reduction_idx in reduce_mapping.on(threadIdx.x):
                         if reduction_idx < reduce_extent:
                             val = regs_repeat[reduction_idx // block_size]
-                            normed = (val - mean_final[0]) * prim.rsqrt(m2_final[0] + cast(self.attrs['epsilon'], accumulate_dtype))
+                            normed = (val - mean_final[0]) * prim.rsqrt(
+                                m2_final[0] + cast(self.attrs['epsilon'], accumulate_dtype)
+                            )
                             flat_tensor[reduction_idx] = normed
 
         ir_module = module.ir_module()
