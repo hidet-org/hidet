@@ -497,32 +497,6 @@ class LlamaForCausalLM(nn.Module):
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
     ):
-        r"""
-        Args:
-            labels (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
-                Labels for computing the masked language modeling loss. Indices should either be in `[0, ...,
-                config.vocab_size]` or -100 (see `input_ids` docstring). Tokens with indices set to `-100` are ignored
-                (masked), the loss is only computed for the tokens with labels in `[0, ..., config.vocab_size]`.
-
-        Returns:
-
-        Example:
-
-        ```python
-        >>> from transformers import AutoTokenizer, LlamaForCausalLM
-
-        >>> model = LlamaForCausalLM.from_pretrained(PATH_TO_CONVERTED_WEIGHTS)
-        >>> tokenizer = AutoTokenizer.from_pretrained(PATH_TO_CONVERTED_TOKENIZER)
-
-        >>> prompt = "Hey, are you consciours? Can you talk to me?"
-        >>> inputs = tokenizer(prompt, return_tensors="pt")
-
-        >>> # Generate
-        >>> generate_ids = model.generate(inputs.input_ids, max_length=30)
-        >>> tokenizer.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
-        "Hey, are you consciours? Can you talk to me?\nI'm not consciours, but I can talk to you."
-        ```"""
-
         # output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         # output_hidden_states = (
         #     output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
@@ -714,6 +688,7 @@ config = LlamaConfig(hidden_size=512, intermediate_size=1024, num_hidden_layers=
 hidet_model = LlamaForCausalLM(config).cuda()
 
 def build_flow_graph(model, batch_size=1, device='cuda'):
+    config = model.config
     input_ids = hidet.symbol([batch_size, "seq_length"], dtype=hidet.int32, device=device)
     attn_mask = hidet.symbol([batch_size, 'prev_seq_len'], dtype=hidet.boolean, device=device)
     position_ids = hidet.symbol([batch_size, 'seq_len'], dtype=hidet.int32, device=device)
@@ -732,5 +707,24 @@ def build_flow_graph(model, batch_size=1, device='cuda'):
 
     return hidet.trace_from(outputs, inputs)
 
-build_flow_graph(hidet_model)
+def generate(input_ids, model, device, num_tokens):
+    cur_len = input_ids.shape[0]
+
+    config = model.config
+    position_ids = hidet.arange(0, config.max_sequence_length, device=device).unsqueeze(0)
+
+    make_past = lambda: hidet.zeros([1, config.num_attention_heads, 0, config.hidden_size // config.num_attention_heads], device=device)
+    past_keys_values = [(make_past(), make_past()) for _ in range(config.num_hidden_layers)]
+    attention_mask = hidet.ones([1, config.max_sequence_length], device=device)
+
+    outputs = []
+    for _ in range(num_tokens):
+        y = model(input_ids, attention_mask=attention_mask[:, :cur_len], position_ids=position_ids[:, cur_len], past_keys_values=past_keys_values, use_cache=True)
+        cur_len += 1
+        outputs.append()
+    
+
+flow_graph = build_flow_graph(hidet_model)
+compiled = flow_graph.build()
+
 
