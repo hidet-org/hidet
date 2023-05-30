@@ -287,7 +287,9 @@ class AttnMaskAddTask(Task):
             + smem_bytes_mij
         )
         used_smem_bytes_per_block = dynamic_smem_bytes
-        tune.check(used_smem_bytes_per_block <= 99000)
+        smem_limits = {70: 96000, 72: 96000, 75: 64000, 80: 163000, 86: 99000, 87: 163000, 89: 99000, 90: 227000}
+        max_smem = 99000 if compute_capability > 90 else smem_limits[compute_capability]
+        tune.check(used_smem_bytes_per_block <= max_smem)
 
         smem_l_type = tensor_type(sm_dtype, shape=[i_rows_per_tb])
         smem_m_type = tensor_type(sm_dtype, shape=[i_rows_per_tb])
@@ -357,7 +359,6 @@ class AttnMaskAddTask(Task):
         v_g2s_layout_sm75, _ = schedule_utils.get_transfer_task_map(
             task_shape=[block_k_o, block_j_o], num_workers=min(block_k_o, block_j_o, block_size), ranks=[0, 1]
         )
-
 
         with hidet.script_module() as module:
             # --------------- helper functions ---------------------------------------------------------------------
@@ -480,7 +481,6 @@ class AttnMaskAddTask(Task):
                     copy_q_g2s_sm80(q, smem_q, offset_i)
                 else:
                     copy_q_g2s_sm75(q, smem_q, offset_i)
-
 
             @hidet.script
             def copy_o_r2g(o: f16[o_head + [n_size, d_size]], regs_o: regs_o_type, offset_i: i32):

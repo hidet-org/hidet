@@ -161,6 +161,7 @@ class PassContext:
         """
         # fmha requires sm75+
         from hidet.cuda import compute_capability
+
         cc = compute_capability()
         if cc < (7, 5):
             return self

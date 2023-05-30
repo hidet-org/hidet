@@ -369,7 +369,7 @@ class AttnTask(Task):
                     else:
                         b32_regs = view(regs, u32[1])
                         ldmatrix(regs=[b32_regs[0]], smem_addr=smem_addr, trans=True)
-            
+
             @hidet.script
             def cp_async_sync():
                 if compute_capability >= 80:
