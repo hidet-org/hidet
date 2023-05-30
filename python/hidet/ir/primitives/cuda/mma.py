@@ -229,7 +229,7 @@ def filter_mma_by_cc(compute_capability):
         if compute_capability < (7, 5):
             if 'm16n8k8' in config_name and config.input_dtype == 'f16':
                 continue
-        elif compute_capability < (8, 0):
+        if compute_capability < (8, 0):
             if 'm8n8k4' in config_name and config.input_dtype == 'f64':
                 continue
             if 'm16n8k16' in config_name and config.input_dtype == 'f16':
