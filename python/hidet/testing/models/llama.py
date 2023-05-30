@@ -66,7 +66,7 @@ def _make_causal_mask(input_ids_shape, dtype, device, past_key_values_length: in
     mask = mask.to(dtype)
 
     if past_key_values_length > 0:
-        mask = hidet.ops.concat([hidet.zeros(tgt_len, past_key_values_length, dtype=dtype, device=device), mask], axis=-1)
+        mask = hidet.ops.concat([hidet.zeros((tgt_len, past_key_values_length), dtype=dtype, device=device), mask], axis=-1)
     return mask[None, None, :, :].expand(bsz, 1, tgt_len, tgt_len + past_key_values_length)
 
 
@@ -127,14 +127,16 @@ class LlamaRotaryEmbedding(nn.Module):
         # This `if` block is unlikely to be run after we build sin/cos in `__init__`. Keep the logic here just in case.
         if seq_len is None:
             seq_len = x.shape[-2]
-        if seq_len > self.max_seq_len_cached:
-            self.max_seq_len_cached = seq_len
-            t = hidet.arange(self.max_seq_len_cached, device=x.device, dtype=self.inv_freq.dtype)
-            freqs = t[:, None] * self.inv_freq[None, :]
-            # Different from paper, but it uses a different permutation in order to obtain the same calculation
-            emb = hidet.ops.concat((freqs, freqs), axis=-1).to(x.device)
-            self.cos_cached = hidet.ops.cos(emb)[None, None, :, :]
-            self.sin_cached = hidet.ops.sin(emb)[None, None, :, :]
+        
+        # Unfortunately, dynamic shape forbids this
+        # if seq_len > self.max_seq_len_cached:
+        #     self.max_seq_len_cached = seq_len
+        #     t = hidet.arange(self.max_seq_len_cached, device=x.device, dtype=self.inv_freq.dtype)
+        #     freqs = t[:, None] * self.inv_freq[None, :]
+        #     # Different from paper, but it uses a different permutation in order to obtain the same calculation
+        #     emb = hidet.ops.concat((freqs, freqs), axis=-1).to(x.device)
+        #     self.cos_cached = hidet.ops.cos(emb)[None, None, :, :]
+        #     self.sin_cached = hidet.ops.sin(emb)[None, None, :, :]
         return (
             self.cos_cached[:, :, :seq_len, ...].to(dtype=x.dtype),
             self.sin_cached[:, :, :seq_len, ...].to(dtype=x.dtype),
@@ -152,8 +154,9 @@ def apply_rotary_pos_emb(q, k, cos, sin, position_ids):
     # The first two dimensions of cos and sin are always 1, so we can `squeeze` them.
     cos = cos.squeeze(1).squeeze(0)  # [seq_len, dim]
     sin = sin.squeeze(1).squeeze(0)  # [seq_len, dim]
-    cos = cos[position_ids].unsqueeze(1)  # [bs, 1, seq_len, dim]
-    sin = sin[position_ids].unsqueeze(1)  # [bs, 1, seq_len, dim]
+
+    cos = hidet.ops.take(cos, position_ids, 0).unsqueeze(1) # [bs, 1, seq_len, dim]
+    sin = hidet.ops.take(sin, position_ids, 0).unsqueeze(1)
     q_embed = (q * cos) + (rotate_half(q) * sin)
     k_embed = (k * cos) + (rotate_half(k) * sin)
     return q_embed, k_embed
@@ -220,6 +223,8 @@ class LlamaAttention(nn.Module):
 
         if past_key_value is not None:
             # reuse k, v, self_attention
+            print(past_key_value[0].shape)
+            print(key_states.shape)
             key_states = hidet.ops.concat([past_key_value[0], key_states], axis=2)
             value_states = hidet.ops.concat([past_key_value[1], value_states], axis=2)
 
@@ -227,18 +232,19 @@ class LlamaAttention(nn.Module):
 
         attn_weights = hidet.ops.matmul(query_states, key_states.transpose(2, 3)) / math.sqrt(self.head_dim)
 
-        if attn_weights.shape != (bsz, self.num_heads, q_len, kv_seq_len):
-            raise ValueError(
-                f"Attention weights should be of size {(bsz, self.num_heads, q_len, kv_seq_len)}, but is"
-                f" {attn_weights.size()}"
-            )
 
-        if attention_mask is not None:
-            if attention_mask.shape != (bsz, 1, q_len, kv_seq_len):
-                raise ValueError(
-                    f"Attention mask should be of size {(bsz, 1, q_len, kv_seq_len)}, but is {attention_mask.size()}"
-                )
-            attn_weights = attn_weights + attention_mask
+        # if attn_weights.shape != (bsz, self.num_heads, q_len, kv_seq_len):
+        #     raise ValueError(
+        #         f"Attention weights should be of size {(bsz, self.num_heads, q_len, kv_seq_len)}, but is"
+        #         f" {attn_weights.size()}"
+        #     )
+
+        # if attention_mask is not None:
+        #     if attention_mask.shape != (bsz, 1, q_len, kv_seq_len):
+        #         raise ValueError(
+        #             f"Attention mask should be of size {(bsz, 1, q_len, kv_seq_len)}, but is {attention_mask.size()}"
+        #         )
+        attn_weights = attn_weights + attention_mask
             # attn_weights = hidet.ops.max(attn_weights, hidet.asarray(float((attn_weights.dtype.min_value))))
 
         # upcast attention to fp32
@@ -325,6 +331,9 @@ class LlamaDecoderLayer(nn.Module):
 
         return outputs
 
+def hidet_make_causal_mask(seq_len, dtype, device, past_key_values_length):
+    x = hidet.ops.tri(n=seq_len, m=seq_len + past_key_values_length, k=past_key_values_length, dtype=dtype, device=device)
+    return (1 - x) * float(dtype._min_value)
 
 class LlamaModel(nn.Module):
     """
@@ -353,14 +362,13 @@ class LlamaModel(nn.Module):
     def _prepare_decoder_attention_mask(self, attention_mask, input_shape, inputs_embeds, past_key_values_length):
         # create causal mask
         # [bsz, seq_len] -> [bsz, 1, tgt_seq_len, src_seq_len]
-        combined_attention_mask = None
-        if input_shape[-1] > 1:
-            combined_attention_mask = _make_causal_mask(
-                input_shape,
-                inputs_embeds.dtype,
-                device=inputs_embeds.device,
-                past_key_values_length=past_key_values_length,
-            )
+        
+        combined_attention_mask = hidet_make_causal_mask(
+            input_shape[1],
+            inputs_embeds.dtype,
+            device=inputs_embeds.device,
+            past_key_values_length=past_key_values_length,
+        )
 
         if attention_mask is not None:
             # [bsz, seq_len] -> [bsz, 1, tgt_seq_len, src_seq_len]
@@ -376,14 +384,13 @@ class LlamaModel(nn.Module):
     def forward(
         self,
         input_ids: hidet.Tensor,
-        attention_mask: Optional[hidet.Tensor] = None,
-        position_ids: Optional[hidet.Tensor] = None,
+        attention_mask: hidet.Tensor,
+        position_ids: hidet.Tensor,
         past_key_values: Optional[List[hidet.Tensor]] = None,
         inputs_embeds: Optional[hidet.Tensor] = None,
         use_cache: Optional[bool] = None,
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
-        return_dict: Optional[bool] = None,
     ):
         # output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         # output_hidden_states = (
@@ -481,15 +488,14 @@ class LlamaForCausalLM(nn.Module):
 
     def forward(
         self,
-        input_ids: hidet.Tensor = None,
-        attention_mask: Optional[hidet.Tensor] = None,
+        input_ids: hidet.Tensor,
+        attention_mask: hidet.Tensor,
         position_ids: Optional[hidet.Tensor] = None,
         past_key_values: Optional[List[hidet.Tensor]] = None,
         inputs_embeds: Optional[hidet.Tensor] = None,
         use_cache: Optional[bool] = None,
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
-        return_dict: Optional[bool] = None,
     ):
         r"""
         Args:
@@ -533,7 +539,6 @@ class LlamaForCausalLM(nn.Module):
             use_cache=use_cache,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
         )
 
         hidden_states = outputs["last_hidden_state"]
@@ -665,7 +670,7 @@ def small_model_loading_test():
 
 
 def load_model(model_str: str = 'decapoda-research/llama-7b-hf'):
-    from transformers import LlamaForCausalLM as hfLlamaModel, LlamaConfig as hfLlamaConfig
+    from transformers import LlamaForCausalLM as hfLlamaModel
     import torch
     hf_model = hfLlamaModel.from_pretrained(model_str, torch_dtype=torch.float16)
     hf_config = hf_model.config
@@ -704,103 +709,28 @@ def load_model(model_str: str = 'decapoda-research/llama-7b-hf'):
     
     return hidet_model
 
-# hidet_model = load_model()
-# config = hidet_model.config
-# # %%
-# ids = hidet.randint(0, 512, shape=[1, 1]).cuda()
-# fake_cache = lambda: hidet.randn([1, config.num_attention_heads, 0, config.hidden_size // config.num_attention_heads], dtype='float16', device='cuda')
-# past_key_values = [
-#     (fake_cache(), fake_cache()) for i in range(config.num_hidden_layers)
-# ]
-# hidet_model(ids, past_key_values=past_key_values, use_cache=True)
 
-
-# %%
-input_ids = hidet.symbol([1, "seq_length"], dtype=hidet.int32, device='cuda')
-
-int(input_ids.shape[1])
-# %%
-hidet.ops.tri(input_ids.shape[1], 5, 5)
-
-hidet.ops.definitions.create.FullOp([1, 2])
-
-# %%
 config = LlamaConfig(hidden_size=512, intermediate_size=1024, num_hidden_layers=2, num_attention_heads=8)
 hidet_model = LlamaForCausalLM(config).cuda()
 
-input_ids = hidet.symbol([1, "seq_length"], dtype=hidet.int32, device='cuda')
+def build_flow_graph(model, batch_size=1, device='cuda'):
+    input_ids = hidet.symbol([batch_size, "seq_length"], dtype=hidet.int32, device=device)
+    attn_mask = hidet.symbol([batch_size, 'prev_seq_len'], dtype=hidet.boolean, device=device)
+    position_ids = hidet.symbol([batch_size, 'seq_len'], dtype=hidet.int32, device=device)
 
-print(type(input_ids.shape[1]))
-hidet.randn([input_ids.shape[1]])
-# %%
-get_sym = lambda: hidet.symbol([1, config.num_attention_heads, "prev_seq_len", config.hidden_size // config.num_attention_heads])
-key_value_cache = [
-    (get_sym(), get_sym()) for i in range(config.num_hidden_layers)
-]
+    get_sym = lambda: hidet.symbol([batch_size, config.num_attention_heads, "prev_seq_len", config.hidden_size // config.num_attention_heads], device=device)
+    key_value_cache = [
+        (get_sym(), get_sym()) for i in range(config.num_hidden_layers)
+    ]
 
-y = hidet_model(input_ids, past_key_values=key_value_cache, use_cache=True)
-outputs = [y['logits'], *y['past_key_values']]
+    y = model(input_ids, attention_mask=attn_mask, position_ids=position_ids, past_key_values=key_value_cache, use_cache=True)
+    inputs = [input_ids, attn_mask, position_ids]
+    for (q, k) in key_value_cache: inputs.append(q); inputs.append(k)
 
-# %%
-from typing import List
-import pytest
-import torch
-import transformers
-import hidet
-import hidet.testing
+    outputs = [y['logits']]
+    for (q, k) in y['past_key_values']: outputs.append(q); outputs.append(k)
 
+    return hidet.trace_from(outputs, inputs)
 
-def generate(model, text, num_hidden_layers, num_heads, head_dim, device, tokens_to_generate=10):
-    tokenizer = hidet.testing.models.gpt2.tokenizer()
-    input_ids_list: List[int] = tokenizer(text)['input_ids']
+build_flow_graph(hidet_model)
 
-    input_ids = hidet.asarray(input_ids_list, dtype=hidet.int32, device=device)
-    position_ids = hidet.arange(input_ids.shape[0], dtype=hidet.int32, device=device)
-    past_keys = hidet.zeros([num_hidden_layers, num_heads, 0, head_dim], dtype=hidet.float32, device=device)
-    past_values = hidet.zeros([num_hidden_layers, num_heads, 0, head_dim], dtype=hidet.float32, device=device)
-
-    output_ids = []
-    for _ in range(tokens_to_generate):
-        input_ids, position_ids, past_keys, past_values = model(input_ids, position_ids, past_keys, past_values)
-        output_ids.append(input_ids[0].item())
-
-    return tokenizer.decode(output_ids)
-
-
-def test_gpt2(device: str, opt: bool):
-    gpt2_module = hidet.testing.models.gpt2.model()
-
-    if device == 'cuda':
-        gpt2_module.cuda()
-
-    input_ids = hidet.symbol(['seq_length'], dtype=hidet.int32, device=device)
-    position_ids = hidet.symbol(['seq_length'], dtype=hidet.int32, device=device)
-    cache_shape = [gpt2_module.num_hidden_layers, gpt2_module.num_heads, 'prev_seq_length', gpt2_module.head_dim]
-    past_keys = hidet.symbol(cache_shape, dtype=hidet.float32, device=device)
-    past_values = hidet.symbol(cache_shape, dtype=hidet.float32, device=device)
-
-    outputs = gpt2_module(input_ids, position_ids, past_keys, past_values)
-    graph = hidet.trace_from(outputs, inputs=[input_ids, position_ids, past_keys, past_values])
-
-    if opt:
-        graph = hidet.graph.optimize(graph)
-
-    compiled_model = graph.build()
-
-    generated_text = generate(
-        compiled_model,
-        "Alan Turing theorized that computers would one day become",
-        gpt2_module.num_hidden_layers,
-        gpt2_module.num_heads,
-        gpt2_module.head_dim,
-        device,
-        tokens_to_generate=40,
-    )
-    expected = (
-        ' the most powerful machines on the planet.\n\n'
-        'The computer is a machine that can perform complex calculations, and it can '
-        'perform these calculations in a way that is very similar to the human brain.\n'
-    )
-    assert generated_text == expected
-
-test_gpt2('cuda', False)
