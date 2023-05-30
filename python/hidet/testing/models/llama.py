@@ -59,14 +59,14 @@ def _make_causal_mask(input_ids_shape, dtype, device, past_key_values_length: in
     Make causal mask used for bi-directional self-attention.
     """
     bsz, tgt_len = input_ids_shape
-    mask = hidet.full((tgt_len, tgt_len), float(dtype._min_value), dtype)
-    mask_cond = hidet.arange(tgt_len)
+    mask = hidet.full((tgt_len, tgt_len), float(dtype._min_value), dtype, device)
+    mask_cond = hidet.arange(tgt_len, device=device)
 
     mask = mask.masked_fill(mask_cond < (mask_cond + 1).reshape([tgt_len, 1]), 0)
     mask = mask.to(dtype)
 
     if past_key_values_length > 0:
-        mask = hidet.ops.concat([hidet.zeros(tgt_len, past_key_values_length, dtype=dtype, device=device), mask], dim=-1)
+        mask = hidet.ops.concat([hidet.zeros(tgt_len, past_key_values_length, dtype=dtype, device=device), mask], axis=-1)
     return mask[None, None, :, :].expand(bsz, 1, tgt_len, tgt_len + past_key_values_length)
 
 
@@ -110,7 +110,7 @@ class LlamaRotaryEmbedding(nn.Module):
         inv_freq = hidet.asarray(1.0).to(device) / (
             hidet.asarray(base).to(device) ** (hidet.arange(0, dim, 2).float().to(device) / dim)
         )
-        self.register_buffer("inv_freq", inv_freq)
+        self.inv_freq = inv_freq
 
         # Build here to make `torch.jit.trace` work.
         self.max_seq_len_cached = max_position_embeddings
@@ -119,8 +119,8 @@ class LlamaRotaryEmbedding(nn.Module):
 
         # Different from paper, but it uses a different permutation in order to obtain the same calculation
         emb = hidet.ops.concat((freqs, freqs), axis=-1)
-        self.register_buffer("cos_cached", hidet.ops.cos(emb)[None, None, :, :])
-        self.register_buffer("sin_cached", hidet.ops.sin(emb)[None, None, :, :])
+        self.cos_cached = hidet.ops.cos(emb)[None, None, :, :]
+        self.sin_cached = hidet.ops.sin(emb)[None, None, :, :]
 
     def forward(self, x, seq_len=None):
         # x: [bs, num_attention_heads, seq_len, head_size]
@@ -132,7 +132,7 @@ class LlamaRotaryEmbedding(nn.Module):
             t = hidet.arange(self.max_seq_len_cached, device=x.device, dtype=self.inv_freq.dtype)
             freqs = t[:, None] * self.inv_freq[None, :]
             # Different from paper, but it uses a different permutation in order to obtain the same calculation
-            emb = hidet.ops.concat((freqs, freqs), dim=-1).to(x.device)
+            emb = hidet.ops.concat((freqs, freqs), axis=-1).to(x.device)
             self.cos_cached = hidet.ops.cos(emb)[None, None, :, :]
             self.sin_cached = hidet.ops.sin(emb)[None, None, :, :]
         return (
@@ -220,8 +220,8 @@ class LlamaAttention(nn.Module):
 
         if past_key_value is not None:
             # reuse k, v, self_attention
-            key_states = hidet.ops.concat([past_key_value[0], key_states], dim=2)
-            value_states = hidet.ops.concat([past_key_value[1], value_states], dim=2)
+            key_states = hidet.ops.concat([past_key_value[0], key_states], axis=2)
+            value_states = hidet.ops.concat([past_key_value[1], value_states], axis=2)
 
         past_key_value = (key_states, value_states) if use_cache else None
 
@@ -669,23 +669,61 @@ def load_model(model_str: str = 'decapoda-research/llama-7b-hf'):
     import torch
     hf_model = hfLlamaModel.from_pretrained(model_str, torch_dtype=torch.float16)
     hf_config = hf_model.config
-    hf_params = {n: p for n, p in hf_model.named_parameters()}
-    del hf_model
-
+    config = LlamaConfig(**hf_config.__dict__)
+    config.dtype = 'float16'
     orig_set_attr = hidet.nn.Module.__setattr__
+
     def my_setattr(self, key, value):
-        # the order of the defined weights are the same
         if isinstance(value, hidet.Tensor):
-            value = value.to(hidet.float16)
+            value = value.to(hidet.float16, 'cuda')
         orig_set_attr(self, key, value)
 
     hidet.nn.Module.__setattr__ = my_setattr
-    hidet_model = LlamaForCausalLM(LlamaConfig(**hf_config.__dict__))
+    hidet_model = LlamaForCausalLM(config).cuda()
     hidet.nn.Module.__setattr__ = orig_set_attr
+
+    found_tensors = []
+
+    for name, tensor in hf_model.named_parameters():
+        mod = hidet_model
+        for m_name in name.split('.'):
+            mod = getattr(mod, m_name)
+        
+        if not isinstance(mod, hidet.Tensor):
+            print(type(mod))
+            raise ValueError(f"hidet/hf mismatch at {name}")
+        
+        found_tensors.append(mod)
+        mod.copy_(hidet.from_torch(tensor).to(mod.dtype, mod.device))
+
+    buffer_names = set(name for name, _ in hf_model.named_buffers())
+
+    for name, tensor in hidet_model.named_parameters():
+        if tensor not in found_tensors and name not in buffer_names:
+            raise ValueError(f'{name} not copied')
     
+    return hidet_model
+
+hidet_model = load_model()
+config = hidet_model.config
+# %%
+ids = hidet.randint(0, 512, shape=[1, 1]).cuda()
+fake_cache = lambda: hidet.randn([1, config.num_attention_heads, 0, config.hidden_size // config.num_attention_heads], dtype='float16', device='cuda')
+past_key_values = [
+    (fake_cache(), fake_cache()) for i in range(config.num_hidden_layers)
+]
+hidet_model(ids, past_key_values=past_key_values, use_cache=True)
 
 
-if __name__ == "__main__":
-    small_model_loading_test()
+# %%
 
+input_ids = hidet.symbol([1, "seq_length"], dtype=hidet.int32, device='cuda')
+
+get_sym = lambda: hidet.symbol([1, config.num_attention_heads, "prev_seq_len", config.hidden_size // config.num_attention_heads])
+key_value_cache = [
+    (get_sym(), get_sym()) for i in range(config.num_hidden_layers)
+]
+
+y = hidet_model(input_ids, past_key_values=key_value_cache, use_cache=True)
+outputs = [y['logits'], *y['past_key_values']]
 
