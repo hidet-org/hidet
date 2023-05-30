@@ -704,21 +704,35 @@ def load_model(model_str: str = 'decapoda-research/llama-7b-hf'):
     
     return hidet_model
 
-hidet_model = load_model()
-config = hidet_model.config
-# %%
-ids = hidet.randint(0, 512, shape=[1, 1]).cuda()
-fake_cache = lambda: hidet.randn([1, config.num_attention_heads, 0, config.hidden_size // config.num_attention_heads], dtype='float16', device='cuda')
-past_key_values = [
-    (fake_cache(), fake_cache()) for i in range(config.num_hidden_layers)
-]
-hidet_model(ids, past_key_values=past_key_values, use_cache=True)
+# hidet_model = load_model()
+# config = hidet_model.config
+# # %%
+# ids = hidet.randint(0, 512, shape=[1, 1]).cuda()
+# fake_cache = lambda: hidet.randn([1, config.num_attention_heads, 0, config.hidden_size // config.num_attention_heads], dtype='float16', device='cuda')
+# past_key_values = [
+#     (fake_cache(), fake_cache()) for i in range(config.num_hidden_layers)
+# ]
+# hidet_model(ids, past_key_values=past_key_values, use_cache=True)
 
 
 # %%
+input_ids = hidet.symbol([1, "seq_length"], dtype=hidet.int32, device='cuda')
+
+int(input_ids.shape[1])
+# %%
+hidet.ops.tri(input_ids.shape[1], 5, 5)
+
+hidet.ops.definitions.create.FullOp([1, 2])
+
+# %%
+config = LlamaConfig(hidden_size=512, intermediate_size=1024, num_hidden_layers=2, num_attention_heads=8)
+hidet_model = LlamaForCausalLM(config).cuda()
 
 input_ids = hidet.symbol([1, "seq_length"], dtype=hidet.int32, device='cuda')
 
+print(type(input_ids.shape[1]))
+hidet.randn([input_ids.shape[1]])
+# %%
 get_sym = lambda: hidet.symbol([1, config.num_attention_heads, "prev_seq_len", config.hidden_size // config.num_attention_heads])
 key_value_cache = [
     (get_sym(), get_sym()) for i in range(config.num_hidden_layers)
@@ -727,3 +741,66 @@ key_value_cache = [
 y = hidet_model(input_ids, past_key_values=key_value_cache, use_cache=True)
 outputs = [y['logits'], *y['past_key_values']]
 
+# %%
+from typing import List
+import pytest
+import torch
+import transformers
+import hidet
+import hidet.testing
+
+
+def generate(model, text, num_hidden_layers, num_heads, head_dim, device, tokens_to_generate=10):
+    tokenizer = hidet.testing.models.gpt2.tokenizer()
+    input_ids_list: List[int] = tokenizer(text)['input_ids']
+
+    input_ids = hidet.asarray(input_ids_list, dtype=hidet.int32, device=device)
+    position_ids = hidet.arange(input_ids.shape[0], dtype=hidet.int32, device=device)
+    past_keys = hidet.zeros([num_hidden_layers, num_heads, 0, head_dim], dtype=hidet.float32, device=device)
+    past_values = hidet.zeros([num_hidden_layers, num_heads, 0, head_dim], dtype=hidet.float32, device=device)
+
+    output_ids = []
+    for _ in range(tokens_to_generate):
+        input_ids, position_ids, past_keys, past_values = model(input_ids, position_ids, past_keys, past_values)
+        output_ids.append(input_ids[0].item())
+
+    return tokenizer.decode(output_ids)
+
+
+def test_gpt2(device: str, opt: bool):
+    gpt2_module = hidet.testing.models.gpt2.model()
+
+    if device == 'cuda':
+        gpt2_module.cuda()
+
+    input_ids = hidet.symbol(['seq_length'], dtype=hidet.int32, device=device)
+    position_ids = hidet.symbol(['seq_length'], dtype=hidet.int32, device=device)
+    cache_shape = [gpt2_module.num_hidden_layers, gpt2_module.num_heads, 'prev_seq_length', gpt2_module.head_dim]
+    past_keys = hidet.symbol(cache_shape, dtype=hidet.float32, device=device)
+    past_values = hidet.symbol(cache_shape, dtype=hidet.float32, device=device)
+
+    outputs = gpt2_module(input_ids, position_ids, past_keys, past_values)
+    graph = hidet.trace_from(outputs, inputs=[input_ids, position_ids, past_keys, past_values])
+
+    if opt:
+        graph = hidet.graph.optimize(graph)
+
+    compiled_model = graph.build()
+
+    generated_text = generate(
+        compiled_model,
+        "Alan Turing theorized that computers would one day become",
+        gpt2_module.num_hidden_layers,
+        gpt2_module.num_heads,
+        gpt2_module.head_dim,
+        device,
+        tokens_to_generate=40,
+    )
+    expected = (
+        ' the most powerful machines on the planet.\n\n'
+        'The computer is a machine that can perform complex calculations, and it can '
+        'perform these calculations in a way that is very similar to the human brain.\n'
+    )
+    assert generated_text == expected
+
+test_gpt2('cuda', False)
