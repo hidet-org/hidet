@@ -12,6 +12,7 @@
 from typing import List, Optional, Callable, Any
 
 from hidet.ir import dtypes
+from hidet.ir.expr import is_constant
 from hidet.graph.operator import Operator, Tensor
 from hidet.graph.transforms import ResolveRule, register_resolve_rule
 from hidet.graph.ops.definitions.utils import is_contiguous_norm
@@ -54,6 +55,8 @@ class NormalizeResolveRule(ResolveRule):
 
     def resolve(self, op: Operator) -> Optional[List[Tensor]]:
         assert isinstance(op, NormalizeOp)
+        if not is_constant(*op.inputs[0].shape):
+            return None
         resolve_funcs: List[Callable[[Operator], Any]] = [self.resolve_f16, self.resolve_generic]
         for resolve_func in resolve_funcs:
             outs = resolve_func(op)

@@ -159,6 +159,13 @@ class PassContext:
         Set to use fused attention schedule
 
         """
+        # fmha requires sm75+
+        from hidet.cuda import compute_capability
+
+        cc = compute_capability()
+        if cc < (7, 5):
+            return self
+
         from ..transforms.graph_patterns import register_attn_patterns, deregister_attn_patterns
 
         self.configs['use_attention'] = flag
