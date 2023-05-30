@@ -664,5 +664,28 @@ def small_model_loading_test():
     y = hidet_model(x)
 
 
+def load_model(model_str: str = 'decapoda-research/llama-7b-hf'):
+    from transformers import LlamaForCausalLM as hfLlamaModel, LlamaConfig as hfLlamaConfig
+    import torch
+    hf_model = hfLlamaModel.from_pretrained(model_str, torch_dtype=torch.float16)
+    hf_config = hf_model.config
+    hf_params = {n: p for n, p in hf_model.named_parameters()}
+    del hf_model
+
+    orig_set_attr = hidet.nn.Module.__setattr__
+    def my_setattr(self, key, value):
+        # the order of the defined weights are the same
+        if isinstance(value, hidet.Tensor):
+            value = value.to(hidet.float16)
+        orig_set_attr(self, key, value)
+
+    hidet.nn.Module.__setattr__ = my_setattr
+    hidet_model = LlamaForCausalLM(LlamaConfig(**hf_config.__dict__))
+    hidet.nn.Module.__setattr__ = orig_set_attr
+    
+
+
 if __name__ == "__main__":
     small_model_loading_test()
+
+
