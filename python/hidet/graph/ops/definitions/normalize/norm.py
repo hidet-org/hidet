@@ -10,9 +10,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List
-from hidet.ir import IRModule
+from hidet.ir.func import IRModule
 from hidet.ir.primitives import active_mask, shfl_down_sync
 from hidet.ir.compute import reduce
+from hidet.ir.expr import Expr
 from hidet.lang import spatial, repeat, view, cast
 from hidet.lang import data_type, TensorType, i32, f32, attrs, tensor
 from hidet.lang.cuda import blockIdx, threadIdx, register_tensor, syncthreads
@@ -33,8 +34,8 @@ class NormalizeTask(Task):
     """
 
     def __init__(self, x: TensorNode, dims: List[int], epsilon: float, accumulate_dtype: str):
-        dtype_str = x.ttype.dtype.name
-        x_shape = x.const_shape
+        dtype_str = x.type.dtype.name
+        x_shape = x.shape
         reduce_shape = []
         other_shape = []
         for idx, size in enumerate(x_shape):
@@ -110,11 +111,11 @@ class NormalizeTask(Task):
         import math
 
         x, y = self.inputs[0], self.outputs[0]
-        input_shape: List[int] = list(x.const_shape)
+        input_shape: List[Expr] = list(x.shape)
         dims = self.dims
 
         spatial_shape = [v for i, v in enumerate(input_shape) if i not in dims]
-        reduce_shape = [input_shape[i] for i in dims]
+        reduce_shape = [int(input_shape[i]) for i in dims]
         dim_zeros = [0] * len(dims)
 
         reduce_extent = prod(reduce_shape)
@@ -158,7 +159,7 @@ class NormalizeTask(Task):
                 count_a[0] = count
 
             @hidet.script
-            def norm_kernel(x: f32[x.const_shape], y: f32[y.const_shape]):
+            def norm_kernel(x: f32[x.shape], y: f32[y.shape]):
                 attrs.cuda.grid_dim = grid_size
                 attrs.cuda.block_dim = block_size
                 attrs.cuda.min_blocks = 1

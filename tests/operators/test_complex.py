@@ -21,7 +21,7 @@ def test_real(shape, dtype, device):
     a = torch.randn(shape, dtype=dtype, device=device)
     a_hidet = hidet.from_torch(a)
 
-    torch.testing.assert_allclose(hidet.ops.real(a_hidet).torch(), torch.real(a))
+    torch.testing.assert_close(hidet.ops.real(a_hidet).torch(), torch.real(a))
 
 
 @pytest.mark.parametrize("shape", [[33, 44]])
@@ -31,7 +31,7 @@ def test_imag(shape, dtype, device):
     a = torch.randn(shape, dtype=dtype, device=device)
     a_hidet = hidet.from_torch(a)
 
-    torch.testing.assert_allclose(hidet.ops.imag(a_hidet).torch(), torch.imag(a))
+    torch.testing.assert_close(hidet.ops.imag(a_hidet).torch(), torch.imag(a))
 
 
 @pytest.mark.parametrize("shape", [[33, 44]])
@@ -41,7 +41,7 @@ def test_conj(shape, dtype, device):
     a = torch.randn(shape, dtype=dtype, device=device)
     a_hidet = hidet.from_torch(a)
 
-    torch.testing.assert_allclose(hidet.ops.conj(a_hidet).torch(), torch.conj(a))
+    torch.testing.assert_close(hidet.ops.conj(a_hidet).torch(), torch.conj(a))
 
 
 @pytest.mark.parametrize("shape", [[33, 44]])
@@ -53,7 +53,7 @@ def test_make_complex(shape, dtype, device):
     a = torch.complex(real, imag)
     b = hidet.ops.make_complex(hidet.from_torch(real), hidet.from_torch(imag))
 
-    torch.testing.assert_allclose(b.torch(), a)
+    torch.testing.assert_close(b.torch(), a)
 
 
 @pytest.mark.parametrize("a_shape,b_shape", [[[1, 33, 44], [1, 44, 55]]])
@@ -68,4 +68,4 @@ def test_complex_matmul(a_shape, b_shape, dtype, device):
     b_hidet = hidet.from_torch(b)
     c_hidet = hidet.ops.matmul(a_hidet, b_hidet)
 
-    torch.testing.assert_allclose(c_hidet.torch(), c, atol=1e-5, rtol=1e-5)
+    torch.testing.assert_close(c_hidet.torch(), c, atol=1e-5, rtol=1e-5)
