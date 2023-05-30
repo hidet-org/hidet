@@ -495,7 +495,8 @@ class AttnMaskAddTask(Task):
                                 for ti, tj in mma_config.c_store_map.on(lane_id):
                                     delta_m = wi * warp_elems_m_o + mma_i * mma_m + ti
                                     delta_n = wj * warp_elems_n_o + mma_j * mma_n + tj
-                                    gmem_o[delta_m, delta_n] = regs_o[mma_i, mma_j, p]
+                                    if delta_m < n_size and delta_n < d_size:
+                                        gmem_o[delta_m, delta_n] = regs_o[mma_i, mma_j, p]
                                     p += 1
 
             @hidet.script
