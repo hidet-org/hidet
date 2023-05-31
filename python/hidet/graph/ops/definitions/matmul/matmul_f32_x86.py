@@ -15,7 +15,6 @@ from hidet.ir.expr import cast
 from hidet.ir.func import IRModule
 from hidet.ir.compute import TensorNode
 from hidet.ir.primitives import avx_malloc, avx_free
-from hidet.ir.primitives.cpu.avx import avx_f32x8_load_aligned, avx_f32x8_store_aligned
 from hidet.ir.stmt import DeclareScope
 from hidet.ir.task import Task
 from hidet.ir.compute import compute, reduce
@@ -79,7 +78,7 @@ class MatmulF32Taskx86(Task):
     @tune.space(2, 'block_m', [2016, 3024])
     @tune.space(2, 'block_n', [64, 144, 192, 256, 384, 512, 592, 672, 752, 896, 1024])
     @tune.space(2, 'block_k', [96, 128, 256, 384, 512, 560, 688, 784])
-    @tune.space(2, 'nthreads', [4, 8, 16, 32])
+    @tune.space(2, 'nthreads', [4, 8, 16])
     @tune.space(1, 'block_m', [2016])
     @tune.space(1, 'block_n', [256, 384, 512])
     @tune.space(1, 'block_k', [384, 512, 560])
@@ -93,6 +92,10 @@ class MatmulF32Taskx86(Task):
         from hidet.lang.layout import row_layout, col_layout
         from hidet.lang.cpu import avx_f32x8_store, avx_f32x8_fmadd, avx_f32x8_load, avx_f32x8_broadcast
         from hidet.lang.cpu import avx_f32x4_broadcast, avx_f32x4_fmadd, avx_f32x4_load, avx_f32x4_store
+        from hidet.lang.cpu import avx_f32x8_store_aligned, avx_f32x8_load_aligned
+        from hidet.lang.cpu import avx_f32x8_unpacklo, avx_f32x8_unpackhi
+        from hidet.lang.cpu import avx_f32x8_insert_f32x4, avx_f32x8_permute2f32x4
+        from hidet.lang.cpu import avx_f32x8_shuffle, avx_f32x8_cast_f32x4
 
         node_a, node_b = self.inputs[0], self.inputs[1]
         a_shape = node_a.const_shape
@@ -333,8 +336,8 @@ class MatmulF32Taskx86(Task):
                 #     dtype=float32,
                 #     layout=row_layout(1, bip_outer_cols) * row_layout(block_k, tile_n),
                 # )
-                packed_a_alloc = avx_malloc(aip_outer_rows * tile_m * block_k * 32, 32)
-                packed_b_alloc = avx_malloc(bip_outer_cols * block_k * tile_n * 32, 32)
+                packed_a_alloc = avx_malloc(aip_outer_rows * tile_m * block_k * 32, 64)
+                packed_b_alloc = avx_malloc(bip_outer_cols * block_k * tile_n * 32, 64)
 
                 packed_a = as_tensor_pointer(packed_a_alloc,
                                              float32,
@@ -353,21 +356,70 @@ class MatmulF32Taskx86(Task):
                         mp = ib // tile_m
                         mr = ib % tile_m
 
-                        # Should be working? But error in really strange ways....
-                        # packeda_ptr = cast(packed_a, ~float32)
-                        # idx = 0
                         for micropanel_idx in range(mp):
                             panel_row_start = micropanel_idx * tile_m
-                            for micropanel_col in range(pb):
-                                for micropanel_row in range(tile_m):
-                                    packed_a[panel_row_start + micropanel_row, micropanel_col] = a[
-                                        i + micropanel_row + panel_row_start, p + micropanel_col
-                                    ]
+                            m8 = pb // 8
+                            m8r = pb % 8
+                            for packing_col_idx in range(m8):
+                                pack_col_start = packing_col_idx * 8
+                                v0 = avx_f32x8_load(~a[i + panel_row_start, p + pack_col_start])
+                                v1 = avx_f32x8_load(~a[i + panel_row_start + 1, p + pack_col_start])
+                                v2 = avx_f32x8_load(~a[i + panel_row_start + 2, p + pack_col_start])
+                                v3 = avx_f32x8_load(~a[i + panel_row_start + 3, p + pack_col_start])
+                                v4 = avx_f32x8_load(~a[i + panel_row_start + 4, p + pack_col_start])
+                                v5 = avx_f32x8_load(~a[i + panel_row_start + 5, p + pack_col_start])
 
-                                    # # TODO: really strange; the index is indeed incremented by 1 each iteration,
-                                    # # TODO: but I just can't get this to pass the test...
-                                    # packeda_ptr[idx] = a[i + micropanel_row + panel_row_start, p + micropanel_col]
-                                    # idx += 1
+                                unpack0 = avx_f32x8_unpacklo(v0, v1)
+                                unpack1 = avx_f32x8_unpackhi(v0, v1)
+                                unpack2 = avx_f32x8_unpacklo(v2, v3)
+                                unpack3 = avx_f32x8_unpackhi(v2, v3)
+                                unpack4 = avx_f32x8_unpacklo(v4, v5)
+                                unpack5 = avx_f32x8_unpackhi(v4, v5)
+
+                                shf0 = avx_f32x8_shuffle(unpack0, unpack2, 0x44)
+                                shf1 = avx_f32x8_shuffle(unpack4, unpack0, 0xe4)
+                                shf2 = avx_f32x8_shuffle(unpack2, unpack4, 0xee)
+                                shf3 = avx_f32x8_shuffle(unpack5, unpack1, 0xe4)
+                                shf4 = avx_f32x8_shuffle(unpack3, unpack5, 0xee)
+                                shf5 = avx_f32x8_shuffle(unpack1, unpack3, 0x44)
+
+                                low_shf1 = avx_f32x8_cast_f32x4(shf1)
+                                res0 = avx_f32x8_insert_f32x4(shf0, low_shf1, 0x1)
+                                res1 = avx_f32x8_permute2f32x4(shf0, shf1, 0x31)
+
+                                low_shf5 = avx_f32x8_cast_f32x4(shf5)
+                                res2 = avx_f32x8_insert_f32x4(shf2, low_shf5, 0x1)
+                                res3 = avx_f32x8_permute2f32x4(shf2, shf5, 0x31)
+
+                                low_shf4 = avx_f32x8_cast_f32x4(shf4)
+                                res4 = avx_f32x8_insert_f32x4(shf3, low_shf4, 0x1)
+                                res5 = avx_f32x8_permute2f32x4(shf3, shf4, 0x31)
+
+                                avx_f32x8_store_aligned(~packed_a[panel_row_start, pack_col_start], res0)
+                                avx_f32x8_store_aligned(~packed_a[panel_row_start + 2, pack_col_start + 1], res2)
+                                avx_f32x8_store_aligned(~packed_a[panel_row_start + 4, pack_col_start + 2], res4)
+                                avx_f32x8_store_aligned(~packed_a[panel_row_start, pack_col_start + 4], res1)
+                                avx_f32x8_store_aligned(~packed_a[panel_row_start + 2, pack_col_start + 5], res3)
+                                avx_f32x8_store_aligned(~packed_a[panel_row_start + 4, pack_col_start + 6], res5)
+                            if m8r > 0:
+                                remaining_start_col = m8 * 8
+                                for remain_off in range(m8r):
+                                    curr_remain_col = remaining_start_col + remain_off
+                                    for micropanel_row in range(tile_m):
+                                        packed_a[panel_row_start + micropanel_row, curr_remain_col] = a[
+                                            i + micropanel_row + panel_row_start, p + curr_remain_col
+                                        ]
+
+
+                            # # For this outer loop: check whether pb is a
+                            # # multiple of 8, because we'll use AVX2 instructions
+                            # for micropanel_col in range(pb):
+                            #     # tile_m = 6; fully unroll this loop!
+                            #     for micropanel_row in range(tile_m):
+                            #         packed_a[panel_row_start + micropanel_row, micropanel_col] = a[
+                            #             i + micropanel_row + panel_row_start, p + micropanel_col
+                            #         ]
+
                         if mr > 0:
                             remain_start_row = mp * tile_m
                             for remain_col in range(pb):
@@ -386,8 +438,6 @@ class MatmulF32Taskx86(Task):
                             np = jb // tile_n
                             nr = jb % tile_n
 
-                            # packedb_ptr = cast(packed_b, ~float32)
-                            # idx = 0
                             for micropanel_idx in range(np):
                                 panel_col_start = micropanel_idx * tile_n
                                 for micropanel_row in range(pb):
@@ -396,14 +446,6 @@ class MatmulF32Taskx86(Task):
 
                                     avx_f32x8_store_aligned(~packed_b[micropanel_row, panel_col_start], b0)
                                     avx_f32x8_store_aligned(~packed_b[micropanel_row, panel_col_start + 8], b8)
-                                # for micropanel_row in range(pb):
-                                #     for micropanel_col in range(tile_n):
-                                #         packed_b[micropanel_row, micropanel_col + panel_col_start] = b[
-                                #             p + micropanel_row, j + micropanel_col + panel_col_start
-                                #         ]
-                                #         # TODO: same as above... why isn't this working?
-                                #         # packedb_ptr[idx] = b[p + micropanel_row, j + micropanel_col + panel_col_start]
-                                #         # idx += 1
                             if nr > 0:
                                 remain_col_start = np * tile_n
                                 for remain_row in range(pb):
