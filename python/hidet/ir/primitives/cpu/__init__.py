@@ -22,3 +22,5 @@ from .avx import (
     avx_f32x8_permute2f32x4,
 )
 from .avx import avx_free, avx_malloc, x86_memcpy, x86_memset, aligned_alloc
+from .avx import avx_f32x8_load_aligned, avx_f32x8_store_aligned
+from .avx import avx_f32x4_store_aligned, avx_f32x4_load_aligned
