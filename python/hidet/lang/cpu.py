@@ -33,6 +33,6 @@ from hidet.ir.primitives.cpu import (
     avx_f32x4_store_aligned,
     avx_f32x8_load_aligned,
     avx_f32x8_store_aligned,
-    avx_f32x4_load_aligned
+    avx_f32x4_load_aligned,
 )
 from hidet.ir.primitives.cpu import avx_free, avx_malloc, x86_memcpy, x86_memset, aligned_alloc
