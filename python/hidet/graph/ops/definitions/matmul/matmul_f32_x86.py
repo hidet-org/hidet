@@ -324,8 +324,8 @@ class MatmulF32Taskx86(Task):
                 nbs = (n_size + block_n - 1) // block_n
                 kbs = (k_size + block_k - 1) // block_k
 
-                packed_a_alloc = avx_malloc(aip_outer_rows * tile_m * block_k * 32, 64)
-                packed_b_alloc = avx_malloc(bip_outer_cols * block_k * tile_n * 32, 64)
+                packed_a_alloc = avx_malloc(block_m * block_k * 32, 64)
+                packed_b_alloc = avx_malloc(block_k * block_n * 32, 64)
 
                 packed_a = as_tensor_pointer(
                     packed_a_alloc, float32, layout=row_layout(aip_outer_rows, 1) * col_layout(tile_m, block_k)
