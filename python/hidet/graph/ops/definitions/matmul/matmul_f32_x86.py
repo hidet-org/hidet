@@ -76,11 +76,11 @@ class MatmulF32Taskx86(Task):
         return tune.extract_ir_modules(self.schedule_matmulf32_x86)
 
     @tune.space(2, 'block_m', [2016, 3024])
-    @tune.space(2, 'block_n', [64, 144, 192, 256, 384, 512, 592, 672, 752, 896, 1024])
-    @tune.space(2, 'block_k', [96, 128, 256, 384, 512, 560, 688, 784])
+    @tune.space(2, 'block_n', [144, 192, 256, 384, 512, 592, 752, 896, 1024])
+    @tune.space(2, 'block_k', [96, 128, 256, 384, 512, 560, 784])
     @tune.space(2, 'nthreads', [4, 8, 16])
     @tune.space(1, 'block_m', [2016])
-    @tune.space(1, 'block_n', [256, 384, 512])
+    @tune.space(1, 'block_n', [384, 512, 896])
     @tune.space(1, 'block_k', [384, 512, 560])
     @tune.space(1, 'nthreads', [8, 16])
     def schedule_matmulf32_x86(
@@ -398,7 +398,6 @@ class MatmulF32Taskx86(Task):
                                         packed_a[panel_row_start + micropanel_row, curr_remain_col] = a[
                                             i + micropanel_row + panel_row_start, p + curr_remain_col
                                         ]
-
                         if mr > 0:
                             remain_start_row = mp * tile_m
                             for remain_col in range(pb):
