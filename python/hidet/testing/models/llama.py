@@ -1,7 +1,4 @@
 # %%
-# pylint: skip-file
-# since this is just a testing file, remove later
-
 import math
 from typing import Optional, Tuple, List
 from collections import OrderedDict
@@ -9,10 +6,11 @@ from collections import OrderedDict
 from tqdm import tqdm
 
 import hidet
-import hidet.graph.nn as nn
+from hidet.graph import nn
 import torch
 
 from transformers import LlamaConfig
+
 
 def copy_weights(torch_model, hidet_model):
     found_tensors = []
@@ -23,11 +21,11 @@ def copy_weights(torch_model, hidet_model):
             mod = getattr(mod, m_name)
             if isinstance(mod, hidet.nn.Linear):
                 is_linear = True
-        
+
         if not isinstance(mod, hidet.Tensor):
             print(type(mod))
             raise ValueError(f"hidet/hf mismatch at {name}")
-        
+
         found_tensors.append(mod)
         if is_linear:
             # print(f"linear layer {name} found, transposing weight")
@@ -42,6 +40,7 @@ def copy_weights(torch_model, hidet_model):
     for name, tensor in hidet_model.named_parameters():
         if tensor not in found_tensors and name not in buffer_names:
             raise ValueError(f'{name} not copied')
+
 
 class LlamaRMSNorm(nn.Module):
     def __init__(self, hidden_size: int, eps=1e-6):
@@ -61,6 +60,7 @@ class LlamaRMSNorm(nn.Module):
             hidden_states = hidden_states.to(self.weight.dtype)
 
         return self.weight * hidden_states
+
 
 class LlamaRotaryEmbedding(nn.Module):
     def __init__(self, dim, max_position_embeddings=2048, base=10000, device=None):
@@ -83,7 +83,7 @@ class LlamaRotaryEmbedding(nn.Module):
         # This `if` block is unlikely to be run after we build sin/cos in `__init__`. Keep the logic here just in case.
         if seq_len is None:
             seq_len = x.shape[-2]
-        
+
         # Unfortunately, dynamic shape forbids this
         # if seq_len > self.max_seq_len_cached:
         #     self.max_seq_len_cached = seq_len
@@ -98,6 +98,7 @@ class LlamaRotaryEmbedding(nn.Module):
             self.sin_cached[:, :, :seq_len, ...].to(dtype=x.dtype),
         )
 
+
 def rotate_half(x):
     """Rotates half the hidden dims of the input."""
     x1 = x[..., : x.shape[-1] // 2]
@@ -110,7 +111,7 @@ def apply_rotary_pos_emb(q, k, cos, sin, position_ids):
     cos = cos.squeeze(1).squeeze(0)  # [seq_len, dim]
     sin = sin.squeeze(1).squeeze(0)  # [seq_len, dim]
 
-    cos = hidet.ops.take(cos, position_ids, 0).unsqueeze(1) # [bs, 1, seq_len, dim]
+    cos = hidet.ops.take(cos, position_ids, 0).unsqueeze(1)  # [bs, 1, seq_len, dim]
     sin = hidet.ops.take(sin, position_ids, 0).unsqueeze(1)
     q_embed = (q * cos) + (rotate_half(q) * sin)
     k_embed = (k * cos) + (rotate_half(k) * sin)
@@ -163,19 +164,12 @@ class LlamaAttention(nn.Module):
         output_attentions: bool = False,
         use_cache: bool = False,
     ) -> Tuple[hidet.Tensor, Optional[hidet.Tensor], Optional[Tuple[hidet.Tensor]]]:
-        self.attn_mask = attention_mask
-        self.hidden_states1 = hidden_states
-        self.position_ids = position_ids
 
         bsz, q_len, _ = hidden_states.shape
 
         query_states = self.q_proj(hidden_states).reshape([bsz, q_len, self.num_heads, self.head_dim]).transpose(1, 2)
         key_states = self.k_proj(hidden_states).reshape([bsz, q_len, self.num_heads, self.head_dim]).transpose(1, 2)
         value_states = self.v_proj(hidden_states).reshape([bsz, q_len, self.num_heads, self.head_dim]).transpose(1, 2)
-
-        self.query_states = query_states
-        self.key_states = key_states
-        self.value_states = value_states
 
         kv_seq_len = key_states.shape[-2]
         if past_key_value is not None:
@@ -189,11 +183,9 @@ class LlamaAttention(nn.Module):
             key_states = hidet.ops.concat([past_key_value[0], key_states], axis=2)
             value_states = hidet.ops.concat([past_key_value[1], value_states], axis=2)
 
-
         past_key_value = (key_states, value_states) if use_cache else None
 
         attn_weights = hidet.ops.matmul(query_states, key_states.transpose(2, 3)) / math.sqrt(self.head_dim)
-        self.attn_weights = attn_weights
 
         if attention_mask is not None:
             attn_weights = attn_weights + attention_mask
@@ -212,6 +204,7 @@ class LlamaAttention(nn.Module):
             attn_weights = None
 
         return attn_output, attn_weights, past_key_value
+
 
 class LlamaDecoderLayer(nn.Module):
     def __init__(self, config: LlamaConfig):
@@ -276,8 +269,12 @@ class LlamaDecoderLayer(nn.Module):
 
         return outputs
 
+
 def hidet_make_causal_mask(seq_len, dtype, device, past_key_values_length):
-    x = hidet.ops.tri(n=seq_len, m=seq_len + past_key_values_length, k=past_key_values_length, dtype=dtype, device=device)
+    # pylint: disable=protected-access
+    x = hidet.ops.tri(
+        n=seq_len, m=seq_len + past_key_values_length, k=past_key_values_length, dtype=dtype, device=device
+    )
     return (1 - x) * float(dtype._min_value)
 
 
@@ -308,7 +305,7 @@ class LlamaModel(nn.Module):
     def _prepare_decoder_attention_mask(self, input_shape, inputs_embeds, past_key_values_length):
         # create causal mask
         # [bsz, seq_len] -> [bsz, 1, tgt_seq_len, src_seq_len]
-        
+
         combined_attention_mask = hidet_make_causal_mask(
             input_shape[1],
             inputs_embeds.dtype,
@@ -340,10 +337,7 @@ class LlamaModel(nn.Module):
             inputs_embeds = self.embed_tokens(input_ids)
 
         attention_mask = hidet_make_causal_mask(
-            seq_length,
-            inputs_embeds.dtype,
-            device=inputs_embeds.device,
-            past_key_values_length=past_key_values_length,
+            seq_length, inputs_embeds.dtype, device=inputs_embeds.device, past_key_values_length=past_key_values_length
         )
 
         hidden_states = inputs_embeds
@@ -391,6 +385,7 @@ class LlamaModel(nn.Module):
         )
         return ret
 
+
 class LlamaForCausalLM(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -430,7 +425,7 @@ class LlamaForCausalLM(nn.Module):
         hidden_states = outputs["last_hidden_state"]
         logits = self.lm_head(hidden_states)
 
-        new_ids = hidet.ops.argmax(logits, dim=-1, keep_dim=False) # [bs, seq_len]
+        new_ids = hidet.ops.argmax(logits, dim=-1, keep_dim=False)  # [bs, seq_len]
 
         return OrderedDict(
             new_ids=new_ids,
@@ -440,7 +435,7 @@ class LlamaForCausalLM(nn.Module):
             attentions=outputs["attentions"],
         )
 
-      
+
 def convert_model(hf_model: torch.nn.Module, dtype=hidet.float16, device='cuda'):
     config = hf_model.config
     # config = LlamaConfig(**hf_config.__dict__)
@@ -456,27 +451,35 @@ def convert_model(hf_model: torch.nn.Module, dtype=hidet.float16, device='cuda')
     hidet.nn.Module.__setattr__ = orig_set_attr
 
     copy_weights(hf_model, hidet_model)
-    
+
     return hidet_model
+
 
 def build_flow_graph(model, batch_size=1, device='cuda', dtype='float16'):
     config = model.config
     input_ids = hidet.symbol([batch_size, "seq_length"], dtype=hidet.int32, device=device)
     position_ids = hidet.symbol([batch_size, config.max_position_embeddings], dtype=hidet.int32, device=device)
 
-    get_sym = lambda: hidet.symbol([batch_size, config.num_attention_heads, "prev_seq_len", config.hidden_size // config.num_attention_heads], device=device, dtype=dtype)
-    key_value_cache = [
-        (get_sym(), get_sym()) for i in range(config.num_hidden_layers)
-    ]
+    get_sym = lambda: hidet.symbol(
+        [batch_size, config.num_attention_heads, "prev_seq_len", config.hidden_size // config.num_attention_heads],
+        device=device,
+        dtype=dtype,
+    )
+    key_value_cache = [(get_sym(), get_sym()) for i in range(config.num_hidden_layers)]
 
     y = model(input_ids, position_ids=position_ids, past_key_values=key_value_cache, use_cache=True)
     inputs = [input_ids, position_ids]
-    for (q, k) in key_value_cache: inputs.append(q); inputs.append(k)
+    for (q, k) in key_value_cache:
+        inputs.append(q)
+        inputs.append(k)
 
     outputs = [y['new_ids']]
-    for (q, k) in y['past_key_values']: outputs.append(q); outputs.append(k)
+    for (q, k) in y['past_key_values']:
+        outputs.append(q)
+        outputs.append(k)
 
     return hidet.trace_from(outputs, inputs)
+
 
 def generate(text: str, model, tokenizer, config, num_tokens=20, device='cuda', dtype='float16'):
     input_ids = tokenizer.encode(text)
@@ -484,7 +487,9 @@ def generate(text: str, model, tokenizer, config, num_tokens=20, device='cuda', 
 
     position_ids = hidet.arange(0, config.max_position_embeddings, dtype=hidet.int32, device=device).unsqueeze(0)
 
-    make_past = lambda: hidet.zeros([1, config.num_attention_heads, 0, config.hidden_size // config.num_attention_heads], device=device, dtype=dtype)
+    make_past = lambda: hidet.zeros(
+        [1, config.num_attention_heads, 0, config.hidden_size // config.num_attention_heads], device=device, dtype=dtype
+    )
     past_keys_values = [make_past() for _ in range(config.num_hidden_layers * 2)]
 
     outputs = []
@@ -493,8 +498,9 @@ def generate(text: str, model, tokenizer, config, num_tokens=20, device='cuda', 
         input_ids = y[0][:, -1:]
         outputs.append(input_ids[0, -1].item())
         past_keys_values = y[1:]
-    
+
     return tokenizer.decode(outputs)
+
 
 def generate_torch(input_ids: str, tokenizer, torch_model, num_tokens, device='cuda', dtype=torch.float16):
     torch_model = torch_model.to(device=device, dtype=dtype)
@@ -504,14 +510,20 @@ def generate_torch(input_ids: str, tokenizer, torch_model, num_tokens, device='c
 
     attention_mask = torch.ones([1, config.max_position_embeddings]).to(device=device, dtype=dtype)
     # position_ids = torch.arange(0, config.max_position_embeddings, device='cuda').unsqueeze(0)
-    make_past = lambda: torch.zeros([1, config.num_attention_heads, 0, config.hidden_size // config.num_attention_heads]).to(device=device, dtype=dtype)
-    key_value_cache = [
-        (make_past(), make_past()) for i in range(config.num_hidden_layers)
-    ]
+    make_past = lambda: torch.zeros(
+        [1, config.num_attention_heads, 0, config.hidden_size // config.num_attention_heads]
+    ).to(device=device, dtype=dtype)
+    key_value_cache = [(make_past(), make_past()) for i in range(config.num_hidden_layers)]
     outputs = []
     cur_len = input_ids.shape[-1]
     for _ in range(num_tokens):
-        y = torch_model(input_ids, attention_mask=attention_mask[:, :cur_len], position_ids=None, past_key_values=key_value_cache, use_cache=True)
+        y = torch_model(
+            input_ids,
+            attention_mask=attention_mask[:, :cur_len],
+            position_ids=None,
+            past_key_values=key_value_cache,
+            use_cache=True,
+        )
         logits = y['logits']
         new_ids = torch.argmax(logits, -1, keepdim=False)
         new_ids = new_ids[:, -1:]
@@ -519,23 +531,25 @@ def generate_torch(input_ids: str, tokenizer, torch_model, num_tokens, device='c
         input_ids = new_ids
         key_value_cache = y['past_key_values']
         cur_len += 1
-    
+
     return tokenizer.decode(outputs)
+
 
 def get_compiled_model(name='decapoda-research/llama-7b-hf', device='cuda', opt=False):
     from transformers import LlamaTokenizer, LlamaForCausalLM as hfLm
+
     tok = LlamaTokenizer.from_pretrained(name)
 
     model = hfLm.from_pretrained(name, torch_dtype=torch.float16)
 
     config = model.config
-    
+
     model = convert_model(model, device=device)
     flow_graph = build_flow_graph(model, device=device)
-    
+
     if opt:
         flow_graph = hidet.graph.optimize(flow_graph)
-    
+
     compiled = flow_graph.build()
     return compiled, config, tok
 
@@ -546,14 +560,23 @@ def test_llama(device='cuda', opt=False):
     text = generate('In the beginning was the Word.', model, tokenizer, config, num_tokens=12)
     assert text == 'The Word was with God, and the Word was God.'
 
-    text = generate("A robot may not injure a human being or, through inaction", model, tokenizer, config, num_tokens=55)
-    assert text == ', allow a human being to come to harm. A robot must obey orders given it by human beings except where such orders would conflict with the First Law. A robot must protect its own existence as long as such protection does not conflict with the First or Second Laws.'
+    text = generate(
+        "A robot may not injure a human being or, through inaction", model, tokenizer, config, num_tokens=55
+    )
+    assert (
+        text
+        == ', allow a human being to come to harm. A robot must obey orders given it by human beings\
+              except where such orders would conflict with the First Law. A robot must protect its own\
+                  existence as long as such protection does not conflict with the First or Second Laws.'
+    )
 
 
 def failure():
+    # pylint: disable=unused-variable
     name = 'decapoda-research/llama-7b-hf'
-    device='cuda'
+    device = 'cuda'
     from transformers import LlamaTokenizer, LlamaForCausalLM as hfLm
+
     tok = LlamaTokenizer.from_pretrained(name)
 
     # model = hfLm.from_pretrained(name, torch_dtype=torch.float16)
@@ -574,4 +597,3 @@ if __name__ == '__main__':
     failure()
     test_llama(device='cuda', opt=False)
     test_llama(device='cuda', opt=True)
-

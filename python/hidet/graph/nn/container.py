@@ -42,7 +42,7 @@ class ModuleList(Module):
 
     def __iter__(self):
         return iter(self._submodules.values())
-    
+
     def __getattr__(self, item):
         return self._submodules[str(item)]
 
