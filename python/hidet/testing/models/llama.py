@@ -571,7 +571,7 @@ def test_llama(device='cuda', opt=False):
     )
 
 
-def failure():
+def failure_case():
     # pylint: disable=unused-variable
     name = 'decapoda-research/llama-7b-hf'
     device = 'cuda'
@@ -594,6 +594,6 @@ def failure():
 
 # %%
 if __name__ == '__main__':
-    failure()
+    failure_case()
     test_llama(device='cuda', opt=False)
     test_llama(device='cuda', opt=True)
