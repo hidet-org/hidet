@@ -336,6 +336,32 @@ def hidet_make_causal_mask(seq_len, dtype, device, past_key_values_length):
     x = hidet.ops.tri(n=seq_len, m=seq_len + past_key_values_length, k=past_key_values_length, dtype=dtype, device=device)
     return (1 - x) * float(dtype._min_value)
 
+# weight = nn.Embedding(512, 64)
+
+# def test_model(indices):
+#     return weight(indices)
+
+# indicies = hidet.randint(0, 512, [1, 512], dtype=hidet.int32)
+# result1 = test_model(indicies)
+
+# indicies2 = hidet.ops.cast(indicies, hidet.int64)
+# result2 = test_model(indicies2)
+
+# print(torch.allclose(result1.torch(), result2.torch()))
+
+# cind = hidet.symbol([1, 512], dtype=hidet.int32)
+# sres = test_model(cind)
+
+# graph = hidet.trace_from(sres, [cind])
+# cm = graph.build()
+
+# result3 = cm(indicies)
+
+# print(torch.allclose(result1.torch(), result3.torch()))
+
+
+# # %%
+
 class LlamaModel(nn.Module):
     """
     Transformer decoder consisting of *config.num_hidden_layers* layers. Each layer is a [`LlamaDecoderLayer`]
@@ -460,6 +486,7 @@ class LlamaModel(nn.Module):
             past_key_values=next_cache,
             hidden_states=all_hidden_states,
             attentions=all_self_attns,
+            input_embeds=inputs_embeds
         )
         return ret
 
@@ -517,6 +544,7 @@ class LlamaForCausalLM(nn.Module):
             past_key_values=outputs["past_key_values"],
             hidden_states=outputs["hidden_states"],
             attentions=outputs["attentions"],
+            input_embeds=outputs['input_embeds']
         )
 
 
@@ -558,7 +586,6 @@ def get_model(args, hf_config):
 
     raise ValueError(f"Unsupported model: {model_name}")
 
-
 def small_model_loading_test():
     from transformers import LlamaForCausalLM as hfLlamaModel, LlamaConfig as hfLlamaConfig
 
@@ -595,8 +622,7 @@ def small_model_loading_test():
 
     x = hidet.randint(0, 512, shape=[1, 512])
     y = hidet_model(x)
-
-        
+      
 def convert_model(hf_model: torch.nn.Module, dtype=hidet.float16, device='cuda'):
     config = hf_model.config
     # config = LlamaConfig(**hf_config.__dict__)
@@ -697,8 +723,8 @@ def get_torch_args(config, seq_len, prev_len):
     return args, kwargs
 
 def get_hidet_args(config, ids, prev_len):
-    ids = hidet.from_torch(ids)
-    position_ids = hidet.arange(0, config.max_position_embeddings).unsqueeze(0)
+    ids = hidet.from_torch(ids).to(hidet.int32)
+    position_ids = hidet.arange(0, config.max_position_embeddings, dtype=hidet.int32).unsqueeze(0)
     make_past = lambda: hidet.zeros([1, config.num_attention_heads, prev_len, config.hidden_size // config.num_attention_heads])
     past_keys_values = [(make_past(), make_past()) for _ in range(config.num_hidden_layers)]
 
@@ -734,36 +760,42 @@ def flatten(obj):
 from transformers import LlamaTokenizer, LlamaForCausalLM as hfLm, LlamaConfig as hfConfig
 import transformers.models.llama.modeling_llama as OrigImpl
 
-config = hfConfig(hidden_size=512, intermediate_size=1024, num_attention_heads=8, num_hidden_layers=2)
-hf_model = OrigImpl.LlamaForCausalLM(config)
 
-x = torch.randint(0, 512, [1, 32])
+config = hfConfig(hidden_size=512, intermediate_size=1024, num_attention_heads=8, num_hidden_layers=2)
+hf_model = OrigImpl.LlamaForCausalLM(config).eval()
+
+x = torch.randint(0, 512, [1, 32], dtype=torch.int64)
+print(x.dtype)
 past_vals = [(torch.randn([1, 8, 32, 64]), torch.randn([1, 8, 32, 64])) for i in range(2)]
 y = hf_model.forward(x, None, None, past_vals, use_cache=True)
 
 model = LlamaForCausalLM(config)
 copy_weights(hf_model, model)
-xh = hidet.from_torch(x)
-ps_ids = hidet.arange(0, 1024).unsqueeze(0)
+xh = hidet.from_torch(x).to(hidet.int32)
+# xh = hidet.randint(0, 512, [1, 32], dtype=hidet.int32)
+ps_ids = hidet.arange(0, 1024, dtype=hidet.int32).unsqueeze(0)
+print(hidet.symbol_like(ps_ids), hidet.symbol_like(xh))
 past_vals = [(hidet.from_torch(ps[0]), hidet.from_torch(ps[1])) for ps in past_vals]
+# past_vals = [(hidet.randn([1, 8, 32, 64]), hidet.randn([1, 8, 32, 64])) for _ in range(2)]
+
 args = [xh, ps_ids]
 yh = model.forward(*args, past_vals, use_cache=True)
 
 print_eq(y['logits'], yh['logits'])
 
-sym = [hidet.symbol_like(u) for u in args]
+sym = [hidet.symbol([1, 32], dtype=hidet.int64), hidet.symbol([1, 1024], dtype=hidet.int64)]
 sym.append([(hidet.symbol_like(u[0]), hidet.symbol_like(u[1])) for u in past_vals])
 
 syh = model.forward(*sym)
 
-graph = hidet.trace_from(syh['logits'], flatten(sym))
+graph = hidet.trace_from([syh['logits'], syh['input_embeds']], flatten(sym))
 cmodel = graph.build()
-yh2 = cmodel(*args, *flatten(past_vals))
+yh2 = cmodel(*[i.to(hidet.int64) for i in args], *flatten(past_vals))
 
-print_eq(y['logits'], yh2)
+print_eq(yh['logits'].torch(), yh2[0])
+print_eq(yh['input_embeds'].torch(), yh2[1])
 
 # %%
-
 model = hfLm(hfConfig(hidden_size=512, intermediate_size=1024, num_attention_heads=8, num_hidden_layers=2))
 config = model.config
 
