@@ -130,3 +130,10 @@ class Module:
         for name, parameter in self._parameters.items():
             self._parameters[name] = parameter.cuda()
         return self
+
+    def to(self, dtype=None, device=None) -> Module:
+        for name, submodule in self._submodules.items():
+            submodule.to(dtype, device)
+        for name, parameter in self._parameters.items():
+            self._parameters[name] = parameter.to(dtype, device)
+        return self

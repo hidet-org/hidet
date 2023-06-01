@@ -2,12 +2,11 @@
 # pylint: skip-file
 # since this is just a testing file, remove later
 
-import numpy as np
-from dataclasses import dataclass
-from typing import Any, Optional, Tuple, List
 import math
-
+from typing import Optional, Tuple, List
 from collections import OrderedDict
+
+from tqdm import tqdm
 
 import hidet
 import hidet.graph.nn as nn
@@ -17,7 +16,7 @@ from transformers import LlamaConfig
 
 def copy_weights(torch_model, hidet_model):
     found_tensors = []
-    for name, tensor in torch_model.named_parameters():
+    for name, tensor in tqdm(list(torch_model.named_parameters()), desc='copying weights'):
         mod = hidet_model
         is_linear = False
         for m_name in name.split('.'):
@@ -43,59 +42,6 @@ def copy_weights(torch_model, hidet_model):
     for name, tensor in hidet_model.named_parameters():
         if tensor not in found_tensors and name not in buffer_names:
             raise ValueError(f'{name} not copied')
-
-def recurse_convert_torch(obj):
-    if isinstance(obj, hidet.Tensor):
-        return obj.torch()
-    elif isinstance(obj, tuple):
-        return tuple(recurse_convert_torch(i) for i in obj)
-    elif isinstance(obj, list):
-        return list(recurse_convert_torch(i) for i in obj)
-    elif isinstance(obj, dict):
-        return {n: recurse_convert_torch(v) for n, v in obj.items()}
-    else:
-        return obj
-    
-def recurse_convert_hidet(obj):
-    if isinstance(obj, torch.Tensor):
-        return hidet.from_torch(obj.contiguous())
-    elif isinstance(obj, tuple):
-        return tuple(recurse_convert_hidet(i) for i in obj)
-    elif isinstance(obj, list):
-        return list(recurse_convert_hidet(i) for i in obj)
-    elif isinstance(obj, dict):
-        return {n: recurse_convert_hidet(v) for n, v in obj.items()}
-    else:
-        return obj
-
-def check_equal(torch_cls, hidet_cls, init_args_tch, args, kwargs={}, init_args_hidet=None, return_models=False):
-    tch_model = torch_cls(*init_args_tch)
-    if init_args_hidet is not None:
-        hidet_model = hidet_cls(*init_args_hidet)
-    else:
-        hidet_model = hidet_cls(*init_args_tch)
-        
-    copy_weights(tch_model, hidet_model)
-    y1 = tch_model(*args, **kwargs)
-    y2 = hidet_model(*recurse_convert_hidet(args), **recurse_convert_hidet(kwargs))
-    if return_models:
-        return tch_model, hidet_model
-    else:
-        return y1, recurse_convert_torch(y2)
-
-def _expand_mask(mask: hidet.Tensor, dtype, tgt_len=None):
-    """
-    Expands attention_mask from `[bsz, seq_len]` to `[bsz, 1, tgt_seq_len, src_seq_len]`.
-    """
-    bsz, src_len = mask.shape
-    tgt_len = tgt_len if tgt_len is not None else src_len
-
-    expanded_mask = mask[:, None, None, :].expand(bsz, 1, tgt_len, src_len).to(dtype=dtype)
-
-    inverted_mask = 1.0 - expanded_mask
-
-    return inverted_mask.masked_fill(inverted_mask.to(hidet.dtypes.boolean), float(dtype._min_value))
-
 
 class LlamaRMSNorm(nn.Module):
     def __init__(self, hidden_size: int, eps=1e-6):
@@ -235,7 +181,6 @@ class LlamaAttention(nn.Module):
         if past_key_value is not None:
             kv_seq_len += past_key_value[0].shape[-2]
         cos, sin = self.rotary_emb(value_states, kv_seq_len)
-        # self.key_states = key_states
         query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin, position_ids)
         # [bsz, nh, t, hd]
 
@@ -313,7 +258,6 @@ class LlamaDecoderLayer(nn.Module):
             output_attentions=output_attentions,
             use_cache=use_cache,
         )
-        self.hidden_states = hidden_states
         hidden_states = residual + hidden_states
 
         # Fully Connected
@@ -336,31 +280,6 @@ def hidet_make_causal_mask(seq_len, dtype, device, past_key_values_length):
     x = hidet.ops.tri(n=seq_len, m=seq_len + past_key_values_length, k=past_key_values_length, dtype=dtype, device=device)
     return (1 - x) * float(dtype._min_value)
 
-# weight = nn.Embedding(512, 64)
-
-# def test_model(indices):
-#     return weight(indices)
-
-# indicies = hidet.randint(0, 512, [1, 512], dtype=hidet.int32)
-# result1 = test_model(indicies)
-
-# indicies2 = hidet.ops.cast(indicies, hidet.int64)
-# result2 = test_model(indicies2)
-
-# print(torch.allclose(result1.torch(), result2.torch()))
-
-# cind = hidet.symbol([1, 512], dtype=hidet.int32)
-# sres = test_model(cind)
-
-# graph = hidet.trace_from(sres, [cind])
-# cm = graph.build()
-
-# result3 = cm(indicies)
-
-# print(torch.allclose(result1.torch(), result3.torch()))
-
-
-# # %%
 
 class LlamaModel(nn.Module):
     """
@@ -409,24 +328,7 @@ class LlamaModel(nn.Module):
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
     ):
-        # output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
-        # output_hidden_states = (
-        #     output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
-        # )
-        # use_cache = use_cache if use_cache is not None else self.config.use_cache
-
-        # return_dict = return_dict if return_dict is not None else self.config.use_return_dict
-
-        # retrieve input_ids and inputs_embeds
-        if input_ids is not None and inputs_embeds is not None:
-            raise ValueError("You cannot specify both decoder_input_ids and decoder_inputs_embeds at the same time")
-        elif input_ids is not None:
-            batch_size, seq_length = input_ids.shape
-        elif inputs_embeds is not None:
-            batch_size, seq_length, _ = inputs_embeds.shape
-        else:
-            raise ValueError("You have to specify either decoder_input_ids or decoder_inputs_embeds")
-
+        _, seq_length = input_ids.shape
         seq_length_with_past = seq_length
         past_key_values_length = 0
 
@@ -486,7 +388,6 @@ class LlamaModel(nn.Module):
             past_key_values=next_cache,
             hidden_states=all_hidden_states,
             attentions=all_self_attns,
-            input_embeds=inputs_embeds
         )
         return ret
 
@@ -510,13 +411,6 @@ class LlamaForCausalLM(nn.Module):
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
     ):
-        # output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
-        # output_hidden_states = (
-        #     output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
-        # )
-        # return_dict = return_dict if return_dict is not None else self.config.use_return_dict
-
-        # decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
         seq_len = input_ids.shape[-1]
         prev_seq_len = 0
         if past_key_values is not None:
@@ -544,84 +438,8 @@ class LlamaForCausalLM(nn.Module):
             past_key_values=outputs["past_key_values"],
             hidden_states=outputs["hidden_states"],
             attentions=outputs["attentions"],
-            input_embeds=outputs['input_embeds']
         )
 
-
-def get_model(args, hf_config):
-    from transformers import AutoModelForCausalLM  # type: ignore[import]
-
-    model_name = args.model
-    model_path = args.model_path
-    dtype = args.quantization.model_dtype
-    max_seq_len = args.max_seq_len
-
-    if model_name.startswith("vicuna-") or model_name.startswith("llama-"):
-        config = LlamaConfig(**hf_config, dtype=dtype)
-        if max_seq_len != -1:
-            config.max_sequence_length = max_seq_len
-
-        hf_model = AutoModelForCausalLM.from_pretrained(model_path)
-        # Get a list of parameters in advance, then delete the model to save memory
-        param_list = [param for _, param in hf_model.named_parameters()]
-        del hf_model
-
-        for i, param in enumerate(param_list):
-            param_list[i] = hidet.from_torch(param.detach()).to(config.dtype)
-
-        # construct the new model without duplicating the weights
-        orig_set_attr = nn.Module.__setattr__
-
-        def my_setattr(self, key, value):
-            # the order of the defined weights are the same
-            if isinstance(value, hidet.Tensor):
-                value = param_list.pop(0)
-            orig_set_attr(self, key, value)
-
-        hidet.nn.Module.__setattr__ = my_setattr
-        hidet_model = LlamaForCausalLM(config)
-        hidet.nn.Module.__setattr__ = orig_set_attr
-
-        return hidet_model
-
-    raise ValueError(f"Unsupported model: {model_name}")
-
-def small_model_loading_test():
-    from transformers import LlamaForCausalLM as hfLlamaModel, LlamaConfig as hfLlamaConfig
-
-    configuration = hfLlamaConfig(
-        vocab_size=512, hidden_size=512, intermediate_size=512, num_attention_heads=8, num_hidden_layers=2
-    )
-    hf_model = hfLlamaModel(configuration)
-
-    ###### use the local LlamaConfig
-    config = LlamaConfig(
-        vocab_size=512, hidden_size=512, intermediate_size=512, num_attention_heads=8, num_hidden_layers=2
-    )
-    # Get a list of parameters in advance, then delete the model to save memory
-    param_list = [param for _, param in hf_model.named_parameters()]
-    del hf_model
-
-    for i, param in enumerate(param_list):
-        param_list[i] = hidet.from_torch(param.detach()).to(config.dtype)
-
-    # construct the new model without duplicating the weights
-    # since the hidet model is isomorphic to the original torch model
-    # this only works if we add .register_buffer(...)
-    orig_set_attr = hidet.nn.Module.__setattr__
-
-    def my_setattr(self, key, value):
-        # the order of the defined weights are the same
-        if isinstance(value, hidet.Tensor):
-            value = param_list.pop(0)
-        orig_set_attr(self, key, value)
-
-    hidet.nn.Module.__setattr__ = my_setattr
-    hidet_model = LlamaForCausalLM(config)
-    hidet.nn.Module.__setattr__ = orig_set_attr
-
-    x = hidet.randint(0, 512, shape=[1, 512])
-    y = hidet_model(x)
       
 def convert_model(hf_model: torch.nn.Module, dtype=hidet.float16, device='cuda'):
     config = hf_model.config
@@ -634,7 +452,7 @@ def convert_model(hf_model: torch.nn.Module, dtype=hidet.float16, device='cuda')
         orig_set_attr(self, key, value)
 
     hidet.nn.Module.__setattr__ = my_setattr
-    hidet_model = LlamaForCausalLM(config).cuda()
+    hidet_model = LlamaForCausalLM(config).to(device=device)
     hidet.nn.Module.__setattr__ = orig_set_attr
 
     copy_weights(hf_model, hidet_model)
@@ -704,84 +522,34 @@ def generate_torch(input_ids: str, tokenizer, torch_model, num_tokens, device='c
     
     return tokenizer.decode(outputs)
 
-def print_eq(a, b):
-    print((a - b.torch()).abs().max())
+def get_compiled_model(name='decapoda-research/llama-7b-hf', device='cuda', opt=False):
+    from transformers import LlamaTokenizer, LlamaForCausalLM as hfLm
+    tok = LlamaTokenizer.from_pretrained(name)
 
-def get_torch_args(config, seq_len, prev_len):
-    ids = torch.randint(0, 1102, [1, seq_len])
-    attention_mask = None # torch.ones([1, seq_len + prev_len])
-    position_ids = None # torch.arange(0, seq_len + prev_len).unsqueeze(0)
-    make_past = lambda: torch.zeros([1, config.num_attention_heads, prev_len, config.hidden_size // config.num_attention_heads])
-    past_keys_values = [(make_past(), make_past()) for _ in range(config.num_hidden_layers)]
+    model = hfLm.from_pretrained(name, torch_dtype=torch.float16)
 
-    args = [ids, attention_mask, position_ids, past_keys_values]
-    kwargs = dict(use_cache=True)
-    return args, kwargs
-
-def get_hidet_args(config, ids, prev_len):
-    ids = hidet.from_torch(ids).to(hidet.int32)
-    position_ids = hidet.arange(0, config.max_position_embeddings, dtype=hidet.int32).unsqueeze(0)
-    make_past = lambda: hidet.zeros([1, config.num_attention_heads, prev_len, config.hidden_size // config.num_attention_heads])
-    past_keys_values = [(make_past(), make_past()) for _ in range(config.num_hidden_layers)]
-
-    args = [ids, position_ids, past_keys_values]
-    kwargs = dict(use_cache=True)
-    return args, kwargs
-
-def get_hidet_symbolic_args(config, seq_len, prev_len):
-    ids = hidet.symbol([1, seq_len], dtype=hidet.int32)
-    position_ids = hidet.symbol([1, config.max_position_embeddings], dtype=hidet.int32)
-    make_past = lambda: hidet.symbol([1, config.num_attention_heads, prev_len, config.hidden_size // config.num_attention_heads])
-    past_keys_values = [(make_past(), make_past()) for _ in range(config.num_hidden_layers)]
-
-    args = [ids, position_ids, past_keys_values]
-    kwargs = dict(use_cache=True)
-    return args, kwargs
-
-def flatten(obj):
-    total = []
-    from typing import Iterable
-    def flatten_(obj):
-        if isinstance(obj, hidet.Tensor):
-            total.append(obj)
-        elif isinstance(obj, Iterable):
-            for i in obj:
-                flatten_(i)
-        else:
-            raise ValueError(f"unrecognized object with type {type(obj)}")
-    flatten_(obj)
-    return total
+    config = model.config
+    
+    model = convert_model(model, device=device)
+    flow_graph = build_flow_graph(model, device=device)
+    
+    if opt:
+        flow_graph = hidet.graph.optimize(flow_graph)
+    
+    compiled = flow_graph.build()
+    return compiled, config, tok
 
 
+def test_llama(device='cuda', opt=False):
+    model, config, tokenizer = get_compiled_model(device=device, opt=opt)
 
-from transformers import LlamaTokenizer, LlamaForCausalLM as hfLm, LlamaConfig as hfConfig
-tok = LlamaTokenizer.from_pretrained('decapoda-research/llama-7b-hf')
+    text = generate('In the beginning was the Word.', model, tokenizer, config, num_tokens=12)
+    assert text == 'The Word was with God, and the Word was God.'
 
-model = hfLm.from_pretrained('decapoda-research/llama-7b-hf', torch_dtype=torch.float16)
-# config = hfConfig(hidden_size=1024, intermediate_size=2048, num_attention_heads=8, num_hidden_layers=2, )
-# model = hfLm(hfConfig(hidden_size=1024, intermediate_size=2048, num_attention_heads=8, num_hidden_layers=2))
+    text = generate("A robot may not injure a human being or, through inaction", model, tokenizer, config, num_tokens=55)
+    assert text == ', allow a human being to come to harm. A robot must obey orders given it by human beings except where such orders would conflict with the First Law. A robot must protect its own existence as long as such protection does not conflict with the First or Second Laws.'
 
-config = model.config
+if __name__ == '__main__':
+    test_llama(device='cuda', opt=False)
+    test_llama(device='cuda', opt=True)
 
-
-# generate_torch("In the beginning was the Word.", tok, model, 12, device='cpu')
-
-# # 'The Word was with God, and the Word was God.'
-
-# generate_torch("A robot may not injure a human being or, through inaction", tok, model, 55, device='cpu')
-# # ', allow a human being to come to harm. A robot must obey orders given it by human beings except where such orders would conflict with the First Law. A robot must protect its own existence as long as such protection does not conflict with the First or Second Laws.'
-
-model = convert_model(model)
-flow_graph = build_flow_graph(model)
-compiled = flow_graph.build()
-
-
-
-new = generate('In the beginning was the Word.', compiled, tok, config, num_tokens=12)
-print(new)
-
-new = generate("A robot may not injure a human being or, through inaction", compiled, tok, config, num_tokens=55)
-print(new)
-
-
-# %%
