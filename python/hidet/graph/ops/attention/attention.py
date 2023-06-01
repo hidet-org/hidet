@@ -678,7 +678,7 @@ class AttnTask(Task):
 
                 j_tiles = cdiv(n_kv_size, block_j)
                 if is_causal:
-                    j_tiles = cdiv((blockIdx.x + 1) * block_i, block_j)
+                    j_tiles = min(cdiv((blockIdx.x + 1) * block_i, block_j), j_tiles)
                 for j in range(j_tiles):
                     offset_j = block_j * j
 
