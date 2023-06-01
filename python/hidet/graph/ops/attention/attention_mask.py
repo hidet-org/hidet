@@ -35,6 +35,7 @@ class AttnMaskAddTask(Task):
         v_shape = v.const_shape
         mask_shape = mask.const_shape
         n_size = q_shape[-2]
+        n_kv_size = k_shape[-1]
         d_size = q_shape[-1]
         o_shape = broadcast_shapes([q_shape[:-2], k_shape[:-2], v_shape[:-2]]) + [n_size, d_size]
         o_head, q_head, k_head, v_head = o_shape[:-2], q_shape[:-2], k_shape[:-2], v_shape[:-2]
@@ -185,6 +186,7 @@ class AttnMaskAddTask(Task):
         row_major = DataLayout.row_major
         n_size = q_shape[-2]
         d_size = q_shape[-1]
+        n_kv_size = k_shape[-1]
         dpad_size = 32 * cdiv(d_size, 32)
         dtype = task.inputs[0].ttype.dtype
         dtype_size = dtype.nbytes
@@ -192,6 +194,7 @@ class AttnMaskAddTask(Task):
         tune.check(d_size % 8 == 0)
         tune.check(d_size <= 160)
         tune.check(n_size >= 64)
+        tune.check(n_kv_size >= 64)
         block_j = min(block_j, n_size)
 
         acc_dtype = f16
@@ -258,7 +261,7 @@ class AttnMaskAddTask(Task):
         i_split = n_tiles
         i_tiles_per_tb = 1
         i_rows_per_tb = i_tiles_per_tb * block_i
-        j_tiles = cdiv(n_size, block_j)
+        j_tiles = cdiv(n_kv_size, block_j)
 
         smem_bytes_q = dtype_size * block_i * dpad_size
         # k and v requires double memory for double buffering pipeline
@@ -405,22 +408,22 @@ class AttnMaskAddTask(Task):
                         smem_m[i] = smem_m_type.dtype.min_value
 
             @hidet.script
-            def copy_k_g2s_sm80(k: f16[k_head + [d_size, n_size]], smem_k: smem_k_type, offset_j: i32, offset_k: i32):
+            def copy_k_g2s_sm80(k: f16[k_head + [d_size, n_kv_size]], smem_k: smem_k_type, offset_j: i32, offset_k: i32):
                 o_head_index = spatial(*o_head).map(blockIdx.y)
                 gmem_k = k[broadcast_indices(o_head_index, k_head, o_head)][offset_k:, offset_j:]
                 for i, j_seg in k_g2s_layout.on(threadIdx.x):
                     j = j_seg * 8
-                    src_size = 0 if (offset_k + i >= d_size or offset_j + j >= n_size) else min(n_size - j, 8)
+                    src_size = 0 if (offset_k + i >= d_size or offset_j + j >= n_kv_size) else min(n_kv_size - j, 8)
                     if threadIdx.x < k_g2s_layout.num_workers and i < smem_k_type.shape[0]:
                         cp_async(~smem_k[i, j], ~gmem_k[i, j], cp_size=16, src_size=src_size * 2, cache_level='global')
 
             @hidet.script
-            def copy_v_g2s_sm80(v: f16[v_head + [n_size, d_size]], smem_v: smem_v_type, offset_j: i32):
+            def copy_v_g2s_sm80(v: f16[v_head + [n_kv_size, d_size]], smem_v: smem_v_type, offset_j: i32):
                 o_head_index = spatial(*o_head).map(blockIdx.y)
                 gmem_v = v[broadcast_indices(o_head_index, v_head, o_head)][offset_j:, :]
                 for i, j_seg in v_g2s_layout.on(threadIdx.x):
                     j = j_seg * 8
-                    src_size = 0 if (offset_j + i >= n_size or j >= d_size) else min(d_size - j, 8)
+                    src_size = 0 if (offset_j + i >= n_kv_size or j >= d_size) else min(d_size - j, 8)
                     if threadIdx.x < v_g2s_layout.num_workers and i < smem_v_type.shape[0]:
                         cp_async(~smem_v[i, j], ~gmem_v[i, j], cp_size=16, src_size=src_size * 2, cache_level='global')
 
@@ -435,23 +438,23 @@ class AttnMaskAddTask(Task):
                         cp_async(~smem_q[i, j], ~gmem_q[i, j], cp_size=16, src_size=src_size * 2, cache_level='global')
 
             @hidet.script
-            def copy_k_g2s_sm75(k: f16[k_head + [d_size, n_size]], smem_k: smem_k_type, offset_j: i32, offset_k: i32):
+            def copy_k_g2s_sm75(k: f16[k_head + [d_size, n_kv_size]], smem_k: smem_k_type, offset_j: i32, offset_k: i32):
                 o_head_index = spatial(*o_head).map(blockIdx.y)
                 gmem_k = k[broadcast_indices(o_head_index, k_head, o_head)][offset_k:, offset_j:]
                 for i, j in k_g2s_layout_sm75.on(threadIdx.x):
                     if threadIdx.x < k_g2s_layout_sm75.num_workers and i < smem_k_type.shape[0]:
-                        if offset_k + i < d_size and offset_j + j < n_size:
+                        if offset_k + i < d_size and offset_j + j < n_kv_size:
                             smem_k[i, j] = gmem_k.read([i, j], protected=False)
                         else:
                             smem_k[i, j] = f16.zero
 
             @hidet.script
-            def copy_v_g2s_sm75(v: f16[v_head + [n_size, d_size]], smem_v: smem_v_type, offset_j: i32):
+            def copy_v_g2s_sm75(v: f16[v_head + [n_kv_size, d_size]], smem_v: smem_v_type, offset_j: i32):
                 o_head_index = spatial(*o_head).map(blockIdx.y)
                 gmem_v = v[broadcast_indices(o_head_index, v_head, o_head)][offset_j:, :]
                 for i, j in v_g2s_layout_sm75.on(threadIdx.x):
                     if threadIdx.x < v_g2s_layout_sm75.num_workers and i < smem_v_type.shape[0]:
-                        if offset_j + i < n_size and j < d_size:
+                        if offset_j + i < n_kv_size and j < d_size:
                             smem_v[i, j] = gmem_v.read([i, j], protected=False)
                         else:
                             smem_v[i, j] = f16.zero
@@ -468,14 +471,14 @@ class AttnMaskAddTask(Task):
                             smem_q[i, j] = f16.zero
 
             @hidet.script
-            def copy_k_g2s(k: f16[k_head + [d_size, n_size]], smem_k: smem_k_type, offset_j: i32, offset_k: i32):
+            def copy_k_g2s(k: f16[k_head + [d_size, n_kv_size]], smem_k: smem_k_type, offset_j: i32, offset_k: i32):
                 if compute_capability >= 80:
                     copy_k_g2s_sm80(k, smem_k, offset_j, offset_k)
                 else:
                     copy_k_g2s_sm75(k, smem_k, offset_j, offset_k)
 
             @hidet.script
-            def copy_v_g2s(v: f16[v_head + [n_size, d_size]], smem_v: smem_v_type, offset_j: i32):
+            def copy_v_g2s(v: f16[v_head + [n_kv_size, d_size]], smem_v: smem_v_type, offset_j: i32):
                 if compute_capability >= 80:
                     copy_v_g2s_sm80(v, smem_v, offset_j)
                 else:
@@ -637,8 +640,8 @@ class AttnMaskAddTask(Task):
             @hidet.script
             def attn_kernel(
                 q: f16[q_head + [n_size, d_size]],
-                k: f16[k_head + [d_size, n_size]],
-                v: f16[v_head + [n_size, d_size]],
+                k: f16[k_head + [d_size, n_kv_size]],
+                v: f16[v_head + [n_kv_size, d_size]],
                 mask: f16[mask_shape],
                 o: f16[o_head + [n_size, d_size]],
             ):
