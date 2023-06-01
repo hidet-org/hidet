@@ -74,9 +74,9 @@ class AttentionRewriteRule(SubgraphRewriteRule):
         q, k, v = [matched[t] for t in [self.q, self.k, self.v]]
         if (
             q.dtype == k.dtype == v.dtype == f16
-            and same_list(q.shape, v.shape)
-            and len(q.shape) == len(k.shape)
-            and (q.shape[-2], q.shape[-1]) == (k.shape[-1], k.shape[-2])
+            and len(q.shape) == len(k.shape) == len(v.shape)
+            and k.shape[-1] == v.shape[-2]
+            and q.shape[-1] == k.shape[-2] == v.shape[-1]
             and q.shape[-1] <= 160
         ):
             return [attention(q, k, v)]
@@ -103,9 +103,9 @@ class AttentionMaskAddRewriteRule(SubgraphRewriteRule):
         q, k, v, mask = [matched[t] for t in [self.q, self.k, self.v, self.mask]]
         if (
             q.dtype == k.dtype == v.dtype == f16
-            and same_list(q.shape, v.shape)
-            and len(q.shape) == len(k.shape)
-            and (q.shape[-2], q.shape[-1]) == (k.shape[-1], k.shape[-2])
+            and len(q.shape) == len(k.shape) == len(v.shape)
+            and k.shape[-1] == v.shape[-2]
+            and q.shape[-1] == k.shape[-2] == v.shape[-1]
             and q.shape[-1] <= 160
         ):
             return [attention(q, k, v, mask)]

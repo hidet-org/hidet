@@ -45,7 +45,7 @@ class AttnTask(Task):
         # ToDo: Add causal mask to compute definition (Will not affect results since schedule template will be used)
         qk = compute(
             name='qk',
-            shape=qk_head + [n_size, n_size],
+            shape=qk_head + [n_size, n_kv_size],
             fcompute=lambda *indices: reduce(
                 shape=[d_size],
                 fcompute=lambda d: q[broadcast_indices(indices[:-2], q_head, qk_head) + [indices[-2], d]]
@@ -842,8 +842,8 @@ def attention(q: Tensor, k: Tensor, v: Tensor, mask: Optional[Tensor] = None, is
         raise ValueError("Attention only supports float16 inputs")
 
     if not (
-        k.shape[-1] == v.shape[-2]
-        and len(q.shape) == len(k.shape)
+        len(q.shape) == len(k.shape) == len(v.shape)
+        and k.shape[-1] == v.shape[-2]
         and q.shape[-1] == k.shape[-2] == v.shape[-1]
     ):
         raise ValueError(
@@ -858,10 +858,11 @@ def attention(q: Tensor, k: Tensor, v: Tensor, mask: Optional[Tensor] = None, is
         return AttnOp(q, k, v, is_causal).get_output(0)
 
     mask_shape = mask.shape
-    seq_len = q.shape[-2]
+    seq_len_q = q.shape[-2]
+    seq_len_kv = v.shape[-2]
     q_head, k_head = (q.shape[:-2], k.shape[:-2])
     qk_head = broadcast_shape(q_head, k_head)
-    qk_shape = qk_head + [seq_len, seq_len]
+    qk_shape = qk_head + [seq_len_q, seq_len_kv]
     if not can_broadcast(mask_shape, qk_shape):
         raise ValueError("Invalid mask dimension: {}".format(mask_shape))
 

@@ -44,7 +44,7 @@ class AttnMaskAddTask(Task):
 
         qk = compute(
             name='qk',
-            shape=qk_head + [n_size, n_size],
+            shape=qk_head + [n_size, n_kv_size],
             fcompute=lambda *indices: reduce(
                 shape=[d_size],
                 fcompute=lambda d: q[broadcast_indices(indices[:-2], q_head, qk_head) + [indices[-2], d]]
@@ -747,7 +747,7 @@ class AttnMaskAddTask(Task):
                             delta_n = offset_j + wj * warp_elems_n + mma_j * mma_n + tj
                             regs_acc[mma_i, mma_j, p] += mask[
                                 broadcast_indices(
-                                    qk_head_index + [delta_m, delta_n], mask_shape, qk_head + [n_size, n_size]
+                                    qk_head_index + [delta_m, delta_n], mask_shape, qk_head + [n_size, n_kv_size]
                                 )
                             ]
                             p += 1
