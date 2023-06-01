@@ -374,7 +374,7 @@ class BatchMatmulTask(Task):
     @tune.space(1, 'warp_k', [8, 16, 32])
     @tune.space(1, 'mma_config', MmaConfig.all())
     def schedule_mma(
-        self, block_m=64, block_n=64, block_k=16, warp_m=32, warp_n=32, warp_k=16, mma_config: MmaConfig=None
+        self, block_m=64, block_n=64, block_k=16, warp_m=32, warp_n=32, warp_k=16, mma_config: MmaConfig = None
     ) -> IRModule:
         def resolve_mma_type(a_dtype: DataType, b_dtype: DataType, c_dtype: DataType):
             dtype_rank = {'float16': 0, 'bfloat16': 1, 'tfloat32': 2, 'float32': 4}

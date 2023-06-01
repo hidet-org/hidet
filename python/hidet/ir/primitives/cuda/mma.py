@@ -112,7 +112,7 @@ def register_mma_configs():
                     a_load_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
                     b_load_map=col_spatial(4, 8) * col_repeat(2, 1, attrs='u+u+'),
                     c_store_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
-                    required_arch=(7, 5)
+                    required_arch=(7, 5),
                 ),
                 'm16n8k16_f16_{}'.format(output_dtype): MmaConfig(
                     m=16,
@@ -123,7 +123,7 @@ def register_mma_configs():
                     a_load_map=col_repeat(2, 2, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
                     b_load_map=col_repeat(2, 1, attrs='u+u+') * col_spatial(4, 8) * col_repeat(2, 1, attrs='u+u+'),
                     c_store_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
-                    required_arch=(8, 0)
+                    required_arch=(8, 0),
                 ),
             }
         )
@@ -139,7 +139,7 @@ def register_mma_configs():
                 a_load_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
                 b_load_map=col_spatial(4, 8) * col_repeat(2, 1, attrs='u+u+'),
                 c_store_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
-                required_arch=(8, 0)
+                required_arch=(8, 0),
             ),
             'm16n8k16_bf16_f32': MmaConfig(
                 m=16,
@@ -150,7 +150,7 @@ def register_mma_configs():
                 a_load_map=col_repeat(2, 2, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
                 b_load_map=col_repeat(2, 1, attrs='u+u+') * col_spatial(4, 8) * col_repeat(2, 1, attrs='u+u+'),
                 c_store_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
-                required_arch=(8, 0)
+                required_arch=(8, 0),
             ),
         }
     )
@@ -166,7 +166,7 @@ def register_mma_configs():
                 a_load_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4),
                 b_load_map=col_spatial(4, 8),
                 c_store_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
-                required_arch=(8, 0)
+                required_arch=(8, 0),
             ),
             'm16n8k8_tf32_f32': MmaConfig(
                 m=16,
@@ -177,7 +177,7 @@ def register_mma_configs():
                 a_load_map=col_repeat(2, 2, attrs='u+u+') * row_spatial(8, 4),
                 b_load_map=col_repeat(2, 1, attrs='u+u+') * col_spatial(4, 8),
                 c_store_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
-                required_arch=(8, 0)
+                required_arch=(8, 0),
             ),
         }
     )
@@ -223,7 +223,6 @@ def register_mma_instructions():
                 is_volatile=False,
             )
         register_primitive_function(name=func_name, func_or_type=fb.func)
-
 
 
 def resolve_ldmatrix_func_name(num: int, shared_space_addr: bool = False, trans=False) -> str:
