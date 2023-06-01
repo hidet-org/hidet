@@ -644,7 +644,6 @@ def convert_model(hf_model: torch.nn.Module, dtype=hidet.float16, device='cuda')
 def build_flow_graph(model, batch_size=1, device='cuda', dtype='float16'):
     config = model.config
     input_ids = hidet.symbol([batch_size, "seq_length"], dtype=hidet.int32, device=device)
-    attn_mask = hidet.symbol([batch_size, config.max_position_embeddings], dtype=dtype, device=device) # new_seq_len == seq_length + prev_seq_len
     position_ids = hidet.symbol([batch_size, config.max_position_embeddings], dtype=hidet.int32, device=device)
 
     get_sym = lambda: hidet.symbol([batch_size, config.num_attention_heads, "prev_seq_len", config.hidden_size // config.num_attention_heads], device=device, dtype=dtype)
@@ -652,32 +651,29 @@ def build_flow_graph(model, batch_size=1, device='cuda', dtype='float16'):
         (get_sym(), get_sym()) for i in range(config.num_hidden_layers)
     ]
 
-    y = model(input_ids, attention_mask=attn_mask, position_ids=position_ids, past_key_values=key_value_cache, use_cache=True)
-    inputs = [input_ids, attn_mask, position_ids]
+    y = model(input_ids, position_ids=position_ids, past_key_values=key_value_cache, use_cache=True)
+    inputs = [input_ids, position_ids]
     for (q, k) in key_value_cache: inputs.append(q); inputs.append(k)
 
-    outputs = [y['logits']]
-    # for (q, k) in y['past_key_values']: outputs.append(q); outputs.append(k)
+    outputs = [y['new_ids']]
+    for (q, k) in y['past_key_values']: outputs.append(q); outputs.append(k)
 
     return hidet.trace_from(outputs, inputs)
 
 def generate(text: str, model, tokenizer, config, num_tokens=20, device='cuda', dtype='float16'):
     input_ids = tokenizer.encode(text)
-    input_ids = hidet.asarray([input_ids]).to(device=device)
-    cur_len = input_ids.shape[0]
+    input_ids = hidet.asarray([input_ids]).to(dtype=hidet.int32, device=device)
 
-    position_ids = hidet.arange(0, config.max_position_embeddings, device=device).unsqueeze(0)
+    position_ids = hidet.arange(0, config.max_position_embeddings, dtype=hidet.int32, device=device).unsqueeze(0)
 
     make_past = lambda: hidet.zeros([1, config.num_attention_heads, 0, config.hidden_size // config.num_attention_heads], device=device, dtype=dtype)
     past_keys_values = [make_past() for _ in range(config.num_hidden_layers * 2)]
-    attention_mask = hidet.ones([1, config.max_position_embeddings], device=device, dtype=dtype)
 
     outputs = []
     for _ in range(num_tokens):
-        y = model(input_ids, attention_mask, position_ids, *past_keys_values)
-        cur_len += 1
-        outputs.append(input_ids[0, -1].item())
+        y = model(input_ids, position_ids, *past_keys_values)
         input_ids = y[0][:, -1:]
+        outputs.append(input_ids[0, -1].item())
         past_keys_values = y[1:]
     
     return tokenizer.decode(outputs)
@@ -757,124 +753,12 @@ def flatten(obj):
     return total
 
 
-from transformers import LlamaTokenizer, LlamaForCausalLM as hfLm, LlamaConfig as hfConfig
-import transformers.models.llama.modeling_llama as OrigImpl
 
-
-config = hfConfig(hidden_size=512, intermediate_size=1024, num_attention_heads=8, num_hidden_layers=2)
-hf_model = OrigImpl.LlamaForCausalLM(config).eval()
-
-x = torch.randint(0, 512, [1, 32], dtype=torch.int64)
-print(x.dtype)
-past_vals = [(torch.randn([1, 8, 32, 64]), torch.randn([1, 8, 32, 64])) for i in range(2)]
-y = hf_model.forward(x, None, None, past_vals, use_cache=True)
-
-model = LlamaForCausalLM(config)
-copy_weights(hf_model, model)
-xh = hidet.from_torch(x).to(hidet.int32)
-# xh = hidet.randint(0, 512, [1, 32], dtype=hidet.int32)
-ps_ids = hidet.arange(0, 1024, dtype=hidet.int32).unsqueeze(0)
-print(hidet.symbol_like(ps_ids), hidet.symbol_like(xh))
-past_vals = [(hidet.from_torch(ps[0]), hidet.from_torch(ps[1])) for ps in past_vals]
-# past_vals = [(hidet.randn([1, 8, 32, 64]), hidet.randn([1, 8, 32, 64])) for _ in range(2)]
-
-args = [xh, ps_ids]
-yh = model.forward(*args, past_vals, use_cache=True)
-
-print_eq(y['logits'], yh['logits'])
-
-sym = [hidet.symbol([1, 32], dtype=hidet.int64), hidet.symbol([1, 1024], dtype=hidet.int64)]
-sym.append([(hidet.symbol_like(u[0]), hidet.symbol_like(u[1])) for u in past_vals])
-
-syh = model.forward(*sym)
-
-graph = hidet.trace_from([syh['logits'], syh['input_embeds']], flatten(sym))
-cmodel = graph.build()
-yh2 = cmodel(*[i.to(hidet.int64) for i in args], *flatten(past_vals))
-
-print_eq(yh['logits'].torch(), yh2[0])
-print_eq(yh['input_embeds'].torch(), yh2[1])
-
-# %%
-model = hfLm(hfConfig(hidden_size=512, intermediate_size=1024, num_attention_heads=8, num_hidden_layers=2))
-config = model.config
-
-seq_len = 128
-past_len = 12
-
-args, kwargs = get_torch_args(config, seq_len, past_len)
-y = model.forward(*args, **kwargs)
-
-hmodel = convert_model(model, dtype=hidet.float32, device='cpu').cpu()
-
-hargs, hkwargs = get_hidet_args(config, args[0], past_len)
-y1 = hmodel.forward(*hargs, use_cache=True,)
-
-print_eq(y.logits, y1['logits'])
-
-sargs, skwargs = get_hidet_symbolic_args(config, seq_len, past_len)
-y2 = hmodel.forward(*sargs, use_cache=True)
-
-flow_graph = hidet.trace_from(y2['logits'], flatten(sargs))
-compiled = flow_graph.build()
-
-y3 = compiled(*flatten(hargs))
-
-print_eq(y.logits, y3)
-
-# %%
-
-
-# %%
-
-print(compiled.weights)
-
-# # %%
-
-# # %%
-# l1 = model.model.layers[0].self_attn
-# l2 = getattr(hmodel.model.layers, '0').self_attn
-
-# for i in ['attn_mask', 'position_ids', 'query_states', 'key_states', 'value_states', 'attn_weights', 'hidden_states1']:
-#     print(i)
-#     print_eq(getattr(l1, i), getattr(l2, i))
-
-# # %%
-# x = torch.rand([1, 128, 1024])
-# l2.q_proj.weight = l2.q_proj.weight.transpose(0, 1)
-# print_eq(l1.q_proj(x), l2.q_proj(hidet.from_torch(x)))
-# %%
-print(hidet.ops.argmax(y3, -1))
-# %%
-print(torch.argmax(y.logits, -1))
-# %%
-
-
-# # %%
-# for i in range(len(y.attentions)):
-#     print((y.attentions[i] - y2['attentions'][i].torch()).abs().max())
-
-# # %%
-# orig_weights = {n: p for n, p in model.named_parameters()}
-# orig_weights.update({n: p for n, p in model.named_buffers()})
-
-# copied_weights = {n: p for n, p in hmodel.named_parameters()}
-
-# for n in orig_weights.keys():
-#     assert n in copied_weights, f"{n} not present"
-#     # print(n, orig_weights[n].shape, copied_weights[n].shape)
-#     if list(orig_weights[n].shape) == list(copied_weights[n].shape):
-#         print(n, (orig_weights[n] - copied_weights[n].torch()).abs().max())
-#     else:
-#         print("alt", n, (orig_weights[n]- copied_weights[n].torch().t()).abs().max())
-
-
-# %%
 from transformers import LlamaTokenizer, LlamaForCausalLM as hfLm, LlamaConfig as hfConfig
 tok = LlamaTokenizer.from_pretrained('decapoda-research/llama-7b-hf')
 
-# config = hfConfig(hidden_size=1024, intermediate_size=2048, num_attention_heads=8, num_hidden_layers=2, )
 model = hfLm.from_pretrained('decapoda-research/llama-7b-hf', torch_dtype=torch.float16)
+# config = hfConfig(hidden_size=1024, intermediate_size=2048, num_attention_heads=8, num_hidden_layers=2, )
 # model = hfLm(hfConfig(hidden_size=1024, intermediate_size=2048, num_attention_heads=8, num_hidden_layers=2))
 
 config = model.config
