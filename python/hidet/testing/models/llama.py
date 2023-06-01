@@ -5,11 +5,11 @@ from collections import OrderedDict
 
 from tqdm import tqdm
 
+import torch
+from transformers import LlamaConfig
+
 import hidet
 from hidet.graph import nn
-import torch
-
-from transformers import LlamaConfig
 
 
 def copy_weights(torch_model, hidet_model):
