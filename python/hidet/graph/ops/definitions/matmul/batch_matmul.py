@@ -359,11 +359,11 @@ class BatchMatmulTask(Task):
         ir_module = module.ir_module()
         return ir_module
 
-    @tune.space(2, 'block_m', [16, 32, 64, 128, 256])
-    @tune.space(2, 'block_n', [8, 16, 32, 64, 128])
+    @tune.space(2, 'block_m', [32, 64, 128, 256])
+    @tune.space(2, 'block_n', [16, 32, 64, 128])
     @tune.space(2, 'block_k', [8, 16, 32])
     @tune.space(2, 'warp_m', [16, 32, 64])
-    @tune.space(2, 'warp_n', [8, 16, 32, 64])
+    @tune.space(2, 'warp_n', [16, 32, 64])
     @tune.space(2, 'warp_k', [8, 16, 32])
     @tune.space(2, 'mma_config', MmaConfig.all(hidet.cuda.compute_capability()))
     @tune.space(1, 'block_m', [64, 128, 256])
@@ -652,25 +652,39 @@ class BatchMatmulTask(Task):
                 copy_a_s2r(~smem_a[0, 0, 0], regs_a, 0)
                 copy_b_s2r(~smem_b[0, 0, 0], regs_b, 0)
 
-                for k0 in grid(k_tiles - 1, attrs='u2'):
-                    ko = 0
+                for k0 in grid(k_tiles - 1):
                     if mma_count_k % 2 != 0 and k0 % 2 != 0:
-                        ko = 1
-                    for k1 in grid(mma_count_k, attrs='u+'):
-                        if k1 == 0:
-                            offset_k = k0 * block_k + first_k_tile_size
-                            copy_a_g2r(a, regs_a_ldg, offset_m, offset_k)
-                            copy_b_g2r(b, regs_b_ldg, offset_k, offset_n)
-                        if k1 == mma_count_k - 1:
-                            copy_a_r2s(regs_a_ldg, smem_a, (k0 + 1) % 2)
-                            copy_b_r2s(regs_b_ldg, smem_b, (k0 + 1) % 2)
-                            syncthreads()
-                            copy_a_s2r(~smem_a[(k0 + 1) % 2, 0, 0], regs_a, (k1 + ko + 1) % 2)
-                            copy_b_s2r(~smem_b[(k0 + 1) % 2, 0, 0], regs_b, (k1 + ko + 1) % 2)
-                        else:
-                            copy_a_s2r(~smem_a[k0 % 2, 0, (k1 + 1) * mma_k], regs_a, (k1 + ko + 1) % 2)
-                            copy_b_s2r(~smem_b[k0 % 2, (k1 + 1) * mma_k, 0], regs_b, (k1 + ko + 1) % 2)
-                        mma(regs_a, regs_b, regs_c, (k1 + ko) % 2)
+                        for k1 in grid(mma_count_k, attrs='u+'):
+                            if k1 == 0:
+                                offset_k = k0 * block_k + first_k_tile_size
+                                copy_a_g2r(a, regs_a_ldg, offset_m, offset_k)
+                                copy_b_g2r(b, regs_b_ldg, offset_k, offset_n)
+                            if k1 == mma_count_k - 1:
+                                copy_a_r2s(regs_a_ldg, smem_a, (k0 + 1) % 2)
+                                copy_b_r2s(regs_b_ldg, smem_b, (k0 + 1) % 2)
+                                syncthreads()
+                                copy_a_s2r(~smem_a[(k0 + 1) % 2, 0, 0], regs_a, (k1) % 2)
+                                copy_b_s2r(~smem_b[(k0 + 1) % 2, 0, 0], regs_b, (k1) % 2)
+                            else:
+                                copy_a_s2r(~smem_a[k0 % 2, 0, (k1 + 1) * mma_k], regs_a, (k1) % 2)
+                                copy_b_s2r(~smem_b[k0 % 2, (k1 + 1) * mma_k, 0], regs_b, (k1) % 2)
+                            mma(regs_a, regs_b, regs_c, (k1 + 1) % 2)
+                    else:
+                        for k1 in grid(mma_count_k, attrs='u+'):
+                            if k1 == 0:
+                                offset_k = k0 * block_k + first_k_tile_size
+                                copy_a_g2r(a, regs_a_ldg, offset_m, offset_k)
+                                copy_b_g2r(b, regs_b_ldg, offset_k, offset_n)
+                            if k1 == mma_count_k - 1:
+                                copy_a_r2s(regs_a_ldg, smem_a, (k0 + 1) % 2)
+                                copy_b_r2s(regs_b_ldg, smem_b, (k0 + 1) % 2)
+                                syncthreads()
+                                copy_a_s2r(~smem_a[(k0 + 1) % 2, 0, 0], regs_a, (k1 + 1) % 2)
+                                copy_b_s2r(~smem_b[(k0 + 1) % 2, 0, 0], regs_b, (k1 + 1) % 2)
+                            else:
+                                copy_a_s2r(~smem_a[k0 % 2, 0, (k1 + 1) * mma_k], regs_a, (k1 + 1) % 2)
+                                copy_b_s2r(~smem_b[k0 % 2, (k1 + 1) * mma_k, 0], regs_b, (k1 + 1) % 2)
+                            mma(regs_a, regs_b, regs_c, (k1) % 2)
                 last_k = k_tiles - 1
                 ko = 0
                 if mma_count_k % 2 != 0 and last_k % 2 != 0:
