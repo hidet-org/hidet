@@ -365,16 +365,16 @@ class BatchMatmulTask(Task):
     @tune.space(2, 'warp_m', [16, 32, 64])
     @tune.space(2, 'warp_n', [16, 32, 64])
     @tune.space(2, 'warp_k', [8, 16, 32])
-    @tune.space(2, 'mma_config', MmaConfig.all(hidet.cuda.compute_capability()))
+    @tune.space(2, 'mma_config', MmaConfig.all())
     @tune.space(1, 'block_m', [64, 128, 256])
     @tune.space(1, 'block_n', [64, 128])
     @tune.space(1, 'block_k', [8, 16, 32])
     @tune.space(1, 'warp_m', [32, 64])
     @tune.space(1, 'warp_n', [32, 64])
     @tune.space(1, 'warp_k', [8, 16, 32])
-    @tune.space(1, 'mma_config', MmaConfig.all(hidet.cuda.compute_capability()))
+    @tune.space(1, 'mma_config', MmaConfig.all())
     def schedule_mma(
-        self, block_m=64, block_n=64, block_k=16, warp_m=32, warp_n=32, warp_k=16, mma_config=None
+        self, block_m=64, block_n=64, block_k=16, warp_m=32, warp_n=32, warp_k=16, mma_config: MmaConfig=None
     ) -> IRModule:
         def resolve_mma_type(a_dtype: DataType, b_dtype: DataType, c_dtype: DataType):
             dtype_rank = {'float16': 0, 'bfloat16': 1, 'tfloat32': 2, 'float32': 4}
@@ -410,6 +410,7 @@ class BatchMatmulTask(Task):
 
         head, input_dtype, output_dtype = mma_type.split('_')  # pylint: disable=unused-variable
         tune.check(mma_config.input_dtype == input_dtype and mma_config.output_dtype == output_dtype)
+        tune.check(mma_config.required_arch <= hidet.cuda.compute_capability())
 
         mma_m, mma_n, mma_k = (mma_config.m, mma_config.n, mma_config.k)
 
