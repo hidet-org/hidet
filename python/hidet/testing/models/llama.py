@@ -735,33 +735,32 @@ from transformers import LlamaTokenizer, LlamaForCausalLM as hfLm, LlamaConfig a
 import transformers.models.llama.modeling_llama as OrigImpl
 
 config = hfConfig(hidden_size=512, intermediate_size=1024, num_attention_heads=8, num_hidden_layers=2)
-hf_model = OrigImpl.LlamaModel(config)
+hf_model = OrigImpl.LlamaForCausalLM(config)
 
 x = torch.randint(0, 512, [1, 32])
-ps_ids = torch.arange(0, 32).unsqueeze(0)
 past_vals = [(torch.randn([1, 8, 32, 64]), torch.randn([1, 8, 32, 64])) for i in range(2)]
-y = hf_model.forward(x, None, ps_ids, past_vals)
+y = hf_model.forward(x, None, None, past_vals, use_cache=True)
 
-model = LlamaModel(config)
+model = LlamaForCausalLM(config)
 copy_weights(hf_model, model)
 xh = hidet.from_torch(x)
-ps_ids = hidet.from_torch(ps_ids)
+ps_ids = hidet.arange(0, 1024).unsqueeze(0)
 past_vals = [(hidet.from_torch(ps[0]), hidet.from_torch(ps[1])) for ps in past_vals]
 args = [xh, ps_ids]
-yh = model.forward(*args, past_vals)
+yh = model.forward(*args, past_vals, use_cache=True)
 
-print_eq(y['last_hidden_state'], yh['last_hidden_state'])
+print_eq(y['logits'], yh['logits'])
 
 sym = [hidet.symbol_like(u) for u in args]
 sym.append([(hidet.symbol_like(u[0]), hidet.symbol_like(u[1])) for u in past_vals])
 
 syh = model.forward(*sym)
 
-graph = hidet.trace_from(syh['last_hidden_state'], flatten(sym))
+graph = hidet.trace_from(syh['logits'], flatten(sym))
 cmodel = graph.build()
 yh2 = cmodel(*args, *flatten(past_vals))
 
-print_eq(y['last_hidden_state'], yh2)
+print_eq(y['logits'], yh2)
 
 # %%
 
@@ -777,12 +776,12 @@ y = model.forward(*args, **kwargs)
 hmodel = convert_model(model, dtype=hidet.float32, device='cpu').cpu()
 
 hargs, hkwargs = get_hidet_args(config, args[0], past_len)
-y1 = hmodel.forward(*hargs, use_cache=False,)
+y1 = hmodel.forward(*hargs, use_cache=True,)
 
 print_eq(y.logits, y1['logits'])
 
 sargs, skwargs = get_hidet_symbolic_args(config, seq_len, past_len)
-y2 = hmodel.forward(*sargs, **skwargs)
+y2 = hmodel.forward(*sargs, use_cache=True)
 
 flow_graph = hidet.trace_from(y2['logits'], flatten(sargs))
 compiled = flow_graph.build()
