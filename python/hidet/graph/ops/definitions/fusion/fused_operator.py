@@ -151,9 +151,19 @@ class FusedTask(Task):
 
 
 class FusedOperator(Operator):
-    def __init__(self, *inputs: Tensor, fused_graph: FlowGraph, anchor: int):
+    def __init__(self, *inputs: Tensor, fused_graph: FlowGraph, anchor: int, **kwargs):
         task = FusedTask(fused_graph, anchor)
-        super().__init__(inputs=list(inputs), attributes={'fused_graph': fused_graph, 'anchor': anchor}, task=task)
+
+        attributes = {'fused_graph': fused_graph, 'anchor': anchor}
+        if len(inputs) == 0:
+            # if no inputs are provided, we should set the 'device' attribute to allow us to infer the device of output
+            attributes['device'] = fused_graph.nodes[0].device.type
+
+        if len(kwargs) > 0:
+            # incase we use reforward to create the operator, in which case,
+            assert len(kwargs) == 1 and 'device' in kwargs
+
+        super().__init__(inputs=list(inputs), attributes=attributes, task=task)
         self.name = f'Fused{fused_graph.nodes[anchor].name}'
         self._check(inputs, fused_graph, anchor)
 
