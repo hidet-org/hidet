@@ -31,6 +31,7 @@ except ImportError:
 
 import hidet
 hidet.option.cache_dir(os.path.join(hidet.option.get_cache_dir(), 'docs-cache'))
+hidet.utils.clear_op_cache()
 print('Build docs with under cache: {}'.format(hidet.option.get_cache_dir()))
 
 # -- Project information -----------------------------------------------------
