@@ -944,3 +944,24 @@ def torch_mean_v2(
     if dtype:
         output = output.astype(dtype_from_torch(dtype))
     return output
+
+
+@register_function(torch.cumsum)
+def torch_cumsum(x: Tensor, dim, *, dtype: Optional[DataType] = None, out: Optional[Tensor] = None) -> Tensor:
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.cumsum(..., out=...)")
+    output = ops.cumsum(x, dim=dim)
+    if dtype:
+        output = ops.cast(output, dtype)
+    return output
+
+
+@register_function(torch.ne)
+@register_method(torch.Tensor.ne)
+def torch_ne(x: Tensor, y: Union[Tensor, float, int], out: Optional[Tensor] = None) -> Tensor:
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.ne(..., out=...)")
+    if isinstance(y, (float, int)):
+        y = ops.full(x.shape, y, dtype=x.dtype, device=x.device)
+    output = ops.not_equal(x, y)
+    return output
