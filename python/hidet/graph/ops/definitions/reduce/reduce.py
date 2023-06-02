@@ -88,7 +88,7 @@ class ReduceTask(Task):
         import hidet
         from hidet.ir.primitives import active_mask, shfl_down_sync, shfl_sync
         from hidet.ir.compute import ReduceOperation
-        from hidet.ir.type import data_type
+        from hidet.ir.type import data_type, Int
         from hidet.ir.layout import DataLayout
         from hidet.lang import spatial, repeat, attrs, cast
         from hidet.lang.cuda import blockIdx, threadIdx
@@ -99,7 +99,7 @@ class ReduceTask(Task):
         block_size = warp_size
         x, y = self.inputs[0], self.outputs[0]
         xdtype = x.type.dtype
-        shape: List[int] = list(x.const_shape)
+        shape: List[Int] = list(x.shape)
         dims = self.dims
         if self.keep_dim:
             remain_shape = [v if i not in dims else 1 for i, v in enumerate(shape)]
@@ -132,7 +132,7 @@ class ReduceTask(Task):
         with hidet.script_module() as module:
 
             @hidet.script
-            def reduce_kernel(x: xdtype[x.const_shape], y: xdtype[y.const_shape]):
+            def reduce_kernel(x: xdtype[x.shape], y: xdtype[y.shape]):
                 attrs.cuda.grid_dim = grid_size
                 attrs.cuda.block_dim = block_size
                 attrs.cuda.min_blocks = 1
@@ -162,13 +162,13 @@ class ReduceTask(Task):
     def cuda_schedule_reduce_by_default(self) -> IRModule:
         import hidet
         from hidet.ir.compute import ReduceOperation
-        from hidet.ir.type import data_type
+        from hidet.ir.type import data_type, Int
         from hidet.lang import spatial, repeat, attrs
         from hidet.lang.cuda import blockIdx, threadIdx, register_tensor
 
         x, y = self.inputs[0], self.outputs[0]
         dims = self.dims
-        shape: List[int] = list(x.const_shape)
+        shape: List[Int] = list(x.shape)
         xdtype = x.type.dtype
 
         if self.keep_dim:
@@ -179,7 +179,7 @@ class ReduceTask(Task):
         remain_extent = hidet.utils.prod(remain_shape)
         reduce_shape = [shape[i] for i in dims]
         reduce_extent = hidet.utils.prod(reduce_shape)
-        block_size = 256 if 256 < remain_extent else remain_extent
+        block_size = hidet.ir.expr.if_then_else(256 < remain_extent, 256, remain_extent)
         remain_layout = spatial(*remain_shape)
 
         spatial_shape = []
@@ -201,7 +201,7 @@ class ReduceTask(Task):
         with hidet.script_module() as module:
 
             @hidet.script
-            def reduce_kernel(x: xdtype[x.const_shape], y: xdtype[y.const_shape]):
+            def reduce_kernel(x: xdtype[x.shape], y: xdtype[y.shape]):
                 # Each 256-thread ThreadBlock handles 512 columns
                 attrs.cuda.grid_dim = grid_size
                 attrs.cuda.block_dim = block_size
