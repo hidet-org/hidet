@@ -13,7 +13,8 @@ from typing import Optional, List, Union, Dict, Tuple
 
 import hidet.utils.structure
 from hidet.ir.node import Node
-from hidet.ir.func import IRModule, Function
+from hidet.ir.module import IRModule
+from hidet.ir.func import Function
 from hidet.ir.type import DataType, TensorType, VoidType, PointerType, ReferenceType, TensorPointerType, FuncType
 from hidet.ir.type import ArrayType, StringType
 from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, LessThan, FloorDiv, Mod, Equal, Div
@@ -88,8 +89,7 @@ class IRPrinter(IRFunctor):
     def visit_IRModule(self, ir_module: IRModule):
         doc = Doc()
         self.ir_module = ir_module
-        if ir_module.task is not None:
-            doc += self(ir_module.task) + NewLine()
+
         for name, var in ir_module.global_vars.items():
             if name in ir_module.functions:
                 continue

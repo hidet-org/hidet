@@ -9,9 +9,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from . import module
 from . import storage
+from . import compiled_module
+from . import compiled_task
+from . import compiled_graph
 
-from .module import CompiledModule, CompiledFunction
 from .storage import Storage
-from .model import save_model, load_model
+from .compiled_module import CompiledModule, CompiledFunction, load_compiled_module
+from .compiled_task import CompiledTask
+from .compiled_graph import CompiledGraph, save_compiled_graph, load_compiled_graph

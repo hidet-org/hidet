@@ -14,6 +14,7 @@ from functools import lru_cache
 
 import hidet.cuda
 from hidet.ir import dtypes
+from hidet.ir.expr import is_constant
 from hidet.graph.tensor import Tensor
 from hidet.graph.operator import Operator
 from hidet.graph.transforms import ResolveRule, register_resolve_rule
@@ -172,11 +173,19 @@ class MatmulResolveRule(ResolveRule):
         return [c]
 
     def resolve_f16(self, op: Operator) -> Optional[List[Tensor]]:
+        if op.task.has_symbolic_shape():
+            return None
+
         a: Tensor = op.inputs[0]
         b: Tensor = op.inputs[1]
         c: Tensor = op.outputs[0]
 
-        if not (a.dtype == dtypes.float16 and b.dtype == dtypes.float16 and a.shape[-1] % 8 == b.shape[-1] % 8 == 0):
+        if not (
+            a.dtype == dtypes.float16
+            and b.dtype == dtypes.float16
+            and is_constant(a.shape[-1], b.shape[-1])
+            and a.shape[-1] % 8 == b.shape[-1] % 8 == 0
+        ):
             return None
 
         if hidet.cuda.compute_capability() < (8, 0):
@@ -224,10 +233,6 @@ class MatmulResolveRule(ResolveRule):
         return [c]
 
     def resolve(self, op: Operator) -> Optional[List[Tensor]]:
-        if op.task.has_symbolic_shape():
-            # for now, only support static shape
-            return None
-
         resolve_funcs: List[Callable[[Operator], Any]] = [self.resolve_f16, self.resolve_generic]
         for resolve_func in resolve_funcs:
             outs = resolve_func(op)

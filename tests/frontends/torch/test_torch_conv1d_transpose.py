@@ -15,8 +15,8 @@ from hidet.testing.torch_utils import check_module
 import torch.backends.cudnn as cudnn
 
 
-@pytest.mark.parametrize('in_shape', [(1, 3, 224)])
-@pytest.mark.parametrize('w_shape', [(42, 3, 7)])
+@pytest.mark.parametrize('in_shape', [[1, 3, 224]])
+@pytest.mark.parametrize('w_shape', [[42, 3, 7]])
 @pytest.mark.parametrize('stride', [4])
 @pytest.mark.parametrize('padding', [3])
 @pytest.mark.parametrize('output_padding', [3])

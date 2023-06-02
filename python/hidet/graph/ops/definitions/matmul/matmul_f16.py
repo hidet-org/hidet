@@ -13,7 +13,8 @@ from typing import List, Tuple
 from hidet.ir import dtypes
 from hidet.ir.dtypes import float16
 from hidet.ir.expr import if_then_else
-from hidet.ir.func import IRModule, Function
+from hidet.ir.func import Function
+from hidet.ir.module import IRModule
 from hidet.ir.compute import TensorNode
 from hidet.ir.task import Task
 from hidet.ir.compute import compute, reduce
@@ -77,20 +78,30 @@ class MatmulF16Task(Task):
     def implement_cuda(self, working_dir: str) -> List[IRModule]:
         return tune.extract_ir_modules(self.schedule)
 
-    @tune.space(2, 'block_m', [32, 64, 128, 256])
-    @tune.space(2, 'block_n', [32, 64, 128, 256])
-    @tune.space(2, 'block_k', [8, 16, 32, 64, 128])
-    @tune.space(2, 'warp_m', [16, 32, 48, 64])
-    @tune.space(2, 'warp_n', [16, 32, 48, 64])
-    @tune.space(2, 'warp_k', [8, 16, 32, 64])
-    @tune.space(2, 'mma', ['m16n8k16'])
-    @tune.space(1, 'block_m', [128])
-    @tune.space(1, 'block_n', [128])
-    @tune.space(1, 'block_k', [16])
-    @tune.space(1, 'warp_m', [64])
-    @tune.space(1, 'warp_n', [64])
-    @tune.space(1, 'warp_k', [16])
-    @tune.space(1, 'mma', ['m16n8k16'])
+    @tune.space(
+        2,
+        {
+            'block_m': [32, 64, 128, 256],
+            'block_n': [32, 64, 128, 256],
+            'block_k': [8, 16, 32, 64, 128],
+            'warp_m': [16, 32, 48, 64],
+            'warp_n': [16, 32, 48, 64],
+            'warp_k': [8, 16, 32, 64],
+            'mma': ['m16n8k16'],
+        },
+    )
+    @tune.space(
+        1,
+        {
+            'block_m': [128],
+            'block_n': [128],
+            'block_k': [16],
+            'warp_m': [64],
+            'warp_n': [64],
+            'warp_k': [16],
+            'mma': ['m16n8k16'],
+        },
+    )
     def schedule(
         self, block_m=64, block_n=128, block_k=16, warp_m=32, warp_n=64, warp_k=16, mma: str = 'm16n8k16'
     ) -> IRModule:
@@ -129,17 +140,12 @@ class MatmulF16Task(Task):
         tune.check(block_m % warp_m == block_n % warp_n == block_k % warp_k == 0, 'warp dims divide block dims')
         tune.check(warp_m % mma_m == warp_n % mma_n == warp_k % mma_k == 0, 'mma dims divide warp dims')
         tune.check(threads <= 1024, 'threads in a block <= 1024')
-        # maximum_smem_bytes = hidet.cuda.properties().sharedMemPerBlock
         maximum_smem_bytes = 49152
         tune.check(dynamic_smem_bytes <= maximum_smem_bytes, 'dynamic shared memory <= 49152')
 
         tune.check(block_n % 64 == 0, 'block_n must be multiple of 64, required by async gmem -> smem loading')
         tune.check(block_k % 8 == 0)
         tune.check(is_power_of_two(block_k // 8))
-        # tune.check(threads % (block_k // 8) == 0)
-        # tune.check(threads % (block_n // 8) == 0)
-        # tune.check(block_m % (threads // (block_k // 8)) == 0)
-        # tune.check(block_k % (threads // (block_n // 8)) == 0)
         smem_a_type = tensor_type(
             'float16', shape=[block_m, block_k], layout=row_layout(block_m, block_k // 8).swizzle(1) * row_layout(1, 8)
         )
@@ -150,12 +156,6 @@ class MatmulF16Task(Task):
         )
         load_smem_a_map = auto_map(block_m, block_k // 8, workers=threads, on_fail=lambda msg: tune.check(False, msg))
         load_smem_b_map = auto_map(block_k, block_n // 8, workers=threads, on_fail=lambda msg: tune.check(False, msg))
-        # load_smem_a_map = repeat(block_m // (threads // (block_k // 8)), 1).spatial(
-        #     threads // (block_k // 8), block_k // 8
-        # )
-        # load_smem_b_map = repeat(block_k // (threads // (block_n // 8)), 1).spatial(
-        #     threads // (block_n // 8), block_n // 8
-        # )
         store_smem_c_map = auto_map(block_m, block_n, workers=threads, on_fail=lambda msg: tune.check(False, msg))
 
         with hidet.script_module() as module:

@@ -12,7 +12,8 @@
 from typing import Union, List
 from collections import defaultdict
 from hidet.ir.expr import Call
-from hidet.ir.func import IRModule, Function
+from hidet.ir.func import Function
+from hidet.ir.module import IRModule
 from hidet.ir.tools import collect
 
 
@@ -56,11 +57,11 @@ class CallGraph:
                         name = call.func_var.name
                         if name not in ir_module.functions and allow_missing:
                             continue
-                        callee = ir_module.lookup(name)
+                        callee = ir_module.functions[name]
                     else:
                         continue
                 elif call.func_var.name in ir_module.functions:
-                    callee = ir_module.lookup(call.func_var.name)
+                    callee = ir_module.functions[call.func_var.name]
                 else:
                     # call a function pointer or a function that is not defined in this module
                     continue

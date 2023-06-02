@@ -14,7 +14,7 @@ import warnings
 import numpy as np
 import hidet
 from hidet.graph import Tensor
-from hidet.utils import hidet_cache_file
+from hidet.utils import cache_file
 from hidet.utils.transformers_utils import export_transformer_model_as_onnx
 from hidet.utils.torch_utils import export_torchvision_model_as_onnx
 
@@ -27,25 +27,25 @@ def get_onnx_model(
       seq_length=128
     """
     if name == 'resnet50':
-        model_path = hidet_cache_file('onnx', f'{name}.onnx')
+        model_path = cache_file('onnx', f'{name}.onnx')
         export_torchvision_model_as_onnx(model_name=name, output_path=model_path, precision=precision)
         input_names = ['data']
         input_tensors = [hidet.randn(shape=[batch_size, 3, 224, 224])]
         return model_path, input_names, input_tensors
     elif name == 'inception_v3':
-        model_path = hidet_cache_file('onnx', f'{name}.onnx')
+        model_path = cache_file('onnx', f'{name}.onnx')
         export_torchvision_model_as_onnx(model_name=name, output_path=model_path, precision=precision)
         input_names = ['data']
         input_tensors = [hidet.randn(shape=[batch_size, 3, 299, 299])]
         return model_path, input_names, input_tensors
     elif name == 'mobilenet_v2':
-        model_path = hidet_cache_file('onnx', f'{name}.onnx')
+        model_path = cache_file('onnx', f'{name}.onnx')
         export_torchvision_model_as_onnx(model_name=name, output_path=model_path, precision=precision)
         input_names = ['data']
         input_tensors = [hidet.randn(shape=[batch_size, 3, 224, 224])]
         return model_path, input_names, input_tensors
     elif name == 'bert':
-        model_path = hidet_cache_file('onnx', 'bert.onnx')
+        model_path = cache_file('onnx', 'bert.onnx')
         if precision != 'float32':
             warnings.warn(
                 'the float32 model is returned although {} is requested, '
@@ -62,7 +62,7 @@ def get_onnx_model(
         ]
         return model_path, input_names, input_tensors
     elif name == 'bart':
-        model_path = hidet_cache_file('onnx', 'bart.onnx')
+        model_path = cache_file('onnx', 'bart.onnx')
         export_transformer_model_as_onnx(model_name='facebook/bart-base', output_path=model_path, precision=precision)
         vocab_size = 50265
         seq_length = kwargs.get('seq_length', 128)
@@ -75,7 +75,7 @@ def get_onnx_model(
         ]
         return model_path, input_names, input_tensors
     elif name == 'gpt2':
-        model_path = hidet_cache_file('onnx', 'gpt2.onnx')
+        model_path = cache_file('onnx', 'gpt2.onnx')
         export_transformer_model_as_onnx(model_name='gpt2', output_path=model_path, precision=precision)
         vocab_size = 50257
         seq_length = kwargs.get('seq_length', 128)

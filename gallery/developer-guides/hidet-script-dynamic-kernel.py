@@ -132,11 +132,7 @@ def matmul_simt_kernel():
 
     assert isinstance(matmul_kernel, hidet.ir.Function)  # matmul is a hidet.ir.Function
 
-    ir_module = script_module.ir_module()
-    compiled_function: hidet.runtime.CompiledFunction = hidet.driver.build_ir_module(
-        ir_module
-    )
-    return compiled_function
+    return script_module.build()
 
 
 def main():

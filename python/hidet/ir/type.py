@@ -245,7 +245,7 @@ class ArrayType(BaseType):
         self.size: int = size
 
         assert isinstance(base_type, BaseType) and not isinstance(base_type, (ArrayType, TensorType))
-        assert isinstance(size, int) and size > 0
+        assert isinstance(size, int) and size >= 0
 
 
 TypeLike = Union[str, BaseType]

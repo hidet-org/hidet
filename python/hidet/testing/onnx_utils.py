@@ -35,7 +35,7 @@ def check_onnx_and_hidet(
         torch_outputs = (torch_outputs,)
 
     # export to onnx
-    onnx_path = hidet.utils.hidet_cache_file('./test_model.onnx')
+    onnx_path = hidet.utils.cache_file('./test_model.onnx')
     torch.onnx.export(torch_model, args=tuple(inputs), f=onnx_path)
 
     # run onnx via hidet

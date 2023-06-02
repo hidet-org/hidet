@@ -12,7 +12,7 @@
 from typing import List, Union
 from hidet.ir.dtypes import float32, int32
 from hidet.ir.expr import cast
-from hidet.ir.func import IRModule
+from hidet.ir.module import IRModule
 from hidet.ir.compute import TensorNode
 from hidet.ir.stmt import DeclareScope
 from hidet.ir.task import Task
@@ -74,14 +74,16 @@ class MatmulF32Taskx86(Task):
     def implement_cpu(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
         return tune.extract_ir_modules(self.schedule_matmulf32_x86)
 
-    @tune.space(2, 'block_m', [2016, 3024])
-    @tune.space(2, 'block_n', [64, 144, 192, 256, 384, 512, 592, 672, 752, 896, 1024])
-    @tune.space(2, 'block_k', [96, 128, 256, 384, 512, 560, 688, 784])
-    @tune.space(2, 'nthreads', [4, 8, 16, 32])
-    @tune.space(1, 'block_m', [2016])
-    @tune.space(1, 'block_n', [256, 384, 512])
-    @tune.space(1, 'block_k', [384, 512, 560])
-    @tune.space(1, 'nthreads', [8, 16])
+    @tune.space(
+        2,
+        {
+            'block_m': [2016, 3024],
+            'block_n': [64, 144, 192, 256, 384, 512, 592, 672, 752, 896, 1024],
+            'block_k': [96, 128, 256, 384, 512, 560, 688, 784],
+            'nthreads': [4, 8, 16, 32],
+        },
+    )
+    @tune.space(1, {'block_m': [2016], 'block_n': [256, 384, 512], 'block_k': [384, 512, 560], 'nthreads': [8, 16]})
     def schedule_matmulf32_x86(
         self, block_m=2016, block_n=896, block_k=512, micro_ker=(6, 16), nthreads=16
     ) -> IRModule:

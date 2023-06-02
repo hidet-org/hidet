@@ -42,6 +42,8 @@ class TypeChecker:
             return self.visit_VoidType(a, b)
         elif isinstance(a, StringType):
             return self.visit_StringType(a, b)
+        elif isinstance(a, ArrayType):
+            return self.visit_ArrayType(a, b)
         else:
             raise ValueError('Can not recognize type {}'.format(a))
 
@@ -81,6 +83,9 @@ class TypeChecker:
 
     def visit_StringType(self, a: StringType, b: BaseType):
         self.check(a, b, isinstance(b, StringType))
+
+    def visit_ArrayType(self, a: ArrayType, b: BaseType):
+        self.check(a, b, isinstance(b, (ArrayType, PointerType)))
 
 
 def same_type(a: BaseType, b: BaseType) -> bool:

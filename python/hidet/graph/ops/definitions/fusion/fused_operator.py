@@ -14,7 +14,7 @@ from typing import Sequence, List, Dict, Union, Tuple, Optional
 from collections import defaultdict
 from hidet.ir.expr import Var, Expr
 from hidet.ir.task import Task, Target
-from hidet.ir.func import IRModule
+from hidet.ir.module import IRModule
 from hidet.ir.tools import simplify
 from hidet.ir.compute import TensorNode, TensorInput
 from hidet.graph.tensor import Tensor
@@ -99,40 +99,26 @@ class FusedTask(Task):
         outputs: List[TensorNode] = [tensor_map[x] for x in fused_graph.outputs]
         return inputs, outputs
 
-    def implement(self, target: Union[Target, str], working_dir: str) -> IRModule:
+    def implement(self, target: Union[Target, str], working_dir: str) -> List[IRModule]:
         from hidet.graph.ops.schedules.cuda.auto_scheduler import CudaAutoScheduler
         from hidet.graph.ops.schedules.cpu.auto_scheduler import CpuAutoScheduler
         from .apply_prologue_epilogue import apply_prologue_epilogue
-        from hidet.graph.ops.definitions.utils.tune import tune
 
         if isinstance(target, str):
             target = Target.from_string(target)
 
         anchor_op = self.fused_graph.nodes[self.anchor]
 
-        # # DEBUG vvv
-        # import hidet
-        #
-        # hidet.ir.tools.printer._show_var_id = False
-        #
-        # with open(os.path.join(working_dir, 'graph.txt'), 'w') as f:
-        #     f.write(str(self.fused_graph))
-        #
-        # with open(os.path.join(working_dir, 'graph.json'), 'w') as f:
-        #     hidet.utils.netron.dump(self.fused_graph, f)
-        # hidet.ir.tools.printer._show_var_id = False
-        # # DEBUG ^^^
-
         if target.name == 'cpu':
             anchor_modules: Union[NotImplemented, IRModule] = anchor_op.task.implement_cpu(working_dir)
             if anchor_modules is NotImplemented:
                 auto_scheduler = CpuAutoScheduler()
-                return auto_scheduler.schedule_task(self, 'cpu')
+                return [auto_scheduler.schedule_task(self, 'cpu')]
         elif target.name == 'cuda':
             anchor_modules: Union[NotImplemented, IRModule] = anchor_op.task.implement_cuda(working_dir)
             if anchor_modules is NotImplemented:
                 auto_scheduler = CudaAutoScheduler()
-                return auto_scheduler.schedule_task(self, 'cuda')
+                return [auto_scheduler.schedule_task(self, 'cuda')]
         else:
             raise ValueError('unsupported target: {}'.format(target))
 
@@ -144,16 +130,23 @@ class FusedTask(Task):
             if hasattr(anchor_module, '_tuning_kwargs'):
                 setattr(fused_module, '_tuning_kwargs', getattr(anchor_module, '_tuning_kwargs'))
 
-        if len(fused_modules) == 1:
-            return fused_modules[0]
-
-        return tune(fused_modules, dummy_inputs=self.dummy_arguments(target.name), working_dir=working_dir)
+        return fused_modules
 
 
 class FusedOperator(Operator):
-    def __init__(self, *inputs: Tensor, fused_graph: FlowGraph, anchor: int):
+    def __init__(self, *inputs: Tensor, fused_graph: FlowGraph, anchor: int, **kwargs):
         task = FusedTask(fused_graph, anchor)
-        super().__init__(inputs=list(inputs), attributes={'fused_graph': fused_graph, 'anchor': anchor}, task=task)
+
+        attributes = {'fused_graph': fused_graph, 'anchor': anchor}
+        if len(inputs) == 0:
+            # if no inputs are provided, we should set the 'device' attribute to allow us to infer the device of output
+            attributes['device'] = fused_graph.nodes[0].device.type
+
+        if len(kwargs) > 0:
+            # incase we use reforward to create the operator, in which case,
+            assert len(kwargs) == 1 and 'device' in kwargs
+
+        super().__init__(inputs=list(inputs), attributes=attributes, task=task)
         self.name = f'Fused{fused_graph.nodes[anchor].name}'
         self._check(inputs, fused_graph, anchor)
 

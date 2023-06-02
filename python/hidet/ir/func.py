@@ -9,10 +9,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Dict, List, Union, Optional
+from typing import Dict, List, Union
 import string
 from hidet.ir.node import Node
-from hidet.ir.type import BaseType, FuncType
+from hidet.ir.type import BaseType
 from hidet.ir.expr import Var, Call
 from hidet.ir.stmt import Stmt
 
@@ -94,63 +94,3 @@ class Function(Node):
             return default
         else:
             raise KeyError('Attribute {} is not found in function {}'.format(attr_name, self.name))
-
-
-class IRModule(Node):
-    """
-    The intermediate representation of tensor programs.
-
-    An IRModule contains one or more functions. It is the basic compilation unit of hidet.
-    """
-
-    def __init__(self, funcs=None, task=None, global_vars=None):
-        # pylint: disable=import-outside-toplevel
-        from hidet.ir.task import Task
-
-        if funcs:
-            assert isinstance(funcs, dict)
-            # assert task is not None, 'Please specify the task'
-        self.task: Optional[Task] = task
-        self.functions: Dict[str, Function] = funcs if funcs else {}
-        self.global_vars: Dict[str, Var] = global_vars if global_vars else {}
-
-    def lookup(self, name_or_var: Union[str, Var]):
-        if isinstance(name_or_var, Var):
-            name = name_or_var.name
-        else:
-            name = name_or_var
-        if name not in self.functions:
-            raise ValueError(
-                'Function {} does not exist in module, existed functions: \n{}.'.format(
-                    name, list(self.functions.keys())
-                )
-            )
-        return self.functions[name]
-
-    def lookup_var(self, name):
-        assert name in self.functions, (name, self.functions.keys())
-        if name not in self.global_vars:
-            func = self.functions[name]
-            if isinstance(func, Function):
-                self.global_vars[name] = Var(hint=None, type=FuncType.from_func(func), name=name)
-            else:
-                raise ValueError()
-
-        return self.global_vars[name]
-
-    def update_function(self, func: Function):
-        from hidet.ir.tools import rewrite
-
-        self.functions[func.name] = func
-        if func.name in self.global_vars:
-            old_var = self.global_vars[func.name]
-            new_var = Var(func.name, FuncType.from_func(func))
-            self.global_vars[func.name] = new_var
-            for name, f in self.functions.items():
-                self.functions[name] = rewrite(f, {old_var: new_var})
-
-    def add(self, name, func: Function):
-        if name in self.functions:
-            raise ValueError('Function {} has already existed in module.'.format(name))
-        else:
-            self.functions[name] = func

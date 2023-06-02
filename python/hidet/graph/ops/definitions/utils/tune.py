@@ -15,7 +15,7 @@ import itertools
 import shutil
 from tqdm import tqdm
 import numpy as np
-from hidet.ir.func import IRModule
+from hidet.ir.module import IRModule
 import hidet.option
 from hidet.utils import prod
 
@@ -60,29 +60,36 @@ class TuningSpace:
                     kwargs[key] = value
             yield kwargs
 
-    def add_sub_space(self, level: int, names: str, choices: Sequence[Union[Choice, Sequence[Choice]]]):
-        if level not in self.spaces:
-            self.spaces[level] = {}
-        names: List[str] = [name.strip() for name in names.split(',')]
-        for name in names:
-            if name in self.existing_names:
-                raise ValueError(f'Subspace {name} is already added.')
-        if len(names) > 1:
-            for choice in choices:
-                if not hasattr(choice, '__len__'):
-                    raise ValueError(f'When multiple names are given, choices must be iterable, got {type(choice)}')
-                if len(choice) != len(names):
-                    raise ValueError(f'Number of choices {len(choice)} does not match number of names {len(names)}.')
-        self.spaces[level][",".join(names)] = choices
+    def add_sub_space(self, level: int, name_choice_dict: Dict[str, Sequence[Union[Choice, Sequence[Choice]]]]):
+        if level in self.spaces:
+            raise ValueError(f'Level {level} is already defined.')
+        if level == 0:
+            raise ValueError('Level 0 is reserved for the default space. Use the default arguments to define it.')
+
+        self.spaces[level] = {}
+        for names, choices in name_choice_dict.items():
+            names = [name.strip() for name in names.split(',')]
+            for name in names:
+                if name in self.existing_names:
+                    raise ValueError(f'Subspace {name} is already added.')
+            if len(names) > 1:
+                for choice in choices:
+                    if not hasattr(choice, '__len__'):
+                        raise ValueError(f'When multiple names are given, choices must be iterable, got {type(choice)}')
+                    if len(choice) != len(names):
+                        raise ValueError(
+                            f'Number of choices {len(choice)} does not match number of names {len(names)}.'
+                        )
+            self.spaces[level][",".join(names)] = choices
 
 
-def space(level: int, names: str, choices: Sequence[Union[Choice, Sequence[Choice]]]):
+def space(level: int, name_choice_dict: Dict[str, Sequence[Union[Choice, Sequence[Choice]]]]):
     def wrapper(func):
         if not hasattr(func, '_tuning_space'):
             # attach tuning space when the first time of this function is called
             setattr(func, '_tuning_space', TuningSpace())
         tuning_space: TuningSpace = getattr(func, '_tuning_space')
-        tuning_space.add_sub_space(level, names, choices)
+        tuning_space.add_sub_space(level, name_choice_dict)
         return func
 
     return wrapper
@@ -155,8 +162,9 @@ def tune(ir_modules: Sequence[IRModule], dummy_inputs: Sequence[Any], working_di
 
     # build ir modules into compiled functions
     tuning_dir = os.path.join(working_dir, 'tuning')
+    output_dirs = [os.path.join(tuning_dir, str(i)) for i in range(len(ir_modules))]
     compiled_modules: List[Optional[CompiledModule]] = build_ir_module_batch(
-        ir_modules, output_dir=tuning_dir, parallel=True, verbose=True
+        ir_modules, output_dirs, parallel=True, verbose=True
     )
     assert len(compiled_modules) == len(ir_modules)
     if any(f is None for f in compiled_modules):

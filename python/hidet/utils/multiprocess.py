@@ -52,3 +52,21 @@ def parallel_imap(func: Callable, jobs: Sequence[Any], num_workers: Optional[int
         yield from pool.imap(_wrapped_func, range(len(jobs)))
 
     _job_queue = None
+
+
+def parallel_map(func: Callable, jobs: Sequence[Any], num_workers: Optional[int] = None) -> Iterable[Any]:
+    global _job_queue
+
+    if _job_queue is not None:
+        raise RuntimeError('Cannot call parallel_map recursively.')
+
+    _job_queue = JobQueue(func, jobs)
+
+    if num_workers is None:
+        num_workers = os.cpu_count()
+
+    with multiprocessing.Pool(num_workers) as pool:
+        ret = pool.map(_wrapped_func, range(len(jobs)))
+
+    _job_queue = None
+    return ret

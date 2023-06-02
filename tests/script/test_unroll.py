@@ -53,8 +53,7 @@ def test_unroll():
                 for i, j in repeat(2, 8, attrs='.u+').spatial(4, 8).on(w):
                     printf("i = %d, j = %d\n", i, j)
 
-    ir_module = script_module.ir_module()
-    func = hidet.driver.build_ir_module(ir_module)
+    func = script_module.build()
     source_code = func.source()
     assert "#pragma unroll" in source_code
     return func

@@ -25,7 +25,7 @@ def download(url: str, file_name: Optional[str] = None, progress: bool = True) -
     if file_name is None:
         parts = urllib.parse.urlparse(url)
         file_name = os.path.basename(parts.path)
-    cached_file = os.path.join(hidet.utils.hidet_cache_dir(), 'download', file_name)
+    cached_file = os.path.join(hidet.utils.cache_dir(), 'download', file_name)
     if not os.path.exists(cached_file):
         sys.stderr.write('Downloading: "{}" to {}\n'.format(url, cached_file))
         download_url_to_file(url, cached_file, progress=progress)

@@ -13,7 +13,7 @@
 Please refer to the following section in PTX manual for the details of MMA instructions:
   https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#warp-level-matrix-instructions-for-mma
 """
-from typing import List, Dict
+from typing import List, Dict, Tuple
 from hidet.ir.mapping import TaskMapping, row_spatial, col_spatial, row_repeat, col_repeat
 from hidet.utils import initialize
 from hidet.ir.type import PointerType, DataType, data_type
@@ -32,7 +32,7 @@ def num_regs(short_dtype: str, num_elements: int) -> int:
 
 
 class MmaConfig:
-    def __init__(self, m, n, k, input_dtype, output_dtype, a_load_map, b_load_map, c_store_map):
+    def __init__(self, m, n, k, input_dtype, output_dtype, a_load_map, b_load_map, c_store_map, required_arch):
         self.m: int = m
         self.n: int = n
         self.k: int = k
@@ -47,6 +47,7 @@ class MmaConfig:
         self.a_regs: int = num_regs(input_dtype, m * k)
         self.b_regs: int = num_regs(input_dtype, k * n)
         self.c_regs: int = num_regs(output_dtype, m * n)
+        self.required_arch: Tuple[int, int] = required_arch
 
     def inst_name(self) -> str:
         return 'mma.sync.aligned.m{}n{}k{}.row.col.{}.{}.{}.{}'.format(
@@ -86,11 +87,8 @@ class MmaConfig:
         return mma_configs['m16n8k8_tf32_f32']
 
     @staticmethod
-    def all(compute_capability=None):
-        if compute_capability is None:
-            return list(mma_configs.values())
-        else:
-            return filter_mma_by_cc(compute_capability)
+    def all():
+        return list(mma_configs.values())
 
     def __str__(self):
         return self.inst_name()
@@ -114,6 +112,7 @@ def register_mma_configs():
                     a_load_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
                     b_load_map=col_spatial(4, 8) * col_repeat(2, 1, attrs='u+u+'),
                     c_store_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
+                    required_arch=(7, 5),
                 ),
                 'm16n8k16_f16_{}'.format(output_dtype): MmaConfig(
                     m=16,
@@ -124,6 +123,7 @@ def register_mma_configs():
                     a_load_map=col_repeat(2, 2, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
                     b_load_map=col_repeat(2, 1, attrs='u+u+') * col_spatial(4, 8) * col_repeat(2, 1, attrs='u+u+'),
                     c_store_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
+                    required_arch=(8, 0),
                 ),
             }
         )
@@ -139,6 +139,7 @@ def register_mma_configs():
                 a_load_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
                 b_load_map=col_spatial(4, 8) * col_repeat(2, 1, attrs='u+u+'),
                 c_store_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
+                required_arch=(8, 0),
             ),
             'm16n8k16_bf16_f32': MmaConfig(
                 m=16,
@@ -149,6 +150,7 @@ def register_mma_configs():
                 a_load_map=col_repeat(2, 2, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
                 b_load_map=col_repeat(2, 1, attrs='u+u+') * col_spatial(4, 8) * col_repeat(2, 1, attrs='u+u+'),
                 c_store_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
+                required_arch=(8, 0),
             ),
         }
     )
@@ -164,6 +166,7 @@ def register_mma_configs():
                 a_load_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4),
                 b_load_map=col_spatial(4, 8),
                 c_store_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
+                required_arch=(8, 0),
             ),
             'm16n8k8_tf32_f32': MmaConfig(
                 m=16,
@@ -174,6 +177,7 @@ def register_mma_configs():
                 a_load_map=col_repeat(2, 2, attrs='u+u+') * row_spatial(8, 4),
                 b_load_map=col_repeat(2, 1, attrs='u+u+') * col_spatial(4, 8),
                 c_store_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
+                required_arch=(8, 0),
             ),
         }
     )
@@ -219,29 +223,6 @@ def register_mma_instructions():
                 is_volatile=False,
             )
         register_primitive_function(name=func_name, func_or_type=fb.func)
-
-
-def filter_mma_by_cc(compute_capability):
-    supported_configs = []
-    for config_name, config in mma_configs.items():
-        if compute_capability < (7, 0):
-            continue
-        if compute_capability < (7, 5):
-            if 'm16n8k8' in config_name and config.input_dtype == 'f16':
-                continue
-        if compute_capability < (8, 0):
-            if 'm8n8k4' in config_name and config.input_dtype == 'f64':
-                continue
-            if 'm16n8k16' in config_name and config.input_dtype == 'f16':
-                continue
-            if ('m16n8k8' in config_name or 'm16n8k16' in config_name) and config.input_dtype == 'bf16':
-                continue
-            if ('m16n8k4' in config_name or 'm16n8k8' in config_name) and config.input_dtype == 'tf32':
-                continue
-
-        supported_configs.append(config)
-
-    return supported_configs
 
 
 def resolve_ldmatrix_func_name(num: int, shared_space_addr: bool = False, trans=False) -> str:

@@ -277,7 +277,7 @@ def model(name='gpt2', disable_cache=False) -> GPT2LMHead:
     ret: GPT2LMHead
         The GPT2 model.
     """
-    cache_path = hidet.utils.hidet_cache_file('testing', 'models', 'gpt2', name)
+    cache_path = hidet.utils.cache_file('testing', 'models', 'gpt2', name)
     if os.path.exists(cache_path) and not disable_cache:
         with open(cache_path, 'rb') as f:
             return pickle.load(f)
