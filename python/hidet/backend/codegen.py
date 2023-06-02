@@ -715,11 +715,13 @@ class CUDACodegen(Codegen):
             block_dim = func.attrs['cuda.block_dim']
             if isinstance(block_dim, list):
                 block_dim = prod(block_dim)
-            if 'cuda.min_blocks' in func.attrs:
-                min_blocks = func.attrs['cuda.min_blocks']
-                doc += f' __launch_bounds__({block_dim}, {min_blocks})'
-            else:
-                doc += f' __launch_bounds__({block_dim})'
+            if isinstance(block_dim, (Constant, int)):
+                if 'cuda.min_blocks' in func.attrs:
+                    min_blocks = func.attrs['cuda.min_blocks']
+                    if isinstance(min_blocks, (Constant, int)):
+                        doc += f' __launch_bounds__({block_dim}, {min_blocks})'
+                else:
+                    doc += f' __launch_bounds__({block_dim})'
 
         # func name
         canonized_func_name = self.canonize_funcname(func.name)
