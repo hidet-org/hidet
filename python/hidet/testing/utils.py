@@ -9,8 +9,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Union, Sequence
+from typing import Union, Sequence, Tuple
 import numpy as np
+from hidet import symbol, trace_from
 from hidet.graph.tensor import asarray
 
 
@@ -23,6 +24,34 @@ def check_unary(shape, numpy_op, hidet_op, device: str = 'all', dtype=np.float32
     data = np.array(np.random.randn(*shape)).astype(dtype)
     numpy_result = numpy_op(data)
     hidet_result = hidet_op(asarray(data).to(device=device)).cpu().numpy()
+    np.testing.assert_allclose(actual=hidet_result, desired=numpy_result, atol=atol, rtol=rtol)
+
+
+def check_unary_dynamic(
+    # when type(shape[i]) == int, we take it as static,
+    # when type(shape[i]) == Tuple[str, int], we take it as dynamic,
+    #   where the value of the integer is the shape of the testing value
+    shape: Sequence[Union[int, Tuple[str, int]]],
+    numpy_op,
+    hidet_op,
+    device: str = 'all',
+    dtype=np.float32,
+    atol=0,
+    rtol=0,
+):
+    if device == 'all':
+        for dev in ['cuda', 'cpu']:
+            check_unary_dynamic(shape, numpy_op, hidet_op, dev, dtype, atol, rtol)
+        return
+    concrete_shape = [(i if isinstance(i, int) else i[1]) for i in shape]
+    symbolic_shape = [(i if isinstance(i, int) else i[0]) for i in shape]
+    data = np.array(np.random.randn(*concrete_shape)).astype(dtype)
+    hidet_data = asarray(data).to(device=device)
+    numpy_result = numpy_op(data)
+    sym = symbol(symbolic_shape, dtype=hidet_data.dtype, device=hidet_data.device)
+    out = hidet_op(sym)
+    func = trace_from(out, sym).build()
+    hidet_result = func(hidet_data).cpu().numpy()
     np.testing.assert_allclose(actual=hidet_result, desired=numpy_result, atol=atol, rtol=rtol)
 
 
