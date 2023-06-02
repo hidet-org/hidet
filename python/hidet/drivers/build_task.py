@@ -33,7 +33,7 @@ logger.setLevel(logging.INFO)
 logger.addHandler(logging.StreamHandler())
 
 
-def build_task_module(task: Task, candidates: List[IRModule], task_dir: str, target: str) -> IRModule:
+def build_task_module(task: Task, candidates: List[IRModule], task_dir: str, target: str):
     from hidet.lang import int32, void
     from hidet.lang import attrs
     from hidet.lang import meta
@@ -122,9 +122,17 @@ def build_task_module(task: Task, candidates: List[IRModule], task_dir: str, tar
     )
 
 
-def generate_meta_data(task: Task, task_dir: str, device: str, num_candidates: int):
+def generate_meta_data(task: Task, task_dir: str, build_target: str, num_candidates: int):
     from hidet.runtime.compiled_task import TaskMetaData
+    from hidet.graph.ops.definitions.transfer import TransferTask
 
+    # determine the output device
+    if isinstance(task, TransferTask):
+        device = task.dst_device
+    else:
+        device = build_target
+
+    # generate meta data
     meta = TaskMetaData(
         symbols=[v.name for v in task.symbols],
         inputs=[[t.type.dtype.name] + [int(v) if is_constant(v) else str(v) for v in t.shape] for t in task.inputs],
@@ -221,13 +229,13 @@ def build_task(task: Task, target='cuda', load=True) -> Optional[CompiledTask]:
     return compiled_task
 
 
-def build_task_batch(task_device_pairs: List[Tuple[Task, Device]]):
-    jobs = [(task, device) for task, device in task_device_pairs]
+def build_task_batch(task_target_pairs: List[Tuple[Task, str]]):
+    jobs = [(task, target) for task, target in task_target_pairs]
 
     def build_job(args):
         try:
-            task, target_device = args
-            build_task(task, target_device, load=False)
+            task, target = args
+            build_task(task, target, load=False)
             return True, 'Success'
         except Exception:  # pylint: disable=broad-except
             import traceback
@@ -244,7 +252,7 @@ def build_task_batch(task_device_pairs: List[Tuple[Task, Device]]):
         status_list = list(map(build_job, jobs))
     if not all(status for status, msg in status_list) and option.get_option('parallel_build'):
         msg = ['Failed to build {} tasks:'.format(sum(1 for s, msg in status_list if not s))]
-        for (task, device), (status, job_msg) in zip(task_device_pairs, status_list):
+        for (task, device), (status, job_msg) in zip(task_target_pairs, status_list):
             if not status:
                 job_msg = ('\n' + job_msg).replace('\n', '\n    ')
                 msg.append(f'  [{device.type}] {task.signature()}')

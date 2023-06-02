@@ -165,7 +165,7 @@ class CompiledGraph:
 
         # derived properties
         self.is_dynamic: bool = len(self.meta_data.dynamic_dims) > 0
-        self.device: Device = self.weights[0].device if len(self.weights) > 0 else Device('cpu')
+        self.device: Device = self.weights[0].device if len(self.weights) > 0 else Device('cuda')
 
         # runtime state
         self._registered_hook: Optional[Any] = None

@@ -154,14 +154,12 @@ class FlowGraph:
         self._usage_count = None
 
     def _build_nodes(self):
-        from hidet.runtime.device import Device
-
-        tasks: List[Tuple[Task, Device]] = []
-        tunable_tasks: List[Tuple[Task, Device]] = []
+        tasks: List[Tuple[Task, str]] = []
+        tunable_tasks: List[Tuple[Task, str]] = []
         task_keys = set()
         search_space = hidet.option.get_option('search_space')
         for node in self.nodes:
-            if node._task_func is None:
+            if node._compiled_task is None:
                 task_key = hash(str(node.task))
                 if task_key in task_keys:
                     continue
@@ -170,9 +168,9 @@ class FlowGraph:
                     method not in node.task.__class__.__dict__
                     for method in ['implement_cuda', 'implement_cpu', 'implement']
                 ):
-                    tasks.append((node.task, node.device))
+                    tasks.append((node.task, node.build_target))
                 else:
-                    tunable_tasks.append((node.task, node.device))
+                    tunable_tasks.append((node.task, node.build_target))
 
         hidet.drivers.build_task_batch(tasks)
 
@@ -292,7 +290,7 @@ class FlowGraph:
         """
         # before save, clear the packed func cache because ctypes object can not be pickled
         for node in self.nodes:
-            node._task_func = None
+            node._compiled_task = None
         self._usage_count, self._nodes = None, None
 
         dirname = os.path.dirname(model_file)

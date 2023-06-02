@@ -315,7 +315,7 @@ def build_flow_graph(graph, *, space=0, allow_hook=False) -> CompiledGraph:
             if task_string not in task2kernel:
                 kernel_idx = len(graph_kernels)
                 task2kernel[task_string] = kernel_idx
-                graph_kernels.append(node.task.build(target=node.device.type))
+                graph_kernels.append(node.task.build(target=node.build_target))
             node2kernel.append(task2kernel[task_string])
 
     # build the graph module
