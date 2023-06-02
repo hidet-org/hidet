@@ -103,7 +103,7 @@ class ReduceF16Task(Task):
         warp_size = 32
         block_size = warp_size
         x, y = self.inputs[0], self.outputs[0]
-        shape: List[int] = list(x.const_shape)
+        shape: List[int] = list(x.shape)
         dims = self.dims
         if self.keep_dim:
             remain_shape = [v if i not in dims else 1 for i, v in enumerate(shape)]
@@ -136,7 +136,7 @@ class ReduceF16Task(Task):
         with hidet.script_module() as module:
 
             @hidet.script
-            def reduce_kernel(x: f16[x.const_shape], y: f16[y.const_shape]):
+            def reduce_kernel(x: f16[x.shape], y: f16[y.shape]):
                 attrs.cuda.grid_dim = grid_size
                 attrs.cuda.block_dim = block_size
                 attrs.cuda.min_blocks = 1
@@ -175,7 +175,7 @@ class ReduceF16Task(Task):
 
         x, y = self.inputs[0], self.outputs[0]
         dims = self.dims
-        shape: List[int] = list(x.const_shape)
+        shape: List[int] = list(x.shape)
 
         if self.keep_dim:
             remain_shape = [v if i not in dims else 1 for i, v in enumerate(shape)]
@@ -188,7 +188,7 @@ class ReduceF16Task(Task):
         reduce_shape = [shape[i] for i in dims]
         reduce_extent = prod(reduce_shape)
 
-        block_size = min(256, remain_extent)
+        block_size = hidet.ir.expr.if_then_else(256 < remain_extent, 256, remain_extent)
         remain_layout = spatial(*remain_shape_32bit)
 
         spatial_shape = []
@@ -210,7 +210,7 @@ class ReduceF16Task(Task):
         with hidet.script_module() as module:
 
             @hidet.script
-            def reduce_kernel(x: f16[x.const_shape], y: f16[y.const_shape]):
+            def reduce_kernel(x: f16[x.shape], y: f16[y.shape]):
                 # Each 256-thread ThreadBlock handles 512 columns
                 attrs.cuda.grid_dim = grid_size
                 attrs.cuda.block_dim = block_size
@@ -293,6 +293,12 @@ class ReduceProdF16Op(ReduceBaseF16Op):
 def reduce_f16(
     x: Tensor, dims: Union[int, Sequence[int]], keepdims: bool, reduce_type: Union[ReduceType, str]
 ) -> Tensor:
+    from hidet.ir import Expr
+
+    if True in [isinstance(i, Expr) for i in x.shape]:
+        # TODO: either remove x.shape[-1] % 2 != 0 condition
+        # or for more longterm solution, add conditional statements to kernel launch
+        raise ValueError('reduce_f16 currently does not support dynamic shape')
     if x.dtype != dtypes.float16:
         raise ValueError('reduce_f16 only support float16, got {}'.format(x.dtype))
     if x.shape[-1] % 2 != 0:
