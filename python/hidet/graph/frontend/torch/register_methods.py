@@ -229,3 +229,8 @@ def tensor_masked_fill_(self: Tensor, mask: Tensor, value: float) -> Tensor:
 @register_method(torch.Tensor.repeat)
 def tensor_repeat(self: Tensor, *sizes: int) -> Tensor:
     return ops.tile(self, sizes)
+
+
+@register_method(torch.Tensor.detach)
+def tensor_detach(self: Tensor) -> Tensor:
+    return self

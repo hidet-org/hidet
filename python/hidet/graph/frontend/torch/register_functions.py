@@ -218,13 +218,15 @@ def unsqueeze(x: Tensor, dim: int):
 
 
 @register_function(torch.nn.functional.avg_pool2d)
-def avg_pool2d(x: Tensor, kernel_size, stride, padding, ceil_mode=False, count_include_pad=True, divisor_override=None):
+def avg_pool2d(x: Tensor, kernel_size, stride=None, padding=0, ceil_mode=False, count_include_pad=True, divisor_override=None):
     if ceil_mode:
         raise NotImplementedError("ceil_mode=True")
     if not count_include_pad:
         raise NotImplementedError("count_include_pad=False")
     if divisor_override is not None:
         raise NotImplementedError("divisor_override is not None")
+    if stride is None:
+        stride = kernel_size
     y = ops.avg_pool2d(x, kernel_size, stride, padding)
     return y
 
