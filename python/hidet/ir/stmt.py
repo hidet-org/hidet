@@ -73,7 +73,7 @@ class ForStmtAttr:
                 extent = int(extent)
             else:
                 return ForStmtAttr()
-        if extent < 8:
+        if extent < 4:
             return ForStmtAttr(unroll=True, unroll_explicit=True)
         else:
             return ForStmtAttr()
