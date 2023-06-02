@@ -12,7 +12,8 @@
 from typing import List, Dict, Set
 
 from hidet.ir.expr import Call, Var, Expr
-from hidet.ir.func import IRModule, Function
+from hidet.ir.func import Function
+from hidet.ir.module import IRModule
 from hidet.ir.functors import IRRewriter
 from hidet.ir.stmt import Stmt, SeqStmt, DeclareStmt, EvaluateStmt, ReturnStmt
 from hidet.ir.tools import collect, rewrite
@@ -144,7 +145,7 @@ def prune_unused_functions(ir_module: IRModule):
 class InlineFunctionPass(Pass):
     def process_module(self, ir_module: IRModule) -> IRModule:
         call_graph = CallGraph(ir_module, allow_missing=True)
-        updated_ir_module = IRModule(task=ir_module.task)
+        updated_ir_module = IRModule(namespace=ir_module.namespace, extern_functions=ir_module.extern_functions)
         for node in call_graph.reversed_order:
             assert isinstance(node, CallGraphNode)
             func = inline_callees(node.func, updated_ir_module)

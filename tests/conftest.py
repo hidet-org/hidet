@@ -32,4 +32,4 @@ def pytest_sessionstart(session):
 
         # clean the operator cache directory
         print('Clearing operator cache in test cache...')
-        hidet.utils.hidet_clear_op_cache()
+        hidet.utils.clear_op_cache()

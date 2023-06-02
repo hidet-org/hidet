@@ -25,7 +25,8 @@ from hidet.ir.stmt import DeclareScope, DeclareStmt, EvaluateStmt, BufferStoreSt
 from hidet.ir.stmt import LaunchKernelStmt
 from hidet.ir.stmt import ForMappingStmt, WhileStmt, BreakStmt, ContinueStmt, IfStmt, ReturnStmt, AssertStmt, AsmStmt
 from hidet.ir.stmt import BlackBoxStmt, SeqStmt
-from hidet.ir.func import IRModule, Function
+from hidet.ir.func import Function
+from hidet.ir.module import IRModule
 from hidet.ir.compute import TensorNode, ScalarNode
 from hidet.ir.functors import ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor
 from hidet.ir.tools import TypeInfer
@@ -39,7 +40,6 @@ from hidet.ir.primitives import is_primitive_function, lookup_primitive_function
 class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
     def __init__(self):
         super().__init__()
-        self.func_name_map = {}
         self.ir_module: Optional[IRModule] = None
         self.namer = Namer()
         self.type_infer = TypeInfer()
@@ -53,9 +53,17 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
     def __call__(self, node) -> Doc:
         return self.visit(node)
 
-    @staticmethod
-    def canonize_funcname(name: str):
-        return 'hidet_' + name.replace('.', '_')
+    def canonize_funcname(self, name: str):
+        items = name.split('.')
+        if len(items) == 1:
+            if self.ir_module.namespace != '':
+                return items[0]
+            else:
+                return 'hidet_' + items[0]  # only add 'hidet_' prefix when no namespace
+        elif len(items) == 2:
+            return items[0] + '::' + items[1]
+        else:
+            raise ValueError('Cannot recognize function name {}'.format(name))
 
     def scalar_literal(self, value, dtype: DataType):
         if dtype == dtypes.boolean:
@@ -199,9 +207,40 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             raise RuntimeError('None encountered during code generation')
         return Text(str(c))
 
+    def declare_function(self, func_name, func_type: FuncType):
+        doc = Doc()
+
+        # return type
+        doc += self(func_type.ret_type)
+
+        # func name
+        doc += ' ' + func_name
+
+        # parameters
+        doc += '('
+        param_docs = []
+        for param_type in func_type.param_types:
+            param_docs.append(self.param_declare(Var('v', param_type)))
+        doc += doc_join(param_docs, Text(', '))
+        doc += ');'
+        return doc
+
     def visit_IRModule(self, module: IRModule) -> Doc:
         self.ir_module = module
         doc = Doc()
+
+        for name, func_var in module.extern_functions.items():
+            items = name.split('.')
+            assert len(items) <= 2
+            if len(items) == 1:
+                doc += self.declare_function(name, func_var.type) + NewLine()
+            else:
+                doc += 'namespace ' + items[0] + ' {' + NewLine()
+                doc += '  ' + self.declare_function(items[1], func_var.type) + NewLine()
+                doc += '} ' + NewLine()
+
+        if module.namespace != '':
+            doc += 'namespace ' + module.namespace + ' {' + NewLine()
 
         # define global variables
         for name, var in module.global_vars.items():
@@ -213,6 +252,10 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
         call_graph = CallGraph(module)
         for node in call_graph.reversed_order:
             doc += self(node.func) + NewLine()
+
+        if module.namespace != '':
+            doc += NewLine()
+            doc += '}  // namespace ' + module.namespace + NewLine()
 
         doc = self.require_headers() + doc
 
@@ -341,7 +384,7 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
         func_name: str = e.func_var.name if e.func_var.name else e.func_var.hint
         assert isinstance(func_name, str)
         if func_name in self.ir_module.functions:
-            func = self.ir_module.lookup(func_name)
+            func = self.ir_module.functions[func_name]
             func_name = self.canonize_funcname(func_name)
             if func.kind == 'cuda_kernel':
                 raise RuntimeError('Call to cuda kernel should be lowered to LaunchKernelStmt.')
@@ -652,15 +695,16 @@ class CUDACodegen(Codegen):
 
         # ret
         if func.kind == 'cuda_kernel':
-            doc += '__global__ '
+            doc += 'static __global__ '
         elif func.kind == 'cuda_internal':
-            doc += '__device__ __forceinline__ '
+            doc += 'static __device__ __forceinline__ '
         elif func.kind == 'cpu_kernel':
-            doc += ''
+            doc += 'static '
         elif func.kind == 'cpu_internal':
-            doc += '__forceinline__ '
+            doc += 'static __forceinline__ '
         elif func.kind == 'public':
-            doc += 'DLL '
+            if self.ir_module.namespace == '':
+                doc += 'DLL '
         else:
             raise ValueError(f'Unknown function kind: {func.kind}')
 
@@ -680,7 +724,6 @@ class CUDACodegen(Codegen):
         # func name
         canonized_func_name = self.canonize_funcname(func.name)
         doc += ' ' + canonized_func_name
-        self.func_name_map[func.name] = canonized_func_name
 
         # parameters
         doc += '('
@@ -704,33 +747,41 @@ class CPUCodegen(Codegen):
         doc += Text('#include <stdint.h>') + NewLine()
         doc += Text('#include <math.h>') + NewLine()
         if self.require_immintrin:
-            doc += Text('#include <immintrin.h>')
+            doc += Text('#include <immintrin.h>') + NewLine()
         doc += Text('#include <hidet/runtime/symbols.h>') + NewLine()
         doc += Text('#include <hidet/runtime/memory_planner.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cpu/context.h>') + NewLine()
+        doc += Text('#include <hidet/runtime/cpu/float32.h>') + NewLine()
         if self.require_complex:
             doc += Text('#include <hidet/runtime/cpu/complex.h>') + NewLine()
         if self.require_fp16:
             doc += Text('#include <hidet/runtime/cpu/float16.h>') + NewLine()
         if self.require_bf16:
             doc += Text('#include <hidet/runtime/cpu/bfloat16.h>') + NewLine()
+        if self.require_tf32:
+            doc += Text('typedef float tfloat32_t;') + NewLine()
         doc += NewLine()
         return doc
 
     def visit_Function(self, func: Function) -> Doc:
         self.namer.clear()
-
-        if func.kind not in ['cpu_kernel', 'cpu_internal', 'public']:
-            raise ValueError(f'Unsupported function kind: {func.kind}')
-
         doc = NewLine()
 
-        doc += ' ' + self(func.ret_type)
+        if func.kind == 'public':
+            if self.ir_module.namespace == '':
+                doc += 'DLL '
+            else:
+                doc += ''
+        elif func.kind in ['cpu_kernel', 'cpu_internal']:
+            doc += 'static '
+        else:
+            raise ValueError(f'Unsupported function kind: {func.kind}')
+
+        doc += self(func.ret_type)
 
         # func name
         canonized_func_name = self.canonize_funcname(func.name)
         doc += ' ' + canonized_func_name
-        self.func_name_map[func.name] = canonized_func_name
 
         # parameters
         doc += '('
@@ -748,13 +799,14 @@ class CPUCodegen(Codegen):
         return doc
 
 
-def codegen(ir_module: IRModule, src_out_path: Optional[str] = None) -> str:
-    from hidet.cuda import available
-
-    if available():
+def codegen(ir_module: IRModule, src_out_path: str, target: str) -> str:
+    if target == 'cuda':
         gen = CUDACodegen()
-    else:
+    elif target == 'cpu':
         gen = CPUCodegen()
+    else:
+        raise ValueError(f'Unknown target: {target}')
+
     doc = gen(ir_module)
     code = str(doc)
     if src_out_path is not None:

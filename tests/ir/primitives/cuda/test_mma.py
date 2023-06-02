@@ -13,17 +13,17 @@ import numpy as np
 import pytest
 
 import hidet
-from hidet.driver import build_ir_module
+from hidet.drivers import build_ir_module
 from hidet.ir.builders import FunctionBuilder
 from hidet.ir.expr import Var, tensor_var
-from hidet.ir.func import IRModule
+from hidet.ir.module import IRModule
 from hidet.ir.primitives.cuda import threadIdx
 from hidet.ir.primitives.cuda.mma import MmaConfig, mma_sync, mma_configs
 from hidet.ir.stmt import BufferStoreStmt, DeclareStmt, DeclareScope
 from hidet.ir.type import tensor_pointer_type, FuncType, data_type
 
 
-def matmul_mma_tensor_core(config: MmaConfig):
+def matmul_mma_tensor_core(config: MmaConfig) -> IRModule:
     with FunctionBuilder(name='matmul_mma_grid', kind='cuda_kernel', grid_dim=1, block_dim=32) as fb:
         # parameters
         a = Var('a', tensor_pointer_type(config.input_dtype, [1, config.m, config.k]))
@@ -51,7 +51,7 @@ def matmul_mma_tensor_core(config: MmaConfig):
         for p, (i, j) in enumerate(config.c_store_map(w)):
             fb += BufferStoreStmt(c, [0, i, j], regs_c[p])
     func = fb.func
-    ir_module = IRModule(funcs={func.name: func})
+    ir_module = IRModule(functions={func.name: func})
     return ir_module
 
 
@@ -77,7 +77,7 @@ def test_mma(config: MmaConfig):
         if (config.m, config.n, config.k) in [(16, 8, 16)]:
             pytest.skip('tensor core with shape m16n8k16 is supported on device with sm80 or higher')
     ir_module = matmul_mma_tensor_core(config)
-    func = build_ir_module(ir_module)
+    func = ir_module.build()
     m, n, k = config.m, config.n, config.k
     a = hidet.randint(3, shape=[1, m, k]).to(data_type(config.input_dtype).name).cuda()
     b = hidet.randint(3, shape=[1, k, n]).to(data_type(config.input_dtype).name).cuda()

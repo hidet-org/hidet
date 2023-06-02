@@ -17,7 +17,7 @@ from hidet.ir.type import Int
 from hidet.ir.expr import Var, Expr, Constant, is_constant
 from hidet.ir.type import TensorType, tensor_type, DataType
 from hidet.ir.task import Task, InverseMap
-from hidet.ir.func import IRModule
+from hidet.ir.module import IRModule
 from hidet.graph.operator import Operator, Tensor
 from hidet.ir.compute import TensorNode, TensorInput, ReduceType, tensor_input, compute, reduce, arg_reduce
 from hidet.ir.dtypes import int32

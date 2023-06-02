@@ -11,7 +11,8 @@
 # limitations under the License.
 from typing import List
 from hidet.ir.expr import Call
-from hidet.ir.func import IRModule, Function
+from hidet.ir.func import Function
+from hidet.ir.module import IRModule
 from hidet.ir.tools import collect
 from hidet.ir.primitives import is_primitive_function, lookup_primitive_function
 from hidet.transforms import Pass
@@ -36,12 +37,12 @@ class ImportPrimitiveFunctionPass(Pass):
         if len(primitive_funcs) == 0:
             return ir_module
         else:
-            new_ir_module = IRModule(task=ir_module.task)
+            new_ir_module = IRModule(namespace=ir_module.namespace, extern_functions=ir_module.extern_functions)
             for func_name, func in ir_module.functions.items():
-                new_ir_module.add(func_name, func)
+                new_ir_module.add_function(func_name, func)
             for func in primitive_funcs:
                 if func.name not in new_ir_module.functions:
-                    new_ir_module.add(func.name, func)
+                    new_ir_module.add_function(func.name, func)
             return new_ir_module
 
 

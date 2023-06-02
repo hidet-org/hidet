@@ -259,6 +259,8 @@ class Expr(Node):
                     return promote_type(infer_type(b), a.type)(0)
             elif a == 1 and cls is Multiply:
                 return b
+        elif a is b and isinstance(a, Var) and cls == LessThan:
+            return constant(False, 'bool')
 
         return cls(a, b)
 

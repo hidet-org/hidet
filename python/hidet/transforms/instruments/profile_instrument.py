@@ -14,7 +14,7 @@ import os
 import time
 
 from hidet import utils
-from hidet.ir.func import IRModule
+from hidet.ir.module import IRModule
 
 from .base import PassInstrument
 

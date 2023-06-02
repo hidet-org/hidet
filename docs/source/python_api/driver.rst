@@ -1,6 +1,6 @@
-hidet.driver
-------------
+hidet.drivers
+-------------
 
-.. automodule:: hidet.driver
+.. automodule:: hidet.drivers
   :members:
   :autosummary:

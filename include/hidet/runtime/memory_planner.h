@@ -21,8 +21,6 @@ struct MemoryPlanner {
 };
 
 static MemoryPlanner memory_planner;
-//
-//int max_segments = 0;
 
 static void memory_planner_init() {
     memory_planner.size_map.clear();
@@ -31,13 +29,6 @@ static void memory_planner_init() {
 }
 
 static int64_t memory_planner_allocate(int64_t size) {
-//    max_segments = std::max(max_segments, (int)memory_planner.regions.size());
-//    printf("%d (%d)\n", (int)memory_planner.regions.size(), max_segments);
-//    memory_planner.print();
-
-//    auto ret = memory_planner.regions.begin()->start;
-//    memory_planner.regions.begin()->start += size;
-//    return ret;
     if(size == 0) {
         return -1;
     }
@@ -65,9 +56,6 @@ static int64_t memory_planner_allocate(int64_t size) {
 }
 
 static void memory_planner_free(int64_t ptr) {
-//    max_segments = std::max(max_segments, (int)memory_planner.regions.size());
-//    printf("%d (%d)\n", (int)memory_planner.regions.size(), max_segments);
-//    memory_planner.print();
     if(ptr == -1) {
         return;
     }

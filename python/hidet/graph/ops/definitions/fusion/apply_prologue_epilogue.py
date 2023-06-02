@@ -16,7 +16,8 @@ import hidet.option
 from hidet.ir.compute import TensorNode, GridCompute, TensorInput
 from hidet.ir.expr import Expr, Var, TensorElement, tensor_var, tensor_element
 from hidet.ir.stmt import BufferStoreStmt
-from hidet.ir.func import Function, IRModule
+from hidet.ir.func import Function
+from hidet.ir.module import IRModule
 from hidet.ir.task import Task, InverseMap
 from hidet.ir.functors import IRRewriter
 from hidet.ir.tools import rewrite, collect

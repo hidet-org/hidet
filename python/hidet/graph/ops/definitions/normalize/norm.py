@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List
-from hidet.ir.func import IRModule
+from hidet.ir.module import IRModule
 from hidet.ir.primitives import active_mask, shfl_down_sync
 from hidet.ir.compute import reduce
 from hidet.ir.expr import Expr

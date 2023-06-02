@@ -38,7 +38,7 @@ def test_parallel():
             for i, j in grid(2, 5, attrs='pp'):  # unroll the first loop while keep the second loop unchanged
                 a[i * 5 + j] = i
 
-            b = tensor('global', 'float32', shape=[8, 64])
+            b = tensor('default', 'float32', shape=[8, 64])
             for w in range(32):
                 for i, j in repeat(2, 8).spatial(4, 8).on(w):
                     b[i, j] = i
@@ -52,8 +52,7 @@ def test_parallel():
                 for i, j in repeat(2, 8, attrs='.p').spatial(4, 8).on(w):
                     b[i, j] = i
 
-    ir_module = script_module.ir_module()
-    func = hidet.driver.build_ir_module(ir_module)
+    func = script_module.build()
     source_code = func.source()
     assert "#pragma omp parallel" in source_code
     return func
@@ -76,8 +75,7 @@ def matmul(m_size, n_size, k_size):
                     for k in range(k_size):
                         c[i, j] += a[i, k] * b[k, j]
 
-    ir_module = script_module.ir_module()
-    return hidet.driver.build_ir_module(ir_module)
+    return script_module.build()
 
 
 def test_parallel_v2():

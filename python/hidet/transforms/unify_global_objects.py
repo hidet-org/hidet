@@ -11,7 +11,7 @@
 # limitations under the License.
 
 from hidet.ir.expr import Var, SymbolVar, symbol_var
-from hidet.ir.func import IRModule
+from hidet.ir.module import IRModule
 from hidet.ir.functors import IRRewriter
 from hidet.ir.primitives.vars import registered_primitive_variables, lookup_primitive_variable
 from hidet.ir.type import DataType, data_type

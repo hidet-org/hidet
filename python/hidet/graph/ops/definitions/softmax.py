@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from hidet.ir.func import IRModule
+from hidet.ir.module import IRModule
 from hidet.ir import primitives as prim
 from hidet.ir.expr import is_constant
 from .utils import Task, TensorNode, compute, reduce

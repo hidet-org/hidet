@@ -14,7 +14,7 @@ from hidet.ir.type import TensorType, DataType
 from hidet.ir.expr import Var, Constant
 from hidet.ir.dtypes import float16, bfloat16, float32
 from hidet.ir.task import Task
-from hidet.runtime.module import CompiledFunction, CompiledModule
+from hidet.runtime.compiled_task import CompiledTask
 from hidet.graph.tensor import empty, empty_like, Tensor, SymbolVar
 from hidet.ffi.ffi import get_last_error, BackendException
 from hidet.runtime.device import Device, instantiate_device
@@ -43,7 +43,7 @@ class Operator:
         self.outputs: List[Tensor] = []
 
         # cache
-        self._task_func: Optional[CompiledFunction] = None
+        self._task_func: Optional[CompiledTask] = None
 
         self.outputs = self._run()
 
@@ -66,7 +66,7 @@ class Operator:
             return self.inputs[0].device
 
     @property
-    def task_func(self) -> CompiledModule:
+    def task_func(self) -> CompiledTask:
         if self._task_func is None:
             self._task_func = self.task.build(target=self.device.type)
         return self._task_func
@@ -131,9 +131,7 @@ class Operator:
         return outputs
 
     def imperative_run(self, inputs: List[Tensor]) -> List[Tensor]:
-        outputs: List[Tensor] = self._imperative_run_prepare_outputs()
-
-        self.task_func(*inputs, *outputs)
+        outputs = self.task_func.run_async(inputs)
 
         status = get_last_error()
         if status is not None:

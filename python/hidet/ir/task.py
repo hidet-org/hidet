@@ -17,7 +17,7 @@ import pickle
 from hidet.ir.node import Node
 from hidet.ir.type import FuncType, VoidType
 from hidet.ir.expr import Expr, Var, SymbolVar, var
-from hidet.ir.func import IRModule
+from hidet.ir.module import IRModule
 from hidet.ir.compute import ComputeNode, TensorNode, TensorInput, ScalarInput, GridCompute
 
 
@@ -93,6 +93,10 @@ class Task(Node):
         self.outputs: List[TensorNode] = list(outputs)
         self.inverse_map: Dict[TensorInput, InverseMap] = {a: InverseMap.from_obj(b) for a, b in inverse_map.items()}
         self.attrs: Dict[str, Union[str, float, int, bool]] = attributes
+
+        from hidet.ir.tools import collect
+
+        self.symbols: List[SymbolVar] = list(collect(self.outputs, SymbolVar))
 
         self._sanity_check()
 
@@ -217,22 +221,22 @@ class Task(Node):
 
         Returns
         -------
-        func: hidet.runtime.CompiledModule
+        func: hidet.runtime.CompiledTask
             The compiled module.
         """
-        from hidet.driver import build_task
+        from hidet.drivers import build_task
 
         if isinstance(target, Target):
             target = target.name
-        return build_task(self, target_device=target, load=True)
+        return build_task(self, target=target, load=True)
 
-    def implement(self, target: Union[Target, str], working_dir: str) -> IRModule:
+    def implement(self, target: Union[Target, str], working_dir: str) -> List[IRModule]:
         from hidet.graph.ops.schedules.cuda.auto_scheduler import CudaAutoScheduler
         from hidet.graph.ops.schedules.cpu.auto_scheduler import CpuAutoScheduler
-        from hidet.graph.ops.definitions.utils.tune import tune
 
         if isinstance(target, str):
             target = Target.from_string(target)
+
         if target.name == 'cuda':
             ret = self.implement_cuda(working_dir)
             if ret is NotImplemented:
@@ -245,25 +249,30 @@ class Task(Node):
                 ret = auto_scheduler.schedule_task(self, 'cpu')
         else:
             raise ValueError()
+
         if isinstance(ret, IRModule):
-            return ret
+            ir_modules = [ret]
+        else:
+            ir_modules = ret
 
-        ir_modules: List[IRModule] = ret
+        return ir_modules
 
-        if len(ir_modules) == 1:
-            return ir_modules[0]
-
-        if not all(isinstance(m, IRModule) for m in ir_modules):
-            raise AssertionError(
-                f'The task implement function should return an IRModule or a sequence of IRModule, '
-                f'but got a {type(ir_modules)}.'
-            )
-        dummy_args = self.dummy_arguments(target.name)
-        try:
-            best_ir_module = tune(ir_modules, dummy_inputs=dummy_args, working_dir=working_dir)
-        except ValueError as e:
-            raise RuntimeError(f'Failed to tune the task: {self}') from e
-        return best_ir_module
+        # ir_modules: List[IRModule] = ret
+        #
+        # if len(ir_modules) == 1:
+        #     return ir_modules[0]
+        #
+        # if not all(isinstance(m, IRModule) for m in ir_modules):
+        #     raise AssertionError(
+        #         f'The task implement function should return an IRModule or a sequence of IRModule, '
+        #         f'but got a {type(ir_modules)}.'
+        #     )
+        # dummy_args = self.dummy_arguments(target.name)
+        # try:
+        #     best_ir_module = tune(ir_modules, dummy_inputs=dummy_args, working_dir=working_dir)
+        # except ValueError as e:
+        #     raise RuntimeError(f'Failed to tune the task: {self}') from e
+        # return best_ir_module
 
     def implement_cuda(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
         return NotImplemented

@@ -10,16 +10,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from __future__ import annotations
-from typing import Tuple, Optional, List, Any, Dict
-from types import FunctionType
+
 import ast as py_ast
 import inspect
-from hidet.ir.task import Task
-from hidet.ir.func import IRModule, Function
-from hidet.ir.type import FuncType
+from types import FunctionType
+from typing import Tuple, Optional, List, Any, Dict
+
 from hidet.ir.expr import Var
+from hidet.ir.func import Function
+from hidet.ir.module import IRModule
+from hidet.ir.type import FuncType, BaseType, func_type
 from hidet.lang.transpiler import PythonToHidetTranslator
-from hidet.runtime.module import CompiledModule
+from hidet.runtime.compiled_module import CompiledModule
 
 
 def eliminate_indent(source: str) -> Tuple[str, int]:
@@ -97,10 +99,10 @@ def script(func: FunctionType) -> Function:
 class ScriptModuleContext:
     contexts: List[ScriptModuleContext] = []
 
-    def __init__(self, task=None):
+    def __init__(self):
         self.name2var: Dict[str, Var] = {}
         self.functions: List[Function] = []
-        self.task: Optional[Task] = task
+        self.extern_functions: Dict[str, Var] = {}
 
     def __enter__(self):
         self.contexts.append(self)
@@ -123,20 +125,28 @@ class ScriptModuleContext:
             return None
         return self.name2var[name]
 
-    def define_global_var(self, var: Var):
-        if var.hint in self.name2var:
-            raise ValueError(f'Global variable {var.hint} is already defined.')
-        self.name2var[var.hint] = var
+    def define_global_var(self, name: str, var_type: BaseType) -> Var:
+        if name in self.name2var:
+            raise ValueError(f'Global variable {name} is already defined.')
+        self.name2var[name] = Var(hint=None, type=var_type, name=name)
+        return self.name2var[name]
+
+    def declare_extern_func(self, name: str, param_types, ret_type):
+        if name in self.extern_functions:
+            raise ValueError(f'Extern function {name} is already declared.')
+        self.extern_functions[name] = Var(hint=None, name=name, type=func_type(param_types, ret_type))
+        return self.extern_functions[name]
 
     def ir_module(self) -> IRModule:
-        return IRModule(funcs={func.name: func for func in self.functions}, task=self.task, global_vars=self.name2var)
+        return IRModule(
+            functions={func.name: func for func in self.functions},
+            global_vars=self.name2var,
+            extern_functions=self.extern_functions,
+        )
 
     def build(self) -> CompiledModule:
-        from hidet.driver import build_ir_module
-
-        ir_module = self.ir_module()
-        return build_ir_module(ir_module)
+        return self.ir_module().build()
 
 
-def script_module(task: Optional[Task] = None) -> ScriptModuleContext:
-    return ScriptModuleContext(task)
+def script_module() -> ScriptModuleContext:
+    return ScriptModuleContext()

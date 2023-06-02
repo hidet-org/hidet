@@ -43,6 +43,7 @@ def test_gpt2(device: str, opt: bool):
         graph = hidet.graph.optimize(graph)
 
     compiled_model = graph.build()
+    compiled_model.save('./outs/compiled.hidet')
 
     generated_text = generate(
         compiled_model,
