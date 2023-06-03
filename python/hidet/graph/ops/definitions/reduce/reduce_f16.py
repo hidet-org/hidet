@@ -295,9 +295,7 @@ def reduce_f16(
 ) -> Tensor:
     from hidet.ir import Expr
 
-    if True in [isinstance(i, Expr) for i in x.shape]:
-        # TODO: either remove x.shape[-1] % 2 != 0 condition
-        # or for more longterm solution, add conditional statements to kernel launch
+    if any(isinstance(d, Expr) for d in x.shape):
         raise ValueError('reduce_f16 currently does not support dynamic shape')
     if x.dtype != dtypes.float16:
         raise ValueError('reduce_f16 only support float16, got {}'.format(x.dtype))

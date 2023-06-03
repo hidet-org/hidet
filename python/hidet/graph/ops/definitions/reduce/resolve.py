@@ -11,7 +11,7 @@
 # limitations under the License.
 from typing import List, Optional, Callable, Any
 
-from hidet.ir import dtypes
+from hidet.ir import dtypes, Expr
 from hidet.graph.operator import Operator, Tensor
 from hidet.graph.transforms import ResolveRule, register_resolve_rule
 
@@ -47,7 +47,7 @@ class ReduceResolveRule(ResolveRule):
         reduce_type = op.task.attrs['reduce_type']
         x: Tensor = op.inputs[0]
         last_dim = x.shape[-1]
-        if x.dtype != dtypes.float16 or last_dim % 2 != 0:
+        if x.dtype != dtypes.float16 or any(isinstance(d, Expr) for d in x.shape) or last_dim % 2 != 0:
             return None
         return [reduce_f16(x, dims, keepdims, reduce_type)]
 
