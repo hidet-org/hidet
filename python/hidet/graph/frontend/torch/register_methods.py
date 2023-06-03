@@ -36,6 +36,16 @@ def tensor_cpu(self: Tensor) -> Tensor:
     return self.cpu()
 
 
+@register_method(torch.Tensor.int)
+def tensor_int(self: Tensor) -> Tensor:
+    return ops.cast(self, "int32")
+
+
+@register_method(torch.Tensor.long)
+def tensor_long(self: Tensor) -> Tensor:
+    return ops.cast(self, "int64")
+
+
 @register_method(torch.Tensor.float)
 def tensor_float(self: Tensor) -> Tensor:
     return ops.cast(self, "float32")
@@ -49,6 +59,11 @@ def tensor_half(self: Tensor) -> Tensor:
 @register_method(torch.Tensor.bool)
 def tensor_bool(self: Tensor) -> Tensor:
     return ops.cast(self, "bool")
+
+
+@register_method(torch.Tensor.type_as)
+def tensor_type_as(self: Tensor, other: Tensor) -> Tensor:
+    return ops.cast(self, other.dtype)
 
 
 @register_method(torch.Tensor.to)
