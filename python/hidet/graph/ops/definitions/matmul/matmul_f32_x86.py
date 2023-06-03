@@ -328,21 +328,13 @@ class MatmulF32Taskx86(Task):
                             temp_c = tensor(
                                 scope=DeclareScope.Default, dtype='float32', layout=row_layout(tile_m, tile_n)
                             )
-                            for tempi in range(tile_m):
-                                for tempj in range(tile_n):
-                                    temp_c[tempi, tempj] = 0.0
-                            micro_kernel(~a[ii, 0], ~b[0, jj], temp_c, pb, tile_m, tile_n, is_first)
+                            micro_kernel(~a[ii, 0], ~b[0, jj], temp_c, pb, tile_m, tile_n, True)
                             if is_first:
                                 for remain_row, remain_col in grid(mr, nr):
                                     c_in_macro[ii + remain_row, jj + remain_col] = temp_c[remain_row, remain_col]
                             else:
                                 for remain_row, remain_col in grid(mr, nr):
                                     c_in_macro[ii + remain_row, jj + remain_col] += temp_c[remain_row, remain_col]
-                            # for remain_row, remain_col in grid(mr, nr):
-                            #     if is_first:
-                            #         c_in_macro[ii + remain_row, jj + remain_col] = temp_c[remain_row, remain_col]
-                            #     else:
-                            #         c_in_macro[ii + remain_row, jj + remain_col] += temp_c[remain_row, remain_col]
 
             @hidet.script
             def matmul_kernel_x86(a: float32[m_size, k_size], b: float32[k_size, n_size], c: float32[m_size, n_size]):
@@ -352,8 +344,6 @@ class MatmulF32Taskx86(Task):
 
                 packed_a_alloc = avx_malloc(block_m * block_k * 32, 64)
                 packed_b_alloc = avx_malloc(block_k * block_n * 32, 64)
-
-                # x86_memset(~c[0, 0], 0, m_size * n_size * 4)
 
                 packed_a = as_tensor_pointer(
                     packed_a_alloc, float32, layout=row_layout(aip_outer_rows, 1) * col_layout(tile_m, block_k)
