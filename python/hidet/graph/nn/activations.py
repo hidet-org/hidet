@@ -9,7 +9,7 @@ class Relu(Module):
 
 class Gelu(Module):
     def forward(self, x):
-        return x * (ops.erf(x * (1.0 / 1.4142135381698608)) + 1.0) * 0.5
+        return ops.gelu(x)
 
 
 class Tanh(Module):

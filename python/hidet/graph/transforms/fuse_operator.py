@@ -13,7 +13,7 @@ from typing import List, Sequence, Dict, Tuple, Optional, Set, Union
 
 import hidet
 from hidet.graph.flow_graph import FlowGraph, Operator, Tensor
-from hidet.graph.ops.definitions.special import BarrierOp
+from hidet.graph.ops.special import BarrierOp
 from hidet.graph.graph_utils.functors import analyze_usage
 from hidet.graph.transforms.base import GraphPass
 from hidet.utils.structure import DirectedGraph
@@ -283,7 +283,7 @@ def operator_from_sub_graph(sub_graph: FusibleGraph, tensor_remap: Dict[Tensor, 
         return updated_op
     else:
         # otherwise, create a new operator from the sub-graph.
-        from hidet.graph.ops.definitions.fusion.fused_operator import fused_operator
+        from hidet.graph.ops.fusion.fused_operator import fused_operator
 
         fused_graph, anchor = sub_graph.flow_graph_and_anchor()
         updated_inputs: List[Tensor] = [

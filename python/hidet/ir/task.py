@@ -231,8 +231,7 @@ class Task(Node):
         return build_task(self, target=target, load=True)
 
     def implement(self, target: Union[Target, str], working_dir: str) -> List[IRModule]:
-        from hidet.graph.ops.schedules.cuda.auto_scheduler import CudaAutoScheduler
-        from hidet.graph.ops.schedules.cpu.auto_scheduler import CpuAutoScheduler
+        from hidet.ir.schedulers import CudaAutoScheduler, CpuAutoScheduler
 
         if isinstance(target, str):
             target = Target.from_string(target)
@@ -256,23 +255,6 @@ class Task(Node):
             ir_modules = ret
 
         return ir_modules
-
-        # ir_modules: List[IRModule] = ret
-        #
-        # if len(ir_modules) == 1:
-        #     return ir_modules[0]
-        #
-        # if not all(isinstance(m, IRModule) for m in ir_modules):
-        #     raise AssertionError(
-        #         f'The task implement function should return an IRModule or a sequence of IRModule, '
-        #         f'but got a {type(ir_modules)}.'
-        #     )
-        # dummy_args = self.dummy_arguments(target.name)
-        # try:
-        #     best_ir_module = tune(ir_modules, dummy_inputs=dummy_args, working_dir=working_dir)
-        # except ValueError as e:
-        #     raise RuntimeError(f'Failed to tune the task: {self}') from e
-        # return best_ir_module
 
     def implement_cuda(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
         return NotImplemented

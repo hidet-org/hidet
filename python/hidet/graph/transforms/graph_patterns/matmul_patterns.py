@@ -13,7 +13,7 @@ from typing import List, Optional
 
 from hidet.graph import ops
 from hidet.graph.flow_graph import Tensor
-from hidet.graph.ops.definitions.matmul import MatmulOp
+from hidet.graph.ops.matmul import MatmulOp
 from hidet.utils import same_list, initialize
 from .base import SubgraphRewriteRule, TensorPattern, MatchDict, op_pattern, register_rewrite_rule
 
