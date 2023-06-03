@@ -66,7 +66,7 @@ def test_matmul(a_shape, b_shape, dtype):
 
 @pytest.mark.parametrize("a_shape, b_shape", [[[1, 128, 128], [128, 128]]])
 def test_matmul_fp16(a_shape, b_shape):
-    from hidet.graph.ops.definitions.matmul.matmul_f16 import matmul_f16
+    from hidet.graph.ops.matmul.matmul_f16 import matmul_f16
 
     check_binary(
         a_shape,

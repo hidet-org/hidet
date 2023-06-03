@@ -13,8 +13,8 @@ import pytest
 import numpy as np
 from hidet import ops
 from hidet.testing import check_unary
-from hidet.graph.ops.definitions.utils import ReduceType
-from hidet.graph.ops.definitions.reduce import reduce_f16
+from hidet.graph.ops.utils import ReduceType
+from hidet.graph.ops.reduce import reduce_f16
 
 
 @pytest.mark.parametrize('dtype', [np.float64, np.float32, np.float16])

@@ -12,7 +12,7 @@
 import pytest
 import numpy
 import hidet
-from hidet.graph.ops.definitions.fusion.fused_operator import fused_operator
+from hidet.graph.ops.fusion.fused_operator import fused_operator
 
 
 def test_fusion():

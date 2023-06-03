@@ -13,7 +13,7 @@ import math
 import pytest
 import numpy
 import hidet
-from hidet.graph.ops.definitions.attention import attention
+from hidet.graph.ops.attention import attention
 from hidet import ops
 
 

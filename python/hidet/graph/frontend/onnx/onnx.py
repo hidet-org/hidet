@@ -651,7 +651,7 @@ class OnnxExpand(OnnxOperator):
     def run_v8(self, inputs: List[Tensor]) -> List[Tensor]:
         data, new_shape = inputs
         new_shape = self.tensor2list(new_shape)
-        new_shape = hidet.graph.ops.definitions.arithmetic.broadcast_shape(data.shape, new_shape)
+        new_shape = hidet.graph.ops.arithmetic.broadcast_shape(data.shape, new_shape)
         return [ops.broadcast(data, new_shape)]
 
 
@@ -932,7 +932,7 @@ class OnnxLeakyRelu(OnnxOperator):
 @register_onnx_operator
 class OnnxConvTranspose(OnnxOperator):
     def run_v1(self, inputs: List[Tensor]) -> List[Tensor]:
-        from hidet.graph.ops.definitions.utils import normalize_stride
+        from hidet.graph.ops.utils import normalize_stride
 
         data, weight = inputs[:2]
         if len(data.shape) != 4:

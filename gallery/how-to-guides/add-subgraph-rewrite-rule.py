@@ -84,7 +84,8 @@ print(graph)
 # %%
 # Then, we define and register the sub-graph rewrite rule.
 #
-from hidet.graph.ops.definitions import MatmulOp, ConcatOp
+from hidet.graph.ops.matmul import MatmulOp
+from hidet.graph.ops.transform import ConcatOp
 from hidet.graph.transforms import TensorPattern, SubgraphRewriteRule
 from hidet.graph.transforms import op_pattern, register_rewrite_rule
 from hidet.utils import same_list
