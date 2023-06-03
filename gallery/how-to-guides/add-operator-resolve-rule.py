@@ -91,7 +91,7 @@ print(graph_opt)
 
 from typing import Optional, List
 from hidet import Tensor
-from hidet.graph.ops.definitions.arithmetic import PowOp
+from hidet.graph.ops.arithmetic import PowOp
 from hidet.graph.transforms import register_resolve_rule, ResolveRule
 
 
