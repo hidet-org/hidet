@@ -752,11 +752,11 @@ class Tensor:
             The new tensor or self.
         """
         from hidet.graph.ops import transfer
-        if self.device.type == 'cpu':
+        if self.device.kind == 'cpu':
             return self
         else:
-            if self.trace is None:
-                return Tensor(self.shape, self.dtype, 'cpu', self.storage.cpu() if self.storage else None, self.layout)
+            if self.storage is not None:
+                return Tensor(self.shape, self.dtype, 'cpu', self.storage.cpu(), self.layout)
             else:
                 return transfer(self, 'cpu')
 
@@ -783,10 +783,8 @@ class Tensor:
         if self.device == device:
             return self
         else:
-            if self.trace is None:
-                return Tensor(
-                    self.shape, self.dtype, device, self.storage.cuda(device.id) if self.storage else None, self.layout
-                )
+            if self.storage is not None:
+                return Tensor(self.shape, self.dtype, device, self.storage.cuda(device.id), self.layout)
             else:
                 return transfer(self, device)
 
@@ -875,7 +873,7 @@ class Tensor:
         ret: Tensor
             The tensor on CPU.
         """
-        if self.device.type == 'cpu':
+        if self.device.kind == 'cpu':
             return self
         else:
             if self.trace is None:
@@ -933,7 +931,7 @@ class Tensor:
         ret: np.ndarray
             The numpy array.
         """
-        if self.device.type != 'cpu':
+        if self.device.kind != 'cpu':
             raise RuntimeError('Cannot convert a tensor on {} to numpy array.'.format(self.device))
         if self.dtype in [dtypes.bfloat16, dtypes.tfloat32]:
             warnings.warn('numpy does not support {}, converting to float32'.format(self.dtype.name))

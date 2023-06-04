@@ -139,7 +139,7 @@ class FusedOperator(Operator):
         attributes = {'fused_graph': fused_graph, 'anchor': anchor}
         if len(inputs) == 0:
             # if no inputs are provided, we should set the 'device' attribute to allow us to infer the device of output
-            attributes['device'] = fused_graph.nodes[0].device.type
+            attributes['device'] = fused_graph.nodes[0].device.kind
 
         if len(kwargs) > 0:
             # incase we use reforward to create the operator, in which case,

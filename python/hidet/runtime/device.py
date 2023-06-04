@@ -14,26 +14,26 @@ from typing import Optional
 
 class Device:
     def __init__(self, device_type: str, device_index: Optional[int] = None):
-        self.type: str = device_type
+        self.kind: str = device_type
         self.id: Optional[int] = device_index
 
     def __repr__(self) -> str:
         if self.id is None:
-            return 'device({})'.format(self.type)
-        return 'device({}, {})'.format(self.type, self.id)
+            return 'device({})'.format(self.kind)
+        return 'device({}, {})'.format(self.kind, self.id)
 
     def __str__(self) -> str:
         if self.id is None:
-            return self.type
-        return '{}:{}'.format(self.type, self.id)
+            return self.kind
+        return '{}:{}'.format(self.kind, self.id)
 
     def __eq__(self, other):
         if not isinstance(other, Device):
             raise ValueError('Cannot compare Device with {}'.format(type(other)))
-        return self.type == other.type and self.id == other.id
+        return self.kind == other.kind and self.id == other.id
 
     def __hash__(self):
-        return hash((self.type, self.id))
+        return hash((self.kind, self.id))
 
     def __enter__(self):
         from hidet.cuda.device import current_device, set_device
@@ -49,10 +49,10 @@ class Device:
             set_device(getattr(self, '_prev_device'))
 
     def is_cpu(self) -> bool:
-        return self.type == 'cpu'
+        return self.kind == 'cpu'
 
     def is_cuda(self) -> bool:
-        return self.type == 'cuda'
+        return self.kind == 'cuda'
 
 
 def device(device_type: str, device_index: Optional[int] = None):
@@ -102,16 +102,16 @@ def instantiate_device(dev) -> Device:
     if isinstance(dev, str):
         dev = device(dev)
     elif isinstance(dev, Device):
-        dev = Device(dev.type, dev.id)  # make a copy
+        dev = Device(dev.kind, dev.id)  # make a copy
     else:
         raise ValueError(
             f'Invalid device: {dev}, must be a device string (e.g., "cuda") or a Device object (e.g., '
             f'hidet.device("cuda", 0)).'
         )
-    if dev.type == 'cpu':
+    if dev.kind == 'cpu':
         dev.id = None  # CPU device does not have a device index
         return dev
-    elif dev.type == 'cuda':
+    elif dev.kind == 'cuda':
         if dev.id is None:
             dev.id = current_device()
         return dev

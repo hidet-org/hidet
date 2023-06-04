@@ -23,9 +23,9 @@ from .utils import Task, TensorNode, Operator, Tensor, compute, input_like
 class TransferTask(Task):
     def __init__(self, x: TensorNode, src_device: Device, dst_device: Device):
         allowed_devices = ['cpu', 'cuda']
-        if src_device not in allowed_devices:
+        if src_device.kind not in allowed_devices:
             raise RuntimeError(f'Unsupported source device {src_device}, candidate devices are {allowed_devices}')
-        if dst_device not in allowed_devices:
+        if dst_device.kind not in allowed_devices:
             raise RuntimeError(f'Unsupported destination device {dst_device}, candidate devices are {allowed_devices}')
 
         y = compute('out', x.shape, lambda *indices: x[indices])
@@ -44,9 +44,9 @@ class TransferTask(Task):
         dtype: DataType = self.inputs[0].type.dtype
         shape: Tuple[Expr, ...] = self.inputs[0].shape
         nbytes = dtype.nbytes * prod(shape)
-        kind = f'{self.src_device.type}_to_{self.dst_device.type}'
+        kind = f'{self.src_device.kind}_to_{self.dst_device.kind}'
 
-        if (self.src_device.type == 'cuda' and self.src_device.id > 0) or (self.dst_device.type == 'cuda' and self.dst_device.id > 0):
+        if (self.src_device.kind == 'cuda' and self.src_device.id > 0) or (self.dst_device.kind == 'cuda' and self.dst_device.id > 0):
             raise NotImplementedError('The transfer between non-default CUDA devices is not supported yet.')
 
         with hidet.script_module() as script_module:

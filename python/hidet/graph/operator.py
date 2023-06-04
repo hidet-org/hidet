@@ -81,11 +81,11 @@ class Operator:
         ret: str
             The build target of this operator.
         """
-        from hidet.graph.ops.definitions.transfer import TransferOp
+        from hidet.graph.ops.transfer import TransferOp
         if isinstance(self, TransferOp):
             return 'cuda'
         else:
-            return self.device.type
+            return self.device.kind
 
     @property
     def compiled_task(self) -> CompiledTask:

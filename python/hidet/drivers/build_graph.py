@@ -118,14 +118,14 @@ def get_graph_meta_data(graph: FlowGraph, num_kernels) -> GraphMetaData:
         lines.append(w.signature())
     for node in graph.nodes:
         lines.append(str(node.task))
-    lines.append(graph.inputs[0].device.type)
+    lines.append(graph.inputs[0].device.kind)
     lines.append(str(graph))
     graph_hash = sha256('\n'.join(lines).encode('utf-8')).hexdigest()[:16]
 
     return GraphMetaData(
         input_signatures=input_signatures,
         output_signatures=output_signatures,
-        device=graph.inputs[0].device.type,
+        device=graph.inputs[0].device.kind,
         hidet_version=hidet.__version__,
         num_kernels=num_kernels,
         graph_hash=graph_hash,
@@ -329,7 +329,7 @@ def build_flow_graph(graph, *, space=0, allow_hook=False) -> CompiledGraph:
 
     # build the compiled graph
     compiled_graph = CompiledGraph(
-        meta_data=graph_meta_data,
+        meta=graph_meta_data,
         graph_module=graph_module,
         weights=graph_weights,
         compiled_tasks=graph_kernels,
