@@ -110,21 +110,21 @@ class ResNet(nn.Module):
         return x
 
 
-def resnet18():
+def resnet18() -> ResNet:
     return ResNet(block=BasicBlock, layers=[2, 2, 2, 2])
 
 
-def resnet34():
+def resnet34() -> ResNet:
     return ResNet(block=BasicBlock, layers=[3, 4, 6, 3])
 
 
-def resnet50():
+def resnet50() -> ResNet:
     return ResNet(block=Bottleneck, layers=[3, 4, 6, 3])
 
 
-def resnet101():
+def resnet101() -> ResNet:
     return ResNet(block=Bottleneck, layers=[3, 4, 23, 3])
 
 
-def resnet152():
+def resnet152() -> ResNet:
     return ResNet(block=Bottleneck, layers=[3, 8, 36, 3])

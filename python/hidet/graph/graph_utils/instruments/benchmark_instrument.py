@@ -57,7 +57,7 @@ class GraphForwardBenchmarkInstrument(GraphForwardInstrument):
         if not self.benchmarking:
             return
 
-        task_func: CompiledModule = op.task_func
+        task_func: CompiledModule = op.compiled_task
         latency: List[float] = task_func.profile(
             *inputs, *outputs, warmup=self.warmup, number=self.number, repeat=self.repeat
         )

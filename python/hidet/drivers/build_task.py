@@ -23,7 +23,7 @@ from hidet.ir.task import Task
 from hidet.drivers.build_module import build_ir_module, build_ir_module_batch
 from hidet.drivers.utils import lazy_initialize_cuda
 from hidet.runtime.compiled_module import compiled_module_exists
-from hidet.runtime.compiled_task import CompiledTask, load_compiled_task, compiled_task_cache
+from hidet.runtime.compiled_task import CompiledTask, TensorSignature, load_compiled_task, compiled_task_cache
 from hidet.runtime.device import Device
 from hidet.utils.multiprocess import parallel_imap
 from hidet.utils.py import cyan, green
@@ -33,7 +33,7 @@ logger.setLevel(logging.INFO)
 logger.addHandler(logging.StreamHandler())
 
 
-def build_task_module(task: Task, candidates: List[IRModule], task_dir: str, target: str) -> IRModule:
+def build_task_module(task: Task, candidates: List[IRModule], task_dir: str, target: str):
     from hidet.lang import int32, void
     from hidet.lang import attrs
     from hidet.lang import meta
@@ -122,19 +122,37 @@ def build_task_module(task: Task, candidates: List[IRModule], task_dir: str, tar
     )
 
 
-def generate_meta_data(task: Task, task_dir: str, device: str, num_candidates: int):
+def generate_meta_data(task: Task, task_dir: str, build_target: str, num_candidates: int):
+    from hidet.ir.compute import TensorNode
     from hidet.runtime.compiled_task import TaskMetaData
+    from hidet.graph.ops.transfer import TransferTask
+    from hidet.utils.dataclass import asdict
 
+    # determine the output device
+    if isinstance(task, TransferTask):
+        # for transfer tasks, we use the src/dst device to know input/output device
+        input_device = str(task.src_device)
+        output_device = str(task.dst_device)
+    else:
+        # for ALL other tasks, their input/output device MUST be the same: the build target
+        input_device = output_device = build_target
+
+    def get_signature(t: TensorNode, device: str) -> TensorSignature:
+        return TensorSignature(
+            device=device, dtype=t.type.dtype.name, shape=[int(v) if is_constant(v) else str(v) for v in t.shape]
+        )
+
+    # generate meta data
     meta = TaskMetaData(
         symbols=[v.name for v in task.symbols],
-        inputs=[[t.type.dtype.name] + [int(v) if is_constant(v) else str(v) for v in t.shape] for t in task.inputs],
-        outputs=[[t.type.dtype.name] + [int(v) if is_constant(v) else str(v) for v in t.shape] for t in task.outputs],
-        device=device,
+        inputs=[get_signature(t, input_device) for t in task.inputs],
+        outputs=[get_signature(t, output_device) for t in task.outputs],
+        target=build_target,
         num_candidates=num_candidates,
         hidet_version=hidet.__version__,
     )
     with open(os.path.join(task_dir, 'meta.json'), 'w') as f:
-        json.dump(meta.export_state(), f, indent=2)
+        json.dump(asdict(meta), f, indent=2)
 
 
 def build_task(task: Task, target='cuda', load=True) -> Optional[CompiledTask]:
@@ -159,7 +177,7 @@ def build_task(task: Task, target='cuda', load=True) -> Optional[CompiledTask]:
     compiled_task: Optional[CompiledTask] = None
 
     if isinstance(target, Device):
-        target = target.type
+        target = target.kind
 
     space_level = option.get_option('search_space')
     op_cache_dir = os.path.join(option.get_option('cache_dir'), './ops')
@@ -208,11 +226,11 @@ def build_task(task: Task, target='cuda', load=True) -> Optional[CompiledTask]:
             # they have the same functionality but different performance
             candidates = task.implement(target=target, working_dir=task_dir)
 
-            # construct the ir module for the task
-            build_task_module(task, candidates, task_dir, target)
-
             # generate meta data
             generate_meta_data(task, task_dir, target, len(candidates))
+
+            # construct the ir module for the task
+            build_task_module(task, candidates, task_dir, target)
 
             if load:
                 compiled_task = load_compiled_task(task_dir)
@@ -221,15 +239,15 @@ def build_task(task: Task, target='cuda', load=True) -> Optional[CompiledTask]:
     return compiled_task
 
 
-def build_task_batch(task_device_pairs: List[Tuple[Task, Device]]):
-    jobs = [(task, device) for task, device in task_device_pairs]
+def build_task_batch(task_target_pairs: List[Tuple[Task, str]]):
+    jobs = [(task, target) for task, target in task_target_pairs]
 
     def build_job(args):
         try:
-            task, target_device = args
-            build_task(task, target_device, load=False)
+            task, target = args
+            build_task(task, target, load=False)
             return True, 'Success'
-        except Exception:  # pylint: disable=broad-except
+        except (Exception,):  # pylint: disable=broad-except
             import traceback
 
             if option.get_option('parallel_build'):
@@ -244,10 +262,10 @@ def build_task_batch(task_device_pairs: List[Tuple[Task, Device]]):
         status_list = list(map(build_job, jobs))
     if not all(status for status, msg in status_list) and option.get_option('parallel_build'):
         msg = ['Failed to build {} tasks:'.format(sum(1 for s, msg in status_list if not s))]
-        for (task, device), (status, job_msg) in zip(task_device_pairs, status_list):
+        for (task, target), (status, job_msg) in zip(task_target_pairs, status_list):
             if not status:
                 job_msg = ('\n' + job_msg).replace('\n', '\n    ')
-                msg.append(f'  [{device.type}] {task.signature()}')
+                msg.append(f'  [{target}] {task.signature()}')
                 msg.append(f'{job_msg}')
         # msg.append('Please turn off parallel build to see the error message:')
         # msg.append('  hidet.option.parallel_build(False)')

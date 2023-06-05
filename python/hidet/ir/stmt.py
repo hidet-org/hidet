@@ -291,10 +291,10 @@ class AsmStmt(Stmt):
 
 
 class BlackBoxStmt(Stmt):
-    def __init__(self, template_string: str, *exprs: Expr):
+    def __init__(self, template_string: str, *exprs: Union[Expr, str]):
         super().__init__()
         self.template_string: str = template_string
-        self.exprs: Tuple[Expr] = convert(exprs)
+        self.exprs: Tuple[Union[str, Expr]] = convert(exprs)
         expect_args_num = self.template_string.count('{}')
         if expect_args_num != len(exprs):
             raise ValueError("Invalid template string: {} for {} args".format(self.template_string, len(exprs)))

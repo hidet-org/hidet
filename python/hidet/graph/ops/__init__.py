@@ -42,6 +42,7 @@ from .transform import squeeze, unsqueeze, flatten, concat, cast, take, rearrang
 from .transform import transpose, broadcast, pad, tile, split, conv_pad, expand_dims, gather
 from .transform import permute_dims
 from .fusion import fused_operator
+from .transfer import transfer
 from .special import barrier
 
 from . import utils

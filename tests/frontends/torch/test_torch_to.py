@@ -49,9 +49,8 @@ def test_tensor_cpu():
     x_cpu = torch.randn(10, device='cpu')
     model_opt(x_cpu)
 
-    with pytest.raises(BackendCompilerFailed):
-        x_cuda = torch.randn(10, device='cuda')
-        model_opt(x_cuda)
+    x_cuda = torch.randn(10, device='cuda')
+    model_opt(x_cuda)
 
 
 def test_tensor_cuda():
@@ -61,9 +60,8 @@ def test_tensor_cuda():
     x_cuda = torch.randn(10, device='cuda')
     model_opt(x_cuda)
 
-    with pytest.raises(BackendCompilerFailed):
-        x_cpu = torch.randn(10, device='cpu')
-        model_opt(x_cpu)
+    x_cpu = torch.randn(10, device='cpu')
+    model_opt(x_cpu)
 
 
 def test_tensor_to():
@@ -73,6 +71,5 @@ def test_tensor_to():
     x_cuda = torch.randn(10, device='cuda')
     model_opt(x_cuda)
 
-    with pytest.raises(BackendCompilerFailed):
-        x_cpu = torch.randn(10, device='cpu')
-        model_opt(x_cpu)
+    x_cpu = torch.randn(10, device='cpu')
+    model_opt(x_cpu)
