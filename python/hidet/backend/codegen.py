@@ -720,6 +720,8 @@ class CUDACodegen(Codegen):
                     min_blocks = func.attrs['cuda.min_blocks']
                     if isinstance(min_blocks, (Constant, int)):
                         doc += f' __launch_bounds__({block_dim}, {min_blocks})'
+                    else:
+                        doc += f' __launch_bounds__({block_dim})'
                 else:
                     doc += f' __launch_bounds__({block_dim})'
 
