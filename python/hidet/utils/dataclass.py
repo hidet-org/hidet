@@ -1,9 +1,13 @@
-from dataclasses import fields, is_dataclass
+# pylint: disable=unused-import
+from dataclasses import fields, is_dataclass, asdict
 
 
 def from_dict(cls, data):
+    # pylint: disable=protected-access
     if is_dataclass(cls):
         args = []
+        if not isinstance(data, dict):
+            raise TypeError(f'expected dict, got {type(data)}')
         for field in fields(cls):
             args.append(from_dict(field.type, data[field.name]))
         return cls(*args)

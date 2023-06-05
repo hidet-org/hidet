@@ -752,6 +752,7 @@ class Tensor:
             The new tensor or self.
         """
         from hidet.graph.ops import transfer
+
         if self.device.kind == 'cpu':
             return self
         else:

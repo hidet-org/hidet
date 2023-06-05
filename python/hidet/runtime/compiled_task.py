@@ -1,4 +1,4 @@
-from typing import List, Dict, Tuple, Union, Any, Optional
+from typing import List, Dict, Tuple, Union, Optional
 from dataclasses import dataclass
 import os
 import json
@@ -22,7 +22,7 @@ class TaskMetaData:
     symbols: List[str]
     inputs: List[TensorSignature]
     outputs: List[TensorSignature]
-    device: str
+    target: str
     num_candidates: int
     hidet_version: str
 
@@ -92,6 +92,7 @@ class CompiledTask:
 
     def create_outputs(self):
         import hidet
+
         outputs = []
 
         for idx, sig in enumerate(self.meta_data.outputs):

@@ -113,7 +113,7 @@ def symbol_like_torch(tensor) -> Tensor:
 
     if isinstance(tensor, torch.Tensor):
         return hidet.symbol(
-            shape=list(tensor.shape), dtype=dtype_from_torch(tensor.dtype).name, device=tensor.device.kind
+            shape=list(tensor.shape), dtype=dtype_from_torch(tensor.dtype).name, device=tensor.device.type
         )
     else:
         return hidet.graph.tensor.symbol_like(tensor)

@@ -10,13 +10,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # pylint: disable=no-name-in-module
-from typing import List, Callable, Sequence, Union
+from typing import List, Callable, Sequence
 import logging
 import torch
 import hidet.option
 from hidet.ir.type import data_type
 from hidet.graph.flow_graph import FlowGraph
 from hidet.graph.transforms import PassContext, optimize
+from hidet.runtime import CompiledGraph
+from hidet.cuda.graph import CudaGraphCreationError
 from .utils import serialize_output, deserialize_output, resolve_save_dir_multigraph
 from .dynamo_config import dynamo_config
 from .interpreter import warnings
@@ -26,8 +28,6 @@ logger = logging.getLogger(__name__)
 
 
 def generate_executor(flow_graph: FlowGraph) -> Callable:
-    from hidet.cuda.graph import CudaGraph
-
     use_fp16 = dynamo_config['use_fp16']
     use_fp16_reduction = dynamo_config['use_fp16_reduction']
     use_cuda_graph = dynamo_config['use_cuda_graph']
@@ -55,11 +55,6 @@ def generate_executor(flow_graph: FlowGraph) -> Callable:
 
     logger.info('schedule search space: %d', search_space)
 
-    has_cpu_tensor = any(tensor.device.kind == 'cpu' for tensor in graph_opt.inputs + graph_opt.outputs)
-    # has_cuda_tensor = any(tensor.device.type == 'cuda' for tensor in graph_opt.inputs + graph_opt.outputs)
-    # if has_cpu_tensor and has_cuda_tensor:
-    #     raise RuntimeError('the flow graph contains both CPU and CUDA tensors, currently not supported by hidet')
-
     def preprocess_inputs(inputs: Sequence[torch.Tensor]) -> List[hidet.Tensor]:
         torch_inputs: List[torch.Tensor] = []
         for x in inputs:
@@ -70,34 +65,23 @@ def generate_executor(flow_graph: FlowGraph) -> Callable:
         hidet_inputs: List[hidet.Tensor] = [hidet.from_torch(tensor) for tensor in torch_inputs]
         return hidet_inputs
 
-    if use_cuda_graph and not has_cpu_tensor:
-        with hidet.option.context():
-            hidet.option.search_space(search_space)
-            logger.info('start to generate the cuda graph')
-            cuda_graph: CudaGraph = graph_opt.cuda_graph()
-            logger.info('finish generating the cuda graph')
+    logger.info('start to build the optimized computation graph')
+    cgraph: CompiledGraph = graph_opt.build(space=search_space)
+    logger.info('finish building computation graph')
 
-        def run(*inputs: torch.Tensor):
-            hidet_inputs = preprocess_inputs(inputs)
-            hidet_outputs: List[hidet.Tensor] = cuda_graph.run_async(inputs=hidet_inputs)
-            torch_outputs: List[torch.Tensor] = [tensor.torch() for tensor in hidet_outputs]
-            return torch_outputs
-
+    if use_cuda_graph:
+        try:
+            runner = cgraph.cuda_graph()
+        except CudaGraphCreationError:
+            runner = cgraph
     else:
-        logger.info('start to generate the executor without cuda graph')
-        with hidet.option.context():
-            hidet.option.search_space(search_space)
-            dummy_inputs = flow_graph.dummy_inputs()
-            graph_opt(*dummy_inputs)
-        logger.info('finish generating the executor without cuda graph')
+        runner = cgraph
 
-        def run(*inputs: torch.Tensor):
-            hidet_inputs = preprocess_inputs(inputs)
-            hidet_outputs: Union[List[hidet.Tensor], hidet.Tensor] = graph_opt(*hidet_inputs)
-            if isinstance(hidet_outputs, hidet.Tensor):
-                hidet_outputs = [hidet_outputs]
-            torch_outputs: List[torch.Tensor] = [tensor.torch() for tensor in hidet_outputs]
-            return torch_outputs
+    def run(*inputs: torch.Tensor):
+        hidet_inputs = preprocess_inputs(inputs)
+        hidet_outputs: List[hidet.Tensor] = runner.run_async(hidet_inputs)
+        torch_outputs: List[torch.Tensor] = [tensor.torch() for tensor in hidet_outputs]
+        return torch_outputs
 
     return run
 

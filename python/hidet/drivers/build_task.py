@@ -23,7 +23,7 @@ from hidet.ir.task import Task
 from hidet.drivers.build_module import build_ir_module, build_ir_module_batch
 from hidet.drivers.utils import lazy_initialize_cuda
 from hidet.runtime.compiled_module import compiled_module_exists
-from hidet.runtime.compiled_task import CompiledTask, load_compiled_task, compiled_task_cache
+from hidet.runtime.compiled_task import CompiledTask, TensorSignature, load_compiled_task, compiled_task_cache
 from hidet.runtime.device import Device
 from hidet.utils.multiprocess import parallel_imap
 from hidet.utils.py import cyan, green
@@ -123,26 +123,36 @@ def build_task_module(task: Task, candidates: List[IRModule], task_dir: str, tar
 
 
 def generate_meta_data(task: Task, task_dir: str, build_target: str, num_candidates: int):
+    from hidet.ir.compute import TensorNode
     from hidet.runtime.compiled_task import TaskMetaData
     from hidet.graph.ops.transfer import TransferTask
+    from hidet.utils.dataclass import asdict
 
     # determine the output device
     if isinstance(task, TransferTask):
-        device = str(task.dst_device)
+        # for transfer tasks, we use the src/dst device to know input/output device
+        input_device = str(task.src_device)
+        output_device = str(task.dst_device)
     else:
-        device = build_target
+        # for ALL other tasks, their input/output device MUST be the same: the build target
+        input_device = output_device = build_target
+
+    def get_signature(t: TensorNode, device: str) -> TensorSignature:
+        return TensorSignature(
+            device=device, dtype=t.type.dtype.name, shape=[int(v) if is_constant(v) else str(v) for v in t.shape]
+        )
 
     # generate meta data
     meta = TaskMetaData(
         symbols=[v.name for v in task.symbols],
-        inputs=[[t.type.dtype.name] + [int(v) if is_constant(v) else str(v) for v in t.shape] for t in task.inputs],
-        outputs=[[t.type.dtype.name] + [int(v) if is_constant(v) else str(v) for v in t.shape] for t in task.outputs],
-        device=device,
+        inputs=[get_signature(t, input_device) for t in task.inputs],
+        outputs=[get_signature(t, output_device) for t in task.outputs],
+        target=build_target,
         num_candidates=num_candidates,
         hidet_version=hidet.__version__,
     )
     with open(os.path.join(task_dir, 'meta.json'), 'w') as f:
-        json.dump(meta.export_state(), f, indent=2)
+        json.dump(asdict(meta), f, indent=2)
 
 
 def build_task(task: Task, target='cuda', load=True) -> Optional[CompiledTask]:
@@ -237,7 +247,7 @@ def build_task_batch(task_target_pairs: List[Tuple[Task, str]]):
             task, target = args
             build_task(task, target, load=False)
             return True, 'Success'
-        except Exception:  # pylint: disable=broad-except
+        except (Exception,):  # pylint: disable=broad-except
             import traceback
 
             if option.get_option('parallel_build'):

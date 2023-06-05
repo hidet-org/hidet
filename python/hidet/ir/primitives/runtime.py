@@ -40,16 +40,18 @@ def register_functions():
         name='set_symbol_value', func_or_type=FuncType([string_type(), int32], void_p), codegen_name='set_symbol_value'
     )
     register_primitive_function(
-        name='memory_planner_init', func_or_type=FuncType([], void_p), codegen_name='memory_planner_init'
+        name='memory_planner_init', func_or_type=FuncType([int32], void_p), codegen_name='memory_planner_init'
     )
     register_primitive_function(
-        name='memory_planner_allocate', func_or_type=FuncType([int64], void_p), codegen_name='memory_planner_allocate'
+        name='memory_planner_allocate',
+        func_or_type=FuncType([int32, int64], void_p),
+        codegen_name='memory_planner_allocate',
     )
     register_primitive_function(
-        name='memory_planner_free', func_or_type=FuncType([int64], void_p), codegen_name='memory_planner_free'
+        name='memory_planner_free', func_or_type=FuncType([int32, int64], void_p), codegen_name='memory_planner_free'
     )
     register_primitive_function(
-        name='memory_planner_used', func_or_type=FuncType([], int64), codegen_name='memory_planner_used'
+        name='memory_planner_used', func_or_type=FuncType([int32], int64), codegen_name='memory_planner_used'
     )
 
 
@@ -73,17 +75,17 @@ def set_symbol_value(name: Union[str, Expr], value: Union[int, Expr]):
     return call_primitive_func('set_symbol_value', [name, value])
 
 
-def memory_planner_init():
-    return call_primitive_func('memory_planner_init', [])
+def memory_planner_init(idx: Union[int, Expr]):
+    return call_primitive_func('memory_planner_init', [idx])
 
 
-def memory_planner_allocate(size: Union[int, Expr]):
-    return call_primitive_func('memory_planner_allocate', [size])
+def memory_planner_allocate(idx: Union[int, Expr], size: Union[int, Expr]):
+    return call_primitive_func('memory_planner_allocate', [idx, size])
 
 
-def memory_planner_free(ptr: Union[int, Expr]):
-    return call_primitive_func('memory_planner_free', [ptr])
+def memory_planner_free(idx: Union[int, Expr], ptr: Union[int, Expr]):
+    return call_primitive_func('memory_planner_free', [idx, ptr])
 
 
-def memory_planner_used():
-    return call_primitive_func('memory_planner_used', [])
+def memory_planner_used(idx: Union[int, Expr]):
+    return call_primitive_func('memory_planner_used', [idx])

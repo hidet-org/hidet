@@ -31,10 +31,7 @@ class TransferTask(Task):
         y = compute('out', x.shape, lambda *indices: x[indices])
         self.src_device: Device = src_device
         self.dst_device: Device = dst_device
-        super().__init__('transfer', inputs=[x], outputs=[y], attributes={
-            'src': src_device,
-            'dst': dst_device
-        })
+        super().__init__('transfer', inputs=[x], outputs=[y], attributes={'src': src_device, 'dst': dst_device})
 
     def implement(self, target: Union[Target, str], working_dir: str) -> List[IRModule]:
         import hidet
@@ -46,7 +43,9 @@ class TransferTask(Task):
         nbytes = dtype.nbytes * prod(shape)
         kind = f'{self.src_device.kind}_to_{self.dst_device.kind}'
 
-        if (self.src_device.kind == 'cuda' and self.src_device.id > 0) or (self.dst_device.kind == 'cuda' and self.dst_device.id > 0):
+        if (self.src_device.kind == 'cuda' and self.src_device.id > 0) or (
+            self.dst_device.kind == 'cuda' and self.dst_device.id > 0
+        ):
             raise NotImplementedError('The transfer between non-default CUDA devices is not supported yet.')
 
         with hidet.script_module() as script_module:
@@ -65,8 +64,9 @@ class TransferOp(Operator):
         super().__init__(
             inputs=[x],
             attributes={'device': device},
-            task=TransferTask(input_like(x, 'x'), src_device=x.device, dst_device=device)
+            task=TransferTask(input_like(x, 'x'), src_device=x.device, dst_device=device),
         )
+
 
 def transfer(x: Tensor, dst_device: Union[str, Device]) -> Tensor:
     dst_device: Device = instantiate_device(dst_device)

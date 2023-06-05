@@ -1,11 +1,11 @@
-from typing import List, Optional, Tuple, Dict, Any, Union, Callable, Sequence
-import functools
+from typing import List, Optional, Tuple, Dict, Any, Callable
 import zipfile
 import os
 import json
-import numpy
 from dataclasses import dataclass
+
 from tabulate import tabulate
+import numpy
 
 import hidet
 from hidet.ffi.utils import Array, ctypes_func_pointer
@@ -50,6 +50,7 @@ class GraphExecution:
     inputs_index: List[int]
     instructions: List[GraphExecutionInstruction]
     outputs_index: List[int]
+    tensor_device: List[str]
 
 
 class CompiledGraph:
@@ -66,7 +67,6 @@ class CompiledGraph:
 
         # graph module functions
         self._init = graph_module['init']
-        self._register_hook = graph_module['register_hook']
         self._get_output_shape = graph_module['get_output_shape']
         self._set_workspace = graph_module['set_workspace']
         self._get_workspace_size = graph_module['get_workspace_size']
@@ -83,13 +83,12 @@ class CompiledGraph:
         # derived properties
         self.dynamic_dims: List[Tuple[str, Tuple[int, int]]] = []  # [(name, (tensor_index, dim_index))]
         for tensor_index, sig in enumerate(self.meta.inputs):
-            for dim_index, dim in enumerate(sig[1:]):
+            for dim_index, dim in enumerate(sig.shape):
                 if isinstance(dim, str) and dim not in [v for v, _ in self.dynamic_dims]:
                     self.dynamic_dims.append((dim, (tensor_index, dim_index)))
         self.is_dynamic: bool = len(self.dynamic_dims) > 0
 
         # runtime state
-        self._registered_hook: Optional[Any] = None
         self.dispatch_table_path = hidet.utils.cache_file('graphs', self.meta.graph_hash, 'dispatch_table.txt')
         self.dispatch_table: Dict[Tuple[int, ...], Array] = {}
         self.cuda_workspace: Optional[Storage] = None
@@ -147,7 +146,7 @@ class CompiledGraph:
                         raise RuntimeError('Invalid dispatch table')
                     items = [int(item) for item in items]
                     symbol_dims = items[: len(self.dynamic_dims)]
-                    schedule_indices = items[len(self.dynamic_dims):]
+                    schedule_indices = items[len(self.dynamic_dims) :]
                     kernel_array = Array(void_p, len(self.compiled_tasks))
                     for task_idx, (compiled_task, sch_idx) in enumerate(zip(self.compiled_tasks, schedule_indices)):
                         if not 0 <= sch_idx < len(compiled_task.candidates):
@@ -205,12 +204,12 @@ class CompiledGraph:
         required_cpu_workspace, required_cuda_workspace = list(buffer)
 
         if self.cpu_workspace is None or self.cpu_workspace.num_bytes < required_cpu_workspace:
-            self.workspace = Storage.new('cpu', required_cpu_workspace)
-            self._set_workspace(0, self.workspace.addr)
+            self.cpu_workspace = Storage.new('cpu', required_cpu_workspace)
+            self._set_workspace(0, self.cpu_workspace.addr)
 
         if self.cuda_workspace is None or self.cuda_workspace.num_bytes < required_cuda_workspace:
-            self.workspace = Storage.new('cuda', required_cpu_workspace)
-            self._set_workspace(1, self.workspace.addr)
+            self.cuda_workspace = Storage.new('cuda', required_cuda_workspace)
+            self._set_workspace(1, self.cuda_workspace.addr)
 
     def _run_fast_path(self, inputs, symbol_dims: Tuple[int, ...]):
         # create output tensors
@@ -253,51 +252,6 @@ class CompiledGraph:
 
         return outputs
 
-    def register_hook(self, hook: ModelExecutionHook):
-        """
-        Register a hook that will be called after each operator run.
-
-        Parameters
-        ----------
-        hook: ModelExecutionHook
-            The hook to be registered. It has the following signature:
-                hook(idx: int, inputs: List[Tensor], outputs: List[Tensor) -> None
-            The hook will be called after the idx-th (0-base) operator finishes execution, with the inputs and outputs
-            of the operator as arguments. When the whole model finishes execution, the hook will be called with
-            idx=len(operators). There is at most one hook can be registered at any time. Registering a new hook will
-            overwrite the previous one.
-        """
-        from ctypes import CFUNCTYPE, c_uint64, POINTER, cast, c_void_p
-
-        def hook_wrapper(args: Sequence[int], device, hook: ModelExecutionHook):
-            from hidet.graph.tensor import Tensor
-            from ctypes import c_char_p
-
-            cur = 0
-
-            def get():
-                nonlocal cur
-                cur += 1
-                return args[cur - 1]
-
-            idx: int = get()
-            num_inputs: int = get()
-            num_outputs: int = get()
-            params: List[Tensor] = []
-            for _ in range(num_inputs + num_outputs):
-                dtype: str = c_char_p(get()).value.decode('utf-8')
-                rank: int = get()
-                shape: List[int] = [get() for _ in range(rank)]
-                pointer: int = get()
-                storage = ExternalStorage('cpu', pointer, prod(shape) * data_type(dtype).nbytes)
-                params.append(Tensor(shape, dtype, device, storage))
-            hook(idx, params[:num_inputs], params[num_inputs:])
-
-        self._registered_hook = CFUNCTYPE(None, POINTER(c_uint64))(
-            functools.partial(hook_wrapper, device=self.device, hook=hook)
-        )
-        self._register_hook(cast(self._registered_hook, c_void_p))
-
     def run_async(self, inputs):
         """
         Run the model asynchronously.
@@ -319,57 +273,45 @@ class CompiledGraph:
         else:
             return self._run_slow_path(inputs, symbol_dims)
 
+    def cuda_graph(self):
+        """
+        Create a CUDA graph for this compiled graph.
+
+        Returns
+        -------
+        cuda_graph: hidet.cuda.graph.CudaGraph
+            The CUDA graph.
+        """
+        from hidet.cuda.graph import CudaGraph, CudaGraphCreationError
+        from hidet.graph.tensor import Tensor, empty
+
+        for x in self.meta.inputs:
+            if x.device == 'cpu':
+                raise CudaGraphCreationError(f'Cannot create CUDA graph for a model with CPU inputs:\n {x}')
+            for d in x.shape:
+                if not isinstance(d, int):
+                    raise CudaGraphCreationError(f'Cannot create CUDA graph for a model with dynamic inputs:\n {x}')
+        if any(device == 'cpu' for device in self.graph_execution.tensor_device):
+            raise CudaGraphCreationError('Cannot create CUDA graph for a model with CPU tensors.')
+
+        def f_create_inputs() -> List[Tensor]:
+            return [empty(shape=x.shape, dtype=x.dtype, device=x.device) for x in self.meta.inputs]
+
+        def f_run(inputs: List[Tensor]) -> List[Tensor]:
+            return self.run_async(inputs)
+
+        # clear the workspace to avoid the storage being captured by the CUDA graph.
+        self.cuda_workspace = None
+
+        return CudaGraph(f_create_inputs, f_run, ref_objs=[self])
+
     def save(self, path: str):
         save_compiled_graph(self, path)
 
 
-def load_compiled_graph(path: str) -> CompiledGraph:
-    with zipfile.ZipFile(path, 'r') as zf:
-        files_to_extract: List[str] = zf.namelist()
-        files_to_extract.remove('weights.npz')  # weights are loaded directly from the zip file
-
-        # load meta data
-        with zf.open('meta.json', 'r') as f:
-            meta_data = GraphMetaData.from_state_dict(json.load(f))
-
-        # load weights as numpy arrays
-        with zf.open('weights.npz', 'r') as f:
-            with zipfile.ZipFile(f, 'r') as npz:
-                weights = []
-                for name in npz.namelist():
-                    with npz.open(name, 'r') as npy_file:
-                        npy_file: Any  # used to suppress type checker warning
-                        weights.append(hidet.asarray(numpy.load(npy_file), device=meta_data.device))
-
-        # extract all files except weights
-        cache_dir = hidet.utils.cache_dir('graphs', meta_data.graph_hash)
-
-        if not os.path.exists(os.path.join(cache_dir, 'graph_module/lib.so')):
-            # only extract files if the compiled graph is not in the cache
-            zf.extractall(cache_dir, files_to_extract)
-
-    # load kernels (i.e., compiled tasks)
-    num_kernels = meta_data.num_kernels
-    compiled_tasks = [CompiledTask(task_dir=os.path.join(cache_dir, 'kernels', str(i))) for i in range(num_kernels)]
-
-    # load graph module
-    graph_module = CompiledModule(module_dir=os.path.join(cache_dir, 'graph_module'))
-
-    # load graph execution
-    with open(os.path.join(cache_dir, 'graph_execution.json'), 'r') as f:
-        graph_execution = GraphExecution.from_state_dict(json.load(f))
-
-    # load graph string
-    with open(os.path.join(cache_dir, 'graph_string.txt'), 'r') as f:
-        graph_string = f.read()
-
-    # construct the compiled graph
-    ret = CompiledGraph(meta_data, graph_module, weights, compiled_tasks, graph_execution, graph_string)
-
-    return ret
-
-
 def save_compiled_graph(model: CompiledGraph, path: str):
+    from hidet.utils.dataclass import asdict
+
     with zipfile.ZipFile(path, 'w') as zf:
 
         def _save_under(dir_path: str, dir_in_zip: str, exclude: Optional[List[str]] = None):
@@ -385,7 +327,7 @@ def save_compiled_graph(model: CompiledGraph, path: str):
 
         # meta info
         with zf.open('meta.json', 'w') as f:
-            meta_bytes = json.dumps(model.meta.state_dict(), indent=4).encode('utf-8')
+            meta_bytes = json.dumps(asdict(model.meta), indent=4).encode('utf-8')
             f.write(meta_bytes)
 
         # save the modules
@@ -401,9 +343,60 @@ def save_compiled_graph(model: CompiledGraph, path: str):
 
         # save graph execution
         with zf.open('graph_execution.json', 'w') as f:
-            ge_bytes = json.dumps(model.graph_execution.state_dict(), indent=4).encode('utf-8')
+            ge_bytes = json.dumps(asdict(model.graph_execution), indent=4).encode('utf-8')
             f.write(ge_bytes)
 
         # save graph string
         with zf.open('graph_string.txt', 'w') as f:
             f.write(model.graph_string.encode('utf-8'))
+
+
+def load_compiled_graph(path: str) -> CompiledGraph:
+    from hidet.utils.dataclass import from_dict
+
+    with zipfile.ZipFile(path, 'r') as zf:
+        files_to_extract: List[str] = zf.namelist()
+        files_to_extract.remove('weights.npz')  # weights are loaded directly from the zip file
+
+        # load meta data
+        with zf.open('meta.json', 'r') as f:
+            meta_data: GraphMetaData = from_dict(GraphMetaData, json.load(f))
+
+        # load graph execution
+        with zf.open('graph_execution.json', 'r') as f:
+            graph_execution: GraphExecution = from_dict(GraphExecution, json.load(f))
+
+        # load weights as numpy arrays
+        with zf.open('weights.npz', 'r') as f:
+            with zipfile.ZipFile(f, 'r') as npz:
+                weights = []
+                for weight_idx, name in enumerate(npz.namelist()):
+                    with npz.open(name, 'r') as npy_file:
+                        npy_file: Any  # used to suppress type checker warning
+                        device = graph_execution.tensor_device[graph_execution.weights_index[weight_idx]]
+                        weights.append(hidet.asarray(numpy.load(npy_file), device=device))
+
+        # extract all files except weights
+        cache_dir = hidet.utils.cache_dir('graphs', meta_data.graph_hash)
+
+        if not os.path.exists(os.path.join(cache_dir, 'graph_string.txt')):
+            # only extract files if the graph_string.txt is not in the cache
+            # here 'graph_string.txt' is just the last file we usually save to disk, we use it as a flag
+            # to indicate whether the graph is already in the cache
+            zf.extractall(cache_dir, files_to_extract)
+
+    # load kernels (i.e., compiled tasks)
+    num_kernels = meta_data.num_kernels
+    compiled_tasks = [CompiledTask(task_dir=os.path.join(cache_dir, 'kernels', str(i))) for i in range(num_kernels)]
+
+    # load graph module
+    graph_module = CompiledModule(module_dir=os.path.join(cache_dir, 'graph_module'))
+
+    # load graph string
+    with open(os.path.join(cache_dir, 'graph_string.txt'), 'r') as f:
+        graph_string = f.read()
+
+    # construct the compiled graph
+    ret = CompiledGraph(meta_data, graph_module, weights, compiled_tasks, graph_execution, graph_string)
+
+    return ret

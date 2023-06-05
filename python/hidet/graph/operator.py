@@ -9,13 +9,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Optional, Dict, Any, Union
+from typing import List, Optional, Dict, Any
 from hidet.ir.type import TensorType, DataType
 from hidet.ir.expr import Var, Constant
-from hidet.ir.dtypes import float16, bfloat16, float32
 from hidet.ir.task import Task
 from hidet.runtime.compiled_task import CompiledTask
-from hidet.graph.tensor import empty, empty_like, Tensor, SymbolVar
+from hidet.graph.tensor import empty, Tensor, SymbolVar
 from hidet.ffi.ffi import get_last_error, BackendException
 from hidet.runtime.device import Device, instantiate_device
 
@@ -82,6 +81,7 @@ class Operator:
             The build target of this operator.
         """
         from hidet.graph.ops.transfer import TransferOp
+
         if isinstance(self, TransferOp):
             return 'cuda'
         else:
