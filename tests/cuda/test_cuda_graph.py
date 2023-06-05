@@ -27,9 +27,17 @@ def example_graph() -> Tuple[FlowGraph, Tensor]:
     return graph, hidet.randn_like(x)
 
 
-def test_cuda_graph():
+def test_flow_graph_cuda_graph():
     graph, x = example_graph()
     cuda_graph: CudaGraph = graph.cuda_graph()
+    (actual,) = cuda_graph.run(inputs=[x])
+    expected = graph(x)
+    numpy.testing.assert_allclose(actual=actual.cpu().numpy(), desired=expected.cpu().numpy(), atol=0.0, rtol=0.0)
+
+
+def test_compiled_graph_cuda_graph():
+    graph, x = example_graph()
+    cuda_graph: CudaGraph = graph.build().cuda_graph()
     (actual,) = cuda_graph.run(inputs=[x])
     expected = graph(x)
     numpy.testing.assert_allclose(actual=actual.cpu().numpy(), desired=expected.cpu().numpy(), atol=0.0, rtol=0.0)

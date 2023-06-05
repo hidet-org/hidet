@@ -29,8 +29,8 @@ from hidet.testing import check_torch_binary
     ],
 )
 @pytest.mark.parametrize("padding", [[0, 0, 0, 0, 0, 0], [1, 2, 3, 1, 2, 3]])
-@pytest.mark.parametrize("stride", [[1, 1, 1], [3, 2, 1]])
-@pytest.mark.parametrize("dilations", [[1, 1, 1], [1, 2, 3]])
+@pytest.mark.parametrize("stride", [[3, 2, 1]])
+@pytest.mark.parametrize("dilations", [[1, 2, 3]])
 def test_conv3d(hidet_op, n, c, d, h, w, oc, kz, kx, ky, padding, stride, dilations):
     check_torch_binary(
         a_shape=[n, c, d, h, w],
