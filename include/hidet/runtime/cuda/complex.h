@@ -75,6 +75,28 @@ HIDET_HOST_DEVICE Complex<T> conj(Complex<T> a) {
 }
 
 template<typename T>
+HIDET_HOST_DEVICE Complex<T> sin(Complex<T> a) {
+    T real = sin(a.real) * cosh(a.imag);
+    T imag = cos(a.real) * sinh(a.imag);
+    return {real, imag};
+}
+
+template<typename T>
+HIDET_HOST_DEVICE Complex<T> cos(Complex<T> a) {
+    T real = cos(a.real) * cosh(a.imag);
+    T imag = -sin(a.real) * sinh(a.imag);
+    return {real, imag};
+}
+
+template<typename T>
+HIDET_HOST_DEVICE Complex<T> exp(Complex<T> a) {
+    T magnitude = exp(a.real);
+    T real = magnitude * cos(a.imag);
+    T imag = magnitude * sin(a.imag);
+    return {real, imag};
+}
+
+template<typename T>
 HIDET_HOST_DEVICE T abs(Complex<T> a);
 
 template<>

@@ -47,6 +47,8 @@ def dtype_from_torch(torch_dtype) -> Optional[DataType]:
         torch.uint8: dtypes.uint8,
         torch.bool: dtypes.boolean,
         torch.double: dtypes.float64,
+        torch.complex64: dtypes.complex64,
+        torch.complex128: dtypes.complex128,
     }
     return mapping[torch_dtype]
 

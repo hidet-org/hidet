@@ -355,14 +355,6 @@ class SqueezeOp(Operator):
             task=RearrangeTask(input_like(x, 'x'), plan=[[i] for i in range(len(x.shape)) if i not in dims]),
         )
 
-    # def imperative_run(self, inputs: Optional[List[Tensor]] = None) -> List[Tensor]:
-    #     x = inputs[0] if inputs else self.inputs[0]
-    #     if isinstance(x.layout, RowMajorLayout):
-    #         shape = self.task.outputs[0].const_shape()
-    #         return [Tensor(shape=shape, dtype=x.dtype, device=x.device, storage=x.storage, trace=None)]
-    #     else:
-    #         return Operator.imperative_run(self, inputs)
-
 
 class UnsqueezeOp(Operator):
     def __init__(self, x: Tensor, dims: List[int]):
@@ -375,17 +367,9 @@ class UnsqueezeOp(Operator):
             else:
                 plan.append([c])
                 c += 1
-        assert c == len(x.shape)
+        if c != len(x.shape):
+            raise ValueError('Invalid unsqueeze dims: {} for shape: {}'.format(dims, x.shape))
         super().__init__(inputs=[x], attributes={'dims': dims}, task=RearrangeTask(input_like(x, 'x'), plan=plan))
-
-    # def imperative_run(self, inputs: Optional[List[Tensor]] = None) -> List[Tensor]:
-    #     x = inputs[0] if inputs else self.inputs[0]
-    #     if isinstance(x.layout, (RowMajorLayout, ColumnMajorLayout)):
-    #         shape = self.task.outputs[0].const_shape()
-    #         layout = x.layout.__class__(shape)
-    #         return [Tensor(shape=shape, dtype=x.dtype, device=x.device, storage=x.storage, layout=layout, trace=None)]
-    #     else:
-    #         return Operator.imperative_run(self, inputs)
 
 
 class FlattenOp(Operator):
@@ -401,15 +385,6 @@ class FlattenOp(Operator):
             attributes={'start_dim': start_dim, 'end_dim': end_dim},
             task=RearrangeTask(input_like(x, 'x'), plan=plan),
         )
-
-    # def imperative_run(self, inputs: List[Tensor]) -> List[Tensor]:
-    #     x = inputs[0] if inputs else self.inputs[0]
-    #     if isinstance(x.layout, (RowMajorLayout, ColumnMajorLayout)):
-    #         shape = self.task.outputs[0].const_shape()
-    #         layout = x.layout.__class__(shape)
-    #         return [Tensor(shape=shape, dtype=x.dtype, device=x.device, storage=x.storage, layout=layout, trace=None)]
-    #     else:
-    #         return Operator.imperative_run(self, inputs)
 
 
 class PermuteDimsOp(Operator):
@@ -604,6 +579,7 @@ def squeeze(x: Tensor, dims: Union[int, Sequence[int]]) -> Tensor:
 def unsqueeze(x: Tensor, dims: Union[int, Sequence[int]]) -> Tensor:
     if isinstance(dims, int):
         dims = [dims]
+    dims = [normalize_dim(dim, len(x.shape) + len(dims)) for dim in dims]
     if len(dims) == 0:
         return x
     return UnsqueezeOp(x, dims).get_output(0)

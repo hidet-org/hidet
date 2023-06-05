@@ -187,7 +187,10 @@ def tensor_squeeze(self: Tensor, dim=None) -> Tensor:
 
 @register_method(torch.Tensor.unsqueeze)
 def tensor_unsqueeze(self: Tensor, dim) -> Tensor:
-    return ops.unsqueeze(self, [int(dim)])
+    dim = int(dim)
+    if dim < 0:
+        dim = len(self.shape) + dim + 1
+    return ops.unsqueeze(self, [dim])
 
 
 @register_method(torch.Tensor.type)
