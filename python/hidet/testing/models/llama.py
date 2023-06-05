@@ -571,29 +571,7 @@ def test_llama(device='cuda', opt=False):
     )
 
 
-def failure_case():
-    # pylint: disable=unused-variable
-    name = 'decapoda-research/llama-7b-hf'
-    device = 'cuda'
-    from transformers import LlamaTokenizer, LlamaForCausalLM as hfLm
-
-    tok = LlamaTokenizer.from_pretrained(name)
-
-    # model = hfLm.from_pretrained(name, torch_dtype=torch.float16)
-    model = hfLm(LlamaConfig(hidden_size=512, intermediate_size=1024, num_hidden_layers=2, num_attention_heads=8))
-
-    config = model.config
-
-    model = convert_model(model, device=device).cuda()
-    flow_graph = build_flow_graph(model, device=device)
-
-    flow_graph = hidet.graph.optimize(flow_graph)
-
-    compiled = flow_graph.build()
-
-
 if __name__ == '__main__':
     hidet.option.parallel_build(False)
-    failure_case()
     test_llama(device='cuda', opt=False)
     # test_llama(device='cuda', opt=True)
