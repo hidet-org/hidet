@@ -23,11 +23,6 @@ class Module:
         self._parameters: OrderedDict[str, Optional[Tensor]] = OrderedDict()
         self._submodules: OrderedDict[str, Optional[Module]] = OrderedDict()
 
-    def register_buffer(self, key, value):
-        assert isinstance(value, Tensor), "expected a hidet.Tensor object"
-        value.name = key
-        self.buffers[key] = value
-
     def __setattr__(self, key, value):
         parameters = self.__dict__.get('parameters')
         submodules = self.__dict__.get('submodules')

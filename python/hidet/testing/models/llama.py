@@ -592,9 +592,8 @@ def failure_case():
     compiled = flow_graph.build()
 
 
-# %%
 if __name__ == '__main__':
     hidet.option.parallel_build(False)
     failure_case()
     test_llama(device='cuda', opt=False)
-    test_llama(device='cuda', opt=True)
+    # test_llama(device='cuda', opt=True)
