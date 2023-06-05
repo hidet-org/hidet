@@ -10,18 +10,22 @@ class bcolors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
+
 def quote_green(s):
     return bcolors.OKGREEN + s + bcolors.ENDC
+
 
 def quote_red(s):
     return bcolors.FAIL + s + bcolors.ENDC
 
+
 def quote_cyan(s):
     return bcolors.OKCYAN + s + bcolors.ENDC
+
 
 def quote_warning(s):
     return bcolors.WARNING + s + bcolors.ENDC
 
+
 def quote_fail(s):
     return bcolors.FAIL + s + bcolors.ENDC
-

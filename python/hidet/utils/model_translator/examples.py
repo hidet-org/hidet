@@ -9,7 +9,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# pylint: skip-file
 # %%
+
 from hidet.utils.model_translator import AstInterpreter, transpiled_str, vis_interpreter
 
 # %%
@@ -19,11 +21,12 @@ import numpy as np
 # transpile a simple function
 def orig_func(a, b: torch.Tensor, c: float, dim: int = 1):
     """
-        doc str
+    doc str
     """
     x = torch.matmul(a, b)
     y = np.matmul(a.numpy(), b.numpy())
     return torch.nn.functional.softmax(x.view([1, -1]), dim) + c
+
 
 interpreter = AstInterpreter()
 args = [torch.rand([4, 5]), torch.rand([5, 5]), 1.0]
@@ -48,6 +51,7 @@ def conditional(a: torch.Tensor, b: torch.Tensor, c):
         d = None
     return d
 
+
 interpreter = AstInterpreter()
 # each call activates a branch, updating the type of the nodes
 interpreter(conditional, [torch.rand([4, 4]), torch.rand([4, 4]), 1])
@@ -68,7 +72,8 @@ def forloop(a: torch.Tensor, c, l):
     else:
         print("hi")
     return a
- 
+
+
 interpreter = AstInterpreter()
 res = interpreter(forloop, [torch.rand([4, 4]), torch.rand([4, 4]), 13])
 vis_interpreter(interpreter)
@@ -80,13 +85,15 @@ print(transpiled_str(interpreter))
 def mysoftmax(a, dim):
     return torch.softmax(a, dim)
 
+
 def raw_function(a, b, c, d):
     d = torch.tensor([1, 2]).to(c.device)
-    x = a + mysoftmax(b, dim = 1)
+    x = a + mysoftmax(b, dim=1)
     a, b = (1, 2)
     a, b = (torch.tensor([1, 2]).float(), c)
     a, b = (torch.rand(4, 3).to(a.device), c)
     return d
+
 
 interpreter = AstInterpreter()
 res = interpreter(raw_function, [torch.rand([2, 2]), torch.rand([2, 2]), torch.rand([1, 2]), torch.rand([1, 1])])
@@ -97,13 +104,14 @@ print(transpiled_str(interpreter))
 # tracing classes works a bit differently
 class TestClass(torch.nn.Module):
     h = 1
+
     def __init__(self, dim) -> None:
         super().__init__()
         self.conv = torch.nn.Conv2d(dim, dim, kernel_size=[3, 3], padding=1)
         self.conv2 = torch.nn.Conv2d(dim, dim, kernel_size=[3, 3], padding=1)
         self.num = self.test(dim)
         self.num2 = self.test1(1)
-    
+
     def forward(self, x):
         y1 = self.conv(x)
         y2 = self.test2
@@ -112,13 +120,14 @@ class TestClass(torch.nn.Module):
     @staticmethod
     def test1(x):
         return x + 2
-    
+
     def test(self, x):
         return x + 1
-    
+
     @property
     def test2(self):
         return self.num + 1
+
 
 # visualize(TestClass, [3])
 intp = AstInterpreter()
@@ -139,11 +148,12 @@ class TestClass2(TestClass):
         self.conv3 = torch.nn.Conv2d(dim, dim, kernel_size=[3, 3], padding=1)
         self.num1 = self.test(3)
         self.num4 = self.test2
-    
+
     def forward(self, x):
         y = super().forward(x)
         y = self.conv3(y)
         return y
+
 
 intp = AstInterpreter()
 h = intp(TestClass2, [3])

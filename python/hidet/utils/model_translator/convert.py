@@ -9,22 +9,29 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# pylint: disable=exec-used
+# pylint: disable=eval-used
+# pylint: disable=dangerous-default-value
+# pylint: disable=redefined-outer-name
+# pylint: disable=broad-except
+# pylint: disable=raise-missing-from
+
 import ast
 from ast import AST
 import inspect
 
 import typing as tp
 from typing import Any, Union, Tuple, List, Dict, Set
+import types
 import astunparse
 from astunparse import Unparser
-import types
 
 import torch
 import hidet
-from transformers import LlamaForCausalLM as hfLlamaModel, LlamaConfig as hfLlamaConfig
+
 # from hidet.utils.model_translator.convert import AstTypedNode
 
-from hidet.utils.model_translator.utils import quote_cyan, quote_fail, quote_green, quote_red, quote_warning
+from hidet.utils.model_translator.utils import quote_cyan, quote_fail, quote_green, quote_warning
 
 # must do this to load the registery
 import hidet.graph.frontend.torch.register_functions
@@ -35,21 +42,22 @@ TYPEDNODE_ATTR = "_typed_node"
 STMT_ERROR_ATTR = "_stmt_error_attr"
 STMT_WARNING_ATTR = "_stmt_warning_attr"
 
+
 class AstInternalError(Exception):
     """AstInternalError means a bug"""
-    pass
+
 
 class AstRunTimeError(Exception):
     """AstRunTimeError means for user intervention"""
-    pass
 
 
 class AstTypedNode:
     def __init__(self) -> None:
         self.type = set()
         self.value = None
-    
+
     def add(self, val):
+        # pylint: disable=broad-except
         if callable(val):
             if is_bound_method(val):
                 try:
@@ -69,12 +77,15 @@ class AstTypedNode:
 def is_bound_method(meth):
     return callable(meth) and hasattr(meth, '__self__')
 
+
 def get_unbound_method(meth):
     assert is_bound_method(meth)
     return getattr(type(meth.__self__), meth.__name__)
 
+
 def hashable(obj) -> bool:
     return hasattr(obj, "__hash__") and obj.__hash__ is not None
+
 
 def default_should_trace(obj):
     if belong_to_torch(obj) or (not hashable(obj)):
@@ -87,19 +98,23 @@ def default_should_trace(obj):
         return False
     return True
 
+
 def get_types(node: AST) -> tp.Union[tp.Set[Any], None]:
     if hasattr(node, TYPEDNODE_ATTR):
-        types = getattr(node, TYPEDNODE_ATTR)
-        assert isinstance(types, AstTypedNode)
-        return types.type
+        _types = getattr(node, TYPEDNODE_ATTR)
+        assert isinstance(_types, AstTypedNode)
+        return _types.type
     return None
+
 
 class StripValues(ast.NodeVisitor):
     """Delete values for deepcopying"""
+
     def visit(self, node: AST):
         if hasattr(node, TYPEDNODE_ATTR):
             delattr(node, TYPEDNODE_ATTR)
         return super().visit(node)
+
 
 def get_class_of_method(meth, init_cls):
     assert inspect.isclass(init_cls)
@@ -112,48 +127,54 @@ def get_class_of_method(meth, init_cls):
                 return par
     return None
 
+
 class RewriteSuper(ast.NodeTransformer):
     """
     Rewrites any occurances of super().foo to super(CurClass, self).foo
     """
+
     def __init__(self) -> None:
-        super(RewriteSuper, self).__init__()
+        super().__init__()
         self.class_names = []
 
     def visit_Call(self, node: ast.Call) -> ast.Call:
-        if isinstance(node.func, ast.Name) and node.func.id == 'super' \
-            and isinstance(node.func.ctx, ast.Load) \
-            and len(node.args) == 0 \
-            and len(node.keywords) == 0:
+        if (
+            isinstance(node.func, ast.Name)
+            and node.func.id == 'super'
+            and isinstance(node.func.ctx, ast.Load)
+            and len(node.args) == 0
+            and len(node.keywords) == 0
+        ):
             node.args = [ast.Name(id=self.class_names[-1], ctx=ast.Load()), ast.Name(id='self', ctx=ast.Load())]
         else:
             node = self.generic_visit(node)
         return node
-    
+
     def visit_ClassDef(self, node: ast.ClassDef) -> Any:
         self.class_names.append(node.name)
         node = self.generic_visit(node)
         self.class_names.pop(-1)
         return node
 
+
 class InterpreterState:
     def __init__(self) -> None:
-        self.warnings:     List[str] = []
-        self.errors:       List[str] = []
-        self.globals:      Dict[str, Any] = {}
-        self.local_stack:  List[Dict[str, Any]] = []
+        self.warnings: List[str] = []
+        self.errors: List[str] = []
+        self.globals: Dict[str, Any] = {}
+        self.local_stack: List[Dict[str, Any]] = []
         # if we are in the context of a class (necessary for super())
         self.marked_global: List[Set[str]] = []
-    
+
     def add_warning(self, msg: str):
         self.warnings.append(msg)
-    
+
     def add_warnings(self, node: AST) -> AST:
         if len(self.warnings) > 0:
             self.warnings, warnings = [], self.warnings
             setattr(node, STMT_WARNING_ATTR, warnings)
         return node
-    
+
     def add_error(self, msg: str):
         self.errors.append(msg)
 
@@ -162,11 +183,12 @@ class InterpreterState:
             self.errors, errors = [], self.errors
             setattr(node, STMT_ERROR_ATTR, errors)
         return node
-    
+
     @property
     def locals(self):
         return self.local_stack[-1]
-    
+
+    # pylint: disable=dangerous-default-value
     def push_stack(self, node: ast.arguments, arg_values: List[Any] = [], kwarg_values: Dict[str, Any] = {}):
         """binds arguments to a new local stack, this happens when calling a function"""
         args = {}
@@ -174,8 +196,8 @@ class InterpreterState:
         self.marked_global.append(set())
 
         if node.vararg is not None:
-            args[node.vararg.arg] = arg_values[len(node.args):]
-            arg_values = arg_values[:len(node.args)]
+            args[node.vararg.arg] = arg_values[len(node.args) :]
+            arg_values = arg_values[: len(node.args)]
         defaults = node.defaults.copy()
         for a in node.args:
             if len(arg_values) > 0:
@@ -188,7 +210,7 @@ class InterpreterState:
                 args[a.arg] = self.exec_node(default)
             else:
                 raise Exception("Not enough arguments")
-        
+
         kw_defaults = node.kw_defaults.copy()
         for kw in node.kwonlyargs:
             if kw.arg in kwarg_values:
@@ -198,7 +220,7 @@ class InterpreterState:
                 args[kw.arg] = self.exec_node(default)
             else:
                 raise Exception("Not enough keyword arguments")
-    
+
     def pop_stack(self) -> Any:
         """when function call ends, pops the latest stack, returning what the function returned as result"""
         last_stack = self.local_stack.pop(-1)
@@ -207,11 +229,11 @@ class InterpreterState:
             return last_stack['__return__']
         else:
             return None
-    
+
     def set_return(self, val):
         assert '__return__' not in self.locals
         self.locals['__return__'] = val
-    
+
     def mark_globals(self, node: ast.Global):
         for i in node.names:
             self.marked_global[-1].add(i)
@@ -221,7 +243,7 @@ class InterpreterState:
         while variable in self.locals or variable in self.marked_global:
             variable += "_"
         return variable
-    
+
     def exec_node(self, node: AST) -> Any:
         exec_str = astunparse.unparse(node)
         if isinstance(node, ast.expr):
@@ -235,7 +257,7 @@ class InterpreterState:
                 return None
             except Exception as e:
                 raise AstRunTimeError(f"unable to execute node {node}, {node.lineno} due to {e}")
-    
+
     def get_identifer(self, name: str) -> Any:
         if name in self.locals:
             return self.locals[name]
@@ -245,21 +267,22 @@ class InterpreterState:
             return getattr(__builtins__, name)
         else:
             raise AstRunTimeError(f"unable to get identifier {name}")
-    
+
     def set_identifier(self, name: str, val: Any):
         if not name in self.marked_global[-1]:
             self.locals[name] = val
         else:
             self.globals[name] = val
 
+
 class AstTrace:
     def __init__(self) -> None:
         self.traced: Dict[Union[tp.Callable, type], AST] = {}
         self.method_map: Dict[tp.Callable, type] = {}
-    
+
     def can_trace(self, obj):
         return hashable(obj) and hasattr(obj, '__name__')
-    
+
     def add_function(self, obj):
         assert inspect.isfunction(obj)
         assert hashable(obj)
@@ -267,7 +290,7 @@ class AstTrace:
         ast_node = ast.parse(inspect.getsource(obj)).body[0]
         assert isinstance(ast_node, ast.FunctionDef)
         self.traced[obj] = ast_node
-    
+
     def add_class(self, obj):
         """This does not recursively add all the inherited bases"""
         assert inspect.isclass(obj)
@@ -283,7 +306,7 @@ class AstTrace:
                 elif inspect.isfunction(fn_obj):
                     self.method_map[fn_obj] = obj
         self.traced[obj] = ast_node
-    
+
     def add_trace(self, obj):
         if self.can_trace(obj):
             if not (obj in self.traced or obj in self.method_map):
@@ -294,13 +317,13 @@ class AstTrace:
                 elif is_bound_method(obj):
                     parent_class = type(obj.__self__)
                     self.add_trace(parent_class)
-    
+
     def get_trace(self, obj: Any) -> AST:
         if self.can_trace(obj):
             # is function or class
             if obj in self.traced:
                 return self.traced[obj]
-            
+
             # is class method
             if is_bound_method(obj):
                 parent = type(obj.__self__)
@@ -319,7 +342,7 @@ class AstTrace:
                 if isinstance(fn, ast.FunctionDef) and fn.name == obj.__name__:
                     return fn
         return None
-    
+
     def set_trace(self, obj: Any, ast_node: AST) -> bool:
         if self.can_trace(obj):
             # is function or class
@@ -335,8 +358,8 @@ class AstTrace:
                     self.traced[obj] = ast_node
                     return True
                 else:
-                    return False 
-            
+                    return False
+
             # is class method
             if is_bound_method(obj):
                 parent = type(obj.__self__)
@@ -367,17 +390,17 @@ class AstInterpreter:
         self.returned = False
         self.inner_break = False
         self.indent_level = 0
-    
+
     def trace_msg(self, msg):
         # print("    " * self.indent_level + msg)
         pass
-    
+
     def indent(self):
         self.indent_level += 1
-    
+
     def unindent(self):
         self.indent_level = max(0, self.indent_level - 1)
-    
+
     def add_val(self, node: AST, val) -> AST:
         if val is None:
             return node
@@ -397,7 +420,7 @@ class AstInterpreter:
             return self.add_val(node, val), val
         visitor = getattr(self, method)
         return visitor(node)
-    
+
     def generic_visit(self, node: AST) -> AST:
         for field, old_value in iter_fields(node):
             if isinstance(old_value, list):
@@ -407,7 +430,7 @@ class AstInterpreter:
                         value = self.visit(value)
                         if value is None:
                             continue
-                        elif not isinstance(value, AST):
+                        if not isinstance(value, AST):
                             new_values.extend(value)
                             continue
                     new_values.append(value)
@@ -419,16 +442,16 @@ class AstInterpreter:
                 else:
                     setattr(node, field, new_node)
         return node
-    
+
     #######################################################################
     ### Expressions #######################################################
-    #######################################################################    
+    #######################################################################
     # def visit_list(self, lst: tp.List) -> tp.List:
     #     return [self.visit(i) for i in lst]
 
     # def visit_tuple(self, tup: tp.Tuple) -> tp.Tuple:
     #     return tuple(self.visit_list(list(tup)))
-    
+
     def visit_Constant(self, node: ast.Constant) -> Tuple[AST, Any]:
         if isinstance(node.value, (float, int, str)):
             return self.add_val(node, node.value), node.value
@@ -436,29 +459,29 @@ class AstInterpreter:
             return node, None
         else:
             raise AstInternalError(f'cannot recognize constant {node.value}')
-        
+
     def visit_Tuple(self, node: ast.Tuple) -> Tuple[AST, Any]:
         vals = [self.visit(lo) for lo in node.elts]
         node.elts = [v[0] for v in vals]
-        values = tuple([v[1] for v in vals])
+        values = tuple(v[1] for v in vals)
 
         new_node = self.add_val(node, values)
         if isinstance(node.ctx, ast.Load):
             return new_node, values
         else:
             return new_node, None
-    
+
     def visit_List(self, node: ast.List) -> Tuple[AST, Any]:
         vals = [self.visit(lo) for lo in node.elts]
         node.elts = [v[0] for v in vals]
-        values = tuple([v[1] for v in vals])
+        values = tuple(v[1] for v in vals)
 
         new_node = self.add_val(node, values)
         if isinstance(node.ctx, ast.Load):
             return new_node, values
         else:
             return new_node, None
-        
+
     def visit_arg(self, node: ast.arg) -> Tuple[AST, Any]:
         actual_value = self.state.get_identifer(node.arg)
         # types = {type(actual_value)}
@@ -468,7 +491,7 @@ class AstInterpreter:
             # types.add(node.annotation)
             node.annotation = None
         return self.add_val(node, actual_value), actual_value
-    
+
     def visit_BinOp(self, node: ast.BinOp) -> Tuple[AST, Any]:
         node.left, lhs = self.visit(node.left)
         node.right, rhs = self.visit(node.right)
@@ -490,10 +513,10 @@ class AstInterpreter:
         self.state.locals.pop(var_right)
 
         return self.add_val(node, val), val
-    
+
     def visit_Compare(self, node: ast.Compare) -> Tuple[AST, Any]:
         node.left, lhs = self.visit(node.left)
-        fake_left = self.state.get_unique_local_var(f"INTERNAL_COMPARATOR_LEFTVAR")
+        fake_left = self.state.get_unique_local_var("INTERNAL_COMPARATOR_LEFTVAR")
         self.state.locals[fake_left] = lhs
         fake_variables = []
         for i in range(len(node.comparators)):
@@ -503,10 +526,12 @@ class AstInterpreter:
         fake_comparators = [ast.Name(id, ctx=ast.Load()) for id in fake_variables]
         fake_ast = ast.Compare(left=ast.Name(fake_left, ctx=ast.Load()), ops=node.ops, comparators=fake_comparators)
         eval_str = astunparse.unparse(fake_ast)
+
         def remove_fake_vars():
             for name in fake_variables:
                 self.state.locals.pop(name)
             self.state.locals.pop(fake_left)
+
         try:
             val = eval(eval_str, self.state.globals, self.state.locals)
         except Exception as e:
@@ -514,7 +539,7 @@ class AstInterpreter:
             raise AstRunTimeError(f"failed to eval {eval_str} in Compare due to {e}")
         remove_fake_vars()
         return self.add_val(node, val), val
-    
+
     def visit_BoolOp(self, node: ast.BoolOp) -> Tuple[AST, Any]:
         nvals = [self.visit(v) for v in node.values]
         node.values = [v[0] for v in nvals]
@@ -528,7 +553,7 @@ class AstInterpreter:
             for v in vals:
                 val = val or v
         return self.add_val(node, val), val
-    
+
     def visit_UnaryOp(self, node: ast.UnaryOp) -> Tuple[AST, Any]:
         node.operand, val = self.visit(node.operand)
         variable = self.state.get_unique_local_var("INTERNAL_UNIOPVAR")
@@ -554,7 +579,7 @@ class AstInterpreter:
             return new_node, val
         else:
             return new_node, val
-        
+
     def visit_Attribute(self, node: ast.Attribute) -> Tuple[AST, Any]:
         # TODO: handle @property
         node.value, val = self.visit(node.value)
@@ -569,7 +594,7 @@ class AstInterpreter:
                 if t_node is not None or self.should_trace_prompt(fn_obj):
                     ret = self.trace_class_meth(fn_obj, type_val, args=[val])
                     return self.add_val(node, ret), ret
-        
+
         # unfortunately, hasattr calls the property fn object
         if hasattr(val, node.attr):
             val = getattr(val, node.attr)
@@ -580,7 +605,7 @@ class AstInterpreter:
                 return new_node, None
         else:
             raise AstRunTimeError(f"Cannot get attribute {node.attr} from {astunparse.unparse(node.value)}")
-    
+
     def visit_Call(self, node: ast.Call) -> Tuple[AST, Any]:
         """
         Tracing rules:
@@ -600,14 +625,14 @@ class AstInterpreter:
             else:
                 node.args[i], val = self.visit(node.args[i])
                 arg_values.append(val)
-        
+
         kwarg_values = {}
         for i in range(len(node.keywords)):
             node.keywords[i].value, val = self.visit(node.keywords[i].value)
             kwarg_values[node.keywords[i].arg] = val
-        
+
         def call_directly():
-            try: 
+            try:
                 # all supers should have been converted at this point
                 # from super().meth to super(Class, self).meth
                 if obj_callable == super:
@@ -615,11 +640,11 @@ class AstInterpreter:
                 return obj_callable(*arg_values, **kwarg_values)
             except Exception as e:
                 raise AstRunTimeError(str(e))
-        
+
         def handle_base_trace_call(obj_callable, arg_values, kwarg_values, parent_cls=None):
             """
             This function handles if we should trace any subsequent calls
-            parent_cls is supplied because I don't have a way of getting the class of any 
+            parent_cls is supplied because I don't have a way of getting the class of any
             objects of the form 'MyClass.foo', as its not a bound method
             """
             sub_node = self.trace.get_trace(obj_callable)
@@ -627,14 +652,16 @@ class AstInterpreter:
                 return self.trace_code_obj(obj_callable, arg_values, kwarg_values)
             if parent_cls is not None:
                 # could be a static method of a class
-                if self.should_trace_prompt(parent_cls, f"should trace parent class {parent_cls} of method {obj_callable}? [y]/n"):
+                if self.should_trace_prompt(
+                    parent_cls, f"should trace parent class {parent_cls} of method {obj_callable}? [y]/n"
+                ):
                     return self.trace_class_meth(obj_callable, parent_cls, arg_values, kwarg_values)
                 else:
                     return call_directly()
             if self.should_trace_prompt(obj_callable):
                 return self.trace_code_obj(obj_callable, arg_values, kwarg_values)
             return call_directly()
-        
+
         def handle_trace_call():
             if not (self.trace.can_trace(obj_callable) and default_should_trace(obj_callable)):
                 return call_directly()
@@ -652,7 +679,9 @@ class AstInterpreter:
                         base_cls = get_class_of_method(obj_callable, base)
                         if base_cls is not None:
                             meth = getattr(base_cls, obj_callable.__name__)
-                            return handle_base_trace_call(meth, arg_values=[obj_callable.__self__] + arg_values, kwarg_values=kwarg_values)
+                            return handle_base_trace_call(
+                                meth, arg_values=[obj_callable.__self__] + arg_values, kwarg_values=kwarg_values
+                            )
                     return call_directly()
             parent_cls = None
             if isinstance(node.func, ast.Attribute) and inspect.isfunction(obj_callable):
@@ -664,14 +693,14 @@ class AstInterpreter:
                 else:
                     parent_cls = parent_val.value
             return handle_base_trace_call(obj_callable, arg_values, kwarg_values, parent_cls)
-        
+
         func_return = handle_trace_call()
         return self.add_val(node, func_return), func_return
-    
+
     #######################################################################
     ### Statements ########################################################
     #######################################################################
-    
+
     def simulate_assign(self, expr: ast.Expr, val: Any):
         """Binds whatever is val to expr, which is the left hand side of the assignment"""
 
@@ -701,27 +730,30 @@ class AstInterpreter:
             self.simulate_assign(ast.Tuple(elts=node.targets, ctx=ast.Store()), val=val)
         else:
             self.simulate_assign(node.targets[0], val=val)
-        
+
         # annotate targets
         node.targets, _ = self.visit(node.targets)
 
         return node, None
-            
+
     def visit_arguments(self, node: ast.arguments) -> Tuple[AST, Any]:
         for i, arg in enumerate(node.args):
             node.args[i], _ = self.visit(arg)
-        
+
         for i, arg in enumerate(node.kwonlyargs):
             node.kwonlyargs[i], _ = self.visit(arg)
-        
+
         return node, None
-    
+
     def visit_Break(self, node: ast.Break) -> Tuple[AST, Any]:
         self.inner_break = True
         return node, None
 
     def visit_stmt(self, stmt: ast.stmt) -> Tuple[AST, bool]:
-        """This function should not be reached by self.visit, handles warnings and exceptions thrown on the line/statement level"""
+        """
+        This function should not be reached by self.visit,
+        handles warnings and exceptions thrown on the line/statement level
+        """
         if isinstance(stmt, ast.FunctionDef):
             self.state.add_error("We don't support internal nested functions yet")
         else:
@@ -729,33 +761,32 @@ class AstInterpreter:
                 stmt, _ = self.visit(stmt)
             except AstRunTimeError as e:
                 self.state.add_error(str(e))
-        
+
         success = len(self.state.errors) == 0
         return self.state.add_errors(self.state.add_warnings(stmt)), success
-    
+
     def visit_stmt_body(self, stmt_lst: tp.List[ast.stmt]) -> Tuple[AST, bool]:
         """This function should not be reached by self.visit"""
         success = True
         for i, stmt in enumerate(stmt_lst):
             if self.returned:
                 break
-            else:
-                self.trace_msg('---> ' + vis_typed_ast(stmt))
-                stmt_lst[i], succ = self.visit_stmt(stmt)
-                success &= succ
-                if self.inner_break and not success:
-                    break
+            self.trace_msg('---> ' + vis_typed_ast(stmt))
+            stmt_lst[i], succ = self.visit_stmt(stmt)
+            success &= succ
+            if self.inner_break and not success:
+                break
         # success indicates if we should early break when executing a block of statements
         return stmt_lst, success
-    
+
     def visit_If(self, node: ast.If) -> Tuple[AST, Any]:
         try:
             node.test, cond = self.visit(node.test)
         except Exception as e:
             self.state.add_error(str(e))
             return node, None
-        
-        self.trace_msg(f"tracing if " + vis_typed_ast(node.test))
+
+        self.trace_msg("tracing if " + vis_typed_ast(node.test))
         self.indent()
         if cond:
             node.body, success = self.visit_stmt_body(node.body)
@@ -810,7 +841,7 @@ class AstInterpreter:
 
     def visit_Pass(self, node: ast.Pass) -> Tuple[AST, Any]:
         return node, None
-    
+
     def visit_Return(self, node: ast.Return) -> Tuple[AST, Any]:
         self.returned = True
         if node.value is not None:
@@ -820,7 +851,7 @@ class AstInterpreter:
         else:
             self.state.set_return(None)
             return node, None
-    
+
     def visit_Expr(self, node: ast.Expr) -> Tuple[AST, Any]:
         node.value, _ = self.visit(node.value)
         return node, None
@@ -831,47 +862,20 @@ class AstInterpreter:
         node.body[0], _ = self.visit(node.body[0])
 
         return self.state.add_errors(self.state.add_warnings(node)), None
-    
+
     def visit_Global(self, node: ast.Global) -> Tuple[AST, Any]:
         self.state.mark_globals(node)
         return node, None
-    
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> Tuple[AST, Any]:
-        assert self.binding_args is not None and self.binding_kwargs is not None
-        # we don't handle any decorators other than @property, and @staticmethod
-        #   maybe in the future, when this is re-architected to something more like the python debugger
-        
-        # update locals to have the argument names defined
-        self.state.push_stack(node.args, self.binding_args, self.binding_kwargs)
-        self.binding_args = None
-        self.binding_kwargs = None
 
-        self.trace_msg(f"tracing function {node.name}")
-        self.indent()
-        try:
-            # annotate args
-            node.args, _ = self.visit(node.args)
-        except AstRunTimeError as e:
-            self.state.add_error(str(e))
-            self.state.pop_stack()
-            return self.state.add_errors(self.state.add_warnings(node)), None
-        
-        node.body = self.visit_stmt_body(node.body)[0]
-        val = self.state.pop_stack()
-        # return barrier is at the function level
-        self.returned = False
-        self.unindent()
-        return self.state.add_errors(self.state.add_warnings(node)), val
-
-    def trace_function(self, code_obj, args=[], kwargs={}) -> Any:        
+    def trace_function(self, code_obj, args=[], kwargs={}) -> Any:
         assert inspect.isfunction(code_obj), "expected code_obj of trace_function to be a function"
-        self.trace.add_trace(code_obj) # this is a no op when code_obj is already in the trace
+        self.trace.add_trace(code_obj)  # this is a no op when code_obj is already in the trace
         node = self.trace.get_trace(code_obj)
         assert isinstance(node, ast.FunctionDef)
         # update locals to have the argument names defined
         self.state.push_stack(node.args, args, kwargs)
         self.state.globals.update(code_obj.__globals__)
-        
+
         try:
             # annotate args
             node.args, _ = self.visit(node.args)
@@ -879,12 +883,12 @@ class AstInterpreter:
             self.state.add_error(str(e))
             self.state.pop_stack()
             return self.state.add_errors(self.state.add_warnings(node)), None
-        
+
         node.body = self.visit_stmt_body(node.body)[0]
         success = self.trace.set_trace(code_obj, node)
         if not success:
             raise AstRunTimeError("cannot set trace for trace_function")
-        
+
         val = self.state.pop_stack()
         # return barrier is at the function level
         self.returned = False
@@ -898,7 +902,7 @@ class AstInterpreter:
         for i, (base_node, base_obj) in enumerate(zip(node.bases, cls_obj.__bases__)):
             node.bases[i] = self.add_val(base_node, base_obj)
         self.trace.set_trace(cls_obj, node)
-    
+
     def trace_bases(self, cls_obj, indent_level=0):
         assert inspect.isclass(cls_obj)
         bases = list(filter(lambda x: default_should_trace(x), cls_obj.__bases__))
@@ -907,13 +911,15 @@ class AstInterpreter:
             indent_level += 1
             for base in bases:
                 if self.trace.get_trace(base) is None:
-                    cond = self.should_trace_prompt(base, msg=" " * indent_level + f"{base.__name__}, trace this class?")
+                    cond = self.should_trace_prompt(
+                        base, msg=" " * indent_level + f"{base.__name__}, trace this class?"
+                    )
                     if cond:
                         self.add_trace_class(base)
                         self.trace_bases(base, indent_level)
                     else:
                         self.trace_blacklist.add(base)
-    
+
     def trace_class(self, code_obj, args=[], kwargs={}):
         """This traces the class constructor"""
         assert inspect.isclass(code_obj)
@@ -924,18 +930,18 @@ class AstInterpreter:
         selves = code_obj.__new__(code_obj)
         if self.trace.get_trace(getattr(code_obj, '__init__')) is None:
             # this means that either the current class does not contain __init__
-            #   or one of the super classes contains __init__, but the user chose not to trace 
+            #   or one of the super classes contains __init__, but the user chose not to trace
             return selves.__init__(*args, **kwargs)
         self.trace_function(getattr(code_obj, '__init__'), [selves] + args, kwargs)
         return selves
-    
+
     def trace_class_meth(self, meth, cls_obj, args=[], kwargs={}):
         assert inspect.isfunction(meth)
         assert inspect.isclass(cls_obj)
         assert hasattr(cls_obj, meth.__name__)
         self.add_trace_class(cls_obj)
         return self.trace_function(meth, args=args, kwargs=kwargs)
-        
+
     def trace_bound_method(self, code_obj, args=[], kwargs={}):
         assert is_bound_method(code_obj)
         parent_cls = type(code_obj.__self__)
@@ -944,16 +950,16 @@ class AstInterpreter:
         if unbound_meth != getattr(parent_cls, code_obj.__name__):
             raise AstInternalError(f"Origin class of method {code_obj} mismatched")
         return self.trace_class_meth(unbound_meth, actual_cls, args=[code_obj.__self__] + args, kwargs=kwargs)
-    
+
     def trace_code_obj(self, code_obj, args=[], kwargs={}) -> Any:
         """
         expects code_obj to be one of the following cases
-            1. a class, eg. inspect.isclass(code_obj) == True       
+            1. a class, eg. inspect.isclass(code_obj) == True
             2. a bound method of a class
             3. a function
         """
         if not self.trace.can_trace(code_obj) or not default_should_trace(code_obj):
-            raise AstRunTimeError(f"code_obj cannot be traced")
+            raise AstRunTimeError("code_obj cannot be traced")
         if inspect.isfunction(code_obj):
             return self.trace_function(code_obj, args, kwargs)
         elif inspect.isclass(code_obj):
@@ -962,10 +968,10 @@ class AstInterpreter:
             return self.trace_bound_method(code_obj, args, kwargs)
         else:
             raise AstRunTimeError(f"code_obj {code_obj} is not detectd to be a function, bound method, or class")
-    
+
     def __call__(self, code_obj, args=[], kwargs={}) -> Any:
         return self.trace_code_obj(code_obj, args, kwargs)
-    
+
     def should_trace_prompt(self, obj: Any, msg=None) -> bool:
         if self.trace.can_trace(obj) and default_should_trace(obj):
             if obj in self.trace_blacklist:
@@ -981,6 +987,7 @@ class AstInterpreter:
                 return True
         else:
             return False
+
 
 def get_single_expr_str(node: ast.AST) -> str:
     lhs_assign_str = astunparse.unparse(node).split("\n")
@@ -999,6 +1006,7 @@ def iter_fields(node):
             yield field, getattr(node, field)
         except AttributeError:
             pass
+
 
 def eliminate_indent(source: str) -> tp.Tuple[str, int]:
     lines = source.split('\n')
@@ -1019,6 +1027,7 @@ def is_torch_module(code_obj) -> bool:
             if is_torch_module(b):
                 return True
     return False
+
 
 class VisualizeTypedAst(Unparser):
     def write_err_msg(self, tree: AST, attr: str, quote_fn, header: str):
@@ -1049,6 +1058,7 @@ class VisualizeTypedAst(Unparser):
             elif len(types.type) > 1:
                 self.write(quote_cyan(" :") + quote_green('Union[' + ', '.join(type_repr) + '] '))
 
+
 class UnparseAstWithComments(Unparser):
     def write_err_msg(self, tree: AST, attr: str, header: str):
         if hasattr(tree, attr):
@@ -1065,27 +1075,34 @@ class UnparseAstWithComments(Unparser):
         self.write_err_msg(tree, STMT_ERROR_ATTR, "ERROR")
         super().dispatch(tree)
 
+
 def vis_typed_ast(tree):
     import six
+
     v = six.moves.cStringIO()
     VisualizeTypedAst(tree, file=v)
     return v.getvalue()
 
+
 def vis_ast(tree):
     import six
+
     v = six.moves.cStringIO()
     UnparseAstWithComments(tree, file=v)
     return v.getvalue()
 
+
 def dump_ast(code: str):
     print(ast.dump(ast.parse(code), indent=4))
+
 
 def is_torch_path(name: str) -> bool:
     name = name.split(".")
     if len(name) > 0:
         return name[0] == "torch"
     return False
-    
+
+
 def belong_to_torch(code_obj) -> bool:
     belongs = False
     if hasattr(code_obj, "__module__") and code_obj.__module__ is not None:
@@ -1093,6 +1110,7 @@ def belong_to_torch(code_obj) -> bool:
     if not belongs and hasattr(code_obj, "__package__") and code_obj.__package__ is not None:
         belongs |= is_torch_path(code_obj.__package__)
     return belongs
+
 
 class StaticTypeInferPass(ast.NodeTransformer):
     def __init__(self) -> None:
@@ -1104,7 +1122,7 @@ class InferImports(ast.NodeVisitor):
     def __init__(self) -> None:
         self.imports = set()
         self.warnings = []
-    
+
     def add_warnings(self, node: AST):
         if len(self.warnings) > 0:
             self.warnings, warnings = [], self.warnings
@@ -1117,29 +1135,28 @@ class InferImports(ast.NodeVisitor):
         if isinstance(node, ast.stmt):
             self.add_warnings(node)
         return super().visit(node)
-    
+
     def visit_Name(self, node: ast.Name) -> Any:
         if hasattr(node, TYPEDNODE_ATTR):
             type_node = getattr(node, TYPEDNODE_ATTR)
             assert isinstance(type_node, AstTypedNode)
             val = type_node.value
             module_name = None
-            
-            if type(val) == types.ModuleType:
+
+            if isinstance(val, types.ModuleType):
                 module_name = val.__name__
-            elif hasattr(val, '__module__') and \
-                (val.__module__ == 'builtins' or val.__module__ == '__main__'):
+            elif hasattr(val, '__module__') and val.__module__ in ('__main__', 'builtins'):
                 pass
-            elif hasattr(val, '__module__') and \
-                (inspect.isfunction(val) or inspect.isclass(val)):
+            elif hasattr(val, '__module__') and (inspect.isfunction(val) or inspect.isclass(val)):
                 module_name = val.__module__
             if module_name is not None:
                 if node.id != module_name:
                     self.imports.add(f"import {module_name} as {node.id}")
                 else:
                     self.imports.add(f"import {module_name}")
-            elif (inspect.isfunction(val) or inspect.isclass(val)):
+            elif inspect.isfunction(val) or inspect.isclass(val):
                 self.warnings.append(f"cannot find import for identifier {node.id}")
+
 
 class Transpiler:
     FN_ROOT = "hidet_fn"
@@ -1150,9 +1167,9 @@ class Transpiler:
         f"import hidet.graph.frontend.torch.register_functions as {FN_ROOT}",
         f"import hidet.graph.frontend.torch.register_methods as {METHOD_ROOT}",
         f"import hidet.graph.frontend.torch.register_modules as {MODULE_ROOT}",
-        "from functools import partial", 
+        "from functools import partial",
     ]
-    
+
     type_dispatch = {
         torch.float32: hidet.float32,
         torch.float: hidet.float32,
@@ -1186,9 +1203,27 @@ class Transpiler:
         self.errors = []
         for imp in self.IMPORTS:
             exec(imp)
-        self.hidet_fns = set({fn for _, fn in eval(f"{self.FN_ROOT}.__dict__").items() if hasattr(fn, "__hash__") and fn.__hash__ is not None})
-        self.hidet_meths = set({fn for _, fn in eval(f"{self.METHOD_ROOT}.__dict__").items() if hasattr(fn, "__hash__") and fn.__hash__ is not None})
-        self.hidet_mods = set({fn for _, fn in eval(f"{self.MODULE_ROOT}.__dict__").items() if hasattr(fn, "__hash__") and fn.__hash__ is not None})
+        self.hidet_fns = set(
+            {
+                fn
+                for _, fn in eval(f"{self.FN_ROOT}.__dict__").items()
+                if hasattr(fn, "__hash__") and fn.__hash__ is not None
+            }
+        )
+        self.hidet_meths = set(
+            {
+                fn
+                for _, fn in eval(f"{self.METHOD_ROOT}.__dict__").items()
+                if hasattr(fn, "__hash__") and fn.__hash__ is not None
+            }
+        )
+        self.hidet_mods = set(
+            {
+                fn
+                for _, fn in eval(f"{self.MODULE_ROOT}.__dict__").items()
+                if hasattr(fn, "__hash__") and fn.__hash__ is not None
+            }
+        )
         self.warnings = []
         self.errors = []
 
@@ -1198,7 +1233,7 @@ class Transpiler:
         attr.attr = name
         attr.ctx = ast.Load()
         return attr
-    
+
     def get_obj_expr(self, hidet_obj) -> AST:
         if hidet_obj in self.hidet_fns:
             return self.replacement_fn_attr(name=hidet_obj.__name__, root=self.FN_ROOT)
@@ -1207,7 +1242,7 @@ class Transpiler:
         if hidet_obj in self.hidet_mods:
             return self.replacement_fn_attr(name=hidet_obj.__name__, root=self.MODULE_ROOT)
         raise AstInternalError(f"cannot find {hidet_obj.__name__} in caches")
-    
+
     def visit(self, node: AST) -> AST:
         if hasattr(node, TYPEDNODE_ATTR):
             type = getattr(node, TYPEDNODE_ATTR)
@@ -1223,7 +1258,7 @@ class Transpiler:
             return self.add_errors(self.add_warnings(node))
         else:
             return node
-    
+
     def generic_visit(self, node):
         for field, old_value in iter_fields(node):
             if isinstance(old_value, list):
@@ -1233,7 +1268,7 @@ class Transpiler:
                         value = self.visit(value)
                         if value is None:
                             continue
-                        elif not isinstance(value, AST):
+                        if not isinstance(value, AST):
                             new_values.extend(value)
                             continue
                     new_values.append(value)
@@ -1245,21 +1280,25 @@ class Transpiler:
                 else:
                     setattr(node, field, new_node)
         return node
-    
+
     def add_errors(self, node: AST) -> AST:
-        assert isinstance(node, (ast.stmt, ast.mod)), f"cannot add warnings to a non-statment ast node, adding {type(node)}"
+        assert isinstance(
+            node, (ast.stmt, ast.mod)
+        ), f"cannot add warnings to a non-statment ast node, adding {type(node)}"
         if len(self.errors) > 0:
             self.errors, errors = [], self.errors
             setattr(node, STMT_ERROR_ATTR, errors)
         return node
-    
+
     def add_warnings(self, node: AST) -> AST:
-        assert isinstance(node, (ast.stmt, ast.mod)), f"cannot add warnings to a non-statment ast node, adding {type(node)}"
+        assert isinstance(
+            node, (ast.stmt, ast.mod)
+        ), f"cannot add warnings to a non-statment ast node, adding {type(node)}"
         if len(self.warnings) > 0:
             self.warnings, warnings = [], self.warnings
             setattr(node, STMT_WARNING_ATTR, warnings)
         return node
-    
+
     def add_warning(self, msg: str):
         self.warnings.append(msg)
 
@@ -1269,7 +1308,7 @@ class Transpiler:
     def visit_stmt(self, node: AST) -> AST:
         node = self.visit(node)
         return self.add_errors(self.add_warnings(node))
-    
+
     def handle_torch_types(self, obj) -> tp.Union[AST, None]:
         if obj == torch.dtype or isinstance(obj, torch.dtype):
             if obj in self.type_dispatch:
@@ -1279,7 +1318,7 @@ class Transpiler:
                 else:
                     self.errors.append(f"found no equivalent type {obj} in hidet")
             else:
-                self.errors.append(f"obj is of instance dtype but not in dispatch table")
+                self.errors.append("obj is of instance dtype but not in dispatch table")
         return None
 
     def get_type(self, node: AST) -> Any:
@@ -1291,7 +1330,7 @@ class Transpiler:
         if len(inner_types) > 1:
             self.errors.append(f"type instability for inner attr.value {inner_types}")
         return list(inner_types)[0]
-    
+
     def visit_Attribute(self, node: ast.Attribute, types: tp.Set):
         if isinstance(node.ctx, ast.Store):
             return node
@@ -1307,7 +1346,9 @@ class Transpiler:
                 replacement = self.get_obj_expr(fn)
                 return replacement
             elif inspect.isfunction(obj) and belong_to_torch(obj):
-                self.add_warning(f"detected {obj} if a function and belongs to torch, but is not found in hidet function registry")
+                self.add_warning(
+                    f"detected {obj} if a function and belongs to torch, but is not found in hidet function registry"
+                )
                 return node
             if get_hidet_method(obj) is not None:
                 meth = get_hidet_method(obj)
@@ -1316,18 +1357,24 @@ class Transpiler:
                 meth = meth.functions[0]
                 replacement = ast.Call(
                     func=ast.Name("partial", ctx=ast.Load()),
-                    args=[
-                        self.get_obj_expr(meth),
-                        self.visit(node.value),
-                    ],
-                    keywords=[]
+                    args=[self.get_obj_expr(meth), self.visit(node.value)],
+                    keywords=[],
                 )
                 return replacement
-            elif isinstance(self.get_type(node.value), torch.Tensor) and hasattr(obj, '__name__') and hasattr(torch.Tensor, obj.__name__):
+            elif (
+                isinstance(self.get_type(node.value), torch.Tensor)
+                and hasattr(obj, '__name__')
+                and hasattr(torch.Tensor, obj.__name__)
+            ):
                 if hasattr(hidet.Tensor, obj.__name__):
-                    self.add_warning(f"assuming that it is correct to replace attribute {obj.__name__} with hidet's version")
+                    self.add_warning(
+                        f"assuming that it is correct to replace attribute {obj.__name__} with hidet's version"
+                    )
                 else:
-                    self.add_warning(f"detected {obj.__name__} is a method of torch.Tensor, but is not found in hidet method registry and is not an attribute of hidet.Tensor")
+                    self.add_warning(
+                        f"detected {obj.__name__} is a method of torch.Tensor, \
+ but is not found in hidet method registry and is not an attribute of hidet.Tensor"
+                    )
                 return node
             if obj == torch.nn.Module:
                 return ast.parse("hidet.nn.Module").body[0].value
@@ -1338,30 +1385,40 @@ class Transpiler:
                 replacement = self.get_obj_expr(mod)
                 return replacement
             elif inspect.isclass(obj) and belong_to_torch(obj):
-                self.add_warning(f"detected that {obj.__name__} belongs to torch, but is not found in hidet module registry")
+                self.add_warning(
+                    f"detected that {obj.__name__} belongs to torch, but is not found in hidet module registry"
+                )
                 return node
 
         type_rep = self.handle_torch_types(obj)
         if type_rep is not None:
             return type_rep
-        
+
         if hasattr(node.value, TYPEDNODE_ATTR):
             inner_type = self.get_type(node.value)
             if belong_to_torch(inner_type):
                 if inner_type == torch.Tensor:
                     # this makes the assumption that all torch values will be replaced by hidet values
                     if not hasattr(hidet.Tensor, node.attr):
-                        self.errors.append(f"detected that torch.Tensor has attr {node.attr}, but hidet.Tensor does not")
+                        self.errors.append(
+                            f"detected that torch.Tensor has attr {node.attr}, but hidet.Tensor does not"
+                        )
                     else:
-                        self.errors.append(f"making implicit assumption that its correct to replace attribute {node.attr} (from torch) with hidet's version")
+                        self.errors.append(
+                            f"making implicit assumption that its correct to \
+                                replace attribute {node.attr} (from torch) with hidet's version"
+                        )
                         return node
                 else:
-                    self.errors.append(f"detected that type of attr.value ({inner_type}) belongs to torch, but found no hidet equivalent")
+                    self.errors.append(
+                        f"detected that type of attr.value ({inner_type}) \
+                            belongs to torch, but found no hidet equivalent"
+                    )
         if belong_to_torch(obj):
             self.errors.append(f"detected that {obj} of attr {node.attr} belongs to torch, but cannot find equivalent")
         node.value = self.visit(node.value)
         return node
-    
+
     def visit_Name(self, node: ast.Name, types: tp.Set):
         if len(types) > 1:
             self.errors.append(f"type instability, {types} detected for node Name {node.id}")
@@ -1370,7 +1427,9 @@ class Transpiler:
             if get_hidet_function(obj) is not None:
                 fn = get_hidet_function(obj)
                 if len(fn.functions) > 1:
-                    self.errors.append(f"warning: multiple overloaded hidet functions detected for {obj}, name {node.id}")
+                    self.errors.append(
+                        f"warning: multiple overloaded hidet functions detected for {obj}, name {node.id}"
+                    )
                 fn = fn.functions[0]
                 replacement = self.replacement_fn_attr(fn.__name__, self.FN_ROOT)
                 return replacement
@@ -1378,7 +1437,9 @@ class Transpiler:
         if type_rep is not None:
             return type_rep
         if obj != torch.Tensor and belong_to_torch(obj):
-            self.errors.append(f"warning: detected that {obj} of Name {node.id} belongs to torch, but cannot find equivalent")
+            self.errors.append(
+                f"warning: detected that {obj} of Name {node.id} belongs to torch, but cannot find equivalent"
+            )
         return node
 
     def visit_arg(self, node: ast.arg, types: tp.Set):
@@ -1393,25 +1454,33 @@ class Transpiler:
         if hasattr(obj, '__module__') and obj.__module__ == "builtins":
             node.annotation = ast.Name(str(obj)[8:-2], ctx=ast.Load())
         return node
-    
+
 
 def get_hidet_function(fn):
     from hidet.graph.frontend.torch.interpreter import Registry
+
     if fn in Registry.registered_functions:
         return Registry.registered_functions[fn]
+    return None
+
 
 def get_hidet_method(fn):
     from hidet.graph.frontend.torch.interpreter import Registry
+
     if fn in Registry.registered_methods:
         return Registry.registered_methods[fn]
+    return None
+
 
 def get_hidet_module(mod):
     from hidet.graph.frontend.torch.interpreter import Registry
+
     if mod in Registry.registered_modules:
         return Registry.registered_modules[mod]
+    return None
 
 
-def visualize(func, args, kwargs={}, transpile=True): 
+def visualize(func, args, kwargs={}, transpile=True):
     interpreter = AstInterpreter()
     interpreter(func, args, kwargs)
     for _, ast_node in interpreter.trace.traced.items():
@@ -1419,6 +1488,7 @@ def visualize(func, args, kwargs={}, transpile=True):
         if transpile:
             transpiled = Transpiler().visit(ast_node)
             print(vis_typed_ast(transpiled))
+
 
 def vis_interpreter(interpreter: AstInterpreter):
     for _, ast_node in interpreter.trace.traced.items():
@@ -1436,7 +1506,7 @@ def transpiled_str(interpreter: AstInterpreter):
         transpiled = Transpiler().visit(ast_node)
         imports.visit(transpiled)
         body.append(transpiled)
-    
+
     imported = list(imports.imports)
     imported.extend(Transpiler.IMPORTS)
 
