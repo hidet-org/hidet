@@ -1,4 +1,5 @@
-from typing import List, Dict, Tuple, Union, Any, Optional
+from typing import List, Dict, Tuple, Union, Optional
+from dataclasses import dataclass
 import os
 import json
 import time
@@ -9,43 +10,21 @@ from hidet.ffi import runtime_api
 from hidet.ffi.utils import Array
 
 
+@dataclass
+class TensorSignature:
+    device: str
+    dtype: str
+    shape: List[Union[str, int]]
+
+
+@dataclass
 class TaskMetaData:
-    def __init__(self, symbols, inputs, outputs, device, num_candidates, hidet_version):
-        self.symbols: List[str] = symbols
-        self.inputs: List[Union[str, int]] = inputs
-        self.outputs: List[Union[str, int]] = outputs
-        self.device: str = device
-        self.num_candidates: int = num_candidates
-        self.hidet_version: str = hidet_version
-        self.dynamic_dims: List[Tuple[str, Tuple[int, int]]] = []  # [(name, (tensor_index, dim_index))]
-        for tensor_index, sig in enumerate(self.inputs):
-            for dim_index, dim in enumerate(sig[1:]):
-                if isinstance(dim, str) and dim not in [v for v, _ in self.dynamic_dims]:
-                    self.dynamic_dims.append((dim, (tensor_index, dim_index)))
-
-    def export_state(self) -> Dict[str, Any]:
-        return {
-            'symbols': self.symbols,
-            'inputs': self.inputs,
-            'outputs': self.outputs,
-            'device': self.device,
-            'num_candidates': self.num_candidates,
-            'hidet_version': self.hidet_version,
-        }
-
-    def extract_dynamic_dims(self, inputs) -> Tuple[int, ...]:
-        return tuple(inputs[tensor_index].shape[dim_index] for tensor_index, dim_index in self.dynamic_dims)
-
-    @staticmethod
-    def from_state(state):
-        return TaskMetaData(
-            symbols=state['symbols'],
-            inputs=state['inputs'],
-            outputs=state['outputs'],
-            device=state['device'],
-            num_candidates=state['num_candidates'],
-            hidet_version=state['hidet_version'],
-        )
+    symbols: List[str]
+    inputs: List[TensorSignature]
+    outputs: List[TensorSignature]
+    target: str
+    num_candidates: int
+    hidet_version: str
 
 
 class CompiledTask:
@@ -70,10 +49,11 @@ class CompiledTask:
             return outs
 
     def _load_meta_data(self) -> TaskMetaData:
+        from hidet.utils.dataclass import from_dict
+
         meta_data_path = os.path.join(self.task_dir, 'meta.json')
         with open(meta_data_path, 'r') as f:
-            meta_data = TaskMetaData.from_state(json.load(f))
-        return meta_data
+            return from_dict(TaskMetaData, json.load(f))
 
     def _load_compiled_modules(self) -> List[CompiledModule]:
         compiled_modules = []
@@ -113,14 +93,14 @@ class CompiledTask:
     def create_outputs(self):
         import hidet
 
-        dtypes = []
-        shapes = []
+        outputs = []
+
         for idx, sig in enumerate(self.meta_data.outputs):
-            shape_buffer = Array(i32, len(sig) - 1)
+            shape_buffer = Array(i32, len(sig.shape))
             self._get_output_shape(idx, shape_buffer)
-            dtypes.append(sig[0])
-            shapes.append(list(shape_buffer))
-        return [hidet.empty(shape, dtype, device=self.meta_data.device) for shape, dtype in zip(shapes, dtypes)]
+            shape: List[int] = list(shape_buffer)
+            outputs.append(hidet.empty(shape, sig.dtype, sig.device))
+        return outputs
 
     def pick_best_candidate(self, inputs, outputs) -> int:
         import hidet

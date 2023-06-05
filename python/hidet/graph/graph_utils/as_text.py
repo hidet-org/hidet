@@ -38,7 +38,7 @@ def flow_graph_as_text(graph: FlowGraph) -> str:
                 else:
                     shape_items.append(printer(x.shape[i]))
 
-        return Text(x.dtype.name) + '[' + doc_join(shape_items, ', ') + ']'
+        return Text(x.dtype.name) + '[' + doc_join(shape_items, ', ') + '][' + Text(x.device.kind) + ']'
 
     def get_attr_repr(value: Union[float, int, bool, str, list, tuple, FlowGraph]) -> Doc:
         if isinstance(value, (float, int, bool)):

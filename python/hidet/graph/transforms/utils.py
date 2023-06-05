@@ -13,6 +13,6 @@ from hidet.graph.operator import Operator
 
 
 def is_barrier(op: Operator):
-    from hidet.graph.ops.definitions.special import BarrierOp
+    from hidet.graph.ops.special import BarrierOp
 
     return isinstance(op, BarrierOp)

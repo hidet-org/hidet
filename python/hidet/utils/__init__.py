@@ -22,5 +22,5 @@ from .py import same_list, strict_zip, index_of, initialize, gcd, lcm, error_tol
 from .py import str_indent, unique
 from .bench import benchmark_func
 from .structure import DirectedGraph
-from .cache_utils import cache_dir, cache_file, clear_op_cache
+from .cache_utils import cache_dir, cache_file, clear_op_cache, clear_cache_dir
 from .net_utils import download

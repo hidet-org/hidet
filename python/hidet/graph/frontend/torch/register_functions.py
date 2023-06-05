@@ -927,9 +927,9 @@ def tensor_pow(self: Union[Tensor, Number], exponent: Union[Tensor, Number]) -> 
 @register_function(torch.mean)
 @register_method(torch.Tensor.mean)
 def torch_mean_v1(x: Tensor, *, dtype: Optional[DataType] = None) -> Tensor:
-    output = ops.mean(x, dims=list(range(len(x.shape))), keep_dim=True)
     if dtype:
-        output = output.astype(dtype_from_torch(dtype))
+        x = x.astype(dtype_from_torch(dtype))
+    output = ops.mean(x, dims=list(range(len(x.shape))), keep_dim=True)
     return output
 
 
@@ -940,7 +940,28 @@ def torch_mean_v2(
 ) -> Tensor:
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.mean(..., out=...)")
-    output = ops.mean(x, dims=dim, keep_dim=keepdim)
     if dtype:
-        output = output.astype(dtype_from_torch(dtype))
+        x = x.astype(dtype_from_torch(dtype))
+    output = ops.mean(x, dims=dim, keep_dim=keepdim)
+    return output
+
+
+@register_function(torch.cumsum)
+def torch_cumsum(x: Tensor, dim, *, dtype: Optional[DataType] = None, out: Optional[Tensor] = None) -> Tensor:
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.cumsum(..., out=...)")
+    if dtype:
+        x = x.astype(dtype_from_torch(dtype))
+    output = ops.cumsum(x, dim=dim)
+    return output
+
+
+@register_function(torch.ne)
+@register_method(torch.Tensor.ne)
+def torch_ne(x: Tensor, y: Union[Tensor, float, int], out: Optional[Tensor] = None) -> Tensor:
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.ne(..., out=...)")
+    if isinstance(y, (float, int)):
+        y = ops.full(x.shape, y, dtype=x.dtype, device=x.device)
+    output = ops.not_equal(x, y)
     return output

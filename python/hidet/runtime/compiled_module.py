@@ -96,7 +96,7 @@ class CompiledFunction:
                 self.ctypes_func(*args)
             current_stream().synchronize()
             end = time.time()
-            results.append((end - start) / number)
+            results.append((end - start) / number * 1000)
 
         return results
 
