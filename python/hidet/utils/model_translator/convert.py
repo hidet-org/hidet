@@ -544,11 +544,11 @@ class AstInterpreter:
         nvals = [self.visit(v) for v in node.values]
         node.values = [v[0] for v in nvals]
         vals = [v[1] for v in nvals]
-        if isinstance(node.op, ast.And()):
+        if isinstance(node.op, ast.And):
             val = True
             for v in vals:
                 val = val and v
-        elif isinstance(node.op, ast.Or()):
+        elif isinstance(node.op, ast.Or):
             val = False
             for v in vals:
                 val = val or v
@@ -1093,6 +1093,7 @@ def vis_ast(tree):
 
 
 def dump_ast(code: str):
+    # pylint: disable=unexpected-keyword-arg
     print(ast.dump(ast.parse(code), indent=4))
 
 
