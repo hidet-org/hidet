@@ -28,7 +28,12 @@ def cache_file(*items: str) -> str:
     return ret
 
 
+def clear_cache_dir(*items: str):
+    root = hidet.option.get_cache_dir()
+    dir_to_clear = os.path.abspath(os.path.join(root, *items))
+    print('Clearing hidet cache dir: {}'.format(dir_to_clear))
+    shutil.rmtree(dir_to_clear, ignore_errors=True)
+
+
 def clear_op_cache():
-    op_cache = cache_dir('ops')
-    print('Clearing operator cache: {}'.format(op_cache))
-    shutil.rmtree(op_cache, ignore_errors=True)
+    clear_cache_dir('ops')
