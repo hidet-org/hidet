@@ -89,7 +89,7 @@ def register_resolve_rule(op_cls: Type[Operator]):
 
         from hidet.ir import Tensor
         from hidet import ops
-        from hidet.graph.ops.definitions import PowOp
+        from hidet.graph.ops import PowOp
         from hidet.graph.transforms import ResolveRule, register_resolve_rule
 
         @register_resolve_rule(PowOp)

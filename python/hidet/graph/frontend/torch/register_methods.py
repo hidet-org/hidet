@@ -24,16 +24,22 @@ from .utils import dtype_from_torch, device_from_torch, dtype_to_torch
 
 @register_method(torch.Tensor.cuda)
 def tensor_cuda(self: Tensor) -> Tensor:
-    if self.is_symbolic() and not self.device.is_cuda():
-        raise NotImplementedError('hidet: torch.Tensor.cuda() is not supported for symbolic tensors.')
     return self.cuda()
 
 
 @register_method(torch.Tensor.cpu)
 def tensor_cpu(self: Tensor) -> Tensor:
-    if self.is_symbolic() and not self.device.is_cpu():
-        raise NotImplementedError('hidet: torch.Tensor.cpu() is not supported for symbolic tensors.')
     return self.cpu()
+
+
+@register_method(torch.Tensor.int)
+def tensor_int(self: Tensor) -> Tensor:
+    return ops.cast(self, "int32")
+
+
+@register_method(torch.Tensor.long)
+def tensor_long(self: Tensor) -> Tensor:
+    return ops.cast(self, "int64")
 
 
 @register_method(torch.Tensor.float)
@@ -49,6 +55,11 @@ def tensor_half(self: Tensor) -> Tensor:
 @register_method(torch.Tensor.bool)
 def tensor_bool(self: Tensor) -> Tensor:
     return ops.cast(self, "bool")
+
+
+@register_method(torch.Tensor.type_as)
+def tensor_type_as(self: Tensor, other: Tensor) -> Tensor:
+    return ops.cast(self, other.dtype)
 
 
 @register_method(torch.Tensor.to)
@@ -176,7 +187,10 @@ def tensor_squeeze(self: Tensor, dim=None) -> Tensor:
 
 @register_method(torch.Tensor.unsqueeze)
 def tensor_unsqueeze(self: Tensor, dim) -> Tensor:
-    return ops.unsqueeze(self, [int(dim)])
+    dim = int(dim)
+    if dim < 0:
+        dim = len(self.shape) + dim + 1
+    return ops.unsqueeze(self, [dim])
 
 
 @register_method(torch.Tensor.type)
@@ -218,3 +232,8 @@ def tensor_masked_fill_(self: Tensor, mask: Tensor, value: float) -> Tensor:
 @register_method(torch.Tensor.repeat)
 def tensor_repeat(self: Tensor, *sizes: int) -> Tensor:
     return ops.tile(self, sizes)
+
+
+@register_method(torch.Tensor.detach)
+def tensor_detach(self: Tensor) -> Tensor:
+    return self

@@ -19,6 +19,7 @@ from collections import defaultdict
 
 import hidet.graph.operator
 import hidet.cuda
+from hidet.cuda.graph import CudaGraphCreationError
 from hidet import option
 from hidet.ir.expr import is_constant
 from hidet.ir.task import Task
@@ -127,7 +128,7 @@ class FlowGraph:
         ret: Union[List[Tensor], Tensor]
             The output tensors. If there is only one output, return it directly.
         """
-        outputs = self.forward(*inputs)
+        outputs = self.forward(list(inputs))
         return outputs[0] if len(outputs) == 1 else outputs
 
     def __str__(self):
@@ -154,14 +155,12 @@ class FlowGraph:
         self._usage_count = None
 
     def _build_nodes(self):
-        from hidet.runtime.device import Device
-
-        tasks: List[Tuple[Task, Device]] = []
-        tunable_tasks: List[Tuple[Task, Device]] = []
+        tasks: List[Tuple[Task, str]] = []
+        tunable_tasks: List[Tuple[Task, str]] = []
         task_keys = set()
         search_space = hidet.option.get_option('search_space')
         for node in self.nodes:
-            if node._task_func is None:
+            if node._compiled_task is None:
                 task_key = hash(str(node.task))
                 if task_key in task_keys:
                     continue
@@ -170,9 +169,9 @@ class FlowGraph:
                     method not in node.task.__class__.__dict__
                     for method in ['implement_cuda', 'implement_cpu', 'implement']
                 ):
-                    tasks.append((node.task, node.device))
+                    tasks.append((node.task, node.build_target))
                 else:
-                    tunable_tasks.append((node.task, node.device))
+                    tunable_tasks.append((node.task, node.build_target))
 
         hidet.drivers.build_task_batch(tasks)
 
@@ -180,12 +179,12 @@ class FlowGraph:
             hidet.option.parallel_build(False)
             hidet.drivers.build_task_batch(tunable_tasks)  # build tunable tasks one by one
 
-    def forward(self, *inputs: Tensor) -> Union[List[Tensor], Tensor]:
+    def forward(self, inputs: List[Tensor]) -> List[Tensor]:
         """Run the computation graph.
 
         Parameters
         ----------
-        *inputs: Tensor
+        inputs: List[Tensor]
             The input tensors. They should be consistent with the symbolic inputs
             of the computation graph.
 
@@ -292,7 +291,7 @@ class FlowGraph:
         """
         # before save, clear the packed func cache because ctypes object can not be pickled
         for node in self.nodes:
-            node._task_func = None
+            node._compiled_task = None
         self._usage_count, self._nodes = None, None
 
         dirname = os.path.dirname(model_file)
@@ -343,7 +342,7 @@ class FlowGraph:
             self.inputs = free_vars
         return self
 
-    def build(self, *, space=0, allow_hook=False):
+    def build(self, *, space=0):
         """
         Build the flow graph to a compiled model (hidet.runtime.CompiledModel).
 
@@ -356,11 +355,6 @@ class FlowGraph:
             schedules. The larger the space, the more schedules will be tried, and the better the performance will be,
             with the cost of longer compilation and tuning time.
 
-        allow_hook: bool
-            Whether to allow hooking the compiled model. If True, the compiled model can be registered with a hook
-            to get the intermediate results of each operator. This is useful for debugging and testing. By default,
-            this is False.
-
         Returns
         -------
         ret: hidet.runtime.CompiledGraph
@@ -368,7 +362,7 @@ class FlowGraph:
         """
         from hidet.drivers.build_graph import build_flow_graph
 
-        return build_flow_graph(self, space=space, allow_hook=allow_hook)
+        return build_flow_graph(self, space=space)
 
     def cuda_graph(self):
         """Create a CudaGraph from FlowGraph.
@@ -380,7 +374,24 @@ class FlowGraph:
         """
         from hidet.cuda.graph import CudaGraph
 
-        return CudaGraph(self)
+        for x in self.inputs:
+            if not x.device.is_cuda():
+                raise CudaGraphCreationError(
+                    'FlowGraph.cuda_graph() only supports cuda inputs, got {}'.format(x.signature())
+                )
+            for d in x.shape:
+                if not isinstance(d, int):
+                    raise CudaGraphCreationError(
+                        'FlowGraph.cuda_graph() only supports inputs with static shape, got {}'.format(x.signature())
+                    )
+
+        def f_create_inputs() -> List[Tensor]:
+            return self.dummy_inputs()
+
+        def f_run(inputs: List[Tensor]) -> List[Tensor]:
+            return self.forward(inputs)
+
+        return CudaGraph(f_create_inputs, f_run, ref_objs=[self])
 
     def latency(
         self, warmup=1, number=3, repeat=3, median=True, dummy_inputs: Optional[Sequence[Tensor]] = None
@@ -421,7 +432,7 @@ class FlowGraph:
             hidet.cuda.synchronize()
             t1 = time.time()
             for _ in range(number):
-                self.forward(*dummy_inputs)
+                self.forward(dummy_inputs)
             hidet.cuda.synchronize()
             t2 = time.time()
             results.append((t2 - t1) * 1000 / number)

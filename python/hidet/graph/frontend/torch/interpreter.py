@@ -278,7 +278,7 @@ class Interpreter:
             caused_callable = dispatched
 
         callable_name, filename, lineno = Interpreter._callable_info(caused_callable)
-        raise type(exception)(
+        raise RuntimeError(
             f'{exception}, occurred when interpreting {target_name} with\n'
             f'  {callable_name}({", ".join(argument_strings)})\n'
             f'{callable_name} is defined at\n'

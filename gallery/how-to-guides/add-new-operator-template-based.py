@@ -212,7 +212,7 @@ def batch_matmul_mma_fp16_schedule(task: BatchMatmulFp16Task) -> IRModule:
 # -------------------
 # The remaining part is the same as the rule-based scheduling method to add new operator.
 from hidet.graph import Operator, Tensor
-from hidet.graph.ops.definitions.utils import input_like
+from hidet.graph.ops.utils import input_like
 
 
 class BatchMatmulFp16Op(Operator):

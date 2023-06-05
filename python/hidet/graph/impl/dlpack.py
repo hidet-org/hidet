@@ -254,9 +254,9 @@ def to_dlpack(tensor: Tensor) -> ctypes.py_object:
 
 
 def to_dlpack_device(tensor: Tensor) -> Tuple[int, int]:
-    if tensor.device.type == 'cuda':
+    if tensor.device.kind == 'cuda':
         return DLDeviceType.kDLGPU, 0
-    elif tensor.device.type == 'cpu':
+    elif tensor.device.kind == 'cpu':
         # here, we use kDLCPU instead of kDLCPUPinned, because we pytorch doesn't support kDLCPUPinned
         # technically, we can think kDLCPUPinned as a special case of kDLCPU
         device_type = DLDeviceType.kDLCPU

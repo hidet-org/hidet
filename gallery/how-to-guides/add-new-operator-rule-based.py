@@ -69,7 +69,7 @@ class BatchMatmulTask(Task):
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Our next step is to define the operator class **BatchMatmulOp** by inheriting :py:class:`~hidet.graph.Operator` class.
 from hidet.graph import Operator, Tensor
-from hidet.graph.ops.definitions.utils import input_like
+from hidet.graph.ops.utils import input_like
 
 
 class BatchMatmulOp(Operator):

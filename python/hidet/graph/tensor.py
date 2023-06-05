@@ -751,13 +751,15 @@ class Tensor:
         ret: Tensor
             The new tensor or self.
         """
-        if self.device.type == 'cpu':
+        from hidet.graph.ops import transfer
+
+        if self.device.kind == 'cpu':
             return self
         else:
-            if self.trace is None:
-                return Tensor(self.shape, self.dtype, 'cpu', self.storage.cpu() if self.storage else None, self.layout)
+            if self.storage is not None:
+                return Tensor(self.shape, self.dtype, 'cpu', self.storage.cpu(), self.layout)
             else:
-                raise ValueError('Please use .detach() to detach a trace variable first.')
+                return transfer(self, 'cpu')
 
     def cuda(self, device=None):
         """Create a copy of self tensor on cuda device.
@@ -774,18 +776,18 @@ class Tensor:
         ret: Tensor
             The new tensor or self.
         """
+        from hidet.graph.ops import transfer
+
         if device is None:
             device = 'cuda'
         device = instantiate_device(device)
         if self.device == device:
             return self
         else:
-            if self.trace is None:
-                return Tensor(
-                    self.shape, self.dtype, device, self.storage.cuda(device.id) if self.storage else None, self.layout
-                )
+            if self.storage is not None:
+                return Tensor(self.shape, self.dtype, device, self.storage.cuda(device.id), self.layout)
             else:
-                raise ValueError('Please use .detach() to detach a trace variable first.')
+                return transfer(self, device)
 
     def copy(self) -> Tensor:
         """Create a copy of current tensor.
@@ -796,7 +798,7 @@ class Tensor:
             A new tensor with the same contents as the current one.
         """
         if self.trace is not None:
-            raise ValueError('Please use .detach() to detach a trace variable first before copying.')
+            raise ValueError('The symbolic tensor is not modifiable, so feel free to use them without copying.')
         return Tensor(
             shape=list(self.shape),
             dtype=self.dtype,
@@ -828,7 +830,7 @@ class Tensor:
             A new tensor with the same contents as the current one.
         """
         if self.trace is not None:
-            raise ValueError('Please use .detach() to detach a trace variable first before copying.')
+            raise ValueError('The symbolic tensor is not modifiable, so feel free to use them without copying.')
         return Tensor(
             shape=list(self.shape),
             dtype=self.dtype,
@@ -872,7 +874,7 @@ class Tensor:
         ret: Tensor
             The tensor on CPU.
         """
-        if self.device.type == 'cpu':
+        if self.device.kind == 'cpu':
             return self
         else:
             if self.trace is None:
@@ -881,7 +883,7 @@ class Tensor:
                 )
                 return ret
             else:
-                raise ValueError('Please use .detach() to detach a trace variable first.')
+                raise ValueError('Please use .cpu() for symbolic tensor transfer.')
 
     def cuda_async(self, device=None, stream=None):
         """
@@ -916,7 +918,7 @@ class Tensor:
                 )
                 return ret
             else:
-                raise ValueError('Please use .detach() to detach a trace variable first.')
+                raise ValueError('Please use .cuda(...) for symbolic tensor transfer.')
 
     def numpy(self) -> np.ndarray:
         """
@@ -930,7 +932,7 @@ class Tensor:
         ret: np.ndarray
             The numpy array.
         """
-        if self.device.type != 'cpu':
+        if self.device.kind != 'cpu':
             raise RuntimeError('Cannot convert a tensor on {} to numpy array.'.format(self.device))
         if self.dtype in [dtypes.bfloat16, dtypes.tfloat32]:
             warnings.warn('numpy does not support {}, converting to float32'.format(self.dtype.name))
