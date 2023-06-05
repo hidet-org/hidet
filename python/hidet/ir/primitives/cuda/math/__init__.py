@@ -15,3 +15,5 @@ from . import float32
 from . import float64
 from . import int64
 from . import int32
+from . import complex64
+from . import complex128

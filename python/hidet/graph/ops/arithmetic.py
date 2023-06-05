@@ -463,13 +463,16 @@ class MinOp(Operator):
 
 
 def binary_arithmetic(
-    x: Union[Tensor, Constant, float, int],
-    y: Union[Tensor, Constant, float, int],
+    x: Union[Tensor, Constant, complex, float, int],
+    y: Union[Tensor, Constant, complex, float, int],
     tensor_scalar_op: Callable[[Tensor, Constant], Tensor],
     scalar_tensor_op: Callable[[Constant, Tensor], Tensor],
     tensor_tensor_op: Callable[[Tensor, Tensor], Tensor],
 ) -> Union[Tensor, float, int]:
-    if not (isinstance(x, (Tensor, float, int, Constant)) and isinstance(y, (Tensor, float, int, Constant))):
+    if not (
+        isinstance(x, (Tensor, complex, float, int, Constant))
+        and isinstance(y, (Tensor, complex, float, int, Constant))
+    ):
         raise ValueError(
             'Only support add/sub/mul/div between hidet.Tensor, float, int, and Constant. got {} and {}'.format(
                 type(x), type(y)
@@ -485,6 +488,8 @@ def binary_arithmetic(
         x = dtypes.int32(x)
     elif isinstance(x, float):
         x = dtypes.float32(x)
+    elif isinstance(x, complex):
+        x = dtypes.complex64(x)
     elif isinstance(x, Tensor) and len(x.shape) == 0:
         if x.trace is None and x.storage is not None:
             x = x.dtype(x.item())
@@ -493,6 +498,8 @@ def binary_arithmetic(
         y = dtypes.int32(y)
     elif isinstance(y, float):
         y = dtypes.float32(y)
+    elif isinstance(y, complex):
+        y = dtypes.complex64(y)
     elif isinstance(y, Tensor) and len(y.shape) == 0:
         if y.trace is None and y.storage is not None:
             y = y.dtype(y.item())

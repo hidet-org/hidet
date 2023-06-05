@@ -11,11 +11,13 @@
 # limitations under the License.
 from typing import Optional, Union, Sequence, Any, Tuple, List
 import operator
+import functools
 import torch
 from hidet.graph.tensor import Tensor, full_like, from_torch
 from hidet.graph import ops
 from hidet.utils import same_list
 from hidet.ir.type import DataType
+from hidet.ir.dtypes import promote_type
 from hidet.ir.expr import Int
 from hidet.runtime.device import Device
 from .interpreter import register_function, register_method
@@ -209,6 +211,8 @@ def mul(x: Tensor, y: Tensor):
 
 @register_function(torch.cat)
 def cat(tensors: List[Tensor], dim: int):
+    dtype = functools.reduce(promote_type, [t.dtype for t in tensors])
+    tensors = [ops.cast(t, dtype) for t in tensors]
     return ops.concat(tensors, dim)
 
 
@@ -218,13 +222,17 @@ def unsqueeze(x: Tensor, dim: int):
 
 
 @register_function(torch.nn.functional.avg_pool2d)
-def avg_pool2d(x: Tensor, kernel_size, stride, padding, ceil_mode=False, count_include_pad=True, divisor_override=None):
+def avg_pool2d(
+    x: Tensor, kernel_size, stride=None, padding=0, ceil_mode=False, count_include_pad=True, divisor_override=None
+):
     if ceil_mode:
         raise NotImplementedError("ceil_mode=True")
     if not count_include_pad:
         raise NotImplementedError("count_include_pad=False")
     if divisor_override is not None:
         raise NotImplementedError("divisor_override is not None")
+    if stride is None:
+        stride = kernel_size
     y = ops.avg_pool2d(x, kernel_size, stride, padding)
     return y
 
@@ -965,3 +973,20 @@ def torch_ne(x: Tensor, y: Union[Tensor, float, int], out: Optional[Tensor] = No
         y = ops.full(x.shape, y, dtype=x.dtype, device=x.device)
     output = ops.not_equal(x, y)
     return output
+
+
+@register_function(torch.stack)
+def torch_stack(tensors: Union[Tuple[Tensor, ...], List[Tensor]], dim: int = 0, *, out: Optional[Tensor] = None):
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.stack(..., out=...)")
+    tensors = [ops.unsqueeze(t, dims=dim) for t in tensors]
+    return ops.concat(tensors, axis=dim)
+
+
+@register_function(torch.conj)
+@register_method(torch.Tensor.conj)
+def torch_conj(x: Tensor) -> Tensor:
+    if x.dtype.is_complex():
+        return ops.conj(x)
+    else:
+        return x
