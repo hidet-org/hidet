@@ -18,7 +18,7 @@ from hidet.ir.type import tensor_type
 from hidet.ir import primitives as prim
 from hidet.ir.primitives import active_mask, shfl_down_sync
 from hidet.graph.ops.utils import tune
-from hidet.lang import f16, f32, i32, u32, spatial, repeat, tensor
+from hidet.lang import f16, f32, i32, u32, spatial, repeat, tensor, printf
 from hidet.lang import attrs, grid, tensor_pointer, view, col_spatial
 from hidet.lang.cuda import blockIdx, threadIdx, syncthreads, dynamic_shared_memory, register_tensor
 from hidet.lang.cuda import MmaConfig, mma_sync, cp_async, ldmatrix, cp_async_wait_all
@@ -180,7 +180,7 @@ class AttnTask(Task):
         tune.check(d_size <= 160)
         tune.check(n_size >= 64)
         tune.check(n_kv_size >= 64)
-        block_j = min(block_j, n_kv_size)
+        # block_j = min(block_j, n_kv_size)
 
         acc_dtype = f16  # must be f16 for now. f32 will fail to compile
         sm_dtype = f32  # currently changing to f16 will not boost performance
@@ -397,7 +397,7 @@ class AttnTask(Task):
                 gmem_k = k[broadcast_indices(o_head_index, k_head, o_head)][offset_k:, offset_j:]
                 for i, j_seg in k_g2s_layout.on(threadIdx.x):
                     j = j_seg * 8
-                    src_size = 0 if (offset_k + i >= d_size or offset_j + j >= n_kv_size) else min(n_kv_size - j, 8)
+                    src_size = 0 if (offset_k + i >= d_size or offset_j + j >= n_kv_size) else min(n_kv_size - (offset_j + j), 8)
                     if threadIdx.x < k_g2s_layout.num_workers and i < smem_k_type.shape[0]:
                         cp_async(~smem_k[i, j], ~gmem_k[i, j], cp_size=16, src_size=src_size * 2, cache_level='global')
 
@@ -541,16 +541,27 @@ class AttnTask(Task):
                 smem_mij: smem_mij_type,
                 smem_lij: smem_lij_type,
                 regs_acc: acc_dtype[mmas_per_warp_m, mmas_per_warp_n, mma_config.c_elements],
+                offset_j: i32,
             ):
                 warp_mask = active_mask()
                 warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
+                wi, wj, _ = spatial(warp_count_m, warp_count_n, warp_count_k).map(warp_id)
+
+                # mask out unused values when block_j > (n_kv_size - offset_j)
+                for mma_i, mma_j in grid(mmas_per_warp_m, mmas_per_warp_n):
+                    p = 0
+                    for i, j in mma_config.c_store_map.on(lane_id):
+                        delta_n = offset_j + wj * warp_elems_n + mma_j * mma_n + j
+                        if delta_n >= n_kv_size:
+                            regs_acc[mma_i, mma_j, p] = acc_dtype.min_value
+                        p += 1
+
                 # Each thread holds c elements in 2 rows in mma
                 rv = register_tensor(acc_dtype, [2])
 
                 # Reduce mij
                 rv[0] = acc_dtype.min_value
                 rv[1] = acc_dtype.min_value
-                wi, wj, _ = spatial(warp_count_m, warp_count_n, warp_count_k).map(warp_id)
                 c_map = repeat(2, 1) * spatial(8, 4)
                 for mma_i in range(mmas_per_warp_m):
                     rv[0] = acc_dtype.min_value
@@ -581,7 +592,10 @@ class AttnTask(Task):
                     for i, j in mma_config.c_store_map.on(lane_id):
                         delta_m = wi * warp_elems_m + mma_i * mma_m + i
                         delta_n = wj * warp_elems_n + mma_j * mma_n + j
-                        regs_acc[mma_i, mma_j, p] = prim.exp(regs_acc[mma_i, mma_j, p] - smem_mij[delta_m])
+                        if delta_n + offset_j >= n_kv_size:
+                            regs_acc[mma_i, mma_j, p] = acc_dtype.zero
+                        else:
+                            regs_acc[mma_i, mma_j, p] = prim.exp(regs_acc[mma_i, mma_j, p] - smem_mij[delta_m])
                         smem_qk[delta_m, delta_n] = regs_acc[mma_i, mma_j, p]
                         p += 1
                 syncthreads()
@@ -622,7 +636,7 @@ class AttnTask(Task):
 
             # -------------- main function ---------------------------------------------------------------
             @hidet.script
-            def cross_attn_kernel(
+            def attn_kernel(
                 q: f16[q_head + [n_size, d_size]],
                 k: f16[k_head + [d_size, n_kv_size]],
                 v: f16[v_head + [n_kv_size, d_size]],
@@ -736,7 +750,7 @@ class AttnTask(Task):
                                 p += 1
 
                     # Iterative softmax, and write result matrix into shared memory
-                    qk_softmax_reduce(smem_qk, smem_mij, smem_lij, regs_acc)
+                    qk_softmax_reduce(smem_qk, smem_mij, smem_lij, regs_acc, offset_j)
                     # ----------------------------
 
                     # ----------------------------
