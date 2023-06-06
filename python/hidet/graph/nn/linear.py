@@ -19,7 +19,7 @@ class Linear(Module):
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
-        self.weight = empty(shape=[in_features, out_features])
+        self.weight = empty(shape=[out_features, in_features])
         if bias:
             self.bias = empty(shape=[out_features])
         else:
@@ -29,7 +29,14 @@ class Linear(Module):
         return 'in_features={}, out_features={}'.format(self.in_features, self.out_features)
 
     def forward(self, x: Tensor) -> Tensor:
-        x = ops.matmul(x, self.weight)
+        # x = ops.matmul(x, ops.transpose(self.weight)) # will duplicate weight memory consumption
+        # workaround: use ops.matmul with some transformations
+        # todo: use matmul(..., trans_a=False, trans_b=True) when we have support for transposed matmul
+
+        out_shape = list(x.shape[:-1]) + [self.out_features]
+        x = ops.reshape(x, [-1, self.in_features]).transpose(0, 1)
+        x = ops.matmul(self.weight, x).transpose(0, 1).reshape(out_shape)
+
         if self.bias is not None:
             x = ops.add(x, self.bias)
         return x

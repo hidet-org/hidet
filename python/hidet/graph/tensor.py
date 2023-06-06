@@ -810,6 +810,12 @@ class Tensor:
 
     def copy_(self, src: Tensor):
         src_converted = src.to(dtype=self.dtype, device=self.device)
+        if len(src.shape) != len(self.shape) or any(a != b for a, b in zip(self.shape, src_converted.shape)):
+            raise ValueError(
+                'The shape of source tensor {} does not match the shape of target tensor {}'.format(
+                    src_converted.shape, self.shape
+                )
+            )
         if src_converted is src:
             self._storage = src.storage.copy()
         else:

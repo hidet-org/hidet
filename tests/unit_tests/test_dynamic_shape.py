@@ -65,7 +65,7 @@ def test_resnet50(device, bs, h, w):
     graph_static = hidet.trace_from(model(hidet.symbol([bs, 3, h, w], device=device)))
     graph_dynamic = hidet.trace_from(y)
     graph_dynamic_opt = hidet.graph.optimize(graph_dynamic)
-    xx = hidet.randn([bs, 3, h, w], device=device)
+    xx = hidet.randn([bs, 3, h, w], device=device, mean=0.45, stddev=0.22)
     y1 = graph_static(xx)
     y2 = graph_dynamic(xx)
     y3 = graph_dynamic_opt(xx)

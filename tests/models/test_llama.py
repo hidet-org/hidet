@@ -9,9 +9,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import pytest
 from hidet.testing.models.llama import get_compiled_model, generate
 
 
+@pytest.mark.skip(reason='This test requires a lot of memory')
 def test_llama(device='cuda', opt=False):
     model, config, tokenizer = get_compiled_model(device=device, opt=opt)
 

@@ -17,17 +17,27 @@ from hidet.graph.tensor import Tensor, empty
 
 
 class BatchNorm2d(Module):
-    def __init__(self, num_features, eps=1e-5):
+    def __init__(self, num_features, eps=1e-5, affine=True):
         super().__init__()
         self.eps = eps
+        self.affine = affine
         self.running_mean = empty(shape=[num_features])
         self.running_var = empty(shape=[num_features])
+        if affine:
+            self.weight: Tensor = empty(shape=[num_features])
+            self.bias = empty(shape=[num_features])
+        else:
+            self.weight = None
+            self.bias = None
 
     def extra_str(self) -> str:
-        return 'eps={}'.format(self.eps)
+        return 'eps={}, affine={}'.format(self.eps, self.affine)
 
     def forward(self, x: Tensor):
-        return ops.batch_norm_infer(x, self.running_mean, self.running_var, self.eps)
+        x = ops.batch_norm_infer(x, self.running_mean, self.running_var, self.eps)
+        if self.affine:
+            x = x * self.weight.unsqueeze([0, 2, 3]) + self.bias.unsqueeze([0, 2, 3])
+        return x
 
 
 class LayerNorm(Module):

@@ -20,6 +20,12 @@ from .utils import Task, InverseMap, Operator, Tensor, TensorNode, compute, inpu
 from .utils import TensorInput
 
 
+def is_true(x: Union[Expr, bool]) -> bool:
+    if isinstance(x, (Constant, bool)):
+        return bool(x) is True
+    return False
+
+
 def same_shape(shape_a: Sequence[int], shape_b: Sequence[int]) -> bool:
     return len(shape_a) == len(shape_b) and all(a == b for a, b in zip(shape_a, shape_b))
 
@@ -316,7 +322,7 @@ class ReshapeOp(Operator):
         cnt = sum(1 for v in shape if isinstance(v, int) and v == -1)
         if cnt == 0:
             total = prod(shape)
-            if isinstance(total, int) and total != size:
+            if is_true(total != size):
                 raise ValueError(
                     'Reshape: given shape has different size with input tensor: '
                     'shape {} and size {}'.format(shape, size)
@@ -324,7 +330,7 @@ class ReshapeOp(Operator):
             return shape
         elif cnt == 1:
             remain_size = prod([v for v in shape if v != -1])
-            if isinstance(remain_size, int) and size % remain_size != 0:
+            if is_true(size % remain_size != 0):
                 raise ValueError(
                     'Given shape is incompatible with input tensor: ' 'shape {} and size {}'.format(shape, size)
                 )

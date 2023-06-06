@@ -74,7 +74,7 @@ class Module:
         return self.forward(*args, **kwargs)
 
     def state_dict(self) -> Dict[str, Any]:
-        state_dict = {}
+        state_dict = OrderedDict()
         for name, parameter in self.named_parameters():
             state_dict[name] = parameter
         return state_dict

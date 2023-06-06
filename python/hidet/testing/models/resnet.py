@@ -81,7 +81,7 @@ class ResNet(nn.Module):
         self.conv1 = nn.Conv2d(3, self.in_channels, kernel_size=7, stride=2, padding=3)
         self.bn1 = nn.BatchNorm2d(self.in_channels)
         self.relu = nn.Relu()
-        self.max_pool = nn.MaxPool2d(kernel_size=7, stride=2, padding=3)
+        self.max_pool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self.make_layer(block, 64, layers[0])
         self.layer2 = self.make_layer(block, 128, layers[1], stride=2)
         self.layer3 = self.make_layer(block, 256, layers[2], stride=2)
@@ -114,10 +114,14 @@ class ResNet(nn.Module):
 def load_pretrained_weights(name: str, hidet_module: nn.Module):
     import torch
 
-    torch_resnet: torch.nn.Module = torch.hub.load('pytorch/vision:v0.6.0', name, pretrained=True)
+    torch_resnet: torch.nn.Module = torch.hub.load('pytorch/vision:v0.6.0', name, pretrained=True).eval()
 
     torch_state_dict = torch_resnet.state_dict()
     hidet_state_dict = {k: hidet.from_torch(v) for k, v in torch_state_dict.items()}
+
+    for p_name, _ in hidet_module.named_parameters():
+        if p_name not in hidet_state_dict:
+            raise ValueError(f'Parameter {p_name} not found in state dict')
 
     hidet_module.load_state_dict(hidet_state_dict)
     return hidet_module

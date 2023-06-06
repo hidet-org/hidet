@@ -27,24 +27,15 @@ def copy_weights(torch_model, hidet_model):
     found_tensors = []
     for name, tensor in tqdm(list(torch_model.named_parameters()), desc='copying weights'):
         mod = hidet_model
-        is_linear = False
         for m_name in name.split('.'):
             mod = getattr(mod, m_name)
-            if isinstance(mod, hidet.nn.Linear):
-                is_linear = True
 
         if not isinstance(mod, hidet.Tensor):
             print(type(mod))
             raise ValueError(f"hidet/hf mismatch at {name}")
 
         found_tensors.append(mod)
-        if is_linear:
-            # print(f"linear layer {name} found, transposing weight")
-            mod.copy_(hidet.from_torch(tensor).to(mod.dtype, mod.device).transpose(0, 1))
-        elif list(tensor.shape) == list(mod.shape):
-            mod.copy_(hidet.from_torch(tensor).to(mod.dtype, mod.device))
-        else:
-            raise ValueError(f"{name} is not copied due to shape mismatch")
+        mod.copy_(hidet.from_torch(tensor).to(mod.dtype, mod.device))
 
     buffer_names = set(name for name, _ in torch_model.named_buffers())
 
