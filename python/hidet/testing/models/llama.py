@@ -1,4 +1,14 @@
-# %%
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import math
 from typing import Optional, Tuple, List
 from collections import OrderedDict
@@ -6,7 +16,8 @@ from collections import OrderedDict
 from tqdm import tqdm
 
 import torch
-from transformers import LlamaConfig
+from transformers import LlamaConfig, LlamaTokenizer
+from transformers import LlamaForCausalLM as hfLm
 
 import hidet
 from hidet.graph import nn
@@ -74,7 +85,7 @@ class LlamaRotaryEmbedding(nn.Module):
         t = hidet.arange(self.max_seq_len_cached, device=self.inv_freq.device, dtype=self.inv_freq.dtype)
         freqs = t[:, None] * self.inv_freq[None, :]
 
-        emb = hidet.ops.concat((freqs, freqs), axis=-1)
+        emb = hidet.ops.concat([freqs, freqs], axis=-1)
         self.cos_cached = hidet.ops.cos(emb)[None, None, :, :]
         self.sin_cached = hidet.ops.sin(emb)[None, None, :, :]
 
@@ -103,13 +114,13 @@ def rotate_half(x):
     """Rotates half the hidden dims of the input."""
     x1 = x[..., : x.shape[-1] // 2]
     x2 = x[..., x.shape[-1] // 2 :]
-    return hidet.ops.concat((-x2, x1), axis=-1)
+    return hidet.ops.concat([-x2, x1], axis=-1)
 
 
 def apply_rotary_pos_emb(q, k, cos, sin, position_ids):
     # The first two dimensions of cos and sin are always 1, so we can `squeeze` them.
-    cos = cos.squeeze(1).squeeze(0)  # [seq_len, dim]
-    sin = sin.squeeze(1).squeeze(0)  # [seq_len, dim]
+    cos = cos.squeeze([0, 1])  # [seq_len, dim]
+    sin = sin.squeeze([0, 1])  # [seq_len, dim]
 
     cos = hidet.ops.take(cos, position_ids, 0).unsqueeze(1)  # [bs, 1, seq_len, dim]
     sin = hidet.ops.take(sin, position_ids, 0).unsqueeze(1)
@@ -152,18 +163,13 @@ class LlamaAttention(nn.Module):
         self.o_proj = nn.Linear(self.num_heads * self.head_dim, self.hidden_size, bias=False)
         self.rotary_emb = LlamaRotaryEmbedding(self.head_dim, max_position_embeddings=self.max_position_embeddings)
 
-    def _shape(self, tensor: hidet.Tensor, seq_len: int, bsz: int):
-        return tensor.reshape(bsz, seq_len, self.num_heads, self.head_dim).transpose(1, 2).contiguous()
-
     def forward(
         self,
         hidden_states: hidet.Tensor,
         attention_mask: Optional[hidet.Tensor] = None,
         position_ids: Optional[hidet.Tensor] = None,
         past_key_value: Optional[Tuple[hidet.Tensor]] = None,
-        output_attentions: bool = False,
-        use_cache: bool = False,
-    ) -> Tuple[hidet.Tensor, Optional[hidet.Tensor], Optional[Tuple[hidet.Tensor]]]:
+    ) -> Tuple[hidet.Tensor, Tuple[hidet.Tensor, hidet.Tensor]]:
 
         bsz, q_len, _ = hidden_states.shape
 
@@ -183,13 +189,12 @@ class LlamaAttention(nn.Module):
             key_states = hidet.ops.concat([past_key_value[0], key_states], axis=2)
             value_states = hidet.ops.concat([past_key_value[1], value_states], axis=2)
 
-        past_key_value = (key_states, value_states) if use_cache else None
+        past_key_value = (key_states, value_states)
 
         attn_weights = hidet.ops.matmul(query_states, key_states.transpose(2, 3)) / math.sqrt(self.head_dim)
 
         if attention_mask is not None:
             attn_weights = attn_weights + attention_mask
-            # attn_weights = hidet.ops.max(attn_weights, hidet.asarray(float((attn_weights.dtype.min_value))))
 
         # upcast attention to fp32
         attn_weights = hidet.ops.softmax(attn_weights, axis=-1).to(query_states.dtype)
@@ -200,10 +205,7 @@ class LlamaAttention(nn.Module):
 
         attn_output = self.o_proj(attn_output)
 
-        if not output_attentions:
-            attn_weights = None
-
-        return attn_output, attn_weights, past_key_value
+        return attn_output, past_key_value
 
 
 class LlamaDecoderLayer(nn.Module):
@@ -221,35 +223,17 @@ class LlamaDecoderLayer(nn.Module):
         attention_mask: Optional[hidet.Tensor] = None,
         position_ids: Optional[hidet.Tensor] = None,
         past_key_value: Optional[Tuple[hidet.Tensor]] = None,
-        output_attentions: Optional[bool] = False,
-        use_cache: Optional[bool] = False,
     ) -> Tuple[hidet.Tensor, Optional[Tuple[hidet.Tensor, hidet.Tensor]]]:
-        """
-        Args:
-            hidden_states (`torch.FloatTensor`): input to the layer of shape `(batch, seq_len, embed_dim)`
-            attention_mask (`torch.FloatTensor`, *optional*): attention mask of size
-                `(batch, 1, tgt_len, src_len)` where padding elements are indicated by very large negative values.
-            output_attentions (`bool`, *optional*):
-                Whether or not to return the attentions tensors of all attention layers. See `attentions` under
-                returned tensors for more detail.
-            use_cache (`bool`, *optional*):
-                If set to `True`, `past_key_values` key value states are returned and can be used to speed up decoding
-                (see `past_key_values`).
-            past_key_value (`Tuple(torch.FloatTensor)`, *optional*): cached past key and value projection states
-        """
-
         residual = hidden_states
 
         hidden_states = self.input_layernorm(hidden_states)
 
         # Self Attention
-        hidden_states, self_attn_weights, present_key_value = self.self_attn(
+        hidden_states, present_key_value = self.self_attn(
             hidden_states=hidden_states,
             attention_mask=attention_mask,
             position_ids=position_ids,
             past_key_value=past_key_value,
-            output_attentions=output_attentions,
-            use_cache=use_cache,
         )
         hidden_states = residual + hidden_states
 
@@ -259,13 +243,7 @@ class LlamaDecoderLayer(nn.Module):
         hidden_states = self.mlp(hidden_states)
         hidden_states = residual + hidden_states
 
-        outputs = (hidden_states,)
-
-        if output_attentions:
-            outputs += (self_attn_weights,)
-
-        if use_cache:
-            outputs += (present_key_value,)
+        outputs = (hidden_states, present_key_value)
 
         return outputs
 
@@ -275,7 +253,7 @@ def hidet_make_causal_mask(seq_len, dtype, device, past_key_values_length):
     x = hidet.ops.tri(
         n=seq_len, m=seq_len + past_key_values_length, k=past_key_values_length, dtype=dtype, device=device
     )
-    return (1 - x) * float(dtype._min_value)
+    return (1 - x) * float(dtype.min_value)
 
 
 class LlamaModel(nn.Module):
@@ -301,37 +279,18 @@ class LlamaModel(nn.Module):
     def set_input_embeddings(self, value):
         self.embed_tokens = value
 
-    # Copied from transformers.models.bart.modeling_bart.BartDecoder._prepare_decoder_attention_mask
-    def _prepare_decoder_attention_mask(self, input_shape, inputs_embeds, past_key_values_length):
-        # create causal mask
-        # [bsz, seq_len] -> [bsz, 1, tgt_seq_len, src_seq_len]
-
-        combined_attention_mask = hidet_make_causal_mask(
-            input_shape[1],
-            inputs_embeds.dtype,
-            device=inputs_embeds.device,
-            past_key_values_length=past_key_values_length,
-        )
-
-        return combined_attention_mask
-
     def forward(
         self,
         input_ids: hidet.Tensor,
         position_ids: hidet.Tensor,
         past_key_values: Optional[List[hidet.Tensor]] = None,
         inputs_embeds: Optional[hidet.Tensor] = None,
-        use_cache: Optional[bool] = None,
-        output_attentions: Optional[bool] = None,
-        output_hidden_states: Optional[bool] = None,
     ):
         _, seq_length = input_ids.shape
-        seq_length_with_past = seq_length
         past_key_values_length = 0
 
         if past_key_values is not None:
             past_key_values_length = past_key_values[0][0].shape[-2]
-            seq_length_with_past = seq_length_with_past + past_key_values_length
 
         if inputs_embeds is None:
             inputs_embeds = self.embed_tokens(input_ids)
@@ -343,46 +302,23 @@ class LlamaModel(nn.Module):
         hidden_states = inputs_embeds
 
         # decoder layers
-        all_hidden_states = () if output_hidden_states else None
-        all_self_attns = () if output_attentions else None
-        next_decoder_cache = () if use_cache else None
+        next_decoder_cache = tuple()
 
         for idx, decoder_layer in enumerate(self.layers):
-            if output_hidden_states:
-                all_hidden_states += (hidden_states,)
-
             past_key_value = past_key_values[idx] if past_key_values is not None else None
 
             layer_outputs = decoder_layer(
-                hidden_states,
-                attention_mask=attention_mask,
-                position_ids=position_ids,
-                past_key_value=past_key_value,
-                output_attentions=output_attentions,
-                use_cache=use_cache,
+                hidden_states, attention_mask=attention_mask, position_ids=position_ids, past_key_value=past_key_value
             )
 
             hidden_states = layer_outputs[0]
 
-            if use_cache:
-                next_decoder_cache += (layer_outputs[2 if output_attentions else 1],)
-
-            if output_attentions:
-                all_self_attns += (layer_outputs[1],)
+            next_decoder_cache += (layer_outputs[1],)
 
         hidden_states = self.norm(hidden_states)
 
-        # add hidden states from the last decoder layer
-        if output_hidden_states:
-            all_hidden_states += (hidden_states,)
-
-        next_cache = next_decoder_cache if use_cache else None
-        ret = OrderedDict(
-            last_hidden_state=hidden_states,
-            past_key_values=next_cache,
-            hidden_states=all_hidden_states,
-            attentions=all_self_attns,
-        )
+        next_cache = next_decoder_cache
+        ret = OrderedDict(last_hidden_state=hidden_states, past_key_values=next_cache)
         return ret
 
 
@@ -391,10 +327,7 @@ class LlamaForCausalLM(nn.Module):
         super().__init__()
         self.config = config
         self.model = LlamaModel(config)
-
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
-
-        # Initialize weights and apply final processing
 
     def forward(
         self,
@@ -402,9 +335,6 @@ class LlamaForCausalLM(nn.Module):
         position_ids: hidet.Tensor,
         past_key_values: List[Tuple[hidet.Tensor]],
         inputs_embeds: hidet.Tensor = None,
-        use_cache: Optional[bool] = None,
-        output_attentions: Optional[bool] = None,
-        output_hidden_states: Optional[bool] = None,
     ):
         seq_len = input_ids.shape[-1]
         prev_seq_len = 0
@@ -413,13 +343,7 @@ class LlamaForCausalLM(nn.Module):
         new_seq_len = seq_len + prev_seq_len
         position_ids = position_ids[:, prev_seq_len:new_seq_len]
         outputs = self.model(
-            input_ids=input_ids,
-            position_ids=position_ids,
-            past_key_values=past_key_values,
-            inputs_embeds=inputs_embeds,
-            use_cache=use_cache,
-            output_attentions=output_attentions,
-            output_hidden_states=output_hidden_states,
+            input_ids=input_ids, position_ids=position_ids, past_key_values=past_key_values, inputs_embeds=inputs_embeds
         )
 
         hidden_states = outputs["last_hidden_state"]
@@ -427,28 +351,14 @@ class LlamaForCausalLM(nn.Module):
 
         new_ids = hidet.ops.argmax(logits, dim=-1, keep_dim=False)  # [bs, seq_len]
 
-        return OrderedDict(
-            new_ids=new_ids,
-            logits=logits,
-            past_key_values=outputs["past_key_values"],
-            hidden_states=outputs["hidden_states"],
-            attentions=outputs["attentions"],
-        )
+        return OrderedDict(new_ids=new_ids, logits=logits, past_key_values=outputs["past_key_values"])
 
 
 def convert_model(hf_model: torch.nn.Module, dtype=hidet.float16, device='cuda'):
     config = hf_model.config
-    # config = LlamaConfig(**hf_config.__dict__)
-    orig_set_attr = hidet.nn.Module.__setattr__
 
-    def my_setattr(self, key, value):
-        if isinstance(value, hidet.Tensor):
-            value = value.to(dtype, device)
-        orig_set_attr(self, key, value)
-
-    hidet.nn.Module.__setattr__ = my_setattr
-    hidet_model = LlamaForCausalLM(config).to(device=device)
-    hidet.nn.Module.__setattr__ = orig_set_attr
+    hidet_model = LlamaForCausalLM(config)
+    hidet_model.to(device=device, dtype=dtype)
 
     copy_weights(hf_model, hidet_model)
 
@@ -465,9 +375,9 @@ def build_flow_graph(model, batch_size=1, device='cuda', dtype='float16'):
         device=device,
         dtype=dtype,
     )
-    key_value_cache = [(get_sym(), get_sym()) for i in range(config.num_hidden_layers)]
+    key_value_cache = [(get_sym(), get_sym()) for _ in range(config.num_hidden_layers)]
 
-    y = model(input_ids, position_ids=position_ids, past_key_values=key_value_cache, use_cache=True)
+    y = model(input_ids, position_ids=position_ids, past_key_values=key_value_cache)
     inputs = [input_ids, position_ids]
     for (q, k) in key_value_cache:
         inputs.append(q)
@@ -513,7 +423,7 @@ def generate_torch(input_ids: str, tokenizer, torch_model, num_tokens, device='c
     make_past = lambda: torch.zeros(
         [1, config.num_attention_heads, 0, config.hidden_size // config.num_attention_heads]
     ).to(device=device, dtype=dtype)
-    key_value_cache = [(make_past(), make_past()) for i in range(config.num_hidden_layers)]
+    key_value_cache = [(make_past(), make_past()) for _ in range(config.num_hidden_layers)]
     outputs = []
     cur_len = input_ids.shape[-1]
     for _ in range(num_tokens):
@@ -536,15 +446,18 @@ def generate_torch(input_ids: str, tokenizer, torch_model, num_tokens, device='c
 
 
 def get_compiled_model(name='decapoda-research/llama-7b-hf', device='cuda', opt=False):
-    from transformers import LlamaTokenizer, LlamaForCausalLM as hfLm
 
     tok = LlamaTokenizer.from_pretrained(name)
 
-    model = hfLm.from_pretrained(name, torch_dtype=torch.float16)
+    with torch.device("cuda"):  # reduce the time to load the model
+        model = hfLm.from_pretrained(name, torch_dtype=torch.float16)
+    model.cpu()
+    torch.cuda.empty_cache()
 
     config = model.config
 
-    model = convert_model(model, device=device)
+    model: nn.Module = convert_model(model, device=device)
+
     flow_graph = build_flow_graph(model, device=device)
 
     if opt:
@@ -554,7 +467,9 @@ def get_compiled_model(name='decapoda-research/llama-7b-hf', device='cuda', opt=
     return compiled, config, tok
 
 
-def test_llama(device='cuda', opt=False):
+def demo_usage():
+    device = 'cuda'
+    opt = False
     model, config, tokenizer = get_compiled_model(device=device, opt=opt)
 
     text = generate('In the beginning was the Word.', model, tokenizer, config, num_tokens=12)
@@ -563,15 +478,14 @@ def test_llama(device='cuda', opt=False):
     text = generate(
         "A robot may not injure a human being or, through inaction", model, tokenizer, config, num_tokens=55
     )
-    assert (
-        text
-        == ', allow a human being to come to harm. A robot must obey the orders given it by human beings\
- except where such orders would conflict with the First Law. A robot must protect its own\
- existence as long as such protection does not conflict with the First or Second Laws'
+
+    expected = (
+        ', allow a human being to come to harm. A robot must obey the orders given it by human beings'
+        ' except where such orders would conflict with the First Law. A robot must protect its own'
+        ' existence as long as such protection does not conflict with the First or Second Laws'
     )
+    assert text == expected
 
 
 if __name__ == '__main__':
-    hidet.option.parallel_build(False)
-    test_llama(device='cuda', opt=False)
-    # test_llama(device='cuda', opt=True)
+    demo_usage()
