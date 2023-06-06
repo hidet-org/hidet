@@ -11,7 +11,7 @@
 # limitations under the License.
 # pylint: disable=import-outside-toplevel
 from __future__ import annotations
-from typing import Union, Sequence, Tuple, Optional
+from typing import Union, Sequence, Tuple, Optional, List
 from hidet.ir.type import DataType, TensorType, tensor_type, data_type
 from hidet.ir.expr import Expr, convert, Var, Constant, var
 from hidet.ir.layout import DataLayout
@@ -55,12 +55,12 @@ class TensorNode(ComputeNode):
         return len(self.type.shape)
 
     @property
-    def const_shape(self) -> Tuple[int, ...]:
-        return tuple(int(v) for v in self.type.shape)
+    def const_shape(self) -> List[int]:
+        return list(int(v) for v in self.type.shape)
 
     @property
-    def shape(self) -> Tuple[Expr, ...]:
-        return self.type.shape
+    def shape(self) -> List[Expr]:
+        return list(self.type.shape)
 
     def is_concrete(self) -> bool:
         return all(isinstance(v, Constant) for v in self.shape)

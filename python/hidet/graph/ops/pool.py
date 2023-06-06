@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Union, Sequence, List, Dict, Any, Tuple
+from typing import Union, Sequence, List, Dict, Any
 
 from hidet.ir.expr import Expr, Int, convert, if_then_else, logical_and
 
@@ -98,9 +98,9 @@ class Pool3dTask(Task):
 class AdaptivePoolTask(Task):
     def __init__(self, x: TensorNode, output_size: Sequence[int], reduce_type: str):
         assert reduce_type in ['max', 'avg']
-        x_shape: Tuple[Expr, ...] = x.shape  # [N, C, D1, D2, ...]
-        output_size: Tuple[Expr, ...] = tuple(normalize_output(output_size, len(x_shape) - 2))
-        y_shape: Tuple[Int, ...] = x_shape[:2] + output_size
+        x_shape: List[Expr] = x.shape  # [N, C, D1, D2, ...]
+        output_size: List[Expr] = normalize_output(output_size, len(x_shape) - 2)
+        y_shape: List[Int] = x_shape[:2] + output_size
         spatial_ndim = len(output_size)
 
         def start_index(y_indices: Sequence[Expr], spatial_dim: int) -> Expr:
