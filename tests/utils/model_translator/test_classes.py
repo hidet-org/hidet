@@ -13,6 +13,8 @@
 # Taken from transformers.models.llama
 # %%
 # pylint: skip-file
+import pytest
+
 import torch
 import torch.utils.checkpoint
 from torch import nn
@@ -40,12 +42,13 @@ class LlamaRMSNorm(nn.Module):
         return self.weight * hidden_states
 
 
-interpreter = AstInterpreter()
-model = interpreter(LlamaRMSNorm, [32])
-interpreter(model.forward, [torch.rand([1, 32])])
-vis_interpreter(interpreter)
-print("final result:\n")
-print(transpiled_str(interpreter))
+def test_rmsnorm():
+    interpreter = AstInterpreter()
+    model = interpreter(LlamaRMSNorm, [32])
+    interpreter(model.forward, [torch.rand([1, 32])])
+    vis_interpreter(interpreter)
+    print("final result:\n")
+    print(transpiled_str(interpreter))
 
 
 # %%
@@ -83,9 +86,14 @@ class LlamaRotaryEmbedding(torch.nn.Module):
         )
 
 
-interpreter = AstInterpreter()
-model = interpreter(LlamaRotaryEmbedding, [32])
-interpreter(model.forward, [torch.rand([1, 12, 32]), 12])
-vis_interpreter(interpreter)
-print("final result:\n")
-print(transpiled_str(interpreter))
+def test_rotembed():
+    interpreter = AstInterpreter()
+    model = interpreter(LlamaRotaryEmbedding, [32])
+    interpreter(model.forward, [torch.rand([1, 12, 32]), 12])
+    vis_interpreter(interpreter)
+    print("final result:\n")
+    print(transpiled_str(interpreter))
+
+
+if __name__ == '__main__':
+    pytest.main([__file__])

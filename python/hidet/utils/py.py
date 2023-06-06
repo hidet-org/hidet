@@ -83,6 +83,10 @@ def blue(v, fmt='{}'):
     return COLORS.OKBLUE + fmt.format(v) + COLORS.ENDC
 
 
+def yellow(v, fmt='{}'):
+    return COLORS.WARNING + fmt.format(v) + COLORS.ENDC
+
+
 def red(v, fmt='{}'):
     return COLORS.FAIL + fmt.format(v) + COLORS.ENDC
 

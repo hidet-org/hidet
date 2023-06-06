@@ -29,9 +29,7 @@ from astunparse import Unparser
 import torch
 import hidet
 
-# from hidet.utils.model_translator.convert import AstTypedNode
-
-from hidet.utils.model_translator.utils import quote_cyan, quote_fail, quote_green, quote_warning
+from hidet.utils.py import green, cyan, red, yellow
 
 # must do this to load the registery
 import hidet.graph.frontend.torch.register_functions
@@ -49,6 +47,15 @@ class AstInternalError(Exception):
 
 class AstRunTimeError(Exception):
     """AstRunTimeError means for user intervention"""
+
+
+class AstUnsupported(Exception):
+    """
+    AstUnsupported means that something went wrong in the lower ast, but the error is
+    recoverable, so we execute with exec/eval instead of tracing. We do this to avoid
+    exponential runtimes of first recursively checking the ast, then determining if it
+    could be safely evaluated.
+    """
 
 
 class AstTypedNode:
@@ -382,10 +389,15 @@ class AstTrace:
 
 
 class AstInterpreter:
-    def __init__(self) -> None:
+    def __init__(self, whitelist: Set[Any] = None) -> None:
         self.state = InterpreterState()
         self.trace = AstTrace()
         self.trace_blacklist = set()
+        if whitelist is None:
+            self.trace_whitelist = set()
+        else:
+            assert isinstance(whitelist, set)
+            self.trace_whitelist = whitelist
 
         self.returned = False
         self.inner_break = False
@@ -419,7 +431,12 @@ class AstInterpreter:
             val = self.state.exec_node(node)
             return self.add_val(node, val), val
         visitor = getattr(self, method)
-        return visitor(node)
+        try:
+            return visitor(node)
+        except AstUnsupported as e:
+            self.state.add_error("AstUnsupported: " + str(e))
+            val = self.state.exec_node(node)
+            return self.add_val(node, val), val
 
     def generic_visit(self, node: AST) -> AST:
         for field, old_value in iter_fields(node):
@@ -458,7 +475,7 @@ class AstInterpreter:
         elif node.value is None:
             return node, None
         else:
-            raise AstInternalError(f'cannot recognize constant {node.value}')
+            raise AstUnsupported(f'cannot recognize constant {node.value}')
 
     def visit_Tuple(self, node: ast.Tuple) -> Tuple[AST, Any]:
         vals = [self.visit(lo) for lo in node.elts]
@@ -581,7 +598,6 @@ class AstInterpreter:
             return new_node, val
 
     def visit_Attribute(self, node: ast.Attribute) -> Tuple[AST, Any]:
-        # TODO: handle @property
         node.value, val = self.visit(node.value)
 
         # extract the @property object without calling it
@@ -589,6 +605,8 @@ class AstInterpreter:
         if hasattr(type_val, node.attr):
             prop = getattr(type_val, node.attr)
             if isinstance(prop, property):
+                if isinstance(node.ctx, ast.Store):
+                    raise AstRunTimeError("Not supported fset with @property")
                 fn_obj = prop.fget
                 t_node = self.trace.get_trace(fn_obj)
                 if t_node is not None or self.should_trace_prompt(fn_obj):
@@ -731,8 +749,8 @@ class AstInterpreter:
         else:
             self.simulate_assign(node.targets[0], val=val)
 
-        # annotate targets
-        node.targets, _ = self.visit(node.targets)
+        # annotating targets should not be necessary right row
+        # node.targets, _ = self.visit(node.targets)
 
         return node, None
 
@@ -872,6 +890,10 @@ class AstInterpreter:
         self.trace.add_trace(code_obj)  # this is a no op when code_obj is already in the trace
         node = self.trace.get_trace(code_obj)
         assert isinstance(node, ast.FunctionDef)
+        # decorator
+        for dec in node.decorator_list:
+            if not (isinstance(dec, ast.Name) and dec.id in ('property', 'staticmethod')):
+                raise AstUnsupported(f"Unsupported decorators {ast.unparse(dec)}")
         # update locals to have the argument names defined
         self.state.push_stack(node.args, args, kwargs)
         self.state.globals.update(code_obj.__globals__)
@@ -976,6 +998,8 @@ class AstInterpreter:
         if self.trace.can_trace(obj) and default_should_trace(obj):
             if obj in self.trace_blacklist:
                 return False
+            if obj in self.trace_whitelist:
+                return True
             if msg is None:
                 msg = f"should trace {obj.__name__}?"
             msg = ' ' * self.indent_level + (msg) + ' [y]/n '
@@ -1041,8 +1065,8 @@ class VisualizeTypedAst(Unparser):
                     self.fill(quote_fn("#   " + i))
 
     def dispatch(self, tree):
-        self.write_err_msg(tree, STMT_WARNING_ATTR, quote_warning, "WARNING")
-        self.write_err_msg(tree, STMT_ERROR_ATTR, quote_fail, "ERROR")
+        self.write_err_msg(tree, STMT_WARNING_ATTR, yellow, "WARNING")
+        self.write_err_msg(tree, STMT_ERROR_ATTR, red, "ERROR")
         super().dispatch(tree)
         if hasattr(tree, TYPEDNODE_ATTR):
             types = getattr(tree, TYPEDNODE_ATTR)
@@ -1054,9 +1078,9 @@ class VisualizeTypedAst(Unparser):
                 else:
                     type_repr.append(str(i)[8:-2])
             if len(types.type) == 1:
-                self.write(quote_cyan(" :") + quote_green(type_repr[0] + ' '))
+                self.write(cyan(" :") + green(type_repr[0] + ' '))
             elif len(types.type) > 1:
-                self.write(quote_cyan(" :") + quote_green('Union[' + ', '.join(type_repr) + '] '))
+                self.write(cyan(" :") + green('Union[' + ', '.join(type_repr) + '] '))
 
 
 class UnparseAstWithComments(Unparser):

@@ -13,6 +13,7 @@
 # Taken from transformers.models.llama
 # %%
 # pylint: skip-file
+import pytest
 import typing as tp
 
 import torch
@@ -39,11 +40,12 @@ def _make_causal_mask(
     return mask[None, None, :, :].expand(bsz, 1, tgt_len, tgt_len + past_key_values_length)
 
 
-interpreter = AstInterpreter()
-interpreter(_make_causal_mask, [[1, 128], torch.float32, 'cuda', 0])
-vis_interpreter(interpreter)
-print("final result:\n")
-print(transpiled_str(interpreter))
+def test_fn1():
+    interpreter = AstInterpreter()
+    interpreter(_make_causal_mask, [[1, 128], torch.float32, 'cuda', 0])
+    vis_interpreter(interpreter)
+    print("final result:\n")
+    print(transpiled_str(interpreter))
 
 
 # %%
@@ -62,8 +64,13 @@ def _expand_mask(mask: torch.Tensor, dtype: torch.dtype, tgt_len: tp.Optional[in
     return inverted_mask.masked_fill(inverted_mask.to(torch.bool), torch.finfo(dtype).min)
 
 
-interpreter = AstInterpreter()
-interpreter(_expand_mask, [torch.ones([1, 32]), torch.float32, 2])
-vis_interpreter(interpreter)
-print("final result:\n")
-print(transpiled_str(interpreter))
+def test_fn2():
+    interpreter = AstInterpreter()
+    interpreter(_expand_mask, [torch.ones([1, 32]), torch.float32, 2])
+    vis_interpreter(interpreter)
+    print("final result:\n")
+    print(transpiled_str(interpreter))
+
+
+if __name__ == '__main__':
+    pytest.main([__file__])

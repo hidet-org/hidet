@@ -95,7 +95,7 @@ def raw_function(a, b, c, d):
     return d
 
 
-interpreter = AstInterpreter()
+interpreter = AstInterpreter(whitelist={mysoftmax})
 res = interpreter(raw_function, [torch.rand([2, 2]), torch.rand([2, 2]), torch.rand([1, 2]), torch.rand([1, 1])])
 vis_interpreter(interpreter)
 print(transpiled_str(interpreter))
@@ -155,7 +155,7 @@ class TestClass2(TestClass):
         return y
 
 
-intp = AstInterpreter()
+intp = AstInterpreter(whitelist={TestClass})
 h = intp(TestClass2, [3])
 intp(h.forward, [torch.rand([1, 3, 5, 5])])
 vis_interpreter(intp)
