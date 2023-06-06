@@ -100,7 +100,7 @@ class SoftmaxTask(Task):
 
         from hidet.lang.cuda import blockIdx, threadIdx
 
-        shape = self.inputs[0].const_shape
+        shape = self.inputs[0].shape
         axis = self.axis
         reduce_extent = shape[axis]
         reduced_shape = shape[:axis] + shape[axis + 1 :]

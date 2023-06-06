@@ -11,7 +11,7 @@
 # limitations under the License.
 from typing import Union, Sequence, Tuple
 import numpy as np
-from hidet import symbol, trace_from
+from hidet import symbol, symbol_like, trace_from
 from hidet.graph.tensor import asarray
 
 
@@ -74,6 +74,39 @@ def check_binary(
     b = np.array(np.random.randn(*b_shape)).astype(dtype)
     numpy_result = numpy_op(a, b)
     hidet_result = hidet_op(asarray(a).to(device=device), asarray(b).to(device=device)).cpu().numpy()
+    np.testing.assert_allclose(actual=hidet_result, desired=numpy_result, atol=atol, rtol=rtol)
+
+
+def check_binary_dynamic(
+    a_shape: Sequence[Union[int, Tuple[str, int]]],
+    b_shape: Sequence[Union[int, Tuple[str, int]]],
+    numpy_op,
+    hidet_op,
+    device: str = 'all',
+    dtype: Union[str, np.dtype] = np.float32,
+    atol=0.0,
+    rtol=0.0,
+):
+    if device == 'all':
+        for dev in ['cuda', 'cpu']:
+            print('checking', dev)
+            check_binary(a_shape, b_shape, numpy_op, hidet_op, dev, dtype, atol, rtol)
+        return
+    a_concrete_shape = [(i if isinstance(i, int) else i[1]) for i in a_shape]
+    a_symbolic_shape = [(i if isinstance(i, int) else i[0]) for i in a_shape]
+
+    b_concrete_shape = [(i if isinstance(i, int) else i[1]) for i in b_shape]
+    b_symbolic_shape = [(i if isinstance(i, int) else i[0]) for i in b_shape]
+    a = np.array(np.random.randn(*a_concrete_shape)).astype(dtype)
+    b = np.array(np.random.randn(*b_concrete_shape)).astype(dtype)
+    numpy_result = numpy_op(a, b)
+    a_hidet = asarray(a).to(device=device)
+    b_hidet = asarray(b).to(device=device)
+    sym_a = symbol(a_symbolic_shape, dtype=a_hidet.dtype, device=a_hidet.device)
+    sym_b = symbol(b_symbolic_shape, dtype=b_hidet.dtype, device=b_hidet.device)
+    sym_result = hidet_op(sym_a, sym_b)
+    func = trace_from(sym_result, [sym_a, sym_b])
+    hidet_result = func(a_hidet, b_hidet).cpu().numpy()
     np.testing.assert_allclose(actual=hidet_result, desired=numpy_result, atol=atol, rtol=rtol)
 
 

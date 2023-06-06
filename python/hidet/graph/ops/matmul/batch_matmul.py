@@ -703,9 +703,18 @@ class BatchMatmulTask(Task):
         ir_module = module.ir_module()
         return ir_module
 
+def is_true(expr) -> bool:
+    if is_constant(expr):
+        return bool(expr) is True
+    return False
+
+def is_false():
+    pass
 
 class BatchMatmulOp(Operator):
     def __init__(self, a: Tensor, b: Tensor, mma: str = 'simt'):
+        # if is_false(a.shape[0] == b.shape[0]) or is_false(a.shape[2] == b.shape[1]):
+        #     raise
         if not (
             len(a.shape) == len(b.shape) == 3
             and (not is_constant(a.shape[0], b.shape[0]) or a.shape[0] == b.shape[0])
