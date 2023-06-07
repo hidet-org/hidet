@@ -10,8 +10,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List, Union, Sequence
-from ..utils import normalize_stride
 from hidet.ir.expr import is_constant
+from ..utils import normalize_stride
 
 
 def infer_conv2d_shape(

@@ -703,13 +703,16 @@ class BatchMatmulTask(Task):
         ir_module = module.ir_module()
         return ir_module
 
+
 def is_true(expr) -> bool:
     if is_constant(expr):
         return bool(expr) is True
     return False
 
+
 def is_false():
     pass
+
 
 class BatchMatmulOp(Operator):
     def __init__(self, a: Tensor, b: Tensor, mma: str = 'simt'):

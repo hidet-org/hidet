@@ -55,8 +55,11 @@ def test_batch_matmul(a_shape, b_shape, dtype, mma):
 
 
 @pytest.mark.parametrize(
-    "a_shape, b_shape, dtype", [[[1, ("n", 333), ("m", 444)], [1, ("m", 444), ("k", 555)], "float32"], 
-                                [[("b", 1), ("m", 333), ("k", 444)], [("b", 1), ("k", 444), ("n", 555)], "float16"]]
+    "a_shape, b_shape, dtype",
+    [
+        [[1, ("n", 333), ("m", 444)], [1, ("m", 444), ("k", 555)], "float32"],
+        [[("b", 1), ("m", 333), ("k", 444)], [("b", 1), ("k", 444), ("n", 555)], "float16"],
+    ],
 )
 @pytest.mark.parametrize('mma', ['simt', 'mma'])
 def test_batch_matmul_dynamic(a_shape, b_shape, dtype, mma):
@@ -74,7 +77,6 @@ def test_batch_matmul_dynamic(a_shape, b_shape, dtype, mma):
         atol=tol,
         rtol=tol,
     )
-
 
 
 @pytest.mark.parametrize(

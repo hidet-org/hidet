@@ -11,7 +11,7 @@
 # limitations under the License.
 from typing import Union, Sequence, Tuple
 import numpy as np
-from hidet import symbol, symbol_like, trace_from
+from hidet import symbol, trace_from
 from hidet.graph.tensor import asarray
 
 
@@ -189,6 +189,7 @@ def check_torch_binary_dynamic(
             check_torch_binary_dynamic(a_shape, b_shape, torch_func, hidet_func, dev, dtype, atol, rtol)
         return
     import torch
+
     a_concrete_shape = [(i if isinstance(i, int) else i[1]) for i in a_shape]
     a_symbolic_shape = [(i if isinstance(i, int) else i[0]) for i in a_shape]
 

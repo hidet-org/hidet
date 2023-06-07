@@ -17,10 +17,18 @@ import hidet
 from hidet.testing import check_binary, check_binary_dynamic
 
 
-def torch_conv_transpose1d(data: np.ndarray, weight: np.ndarray, padding: int, stride: int, output_padding: int, groups: int):
+def torch_conv_transpose1d(
+    data: np.ndarray, weight: np.ndarray, padding: int, stride: int, output_padding: int, groups: int
+):
     data_torch, weight_torch = torch.from_numpy(data), torch.from_numpy(weight)
     torch_out = torch.nn.functional.conv_transpose1d(
-        data_torch, weight_torch, stride=stride, padding=padding, output_padding=output_padding, groups=groups, bias=None
+        data_torch,
+        weight_torch,
+        stride=stride,
+        padding=padding,
+        output_padding=output_padding,
+        groups=groups,
+        bias=None,
     )
     return torch_out.numpy()
 
@@ -29,9 +37,7 @@ def torch_conv_transpose1d(data: np.ndarray, weight: np.ndarray, padding: int, s
     'in_channels, out_channels, kernel_size, stride, pads, groups, length, output_padding',
     [[10, 20, 5, 2, 0, 5, 15, 1]],
 )
-def test_conv1d_transpose(
-    in_channels, out_channels, kernel_size, stride, pads, groups, length, output_padding
-):
+def test_conv1d_transpose(in_channels, out_channels, kernel_size, stride, pads, groups, length, output_padding):
     check_binary(
         a_shape=[1, out_channels, length],
         b_shape=[out_channels, in_channels // groups, kernel_size],
@@ -39,16 +45,15 @@ def test_conv1d_transpose(
         hidet_op=lambda data, weight: hidet.ops.conv1d_transpose(data, weight, stride, pads, groups, output_padding),
         dtype='float32',
         atol=2e-5,
-        rtol=2e-5
+        rtol=2e-5,
     )
+
 
 @pytest.mark.parametrize(
     'in_channels, out_channels, kernel_size, stride, pads, groups, length, output_padding',
     [[10, 20, 5, 2, 0, 5, 15, 1]],
 )
-def test_conv1d_transpose_dynamic(
-    in_channels, out_channels, kernel_size, stride, pads, groups, length, output_padding
-):
+def test_conv1d_transpose_dynamic(in_channels, out_channels, kernel_size, stride, pads, groups, length, output_padding):
     check_binary_dynamic(
         a_shape=[('b', 1), ('oc', out_channels), ('l', length)],
         b_shape=[out_channels, in_channels // groups, kernel_size],
@@ -56,7 +61,7 @@ def test_conv1d_transpose_dynamic(
         hidet_op=lambda data, weight: hidet.ops.conv1d_transpose(data, weight, stride, pads, groups, output_padding),
         dtype='float32',
         atol=2e-5,
-        rtol=2e-5
+        rtol=2e-5,
     )
 
 
