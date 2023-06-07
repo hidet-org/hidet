@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List, Union, Sequence
+from hidet.ir.expr import is_constant
 from ..utils import normalize_stride
 
 
@@ -24,7 +25,7 @@ def infer_conv2d_shape(
     oc, gc, kx, ky = w_shape
     sx, sy = normalize_stride(strides)
     dilx, dily = dilations
-    if gc * groups != c:
+    if is_constant(c) and gc * groups != c:
         msg = 'Conv2d: x has {} input channels, w has {} group channels, and groups={}'.format(c, gc, groups)
         raise ValueError(msg)
     if oc % groups != 0:

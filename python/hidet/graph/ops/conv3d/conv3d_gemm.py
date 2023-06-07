@@ -14,6 +14,7 @@ from typing import List
 from hidet.graph.ops.matmul import matmul
 from hidet.graph.ops.utils import Task, Operator, Tensor, compute, input_like, TensorNode
 from hidet.graph.ops.utils import normalize_kernel, normalize_stride
+from hidet.ir.expr import is_constant
 from .utils import infer_conv3d_shape
 
 
@@ -28,7 +29,7 @@ class Conv3dGemmImageTransformTask(Task):
             (h - dilx * (kx - 1) - 1) // sx + 1,
             (w - dily * (ky - 1) - 1) // sy + 1,
         )
-        if c % groups != 0:
+        if is_constant(c) and c % groups != 0:
             msg = 'Conv3d expect in_channels % groups == 0, but got in_channels {} and groups {}'.format(c, groups)
             raise ValueError(msg)
         gc = c // groups  # group channels
@@ -80,7 +81,8 @@ def conv3d_gemm_inverse_transform(gemm_y: Tensor, out_depth, out_height, out_wid
     # output shape: [n, oc, r, p, q] where oc = groups * ogc
     r, p, q = out_depth, out_height, out_width
     groups, nrpq, ogc = gemm_y.shape
-    assert nrpq % (r * p * q) == 0
+    if is_constant(nrpq, r, p, q):
+        assert nrpq % (r * p * q) == 0
     n = nrpq // (r * p * q)
     y = gemm_y.reshape([groups, n, r, p, q, ogc])
     y = y.rearrange([[1], [0, 5], [2], [3], [4]])

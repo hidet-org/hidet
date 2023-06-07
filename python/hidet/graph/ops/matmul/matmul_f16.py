@@ -12,7 +12,7 @@
 from typing import List, Tuple
 from hidet.ir import dtypes
 from hidet.ir.dtypes import float16
-from hidet.ir.expr import if_then_else
+from hidet.ir.expr import if_then_else, Int, Expr
 from hidet.ir.func import Function
 from hidet.ir.module import IRModule
 from hidet.ir.compute import TensorNode
@@ -33,7 +33,8 @@ class MatmulF16Task(Task):
         if len(a.shape) < 2 or len(b.shape) < 2:
             raise ValueError('Matrix multiplication expect at least 2D tensor, got {} and {}'.format(a.shape, b.shape))
 
-        if a.shape[-1] != b.shape[-2]:
+        # TODO: add dynamic shape assertions
+        if not (isinstance(a.shape[-1], Expr) or isinstance(b.shape[-1], Expr)) and a.shape[-1] != b.shape[-2]:
             raise ValueError(
                 'Matrix multiplication expect tensor A and B with shape [..., M, K] and [..., K, N]'
                 ', got {} and {}'.format(a.shape, b.shape)
@@ -44,9 +45,9 @@ class MatmulF16Task(Task):
                 'Matrix multiplication expect tensor A and B with compatible broadcast shape, '
                 'got {} and {}'.format(a.shape, b.shape)
             )
-        a_shape = a.const_shape
-        b_shape = b.const_shape
-        k_size = int(a.shape[-1])
+        a_shape = a.shape
+        b_shape = b.shape
+        k_size = a.shape[-1]
         c_shape = [parallel_k_parts] + broadcast_shape(a.shape[:-2], b.shape[:-2]) + [a_shape[-2], b_shape[-1]]
         k_part_extent = cdiv(k_size, parallel_k_parts)
 
@@ -104,9 +105,9 @@ class MatmulF16Task(Task):
 
         # input shapes
         node_a, node_b, node_c = self.inputs[0], self.inputs[1], self.outputs[0]
-        a_shape: Tuple[int, ...] = node_a.const_shape
-        b_shape: Tuple[int, ...] = node_b.const_shape
-        c_shape: Tuple[int, ...] = node_c.const_shape
+        a_shape: Tuple[Int, ...] = node_a.shape
+        b_shape: Tuple[Int, ...] = node_b.shape
+        c_shape: Tuple[Int, ...] = node_c.shape
         m_size, n_size, k_size = a_shape[-2], b_shape[-1], a_shape[-1]
         a_head, b_head, c_head = list(a_shape[:-2]), list(b_shape[:-2]), list(c_shape[:-2])
         k_parts = self.attrs['parallel_k_parts']
@@ -121,7 +122,7 @@ class MatmulF16Task(Task):
         warp_count_m, warp_count_n, warp_count_k = block_m // warp_m, block_n // warp_n, block_k // warp_k
         mma_count_m, mma_count_n, mma_count_k = warp_m // mma_m, warp_n // mma_n, warp_k // mma_k
         threads = warp_count_m * warp_count_n * warp_count_k * 32
-        grid_dim: Tuple[int, int, int] = cdiv(m_size, block_m), cdiv(n_size, block_n), prod(c_head)
+        grid_dim: Tuple[Int, Int, Int] = cdiv(m_size, block_m), cdiv(n_size, block_n), prod(c_head)
         dynamic_smem_bytes = max(2 * (block_m + block_n) * block_k * 2, block_m * block_n * 2)
 
         tune.check(block_m % warp_m == block_n % warp_n == block_k % warp_k == 0, 'warp dims divide block dims')
@@ -322,7 +323,10 @@ class MatmulF16Op(Operator):
 def matmul_f16(a: Tensor, b: Tensor, parallel_k_parts=1) -> Tensor:
     if len(a.shape) < 2 or len(b.shape) < 2:
         raise ValueError('a and b must have at least 2 dimensions, got shape {} and {}'.format(a.shape, b.shape))
-    if a.shape[-1] % 8 != 0 or b.shape[-1] % 8 != 0:
+    # TODO: impliment dynamic run-time shape assertion
+    if not (isinstance(a.shape[-1], Expr) or isinstance(b.shape[-1], Expr)) and (
+        a.shape[-1] % 8 != 0 or b.shape[-1] % 8 != 0
+    ):
         raise ValueError('Expect the last dimension of the input tensors to be a multiple of 8')
     if a.dtype != dtypes.float16 or b.dtype != dtypes.float16:
         raise ValueError('BatchMatmulF16Op only support float16, got {} and {}'.format(a.dtype, b.dtype))
