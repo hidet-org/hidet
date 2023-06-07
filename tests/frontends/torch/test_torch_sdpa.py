@@ -17,9 +17,9 @@ from hidet.testing.torch_utils import check_module, FunctionalModule
 @pytest.mark.parametrize('shape', [[1, 16, 1024, 1024, 128], [4, 4, 4096, 4096, 64], [4, 4, 333, 77, 64]])
 @pytest.mark.parametrize('attn_mask_type', [None, 'bool', 'float16', 'causal'])
 def test_sdpa(shape, attn_mask_type):
-    bs, nheads, n_q, n_kv, d = shape
-    q_shape = [bs, nheads, n_q, d]
-    kv_shape = [bs, nheads, n_kv, d]
+    bs, nheads, s_q, s_kv, d = shape
+    q_shape = [bs, nheads, s_q, d]
+    kv_shape = [bs, nheads, s_kv, d]
     q = torch.randn(q_shape, dtype=torch.float16)
     k = torch.randn(kv_shape, dtype=torch.float16)
     v = torch.randn(kv_shape, dtype=torch.float16)

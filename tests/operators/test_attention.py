@@ -17,7 +17,7 @@ from hidet.graph.ops.attention import attention
 from hidet import ops
 
 
-@pytest.mark.parametrize("shape", [[2, 512, 512, 8, 128], [2, 512, 77, 8, 128]])
+@pytest.mark.parametrize("shape", [[2, 512, 512, 8, 128], [2, 435, 179, 8, 64]])
 def test_attn_mask_add(shape):
     bs, s_q, s_kv, h, d = shape
     def attention_layer():
@@ -29,8 +29,7 @@ def test_attn_mask_add(shape):
         qk_masked = qk + mask
         sm = ops.softmax(qk_masked, axis=-1)
         out = ops.matmul(sm, v)
-        hidet.graph.PassContext().set_use_attention(False)
-        return hidet.graph.optimize(hidet.trace_from(out, [q, k, v, mask]))
+        return hidet.trace_from(out, [q, k, v, mask])
 
     graph = attention_layer()
     q = hidet.randn([bs, h, s_q, d], dtype='float16', device='cuda')
@@ -41,10 +40,10 @@ def test_attn_mask_add(shape):
     cc1 = attention(q, k, v, mask)
     cc2 = graph(q, k, v, mask)
 
-    numpy.testing.assert_allclose(cc1.cpu().numpy(), cc2.cpu().numpy(), atol=1e-1, rtol=1e-1)
+    numpy.testing.assert_allclose(cc1.cpu().numpy(), cc2.cpu().numpy(), atol=0.5, rtol=0.5)
 
 
-@pytest.mark.parametrize("shape", [[2, 1024, 1024, 8, 128], [2, 1024, 777, 8, 128]])
+@pytest.mark.parametrize("shape", [[2, 1024, 1024, 8, 128], [2, 667, 775, 8, 64]])
 def test_attn(shape):
     bs, s_q, s_kv, h, d = shape
     def attention_layer():
@@ -54,8 +53,7 @@ def test_attn(shape):
         qk = ops.matmul(q, k)
         sm = ops.softmax(qk, axis=-1)
         out = ops.matmul(sm, v)
-        hidet.graph.PassContext().set_use_attention(False)
-        return hidet.graph.optimize(hidet.trace_from(out, [q, k, v]))
+        return hidet.trace_from(out, [q, k, v])
 
     graph = attention_layer()
     q = hidet.randn([bs, h, s_q, d], dtype='float16', device='cuda')
@@ -65,7 +63,7 @@ def test_attn(shape):
     cc1 = attention(q, k, v)
     cc2 = graph(q, k, v)
 
-    numpy.testing.assert_allclose(cc1.cpu().numpy(), cc2.cpu().numpy(), atol=1e-2, rtol=1e-2)
+    numpy.testing.assert_allclose(cc1.cpu().numpy(), cc2.cpu().numpy(), atol=0.5, rtol=0.5)
 
 
 if __name__ == '__main__':

@@ -120,8 +120,8 @@ class AttnMaskAddTask(Task):
 
     @tune.space(
         2,
-        block_i=[128, 64, 256, 512],
-        block_j=[128, 64, 256, 512],
+        block_i=[128, 64, 256, 512, 32, 16],
+        block_j=[128, 64, 256, 512, 32, 16],
         block_k=[8, 16, 32, 64],
         warp_elems_m=[16, 32, 64, 128],
         warp_elems_n=[16, 32, 64, 128],
@@ -193,9 +193,6 @@ class AttnMaskAddTask(Task):
         warp_size = 32
         tune.check(d_size % 8 == 0)
         tune.check(d_size <= 160)
-        tune.check(n_size >= 64)
-        tune.check(n_kv_size >= 64)
-        block_j = min(block_j, n_size)
 
         acc_dtype = f16
         sm_dtype = f32
@@ -397,7 +394,7 @@ class AttnMaskAddTask(Task):
 
             @hidet.script
             def cp_async_sync():
-                if compute_capability >= 80:
+                if compute_capability >= 80 and (n_kv_size % 8 == 0 or n_size % 8 == 0):
                     cp_async_wait_all()
 
             @hidet.script
@@ -413,7 +410,7 @@ class AttnMaskAddTask(Task):
                 gmem_k = k[broadcast_indices(o_head_index, k_head, o_head)][offset_k:, offset_j:]
                 for i, j_seg in k_g2s_layout.on(threadIdx.x):
                     j = j_seg * 8
-                    src_size = 0 if (offset_k + i >= d_size or offset_j + j >= n_kv_size) else min(n_kv_size - j, 8)
+                    src_size = 0 if (offset_k + i >= d_size or offset_j + j >= n_kv_size) else min(n_kv_size - (offset_j + j), 8)
                     if threadIdx.x < k_g2s_layout.num_workers and i < smem_k_type.shape[0]:
                         cp_async(~smem_k[i, j], ~gmem_k[i, j], cp_size=16, src_size=src_size * 2, cache_level='global')
 
@@ -472,21 +469,21 @@ class AttnMaskAddTask(Task):
 
             @hidet.script
             def copy_k_g2s(k: f16[k_head + [d_size, n_kv_size]], smem_k: smem_k_type, offset_j: i32, offset_k: i32):
-                if compute_capability >= 80:
+                if compute_capability >= 80 and n_kv_size % 8 == 0:
                     copy_k_g2s_sm80(k, smem_k, offset_j, offset_k)
                 else:
                     copy_k_g2s_sm75(k, smem_k, offset_j, offset_k)
 
             @hidet.script
             def copy_v_g2s(v: f16[v_head + [n_kv_size, d_size]], smem_v: smem_v_type, offset_j: i32):
-                if compute_capability >= 80:
+                if compute_capability >= 80 and n_kv_size % 8 == 0:
                     copy_v_g2s_sm80(v, smem_v, offset_j)
                 else:
                     copy_v_g2s_sm75(v, smem_v, offset_j)
 
             @hidet.script
             def copy_q_g2s(q: f16[q_head + [n_size, d_size]], smem_q: smem_q_type, offset_i: i32):
-                if compute_capability >= 80:
+                if compute_capability >= 80 and n_size % 8 == 0:
                     copy_q_g2s_sm80(q, smem_q, offset_i)
                 else:
                     copy_q_g2s_sm75(q, smem_q, offset_i)
@@ -504,7 +501,7 @@ class AttnMaskAddTask(Task):
                                 for ti, tj in mma_config.c_store_map.on(lane_id):
                                     delta_m = wi * warp_elems_m_o + mma_i * mma_m + ti
                                     delta_n = wj * warp_elems_n_o + mma_j * mma_n + tj
-                                    if delta_m < n_size and delta_n < d_size:
+                                    if delta_m + offset_i < n_size and delta_n < d_size:
                                         gmem_o[delta_m, delta_n] = regs_o[mma_i, mma_j, p]
                                     p += 1
 
@@ -557,16 +554,27 @@ class AttnMaskAddTask(Task):
                 smem_mij: smem_mij_type,
                 smem_lij: smem_lij_type,
                 regs_acc: acc_dtype[mmas_per_warp_m, mmas_per_warp_n, mma_config.c_elements],
+                offset_j: i32,
             ):
                 warp_mask = active_mask()
                 warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
+                wi, wj, _ = spatial(warp_count_m, warp_count_n, warp_count_k).map(warp_id)
+
+                # mask out unused values when block_j > (n_kv_size - offset_j)
+                for mma_i, mma_j in grid(mmas_per_warp_m, mmas_per_warp_n):
+                    p = 0
+                    for i, j in mma_config.c_store_map.on(lane_id):
+                        delta_n = offset_j + wj * warp_elems_n + mma_j * mma_n + j
+                        if delta_n >= n_kv_size:
+                            regs_acc[mma_i, mma_j, p] = acc_dtype.min_value
+                        p += 1
+
                 # Each thread holds c elements in 2 rows in mma
                 rv = register_tensor(acc_dtype, [2])
 
                 # Reduce mij
                 rv[0] = acc_dtype.min_value
                 rv[1] = acc_dtype.min_value
-                wi, wj, _ = spatial(warp_count_m, warp_count_n, warp_count_k).map(warp_id)
                 c_map = repeat(2, 1) * spatial(8, 4)
                 for mma_i in range(mmas_per_warp_m):
                     rv[0] = acc_dtype.min_value
@@ -597,7 +605,10 @@ class AttnMaskAddTask(Task):
                     for i, j in mma_config.c_store_map.on(lane_id):
                         delta_m = wi * warp_elems_m + mma_i * mma_m + i
                         delta_n = wj * warp_elems_n + mma_j * mma_n + j
-                        regs_acc[mma_i, mma_j, p] = prim.exp(regs_acc[mma_i, mma_j, p] - smem_mij[delta_m])
+                        if delta_n + offset_j >= n_kv_size:
+                            regs_acc[mma_i, mma_j, p] = acc_dtype.zero
+                        else:
+                            regs_acc[mma_i, mma_j, p] = prim.exp(regs_acc[mma_i, mma_j, p] - smem_mij[delta_m])
                         smem_qk[delta_m, delta_n] = regs_acc[mma_i, mma_j, p]
                         p += 1
                 syncthreads()
@@ -753,7 +764,7 @@ class AttnMaskAddTask(Task):
                             p += 1
 
                     # Iterative softmax, and write result matrix into shared memory
-                    qk_softmax_reduce(smem_qk, smem_mij, smem_lij, regs_acc)
+                    qk_softmax_reduce(smem_qk, smem_mij, smem_lij, regs_acc, offset_j)
                     # ----------------------------
 
                     # ----------------------------
