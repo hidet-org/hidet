@@ -40,3 +40,24 @@ class Linear(Module):
         if self.bias is not None:
             x = ops.add(x, self.bias)
         return x
+
+
+class LinearTransposed(Module):
+    def __init__(self, in_features, out_features, bias: bool = True):
+        super().__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.weight = empty(shape=[in_features, out_features])
+        if bias:
+            self.bias = empty(shape=[out_features])
+        else:
+            self.bias = None
+
+    def extra_str(self) -> str:
+        return 'in_features={}, out_features={}'.format(self.in_features, self.out_features)
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = ops.matmul(x, self.weight)
+        if self.bias is not None:
+            x = ops.add(x, self.bias)
+        return x
