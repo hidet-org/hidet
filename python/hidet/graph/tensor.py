@@ -232,7 +232,7 @@ class Tensor:
         return pow(self, utils.convert_to_tensor(power, self))
 
     def __matmul__(self, other) -> Tensor:
-        from .ops import matmul, utils
+        from .ops import utils, matmul
 
         return matmul(self, utils.convert_to_tensor(other, self))
 
@@ -810,6 +810,12 @@ class Tensor:
 
     def copy_(self, src: Tensor):
         src_converted = src.to(dtype=self.dtype, device=self.device)
+        if len(src.shape) != len(self.shape) or any(a != b for a, b in zip(self.shape, src_converted.shape)):
+            raise ValueError(
+                'The shape of source tensor {} does not match the shape of target tensor {}'.format(
+                    src_converted.shape, self.shape
+                )
+            )
         if src_converted is src:
             self._storage = src.storage.copy()
         else:
@@ -959,6 +965,48 @@ class Tensor:
             return torch.from_dlpack(self.to(dtype='uint8')).bool()
 
         return torch.from_dlpack(self)
+
+    def masked_fill(self, mask, value):
+        """
+        Fills the tensor with value where mask is True
+
+        Parameters
+        ----------
+        mask: Tensor
+            The target cuda device. None indicates the current cuda device.
+
+        value: Union[float, int]
+            The stream to copy the tensor to GPU on. None indicates the current stream.
+
+        Returns
+        -------
+        ret: Tensor
+        """
+        from .ops import where
+
+        return where(mask, full([], value, dtype=self.dtype, device=self.device), self)
+
+    def expand(self, *sizes: int) -> Tensor:
+        from .ops import broadcast
+
+        sizes: List[int] = list(sizes)
+        assert len(sizes) >= len(self.shape)
+        for i in range(len(sizes)):
+            if sizes[i] == -1:
+                ri = len(sizes) - 1 - i
+                assert ri < len(self.shape)
+                sizes[i] = int(self.shape[len(self.shape) - 1 - ri])
+        return broadcast(self, sizes)
+
+    def float(self) -> Tensor:
+        return self.to(dtype=hidet.float32)
+
+    def transpose(self, dim0: int, dim1: int):
+        from .ops import transpose
+
+        if dim0 < dim1:
+            dim0, dim1 = dim1, dim0
+        return transpose(self, [dim0, dim1])
 
 
 def empty(shape, dtype='float32', device='cpu', layout=None):

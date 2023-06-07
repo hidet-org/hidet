@@ -35,3 +35,18 @@ def pytest_sessionstart(session):
         hidet.utils.clear_cache_dir('ops')
         hidet.utils.clear_cache_dir('testing')
         hidet.utils.clear_cache_dir('graphs')
+
+
+@pytest.fixture(autouse=True)
+def clear_memory_cache():
+    """
+    Clear the memory cache before each test.
+    """
+    # run before each test
+    import torch
+
+    torch.cuda.empty_cache()
+    hidet.runtime.storage.current_memory_pool('cuda').clear()
+    yield
+    # run after each test
+    pass

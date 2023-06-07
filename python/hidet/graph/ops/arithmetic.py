@@ -104,7 +104,7 @@ class WhereTask(Task):
             inverse_map={
                 v: InverseMap.identity(len(v_shape))
                 for v, v_shape in zip([cond, x, y], [cond_shape, x_shape, y_shape])
-                if prod(v_shape) == prod(z_shape)
+                if prod(v_shape) == prod(z_shape) and len(v_shape) == len(z_shape)
             },
         )
 

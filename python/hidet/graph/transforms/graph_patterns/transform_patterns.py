@@ -15,6 +15,7 @@ from hidet.graph import ops
 from hidet.graph.flow_graph import Tensor
 from hidet.graph.ops.transform import ReshapeOp, SqueezeOp, CastOp
 from hidet.utils import prod, initialize
+from hidet.ir.expr import is_true
 from .base import SubgraphRewriteRule, TensorPattern, MatchDict, op_pattern, register_rewrite_rule
 
 
@@ -22,14 +23,14 @@ def reverse_reshape_dim(orig_shape, new_shape, new_axis) -> Optional[int]:
     pre_sum = prod(new_shape[:new_axis])
     cnt = 1
     for i, extent in enumerate(orig_shape):
-        if cnt == pre_sum:
+        if is_true(cnt == pre_sum):
             if len(orig_shape) == i:
                 return None
-            elif orig_shape[i] == new_shape[new_axis]:
+            elif is_true(orig_shape[i] == new_shape[new_axis]):
                 return i
             else:
                 return None
-        elif cnt > pre_sum:
+        elif is_true(cnt > pre_sum):
             return None
         else:
             cnt *= extent

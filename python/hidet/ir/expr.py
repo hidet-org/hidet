@@ -669,12 +669,16 @@ def is_zero(v: Expr) -> bool:
     return isinstance(v, Constant) and v.value == 0
 
 
-def is_true(v: Expr) -> bool:
-    return isinstance(v, Constant) and v.type.name == 'bool' and v.value is True
+def is_true(v: Union[Expr, bool]) -> bool:
+    if isinstance(v, (Constant, bool)):
+        return bool(v) is True
+    return False
 
 
-def is_false(v: Expr) -> bool:
-    return isinstance(v, Constant) and v.type.name == 'bool' and v.value is False
+def is_false(v: Union[Expr, bool]) -> bool:
+    if isinstance(v, (Constant, bool)):
+        return bool(v) is False
+    return False
 
 
 def if_then_else(

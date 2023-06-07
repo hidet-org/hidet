@@ -70,11 +70,11 @@ class Module:
             lines = [' ' * indent + line for line in lines]
             return '{}(\n{}\n)'.format(name, '\n'.join(lines))
 
-    def __call__(self, *args):
-        return self.forward(*args)
+    def __call__(self, *args, **kwargs):
+        return self.forward(*args, **kwargs)
 
     def state_dict(self) -> Dict[str, Any]:
-        state_dict = {}
+        state_dict = OrderedDict()
         for name, parameter in self.named_parameters():
             state_dict[name] = parameter
         return state_dict
@@ -86,7 +86,7 @@ class Module:
     def extra_str(self) -> str:
         return ''
 
-    def forward(self, *args):
+    def forward(self, *args, **kwargs):
         raise NotImplementedError()
 
     def parameters(self, recursive: bool = True) -> Iterator[Tensor]:
@@ -124,4 +124,11 @@ class Module:
             submodule.cuda()
         for name, parameter in self._parameters.items():
             self._parameters[name] = parameter.cuda()
+        return self
+
+    def to(self, dtype=None, device=None) -> Module:
+        for name, submodule in self._submodules.items():
+            submodule.to(dtype, device)
+        for name, parameter in self._parameters.items():
+            self._parameters[name] = parameter.to(dtype, device)
         return self

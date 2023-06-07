@@ -16,7 +16,7 @@ from .module import Module
 from .container import Sequential, ModuleList
 from .activations import Relu, Gelu, Tanh
 from .convolutions import Conv2d
-from .linear import Linear
+from .linear import Linear, LinearTransposed
 from .norms import BatchNorm2d, LayerNorm
 from .poolings import MaxPool2d, AvgPool2d, AdaptiveAvgPool2d
 from .transforms import Embedding

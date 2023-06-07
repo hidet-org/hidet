@@ -40,8 +40,8 @@ class GPT2Attention(nn.Module):
         self.num_heads = config.num_heads
         self.hidden_size = config.hidden_size
         self.head_dim = config.hidden_size // config.num_heads
-        self.c_attn = nn.Linear(config.hidden_size, config.hidden_size * 3)
-        self.c_proj = nn.Linear(config.hidden_size, config.hidden_size)
+        self.c_attn = nn.LinearTransposed(config.hidden_size, config.hidden_size * 3)
+        self.c_proj = nn.LinearTransposed(config.hidden_size, config.hidden_size)
 
     def forward(self, hidden_states: Tensor, last_key, last_value):
         # params:
@@ -101,8 +101,8 @@ class GPT2Attention(nn.Module):
 class GPT2MLP(nn.Module):
     def __init__(self, config: GPT2Config):
         super().__init__()
-        self.c_fc = nn.Linear(config.hidden_size, config.intermediate_size)
-        self.c_proj = nn.Linear(config.intermediate_size, config.hidden_size)
+        self.c_fc = nn.LinearTransposed(config.hidden_size, config.intermediate_size)
+        self.c_proj = nn.LinearTransposed(config.intermediate_size, config.hidden_size)
 
     def forward(self, hidden_states):
         # params:
@@ -234,7 +234,7 @@ class GPT2LMHead(nn.Module):
                 raise ValueError('{} is not a tensor'.format(name))
             found_tensors.append(pointer)
             pointer.copy_(hidet.from_torch(tensor))
-        module.lm_head.weight = ops.transpose(module.transformer.wte.weight, [-1, -2])
+        module.lm_head.weight = module.transformer.wte.weight
 
         for name, tensor in module.named_parameters():
             if tensor not in found_tensors and name not in allow_missing:

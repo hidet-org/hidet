@@ -100,7 +100,7 @@ class MatmulResolveRule(ResolveRule):
         parallel_k = self.get_config('parallel_k', default='default')  # 'default', 'search', 2, 4, ...
         mma = self.get_config('mma', default='simt')  # 'simt', 'mma'
 
-        if any(not isinstance(v, int) for v in a.shape):
+        if any(not isinstance(v, int) for v in a.shape + b.shape):
             nparts = 1
         else:
             batch_size, m_size, n_size, k_size = a.shape[0], a.shape[1], b.shape[2], a.shape[2]
@@ -233,6 +233,8 @@ class MatmulResolveRule(ResolveRule):
         return [c]
 
     def resolve(self, op: Operator) -> Optional[List[Tensor]]:
+        if op.device.is_cpu():
+            return None
         resolve_funcs: List[Callable[[Operator], Any]] = [self.resolve_f16, self.resolve_generic]
         for resolve_func in resolve_funcs:
             outs = resolve_func(op)
