@@ -13,6 +13,7 @@ from typing import List, Optional
 from hidet.graph.operator import Operator, Tensor
 from hidet.graph.transforms import ResolveRule, register_resolve_rule
 from hidet.graph import ops
+from hidet.ir.expr import is_constant
 
 from .conv2d import Conv2dOp
 
@@ -28,7 +29,7 @@ class Conv2dResolveRule(ResolveRule):
         groups = op.attrs['groups']
         dilations = op.attrs['dilations']
         channels = op.inputs[1].shape[0]
-        if groups == channels:
+        if is_constant(channels) and groups == channels:
             return None  # use depthwise schedule in the default Task
         data, weight = op.inputs
         kernel_size = weight.shape[2:]

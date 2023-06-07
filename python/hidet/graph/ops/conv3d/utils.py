@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List, Union
+from hidet.ir.expr import is_constant
 from ..utils import normalize_stride
 
 
@@ -20,7 +21,7 @@ def infer_conv3d_shape(
     oc, gc, kz, kx, ky = w_shape
     sz, sx, sy = normalize_stride(strides, dim=3)
     dilz, dilx, dily = dilations
-    if gc * groups != c:
+    if is_constant(c) and gc * groups != c:
         msg = 'Conv3d: x has {} input channels, w has {} group channels, and groups={}'.format(c, gc, groups)
         raise ValueError(msg)
     if oc % groups != 0:

@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Sequence, Union, Tuple
-from hidet.ir.expr import if_then_else, logical_and
+from hidet.ir.expr import if_then_else, logical_and, is_constant
 from hidet.ir.compute import compute, reduce
 from hidet.graph.ops.utils import Task, Operator, Tensor, TensorNode
 from hidet.graph.ops.utils import input_like, normalize_stride, normalize_padding
@@ -26,7 +26,7 @@ class Conv3dTransposeTask(Task):
         groups: int,
         output_padding: Tuple[int, int, int],
     ):
-        n, oc, r, p, q = data.const_shape
+        n, oc, r, p, q = data.shape
         oc, wc, kz, kx, ky = weight.const_shape
         c = wc * groups
         sz, sx, sy = stride
@@ -40,7 +40,7 @@ class Conv3dTransposeTask(Task):
                 'Conv3dTranspose expect the output_padding < stride, \n'
                 'but got output_padding, stride: {}, {}'.format(output_padding, stride)
             )
-        if any(p < 0 for p in padding):
+        if is_constant(p) and any(p < 0 for p in padding):
             raise ValueError('Negative padding is not supported.')
 
         og = oc // groups  # output channels in each group

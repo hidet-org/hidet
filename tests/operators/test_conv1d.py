@@ -16,7 +16,7 @@ import torch
 import pytest
 
 from hidet import ops
-from hidet.testing import check_binary
+from hidet.testing import check_binary, check_binary_dynamic
 
 
 def torch_conv1d(
@@ -38,6 +38,26 @@ def torch_conv1d(
 def test_conv1d(hidet_op, n, c, l, oc, k, padding, stride, dilations, groups):
     check_binary(
         a_shape=[n, c, l],
+        b_shape=[oc, c, k],
+        numpy_op=lambda data, weight: torch_conv1d(data, weight, padding, stride, dilations, groups),
+        hidet_op=lambda data, weight: hidet_op(
+            ops.conv_pad(data, padding), weight=weight, stride=stride, dilations=dilations, groups=groups
+        ),
+        dtype='float32',
+        atol=2e-5,
+        rtol=2e-5,
+    )
+
+
+@pytest.mark.parametrize("hidet_op", [ops.conv1d])
+@pytest.mark.parametrize("n, c, l, oc, k", [[1, 3, 32, 12, 3]])
+@pytest.mark.parametrize("padding", [[0], [1]])
+@pytest.mark.parametrize("stride", [1])
+@pytest.mark.parametrize("dilations", [1])
+@pytest.mark.parametrize("groups", [1])
+def test_conv1d_dynamic(hidet_op, n, c, l, oc, k, padding, stride, dilations, groups):
+    check_binary_dynamic(
+        a_shape=[('n', n), ('c', c), ('c', l)],
         b_shape=[oc, c, k],
         numpy_op=lambda data, weight: torch_conv1d(data, weight, padding, stride, dilations, groups),
         hidet_op=lambda data, weight: hidet_op(

@@ -12,6 +12,7 @@
 from typing import List, Union, Sequence
 from hidet.graph.ops.utils import Task, Operator, Tensor, TensorNode
 from hidet.graph.ops.utils import compute, input_like, normalize_stride, normalize_dilations, reduce
+from hidet.ir.expr import is_constant
 
 
 class Conv3dTask(Task):
@@ -26,12 +27,12 @@ class Conv3dTask(Task):
             (h - dilx * (kx - 1) - 1) // sx + 1,
             (w - dily * (ky - 1) - 1) // sy + 1,
         )
-        if c % groups != 0 or oc % groups != 0:
+        if is_constant(c) and c % groups != 0 or oc % groups != 0:
             raise ValueError(
                 'Conv3d expect the in_channels % groups == 0 and out_channels % groups == 0, \n'
                 'but got in_channels, out_channels, groups: {}, {}, {}'.format(c, oc, groups)
             )
-        if wc * groups != c:
+        if is_constant(c) and wc * groups != c:
             raise ValueError(
                 'Conv3d expect the weight has shape [out_channels, in_channels / groups, kx, ky], \n'
                 'got weight shape {}, in_channels {} and groups {}'.format([oc, wc, kx, ky], c, groups)
