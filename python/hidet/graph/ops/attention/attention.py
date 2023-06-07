@@ -18,7 +18,7 @@ from hidet.ir.type import tensor_type
 from hidet.ir import primitives as prim
 from hidet.ir.primitives import active_mask, shfl_down_sync
 from hidet.graph.ops.utils import tune
-from hidet.lang import f16, f32, i32, u32, spatial, repeat, tensor, printf
+from hidet.lang import f16, f32, i32, u32, spatial, repeat, tensor
 from hidet.lang import attrs, grid, tensor_pointer, view, col_spatial
 from hidet.lang.cuda import blockIdx, threadIdx, syncthreads, dynamic_shared_memory, register_tensor
 from hidet.lang.cuda import MmaConfig, mma_sync, cp_async, ldmatrix, cp_async_wait_all
@@ -111,8 +111,8 @@ class AttnTask(Task):
 
     @tune.space(
         2,
-        block_i=[128, 64, 256, 512],
-        block_j=[128, 64, 256, 512],
+        block_i=[128, 64, 256, 512, 32, 16],
+        block_j=[128, 64, 256, 512, 32, 16],
         block_k=[8, 16, 32, 64],
         warp_elems_m=[16, 32, 64, 128],
         warp_elems_n=[16, 32, 64, 128],
@@ -178,9 +178,6 @@ class AttnTask(Task):
         warp_size = 32
         tune.check(d_size % 8 == 0)
         tune.check(d_size <= 160)
-        tune.check(n_size >= 64)
-        tune.check(n_kv_size >= 64)
-        # block_j = min(block_j, n_kv_size)
 
         acc_dtype = f16  # must be f16 for now. f32 will fail to compile
         sm_dtype = f32  # currently changing to f16 will not boost performance
@@ -381,7 +378,7 @@ class AttnTask(Task):
 
             @hidet.script
             def cp_async_sync():
-                if compute_capability >= 80:
+                if compute_capability >= 80 and (n_kv_size % 8 == 0 or n_size % 8 == 0):
                     cp_async_wait_all()
 
             @hidet.script
@@ -456,21 +453,21 @@ class AttnTask(Task):
 
             @hidet.script
             def copy_k_g2s(k: f16[k_head + [d_size, n_kv_size]], smem_k: smem_k_type, offset_j: i32, offset_k: i32):
-                if compute_capability >= 80:
+                if compute_capability >= 80 and n_kv_size % 8 == 0:
                     copy_k_g2s_sm80(k, smem_k, offset_j, offset_k)
                 else:
                     copy_k_g2s_sm75(k, smem_k, offset_j, offset_k)
 
             @hidet.script
             def copy_v_g2s(v: f16[v_head + [n_kv_size, d_size]], smem_v: smem_v_type, offset_j: i32):
-                if compute_capability >= 80:
+                if compute_capability >= 80 and n_kv_size % 8 == 0:
                     copy_v_g2s_sm80(v, smem_v, offset_j)
                 else:
                     copy_v_g2s_sm75(v, smem_v, offset_j)
 
             @hidet.script
             def copy_q_g2s(q: f16[q_head + [n_size, d_size]], smem_q: smem_q_type, offset_i: i32):
-                if compute_capability >= 80:
+                if compute_capability >= 80 and n_size % 8 == 0:
                     copy_q_g2s_sm80(q, smem_q, offset_i)
                 else:
                     copy_q_g2s_sm75(q, smem_q, offset_i)
@@ -488,7 +485,7 @@ class AttnTask(Task):
                                 for ti, tj in mma_config.c_store_map.on(lane_id):
                                     delta_m = wi * warp_elems_m_o + mma_i * mma_m + ti
                                     delta_n = wj * warp_elems_n_o + mma_j * mma_n + tj
-                                    if delta_m < n_size and delta_n < d_size:
+                                    if delta_m + offset_i < n_size and delta_n < d_size:
                                         gmem_o[delta_m, delta_n] = regs_o[mma_i, mma_j, p]
                                     p += 1
 

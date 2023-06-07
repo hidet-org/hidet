@@ -766,9 +766,10 @@ def scaled_dot_product_attention(
 
     type_match = (
         q.dtype == k.dtype == v.dtype == float16
-        and same_list(q.shape, v.shape)
-        and len(q.shape) == len(k_transpose_scaled.shape)
-        and (q.shape[-2], q.shape[-1]) == (k_transpose_scaled.shape[-1], k_transpose_scaled.shape[-2])
+        and len(q.shape) == len(k_transpose_scaled.shape) == len(v.shape)
+        and k_transpose_scaled.shape[-1] == v.shape[-2]
+        and q.shape[-1] == k_transpose_scaled.shape[-2] == v.shape[-1]
+        and q.shape[-1] <= 160
     )
     fmha_requirements = q.shape[-1] <= 160 and (
         attn_mask is None or attn_mask is not None and attn_mask.dtype == float16
