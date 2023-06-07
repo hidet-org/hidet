@@ -20,6 +20,7 @@ from hidet import ops
 @pytest.mark.parametrize("shape", [[2, 512, 512, 8, 128], [2, 435, 179, 8, 64]])
 def test_attn_mask_add(shape):
     bs, s_q, s_kv, h, d = shape
+
     def attention_layer():
         q = hidet.symbol([bs, h, s_q, d], dtype='float16', device='cuda')
         k = hidet.symbol([bs, h, d, s_kv], dtype='float16', device='cuda')
@@ -46,6 +47,7 @@ def test_attn_mask_add(shape):
 @pytest.mark.parametrize("shape", [[2, 1024, 1024, 8, 128], [2, 667, 775, 8, 64]])
 def test_attn(shape):
     bs, s_q, s_kv, h, d = shape
+
     def attention_layer():
         q = hidet.symbol([bs, h, s_q, d], dtype='float16', device='cuda')
         k = hidet.symbol([bs, h, d, s_kv], dtype='float16', device='cuda')

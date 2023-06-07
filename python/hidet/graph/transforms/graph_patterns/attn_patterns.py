@@ -14,7 +14,6 @@ from hidet.ir.dtypes import f16
 from hidet.graph.transforms.graph_patterns import MatchDict
 from hidet.graph.transforms.graph_patterns import op_pattern, register_rewrite_rule, deregister_rewrite_rule
 from hidet.graph.transforms.graph_patterns import TensorPattern, SubgraphRewriteRule
-from hidet.utils import same_list
 from hidet.graph.ops.matmul import MatmulOp
 from hidet.graph.ops.arithmetic import AddOp, MultiplyScalarOp, DivideScalarOp
 from hidet.graph.ops.activation import SoftmaxOp

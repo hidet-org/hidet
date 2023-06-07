@@ -25,7 +25,6 @@ from hidet.lang.cuda import MmaConfig, mma_sync, cp_async, ldmatrix, cp_async_wa
 from hidet.graph.ops.utils import Task, Operator, Tensor, TensorNode, compute, input_like
 from hidet.graph.ops.utils import broadcast_shape, broadcast_shapes, broadcast_indices
 from hidet.graph.ops.utils import can_broadcast, schedule_utils
-from hidet.utils import same_list
 from hidet.utils.py import cdiv, prod
 from .attention_mask import AttnMaskAddOp
 
@@ -389,12 +388,18 @@ class AttnTask(Task):
                         smem_m[i] = smem_m_type.dtype.min_value
 
             @hidet.script
-            def copy_k_g2s_sm80(k: f16[k_head + [d_size, n_kv_size]], smem_k: smem_k_type, offset_j: i32, offset_k: i32):
+            def copy_k_g2s_sm80(
+                k: f16[k_head + [d_size, n_kv_size]], smem_k: smem_k_type, offset_j: i32, offset_k: i32
+            ):
                 o_head_index = spatial(*o_head).map(blockIdx.y)
                 gmem_k = k[broadcast_indices(o_head_index, k_head, o_head)][offset_k:, offset_j:]
                 for i, j_seg in k_g2s_layout.on(threadIdx.x):
                     j = j_seg * 8
-                    src_size = 0 if (offset_k + i >= d_size or offset_j + j >= n_kv_size) else min(n_kv_size - (offset_j + j), 8)
+                    src_size = (
+                        0
+                        if (offset_k + i >= d_size or offset_j + j >= n_kv_size)
+                        else min(n_kv_size - (offset_j + j), 8)
+                    )
                     if threadIdx.x < k_g2s_layout.num_workers and i < smem_k_type.shape[0]:
                         cp_async(~smem_k[i, j], ~gmem_k[i, j], cp_size=16, src_size=src_size * 2, cache_level='global')
 
@@ -419,7 +424,9 @@ class AttnTask(Task):
                         cp_async(~smem_q[i, j], ~gmem_q[i, j], cp_size=16, src_size=src_size * 2, cache_level='global')
 
             @hidet.script
-            def copy_k_g2s_sm75(k: f16[k_head + [d_size, n_kv_size]], smem_k: smem_k_type, offset_j: i32, offset_k: i32):
+            def copy_k_g2s_sm75(
+                k: f16[k_head + [d_size, n_kv_size]], smem_k: smem_k_type, offset_j: i32, offset_k: i32
+            ):
                 o_head_index = spatial(*o_head).map(blockIdx.y)
                 gmem_k = k[broadcast_indices(o_head_index, k_head, o_head)][offset_k:, offset_j:]
                 for i, j in k_g2s_layout_sm75.on(threadIdx.x):
