@@ -25,7 +25,6 @@ from hidet.lang.cuda import MmaConfig, mma_sync, cp_async, ldmatrix, cp_async_wa
 from hidet.graph.ops.utils import Task, Operator, Tensor, TensorNode, compute, input_like
 from hidet.graph.ops.utils import broadcast_shape, broadcast_shapes, broadcast_indices
 from hidet.graph.ops.utils import can_broadcast, schedule_utils
-from hidet.utils import same_list
 from hidet.utils.py import cdiv, prod
 from .attention_mask import AttnMaskAddOp
 
@@ -36,6 +35,7 @@ class AttnTask(Task):
         k_shape = k.const_shape
         v_shape = v.const_shape
         n_size = q_shape[-2]
+        n_kv_size = k_shape[-1]
         d_size = q_shape[-1]
         o_shape = broadcast_shapes([q_shape[:-2], k_shape[:-2], v_shape[:-2]]) + [n_size, d_size]
         o_head, q_head, k_head, v_head = o_shape[:-2], q_shape[:-2], k_shape[:-2], v_shape[:-2]
@@ -44,7 +44,7 @@ class AttnTask(Task):
         # ToDo: Add causal mask to compute definition (Will not affect results since schedule template will be used)
         qk = compute(
             name='qk',
-            shape=qk_head + [n_size, n_size],
+            shape=qk_head + [n_size, n_kv_size],
             fcompute=lambda *indices: reduce(
                 shape=[d_size],
                 fcompute=lambda d: q[broadcast_indices(indices[:-2], q_head, qk_head) + [indices[-2], d]]
@@ -110,8 +110,8 @@ class AttnTask(Task):
 
     @tune.space(
         2,
-        block_i=[128, 64, 256, 512],
-        block_j=[128, 64, 256, 512],
+        block_i=[128, 64, 256, 512, 32, 16],
+        block_j=[128, 64, 256, 512, 32, 16],
         block_k=[8, 16, 32, 64],
         warp_elems_m=[16, 32, 64, 128],
         warp_elems_n=[16, 32, 64, 128],
@@ -170,14 +170,13 @@ class AttnTask(Task):
         row_major = DataLayout.row_major
         n_size = q_shape[-2]
         d_size = q_shape[-1]
+        n_kv_size = k_shape[-1]
         dpad_size = 32 * cdiv(d_size, 32)
         dtype = task.inputs[0].ttype.dtype
         dtype_size = dtype.nbytes
         warp_size = 32
         tune.check(d_size % 8 == 0)
         tune.check(d_size <= 160)
-        tune.check(n_size >= 64)
-        block_j = min(block_j, n_size)
 
         acc_dtype = f16  # must be f16 for now. f32 will fail to compile
         sm_dtype = f32  # currently changing to f16 will not boost performance
@@ -378,7 +377,7 @@ class AttnTask(Task):
 
             @hidet.script
             def cp_async_sync():
-                if compute_capability >= 80:
+                if compute_capability >= 80 and (n_kv_size % 8 == 0 or n_size % 8 == 0):
                     cp_async_wait_all()
 
             @hidet.script
@@ -389,22 +388,28 @@ class AttnTask(Task):
                         smem_m[i] = smem_m_type.dtype.min_value
 
             @hidet.script
-            def copy_k_g2s_sm80(k: f16[k_head + [d_size, n_size]], smem_k: smem_k_type, offset_j: i32, offset_k: i32):
+            def copy_k_g2s_sm80(
+                k: f16[k_head + [d_size, n_kv_size]], smem_k: smem_k_type, offset_j: i32, offset_k: i32
+            ):
                 o_head_index = spatial(*o_head).map(blockIdx.y)
                 gmem_k = k[broadcast_indices(o_head_index, k_head, o_head)][offset_k:, offset_j:]
                 for i, j_seg in k_g2s_layout.on(threadIdx.x):
                     j = j_seg * 8
-                    src_size = 0 if (offset_k + i >= d_size or offset_j + j >= n_size) else min(n_size - j, 8)
+                    src_size = (
+                        0
+                        if (offset_k + i >= d_size or offset_j + j >= n_kv_size)
+                        else min(n_kv_size - (offset_j + j), 8)
+                    )
                     if threadIdx.x < k_g2s_layout.num_workers and i < smem_k_type.shape[0]:
                         cp_async(~smem_k[i, j], ~gmem_k[i, j], cp_size=16, src_size=src_size * 2, cache_level='global')
 
             @hidet.script
-            def copy_v_g2s_sm80(v: f16[v_head + [n_size, d_size]], smem_v: smem_v_type, offset_j: i32):
+            def copy_v_g2s_sm80(v: f16[v_head + [n_kv_size, d_size]], smem_v: smem_v_type, offset_j: i32):
                 o_head_index = spatial(*o_head).map(blockIdx.y)
                 gmem_v = v[broadcast_indices(o_head_index, v_head, o_head)][offset_j:, :]
                 for i, j_seg in v_g2s_layout.on(threadIdx.x):
                     j = j_seg * 8
-                    src_size = 0 if (offset_j + i >= n_size or j >= d_size) else min(d_size - j, 8)
+                    src_size = 0 if (offset_j + i >= n_kv_size or j >= d_size) else min(d_size - j, 8)
                     if threadIdx.x < v_g2s_layout.num_workers and i < smem_v_type.shape[0]:
                         cp_async(~smem_v[i, j], ~gmem_v[i, j], cp_size=16, src_size=src_size * 2, cache_level='global')
 
@@ -419,23 +424,25 @@ class AttnTask(Task):
                         cp_async(~smem_q[i, j], ~gmem_q[i, j], cp_size=16, src_size=src_size * 2, cache_level='global')
 
             @hidet.script
-            def copy_k_g2s_sm75(k: f16[k_head + [d_size, n_size]], smem_k: smem_k_type, offset_j: i32, offset_k: i32):
+            def copy_k_g2s_sm75(
+                k: f16[k_head + [d_size, n_kv_size]], smem_k: smem_k_type, offset_j: i32, offset_k: i32
+            ):
                 o_head_index = spatial(*o_head).map(blockIdx.y)
                 gmem_k = k[broadcast_indices(o_head_index, k_head, o_head)][offset_k:, offset_j:]
                 for i, j in k_g2s_layout_sm75.on(threadIdx.x):
                     if threadIdx.x < k_g2s_layout_sm75.num_workers and i < smem_k_type.shape[0]:
-                        if offset_k + i < d_size and offset_j + j < n_size:
+                        if offset_k + i < d_size and offset_j + j < n_kv_size:
                             smem_k[i, j] = gmem_k.read([i, j], protected=False)
                         else:
                             smem_k[i, j] = f16.zero
 
             @hidet.script
-            def copy_v_g2s_sm75(v: f16[v_head + [n_size, d_size]], smem_v: smem_v_type, offset_j: i32):
+            def copy_v_g2s_sm75(v: f16[v_head + [n_kv_size, d_size]], smem_v: smem_v_type, offset_j: i32):
                 o_head_index = spatial(*o_head).map(blockIdx.y)
                 gmem_v = v[broadcast_indices(o_head_index, v_head, o_head)][offset_j:, :]
                 for i, j in v_g2s_layout_sm75.on(threadIdx.x):
                     if threadIdx.x < v_g2s_layout_sm75.num_workers and i < smem_v_type.shape[0]:
-                        if offset_j + i < n_size and j < d_size:
+                        if offset_j + i < n_kv_size and j < d_size:
                             smem_v[i, j] = gmem_v.read([i, j], protected=False)
                         else:
                             smem_v[i, j] = f16.zero
@@ -452,22 +459,22 @@ class AttnTask(Task):
                             smem_q[i, j] = f16.zero
 
             @hidet.script
-            def copy_k_g2s(k: f16[k_head + [d_size, n_size]], smem_k: smem_k_type, offset_j: i32, offset_k: i32):
-                if compute_capability >= 80:
+            def copy_k_g2s(k: f16[k_head + [d_size, n_kv_size]], smem_k: smem_k_type, offset_j: i32, offset_k: i32):
+                if compute_capability >= 80 and n_kv_size % 8 == 0:
                     copy_k_g2s_sm80(k, smem_k, offset_j, offset_k)
                 else:
                     copy_k_g2s_sm75(k, smem_k, offset_j, offset_k)
 
             @hidet.script
-            def copy_v_g2s(v: f16[v_head + [n_size, d_size]], smem_v: smem_v_type, offset_j: i32):
-                if compute_capability >= 80:
+            def copy_v_g2s(v: f16[v_head + [n_kv_size, d_size]], smem_v: smem_v_type, offset_j: i32):
+                if compute_capability >= 80 and n_kv_size % 8 == 0:
                     copy_v_g2s_sm80(v, smem_v, offset_j)
                 else:
                     copy_v_g2s_sm75(v, smem_v, offset_j)
 
             @hidet.script
             def copy_q_g2s(q: f16[q_head + [n_size, d_size]], smem_q: smem_q_type, offset_i: i32):
-                if compute_capability >= 80:
+                if compute_capability >= 80 and n_size % 8 == 0:
                     copy_q_g2s_sm80(q, smem_q, offset_i)
                 else:
                     copy_q_g2s_sm75(q, smem_q, offset_i)
@@ -485,7 +492,7 @@ class AttnTask(Task):
                                 for ti, tj in mma_config.c_store_map.on(lane_id):
                                     delta_m = wi * warp_elems_m_o + mma_i * mma_m + ti
                                     delta_n = wj * warp_elems_n_o + mma_j * mma_n + tj
-                                    if delta_m < n_size and delta_n < d_size:
+                                    if delta_m + offset_i < n_size and delta_n < d_size:
                                         gmem_o[delta_m, delta_n] = regs_o[mma_i, mma_j, p]
                                     p += 1
 
@@ -538,16 +545,27 @@ class AttnTask(Task):
                 smem_mij: smem_mij_type,
                 smem_lij: smem_lij_type,
                 regs_acc: acc_dtype[mmas_per_warp_m, mmas_per_warp_n, mma_config.c_elements],
+                offset_j: i32,
             ):
                 warp_mask = active_mask()
                 warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
+                wi, wj, _ = spatial(warp_count_m, warp_count_n, warp_count_k).map(warp_id)
+
+                # mask out unused values when block_j > (n_kv_size - offset_j)
+                for mma_i, mma_j in grid(mmas_per_warp_m, mmas_per_warp_n):
+                    p = 0
+                    for i, j in mma_config.c_store_map.on(lane_id):
+                        delta_n = offset_j + wj * warp_elems_n + mma_j * mma_n + j
+                        if delta_n >= n_kv_size:
+                            regs_acc[mma_i, mma_j, p] = acc_dtype.min_value
+                        p += 1
+
                 # Each thread holds c elements in 2 rows in mma
                 rv = register_tensor(acc_dtype, [2])
 
                 # Reduce mij
                 rv[0] = acc_dtype.min_value
                 rv[1] = acc_dtype.min_value
-                wi, wj, _ = spatial(warp_count_m, warp_count_n, warp_count_k).map(warp_id)
                 c_map = repeat(2, 1) * spatial(8, 4)
                 for mma_i in range(mmas_per_warp_m):
                     rv[0] = acc_dtype.min_value
@@ -578,7 +596,10 @@ class AttnTask(Task):
                     for i, j in mma_config.c_store_map.on(lane_id):
                         delta_m = wi * warp_elems_m + mma_i * mma_m + i
                         delta_n = wj * warp_elems_n + mma_j * mma_n + j
-                        regs_acc[mma_i, mma_j, p] = prim.exp(regs_acc[mma_i, mma_j, p] - smem_mij[delta_m])
+                        if delta_n + offset_j >= n_kv_size:
+                            regs_acc[mma_i, mma_j, p] = acc_dtype.zero
+                        else:
+                            regs_acc[mma_i, mma_j, p] = prim.exp(regs_acc[mma_i, mma_j, p] - smem_mij[delta_m])
                         smem_qk[delta_m, delta_n] = regs_acc[mma_i, mma_j, p]
                         p += 1
                 syncthreads()
@@ -621,8 +642,8 @@ class AttnTask(Task):
             @hidet.script
             def attn_kernel(
                 q: f16[q_head + [n_size, d_size]],
-                k: f16[k_head + [d_size, n_size]],
-                v: f16[v_head + [n_size, d_size]],
+                k: f16[k_head + [d_size, n_kv_size]],
+                v: f16[v_head + [n_kv_size, d_size]],
                 o: f16[o_head + [n_size, d_size]],
             ):
                 attrs.cuda.grid_dim = (i_split, bs)
@@ -673,9 +694,9 @@ class AttnTask(Task):
                     regs_acc_o[a, b, c] = acc_dtype.zero
                     regs_o[a, b, c] = acc_dtype.zero
 
-                j_tiles = cdiv(n_size, block_j)
+                j_tiles = cdiv(n_kv_size, block_j)
                 if is_causal:
-                    j_tiles = cdiv((blockIdx.x + 1) * block_i, block_j)
+                    j_tiles = min(cdiv((blockIdx.x + 1) * block_i, block_j), j_tiles)
                 for j in range(j_tiles):
                     offset_j = block_j * j
 
@@ -733,7 +754,7 @@ class AttnTask(Task):
                                 p += 1
 
                     # Iterative softmax, and write result matrix into shared memory
-                    qk_softmax_reduce(smem_qk, smem_mij, smem_lij, regs_acc)
+                    qk_softmax_reduce(smem_qk, smem_mij, smem_lij, regs_acc, offset_j)
                     # ----------------------------
 
                     # ----------------------------
@@ -839,12 +860,12 @@ def attention(q: Tensor, k: Tensor, v: Tensor, mask: Optional[Tensor] = None, is
         raise ValueError("Attention only supports float16 inputs")
 
     if not (
-        same_list(q.shape, v.shape)
-        and len(q.shape) == len(k.shape)
-        and (q.shape[-2], q.shape[-1]) == (k.shape[-1], k.shape[-2])
+        len(q.shape) == len(k.shape) == len(v.shape)
+        and k.shape[-1] == v.shape[-2]
+        and q.shape[-1] == k.shape[-2] == v.shape[-1]
     ):
         raise ValueError(
-            'Attention expect tensor Q[..., S, D], K[..., D, S], V[..., S, D]'
+            'Attention expect tensor Q[..., S_q, D], K[..., D, S_kv], V[..., S_kv, D]'
             + ', got Q {}, K {}, V {}'.format(q.shape, k.shape, v.shape)
         )
 
@@ -855,10 +876,11 @@ def attention(q: Tensor, k: Tensor, v: Tensor, mask: Optional[Tensor] = None, is
         return AttnOp(q, k, v, is_causal).get_output(0)
 
     mask_shape = mask.shape
-    seq_len = q.shape[-2]
+    seq_len_q = q.shape[-2]
+    seq_len_kv = v.shape[-2]
     q_head, k_head = (q.shape[:-2], k.shape[:-2])
     qk_head = broadcast_shape(q_head, k_head)
-    qk_shape = qk_head + [seq_len, seq_len]
+    qk_shape = qk_head + [seq_len_q, seq_len_kv]
     if not can_broadcast(mask_shape, qk_shape):
         raise ValueError("Invalid mask dimension: {}".format(mask_shape))
 
