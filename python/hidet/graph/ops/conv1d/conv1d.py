@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Union, Sequence
+from hidet import ir
 from hidet.ir.expr import is_constant
 from hidet.graph.ops.utils import Task, Operator, Tensor, TensorNode
 from hidet.graph.ops.utils import compute, input_like, normalize_stride, normalize_dilations, reduce
@@ -24,11 +25,11 @@ class Conv1dTask(Task):
         s = normalize_stride(stride, dim=1)[0]
         dil = normalize_dilations(dilations, dim=1)[0]
         len_in = (l - dil * (k - 1) - 1) // s + 1
-        if is_constant(c, oc, groups) and c % groups != 0 or oc % groups != 0:
-            raise ValueError(
-                'Conv1d expects: in_channels % groups == 0 and out_channels % groups == 0, \n'
-                'but got in_channels, out_channels, groups: {}, {}, {}'.format(c, oc, groups)
-            )
+
+        self._assert(ir.logical_or(c % groups != 0, oc % groups != 0), msg=(
+            'Conv1d expects: in_channels % groups == 0 and out_channels % groups == 0, \n'
+            'but got in_channels, out_channels, groups: {}, {}, {}'.format(c, oc, groups)
+        ))
         if is_constant(wc, groups, c) and wc * groups != c:
             raise ValueError(
                 'Conv1d expects the weight tensor has shape [out_channels, in_channels / groups, kernel_size], \n'

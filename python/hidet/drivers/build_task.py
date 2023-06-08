@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import logging
+import re
 import os
 import json
 from hashlib import sha256
@@ -17,6 +18,7 @@ from typing import List, Optional, Tuple
 
 import hidet.cuda
 from hidet import option
+from hidet.ir.stmt import AssertStmt
 from hidet.ir.expr import is_constant
 from hidet.ir.module import IRModule
 from hidet.ir.task import Task
@@ -115,7 +117,20 @@ def build_task_module(task: Task, candidates: List[IRModule], task_dir: str, tar
         ir_module.add_function(get_output_shape.name, get_output_shape)
         task_ir_module = ir_module
         object_files = [os.path.join(task_dir, 'candidates', str(i), 'lib.o') for i in range(len(candidates))]
-
+    
+    # add assertions to the launch function
+    if len(task.assertions) > 0:
+        assertions = tuple(AssertStmt(cond, msg) for cond, msg in task.assertions)
+        for _, func in ir_module.functions.items():
+            # TODO: this is a hacky way of detecting if a function is a launch function
+            #    maybe designate a separate function type?
+            if func.kind == 'public' and re.search('launch_*', func.name):
+                body = func.body
+                # this should be fine, since ResolveSymbolPass resolves all symbols to the front
+                #    before these
+                if isinstance(body, hidet.ir.stmt.SeqStmt):
+                    body.seq = assertions + body.seq
+    
     # build task ir module
     build_ir_module(
         ir_module=task_ir_module, output_dir=task_dir, output_kind='.so', object_files=object_files, target=target

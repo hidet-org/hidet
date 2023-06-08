@@ -11,12 +11,12 @@
 # limitations under the License.
 # pylint: disable=import-outside-toplevel
 from __future__ import annotations
-from typing import Any, Dict, List, Union, Callable
+from typing import Any, Dict, List, Union, Callable, Optional, Tuple
 import os
 import pickle
 from hidet.ir.node import Node
 from hidet.ir.type import FuncType, VoidType
-from hidet.ir.expr import Expr, Var, SymbolVar, var
+from hidet.ir.expr import Expr, Var, SymbolVar, var, is_constant
 from hidet.ir.module import IRModule
 from hidet.ir.compute import ComputeNode, TensorNode, TensorInput, ScalarInput, GridCompute
 
@@ -93,12 +93,22 @@ class Task(Node):
         self.outputs: List[TensorNode] = list(outputs)
         self.inverse_map: Dict[TensorInput, InverseMap] = {a: InverseMap.from_obj(b) for a, b in inverse_map.items()}
         self.attrs: Dict[str, Union[str, float, int, bool]] = attributes
+        self.assertions: List[Tuple[Expr, Optional[str]]] = []
 
         from hidet.ir.tools import collect
 
         self.symbols: List[SymbolVar] = list(collect(self.outputs, SymbolVar))
 
         self._sanity_check()
+    
+    def _assert(self, expr: Expr, msg: Optional[str] = None):
+        import hidet
+        simplified = hidet.ir.tools.simplify(expr)
+        print(simplified)
+        if is_constant(simplified):
+            assert simplified, msg
+        else:
+            self.assertions.append((expr, msg))
 
     @property
     def params(self) -> List[TensorNode]:
