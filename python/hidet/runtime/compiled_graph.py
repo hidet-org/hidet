@@ -293,6 +293,7 @@ class CompiledGraph:
         cuda_graph: hidet.cuda.graph.CudaGraph
             The CUDA graph.
         """
+        # pylint: disable=line-too-long
         from hidet.cuda.graph import CudaGraph, CudaGraphCreationError
         from hidet.graph.tensor import Tensor, empty
 
