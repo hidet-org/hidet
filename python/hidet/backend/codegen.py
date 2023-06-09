@@ -537,10 +537,16 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
 
     def visit_AssertStmt(self, stmt: AssertStmt):
         if stmt.msg is not None:
-            return NewLine() + Text('assert(((void)"') + stmt.msg + '", ' + self(stmt.cond) + '));'
+            msg = stmt.msg.replace("\n", "")
         else:
-            return NewLine() + Text('assert(') + self(stmt.cond) + ');'
-
+            msg = 'assertion failed!'
+        
+        doc = NewLine() + Text(f'hidet_set_last_error("{msg}");') + NewLine()
+        doc += Text('return;')
+        
+        doc = NewLine() + Text('if (!') + self(stmt.cond) + Text(') {') + doc.indent() + NewLine() + Text('}')
+        return doc
+        
     def visit_AsmStmt(self, stmt: AsmStmt):
         volatile_doc = 'volatile ' if stmt.is_volatile else ''
         template_doc = f'"{Text(stmt.template_string)}"'
@@ -666,6 +672,7 @@ class CUDACodegen(Codegen):
     def require_headers(self) -> Doc:
         doc = Doc()
         doc += Text('#include <stdint.h>') + NewLine()
+
         if self.require_immintrin:
             doc += Text('#include <immintrin.h>') + NewLine()
         if self.require_fp16:
@@ -677,6 +684,8 @@ class CUDACodegen(Codegen):
         doc += Text('#include <hidet/runtime/cpu/context.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cuda/complex.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cuda/context.h>') + NewLine()
+        doc += Text("#include <hidet/runtime/logging.h>") + NewLine()
+
 
         if self.require_tf32:
             # nvcc use float to 'store' tfloat32 data
@@ -756,6 +765,8 @@ class CPUCodegen(Codegen):
         doc += Text('#include <hidet/runtime/memory_planner.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cpu/context.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cpu/float32.h>') + NewLine()
+        doc += Text("#include <hidet/runtime/logging.h>") + NewLine()
+
         if self.require_complex:
             doc += Text('#include <hidet/runtime/cpu/complex.h>') + NewLine()
         if self.require_fp16:

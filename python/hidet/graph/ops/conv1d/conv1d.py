@@ -30,7 +30,7 @@ class Conv1dTask(Task):
             'Conv1d expects: in_channels % groups == 0 and out_channels % groups == 0, \n'
             'but got in_channels, out_channels, groups: {}, {}, {}'.format(c, oc, groups)
         ))
-        self._assert(wc * groups == c, (
+        self._assert(wc * groups == c, msg=(
             'Conv1d expects the weight tensor has shape [out_channels, in_channels / groups, kernel_size], \n'
             'got weight shape {}, in_channels {} and groups {}'.format([oc, wc, k], c, groups)
         ))

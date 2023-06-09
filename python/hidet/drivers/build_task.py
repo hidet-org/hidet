@@ -121,7 +121,7 @@ def build_task_module(task: Task, candidates: List[IRModule], task_dir: str, tar
     # add assertions to the launch function
     if len(task.assertions) > 0:
         assertions = tuple(AssertStmt(cond, msg) for cond, msg in task.assertions)
-        for _, func in ir_module.functions.items():
+        for _, func in task_ir_module.functions.items():
             # TODO: this is a hacky way of detecting if a function is a launch function
             #    maybe designate a separate function type?
             if func.kind == 'public' and re.search('launch_*', func.name):
