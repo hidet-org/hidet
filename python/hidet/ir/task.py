@@ -93,22 +93,29 @@ class Task(Node):
         self.outputs: List[TensorNode] = list(outputs)
         self.inverse_map: Dict[TensorInput, InverseMap] = {a: InverseMap.from_obj(b) for a, b in inverse_map.items()}
         self.attrs: Dict[str, Union[str, float, int, bool]] = attributes
-        self.assertions: List[Tuple[Expr, Optional[str]]] = []
+        if not hasattr(self, 'assertions'):
+            self.assertions: List[Tuple[Expr, Optional[str]]] = []
 
         from hidet.ir.tools import collect
 
         self.symbols: List[SymbolVar] = list(collect(self.outputs, SymbolVar))
+        # check assertions for correctness
+        assert_symbols: List[SymbolVar] = list(collect([i[0] for i in self.assertions], SymbolVar))
+        for sym in assert_symbols:
+            assert sym in self.symbols, f"encountered {sym} in assertions, but not in list of defined symbols"
 
         self._sanity_check()
     
     def _assert(self, expr: Expr, msg: Optional[str] = None):
         import hidet
         simplified = hidet.ir.tools.simplify(expr)
-        print(simplified)
         if is_constant(simplified):
             assert simplified, msg
         else:
-            self.assertions.append((expr, msg))
+            if hasattr(self, 'assertions'):
+                self.assertions.append((expr, msg))
+            else:
+                self.assertions = [(expr, msg)]
 
     @property
     def params(self) -> List[TensorNode]:

@@ -26,15 +26,14 @@ class Conv1dTask(Task):
         dil = normalize_dilations(dilations, dim=1)[0]
         len_in = (l - dil * (k - 1) - 1) // s + 1
 
-        self._assert(ir.logical_or(c % groups != 0, oc % groups != 0), msg=(
+        self._assert(ir.logical_and(c % groups == 0, oc % groups == 0), msg=(
             'Conv1d expects: in_channels % groups == 0 and out_channels % groups == 0, \n'
             'but got in_channels, out_channels, groups: {}, {}, {}'.format(c, oc, groups)
         ))
-        if is_constant(wc, groups, c) and wc * groups != c:
-            raise ValueError(
-                'Conv1d expects the weight tensor has shape [out_channels, in_channels / groups, kernel_size], \n'
-                'got weight shape {}, in_channels {} and groups {}'.format([oc, wc, k], c, groups)
-            )
+        self._assert(wc * groups == c, (
+            'Conv1d expects the weight tensor has shape [out_channels, in_channels / groups, kernel_size], \n'
+            'got weight shape {}, in_channels {} and groups {}'.format([oc, wc, k], c, groups)
+        ))
         out_group_size = oc // groups
         output = compute(
             name='out',
