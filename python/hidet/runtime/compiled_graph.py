@@ -292,8 +292,10 @@ class CompiledGraph:
                     )
                 for j, (orig_shape, new_shape) in enumerate(zip(traced_shape, concrete_shape)):
                     if isinstance(orig_shape, int) and orig_shape != new_shape:
-                        raise RuntimeError(f'shape mismatch at dimension {j}, \
-                                           original: {orig_shape} vs. new: {new_shape}')
+                        raise RuntimeError(
+                            f'shape mismatch at dimension {j}, \
+                                           original: {orig_shape} vs. new: {new_shape}'
+                        )
                     elif orig_shape not in symbol_map:
                         symbol_map[orig_shape] = new_shape
                     elif symbol_map[orig_shape] != new_shape:
