@@ -540,13 +540,13 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             msg = stmt.msg.replace("\n", "")
         else:
             msg = 'assertion failed!'
-        
+
         doc = NewLine() + Text(f'hidet_set_last_error("{msg}");') + NewLine()
         doc += Text('return;')
-        
+
         doc = NewLine() + Text('if (!') + self(stmt.cond) + Text(') {') + doc.indent() + NewLine() + Text('}')
         return doc
-        
+
     def visit_AsmStmt(self, stmt: AsmStmt):
         volatile_doc = 'volatile ' if stmt.is_volatile else ''
         template_doc = f'"{Text(stmt.template_string)}"'
@@ -685,7 +685,6 @@ class CUDACodegen(Codegen):
         doc += Text('#include <hidet/runtime/cuda/complex.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cuda/context.h>') + NewLine()
         doc += Text("#include <hidet/runtime/logging.h>") + NewLine()
-
 
         if self.require_tf32:
             # nvcc use float to 'store' tfloat32 data

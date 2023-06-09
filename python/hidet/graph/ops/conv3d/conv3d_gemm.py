@@ -29,7 +29,10 @@ class Conv3dGemmImageTransformTask(Task):
             (h - dilx * (kx - 1) - 1) // sx + 1,
             (w - dily * (ky - 1) - 1) // sy + 1,
         )
-        self._assert(c % groups == 0, msg = 'Conv3d expect in_channels % groups == 0, but got in_channels {} and groups {}'.format(c, groups))
+        self._assert(
+            c % groups == 0,
+            msg='Conv3d expect in_channels % groups == 0, but got in_channels {} and groups {}'.format(c, groups),
+        )
         gc = c // groups  # group channels
         gemm_x = compute(
             name='gemm_x',

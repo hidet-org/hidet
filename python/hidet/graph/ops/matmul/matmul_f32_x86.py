@@ -33,16 +33,22 @@ class MatmulF32Taskx86(Task):
 
         if len(a_shape) < 2 or len(b_shape) < 2:
             raise ValueError('Matrix multiplication expect at least 2D tensor, got {} and {}'.format(a_shape, b_shape))
-        
-        self._assert(a_shape[-1] == b_shape[-2], msg=(
-            'Matrix multiplication expect tensor A and B with shape [..., M, K] and [..., K, N]'
-            ', got {} and {}'.format(a_shape, b_shape)
-        ))
 
-        self._assert(can_mutually_broadcast(a_shape[:-2], b_shape[:-2]), msg=(
-            'Matrix multiplication expect tensor A and B with compatible broadcast shape, '
-            'got {} and {}'.format(a_shape, b_shape)
-        ))
+        self._assert(
+            a_shape[-1] == b_shape[-2],
+            msg=(
+                'Matrix multiplication expect tensor A and B with shape [..., M, K] and [..., K, N]'
+                ', got {} and {}'.format(a_shape, b_shape)
+            ),
+        )
+
+        self._assert(
+            can_mutually_broadcast(a_shape[:-2], b_shape[:-2]),
+            msg=(
+                'Matrix multiplication expect tensor A and B with compatible broadcast shape, '
+                'got {} and {}'.format(a_shape, b_shape)
+            ),
+        )
 
         k_size = a_shape[-1]
         c_shape = broadcast_shape(a_shape[:-2], b_shape[:-2]) + [a_shape[-2], b_shape[-1]]

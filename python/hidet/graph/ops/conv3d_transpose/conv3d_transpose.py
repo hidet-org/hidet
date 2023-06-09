@@ -11,7 +11,7 @@
 # limitations under the License.
 from typing import Sequence, Union, Tuple
 from hidet import ir
-from hidet.ir.expr import if_then_else, logical_and, is_constant
+from hidet.ir.expr import if_then_else, logical_and
 from hidet.ir.compute import compute, reduce
 from hidet.graph.ops.utils import Task, Operator, Tensor, TensorNode
 from hidet.graph.ops.utils import input_like, normalize_stride, normalize_padding
@@ -41,7 +41,7 @@ class Conv3dTransposeTask(Task):
             msg=(
                 'Conv3dTranspose expect the output_padding < stride, \n'
                 'but got output_padding, stride: {}, {}'.format(output_padding, stride)
-            )
+            ),
         )
         self._assert(all(p >= 0 for p in padding), msg='Negative padding is not supported.')
 

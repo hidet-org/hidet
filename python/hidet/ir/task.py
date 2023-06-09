@@ -105,9 +105,10 @@ class Task(Node):
             assert sym in self.symbols, f"encountered {sym} in assertions, but not in list of defined symbols"
 
         self._sanity_check()
-    
+
     def _assert(self, expr: Expr, msg: Optional[str] = None):
         import hidet
+
         simplified = hidet.ir.tools.simplify(expr)
         if is_constant(simplified):
             assert simplified, msg

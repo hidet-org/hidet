@@ -148,24 +148,32 @@ class CompiledTask:
 
     def run_async(self, inputs):
         from hidet import option, ir
+
         if option.runtime_check():
             symbol_map = {}
             for i, (traced, new) in enumerate(zip(self.meta_data.inputs, inputs)):
                 if ir.data_type(traced.dtype) != new.dtype:
-                    raise RuntimeError(f"dtype mismatch at arg {i} between original: {traced.dtype} and new: {new.dtype}")
+                    raise RuntimeError(
+                        f"dtype mismatch at arg {i} between original: {traced.dtype} and new: {new.dtype}"
+                    )
                 traced_shape = traced.shape
                 concrete_shape = new.shape
-                if (len(traced_shape) != len(concrete_shape)):
-                    raise RuntimeError(f"Rank of input {i} not equal to original. ({len(concrete_shape)} vs. {len(traced_shape)})")
-                for i, (orig, new) in enumerate(zip(traced_shape, concrete_shape)):
-                    if isinstance(orig, int) and orig != new:
-                        raise RuntimeError(f'shape mismatch at dimension {i}, original: {orig} vs. new: {new}')
-                    elif orig not in symbol_map:
-                        symbol_map[orig] = new
-                    elif symbol_map[orig] != new:
-                        raise RuntimeError(f"There exists multiple instances of the same symbol {orig} with different values in inputs\
-                                   (ex: {symbol_map[orig]} and {new})")
-                    
+                if len(traced_shape) != len(concrete_shape):
+                    raise RuntimeError(
+                        f"Rank of input {i} not equal to original. ({len(concrete_shape)} vs. {len(traced_shape)})"
+                    )
+                for j, (orig_shape, new_shape) in enumerate(zip(traced_shape, concrete_shape)):
+                    if isinstance(orig_shape, int) and orig_shape != new_shape:
+                        raise RuntimeError(f'shape mismatch at dimension {j}, original: \
+                                           {orig_shape} vs. new: {new_shape}')
+                    elif orig_shape not in symbol_map:
+                        symbol_map[orig_shape] = new_shape
+                    elif symbol_map[orig_shape] != new_shape:
+                        raise RuntimeError(
+                            f"There exists multiple instances of the same symbol {orig_shape}\
+                            with different values in inputs (ex: {symbol_map[orig_shape]} and {new_shape})"
+                        )
+
         outputs = self.create_outputs()
         candidate = self.candidates[self.pick_best_candidate(inputs, outputs)]
         candidate(*inputs, *outputs)

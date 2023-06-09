@@ -35,11 +35,12 @@ class Conv2dTransposeTask(Task):
         h = (p - 1) * sx - px0 - px1 + kx + output_padding[0]
         w = (q - 1) * sy - py0 - py1 + ky + output_padding[1]
 
-        self._assert(ir.logical_and(output_padding[0] < stride[0], output_padding < stride[1]),
+        self._assert(
+            ir.logical_and(output_padding[0] < stride[0], output_padding < stride[1]),
             msg=(
                 'Conv2dTranspose expect the output_padding < stride, \n'
                 'but got output_padding, stride: {}, {}'.format(output_padding, stride)
-            )
+            ),
         )
 
         self._assert(all(p >= 0 for p in padding), msg='Negative padding is not supported.')

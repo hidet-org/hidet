@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List, Tuple
-from hidet.ir.expr import Expr, Var, Constant
+from hidet.ir.expr import Expr, Var
 from ..utils import Task, Operator, Tensor, compute, reduce, input_like, broadcast_shape, broadcast_indices
 from ..utils import TensorInput
 
@@ -24,15 +24,22 @@ class MatmulTask(Task):
         if len(a_shape) <= 1 and len(b_shape) <= 1:
             raise ValueError('At least one of the inputs must have rank > 1')
         elif len(a_shape) == 1:
-            self._assert(a_shape[0] == b_shape[-2], msg='Cannot multiply matrices with shape {} and {}.'.format(a_shape, b_shape))
+            self._assert(
+                a_shape[0] == b_shape[-2], msg='Cannot multiply matrices with shape {} and {}.'.format(a_shape, b_shape)
+            )
             reduce_extent = a_shape[0]
             c_shape = b_shape[:-2] + b_shape[-1:]
         elif len(b_shape) == 1:
-            self._assert(a_shape[-1] == b_shape[0], msg='Cannot multiply matrices with shape {} and {}.'.format(a_shape, b_shape))
+            self._assert(
+                a_shape[-1] == b_shape[0], msg='Cannot multiply matrices with shape {} and {}.'.format(a_shape, b_shape)
+            )
             reduce_extent = a_shape[-1]
             c_shape = a_shape[:-1]
         else:
-            self._assert(a_shape[-1] == b_shape[-2], msg='Cannot multiply matrices with shape {} and {}.'.format(a_shape, b_shape))
+            self._assert(
+                a_shape[-1] == b_shape[-2],
+                msg='Cannot multiply matrices with shape {} and {}.'.format(a_shape, b_shape),
+            )
             reduce_extent = a_shape[-1]
             c_shape = broadcast_shape(a_shape[:-2], b_shape[:-2]) + [a_shape[-2], b_shape[-1]]
 
