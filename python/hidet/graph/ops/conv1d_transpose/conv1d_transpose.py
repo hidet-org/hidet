@@ -35,12 +35,11 @@ class Conv1dTransposeTask(Task):
         channels_in = wc * groups
         l = (length_in - 1) * s - 2 * p + k + op
 
-        if op >= s:
-            raise ValueError(
-                'Convd1dTranspose expects: output_padding < stride, \n'
-                'but got output_padding, stride: {}, {}'.format(output_padding, s)
-            )
-
+        self._assert(op < s, msg=(
+            'Convd1dTranspose expects: output_padding < stride, \n'
+            'but got output_padding, stride: {}, {}'.format(output_padding, s)
+        ))
+        
         # output channels per group
         og = out_channels // groups
 

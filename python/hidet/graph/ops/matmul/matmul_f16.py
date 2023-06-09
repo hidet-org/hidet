@@ -33,18 +33,16 @@ class MatmulF16Task(Task):
         if len(a.shape) < 2 or len(b.shape) < 2:
             raise ValueError('Matrix multiplication expect at least 2D tensor, got {} and {}'.format(a.shape, b.shape))
 
-        # TODO: add dynamic shape assertions
-        if not (isinstance(a.shape[-1], Expr) or isinstance(b.shape[-1], Expr)) and a.shape[-1] != b.shape[-2]:
-            raise ValueError(
-                'Matrix multiplication expect tensor A and B with shape [..., M, K] and [..., K, N]'
-                ', got {} and {}'.format(a.shape, b.shape)
-            )
+        self._assert(a.shape[-1] == b.shape[-2], msg=(
+            'Matrix multiplication expect tensor A and B with shape [..., M, K] and [..., K, N]'
+            ', got {} and {}'.format(a.shape, b.shape)
+        ))
 
-        if not can_mutually_broadcast(a.shape[:-2], b.shape[:-2]):
-            raise ValueError(
-                'Matrix multiplication expect tensor A and B with compatible broadcast shape, '
-                'got {} and {}'.format(a.shape, b.shape)
-            )
+        self._assert(can_mutually_broadcast(a.shape[:-2], b.shape[:-2]), msg=(
+            'Matrix multiplication expect tensor A and B with compatible broadcast shape, '
+            'got {} and {}'.format(a.shape, b.shape)
+        ))
+
         a_shape = a.shape
         b_shape = b.shape
         k_size = a.shape[-1]
