@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Optional, Tuple, Dict, Any, Callable
+from typing import List, Optional, Tuple, Dict, Any, Callable, Sequence
 import zipfile
 import os
 import json
@@ -277,6 +277,24 @@ class CompiledGraph:
         ret: List[hidet.Tensor]
             The output tensors.
         """
+        if hidet.option.runtime_check():
+            symbol_map = {}
+            for i, (traced, new) in enumerate(zip(self.meta.inputs, inputs)):
+                if hidet.ir.data_type(traced.dtype) != new.dtype:
+                    raise RuntimeError(f"dtype mismatch at arg {i} between original: {traced.dtype} and new: {new.dtype}")
+                traced_shape = traced.shape
+                concrete_shape = new.shape
+                if (len(traced_shape) != len(concrete_shape)):
+                    raise RuntimeError(f"Rank of input {i} not equal to original. ({len(concrete_shape)} vs. {len(traced_shape)})")
+                for i, (orig, new) in enumerate(zip(traced_shape, concrete_shape)):
+                    if isinstance(orig, int) and orig != new:
+                        raise RuntimeError(f'shape mismatch at dimension {i}, original: {orig} vs. new: {new}')
+                    elif orig not in symbol_map:
+                        symbol_map[orig] = new
+                    elif symbol_map[orig] != new:
+                        raise RuntimeError(f"There exists multiple instances of the same symbol {orig} with different values in inputs\
+                                   (ex: {symbol_map[orig]} and {new})")
+
         symbol_dims = self._update_symbol_dims(inputs)
 
         if symbol_dims in self.dispatch_table:
