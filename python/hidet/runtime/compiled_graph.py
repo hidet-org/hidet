@@ -300,8 +300,8 @@ class CompiledGraph:
                         symbol_map[orig_shape] = new_shape
                     elif symbol_map[orig_shape] != new_shape:
                         raise RuntimeError(
-                            f"There exists multiple instances of the same symbol {orig_shape} with different values in inputs\
-                                   (ex: {symbol_map[orig_shape]} and {new_shape})"
+                            f"There exists multiple instances of the same symbol {orig_shape} with\
+                            different values in inputs (ex: {symbol_map[orig_shape]} and {new_shape})"
                         )
 
         symbol_dims = self._update_symbol_dims(inputs)
