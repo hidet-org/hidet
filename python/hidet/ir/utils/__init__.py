@@ -16,3 +16,4 @@ from . import expr_utils
 
 from .index_transform import index_serialize, index_deserialize
 from .expr_utils import as_expr
+from .broadcast_utils import can_broadcast, can_mutually_broadcast, broadcast_shape, broadcast_shapes, broadcast_indices

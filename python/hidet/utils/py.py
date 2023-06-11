@@ -483,6 +483,32 @@ def error_tolerance(a: Union[np.ndarray, 'Tensor'], b: Union[np.ndarray, 'Tensor
     return (lf + rg) / 2.0
 
 
+def assert_close(actual, expected, rtol=1e-5, atol=1e-5):
+    from numpy import ndarray
+    from hidet import Tensor
+    import numpy.testing
+
+    if isinstance(actual, ndarray):
+        pass
+    elif isinstance(actual, Tensor):
+        actual = actual.cpu().numpy()
+    elif type(actual).__name__ == 'Tensor' and type(actual).__module__ == 'torch':
+        actual = actual.cpu().numpy()
+    else:
+        raise TypeError(f'Unsupported type: {type(actual)}')
+
+    if isinstance(expected, ndarray):
+        pass
+    elif isinstance(expected, Tensor):
+        expected = expected.cpu().numpy()
+    elif type(expected).__name__ == 'Tensor' and type(expected).__module__ == 'torch':
+        expected = expected.cpu().numpy()
+    else:
+        raise TypeError(f'Unsupported type: {type(expected)}')
+
+    numpy.testing.assert_allclose(actual, expected, rtol, atol)
+
+
 if __name__ == '__main__':
     # color_table()
     print(color_text('sample', idx=1))

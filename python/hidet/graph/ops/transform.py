@@ -197,7 +197,7 @@ class TakeTask(Task):
 
 class GatherTask(Task):
     def __init__(self, data: TensorInput, indices: TensorInput, axis=0):
-        output_shape = data.shape[:axis] + (indices.shape[axis],) + data.shape[axis + 1 :]
+        output_shape = data.shape[:axis] + [indices.shape[axis]] + data.shape[axis + 1 :]
 
         def fmap(*output_indices):
             index_value = indices[output_indices]

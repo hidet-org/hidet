@@ -16,7 +16,7 @@ from hidet.ir import primitives
 from hidet.ir import expr, dtypes
 from hidet.ir.type import DataType
 from hidet.ir.expr import Constant, if_then_else
-from hidet.utils import prod
+from hidet.utils import prod, same_list
 from .utils import Task, Operator, Tensor, TensorNode, InverseMap, compute, input_like
 from .utils import broadcast_shape, broadcast_shapes, broadcast_indices
 
@@ -48,7 +48,9 @@ class BinaryElementwiseTask(Task):
 
         inverse_map = {}
         for inp, inp_shape in zip([x, y], [x.shape, y.shape]):
-            if prod(inp_shape) == prod(z_shape):
+            if same_list(inp_shape, z_shape):
+                inverse_map[inp] = InverseMap.from_lambda(lambda *indices: indices, num_args=len(inp_shape))
+            elif prod(inp_shape) == prod(z_shape):
                 inverse_map[inp] = InverseMap.from_lambda(
                     lambda *indices: [0 for _ in range(len(z_shape) - len(inp_shape))] + list(indices),
                     num_args=len(inp_shape),

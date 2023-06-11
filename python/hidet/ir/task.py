@@ -236,23 +236,23 @@ class Task(Node):
         if isinstance(target, str):
             target = Target.from_string(target)
 
-        if target.name == 'cuda':
-            ret = self.implement_cuda(working_dir)
-            if ret is NotImplemented:
-                auto_scheduler = CudaAutoScheduler()
-                ret = auto_scheduler.schedule_task(self, 'cuda')
-        elif target.name == 'cpu':
-            ret = self.implement_cpu(working_dir)
-            if ret is NotImplemented:
-                auto_scheduler = CpuAutoScheduler()
-                ret = auto_scheduler.schedule_task(self, 'cpu')
-        else:
-            raise ValueError()
+        implement_target, scheduler = {
+            'cuda': (self.implement_cuda, CudaAutoScheduler),
+            'cpu': (self.implement_cpu, CpuAutoScheduler),
+        }[target.name]
 
-        if isinstance(ret, IRModule):
-            ir_modules = [ret]
+        ir_modules: Union[IRModule, List[IRModule]] = implement_target(working_dir)
+        if ir_modules is NotImplemented:
+            auto_scheduler = scheduler()
+            ir_modules = [auto_scheduler.schedule_task(self, target.name)]
+        elif isinstance(ir_modules, IRModule):
+            ir_modules = [ir_modules]
+        elif isinstance(ir_modules, (list, tuple)) and all(isinstance(x, IRModule) for x in ir_modules):
+            ir_modules = list(ir_modules)
         else:
-            ir_modules = ret
+            raise ValueError(
+                'Expect the `implement` method to return an IRModule or List[IRModule], got {}'.format(ir_modules)
+            )
 
         return ir_modules
 
