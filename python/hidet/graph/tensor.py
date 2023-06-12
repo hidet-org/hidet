@@ -138,7 +138,7 @@ class Tensor:
 
         Returns
         -------
-        trace: Tuple[Operator, int]
+        trace: Tuple[hidet.graph.Operator, int]
             The trace of this tensor.
         """
         return self._trace

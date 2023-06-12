@@ -85,6 +85,16 @@ class Expr(Node):
         return self._binary(LessEqual, self, other)
 
     def __eq__(self, other):
+        # In hidet, we override the comparison operators: '<', '<=', '==', '!=', '>', '>=', which will return
+        # the corresponding comparison expression. For example, `a < b` will return a LessThan expression.
+        # An error will be raised if the result of the comparison is used in any place to evaluate the value in python:
+        # `if a < b: ...` will raise an error.
+        # This is because these comparison operators are used to construct the comparison expression in hidet IR.
+        # However, there are two exceptions:
+        #  1. if the comparison result is a constant (e.g., `int32(1) < int32(2)`), the result can be evaluated.
+        #  2. if it is a `==` comparison, the result can be evaluated in python, and True if the two expressions are
+        #     identical (e.g., `a is b`), False otherwise. We need this feature to use Expr as the keys in dict.
+        # See `hidet.ir.expr.Constant.__bool__` and `hidet.ir.expr.Equal.__bool__` for the implementation details.
         return self._binary(Equal, self, other)
 
     def __ne__(self, other):
@@ -95,9 +105,6 @@ class Expr(Node):
 
     def __rshift__(self, other):
         return self._binary(RightShift, self, other)
-
-    def __hash__(self):
-        return id(self)
 
     def __gt__(self, other):
         return self._binary(LessThan, other, self)
@@ -168,6 +175,8 @@ class Expr(Node):
 
     def __complex__(self):
         raise TypeError("Cannot convert hidet.ir.Expr to complex.")
+
+    __hash__ = object.__hash__  # use default hash function
 
     def read(self, items, protected=True):
         te = self[items]

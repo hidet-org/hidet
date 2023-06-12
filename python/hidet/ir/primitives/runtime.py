@@ -59,11 +59,11 @@ def get_cuda_stream() -> void_p:
     return call_primitive_func('get_cuda_stream', [])
 
 
-def request_cuda_workspace(nbytes: Union[int, Expr], require_clean: Union[bool, Expr]) -> void_p:
+def request_cuda_workspace(nbytes: Union[int, Expr], require_clean: Union[bool, Expr] = False) -> void_p:
     return call_primitive_func('request_cuda_workspace', [nbytes, require_clean])
 
 
-def request_cpu_workspace(nbytes: Union[int, Expr], require_clean: Union[bool, Expr]) -> void_p:
+def request_cpu_workspace(nbytes: Union[int, Expr], require_clean: Union[bool, Expr] = False) -> void_p:
     return call_primitive_func('request_cpu_workspace', [nbytes, require_clean])
 
 
