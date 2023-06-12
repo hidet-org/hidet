@@ -189,7 +189,7 @@ def resize2d_nchw_compute(
             )
         return value
 
-    output_shape = data.shape[:2] + tuple(target_size)
+    output_shape = data.shape[:2] + list(target_size)
     out = compute('out', shape=output_shape, fcompute=fmap)
     return out
 

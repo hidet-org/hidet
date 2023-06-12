@@ -9,61 +9,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Tuple
-from hidet.ir.expr import Expr, Var
-from ..utils import Task, Operator, Tensor, compute, reduce, input_like, broadcast_shape, broadcast_indices
+from ..utils import Task, Operator, Tensor, input_like
 from ..utils import TensorInput
 
 
 class MatmulTask(Task):
     def __init__(self, a: TensorInput, b: TensorInput):
-        # The semantics of this operator is the same as the one in numpy
-        # See Also https://numpy.org/doc/stable/reference/generated/numpy.matmul.html
-        a_shape: List[Expr] = list(a.shape)
-        b_shape: List[Expr] = list(b.shape)
-        if len(a_shape) <= 1 and len(b_shape) <= 1:
-            raise ValueError('At least one of the inputs must have rank > 1')
-        elif len(a_shape) == 1:
-            self._assert(
-                a_shape[0] == b_shape[-2], msg='Cannot multiply matrices with shape {} and {}.'.format(a_shape, b_shape)
-            )
-            reduce_extent = a_shape[0]
-            c_shape = b_shape[:-2] + b_shape[-1:]
-        elif len(b_shape) == 1:
-            self._assert(
-                a_shape[-1] == b_shape[0], msg='Cannot multiply matrices with shape {} and {}.'.format(a_shape, b_shape)
-            )
-            reduce_extent = a_shape[-1]
-            c_shape = a_shape[:-1]
-        else:
-            self._assert(
-                a_shape[-1] == b_shape[-2],
-                msg='Cannot multiply matrices with shape {} and {}.'.format(a_shape, b_shape),
-            )
-            reduce_extent = a_shape[-1]
-            c_shape = broadcast_shape(a_shape[:-2], b_shape[:-2]) + [a_shape[-2], b_shape[-1]]
+        from hidet.ir.compute import cops
 
-        def fcompute(indices: Tuple[Var], k: Var) -> Expr:
-            if len(a_shape) == 1:
-                a_val = a[k]
-                b_val = b[indices[:-1] + (k,) + indices[-1:]]
-            elif len(b_shape) == 1:
-                a_val = a[indices + (k,)]
-                b_val = b[k]
-            else:
-                a_indices = broadcast_indices(indices[:-2], a_shape[:-2], c_shape[:-2])
-                b_indices = broadcast_indices(indices[:-2], b_shape[:-2], c_shape[:-2])
-                a_val = a[a_indices + [indices[-2], k]]
-                b_val = b[b_indices + [k, indices[-1]]]
-            return a_val * b_val
-
-        c = compute(
-            name='c',
-            shape=c_shape,
-            fcompute=lambda *indices: reduce(
-                shape=[reduce_extent], fcompute=lambda k: fcompute(indices, k), reduce_type='sum'
-            ),
-        )
+        c = cops.matmul(a, b, allow_1d=True)
         super().__init__(name='matmul', inputs=[a, b], outputs=[c])
 
 
