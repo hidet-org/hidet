@@ -36,7 +36,7 @@ class Conv2dTransposeTask(Task):
         w = (q - 1) * sy - py0 - py1 + ky + output_padding[1]
 
         self._assert(
-            ir.logical_and(output_padding[0] < stride[0], output_padding < stride[1]),
+            ir.logical_and(output_padding[0] < stride[0], output_padding[1] < stride[1]),
             msg=(
                 'Conv2dTranspose expect the output_padding < stride, \n'
                 'but got output_padding, stride: {}, {}'.format(output_padding, stride)
