@@ -303,28 +303,28 @@ class AttnMaskAddTask(Task):
         smem_mij_type = tensor_type(sm_dtype, shape=[block_i])
 
         smem_q_layout = (
-            row_major((1, swizzle_repeat)) * row_major((block_i, swizzle_unit // 8)).swizzle(1) * row_major((1, 8))
+            row_major(1, swizzle_repeat) * row_major(block_i, swizzle_unit // 8).swizzle(1) * row_major(1, 8)
         )
 
-        smem_k_layout = row_major((block_k // 8, block_j // 64)) * row_major((8, 8)).swizzle(1) * row_major((1, 8))
-        smem_qk_layout = row_major((block_i, block_j // 8)).swizzle(1) * row_major((1, 8))
+        smem_k_layout = row_major(block_k // 8, block_j // 64) * row_major(8, 8).swizzle(1) * row_major(1, 8)
+        smem_qk_layout = row_major(block_i, block_j // 8).swizzle(1) * row_major(1, 8)
         if block_j_o % 64 == 0:
             smem_v_layout = (
-                row_major((block_k_o // 8, block_j_o // 64)) * row_major((8, 8)).swizzle(1) * row_major((1, 8))
+                row_major(block_k_o // 8, block_j_o // 64) * row_major(8, 8).swizzle(1) * row_major(1, 8)
             )
         else:
             smem_v_layout = (
-                row_major((1, swizzle_repeat))
-                * row_major((block_k_o, swizzle_unit // 8)).swizzle(1)
-                * row_major((1, 8))
+                row_major(1, swizzle_repeat)
+                * row_major(block_k_o, swizzle_unit // 8).swizzle(1)
+                * row_major(1, 8)
             )
 
         smem_q_type = tensor_type('float16', shape=[block_i, dpad_size], layout=smem_q_layout)
         smem_k_type = tensor_type('float16', shape=[block_k, block_j], layout=smem_k_layout)
-        smem_k_db_type = tensor_type('float16', shape=[2, block_k, block_j], layout=row_major([2]) + smem_k_layout)
+        smem_k_db_type = tensor_type('float16', shape=[2, block_k, block_j], layout=row_major(2) + smem_k_layout)
         smem_qk_type = tensor_type('float16', shape=[block_i, block_j], layout=smem_qk_layout)
         smem_v_type = tensor_type('float16', shape=[block_k_o, block_j_o], layout=smem_v_layout)
-        smem_v_db_type = tensor_type('float16', shape=[2, block_k_o, block_j_o], layout=row_major([2]) + smem_v_layout)
+        smem_v_db_type = tensor_type('float16', shape=[2, block_k_o, block_j_o], layout=row_major(2) + smem_v_layout)
         regs_o_type = tensor_type(acc_dtype, shape=[mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements])
 
         n_size_per_thread = cdiv(i_rows_per_tb, block_size)
@@ -332,7 +332,7 @@ class AttnMaskAddTask(Task):
 
         rows_per_thread_per_mma = 2
         rows_per_thread_mma_o = rows_per_thread_per_mma * mmas_per_warp_m_o
-        regs_li_new_layout = row_major((rows_per_thread_mma_o, 1)) * local_layout((mma_m // rows_per_thread_per_mma, 1))
+        regs_li_new_layout = row_major(rows_per_thread_mma_o, 1) * local_layout((mma_m // rows_per_thread_per_mma, 1))
         regs_mi_new_layout = regs_li_new_layout
         regs_exp_mij_layout = regs_li_new_layout
 
@@ -689,20 +689,16 @@ class AttnMaskAddTask(Task):
                 smem_lij = dynamic_shared_memory(byte_offset=smem_bytes_offsets['lij'], dtype=smem_lij_type.dtype)
                 smem_mij = dynamic_shared_memory(byte_offset=smem_bytes_offsets['mij'], dtype=smem_mij_type.dtype)
 
-                regs_q = tensor('register', dtype='float16', shape=[2, mmas_per_warp_m, mma_config.a_elements])
-                regs_k = tensor('register', dtype='float16', shape=[2, mmas_per_warp_n, mma_config.b_elements])
-                regs_acc = tensor(
-                    'register', dtype=acc_dtype, shape=[mmas_per_warp_m, mmas_per_warp_n, mma_config.c_elements]
-                )
-                regs_qk = tensor('register', dtype='float16', shape=[2, mmas_per_warp_m_o, mma_config.a_elements])
-                regs_v = tensor('register', dtype='float16', shape=[2, mmas_per_warp_n_o, mma_config.b_elements])
-                regs_acc_o = tensor(
-                    'register', dtype=acc_dtype, shape=[mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements]
-                )
-                regs_o = tensor('register', dtype=acc_dtype, shape=regs_o_type.shape)
-                regs_li_new = tensor('register', dtype=smem_l_type.dtype, layout=regs_li_new_layout)
-                regs_mi_new = tensor('register', dtype=smem_m_type.dtype, layout=regs_mi_new_layout)
-                regs_exp_mij = tensor('register', dtype=smem_mij_type.dtype, layout=regs_exp_mij_layout)
+                regs_q = register_tensor(dtype='float16', shape=[2, mmas_per_warp_m, mma_config.a_elements])
+                regs_k = register_tensor(dtype='float16', shape=[2, mmas_per_warp_n, mma_config.b_elements])
+                regs_acc = register_tensor(dtype=acc_dtype, shape=[mmas_per_warp_m, mmas_per_warp_n, mma_config.c_elements] )
+                regs_qk = register_tensor(dtype='float16', shape=[2, mmas_per_warp_m_o, mma_config.a_elements])
+                regs_v = register_tensor(dtype='float16', shape=[2, mmas_per_warp_n_o, mma_config.b_elements])
+                regs_acc_o = register_tensor(dtype=acc_dtype, shape=[mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements] )
+                regs_o = register_tensor(dtype=acc_dtype, shape=regs_o_type.shape)
+                regs_li_new = register_tensor(dtype=smem_l_type.dtype, layout=regs_li_new_layout)
+                regs_mi_new = register_tensor(dtype=smem_m_type.dtype, layout=regs_mi_new_layout)
+                regs_exp_mij = register_tensor(dtype=smem_mij_type.dtype, layout=regs_exp_mij_layout)
 
                 init_lm_smem(smem_l, smem_m)
                 # Load Qi into Smem, it stays there forever

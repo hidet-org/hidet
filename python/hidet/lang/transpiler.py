@@ -52,7 +52,7 @@ from hidet.ir.builders import FunctionBuilder
 from hidet.utils import red, bold, blue, str_indent
 import hidet.lang.attrs
 from hidet.lang.constructs.loops import HidetLoopIterable
-from hidet.lang.constructs.type import TypeDecorator
+from hidet.lang.constructs.declare import Declaration
 from hidet.lang.constructs.meta import HidetMetaLoopIterable
 
 
@@ -327,7 +327,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
         # pylint: disable=too-many-locals, too-many-branches, too-many-statements
         # check the rhs value, must be an instance of allowed_types or a list of these kinds of elements.
         host_var_types = (ir.TaskMapping, ir.DataLayout, ir.TensorSlice, ir.Function, str, list, tuple, dict)
-        allowed_types = (ir.Expr, ir.BaseType, TypeDecorator, float, int, str, type(None))
+        allowed_types = (ir.Expr, ir.BaseType, Declaration, float, int, str, type(None))
         allowed_types += host_var_types
         assert isinstance(rhs, allowed_types) or (
             isinstance(rhs, list) and all(isinstance(v, allowed_types) for v in rhs)
@@ -367,10 +367,11 @@ class PythonToHidetTranslator(PythonAstFunctor):
                         scope = DeclareScope.Default
                         if isinstance(rhs, ir.BaseType):
                             var_type = rhs
-                        elif isinstance(rhs, TypeDecorator):
-                            var_type = rhs.decorated_type
+                        elif isinstance(rhs, Declaration):
+                            var_type = rhs.type
                             is_static = rhs.is_static
                             scope = rhs.scope
+                            init_value = rhs.init
                         else:
                             rhs = ir.convert(rhs)
                             var_type = ir.infer_type(rhs)
@@ -416,13 +417,13 @@ class PythonToHidetTranslator(PythonAstFunctor):
             raise ValueError(msg)
         return self.visit(module.body[0])
 
-    def _process_arg_type(self, arg, arg_type: Union[ir.BaseType, TypeDecorator, Type[int], Type[float], Type[bool]]):
+    def _process_arg_type(self, arg, arg_type: Union[ir.BaseType, Declaration, Type[int], Type[float], Type[bool]]):
         if isinstance(arg_type, ir.BaseType):
             if isinstance(arg_type, ir.TensorType):
                 # we automatically change the tensor type of argument to a tensor pointer type.
                 arg_type = ir.tensor_pointer_type(dtype=arg_type.dtype, shape=arg_type.shape, layout=arg_type.layout)
-        elif isinstance(arg_type, TypeDecorator):
-            arg_type = arg_type.decorated_type
+        elif isinstance(arg_type, Declaration):
+            arg_type = arg_type.type
             if isinstance(arg_type, ir.TensorType):
                 # we automatically change the tensor type of argument to a tensor pointer type.
                 arg_type = ir.tensor_pointer_type(dtype=arg_type.dtype, shape=arg_type.shape, layout=arg_type.layout)

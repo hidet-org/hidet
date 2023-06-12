@@ -10,4 +10,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # pylint: disable=unused-import
-from hidet.ir.layout import row_layout, col_layout, local_layout, DataLayout
+from hidet.ir.layout import row_major, column_major, local_layout, DataLayout

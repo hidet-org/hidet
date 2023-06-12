@@ -321,7 +321,7 @@ def tensor_type(dtype, shape: Optional[Sequence[Union[int, Expr]]] = None, layou
         assert isinstance(layout, DataLayout)
         shape = layout.shape
     elif layout is None:
-        layout = DataLayout.row_major(list(shape))
+        layout = DataLayout.row_major(*shape)
     else:
         assert isinstance(layout, DataLayout)
         assert isinstance(shape, (list, tuple))

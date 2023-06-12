@@ -26,7 +26,8 @@ def unique(seq: Sequence) -> List:
     return [item for item in seq if (item not in added and not added.add(item))]
 
 
-def prod(seq: Sequence):
+def prod(seq: Iterable):
+    seq = list(seq)
     if len(seq) == 0:
         return 1
     else:

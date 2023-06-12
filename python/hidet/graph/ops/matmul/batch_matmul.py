@@ -16,7 +16,7 @@ from hidet.ir.compute import reduce
 from hidet.ir.expr import is_constant
 from hidet.ir.layout import DataLayout, StridesLayout, data_layout
 from hidet.ir.type import data_type, TensorType, DataType, void_p
-from hidet.lang import i32, spatial, repeat, tensor, attrs, grid, tensor_pointer
+from hidet.lang import i32, spatial, repeat, register_tensor, shared_tensor, attrs, grid, tensor_pointer
 from hidet.lang.cuda import blockIdx, threadIdx, syncthreads
 from hidet.graph.ops.utils import Task, Operator, Tensor, TensorNode, compute
 from hidet.graph.ops.utils import input_like, tune, schedule_utils
@@ -119,27 +119,27 @@ class BatchMatmulTask(Task):
 
         # Data Layouts
         regs_a_layout = (
-            local_layout((block_warps[0], 1))
-            * col_major((warp_outer[0], warp_k))
-            * local_layout((warp_mid_shape[0], 1))
-            * row_major((warp_inner[0], 1))
+            local_layout(block_warps[0], 1)
+            * col_major(warp_outer[0], warp_k)
+            * local_layout(warp_mid_shape[0], 1)
+            * row_major(warp_inner[0], 1)
         )
         regs_a_layout = [2] + regs_a_layout
         regs_b_layout = (
-            local_layout((1, block_warps[1]))
-            * row_major((warp_k, warp_outer[1]))
-            * local_layout((1, warp_mid_shape[1]))
+            local_layout(1, block_warps[1])
+            * row_major(warp_k, warp_outer[1])
+            * local_layout(1, warp_mid_shape[1])
             * row_major((1, warp_inner[1]))
         )
         regs_b_layout = [2] + regs_b_layout
         regs_c_layout = (
-            local_layout(block_warps) * row_major(warp_outer) * local_layout(warp_mid_shape) * row_major(warp_inner)
+            local_layout(*block_warps) * row_major(*warp_outer) * local_layout(*warp_mid_shape) * row_major(*warp_inner)
         )
         regs_a_ldg_layout = local_layout((block_size // block_k, block_k)) * row_major(
-            (block_shape[0] // (block_size // block_k), 1)
+            block_shape[0] // (block_size // block_k), 1
         )
-        regs_b_ldg_layout = row_major((1, block_shape[1] // (block_size // block_k))) * local_layout(
-            (block_k, block_size // block_k)
+        regs_b_ldg_layout = row_major(1, block_shape[1] // (block_size // block_k)) * local_layout(
+            block_k, block_size // block_k
         )
 
         used_smem_bytes_per_block = (block_shape[0] + block_shape[1]) * block_k * 2 * dtype.nbytes
@@ -291,19 +291,17 @@ class BatchMatmulTask(Task):
 
                 offset_m, offset_n = blockIdx.x // n_tiles * block_m, blockIdx.x % n_tiles * block_n
 
-                smem = tensor('shared', 'int8', shape=[used_smem_bytes_per_block])
+                smem = shared_tensor('int8', shape=[used_smem_bytes_per_block])
 
-                smem_a = tensor_pointer(dtype, layout=StridesLayout.from_shape([2, block_m, block_k], perm=[0, 2, 1]))
-                smem_b = tensor_pointer(dtype, layout=StridesLayout.from_shape([2, block_k, block_n], perm=[0, 1, 2]))
+                smem_a = tensor_pointer(dtype, layout=StridesLayout.from_shape([2, block_m, block_k], perm=[0, 2, 1]), init=~smem[0])
                 smem_a_bytes = smem_a.type.tensor_type.storage_bytes()
-                smem_a = ~smem[0]
-                smem_b = ~smem[smem_a_bytes]
+                smem_b = tensor_pointer(dtype, layout=StridesLayout.from_shape([2, block_k, block_n], perm=[0, 1, 2]), init=~smem[smem_a_bytes])
 
-                regs_a = tensor('register', dtype, layout=regs_a_layout)
-                regs_b = tensor('register', dtype, layout=regs_b_layout)
-                regs_c = tensor('register', dtype, layout=regs_c_layout)
-                regs_a_ldg = tensor('register', dtype, layout=regs_a_ldg_layout)
-                regs_b_ldg = tensor('register', dtype, layout=regs_b_ldg_layout)
+                regs_a = register_tensor(dtype, layout=regs_a_layout)
+                regs_b = register_tensor(dtype, layout=regs_b_layout)
+                regs_c = register_tensor(dtype, layout=regs_c_layout)
+                regs_a_ldg = register_tensor(dtype, layout=regs_a_ldg_layout)
+                regs_b_ldg = register_tensor(dtype, layout=regs_b_ldg_layout)
 
                 # Copy first k-tile from global to shared
                 first_k_tile_size = k_size - (k_tiles - 1) * block_k
@@ -437,9 +435,9 @@ class BatchMatmulTask(Task):
         smem_a_layout = data_layout([2, block_m, block_k], ranks=[0, 1, 2])
         smem_b_layout = data_layout([2, block_k, block_n], ranks=[0, 1, 2])
         smem_c_layout = data_layout([block_m, block_n], ranks=[0, 1])
-        regs_a_layout = row_major([2, mma_count_m, mma_config.a_elements])
-        regs_b_layout = row_major([2, mma_count_n, mma_config.b_elements])
-        regs_c_layout = row_major([mma_count_m, mma_count_n, mma_config.c_elements])
+        regs_a_layout = row_major(2, mma_count_m, mma_config.a_elements)
+        regs_b_layout = row_major(2, mma_count_n, mma_config.b_elements)
+        regs_c_layout = row_major(mma_count_m, mma_count_n, mma_config.c_elements)
         smem_storage_nbytes = max(
             (smem_a_layout.size + smem_b_layout.size) * data_type(mma_config.input_dtype).nbytes,
             smem_c_layout.size * data_type(mma_config.output_dtype).nbytes,
@@ -612,21 +610,16 @@ class BatchMatmulTask(Task):
                 attrs.cuda.grid_dim = (m_tiles * n_tiles, bs)
                 attrs.cuda.block_dim = block_size
 
-                gmem_a = a[blockIdx.y, :, :]
-                gmem_b = b[blockIdx.y, :, :]
-
-                smem = tensor('shared', 'int8', shape=[smem_storage_nbytes])
-                smem_a = tensor_pointer(a_dtype, layout=smem_a_layout)
-                smem_b = tensor_pointer(b_dtype, layout=smem_b_layout)
+                smem = shared_tensor('int8', shape=[smem_storage_nbytes])
+                smem_a = tensor_pointer(a_dtype, layout=smem_a_layout, init=~smem[0])
                 smem_a_bytes = smem_a.type.tensor_type.storage_bytes()
-                smem_a = ~smem[0]
-                smem_b = ~smem[smem_a_bytes]
+                smem_b = tensor_pointer(b_dtype, layout=smem_b_layout, init=~smem[smem_a_bytes])
 
-                regs_a = tensor('register', a_dtype, layout=regs_a_layout)
-                regs_b = tensor('register', b_dtype, layout=regs_b_layout)
-                regs_c = tensor('register', c_dtype, layout=regs_c_layout)
-                regs_a_ldg = tensor('register', a_dtype, layout=regs_a_ldg_layout)
-                regs_b_ldg = tensor('register', b_dtype, layout=regs_b_ldg_layout)
+                regs_a = register_tensor(a_dtype, layout=regs_a_layout)
+                regs_b = register_tensor(b_dtype, layout=regs_b_layout)
+                regs_c = register_tensor(c_dtype, layout=regs_c_layout)
+                regs_a_ldg = register_tensor(a_dtype, layout=regs_a_ldg_layout)
+                regs_b_ldg = register_tensor(b_dtype, layout=regs_b_ldg_layout)
                 # Initialize regs C
                 for i, j, p in grid(mma_count_m, mma_count_n, mma_config.c_elements):
                     regs_c[i, j, p] = c_zero

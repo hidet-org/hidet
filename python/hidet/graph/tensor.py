@@ -74,7 +74,7 @@ class Tensor:
         self._dtype: DataType = data_type(dtype)
         self._device: Device = instantiate_device(device)
         self._storage: Optional[Storage] = storage
-        self._layout: DataLayout = layout if layout else DataLayout.row_major(self._shape)
+        self._layout: DataLayout = layout if layout else DataLayout.row_major(*self._shape)
         self._trace: Optional[Tuple[Operator, int]] = trace
 
     @property

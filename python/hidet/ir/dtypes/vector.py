@@ -78,3 +78,7 @@ float16x2 = VectorType(float16, 2)
 f32x4 = float32x4
 f32x8 = float32x8
 f16x2 = float16x2
+
+
+def vectorize(base_dtype: DataType, num_lanes: int) -> VectorType:
+    return VectorType(base_dtype, num_lanes)
