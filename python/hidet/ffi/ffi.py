@@ -12,14 +12,16 @@
 from typing import List, Dict, Optional
 import os
 import os.path
+import glob
 import ctypes
-from hidet.libinfo import get_library_search_dirs
+from hidet.libinfo import get_library_search_dirs, get_nccl_library_search_dirs
 
 _LIB: Optional[ctypes.CDLL] = None
 _LIB_RUNTIME: Optional[ctypes.CDLL] = None
+_LIB_NCCL: Optional[ctypes.CDLL] = None
 
 
-library_paths: Dict[str, Optional[str]] = {'hidet': None, 'hidet_runtime': None}
+library_paths: Dict[str, Optional[str]] = {'hidet': None, 'hidet_runtime': None, 'nccl': None}
 
 
 def load_library():
@@ -40,6 +42,18 @@ def load_library():
     if _LIB is None:
         raise OSError('Can not find library in the following directory: \n' + '\n'.join(library_dirs))
 
+def load_nccl_library():
+    global _LIB_NCCL
+    library_dirs = get_nccl_library_search_dirs()
+    for library_dir in library_dirs:
+        lib_nccl_paths = glob.glob(os.path.join(library_dir, 'libnccl.so*'))
+        if len(lib_nccl_paths) == 0:
+            continue
+        _LIB_NCCL = ctypes.cdll.LoadLibrary(lib_nccl_paths[0])
+        library_paths['nccl'] = lib_nccl_paths[0]
+        break
+    if _LIB_NCCL is None:
+        raise OSError('Can not find nccl library in the following directory: \n' + '\n'.join(library_dirs))
 
 def get_last_error() -> Optional[str]:
     func = getattr(get_last_error, '_func', None)
@@ -96,3 +110,4 @@ def get_func(func_name, arg_types: List, restype):
 
 
 load_library()
+load_nccl_library()
