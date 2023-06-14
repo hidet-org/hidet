@@ -279,7 +279,7 @@ class CompiledGraph:
         """
         if hidet.option.runtime_check():
             symbol_map = {}
-            for i, (traced, new) in enumerate(zip(self.meta.inputs, inputs)):
+            for i, (expected, actual) in enumerate(zip(self.meta.inputs, inputs)):
                 if hidet.ir.data_type(traced.dtype) != hidet.ir.data_type(new.dtype):
                     raise RuntimeError(
                         f"dtype mismatch at arg {i} between original: {traced.dtype} and new: {new.dtype}"
