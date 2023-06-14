@@ -109,6 +109,7 @@ class PythonAstFunctor:
         return self.visit(node)
 
     def visit(self, node):
+        from hidet.ir.library.tune import ScheduleError
         method = 'visit_' + node.__class__.__name__
         if hasattr(self, method):
             visitor = getattr(self, method)
@@ -118,6 +119,8 @@ class PythonAstFunctor:
 
         try:
             return visitor(node)
+        except ScheduleError:
+            raise
         except HidetProgramError:
             raise
         except Exception as e:

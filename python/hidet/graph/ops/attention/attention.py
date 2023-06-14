@@ -17,7 +17,7 @@ from hidet.ir.layout import DataLayout
 from hidet.ir.type import tensor_type
 from hidet.ir import primitives as prim
 from hidet.ir.primitives import active_mask, shfl_down_sync
-from hidet.graph.ops.utils import tune
+from hidet.ir.library import tune
 from hidet.lang import f16, f32, i32, u32, spatial, repeat, tensor
 from hidet.lang import attrs, grid, tensor_pointer, view, col_spatial
 from hidet.lang.cuda import blockIdx, threadIdx, syncthreads, dynamic_shared_memory, register_tensor

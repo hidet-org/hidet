@@ -19,7 +19,7 @@ from hidet.ir.compute import TensorNode
 from hidet.ir.task import Task
 from hidet.ir.compute import compute, reduce
 from hidet.graph.ops.utils import input_like, broadcast_shape, can_mutually_broadcast
-from hidet.graph.ops.utils import tune
+from hidet.ir.library import tune
 from hidet.graph.operator import Operator, Tensor
 from hidet.utils.py import is_power_of_two, cdiv, prod
 from hidet.graph.ops.utils import broadcast_indices

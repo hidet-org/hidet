@@ -19,7 +19,8 @@ from hidet.ir.type import data_type, TensorType, DataType, void_p
 from hidet.lang import i32, spatial, repeat, register_tensor, shared_tensor, attrs, grid, tensor_pointer
 from hidet.lang.cuda import blockIdx, threadIdx, syncthreads
 from hidet.graph.ops.utils import Task, Operator, Tensor, TensorNode, compute
-from hidet.graph.ops.utils import input_like, tune, schedule_utils
+from hidet.graph.ops.utils import input_like, schedule_utils
+from hidet.ir.library import tune
 from hidet.ir.primitives.cuda.mma import MmaConfig, mma_sync
 
 

@@ -11,7 +11,7 @@ from hidet.graph.tensor import Tensor
 from hidet.graph.operator import Operator
 from hidet.graph.ops.utils import input_like
 from hidet import ops
-from hidet.graph.ops.utils import tune
+from hidet.ir.library import tune
 
 hidet.option.cache_dir('./outs/cache')
 hidet.utils.clear_op_cache()
@@ -36,6 +36,7 @@ class MatmulTask(Task):
         from hidet.lang import attrs
         from hidet.lang.cuda import threadIdx, blockIdx, blockDim, gridDim
         from hidet.lang.mapping import spatial, repeat
+        from hidet.ir.library.cuda import matmul_simt
         from hidet.lang import printf
         from hidet.ir.primitives.runtime import request_cuda_workspace
 
@@ -92,15 +93,17 @@ class MatmulTask(Task):
                 c: f16[b_size, m_size, n_size]
             ):
                 attrs.func_kind = 'public'
+                matmul_simt(a, b, c)
 
-                workspace = cast(
-                    request_cuda_workspace(parts * b_size * m_size * n_size * 2, require_clean=False),
-                    tensor_pointer_type(f16, [parts, b_size, m_size, n_size])
-                )
+                # workspace = cast(
+                #     request_cuda_workspace(parts * b_size * m_size * n_size * 2, require_clean=False),
+                #     tensor_pointer_type(f16, [parts, b_size, m_size, n_size])
+                # )
+                #
+                # matmul_kernel(a, b, workspace)
+                #
+                # reduce_kernel(workspace, c)
 
-                matmul_kernel(a, b, workspace)
-
-                reduce_kernel(workspace, c)
         return script_module.ir_module()
 
 

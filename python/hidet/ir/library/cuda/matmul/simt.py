@@ -5,7 +5,7 @@ from hidet.ir.type import DataType, TensorType, tensor_type, tensor_pointer_type
 from hidet.ir.dtypes import vectorize, i32
 from hidet.ir.expr import Expr, is_true, tensor_pointer_var
 from hidet.ir.layout import row_major, data_layout, local_layout
-from hidet.graph.ops.utils import tune
+from hidet.ir.library import tune
 from hidet.ir.library.utils import get_tensor_type
 from hidet.ir.utils.broadcast_utils import can_broadcast
 from hidet.utils import prod
@@ -27,14 +27,15 @@ def check_type(a_type: TensorType, b_type: TensorType, c_type: TensorType):
                 len(a_shape), len(b_shape), len(c_shape)
             )
         )
+
     if (
         is_true(a_shape[-1] != b_shape[-2])
-        or is_true(a_shape[:-2] == c_shape[:-2])
-        or is_true(b_shape[:-1] == c_shape[:-1])
+        or is_true(a_shape[-2] != c_shape[-2])
+        or is_true(b_shape[-1] != c_shape[-1])
         or not can_broadcast(a_shape[:-2], c_shape[:-2])
         or not can_broadcast(b_shape[:-1], c_shape[:-1])
     ):
-        raise ValueError('The shape of a, b, c should be compatible, got {}, {}, {}'.format(a_shape, b_shape, c_shape))
+        raise ValueError('The shapes of a, b, c are not compatible, got {}, {}, {}'.format(a_shape, b_shape, c_shape))
 
 
 def matmul_simt(
@@ -50,7 +51,7 @@ def matmul_simt(
     arch='sm_70'
 ):
     from hidet.lang import attrs
-    from hidet.lang import tensor_pointer, register_tensor, grid, cast, deref
+    from hidet.lang import tensor_pointer, register_tensor, grid, cast, deref, meta
     from hidet.lang.cuda import dynamic_shared_memory, threadIdx, blockIdx, syncthreads
     from hidet.lang.mapping import spatial, repeat
 
@@ -77,8 +78,8 @@ def matmul_simt(
 
     tune.check(all(a % b == 0 for a, b in zip(block_shape, warp_shape)))
     tune.check(all(a % (b * c) == 0 for a, b, c in zip(warp_shape[:2], warp_threads, thread_shape)))
-    tune.check(is_true(k_size % lanes == 0))
-    tune.check(is_true(n_size % lanes == 0))
+    tune.check(not is_true(k_size % lanes != 0))
+    tune.check(not is_true(n_size % lanes != 0))
     block_warps = tuple(a // b for a, b in zip(block_shape, warp_shape))  # Tuple[int, int, int]
     warp_repeat = tuple(a // (b * c) for a, b, c in zip(warp_shape[:2], warp_threads, thread_shape))  # Tuple[int, int]
 
@@ -116,7 +117,7 @@ def matmul_simt(
         .local(warp_threads[0], warp_threads[1])
         .row_major(thread_shape[0], thread_shape[1])
     )
-    # regs_a_ldg: (block_k / lanes) x block_m x lanes
+    # regs_a_ldg: (block_k / lanes) x block_m (for vectorized dtype)
     if num_threads >= block_k_vectors:
         tune.check(num_threads % block_k_vectors == 0)
         rows = num_threads // block_k_vectors
@@ -127,18 +128,18 @@ def matmul_simt(
         regs_a_ldg_layout = None
         tune.check(False)   # rare case
 
-    # regs_b_ldg: (block_k / lanes) x block_n x lanes
+    # regs_b_ldg: block_k x block_n
     if num_threads >= block_n:
         tune.check(num_threads % block_n == 0)
         rows = num_threads // block_n
-        tune.check(block_k_vectors % rows == 0)
-        regs_b_ldg_layout = row_major(block_k_vectors // rows, 1).local(rows, block_n, 1)
+        tune.check(block_k % rows == 0)
+        regs_b_ldg_layout = row_major(block_k // rows, 1).local(rows, block_n)
         b_g2s_mapping = repeat(block_k // rows, 1).spatial(rows, block_n)
     else:
         tune.check(block_n % num_threads == 0)
         segments = block_n // num_threads
         tune.check(block_n % segments == 0)
-        regs_b_ldg_layout = row_major(block_k_vectors, segments).local(1, num_threads)
+        regs_b_ldg_layout = row_major(block_k, segments).local(1, num_threads)
         b_g2s_mapping = repeat(block_k, segments).spatial(1, num_threads)
 
     # prepare task mapping
@@ -193,14 +194,15 @@ def matmul_simt(
         regs_buffer_idx: i32,
         k_frag_idx: i32,
     ):
-        _, _, warp_idx_k = spatial(*block_warps)(threadIdx.x // 32)
+        _, _, warp_idx_k = spatial(*block_warps).map(threadIdx.x // 32)
+        smem_a_slice = smem_a[smem_buffer_idx, warp_idx_k * (warp_k // lanes):, :]
         for i, k in a_s2r_mapping.on(threadIdx.x):
-            regs_a[regs_buffer_idx, i, k] = smem_a[smem_buffer_idx, i, warp_idx_k * warp_k + k_frag_idx * lanes]
+            regs_a[regs_buffer_idx, i] = smem_a_slice[k_frag_idx, i]
 
     @hidet.script
     def copy_b_g2r(
         b: tensor_type(dtype=dtype, shape=b_head + [k_size, n_size]),
-        regs_b_ldg: tensor_type(dtype=vtype, layout=regs_b_ldg_layout),
+        regs_b_ldg: tensor_type(dtype=dtype, layout=regs_b_ldg_layout),
         offset_k: i32,
         offset_n: i32,
         first_k_tile_size: i32,
@@ -209,18 +211,20 @@ def matmul_simt(
         for k, j in b_g2s_mapping.on(threadIdx.x):
             k_predicate = (first_k_tile_size == 0) or k < first_k_tile_size
             if offset_n + j < n_size and k_predicate:
-                regs_b_ldg[k, j] = deref(cast(gmem_b[k, j], ~vtype))
+                regs_b_ldg[k, j] = gmem_b[k, j]
             else:
-                regs_b_ldg[k, j] = 0.0
+                regs_b_ldg[k, j] = dtype.zero
+
 
     @hidet.script
     def copy_b_r2s(
-        regs_b_ldg: tensor_type(dtype=vtype, layout=regs_b_ldg_layout),
+        regs_b_ldg: tensor_type(dtype=dtype, layout=regs_b_ldg_layout),
         smem_b: tensor_type(dtype=vtype, layout=smem_b_layout),
         buffer_idx: i32,
     ):
         for k, j in b_g2s_mapping.on(threadIdx.x):
-            smem_b[buffer_idx, k, j] = regs_b_ldg[k, j]
+            dst_ptr = cast(~smem_b[buffer_idx, k // lanes, j], ~dtype)
+            dst_ptr[k % lanes] = regs_b_ldg[k, j]
 
     @hidet.script
     def copy_b_s2r(
@@ -230,9 +234,10 @@ def matmul_simt(
         regs_buffer_idx: i32,
         k_frag_idx: i32,
     ):
-        _, _, warp_idx_k = spatial(*block_warps)(threadIdx.x // 32)
+        _, _, warp_idx_k = spatial(*block_warps).map(threadIdx.x // 32)
+        smem_b_slice = smem_b[smem_buffer_idx, warp_idx_k * (warp_k // lanes):, :]
         for k, j in b_s2r_mapping.on(threadIdx.x):
-            regs_b[regs_buffer_idx, k, j] = smem_b[smem_buffer_idx, warp_idx_k * warp_k + k_frag_idx * lanes, j]
+            regs_b[regs_buffer_idx, k, j] = smem_b_slice[k_frag_idx, j]
 
     @hidet.script
     def copy_c_r2g(
@@ -244,7 +249,11 @@ def matmul_simt(
         gmem_c = c[blockIdx.y, offset_m:, offset_n:]
         for i, j in block_mapping.on(threadIdx.x):
             if offset_m + i < m_size and offset_n + j < n_size:
-                gmem_c.write([i, j], regs_c[i, j], protected=False)
+                regs_c_ptr = cast(~regs_c[i, j], ~dtype)
+                result = dtype.zero
+                for k in range(lanes):
+                    result += regs_c_ptr[k]
+                gmem_c[i, j] = result
 
     @hidet.script
     def mma(
@@ -326,3 +335,6 @@ def matmul_simt(
 
         # Store results from regs_c into C
         copy_c_r2g(regs_c, c, offset_m, offset_n)
+
+    from hidet.lang.script import ScriptModuleContext
+    return ScriptModuleContext.current_context().lookup('matmul_kernel')(arg_a, arg_b, arg_c)
