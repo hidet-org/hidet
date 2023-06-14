@@ -536,15 +536,11 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
         return doc
 
     def visit_AssertStmt(self, stmt: AssertStmt):
+        doc = NewLine() + Text('assert(' + self(stmt.cond) + ');')
+
         if stmt.msg is not None:
             msg = stmt.msg.replace("\n", "")
-        else:
-            msg = 'assertion failed!'
-
-        doc = NewLine() + Text(f'hidet_set_last_error("{msg}");') + NewLine()
-        doc += Text('return;')
-
-        doc = NewLine() + Text('if (!') + self(stmt.cond) + Text(') {') + doc.indent() + NewLine() + Text('}')
+            doc += "  // {}".format(msg)
         return doc
 
     def visit_AsmStmt(self, stmt: AsmStmt):

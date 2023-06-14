@@ -475,8 +475,7 @@ class IRPrinter(IRFunctor):
             Text('attributes: {') + self({k: str(v) for k, v in e.attrs.items()}) + '}',
         ]
         if len(e.assertions) > 0:  # between computations and attributes
-            lines.insert(
-                -1,
+            lines.append(
                 Text('assertions: ')
                 + (
                     NewLine()  # self.assertions: List[Tuple[Expr, str]]

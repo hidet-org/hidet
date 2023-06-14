@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Optional, Tuple, Dict, Any, Callable
+from typing import List, Optional, Tuple, Dict, Any, Callable, Sequence
 import zipfile
 import os
 import json
@@ -19,12 +19,13 @@ from tabulate import tabulate
 import numpy
 
 import hidet
+from hidet.graph.tensor import Tensor
 from hidet.ffi.utils import Array, ctypes_func_pointer
 from hidet.ir.type import void_p, data_type
 from hidet.ir.dtypes import i32, i64
 from hidet.runtime.device import Device
 from hidet.runtime.compiled_module import CompiledModule
-from hidet.runtime.compiled_task import CompiledTask, TensorSignature
+from hidet.runtime.compiled_task import CompiledTask, TensorSignature, _check_inputs
 from hidet.runtime.storage import Storage
 from hidet.ffi import runtime_api
 from hidet.utils import prod
@@ -263,7 +264,7 @@ class CompiledGraph:
 
         return outputs
 
-    def run_async(self, inputs):
+    def run_async(self, inputs: Sequence[Tensor]):
         """
         Run the model asynchronously.
 
@@ -277,32 +278,8 @@ class CompiledGraph:
         ret: List[hidet.Tensor]
             The output tensors.
         """
-        if hidet.option.runtime_check():
-            symbol_map = {}
-            for i, (expected, actual) in enumerate(zip(self.meta.inputs, inputs)):
-                if hidet.ir.data_type(traced.dtype) != hidet.ir.data_type(new.dtype):
-                    raise RuntimeError(
-                        f"dtype mismatch at arg {i} between original: {traced.dtype} and new: {new.dtype}"
-                    )
-                traced_shape = traced.shape
-                concrete_shape = new.shape
-                if len(traced_shape) != len(concrete_shape):
-                    raise RuntimeError(
-                        f"Rank of input {i} not equal to original. ({len(concrete_shape)} vs. {len(traced_shape)})"
-                    )
-                for j, (expected_size, actual_size) in enumerate(zip(traced_shape, concrete_shape)):
-                    if isinstance(orig_shape, int) and orig_shape != new_shape:
-                        raise RuntimeError(
-                            f'shape mismatch at dimension {j}, \
-                                           original: {orig_shape} vs. new: {new_shape}'
-                        )
-                    elif orig_shape not in symbol_map:
-                        symbol_map[orig_shape] = new_shape
-                    elif symbol_map[orig_shape] != new_shape:
-                        raise RuntimeError(
-                            f"There exists multiple instances of the same symbol {orig_shape} with\
-                            different values in inputs (ex: {symbol_map[orig_shape]} and {new_shape})"
-                        )
+        if hidet.option.get_runtime_check():
+            _check_inputs(self.meta.inputs, inputs)
 
         symbol_dims = self._update_symbol_dims(inputs)
 

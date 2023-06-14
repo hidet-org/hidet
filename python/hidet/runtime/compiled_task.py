@@ -9,13 +9,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Dict, Tuple, Union, Optional
+from typing import List, Dict, Tuple, Union, Optional, Iterable
 from dataclasses import dataclass
 import os
 import json
 import time
 from collections import namedtuple
 from hidet.runtime.compiled_module import CompiledModule, CompiledFunction, load_compiled_module
+from hidet.graph.tensor import Tensor
 from hidet.ir.dtypes import i32
 from hidet.ffi import runtime_api
 from hidet.ffi.utils import Array
@@ -101,7 +102,7 @@ class CompiledTask:
     def _get_symbol_values(self) -> Tuple[int, ...]:
         return tuple(runtime_api.get_symbol_value(symbol) for symbol in self.meta_data.symbols)
 
-    def create_outputs(self):
+    def create_outputs(self) -> List[Tensor]:
         import hidet
 
         outputs = []
@@ -113,7 +114,7 @@ class CompiledTask:
             outputs.append(hidet.empty(shape, sig.dtype, sig.device))
         return outputs
 
-    def pick_best_candidate(self, inputs, outputs) -> int:
+    def pick_best_candidate(self, inputs: List[Tensor], outputs: List[Tensor]) -> int:
         import hidet
 
         key = self._get_symbol_values()
@@ -146,35 +147,11 @@ class CompiledTask:
             raise RuntimeError(f'Invalid candidate index: {candidate_index}')
         return candidate_index
 
-    def run_async(self, inputs):
-        from hidet import option, ir
+    def run_async(self, inputs: Iterable[Tensor]) -> List[Tensor]:
+        from hidet import option
 
-        if option.runtime_check():
-            symbol_map = {}
-            for i, (traced, new) in enumerate(zip(self.meta_data.inputs, inputs)):
-                if ir.data_type(traced.dtype) != new.dtype:
-                    raise RuntimeError(
-                        f"dtype mismatch at arg {i} between original: {traced.dtype} and new: {new.dtype}"
-                    )
-                traced_shape = traced.shape
-                concrete_shape = new.shape
-                if len(traced_shape) != len(concrete_shape):
-                    raise RuntimeError(
-                        f"Rank of input {i} not equal to original. ({len(concrete_shape)} vs. {len(traced_shape)})"
-                    )
-                for j, (orig_shape, new_shape) in enumerate(zip(traced_shape, concrete_shape)):
-                    if isinstance(orig_shape, int) and orig_shape != new_shape:
-                        raise RuntimeError(
-                            f'shape mismatch at dimension {j}, original: \
-                                           {orig_shape} vs. new: {new_shape}'
-                        )
-                    elif orig_shape not in symbol_map:
-                        symbol_map[orig_shape] = new_shape
-                    elif symbol_map[orig_shape] != new_shape:
-                        raise RuntimeError(
-                            f"There exists multiple instances of the same symbol {orig_shape}\
-                            with different values in inputs (ex: {symbol_map[orig_shape]} and {new_shape})"
-                        )
+        if option.get_runtime_check():
+            self.meta_data._check_inputs(inputs)
 
         outputs = self.create_outputs()
         candidate = self.candidates[self.pick_best_candidate(inputs, outputs)]
@@ -207,3 +184,32 @@ class CompiledTaskCache:
 
 
 compiled_task_cache = CompiledTaskCache()
+
+
+def _check_inputs(traced_inputs: Iterable[TensorSignature], inputs: Iterable[Tensor]):
+    from hidet import ir
+    symbol_map = {}
+    for i, (traced, new) in enumerate(zip(traced_inputs, inputs)):
+        if ir.data_type(traced.dtype) != new.dtype:
+            raise RuntimeError(
+                f"dtype mismatch at arg {i} between original: {traced.dtype} and new: {new.dtype}"
+            )
+        traced_shape = traced.shape
+        concrete_shape = new.shape
+        if len(traced_shape) != len(concrete_shape):
+            raise RuntimeError(
+                f"Rank of input {i} not equal to original. ({len(concrete_shape)} vs. {len(traced_shape)})"
+            )
+        for j, (orig_shape, new_shape) in enumerate(zip(traced_shape, concrete_shape)):
+            if isinstance(orig_shape, int) and orig_shape != new_shape:
+                raise RuntimeError(
+                    f'shape mismatch at dimension {j}, original: \
+                                    {orig_shape} vs. new: {new_shape}'
+                )
+            elif orig_shape not in symbol_map:
+                symbol_map[orig_shape] = new_shape
+            elif symbol_map[orig_shape] != new_shape:
+                raise RuntimeError(
+                    f"There exists multiple instances of the same symbol {orig_shape}\
+                    with different values in inputs (ex: {symbol_map[orig_shape]} and {new_shape})"
+                )

@@ -570,19 +570,7 @@ def debug_show_var_id(enable: bool = True):
     OptionContext.current().set_option('debug_show_var_id', enable)
 
 
-def runtime_check() -> bool:
-    """
-    Get whether to check shapes and dtypes of all input arguments to compiled Graphs or Tasks.
-
-    Returns
-    -------
-    ret: bool
-        Get whether to check shapes and dtypes of all input arguments to compiled Graphs or Tasks.
-    """
-    return OptionContext.current().get_option('runtime_check')
-
-
-def set_runtime_check(enable: bool = True):
+def runtime_check(enable: bool = True):
     """
     Whether to check shapes and dtypes of all input arguments to compiled Graphs or Tasks.
 
@@ -592,6 +580,18 @@ def set_runtime_check(enable: bool = True):
         Whether to check shapes and dtypes of all input arguments to compiled Graphs or Tasks.
     """
     OptionContext.current().set_option('runtime_check', enable)
+
+
+def get_runtime_check() -> bool:
+    """
+    Get whether to check shapes and dtypes of all input arguments to compiled Graphs or Tasks.
+
+    Returns
+    -------
+    ret: bool
+        Get whether to check shapes and dtypes of all input arguments to compiled Graphs or Tasks.
+    """
+    return OptionContext.current().get_option('runtime_check')
 
 
 def debug_show_verbose_flow_graph(enable: bool = True):
