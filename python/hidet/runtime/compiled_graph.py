@@ -290,7 +290,7 @@ class CompiledGraph:
                     raise RuntimeError(
                         f"Rank of input {i} not equal to original. ({len(concrete_shape)} vs. {len(traced_shape)})"
                     )
-                for j, (orig_shape, new_shape) in enumerate(zip(traced_shape, concrete_shape)):
+                for j, (expected_size, actual_size) in enumerate(zip(traced_shape, concrete_shape)):
                     if isinstance(orig_shape, int) and orig_shape != new_shape:
                         raise RuntimeError(
                             f'shape mismatch at dimension {j}, \
