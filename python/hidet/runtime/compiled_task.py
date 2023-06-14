@@ -16,7 +16,6 @@ import json
 import time
 from collections import namedtuple
 from hidet.runtime.compiled_module import CompiledModule, CompiledFunction, load_compiled_module
-from hidet.graph.tensor import Tensor
 from hidet.ir.dtypes import i32
 from hidet.ffi import runtime_api
 from hidet.ffi.utils import Array
@@ -102,7 +101,7 @@ class CompiledTask:
     def _get_symbol_values(self) -> Tuple[int, ...]:
         return tuple(runtime_api.get_symbol_value(symbol) for symbol in self.meta_data.symbols)
 
-    def create_outputs(self) -> List[Tensor]:
+    def create_outputs(self):
         import hidet
 
         outputs = []
@@ -114,7 +113,7 @@ class CompiledTask:
             outputs.append(hidet.empty(shape, sig.dtype, sig.device))
         return outputs
 
-    def pick_best_candidate(self, inputs: List[Tensor], outputs: List[Tensor]) -> int:
+    def pick_best_candidate(self, inputs, outputs) -> int:
         import hidet
 
         key = self._get_symbol_values()
@@ -147,11 +146,11 @@ class CompiledTask:
             raise RuntimeError(f'Invalid candidate index: {candidate_index}')
         return candidate_index
 
-    def run_async(self, inputs: Iterable[Tensor]) -> List[Tensor]:
+    def run_async(self, inputs):
         from hidet import option
 
         if option.get_runtime_check():
-            self.meta_data._check_inputs(inputs)
+            _check_inputs(self.meta_data.inputs, inputs)
 
         outputs = self.create_outputs()
         candidate = self.candidates[self.pick_best_candidate(inputs, outputs)]
@@ -186,14 +185,13 @@ class CompiledTaskCache:
 compiled_task_cache = CompiledTaskCache()
 
 
-def _check_inputs(traced_inputs: Iterable[TensorSignature], inputs: Iterable[Tensor]):
+def _check_inputs(traced_inputs: Iterable[TensorSignature], inputs):
     from hidet import ir
+
     symbol_map = {}
     for i, (traced, new) in enumerate(zip(traced_inputs, inputs)):
         if ir.data_type(traced.dtype) != new.dtype:
-            raise RuntimeError(
-                f"dtype mismatch at arg {i} between original: {traced.dtype} and new: {new.dtype}"
-            )
+            raise RuntimeError(f"dtype mismatch at arg {i} between original: {traced.dtype} and new: {new.dtype}")
         traced_shape = traced.shape
         concrete_shape = new.shape
         if len(traced_shape) != len(concrete_shape):

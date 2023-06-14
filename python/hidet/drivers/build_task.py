@@ -122,8 +122,7 @@ def build_task_module(task: Task, candidates: List[IRModule], task_dir: str, tar
     if len(task.assertions) > 0:
         assertions = tuple(AssertStmt(cond, msg) for cond, msg in task.assertions)
         for _, func in task_ir_module.functions.items():
-            # TODO: this is a hacky way of detecting if a function is a launch function
-            #    maybe designate a separate function type?
+            # pylint: disable=anomalous-backslash-in-string
             if func.kind == 'public' and re.search("launch_\d+", func.name):
                 body = func.body
                 # this should be fine, since ResolveSymbolPass resolves all symbols to the front

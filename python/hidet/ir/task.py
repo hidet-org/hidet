@@ -144,12 +144,11 @@ class Task(Node):
         used_inputs = collect(self.outputs, TensorInput)
         if any(x not in self.inputs for x in used_inputs):
             raise ValueError('Some TensorInput used in outputs are not placed in inputs: {}'.format(used_inputs))
-        
+
         # check assertions for correctness
         assert_symbols: List[SymbolVar] = list(collect([cond for cond, _ in self.assertions], SymbolVar))
         for sym in assert_symbols:
             assert sym in self.symbols, f"encountered {sym} in assertions, but not in list of defined symbols"
-
 
     def has_symbolic_shape(self) -> bool:
         from hidet.ir.tools import collect

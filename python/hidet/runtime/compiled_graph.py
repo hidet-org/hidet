@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Optional, Tuple, Dict, Any, Callable, Sequence
+from typing import List, Optional, Tuple, Dict, Any, Callable
 import zipfile
 import os
 import json
@@ -19,7 +19,6 @@ from tabulate import tabulate
 import numpy
 
 import hidet
-from hidet.graph.tensor import Tensor
 from hidet.ffi.utils import Array, ctypes_func_pointer
 from hidet.ir.type import void_p, data_type
 from hidet.ir.dtypes import i32, i64
@@ -264,7 +263,7 @@ class CompiledGraph:
 
         return outputs
 
-    def run_async(self, inputs: Sequence[Tensor]):
+    def run_async(self, inputs):
         """
         Run the model asynchronously.
 

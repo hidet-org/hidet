@@ -480,7 +480,7 @@ class IRPrinter(IRFunctor):
                 + (
                     NewLine()  # self.assertions: List[Tuple[Expr, str]]
                     + doc_join(['assert {}'.format(str(self.visit(v[0]))) for v in e.assertions], NewLine())
-                ).indent(),
+                ).indent()
             )
         front_part = doc_join(lines, NewLine())
         inverse_map_doc = Doc()
