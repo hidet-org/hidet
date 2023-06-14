@@ -178,6 +178,38 @@ def conv2d_gemm_fp16(data: Tensor, weight: Tensor, stride, dilations: List[int],
 
 
 def conv2d_gemm_2(data: Tensor, weight: Tensor, stride, dilations: List[int], groups: int = 1) -> Tensor:
+    """
+    Equivalent to the following algorithm:
+
+    def conv2d(x: torch.Tensor, weight: torch.Tensor, stride=[1, 1], dilation=[1, 1], groups=1):
+        n, c, h, w = x.shape
+        oc, wc, ky, kx = weight.shape
+        assert c % groups == 0 and oc % groups == 0
+        assert wc * groups == c
+
+        stride_y = stride[0]
+        stride_x = stride[1]
+        dilation_y = dilation[0]
+        dilation_x = dilation[1]
+        x = x.reshape([n, 1, groups, wc, w * h])
+        weight = weight.permute(2, 3, 0, 1).reshape([ky * kx, groups, oc // groups, wc])
+
+        a = weight @ x
+        a = a.reshape([n, ky, kx, oc, h, w])
+        out_h = (h - dilation_y * (ky - 1) - 1) // stride_y + 1
+        out_w = (w - dilation_x * (kx - 1) - 1) // stride_x + 1
+        y = torch.zeros([n, oc, out_h, out_w], device=x.device, dtype=x.dtype)
+
+        for i in range(out_h):
+            for j in range(out_w):
+                for kyi in range(ky):
+                    for kxi in range(kx):
+                        iy = i * stride_y + kyi * dilation_y
+                        ix = j * stride_x + kxi * dilation_x
+                        y[:, :, i, j] += a[:, kyi, kxi, :, iy, ix]
+        return y
+    
+    """
     from hidet.graph.ops import transpose
     stride = normalize_stride(stride)
     dilations = normalize_dilations(dilations)
