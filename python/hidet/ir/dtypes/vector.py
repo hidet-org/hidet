@@ -81,4 +81,12 @@ f16x2 = float16x2
 
 
 def vectorize(base_dtype: DataType, num_lanes: int) -> VectorType:
-    return VectorType(base_dtype, num_lanes)
+    table = {
+        (float32, 4): float32x4,
+        (float32, 8): float32x8,
+        (float16, 2): float16x2,
+    }
+    if (base_dtype, num_lanes) in table:
+        return table[(base_dtype, num_lanes)]
+    else:
+        raise ValueError('Cannot vectorize {}x{}'.format(base_dtype, num_lanes))

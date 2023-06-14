@@ -77,11 +77,11 @@ def matmul_simt(
     k_size: Expr = a_type.shape[-1]
 
     tune.check(all(a % b == 0 for a, b in zip(block_shape, warp_shape)))
-    tune.check(all(a % (b * c) == 0 for a, b, c in zip(warp_shape[:2], warp_threads, thread_shape)))
+    tune.check(all(a % (b * c) == 0 for a, b, c in zip(warp_shape[:2], warp_threads, thread_shape[:2])))
     tune.check(not is_true(k_size % lanes != 0))
     tune.check(not is_true(n_size % lanes != 0))
     block_warps = tuple(a // b for a, b in zip(block_shape, warp_shape))  # Tuple[int, int, int]
-    warp_repeat = tuple(a // (b * c) for a, b, c in zip(warp_shape[:2], warp_threads, thread_shape))  # Tuple[int, int]
+    warp_repeat = tuple(a // (b * c) for a, b, c in zip(warp_shape[:2], warp_threads, thread_shape[:2]))  # Tuple[int, int]
 
     num_warps: int = prod(block_warps)
     num_threads: int = num_warps * 32
@@ -98,18 +98,18 @@ def matmul_simt(
     smem_a_layout = data_layout([2, block_k_vectors, block_m])
     smem_b_layout = data_layout([2, block_k_vectors, block_n])
     regs_a_layout = (  # 2 x block_m
-        row_major(2, 1, 1)
-        .local(1, block_warps[0], 1)
-        .column_major(1, warp_repeat[0], 1)
-        .local(1, warp_threads[0], 1)
-        .row_major(1, thread_shape[0], 1)
+        row_major(2, 1)
+        .local(1, block_warps[0])
+        .column_major(1, warp_repeat[0])
+        .local(1, warp_threads[0])
+        .row_major(1, thread_shape[0])
     )
     regs_b_layout = (  # 2 x block_n
-        row_major(2, 1, 1)
-        .local(1, 1, block_warps[1])
-        .row_major(1, 1, warp_repeat[1])
-        .local(1, 1, warp_threads[1])
-        .row_major(1, 1, thread_shape[1])
+        row_major(2, 1)
+        .local(1, block_warps[1])
+        .row_major(1, warp_repeat[1])
+        .local(1, warp_threads[1])
+        .row_major(1, thread_shape[1])
     )
     regs_c_layout = (  # block_m x block_n
         local_layout(block_warps[0], block_warps[1])
@@ -196,7 +196,7 @@ def matmul_simt(
     ):
         _, _, warp_idx_k = spatial(*block_warps).map(threadIdx.x // 32)
         smem_a_slice = smem_a[smem_buffer_idx, warp_idx_k * (warp_k // lanes):, :]
-        for i, k in a_s2r_mapping.on(threadIdx.x):
+        for i, _ in a_s2r_mapping.on(threadIdx.x):
             regs_a[regs_buffer_idx, i] = smem_a_slice[k_frag_idx, i]
 
     @hidet.script
@@ -214,7 +214,6 @@ def matmul_simt(
                 regs_b_ldg[k, j] = gmem_b[k, j]
             else:
                 regs_b_ldg[k, j] = dtype.zero
-
 
     @hidet.script
     def copy_b_r2s(
@@ -236,8 +235,8 @@ def matmul_simt(
     ):
         _, _, warp_idx_k = spatial(*block_warps).map(threadIdx.x // 32)
         smem_b_slice = smem_b[smem_buffer_idx, warp_idx_k * (warp_k // lanes):, :]
-        for k, j in b_s2r_mapping.on(threadIdx.x):
-            regs_b[regs_buffer_idx, k, j] = smem_b_slice[k_frag_idx, j]
+        for _, j in b_s2r_mapping.on(threadIdx.x):
+            regs_b[regs_buffer_idx, j] = smem_b_slice[k_frag_idx, j]
 
     @hidet.script
     def copy_c_r2g(
@@ -263,8 +262,7 @@ def matmul_simt(
         buffer_idx: i32,
     ):
         for i, j in block_mapping.on(threadIdx.x):
-            for k in range(warp_k):
-                regs_c[i, j] += regs_a[buffer_idx, i, k] * regs_b[buffer_idx, k, j]
+            regs_c[i, j] += regs_a[buffer_idx, i] * regs_b[buffer_idx, j]
 
     @hidet.script
     def matmul_kernel(
@@ -276,12 +274,12 @@ def matmul_simt(
         attrs.cuda.dynamic_smem_bytes = smem_total_size
 
         smem = tensor_pointer('uint8', [smem_total_size], init=dynamic_shared_memory(0, 'uint8'))
-        smem_a = tensor_pointer(dtype, layout=smem_a_layout, init=~smem[0])
-        smem_b = tensor_pointer(dtype, layout=smem_b_layout, init=~smem[dtype.nbytes * smem_a_layout.size])
-        regs_a = register_tensor(dtype, layout=regs_a_layout)
-        regs_b = register_tensor(dtype, layout=regs_b_layout)
-        regs_c = register_tensor(dtype, layout=regs_c_layout)
-        regs_a_ldg = register_tensor(dtype, layout=regs_a_ldg_layout)
+        smem_a = tensor_pointer(vtype, layout=smem_a_layout, init=~smem[0])
+        smem_b = tensor_pointer(vtype, layout=smem_b_layout, init=~smem[vtype.nbytes * smem_a_layout.size])
+        regs_a = register_tensor(vtype, layout=regs_a_layout)
+        regs_b = register_tensor(vtype, layout=regs_b_layout)
+        regs_c = register_tensor(vtype, layout=regs_c_layout)
+        regs_a_ldg = register_tensor(vtype, layout=regs_a_ldg_layout)
         regs_b_ldg = register_tensor(dtype, layout=regs_b_ldg_layout)
 
         offset_m, offset_n = spatial(block_tiles_m, block_tiles_n).map(blockIdx.x)

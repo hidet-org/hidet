@@ -99,7 +99,12 @@ class DataType(BaseType):
         """
         from hidet.ir import expr
 
-        if isinstance(value, (int, float, bool, complex, list, tuple)):
+        built_types = (int, float, bool, complex)
+
+        if (
+            isinstance(value, built_types) or
+            isinstance(value, (list, tuple)) and all(isinstance(v, built_types) for v in value)
+        ):
             return self.constant(value)
         elif isinstance(value, expr.Constant):
             return self.constant(value.value)

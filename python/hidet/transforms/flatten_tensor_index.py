@@ -88,6 +88,12 @@ class FlattenTensorAccessRewriter(IRRewriter):
         indices = [self(i) for i in stmt.indices]
         value = self(stmt.value)
         layout = self.get_layout(stmt.buf)
+        if len(layout.shape) != len(indices):
+            raise ValueError(
+                'Access {}-d tensor {}{} with {}-d indices {}'.format(
+                    len(layout.shape), var.hint, list(layout.shape), len(indices), list(indices)
+                )
+            )
         global_index = layout(indices)
         return BufferStoreStmt(var, [global_index], value)
 

@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple, Optional, Union
 from hidet.ir.expr import Expr
 from hidet.ir.type import FuncType, DataType, data_type
 from hidet.ir.utils.type_utils import numeric_promotion
@@ -40,6 +40,28 @@ class MathFunctionSet:
             The cast expression. None if (cast_dtype)(a) is used to represent the cast.
         """
         return None
+
+    def make_vector(self, *items: Expr) -> Expr:
+        """
+        Make a vector-type value from a list of sub-expressions.
+
+        For example, if we want to create a f16x2 type given two f16 expressions, we can use the following code:
+            f16x2_expr = make_vector([f16_expr1, f16_expr2])
+
+        Parameters
+        ----------
+        *items: Expr
+            The list of sub-expressions.
+
+        Returns
+        -------
+        ret: Expr
+            The vector-type value. The number of lanes is determined by the length of the list.
+        """
+        raise NotImplementedError()
+
+    def make_vector_from_scalar(self, scalar: Expr, num_lanes: int) -> Expr:
+        raise NotImplementedError()
 
     # unary math functions
     def sin(self, a: Expr) -> Expr:
@@ -168,6 +190,19 @@ def type_infer_func(arg_types: List[DataType]) -> DataType:
     return dtype
 
 
+def tif_make_vector(arg_types: List[DataType]) -> DataType:
+    from hidet.ir.dtypes import vectorize
+    if len(arg_types) == 0:
+        raise ValueError("At least one argument is required")
+    if not all(arg_types[0] == arg_type for arg_type in arg_types[1:]):
+        raise ValueError("All arguments must have the same type")
+    return vectorize(arg_types[0], len(arg_types))
+
+
+def tif_make_vector_from_scalar(arg_types: List[DataType]) -> DataType:
+    pass
+
+
 class MathFunctionSetGeneric(MathFunctionSet):
     @staticmethod
     def register():
@@ -191,12 +226,15 @@ class MathFunctionSetGeneric(MathFunctionSet):
             'isfinite',
             'isinf',
             'isnan',
+            'make_vector',
         ]
         binary_names = ['min', 'max', 'pow', 'mod', 'atan2']
         ternary_names = ['fma']
         for name in unary_names + binary_names + ternary_names:
             if name in ['isfinite', 'isinf', 'isnan']:
                 func_type = FuncType(type_infer_func=lambda _: data_type('bool'))
+            elif name == 'make_vector':
+                func_type = FuncType(type_infer_func=tif_make_vector)
             else:
                 func_type = FuncType(type_infer_func=type_infer_func)
             register_primitive_function(name=f'generic_{name}', codegen_name=None, func_or_type=func_type, generic=True)
@@ -316,6 +354,9 @@ class MathFunctionSetGeneric(MathFunctionSet):
 
     def fma(self, a: Expr, b: Expr, c: Expr) -> Expr:
         return self.call('fma', a, b, c)
+
+    def make_vector(self, *args) -> Expr:
+        return self.call('make_vector', *args)
 
 
 generic_math_function_set = MathFunctionSetGeneric()
@@ -460,3 +501,7 @@ def isinf(a: Expr) -> Expr:
 
 def isnan(a: Expr) -> Expr:
     return generic_math_function_set.isnan(a)
+
+
+def make_vector(*args) -> Expr:
+    return generic_math_function_set.make_vector(*args)
