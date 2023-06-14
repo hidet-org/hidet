@@ -91,6 +91,28 @@ def conv2d_gemm_image_transform(
 def conv2d_gemm_post_transform(
     a: Tensor, stride: Sequence[int], dilations: Sequence[int]
 ) -> Tensor:
+    """
+    Equivalent to the following algorithm:
+
+    def post_transform(a, stride, dilations):
+        n, ky, kx, oc, h, w = a.shape
+        stride_y = stride[0]
+        stride_x = stride[1]
+        dilation_y = dilations[0]
+        dilation_x = dilations[1]
+        out_h = (h - dilation_y * (ky - 1) - 1) // stride_y + 1
+        out_w = (w - dilation_x * (kx - 1) - 1) // stride_x + 1
+        y = torch.zeros([n, oc, out_h, out_w], device=x.device, dtype=x.dtype)
+
+        for i in range(out_h):
+            for j in range(out_w):
+                for kyi in range(ky):
+                    for kxi in range(kx):
+                        iy = i * stride_y + kyi * dilation_y
+                        ix = j * stride_x + kxi * dilation_x
+                        y[:, :, i, j] += a[:, kyi, kxi, :, iy, ix]
+        return y
+    """
     return Conv2dGemmPostTransformOp(a, stride, dilations).get_output(0)
 
 
@@ -131,6 +153,18 @@ def conv2d_gemm(data: Tensor, weight: Tensor, stride, dilations: List[int], grou
     return y
 
 
+def conv2d_gemm_1(data: Tensor, gemm_w: Tensor, weight_shape, stride, dilations: List[int], groups: int = 1) -> Tensor:
+    gemm_x = conv2d_gemm_image_transform(
+        data, kernel=weight_shape[2:], stride=stride, dilations=dilations, groups=groups
+    )
+    
+    gemm_y = matmul(gemm_x, gemm_w)
+
+    y_shape = infer_conv2d_shape(data.shape, weight_shape, stride, groups, dilations)
+    y = conv2d_gemm_inverse_transform(gemm_y, out_height=y_shape[2], out_width=y_shape[3])
+    return y
+
+
 def conv2d_gemm_fp16(data: Tensor, weight: Tensor, stride, dilations: List[int], groups: int = 1, mma='simt') -> Tensor:
     gemm_x = conv2d_gemm_image_transform(
         data, kernel=weight.shape[2:], stride=stride, dilations=dilations, groups=groups
@@ -157,8 +191,8 @@ def conv2d_gemm_2(data: Tensor, weight: Tensor, stride, dilations: List[int], gr
     y = conv2d_gemm_post_transform(a, stride, dilations)
     return y
 
+
 def conv2d_gemm_2_1(data: Tensor, weight: Tensor, weight_shape: List[int], stride, dilations: List[int], groups: int = 1) -> Tensor:
-    from hidet.graph.ops import transpose
     stride = normalize_stride(stride)
     dilations = normalize_dilations(dilations)
     
