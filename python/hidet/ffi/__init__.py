@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from .ffi import _LIB
+from .ffi import _LIB, _LIB_NCCL
 from .runtime_api import runtime_api
 
 from . import callbacks
