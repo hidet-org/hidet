@@ -100,7 +100,7 @@ class Task(Node):
 
         self.symbols: List[SymbolVar] = list(collect(self.outputs, SymbolVar))
         # check assertions for correctness
-        assert_symbols: List[SymbolVar] = list(collect([i[0] for i in self.assertions], SymbolVar))
+        assert_symbols: List[SymbolVar] = list(collect([cond for cond, _ in self.assertions], SymbolVar))
         for sym in assert_symbols:
             assert sym in self.symbols, f"encountered {sym} in assertions, but not in list of defined symbols"
 
