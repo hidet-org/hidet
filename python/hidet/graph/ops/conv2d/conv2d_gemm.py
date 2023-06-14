@@ -9,12 +9,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Sequence
+from typing import Any, Dict, List, Optional, Sequence
+from hidet.graph.tensor import Tensor
 
 from hidet.ir.expr import is_constant
 from hidet.graph.ops.matmul import matmul, batch_matmul
 from hidet.graph.ops.utils import Task, Operator, Tensor, compute, input_like, TensorNode
-from hidet.graph.ops.utils import normalize_kernel, normalize_stride, normalize_dilations
+from hidet.graph.ops.utils import normalize_kernel, normalize_stride, normalize_dilations, reduce
+from hidet.ir.task import Task
 from .utils import infer_conv2d_shape
 
 
@@ -50,10 +52,46 @@ class Conv2dGemmImageTransformOp(Operator):
         )
 
 
+class Conv2dGemmPostTransformTask(Task):
+    def __init__(self, a: TensorNode, stride: List[int], dilations: List[int]):
+        n, ky, kx, oc, h, w = a.shape
+        stride_y, stride_x = stride
+        dilation_y, dilation_x = dilations
+        out_h = (h - dilation_y * (ky - 1) - 1) // stride_y + 1
+        out_w = (w - dilation_x * (kx - 1) - 1) // stride_x + 1
+        out = compute(
+            name='post_transform',
+            shape=[n, oc, out_h, out_w], 
+            fcompute=lambda ni, oci, hi, wi: reduce(
+                shape=[ky, kx],
+                reduce_type='sum',
+                fcompute=lambda kyi, kxi: a[ni, kyi, kxi, oci, hi * stride_y + kyi * dilation_y, wi * stride_x + kxi * dilation_x]
+            )
+        )
+        super().__init__(name="conv2d_gemm_post_transform", inputs=[a], outputs=[out])
+
+
+class Conv2dGemmPostTransformOp(Operator):
+    def __init__(self, a: Tensor, stride: List[int], dilations: List[int]):
+        stride = normalize_stride(stride)
+        dilations = normalize_dilations(dilations)
+        super().__init__(
+            inputs=[a],
+            attributes={'stride': stride, 'dilations': dilations},
+            task=Conv2dGemmPostTransformTask(input_like(a, 'a'), stride, dilations),
+        )
+
+
 def conv2d_gemm_image_transform(
     x: Tensor, kernel: Sequence[int], stride: Sequence[int], dilations: Sequence[int], groups: int = 1
 ) -> Tensor:
     return Conv2dGemmImageTransformOp(x, kernel, stride, dilations, groups).get_output(0)
+
+
+def conv2d_gemm_post_transform(
+    a: Tensor, stride: Sequence[int], dilations: Sequence[int]
+) -> Tensor:
+    return Conv2dGemmPostTransformOp(a, stride, dilations).get_output(0)
 
 
 def conv2d_gemm_filter_transform(w: Tensor, groups: int = 1) -> Tensor:
@@ -102,4 +140,32 @@ def conv2d_gemm_fp16(data: Tensor, weight: Tensor, stride, dilations: List[int],
 
     y_shape = infer_conv2d_shape(data.shape, weight.shape, stride, groups, dilations)
     y = conv2d_gemm_inverse_transform(gemm_y, out_height=y_shape[2], out_width=y_shape[3])
+    return y
+
+
+def conv2d_gemm_2(data: Tensor, weight: Tensor, stride, dilations: List[int], groups: int = 1) -> Tensor:
+    from hidet.graph.ops import transpose
+    stride = normalize_stride(stride)
+    dilations = normalize_dilations(dilations)
+    
+    n, c, h, w = data.shape
+    oc, wc, ky, kx = weight.shape
+    data = data.reshape([n, 1, groups, wc, w * h])
+    weight = transpose(weight, [2, 3, 0, 1]).reshape([ky * kx, groups, oc // groups, wc])
+
+    a = matmul(weight, data).reshape([n, ky, kx, oc, h, w])
+    y = conv2d_gemm_post_transform(a, stride, dilations)
+    return y
+
+def conv2d_gemm_2_1(data: Tensor, weight: Tensor, weight_shape: List[int], stride, dilations: List[int], groups: int = 1) -> Tensor:
+    from hidet.graph.ops import transpose
+    stride = normalize_stride(stride)
+    dilations = normalize_dilations(dilations)
+    
+    n, c, h, w = data.shape
+    oc, wc, ky, kx = weight_shape
+    data = data.reshape([n, 1, groups, wc, w * h])
+
+    a = matmul(weight, data).reshape([n, ky, kx, oc, h, w])
+    y = conv2d_gemm_post_transform(a, stride, dilations)
     return y
