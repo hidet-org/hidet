@@ -17,7 +17,7 @@ from typing import List, Tuple
 
 import numpy as np
 
-from hidet.ir.expr import const_tensor, Constant, cast
+from hidet.ir.expr import const_tensor, Constant, cast, is_constant
 from hidet.graph.ops.matmul import matmul
 from ..utils import Tensor, Operator, Task, TensorNode, input_like, compute, reduce, normalize_kernel
 
@@ -69,9 +69,9 @@ class Conv2dWinogradFilterTransformTask(Task):
         assert len(w.shape) == 4
         oc, c, rx, ry = w.shape
         mx, my = ms
-        if not rx.is_const():
+        if not is_constant(rx):
             raise ValueError('winograd filter transform: rx must be const')
-        if not ry.is_const():
+        if not is_constant(ry):
             raise ValueError('winograd filter transform: ry must be const')
         alpha_x, alpha_y = mx + rx - 1, my + ry - 1
         GH = winograd_transform_matrices(mx, int(rx))[0]

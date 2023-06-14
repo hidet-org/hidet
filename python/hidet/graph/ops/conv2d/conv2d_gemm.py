@@ -12,9 +12,9 @@
 from typing import List, Sequence
 
 from hidet.ir.expr import is_constant
-from hidet.graph.ops.matmul import matmul
+from hidet.graph.ops.matmul import matmul, batch_matmul
 from hidet.graph.ops.utils import Task, Operator, Tensor, compute, input_like, TensorNode
-from hidet.graph.ops.utils import normalize_kernel, normalize_stride
+from hidet.graph.ops.utils import normalize_kernel, normalize_stride, normalize_dilations
 from .utils import infer_conv2d_shape
 
 
@@ -87,6 +87,18 @@ def conv2d_gemm(data: Tensor, weight: Tensor, stride, dilations: List[int], grou
     )
     gemm_w = conv2d_gemm_filter_transform(weight, groups=groups)
     gemm_y = matmul(gemm_x, gemm_w)
+
+    y_shape = infer_conv2d_shape(data.shape, weight.shape, stride, groups, dilations)
+    y = conv2d_gemm_inverse_transform(gemm_y, out_height=y_shape[2], out_width=y_shape[3])
+    return y
+
+
+def conv2d_gemm_fp16(data: Tensor, weight: Tensor, stride, dilations: List[int], groups: int = 1, mma='simt') -> Tensor:
+    gemm_x = conv2d_gemm_image_transform(
+        data, kernel=weight.shape[2:], stride=stride, dilations=dilations, groups=groups
+    )
+    gemm_w = conv2d_gemm_filter_transform(weight, groups=groups)
+    gemm_y = batch_matmul(gemm_x, gemm_w, mma=mma)
 
     y_shape = infer_conv2d_shape(data.shape, weight.shape, stride, groups, dilations)
     y = conv2d_gemm_inverse_transform(gemm_y, out_height=y_shape[2], out_width=y_shape[3])

@@ -15,7 +15,7 @@ from .conv2d_winograd import conv2d_winograd, conv2d_winograd_image_transform, c
 from .conv2d_winograd import conv2d_winograd_inverse_transform
 from .conv2d_winograd import Conv2dWinogradInverseTransformOp, Conv2dWinogradFilterTransformOp
 from .conv2d_winograd import Conv2dWinogradImageTransformOp
-from .conv2d_gemm import conv2d_gemm, conv2d_gemm_image_transform, conv2d_gemm_filter_transform
+from .conv2d_gemm import conv2d_gemm, conv2d_gemm_fp16, conv2d_gemm_image_transform, conv2d_gemm_filter_transform
 from .conv2d_gemm import conv2d_gemm_inverse_transform
 from .conv2d_gemm import Conv2dGemmImageTransformOp
 
