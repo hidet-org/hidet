@@ -93,8 +93,7 @@ class Task(Node):
         self.outputs: List[TensorNode] = list(outputs)
         self.inverse_map: Dict[TensorInput, InverseMap] = {a: InverseMap.from_obj(b) for a, b in inverse_map.items()}
         self.attrs: Dict[str, Union[str, float, int, bool]] = attributes
-        if not hasattr(self, 'assertions'):
-            self.assertions: List[Tuple[Expr, Optional[str]]] = []
+        self.assertions: List[Tuple[Expr, Optional[str]]] = getattr(self, 'assertions', [])
 
         from hidet.ir.tools import collect
 
