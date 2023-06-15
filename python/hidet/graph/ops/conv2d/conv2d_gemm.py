@@ -158,7 +158,7 @@ def conv2d_gemm_1(data: Tensor, gemm_w: Tensor, weight_shape, stride, dilations:
         data, kernel=weight_shape[2:], stride=stride, dilations=dilations, groups=groups
     )
     
-    gemm_y = matmul(gemm_x, gemm_w)
+    gemm_y = batch_matmul(gemm_x, gemm_w, 'mma')
 
     y_shape = infer_conv2d_shape(data.shape, weight_shape, stride, groups, dilations)
     y = conv2d_gemm_inverse_transform(gemm_y, out_height=y_shape[2], out_width=y_shape[3])
@@ -255,7 +255,7 @@ from hidet.graph.ops.utils import broadcast_indices
 
 
 class FusedConvGemmF16Task(Task):
-    def __init__(self, x: TensorNode, weight: TensorNode, ky: int, kx: int, stride: List[int], dilation: List[int], groups=1):
+    def __init__(self, weight: TensorNode, x: TensorNode, ky: int, kx: int, stride: List[int], dilation: List[int], groups=1):
         # x.shape == [n, c, h, w]
         # w.shape == [ky * kx, groups, oc // groups, wc]
         if not x.type.dtype == float16 or not weight.type.dtype == float16:
@@ -304,7 +304,7 @@ class FusedConvGemmF16Task(Task):
         )
 
         super().__init__(
-            name='matmul_f16_pk', inputs=[x, weight], outputs=[c]
+            name='matmul_f16_pk', inputs=[weight, x], outputs=[c]
         )
 
     def allow_prologue(self) -> bool:
@@ -341,9 +341,9 @@ class FusedConvGemmF16Task(Task):
         from hidet.lang.cuda import register_tensor, atomic_add
 
         # input shapes
-        node_a, node_b = self.inputs[0].ttype.shape, self.inputs[1].ttype.shape
-        N, C, HW = node_a[0], node_a[1], node_a[2] * node_a[3]
-        KYKX, GROUPS, GP, WC = node_b
+        weight_shape, x_shape = self.inputs[0].ttype.shape, self.inputs[1].ttype.shape
+        N, C, HW = x_shape[0], x_shape[1], x_shape[2] * x_shape[3]
+        KYKX, GROUPS, GP, WC = weight_shape
         KY, KX = self.ky, self.kx
 
         OC, OUTH, OUTW = self.oc, self.out_h, self.out_w
@@ -432,7 +432,6 @@ class FusedConvGemmF16Task(Task):
                 offset_m = blockIdx.x * block_m
                 offset_k = k0 * block_k
 
-                gmem_a = a[kykx_idx, gp_idx, offset_m:, offset_k:]
                 for i, k_seg in load_smem_a_map.on(threadIdx.x):
                     k = k_seg * 8
                     src_size = (
@@ -440,7 +439,7 @@ class FusedConvGemmF16Task(Task):
                         if (offset_m + i >= m_size or offset_k + k >= k_size)
                         else min(k_size - (offset_k + k), 8)
                     )
-                    cp_async(~smem_a[i, k], ~gmem_a[i, k], cp_size=16, src_size=src_size * 2, cache_level='global')
+                    cp_async(~smem_a[i, k], ~a[kykx_idx, gp_idx, offset_m + i, offset_k + k], cp_size=16, src_size=src_size * 2, cache_level='global')
                     cp_async_wait_all()
 
             @hidet.script
@@ -451,13 +450,12 @@ class FusedConvGemmF16Task(Task):
                 offset_n = blockIdx.y * block_n
                 offset_k = k0 * block_k
 
-                gmem_b = b[n_idx, gp_idx, offset_k:, offset_n:]
                 for k, j_seg in load_smem_b_map.on(threadIdx.x):
                     j = j_seg * 8
                     src_size = (
                         0 if (offset_k + k >= k_size or offset_n + j >= n_size) else min(n_size - (offset_n + j), 8)
                     )
-                    cp_async(~smem_b[k, j], ~gmem_b[k, j], cp_size=16, src_size=src_size * 2, cache_level='global')
+                    cp_async(~smem_b[k, j], ~b[n_idx, gp_idx, offset_k + k, offset_n + j], cp_size=16, src_size=src_size * 2, cache_level='global')
 
             @hidet.script
             def matmul_f16_kernel(
@@ -535,12 +533,12 @@ class FusedConvGemmF16Task(Task):
                                 
                                 im_y = iy - ky_idx * dilation_y
                                 im_x = ix - kx_idx * dilation_x
-                                in_bound = (delta_m < m_size) and (delta_n < n_size)
+                                in_bound = (delta_m < m_size) and (delta_n < n_size) and (0 <= im_y < OUTH) and (0 <= im_x < OUTW)
                                 is_stride_multiple = im_y % stride_y == 0 and im_x % stride_x == 0
                                 if in_bound and is_stride_multiple:
                                     im_y = im_y // stride_y
                                     im_x = im_x // stride_x
-                                    col_idx = gp_idx * GP + delta_n
+                                    col_idx = gp_idx * GP + delta_m
 
                                     atomic_add(~c[n_idx, col_idx, im_y, im_x], regs_c[mi, mj, p])
                                 p += 1
@@ -573,13 +571,13 @@ class FusedConvGemmF16Task(Task):
                         
                         im_y = iy - ky_idx * dilation_y
                         im_x = ix - kx_idx * dilation_x
-                        in_bound = (delta_m < m_size) and (delta_n < n_size)
+                        in_bound = (delta_m < m_size) and (delta_n < n_size) and (0 <= im_y < OUTH) and (0 <= im_x < OUTW)
                         is_stride_multiple = im_y % stride_y == 0 and im_x % stride_x == 0
 
                         if in_bound and is_stride_multiple:
                             im_y = im_y // stride_y
                             im_x = im_x // stride_x
-                            col_idx = gp_idx * GP + delta_n
+                            col_idx = gp_idx * GP + delta_m
                             atomic_add(~c[n_idx, col_idx, im_y, im_x], smem_c[i, j])
 
         ir_module = module.ir_module()
@@ -587,6 +585,36 @@ class FusedConvGemmF16Task(Task):
 
         return ir_module
 
+# def conv2d(x: torch.Tensor, weight: torch.Tensor, stride=[1, 1], dilation=[1, 1], groups=1):
+#     n, c, h, w = x.shape
+#     oc, wc, ky, kx = weight.shape
+#     assert c % groups == 0 and oc % groups == 0
+#     assert wc * groups == c
+
+#     stride_y = stride[0]
+#     stride_x = stride[1]
+#     dilation_y = dilation[0]
+#     dilation_x = dilation[1]
+#     x = x.reshape([n, 1, groups, wc, w * h])
+#     weight = weight.permute(2, 3, 0, 1).reshape([ky * kx, groups, oc // groups, wc])
+
+#     a = weight @ x  # [n, ky * kx, groups, gp, h * w]
+#     a = a.reshape([n, ky * kx, -1, h * w])
+    
+#     out_h = (h - dilation_y * (ky - 1) - 1) // stride_y + 1
+#     out_w = (w - dilation_x * (kx - 1) - 1) // stride_x + 1
+#     y = torch.zeros([n, oc, out_h, out_w], device=x.device, dtype=x.dtype)
+
+#     for kyi in range(ky):
+#         for kxi in range(kx):
+#             for dn in range(h * w):
+#                 ih = dn // w
+#                 iw = dn % w
+#                 im_y = ih - kyi * dilation_y
+#                 im_x = iw - kxi * dilation_x
+#                 if im_y % stride_y == 0 and im_x % stride_x == 0 and 0 <= im_y < out_h and 0 <= im_x < out_w:
+#                     y[:, :, im_y, im_x] += a[:, kyi * kx + kxi, :, dn]
+#     return y
 
 class ConvMatmulF16Op(Operator):
     def __init__(self, a: Tensor, b: Tensor, parallel_k_parts=1):
