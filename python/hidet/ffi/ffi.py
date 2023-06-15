@@ -85,10 +85,12 @@ def get_func(func_name, arg_types: List, restype):
         func = getattr(_LIB, func_name)
     elif func_exists(func_name, _LIB_RUNTIME):
         func = getattr(_LIB_RUNTIME, func_name)
+    elif func_exists(func_name, _LIB_NCCL):
+        func = getattr(_LIB_NCCL, func_name)
     else:
         raise ValueError(
-            'Can not find function "{}" in hidet libraries:\n{}\n{}'.format(
-                func_name, library_paths['hidet'], library_paths['hidet_runtime']
+            'Can not find function "{}" in hidet libraries:\n{}\n{}\n{}'.format(
+                func_name, library_paths['hidet'], library_paths['hidet_runtime'], library_paths['nccl']
             )
         )
 
@@ -111,3 +113,6 @@ def get_func(func_name, arg_types: List, restype):
 
 load_library()
 load_nccl_library()
+
+def nccl_available():
+    return _LIB_NCCL is not None

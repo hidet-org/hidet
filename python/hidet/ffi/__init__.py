@@ -10,7 +10,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from .ffi import _LIB, _LIB_NCCL
-from .runtime_api import runtime_api
+from .runtime_api import runtime_api, nccl_available
+if nccl_available():
+    from .runtime_api import nccl_runtime_api, NcclUniqueId
 
 from . import callbacks
 from . import crt

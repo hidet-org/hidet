@@ -10,9 +10,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Union
-from ctypes import c_void_p, c_char_p, c_uint64, c_int32
+from ctypes import c_void_p, c_char_p, c_uint64, c_int32, c_int, pointer, Structure, c_byte
 from hidet.cuda import Stream
-from .ffi import get_func
+from .ffi import get_func, nccl_available, _LIB_NCCL
 
 
 class RuntimeAPI:
@@ -61,5 +61,59 @@ class RuntimeAPI:
         name = name.encode('utf-8')
         RuntimeAPI._set_symbol_value(name, value)
 
-
 runtime_api = RuntimeAPI()
+
+if nccl_available():
+    print("NCCL is available")
+
+    class NcclUniqueId(Structure):
+        """
+        Defined in nccl.h
+        """
+        _fields_ = [("internal", c_byte * 128)]
+
+    class NCCLRuntimeAPI:
+        """
+        Runtime APIs regarding NCCL
+        TODO: Exception handling
+        """
+        _get_version = get_func('ncclGetVersion', [c_void_p], c_int)
+        _get_unique_id = get_func('ncclGetUniqueId', [c_void_p], c_int)
+        _comm_init_rank = get_func('ncclCommInitRank', [c_void_p, c_int, NcclUniqueId, c_int], c_int)
+        _comm_destroy = get_func('ncclCommDestroy', [c_void_p], c_int)
+        _all_reduce = get_func('ncclAllReduce', [c_void_p, c_void_p, c_uint64, c_int, c_int, c_void_p, c_int], c_int)
+        _broadcast = get_func('ncclBroadcast', [c_void_p, c_void_p, c_uint64, c_int, c_int, c_void_p, c_int], c_int)
+        _reduce = get_func('ncclReduce', [c_void_p, c_void_p, c_uint64, c_int, c_int, c_int, c_void_p, c_int], c_int)
+        _all_gather = get_func('ncclAllGather', [c_void_p, c_void_p, c_uint64, c_int, c_void_p, c_int], c_int)
+        _reduce_scatter = get_func('ncclReduceScatter', [c_void_p, c_void_p, c_uint64, c_int, c_int, c_void_p, c_int], c_int)
+
+        @staticmethod
+        def get_version() -> int:
+            version = c_int(0)
+            NCCLRuntimeAPI._get_version(pointer(version))
+            return version.value
+        
+        @staticmethod
+        def get_unique_id(comm_id:NcclUniqueId) -> None:
+            """
+            In-place initialization of the NcclUniqueId object
+            """
+            ret = NCCLRuntimeAPI._get_unique_id(pointer(comm_id))
+            assert ret == 0, ret
+        
+        @staticmethod
+        def comm_init_rank(ndev:int, comm_id:NcclUniqueId, rank:int) -> c_void_p:
+            comm = c_void_p()
+            ret = NCCLRuntimeAPI._comm_init_rank(pointer(comm), ndev, comm_id, rank)
+            assert ret == 0, ret
+            return comm
+        
+        @staticmethod
+        def comm_destroy(comm:c_void_p) -> None:
+            ret = NCCLRuntimeAPI._comm_destroy(comm)
+            assert ret == 0
+            
+        
+
+
+    nccl_runtime_api = NCCLRuntimeAPI()
