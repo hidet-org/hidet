@@ -338,15 +338,18 @@ class FusedConvGemmF16Task(Task):
         from hidet.lang.mapping import spatial, auto_map
         from hidet.lang.cuda import blockIdx, threadIdx, syncthreads, dynamic_shared_memory
         from hidet.lang.cuda import MmaConfig, mma_sync, cp_async, cp_async_wait_all, ldmatrix
-        from hidet.lang.cuda import register_tensor
+        from hidet.lang.cuda import register_tensor, atomic_add
 
         # input shapes
-        node_a, node_b, node_c = self.inputs[0], self.inputs[1], self.outputs[0]
-        N, C, HW = node_a[0].shape, node_a[1].shape, node_a[2].shape * node_a[3].shape
-        KYKX, GROUPS, GP, WC = node_b.shape
+        node_a, node_b = self.inputs[0].ttype.shape, self.inputs[1].ttype.shape
+        N, C, HW = node_a[0], node_a[1], node_a[2] * node_a[3]
+        KYKX, GROUPS, GP, WC = node_b
         KY, KX = self.ky, self.kx
 
         OC, OUTH, OUTW = self.oc, self.out_h, self.out_w
+
+        dilation_y, dilation_x = self.dilation_y, self.dilation_x
+        stride_y, stride_x = self.stride_y, self.stride_x
 
         # a_shape = [1, KYKX, GROUPS, GP, WC]
         # b_shape = [N, 1, GROUPS, WC, HW]
@@ -420,9 +423,6 @@ class FusedConvGemmF16Task(Task):
                 regs_c: float16[mma_config.c_elements],
             ):
                 mma_sync(mma_config, regs_a, regs_b, regs_c)
-
-            def get_c_head_index(idx):
-                return spatial(N, KYKX, GROUPS).map(idx)
             
             @hidet.script
             def load_smem_a(k0: int, a: float16[KYKX, GROUPS, GP, WC], smem_a: smem_a_type):
@@ -529,10 +529,20 @@ class FusedConvGemmF16Task(Task):
                             for i, j in mma_config.c_store_map.on(lane_id):
                                 delta_m = wi * warp_m + mi * mma_m + i + offset_m
                                 delta_n = wj * warp_n + mj * mma_n + j + offset_n
-                                in_bound = (offset_m + delta_m < m_size) and (offset_n + delta_n < n_size)
-                                if in_bound:
-                                    # TODO
-                                    gmem_c[delta_m, delta_n] = regs_c[mi, mj, p]
+                                
+                                iy = delta_n // OUTW
+                                ix = delta_n % OUTW
+                                
+                                im_y = iy - ky_idx * dilation_y
+                                im_x = ix - kx_idx * dilation_x
+                                in_bound = (delta_m < m_size) and (delta_n < n_size)
+                                is_stride_multiple = im_y % stride_y == 0 and im_x % stride_x == 0
+                                if in_bound and is_stride_multiple:
+                                    im_y = im_y // stride_y
+                                    im_x = im_x // stride_x
+                                    col_idx = gp_idx * GP + delta_n
+
+                                    atomic_add(~c[n_idx, col_idx, im_y, im_x], regs_c[mi, mj, p])
                                 p += 1
                 else:
                     smem_c = tensor_pointer('float16', shape=[block_m, block_n])
@@ -548,7 +558,6 @@ class FusedConvGemmF16Task(Task):
                                         delta_n = wj * warp_n + mj * mma_n + j
                                         in_bound = (offset_m + delta_m < m_size) and (offset_n + delta_n < n_size)
                                         if in_bound:
-                                            # TODO
                                             if k_round == 0:
                                                 smem_c[delta_m, delta_n] = regs_c[mi, mj, p]
                                             else:
@@ -559,8 +568,19 @@ class FusedConvGemmF16Task(Task):
                     for i, j in store_smem_c_map.on(threadIdx.x):
                         delta_m = i + offset_m
                         delta_n = j + offset_n
-                        if delta_m < m_size and delta_n < n_size:
-                            gmem_c[i + offset_m, j + offset_n] = smem_c[i, j]
+                        iy = delta_n // OUTW
+                        ix = delta_n % OUTW
+                        
+                        im_y = iy - ky_idx * dilation_y
+                        im_x = ix - kx_idx * dilation_x
+                        in_bound = (delta_m < m_size) and (delta_n < n_size)
+                        is_stride_multiple = im_y % stride_y == 0 and im_x % stride_x == 0
+
+                        if in_bound and is_stride_multiple:
+                            im_y = im_y // stride_y
+                            im_x = im_x // stride_x
+                            col_idx = gp_idx * GP + delta_n
+                            atomic_add(~c[n_idx, col_idx, im_y, im_x], smem_c[i, j])
 
         ir_module = module.ir_module()
         assert isinstance(matmul_f16_kernel, Function)
@@ -568,7 +588,7 @@ class FusedConvGemmF16Task(Task):
         return ir_module
 
 
-class MatmulF16Op(Operator):
+class ConvMatmulF16Op(Operator):
     def __init__(self, a: Tensor, b: Tensor, parallel_k_parts=1):
         if not (isinstance(parallel_k_parts, int) and not isinstance(parallel_k_parts, bool)):
             raise ValueError('parallel_k_parts must be an integer, got {}'.format(parallel_k_parts))
@@ -589,4 +609,4 @@ def matmul_f16(a: Tensor, b: Tensor, parallel_k_parts=1) -> Tensor:
         raise ValueError('Expect the last dimension of the input tensors to be a multiple of 8')
     if a.dtype != dtypes.float16 or b.dtype != dtypes.float16:
         raise ValueError('BatchMatmulF16Op only support float16, got {} and {}'.format(a.dtype, b.dtype))
-    return MatmulF16Op(a, b, parallel_k_parts).get_output(0)
+    return ConvMatmulF16Op(a, b, parallel_k_parts).get_output(0)
