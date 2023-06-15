@@ -402,7 +402,9 @@ class IRPrinter(IRFunctor):
     def visit_PointerType(self, t: PointerType):
         if isinstance(t.base_type, VoidType):
             return Text('void*')
-        return Text('PointerType(') + self(t.base_type) + ')'
+        if isinstance(t.base_type, (DataType, PointerType)):
+            return self(t.base_type) + '*'
+        return Text('*') + self(t.base_type) + ')'
 
     def visit_TensorPointerType(self, t: TensorPointerType):
         return Text('tensor_pointer(') + self._tensor_type(t.tensor_type) + ')'

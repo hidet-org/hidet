@@ -873,6 +873,8 @@ def cast(v: Union[Expr, int, bool, float], dtype: Union[str, DataType, BaseType]
         dtype = data_type(dtype)
 
     if isinstance(v, Constant) and v.is_scalar():
+        if dtype.is_vector():
+            raise ValueError('Can not cast a scalar {} to a vector type {}.'.format(v, dtype))
         return constant(v.value, dtype)
     elif isinstance(v, Var) and v.type.is_data_type() and dtype.is_data_type() and v.type == dtype:
         return v

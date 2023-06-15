@@ -213,7 +213,7 @@ def matmul_simt(
             if offset_n + j < n_size and k_predicate:
                 regs_b_ldg[k, j] = gmem_b[k, j]
             else:
-                regs_b_ldg[k, j] = dtype.zero
+                regs_b_ldg[k, j] = vtype.zero
 
     @hidet.script
     def copy_b_r2s(
@@ -298,7 +298,7 @@ def matmul_simt(
         syncthreads()
         # Initialize regs C
         for i, j in block_mapping.on(threadIdx.x):
-            regs_c[i, j] = 0.0
+            regs_c[i, j] = vtype.zero
 
         # Main k loop
         for k0 in range(k_tiles - 1):  # iterate block_k tile
