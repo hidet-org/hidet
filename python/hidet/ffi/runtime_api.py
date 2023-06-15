@@ -11,6 +11,7 @@
 # limitations under the License.
 from typing import Union
 from ctypes import c_void_p, c_char_p, c_uint64, c_int32, c_int, pointer, Structure, c_byte
+from enum import IntEnum
 from hidet.cuda import Stream
 from .ffi import get_func, nccl_available, _LIB_NCCL
 
@@ -66,6 +67,30 @@ runtime_api = RuntimeAPI()
 if nccl_available():
     print("NCCL is available")
 
+    class ncclDataType(IntEnum):
+        int8 = 0
+        char = 0
+        uint8 = 1
+        int32 = 2
+        int = 2
+        uint32 = 3
+        int64 = 4
+        uint64 = 5
+        float16 = 6
+        half = 6
+        float32 = 7
+        float = 7
+        float64 = 8
+        double = 8
+        bfloat = 9
+
+    class ncclRedOp(IntEnum):
+        sum = 0
+        prod = 1
+        max = 2
+        min = 3
+        avg = 4
+
     class NcclUniqueId(Structure):
         """
         Defined in nccl.h
@@ -102,17 +127,26 @@ if nccl_available():
             assert ret == 0, ret
         
         @staticmethod
-        def comm_init_rank(ndev:int, comm_id:NcclUniqueId, rank:int) -> c_void_p:
+        def comm_init_rank(ndev:int, comm_id:NcclUniqueId, rank:int) -> int:
             comm = c_void_p()
             ret = NCCLRuntimeAPI._comm_init_rank(pointer(comm), ndev, comm_id, rank)
             assert ret == 0, ret
-            return comm
+            return comm.value
         
         @staticmethod
-        def comm_destroy(comm:c_void_p) -> None:
-            ret = NCCLRuntimeAPI._comm_destroy(comm)
+        def comm_destroy(comm_handle:int) -> None:
+            ret = NCCLRuntimeAPI._comm_destroy(comm_handle)
             assert ret == 0
             
+        @staticmethod
+        def all_reduce(sendbuff:int, recvbuff:int, count:int, datatype:ncclDataType, op:ncclRedOp, comm_handle:int, s:Stream) -> None:
+            print(type(datatype), op)
+            ret = NCCLRuntimeAPI._all_reduce(
+                sendbuff, recvbuff, count, datatype, op, comm_handle, s._handle
+            )
+            assert ret == 0
+
+
         
 
 
