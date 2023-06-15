@@ -86,7 +86,7 @@ def conv2d_gemm(data: Tensor, weight: Tensor, stride, dilations: List[int], grou
         data, kernel=weight.shape[2:], stride=stride, dilations=dilations, groups=groups
     )
     gemm_w = conv2d_gemm_filter_transform(weight, groups=groups)
-    gemm_y = matmul(gemm_x, gemm_w)
+    gemm_y = matmul(gemm_x, gemm_w, require_prologue=True)
 
     y_shape = infer_conv2d_shape(data.shape, weight.shape, stride, groups, dilations)
     y = conv2d_gemm_inverse_transform(gemm_y, out_height=y_shape[2], out_width=y_shape[3])
