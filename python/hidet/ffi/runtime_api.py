@@ -33,7 +33,10 @@ class NcclCommunicator:
         if not nccl_available():
             raise RuntimeError("NCCL Library not found.")
         self._handle = handle
+
+        # TODO: how to ensure the following two are identical?
         _comms.append(self)
+        runtime_api.add_nccl_comm(self)
     
     def __del__(self):
         """

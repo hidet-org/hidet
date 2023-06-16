@@ -20,5 +20,5 @@ def all_reduce(comm_id: int, sendbuff: Expr, recvbuff: Expr, count: Expr, dtype:
     from hidet.ir.primitives.runtime import get_cuda_stream, get_nccl_comm
     comm = get_nccl_comm(comm_id)
     return BlackBoxStmt(
-        'ncclAllReduce({}, {}, (ncclDataType_t){}, (ncclRedOp_t){}, (ncclComm_t){}, (cudaStream_t){});'.format(sendbuff, recvbuff, count, int(dtype), int(op), comm, get_cuda_stream())
+        'ncclAllReduce({}, {}, {}, (ncclDataType_t){}, (ncclRedOp_t){}, (ncclComm_t){}, (cudaStream_t){});'.format(sendbuff, recvbuff, count, int(dtype), int(op), comm, get_cuda_stream())
     )
