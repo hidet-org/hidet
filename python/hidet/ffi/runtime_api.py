@@ -9,11 +9,35 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Union
-from ctypes import c_void_p, c_char_p, c_uint64, c_int32, c_int, pointer, Structure, c_byte
+from typing import Union, Optional, List
+from ctypes import c_void_p, c_char_p, c_uint64, c_int32, c_int, pointer, Structure, c_byte, POINTER
 from enum import IntEnum
 from hidet.cuda import Stream
-from .ffi import get_func, nccl_available, _LIB_NCCL
+from .ffi import get_func, nccl_available
+
+class NcclUniqueId(Structure):
+    """
+    Defined in nccl.h
+    """
+    _fields_ = [("internal", c_byte * 128)]
+
+class NcclCommunicator:
+    """
+    This is only a wrapper of underlying C++ ncclComm_t object.
+    The lifetime of ncclComm_t objects is managed in C++.
+    They will be created and not released until the program exits.
+    
+    Q: Why not maintain the lifetime of ncclComm in Python?
+    A: If we want get_nccl_comm(comm_id) API in python, we need to maintain two pools of ncclComm
+       objects in Python and C++ respectively, which is redundant.
+    """
+    def __init__(self, handle: int):
+        """
+        Users should not call this constructor directly
+        """
+        if not nccl_available():
+            raise RuntimeError("NCCL Library not found.")
+        self._handle = handle
 
 
 class RuntimeAPI:
@@ -25,6 +49,8 @@ class RuntimeAPI:
     _reset_symbol_table = get_func('reset_symbol_table', [], None)
     _get_symbol_value = get_func('get_symbol_value', [c_char_p], c_int32)
     _set_symbol_value = get_func('set_symbol_value', [c_char_p, c_int32], None)
+    _add_nccl_comm = get_func('add_nccl_comm', [c_void_p], None)
+    _get_nccl_comm = get_func('get_nccl_comm', [], c_void_p)
 
     @staticmethod
     def set_current_stream(stream: Union[Stream, int]) -> None:
@@ -62,41 +88,22 @@ class RuntimeAPI:
         name = name.encode('utf-8')
         RuntimeAPI._set_symbol_value(name, value)
 
+    @staticmethod
+    def add_nccl_comm(comm: NcclCommunicator) -> None:
+        if not nccl_available():
+            raise RuntimeError("NCCL Library not found.")
+        RuntimeAPI._add_nccl_comm(comm._handle)
+    
+    @staticmethod
+    def get_nccl_comm(comm_id: int) -> NcclCommunicator:
+        if not nccl_available():
+            raise RuntimeError("NCCL Library not found.") 
+        comm_handle = RuntimeAPI._get_nccl_comm(comm_id)
+        return NcclCommunicator(comm_handle)
+
 runtime_api = RuntimeAPI()
 
 if nccl_available():
-    print("NCCL is available")
-
-    class ncclDataType(IntEnum):
-        int8 = 0
-        char = 0
-        uint8 = 1
-        int32 = 2
-        int = 2
-        uint32 = 3
-        int64 = 4
-        uint64 = 5
-        float16 = 6
-        half = 6
-        float32 = 7
-        float = 7
-        float64 = 8
-        double = 8
-        bfloat = 9
-
-    class ncclRedOp(IntEnum):
-        sum = 0
-        prod = 1
-        max = 2
-        min = 3
-        avg = 4
-
-    class NcclUniqueId(Structure):
-        """
-        Defined in nccl.h
-        """
-        _fields_ = [("internal", c_byte * 128)]
-
     class NCCLRuntimeAPI:
         """
         Runtime APIs regarding NCCL
@@ -106,11 +113,9 @@ if nccl_available():
         _get_unique_id = get_func('ncclGetUniqueId', [c_void_p], c_int)
         _comm_init_rank = get_func('ncclCommInitRank', [c_void_p, c_int, NcclUniqueId, c_int], c_int)
         _comm_destroy = get_func('ncclCommDestroy', [c_void_p], c_int)
-        _all_reduce = get_func('ncclAllReduce', [c_void_p, c_void_p, c_uint64, c_int, c_int, c_void_p, c_int], c_int)
-        _broadcast = get_func('ncclBroadcast', [c_void_p, c_void_p, c_uint64, c_int, c_int, c_void_p, c_int], c_int)
-        _reduce = get_func('ncclReduce', [c_void_p, c_void_p, c_uint64, c_int, c_int, c_int, c_void_p, c_int], c_int)
-        _all_gather = get_func('ncclAllGather', [c_void_p, c_void_p, c_uint64, c_int, c_void_p, c_int], c_int)
-        _reduce_scatter = get_func('ncclReduceScatter', [c_void_p, c_void_p, c_uint64, c_int, c_int, c_void_p, c_int], c_int)
+
+        _comm_user_rank = get_func('ncclCommUserRank', [c_void_p, POINTER(c_int)])
+        _comm_count = get_func('ncclCommCount', [c_void_p, POINTER(c_int)])
 
         @staticmethod
         def get_version() -> int:
@@ -134,20 +139,8 @@ if nccl_available():
             return comm.value
         
         @staticmethod
-        def comm_destroy(comm_handle:int) -> None:
-            ret = NCCLRuntimeAPI._comm_destroy(comm_handle)
+        def comm_destroy(comm:NcclCommunicator) -> None:
+            ret = NCCLRuntimeAPI._comm_destroy(comm._handle)
             assert ret == 0
-            
-        @staticmethod
-        def all_reduce(sendbuff:int, recvbuff:int, count:int, datatype:ncclDataType, op:ncclRedOp, comm_handle:int, s:Stream) -> None:
-            print(type(datatype), op)
-            ret = NCCLRuntimeAPI._all_reduce(
-                sendbuff, recvbuff, count, datatype, op, comm_handle, s._handle
-            )
-            assert ret == 0
-
-
-        
-
 
     nccl_runtime_api = NCCLRuntimeAPI()
