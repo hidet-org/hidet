@@ -44,8 +44,6 @@ class NcclCommunicator:
     def split(self):
         raise NotImplementedError()
 
-_comms: List[NcclCommunicator] = []
-
 class RuntimeAPI:
     _set_current_stream = get_func('set_cuda_stream', [c_void_p], None)
     _get_current_stream = get_func('get_cuda_stream', [], c_void_p)
@@ -150,3 +148,7 @@ if nccl_available():
             assert ret == 0
 
     nccl_runtime_api = NCCLRuntimeAPI()
+    _comms: List[NcclCommunicator] = []
+
+    def get_nccl_comm(comm_id: int):
+        return _comms[comm_id]

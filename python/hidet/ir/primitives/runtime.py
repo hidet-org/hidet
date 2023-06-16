@@ -53,6 +53,9 @@ def register_functions():
     register_primitive_function(
         name='memory_planner_used', func_or_type=FuncType([int32], int64), codegen_name='memory_planner_used'
     )
+    register_primitive_function(
+        name='get_nccl_comm', func_or_type=FuncType([int32], void_p), codegen_name='get_nccl_comm'
+    )
 
 
 def get_cuda_stream() -> void_p:
@@ -89,3 +92,7 @@ def memory_planner_free(idx: Union[int, Expr], ptr: Union[int, Expr]):
 
 def memory_planner_used(idx: Union[int, Expr]):
     return call_primitive_func('memory_planner_used', [idx])
+
+
+def get_nccl_comm(idx: int) -> void_p:
+    return call_primitive_func('get_nccl_comm', [idx])

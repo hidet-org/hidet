@@ -12,7 +12,7 @@
 from .ffi import _LIB, _LIB_NCCL
 from .runtime_api import runtime_api, nccl_available
 if nccl_available():
-    from .runtime_api import nccl_runtime_api, NcclUniqueId, NcclCommunicator 
+    from .runtime_api import nccl_runtime_api, NcclUniqueId, NcclCommunicator, get_nccl_comm
 
 from . import callbacks
 from . import crt
