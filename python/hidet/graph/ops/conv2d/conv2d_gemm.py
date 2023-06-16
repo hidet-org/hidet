@@ -585,6 +585,7 @@ class FusedConvGemmF16Task(Task):
 
         return ir_module
 
+
 # def conv2d(x: torch.Tensor, weight: torch.Tensor, stride=[1, 1], dilation=[1, 1], groups=1):
 #     n, c, h, w = x.shape
 #     oc, wc, ky, kx = weight.shape
@@ -638,3 +639,369 @@ def matmul_f16(a: Tensor, b: Tensor, parallel_k_parts=1) -> Tensor:
     if a.dtype != dtypes.float16 or b.dtype != dtypes.float16:
         raise ValueError('BatchMatmulF16Op only support float16, got {} and {}'.format(a.dtype, b.dtype))
     return ConvMatmulF16Op(a, b, parallel_k_parts).get_output(0)
+
+
+class Conv2dGemm2(Task):
+    def __init__(self, 
+                 img: TensorNode, 
+                 weight: TensorNode, 
+                 orig_weight_shape: List[int],
+                 stride: List[int],
+                 dilations: List[int],
+                 groups: int = 1,
+                 parallel_k_parts: int = 1):
+        # Channel last
+        # This kernel expects the weight to be transformed in the following way:
+        # weight.shape [OC, WC, KY, KX] -> [KY * KX * WC, OC]
+        assert len(img.shape) == 4
+        assert len(weight.shape) == 2
+        # TODO: group other than 1
+        assert groups == 1
+
+        self.dilations = dilations
+        self.stride = stride
+        self.img_shape = img.shape
+        self.orig_weight_shape = orig_weight_shape
+        
+
+        DILY, DILX = dilations
+        STRY, STRX = stride
+        # orig_weight_shape == [OC, WC, KY, KX]
+        N, W, H, C = img.shape
+        OC, WC, KY, KX = orig_weight_shape
+
+        OUT_H = (H - DILY * (KY - 1) - 1) // STRY + 1
+        OUT_W = (W - DILX * (KX - 1) - 1) // STRX + 1
+
+        self.out_shape = [parallel_k_parts, N, OUT_H, OUT_W, OC]
+
+        if not img.type.dtype == float16 or not weight.type.dtype == float16:
+            raise ValueError('Both inputs must be float16 tensors')
+
+        k_size = WC * KY * KX
+        k_part_extent = cdiv(k_size, parallel_k_parts)
+
+        # k is tiled from [ky, kx, wc]
+        def f_compute(k, ni, hi, wi, oci):
+            wci = k % WC
+            ky = (k // (WC * KX)) % KY
+            kx = (k // WC) % KX
+            return img[ni, hi * STRY + ky * DILY, wi * STRX + kx * DILX, wci] * weight[k, oci]
+        
+        c = compute(
+            name='c',
+            shape=self.out_shape,
+            fcompute=lambda kpi, ni, hi, wi, oci: reduce(
+                shape=[k_part_extent],
+                fcompute=lambda k: if_then_else(
+                    kpi * k_part_extent + k < k_size,
+                    f_compute(k, ni, hi, wi, oci),
+                    float16(0.0),
+                ),
+                reduce_type='sum',
+            ),
+        )
+
+        super().__init__(
+            name='matmul_f16_pk', inputs=[img, weight], outputs=[c], attributes={'parallel_k_parts': parallel_k_parts}
+        )
+
+    def allow_prologue(self) -> bool:
+        return False
+
+    def allow_epilogue(self) -> bool:
+        return True
+
+    def implement_cuda(self, working_dir: str) -> List[IRModule]:
+        return tune.extract_ir_modules(self.schedule)
+
+    @tune.space(
+        2,
+        block_m=[32, 64, 128, 256],
+        block_n=[32, 64, 128, 256],
+        block_k=[8, 16, 32, 64, 128],
+        warp_m=[16, 32, 48, 64],
+        warp_n=[16, 32, 48, 64],
+        warp_k=[8, 16, 32, 64],
+        mma=['m16n8k16'],
+    )
+    @tune.space(1, block_m=[128], block_n=[128], block_k=[16], warp_m=[64], warp_n=[64], warp_k=[16], mma=['m16n8k16'])
+    def schedule(
+        self, block_m=64, block_n=128, block_k=16, warp_m=32, warp_n=64, warp_k=16, mma: str = 'm16n8k16'
+    ) -> IRModule:
+        # pylint: disable=unused-variable
+        import hidet
+        from hidet.ir.type import tensor_type
+        from hidet.lang import attrs, col_spatial, view, u32, tensor_pointer, grid
+        from hidet.lang.layout import row_layout
+        from hidet.lang.mapping import spatial, auto_map
+        from hidet.lang.cuda import blockIdx, threadIdx, syncthreads, dynamic_shared_memory
+        from hidet.lang.cuda import MmaConfig, mma_sync, cp_async, cp_async_wait_all, ldmatrix
+        from hidet.lang.cuda import register_tensor
+
+        DILY, DILX = self.dilations
+        STRY, STRX = self.stride
+        N, W, H, C = self.img_shape
+        OC, WC, KY, KX = self.orig_weight_shape
+        # actual shape = [KY * KX * WC, OC]
+
+        K_PARTS, _, OUT_H, OUT_W, _ = self.out_shape
+
+        # input shapes
+        M_SIZE = OUT_H * OUT_W
+        K_SIZE = KY * KX * WC
+        N_SIZE = OC
+
+        K_PART_BLOCK = cdiv(cdiv(K_SIZE, K_PARTS), 8) * 8
+
+        # schedule parameters
+        mma_configs = {'m16n8k8': MmaConfig.m16n8k8_f16_f16(), 'm16n8k16': MmaConfig.m16n8k16_f16_f16()}
+        tune.check(mma in mma_configs)
+        mma_config = mma_configs[mma]
+
+        # number of elements each warp handles at once
+        mma_m, mma_n, mma_k = mma_config.m, mma_config.n, mma_config.k  # 16, 8, 16
+        # number of warps in each dimension
+        warp_count_m, warp_count_n, warp_count_k = block_m // warp_m, block_n // warp_n, block_k // warp_k
+        # number of repeats that each warp has to do
+        mma_count_m, mma_count_n, mma_count_k = warp_m // mma_m, warp_n // mma_n, warp_k // mma_k
+        threads = warp_count_m * warp_count_n * warp_count_k * 32
+
+        grid_dim: Tuple[Int, Int, Int] = cdiv(M_SIZE, block_m), cdiv(N_SIZE, block_n), N * K_PARTS
+        dynamic_smem_bytes = max(2 * (block_m + block_n) * block_k * 2, block_m * block_n * 2)
+
+        ### checks
+        tune.check(block_m % warp_m == block_n % warp_n == block_k % warp_k == 0, 'warp dims divide block dims')
+        tune.check(warp_m % mma_m == warp_n % mma_n == warp_k % mma_k == 0, 'mma dims divide warp dims')
+        tune.check(threads <= 1024, 'threads in a block <= 1024')
+        maximum_smem_bytes = 49152
+        tune.check(dynamic_smem_bytes <= maximum_smem_bytes, 'dynamic shared memory <= 49152')
+
+        tune.check(block_n % 64 == 0, 'block_n must be multiple of 64, required by async gmem -> smem loading')
+        tune.check(block_k % 8 == 0)
+        tune.check(is_power_of_two(block_k // 8))
+
+        tune.check(C % block_k == 0, 'channel dimension must be a multiple of block_k')
+
+
+        smem_img_type = tensor_type(
+            'float16', shape=[block_m, block_k],
+            layout=row_layout(block_m, block_k // 8).swizzle(1) * row_layout(1, 8)
+            # layout=row_layout(block_m, block_k)
+        )
+        smem_weight_type = tensor_type(
+            'float16',
+            shape=[block_k, block_n],
+            # layout=row_layout(block_k // 8, block_n // 64) * row_layout(8, 8).swizzle(1) * row_layout(1, 8),
+            layout=row_layout(block_k, block_n)
+        )
+        load_smem_a_map = auto_map(block_m, block_k // 8, workers=threads, on_fail=lambda msg: tune.check(False, msg))
+        load_smem_b_map = auto_map(block_k, block_n // 8, workers=threads, on_fail=lambda msg: tune.check(False, msg))
+        store_smem_c_map = auto_map(block_m, block_n, workers=threads, on_fail=lambda msg: tune.check(False, msg))
+
+        with hidet.script_module() as module:
+
+            @hidet.script
+            def load_regs_a(mi: int, k1: int, smem_a: smem_img_type, regs_a: float16[mma_config.a_elements]):
+                # mi - mma_count_m
+                # k1 - mma_count_k
+                # block - [warp_count_m, warp_count_n, warp_count_k]
+                # each warp handles: [warp_m, warp_k] == [mma_count_m * mma_m, mma_count_k * mma_k]
+                # smem_a - [block_m, block_k]
+                warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
+                wk = warp_id % warp_count_k
+                wi = warp_id // (warp_count_k * warp_count_n)
+                p = lane_id % 16
+                q = lane_id // 16
+                row_addr = ~smem_a[wi * warp_m + mi * mma_m + p, wk * warp_k + k1 * mma_k + q * 8]
+                b32_regs = view(regs_a, u32[4])
+                ldmatrix(
+                    regs=[b32_regs[0], b32_regs[1], b32_regs[2], b32_regs[3]],
+                    smem_addr=row_addr,
+                    shared_space_addr=False,
+                    trans=False,
+                )
+
+            @hidet.script
+            def load_regs_b(mj: int, k1: int, smem_b: smem_weight_type, regs_b: float16[mma_config.b_elements]):
+                # mj - mma_count_n
+                # k1 - mma_count_k
+                # each warp handles: [warp_k, warp_n] == [mma_count_k * mma_k, mma_count_n * mma_n]
+                # smem_b - [block_k, block_n]
+                warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
+                wj = (warp_id // warp_count_k) % warp_count_n
+                wk = warp_id % warp_count_k
+                
+                p = lane_id % 16
+                # have not used q as we only use the address of the first 16 threads to load 2 of 8x8 f16 matrix.
+                row_addr = ~smem_b[wk * warp_k + k1 * mma_k + p, wj * warp_n + mj * mma_n]
+                regs = view(regs_b, u32[2])
+                ldmatrix(regs=[regs[0], regs[1]], smem_addr=row_addr, trans=True)
+
+            @hidet.script
+            def warp_mma(
+                regs_a: float16[mma_config.a_elements],
+                regs_b: float16[mma_config.b_elements],
+                regs_c: float16[mma_config.c_elements],
+            ):
+                mma_sync(mma_config, regs_a, regs_b, regs_c)
+
+            @hidet.script
+            def load_smem_img(k0: int, img: float16[N, H, W, C], smem_img: smem_img_type):
+                k_part_idx = blockIdx.z // N
+                batch_idx = blockIdx.z % N
+
+                offset_m = blockIdx.x * block_m  # this is the output pixel, when tiled
+                offset_k = k_part_idx * K_PART_BLOCK + k0 * block_k
+                maximum_k = min(K_SIZE, (k_part_idx + 1) * K_PART_BLOCK)
+
+                # we make sure that block_k is less than the input channel dimension C
+                for i, k_seg in load_smem_a_map.on(threadIdx.x):
+                    k = k_seg * 8
+
+                    img_depth = k + offset_k
+                    channel_idx = img_depth % C # TODO: we don't handle groups for now, so C == WC
+                    filter_x = (img_depth // C) % KX
+                    filter_y = (img_depth // (C * KX))
+
+                    # tiling the output image spatial dimension [OUT_H, OUT_W]
+                    img_spatial = i + offset_m
+                    oh_idx = img_spatial // W
+                    ow_idx = img_spatial % W
+
+
+                    # there are the input pixel coordinates
+                    ih_idx = oh_idx * STRY + filter_y * DILY
+                    iw_idx = ow_idx * STRX + filter_x * DILX
+
+                    src_size = (
+                        0
+                        if (img_spatial >= M_SIZE or offset_k + k >= maximum_k)
+                        else min(maximum_k - (offset_k + k), 8)
+                    )
+                    cp_async(~smem_img[i, k], ~img[batch_idx, ih_idx, iw_idx, channel_idx], cp_size=16, src_size=src_size * 2, cache_level='global')
+                    cp_async_wait_all()
+
+            @hidet.script
+            def load_smem_weight(k0: int, weight: float16[K_SIZE, N_SIZE], smem_weight: smem_weight_type):
+                k_part_idx = blockIdx.z // N
+
+                offset_n = blockIdx.y * block_n
+                offset_k = k_part_idx * K_PART_BLOCK + k0 * block_k
+                maximum_k = min(K_SIZE, (k_part_idx + 1) * K_PART_BLOCK)
+
+                for k, j_seg in load_smem_b_map.on(threadIdx.x):
+                    j = j_seg * 8
+                    src_size = (
+                        0 if (offset_k + k >= maximum_k or offset_n + j >= N_SIZE) else min(N_SIZE - (offset_n + j), 8)
+                    )
+                    cp_async(~smem_weight[k, j], ~weight[k + offset_k, j + offset_n], cp_size=16, src_size=src_size * 2, cache_level='global')
+
+            @hidet.script
+            def matmul_f16_kernel(
+                img:    float16[N, H, W, C],
+                weight: float16[K_SIZE, N_SIZE],
+                res: float16[K_PARTS, N, OUT_H, OUT_W, OC],
+            ):
+                # matrix multiplication, using mma instruction
+                attrs.cuda.grid_dim = grid_dim
+                attrs.cuda.block_dim = threads
+                # the second 2 means '2 bytes per float16'
+                attrs.cuda.dynamic_smem_bytes = dynamic_smem_bytes
+                # smem_storage = dyn_smem_storage
+                smem_img = tensor_pointer(
+                    'float16', shape=[2, block_m, block_k], layout=row_layout(2) + smem_img_type.layout
+                )
+                smem_weight = tensor_pointer(
+                    'float16', shape=[2, block_k, block_n], layout=row_layout(2) + smem_weight_type.layout
+                )
+                smem_img = dynamic_shared_memory(byte_offset=0, dtype=float16)
+                smem_weight = dynamic_shared_memory(byte_offset=2 * block_m * block_k * 2, dtype=float16)
+                regs_a = register_tensor(float16, [2, mma_count_m, mma_config.a_elements])
+                regs_b = register_tensor(float16, [2, mma_count_n, mma_config.b_elements])
+                regs_c = register_tensor(float16, [mma_count_m, mma_count_n, mma_config.c_elements])
+
+                for i, j, p in grid(mma_count_m, mma_count_n, mma_config.c_elements):
+                    regs_c[i, j, p] = 0.0
+
+                load_smem_img(0, img, ~smem_img[0, 0, 0])
+                load_smem_weight(0, weight, ~smem_weight[0, 0, 0])
+                cp_async_wait_all()
+
+                syncthreads()
+                for k0 in range((K_PART_BLOCK + block_k - 1) // block_k):
+                    load_smem_img(k0 + 1, img, ~smem_img[(k0 + 1) % 2, 0, 0])
+                    load_smem_weight(k0 + 1, weight, ~smem_weight[(k0 + 1) % 2, 0, 0])
+
+                    for mi in range(mma_count_m):
+                        load_regs_a(mi, 0, ~smem_img[k0 % 2, 0, 0], ~regs_a[0, mi, 0])
+                    for mj in range(mma_count_n):
+                        load_regs_b(mj, 0, ~smem_weight[k0 % 2, 0, 0], ~regs_b[0, mj, 0])
+                    for mk in range(mma_count_k):
+                        if mk + 1 < mma_count_k:
+                            for mi in range(mma_count_m):
+                                load_regs_a(mi, mk + 1, ~smem_img[k0 % 2, 0, 0], ~regs_a[(mk + 1) % 2, mi, 0])
+                            for mj in range(mma_count_n):
+                                load_regs_b(mj, mk + 1, ~smem_weight[k0 % 2, 0, 0], ~regs_b[(mk + 1) % 2, mj, 0])
+                        for mi, mj in grid(mma_count_m, mma_count_n):
+                            warp_mma(~regs_a[mk % 2, mi, 0], ~regs_b[mk % 2, mj, 0], ~regs_c[mi, mj, 0])
+                    cp_async_wait_all()
+                    syncthreads()
+
+                # store back
+                warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
+                offset_m, offset_n = blockIdx.x * block_m, blockIdx.y * block_n
+                k_part_idx = blockIdx.z // N
+                batch_idx  = blockIdx.z % N
+
+                if warp_count_k == 1:
+                    wi = warp_id // (warp_count_n * warp_count_k)
+                    wj = (warp_id // warp_count_k) % warp_count_n
+                    wk = warp_id % warp_count_k
+
+                    for mi in range(mma_count_m):
+                        for mj in range(mma_count_n):
+                            p = 0
+                            for i, j in mma_config.c_store_map.on(lane_id):
+                                res_spatial = wi * warp_m + mi * mma_m + i + offset_m
+                                channel_idx = wj * warp_n + mj * mma_n + j + offset_n
+
+                                res_x = res_spatial % OUT_W
+                                res_y = res_spatial // OUT_H
+                                in_bound = (res_spatial < OUT_H * OUT_W) and (channel_idx < OC)
+                                if in_bound:
+                                    res[k_part_idx, batch_idx, res_y, res_x, channel_idx] = regs_c[mi, mj, p]
+                                p += 1
+                else:
+                    smem_c = tensor_pointer('float16', shape=[block_m, block_n])
+                    smem_c = dynamic_shared_memory(byte_offset=0, dtype=float16)
+
+                    for k_round in range(warp_count_k):
+                        for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
+                            if wk == k_round:
+                                for mi, mj in grid(mma_count_m, mma_count_n):
+                                    p = 0
+                                    for i, j in mma_config.c_store_map.on(lane_id):
+                                        delta_m = wi * warp_m + mi * mma_m + i
+                                        delta_n = wj * warp_n + mj * mma_n + j
+                                        in_bound = (offset_m + delta_m < M_SIZE) and (offset_n + delta_n < N_SIZE)
+                                        if in_bound:
+                                            if k_round == 0:
+                                                smem_c[delta_m, delta_n] = regs_c[mi, mj, p]
+                                            else:
+                                                smem_c[delta_m, delta_n] += regs_c[mi, mj, p]
+                                        p += 1
+                        if warp_count_k > 1:
+                            syncthreads()
+                    for i, j in store_smem_c_map.on(threadIdx.x):
+                        res_spatial = i + offset_m
+                        channel_idx = j + offset_n
+                        res_x = res_spatial % OUT_W
+                        res_y = res_spatial // OUT_H
+                        if res_spatial < M_SIZE and channel_idx < N_SIZE:
+                            res[k_part_idx, batch_idx, res_y, res_x, channel_idx] = smem_c[i, j]
+
+        ir_module = module.ir_module()
+        assert isinstance(matmul_f16_kernel, Function)
+
+        return ir_module
