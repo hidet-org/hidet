@@ -128,6 +128,13 @@ def register_hidet_options():
         choices=[True, False],
     )
     register_option(
+        name='runtime_check',
+        type_hint='bool',
+        default_value=True,
+        description='Whether to check shapes of compiled graph and tasks during execution.',
+        choices=[True, False],
+    )
+    register_option(
         name='debug_show_verbose_flow_graph',
         type_hint='bool',
         default_value=False,
@@ -561,6 +568,30 @@ def debug_show_var_id(enable: bool = True):
         Whether to show the var id in the IR.
     """
     OptionContext.current().set_option('debug_show_var_id', enable)
+
+
+def runtime_check(enable: bool = True):
+    """
+    Whether to check shapes and dtypes of all input arguments to compiled Graphs or Tasks.
+
+    Parameters
+    ----------
+    enable: bool
+        Whether to check shapes and dtypes of all input arguments to compiled Graphs or Tasks.
+    """
+    OptionContext.current().set_option('runtime_check', enable)
+
+
+def get_runtime_check() -> bool:
+    """
+    Get whether to check shapes and dtypes of all input arguments to compiled Graphs or Tasks.
+
+    Returns
+    -------
+    ret: bool
+        Get whether to check shapes and dtypes of all input arguments to compiled Graphs or Tasks.
+    """
+    return OptionContext.current().get_option('runtime_check')
 
 
 def debug_show_verbose_flow_graph(enable: bool = True):

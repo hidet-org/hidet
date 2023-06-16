@@ -29,6 +29,7 @@ class Conv2dResolveRule(ResolveRule):
         groups = op.attrs['groups']
         dilations = op.attrs['dilations']
         channels = op.inputs[1].shape[0]
+        # TODO: current assert mechanism does not cover this use case
         if is_constant(channels) and groups == channels:
             return None  # use depthwise schedule in the default Task
         data, weight = op.inputs

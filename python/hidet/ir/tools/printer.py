@@ -474,6 +474,14 @@ class IRPrinter(IRFunctor):
             Text('computations: ') + self.print_tensor_nodes(e.outputs).indent(),
             Text('attributes: {') + self({k: str(v) for k, v in e.attrs.items()}) + '}',
         ]
+        if len(e.assertions) > 0:  # between computations and attributes
+            lines.append(
+                Text('assertions: ')
+                + (
+                    NewLine()  # self.assertions: List[Tuple[Expr, str]]
+                    + doc_join(['assert {}'.format(str(self.visit(v[0]))) for v in e.assertions], NewLine())
+                ).indent()
+            )
         front_part = doc_join(lines, NewLine())
         inverse_map_doc = Doc()
         if e.inverse_map:
