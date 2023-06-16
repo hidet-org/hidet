@@ -23,22 +23,28 @@ class NcclUniqueId(Structure):
 
 class NcclCommunicator:
     """
-    This is only a wrapper of underlying C++ ncclComm_t object.
-    The lifetime of ncclComm_t objects is managed in C++.
-    They will be created and not released until the program exits.
-    
-    Q: Why not maintain the lifetime of ncclComm in Python?
-    A: If we want get_nccl_comm(comm_id) API in python, we need to maintain two pools of ncclComm
-       objects in Python and C++ respectively, which is redundant.
+
     """
     def __init__(self, handle: int):
         """
-        Users should not call this constructor directly
+        Users should not call this constructor directly. Because there are two ways of creating
+        a new communicator: 1) using unique_id and rank ; 2) using split.
         """
         if not nccl_available():
             raise RuntimeError("NCCL Library not found.")
         self._handle = handle
+        _comms.append(self)
+    
+    def __del__(self):
+        """
+        Should we manage the lifetime of communicator object in Python or C++?
+        """
+        nccl_runtime_api.comm_destroy(self)
 
+    def split(self):
+        raise NotImplementedError()
+
+_comms: List[NcclCommunicator] = []
 
 class RuntimeAPI:
     _set_current_stream = get_func('set_cuda_stream', [c_void_p], None)
@@ -114,8 +120,8 @@ if nccl_available():
         _comm_init_rank = get_func('ncclCommInitRank', [c_void_p, c_int, NcclUniqueId, c_int], c_int)
         _comm_destroy = get_func('ncclCommDestroy', [c_void_p], c_int)
 
-        _comm_user_rank = get_func('ncclCommUserRank', [c_void_p, POINTER(c_int)])
-        _comm_count = get_func('ncclCommCount', [c_void_p, POINTER(c_int)])
+        _comm_user_rank = get_func('ncclCommUserRank', [c_void_p, POINTER(c_int)], c_int)
+        _comm_count = get_func('ncclCommCount', [c_void_p, POINTER(c_int)], c_int)
 
         @staticmethod
         def get_version() -> int:
