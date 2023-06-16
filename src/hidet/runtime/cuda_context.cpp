@@ -55,3 +55,11 @@ DLL void* request_cuda_workspace(size_t nbytes, bool require_clean) {
         return nullptr;
     }
 }
+
+DLL void add_nccl_comm(void* comm) {
+    CudaContext::global()->nccl_comms.emplace_back(comm);
+}
+
+DLL void* get_nccl_comm(int idx) {
+    return CudaContext::global()->nccl_comms.at(idx);
+}
