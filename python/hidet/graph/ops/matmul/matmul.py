@@ -22,10 +22,10 @@ class MatmulTask(Task):
 
 
 class MatmulOp(Operator):
-    def __init__(self, a: Tensor, b: Tensor):
+    def __init__(self, a: Tensor, b: Tensor, require_prologue=False):
         task = MatmulTask(input_like(a, 'a'), input_like(b, 'b'))
-        super().__init__(inputs=[a, b], attributes={}, task=task)
+        super().__init__(inputs=[a, b], attributes={'require_prologue': require_prologue}, task=task)
 
 
-def matmul(a: Tensor, b: Tensor) -> Tensor:
-    return MatmulOp(a, b).get_output(0)
+def matmul(a: Tensor, b: Tensor, require_prologue=False) -> Tensor:
+    return MatmulOp(a, b, require_prologue=require_prologue).get_output(0)
