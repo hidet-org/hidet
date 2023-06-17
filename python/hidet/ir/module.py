@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from __future__ import annotations
-from typing import Dict
+from typing import Dict, List
 from hidet.ir.node import Node
 from hidet.ir.type import FuncType
 from hidet.ir.expr import Var
@@ -24,11 +24,33 @@ class IRModule(Node):
     An IRModule contains one or more functions. It is the basic compilation unit of hidet.
     """
 
-    def __init__(self, functions=None, global_vars=None, namespace='', extern_functions: Dict[str, Var] = None):
+    def __init__(
+        self,
+        functions=None,
+        global_vars=None,
+        namespace='',
+        extern_functions: Dict[str, Var] = None,
+        include_headers: List[str] = None,
+        include_dirs: List[str] = None,
+        linking_dirs: List[str] = None,
+        linking_libs: List[str] = None,
+        object_files: List[str] = None
+    ):
+        # the functions defined in this module
         self.functions: Dict[str, Function] = functions if functions else {}
+        # the global variables defined in this module
         self.global_vars: Dict[str, Var] = global_vars if global_vars else {}
+        # the namespace of the module, all the functions and the global variables will be defined in this namespace
         self.namespace: str = namespace
+        # the external functions that are used in this module, the Var must have a function type
         self.extern_functions: Dict[str, Var] = {} if extern_functions is None else extern_functions
+        # '#include ...' preprocessor directives
+        self.include_headers: List[str] = include_headers if include_headers else []
+        # flags that will be passed to the underlying compiler, can be used to add 3rd-party libraries
+        self.include_dirs: List[str] = include_dirs if include_dirs else []   # -L flags
+        self.linking_dirs: List[str] = linking_dirs if linking_dirs else []   # -I flags
+        self.linking_libs: List[str] = linking_libs if linking_libs else []   # -l flags
+        self.object_files: List[str] = object_files if object_files else []   # .o files
 
         assert all(isinstance(func, Function) for func in self.functions.values()) and all(
             isinstance(var, Var) for var in self.global_vars.values()
@@ -50,6 +72,24 @@ class IRModule(Node):
             raise ValueError('Function {} has already existed in module.'.format(name))
         else:
             self.functions[name] = func
+
+    def copy(self):
+        return IRModule(
+            functions=self.functions.copy(),
+            global_vars=self.global_vars.copy(),
+            namespace=self.namespace,
+            extern_functions=self.extern_functions.copy(),
+            include_headers=self.include_headers.copy(),
+            include_dirs=self.include_dirs.copy(),
+            linking_dirs=self.linking_dirs.copy(),
+            linking_libs=self.linking_libs.copy(),
+            object_files=self.object_files.copy()
+        )
+
+    def reset_funcs(self, functions: Dict[str, Function] = None, global_vars: Dict[str, Var] = None):
+        self.functions = functions if functions else {}
+        self.global_vars = global_vars if global_vars else {}
+        return self
 
     def build(self):
         """

@@ -74,8 +74,6 @@ def build_task_module(task: Task, candidates: List[IRModule], task_dir: str, tar
 
         launch_func.name = 'launch_0'
         task_ir_module.functions['launch_0'] = launch_func
-
-        object_files = []
     else:
         # otherwise, build each candidate to a .o file, and link them into the task's ir module
         for i, candidate in enumerate(candidates):
@@ -113,13 +111,11 @@ def build_task_module(task: Task, candidates: List[IRModule], task_dir: str, tar
         ir_module = script_module.ir_module()
         ir_module.add_function(get_input_shape.name, get_input_shape)
         ir_module.add_function(get_output_shape.name, get_output_shape)
+        ir_module.object_files.extend([os.path.join(task_dir, 'candidates', str(i), 'lib.o') for i in range(len(candidates))])
         task_ir_module = ir_module
-        object_files = [os.path.join(task_dir, 'candidates', str(i), 'lib.o') for i in range(len(candidates))]
 
     # build task ir module
-    build_ir_module(
-        ir_module=task_ir_module, output_dir=task_dir, output_kind='.so', object_files=object_files, target=target
-    )
+    build_ir_module(ir_module=task_ir_module, output_dir=task_dir, output_kind='.so', target=target)
 
 
 def generate_meta_data(task: Task, task_dir: str, build_target: str, num_candidates: int):

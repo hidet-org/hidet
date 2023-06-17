@@ -37,7 +37,7 @@ class ImportPrimitiveFunctionPass(Pass):
         if len(primitive_funcs) == 0:
             return ir_module
         else:
-            new_ir_module = IRModule(namespace=ir_module.namespace, extern_functions=ir_module.extern_functions)
+            new_ir_module = ir_module.copy().reset_funcs()
             for func_name, func in ir_module.functions.items():
                 new_ir_module.add_function(func_name, func)
             for func in primitive_funcs:

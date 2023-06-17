@@ -678,6 +678,9 @@ class CUDACodegen(Codegen):
         doc += Text('#include <hidet/runtime/cuda/complex.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cuda/context.h>') + NewLine()
 
+        for header in self.ir_module.include_headers:
+            doc += Text('#include <{}>').format(header) + NewLine()
+
         if self.require_tf32:
             # nvcc use float to 'store' tfloat32 data
             doc += Text('typedef float tfloat32_t;') + NewLine()
@@ -762,6 +765,8 @@ class CPUCodegen(Codegen):
             doc += Text('#include <hidet/runtime/cpu/float16.h>') + NewLine()
         if self.require_bf16:
             doc += Text('#include <hidet/runtime/cpu/bfloat16.h>') + NewLine()
+        for header in self.ir_module.include_headers:
+            doc += Text('#include <{}>').format(header) + NewLine()
         if self.require_tf32:
             doc += Text('typedef float tfloat32_t;') + NewLine()
         doc += NewLine()

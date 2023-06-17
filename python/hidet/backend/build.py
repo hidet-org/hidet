@@ -39,7 +39,15 @@ class SourceCompiler:
     The base class of source compiler.
     """
 
-    def compile(self, src_path: str, out_lib_path: str, linking_objects: Sequence[str]) -> None:
+    def compile(
+        self,
+        src_path: str,
+        out_lib_path: str,
+        include_dirs: Sequence[str]=(),
+        linking_dirs: Sequence[str]=(),
+        linking_libraries: Sequence[str]=(),
+        object_files: Sequence[str]=()
+    ) -> None:
         raise NotImplementedError()
 
     def run_compile_command(self, command: str, src_path, out_lib_path: str):
@@ -104,8 +112,16 @@ class NVCC(SourceCompiler):
                 return path
         raise FileNotFoundError('Can not find nvcc compiler.')
 
-    def compile(self, src_path: str, out_lib_path: str, linking_objects: Sequence[str]) -> None:
-        if len(linking_objects) > 0 and out_lib_path.endswith('.o'):
+    def compile(
+        self,
+        src_path: str,
+        out_lib_path: str,
+        include_dirs: Sequence[str] = (),
+        linking_dirs: Sequence[str] = (),
+        linking_libraries: Sequence[str] = (),
+        object_files: Sequence[str] = ()
+    ) -> None:
+        if len(object_files) > 0 and out_lib_path.endswith('.o'):
             raise ValueError('Can not compile multiple objects into a single object file.')
 
         cc = hidet.cuda.compute_capability()
@@ -118,9 +134,10 @@ class NVCC(SourceCompiler):
             # the path to nvcc compiler
             self.nvcc_path,
             # the included directories.
-            *['-I{}'.format(include_dir) for include_dir in self.include_dirs],
+            *['-I{}'.format(include_dir) for include_dir in self.include_dirs + list(include_dirs)],
             # the library directories.
-            *['-L{}'.format(library_dir) for library_dir in self.library_dirs],
+            *['-L{}'.format(library_dir) for library_dir in self.library_dirs + list(linking_dirs)],
+            *['-l{}'.format(library) for library in linking_libraries],
             # optimize host side code via -O3
             '-O3',
             # host compiler options: enable openmp, avx2, unroll loops and fast math
@@ -153,7 +170,7 @@ class NVCC(SourceCompiler):
             # generate shared library (lib.so).
             '--shared' if out_lib_path.endswith('.so') else '--compile',
             # the linking objects.
-            ' '.join(linking_objects),
+            ' '.join(object_files),
             # the source path.
             src_path,
             # the output library path.
@@ -179,16 +196,25 @@ class GCC(SourceCompiler):
             return path
         raise FileNotFoundError('Can not find g++ compiler.')
 
-    def compile(self, src_path: str, out_lib_path: str, linking_objects: Sequence[str]) -> None:
-        if len(linking_objects) > 0 and out_lib_path.endswith('.o'):
+    def compile(
+        self,
+        src_path: str,
+        out_lib_path: str,
+        include_dirs: Sequence[str]=(),
+        linking_dirs: Sequence[str]=(),
+        linking_libraries: Sequence[str]=(),
+        object_files: Sequence[str]=()
+    ) -> None:
+        if len(object_files) > 0 and out_lib_path.endswith('.o'):
             raise ValueError('Can not compile multiple objects into a single object file.')
         command = [
             # the path to nvcc compiler
             self.gcc_path,
             # the included directories.
-            *['-I{}'.format(include_dir) for include_dir in self.include_dirs],
+            *['-I{}'.format(include_dir) for include_dir in self.include_dirs + list(include_dirs)],
             # the library directories.
-            *['-L{}'.format(library_dir) for library_dir in self.library_dirs],
+            *['-L{}'.format(library_dir) for library_dir in self.library_dirs + list(linking_dirs)],
+            *['-l{}'.format(library) for library in linking_libraries],
             # apply -O3 optimization.
             '-O3',
             # support avx intrinsics
@@ -204,7 +230,7 @@ class GCC(SourceCompiler):
             # generate shared library (lib.so).
             '-shared' if out_lib_path.endswith('.so') else '--compile',
             # the linking objects.
-            ' '.join(linking_objects),
+            ' '.join(object_files),
             # the source path.
             src_path,
             # the output library path.
@@ -216,7 +242,13 @@ class GCC(SourceCompiler):
 
 
 def compile_source(
-    source_file: str, output_library_file: str, target: str, object_files: Optional[Sequence[str]]
+    source_file: str,
+    output_library_file: str,
+    target: str,
+    include_dirs: Sequence[str] = (),
+    linking_dirs: Sequence[str] = (),
+    linking_libraries: Sequence[str] = (),
+    object_files: Sequence[str] = (),
 ) -> None:
     """
     Compile the source code in 'src_path' file and output the library to 'out_lib_path'.
@@ -229,6 +261,12 @@ def compile_source(
         The path to output library.
     target: str
         The target platform. Currently only support 'cpu' and 'gpu'.
+    include_dirs: Optional[Sequence[str]]
+        The include directories.
+    linking_dirs: Optional[Sequence[str]]
+        The library directories.
+    linking_libraries:
+        The libraries to link to the output library.
     object_files: Optional[Sequence[str]]
         The path to object files. If not None, the object files will be linked to the output library.
     """
@@ -247,4 +285,11 @@ def compile_source(
         raise ValueError('Unknown target platform: {}'.format(target))
 
     object_files = object_files or []
-    compiler.compile(source_file, output_library_file, object_files)
+    compiler.compile(
+        source_file,
+        output_library_file,
+        include_dirs=include_dirs,
+        linking_dirs=linking_dirs,
+        linking_libraries=linking_libraries,
+        object_files=object_files
+    )
