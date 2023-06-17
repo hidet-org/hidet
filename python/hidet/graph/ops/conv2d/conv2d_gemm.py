@@ -703,7 +703,9 @@ class Conv2dGemm2(Task):
         )
 
         super().__init__(
-            name='matmul_f16_pk', inputs=[img, weight], outputs=[c], attributes={'parallel_k_parts': parallel_k_parts}
+            name='conv_gemm_fp16_pk', inputs=[img, weight], outputs=[c], 
+            attributes={'stride': stride, 'dilations': dilations, 'orig_weight_shape': orig_weight_shape, 
+                        'parallel_k_parts': parallel_k_parts}
         )
 
     def allow_prologue(self) -> bool:
@@ -866,21 +868,25 @@ class Conv2dGemm2(Task):
 
                     # tiling the output image spatial dimension [OUT_H, OUT_W]
                     img_spatial = i + offset_m
-                    oh_idx = img_spatial // W
-                    ow_idx = img_spatial % W
+                    oh_idx = img_spatial // OUT_W
+                    ow_idx = img_spatial % OUT_W
 
 
-                    # there are the input pixel coordinates
+                    # these are the input pixel coordinates
                     ih_idx = oh_idx * STRY + filter_y * DILY
                     iw_idx = ow_idx * STRX + filter_x * DILX
 
                     src_size = (
                         0
-                        if (img_spatial >= M_SIZE or offset_k + k >= maximum_k)
-                        else min(maximum_k - (offset_k + k), 8)
+                        if (img_spatial >= M_SIZE or img_depth >= maximum_k)
+                        else min(min(maximum_k - img_depth, 8), C - channel_idx)
+                        # we also make sure to mask channel wise, since in general, for dilation > 1,
+                        #   the channel dimension is not contiguous across KX. Maybe TODO: add a separate compile time
+                        #   condition for dilation > 1
                     )
                     cp_async(~smem_img[i, k], ~img[batch_idx, ih_idx, iw_idx, channel_idx], cp_size=16, src_size=src_size * 2, cache_level='global')
-                    cp_async_wait_all()
+                    # I don't think the following cp_async is necessary; it was in the original fp16 matmul kernel
+                    # cp_async_wait_all()
 
             @hidet.script
             def load_smem_weight(k0: int, weight: float16[K_SIZE, N_SIZE], smem_weight: smem_weight_type):
@@ -892,6 +898,8 @@ class Conv2dGemm2(Task):
 
                 for k, j_seg in load_smem_b_map.on(threadIdx.x):
                     j = j_seg * 8
+                    # we don't need to mask channel wise, since we have already done so for the img
+                    #   so the extra bits are not relevant when multipled by zeros
                     src_size = (
                         0 if (offset_k + k >= maximum_k or offset_n + j >= N_SIZE) else min(N_SIZE - (offset_n + j), 8)
                     )
@@ -967,7 +975,7 @@ class Conv2dGemm2(Task):
                                 channel_idx = wj * warp_n + mj * mma_n + j + offset_n
 
                                 res_x = res_spatial % OUT_W
-                                res_y = res_spatial // OUT_H
+                                res_y = res_spatial // OUT_W
                                 in_bound = (res_spatial < OUT_H * OUT_W) and (channel_idx < OC)
                                 if in_bound:
                                     res[k_part_idx, batch_idx, res_y, res_x, channel_idx] = regs_c[mi, mj, p]
@@ -997,7 +1005,7 @@ class Conv2dGemm2(Task):
                         res_spatial = i + offset_m
                         channel_idx = j + offset_n
                         res_x = res_spatial % OUT_W
-                        res_y = res_spatial // OUT_H
+                        res_y = res_spatial // OUT_W
                         if res_spatial < M_SIZE and channel_idx < N_SIZE:
                             res[k_part_idx, batch_idx, res_y, res_x, channel_idx] = smem_c[i, j]
 
@@ -1005,3 +1013,41 @@ class Conv2dGemm2(Task):
         assert isinstance(matmul_f16_kernel, Function)
 
         return ir_module
+
+
+class ConvGemmFp16(Operator):
+    def __init__(self, img: Tensor, weight: Tensor, orig_weight_shape: List[int], stride: List[int], dilations: List[int], parallel_k_parts=1):
+        if not (isinstance(parallel_k_parts, int) and not isinstance(parallel_k_parts, bool)):
+            raise ValueError('parallel_k_parts must be an integer, got {}'.format(parallel_k_parts))
+        
+        super().__init__(
+            inputs=[img, weight],
+            attributes={'stride': stride, 'dilations': dilations, 'orig_weight_shape': orig_weight_shape, 
+                        'parallel_k_parts': parallel_k_parts},
+            task=Conv2dGemm2(
+                input_like(img, 'img'), 
+                input_like(weight, 'weight'), 
+                orig_weight_shape, 
+                stride, 
+                dilations, 
+                groups=1, 
+                parallel_k_parts=parallel_k_parts
+            ),
+        )
+
+
+def conv_fp16_gemm2(img: Tensor, weight: Tensor, stride: List[int], dilations: List[int], parallel_k_parts=1) -> Tensor:
+    # if len(a.shape) < 2 or len(b.shape) < 2:
+    #     raise ValueError('a and b must have at least 2 dimensions, got shape {} and {}'.format(a.shape, b.shape))
+    # # TODO: impliment dynamic run-time shape assertion
+    # if not (isinstance(a.shape[-1], Expr) or isinstance(b.shape[-1], Expr)) and (
+    #     a.shape[-1] % 8 != 0 or b.shape[-1] % 8 != 0
+    # ):
+    #     raise ValueError('Expect the last dimension of the input tensors to be a multiple of 8')
+    # if a.dtype != dtypes.float16 or b.dtype != dtypes.float16:
+    #     raise ValueError('BatchMatmulF16Op only support float16, got {} and {}'.format(a.dtype, b.dtype))
+    oc, wc, ky, kx = weight.shape
+    weight = hidet.ops.transpose(weight, [2, 3, 1, 0]).reshape([ky * kx * wc, oc])
+    return ConvGemmFp16(
+        img, weight, orig_weight_shape=[oc, wc, ky, kx], stride=stride, dilations=dilations, parallel_k_parts=parallel_k_parts
+    ).get_output(0).sum(0) # parallel k
