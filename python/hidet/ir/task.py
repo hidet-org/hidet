@@ -11,12 +11,12 @@
 # limitations under the License.
 # pylint: disable=import-outside-toplevel
 from __future__ import annotations
-from typing import Any, Dict, List, Union, Callable
+from typing import Any, Dict, List, Union, Callable, Optional, Tuple
 import os
 import pickle
 from hidet.ir.node import Node
 from hidet.ir.type import FuncType, VoidType
-from hidet.ir.expr import Expr, Var, SymbolVar, var
+from hidet.ir.expr import Expr, Var, SymbolVar, var, is_constant
 from hidet.ir.module import IRModule
 from hidet.ir.compute import ComputeNode, TensorNode, TensorInput, ScalarInput, GridCompute
 
@@ -93,12 +93,24 @@ class Task(Node):
         self.outputs: List[TensorNode] = list(outputs)
         self.inverse_map: Dict[TensorInput, InverseMap] = {a: InverseMap.from_obj(b) for a, b in inverse_map.items()}
         self.attrs: Dict[str, Union[str, float, int, bool]] = attributes
+        self.assertions: List[Tuple[Expr, Optional[str]]] = getattr(self, 'assertions', [])
 
         from hidet.ir.tools import collect
 
         self.symbols: List[SymbolVar] = list(collect(self.outputs, SymbolVar))
-
         self._sanity_check()
+
+    def _assert(self, expr: Expr, msg: Optional[str] = None):
+        import hidet
+
+        simplified = hidet.ir.tools.simplify(expr)
+        if is_constant(simplified):
+            assert simplified, msg
+        else:
+            if hasattr(self, 'assertions'):
+                self.assertions.append((expr, msg))
+            else:
+                self.assertions = [(expr, msg)]
 
     @property
     def params(self) -> List[TensorNode]:
@@ -132,6 +144,11 @@ class Task(Node):
         used_inputs = collect(self.outputs, TensorInput)
         if any(x not in self.inputs for x in used_inputs):
             raise ValueError('Some TensorInput used in outputs are not placed in inputs: {}'.format(used_inputs))
+
+        # check assertions for correctness
+        assert_symbols: List[SymbolVar] = list(collect([cond for cond, _ in self.assertions], SymbolVar))
+        for sym in assert_symbols:
+            assert sym in self.symbols, f"encountered {sym} in assertions, but not in list of defined symbols"
 
     def has_symbolic_shape(self) -> bool:
         from hidet.ir.tools import collect

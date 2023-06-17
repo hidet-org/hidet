@@ -25,9 +25,10 @@ class Conv2dGemmImageTransformTask(Task):
         sx, sy = stride
         dilx, dily = dilations
         p, q = (h - dilx * (kx - 1) - 1) // sx + 1, (w - dily * (ky - 1) - 1) // sy + 1
-        if is_constant(c) and c % groups != 0:
-            msg = 'Conv2d expect in_channels % groups == 0, but got in_channels {} and groups {}'.format(c, groups)
-            raise ValueError(msg)
+        self._assert(
+            c % groups == 0,
+            msg='Conv2d expect in_channels % groups == 0, but got in_channels {} and groups {}'.format(c, groups),
+        )
         gc = c // groups  # group channels
         gemm_x = compute(
             name='gemm_x',
@@ -60,6 +61,7 @@ def conv2d_gemm_filter_transform(w: Tensor, groups: int = 1) -> Tensor:
     # weight shape: [oc, c, kx, ky]
     # output shape: [groups, c * kx * ky, ogc] where ogc = oc // groups
     oc, c, kx, ky = w.shape
+    # TODO: current assertion mechanism does not cover this use case (only on the task-level)
     if is_constant(oc, groups) and oc % groups != 0:
         raise ValueError('invalid conv2d groups {} for out channels {}'.format(groups, oc))
     ogc = oc // groups
@@ -73,6 +75,7 @@ def conv2d_gemm_inverse_transform(gemm_y: Tensor, out_height, out_width) -> Tens
     # output shape: [n, oc, p, q] where oc = groups * ogc
     p, q = out_height, out_width
     groups, npq, ogc = gemm_y.shape
+    # TODO: current assertion mechanism does not cover this use case (only on the task-level)
     if is_constant(npq, p, q) and npq % (p * q) != 0:
         raise ValueError('invalid conv2d output shape {} for height {} and width {}'.format(npq, p, q))
     n = npq // (p * q)
@@ -86,7 +89,7 @@ def conv2d_gemm(data: Tensor, weight: Tensor, stride, dilations: List[int], grou
         data, kernel=weight.shape[2:], stride=stride, dilations=dilations, groups=groups
     )
     gemm_w = conv2d_gemm_filter_transform(weight, groups=groups)
-    gemm_y = matmul(gemm_x, gemm_w)
+    gemm_y = matmul(gemm_x, gemm_w, require_prologue=True)
 
     y_shape = infer_conv2d_shape(data.shape, weight.shape, stride, groups, dilations)
     y = conv2d_gemm_inverse_transform(gemm_y, out_height=y_shape[2], out_width=y_shape[3])

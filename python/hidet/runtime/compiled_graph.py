@@ -24,7 +24,7 @@ from hidet.ir.type import void_p, data_type
 from hidet.ir.dtypes import i32, i64
 from hidet.runtime.device import Device
 from hidet.runtime.compiled_module import CompiledModule
-from hidet.runtime.compiled_task import CompiledTask, TensorSignature
+from hidet.runtime.compiled_task import CompiledTask, TensorSignature, _check_inputs
 from hidet.runtime.storage import Storage
 from hidet.ffi import runtime_api
 from hidet.utils import prod
@@ -277,6 +277,9 @@ class CompiledGraph:
         ret: List[hidet.Tensor]
             The output tensors.
         """
+        if hidet.option.get_runtime_check():
+            _check_inputs(self.meta.inputs, inputs)
+
         symbol_dims = self._update_symbol_dims(inputs)
 
         if symbol_dims in self.dispatch_table:
