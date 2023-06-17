@@ -66,7 +66,11 @@ def build_ir_module(
     codegen(ir_module, src_out_path=src_path, target=target)
 
     # compile source code
-    compile_source(src_path, output_library_file=lib_path, target=target, object_files=object_files)
+    compile_source(src_path, output_library_file=lib_path, target=target, 
+                   include_dirs=ir_module.include_dirs,
+                   linking_dirs = ir_module.linking_dirs,
+                   linking_libraries = ir_module.linking_libs,
+                   object_files=object_files)
 
     # write the function types
     if output_kind == '.so':
