@@ -1037,6 +1037,7 @@ class ConvGemmFp16(Operator):
 
 
 def conv_fp16_gemm2(img: Tensor, weight: Tensor, stride: List[int], dilations: List[int], parallel_k_parts=1) -> Tensor:
+    import hidet
     # if len(a.shape) < 2 or len(b.shape) < 2:
     #     raise ValueError('a and b must have at least 2 dimensions, got shape {} and {}'.format(a.shape, b.shape))
     # # TODO: impliment dynamic run-time shape assertion
