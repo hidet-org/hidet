@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Sequence, Union, Tuple
+from hidet import ir
 from hidet.ir.expr import if_then_else, logical_and
 from hidet.ir.compute import compute, reduce
 from hidet.graph.ops.utils import Task, Operator, Tensor, TensorNode
@@ -34,13 +35,15 @@ class Conv2dTransposeTask(Task):
         h = (p - 1) * sx - px0 - px1 + kx + output_padding[0]
         w = (q - 1) * sy - py0 - py1 + ky + output_padding[1]
 
-        if output_padding[0] >= stride[0] or output_padding[1] >= stride[1]:
-            raise ValueError(
+        self._assert(
+            ir.logical_and(output_padding[0] < stride[0], output_padding[1] < stride[1]),
+            msg=(
                 'Conv2dTranspose expect the output_padding < stride, \n'
                 'but got output_padding, stride: {}, {}'.format(output_padding, stride)
-            )
-        if any(p < 0 for p in padding):
-            raise ValueError('Negative padding is not supported.')
+            ),
+        )
+
+        self._assert(all(p >= 0 for p in padding), msg='Negative padding is not supported.')
 
         og = oc // groups  # output channels in each group
         output = compute(

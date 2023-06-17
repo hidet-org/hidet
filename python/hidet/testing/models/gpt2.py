@@ -257,6 +257,9 @@ class GPT2LMHead(nn.Module):
         )
         logits = self.lm_head(hidden_states)  # [1, vocab_size]
         updated_input_ids = ops.argmax(logits, dim=-1, keep_dim=False)  # [1]
+        # we want to keep types consistent, since in the autoregressive case,
+        #   the output is fed back into the input of the compiled model
+        updated_input_ids = updated_input_ids.to(input_ids.dtype)
         return updated_input_ids, position_ids, past_keys, past_values
 
 

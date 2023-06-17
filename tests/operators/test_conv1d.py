@@ -57,7 +57,7 @@ def test_conv1d(hidet_op, n, c, l, oc, k, padding, stride, dilations, groups):
 @pytest.mark.parametrize("groups", [1])
 def test_conv1d_dynamic(hidet_op, n, c, l, oc, k, padding, stride, dilations, groups):
     check_binary_dynamic(
-        a_shape=[('n', n), ('c', c), ('c', l)],
+        a_shape=[('n', n), ('c', c), ('l', l)],
         b_shape=[oc, c, k],
         numpy_op=lambda data, weight: torch_conv1d(data, weight, padding, stride, dilations, groups),
         hidet_op=lambda data, weight: hidet_op(
