@@ -68,14 +68,17 @@ def create_comm(nranks: int, unique_id: NcclUniqueId, rank: int) -> NcclCommunic
     handle = nccl_runtime_api.comm_init_rank(nranks, unique_id, rank)
     return NcclCommunicator(handle)
 
+
 def comms_to_array(comms: List[NcclCommunicator]) -> Array:
     handles = [comm.handle for comm in comms]
     array = Array(void_p, len(comms))
     struct.pack_into(array.format, array.buffer, 0, *handles)
     return array
 
+
 def init_unique_id(unqie_id: NcclUniqueId) -> None:
     nccl_runtime_api.get_unique_id(unqie_id)
+
 
 def dtype_to_nccl(dtype: DataType) -> NcclDataType:
     sname_dict = {
