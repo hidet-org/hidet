@@ -245,7 +245,7 @@ def build_task_batch(task_target_pairs: List[Tuple[Task, str]]):
     def build_job(args):
         try:
             task, target = args
-            build_task(task, target, load=False)
+            task.build(target, load=False)
             return True, 'Success'
         except (Exception,):  # pylint: disable=broad-except
             import traceback
