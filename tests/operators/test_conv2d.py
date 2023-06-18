@@ -38,7 +38,8 @@ def torch_conv2d(data: np.ndarray, weight: np.ndarray, padding: List[int], strid
 @pytest.mark.parametrize("groups", [1, 2, 4])
 @pytest.mark.parametrize("stride", [[1, 1], [2, 3]])
 @pytest.mark.parametrize("dilations", [[1, 1], [2, 3]])
-def test_conv2d_gemm_fp16(n, c, h, w, oc, kx, ky, groups, stride, dilations):
+@pytest.mark.parametrize("parallel_k", [1, 2, 3])
+def test_conv2d_gemm_fp16(n, c, h, w, oc, kx, ky, groups, stride, dilations, parallel_k):
     check_torch_binary(
         a_shape=[n, c, h, w],
         b_shape=[oc, c // groups, kx, ky],
@@ -46,7 +47,7 @@ def test_conv2d_gemm_fp16(n, c, h, w, oc, kx, ky, groups, stride, dilations):
             data, weight, bias=None, stride=stride, padding=[0, 0], dilation=dilations, groups=groups
         ),
         hidet_func=lambda data, weight: ops.transpose(ops.conv2d_gemm_fp16(
-            ops.transpose(data, [0, 2, 3, 1]), weight, stride=stride, dilations=dilations, groups=groups),
+            ops.transpose(data, [0, 2, 3, 1]), weight, stride=stride, dilations=dilations, groups=groups, parallel_k_parts=parallel_k),
             [0, 3, 1, 2]),
         dtype='float16',
         device='cuda',
