@@ -10,9 +10,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Union
-from ctypes import c_void_p, c_char_p, c_uint64, c_int32 
+from ctypes import c_void_p, c_char_p, c_uint64, c_int32
 from hidet.cuda import Stream
 from .ffi import get_func
+
 
 class RuntimeAPI:
     _set_current_stream = get_func('set_cuda_stream', [c_void_p], None)
@@ -65,5 +66,6 @@ class RuntimeAPI:
     @staticmethod
     def add_nccl_comm(comm_handle: int) -> None:
         RuntimeAPI._add_nccl_comm(comm_handle)
-    
+
+
 runtime_api = RuntimeAPI()

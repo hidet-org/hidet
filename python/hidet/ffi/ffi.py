@@ -18,6 +18,7 @@ from hidet.libinfo import get_library_search_dirs
 _LIB: Optional[ctypes.CDLL] = None
 _LIB_RUNTIME: Optional[ctypes.CDLL] = None
 
+
 library_paths: Dict[str, Optional[str]] = {'hidet': None, 'hidet_runtime': None}
 
 
@@ -38,7 +39,6 @@ def load_library():
         break
     if _LIB is None:
         raise OSError('Can not find library in the following directory: \n' + '\n'.join(library_dirs))
-
 
 
 def get_last_error() -> Optional[str]:
@@ -98,4 +98,3 @@ def get_func(func_name, arg_types: List, restype, lib=None):
 
 
 load_library()
-
