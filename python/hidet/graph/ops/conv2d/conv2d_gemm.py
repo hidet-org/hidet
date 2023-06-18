@@ -124,8 +124,8 @@ class Conv2dGemmFp16(Task):
         # Channel last
         # This kernel expects the weight to be transformed in the following way:
         # weight.shape [OC, WC, KY, KX] -> [KY * KX * WC, OC]
-        self._assert(len(img.shape) == 4)
-        self._assert(len(weight.shape) == 2)
+        self._assert(len(img.shape) == 4, f"expect img shape to be in NHWC format, got {img.shape}")
+        self._assert(len(weight.shape) == 2, f"expected weight to be transformed from [OC, WC, KY, kX] to [KY * KX * WC, OC], got {weight.shape}")
         self._assert(img.type.dtype == float16 and weight.type.dtype == float16, 'Both inputs must be float16 tensors')
 
         self.groups = groups
@@ -140,9 +140,10 @@ class Conv2dGemmFp16(Task):
         N, W, H, C = img.shape
         OC, WC, KY, KX = orig_weight_shape
 
-        self._assert(C % groups == 0 and OC % groups == 0, "")
-        self._assert(groups * WC == C, "")
-        self._assert(DILX > 0 and DILY > 0 and STRX > 0 and STRY > 0)
+        self._assert(C % groups == 0, f"expected input channels to be divisible by groups, got {C}")
+        self._assert(OC % groups == 0, f"expected output channels to be divisible by groups, got {OC}")
+        self._assert(groups * WC == C, f"expected groups * WC == C")
+        self._assert(DILX > 0 and DILY > 0 and STRX > 0 and STRY > 0, f"dilations and strides must be larger than 0, got strides={(STRY, STRX)}, dilations={(DILY, DILX)}")
 
         OUT_H = (H - DILY * (KY - 1) - 1) // STRY + 1
         OUT_W = (W - DILX * (KX - 1) - 1) // STRX + 1
@@ -226,11 +227,7 @@ class Conv2dGemmFp16(Task):
 
         # the problem is that the block_k is not contiguous across the channel dimension, depending on certain
         # configuration of parameters
-        if False and DILX == 1 and GROUPS == 1: # in this setting, this are contiguous across C * KX elements
-            TILES_K = cdiv(C * KX, block_k) * KY
-        else: # in this setting, its contiguous only across GROUP_C dimensions
-            TILES_K = cdiv(GROUP_C, block_k) * KX * KY
-            
+        TILES_K = cdiv(GROUP_C, block_k) * KX * KY    
         K_TILES_PER_BLOCK = cdiv(TILES_K, K_PARTS) # number of tiles assigned to each block
         
         # schedule parameters
@@ -260,11 +257,6 @@ class Conv2dGemmFp16(Task):
         tune.check(block_k % 8 == 0)
         tune.check(is_power_of_two(block_k // 8))
 
-        # if DILX == 1 and GROUPS == 1: # the channel dimension is contiguous across a block of size DILX * C
-        #     tune.check(DILX * C >= block_k, 'channel dimension must be larger than block_k')
-        # else: # the channel dimension is contiguous across a block of size C // GROUPS
-        #     tune.check(C // GROUPS >= block_k, 'channel dimension must be larger than block_k')
-
         smem_img_type = tensor_type(
             'float16', shape=[block_m, block_k],
             layout=row_layout(block_m, block_k // 8).swizzle(1) * row_layout(1, 8)
@@ -273,8 +265,8 @@ class Conv2dGemmFp16(Task):
         smem_weight_type = tensor_type(
             'float16',
             shape=[block_k, block_n],
-            # layout=row_layout(block_k // 8, block_n // 64) * row_layout(8, 8).swizzle(1) * row_layout(1, 8),
-            layout=row_layout(block_k, block_n)
+            layout=row_layout(block_k // 8, block_n // 64) * row_layout(8, 8).swizzle(1) * row_layout(1, 8),
+            # layout=row_layout(block_k, block_n)
         )
         load_smem_a_map = auto_map(block_m, block_k // 8, workers=threads, on_fail=lambda msg: tune.check(False, msg))
         load_smem_b_map = auto_map(block_k, block_n // 8, workers=threads, on_fail=lambda msg: tune.check(False, msg))
@@ -335,76 +327,41 @@ class Conv2dGemmFp16(Task):
                 k_tile_idx = (blockIdx.z // (N * GROUPS)) * K_TILES_PER_BLOCK + k0
                 
                 batch_idx = (blockIdx.z // GROUPS) % N
+            
+                group_idx = blockIdx.z % GROUPS
+                num_tiles_per_channel = cdiv(GROUP_C, block_k)
+                channel_idx = k_tile_idx // num_tiles_per_channel
+                channel_group_offset = (k_tile_idx % num_tiles_per_channel) * block_k
+                filter_y = channel_idx // KX
+                filter_x = channel_idx % KX
 
-                # when DILX == 1 and groups == 1, tile block_k across [KX * C]
-                # otherwise, tile block_k across [GROUP_C]
-                if False and DILX == 1 and GROUPS == 1:
-                    img_ptr = tensor_pointer(float16, shape=[N, H * W * C])
-                    img_ptr = img
-                    num_tiles_per_region = cdiv(C * KX, block_k)
-                    filter_y = k_tile_idx // num_tiles_per_region   # the current contiguous region we are dealing with
-                    tile_region = k_tile_idx % num_tiles_per_region # the tile within the contiguous region
+                for i, k_seg in load_smem_a_map.on(threadIdx.x):
+                    k = k_seg * 8
 
-                    offset_k = filter_y * C * KX + tile_region * block_k
+                    # tiling the output image spatial dimension [OUT_H, OUT_W]
+                    img_spatial = i + offset_m
+                    oh_idx = img_spatial // OUT_W
+                    ow_idx = img_spatial % OUT_W
 
-                    for i, k_seg in load_smem_a_map.on(threadIdx.x):
-                        k = k_seg * 8
+                    # these are the input pixel coordinates
+                    ih_idx = oh_idx * STRY + filter_y * DILY
+                    iw_idx = ow_idx * STRX + filter_x * DILX
 
-                        # tiling the output image spatial dimension [OUT_H, OUT_W]
-                        img_spatial = i + offset_m
-                        oh_idx = img_spatial // OUT_W
-                        ow_idx = img_spatial % OUT_W
+                    channel_offset = channel_group_offset + k + group_idx * GROUP_C
 
-                        # these are the input pixel coordinates
-                        ih_idx = oh_idx * STRY + filter_y * DILY
-                        iw_idx = ow_idx * STRX
+                    src_size = 0
+                    if iw_idx < W and ih_idx < H and channel_group_offset + k < GROUP_C:
+                        src_size = min(8, GROUP_C - (channel_group_offset + k))
 
-                        offset_input = ih_idx * W * C + iw_idx * C + offset_k + k
-
-                        src_size = 0
-                        if img_spatial < OUT_H * OUT_W and tile_region * block_k + k < KX * C:
-                            src_size = min(8, KX * C - (tile_region * block_k + k))
-
-                        # cp_async(~smem_img[i, k], ~img_ptr[batch_idx, offset_input], cp_size=16, src_size=src_size * 2, cache_level='global')
+                    # a bit strange, the two branches should be the same, but gives different results
+                    #   but only when GROUP_C % 8 != 0                    
+                    if GROUP_C % 8 == 0:
+                        cp_async(~smem_img[i, k], ~img[batch_idx, ih_idx, iw_idx, channel_offset], cp_size=16, src_size=src_size * 2, cache_level='global')
+                    else:
                         for ki in range(src_size):
-                            smem_img[i, k + ki] = img_ptr[batch_idx, offset_input + ki]
+                            smem_img[i, k + ki] = img[batch_idx, ih_idx, iw_idx, channel_offset + ki]
                         for ki in range(8 - src_size):
                             smem_img[i, k + ki + src_size] = 0
-                else:
-                    group_idx = blockIdx.z % GROUPS
-                    num_tiles_per_channel = cdiv(GROUP_C, block_k)
-                    channel_idx = k_tile_idx // num_tiles_per_channel
-                    channel_group_offset = (k_tile_idx % num_tiles_per_channel) * block_k
-                    filter_y = channel_idx // KX
-                    filter_x = channel_idx % KX
-
-                    for i, k_seg in load_smem_a_map.on(threadIdx.x):
-                        k = k_seg * 8
-
-                        # tiling the output image spatial dimension [OUT_H, OUT_W]
-                        img_spatial = i + offset_m
-                        oh_idx = img_spatial // OUT_W
-                        ow_idx = img_spatial % OUT_W
-
-                        # these are the input pixel coordinates
-                        ih_idx = oh_idx * STRY + filter_y * DILY
-                        iw_idx = ow_idx * STRX + filter_x * DILX
-
-                        channel_offset = channel_group_offset + k + group_idx * GROUP_C
-
-                        src_size = 0
-                        if iw_idx < W and ih_idx < H and channel_group_offset + k < GROUP_C:
-                            src_size = min(8, GROUP_C - (channel_group_offset + k))
-
-                        # a bit strange, the two branches should be the same, but gives different results
-                        #   but only when GROUP_C % 8 != 0                    
-                        if GROUP_C % 8 == 0:
-                            cp_async(~smem_img[i, k], ~img[batch_idx, ih_idx, iw_idx, channel_offset], cp_size=16, src_size=src_size * 2, cache_level='global')
-                        else:
-                            for ki in range(src_size):
-                                smem_img[i, k + ki] = img[batch_idx, ih_idx, iw_idx, channel_offset + ki]
-                            for ki in range(8 - src_size):
-                                smem_img[i, k + ki + src_size] = 0
 
             @hidet.script
             def load_smem_weight(k0: int, weight: float16[KX * KY * WC, OC], smem_weight: smem_weight_type):
@@ -414,18 +371,12 @@ class Conv2dGemmFp16(Task):
                 k_tile_idx = (blockIdx.z // (N * GROUPS)) * K_TILES_PER_BLOCK + k0
                 offset_k = 0
                 
-                if False and DILX == 1 and GROUPS == 1:
-                    num_tiles_per_region = cdiv(C * KX, block_k)
-                    filter_y = k_tile_idx // num_tiles_per_region
-                    inner_idx = k0 % num_tiles_per_region
-                    offset_k = filter_y * KX * WC + inner_idx * block_k
-                else:
-                    num_tiles_per_channel = cdiv(GROUP_C, block_k)
-                    channel_idx = (k_tile_idx // num_tiles_per_channel)
-                    channel_offset = k_tile_idx % num_tiles_per_channel
-                    filter_y = channel_idx // KX
-                    filter_x = channel_idx % KX
-                    offset_k = filter_y * KX * WC + filter_x * WC + channel_offset * block_k
+                num_tiles_per_channel = cdiv(GROUP_C, block_k)
+                channel_idx = (k_tile_idx // num_tiles_per_channel)
+                channel_offset = k_tile_idx % num_tiles_per_channel
+                filter_y = channel_idx // KX
+                filter_x = channel_idx % KX
+                offset_k = filter_y * KX * WC + filter_x * WC + channel_offset * block_k
 
                 for k, j_seg in load_smem_b_map.on(threadIdx.x):
                     j = j_seg * 8
@@ -447,7 +398,6 @@ class Conv2dGemmFp16(Task):
                             smem_weight[k, j + ji] = weight[offset_k + k, offset_n + j + ji]
                         for ji in range(8 - src_size):
                             smem_weight[k, j + ji + src_size] = 0
-
 
             @hidet.script
             def matmul_f16_kernel(
@@ -508,7 +458,7 @@ class Conv2dGemmFp16(Task):
                 group_idx  = blockIdx.z % GROUPS
                 group_offset = group_idx * GROUP_OC
 
-                if True or warp_count_k == 1:
+                if warp_count_k == 1:
                     wi = warp_id // (warp_count_n * warp_count_k)
                     wj = (warp_id // warp_count_k) % warp_count_n
                     wk = warp_id % warp_count_k
@@ -528,7 +478,6 @@ class Conv2dGemmFp16(Task):
                                     res[k_part_idx, batch_idx, res_y, res_x, channel_idx] = regs_c[mi, mj, p]
                                 p += 1
                 else:
-                    assert False
                     smem_c = tensor_pointer('float16', shape=[block_m, block_n])
                     smem_c = dynamic_shared_memory(byte_offset=0, dtype=float16)
 
