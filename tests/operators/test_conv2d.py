@@ -16,15 +16,43 @@ import torch
 import pytest
 
 from hidet import ops
-from hidet.testing import check_binary, check_binary_dynamic
+from hidet.testing import check_binary, check_binary_dynamic, check_torch_binary
 
 
-def torch_conv2d(data: np.ndarray, weight: np.ndarray, padding: List[int], stride: List[int], dilations: List[int]):
+def torch_conv2d(data: np.ndarray, weight: np.ndarray, padding: List[int], stride: List[int], dilations: List[int], groups: int = 1):
     data_torch, weight_torch = torch.from_numpy(data), torch.from_numpy(weight)
     torch_out = torch.nn.functional.conv2d(
-        data_torch, weight_torch, bias=None, stride=stride, padding=[padding[0], padding[1]], dilation=dilations
+        data_torch, weight_torch, bias=None, stride=stride, padding=[padding[0], padding[1]], dilation=dilations, groups=groups
     )
     return torch_out.numpy()
+
+
+@pytest.mark.parametrize(
+    "n, c, h, w, oc, kx, ky",
+    [
+        [1, 64, 32, 32, 12, 3, 3],  # kernel 3,
+        [2, 128, 32, 32, 32, 5, 5],  # kernel 7, batch size 2
+        [1, 32, 32, 32, 64, 1, 1],  # kernel 1,
+    ],
+)
+@pytest.mark.parametrize("groups", [1, 2, 4])
+@pytest.mark.parametrize("stride", [[1, 1], [2, 3]])
+@pytest.mark.parametrize("dilations", [[1, 1], [2, 3]])
+def test_conv2d_gemm_fp16(n, c, h, w, oc, kx, ky, groups, stride, dilations):
+    check_torch_binary(
+        a_shape=[n, c, h, w],
+        b_shape=[oc, c // groups, kx, ky],
+        torch_func=lambda data, weight: torch.nn.functional.conv2d(
+            data, weight, bias=None, stride=stride, padding=[0, 0], dilation=dilations, groups=groups
+        ),
+        hidet_func=lambda data, weight: ops.transpose(ops.conv2d_gemm_fp16(
+            ops.transpose(data, [0, 2, 3, 1]), weight, stride=stride, dilations=dilations, groups=groups),
+            [0, 3, 1, 2]),
+        dtype='float16',
+        device='cuda',
+        atol=0.5,
+        rtol=0.5,
+    )
 
 
 @pytest.mark.parametrize("hidet_op", [ops.conv2d, ops.conv2d_gemm])

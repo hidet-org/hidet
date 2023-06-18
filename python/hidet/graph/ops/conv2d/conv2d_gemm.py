@@ -33,6 +33,8 @@ from hidet.graph.ops.utils import tune
 from hidet.graph.operator import Operator, Tensor
 from hidet.utils.py import is_power_of_two, cdiv, prod
 from hidet.graph.ops.utils import broadcast_indices
+from hidet.graph.transforms import ResolveRule, register_resolve_rule
+
 
 class Conv2dGemmImageTransformTask(Task):
     def __init__(self, x: TensorNode, kernel: List[int], stride: List[int], dilations: List[int], groups: int):
@@ -137,12 +139,12 @@ class Conv2dGemmFp16(Task):
         DILY, DILX = dilations
         STRY, STRX = stride
         # orig_weight_shape == [OC, WC, KY, KX]
-        N, W, H, C = img.shape
+        N, H, W, C = img.shape
         OC, WC, KY, KX = orig_weight_shape
 
         self._assert(C % groups == 0, f"expected input channels to be divisible by groups, got {C}")
         self._assert(OC % groups == 0, f"expected output channels to be divisible by groups, got {OC}")
-        self._assert(groups * WC == C, f"expected groups * WC == C")
+        self._assert(groups * WC == C, f"expected groups * WC == C, got groups: {groups}, WC: {WC}, C: {C}; make sure the image is channels last!")
         self._assert(DILX > 0 and DILY > 0 and STRX > 0 and STRY > 0, f"dilations and strides must be larger than 0, got strides={(STRY, STRX)}, dilations={(DILY, DILX)}")
 
         OUT_H = (H - DILY * (KY - 1) - 1) // STRY + 1
@@ -215,7 +217,7 @@ class Conv2dGemmFp16(Task):
 
         DILY, DILX = self.dilations
         STRY, STRX = self.stride
-        N, W, H, C = self.img_shape
+        N, H, W, C = self.img_shape
         OC, WC, KY, KX = self.orig_weight_shape
         GROUPS = self.groups
 
@@ -514,7 +516,7 @@ class Conv2dGemmFp16(Task):
         return ir_module
 
 
-class ConvGemmFp16(Operator):
+class ConvGemmFp16Op(Operator):
     def __init__(self, img: Tensor, weight: Tensor, orig_weight_shape: List[int], stride: List[int], dilations: List[int], groups: int, parallel_k_parts=1):
         if not (isinstance(parallel_k_parts, int) and not isinstance(parallel_k_parts, bool)):
             raise ValueError('parallel_k_parts must be an integer, got {}'.format(parallel_k_parts))
@@ -535,7 +537,87 @@ class ConvGemmFp16(Operator):
         )
 
 
-def conv_gemm_fp16(img: Tensor, weight: Tensor, stride: List[int], dilations: List[int], groups: int, parallel_k_parts=1) -> Tensor:
+@register_resolve_rule(ConvGemmFp16Op)
+class Conv2dResolveRule(ResolveRule):
+    def resolve(self, op: Operator) -> Optional[List[Tensor]]:
+        import hidet
+        if op.attrs['require_prologue']:
+            return None
+        if op.task.has_symbolic_shape():
+            return None
+
+        a: Tensor = op.inputs[0]
+        b: Tensor = op.inputs[1]
+        c: Tensor = op.outputs[0]
+
+        if hidet.cuda.compute_capability() < (8, 0):
+            return None
+
+        parallel_k = self.get_config('parallel_k', default='default')  # 'default', 'search', 2, 4, ...
+        if isinstance(parallel_k, str):
+            if parallel_k == 'default':
+                batch_size = c.shape[1]
+                _, _, H, W = a.shape
+                OC, WC, KY, KX = b.shape
+                DILY, DILX = op.attrs['dilations']
+                STRY, STRX = op.attrs['strides']
+                GROUPS = op.attrs['groups']
+                OUT_H = (H - DILY * (KY - 1) - 1) // STRY + 1
+                OUT_W = (W - DILX * (KX - 1) - 1) // STRX + 1
+                m_size = OUT_H * OUT_W
+                n_size = OC % GROUPS
+                k_size = WC * KX * KY
+
+                estimate_blocks = batch_size * cdiv(m_size, 64) * cdiv(n_size, 64)
+                estimate_concurrent_blocks = 80 * 5
+                max_k_parts = cdiv(k_size, 64)
+                k_parts = min(cdiv(estimate_concurrent_blocks, estimate_blocks), max_k_parts)
+            elif parallel_k == 'disabled':
+                k_parts = 1
+            elif parallel_k == 'search':
+                candidates = [1, 2, 3, 4, 5, 6, 8, 10, 12, 16]
+                aa = hidet.symbol_like(a)
+                bb = hidet.symbol_like(b)
+                latencies: List[float] = []
+                print('Searching the best parallel_k for {} x {} among {}'.format(a.shape, b.shape, candidates))
+                for candidate in candidates:
+                    cc = conv2d_gemm_fp16(
+                        aa, bb, 
+                        op.attrs['stride'], 
+                        op.attrs['dilations'],
+                        op.attrs['groups'],
+                        parallel_k_parts=candidate
+                    )
+
+                    graph = hidet.trace_from([cc], [aa, bb])
+                    graph: hidet.FlowGraph = hidet.graph.optimize(graph)
+                    latency: float = graph.latency()
+                    latencies.append(latency)
+                best_idx = min(range(len(candidates)), key=lambda i: latencies[i])
+                print(
+                    'Results: {{{}}},'.format(
+                        ', '.join('{}: {:.1f}'.format(a, b * 1000) for a, b in zip(candidates, latencies))
+                    ),
+                    'Picked {} with {:.1f} micro-seconds'.format(candidates[best_idx], latencies[best_idx] * 1000),
+                )
+                k_parts = candidates[best_idx]
+            else:
+                raise ValueError(f'invalid parallel_k: {parallel_k}')
+        elif isinstance(parallel_k, int):
+            k_parts = min(max(parallel_k, 1), 32)
+        else:
+            raise ValueError(f'invalid parallel_k: {parallel_k}')
+        c = conv2d_gemm_fp16(
+                        a, b, 
+                        op.attrs['stride'], 
+                        op.attrs['dilations'],
+                        op.attrs['groups'],
+                        parallel_k_parts=k_parts
+            )
+        return [c]
+
+
+def conv2d_gemm_fp16(img: Tensor, weight: Tensor, stride: List[int], dilations: List[int], groups: int, parallel_k_parts=1) -> Tensor:
     import hidet
 
     if len(img.shape) != 4 or len(weight.shape) != 4:
@@ -544,6 +626,6 @@ def conv_gemm_fp16(img: Tensor, weight: Tensor, stride: List[int], dilations: Li
         raise ValueError('ConvGemmF16Op only support float16, got {} and {}'.format(img.dtype, weight.dtype))
     oc, wc, ky, kx = weight.shape
     weight = hidet.ops.transpose(weight, [2, 3, 1, 0]).reshape([ky * kx * wc, oc])
-    return ConvGemmFp16(
+    return ConvGemmFp16Op(
         img, weight, orig_weight_shape=[oc, wc, ky, kx], stride=stride, dilations=dilations, groups=groups, parallel_k_parts=parallel_k_parts
     ).get_output(0).sum(0) # parallel k
