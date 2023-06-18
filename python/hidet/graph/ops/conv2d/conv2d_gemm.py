@@ -9,31 +9,22 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Any, Dict, List, Optional, Sequence
+from typing import List, Tuple, Sequence
+
 from hidet.graph.tensor import Tensor
-
-from hidet.ir.expr import is_constant
-from hidet.graph.ops.matmul import matmul, batch_matmul
-from hidet.graph.ops.utils import Task, Operator, Tensor, compute, input_like, TensorNode
-from hidet.graph.ops.utils import normalize_kernel, normalize_stride, normalize_dilations, reduce
-from hidet.ir.task import Task
-from .utils import infer_conv2d_shape
-
-from typing import List, Tuple
 from hidet.ir import dtypes
 from hidet.ir.dtypes import float16
-from hidet.ir.expr import if_then_else, Int, Expr
+from hidet.ir.expr import if_then_else, is_constant, Int
 from hidet.ir.func import Function
 from hidet.ir.module import IRModule
 from hidet.ir.compute import TensorNode
 from hidet.ir.task import Task
 from hidet.ir.compute import compute, reduce
-from hidet.graph.ops.utils import input_like, broadcast_shape, can_mutually_broadcast
-from hidet.graph.ops.utils import tune
-from hidet.graph.operator import Operator, Tensor
-from hidet.utils.py import is_power_of_two, cdiv, prod
-from hidet.graph.ops.utils import broadcast_indices
-from hidet.graph.transforms import ResolveRule, register_resolve_rule
+from hidet.graph.ops.matmul import matmul
+from hidet.graph.ops.utils import Operator, input_like
+from hidet.graph.ops.utils import normalize_kernel, normalize_stride, tune
+from hidet.utils.py import is_power_of_two, cdiv
+from .utils import infer_conv2d_shape
 
 
 class Conv2dGemmImageTransformTask(Task):
@@ -115,19 +106,24 @@ def conv2d_gemm(data: Tensor, weight: Tensor, stride, dilations: List[int], grou
 
 
 class Conv2dGemmFp16(Task):
-    def __init__(self, 
-                 img: TensorNode, 
-                 weight: TensorNode, 
-                 orig_weight_shape: List[int],
-                 stride: List[int],
-                 dilations: List[int],
-                 groups: int = 1,
-                 parallel_k_parts: int = 1):
+    def __init__(
+        self,
+        img: TensorNode,
+        weight: TensorNode,
+        orig_weight_shape: List[int],
+        stride: List[int],
+        dilations: List[int],
+        groups: int = 1,
+        parallel_k_parts: int = 1,
+    ):
         # Channel last
         # This kernel expects the weight to be transformed in the following way:
         # weight.shape [OC, WC, KY, KX] -> [KY * KX * WC, OC]
         self._assert(len(img.shape) == 4, f"expect img shape to be in NHWC format, got {img.shape}")
-        self._assert(len(weight.shape) == 2, f"expected weight to be transformed from [OC, WC, KY, kX] to [KY * KX * WC, OC], got {weight.shape}")
+        self._assert(
+            len(weight.shape) == 2,
+            f"expected weight to be transformed from [OC, WC, KY, kX] to [KY * KX * WC, OC], got {weight.shape}",
+        )
         self._assert(img.type.dtype == float16 and weight.type.dtype == float16, 'Both inputs must be float16 tensors')
 
         self.groups = groups
@@ -135,7 +131,7 @@ class Conv2dGemmFp16(Task):
         self.stride = stride
         self.img_shape = img.shape
         self.orig_weight_shape = orig_weight_shape
-        
+
         DILY, DILX = dilations
         STRY, STRX = stride
         # orig_weight_shape == [OC, WC, KY, KX]
@@ -144,9 +140,15 @@ class Conv2dGemmFp16(Task):
 
         self._assert(C % groups == 0, f"expected input channels to be divisible by groups, got {C}")
         self._assert(OC % groups == 0, f"expected output channels to be divisible by groups, got {OC}")
-        self._assert(groups * WC == C, f"expected groups * WC == C, got groups: {groups}, WC: {WC}, C: {C}; make sure the image is channels last!")
-        self._assert(DILX > 0 and DILY > 0 and STRX > 0 and STRY > 0, f"dilations and strides must be larger than 0, got strides={(STRY, STRX)}, dilations={(DILY, DILX)}")
-        self._assert(parallel_k_parts > 0, f"expected parallel_k_parts to be greater than 0")
+        self._assert(
+            groups * WC == C,
+            f"expected groups * WC == C, got groups: {groups}, WC: {WC}, C: {C}; make sure the image is channels last!",
+        )
+        self._assert(
+            DILX > 0 and DILY > 0 and STRX > 0 and STRY > 0,
+            f"dilations and strides must be larger than 0, got strides={(STRY, STRX)}, dilations={(DILY, DILX)}",
+        )
+        self._assert(parallel_k_parts > 0, "expected parallel_k_parts to be greater than 0")
         self._assert(H >= KY and W >= KX, "expected image dimensions to be greater than filter dimensions")
 
         OUT_H = (H - DILY * (KY - 1) - 1) // STRY + 1
@@ -163,25 +165,30 @@ class Conv2dGemmFp16(Task):
             ky = (k // (WC * KX)) % KY
             kx = (k // WC) % KX
             return img[ni, hi * STRY + ky * DILY, wi * STRX + kx * DILX, wci] * weight[k, oci]
-        
+
         c = compute(
             name='c',
             shape=self.out_shape,
             fcompute=lambda kpi, ni, hi, wi, oci: reduce(
                 shape=[k_part_extent],
                 fcompute=lambda k: if_then_else(
-                    kpi * k_part_extent + k < k_size,
-                    f_compute(k, ni, hi, wi, oci),
-                    float16(0.0),
+                    kpi * k_part_extent + k < k_size, f_compute(k, ni, hi, wi, oci), float16(0.0)
                 ),
                 reduce_type='sum',
             ),
         )
 
         super().__init__(
-            name='conv_gemm_fp16_pk', inputs=[img, weight], outputs=[c], 
-            attributes={'stride': stride, 'dilations': dilations, 'orig_weight_shape': orig_weight_shape, 'groups': groups,
-                        'parallel_k_parts': parallel_k_parts}
+            name='conv_gemm_fp16_pk',
+            inputs=[img, weight],
+            outputs=[c],
+            attributes={
+                'stride': stride,
+                'dilations': dilations,
+                'orig_weight_shape': orig_weight_shape,
+                'groups': groups,
+                'parallel_k_parts': parallel_k_parts,
+            },
         )
 
     def allow_prologue(self) -> bool:
@@ -210,7 +217,7 @@ class Conv2dGemmFp16(Task):
         # pylint: disable=unused-variable
         import hidet
         from hidet.ir.type import tensor_type
-        from hidet.lang import attrs, col_spatial, view, u32, tensor_pointer, grid
+        from hidet.lang import attrs, view, u32, tensor_pointer, grid
         from hidet.lang.layout import row_layout
         from hidet.lang.mapping import spatial, auto_map
         from hidet.lang.cuda import blockIdx, threadIdx, syncthreads, dynamic_shared_memory
@@ -231,9 +238,9 @@ class Conv2dGemmFp16(Task):
 
         # the problem is that the block_k is not contiguous across the channel dimension, depending on certain
         # configuration of parameters
-        TILES_K = cdiv(GROUP_C, block_k) * KX * KY    
-        K_TILES_PER_BLOCK = cdiv(TILES_K, K_PARTS) # number of tiles assigned to each block
-        
+        TILES_K = cdiv(GROUP_C, block_k) * KX * KY
+        K_TILES_PER_BLOCK = cdiv(TILES_K, K_PARTS)  # number of tiles assigned to each block
+
         # schedule parameters
         mma_configs = {'m16n8k8': MmaConfig.m16n8k8_f16_f16(), 'm16n8k16': MmaConfig.m16n8k16_f16_f16()}
         tune.check(mma in mma_configs)
@@ -262,7 +269,8 @@ class Conv2dGemmFp16(Task):
         tune.check(is_power_of_two(block_k // 8))
 
         smem_img_type = tensor_type(
-            'float16', shape=[block_m, block_k],
+            'float16',
+            shape=[block_m, block_k],
             layout=row_layout(block_m, block_k // 8).swizzle(1) * row_layout(1, 8)
             # layout=row_layout(block_m, block_k)
         )
@@ -308,7 +316,7 @@ class Conv2dGemmFp16(Task):
                 warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
                 wj = (warp_id // warp_count_k) % warp_count_n
                 wk = warp_id % warp_count_k
-                
+
                 p = lane_id % 16
                 # have not used q as we only use the address of the first 16 threads to load 2 of 8x8 f16 matrix.
                 row_addr = ~smem_b[wk * warp_k + k1 * mma_k + p, wj * warp_n + mj * mma_n]
@@ -326,12 +334,12 @@ class Conv2dGemmFp16(Task):
             @hidet.script
             def load_smem_img(k0: int, img: float16[N, H, W, C], smem_img: smem_img_type):
                 offset_m = blockIdx.x * block_m  # this is the output pixel index
-                
+
                 # the current global tile index, where each tile is of size [block_k]
                 k_tile_idx = (blockIdx.z // (N * GROUPS)) * K_TILES_PER_BLOCK + k0
-                
+
                 batch_idx = (blockIdx.z // GROUPS) % N
-            
+
                 group_idx = blockIdx.z % GROUPS
                 num_tiles_per_channel = cdiv(GROUP_C, block_k)
                 channel_idx = k_tile_idx // num_tiles_per_channel
@@ -358,9 +366,15 @@ class Conv2dGemmFp16(Task):
                         src_size = min(8, GROUP_C - (channel_group_offset + k))
 
                     # a bit strange, the two branches should be the same, but gives different results
-                    #   but only when GROUP_C % 8 != 0                    
+                    #   but only when GROUP_C % 8 != 0
                     if GROUP_C % 8 == 0:
-                        cp_async(~smem_img[i, k], ~img[batch_idx, ih_idx, iw_idx, channel_offset], cp_size=16, src_size=src_size * 2, cache_level='global')
+                        cp_async(
+                            ~smem_img[i, k],
+                            ~img[batch_idx, ih_idx, iw_idx, channel_offset],
+                            cp_size=16,
+                            src_size=src_size * 2,
+                            cache_level='global',
+                        )
                     else:
                         for ki in range(src_size):
                             smem_img[i, k + ki] = img[batch_idx, ih_idx, iw_idx, channel_offset + ki]
@@ -374,9 +388,9 @@ class Conv2dGemmFp16(Task):
 
                 k_tile_idx = (blockIdx.z // (N * GROUPS)) * K_TILES_PER_BLOCK + k0
                 offset_k = 0
-                
+
                 num_tiles_per_channel = cdiv(GROUP_C, block_k)
-                channel_idx = (k_tile_idx // num_tiles_per_channel)
+                channel_idx = k_tile_idx // num_tiles_per_channel
                 channel_offset = k_tile_idx % num_tiles_per_channel
                 filter_y = channel_idx // KX
                 filter_x = channel_idx % KX
@@ -388,15 +402,21 @@ class Conv2dGemmFp16(Task):
                     #   so the extra bits are not relevant when multipled by zeros
                     offset_n = offset_n_group + group_idx * GROUP_OC
                     src_size = (
-                        0 
-                        if (offset_n_group + j >= GROUP_OC or offset_k + k >= KY * KX * WC) 
+                        0
+                        if (offset_n_group + j >= GROUP_OC or offset_k + k >= KY * KX * WC)
                         else min(8, GROUP_OC - (offset_n_group + j))
                     )
 
                     # also quite strange; the two branches should be the same, but gives different
                     #   results when GROUP_OC % 8 != 0
                     if GROUP_OC % 8 == 0:
-                        cp_async(~smem_weight[k, j], ~weight[offset_k + k, offset_n + j], cp_size=16, src_size=src_size * 2, cache_level='global')
+                        cp_async(
+                            ~smem_weight[k, j],
+                            ~weight[offset_k + k, offset_n + j],
+                            cp_size=16,
+                            src_size=src_size * 2,
+                            cache_level='global',
+                        )
                     else:
                         for ji in range(src_size):
                             smem_weight[k, j + ji] = weight[offset_k + k, offset_n + j + ji]
@@ -405,9 +425,7 @@ class Conv2dGemmFp16(Task):
 
             @hidet.script
             def matmul_f16_kernel(
-                img:    float16[N, H, W, C],
-                weight: float16[KX * KY * WC, OC],
-                res: float16[K_PARTS, N, OUT_H, OUT_W, OC],
+                img: float16[N, H, W, C], weight: float16[KX * KY * WC, OC], res: float16[K_PARTS, N, OUT_H, OUT_W, OC]
             ):
                 # matrix multiplication, using mma instruction
                 attrs.cuda.grid_dim = grid_dim
@@ -458,8 +476,8 @@ class Conv2dGemmFp16(Task):
                 warp_id, lane_id = threadIdx.x / 32, threadIdx.x % 32
                 offset_m, offset_n = blockIdx.x * block_m, blockIdx.y * block_n
                 k_part_idx = blockIdx.z // (N * GROUPS)
-                batch_idx  = (blockIdx.z // GROUPS) % N
-                group_idx  = blockIdx.z % GROUPS
+                batch_idx = (blockIdx.z // GROUPS) % N
+                group_idx = blockIdx.z % GROUPS
                 group_offset = group_idx * GROUP_OC
 
                 if warp_count_k == 1:
@@ -519,27 +537,44 @@ class Conv2dGemmFp16(Task):
 
 
 class Conv2dGemmFp16Op(Operator):
-    def __init__(self, img: Tensor, weight: Tensor, orig_weight_shape: List[int], stride: List[int], dilations: List[int], groups: int, parallel_k_parts=1):
+    def __init__(
+        self,
+        img: Tensor,
+        weight: Tensor,
+        orig_weight_shape: List[int],
+        stride: List[int],
+        dilations: List[int],
+        groups: int,
+        parallel_k_parts=1,
+    ):
         if not (isinstance(parallel_k_parts, int) and not isinstance(parallel_k_parts, bool)):
             raise ValueError('parallel_k_parts must be an integer, got {}'.format(parallel_k_parts))
-        
+
         super().__init__(
             inputs=[img, weight],
-            attributes={'stride': stride, 'dilations': dilations, 'orig_weight_shape': orig_weight_shape, 'groups': groups,
-                        'parallel_k_parts': parallel_k_parts},
+            attributes={
+                'stride': stride,
+                'dilations': dilations,
+                'orig_weight_shape': orig_weight_shape,
+                'groups': groups,
+                'parallel_k_parts': parallel_k_parts,
+            },
             task=Conv2dGemmFp16(
-                input_like(img, 'img'), 
-                input_like(weight, 'weight'), 
-                orig_weight_shape, 
-                stride, 
-                dilations, 
-                groups=groups, 
+                input_like(img, 'img'),
+                input_like(weight, 'weight'),
+                orig_weight_shape,
+                stride,
+                dilations,
+                groups=groups,
                 parallel_k_parts=parallel_k_parts,
             ),
         )
 
 
-def parallel_part_heuristic(input_shape, weight_shape, stride=[1, 1], dilation=[1, 1], groups=1):
+# pylint: disable=dangerous-default-value
+def parallel_part_heuristic(
+    input_shape, weight_shape, stride: List[int] = [1, 1], dilation: List[int] = [1, 1], groups: int = 1
+):
     N, H, W, _ = input_shape
     OC, WC, KY, KX = weight_shape
     DILY, DILX = dilation
@@ -556,7 +591,9 @@ def parallel_part_heuristic(input_shape, weight_shape, stride=[1, 1], dilation=[
     return k_parts
 
 
-def conv2d_gemm_fp16(img: Tensor, weight: Tensor, stride: List[int], dilations: List[int], groups: int, parallel_k_parts=1) -> Tensor:
+def conv2d_gemm_fp16(
+    img: Tensor, weight: Tensor, stride: List[int], dilations: List[int], groups: int, parallel_k_parts=1
+) -> Tensor:
     import hidet
 
     if len(img.shape) != 4 or len(weight.shape) != 4:
@@ -565,6 +602,16 @@ def conv2d_gemm_fp16(img: Tensor, weight: Tensor, stride: List[int], dilations: 
         raise ValueError('ConvGemmF16Op only support float16, got {} and {}'.format(img.dtype, weight.dtype))
     oc, wc, ky, kx = weight.shape
     weight = hidet.ops.transpose(weight, [2, 3, 1, 0]).reshape([ky * kx * wc, oc])
-    return Conv2dGemmFp16Op(
-        img, weight, orig_weight_shape=[oc, wc, ky, kx], stride=stride, dilations=dilations, groups=groups, parallel_k_parts=parallel_k_parts
-    ).get_output(0).sum(0) # parallel k
+    return (
+        Conv2dGemmFp16Op(
+            img,
+            weight,
+            orig_weight_shape=[oc, wc, ky, kx],
+            stride=stride,
+            dilations=dilations,
+            groups=groups,
+            parallel_k_parts=parallel_k_parts,
+        )
+        .get_output(0)
+        .sum(0)
+    )  # parallel k

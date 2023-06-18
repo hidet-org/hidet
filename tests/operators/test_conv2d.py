@@ -19,10 +19,18 @@ from hidet import ops
 from hidet.testing import check_binary, check_binary_dynamic, check_torch_binary
 
 
-def torch_conv2d(data: np.ndarray, weight: np.ndarray, padding: List[int], stride: List[int], dilations: List[int], groups: int = 1):
+def torch_conv2d(
+    data: np.ndarray, weight: np.ndarray, padding: List[int], stride: List[int], dilations: List[int], groups: int = 1
+):
     data_torch, weight_torch = torch.from_numpy(data), torch.from_numpy(weight)
     torch_out = torch.nn.functional.conv2d(
-        data_torch, weight_torch, bias=None, stride=stride, padding=[padding[0], padding[1]], dilation=dilations, groups=groups
+        data_torch,
+        weight_torch,
+        bias=None,
+        stride=stride,
+        padding=[padding[0], padding[1]],
+        dilation=dilations,
+        groups=groups,
     )
     return torch_out.numpy()
 
@@ -46,9 +54,17 @@ def test_conv2d_gemm_fp16(n, c, h, w, oc, kx, ky, groups, stride, dilations, par
         torch_func=lambda data, weight: torch.nn.functional.conv2d(
             data, weight, bias=None, stride=stride, padding=[0, 0], dilation=dilations, groups=groups
         ),
-        hidet_func=lambda data, weight: ops.transpose(ops.conv2d_gemm_fp16(
-            ops.transpose(data, [0, 2, 3, 1]), weight, stride=stride, dilations=dilations, groups=groups, parallel_k_parts=parallel_k),
-            [0, 3, 1, 2]),
+        hidet_func=lambda data, weight: ops.transpose(
+            ops.conv2d_gemm_fp16(
+                ops.transpose(data, [0, 2, 3, 1]),
+                weight,
+                stride=stride,
+                dilations=dilations,
+                groups=groups,
+                parallel_k_parts=parallel_k,
+            ),
+            [0, 3, 1, 2],
+        ),
         dtype='float16',
         device='cuda',
         atol=0.5,
