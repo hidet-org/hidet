@@ -1,9 +1,11 @@
 import hidet
 import multiprocessing
 from multiprocessing import Process
+import numpy
+
 import hidet.cuda.nccl
 from hidet.cuda.nccl import NcclUniqueId, create_comm, ncclDataType, ncclRedOp
-from hidet.ffi.runtime_api import NCCLRuntimeAPI
+from hidet.cuda.nccl.ffi import NCCLRuntimeAPI
 from hidet.lang import attrs
 from hidet.ir.primitives.cuda.nccl import all_reduce
 from hidet.ir.type import data_type
@@ -17,6 +19,7 @@ from hidet.runtime import load_compiled_module
 print("NCCL version:", NCCLRuntimeAPI.get_version())
 
 def run(world_size, rank, shared_id, barrier):
+    numpy.random.seed(rank)
     if rank == 0:
         NCCLRuntimeAPI.get_unique_id(shared_id)
     barrier.wait()
@@ -28,6 +31,8 @@ def run(world_size, rank, shared_id, barrier):
     device = f"cuda:{rank}"
     send = hidet.randn([2, 2], device=device)
     recv = hidet.empty([2, 2], device=device)
+
+    print(send)
 
     dtype = data_type('float32')
     shape = [2, 2] 
@@ -53,7 +58,7 @@ def run(world_size, rank, shared_id, barrier):
     s.synchronize()
     print(recv)
 
-world_size = 4
+world_size = 1 
 barrier = multiprocessing.Barrier(world_size)
 shared_id = multiprocessing.Value(NcclUniqueId, lock=False)
 processes = [Process(target=run, args=(world_size, i, shared_id, barrier)) for i in range(world_size)]
