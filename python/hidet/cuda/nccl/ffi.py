@@ -5,12 +5,16 @@ from enum import IntEnum
 import glob, os
 from functools import partial
 
-from hidet.ffi import runtime_api
 from hidet.ffi.ffi import get_func
 from .libinfo import get_nccl_library_search_dirs
-from hidet.cuda.nccl.comm import NcclUniqueId, NcclCommunicator
 
 _LIB_NCCL: Optional[ctypes.CDLL] = None
+
+class NcclUniqueId(Structure):
+    """
+    Defined in nccl.h
+    """
+    _fields_ = [("internal", c_byte * 128)]
 
 def nccl_available():
     return _LIB_NCCL is not None
@@ -67,8 +71,8 @@ class NCCLRuntimeAPI:
         return comm.value
     
     @staticmethod
-    def comm_destroy(comm:NcclCommunicator) -> None:
-        ret = NCCLRuntimeAPI._comm_destroy(comm._handle)
+    def comm_destroy(comm_handle) -> None:
+        ret = NCCLRuntimeAPI._comm_destroy(comm_handle)
         assert ret == 0
 
 nccl_runtime_api = NCCLRuntimeAPI()

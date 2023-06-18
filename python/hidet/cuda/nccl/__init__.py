@@ -1,1 +1,1 @@
-from .comm import create_comm, NcclUniqueId, ncclDataType, ncclRedOp
+from .comm import create_comm, NcclUniqueId, ncclDataType, ncclRedOp, comms_to_array

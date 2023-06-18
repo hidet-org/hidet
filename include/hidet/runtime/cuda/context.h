@@ -15,14 +15,14 @@
 #include <hidet/runtime/context.h>
 // #include <cuda_runtime.h>
 
-#include <vector>
-
 struct CudaContext: BaseContext {
     /* The cuda stream the kernels will be launched on. */
     void* stream = nullptr;
 
     /* NCCL Comunicators*/
-    std::vector<void *> nccl_comms;
+    void ** nccl_comms;
+
+    int num_comms;
 
     /**
      * Get the instance of cuda context.
@@ -48,7 +48,7 @@ DLL void* request_cuda_workspace(size_t nbytes, bool require_clean);
 /**
  * Add a NCCL communicator to the context.
  */
-DLL void add_nccl_comm(void* comm);
+DLL void set_nccl_comms(void** comm, int num_comms);
 
 /**
  * Get the NCCL communicator by the index

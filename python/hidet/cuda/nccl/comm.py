@@ -1,7 +1,10 @@
-from ctypes import c_void_p, c_char_p, c_uint64, c_int32, c_int, pointer, Structure, c_byte, POINTER
 from enum import IntEnum
+from typing import List
+import struct
 
-from hidet.ffi import runtime_api
+from .ffi import nccl_runtime_api, NcclUniqueId
+from hidet.ffi.utils import Array
+from hidet.ir.type import void_p
 
 class ncclDataType(IntEnum):	
     int8 = 0	
@@ -27,12 +30,6 @@ class ncclRedOp(IntEnum):
     min = 3	
     avg = 4	
 
-class NcclUniqueId(Structure):
-    """
-    Defined in nccl.h
-    """
-    _fields_ = [("internal", c_byte * 128)]
-
 class NcclCommunicator:
     def __init__(self, handle: int):
         """
@@ -41,16 +38,19 @@ class NcclCommunicator:
         """
 
         self._handle = handle
-        runtime_api.add_nccl_comm(handle)
     
     def __del__(self):
-        from hidet.cuda.nccl.ffi import nccl_runtime_api
-        nccl_runtime_api.comm_destroy(self)
+        nccl_runtime_api.comm_destroy(self._handle)
 
     def split(self):
         raise NotImplementedError()
     
 def create_comm(nranks: int, unique_id: NcclUniqueId, rank: int):
-    from hidet.cuda.nccl.ffi import nccl_runtime_api
     handle = nccl_runtime_api.comm_init_rank(nranks, unique_id, rank)
     return NcclCommunicator(handle)
+
+def comms_to_array(comms: List[NcclCommunicator]):
+    handles = [comm._handle for comm in comms]
+    array = Array(void_p, len(comms))
+    struct.pack_into(array.format, array.buffer, 0, *handles)
+    return array
