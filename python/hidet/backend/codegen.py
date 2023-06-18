@@ -536,10 +536,12 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
         return doc
 
     def visit_AssertStmt(self, stmt: AssertStmt):
+        doc = NewLine() + Text('assert(') + self(stmt.cond) + Text(');')
+
         if stmt.msg is not None:
-            return NewLine() + Text('assert(((void)"') + stmt.msg + '", ' + self(stmt.cond) + '));'
-        else:
-            return NewLine() + Text('assert(') + self(stmt.cond) + ');'
+            msg = stmt.msg.replace("\n", "")
+            doc += "  // {}".format(msg)
+        return doc
 
     def visit_AsmStmt(self, stmt: AsmStmt):
         volatile_doc = 'volatile ' if stmt.is_volatile else ''
@@ -666,6 +668,7 @@ class CUDACodegen(Codegen):
     def require_headers(self) -> Doc:
         doc = Doc()
         doc += Text('#include <stdint.h>') + NewLine()
+
         if self.require_immintrin:
             doc += Text('#include <immintrin.h>') + NewLine()
         if self.require_fp16:
@@ -677,6 +680,7 @@ class CUDACodegen(Codegen):
         doc += Text('#include <hidet/runtime/cpu/context.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cuda/complex.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cuda/context.h>') + NewLine()
+        doc += Text("#include <hidet/runtime/logging.h>") + NewLine()
 
         for header in self.ir_module.include_headers:
             doc += Text('#include <{}>').format(header) + NewLine()
@@ -759,6 +763,8 @@ class CPUCodegen(Codegen):
         doc += Text('#include <hidet/runtime/memory_planner.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cpu/context.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cpu/float32.h>') + NewLine()
+        doc += Text("#include <hidet/runtime/logging.h>") + NewLine()
+
         if self.require_complex:
             doc += Text('#include <hidet/runtime/cpu/complex.h>') + NewLine()
         if self.require_fp16:

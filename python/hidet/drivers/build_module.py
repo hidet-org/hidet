@@ -120,7 +120,10 @@ def build_ir_module_batch(ir_modules: Sequence[IRModule], output_dirs: Sequence[
     if num_workers > 1 and len(jobs) > 1:
         # Set the affinity of current process. Some package such as numpy will change affinity of current process,
         # which might limit the parallelism of compilation.
-        os.sched_setaffinity(0, range(cpu_count))
+        from contextlib import suppress
+
+        with suppress(OSError):
+            os.sched_setaffinity(0, range(cpu_count))
 
         lazy_initialize_cuda()
 

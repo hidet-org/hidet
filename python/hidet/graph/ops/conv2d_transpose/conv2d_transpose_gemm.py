@@ -120,7 +120,7 @@ def conv2d_transpose_gemm(
     kx, ky = weight.shape[2:]
     gemm_x = conv2d_transpose_gemm_image(data, (kx, ky), (sx, sy), (px0, py0, px1, py1), groups, (opx, opy))
     gemm_w = conv2d_transpose_gemm_filter(weight, groups)
-    gemm_y = matmul(gemm_x, gemm_w)
+    gemm_y = matmul(gemm_x, gemm_w, require_prologue=True)
 
     p, q = data.shape[2:]
     h = (p - 1) * sx - px0 - px1 + kx + output_padding[0]

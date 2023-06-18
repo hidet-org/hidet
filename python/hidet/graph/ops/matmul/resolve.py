@@ -173,6 +173,8 @@ class MatmulResolveRule(ResolveRule):
         return [c]
 
     def resolve_f16(self, op: Operator) -> Optional[List[Tensor]]:
+        if op.attrs['require_prologue']:
+            return None
         if op.task.has_symbolic_shape():
             return None
 
