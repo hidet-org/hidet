@@ -549,7 +549,7 @@ def parallel_part_heuristic(input_shape, weight_shape, stride=[1, 1], dilation=[
     m_size = OUT_H * OUT_W
     n_size = OC // groups
     k_size = WC * KX * KY
-    estimate_blocks = N * cdiv(m_size, 64) * cdiv(n_size, 64)
+    estimate_blocks = N * cdiv(m_size, 64) * cdiv(n_size, 64) * groups
     estimate_concurrent_blocks = 80 * 5
     max_k_parts = cdiv(k_size, 64)
     k_parts = min(cdiv(estimate_concurrent_blocks, estimate_blocks), max_k_parts)
