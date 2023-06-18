@@ -131,7 +131,6 @@ class ComputeRewriter(BaseRewriter, ComputeFunctor):
         ):
             return node
         else:
-
             return ReduceCompute(node.name, shape, axes, value, node.reduce_operation, accumulate_dtype)
 
     def visit_ArgReduceCompute(self, node: ArgReduceCompute):

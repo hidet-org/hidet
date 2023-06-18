@@ -1,34 +1,48 @@
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 from enum import IntEnum
 from typing import List
 import struct
 
-from .ffi import nccl_runtime_api, NcclUniqueId
 from hidet.ffi.utils import Array
 from hidet.ir.type import void_p
+from .ffi import nccl_runtime_api, NcclUniqueId
 
-class ncclDataType(IntEnum):	
-    int8 = 0	
-    char = 0	
-    uint8 = 1	
-    int32 = 2	
-    int = 2	
-    uint32 = 3	
-    int64 = 4	
-    uint64 = 5	
-    float16 = 6	
-    half = 6	
-    float32 = 7	
-    float = 7	
-    float64 = 8	
-    double = 8	
-    bfloat = 9	
 
-class ncclRedOp(IntEnum):	
-    sum = 0	
-    prod = 1	
-    max = 2	
-    min = 3	
-    avg = 4	
+class NcclDataType(IntEnum):
+    int8 = 0
+    char = 0
+    uint8 = 1
+    int32 = 2
+    int = 2
+    uint32 = 3
+    int64 = 4
+    uint64 = 5
+    float16 = 6
+    half = 6
+    float32 = 7
+    float = 7
+    float64 = 8
+    double = 8
+    bfloat = 9
+
+
+class NcclRedOp(IntEnum):
+    sum = 0
+    prod = 1
+    max = 2
+    min = 3
+    avg = 4
+
 
 class NcclCommunicator:
     def __init__(self, handle: int):
@@ -38,19 +52,29 @@ class NcclCommunicator:
         """
 
         self._handle = handle
-    
+
     def __del__(self):
         nccl_runtime_api.comm_destroy(self._handle)
 
+    @property
+    def handle(self):
+        return self._handle
+
     def split(self):
         raise NotImplementedError()
-    
-def create_comm(nranks: int, unique_id: NcclUniqueId, rank: int):
+
+
+def create_comm(nranks: int, unique_id: NcclUniqueId, rank: int) -> NcclCommunicator:
     handle = nccl_runtime_api.comm_init_rank(nranks, unique_id, rank)
     return NcclCommunicator(handle)
 
-def comms_to_array(comms: List[NcclCommunicator]):
-    handles = [comm._handle for comm in comms]
+
+def comms_to_array(comms: List[NcclCommunicator]) -> Array:
+    handles = [comm.handle for comm in comms]
     array = Array(void_p, len(comms))
     struct.pack_into(array.format, array.buffer, 0, *handles)
     return array
+
+
+def init_unique_id(unqie_id: NcclUniqueId) -> None:
+    nccl_runtime_api.get_unique_id(unqie_id)

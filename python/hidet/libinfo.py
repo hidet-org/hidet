@@ -66,4 +66,3 @@ def get_library_search_dirs() -> List[str]:
         '../../build-debug/lib',
     ]
     return [os.path.abspath(os.path.join(root, relative)) for relative in relative_dirs]
-

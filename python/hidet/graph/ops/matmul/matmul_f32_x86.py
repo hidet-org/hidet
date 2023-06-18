@@ -180,7 +180,6 @@ class MatmulF32Taskx86(Task):
             def micro_kernel_4x8(
                 a: packed_a_type, b: packed_b_type, c_ptr: ~float32, pb: int32, msize: int32, nsize: int32
             ):
-
                 c = as_tensor_pointer(c_ptr, dtype=float32, shape=[msize, nsize])
                 c0 = avx_f32x8_load(~c[0, 0])
                 c1 = avx_f32x8_load(~c[1, 0])
@@ -207,7 +206,6 @@ class MatmulF32Taskx86(Task):
             def micro_kernel_8x8(
                 a: packed_a_type, b: packed_b_type, c_ptr: ~float32, pb: int32, msize: int32, nsize: int32
             ):
-
                 c = as_tensor_pointer(c_ptr, dtype=float32, shape=[msize, nsize])
                 c0 = avx_f32x8_load(~c[0, 0])
                 c1 = avx_f32x8_load(~c[1, 0])

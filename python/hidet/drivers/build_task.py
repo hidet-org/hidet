@@ -90,7 +90,6 @@ def build_task_module(task: Task, candidates: List[IRModule], task_dir: str, tar
         param_types = [~t.type.dtype for t in task.params]
 
         with hidet.script_module() as script_module:
-
             launch_candidates = []
             for i in range(len(candidates)):
                 launch_candidates.append(
@@ -111,7 +110,9 @@ def build_task_module(task: Task, candidates: List[IRModule], task_dir: str, tar
         ir_module = script_module.ir_module()
         ir_module.add_function(get_input_shape.name, get_input_shape)
         ir_module.add_function(get_output_shape.name, get_output_shape)
-        ir_module.object_files.extend([os.path.join(task_dir, 'candidates', str(i), 'lib.o') for i in range(len(candidates))])
+        ir_module.object_files.extend(
+            [os.path.join(task_dir, 'candidates', str(i), 'lib.o') for i in range(len(candidates))]
+        )
         task_ir_module = ir_module
 
     # build task ir module

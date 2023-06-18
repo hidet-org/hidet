@@ -13,12 +13,17 @@ from hidet.ir.expr import Expr
 from hidet.ir.stmt import BlackBoxStmt
 
 # TODO: we should not put nccl-related types here since hidet.cuda.nccl depends on
-# .     the existence of nccl library?
-from hidet.cuda.nccl import ncclDataType, ncclRedOp
+#       the existence of nccl library?
+from hidet.cuda.nccl import NcclDataType, NcclRedOp
 
-def all_reduce(comm_id: int, sendbuff: Expr, recvbuff: Expr, count: Expr, dtype: ncclDataType, op: ncclRedOp):
+
+def all_reduce(comm_id: int, sendbuff: Expr, recvbuff: Expr, count: Expr, dtype: NcclDataType, op: NcclRedOp):
     from hidet.ir.primitives.runtime import get_cuda_stream, get_nccl_comm
+
     comm = get_nccl_comm(comm_id)
     return BlackBoxStmt(
-        'ncclAllReduce({}, {}, {}, (ncclDataType_t){}, (ncclRedOp_t){}, (ncclComm_t){}, (cudaStream_t){});'.format(sendbuff, recvbuff, count, int(dtype), int(op), comm, get_cuda_stream())
+        'ncclAllReduce({}, {}, {}, (ncclDataType_t){}, (ncclRedOp_t){}, '
+        '(ncclComm_t){}, (cudaStream_t){});'.format(
+            sendbuff, recvbuff, count, int(dtype), int(op), comm, get_cuda_stream()
+        )
     )

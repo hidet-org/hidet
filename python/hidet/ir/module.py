@@ -34,7 +34,7 @@ class IRModule(Node):
         include_dirs: List[str] = None,
         linking_dirs: List[str] = None,
         linking_libs: List[str] = None,
-        object_files: List[str] = None
+        object_files: List[str] = None,
     ):
         # the functions defined in this module
         self.functions: Dict[str, Function] = functions if functions else {}
@@ -47,10 +47,10 @@ class IRModule(Node):
         # '#include ...' preprocessor directives
         self.include_headers: List[str] = include_headers if include_headers else []
         # flags that will be passed to the underlying compiler, can be used to add 3rd-party libraries
-        self.include_dirs: List[str] = include_dirs if include_dirs else []   # -L flags
-        self.linking_dirs: List[str] = linking_dirs if linking_dirs else []   # -I flags
-        self.linking_libs: List[str] = linking_libs if linking_libs else []   # -l flags
-        self.object_files: List[str] = object_files if object_files else []   # .o files
+        self.include_dirs: List[str] = include_dirs if include_dirs else []  # -L flags
+        self.linking_dirs: List[str] = linking_dirs if linking_dirs else []  # -I flags
+        self.linking_libs: List[str] = linking_libs if linking_libs else []  # -l flags
+        self.object_files: List[str] = object_files if object_files else []  # .o files
 
         assert all(isinstance(func, Function) for func in self.functions.values()) and all(
             isinstance(var, Var) for var in self.global_vars.values()
@@ -83,7 +83,7 @@ class IRModule(Node):
             include_dirs=self.include_dirs.copy(),
             linking_dirs=self.linking_dirs.copy(),
             linking_libs=self.linking_libs.copy(),
-            object_files=self.object_files.copy()
+            object_files=self.object_files.copy(),
         )
 
     def reset_funcs(self, functions: Dict[str, Function] = None, global_vars: Dict[str, Var] = None):

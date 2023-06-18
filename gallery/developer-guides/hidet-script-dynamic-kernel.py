@@ -83,7 +83,6 @@ def matmul_simt_kernel():
             # iterate over the k tiles
             num_k_tiles = (k_size + block_k_size - 1) // block_k_size
             for k_tile in range(num_k_tiles):
-
                 # load smem_a [block_m_size, block_k_size] from global memory
                 for i, k in auto_map(block_m_size, block_k_size, workers=num_threads).on(
                     threadIdx.x

@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Union
-from ctypes import c_void_p, c_char_p, c_uint64, c_int32, pointer
+from ctypes import c_void_p, c_char_p, c_uint64, c_int32
 from hidet.cuda import Stream
 from .ffi import get_func
 from .utils import Array
@@ -67,5 +67,6 @@ class RuntimeAPI:
     def set_nccl_comms(comms: Array) -> None:
         comms_array_t = c_void_p * comms.length
         RuntimeAPI._set_nccl_comms(comms_array_t.from_buffer(comms.buffer), comms.length)
+
 
 runtime_api = RuntimeAPI()

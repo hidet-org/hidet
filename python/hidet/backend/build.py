@@ -43,10 +43,10 @@ class SourceCompiler:
         self,
         src_path: str,
         out_lib_path: str,
-        include_dirs: Sequence[str]=(),
-        linking_dirs: Sequence[str]=(),
-        linking_libraries: Sequence[str]=(),
-        object_files: Sequence[str]=()
+        include_dirs: Sequence[str] = (),
+        linking_dirs: Sequence[str] = (),
+        linking_libraries: Sequence[str] = (),
+        object_files: Sequence[str] = (),
     ) -> None:
         raise NotImplementedError()
 
@@ -119,7 +119,7 @@ class NVCC(SourceCompiler):
         include_dirs: Sequence[str] = (),
         linking_dirs: Sequence[str] = (),
         linking_libraries: Sequence[str] = (),
-        object_files: Sequence[str] = ()
+        object_files: Sequence[str] = (),
     ) -> None:
         if len(object_files) > 0 and out_lib_path.endswith('.o'):
             raise ValueError('Can not compile multiple objects into a single object file.')
@@ -200,10 +200,10 @@ class GCC(SourceCompiler):
         self,
         src_path: str,
         out_lib_path: str,
-        include_dirs: Sequence[str]=(),
-        linking_dirs: Sequence[str]=(),
-        linking_libraries: Sequence[str]=(),
-        object_files: Sequence[str]=()
+        include_dirs: Sequence[str] = (),
+        linking_dirs: Sequence[str] = (),
+        linking_libraries: Sequence[str] = (),
+        object_files: Sequence[str] = (),
     ) -> None:
         if len(object_files) > 0 and out_lib_path.endswith('.o'):
             raise ValueError('Can not compile multiple objects into a single object file.')
@@ -291,5 +291,5 @@ def compile_source(
         include_dirs=include_dirs,
         linking_dirs=linking_dirs,
         linking_libraries=linking_libraries,
-        object_files=object_files
+        object_files=object_files,
     )
