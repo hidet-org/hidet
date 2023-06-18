@@ -56,11 +56,15 @@ DLL void* request_cuda_workspace(size_t nbytes, bool require_clean) {
     }
 }
 
-DLL void set_nccl_comms(void** comms, int num_comms) {
-    CudaContext::global()->nccl_comms = comms;
+DLL void set_nccl_comms(int num_comms, void** comms) {
     CudaContext::global()->num_comms = num_comms;
+    CudaContext::global()->nccl_comms = comms;
 }
 
 DLL void* get_nccl_comm(int idx) {
+    const int num_comms = CudaContext::global()->num_comms;
+    if (idx >= num_comms) {
+        LOG(FATAL) << "Index of NCCL Communicator out of boundary. (" << idx << " vs " << num_comms << ")";
+    }
     return CudaContext::global()->nccl_comms[idx];
 }

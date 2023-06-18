@@ -60,7 +60,7 @@ def run(world_size, rank, shared_id, barrier):
         @hidet.script
         def launch(send: dtype[shape], recv: dtype[shape]):
             attrs.func_kind = 'public'
-            all_reduce(0, send, recv, nbytes, NcclDataType.float32, getattr(NcclRedOp, args.reduce_op))
+            all_reduce(0, send, recv, nbytes, dtype, getattr(NcclRedOp, args.reduce_op))
 
     # Build
     ir_module = script_module.ir_module()

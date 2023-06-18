@@ -20,9 +20,9 @@ struct CudaContext: BaseContext {
     void* stream = nullptr;
 
     /* NCCL Comunicators*/
-    void ** nccl_comms;
+    void ** nccl_comms = nullptr;
 
-    int num_comms;
+    int num_comms = 0;
 
     /**
      * Get the instance of cuda context.
@@ -46,9 +46,9 @@ DLL void* get_cuda_stream();
 DLL void* request_cuda_workspace(size_t nbytes, bool require_clean);
 
 /**
- * Add a NCCL communicator to the context.
+ * Set required NCCL communicators of the context.
  */
-DLL void set_nccl_comms(void** comm, int num_comms);
+DLL void set_nccl_comms(int num_comms, void** comm);
 
 /**
  * Get the NCCL communicator by the index

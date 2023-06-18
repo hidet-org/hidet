@@ -25,7 +25,7 @@ class RuntimeAPI:
     _reset_symbol_table = get_func('reset_symbol_table', [], None)
     _get_symbol_value = get_func('get_symbol_value', [c_char_p], c_int32)
     _set_symbol_value = get_func('set_symbol_value', [c_char_p, c_int32], None)
-    _set_nccl_comms = get_func('set_nccl_comms', [c_void_p, c_int32], None)
+    _set_nccl_comms = get_func('set_nccl_comms', [c_int32, c_void_p], None)
 
     @staticmethod
     def set_current_stream(stream: Union[Stream, int]) -> None:
@@ -66,7 +66,7 @@ class RuntimeAPI:
     @staticmethod
     def set_nccl_comms(comms: Array) -> None:
         comms_array_t = c_void_p * comms.length
-        RuntimeAPI._set_nccl_comms(comms_array_t.from_buffer(comms.buffer), comms.length)
+        RuntimeAPI._set_nccl_comms(comms.length, comms_array_t.from_buffer(comms.buffer))
 
 
 runtime_api = RuntimeAPI()
