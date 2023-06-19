@@ -38,7 +38,7 @@ class Conv2dResolveRule(ResolveRule):
         kernel_size = weight.shape[2:]
         if channels >= 16 and data.dtype == float16 and weight.dtype == float16:
             # we set parallel_k to 1 for channel first, because we need to transpose back;
-            #   setting parallel_k > 1 pervents epilogue fusion, leading to bad performance. 
+            #   setting parallel_k > 1 pervents epilogue fusion, leading to bad performance.
             k_parts = 1
             out = ops.conv2d_gemm_fp16(data, weight, stride, dilations, groups, k_parts)
         elif self.enable_winograd and tuple(stride) == (1, 1) and tuple(kernel_size) == (3, 3) and groups == 1:
