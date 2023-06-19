@@ -9,13 +9,19 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from .conv2d import conv2d
-from .conv2d import Conv2dOp
+from .conv2d import conv2d, conv2d_channel_last
+from .conv2d import Conv2dOp, Conv2dChannelLastOp
 from .conv2d_winograd import conv2d_winograd, conv2d_winograd_image_transform, conv2d_winograd_filter_transform
 from .conv2d_winograd import conv2d_winograd_inverse_transform
 from .conv2d_winograd import Conv2dWinogradInverseTransformOp, Conv2dWinogradFilterTransformOp
 from .conv2d_winograd import Conv2dWinogradImageTransformOp
-from .conv2d_gemm import conv2d_gemm, conv2d_gemm_fp16, conv2d_gemm_image_transform, conv2d_gemm_filter_transform
+from .conv2d_gemm import (
+    conv2d_gemm,
+    conv2d_gemm_fp16,
+    conv2d_gemm_fp16_channel_last,
+    conv2d_gemm_image_transform,
+    conv2d_gemm_filter_transform,
+)
 from .conv2d_gemm import conv2d_gemm_inverse_transform
 from .conv2d_gemm import Conv2dGemmImageTransformOp
 

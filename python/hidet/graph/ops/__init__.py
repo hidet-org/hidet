@@ -12,7 +12,15 @@
 # pylint: disable=redefined-builtin
 from .conv1d import conv1d
 from .conv1d_transpose import conv1d_transpose
-from .conv2d import conv2d, conv2d_winograd, conv2d_gemm, conv2d_gemm_fp16, conv2d_gemm_image_transform
+from .conv2d import (
+    conv2d,
+    conv2d_channel_last,
+    conv2d_winograd,
+    conv2d_gemm,
+    conv2d_gemm_fp16,
+    conv2d_gemm_fp16_channel_last,
+    conv2d_gemm_image_transform,
+)
 from .conv2d_transpose import conv2d_transpose, conv2d_transpose_gemm
 from .conv3d import conv3d, conv3d_gemm
 from .conv3d_transpose import conv3d_transpose

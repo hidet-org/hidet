@@ -105,7 +105,7 @@ def conv2d_gemm(data: Tensor, weight: Tensor, stride, dilations: List[int], grou
     return y
 
 
-class Conv2dGemmFp16(Task):
+class Conv2dGemmFp16Task(Task):
     def __init__(
         self,
         img: TensorNode,
@@ -160,11 +160,17 @@ class Conv2dGemmFp16(Task):
         k_part_extent = cdiv(k_size, parallel_k_parts)
 
         # k is tiled from [ky, kx, wc]
+        #   this compute definition is not ever going to be used, since we always
+        #   implement cuda on fp16
         def f_compute(k, ni, hi, wi, oci):
             wci = k % WC
             ky = (k // (WC * KX)) % KY
             kx = (k // WC) % KX
-            return img[ni, hi * STRY + ky * DILY, wi * STRX + kx * DILX, wci] * weight[k, oci]
+            out_group_size = OC // groups
+            return (
+                img[ni, hi * STRY + ky * DILY, wi * STRX + kx * DILX, (oci // out_group_size) * WC + wci]
+                * weight[k, oci]
+            )
 
         c = compute(
             name='c',
@@ -172,7 +178,7 @@ class Conv2dGemmFp16(Task):
             fcompute=lambda kpi, ni, hi, wi, oci: reduce(
                 shape=[k_part_extent],
                 fcompute=lambda k: if_then_else(
-                    kpi * k_part_extent + k < k_size, f_compute(k, ni, hi, wi, oci), float16(0.0)
+                    kpi * k_part_extent + k < k_size, f_compute(kpi * k_part_extent + k, ni, hi, wi, oci), float16(0.0)
                 ),
                 reduce_type='sum',
             ),
@@ -559,7 +565,7 @@ class Conv2dGemmFp16Op(Operator):
                 'groups': groups,
                 'parallel_k_parts': parallel_k_parts,
             },
-            task=Conv2dGemmFp16(
+            task=Conv2dGemmFp16Task(
                 input_like(img, 'img'),
                 input_like(weight, 'weight'),
                 orig_weight_shape,
@@ -591,7 +597,7 @@ def parallel_part_heuristic(
     return k_parts
 
 
-def conv2d_gemm_fp16(
+def conv2d_gemm_fp16_channel_last(
     img: Tensor, weight: Tensor, stride: List[int], dilations: List[int], groups: int, parallel_k_parts=1
 ) -> Tensor:
     import hidet
@@ -614,4 +620,14 @@ def conv2d_gemm_fp16(
         )
         .get_output(0)
         .sum(0)
-    )  # parallel k
+    )
+
+
+def conv2d_gemm_fp16(
+    img: Tensor, weight: Tensor, stride: List[int], dilations: List[int], groups: int, parallel_k_parts=1
+) -> Tensor:
+    import hidet
+
+    img = hidet.ops.transpose(img, [0, 2, 3, 1])
+    res = conv2d_gemm_fp16_channel_last(img, weight, stride, dilations, groups, parallel_k_parts)
+    return hidet.ops.transpose(res, [0, 3, 1, 2])
