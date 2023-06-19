@@ -64,7 +64,7 @@ def build_ir_module(ir_module: IRModule, output_dir: str, *, target: str, output
 
         if not nccl_available():
             raise RuntimeError("NCCL is not available")
-        
+
         ir_module.include_dirs.extend(get_nccl_include_dirs())
         ir_module.linking_dirs.extend(get_nccl_library_search_dirs())
         ir_module.include_headers.append(["nccl.h"])

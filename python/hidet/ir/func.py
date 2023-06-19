@@ -99,6 +99,7 @@ class Function(Node):
         """
         Return true if this function involves any distributed primitives
         """
+
         def _recursive_find(root: Stmt):
             if isinstance(root, BlackBoxStmt):
                 if root.template_string.startswith('nccl'):
@@ -108,5 +109,6 @@ class Function(Node):
                     if _recursive_find(child):
                         return True
             return False
+
         ret = _recursive_find(self.body)
         return ret

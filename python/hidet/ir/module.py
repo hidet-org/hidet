@@ -117,4 +117,4 @@ class IRModule(Node):
         return load_compiled_module(output_dir)
 
     def use_distributed(self):
-        return any([func.use_distributed() for func in self.functions.values()])
+        return any((func.use_distributed() for func in self.functions.values()))
