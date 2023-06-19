@@ -227,7 +227,7 @@ class Task(Node):
                 raise ValueError('Unknown parameter type: {}'.format(type(param)))
         return arguments
 
-    def build(self, target: Union[str, Target]):
+    def build(self, target: Union[str, Target], load: bool = True):
         """
         Build the task for the given target to a callable function.
 
@@ -236,6 +236,8 @@ class Task(Node):
         target: Union[str, Target]
             The target device.
 
+        load: bool
+            Whether to load the task
         Returns
         -------
         func: hidet.runtime.CompiledTask
@@ -245,7 +247,7 @@ class Task(Node):
 
         if isinstance(target, Target):
             target = target.name
-        return build_task(self, target=target, load=True)
+        return build_task(self, target=target, load=load)
 
     def implement(self, target: Union[Target, str], working_dir: str) -> List[IRModule]:
         from hidet.ir.schedulers import CudaAutoScheduler, CpuAutoScheduler
