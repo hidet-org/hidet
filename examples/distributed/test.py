@@ -31,24 +31,26 @@ def run(world_size, rank, shared_id, barrier):
     hidet.cuda.set_device(rank)
 
     device = f"cuda:{rank}"
-    send = hidet.randn([3, 3], device=device)
+    x = hidet.randn([2, 3], device=device)
+    w = hidet.randn([3, 2], device=device)
 
     # Create Computation Graph
-    send_symb = hidet.symbol_like(send)
-    recv_symb = hidet.ops.all_reduce(send_symb, NcclRedOp.sum, 0)
-    graph = hidet.trace_from(recv_symb)
+    x_symb = hidet.symbol_like(x)
+    w_symb = hidet.symbol_like(w)
+    y_local = hidet.ops.relu(x_symb @ w_symb)
+    y_sync = hidet.ops.all_reduce(y_local, getattr(NcclRedOp, args.reduce_op), 0)
+    graph = hidet.trace_from([y_local, y_sync], inputs=[x_symb, w_symb])
     opt_graph = hidet.graph.optimize(graph)
 
     # Create Distributed Graph
-    dist_graph = hidet.graph.DistributedFlowGraph(graph, world_size, rank)
+    dist_graph = hidet.graph.DistributedFlowGraph(opt_graph, world_size, rank)
     dist_graph.initialize(shared_id)
 
-    recv = dist_graph(send)
-    print(opt_graph)
+    y_local, y_sync = dist_graph(x, w)
 
     s = hidet.cuda.current_stream() 
     s.synchronize()
-    print(rank, recv)
+    print(f"process {rank}\nbefore allreduce:{y_local}\nafter allreduce:{y_sync}")
 
 world_size = args.n_gpus
 

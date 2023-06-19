@@ -28,6 +28,9 @@ class AllReduceTask(Task):
         self.op = op
         
         super().__init__('all_reduce', inputs=[x], outputs=[y], attributes={})
+    
+    def __str__(self):
+        return f"all_reduce_{int(self.op)}_{self.comm_id}"
 
     def implement(self, target: Union[Target, str], working_dir: str) -> List[IRModule]:
         # we may need current rank here to avoid duplicated working_dirs
