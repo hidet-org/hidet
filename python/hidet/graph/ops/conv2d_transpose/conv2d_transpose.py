@@ -61,7 +61,7 @@ class Conv2dTransposeTask(Task):
                         data[ni, (ci // wc) * og + ogi, (hi + px0 - kxi) // sx, (wi + py0 - kyi) // sy]
                         * weight[(ci // wc) * og + ogi, ci % wc, kxi, kyi]
                     ),
-                    else_expr=0.0,
+                    else_expr=data.type.dtype.zero,
                 ),
                 reduce_type='sum',
             ),
