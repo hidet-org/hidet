@@ -161,7 +161,6 @@ class LlamaAttention(nn.Module):
         position_ids: Optional[hidet.Tensor] = None,
         past_key_value: Optional[Tuple[hidet.Tensor]] = None,
     ) -> Tuple[hidet.Tensor, Tuple[hidet.Tensor, hidet.Tensor]]:
-
         bsz, q_len, _ = hidden_states.shape
 
         query_states = self.q_proj(hidden_states).reshape([bsz, q_len, self.num_heads, self.head_dim]).transpose(1, 2)
@@ -370,12 +369,12 @@ def build_flow_graph(model, batch_size=1, device='cuda', dtype='float16'):
 
     y = model(input_ids, position_ids=position_ids, past_key_values=key_value_cache)
     inputs = [input_ids, position_ids]
-    for (q, k) in key_value_cache:
+    for q, k in key_value_cache:
         inputs.append(q)
         inputs.append(k)
 
     outputs = [y['new_ids']]
-    for (q, k) in y['past_key_values']:
+    for q, k in y['past_key_values']:
         outputs.append(q)
         outputs.append(k)
 
@@ -437,7 +436,6 @@ def generate_torch(input_ids: str, tokenizer, torch_model, num_tokens, device='c
 
 
 def get_compiled_model(name='decapoda-research/llama-7b-hf', device='cuda', opt=False):
-
     tok = LlamaTokenizer.from_pretrained(name)
 
     with torch.device("cuda"):  # reduce the time to load the model

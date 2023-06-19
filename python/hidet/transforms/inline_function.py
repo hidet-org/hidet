@@ -145,7 +145,7 @@ def prune_unused_functions(ir_module: IRModule):
 class InlineFunctionPass(Pass):
     def process_module(self, ir_module: IRModule) -> IRModule:
         call_graph = CallGraph(ir_module, allow_missing=True)
-        updated_ir_module = IRModule(namespace=ir_module.namespace, extern_functions=ir_module.extern_functions)
+        updated_ir_module = ir_module.copy().reset_funcs()
         for node in call_graph.reversed_order:
             assert isinstance(node, CallGraphNode)
             func = inline_callees(node.func, updated_ir_module)

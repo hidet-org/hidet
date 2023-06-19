@@ -9,20 +9,18 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import hidet
-import pytest
-
-hidet.option.save_lower_ir()
+import os
 
 
-def test_profile_config():
-    a = hidet.randn([1, 10, 10], device='cuda')
-    b = hidet.randn([1, 10, 10], device='cuda')
-    hidet.option.search_space(1)
-    hidet.option.bench_config(1, 1, 1)
-    c = hidet.ops.batch_matmul(a, b)
-    hidet.option.search_space(0)
+def _get_nccl_dirs():
+    import site
+
+    return [os.path.join(root, 'nvidia', 'nccl') for root in site.getsitepackages()]
 
 
-if __name__ == '__main__':
-    pytest.main(__file__)
+def get_nccl_include_dirs():
+    return [os.path.join(root, 'include') for root in _get_nccl_dirs()]
+
+
+def get_nccl_library_search_dirs():
+    return [os.path.join(root, 'lib') for root in _get_nccl_dirs()]

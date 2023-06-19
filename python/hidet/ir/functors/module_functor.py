@@ -52,7 +52,7 @@ class ModuleRewriter(ModuleFunctor, BaseRewriter):
         if same_list(global_vars, module.global_vars) and functions is module.functions:
             return module
         else:
-            return IRModule(functions, global_vars, module.namespace, module.extern_functions)
+            return module.copy().reset_funcs(functions, global_vars)
 
     def visit_Function(self, func: Function):
         params = self.visit(func.params)
