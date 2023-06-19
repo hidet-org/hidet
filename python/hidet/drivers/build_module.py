@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Optional, Sequence, Dict
+from typing import Sequence, Dict
 import logging
 import os
 import pickle
@@ -31,14 +31,7 @@ logger.setLevel(logging.INFO)
 logger.addHandler(logging.StreamHandler())
 
 
-def build_ir_module(
-    ir_module: IRModule,
-    output_dir: str,
-    *,
-    target: str,
-    output_kind: str = '.so',  # '.so', '.o'
-    object_files: Optional[Sequence[str]] = None,
-):
+def build_ir_module(ir_module: IRModule, output_dir: str, *, target: str, output_kind: str = '.so'):  # '.so', '.o'
     if target == 'cuda':
         src_path = os.path.join(output_dir, 'source.cu')
     elif target == 'cpu':
@@ -73,7 +66,7 @@ def build_ir_module(
         include_dirs=ir_module.include_dirs,
         linking_dirs=ir_module.linking_dirs,
         linking_libraries=ir_module.linking_libs,
-        object_files=object_files,
+        object_files=ir_module.object_files,
     )
 
     # write the function types
