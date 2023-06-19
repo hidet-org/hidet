@@ -14,7 +14,7 @@ import string
 from hidet.ir.node import Node
 from hidet.ir.type import BaseType
 from hidet.ir.expr import Var, Call
-from hidet.ir.stmt import Stmt
+from hidet.ir.stmt import Stmt, BlackBoxStmt
 
 
 def check_func_name(name: str):
@@ -94,3 +94,19 @@ class Function(Node):
             return default
         else:
             raise KeyError('Attribute {} is not found in function {}'.format(attr_name, self.name))
+
+    def use_distributed(self) -> bool:
+        """
+        Return true if this function involves any distributed primitives
+        """
+        def _recursive_find(root: Stmt):
+            if isinstance(root, BlackBoxStmt):
+                if root.template_string.startswith('nccl'):
+                    return True
+            for child in dir(root):
+                if isinstance(child, Stmt):
+                    if _recursive_find(child):
+                        return True
+            return False
+        ret = _recursive_find(self.body)
+        return ret

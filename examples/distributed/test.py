@@ -8,6 +8,7 @@ from multiprocessing import Process
 import numpy
 import argparse
 
+import hidet
 import hidet.cuda.nccl
 from hidet.cuda import nccl
 from hidet.cuda.nccl import NcclUniqueId, NcclDataType, NcclRedOp, nccl_library_filename
@@ -47,34 +48,8 @@ def run(world_size, rank, shared_id, barrier):
     # Initialize send and receive buffer
     device = f"cuda:{rank}"
     send = hidet.randn([2, 2], device=device)
-    recv = hidet.empty([2, 2], device=device)
+    recv = hidet.ops.all_reduce(0, send, NcclRedOp.sum)
 
-    print(rank, send)
-
-    dtype = data_type('float32')
-    shape = [2, 2] 
-    nbytes = dtype.nbytes * prod(shape)
-
-    # Define IRModule
-    with hidet.script_module() as script_module:
-        @hidet.script
-        def launch(send: dtype[shape], recv: dtype[shape]):
-            attrs.func_kind = 'public'
-            all_reduce(0, send, recv, nbytes, dtype, getattr(NcclRedOp, args.reduce_op))
-
-    # Build
-    ir_module = script_module.ir_module()
-    ir_module.target = 'cuda'
-    ir_module.include_dirs.extend(get_nccl_include_dirs())
-    ir_module.linking_dirs.extend(get_nccl_library_search_dirs())
-    ir_module.include_headers.append(["nccl.h"])
-    ir_module.linking_libs.append(":" + nccl_library_filename())
-    out_dir = f'./.cache/all_reduce_{rank}'
-
-    build_ir_module(ir_module, out_dir, target='cuda')
-    compiled_module = load_compiled_module(out_dir)
-
-    compiled_module(send, recv)
     s = hidet.cuda.current_stream() 
     s.synchronize()
     print(rank, recv)
