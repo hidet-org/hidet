@@ -56,7 +56,6 @@ def build_ir_module(ir_module: IRModule, output_dir: str, *, target: str, output
         ir_module = lower(ir_module)
 
     # nccl-related
-    print(ir_module.use_distributed())
     if ir_module.use_distributed():
         if target != 'cuda':
             raise RuntimeError("IRModules using NCCL must be targeted for cuda")
@@ -70,7 +69,6 @@ def build_ir_module(ir_module: IRModule, output_dir: str, *, target: str, output
         ir_module.linking_dirs.extend(get_nccl_library_search_dirs())
         ir_module.include_headers.append(["nccl.h"])
         ir_module.linking_libs.append(":" + nccl_library_filename())
-
 
     # code generation
     codegen(ir_module, src_out_path=src_path, target=target)

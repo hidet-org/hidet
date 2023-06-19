@@ -47,8 +47,12 @@ def run(world_size, rank, shared_id, barrier):
 
     # Initialize send and receive buffer
     device = f"cuda:{rank}"
-    send = hidet.randn([2, 2], device=device)
-    recv = hidet.ops.all_reduce(0, send, NcclRedOp.sum)
+    send = hidet.randn([3, 2], device=device)
+    send_symb = hidet.symbol_like(send)
+    recv_symb = hidet.ops.all_reduce(send_symb, NcclRedOp.sum, 0)
+    graph = hidet.trace_from(recv_symb)
+    opt_graph = hidet.graph.optimize(graph)
+    recv = opt_graph(send)
 
     s = hidet.cuda.current_stream() 
     s.synchronize()

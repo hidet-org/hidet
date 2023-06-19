@@ -22,7 +22,7 @@ from .utils import Task, TensorNode, Operator, Tensor, compute, input_like
 from hidet.cuda.nccl import NcclRedOp
 
 class AllReduceTask(Task):
-    def __init__(self, comm_id: int, x: TensorNode, op: NcclRedOp):
+    def __init__(self, x: TensorNode, op: NcclRedOp, comm_id: int):
         y = compute('out', x.shape, lambda *indices: x[indices])
         self.comm_id = comm_id
         self.op = op
@@ -43,38 +43,38 @@ class AllReduceTask(Task):
             @hidet.script
             def launch(x: dtype[shape], y: dtype[shape]):
                 attrs.func_kind = 'public'
-                all_reduce(self.comm_id, x, y, nbytes, dtype, self.op)
+                all_reduce(x, y, nbytes, dtype, self.op, self.comm_id)
 
         return [script_module.ir_module()]    
 
 class AllReduceOp(Operator):
-    def __init__(self, comm_id: int, x: Tensor, op: NcclRedOp):
+    def __init__(self, x: Tensor, op: NcclRedOp, comm_id: int):
         super().__init__(
             inputs=[x],
-            attributes={'comm_id': comm_id},
-            task=AllReduceTask(comm_id, input_like(x, 'x'), op)
+            attributes={'op': op, 'comm_id': comm_id},
+            task=AllReduceTask(input_like(x, 'x'), op, comm_id)
         )
 
-def all_reduce(comm_id: int, x: Tensor, op: NcclRedOp) -> Tensor:
+def all_reduce(x: Tensor, op: NcclRedOp, comm_id: int) -> Tensor:
     if x.device.kind != 'cuda':
         raise RuntimeError("NCCL only supports CUDA tensors")
-    return AllReduceOp(comm_id, x, op).outputs[0]
+    return AllReduceOp(x, op, comm_id).outputs[0]
 
-def broadcast(comm_id: int, x: Tensor, root:int) -> Tensor:
+def broadcast(x: Tensor, root:int, comm_id: int) -> Tensor:
     raise NotImplementedError()
 
-def reduce(comm_id: int, x: Tensor, root:int, op: NcclRedOp) -> Tensor:
+def reduce(x: Tensor, root:int, op: NcclRedOp, comm_id: int) -> Tensor:
     raise NotImplementedError()
 
-def all_gather(comm_id: int, x: Tensor) -> Tensor:
+def all_gather(x: Tensor, comm_id: int) -> Tensor:
     raise NotImplementedError()
 
-def reduce_scatter(comm_id: int, x: Tensor, op: NcclRedOp) -> Tensor:
+def reduce_scatter(x: Tensor, op: NcclRedOp, comm_id: int) -> Tensor:
     raise NotImplementedError()
 
-def send(comm_id: int, x: Tensor, peer: int) -> None:
+def send(x: Tensor, peer: int, comm_id: int) -> None:
     raise NotImplementedError()
 
 # Recv is a little bit tricky since we need to pass the metadata of the recv buffer
-def recv(comm_id: int, peer: int) -> Tensor:
+def recv(peer: int, comm_id: int) -> Tensor:
     raise NotImplementedError()
