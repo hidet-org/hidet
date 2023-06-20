@@ -627,7 +627,7 @@ def conv2d_gemm_fp16(
     img: Tensor, weight: Tensor, stride: List[int], dilations: List[int], groups: int, parallel_k_parts=1
 ) -> Tensor:
     import hidet
-    
+
     n, c, h, w = img.shape
     oc, wc, ky, kx = weight.shape
     if ky == 1 and kx == 1:
@@ -636,13 +636,12 @@ def conv2d_gemm_fp16(
         weight = hidet.ops.reshape(weight, [1, groups, oc // groups, wc])
         out = hidet.ops.matmul(weight, img)
         return hidet.ops.reshape(out, [n, oc, h, w])
-    
+
     img = hidet.ops.transpose(img, [0, 2, 3, 1])
     if groups == 1 and c % 8 != 0:
         pad_channel = cdiv(c, 8) * 8 - c
         img = hidet.ops.pad(img, [0, pad_channel])
         weight = hidet.ops.pad(weight, [0, 0, 0, 0, 0, pad_channel, 0, 0])
-        
+
     res = conv2d_gemm_fp16_channel_last(img, weight, stride, dilations, groups, parallel_k_parts)
     return hidet.ops.transpose(res, [0, 3, 1, 2])
-
