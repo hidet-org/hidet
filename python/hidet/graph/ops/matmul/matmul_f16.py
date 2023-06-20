@@ -199,7 +199,6 @@ class MatmulF16Task(Task):
                         else min(maximum_k - (offset_k + k), 8)
                     )
                     cp_async(~smem_a[i, k], ~gmem_a[i, k], cp_size=16, src_size=src_size * 2, cache_level='global')
-                    cp_async_wait_all()
 
             @hidet.script
             def load_smem_b(k0: int, b: float16[b_head + [k_size, n_size]], smem_b: smem_b_type):

@@ -430,7 +430,7 @@ class Conv2dGemmFp16Task(Task):
                             smem_weight[k, j + ji + src_size] = 0
 
             @hidet.script
-            def matmul_f16_kernel(
+            def conv2d_gemm_f16_kernel(
                 img: float16[N, H, W, C], weight: float16[KX * KY * WC, OC], res: float16[K_PARTS, N, OUT_H, OUT_W, OC]
             ):
                 # matrix multiplication, using mma instruction
@@ -537,7 +537,7 @@ class Conv2dGemmFp16Task(Task):
                             res[k_part_idx, batch_idx, res_y, res_x, channel_idx] = smem_c[i, j]
 
         ir_module = module.ir_module()
-        assert isinstance(matmul_f16_kernel, Function)
+        assert isinstance(conv2d_gemm_f16_kernel, Function)
 
         return ir_module
 
@@ -627,7 +627,22 @@ def conv2d_gemm_fp16(
     img: Tensor, weight: Tensor, stride: List[int], dilations: List[int], groups: int, parallel_k_parts=1
 ) -> Tensor:
     import hidet
-
+    
+    n, c, h, w = img.shape
+    oc, wc, ky, kx = weight.shape
+    if ky == 1 and kx == 1:
+        assert c % groups == 0 and wc * groups == c, "invalid group / channel size"
+        img = hidet.ops.reshape(img, [n, groups, c // groups, h * w])
+        weight = hidet.ops.reshape(weight, [1, groups, oc // groups, wc])
+        out = hidet.ops.matmul(weight, img)
+        return hidet.ops.reshape(out, [n, oc, h, w])
+    
     img = hidet.ops.transpose(img, [0, 2, 3, 1])
+    if groups == 1 and c % 8 != 0:
+        pad_channel = cdiv(c, 8) * 8 - c
+        img = hidet.ops.pad(img, [0, pad_channel])
+        weight = hidet.ops.pad(weight, [0, 0, 0, 0, 0, pad_channel, 0, 0])
+        
     res = conv2d_gemm_fp16_channel_last(img, weight, stride, dilations, groups, parallel_k_parts)
     return hidet.ops.transpose(res, [0, 3, 1, 2])
+
