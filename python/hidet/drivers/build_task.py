@@ -76,8 +76,6 @@ def build_task_module(task: Task, candidates: List[IRModule], task_dir: str, tar
 
         launch_func.name = 'launch_0'
         task_ir_module.functions['launch_0'] = launch_func
-
-        object_files = []
     else:
         # otherwise, build each candidate to a .o file, and link them into the task's ir module
         for i, candidate in enumerate(candidates):
@@ -94,7 +92,6 @@ def build_task_module(task: Task, candidates: List[IRModule], task_dir: str, tar
         param_types = [~t.type.dtype for t in task.params]
 
         with hidet.script_module() as script_module:
-
             launch_candidates = []
             for i in range(len(candidates)):
                 launch_candidates.append(
@@ -115,8 +112,10 @@ def build_task_module(task: Task, candidates: List[IRModule], task_dir: str, tar
         ir_module = script_module.ir_module()
         ir_module.add_function(get_input_shape.name, get_input_shape)
         ir_module.add_function(get_output_shape.name, get_output_shape)
+        ir_module.object_files.extend(
+            [os.path.join(task_dir, 'candidates', str(i), 'lib.o') for i in range(len(candidates))]
+        )
         task_ir_module = ir_module
-        object_files = [os.path.join(task_dir, 'candidates', str(i), 'lib.o') for i in range(len(candidates))]
 
     # add assertions to the launch function
     if len(task.assertions) > 0:
@@ -131,9 +130,7 @@ def build_task_module(task: Task, candidates: List[IRModule], task_dir: str, tar
                     body.seq = assertions + body.seq
 
     # build task ir module
-    build_ir_module(
-        ir_module=task_ir_module, output_dir=task_dir, output_kind='.so', object_files=object_files, target=target
-    )
+    build_ir_module(ir_module=task_ir_module, output_dir=task_dir, output_kind='.so', target=target)
 
 
 def generate_meta_data(task: Task, task_dir: str, build_target: str, num_candidates: int):
@@ -259,7 +256,7 @@ def build_task_batch(task_target_pairs: List[Tuple[Task, str]]):
     def build_job(args):
         try:
             task, target = args
-            build_task(task, target, load=False)
+            task.build(target, load=False)
             return True, 'Success'
         except (Exception,):  # pylint: disable=broad-except
             import traceback

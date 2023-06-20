@@ -90,6 +90,15 @@ class IRPrinter(IRFunctor):
         doc = Doc()
         self.ir_module = ir_module
 
+        for linking_lib in ir_module.linking_libs:
+            doc += Text('link lib: ') + linking_lib + NewLine()
+        for object_file in ir_module.object_files:
+            doc += Text('external object: ') + object_file + NewLine()
+        for header in ir_module.include_headers:
+            doc += Text('#include <{}>'.format(header)) + NewLine()
+        if len(ir_module.include_headers) + len(ir_module.linking_libs) + len(ir_module.object_files) > 0:
+            doc += NewLine()
+
         for name, var in ir_module.global_vars.items():
             if name in ir_module.functions:
                 continue

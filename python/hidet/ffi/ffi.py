@@ -66,11 +66,13 @@ def func_exists(func_name: str, shared_lib: ctypes.CDLL) -> bool:
         return False
 
 
-def get_func(func_name, arg_types: List, restype):
+def get_func(func_name, arg_types: List, restype, lib=None):
     if func_exists(func_name, _LIB):
         func = getattr(_LIB, func_name)
     elif func_exists(func_name, _LIB_RUNTIME):
         func = getattr(_LIB_RUNTIME, func_name)
+    elif func_exists(func_name, lib):
+        func = getattr(lib, func_name)
     else:
         raise ValueError(
             'Can not find function "{}" in hidet libraries:\n{}\n{}'.format(

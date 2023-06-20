@@ -73,7 +73,6 @@ def create_graph_execution(graph: FlowGraph, weights: List[Tensor], node2kernel:
     instructions: List[GraphExecutionInstruction] = []
 
     for node_idx, node in enumerate(graph.nodes):
-
         inst_task_idx = node2kernel[node_idx]
 
         inst_inputs = [tensor_index[x] for x in node.inputs]
@@ -155,7 +154,6 @@ def build_graph_module(graph: FlowGraph, graph_weights: List[Tensor], node2kerne
     graph_nodes: List[Operator] = graph.nodes
 
     with hidet.script_module() as script_module:
-
         cpu_workspace = script_module.define_global_var('cpu_workspace', byte_p)
         cuda_workspace = script_module.define_global_var('cuda_workspace', byte_p)
         weights = script_module.define_global_var('weights', void_p[len(graph_weights)])
@@ -301,7 +299,6 @@ def save_to_graph_cache(cgraph: CompiledGraph):
 
 
 def build_flow_graph(graph, *, space=0) -> CompiledGraph:
-
     assert isinstance(graph, FlowGraph)
 
     # get the graph weights
