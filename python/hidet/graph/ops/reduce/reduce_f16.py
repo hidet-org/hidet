@@ -96,8 +96,7 @@ class ReduceF16Task(Task):
 
     def cuda_schedule_reduce_by_warp(self) -> IRModule:
         import hidet
-
-        row_major = DataLayout.row_major
+        from hidet.ir.layout import row_major
 
         warp_size = 32
         block_size = warp_size

@@ -14,7 +14,7 @@ import hidet
 from hidet.ir import IRModule
 from hidet.ir.compute import reduce
 from hidet.ir.expr import is_constant
-from hidet.ir.layout import DataLayout, StridesLayout, data_layout
+from hidet.ir.layout import DataLayout, StridesLayout, data_layout, row_major, column_major, local_layout
 from hidet.ir.type import data_type, TensorType, DataType, void_p
 from hidet.lang import i32, spatial, repeat, register_tensor, shared_tensor, attrs, grid, tensor_pointer
 from hidet.lang.cuda import blockIdx, threadIdx, syncthreads
@@ -89,9 +89,6 @@ class BatchMatmulTask(Task):
         self, block_warps_k=8, block_warps=(4, 2), warp_outer=(2, 2), warp_mid=spatial(4, 8), warp_inner=(4, 4)
     ) -> IRModule:
         task = self
-        local_layout = DataLayout.local
-        row_major = DataLayout.row_major
-        col_major = DataLayout.column_major
         dtype = task.inputs[0].type.dtype
         warp_k = 1
 
@@ -121,7 +118,7 @@ class BatchMatmulTask(Task):
         # Data Layouts
         regs_a_layout = (
             local_layout(block_warps[0], 1)
-            * col_major(warp_outer[0], warp_k)
+            * column_major(warp_outer[0], warp_k)
             * local_layout(warp_mid_shape[0], 1)
             * row_major(warp_inner[0], 1)
         )
@@ -392,7 +389,6 @@ class BatchMatmulTask(Task):
                 return 'mma_tf32_f32'
 
         task = self
-        row_major = DataLayout.row_major
 
         input_a, input_b, input_c = task.inputs[0], task.inputs[1], task.outputs[0]
         input_a_dtype, input_b_dtype, input_c_dtype = [t.type.dtype for t in [input_a, input_b, input_c]]

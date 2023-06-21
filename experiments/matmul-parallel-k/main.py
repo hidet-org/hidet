@@ -12,6 +12,7 @@ from hidet.graph.operator import Operator
 from hidet.graph.ops.utils import input_like
 from hidet import ops
 from hidet.ir.library import tune
+from hidet.ir.library.cuda import matmul_simt
 
 hidet.option.cache_dir('./outs/cache')
 hidet.utils.clear_op_cache()
@@ -23,6 +24,9 @@ class MatmulTask(Task):
         c = cops.matmul(a, b, allow_1d=True)
         super().__init__(name='matmul', inputs=[a, b], outputs=[c])
 
+        self._assert(a.shape[-1] % 2 == 0, 'k_size must be even')
+        self._assert(b.shape[-1] % 2 == 0, 'n_size must be even')
+
     def allow_prologue(self) -> bool:
         return False
 
@@ -30,13 +34,16 @@ class MatmulTask(Task):
         return True
 
     def implement_cuda(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
-        return self.schedule_matmul_mma()
+        return tune.extract_ir_modules(self.schedule_matmul_mma)
 
-    def schedule_matmul_mma(self):
+    @tune.space(
+        2,
+        matmul_simt_space=matmul_simt.tuning_space.iterate_space(2)
+    )
+    def schedule_matmul_mma(self, matmul_simt_space):
         from hidet.lang import attrs
         from hidet.lang.cuda import threadIdx, blockIdx, blockDim, gridDim
         from hidet.lang.mapping import spatial, repeat
-        from hidet.ir.library.cuda import matmul_simt
         from hidet.lang import printf
         from hidet.ir.primitives.runtime import request_cuda_workspace
 
@@ -93,16 +100,7 @@ class MatmulTask(Task):
                 c: f16[b_size, m_size, n_size]
             ):
                 attrs.func_kind = 'public'
-                matmul_simt(a, b, c)
-
-                # workspace = cast(
-                #     request_cuda_workspace(parts * b_size * m_size * n_size * 2, require_clean=False),
-                #     tensor_pointer_type(f16, [parts, b_size, m_size, n_size])
-                # )
-                #
-                # matmul_kernel(a, b, workspace)
-                #
-                # reduce_kernel(workspace, c)
+                matmul_simt(a, b, c, **matmul_simt_space)
 
         return script_module.ir_module()
 
@@ -128,19 +126,24 @@ def benchmark():
         graph = hidet.trace_from(c, [a, b])
         cgraph = graph.build(space=2)
 
-        # for m_size, n_size, k_size in [(1024, 1024, 1024), (1024, 3072, 768), (1024, 768, 3072)]:
-        for m_size, n_size, k_size in [(2, 2, 2)]:
-            aa = hidet.randn([1, m_size, k_size], dtype=dtype, device='cuda', stddev=0.1)
-            bb = hidet.randn([1, k_size, n_size], dtype=dtype, device='cuda', stddev=0.1)
+        for m_size, n_size, k_size in [(1024, 1024, 1024), (1024, 3072, 768), (1024, 768, 3072)]:
+            # aa = hidet.randn([1, m_size, k_size], dtype=dtype, device='cuda', stddev=0.1)
+            # bb = hidet.randn([1, k_size, n_size], dtype=dtype, device='cuda', stddev=0.1)
+            aa = hidet.ones([1, m_size, k_size], dtype=dtype, device='cuda')
+            bb = hidet.ones([1, k_size, n_size], dtype=dtype, device='cuda')
             at = aa.torch().clone()
             bt = bb.torch().clone()
 
             # check correctness
-            print(aa)
-            print(bb)
+            # print(aa)
+            # print(bb)
             c1 = cgraph(aa, bb)
             c2 = aa.torch() @ bb.torch()
-            hidet.utils.assert_close(c1, c2, rtol=0.1, atol=0.1)
+            # print(c1)
+            # print(c2)
+            # print(c1[0, :128, :128])
+            # print(c1[0, 128:, 128:])
+            hidet.utils.assert_close(c1, c2, rtol=1e-2 * (k_size / 100), atol=1e-2 * (k_size / 100))
 
             # benchmark
             torch_latency = hidet.utils.benchmark_func(lambda: at @ bt, number=100)

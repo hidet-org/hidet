@@ -314,7 +314,7 @@ def tensor_type(dtype, shape: Optional[Sequence[Union[int, Expr]]] = None, layou
         The constructed tensor type
     """
     from hidet.ir.expr import convert
-    from hidet.ir.layout import DataLayout
+    from hidet.ir.layout import DataLayout, row_major
 
     if isinstance(dtype, str):
         dtype = data_type(dtype)
@@ -326,7 +326,7 @@ def tensor_type(dtype, shape: Optional[Sequence[Union[int, Expr]]] = None, layou
         assert isinstance(layout, DataLayout)
         shape = layout.shape
     elif layout is None:
-        layout = DataLayout.row_major(*shape)
+        layout = row_major(*shape)
     else:
         assert isinstance(layout, DataLayout)
         assert isinstance(shape, (list, tuple))

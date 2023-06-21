@@ -22,7 +22,8 @@ from hidet.ir.task import Task
 from hidet.ir.compute import compute, reduce
 from hidet.graph.ops.matmul import matmul
 from hidet.graph.ops.utils import Operator, input_like
-from hidet.graph.ops.utils import normalize_kernel, normalize_stride, tune
+from hidet.graph.ops.utils import normalize_kernel, normalize_stride
+from hidet.ir.library import tune
 from hidet.utils.py import is_power_of_two, cdiv
 from .utils import infer_conv2d_shape
 

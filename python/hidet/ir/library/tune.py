@@ -65,6 +65,7 @@ class TuningSpace:
 
         self.spaces[level] = {}
         for names, choices in name_choice_dict.items():
+            choices = list(choices)
             names = [name.strip() for name in names.split(',')]
             for name in names:
                 if name in self.existing_names:
@@ -82,10 +83,10 @@ class TuningSpace:
 
 def space(level: int, /, **subspaces: Sequence[Choice]):
     def wrapper(func):
-        if not hasattr(func, '_tuning_space'):
+        if not hasattr(func, 'tuning_space'):
             # attach tuning space when the first time of this function is called
-            setattr(func, '_tuning_space', TuningSpace())
-        tuning_space: TuningSpace = getattr(func, '_tuning_space')
+            setattr(func, 'tuning_space', TuningSpace())
+        tuning_space: TuningSpace = getattr(func, 'tuning_space')
         tuning_space.add_sub_space(level, subspaces)
         return func
 
@@ -95,8 +96,8 @@ def space(level: int, /, **subspaces: Sequence[Choice]):
 def extract_ir_modules(template_func) -> List[IRModule]:
     MAX_VALID_SPACE_SIZE = 2000
     # get ir modules to tune
-    if hasattr(template_func, '_tuning_space'):
-        tuning_space: TuningSpace = getattr(template_func, '_tuning_space')
+    if hasattr(template_func, 'tuning_space'):
+        tuning_space: TuningSpace = getattr(template_func, 'tuning_space')
         # iterate space and instantiate schedules into tensor programs
         kwargs_list = list(tuning_space.iterate_space(hidet.option.get_search_space()))
     else:

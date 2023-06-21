@@ -94,6 +94,8 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             ret = 'uint16_t({})'.format(int(value))
         elif dtype == dtypes.uint8:
             ret = 'uint8_t({})'.format(int(value))
+        elif dtype == dtypes.float16x2:
+            ret = 'half2({}, {})'.format(float(value[0]), float(value[0]))
         elif dtype.is_complex():
             if not isinstance(value, complex):
                 raise ValueError('Cannot recognize scalar literal {} with dtype {}'.format(value, dtype))
@@ -609,6 +611,7 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             'tfloat32': 'tfloat32_t',
             'complex64': 'complex64_t',
             'complex128': 'complex128_t',
+            'float16x2': 'half2',
             'float32x4': '__m128',
             'float32x8': '__m256',
         }

@@ -107,8 +107,8 @@ class TaskMapping(Node):
     def spatial(self, *task_shape, ranks: List[int] = None) -> TaskMapping:
         return self * spatial_map(task_shape, ranks)
 
-    def repeat(self, *task_shape, ranks: List[int] = None) -> TaskMapping:
-        return self * repeat_map(task_shape, ranks)
+    def repeat(self, *task_shape, ranks: List[int] = None, attrs: Optional[str] = None) -> TaskMapping:
+        return self * repeat_map(task_shape, ranks, attrs)
 
 
 class RepeatTaskMapping(TaskMapping):

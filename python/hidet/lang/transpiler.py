@@ -266,6 +266,9 @@ class Scope:
         return scope
 
     def define_var(self, name: str, v: Var):
+        if name == '_':
+            # ignore anonymous variable '_'
+            return
         self.name2var[name] = v
 
     def define_host_var(self, name: str, value: Any):
@@ -904,10 +907,21 @@ class PythonToHidetTranslator(PythonAstFunctor):
                 args.extend(self.visit(arg.value))
             else:
                 args.append(self.visit(arg))
-        kwargs = {kwarg.arg: self.visit(kwarg.value) for kwarg in expr.keywords}
+
+        if len(expr.keywords) == 0:
+            kwargs = {}
+        elif len(expr.keywords) == 1 and expr.keywords[0].arg is None:
+            # func(a, b, **kwargs)
+            kwargs = self.visit(expr.keywords[0].value)
+        else:
+            # func(a=1, b=2, c=3)
+            kwargs = {kwarg.arg: self.visit(kwarg.value) for kwarg in expr.keywords}
 
         if isinstance(func, types.FunctionType):
             # call python function
+            if len(kwargs) > 0 and not isinstance(list(kwargs)[0], str):
+                print('Hi')
+
             return func(*args, **kwargs)
         elif isinstance(func, types.MethodType):
             # call python class method
