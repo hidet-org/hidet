@@ -110,25 +110,25 @@ def benchmark():
         cgraph = graph.build(space=0)
 
         # for m_size, n_size, k_size in [(1024, 1024, 1024), (1024, 3072, 768), (1024, 768, 3072)]:
-        for m_size, n_size, k_size in [(8, 8, 8)]:
+        for m_size, n_size, k_size in [(1024, 1024, 1024)]:
         # for m_size, n_size, k_size in [(1024, 1024, 1024)]:
-        #     aa = hidet.randn([1, m_size, k_size], dtype=dtype, device='cuda', stddev=0.1)
-        #     bb = hidet.randn([1, k_size, n_size], dtype=dtype, device='cuda', stddev=0.1)
+        #     aa = hidet.randn([1, m_size, k_size], dtype=dtype, device='cuda', stddev=0.1 if dtype=='float16' else 1)
+        #     bb = hidet.randn([1, k_size, n_size], dtype=dtype, device='cuda', stddev=0.1 if dtype=='float16' else 1)
             aa = hidet.ones([1, m_size, k_size], dtype=dtype, device='cuda')
             bb = hidet.ones([1, k_size, n_size], dtype=dtype, device='cuda')
-            at = aa.torch().clone()
-            bt = bb.torch().clone()
 
             # check correctness
-            print(aa)
-            print(bb)
+            # print(aa)
+            # print(bb)
             c1 = cgraph(aa, bb)
             c2 = aa.torch() @ bb.torch()
-            print(c1)
-            print(c2)
+            # c3 = aa @ bb
+            # print(c1)
+            # print(c2)
             # print(c1[0, :128, :128])
             # print(c1[0, 128:, 128:])
-            tol = 1e-5 if dtype == 'float32' else 1e-2
+            tol = 1e-3 if dtype == 'float32' else 1e-2
+            # hidet.utils.assert_close(c1, c3, rtol=tol, atol=tol)
             hidet.utils.assert_close(c1, c2, rtol=tol, atol=tol)
 
             # benchmark

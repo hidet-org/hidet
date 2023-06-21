@@ -298,6 +298,10 @@ def matmul_simt(
         offset_m: i32,
         offset_n: i32,
     ):
+        c_part_index = [blockIdx.z] if parallel_k > 1 else []
+        c_head_indices = spatial(*c_head).map(blockIdx.y)
+        gmem_c_head = c[c_part_index + c_head_indices]
+        gmem_c = gmem_c_head[offset_m:, offset_n:]
         # write results to smem
         smem_c = tensor_pointer(dtype, shape=[block_m, block_n], init=dynamic_shared_memory(0, dtype))
         for k_round in grid(block_warps_k, 'u'):
@@ -307,22 +311,22 @@ def matmul_simt(
                     if offset_m + i < m_size and offset_n + j < n_size:
                         regs_c_ptr = cast(~regs_c[i, j], ~dtype)
                         result = sum(regs_c_ptr[k] for k in range(lanes))
-                        if k_round == 0:
-                            smem_c[i, j] = result
+                        if block_warps_k == 1:
+                            gmem_c[i, j] = result
                         else:
-                            smem_c[i, j] += result
+                            if k_round == 0:
+                                smem_c[i, j] = result
+                            elif k_round < block_warps_k - 1:
+                                smem_c[i, j] += result
+                            else:
+                                gmem_c[i, j] = smem_c[i, j] + result
             if block_warps_k > 1 and k_round < block_warps_k - 1:
                 syncthreads()
 
-        # smem to gmem
-        c_part_index = [blockIdx.z] if parallel_k > 1 else []
-        c_head_indices = spatial(*c_head).map(blockIdx.y)
-        gmem_c_head = c[c_part_index + c_head_indices]
-        gmem_c = gmem_c_head[offset_m:, offset_n:]
-        mapping = auto_map(block_m, block_n, workers=num_threads)
-        for i, j in mapping.on(threadIdx.x):
-            if offset_m + i < m_size and offset_n + j < n_size:
-                gmem_c[i, j] = smem_c[i, j]
+        # mapping = auto_map(block_m, block_n, workers=num_threads)
+        # for i, j in mapping.on(threadIdx.x):
+        #     if offset_m + i < m_size and offset_n + j < n_size:
+        #         gmem_c[i, j] = smem_c[i, j]
 
     @hidet.script
     def mma(

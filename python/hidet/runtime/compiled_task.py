@@ -119,38 +119,42 @@ class CompiledTask:
 
         key = self._get_symbol_values()
         if key not in self.dispatch_table:
-            warmup, number, repeat = hidet.option.get_bench_config()
-            latencies = []
-            for candidate in self.candidates:
-                for _ in range(warmup):
-                    candidate(*inputs, *outputs)
-                candidate_latency = 0.0
-                for _ in range(repeat):
-                    hidet.cuda.synchronize()
-                    t1 = time.time()
-                    for _ in range(number):
+            if len(self.candidates) > 1:
+                warmup, number, repeat = hidet.option.get_bench_config()
+                latencies = []
+                for candidate in self.candidates:
+                    for _ in range(warmup):
                         candidate(*inputs, *outputs)
-                    hidet.cuda.synchronize()
-                    t2 = time.time()
-                    candidate_latency += (t2 - t1) * 1000 / number
-                latencies.append(candidate_latency / repeat)
-            self.dispatch_table[key] = latencies.index(min(latencies))
+                    candidate_latency = 0.0
+                    for _ in range(repeat):
+                        hidet.cuda.synchronize()
+                        t1 = time.time()
+                        for _ in range(number):
+                            candidate(*inputs, *outputs)
+                        hidet.cuda.synchronize()
+                        t2 = time.time()
+                        candidate_latency += (t2 - t1) * 1000 / number
+                    latencies.append(candidate_latency / repeat)
+                self.dispatch_table[key] = latencies.index(min(latencies))
 
-            # write a benchmark report
-            report_name = '_'.join('{}_{}'.format(a, b) for a, b in zip(self.meta_data.symbols, key))
-            os.makedirs(os.path.join(self.task_dir, 'reports'), exist_ok=True)
-            report_path = os.path.join(self.task_dir, 'reports', report_name + '.txt')
-            with open(os.path.join(self.task_dir, 'candidates.json'), 'r') as f:
-                candidates_json = json.load(f)
-                headers: List[str] = candidates_json['headers']
-                candidate_lines: List[List[str]] = candidates_json['candidates']
-            headers.extend(['latency', 'rank'])
-            sorted_indices = sorted(range(len(latencies)), key=lambda i: latencies[i])
-            for idx, line in enumerate(candidate_lines):
-                line.extend(['{:.3f} ms'.format(latencies[idx]), sorted_indices.index(idx)])
-            candidate_lines.sort(key=lambda l: l[-1])
-            with open(report_path, 'w') as f:
-                f.write(tabulate.tabulate(candidate_lines, headers=headers, tablefmt='plain'))
+                # write a benchmark report
+                report_name = '_'.join('{}_{}'.format(a, b) for a, b in zip(self.meta_data.symbols, key))
+                os.makedirs(os.path.join(self.task_dir, 'reports'), exist_ok=True)
+                report_path = os.path.join(self.task_dir, 'reports', report_name + '.txt')
+                with open(os.path.join(self.task_dir, 'candidates.json'), 'r') as f:
+                    candidates_json = json.load(f)
+                    headers: List[str] = candidates_json['headers']
+                    candidate_lines: List[List[str]] = candidates_json['candidates']
+                headers.extend(['latency', 'rank'])
+                sorted_indices = sorted(range(len(latencies)), key=lambda i: latencies[i])
+                for idx, line in enumerate(candidate_lines):
+                    line.extend(['{:.3f} ms'.format(latencies[idx]), sorted_indices.index(idx)])
+                candidate_lines.sort(key=lambda l: l[-1])
+                with open(report_path, 'w') as f:
+                    f.write(tabulate.tabulate(candidate_lines, headers=headers, tablefmt='plain'))
+            else:
+                assert len(self.candidates) == 1
+                self.dispatch_table[key] = 0
 
             # write the best candidate to dispatch table
             dispatch_table_path = os.path.join(self.task_dir, 'dispatch_table.txt')
