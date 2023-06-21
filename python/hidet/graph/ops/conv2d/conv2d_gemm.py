@@ -115,7 +115,7 @@ class Conv2dGemmFp16Task(Task):
         dilations: List[int],
         groups: int = 1,
         parallel_k_parts: int = 1,
-        disable_cp_async: bool = False
+        disable_cp_async: bool = False,
     ):
         # Channel last
         # This kernel expects the weight to be transformed in the following way:
@@ -187,9 +187,9 @@ class Conv2dGemmFp16Task(Task):
         )
 
         if not disable_cp_async:
-            name='conv_gemm_fp16_pk'
+            name = 'conv_gemm_fp16_pk'
         else:
-            name='conv_gemm_fp16_pk_disable_cp_async'
+            name = 'conv_gemm_fp16_pk_disable_cp_async'
         super().__init__(
             name=name,
             inputs=[img, weight],
@@ -200,7 +200,7 @@ class Conv2dGemmFp16Task(Task):
                 'orig_weight_shape': orig_weight_shape,
                 'groups': groups,
                 'parallel_k_parts': parallel_k_parts,
-                'disable_cp_async': disable_cp_async
+                'disable_cp_async': disable_cp_async,
             },
         )
 
@@ -561,7 +561,7 @@ class Conv2dGemmFp16Op(Operator):
         dilations: List[int],
         groups: int,
         parallel_k_parts=1,
-        disable_cp_async=False
+        disable_cp_async=False,
     ):
         if not (isinstance(parallel_k_parts, int) and not isinstance(parallel_k_parts, bool)):
             raise ValueError('parallel_k_parts must be an integer, got {}'.format(parallel_k_parts))
@@ -574,7 +574,7 @@ class Conv2dGemmFp16Op(Operator):
                 'orig_weight_shape': orig_weight_shape,
                 'groups': groups,
                 'parallel_k_parts': parallel_k_parts,
-                'disable_cp_async': disable_cp_async
+                'disable_cp_async': disable_cp_async,
             },
             task=Conv2dGemmFp16Task(
                 input_like(img, 'img'),
@@ -584,7 +584,7 @@ class Conv2dGemmFp16Op(Operator):
                 dilations,
                 groups=groups,
                 parallel_k_parts=parallel_k_parts,
-                disable_cp_async=disable_cp_async
+                disable_cp_async=disable_cp_async,
             ),
         )
 
@@ -610,7 +610,13 @@ def parallel_part_heuristic(
 
 
 def conv2d_gemm_fp16_channel_last(
-    img: Tensor, weight: Tensor, stride: List[int], dilations: List[int], groups: int, parallel_k_parts=1, disable_cp_async=False
+    img: Tensor,
+    weight: Tensor,
+    stride: List[int],
+    dilations: List[int],
+    groups: int,
+    parallel_k_parts=1,
+    disable_cp_async=False,
 ) -> Tensor:
     import hidet
 
@@ -629,7 +635,7 @@ def conv2d_gemm_fp16_channel_last(
             dilations=dilations,
             groups=groups,
             parallel_k_parts=parallel_k_parts,
-            disable_cp_async=disable_cp_async
+            disable_cp_async=disable_cp_async,
         )
         .get_output(0)
         .sum(0)
@@ -638,6 +644,7 @@ def conv2d_gemm_fp16_channel_last(
 
 def conv2d_pointwise_fp16(img: Tensor, weight: Tensor, groups: int):
     import hidet
+
     n, c, h, w = img.shape
     oc, wc, ky, kx = weight.shape
     if ky == 1 and kx == 1:
@@ -651,7 +658,13 @@ def conv2d_pointwise_fp16(img: Tensor, weight: Tensor, groups: int):
 
 
 def conv2d_gemm_fp16(
-    img: Tensor, weight: Tensor, stride: List[int], dilations: List[int], groups: int, parallel_k_parts=1, disable_cp_async=False
+    img: Tensor,
+    weight: Tensor,
+    stride: List[int],
+    dilations: List[int],
+    groups: int,
+    parallel_k_parts=1,
+    disable_cp_async=False,
 ) -> Tensor:
     import hidet
 

@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List, Optional, Union, Sequence, Tuple
+from hidet.ir.task import Target
 from hidet.ir.type import DataType, data_type
 from hidet.ir.expr import Expr, Constant, if_then_else, convert, cast as ir_cast, logical_and, is_constant
 from hidet.ir.expr import Int
@@ -99,6 +100,10 @@ class ReshapeTask(Task):
             inverse_map={x: InverseMap.from_lambda(inverse_map, num_args=len(x.shape))},
             attributes={'shape': y_shape},
         )
+
+    # to get around unnecessary reshapes during runtime
+    def build(self, target: Union[str, Target], load: bool = True):
+        return lambda x, y: y
 
 
 class RearrangeTask(Task):

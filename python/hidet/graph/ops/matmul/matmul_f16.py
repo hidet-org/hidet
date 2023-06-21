@@ -204,7 +204,6 @@ class MatmulF16Task(Task):
                         cp_async(~smem_a[i, k], ~gmem_a[i, k], cp_size=8, src_size=min(8, src_size * 2))
                         cp_async(~smem_a[i, k + 4], ~gmem_a[i, k + 4], cp_size=8, src_size=max(0, src_size * 2 - 8))
 
-
             @hidet.script
             def load_smem_b(k0: int, b: float16[b_head + [k_size, n_size]], smem_b: smem_b_type):
                 c_head_index = spatial(*c_head).map(blockIdx.z)
