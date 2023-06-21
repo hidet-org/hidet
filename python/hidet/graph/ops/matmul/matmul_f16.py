@@ -201,7 +201,7 @@ class MatmulF16Task(Task):
                     if a_shape[-1] % 8 == 0:
                         cp_async(~smem_a[i, k], ~gmem_a[i, k], cp_size=16, src_size=src_size * 2, cache_level='global')
                     elif a_shape[-1] % 4 == 0:
-                        cp_async(~smem_a[i, k], ~gmem_a[i, k], cp_size=8, src_size=min(4, src_size * 2))
+                        cp_async(~smem_a[i, k], ~gmem_a[i, k], cp_size=8, src_size=min(8, src_size * 2))
                         cp_async(~smem_a[i, k + 4], ~gmem_a[i, k + 4], cp_size=8, src_size=max(0, src_size * 2 - 8))
 
 
@@ -220,7 +220,7 @@ class MatmulF16Task(Task):
                     if b_shape[-1] % 8 == 0:
                         cp_async(~smem_b[k, j], ~gmem_b[k, j], cp_size=16, src_size=src_size * 2, cache_level='global')
                     elif b_shape[-1] % 4 == 0:
-                        cp_async(~smem_b[k, j], ~gmem_b[k, j], cp_size=8, src_size=min(4, src_size * 2))
+                        cp_async(~smem_b[k, j], ~gmem_b[k, j], cp_size=8, src_size=min(8, src_size * 2))
                         cp_async(~smem_b[k, j + 4], ~gmem_b[k, j + 4], cp_size=8, src_size=max(0, src_size * 2 - 8))
 
             @hidet.script
@@ -339,7 +339,7 @@ def matmul_f16(a: Tensor, b: Tensor, parallel_k_parts=1) -> Tensor:
     if not (isinstance(a.shape[-1], Expr) or isinstance(b.shape[-1], Expr)) and (
         a.shape[-1] % 4 != 0 or b.shape[-1] % 4 != 0
     ):
-        raise ValueError('Expect the last dimension of the input tensors to be a multiple of 8')
+        raise ValueError('Expect the last dimension of the input tensors to be a multiple of 8 or 4')
     if a.dtype != dtypes.float16 or b.dtype != dtypes.float16:
         raise ValueError('BatchMatmulF16Op only support float16, got {} and {}'.format(a.dtype, b.dtype))
     return MatmulF16Op(a, b, parallel_k_parts).get_output(0)
