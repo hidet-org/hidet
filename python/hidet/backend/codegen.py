@@ -374,7 +374,7 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             return Text('((') + self.visit(e.target_type) + ')(' + self(e.expr) + '))'
 
     def visit_Address(self, e: Address):
-        return Text('&') + self.visit(e.expr)
+        return Text('(&') + self.visit(e.expr) + ')'
 
     def visit_Reference(self, e: Reference):
         raise ValueError()
@@ -580,7 +580,10 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
 
     def visit_BlackBoxStmt(self, stmt: BlackBoxStmt):
         expr_docs = [str(self(e)) for e in stmt.exprs]
-        stmt_string: str = stmt.template_string.format(*expr_docs)
+        if len(expr_docs) > 0:
+            stmt_string: str = stmt.template_string.format(*expr_docs)
+        else:
+            stmt_string: str = stmt.template_string
         lines = stmt_string.split('\n')
         doc = Text('')
         for line in lines:

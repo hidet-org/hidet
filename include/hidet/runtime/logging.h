@@ -55,3 +55,20 @@ public:
 DLL void hidet_set_last_error(const char *msg);
 
 DLL const char * hidet_get_last_error();
+
+class ERRORMessage {
+    std::ostringstream stream_;
+public:
+    ERRORMessage(const char* file, int line) {
+        this->stream_ << file << ":" << line << ": ";
+    }
+
+    std::ostringstream &stream() {
+        return this->stream_;
+    }
+
+    ~ERRORMessage() {
+        hidet_set_last_error(this->stream_.str().c_str());
+    }
+};
+

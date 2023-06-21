@@ -11,8 +11,10 @@
 # limitations under the License.
 from hidet.ir.builders import StmtBuilder
 from hidet.ir.expr import logical_and, logical_or
+from hidet.ir.stmt import BlackBoxStmt
 from hidet.ir.functors import IRRewriter
 from hidet.ir.primitives import printf
+from hidet.ir.primitives.cuda import check_cuda_error
 from hidet.ir.stmt import Stmt, LaunchKernelStmt, AssertStmt
 from hidet.transforms.base import Pass, FunctionBodyPass
 
@@ -46,7 +48,15 @@ class CheckLaunchConfigurationRewriter(IRRewriter):
                     stmt.block_dim[2],
                 )
                 sb += AssertStmt(False, "Invalid launch configuration")
+            with sb.if_then(stmt.shared_mem_bytes > 49152):
+                # if the shared memory is larger than 48KB, we should call cudaFuncSetAttribute
+                sb += BlackBoxStmt(
+                    "cudaFuncSetAttribute({}, cudaFuncAttributeMaxDynamicSharedMemorySize, {});",
+                    stmt.func_var, stmt.shared_mem_bytes
+                )
+                sb += check_cuda_error()
             sb += stmt
+            sb += check_cuda_error()
         return sb.finish()
 
 

@@ -15,7 +15,7 @@ from hidet.ir.library import tune
 from hidet.ir.library.cuda import matmul_simt
 
 hidet.option.cache_dir('./outs/cache')
-# hidet.utils.clear_op_cache()
+# hidet.utils.clear_cache_dir()
 hidet.option.save_lower_ir()
 
 
@@ -26,6 +26,7 @@ class MatmulTask(Task):
 
         self._assert(a.shape[-1] % 2 == 0, 'k_size must be even')
         self._assert(b.shape[-1] % 2 == 0, 'n_size must be even')
+        self.dtype = a.type.dtype
 
     def allow_prologue(self) -> bool:
         return False
@@ -38,69 +39,51 @@ class MatmulTask(Task):
 
     @tune.space(
         2,
-        matmul_simt_space=matmul_simt.tuning_space.iterate_space(2)
+        parallel_k=[1, 4, 8, 16],
+        block_shape=[(128, 128, 8), (128, 128, 16), (64, 128, 16), (128, 64, 16), (64, 64, 16), (64, 64, 32),
+                     (64, 64, 64)],
+        warp_shape=[(32, 32, 16), (64, 64, 8), (64, 64, 16), (64, 64, 32)],
+        warp_threads=[(4, 8), (2, 16), (8, 4), (16, 2)],
+        thread_shape=[(4, 4)],
+        arch=['sm_70']
     )
-    def schedule_matmul_mma(self, matmul_simt_space):
+    @tune.space(
+        1,
+        parallel_k=[1, 8],
+        # parallel_k=[1],
+        block_shape=[(64, 128, 16), (128, 64, 16), (64, 64, 16), (64, 64, 32), (64, 64, 64), (128, 128, 16),
+                     (128, 128, 32), (128, 128, 64)],
+        # block_shape=[(128, 128, 64)],
+        warp_shape=[(32, 32, 16), (64, 64, 8), (32, 64, 8), (32, 64, 16), (32, 64, 32)],
+        # warp_shape=[(32, 64, 32)],
+        warp_threads=[(4, 8), (2, 16), (8, 4), (16, 2)],
+        thread_shape=[(4, 4)],
+        arch=['sm_70']
+    )
+    def schedule_matmul_mma(
+        self,
+        parallel_k=1, block_shape=(128, 128, 8), warp_shape=(32, 64, 8), warp_threads=(4, 8), thread_shape=(4, 4),
+        arch='sm_70'
+    ):
         from hidet.lang import attrs
-        from hidet.lang.cuda import threadIdx, blockIdx, blockDim, gridDim
-        from hidet.lang.mapping import spatial, repeat
-        from hidet.lang import printf
-        from hidet.ir.primitives.runtime import request_cuda_workspace
 
         b_size, m_size, k_size = self.inputs[0].shape
         b_size, k_size, n_size = self.inputs[1].shape
-        parts = 4
+        dtype = self.dtype
 
         with hidet.script_module() as script_module:
-
-            @hidet.script
-            def matmul_kernel(
-                a: f16[b_size, m_size, k_size],
-                b: f16[b_size, k_size, n_size],
-                c: f16[parts, b_size, m_size, n_size]
-            ):
-                attrs.func_kind = 'cuda_kernel'
-                attrs.cuda.block_dim = (16, 16)
-                attrs.cuda.grid_dim = ((m_size + 15) // 16, (n_size + 15) // 16, b_size * parts)
-
-                i = blockIdx.x * blockDim.x + threadIdx.x
-                j = blockIdx.y * blockDim.y + threadIdx.y
-                part_size = (k_size + parts - 1) // parts
-
-                if i < m_size and j < n_size:
-                    for part, batch in spatial(parts, b_size).on(blockIdx.z):
-                        acc = f16(0.0)
-                        for k_inner in range(part_size):
-                            k = part * part_size + k_inner
-                            if k < k_size:
-                                acc += a[batch, i, k] * b[batch, k, j]
-                        c[part, batch, i, j] = acc
-
-            @hidet.script
-            def reduce_kernel(
-                c_in: f16[parts, b_size, m_size, n_size],
-                c_out: f16[b_size, m_size, n_size]
-            ):
-                attrs.func_kind = 'cuda_kernel'
-                attrs.cuda.block_dim = 512
-                attrs.cuda.grid_dim = (m_size * n_size * b_size + 511) // 512
-
-                w = threadIdx.x + blockIdx.x * blockDim.x
-                if w < m_size * n_size * b_size:
-                    for b, i, j in spatial(b_size, m_size, n_size).on(w):
-                        acc = f16(0.0)
-                        for part in range(parts):
-                            acc += c_in[part, b, i, j]
-                        c_out[b, i, j] = acc
-
             @hidet.script
             def launch(
-                a: f16[b_size, m_size, k_size],
-                b: f16[b_size, k_size, n_size],
-                c: f16[b_size, m_size, n_size]
+                a: dtype[b_size, m_size, k_size],
+                b: dtype[b_size, k_size, n_size],
+                c: dtype[b_size, m_size, n_size]
             ):
                 attrs.func_kind = 'public'
-                matmul_simt(a, b, c, **matmul_simt_space)
+                matmul_simt(
+                    a, b, c,
+                    parallel_k=parallel_k, block_shape=block_shape, warp_shape=warp_shape,
+                    warp_threads=warp_threads, thread_shape=thread_shape, arch=arch
+                )
 
         return script_module.ir_module()
 
@@ -118,38 +101,41 @@ def my_matmul(a: Tensor, b: Tensor) -> Tensor:
 def benchmark():
 
     # for dtype in ['float32', 'float16']:
-    for dtype in ['float16']:
+    for dtype in ['float32']:
 
         a = hidet.symbol(['b', 'm', 'k'], dtype=dtype, device='cuda')
         b = hidet.symbol(['b', 'k', 'n'], dtype=dtype, device='cuda')
         c = my_matmul(a, b)
         graph = hidet.trace_from(c, [a, b])
-        cgraph = graph.build(space=2)
+        cgraph = graph.build(space=0)
 
-        for m_size, n_size, k_size in [(1024, 1024, 1024), (1024, 3072, 768), (1024, 768, 3072)]:
-            # aa = hidet.randn([1, m_size, k_size], dtype=dtype, device='cuda', stddev=0.1)
-            # bb = hidet.randn([1, k_size, n_size], dtype=dtype, device='cuda', stddev=0.1)
+        # for m_size, n_size, k_size in [(1024, 1024, 1024), (1024, 3072, 768), (1024, 768, 3072)]:
+        for m_size, n_size, k_size in [(8, 8, 8)]:
+        # for m_size, n_size, k_size in [(1024, 1024, 1024)]:
+        #     aa = hidet.randn([1, m_size, k_size], dtype=dtype, device='cuda', stddev=0.1)
+        #     bb = hidet.randn([1, k_size, n_size], dtype=dtype, device='cuda', stddev=0.1)
             aa = hidet.ones([1, m_size, k_size], dtype=dtype, device='cuda')
             bb = hidet.ones([1, k_size, n_size], dtype=dtype, device='cuda')
             at = aa.torch().clone()
             bt = bb.torch().clone()
 
             # check correctness
-            # print(aa)
-            # print(bb)
+            print(aa)
+            print(bb)
             c1 = cgraph(aa, bb)
             c2 = aa.torch() @ bb.torch()
-            # print(c1)
-            # print(c2)
+            print(c1)
+            print(c2)
             # print(c1[0, :128, :128])
             # print(c1[0, 128:, 128:])
-            hidet.utils.assert_close(c1, c2, rtol=1e-2 * (k_size / 100), atol=1e-2 * (k_size / 100))
+            tol = 1e-5 if dtype == 'float32' else 1e-2
+            hidet.utils.assert_close(c1, c2, rtol=tol, atol=tol)
 
             # benchmark
-            torch_latency = hidet.utils.benchmark_func(lambda: at @ bt, number=100)
-            hidet_latency = hidet.utils.benchmark_func(lambda: cgraph(aa, bb), number=100)
-            print(' {:4} x {:4} x {:4} torch: {:.3f}'.format(m_size, n_size, k_size, torch_latency))
-            print(' {:4} x {:4} x {:4} hidet: {:.3f}'.format(m_size, n_size, k_size, hidet_latency))
+            # torch_latency = hidet.utils.benchmark_func(lambda: at @ bt, number=100, repeat=10)
+            # hidet_latency = hidet.utils.benchmark_func(lambda: cgraph(aa, bb), number=100, repeat=10)
+            # print(' {:4} x {:4} x {:4} torch: {:.3f}'.format(m_size, n_size, k_size, torch_latency))
+            # print(' {:4} x {:4} x {:4} hidet: {:.3f}'.format(m_size, n_size, k_size, hidet_latency))
 
 
 def main():

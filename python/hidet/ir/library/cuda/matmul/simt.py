@@ -61,6 +61,15 @@ def check_type(a_type: TensorType, b_type: TensorType, c_type: TensorType):
     thread_shape=[(4, 4)],
     arch=['sm_70']
 )
+@tune.space(
+    1,
+    parallel_k=[1, 8],
+    block_shape=[(64, 128, 16), (128, 64, 16), (64, 64, 16), (64, 64, 32), (64, 64, 64), (128, 128, 16), (128, 128, 32), (128, 128, 64)],
+    warp_shape=[(32, 32, 16), (64, 64, 8), (32, 64, 8), (32, 64, 16), (32, 64, 32)],
+    warp_threads=[(4, 8), (2, 16), (8, 4), (16, 2)],
+    thread_shape=[(4, 4)],
+    arch=['sm_70']
+)
 def matmul_simt(
     arg_a: Expr,
     arg_b: Expr,
@@ -76,7 +85,7 @@ def matmul_simt(
     from hidet.lang import attrs
     from hidet.lang import tensor_pointer, register_tensor, grid, cast, deref, meta, printf
     from hidet.lang.cuda import dynamic_shared_memory, threadIdx, blockIdx, blockDim, syncthreads
-    from hidet.lang.mapping import spatial, repeat
+    from hidet.lang.mapping import spatial, repeat, auto_map
 
     capability = hidet.cuda.capability(arch)
     a_type: TensorType = get_tensor_type(arg_a)
@@ -192,10 +201,18 @@ def matmul_simt(
         .repeat(1, thread_shape[1], 1, attrs='u')
     )
 
-    smem_total_size: Expr = max(
-        vtype.nbytes * (smem_a_layout.size + smem_b_layout.size),
-        dtype.nbytes * (block_m * block_n) if block_warps_k > 1 else 0,
-    )
+    # estimate resource usage
+    num_regs = vtype.nbytes * int(
+        regs_a_layout.size + regs_b_layout.size + regs_c_layout.size + regs_a_ldg_layout.size + regs_b_ldg_layout.size
+    ) // 4 + 32  # 32 reserved for intermediate results
+    tune.check(num_regs < 256)
+    smem_total_size: int = int(max(
+        vtype.nbytes * (smem_a_layout.size + smem_b_layout.size), dtype.nbytes * block_m * block_n
+    ))
+    tune.check(smem_total_size <= capability.sharedMemPerBlock)
+    tune.metric('smem (kb)', int(smem_total_size / 1024))
+    tune.metric('regs', num_regs)
+    tune.metric('threads', num_threads)
 
     @hidet.script
     def copy_a_g2r(  # copy tile block_m x block_k of matrix a from global memory to shared memory
@@ -281,35 +298,31 @@ def matmul_simt(
         offset_m: i32,
         offset_n: i32,
     ):
+        # write results to smem
+        smem_c = tensor_pointer(dtype, shape=[block_m, block_n], init=dynamic_shared_memory(0, dtype))
+        for k_round in grid(block_warps_k, 'u'):
+            _, _, warp_k_round = spatial(*block_warps).map(threadIdx.x / 32)
+            if k_round == warp_k_round:
+                for i, j, _ in block_mapping.on(threadIdx.x):
+                    if offset_m + i < m_size and offset_n + j < n_size:
+                        regs_c_ptr = cast(~regs_c[i, j], ~dtype)
+                        result = sum(regs_c_ptr[k] for k in range(lanes))
+                        if k_round == 0:
+                            smem_c[i, j] = result
+                        else:
+                            smem_c[i, j] += result
+            if block_warps_k > 1 and k_round < block_warps_k - 1:
+                syncthreads()
+
+        # smem to gmem
         c_part_index = [blockIdx.z] if parallel_k > 1 else []
         c_head_indices = spatial(*c_head).map(blockIdx.y)
         gmem_c_head = c[c_part_index + c_head_indices]
         gmem_c = gmem_c_head[offset_m:, offset_n:]
-        smem_c = tensor_pointer(dtype, shape=[block_m, block_k])
-
-        if block_warps_k > 1:
-            smem_c = dynamic_shared_memory(0, dtype)
-
-        for k_round in grid(block_warps_k, 'u'):
-            _, _, warp_k_round = spatial(*block_warps).map(threadIdx.x / 32)
-            for i, j, _ in block_mapping.on(threadIdx.x):
-                if k_round == warp_k_round:
-                    if offset_m + i < m_size and offset_n + j < n_size:
-                        regs_c_ptr = cast(~regs_c[i, j], ~dtype)
-                        result = dtype.zero
-                        for k in range(lanes):
-                            result += regs_c_ptr[k]
-                        if block_warps_k == 1:
-                            gmem_c[i, j] = result
-                        else:
-                            if k_round == 0:
-                                smem_c[i, j] = result
-                            elif k_round < block_warps_k - 1:
-                                smem_c[i, j] += result
-                            else:
-                                gmem_c[i, j] = smem_c[i, j] + result
-            if block_warps_k > 1 and k_round < block_warps_k - 1:
-                syncthreads()
+        mapping = auto_map(block_m, block_n, workers=num_threads)
+        for i, j in mapping.on(threadIdx.x):
+            if offset_m + i < m_size and offset_n + j < n_size:
+                gmem_c[i, j] = smem_c[i, j]
 
     @hidet.script
     def mma(
@@ -385,7 +398,7 @@ def matmul_simt(
         warp_k_tiles = warp_k // lanes
         for k0 in grid(k_part_tiles - 1, 'u1'):  # iterate block_k tile
             offset_k = k_start + k0 * block_k + first_k_tile_size
-            for k1 in grid(warp_k_tiles, 'u+'):
+            for k1 in grid(warp_k_tiles, 'u'):
                 if k1 == warp_k_tiles - 1:
                     # Store next AB tile from local into shared
                     copy_a_r2s(regs_a_ldg, smem_a, (k0 + 1) % 2)

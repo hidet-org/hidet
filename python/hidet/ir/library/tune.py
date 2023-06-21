@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import itertools
+import warnings
 from typing import Union, Sequence, TypeVar, Any, Dict, List
 
 import hidet.option
@@ -81,6 +82,20 @@ class TuningSpace:
             self.spaces[level][",".join(names)] = choices
 
 
+class MetricCollectContext:
+    current = None
+
+    def __init__(self):
+        self.metrics: Dict[str, Union[str, int, float]] = {}
+
+    def __enter__(self):
+        MetricCollectContext.current = self
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.current = None
+
+
 def space(level: int, /, **subspaces: Sequence[Choice]):
     def wrapper(func):
         if not hasattr(func, 'tuning_space'):
@@ -109,7 +124,8 @@ def extract_ir_modules(template_func) -> List[IRModule]:
     ir_modules = []
     for kwargs in kwargs_list:
         try:
-            ir_module = template_func(**kwargs)
+            with MetricCollectContext() as metric_ctx:
+                ir_module = template_func(**kwargs)
             ir_modules.append(ir_module)
             if len(ir_modules) > MAX_VALID_SPACE_SIZE:
                 raise ValueError(
@@ -117,6 +133,7 @@ def extract_ir_modules(template_func) -> List[IRModule]:
                     f'which is larger than the predefined limit {MAX_VALID_SPACE_SIZE}. '
                     f'Please consider to reduce the search space.'
                 )
+            kwargs.update(metric_ctx.metrics)
             setattr(ir_module, '_tuning_kwargs', kwargs)  # workaround to pass kwargs to the tune function
         except ScheduleError:
             # the schedule is invalid, skip it
@@ -127,3 +144,12 @@ def extract_ir_modules(template_func) -> List[IRModule]:
 def check(condition: bool, message: str = ""):
     if not condition:
         raise ScheduleError(message)
+
+
+def metric(name: str, value: Union[float, int, str]):
+    if MetricCollectContext.current is None:
+        return
+    ctx: MetricCollectContext = MetricCollectContext.current
+    if name in ctx.metrics:
+        warnings.warn(f'Metric {name} is already defined, the value will be overwritten.')
+    ctx.metrics[name] = value
