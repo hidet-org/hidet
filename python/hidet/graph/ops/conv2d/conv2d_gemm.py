@@ -115,6 +115,7 @@ class Conv2dGemmFp16Task(Task):
         dilations: List[int],
         groups: int = 1,
         parallel_k_parts: int = 1,
+        disable_cp_async: bool = False
     ):
         # Channel last
         # This kernel expects the weight to be transformed in the following way:
@@ -131,6 +132,7 @@ class Conv2dGemmFp16Task(Task):
         self.stride = stride
         self.img_shape = img.shape
         self.orig_weight_shape = orig_weight_shape
+        self.disable_cp_async = disable_cp_async
 
         DILY, DILX = dilations
         STRY, STRX = stride
@@ -184,8 +186,12 @@ class Conv2dGemmFp16Task(Task):
             ),
         )
 
+        if not disable_cp_async:
+            name='conv_gemm_fp16_pk'
+        else:
+            name='conv_gemm_fp16_pk_disable_cp_async'
         super().__init__(
-            name='conv_gemm_fp16_pk',
+            name=name,
             inputs=[img, weight],
             outputs=[c],
             attributes={
@@ -194,11 +200,12 @@ class Conv2dGemmFp16Task(Task):
                 'orig_weight_shape': orig_weight_shape,
                 'groups': groups,
                 'parallel_k_parts': parallel_k_parts,
+                'disable_cp_async': disable_cp_async
             },
         )
 
     def allow_prologue(self) -> bool:
-        return False
+        return self.disable_cp_async
 
     def allow_epilogue(self) -> bool:
         return True
@@ -373,7 +380,7 @@ class Conv2dGemmFp16Task(Task):
 
                     # a bit strange, the two branches should be the same, but gives different results
                     #   but only when GROUP_C % 8 != 0
-                    if GROUP_C % 8 == 0:
+                    if GROUP_C % 8 == 0 and not self.disable_cp_async:
                         cp_async(
                             ~smem_img[i, k],
                             ~img[batch_idx, ih_idx, iw_idx, channel_offset],
@@ -415,7 +422,7 @@ class Conv2dGemmFp16Task(Task):
 
                     # also quite strange; the two branches should be the same, but gives different
                     #   results when GROUP_OC % 8 != 0
-                    if GROUP_OC % 8 == 0:
+                    if GROUP_OC % 8 == 0 and not self.disable_cp_async:
                         cp_async(
                             ~smem_weight[k, j],
                             ~weight[offset_k + k, offset_n + j],
@@ -456,7 +463,8 @@ class Conv2dGemmFp16Task(Task):
 
                 load_smem_img(0, img, ~smem_img[0, 0, 0])
                 load_smem_weight(0, weight, ~smem_weight[0, 0, 0])
-                cp_async_wait_all()
+                if GROUP_OC % 8 == 0 and not self.disable_cp_async:
+                    cp_async_wait_all()
 
                 syncthreads()
                 for k0 in range(K_TILES_PER_BLOCK):
@@ -475,7 +483,8 @@ class Conv2dGemmFp16Task(Task):
                                 load_regs_b(mj, mk + 1, ~smem_weight[k0 % 2, 0, 0], ~regs_b[(mk + 1) % 2, mj, 0])
                         for mi, mj in grid(mma_count_m, mma_count_n):
                             warp_mma(~regs_a[mk % 2, mi, 0], ~regs_b[mk % 2, mj, 0], ~regs_c[mi, mj, 0])
-                    cp_async_wait_all()
+                    if GROUP_OC % 8 == 0 and not self.disable_cp_async:
+                        cp_async_wait_all()
                     syncthreads()
 
                 # store back
@@ -552,6 +561,7 @@ class Conv2dGemmFp16Op(Operator):
         dilations: List[int],
         groups: int,
         parallel_k_parts=1,
+        disable_cp_async=False
     ):
         if not (isinstance(parallel_k_parts, int) and not isinstance(parallel_k_parts, bool)):
             raise ValueError('parallel_k_parts must be an integer, got {}'.format(parallel_k_parts))
@@ -564,6 +574,7 @@ class Conv2dGemmFp16Op(Operator):
                 'orig_weight_shape': orig_weight_shape,
                 'groups': groups,
                 'parallel_k_parts': parallel_k_parts,
+                'disable_cp_async': disable_cp_async
             },
             task=Conv2dGemmFp16Task(
                 input_like(img, 'img'),
@@ -573,6 +584,7 @@ class Conv2dGemmFp16Op(Operator):
                 dilations,
                 groups=groups,
                 parallel_k_parts=parallel_k_parts,
+                disable_cp_async=disable_cp_async
             ),
         )
 
@@ -598,7 +610,7 @@ def parallel_part_heuristic(
 
 
 def conv2d_gemm_fp16_channel_last(
-    img: Tensor, weight: Tensor, stride: List[int], dilations: List[int], groups: int, parallel_k_parts=1
+    img: Tensor, weight: Tensor, stride: List[int], dilations: List[int], groups: int, parallel_k_parts=1, disable_cp_async=False
 ) -> Tensor:
     import hidet
 
@@ -617,17 +629,15 @@ def conv2d_gemm_fp16_channel_last(
             dilations=dilations,
             groups=groups,
             parallel_k_parts=parallel_k_parts,
+            disable_cp_async=disable_cp_async
         )
         .get_output(0)
         .sum(0)
     )
 
 
-def conv2d_gemm_fp16(
-    img: Tensor, weight: Tensor, stride: List[int], dilations: List[int], groups: int, parallel_k_parts=1
-) -> Tensor:
+def conv2d_pointwise_fp16(img: Tensor, weight: Tensor, groups: int):
     import hidet
-
     n, c, h, w = img.shape
     oc, wc, ky, kx = weight.shape
     if ky == 1 and kx == 1:
@@ -636,6 +646,25 @@ def conv2d_gemm_fp16(
         weight = hidet.ops.reshape(weight, [1, groups, oc // groups, wc])
         out = hidet.ops.matmul(weight, img)
         return hidet.ops.reshape(out, [n, oc, h, w])
+    else:
+        raise ValueError(f"expected kernel sizes to be (1, 1), got {(ky, kx)}")
+
+
+def conv2d_gemm_fp16(
+    img: Tensor, weight: Tensor, stride: List[int], dilations: List[int], groups: int, parallel_k_parts=1, disable_cp_async=False
+) -> Tensor:
+    import hidet
+
+    n, c, h, w = img.shape
+    oc, wc, ky, kx = weight.shape
+    sy, sx = stride
+    dy, dx = dilations
+    # if ky == 1 and kx == 1 and sy == 1 and sx == 1 and dy == 1 and dx == 1:
+    #     assert c % groups == 0 and wc * groups == c, "invalid group / channel size"
+    #     img = hidet.ops.reshape(img, [n, groups, c // groups, h * w])
+    #     weight = hidet.ops.reshape(weight, [1, groups, oc // groups, wc])
+    #     out = hidet.ops.matmul(weight, img)
+    #     return hidet.ops.reshape(out, [n, oc, h, w])
 
     img = hidet.ops.transpose(img, [0, 2, 3, 1])
     if groups == 1 and c % 8 != 0:
@@ -643,5 +672,5 @@ def conv2d_gemm_fp16(
         img = hidet.ops.pad(img, [0, pad_channel])
         weight = hidet.ops.pad(weight, [0, 0, 0, 0, 0, pad_channel, 0, 0])
 
-    res = conv2d_gemm_fp16_channel_last(img, weight, stride, dilations, groups, parallel_k_parts)
+    res = conv2d_gemm_fp16_channel_last(img, weight, stride, dilations, groups, parallel_k_parts, disable_cp_async)
     return hidet.ops.transpose(res, [0, 3, 1, 2])

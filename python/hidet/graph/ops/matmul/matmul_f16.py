@@ -198,7 +198,12 @@ class MatmulF16Task(Task):
                         if (offset_m + i >= m_size or offset_k + k >= maximum_k)
                         else min(maximum_k - (offset_k + k), 8)
                     )
-                    cp_async(~smem_a[i, k], ~gmem_a[i, k], cp_size=16, src_size=src_size * 2, cache_level='global')
+                    if a_shape[-1] % 8 == 0:
+                        cp_async(~smem_a[i, k], ~gmem_a[i, k], cp_size=16, src_size=src_size * 2, cache_level='global')
+                    elif a_shape[-1] % 4 == 0:
+                        cp_async(~smem_a[i, k], ~gmem_a[i, k], cp_size=8, src_size=min(4, src_size * 2))
+                        cp_async(~smem_a[i, k + 4], ~gmem_a[i, k + 4], cp_size=8, src_size=max(0, src_size * 2 - 8))
+
 
             @hidet.script
             def load_smem_b(k0: int, b: float16[b_head + [k_size, n_size]], smem_b: smem_b_type):
@@ -212,7 +217,11 @@ class MatmulF16Task(Task):
                     src_size = (
                         0 if (offset_k + k >= maximum_k or offset_n + j >= n_size) else min(n_size - (offset_n + j), 8)
                     )
-                    cp_async(~smem_b[k, j], ~gmem_b[k, j], cp_size=16, src_size=src_size * 2, cache_level='global')
+                    if b_shape[-1] % 8 == 0:
+                        cp_async(~smem_b[k, j], ~gmem_b[k, j], cp_size=16, src_size=src_size * 2, cache_level='global')
+                    elif b_shape[-1] % 4 == 0:
+                        cp_async(~smem_b[k, j], ~gmem_b[k, j], cp_size=8, src_size=min(4, src_size * 2))
+                        cp_async(~smem_b[k, j + 4], ~gmem_b[k, j + 4], cp_size=8, src_size=max(0, src_size * 2 - 8))
 
             @hidet.script
             def matmul_f16_kernel(
@@ -328,7 +337,7 @@ def matmul_f16(a: Tensor, b: Tensor, parallel_k_parts=1) -> Tensor:
         raise ValueError('a and b must have at least 2 dimensions, got shape {} and {}'.format(a.shape, b.shape))
     # TODO: impliment dynamic run-time shape assertion
     if not (isinstance(a.shape[-1], Expr) or isinstance(b.shape[-1], Expr)) and (
-        a.shape[-1] % 8 != 0 or b.shape[-1] % 8 != 0
+        a.shape[-1] % 4 != 0 or b.shape[-1] % 4 != 0
     ):
         raise ValueError('Expect the last dimension of the input tensors to be a multiple of 8')
     if a.dtype != dtypes.float16 or b.dtype != dtypes.float16:
