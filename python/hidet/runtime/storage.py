@@ -15,6 +15,7 @@ from collections import defaultdict
 import hidet.cuda
 from hidet.cuda.stream import Stream
 from hidet.utils import green, exiting
+from hidet.utils.exiting import is_exiting
 from hidet.runtime.device import Device, instantiate_device
 
 
@@ -306,7 +307,9 @@ class MemoryPool:
         if self.reserved_size > self.max_reserve_size:
             self.clear()
 
-    def clear(self):
+    def clear(self, _is_exiting=is_exiting):
+        if _is_exiting():
+            return
         if hidet.cuda.available():
             hidet.cuda.synchronize()
         for block_list in self.memory_blocks.values():

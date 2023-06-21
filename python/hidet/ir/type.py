@@ -245,7 +245,7 @@ class ArrayType(BaseType):
         self.size: int = size
 
         assert isinstance(base_type, BaseType) and not isinstance(base_type, (ArrayType, TensorType))
-        assert isinstance(size, int) and size > 0
+        assert isinstance(size, int) and size >= 0
 
 
 TypeLike = Union[str, BaseType]
@@ -344,6 +344,10 @@ def tensor_pointer_type(dtype, shape=None, layout=None):
 
 def string_type():
     return StringType()
+
+
+def func_type(param_types, ret_type) -> FuncType:
+    return FuncType(param_types, ret_type)
 
 
 def data_type(dtype: Union[str, DataType]) -> DataType:

@@ -651,7 +651,7 @@ class OnnxExpand(OnnxOperator):
     def run_v8(self, inputs: List[Tensor]) -> List[Tensor]:
         data, new_shape = inputs
         new_shape = self.tensor2list(new_shape)
-        new_shape = hidet.graph.ops.definitions.arithmetic.broadcast_shape(data.shape, new_shape)
+        new_shape = hidet.graph.ops.arithmetic.broadcast_shape(data.shape, new_shape)
         return [ops.broadcast(data, new_shape)]
 
 
@@ -932,7 +932,7 @@ class OnnxLeakyRelu(OnnxOperator):
 @register_onnx_operator
 class OnnxConvTranspose(OnnxOperator):
     def run_v1(self, inputs: List[Tensor]) -> List[Tensor]:
-        from hidet.graph.ops.definitions.utils import normalize_stride
+        from hidet.graph.ops.utils import normalize_stride
 
         data, weight = inputs[:2]
         if len(data.shape) != 4:
@@ -1128,8 +1128,8 @@ class OnnxGraph(nn.Module):
         self.name: str = graph.name
         for param in graph.initializer:
             numpy_array = onnx.numpy_helper.to_array(tensor=param)
-            self.parameters[param.name] = from_numpy(numpy_array).cuda()
-        self.input_names: List[str] = [input.name for input in graph.input if input.name not in self.parameters]
+            self._parameters[param.name] = from_numpy(numpy_array).cuda()
+        self.input_names: List[str] = [input.name for input in graph.input if input.name not in self._parameters]
         self.output_names: List[str] = [output.name for output in graph.output]
         self.operators: List[OnnxOperator] = dispatch_operators(graph.node, op_sets)
         # self.operators: List[OnnxOperator] = [dispatch(node, op_sets=self.op_sets) for node in graph.node]
@@ -1142,7 +1142,7 @@ class OnnxGraph(nn.Module):
             name2tensor.update(self.env_tensors)
         assert len(args) == len(self.input_names)
         # parameters
-        for name, param in self.parameters.items():
+        for name, param in self._parameters.items():
             name2tensor[name] = param
         # inputs
         for name, inp in zip(self.input_names, args):

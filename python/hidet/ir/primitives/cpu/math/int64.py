@@ -18,7 +18,7 @@ from hidet.ir.primitives.math import MathFunctionSet, register_math_function_set
 class CPUInt64MathFunctionSet(MathFunctionSet):
     # pylint: disable=abstract-method
     def register(self):
-        entries = {'min': ['min', 2], 'max': ['max', 2]}
+        entries = {'min': ['std::min', 2], 'max': ['std::max', 2]}
 
         for name, (codegen_name, num_args) in entries.items():
             register_primitive_function(

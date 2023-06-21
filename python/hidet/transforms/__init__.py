@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Sequence
-from hidet.ir.func import IRModule
+from hidet.ir.module import IRModule
 
 from .base import Pass, FunctionPass, FunctionBodyPass, SequencePass, RepeatFunctionPass, PassContext
 from .instruments import PassInstrument, SaveIRInstrument, ProfileInstrument
@@ -34,6 +34,7 @@ from .lower_task_mapping import lower_task_mapping_pass
 from .lower_protect_access import lower_protect_access_pass
 from .declare_to_let import declare_to_let_pass
 from .propagate_launch_bound import propagate_launch_bound_pass
+from .check_launch_configuration import check_launch_configuration_pass
 from .lower_special_cast import lower_special_cast_pass
 
 
@@ -71,6 +72,7 @@ def lower(ir_module: IRModule) -> IRModule:
         add_explicit_cast_pass(),
         declare_to_let_pass(),
         instantiate_symbols_pass(),
+        check_launch_configuration_pass(),
         # simplification
         expand_let_expr_pass(),
         inline_let_stmt_pass(),

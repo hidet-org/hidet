@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Optional, List, Dict
+from typing import Optional, List, Sequence
 import functools
 import warnings
 import os
@@ -39,11 +39,18 @@ class SourceCompiler:
     The base class of source compiler.
     """
 
-    def compile(self, src_path: str, out_lib_path: str, options: Optional[Dict[str, str]] = None) -> None:
+    def compile(
+        self,
+        src_path: str,
+        out_lib_path: str,
+        include_dirs: Sequence[str] = (),
+        linking_dirs: Sequence[str] = (),
+        linking_libraries: Sequence[str] = (),
+        object_files: Sequence[str] = (),
+    ) -> None:
         raise NotImplementedError()
 
-    @staticmethod
-    def run_compile_command(command: str, src_path, out_lib_path: str):
+    def run_compile_command(self, command: str, src_path, out_lib_path: str):
         try:
             # the directory to store the library "lib.so"
             out_lib_dir = os.path.dirname(out_lib_path)
@@ -68,7 +75,8 @@ class SourceCompiler:
                     raise CompilationFailed(src_path, message)
 
                 # write the compilation log
-                with open(os.path.join(out_lib_dir, 'compiler.log'), 'w') as f:
+                log_name = self.__class__.__name__.lower() + '_output.txt'
+                with open(os.path.join(out_lib_dir, log_name), 'w', encoding='utf-8') as f:
                     output = '\n'.join([result.stdout.decode('utf-8').strip(), result.stderr.decode('utf-8').strip()])
                     f.write(output.strip())
 
@@ -104,7 +112,18 @@ class NVCC(SourceCompiler):
                 return path
         raise FileNotFoundError('Can not find nvcc compiler.')
 
-    def compile(self, src_path: str, out_lib_path: str, options: Optional[Dict[str, str]] = None) -> None:
+    def compile(
+        self,
+        src_path: str,
+        out_lib_path: str,
+        include_dirs: Sequence[str] = (),
+        linking_dirs: Sequence[str] = (),
+        linking_libraries: Sequence[str] = (),
+        object_files: Sequence[str] = (),
+    ) -> None:
+        if len(object_files) > 0 and out_lib_path.endswith('.o'):
+            raise ValueError('Can not compile multiple objects into a single object file.')
+
         cc = hidet.cuda.compute_capability()
         cc_code = '{}{}'.format(cc[0], cc[1])
 
@@ -115,9 +134,10 @@ class NVCC(SourceCompiler):
             # the path to nvcc compiler
             self.nvcc_path,
             # the included directories.
-            *['-I{}'.format(include_dir) for include_dir in self.include_dirs],
+            *['-I{}'.format(include_dir) for include_dir in self.include_dirs + list(include_dirs)],
             # the library directories.
-            *['-L{}'.format(library_dir) for library_dir in self.library_dirs],
+            *['-L{}'.format(library_dir) for library_dir in self.library_dirs + list(linking_dirs)],
+            *['-l{}'.format(library) for library in linking_libraries],
             # optimize host side code via -O3
             '-O3',
             # host compiler options: enable openmp, avx2, unroll loops and fast math
@@ -148,7 +168,9 @@ class NVCC(SourceCompiler):
             # supress warning no 39 like: "warning #39-D: division by zero"
             '--diag-suppress 39',
             # generate shared library (lib.so).
-            '--shared',
+            '--shared' if out_lib_path.endswith('.so') else '--compile',
+            # the linking objects.
+            ' '.join(object_files),
             # the source path.
             src_path,
             # the output library path.
@@ -174,14 +196,25 @@ class GCC(SourceCompiler):
             return path
         raise FileNotFoundError('Can not find g++ compiler.')
 
-    def compile(self, src_path: str, out_lib_path: str, options: Optional[Dict[str, str]] = None) -> None:
+    def compile(
+        self,
+        src_path: str,
+        out_lib_path: str,
+        include_dirs: Sequence[str] = (),
+        linking_dirs: Sequence[str] = (),
+        linking_libraries: Sequence[str] = (),
+        object_files: Sequence[str] = (),
+    ) -> None:
+        if len(object_files) > 0 and out_lib_path.endswith('.o'):
+            raise ValueError('Can not compile multiple objects into a single object file.')
         command = [
             # the path to nvcc compiler
             self.gcc_path,
             # the included directories.
-            *['-I{}'.format(include_dir) for include_dir in self.include_dirs],
+            *['-I{}'.format(include_dir) for include_dir in self.include_dirs + list(include_dirs)],
             # the library directories.
-            *['-L{}'.format(library_dir) for library_dir in self.library_dirs],
+            *['-L{}'.format(library_dir) for library_dir in self.library_dirs + list(linking_dirs)],
+            *['-l{}'.format(library) for library in linking_libraries],
             # apply -O3 optimization.
             '-O3',
             # support avx intrinsics
@@ -193,9 +226,11 @@ class GCC(SourceCompiler):
             # enable OpenMP.
             '-fopenmp',
             # link the hidet runtime, all APIs for communication between kernels and host system are in hidet runtime.
-            '-lhidet_runtime',
+            '-Wl,--no-as-needed -lhidet_runtime',
             # generate shared library (lib.so).
-            '-shared',
+            '-shared' if out_lib_path.endswith('.so') else '--compile',
+            # the linking objects.
+            ' '.join(object_files),
             # the source path.
             src_path,
             # the output library path.
@@ -206,23 +241,55 @@ class GCC(SourceCompiler):
         self.run_compile_command(" ".join(command), src_path, out_lib_path)
 
 
-def compile_source(src_path: str, out_lib_path: str) -> None:
+def compile_source(
+    source_file: str,
+    output_library_file: str,
+    target: str,
+    include_dirs: Sequence[str] = (),
+    linking_dirs: Sequence[str] = (),
+    linking_libraries: Sequence[str] = (),
+    object_files: Sequence[str] = (),
+) -> None:
     """
     Compile the source code in 'src_path' file and output the library to 'out_lib_path'.
 
     Parameters
     ----------
-    src_path: str
+    source_file: str
         The path to source code.
-    out_lib_path: str
+    output_library_file: str
         The path to output library.
+    target: str
+        The target platform. Currently only support 'cpu' and 'gpu'.
+    include_dirs: Optional[Sequence[str]]
+        The include directories.
+    linking_dirs: Optional[Sequence[str]]
+        The library directories.
+    linking_libraries:
+        The libraries to link to the output library.
+    object_files: Optional[Sequence[str]]
+        The path to object files. If not None, the object files will be linked to the output library.
     """
-    src_path = os.path.abspath(src_path)
-    out_lib_path = os.path.abspath(out_lib_path)
+    source_file = os.path.abspath(source_file)
+    output_library_file = os.path.abspath(output_library_file)
+    if object_files is not None:
+        object_files = [os.path.abspath(object_file) for object_file in object_files]
 
-    if hidet.cuda.available():
+    if target == 'cuda':
+        if not hidet.cuda.available():
+            raise RuntimeError('CUDA is not available.')
         compiler = NVCC()
-    else:
+    elif target == 'cpu':
         compiler = GCC()
+    else:
+        raise ValueError('Unknown target platform: {}'.format(target))
 
-    compiler.compile(src_path, out_lib_path)
+    object_files = object_files or []
+    compiler.compile(
+        source_file,
+        output_library_file,
+        include_dirs=include_dirs,
+        linking_dirs=linking_dirs,
+        linking_libraries=linking_libraries,
+        object_files=object_files,
+    )

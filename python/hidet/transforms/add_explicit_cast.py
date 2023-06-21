@@ -14,7 +14,7 @@ from hidet.ir.tools import TypeInfer
 from hidet.ir.stmt import Stmt, AssignStmt, BufferStoreStmt
 from hidet.ir.expr import Expr, Cast, Add, Sub, Multiply, Div, BinaryExpr, cast
 from hidet.ir.type import DataType, BaseType, TensorType, TensorPointerType, PointerType, ReferenceType, VoidType
-from hidet.ir.type import ArrayType
+from hidet.ir.type import ArrayType, StringType
 from .base import FunctionBodyPass, Pass
 
 
@@ -40,6 +40,10 @@ class TypeChecker:
             return self.visit_ReferenceType(a, b)
         elif isinstance(a, VoidType):
             return self.visit_VoidType(a, b)
+        elif isinstance(a, StringType):
+            return self.visit_StringType(a, b)
+        elif isinstance(a, ArrayType):
+            return self.visit_ArrayType(a, b)
         else:
             raise ValueError('Can not recognize type {}'.format(a))
 
@@ -76,6 +80,12 @@ class TypeChecker:
 
     def visit_VoidType(self, a: VoidType, b: BaseType):
         self.check(a, b, isinstance(b, VoidType))
+
+    def visit_StringType(self, a: StringType, b: BaseType):
+        self.check(a, b, isinstance(b, StringType))
+
+    def visit_ArrayType(self, a: ArrayType, b: BaseType):
+        self.check(a, b, isinstance(b, (ArrayType, PointerType)))
 
 
 def same_type(a: BaseType, b: BaseType) -> bool:

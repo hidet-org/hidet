@@ -113,7 +113,7 @@ class Encoder:
 
 def get_encoder(model_name="124M"):
     import hidet
-    models_dir = hidet.utils.hidet_cache_dir("./examples/gpt-2")
+    models_dir = hidet.utils.cache_dir("./examples/gpt-2")
     with open(os.path.join(models_dir, model_name, "encoder.json"), "r") as f:
         encoder = json.load(f)
     with open(os.path.join(models_dir, model_name, "vocab.bpe"), "r", encoding="utf-8") as f:

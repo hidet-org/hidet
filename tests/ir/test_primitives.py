@@ -16,10 +16,10 @@ from hidet.backend import build
 from hidet.ir.builders import FunctionBuilder, StmtBuilder
 from hidet.ir.type import FuncType, VoidType
 from hidet.ir.expr import var, tensor_var
-from hidet.ir.func import IRModule
+from hidet.ir.module import IRModule
 from hidet.ir.primitives import lds128, sts128
 from hidet.ir.stmt import BlackBoxStmt, AssignStmt, BufferStoreStmt, DeclareStmt, DeclareScope
-from hidet.driver import build_ir_module
+from hidet.drivers import build_ir_module
 
 
 def test_lds128(capfd):
@@ -39,8 +39,8 @@ def test_lds128(capfd):
         fb.set_body(fb.finish())
 
     func = fb.get()
-    ir_module = IRModule({func.name: func}, task=None)
-    compiled_func = build_ir_module(ir_module, output_dir='./outs/')
+    ir_module = IRModule(functions={func.name: func})
+    compiled_func = ir_module.build()
     compiled_func()
     hidet.cuda.synchronize()
     captured = capfd.readouterr()
@@ -69,8 +69,8 @@ def test_sts128(capfd):
         )
 
     func = fb.get()
-    ir_module = IRModule({func.name: func}, task=None)
-    compiled_func = build_ir_module(ir_module, output_dir='./outs/')
+    ir_module = IRModule(functions={func.name: func})
+    compiled_func = ir_module.build()
     compiled_func()
     hidet.cuda.synchronize()
     captured = capfd.readouterr()

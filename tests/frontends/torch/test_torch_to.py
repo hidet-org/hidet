@@ -15,7 +15,7 @@ from torch._dynamo.exc import BackendCompilerFailed
 from torch import nn
 
 
-class TestTensorCpu(nn.Module):
+class TensorCpuModule(nn.Module):
     def __init__(self):
         super().__init__()
         self.w = torch.randn(1, device='cuda')
@@ -24,7 +24,7 @@ class TestTensorCpu(nn.Module):
         return self.w.cpu() * x.cpu()
 
 
-class TestTensorCuda(nn.Module):
+class TensorCudaModule(nn.Module):
     def __init__(self):
         super().__init__()
         self.w = torch.randn(1, device='cpu')
@@ -33,7 +33,7 @@ class TestTensorCuda(nn.Module):
         return self.w.cuda() * x.cuda()
 
 
-class TestTensorTo(nn.Module):
+class TensorToModule(nn.Module):
     def __init__(self):
         super().__init__()
         self.w = torch.randn(1, device='cpu')
@@ -43,36 +43,33 @@ class TestTensorTo(nn.Module):
 
 
 def test_tensor_cpu():
-    model = TestTensorCpu()
+    model = TensorCpuModule()
     model_opt = torch.compile(model, backend='hidet')
 
     x_cpu = torch.randn(10, device='cpu')
     model_opt(x_cpu)
 
-    with pytest.raises(BackendCompilerFailed):
-        x_cuda = torch.randn(10, device='cuda')
-        model_opt(x_cuda)
+    x_cuda = torch.randn(10, device='cuda')
+    model_opt(x_cuda)
 
 
 def test_tensor_cuda():
-    model = TestTensorCuda()
+    model = TensorCudaModule()
     model_opt = torch.compile(model, backend='hidet')
 
     x_cuda = torch.randn(10, device='cuda')
     model_opt(x_cuda)
 
-    with pytest.raises(BackendCompilerFailed):
-        x_cpu = torch.randn(10, device='cpu')
-        model_opt(x_cpu)
+    x_cpu = torch.randn(10, device='cpu')
+    model_opt(x_cpu)
 
 
 def test_tensor_to():
-    model = TestTensorTo()
+    model = TensorToModule()
     model_opt = torch.compile(model, backend='hidet')
 
     x_cuda = torch.randn(10, device='cuda')
     model_opt(x_cuda)
 
-    with pytest.raises(BackendCompilerFailed):
-        x_cpu = torch.randn(10, device='cpu')
-        model_opt(x_cpu)
+    x_cpu = torch.randn(10, device='cpu')
+    model_opt(x_cpu)

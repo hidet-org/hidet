@@ -83,7 +83,6 @@ def matmul_simt_kernel():
             # iterate over the k tiles
             num_k_tiles = (k_size + block_k_size - 1) // block_k_size
             for k_tile in range(num_k_tiles):
-
                 # load smem_a [block_m_size, block_k_size] from global memory
                 for i, k in auto_map(block_m_size, block_k_size, workers=num_threads).on(
                     threadIdx.x
@@ -132,11 +131,7 @@ def matmul_simt_kernel():
 
     assert isinstance(matmul_kernel, hidet.ir.Function)  # matmul is a hidet.ir.Function
 
-    ir_module = script_module.ir_module()
-    compiled_function: hidet.runtime.CompiledFunction = hidet.driver.build_ir_module(
-        ir_module
-    )
-    return compiled_function
+    return script_module.build()
 
 
 def main():

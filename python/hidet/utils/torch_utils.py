@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
-from hidet.utils import hidet_cache_file
+from hidet.utils import cache_file
 
 
 def export_torchvision_model_as_onnx(model_name: str, output_path: str, skip_existed: bool = True, precision='float32'):
@@ -55,4 +55,4 @@ def export_torchvision_model_as_onnx(model_name: str, output_path: str, skip_exi
 if __name__ == '__main__':
     names = ['resnet50', 'inception_v3', 'mobilenet_v2']
     for name in names:
-        export_torchvision_model_as_onnx(name, hidet_cache_file('onnx', f'{name}.onnx'))
+        export_torchvision_model_as_onnx(name, cache_file('onnx', f'{name}.onnx'))

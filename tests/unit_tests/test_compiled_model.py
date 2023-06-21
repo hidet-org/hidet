@@ -1,3 +1,14 @@
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import pytest
 import numpy.testing
 import hidet
@@ -18,19 +29,19 @@ def test_load_save(device: str):
     graph = hidet.graph.optimize(graph)
 
     # build the graph
-    model = graph.build()
+    compiled_graph = graph.build()
 
     # save the model
-    model.save('./model.hidet')
+    compiled_graph.save('./model.hidet')
 
     # load the model
-    loaded_model = hidet.load_model('./model.hidet')
+    loaded_compiled_graph = hidet.load_compiled_graph('./model.hidet')
 
     # compare the results
     xx = hidet.randn([2, 3], device=device)
     y1 = graph(xx)
-    y2 = model(xx)
-    y3 = loaded_model(xx)
+    y2 = compiled_graph(xx)
+    y3 = loaded_compiled_graph(xx)
 
     numpy.testing.assert_allclose(y1.cpu().numpy(), y2.cpu().numpy())
     numpy.testing.assert_allclose(y1.cpu().numpy(), y3.cpu().numpy())

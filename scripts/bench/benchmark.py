@@ -57,7 +57,7 @@ def main():
 
     if not args.keep_cache:
         print('Clearing hidet operator cache...')
-        hidet.utils.hidet_clear_op_cache()
+        hidet.utils.clear_op_cache()
 
     commands = [
         f'hidet bench --cache-dir {cache_dir} --space {args.space} --dtype float32 --report resnet50_f32.txt --tensor-core resnet --models resnet50',

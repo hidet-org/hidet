@@ -20,11 +20,15 @@ def main():
         # child process
         p = 'child'
         a = hidet.randn([3, 4], device='cuda')
+        print('I am the {} process, tensor: \n{}'.format(p, a))
     else:
         # parent process
         p = 'parent'
         a = hidet.randn([3, 4], device='cuda')
-    print('I am the {} process, tensor: \n{}'.format(p, a))
+        _, child_ret = os.waitpid(ret, 0)
+        print('I am the {} process, tensor: \n{}'.format(p, a))
+        if child_ret != 0:
+            raise RuntimeError('Child process exited with non-zero code: {}'.format(child_ret))
 
 
 main()

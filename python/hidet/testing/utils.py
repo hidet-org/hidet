@@ -9,8 +9,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Union, Sequence
+from typing import Union, Sequence, Tuple
 import numpy as np
+from hidet import symbol, trace_from
 from hidet.graph.tensor import asarray
 
 
@@ -23,6 +24,34 @@ def check_unary(shape, numpy_op, hidet_op, device: str = 'all', dtype=np.float32
     data = np.array(np.random.randn(*shape)).astype(dtype)
     numpy_result = numpy_op(data)
     hidet_result = hidet_op(asarray(data).to(device=device)).cpu().numpy()
+    np.testing.assert_allclose(actual=hidet_result, desired=numpy_result, atol=atol, rtol=rtol)
+
+
+def check_unary_dynamic(
+    # when type(shape[i]) == int, we take it as static,
+    # when type(shape[i]) == Tuple[str, int], we take it as dynamic,
+    #   where the value of the integer is the shape of the testing value
+    shape: Sequence[Union[int, Tuple[str, int]]],
+    numpy_op,
+    hidet_op,
+    device: str = 'all',
+    dtype=np.float32,
+    atol=0,
+    rtol=0,
+):
+    if device == 'all':
+        for dev in ['cuda', 'cpu']:
+            check_unary_dynamic(shape, numpy_op, hidet_op, dev, dtype, atol, rtol)
+        return
+    concrete_shape = [(i if isinstance(i, int) else i[1]) for i in shape]
+    symbolic_shape = [(i if isinstance(i, int) else i[0]) for i in shape]
+    data = np.array(np.random.randn(*concrete_shape)).astype(dtype)
+    hidet_data = asarray(data).to(device=device)
+    numpy_result = numpy_op(data)
+    sym = symbol(symbolic_shape, dtype=hidet_data.dtype, device=hidet_data.device)
+    out = hidet_op(sym)
+    func = trace_from(out, sym).build()
+    hidet_result = func(hidet_data).cpu().numpy()
     np.testing.assert_allclose(actual=hidet_result, desired=numpy_result, atol=atol, rtol=rtol)
 
 
@@ -45,6 +74,38 @@ def check_binary(
     b = np.array(np.random.randn(*b_shape)).astype(dtype)
     numpy_result = numpy_op(a, b)
     hidet_result = hidet_op(asarray(a).to(device=device), asarray(b).to(device=device)).cpu().numpy()
+    np.testing.assert_allclose(actual=hidet_result, desired=numpy_result, atol=atol, rtol=rtol)
+
+
+def check_binary_dynamic(
+    a_shape: Sequence[Union[int, Tuple[str, int]]],
+    b_shape: Sequence[Union[int, Tuple[str, int]]],
+    numpy_op,
+    hidet_op,
+    device: str = 'all',
+    dtype: Union[str, np.dtype] = np.float32,
+    atol=0.0,
+    rtol=0.0,
+):
+    if device == 'all':
+        for dev in ['cuda', 'cpu']:
+            check_binary_dynamic(a_shape, b_shape, numpy_op, hidet_op, dev, dtype, atol, rtol)
+        return
+    a_concrete_shape = [(i if isinstance(i, int) else i[1]) for i in a_shape]
+    a_symbolic_shape = [(i if isinstance(i, int) else i[0]) for i in a_shape]
+
+    b_concrete_shape = [(i if isinstance(i, int) else i[1]) for i in b_shape]
+    b_symbolic_shape = [(i if isinstance(i, int) else i[0]) for i in b_shape]
+    a = np.array(np.random.randn(*a_concrete_shape)).astype(dtype)
+    b = np.array(np.random.randn(*b_concrete_shape)).astype(dtype)
+    numpy_result = numpy_op(a, b)
+    a_hidet = asarray(a).to(device=device)
+    b_hidet = asarray(b).to(device=device)
+    sym_a = symbol(a_symbolic_shape, dtype=a_hidet.dtype, device=a_hidet.device)
+    sym_b = symbol(b_symbolic_shape, dtype=b_hidet.dtype, device=b_hidet.device)
+    sym_result = hidet_op(sym_a, sym_b)
+    func = trace_from(sym_result, [sym_a, sym_b])
+    hidet_result = func(a_hidet, b_hidet).cpu().numpy()
     np.testing.assert_allclose(actual=hidet_result, desired=numpy_result, atol=atol, rtol=rtol)
 
 
@@ -111,6 +172,41 @@ def check_torch_binary(
     np.testing.assert_allclose(
         actual=hidet_result.cpu().numpy(), desired=torch_result.cpu().numpy(), atol=atol, rtol=rtol
     )
+
+
+def check_torch_binary_dynamic(
+    a_shape: Sequence[Union[int, Tuple[str, int]]],
+    b_shape: Sequence[Union[int, Tuple[str, int]]],
+    torch_func,
+    hidet_func,
+    device: str = 'all',
+    dtype: Union[str, np.dtype] = np.float32,
+    atol=0.0,
+    rtol=0.0,
+):
+    if device == 'all':
+        for dev in ['cuda', 'cpu']:
+            check_torch_binary_dynamic(a_shape, b_shape, torch_func, hidet_func, dev, dtype, atol, rtol)
+        return
+    import torch
+
+    a_concrete_shape = [(i if isinstance(i, int) else i[1]) for i in a_shape]
+    a_symbolic_shape = [(i if isinstance(i, int) else i[0]) for i in a_shape]
+
+    b_concrete_shape = [(i if isinstance(i, int) else i[1]) for i in b_shape]
+    b_symbolic_shape = [(i if isinstance(i, int) else i[0]) for i in b_shape]
+
+    a = torch.randn(*a_concrete_shape, dtype=getattr(torch, dtype)).to(device=device)
+    b = torch.randn(*b_concrete_shape, dtype=getattr(torch, dtype)).to(device=device)
+    torch_result = torch_func(a, b)
+    a_hidet = asarray(a.cpu(), dtype=dtype).to(device=device)
+    b_hidet = asarray(b.cpu(), dtype=dtype).to(device=device)
+    sym_a = symbol(a_symbolic_shape, dtype=a_hidet.dtype, device=a_hidet.device)
+    sym_b = symbol(b_symbolic_shape, dtype=b_hidet.dtype, device=b_hidet.device)
+    sym_result = hidet_func(sym_a, sym_b)
+    func = trace_from(sym_result, [sym_a, sym_b])
+    hidet_result = func(a_hidet, b_hidet).cpu().numpy()
+    np.testing.assert_allclose(actual=hidet_result, desired=torch_result.cpu().numpy(), atol=atol, rtol=rtol)
 
 
 def check_torch_ternary(

@@ -13,13 +13,18 @@ from typing import List, Sequence, Dict, Tuple, Optional, Set, Union
 
 import hidet
 from hidet.graph.flow_graph import FlowGraph, Operator, Tensor
-from hidet.graph.ops.definitions.special import BarrierOp
+from hidet.graph.ops.special import BarrierOp
+from hidet.graph.ops.transfer import TransferOp
 from hidet.graph.graph_utils.functors import analyze_usage
 from hidet.graph.transforms.base import GraphPass
 from hidet.utils.structure import DirectedGraph
 from hidet.utils.doc import Doc, Text, NewLine, doc_join
 from hidet.utils.namer import Namer
 from hidet.utils.py import unique
+
+
+# the following operators are not fusible
+NOT_FUSIBLE = {BarrierOp, TransferOp}
 
 
 class FusibleGraph:
@@ -73,6 +78,10 @@ def fuse_epilogue_operators(anchors: Sequence[Operator], usage: Usage, belong: D
             # this anchor operator does not allow epilogue fusion, skip
             continue
 
+        if type(anchor) in NOT_FUSIBLE:
+            # for operator are not fusible, skip
+            continue
+
         sub_graph: FusibleGraph = belong[anchor]
 
         while True:
@@ -89,8 +98,8 @@ def fuse_epilogue_operators(anchors: Sequence[Operator], usage: Usage, belong: D
                     # this tensor is an output of flow graph, skip
                     continue
 
-                if isinstance(user, BarrierOp):
-                    # fusion does not cross barrier operator, skip
+                if type(user) in NOT_FUSIBLE:
+                    # for operator are not fusible, skip
                     continue
 
                 if user in belong:
@@ -137,6 +146,10 @@ def fuse_prologue_operators(anchors: Sequence[Operator], usage: Usage, belong: D
             # this anchor operator does not allow prologue fusion, skip
             continue
 
+        if type(anchor) in NOT_FUSIBLE:
+            # for operator are not fusible, skip
+            continue
+
         sub_graph: FusibleGraph = belong[anchor]
 
         while True:
@@ -157,8 +170,8 @@ def fuse_prologue_operators(anchors: Sequence[Operator], usage: Usage, belong: D
                     # this tensor has been fused, skip
                     continue
 
-                if isinstance(producer, BarrierOp):
-                    # fusion does not cross barrier operator, skip
+                if type(producer) in NOT_FUSIBLE:
+                    # for operator are not fusible, skip
                     continue
 
                 # The tensor is used by only one time, and not fused yet, we found an input to fuse.
@@ -283,7 +296,7 @@ def operator_from_sub_graph(sub_graph: FusibleGraph, tensor_remap: Dict[Tensor, 
         return updated_op
     else:
         # otherwise, create a new operator from the sub-graph.
-        from hidet.graph.ops.definitions.fusion.fused_operator import fused_operator
+        from hidet.graph.ops.fusion.fused_operator import fused_operator
 
         fused_graph, anchor = sub_graph.flow_graph_and_anchor()
         updated_inputs: List[Tensor] = [

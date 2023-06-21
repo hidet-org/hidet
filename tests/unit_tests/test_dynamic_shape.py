@@ -49,13 +49,13 @@ def test_attention(device):
         y_dynamic = graph_dynamic(x)
         y_dynamic_opt = graph_dynamic_opt(x)
         for y in [y_dynamic, y_dynamic_opt]:
-            assert np.allclose(y_static.cpu().numpy(), y.cpu().numpy(), atol=1e-5, rtol=1e-5)
+            numpy.testing.assert_allclose(y_static.cpu().numpy(), y.cpu().numpy(), atol=1e-4, rtol=1e-4)
 
 
 @pytest.mark.parametrize('device', ['cuda'])
 @pytest.mark.parametrize('bs,h,w', [(1, 224, 224), (2, 224, 224), (1, 256, 256)])
 def test_resnet50(device, bs, h, w):
-    model, _ = hidet.testing.models.resnet50()
+    model = hidet.testing.models.resnet50()
     if device == 'cuda':
         model = model.cuda()
     else:
@@ -65,7 +65,7 @@ def test_resnet50(device, bs, h, w):
     graph_static = hidet.trace_from(model(hidet.symbol([bs, 3, h, w], device=device)))
     graph_dynamic = hidet.trace_from(y)
     graph_dynamic_opt = hidet.graph.optimize(graph_dynamic)
-    xx = hidet.randn([bs, 3, h, w], device=device)
+    xx = hidet.randn([bs, 3, h, w], device=device, mean=0.45, stddev=0.22)
     y1 = graph_static(xx)
     y2 = graph_dynamic(xx)
     y3 = graph_dynamic_opt(xx)

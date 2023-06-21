@@ -1,0 +1,1 @@
+For now, it is sufficient that these instances do not throw an exception.

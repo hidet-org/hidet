@@ -85,6 +85,16 @@ class Expr(Node):
         return self._binary(LessEqual, self, other)
 
     def __eq__(self, other):
+        # In hidet, we override the comparison operators: '<', '<=', '==', '!=', '>', '>=', which will return
+        # the corresponding comparison expression. For example, `a < b` will return a LessThan expression.
+        # An error will be raised if the result of the comparison is used in any place to evaluate the value in python:
+        # `if a < b: ...` will raise an error.
+        # This is because these comparison operators are used to construct the comparison expression in hidet IR.
+        # However, there are two exceptions:
+        #  1. if the comparison result is a constant (e.g., `int32(1) < int32(2)`), the result can be evaluated.
+        #  2. if it is a `==` comparison, the result can be evaluated in python, and True if the two expressions are
+        #     identical (e.g., `a is b`), False otherwise. We need this feature to use Expr as the keys in dict.
+        # See `hidet.ir.expr.Constant.__bool__` and `hidet.ir.expr.Equal.__bool__` for the implementation details.
         return self._binary(Equal, self, other)
 
     def __ne__(self, other):
@@ -95,9 +105,6 @@ class Expr(Node):
 
     def __rshift__(self, other):
         return self._binary(RightShift, self, other)
-
-    def __hash__(self):
-        return id(self)
 
     def __gt__(self, other):
         return self._binary(LessThan, other, self)
@@ -168,6 +175,8 @@ class Expr(Node):
 
     def __complex__(self):
         raise TypeError("Cannot convert hidet.ir.Expr to complex.")
+
+    __hash__ = object.__hash__  # use default hash function
 
     def read(self, items, protected=True):
         te = self[items]
@@ -259,6 +268,8 @@ class Expr(Node):
                     return promote_type(infer_type(b), a.type)(0)
             elif a == 1 and cls is Multiply:
                 return b
+        elif a is b and isinstance(a, Var) and cls == LessThan:
+            return constant(False, 'bool')
 
         return cls(a, b)
 
@@ -667,12 +678,16 @@ def is_zero(v: Expr) -> bool:
     return isinstance(v, Constant) and v.value == 0
 
 
-def is_true(v: Expr) -> bool:
-    return isinstance(v, Constant) and v.type.name == 'bool' and v.value is True
+def is_true(v: Union[Expr, bool]) -> bool:
+    if isinstance(v, (Constant, bool)):
+        return bool(v) is True
+    return False
 
 
-def is_false(v: Expr) -> bool:
-    return isinstance(v, Constant) and v.type.name == 'bool' and v.value is False
+def is_false(v: Union[Expr, bool]) -> bool:
+    if isinstance(v, (Constant, bool)):
+        return bool(v) is False
+    return False
 
 
 def if_then_else(
@@ -697,13 +712,16 @@ def if_then_else(
     ret: Expr
         The if-then-else expression.
     """
+    cond = convert(cond)
+    then_expr = convert(then_expr)
+    else_expr = convert(else_expr)
     if is_constant(cond):
         if bool(cond):
-            return convert(then_expr)
+            return then_expr
         else:
-            return convert(else_expr)
+            return else_expr
     else:
-        return IfThenElse(convert(cond), convert(then_expr), convert(else_expr))
+        return IfThenElse(cond, then_expr, else_expr)
 
 
 def tensor_rank(v: Expr) -> int:
@@ -845,14 +863,16 @@ def bitwise_xor(*args: Union[Expr, int]) -> BitwiseXor:
     return _chain_binary_op(BitwiseXor, args, 0)
 
 
-def cast(v: Expr, dtype: Union[str, DataType, BaseType]):
+def cast(v: Union[Expr, int, bool, float], dtype: Union[str, DataType, BaseType]):
+    if isinstance(v, (bool, int, float)):
+        v = convert(v)
     if not isinstance(v, Expr):
         raise ValueError('Expect an expression, got {}'.format(type(v).__name__))
 
     if isinstance(dtype, str):
         dtype = data_type(dtype)
 
-    if isinstance(v, Constant):
+    if isinstance(v, Constant) and v.is_scalar():
         return constant(v.value, dtype)
     elif isinstance(v, Var) and v.type.is_data_type() and dtype.is_data_type() and v.type == dtype:
         return v

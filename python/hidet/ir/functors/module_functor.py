@@ -10,7 +10,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # pylint: disable=bad-staticmethod-argument
-from hidet.ir.func import IRModule, Function
+from hidet.ir.func import Function
+from hidet.ir.module import IRModule
 from hidet.utils import same_list
 
 from .base_functor import BaseFunctor, BaseVisitor, BaseRewriter
@@ -51,7 +52,7 @@ class ModuleRewriter(ModuleFunctor, BaseRewriter):
         if same_list(global_vars, module.global_vars) and functions is module.functions:
             return module
         else:
-            return IRModule(functions, module.task, global_vars)
+            return module.copy().reset_funcs(functions, global_vars)
 
     def visit_Function(self, func: Function):
         params = self.visit(func.params)

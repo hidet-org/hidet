@@ -40,7 +40,9 @@ class Namer:
         if hint:
             orig_name = hint
         elif isinstance(e, Var) and (e.name or e.hint):
-            orig_name = e.name if e.name else e.hint
+            if e.name is not None:
+                return e.name
+            orig_name = e.hint
         elif isinstance(e, (ScalarNode, TensorNode)):
             orig_name = e.name
         else:

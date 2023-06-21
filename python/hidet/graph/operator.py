@@ -9,20 +9,17 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Optional, Dict, Any, Union
+from typing import List, Optional, Dict, Any
 from hidet.ir.type import TensorType, DataType
 from hidet.ir.expr import Var, Constant
-from hidet.ir.dtypes import float16, bfloat16, float32
 from hidet.ir.task import Task
-from hidet.runtime.module import CompiledFunction, CompiledModule
-from hidet.graph.tensor import empty, empty_like, Tensor, SymbolVar
+from hidet.runtime.compiled_task import CompiledTask
+from hidet.graph.tensor import empty, Tensor, SymbolVar
 from hidet.ffi.ffi import get_last_error, BackendException
 from hidet.runtime.device import Device, instantiate_device
 
 
-def get_operator_name(op, given_name: Optional[str] = None):
-    if given_name is not None:
-        return given_name
+def get_operator_name(op):
     cls_name = op.__class__.__name__
     if cls_name.endswith('Op'):
         return cls_name[:-2]
@@ -43,7 +40,7 @@ class Operator:
         self.outputs: List[Tensor] = []
 
         # cache
-        self._task_func: Optional[CompiledFunction] = None
+        self._compiled_task: Optional[CompiledTask] = None
 
         self.outputs = self._run()
 
@@ -54,22 +51,47 @@ class Operator:
 
     @property
     def device(self) -> Device:
-        if len(self.inputs) == 0:
-            # this is an operator that create a tensor like hidet.full
+        """Get the device of the output tensor of this operator.
+
+        Returns
+        -------
+        ret: Device
+            The device of the output tensor of this operator.
+        """
+        if 'device' in self.attrs:
+            # this is an operator that create a tensor like hidet.full, or transfer operator
             # get the device from the operator attributes
-            assert 'device' in self.attrs
             return instantiate_device(self.attrs['device'])
         else:
+            if len(self.inputs) == 0:
+                raise ValueError('Cannot infer device from an operator with no inputs and "device" attribute')
             # when the operator has inputs, get the device from the inputs
             if not all(t.device == self.inputs[0].device for t in self.inputs):
                 raise ValueError('All inputs of an operator must be on the same device')
             return self.inputs[0].device
 
     @property
-    def task_func(self) -> CompiledModule:
-        if self._task_func is None:
-            self._task_func = self.task.build(target=self.device.type)
-        return self._task_func
+    def build_target(self) -> str:
+        """
+        Get the build target of this operator.
+
+        Returns
+        -------
+        ret: str
+            The build target of this operator.
+        """
+        from hidet.graph.ops.transfer import TransferOp
+
+        if isinstance(self, TransferOp):
+            return 'cuda'
+        else:
+            return self.device.kind
+
+    @property
+    def compiled_task(self) -> CompiledTask:
+        if self._compiled_task is None:
+            self._compiled_task = self.task.build(target=self.build_target)
+        return self._compiled_task
 
     def _run(self) -> List[Tensor]:
         from hidet.ir.tools import rewrite, simplify, collect
@@ -131,9 +153,7 @@ class Operator:
         return outputs
 
     def imperative_run(self, inputs: List[Tensor]) -> List[Tensor]:
-        outputs: List[Tensor] = self._imperative_run_prepare_outputs()
-
-        self.task_func(*inputs, *outputs)
+        outputs = self.compiled_task.run_async(inputs)
 
         status = get_last_error()
         if status is not None:
@@ -148,23 +168,3 @@ class Operator:
         if update_attributes is not None:
             attributes.update(update_attributes)
         return cls(*inputs, **attributes).outputs
-
-    def dummy_inputs(self) -> List[Tensor]:
-        dummy_inputs = []
-        for x in self.inputs:
-            if x.storage is not None:
-                dummy_inputs.append(x)
-            else:
-                if x.dtype in [float16, bfloat16, float32]:
-                    dummy_inputs.append(empty_like(x))
-                else:
-                    raise ValueError('Can not generate dummy input for dtype {}'.format(x.dtype))
-        return dummy_inputs
-
-    def latency(self, warmup=3, number=20, repeat=5, median=True) -> Union[List[float], float]:
-        from hidet.testing import benchmark_func
-
-        dummy_inputs = self.dummy_inputs()
-        outputs = self.imperative_run(dummy_inputs)
-        args = self.task.generate_arguments(dummy_inputs, outputs)
-        return benchmark_func(lambda: self.task_func(*args), warmup=warmup, number=number, repeat=repeat, median=median)

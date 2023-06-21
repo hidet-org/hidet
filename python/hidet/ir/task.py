@@ -11,13 +11,13 @@
 # limitations under the License.
 # pylint: disable=import-outside-toplevel
 from __future__ import annotations
-from typing import Any, Dict, List, Union, Callable
+from typing import Any, Dict, List, Union, Callable, Optional, Tuple
 import os
 import pickle
 from hidet.ir.node import Node
 from hidet.ir.type import FuncType, VoidType
-from hidet.ir.expr import Expr, Var, SymbolVar, var
-from hidet.ir.func import IRModule
+from hidet.ir.expr import Expr, Var, SymbolVar, var, is_constant
+from hidet.ir.module import IRModule
 from hidet.ir.compute import ComputeNode, TensorNode, TensorInput, ScalarInput, GridCompute
 
 
@@ -93,8 +93,24 @@ class Task(Node):
         self.outputs: List[TensorNode] = list(outputs)
         self.inverse_map: Dict[TensorInput, InverseMap] = {a: InverseMap.from_obj(b) for a, b in inverse_map.items()}
         self.attrs: Dict[str, Union[str, float, int, bool]] = attributes
+        self.assertions: List[Tuple[Expr, Optional[str]]] = getattr(self, 'assertions', [])
 
+        from hidet.ir.tools import collect
+
+        self.symbols: List[SymbolVar] = list(collect(self.outputs, SymbolVar))
         self._sanity_check()
+
+    def _assert(self, expr: Expr, msg: Optional[str] = None):
+        import hidet
+
+        simplified = hidet.ir.tools.simplify(expr)
+        if is_constant(simplified):
+            assert simplified, msg
+        else:
+            if hasattr(self, 'assertions'):
+                self.assertions.append((expr, msg))
+            else:
+                self.assertions = [(expr, msg)]
 
     @property
     def params(self) -> List[TensorNode]:
@@ -128,6 +144,11 @@ class Task(Node):
         used_inputs = collect(self.outputs, TensorInput)
         if any(x not in self.inputs for x in used_inputs):
             raise ValueError('Some TensorInput used in outputs are not placed in inputs: {}'.format(used_inputs))
+
+        # check assertions for correctness
+        assert_symbols: List[SymbolVar] = list(collect([cond for cond, _ in self.assertions], SymbolVar))
+        for sym in assert_symbols:
+            assert sym in self.symbols, f"encountered {sym} in assertions, but not in list of defined symbols"
 
     def has_symbolic_shape(self) -> bool:
         from hidet.ir.tools import collect
@@ -206,7 +227,7 @@ class Task(Node):
                 raise ValueError('Unknown parameter type: {}'.format(type(param)))
         return arguments
 
-    def build(self, target: Union[str, Target]):
+    def build(self, target: Union[str, Target], load: bool = True):
         """
         Build the task for the given target to a callable function.
 
@@ -215,55 +236,44 @@ class Task(Node):
         target: Union[str, Target]
             The target device.
 
+        load: bool
+            Whether to load the task
         Returns
         -------
-        func: hidet.runtime.CompiledModule
+        func: hidet.runtime.CompiledTask
             The compiled module.
         """
-        from hidet.driver import build_task
+        from hidet.drivers import build_task
 
         if isinstance(target, Target):
             target = target.name
-        return build_task(self, target_device=target, load=True)
+        return build_task(self, target=target, load=load)
 
-    def implement(self, target: Union[Target, str], working_dir: str) -> IRModule:
-        from hidet.graph.ops.schedules.cuda.auto_scheduler import CudaAutoScheduler
-        from hidet.graph.ops.schedules.cpu.auto_scheduler import CpuAutoScheduler
-        from hidet.graph.ops.definitions.utils.tune import tune
+    def implement(self, target: Union[Target, str], working_dir: str) -> List[IRModule]:
+        from hidet.ir.schedulers import CudaAutoScheduler, CpuAutoScheduler
 
         if isinstance(target, str):
             target = Target.from_string(target)
-        if target.name == 'cuda':
-            ret = self.implement_cuda(working_dir)
-            if ret is NotImplemented:
-                auto_scheduler = CudaAutoScheduler()
-                ret = auto_scheduler.schedule_task(self, 'cuda')
-        elif target.name == 'cpu':
-            ret = self.implement_cpu(working_dir)
-            if ret is NotImplemented:
-                auto_scheduler = CpuAutoScheduler()
-                ret = auto_scheduler.schedule_task(self, 'cpu')
+
+        implement_target, scheduler = {
+            'cuda': (self.implement_cuda, CudaAutoScheduler),
+            'cpu': (self.implement_cpu, CpuAutoScheduler),
+        }[target.name]
+
+        ir_modules: Union[IRModule, List[IRModule]] = implement_target(working_dir)
+        if ir_modules is NotImplemented:
+            auto_scheduler = scheduler()
+            ir_modules = [auto_scheduler.schedule_task(self, target.name)]
+        elif isinstance(ir_modules, IRModule):
+            ir_modules = [ir_modules]
+        elif isinstance(ir_modules, (list, tuple)) and all(isinstance(x, IRModule) for x in ir_modules):
+            ir_modules = list(ir_modules)
         else:
-            raise ValueError()
-        if isinstance(ret, IRModule):
-            return ret
-
-        ir_modules: List[IRModule] = ret
-
-        if len(ir_modules) == 1:
-            return ir_modules[0]
-
-        if not all(isinstance(m, IRModule) for m in ir_modules):
-            raise AssertionError(
-                f'The task implement function should return an IRModule or a sequence of IRModule, '
-                f'but got a {type(ir_modules)}.'
+            raise ValueError(
+                'Expect the `implement` method to return an IRModule or List[IRModule], got {}'.format(ir_modules)
             )
-        dummy_args = self.dummy_arguments(target.name)
-        try:
-            best_ir_module = tune(ir_modules, dummy_inputs=dummy_args, working_dir=working_dir)
-        except ValueError as e:
-            raise RuntimeError(f'Failed to tune the task: {self}') from e
-        return best_ir_module
+
+        return ir_modules
 
     def implement_cuda(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
         return NotImplemented

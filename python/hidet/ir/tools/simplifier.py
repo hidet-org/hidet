@@ -13,14 +13,20 @@ from typing import Union, Dict, Tuple, Callable, Type
 import operator
 from hidet.ir.type import DataType
 from hidet.ir.expr import Expr, BinaryExpr, Add, Sub, Multiply, Div, Mod, FloorDiv, LessThan, LessEqual, Equal, Constant
-from hidet.ir.expr import BitwiseAnd, BitwiseOr, BitwiseXor, NotEqual, LeftShift, RightShift, Cast, Neg
+from hidet.ir.expr import BitwiseAnd, BitwiseOr, BitwiseXor, NotEqual, LeftShift, RightShift, Cast, Neg, IfThenElse, Var
 from hidet.ir.expr import LogicalAnd, LogicalOr, LogicalNot, is_one, is_zero, is_true, is_false, convert, cast, constant
+from hidet.ir.expr import SymbolVar
 from hidet.ir.stmt import Stmt, IfStmt, SeqStmt, ForStmt
+from hidet.ir.dtypes import int32
 from hidet.ir.tools import rewrite
 from hidet.ir.functors import StmtRewriter, ExprRewriter, BaseRewriter
 
 
 class Simplifier(StmtRewriter, ExprRewriter, BaseRewriter):
+    def __init__(self, instantiate_symbols: bool = False):
+        super().__init__()
+        self.instantiate_symbols = instantiate_symbols
+
     def visit_Binary(self, e: BinaryExpr):  # pylint: disable=too-many-branches
         a = self(e.a)
         b = self(e.b)
@@ -198,11 +204,33 @@ class Simplifier(StmtRewriter, ExprRewriter, BaseRewriter):
             else:
                 return ForStmt(loop_var, extent, body=body, attr=stmt.attr)
 
+    def visit_IfThenElse(self, e: IfThenElse):
+        cond = self.visit(e.cond)
+        then_expr = self.visit(e.then_expr)
+        else_expr = self.visit(e.else_expr)
+        if is_true(cond):
+            return then_expr
+        elif is_false(cond):
+            return else_expr
+        else:
+            if cond is e.cond and then_expr is e.then_expr and else_expr is e.else_expr:
+                return e
+            else:
+                return IfThenElse(cond, then_expr, else_expr)
 
-def simplify(node: Union[Stmt, Expr, int, float, list, tuple], *, repeat_limit=10):
+    def visit_Var(self, e: Var):
+        if isinstance(e, SymbolVar) and self.instantiate_symbols:
+            from hidet.ffi import runtime_api
+
+            return int32(runtime_api.get_symbol_value(e.name))
+        else:
+            return super().visit_Var(e)
+
+
+def simplify(node: Union[Stmt, Expr, int, float, list, tuple], *, instantiate_symbols=False, repeat_limit=10):
     if isinstance(node, (int, float)):
         return node
-    simplifier = Simplifier()
+    simplifier = Simplifier(instantiate_symbols)
     for _ in range(repeat_limit):
         old_node = node
         node = simplifier(node)
@@ -211,10 +239,10 @@ def simplify(node: Union[Stmt, Expr, int, float, list, tuple], *, repeat_limit=1
     return node
 
 
-def simplify_to_int(node: Union[Expr, int], repeat_limit=10) -> int:
+def simplify_to_int(node: Union[Expr, int], *, instantiate_symbols=False, repeat_limit=10) -> int:
     if isinstance(node, int):
         return node
-    node = simplify(node, repeat_limit=repeat_limit)
+    node = simplify(node, instantiate_symbols=instantiate_symbols, repeat_limit=repeat_limit)
     if not (isinstance(node, Constant) and node.type.is_integer()):
         raise ValueError(f'Can not simplify expression {node} to an integer')
     return node.value

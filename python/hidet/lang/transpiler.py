@@ -16,14 +16,14 @@ import math
 import builtins
 import operator
 
-from typing import Optional, Dict, Any, Union, Type
+from typing import Optional, Dict, Any, Union, Type, Callable
 import os.path
 import ast
 from ast import Module
 
 # statements
 from ast import FunctionDef, Return, Assign, AnnAssign, AugAssign, For, While, If, With, Assert, Expr, Pass, Break
-from ast import Continue
+from ast import Continue, Nonlocal, Global
 
 # expressions
 from ast import Constant, Num, Str, NameConstant
@@ -239,6 +239,9 @@ class PythonAstFunctor:
         raise NotImplementedError()
 
     def visit_GeneratorExp(self, expr: GeneratorExp):
+        raise NotImplementedError()
+
+    def visit_Nonlocal(self, stmt: Nonlocal):
         raise NotImplementedError()
 
 
@@ -690,7 +693,8 @@ class PythonToHidetTranslator(PythonAstFunctor):
         if isinstance(value, hidet.ir.Node):
             if isinstance(expr.op, Not):
                 # not v
-                return ir.LogicalNot(value)
+                assert isinstance(value, ir.Expr)
+                return ir.logical_not(value)
             elif isinstance(expr.op, Invert):
                 # there are two cases for a ~ operator: ~something
                 # case 1: get the address of an expression
@@ -701,17 +705,23 @@ class PythonToHidetTranslator(PythonAstFunctor):
                 if isinstance(value, BaseType):
                     return ~value
                 else:
+                    assert isinstance(value, ir.Expr)
                     return Address(value)
             elif isinstance(expr.op, UAdd):
                 # +v
                 return value
             elif isinstance(expr.op, USub):
                 # -v
-                return ir.Neg(value)
+                assert isinstance(value, ir.Expr)
+                return -value
             else:
                 raise HidetProgramError(self, expr, 'Can not recognize unary operator.')
         else:
-            op_dict = {UAdd: operator.pos, USub: operator.neg, Not: operator.not_}
+            op_dict: Dict[Type[Union[UAdd, USub, Not].unaryop], Callable] = {
+                UAdd: operator.pos,
+                USub: operator.neg,
+                Not: operator.not_,
+            }
             return op_dict[type(expr.op)](value)
 
     def visit_If(self, stmt: If):
@@ -923,7 +933,16 @@ class PythonToHidetTranslator(PythonAstFunctor):
                 raise HidetProgramError(self, expr, 'Call undefined function.')
             if len(kwargs) > 0:
                 raise HidetProgramError(self, expr, 'Hidet do not support call with keyword.')
-            return func_var(*args)
+            if func.kind == 'cuda_kernel':
+                return ir.stmt.launch_kernel(
+                    func_var=func_var,
+                    args=args,
+                    grid_dim=func.attrs['cuda.grid_dim'],
+                    block_dim=func.attrs['cuda.block_dim'],
+                    shared_mem=func.attrs.get('cuda.dynamic_smem_bytes', 0),
+                )
+            else:
+                return func_var(*args)
         elif isinstance(func, (types.BuiltinMethodType, types.BuiltinFunctionType)):
             # call python builtin method, such "a string".format(...) or max, min
             from hidet.ir import primitives
@@ -1095,3 +1114,9 @@ class PythonToHidetTranslator(PythonAstFunctor):
 
     def visit_GeneratorExp(self, expr: GeneratorExp):
         return self.process_generator(expr.elt, expr.generators)
+
+    def visit_Nonlocal(self, stmt: Nonlocal):
+        pass
+
+    def visit_Global(self, stmt: Global):
+        pass

@@ -12,6 +12,8 @@
 import hidet
 import pytest
 
+hidet.option.save_lower_ir()
+
 
 def test_profile_config():
     a = hidet.randn([1, 10, 10], device='cuda')

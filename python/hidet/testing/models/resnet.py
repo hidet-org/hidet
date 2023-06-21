@@ -10,7 +10,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Type, Union, List
-
 import hidet
 from hidet.graph import nn
 
@@ -34,16 +33,16 @@ class BasicBlock(nn.Module):
         self.bn2 = nn.BatchNorm2d(channels)
         self.relu = nn.Relu()
         if in_channels != channels * self.expansion or stride != 1:
-            self.skip = nn.Sequential(
+            self.downsample = nn.Sequential(
                 conv1x1(in_channels=in_channels, out_channels=channels * self.expansion, stride=stride),
                 nn.BatchNorm2d(channels * self.expansion),
             )
         else:
-            self.skip = lambda x: x
+            self.downsample = lambda x: x
 
     def forward(self, x):
         out = self.bn2(self.conv2(self.relu(self.bn1(self.conv1(x)))))
-        out = self.relu(out + self.skip(x))
+        out = self.relu(out + self.downsample(x))
         return out
 
 
@@ -61,17 +60,17 @@ class Bottleneck(nn.Module):
         self.bn3 = nn.BatchNorm2d(channels * expansion)
         self.relu = nn.Relu()
         if in_channels != channels * expansion or stride != 1:
-            self.skip = nn.Sequential(
+            self.downsample = nn.Sequential(
                 conv1x1(in_channels=in_channels, out_channels=channels * self.expansion, stride=stride),
                 nn.BatchNorm2d(channels * self.expansion),
             )
         else:
-            self.skip = lambda x: x
+            self.downsample = lambda x: x
 
     def forward(self, x):
         out = self.relu(self.bn1(self.conv1(x)))
         out = self.relu(self.bn2(self.conv2(out)))
-        out = self.relu(self.bn3(self.conv3(out)) + self.skip(x))
+        out = self.relu(self.bn3(self.conv3(out)) + self.downsample(x))
         return out
 
 
@@ -82,7 +81,7 @@ class ResNet(nn.Module):
         self.conv1 = nn.Conv2d(3, self.in_channels, kernel_size=7, stride=2, padding=3)
         self.bn1 = nn.BatchNorm2d(self.in_channels)
         self.relu = nn.Relu()
-        self.max_pool = nn.MaxPool2d(kernel_size=7, stride=2, padding=3)
+        self.max_pool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self.make_layer(block, 64, layers[0])
         self.layer2 = self.make_layer(block, 128, layers[1], stride=2)
         self.layer3 = self.make_layer(block, 256, layers[2], stride=2)
@@ -112,31 +111,43 @@ class ResNet(nn.Module):
         return x
 
 
-def resnet18(batch_size=1, channels=3, height=224, width=224):
-    model = ResNet(block=BasicBlock, layers=[2, 2, 2, 2])
-    inputs = [hidet.randn([batch_size, channels, height, width])]
-    return model, inputs
+def load_pretrained_weights(name: str, hidet_module: nn.Module):
+    import torch
+
+    torch_resnet: torch.nn.Module = torch.hub.load('pytorch/vision:v0.6.0', name, pretrained=True).eval()
+
+    torch_state_dict = torch_resnet.state_dict()
+    hidet_state_dict = {k: hidet.from_torch(v) for k, v in torch_state_dict.items()}
+
+    for p_name, _ in hidet_module.named_parameters():
+        if p_name not in hidet_state_dict:
+            raise ValueError(f'Parameter {p_name} not found in state dict')
+
+    hidet_module.load_state_dict(hidet_state_dict)
+    return hidet_module
 
 
-def resnet34(batch_size=1, channels=3, height=224, width=224):
-    model = ResNet(block=BasicBlock, layers=[3, 4, 6, 3])
-    inputs = [hidet.randn([batch_size, channels, height, width])]
-    return model, inputs
+def resnet(name: str, layers, block) -> ResNet:
+    module = ResNet(block=block, layers=layers)
+    load_pretrained_weights(name, module)
+    return module
 
 
-def resnet50(batch_size=1, channels=3, height=224, width=224):
-    model = ResNet(block=Bottleneck, layers=[3, 4, 6, 3])
-    inputs = [hidet.randn([batch_size, channels, height, width])]
-    return model, inputs
+def resnet18() -> ResNet:
+    return resnet('resnet18', [2, 2, 2, 2], BasicBlock)
 
 
-def resnet101(batch_size=1, channels=3, height=224, width=224):
-    model = ResNet(block=Bottleneck, layers=[3, 4, 23, 3])
-    inputs = [hidet.randn([batch_size, channels, height, width])]
-    return model, inputs
+def resnet34() -> ResNet:
+    return resnet('resnet34', [3, 4, 6, 3], BasicBlock)
 
 
-def resnet152(batch_size=1, channels=3, height=224, width=224):
-    model = ResNet(block=Bottleneck, layers=[3, 8, 36, 3])
-    inputs = [hidet.randn([batch_size, channels, height, width])]
-    return model, inputs
+def resnet50() -> ResNet:
+    return resnet('resnet50', [3, 4, 6, 3], Bottleneck)
+
+
+def resnet101() -> ResNet:
+    return resnet('resnet101', [3, 4, 23, 3], Bottleneck)
+
+
+def resnet152() -> ResNet:
+    return resnet('resnet152', [3, 8, 36, 3], Bottleneck)

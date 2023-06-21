@@ -17,7 +17,7 @@ can be override when we define a new task.
 import hidet
 from hidet.ir.compute import TensorNode, compute, reduce
 from hidet.ir.task import Task
-from hidet.ir.func import IRModule
+from hidet.ir.module import IRModule
 
 
 class BatchMatmulFp16Task(Task):
@@ -212,7 +212,7 @@ def batch_matmul_mma_fp16_schedule(task: BatchMatmulFp16Task) -> IRModule:
 # -------------------
 # The remaining part is the same as the rule-based scheduling method to add new operator.
 from hidet.graph import Operator, Tensor
-from hidet.graph.ops.definitions.utils import input_like
+from hidet.graph.ops.utils import input_like
 
 
 class BatchMatmulFp16Op(Operator):
@@ -239,16 +239,6 @@ def demo_usage():
 
 
 demo_usage()
-
-# %%
-# Generated Source Code
-# ---------------------
-# If you are interested in the generated source code, here it is:
-
-a = hidet.randn([1, 2, 2], dtype='float16', device='cuda')
-b = hidet.randn([1, 2, 2], dtype='float16', device='cuda')
-op = BatchMatmulFp16Op(a, b)
-print(op.task_func.source(color=True))
 
 # %%
 # Summary

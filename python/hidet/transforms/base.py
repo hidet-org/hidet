@@ -11,7 +11,8 @@
 # limitations under the License.
 from typing import List, Optional
 from hidet.ir.stmt import Stmt
-from hidet.ir.func import IRModule, Function
+from hidet.ir.func import Function
+from hidet.ir.module import IRModule
 
 from .instruments import PassInstrument
 
@@ -58,7 +59,7 @@ class Pass:
         if all(new_funcs[name] is ir_module.functions[name] for name in new_funcs):
             return ir_module
         else:
-            return IRModule(funcs=new_funcs, task=ir_module.task, global_vars=ir_module.global_vars)
+            return ir_module.copy().reset_funcs(new_funcs, ir_module.global_vars)
 
     def process_func(self, func: Function) -> Function:
         return func

@@ -31,5 +31,22 @@ def pytest_sessionstart(session):
         print('Clearing cache directory: {}'.format(hidet.option.get_cache_dir()))
 
         # clean the operator cache directory
-        print('Clearing operator cache in test cache...')
-        hidet.utils.hidet_clear_op_cache()
+        print('Clearing hidet cache in test cache...')
+        hidet.utils.clear_cache_dir('ops')
+        hidet.utils.clear_cache_dir('testing')
+        hidet.utils.clear_cache_dir('graphs')
+
+
+@pytest.fixture(autouse=True)
+def clear_memory_cache():
+    """
+    Clear the memory cache before each test.
+    """
+    # run before each test
+    import torch
+
+    torch.cuda.empty_cache()
+    hidet.runtime.storage.current_memory_pool('cuda').clear()
+    yield
+    # run after each test
+    pass

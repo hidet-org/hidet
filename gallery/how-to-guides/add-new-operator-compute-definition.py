@@ -270,16 +270,15 @@ import hidet
 from hidet.ir.task import Task
 
 
-def run_task(task: Task, inputs: List[hidet.Tensor], outputs: List[hidet.Tensor]):
+def run_task(task: Task, inputs: List[hidet.Tensor]):
     """Run given task and print inputs and outputs"""
-    from hidet.runtime import CompiledFunction
+    from hidet.runtime import CompiledTask
 
     # build the task
-    func: CompiledFunction = hidet.driver.build_task(task, target_device='cpu')
-    params = inputs + outputs
+    func: CompiledTask = hidet.drivers.build_task(task, target='cpu')
 
     # run the compiled task
-    func(*params)
+    outputs = func.run_async(inputs)
 
     print('Task:', task.name)
     print('Inputs:')
@@ -317,7 +316,7 @@ def add_example():
     b: TensorNode = tensor_input(name='b', dtype='float32', shape=[5])
     c: TensorNode = compute(name='c', shape=[5], fcompute=lambda i: a[i] + b[i])
     task = Task(name='add', inputs=[a, b], outputs=[c])
-    run_task(task, [hidet.randn([5]), hidet.randn([5])], [hidet.empty([5])])
+    run_task(task, [hidet.randn([5]), hidet.randn([5])])
 
 
 add_example()
@@ -350,7 +349,7 @@ def reduce_sum_example():
         ),
     )
     task = Task('reduce_sum', inputs=[a], outputs=[b])
-    run_task(task, [hidet.randn([4, 3])], [hidet.empty([4])])
+    run_task(task, [hidet.randn([4, 3])])
 
 
 reduce_sum_example()
@@ -371,7 +370,7 @@ def arg_max_example():
         ),
     )
     task = Task('arg_max', inputs=[a], outputs=[b])
-    run_task(task, [hidet.randn([4, 3])], [hidet.empty([4], dtype='int64')])
+    run_task(task, [hidet.randn([4, 3])])
 
 
 arg_max_example()
@@ -391,7 +390,7 @@ def matmul_example():
         ),
     )
     task = Task('matmul', inputs=[a, b], outputs=[c])
-    run_task(task, [hidet.randn([3, 3]), hidet.randn([3, 3])], [hidet.empty([3, 3])])
+    run_task(task, [hidet.randn([3, 3]), hidet.randn([3, 3])])
 
 
 matmul_example()
@@ -411,7 +410,7 @@ def softmax_example():
     softmax = compute('softmax', shape=[3], fcompute=lambda i: exp_a[i] / exp_sum)
 
     task = Task('softmax', inputs=[a], outputs=[softmax])
-    run_task(task, [hidet.randn([3])], [hidet.empty([3])])
+    run_task(task, [hidet.randn([3])])
 
 
 softmax_example()

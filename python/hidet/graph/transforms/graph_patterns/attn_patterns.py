@@ -14,11 +14,10 @@ from hidet.ir.dtypes import f16
 from hidet.graph.transforms.graph_patterns import MatchDict
 from hidet.graph.transforms.graph_patterns import op_pattern, register_rewrite_rule, deregister_rewrite_rule
 from hidet.graph.transforms.graph_patterns import TensorPattern, SubgraphRewriteRule
-from hidet.utils import same_list
-from hidet.graph.ops.definitions.matmul import MatmulOp
-from hidet.graph.ops.definitions.arithmetic import AddOp, MultiplyScalarOp, DivideScalarOp
-from hidet.graph.ops.definitions.activation import SoftmaxOp
-from hidet.graph.ops.definitions.attention import attention
+from hidet.graph.ops.matmul import MatmulOp
+from hidet.graph.ops.arithmetic import AddOp, MultiplyScalarOp, DivideScalarOp
+from hidet.graph.ops.activation import SoftmaxOp
+from hidet.graph.ops.attention import attention
 
 
 class ReorderMulScaleRewriteRule(SubgraphRewriteRule):
@@ -74,9 +73,9 @@ class AttentionRewriteRule(SubgraphRewriteRule):
         q, k, v = [matched[t] for t in [self.q, self.k, self.v]]
         if (
             q.dtype == k.dtype == v.dtype == f16
-            and same_list(q.shape, v.shape)
-            and len(q.shape) == len(k.shape)
-            and (q.shape[-2], q.shape[-1]) == (k.shape[-1], k.shape[-2])
+            and len(q.shape) == len(k.shape) == len(v.shape)
+            and k.shape[-1] == v.shape[-2]
+            and q.shape[-1] == k.shape[-2] == v.shape[-1]
             and q.shape[-1] <= 160
         ):
             return [attention(q, k, v)]
@@ -103,9 +102,9 @@ class AttentionMaskAddRewriteRule(SubgraphRewriteRule):
         q, k, v, mask = [matched[t] for t in [self.q, self.k, self.v, self.mask]]
         if (
             q.dtype == k.dtype == v.dtype == f16
-            and same_list(q.shape, v.shape)
-            and len(q.shape) == len(k.shape)
-            and (q.shape[-2], q.shape[-1]) == (k.shape[-1], k.shape[-2])
+            and len(q.shape) == len(k.shape) == len(v.shape)
+            and k.shape[-1] == v.shape[-2]
+            and q.shape[-1] == k.shape[-2] == v.shape[-1]
             and q.shape[-1] <= 160
         ):
             return [attention(q, k, v, mask)]

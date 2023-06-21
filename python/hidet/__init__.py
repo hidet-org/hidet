@@ -18,7 +18,7 @@ from . import backend
 from . import utils
 from . import graph
 from . import runtime
-from . import driver
+from . import drivers
 from . import logging
 from . import cuda
 
@@ -31,7 +31,7 @@ from .ir.dtypes import bfloat16, tfloat32, complex64, complex128
 from .ir.expr import symbol_var
 
 from .runtime.device import Device, device
-from .runtime.model import save_model, load_model
+from .runtime.compiled_graph import save_compiled_graph, load_compiled_graph
 
 from .graph import Tensor, Operator, Module, FlowGraph
 from .graph import nn

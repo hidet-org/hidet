@@ -182,10 +182,10 @@ def dump(flow_graph, fp):
         inputs.append(Parameter(name, argument))
 
     constant_cnt = 0
-    for node in flow_graph.nodes:
+    for node_idx, node in enumerate(flow_graph.nodes):
         node_type = node.name
         node2idx[node_type] += 1
-        node_name = '{}{}'.format(node_type, node2idx[node_type])
+        node_name = '{}_{}'.format(node_idx, node_type)
         for idx, tensor in enumerate(node.inputs):
             if tensor.storage is None:  # not a constant
                 continue

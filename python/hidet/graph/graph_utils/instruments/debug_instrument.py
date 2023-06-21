@@ -13,7 +13,7 @@ from typing import List, Optional, Dict
 import os
 import numpy as np
 
-from hidet.graph.flow_graph import FlowGraph, Operator, Tensor, GraphForwardInstrument, SymbolVar
+from hidet.graph.flow_graph import FlowGraph, Operator, Tensor, GraphForwardInstrument
 
 
 class GraphForwardDebugInstrument(GraphForwardInstrument):
@@ -59,17 +59,20 @@ class GraphForwardDebugInstrument(GraphForwardInstrument):
     @staticmethod
     def tensor_stats(array: np.ndarray) -> Dict[str, str]:
         double_array = array.astype(np.float64)
-        return {
-            'nan': '{:8d}'.format(np.count_nonzero(np.isnan(array))),
-            'inf': '{:8d}'.format(np.count_nonzero(np.isinf(array))),
-            'zero': '{:8d}'.format(np.count_nonzero(array == 0)),
-            'min': '{:8.2e}'.format(np.min(double_array)),
-            'max': '{:8.2e}'.format(np.max(double_array)),
-            'mean': '{:8.2e}'.format(np.mean(double_array)),
-            'std': '{:8.2e}'.format(np.std(double_array)),
-        }
+        if array.size == 0:
+            return {'nan': '0', 'inf': '0', 'zero': '0', 'min': '-', 'max': '-', 'mean': '-', 'std': '-'}
+        else:
+            return {
+                'nan': '{:8d}'.format(np.count_nonzero(np.isnan(array))),
+                'inf': '{:8d}'.format(np.count_nonzero(np.isinf(array))),
+                'zero': '{:8d}'.format(np.count_nonzero(array == 0)),
+                'min': '{:8.2e}'.format(np.min(double_array)),
+                'max': '{:8.2e}'.format(np.max(double_array)),
+                'mean': '{:8.2e}'.format(np.mean(double_array)),
+                'std': '{:8.2e}'.format(np.std(double_array)),
+            }
 
-    def before_operator(self, op: Operator, inputs: List[Tensor], shape_map: Dict[SymbolVar, int]) -> None:
+    def before_operator(self, op: Operator, inputs: List[Tensor]) -> None:
         if not self.debugging:
             return
 
@@ -105,9 +108,7 @@ class GraphForwardDebugInstrument(GraphForwardInstrument):
         with open(self.summary_file, 'a') as f:
             f.write('\n'.join(lines) + '\n')
 
-    def after_operator(
-        self, op: Operator, inputs: List[Tensor], shape_map: Dict[SymbolVar, int], outputs: List[Tensor]
-    ) -> None:
+    def after_operator(self, op: Operator, inputs: List[Tensor], outputs: List[Tensor]) -> None:
         if not self.debugging:
             return
 
@@ -134,18 +135,12 @@ class GraphForwardDebugInstrument(GraphForwardInstrument):
             found_abnormal = found_abnormal or int(stats['nan']) > 0 or int(stats['inf']) > 0
 
             if self.dump_outputs:
-                array = array.squeeze()
                 array_path = os.path.join(
                     self.output_dir, '{}_{}{}.txt'.format(self.operator_idx, op.name, f'_y{idx}' if idx > 0 else '')
                 )
-                if array.ndim <= 2:
-                    if array.ndim == 0:
-                        array = array.reshape(1)
-                    np.savetxt(array_path, array, fmt='%8.5e')
-                else:
-                    with open(array_path, 'w') as f:
-                        with np.printoptions(precision=8, edgeitems=30, linewidth=512):
-                            f.write(str(array))
+                with open(array_path, 'w') as f:
+                    with np.printoptions(precision=8, edgeitems=30, linewidth=512):
+                        f.write(str(array))
 
         with open(self.summary_file, 'a') as f:
             f.write('\n'.join(lines) + '\n')

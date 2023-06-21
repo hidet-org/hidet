@@ -13,9 +13,10 @@ from typing import Optional, List, Union, Dict, Tuple
 
 import hidet.utils.structure
 from hidet.ir.node import Node
-from hidet.ir.func import IRModule, Function
+from hidet.ir.module import IRModule
+from hidet.ir.func import Function
 from hidet.ir.type import DataType, TensorType, VoidType, PointerType, ReferenceType, TensorPointerType, FuncType
-from hidet.ir.type import ArrayType
+from hidet.ir.type import ArrayType, StringType
 from hidet.ir.expr import Constant, Var, Call, TensorElement, Add, Multiply, LessThan, FloorDiv, Mod, Equal, Div
 from hidet.ir.expr import Sub, LogicalNot, LogicalOr, LogicalAnd, Let, IfThenElse, TensorSlice
 from hidet.ir.expr import RightShift, LeftShift, BitwiseNot, BitwiseOr
@@ -88,8 +89,16 @@ class IRPrinter(IRFunctor):
     def visit_IRModule(self, ir_module: IRModule):
         doc = Doc()
         self.ir_module = ir_module
-        if ir_module.task is not None:
-            doc += self(ir_module.task) + NewLine()
+
+        for linking_lib in ir_module.linking_libs:
+            doc += Text('link lib: ') + linking_lib + NewLine()
+        for object_file in ir_module.object_files:
+            doc += Text('external object: ') + object_file + NewLine()
+        for header in ir_module.include_headers:
+            doc += Text('#include <{}>'.format(header)) + NewLine()
+        if len(ir_module.include_headers) + len(ir_module.linking_libs) + len(ir_module.object_files) > 0:
+            doc += NewLine()
+
         for name, var in ir_module.global_vars.items():
             if name in ir_module.functions:
                 continue
@@ -232,6 +241,8 @@ class IRPrinter(IRFunctor):
                 ret = 'half({})'.format(float(e.value))
             elif dtype == 'int32':
                 ret = '{}'.format(int(e.value))
+            elif dtype == 'bool':
+                ret = 'true' if e.value else 'false'
             else:
                 ret = '{}({})'.format(dtype, e.value)
             return Text(ret)
@@ -385,6 +396,9 @@ class IRPrinter(IRFunctor):
     def visit_ArrayType(self, t: ArrayType):
         return Text('array(') + self(t.base_type) + ', size=' + self(t.size) + ')'
 
+    def visit_StringType(self, t: StringType):
+        return Text('char*')
+
     def visit_PointerType(self, t: PointerType):
         if isinstance(t.base_type, VoidType):
             return Text('void*')
@@ -469,6 +483,14 @@ class IRPrinter(IRFunctor):
             Text('computations: ') + self.print_tensor_nodes(e.outputs).indent(),
             Text('attributes: {') + self({k: str(v) for k, v in e.attrs.items()}) + '}',
         ]
+        if len(e.assertions) > 0:  # between computations and attributes
+            lines.append(
+                Text('assertions: ')
+                + (
+                    NewLine()  # self.assertions: List[Tuple[Expr, str]]
+                    + doc_join(['assert {}'.format(str(self.visit(v[0]))) for v in e.assertions], NewLine())
+                ).indent()
+            )
         front_part = doc_join(lines, NewLine())
         inverse_map_doc = Doc()
         if e.inverse_map:
