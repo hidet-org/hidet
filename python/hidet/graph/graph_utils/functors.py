@@ -119,7 +119,7 @@ class GraphRewriter:
 class GraphCloneRewriter(GraphRewriter):
     def visit_FlowGraph(self, graph: FlowGraph):
         outputs = [self.visit(output) for output in graph.outputs]
-        return FlowGraph(outputs, graph.inputs)
+        return FlowGraph(outputs, graph.inputs, nrank=graph._nrank, rank=graph._rank, groups=graph._groups)
 
     def visit_Operator(self, op: Operator):
         inputs = [self(x) for x in op.inputs]

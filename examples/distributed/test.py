@@ -1,6 +1,14 @@
 """
 Testing script for distributed components for hidet
 To debug, set the environment variable NCCL_DEBUG=INFO
+
+To install nccl, run
+
+    pip install nvidia-nccl-cu11==2.18.3
+
+Or
+
+    pip install nvidia-nccl-cu12==2.18.3
 """
 import hidet
 import multiprocessing
@@ -11,7 +19,8 @@ import argparse
 import hidet
 import hidet.cuda.nccl
 from hidet.cuda import nccl
-from hidet.cuda.nccl import NcclUniqueId,NcclRedOp
+from hidet.cuda.nccl import NcclUniqueId
+from hidet.runtime.compiled_graph import GraphDistributedInfo
 
 print("NCCL version:", nccl.nccl_version())
 
@@ -38,15 +47,16 @@ def run(world_size, rank, shared_id, barrier):
     x_symb = hidet.symbol_like(x)
     w_symb = hidet.symbol_like(w)
     y_local = hidet.ops.relu(x_symb @ w_symb)
-    y_sync = hidet.ops.all_reduce(y_local, getattr(NcclRedOp, args.reduce_op), 0)
+    y_sync = hidet.ops.all_reduce(y_local, args.reduce_op)
     graph = hidet.trace_from([y_local, y_sync], inputs=[x_symb, w_symb])
     opt_graph = hidet.graph.optimize(graph)
+    opt_graph.set_dist_attrs(nrank=world_size, rank=rank)
+    compiled = opt_graph.build()
 
     # Create Distributed Graph
-    dist_graph = hidet.graph.DistributedFlowGraph(opt_graph, world_size, rank)
-    dist_graph.initialize(shared_id)
+    compiled.init_dist(shared_id)
 
-    y_local, y_sync = dist_graph(x, w)
+    y_local, y_sync = compiled(x, w)
 
     s = hidet.cuda.current_stream() 
     s.synchronize()

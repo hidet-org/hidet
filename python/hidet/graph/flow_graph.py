@@ -107,12 +107,17 @@ def forward_context() -> GraphForwardContext:
 class FlowGraph:
     """The computation graph representation."""
 
-    def __init__(self, outputs: Sequence[Tensor], inputs: Optional[Sequence[Tensor]] = None, nodes=None):
+    def __init__(self, outputs: Sequence[Tensor], inputs: Optional[Sequence[Tensor]] = None, nodes=None, nrank=None, rank=None, groups=None):
         self.outputs: List[Tensor] = list(outputs)
         self.inputs: Optional[List[Tensor]] = list(inputs) if inputs is not None else None
         self._nodes: Optional[List[Operator]] = nodes
         self._usage_count: Optional[Dict[Tensor, int]] = None
         self.update_nodes()
+
+        # For distributed graphs
+        self._nrank = nrank
+        self._rank = rank
+        self._groups = groups
 
     def __call__(self, *inputs: Tensor) -> Union[List[Tensor], Tensor]:
         """
@@ -179,6 +184,14 @@ class FlowGraph:
             hidet.option.parallel_build(False)
             hidet.drivers.build_task_batch(tunable_tasks)  # build tunable tasks one by one
 
+    def is_distributed(self):
+        return self._nrank is not None or self._rank is not None
+
+    def set_dist_attrs(self, nrank: int, rank: int, groups: Optional[List[List[int]]] = None):
+        self._nrank = nrank
+        self._rank = rank
+        self._groups = groups
+
     def forward(self, inputs: List[Tensor]) -> List[Tensor]:
         """Run the computation graph.
 
@@ -193,6 +206,9 @@ class FlowGraph:
         output: List[Tensor]
             The output tensors of the computation graph.
         """
+        if self.is_distributed():
+            raise RuntimeError("Running Distributed FlowGraph is not supported. Please compile it first.")
+
         from hidet.ffi import runtime_api
 
         inputs: List[Tensor] = list(inputs)

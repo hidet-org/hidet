@@ -49,20 +49,11 @@ def load_nccl_library():
         _LIB_NCCL = ctypes.cdll.LoadLibrary(lib_nccl_paths[0])
         nccl_library_path = lib_nccl_paths[0]
         break
-    if _LIB_NCCL is None:
-        raise OSError('Can not find nccl library in the following directory: \n' + '\n'.join(library_dirs))
-
 
 load_nccl_library()
 
-
 def nccl_library_filename():
     return os.path.basename(nccl_library_path)
-
-
-if not nccl_available():
-    raise RuntimeError("NCCL Library not found.")
-
 
 class NCCLRuntimeAPI:
     """
@@ -77,6 +68,8 @@ class NCCLRuntimeAPI:
 
     _comm_user_rank = get_func('ncclCommUserRank', [c_void_p, POINTER(c_int)], c_int, lib=_LIB_NCCL)
     _comm_count = get_func('ncclCommCount', [c_void_p, POINTER(c_int)], c_int, lib=_LIB_NCCL)
+
+    _comm_split = get_func('ncclCommSplit', [c_void_p, c_int, c_int, c_void_p, c_void_p], c_int, lib=_LIB_NCCL)
 
     @staticmethod
     def get_version() -> int:
@@ -104,5 +97,13 @@ class NCCLRuntimeAPI:
         ret = NCCLRuntimeAPI._comm_destroy(comm_handle)
         assert ret == 0
 
+    @staticmethod
+    def comm_split(comm_handle: int, color: int, key: int) -> int:
+        comm = c_void_p()
+        ret = NCCLRuntimeAPI._comm_split(comm_handle, color, key, pointer(comm), None)
+        assert ret == 0
+        return comm.value
 
-nccl_runtime_api = NCCLRuntimeAPI()
+
+if nccl_available():
+    nccl_runtime_api = NCCLRuntimeAPI()
