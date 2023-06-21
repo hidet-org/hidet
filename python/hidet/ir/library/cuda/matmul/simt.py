@@ -54,12 +54,12 @@ def check_type(a_type: TensorType, b_type: TensorType, c_type: TensorType):
 
 @tune.space(
     2,
-    parallel_k=[1, 2, 4, 8, 10, 12, 16],
+    parallel_k=[1, 4, 8, 16],
     block_shape=[(128, 128, 8), (128, 128, 16), (64, 128, 16), (128, 64, 16), (64, 64, 16), (64, 64, 32), (64, 64, 64)],
-    warp_shape=[(64, 64, 8), (64, 64, 16), (64, 64, 32), (64, 64, 64)],
-    warp_threads=[(4, 8), (1, 32), (2, 16), (8, 4), (16, 2), (32, 1)],
-    thread_shape=[(4, 4), (2, 4), (4, 2), (2, 2)],
-    arch='sm_70'
+    warp_shape=[(32, 32, 16), (64, 64, 8), (64, 64, 16), (64, 64, 32)],
+    warp_threads=[(4, 8), (2, 16), (8, 4), (16, 2)],
+    thread_shape=[(4, 4)],
+    arch=['sm_70']
 )
 def matmul_simt(
     arg_a: Expr,

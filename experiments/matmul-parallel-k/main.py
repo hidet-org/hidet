@@ -15,7 +15,7 @@ from hidet.ir.library import tune
 from hidet.ir.library.cuda import matmul_simt
 
 hidet.option.cache_dir('./outs/cache')
-hidet.utils.clear_op_cache()
+# hidet.utils.clear_op_cache()
 hidet.option.save_lower_ir()
 
 
