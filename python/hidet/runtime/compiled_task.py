@@ -122,7 +122,7 @@ class CompiledTask:
             if len(self.candidates) > 1:
                 warmup, number, repeat = hidet.option.get_bench_config()
                 latencies = []
-                for candidate in self.candidates:
+                for idx, candidate in enumerate(self.candidates):
                     for _ in range(warmup):
                         candidate(*inputs, *outputs)
                     candidate_latency = 0.0

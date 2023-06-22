@@ -1,4 +1,5 @@
 from typing import Union, List
+import numpy
 import hidet
 from hidet.ir.dtypes import f16, f32
 from hidet.ir.type import tensor_pointer_type
@@ -49,14 +50,16 @@ class MatmulTask(Task):
     )
     @tune.space(
         1,
-        parallel_k=[1, 8],
-        # parallel_k=[1],
-        block_shape=[(64, 128, 16), (128, 64, 16), (64, 64, 16), (64, 64, 32), (64, 64, 64), (128, 128, 16),
-                     (128, 128, 32), (128, 128, 64)],
-        # block_shape=[(128, 128, 64)],
-        warp_shape=[(32, 32, 16), (64, 64, 8), (32, 64, 8), (32, 64, 16), (32, 64, 32)],
-        # warp_shape=[(32, 64, 32)],
-        warp_threads=[(4, 8), (2, 16), (8, 4), (16, 2)],
+        # parallel_k=[1, 8],
+        # block_shape=[(64, 128, 16), (128, 64, 16), (64, 64, 16), (64, 64, 32), (64, 64, 64), (128, 128, 16),
+        #              (128, 128, 32), (128, 128, 64)],
+        # warp_shape=[(32, 32, 16), (64, 64, 8), (32, 64, 8), (32, 64, 16), (32, 64, 32)],
+        # warp_threads=[(4, 8), (2, 16), (8, 4), (16, 2)],
+        # thread_shape=[(4, 4)],
+        parallel_k=[8],
+        block_shape=[(128, 64, 16)],
+        warp_shape=[(32, 32, 16)],
+        warp_threads=[(4, 8)],
         thread_shape=[(4, 4)],
         arch=['sm_70']
     )
@@ -107,31 +110,24 @@ def benchmark():
         b = hidet.symbol(['b', 'k', 'n'], dtype=dtype, device='cuda')
         c = my_matmul(a, b)
         graph = hidet.trace_from(c, [a, b])
-        cgraph = graph.build(space=0)
+        cgraph = graph.build(space=1)
 
         # for m_size, n_size, k_size in [(1024, 1024, 1024), (1024, 3072, 768), (1024, 768, 3072)]:
         for m_size, n_size, k_size in [(1024, 1024, 1024)]:
-        # for m_size, n_size, k_size in [(1024, 1024, 1024)]:
-        #     aa = hidet.randn([1, m_size, k_size], dtype=dtype, device='cuda', stddev=0.1 if dtype=='float16' else 1)
-        #     bb = hidet.randn([1, k_size, n_size], dtype=dtype, device='cuda', stddev=0.1 if dtype=='float16' else 1)
-            aa = hidet.ones([1, m_size, k_size], dtype=dtype, device='cuda')
-            bb = hidet.ones([1, k_size, n_size], dtype=dtype, device='cuda')
+            aa = hidet.randn([1, m_size, k_size], dtype=dtype, device='cuda', stddev=0.1 if dtype == 'float16' else 1)
+            bb = hidet.randn([1, k_size, n_size], dtype=dtype, device='cuda', stddev=0.1 if dtype == 'float16' else 1)
+            # aa = hidet.ones([1, m_size, k_size], dtype=dtype, device='cuda')
+            # bb = hidet.ones([1, k_size, n_size], dtype=dtype, device='cuda')
 
-            # check correctness
-            # print(aa)
-            # print(bb)
             c1 = cgraph(aa, bb)
+            hidet.cuda.synchronize()
             c2 = aa.torch() @ bb.torch()
-            # c3 = aa @ bb
-            # print(c1)
-            # print(c2)
-            # print(c1[0, :128, :128])
-            # print(c1[0, 128:, 128:])
             tol = 1e-3 if dtype == 'float32' else 1e-2
-            # hidet.utils.assert_close(c1, c3, rtol=tol, atol=tol)
             hidet.utils.assert_close(c1, c2, rtol=tol, atol=tol)
 
-            # benchmark
+            # # benchmark
+            # at = aa.torch()
+            # bt = bb.torch()
             # torch_latency = hidet.utils.benchmark_func(lambda: at @ bt, number=100, repeat=10)
             # hidet_latency = hidet.utils.benchmark_func(lambda: cgraph(aa, bb), number=100, repeat=10)
             # print(' {:4} x {:4} x {:4} torch: {:.3f}'.format(m_size, n_size, k_size, torch_latency))

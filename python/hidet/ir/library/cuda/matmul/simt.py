@@ -47,7 +47,7 @@ def check_type(a_type: TensorType, b_type: TensorType, c_type: TensorType):
         or is_true(a_shape[-2] != c_shape[-2])
         or is_true(b_shape[-1] != c_shape[-1])
         or not can_broadcast(a_shape[:-2], c_shape[:-2])
-        or not can_broadcast(b_shape[:-1], c_shape[:-1])
+        or not can_broadcast(b_shape[:-2], c_shape[:-2])
     ):
         raise ValueError('The shapes of a, b, c are not compatible, got {}, {}, {}'.format(a_shape, b_shape, c_shape))
 
@@ -206,9 +206,15 @@ def matmul_simt(
         regs_a_layout.size + regs_b_layout.size + regs_c_layout.size + regs_a_ldg_layout.size + regs_b_ldg_layout.size
     ) // 4 + 32  # 32 reserved for intermediate results
     tune.check(num_regs < 256)
+
+    block_m_cwb_threshold = int(block_k * 2 * (1 + block_n / block_m))
+    block_m_cwb_candidates = [v for v in hidet.utils.factorize(block_m) if v >= block_m_cwb_threshold]
+    tune.check(len(block_m_cwb_candidates) > 0)
+    block_m_cwb = min(block_m_cwb_candidates)
     smem_total_size: int = int(max(
-        vtype.nbytes * (smem_a_layout.size + smem_b_layout.size), dtype.nbytes * block_m * block_n
+        vtype.nbytes * (smem_a_layout.size + smem_b_layout.size), dtype.nbytes * block_m_cwb * block_n
     ))
+
     tune.check(smem_total_size <= capability.sharedMemPerBlock)
     tune.metric('smem (kb)', int(smem_total_size / 1024))
     tune.metric('regs', num_regs)
@@ -302,31 +308,30 @@ def matmul_simt(
         c_head_indices = spatial(*c_head).map(blockIdx.y)
         gmem_c_head = c[c_part_index + c_head_indices]
         gmem_c = gmem_c_head[offset_m:, offset_n:]
+
+        syncthreads()   # because smem_a, smem_b share the shared memory with smem_c
+
         # write results to smem
-        smem_c = tensor_pointer(dtype, shape=[block_m, block_n], init=dynamic_shared_memory(0, dtype))
-        for k_round in grid(block_warps_k, 'u'):
-            _, _, warp_k_round = spatial(*block_warps).map(threadIdx.x / 32)
-            if k_round == warp_k_round:
-                for i, j, _ in block_mapping.on(threadIdx.x):
-                    if offset_m + i < m_size and offset_n + j < n_size:
-                        regs_c_ptr = cast(~regs_c[i, j], ~dtype)
-                        result = sum(regs_c_ptr[k] for k in range(lanes))
-                        if block_warps_k == 1:
-                            gmem_c[i, j] = result
-                        else:
-                            if k_round == 0:
-                                smem_c[i, j] = result
-                            elif k_round < block_warps_k - 1:
-                                smem_c[i, j] += result
-                            else:
-                                gmem_c[i, j] = smem_c[i, j] + result
-            if block_warps_k > 1 and k_round < block_warps_k - 1:
+        for m_seg in range(block_m // block_m_cwb):
+            smem_c = tensor_pointer(dtype, shape=[block_m_cwb, block_n], init=dynamic_shared_memory(0, dtype))
+            mapping = auto_map(block_m_cwb, block_n, workers=num_threads)
+
+            for k_round in grid(block_warps_k, 'u'):
+                for i, j, warp_k_round in block_mapping.on(threadIdx.x):
+                    if k_round == warp_k_round and (i / block_m_cwb) == m_seg:
+                        if offset_m + i < m_size and offset_n + j < n_size:
+                            regs_c_ptr = cast(~regs_c[i, j], ~dtype)
+                            result = sum(regs_c_ptr[k] for k in range(lanes))
+                            ii = i % block_m_cwb
+                            smem_c[ii, j] = result if k_round == 0 else smem_c[ii, j] + result
                 syncthreads()
 
-        # mapping = auto_map(block_m, block_n, workers=num_threads)
-        # for i, j in mapping.on(threadIdx.x):
-        #     if offset_m + i < m_size and offset_n + j < n_size:
-        #         gmem_c[i, j] = smem_c[i, j]
+            for ii, j in mapping.on(threadIdx.x):
+                i = ii + m_seg * block_m_cwb
+                if offset_m + i < m_size and offset_n + j < n_size:
+                    gmem_c[i, j] = smem_c[ii, j]
+
+            syncthreads()
 
     @hidet.script
     def mma(
