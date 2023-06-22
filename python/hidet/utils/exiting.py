@@ -32,7 +32,7 @@ _is_exiting = False
 
 def is_exiting():
     """Returns True if the python interpreter is exiting."""
-    return _is_exiting is None or _is_exiting is True
+    return _is_exiting is True
 
 
 def _at_exit():
