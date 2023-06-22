@@ -59,6 +59,7 @@ def nccl_library_filename():
 
 
 if nccl_available():
+
     class NCCLRuntimeAPI:
         """
         Runtime APIs regarding NCCL
