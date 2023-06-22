@@ -107,7 +107,15 @@ def forward_context() -> GraphForwardContext:
 class FlowGraph:
     """The computation graph representation."""
 
-    def __init__(self, outputs: Sequence[Tensor], inputs: Optional[Sequence[Tensor]] = None, nodes=None, nrank=None, rank=None, groups=None):
+    def __init__(
+        self,
+        outputs: Sequence[Tensor],
+        inputs: Optional[Sequence[Tensor]] = None,
+        nodes=None,
+        nrank=None,
+        rank=None,
+        groups=None,
+    ):
         self.outputs: List[Tensor] = list(outputs)
         self.inputs: Optional[List[Tensor]] = list(inputs) if inputs is not None else None
         self._nodes: Optional[List[Operator]] = nodes
@@ -115,9 +123,9 @@ class FlowGraph:
         self.update_nodes()
 
         # For distributed graphs
-        self._nrank = nrank
-        self._rank = rank
-        self._groups = groups
+        self.nrank = nrank
+        self.rank = rank
+        self.groups = groups
 
     def __call__(self, *inputs: Tensor) -> Union[List[Tensor], Tensor]:
         """
@@ -185,12 +193,12 @@ class FlowGraph:
             hidet.drivers.build_task_batch(tunable_tasks)  # build tunable tasks one by one
 
     def is_distributed(self):
-        return self._nrank is not None or self._rank is not None
+        return self.nrank is not None or self.rank is not None
 
     def set_dist_attrs(self, nrank: int, rank: int, groups: Optional[List[List[int]]] = None):
-        self._nrank = nrank
-        self._rank = rank
-        self._groups = groups
+        self.nrank = nrank
+        self.rank = rank
+        self.groups = groups
 
     def forward(self, inputs: List[Tensor]) -> List[Tensor]:
         """Run the computation graph.

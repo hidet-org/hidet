@@ -51,14 +51,14 @@ def run(world_size, rank, shared_id, barrier):
         
 
     device = f"cuda:{rank}"
-    x = hidet.randn([2, 3], device=device)
+    x = hidet.randn([1, 3], device=device)
     w = hidet.randn([3, 2], device=device)
 
     # Create Computation Graph
     x_symb = hidet.symbol_like(x)
     w_symb = hidet.symbol_like(w)
     y_local = hidet.ops.relu(x_symb @ w_symb)
-    y_sync = hidet.ops.all_reduce(y_local, args.reduce_op)
+    y_sync = hidet.ops.all_reduce(y_local, args.reduce_op, comm_id=int(use_group))
     graph = hidet.trace_from([y_local, y_sync], inputs=[x_symb, w_symb])
     opt_graph = hidet.graph.optimize(graph)
     opt_graph.set_dist_attrs(nrank=world_size, rank=rank, groups=groups)
@@ -71,7 +71,7 @@ def run(world_size, rank, shared_id, barrier):
 
     s = hidet.cuda.current_stream() 
     s.synchronize()
-    print(f"process {rank}\nbefore allreduce:{y_local}\nafter allreduce:{y_sync}")
+    print(f"process {rank}\nbefore allreduce:{y_local}\nafter allreduce:{y_sync}\n", end='')
 
 world_size = args.n_gpus
 

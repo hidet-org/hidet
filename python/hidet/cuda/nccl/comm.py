@@ -19,7 +19,7 @@ from .ffi import nccl_available, NcclUniqueId
 
 NCCL_SPLIT_NOCOLOR = -1
 
-if nccl_available:
+if nccl_available():
     from .ffi import nccl_runtime_api
 
 
@@ -48,10 +48,12 @@ class NcclRedOp(IntEnum):
     min = 3
     avg = 4
 
+
 def str_to_nccl_op(name: str) -> NcclRedOp:
     if name not in ('sum', 'prod', 'max', 'min', 'avg'):
         raise RuntimeError(f"'{name}' is not a supported reduce op")
     return getattr(NcclRedOp, name)
+
 
 class NcclCommunicator:
     def __init__(self, handle: int):

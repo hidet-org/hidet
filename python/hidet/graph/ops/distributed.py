@@ -21,7 +21,7 @@ from .utils import Task, TensorNode, Operator, Tensor, compute, input_like
 
 
 class AllReduceTask(Task):
-    def __init__(self, x: TensorNode, op: str, comm_id: int=0):
+    def __init__(self, x: TensorNode, op: str, comm_id: int = 0):
         y = compute('out', x.shape, lambda *indices: x[indices])
         self.comm_id = comm_id
         self.op = op
@@ -57,29 +57,33 @@ class AllReduceOp(Operator):
             inputs=[x], attributes={'op': op, 'comm_id': comm_id}, task=AllReduceTask(input_like(x, 'x'), op, comm_id)
         )
 
-def all_reduce(x: Tensor, op: str, comm_id: int=0) -> Tensor:
+
+def all_reduce(x: Tensor, op: str, comm_id: int = 0) -> Tensor:
     if x.device.kind != 'cuda':
         raise RuntimeError("NCCL only supports CUDA tensors")
     return AllReduceOp(x, op, comm_id).outputs[0]
 
-def broadcast(x: Tensor, root: int, comm_id: int=0) -> Tensor:
-    raise NotImplementedError()
 
-def reduce(x: Tensor, root: int, op: str, comm_id: int=0) -> Tensor:
-    raise NotImplementedError()
-
-def all_gather(x: Tensor, comm_id: int=0) -> Tensor:
+def broadcast(x: Tensor, root: int, comm_id: int = 0) -> Tensor:
     raise NotImplementedError()
 
 
-def reduce_scatter(x: Tensor, op: str, comm_id: int=0) -> Tensor:
+def reduce(x: Tensor, root: int, op: str, comm_id: int = 0) -> Tensor:
     raise NotImplementedError()
 
 
-def send(x: Tensor, peer: int, comm_id: int=0) -> None:
+def all_gather(x: Tensor, comm_id: int = 0) -> Tensor:
+    raise NotImplementedError()
+
+
+def reduce_scatter(x: Tensor, op: str, comm_id: int = 0) -> Tensor:
+    raise NotImplementedError()
+
+
+def send(x: Tensor, peer: int, comm_id: int = 0) -> None:
     raise NotImplementedError()
 
 
 # Recv is a little bit tricky since we need to pass the metadata of the recv buffer
-def recv(peer: int, comm_id: int=0) -> Tensor:
+def recv(peer: int, comm_id: int = 0) -> Tensor:
     raise NotImplementedError()

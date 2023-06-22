@@ -38,6 +38,7 @@ from .check_launch_configuration import check_launch_configuration_pass
 from .lower_special_cast import lower_special_cast_pass
 from .include_nccl import include_nccl_pass
 
+
 def lower_with(ir_module: IRModule, transforms: Sequence[Pass]) -> IRModule:
     ctx = PassContext.current()
     for instrument in ctx.instruments:
@@ -80,6 +81,6 @@ def lower(ir_module: IRModule) -> IRModule:
         rule_based_simplify_pass(),
         inline_let_stmt_pass(),
         simplify_stmt_pass(),
-        include_nccl_pass()
+        include_nccl_pass(),
     ]
     return lower_with(ir_module, transforms)

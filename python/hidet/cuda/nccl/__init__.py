@@ -20,5 +20,5 @@ from .comm import (
     dtype_to_nccl,
     NcclCommunicator,
     str_to_nccl_op,
-    NCCL_SPLIT_NOCOLOR
+    NCCL_SPLIT_NOCOLOR,
 )

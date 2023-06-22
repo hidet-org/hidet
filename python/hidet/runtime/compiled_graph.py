@@ -64,6 +64,7 @@ class GraphExecution:
     outputs_index: List[int]
     tensor_device: List[str]
 
+
 @dataclass
 class GraphDistributedInfo:
     nrank: int
@@ -80,7 +81,7 @@ class CompiledGraph:
         compiled_tasks: List[CompiledTask],
         graph_execution: GraphExecution,
         graph_string: str,
-        dist_info: Optional[GraphDistributedInfo]=None
+        dist_info: Optional[GraphDistributedInfo] = None,
     ):
         from hidet.graph.tensor import Tensor
 
@@ -112,7 +113,7 @@ class CompiledGraph:
         self.dispatch_table: Dict[Tuple[int, ...], Array] = {}
         self.cuda_workspace: Optional[Storage] = None
         self.cpu_workspace: Optional[Storage] = None
-    
+
         # distributed properties
         self.dist_info: Optional[GraphDistributedInfo] = dist_info
         self.nccl_comms: List[NcclCommunicator] = []
@@ -201,9 +202,6 @@ class CompiledGraph:
                 comm = default_comm.split(key, color)
                 if in_group:
                     self.nccl_comms.append(comm)
-        
-        print(self.nccl_comms)
-
 
     def _update_symbol_table(self, symbol_dims: Tuple[int, ...], best_candidates: List[int]):
         kernel_array = Array(void_p, len(self.compiled_tasks))
@@ -403,7 +401,7 @@ def save_compiled_graph(model: CompiledGraph, path: str):
         # save graph string
         with zf.open('graph_string.txt', 'w') as f:
             f.write(model.graph_string.encode('utf-8'))
-        
+
         # save distibuted information
         if model.dist_info is not None:
             with zf.open('dist_info.json', 'w') as f:
@@ -462,6 +460,8 @@ def load_compiled_graph(path: str) -> CompiledGraph:
         graph_string = f.read()
 
     # construct the compiled graph
-    ret = CompiledGraph(meta_data, graph_module, weights, compiled_tasks, graph_execution, graph_string, dist_info=dist_info)
+    ret = CompiledGraph(
+        meta_data, graph_module, weights, compiled_tasks, graph_execution, graph_string, dist_info=dist_info
+    )
 
     return ret

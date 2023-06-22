@@ -14,7 +14,7 @@ import string
 from hidet.ir.node import Node
 from hidet.ir.type import BaseType
 from hidet.ir.expr import Var, Call
-from hidet.ir.stmt import Stmt, BlackBoxStmt
+from hidet.ir.stmt import Stmt
 
 
 def check_func_name(name: str):
@@ -94,4 +94,3 @@ class Function(Node):
             return default
         else:
             raise KeyError('Attribute {} is not found in function {}'.format(attr_name, self.name))
-

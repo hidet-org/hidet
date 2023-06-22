@@ -50,10 +50,13 @@ def load_nccl_library():
         nccl_library_path = lib_nccl_paths[0]
         break
 
+
 load_nccl_library()
+
 
 def nccl_library_filename():
     return os.path.basename(nccl_library_path)
+
 
 class NCCLRuntimeAPI:
     """
