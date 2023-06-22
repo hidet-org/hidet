@@ -95,7 +95,7 @@ class DataLayout(Node):
             return '{}(shape={}, size={})'.format(self.__class__.__name__, self.shape, self.size)
         else:
             shape = [int(v) for v in self.shape]
-            table = np.zeros(shape=shape, dtype=np.int)
+            table = np.zeros(shape=shape, dtype=int)
             ranges = [range(v) for v in shape]
             for indices in itertools.product(*ranges):
                 local_index = self.global2local(*indices)
