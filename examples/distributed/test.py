@@ -64,6 +64,11 @@ def run(world_size, rank, shared_id, barrier):
     opt_graph.set_dist_attrs(nrank=world_size, rank=rank, groups=groups)
     compiled = opt_graph.build()
 
+    # test save and load
+    compiled_dir = f"./outs/graph_{rank}.zip"
+    compiled.save(compiled_dir)
+    compiled = hidet.runtime.load_compiled_graph(compiled_dir)
+
     # Create Distributed Graph
     compiled.init_dist(shared_id)
 

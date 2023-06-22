@@ -425,7 +425,7 @@ def load_compiled_graph(path: str) -> CompiledGraph:
             graph_execution: GraphExecution = from_dict(GraphExecution, json.load(f))
 
         # load dist info
-        if zipfile.Path(zf, 'dist_info.json').exists():
+        if 'dist_info.json' in zf.namelist():
             with zf.open('dist_info.json', 'r') as f:
                 dist_info: GraphDistributedInfo = from_dict(GraphDistributedInfo, json.load(f))
 
