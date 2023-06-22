@@ -20,7 +20,6 @@ import hidet
 import hidet.cuda.nccl
 from hidet.cuda import nccl
 from hidet.cuda.nccl import NcclUniqueId
-from hidet.runtime.compiled_graph import GraphDistributedInfo
 
 print("NCCL version:", nccl.nccl_version())
 
