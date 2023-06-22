@@ -73,7 +73,11 @@ if nccl_available():
         _comm_user_rank = get_func('ncclCommUserRank', [c_void_p, POINTER(c_int)], c_int, lib=_LIB_NCCL)
         _comm_count = get_func('ncclCommCount', [c_void_p, POINTER(c_int)], c_int, lib=_LIB_NCCL)
 
-        _comm_split = get_func('ncclCommSplit', [c_void_p, c_int, c_int, c_void_p, c_void_p], c_int, lib=_LIB_NCCL)
+        # Early versions of NCCL do not have split
+        try:
+            _comm_split = get_func('ncclCommSplit', [c_void_p, c_int, c_int, c_void_p, c_void_p], c_int, lib=_LIB_NCCL)
+        except ValueError:
+            _comm_split = None
 
         @staticmethod
         def get_version() -> int:
@@ -103,6 +107,8 @@ if nccl_available():
 
         @staticmethod
         def comm_split(comm_handle: int, color: int, key: int) -> int:
+            if NCCLRuntimeAPI._comm_split is None:
+                raise RuntimeError("split is not supported on this version of NCCL. Please install a newer version.")
             comm = c_void_p()
             ret = NCCLRuntimeAPI._comm_split(comm_handle, color, key, pointer(comm), None)
             assert ret == 0
