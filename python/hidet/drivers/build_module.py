@@ -55,21 +55,6 @@ def build_ir_module(ir_module: IRModule, output_dir: str, *, target: str, output
     with PassContext(instruments=instruments):
         ir_module = lower(ir_module)
 
-    # nccl-related
-    if ir_module.use_distributed():
-        if target != 'cuda':
-            raise RuntimeError("IRModules using NCCL must be targeted for cuda")
-        from hidet.cuda.nccl.libinfo import get_nccl_include_dirs, get_nccl_library_search_dirs
-        from hidet.cuda.nccl import nccl_available, nccl_library_filename
-
-        if not nccl_available():
-            raise RuntimeError("NCCL is not available")
-
-        ir_module.include_dirs.extend(get_nccl_include_dirs())
-        ir_module.linking_dirs.extend(get_nccl_library_search_dirs())
-        ir_module.include_headers.append(["nccl.h"])
-        ir_module.linking_libs.append(":" + nccl_library_filename())
-
     # code generation
     codegen(ir_module, src_out_path=src_path, target=target)
 

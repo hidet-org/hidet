@@ -198,7 +198,11 @@ class CompiledGraph:
                 in_group = rank in group
                 color = 0 if in_group else NCCL_SPLIT_NOCOLOR
                 key = group.index(rank) if in_group else 0
-                self.nccl_comms.append(default_comm.split(key, color))
+                comm = default_comm.split(key, color)
+                if in_group:
+                    self.nccl_comms.append(comm)
+        
+        print(self.nccl_comms)
 
 
     def _update_symbol_table(self, symbol_dims: Tuple[int, ...], best_candidates: List[int]):

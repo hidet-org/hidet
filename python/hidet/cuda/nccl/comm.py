@@ -72,6 +72,8 @@ class NcclCommunicator:
 
     def split(self, key, color):
         new_handle = nccl_runtime_api.comm_split(self._handle, color, key)
+        if color == NCCL_SPLIT_NOCOLOR:
+            return None
         return NcclCommunicator(new_handle)
 
 

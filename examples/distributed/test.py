@@ -27,6 +27,7 @@ print("NCCL version:", nccl.nccl_version())
 parser = argparse.ArgumentParser()
 parser.add_argument("n_gpus", type=int)
 parser.add_argument("reduce_op", choices=['sum', 'prod', 'max', 'min', 'avg'])
+parser.add_argument("--group_size", type=int, default=0)
 args = parser.parse_args()
 
 def run(world_size, rank, shared_id, barrier):
@@ -39,6 +40,16 @@ def run(world_size, rank, shared_id, barrier):
     barrier.wait()
     hidet.cuda.set_device(rank)
 
+    use_group = args.group_size > 1
+    if use_group:
+        gs = args.group_size
+        gn = world_size // gs
+        assert world_size % gs == 0
+        groups = [list(range(i * gs, (i + 1) * gs)) for i in range(gn)]
+    else:
+        groups = []
+        
+
     device = f"cuda:{rank}"
     x = hidet.randn([2, 3], device=device)
     w = hidet.randn([3, 2], device=device)
@@ -50,7 +61,7 @@ def run(world_size, rank, shared_id, barrier):
     y_sync = hidet.ops.all_reduce(y_local, args.reduce_op)
     graph = hidet.trace_from([y_local, y_sync], inputs=[x_symb, w_symb])
     opt_graph = hidet.graph.optimize(graph)
-    opt_graph.set_dist_attrs(nrank=world_size, rank=rank)
+    opt_graph.set_dist_attrs(nrank=world_size, rank=rank, groups=groups)
     compiled = opt_graph.build()
 
     # Create Distributed Graph
