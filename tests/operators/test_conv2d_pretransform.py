@@ -10,6 +10,7 @@ from hidet.graph.ops.conv2d.conv2d_gemm import pre_transform_img
 
 def pre_transform_img_ref(img: Tensor, padding: Union[int, Tuple[int, int]], pad_value=0.0, make_multiple_8=False):
     import hidet
+
     n, c, w, h = img.shape
     assert pad_value == 0.0
     img = hidet.ops.conv_pad(img, padding)
