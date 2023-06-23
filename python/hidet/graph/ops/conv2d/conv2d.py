@@ -11,19 +11,22 @@
 # limitations under the License.
 from typing import List, Union, Sequence
 from hidet import ir
+from hidet.ir.expr import if_then_else, logical_and
 from hidet.graph.ops.utils import Task, Operator, Tensor, TensorNode
 from hidet.graph.ops.utils import compute, input_like, normalize_stride, normalize_dilations, reduce
 
 
 class Conv2dTask(Task):
-    def __init__(self, data: TensorNode, weight: TensorNode, stride: List[int], dilations: List[int], groups: int):
+    def __init__(self, data: TensorNode, weight: TensorNode, padding: List[int], pad_value: float, stride: List[int], dilations: List[int], groups: int):
         # pylint: disable=too-many-locals
         # we assume that only data needs to have dynamic shape
         n, c, h, w = data.shape
         oc, wc, kx, ky = weight.shape
         sx, sy = stride
         dilx, dily = dilations
-        p, q = (h - dilx * (kx - 1) - 1) // sx + 1, (w - dily * (ky - 1) - 1) // sy + 1
+        pad_h, pad_w = padding
+        p, q = ((h + 2 * pad_h) - dilx * (kx - 1) - 1) // sx + 1, ((w + 2 * pad_w) - dily * (ky - 1) - 1) // sy + 1
+
         self._assert(
             ir.logical_or(c % groups == 0, oc % groups == 0),
             msg=(
@@ -39,15 +42,25 @@ class Conv2dTask(Task):
             ),
         )
         out_group_size = oc // groups
+        # upcast to the resulting dtype
+        dtype = data.type.dtype if data.type.dtype.nbytes > weight.type.dtype.nbytes else weight.type.dtype
+
+        def f_compute(wci, kxi, kyi, ni, oci, pi, qi):
+            im_hi = pi * sx + kxi * dilx
+            im_wi = qi * sy + kyi * dily
+            return if_then_else(
+                logical_and(im_hi >= pad_h, im_hi < h + pad_h, im_wi >= pad_w, im_wi < w + pad_w),
+                data[ni, (oci // out_group_size) * wc + wci, im_hi - pad_h, im_wi - pad_w]
+                * weight[oci, wci, kxi, kyi],
+                dtype(pad_value)
+            )
+
         output = compute(
             name='out',
             shape=[n, oc, p, q],
             fcompute=lambda ni, oci, pi, qi: reduce(
                 shape=[wc, kx, ky],
-                fcompute=lambda wci, kxi, kyi: (
-                    data[ni, (oci // out_group_size) * wc + wci, pi * sx + kxi * dilx, qi * sy + kyi * dily]
-                    * weight[oci, wci, kxi, kyi]
-                ),
+                fcompute=lambda wci, kxi, kyi: f_compute(wci, kxi, kyi, ni, oci, pi, qi),
                 reduce_type='sum',
             ),
         )
@@ -100,13 +113,13 @@ class Conv2dChannelLastTask(Task):
 
 
 class Conv2dOp(Operator):
-    def __init__(self, x: Tensor, w: Tensor, stride: Sequence[int], dilations: Union[int, Sequence[int]], groups: int):
+    def __init__(self, x: Tensor, w: Tensor, padding: Sequence[int], pad_value: float, stride: Sequence[int], dilations: Union[int, Sequence[int]], groups: int):
         stride = normalize_stride(stride)
         dilations = normalize_dilations(dilations)
         super().__init__(
             inputs=[x, w],
-            attributes={'stride': stride, 'groups': groups, 'dilations': dilations},
-            task=Conv2dTask(input_like(x, 'x'), input_like(w, 'w'), stride, dilations, groups),
+            attributes={'padding': padding, 'pad_value': pad_value, 'stride': stride, 'groups': groups, 'dilations': dilations},
+            task=Conv2dTask(input_like(x, 'x'), input_like(w, 'w'), padding, pad_value, stride, dilations, groups),
         )
 
 
@@ -124,11 +137,13 @@ class Conv2dChannelLastOp(Operator):
 def conv2d(
     data: Tensor,
     weight: Tensor,
-    stride: Union[int, Sequence[int]] = (1, 1),
-    dilations: Union[int, Sequence[int]] = (1, 1),
+    padding: Sequence[int] = (0, 0),
+    pad_value: float = 0.0,
+    stride: Sequence[int] = (1, 1),
+    dilations: Sequence[int] = (1, 1),
     groups: int = 1,
 ) -> Tensor:
-    return Conv2dOp(data, weight, stride, dilations, groups).get_output(0)
+    return Conv2dOp(data, weight, padding, pad_value, stride, dilations, groups).get_output(0)
 
 
 def conv2d_channel_last(

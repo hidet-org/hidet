@@ -91,7 +91,11 @@ def test_matmul(a_shape, b_shape, dtype):
 
 @pytest.mark.parametrize(
     "a_shape, b_shape",
-    [[[1, 128, 128], [128, 128]], [[1, 128, 128 + 4], [128 + 4, 128]], [[1, 128, 128], [128, 128 - 4]]],
+    [[[1, 128, 128], [128, 128]], 
+     [[1, 128, 128 + 4], [128 + 4, 128]], 
+     [[1, 128, 128 + 2], [128 + 2, 128]],
+     [[1, 128, 128 + 2], [128 + 2, 128 - 2]],
+     [[1, 128, 128], [128, 128 - 4]]],
 )
 def test_matmul_fp16(a_shape, b_shape):
     from hidet.graph.ops.matmul.matmul_f16 import matmul_f16

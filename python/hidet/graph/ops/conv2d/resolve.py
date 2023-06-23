@@ -27,6 +27,8 @@ class Conv2dResolveRule(ResolveRule):
 
     def resolve(self, op: Operator) -> Optional[List[Tensor]]:
         assert isinstance(op, Conv2dOp)
+        padding = op.attrs['padding']
+        pad_value = op.attrs['pad_value']
         stride = ops.utils.normalize_stride(op.attrs['stride'])
         groups = op.attrs['groups']
         dilations = op.attrs['dilations']
@@ -36,16 +38,18 @@ class Conv2dResolveRule(ResolveRule):
             return None  # use depthwise schedule in the default Task
         data, weight = op.inputs
         kernel_size = weight.shape[2:]
-        if channels >= 16 and data.dtype == float16 and weight.dtype == float16:
+        if data.dtype == float16 and weight.dtype == float16:
             # we set parallel_k to 1 for channel first, because we need to transpose back;
-            #   setting parallel_k > 1 pervents epilogue fusion, leading to bad performance.
+            #   setting parallel_k > 1 prevents epilogue fusion, leading to bad performance.
             k_parts = 1
-            out = ops.conv2d_gemm_fp16(data, weight, [0, 0], stride, dilations, groups, k_parts)
+            out = ops.conv2d_gemm_fp16(data, weight, padding, pad_value, stride, dilations, groups, k_parts)
         elif self.enable_winograd and tuple(stride) == (1, 1) and tuple(kernel_size) == (3, 3) and groups == 1:
             # winograd algorithm
+            data = ops.conv_pad(data, padding, pad_value)
             out = ops.conv2d_winograd(data, weight)
         else:
             # implicit gemm algorithm
+            data = ops.conv_pad(data, padding, pad_value)
             out = ops.conv2d_gemm(data, weight, stride, dilations, groups)
         return [out]
 

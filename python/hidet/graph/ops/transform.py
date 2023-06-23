@@ -669,11 +669,11 @@ def pad(data: Tensor, pads: List[int], mode: str = 'constant', value: float = 0.
     return PadOp(data, pads, mode, value).get_output(0)
 
 
-def conv_pad(data: Tensor, pads: Union[int, List[int]]) -> Tensor:
+def conv_pad(data: Tensor, pads: Union[int, List[int]], value: float = 0.0) -> Tensor:
     from .utils import normalize_padding
 
     pads = normalize_padding(pads, dim=len(data.shape) - 2)
-    return pad(data, pads)
+    return pad(data, pads, value=value)
 
 
 def tile(data: Tensor, repeats: Sequence[int]) -> Tensor:
