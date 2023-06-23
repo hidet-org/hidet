@@ -205,10 +205,16 @@ class MatmulF16Task(Task):
                         cp_async(~smem_a[i, k], ~gmem_a[i, k], cp_size=8, src_size=min(8, src_size * 2))
                         cp_async(~smem_a[i, k + 4], ~gmem_a[i, k + 4], cp_size=8, src_size=max(0, src_size * 2 - 8))
                     elif a_shape[-1] % 2 == 0:
-                        cp_async(~smem_a[i, k],     ~gmem_a[i, k],     cp_size=4, src_size=min(4, src_size * 2))
-                        cp_async(~smem_a[i, k + 2], ~gmem_a[i, k + 2], cp_size=4, src_size=min(4, max(0, src_size * 2 - 4)))
-                        cp_async(~smem_a[i, k + 4], ~gmem_a[i, k + 4], cp_size=4, src_size=min(4, max(0, src_size * 2 - 8)))
-                        cp_async(~smem_a[i, k + 6], ~gmem_a[i, k + 6], cp_size=4, src_size=min(4, max(0, src_size * 2 - 12)))
+                        cp_async(~smem_a[i, k], ~gmem_a[i, k], cp_size=4, src_size=min(4, src_size * 2))
+                        cp_async(
+                            ~smem_a[i, k + 2], ~gmem_a[i, k + 2], cp_size=4, src_size=min(4, max(0, src_size * 2 - 4))
+                        )
+                        cp_async(
+                            ~smem_a[i, k + 4], ~gmem_a[i, k + 4], cp_size=4, src_size=min(4, max(0, src_size * 2 - 8))
+                        )
+                        cp_async(
+                            ~smem_a[i, k + 6], ~gmem_a[i, k + 6], cp_size=4, src_size=min(4, max(0, src_size * 2 - 12))
+                        )
 
             @hidet.script
             def load_smem_b(k0: int, b: float16[b_head + [k_size, n_size]], smem_b: smem_b_type):
@@ -229,11 +235,16 @@ class MatmulF16Task(Task):
                         cp_async(~smem_b[k, j], ~gmem_b[k, j], cp_size=8, src_size=min(8, src_size * 2))
                         cp_async(~smem_b[k, j + 4], ~gmem_b[k, j + 4], cp_size=8, src_size=max(0, src_size * 2 - 8))
                     elif b_shape[-1] % 2 == 0:
-                        cp_async(~smem_b[k, j],     ~gmem_b[k, j],     cp_size=4, src_size=min(4, src_size * 2))
-                        cp_async(~smem_b[k, j + 2], ~gmem_b[k, j + 2], cp_size=4, src_size=min(4, max(0, src_size * 2 - 4)))
-                        cp_async(~smem_b[k, j + 4], ~gmem_b[k, j + 4], cp_size=4, src_size=min(4, max(0, src_size * 2 - 8)))
-                        cp_async(~smem_b[k, j + 6], ~gmem_b[k, j + 6], cp_size=4, src_size=min(4, max(0, src_size * 2 - 12)))
-
+                        cp_async(~smem_b[k, j], ~gmem_b[k, j], cp_size=4, src_size=min(4, src_size * 2))
+                        cp_async(
+                            ~smem_b[k, j + 2], ~gmem_b[k, j + 2], cp_size=4, src_size=min(4, max(0, src_size * 2 - 4))
+                        )
+                        cp_async(
+                            ~smem_b[k, j + 4], ~gmem_b[k, j + 4], cp_size=4, src_size=min(4, max(0, src_size * 2 - 8))
+                        )
+                        cp_async(
+                            ~smem_b[k, j + 6], ~gmem_b[k, j + 6], cp_size=4, src_size=min(4, max(0, src_size * 2 - 12))
+                        )
 
             @hidet.script
             def matmul_f16_kernel(

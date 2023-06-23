@@ -103,7 +103,7 @@ def conv2d_gemm(data: Tensor, weight: Tensor, stride, dilations: List[int], grou
     y_shape = infer_conv2d_shape(data.shape, weight.shape, stride, groups, dilations)
     y = conv2d_gemm_inverse_transform(gemm_y, out_height=y_shape[2], out_width=y_shape[3])
     return y
-                
+
 
 class Conv2dGemmFp16PretransformTask(Task):
     """
@@ -125,7 +125,10 @@ class Conv2dGemmFp16PretransformTask(Task):
             img = hidet.ops.pad(img, [0, pad_channel])
         return img
     """
-    def __init__(self, img: TensorNode, padding: Union[int, Tuple[int, int]], pad_value: float, channel_mul_8: bool = False):
+
+    def __init__(
+        self, img: TensorNode, padding: Union[int, Tuple[int, int]], pad_value: float, channel_mul_8: bool = False
+    ):
         self._assert(len(img.shape) == 4, "expected images to have 4 dimensions")
         if isinstance(padding, tuple):
             self._assert(len(padding) == 2, "padding must be a tuple of 2 ints")
@@ -155,23 +158,18 @@ class Conv2dGemmFp16PretransformTask(Task):
                 if_then_else(
                     logical_and(pad_h <= hi, hi < h + pad_h, pad_w <= wi, wi < w + pad_w),
                     img[ni, ci, hi - pad_h, wi - pad_w],
-                    float16(pad_value)
+                    float16(pad_value),
                 ),
-                float16(0.0)
-            )
+                float16(0.0),
+            ),
         )
         super().__init__(
             name='Conv2dGemmFp16PretransformTask',
             inputs=[img],
             outputs=[y],
-            attributes={
-                'pad_value': pad_value,
-                'pad_h': pad_h,
-                'pad_w': pad_w,
-                'channel_mul_8': channel_mul_8
-            }
+            attributes={'pad_value': pad_value, 'pad_h': pad_h, 'pad_w': pad_w, 'channel_mul_8': channel_mul_8},
         )
-    
+
     def allow_prologue(self) -> bool:
         return True
 
@@ -180,9 +178,10 @@ class Conv2dGemmFp16PretransformTask(Task):
 
     def implement_cuda(self, working_dir: str) -> List[IRModule]:
         return tune.extract_ir_modules(self.schedule)
-    
+
     def load_dtype(self, load_width):
-        from hidet.lang import attrs, view, u16, u32, u64, tensor_pointer, grid
+        from hidet.lang import u16, u32, u64
+
         if load_width == 1:
             load_type = u16
         elif load_width == 2:
@@ -192,19 +191,19 @@ class Conv2dGemmFp16PretransformTask(Task):
         else:
             load_type = None
         return load_type
-        
-    @tune.space(2, block_n = [4, 8, 16, 32, 64, 128], block_m = [8, 16, 32, 64, 128], load_width = [1, 2, 4])    
-    @tune.space(1, block_n = [8, 16, 32], block_m = [16, 32], load_width = [1, 2])
-    def schedule(self, block_n = 8, block_m = 32, load_width = 1): # load_width is multiples of f16
+
+    @tune.space(2, block_n=[4, 8, 16, 32, 64, 128], block_m=[8, 16, 32, 64, 128], load_width=[1, 2, 4])
+    @tune.space(1, block_n=[8, 16, 32], block_m=[16, 32], load_width=[1, 2])
+    def schedule(self, block_n=8, block_m=32, load_width=1):  # load_width is multiples of f16
         import hidet
-        from hidet.lang import attrs, view, u16, u32, u64, tensor_pointer, grid
-        from hidet.lang.cuda import shared_tensor, register_tensor, syncthreads, cp_async, cp_async_wait_all, threadIdx, blockIdx, gridDim
+        from hidet.lang import attrs, tensor_pointer
+        from hidet.lang.cuda import shared_tensor, register_tensor, syncthreads, threadIdx, blockIdx
 
         N, C, H, W = self.inputs[0].shape
         _, HN, WN, CN = self.outputs[0].shape
 
         tune.check(block_n * block_m <= 1024)
-        
+
         last_dim = H * W
         tune.check(last_dim % load_width == 0)
         tune.check(block_n % load_width == 0)
@@ -222,6 +221,7 @@ class Conv2dGemmFp16PretransformTask(Task):
         tiles_c = cdiv(C, block_m)
 
         with hidet.script_module() as module:
+
             @hidet.script
             def write_pad(y: write_dtype[N, HN * WN * CN // write_width]):
                 # pack larger dtype with pad value
@@ -231,18 +231,18 @@ class Conv2dGemmFp16PretransformTask(Task):
                 pad_ptr = pad_regs
                 for i in range(write_width):
                     pad_ptr[i] = float16(self.pad_value)
-                
+
                 stride = tiles_hw * tiles_c * block_n * block_m
                 bid = blockIdx.x + blockIdx.y * tiles_hw
                 tid = threadIdx.x + threadIdx.y * block_n + bid * block_n * block_m
 
-                while (tid < HN * WN * CN // write_width):
+                while tid < HN * WN * CN // write_width:
                     row_id = tid // (CN // write_width)
                     col_id = tid % (CN // write_width)
                     middle_square = False
-                    if row_id >= WN * self.pad_h and row_id < HN * WN - WN * self.pad_h:
+                    if WN * self.pad_h <= row_id < HN * WN - WN * self.pad_h:
                         r_id = (row_id - WN * self.pad_h) % WN
-                        if r_id >= self.pad_w and r_id < self.pad_w + W:
+                        if self.pad_w <= r_id < self.pad_w + W:
                             middle_square = True
                     if not middle_square:
                         if col_id < C:
@@ -250,7 +250,6 @@ class Conv2dGemmFp16PretransformTask(Task):
                         else:
                             y[blockIdx.z, tid] = 0
                     tid += stride
-            
 
             @hidet.script
             def conv2dfp16_pretransform_kernelv3(img: float16[N, C, H * W], y: float16[N, HN * WN, CN]):
@@ -299,7 +298,8 @@ class Conv2dGemmFp16PretransformTask(Task):
         ir_module = module.ir_module()
         assert isinstance(conv2dfp16_pretransform_kernelv3, Function)
 
-        return ir_module  
+        return ir_module
+
 
 class Conv2dGemmFp16Task(Task):
     def __init__(
@@ -784,22 +784,15 @@ class Conv2dGemmFp16Op(Operator):
             ),
         )
 
+
 class Conv2dGemmFp16PretransformOP(Operator):
     def __init__(self, img: Tensor, padding: Union[int, Tuple[int, int]], pad_value=0.0, channel_mul_8: bool = False):
         super().__init__(
             inputs=[img],
-            attributes={
-                'pad_value': pad_value,
-                'padding': padding,
-                'channel_mul_8': channel_mul_8
-            },
-            task=Conv2dGemmFp16PretransformTask(
-                input_like(img, 'img'),
-                padding,
-                pad_value,
-                channel_mul_8
-            )
+            attributes={'pad_value': pad_value, 'padding': padding, 'channel_mul_8': channel_mul_8},
+            task=Conv2dGemmFp16PretransformTask(input_like(img, 'img'), padding, pad_value, channel_mul_8),
         )
+
 
 def pre_transform_img(img: Tensor, padding: Union[int, Tuple[int, int]], pad_value=0.0, make_multiple_8=False):
     """
@@ -894,7 +887,7 @@ def conv2d_gemm_fp16(
     _, _, ky, kx = weight.shape
     sy, sx = stride
     dy, dx = dilations
-    if ky == 1 and kx == 1 and sy == 1 and sx == 1 and dy == 1 and dx == 1:
+    if ky == kx == sy == sx == dy == dx == 1:
         return conv2d_pointwise_fp16(img, weight, groups)
 
     img = pre_transform_img(img, padding, pad_value=pad_value, make_multiple_8=True)

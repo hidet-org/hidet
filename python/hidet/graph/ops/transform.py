@@ -10,7 +10,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List, Optional, Union, Sequence, Tuple
-from hidet.ir.task import Target
 from hidet.ir.type import DataType, data_type
 from hidet.ir.expr import Expr, Constant, if_then_else, convert, cast as ir_cast, logical_and, is_constant
 from hidet.ir.expr import Int

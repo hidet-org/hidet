@@ -72,6 +72,8 @@ class Conv2dChannelLastResolveRule(ResolveRule):
                 k_parts = parallel_part_heuristic(data.shape, weight.shape, stride, dilations, groups)
             else:
                 k_parts = 1
-            out = ops.conv2d_gemm_fp16_channel_last(data, weight, stride=stride, dilations=dilations, groups=groups, k_parts=k_parts)
+            out = ops.conv2d_gemm_fp16_channel_last(
+                data, weight, stride=stride, dilations=dilations, groups=groups, parallel_k_parts=k_parts
+            )
             return [out]
         return None

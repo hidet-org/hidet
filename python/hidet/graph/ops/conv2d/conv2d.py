@@ -17,7 +17,16 @@ from hidet.graph.ops.utils import compute, input_like, normalize_stride, normali
 
 
 class Conv2dTask(Task):
-    def __init__(self, data: TensorNode, weight: TensorNode, padding: List[int], pad_value: float, stride: List[int], dilations: List[int], groups: int):
+    def __init__(
+        self,
+        data: TensorNode,
+        weight: TensorNode,
+        padding: List[int],
+        pad_value: float,
+        stride: List[int],
+        dilations: List[int],
+        groups: int,
+    ):
         # pylint: disable=too-many-locals
         # we assume that only data needs to have dynamic shape
         n, c, h, w = data.shape
@@ -50,9 +59,8 @@ class Conv2dTask(Task):
             im_wi = qi * sy + kyi * dily
             return if_then_else(
                 logical_and(im_hi >= pad_h, im_hi < h + pad_h, im_wi >= pad_w, im_wi < w + pad_w),
-                data[ni, (oci // out_group_size) * wc + wci, im_hi - pad_h, im_wi - pad_w]
-                * weight[oci, wci, kxi, kyi],
-                dtype(pad_value)
+                data[ni, (oci // out_group_size) * wc + wci, im_hi - pad_h, im_wi - pad_w] * weight[oci, wci, kxi, kyi],
+                dtype(pad_value),
             )
 
         output = compute(
@@ -113,12 +121,27 @@ class Conv2dChannelLastTask(Task):
 
 
 class Conv2dOp(Operator):
-    def __init__(self, x: Tensor, w: Tensor, padding: Sequence[int], pad_value: float, stride: Sequence[int], dilations: Union[int, Sequence[int]], groups: int):
+    def __init__(
+        self,
+        x: Tensor,
+        w: Tensor,
+        padding: Sequence[int],
+        pad_value: float,
+        stride: Sequence[int],
+        dilations: Union[int, Sequence[int]],
+        groups: int,
+    ):
         stride = normalize_stride(stride)
         dilations = normalize_dilations(dilations)
         super().__init__(
             inputs=[x, w],
-            attributes={'padding': padding, 'pad_value': pad_value, 'stride': stride, 'groups': groups, 'dilations': dilations},
+            attributes={
+                'padding': padding,
+                'pad_value': pad_value,
+                'stride': stride,
+                'groups': groups,
+                'dilations': dilations,
+            },
             task=Conv2dTask(input_like(x, 'x'), input_like(w, 'w'), padding, pad_value, stride, dilations, groups),
         )
 

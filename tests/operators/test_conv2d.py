@@ -41,6 +41,7 @@ def torch_conv2d(
         torch_out = torch_out.cpu()
     return torch_out.numpy()
 
+
 # due to float16 numerical errors on larger kernel sizes, eg 5, disable the test for now
 @pytest.mark.parametrize(
     "n, c, h, w, oc, kx, ky",
@@ -155,7 +156,9 @@ def test_conv2d_gemm(n, c, h, w, oc, kx, ky, padding, stride, dilations):
         a_shape=[n, c, h, w],
         b_shape=[oc, c, kx, ky],
         numpy_op=lambda data, weight: torch_conv2d(data, weight, padding, stride, dilations),
-        hidet_op=lambda data, weight: ops.conv2d_gemm(ops.conv_pad(data, padding), weight, stride=stride, dilations=dilations),
+        hidet_op=lambda data, weight: ops.conv2d_gemm(
+            ops.conv_pad(data, padding), weight, stride=stride, dilations=dilations
+        ),
         dtype='float32',
         atol=2e-5,
         rtol=2e-5,
@@ -227,7 +230,9 @@ def test_conv2d_dynamic_gemm(n, c, h, w, oc, kx, ky, padding, stride, dilations)
         a_shape=[('n', n), ('c', c), ('h', h), ('w', w)],
         b_shape=[oc, c, kx, ky],
         numpy_op=lambda data, weight: torch_conv2d(data, weight, padding, stride, dilations),
-        hidet_op=lambda data, weight: ops.conv2d_gemm(ops.conv_pad(data, padding), weight, stride=stride, dilations=dilations),
+        hidet_op=lambda data, weight: ops.conv2d_gemm(
+            ops.conv_pad(data, padding), weight, stride=stride, dilations=dilations
+        ),
         dtype='float32',
         atol=2e-5,
         rtol=2e-5,

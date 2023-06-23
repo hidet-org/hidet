@@ -29,7 +29,7 @@ def test_pretransform_v3(img_dim, channel, padding, multi_8):
     assert torch.allclose(y1.torch(), y2.torch(), 1e-3, 1e-3)
 
     imgs = hidet.symbol([1, channel] + img_dim, dtype='float16', device='cuda')
-    ys = pre_transform_img(imgs, tuple(padding),0.0, multi_8)
+    ys = pre_transform_img(imgs, tuple(padding), 0.0, multi_8)
     graph = hidet.trace_from(ys, imgs)
     cgraph = graph.build(space=2)
     task = cgraph.compiled_tasks[0]

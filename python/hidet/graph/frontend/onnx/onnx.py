@@ -208,7 +208,9 @@ class OnnxConv(OnnxOperator):
                 x = ops.pad(x, ops.utils.normalize_padding(padding))
                 output = ops.conv2d(x, w, stride=strides, dilations=dilations, groups=groups)
             else:
-                output = ops.conv2d(x, w, padding=(padding[0], padding[1]), stride=strides, dilations=dilations, groups=groups)
+                output = ops.conv2d(
+                    x, w, padding=(padding[0], padding[1]), stride=strides, dilations=dilations, groups=groups
+                )
             if bias is not None:
                 bias = ops.unsqueeze(bias, [0, 2, 3])
                 output = output + bias
