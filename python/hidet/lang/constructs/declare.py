@@ -38,7 +38,7 @@ def tensor(
     shape: Optional[Sequence[Union[Expr, int]]] = None,
     layout: Optional[DataLayout] = None,
     scope: Union[DeclareScope, str] = DeclareScope.Default,
-    is_static: bool = False
+    is_static: bool = False,
 ):
     if isinstance(scope, str):
         scope = DeclareScope.from_str(scope)
@@ -49,7 +49,7 @@ def tensor_pointer(
     dtype: Union[DataType, str],
     shape: Optional[Sequence[Union[Expr, int]]] = None,
     layout: Optional[DataLayout] = None,
-    init: Optional[Expr] = None
+    init: Optional[Expr] = None,
 ):
     return Declaration(scope=DeclareScope.Default, tp=tensor_pointer_type(dtype, shape, layout), init=init)
 

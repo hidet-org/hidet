@@ -192,6 +192,7 @@ def type_infer_func(arg_types: List[DataType]) -> DataType:
 
 def tif_make_vector(arg_types: List[DataType]) -> DataType:
     from hidet.ir.dtypes import vectorize
+
     if len(arg_types) == 0:
         raise ValueError("At least one argument is required")
     if not all(arg_types[0] == arg_type for arg_type in arg_types[1:]):

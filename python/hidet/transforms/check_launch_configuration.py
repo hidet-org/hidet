@@ -52,7 +52,8 @@ class CheckLaunchConfigurationRewriter(IRRewriter):
                 # if the shared memory is larger than 48KB, we should call cudaFuncSetAttribute
                 sb += BlackBoxStmt(
                     "cudaFuncSetAttribute({}, cudaFuncAttributeMaxDynamicSharedMemorySize, {});",
-                    stmt.func_var, stmt.shared_mem_bytes
+                    stmt.func_var,
+                    stmt.shared_mem_bytes,
                 )
                 sb += check_cuda_error()
             sb += stmt

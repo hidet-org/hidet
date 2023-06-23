@@ -307,14 +307,10 @@ class AttnMaskAddTask(Task):
         smem_k_layout = row_major(block_k // 8, block_j // 64) * row_major(8, 8).swizzle(1) * row_major(1, 8)
         smem_qk_layout = row_major(block_i, block_j // 8).swizzle(1) * row_major(1, 8)
         if block_j_o % 64 == 0:
-            smem_v_layout = (
-                row_major(block_k_o // 8, block_j_o // 64) * row_major(8, 8).swizzle(1) * row_major(1, 8)
-            )
+            smem_v_layout = row_major(block_k_o // 8, block_j_o // 64) * row_major(8, 8).swizzle(1) * row_major(1, 8)
         else:
             smem_v_layout = (
-                row_major(1, swizzle_repeat)
-                * row_major(block_k_o, swizzle_unit // 8).swizzle(1)
-                * row_major(1, 8)
+                row_major(1, swizzle_repeat) * row_major(block_k_o, swizzle_unit // 8).swizzle(1) * row_major(1, 8)
             )
 
         smem_q_type = tensor_type('float16', shape=[block_i, dpad_size], layout=smem_q_layout)
@@ -689,10 +685,14 @@ class AttnMaskAddTask(Task):
 
                 regs_q = register_tensor(dtype='float16', shape=[2, mmas_per_warp_m, mma_config.a_elements])
                 regs_k = register_tensor(dtype='float16', shape=[2, mmas_per_warp_n, mma_config.b_elements])
-                regs_acc = register_tensor(dtype=acc_dtype, shape=[mmas_per_warp_m, mmas_per_warp_n, mma_config.c_elements] )
+                regs_acc = register_tensor(
+                    dtype=acc_dtype, shape=[mmas_per_warp_m, mmas_per_warp_n, mma_config.c_elements]
+                )
                 regs_qk = register_tensor(dtype='float16', shape=[2, mmas_per_warp_m_o, mma_config.a_elements])
                 regs_v = register_tensor(dtype='float16', shape=[2, mmas_per_warp_n_o, mma_config.b_elements])
-                regs_acc_o = register_tensor(dtype=acc_dtype, shape=[mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements] )
+                regs_acc_o = register_tensor(
+                    dtype=acc_dtype, shape=[mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements]
+                )
                 regs_o = register_tensor(dtype=acc_dtype, shape=regs_o_type.shape)
                 regs_li_new = register_tensor(dtype=smem_l_type.dtype, layout=regs_li_new_layout)
                 regs_mi_new = register_tensor(dtype=smem_m_type.dtype, layout=regs_mi_new_layout)

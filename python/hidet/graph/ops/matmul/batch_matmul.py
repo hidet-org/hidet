@@ -291,9 +291,15 @@ class BatchMatmulTask(Task):
 
                 smem = shared_tensor('int8', shape=[used_smem_bytes_per_block])
 
-                smem_a = tensor_pointer(dtype, layout=StridesLayout.from_shape([2, block_m, block_k], perm=[0, 2, 1]), init=~smem[0])
+                smem_a = tensor_pointer(
+                    dtype, layout=StridesLayout.from_shape([2, block_m, block_k], perm=[0, 2, 1]), init=~smem[0]
+                )
                 smem_a_bytes = smem_a.type.tensor_type.storage_bytes()
-                smem_b = tensor_pointer(dtype, layout=StridesLayout.from_shape([2, block_k, block_n], perm=[0, 1, 2]), init=~smem[smem_a_bytes])
+                smem_b = tensor_pointer(
+                    dtype,
+                    layout=StridesLayout.from_shape([2, block_k, block_n], perm=[0, 1, 2]),
+                    init=~smem[smem_a_bytes],
+                )
 
                 regs_a = register_tensor(dtype, layout=regs_a_layout)
                 regs_b = register_tensor(dtype, layout=regs_b_layout)

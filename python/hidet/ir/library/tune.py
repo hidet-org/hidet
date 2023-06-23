@@ -102,6 +102,9 @@ def space(level: int, /, **subspaces: Sequence[Choice]):
             # attach tuning space when the first time of this function is called
             setattr(func, 'tuning_space', TuningSpace())
         tuning_space: TuningSpace = getattr(func, 'tuning_space')
+        if 'combinations' in subspaces:
+            combinations = subspaces.pop('combinations')
+            subspaces.update(combinations)
         tuning_space.add_sub_space(level, subspaces)
         return func
 

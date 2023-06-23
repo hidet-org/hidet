@@ -290,14 +290,10 @@ class AttnTask(Task):
         smem_k_layout = row_major(block_k // 8, block_j // 64) * row_major(8, 8).swizzle(1) * row_major(1, 8)
         smem_qk_layout = row_major(block_i, block_j // 8).swizzle(1) * row_major(1, 8)
         if block_j_o % 64 == 0:
-            smem_v_layout = (
-                row_major(block_k_o // 8, block_j_o // 64) * row_major(8, 8).swizzle(1) * row_major(1, 8)
-            )
+            smem_v_layout = row_major(block_k_o // 8, block_j_o // 64) * row_major(8, 8).swizzle(1) * row_major(1, 8)
         else:
             smem_v_layout = (
-                row_major(1, swizzle_repeat)
-                * row_major(block_k_o, swizzle_unit // 8).swizzle(1)
-                * row_major(1, 8)
+                row_major(1, swizzle_repeat) * row_major(block_k_o, swizzle_unit // 8).swizzle(1) * row_major(1, 8)
             )
 
         smem_q_type = tensor_type('float16', shape=[block_i, dpad_size], layout=smem_q_layout)

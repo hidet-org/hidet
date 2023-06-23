@@ -102,8 +102,9 @@ class DataType(BaseType):
         built_types = (int, float, bool, complex)
 
         if (
-            isinstance(value, built_types) or
-            isinstance(value, (list, tuple)) and all(isinstance(v, built_types) for v in value)
+            isinstance(value, built_types)
+            or isinstance(value, (list, tuple))
+            and all(isinstance(v, built_types) for v in value)
         ):
             return self.constant(value)
         elif isinstance(value, expr.Constant):

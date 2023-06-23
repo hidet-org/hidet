@@ -64,10 +64,7 @@ class FlattenTensorAccessRewriter(IRRewriter):
             return DeclareStmt(var, init, is_static=stmt.is_static, scope=stmt.scope)
         elif isinstance(stmt.var.type, TensorPointerType):
             size = simplify(stmt.var.type.tensor_type.layout.size)
-            var = Var(
-                stmt.var.hint,
-                tensor_pointer_type(stmt.var.type.tensor_type.dtype, [size], row_major(size)),
-            )
+            var = Var(stmt.var.hint, tensor_pointer_type(stmt.var.type.tensor_type.dtype, [size], row_major(size)))
             self.memo[stmt.var] = var
             init = self(stmt.init) if stmt.init is not None else None
             return DeclareStmt(var, init, is_static=stmt.is_static, scope=stmt.scope)

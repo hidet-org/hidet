@@ -38,6 +38,7 @@ logger.addHandler(logging.StreamHandler())
 def _generate_candidate_summary(candidates: List[IRModule], task_dir: str):
     import tabulate
     import json
+
     headers = ['index']
     tuning_kwargs = getattr(candidates[0], '_tuning_kwargs', {})
     headers.extend(list(tuning_kwargs.keys()))
@@ -56,14 +57,7 @@ def _generate_candidate_summary(candidates: List[IRModule], task_dir: str):
     with open(os.path.join(task_dir, 'candidates.txt'), 'w') as f:
         f.write(tabulate.tabulate(lines, headers=headers, tablefmt='plain'))
     with open(os.path.join(task_dir, 'candidates.json'), 'w') as f:
-        json.dump(
-            {
-                'headers': headers,
-                'candidates': lines
-            },
-            f,
-            indent=2
-        )
+        json.dump({'headers': headers, 'candidates': lines}, f, indent=2)
 
 
 def build_task_module(task: Task, candidates: List[IRModule], task_dir: str, target: str):

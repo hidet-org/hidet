@@ -16,7 +16,7 @@ from hidet.ir.library import tune
 from hidet.ir.library.cuda import matmul_simt
 
 hidet.option.cache_dir('./outs/cache')
-# hidet.utils.clear_cache_dir()
+hidet.utils.clear_cache_dir()
 hidet.option.save_lower_ir()
 
 
@@ -50,22 +50,26 @@ class MatmulTask(Task):
     )
     @tune.space(
         1,
-        # parallel_k=[1, 8],
-        # block_shape=[(64, 128, 16), (128, 64, 16), (64, 64, 16), (64, 64, 32), (64, 64, 64), (128, 128, 16),
-        #              (128, 128, 32), (128, 128, 64)],
-        # warp_shape=[(32, 32, 16), (64, 64, 8), (32, 64, 8), (32, 64, 16), (32, 64, 32)],
-        # warp_threads=[(4, 8), (2, 16), (8, 4), (16, 2)],
-        # thread_shape=[(4, 4)],
-        parallel_k=[8],
-        block_shape=[(128, 64, 16)],
-        warp_shape=[(32, 32, 16)],
+        parallel_k=[1, 8],
+        block_shape=[(64, 64, 16)],
+        warp_shape=[(32, 64, 8)],
         warp_threads=[(4, 8)],
         thread_shape=[(4, 4)],
-        arch=['sm_70']
+        # parallel_k=[8],
+        # block_shape=[(128, 64, 16)],
+        # warp_shape=[(32, 32, 16)],
+        # warp_threads=[(4, 8)],
+        # thread_shape=[(4, 4)],
+        arch=['sm_70'],
+        # combinations={
+        #     "block_shape, warp_shape, warp_threads, thread_shape": [
+        #         [(64, 64, 16), (32, 64, 8), (4, 8), (4, 4)],
+        #     ]
+        # }
     )
     def schedule_matmul_mma(
         self,
-        parallel_k=1, block_shape=(128, 128, 8), warp_shape=(32, 64, 8), warp_threads=(4, 8), thread_shape=(4, 4),
+        parallel_k=1, block_shape=(64, 64, 16), warp_shape=(32, 64, 8), warp_threads=(4, 8), thread_shape=(4, 4),
         arch='sm_70'
     ):
         from hidet.lang import attrs
@@ -112,8 +116,8 @@ def benchmark():
         graph = hidet.trace_from(c, [a, b])
         cgraph = graph.build(space=1)
 
-        # for m_size, n_size, k_size in [(1024, 1024, 1024), (1024, 3072, 768), (1024, 768, 3072)]:
-        for m_size, n_size, k_size in [(1024, 1024, 1024)]:
+        for m_size, n_size, k_size in [(1024, 1024, 1024), (1024, 3072, 768), (1024, 768, 3072)]:
+        # for m_size, n_size, k_size in [(1024, 1024, 1024)]:
             aa = hidet.randn([1, m_size, k_size], dtype=dtype, device='cuda', stddev=0.1 if dtype == 'float16' else 1)
             bb = hidet.randn([1, k_size, n_size], dtype=dtype, device='cuda', stddev=0.1 if dtype == 'float16' else 1)
             # aa = hidet.ones([1, m_size, k_size], dtype=dtype, device='cuda')
@@ -125,13 +129,13 @@ def benchmark():
             tol = 1e-3 if dtype == 'float32' else 1e-2
             hidet.utils.assert_close(c1, c2, rtol=tol, atol=tol)
 
-            # # benchmark
-            # at = aa.torch()
-            # bt = bb.torch()
-            # torch_latency = hidet.utils.benchmark_func(lambda: at @ bt, number=100, repeat=10)
-            # hidet_latency = hidet.utils.benchmark_func(lambda: cgraph(aa, bb), number=100, repeat=10)
-            # print(' {:4} x {:4} x {:4} torch: {:.3f}'.format(m_size, n_size, k_size, torch_latency))
-            # print(' {:4} x {:4} x {:4} hidet: {:.3f}'.format(m_size, n_size, k_size, hidet_latency))
+            # benchmark
+            at = aa.torch()
+            bt = bb.torch()
+            torch_latency = hidet.utils.benchmark_func(lambda: at @ bt, number=100, repeat=10)
+            hidet_latency = hidet.utils.benchmark_func(lambda: cgraph(aa, bb), number=100, repeat=10)
+            print(' {:4} x {:4} x {:4} torch: {:.3f}'.format(m_size, n_size, k_size, torch_latency))
+            print(' {:4} x {:4} x {:4} hidet: {:.3f}'.format(m_size, n_size, k_size, hidet_latency))
 
 
 def main():

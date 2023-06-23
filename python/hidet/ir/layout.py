@@ -185,7 +185,7 @@ class StridesLayout(DataLayout):
         tuples = sorted(tuples, key=lambda t: t[1])
         reordered_shape = [shape[t[0]] for t in tuples]
         for i in range(rank):
-            tuples[i][2] = prod(reordered_shape[i + 1:])
+            tuples[i][2] = prod(reordered_shape[i + 1 :])
         tuples = sorted(tuples, key=lambda t: t[0])
         strides = [t[2] for t in tuples]
         return strides
@@ -261,8 +261,8 @@ class SwizzleLayout(DataLayout):
         indices = []
         for dim, origin_index in enumerate(origin_indices):
             if dim == self.dim:
-                regards_index = origin_indices[self.regards_dim] // (2 ** self.log_step)
-                regards_extent = self.shape[self.regards_dim] // (2 ** self.log_step)
+                regards_index = origin_indices[self.regards_dim] // (2**self.log_step)
+                regards_extent = self.shape[self.regards_dim] // (2**self.log_step)
                 if regards_extent > self.shape[dim]:
                     regards_index = regards_index % self.shape[dim]  # prevent the xor making the index out of bound
                 indices.append(origin_index ^ regards_index)
@@ -302,14 +302,14 @@ class ConcatLayout(DataLayout):
 
     def global2local(self, *args: Int) -> Int:
         lhs_args = args[: len(self.lhs.shape)]
-        rhs_args = args[len(self.lhs.shape):]
+        rhs_args = args[len(self.lhs.shape) :]
         return self.lhs(*lhs_args) * self.rhs.size + self.rhs(*rhs_args)
 
     def global2cond(self, *args: Int) -> Bool:
         from hidet.ir.expr import LogicalAnd
 
         lhs_args = args[: len(self.lhs.shape)]
-        rhs_args = args[len(self.lhs.shape):]
+        rhs_args = args[len(self.lhs.shape) :]
         return LogicalAnd(self.lhs.within_bound(*lhs_args), self.rhs.within_bound(*rhs_args))
 
 

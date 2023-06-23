@@ -110,6 +110,7 @@ class PythonAstFunctor:
 
     def visit(self, node):
         from hidet.ir.library.tune import ScheduleError
+
         method = 'visit_' + node.__class__.__name__
         if hasattr(self, method):
             visitor = getattr(self, method)

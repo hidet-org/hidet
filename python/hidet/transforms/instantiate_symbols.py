@@ -106,7 +106,10 @@ class InstantiateSymbolsRewriter(IRRewriter):
         stmt = super().visit_LaunchKernelStmt(stmt)
         if stmt.func_var.name not in self.func_symbols:
             return stmt
-        if stmt.func_var.name in self.ir_module.functions and self.ir_module.functions[stmt.func_var.name].kind == 'public':
+        if (
+            stmt.func_var.name in self.ir_module.functions
+            and self.ir_module.functions[stmt.func_var.name].kind == 'public'
+        ):
             return stmt
 
         callee_func_symbols: FuncSymbols = self.func_symbols[stmt.func_var.name]
@@ -120,7 +123,10 @@ class InstantiateSymbolsRewriter(IRRewriter):
         call = super().visit_Call(call)
         if call.func_var.name not in self.func_symbols:
             return call
-        if call.func_var.name in self.ir_module.functions and self.ir_module.functions[call.func_var.name].kind == 'public':
+        if (
+            call.func_var.name in self.ir_module.functions
+            and self.ir_module.functions[call.func_var.name].kind == 'public'
+        ):
             return call
 
         callee_func_symbols: FuncSymbols = self.func_symbols[call.func_var.name]
