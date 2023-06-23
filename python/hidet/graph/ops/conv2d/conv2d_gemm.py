@@ -484,17 +484,7 @@ class Conv2dGemmFp16PretransformV3Task(Task):
 
         with hidet.script_module() as module:
             @hidet.script
-            def conv2dfp16_pretransform_kernelv2(img: float16[N, C, H * W], y: float16[N, HN * WN, CN]):
-                attrs.cuda.block_dim = block_n, block_m, 1
-                attrs.cuda.grid_dim = tiles_hw, tiles_c, N
-
-                bid = blockIdx.x + blockIdx.y * tiles_hw + blockIdx.z * tiles_hw * tiles_c
-                global_stride = tiles_hw * tiles_c * N * block_n * block_m
-                tid = (threadIdx.x + threadIdx.y * block_n + bid * block_n * block_m)
-
-                write_ptr = tensor_pointer(write_dtype, [N * CN * HN * WN // write_width])
-                write_ptr = y
-
+            def write_pad(y: write_dtype[N, HN * WN * CN // write_width]):
                 # pack larger dtype with pad value
                 # is is valid because last dimension CN is a multiple of write_width
                 pad_regs = register_tensor(write_dtype, [1])
@@ -503,14 +493,35 @@ class Conv2dGemmFp16PretransformV3Task(Task):
                 for i in range(write_width):
                     pad_ptr[i] = float16(self.pad_value)
                 
-                # fill padding first
-                while (tid < N * CN * HN * WN // write_width):
-                    if (tid * write_width % CN) < C:
-                        write_ptr[tid] = pad_regs[0]
-                    else:
-                        write_ptr[tid] = 0
-                    tid += global_stride
-                
+                stride = tiles_hw * tiles_c * block_n * block_m
+                bid = blockIdx.x + blockIdx.y * tiles_hw
+                tid = threadIdx.x + threadIdx.y * block_n + bid * block_n * block_m
+
+                while (tid < HN * WN * CN // write_width):
+                    row_id = tid // (CN // write_width)
+                    col_id = tid % (CN // write_width)
+                    middle_square = False
+                    if row_id >= WN * self.pad_h and row_id < HN * WN - WN * self.pad_h:
+                        r_id = (row_id - WN * self.pad_h) % WN
+                        if r_id >= self.pad_w and r_id < self.pad_w + W:
+                            middle_square = True
+                    if not middle_square:
+                        if col_id < C:
+                            y[blockIdx.z, tid] = pad_regs[0]
+                        else:
+                            y[blockIdx.z, tid] = 0
+                    tid += stride
+            
+
+            @hidet.script
+            def conv2dfp16_pretransform_kernelv2(img: float16[N, C, H * W], y: float16[N, HN * WN, CN]):
+                attrs.cuda.block_dim = block_n, block_m, 1
+                attrs.cuda.grid_dim = tiles_hw, tiles_c, N
+
+                write_ptr = tensor_pointer(write_dtype, [N * CN * HN * WN // write_width])
+                write_ptr = y
+                write_pad(write_ptr)
+
                 smem = shared_tensor(float16, [block_n * load_width, block_m])
 
                 offset_hw = (blockIdx.x * block_n + threadIdx.x) * load_width
@@ -532,7 +543,7 @@ class Conv2dGemmFp16PretransformV3Task(Task):
                 row_idx = tid % (block_m // write_width)
                 col_idx = tid // (block_m // write_width)
                 offset_hw = blockIdx.x * block_n * load_width + col_idx
-                offset_c = (blockIdx.y * block_m + row_idx) * write_width
+                offset_c = blockIdx.y * block_m + row_idx * write_width
 
                 initial_pad_offset = self.pad_h * WN * CN + self.pad_w * CN
                 im_block = offset_hw // W
@@ -545,7 +556,6 @@ class Conv2dGemmFp16PretransformV3Task(Task):
                     batch_offset = blockIdx.z * HN * WN * CN
                     global_offset = batch_offset + offset_hw * CN + offset_c + initial_pad_offset + w_pad
                     write_ptr[global_offset // write_width] = smem_ptr[col_idx, row_idx]
-
 
         ir_module = module.ir_module()
         assert isinstance(conv2dfp16_pretransform_kernelv2, Function)
