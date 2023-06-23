@@ -160,11 +160,11 @@ class Conv2dChannelLastOp(Operator):
 def conv2d(
     data: Tensor,
     weight: Tensor,
-    padding: Sequence[int] = (0, 0),
-    pad_value: float = 0.0,
     stride: Sequence[int] = (1, 1),
     dilations: Sequence[int] = (1, 1),
     groups: int = 1,
+    padding: Sequence[int] = (0, 0),
+    pad_value: float = 0.0,
 ) -> Tensor:
     return Conv2dOp(data, weight, padding, pad_value, stride, dilations, groups).get_output(0)
 

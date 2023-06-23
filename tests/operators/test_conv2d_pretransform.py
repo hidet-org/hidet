@@ -1,21 +1,23 @@
+from typing import Union, Tuple
+
 import torch
 import hidet
 import pytest
 
-from hidet.graph.ops.conv2d.conv2d_gemm import pre_transform_img, pre_transform_imgv2, pre_transform_img
-from hidet.graph.ops.conv2d.conv2d_gemm import Conv2dGemmFp16PretransformTask
-from hidet.graph.ops.utils import Operator, input_like
+from hidet import Tensor
+from hidet.graph.ops.conv2d.conv2d_gemm import pre_transform_img
 
 
-# @pytest.mark.parametrize("img_dim", [[32, 64], [31, 63]])
-# @pytest.mark.parametrize("channel", [3, 32, 64])
-# @pytest.mark.parametrize("padding", [[0, 0], [1, 1], [2, 3]])
-# @pytest.mark.parametrize("multi_8", [True, False])
-# def test_pretransform_v2(img_dim, channel, padding, multi_8):
-#     img = hidet.randn([1, channel] + img_dim, device='cuda', dtype='float16')
-#     y1 = pre_transform_img(img, tuple(padding), 0.0, multi_8)
-#     y2 = pre_transform_imgv2(img, tuple(padding), 0.0, multi_8)
-#     assert torch.allclose(y1.torch(), y2.torch(), 1e-3, 1e-3)
+def pre_transform_img_ref(img: Tensor, padding: Union[int, Tuple[int, int]], pad_value=0.0, make_multiple_8=False):
+    import hidet
+    n, c, w, h = img.shape
+    assert pad_value == 0.0
+    img = hidet.ops.conv_pad(img, padding)
+    img = hidet.ops.transpose(img, [0, 2, 3, 1])
+    if make_multiple_8:
+        pad_channel = ((c + 7) // 8) * 8 - c
+        img = hidet.ops.pad(img, [0, pad_channel])
+    return img
 
 
 @pytest.mark.parametrize("img_dim", [[32, 64], [31, 63]])
@@ -24,7 +26,7 @@ from hidet.graph.ops.utils import Operator, input_like
 @pytest.mark.parametrize("multi_8", [True, False])
 def test_pretransform_v3(img_dim, channel, padding, multi_8):
     img = hidet.randn([1, channel] + img_dim, device='cuda', dtype='float16')
-    y1 = pre_transform_img(img, tuple(padding), 0.0, multi_8)
+    y1 = pre_transform_img_ref(img, tuple(padding), 0.0, multi_8)
     y2 = pre_transform_img(img, tuple(padding), 0.0, multi_8)
     assert torch.allclose(y1.torch(), y2.torch(), 1e-3, 1e-3)
 
