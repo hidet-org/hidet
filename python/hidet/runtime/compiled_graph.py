@@ -176,9 +176,9 @@ class CompiledGraph:
         self.nccl_comms = []
 
         # Initialize the default group
-        nrank = self.dist_info.nrank
+        nranks = self.dist_info.nrank
         rank = self.dist_info.rank
-        default_comm = create_comm(nrank, unique_id, rank)
+        default_comm = create_comm(nranks, unique_id, rank)
         self.nccl_comms.append(default_comm)
 
         # Create communicators according to groups
