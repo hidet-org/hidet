@@ -27,7 +27,6 @@ from hidet.runtime.compiled_graph import (
     GraphMetaData,
     GraphExecution,
     GraphExecutionInstruction,
-    GraphDistributedInfo,
 )
 from hidet.runtime.compiled_task import CompiledTask, TensorSignature
 from hidet.graph.operator import Operator
@@ -144,15 +143,9 @@ def get_graph_meta_data(graph: FlowGraph, num_kernels, space: int) -> GraphMetaD
     graph_hash = sha256('\n'.join(lines).encode('utf-8')).hexdigest()[:16]
 
     return GraphMetaData(
-        inputs=inputs, outputs=outputs, hidet_version=hidet.__version__, num_kernels=num_kernels, graph_hash=graph_hash
+        inputs=inputs, outputs=outputs, hidet_version=hidet.__version__, num_kernels=num_kernels, graph_hash=graph_hash,
+        attrs=asdict(graph.attrs)
     )
-
-
-def get_graph_dist_info(graph: FlowGraph) -> GraphDistributedInfo:
-    if not graph.is_distributed():
-        return None
-    return GraphDistributedInfo(nrank=graph.nrank, rank=graph.rank, groups=graph.groups)
-
 
 def build_graph_module(graph: FlowGraph, graph_weights: List[Tensor], node2kernel: List[int]) -> CompiledModule:
     from hidet.lang import void_p, attrs, int32, int64, meta, cast
@@ -341,9 +334,6 @@ def build_flow_graph(graph, *, space=0) -> CompiledGraph:
     # get the graph meta data
     graph_meta_data = get_graph_meta_data(graph, len(graph_kernels), space)
 
-    # get distributed information
-    graph_dist_info = get_graph_dist_info(graph)
-
     # build the compiled graph
     compiled_graph = CompiledGraph(
         meta=graph_meta_data,
@@ -352,7 +342,6 @@ def build_flow_graph(graph, *, space=0) -> CompiledGraph:
         compiled_tasks=graph_kernels,
         graph_execution=graph_execution,
         graph_string=str(graph),
-        dist_info=graph_dist_info,
     )
 
     # save the compiled graph to cache

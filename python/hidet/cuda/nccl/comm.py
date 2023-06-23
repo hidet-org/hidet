@@ -93,11 +93,12 @@ def comms_to_array(comms: List[NcclCommunicator]) -> Array:
     return array
 
 
-def init_unique_id(unqie_id: NcclUniqueId) -> None:
+def create_unique_id() -> NcclUniqueId:
     if not nccl_available():
         raise RuntimeError("NCCL is not available")
-    nccl_runtime_api.get_unique_id(unqie_id)
-
+    unique_id = NcclUniqueId()
+    nccl_runtime_api.get_unique_id(unique_id)
+    return unique_id
 
 def dtype_to_nccl(dtype: DataType) -> NcclDataType:
     sname_dict = {

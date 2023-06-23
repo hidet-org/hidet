@@ -16,7 +16,7 @@ from .comm import (
     NcclDataType,
     NcclRedOp,
     comms_to_array,
-    init_unique_id,
+    create_unique_id,
     dtype_to_nccl,
     NcclCommunicator,
     str_to_nccl_op,

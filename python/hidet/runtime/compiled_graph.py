@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Optional, Tuple, Dict, Any, Callable
+from typing import List, Optional, Tuple, Dict, Any, Callable, Union
 import zipfile
 import os
 import json
@@ -30,7 +30,6 @@ from hidet.ffi import runtime_api
 from hidet.utils import prod
 from hidet.cuda.nccl import NcclCommunicator, NcclUniqueId, create_comm, NCCL_SPLIT_NOCOLOR, comms_to_array
 
-
 ModelExecutionHook = Callable[[int, List['Tensor'], List['Tensor']], None]
 
 
@@ -46,6 +45,7 @@ class GraphMetaData:
     hidet_version: str
     num_kernels: int
     graph_hash: str
+    attrs: Dict[str, Union[int, List[List[int]]]]
 
 
 @dataclass
@@ -64,14 +64,6 @@ class GraphExecution:
     outputs_index: List[int]
     tensor_device: List[str]
 
-
-@dataclass
-class GraphDistributedInfo:
-    nrank: int
-    rank: int
-    groups: List[List[int]]
-
-
 class CompiledGraph:
     def __init__(
         self,
@@ -81,7 +73,6 @@ class CompiledGraph:
         compiled_tasks: List[CompiledTask],
         graph_execution: GraphExecution,
         graph_string: str,
-        dist_info: Optional[GraphDistributedInfo] = None,
     ):
         from hidet.graph.tensor import Tensor
 
@@ -113,9 +104,6 @@ class CompiledGraph:
         self.dispatch_table: Dict[Tuple[int, ...], Array] = {}
         self.cuda_workspace: Optional[Storage] = None
         self.cpu_workspace: Optional[Storage] = None
-
-        # distributed properties
-        self.dist_info: Optional[GraphDistributedInfo] = dist_info
         self.nccl_comms: List[NcclCommunicator] = []
 
         self._init_compiled_graph()
@@ -402,11 +390,6 @@ def save_compiled_graph(model: CompiledGraph, path: str):
         with zf.open('graph_string.txt', 'w') as f:
             f.write(model.graph_string.encode('utf-8'))
 
-        # save distibuted information
-        if model.dist_info is not None:
-            with zf.open('dist_info.json', 'w') as f:
-                dist_info_bytes = json.dumps(asdict(model.dist_info), indent=4).encode('utf-8')
-                f.write(dist_info_bytes)
 
 
 def load_compiled_graph(path: str) -> CompiledGraph:
@@ -423,13 +406,6 @@ def load_compiled_graph(path: str) -> CompiledGraph:
         # load graph execution
         with zf.open('graph_execution.json', 'r') as f:
             graph_execution: GraphExecution = from_dict(GraphExecution, json.load(f))
-
-        # load dist info
-        if 'dist_info.json' in zf.namelist():
-            with zf.open('dist_info.json', 'r') as f:
-                dist_info: GraphDistributedInfo = from_dict(GraphDistributedInfo, json.load(f))
-        else:
-            dist_info = None
 
         # load weights as numpy arrays
         with zf.open('weights.npz', 'r') as f:
@@ -463,7 +439,7 @@ def load_compiled_graph(path: str) -> CompiledGraph:
 
     # construct the compiled graph
     ret = CompiledGraph(
-        meta_data, graph_module, weights, compiled_tasks, graph_execution, graph_string, dist_info=dist_info
+        meta_data, graph_module, weights, compiled_tasks, graph_execution, graph_string
     )
 
     return ret

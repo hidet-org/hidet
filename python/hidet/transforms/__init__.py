@@ -36,7 +36,7 @@ from .declare_to_let import declare_to_let_pass
 from .propagate_launch_bound import propagate_launch_bound_pass
 from .check_launch_configuration import check_launch_configuration_pass
 from .lower_special_cast import lower_special_cast_pass
-from .include_nccl import include_nccl_pass
+from .annotate_include_headers import annotate_include_headers_pass
 
 
 def lower_with(ir_module: IRModule, transforms: Sequence[Pass]) -> IRModule:
@@ -81,6 +81,6 @@ def lower(ir_module: IRModule) -> IRModule:
         rule_based_simplify_pass(),
         inline_let_stmt_pass(),
         simplify_stmt_pass(),
-        include_nccl_pass(),
+        annotate_include_headers_pass(),
     ]
     return lower_with(ir_module, transforms)

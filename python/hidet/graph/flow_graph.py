@@ -16,6 +16,7 @@ import logging
 import os
 import pickle
 from collections import defaultdict
+from dataclasses import dataclass, field
 
 import hidet.graph.operator
 import hidet.cuda
@@ -103,6 +104,11 @@ class GraphForwardContext:
 def forward_context() -> GraphForwardContext:
     return GraphForwardContext()
 
+@dataclass
+class FlowGraphAttrs:
+    nrank: int = 0
+    rank: int = 0
+    groups: List[List[int]] = field(default_factory=list)
 
 class FlowGraph:
     """The computation graph representation."""
@@ -112,9 +118,7 @@ class FlowGraph:
         outputs: Sequence[Tensor],
         inputs: Optional[Sequence[Tensor]] = None,
         nodes=None,
-        nrank=None,
-        rank=None,
-        groups=None,
+        attrs: Optional[FlowGraphAttrs] = None
     ):
         self.outputs: List[Tensor] = list(outputs)
         self.inputs: Optional[List[Tensor]] = list(inputs) if inputs is not None else None
@@ -122,10 +126,7 @@ class FlowGraph:
         self._usage_count: Optional[Dict[Tensor, int]] = None
         self.update_nodes()
 
-        # For distributed graphs
-        self.nrank = nrank
-        self.rank = rank
-        self.groups = groups
+        self.attrs: FlowGraphAttrs = attrs if attrs else FlowGraphAttrs()
 
     def __call__(self, *inputs: Tensor) -> Union[List[Tensor], Tensor]:
         """
@@ -192,13 +193,8 @@ class FlowGraph:
             hidet.option.parallel_build(False)
             hidet.drivers.build_task_batch(tunable_tasks)  # build tunable tasks one by one
 
-    def is_distributed(self):
-        return self.nrank is not None or self.rank is not None
-
-    def set_dist_attrs(self, nrank: int, rank: int, groups: Optional[List[List[int]]] = None):
-        self.nrank = nrank
-        self.rank = rank
-        self.groups = groups
+    def set_attrs(self, *args, **kwargs):
+        self.attrs = FlowGraphAttrs(*args, **kwargs)
 
     def forward(self, inputs: List[Tensor]) -> List[Tensor]:
         """Run the computation graph.
@@ -214,8 +210,6 @@ class FlowGraph:
         output: List[Tensor]
             The output tensors of the computation graph.
         """
-        if self.is_distributed():
-            raise RuntimeError("Running Distributed FlowGraph is not supported. Please compile it first.")
 
         from hidet.ffi import runtime_api
 

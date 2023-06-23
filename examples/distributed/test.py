@@ -34,7 +34,8 @@ def run(world_size, rank, shared_id, barrier):
 
     # Initialize unique id
     if rank == 0:
-        nccl.init_unique_id(shared_id)
+        _id = nccl.create_unique_id()
+        shared_id.internal = _id.internal
 
     barrier.wait()
     hidet.cuda.set_device(rank)
@@ -60,7 +61,7 @@ def run(world_size, rank, shared_id, barrier):
     y_sync = hidet.ops.all_reduce(y_local, args.reduce_op, comm_id=int(use_group))
     graph = hidet.trace_from([y_local, y_sync], inputs=[x_symb, w_symb])
     opt_graph = hidet.graph.optimize(graph)
-    opt_graph.set_dist_attrs(nrank=world_size, rank=rank, groups=groups)
+    opt_graph.set_attrs(nrank=world_size, rank=rank, groups=groups)
     compiled = opt_graph.build()
 
     # test save and load
