@@ -101,10 +101,6 @@ class ReshapeTask(Task):
             attributes={'shape': y_shape},
         )
 
-    # to get around unnecessary reshapes during runtime
-    def build(self, target: Union[str, Target], load: bool = True):
-        return lambda x, y: y
-
 
 class RearrangeTask(Task):
     def __init__(self, x: TensorNode, plan: List[List[int]]):

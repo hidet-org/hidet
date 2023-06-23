@@ -1169,6 +1169,7 @@ def conv2d_pointwise_fp16(img: Tensor, weight: Tensor, groups: int):
 def conv2d_gemm_fp16(
     img: Tensor,
     weight: Tensor,
+    padding: List[int],
     stride: List[int],
     dilations: List[int],
     groups: int,
@@ -1181,17 +1182,16 @@ def conv2d_gemm_fp16(
     oc, wc, ky, kx = weight.shape
     sy, sx = stride
     dy, dx = dilations
-    # if ky == 1 and kx == 1 and sy == 1 and sx == 1 and dy == 1 and dx == 1:
-    #     assert c % groups == 0 and wc * groups == c, "invalid group / channel size"
-    #     img = hidet.ops.reshape(img, [n, groups, c // groups, h * w])
-    #     weight = hidet.ops.reshape(weight, [1, groups, oc // groups, wc])
-    #     out = hidet.ops.matmul(weight, img)
-    #     return hidet.ops.reshape(out, [n, oc, h, w])
+    if ky == 1 and kx == 1 and sy == 1 and sx == 1 and dy == 1 and dx == 1:
+        assert c % groups == 0 and wc * groups == c, "invalid group / channel size"
+        img = hidet.ops.reshape(img, [n, groups, c // groups, h * w])
+        weight = hidet.ops.reshape(weight, [1, groups, oc // groups, wc])
+        out = hidet.ops.matmul(weight, img)
+        return hidet.ops.reshape(out, [n, oc, h, w])
 
-    img = hidet.ops.transpose(img, [0, 2, 3, 1])
+    img = pre_transform_imgv3(img, tuple(padding), pad_value=0, make_multiple_8=True)
     if groups == 1 and c % 8 != 0:
         pad_channel = cdiv(c, 8) * 8 - c
-        img = hidet.ops.pad(img, [0, pad_channel])
         weight = hidet.ops.pad(weight, [0, 0, 0, 0, 0, pad_channel, 0, 0])
 
     res = conv2d_gemm_fp16_channel_last(img, weight, stride, dilations, groups, parallel_k_parts, disable_cp_async)
