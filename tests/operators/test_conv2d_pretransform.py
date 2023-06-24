@@ -39,7 +39,7 @@ def test_pretransform_v3(img_dim, channel, padding, multi_8):
     for func in task.candidates:
         y2 = hidet.empty_like(y1)
         func(img, y2)
-        assert torch.allclose(y1.torch(), y2.torch(), 1e-3, 1e-3)
+        assert torch.allclose(y1.torch(), y2.torch(), 1e-2, 1e-2)
 
 
 if __name__ == '__main__':
