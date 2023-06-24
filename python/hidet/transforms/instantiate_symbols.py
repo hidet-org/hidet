@@ -15,6 +15,7 @@ from hidet.ir.expr import Var, SymbolVar, Call
 from hidet.ir.func import Function
 from hidet.ir.module import IRModule
 from hidet.ir.functors import IRRewriter
+from hidet.ir.primitives import is_primitive_function
 from hidet.ir.primitives.runtime import get_symbol_value
 from hidet.ir.stmt import LetStmt, LaunchKernelStmt
 from hidet.ir.tools import collect
@@ -58,6 +59,9 @@ class InstantiateSymbolsRewriter(IRRewriter):
                 symbols.update(func_symbols.symbols)
             else:
                 assert False
+        
+        if is_primitive_function(func.name):
+            return func
 
         ordered_symbols: List[SymbolVar] = list(symbols)
         symbol_params: List[Var] = [Var(symbol.name, symbol.type) for symbol in ordered_symbols]
