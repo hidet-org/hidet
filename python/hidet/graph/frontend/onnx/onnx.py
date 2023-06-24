@@ -204,8 +204,10 @@ class OnnxConv(OnnxOperator):
             dilations = self.attrs.get('dilations', [1, 1])
             padding = self.attrs.get('pads', [0, 0, 0, 0])
             strides = self.attrs.get('strides', [1, 1])
+            padding = ops.utils.normalize_padding(padding)
+            # currently conv2d only supports symmetric padding, like torch
             if not (padding[0] == padding[2] and padding[1] == padding[3]):
-                x = ops.pad(x, ops.utils.normalize_padding(padding))
+                x = ops.pad(x, padding)
                 output = ops.conv2d(x, w, stride=strides, dilations=dilations, groups=groups)
             else:
                 output = ops.conv2d(
