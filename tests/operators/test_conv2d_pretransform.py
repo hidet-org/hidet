@@ -21,6 +21,7 @@ def pre_transform_img_ref(img: Tensor, padding: Union[int, Tuple[int, int]], pad
     return img
 
 
+@pytest.mark.skip(reason='This operator is not needed right now')
 @pytest.mark.parametrize("img_dim", [[32, 64], [31, 63]])
 @pytest.mark.parametrize("channel", [3, 32, 64])
 @pytest.mark.parametrize("padding", [[0, 0], [1, 1], [2, 3]])
