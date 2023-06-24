@@ -59,7 +59,7 @@ class InstantiateSymbolsRewriter(IRRewriter):
                 symbols.update(func_symbols.symbols)
             else:
                 assert False
-        
+
         if is_primitive_function(func.name):
             return func
 
