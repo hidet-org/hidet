@@ -26,7 +26,7 @@ def get_lane(v, idx):
         raise ValueError('v should be a vector, got {}'.format(vtype))
 
 
-def check_type(a_type: TensorType, b_type: TensorType, c_type: TensorType):
+def check_type(a_type: TensorType, b_type: TensorType, c_type: TensorType, ta: bool, tb: bool):
     if not (a_type.dtype == b_type.dtype == c_type.dtype):
         raise TypeError(
             'The data type of a, b, c should be the same, got {}, {}, {}'.format(
@@ -43,10 +43,22 @@ def check_type(a_type: TensorType, b_type: TensorType, c_type: TensorType):
             )
         )
 
+    if not ta:
+        a_m_size, a_k_size = a_shape[-2:]
+    else:
+        a_k_size, a_m_size = a_shape[-2:]
+
+    if not tb:
+        b_k_size, b_n_size = b_shape[-2:]
+    else:
+        b_n_size, b_k_size = b_shape[-2:]
+
+    c_m_size, c_n_size = c_shape[-2:]
+
     if (
-        is_true(a_shape[-1] != b_shape[-2])
-        or is_true(a_shape[-2] != c_shape[-2])
-        or is_true(b_shape[-1] != c_shape[-1])
+        is_true(a_k_size != b_k_size)
+        or is_true(a_m_size != c_m_size)
+        or is_true(b_n_size != c_n_size)
         or not can_broadcast(a_shape[:-2], c_shape[:-2])
         or not can_broadcast(b_shape[:-2], c_shape[:-2])
     ):
@@ -84,6 +96,8 @@ def matmul_simt(
     arg_a: Expr,
     arg_b: Expr,
     arg_c: Expr,
+    ta: bool = False,
+    tb: bool = False,
     *,
     parallel_k=2,
     block_shape=(64, 128, 16),
@@ -101,7 +115,7 @@ def matmul_simt(
     a_type: TensorType = get_tensor_type(arg_a)
     b_type: TensorType = get_tensor_type(arg_b)
     c_type: TensorType = get_tensor_type(arg_c)
-    check_type(a_type, b_type, c_type)
+    check_type(a_type, b_type, c_type, ta, tb)
     dtype: DataType = a_type.dtype
 
     if dtype.nbytes < 4:
@@ -116,9 +130,9 @@ def matmul_simt(
     a_head: List[Expr] = list(a_type.shape[:-2])
     b_head: List[Expr] = list(b_type.shape[:-2])
     c_head: List[Expr] = list(c_type.shape[:-2])
-    m_size: Expr = a_type.shape[-2]
-    n_size: Expr = b_type.shape[-1]
-    k_size: Expr = a_type.shape[-1]
+    m_size: Expr = a_type.shape[-2] if not ta else a_type.shape[-1]
+    n_size: Expr = b_type.shape[-1] if not tb else b_type.shape[-2]
+    k_size: Expr = a_type.shape[-1] if not ta else a_type.shape[-2]
 
     tune.check(all(a % b == 0 for a, b in zip(block_shape, warp_shape)))
     tune.check(all(a % (b * c) == 0 for a, b, c in zip(warp_shape[:2], warp_threads, thread_shape[:2])))
