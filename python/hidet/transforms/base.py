@@ -59,12 +59,7 @@ class Pass:
         if all(new_funcs[name] is ir_module.functions[name] for name in new_funcs):
             return ir_module
         else:
-            return IRModule(
-                functions=new_funcs,
-                global_vars=ir_module.global_vars,
-                namespace=ir_module.namespace,
-                extern_functions=ir_module.extern_functions,
-            )
+            return ir_module.copy().reset_funcs(new_funcs, ir_module.global_vars)
 
     def process_func(self, func: Function) -> Function:
         return func

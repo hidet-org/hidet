@@ -26,7 +26,6 @@ class ReduceF16Task(Task):
     def __init__(
         self, x: TensorNode, dims: List[int], keep_dim: bool, reduce_type: ReduceType, accumulate_dtype: str = 'float32'
     ):
-
         y_shape = []
         for i in range(len(x.shape)):
             if i in dims:

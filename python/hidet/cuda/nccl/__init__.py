@@ -9,20 +9,5 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import hidet
-import pytest
-
-hidet.option.save_lower_ir()
-
-
-def test_profile_config():
-    a = hidet.randn([1, 10, 10], device='cuda')
-    b = hidet.randn([1, 10, 10], device='cuda')
-    hidet.option.search_space(1)
-    hidet.option.bench_config(1, 1, 1)
-    c = hidet.ops.batch_matmul(a, b)
-    hidet.option.search_space(0)
-
-
-if __name__ == '__main__':
-    pytest.main(__file__)
+from .comm import create_comm, NcclUniqueId, NcclDataType, NcclRedOp, comms_to_array, init_unique_id, dtype_to_nccl
+from .ffi import nccl_version, nccl_library_filename

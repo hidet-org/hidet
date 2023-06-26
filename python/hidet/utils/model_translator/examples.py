@@ -18,6 +18,7 @@ from hidet.utils.model_translator import AstInterpreter, transpiled_str, vis_int
 import torch
 import numpy as np
 
+
 # transpile a simple function
 def orig_func(a, b: torch.Tensor, c: float, dim: int = 1):
     """
@@ -39,6 +40,7 @@ assert torch.allclose(res, orig)
 vis_interpreter(interpreter)
 print("final result:\n")
 print(transpiled_str(interpreter))
+
 
 # %%
 # conditionals with multiple branches may need to have all branches covered
@@ -63,6 +65,7 @@ vis_interpreter(interpreter)
 
 print(transpiled_str(interpreter))
 
+
 # %%
 def forloop(a: torch.Tensor, c, l):
     for i in range(l):
@@ -78,6 +81,7 @@ interpreter = AstInterpreter()
 res = interpreter(forloop, [torch.rand([4, 4]), torch.rand([4, 4]), 13])
 vis_interpreter(interpreter)
 print(transpiled_str(interpreter))
+
 
 # %%
 # calling a function that is not in the torch name space will trigger a recursive trace
@@ -99,6 +103,7 @@ interpreter = AstInterpreter(whitelist={mysoftmax})
 res = interpreter(raw_function, [torch.rand([2, 2]), torch.rand([2, 2]), torch.rand([1, 2]), torch.rand([1, 1])])
 vis_interpreter(interpreter)
 print(transpiled_str(interpreter))
+
 
 # %%
 # tracing classes works a bit differently
@@ -139,6 +144,7 @@ intp(h.forward, [torch.rand([1, 3, 5, 5])])
 
 vis_interpreter(intp)
 print(transpiled_str(intp))
+
 
 # %%
 # inheritance would trigger more recursive traces
