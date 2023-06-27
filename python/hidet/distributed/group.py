@@ -81,6 +81,7 @@ class NCCLProcessGroup(ProcessGroup):
         assert not tensor.is_symbolic()
         assert tensor.device.is_cuda()
         addr = tensor.storage.addr
+        print(addr, tensor.nbytes, tensor, tensor.dtype)
         self._comm.all_reduce(addr, addr, tensor.nbytes, tensor.dtype, op)
 
 

@@ -85,7 +85,7 @@ class NcclCommunicator:
         if s is None:
             s = current_stream()
         nccl_runtime_api.all_reduce(
-            sendbuff, recvbuff, count, dtype_to_nccl(datatype), str_to_nccl_op(op), self._handle, s
+            sendbuff, recvbuff, count, int(dtype_to_nccl(datatype)), int(str_to_nccl_op(op)), self._handle, s
         )
 
 

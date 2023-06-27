@@ -10,6 +10,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .distributed import init_process_group
+from .distributed import init_process_group, all_reduce
 from .group import set_nccl_comms
 from .store import FileStore

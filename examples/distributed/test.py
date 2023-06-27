@@ -35,6 +35,10 @@ def run(world_size, rank):
     device = f"cuda:{rank}"
     x = hidet.randn([1, 3], device=device)
     w = hidet.randn([3, 2], device=device)
+
+    # test runtime distributed op
+    hidet.distributed.all_reduce(w, 'avg')
+    # print(w)
     
     # Create Computation Graph
     x_symb = hidet.symbol_like(x)
