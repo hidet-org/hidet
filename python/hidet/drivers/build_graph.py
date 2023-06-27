@@ -22,7 +22,12 @@ from hidet.ir.stmt import AssignStmt, DeclareStmt
 from hidet.graph.tensor import Tensor
 from hidet.graph.flow_graph import FlowGraph
 from hidet.runtime.compiled_module import CompiledModule
-from hidet.runtime.compiled_graph import CompiledGraph, GraphMetaData, GraphExecution, GraphExecutionInstruction
+from hidet.runtime.compiled_graph import (
+    CompiledGraph,
+    GraphMetaData,
+    GraphExecution,
+    GraphExecutionInstruction,
+)
 from hidet.runtime.compiled_task import CompiledTask, TensorSignature
 from hidet.graph.operator import Operator
 from hidet.ir import primitives
@@ -138,9 +143,9 @@ def get_graph_meta_data(graph: FlowGraph, num_kernels, space: int) -> GraphMetaD
     graph_hash = sha256('\n'.join(lines).encode('utf-8')).hexdigest()[:16]
 
     return GraphMetaData(
-        inputs=inputs, outputs=outputs, hidet_version=hidet.__version__, num_kernels=num_kernels, graph_hash=graph_hash
+        inputs=inputs, outputs=outputs, hidet_version=hidet.__version__, num_kernels=num_kernels, graph_hash=graph_hash,
+        attrs=asdict(graph.attrs)
     )
-
 
 def build_graph_module(graph: FlowGraph, graph_weights: List[Tensor], node2kernel: List[int]) -> CompiledModule:
     from hidet.lang import void_p, attrs, int32, int64, meta, cast

@@ -16,6 +16,7 @@ import logging
 import os
 import pickle
 from collections import defaultdict
+from dataclasses import dataclass, field
 
 import hidet.graph.operator
 import hidet.cuda
@@ -103,16 +104,29 @@ class GraphForwardContext:
 def forward_context() -> GraphForwardContext:
     return GraphForwardContext()
 
+@dataclass
+class FlowGraphAttrs:
+    nrank: int = 0
+    rank: int = 0
+    groups: List[List[int]] = field(default_factory=list)
 
 class FlowGraph:
     """The computation graph representation."""
 
-    def __init__(self, outputs: Sequence[Tensor], inputs: Optional[Sequence[Tensor]] = None, nodes=None):
+    def __init__(
+        self,
+        outputs: Sequence[Tensor],
+        inputs: Optional[Sequence[Tensor]] = None,
+        nodes=None,
+        attrs: Optional[FlowGraphAttrs] = None
+    ):
         self.outputs: List[Tensor] = list(outputs)
         self.inputs: Optional[List[Tensor]] = list(inputs) if inputs is not None else None
         self._nodes: Optional[List[Operator]] = nodes
         self._usage_count: Optional[Dict[Tensor, int]] = None
         self.update_nodes()
+
+        self.attrs: FlowGraphAttrs = attrs if attrs else FlowGraphAttrs()
 
     def __call__(self, *inputs: Tensor) -> Union[List[Tensor], Tensor]:
         """
@@ -179,6 +193,9 @@ class FlowGraph:
             hidet.option.parallel_build(False)
             hidet.drivers.build_task_batch(tunable_tasks)  # build tunable tasks one by one
 
+    def set_attrs(self, *args, **kwargs):
+        self.attrs = FlowGraphAttrs(*args, **kwargs)
+
     def forward(self, inputs: List[Tensor]) -> List[Tensor]:
         """Run the computation graph.
 
@@ -193,6 +210,7 @@ class FlowGraph:
         output: List[Tensor]
             The output tensors of the computation graph.
         """
+
         from hidet.ffi import runtime_api
 
         inputs: List[Tensor] = list(inputs)

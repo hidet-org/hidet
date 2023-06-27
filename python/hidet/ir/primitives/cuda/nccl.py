@@ -18,7 +18,7 @@ from hidet.ir.type import DataType
 from hidet.cuda.nccl import NcclRedOp, dtype_to_nccl
 
 
-def all_reduce(comm_id: int, sendbuff: Expr, recvbuff: Expr, count: Expr, dtype: DataType, op: NcclRedOp):
+def all_reduce(sendbuff: Expr, recvbuff: Expr, count: Expr, dtype: DataType, op: NcclRedOp, comm_id: int):
     from hidet.ir.primitives.runtime import get_cuda_stream, get_nccl_comm
 
     comm = get_nccl_comm(comm_id)

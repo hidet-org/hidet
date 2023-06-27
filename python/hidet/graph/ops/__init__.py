@@ -52,5 +52,6 @@ from .transform import permute_dims
 from .fusion import fused_operator
 from .transfer import transfer
 from .special import barrier
+from .distributed import all_reduce
 
 from . import utils
