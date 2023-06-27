@@ -103,40 +103,62 @@ def hidet_backend(graph_module, example_inputs):
     interpreter: Interpreter = hidet.frontend.from_torch(graph_module)
 
     # prepare dummy and symbolic inputs for correctness and flow graph construction
-    symbolic_inputs: List[Tensor] = []  # for flow graph construction
+    # unfortunately, when dynamic=True in torch.compile, there may exist other non-tensor parameters
+    #   in example inputs
+    inputs = []  # for flow graph construction
     for example_input in example_inputs:
         if isinstance(example_input, torch.Tensor):
             symbolic_input = symbol_like_torch(example_input)
-            symbolic_inputs.append(symbolic_input)
+            inputs.append(symbolic_input)
+        elif isinstance(example_input, int):
+            inputs.append(symbolic_input)
+        elif isinstance(example_input, torch.SymInt):
+            try:
+                inputs.append(int(example_input))
+            except Exception:
+                raise ValueError(f"hidet_backend: free symbolic example input {example_input}")
         else:
-            raise ValueError('hidet_backend: only support torch.Tensor as example input')
+            raise ValueError(f'hidet_backend: unexpected example input {example_input}, type {type(example_input)}')
+    
 
     if dynamo_config['correctness_report']:
         # check correctness using random inputs
         logger.info('start to check correctness')
-        dummy_inputs: List[Tensor] = []  # for correctness check
-        for symbolic_input in symbolic_inputs:
-            if data_type(symbolic_input.dtype).is_integer():
-                dummy_input = hidet.zeros_like(symbolic_input)
+        dummy_inputs = []  # for correctness check
+        for arg in inputs:
+            if isinstance(arg, hidet.Tensor):
+                if data_type(arg.dtype).is_integer():
+                    dummy_input = hidet.zeros_like(arg)
+                else:
+                    dummy_input = hidet.randn_like(arg)
             else:
-                dummy_input = hidet.randn_like(symbolic_input)
+                dummy_input = arg
             dummy_inputs.append(dummy_input)
         report: str = interpreter.forward_with_check(*dummy_inputs)
         logger.info('finish checking correctness')
         print(report)
 
-    logger.info('hidet: symbolic inputs: ')
-    for symbolic_input in symbolic_inputs:
-        logger.info('hidet:   %s', symbolic_input.signature())
+    logger.info('hidet:   inputs: ')
+    for arg in inputs:
+        if isinstance(arg, hidet.Tensor):
+            logger.info('hidet:   %s', arg.signature())
+        else:
+            logger.info('hidet:   %s', arg)
 
     # symbolic run to get flow graph
-    output = interpreter(*symbolic_inputs)
+    output = interpreter(*inputs)
     output_format, output_tensors = serialize_output(output)
-    flow_graph: FlowGraph = hidet.trace_from(output_tensors, inputs=symbolic_inputs)
+    input_tensors = list(filter(lambda x: isinstance(x, hidet.Tensor), inputs))
+    # essentially, I think this is a bug in torch._inductor
+    #   the example inputs have instances of torch.SymInt (when dynamic=True), while the inputs to the compiled model
+    #   are torch.Tensors.
+    input_map = [isinstance(x, hidet.Tensor) for x in inputs]
+    flow_graph: FlowGraph = hidet.trace_from(output_tensors, inputs=input_tensors)
 
     executor = generate_executor(flow_graph)
 
     def wrapper(*args: Tensor):
+        args = [t for (t, is_hidet_tensor) in zip(args, input_map) if is_hidet_tensor]
         outputs: Sequence[torch.Tensor] = executor(*args)
         ret = deserialize_output(output_format, outputs)
         return ret

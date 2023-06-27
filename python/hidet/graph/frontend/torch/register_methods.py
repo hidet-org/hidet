@@ -14,7 +14,7 @@ import math
 from typing import List, Union
 import torch
 
-from hidet.ir.type import DataType
+from hidet.ir.type import DataType, Int
 from hidet.graph.tensor import Tensor
 from hidet.graph import ops
 from hidet.runtime.device import instantiate_device
@@ -130,7 +130,7 @@ def tensor_view(self: Tensor, *args) -> Tensor:
     else:
         if len(args) == 1 and isinstance(args[0], (list, tuple)):
             args = args[0]
-        dst_shape = [int(arg) for arg in args]
+        dst_shape = list(args)
         return ops.reshape(self, dst_shape)
 
 
@@ -159,6 +159,11 @@ def tensor_split(self: Tensor, split_size, dim=0) -> List[Tensor]:
         parts = [int(v) for v in split_size]
         assert sum(parts) == self.shape[dim]
     return ops.split(self, axis=dim, parts_or_sections=parts)
+
+
+@register_method(torch.Tensor.size)
+def tensor_size(self: Tensor) -> List[Int]:
+    return self.shape
 
 
 @register_method(torch.Tensor.chunk)
