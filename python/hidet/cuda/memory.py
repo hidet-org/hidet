@@ -45,7 +45,6 @@ def malloc(num_bytes: int) -> int:
         The address of the allocated memory.
     """
     err, addr = cudart.cudaMalloc(num_bytes)
-    if err != 0: import pdb; pdb.set_trace()
     assert err == 0, err
     return addr
 
