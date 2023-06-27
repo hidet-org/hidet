@@ -120,12 +120,10 @@ def symbol_like_torch(tensor) -> Tensor:
         for s in tensor.shape:
             try:
                 i = int(s)
-            except Exception as e:
+            except Exception: # pylint: disable=broad-except
                 i = str(s)
             symbolic_shape.append(i)
-        return hidet.symbol(
-            shape=symbolic_shape, dtype=dtype_from_torch(tensor.dtype).name, device=tensor.device.type
-        )
+        return hidet.symbol(shape=symbolic_shape, dtype=dtype_from_torch(tensor.dtype).name, device=tensor.device.type)
     elif isinstance(tensor, torch.Tensor):
         return hidet.symbol(
             shape=list(tensor.shape), dtype=dtype_from_torch(tensor.dtype).name, device=tensor.device.type

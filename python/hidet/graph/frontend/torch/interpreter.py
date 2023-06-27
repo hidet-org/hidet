@@ -238,7 +238,7 @@ class Interpreter:
                 target_fn = self._lookup_function(node.target)
                 if target_fn is None:
                     not_supported.add(node.target)
-                
+
         if len(not_supported) > 0:
             lines = []
             lines.append("The following modules/functions are not supported by hidet yet:")
@@ -259,7 +259,7 @@ class Interpreter:
             method_name = self._get_callable_name(torch_method)
             raise NotImplementedError(f"hidet: method {method_name} is not supported yet.")
         return Registry.registered_methods[torch_method]
-    
+
     def _lookup_function(self, code_obj):
         if code_obj.__name__ in self.ignore_funcs:
             return self.ignore_funcs[code_obj.__name__]

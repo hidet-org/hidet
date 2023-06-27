@@ -115,11 +115,10 @@ def hidet_backend(graph_module, example_inputs):
         elif isinstance(example_input, torch.SymInt):
             try:
                 inputs.append(int(example_input))
-            except Exception:
-                raise ValueError(f"hidet_backend: free symbolic example input {example_input}")
+            except Exception as e:
+                raise ValueError(f"hidet_backend: free symbolic example input {example_input}") from e
         else:
             raise ValueError(f'hidet_backend: unexpected example input {example_input}, type {type(example_input)}')
-    
 
     if dynamo_config['correctness_report']:
         # check correctness using random inputs
