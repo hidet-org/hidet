@@ -43,7 +43,6 @@ class Conv2dScalePattern(SubgraphRewriteRule):
                 dilations=attrs['dilations'],
                 groups=attrs['groups'],
                 padding=attrs['padding'],
-                pad_value=attrs['pad_value'],
             )
         ]
 
@@ -70,7 +69,6 @@ class TwoConv2dFusionPattern(SubgraphRewriteRule):
                 and same_list(w1.shape[1:], w2.shape[1:])
                 and same_list(op1.attrs['dilations'], op2.attrs['dilations'])
                 and same_list(op1.attrs['padding'], op2.attrs['padding'])
-                and op1.attrs['pad_value'] == op2.attrs['pad_value']
             ):
 
                 w = ops.concat([w1, w2], axis=0)
@@ -78,7 +76,6 @@ class TwoConv2dFusionPattern(SubgraphRewriteRule):
                     x,
                     w,
                     padding=op1.attrs['padding'],
-                    pad_value=op1.attrs['pad_value'],
                     stride=op1.attrs['stride'],
                     dilations=op1.attrs['dilations'],
                     groups=1,
@@ -121,11 +118,17 @@ class ThreeConv2dFusionPattern(SubgraphRewriteRule):
                 and same_list(op1.attrs['dilations'], op3.attrs['dilations'])
                 and same_list(op1.attrs['padding'], op2.attrs['padding'])
                 and same_list(op1.attrs['padding'], op3.attrs['padding'])
-                and op1.attrs['pad_value'] == op2.attrs['pad_value'] == op3.attrs['pad_value']
             ):
 
                 w = ops.concat([w1, w2, w3], axis=0)
-                y = ops.conv2d(x, w, stride=op1.attrs['stride'], groups=1)
+                y = ops.conv2d(
+                    x,
+                    w,
+                    stride=op1.attrs['stride'],
+                    dilations=op1.attrs['dilation'],
+                    groups=1,
+                    padding=op1.attrs['padding'],
+                )
                 # pylint: disable=unbalanced-tuple-unpacking
                 new_y1, new_y2, new_y3 = ops.split(y, axis=1, parts_or_sections=[w1.shape[0], w2.shape[0], w3.shape[0]])
                 return [new_y1, new_y2, new_y3]

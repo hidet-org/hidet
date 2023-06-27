@@ -11,7 +11,7 @@
 # limitations under the License.
 from typing import List, Optional, Union, Sequence, Tuple
 from hidet.ir.type import DataType, data_type
-from hidet.ir.expr import Expr, Constant, if_then_else, convert, cast as ir_cast, logical_and, is_constant
+from hidet.ir.expr import Expr, Constant, if_then_else, convert, cast as ir_cast, is_constant
 from hidet.ir.expr import Int
 from hidet.ir.layout import RowMajorLayout
 from hidet.ir.utils import index_deserialize, index_serialize
@@ -272,19 +272,9 @@ class BroadcastTask(Task):
 
 class PadTask(Task):
     def __init__(self, data: TensorNode, pads: List[int], value: float):
-        shape = data.shape
-        rank = len(shape)
-        assert rank * 2 == len(pads)
-        out_shape = [a + b + c for a, b, c in zip(pads[:rank], shape, pads[rank:])]
+        from hidet.ir.compute import cops
 
-        value = convert(value, dtype=data.type.dtype.name)
-
-        def fmap(*indices):
-            indices = [idx - beg for idx, beg in zip(indices, pads[:rank])]
-            cond = logical_and(*[logical_and(0 <= idx, idx < shape[i]) for i, idx in enumerate(indices)])
-            return if_then_else(cond, data[indices], value)
-
-        out = compute('out', shape=out_shape, fcompute=fmap)
+        out = cops.pad(data, pads, value)
         super().__init__(name='pad', inputs=[data], outputs=[out])
 
 
