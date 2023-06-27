@@ -78,6 +78,7 @@ class NCCLProcessGroup(ProcessGroup):
         return self._world_size
 
     def all_reduce(self, tensor: Tensor, op: str):
+        print(tensor, op)
         assert not tensor.is_symbolic()
         assert tensor.device.is_cuda()
         addr = tensor.storage.addr
