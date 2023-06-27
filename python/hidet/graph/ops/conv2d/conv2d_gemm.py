@@ -874,7 +874,6 @@ def conv2d_gemm_fp16(
     img: Tensor,
     weight: Tensor,
     padding: Union[int, Tuple[int, int]] = 0,
-    pad_value: float = 0.0,
     stride: Tuple[int, int] = (1, 1),
     dilations: Tuple[int, int] = (1, 1),
     groups: int = 1,
