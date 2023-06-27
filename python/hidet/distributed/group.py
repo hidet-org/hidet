@@ -46,6 +46,7 @@ class ProcessGroup:
         raise NotImplementedError()
 
 NCCL_COMMS = []
+_NCCL_ARRAY = None
 
 class NCCLProcessGroup(ProcessGroup):
     def __init__(self, comm: NcclCommunicator, world_size: int, rank: int):
@@ -78,9 +79,10 @@ def create_nccl_group(store: Store, world_size: int, rank: int):
     return NCCLProcessGroup(comm, world_size, rank)
 
 def set_nccl_comms():
+    global _NCCL_ARRAY
     from hidet.ffi.runtime_api import runtime_api
-    comm_array = comms_to_array(NCCL_COMMS)
-    runtime_api.set_nccl_comms(comm_array)
+    _NCCL_ARRAY = comms_to_array(NCCL_COMMS)
+    runtime_api.set_nccl_comms(_NCCL_ARRAY)
 
 
 if __name__ == '__main__':

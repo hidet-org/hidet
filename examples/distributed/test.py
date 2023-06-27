@@ -39,14 +39,15 @@ def run(world_size, rank):
     x_symb = hidet.symbol_like(x)
     w_symb = hidet.symbol_like(w)
     y_local = hidet.ops.relu(x_symb @ w_symb)
-    y_sync = hidet.ops.all_reduce(y_local, args.reduce_op, comm_id=0)
+    y_sync = hidet.ops.all_reduce(y_local, args.reduce_op)
     graph = hidet.trace_from([y_local, y_sync], inputs=[x_symb, w_symb])
     opt_graph = hidet.graph.optimize(graph)
     compiled = opt_graph.build()
     y_local, y_sync = compiled(x, w)
 
-    s = hidet.cuda.current_stream().synchronize()
+    hidet.cuda.current_stream().synchronize()
     print(f"process {rank}\nbefore allreduce:{y_local}\nafter allreduce:{y_sync}\n", end='')
+    print("sss")
 
 world_size = args.n_gpus
 processes = [Process(target=run, args=(world_size, i)) for i in range(world_size)]
