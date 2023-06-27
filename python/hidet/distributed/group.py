@@ -81,7 +81,6 @@ class NCCLProcessGroup(ProcessGroup):
         assert not tensor.is_symbolic()
         assert tensor.device.is_cuda()
         addr = tensor.storage.addr
-        print(addr, tensor.nbytes, tensor, tensor.dtype)
         self._comm.all_reduce(addr, addr, tensor.nbytes, tensor.dtype, op)
 
 
@@ -90,8 +89,9 @@ def create_nccl_group(store: Store, world_size: int, rank: int):
         unique_id = create_unique_id()
         store.set('unique_id', unique_id.internal)
     else:
-        unique_id = store.get('unique_id')
-        unique_id = NcclUniqueId(unique_id)
+        _id = store.get('unique_id')
+        unique_id = NcclUniqueId()
+        unique_id.internal[:] = _id[:]
     comm = create_comm(world_size, unique_id, rank)
     return NCCLProcessGroup(comm, world_size, rank)
 

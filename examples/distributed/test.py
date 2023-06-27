@@ -16,6 +16,7 @@ from multiprocessing import Process
 import numpy
 import argparse
 import atexit
+import os
 
 import hidet
 import hidet.cuda.nccl
@@ -38,7 +39,7 @@ def run(world_size, rank):
 
     # test runtime distributed op
     hidet.distributed.all_reduce(w, 'avg')
-    # print(w)
+    print(w)
     
     # Create Computation Graph
     x_symb = hidet.symbol_like(x)
@@ -53,6 +54,9 @@ def run(world_size, rank):
     hidet.cuda.current_stream().synchronize()
     print(f"process {rank}\nbefore allreduce:{y_local}\nafter allreduce:{y_sync}\n", end='')
     atexit._run_exitfuncs()
+
+if os.path.exists('tmp'):
+    os.remove('tmp')
 
 world_size = args.n_gpus
 processes = [Process(target=run, args=(world_size, i)) for i in range(world_size)]

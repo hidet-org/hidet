@@ -13,7 +13,6 @@
 from typing import Optional
 from datetime import timedelta
 
-import hidet
 from hidet.graph import Tensor
 from hidet.cuda.nccl import nccl_available
 from .store import Store, FileStore
@@ -102,12 +101,3 @@ def scatter():
 
 def reduce_scatter_tensor():
     raise NotImplementedError()
-
-
-if __name__ == '__main__':
-    init_process_group(init_method='file://tmp', world_size=1, rank=0)
-    print(is_initialized())
-    test = hidet.randn((2, 2), device='cuda')
-    print(test)
-    all_reduce(test, 'sum')
-    print(test)

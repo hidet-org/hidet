@@ -137,9 +137,7 @@ if nccl_available():
         def all_reduce(
             sendbuff: int, recvbuff: int, count: int, datatype: int, op: int, comm_handle: int, s: Stream
         ) -> None:
-            print("get all_reduce request", sendbuff, recvbuff, count, datatype, op, comm_handle, s.handle())
             ret = NCCLRuntimeAPI._all_reduce(sendbuff, recvbuff, count, datatype, op, comm_handle, s.handle())
-            print(ret)
             assert ret == 0
 
     nccl_runtime_api = NCCLRuntimeAPI()
