@@ -182,7 +182,10 @@ class StreamContext:
         from hidet.ffi import runtime_api
 
         current_streams = _current_streams
-        self.prev_stream = current_streams[self.device]
+        if self.device in current_streams:
+            self.prev_stream = current_streams[self.device]
+        else:
+            self.prev_stream = None
         current_streams[self.device] = self.stream
         self.device_context.__enter__()
         runtime_api.set_current_stream(self.stream)
@@ -191,8 +194,9 @@ class StreamContext:
         from hidet.ffi import runtime_api
 
         current_streams = _current_streams
-        current_streams[self.device] = self.prev_stream
-        runtime_api.set_current_stream(self.prev_stream)
+        if self.prev_stream is not None:
+            current_streams[self.device] = self.prev_stream
+            runtime_api.set_current_stream(self.prev_stream)
         self.device_context.__exit__(exc_type, exc_val, exc_tb)
 
 

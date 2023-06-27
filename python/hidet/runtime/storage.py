@@ -55,7 +55,7 @@ class MemoryAPI:
 class CudaMemoryAPI(MemoryAPI):
     def malloc(self, nbytes: int) -> int:
         with hidet.cuda.device(self.device.id):
-            addr = hidet.cuda.malloc_async(nbytes)
+            addr = hidet.cuda.malloc(nbytes)
         if addr == 0 and nbytes != 0:
             # out of memory
             return 0
