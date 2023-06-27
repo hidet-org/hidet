@@ -10,11 +10,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from enum import IntEnum
-from typing import List
+from typing import List, Optional
 import struct
 
 from hidet.ffi.utils import Array
 from hidet.ir.type import void_p, DataType
+from hidet.cuda import Stream, current_stream
 from .ffi import nccl_available, NcclUniqueId
 
 NCCL_SPLIT_NOCOLOR = -1
@@ -77,6 +78,11 @@ class NcclCommunicator:
         if color == NCCL_SPLIT_NOCOLOR:
             return None
         return NcclCommunicator(new_handle)
+    
+    def all_reduce(self, sendbuff:int, recvbuff:int, count:int, datatype:DataType, op:str, s:Optional[Stream]=None):
+        if s is None:
+            s = current_stream()
+        nccl_runtime_api.all_reduce(sendbuff, recvbuff, count, dtype_to_nccl(datatype), str_to_nccl_op(op), self._handle, s)
 
 
 def create_comm(nranks: int, unique_id: NcclUniqueId, rank: int) -> NcclCommunicator:

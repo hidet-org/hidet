@@ -32,7 +32,6 @@ class AllReduceTask(Task):
         return f"all_reduce"
 
     def implement(self, target: Union[Target, str], working_dir: str) -> List[IRModule]:
-        # we may need current rank here to avoid duplicated working_dirs
         import hidet
         from hidet.ir.primitives.cuda.nccl import all_reduce as _all_reduce
         from hidet.lang import attrs

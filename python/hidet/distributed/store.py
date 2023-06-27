@@ -5,6 +5,7 @@ import time
 import struct
 from functools import partial
 import os
+import atexit
 
 class Store:
     def set(self, key: str, value: bytes) -> None:
@@ -31,9 +32,6 @@ class Store:
     def set_timeout(self, timeout: timedelta):
         raise NotImplementedError()
     
-    def close(self):
-        raise NotImplementedError()
-
 class FileStore(Store):
     REGULAR_PREFIX = '+'
     DELETE_PREFIX = '-'
@@ -47,8 +45,19 @@ class FileStore(Store):
         self._timeout = None
 
         num_peers = self._add('cnt', 1)
-        if num_peers > self._world_size:
+        if world_size >= 0 and num_peers > world_size:
             raise RuntimeError("Warning: more peers than world size.")
+        
+        # We cannot operate files in __del__, and we don't want to call close explicitly
+        # So we register a atexit function doing cleanup when python interpreter exits
+        @atexit.register
+        def cleanup():
+            with self._lock:
+                if os.path.exists(self._filename):
+                    rest = self._add('cnt', -1)
+                    if rest == 0:
+                        os.remove(self._filename)
+            
 
     def _write(self, f, content):
         f.write(struct.pack('i', len(content)))
@@ -170,11 +179,6 @@ class FileStore(Store):
     def set_timeout(self, timeout: timedelta):
         self._timeout = timeout
 
-    def close(self):
-        rest = self._add('cnt', -1)
-        if rest == 0:
-            os.remove(self._filename)
-
 if __name__ == '__main__':
     store = FileStore('tmp')
     store.set_timeout(timedelta(seconds=30))
@@ -185,4 +189,3 @@ if __name__ == '__main__':
     ret = store.add('baga', 5)
     print(ret)
     print(store.get('baga'))
-    store.close()

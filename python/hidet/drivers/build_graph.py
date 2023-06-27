@@ -143,8 +143,7 @@ def get_graph_meta_data(graph: FlowGraph, num_kernels, space: int) -> GraphMetaD
     graph_hash = sha256('\n'.join(lines).encode('utf-8')).hexdigest()[:16]
 
     return GraphMetaData(
-        inputs=inputs, outputs=outputs, hidet_version=hidet.__version__, num_kernels=num_kernels, graph_hash=graph_hash,
-        attrs=asdict(graph.attrs)
+        inputs=inputs, outputs=outputs, hidet_version=hidet.__version__, num_kernels=num_kernels, graph_hash=graph_hash
     )
 
 def build_graph_module(graph: FlowGraph, graph_weights: List[Tensor], node2kernel: List[int]) -> CompiledModule:

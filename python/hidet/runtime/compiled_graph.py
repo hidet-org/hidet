@@ -28,7 +28,6 @@ from hidet.runtime.compiled_task import CompiledTask, TensorSignature, _check_in
 from hidet.runtime.storage import Storage
 from hidet.ffi import runtime_api
 from hidet.utils import prod
-from hidet.cuda.nccl import NcclCommunicator, NcclUniqueId, create_comm, NCCL_SPLIT_NOCOLOR, comms_to_array
 
 ModelExecutionHook = Callable[[int, List['Tensor'], List['Tensor']], None]
 
@@ -45,7 +44,6 @@ class GraphMetaData:
     hidet_version: str
     num_kernels: int
     graph_hash: str
-    attrs: Dict[str, Union[int, List[List[int]]]]
 
 
 @dataclass
@@ -104,7 +102,6 @@ class CompiledGraph:
         self.dispatch_table: Dict[Tuple[int, ...], Array] = {}
         self.cuda_workspace: Optional[Storage] = None
         self.cpu_workspace: Optional[Storage] = None
-        self.nccl_comms: List[NcclCommunicator] = []
 
         self._init_compiled_graph()
 
@@ -169,27 +166,6 @@ class CompiledGraph:
                             )
                         kernel_array[task_idx] = ctypes_func_pointer(compiled_task.candidates[sch_idx].ctypes_func)
                     self.dispatch_table[tuple(symbol_dims)] = kernel_array
-
-    def init_dist(self, unique_id: NcclUniqueId):
-        if self.dist_info is None:
-            raise RuntimeError("Distributed information is not set.")
-        self.nccl_comms = []
-
-        # Initialize the default group
-        nranks = self.dist_info.nrank
-        rank = self.dist_info.rank
-        default_comm = create_comm(nranks, unique_id, rank)
-        self.nccl_comms.append(default_comm)
-
-        # Create communicators according to groups
-        if self.dist_info.groups is not None:
-            for group in self.dist_info.groups:
-                in_group = rank in group
-                color = 0 if in_group else NCCL_SPLIT_NOCOLOR
-                key = group.index(rank) if in_group else 0
-                comm = default_comm.split(key, color)
-                if in_group:
-                    self.nccl_comms.append(comm)
 
     def _update_symbol_table(self, symbol_dims: Tuple[int, ...], best_candidates: List[int]):
         kernel_array = Array(void_p, len(self.compiled_tasks))
@@ -299,10 +275,6 @@ class CompiledGraph:
         ret: List[hidet.Tensor]
             The output tensors.
         """
-        if self.dist_info is not None:
-            comms_array = comms_to_array(self.nccl_comms)
-            runtime_api.set_nccl_comms(comms_array)
-
         if hidet.option.get_runtime_check():
             _check_inputs(self.meta.inputs, inputs)
 

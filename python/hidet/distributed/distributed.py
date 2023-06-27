@@ -1,8 +1,16 @@
 from typing import Optional
 from datetime import timedelta
 from .store import Store, FileStore
+from .group import create_nccl_group, ProcessGroup
+
+import hidet
+from hidet.graph import Tensor
+from hidet.cuda.nccl import nccl_available
+
 
 DEFAULT_TIMEOUT = timedelta(seconds=1800)
+
+DEFAULT_GROUP = None
 
 def init_process_group(
     backend: str = 'nccl',
@@ -19,6 +27,7 @@ def init_process_group(
         2. Specify ``init_method`` with ``files://path-to-file```
     Now world_size and rank still need to be specified manually.
     """
+    global DEFAULT_GROUP
 
     if world_size <= 0 or rank < 0:
         raise RuntimeError("'world_size' and 'rank' must be specified.")
@@ -39,29 +48,41 @@ def init_process_group(
             raise RuntimeError("'init_method' and 'store' are mutually exclusive.")
         
     store.set_timeout(timeout)
-
-
+    if backend == 'nccl':
+        if not is_nccl_available():
+            raise RuntimeError("NCCL is not found.")
+        DEFAULT_GROUP = create_nccl_group(store, world_size, rank)
 
 def is_initialized():
-    pass
+    return DEFAULT_GROUP is not None
 
 def is_nccl_available():
-    pass
+    return nccl_available()
 
 def broadcast():
-    pass
+    raise NotImplementedError()
 
-def all_reduce():
-    pass
+def all_reduce(tensor: Tensor, op:str, group:Optional[ProcessGroup]=None):
+    if group is None:
+        group = DEFAULT_GROUP
+    group.all_reduce(tensor, op)
 
 def reduce():
-    pass
+    raise NotImplementedError()
 
 def all_gather_into_tensor():
-    pass
+    raise NotImplementedError()
 
 def scatter():
-    pass
+    raise NotImplementedError()
 
 def reduce_scatter_tensor():
-    pass
+    raise NotImplementedError()
+
+if __name__ == '__main__':
+    init_process_group(init_method='file://tmp', world_size=1, rank=0)
+    print(is_initialized())
+    test = hidet.randn((2, 2), device='cuda')
+    print(test)
+    all_reduce(test, 'sum')
+    print(test)

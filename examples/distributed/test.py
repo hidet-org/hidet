@@ -18,75 +18,29 @@ import argparse
 
 import hidet
 import hidet.cuda.nccl
-from hidet.cuda import nccl
-from hidet.cuda.nccl import NcclUniqueId
-
-print("NCCL version:", nccl.nccl_version())
 
 parser = argparse.ArgumentParser()
 parser.add_argument("n_gpus", type=int)
 parser.add_argument("reduce_op", choices=['sum', 'prod', 'max', 'min', 'avg'])
-parser.add_argument("--group_size", type=int, default=0)
 args = parser.parse_args()
 
-def run(world_size, rank, shared_id, barrier):
+def run(world_size, rank):
     numpy.random.seed(rank)
 
-    # Initialize unique id
-    if rank == 0:
-        _id = nccl.create_unique_id()
-        shared_id.internal = _id.internal
-
-    barrier.wait()
     hidet.cuda.set_device(rank)
-
-    use_group = args.group_size > 1
-    if use_group:
-        gs = args.group_size
-        gn = world_size // gs
-        assert world_size % gs == 0
-        groups = [list(range(i * gs, (i + 1) * gs)) for i in range(gn)]
-    else:
-        groups = []
-        
+    hidet.distributed.init_process_group(init_method='file://tmp', world_size=world_size, rank=rank)
+    hidet.distributed.set_nccl_comms()
 
     device = f"cuda:{rank}"
     x = hidet.randn([1, 3], device=device)
     w = hidet.randn([3, 2], device=device)
 
-    # Create Computation Graph
-    x_symb = hidet.symbol_like(x)
-    w_symb = hidet.symbol_like(w)
-    y_local = hidet.ops.relu(x_symb @ w_symb)
-    y_sync = hidet.ops.all_reduce(y_local, args.reduce_op, comm_id=int(use_group))
-    graph = hidet.trace_from([y_local, y_sync], inputs=[x_symb, w_symb])
-    opt_graph = hidet.graph.optimize(graph)
-    opt_graph.set_attrs(nrank=world_size, rank=rank, groups=groups)
-    compiled = opt_graph.build()
-
-    # test save and load
-    compiled_dir = f"./outs/graph_{rank}.zip"
-    compiled.save(compiled_dir)
-    compiled = hidet.runtime.load_compiled_graph(compiled_dir)
-
-    # Create Distributed Graph
-    compiled.init_dist(shared_id)
-
-    y_local, y_sync = compiled(x, w)
-
     s = hidet.cuda.current_stream() 
     s.synchronize()
-    print(f"process {rank}\nbefore allreduce:{y_local}\nafter allreduce:{y_sync}\n", end='')
+    print(f"process {rank}")
 
 world_size = args.n_gpus
-
-# Barrier to ensure unique id is created
-barrier = multiprocessing.Barrier(world_size)
-
-# Create a unique id object in shared memory
-shared_id = multiprocessing.Value(NcclUniqueId, lock=False)
-
-processes = [Process(target=run, args=(world_size, i, shared_id, barrier)) for i in range(world_size)]
+processes = [Process(target=run, args=(world_size, i)) for i in range(world_size)]
 
 for p in processes:
     p.start()

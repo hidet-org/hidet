@@ -12,11 +12,12 @@
 
 from typing import Optional
 import ctypes
-from ctypes import c_void_p, c_int, pointer, Structure, c_byte, POINTER
+from ctypes import c_void_p, c_int, pointer, Structure, c_byte, POINTER, c_uint64
 import glob
 import os
 
 from hidet.ffi.ffi import get_func
+from hidet.cuda import Stream
 from .libinfo import get_nccl_library_search_dirs
 
 _LIB_NCCL: Optional[ctypes.CDLL] = None
@@ -74,6 +75,12 @@ if nccl_available():
         _comm_user_rank = get_func('ncclCommUserRank', [c_void_p, POINTER(c_int)], c_int, lib=_LIB_NCCL)
         _comm_count = get_func('ncclCommCount', [c_void_p, POINTER(c_int)], c_int, lib=_LIB_NCCL)
 
+        _all_reduce = get_func('ncclAllReduce', [c_void_p, c_void_p, c_uint64, c_int, c_int, c_void_p, c_int], c_int, lib=_LIB_NCCL)
+        _broadcast = get_func('ncclBroadcast', [c_void_p, c_void_p, c_uint64, c_int, c_int, c_void_p, c_int], c_int, lib=_LIB_NCCL)
+        _reduce = get_func('ncclReduce', [c_void_p, c_void_p, c_uint64, c_int, c_int, c_int, c_void_p, c_int], c_int, lib=_LIB_NCCL)
+        _all_gather = get_func('ncclAllGather', [c_void_p, c_void_p, c_uint64, c_int, c_void_p, c_int], c_int, lib=_LIB_NCCL)
+        _reduce_scatter = get_func('ncclReduceScatter', [c_void_p, c_void_p, c_uint64, c_int, c_int, c_void_p, c_int], c_int, lib=_LIB_NCCL)
+
         # Early versions of NCCL do not have split
         try:
             _comm_split = get_func('ncclCommSplit', [c_void_p, c_int, c_int, c_void_p, c_void_p], c_int, lib=_LIB_NCCL)
@@ -114,5 +121,13 @@ if nccl_available():
             ret = NCCLRuntimeAPI._comm_split(comm_handle, color, key, pointer(comm), None)
             assert ret == 0
             return comm.value
+        
+        # TODO: Currently only support all_reduce
+        @staticmethod
+        def all_reduce(sendbuff:int, recvbuff:int, count:int, datatype:int, op:int, comm_handle:int, s:Stream) -> None:
+            ret = NCCLRuntimeAPI._all_reduce(
+                sendbuff, recvbuff, count, datatype, op, comm_handle, s._handle
+            )
+            assert ret == 0
 
     nccl_runtime_api = NCCLRuntimeAPI()

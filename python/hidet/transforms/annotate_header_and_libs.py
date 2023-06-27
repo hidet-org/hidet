@@ -19,7 +19,7 @@ def _use_distributed(func) -> bool:
     black_stmts = hidet.ir.tools.collect(func.body, [BlackBoxStmt])
     return any(stmt.template_string.startswith('nccl') for stmt in black_stmts)
 
-class AnnotateIncludeHeadersPass(Pass):
+class AnnotateHeaderAndLibsPass(Pass):
     def process_module(self, ir_module: IRModule) -> IRModule:
         use_dist = any(_use_distributed(func) for func in ir_module.functions.values())
         if not use_dist:
@@ -39,5 +39,5 @@ class AnnotateIncludeHeadersPass(Pass):
         return new_module
 
 
-def annotate_include_headers_pass():
-    return AnnotateIncludeHeadersPass()
+def annotate_header_and_libs_pass():
+    return AnnotateHeaderAndLibsPass()
