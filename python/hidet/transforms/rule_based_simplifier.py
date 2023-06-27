@@ -16,8 +16,8 @@ from itertools import product
 from hidet.ir.dialects.pattern import PlaceholderExpr, match
 from hidet.ir.dtypes import boolean
 from hidet.ir.expr import Add, convert, Sub, Multiply, Mod, LessThan, LessEqual, Equal, BinaryExpr, LogicalAnd
-from hidet.ir.expr import BitwiseXor, BitwiseAnd, BitwiseOr, BitwiseNot, Var
-from hidet.ir.expr import Div, Constant, Expr, logical_and, logical_or, if_then_else, constant
+from hidet.ir.expr import BitwiseXor, BitwiseAnd, BitwiseOr, BitwiseNot, Var, LogicalOr
+from hidet.ir.expr import Div, Constant, Expr, logical_and, logical_or, if_then_else, constant, IfThenElse
 from hidet.ir.stmt import LetStmt, ForStmt
 from hidet.ir.functors import IRRewriter
 from hidet.ir.tools import rewrite, simplify
@@ -100,6 +100,8 @@ class RuleBasedSimplifier(IRRewriter):
         c1, c2 = any_constant(), any_constant()
         ec1, ec2 = any_expr(allow_const=True), any_expr(allow_const=True)
         self.args = {e1, e2, c1, c2, ec1, ec2}
+        true = constant(True, boolean)
+        false = constant(False, boolean)
         self.patterns = [
             # add
             ((c1 + e1) + e2, (e1 + e2) + c1),
@@ -136,13 +138,13 @@ class RuleBasedSimplifier(IRRewriter):
             (c1 <= e1 - c2, c1 + c2 <= e1),
             (c1 <= e1 + c2, c1 - c2 <= e1),
             # and/or
-            (logical_and(ec1, True), ec1),
-            (logical_and(ec1, False), boolean.false),
-            (logical_or(ec1, True), boolean.true),
-            (logical_or(ec1, False), ec1),
+            (LogicalAnd(ec1, true), ec1),
+            (LogicalAnd(ec1, false), false),
+            (LogicalOr(ec1, true), true),
+            (LogicalOr(ec1, false), ec1),
             # if then else
-            (if_then_else(True, ec1, ec2), ec1),
-            (if_then_else(True, ec1, ec2), ec2),
+            (IfThenElse(true, ec1, ec2), ec1),
+            (IfThenElse(false, ec1, ec2), ec2),
         ]
         self.bound_patterns = [
             # ((pattern_args, pattern_func, target_args, target_func)

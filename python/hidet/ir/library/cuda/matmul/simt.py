@@ -72,6 +72,7 @@ def check_type(a_type: TensorType, b_type: TensorType, c_type: TensorType, ta: b
     warp_shape=[(32, 32, 16), (64, 64, 8), (64, 64, 16), (64, 64, 32)],
     warp_threads=[(4, 8), (2, 16), (8, 4), (16, 2)],
     thread_shape=[(4, 4)],
+    swizzle_tile=[1, 2, 4, 8],
     arch=['sm_70'],
 )
 @tune.space(
@@ -90,6 +91,7 @@ def check_type(a_type: TensorType, b_type: TensorType, c_type: TensorType, ta: b
     warp_shape=[(32, 32, 16), (64, 64, 8), (32, 64, 8), (32, 64, 16), (32, 64, 32)],
     warp_threads=[(4, 8), (2, 16), (8, 4), (16, 2)],
     thread_shape=[(4, 4)],
+    swizzle_tile=[1],
     arch=['sm_70'],
 )
 def matmul_simt(
@@ -104,6 +106,7 @@ def matmul_simt(
     warp_shape=(64, 64, 8),
     warp_threads=(4, 8),
     thread_shape=(4, 4),
+    swizzle_tile=1,
     arch='sm_70'
 ):
     from hidet.lang import attrs
@@ -349,7 +352,7 @@ def matmul_simt(
             smem_c = tensor_pointer(dtype, shape=[block_m_cwb, block_n], init=dynamic_shared_memory(0, dtype))
             mapping = auto_map(block_m_cwb, block_n, workers=num_threads)
 
-            for k_round in grid(block_warps_k, 'u'):
+            for k_round in grid(block_warps_k):
                 for i, j, warp_k_round in block_mapping.on(threadIdx.x):
                     if k_round == warp_k_round and (i / block_m_cwb) == m_seg:
                         if offset_m + i < m_size and offset_n + j < n_size:
@@ -383,9 +386,13 @@ def matmul_simt(
         c: (dtype[[k_parts] + c_head + [m_size, n_size]] if k_parts > 1 else dtype[c_head + [m_size, n_size]]),
     ):
         attrs.func_kind = 'cuda_kernel'
-        attrs.cuda.block_dim = num_threads
-        attrs.cuda.grid_dim = block_tiles_m * block_tiles_n, prod(c_head), k_parts
         attrs.cuda.dynamic_smem_bytes = smem_total_size
+        attrs.cuda.block_dim = num_threads
+        attrs.cuda.grid_dim = (
+            (block_tiles_m * ((block_tiles_n + swizzle_tile - 1) // swizzle_tile * swizzle_tile)),
+            prod(c_head),
+            k_parts
+        )
 
         smem = tensor_pointer('uint8', [smem_total_size], init=dynamic_shared_memory(0, 'uint8'))
         smem_a = tensor_pointer(vtype, layout=smem_a_layout, init=cast(~smem[0], ~vtype))
@@ -402,9 +409,16 @@ def matmul_simt(
         for i, j, _ in block_mapping.on(threadIdx.x):
             regs_c[i, j] = vtype.zero
 
-        bm, bn = spatial(block_tiles_m, block_tiles_n).map(blockIdx.x)
+        bm, bn = (
+            spatial(1, (block_tiles_n + swizzle_tile - 1) // swizzle_tile)
+            .spatial(block_tiles_m, swizzle_tile)
+            .map(blockIdx.x)
+        )
         offset_m = bm * block_m
         offset_n = bn * block_n
+
+        if offset_m >= m_size or offset_n >= n_size:
+            return
 
         k_part_size = k_size
 

@@ -615,12 +615,9 @@ class PythonToHidetTranslator(PythonAstFunctor):
         elif isinstance(lhs, str) and isinstance(rhs, str):
             assert isinstance(expr.op, Add)
             return lhs + rhs
-        elif isinstance(lhs, list) and isinstance(rhs, list):
+        elif isinstance(lhs, (list, tuple)) and isinstance(rhs, (list, tuple)):
             assert isinstance(expr.op, Add)
-            return lhs + rhs
-        elif isinstance(lhs, tuple) and isinstance(rhs, tuple):
-            assert isinstance(expr.op, Add)
-            return lhs + rhs
+            return list(lhs) + list(rhs)
         elif isinstance(lhs, (ir.Expr, float, int)) and isinstance(rhs, (ir.Expr, float, int)):
             op_dict = {
                 Add: operator.add,

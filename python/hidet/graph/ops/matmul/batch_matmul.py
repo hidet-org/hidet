@@ -13,7 +13,7 @@ from typing import List
 import hidet
 from hidet.ir import IRModule
 from hidet.ir.compute import reduce
-from hidet.ir.expr import is_constant
+from hidet.ir.expr import is_constant, cast
 from hidet.ir.layout import DataLayout, StridesLayout, data_layout, row_major, column_major, local_layout
 from hidet.ir.type import data_type, TensorType, DataType, void_p
 from hidet.lang import i32, spatial, repeat, register_tensor, shared_tensor, attrs, grid, tensor_pointer
@@ -127,13 +127,13 @@ class BatchMatmulTask(Task):
             local_layout(1, block_warps[1])
             * row_major(warp_k, warp_outer[1])
             * local_layout(1, warp_mid_shape[1])
-            * row_major((1, warp_inner[1]))
+            * row_major(1, warp_inner[1])
         )
         regs_b_layout = [2] + regs_b_layout
         regs_c_layout = (
             local_layout(*block_warps) * row_major(*warp_outer) * local_layout(*warp_mid_shape) * row_major(*warp_inner)
         )
-        regs_a_ldg_layout = local_layout((block_size // block_k, block_k)) * row_major(
+        regs_a_ldg_layout = local_layout(block_size // block_k, block_k) * row_major(
             block_shape[0] // (block_size // block_k), 1
         )
         regs_b_ldg_layout = row_major(1, block_shape[1] // (block_size // block_k)) * local_layout(
@@ -292,13 +292,13 @@ class BatchMatmulTask(Task):
                 smem = shared_tensor('int8', shape=[used_smem_bytes_per_block])
 
                 smem_a = tensor_pointer(
-                    dtype, layout=StridesLayout.from_shape([2, block_m, block_k], perm=[0, 2, 1]), init=~smem[0]
+                    dtype, layout=StridesLayout.from_shape([2, block_m, block_k], perm=[0, 2, 1]), init=cast(~smem[0], ~dtype)
                 )
                 smem_a_bytes = smem_a.type.tensor_type.storage_bytes()
                 smem_b = tensor_pointer(
                     dtype,
                     layout=StridesLayout.from_shape([2, block_k, block_n], perm=[0, 1, 2]),
-                    init=~smem[smem_a_bytes],
+                    init=cast(~smem[smem_a_bytes], ~dtype),
                 )
 
                 regs_a = register_tensor(dtype, layout=regs_a_layout)

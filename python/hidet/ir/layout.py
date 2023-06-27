@@ -57,8 +57,7 @@ def concat_let_expr(var2value, body: Expr):
 
 def to_data_layout(obj):
     if isinstance(obj, (tuple, list)):
-        assert all(isinstance(v, int) for v in obj)
-        return row_major(obj)
+        return row_major(*obj)
     elif isinstance(obj, DataLayout):
         return obj
     else:

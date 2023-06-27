@@ -79,14 +79,14 @@ class TaskMapping(Node):
 
         return TaskMappingLoopIterable(self, w, bind_tuple)
 
-    def map(self, w: Int) -> Tuple[Int, ...]:
+    def map(self, w: Int) -> List[Int]:
         return self.single_task_of(w)
 
-    def single_task_of(self, w: Int) -> Tuple[Int, ...]:
+    def single_task_of(self, w: Int) -> List[Int]:
         tasks = self.worker2task(w)
         if len(tasks) != 1:
             raise ValueError('Expect to have a single task, but got {} tasks'.format(len(tasks)))
-        return tasks[0]
+        return list(tasks[0])
 
     @staticmethod
     def row_major(task_shape: Sequence[int]):
