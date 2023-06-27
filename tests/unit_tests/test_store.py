@@ -51,7 +51,7 @@ def test_filestore_set_get():
 
     store = FileStore(TMP_PATH)
     store.set('key', b'u98guj89ks')
-    new_value = b'32894728934798' 
+    new_value = b'32894728934798'
     store.set('key', new_value)
     q = Queue()
     p = Process(target=subproc, args=(q,))
