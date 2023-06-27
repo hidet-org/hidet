@@ -8,7 +8,8 @@ import random
 
 from hidet.distributed import FileStore
 
-TMP_PATH='./tmp'
+TMP_PATH = './tmp'
+
 
 def test_filestore_get_hold():
     if os.path.exists(TMP_PATH):
@@ -17,7 +18,7 @@ def test_filestore_get_hold():
     def subproc():
         store = FileStore(TMP_PATH)
         store.get('non-existing-key')
-    
+
     p = Process(target=subproc)
     p.start()
     store = FileStore(TMP_PATH)
@@ -26,36 +27,38 @@ def test_filestore_get_hold():
     assert p.is_alive()
     p.terminate()
 
+
 def test_filestore_set_get():
     if os.path.exists(TMP_PATH):
         os.remove(TMP_PATH)
-    
+
     def subproc(q):
         store = FileStore(TMP_PATH)
         store.set_timeout(timedelta(seconds=10))
         b = store.get('key')
         q.put(b)
-    
+
     store = FileStore(TMP_PATH)
     store.set('key', random.randbytes(8))
     new_value = random.randbytes(8)
     store.set('key', new_value)
     q = Queue()
-    p = Process(target=subproc, args=(q, ))
+    p = Process(target=subproc, args=(q,))
     p.start()
     ret = q.get()
     assert ret == new_value
     p.join()
-    
+
+
 def test_filestore_add():
     if os.path.exists(TMP_PATH):
         os.remove(TMP_PATH)
-    
+
     def subproc():
         store = FileStore(TMP_PATH)
         store.add('cnt', 1)
         store.add('cnt', 2)
-    
+
     store = FileStore(TMP_PATH)
     store.add('cnt', 1)
     p = Process(target=subproc)
@@ -63,7 +66,8 @@ def test_filestore_add():
     p.join()
     ret = store.add('cnt', 2)
     assert ret == 6
-    
+
+
 def test_filestore_del():
     if os.path.exists(TMP_PATH):
         os.remove(TMP_PATH)
@@ -71,7 +75,7 @@ def test_filestore_del():
     def subproc():
         store = FileStore(TMP_PATH)
         store.get('key')
-    
+
     p = Process(target=subproc)
     p.start()
     store = FileStore(TMP_PATH)
@@ -79,7 +83,8 @@ def test_filestore_del():
     store.delete_key('key')
     time.sleep(1)
     assert p.is_alive()
-    p.terminate() 
+    p.terminate()
+
 
 def test_filestore_wait():
     if os.path.exists(TMP_PATH):
@@ -88,7 +93,7 @@ def test_filestore_wait():
     def subproc():
         store = FileStore(TMP_PATH)
         store.wait(['key'], timeout=timedelta(seconds=10))
-    
+
     p = Process(target=subproc)
     p.start()
     store = FileStore(TMP_PATH)
@@ -98,6 +103,7 @@ def test_filestore_wait():
     p.join()
     assert not p.is_alive()
 
+
 def test_filestore_compare_set():
     if os.path.exists(TMP_PATH):
         os.remove(TMP_PATH)
@@ -106,7 +112,7 @@ def test_filestore_compare_set():
         store = FileStore(TMP_PATH)
         store.compare_set("key", b"first", b"second")
 
-    store = FileStore(TMP_PATH)    
+    store = FileStore(TMP_PATH)
     store.set("key", b"random")
     p = Process(target=subproc)
     p.start()

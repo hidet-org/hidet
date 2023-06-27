@@ -15,6 +15,7 @@ import multiprocessing
 from multiprocessing import Process
 import numpy
 import argparse
+import atexit
 
 import hidet
 import hidet.cuda.nccl
@@ -47,7 +48,7 @@ def run(world_size, rank):
 
     hidet.cuda.current_stream().synchronize()
     print(f"process {rank}\nbefore allreduce:{y_local}\nafter allreduce:{y_sync}\n", end='')
-    print("sss")
+    atexit._run_exitfuncs()
 
 world_size = args.n_gpus
 processes = [Process(target=run, args=(world_size, i)) for i in range(world_size)]

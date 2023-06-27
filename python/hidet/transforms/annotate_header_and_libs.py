@@ -11,13 +11,14 @@
 # limitations under the License.
 import hidet.ir
 from hidet.ir.module import IRModule
-from hidet.ir import Stmt
 from hidet.ir.stmt import BlackBoxStmt
 from hidet.transforms import Pass
+
 
 def _use_distributed(func) -> bool:
     black_stmts = hidet.ir.tools.collect(func.body, [BlackBoxStmt])
     return any(stmt.template_string.startswith('nccl') for stmt in black_stmts)
+
 
 class AnnotateHeaderAndLibsPass(Pass):
     def process_module(self, ir_module: IRModule) -> IRModule:

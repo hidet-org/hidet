@@ -1,40 +1,54 @@
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from typing import List, Optional
 from datetime import timedelta, datetime
-import filelock
-import time 
+import time
 import struct
-from functools import partial
 import os
 import atexit
+import filelock
+
 
 class Store:
     def set(self, key: str, value: bytes) -> None:
         raise NotImplementedError()
-    
+
     def get(self, key: str) -> bytes:
         raise NotImplementedError()
-    
+
     def add(self, key: str, amount: int) -> int:
         raise NotImplementedError()
-    
+
     def compare_set(self, key: str, expected: bytes, desired: bytes) -> bytes:
         raise NotImplementedError()
-    
-    def wait(self, keys: List[str], timeout: Optional[timedelta]=None) -> None:
+
+    def wait(self, keys: List[str], timeout: Optional[timedelta] = None) -> None:
         raise NotImplementedError()
-    
+
     def num_keys(self) -> int:
         raise NotImplementedError()
-    
+
     def delete_key(self, key: str) -> bool:
         raise NotImplementedError()
-    
+
     def set_timeout(self, timeout: timedelta):
         raise NotImplementedError()
-    
+
+
 class FileStore(Store):
     REGULAR_PREFIX = '+'
     DELETE_PREFIX = '-'
+
     def __init__(self, filename: str, world_size: Optional[int] = -1):
         self._filename = filename
         self._lock_filename = filename + '.lock'
@@ -45,9 +59,9 @@ class FileStore(Store):
         self._timeout = None
 
         num_peers = self._add('cnt', 1)
-        if world_size >= 0 and num_peers > world_size:
+        if 0 <= world_size < num_peers:
             raise RuntimeError("Warning: more peers than world size.")
-        
+
         # We cannot operate files in __del__, and we don't want to call close explicitly
         # So we register a atexit function doing cleanup when python interpreter exits
         @atexit.register
@@ -57,7 +71,6 @@ class FileStore(Store):
                     rest = self._add('cnt', -1)
                     if rest == 0:
                         os.remove(self._filename)
-            
 
     def _write(self, f, content):
         f.write(struct.pack('i', len(content)))
@@ -66,19 +79,20 @@ class FileStore(Store):
     def _read(self, f):
         len_str = f.read(4)
         if len_str == b'':
-            return
+            return None
         l = struct.unpack('i', len_str)[0]
         return f.read(l)
-    
+
     def _file_size(self, f):
         origin_pos = f.tell()
-        f.seek(0, 2) # 2 means the file's end
+        f.seek(0, 2)  # 2 means the file's end
         size = f.tell()
         f.seek(origin_pos, 0)
         return size
-    
+
     def _update(self, f):
         self._cache = {}
+        f.seek(0)
         while True:
             k = self._read(f)
             if k is None:
@@ -86,11 +100,12 @@ class FileStore(Store):
             v = self._read(f)
             k = str(k, encoding='raw_unicode_escape')
             if k.startswith(self.DELETE_PREFIX):
+                k = k[len(self.DELETE_PREFIX) :]
                 del self._cache[k]
-            self._cache[k] = v
+            else:
+                self._cache[k] = v
 
     def _add(self, key: str, amount: int) -> int:
-        key = key
         with self._lock:
             with open(self._filename, "ab+") as f:
                 f.seek(0)
@@ -106,15 +121,17 @@ class FileStore(Store):
             with open(self._filename, "ab+") as f:
                 f.seek(0)
                 self._update(f)
-        print(self._cache.keys())
-        return all((key in self._cache.keys() for key in keys))
+        return all((key in self._cache for key in keys))
 
-    def set(self, key: str, value: bytes) -> None:
+    def _set(self, key: str, value: bytes):
         with self._lock:
             with open(self._filename, "ab+") as f:
-                self._write(f, bytes(self.REGULAR_PREFIX + key, encoding='raw_unicode_escape'))
+                self._write(f, bytes(key, encoding='raw_unicode_escape'))
                 self._write(f, value)
-    
+
+    def set(self, key: str, value: bytes) -> None:
+        self._set(self.REGULAR_PREFIX + key, value)
+
     def get(self, key: str) -> bytes:
         last_file_size = None
         key = self.REGULAR_PREFIX + key
@@ -124,7 +141,7 @@ class FileStore(Store):
             with open(self._filename, "ab+") as f:
                 f.seek(0)
                 file_size = self._file_size(f)
-                if key not in self._cache.keys() and file_size == last_file_size:
+                if key not in self._cache and file_size == last_file_size:
                     # No new entries
                     last_file_size = file_size
                     self._lock.release()
@@ -141,14 +158,15 @@ class FileStore(Store):
 
     def add(self, key: str, amount: int) -> int:
         return self._add(self.REGULAR_PREFIX + key, amount)
-    
+
     def compare_set(self, key: str, expected: bytes, desired: bytes) -> bytes:
         key = self.REGULAR_PREFIX + key
         with self._lock:
             with open(self._filename, "ab+") as f:
                 f.seek(0)
-                self._update()
-                has_key = key in self._cache.keys()
+                self._update(f)
+                has_key = key in self._cache
+                print(has_key, self._cache[key])
                 if (not has_key and expected == b'') or (has_key and self._cache[key] == expected):
                     f.seek(0, 2)
                     self._write(f, bytes(key, encoding='raw_unicode_escape'))
@@ -158,7 +176,7 @@ class FileStore(Store):
                     return expected
         return self._cache[key]
 
-    def wait(self, keys: List[str], timeout: Optional[timedelta]=None) -> None:
+    def wait(self, keys: List[str], timeout: Optional[timedelta] = None) -> None:
         timeout = self._timeout if self._timeout is not None else timeout
         start_t = datetime.now()
         keys = [self.REGULAR_PREFIX + key for key in keys]
@@ -172,12 +190,13 @@ class FileStore(Store):
             with open(self._filename, "rb") as f:
                 self._update(f)
         return len(self._cache)
-    
+
     def delete_key(self, key: str):
-        self.set(self.DELETE_PREFIX + key, b'')
+        self._set(self.DELETE_PREFIX + self.REGULAR_PREFIX + key, b'')
 
     def set_timeout(self, timeout: timedelta):
         self._timeout = timeout
+
 
 if __name__ == '__main__':
     store = FileStore('tmp')

@@ -29,7 +29,7 @@ class AllReduceTask(Task):
         super().__init__('all_reduce', inputs=[x], outputs=[y], attributes={'comm_id': comm_id, 'op': op})
 
     def __str__(self):
-        return f"all_reduce"
+        return "all_reduce"
 
     def implement(self, target: Union[Target, str], working_dir: str) -> List[IRModule]:
         import hidet

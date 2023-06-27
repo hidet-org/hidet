@@ -78,11 +78,15 @@ class NcclCommunicator:
         if color == NCCL_SPLIT_NOCOLOR:
             return None
         return NcclCommunicator(new_handle)
-    
-    def all_reduce(self, sendbuff:int, recvbuff:int, count:int, datatype:DataType, op:str, s:Optional[Stream]=None):
+
+    def all_reduce(
+        self, sendbuff: int, recvbuff: int, count: int, datatype: DataType, op: str, s: Optional[Stream] = None
+    ):
         if s is None:
             s = current_stream()
-        nccl_runtime_api.all_reduce(sendbuff, recvbuff, count, dtype_to_nccl(datatype), str_to_nccl_op(op), self._handle, s)
+        nccl_runtime_api.all_reduce(
+            sendbuff, recvbuff, count, dtype_to_nccl(datatype), str_to_nccl_op(op), self._handle, s
+        )
 
 
 def create_comm(nranks: int, unique_id: NcclUniqueId, rank: int) -> NcclCommunicator:
@@ -105,6 +109,7 @@ def create_unique_id() -> NcclUniqueId:
     unique_id = NcclUniqueId()
     nccl_runtime_api.get_unique_id(unique_id)
     return unique_id
+
 
 def dtype_to_nccl(dtype: DataType) -> NcclDataType:
     sname_dict = {

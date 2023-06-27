@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Optional, Tuple, Dict, Any, Callable, Union
+from typing import List, Optional, Tuple, Dict, Any, Callable
 import zipfile
 import os
 import json
@@ -61,6 +61,7 @@ class GraphExecution:
     instructions: List[GraphExecutionInstruction]
     outputs_index: List[int]
     tensor_device: List[str]
+
 
 class CompiledGraph:
     def __init__(
@@ -363,7 +364,6 @@ def save_compiled_graph(model: CompiledGraph, path: str):
             f.write(model.graph_string.encode('utf-8'))
 
 
-
 def load_compiled_graph(path: str) -> CompiledGraph:
     from hidet.utils.dataclass import from_dict
 
@@ -410,8 +410,6 @@ def load_compiled_graph(path: str) -> CompiledGraph:
         graph_string = f.read()
 
     # construct the compiled graph
-    ret = CompiledGraph(
-        meta_data, graph_module, weights, compiled_tasks, graph_execution, graph_string
-    )
+    ret = CompiledGraph(meta_data, graph_module, weights, compiled_tasks, graph_execution, graph_string)
 
     return ret

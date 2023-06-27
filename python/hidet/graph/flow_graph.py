@@ -103,6 +103,7 @@ class GraphForwardContext:
 def forward_context() -> GraphForwardContext:
     return GraphForwardContext()
 
+
 class FlowGraph:
     """The computation graph representation."""
 
