@@ -215,18 +215,12 @@ class CompiledGraph:
         required_cpu_workspace, required_cuda_workspace = list(buffer)
 
         if self.cpu_workspace is None or self.cpu_workspace.num_bytes < required_cpu_workspace:
-            if required_cpu_workspace == 0:
-                self._set_workspace(0, 0)
-            else:
-                self.cpu_workspace = Storage.new('cpu', required_cpu_workspace)
-                self._set_workspace(0, self.cpu_workspace.addr)
+            self.cpu_workspace = Storage.new('cpu', required_cpu_workspace)
+            self._set_workspace(0, self.cpu_workspace.addr)
 
         if self.cuda_workspace is None or self.cuda_workspace.num_bytes < required_cuda_workspace:
-            if required_cuda_workspace == 0:
-                self._set_workspace(1, 0)
-            else:
-                self.cuda_workspace = Storage.new('cuda', required_cuda_workspace)
-                self._set_workspace(1, self.cuda_workspace.addr)
+            self.cuda_workspace = Storage.new('cuda', required_cuda_workspace)
+            self._set_workspace(1, self.cuda_workspace.addr)
 
     def _run_fast_path(self, inputs, symbol_dims: Tuple[int, ...]):
         # create output tensors
