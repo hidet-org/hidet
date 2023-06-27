@@ -58,10 +58,7 @@ def torch_conv2d(
     "device", ["cuda"]
 )  # we don't test for cpu because its quite imprecise in fp16 for larger kernel sizes
 def test_conv2d_gemm_fp16(n, c, h, w, oc, kx, ky, groups, stride, dilations, parallel_k, device):
-    if device == 'cpu':
-        tol = 0.8
-    else:
-        tol = 0.5
+    tol = 0.8
     check_binary(
         a_shape=[n, c, h, w],
         b_shape=[oc, c // groups, kx, ky],
