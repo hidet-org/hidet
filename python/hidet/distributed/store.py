@@ -196,15 +196,3 @@ class FileStore(Store):
 
     def set_timeout(self, timeout: timedelta):
         self._timeout = timeout
-
-
-if __name__ == '__main__':
-    store = FileStore('tmp')
-    store.set_timeout(timedelta(seconds=30))
-    ret = store.add('baga', 2)
-    store.set('yarou', b'haha')
-    store.wait(['baga', 'yarou'])
-    print(ret)
-    ret = store.add('baga', 5)
-    print(ret)
-    print(store.get('baga'))
