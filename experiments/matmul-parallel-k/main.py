@@ -137,22 +137,25 @@ def my_matmul(a: Tensor, b: Tensor) -> Tensor:
 
 
 def benchmark():
+    space = 2
 
-    # for dtype in ['float32', 'float16']:
     for dtype in ['float32']:
 
         a = hidet.symbol(['b', 'm', 'k'], dtype=dtype, device='cuda')
         b = hidet.symbol(['b', 'k', 'n'], dtype=dtype, device='cuda')
         c = my_matmul(a, b)
         graph = hidet.trace_from(c, [a, b])
-        cgraph = graph.build(space=2)
+        cgraph = graph.build(space=space)
 
-        # for m_size, n_size, k_size in [(1024, 1024, 1024), (512, 3072, 768), (512, 768, 3072), (1024, 3072, 768), (1024, 768, 3072)]:
-        for m_size, n_size, k_size in [(512, 768, 3072)]:
+        for m_size, n_size, k_size in [
+            (1024, 1024, 1024),
+            (512, 3072, 768),
+            (512, 768, 3072),
+            (1024, 3072, 768),
+            (1024, 768, 3072)
+        ]:
             aa = hidet.randn([1, m_size, k_size], dtype=dtype, device='cuda', stddev=0.1 if dtype == 'float16' else 1)
             bb = hidet.randn([1, k_size, n_size], dtype=dtype, device='cuda', stddev=0.1 if dtype == 'float16' else 1)
-            # aa = hidet.ones([1, m_size, k_size], dtype=dtype, device='cuda')
-            # bb = hidet.ones([1, k_size, n_size], dtype=dtype, device='cuda')
 
             c1 = cgraph(aa, bb)
             hidet.cuda.synchronize()
@@ -163,7 +166,7 @@ def benchmark():
             sa = hidet.symbol_like(aa)
             sb = hidet.symbol_like(bb)
             graph2 = hidet.trace_from(hidet.ops.batch_matmul(sa, sb), [sa, sb])
-            cgraph2 = graph2.build(space=2)
+            cgraph2 = graph2.build(space=space)
             c3 = cgraph2(aa, bb)
             hidet.cuda.synchronize()
 
@@ -172,15 +175,15 @@ def benchmark():
             hidet.utils.assert_close(c1, c3, rtol=tol, atol=tol)
 
             # benchmark
-            # at = aa.torch()
-            # bt = bb.torch()
-            # ct = at @ bt
-            # torch_latency = hidet.utils.benchmark_func(lambda: torch.matmul(at, bt, out=ct), number=100, repeat=10)
-            # hidet_latency = hidet.utils.benchmark_func(lambda: cgraph(aa, bb), number=100, repeat=10)
-            # hidet_latency2 = hidet.utils.benchmark_func(lambda: cgraph2(aa, bb), number=100, repeat=10)
-            # print(' {:4} x {:4} x {:4} torch: {:.3f}'.format(m_size, n_size, k_size, torch_latency))
-            # print(' {:4} x {:4} x {:4} hidet: {:.3f} {:.2f}'.format(m_size, n_size, k_size, hidet_latency, hidet_latency / torch_latency))
-            # print(' {:4} x {:4} x {:4} hidet2: {:.3f} {:.2f}'.format(m_size, n_size, k_size, hidet_latency2, hidet_latency2 / torch_latency))
+            at = aa.torch()
+            bt = bb.torch()
+            ct = at @ bt
+            torch_latency = hidet.utils.benchmark_func(lambda: torch.matmul(at, bt, out=ct), number=100, repeat=10)
+            hidet_latency = hidet.utils.benchmark_func(lambda: cgraph(aa, bb), number=100, repeat=10)
+            hidet_latency2 = hidet.utils.benchmark_func(lambda: cgraph2(aa, bb), number=100, repeat=10)
+            print(' {:4} x {:4} x {:4}     torch: {:.3f}'.format(m_size, n_size, k_size, torch_latency))
+            print(' {:4} x {:4} x {:4}     hidet: {:.3f} {:.2f}'.format(m_size, n_size, k_size, hidet_latency, hidet_latency / torch_latency))
+            print(' {:4} x {:4} x {:4} hidet (s): {:.3f} {:.2f}'.format(m_size, n_size, k_size, hidet_latency2, hidet_latency2 / torch_latency))
 
 
 def main():
