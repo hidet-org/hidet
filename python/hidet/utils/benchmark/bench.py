@@ -34,6 +34,7 @@ def do_bench(fn, warmup=25, rep=100, percentiles=(0.2, 0.5, 0.8)):
 
     # Estimate the runtime of the function
     import torch
+
     fn()
     torch.cuda.synchronize()
     start_event = torch.cuda.Event(enable_timing=True)
