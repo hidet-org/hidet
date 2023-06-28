@@ -14,8 +14,6 @@ import time
 from dataclasses import dataclass
 
 import numpy as np
-import torch
-from matplotlib import pyplot as plt
 
 
 # copied from: https://github.com/openai/triton/blob/main/python/triton/testing.py
@@ -35,6 +33,7 @@ def do_bench(fn, warmup=25, rep=100, percentiles=(0.2, 0.5, 0.8)):
     """
 
     # Estimate the runtime of the function
+    import torch
     fn()
     torch.cuda.synchronize()
     start_event = torch.cuda.Event(enable_timing=True)
@@ -137,6 +136,8 @@ class BenchData:
     data: Dict[str, Tuple[List[float], List[float], List[float]]]  # [t_min, t_avg, t_max]
 
     def show_plot(self, show=True, save_path=None):
+        from matplotlib import pyplot as plt
+
         plt.figure()
         ax = plt.subplot()
         for name, (t_min, t_avg, t_max) in self.data.items():
