@@ -131,7 +131,6 @@ class FileStore(Store):
     def _add(self, key: str, amount: int) -> int:
         with self._lock:
             with open(self._filename, "ab+") as f:
-                f.seek(0)
                 self._update(f)
             value = int(self._cache.get(key, '0')) + amount
             with open(self._filename, "ab+") as f:
@@ -142,7 +141,6 @@ class FileStore(Store):
     def _check(self, keys: List[str]):
         with self._lock:
             with open(self._filename, "ab+") as f:
-                f.seek(0)
                 self._update(f)
         return all((key in self._cache for key in keys))
 
