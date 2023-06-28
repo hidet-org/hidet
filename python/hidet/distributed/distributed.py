@@ -67,6 +67,8 @@ def init_process_group(
         if not is_nccl_available():
             raise RuntimeError("NCCL is not found.")
         DEFAULT_GROUP = create_nccl_group(store, world_size, rank)
+    else:
+        raise ValueError(f"Backend {backend} is not supported.")
 
 
 def is_initialized():

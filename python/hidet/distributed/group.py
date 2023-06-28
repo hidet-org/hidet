@@ -60,8 +60,8 @@ class ProcessGroup:
         raise NotImplementedError()
 
 
-NCCL_COMMS = []
-_NCCL_ARRAY = None
+NCCL_COMMS: List[NcclCommunicator] = []
+_NCCL_ARRAY: 'Array' = None
 
 
 class NCCLProcessGroup(ProcessGroup):

@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List, Optional
+from typing import List, Optional, Dict
 from datetime import timedelta, datetime
 import time
 import struct
@@ -46,17 +46,40 @@ class Store:
 
 
 class FileStore(Store):
+    """
+    A shared KV-store based on the local filesystem.
+
+    It will create a binary file (specified by the filename argument) and a locking file.
+    Each time an new entry (key, value) is requested to be inserted, it will be inserted to
+    the end of the file. Only the newest is effective among all entries with the same key.
+    So when scanning the file from beginning, we can get the up-to-date status of the KV-store.
+
+    All keys requested by public methods will be given a prefix '+' (REGULAR_PREFIX) to be
+    distinguished from some internal keys used by the store itself. For example, we have an
+    internal entry 'cnt' to maintain how many clients are using this store currently.
+
+    Keys will be converted from Python strings to bytes automatically, while values won't since
+    values can be arbitary bytes arrays that might not be decodable. So please do the conversion
+    manually if required.
+
+    We use a 4-byte integer to record the length of each (encoded) key and value. So do not insert
+    more than 32768 bytes for each entry.
+
+    Deletion of an entry is done by adding a new entry with a suffix '-' (DELETE_PREFIX). It will
+    overwrite the insertion of the given entry when we scanning the file.
+    """
+
     REGULAR_PREFIX = '+'
     DELETE_PREFIX = '-'
 
     def __init__(self, filename: str, world_size: Optional[int] = -1):
-        self._filename = filename
-        self._lock_filename = filename + '.lock'
-        self._world_size = world_size
+        self._filename: str = filename
+        self._lock_filename: str = filename + '.lock'
+        self._world_size: int = world_size
 
-        self._lock = filelock.FileLock(self._lock_filename)
-        self._cache = {}
-        self._timeout = None
+        self._lock: filelock.FileLock = filelock.FileLock(self._lock_filename)
+        self._cache: Dict[str, bytes] = {}
+        self._timeout: timedelta = None
 
         num_peers = self._add('cnt', 1)
         if 0 <= world_size < num_peers:
@@ -98,7 +121,7 @@ class FileStore(Store):
             if k is None:
                 return
             v = self._read(f)
-            k = str(k, encoding='raw_unicode_escape')
+            k = k.decode()
             if k.startswith(self.DELETE_PREFIX):
                 k = k[len(self.DELETE_PREFIX) :]
                 del self._cache[k]
@@ -112,8 +135,8 @@ class FileStore(Store):
                 self._update(f)
             value = int(self._cache.get(key, '0')) + amount
             with open(self._filename, "ab+") as f:
-                self._write(f, bytes(key, encoding='raw_unicode_escape'))
-                self._write(f, bytes(str(value), encoding='raw_unicode_escape'))
+                self._write(f, bytes(key, encoding='utf-8'))
+                self._write(f, bytes(str(value), encoding='utf-8'))
         return value
 
     def _check(self, keys: List[str]):
@@ -126,7 +149,7 @@ class FileStore(Store):
     def _set(self, key: str, value: bytes):
         with self._lock:
             with open(self._filename, "ab+") as f:
-                self._write(f, bytes(key, encoding='raw_unicode_escape'))
+                self._write(f, bytes(key, encoding='utf-8'))
                 self._write(f, value)
 
     def set(self, key: str, value: bytes) -> None:
@@ -139,11 +162,9 @@ class FileStore(Store):
         while True:
             self._lock.acquire()
             with open(self._filename, "ab+") as f:
-                f.seek(0)
                 file_size = self._file_size(f)
                 if key not in self._cache and file_size == last_file_size:
                     # No new entries
-                    last_file_size = file_size
                     self._lock.release()
                     if self._timeout is not None and datetime.now() - start_t > self._timeout:
                         raise TimeoutError()
@@ -163,13 +184,11 @@ class FileStore(Store):
         key = self.REGULAR_PREFIX + key
         with self._lock:
             with open(self._filename, "ab+") as f:
-                f.seek(0)
                 self._update(f)
                 has_key = key in self._cache
-                print(has_key, self._cache[key])
                 if (not has_key and expected == b'') or (has_key and self._cache[key] == expected):
                     f.seek(0, 2)
-                    self._write(f, bytes(key, encoding='raw_unicode_escape'))
+                    self._write(f, bytes(key, encoding='utf-8'))
                     self._write(f, desired)
                     return desired
                 elif not has_key:
