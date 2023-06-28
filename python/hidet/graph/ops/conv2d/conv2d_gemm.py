@@ -9,10 +9,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Tuple, Sequence
+from typing import List, Tuple, Sequence, Union
 
 from hidet.graph.tensor import Tensor
-from hidet.ir import dtypes
+from hidet.ir import dtypes, logical_and
 from hidet.ir.dtypes import float16
 from hidet.ir.expr import if_then_else, is_constant, Int
 from hidet.ir.func import Function
@@ -105,6 +105,202 @@ def conv2d_gemm(data: Tensor, weight: Tensor, stride, dilations: List[int], grou
     return y
 
 
+class Conv2dGemmFp16PretransformTask(Task):
+    """
+    Pre transforms the image and pads it, as required by Conv2dGemmFp16
+
+    its the equivalent of:
+    1. pads the image
+    2. converts to channel last
+    3. optionally make the channel a multiple of 8
+
+    def pre_transform_img(img: Tensor, padding: Union[int, Tuple[int, int]], pad_value=0.0, make_multiple_8=False):
+        import hidet
+        n, c, w, h = img.shape
+        assert pad_value == 0.0
+        img = hidet.ops.conv_pad(img, padding)
+        img = hidet.ops.transpose(img, [0, 2, 3, 1])
+        if make_multiple_8:
+            pad_channel = cdiv(c, 8) * 8 - c
+            img = hidet.ops.pad(img, [0, pad_channel])
+        return img
+    """
+
+    def __init__(
+        self, img: TensorNode, padding: Union[int, Tuple[int, int]], pad_value: float, channel_mul_8: bool = False
+    ):
+        self._assert(len(img.shape) == 4, "expected images to have 4 dimensions")
+        if isinstance(padding, tuple):
+            self._assert(len(padding) == 2, "padding must be a tuple of 2 ints")
+            pad_h = padding[0]
+            pad_w = padding[1]
+        else:
+            pad_h = padding
+            pad_w = padding
+        self._assert(pad_h >= 0, f"padding size must be greater or equal to 0, got {padding}")
+        self._assert(pad_w >= 0, f"padding size must be greater or equal to 0, got {padding}")
+
+        n, c, h, w = img.shape
+        if channel_mul_8:
+            new_channel = cdiv(c, 8) * 8
+        else:
+            new_channel = c
+        self.channel_mul_8 = channel_mul_8
+        self.pad_value = pad_value
+        self.pad_h = pad_h
+        self.pad_w = pad_w
+
+        y = compute(
+            name="y",
+            shape=[n, h + pad_h * 2, w + pad_w * 2, new_channel],
+            fcompute=lambda ni, hi, wi, ci: if_then_else(
+                ci < c,
+                if_then_else(
+                    logical_and(pad_h <= hi, hi < h + pad_h, pad_w <= wi, wi < w + pad_w),
+                    img[ni, ci, hi - pad_h, wi - pad_w],
+                    float16(pad_value),
+                ),
+                float16(0.0),
+            ),
+        )
+        super().__init__(
+            name='Conv2dGemmFp16PretransformTask',
+            inputs=[img],
+            outputs=[y],
+            attributes={'pad_value': pad_value, 'pad_h': pad_h, 'pad_w': pad_w, 'channel_mul_8': channel_mul_8},
+        )
+
+    def allow_prologue(self) -> bool:
+        return False
+
+    def allow_epilogue(self) -> bool:
+        return False
+
+    def implement_cuda(self, working_dir: str) -> List[IRModule]:
+        return tune.extract_ir_modules(self.schedule)
+
+    def load_dtype(self, load_width):
+        from hidet.lang import u16, u32, u64
+
+        if load_width == 1:
+            load_type = u16
+        elif load_width == 2:
+            load_type = u32
+        elif load_width == 4:
+            load_type = u64
+        else:
+            load_type = None
+        return load_type
+
+    @tune.space(2, block_n=[4, 8, 16, 32, 64, 128], block_m=[8, 16, 32, 64, 128], load_width=[1, 2, 4])
+    @tune.space(1, block_n=[8, 16, 32], block_m=[16, 32], load_width=[1, 2])
+    def schedule(self, block_n=8, block_m=32, load_width=1):  # load_width is multiples of f16
+        import hidet
+        from hidet.lang import attrs, tensor_pointer
+        from hidet.lang.cuda import shared_tensor, register_tensor, syncthreads, threadIdx, blockIdx
+
+        N, C, H, W = self.inputs[0].shape
+        _, HN, WN, CN = self.outputs[0].shape
+
+        tune.check(block_n * block_m <= 1024)
+
+        last_dim = H * W
+        tune.check(last_dim % load_width == 0)
+        tune.check(block_n % load_width == 0)
+        load_dtype = self.load_dtype(load_width)
+        tune.check(load_dtype is not None)
+
+        write_width = load_width
+        write_dtype = self.load_dtype(write_width)
+        tune.check(write_dtype is not None)
+        tune.check(CN % write_width == 0 and block_m % write_width == 0)
+        tune.check(C % write_width == 0)
+
+        tune.check(block_m % write_width == 0)
+        tiles_hw = cdiv(H * W, block_n * load_width)
+        tiles_c = cdiv(C, block_m)
+
+        with hidet.script_module() as module:
+
+            @hidet.script
+            def write_pad(y: write_dtype[N, HN * WN * CN // write_width]):
+                # pack larger dtype with pad value
+                # is is valid because last dimension CN is a multiple of write_width
+                pad_regs = register_tensor(write_dtype, [1])
+                pad_ptr = tensor_pointer(float16, [write_width])
+                pad_ptr = pad_regs
+                for i in range(write_width):
+                    pad_ptr[i] = float16(self.pad_value)
+
+                stride = tiles_hw * tiles_c * block_n * block_m
+                bid = blockIdx.x + blockIdx.y * tiles_hw
+                tid = threadIdx.x + threadIdx.y * block_n + bid * block_n * block_m
+
+                while tid < HN * WN * CN // write_width:
+                    row_id = tid // (CN // write_width)
+                    col_id = tid % (CN // write_width)
+                    middle_square = False
+                    if WN * self.pad_h <= row_id < HN * WN - WN * self.pad_h:
+                        r_id = (row_id - WN * self.pad_h) % WN
+                        if self.pad_w <= r_id < self.pad_w + W:
+                            middle_square = True
+                    if not middle_square:
+                        if col_id < C:
+                            y[blockIdx.z, tid] = pad_regs[0]
+                        else:
+                            y[blockIdx.z, tid] = 0
+                    tid += stride
+
+            @hidet.script
+            def conv2dfp16_pretransform_kernelv3(img: float16[N, C, H * W], y: float16[N, HN * WN, CN]):
+                attrs.cuda.block_dim = block_n, block_m, 1
+                attrs.cuda.grid_dim = tiles_hw, tiles_c, N
+
+                write_ptr = tensor_pointer(write_dtype, [N * CN * HN * WN // write_width])
+                write_ptr = y
+                write_pad(write_ptr)
+
+                smem = shared_tensor(float16, [block_n * load_width, block_m])
+
+                offset_hw = (blockIdx.x * block_n + threadIdx.x) * load_width
+                offset_c = blockIdx.y * block_m + threadIdx.y
+                load_ptr = tensor_pointer(load_dtype, [N, C, H * W // load_width])
+                load_ptr = img
+
+                regs = register_tensor(float16, [load_width])
+                reg_ptr = tensor_pointer(load_dtype, [1])
+                reg_ptr = regs
+
+                if offset_hw < H * W and offset_c < C:
+                    reg_ptr[0] = load_ptr[blockIdx.z, offset_c, offset_hw // load_width]
+                for i in range(load_width):
+                    smem[threadIdx.x * load_width + i, threadIdx.y] = regs[i]
+                syncthreads()
+
+                tid = threadIdx.x + threadIdx.y * block_n
+                row_idx = tid % (block_m // write_width)
+                col_idx = tid // (block_m // write_width)
+                offset_hw = blockIdx.x * block_n * load_width + col_idx
+                offset_c = blockIdx.y * block_m + row_idx * write_width
+
+                initial_pad_offset = self.pad_h * WN * CN + self.pad_w * CN
+                im_block = offset_hw // W
+                w_pad = im_block * 2 * self.pad_w * CN
+
+                smem_ptr = tensor_pointer(write_dtype, [block_n * write_width, block_m // write_width])
+                smem_ptr = smem
+
+                if offset_hw < H * W and offset_c < C:
+                    batch_offset = blockIdx.z * HN * WN * CN
+                    global_offset = batch_offset + offset_hw * CN + offset_c + initial_pad_offset + w_pad
+                    write_ptr[global_offset // write_width] = smem_ptr[col_idx, row_idx]
+
+        ir_module = module.ir_module()
+        assert isinstance(conv2dfp16_pretransform_kernelv3, Function)
+
+        return ir_module
+
+
 class Conv2dGemmFp16Task(Task):
     def __init__(
         self,
@@ -115,6 +311,7 @@ class Conv2dGemmFp16Task(Task):
         dilations: List[int],
         groups: int = 1,
         parallel_k_parts: int = 1,
+        disable_cp_async: bool = False,
     ):
         # Channel last
         # This kernel expects the weight to be transformed in the following way:
@@ -131,6 +328,7 @@ class Conv2dGemmFp16Task(Task):
         self.stride = stride
         self.img_shape = img.shape
         self.orig_weight_shape = orig_weight_shape
+        self.disable_cp_async = disable_cp_async
 
         DILY, DILX = dilations
         STRY, STRX = stride
@@ -184,8 +382,12 @@ class Conv2dGemmFp16Task(Task):
             ),
         )
 
+        if not disable_cp_async:
+            name = 'conv_gemm_fp16_pk'
+        else:
+            name = 'conv_gemm_fp16_pk_disable_cp_async'
         super().__init__(
-            name='conv_gemm_fp16_pk',
+            name=name,
             inputs=[img, weight],
             outputs=[c],
             attributes={
@@ -194,11 +396,12 @@ class Conv2dGemmFp16Task(Task):
                 'orig_weight_shape': orig_weight_shape,
                 'groups': groups,
                 'parallel_k_parts': parallel_k_parts,
+                'disable_cp_async': disable_cp_async,
             },
         )
 
     def allow_prologue(self) -> bool:
-        return False
+        return self.disable_cp_async
 
     def allow_epilogue(self) -> bool:
         return True
@@ -373,7 +576,7 @@ class Conv2dGemmFp16Task(Task):
 
                     # a bit strange, the two branches should be the same, but gives different results
                     #   but only when GROUP_C % 8 != 0
-                    if GROUP_C % 8 == 0:
+                    if GROUP_C % 8 == 0 and not self.disable_cp_async:
                         cp_async(
                             ~smem_img[i, k],
                             ~img[batch_idx, ih_idx, iw_idx, channel_offset],
@@ -415,7 +618,7 @@ class Conv2dGemmFp16Task(Task):
 
                     # also quite strange; the two branches should be the same, but gives different
                     #   results when GROUP_OC % 8 != 0
-                    if GROUP_OC % 8 == 0:
+                    if GROUP_OC % 8 == 0 and not self.disable_cp_async:
                         cp_async(
                             ~smem_weight[k, j],
                             ~weight[offset_k + k, offset_n + j],
@@ -430,7 +633,7 @@ class Conv2dGemmFp16Task(Task):
                             smem_weight[k, j + ji + src_size] = 0
 
             @hidet.script
-            def matmul_f16_kernel(
+            def conv2d_gemm_f16_kernel(
                 img: float16[N, H, W, C], weight: float16[KX * KY * WC, OC], res: float16[K_PARTS, N, OUT_H, OUT_W, OC]
             ):
                 # matrix multiplication, using mma instruction
@@ -456,7 +659,8 @@ class Conv2dGemmFp16Task(Task):
 
                 load_smem_img(0, img, ~smem_img[0, 0, 0])
                 load_smem_weight(0, weight, ~smem_weight[0, 0, 0])
-                cp_async_wait_all()
+                if GROUP_OC % 8 == 0 and not self.disable_cp_async:
+                    cp_async_wait_all()
 
                 syncthreads()
                 for k0 in range(K_TILES_PER_BLOCK):
@@ -475,7 +679,8 @@ class Conv2dGemmFp16Task(Task):
                                 load_regs_b(mj, mk + 1, ~smem_weight[k0 % 2, 0, 0], ~regs_b[(mk + 1) % 2, mj, 0])
                         for mi, mj in grid(mma_count_m, mma_count_n):
                             warp_mma(~regs_a[mk % 2, mi, 0], ~regs_b[mk % 2, mj, 0], ~regs_c[mi, mj, 0])
-                    cp_async_wait_all()
+                    if GROUP_OC % 8 == 0 and not self.disable_cp_async:
+                        cp_async_wait_all()
                     syncthreads()
 
                 # store back
@@ -537,7 +742,7 @@ class Conv2dGemmFp16Task(Task):
                             res[k_part_idx, batch_idx, res_y, res_x, channel_idx] = smem_c[i, j]
 
         ir_module = module.ir_module()
-        assert isinstance(matmul_f16_kernel, Function)
+        assert isinstance(conv2d_gemm_f16_kernel, Function)
 
         return ir_module
 
@@ -552,6 +757,7 @@ class Conv2dGemmFp16Op(Operator):
         dilations: List[int],
         groups: int,
         parallel_k_parts=1,
+        disable_cp_async=False,
     ):
         if not (isinstance(parallel_k_parts, int) and not isinstance(parallel_k_parts, bool)):
             raise ValueError('parallel_k_parts must be an integer, got {}'.format(parallel_k_parts))
@@ -564,6 +770,7 @@ class Conv2dGemmFp16Op(Operator):
                 'orig_weight_shape': orig_weight_shape,
                 'groups': groups,
                 'parallel_k_parts': parallel_k_parts,
+                'disable_cp_async': disable_cp_async,
             },
             task=Conv2dGemmFp16Task(
                 input_like(img, 'img'),
@@ -573,8 +780,26 @@ class Conv2dGemmFp16Op(Operator):
                 dilations,
                 groups=groups,
                 parallel_k_parts=parallel_k_parts,
+                disable_cp_async=disable_cp_async,
             ),
         )
+
+
+class Conv2dGemmFp16PretransformOP(Operator):
+    def __init__(self, img: Tensor, padding: Union[int, Tuple[int, int]], pad_value=0.0, channel_mul_8: bool = False):
+        super().__init__(
+            inputs=[img],
+            attributes={'pad_value': pad_value, 'padding': padding, 'channel_mul_8': channel_mul_8},
+            task=Conv2dGemmFp16PretransformTask(input_like(img, 'img'), padding, pad_value, channel_mul_8),
+        )
+
+
+def pre_transform_img(img: Tensor, padding: Union[int, Tuple[int, int]], pad_value=0.0, make_multiple_8=False):
+    """
+    Pre transforms the image to channels last, pads it and optionally makes the channel a multiple of 8
+    as required by Conv2dGemmFp16
+    """
+    return Conv2dGemmFp16PretransformOP(img, padding, pad_value, make_multiple_8).get_output(0)
 
 
 # pylint: disable=dangerous-default-value
@@ -598,7 +823,13 @@ def parallel_part_heuristic(
 
 
 def conv2d_gemm_fp16_channel_last(
-    img: Tensor, weight: Tensor, stride: List[int], dilations: List[int], groups: int, parallel_k_parts=1
+    img: Tensor,
+    weight: Tensor,
+    stride: List[int],
+    dilations: List[int],
+    groups: int,
+    parallel_k_parts=1,
+    disable_cp_async=False,
 ) -> Tensor:
     import hidet
 
@@ -617,17 +848,66 @@ def conv2d_gemm_fp16_channel_last(
             dilations=dilations,
             groups=groups,
             parallel_k_parts=parallel_k_parts,
+            disable_cp_async=disable_cp_async,
         )
         .get_output(0)
         .sum(0)
     )
 
 
+def conv2d_pointwise_fp16(img: Tensor, weight: Tensor, groups: int):
+    import hidet
+
+    n, c, h, w = img.shape
+    oc, wc, ky, kx = weight.shape
+    if ky == 1 and kx == 1:
+        assert c % groups == 0 and wc * groups == c, "invalid group / channel size"
+        img = hidet.ops.reshape(img, [n, groups, c // groups, h * w])
+        weight = hidet.ops.reshape(weight, [1, groups, oc // groups, wc])
+        out = hidet.ops.matmul(weight, img)
+        return hidet.ops.reshape(out, [n, oc, h, w])
+    else:
+        raise ValueError(f"expected kernel sizes to be (1, 1), got {(ky, kx)}")
+
+
 def conv2d_gemm_fp16(
-    img: Tensor, weight: Tensor, stride: List[int], dilations: List[int], groups: int, parallel_k_parts=1
+    img: Tensor,
+    weight: Tensor,
+    padding: Union[int, Tuple[int, int]] = 0,
+    stride: Tuple[int, int] = (1, 1),
+    dilations: Tuple[int, int] = (1, 1),
+    groups: int = 1,
+    parallel_k_parts=1,
+    disable_cp_async=False,
 ) -> Tensor:
     import hidet
 
+    _, c, _, _ = img.shape
+    _, _, ky, kx = weight.shape
+    sy, sx = stride
+    dy, dx = dilations
+    if ky == kx == sy == sx == dy == dx == 1:
+        return conv2d_pointwise_fp16(img, weight, groups)
+
+    # img = pre_transform_img(img, padding, pad_value=pad_value, make_multiple_8=True)
+    # if groups == 1 and c % 8 != 0:
+    #     pad_channel = cdiv(c, 8) * 8 - c
+    #     weight = hidet.ops.pad(weight, [0, 0, 0, 0, 0, pad_channel, 0, 0])
+
+    if groups == 1 and c % 8 != 0:
+        pad_channel = cdiv(c, 8) * 8 - c
+    else:
+        pad_channel = 0
+    if isinstance(padding, int):
+        pad_h = padding
+        pad_w = padding
+    else:
+        pad_h = padding[0]
+        pad_w = padding[1]
+    img = hidet.ops.pad(img, [0, 0, pad_h, pad_w, 0, pad_channel, pad_h, pad_w])
+    weight = hidet.ops.pad(weight, [0, 0, 0, 0, 0, pad_channel, 0, 0])
+
     img = hidet.ops.transpose(img, [0, 2, 3, 1])
-    res = conv2d_gemm_fp16_channel_last(img, weight, stride, dilations, groups, parallel_k_parts)
+
+    res = conv2d_gemm_fp16_channel_last(img, weight, stride, dilations, groups, parallel_k_parts, disable_cp_async)
     return hidet.ops.transpose(res, [0, 3, 1, 2])

@@ -186,7 +186,7 @@ class MatmulResolveRule(ResolveRule):
             a.dtype == dtypes.float16
             and b.dtype == dtypes.float16
             and is_constant(a.shape[-1], b.shape[-1])
-            and a.shape[-1] % 8 == b.shape[-1] % 8 == 0
+            and (a.shape[-1] % 2 == b.shape[-1] % 2 == 0)
         ):
             return None
 

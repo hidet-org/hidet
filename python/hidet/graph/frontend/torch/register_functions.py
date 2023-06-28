@@ -50,8 +50,7 @@ def conv1d_transpose(
 
 @register_function(torch.nn.functional.conv2d)
 def conv2d(x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, dilation, groups):
-    x = ops.conv_pad(x, padding)
-    y = ops.conv2d(x, weight, stride, dilation, groups)
+    y = ops.conv2d(x, weight, stride, dilation, groups, padding=padding)
     if bias is not None:
         y = y + ops.unsqueeze(bias, [0, 2, 3])
     return y
