@@ -123,6 +123,8 @@ def hidet_backend(graph_module, example_inputs):
     if dynamo_config['correctness_report']:
         # check correctness using random inputs
         logger.info('start to check correctness')
+        if any(t.is_symbolic() for t in inputs if isinstance(t, hidet.Tensor)):
+            raise ValueError("hidet_backend: cannot print correctness report with dynamic=True")
         dummy_inputs = []  # for correctness check
         for arg in inputs:
             if isinstance(arg, hidet.Tensor):
