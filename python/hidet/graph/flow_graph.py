@@ -193,6 +193,7 @@ class FlowGraph:
         output: List[Tensor]
             The output tensors of the computation graph.
         """
+
         from hidet.ffi import runtime_api
 
         inputs: List[Tensor] = list(inputs)

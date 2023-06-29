@@ -30,7 +30,6 @@ from hidet.runtime.storage import Storage
 from hidet.ffi import runtime_api
 from hidet.utils import prod
 
-
 ModelExecutionHook = Callable[[int, List['Tensor'], List['Tensor']], None]
 
 

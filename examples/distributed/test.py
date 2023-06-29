@@ -1,93 +1,65 @@
 """
 Testing script for distributed components for hidet
 To debug, set the environment variable NCCL_DEBUG=INFO
+
+To install nccl, run
+
+    pip install nvidia-nccl-cu11==2.18.3
+
+Or
+
+    pip install nvidia-nccl-cu12==2.18.3
 """
 import hidet
 import multiprocessing
 from multiprocessing import Process
 import numpy
 import argparse
+import atexit
+import os
 
+import hidet
 import hidet.cuda.nccl
-from hidet.cuda import nccl
-from hidet.cuda.nccl import NcclUniqueId, NcclDataType, NcclRedOp, nccl_library_filename
-from hidet.ffi import runtime_api
-from hidet.lang import attrs
-from hidet.ir.primitives.cuda.nccl import all_reduce
-from hidet.ir.type import data_type
-from hidet.utils import prod
-from hidet.drivers import build_ir_module
-from hidet.cuda.nccl.libinfo import get_nccl_include_dirs, get_nccl_library_search_dirs
-from hidet.runtime import load_compiled_module
-
-print("NCCL version:", nccl.nccl_version())
 
 parser = argparse.ArgumentParser()
 parser.add_argument("n_gpus", type=int)
 parser.add_argument("reduce_op", choices=['sum', 'prod', 'max', 'min', 'avg'])
 args = parser.parse_args()
 
-def run(world_size, rank, shared_id, barrier):
+def run(world_size, rank):
     numpy.random.seed(rank)
 
-    # Initialize unique id
-    if rank == 0:
-        nccl.init_unique_id(shared_id)
-
-    barrier.wait()
     hidet.cuda.set_device(rank)
+    hidet.distributed.init_process_group(init_method='file://tmp', world_size=world_size, rank=rank)
+    hidet.distributed.set_nccl_comms()
 
-    print('initialize', rank)
-    # Create NcclCommunicator and set the cuda context
-    # this part should be moved into CompiledGraph in the future
-    comm = nccl.create_comm(world_size, shared_id, rank)
-    comms_array = nccl.comms_to_array([comm])
-    runtime_api.set_nccl_comms(comms_array)
-
-    # Initialize send and receive buffer
     device = f"cuda:{rank}"
-    send = hidet.randn([2, 2], device=device)
-    recv = hidet.empty([2, 2], device=device)
+    x = hidet.randn([1, 3], device=device)
+    w = hidet.randn([3, 2], device=device)
 
-    print(rank, send)
+    # test runtime distributed op
+    hidet.distributed.all_reduce(w, 'avg')
+    print(w)
+    
+    # Create Computation Graph
+    x_symb = hidet.symbol_like(x)
+    w_symb = hidet.symbol_like(w)
+    y_local = hidet.ops.relu(x_symb @ w_symb)
+    y_sync = hidet.ops.all_reduce(y_local, args.reduce_op)
+    graph = hidet.trace_from([y_local, y_sync], inputs=[x_symb, w_symb])
+    opt_graph = hidet.graph.optimize(graph)
+    compiled = opt_graph.build()
+    y_local, y_sync = compiled(x, w)
 
-    dtype = data_type('float32')
-    shape = [2, 2] 
-    nbytes = dtype.nbytes * prod(shape)
+    hidet.cuda.current_stream().synchronize()
+    print(f"process {rank}\nbefore allreduce:{y_local}\nafter allreduce:{y_sync}\n", end='')
+    atexit._run_exitfuncs()
 
-    # Define IRModule
-    with hidet.script_module() as script_module:
-        @hidet.script
-        def launch(send: dtype[shape], recv: dtype[shape]):
-            attrs.func_kind = 'public'
-            all_reduce(0, send, recv, nbytes, dtype, getattr(NcclRedOp, args.reduce_op))
-
-    # Build
-    ir_module = script_module.ir_module()
-    ir_module.target = 'cuda'
-    ir_module.include_dirs.extend(get_nccl_include_dirs())
-    ir_module.linking_dirs.extend(get_nccl_library_search_dirs())
-    ir_module.include_headers.append(["nccl.h"])
-    ir_module.linking_libs.append(":" + nccl_library_filename())
-    out_dir = f'./.cache/all_reduce_{rank}'
-
-    build_ir_module(ir_module, out_dir, target='cuda')
-    compiled_module = load_compiled_module(out_dir)
-
-    compiled_module(send, recv)
-    s = hidet.cuda.current_stream() 
-    s.synchronize()
-    print(rank, recv)
+if os.path.exists('tmp'):
+    os.remove('tmp')
 
 world_size = args.n_gpus
-
-# Barrier to ensure unique id is created
-barrier = multiprocessing.Barrier(world_size)
-
-# Create a unique id object in shared memory
-shared_id = multiprocessing.Value(NcclUniqueId, lock=False)
-
-processes = [Process(target=run, args=(world_size, i, shared_id, barrier)) for i in range(world_size)]
+processes = [Process(target=run, args=(world_size, i)) for i in range(world_size)]
 
 for p in processes:
     p.start()
