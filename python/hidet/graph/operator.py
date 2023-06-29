@@ -42,7 +42,7 @@ class Operator:
         # cache
         self._compiled_task: Optional[CompiledTask] = None
 
-        self.outputs = self._run()
+        self.outputs = self.symbolic_run()
 
     def __str__(self):
         arguments = ['{}: {}{}'.format(i, t.dtype.name, t.shape) for i, t in enumerate(self.inputs)]
@@ -93,32 +93,36 @@ class Operator:
             self._compiled_task = self.task.build(target=self.build_target)
         return self._compiled_task
 
-    def _run(self) -> List[Tensor]:
-        from hidet.ir.tools import rewrite, simplify, collect
+    def symbolic_run(self) -> List[Tensor]:
+        from hidet.ir.tools import rewrite, simplify
 
-        if all(t.storage is not None for t in self.inputs) and len(collect(self.task, SymbolVar)) == 0:
-            return self.imperative_run(self.inputs)
-        else:
-            output_types: List[TensorType] = [output_node.type for output_node in self.task.outputs]
-            outputs: List[Tensor] = []
-            remap: Dict[Var, Constant] = {}
-            for i, (a, b) in enumerate(zip(self.task.inputs, self.inputs)):
-                for d1, d2 in zip(a.type.shape, b.shape):
-                    if isinstance(d1, Var) and not (d1 in remap and isinstance(remap[d1], Constant)):
-                        remap[d1] = d2
-            for i, output_type in enumerate(output_types):
-                shape = [simplify(rewrite(d, remap)) for d in output_type.shape]
-                outputs.append(
-                    Tensor(shape=shape, dtype=output_type.dtype.name, device=self.device, storage=None, trace=(self, i))
-                )
-            return outputs
+        output_types: List[TensorType] = [output_node.type for output_node in self.task.outputs]
+        outputs: List[Tensor] = []
+        remap: Dict[Var, Constant] = {}
+        for i, (a, b) in enumerate(zip(self.task.inputs, self.inputs)):
+            for d1, d2 in zip(a.type.shape, b.shape):
+                if isinstance(d1, Var) and not (d1 in remap and isinstance(remap[d1], Constant)):
+                    remap[d1] = d2
+        for i, output_type in enumerate(output_types):
+            shape = [simplify(rewrite(d, remap)) for d in output_type.shape]
+            outputs.append(
+                Tensor(shape=shape, dtype=output_type.dtype.name, device=self.device, storage=None, trace=(self, i))
+            )
+        return outputs
 
     def get_output(self, idx: int) -> Tensor:
-        if self.outputs is None:
-            outputs = self._run()
+        from hidet.ir.tools import collect
+
+        could_imperative_run = all(t.storage is not None for t in self.inputs) and len(collect(self.task, SymbolVar)) == 0
+
+        if could_imperative_run:
+            if self.outputs is None or any(t.storage is None for t in self.outputs):
+                self.outputs = self.imperative_run(self.inputs)
         else:
-            outputs = self.outputs
-        return outputs[idx]
+            if self.outputs is None:
+                self.outputs = self.symbolic_run()
+        
+        return self.outputs[idx]
 
     def _imperative_run_prepare_outputs(self) -> List[Tensor]:
         from hidet.ir.tools import simplify, collect, rewrite

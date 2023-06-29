@@ -10,6 +10,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from .utils import Task, Operator, Tensor, TensorNode, compute, input_like
+from typing import List, Optional, Dict, Any
+from hidet.ir.type import TensorType, DataType
+from hidet.ir.expr import Var, Constant
+from hidet.ir.task import Task
+from hidet.runtime.compiled_task import CompiledTask
+from hidet.graph.tensor import empty, Tensor, SymbolVar
+from hidet.ffi.ffi import get_last_error, BackendException
+from hidet.runtime.device import Device, instantiate_device
 
 
 # todo: add GraphInput and GraphOutput special operators here.
@@ -24,6 +32,10 @@ class BarrierTask(Task):
 class BarrierOp(Operator):
     def __init__(self, x: Tensor):
         super().__init__(inputs=[x], attributes={}, task=BarrierTask(input_like(x, 'x')))
+
+    def get_output(self, idx: int) -> Tensor:
+        self.outputs = super().symbolic_run()
+        return self.outputs[idx]
 
 
 def barrier(x: Tensor) -> Tensor:
