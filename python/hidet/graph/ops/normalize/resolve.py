@@ -11,12 +11,10 @@
 # limitations under the License.
 from typing import List, Optional, Callable, Any
 
-from hidet.ir import dtypes
 from hidet.ir.expr import is_constant
 from hidet.graph.operator import Operator, Tensor
 from hidet.graph.transforms import ResolveRule, register_resolve_rule
 from hidet.graph.ops.utils import is_contiguous_norm
-from hidet.utils import prod
 
 
 from .norm import NormalizeOp

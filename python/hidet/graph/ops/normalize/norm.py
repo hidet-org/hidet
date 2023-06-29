@@ -15,7 +15,7 @@ from hidet.ir.primitives import active_mask, shfl_down_sync
 from hidet.ir.compute import reduce
 from hidet.ir.expr import Expr
 from hidet.lang import spatial, repeat, view, cast
-from hidet.lang import data_type, TensorType, i32, f32, attrs, tensor
+from hidet.lang import data_type, TensorType, i32, attrs, tensor
 from hidet.lang.cuda import blockIdx, threadIdx, register_tensor, syncthreads
 from hidet.graph.ops.utils import Task, Operator, Tensor, TensorNode
 from hidet.graph.ops.utils import compute, input_like, normalize_dim
@@ -156,7 +156,13 @@ class NormalizeTask(Task):
 
                 mean_a[0] = mean_a[0] + delta * cast(count_b[0], accumulate_dtype) / cast(count, accumulate_dtype)
                 m2_a[0] = (
-                    m2_a[0] + m2_b[0] + delta * delta * cast(count_a[0], accumulate_dtype) * cast(count_b[0], accumulate_dtype) / cast(count, accumulate_dtype)
+                    m2_a[0]
+                    + m2_b[0]
+                    + delta
+                    * delta
+                    * cast(count_a[0], accumulate_dtype)
+                    * cast(count_b[0], accumulate_dtype)
+                    / cast(count, accumulate_dtype)
                 )
                 count_a[0] = count
 
@@ -305,7 +311,9 @@ class NormalizeTask(Task):
                     for reduction_idx in reduce_mapping.on(threadIdx.x):
                         if reduction_idx < reduce_extent:
                             val = regs_repeat[reduction_idx // block_size]
-                            normed = (val - mean_final[0]) * prim.rsqrt(m2_final[0] + cast(self.attrs['epsilon'], accumulate_dtype))
+                            normed = (val - mean_final[0]) * prim.rsqrt(
+                                m2_final[0] + cast(self.attrs['epsilon'], accumulate_dtype)
+                            )
                             flat_tensor[reduction_idx] = normed
 
         ir_module = module.ir_module()
