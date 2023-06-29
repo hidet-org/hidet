@@ -15,6 +15,7 @@ import logging
 import torch
 import hidet.option
 from hidet.ir.type import data_type
+from hidet.ir.expr import is_constant
 from hidet.graph.flow_graph import FlowGraph
 from hidet.graph.transforms import PassContext, optimize
 from hidet.runtime import CompiledGraph
@@ -123,7 +124,10 @@ def hidet_backend(graph_module, example_inputs):
     if dynamo_config['correctness_report']:
         # check correctness using random inputs
         logger.info('start to check correctness')
-        if any(t.is_symbolic() for t in inputs if isinstance(t, hidet.Tensor)):
+        # there exist some symbolic shapes, currently we don't support this option
+        #   as there is no way to principly get concrete shapes at this stage from symbolic shapes
+        #   since some models like resnet requires the image to be above a certain size.
+        if any(not all(is_constant(s) for s in t.shape) for t in inputs if isinstance(t, hidet.Tensor)):
             raise ValueError("hidet_backend: cannot print correctness report with dynamic=True")
         dummy_inputs = []  # for correctness check
         for arg in inputs:
