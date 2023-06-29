@@ -136,6 +136,56 @@ def my_matmul(a: Tensor, b: Tensor) -> Tensor:
     return MatmulOp(a, b).outputs[0]
 
 
+def vis_bench():
+    bn = hidet.utils.Bench(
+        x_name='(m, n, k)',
+        x_vals=[
+            (1024, 1024, 1024),
+            (512, 3072, 768),
+            (512, 768, 3072),
+            (1024, 3072, 768),
+            (1024, 768, 3072)
+        ],
+    )
+
+    def torch_matmul(x):
+        m_size, n_size, k_size = x
+        a = torch.randn([1, m_size, k_size], dtype=torch.float32, device='cuda')
+        b = torch.randn([1, k_size, n_size], dtype=torch.float32, device='cuda')
+        c = torch.matmul(a, b)
+        return lambda: torch.matmul(a, b, out=c)
+
+    def hidet_matmul_static(x):
+        m_size, n_size, k_size = x
+        a = hidet.symbol([1, m_size, k_size], dtype='float32', device='cuda')
+        b = hidet.symbol([1, k_size, n_size], dtype='float32', device='cuda')
+        c = hidet.ops.batch_matmul(a, b)
+        graph = hidet.trace_from(c, [a, b])
+        cgraph = graph.build(space=2)
+        aa = hidet.randn([1, m_size, k_size], dtype='float32', device='cuda')
+        bb = hidet.randn([1, k_size, n_size], dtype='float32', device='cuda')
+        return lambda: cgraph(aa, bb)
+
+    def hidet_matmul_dynamic(x):
+        m_size, n_size, k_size = x
+        a = hidet.symbol(['b', 'm', 'k'], dtype='float32', device='cuda')
+        b = hidet.symbol(['b', 'k', 'n'], dtype='float32', device='cuda')
+        c = my_matmul(a, b)
+        cgraph = hidet.trace_from(c, [a, b]).build(space=2)
+        aa = hidet.randn([1, m_size, k_size], dtype='float32', device='cuda')
+        bb = hidet.randn([1, k_size, n_size], dtype='float32', device='cuda')
+        return lambda: cgraph(aa, bb)
+
+    bn.bench(torch_matmul)
+    bn.bench(hidet_matmul_static)
+    bn.bench(hidet_matmul_dynamic)
+    bn.measure_flops(lambda x: x[0] * x[1] * x[2] * 2)
+
+    data = bn.run()
+    data.show_plot(figsize=(8, 6))
+    data.print_data()
+
+
 def benchmark():
     space = 2
 
@@ -187,7 +237,8 @@ def benchmark():
 
 
 def main():
-    benchmark()
+    # benchmark()
+    vis_bench()
 
 
 if __name__ == '__main__':
