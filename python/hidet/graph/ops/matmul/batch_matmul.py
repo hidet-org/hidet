@@ -616,9 +616,9 @@ class BatchMatmulTask(Task):
                 attrs.cuda.block_dim = block_size
 
                 smem = shared_tensor('int8', shape=[smem_storage_nbytes])
-                smem_a = tensor_pointer(a_dtype, layout=smem_a_layout, init=~smem[0])
+                smem_a = tensor_pointer(a_dtype, layout=smem_a_layout, init=cast(~smem[0], ~a_dtype))
                 smem_a_bytes = smem_a.type.tensor_type.storage_bytes()
-                smem_b = tensor_pointer(b_dtype, layout=smem_b_layout, init=~smem[smem_a_bytes])
+                smem_b = tensor_pointer(b_dtype, layout=smem_b_layout, init=cast(~smem[smem_a_bytes], ~b_dtype))
 
                 regs_a = register_tensor(a_dtype, layout=regs_a_layout)
                 regs_b = register_tensor(b_dtype, layout=regs_b_layout)

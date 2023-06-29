@@ -73,6 +73,7 @@ class DataLayout(Node):
             shape = []
         self.shape: Tuple[Int] = tuple(int(v) if isinstance(v, ir.Constant) else v for v in shape)
         self.size: Int = size
+        assert all(isinstance(v, (ir.Expr, int)) for v in self.shape)
 
     def __call__(self, *args: Int):
         return self.serialize(*args)
@@ -313,11 +314,11 @@ class ConcatLayout(DataLayout):
 
 
 def row_major(*shape: Int):
-    return data_layout(shape)
+    return RowMajorLayout(shape)
 
 
 def column_major(*shape: Int):
-    return data_layout(shape, list(reversed(range(len(shape)))))
+    return ColumnMajorLayout(shape)
 
 
 def local_layout(*shape: Int):

@@ -107,7 +107,7 @@ class ReduceTask(Task):
         reduce_extent = hidet.utils.prod(reduce_shape)
 
         remain_layout = spatial(*remain_shape)
-        layout = row_major(shape)
+        layout = row_major(*shape)
 
         spatial_shape = []
         repeat_shape = []

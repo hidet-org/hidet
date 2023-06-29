@@ -326,7 +326,7 @@ class AttnMaskAddTask(Task):
 
         rows_per_thread_per_mma = 2
         rows_per_thread_mma_o = rows_per_thread_per_mma * mmas_per_warp_m_o
-        regs_li_new_layout = row_major(rows_per_thread_mma_o, 1) * local_layout((mma_m // rows_per_thread_per_mma, 1))
+        regs_li_new_layout = row_major(rows_per_thread_mma_o, 1) * local_layout(mma_m // rows_per_thread_per_mma, 1)
         regs_mi_new_layout = regs_li_new_layout
         regs_exp_mij_layout = regs_li_new_layout
 
