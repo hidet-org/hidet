@@ -9,17 +9,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Union, Optional, Sequence
-from hidet.ir import IRModule, dtypes
-from hidet.ir.primitives import active_mask, shfl_down_sync, shfl_sync
-from hidet.ir.compute import ReduceOperation, reduce
-from hidet.ir.type import data_type
-from hidet.ir.layout import DataLayout
-from hidet.lang import f16, f32, spatial, repeat, attrs, tensor_pointer
-from hidet.lang.cuda import blockIdx, threadIdx, register_tensor
-from hidet.graph.ops.utils import Task, Operator, Tensor, TensorNode, ReduceType
-from hidet.graph.ops.utils import compute, input_like, normalize_dim
-from hidet.utils import prod
+from typing import List
+from hidet.ir.compute import reduce
+from hidet.graph.ops.utils import TensorNode
+from hidet.graph.ops.utils import compute
 
 
 def reduce_shape(x: TensorNode, dims: List[int], keep_dim: bool):
@@ -54,9 +47,9 @@ def reduce_cop(x: TensorNode, dims: List[int], keep_dim: bool, reduce_type: str,
             assert p == len(indices) and q == len(reduce_indices)
             return x[x_indices]
 
-        reduce_shape = [x.shape[i] for i in dims]
+        y_shape = [x.shape[i] for i in dims]
         return reduce(
-            shape=reduce_shape, fcompute=reduce_fcompute, reduce_type=reduce_type, accumulate_dtype=accumulate_dtype
+            shape=y_shape, fcompute=reduce_fcompute, reduce_type=reduce_type, accumulate_dtype=accumulate_dtype
         )
 
     y = compute(name='y', shape=y_shape, fcompute=fcompute)

@@ -113,7 +113,9 @@ class Operator:
     def get_output(self, idx: int) -> Tensor:
         from hidet.ir.tools import collect
 
-        could_imperative_run = all(t.storage is not None for t in self.inputs) and len(collect(self.task, SymbolVar)) == 0
+        could_imperative_run = (
+            all(t.storage is not None for t in self.inputs) and len(collect(self.task, SymbolVar)) == 0
+        )
 
         if could_imperative_run:
             if self.outputs is None or any(t.storage is None for t in self.outputs):
@@ -121,7 +123,7 @@ class Operator:
         else:
             if self.outputs is None:
                 self.outputs = self.symbolic_run()
-        
+
         return self.outputs[idx]
 
     def _imperative_run_prepare_outputs(self) -> List[Tensor]:

@@ -11,16 +11,17 @@
 # limitations under the License.
 from typing import List, Union, Optional, Sequence
 
+from hidet.ir.compute import cops
 from ..arithmetic import square, sqrt
 from ..utils import Task, Operator, Tensor, TensorNode, IRModule, ReduceType
-from ..utils import compute, reduce, input_like, normalize_dim, arg_reduce
-from hidet.ir.compute import cops
+from ..utils import compute, input_like, normalize_dim, arg_reduce
+
 
 class ReduceTask(Task):
     def __init__(
         self, x: TensorNode, dims: List[int], keep_dim: bool, reduce_type: str, accumulate_dtype: str = 'float32'
     ):
-        
+
         y = cops.reduce_cop(x, dims, keep_dim, reduce_type, accumulate_dtype)
         self.dims: List[int] = dims
         self.keep_dim: bool = keep_dim
