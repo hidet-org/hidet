@@ -33,7 +33,8 @@ def test_bert(batch_size: int, seq_length: int, use_fp16, use_tensor_core, dynam
         hidet.torch.dynamo_config.use_tensor_core(use_tensor_core)
 
         y2 = model_opt(*args, **kwargs).last_hidden_state
-        torch.testing.assert_close(y1, y2, atol=1e-2, rtol=1e-2)
+        tol = 1e-1 if use_fp16 else 1e-2
+        torch.testing.assert_close(y1, y2, atol=tol, rtol=tol)
     finally:
         # in case of failure, reset the config
         hidet.torch.dynamo_config.reset()

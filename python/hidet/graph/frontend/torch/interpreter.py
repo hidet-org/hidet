@@ -444,7 +444,7 @@ class Interpreter:
                 torch_kwargs = load_arg(node.kwargs, torch_env)
                 torch_env[node.name] = torch_func(*torch_args, **torch_kwargs)
 
-                hidet_func = Registry.registered_functions[torch_func]
+                hidet_func = self._lookup_function(node.target)
                 hidet_args = load_arg(node.args, hidet_env)
                 hidet_kwargs = load_arg(node.kwargs, hidet_env)
 
