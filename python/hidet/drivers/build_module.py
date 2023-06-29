@@ -31,7 +31,20 @@ logger.setLevel(logging.INFO)
 logger.addHandler(logging.StreamHandler())
 
 
+def can_remote_build(ir_module: IRModule) -> bool:
+    return not (
+        len(ir_module.object_files) > 0
+        or len(ir_module.linking_dirs) > 0
+        or len(ir_module.include_dirs) > 0
+    )
+
+
 def build_ir_module(ir_module: IRModule, output_dir: str, *, target: str, output_kind: str = '.so'):  # '.so', '.o'
+    if hidet.option.compile_server.enabled() and can_remote_build(ir_module):
+        from hidet.apps.compile_server import remote_build
+        remote_build(ir_module, output_dir, target=target, output_kind=output_kind)
+        return
+
     if target == 'cuda':
         src_path = os.path.join(output_dir, 'source.cu')
     elif target == 'cpu':
