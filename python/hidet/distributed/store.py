@@ -63,7 +63,7 @@ class FileStore(Store):
     manually if required.
 
     We use a 4-byte integer to record the length of each (encoded) key and value. So do not insert
-    more than 32768 bytes for each entry.
+    more than 2^31 - 1 bytes for each entry.
 
     Deletion of an entry is done by adding a new entry with a suffix '-' (DELETE_PREFIX). It will
     overwrite the insertion of the given entry when we scanning the file.
