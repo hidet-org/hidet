@@ -17,7 +17,7 @@ from hidet.ir.dialects.pattern import PlaceholderExpr, match
 from hidet.ir.dtypes import boolean
 from hidet.ir.expr import Add, convert, Sub, Multiply, Mod, LessThan, LessEqual, Equal, BinaryExpr, LogicalAnd
 from hidet.ir.expr import BitwiseXor, BitwiseAnd, BitwiseOr, BitwiseNot, Var, LogicalOr
-from hidet.ir.expr import Div, Constant, Expr, logical_and, logical_or, if_then_else, constant, IfThenElse
+from hidet.ir.expr import Div, Constant, Expr, logical_and, constant, IfThenElse
 from hidet.ir.stmt import LetStmt, ForStmt
 from hidet.ir.functors import IRRewriter
 from hidet.ir.tools import rewrite, simplify

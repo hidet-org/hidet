@@ -37,7 +37,6 @@ logger.addHandler(logging.StreamHandler())
 
 def _generate_candidate_summary(candidates: List[IRModule], task_dir: str):
     import tabulate
-    import json
 
     headers = ['index']
     tuning_kwargs = getattr(candidates[0], '_tuning_kwargs', {})

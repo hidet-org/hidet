@@ -14,7 +14,7 @@ from hidet.ir import IRModule, dtypes
 from hidet.ir.primitives import active_mask, shfl_down_sync
 from hidet.ir.expr import Expr
 from hidet.lang import spatial, repeat, view, cast, shared_tensor, register_tensor
-from hidet.lang import data_type, TensorType, i32, f16, attrs, tensor
+from hidet.lang import data_type, TensorType, i32, f16, attrs
 from hidet.lang.cuda import blockIdx, threadIdx, syncthreads
 from hidet.graph.ops.utils import Operator, Tensor, normalize_dim
 from hidet.graph.ops.utils import input_like

@@ -14,7 +14,7 @@ import hidet
 from hidet.ir import IRModule
 from hidet.ir.compute import reduce
 from hidet.ir.expr import is_constant, cast
-from hidet.ir.layout import DataLayout, StridesLayout, data_layout, row_major, column_major, local_layout
+from hidet.ir.layout import StridesLayout, data_layout, row_major, column_major, local_layout
 from hidet.ir.type import data_type, TensorType, DataType, void_p
 from hidet.lang import i32, spatial, repeat, register_tensor, shared_tensor, attrs, grid, tensor_pointer
 from hidet.lang.cuda import blockIdx, threadIdx, syncthreads
@@ -292,7 +292,9 @@ class BatchMatmulTask(Task):
                 smem = shared_tensor('int8', shape=[used_smem_bytes_per_block])
 
                 smem_a = tensor_pointer(
-                    dtype, layout=StridesLayout.from_shape([2, block_m, block_k], perm=[0, 2, 1]), init=cast(~smem[0], ~dtype)
+                    dtype,
+                    layout=StridesLayout.from_shape([2, block_m, block_k], perm=[0, 2, 1]),
+                    init=cast(~smem[0], ~dtype),
                 )
                 smem_a_bytes = smem_a.type.tensor_type.storage_bytes()
                 smem_b = tensor_pointer(

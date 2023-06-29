@@ -14,7 +14,6 @@ from hidet.ir import IRModule, dtypes
 from hidet.ir.primitives import active_mask, shfl_down_sync, shfl_sync
 from hidet.ir.compute import ReduceOperation, reduce
 from hidet.ir.type import data_type
-from hidet.ir.layout import DataLayout
 from hidet.lang import f16, f32, spatial, repeat, attrs, tensor_pointer
 from hidet.lang.cuda import blockIdx, threadIdx, register_tensor
 from hidet.graph.ops.utils import Task, Operator, Tensor, TensorNode, ReduceType

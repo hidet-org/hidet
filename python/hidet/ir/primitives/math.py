@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Dict, Tuple, Optional, Union
+from typing import List, Dict, Tuple, Optional
 from hidet.ir.expr import Expr
 from hidet.ir.type import FuncType, DataType, data_type
 from hidet.ir.utils.type_utils import numeric_promotion
@@ -198,10 +198,6 @@ def tif_make_vector(arg_types: List[DataType]) -> DataType:
     if not all(arg_types[0] == arg_type for arg_type in arg_types[1:]):
         raise ValueError("All arguments must have the same type")
     return vectorize(arg_types[0], len(arg_types))
-
-
-def tif_make_vector_from_scalar(arg_types: List[DataType]) -> DataType:
-    pass
 
 
 class MathFunctionSetGeneric(MathFunctionSet):

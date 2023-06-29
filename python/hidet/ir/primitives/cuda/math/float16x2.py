@@ -9,14 +9,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Callable, Union, List
-from hidet.ir.expr import Expr, ExprInt64, ExprFloat16, ExprInt16
-from hidet.ir.type import FuncType, DataType, func_type
-from hidet.ir.func import Function
-from hidet.ir.dtypes import int16, float16, float32, int64, float16x2
-from hidet.ir.primitives.func import register_primitive_function, primitive_func_pool, call_primitive_func
+from typing import Union, List
+from hidet.ir.expr import Expr
+from hidet.ir.type import func_type
+from hidet.ir.dtypes import float16, float16x2
+from hidet.ir.primitives.func import register_primitive_function, primitive_func_pool
 from hidet.ir.primitives.math import MathFunctionSet, register_math_function_set
-from hidet.utils import initialize
 
 
 class CUDAFloat16x2MathFunctionSet(MathFunctionSet):

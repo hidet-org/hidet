@@ -119,7 +119,7 @@ _promotion_table = {
     (u64, i64): i64,
     # vector type promotion
     (f16x2, f16x2): f16x2,
-    (i8x4, i8x4): i8x4
+    (i8x4, i8x4): i8x4,
 }
 
 

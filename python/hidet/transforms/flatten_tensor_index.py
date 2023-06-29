@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from hidet.ir.type import TensorType, tensor_type, tensor_pointer_type, PointerType, TensorPointerType, ArrayType
-from hidet.ir.expr import Var, TensorElement, TensorSlice, Constant, tensor_element
+from hidet.ir.expr import Var, TensorElement, TensorSlice, tensor_element
 from hidet.ir.stmt import BufferStoreStmt, DeclareStmt
 from hidet.ir.layout import row_major
 from hidet.ir.func import Function

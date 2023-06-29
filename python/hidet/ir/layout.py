@@ -12,7 +12,7 @@
 # pylint: disable=import-outside-toplevel
 import itertools
 from collections import OrderedDict
-from typing import Sequence, Union, List, Mapping, Dict, Tuple, Optional
+from typing import Sequence, Union, List, Dict, Tuple, Optional
 
 from hidet.ir.node import Node
 from hidet.utils import prod

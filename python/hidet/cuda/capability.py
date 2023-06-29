@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from cuda.cudart import cudaDeviceProp
 
 
 @dataclass

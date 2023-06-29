@@ -14,7 +14,6 @@ from hidet.ir.dtypes import float32, int32
 from hidet.ir.expr import cast
 from hidet.ir.module import IRModule
 from hidet.ir.compute import TensorNode
-from hidet.ir.stmt import DeclareScope
 from hidet.ir.task import Task
 from hidet.ir.compute import compute, reduce
 from hidet.graph.ops.utils import input_like, broadcast_shape, can_mutually_broadcast

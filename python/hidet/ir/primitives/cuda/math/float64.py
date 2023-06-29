@@ -16,6 +16,7 @@ from hidet.ir.primitives.math import MathFunctionSet, register_math_function_set
 
 
 class CUDAFloat64MathFunctionSet(MathFunctionSet):
+    # pylint: disable=abstract-method
     @staticmethod
     def register():
         unary_funcs = {

@@ -1,10 +1,9 @@
-from typing import Union, List, Tuple
+from typing import List
 
 import hidet
 from hidet.ir.type import DataType, TensorType, tensor_type, tensor_pointer_type
-from hidet.ir.dtypes import vectorize, i32, float32
-from hidet.ir.expr import Expr, is_true, tensor_pointer_var
-from hidet.ir.stmt import launch_kernel
+from hidet.ir.dtypes import vectorize, i32
+from hidet.ir.expr import Expr, is_true
 from hidet.ir.layout import row_major, data_layout, local_layout
 from hidet.ir.library import tune
 from hidet.ir.library.utils import get_tensor_type
@@ -21,13 +20,13 @@ def get_lane(v, idx):
     vtype = infer_type(v)
     if isinstance(vtype, DataType) and vtype.is_vector():
         assert isinstance(vtype, VectorType)
-        return cast(address(v), ~vtype._lane_type)[idx]
+        return cast(address(v), ~vtype.lane_type())[idx]
     else:
         raise ValueError('v should be a vector, got {}'.format(vtype))
 
 
 def check_type(a_type: TensorType, b_type: TensorType, c_type: TensorType, ta: bool, tb: bool):
-    if not (a_type.dtype == b_type.dtype == c_type.dtype):
+    if not a_type.dtype == b_type.dtype == c_type.dtype:
         raise TypeError(
             'The data type of a, b, c should be the same, got {}, {}, {}'.format(
                 a_type.dtype, b_type.dtype, c_type.dtype
@@ -110,7 +109,7 @@ def matmul_simt(
     arch='sm_70'
 ):
     from hidet.lang import attrs
-    from hidet.lang import tensor_pointer, register_tensor, grid, cast, deref, meta, printf
+    from hidet.lang import tensor_pointer, register_tensor, grid, cast, deref
     from hidet.lang.cuda import dynamic_shared_memory, threadIdx, blockIdx, blockDim, syncthreads
     from hidet.lang.mapping import spatial, repeat, auto_map
 
@@ -149,8 +148,8 @@ def matmul_simt(
     num_warps: int = prod(block_warps)
     num_threads: int = num_warps * 32
     block_m, block_n, block_k = block_shape
-    warp_m, warp_n, warp_k = warp_shape
-    block_warps_m, block_warps_n, block_warps_k = block_m // warp_m, block_n // warp_n, block_k // warp_k
+    warp_k = warp_shape[2]
+    block_warps_k = block_k // warp_k
     block_tiles_m: Expr = (m_size + block_m - 1) // block_m
     block_tiles_n: Expr = (n_size + block_n - 1) // block_n
     tune.check(num_threads <= capability.maxThreadsPerBlock)
@@ -376,7 +375,7 @@ def matmul_simt(
         regs_c: tensor_type(dtype=vtype, layout=regs_c_layout),
         buffer_idx: i32,
     ):
-        for i, j, k in block_mapping.on(threadIdx.x):
+        for i, j, _ in block_mapping.on(threadIdx.x):
             regs_c[i, j] += regs_a[buffer_idx, i] * regs_b[buffer_idx, j]
 
     @hidet.script
@@ -391,7 +390,7 @@ def matmul_simt(
         attrs.cuda.grid_dim = (
             (block_tiles_m * ((block_tiles_n + swizzle_tile - 1) // swizzle_tile * swizzle_tile)),
             prod(c_head),
-            k_parts
+            k_parts,
         )
 
         smem = tensor_pointer('uint8', [smem_total_size], init=dynamic_shared_memory(0, 'uint8'))
