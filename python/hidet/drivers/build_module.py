@@ -122,10 +122,13 @@ def build_ir_module_batch(ir_modules: Sequence[IRModule], output_dirs: Sequence[
 
     # calculate the number of workers
     cpu_count = os.cpu_count()
-    max_jobs, mem_for_worker = option.get_parallel_tune()
-    max_jobs = cpu_count if max_jobs == -1 else min(max_jobs, cpu_count)
-    mem_for_worker *= 1024**3
-    num_workers = min(max(int(psutil.virtual_memory().available // mem_for_worker), 1), max_jobs)
+    if hidet.option.compile_server.enabled():
+        num_workers = min(len(jobs), 128)
+    else:
+        max_jobs, mem_for_worker = option.get_parallel_tune()
+        max_jobs = cpu_count if max_jobs == -1 else min(max_jobs, cpu_count)
+        mem_for_worker *= 1024**3
+        num_workers = min(max(int(psutil.virtual_memory().available // mem_for_worker), 1), max_jobs)
 
     if num_workers > 1 and len(jobs) > 1:
         # Set the affinity of current process. Some package such as numpy will change affinity of current process,
