@@ -21,6 +21,7 @@ from . import runtime
 from . import drivers
 from . import logging
 from . import cuda
+from . import distributed
 
 from .version import __version__
 

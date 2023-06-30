@@ -23,7 +23,7 @@ def test_parallel():
         def example():
             attrs.func_kind = 'cpu_kernel'
 
-            a = tensor('default', 'float32', shape=[10])
+            a = tensor('float32', shape=[10])
 
             for i in grid(10, attrs='p'):  # unroll
                 a[i] = i
@@ -38,7 +38,7 @@ def test_parallel():
             for i, j in grid(2, 5, attrs='pp'):  # unroll the first loop while keep the second loop unchanged
                 a[i * 5 + j] = i
 
-            b = tensor('default', 'float32', shape=[8, 64])
+            b = tensor('float32', shape=[8, 64])
             for w in range(32):
                 for i, j in repeat(2, 8).spatial(4, 8).on(w):
                     b[i, j] = i

@@ -24,7 +24,7 @@ from hidet.utils import initialize
 def register_functions():
     from hidet.lang import script, attrs, cast
 
-    for dtype in ['uint8', 'uint32', 'int32', 'float16', 'float32']:
+    for dtype in ['int8', 'uint8', 'uint32', 'int32', 'float16', 'float32']:
         func_name = f'cuda_dynamic_shared_memory_{dtype}'
         dtype = data_type(dtype)
 

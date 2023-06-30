@@ -1,0 +1,4 @@
+flask
+flask-restful
+flask-jwt-extended
+gunicorn

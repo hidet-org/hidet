@@ -19,7 +19,7 @@ from hidet.ir.compute import TensorNode
 from hidet.ir.task import Task
 from hidet.ir.compute import compute, reduce
 from hidet.graph.ops.utils import input_like, broadcast_shape, can_mutually_broadcast
-from hidet.graph.ops.utils import tune
+from hidet.ir.library import tune
 from hidet.graph.operator import Operator, Tensor
 from hidet.utils.py import is_power_of_two, cdiv, prod
 from hidet.graph.ops.utils import broadcast_indices
@@ -101,7 +101,7 @@ class MatmulF16Task(Task):
         import hidet
         from hidet.ir.type import tensor_type
         from hidet.lang import attrs, col_spatial, view, u32, tensor_pointer, grid
-        from hidet.lang.layout import row_layout
+        from hidet.lang.layout import row_major
         from hidet.lang.mapping import spatial, auto_map
         from hidet.lang.cuda import blockIdx, threadIdx, syncthreads, dynamic_shared_memory
         from hidet.lang.cuda import MmaConfig, mma_sync, cp_async, cp_async_wait_all, ldmatrix
@@ -139,12 +139,12 @@ class MatmulF16Task(Task):
         tune.check(block_k % 8 == 0)
         tune.check(is_power_of_two(block_k // 8))
         smem_a_type = tensor_type(
-            'float16', shape=[block_m, block_k], layout=row_layout(block_m, block_k // 8).swizzle(1) * row_layout(1, 8)
+            'float16', shape=[block_m, block_k], layout=row_major(block_m, block_k // 8).swizzle(1) * row_major(1, 8)
         )
         smem_b_type = tensor_type(
             'float16',
             shape=[block_k, block_n],
-            layout=row_layout(block_k // 8, block_n // 64) * row_layout(8, 8).swizzle(1) * row_layout(1, 8),
+            layout=row_major(block_k // 8, block_n // 64) * row_major(8, 8).swizzle(1) * row_major(1, 8),
         )
         load_smem_a_map = auto_map(block_m, block_k // 8, workers=threads, on_fail=lambda msg: tune.check(False, msg))
         load_smem_b_map = auto_map(block_k, block_n // 8, workers=threads, on_fail=lambda msg: tune.check(False, msg))
@@ -198,8 +198,23 @@ class MatmulF16Task(Task):
                         if (offset_m + i >= m_size or offset_k + k >= maximum_k)
                         else min(maximum_k - (offset_k + k), 8)
                     )
-                    cp_async(~smem_a[i, k], ~gmem_a[i, k], cp_size=16, src_size=src_size * 2, cache_level='global')
-                    cp_async_wait_all()
+                    if a_shape[-1] % 8 == 0:
+                        cp_async(~smem_a[i, k], ~gmem_a[i, k], cp_size=16, src_size=src_size * 2, cache_level='global')
+                    # trivially support other cp_sizes, perhaps do this in a more clever way?
+                    elif a_shape[-1] % 4 == 0:
+                        cp_async(~smem_a[i, k], ~gmem_a[i, k], cp_size=8, src_size=min(8, src_size * 2))
+                        cp_async(~smem_a[i, k + 4], ~gmem_a[i, k + 4], cp_size=8, src_size=max(0, src_size * 2 - 8))
+                    elif a_shape[-1] % 2 == 0:
+                        cp_async(~smem_a[i, k], ~gmem_a[i, k], cp_size=4, src_size=min(4, src_size * 2))
+                        cp_async(
+                            ~smem_a[i, k + 2], ~gmem_a[i, k + 2], cp_size=4, src_size=min(4, max(0, src_size * 2 - 4))
+                        )
+                        cp_async(
+                            ~smem_a[i, k + 4], ~gmem_a[i, k + 4], cp_size=4, src_size=min(4, max(0, src_size * 2 - 8))
+                        )
+                        cp_async(
+                            ~smem_a[i, k + 6], ~gmem_a[i, k + 6], cp_size=4, src_size=min(4, max(0, src_size * 2 - 12))
+                        )
 
             @hidet.script
             def load_smem_b(k0: int, b: float16[b_head + [k_size, n_size]], smem_b: smem_b_type):
@@ -213,7 +228,23 @@ class MatmulF16Task(Task):
                     src_size = (
                         0 if (offset_k + k >= maximum_k or offset_n + j >= n_size) else min(n_size - (offset_n + j), 8)
                     )
-                    cp_async(~smem_b[k, j], ~gmem_b[k, j], cp_size=16, src_size=src_size * 2, cache_level='global')
+                    if b_shape[-1] % 8 == 0:
+                        cp_async(~smem_b[k, j], ~gmem_b[k, j], cp_size=16, src_size=src_size * 2, cache_level='global')
+                    # trivially support other cp_sizes, perhaps do this in a more clever way?
+                    elif b_shape[-1] % 4 == 0:
+                        cp_async(~smem_b[k, j], ~gmem_b[k, j], cp_size=8, src_size=min(8, src_size * 2))
+                        cp_async(~smem_b[k, j + 4], ~gmem_b[k, j + 4], cp_size=8, src_size=max(0, src_size * 2 - 8))
+                    elif b_shape[-1] % 2 == 0:
+                        cp_async(~smem_b[k, j], ~gmem_b[k, j], cp_size=4, src_size=min(4, src_size * 2))
+                        cp_async(
+                            ~smem_b[k, j + 2], ~gmem_b[k, j + 2], cp_size=4, src_size=min(4, max(0, src_size * 2 - 4))
+                        )
+                        cp_async(
+                            ~smem_b[k, j + 4], ~gmem_b[k, j + 4], cp_size=4, src_size=min(4, max(0, src_size * 2 - 8))
+                        )
+                        cp_async(
+                            ~smem_b[k, j + 6], ~gmem_b[k, j + 6], cp_size=4, src_size=min(4, max(0, src_size * 2 - 12))
+                        )
 
             @hidet.script
             def matmul_f16_kernel(
@@ -228,10 +259,10 @@ class MatmulF16Task(Task):
                 attrs.cuda.dynamic_smem_bytes = dynamic_smem_bytes
                 # smem_storage = dyn_smem_storage
                 smem_a = tensor_pointer(
-                    'float16', shape=[2, block_m, block_k], layout=row_layout(2) + smem_a_type.layout
+                    'float16', shape=[2, block_m, block_k], layout=row_major(2) + smem_a_type.layout
                 )
                 smem_b = tensor_pointer(
-                    'float16', shape=[2, block_k, block_n], layout=row_layout(2) + smem_b_type.layout
+                    'float16', shape=[2, block_k, block_n], layout=row_major(2) + smem_b_type.layout
                 )
                 smem_a = dynamic_shared_memory(byte_offset=0, dtype=float16)
                 smem_b = dynamic_shared_memory(byte_offset=2 * block_m * block_k * 2, dtype=float16)
@@ -329,9 +360,9 @@ def matmul_f16(a: Tensor, b: Tensor, parallel_k_parts=1) -> Tensor:
         raise ValueError('a and b must have at least 2 dimensions, got shape {} and {}'.format(a.shape, b.shape))
     # TODO: impliment dynamic run-time shape assertion
     if not (isinstance(a.shape[-1], Expr) or isinstance(b.shape[-1], Expr)) and (
-        a.shape[-1] % 8 != 0 or b.shape[-1] % 8 != 0
+        a.shape[-1] % 2 != 0 or b.shape[-1] % 2 != 0
     ):
-        raise ValueError('Expect the last dimension of the input tensors to be a multiple of 8')
+        raise ValueError('Expect the last dimension of the input tensors to be a multiple of 2')
     if a.dtype != dtypes.float16 or b.dtype != dtypes.float16:
         raise ValueError('BatchMatmulF16Op only support float16, got {} and {}'.format(a.dtype, b.dtype))
     return MatmulF16Op(a, b, parallel_k_parts).get_output(0)

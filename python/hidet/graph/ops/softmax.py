@@ -93,7 +93,7 @@ class SoftmaxTask(Task):
 
         import math
         import hidet
-        from hidet.lang import tensor
+        from hidet.lang import register_tensor
         from hidet.lang import attrs
 
         from hidet.ir.mapping import TaskMapping
@@ -121,7 +121,7 @@ class SoftmaxTask(Task):
                 attrs.cuda.block_dim = warp_size
                 attrs.cuda.grid_dim = n_reduce
 
-                temp = tensor('register', xdtype, shape=[outer_extent])
+                temp = register_tensor(xdtype, shape=[outer_extent])
 
                 rv = -xdtype.max_value
 

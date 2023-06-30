@@ -20,3 +20,4 @@ from .vars import threadIdx, blockIdx, blockDim, gridDim
 from .wmma import wmma_load_a, wmma_load_b, wmma_mma, wmma_store
 from .cvt import cvt
 from .memcpy import memcpy_async
+from .errchk import check_cuda_error

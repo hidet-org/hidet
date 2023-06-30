@@ -35,6 +35,30 @@ logger.setLevel(logging.INFO)
 logger.addHandler(logging.StreamHandler())
 
 
+def _generate_candidate_summary(candidates: List[IRModule], task_dir: str):
+    import tabulate
+
+    headers = ['index']
+    tuning_kwargs = getattr(candidates[0], '_tuning_kwargs', {})
+    headers.extend(list(tuning_kwargs.keys()))
+    lines = []
+    for i, candidate in enumerate(candidates):
+        line = []
+        line.append(str(i))
+        tuning_kwargs = getattr(candidate, '_tuning_kwargs', {})
+        for header in headers[1:]:
+            if header in tuning_kwargs:
+                line.append(str(tuning_kwargs[header]))
+            else:
+                line.append('N/A')
+        lines.append(line)
+
+    with open(os.path.join(task_dir, 'candidates.txt'), 'w') as f:
+        f.write(tabulate.tabulate(lines, headers=headers, tablefmt='plain'))
+    with open(os.path.join(task_dir, 'candidates.json'), 'w') as f:
+        json.dump({'headers': headers, 'candidates': lines}, f, indent=2)
+
+
 def build_task_module(task: Task, candidates: List[IRModule], task_dir: str, target: str):
     from hidet.lang import int32, void
     from hidet.lang import attrs
@@ -69,6 +93,9 @@ def build_task_module(task: Task, candidates: List[IRModule], task_dir: str, tar
         task_ir_module.add_function(get_input_shape.name, get_input_shape)
         task_ir_module.add_function(get_output_shape.name, get_output_shape)
 
+        # generate the candidate summary
+        _generate_candidate_summary(candidates, task_dir)
+
         launch_func = task_ir_module.functions['launch']
         del task_ir_module.functions['launch']
         if 'launch' in task_ir_module.global_vars:
@@ -80,6 +107,9 @@ def build_task_module(task: Task, candidates: List[IRModule], task_dir: str, tar
         # otherwise, build each candidate to a .o file, and link them into the task's ir module
         for i, candidate in enumerate(candidates):
             candidate.namespace = f'candidate_{i}'
+
+        # generate the candidate summary
+        _generate_candidate_summary(candidates, task_dir)
 
         # build each candidate to an object file (.o)
         build_ir_module_batch(
@@ -122,7 +152,7 @@ def build_task_module(task: Task, candidates: List[IRModule], task_dir: str, tar
         assertions = tuple(AssertStmt(cond, msg) for cond, msg in task.assertions)
         for _, func in task_ir_module.functions.items():
             # pylint: disable=anomalous-backslash-in-string
-            if func.kind == 'public' and re.search("launch_\d+", func.name):
+            if func.kind == 'public' and re.search(r"launch_\d+", func.name):
                 body = func.body
                 # this should be fine, since ResolveSymbolPass resolves all symbols to the front
                 #    before these

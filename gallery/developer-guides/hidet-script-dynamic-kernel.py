@@ -14,10 +14,10 @@ import hidet
 def matmul_simt_kernel():
     from hidet.lang import attrs
     from hidet.lang import float32, int32
-    from hidet.lang import as_tensor_pointer, tensor
+    from hidet.lang import as_tensor_pointer, tensor, register_tensor, shared_tensor
     from hidet.lang.cuda import threadIdx, blockIdx, syncthreads
     from hidet.lang.mapping import repeat, spatial, auto_map
-    from hidet.lang.layout import row_layout, local_layout
+    from hidet.lang.layout import row_major, local_layout
 
     warps_m, warps_n = 4, 2  # we use 4x2 warps
     warp_m, warp_n = 2, 2  # each warp repeats 2x2 times
@@ -55,18 +55,17 @@ def matmul_simt_kernel():
             b = as_tensor_pointer(b_ptr, float32, [k_size, n_size])
             c = as_tensor_pointer(c_ptr, float32, [m_size, n_size])
 
-            smem_a = tensor('shared', float32, shape=[block_m_size, block_k_size])
-            smem_b = tensor('shared', float32, shape=[block_k_size, block_n_size])
-            regs_c = tensor(
-                scope='register',
+            smem_a = shared_tensor(float32, shape=[block_m_size, block_k_size])
+            smem_b = shared_tensor(float32, shape=[block_k_size, block_n_size])
+            regs_c = register_tensor(
                 dtype=float32,
                 # shape will be inferred from the layout automatically,
                 # in this case, the shape is [64, 256]
                 layout=(
                     local_layout(warps_m, warps_n)
-                    * row_layout(warp_m, warp_n)
+                    * row_major(warp_m, warp_n)
                     * local_layout(warp_map_m, warp_map_n)
-                    * row_layout(thread_m, thread_n)
+                    * row_major(thread_m, thread_n)
                 ),
             )
 

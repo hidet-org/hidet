@@ -25,6 +25,7 @@ from hidet.ir.stmt import DeclareScope, DeclareStmt, EvaluateStmt, BufferStoreSt
 from hidet.ir.stmt import LaunchKernelStmt
 from hidet.ir.stmt import ForMappingStmt, WhileStmt, BreakStmt, ContinueStmt, IfStmt, ReturnStmt, AssertStmt, AsmStmt
 from hidet.ir.stmt import BlackBoxStmt, SeqStmt
+from hidet.ir.target import Target
 from hidet.ir.func import Function
 from hidet.ir.module import IRModule
 from hidet.ir.compute import TensorNode, ScalarNode
@@ -94,6 +95,10 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             ret = 'uint16_t({})'.format(int(value))
         elif dtype == dtypes.uint8:
             ret = 'uint8_t({})'.format(int(value))
+        elif dtype == dtypes.float16x2:
+            ret = 'half2({}, {})'.format(float(value[0]), float(value[0]))
+        elif dtype == dtypes.int8x4:
+            ret = 'make_char4({}, {}, {}, {})'.format(int(value[0]), int(value[1]), int(value[2]), int(value[3]))
         elif dtype.is_complex():
             if not isinstance(value, complex):
                 raise ValueError('Cannot recognize scalar literal {} with dtype {}'.format(value, dtype))
@@ -372,7 +377,7 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             return Text('((') + self.visit(e.target_type) + ')(' + self(e.expr) + '))'
 
     def visit_Address(self, e: Address):
-        return Text('&') + self.visit(e.expr)
+        return Text('(&') + self.visit(e.expr) + ')'
 
     def visit_Reference(self, e: Reference):
         raise ValueError()
@@ -578,7 +583,10 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
 
     def visit_BlackBoxStmt(self, stmt: BlackBoxStmt):
         expr_docs = [str(self(e)) for e in stmt.exprs]
-        stmt_string: str = stmt.template_string.format(*expr_docs)
+        if len(expr_docs) > 0:
+            stmt_string: str = stmt.template_string.format(*expr_docs)
+        else:
+            stmt_string: str = stmt.template_string
         lines = stmt_string.split('\n')
         doc = Text('')
         for line in lines:
@@ -609,8 +617,10 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             'tfloat32': 'tfloat32_t',
             'complex64': 'complex64_t',
             'complex128': 'complex128_t',
+            'float16x2': 'half2',
             'float32x4': '__m128',
             'float32x8': '__m256',
+            'int8x4': 'char4',
         }
 
         self.require_complex = self.require_complex or t.name in ['complex64', 'complex128']
@@ -814,10 +824,13 @@ class CPUCodegen(Codegen):
         return doc
 
 
-def codegen(ir_module: IRModule, src_out_path: str, target: str) -> str:
-    if target == 'cuda':
+def codegen(ir_module: IRModule, src_out_path: str, target: Union[str, Target]) -> str:
+    if isinstance(target, str):
+        target = Target.from_string(target)
+
+    if target.name == 'cuda':
         gen = CUDACodegen()
-    elif target == 'cpu':
+    elif target.name == 'cpu':
         gen = CPUCodegen()
     else:
         raise ValueError(f'Unknown target: {target}')

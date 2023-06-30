@@ -10,12 +10,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from enum import IntEnum
-from typing import List
+from typing import List, Optional
 import struct
 
 from hidet.ffi.utils import Array
 from hidet.ir.type import void_p, DataType
-from .ffi import nccl_runtime_api, NcclUniqueId
+from hidet.cuda import Stream, current_stream
+from .ffi import nccl_available, NcclUniqueId
+
+NCCL_SPLIT_NOCOLOR = -1
+
+if nccl_available():
+    from .ffi import nccl_runtime_api
 
 
 class NcclDataType(IntEnum):
@@ -44,13 +50,20 @@ class NcclRedOp(IntEnum):
     avg = 4
 
 
+def str_to_nccl_op(name: str) -> NcclRedOp:
+    if name not in ('sum', 'prod', 'max', 'min', 'avg'):
+        raise RuntimeError(f"'{name}' is not a supported reduce op")
+    return getattr(NcclRedOp, name)
+
+
 class NcclCommunicator:
     def __init__(self, handle: int):
         """
         Users should not call this constructor directly. Because there are two ways of creating
         a new communicator: 1) using unique_id and rank ; 2) using split.
         """
-
+        if not nccl_available():
+            raise RuntimeError("NCCL is not available")
         self._handle = handle
 
     def __del__(self):
@@ -60,11 +73,25 @@ class NcclCommunicator:
     def handle(self):
         return self._handle
 
-    def split(self):
-        raise NotImplementedError()
+    def split(self, key, color):
+        new_handle = nccl_runtime_api.comm_split(self._handle, color, key)
+        if color == NCCL_SPLIT_NOCOLOR:
+            return None
+        return NcclCommunicator(new_handle)
+
+    def all_reduce(
+        self, sendbuff: int, recvbuff: int, count: int, datatype: DataType, op: str, s: Optional[Stream] = None
+    ):
+        if s is None:
+            s = current_stream()
+        nccl_runtime_api.all_reduce(
+            sendbuff, recvbuff, count, int(dtype_to_nccl(datatype)), int(str_to_nccl_op(op)), self._handle, s
+        )
 
 
 def create_comm(nranks: int, unique_id: NcclUniqueId, rank: int) -> NcclCommunicator:
+    if not nccl_available():
+        raise RuntimeError("NCCL is not available")
     handle = nccl_runtime_api.comm_init_rank(nranks, unique_id, rank)
     return NcclCommunicator(handle)
 
@@ -76,8 +103,12 @@ def comms_to_array(comms: List[NcclCommunicator]) -> Array:
     return array
 
 
-def init_unique_id(unqie_id: NcclUniqueId) -> None:
-    nccl_runtime_api.get_unique_id(unqie_id)
+def create_unique_id() -> NcclUniqueId:
+    if not nccl_available():
+        raise RuntimeError("NCCL is not available")
+    unique_id = NcclUniqueId()
+    nccl_runtime_api.get_unique_id(unique_id)
+    return unique_id
 
 
 def dtype_to_nccl(dtype: DataType) -> NcclDataType:

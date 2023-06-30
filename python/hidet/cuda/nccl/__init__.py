@@ -9,5 +9,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from .comm import create_comm, NcclUniqueId, NcclDataType, NcclRedOp, comms_to_array, init_unique_id, dtype_to_nccl
-from .ffi import nccl_version, nccl_library_filename
+from .ffi import nccl_available, nccl_version, nccl_library_filename
+from .comm import (
+    create_comm,
+    NcclUniqueId,
+    NcclDataType,
+    NcclRedOp,
+    comms_to_array,
+    create_unique_id,
+    dtype_to_nccl,
+    NcclCommunicator,
+    str_to_nccl_op,
+    NCCL_SPLIT_NOCOLOR,
+)
