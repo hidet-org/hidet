@@ -13,7 +13,7 @@ def init_api():
         hidet.option.get_option('compile_server.addr'),
         hidet.option.get_option('compile_server.port')
     )
-    username = hidet.option.get_option('compile_server.username'),
+    username = hidet.option.get_option('compile_server.username')
     password = hidet.option.get_option('compile_server.password')
     _access_token = get_access_token(username, password)
 

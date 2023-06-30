@@ -23,6 +23,7 @@ from hidet.backend import codegen, compile_source
 from hidet.drivers.utils import lazy_initialize_cuda
 from hidet.ir.module import IRModule
 from hidet.ir.type import FuncType
+from hidet.ir.target import Target
 from hidet.transforms import lower, PassContext, SaveIRInstrument, ProfileInstrument
 from hidet.utils.multiprocess import parallel_imap
 
@@ -45,9 +46,12 @@ def build_ir_module(ir_module: IRModule, output_dir: str, *, target: str, output
         remote_build(ir_module, output_dir, target=target, output_kind=output_kind)
         return
 
-    if target == 'cuda':
+    if isinstance(target, str):
+        target = Target.from_string(target)
+
+    if target.name == 'cuda':
         src_path = os.path.join(output_dir, 'source.cu')
-    elif target == 'cpu':
+    elif target.name == 'cpu':
         src_path = os.path.join(output_dir, 'source.cc')
     else:
         raise ValueError(f'Invalid target: {target}')

@@ -19,22 +19,7 @@ from hidet.ir.type import FuncType, VoidType
 from hidet.ir.expr import Expr, Var, SymbolVar, var, is_constant
 from hidet.ir.module import IRModule
 from hidet.ir.compute import ComputeNode, TensorNode, TensorInput, ScalarInput, GridCompute
-
-
-class Target:
-    _supported_targets = ['cuda', 'cpu']
-
-    def __init__(self, name: str, attrs: List[str]):
-        if name not in self._supported_targets:
-            raise ValueError('Does not support target {}, candidates {}.'.format(name, self._supported_targets))
-        self.name = name
-        self.attrs = attrs
-
-    @staticmethod
-    def from_string(target_string: str) -> Target:
-        items = target_string.split()
-        name, attrs = items[0], items[1:]
-        return Target(name, attrs)
+from hidet.ir.target import Target
 
 
 class InverseMap(Node):

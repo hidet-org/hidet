@@ -15,6 +15,5 @@ def get_access_token(username, password):
         raise RuntimeError('Can not connect to compiler server {}'.format(api_url(''))) from None
 
     if response.status_code != 200:
-        print('Invalid credentials')
-        return
+        raise RuntimeError('Failed to get access token: {}'.format(response.json()['message']))
     return response.json()['access_token']

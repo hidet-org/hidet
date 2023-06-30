@@ -7,7 +7,7 @@ from flask_restful import Api
 from resources import CompilationResource, AuthResource, UserResource
 
 app = Flask(__name__)
-app.config['JWT_SECRET_KEY'] = os.urandom(32)
+app.config['JWT_SECRET_KEY'] = 'jwt-secret-string'
 api = Api(app)
 jwt = JWTManager(app)
 
