@@ -14,7 +14,9 @@ class SymmetricQuantizationTask(Task):
         dims = [i if i >= 0 else len(w.shape) + i for i in dims]
         self._assert(all(i >= 0 or i < len(w.shape) for i in dims), "dims are out of bounds")
 
-        wm = compute(name='abs', shape=w.shape, fcompute=lambda *indices: if_then_else(w[indices] >= 0, w[indices], -w[indices]))
+        wm = compute(
+            name='abs', shape=w.shape, fcompute=lambda *indices: if_then_else(w[indices] >= 0, w[indices], -w[indices])
+        )
         scale = cops.reduce_cop(wm, dims, keep_dim=False, reduce_type='max')
         scale = compute(
             name='scaling', shape=scale.shape, fcompute=lambda *indices: quant_type.max_value / scale[indices]
