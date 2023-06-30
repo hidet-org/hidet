@@ -9,6 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from typing import List
 from hidet.graph.flow_graph import FlowGraph
 
 from .base import GraphPass, PassContext, logger
@@ -22,6 +23,8 @@ from .eliminate_barrier import eliminate_barrier_pass
 from .resolve_variant import ResolveRule, register_resolve_rule, get_resolve_chain
 from .graph_patterns import TensorPattern, OperatorPattern, SubgraphRewriteRule, register_rewrite_rule, op_pattern
 from .graph_patterns import registered_rewrite_rules
+
+from .graph_patterns import quant
 
 
 def optimize(graph: FlowGraph) -> FlowGraph:
@@ -61,3 +64,14 @@ def optimize(graph: FlowGraph) -> FlowGraph:
     for inst in reversed(ctx.instruments):
         inst.after_all_passes(graph)
     return graph.update_nodes()
+
+
+def quantize(graph: FlowGraph, rules: List[SubgraphRewriteRule]) -> FlowGraph:
+    from .subgraph_rewrite import SubgraphRewritePass
+    ctx = PassContext.current()
+    for inst in ctx.instruments:
+        inst.before_all_passes(graph)
+    graph = SubgraphRewritePass(rules)(graph)
+    for inst in reversed(ctx.instruments):
+        inst.after_all_passes(graph)
+    return graph

@@ -187,7 +187,7 @@ class GPT2Model(nn.Module):
 
         position_ids = position_ids[-1:] + 1  # [1]
 
-        return hidden_states[-1:], position_ids, updated_cur_keys, updated_past_values
+        return hidden_states, position_ids, updated_cur_keys, updated_past_values
         # return hidden_states[-1:], position_ids, None, None
 
 
@@ -204,8 +204,8 @@ class GPT2LMHead(nn.Module):
         self.vocab_size = config.vocab_size
         self.num_hidden_layers = config.num_hidden_layers
 
-    @staticmethod
-    def from_transformers(model_name: str):
+    @classmethod
+    def from_transformers(cls, model_name: str):
         assert model_name in ['gpt2', 'gpt2-medium', 'gpt2-large', 'gpt2-xl', 'distilgpt2']
 
         # load from transformers
@@ -223,7 +223,7 @@ class GPT2LMHead(nn.Module):
         config.layer_norm_epsilon = hf_config.layer_norm_epsilon
 
         # create model
-        module = GPT2LMHead(config)
+        module = cls(config)
         allow_missing = ['lm_head.weight']
         found_tensors = []
         for name, tensor in hf_gpt2.named_parameters():
@@ -255,7 +255,7 @@ class GPT2LMHead(nn.Module):
         hidden_states, position_ids, past_keys, past_values = self.transformer(
             input_ids, position_ids, past_keys, past_values
         )
-        logits = self.lm_head(hidden_states)  # [1, vocab_size]
+        logits = self.lm_head(hidden_states[-1:])  # [1, vocab_size]
         updated_input_ids = ops.argmax(logits, dim=-1, keep_dim=False)  # [1]
         # we want to keep types consistent, since in the autoregressive case,
         #   the output is fed back into the input of the compiled model

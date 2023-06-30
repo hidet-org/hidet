@@ -27,7 +27,7 @@ class BarrierOp(Operator):
         super().__init__(inputs=[x], attributes={}, task=BarrierTask(input_like(x, 'x')))
 
     def get_output(self, idx: int) -> Tensor:
-        self.outputs = super().symbolic_run()
+        self.outputs = self.symbolic_run()
         return self.outputs[idx]
 
 
