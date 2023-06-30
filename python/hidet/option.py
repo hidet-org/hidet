@@ -169,6 +169,18 @@ def register_hidet_options():
         default_value='admin_password',
         description='The password to access the compile server.',
     )
+    register_option(
+        name='compile_server.repo_url',
+        type_hint='str',
+        default_value='https://github.com/hidet-org/hidet',
+        description='The URL of the repository that the remote server will use.',
+    )
+    register_option(
+        name='compile_server.repo_version',
+        type_hint='str',
+        default_value='main',
+        description='The version (e.g., branch, commit, or tag) that the remote server will use.',
+    )
 
 
 register_hidet_options()
@@ -672,6 +684,11 @@ class compile_server:
     @staticmethod
     def password(password: str):
         OptionContext.current().set_option('compile_server.password', password)
+
+    @staticmethod
+    def repo(repo_url: str, version: str = 'main'):
+        OptionContext.current().set_option('compile_server.repo_url', repo_url)
+        OptionContext.current().set_option('compile_server.repo_version', version)
 
 
 # load the options from config file (e.g., ~/.config/hidet.config) if exists

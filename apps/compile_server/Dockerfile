@@ -12,15 +12,11 @@ RUN apt-get update && apt-get install -y \
     python3-setuptools \
     vim \
     wget \
+    git \
     && rm -rf /var/lib/apt/lists/* \
     && ln -s /usr/bin/python3 /usr/bin/python \
     && python -m pip install --upgrade pip \
-    && python -m pip install filelock requests
-
-RUN apt-get update && apt-get install -y \
-    git \
-    && python -m pip install gunicorn flask cmake \
-    && rm -rf /var/lib/apt/lists/*
+    && python -m pip install filelock requests gunicorn flask cmake
 
 EXPOSE 3281
 
