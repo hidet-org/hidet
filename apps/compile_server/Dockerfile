@@ -3,6 +3,9 @@ FROM nvidia/cuda:12.2.0-devel-ubuntu20.04
 COPY ./run.py /app/run.py
 WORKDIR /app
 
+ENV TZ=America/Toronto
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
 RUN apt-get update && apt-get install -y \
     python3-dev \
     python3-pip \
@@ -16,7 +19,7 @@ RUN apt-get update && apt-get install -y \
 
 RUN apt-get update && apt-get install -y \
     git \
-    && python -m pip install gunicorn flask \
+    && python -m pip install gunicorn flask cmake \
     && rm -rf /var/lib/apt/lists/*
 
 EXPOSE 3281

@@ -13,7 +13,11 @@ def update_hidet():
         run('git clone https://github.com/yaoyaoding/hidet.git')
         run('git checkout ccapp', cwd='./hidet')
     run('git pull', cwd='./hidet')
+    run('mkdir -p build', cwd='./hidet')
+    run('cmake ..', cwd='./hidet/build')
+    run('make -j4', cwd='./hidet/build')
     run('pip install --force-reinstall -e .', cwd='./hidet')
+    run('pip install -r requirements.txt', cwd='./hidet/apps/compile_server')
 
 
 def keep_idle_for_30minutes():
@@ -28,6 +32,7 @@ def keep_idle_for_30minutes():
 
 
 def main():
+    update_hidet()
     cmd ='gunicorn -w {} -b 0.0.0.0:3281 app:app'.format(os.cpu_count())
     proc = Popen(cmd.split(), stdout=PIPE, stdin=PIPE, cwd='./hidet/apps/compile_server')
 
