@@ -94,6 +94,8 @@ class IRPrinter(IRFunctor):
             doc += Text('link lib: ') + linking_lib + NewLine()
         for object_file in ir_module.object_files:
             doc += Text('external object: ') + object_file + NewLine()
+        if ir_module.namespace != '':
+            doc += Text('namespace: ') + ir_module.namespace + NewLine()
         for header in ir_module.include_headers:
             doc += Text('#include <{}>'.format(header)) + NewLine()
         if len(ir_module.include_headers) + len(ir_module.linking_libs) + len(ir_module.object_files) > 0:
