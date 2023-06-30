@@ -16,9 +16,14 @@ def main():
 
     # download the compile server code from official repo
     if not os.path.exists('compile_server/hidet'):
-        run('git clone https://github.com/hidet-org/hidet.git compile_server/hidet')
+        # run('git clone https://github.com/hidet-org/hidet.git compile_server/hidet')
+        run('git clone https://github.com/yaoyaoding/hidet.git compile_server/hidet')
+        run('git checkout enhance-cserver', cwd='compile_server/hidet')
 
-    # install the compile server
+    # install the dependencies
+    run('pip install -r requirements.txt', cwd='compile_server/hidet/apps/compile_server')
+
+    # run the compile server
     debug = False
     if debug:
         run(
