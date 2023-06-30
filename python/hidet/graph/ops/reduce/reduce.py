@@ -89,11 +89,9 @@ class ReduceTask(Task):
         from hidet.ir.primitives import active_mask, shfl_down_sync, shfl_sync
         from hidet.ir.compute import ReduceOperation
         from hidet.ir.type import data_type, Int
-        from hidet.ir.layout import DataLayout
+        from hidet.ir.layout import row_major
         from hidet.lang import spatial, repeat, attrs, cast
         from hidet.lang.cuda import blockIdx, threadIdx
-
-        row_major = DataLayout.row_major
 
         warp_size = 32
         block_size = warp_size
@@ -109,7 +107,7 @@ class ReduceTask(Task):
         reduce_extent = hidet.utils.prod(reduce_shape)
 
         remain_layout = spatial(*remain_shape)
-        layout = row_major(shape)
+        layout = row_major(*shape)
 
         spatial_shape = []
         repeat_shape = []

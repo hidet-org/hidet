@@ -34,10 +34,12 @@ class InstantiateSymbolsRewriter(IRRewriter):
         super().__init__()
         self.func_symbols: Dict[str, FuncSymbols] = {}
         self.current_func: Optional[str] = None
+        self.ir_module: Optional[IRModule] = None
 
     def visit_IRModule(self, module: IRModule):
         updated_module = module.copy().reset_funcs()
         call_graph = CallGraph(module, allow_missing=True)
+        self.ir_module = updated_module
         for node in call_graph.reversed_order:
             updated_module.functions[node.func.name] = self.visit(node.func)
             # use a new memo for each function, in case there are some expressions are used in multiple functions
@@ -104,6 +106,11 @@ class InstantiateSymbolsRewriter(IRRewriter):
         stmt = super().visit_LaunchKernelStmt(stmt)
         if stmt.func_var.name not in self.func_symbols:
             return stmt
+        if (
+            stmt.func_var.name in self.ir_module.functions
+            and self.ir_module.functions[stmt.func_var.name].kind == 'public'
+        ):
+            return stmt
 
         callee_func_symbols: FuncSymbols = self.func_symbols[stmt.func_var.name]
         caller_func_symbols: FuncSymbols = self.func_symbols[self.current_func]
@@ -115,6 +122,11 @@ class InstantiateSymbolsRewriter(IRRewriter):
     def visit_Call(self, call: Call):
         call = super().visit_Call(call)
         if call.func_var.name not in self.func_symbols:
+            return call
+        if (
+            call.func_var.name in self.ir_module.functions
+            and self.ir_module.functions[call.func_var.name].kind == 'public'
+        ):
             return call
 
         callee_func_symbols: FuncSymbols = self.func_symbols[call.func_var.name]

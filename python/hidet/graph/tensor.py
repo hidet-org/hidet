@@ -74,7 +74,7 @@ class Tensor:
         self._dtype: DataType = data_type(dtype)
         self._device: Device = instantiate_device(device)
         self._storage: Optional[Storage] = storage
-        self._layout: DataLayout = layout if layout else DataLayout.row_major(self._shape)
+        self._layout: Optional[DataLayout] = layout
         self._trace: Optional[Tuple[Operator, int]] = trace
 
     @property
@@ -166,8 +166,8 @@ class Tensor:
 
         Returns
         -------
-        layout: DataLayout
-            The data layout of the tensor.
+        layout: Optional[DataLayout]
+            The data layout of the tensor. None indicates the compact row major layout.
         """
         return self._layout
 
@@ -569,7 +569,7 @@ class Tensor:
         ret: Tensor
             The tensor with contiguous row-major layout.
         """
-        if isinstance(self.layout, RowMajorLayout):
+        if self.layout is None or isinstance(self.layout, RowMajorLayout):
             return self
         return self.reshape(self.shape)
 

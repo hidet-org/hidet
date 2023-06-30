@@ -330,7 +330,7 @@ class ReshapeOp(Operator):
 
     def imperative_run(self, inputs: List[Tensor]) -> List[Tensor]:
         x = inputs[0]
-        if isinstance(x.layout, RowMajorLayout):
+        if x.layout is None or isinstance(x.layout, RowMajorLayout):
             outputs = self.compiled_task.create_outputs()
             outputs[0]._storage = x.storage  # pylint: disable=protected-access
             return outputs

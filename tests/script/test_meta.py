@@ -61,7 +61,7 @@ def test_if_then_else():
         def launch():
             attrs.func_kind = 'public'
 
-            a = tensor('default', 'float32', shape=[2, 3, 4, 5])
+            a = tensor('float32', shape=[2, 3, 4, 5])
             indices = [0, 1, 2, 3]
             updated_indices = [indices[i] if i in dims else 0 for i in range(len(indices))]
             a[updated_indices] = 1.0

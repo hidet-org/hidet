@@ -365,7 +365,10 @@ class IRPrinter(IRFunctor):
 
     def visit_BlackBoxStmt(self, stmt: BlackBoxStmt):
         expr_docs = [str(self(e)) for e in stmt.exprs]
-        stmt_string: str = stmt.template_string.format(*expr_docs)
+        if len(expr_docs) > 0:
+            stmt_string: str = stmt.template_string.format(*expr_docs)
+        else:
+            stmt_string: str = stmt.template_string
         lines = stmt_string.split('\n')
         doc = Text('')
         for line in lines:
@@ -402,7 +405,9 @@ class IRPrinter(IRFunctor):
     def visit_PointerType(self, t: PointerType):
         if isinstance(t.base_type, VoidType):
             return Text('void*')
-        return Text('PointerType(') + self(t.base_type) + ')'
+        if isinstance(t.base_type, (DataType, PointerType)):
+            return self(t.base_type) + '*'
+        return Text('*') + self(t.base_type) + ')'
 
     def visit_TensorPointerType(self, t: TensorPointerType):
         return Text('tensor_pointer(') + self._tensor_type(t.tensor_type) + ')'

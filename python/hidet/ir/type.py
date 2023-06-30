@@ -99,7 +99,13 @@ class DataType(BaseType):
         """
         from hidet.ir import expr
 
-        if isinstance(value, (int, float, bool, complex, list, tuple)):
+        built_types = (int, float, bool, complex)
+
+        if (
+            isinstance(value, built_types)
+            or isinstance(value, (list, tuple))
+            and all(isinstance(v, built_types) for v in value)
+        ):
             return self.constant(value)
         elif isinstance(value, expr.Constant):
             return self.constant(value.value)
@@ -309,7 +315,7 @@ def tensor_type(dtype, shape: Optional[Sequence[Union[int, Expr]]] = None, layou
         The constructed tensor type
     """
     from hidet.ir.expr import convert
-    from hidet.ir.layout import DataLayout
+    from hidet.ir.layout import DataLayout, row_major
 
     if isinstance(dtype, str):
         dtype = data_type(dtype)
@@ -321,7 +327,7 @@ def tensor_type(dtype, shape: Optional[Sequence[Union[int, Expr]]] = None, layou
         assert isinstance(layout, DataLayout)
         shape = layout.shape
     elif layout is None:
-        layout = DataLayout.row_major(list(shape))
+        layout = row_major(*shape)
     else:
         assert isinstance(layout, DataLayout)
         assert isinstance(shape, (list, tuple))

@@ -52,7 +52,7 @@ from hidet.ir.builders import FunctionBuilder
 from hidet.utils import red, bold, blue, str_indent
 import hidet.lang.attrs
 from hidet.lang.constructs.loops import HidetLoopIterable
-from hidet.lang.constructs.type import TypeDecorator
+from hidet.lang.constructs.declare import Declaration
 from hidet.lang.constructs.meta import HidetMetaLoopIterable
 
 
@@ -109,6 +109,8 @@ class PythonAstFunctor:
         return self.visit(node)
 
     def visit(self, node):
+        from hidet.ir.library.tune import ScheduleError
+
         method = 'visit_' + node.__class__.__name__
         if hasattr(self, method):
             visitor = getattr(self, method)
@@ -118,6 +120,8 @@ class PythonAstFunctor:
 
         try:
             return visitor(node)
+        except ScheduleError:
+            raise
         except HidetProgramError:
             raise
         except Exception as e:
@@ -263,6 +267,9 @@ class Scope:
         return scope
 
     def define_var(self, name: str, v: Var):
+        if name == '_':
+            # ignore anonymous variable '_'
+            return
         self.name2var[name] = v
 
     def define_host_var(self, name: str, value: Any):
@@ -327,7 +334,7 @@ class PythonToHidetTranslator(PythonAstFunctor):
         # pylint: disable=too-many-locals, too-many-branches, too-many-statements
         # check the rhs value, must be an instance of allowed_types or a list of these kinds of elements.
         host_var_types = (ir.TaskMapping, ir.DataLayout, ir.TensorSlice, ir.Function, str, list, tuple, dict)
-        allowed_types = (ir.Expr, ir.BaseType, TypeDecorator, float, int, str, type(None))
+        allowed_types = (ir.Expr, ir.BaseType, Declaration, float, int, str, type(None))
         allowed_types += host_var_types
         assert isinstance(rhs, allowed_types) or (
             isinstance(rhs, list) and all(isinstance(v, allowed_types) for v in rhs)
@@ -367,10 +374,11 @@ class PythonToHidetTranslator(PythonAstFunctor):
                         scope = DeclareScope.Default
                         if isinstance(rhs, ir.BaseType):
                             var_type = rhs
-                        elif isinstance(rhs, TypeDecorator):
-                            var_type = rhs.decorated_type
+                        elif isinstance(rhs, Declaration):
+                            var_type = rhs.type
                             is_static = rhs.is_static
                             scope = rhs.scope
+                            init_value = rhs.init
                         else:
                             rhs = ir.convert(rhs)
                             var_type = ir.infer_type(rhs)
@@ -416,13 +424,13 @@ class PythonToHidetTranslator(PythonAstFunctor):
             raise ValueError(msg)
         return self.visit(module.body[0])
 
-    def _process_arg_type(self, arg, arg_type: Union[ir.BaseType, TypeDecorator, Type[int], Type[float], Type[bool]]):
+    def _process_arg_type(self, arg, arg_type: Union[ir.BaseType, Declaration, Type[int], Type[float], Type[bool]]):
         if isinstance(arg_type, ir.BaseType):
             if isinstance(arg_type, ir.TensorType):
                 # we automatically change the tensor type of argument to a tensor pointer type.
                 arg_type = ir.tensor_pointer_type(dtype=arg_type.dtype, shape=arg_type.shape, layout=arg_type.layout)
-        elif isinstance(arg_type, TypeDecorator):
-            arg_type = arg_type.decorated_type
+        elif isinstance(arg_type, Declaration):
+            arg_type = arg_type.type
             if isinstance(arg_type, ir.TensorType):
                 # we automatically change the tensor type of argument to a tensor pointer type.
                 arg_type = ir.tensor_pointer_type(dtype=arg_type.dtype, shape=arg_type.shape, layout=arg_type.layout)
@@ -607,12 +615,9 @@ class PythonToHidetTranslator(PythonAstFunctor):
         elif isinstance(lhs, str) and isinstance(rhs, str):
             assert isinstance(expr.op, Add)
             return lhs + rhs
-        elif isinstance(lhs, list) and isinstance(rhs, list):
+        elif isinstance(lhs, (list, tuple)) and isinstance(rhs, (list, tuple)):
             assert isinstance(expr.op, Add)
-            return lhs + rhs
-        elif isinstance(lhs, tuple) and isinstance(rhs, tuple):
-            assert isinstance(expr.op, Add)
-            return lhs + rhs
+            return list(lhs) + list(rhs)
         elif isinstance(lhs, (ir.Expr, float, int)) and isinstance(rhs, (ir.Expr, float, int)):
             op_dict = {
                 Add: operator.add,
@@ -900,10 +905,21 @@ class PythonToHidetTranslator(PythonAstFunctor):
                 args.extend(self.visit(arg.value))
             else:
                 args.append(self.visit(arg))
-        kwargs = {kwarg.arg: self.visit(kwarg.value) for kwarg in expr.keywords}
+
+        if len(expr.keywords) == 0:
+            kwargs = {}
+        elif len(expr.keywords) == 1 and expr.keywords[0].arg is None:
+            # func(a, b, **kwargs)
+            kwargs = self.visit(expr.keywords[0].value)
+        else:
+            # func(a=1, b=2, c=3)
+            kwargs = {kwarg.arg: self.visit(kwarg.value) for kwarg in expr.keywords}
 
         if isinstance(func, types.FunctionType):
             # call python function
+            if len(kwargs) > 0 and not isinstance(list(kwargs)[0], str):
+                print('Hi')
+
             return func(*args, **kwargs)
         elif isinstance(func, types.MethodType):
             # call python class method

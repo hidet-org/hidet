@@ -14,7 +14,7 @@ from hidet.ir import IRModule, dtypes
 from hidet.ir.primitives import active_mask, shfl_down_sync, shfl_sync
 from hidet.ir.compute import ReduceOperation, reduce
 from hidet.ir.type import data_type
-from hidet.ir.layout import DataLayout
+from hidet.ir.expr import Expr
 from hidet.lang import f16, f32, spatial, repeat, attrs, tensor_pointer
 from hidet.lang.cuda import blockIdx, threadIdx, register_tensor
 from hidet.graph.ops.utils import Task, Operator, Tensor, TensorNode, ReduceType
@@ -96,13 +96,12 @@ class ReduceF16Task(Task):
 
     def cuda_schedule_reduce_by_warp(self) -> IRModule:
         import hidet
-
-        row_major = DataLayout.row_major
+        from hidet.ir.layout import row_major
 
         warp_size = 32
         block_size = warp_size
         x, y = self.inputs[0], self.outputs[0]
-        shape: List[int] = list(x.shape)
+        shape: List[Expr] = list(x.shape)
         dims = self.dims
         if self.keep_dim:
             remain_shape = [v if i not in dims else 1 for i, v in enumerate(shape)]
@@ -112,7 +111,7 @@ class ReduceF16Task(Task):
         reduce_extent = prod(reduce_shape)
         shape_32bit = [s // 2 if i == len(shape) - 1 else s for i, s in enumerate(shape)]
         remain_layout = spatial(*remain_shape)
-        x_f32_layout = row_major(shape_32bit)
+        x_f32_layout = row_major(*shape_32bit)
 
         spatial_shape = []
         repeat_shape = []
@@ -292,8 +291,6 @@ class ReduceProdF16Op(ReduceBaseF16Op):
 def reduce_f16(
     x: Tensor, dims: Union[int, Sequence[int]], keepdims: bool, reduce_type: Union[ReduceType, str]
 ) -> Tensor:
-    from hidet.ir import Expr
-
     if any(isinstance(d, Expr) for d in x.shape):
         raise ValueError('reduce_f16 currently does not support dynamic shape')
     if x.dtype != dtypes.float16:

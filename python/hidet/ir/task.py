@@ -100,7 +100,7 @@ class Task(Node):
         self.symbols: List[SymbolVar] = list(collect(self.outputs, SymbolVar))
         self._sanity_check()
 
-    def _assert(self, expr: Expr, msg: Optional[str] = None):
+    def _assert(self, expr: Union[Expr, bool], msg: Optional[str] = None):
         import hidet
 
         simplified = hidet.ir.tools.simplify(expr)

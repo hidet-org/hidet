@@ -13,9 +13,9 @@ from typing import List
 from hidet.ir import IRModule, dtypes
 from hidet.ir.primitives import active_mask, shfl_down_sync
 from hidet.ir.expr import Expr
-from hidet.lang import spatial, repeat, view, cast
-from hidet.lang import data_type, TensorType, i32, f16, attrs, tensor
-from hidet.lang.cuda import blockIdx, threadIdx, register_tensor, syncthreads
+from hidet.lang import spatial, repeat, view, cast, shared_tensor, register_tensor
+from hidet.lang import data_type, TensorType, i32, f16, attrs
+from hidet.lang.cuda import blockIdx, threadIdx, syncthreads
 from hidet.graph.ops.utils import Operator, Tensor, normalize_dim
 from hidet.graph.ops.utils import input_like
 from hidet.utils import prod
@@ -97,12 +97,12 @@ class NormalizeF16Task(NormalizeTask):
                 attrs.cuda.min_blocks = 1
 
                 # this is used for multi-level reduction
-                smem_mean = tensor('shared', accumulate_dtype, shape=[used_smem_bytes_per_block])
-                smem_m2 = tensor('shared', accumulate_dtype, shape=[used_smem_bytes_per_block])
-                smem_count = tensor('shared', i32, shape=[used_smem_bytes_per_block])
+                smem_mean = shared_tensor(accumulate_dtype, shape=[used_smem_bytes_per_block])
+                smem_m2 = shared_tensor(accumulate_dtype, shape=[used_smem_bytes_per_block])
+                smem_count = shared_tensor(i32, shape=[used_smem_bytes_per_block])
 
                 # cache repeated loads
-                regs_repeat = tensor('register', f16, shape=[repeat_reduction])
+                regs_repeat = register_tensor(f16, shape=[repeat_reduction])
 
                 reg16 = register_tensor(f16, [1])
                 mean_final = register_tensor(accumulate_dtype, [1])

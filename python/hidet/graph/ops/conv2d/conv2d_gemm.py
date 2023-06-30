@@ -22,7 +22,8 @@ from hidet.ir.task import Task
 from hidet.ir.compute import compute, reduce
 from hidet.graph.ops.matmul import matmul
 from hidet.graph.ops.utils import Operator, input_like
-from hidet.graph.ops.utils import normalize_kernel, normalize_stride, tune
+from hidet.graph.ops.utils import normalize_kernel, normalize_stride
+from hidet.ir.library import tune
 from hidet.utils.py import is_power_of_two, cdiv
 from .utils import infer_conv2d_shape
 
@@ -427,7 +428,7 @@ class Conv2dGemmFp16Task(Task):
         import hidet
         from hidet.ir.type import tensor_type
         from hidet.lang import attrs, view, u32, tensor_pointer, grid
-        from hidet.lang.layout import row_layout
+        from hidet.lang.layout import row_major
         from hidet.lang.mapping import spatial, auto_map
         from hidet.lang.cuda import blockIdx, threadIdx, syncthreads, dynamic_shared_memory
         from hidet.lang.cuda import MmaConfig, mma_sync, cp_async, cp_async_wait_all, ldmatrix
@@ -480,14 +481,14 @@ class Conv2dGemmFp16Task(Task):
         smem_img_type = tensor_type(
             'float16',
             shape=[block_m, block_k],
-            layout=row_layout(block_m, block_k // 8).swizzle(1) * row_layout(1, 8)
-            # layout=row_layout(block_m, block_k)
+            layout=row_major(block_m, block_k // 8).swizzle(1) * row_major(1, 8)
+            # layout=row_major(block_m, block_k)
         )
         smem_weight_type = tensor_type(
             'float16',
             shape=[block_k, block_n],
-            layout=row_layout(block_k // 8, block_n // 64) * row_layout(8, 8).swizzle(1) * row_layout(1, 8),
-            # layout=row_layout(block_k, block_n)
+            layout=row_major(block_k // 8, block_n // 64) * row_major(8, 8).swizzle(1) * row_major(1, 8),
+            # layout=row_major(block_k, block_n)
         )
         load_smem_a_map = auto_map(block_m, block_k // 8, workers=threads, on_fail=lambda msg: tune.check(False, msg))
         load_smem_b_map = auto_map(block_k, block_n // 8, workers=threads, on_fail=lambda msg: tune.check(False, msg))
@@ -643,10 +644,10 @@ class Conv2dGemmFp16Task(Task):
                 attrs.cuda.dynamic_smem_bytes = dynamic_smem_bytes
                 # smem_storage = dyn_smem_storage
                 smem_img = tensor_pointer(
-                    'float16', shape=[2, block_m, block_k], layout=row_layout(2) + smem_img_type.layout
+                    'float16', shape=[2, block_m, block_k], layout=row_major(2) + smem_img_type.layout
                 )
                 smem_weight = tensor_pointer(
-                    'float16', shape=[2, block_k, block_n], layout=row_layout(2) + smem_weight_type.layout
+                    'float16', shape=[2, block_k, block_n], layout=row_major(2) + smem_weight_type.layout
                 )
                 smem_img = dynamic_shared_memory(byte_offset=0, dtype=float16)
                 smem_weight = dynamic_shared_memory(byte_offset=2 * block_m * block_k * 2, dtype=float16)
