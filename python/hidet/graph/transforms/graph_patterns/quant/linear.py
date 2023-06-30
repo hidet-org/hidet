@@ -9,17 +9,17 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# pylint: disable=dangerous-default-value
 from typing import List, Optional
 
 from hidet.graph import ops
-from hidet.graph.flow_graph import Tensor, Operator
-from hidet.graph.ops.conv2d import Conv2dOp
+from hidet.graph.flow_graph import Tensor
 from hidet.graph.ops.matmul import MatmulOp
-from hidet.utils import same_list, initialize
 from ..base import SubgraphRewriteRule, TensorPattern, MatchDict, op_pattern, add_rewrite_rule
 
 # we use the heuristic that if one of the inputs to matmul is a constant, and the number if dimensions is two
 #   then its a linear layer, and we quantize it
+
 
 class SymmetricLinearQuantizePatternR(SubgraphRewriteRule):
     def __init__(self, quant_type: str = 'int8', dims=[-1]):
@@ -29,7 +29,7 @@ class SymmetricLinearQuantizePatternR(SubgraphRewriteRule):
         self.out = op_pattern(MatmulOp, [self.x, self.w])
         self.quant_type = quant_type
         self.dims = dims
-    
+
     def source(self) -> List[TensorPattern]:
         return [self.out]
 
@@ -39,7 +39,13 @@ class SymmetricLinearQuantizePatternR(SubgraphRewriteRule):
             return None
         attrs = out.op.attrs
         wq, scale = ops.symmetric_quantize(w, quant_type=self.quant_type, dims=self.dims)
-        return [ops.matmul(x, ops.symmetric_dequantize(ops.barrier(wq), scale, dims=self.dims), require_prologue=attrs['require_prologue'])]
+        return [
+            ops.matmul(
+                x,
+                ops.symmetric_dequantize(ops.barrier(wq), scale, dims=self.dims),
+                require_prologue=attrs['require_prologue'],
+            )
+        ]
 
 
 class SymmetricLinearQuantizePatternL(SubgraphRewriteRule):
@@ -50,7 +56,7 @@ class SymmetricLinearQuantizePatternL(SubgraphRewriteRule):
         self.out = op_pattern(MatmulOp, [self.w, self.x])
         self.quant_type = quant_type
         self.dims = dims
-    
+
     def source(self) -> List[TensorPattern]:
         return [self.out]
 
@@ -60,7 +66,13 @@ class SymmetricLinearQuantizePatternL(SubgraphRewriteRule):
         if len(w.shape) != 2:
             return None
         wq, scale = ops.symmetric_quantize(w, quant_type=self.quant_type, dims=self.dims)
-        return [ops.matmul(ops.symmetric_dequantize(ops.barrier(wq), scale, dims=self.dims), x, require_prologue=attrs['require_prologue'])]
+        return [
+            ops.matmul(
+                ops.symmetric_dequantize(ops.barrier(wq), scale, dims=self.dims),
+                x,
+                require_prologue=attrs['require_prologue'],
+            )
+        ]
 
 
 def symmetric_linear_quantize_patterns(rules: List[SubgraphRewriteRule], quant_type: str = 'int8', dims=[-1]):

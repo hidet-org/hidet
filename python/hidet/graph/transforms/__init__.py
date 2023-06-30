@@ -68,6 +68,7 @@ def optimize(graph: FlowGraph) -> FlowGraph:
 
 def quantize(graph: FlowGraph, rules: List[SubgraphRewriteRule]) -> FlowGraph:
     from .subgraph_rewrite import SubgraphRewritePass
+
     ctx = PassContext.current()
     for inst in ctx.instruments:
         inst.before_all_passes(graph)

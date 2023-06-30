@@ -12,9 +12,8 @@
 from typing import List, Optional
 
 from hidet.graph import ops
-from hidet.graph.flow_graph import Tensor, Operator
+from hidet.graph.flow_graph import Tensor
 from hidet.graph.ops.transform import TakeOp
-from hidet.utils import same_list, initialize
 from ..base import SubgraphRewriteRule, TensorPattern, MatchDict, op_pattern, add_rewrite_rule
 
 # we use the heuristic that if the weight is constant and the axis is 0 in the take op, then its an embedding layer
@@ -26,15 +25,14 @@ class SymmetricEmbeddingQuantizePattern(SubgraphRewriteRule):
         self.ind = TensorPattern.tensor()
         self.out = op_pattern(TakeOp, [self.w, self.ind])
         self.quant_type = quant_type
-    
+
     def source(self) -> List[TensorPattern]:
         return [self.out]
 
     def target(self, matched: MatchDict) -> Optional[List[Tensor]]:
         w, ind, out = [matched[v] for v in [self.w, self.ind, self.out]]
         attrs = out.op.attrs
-        if len(w.shape) != 2 or (not ind.dtype in ('int32', 'int64')) or \
-            attrs['axis'] != 0:
+        if len(w.shape) != 2 or (not ind.dtype in ('int32', 'int64')) or attrs['axis'] != 0:
             return None
         wq, scale = ops.symmetric_quantize(w, quant_type=self.quant_type, dims=[-1])
         return [ops.take(ops.symmetric_dequantize(ops.barrier(wq), scale, dims=[-1]), ind, axis=0)]
