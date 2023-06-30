@@ -1,4 +1,3 @@
-from typing import Sequence
 import zipfile
 import shutil
 import tempfile
@@ -16,18 +15,8 @@ def remote_build(ir_module: IRModule, output_dir: str, *, target: str, output_ki
     if 'cuda' in target and 'arch' not in target:
         cc = hidet.cuda.compute_capability()
         target = '{} --arch=sm_{}{}'.format(target, cc[0], cc[1])
-    workload = pickle.dumps({
-        'ir_module': ir_module,
-        'target': target,
-        'output_kind': output_kind,
-    })
-    response = requests.post(
-        api_url('compile'),
-        data=workload,
-        headers={
-            'Authorization': f'Bearer {access_token()}'
-        }
-    )
+    workload = pickle.dumps({'ir_module': ir_module, 'target': target, 'output_kind': output_kind})
+    response = requests.post(api_url('compile'), data=workload, headers={'Authorization': f'Bearer {access_token()}'})
     if response.status_code != 200:
         msg = response.json()['message']
         raise RuntimeError('Failed to remotely compile an IRModule: \n{}'.format(msg))
@@ -38,10 +27,7 @@ def remote_build(ir_module: IRModule, output_dir: str, *, target: str, output_ki
         download_url = api_url(f'download/{filename}')
         save_path = os.path.join(tmp_dir, 'download.zip')
         hidet.utils.net_utils.download_url_to_file(
-            download_url, save_path, progress=False,
-            headers={
-                'Authorization': f'Bearer {access_token()}'
-            }
+            download_url, save_path, progress=False, headers={'Authorization': f'Bearer {access_token()}'}
         )
 
         # extract the downloaded zip file to the output directory

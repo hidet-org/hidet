@@ -127,7 +127,6 @@ class NVCC(SourceCompiler):
         if len(object_files) > 0 and out_lib_path.endswith('.o'):
             raise ValueError('Can not compile multiple objects into a single object file.')
 
-
         if 'arch' in target.attrs:
             arch = target.attrs['arch']
         else:
@@ -150,7 +149,7 @@ class NVCC(SourceCompiler):
             # host compiler options: enable openmp, avx2, unroll loops and fast math
             '-Xcompiler -fopenmp,-fPIC,-m64,-mavx2,-march=native,-O3,-funroll-loops,-ffast-math',
             # the target PTX and SASS version.
-            '-gencode arch=compute_{cc},code=sm_{cc}'.format(cc=arch[len('sm_'):]),
+            '-gencode arch=compute_{cc},code=sm_{cc}'.format(cc=arch[len('sm_') :]),
             # allow ptxas (PTX assembler) to output information like register/smem usage.
             '--ptxas-options=-v',
             # compile into position independent code.

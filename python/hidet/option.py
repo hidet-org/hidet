@@ -148,10 +148,7 @@ def register_hidet_options():
         description='The address of the compile server. Can be an IP address or a domain name.',
     )
     register_option(
-        name='compile_server.port',
-        type_hint='int',
-        default_value=8329,
-        description='The port of the compile server.',
+        name='compile_server.port', type_hint='int', default_value=8329, description='The port of the compile server.'
     )
     register_option(
         name='compile_server.enabled',
@@ -214,6 +211,7 @@ class OptionContext:
 
     def load_from_file(self, config_path: str):
         import configparser
+
         config = configparser.ConfigParser()
         config.read(config_path)
         for section in config.sections():

@@ -10,8 +10,7 @@ def init_api():
     from .auth import get_access_token
 
     _api_url = 'http://{}:{}'.format(
-        hidet.option.get_option('compile_server.addr'),
-        hidet.option.get_option('compile_server.port')
+        hidet.option.get_option('compile_server.addr'), hidet.option.get_option('compile_server.port')
     )
     username = hidet.option.get_option('compile_server.username')
     password = hidet.option.get_option('compile_server.password')
@@ -28,4 +27,3 @@ def access_token():
     if _access_token is None:
         init_api()
     return _access_token
-
