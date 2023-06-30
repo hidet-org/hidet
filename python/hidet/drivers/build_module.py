@@ -23,6 +23,7 @@ from hidet.backend import codegen, compile_source
 from hidet.drivers.utils import lazy_initialize_cuda
 from hidet.ir.module import IRModule
 from hidet.ir.type import FuncType
+from hidet.ir.target import Target
 from hidet.transforms import lower, PassContext, SaveIRInstrument, ProfileInstrument
 from hidet.utils.multiprocess import parallel_imap
 
@@ -31,10 +32,23 @@ logger.setLevel(logging.INFO)
 logger.addHandler(logging.StreamHandler())
 
 
+def can_remote_build(ir_module: IRModule) -> bool:
+    return not (len(ir_module.object_files) > 0 or len(ir_module.linking_dirs) > 0 or len(ir_module.include_dirs) > 0)
+
+
 def build_ir_module(ir_module: IRModule, output_dir: str, *, target: str, output_kind: str = '.so'):  # '.so', '.o'
-    if target == 'cuda':
+    if hidet.option.compile_server.enabled() and can_remote_build(ir_module):
+        from hidet.apps.compile_server import remote_build
+
+        remote_build(ir_module, output_dir, target=target, output_kind=output_kind)
+        return
+
+    if isinstance(target, str):
+        target = Target.from_string(target)
+
+    if target.name == 'cuda':
         src_path = os.path.join(output_dir, 'source.cu')
-    elif target == 'cpu':
+    elif target.name == 'cpu':
         src_path = os.path.join(output_dir, 'source.cc')
     else:
         raise ValueError(f'Invalid target: {target}')
@@ -105,10 +119,13 @@ def build_ir_module_batch(ir_modules: Sequence[IRModule], output_dirs: Sequence[
 
     # calculate the number of workers
     cpu_count = os.cpu_count()
-    max_jobs, mem_for_worker = option.get_parallel_tune()
-    max_jobs = cpu_count if max_jobs == -1 else min(max_jobs, cpu_count)
-    mem_for_worker *= 1024**3
-    num_workers = min(max(int(psutil.virtual_memory().available // mem_for_worker), 1), max_jobs)
+    if hidet.option.compile_server.enabled():
+        num_workers = min(len(jobs), 128)
+    else:
+        max_jobs, mem_for_worker = option.get_parallel_tune()
+        max_jobs = cpu_count if max_jobs == -1 else min(max_jobs, cpu_count)
+        mem_for_worker *= 1024**3
+        num_workers = min(max(int(psutil.virtual_memory().available // mem_for_worker), 1), max_jobs)
 
     if num_workers > 1 and len(jobs) > 1:
         # Set the affinity of current process. Some package such as numpy will change affinity of current process,

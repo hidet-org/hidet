@@ -25,6 +25,7 @@ from hidet.ir.stmt import DeclareScope, DeclareStmt, EvaluateStmt, BufferStoreSt
 from hidet.ir.stmt import LaunchKernelStmt
 from hidet.ir.stmt import ForMappingStmt, WhileStmt, BreakStmt, ContinueStmt, IfStmt, ReturnStmt, AssertStmt, AsmStmt
 from hidet.ir.stmt import BlackBoxStmt, SeqStmt
+from hidet.ir.target import Target
 from hidet.ir.func import Function
 from hidet.ir.module import IRModule
 from hidet.ir.compute import TensorNode, ScalarNode
@@ -823,10 +824,13 @@ class CPUCodegen(Codegen):
         return doc
 
 
-def codegen(ir_module: IRModule, src_out_path: str, target: str) -> str:
-    if target == 'cuda':
+def codegen(ir_module: IRModule, src_out_path: str, target: Union[str, Target]) -> str:
+    if isinstance(target, str):
+        target = Target.from_string(target)
+
+    if target.name == 'cuda':
         gen = CUDACodegen()
-    elif target == 'cpu':
+    elif target.name == 'cpu':
         gen = CPUCodegen()
     else:
         raise ValueError(f'Unknown target: {target}')
