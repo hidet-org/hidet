@@ -18,14 +18,13 @@ api.add_resource(UserResource, '/user')
 
 @app.route('/download/<string:filename>')
 def download(filename):
-    import hidet
-    cache_dir = hidet.utils.cache_dir('compilefarm')
-    path = os.path.join(cache_dir, filename)
+    results_dir = os.path.join(os.getcwd(), 'results')
+    path = os.path.join(results_dir, filename)
     if os.path.exists(path):
-        return send_from_directory(cache_dir, filename, as_attachment=True)
+        return send_from_directory(results_dir, filename, as_attachment=True)
     else:
         return 'File not found', 404
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=False, port=3281)
