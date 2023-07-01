@@ -28,9 +28,6 @@ class AllReduceTask(Task):
 
         super().__init__('all_reduce', inputs=[x], outputs=[y], attributes={'comm_id': comm_id, 'op': op})
 
-    def __str__(self):
-        return "all_reduce"
-
     def implement(self, target: Union[Target, str], working_dir: str) -> List[IRModule]:
         import hidet
         from hidet.ir.primitives.cuda.nccl import all_reduce as _all_reduce
@@ -38,14 +35,14 @@ class AllReduceTask(Task):
 
         dtype: DataType = self.inputs[0].type.dtype
         shape: Tuple[Expr, ...] = self.inputs[0].shape
-        nbytes = dtype.nbytes * prod(shape)
+        size = prod(shape)
 
         with hidet.script_module() as script_module:
 
             @hidet.script
             def launch(x: dtype[shape], y: dtype[shape]):
                 attrs.func_kind = 'public'
-                _all_reduce(x, y, nbytes, dtype, str_to_nccl_op(self.op), self.comm_id)
+                _all_reduce(x, y, size, dtype, str_to_nccl_op(self.op), self.comm_id)
 
         return [script_module.ir_module()]
 
