@@ -32,10 +32,13 @@ def download(url: str, file_name: Optional[str] = None, progress: bool = True) -
     return cached_file
 
 
-def download_url_to_file(url, dst, progress=True):
+def download_url_to_file(url, dst, progress=True, headers=None):
     # modified based on PyTorch
     file_size = None
-    req = urllib.request.Request(url, headers={"User-Agent": ""})
+    if headers is None:
+        headers = {}
+    headers['User-Agent'] = ''
+    req = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(req) as u:
         meta = u.info()
         if hasattr(meta, 'getheaders'):

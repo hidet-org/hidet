@@ -32,6 +32,8 @@ class PassContext:
         self.stack.append(self)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        if not (len(self.stack) > 0 and self.stack[-1] is self):
+            print(self.stack, self.stack[-1] is self)
         assert len(self.stack) > 0 and self.stack[-1] is self
         self.stack.pop()
 

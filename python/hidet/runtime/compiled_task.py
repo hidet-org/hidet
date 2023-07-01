@@ -15,6 +15,7 @@ import os
 import json
 import time
 from collections import namedtuple
+import tabulate
 from hidet.runtime.compiled_module import CompiledModule, CompiledFunction, load_compiled_module
 from hidet.ir.dtypes import i32
 from hidet.ffi import runtime_api
@@ -46,7 +47,6 @@ class CompiledTask:
         self.candidates: List[CompiledFunction] = [
             self.task_module['launch_{}'.format(i)] for i in range(self.meta_data.num_candidates)
         ]
-        self.dispatch_table_path = os.path.join(self.task_dir, 'dispatch_table.txt')
         self.dispatch_table: Dict[Tuple[int, ...], int] = self._load_dispatch_table()
 
         self._get_input_shape = self.task_module['get_input_shape']
@@ -80,10 +80,11 @@ class CompiledTask:
         return compiled_modules
 
     def _load_dispatch_table(self):
-        if not os.path.exists(self.dispatch_table_path):
+        dispatch_table_path = os.path.join(self.task_dir, 'dispatch_table.txt')
+        if not os.path.exists(dispatch_table_path):
             return {}
         dispatch_table = {}
-        with open(self.dispatch_table_path, 'r') as f:
+        with open(dispatch_table_path, 'r') as f:
             for i, line in enumerate(f.readlines()):
                 if i == 0:
                     continue
@@ -91,8 +92,8 @@ class CompiledTask:
                 if len(items) == 0:
                     continue
                 if len(items) != len(self.meta_data.symbols) + 1:
-                    os.remove(self.dispatch_table_path)
-                    raise RuntimeError(f'Invalid dispatch table: {self.dispatch_table_path}')
+                    os.remove(dispatch_table_path)
+                    raise RuntimeError(f'Invalid dispatch table: {dispatch_table_path}')
                 key = tuple(int(item) for item in items[:-1])
                 value = int(items[-1])
                 dispatch_table[key] = value
@@ -118,27 +119,49 @@ class CompiledTask:
 
         key = self._get_symbol_values()
         if key not in self.dispatch_table:
-            warmup, number, repeat = hidet.option.get_bench_config()
-            latencies = []
-            for candidate in self.candidates:
-                for _ in range(warmup):
-                    candidate(*inputs, *outputs)
-                candidate_latency = 0.0
-                for _ in range(repeat):
-                    hidet.cuda.synchronize()
-                    t1 = time.time()
-                    for _ in range(number):
+            if len(self.candidates) > 1:
+                warmup, number, repeat = hidet.option.get_bench_config()
+                latencies = []
+                for idx, candidate in enumerate(self.candidates):
+                    for _ in range(warmup):
                         candidate(*inputs, *outputs)
-                    hidet.cuda.synchronize()
-                    t2 = time.time()
-                    candidate_latency += (t2 - t1) / number
-                latencies.append(candidate_latency / repeat)
-            self.dispatch_table[key] = latencies.index(min(latencies))
+                    candidate_latency = 0.0
+                    for _ in range(repeat):
+                        hidet.cuda.synchronize()
+                        t1 = time.time()
+                        for _ in range(number):
+                            candidate(*inputs, *outputs)
+                        hidet.cuda.synchronize()
+                        t2 = time.time()
+                        candidate_latency += (t2 - t1) * 1000 / number
+                    latencies.append(candidate_latency / repeat)
+                self.dispatch_table[key] = latencies.index(min(latencies))
 
-            if not os.path.exists(self.dispatch_table_path):
-                with open(self.dispatch_table_path, 'w') as f:
+                # write a benchmark report
+                report_name = '_'.join('{}_{}'.format(a, b) for a, b in zip(self.meta_data.symbols, key))
+                os.makedirs(os.path.join(self.task_dir, 'reports'), exist_ok=True)
+                report_path = os.path.join(self.task_dir, 'reports', report_name + '.txt')
+                with open(os.path.join(self.task_dir, 'candidates.json'), 'r') as f:
+                    candidates_json = json.load(f)
+                    headers: List[str] = candidates_json['headers']
+                    candidate_lines: List[List[str]] = candidates_json['candidates']
+                headers.extend(['latency', 'rank'])
+                sorted_indices = sorted(range(len(latencies)), key=lambda i: latencies[i])
+                for idx, line in enumerate(candidate_lines):
+                    line.extend(['{:.3f} ms'.format(latencies[idx]), sorted_indices.index(idx)])
+                candidate_lines.sort(key=lambda l: l[-1])
+                with open(report_path, 'w') as f:
+                    f.write(tabulate.tabulate(candidate_lines, headers=headers, tablefmt='plain'))
+            else:
+                assert len(self.candidates) == 1
+                self.dispatch_table[key] = 0
+
+            # write the best candidate to dispatch table
+            dispatch_table_path = os.path.join(self.task_dir, 'dispatch_table.txt')
+            if not os.path.exists(dispatch_table_path):
+                with open(dispatch_table_path, 'w') as f:
                     f.write(' '.join(self.meta_data.symbols) + '\n')
-            with open(self.dispatch_table_path, 'a') as f:
+            with open(dispatch_table_path, 'a') as f:
                 f.write(' '.join([str(v) for v in key]) + ' ' + str(self.dispatch_table[key]) + '\n')
 
         candidate_index = self.dispatch_table[key]

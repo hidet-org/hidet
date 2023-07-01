@@ -15,7 +15,7 @@ from hidet.ir.primitives import active_mask, shfl_down_sync, shfl_sync
 from hidet.ir.stmt import AssignStmt, Stmt
 from hidet.utils import gcd, prod
 from hidet.ir.mapping import TaskMapping, row_repeat, spatial_map
-from hidet.ir.layout import DataLayout, row_layout, local_layout
+from hidet.ir.layout import DataLayout, row_major, local_layout
 
 
 class NotSupportedError(Exception):
@@ -141,5 +141,5 @@ def get_transfer_task_map(
     grid_shape, repeat_shape = _get_shapes(task_shape, num_workers, ranks)
 
     task_map = row_repeat(*repeat_shape, attrs='u+u+') * spatial_map(grid_shape, ranks=ranks)
-    data_layout = row_layout(*repeat_shape) * local_layout(*grid_shape)
+    data_layout = row_major(*repeat_shape) * local_layout(*grid_shape)
     return task_map, data_layout

@@ -1,0 +1,43 @@
+################################################################################
+# Necessary packages
+################################################################################
+gitpython
+numpy
+
+# used for query available memory
+psutil
+
+# used for print table
+tabulate
+
+# python tests
+pytest
+
+# show progress bar
+tqdm
+
+# used to annotate the scope of events in host process, which can be visualized
+# in Nsight System.
+nvtx
+
+# for print python ast node
+astunparse
+
+# for command line interface
+click
+
+# for package version check
+packaging
+
+# for cuda runtime api and runtime compilation api
+cuda-python
+
+# for filestore
+filelock
+
+requests
+flask
+flask-restful
+flask-jwt-extended
+gunicorn
+GitPython

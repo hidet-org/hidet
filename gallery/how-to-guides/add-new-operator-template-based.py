@@ -74,7 +74,17 @@ class BatchMatmulFp16Task(Task):
 
 
 def batch_matmul_mma_fp16_schedule(task: BatchMatmulFp16Task) -> IRModule:
-    from hidet.lang import f16, spatial, repeat, tensor, attrs, grid, printf, cast
+    from hidet.lang import (
+        f16,
+        spatial,
+        repeat,
+        shared_tensor,
+        register_tensor,
+        attrs,
+        grid,
+        printf,
+        cast,
+    )
     from hidet.lang.mapping import repeat, spatial
     from hidet.lang.cuda import blockIdx, threadIdx, syncthreads
     from hidet.lang.cuda import MmaConfig, mma_sync
@@ -179,11 +189,11 @@ def batch_matmul_mma_fp16_schedule(task: BatchMatmulFp16Task) -> IRModule:
             )
             attrs.cuda.block_dim = threads
             offset_m, offset_n = blockIdx.x * block_m, blockIdx.y * block_n
-            smem_a = tensor('shared', 'float16', [block_m, block_k])
-            smem_b = tensor('shared', 'float16', [block_k, block_n])
-            regs_a = tensor('register', 'float16', [4, mma_config.a_elements])
-            regs_b = tensor('register', 'float16', [8, mma_config.b_elements])
-            regs_c = tensor('register', 'float16', [4, 8, mma_config.c_elements])
+            smem_a = shared_tensor('float16', [block_m, block_k])
+            smem_b = shared_tensor('float16', [block_k, block_n])
+            regs_a = register_tensor('float16', [4, mma_config.a_elements])
+            regs_b = register_tensor('float16', [8, mma_config.b_elements])
+            regs_c = register_tensor('float16', [4, 8, mma_config.c_elements])
 
             for i, j, p in grid(4, 8, mma_config.c_elements):
                 regs_c[i, j, p] = 0.0

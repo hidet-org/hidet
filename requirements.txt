@@ -34,3 +34,5 @@ cuda-python
 
 # for filestore
 filelock
+
+requests
