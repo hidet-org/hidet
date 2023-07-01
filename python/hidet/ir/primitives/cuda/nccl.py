@@ -23,8 +23,12 @@ def all_reduce(sendbuff: Expr, recvbuff: Expr, count: Expr, dtype: DataType, op:
 
     comm = get_nccl_comm(comm_id)
     return BlackBoxStmt(
-        'ncclAllReduce({}, {}, {}, (ncclDataType_t){}, (ncclRedOp_t){}, '
-        '(ncclComm_t){}, (cudaStream_t){});'.format(
-            sendbuff, recvbuff, count, int(dtype_to_nccl(dtype)), int(op), comm, get_cuda_stream()
-        )
+        'ncclAllReduce({}, {}, {}, (ncclDataType_t){}, (ncclRedOp_t){}, ' '(ncclComm_t){}, (cudaStream_t){});',
+        sendbuff,
+        recvbuff,
+        count,
+        int(dtype_to_nccl(dtype)),
+        int(op),
+        comm,
+        get_cuda_stream(),
     )
