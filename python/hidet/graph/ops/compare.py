@@ -70,40 +70,40 @@ class LogicalXorOp(BinaryElementwiseOp):
 
 
 def equal(x: Tensor, y: Tensor) -> Tensor:
-    return EqualOp(x, y).get_output(0)
+    return EqualOp(x, y).outputs[0]
 
 
 def not_equal(x: Tensor, y: Tensor) -> Tensor:
-    return NotEqualOp(x, y).get_output(0)
+    return NotEqualOp(x, y).outputs[0]
 
 
 def less(x: Tensor, y: Tensor) -> Tensor:
-    return LessOp(x, y).get_output(0)
+    return LessOp(x, y).outputs[0]
 
 
 def greater(x: Tensor, y: Tensor) -> Tensor:
-    return GreaterOp(x, y).get_output(0)
+    return GreaterOp(x, y).outputs[0]
 
 
 def less_equal(x: Tensor, y: Tensor) -> Tensor:
-    return LessEqualOp(x, y).get_output(0)
+    return LessEqualOp(x, y).outputs[0]
 
 
 def greater_equal(x: Tensor, y: Tensor) -> Tensor:
-    return GreaterEqualOp(x, y).get_output(0)
+    return GreaterEqualOp(x, y).outputs[0]
 
 
 def logical_not(x: Tensor) -> Tensor:
-    return LogicalNotOp(x).get_output(0)
+    return LogicalNotOp(x).outputs[0]
 
 
 def logical_or(x: Tensor, y: Tensor) -> Tensor:
-    return LogicalOrOp(x, y).get_output(0)
+    return LogicalOrOp(x, y).outputs[0]
 
 
 def logical_and(x: Tensor, y: Tensor) -> Tensor:
-    return LogicalAndOp(x, y).get_output(0)
+    return LogicalAndOp(x, y).outputs[0]
 
 
 def logical_xor(x: Tensor, y: Tensor) -> Tensor:
-    return LogicalXorOp(x, y).get_output(0)
+    return LogicalXorOp(x, y).outputs[0]

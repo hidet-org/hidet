@@ -27,7 +27,7 @@ def reduce_shape(x: TensorNode, dims: List[int], keep_dim: bool):
     return y_shape
 
 
-def reduce_cop(x: TensorNode, dims: List[int], keep_dim: bool, reduce_type: str, accumulate_dtype: str = 'float32'):
+def reduce(x: TensorNode, dims: List[int], keep_dim: bool, reduce_type: str, accumulate_dtype: str = 'float32'):
     y_shape = reduce_shape(x, dims, keep_dim)
 
     def fcompute(*indices):

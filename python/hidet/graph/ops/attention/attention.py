@@ -873,7 +873,7 @@ def attention(q: Tensor, k: Tensor, v: Tensor, mask: Optional[Tensor] = None, is
         raise ValueError('Attention only supports head dim <= 160, got {}'.format(q.shape[-1]))
 
     if mask is None:
-        return AttnOp(q, k, v, is_causal).get_output(0)
+        return AttnOp(q, k, v, is_causal).outputs[0]
 
     mask_shape = mask.shape
     seq_len_q = q.shape[-2]
@@ -884,4 +884,4 @@ def attention(q: Tensor, k: Tensor, v: Tensor, mask: Optional[Tensor] = None, is
     if not can_broadcast(mask_shape, qk_shape):
         raise ValueError("Invalid mask dimension: {}".format(mask_shape))
 
-    return AttnMaskAddOp(q, k, v, mask).get_output(0)
+    return AttnMaskAddOp(q, k, v, mask).outputs[0]

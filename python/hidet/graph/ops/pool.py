@@ -244,40 +244,40 @@ class AdaptiveMaxPool3dOp(AdaptivePoolOp):
 
 
 def max_pool2d(x: Tensor, kernel, stride, padding) -> Tensor:
-    return MaxPool2dOp(x, kernel, stride, padding).get_output(0)
+    return MaxPool2dOp(x, kernel, stride, padding).outputs[0]
 
 
 def max_pool3d(x: Tensor, kernel, stride, padding) -> Tensor:
-    return MaxPool3dOp(x, kernel, stride, padding).get_output(0)
+    return MaxPool3dOp(x, kernel, stride, padding).outputs[0]
 
 
 def avg_pool2d(x: Tensor, kernel, stride, padding) -> Tensor:
-    return AvgPool2dOp(x, kernel, stride, padding).get_output(0)
+    return AvgPool2dOp(x, kernel, stride, padding).outputs[0]
 
 
 def avg_pool3d(x: Tensor, kernel, stride, padding) -> Tensor:
-    return AvgPool3dOp(x, kernel, stride, padding).get_output(0)
+    return AvgPool3dOp(x, kernel, stride, padding).outputs[0]
 
 
 def adaptive_avg_pool1d(x: Tensor, output_size: Union[int, Sequence[int]]) -> Tensor:
-    return AdaptiveAvgPool1dOp(x, output_size).get_output(0)
+    return AdaptiveAvgPool1dOp(x, output_size).outputs[0]
 
 
 def adaptive_avg_pool2d(x: Tensor, output_size: Union[int, Sequence[int]]) -> Tensor:
-    return AdaptiveAvgPool2dOp(x, output_size).get_output(0)
+    return AdaptiveAvgPool2dOp(x, output_size).outputs[0]
 
 
 def adaptive_avg_pool3d(x: Tensor, output_size: Union[int, Sequence[int]]) -> Tensor:
-    return AdaptiveAvgPool3dOp(x, output_size).get_output(0)
+    return AdaptiveAvgPool3dOp(x, output_size).outputs[0]
 
 
 def adaptive_max_pool1d(x: Tensor, output_size: Union[int, Sequence[int]]) -> Tensor:
-    return AdaptiveMaxPool1dOp(x, output_size).get_output(0)
+    return AdaptiveMaxPool1dOp(x, output_size).outputs[0]
 
 
 def adaptive_max_pool2d(x: Tensor, output_size: Union[int, Sequence[int]]) -> Tensor:
-    return AdaptiveMaxPool2dOp(x, output_size).get_output(0)
+    return AdaptiveMaxPool2dOp(x, output_size).outputs[0]
 
 
 def adaptive_max_pool3d(x: Tensor, output_size: Union[int, Sequence[int]]) -> Tensor:
-    return AdaptiveMaxPool3dOp(x, output_size).get_output(0)
+    return AdaptiveMaxPool3dOp(x, output_size).outputs[0]

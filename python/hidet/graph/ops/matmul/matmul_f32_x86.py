@@ -418,4 +418,4 @@ class Matmulx86Op(Operator):
 
 
 def matmul_x86(a: Tensor, b: Tensor) -> Tensor:
-    return Matmulx86Op(a, b).get_output(0)
+    return Matmulx86Op(a, b).outputs[0]

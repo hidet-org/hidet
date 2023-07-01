@@ -11,4 +11,4 @@
 # limitations under the License.
 from .matmul import matmul
 from .pad import pad
-from .reduce import reduce_cop
+from .reduce import reduce

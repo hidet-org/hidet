@@ -63,7 +63,7 @@ class Conv2dGemmImageTransformOp(Operator):
 def conv2d_gemm_image_transform(
     x: Tensor, kernel: Sequence[int], stride: Sequence[int], dilations: Sequence[int], groups: int = 1
 ) -> Tensor:
-    return Conv2dGemmImageTransformOp(x, kernel, stride, dilations, groups).get_output(0)
+    return Conv2dGemmImageTransformOp(x, kernel, stride, dilations, groups).outputs[0]
 
 
 def conv2d_gemm_filter_transform(w: Tensor, groups: int = 1) -> Tensor:
@@ -799,7 +799,7 @@ def pre_transform_img(img: Tensor, padding: Union[int, Tuple[int, int]], pad_val
     Pre transforms the image to channels last, pads it and optionally makes the channel a multiple of 8
     as required by Conv2dGemmFp16
     """
-    return Conv2dGemmFp16PretransformOP(img, padding, pad_value, make_multiple_8).get_output(0)
+    return Conv2dGemmFp16PretransformOP(img, padding, pad_value, make_multiple_8).outputs[0]
 
 
 # pylint: disable=dangerous-default-value
@@ -850,7 +850,7 @@ def conv2d_gemm_fp16_channel_last(
             parallel_k_parts=parallel_k_parts,
             disable_cp_async=disable_cp_async,
         )
-        .get_output(0)
+        .outputs[0]
         .sum(0)
     )
 

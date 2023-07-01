@@ -314,4 +314,4 @@ def reduce_f16(
         ReduceType.And.value: ReduceAndF16Op,
     }
     op = op_dict[reduce_type]
-    return op(x, dims, keepdims).get_output(0)
+    return op(x, dims, keepdims).outputs[0]

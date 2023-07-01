@@ -42,16 +42,16 @@ class MakeComplexOperator(BinaryElementwiseOp):
 
 
 def real(x: Tensor) -> Tensor:
-    return RealOperator(x).get_output(0)
+    return RealOperator(x).outputs[0]
 
 
 def imag(x: Tensor) -> Tensor:
-    return ImagOperator(x).get_output(0)
+    return ImagOperator(x).outputs[0]
 
 
 def conj(x: Tensor) -> Tensor:
-    return ConjOperator(x).get_output(0)
+    return ConjOperator(x).outputs[0]
 
 
 def make_complex(real: Tensor, imag: Tensor) -> Tensor:
-    return MakeComplexOperator(real, imag).get_output(0)
+    return MakeComplexOperator(real, imag).outputs[0]

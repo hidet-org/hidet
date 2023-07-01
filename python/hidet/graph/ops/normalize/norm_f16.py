@@ -273,4 +273,4 @@ def normalize_f16(x: Tensor, axis: List[int], epsilon: float = 1e-5, accumulate_
     ret: Tensor
         The normalized tensor.
     """
-    return NormalizeF16Op(x, axis, epsilon, accumulate_dtype).get_output(0)
+    return NormalizeF16Op(x, axis, epsilon, accumulate_dtype).outputs[0]

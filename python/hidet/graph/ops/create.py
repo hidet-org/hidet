@@ -183,11 +183,11 @@ def full(
     dtype: Optional[Union[DataType, str]] = None,
     device: Union[Device, str] = 'cpu',
 ) -> Tensor:
-    return FullOp(shape, value, data_type(dtype) if dtype is not None else dtype, device).get_output(0)
+    return FullOp(shape, value, data_type(dtype) if dtype is not None else dtype, device).outputs[0]
 
 
 def arange(start, /, stop=None, step=1, *, dtype=None, device='cpu') -> Tensor:
-    return ArangeOp(start, stop, step, dtype=dtype, device=device).get_output(0)
+    return ArangeOp(start, stop, step, dtype=dtype, device=device).outputs[0]
 
 
 def linspace(start, stop, /, num, *, dtype=None, device='cpu', endpoint=True) -> Tensor:
@@ -197,7 +197,7 @@ def linspace(start, stop, /, num, *, dtype=None, device='cpu', endpoint=True) ->
     if dtype.is_integer():
         warnings.warn('linspace with integer dtype is not supported, changed to float32')
         dtype = dtypes.float32
-    return LinSpaceOp(start, stop, num, dtype=dtype, device=device, endpoint=endpoint).get_output(0)
+    return LinSpaceOp(start, stop, num, dtype=dtype, device=device, endpoint=endpoint).outputs[0]
 
 
 def tri(
@@ -205,4 +205,4 @@ def tri(
 ) -> Tensor:
     if m is None:
         m = n
-    return TriOp(n, m, k, dtype, device).get_output(0)
+    return TriOp(n, m, k, dtype, device).outputs[0]

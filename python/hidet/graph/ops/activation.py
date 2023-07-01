@@ -193,23 +193,23 @@ class SoftmaxOp(Operator):
 
 
 def relu(x) -> Tensor:
-    return ReluOp(x).get_output(0)
+    return ReluOp(x).outputs[0]
 
 
 def leaky_relu(x: Tensor, alpha: float) -> Tensor:
-    return LeakyReluOp(x, alpha).get_output(0)
+    return LeakyReluOp(x, alpha).outputs[0]
 
 
 def sigmoid(x: Tensor) -> Tensor:
-    return SigmoidOp(x).get_output(0)
+    return SigmoidOp(x).outputs[0]
 
 
 def hardsigmoid(x: Tensor) -> Tensor:
-    return HardSigmoidOp(x).get_output(0)
+    return HardSigmoidOp(x).outputs[0]
 
 
 def clip(x: Tensor, min_val: Optional[float], max_val: Optional[float]) -> Tensor:
-    return ClipOp(x, min_val, max_val).get_output(0)
+    return ClipOp(x, min_val, max_val).outputs[0]
 
 
 def relu6(x: Tensor) -> Tensor:
@@ -217,68 +217,68 @@ def relu6(x: Tensor) -> Tensor:
 
 
 def gelu(x: Tensor, approximate: bool = False) -> Tensor:
-    return GeluOp(x, approximate).get_output(0)
+    return GeluOp(x, approximate).outputs[0]
 
 
 def silu(x: Tensor) -> Tensor:
-    return SiluOp(x).get_output(0)
+    return SiluOp(x).outputs[0]
 
 
 def prelu(x: Tensor, slope: Tensor) -> Tensor:
-    return PReluOp(x, slope).get_output(0)
+    return PReluOp(x, slope).outputs[0]
 
 
 def hardswish(x: Tensor) -> Tensor:
-    return HardSwishOp(x).get_output(0)
+    return HardSwishOp(x).outputs[0]
 
 
 def threshold(x: Tensor, threshold_val: float, value: float) -> Tensor:
-    return ThresholdOp(x, threshold_val, value).get_output(0)
+    return ThresholdOp(x, threshold_val, value).outputs[0]
 
 
 def hardtanh(x: Tensor, min_val: float, max_val: float) -> Tensor:
-    return HardTanhOp(x, min_val, max_val).get_output(0)
+    return HardTanhOp(x, min_val, max_val).outputs[0]
 
 
 def elu(x: Tensor, alpha: float) -> Tensor:
-    return EluOp(x, alpha).get_output(0)
+    return EluOp(x, alpha).outputs[0]
 
 
 def selu(x: Tensor, alpha: float, scale: float) -> Tensor:
-    return SeluOp(x, alpha, scale).get_output(0)
+    return SeluOp(x, alpha, scale).outputs[0]
 
 
 def celu(x: Tensor, alpha: float) -> Tensor:
-    return CeluOp(x, alpha).get_output(0)
+    return CeluOp(x, alpha).outputs[0]
 
 
 def logsigmoid(x: Tensor) -> Tensor:
-    return LogSigmoidOp(x).get_output(0)
+    return LogSigmoidOp(x).outputs[0]
 
 
 def hardshrink(x: Tensor, lambda_val: float) -> Tensor:
-    return HardShrinkOp(x, lambda_val).get_output(0)
+    return HardShrinkOp(x, lambda_val).outputs[0]
 
 
 def tanhshrink(x: Tensor) -> Tensor:
-    return TanhShrinkOp(x).get_output(0)
+    return TanhShrinkOp(x).outputs[0]
 
 
 def softsign(x: Tensor) -> Tensor:
-    return SoftSignOp(x).get_output(0)
+    return SoftSignOp(x).outputs[0]
 
 
 def softplus(x: Tensor, beta: int, threshold_val: int) -> Tensor:
-    return SoftPlusOp(x, beta, threshold_val).get_output(0)
+    return SoftPlusOp(x, beta, threshold_val).outputs[0]
 
 
 def softshrink(x: Tensor, lambda_val: float) -> Tensor:
-    return SoftShrinkOp(x, lambda_val).get_output(0)
+    return SoftShrinkOp(x, lambda_val).outputs[0]
 
 
 def softmax(x: Tensor, axis=1) -> Tensor:
-    return SoftmaxOp(x, axis).get_output(0)
+    return SoftmaxOp(x, axis).outputs[0]
 
 
 def softmin(x: Tensor, axis: int) -> Tensor:
-    return SoftmaxOp(-x, axis).get_output(0)
+    return SoftmaxOp(-x, axis).outputs[0]

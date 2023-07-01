@@ -9,6 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from typing import List
 from hidet.ir.task import Task
 from hidet.graph.tensor import Tensor
 from .utils import Task, Operator, Tensor, TensorNode, compute, input_like
@@ -26,9 +27,8 @@ class BarrierOp(Operator):
     def __init__(self, x: Tensor):
         super().__init__(inputs=[x], attributes={}, task=BarrierTask(input_like(x, 'x')))
 
-    def get_output(self, idx: int) -> Tensor:
-        self.outputs = super().symbolic_run()
-        return self.outputs[idx]
+    def run(self) -> List[Tensor]:
+        return self.symbolic_run()
 
 
 def barrier(x: Tensor) -> Tensor:
@@ -48,4 +48,4 @@ def barrier(x: Tensor) -> Tensor:
     y: Tensor
         The output tensor.
     """
-    return BarrierOp(x).get_output(0)
+    return BarrierOp(x).outputs[0]
