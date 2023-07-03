@@ -450,7 +450,9 @@ def get_compiled_model(name='decapoda-research/llama-7b-hf', device='cuda', opt=
     flow_graph = build_flow_graph(model, device=device)
 
     if opt:
-        flow_graph = hidet.graph.optimize(flow_graph)
+        with hidet.graph.PassContext() as ctx:
+            ctx.reduce_cuda_compile_mem(True)
+            flow_graph = hidet.graph.optimize(flow_graph)
 
     compiled = flow_graph.build()
     return compiled, config, tok

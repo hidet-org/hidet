@@ -789,6 +789,45 @@ class Tensor:
             else:
                 return transfer(self, device)
 
+    def _move_to_vcuda(self):
+        """Cast the tensor to vcuda device in place.
+
+        If the current tensor is already on vcuda device, self is returned.
+
+        Returns
+        -------
+        ret: None
+            This operation is in-place
+        """
+
+        if self.device.is_vcuda():
+            return self
+        if not self.device.is_cuda():
+            raise ValueError("Tensor must be on cuda device, got {}".format(self.device))
+        # if the tensor has no storage, there is no need to cast
+        if self.storage is not None:
+            self._storage = self.storage.vcuda(self.device.id)
+        self._device = Device('vcuda', self.device.id)
+
+    def _move_from_vcuda(self):
+        """Cast the tensor from vcuda device in place.
+
+        If the current tensor is already on cuda device, self is returned.
+
+        Returns
+        -------
+        ret: None
+            This operation is in-place
+        """
+        if self.device.is_cuda():
+            return self
+        if not self.device.is_vcuda():
+            raise ValueError("Tensor must be on vcuda device, got {}".format(self.device))
+
+        if self.storage is not None:
+            self._storage = self.storage.cuda(self.device.id)
+        self._device = Device('cuda', self.device.id)
+
     def copy(self) -> Tensor:
         """Create a copy of current tensor.
 

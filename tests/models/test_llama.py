@@ -29,3 +29,6 @@ def test_llama(device='cuda', opt=False):
         ' existence as long as such protection does not conflict with the First or Second Laws'
     )
     assert text == expected
+
+
+test_llama(opt=True)

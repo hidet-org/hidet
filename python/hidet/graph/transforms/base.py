@@ -262,6 +262,12 @@ class PassContext:
         self.instruments.append(ProfileInstrument(log_file, print_stdout))
         return self
 
+    def reduce_cuda_compile_mem(self, enabale=True):
+        from .instruments import ConvertGraphToVCuda  # pylint: disable=import-outside-toplevel
+
+        self.instruments.append(ConvertGraphToVCuda())
+        return self
+
 
 class GraphPass:
     def __init__(self):

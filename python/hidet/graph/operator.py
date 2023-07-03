@@ -84,6 +84,8 @@ class Operator:
 
         if isinstance(self, TransferOp):
             return 'cuda'
+        elif self.device.is_vcuda():
+            return 'cuda'
         else:
             return self.device.kind
 

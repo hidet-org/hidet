@@ -528,6 +528,50 @@ class FlowGraph:
 
         return free_vars, nodes, usage_count
 
+    def _to_vcuda(self) -> None:
+        """
+        casts the flow graph object to vcuda device in place
+        """
+        from hidet.runtime.device import instantiate_device, Device
+
+        for x in self.inputs:
+            if not x.device.is_cuda():
+                raise ValueError("Inputs must be on cuda device")
+            x._move_to_vcuda()
+
+        for node in self.nodes:
+            if 'device' in node.attrs:
+                dev = instantiate_device(node.attrs['device'])
+                if dev.is_cuda():
+                    dev = Device('vcuda', dev.id)
+                node.attrs['device'] = dev
+            for inp in node.inputs:
+                inp._move_to_vcuda()
+            for outp in node.outputs:
+                outp._move_to_vcuda()
+
+    def _from_vcuda(self) -> None:
+        """
+        casts the flow graph object from vcuda device in place
+        """
+        from hidet.runtime.device import instantiate_device, Device
+
+        for x in self.inputs:
+            if not x.device.is_vcuda():
+                raise ValueError("Inputs must be on vcuda device")
+            x._move_from_vcuda()
+
+        for node in self.nodes:
+            if 'device' in node.attrs:
+                dev = instantiate_device(node.attrs['device'])
+                if dev.is_vcuda():
+                    dev = Device('cuda', dev.id)
+                node.attrs['device'] = dev
+            for inp in node.inputs:
+                inp._move_from_vcuda()
+            for outp in node.outputs:
+                outp._move_from_vcuda()
+
 
 def trace_from(tensor: Union[Tensor, List[Tensor]], inputs: Optional[Union[Tensor, List[Tensor]]] = None) -> FlowGraph:
     """
