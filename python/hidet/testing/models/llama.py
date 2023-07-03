@@ -438,8 +438,7 @@ def generate_torch(input_ids: str, tokenizer, torch_model, num_tokens, device='c
 def get_compiled_model(name='decapoda-research/llama-7b-hf', device='cuda', opt=False):
     tok = LlamaTokenizer.from_pretrained(name)
 
-    with torch.device("cuda"):  # reduce the time to load the model
-        model = hfLm.from_pretrained(name, torch_dtype=torch.float16)
+    model = hfLm.from_pretrained(name, torch_dtype=torch.float16)
     model.cpu()
     torch.cuda.empty_cache()
 
