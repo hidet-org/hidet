@@ -357,8 +357,8 @@ def convert_model(hf_model: torch.nn.Module, dtype=hidet.float16, device='cuda')
 
 def build_flow_graph(model, batch_size=1, device='cuda', dtype='float16'):
     config = model.config
-    input_ids = hidet.symbol([batch_size, "seq_length"], dtype=hidet.int32, device=device)
-    position_ids = hidet.symbol([batch_size, config.max_position_embeddings], dtype=hidet.int32, device=device)
+    input_ids = hidet.symbol([batch_size, "seq_length"], dtype=hidet.int64, device=device)
+    position_ids = hidet.symbol([batch_size, config.max_position_embeddings], dtype=hidet.int64, device=device)
 
     get_sym = lambda: hidet.symbol(
         [batch_size, config.num_attention_heads, "prev_seq_len", config.hidden_size // config.num_attention_heads],
@@ -383,9 +383,9 @@ def build_flow_graph(model, batch_size=1, device='cuda', dtype='float16'):
 
 def generate(text: str, model, tokenizer, config, num_tokens=20, device='cuda', dtype='float16'):
     input_ids = tokenizer.encode(text)
-    input_ids = hidet.asarray([input_ids]).to(dtype=hidet.int32, device=device)
+    input_ids = hidet.asarray([input_ids]).to(dtype=hidet.int64, device=device)
 
-    position_ids = hidet.arange(0, config.max_position_embeddings, dtype=hidet.int32, device=device).unsqueeze(0)
+    position_ids = hidet.arange(0, config.max_position_embeddings, dtype=hidet.int64, device=device).unsqueeze(0)
 
     make_past = lambda: hidet.zeros(
         [1, config.num_attention_heads, 0, config.hidden_size // config.num_attention_heads], device=device, dtype=dtype

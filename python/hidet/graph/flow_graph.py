@@ -537,7 +537,7 @@ class FlowGraph:
         for x in self.inputs:
             if not x.device.is_cuda():
                 raise ValueError("Inputs must be on cuda device")
-            x._move_to_vcuda()
+            x.move_to_vcuda()
 
         for node in self.nodes:
             if 'device' in node.attrs:
@@ -546,9 +546,9 @@ class FlowGraph:
                     dev = Device('vcuda', dev.id)
                 node.attrs['device'] = dev
             for inp in node.inputs:
-                inp._move_to_vcuda()
+                inp.move_to_vcuda()
             for outp in node.outputs:
-                outp._move_to_vcuda()
+                outp.move_to_vcuda()
 
     def from_vcuda(self) -> None:
         """
@@ -559,7 +559,7 @@ class FlowGraph:
         for x in self.inputs:
             if not x.device.is_vcuda():
                 raise ValueError("Inputs must be on vcuda device")
-            x._move_from_vcuda()
+            x.move_from_vcuda()
 
         for node in self.nodes:
             if 'device' in node.attrs:
@@ -568,9 +568,9 @@ class FlowGraph:
                     dev = Device('cuda', dev.id)
                 node.attrs['device'] = dev
             for inp in node.inputs:
-                inp._move_from_vcuda()
+                inp.move_from_vcuda()
             for outp in node.outputs:
-                outp._move_from_vcuda()
+                outp.move_from_vcuda()
 
 
 def trace_from(tensor: Union[Tensor, List[Tensor]], inputs: Optional[Union[Tensor, List[Tensor]]] = None) -> FlowGraph:
