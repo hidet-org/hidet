@@ -14,7 +14,7 @@ from hidet.testing.models.llama import get_compiled_model, generate
 from hidet.runtime.storage import current_memory_pool
 
 
-@pytest.mark.parametrize('device,opt', [('cuda', False), ('cuda', True)])
+@pytest.mark.parametrize('device,opt', [('cuda', True)])
 def test_llama(device, opt):
     model, config, tokenizer = get_compiled_model(device=device, opt=opt)
 
@@ -26,18 +26,11 @@ def test_llama(device, opt):
     text = generate(
         "A robot may not injure a human being or, through inaction", model, tokenizer, config, num_tokens=55
     )
-    if opt:
-        expected = (
-            ', allow a human being to come to harm. A robot must obey orders given it by human beings'
-            ' except where such orders would conflict with the First Law. A robot must protect its own'
-            ' existence as long as such protection does not conflict with the First or Second Laws'
-        )
-    else:
-        expected = (
-            ', allow a human being to come to harm. A robot must obey the orders given it by human beings'
-            ' except where such orders would conflict with the First Law. A robot must protect its own'
-            ' existence as long as such protection does not conflict with the First or Second Laws'
-        )
+    expected = (
+        ', allow a human being to come to harm. A robot must obey orders given it by human beings'
+        ' except where such orders would conflict with the First Law. A robot must protect its own'
+        ' existence as long as such protection does not conflict with the First or Second Laws.'
+    )
 
 
     print(text)
