@@ -32,11 +32,9 @@ def test_llama(device, opt):
         ' existence as long as such protection does not conflict with the First or Second Laws.'
     )
 
-
     print(text)
     assert text == expected
 
     print(current_memory_pool("cuda"))
     print(current_memory_pool("cpu"))
     print(current_memory_pool("vcuda"))
-
