@@ -9,9 +9,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import os
-
-from hidet import utils
 from hidet.graph.flow_graph import FlowGraph
 
 from .base import GraphPassInstrument
@@ -19,7 +16,7 @@ from .base import GraphPassInstrument
 
 class ConvertGraphToVCuda(GraphPassInstrument):
     def before_all_passes(self, graph: FlowGraph):
-        graph._to_vcuda()
+        graph.to_vcuda()
 
     def after_all_passes(self, graph: FlowGraph) -> None:
-        graph._from_vcuda()
+        graph.from_vcuda()

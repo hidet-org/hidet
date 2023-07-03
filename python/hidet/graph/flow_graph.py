@@ -528,7 +528,7 @@ class FlowGraph:
 
         return free_vars, nodes, usage_count
 
-    def _to_vcuda(self) -> None:
+    def to_vcuda(self) -> None:
         """
         casts the flow graph object to vcuda device in place
         """
@@ -550,7 +550,7 @@ class FlowGraph:
             for outp in node.outputs:
                 outp._move_to_vcuda()
 
-    def _from_vcuda(self) -> None:
+    def from_vcuda(self) -> None:
         """
         casts the flow graph object from vcuda device in place
         """

@@ -114,7 +114,7 @@ def instantiate_device(dev) -> Device:
     if dev.kind == 'cpu':
         dev.id = None  # CPU device does not have a device index
         return dev
-    elif dev.kind == 'cuda' or dev.kind == 'vcuda':
+    elif dev.kind in ['cuda', 'vcuda']:
         if dev.id is None:
             dev.id = current_device()
         return dev

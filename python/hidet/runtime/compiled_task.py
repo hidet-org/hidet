@@ -177,19 +177,19 @@ class CompiledTask:
 
         outputs = self.create_outputs()
 
-        has_vcuda = len(inputs) > 0 and all([inp.device.is_vcuda() for inp in inputs])
+        has_vcuda = len(inputs) > 0 and all(inp.device.is_vcuda() for inp in inputs)
         if has_vcuda:
             for inp in inputs:
-                inp._move_from_vcuda()
+                inp.move_from_vcuda()
 
         candidate = self.candidates[self.pick_best_candidate(inputs, outputs)]
         candidate(*inputs, *outputs)
 
         if has_vcuda:
             for inp in inputs:
-                inp._move_to_vcuda()
+                inp.move_to_vcuda()
             for outp in outputs:
-                outp._move_to_vcuda()
+                outp.move_to_vcuda()
 
         return outputs
 
