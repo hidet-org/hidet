@@ -10,9 +10,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List
-from hidet.ir.compute import reduce
-from hidet.graph.ops.utils import TensorNode
-from hidet.graph.ops.utils import compute
+from hidet.ir.compute import TensorNode
+from hidet.ir import compute
 
 
 def reduce_shape(x: TensorNode, dims: List[int], keep_dim: bool):
@@ -48,9 +47,9 @@ def reduce(x: TensorNode, dims: List[int], keep_dim: bool, reduce_type: str, acc
             return x[x_indices]
 
         y_shape = [x.shape[i] for i in dims]
-        return reduce(
+        return compute.reduce(
             shape=y_shape, fcompute=reduce_fcompute, reduce_type=reduce_type, accumulate_dtype=accumulate_dtype
         )
 
-    y = compute(name='y', shape=y_shape, fcompute=fcompute)
+    y = compute.compute(name='y', shape=y_shape, fcompute=fcompute)
     return y

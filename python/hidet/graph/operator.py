@@ -10,10 +10,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List, Optional, Dict, Any
-from hidet.ir.type import TensorType, DataType
+from hidet.ir.type import TensorType
 from hidet.ir.task import Task
 from hidet.runtime.compiled_task import CompiledTask
-from hidet.graph.tensor import empty, Tensor, SymbolVar
+from hidet.graph.tensor import Tensor, SymbolVar
 from hidet.runtime.device import Device, instantiate_device
 
 
@@ -90,6 +90,7 @@ class Operator:
             The build target of this operator.
         """
         from hidet.graph.ops.transfer import TransferOp
+
         # Some notes about self.build_target:
         #
         #    Each hidet operator has a build_target property, which is the build target of this operator and determines
@@ -111,7 +112,6 @@ class Operator:
             self._compiled_task = self.task.build(target=self.build_target)
         return self._compiled_task
 
-
     def run(self) -> List[Tensor]:
         from hidet.ir.tools import collect
 
@@ -127,7 +127,6 @@ class Operator:
         else:
             return self.symbolic_run()
 
-
     def symbolic_run(self) -> List[Tensor]:
         from hidet.ir.tools import simplify
 
@@ -139,7 +138,6 @@ class Operator:
                 Tensor(shape=shape, dtype=output_type.dtype.name, device=self.device, storage=None, trace=(self, i))
             )
         return outputs
-
 
     def reforward(self, inputs: List[Tensor], update_attributes: Optional[Dict[str, Any]] = None) -> List[Tensor]:
         cls = self.__class__

@@ -11,7 +11,7 @@ from hidet.graph.ops.utils import Task, Operator, Tensor, input_like, normalize_
 
 # pylint: disable=dangerous-default-value
 class SymmetricQuantizationTask(Task):
-    def __init__(self, w: TensorNode, quant_type: DataType, dims: Union[int, List[int]]=-1):
+    def __init__(self, w: TensorNode, quant_type: DataType, dims: Union[int, List[int]] = -1):
         dims = normalize_dim(dims, len(w.shape))
         self._assert(all(i >= 0 or i < len(w.shape) for i in dims), "dims are out of bounds")
 
@@ -46,9 +46,7 @@ class SymmetricDeQuantizationTask(Task):
             return cast(wq[indices], scale.type.dtype) / scale[scale_indices]
 
         w = compute(name='dequantize', shape=wq.shape, fcompute=unscale_weight)
-        super().__init__(
-            name='symmetric_dequantization', inputs=[wq, scale], outputs=[w], attributes={'dims': dims}
-        )
+        super().__init__(name='symmetric_dequantization', inputs=[wq, scale], outputs=[w], attributes={'dims': dims})
 
 
 class SymmetricQuantizationOp(Operator):
