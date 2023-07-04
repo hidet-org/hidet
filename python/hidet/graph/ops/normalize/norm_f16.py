@@ -10,109 +10,33 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List
-from hidet.ir.module import IRModule
+from hidet.ir import IRModule, dtypes
 from hidet.ir.primitives import active_mask, shfl_down_sync
-from hidet.ir.compute import reduce
 from hidet.ir.expr import Expr
-from hidet.lang import spatial, repeat, view, cast, register_tensor, shared_tensor
-from hidet.lang import data_type, TensorType, i32, attrs
+from hidet.lang import spatial, repeat, view, cast, shared_tensor, register_tensor
+from hidet.lang import data_type, TensorType, i32, f16, attrs
 from hidet.lang.cuda import blockIdx, threadIdx, syncthreads
-from hidet.graph.ops.utils import Task, Operator, Tensor, TensorNode
-from hidet.graph.ops.utils import compute, input_like, normalize_dim
+from hidet.graph.ops.utils import Operator, Tensor, normalize_dim
+from hidet.graph.ops.utils import input_like
 from hidet.utils import prod
 from hidet.ir import primitives as prim
-from hidet.ir.expr import convert
+from .norm import NormalizeTask
 
 
-class NormalizeTask(Task):
+class NormalizeF16Task(NormalizeTask):
     """
-    Performs the following operation
+    Performs the following operation in float16 precision
         mean = x.mean(dims, keep_dim=True)
         x = x - mean
         variance = square(x).mean(dims, keep_dim=True)
         x = x * rsqrt(variance + epsilon)
     """
 
-    def __init__(self, x: TensorNode, dims: List[int], epsilon: float, accumulate_dtype: str):
-        dtype_str = x.type.dtype.name
-        x_shape = x.shape
-        reduce_shape = []
-        other_shape = []
-        for idx, size in enumerate(x_shape):
-            if idx in dims:
-                reduce_shape.append(size)
-            else:
-                other_shape.append(size)
-        epsilon = convert(epsilon, dtype=dtype_str)
-
-        def mean_compute(*indices):
-            def mean_reduce(*reduction_axis):
-                x_indices = []
-                p = 0
-                q = 0
-                for i in range(len(x.shape)):
-                    if i not in dims:
-                        x_indices.append(indices[p])
-                        p += 1
-                    else:
-                        x_indices.append(reduction_axis[q])
-                        q += 1
-                assert p == len(indices) and q == len(reduction_axis)
-                return x[x_indices]
-
-            return reduce(
-                shape=reduce_shape, fcompute=mean_reduce, reduce_type='avg', accumulate_dtype=accumulate_dtype
-            )
-
-        mean = compute(name='mean', shape=other_shape, fcompute=mean_compute)
-
-        def var_compute(*indices):
-            def var_reduce(*reduction_axis):
-                x_indices = []
-                p = 0
-                q = 0
-                for i in range(len(x.shape)):
-                    if i not in dims:
-                        x_indices.append(indices[p])
-                        p += 1
-                    else:
-                        x_indices.append(reduction_axis[q])
-                        q += 1
-                assert p == len(indices) and q == len(reduction_axis)
-                return prim.pow(x[x_indices] - mean[indices], 2)
-
-            return reduce(shape=reduce_shape, fcompute=var_reduce, reduce_type='avg', accumulate_dtype=accumulate_dtype)
-
-        var = compute(name='var', shape=other_shape, fcompute=var_compute)
-
-        def norm_compute(*indices):
-            mean_var_indices = [index for id, index in enumerate(indices) if id not in dims]
-            return (x[indices] - mean[mean_var_indices]) * prim.rsqrt(var[mean_var_indices] + epsilon)
-
-        y = compute(name='y', shape=x_shape, fcompute=norm_compute)
-
-        self.dims: List[int] = dims
-
-        super().__init__(
-            name='normalize_{}'.format(dtype_str),
-            inputs=[x],
-            outputs=[y],
-            attributes={'dims': dims, 'accumulate_dtype': accumulate_dtype, 'epsilon': epsilon},
-        )
-
-    def allow_prologue(self) -> bool:
-        return False
-
-    def allow_epilogue(self) -> bool:
-        return False
-
     def implement_cuda(self, working_dir: str) -> IRModule:
         import hidet
         import math
 
         x, y = self.inputs[0], self.outputs[0]
-        dtype = x.type.dtype
-
         input_shape: List[Expr] = list(x.shape)
         dims = self.dims
 
@@ -122,7 +46,7 @@ class NormalizeTask(Task):
 
         reduce_extent = prod(reduce_shape)
 
-        warp_size = 32
+        warp_size = 32  # TODO: improve coleased loads
         block_size = min(max(warp_size, reduce_extent), 1024)
         block_size = math.ceil(block_size / warp_size) * warp_size
         repeat_reduction = math.ceil(reduce_extent / block_size)
@@ -167,7 +91,7 @@ class NormalizeTask(Task):
                 count_a[0] = count
 
             @hidet.script
-            def norm_kernel(x: dtype[x.shape], y: dtype[y.shape]):
+            def norm_kernel(x: f16[x.shape], y: f16[y.shape]):
                 attrs.cuda.grid_dim = grid_size
                 attrs.cuda.block_dim = block_size
                 attrs.cuda.min_blocks = 1
@@ -178,22 +102,21 @@ class NormalizeTask(Task):
                 smem_count = shared_tensor(i32, shape=[used_smem_bytes_per_block])
 
                 # cache repeated loads
-                regs_repeat = register_tensor(dtype, shape=[repeat_reduction])
+                regs_repeat = register_tensor(f16, shape=[repeat_reduction])
 
-                reg_dtype = register_tensor(dtype, [1])
+                reg16 = register_tensor(f16, [1])
                 mean_final = register_tensor(accumulate_dtype, [1])
                 m2_final = register_tensor(accumulate_dtype, [1])
                 count_final = register_tensor('int32', [1])
 
                 mean_final[0] = accumulate_dtype.zero
                 m2_final[0] = accumulate_dtype.zero
-                count_final[0] = i32.zero
+                count_final[0] = dtypes.int32.zero
 
                 for spatial_idxs in task_layout.on(blockIdx.x, bind_tuple=True):
-                    # note, this is evaluated at compile time
                     ele_idx = spatial_idxs + dim_zeros
                     norm_tensor = ~x[ele_idx]
-                    flat_tensor = view(norm_tensor, dtype[reduce_extent])
+                    flat_tensor = view(norm_tensor, f16[reduce_extent])
 
                     reduce_mapping = repeat(repeat_reduction) * spatial(block_size)
                     for reduction_idx in reduce_mapping.on(threadIdx.x):
@@ -205,15 +128,15 @@ class NormalizeTask(Task):
                         other_count = register_tensor('int32', [1])
 
                         if reduction_idx < reduce_extent:
-                            reg_dtype[0] = flat_tensor[reduction_idx]
+                            reg16[0] = flat_tensor[reduction_idx]
                             count[0] = 1
                         else:
-                            reg_dtype[0] = dtype.zero
+                            reg16[0] = f16.zero
                             count[0] = 0
-                        regs_repeat[reduction_idx // block_size] = reg_dtype[0]
+                        regs_repeat[reduction_idx // block_size] = reg16[0]
 
-                        mean[0] = reg_dtype[0]
-                        m2[0] = accumulate_dtype.zero
+                        mean[0] = reg16[0]
+                        m2[0] = f16.zero
 
                         # Warp reduce by shuffle down
                         mask = active_mask()
@@ -300,12 +223,12 @@ class NormalizeTask(Task):
                         welford_combine(mean_final, m2_final, count_final, mean, m2, count)
 
                 # end of mean and var calculation, perform write back
-                m2_final[0] = m2_final[0] / cast(count_final[0], dtype)
+                m2_final[0] = m2_final[0] / cast(count_final[0], accumulate_dtype)
 
                 for spatial_idxs in task_layout.on(blockIdx.x, bind_tuple=True):
                     ele_idx = spatial_idxs + dim_zeros
                     norm_tensor = ~y[ele_idx]
-                    flat_tensor = view(norm_tensor, dtype[reduce_extent])
+                    flat_tensor = view(norm_tensor, f16[reduce_extent])
 
                     reduce_mapping = repeat(repeat_reduction) * spatial(block_size)
                     for reduction_idx in reduce_mapping.on(threadIdx.x):
@@ -320,18 +243,18 @@ class NormalizeTask(Task):
         return ir_module
 
 
-class NormalizeOp(Operator):
+class NormalizeF16Op(Operator):
     def __init__(self, x: Tensor, dims, epsilon: float, accumulate_dtype: str):
         rank = len(x.shape)
         dims = normalize_dim(dims, rank=rank)
         super().__init__(
             inputs=[x],
             attributes={'dims': dims, 'epsilon': epsilon, 'accumulate_dtype': accumulate_dtype},
-            task=NormalizeTask(input_like(x, 'x'), dims, epsilon, accumulate_dtype),
+            task=NormalizeF16Task(input_like(x, 'x'), dims, epsilon, accumulate_dtype),
         )
 
 
-def normalize(x: Tensor, axis: List[int], epsilon: float = 1e-5, accumulate_dtype: str = 'float32') -> Tensor:
+def normalize_f16(x: Tensor, axis: List[int], epsilon: float = 1e-5, accumulate_dtype: str = 'float32') -> Tensor:
     """Instance norm.
 
     Parameters
@@ -350,4 +273,4 @@ def normalize(x: Tensor, axis: List[int], epsilon: float = 1e-5, accumulate_dtyp
     ret: Tensor
         The normalized tensor.
     """
-    return NormalizeOp(x, axis, epsilon, accumulate_dtype).outputs[0]
+    return NormalizeF16Op(x, axis, epsilon, accumulate_dtype).get_output(0)

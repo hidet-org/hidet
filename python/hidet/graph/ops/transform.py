@@ -328,15 +328,6 @@ class ReshapeOp(Operator):
         else:
             raise ValueError('Can not infer the shape when there are multiple -1: {}'.format(shape))
 
-    def imperative_run(self, inputs: List[Tensor]) -> List[Tensor]:
-        x = inputs[0]
-        if x.layout is None or isinstance(x.layout, RowMajorLayout):
-            outputs = self.compiled_task.create_outputs()
-            outputs[0]._storage = x.storage  # pylint: disable=protected-access
-            return outputs
-        else:
-            return Operator.imperative_run(self, inputs)
-
 
 class RearrangeOp(Operator):
     def __init__(self, x: Tensor, plan: List[List[int]]):
@@ -533,7 +524,7 @@ class TileOp(Operator):
 def reshape(x: Tensor, shape) -> Tensor:
     if same_shape(x.shape, shape):
         return x
-    return ReshapeOp(x, shape).get_output(0)
+    return ReshapeOp(x, shape).outputs[0]
 
 
 def rearrange(x: Tensor, plan: List[List[int]]) -> Tensor:
@@ -561,7 +552,7 @@ def rearrange(x: Tensor, plan: List[List[int]]) -> Tensor:
     """
     if not isinstance(plan, (list, tuple)) or any(not isinstance(v, (list, tuple)) for v in plan):
         raise ValueError('plan should be List[List[int]], but got: {}'.format(plan))
-    return RearrangeOp(x, plan).get_output(0)
+    return RearrangeOp(x, plan).outputs[0]
 
 
 def squeeze(x: Tensor, dims: Union[int, Sequence[int]]) -> Tensor:
@@ -569,7 +560,7 @@ def squeeze(x: Tensor, dims: Union[int, Sequence[int]]) -> Tensor:
         dims = [dims]
     if len(dims) == 0:
         return x
-    return SqueezeOp(x, dims).get_output(0)
+    return SqueezeOp(x, dims).outputs[0]
 
 
 def unsqueeze(x: Tensor, dims: Union[int, Sequence[int]]) -> Tensor:
@@ -578,7 +569,7 @@ def unsqueeze(x: Tensor, dims: Union[int, Sequence[int]]) -> Tensor:
     dims = [normalize_dim(dim, len(x.shape) + len(dims)) for dim in dims]
     if len(dims) == 0:
         return x
-    return UnsqueezeOp(x, dims).get_output(0)
+    return UnsqueezeOp(x, dims).outputs[0]
 
 
 def flatten(x: Tensor, start_dim=0, end_dim=-1) -> Tensor:
@@ -586,7 +577,7 @@ def flatten(x: Tensor, start_dim=0, end_dim=-1) -> Tensor:
     end_dim = normalize_dim(end_dim, len(x.shape))
     if start_dim >= end_dim:
         return x
-    return FlattenOp(x, start_dim, end_dim).get_output(0)
+    return FlattenOp(x, start_dim, end_dim).outputs[0]
 
 
 def transpose(x: Tensor, axes: Optional[Sequence[int]] = None) -> Tensor:
@@ -602,11 +593,11 @@ def transpose(x: Tensor, axes: Optional[Sequence[int]] = None) -> Tensor:
             i += 1
         else:
             dims.append(j)
-    return PermuteDimsOp(x, dims).get_output(0)
+    return PermuteDimsOp(x, dims).outputs[0]
 
 
 def permute_dims(x: Tensor, /, axes: Sequence[int]) -> Tensor:
-    return PermuteDimsOp(x, axes).get_output(0)
+    return PermuteDimsOp(x, axes).outputs[0]
 
 
 def concat(tensors: List[Tensor], axis: int) -> Tensor:
@@ -618,18 +609,18 @@ def concat(tensors: List[Tensor], axis: int) -> Tensor:
                 '\n'.join(t.signature() for t in tensors)
             )
         )
-    return ConcatOp(*tensors, axis=axis).get_output(0)
+    return ConcatOp(*tensors, axis=axis).outputs[0]
 
 
 def cast(x: Tensor, dtype: Union[str, DataType]) -> Tensor:
     dtype = data_type(dtype)
     if x.dtype == dtype:
         return x
-    return CastOp(x, dtype).get_output(0)
+    return CastOp(x, dtype).outputs[0]
 
 
 def take(data: Tensor, indices: Tensor, axis: int = 0) -> Tensor:
-    return TakeOp(data, indices, axis).get_output(0)
+    return TakeOp(data, indices, axis).outputs[0]
 
 
 def gather(data: Tensor, indices: Tensor, axis: int = 0) -> Tensor:
@@ -643,19 +634,19 @@ def strided_slice(
     axes: Optional[Sequence[int]] = None,
     strides: Optional[Sequence[Optional[int]]] = None,
 ) -> Tensor:
-    return StridedSliceOp(data, starts, ends, axes, strides).get_output(0)
+    return StridedSliceOp(data, starts, ends, axes, strides).outputs[0]
 
 
 def broadcast(data: Tensor, shape) -> Tensor:
     if same_shape(data.shape, shape):
         return data
-    return BroadcastOp(data, shape).get_output(0)
+    return BroadcastOp(data, shape).outputs[0]
 
 
 def pad(data: Tensor, pads: List[int], mode: str = 'constant', value: float = 0.0) -> Tensor:
     if all(p == 0 for p in pads):
         return data
-    return PadOp(data, pads, mode, value).get_output(0)
+    return PadOp(data, pads, mode, value).outputs[0]
 
 
 def conv_pad(data: Tensor, pads: Union[int, List[int]], value: float = 0.0) -> Tensor:
@@ -682,7 +673,7 @@ def tile(data: Tensor, repeats: Sequence[int]) -> Tensor:
     ret: Tensor
         The tiled tensor, with shape [a * b for a, b in zip(data.shape, repeats)].
     """
-    return TileOp(data, repeats).get_output(0)
+    return TileOp(data, repeats).outputs[0]
 
 
 def split(data: Tensor, parts_or_sections: Union[Sequence[int], int], axis: int = 0) -> List[Tensor]:

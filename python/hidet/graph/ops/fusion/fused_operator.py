@@ -191,7 +191,7 @@ def fused_operator(
     op = FusedOperator(*inputs, fused_graph=fused_graph, anchor=anchor)
     outputs = []
     for i in range(len(fused_graph.outputs)):
-        outputs.append(op.get_output(i))
+        outputs.append(op.outputs[i])
     if len(outputs) == 1:
         return outputs[0]
     else:

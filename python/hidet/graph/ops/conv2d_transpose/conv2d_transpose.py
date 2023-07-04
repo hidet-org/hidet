@@ -100,4 +100,4 @@ def conv2d_transpose(
     sx, sy = normalize_stride(stride)
     px0, py0, px1, py1 = normalize_padding(padding)
     opx, opy = normalize_stride(output_padding)
-    return Conv2dTransposeOp(data, weight, (sx, sy), (px0, py0, px1, py1), groups, (opx, opy)).get_output(0)
+    return Conv2dTransposeOp(data, weight, (sx, sy), (px0, py0, px1, py1), groups, (opx, opy)).outputs[0]
