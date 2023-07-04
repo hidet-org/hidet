@@ -236,7 +236,7 @@ class BatchMatmulFp16Op(Operator):
 
 
 def batch_matmul_fp16(a: Tensor, b: Tensor) -> Tensor:
-    return BatchMatmulFp16Op(a, b).get_output(0)
+    return BatchMatmulFp16Op(a, b).outputs[0]
 
 
 def demo_usage():

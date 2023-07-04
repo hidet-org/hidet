@@ -756,4 +756,4 @@ def batch_matmul(a: Tensor, b: Tensor, mma: str = 'simt') -> Tensor:
     c: Tensor
         The result tensor of matrix multiplication.
     """
-    return BatchMatmulOp(a, b, mma).get_output(0)
+    return BatchMatmulOp(a, b, mma).outputs[0]

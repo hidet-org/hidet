@@ -68,4 +68,4 @@ class CumulativeSumOp(CumulativeBaseOp):
 
 
 def cumsum(x: Tensor, dim: int, exclusive: bool = False, reverse: bool = False) -> Tensor:
-    return CumulativeSumOp(x, dim, exclusive, reverse).get_output(0)
+    return CumulativeSumOp(x, dim, exclusive, reverse).outputs[0]

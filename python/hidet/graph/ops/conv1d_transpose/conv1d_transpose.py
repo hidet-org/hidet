@@ -91,4 +91,4 @@ def conv1d_transpose(
     output_padding: Optional[int] = 0,
 ) -> Tensor:
     s, p, op = stride, padding, output_padding
-    return Conv1dTransposeOp(data, weight, s, p, groups, op).get_output(0)
+    return Conv1dTransposeOp(data, weight, s, p, groups, op).outputs[0]

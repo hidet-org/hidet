@@ -152,15 +152,15 @@ class Conv2dWinogradInverseTransformOp(Operator):
 
 
 def conv2d_winograd_image_transform(x: Tensor, kernel, ms) -> Tensor:
-    return Conv2dWinogradImageTransformOp(x, kernel, ms).get_output(0)
+    return Conv2dWinogradImageTransformOp(x, kernel, ms).outputs[0]
 
 
 def conv2d_winograd_filter_transform(w: Tensor, ms) -> Tensor:
-    return Conv2dWinogradFilterTransformOp(w, ms).get_output(0)
+    return Conv2dWinogradFilterTransformOp(w, ms).outputs[0]
 
 
 def conv2d_winograd_inverse_transform(y: Tensor, input_shape, kernel, ms) -> Tensor:
-    return Conv2dWinogradInverseTransformOp(y, input_shape, kernel, ms).get_output(0)
+    return Conv2dWinogradInverseTransformOp(y, input_shape, kernel, ms).outputs[0]
 
 
 def conv2d_winograd(x: Tensor, w: Tensor) -> Tensor:

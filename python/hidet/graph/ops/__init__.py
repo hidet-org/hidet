@@ -44,6 +44,7 @@ from .arithmetic import sin, cos, tan, sinh, cosh, tanh, asin, acos, atan, asinh
 from .complex import real, imag, conj, make_complex
 from .compare import equal, not_equal, less, greater, less_equal, greater_equal
 from .compare import logical_not, logical_and, logical_or, logical_xor
+from .quant import symmetric_quantize, symmetric_dequantize
 from .reduce import mean, sum, var, min, max, std, prod, argmin, argmax, all, any
 from .cumulative import cumsum
 from .transform import squeeze, unsqueeze, flatten, concat, cast, take, rearrange, strided_slice, reshape
