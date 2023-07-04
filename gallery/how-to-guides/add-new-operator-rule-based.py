@@ -94,7 +94,7 @@ class BatchMatmulOp(Operator):
 
 def batch_matmul(a: Tensor, b: Tensor) -> Tensor:
     # get_output(0) returns the first output tensor of the operator
-    return BatchMatmulOp(a, b).get_output(0)
+    return BatchMatmulOp(a, b).outputs[0]
 
 
 # %%
