@@ -177,19 +177,8 @@ class CompiledTask:
 
         outputs = self.create_outputs()
 
-        has_vcuda = len(inputs) > 0 and all(inp.device.is_vcuda() for inp in inputs)
-        if has_vcuda:
-            for inp in inputs:
-                inp.move_from_vcuda()
-
         candidate = self.candidates[self.pick_best_candidate(inputs, outputs)]
         candidate(*inputs, *outputs)
-
-        if has_vcuda:
-            for inp in inputs:
-                inp.move_to_vcuda()
-            for outp in outputs:
-                outp.move_to_vcuda()
 
         return outputs
 
@@ -227,9 +216,7 @@ def _check_inputs(traced_inputs: Iterable[TensorSignature], inputs):
     symbol_map = {}
     for i, (traced, new) in enumerate(zip(traced_inputs, inputs)):
         traced_dev_kind = traced.device.partition(':')[0]
-        if traced_dev_kind != new.device.kind:
-            if traced_dev_kind == 'cuda' and new.device.is_vcuda():
-                continue
+        if traced_dev_kind != new.device.target:
             raise RuntimeError(
                 f"device mismatch at arg {i} between original: {traced.device} and new: {new.device.kind}"
             )

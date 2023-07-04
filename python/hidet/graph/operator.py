@@ -66,7 +66,7 @@ class Operator:
             if len(self.inputs) == 0:
                 raise ValueError('Cannot infer device from an operator with no inputs and "device" attribute')
             # when the operator has inputs, get the device from the inputs
-            if not all(t.device == self.inputs[0].device for t in self.inputs):
+            if not all(t.device.target == self.inputs[0].device.target for t in self.inputs):
                 raise ValueError('All inputs of an operator must be on the same device')
             return self.inputs[0].device
 
@@ -84,10 +84,12 @@ class Operator:
 
         if isinstance(self, TransferOp):
             return 'cuda'
-        elif self.device.is_vcuda():
-            return 'cuda'
+        if self.device.kind in ["cuda", "vcuda"]:
+            return "cuda"
+        elif self.device.kind == "cpu":
+            return "cpu"
         else:
-            return self.device.kind
+            raise NotImplementedError()
 
     @property
     def compiled_task(self) -> CompiledTask:

@@ -528,7 +528,7 @@ class FlowGraph:
 
         return free_vars, nodes, usage_count
 
-    def to_vcuda(self) -> None:
+    def vcuda_(self) -> None:
         """
         casts the flow graph object to vcuda device in place
         """
@@ -537,7 +537,7 @@ class FlowGraph:
         for x in self.inputs:
             if not x.device.is_cuda():
                 raise ValueError("Inputs must be on cuda device")
-            x.move_to_vcuda()
+            x.vcuda_()
 
         for node in self.nodes:
             if 'device' in node.attrs:
@@ -546,11 +546,11 @@ class FlowGraph:
                     dev = Device('vcuda', dev.id)
                 node.attrs['device'] = dev
             for inp in node.inputs:
-                inp.move_to_vcuda()
+                inp.vcuda_()
             for outp in node.outputs:
-                outp.move_to_vcuda()
+                outp.vcuda_()
 
-    def from_vcuda(self) -> None:
+    def cuda_(self) -> None:
         """
         casts the flow graph object from vcuda device in place
         """
@@ -559,7 +559,7 @@ class FlowGraph:
         for x in self.inputs:
             if not x.device.is_vcuda():
                 raise ValueError("Inputs must be on vcuda device")
-            x.move_from_vcuda()
+            x.cuda_()
 
         for node in self.nodes:
             if 'device' in node.attrs:
@@ -568,9 +568,9 @@ class FlowGraph:
                     dev = Device('cuda', dev.id)
                 node.attrs['device'] = dev
             for inp in node.inputs:
-                inp.move_from_vcuda()
+                inp.cuda_()
             for outp in node.outputs:
-                outp.move_from_vcuda()
+                outp.cuda_()
 
 
 def trace_from(tensor: Union[Tensor, List[Tensor]], inputs: Optional[Union[Tensor, List[Tensor]]] = None) -> FlowGraph:

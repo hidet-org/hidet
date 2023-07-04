@@ -14,7 +14,8 @@ from hidet.testing.models.llama import get_compiled_model, generate
 from hidet.runtime.storage import current_memory_pool
 
 
-@pytest.mark.parametrize('device,opt', [('cuda', True)])
+# @pytest.mark.parametrize('device,opt', [('cuda', True)])
+@pytest.mark.skip(reason='This test requires a lot of CPU memory > 32GB')
 def test_llama(device, opt):
     model, config, tokenizer = get_compiled_model(device=device, opt=opt)
 

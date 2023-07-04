@@ -789,10 +789,10 @@ class Tensor:
             else:
                 return transfer(self, device)
 
-    def move_to_vcuda(self):
+    def vcuda_(self):
         """Cast the tensor to vcuda device in place.
 
-        If the current tensor is already on vcuda device, self is returned.
+        If the current tensor is already on vcuda device, nothing is performed
 
         Returns
         -------
@@ -809,10 +809,10 @@ class Tensor:
             self._storage = self.storage.vcuda(self.device.id)
         self._device = Device('vcuda', self.device.id)
 
-    def move_from_vcuda(self):
+    def cuda_(self):
         """Cast the tensor from vcuda device in place.
 
-        If the current tensor is already on cuda device, self is returned.
+        If the current tensor is already on cuda device, nothing is performed
 
         Returns
         -------

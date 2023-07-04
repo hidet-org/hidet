@@ -357,8 +357,8 @@ def convert_model(hf_model: torch.nn.Module, dtype=hidet.float16, device='cuda')
 
 def build_flow_graph(model, batch_size=1, device='cuda', dtype='float16'):
     config = model.config
-    input_ids = hidet.symbol([batch_size, "seq_length"], dtype=hidet.int64, device=device)
-    position_ids = hidet.symbol([batch_size, config.max_position_embeddings], dtype=hidet.int64, device=device)
+    input_ids = hidet.symbol([batch_size, "seq_length"], dtype=hidet.int32, device=device)
+    position_ids = hidet.symbol([batch_size, config.max_position_embeddings], dtype=hidet.int32, device=device)
 
     get_sym = lambda: hidet.symbol(
         [batch_size, config.num_attention_heads, "prev_seq_len", config.hidden_size // config.num_attention_heads],
@@ -383,9 +383,9 @@ def build_flow_graph(model, batch_size=1, device='cuda', dtype='float16'):
 
 def generate(text: str, model, tokenizer, config, num_tokens=20, device='cuda', dtype='float16'):
     input_ids = tokenizer.encode(text)
-    input_ids = hidet.asarray([input_ids]).to(dtype=hidet.int64, device=device)
+    input_ids = hidet.asarray([input_ids]).to(dtype=hidet.int32, device=device)
 
-    position_ids = hidet.arange(0, config.max_position_embeddings, dtype=hidet.int64, device=device).unsqueeze(0)
+    position_ids = hidet.arange(0, config.max_position_embeddings, dtype=hidet.int32, device=device).unsqueeze(0)
 
     make_past = lambda: hidet.zeros(
         [1, config.num_attention_heads, 0, config.hidden_size // config.num_attention_heads], device=device, dtype=dtype
@@ -395,7 +395,7 @@ def generate(text: str, model, tokenizer, config, num_tokens=20, device='cuda', 
     outputs = []
     for _ in range(num_tokens):
         y = model(input_ids, position_ids, *past_keys_values)
-        input_ids = y[0][:, -1:]
+        input_ids = y[0][:, -1:].to(dtype=hidet.int32)
         outputs.append(input_ids[0, -1].item())
         past_keys_values = y[1:]
 
@@ -438,7 +438,9 @@ def generate_torch(input_ids: str, tokenizer, torch_model, num_tokens, device='c
 def get_compiled_model(name='decapoda-research/llama-7b-hf', device='cuda', opt=False):
     tok = LlamaTokenizer.from_pretrained(name)
 
-    model = hfLm.from_pretrained(name, torch_dtype=torch.float16)
+    with torch.device("cuda"):  # reduce the time to load the model
+        model = hfLm.from_pretrained(name, torch_dtype=torch.float16)
+
     model.cpu()
     torch.cuda.empty_cache()
 
@@ -450,7 +452,7 @@ def get_compiled_model(name='decapoda-research/llama-7b-hf', device='cuda', opt=
 
     if opt:
         with hidet.graph.PassContext() as ctx:
-            ctx.reduce_cuda_compile_mem(True)
+            ctx.reduce_cuda_compile_mem()
             flow_graph = hidet.graph.optimize(flow_graph)
 
     compiled = flow_graph.build()

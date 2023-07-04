@@ -57,6 +57,10 @@ class Device:
     def is_vcuda(self) -> bool:
         return self.kind == 'vcuda'
 
+    @property
+    def target(self) -> str:
+        return 'cuda' if self.kind in ['cuda', 'vcuda'] else 'cpu'
+
 
 def device(device_type: str, device_index: Optional[int] = None):
     if ':' in device_type:
