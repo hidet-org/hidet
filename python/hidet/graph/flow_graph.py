@@ -546,9 +546,11 @@ class FlowGraph:
                     dev = Device('vcuda', dev.id)
                 node.attrs['device'] = dev
             for inp in node.inputs:
-                inp.vcuda_()
+                if inp.device.is_cuda():
+                    inp.vcuda_()
             for outp in node.outputs:
-                outp.vcuda_()
+                if outp.device.is_cuda():
+                    outp.vcuda_()
 
     def cuda_(self) -> None:
         """
@@ -568,9 +570,11 @@ class FlowGraph:
                     dev = Device('cuda', dev.id)
                 node.attrs['device'] = dev
             for inp in node.inputs:
-                inp.cuda_()
+                if inp.device.is_vcuda():
+                    inp.cuda_()
             for outp in node.outputs:
-                outp.cuda_()
+                if outp.device.is_vcuda():
+                    outp.cuda_()
 
 
 def trace_from(tensor: Union[Tensor, List[Tensor]], inputs: Optional[Union[Tensor, List[Tensor]]] = None) -> FlowGraph:
