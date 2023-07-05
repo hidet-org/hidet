@@ -77,7 +77,10 @@ class SharedLibrary:
         func: ctypes.CFUNCTYPE
             The loaded function.
         """
+        # import sys
+        # print('loading {} {}'.format(self.lib_path, item), file=sys.stderr, flush=True)
         ret = self.cdll[item]
+        # print('success', file=sys.stderr, flush=True)
         # keep a reference to the library to prevent it from being unloaded before the function is deleted.
         ret._lib = self
         return ret

@@ -27,6 +27,14 @@ def pytest_sessionstart(session):
     hidet.option.cache_dir(os.path.join(hidet.option.get_cache_dir(), 'test_cache'))
     print('Cache directory: {}'.format(hidet.option.get_cache_dir()))
 
+    # hidet.option.compile_server.addr('23.21.86.254')
+    # hidet.option.compile_server.port(3281)
+    # hidet.option.compile_server.username('admin')
+    # hidet.option.compile_server.password('admin_password')
+    # # hidet.option.compile_server.repo('hidet-org/hidet', 'main')
+    # hidet.option.compile_server.repo('yaoyaoding/hidet', 'fix-cserver')
+    # hidet.option.compile_server.enable()
+    #
     if session.config.getoption("--clear-cache"):
         print('Clearing cache directory: {}'.format(hidet.option.get_cache_dir()))
 
