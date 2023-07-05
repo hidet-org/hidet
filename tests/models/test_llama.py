@@ -39,5 +39,3 @@ def test_llama(device, opt):
     print(current_memory_pool("cuda"))
     print(current_memory_pool("cpu"))
     print(current_memory_pool("vcuda"))
-
-test_llama('cuda', True)
