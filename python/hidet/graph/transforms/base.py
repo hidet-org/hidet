@@ -262,6 +262,19 @@ class PassContext:
         self.instruments.append(ProfileInstrument(log_file, print_stdout))
         return self
 
+    def reduce_cuda_compile_mem(self, enable: Optional[bool] = None):
+        """
+        Reduce CUDA memory used during compilation by using vcuda tensors, might incur compile time cost
+        Parameters
+        ----------
+        enable: Optional[bool]
+            When given, will always enable or disable this instrument.
+            If no argument is given, the compiler will decide to enable this with some heuristics
+        """
+        from .instruments import ConvertGraphToVCuda  # pylint: disable=import-outside-toplevel
+
+        self.instruments.append(ConvertGraphToVCuda(enable))
+
 
 class GraphPass:
     def __init__(self):

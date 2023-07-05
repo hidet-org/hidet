@@ -54,6 +54,13 @@ class Device:
     def is_cuda(self) -> bool:
         return self.kind == 'cuda'
 
+    def is_vcuda(self) -> bool:
+        return self.kind == 'vcuda'
+
+    @property
+    def target(self) -> str:
+        return 'cuda' if self.kind in ['cuda', 'vcuda'] else 'cpu'
+
 
 def device(device_type: str, device_index: Optional[int] = None):
     if ':' in device_type:
@@ -70,8 +77,8 @@ def device(device_type: str, device_index: Optional[int] = None):
             raise ValueError(f'Invalid device_index: {device_index}')
         device_index = int(device_index)
 
-    if device_type not in ['cpu', 'cuda']:
-        raise ValueError(f'Invalid device_type: {device_type}, must be "cpu" or "cuda"')
+    if device_type not in ['cpu', 'cuda', 'vcuda']:
+        raise ValueError(f'Invalid device_type: {device_type}, must be "cpu" "cuda" or "vcuda"')
 
     if device_index is not None and not isinstance(device_index, int):
         raise ValueError(f'Invalid device_index: {device_index}, must be an integer')
@@ -111,7 +118,7 @@ def instantiate_device(dev) -> Device:
     if dev.kind == 'cpu':
         dev.id = None  # CPU device does not have a device index
         return dev
-    elif dev.kind == 'cuda':
+    elif dev.kind in ['cuda', 'vcuda']:
         if dev.id is None:
             dev.id = current_device()
         return dev

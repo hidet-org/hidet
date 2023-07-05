@@ -176,8 +176,10 @@ class CompiledTask:
             _check_inputs(self.meta_data.inputs, inputs)
 
         outputs = self.create_outputs()
+
         candidate = self.candidates[self.pick_best_candidate(inputs, outputs)]
         candidate(*inputs, *outputs)
+
         return outputs
 
 
@@ -213,7 +215,8 @@ def _check_inputs(traced_inputs: Iterable[TensorSignature], inputs):
 
     symbol_map = {}
     for i, (traced, new) in enumerate(zip(traced_inputs, inputs)):
-        if traced.device.partition(':')[0] != new.device.kind:
+        traced_dev_kind = traced.device.partition(':')[0]
+        if traced_dev_kind != new.device.target:
             raise RuntimeError(
                 f"device mismatch at arg {i} between original: {traced.device} and new: {new.device.kind}"
             )
