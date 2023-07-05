@@ -23,18 +23,20 @@ from hidet.graph.ops.utils import Task, Operator, Tensor, input_like, normalize_
 class SymmetricQuantizationTask(Task):
     def __init__(self, w: TensorNode, quant_type: DataType, dims: Union[int, List[int]] = -1):
         dims = normalize_dim(dims, len(w.shape))
+        if not isinstance(dims, (list, tuple)):
+            dims = [dims]
 
         wm = compute(
             name='abs', shape=w.shape, fcompute=lambda *indices: if_then_else(w[indices] >= 0, w[indices], -w[indices])
         )
         scale = cops.reduce(wm, dims, keep_dim=False, reduce_type='max')
         scale = compute(
-            name='scaling', shape=scale.shape, fcompute=lambda *indices: quant_type.max_value / scale[indices]
+            name='scaling', shape=scale.shape, fcompute=lambda *indices: scale[indices] / quant_type.max_value
         )
 
         def scale_weight(*indices):
             scale_indices = [indices[i] for i in range(len(indices)) if not i in dims]
-            return cast(prim.round(w[indices] * scale[scale_indices]), quant_type)
+            return cast(prim.round(w[indices] / scale[scale_indices]), quant_type)
 
         wq = compute(name='quantize', shape=w.shape, fcompute=scale_weight)
         super().__init__(
@@ -48,10 +50,12 @@ class SymmetricQuantizationTask(Task):
 class SymmetricDeQuantizationTask(Task):
     def __init__(self, wq: TensorNode, scale: TensorNode, dims: Union[int, List[int]] = -1):
         dims = normalize_dim(dims, len(wq.shape))
-
+        if not isinstance(dims, (list, tuple)):
+            dims = [dims]
+        
         def unscale_weight(*indices):
             scale_indices = [indices[i] for i in range(len(indices)) if not i in dims]
-            return cast(wq[indices], scale.type.dtype) / scale[scale_indices]
+            return cast(wq[indices], scale.type.dtype) * scale[scale_indices]
 
         w = compute(name='dequantize', shape=wq.shape, fcompute=unscale_weight)
         super().__init__(name='symmetric_dequantization', inputs=[wq, scale], outputs=[w], attributes={'dims': dims})

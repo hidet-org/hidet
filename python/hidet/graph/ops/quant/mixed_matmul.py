@@ -26,7 +26,7 @@ from hidet.utils.py import is_power_of_two, cdiv, prod
 from hidet.graph.ops.utils import broadcast_indices
 
 
-class SymmetricQuantizedMatmulF16(Task):
+class SymmetricQuantizedMatmulF16Task(Task):
     def __init__(self, 
                  a: TensorNode, 
                  weight: TensorNode, 
@@ -90,6 +90,16 @@ class SymmetricQuantizedMatmulF16(Task):
 
     def implement_cuda(self, working_dir: str) -> List[IRModule]:
         return tune.extract_ir_modules(self.schedule)
+    
+    def get_alignment(self, last_dim: int) -> int:
+        if last_dim % 16 == 0:
+            return 16
+        elif last_dim % 8 == 0:
+            return 8
+        elif last_dim % 4 == 0:
+            return 4
+        else:
+            return 1
 
     @tune.space(
         2,
@@ -107,13 +117,14 @@ class SymmetricQuantizedMatmulF16(Task):
     ) -> IRModule:
         # pylint: disable=unused-variable
         import hidet
+        from hidet.ir.mapping import TaskMapping, row_spatial, col_spatial, row_repeat, col_repeat
         from hidet.ir.type import tensor_type
-        from hidet.lang import attrs, col_spatial, view, u32, tensor_pointer, grid
+        from hidet.lang import attrs, col_spatial, view, u32, i32, tensor_pointer, grid
         from hidet.lang.layout import row_major
         from hidet.lang.mapping import spatial, auto_map
         from hidet.lang.cuda import blockIdx, threadIdx, syncthreads, dynamic_shared_memory
         from hidet.lang.cuda import MmaConfig, mma_sync, cp_async, cp_async_wait_all, ldmatrix
-        from hidet.lang.cuda import register_tensor
+        from hidet.lang.cuda import register_tensor, load
         # load a as usual, [block_m, block_k] of fp16 values into smem
         # each warp computes a fragment of [16, 16] or [16, 8] in shape, of fp16 values in registers
 
@@ -121,10 +132,6 @@ class SymmetricQuantizedMatmulF16(Task):
         # each warp loads a block of int8[16, 16] reinterpreted as fp16[16, 8] using ldmatrix instruction
         # each thread loads 8 int8 values from smem into registers, we then cast them to fp16 using scale
         
-        # each tile of [16, 16] int8 values gets reinterpreted as [16, 8] f16 values, in smem
-
-        # mma_n becomes 16
-
         # input shapes
         node_a, weight, scale, node_c = self.inputs[0], self.inputs[1], self.inputs[2], self.outputs[0]
         a_shape: Tuple[Int, ...] = node_a.shape
@@ -148,7 +155,11 @@ class SymmetricQuantizedMatmulF16(Task):
         mma_count_m, mma_count_n, mma_count_k = warp_m // mma_m, warp_n // mma_n, warp_k // mma_k
         threads = warp_count_m * warp_count_n * warp_count_k * 32
         grid_dim: Tuple[Int, Int, Int] = cdiv(m_size, block_m), cdiv(n_size, block_n), prod(c_head)
-        dynamic_smem_bytes = max(2 * block_m * block_k * 2 + block_n * block_k, block_m * block_n * 2) + block_n * 2
+        # tile_a of size fp16[2, block_m, block_k] takes 2 * block_m * block_k * 2 bytes
+        # tile_b of size int8[2, block_k, block_n] takes block_k * block_n bytes
+        # tile_c of size fp16[block_m, block_n] takes block_m * block_n * 2 bytes
+        # scale_parameters of size fp16[block_n] takes block_n * 2 bytes
+        dynamic_smem_bytes = max(2 * block_m * block_k * 2 + 2 * block_n * block_k, block_m * block_n * 2) + block_n * 2
 
         tune.check(block_m % warp_m == block_n % warp_n == block_k % warp_k == 0, 'warp dims divide block dims')
         tune.check(warp_m % mma_m == warp_n % mma_n == warp_k % mma_k == 0, 'mma dims divide warp dims')
@@ -167,17 +178,41 @@ class SymmetricQuantizedMatmulF16(Task):
             shape=[block_k, block_n],
             layout=row_major(block_k // 8, block_n // 128) * row_major(8, 8).swizzle(1) * row_major(1, 16),
         )
-        smem_scale_type = tensor_type(
-            'float16',
-            shape=[block_n],
-        )
 
         load_smem_scale_map = auto_map(block_n, workers=threads, on_fail=lambda msg: tune.check(False, msg))
+
         load_smem_a_map = auto_map(block_m, block_k // 8, workers=threads, on_fail=lambda msg: tune.check(False, msg))
         load_smem_b_map = auto_map(block_k, block_n // 16, workers=threads, on_fail=lambda msg: tune.check(False, msg))
         store_smem_c_map = auto_map(block_m, block_n, workers=threads, on_fail=lambda msg: tune.check(False, msg))
 
         with hidet.script_module() as module:
+            @hidet.script
+            def load_smem_fixed(smem: ~int8, gmem: ~int8, alignment: i32, target_bytes: i32, src_bytes: i32): 
+                """
+                Loads src_bytes from gmem into smem
+
+                alignment specifies the cp_async instruction used, while target_bytes specifies the size
+                of smem mutated, starting from the address provided, it must be a multiple of alignment
+
+                This parameter is used as cp_async writes zeros to all bytes from smem[src_bytes:target_bytes]
+                """
+
+                if alignment == 16:
+                    for i in range(cdiv(target_bytes, 16)):
+                        cp_async(~smem[i * 16], ~gmem[i * 16], cp_size=16, src_size=src_bytes, cache_level='global')
+                        src_bytes = max(0, src_bytes - 16)
+                elif alignment == 8:
+                    for i in range(cdiv(target_bytes, 8)):
+                        cp_async(~smem[i * 8], ~gmem[i * 8], cp_size=8, src_size=src_bytes)
+                        src_bytes = max(0, src_bytes - 8)
+                elif alignment == 4:
+                    for i in range(cdiv(target_bytes, 4)):
+                        cp_async(~smem[i * 4], ~gmem[i * 4], cp_size=4, src_size=src_bytes)
+                        src_bytes = max(0, src_bytes - 4)
+                else: # slow fallback
+                    for i in range(src_bytes):
+                        smem[i] = gmem[i]
+            
 
             @hidet.script
             def load_regs_a(mi: int, k1: int, smem_a: smem_a_type, regs_a: float16[mma_config.a_elements]):
@@ -194,7 +229,7 @@ class SymmetricQuantizedMatmulF16(Task):
                     )
 
             @hidet.script
-            def load_regs_b(mj: int, k1: int, smem_b: smem_b_type, regs_b: float16[2, mma_config.b_elements], scale: smem_scale_type):
+            def load_regs_b(mj: int, k1: int, smem_b: smem_b_type, regs_b: float16[2, mma_config.b_elements], scale: float16[block_n]):
                 # smem_b_type = float16[block_k, block_n]
                 # smem_scale_type = float16[block_n]
 
@@ -209,17 +244,18 @@ class SymmetricQuantizedMatmulF16(Task):
                     ldmatrix(regs=[temp_regs[0], temp_regs[1]], smem_addr=row_addr, trans=True)
 
                     regs = view(~temp_regs, int8[8])
+        
                     for i in range(8):
-                        val = cast(regs[i], float16) * scale[offset_block_n + i % 2]
-                        regs_b[i % 2, i // 2] = val
+                        regs_b[i % 2, i // 2] = cast(regs[i], float16)
 
             @hidet.script
             def warp_mma(
                 regs_a: float16[mma_config.a_elements],
-                regs_b: float16[mma_config.b_elements],
-                regs_c: float16[mma_config.c_elements],
+                regs_b: float16[2, mma_config.b_elements],
+                regs_c: float16[2, mma_config.c_elements],
             ):
-                mma_sync(mma_config, regs_a, regs_b, regs_c)
+                mma_sync(mma_config, regs_a, ~regs_b[0, 0], ~regs_c[0, 0])
+                mma_sync(mma_config, regs_a, ~regs_b[1, 0], ~regs_c[1, 0])
 
             @hidet.script
             def load_smem_a(k0: int, a: float16[a_head + [m_size, k_size]], smem_a: smem_a_type):
@@ -235,23 +271,8 @@ class SymmetricQuantizedMatmulF16(Task):
                         if (offset_m + i >= m_size or offset_k + k >= maximum_k)
                         else min(maximum_k - (offset_k + k), 8)
                     )
-                    if a_shape[-1] % 8 == 0:
-                        cp_async(~smem_a[i, k], ~gmem_a[i, k], cp_size=16, src_size=src_size * 2, cache_level='global')
-                    # trivially support other cp_sizes, perhaps do this in a more clever way?
-                    elif a_shape[-1] % 4 == 0:
-                        cp_async(~smem_a[i, k], ~gmem_a[i, k], cp_size=8, src_size=min(8, src_size * 2))
-                        cp_async(~smem_a[i, k + 4], ~gmem_a[i, k + 4], cp_size=8, src_size=max(0, src_size * 2 - 8))
-                    elif a_shape[-1] % 2 == 0:
-                        cp_async(~smem_a[i, k], ~gmem_a[i, k], cp_size=4, src_size=min(4, src_size * 2))
-                        cp_async(
-                            ~smem_a[i, k + 2], ~gmem_a[i, k + 2], cp_size=4, src_size=min(4, max(0, src_size * 2 - 4))
-                        )
-                        cp_async(
-                            ~smem_a[i, k + 4], ~gmem_a[i, k + 4], cp_size=4, src_size=min(4, max(0, src_size * 2 - 8))
-                        )
-                        cp_async(
-                            ~smem_a[i, k + 6], ~gmem_a[i, k + 6], cp_size=4, src_size=min(4, max(0, src_size * 2 - 12))
-                        )
+                    alignment = self.get_alignment(k_size)
+                    load_smem_fixed(cast(~smem_a[i, k], ~int8), cast(~gmem_a[i, k], ~int8), alignment, 16, src_size * 2)
 
             @hidet.script
             def load_smem_b(k0: int, b: int8[b_head + [k_size, n_size]], smem_b: smem_b_type):
@@ -263,26 +284,12 @@ class SymmetricQuantizedMatmulF16(Task):
                 for k, j_seg in load_smem_b_map.on(threadIdx.x):
                     j = j_seg * 16
                     src_size = (
-                        0 if (offset_k + k >= maximum_k or offset_n + j >= n_size) else min(n_size - (offset_n + j), 8)
+                        0 if (offset_k + k >= maximum_k or offset_n + j >= n_size) else min(n_size - (offset_n + j), 16)
                     )
-                    if b_shape[-1] % 8 == 0:
-                        cp_async(~smem_b[k, j], ~gmem_b[k, j], cp_size=16, src_size=src_size * 2, cache_level='global')
-                    # trivially support other cp_sizes, perhaps do this in a more clever way?
-                    elif b_shape[-1] % 4 == 0:
-                        cp_async(~smem_b[k, j], ~gmem_b[k, j], cp_size=8, src_size=min(8, src_size * 2))
-                        cp_async(~smem_b[k, j + 4], ~gmem_b[k, j + 4], cp_size=8, src_size=max(0, src_size * 2 - 8))
-                    elif b_shape[-1] % 2 == 0:
-                        cp_async(~smem_b[k, j], ~gmem_b[k, j], cp_size=4, src_size=min(4, src_size * 2))
-                        cp_async(
-                            ~smem_b[k, j + 2], ~gmem_b[k, j + 2], cp_size=4, src_size=min(4, max(0, src_size * 2 - 4))
-                        )
-                        cp_async(
-                            ~smem_b[k, j + 4], ~gmem_b[k, j + 4], cp_size=4, src_size=min(4, max(0, src_size * 2 - 8))
-                        )
-                        cp_async(
-                            ~smem_b[k, j + 6], ~gmem_b[k, j + 6], cp_size=4, src_size=min(4, max(0, src_size * 2 - 12))
-                        )
-
+                    alignment = self.get_alignment(n_size)
+                    # the target_cp_size is 16 because ld_matrix requires 16-byte alignment
+                    load_smem_fixed(~smem_b[k, j], ~gmem_b[k, j], alignment, 16, src_size)
+                    
             @hidet.script
             def matmul_f16_kernel(
                 a: float16[a_head + [m_size, k_size]],
@@ -293,7 +300,6 @@ class SymmetricQuantizedMatmulF16(Task):
                 # matrix multiplication, using mma instruction
                 attrs.cuda.grid_dim = grid_dim
                 attrs.cuda.block_dim = threads
-                # the second 2 means '2 bytes per float16'
                 attrs.cuda.dynamic_smem_bytes = dynamic_smem_bytes
                 # smem_storage = dyn_smem_storage
                 smem_a = tensor_pointer(
@@ -303,14 +309,12 @@ class SymmetricQuantizedMatmulF16(Task):
                     'int8', shape=[2, block_k, block_n], layout=row_major(2) + smem_b_type.layout
                 )
                 smem_scale = tensor_pointer(
-                    'float16', shape=[block_n], layout=smem_scale_type.layout
+                    'float16', shape=[block_n] # we use row_major for now
                 )
 
                 smem_a = dynamic_shared_memory(byte_offset=0, dtype=float16)
                 smem_b = dynamic_shared_memory(byte_offset=2 * block_m * block_k * 2, dtype=int8)
-                smem_scale = dynamic_shared_memory(byte_offset=2 * block_m * block_k + block_k * block_n, dtype=float16)
-
-                
+                smem_scale = dynamic_shared_memory(byte_offset=2 * block_m * block_k * 2 + 2 * block_k * block_n, dtype=float16)                
 
                 regs_a = register_tensor(float16, [2, mma_count_m, mma_config.a_elements])
                 regs_b = register_tensor(float16, [2, mma_count_n, 2, mma_config.b_elements])
@@ -319,12 +323,30 @@ class SymmetricQuantizedMatmulF16(Task):
                 for i, j, k, p in grid(mma_count_m, mma_count_n, 2, mma_config.c_elements):
                     regs_c[i, j, k, p] = 0.0
 
-                for i in load_smem_scale_map.on(threadIdx.x):
-                    if i + blockIdx.y * block_n < n_size:
-                        smem_scale[i] = scale[i + blockIdx.y * block_n]
-                    else:
-                        smem_scale[i] = 1.0  # identity w.r.t. multiplication
+                # for i in load_smem_scale_map.on(threadIdx.x):
+                #     if i < block_n:
+                #         if i + blockIdx.y * block_n < n_size:
+                #             smem_scale[i] = scale[i + blockIdx.y * block_n]
+                #         else:
+                #             smem_scale[i] = 1.0  # identity w.r.t. multiplication
+                
+                if threads * 8 > block_n:
+                    offset = threadIdx.x * 8 + blockIdx.y * block_n
+                    if offset < n_size and threadIdx.x * 8 < block_n:
+                        src_size = min(8, n_size - offset)
+                        load_smem_fixed(cast(~smem_scale[threadIdx.x * 8], ~int8), cast(~scale[offset], ~int8), 16, 16, src_size * 2)
+                else:
+                    loc_tid = threadIdx.x * 8
+                    while loc_tid < block_n:
+                        offset = loc_tid + blockIdx.y * block_n
+                        if offset < n_size and loc_tid < block_n:
+                            src_size = min(8, n_size - offset)
+                            load_smem_fixed(cast(~smem_scale[loc_tid], ~int8), cast(~scale[offset], ~int8), 16, 16, src_size * 2)
+                            loc_tid += threads * 8
+    
 
+                
+                syncthreads()
                 load_smem_a(0, a, ~smem_a[0, 0, 0])
                 load_smem_b(0, b, ~smem_b[0, 0, 0])
                 cp_async_wait_all()
@@ -336,18 +358,17 @@ class SymmetricQuantizedMatmulF16(Task):
                     for mi in range(mma_count_m):
                         load_regs_a(mi, 0, ~smem_a[k0 % 2, 0, 0], ~regs_a[0, mi, 0])
                     for mj in range(mma_count_n):
-                        load_regs_b(mj, 0, ~smem_b[k0 % 2, 0, 0], ~regs_b[0, mj, 0, 0])
+                        load_regs_b(mj, 0, ~smem_b[k0 % 2, 0, 0], ~regs_b[0, mj, 0, 0], ~smem_scale[0])
                     
                     for mk in range(mma_count_k):
                         if mk + 1 < mma_count_k:
                             for mi in range(mma_count_m):
                                 load_regs_a(mi, mk + 1, ~smem_a[k0 % 2, 0, 0], ~regs_a[(mk + 1) % 2, mi, 0])
                             for mj in range(mma_count_n):
-                                load_regs_b(mj, mk + 1, ~smem_b[k0 % 2, 0, 0], ~regs_b[(mk + 1) % 2, mj, 0, 0])
+                                load_regs_b(mj, mk + 1, ~smem_b[k0 % 2, 0, 0], ~regs_b[(mk + 1) % 2, mj, 0, 0], ~smem_scale[0])
 
                         for mi, mj in grid(mma_count_m, mma_count_n):
-                            for i in range(2):
-                                warp_mma(~regs_a[mk % 2, mi, 0], ~regs_b[mk % 2, mj, i, 0], ~regs_c[mi, mj, i, 0])
+                            warp_mma(~regs_a[mk % 2, mi, 0], ~regs_b[mk % 2, mj, 0, 0], ~regs_c[mi, mj, 0, 0])
                     cp_async_wait_all()
                     syncthreads()
 
@@ -357,17 +378,19 @@ class SymmetricQuantizedMatmulF16(Task):
                 c_head_index = spatial(*c_head).map(blockIdx.z)
                 gmem_c = c[c_head_index][offset_m:, offset_n:]
 
+                c_store_map = row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 4, attrs='u+u+')
+
                 # TODO: handle store back
                 if warp_count_k == 1:
                     for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
                         for mi, mj in grid(mma_count_m, mma_count_n):
                             p = 0
-                            for i, j in mma_config.c_store_map.on(lane_id):
+                            for i, j in c_store_map.on(lane_id):
                                 delta_m = wi * warp_m + mi * mma_m + i
                                 delta_n = wj * warp_n + mj * mma_n + j
                                 in_bound = (offset_m + delta_m < m_size) and (offset_n + delta_n < n_size)
                                 if in_bound:
-                                    gmem_c[delta_m, delta_n] = regs_c[mi, mj, p]
+                                    gmem_c[delta_m, delta_n] = regs_c[mi, mj, p % 2, p // 2] * smem_scale[delta_n]
                                 p += 1
                 else:
                     smem_c = tensor_pointer('float16', shape=[block_m, block_n])
@@ -378,21 +401,21 @@ class SymmetricQuantizedMatmulF16(Task):
                             if wk == k_round:
                                 for mi, mj in grid(mma_count_m, mma_count_n):
                                     p = 0
-                                    for i, j in mma_config.c_store_map.on(lane_id):
+                                    for i, j in c_store_map.on(lane_id):
                                         delta_m = wi * warp_m + mi * mma_m + i
                                         delta_n = wj * warp_n + mj * mma_n + j
                                         in_bound = (offset_m + delta_m < m_size) and (offset_n + delta_n < n_size)
                                         if in_bound:
                                             if k_round == 0:
-                                                smem_c[delta_m, delta_n] = regs_c[mi, mj, p]
+                                                smem_c[delta_m, delta_n] = regs_c[mi, mj, p % 2, p // 2]
                                             else:
-                                                smem_c[delta_m, delta_n] += regs_c[mi, mj, p]
+                                                smem_c[delta_m, delta_n] += regs_c[mi, mj, p % 2, p // 2]
                                         p += 1
                         if warp_count_k > 1:
                             syncthreads()
                     for i, j in store_smem_c_map.on(threadIdx.x):
                         if offset_m + i < m_size and offset_n + j < n_size:
-                            gmem_c[i, j] = smem_c[i, j]
+                            gmem_c[i, j] = smem_c[i, j] * smem_scale[j]
 
         ir_module = module.ir_module()
         assert isinstance(matmul_f16_kernel, Function)
@@ -400,28 +423,25 @@ class SymmetricQuantizedMatmulF16(Task):
         return ir_module
 
 
-class MatmulF16Op(Operator):
-    def __init__(self, a: Tensor, b: Tensor, parallel_k_parts=1):
+class SymmetricQuantizedMatmulF16Op(Operator):
+    def __init__(self, a: Tensor, b: Tensor, scale: Tensor, parallel_k_parts=1):
         if not (isinstance(parallel_k_parts, int) and not isinstance(parallel_k_parts, bool)):
             raise ValueError('parallel_k_parts must be an integer, got {}'.format(parallel_k_parts))
         super().__init__(
-            inputs=[a, b],
+            inputs=[a, b, scale],
             attributes={'parallel_k_parts': parallel_k_parts},
-            task=SymmetricQuantizedMatmulF16(input_like(a, 'a'), input_like(b, 'b'), parallel_k_parts),
+            task=SymmetricQuantizedMatmulF16Task(input_like(a, 'a'), input_like(b, 'b'), input_like(scale, 'scale'), parallel_k_parts),
         )
 
 
-def matmul_f16(a: Tensor, b: Tensor, parallel_k_parts=1) -> Tensor:
-    if len(a.shape) < 2 or len(b.shape) < 2:
-        raise ValueError('a and b must have at least 2 dimensions, got shape {} and {}'.format(a.shape, b.shape))
+def symmetric_quant_matmul(a: Tensor, weight: Tensor, scale: Tensor, parallel_k_parts=1) -> Tensor:
+    if len(a.shape) < 2 or len(weight.shape) < 2:
+        raise ValueError('a and b must have at least 2 dimensions, got shape {} and {}'.format(a.shape, weight.shape))
     # TODO: impliment dynamic run-time shape assertion
-    if not (isinstance(a.shape[-1], Expr) or isinstance(b.shape[-1], Expr)) and (
-        a.shape[-1] % 2 != 0 or b.shape[-1] % 2 != 0
+    if not (isinstance(a.shape[-1], Expr) or isinstance(weight.shape[-1], Expr)) and (
+        a.shape[-1] % 2 != 0 or weight.shape[-1] % 2 != 0
     ):
         raise ValueError('Expect the last dimension of the input tensors to be a multiple of 2')
-    if a.dtype != dtypes.float16 or b.dtype != dtypes.float16:
-        raise ValueError('BatchMatmulF16Op only support float16, got {} and {}'.format(a.dtype, b.dtype))
-    return MatmulF16Op(a, b, parallel_k_parts).outputs[0]
-
-
-# %%
+    if a.dtype != dtypes.float16 or weight.dtype != dtypes.int8:
+        raise ValueError('BatchMatmulF16Op only support float16, int8, got {} and {}'.format(a.dtype, weight.dtype))
+    return SymmetricQuantizedMatmulF16Op(a, weight, scale, parallel_k_parts).outputs[0]
