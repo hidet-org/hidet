@@ -11,8 +11,6 @@ from .core import api_url, access_token
 
 
 def remote_build(ir_module: IRModule, output_dir: str, *, target: str, output_kind: str = '.so'):
-    # print('remote build', 'output_dir', output_dir)
-    # exit(0)
     # upload the IRModule
     if 'cuda' in target and 'arch' not in target:
         arch = hidet.option.cuda.get_arch()
