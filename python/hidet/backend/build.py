@@ -130,8 +130,7 @@ class NVCC(SourceCompiler):
         if 'arch' in target.attrs:
             arch = target.attrs['arch']
         else:
-            cc = hidet.cuda.compute_capability()
-            arch = 'sm_{}{}'.format(cc[0], cc[1])
+            arch = hidet.option.cuda.get_arch()
 
         # The following command compiles the cuda source code to a shared library
         # See https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html

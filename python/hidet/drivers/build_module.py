@@ -66,8 +66,11 @@ def build_ir_module(ir_module: IRModule, output_dir: str, *, target: str, output
     if hidet.option.get_save_lower_ir():
         instruments.append(SaveIRInstrument(out_dir=os.path.join(output_dir, './ir')))
         instruments.append(ProfileInstrument(log_file=os.path.join(output_dir, './lower_time.txt')))
-    with PassContext(instruments=instruments):
-        ir_module = lower(ir_module)
+    with hidet.option.context():
+        if target.name == 'cuda' and 'arch' in target.attrs:
+            hidet.option.cuda.arch(target.attrs['arch'])
+        with PassContext(instruments=instruments):
+            ir_module = lower(ir_module)
 
     # code generation
     codegen(ir_module, src_out_path=src_path, target=target)

@@ -53,7 +53,7 @@ class BatchMatmulTask(Task):
         if self.mma == 'simt':
             return tune.extract_ir_modules(self.schedule_simt)
         elif self.mma.startswith('mma'):
-            cc = hidet.cuda.compute_capability()
+            cc = hidet.option.cuda.get_arch_pair()
             if cc < (7, 5):
                 raise ValueError(
                     "mma instructions are only supported on Compute Capability >= 75, got sm{}{}".format(*cc)
@@ -163,9 +163,9 @@ class BatchMatmulTask(Task):
         # the number of registers allocated to each thread is a multiple of 8.
         used_num_regs_per_thread = (used_num_regs_per_thread + 7) // 8 * 8
         tune.check(used_num_regs_per_thread <= 255)
-        resident_blocks = hidet.cuda.properties().regsPerMultiprocessor // (used_num_regs_per_thread * block_size)
+        resident_blocks = hidet.cuda.capability().regsPerMultiprocessor // (used_num_regs_per_thread * block_size)
         max_smem_bytes_per_block = (
-            min(48 * 1024 // resident_blocks, hidet.cuda.properties().sharedMemPerBlock) // 128 * 128
+            min(48 * 1024 // resident_blocks, hidet.cuda.capability().sharedMemPerBlock) // 128 * 128
         )
 
         tune.check(warp_mid.num_workers == 32)
@@ -174,7 +174,7 @@ class BatchMatmulTask(Task):
         tune.check(warp_size % block_k == 0)
         tune.check(block_shape[0] % (block_size // block_k) == 0 and block_shape[1] % (block_size // block_k) == 0)
         tune.check(used_smem_bytes_per_block <= max_smem_bytes_per_block)
-        tune.check(used_num_regs_per_thread * block_size <= hidet.cuda.properties().regsPerBlock)
+        tune.check(used_num_regs_per_thread * block_size <= hidet.cuda.capability().regsPerBlock)
         use_dynamic_smem = used_smem_bytes_per_block > 48 * 1024
         min_thread_blocks = resident_blocks
         cuda_dynamic_smem_bytes = used_smem_bytes_per_block if use_dynamic_smem else 0
@@ -416,7 +416,7 @@ class BatchMatmulTask(Task):
 
         head, input_dtype, output_dtype = mma_type.split('_')  # pylint: disable=unused-variable
         tune.check(mma_config.input_dtype == input_dtype and mma_config.output_dtype == output_dtype)
-        tune.check(mma_config.required_arch <= hidet.cuda.compute_capability())
+        tune.check(mma_config.required_arch <= hidet.option.cuda.get_arch_pair())
 
         mma_m, mma_n, mma_k = (mma_config.m, mma_config.n, mma_config.k)
 
@@ -455,7 +455,7 @@ class BatchMatmulTask(Task):
         used_registers = (used_registers + 7) // 8 * 8
         tune.check(smem_storage_nbytes <= 48 * 1024)
         tune.check(used_registers <= 255)
-        tune.check(used_registers * num_threads <= hidet.cuda.properties().regsPerBlock)
+        tune.check(used_registers * num_threads <= hidet.cuda.capability().regsPerBlock)
 
         bs = task.attrs['batch_size']
         m_size = task.attrs['m_size']

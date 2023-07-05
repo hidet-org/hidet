@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import List, Optional, Dict, Any
 import logging
 
+import hidet.option
 from hidet.graph.flow_graph import FlowGraph
 from .instruments import GraphPassInstrument
 
@@ -160,9 +161,7 @@ class PassContext:
 
         """
         # fmha requires sm75+
-        from hidet.cuda import compute_capability
-
-        cc = compute_capability()
+        cc = hidet.option.cuda.get_arch_pair()
         if cc < (7, 5):
             return self
 
