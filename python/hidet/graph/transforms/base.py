@@ -91,7 +91,7 @@ class PassContext:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        from ..transforms.graph_patterns import deregister_attn_patterns
+        from ..transforms.graph_patterns.attn_patterns import deregister_attn_patterns
 
         deregister_attn_patterns()
         popped = self._stack.pop()
@@ -166,7 +166,7 @@ class PassContext:
         if cc < (7, 5):
             return self
 
-        from ..transforms.graph_patterns import register_attn_patterns, deregister_attn_patterns
+        from ..transforms.graph_patterns.attn_patterns import register_attn_patterns, deregister_attn_patterns
 
         self.configs['use_attention'] = flag
         if flag:

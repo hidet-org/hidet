@@ -42,7 +42,7 @@ class SubgraphRewritePass(GraphPass):
     def process_graph(self, graph: FlowGraph) -> FlowGraph:
         graph = graph_utils.functors.clone(graph)
         for _ in range(self.max_num_transforms):
-            updated, graph = self.try_transform(graph, registered_rewrite_rules)
+            updated, graph = self.try_transform(graph, registered_rewrite_rules())
             if not updated:
                 graph.update_nodes()
                 return graph
