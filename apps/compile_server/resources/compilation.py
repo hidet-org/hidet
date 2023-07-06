@@ -145,7 +145,7 @@ class CompilationResource(Resource):
                         pickle.dump(job, f)
 
             with lock:  # Only one thread can access the following code at the same time
-                print('[{}] Start compiling {}'.format(pid, job_id[:16]))
+                print('[{}] Start compiling: {}'.format(pid, job_id[:16]))
                 ret = subprocess.run([sys.executable, compile_script, '--job_id', job_id])
 
             # respond to the client
@@ -153,7 +153,7 @@ class CompilationResource(Resource):
             if not os.path.exists(response_path):
                 raise RuntimeError('Can not find the response file:\n{}{}'.format(ret.stderr, ret.stdout))
             else:
-                print('[{}] Finish compiling {}'.format(pid, job_id[:16]))
+                print('[{}] Finish compiling: {}'.format(pid, job_id[:16]))
                 with open(response_path, 'rb') as f:
                     response: Tuple[Dict, int] = pickle.load(f)
                     return response
