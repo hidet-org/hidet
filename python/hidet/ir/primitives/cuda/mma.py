@@ -93,6 +93,12 @@ class MmaConfig:
     def __str__(self):
         return self.inst_name()
 
+class MmaConfigInt(MmaConfig):
+    def inst_name(self) -> str:
+        return 'mma.sync.aligned.m{}n{}k{}.row.col.satfinite.{}.{}.{}.{}'.format(
+            self.m, self.n, self.k, self.output_dtype, self.input_dtype, self.input_dtype, self.output_dtype
+        )
+
 
 mma_configs: Dict[str, MmaConfig] = {}
 
@@ -122,6 +128,46 @@ def register_mma_configs():
                     output_dtype=output_dtype,
                     a_load_map=col_repeat(2, 2, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
                     b_load_map=col_repeat(2, 1, attrs='u+u+') * col_spatial(4, 8) * col_repeat(2, 1, attrs='u+u+'),
+                    c_store_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
+                    required_arch=(8, 0),
+                ),
+            }
+        )
+    
+    # int8
+    for input_type in ['s8', 'u8']:
+        mma_configs.update(
+            {
+                'm8n8k16_i8_i32': MmaConfigInt(
+                    m=8,
+                    n=8,
+                    k=16,
+                    input_dtype=input_type,
+                    output_dtype='i32',
+                    a_load_map=row_spatial(8, 4) * row_repeat(1, 4, attrs='u+u+'),
+                    b_load_map=col_spatial(4, 8) * col_repeat(4, 1, attrs='u+u+'),
+                    c_store_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
+                    required_arch=(8, 0),
+                ),
+                'm8n8k16_i8_i32': MmaConfigInt(
+                    m=8,
+                    n=8,
+                    k=16,
+                    input_dtype=input_type,
+                    output_dtype='i32',
+                    a_load_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
+                    b_load_map=col_spatial(4, 8) * col_repeat(2, 1, attrs='u+u+'),
+                    c_store_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
+                    required_arch=(8, 0),
+                ),
+                'm8n8k16_i8_i32': MmaConfigInt(
+                    m=8,
+                    n=8,
+                    k=16,
+                    input_dtype=input_type,
+                    output_dtype='i32',
+                    a_load_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
+                    b_load_map=col_spatial(4, 8) * col_repeat(2, 1, attrs='u+u+'),
                     c_store_map=row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 2, attrs='u+u+'),
                     required_arch=(8, 0),
                 ),
