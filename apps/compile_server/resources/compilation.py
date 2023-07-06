@@ -58,7 +58,7 @@ def clone_github_repo(owner: str, repo: str, version: str) -> str:
             repo.git.fetch('--all')
             repo.git.fetch('--tags')
             repo.git.checkout(version)
-            repo.git.pull(version)
+            repo.git.pull('origin', version)
         else:
             repo.git.checkout(version)
         commit_id = repo.head.commit.hexsha
