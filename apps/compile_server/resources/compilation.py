@@ -98,55 +98,58 @@ def parse_repo_url(url: str) -> Tuple[str, str]:
 class CompilationResource(Resource):
     @jwt_required()  # Requires JWT authentication for this endpoint
     def post(self):
-        # Retrieve the ir modules
-        job_data: bytes = request.data
+        try:
+            # Retrieve the ir modules
+            job_data: bytes = request.data
 
-        raw_job: Dict[str, Any] = pickle.loads(job_data)
+            raw_job: Dict[str, Any] = pickle.loads(job_data)
 
-        # download the repository if needed
-        hidet_repo_url = raw_job['hidet_repo_url']
-        hidet_repo_version = raw_job['hidet_repo_version']
-        owner, repo = parse_repo_url(hidet_repo_url)
-        commit_id: str = clone_github_repo(owner, repo, hidet_repo_version)
+            # download the repository if needed
+            hidet_repo_url = raw_job['hidet_repo_url']
+            hidet_repo_version = raw_job['hidet_repo_version']
+            owner, repo = parse_repo_url(hidet_repo_url)
+            commit_id: str = clone_github_repo(owner, repo, hidet_repo_version)
 
-        workload: bytes = raw_job['workload']
+            workload: bytes = raw_job['workload']
 
-        job = {
-            'commit_id': commit_id,
-            'workload': workload
-        }
+            job = {
+                'commit_id': commit_id,
+                'workload': workload
+            }
 
-        job_id: str = sha256(commit_id.encode() + workload).hexdigest()
-        job_path = os.path.join(jobs_dir, job_id + '.pickle')
-        job_response_path = os.path.join(jobs_dir, job_id + '.response')
+            job_id: str = sha256(commit_id.encode() + workload).hexdigest()
+            job_path = os.path.join(jobs_dir, job_id + '.pickle')
+            job_response_path = os.path.join(jobs_dir, job_id + '.response')
 
-        print('[{}] Received a job: {}'.format(pid, job_id[:16]))
+            print('[{}] Received a job: {}'.format(pid, job_id[:16]))
 
-        # check if the job is already done
-        if os.path.exists(job_response_path):
-            print('[{}] Job {} has already done before, respond directly'.format(pid, job_id[:16]))
-            with open(job_response_path, 'rb') as f:
-                return pickle.load(f)
+            # check if the job is already done
+            if os.path.exists(job_response_path):
+                print('[{}] Job {} has already done before, respond directly'.format(pid, job_id[:16]))
+                with open(job_response_path, 'rb') as f:
+                    return pickle.load(f)
 
-        # write the job to the disk
-        job_lock = os.path.join(jobs_dir, job_id + '.lock')
-        with FileLock(job_lock):
-            if not os.path.exists(job_path):
-                with open(job_path, 'wb') as f:
-                    pickle.dump(job, f)
+            # write the job to the disk
+            job_lock = os.path.join(jobs_dir, job_id + '.lock')
+            with FileLock(job_lock):
+                if not os.path.exists(job_path):
+                    with open(job_path, 'wb') as f:
+                        pickle.dump(job, f)
 
-        with lock:  # Only one thread can access the following code at the same time
-            print('[{}] Start compiling {}'.format(pid, job_id[:16]))
-            ret = subprocess.run([sys.executable, compile_script, '--job_id', job_id])
+            with lock:  # Only one thread can access the following code at the same time
+                print('[{}] Start compiling {}'.format(pid, job_id[:16]))
+                ret = subprocess.run([sys.executable, compile_script, '--job_id', job_id])
 
-        # respond to the client
-        response_path = os.path.join(jobs_dir, job_id + '.response')
-        if not os.path.exists(response_path):
-            msg = '{}\n{}'.format(ret.stderr, ret.stdout)
-            print('[{}] Failed to compile {}:\n{}'.format(pid, job_id[:16], msg))
-            return {'message': 'Can not find a response from the worker due to\n{}'.format(msg)}, 500
-        else:
-            print('[{}] finish compiling {}'.format(pid, job_id[:16]))
-            with open(response_path, 'rb') as f:
-                response: Tuple[Dict, int] = pickle.load(f)
-                return response
+            # respond to the client
+            response_path = os.path.join(jobs_dir, job_id + '.response')
+            if not os.path.exists(response_path):
+                raise RuntimeError('Can not find the response file:\n{}{}'.format(ret.stderr, ret.stdout))
+            else:
+                print('[{}] finish compiling {}'.format(pid, job_id[:16]))
+                with open(response_path, 'rb') as f:
+                    response: Tuple[Dict, int] = pickle.load(f)
+                    return response
+        except Exception as e:
+            msg = traceback.format_exc()
+            print('[{}] Failed to compile:\n{}'.format(pid, msg))
+            return {'message': '[Remote] {}'.format(msg)}, 500
