@@ -35,14 +35,12 @@ def should_update(repo_timestamp) -> bool:
             timestamp = f.read()
         return time.time() - float(timestamp) > 3 * 60  # 3 minutes
     else:
-        with open(repo_timestamp, 'w') as f:
-            f.write(str(time.time()))
         return True
 
 
 def clone_github_repo(owner: str, repo: str, version: str) -> str:
     repo_dir = os.path.join(repos_dir, "{}_{}".format(owner, repo))
-    repo_timestamp = os.path.join(repos_dir, "{}_{}_{}_timestamp".format(owner, repo, version))
+    repo_timestamp = os.path.join(repos_dir, "{}_{}_timestamp".format(owner, repo))
     os.makedirs(repo_dir, exist_ok=True)
     with FileLock(os.path.join(repos_dir, '{}_{}.lock'.format(owner, repo))):
         if not os.path.exists(os.path.join(repo_dir, '.git')):
@@ -54,11 +52,13 @@ def clone_github_repo(owner: str, repo: str, version: str) -> str:
             repo = git.Repo(repo_dir)
 
         if should_update(repo_timestamp):
-            repo.remotes.origin.fetch()
-            repo.git.fetch('--all')
-            repo.git.fetch('--tags')
+            # repo.remotes.origin.fetch()
+            # repo.git.fetch('--all')
+            # repo.git.fetch('--tags')
             repo.git.checkout(version)
-            repo.git.pull('origin', version)
+            repo.remotes.origin.pull(version)
+            with open(repo_timestamp, 'w') as f:
+                f.write(str(time.time()))
         else:
             repo.git.checkout(version)
         commit_id = repo.head.commit.hexsha
