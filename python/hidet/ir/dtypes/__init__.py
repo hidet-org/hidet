@@ -15,8 +15,13 @@ from .integer import i8, i16, i32, i64, u8, u16, u32, u64
 from .floats import float16, float32, float64, bfloat16, tfloat32
 from .floats import f16, f32, f64, bf16, tf32
 from .boolean import boolean
+<<<<<<< HEAD
 from .vector import float16x2, float32x4, float32x8, int32x8, int8x4, vectorize
 from .vector import f16x2, f32x4, f32x8, i32x8
+=======
+from .vector import float16x2, float32x4, float32x8, uint32x8, int8x4, vectorize
+from .vector import f16x2, f32x4, f32x8, u32x8
+>>>>>>> 12dd22ae (initial commit)
 from .complex import complex64, complex128
 from .promotion import promote_type
 from .utils import dtype_to_numpy, finfo, iinfo
