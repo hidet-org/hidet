@@ -145,18 +145,24 @@ def avx_f32x8_subtract(a: Expr, b: Expr) -> Call:
     return call_primitive_func('avx_x86_float32x8_subtract', [a, b])
 
 
+<<<<<<< HEAD
 def avx_f32x8_multiply(a: Expr, b: Expr) -> Call:
     return call_primitive_func('avx_x86_float32x8_multiply', [a, b])
 
 
+=======
+>>>>>>> 12dd22ae (initial commit)
 def avx_f32x8_divide(a: Expr, b: Expr) -> Call:
     return call_primitive_func('avx_x86_float32x8_divide', [a, b])
 
 
+<<<<<<< HEAD
 def avx_f32x8_exp(a: Expr) -> Call:
     return call_primitive_func('avx_x86_float32x8_exp', [a])
 
 
+=======
+>>>>>>> 12dd22ae (initial commit)
 def avx_f32x4_hadd(a: Expr, b: Expr) -> Call:
     return call_primitive_func('avx_x86_float32x4_hadd', [a, b])
 
@@ -193,12 +199,21 @@ def avx_f32x8_fmadd(a: Expr, b: Expr, c: Expr) -> Call:
     return call_primitive_func('avx_x86_float32x8_fmadd', [a, b, c])
 
 
+<<<<<<< HEAD
 def avx_f32x8_to_i32x8(a: Expr) -> Call:
     return call_primitive_func('avx_x86_float32x8_to_int32x8', [a])
 
 
 def avx_i32x8_to_f32x8(a: Expr) -> Call:
     return call_primitive_func('avx_x86_int32x8_to_float32x8', [a])
+=======
+def avx_f32x8_to_u32x8(a: Expr) -> Call:
+    return call_primitive_func('avx_x86_float32x8_to_uint32x8', [a])
+
+
+def avx_u32x8_to_f32x8(a: Expr) -> Call:
+    return call_primitive_func('avx_x86_uint32x8_to_float32x8', [a])
+>>>>>>> 12dd22ae (initial commit)
 
 
 def avx_f32x4_load(addr: Expr) -> Call:

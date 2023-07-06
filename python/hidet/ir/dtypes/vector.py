@@ -12,7 +12,11 @@
 from typing import Any, Sequence
 from hidet.ir.type import DataType
 from .floats import float32, float16
+<<<<<<< HEAD
 from .integer import int32, int8
+=======
+from .integer import uint32, int8
+>>>>>>> 12dd22ae (initial commit)
 
 
 class VectorType(DataType):
