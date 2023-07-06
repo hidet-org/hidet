@@ -147,7 +147,7 @@ class AttnTask(Task):
                     return n, d // n
             return -1, -1
 
-        compute_capability = hidet.cuda.compute_capability()
+        compute_capability = hidet.option.cuda.get_arch_pair()
         compute_capability = compute_capability[0] * 10 + compute_capability[1]
         if compute_capability < 80:
             # hack: sm75 only supports m16n8k8, not m16n8k16

@@ -38,7 +38,7 @@ def test_matmul_x86(a_shape, b_shape):
 )
 @pytest.mark.parametrize('mma', ['simt', 'mma'])
 def test_batch_matmul(a_shape, b_shape, dtype, mma):
-    if hidet.cuda.compute_capability() < (8, 0) and mma in ['wmma', 'mma'] and dtype == 'float32':
+    if hidet.option.cuda.get_arch_pair() < (8, 0) and mma in ['wmma', 'mma'] and dtype == 'float32':
         pytest.skip('wmma and mma for float32 will triger hidet to use tf32, which is only supported on sm80 and above')
     tolerance = {('float16', 'simt'): 0.5, ('float16', 'mma'): 0.5, ('float32', 'simt'): 1e-4, ('float32', 'mma'): 0.05}
     tol = tolerance[(dtype, mma)]
@@ -62,8 +62,8 @@ def test_batch_matmul(a_shape, b_shape, dtype, mma):
     ],
 )
 @pytest.mark.parametrize('mma', ['simt', 'mma'])
-def test_batch_matmul_dynamic(a_shape, b_shape, dtype, mma):
-    if hidet.cuda.compute_capability() < (8, 0) and mma in ['wmma', 'mma'] and dtype == 'float32':
+def test_batch_matmul_dynamic(a_shape, b_shape, dtype: str, mma: str):
+    if hidet.option.cuda.get_arch_pair() < (8, 0) and mma in ['wmma', 'mma'] and dtype == 'float32':
         pytest.skip('wmma and mma for float32 will triger hidet to use tf32, which is only supported on sm80 and above')
     tolerance = {('float16', 'simt'): 0.5, ('float16', 'mma'): 0.5, ('float32', 'simt'): 1e-4, ('float32', 'mma'): 0.05}
     tol = tolerance[(dtype, mma)]

@@ -78,8 +78,8 @@ def check_binary(
 
 
 def check_binary_dynamic(
-    a_shape: Sequence[Union[int, Tuple[str, int]]],
-    b_shape: Sequence[Union[int, Tuple[str, int]]],
+    a_shape,  # Sequence[Union[int, Tuple[str, int]]]
+    b_shape,  # Sequence[Union[int, Tuple[str, int]]]
     numpy_op,
     hidet_op,
     device: str = 'all',
