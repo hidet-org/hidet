@@ -40,7 +40,7 @@ def should_update(repo_timestamp) -> bool:
 
 def clone_github_repo(owner: str, repo: str, version: str) -> str:
     repo_dir = os.path.join(repos_dir, "{}_{}".format(owner, repo))
-    repo_timestamp = os.path.join(repos_dir, "{}_{}_timestamp".format(owner, repo))
+    repo_timestamp = os.path.join(repos_dir, "{}_{}_{}_timestamp".format(owner, repo, version))
     os.makedirs(repo_dir, exist_ok=True)
     with FileLock(os.path.join(repos_dir, '{}_{}.lock'.format(owner, repo))):
         if not os.path.exists(os.path.join(repo_dir, '.git')):
@@ -55,7 +55,10 @@ def clone_github_repo(owner: str, repo: str, version: str) -> str:
             repo.remotes.origin.fetch()
             repo.git.fetch('--all')
             repo.git.fetch('--tags')
-        repo.git.checkout(version)
+            repo.git.checkout(version)
+            repo.git.pull(version)
+        else:
+            repo.git.checkout(version)
         commit_id = repo.head.commit.hexsha
 
         commit_dir = os.path.join(commits_dir, commit_id)
