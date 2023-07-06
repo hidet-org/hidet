@@ -36,7 +36,54 @@ def can_remote_build(ir_module: IRModule) -> bool:
     return not (len(ir_module.object_files) > 0 or len(ir_module.linking_dirs) > 0 or len(ir_module.include_dirs) > 0)
 
 
-def build_ir_module(ir_module: IRModule, output_dir: str, *, target: str, output_kind: str = '.so'):  # '.so', '.o'
+def build_ir_module(ir_module: IRModule, output_dir: str, *, target: str, output_kind: str = '.so', force=False):
+    """
+    Build an IR module to a shared library or object file.
+
+    This driver function performs the following steps to build an IR module:
+
+    1. Lower and optimize the IR module with a sequence of pre-defined passes.
+    2. Generate source code from the lowered IR module.
+    3. Call the underlying compiler (e.g., gcc or nvcc) to compile the generated source code to a shared library (when
+       `output_kind == '.so'`) or an object file (when `output_kind == '.o'`).
+
+    Parameters
+    ----------
+    ir_module: IRModule
+        The IR module to be built.
+
+    output_dir: str
+        The directory to save the generated source code and the compiled library.
+
+    target: str
+        The target to build the IR module. Currently, we support two targets: `cpu` and `cuda`. The target can also
+        specify attributes (e.g., 'cuda --arch=sm_70').
+
+    output_kind: str
+        The output kind. Currently, we support two kinds: `'.so'` and `'.o'`. The former means that the IR module will
+        be compiled to a shared library, while the latter means that the IR module will be compiled to an object file.
+
+    force: bool
+        Whether to force re-build the IR module. By default, we will not re-build the IR module if the library has been
+        built at the specified output directory.
+    """
+    if output_kind == '.so':
+        lib_name = 'lib.so'
+    elif output_kind == '.o':
+        lib_name = 'lib.o'
+    else:
+        raise ValueError(f'Invalid output kind: {output_kind}')
+    lib_path = os.path.join(output_dir, lib_name)
+
+    if (
+        os.path.exists(lib_path)
+        and os.path.getsize(lib_path) > 0
+        and (output_kind != '.so' or os.path.exists(os.path.join(output_dir, 'func_types.pickle')))
+        and not force
+    ):
+        # the library has been built
+        return
+
     if hidet.option.compile_server.enabled() and can_remote_build(ir_module):
         from hidet.apps.compile_server import remote_build
 
@@ -52,14 +99,6 @@ def build_ir_module(ir_module: IRModule, output_dir: str, *, target: str, output
         src_path = os.path.join(output_dir, 'source.cc')
     else:
         raise ValueError(f'Invalid target: {target}')
-
-    if output_kind == '.so':
-        lib_name = 'lib.so'
-    elif output_kind == '.o':
-        lib_name = 'lib.o'
-    else:
-        raise ValueError(f'Invalid output kind: {output_kind}')
-    lib_path = os.path.join(output_dir, lib_name)
 
     # lower ir module
     instruments = []
@@ -95,7 +134,9 @@ def build_ir_module(ir_module: IRModule, output_dir: str, *, target: str, output
             pickle.dump(func_types, f)
 
 
-def build_ir_module_batch(ir_modules: Sequence[IRModule], output_dirs: Sequence[str], output_kind: str, target: str):
+def build_ir_module_batch(
+    ir_modules: Sequence[IRModule], output_dirs: Sequence[str], output_kind: str, target: str, force: bool = False
+):
     """
     Build a batch of ir modules.
 
@@ -112,11 +153,15 @@ def build_ir_module_batch(ir_modules: Sequence[IRModule], output_dirs: Sequence[
 
     target: str
         The target of the compilation. Can be 'cuda' or 'cpu'.
+
+    force: bool
+        Whether to force re-build the IR module. By default, we will not re-build the IR module if the library has been
+        built at the specified output directory.
     """
 
     def build_job(args):
         ir_module, output_dir = args
-        build_ir_module(ir_module, output_dir, output_kind=output_kind, target=target)
+        build_ir_module(ir_module, output_dir, output_kind=output_kind, target=target, force=force)
 
     jobs = [(ir_module, output_dir) for ir_module, output_dir in zip(ir_modules, output_dirs)]
 
