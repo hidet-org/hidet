@@ -104,10 +104,10 @@ class SymmetricQuantizedMatmulF16Task(Task):
     @tune.space(
         2,
         block_m=[32, 64, 128, 256],
-        block_n=[32, 64, 128, 256],
-        block_k=[8, 16, 32, 64, 128],
+        block_n=[128, 256, 512],
+        block_k=[16, 32, 64, 128],
         warp_m=[16, 32, 48, 64],
-        warp_n=[16, 32, 48, 64],
+        warp_n=[16, 32, 48, 64, 96],
         warp_k=[8, 16, 32, 64],
         mma=['m16n8k16'],
     )
@@ -133,7 +133,7 @@ class SymmetricQuantizedMatmulF16Task(Task):
         # each thread loads 8 int8 values from smem into registers, we then cast them to fp16 using scale
         
         # input shapes
-        node_a, weight, scale, node_c = self.inputs[0], self.inputs[1], self.inputs[2], self.outputs[0]
+        node_a, weight, node_c = self.inputs[0], self.inputs[1], self.outputs[0]
         a_shape: Tuple[Int, ...] = node_a.shape
         b_shape: Tuple[Int, ...] = weight.shape
         c_shape: Tuple[Int, ...] = node_c.shape
@@ -178,8 +178,6 @@ class SymmetricQuantizedMatmulF16Task(Task):
             shape=[block_k, block_n],
             layout=row_major(block_k // 8, block_n // 128) * row_major(8, 8).swizzle(1) * row_major(1, 16),
         )
-
-        load_smem_scale_map = auto_map(block_n, workers=threads, on_fail=lambda msg: tune.check(False, msg))
 
         load_smem_a_map = auto_map(block_m, block_k // 8, workers=threads, on_fail=lambda msg: tune.check(False, msg))
         load_smem_b_map = auto_map(block_k, block_n // 16, workers=threads, on_fail=lambda msg: tune.check(False, msg))
@@ -344,9 +342,6 @@ class SymmetricQuantizedMatmulF16Task(Task):
                             load_smem_fixed(cast(~smem_scale[loc_tid], ~int8), cast(~scale[offset], ~int8), 16, 16, src_size * 2)
                             loc_tid += threads * 8
     
-
-                
-                syncthreads()
                 load_smem_a(0, a, ~smem_a[0, 0, 0])
                 load_smem_b(0, b, ~smem_b[0, 0, 0])
                 cp_async_wait_all()
@@ -380,7 +375,6 @@ class SymmetricQuantizedMatmulF16Task(Task):
 
                 c_store_map = row_repeat(2, 1, attrs='u+u+') * row_spatial(8, 4) * row_repeat(1, 4, attrs='u+u+')
 
-                # TODO: handle store back
                 if warp_count_k == 1:
                     for wi, wj, wk in spatial(warp_count_m, warp_count_n, warp_count_k).on(warp_id):
                         for mi, mj in grid(mma_count_m, mma_count_n):
@@ -445,3 +439,5 @@ def symmetric_quant_matmul(a: Tensor, weight: Tensor, scale: Tensor, parallel_k_
     if a.dtype != dtypes.float16 or weight.dtype != dtypes.int8:
         raise ValueError('BatchMatmulF16Op only support float16, int8, got {} and {}'.format(a.dtype, weight.dtype))
     return SymmetricQuantizedMatmulF16Op(a, weight, scale, parallel_k_parts).outputs[0]
+
+

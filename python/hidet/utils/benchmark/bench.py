@@ -136,7 +136,7 @@ class BenchData:
     kwargs: Dict[str, Any]
     data: Dict[str, Tuple[List[float], List[float], List[float]]]  # [t_min, t_avg, t_max]
 
-    def show_plot(self, show=True, save_path=None, figsize=None):
+    def show_plot(self, show=True, save_path=None, figsize=None, title=None):
         from matplotlib import pyplot as plt
 
         if all(isinstance(x, (float, int)) for x in self.x_vals):
@@ -153,6 +153,8 @@ class BenchData:
         ax.legend()
         ax.set_xlabel(self.x_name)
         ax.set_ylabel(self.y_name)
+        if title is not None:
+            ax.set_title(title)
         ax.set_xticks(ticks=x_vals, labels=[str(x) for x in self.x_vals])
         if show:
             plt.show()
