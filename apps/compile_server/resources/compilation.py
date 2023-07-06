@@ -5,6 +5,7 @@ import sys
 import os
 import traceback
 import threading
+import requests
 import subprocess
 import zipfile
 import logging
@@ -28,20 +29,50 @@ results_dir = os.path.join(os.getcwd(), 'results')
 compile_script = os.path.join(os.path.dirname(__file__), 'compile_worker.py')
 
 
-def should_update(repo_timestamp) -> bool:
-    if os.path.exists(repo_timestamp):
-        with open(repo_timestamp, 'r') as f:
-            timestamp = f.read()
-        return time.time() - float(timestamp) > 3 * 60  # 3 minutes
+def _get_github_repo_commit_id(owner: str, repo: str, version: str) -> str:
+    try:
+        # try branch first
+        response = requests.get(
+            url="https://api.github.com/repos/{}/{}/branches/{}".format(owner, repo, version),
+        )
+        if response.status_code == 200:
+            return response.json()['commit']['sha']
+        # try tag
+        response = requests.get(
+            url="https://api.github.com/repos/{}/{}/git/ref/tags/{}".format(owner, repo, version),
+        )
+        if response.status_code == 200:
+            return response.json()['object']['sha']
+        else:
+            print(response.json())
+
+    except requests.exceptions.ConnectionError:
+        raise RuntimeError('Can not connect to compiler server') from None
+
+    raise RuntimeError(
+        'Failed to get commit id for {}/{}:{}: {}'.format(owner, repo, version, response.json()['message'])
+    )
+
+def get_github_repo_commit_id(owner: str, repo: str, version: str) -> str:
+    records = getattr(get_github_repo_commit_id, 'records', {})
+
+    key = (owner, repo, version)
+    if key in records and (time.time() - records[key][0]) < 10: # cache for 10 seconds
+        return records[key][1]
     else:
-        with open(repo_timestamp, 'w') as f:
-            f.write(str(time.time()))
-        return True
+        commit_id = _get_github_repo_commit_id(owner, repo, version)
+        records[key] = (time.time(), commit_id)
+        get_github_repo_commit_id.records = records
+        return commit_id
 
 
 def clone_github_repo(owner: str, repo: str, version: str) -> str:
+    commit_id: str = get_github_repo_commit_id(owner, repo, version)
+    commit_dir = os.path.join(commits_dir, commit_id)
+    if os.path.exists(commit_dir):
+        return commit_id
+
     repo_dir = os.path.join(repos_dir, "{}_{}".format(owner, repo))
-    repo_timestamp = os.path.join(repos_dir, "{}_{}_{}_timestamp".format(owner, repo, version))
     os.makedirs(repo_dir, exist_ok=True)
     with FileLock(os.path.join(repos_dir, '{}_{}.lock'.format(owner, repo))):
         if not os.path.exists(os.path.join(repo_dir, '.git')):
@@ -52,17 +83,13 @@ def clone_github_repo(owner: str, repo: str, version: str) -> str:
         else:
             repo = git.Repo(repo_dir)
 
-        if should_update(repo_timestamp):
-            repo.remotes.origin.fetch()
-            repo.git.fetch('--all')
-            repo.git.fetch('--tags')
-            repo.git.checkout(version)
-            repo.git.pull(version)
-        else:
-            repo.git.checkout(version)
+        repo.remotes.origin.fetch()
+        repo.git.fetch('--all')
+        repo.git.checkout(version)
+        repo.git.pull('origin', version)
         commit_id = repo.head.commit.hexsha
-
         commit_dir = os.path.join(commits_dir, commit_id)
+
         if os.path.exists(commit_dir):
             return commit_id
         with FileLock(os.path.join(commits_dir, commit_id + '.lock')):
@@ -77,7 +104,14 @@ def clone_github_repo(owner: str, repo: str, version: str) -> str:
                 ("make -j1", "./build")
             ]
             for command, cwd in commands:
-                subprocess.run(command.split(), cwd=os.path.join(commit_dir, cwd), check=True)
+                subprocess.run(
+                    command.split(),
+                    cwd=os.path.join(commit_dir, cwd),
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    check=True
+                )
 
         return commit_id
 
@@ -145,7 +179,7 @@ class CompilationResource(Resource):
             if not os.path.exists(response_path):
                 raise RuntimeError('Can not find the response file:\n{}{}'.format(ret.stderr, ret.stdout))
             else:
-                print('[{}] finish compiling {}'.format(pid, job_id[:16]))
+                print('[{}] Finish compiling {}'.format(pid, job_id[:16]))
                 with open(response_path, 'rb') as f:
                     response: Tuple[Dict, int] = pickle.load(f)
                     return response
