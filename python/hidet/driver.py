@@ -104,6 +104,7 @@ def build_task(task: Task, target_device='cuda', load=True) -> Optional[Compiled
                 f.write(hidet.__version__)
 
             # implement task
+            #TODO: Look into this and get it working on CPU!
             ir_module = task.implement(target=target_device, working_dir=task_dir)
 
             # compile ir module
@@ -113,6 +114,7 @@ def build_task(task: Task, target_device='cuda', load=True) -> Optional[Compiled
                 save_ir=option.get_option('save_lower_ir'),
                 load=False,
                 use_hash_dir=False,
+                target_device=target_device,
             )
             if load:
                 compiled_module = load_compiled_module(task_dir)
@@ -175,6 +177,7 @@ def build_ir_module(
     save_ir: bool = True,
     load: bool = True,
     use_hash_dir: bool = True,
+    target_device: str = "cpu",
 ) -> Optional[CompiledModule]:
     if use_hash_dir:
         hash_dir = sha256(str(ir_module).encode()).hexdigest()[:16]
@@ -182,6 +185,8 @@ def build_ir_module(
 
     src_path = (
         os.path.join(output_dir, 'source.cu') if hidet.cuda.available() else os.path.join(output_dir, 'source.cc')
+        # TODO: change this back to cuda is available
+        # os.path.join(output_dir, 'source.cu') if target_device == "cuda" else os.path.join(output_dir, "source.cc")
     )
     lib_path = os.path.join(output_dir, 'lib.so')
 

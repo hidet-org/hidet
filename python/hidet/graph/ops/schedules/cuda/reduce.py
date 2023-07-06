@@ -123,7 +123,6 @@ def cuda_schedule_reduce_by_default(task: ReduceTask) -> IRModule:
 
     x_dtype = task.inputs[0].ttype.dtype
     accumulate_dtype = task.attrs['accumulate_dtype']
-
     with FunctionBuilder(
         name=task.name + '_grid', kind='cuda_kernel', grid_dim=grid_size, block_dim=block_size, label='reduce schedule'
     ) as fb:

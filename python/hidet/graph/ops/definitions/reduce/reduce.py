@@ -29,7 +29,7 @@ class ReduceTask(Task):
                     y_shape.append(1)
             else:
                 y_shape.append(x.shape[i])
-
+        print(y_shape)
         def fcompute(*indices):
             def reduce_fcompute(*reduce_indices):
                 x_indices = []
@@ -87,6 +87,15 @@ class ReduceTask(Task):
         else:
             # last dimension has not been reduced
             return cuda_schedule_reduce_by_default(self)
+
+    def implement_cpu(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
+        print("implementing on cpu")
+        from ...schedules import cpu_schedule_reduce
+        from hidet.graph.ops.definitions.utils import tune
+        if self.inputs[0].type.dtype.name == 'float32':
+            return cpu_schedule_reduce(self)
+            # return tune.extract_ir_modules(cpu_schedule_reduce(self))
+        return NotImplemented
 
 
 class ArgReduceTask(Task):

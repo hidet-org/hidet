@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List
+from typing import List, Union
 from hidet.ir import IRModule
 from hidet.ir.primitives import active_mask, shfl_down_sync
 from hidet.ir.compute import reduce
@@ -105,6 +105,35 @@ class NormalizeTask(Task):
     def allow_epilogue(self) -> bool:
         return False
 
+    def implement_cpu(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
+        import hidet
+        # return NotImplemented
+        x, y = self.inputs[0], self.outputs[0]
+        input_shape: List[int] = list(x.const_shape)
+        dims = self.dims
+
+        spatial_shape = [v for i, v in enumerate(input_shape) if i not in dims]
+        reduce_shape = [input_shape[i] for i in dims]
+        dim_zeros = [0] * len(dims)
+
+        reduce_extent = prod(reduce_shape)  # product of all elems
+
+        accumulate_dtype = data_type(self.attrs['accumulate_dtype'])  # float32
+
+        with hidet.script_module() as module:
+            @hidet.script
+            def welford_update_mean_var(a, mean, m2):
+                delta = as_tensor_pointer()
+
+            @hidet.script
+            def norm_kernel(x: f32[x.const_shape], y: f32[y.const_shape]):
+                pass
+                # TODO: parallelize, try various vector sizes for loading the values?
+
+        ir_module = module.ir_module()
+        return ir_module
+
+
     def implement_cuda(self, working_dir: str) -> IRModule:
         import hidet
         import math
@@ -117,8 +146,7 @@ class NormalizeTask(Task):
         reduce_shape = [input_shape[i] for i in dims]
         dim_zeros = [0] * len(dims)
 
-        reduce_extent = prod(reduce_shape)
-
+        reduce_extent = prod(reduce_shape)  # product of all elems
         warp_size = 32
         block_size = min(max(warp_size, reduce_extent), 1024)
         block_size = math.ceil(block_size / warp_size) * warp_size
@@ -133,18 +161,34 @@ class NormalizeTask(Task):
         used_smem_bytes_per_block = shm_count
 
         stages = math.ceil(math.log(block_size) / math.log(warp_size))
+        print(x, y)
+        print(input_shape)
+        print(dims)
+        print(spatial_shape)
+        print(reduce_shape)
+        print(dim_zeros)
+        print(reduce_extent)
+        print(block_size)
+        print(repeat_reduction)
+        print(task_layout)
+        print(grid_size)
+        print(accumulate_dtype)
+        print(shm_count)
+        print(used_smem_bytes_per_block)
+        print(stages)
+        # assert False
         assert stages <= 2
 
         with hidet.script_module() as module:
 
             @hidet.script
             def welford_combine(
-                mean_a: TensorType(dtype=accumulate_dtype, shape=[1]),
-                m2_a: TensorType(dtype=accumulate_dtype, shape=[1]),
-                count_a: TensorType(dtype=i32, shape=[1]),
-                mean_b: TensorType(dtype=accumulate_dtype, shape=[1]),
-                m2_b: TensorType(dtype=accumulate_dtype, shape=[1]),
-                count_b: TensorType(dtype=i32, shape=[1]),
+                    mean_a: TensorType(dtype=accumulate_dtype, shape=[1]),
+                    m2_a: TensorType(dtype=accumulate_dtype, shape=[1]),
+                    count_a: TensorType(dtype=i32, shape=[1]),
+                    mean_b: TensorType(dtype=accumulate_dtype, shape=[1]),
+                    m2_b: TensorType(dtype=accumulate_dtype, shape=[1]),
+                    count_b: TensorType(dtype=i32, shape=[1]),
             ):
                 count = count_a[0] + count_b[0]
                 if count == 0:
@@ -153,7 +197,8 @@ class NormalizeTask(Task):
 
                 mean_a[0] = mean_a[0] + delta * cast(count_b[0], f32) / cast(count, f32)
                 m2_a[0] = (
-                    m2_a[0] + m2_b[0] + delta * delta * cast(count_a[0], f32) * cast(count_b[0], f32) / cast(count, f32)
+                        m2_a[0] + m2_b[0] + delta * delta * cast(count_a[0], f32) * cast(count_b[0], f32) / cast(count,
+                                                                                                                 f32)
                 )
                 count_a[0] = count
 
