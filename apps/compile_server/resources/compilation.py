@@ -19,6 +19,7 @@ from filelock import FileLock
 lock = threading.Lock()
 logger = logging.Logger(__name__)
 
+pid = os.getpid()
 jobs_dir = os.path.join(os.getcwd(), 'jobs')
 repos_dir = os.path.join(os.getcwd(), 'repos')
 commits_dir = os.path.join(os.getcwd(), 'commits')
@@ -119,8 +120,11 @@ class CompilationResource(Resource):
         job_path = os.path.join(jobs_dir, job_id + '.pickle')
         job_response_path = os.path.join(jobs_dir, job_id + '.response')
 
+        print('[{}] Received a job: {}'.format(pid, job_id[:16]))
+
         # check if the job is already done
         if os.path.exists(job_response_path):
+            print('[{}] Job {} has already done before, respond directly'.format(pid, job_id[:16]))
             with open(job_response_path, 'rb') as f:
                 return pickle.load(f)
 
@@ -132,15 +136,17 @@ class CompilationResource(Resource):
                     pickle.dump(job, f)
 
         with lock:  # Only one thread can access the following code at the same time
-            print('job_id:', job_id)
+            print('[{}] Start compiling {}'.format(pid, job_id[:16]))
             ret = subprocess.run([sys.executable, compile_script, '--job_id', job_id])
 
         # respond to the client
         response_path = os.path.join(jobs_dir, job_id + '.response')
         if not os.path.exists(response_path):
             msg = '{}\n{}'.format(ret.stderr, ret.stdout)
+            print('[{}] Failed to compile {}:\n{}'.format(pid, job_id[:16], msg))
             return {'message': 'Can not find a response from the worker due to\n{}'.format(msg)}, 500
         else:
+            print('[{}] finish compiling {}'.format(pid, job_id[:16]))
             with open(response_path, 'rb') as f:
                 response: Tuple[Dict, int] = pickle.load(f)
                 return response
