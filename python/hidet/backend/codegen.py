@@ -621,10 +621,11 @@ class Codegen(ModuleFunctor, StmtFunctor, ExprFunctor, TypeFunctor):
             'float32x4': '__m128',
             'float32x8': '__m256',
             'int8x4': 'char4',
+            'uint32x8': '__m256i',
         }
 
         self.require_complex = self.require_complex or t.name in ['complex64', 'complex128']
-        self.require_immintrin = self.require_immintrin or t.name in ['float32x4', 'float32x8']
+        self.require_immintrin = self.require_immintrin or t.name in ['float32x4', 'float32x8', 'uint32x8']
         self.require_bf16 = self.require_bf16 or t.name == 'bfloat16'
         self.require_fp16 = self.require_fp16 or t.name == 'float16'
         self.require_tf32 = self.require_tf32 or t.name == 'tfloat32'
@@ -681,6 +682,7 @@ class CUDACodegen(Codegen):
 
         if self.require_immintrin:
             doc += Text('#include <immintrin.h>') + NewLine()
+            doc += Text('#include <hidet/runtime/cpu/avx_helper.h>') + NewLine()
         if self.require_fp16:
             doc += Text('#include <cuda_fp16.h>') + NewLine()
         if self.require_bf16:
@@ -769,6 +771,7 @@ class CPUCodegen(Codegen):
         doc += Text('#include <math.h>') + NewLine()
         if self.require_immintrin:
             doc += Text('#include <immintrin.h>') + NewLine()
+            doc += Text('#include <hidet/runtime/cpu/avx_helper.h>') + NewLine()
         doc += Text('#include <hidet/runtime/symbols.h>') + NewLine()
         doc += Text('#include <hidet/runtime/memory_planner.h>') + NewLine()
         doc += Text('#include <hidet/runtime/cpu/context.h>') + NewLine()
