@@ -289,7 +289,7 @@ class SymmetricQuantizedMatmulF16Task(Task):
                     load_smem_fixed(~smem_b[k, j], ~gmem_b[k, j], alignment, 16, src_size)
                     
             @hidet.script
-            def matmul_f16_kernel(
+            def matmul_f16_i8_kernel(
                 a: float16[a_head + [m_size, k_size]],
                 b: int8[b_head + [k_size, n_size]],
                 scale: float16[n_size],
@@ -412,7 +412,7 @@ class SymmetricQuantizedMatmulF16Task(Task):
                             gmem_c[i, j] = smem_c[i, j] * smem_scale[j]
 
         ir_module = module.ir_module()
-        assert isinstance(matmul_f16_kernel, Function)
+        assert isinstance(matmul_f16_i8_kernel, Function)
 
         return ir_module
 
