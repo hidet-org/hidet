@@ -243,6 +243,22 @@ class Storage:
         """
         return Storage._convert(self, Device('cuda', dst_id), non_blocking=True, stream=stream)
 
+    def vcuda(self, dst_id: int) -> Storage:
+        """
+        Copy the storage to CUDA device. If the storage is already on the device, return itself.
+
+        Parameters
+        ----------
+        dst_id: int
+            The id of the destination CUDA device.
+
+        Returns
+        -------
+        ret: Storage
+            The storage on the destination CUDA device.
+        """
+        return Storage._convert(self, Device('vcuda', dst_id), non_blocking=False)
+
     def copy(self) -> Storage:
         """
         Copy the storage to the same device. If the storage is already on the device, return itself.
@@ -368,7 +384,7 @@ class DeviceMemoryPools:
                     self.device2pool[device] = MemoryPool(
                         CudaMemoryAPI(device), block_size=4096, max_reserve_size=4 * 1024**3
                     )
-                elif device.is_cpu():
+                elif device.is_cpu() or device.is_vcuda():
                     self.device2pool[device] = MemoryPool(
                         CUDAHostMemoryAPI(device), block_size=4096, max_reserve_size=512 * 1024**2
                     )

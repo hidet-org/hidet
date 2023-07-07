@@ -11,3 +11,6 @@
 # limitations under the License.
 from .conv1d import conv1d
 from .conv1d import Conv1dOp
+from .conv1d_gemm import conv1d_gemm
+
+from . import resolve

@@ -190,7 +190,7 @@ class MatmulResolveRule(ResolveRule):
         ):
             return None
 
-        if hidet.cuda.compute_capability() < (8, 0):
+        if hidet.option.cuda.get_arch_pair() < (8, 0):
             return None
 
         parallel_k = self.get_config('parallel_k', default='default')  # 'default', 'search', 2, 4, ...

@@ -15,6 +15,7 @@ from hidet.ir.type import func_type
 from hidet.ir.dtypes import float16, float16x2
 from hidet.ir.primitives.func import register_primitive_function, primitive_func_pool
 from hidet.ir.primitives.math import MathFunctionSet, register_math_function_set
+import hidet.option
 
 
 class CUDAFloat16x2MathFunctionSet(MathFunctionSet):
@@ -95,17 +96,13 @@ class CUDAFloat16x2MathFunctionSet(MathFunctionSet):
         return self.call('cuda_f16x2_floor', a)
 
     def min(self, a: Expr, b: Expr) -> Expr:
-        from hidet.cuda import compute_capability
-
-        if compute_capability() >= (8, 0):
+        if hidet.option.cuda.get_arch_pair() >= (8, 0):
             return self.call('cuda_f16x2_min_sm80', a, b)
         else:
             raise NotImplementedError('cuda_f16x2_min for < sm80 is not implemented')
 
     def max(self, a: Expr, b: Expr) -> Expr:
-        from hidet.cuda import compute_capability
-
-        if compute_capability() >= (8, 0):
+        if hidet.option.cuda.get_arch_pair() >= (8, 0):
             return self.call('cuda_f16x2_max_sm80', a, b)
         else:
             raise NotImplementedError('cuda_f16x2_max for < sm80 is not implemented')

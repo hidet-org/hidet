@@ -133,10 +133,13 @@ class FuseTwoMatmulRewriteRule(SubgraphRewriteRule):
 
 # %%
 # We can check that the rewrite rule has been registered:
-from hidet.graph.transforms import registered_rewrite_rules
+from hidet.graph.transforms import (
+    registered_rewrite_rules,
+    clear_registered_rewrite_rules,
+)
 
 print('Registered rewrite rules:')
-for rule in registered_rewrite_rules:
+for rule in registered_rewrite_rules():
     assert isinstance(rule, SubgraphRewriteRule)
     print(rule.name)
 
@@ -146,7 +149,7 @@ for rule in registered_rewrite_rules:
 # Besides the predefined rewrite rules, we can see that the rewrite rule we just registered is also included at the
 # last line. In this tutorial, to prevent the default rewrite rules from being applied, we first clear the registered
 # rewrite rules and then register the rewrite rule we just defined:
-registered_rewrite_rules.clear()
+clear_registered_rewrite_rules()
 register_rewrite_rule(
     FuseTwoMatmulRewriteRule()
 )  # a second way to register the rewrite rule

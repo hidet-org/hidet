@@ -286,7 +286,19 @@ def graph_pattern_match(pattern: TensorPattern, target: Tensor, usage: Usage) ->
         return None
 
 
-registered_rewrite_rules: List[SubgraphRewriteRule] = []
+_registered_rewrite_rules: List[SubgraphRewriteRule] = []
+
+
+def registered_rewrite_rules():
+    # pylint: disable=unused-import
+
+    from . import register_all_patterns  # register on demand
+
+    return list(_registered_rewrite_rules)
+
+
+def clear_registered_rewrite_rules():
+    _registered_rewrite_rules.clear()
 
 
 def register_rewrite_rule(rule: Union[SubgraphRewriteRule, Type[SubgraphRewriteRule]]):
@@ -300,10 +312,10 @@ def register_rewrite_rule(rule: Union[SubgraphRewriteRule, Type[SubgraphRewriteR
         should be an instance of SubgraphRewriteRule.
     """
     if isinstance(rule, SubgraphRewriteRule):
-        registered_rewrite_rules.append(rule)
+        _registered_rewrite_rules.append(rule)
         return None
     elif issubclass(rule, SubgraphRewriteRule):
-        registered_rewrite_rules.append(rule())
+        _registered_rewrite_rules.append(rule())
         return rule
     else:
         raise TypeError('rule should be a SubgraphRewriteRule or a subclass of SubgraphRewriteRule')
@@ -339,7 +351,7 @@ def deregister_rewrite_rule(rule: SubgraphRewriteRule):
         The rule to be deregistered.
     """
     if isinstance(rule, SubgraphRewriteRule):
-        registered_rewrite_rules.remove(rule)
+        _registered_rewrite_rules.remove(rule)
         return None
     else:
         raise TypeError('rule should be a SubgraphRewriteRule')

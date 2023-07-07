@@ -22,7 +22,7 @@ from .eliminate_barrier import eliminate_barrier_pass
 
 from .resolve_variant import ResolveRule, register_resolve_rule, get_resolve_chain
 from .graph_patterns import TensorPattern, OperatorPattern, SubgraphRewriteRule, register_rewrite_rule, op_pattern
-from .graph_patterns import registered_rewrite_rules
+from .graph_patterns import registered_rewrite_rules, clear_registered_rewrite_rules
 
 from .graph_patterns import quant
 
