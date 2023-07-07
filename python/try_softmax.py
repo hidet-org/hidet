@@ -1,9 +1,12 @@
 import numpy as np
+import torch
+
 import hidet
 from hidet.graph.ops.definitions.activation import softmax
 from scipy.special import softmax as softmax_scipy
 import timeit
 import time
+import torch.nn as nn
 
 a = hidet.randn([8, 8], device="cpu")
 # a = hidet.randn([2, 8, 8], device="cpu")
@@ -40,4 +43,20 @@ np_latency = hidet.utils.benchmark_func(
 )
 
 print(hidet_latency, np_latency)
-# print(np.allclose(softmax(a), softmax_scipy(a)))
+
+
+b = np.zeros((8, 8))
+for i in range(a.shape[0]):
+    for j in range(a.shape[1]):
+        b[i,j] = float(a[i,j])
+
+def sftmx(a):
+    b = np.zeros_like(a)
+    for i in range(a.shape[0]):
+        c = np.exp(a[i])
+        b[i] = c/np.sum(c)
+    return b
+
+
+print(a_np.dtype)
+print(np.allclose(softmax(a), sftmx(b)))
