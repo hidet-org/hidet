@@ -9,12 +9,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Union, Sequence, List, Dict, Any
+from typing import Union, Sequence, List, Dict, Any, Optional
 
 from hidet.ir.expr import Expr, Int, convert, if_then_else, logical_and
 
 from .utils import Task, Operator, Tensor, TensorNode, compute, reduce, input_like, normalize_stride, normalize_kernel
 from .utils import normalize_padding, normalize_output
+from ..transforms import ResolveRule, register_resolve_rule
 
 
 class Pool2dTask(Task):
@@ -206,6 +207,7 @@ class AdaptivePoolOp(Operator):
                 )
             )
         output_size = normalize_output(output_size, spatial_ndim)
+        self.reduce_type = reduce_type
         super().__init__(
             inputs=[x],
             attributes=attrs,
@@ -281,3 +283,22 @@ def adaptive_max_pool2d(x: Tensor, output_size: Union[int, Sequence[int]]) -> Te
 
 def adaptive_max_pool3d(x: Tensor, output_size: Union[int, Sequence[int]]) -> Tensor:
     return AdaptiveMaxPool3dOp(x, output_size).outputs[0]
+
+
+@register_resolve_rule(AdaptivePoolOp)
+class AdaptivePoolResolveRule(ResolveRule):
+    def resolve(self, op: Operator) -> Optional[List[Tensor]]:
+        assert isinstance(op, AdaptivePoolOp)
+        x: Tensor = op.inputs[0]
+        output_size = op.attrs['output_size']
+        reduce_type = op.reduce_type
+        resolve_to_reduce = output_size == 1 if isinstance(output_size, int) else all(d == 1 for d in output_size)
+        if resolve_to_reduce:
+            dims = [i for i in range(len(x.shape))]
+            from hidet.graph.ops import mean, max
+
+            if reduce_type == 'max':
+                return [max(x, dims=dims[2:], keep_dim=True)]
+            elif reduce_type == 'avg':
+                return [mean(x, dims=dims[2:], keep_dim=True)]
+        return None
