@@ -47,11 +47,10 @@ class AttnMaskAddTask(Task):
             msg=(
                 'Attention Operator expects same seqlen for k/v, and same hdim for q/k/v, got q: {}'
                 ', k: {}, v: {}'.format(q_shape, k_shape, v_shape)
-            )
+            ),
         )
         self._assert(
-            ir.logical_and(q.shape[-1] <= 160),
-            msg='Attention Operator expects hdim <= 160, got {}'.format(q.shape[-1])
+            ir.logical_and(q.shape[-1] <= 160), msg='Attention Operator expects hdim <= 160, got {}'.format(q.shape[-1])
         )
 
         mask_shape = mask.shape
@@ -63,7 +62,7 @@ class AttnMaskAddTask(Task):
         self._assert(
             can_broadcast(mask_shape, qk_shape),
             msg='Attention Operator expects mask shape to be broadcastable with'
-                'attention matrix, got {} and {}'.format(mask_shape, qk_shape)
+            'attention matrix, got {} and {}'.format(mask_shape, qk_shape),
         )
 
         qk = compute(

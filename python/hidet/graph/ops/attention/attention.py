@@ -47,11 +47,10 @@ class AttnTask(Task):
             msg=(
                 'Attention Operator expects same seqlen for k/v, and same hdim for q/k/v, got q: {}'
                 ', k: {}, v: {}'.format(q_shape, k_shape, v_shape)
-            )
+            ),
         )
         self._assert(
-            ir.logical_and(q.shape[-1] <= 160),
-            msg='Attention Operator expects hdim <= 160, got {}'.format(q.shape[-1])
+            ir.logical_and(q.shape[-1] <= 160), msg='Attention Operator expects hdim <= 160, got {}'.format(q.shape[-1])
         )
 
         # ToDo: Add causal mask to compute definition (Will not affect results since schedule template will be used)
@@ -865,10 +864,12 @@ def attention(q: Tensor, k: Tensor, v: Tensor, mask: Optional[Tensor] = None, is
 
     if not q.dtype == k.dtype == v.dtype == f16:
         raise ValueError("Attention only supports float16 inputs")
-        
-    if not (len(q.shape) == len(k.shape) == len(v.shape)):
-        raise ValueError("Attention Operator got different dimension sizes for q/k/v:"
-                         " q {} k {} v {}".format(len(q.shape), len(k.shape), len(v.shape)))
+
+    if not len(q.shape) == len(k.shape) == len(v.shape):
+        raise ValueError(
+            "Attention Operator got different dimension sizes for q/k/v:"
+            " q {} k {} v {}".format(len(q.shape), len(k.shape), len(v.shape))
+        )
 
     if mask is None:
         return AttnOp(q, k, v, is_causal).outputs[0]

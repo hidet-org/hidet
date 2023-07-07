@@ -75,8 +75,7 @@ class AttentionRewriteRule(SubgraphRewriteRule):
         if (
             q.dtype == k.dtype == v.dtype == f16
             and len(q.shape) == len(k.shape) == len(v.shape)
-            and is_true(q.shape[-1] == v.shape[-1]
-                        and q.shape[-1] <= 160)
+            and is_true(q.shape[-1] == v.shape[-1] and q.shape[-1] <= 160)
         ):
             return [attention(q, k, v)]
         else:
@@ -103,8 +102,7 @@ class AttentionMaskAddRewriteRule(SubgraphRewriteRule):
         if (
             q.dtype == k.dtype == v.dtype == f16
             and len(q.shape) == len(k.shape) == len(v.shape)
-            and is_true(q.shape[-1] == v.shape[-1]
-                        and q.shape[-1] <= 160)
+            and is_true(q.shape[-1] == v.shape[-1] and q.shape[-1] <= 160)
         ):
             return [attention(q, k, v, mask)]
         else:
