@@ -57,7 +57,7 @@ class AllReduceOp(Operator):
 def all_reduce(x: Tensor, op: str, comm_id: int = 0) -> Tensor:
     if x.device.kind != 'cuda':
         raise RuntimeError("NCCL only supports CUDA tensors")
-    return AllReduceOp(x, op, comm_id).get_output(0)
+    return AllReduceOp(x, op, comm_id).outputs[0]
 
 
 def broadcast(x: Tensor, root: int, comm_id: int = 0) -> Tensor:

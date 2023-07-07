@@ -217,7 +217,7 @@ def relu6(x: Tensor) -> Tensor:
 
 
 def gelu(x: Tensor, approximate: bool = False) -> Tensor:
-    return GeluOp(x, approximate).get_output(0)
+    return GeluOp(x, approximate).outputs[0]
 
 
 def silu(x: Tensor) -> Tensor:

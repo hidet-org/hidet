@@ -15,7 +15,7 @@ from typing import List, Optional
 from hidet.graph import ops
 from hidet.graph.flow_graph import Tensor
 from hidet.graph.ops.matmul import MatmulOp
-from hidet.graph.ops.utils import Task, Operator, Tensor, input_like, normalize_dim
+from hidet.graph.ops.utils import Task, Operator, Tensor, input_like, normalize_dim, is_constant
 from ..base import SubgraphRewriteRule, TensorPattern, MatchDict, op_pattern, add_rewrite_rule
 
 # we use the heuristic that if one of the inputs to matmul is a constant, and the number if dimensions is two
@@ -99,9 +99,13 @@ class SymmetricQuantizeMatmulFused(SubgraphRewriteRule):
         from hidet.ir import dtypes
         x, wq, scale, w_dequant = [matched[v] for v in [self.x, self.wq, self.scale, self.w_dequant]]
         quant_attrs = w_dequant.op.attrs
-        dim = normalize_dim(quant_attrs['dims'], wq.shape)
-        if x.dtype != dtypes.float16:
+        dim = normalize_dim(quant_attrs['dims'], len(wq.shape))
+        # last dimension of x in fp16 must be multiple of 4 bytes
+        # last dimension of wq in int8 must be multiple of 4 bytes
+        if x.dtype != dtypes.float16 or not is_constant(x.shape[-1]) or x.shape[-1] % 2 != 0 \
+            or wq.shape[-1] % 4 != 0:
             return None
+        # print("target")
         if len(wq.shape) != 2 or wq.dtype != dtypes.int8:
             return None
         if dim != 0 and dim != [0]:

@@ -135,7 +135,7 @@ def register_mma_configs():
         )
     
     # int8
-    for input_type in ['s8', 'u8']:
+    for input_type in ['int8', 'uint8']:
         mma_configs.update(
             {
                 'm8n8k16_i8_i32': MmaConfigInt(

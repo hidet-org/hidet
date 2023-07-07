@@ -2,7 +2,7 @@ from typing import List
 from ..base import SubgraphRewriteRule
 
 from .embedding import SymmetricEmbeddingQuantizePattern, symmetric_embedding_quantize_patterns
-from .linear import SymmetricLinearQuantizePatternL, SymmetricLinearQuantizePatternR, symmetric_linear_quantize_patterns
+from .linear import SymmetricLinearQuantizePatternL, SymmetricLinearQuantizePatternR, symmetric_linear_quantize_patterns, matmul_specialization_rules
 
 
 def default_quant_patterns(rules: List[SubgraphRewriteRule] = [], quant_type: str = 'int8', dims=0):

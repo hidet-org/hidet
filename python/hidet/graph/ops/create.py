@@ -205,4 +205,4 @@ def tri(
 ) -> Tensor:
     if m is None:
         m = n
-    return TriOp(n, m, k, dtype, device).get_output(0)
+    return TriOp(n, m, k, dtype, device).outputs[0]
