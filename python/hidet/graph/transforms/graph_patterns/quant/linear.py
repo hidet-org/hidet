@@ -15,6 +15,7 @@ from typing import List, Optional
 from hidet.graph import ops
 from hidet.graph.flow_graph import Tensor
 from hidet.graph.ops.matmul import MatmulOp
+from hidet.graph.ops.utils import Task, Operator, Tensor, input_like, normalize_dim
 from ..base import SubgraphRewriteRule, TensorPattern, MatchDict, op_pattern, add_rewrite_rule
 
 # we use the heuristic that if one of the inputs to matmul is a constant, and the number if dimensions is two
@@ -22,7 +23,7 @@ from ..base import SubgraphRewriteRule, TensorPattern, MatchDict, op_pattern, ad
 
 
 class SymmetricLinearQuantizePatternR(SubgraphRewriteRule):
-    def __init__(self, quant_type: str = 'int8', dims=[-1]):
+    def __init__(self, quant_type: str = 'int8', dims=0):
         super().__init__(f'linear(x, w) => linear(x, dequant(wq, scale, {quant_type}, dims={dims}))')
         self.x = TensorPattern.tensor()
         self.w = TensorPattern.tensor(is_const=True)
@@ -49,7 +50,7 @@ class SymmetricLinearQuantizePatternR(SubgraphRewriteRule):
 
 
 class SymmetricLinearQuantizePatternL(SubgraphRewriteRule):
-    def __init__(self, quant_type: str = 'int8', dims=[-1]):
+    def __init__(self, quant_type: str = 'int8', dims=0):
         super().__init__(f'matmul(w, x) => matmul(dequant(wq, scale, {quant_type}, dims={dims}), x)')
         self.x = TensorPattern.tensor()
         self.w = TensorPattern.tensor(is_const=True)
@@ -75,7 +76,49 @@ class SymmetricLinearQuantizePatternL(SubgraphRewriteRule):
         ]
 
 
-def symmetric_linear_quantize_patterns(rules: List[SubgraphRewriteRule], quant_type: str = 'int8', dims=[-1]):
+def symmetric_linear_quantize_patterns(rules: List[SubgraphRewriteRule], quant_type: str = 'int8', dims=0):
     add_rewrite_rule(rules, SymmetricLinearQuantizePatternR(quant_type=quant_type, dims=dims))
     add_rewrite_rule(rules, SymmetricLinearQuantizePatternL(quant_type=quant_type, dims=dims))
+    return rules
+
+
+class SymmetricQuantizeMatmulFused(SubgraphRewriteRule):
+    def __init__(self):
+        from hidet.graph.ops.quant.symmetric import SymmetricDeQuantizationOp
+        super().__init__(f'matmul(x, dequant(wq, scale)) => fused_matmul(x, wq, scale)')
+        self.x = TensorPattern.tensor()
+        self.wq = TensorPattern.tensor()
+        self.scale = TensorPattern.tensor(is_const=True)
+        self.w_dequant = op_pattern(SymmetricDeQuantizationOp, [self.wq, self.scale])
+        self.out = op_pattern(MatmulOp, [self.x, self.w_dequant])
+
+    def source(self) -> List[TensorPattern]:
+        return [self.out]
+
+    def target(self, matched: MatchDict) -> Optional[List[Tensor]]:
+        from hidet.ir import dtypes
+        x, wq, scale, w_dequant = [matched[v] for v in [self.x, self.wq, self.scale, self.w_dequant]]
+        quant_attrs = w_dequant.op.attrs
+        dim = normalize_dim(quant_attrs['dims'], wq.shape)
+        if x.dtype != dtypes.float16:
+            return None
+        if len(wq.shape) != 2 or wq.dtype != dtypes.int8:
+            return None
+        if dim != 0 and dim != [0]:
+            return None
+        if scale.shape[0] != wq.shape[1]:
+            return None
+        
+        # for now keep parallel k parts to 1, since I don't see any benefit from benchmarks on shapes [batch, C, C] X [C, C]
+        # for C between [32, 2048]
+        return [
+            ops.quant.symmetric_quant_matmul(
+                x, wq, scale, parallel_k_parts=1
+            ).sum(0)
+        ]
+
+
+def matmul_specialization_rules(rules: List[SubgraphRewriteRule]):
+    """Adds rules for specializing kernels to custom fused versions, if applicable."""
+    add_rewrite_rule(rules, SymmetricQuantizeMatmulFused())
     return rules
