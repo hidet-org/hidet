@@ -11,6 +11,7 @@
 # limitations under the License.
 from hidet.graph import ops
 from hidet.ir.dtypes import f16
+from hidet.ir.expr import is_true
 from hidet.graph.transforms.graph_patterns import MatchDict
 from hidet.graph.transforms.graph_patterns import op_pattern, register_rewrite_rule, deregister_rewrite_rule
 from hidet.graph.transforms.graph_patterns import TensorPattern, SubgraphRewriteRule
@@ -74,9 +75,8 @@ class AttentionRewriteRule(SubgraphRewriteRule):
         if (
             q.dtype == k.dtype == v.dtype == f16
             and len(q.shape) == len(k.shape) == len(v.shape)
-            and k.shape[-1] == v.shape[-2]
-            and q.shape[-1] == k.shape[-2] == v.shape[-1]
-            and q.shape[-1] <= 160
+            and is_true(q.shape[-1] == v.shape[-1]
+                        and q.shape[-1] <= 160)
         ):
             return [attention(q, k, v)]
         else:
@@ -103,9 +103,8 @@ class AttentionMaskAddRewriteRule(SubgraphRewriteRule):
         if (
             q.dtype == k.dtype == v.dtype == f16
             and len(q.shape) == len(k.shape) == len(v.shape)
-            and k.shape[-1] == v.shape[-2]
-            and q.shape[-1] == k.shape[-2] == v.shape[-1]
-            and q.shape[-1] <= 160
+            and is_true(q.shape[-1] == v.shape[-1]
+                        and q.shape[-1] <= 160)
         ):
             return [attention(q, k, v, mask)]
         else:

@@ -31,7 +31,7 @@ def resolve_cvt_func_name(src: Union[Expr, DataType], dtype: DataType) -> str:
 
 
 @initialize()
-def register_cvta_instructions():
+def register_cvt_instructions():
     from hidet.lang import attrs
     from hidet.lang import u8, u16, u32, u64, i8, i16, i32, i64, f16, f32, f64, bf16
 
