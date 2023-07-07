@@ -39,10 +39,17 @@ class SubgraphRewritePass(GraphPass):
 
     max_num_transforms = 1000
 
+    def __init__(self, rewrite_rules: Optional[List[SubgraphRewriteRule]] = None):
+        super().__init__()
+        if rewrite_rules is None:
+            self.rewrite_rules = registered_rewrite_rules
+        else:
+            self.rewrite_rules = rewrite_rules
+
     def process_graph(self, graph: FlowGraph) -> FlowGraph:
         graph = graph_utils.functors.clone(graph)
         for _ in range(self.max_num_transforms):
-            updated, graph = self.try_transform(graph, registered_rewrite_rules)
+            updated, graph = self.try_transform(graph, self.rewrite_rules)
             if not updated:
                 graph.update_nodes()
                 return graph

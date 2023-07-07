@@ -9,6 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from typing import Optional
 from hidet.graph import ops
 from hidet.graph.nn.module import Module
 from hidet.graph.tensor import Tensor, empty
@@ -57,6 +58,26 @@ class LinearTransposed(Module):
 
     def forward(self, x: Tensor) -> Tensor:
         x = ops.matmul(x, self.weight)
+        if self.bias is not None:
+            x = ops.add(x, self.bias)
+        return x
+
+
+class SymQuantLinearTransposed(Module):
+    def __init__(self, weight: Tensor, bias: Optional[Tensor] = None, quant_type: str = 'int8'):
+        super().__init__()
+        self.in_features = weight.shape[0]
+        self.out_features = weight.shape[1]
+        qweight, scale = ops.symmetric_quantize(weight, quant_type=quant_type, dims=[-1])
+        self.qweight = qweight
+        self.scale = scale
+        self.bias = bias
+
+    def extra_str(self) -> str:
+        return 'in_features={}, out_features={}'.format(self.in_features, self.out_features)
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = ops.matmul(x, ops.symmetric_dequantize(ops.barrier(self.qweight), self.scale, dims=[-1]))
         if self.bias is not None:
             x = ops.add(x, self.bias)
         return x

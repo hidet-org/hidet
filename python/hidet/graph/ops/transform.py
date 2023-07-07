@@ -624,7 +624,7 @@ def take(data: Tensor, indices: Tensor, axis: int = 0) -> Tensor:
 
 
 def gather(data: Tensor, indices: Tensor, axis: int = 0) -> Tensor:
-    return GatherOp(data, indices, axis).outputs[0]
+    return GatherOp(data, indices, axis).get_output(0)
 
 
 def strided_slice(
