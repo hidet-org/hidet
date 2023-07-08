@@ -159,7 +159,7 @@ class HidetLinear(HidetModule):
         super().__init__(torch_module)
         from hidet import ops
 
-        self.transposed_weight = ops.transpose(self.param('weight'), [1, 0])
+        self.transposed_weight = ops.transpose(self.param('weight', steal=True), [1, 0])
 
     def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, torch.nn.Linear)
