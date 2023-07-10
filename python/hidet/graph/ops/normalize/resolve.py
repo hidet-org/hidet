@@ -15,7 +15,7 @@ from hidet.ir import dtypes
 from hidet.ir.expr import is_constant
 from hidet.graph.operator import Operator, Tensor
 from hidet.graph.transforms import ResolveRule, register_resolve_rule
-from hidet.graph.ops.utils import is_contiguous_norm
+from hidet.graph.ops.utils import is_contiguous_dims
 from hidet.utils import prod
 
 
@@ -35,7 +35,7 @@ class NormalizeResolveRule(ResolveRule):
     def resolve_f16(self, op: Operator) -> Optional[List[Tensor]]:
         dims = op.attrs['dims']
         x: Tensor = op.inputs[0]
-        if not is_contiguous_norm(dims, len(x.shape)):
+        if not is_contiguous_dims(dims, len(x.shape)):
             return None
         if x.dtype != dtypes.float16 or prod([x.shape[dd] for dd in dims]) % 2 != 0:
             return None
@@ -44,7 +44,7 @@ class NormalizeResolveRule(ResolveRule):
     def resolve_generic(self, op: Operator) -> Optional[List[Tensor]]:
         dims = op.attrs['dims']
         x: Tensor = op.inputs[0]
-        if not is_contiguous_norm(dims, len(x.shape)):
+        if not is_contiguous_dims(dims, len(x.shape)):
             from hidet.graph.ops import square, rsqrt
 
             epsilon = op.attrs['epsilon']
