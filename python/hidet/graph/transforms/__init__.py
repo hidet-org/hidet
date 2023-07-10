@@ -19,6 +19,7 @@ from .automatic_mix_precision import automatic_mix_precision_pass
 from .resolve_variant import resolve_variant_pass
 from .fuse_operator import fuse_operator_pass
 from .eliminate_barrier import eliminate_barrier_pass
+from .selective_quantize import selective_quantize_pass
 
 from .resolve_variant import ResolveRule, register_resolve_rule, get_resolve_chain
 from .graph_patterns import TensorPattern, OperatorPattern, SubgraphRewriteRule, register_rewrite_rule, op_pattern
@@ -52,7 +53,9 @@ def optimize(graph: FlowGraph) -> FlowGraph:
         subgraph_rewrite_pass(),
         automatic_mix_precision_pass(),
         subgraph_rewrite_pass(),
+        selective_quantize_pass(), # for any generic quantize op patterns, eg, matmul, conv2d, etc.
         resolve_variant_pass(),
+        selective_quantize_pass(), # for any specific quantize op patterns, eg, matmulfp16, etc.
         fuse_operator_pass(),
         eliminate_barrier_pass(),
     ]

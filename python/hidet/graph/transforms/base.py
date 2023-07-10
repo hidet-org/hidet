@@ -10,11 +10,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from __future__ import annotations
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Callable
 import logging
 
 import hidet.option
 from hidet.graph.flow_graph import FlowGraph
+from hidet.graph.transforms.graph_patterns.base import SubgraphRewriteRule, add_rewrite_rule
 from .instruments import GraphPassInstrument
 
 logger = logging.Logger(name='hidet.graph.transforms', level=logging.INFO)
@@ -69,8 +70,10 @@ class PassContext:
         self.instruments: List[GraphPassInstrument] = []
         self.configs: Dict[str, Any] = {
             # target precision:
-            # [None, 'float16', 'bfloat16', 'float32']
+            # [None, 'int8', 'float16', 'bfloat16', 'float32']
             'precision': None,
+            # selectively quantize the given graph patterns
+            'quantize_patterns': [],
             # target reduce precision:
             # [None, 'float16', 'float32']
             'reduce_precision': None,
@@ -124,6 +127,9 @@ class PassContext:
 
             - None
               Do not mix the precision.
+            - 'int8'
+                Converts the model into float16 data type, then selectively quantize subgraphs
+                using quantize_patterns.
             - 'float16'
               Convert the model into float16 data type.
             - 'bfloat16'
@@ -132,6 +138,26 @@ class PassContext:
               Convert the model into float32 data type.
         """
         self.configs['precision'] = dtype
+        return self
+    
+    def add_quantize_pattern(self, pattern: Optional[List[SubgraphRewriteRule]] = None) -> PassContext:
+        """
+        Adds selective quantization rules to the pass context.
+
+        Parameters
+        ----------
+        pattern: Optional[List[SubgraphRewriteRule]]
+            The pattern to selectively quantize.
+
+            - None
+              No pattern will be quantized.
+            - List[SubgraphRewriteRule]
+              Applies the quantization pattern in order
+        """
+
+        if pattern is not None:
+            for pat in pattern:
+                add_rewrite_rule(self.configs['quantize_patterns'], pat)
         return self
 
     def set_reduce_precision(self, dtype: Optional[str] = None) -> PassContext:

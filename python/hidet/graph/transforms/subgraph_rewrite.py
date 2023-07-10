@@ -42,7 +42,7 @@ class SubgraphRewritePass(GraphPass):
     def __init__(self, rewrite_rules: Optional[List[SubgraphRewriteRule]] = None):
         super().__init__()
         if rewrite_rules is None:
-            self.rewrite_rules = registered_rewrite_rules
+            self.rewrite_rules = registered_rewrite_rules()
         else:
             self.rewrite_rules = rewrite_rules
 

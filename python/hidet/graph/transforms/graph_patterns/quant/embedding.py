@@ -38,6 +38,7 @@ class SymmetricEmbeddingQuantizePattern(SubgraphRewriteRule):
         return [ops.take(ops.symmetric_dequantize(ops.barrier(wq), scale, dims=[-1]), ind, axis=0)]
 
 
-def symmetric_embedding_quantize_patterns(rules: List[SubgraphRewriteRule], quant_type: str = 'int8'):
+def symmetric_embedding_quantize_patterns(quant_type: str = 'int8') -> List[SubgraphRewriteRule]:
+    rules = []
     add_rewrite_rule(rules, SymmetricEmbeddingQuantizePattern(quant_type=quant_type))
     return rules

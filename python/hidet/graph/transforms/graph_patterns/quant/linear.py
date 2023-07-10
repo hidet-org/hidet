@@ -76,7 +76,8 @@ class SymmetricLinearQuantizePatternL(SubgraphRewriteRule):
         ]
 
 
-def symmetric_linear_quantize_patterns(rules: List[SubgraphRewriteRule], quant_type: str = 'int8', dims=0):
+def symmetric_linear_quantize_patterns(quant_type: str = 'int8', dims=0) -> List[SubgraphRewriteRule]:
+    rules = []
     add_rewrite_rule(rules, SymmetricLinearQuantizePatternR(quant_type=quant_type, dims=dims))
     add_rewrite_rule(rules, SymmetricLinearQuantizePatternL(quant_type=quant_type, dims=dims))
     return rules
@@ -85,27 +86,22 @@ def symmetric_linear_quantize_patterns(rules: List[SubgraphRewriteRule], quant_t
 class SymmetricQuantizeMatmulFused(SubgraphRewriteRule):
     def __init__(self):
         from hidet.graph.ops.quant.symmetric import SymmetricDeQuantizationOp
-        super().__init__(f'matmul(x, dequant(wq, scale)) => fused_matmul(x, wq, scale)')
+        from hidet.graph.ops.matmul.matmul_f16 import MatmulF16Op
+        super().__init__(f'matmulf16(x, dequant(wq, scale)) => fused_matmulf16(x, wq, scale)')
         self.x = TensorPattern.tensor()
         self.wq = TensorPattern.tensor()
-        self.scale = TensorPattern.tensor(is_const=True)
+        self.scale = TensorPattern.tensor()
         self.w_dequant = op_pattern(SymmetricDeQuantizationOp, [self.wq, self.scale])
-        self.out = op_pattern(MatmulOp, [self.x, self.w_dequant])
+        self.out = op_pattern(MatmulF16Op, [self.x, self.w_dequant])
 
     def source(self) -> List[TensorPattern]:
         return [self.out]
 
     def target(self, matched: MatchDict) -> Optional[List[Tensor]]:
         from hidet.ir import dtypes
-        x, wq, scale, w_dequant = [matched[v] for v in [self.x, self.wq, self.scale, self.w_dequant]]
+        x, wq, scale, w_dequant, out = [matched[v] for v in [self.x, self.wq, self.scale, self.w_dequant, self.out]]
         quant_attrs = w_dequant.op.attrs
         dim = normalize_dim(quant_attrs['dims'], len(wq.shape))
-        # last dimension of x in fp16 must be multiple of 4 bytes
-        # last dimension of wq in int8 must be multiple of 4 bytes
-        if x.dtype != dtypes.float16 or not is_constant(x.shape[-1]) or x.shape[-1] % 2 != 0 \
-            or wq.shape[-1] % 4 != 0:
-            return None
-        # print("target")
         if len(wq.shape) != 2 or wq.dtype != dtypes.int8:
             return None
         if dim != 0 and dim != [0]:
@@ -113,16 +109,17 @@ class SymmetricQuantizeMatmulFused(SubgraphRewriteRule):
         if scale.shape[0] != wq.shape[1]:
             return None
         
-        # for now keep parallel k parts to 1, since I don't see any benefit from benchmarks on shapes [batch, C, C] X [C, C]
-        # for C between [32, 2048]
+        # for now we piggyback off of matmulf16, to avoid unnecessary code duplication
+        # since otherwise, we would have a generic QuantMatmulOp, then its own resolve rules
         return [
             ops.quant.symmetric_quant_matmul(
-                x, wq, scale, parallel_k_parts=1
-            ).sum(0)
+                x, wq, scale, parallel_k_parts=out.op.attrs['parallel_k_parts']
+            )
         ]
 
 
-def matmul_specialization_rules(rules: List[SubgraphRewriteRule]):
+def matmul_specialization_rules() -> List[SubgraphRewriteRule]:
     """Adds rules for specializing kernels to custom fused versions, if applicable."""
+    rules = []
     add_rewrite_rule(rules, SymmetricQuantizeMatmulFused())
     return rules

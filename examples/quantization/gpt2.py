@@ -1,3 +1,14 @@
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 # %%
 from typing import List
 
@@ -75,6 +86,7 @@ def accuracy(output, target, topk=(1,)):
             correct_k = correct[:k].reshape(-1).float().sum(0, keepdim=True)
             res.append(correct_k.mul_(1.0 / batch_size))
         return res
+
 
 def calculate_perplexity(model, ids, device, cap_length=1024):
     if len(ids) > cap_length:
@@ -155,59 +167,52 @@ def get_wikitext_test_data() -> List[List[int]]:
 
 def show_differences(tokens: List[List[int]], model='gpt2'):
     topk = (1, 5, 10)
-    print(f'topk: {topk}')
+    # Original float32 model
     orig_model = get_graph('cuda', model)
     orig_model = hidet.graph.optimize(orig_model)
     orig_model = orig_model.build()
 
     orig_model_ppl, orig_model_acc = compute_metrics(orig_model, tokens, topk=topk)
-    print(f'original f32 ppl:  {orig_model_ppl}')
-    print(f'original f32 acc:  {orig_model_acc}')
-
+    ######################
+    # selectively quantize certain layers from fp32 to fp16
     quant_model = get_graph('cuda', model)
-    quant_model = hidet.graph.quantize(quant_model, hidet.graph.quant.default_quant_patterns())
+    quant_model = hidet.graph.quantize(quant_model, hidet.graph.quant.default_patterns())
     quant_model = hidet.graph.optimize(quant_model)
     quant_model = quant_model.build()
 
     quant_model_ppl, quant_model_acc = compute_metrics(quant_model, tokens, topk=topk)
+    ######################
+    # cast model to fp16
+    graph = get_graph('cuda', model)        
+    with hidet.graph.PassContext() as ctx:
+        ctx.set_precision('float16')
+        graph = hidet.graph.optimize(graph)
+    graph = graph.build()
+    fp16_model_ppl, fp16_model_acc = compute_metrics(graph, tokens, topk=topk)
+    #####################
+
+    # quantize fp16 model to int8
+    graph = get_graph('cuda', model)
+    with hidet.graph.PassContext() as ctx:
+        ctx.set_precision('float16')
+        ctx.add_quantize_pattern(hidet.graph.quant.default_patterns())
+        graph = hidet.graph.optimize(graph)
+    graph = graph.build()
+    fused_quant_model_ppl, fused_quant_model_acc = compute_metrics(graph, tokens, topk=topk)
+    #####################
+
+    print(f'topk: {topk}')
+    print(f'original f32 ppl:  {orig_model_ppl}')
+    print(f'original f32 acc:  {orig_model_acc}\n')
     print(f'quantized f32 -> int8 ppl: {quant_model_ppl}')
-    print(f'quantized f32 -> int8 acc: {quant_model_acc}')
+    print(f'quantized f32 -> int8 acc: {quant_model_acc}\n')
+    print(f'quantized f16 ppl: {fp16_model_ppl}')
+    print(f'quantized f16 acc: {fp16_model_acc}\n')
+    print(f'quantized f16 -> int8 ppl: {fused_quant_model_ppl}')
+    print(f'quantized f16 -> int8 acc: {fused_quant_model_acc}\n')
 
-    graph = get_graph('cuda', model)
-        
-    with hidet.graph.PassContext() as ctx:
-        ctx.set_precision('float16')
-        graph = hidet.graph.optimize(graph)
-    
-    graph = graph.build()
-    quant_model_ppl, quant_model_acc = compute_metrics(graph, tokens, topk=topk)
-    print(f'quantized f16 ppl: {quant_model_ppl}')
-    print(f'quantized f16 acc: {quant_model_acc}')
-
-
-    from hidet.graph.transforms.subgraph_rewrite import subgraph_rewrite_pass
-    from hidet.graph.transforms.automatic_mix_precision import automatic_mix_precision_pass
-    from hidet.graph.transforms.resolve_variant import resolve_variant_pass
-    from hidet.graph.transforms.fuse_operator import fuse_operator_pass
-    from hidet.graph.transforms.eliminate_barrier import eliminate_barrier_pass
-
-    graph = get_graph('cuda', model)
-        
-    with hidet.graph.PassContext() as ctx:
-        ctx.set_precision('float16')
-        graph = subgraph_rewrite_pass()(graph)
-        graph = automatic_mix_precision_pass()(graph)
-        graph = hidet.graph.quantize(graph, hidet.graph.quant.default_quant_patterns())
-        graph = hidet.graph.quantize(graph, hidet.graph.quant.matmul_specialization_rules([]))
-        graph = hidet.graph.optimize(graph)
-
-    graph = graph.build()
-    quant_model_ppl, quant_model_acc = compute_metrics(graph, tokens, topk=topk)
-    print(f'quantized f16 -> int8 ppl: {quant_model_ppl}')
-    print(f'quantized f16 -> int8 acc: {quant_model_acc}')
-
-# tokens = get_wikitext_test_data()
-# show_differences(tokens, 'gpt2')
+tokens = get_wikitext_test_data()
+show_differences(tokens, 'gpt2')
 
 # %%
 import logging
@@ -217,17 +222,19 @@ from hidet.graph.transforms.automatic_mix_precision import automatic_mix_precisi
 from hidet.graph.transforms.resolve_variant import resolve_variant_pass
 from hidet.graph.transforms.fuse_operator import fuse_operator_pass
 from hidet.graph.transforms.eliminate_barrier import eliminate_barrier_pass
+from hidet.graph.transforms.selective_quantize import selective_quantize_pass
 
 graph = get_graph('cuda')
-
+hidet.option.cache_dir('gpt2_cache')
 with hidet.graph.PassContext() as ctx:
     ctx.set_precision('float16')
-    # graph = subgraph_rewrite_pass()(graph)
+    ctx.add_quantize_pattern(hidet.graph.quant.default_patterns())
+    graph = subgraph_rewrite_pass()(graph)
     graph = automatic_mix_precision_pass()(graph)
-    # graph = hidet.graph.quantize(graph, hidet.graph.quant.default_quant_patterns())
-    # graph = hidet.graph.quantize(graph, hidet.graph.quant.matmul_specialization_rules([]))
-    # graph = hidet.graph.optimize(graph)
+    graph = selective_quantize_pass()(graph)
     graph = resolve_variant_pass()(graph)
+    graph = selective_quantize_pass()(graph)
+
     
 print(graph)
 # graph = graph.build()
@@ -235,7 +242,7 @@ print(graph)
 # %%
 inputs = torch.randint(0, 50257, (1024,)).cuda().to(torch.int32)
 position_ids = torch.arange(0, 1024).cuda().to(torch.int32)
-with hidet.graph.forward_context() as ctx:
-    ctx.append_instrument(hidet.graph.GraphForwardDebugInstrument())
-    outputs = graph(hidet.from_torch(inputs), hidet.from_torch(position_ids)).torch()
+# with hidet.graph.forward_context() as ctx:
+#     ctx.append_instrument(hidet.graph.GraphForwardDebugInstrument())
+outputs = graph(hidet.from_torch(inputs), hidet.from_torch(position_ids)).torch()
 print(torch.isnan(outputs).any())
