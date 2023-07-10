@@ -81,6 +81,9 @@ f32x4 = float32x4
 float32x8 = VectorType(float32, 8)
 f32x8 = float32x8
 
+float32x1 = VectorType(float32, 1)
+f32x1 = float32x1
+
 float16x2 = VectorType(float16, 2)
 f16x2 = float16x2
 

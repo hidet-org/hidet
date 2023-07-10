@@ -140,7 +140,7 @@ class ReduceTask(Task):
                     if layout.within_bound(indices):
                         vec_read = x_vectorized[indices]
                         for lane_id in grid(lanes, "u+"):
-                            lane_val = cast(address(vec_read), ~vtype.lane_type())[lane_id]
+                            lane_val = cast(address(vec_read), ~vtype.lane_type)[lane_id]
                             rv = ro.combine(rv, cast(lane_val, accumulate_dtype))
 
                     # Warp reduce by shuffle down
@@ -176,10 +176,9 @@ class ReduceTask(Task):
         xdtype = x.type.dtype
         if xdtype.nbytes < 4:
             lanes: int = 4 // dtype.nbytes
-            vtype: DataType = vectorize(xdtype, lanes)
         else:
             lanes: int = 1
-            vtype: DataType = xdtype
+        vtype: DataType = VectorType(xdtype, lanes)
 
         if self.keep_dim:
             remain_shape = [v if i not in dims else 1 for i, v in enumerate(shape)]
@@ -225,7 +224,8 @@ class ReduceTask(Task):
                     for indices in task_layout.on(threadIdx.x + blockIdx.x * block_size):
                         vec_read = x_vectorized[indices]
                         for lane_id in grid(lanes, "u+"):
-                            rv = ro.combine(rv, cast(vec_read[lane_id], accumulate_dtype))
+                            lane_val = cast(address(vec_read), ~vtype.lane_type)[lane_id]
+                            rv = ro.combine(rv, cast(lane_val, accumulate_dtype))
                     rv[0] = ro.finalize(acc=rv[0], size=reduce_extent)
                     for indices in remain_layout.on(threadIdx.x + blockIdx.x * block_size):
                         y[indices] = rv[0]
