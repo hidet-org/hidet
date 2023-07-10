@@ -15,6 +15,7 @@ from hidet.ir.compute import cops
 from ..arithmetic import square, sqrt
 from ..utils import Task, Operator, Tensor, TensorNode, IRModule, ReduceType
 from ..utils import compute, input_like, normalize_dim, arg_reduce
+from hidet.lang.cuda import blockIdx, threadIdx, register_tensor, atomic_add
 
 
 class ReduceTask(Task):
@@ -43,7 +44,7 @@ class ReduceTask(Task):
         rank = len(self.inputs[0].shape)
         if rank - 1 in self.dims:  # pylint: disable=simplifiable-if-statement
             # use self.cuda_schedule_reduce_by_warp
-            return True
+            return False
         else:
             # use self.cuda_schedule_reduce_by_default
             return False
@@ -64,8 +65,7 @@ class ReduceTask(Task):
         from hidet.lang import spatial, repeat, attrs, cast
         from hidet.lang.cuda import blockIdx, threadIdx
 
-        warp_size = 32
-        block_size = warp_size
+        block_size = 1024
         x, y = self.inputs[0], self.outputs[0]
         xdtype = x.type.dtype
         shape: List[Int] = list(x.shape)
@@ -84,8 +84,8 @@ class ReduceTask(Task):
         repeat_shape = []
         for i in range(len(shape)):
             if i == len(shape) - 1:
-                spatial_shape.append(warp_size)
-                repeat_shape.append((shape[i] + warp_size - 1) // warp_size)  # num warps per row
+                spatial_shape.append(block_size)
+                repeat_shape.append((shape[i] + block_size - 1) // block_size)  # num warps per row
             elif i in dims:
                 spatial_shape.append(1)
                 repeat_shape.append(shape[i])
@@ -107,23 +107,26 @@ class ReduceTask(Task):
                 attrs.cuda.min_blocks = 1
 
                 rv = ro.initial_value(data_type(accumulate_dtype))
+                if threadIdx.x == 0:
+                    for indices in remain_layout.on(blockIdx.x):
+                        y.write(indices, rv, protected=False)
                 for indices in task_layout.on(threadIdx.x + blockIdx.x * block_size):
                     if layout.within_bound(indices):
                         k = x[indices]
                         rv = ro.combine(rv, cast(k, accumulate_dtype))
-                # Warp reduce by shuffle down
-                mask = active_mask()
-                rv = ro.combine(rv, shfl_down_sync(mask, rv, 16, 32))
-                rv = ro.combine(rv, shfl_down_sync(mask, rv, 8, 32))
-                rv = ro.combine(rv, shfl_down_sync(mask, rv, 4, 32))
-                rv = ro.combine(rv, shfl_down_sync(mask, rv, 2, 32))
-                rv = ro.combine(rv, shfl_down_sync(mask, rv, 1, 32))
-                rv = shfl_sync(mask, rv, 0, 32)
-                rv = ro.finalize(acc=rv, size=reduce_extent)
+                    # Warp reduce by shuffle down
+                    mask = active_mask()
+                    rv = ro.combine(rv, shfl_down_sync(mask, rv, 16, 32))
+                    rv = ro.combine(rv, shfl_down_sync(mask, rv, 8, 32))
+                    rv = ro.combine(rv, shfl_down_sync(mask, rv, 4, 32))
+                    rv = ro.combine(rv, shfl_down_sync(mask, rv, 2, 32))
+                    rv = ro.combine(rv, shfl_down_sync(mask, rv, 1, 32))
+                    rv = shfl_sync(mask, rv, 0, 32)
+                    rv = ro.finalize(acc=rv, size=reduce_extent)
 
-                if threadIdx.x == 0:
-                    for indices in remain_layout.on(blockIdx.x):
-                        y[indices] = cast(rv, xdtype)
+                    if threadIdx.x % 32 == 0:
+                        for indices in remain_layout.on(blockIdx.x):
+                            atomic_add(~y[indices], rv)
 
         ir_module = module.ir_module()
         return ir_module

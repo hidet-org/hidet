@@ -79,6 +79,8 @@ def fuse_epilogue_operators(anchors: Sequence[Operator], usage: Usage, belong: D
             # this anchor operator does not allow epilogue fusion, skip
             continue
 
+        from hidet.graph.ops.reduce import ReduceMeanOp
+        NOT_FUSIBLE.add(ReduceMeanOp)
         if type(anchor) in NOT_FUSIBLE:
             # for operator are not fusible, skip
             continue
