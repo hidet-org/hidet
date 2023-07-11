@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from __future__ import annotations
-from typing import List, Optional, Dict, Any, Callable
+from typing import List, Optional, Dict, Any
 import logging
 
 import hidet.option
@@ -145,7 +145,7 @@ class PassContext:
         else:
             self.configs['precision'] = dtype
         return self
-    
+
     def add_quantize_rules(self, pattern: Optional[List[SubgraphRewriteRule]] = None) -> PassContext:
         """
         Adds selective quantization rules to the pass context.

@@ -15,7 +15,7 @@ from typing import List, Optional
 from hidet.graph import ops
 from hidet.graph.flow_graph import Tensor
 from hidet.graph.ops.matmul import MatmulOp
-from hidet.graph.ops.utils import Task, Operator, Tensor, input_like, normalize_dim, is_constant
+from hidet.graph.ops.utils import normalize_dim, is_constant
 from ..base import SubgraphRewriteRule, TensorPattern, MatchDict, op_pattern, add_rewrite_rule
 
 # we use the heuristic that if one of the inputs to matmul is a constant, and the number if dimensions is two
@@ -86,7 +86,8 @@ def symmetric_linear_quantize_patterns(quant_type: str = 'int8', dims=0) -> List
 class SymmetricQuantizeMatmulFused(SubgraphRewriteRule):
     def __init__(self):
         from hidet.graph.ops.quant.symmetric import SymmetricDeQuantizationOp
-        super().__init__(f'matmul(x, dequant(wq, scale)) => fused_matmulf16(x, wq, scale)')
+
+        super().__init__('matmul(x, dequant(wq, scale)) => fused_matmulf16(x, wq, scale)')
         self.x = TensorPattern.tensor()
         self.wq = TensorPattern.tensor()
         self.scale = TensorPattern.tensor()
@@ -98,28 +99,30 @@ class SymmetricQuantizeMatmulFused(SubgraphRewriteRule):
 
     def target(self, matched: MatchDict) -> Optional[List[Tensor]]:
         from hidet.ir import dtypes
+
         x, wq, scale, w_dequant, out = [matched[v] for v in [self.x, self.wq, self.scale, self.w_dequant, self.out]]
         quant_attrs = w_dequant.op.attrs
         dim = normalize_dim(quant_attrs['dims'], len(wq.shape))
         # require the last dimension to be a multiple of 4 bytes, for cp_async instruction
-        if not (is_constant(out.shape[-1]) and is_constant(wq.shape[-1]) and out.shape[-1] % 2 == 0 and wq.shape[-1] % 4 == 0):
+        if not (
+            is_constant(out.shape[-1])
+            and is_constant(wq.shape[-1])
+            and out.shape[-1] % 2 == 0
+            and wq.shape[-1] % 4 == 0
+        ):
             return None
         if out.dtype != dtypes.float16:
             return None
         if len(wq.shape) != 2 or wq.dtype != dtypes.int8:
             return None
-        if dim != 0 and dim != [0]:
+        if dim not in (0, [0]):
             return None
         if scale.shape[0] != wq.shape[1]:
             return None
-        
+
         # For now we set parallel_k_parts to 1, as from benchmarking shapes [B, C, C] x [C, C]
         # from C between [32, 2048], we see that parallel_k_parts=1 is the fastest
-        return [
-            ops.quant.symmetric_quant_matmul(
-                x, wq, scale, parallel_k_parts=1
-            ).sum(0)
-        ]
+        return [ops.quant.symmetric_quant_matmul(x, wq, scale, parallel_k_parts=1).sum(0)]
 
 
 def matmul_specialization_rules() -> List[SubgraphRewriteRule]:

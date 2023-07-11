@@ -26,7 +26,7 @@ def symmetric_linear_patterns(quant_type: str = 'int8', dims: Union[int, List[in
     quant_type : str
         Quantization type. One of ['int8', 'int16']
     dims : Union[int, List[int]]
-        Axis to quantize over, where each axis has independent quantization parameters. 
+        Axis to quantize over, where each axis has independent quantization parameters.
     """
     rules = symmetric_linear_quantize_patterns(quant_type=quant_type, dims=dims)
     rules.extend(matmul_specialization_rules())

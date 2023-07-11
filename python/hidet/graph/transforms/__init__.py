@@ -66,4 +66,3 @@ def optimize(graph: FlowGraph) -> FlowGraph:
     for inst in reversed(ctx.instruments):
         inst.after_all_passes(graph)
     return graph.update_nodes()
-

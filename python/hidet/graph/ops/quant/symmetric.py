@@ -52,7 +52,7 @@ class SymmetricDeQuantizationTask(Task):
         dims = normalize_dim(dims, len(wq.shape))
         if not isinstance(dims, (list, tuple)):
             dims = [dims]
-        
+
         def unscale_weight(*indices):
             scale_indices = [indices[i] for i in range(len(indices)) if not i in dims]
             return cast(wq[indices], scale.type.dtype) * scale[scale_indices]
