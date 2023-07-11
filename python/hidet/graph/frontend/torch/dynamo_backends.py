@@ -104,14 +104,12 @@ def hidet_backend(graph_module, example_inputs):
     interpreter: Interpreter = hidet.frontend.from_torch(graph_module)
 
     # prepare dummy and symbolic inputs for correctness and flow graph construction
-    # unfortunately, when dynamic=True in torch.compile, there may exist other non-tensor parameters
-    #   in example inputs
-    inputs = []  # for flow graph construction
+    inputs: List[Union[Tensor, int, bool, float]] = []  # for flow graph construction
     for example_input in example_inputs:
         if isinstance(example_input, torch.Tensor):
             symbolic_input = symbol_like_torch(example_input)
             inputs.append(symbolic_input)
-        elif isinstance(example_input, int):
+        elif isinstance(example_input, (int, bool, float)):
             inputs.append(symbolic_input)
         elif isinstance(example_input, torch.SymInt):
             try:
@@ -153,17 +151,14 @@ def hidet_backend(graph_module, example_inputs):
     # symbolic run to get flow graph
     output = interpreter(*inputs)
     output_format, output_tensors = serialize_output(output)
-    input_tensors = list(filter(lambda x: isinstance(x, hidet.Tensor), inputs))
-    # essentially, I think this is a bug in torch._inductor
-    #   the example inputs have instances of torch.SymInt (when dynamic=True), while the inputs to the compiled model
-    #   are torch.Tensors.
-    input_map = [isinstance(x, hidet.Tensor) for x in inputs]
+    input_tensors = [x for x in inputs if isinstance(x, hidet.Tensor)]
+    input_tensor_indices = [i for (i, x) in enumerate(inputs) if isinstance(x, hidet.Tensor)]
     flow_graph: FlowGraph = hidet.trace_from(output_tensors, inputs=input_tensors)
 
     executor = generate_executor(flow_graph)
 
     def wrapper(*args: Tensor):
-        args = [t for (t, is_hidet_tensor) in zip(args, input_map) if is_hidet_tensor]
+        args = [args[i] for i in input_tensor_indices]
         outputs: Sequence[torch.Tensor] = executor(*args)
         ret = deserialize_output(output_format, outputs)
         return ret

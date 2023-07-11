@@ -26,7 +26,7 @@ def is_true(x: Union[Expr, bool]) -> bool:
     return False
 
 
-def same_shape(shape_a: Sequence[int], shape_b: Sequence[int]) -> bool:
+def same_shape(shape_a: Sequence[Union[Expr, int]], shape_b: Sequence[Union[Expr, int]]) -> bool:
     return len(shape_a) == len(shape_b) and all(a == b for a, b in zip(shape_a, shape_b))
 
 
