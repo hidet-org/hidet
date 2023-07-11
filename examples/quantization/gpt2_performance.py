@@ -98,5 +98,5 @@ def benchmark_hidet(model_name='gpt2', space=0, start_tokens=32, num_tokens=100)
     print(f'f16 latency: {fp16_latency}')
     print(f'quantized f16 -> int8 latency: {fp16_quant_latency}')
 
-benchmark_hidet(model_name='gpt2', space=0, start_tokens=32, num_tokens=100)
+benchmark_hidet(model_name='gpt2', space=2, start_tokens=32, num_tokens=100)
 

@@ -113,7 +113,7 @@ class SymmetricQuantizeMatmulFused(SubgraphRewriteRule):
         # since otherwise, we would have a generic QuantMatmulOp, then its own resolve rules
         return [
             ops.quant.symmetric_quant_matmul(
-                x, wq, scale, parallel_k_parts=out.op.attrs['parallel_k_parts']
+                x, wq, scale, parallel_k_parts=1 # out.op.attrs['parallel_k_parts']
             )
         ]
 
