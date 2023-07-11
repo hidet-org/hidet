@@ -14,7 +14,7 @@ from hidet.graph.graph_utils.functors import GraphRewriter
 from hidet.graph.flow_graph import FlowGraph, Operator, Tensor
 from hidet.graph import ops
 from hidet.ir.type import DataType, data_type
-from hidet.ir.dtypes import int8
+
 from hidet.utils import strict_zip, same_list
 from .base import GraphPass
 
