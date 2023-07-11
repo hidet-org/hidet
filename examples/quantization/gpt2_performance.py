@@ -73,12 +73,6 @@ def benchmark_hidet(model_name='gpt2', space=0, start_tokens=32, num_tokens=100)
     orig_latency = benchmark_func(lambda: generate_fn(graph, inputs, num_tokens))
 
     graph, generate_fn = prepare_graph(model_name, 'cuda')
-    graph = hidet.graph.quantize(graph, hidet.graph.quant.default_patterns())
-    graph = hidet.graph.optimize(graph)
-    graph = graph.build(space=space)
-    quant_latency = benchmark_func(lambda: generate_fn(graph, inputs, num_tokens))
-
-    graph, generate_fn = prepare_graph(model_name, 'cuda')
     with hidet.graph.PassContext() as ctx:
         ctx.set_precision('float16')
         graph = hidet.graph.optimize(graph)
@@ -87,16 +81,18 @@ def benchmark_hidet(model_name='gpt2', space=0, start_tokens=32, num_tokens=100)
 
     graph, generate_fn = prepare_graph(model_name, 'cuda')
     with hidet.graph.PassContext() as ctx:
-        ctx.set_precision('float16')
-        ctx.add_quantize_pattern(hidet.graph.quant.default_patterns())
+        # setting the precision to int8 will first cast the model to float16, then quantize
+        #   layers according to the default settings
+        ctx.set_precision('int8')
+        # to customize the quantization settings, use ctx.add_quantize_rules(...), consult the
+        # docs of that function for more info
         graph = hidet.graph.optimize(graph)
     graph = graph.build(space=space)
     fp16_quant_latency = benchmark_func(lambda: generate_fn(graph, inputs, num_tokens))
 
     print(f'original f32 latency: {orig_latency}')
-    print(f'quantized f32 -> int8 latency: {quant_latency}')
     print(f'f16 latency: {fp16_latency}')
     print(f'quantized f16 -> int8 latency: {fp16_quant_latency}')
 
-benchmark_hidet(model_name='gpt2', space=2, start_tokens=32, num_tokens=100)
+benchmark_hidet(model_name='gpt2', space=2, start_tokens=1, num_tokens=100)
 

@@ -53,9 +53,8 @@ def optimize(graph: FlowGraph) -> FlowGraph:
         subgraph_rewrite_pass(),
         automatic_mix_precision_pass(),
         subgraph_rewrite_pass(),
-        selective_quantize_pass(), # for any generic quantize op patterns, eg, matmul, conv2d, etc.
+        selective_quantize_pass(),
         resolve_variant_pass(),
-        selective_quantize_pass(), # for any specific quantize op patterns, eg, matmulfp16, etc.
         fuse_operator_pass(),
         eliminate_barrier_pass(),
     ]
@@ -68,14 +67,3 @@ def optimize(graph: FlowGraph) -> FlowGraph:
         inst.after_all_passes(graph)
     return graph.update_nodes()
 
-
-def quantize(graph: FlowGraph, rules: List[SubgraphRewriteRule]) -> FlowGraph:
-    from .subgraph_rewrite import SubgraphRewritePass
-
-    ctx = PassContext.current()
-    for inst in ctx.instruments:
-        inst.before_all_passes(graph)
-    graph = SubgraphRewritePass(rules)(graph)
-    for inst in reversed(ctx.instruments):
-        inst.after_all_passes(graph)
-    return graph

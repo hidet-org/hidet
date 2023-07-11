@@ -167,20 +167,15 @@ def get_wikitext_test_data() -> List[List[int]]:
 
 def show_differences(tokens: List[List[int]], model='gpt2'):
     topk = (1, 5, 10)
+    format_acc = lambda x: '[' + ', '.join([f'top-{k}: {round(y, 3)}' for k, y in zip(topk, x)]) + ']'
     # Original float32 model
     orig_model = get_graph('cuda', model)
     orig_model = hidet.graph.optimize(orig_model)
     orig_model = orig_model.build()
 
     orig_model_ppl, orig_model_acc = compute_metrics(orig_model, tokens, topk=topk)
-    ######################
-    # selectively quantize certain layers from fp32 to fp16
-    quant_model = get_graph('cuda', model)
-    quant_model = hidet.graph.quantize(quant_model, hidet.graph.quant.default_patterns())
-    quant_model = hidet.graph.optimize(quant_model)
-    quant_model = quant_model.build()
+    orig_model_acc = format_acc(orig_model_acc)
 
-    quant_model_ppl, quant_model_acc = compute_metrics(quant_model, tokens, topk=topk)
     ######################
     # cast model to fp16
     graph = get_graph('cuda', model)        
@@ -189,23 +184,31 @@ def show_differences(tokens: List[List[int]], model='gpt2'):
         graph = hidet.graph.optimize(graph)
     graph = graph.build()
     fp16_model_ppl, fp16_model_acc = compute_metrics(graph, tokens, topk=topk)
+    fp16_model_acc = format_acc(fp16_model_acc)
     #####################
 
     # quantize fp16 model to int8
     graph = get_graph('cuda', model)
     with hidet.graph.PassContext() as ctx:
-        ctx.set_precision('float16')
-        ctx.add_quantize_pattern(hidet.graph.quant.default_patterns())
+        # setting the precision to int8 will first cast the model to float16, then quantize
+        # layers according to the default settings
+        # Under the default settings, the layers that will be quantized are linear and embedding.
+
+        # More precisely, there is no concept of a 'layer' in the flowgraph, so the quantization
+        # actually is applied to certain patterns of operators. For example, the linear 'layer' pattern
+        # detects if a matmul has a constant input of len(shape) == 2. If so, the constant will be quantized.
+        ctx.set_precision('int8')
+        # to customize the quantization settings, use ctx.add_quantize_rules(List[SubgraphRewriteRule]); consult the
+        # docs of that function for more info
         graph = hidet.graph.optimize(graph)
     graph = graph.build()
     fused_quant_model_ppl, fused_quant_model_acc = compute_metrics(graph, tokens, topk=topk)
+    fused_quant_model_acc = format_acc(fused_quant_model_acc)
     #####################
 
     print(f'topk: {topk}')
     print(f'original f32 ppl:  {orig_model_ppl}')
     print(f'original f32 acc:  {orig_model_acc}\n')
-    print(f'quantized f32 -> int8 ppl: {quant_model_ppl}')
-    print(f'quantized f32 -> int8 acc: {quant_model_acc}\n')
     print(f'quantized f16 ppl: {fp16_model_ppl}')
     print(f'quantized f16 acc: {fp16_model_acc}\n')
     print(f'quantized f16 -> int8 ppl: {fused_quant_model_ppl}')
@@ -228,7 +231,7 @@ graph = get_graph('cuda')
 hidet.option.cache_dir('gpt2_cache')
 with hidet.graph.PassContext() as ctx:
     ctx.set_precision('float16')
-    ctx.add_quantize_pattern(hidet.graph.quant.default_patterns())
+    ctx.add_quantize_rules(hidet.graph.quant.default_patterns())
     graph = subgraph_rewrite_pass()(graph)
     graph = automatic_mix_precision_pass()(graph)
     graph = selective_quantize_pass()(graph)

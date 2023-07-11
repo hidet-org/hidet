@@ -28,4 +28,4 @@ from .tensor import asarray, randn, empty, zeros, ones, symbol, randint, randn_l
 from .tensor import symbol_like, full, full_like
 from .tensor import from_numpy, from_dlpack, from_torch
 from .flow_graph import trace_from, load_graph, save_graph, forward_context
-from .transforms import optimize, quantize, quant
+from .transforms import optimize, quant
