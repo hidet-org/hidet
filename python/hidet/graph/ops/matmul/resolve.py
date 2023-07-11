@@ -199,10 +199,13 @@ class MatmulResolveRule(ResolveRule):
         elif isinstance(parallel_k, str):
             if parallel_k == 'default':
                 batch_size, m_size, n_size, k_size = prod(c.shape[:-2]), c.shape[-2], c.shape[-1], a.shape[-1]
-                estimate_blocks = batch_size * cdiv(m_size, 64) * cdiv(n_size, 64)
-                estimate_concurrent_blocks = 80 * 5
-                max_k_parts = cdiv(k_size, 64)
-                k_parts = min(cdiv(estimate_concurrent_blocks, estimate_blocks), max_k_parts)
+                if is_constant(batch_size, m_size):
+                    estimate_blocks = batch_size * cdiv(m_size, 64) * cdiv(n_size, 64)
+                    estimate_concurrent_blocks = 80 * 5
+                    max_k_parts = cdiv(k_size, 64)
+                    k_parts = min(cdiv(estimate_concurrent_blocks, estimate_blocks), max_k_parts)
+                else:
+                    k_parts = 1
             elif parallel_k == 'disabled':
                 k_parts = 1
             elif parallel_k == 'search':
