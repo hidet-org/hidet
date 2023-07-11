@@ -319,12 +319,12 @@ class ReshapeOp(Operator):
                 )
             return shape
         elif cnt == 1:
-            remain_size = prod([v for v in shape if v != -1])
+            remain_size = prod([v for v in shape if isinstance(v, int) and v != -1])
             if is_true(size % remain_size != 0):
                 raise ValueError(
                     'Given shape is incompatible with input tensor: ' 'shape {} and size {}'.format(shape, size)
                 )
-            return [v if v != -1 else size // remain_size for v in shape]
+            return [size // remain_size if isinstance(v, int) and v == -1 else v for v in shape]
         else:
             raise ValueError('Can not infer the shape when there are multiple -1: {}'.format(shape))
 
