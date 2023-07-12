@@ -35,7 +35,7 @@ class ReduceResolveRule(ResolveRule):
         x: Tensor = op.inputs[0]
         shape = x.shape
 
-        if is_contiguous_dims(dims, len(shape)) and False:
+        if is_contiguous_dims(dims, len(shape)):
             # for some key models, the reduction dimension spans over multiple dims
             # e.g. 40 x 32 x 32. In this case, it is best to map the reduction as
             # a 2-D tensor so the warp reduction implementation does not need to
