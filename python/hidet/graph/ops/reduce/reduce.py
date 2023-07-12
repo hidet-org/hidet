@@ -88,6 +88,7 @@ class ReduceTask(Task):
         read_shape = shape[:]
         read_shape[-1] /= lanes
         block_size = (read_shape[-1] + warp_size - 1) // warp_size * warp_size
+        block_size = hidet.ir.expr.if_then_else(block_size > 1024, 1024, block_size)
 
         dims = self.dims
         if self.keep_dim:
