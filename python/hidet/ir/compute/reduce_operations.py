@@ -168,9 +168,7 @@ class ReduceOperation:
         -------
             None, the combine is inplace to acc
         """
-
-        if not self.has_atomic():
-            raise NotImplementedError()
+        raise NotImplementedError()
 
 
 class MinReduce(ReduceOperation):
@@ -196,6 +194,7 @@ class MinReduce(ReduceOperation):
 
     def atomic_combine(self, acc: Expr, rhs_value: Expr):
         from hidet.lang.cuda import atomic_min
+
         return atomic_min(acc, rhs_value)
 
 
@@ -222,6 +221,7 @@ class MaxReduce(ReduceOperation):
 
     def atomic_combine(self, acc: Expr, rhs_value: Expr):
         from hidet.lang.cuda import atomic_max
+
         return atomic_max(acc, rhs_value)
 
 
@@ -239,6 +239,7 @@ class SumReduce(ReduceOperation):
 
     def atomic_combine(self, acc: Expr, rhs_value: Expr):
         from hidet.lang.cuda import atomic_add
+
         return atomic_add(acc, rhs_value)
 
 
@@ -262,6 +263,7 @@ class AverageReduce(ReduceOperation):
 
     def atomic_combine(self, acc: Expr, rhs_value: Expr):
         from hidet.lang.cuda import atomic_add
+
         return atomic_add(acc, rhs_value)
 
 

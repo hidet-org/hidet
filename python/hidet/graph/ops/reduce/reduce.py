@@ -12,12 +12,13 @@
 from typing import List, Union, Optional, Sequence
 
 from hidet.ir.compute import cops
+from hidet.lang import f16, grid
+from hidet.lang.cuda import blockIdx, threadIdx, register_tensor
+from hidet.ir.type import DataType
+from hidet.ir.dtypes.vector import VectorType
 from ..arithmetic import square, sqrt
 from ..utils import Task, Operator, Tensor, TensorNode, IRModule, ReduceType
 from ..utils import compute, input_like, normalize_dim, arg_reduce
-from hidet.lang import f16, grid
-from hidet.lang.cuda import blockIdx, threadIdx, register_tensor
-from hidet.ir.dtypes.vector import VectorType
 
 
 class ReduceTask(Task):
@@ -67,15 +68,13 @@ class ReduceTask(Task):
             return self.cuda_schedule_reduce_by_default()
 
     def cuda_schedule_reduce_by_warp(self) -> IRModule:
-        import math
         import hidet
         from hidet.ir.primitives import active_mask, shfl_down_sync, shfl_sync
         from hidet.ir.compute import ReduceOperation
         from hidet.ir.type import data_type, Int
         from hidet.ir.layout import row_major
-        from hidet.lang import spatial, repeat, attrs, cast, tensor_pointer
-        from hidet.lang.cuda import blockIdx, threadIdx, dynamic_shared_memory, syncthreads
-        from hidet.ir.expr import cast, address
+        from hidet.lang import spatial, repeat, attrs, cast, tensor_pointer, address
+        from hidet.lang.cuda import dynamic_shared_memory, syncthreads
 
         x, y = self.inputs[0], self.outputs[0]
         warp_size = 32
@@ -126,7 +125,7 @@ class ReduceTask(Task):
             smem_needed = accumulate_dtype.nbytes * block_size // warp_size
 
         with hidet.script_module() as module:
-            print(shape, read_shape, lanes, vtype, smem_needed, reduce_extent, block_size)
+
             @hidet.script
             def reduce_kernel(x: xdtype[x.shape], y: xdtype[y.shape]):
                 attrs.cuda.grid_dim = grid_size
@@ -179,15 +178,14 @@ class ReduceTask(Task):
                     if ro.has_atomic(accumulate_dtype):
                         rv = smem_staging[0]
                     else:
-                        rv = ro.initial_value(data_type(accumulate_dtype))
                         for i in range(reduce_extent // warp_size):
-                            rv = ro.combine(rv, smem_staging[i])
+                            if i > 0:
+                                rv = ro.combine(rv, smem_staging[i])
                     rv = ro.finalize(acc=rv, size=reduce_extent)
                     for indices in write_layout.on(blockIdx.x):
                         y.write(indices, rv)
 
         ir_module = module.ir_module()
-        print(ir_module)
         return ir_module
 
     def cuda_schedule_reduce_by_default(self) -> IRModule:
@@ -195,7 +193,6 @@ class ReduceTask(Task):
         from hidet.ir.compute import ReduceOperation
         from hidet.ir.type import data_type, Int
         from hidet.lang import spatial, repeat, attrs, tensor_pointer
-        from hidet.lang.cuda import blockIdx, threadIdx, register_tensor
         from hidet.ir.expr import cast, address
 
         x, y = self.inputs[0], self.outputs[0]
@@ -280,7 +277,6 @@ class ReduceTask(Task):
                         y_vectorized[indices] = write_val[0]
 
         ir_module = module.ir_module()
-        print(ir_module)
         return ir_module
 
 
