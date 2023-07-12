@@ -33,7 +33,8 @@ def reinstall_hidet():
     subprocess.run(['pip', 'install', '-e', '.'], check=True)
 
 
-def run_bench_script(report_file):
+def run_regression(report_file):
+    return
     space = 2
     current_commit = subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode('utf-8').strip()
     command = 'python scripts/bench/benchmark.py --git-commit {commit} --space {space} --report {report_file}'.format(
@@ -57,13 +58,11 @@ def send_report(result_file):
 
 
 def bench_job():
-    print("running")
-    return
     report_file = './scripts/regression/report.txt'
     try:
         pull_repo()
         reinstall_hidet()
-        run_bench_script(report_file)
+        run_regression(report_file)
         send_report(report_file)
     except Exception as e:
         print('Error: {}'.format(e))
@@ -74,7 +73,7 @@ def main():
     if not os.path.exists('./scripts/regression/performance.py'):
         raise RuntimeError('Please run this script from the root directory of the repository.')
 
-    # install_dependencies()
+    install_dependencies()
 
     now = args.now
     if now:
