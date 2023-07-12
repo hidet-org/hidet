@@ -24,7 +24,7 @@ class DynamoConfig:
         self._print_input_graph: bool = False
         self._dump_graph_ir: Optional[str] = None
         self._correctness_report: bool = False
-        self._steal_weights: bool = True
+        self._steal_weights: bool = False
 
     def __getitem__(self, item: str):
         assert isinstance(item, str)
@@ -44,7 +44,7 @@ class DynamoConfig:
         self._print_input_graph: bool = False
         self._dump_graph_ir: Optional[str] = None
         self._correctness_report: bool = False
-        self._steal_weights: bool = True
+        self._steal_weights: bool = False
 
     def search_space(self, level: int = 2):
         """
