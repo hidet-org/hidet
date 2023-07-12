@@ -182,6 +182,13 @@ class CompiledTask:
 
         return outputs
 
+    def profile(self, *args, warmup=1, number=2, repeat=10):
+        num_outputs = len(self.meta_data.outputs)
+        inputs = args[:num_outputs]
+        outputs = args[num_outputs:]
+        candidate = self.candidates[self.pick_best_candidate(inputs, outputs)]
+        return candidate.profile(*args, warmup=warmup, number=number, repeat=repeat)
+
 
 def load_compiled_task(compiled_task_dir: str) -> CompiledTask:
     return CompiledTask(compiled_task_dir)
