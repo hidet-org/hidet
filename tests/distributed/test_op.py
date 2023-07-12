@@ -58,6 +58,24 @@ def test_all_gather():
     for p in processes:
         p.join()
 
+def test_reduce_scatter():
+    if os.path.exists(TMP_PATH):
+        os.remove(TMP_PATH)
+    def foo(i):
+        device = f'cuda:{i}'
+        hidet.cuda.set_device(i)
+        hidet.distributed.init_process_group(init_method=f'file://{TMP_PATH}', world_size=2, rank=i)
+        hidet.distributed.set_nccl_comms()
+        x = hidet.ones([2, 2], device=device) * i
+        y = hidet.ops.reduce_scatter(x, 'sum')
+        assert numpy.array_equal(y.cpu().numpy(), [1, 1])
+    processes = [Process(target=foo, args=(i, )) for i in range(2)]
+    for p in processes:
+        p.start()
+    for p in processes:
+        p.join()
+
 if __name__ == '__main__':
     test_all_reduce()
     test_all_gather()
+    test_reduce_scatter()

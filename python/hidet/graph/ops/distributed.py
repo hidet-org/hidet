@@ -142,6 +142,7 @@ def all_gather(x: Tensor, nranks: int, comm_id: int = 0) -> Tensor:
 def reduce_scatter(x: Tensor, op: str, comm_id: int = 0) -> Tensor:
     if x.device.kind != 'cuda':
         raise RuntimeError("NCCL only supports CUDA tensors")
+    return ReduceScatterOp(x, op, comm_id).outputs[0]
 
 
 # We haven't decided how to integrate asymmetric communication functions into computational graphs
