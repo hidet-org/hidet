@@ -105,9 +105,10 @@ def reduce(tensor: Tensor, dst: int, op: str, group: Optional[ProcessGroup] = No
     group.reduce(tensor, dst, op)
 
 
-def all_gather_into_tensor():
-    raise NotImplementedError()
-
+def all_gather_into_tensor(output_tensor: Tensor, input_tensor: Tensor, group: Optional[ProcessGroup] = None):
+    if group is None:
+        group = DEFAULT_GROUP
+    group.all_gather_into_tensor(output_tensor, input_tensor)
 
 def scatter():
     raise NotImplementedError()

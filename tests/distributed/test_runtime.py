@@ -23,34 +23,58 @@ import hidet.distributed
 
 from utils import distributed_test
 
-@distributed_test(world_size=2)
+TMP_PATH = './tmp'
+
+# This testing script assumes we have two GPUs.
+WORLD_SIZE = 2
+
+@distributed_test(world_size=WORLD_SIZE)
 def test_all_reduce(rank):
     x = hidet.ones([4], device='cuda') * rank
-    y = hidet.ops.all_reduce(x, 'avg')
-    assert x.shape == y.shape
-    assert all(y.cpu().numpy() == 0.5)
+    hidet.distributed.all_reduce(x, 'avg')
+    hidet.cuda.synchronize()
+    assert all(x.cpu().numpy() == 0.5)
 
-@distributed_test(world_size=2)
-def test_all_gather(rank):
+@distributed_test(world_size=WORLD_SIZE)
+def test_broadcast(rank):
     x = hidet.ones([4], device='cuda') * rank
-    y = hidet.ops.all_gather(x, 2)
-    assert numpy.array_equal(y.cpu().numpy(), [[0, 0, 0, 0], [1, 1, 1, 1]])
+    hidet.distributed.broadcast(x, 1)
+    hidet.cuda.synchronize()
+    assert numpy.array_equal(x.cpu().numpy(), [1, 1, 1, 1])
 
+@distributed_test(world_size=WORLD_SIZE)
+def test_reduce(rank):
+    x = hidet.ones([4], device='cuda') * rank
+    hidet.distributed.reduce(x, 1, 'avg')
+    hidet.cuda.synchronize()
+    if rank == 0:
+        assert all(x.cpu().numpy() == 0)
+    elif rank == 1:
+        assert all(x.cpu().numpy() == 0.5)
 
-@distributed_test(world_size=2)
+@distributed_test(world_size=WORLD_SIZE)
+def test_all_gather_into_tensor(rank):
+    x = hidet.ones([4], device='cuda') * rank
+    y = hidet.empty([2, 4], device='cuda')
+    hidet.distributed.all_gather_into_tensor(y, x)
+    hidet.cuda.synchronize()
+    assert numpy.array_equal(y.cpu().numpy(), [[1, 1, 1, 1], [0, 0, 0, 0]])
+
+@distributed_test(world_size=WORLD_SIZE)
 def test_reduce_scatter(rank):
     if rank == 0:
         x = hidet.asarray([[1, 2], [3, 4]], device='cuda')
     elif rank == 1:
         x = hidet.asarray([[5, 6], [7, 8]], device='cuda')
-    y = hidet.ops.reduce_scatter(x, 'sum')
+    y = hidet.distributed.reduce_scatter(x, 'sum')
     if rank == 0:
         assert numpy.array_equal(y.cpu().numpy(), [6, 8])
     elif rank == 1:
         assert numpy.array_equal(y.cpu().numpy(), [10, 12])
 
-
 if __name__ == '__main__':
     test_all_reduce()
-    test_all_gather()
+    test_broadcast()
+    test_reduce()
+    test_all_gather_into_tensor()
     test_reduce_scatter()

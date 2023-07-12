@@ -98,10 +98,14 @@ class NCCLProcessGroup(ProcessGroup):
     def all_gather_into_tensor(self, output_tensor, input_tensor):
         assert not output_tensor.is_symbolic()
         assert not input_tensor.is_symbolic()
+        assert output_tensor.device.is_cuda()
+        assert input_tensor.device.is_cuda()
+
+        assert output_tensor.size == input_tensor.size * self._world_size
+
         output_addr = output_tensor.storage.addr
         input_addr = input_tensor.storage.addr
-        self._comm.all_gather(output_addr, input_addr, input_addr.size, input_tensor.dtype)
-        # TODO: shape check
+        self._comm.all_gather(output_addr, input_addr, input_tensor.size, input_tensor.dtype)
 
 
 def create_nccl_group(store: Store, world_size: int, rank: int):
