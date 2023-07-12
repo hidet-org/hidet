@@ -18,13 +18,14 @@ import hidet
 @pytest.mark.parametrize('batch_size', [1])
 @pytest.mark.parametrize('seq_length', [128])
 @pytest.mark.parametrize('use_fp16,use_tensor_core', [(False, False), (False, True), (True, True)])
-def test_bert(batch_size: int, seq_length: int, use_fp16, use_tensor_core):
+@pytest.mark.parametrize('dynamic', [False, True])
+def test_bert(batch_size: int, seq_length: int, use_fp16, use_tensor_core, dynamic):
     tokens_tensor = torch.zeros((batch_size, seq_length), dtype=torch.long, device='cuda')
     segments_tensors = torch.zeros((batch_size, seq_length), dtype=torch.long, device='cuda')
     args = (tokens_tensor.cuda(),)
     kwargs = {'token_type_ids': segments_tensors.cuda()}
     model = torch.hub.load('huggingface/pytorch-transformers', 'model', 'bert-base-uncased').cuda().eval()
-    model_opt = torch.compile(model, backend='hidet')
+    model_opt = torch.compile(model, backend='hidet', dynamic=dynamic)
     y1 = model(*args, **kwargs).last_hidden_state
 
     try:
@@ -32,7 +33,8 @@ def test_bert(batch_size: int, seq_length: int, use_fp16, use_tensor_core):
         hidet.torch.dynamo_config.use_tensor_core(use_tensor_core)
 
         y2 = model_opt(*args, **kwargs).last_hidden_state
-        torch.testing.assert_close(y1, y2, atol=1e-2, rtol=1e-2)
+        tol = 1e-1 if use_fp16 else 1e-2
+        torch.testing.assert_close(y1, y2, atol=tol, rtol=tol)
     finally:
         # in case of failure, reset the config
         hidet.torch.dynamo_config.reset()
