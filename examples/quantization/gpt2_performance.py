@@ -23,7 +23,6 @@ import hidet.testing
 
 
 def generate(model, input_ids: hidet.Tensor, num_hidden_layers, num_heads, head_dim, device, tokens_to_generate=10):
-    tokenizer = hidet.testing.models.gpt2.tokenizer()    
     position_ids = hidet.arange(input_ids.shape[0], dtype=hidet.int32, device=device)
     past_keys = hidet.zeros([num_hidden_layers, num_heads, 0, head_dim], dtype=hidet.float32, device=device)
     past_values = hidet.zeros([num_hidden_layers, num_heads, 0, head_dim], dtype=hidet.float32, device=device)
@@ -33,7 +32,7 @@ def generate(model, input_ids: hidet.Tensor, num_hidden_layers, num_heads, head_
         input_ids, position_ids, past_keys, past_values = model(input_ids, position_ids, past_keys, past_values)
         output_ids.append(input_ids[0].item())
 
-    return tokenizer.decode(output_ids)
+    return output_ids
 
 
 def prepare_graph(name: str = 'gpt2', device: str = 'cuda'):
