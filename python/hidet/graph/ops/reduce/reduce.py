@@ -11,47 +11,18 @@
 # limitations under the License.
 from typing import List, Union, Optional, Sequence
 
+from hidet.ir.compute import cops
 from ..arithmetic import square, sqrt
 from ..utils import Task, Operator, Tensor, TensorNode, IRModule, ReduceType
-from ..utils import compute, reduce, input_like, normalize_dim, arg_reduce
+from ..utils import compute, input_like, normalize_dim, arg_reduce
 
 
 class ReduceTask(Task):
     def __init__(
         self, x: TensorNode, dims: List[int], keep_dim: bool, reduce_type: str, accumulate_dtype: str = 'float32'
     ):
-        y_shape = []
-        for i in range(len(x.shape)):
-            if i in dims:
-                if keep_dim:
-                    y_shape.append(1)
-            else:
-                y_shape.append(x.shape[i])
 
-        def fcompute(*indices):
-            def reduce_fcompute(*reduce_indices):
-                x_indices = []
-                p = 0
-                q = 0
-                for i in range(len(x.shape)):
-                    if i not in dims:
-                        x_indices.append(indices[p])
-                        p += 1
-                    else:
-                        x_indices.append(reduce_indices[q])
-                        q += 1
-                        if keep_dim:
-                            p += 1
-                assert p == len(indices) and q == len(reduce_indices)
-                return x[x_indices]
-
-            reduce_shape = [x.shape[i] for i in dims]
-            return reduce(
-                shape=reduce_shape, fcompute=reduce_fcompute, reduce_type=reduce_type, accumulate_dtype=accumulate_dtype
-            )
-
-        y = compute(name='y', shape=y_shape, fcompute=fcompute)
-
+        y = cops.reduce(x, dims, keep_dim, reduce_type, accumulate_dtype)
         self.dims: List[int] = dims
         self.keep_dim: bool = keep_dim
         self.reduce_type: str = reduce_type
@@ -320,25 +291,25 @@ class ArgMaxOp(ArgReduceBaseOp):
 def mean(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -> Tensor:
     if isinstance(dims, int):
         dims = [dims]
-    return ReduceMeanOp(x, dims, keep_dim).get_output(0)
+    return ReduceMeanOp(x, dims, keep_dim).outputs[0]
 
 
 def sum(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -> Tensor:
     if isinstance(dims, int):
         dims = [dims]
-    return ReduceSumOp(x, dims, keep_dim).get_output(0)
+    return ReduceSumOp(x, dims, keep_dim).outputs[0]
 
 
 def max(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -> Tensor:
     if isinstance(dims, int):
         dims = [dims]
-    return ReduceMaxOp(x, dims, keep_dim).get_output(0)
+    return ReduceMaxOp(x, dims, keep_dim).outputs[0]
 
 
 def min(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -> Tensor:
     if isinstance(dims, int):
         dims = [dims]
-    return ReduceMinOp(x, dims, keep_dim).get_output(0)
+    return ReduceMinOp(x, dims, keep_dim).outputs[0]
 
 
 def var(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -> Tensor:
@@ -353,15 +324,15 @@ def std(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -> Tenso
 def prod(x: Tensor, dims: Union[int, List[int]], keep_dim: bool = False) -> Tensor:
     if isinstance(dims, int):
         dims = [dims]
-    return ReduceProdOp(x, dims, keep_dim).get_output(0)
+    return ReduceProdOp(x, dims, keep_dim).outputs[0]
 
 
 def argmin(x: Tensor, dim: int, keep_dim: bool = False) -> Tensor:
-    return ArgMinOp(x, dim, keep_dim).get_output(0)
+    return ArgMinOp(x, dim, keep_dim).outputs[0]
 
 
 def argmax(x: Tensor, dim: int, keep_dim: bool = False) -> Tensor:
-    return ArgMaxOp(x, dim, keep_dim).get_output(0)
+    return ArgMaxOp(x, dim, keep_dim).outputs[0]
 
 
 def all(x: Tensor, /, *, axis=None, keepdims=False) -> Tensor:
@@ -387,7 +358,7 @@ def all(x: Tensor, /, *, axis=None, keepdims=False) -> Tensor:
         The result of logical AND reduction with bool data type.
     """
     x = x.astype('bool')
-    return ReduceAndOp(x, dims=axis, keepdims=keepdims).get_output(0)
+    return ReduceAndOp(x, dims=axis, keepdims=keepdims).outputs[0]
 
 
 def any(x: Tensor, /, *, axis=None, keepdims=False) -> Tensor:
@@ -413,4 +384,4 @@ def any(x: Tensor, /, *, axis=None, keepdims=False) -> Tensor:
         The result of logical OR reduction with bool data type.
     """
     x = x.astype('bool')
-    return ReduceOrOp(x, dims=axis, keepdims=keepdims).get_output(0)
+    return ReduceOrOp(x, dims=axis, keepdims=keepdims).outputs[0]

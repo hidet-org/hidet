@@ -111,4 +111,4 @@ def conv3d_transpose(
     opz, opx, opy = normalize_stride(output_padding, dim=3)
     return Conv3dTransposeOp(
         data, weight, (sz, sx, sy), (pz0, px0, py0, pz1, px1, py1), groups, (opz, opx, opy)
-    ).get_output(0)
+    ).outputs[0]

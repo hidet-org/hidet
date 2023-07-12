@@ -520,9 +520,9 @@ def add(x: Union[Tensor, float, int], y: Union[Tensor, float, int]) -> Tensor:
     return binary_arithmetic(
         x,
         y,
-        lambda a, b: AddScalarOp(a, b).get_output(0),
-        lambda a, b: AddScalarOp(b, a).get_output(0),
-        lambda a, b: AddOp(a, b).get_output(0),
+        lambda a, b: AddScalarOp(a, b).outputs[0],
+        lambda a, b: AddScalarOp(b, a).outputs[0],
+        lambda a, b: AddOp(a, b).outputs[0],
     )
 
 
@@ -530,9 +530,9 @@ def subtract(x: Union[Tensor, float, int], y: Union[Tensor, float, int]) -> Tens
     return binary_arithmetic(
         x,
         y,
-        lambda a, b: SubScalarOp(a, b).get_output(0),
-        lambda a, b: RSubScalarOp(b, a).get_output(0),
-        lambda a, b: SubtractOp(a, b).get_output(0),
+        lambda a, b: SubScalarOp(a, b).outputs[0],
+        lambda a, b: RSubScalarOp(b, a).outputs[0],
+        lambda a, b: SubtractOp(a, b).outputs[0],
     )
 
 
@@ -540,9 +540,9 @@ def multiply(x: Union[Tensor, float, int], y: Union[Tensor, float, int]) -> Tens
     return binary_arithmetic(
         x,
         y,
-        lambda a, b: MultiplyScalarOp(a, b).get_output(0),
-        lambda a, b: MultiplyScalarOp(b, a).get_output(0),
-        lambda a, b: MultiplyOp(a, b).get_output(0),
+        lambda a, b: MultiplyScalarOp(a, b).outputs[0],
+        lambda a, b: MultiplyScalarOp(b, a).outputs[0],
+        lambda a, b: MultiplyOp(a, b).outputs[0],
     )
 
 
@@ -550,54 +550,54 @@ def divide(x: Union[Tensor, float, int], y: Union[Tensor, float, int]) -> Tensor
     return binary_arithmetic(
         x,
         y,
-        lambda a, b: DivideScalarOp(a, b).get_output(0),
-        lambda a, b: RDivideScalarOp(b, a).get_output(0),
-        lambda a, b: DivideOp(a, b).get_output(0),
+        lambda a, b: DivideScalarOp(a, b).outputs[0],
+        lambda a, b: RDivideScalarOp(b, a).outputs[0],
+        lambda a, b: DivideOp(a, b).outputs[0],
     )
 
 
 def sqrt(x: Tensor) -> Tensor:
-    return SqrtOp(x).get_output(0)
+    return SqrtOp(x).outputs[0]
 
 
 def pow(x: Tensor, y: Tensor) -> Tensor:
-    return PowOp(x, y).get_output(0)
+    return PowOp(x, y).outputs[0]
 
 
 def erf(x: Tensor) -> Tensor:
-    return ErfOp(x).get_output(0)
+    return ErfOp(x).outputs[0]
 
 
 def exp(x: Tensor) -> Tensor:
-    return ExpOp(x).get_output(0)
+    return ExpOp(x).outputs[0]
 
 
 def expm1(x: Tensor) -> Tensor:
-    return Expm1Op(x).get_output(0)
+    return Expm1Op(x).outputs[0]
 
 
 def log(x: Tensor) -> Tensor:
-    return LogOp(x).get_output(0)
+    return LogOp(x).outputs[0]
 
 
 def log2(x: Tensor) -> Tensor:
-    return Log2Op(x).get_output(0)
+    return Log2Op(x).outputs[0]
 
 
 def log10(x: Tensor) -> Tensor:
-    return Log10Op(x).get_output(0)
+    return Log10Op(x).outputs[0]
 
 
 def log1p(x: Tensor) -> Tensor:
-    return Log1pOp(x).get_output(0)
+    return Log1pOp(x).outputs[0]
 
 
 def rsqrt(x: Tensor) -> Tensor:
-    return RsqrtOp(x).get_output(0)
+    return RsqrtOp(x).outputs[0]
 
 
 def negative(x: Tensor) -> Tensor:
-    return NegativeOp(x).get_output(0)
+    return NegativeOp(x).outputs[0]
 
 
 def positive(x: Tensor) -> Tensor:
@@ -605,150 +605,150 @@ def positive(x: Tensor) -> Tensor:
 
 
 def reciprocal(x: Tensor) -> Tensor:
-    return ReciprocalOp(x).get_output(0)
+    return ReciprocalOp(x).outputs[0]
 
 
 def sin(x: Tensor) -> Tensor:
-    return SinOp(x).get_output(0)
+    return SinOp(x).outputs[0]
 
 
 def cos(x: Tensor) -> Tensor:
-    return CosOp(x).get_output(0)
+    return CosOp(x).outputs[0]
 
 
 def tan(x: Tensor) -> Tensor:
-    return TanOp(x).get_output(0)
+    return TanOp(x).outputs[0]
 
 
 def asin(x: Tensor) -> Tensor:
-    return AsinOp(x).get_output(0)
+    return AsinOp(x).outputs[0]
 
 
 def acos(x: Tensor) -> Tensor:
-    return AcosOp(x).get_output(0)
+    return AcosOp(x).outputs[0]
 
 
 def atan(x: Tensor) -> Tensor:
-    return AtanOp(x).get_output(0)
+    return AtanOp(x).outputs[0]
 
 
 def atan2(x: Tensor, y: Tensor) -> Tensor:
-    return Atan2Op(x, y).get_output(0)
+    return Atan2Op(x, y).outputs[0]
 
 
 def sinh(x: Tensor) -> Tensor:
-    return SinhOp(x).get_output(0)
+    return SinhOp(x).outputs[0]
 
 
 def cosh(x: Tensor) -> Tensor:
-    return CoshOp(x).get_output(0)
+    return CoshOp(x).outputs[0]
 
 
 def tanh(x: Tensor) -> Tensor:
-    return TanhOp(x).get_output(0)
+    return TanhOp(x).outputs[0]
 
 
 def asinh(x: Tensor) -> Tensor:
-    return AsinhOp(x).get_output(0)
+    return AsinhOp(x).outputs[0]
 
 
 def acosh(x: Tensor) -> Tensor:
-    return AcoshOp(x).get_output(0)
+    return AcoshOp(x).outputs[0]
 
 
 def atanh(x: Tensor) -> Tensor:
-    return AtanhOp(x).get_output(0)
+    return AtanhOp(x).outputs[0]
 
 
 def square(x: Tensor) -> Tensor:
-    return SquareOp(x).get_output(0)
+    return SquareOp(x).outputs[0]
 
 
 def cube(x: Tensor) -> Tensor:
-    return CubeOp(x).get_output(0)
+    return CubeOp(x).outputs[0]
 
 
 def isfinite(x: Tensor) -> Tensor:
-    return IsFiniteOp(x).get_output(0)
+    return IsFiniteOp(x).outputs[0]
 
 
 def isinf(x: Tensor) -> Tensor:
-    return IsInfOp(x).get_output(0)
+    return IsInfOp(x).outputs[0]
 
 
 def isnan(x: Tensor) -> Tensor:
-    return IsNanOp(x).get_output(0)
+    return IsNanOp(x).outputs[0]
 
 
 def sign(x: Tensor) -> Tensor:
-    return SignOp(x).get_output(0)
+    return SignOp(x).outputs[0]
 
 
 def where(cond: Tensor, x: Tensor, y: Tensor) -> Tensor:
     if cond.dtype != dtypes.boolean:
         raise ValueError('The condition tensor must have dtype "bool", but got {}'.format(cond.dtype.name))
-    return WhereOp(cond, x, y).get_output(0)
+    return WhereOp(cond, x, y).outputs[0]
 
 
 def maximum(a: Tensor, b: Tensor, *others: Tensor) -> Tensor:
     args = [a, b] + list(others)
-    return MaxOp(*args).get_output(0)
+    return MaxOp(*args).outputs[0]
 
 
 def minimum(a: Tensor, b: Tensor, *others: Tensor) -> Tensor:
     args = [a, b] + list(others)
-    return MinOp(*args).get_output(0)
+    return MinOp(*args).outputs[0]
 
 
 def mod(x: Tensor, y: Tensor) -> Tensor:
-    return ModOp(x, y).get_output(0)
+    return ModOp(x, y).outputs[0]
 
 
 remainder = mod
 
 
 def abs(x: Tensor) -> Tensor:
-    return AbsOp(x).get_output(0)
+    return AbsOp(x).outputs[0]
 
 
 def bitwise_right_shift(x: Tensor, y: Tensor) -> Tensor:
-    return RightShiftOp(x, y).get_output(0)
+    return RightShiftOp(x, y).outputs[0]
 
 
 def bitwise_left_shift(x: Tensor, y: Tensor) -> Tensor:
-    return LeftShiftOp(x, y).get_output(0)
+    return LeftShiftOp(x, y).outputs[0]
 
 
 def bitwise_and(x: Tensor, y: Tensor) -> Tensor:
-    return BitwiseAndOp(x, y).get_output(0)
+    return BitwiseAndOp(x, y).outputs[0]
 
 
 def bitwise_invert(x: Tensor) -> Tensor:
-    return BitwiseNotOp(x).get_output(0)
+    return BitwiseNotOp(x).outputs[0]
 
 
 def bitwise_or(x: Tensor, y: Tensor) -> Tensor:
-    return BitwiseOrOp(x, y).get_output(0)
+    return BitwiseOrOp(x, y).outputs[0]
 
 
 def bitwise_xor(x: Tensor, y: Tensor) -> Tensor:
-    return BitwiseXorOp(x, y).get_output(0)
+    return BitwiseXorOp(x, y).outputs[0]
 
 
 def floor(x: Tensor) -> Tensor:
-    return FloorOp(x).get_output(0)
+    return FloorOp(x).outputs[0]
 
 
 def ceil(x: Tensor) -> Tensor:
-    return CeilOp(x).get_output(0)
+    return CeilOp(x).outputs[0]
 
 
 def round(x: Tensor) -> Tensor:
-    return RoundOp(x).get_output(0)
+    return RoundOp(x).outputs[0]
 
 
 def trunc(x: Tensor) -> Tensor:
-    return TruncOp(x).get_output(0)
+    return TruncOp(x).outputs[0]
 
 
 def logaddexp(x: Tensor, y: Tensor) -> Tensor:

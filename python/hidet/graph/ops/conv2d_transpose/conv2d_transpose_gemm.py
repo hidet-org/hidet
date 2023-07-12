@@ -86,7 +86,7 @@ def conv2d_transpose_gemm_image(
 ):
     # input shape: [n, oc, p, q]
     # output shape: [groups, n * h * w, og * kx * ky]
-    return Conv2dTransposeGemmImageOp(data, kernel, stride, padding, groups, output_padding).get_output(0)
+    return Conv2dTransposeGemmImageOp(data, kernel, stride, padding, groups, output_padding).outputs[0]
 
 
 def conv2d_transpose_gemm_filter(weight: Tensor, groups: int = 1):

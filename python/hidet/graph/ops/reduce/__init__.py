@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from .reduce import reduce, ReduceBaseOp, ReduceTask
+from .reduce import ReduceBaseOp, ReduceTask
 from .reduce import mean, sum, var, min, max, std, prod, argmin, argmax, all, any
 from .reduce import ReduceSumOp, ReduceMeanOp
 from .reduce_f16 import reduce_f16

@@ -15,8 +15,14 @@ def remote_build(ir_module: IRModule, output_dir: str, *, target: str, output_ki
     if 'cuda' in target and 'arch' not in target:
         cc = hidet.cuda.compute_capability()
         target = '{} --arch=sm_{}{}'.format(target, cc[0], cc[1])
-    workload = pickle.dumps({'ir_module': ir_module, 'target': target, 'output_kind': output_kind})
-    response = requests.post(api_url('compile'), data=workload, headers={'Authorization': f'Bearer {access_token()}'})
+    job_data = pickle.dumps(
+        {
+            'workload': pickle.dumps({'ir_module': ir_module, 'target': target, 'output_kind': output_kind}),
+            'hidet_repo_url': hidet.option.get_option('compile_server.repo_url'),
+            'hidet_repo_version': hidet.option.get_option('compile_server.repo_version'),
+        }
+    )
+    response = requests.post(api_url('compile'), data=job_data, headers={'Authorization': f'Bearer {access_token()}'})
     if response.status_code != 200:
         msg = response.json()['message']
         raise RuntimeError('Failed to remotely compile an IRModule: \n{}'.format(msg))

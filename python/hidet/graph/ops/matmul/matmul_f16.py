@@ -365,4 +365,4 @@ def matmul_f16(a: Tensor, b: Tensor, parallel_k_parts=1) -> Tensor:
         raise ValueError('Expect the last dimension of the input tensors to be a multiple of 2')
     if a.dtype != dtypes.float16 or b.dtype != dtypes.float16:
         raise ValueError('BatchMatmulF16Op only support float16, got {} and {}'.format(a.dtype, b.dtype))
-    return MatmulF16Op(a, b, parallel_k_parts).get_output(0)
+    return MatmulF16Op(a, b, parallel_k_parts).outputs[0]

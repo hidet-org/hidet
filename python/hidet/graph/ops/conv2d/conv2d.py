@@ -155,7 +155,7 @@ def conv2d(
     groups: int = 1,
     padding: Sequence[int] = (0, 0),
 ) -> Tensor:
-    return Conv2dOp(data, weight, padding, stride, dilations, groups).get_output(0)
+    return Conv2dOp(data, weight, padding, stride, dilations, groups).outputs[0]
 
 
 def conv2d_channel_last(
@@ -165,4 +165,4 @@ def conv2d_channel_last(
     dilations: Union[int, Sequence[int]] = (1, 1),
     groups: int = 1,
 ) -> Tensor:
-    return Conv2dChannelLastOp(data, weight, stride, dilations, groups).get_output(0)
+    return Conv2dChannelLastOp(data, weight, stride, dilations, groups).outputs[0]

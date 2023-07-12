@@ -28,4 +28,4 @@ class MatmulOp(Operator):
 
 
 def matmul(a: Tensor, b: Tensor, require_prologue=False) -> Tensor:
-    return MatmulOp(a, b, require_prologue=require_prologue).get_output(0)
+    return MatmulOp(a, b, require_prologue=require_prologue).outputs[0]
