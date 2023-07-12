@@ -10,11 +10,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # pylint: disable=no-name-in-module
-from typing import List, Callable, Sequence
+from typing import List, Callable, Sequence, Union
 import logging
 import torch
 import hidet.option
 from hidet.ir.type import data_type
+from hidet.ir.expr import is_constant
 from hidet.graph.flow_graph import FlowGraph
 from hidet.graph.transforms import PassContext, optimize
 from hidet.runtime import CompiledGraph
@@ -103,40 +104,61 @@ def hidet_backend(graph_module, example_inputs):
     interpreter: Interpreter = hidet.frontend.from_torch(graph_module)
 
     # prepare dummy and symbolic inputs for correctness and flow graph construction
-    symbolic_inputs: List[Tensor] = []  # for flow graph construction
+    inputs: List[Union[Tensor, int, bool, float]] = []  # for flow graph construction
     for example_input in example_inputs:
         if isinstance(example_input, torch.Tensor):
             symbolic_input = symbol_like_torch(example_input)
-            symbolic_inputs.append(symbolic_input)
+            inputs.append(symbolic_input)
+        elif isinstance(example_input, (int, bool, float)):
+            inputs.append(symbolic_input)
+        elif isinstance(example_input, torch.SymInt):
+            try:
+                inputs.append(int(example_input))
+            except Exception as e:
+                raise ValueError(f"hidet_backend: free symbolic example input {example_input}") from e
         else:
-            raise ValueError('hidet_backend: only support torch.Tensor as example input')
+            raise ValueError(f'hidet_backend: unexpected example input {example_input}, type {type(example_input)}')
 
     if dynamo_config['correctness_report']:
         # check correctness using random inputs
         logger.info('start to check correctness')
-        dummy_inputs: List[Tensor] = []  # for correctness check
-        for symbolic_input in symbolic_inputs:
-            if data_type(symbolic_input.dtype).is_integer():
-                dummy_input = hidet.zeros_like(symbolic_input)
+        # there exist some symbolic shapes, currently we don't support this option
+        #   as there is no way to principly get concrete shapes at this stage from symbolic shapes
+        #   since some models like resnet requires the image to be above a certain size.
+        if any(not all(is_constant(s) for s in t.shape) for t in inputs if isinstance(t, hidet.Tensor)):
+            raise ValueError("hidet_backend: cannot print correctness report with dynamic=True")
+        dummy_inputs = []  # for correctness check
+        for arg in inputs:
+            if isinstance(arg, hidet.Tensor):
+                if data_type(arg.dtype).is_integer():
+                    dummy_input = hidet.zeros_like(arg)
+                else:
+                    dummy_input = hidet.randn_like(arg)
             else:
-                dummy_input = hidet.randn_like(symbolic_input)
+                dummy_input = arg
             dummy_inputs.append(dummy_input)
         report: str = interpreter.forward_with_check(*dummy_inputs)
         logger.info('finish checking correctness')
         print(report)
 
-    logger.info('hidet: symbolic inputs: ')
-    for symbolic_input in symbolic_inputs:
-        logger.info('hidet:   %s', symbolic_input.signature())
+    logger.info('hidet:   inputs: ')
+    for arg in inputs:
+        if isinstance(arg, hidet.Tensor):
+            logger.info('hidet:   %s', arg.signature())
+        else:
+            logger.info('hidet:   %s', arg)
 
     # symbolic run to get flow graph
-    output = interpreter(*symbolic_inputs)
+    output = interpreter(*inputs)
     output_format, output_tensors = serialize_output(output)
-    flow_graph: FlowGraph = hidet.trace_from(output_tensors, inputs=symbolic_inputs)
+    input_tensors = [x for x in inputs if isinstance(x, hidet.Tensor)]
+    input_tensor_indices = [i for (i, x) in enumerate(inputs) if isinstance(x, hidet.Tensor)]
+    flow_graph: FlowGraph = hidet.trace_from(output_tensors, inputs=input_tensors)
 
     executor = generate_executor(flow_graph)
 
     def wrapper(*args: Tensor):
+        args = [args[i] for i in input_tensor_indices]
         outputs: Sequence[torch.Tensor] = executor(*args)
         ret = deserialize_output(output_format, outputs)
         return ret

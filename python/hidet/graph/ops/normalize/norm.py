@@ -15,7 +15,7 @@ from hidet.ir.primitives import active_mask, shfl_down_sync
 from hidet.ir.compute import reduce
 from hidet.ir.expr import Expr
 from hidet.lang import spatial, repeat, view, cast, register_tensor, shared_tensor
-from hidet.lang import data_type, TensorType, i32, f32, attrs
+from hidet.lang import data_type, TensorType, i32, attrs
 from hidet.lang.cuda import blockIdx, threadIdx, syncthreads
 from hidet.graph.ops.utils import Task, Operator, Tensor, TensorNode
 from hidet.graph.ops.utils import compute, input_like, normalize_dim
@@ -111,6 +111,8 @@ class NormalizeTask(Task):
         import math
 
         x, y = self.inputs[0], self.outputs[0]
+        dtype = x.type.dtype
+
         input_shape: List[Expr] = list(x.shape)
         dims = self.dims
 
@@ -152,14 +154,20 @@ class NormalizeTask(Task):
                     return
                 delta = mean_b[0] - mean_a[0]
 
-                mean_a[0] = mean_a[0] + delta * cast(count_b[0], f32) / cast(count, f32)
+                mean_a[0] = mean_a[0] + delta * cast(count_b[0], accumulate_dtype) / cast(count, accumulate_dtype)
                 m2_a[0] = (
-                    m2_a[0] + m2_b[0] + delta * delta * cast(count_a[0], f32) * cast(count_b[0], f32) / cast(count, f32)
+                    m2_a[0]
+                    + m2_b[0]
+                    + delta
+                    * delta
+                    * cast(count_a[0], accumulate_dtype)
+                    * cast(count_b[0], accumulate_dtype)
+                    / cast(count, accumulate_dtype)
                 )
                 count_a[0] = count
 
             @hidet.script
-            def norm_kernel(x: f32[x.shape], y: f32[y.shape]):
+            def norm_kernel(x: dtype[x.shape], y: dtype[y.shape]):
                 attrs.cuda.grid_dim = grid_size
                 attrs.cuda.block_dim = block_size
                 attrs.cuda.min_blocks = 1
@@ -170,9 +178,9 @@ class NormalizeTask(Task):
                 smem_count = shared_tensor(i32, shape=[used_smem_bytes_per_block])
 
                 # cache repeated loads
-                regs_repeat = register_tensor(f32, shape=[repeat_reduction])
+                regs_repeat = register_tensor(dtype, shape=[repeat_reduction])
 
-                reg32 = register_tensor(f32, [1])
+                reg_dtype = register_tensor(dtype, [1])
                 mean_final = register_tensor(accumulate_dtype, [1])
                 m2_final = register_tensor(accumulate_dtype, [1])
                 count_final = register_tensor('int32', [1])
@@ -185,7 +193,7 @@ class NormalizeTask(Task):
                     # note, this is evaluated at compile time
                     ele_idx = spatial_idxs + dim_zeros
                     norm_tensor = ~x[ele_idx]
-                    flat_tensor = view(norm_tensor, f32[reduce_extent])
+                    flat_tensor = view(norm_tensor, dtype[reduce_extent])
 
                     reduce_mapping = repeat(repeat_reduction) * spatial(block_size)
                     for reduction_idx in reduce_mapping.on(threadIdx.x):
@@ -197,15 +205,15 @@ class NormalizeTask(Task):
                         other_count = register_tensor('int32', [1])
 
                         if reduction_idx < reduce_extent:
-                            reg32[0] = flat_tensor[reduction_idx]
+                            reg_dtype[0] = flat_tensor[reduction_idx]
                             count[0] = 1
                         else:
-                            reg32[0] = f32.zero
+                            reg_dtype[0] = dtype.zero
                             count[0] = 0
-                        regs_repeat[reduction_idx // block_size] = reg32[0]
+                        regs_repeat[reduction_idx // block_size] = reg_dtype[0]
 
-                        mean[0] = reg32[0]
-                        m2[0] = f32.zero
+                        mean[0] = reg_dtype[0]
+                        m2[0] = accumulate_dtype.zero
 
                         # Warp reduce by shuffle down
                         mask = active_mask()
@@ -243,8 +251,8 @@ class NormalizeTask(Task):
 
                         # reduce shared memory with just a single warp
                         if stages > 1 and threadIdx.x < warp_size:
-                            mean[0] = smem_mean[threadIdx.x] if threadIdx.x < shm_count else f32.zero
-                            m2[0] = smem_m2[threadIdx.x] if threadIdx.x < shm_count else f32.zero
+                            mean[0] = smem_mean[threadIdx.x] if threadIdx.x < shm_count else accumulate_dtype.zero
+                            m2[0] = smem_m2[threadIdx.x] if threadIdx.x < shm_count else accumulate_dtype.zero
                             count[0] = smem_count[threadIdx.x] if threadIdx.x < shm_count else 0
 
                         syncthreads()
@@ -292,18 +300,20 @@ class NormalizeTask(Task):
                         welford_combine(mean_final, m2_final, count_final, mean, m2, count)
 
                 # end of mean and var calculation, perform write back
-                m2_final[0] = m2_final[0] / cast(count_final[0], f32)
+                m2_final[0] = m2_final[0] / cast(count_final[0], dtype)
 
                 for spatial_idxs in task_layout.on(blockIdx.x, bind_tuple=True):
                     ele_idx = spatial_idxs + dim_zeros
                     norm_tensor = ~y[ele_idx]
-                    flat_tensor = view(norm_tensor, f32[reduce_extent])
+                    flat_tensor = view(norm_tensor, dtype[reduce_extent])
 
                     reduce_mapping = repeat(repeat_reduction) * spatial(block_size)
                     for reduction_idx in reduce_mapping.on(threadIdx.x):
                         if reduction_idx < reduce_extent:
                             val = regs_repeat[reduction_idx // block_size]
-                            normed = (val - mean_final[0]) * prim.rsqrt(m2_final[0] + self.attrs['epsilon'])
+                            normed = (val - mean_final[0]) * prim.rsqrt(
+                                m2_final[0] + cast(self.attrs['epsilon'], accumulate_dtype)
+                            )
                             flat_tensor[reduction_idx] = normed
 
         ir_module = module.ir_module()
