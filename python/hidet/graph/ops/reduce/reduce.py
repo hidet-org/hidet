@@ -12,7 +12,7 @@
 from typing import List, Union, Optional, Sequence
 
 from hidet.ir.compute import cops
-from hidet.lang import f16, grid
+from hidet.lang import grid
 from hidet.lang.cuda import blockIdx, threadIdx, register_tensor
 from hidet.ir.type import DataType
 from hidet.ir.dtypes.vector import VectorType
