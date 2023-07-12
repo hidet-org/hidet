@@ -102,7 +102,7 @@ def test_var(shape, axis, keep_dim: bool):
 @pytest.mark.parametrize("keep_dim", [False, True])
 @pytest.mark.parametrize("reduce_func", [mean, max, prod])
 def test_reduce_f16(shape, dims, keep_dim: bool, reduce_func):
-    op_dict = {mean: np.mean, max: np.amax, prod: np.prod}
+    op_dict = {mean: np.mean, max: np.max, prod: np.prod}
     np_op = op_dict[reduce_func]
     check_unary(
         shape,
