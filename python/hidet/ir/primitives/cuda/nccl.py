@@ -85,6 +85,7 @@ def reduce_scatter(sendbuff: Expr, recvbuff: Expr, recvcount: Expr, dtype: DataT
         get_cuda_stream(),
     )
 
+
 def send(sendbuff: Expr, count: Expr, dtype: DataType, peer: int, comm_id: int):
     comm = get_nccl_comm(comm_id)
     return BlackBoxStmt(
@@ -94,5 +95,5 @@ def send(sendbuff: Expr, count: Expr, dtype: DataType, peer: int, comm_id: int):
         int(dtype_to_nccl(dtype)),
         peer,
         comm,
-        get_cuda_stream()
+        get_cuda_stream(),
     )

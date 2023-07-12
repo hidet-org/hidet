@@ -88,6 +88,48 @@ class NcclCommunicator:
             sendbuff, recvbuff, count, int(dtype_to_nccl(datatype)), int(str_to_nccl_op(op)), self._handle, s
         )
 
+    def broadcast(
+        self, sendbuff: int, recvbuff: int, count: int, datatype: DataType, root: int, s: Optional[Stream] = None
+    ):
+        if s is None:
+            s = current_stream()
+        nccl_runtime_api.broadcast(sendbuff, recvbuff, count, int(dtype_to_nccl(datatype)), root, self._handle, s)
+
+    def reduce(
+        self,
+        sendbuff: int,
+        recvbuff: int,
+        count: int,
+        datatype: DataType,
+        op: int,
+        root: int,
+        s: Optional[Stream] = None,
+    ):
+        if s is None:
+            s = current_stream()
+        nccl_runtime_api.reduce(
+            sendbuff, recvbuff, count, int(dtype_to_nccl(datatype)), int(str_to_nccl_op(op)), root, self._handle, s
+        )
+    
+    def all_gather(
+        self, sendbuff: int, recvbuff: int, sendcount: int, datatype: DataType, s: Optional[Stream] = None,
+    ):
+        if s is None:
+            s = current_stream()
+        nccl_runtime_api.all_gather(
+            sendbuff, recvbuff, sendcount, int(dtype_to_nccl(datatype)), self._handle, s
+        )        
+    
+    def reduce_scatter(
+        self, sendbuff: int, recvbuff: int, recvcount: int, datatype: DataType, op: int, s: Optional[Stream] = None
+    ):
+        if s is None:
+            s = current_stream()
+        nccl_runtime_api.reduce_scatter(
+            sendbuff, recvbuff, recvcount, int(dtype_to_nccl(datatype)), op, self._handle, s
+        )
+
+
 
 def create_comm(nranks: int, unique_id: NcclUniqueId, rank: int) -> NcclCommunicator:
     if not nccl_available():

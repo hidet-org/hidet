@@ -56,17 +56,20 @@ class AllReduceOp(Operator):
             inputs=[x], attributes={'op': op, 'comm_id': comm_id}, task=AllReduceTask(input_like(x, 'x'), op, comm_id)
         )
 
+
 class AllGatherTask(Task):
     def __init__(self, x: TensorNode, nranks: int, comm_id: int = 0):
         if not isinstance(x.type.layout, RowMajorLayout):
             raise RuntimeError("Communication operations only support row major layout.")
-        y = compute('out', (nranks, ) + tuple(x.shape), lambda *indices: x[indices[1:]])
+        y = compute('out', (nranks,) + tuple(x.shape), lambda *indices: x[indices[1:]])
 
         self.nranks = nranks
         self.comm_id = comm_id
 
-        super().__init__('distributed.all_gather', inputs=[x], outputs=[y], attributes={'nranks': nranks, 'comm_id': comm_id})
-    
+        super().__init__(
+            'distributed.all_gather', inputs=[x], outputs=[y], attributes={'nranks': nranks, 'comm_id': comm_id}
+        )
+
     def implement(self, target: Union[Target, str], working_dir: str) -> List[IRModule]:
         import hidet
         from hidet.ir.primitives.cuda.nccl import all_gather as _all_gather
@@ -75,9 +78,10 @@ class AllGatherTask(Task):
         dtype: DataType = self.inputs[0].type.dtype
         shape: Tuple[Expr, ...] = self.inputs[0].shape
         size = prod(shape)
-        out_shape = (self.nranks, ) + tuple(shape)
+        out_shape = (self.nranks,) + tuple(shape)
 
         with hidet.script_module() as script_module:
+
             @hidet.script
             def launch(x: dtype[shape], y: dtype[out_shape]):
                 attrs.func_kind = 'public'
@@ -85,25 +89,33 @@ class AllGatherTask(Task):
 
         return [script_module.ir_module()]
 
+
 class AllGatherOp(Operator):
-    def __init__(self, x: Tensor, nranks:int , comm_id: int):
+    def __init__(self, x: Tensor, nranks: int, comm_id: int):
         super().__init__(
-            inputs=[x], attributes={'nranks': nranks, 'comm_id': comm_id}, task=AllGatherTask(input_like(x, 'x'), nranks, comm_id)
+            inputs=[x],
+            attributes={'nranks': nranks, 'comm_id': comm_id},
+            task=AllGatherTask(input_like(x, 'x'), nranks, comm_id),
         )
+
 
 class ReduceScatterTask(Task):
     def __init__(self, x: TensorNode, op: str, comm_id: int = 0):
         if not isinstance(x.type.layout, RowMajorLayout):
             raise RuntimeError("Communication operations only support row major layout.")
         if len(x.shape) < 1:
-            raise ValueError("The number of dimensions of the input tensor must be positive."
-                             "And the first dimension should be equal to the world size.")
-        y = compute('out', x.shape[1:], lambda *indices: x[(0, ) + indices])
+            raise ValueError(
+                "The number of dimensions of the input tensor must be positive."
+                "And the first dimension should be equal to the world size."
+            )
+        y = compute('out', x.shape[1:], lambda *indices: x[(0,) + indices])
         self.comm_id = comm_id
         self.op = op
 
-        super().__init__('distributed.reduce_scatter', inputs=[x], outputs=[y], attributes={'comm_id': comm_id, 'op': op})
-    
+        super().__init__(
+            'distributed.reduce_scatter', inputs=[x], outputs=[y], attributes={'comm_id': comm_id, 'op': op}
+        )
+
     def implement(self, target: Union[Target, str], working_dir: str) -> List[IRModule]:
         import hidet
         from hidet.ir.primitives.cuda.nccl import reduce_scatter as _reduce_scatter
@@ -114,6 +126,7 @@ class ReduceScatterTask(Task):
         size = prod(shape[1:])
 
         with hidet.script_module() as script_module:
+
             @hidet.script
             def launch(x: dtype[shape], y: dtype[shape[1:]]):
                 attrs.func_kind = 'public'
@@ -121,11 +134,15 @@ class ReduceScatterTask(Task):
 
         return [script_module.ir_module()]
 
+
 class ReduceScatterOp(Operator):
     def __init__(self, x: Tensor, op: str, comm_id: int):
         super().__init__(
-            inputs=[x], attributes={'op': op, 'comm_id': comm_id}, task=ReduceScatterTask(input_like(x, 'x'), op, comm_id)
+            inputs=[x],
+            attributes={'op': op, 'comm_id': comm_id},
+            task=ReduceScatterTask(input_like(x, 'x'), op, comm_id),
         )
+
 
 def all_reduce(x: Tensor, op: str, comm_id: int = 0) -> Tensor:
     if x.device.kind != 'cuda':
@@ -151,11 +168,14 @@ def reduce_scatter(x: Tensor, op: str, comm_id: int = 0) -> Tensor:
 def send(x: Tensor, peer: int, comm_id: int = 0) -> None:
     raise NotImplementedError()
 
+
 def recv(peer: int, comm_id: int = 0) -> Tensor:
     raise NotImplementedError()
 
+
 def broadcast(x: Tensor, root: int, comm_id: int = 0) -> Tensor:
     raise NotImplementedError()
+
 
 def reduce(x: Tensor, root: int, op: str, comm_id: int = 0) -> Tensor:
     raise NotImplementedError()

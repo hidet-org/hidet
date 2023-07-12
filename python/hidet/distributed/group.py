@@ -83,6 +83,26 @@ class NCCLProcessGroup(ProcessGroup):
         addr = tensor.storage.addr
         self._comm.all_reduce(addr, addr, tensor.size, tensor.dtype, op)
 
+    def broadcast(self, tensor: Tensor, src: int):
+        assert not tensor.is_symbolic()
+        assert tensor.device.is_cuda()
+        addr = tensor.storage.addr
+        self._comm.broadcast(addr, addr, tensor.size, tensor.dtype, src)
+    
+    def reduce(self, tensor: Tensor, dst: int, op: str):
+        assert not tensor.is_symbolic()
+        assert tensor.device.is_cuda()
+        addr = tensor.storage.addr
+        self._comm.reduce(addr, addr, tensor.size, tensor.dtype, op, dst)
+    
+    def all_gather_into_tensor(self, output_tensor, input_tensor):
+        assert not output_tensor.is_symbolic()
+        assert not input_tensor.is_symbolic()
+        output_addr = output_tensor.storage.addr
+        input_addr = input_tensor.storage.addr
+        self._comm.all_gather(output_addr, input_addr, input_addr.size, input_tensor.dtype)
+        # TODO: shape check
+
 
 def create_nccl_group(store: Store, world_size: int, rank: int):
     if rank == 0:

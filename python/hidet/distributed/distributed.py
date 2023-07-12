@@ -79,9 +79,19 @@ def is_nccl_available():
     return nccl_available()
 
 
-def broadcast():
-    raise NotImplementedError()
+# The runtime API of collective communaction operations
+# Aligned with PyTorch, but different from Hidet ops
 
+
+def broadcast(tensor: Tensor, src: int, group=None):
+    """
+    The caller should make sure the metadata (shape, dtype) of the tensor is aligned with
+    the sender.
+    """
+    # TODO: support group
+    if group is None:
+        group = DEFAULT_GROUP
+    group.broadcast(tensor, src)
 
 def all_reduce(tensor: Tensor, op: str, group: Optional[ProcessGroup] = None):
     if group is None:
@@ -89,8 +99,10 @@ def all_reduce(tensor: Tensor, op: str, group: Optional[ProcessGroup] = None):
     group.all_reduce(tensor, op)
 
 
-def reduce():
-    raise NotImplementedError()
+def reduce(tensor: Tensor, dst: int, op: str, group: Optional[ProcessGroup] = None):
+    if group is None:
+        group = DEFAULT_GROUP
+    group.reduce(tensor, dst, op)
 
 
 def all_gather_into_tensor():

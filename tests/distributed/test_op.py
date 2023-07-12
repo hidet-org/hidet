@@ -23,9 +23,11 @@ import hidet.distributed
 
 TMP_PATH = './tmp'
 
+
 def test_all_reduce():
     if os.path.exists(TMP_PATH):
         os.remove(TMP_PATH)
+
     def foo(i):
         device = f'cuda:{i}'
         hidet.cuda.set_device(i)
@@ -35,15 +37,18 @@ def test_all_reduce():
         y = hidet.ops.all_reduce(x, 'avg')
         assert x.shape == y.shape
         assert all(y.cpu().numpy() == 0.5)
-    processes = [Process(target=foo, args=(i, )) for i in range(2)]
+
+    processes = [Process(target=foo, args=(i,)) for i in range(2)]
     for p in processes:
         p.start()
     for p in processes:
         p.join()
 
+
 def test_all_gather():
     if os.path.exists(TMP_PATH):
         os.remove(TMP_PATH)
+
     def foo(i):
         device = f'cuda:{i}'
         hidet.cuda.set_device(i)
@@ -51,16 +56,19 @@ def test_all_gather():
         hidet.distributed.set_nccl_comms()
         x = hidet.ones([4], device=device) * i
         y = hidet.ops.all_gather(x, 2)
-        assert numpy.array_equal(y.cpu().numpy(), [[0, 0, 0, 0],[1, 1, 1, 1]])
-    processes = [Process(target=foo, args=(i, )) for i in range(2)]
+        assert numpy.array_equal(y.cpu().numpy(), [[0, 0, 0, 0], [1, 1, 1, 1]])
+
+    processes = [Process(target=foo, args=(i,)) for i in range(2)]
     for p in processes:
         p.start()
     for p in processes:
         p.join()
 
+
 def test_reduce_scatter():
     if os.path.exists(TMP_PATH):
         os.remove(TMP_PATH)
+
     def foo(i):
         device = f'cuda:{i}'
         hidet.cuda.set_device(i)
@@ -69,11 +77,13 @@ def test_reduce_scatter():
         x = hidet.ones([2, 2], device=device) * i
         y = hidet.ops.reduce_scatter(x, 'sum')
         assert numpy.array_equal(y.cpu().numpy(), [1, 1])
-    processes = [Process(target=foo, args=(i, )) for i in range(2)]
+
+    processes = [Process(target=foo, args=(i,)) for i in range(2)]
     for p in processes:
         p.start()
     for p in processes:
         p.join()
+
 
 if __name__ == '__main__':
     test_all_reduce()
