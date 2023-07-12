@@ -16,7 +16,7 @@ from hidet.graph import ops
 from hidet.graph.flow_graph import Tensor
 from hidet.graph.ops.matmul import MatmulOp
 from hidet.graph.ops.utils import normalize_dim, is_constant
-from ..base import SubgraphRewriteRule, TensorPattern, MatchDict, op_pattern, add_rewrite_rule
+from ..base import SubgraphRewriteRule, TensorPattern, MatchDict, op_pattern
 
 # we use the heuristic that if one of the inputs to matmul is a constant, and the number if dimensions is two
 #   then its a linear layer, and we quantize it
@@ -77,9 +77,10 @@ class SymmetricLinearQuantizePatternL(SubgraphRewriteRule):
 
 
 def symmetric_linear_quantize_patterns(quant_type: str = 'int8', dims=0) -> List[SubgraphRewriteRule]:
-    rules = []
-    add_rewrite_rule(rules, SymmetricLinearQuantizePatternR(quant_type=quant_type, dims=dims))
-    add_rewrite_rule(rules, SymmetricLinearQuantizePatternL(quant_type=quant_type, dims=dims))
+    rules = [
+        SymmetricLinearQuantizePatternR(quant_type=quant_type, dims=dims),
+        SymmetricLinearQuantizePatternL(quant_type=quant_type, dims=dims),
+    ]
     return rules
 
 
@@ -127,6 +128,4 @@ class SymmetricQuantizeMatmulFused(SubgraphRewriteRule):
 
 def matmul_specialization_rules() -> List[SubgraphRewriteRule]:
     """Adds rules for specializing kernels to custom fused versions, if applicable."""
-    rules = []
-    add_rewrite_rule(rules, SymmetricQuantizeMatmulFused())
-    return rules
+    return [SymmetricQuantizeMatmulFused()]

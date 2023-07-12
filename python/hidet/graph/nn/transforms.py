@@ -23,12 +23,3 @@ class Embedding(Module):
 
     def forward(self, indices: Tensor) -> Tensor:
         return ops.take(self.weight, indices, axis=0)
-
-
-class SymQuantEmbedding(Module):
-    def __init__(self, weight: Tensor, quant_dtype: str = 'int8'):
-        super().__init__()
-        self.qweight, self.scale = ops.symmetric_quantize(weight, quant_dtype)
-
-    def forward(self, indices: Tensor) -> Tensor:
-        return ops.take(ops.symmetric_dequantize(ops.barrier(self.qweight), self.scale), indices, axis=0)

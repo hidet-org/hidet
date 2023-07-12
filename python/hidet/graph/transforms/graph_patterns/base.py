@@ -321,26 +321,6 @@ def register_rewrite_rule(rule: Union[SubgraphRewriteRule, Type[SubgraphRewriteR
         raise TypeError('rule should be a SubgraphRewriteRule or a subclass of SubgraphRewriteRule')
 
 
-def add_rewrite_rule(rules: List[SubgraphRewriteRule], rule: Union[SubgraphRewriteRule, Type[SubgraphRewriteRule]]):
-    """
-    Register a sub-graph rewrite rule.
-
-    Parameters
-    ----------
-    rule: SubgraphRewriteRule or Type[SubgraphRewriteRule]
-        The rule to be registered. If it is a type, it will be instantiated with default arguments. Otherwise, it
-        should be an instance of SubgraphRewriteRule.
-    """
-    if isinstance(rule, SubgraphRewriteRule):
-        rules.append(rule)
-        return None
-    elif issubclass(rule, SubgraphRewriteRule):
-        rules.append(rule())
-        return rule
-    else:
-        raise TypeError('rule should be a SubgraphRewriteRule or a subclass of SubgraphRewriteRule')
-
-
 def deregister_rewrite_rule(rule: SubgraphRewriteRule):
     """
     Remove a sub-graph rewrite rule from list of currently registered rules

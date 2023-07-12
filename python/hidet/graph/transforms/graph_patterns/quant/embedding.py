@@ -14,7 +14,7 @@ from typing import List, Optional
 from hidet.graph import ops
 from hidet.graph.flow_graph import Tensor
 from hidet.graph.ops.transform import TakeOp
-from ..base import SubgraphRewriteRule, TensorPattern, MatchDict, op_pattern, add_rewrite_rule
+from ..base import SubgraphRewriteRule, TensorPattern, MatchDict, op_pattern
 
 # we use the heuristic that if the weight is constant and the axis is 0 in the take op, then its an embedding layer
 #   and we quantize the weights
@@ -39,6 +39,4 @@ class SymmetricEmbeddingQuantizePattern(SubgraphRewriteRule):
 
 
 def symmetric_embedding_quantize_patterns(quant_type: str = 'int8') -> List[SubgraphRewriteRule]:
-    rules = []
-    add_rewrite_rule(rules, SymmetricEmbeddingQuantizePattern(quant_type=quant_type))
-    return rules
+    return [SymmetricEmbeddingQuantizePattern(quant_type=quant_type)]

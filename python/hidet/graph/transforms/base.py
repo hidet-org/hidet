@@ -15,7 +15,7 @@ import logging
 
 import hidet.option
 from hidet.graph.flow_graph import FlowGraph
-from hidet.graph.transforms.graph_patterns.base import SubgraphRewriteRule, add_rewrite_rule
+from hidet.graph.transforms.graph_patterns.base import SubgraphRewriteRule
 from .instruments import GraphPassInstrument
 
 logger = logging.Logger(name='hidet.graph.transforms', level=logging.INFO)
@@ -146,7 +146,7 @@ class PassContext:
             self.configs['precision'] = dtype
         return self
 
-    def add_quantize_rules(self, pattern: Optional[List[SubgraphRewriteRule]] = None) -> PassContext:
+    def add_quantize_rules(self, patterns: List[SubgraphRewriteRule]) -> PassContext:
         """
         Adds selective quantization rules to the pass context.
 
@@ -155,18 +155,18 @@ class PassContext:
         pattern: Optional[List[SubgraphRewriteRule]]
             The pattern to selectively quantize.
 
-            - None
-              Resets all rules, and no selective quantization will be applied.
-            - []
-              Adds no rules, existing rules will be preserved
             - List[SubgraphRewriteRule]
               Adds new rules on top of what is already there. The new rules will be applied
               after the existing ones.
         """
 
-        if pattern is not None:
-            for pat in pattern:
-                add_rewrite_rule(self.configs['quantize_patterns'], pat)
+        if patterns is not None:
+            for pat in patterns:
+                if isinstance(pat, SubgraphRewriteRule):
+                    self.configs['quantize_patterns'].append(pat)
+                    return None
+                elif issubclass(pat, SubgraphRewriteRule):
+                    self.configs['quantize_patterns'].append(pat())
         else:
             self.configs['quantize_patterns'] = []
         return self
