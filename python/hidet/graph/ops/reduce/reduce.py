@@ -16,6 +16,7 @@ from hidet.lang import f16, grid
 from hidet.lang.cuda import blockIdx, threadIdx, register_tensor
 from hidet.ir.type import DataType
 from hidet.ir.dtypes.vector import VectorType
+from hidet.ir.library import tune
 from ..arithmetic import square, sqrt
 from ..utils import Task, Operator, Tensor, TensorNode, IRModule, ReduceType
 from ..utils import compute, input_like, normalize_dim, arg_reduce
@@ -54,8 +55,8 @@ class ReduceTask(Task):
 
     def allow_prologue(self) -> bool:
         if self.inputs[0].type.dtype == f16:
-            # use self.cuda_schedule_reduce_by_warp
-            return False
+            # use self.cuda_schedule_reduce_by_warp with vectorized load
+            return not (self.inputs[0].shape[-1] % 2 == 0)
         else:
             # use self.cuda_schedule_reduce_by_default
             return True
@@ -63,11 +64,13 @@ class ReduceTask(Task):
     def implement_cuda(self, working_dir: str) -> IRModule:
         rank = len(self.inputs[0].shape)
         if rank - 1 in self.dims:
-            return self.cuda_schedule_reduce_by_warp()
+            return tune.extract_ir_modules(self.cuda_schedule_reduce_by_warp)
         else:
             return self.cuda_schedule_reduce_by_default()
 
-    def cuda_schedule_reduce_by_warp(self) -> IRModule:
+    @tune.space(2, use_atomic=[True, False])
+    @tune.space(1, use_atomic=[True, False])
+    def cuda_schedule_reduce_by_warp(self, use_atomic=True) -> IRModule:
         import hidet
         from hidet.ir.primitives import active_mask, shfl_down_sync, shfl_sync
         from hidet.ir.compute import ReduceOperation
@@ -119,7 +122,9 @@ class ReduceTask(Task):
         reduce_type = self.attrs['reduce_type']
         ro = ReduceOperation.from_name(reduce_type)
 
-        if ro.has_atomic(accumulate_dtype):
+        perform_atomic_reduce = use_atomic and ro.has_atomic(accumulate_dtype)
+
+        if perform_atomic_reduce:
             smem_needed = accumulate_dtype.nbytes
         else:
             smem_needed = accumulate_dtype.nbytes * block_size // warp_size
@@ -138,7 +143,7 @@ class ReduceTask(Task):
                 x_vectorized = tensor_pointer(vtype, shape=read_shape, init=cast(x, ~vtype))
 
                 # initialize staging shared memory
-                if ro.has_atomic(accumulate_dtype):
+                if perform_atomic_reduce:
                     if threadIdx.x == 0:
                         smem_staging[0] = rv
                 else:
@@ -167,7 +172,7 @@ class ReduceTask(Task):
 
                 # write to staging area
                 if threadIdx.x % 32 == 0:
-                    if ro.has_atomic(accumulate_dtype):
+                    if perform_atomic_reduce:
                         ro.atomic_combine(~smem_staging[0], cast(rv, accumulate_dtype))
                     else:
                         smem_staging[threadIdx.x // 32] = rv
@@ -175,7 +180,7 @@ class ReduceTask(Task):
                 # collect results from all warps
                 syncthreads()
                 if threadIdx.x == 0:
-                    if ro.has_atomic(accumulate_dtype):
+                    if perform_atomic_reduce:
                         rv = smem_staging[0]
                     else:
                         for i in range(reduce_extent // warp_size):
