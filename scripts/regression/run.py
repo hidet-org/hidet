@@ -34,6 +34,10 @@ def reinstall_hidet():
 
 
 def run_regression(report_file):
+    from model_performance import model_performance_regression
+    from op_performance import op_performance_regression
+    model_performance_regression(report_file)
+    op_performance_regression(report_file)
     return
     space = 2
     current_commit = subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode('utf-8').strip()
@@ -70,7 +74,7 @@ def bench_job():
 
 def main():
     args = parser.parse_args()
-    if not os.path.exists('./scripts/regression/performance.py'):
+    if not os.path.exists('./scripts/regression/run.py'):
         raise RuntimeError('Please run this script from the root directory of the repository.')
 
     install_dependencies()
