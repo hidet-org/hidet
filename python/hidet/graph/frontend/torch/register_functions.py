@@ -146,12 +146,12 @@ def bilinear(x_1: Tensor, x_2: Tensor, weight: Tensor, bias: Optional[Tensor]):
 @register_function(operator.add)
 @register_function(torch.ops.aten.add.Tensor)
 def add(x: Tensor, y: Tensor):
-    return ops.add(x, y)
+    return x + y
 
 
 @register_function(operator.iadd)
 def iadd(x: Tensor, y: Tensor):
-    return ops.add(x, y)
+    return x + y
 
 
 @register_function(torch.sin)
@@ -363,7 +363,7 @@ def zeros(*size, out=None, dtype=None, layout=None, device=None, pin_memory=Fals
 
 @register_function(torch.ones)
 def ones(
-    *size: Union[int, Sequence[int]],
+    *size: Union[Int, Sequence[Int]],
     out: Optional[Tensor] = None,
     dtype: Optional[torch.dtype] = None,
     layout: Optional[torch.layout] = None,
@@ -382,7 +382,7 @@ def ones(
         if isinstance(size[0], (list, tuple)):
             size = size[0]
 
-    shape = [int(v) for v in size]
+    shape = [v if isinstance(v, hidet.ir.Expr) else int(v) for v in size]
     if dtype is None:
         dtype = torch.get_default_dtype()
 
