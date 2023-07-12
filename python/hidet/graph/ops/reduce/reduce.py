@@ -54,12 +54,7 @@ class ReduceTask(Task):
             return False
 
     def allow_prologue(self) -> bool:
-        if self.inputs[0].type.dtype == f16:
-            # use self.cuda_schedule_reduce_by_warp with vectorized load
-            return not (self.inputs[0].shape[-1] % 2 == 0)
-        else:
-            # use self.cuda_schedule_reduce_by_default
-            return True
+        return False
 
     def implement_cuda(self, working_dir: str) -> IRModule:
         rank = len(self.inputs[0].shape)
