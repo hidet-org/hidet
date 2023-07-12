@@ -24,12 +24,12 @@ class FunctionalModule(nn.Module):
         return self.op(*args, **kwargs)
 
 
-def check_module(model: torch.nn.Module, args: Sequence[torch.Tensor], atol=1e-4, rtol=1e-4):
+def check_module(model: torch.nn.Module, args: Sequence[torch.Tensor], atol=1e-4, rtol=1e-4, dynamic=False):
     model = model.cuda()
     model.eval()
     args = [x.cuda() if isinstance(x, torch.Tensor) else x for x in args]
     # we use a lambda to make sure the model is compiled by pytorch
-    model_opt = torch.compile(lambda *args, **kwargs: model(*args, **kwargs), backend='hidet')
+    model_opt = torch.compile(lambda *args, **kwargs: model(*args, **kwargs), backend='hidet', dynamic=dynamic)
     torch_outputs = model(*args)
     hidet_outputs = model_opt(*args)
     if isinstance(torch_outputs, torch.Tensor):

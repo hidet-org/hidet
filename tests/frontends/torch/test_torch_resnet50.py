@@ -16,11 +16,12 @@ from hidet.testing.torch_utils import check_module
 
 
 @pytest.mark.parametrize('shape', [[1, 3, 224, 224]])
-def test_resnet50(shape):
+@pytest.mark.parametrize('dynamic', [False, True])
+def test_resnet50(shape, dynamic):
     torch.backends.cudnn.allow_tf32 = False  # disable tf32 for accuracy
-    model = torch.hub.load('pytorch/vision:v0.6.0', 'resnet50', pretrained=True)
-    x = torch.randn(*shape)
-    check_module(model, [x], atol=1e-2, rtol=1e-2)
+    model = torch.hub.load('pytorch/vision:v0.6.0', 'resnet50', pretrained=True).cuda().eval()
+    x = torch.randn(*shape).cuda()
+    check_module(model, [x], atol=1e-2, rtol=1e-2, dynamic=dynamic)
     torch.backends.cudnn.allow_tf32 = True
 
 
