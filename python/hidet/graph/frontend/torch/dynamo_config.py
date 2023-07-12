@@ -24,6 +24,7 @@ class DynamoConfig:
         self._print_input_graph: bool = False
         self._dump_graph_ir: Optional[str] = None
         self._correctness_report: bool = False
+        self._steal_weights: bool = True
 
     def __getitem__(self, item: str):
         assert isinstance(item, str)
@@ -43,6 +44,7 @@ class DynamoConfig:
         self._print_input_graph: bool = False
         self._dump_graph_ir: Optional[str] = None
         self._correctness_report: bool = False
+        self._steal_weights: bool = True
 
     def search_space(self, level: int = 2):
         """
@@ -143,6 +145,14 @@ class DynamoConfig:
         Whether to check correctness and print report error
         """
         self._correctness_report = flag
+        return self
+
+    def steal_weights(self, flag=True):
+        """
+        Whether to clear pytorch weights in certain layers after
+        converting them to Hidet tensors. This will save some GPU memory usage.
+        """
+        self._steal_weights = flag
         return self
 
 

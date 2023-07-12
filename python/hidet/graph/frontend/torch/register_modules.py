@@ -14,6 +14,7 @@ import torch
 from hidet.graph.tensor import Tensor
 from .interpreter import HidetModule, register_module
 from . import register_functions as regs
+from .dynamo_config import dynamo_config
 
 
 @register_module(torch.nn.Conv1d)
@@ -159,7 +160,9 @@ class HidetLinear(HidetModule):
         super().__init__(torch_module)
         from hidet import ops
 
-        self.transposed_weight = ops.transpose(self.param('weight', steal=True), [1, 0])
+        steal = dynamo_config['steal_weights']
+
+        self.transposed_weight = ops.transpose(self.param('weight', steal=steal), [1, 0])
 
     def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, torch.nn.Linear)
