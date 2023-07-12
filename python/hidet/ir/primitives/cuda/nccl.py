@@ -16,6 +16,7 @@ from hidet.ir.type import DataType
 from hidet.cuda.nccl import NcclRedOp, dtype_to_nccl
 from hidet.ir.primitives.runtime import get_cuda_stream, get_nccl_comm
 
+
 def all_reduce(sendbuff: Expr, recvbuff: Expr, count: Expr, dtype: DataType, op: NcclRedOp, comm_id: int):
     comm = get_nccl_comm(comm_id)
     return BlackBoxStmt(
@@ -29,7 +30,8 @@ def all_reduce(sendbuff: Expr, recvbuff: Expr, count: Expr, dtype: DataType, op:
         get_cuda_stream(),
     )
 
-def broadcast(sendbuff: Expr, recvbuff: Expr, count: Expr, dtype: DataType, root: Expr, comm_id: int):
+
+def broadcast(sendbuff: Expr, recvbuff: Expr, count: Expr, dtype: DataType, root: int, comm_id: int):
     comm = get_nccl_comm(comm_id)
     return BlackBoxStmt(
         'ncclBroadcast({}, {}, {}, (ncclDataType_t){}, {}, (ncclComm_t){}, (cudaStream_t){});',
@@ -38,23 +40,26 @@ def broadcast(sendbuff: Expr, recvbuff: Expr, count: Expr, dtype: DataType, root
         int(dtype_to_nccl(dtype)),
         root,
         comm,
-        get_cuda_stream()
+        get_cuda_stream(),
     )
 
-def reduce(sendbuff: Expr, recvbuff: Expr, count: Expr, dtype: DataType, op: NcclRedOp, root: Expr, comm_id: int):
+
+def reduce(sendbuff: Expr, recvbuff: Expr, count: Expr, dtype: DataType, op: NcclRedOp, root: int, comm_id: int):
     comm = get_nccl_comm(comm_id)
     return BlackBoxStmt(
-        'ncclReduce({}, {}, (ncclDataType_t){}, {}, {}, (ncclComm_t){}, (cudaStream_t){});',
+        'ncclReduce({}, {}, {}, (ncclDataType_t){}, {}, {}, (ncclComm_t){}, (cudaStream_t){});',
         sendbuff,
         recvbuff,
+        count,
         int(dtype_to_nccl(dtype)),
         int(op),
         root,
         comm,
-        get_cuda_stream()
+        get_cuda_stream(),
     )
 
-def all_gather(sendbuff: Expr, recvbuff: Expr, sendcount: Expr, dtype: DataType, comm_id:int):
+
+def all_gather(sendbuff: Expr, recvbuff: Expr, sendcount: Expr, dtype: DataType, comm_id: int):
     comm = get_nccl_comm(comm_id)
     return BlackBoxStmt(
         'ncclAllGather({}, {}, {}, (ncclDataType_t){}, (ncclComm_t){}, (cudaStream_t){});',
@@ -63,8 +68,9 @@ def all_gather(sendbuff: Expr, recvbuff: Expr, sendcount: Expr, dtype: DataType,
         sendcount,
         int(dtype_to_nccl(dtype)),
         comm,
-        get_cuda_stream()
+        get_cuda_stream(),
     )
+
 
 def reduce_scatter(sendbuff: Expr, recvbuff: Expr, recvcount: Expr, dtype: DataType, op: NcclRedOp, comm_id: int):
     comm = get_nccl_comm(comm_id)
@@ -76,5 +82,17 @@ def reduce_scatter(sendbuff: Expr, recvbuff: Expr, recvcount: Expr, dtype: DataT
         int(dtype_to_nccl(dtype)),
         int(op),
         comm,
-        get_cuda_stream() 
+        get_cuda_stream(),
+    )
+
+def send(sendbuff: Expr, count: Expr, dtype: DataType, peer: int, comm_id: int):
+    comm = get_nccl_comm(comm_id)
+    return BlackBoxStmt(
+        'ncclSend({}, {}, (ncclDataType_t){}, {}, (ncclComm_t){}, (cudaStream_t){});',
+        sendbuff,
+        count,
+        int(dtype_to_nccl(dtype)),
+        peer,
+        comm,
+        get_cuda_stream()
     )
