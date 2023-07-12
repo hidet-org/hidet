@@ -162,8 +162,11 @@ def tensor_split(self: Tensor, split_size, dim=0) -> List[Tensor]:
 
 
 @register_method(torch.Tensor.size)
-def tensor_size(self: Tensor) -> List[Int]:
-    return self.shape
+def tensor_size(self: Tensor, dim=None) -> List[Int]:
+    if dim is None:
+        return self.shape
+    else:
+        return self.shape[dim]
 
 
 @register_method(torch.Tensor.chunk)

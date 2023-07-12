@@ -95,7 +95,7 @@ class ReshapeTask(Task):
             inverse_map={x: InverseMap.from_lambda(inverse_map, num_args=len(x.shape))},
             attributes={'shape': y_shape},
         )
-    
+
     def normalize_shape(self, origin_shape: Sequence[Int], shape: Sequence[Int]):
         # [1, 3, 224, 224], [1, -1, 224, 0] => [1, 3, 224, 224]
         shape = list(shape)
@@ -106,20 +106,25 @@ class ReshapeTask(Task):
                         '0 is used outside original shape: ' 'origin {} target {}'.format(origin_shape, shape)
                     )
                 shape[i] = origin_shape[i]
-        
+
         size = prod(origin_shape)
         cnt = sum(1 for v in shape if isinstance(v, int) and v == -1)
         if cnt == 0:
             total = prod(shape)
-            self._assert(total == size, (
+            self._assert(
+                total == size,
+                (
                     'Reshape: given shape has different size with input tensor: '
                     'shape {} and size {}'.format(shape, size)
-                ))
+                ),
+            )
             return shape
         elif cnt == 1:
             remain_size = prod([v for v in shape if not is_constant(v) or v != -1])
-            self._assert(size % remain_size == 0, 
-                         'Given shape is incompatible with input tensor: ' 'shape {} and size {}'.format(shape, size))
+            self._assert(
+                size % remain_size == 0,
+                'Given shape is incompatible with input tensor: ' 'shape {} and size {}'.format(shape, size),
+            )
             return [v if not is_constant(v) or v != -1 else size // remain_size for v in shape]
         else:
             raise ValueError('Can not infer the shape when there are multiple -1: {}'.format(shape))
