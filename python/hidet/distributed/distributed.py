@@ -81,6 +81,7 @@ def is_nccl_available():
 
 # The runtime API of collective communaction operations is aligned with PyTorch
 
+
 def broadcast(tensor: Tensor, src: int, group=None):
     """Broadcast the tensor from device 'src' to all devices.
 
@@ -91,12 +92,12 @@ def broadcast(tensor: Tensor, src: int, group=None):
     Parameters
     ----------
     tensor: Tensor
-        For the sender, the tensor to be broadcasted. 
+        For the sender, the tensor to be broadcasted.
         For other devices, the tensor to store the broadcasted data. It will be updated in-place.
-    
+
     src: int
         The rank of the device that sends the data.
-    
+
     group: Optional[ProcessGroup]
         The process group to work on. If None, the default process group will be used.
     """
@@ -116,10 +117,10 @@ def all_reduce(tensor: Tensor, op: str, group: Optional[ProcessGroup] = None):
     ----------
     tensor: Tensor
         The tensor to be reduced. It will be updated in-place.
-    
+
     op: str
         The reduction operation, which can be 'sum', 'prod', 'max', 'min', 'avg'.
-    
+
     group: Optional[ProcessGroup]
         The process group to work on. If None, the default process group will be used.
     """
@@ -138,7 +139,7 @@ def reduce(tensor: Tensor, dst: int, op: str, group: Optional[ProcessGroup] = No
     Parameters
     ----------
     tensor: Tensor
-        The input tensor to be reduced. The result will be stored in the tensor on the device with rank 'dst'. 
+        The input tensor to be reduced. The result will be stored in the tensor on the device with rank 'dst'.
 
     op: str
         The reduction operation, which can be 'sum', 'prod', 'max', 'min', 'avg'.
@@ -158,7 +159,7 @@ def all_gather(tensor_list: List[Tensor], tensor: Tensor, group: Optional[Proces
 
     .. tip::
 
-        The caller should make sure the metadata (shape, dtype) of 'tensor' from the i-th device 
+        The caller should make sure the metadata (shape, dtype) of 'tensor' from the i-th device
         is the same as tensor_list[i] on all peers.
 
     Parameters
@@ -213,7 +214,7 @@ def gather(
 
     .. tip::
 
-        The caller should make sure the metadata (shape, dtype) of 'tensor' from the i-th device 
+        The caller should make sure the metadata (shape, dtype) of 'tensor' from the i-th device
         is the same as tensor_list[i] on the device dst.
 
     Parameters
@@ -256,7 +257,7 @@ def scatter(
     scatter_list: Optional[List[Tensor]]
         On the device src, a list of tensors to be scattered.
         On other devices, it can be set as None.
-    
+
     src: int
         The rank of the device that sends data.
 
@@ -270,8 +271,8 @@ def scatter(
 
 def reduce_scatter(output: Tensor, input_list: List[Tensor], op: str, group: Optional[ProcessGroup] = None):
     """Reduce each tensor in a list across all devices and store the result of each reduction on one device
-    
-    input_list[i] from all devices will be reduced and stored in the 'output' tensor on the i-th device. 
+
+    input_list[i] from all devices will be reduced and stored in the 'output' tensor on the i-th device.
 
     .. tip::
 
@@ -299,8 +300,8 @@ def reduce_scatter(output: Tensor, input_list: List[Tensor], op: str, group: Opt
 
 def reduce_scatter_tensor(output: Tensor, input: Tensor, op: str, group: Optional[ProcessGroup] = None):
     """Reduce the input tensor across all devices and store a fraction of the result on each device
-    
-    input[i] from all devices will be reduced and stored in the 'output' tensor on the i-th device. 
+
+    input[i] from all devices will be reduced and stored in the 'output' tensor on the i-th device.
 
     .. tip::
 
@@ -350,7 +351,7 @@ def send(tensor: Tensor, dst: int, group: Optional[ProcessGroup] = None):
     ----------
     tensor: Tensor
         The tensor to be sent.
-    
+
     dst: int
         Rank of the device that data is sent to.
 
@@ -376,7 +377,7 @@ def recv(tensor: Tensor, src: int, group: Optional[ProcessGroup] = None):
 
     src: int
         Rank of the device that data is sent from.
-        
+
     group: Optional[ProcessGroup]
         The process group to work on. If None, the default process group will be used.
     """
