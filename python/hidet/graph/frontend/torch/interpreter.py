@@ -191,7 +191,7 @@ class HidetModule:
         hook = self._get_weight_norm_hook(name)
         return hook.compute_weight(self.mod)
 
-    def param(self, name: str, optional=False) -> Optional[Tensor]:
+    def param(self, name: str, optional=False, steal=False) -> Optional[Tensor]:
         if name not in self.torch_params:
             # see https://pytorch.org/docs/stable/generated/torch.nn.utils.weight_norm.html
             # to learn more about weight norm.
@@ -208,7 +208,12 @@ class HidetModule:
                 self.hidet_params[name] = None
             else:
                 torch_param: torch.Tensor = self.torch_params[name]
+                if steal:
+                    del self.torch_params[name]
+                    setattr(self.mod, name, None)
                 self.hidet_params[name] = tensor_from_torch(torch_param)
+                del torch_param
+                torch.cuda.empty_cache()
         return self.hidet_params[name]
 
 
