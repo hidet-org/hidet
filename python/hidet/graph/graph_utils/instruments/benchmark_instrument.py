@@ -13,7 +13,7 @@ from typing import List, Optional, Tuple
 import os
 import numpy as np
 
-from hidet.runtime import CompiledModule, CompiledTask
+from hidet.runtime import CompiledTask
 from hidet.graph.flow_graph import FlowGraph, Operator, Tensor, GraphForwardInstrument
 
 
@@ -57,17 +57,11 @@ class GraphForwardBenchmarkInstrument(GraphForwardInstrument):
         if not self.benchmarking:
             return
 
-        task_func = op.compiled_task
-        if isinstance(task_func, CompiledModule):
-            latency: List[float] = task_func.profile(
-                *inputs, *outputs, warmup=self.warmup, number=self.number, repeat=self.repeat
-            )
-        elif isinstance(task_func, CompiledTask):
-            latency: List[float] = task_func.profile(
-                *inputs, *outputs, warmup=self.warmup, number=self.number, repeat=self.repeat
-            )
-        else:
-            raise RuntimeError('Unknown task_func type: {}'.format(type(task_func)))
+        task_func: CompiledTask = op.compiled_task
+        latency: List[float] = task_func.profile(
+            *inputs, *outputs, warmup=self.warmup, number=self.number, repeat=self.repeat
+        )
+
         self.latency_list.append((op, float(np.median(latency)), float(np.std(latency))))
 
     def after_graph(self, graph: FlowGraph, inputs: List[Tensor], outputs: List[Tensor]) -> None:
