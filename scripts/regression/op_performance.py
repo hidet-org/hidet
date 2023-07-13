@@ -1,5 +1,6 @@
 import torch
 import hidet
+import argparse
 
 # [M, N, K] where C_mxn = A_mxk @ B_kxn
 matmul_shapes = [
@@ -23,8 +24,16 @@ def reduce_regression():
 
 
 def op_performance_regression(report_file):
-    print(report_file)
-    pass
+    with open(report_file, 'w') as f:
+        f.write("ToDo: Operator Performance Regression")
 
 if __name__ == '__main__':
-    op_performance_regression('./report_op_performance.txt')
+    parser = argparse.ArgumentParser(prog='Operator Performance Regression')
+    parser.add_argument(
+        '--report',
+        type=str,
+        default='./report_op_performance.txt',
+        help='Specify report output path'
+    )
+    args = parser.parse_args()
+    op_performance_regression(args.report)

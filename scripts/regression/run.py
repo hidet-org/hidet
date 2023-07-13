@@ -40,15 +40,27 @@ def reinstall_hidet():
 
 
 def run_regression(report_file):
-    command = f'python scripts/regression/model_performance.py --report {report_file}'
+    model_report_file = './scripts/regression/report_model_performance.txt'
+    op_report_file = './scripts/regression/report_op_performance.txt'
+
+    command = f'python scripts/regression/model_performance.py --report {model_report_file}'
     subprocess.run(command.split(), check=True)
-    command = f'python scripts/regression/op_performance.py --report {report_file}'
+    command = f'python scripts/regression/op_performance.py --report {op_report_file}'
     subprocess.run(command.split(), check=True)
+
+    # Merge report files into one
+    model_report = op_report = ""
+    with open(model_report_file, 'r') as f:
+        model_report = f.read()
+    with open(op_report_file, 'r') as f:
+        op_report = f.read()
+    report = model_report + '\n' + op_report
+    with open(report_file, 'w') as f:
+        f.write(report)
+    
 
 def bench_job(sender):
     report_file = './scripts/regression/report.txt'
-    if os.path.exists(report_file):
-        os.remove(report_file)
     try:
         pull_repo()
         reinstall_hidet()
