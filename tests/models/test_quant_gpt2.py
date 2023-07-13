@@ -10,17 +10,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # %%
-from typing import List
-
 import os
 import pickle
 
-from tqdm import tqdm
-
 import torch
 import hidet
-import torch.nn.functional as F
-import datasets
 
 import pytest
 
@@ -66,61 +60,6 @@ def model(name='gpt2', disable_cache=False) -> GPT2LMHead:
         return m
 
 
-def accuracy(output, target, topk=(1,)):
-    """
-    Computes the accuracy over the k top predictions for the specified values of k
-    In top-5 accuracy you give yourself credit for having the right answer
-    if the right answer appears in your top five guesses.
-    """
-    with torch.no_grad():
-        maxk = max(topk)
-        batch_size = target.size(0)
-
-        # st()
-        _, pred = output.topk(maxk, 1, True, True)
-        pred = pred.t()
-        # st()
-        # correct = pred.eq(target.view(1, -1).expand_as(pred))
-        # correct = (pred == target.view(1, -1).expand_as(pred))
-        correct = (pred == target.unsqueeze(dim=0)).expand_as(pred)
-
-        res = []
-        for k in topk:
-            # correct_k = correct[:k].view(-1).float().sum(0, keepdim=True)
-            correct_k = correct[:k].reshape(-1).float().sum(0, keepdim=True)
-            res.append(correct_k.mul_(1.0 / batch_size))
-        return res
-
-
-def calculate_perplexity(model, ids, device, cap_length=1024):
-    if len(ids) > cap_length:
-        ids = ids[:cap_length]
-    input_ids = hidet.asarray(ids, dtype=hidet.int32, device=device)
-    position_ids = torch.arange(0, input_ids.shape[0], dtype=torch.int32, device=device)
-
-    logits = model(input_ids, hidet.from_torch(position_ids))
-    logits: torch.Tensor = logits.torch()
-    ids = input_ids.torch().to(torch.int64)
-    loss = F.cross_entropy(logits[:-1, :].float(), ids[1:], reduction='mean')
-    ppl = torch.exp(loss)
-
-    return ppl
-
-
-def calculate_accuracy(model, ids, device, topk=(1,), cap_length=1024):
-    if len(ids) > cap_length:
-        ids = ids[:cap_length]
-    input_ids = hidet.asarray(ids, dtype=hidet.int32, device=device)
-    position_ids = torch.arange(0, input_ids.shape[0], dtype=torch.int32, device=device)
-
-    logits = model(input_ids, hidet.from_torch(position_ids))
-    logits: torch.Tensor = logits.torch()
-    ids = input_ids.torch().to(torch.int64)
-    acc = accuracy(logits[:-1, :].float(), ids[1:], topk=topk)
-
-    return acc
-
-
 def get_graph(device: str, name='gpt2'):
     gpt2_module = model(name)
 
@@ -139,47 +78,17 @@ def get_graph(device: str, name='gpt2'):
     return graph
 
 
-def compute_metrics(model, data: List[List[int]], topk=(1, 5, 10)):
-    """
-    Accepts a model that takes in two hidet tensors of type int,
-        first argument are the input ids, second argument are the position ids
-        both of shape [seq_length], and returns logits of shape [seq_length, vocab_size]
-    """
-    max_k = max(topk)
-    orig_ppl = 0.0
-    orig_acc = [0.0, 0.0, 0.0]
-    num_accounted = 0
-
-    for ids in tqdm(data):
-        if len(ids) > max_k:
-            orig_ppl += float(calculate_perplexity(model, ids, 'cuda'))
-            acc = calculate_accuracy(model, ids, 'cuda', topk=topk)
-            orig_acc = [x + float(y) for x, y in zip(orig_acc, acc)]
-            num_accounted += 1
-    orig_ppl /= num_accounted
-    orig_acc = [x / num_accounted for x in orig_acc]
-    return orig_ppl, orig_acc
-
-
-def get_wikitext_test_data() -> List[List[int]]:
-    tokenizer = hidet.testing.models.gpt2.tokenizer()
-    data = datasets.load_dataset("wikitext", "wikitext-2-raw-v1")
-    data = data['test']
-    test_tokenized = data.map(lambda x: tokenizer(x['text']), batched=True)
-    tokens = list(filter(lambda x: len(x) > 2, test_tokenized['input_ids']))[:500]
-    return tokens
-
-
-@pytest.mark.parametrize('tokens', [get_wikitext_test_data()])
 @pytest.mark.parametrize('model', ['gpt2'])
-def test_model_differences(tokens: List[List[int]], model):
-    topk = (1, 5, 10)
+def test_model_differences(model):
     # Original float32 model
     orig_model = get_graph('cuda', model)
     orig_model = hidet.graph.optimize(orig_model)
     orig_model = orig_model.build()
 
-    orig_model_ppl, orig_model_acc = compute_metrics(orig_model, tokens, topk=topk)
+    input_ids = torch.randint(0, 1024, (1024,), dtype=torch.int32, device='cuda')
+    position_ids = torch.arange(0, input_ids.shape[0], dtype=torch.int32, device='cuda')
+
+    orig_logits = orig_model(hidet.from_torch(input_ids), hidet.from_torch(position_ids)).torch()
 
     # quantize fp16 model to int8
     graph = get_graph('cuda', model)
@@ -188,14 +97,9 @@ def test_model_differences(tokens: List[List[int]], model):
         graph = hidet.graph.optimize(graph)
 
     graph = graph.build()
-    fused_quant_model_ppl, fused_quant_model_acc = compute_metrics(graph, tokens, topk=topk)
+    new_logits = graph(hidet.from_torch(input_ids), hidet.from_torch(position_ids)).torch()
 
-    # for perplexity, lower is better
-    assert max(0, fused_quant_model_ppl - orig_model_ppl) < 2
-
-    # acc is within 2% of original
-    for orig_acc, new_acc in zip(orig_model_acc, fused_quant_model_acc):
-        assert max(0, orig_acc - new_acc) < 0.02
+    assert torch.allclose(orig_logits, new_logits, atol=0.1, rtol=0.1)
 
 
 if __name__ == "__main__":
