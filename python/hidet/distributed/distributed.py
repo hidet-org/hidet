@@ -94,6 +94,9 @@ def broadcast(tensor: Tensor, src: int, group=None):
         For the sender, the tensor to be broadcasted. 
         For other devices, the tensor to store the broadcasted data. It will be updated in-place.
     
+    src: int
+        The rank of the device that sends the data.
+    
     group: Optional[ProcessGroup]
         The process group to work on. If None, the default process group will be used.
     """
@@ -114,6 +117,9 @@ def all_reduce(tensor: Tensor, op: str, group: Optional[ProcessGroup] = None):
     tensor: Tensor
         The tensor to be reduced. It will be updated in-place.
     
+    op: str
+        The reduction operation, which can be 'sum', 'prod', 'max', 'min', 'avg'.
+    
     group: Optional[ProcessGroup]
         The process group to work on. If None, the default process group will be used.
     """
@@ -133,6 +139,9 @@ def reduce(tensor: Tensor, dst: int, op: str, group: Optional[ProcessGroup] = No
     ----------
     tensor: Tensor
         The input tensor to be reduced. The result will be stored in the tensor on the device with rank 'dst'. 
+
+    op: str
+        The reduction operation, which can be 'sum', 'prod', 'max', 'min', 'avg'.
 
     group: Optional[ProcessGroup]
         The process group to work on. If None, the default process group will be used.
@@ -213,8 +222,11 @@ def gather(
         The input tensor to be broadcasted to all devices.
 
     gather_list: Optional[List[Tensor]]
-        On the device st, a list of tensors where the result will be stored.
+        On the device dst, a list of tensors where the result will be stored.
         On other devices, it can be set as None.
+
+    dst: int
+        The rank of the device that gathers tensors
 
     group: Optional[ProcessGroup]
         The process group to work on. If None, the default process group will be used.
@@ -227,36 +239,147 @@ def gather(
 def scatter(
     tensor: Tensor, scatter_list: Optional[List[Tensor]] = None, src: int = 0, group: Optional[ProcessGroup] = None
 ):
+    """Scatter a list of tensors from the device 'src' to all devices .
+
+    scatter_list[i] from the device 'src' will be stored in 'tensor' on the i-th device.
+
+    .. tip::
+
+        The caller should make sure the metadata (shape, dtype) of scatter_list[i] from
+        the device 'src' is the same as tensor on the i-th device.
+
+    Parameters
+    ----------
+    tensor: Tensor
+        The tensor to store the received data.
+
+    scatter_list: Optional[List[Tensor]]
+        On the device src, a list of tensors to be scattered.
+        On other devices, it can be set as None.
+    
+    src: int
+        The rank of the device that sends data.
+
+    group: Optional[ProcessGroup]
+        The process group to work on. If None, the default process group will be used.
+    """
     if group is None:
         group = DEFAULT_GROUP
     group.scatter(tensor, scatter_list, src)
 
 
 def reduce_scatter(output: Tensor, input_list: List[Tensor], op: str, group: Optional[ProcessGroup] = None):
+    """Reduce each tensor in a list across all devices and store the result of each reduction on one device
+    
+    input_list[i] from all devices will be reduced and stored in the 'output' tensor on the i-th device. 
+
+    .. tip::
+
+        The caller should make sure the metadata (shape, dtype) of input_list[i] from all devices is the same,
+        and also same as the 'output' tensor on the i-th device.
+
+    Parameters
+    ----------
+    output: Tensor
+        The tensor to store the reduction result.
+
+    input_list: List[Tensor]
+        The input tensors to be reduced.
+
+    op: str
+        The reduction operation, which can be 'sum', 'prod', 'max', 'min', 'avg'.
+
+    group: Optional[ProcessGroup]
+        The process group to work on. If None, the default process group will be used.
+    """
     if group is None:
         group = DEFAULT_GROUP
     group.reduce_scatter(output, input_list, op)
 
 
 def reduce_scatter_tensor(output: Tensor, input: Tensor, op: str, group: Optional[ProcessGroup] = None):
+    """Reduce the input tensor across all devices and store a fraction of the result on each device
+    
+    input[i] from all devices will be reduced and stored in the 'output' tensor on the i-th device. 
+
+    .. tip::
+
+        The caller should make sure the metadata (shape, dtype) of input_list from all devices is the same,
+        and the 'output' tensor has the correct shape and dtype to store the reduction result.
+
+    Parameters
+    ----------
+    output: Tensor[dim_1, dim_2, ..., dim_n]
+        The tensor to store a fraction of the reduction result.
+
+    input: Tensor[world_size, dim_1, dim_2, ..., dim_n]
+        The input tensor to be reduced.
+
+    op: str
+        The reduction operation, which can be 'sum', 'prod', 'max', 'min', 'avg'.
+
+    group: Optional[ProcessGroup]
+        The process group to work on. If None, the default process group will be used.
+    """
     if group is None:
         group = DEFAULT_GROUP
     group.reduce_scatter_tensor(output, input, op)
 
 
 def barrier(group: Optional[ProcessGroup] = None):
+    """Synchonize all devices.
+
+    Parameters
+    ----------
+    group: Optional[ProcessGroup]
+        The process group to work on. If None, the default process group will be used.
+    """
     if group is None:
         group = DEFAULT_GROUP
     group.barrier()
 
 
 def send(tensor: Tensor, dst: int, group: Optional[ProcessGroup] = None):
+    """Send a tensor to the device dst.
+
+    .. tip::
+
+        The caller should make sure the metadata (shape, dtype) of tensor is the same on the sender and the receiver.
+
+    Parameters
+    ----------
+    tensor: Tensor
+        The tensor to be sent.
+    
+    dst: int
+        Rank of the device that data is sent to.
+
+    group: Optional[ProcessGroup]
+        The process group to work on. If None, the default process group will be used.
+    """
     if group is None:
         group = DEFAULT_GROUP
     group.send(tensor, dst)
 
 
 def recv(tensor: Tensor, src: int, group: Optional[ProcessGroup] = None):
+    """Receive a tensor from the device src.
+
+    .. tip::
+
+        The caller should make sure the metadata (shape, dtype) of tensor is the same on the sender and the receiver.
+
+    Parameters
+    ----------
+    tensor: Tensor
+        The tensor to store the received data.
+
+    src: int
+        Rank of the device that data is sent from.
+        
+    group: Optional[ProcessGroup]
+        The process group to work on. If None, the default process group will be used.
+    """
     if group is None:
         group = DEFAULT_GROUP
     group.recv(tensor, src)
