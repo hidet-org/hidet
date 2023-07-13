@@ -14,7 +14,8 @@ import numpy as np
 from hidet import ops
 from hidet.testing import check_unary, check_unary_dynamic
 from hidet.graph.ops.utils import ReduceType
-from hidet.graph.ops.reduce import reduce_f16
+from hidet.graph.ops.reduce import mean, max, prod
+import hidet
 
 
 @pytest.mark.parametrize('dtype', [np.float64, np.float32, np.float16])
@@ -99,14 +100,14 @@ def test_var(shape, axis, keep_dim: bool):
 @pytest.mark.parametrize("shape", [[11, 22, 34]])
 @pytest.mark.parametrize("dims", [1, (0, 2)])
 @pytest.mark.parametrize("keep_dim", [False, True])
-@pytest.mark.parametrize("reduce_type", [ReduceType.Average, ReduceType.Max, ReduceType.Product])
-def test_reduce_mean_f16(shape, dims, keep_dim: bool, reduce_type):
-    op_dict = {ReduceType.Average: np.mean, ReduceType.Max: np.amax, ReduceType.Product: np.prod}
-    np_op = op_dict[reduce_type]
+@pytest.mark.parametrize("reduce_func", [mean, max, prod])
+def test_reduce_f16(shape, dims, keep_dim: bool, reduce_func):
+    op_dict = {mean: np.mean, max: np.max, prod: np.prod}
+    np_op = op_dict[reduce_func]
     check_unary(
         shape,
         numpy_op=lambda x: np_op(x, dims, keepdims=keep_dim),
-        hidet_op=lambda x: reduce_f16(x, dims, keep_dim, reduce_type=reduce_type),
+        hidet_op=lambda x: reduce_func(x, dims, keep_dim),
         device='cuda',
         dtype=np.float16,
         atol=1e-2,

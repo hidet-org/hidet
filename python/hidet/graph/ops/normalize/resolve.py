@@ -14,9 +14,7 @@ from typing import List, Optional, Callable, Any
 from hidet.ir.expr import is_constant
 from hidet.graph.operator import Operator, Tensor
 from hidet.graph.transforms import ResolveRule, register_resolve_rule
-from hidet.graph.ops.utils import is_contiguous_norm
-
-
+from hidet.graph.ops.utils import is_contiguous_dims
 from .norm import NormalizeOp
 
 
@@ -32,7 +30,7 @@ class NormalizeResolveRule(ResolveRule):
     def resolve_generic(self, op: Operator) -> Optional[List[Tensor]]:
         dims = op.attrs['dims']
         x: Tensor = op.inputs[0]
-        if not is_contiguous_norm(dims, len(x.shape)):
+        if not is_contiguous_dims(dims, len(x.shape)):
             from hidet.graph.ops import square, rsqrt
 
             epsilon = op.attrs['epsilon']
