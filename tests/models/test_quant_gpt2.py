@@ -22,8 +22,11 @@ import hidet
 import torch.nn.functional as F
 import datasets
 
+import pytest
+
 import hidet.testing
 from hidet.testing.models import gpt2
+
 
 class GPT2LMHead(gpt2.GPT2LMHead):
     def forward(self, input_ids, position_ids, past_keys, past_values):
@@ -46,7 +49,7 @@ class GPT2LMHead(gpt2.GPT2LMHead):
         # we want to keep types consistent, since in the autoregressive case,
         #   the output is fed back into the input of the compiled model
         return logits, position_ids, past_keys, past_values
- 
+
 
 def model(name='gpt2', disable_cache=False) -> GPT2LMHead:
     cache_path = hidet.utils.cache_file('testing', 'models', 'gpt2_quant', name + '.pkl')
@@ -61,6 +64,7 @@ def model(name='gpt2', disable_cache=False) -> GPT2LMHead:
         with open(cache_path, 'wb') as f:
             pickle.dump(m, f)
         return m
+
 
 def accuracy(output, target, topk=(1,)):
     """
@@ -116,7 +120,7 @@ def calculate_accuracy(model, ids, device, topk=(1,), cap_length=1024):
 
     return acc
 
-    
+
 def get_graph(device: str, name='gpt2'):
     gpt2_module = model(name)
 
@@ -133,6 +137,7 @@ def get_graph(device: str, name='gpt2'):
     graph = hidet.trace_from(outputs[0], inputs=[input_ids, position_ids])
 
     return graph
+
 
 def compute_metrics(model, data: List[List[int]], topk=(1, 5, 10)):
     """
@@ -152,7 +157,7 @@ def compute_metrics(model, data: List[List[int]], topk=(1, 5, 10)):
             orig_acc = [x + float(y) for x, y in zip(orig_acc, acc)]
             num_accounted += 1
     orig_ppl /= num_accounted
-    orig_acc  = [x / num_accounted for x in orig_acc]
+    orig_acc = [x / num_accounted for x in orig_acc]
     return orig_ppl, orig_acc
 
 
@@ -165,55 +170,33 @@ def get_wikitext_test_data() -> List[List[int]]:
     return tokens
 
 
-def show_differences(tokens: List[List[int]], model='gpt2'):
+@pytest.mark.parametrize('tokens', [get_wikitext_test_data()])
+@pytest.mark.parametrize('model', ['gpt2'])
+def test_model_differences(tokens: List[List[int]], model):
     topk = (1, 5, 10)
-    format_acc = lambda x: '[' + ', '.join([f'top-{k}: {round(y, 3)}' for k, y in zip(topk, x)]) + ']'
     # Original float32 model
     orig_model = get_graph('cuda', model)
     orig_model = hidet.graph.optimize(orig_model)
     orig_model = orig_model.build()
 
     orig_model_ppl, orig_model_acc = compute_metrics(orig_model, tokens, topk=topk)
-    orig_model_acc = format_acc(orig_model_acc)
-
-    ######################
-    # cast model to fp16
-    graph = get_graph('cuda', model)        
-    with hidet.graph.PassContext() as ctx:
-        ctx.set_precision('float16')
-        graph = hidet.graph.optimize(graph)
-    graph = graph.build()
-    fp16_model_ppl, fp16_model_acc = compute_metrics(graph, tokens, topk=topk)
-    fp16_model_acc = format_acc(fp16_model_acc)
-    #####################
 
     # quantize fp16 model to int8
     graph = get_graph('cuda', model)
     with hidet.graph.PassContext() as ctx:
-        # setting the precision to int8 will first cast the model to float16, then quantize
-        # layers according to the default settings
-        # Under the default settings, the layers that will be quantized are linear and embedding.
-
-        # More precisely, there is no concept of a 'layer' in the flowgraph, so the quantization
-        # actually is applied to certain patterns of operators. For example, the linear 'layer' pattern
-        # detects if a matmul has a constant input of len(shape) == 2. If so, the constant will be quantized.
         ctx.set_precision('int8')
-        # to customize the quantization settings, use ctx.add_quantize_rules(List[SubgraphRewriteRule]); consult the
-        # docs of that function for more info
         graph = hidet.graph.optimize(graph)
+
     graph = graph.build()
     fused_quant_model_ppl, fused_quant_model_acc = compute_metrics(graph, tokens, topk=topk)
-    fused_quant_model_acc = format_acc(fused_quant_model_acc)
-    #####################
 
-    print(f'topk: {topk}')
-    print(f'original f32 ppl:  {orig_model_ppl}')
-    print(f'original f32 acc:  {orig_model_acc}\n')
-    print(f'quantized f16 ppl: {fp16_model_ppl}')
-    print(f'quantized f16 acc: {fp16_model_acc}\n')
-    print(f'quantized f16 -> int8 ppl: {fused_quant_model_ppl}')
-    print(f'quantized f16 -> int8 acc: {fused_quant_model_acc}\n')
+    # for perplexity, lower is better
+    assert max(0, fused_quant_model_ppl - orig_model_ppl) < 2
 
-tokens = get_wikitext_test_data()
-show_differences(tokens, 'gpt2')
+    # acc is within 2% of original
+    for orig_acc, new_acc in zip(orig_model_acc, fused_quant_model_acc):
+        assert max(0, orig_acc - new_acc) < 0.02
 
+
+if __name__ == "__main__":
+    pytest.main([__file__])
