@@ -57,6 +57,19 @@ def test_reduce(rank):
 
 
 @distributed_test(world_size=WORLD_SIZE)
+def test_all_gather(rank):
+    if rank == 0:
+        x = hidet.ones([3], device='cuda', dtype=hidet.float32)
+    elif rank == 1:
+        x = hidet.ones([4], device='cuda', dtype=hidet.float32) * 2
+    recv = [hidet.empty([3], device='cuda', dtype=hidet.float32), hidet.empty([4], device='cuda', dtype=hidet.float32)]
+    hidet.distributed.all_gather(recv, x)
+    hidet.cuda.synchronize()
+    assert numpy.array_equal(recv[0].cpu().numpy(), [1, 1, 1])
+    assert numpy.array_equal(recv[1].cpu().numpy(), [2, 2, 2, 2])
+
+
+@distributed_test(world_size=WORLD_SIZE)
 def test_all_gather_into_tensor(rank):
     x = hidet.ones([4], device='cuda') * rank
     y = hidet.empty([2, 4], device='cuda')
@@ -66,7 +79,41 @@ def test_all_gather_into_tensor(rank):
 
 
 @distributed_test(world_size=WORLD_SIZE)
-def test_reduce_scatter(rank):
+def test_gather(rank):
+    if rank == 0:
+        x = hidet.ones([3], device='cuda', dtype=hidet.float32)
+        recv = [
+            hidet.empty([3], device='cuda', dtype=hidet.float32),
+            hidet.empty([4], device='cuda', dtype=hidet.float32),
+        ]
+        hidet.distributed.gather(x, recv, 0)
+        hidet.cuda.synchronize()
+        assert numpy.array_equal(recv[0].cpu().numpy(), [1, 1, 1])
+        assert numpy.array_equal(recv[1].cpu().numpy(), [2, 2, 2, 2])
+    elif rank == 1:
+        x = hidet.ones([4], device='cuda', dtype=hidet.float32) * 2
+        hidet.distributed.gather(x, None, 0)
+
+
+@distributed_test(world_size=WORLD_SIZE)
+def test_scatter(rank):
+    if rank == 0:
+        x = hidet.ones([3], device='cuda', dtype=hidet.float32)
+        y = hidet.ones([4], device='cuda', dtype=hidet.float32) * 2
+
+        recv = hidet.empty([3], device='cuda', dtype=hidet.float32)
+        hidet.distributed.scatter(recv, [x, y], 0)
+        hidet.cuda.synchronize()
+        assert numpy.array_equal(recv.cpu().numpy(), [1, 1, 1])
+    elif rank == 1:
+        recv = hidet.empty([4], device='cuda', dtype=hidet.float32)
+        hidet.distributed.scatter(recv, None, 0)
+        hidet.cuda.synchronize()
+        assert numpy.array_equal(recv.cpu().numpy(), [2, 2, 2, 2])
+
+
+@distributed_test(world_size=WORLD_SIZE)
+def test_reduce_scatter_tensor(rank):
     if rank == 0:
         x = hidet.asarray([[1, 2], [3, 4]], device='cuda', dtype=hidet.float32)
     elif rank == 1:
@@ -86,10 +133,27 @@ def test_barrier(rank):
     hidet.cuda.synchronize()
 
 
+@distributed_test(world_size=WORLD_SIZE)
+def test_send_recv(rank):
+    if rank == 0:
+        x = hidet.asarray([[1, 2], [3, 4]], device='cuda', dtype=hidet.float32)
+        hidet.distributed.send(x, 1)
+        hidet.cuda.synchronize()
+    elif rank == 1:
+        x = hidet.empty([2, 2], device='cuda', dtype=hidet.float32)
+        hidet.distributed.recv(x, 0)
+        hidet.cuda.synchronize()
+        assert numpy.array_equal(x.cpu().numpy(), [[1, 2], [3, 4]])
+
+
 if __name__ == '__main__':
     # test_all_reduce()
     # test_broadcast()
     # test_reduce()
+    # test_all_gather()
+    # test_gather()
+    test_scatter()
     # test_all_gather_into_tensor()
-    # test_reduce_scatter()
-    test_barrier()
+    # test_reduce_scatter_tensor()
+    # test_barrier()
+    test_send_recv()

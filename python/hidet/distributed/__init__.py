@@ -15,9 +15,14 @@ from .distributed import (
     all_reduce,
     broadcast,
     reduce,
+    all_gather,
     all_gather_into_tensor,
+    gather,
+    scatter,
     reduce_scatter_tensor,
     barrier,
+    send,
+    recv,
 )
 from .group import set_nccl_comms
 from .store import FileStore

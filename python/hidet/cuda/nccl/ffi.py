@@ -91,19 +91,11 @@ if nccl_available():
             'ncclReduceScatter', [c_void_p, c_void_p, c_uint64, c_int, c_int, c_void_p, c_void_p], c_int, lib=_LIB_NCCL
         )
 
-        _send = get_func(
-            'ncclSend', [c_void_p, c_uint64, c_int, c_int, c_void_p, c_void_p], c_int, lib=_LIB_NCCL
-        )
-        _recv = get_func(
-            'ncclRecv', [c_void_p, c_uint64, c_int, c_int, c_void_p, c_void_p], c_int, lib=_LIB_NCCL
-        )
+        _send = get_func('ncclSend', [c_void_p, c_uint64, c_int, c_int, c_void_p, c_void_p], c_int, lib=_LIB_NCCL)
+        _recv = get_func('ncclRecv', [c_void_p, c_uint64, c_int, c_int, c_void_p, c_void_p], c_int, lib=_LIB_NCCL)
 
-        _group_start = get_func(
-            'ncclGroupStart', [], c_int, lib=_LIB_NCCL
-        )
-        _group_end = get_func(
-            'ncclGroupEnd', [], c_int, lib=_LIB_NCCL
-        )
+        _group_start = get_func('ncclGroupStart', [], c_int, lib=_LIB_NCCL)
+        _group_end = get_func('ncclGroupEnd', [], c_int, lib=_LIB_NCCL)
 
         # Early versions of NCCL do not have split
         try:
@@ -182,30 +174,21 @@ if nccl_available():
                 sendbuff, recvbuff, recvcount, datatype, op, comm_handle, c_void_p(int(s))
             )
             assert ret == 0
-        
+
         @staticmethod
-        def send(
-            sendbuff:int, count: int, datatype: int, peer: int, comm_handle: int, s: Stream
-        ) -> None:
-            ret = NCCLRuntimeAPI._send(
-                sendbuff, count, datatype, peer, comm_handle, c_void_p(int(s)) 
-            )
-            assert ret == 0 
-        
+        def send(sendbuff: int, count: int, datatype: int, peer: int, comm_handle: int, s: Stream) -> None:
+            ret = NCCLRuntimeAPI._send(sendbuff, count, datatype, peer, comm_handle, c_void_p(int(s)))
+            assert ret == 0, ret
+
         @staticmethod
-        def recv(
-            recvbuff:int, count: int, datatype: int, peer: int, comm_handle: int, s: Stream
-        ) -> None:
-            ret = NCCLRuntimeAPI._send(
-                recvbuff, count, datatype, peer, comm_handle, c_void_p(int(s)) 
-            )
-            assert ret == 0 
-        
+        def recv(recvbuff: int, count: int, datatype: int, peer: int, comm_handle: int, s: Stream) -> None:
+            ret = NCCLRuntimeAPI._recv(recvbuff, count, datatype, peer, comm_handle, c_void_p(int(s)))
+            assert ret == 0, ret
+
         @staticmethod
         def group_start() -> None:
             ret = NCCLRuntimeAPI._group_start()
             assert ret == 0
-        
 
         @staticmethod
         def group_end() -> None:
@@ -216,6 +199,6 @@ if nccl_available():
 
     def group_start():
         nccl_runtime_api.group_start()
-    
+
     def group_end():
         nccl_runtime_api.group_end()

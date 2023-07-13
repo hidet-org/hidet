@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional
+from typing import Optional, List
 from datetime import timedelta
 
 from hidet.graph import Tensor
@@ -106,14 +106,32 @@ def reduce(tensor: Tensor, dst: int, op: str, group: Optional[ProcessGroup] = No
     group.reduce(tensor, dst, op)
 
 
+def all_gather(tensor_list: List[Tensor], tensor: Tensor, group: Optional[ProcessGroup] = None):
+    if group is None:
+        group = DEFAULT_GROUP
+    group.all_gather(tensor_list, tensor)
+
+
 def all_gather_into_tensor(output_tensor: Tensor, input_tensor: Tensor, group: Optional[ProcessGroup] = None):
     if group is None:
         group = DEFAULT_GROUP
     group.all_gather_into_tensor(output_tensor, input_tensor)
 
 
-def scatter():
-    raise NotImplementedError()
+def gather(
+    tensor: Tensor, gather_list: Optional[List[Tensor]] = None, dst: int = 0, group: Optional[ProcessGroup] = None
+):
+    if group is None:
+        group = DEFAULT_GROUP
+    group.gather(tensor, gather_list, dst)
+
+
+def scatter(
+    tensor: Tensor, scatter_list: Optional[List[Tensor]] = None, src: int = 0, group: Optional[ProcessGroup] = None
+):
+    if group is None:
+        group = DEFAULT_GROUP
+    group.scatter(tensor, scatter_list, src)
 
 
 def reduce_scatter_tensor(output: Tensor, input: Tensor, op: str, group: Optional[ProcessGroup] = None):
@@ -126,3 +144,15 @@ def barrier(group: Optional[ProcessGroup] = None):
     if group is None:
         group = DEFAULT_GROUP
     group.barrier()
+
+
+def send(tensor: Tensor, dst: int, group: Optional[ProcessGroup] = None):
+    if group is None:
+        group = DEFAULT_GROUP
+    group.send(tensor, dst)
+
+
+def recv(tensor: Tensor, src: int, group: Optional[ProcessGroup] = None):
+    if group is None:
+        group = DEFAULT_GROUP
+    group.recv(tensor, src)

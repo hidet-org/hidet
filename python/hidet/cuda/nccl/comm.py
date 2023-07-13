@@ -124,12 +124,16 @@ class NcclCommunicator:
         nccl_runtime_api.reduce_scatter(
             sendbuff, recvbuff, recvcount, int(dtype_to_nccl(datatype)), int(str_to_nccl_op(op)), self._handle, s
         )
-    
-    def send(
-        self, sendbuff: int, count: int, datatype: DataType, peer: int, s: Optional[Stream] = None 
-    ):
+
+    def send(self, sendbuff: int, count: int, datatype: DataType, peer: int, s: Optional[Stream] = None):
         if s is None:
             s = current_stream()
+        nccl_runtime_api.send(sendbuff, count, int(dtype_to_nccl(datatype)), peer, self._handle, s)
+
+    def recv(self, recvbuff: int, count: int, datatype: DataType, peer: int, s: Optional[Stream] = None):
+        if s is None:
+            s = current_stream()
+        nccl_runtime_api.recv(recvbuff, count, int(dtype_to_nccl(datatype)), peer, self._handle, s)
 
 
 def create_comm(nranks: int, unique_id: NcclUniqueId, rank: int) -> NcclCommunicator:
