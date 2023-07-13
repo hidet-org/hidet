@@ -44,8 +44,7 @@ class ReduceResolveRule(ResolveRule):
             spatial = prod(shape[i] for i in range(len(shape)) if i not in dims)
             reduce = prod(shape[i] for i in dims)
             x = x.reshape((spatial, reduce))
-            op_cls = op.__class__
-            x = op_cls(x, [-1], keepdims).outputs[0]
+            x = op.reforward([x], [-1], keepdims).outputs[0]
             x = x.reshape(out_shape)
             return [x]
 

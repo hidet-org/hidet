@@ -68,6 +68,7 @@ class ReduceTask(Task):
     def cuda_schedule_reduce_by_warp(self, use_atomic=True) -> IRModule:
         import hidet
         from hidet.ir.primitives import active_mask, shfl_down_sync, shfl_sync
+        from hidet.ir.expr import is_constant
         from hidet.ir.compute import ReduceOperation
         from hidet.ir.type import data_type, Int
         from hidet.ir.layout import row_major
@@ -82,7 +83,7 @@ class ReduceTask(Task):
         vtype: DataType = xdtype
         if xdtype.nbytes < 4:
             num_eles: int = 4 // xdtype.nbytes
-            if shape[-1] % num_eles == 0:
+            if is_constant(shape[-1]) and shape[-1] % num_eles == 0:
                 lanes = num_eles
                 vtype = VectorType(xdtype, lanes)
         read_shape = shape[:]
