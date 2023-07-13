@@ -114,7 +114,7 @@ class NCCLProcessGroup(ProcessGroup):
     def all_gather(self, tensor_list: List[Tensor], tensor: Tensor):
         assert len(tensor_list) == self._world_size
         map(self._check_cuda_tensor, tensor_list)
-        assert self._check_cuda_tensor(tensor)
+        self._check_cuda_tensor(tensor)
 
         group_start()
         for i, recv_tensor in enumerate(tensor_list):
