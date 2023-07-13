@@ -172,7 +172,7 @@ class ReduceTask(Task):
                     if perform_atomic_reduce:
                         ro.atomic_combine(~smem_staging[0], cast(rv, accumulate_dtype))
                     else:
-                        smem_staging[threadIdx.x // 32] = ro.combine(rv, smem_staging[threadIdx.x // 32])
+                        smem_staging[threadIdx.x // 32] = rv
 
                 # collect results from all warps
                 syncthreads()
@@ -180,7 +180,7 @@ class ReduceTask(Task):
                     if perform_atomic_reduce:
                         rv = smem_staging[0]
                     else:
-                        for i in range(reduce_extent // warp_size):
+                        for i in range(block_size // warp_size):
                             if i > 0:
                                 rv = ro.combine(rv, smem_staging[i])
                     rv = ro.finalize(acc=rv, size=reduce_extent)
