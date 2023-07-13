@@ -63,18 +63,26 @@ def test_all_gather_into_tensor(rank):
 @distributed_test(world_size=WORLD_SIZE)
 def test_reduce_scatter(rank):
     if rank == 0:
-        x = hidet.asarray([[1, 2], [3, 4]], device='cuda')
+        x = hidet.asarray([[1, 2], [3, 4]], device='cuda', dtype=hidet.float32)
     elif rank == 1:
-        x = hidet.asarray([[5, 6], [7, 8]], device='cuda')
-    y = hidet.distributed.reduce_scatter(x, 'sum')
+        x = hidet.asarray([[5, 6], [7, 8]], device='cuda', dtype=hidet.float32)
+    y = hidet.empty([2], device='cuda')
+    hidet.distributed.reduce_scatter_tensor(y, x, 'sum')
+    hidet.cuda.synchronize()
     if rank == 0:
         assert numpy.array_equal(y.cpu().numpy(), [6, 8])
     elif rank == 1:
         assert numpy.array_equal(y.cpu().numpy(), [10, 12])
 
+@distributed_test(world_size=WORLD_SIZE)
+def test_barrier(rank):
+    hidet.distributed.barrier()
+    hidet.cuda.synchronize()
+
 if __name__ == '__main__':
-    test_all_reduce()
-    test_broadcast()
-    test_reduce()
-    test_all_gather_into_tensor()
-    test_reduce_scatter()
+    # test_all_reduce()
+    # test_broadcast()
+    # test_reduce()
+    # test_all_gather_into_tensor()
+    # test_reduce_scatter()
+    test_barrier()

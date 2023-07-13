@@ -10,6 +10,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .distributed import init_process_group, all_reduce, broadcast, reduce, all_gather_into_tensor
+from .distributed import init_process_group, all_reduce, broadcast, reduce, all_gather_into_tensor, reduce_scatter_tensor, barrier
 from .group import set_nccl_comms
 from .store import FileStore

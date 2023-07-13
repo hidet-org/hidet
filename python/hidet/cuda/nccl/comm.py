@@ -126,7 +126,7 @@ class NcclCommunicator:
         if s is None:
             s = current_stream()
         nccl_runtime_api.reduce_scatter(
-            sendbuff, recvbuff, recvcount, int(dtype_to_nccl(datatype)), op, self._handle, s
+            sendbuff, recvbuff, recvcount, int(dtype_to_nccl(datatype)), int(str_to_nccl_op(op)), self._handle, s
         )
 
 

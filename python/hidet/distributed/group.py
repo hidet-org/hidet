@@ -14,8 +14,10 @@
 
 from typing import Optional, List
 
+import hidet
 from hidet.graph import Tensor
 from hidet.cuda.nccl import create_unique_id, NcclUniqueId, create_comm, NcclCommunicator, comms_to_array
+from hidet.graph import Tensor
 from .store import Store
 
 
@@ -95,7 +97,7 @@ class NCCLProcessGroup(ProcessGroup):
         addr = tensor.storage.addr
         self._comm.reduce(addr, addr, tensor.size, tensor.dtype, op, dst)
     
-    def all_gather_into_tensor(self, output_tensor, input_tensor):
+    def all_gather_into_tensor(self, output_tensor: Tensor, input_tensor: Tensor):
         assert not output_tensor.is_symbolic()
         assert not input_tensor.is_symbolic()
         assert output_tensor.device.is_cuda()
@@ -105,7 +107,23 @@ class NCCLProcessGroup(ProcessGroup):
 
         output_addr = output_tensor.storage.addr
         input_addr = input_tensor.storage.addr
-        self._comm.all_gather(output_addr, input_addr, input_tensor.size, input_tensor.dtype)
+        self._comm.all_gather(input_addr, output_addr, input_tensor.size, input_tensor.dtype)
+    
+    def reduce_scatter_tensor(self, output: Tensor, input: Tensor, op: str):
+        assert not output.is_symbolic()
+        assert not input.is_symbolic()
+        assert output.device.is_cuda()
+        assert input.device.is_cuda()
+
+        assert output.size * self._world_size == input.size
+        output_addr = output.storage.addr
+        input_addr = input.storage.addr
+        self._comm.reduce_scatter(input_addr, output_addr, output.size, output.dtype, op)
+    
+    def barrier(self):
+        dummy_tensor = hidet.empty([], device='cuda')
+        self.all_reduce(dummy_tensor, 'sum')
+        hidet.cuda.synchronize()
 
 
 def create_nccl_group(store: Store, world_size: int, rank: int):
