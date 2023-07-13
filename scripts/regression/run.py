@@ -3,6 +3,7 @@ import time
 import argparse
 import subprocess
 import schedule
+from email_sender import EmailSender
 
 parser = argparse.ArgumentParser(prog='Performance Regression Scheduler',
                                  description='This script will periodically launch'
@@ -11,6 +12,11 @@ parser.add_argument(
     '--now',
     action='store_true',
     help='Launch a regression immediately and return.'
+)
+parser.add_argument(
+    '--email',
+    action='store_true',
+    help='Send results to email. Requires Gmail login via app password.'
 )
 
 
@@ -34,40 +40,24 @@ def reinstall_hidet():
 
 
 def run_regression(report_file):
-    from model_performance import model_performance_regression
-    from op_performance import op_performance_regression
-    model_performance_regression(report_file)
-    op_performance_regression(report_file)
-    return
-    space = 2
-    current_commit = subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode('utf-8').strip()
-    command = 'python scripts/bench/benchmark.py --git-commit {commit} --space {space} --report {report_file}'.format(
-        commit=current_commit, report_file=report_file, space=space
-    )
-
-    if os.path.exists('scripts/bench/prev_commit.txt'):
-        with open('scripts/bench/prev_commit.txt', 'r') as f:
-            prev_commit = f.readline().strip()
-        command += ' --git-prev-commit {}'.format(prev_commit)
-
+    command = f'python scripts/regression/model_performance.py --report {report_file}'
+    subprocess.run(command.split(), check=True)
+    command = f'python scripts/regression/op_performance.py --report {report_file}'
     subprocess.run(command.split(), check=True)
 
-    with open('scripts/bench/prev_commit.txt', 'w') as f:
-        f.write(current_commit)
-
-
-def send_report(result_file):
-    command = 'ls'
-    subprocess.run(command.split(), check=True)
-
-
-def bench_job():
+def bench_job(sender):
     report_file = './scripts/regression/report.txt'
+    if os.path.exists(report_file):
+        os.remove(report_file)
     try:
         pull_repo()
         reinstall_hidet()
         run_regression(report_file)
-        send_report(report_file)
+        with open(report_file, 'r') as f:
+            report = f.read()
+            print(report)
+            if sender is not None:
+                sender.send_email(report)
     except Exception as e:
         print('Error: {}'.format(e))
 
@@ -78,13 +68,18 @@ def main():
         raise RuntimeError('Please run this script from the root directory of the repository.')
 
     install_dependencies()
+    print("Finished installing dependencies.")
+
+    sender = EmailSender() if args.email else None
+
+    print("Waiting for next scheduled run.")
 
     now = args.now
     if now:
-        bench_job()
+        bench_job(sender)
         return
 
-    schedule.every().friday.at("22:00").do(bench_job)
+    schedule.every().friday.at("22:00").do(bench_job, sender)
 
     while True:
         schedule.run_pending()
