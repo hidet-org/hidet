@@ -171,7 +171,7 @@ class ReduceTask(Task):
                     if perform_atomic_reduce:
                         ro.atomic_combine(~smem_staging[0], cast(rv, accumulate_dtype))
                     else:
-                        smem_staging[threadIdx.x // 32] = rv
+                        smem_staging[threadIdx.x // 32] = ro.combine(rv, smem_staging[threadIdx.x // 32])
 
                 # collect results from all warps
                 syncthreads()
