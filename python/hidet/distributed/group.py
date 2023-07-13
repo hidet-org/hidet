@@ -60,6 +60,12 @@ class ProcessGroup:
     def barrier(self):
         raise NotImplementedError()
 
+    def send(self, tensor: Tensor, dst: int):
+        raise NotImplementedError()
+    
+    def recv(self, tensor: Tensor, src: int):
+        raise NotImplementedError()
+
 
 NCCL_COMMS: List[NcclCommunicator] = []
 _NCCL_ARRAY: 'Array' = None
@@ -123,6 +129,20 @@ class NCCLProcessGroup(ProcessGroup):
         dummy_tensor = hidet.empty([], device='cuda')
         self.all_reduce(dummy_tensor, 'sum')
         hidet.cuda.synchronize()
+    
+    def send(self, tensor: Tensor, dst: int):
+        assert not tensor.is_symbolic()
+        assert tensor.is_cuda()
+
+        addr = tensor.storage.addr
+        self._comm.send(addr, tensor.size, tensor.dtype, dst)
+    
+    def recv(self, tensor: Tensor, src: int):
+        assert not tensor.is_symbolic()
+        assert tensor.is_cuda()
+
+        addr = tensor.storage.addr
+        self._comm.recv(addr, tensor.size, tensor.dtype, src)
 
 
 def create_nccl_group(store: Store, world_size: int, rank: int):
