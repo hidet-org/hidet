@@ -28,6 +28,7 @@ TMP_PATH = './tmp'
 # This testing script assumes we have two GPUs.
 WORLD_SIZE = 2
 
+
 @distributed_test(world_size=WORLD_SIZE)
 def test_all_reduce(rank):
     x = hidet.ones([4], device='cuda') * rank
@@ -35,12 +36,14 @@ def test_all_reduce(rank):
     hidet.cuda.synchronize()
     assert all(x.cpu().numpy() == 0.5)
 
+
 @distributed_test(world_size=WORLD_SIZE)
 def test_broadcast(rank):
     x = hidet.ones([4], device='cuda') * rank
     hidet.distributed.broadcast(x, 1)
     hidet.cuda.synchronize()
     assert numpy.array_equal(x.cpu().numpy(), [1, 1, 1, 1])
+
 
 @distributed_test(world_size=WORLD_SIZE)
 def test_reduce(rank):
@@ -52,6 +55,7 @@ def test_reduce(rank):
     elif rank == 1:
         assert all(x.cpu().numpy() == 0.5)
 
+
 @distributed_test(world_size=WORLD_SIZE)
 def test_all_gather_into_tensor(rank):
     x = hidet.ones([4], device='cuda') * rank
@@ -59,6 +63,7 @@ def test_all_gather_into_tensor(rank):
     hidet.distributed.all_gather_into_tensor(y, x)
     hidet.cuda.synchronize()
     assert numpy.array_equal(y.cpu().numpy(), [[1, 1, 1, 1], [0, 0, 0, 0]])
+
 
 @distributed_test(world_size=WORLD_SIZE)
 def test_reduce_scatter(rank):
@@ -74,10 +79,12 @@ def test_reduce_scatter(rank):
     elif rank == 1:
         assert numpy.array_equal(y.cpu().numpy(), [10, 12])
 
+
 @distributed_test(world_size=WORLD_SIZE)
 def test_barrier(rank):
     hidet.distributed.barrier()
     hidet.cuda.synchronize()
+
 
 if __name__ == '__main__':
     # test_all_reduce()

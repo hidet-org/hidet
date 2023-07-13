@@ -23,12 +23,14 @@ import hidet.distributed
 
 from utils import distributed_test
 
+
 @distributed_test(world_size=2)
 def test_all_reduce(rank):
     x = hidet.ones([4], device='cuda') * rank
     y = hidet.ops.all_reduce(x, 'avg')
     assert x.shape == y.shape
     assert all(y.cpu().numpy() == 0.5)
+
 
 @distributed_test(world_size=2)
 def test_all_gather(rank):

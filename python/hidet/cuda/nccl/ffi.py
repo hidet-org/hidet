@@ -152,7 +152,7 @@ if nccl_available():
         ) -> None:
             ret = NCCLRuntimeAPI._reduce(sendbuff, recvbuff, count, datatype, op, root, comm_handle, c_void_p(int(s)))
             assert ret == 0
-        
+
         @staticmethod
         def all_gather(
             sendbuff: int, recvbuff: int, sendcount: int, datatype: int, comm_handle: int, s: Stream
@@ -164,7 +164,9 @@ if nccl_available():
         def reduce_scatter(
             sendbuff: int, recvbuff: int, recvcount: int, datatype: int, op: int, comm_handle: int, s: Stream
         ) -> None:
-            ret = NCCLRuntimeAPI._reduce_scatter(sendbuff, recvbuff, recvcount, datatype, op, comm_handle, c_void_p(int(s)))
+            ret = NCCLRuntimeAPI._reduce_scatter(
+                sendbuff, recvbuff, recvcount, datatype, op, comm_handle, c_void_p(int(s))
+            )
             assert ret == 0
 
     nccl_runtime_api = NCCLRuntimeAPI()

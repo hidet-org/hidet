@@ -93,6 +93,7 @@ def broadcast(tensor: Tensor, src: int, group=None):
         group = DEFAULT_GROUP
     group.broadcast(tensor, src)
 
+
 def all_reduce(tensor: Tensor, op: str, group: Optional[ProcessGroup] = None):
     if group is None:
         group = DEFAULT_GROUP
@@ -110,13 +111,16 @@ def all_gather_into_tensor(output_tensor: Tensor, input_tensor: Tensor, group: O
         group = DEFAULT_GROUP
     group.all_gather_into_tensor(output_tensor, input_tensor)
 
+
 def scatter():
     raise NotImplementedError()
+
 
 def reduce_scatter_tensor(output: Tensor, input: Tensor, op: str, group: Optional[ProcessGroup] = None):
     if group is None:
         group = DEFAULT_GROUP
     group.reduce_scatter_tensor(output, input, op)
+
 
 def barrier(group: Optional[ProcessGroup] = None):
     if group is None:
