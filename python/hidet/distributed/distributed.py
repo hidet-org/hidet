@@ -134,6 +134,12 @@ def scatter(
     group.scatter(tensor, scatter_list, src)
 
 
+def reduce_scatter(output: Tensor, input_list: List[Tensor], op: str, group: Optional[ProcessGroup] = None):
+    if group is None:
+        group = DEFAULT_GROUP
+    group.reduce_scatter(output, input_list, op)
+
+
 def reduce_scatter_tensor(output: Tensor, input: Tensor, op: str, group: Optional[ProcessGroup] = None):
     if group is None:
         group = DEFAULT_GROUP

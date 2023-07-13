@@ -166,6 +166,17 @@ class NCCLProcessGroup(ProcessGroup):
             assert self._check_cuda_tensor(tensor)
             self.recv(tensor, src)
 
+    def reduce_scatter(self, output: Tensor, input_list: List[Tensor], op: str):
+        assert self._check_cuda_tensor(output)
+        for t in input_list:
+            assert self._check_cuda_tensor(t)
+
+        assert len(input_list) == self._world_size
+        for i, tensor in enumerate(input_list):
+            out_addr = output.storage.addr if i == self._rank else 0
+            in_addr = tensor.storage.addr
+            self._comm.reduce(in_addr, out_addr, tensor.size, tensor.dtype, op, i)
+
     def reduce_scatter_tensor(self, output: Tensor, input: Tensor, op: str):
         assert not output.is_symbolic()
         assert not input.is_symbolic()

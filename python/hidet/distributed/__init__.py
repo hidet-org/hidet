@@ -19,6 +19,7 @@ from .distributed import (
     all_gather_into_tensor,
     gather,
     scatter,
+    reduce_scatter,
     reduce_scatter_tensor,
     barrier,
     send,

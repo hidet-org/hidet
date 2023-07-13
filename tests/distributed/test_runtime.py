@@ -113,6 +113,23 @@ def test_scatter(rank):
 
 
 @distributed_test(world_size=WORLD_SIZE)
+def test_reduce_scatter(rank):
+    if rank == 0:
+        x = hidet.asarray([1, 2, 3], device='cuda', dtype=hidet.float32)
+        y = hidet.asarray([3, 4], device='cuda', dtype=hidet.float32)
+        o = hidet.empty([3], device='cuda')
+        hidet.distributed.reduce_scatter(o, [x, y], 'sum')
+        assert numpy.array_equal(o.cpu().numpy(), [6, 8, 10])
+    elif rank == 1:
+        x = hidet.asarray([5, 6, 7], device='cuda', dtype=hidet.float32)
+        y = hidet.asarray([7, 8], device='cuda', dtype=hidet.float32)
+        o = hidet.empty([2], device='cuda')
+        hidet.distributed.reduce_scatter(o, [x, y], 'sum')
+        hidet.cuda.synchronize()
+        assert numpy.array_equal(o.cpu().numpy(), [10, 12])
+
+
+@distributed_test(world_size=WORLD_SIZE)
 def test_reduce_scatter_tensor(rank):
     if rank == 0:
         x = hidet.asarray([[1, 2], [3, 4]], device='cuda', dtype=hidet.float32)
@@ -152,8 +169,9 @@ if __name__ == '__main__':
     # test_reduce()
     # test_all_gather()
     # test_gather()
-    test_scatter()
+    # test_scatter()
     # test_all_gather_into_tensor()
+    test_reduce_scatter()
     # test_reduce_scatter_tensor()
     # test_barrier()
-    test_send_recv()
+    # test_send_recv()
