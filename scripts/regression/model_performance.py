@@ -16,6 +16,7 @@ def llama_regression():
 
 def model_performance_regression(report_file):
     with open(report_file, 'w') as f:
+        f.write("---------------- Model Performance Regression -----------------\n")
         f.write("ToDo: Model Performance Regression")
 
 if __name__ == '__main__':

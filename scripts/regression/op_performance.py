@@ -1,40 +1,22 @@
+import os
+import json
 import torch
 import hidet
 import argparse
-from result_entry import ResultEntry, ResultGroup
+from result_entry import ResultEntry, ResultGroup, load_regression_data
 
-# [M, N, K]
-matmul_shapes = [
-    (512, 512, 512),
-    (1024, 1024, 1024),
-    (2048, 2048, 2048),
-    (4096, 4096, 4096),
-    (8192, 8192, 8192),
-    (16, 1024, 1024),
-    (16, 4096, 4096),
-    (16, 8192, 8192),
-    (64, 1024, 1024),
-    (64, 4096, 4096),
-    (64, 8192, 8192),
-    (1024, 64, 1024),
-    (4096, 64, 4096),
-    (8192, 64, 8192),
-    (8192, 8192, 8176),
-]
-# [seqlen_q, seqlen_kv, hdim]
-fmha_shapes = [
-    (4096, 4096, 64),
-    (4096, 4096, 128),
-    (2048, 2048, 64),
-    (2048, 2048, 128),
-    (1024, 1024, 64),
-    (1024, 1024, 128),
-]
-def batch_matmul_regression() -> ResultGroup:
-    pass
+device_name = str(hidet.cuda.properties().name, 'UTF-8')
 
-def matmul_f16_regression() -> ResultGroup:
-    pass
+
+def matmul_regression() -> ResultGroup:
+    regression_data = load_regression_data()
+    result_group = ResultGroup(name='Matrix Multiply Regression', device_name=device_name)
+    matmul_data = regression_data[device_name]['matmul_shapes']
+    for shape, perf in matmul_data.items():
+        for dtype, latency in perf.items():
+            result_group.add_entry(ResultEntry(shape, dtype, latency))
+    return result_group
+
 
 def fmha_regression() -> ResultGroup:
     pass
@@ -48,13 +30,15 @@ def reduce_regression() -> ResultGroup:
 
 def op_performance_regression(report_file):
     result_groups = []
-    result_groups.append(batch_matmul_regression())
-    result_groups.append(matmul_f16_regression())
+    result_groups.append(matmul_regression())
     result_groups.append(fmha_regression())
     result_groups.append(conv2d_regression())
     result_groups.append(reduce_regression())
     with open(report_file, 'w') as f:
-        f.write("ToDo: Operator Performance Regression")
+        f.write("---------------- Operator Performance Regression -----------------\n")
+        for result_group in result_groups:
+            if result_group is not None:
+                f.write(str(result_group))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='Operator Performance Regression')
