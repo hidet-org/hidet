@@ -75,7 +75,7 @@ def test_all_gather_into_tensor(rank):
     y = hidet.empty([2, 4], device='cuda')
     hidet.distributed.all_gather_into_tensor(y, x)
     hidet.cuda.synchronize()
-    assert numpy.array_equal(y.cpu().numpy(), [[1, 1, 1, 1], [0, 0, 0, 0]])
+    assert numpy.array_equal(y.cpu().numpy(), [[0, 0, 0, 0], [1, 1, 1, 1]])
 
 
 @distributed_test(world_size=WORLD_SIZE)
@@ -164,14 +164,14 @@ def test_send_recv(rank):
 
 
 if __name__ == '__main__':
-    # test_all_reduce()
-    # test_broadcast()
-    # test_reduce()
-    # test_all_gather()
-    # test_gather()
-    # test_scatter()
-    # test_all_gather_into_tensor()
+    test_all_reduce()
+    test_broadcast()
+    test_reduce()
+    test_all_gather()
+    test_gather()
+    test_scatter()
+    test_all_gather_into_tensor()
     test_reduce_scatter()
-    # test_reduce_scatter_tensor()
-    # test_barrier()
-    # test_send_recv()
+    test_reduce_scatter_tensor()
+    test_barrier()
+    test_send_recv()
