@@ -46,6 +46,8 @@ class NormalizeResolveRule(ResolveRule):
             x = x.reshape((spatial, reduce))
             x = normalize(x, [-1], op.attrs['epsilon'], op.attrs['accumulate_dtype'])
             x = x.reshape(shape)
+            return [x]
+
         return None
 
     def resolve(self, op: Operator) -> Optional[List[Tensor]]:
