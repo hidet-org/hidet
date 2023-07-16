@@ -11,11 +11,12 @@
 # limitations under the License.
 from typing import List, Optional, Callable, Any
 
+from hidet.utils import prod
 from hidet.ir.expr import is_constant
 from hidet.graph.operator import Operator, Tensor
 from hidet.graph.transforms import ResolveRule, register_resolve_rule
 from hidet.graph.ops.utils import is_contiguous_dims
-from .norm import NormalizeOp
+from .norm import NormalizeOp, normalize
 
 
 @register_resolve_rule(NormalizeOp)
@@ -30,6 +31,7 @@ class NormalizeResolveRule(ResolveRule):
     def resolve_generic(self, op: Operator) -> Optional[List[Tensor]]:
         dims = op.attrs['dims']
         x: Tensor = op.inputs[0]
+
         if not is_contiguous_dims(dims, len(x.shape)):
             from hidet.graph.ops import square, rsqrt
 
@@ -37,7 +39,14 @@ class NormalizeResolveRule(ResolveRule):
             x = x - x.mean(dims, keep_dim=True)
             variance = square(x).mean(dims, keep_dim=True)
             return [x * rsqrt(variance + epsilon)]
-        return op.outputs
+        elif len(dims) > 1:
+            shape = x.shape
+            spatial = prod(shape[i] for i in range(len(shape)) if i not in dims)
+            reduce = prod(shape[i] for i in dims)
+            x = x.reshape((spatial, reduce))
+            x = normalize(x, [-1], op.attrs['epsilon'], op.attrs['accumulate_dtype'])
+            x = x.reshape(shape)
+        return None
 
     def resolve(self, op: Operator) -> Optional[List[Tensor]]:
         assert isinstance(op, NormalizeOp)

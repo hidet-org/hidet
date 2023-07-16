@@ -10,18 +10,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List
+from hidet.ir import primitives as prim
+from hidet.ir.library import tune
 from hidet.ir.module import IRModule
 from hidet.ir.primitives import active_mask, shfl_down_sync
 from hidet.ir.compute import reduce
-from hidet.ir.expr import Expr
-from hidet.lang import spatial, repeat, view, cast, register_tensor, shared_tensor
-from hidet.lang import data_type, TensorType, i32, attrs
-from hidet.lang.cuda import blockIdx, threadIdx, syncthreads
+from hidet.ir.expr import Expr, convert, is_constant, if_then_else
+from hidet.ir.type import DataType
+from hidet.ir.layout import row_major
+from hidet.ir.dtypes.vector import VectorType
+from hidet.lang import spatial, repeat, grid, cast, register_tensor
+from hidet.lang import data_type, TensorType, tensor_pointer, address, i32, attrs
+from hidet.lang.cuda import blockIdx, threadIdx
+from hidet.lang.cuda import dynamic_shared_memory, syncthreads
 from hidet.graph.ops.utils import Task, Operator, Tensor, TensorNode
 from hidet.graph.ops.utils import compute, input_like, normalize_dim
 from hidet.utils import prod
-from hidet.ir import primitives as prim
-from hidet.ir.expr import convert
 
 
 class NormalizeTask(Task):
@@ -104,39 +108,69 @@ class NormalizeTask(Task):
         return False
 
     def allow_epilogue(self) -> bool:
-        return False
+        return True
 
-    def implement_cuda(self, working_dir: str) -> IRModule:
+    def implement_cuda(self, working_dir: str):
+        return tune.extract_ir_modules(self.norm_by_warp)
+
+    @tune.space(2, two_shuffle=[True, False])
+    @tune.space(1, two_shuffle=[True, False])
+    def norm_by_warp(self, two_shuffle=False) -> IRModule:
         import hidet
-        import math
 
         x, y = self.inputs[0], self.outputs[0]
         dtype = x.type.dtype
 
+        lanes = 1
         input_shape: List[Expr] = list(x.shape)
+        vtype: DataType = dtype
+        if dtype.nbytes < 4:
+            num_eles: int = 4 // dtype.nbytes
+            if is_constant(input_shape[-1]) and input_shape[-1] % num_eles == 0:
+                lanes = num_eles
+                vtype = VectorType(dtype, lanes)
+
+        read_shape = input_shape[:]
+        read_shape[-1] /= lanes
+
         dims = self.dims
 
         spatial_shape = [v for i, v in enumerate(input_shape) if i not in dims]
-        reduce_shape = [int(input_shape[i]) for i in dims]
-        dim_zeros = [0] * len(dims)
-
-        reduce_extent = prod(reduce_shape)
+        grid_size = prod(spatial_shape)
 
         warp_size = 32
-        block_size = min(max(warp_size, reduce_extent), 1024)
-        block_size = math.ceil(block_size / warp_size) * warp_size
-        repeat_reduction = math.ceil(reduce_extent / block_size)
+        block_size = (read_shape[-1] + warp_size - 1) // warp_size * warp_size
+        block_size = if_then_else(block_size > 512, 512, block_size)
 
-        task_layout = spatial(*spatial_shape)
-        grid_size = task_layout.num_workers
+        def get_mapping(tensor_shape):
+            spatial_args = []
+            repeat_args = []
+            repeats = 1
+            for idx, size in enumerate(tensor_shape):
+                if idx not in dims:
+                    repeat_args.append(1)
+                    spatial_args.append(size)
+                elif idx + 1 == len(input_shape):
+                    repeats_per_block = (input_shape[-1] + block_size - 1) // block_size
+                    repeat_args.append(repeats_per_block)
+                    spatial_args.append(block_size)
+                    repeats *= repeats_per_block
+                else:
+                    repeat_args.append(size)
+                    spatial_args.append(1)
+                    repeats *= size
+            return repeat(*repeat_args) * spatial(*spatial_args), repeats
+
+        read_mapping, read_block_repeat = get_mapping(read_shape)
+        read_layout = row_major(*read_shape)
+
+        # we choose to not vectorize the write so that epilogue can be fused
+        write_mapping = read_mapping * repeat(*(1 for _ in range(len(read_shape) - 1)), lanes)
+        write_layout = row_major(*input_shape)
 
         accumulate_dtype = data_type(self.attrs['accumulate_dtype'])
-
-        shm_count = math.ceil(block_size / warp_size)
-        used_smem_bytes_per_block = shm_count
-
-        stages = math.ceil(math.log(block_size) / math.log(warp_size))
-        assert stages <= 2
+        smem_per_var = (block_size // warp_size) * accumulate_dtype.nbytes
+        used_smem_bytes_per_block = 3 * smem_per_var
 
         with hidet.script_module() as module:
 
@@ -171,52 +205,95 @@ class NormalizeTask(Task):
                 attrs.cuda.grid_dim = grid_size
                 attrs.cuda.block_dim = block_size
                 attrs.cuda.min_blocks = 1
+                attrs.cuda.dynamic_smem_bytes = used_smem_bytes_per_block
 
-                # this is used for multi-level reduction
-                smem_mean = shared_tensor(accumulate_dtype, shape=[used_smem_bytes_per_block])
-                smem_m2 = shared_tensor(accumulate_dtype, shape=[used_smem_bytes_per_block])
-                smem_count = shared_tensor(i32, shape=[used_smem_bytes_per_block])
+                # this is used for staging warp shuffle results
+                smem_mean = dynamic_shared_memory(byte_offset=0, dtype=accumulate_dtype)
+                smem_m2 = dynamic_shared_memory(byte_offset=smem_per_var, dtype=accumulate_dtype)
+                smem_count = dynamic_shared_memory(byte_offset=smem_per_var * 2, dtype=i32)
 
-                # cache repeated loads
-                regs_repeat = register_tensor(dtype, shape=[repeat_reduction])
+                x_vectorized = tensor_pointer(vtype, shape=read_shape, init=cast(x, ~vtype))
+                # this is needed because normalization needs the original inputs
+                read_cache = register_tensor(dtype, shape=[read_block_repeat * lanes])
 
-                reg_dtype = register_tensor(dtype, [1])
-                mean_final = register_tensor(accumulate_dtype, [1])
-                m2_final = register_tensor(accumulate_dtype, [1])
-                count_final = register_tensor('int32', [1])
+                mean = register_tensor(accumulate_dtype, [1])
+                m2 = register_tensor(accumulate_dtype, [1])
+                count = register_tensor('int32', [1])
 
-                mean_final[0] = accumulate_dtype.zero
-                m2_final[0] = accumulate_dtype.zero
-                count_final[0] = i32.zero
+                other_mean = register_tensor(accumulate_dtype, [1])
+                other_m2 = register_tensor(accumulate_dtype, [1])
+                other_count = register_tensor('int32', [1])
 
-                for spatial_idxs in task_layout.on(blockIdx.x, bind_tuple=True):
-                    # note, this is evaluated at compile time
-                    ele_idx = spatial_idxs + dim_zeros
-                    norm_tensor = ~x[ele_idx]
-                    flat_tensor = view(norm_tensor, dtype[reduce_extent])
-
-                    reduce_mapping = repeat(repeat_reduction) * spatial(block_size)
-                    for reduction_idx in reduce_mapping.on(threadIdx.x):
-                        mean = register_tensor(accumulate_dtype, [1])
-                        m2 = register_tensor(accumulate_dtype, [1])
-                        count = register_tensor('int32', [1])
-                        other_mean = register_tensor(accumulate_dtype, [1])
-                        other_m2 = register_tensor(accumulate_dtype, [1])
-                        other_count = register_tensor('int32', [1])
-
-                        if reduction_idx < reduce_extent:
-                            reg_dtype[0] = flat_tensor[reduction_idx]
-                            count[0] = 1
+                mean[0] = accumulate_dtype.zero
+                m2[0] = accumulate_dtype.zero
+                count[0] = 0
+                k_read = 0
+                for indices in read_mapping.on(threadIdx.x + blockIdx.x * block_size):
+                    # read vectorized
+                    if read_layout.within_bound(indices):
+                        vec_read = x_vectorized[indices]
+                        # local reduction of vectorized
+                        if lanes > 1:
+                            for lane_id in grid(lanes, "u+"):
+                                lane_val = cast(address(vec_read), ~vtype.lane_type)[lane_id]
+                                other_mean[0] = lane_val
+                                other_m2[0] = accumulate_dtype.zero
+                                other_count[0] = 1
+                                welford_combine(mean, m2, count, other_mean, other_m2, other_count)
+                                read_cache[k_read] = lane_val
+                                k_read += 1
                         else:
-                            reg_dtype[0] = dtype.zero
+                            other_mean[0] = vec_read
+                            other_m2[0] = accumulate_dtype.zero
+                            other_count[0] = 1
+                            welford_combine(mean, m2, count, other_mean, other_m2, other_count)
+                            read_cache[k_read] = vec_read
+                            k_read += 1
+
+                # Warp reduce by shuffle down
+                mask = active_mask()
+                other_mean[0] = shfl_down_sync(mask, mean[0], 16, 32)
+                other_m2[0] = shfl_down_sync(mask, m2[0], 16, 32)
+                other_count[0] = shfl_down_sync(mask, count[0], 16, 32)
+                welford_combine(mean, m2, count, other_mean, other_m2, other_count)
+
+                other_mean[0] = shfl_down_sync(mask, mean[0], 8, 32)
+                other_m2[0] = shfl_down_sync(mask, m2[0], 8, 32)
+                other_count[0] = shfl_down_sync(mask, count[0], 8, 32)
+                welford_combine(mean, m2, count, other_mean, other_m2, other_count)
+
+                other_mean[0] = shfl_down_sync(mask, mean[0], 4, 32)
+                other_m2[0] = shfl_down_sync(mask, m2[0], 4, 32)
+                other_count[0] = shfl_down_sync(mask, count[0], 4, 32)
+                welford_combine(mean, m2, count, other_mean, other_m2, other_count)
+
+                other_mean[0] = shfl_down_sync(mask, mean[0], 2, 32)
+                other_m2[0] = shfl_down_sync(mask, m2[0], 2, 32)
+                other_count[0] = shfl_down_sync(mask, count[0], 2, 32)
+                welford_combine(mean, m2, count, other_mean, other_m2, other_count)
+
+                other_mean[0] = shfl_down_sync(mask, mean[0], 1, 32)
+                other_m2[0] = shfl_down_sync(mask, m2[0], 1, 32)
+                other_count[0] = shfl_down_sync(mask, count[0], 1, 32)
+                welford_combine(mean, m2, count, other_mean, other_m2, other_count)
+
+                if threadIdx.x % warp_size == 0:
+                    smem_mean[threadIdx.x // warp_size] = mean[0]
+                    smem_m2[threadIdx.x // warp_size] = m2[0]
+                    smem_count[threadIdx.x // warp_size] = count[0]
+                syncthreads()
+
+                if two_shuffle:
+                    if threadIdx.x < warp_size:
+                        if threadIdx.x < block_size // warp_size:
+                            mean[0] = smem_mean[threadIdx.x]
+                            m2[0] = smem_m2[threadIdx.x]
+                            count[0] = smem_count[threadIdx.x]
+                        else:
+                            mean[0] = accumulate_dtype.zero
+                            m2[0] = accumulate_dtype.zero
                             count[0] = 0
-                        regs_repeat[reduction_idx // block_size] = reg_dtype[0]
 
-                        mean[0] = reg_dtype[0]
-                        m2[0] = accumulate_dtype.zero
-
-                        # Warp reduce by shuffle down
-                        mask = active_mask()
                         other_mean[0] = shfl_down_sync(mask, mean[0], 16, 32)
                         other_m2[0] = shfl_down_sync(mask, m2[0], 16, 32)
                         other_count[0] = shfl_down_sync(mask, count[0], 16, 32)
@@ -241,80 +318,36 @@ class NormalizeTask(Task):
                         other_m2[0] = shfl_down_sync(mask, m2[0], 1, 32)
                         other_count[0] = shfl_down_sync(mask, count[0], 1, 32)
                         welford_combine(mean, m2, count, other_mean, other_m2, other_count)
-
-                        if stages > 1 and threadIdx.x % warp_size == 0:
-                            smem_mean[threadIdx.x // warp_size] = mean[0]
-                            smem_m2[threadIdx.x // warp_size] = m2[0]
-                            smem_count[threadIdx.x // warp_size] = count[0]
-
-                        syncthreads()
-
-                        # reduce shared memory with just a single warp
-                        if stages > 1 and threadIdx.x < warp_size:
-                            mean[0] = smem_mean[threadIdx.x] if threadIdx.x < shm_count else accumulate_dtype.zero
-                            m2[0] = smem_m2[threadIdx.x] if threadIdx.x < shm_count else accumulate_dtype.zero
-                            count[0] = smem_count[threadIdx.x] if threadIdx.x < shm_count else 0
-
-                        syncthreads()
-
-                        if stages > 1 and threadIdx.x < warp_size:
-                            other_mean[0] = shfl_down_sync(mask, mean[0], 16, 32)
-                            other_m2[0] = shfl_down_sync(mask, m2[0], 16, 32)
-                            other_count[0] = shfl_down_sync(mask, count[0], 16, 32)
-                            welford_combine(mean, m2, count, other_mean, other_m2, other_count)
-
-                            other_mean[0] = shfl_down_sync(mask, mean[0], 8, 32)
-                            other_m2[0] = shfl_down_sync(mask, m2[0], 8, 32)
-                            other_count[0] = shfl_down_sync(mask, count[0], 8, 32)
-                            welford_combine(mean, m2, count, other_mean, other_m2, other_count)
-
-                            other_mean[0] = shfl_down_sync(mask, mean[0], 4, 32)
-                            other_m2[0] = shfl_down_sync(mask, m2[0], 4, 32)
-                            other_count[0] = shfl_down_sync(mask, count[0], 4, 32)
-                            welford_combine(mean, m2, count, other_mean, other_m2, other_count)
-
-                            other_mean[0] = shfl_down_sync(mask, mean[0], 2, 32)
-                            other_m2[0] = shfl_down_sync(mask, m2[0], 2, 32)
-                            other_count[0] = shfl_down_sync(mask, count[0], 2, 32)
-                            welford_combine(mean, m2, count, other_mean, other_m2, other_count)
-
-                            other_mean[0] = shfl_down_sync(mask, mean[0], 1, 32)
-                            other_m2[0] = shfl_down_sync(mask, m2[0], 1, 32)
-                            other_count[0] = shfl_down_sync(mask, count[0], 1, 32)
-                            welford_combine(mean, m2, count, other_mean, other_m2, other_count)
-
-                        # at theis point mean, m2, count on T0 has the correct data for this iteration
-                        # we store this to shm and let everyone else read
-                        if threadIdx.x == 0:
-                            smem_mean[0] = mean[0]
-                            smem_m2[0] = m2[0]
-                            smem_count[0] = count[0]
-                        syncthreads()
-
-                        mean[0] = smem_mean[0]
-                        m2[0] = smem_m2[0]
-                        count[0] = smem_count[0]
-                        syncthreads()
-
-                        # we have mean and var here for this iteration
-                        welford_combine(mean_final, m2_final, count_final, mean, m2, count)
-
+                    # at theis point mean, m2, count on T0 has the correct data for this iteration
+                    # we store this to shm and let everyone else read
+                    if threadIdx.x == 0:
+                        smem_mean[0] = mean[0]
+                        smem_m2[0] = m2[0]
+                        smem_count[0] = count[0]
+                else:
+                    if threadIdx.x == 0:
+                        for idx in range(block_size // warp_size):
+                            if idx > 0:
+                                other_mean[0] = smem_mean[idx]
+                                other_m2[0] = smem_m2[idx]
+                                other_count[0] = smem_count[idx]
+                                welford_combine(smem_mean, smem_m2, smem_count, other_mean, other_m2, other_count)
+                syncthreads()
+                mean_final = smem_mean[0]
+                m2_final = smem_m2[0]
+                count_final = smem_count[0]
                 # end of mean and var calculation, perform write back
-                m2_final[0] = m2_final[0] / cast(count_final[0], dtype)
+                m2_final = m2_final / cast(count_final, accumulate_dtype)
 
-                for spatial_idxs in task_layout.on(blockIdx.x, bind_tuple=True):
-                    ele_idx = spatial_idxs + dim_zeros
-                    norm_tensor = ~y[ele_idx]
-                    flat_tensor = view(norm_tensor, dtype[reduce_extent])
-
-                    reduce_mapping = repeat(repeat_reduction) * spatial(block_size)
-                    for reduction_idx in reduce_mapping.on(threadIdx.x):
-                        if reduction_idx < reduce_extent:
-                            val = regs_repeat[reduction_idx // block_size]
-                            normed = (val - mean_final[0]) * prim.rsqrt(
-                                m2_final[0] + cast(self.attrs['epsilon'], accumulate_dtype)
-                            )
-                            flat_tensor[reduction_idx] = normed
+                k_write = 0
+                for write_idx in write_mapping.on(threadIdx.x + blockIdx.x * block_size):
+                    if write_layout.within_bound(write_idx):
+                        cached = read_cache[k_write]
+                        normed = (cached - mean_final) * prim.rsqrt(
+                            m2_final + cast(self.attrs['epsilon'], accumulate_dtype)
+                        )
+                        y.write(write_idx, normed)
+                        k_write += 1
 
         ir_module = module.ir_module()
         return ir_module
