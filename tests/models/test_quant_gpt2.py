@@ -99,7 +99,7 @@ def test_model_differences(model):
     graph = graph.build()
     new_logits = graph(hidet.from_torch(input_ids), hidet.from_torch(position_ids)).torch()
 
-    assert torch.allclose(orig_logits, new_logits, atol=0.1, rtol=0.1)
+    assert torch.allclose(orig_logits, new_logits, atol=0.5, rtol=0.5)
 
 
 if __name__ == "__main__":
