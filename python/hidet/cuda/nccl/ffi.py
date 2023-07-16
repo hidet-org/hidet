@@ -197,8 +197,14 @@ if nccl_available():
 
     nccl_runtime_api = NCCLRuntimeAPI()
 
-    def group_start():
-        nccl_runtime_api.group_start()
 
-    def group_end():
-        nccl_runtime_api.group_end()
+def group_start():
+    if not nccl_available():
+        raise RuntimeError("NCCL is not found.")
+    nccl_runtime_api.group_start()
+
+
+def group_end():
+    if not nccl_available():
+        raise RuntimeError("NCCL is not found.")
+    nccl_runtime_api.group_end()
