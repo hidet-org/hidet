@@ -221,7 +221,7 @@ class Tensor:
 
     def __mul__(self, other) -> Tensor:
         from .ops import multiply, utils
-        
+
         if isinstance(other, Tensor):
             s = utils.convert_to_tensor(self, other)
         else:
