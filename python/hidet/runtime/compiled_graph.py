@@ -97,7 +97,9 @@ class CompiledGraph:
             for dim_index, dim in enumerate(sig.shape):
                 if isinstance(dim, str) and dim not in [v for v, _ in self.dynamic_dims]:
                     self.dynamic_dims.append((dim, (tensor_index, dim_index)))
-        self.is_dynamic: bool = len(self.dynamic_dims) > 0
+        self.is_dynamic: bool = len(self.dynamic_dims) > 0 or any(
+            isinstance(dim, str) for sig in self.meta.outputs for dim in sig.shape
+        )
 
         # runtime state
         self.dispatch_table_path = hidet.utils.cache_file('graphs', self.meta.graph_hash, 'dispatch_table.txt')

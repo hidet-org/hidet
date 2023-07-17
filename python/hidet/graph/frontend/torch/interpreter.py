@@ -149,20 +149,20 @@ def tensor_from_torch(tensor: torch.Tensor) -> Tensor:
     return hidet.graph.tensor.from_torch(tensor)
 
 
-def is_torch_path(name: str) -> bool:
-    name = name.split(".")
-    if len(name) > 0:
-        return name[0] == "torch"
-    return False
-
-
-def belong_to_torch(code_obj) -> bool:
-    belongs = False
-    if hasattr(code_obj, "__module__") and code_obj.__module__ is not None:
-        belongs |= is_torch_path(code_obj.__module__)
-    if not belongs and hasattr(code_obj, "__package__") and code_obj.__package__ is not None:
-        belongs |= is_torch_path(code_obj.__package__)
-    return belongs
+# def is_torch_path(name: str) -> bool:
+#     name = name.split(".")
+#     if len(name) > 0:
+#         return name[0] == "torch"
+#     return False
+#
+#
+# def belong_to_torch(code_obj) -> bool:
+#     belongs = False
+#     if hasattr(code_obj, "__module__") and code_obj.__module__ is not None:
+#         belongs |= is_torch_path(code_obj.__module__)
+#     if not belongs and hasattr(code_obj, "__package__") and code_obj.__package__ is not None:
+#         belongs |= is_torch_path(code_obj.__package__)
+#     return belongs
 
 
 class HidetModule:
@@ -227,12 +227,12 @@ class Interpreter:
 
         # basically dynamo further wraps some builtin functions with annoying locals functions
         #   which gets dispatched incorrectly
-        self.ignore_funcs: Dict[str, Callable] = {
-            # see torch._dynamo.variables.lists.SizeVariable.get_item_dyn
-            #   this signifies that the target of getitem is a torch.Size, we overload torch.Tensor.size by
-            #   returning a list, so this method needs to be overloaded in the interpreter as well
-            '_dynamo_get_item_lambda': lambda target, index: target[index]
-        }
+        # self.ignore_funcs: Dict[str, Callable] = {
+        #     # see torch._dynamo.variables.lists.SizeVariable.get_item_dyn
+        #     #   this signifies that the target of getitem is a torch.Size, we overload torch.Tensor.size by
+        #     #   returning a list, so this method needs to be overloaded in the interpreter as well
+        #     '_dynamo_get_item_lambda': lambda target, index: target[index]
+        # }
 
         self._check_support()
 
@@ -262,9 +262,11 @@ class Interpreter:
                 if torch_cls not in Registry.registered_modules:
                     not_supported.add(torch_cls)
             elif node.op == "call_function":
-                target_fn = self._lookup_function(node.target)
-                if target_fn is None:
+                if node.target not in Registry.registered_functions:
                     not_supported.add(node.target)
+                # target_fn = self._lookup_function(node.target)
+                # if target_fn is None:
+                #     not_supported.add(node.target)
 
         if len(not_supported) > 0:
             lines = []
@@ -287,19 +289,19 @@ class Interpreter:
             raise NotImplementedError(f"hidet: method {method_name} is not supported yet.")
         return Registry.registered_methods[torch_method]
 
-    def _lookup_function(self, code_obj):
-        if code_obj.__name__ in self.ignore_funcs:
-            return self.ignore_funcs[code_obj.__name__]
-        if belong_to_torch(code_obj):
-            if code_obj in Registry.registered_functions:
-                return Registry.registered_functions[code_obj]
-            else:
-                return None
-        else:
-            # this branch handles all the other cases, such as getitem, operator.add, etc.
-            #   since the inputs are all hidet tensors, applying this function should resolve to
-            #   the actual traced implementation
-            return code_obj
+    # def _lookup_function(self, code_obj):
+    #     if code_obj.__name__ in self.ignore_funcs:
+    #         return self.ignore_funcs[code_obj.__name__]
+    #     if belong_to_torch(code_obj):
+    #         if code_obj in Registry.registered_functions:
+    #             return Registry.registered_functions[code_obj]
+    #         else:
+    #             return None
+    #     else:
+    #         # this branch handles all the other cases, such as getitem, operator.add, etc.
+    #         #   since the inputs are all hidet tensors, applying this function should resolve to
+    #         #   the actual traced implementation
+    #         return code_obj
 
     @staticmethod
     def _callable_info(f: Callable) -> Tuple[str, str, int]:
@@ -310,11 +312,18 @@ class Interpreter:
         elif inspect.isfunction(f):
             code = dict(inspect.getmembers(f))['__code__']
             callable_name = f.__qualname__
+        elif inspect.isbuiltin(f):
+            callable_name = f.__name__
+            filename = 'builtin'
+            lineno = 0
         else:
-            # an object with __call__ method
-            func = dict(inspect.getmembers(getattr(f, '__call__')))['__func__']
-            code = dict(inspect.getmembers(func))['__code__']
-            callable_name = getattr(f, '__class__').__qualname__
+            try:
+                # an object with __call__ method
+                func = dict(inspect.getmembers(getattr(f, '__call__')))['__func__']
+                code = dict(inspect.getmembers(func))['__code__']
+                callable_name = getattr(f, '__class__').__qualname__
+            except KeyError:
+                raise
 
         filename, lineno = code.co_filename, code.co_firstlineno
         return callable_name, filename, lineno
@@ -383,7 +392,7 @@ class Interpreter:
                     attr = getattr(attr, atom)
                 hidet_env[node.name] = tensor_from_torch(attr) if isinstance(attr, torch.Tensor) else attr
             elif node.op == "call_function":
-                exec_func = self._lookup_function(node.target)
+                exec_func = Registry.registered_functions[node.target]
                 hidet_args = load_arg(node.args, hidet_env)
                 hidet_kwargs = load_arg(node.kwargs, hidet_env)
                 try:
@@ -471,7 +480,7 @@ class Interpreter:
                 torch_kwargs = load_arg(node.kwargs, torch_env)
                 torch_env[node.name] = torch_func(*torch_args, **torch_kwargs)
 
-                hidet_func = self._lookup_function(node.target)
+                hidet_func = Registry.registered_functions[node.target]
                 hidet_args = load_arg(node.args, hidet_env)
                 hidet_kwargs = load_arg(node.kwargs, hidet_env)
 

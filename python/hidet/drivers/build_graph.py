@@ -30,11 +30,18 @@ from hidet.utils.dataclass import asdict
 
 
 def get_graph_weights(graph):
+    """
+    Get the weights of the graph. All constant tensors used by the operators in the graph, or returned directly by the
+    graph, are considered as weights.
+    """
     weights: Set[Tensor] = set()
     for node in graph.nodes:
         for x in node.inputs:
             if x.storage is not None:
                 weights.add(x)
+    for y in graph.outputs:
+        if y.storage is not None:
+            weights.add(y)
     return list(weights)
 
 
@@ -56,17 +63,18 @@ def create_graph_execution(graph: FlowGraph, weights: List[Tensor], node2kernel:
     tensor_device: List[str] = []
     index_count = 0
 
-    for x in graph.inputs:
+    def add_index_for_tensor(x):
+        nonlocal index_count
         tensor_index[x] = index_count
         index_tensor[index_count] = x
         tensor_device.append(x.device.kind)
         index_count += 1
 
-    for x in weights:
-        tensor_index[x] = index_count
-        index_tensor[index_count] = x
-        tensor_device.append(x.device.kind)
-        index_count += 1
+    for x in graph.inputs:
+        add_index_for_tensor(x)
+
+    for w in weights:
+        add_index_for_tensor(w)
 
     weights_index = [tensor_index[x] for x in weights]
     inputs_index = [tensor_index[x] for x in graph.inputs]
@@ -78,10 +86,7 @@ def create_graph_execution(graph: FlowGraph, weights: List[Tensor], node2kernel:
         inst_inputs = [tensor_index[x] for x in node.inputs]
 
         for out in node.outputs:
-            tensor_index[out] = index_count
-            index_tensor[index_count] = out
-            tensor_device.append(out.device.kind)
-            index_count += 1
+            add_index_for_tensor(out)
 
         inst_outputs = [tensor_index[x] for x in node.outputs]
         inst_free = []

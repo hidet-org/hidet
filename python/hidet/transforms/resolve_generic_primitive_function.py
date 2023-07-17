@@ -19,7 +19,7 @@ from hidet.ir.functors import IRRewriter
 from hidet.ir.tools import infer_type, TypeInfer
 from hidet.ir.primitives import is_primitive_function, lookup_primitive_function
 from hidet.ir.primitives.math import registered_math_function_sets
-from hidet.transforms import FunctionBodyPass
+from hidet.transforms import FunctionPass
 from hidet.utils.py import green
 
 
@@ -92,7 +92,7 @@ class ResolveGenericPrimitiveFuncRewriter(IRRewriter):
             return IRRewriter.visit_Binary(self, e)
 
 
-class ResolveGenericPrimitiveFuncPass(FunctionBodyPass):
+class ResolveGenericPrimitiveFuncPass(FunctionPass):
     def __init__(self):
         super().__init__()
         self.device: Optional[str] = None
@@ -106,11 +106,8 @@ class ResolveGenericPrimitiveFuncPass(FunctionBodyPass):
             'public': 'cpu',
         }
         self.device = func_kind_to_device[func.kind]
-        return FunctionBodyPass.process_func(self, func)
-
-    def process_body(self, stmt: Stmt) -> Stmt:
         rewriter = ResolveGenericPrimitiveFuncRewriter(self.device)
-        return rewriter.visit(stmt)
+        return rewriter.visit(func)
 
 
 def resolve_primitive_func_pass():

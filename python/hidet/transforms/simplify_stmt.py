@@ -12,8 +12,9 @@
 from hidet.ir import Stmt
 from hidet.ir.expr import is_one, is_zero, is_true, is_false, convert
 from hidet.ir.stmt import IfStmt, ForStmt, SeqStmt
+from hidet.ir.func import Function
 from hidet.ir.functors import IRRewriter
-from hidet.transforms.base import FunctionBodyPass
+from hidet.transforms.base import FunctionPass
 
 
 class StatementSimplifier(IRRewriter):
@@ -39,9 +40,10 @@ class StatementSimplifier(IRRewriter):
             return IRRewriter.visit_ForStmt(self, stmt)
 
 
-class SimplifyStmtPass(FunctionBodyPass):
-    def process_body(self, stmt: Stmt) -> Stmt:
-        return StatementSimplifier()(stmt)
+class SimplifyStmtPass(FunctionPass):
+    def process_func(self, func: Function) -> Function:
+        simplifier = StatementSimplifier()
+        return simplifier.visit(func)
 
 
 def simplify_stmt_pass():

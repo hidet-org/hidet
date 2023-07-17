@@ -495,6 +495,8 @@ def binary_arithmetic(
     elif isinstance(x, Tensor) and len(x.shape) == 0:
         if x.trace is None and x.storage is not None:
             x = x.dtype(x.item())
+        elif x.device.is_cpu() and y.device.is_cuda():
+            x = x.cuda(y.device)
 
     if isinstance(y, int):
         y = dtypes.int32(y)
@@ -505,6 +507,8 @@ def binary_arithmetic(
     elif isinstance(y, Tensor) and len(y.shape) == 0:
         if y.trace is None and y.storage is not None:
             y = y.dtype(y.item())
+        elif y.device.is_cpu() and x.device.is_cuda():
+            y = y.cuda(x.device)
 
     if isinstance(x, Tensor) and isinstance(y, Tensor):
         return tensor_tensor_op(x, y)

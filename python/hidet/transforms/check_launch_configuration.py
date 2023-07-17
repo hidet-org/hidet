@@ -16,7 +16,8 @@ from hidet.ir.functors import IRRewriter
 from hidet.ir.primitives import printf
 from hidet.ir.primitives.cuda import check_cuda_error
 from hidet.ir.stmt import Stmt, LaunchKernelStmt, AssertStmt
-from hidet.transforms.base import Pass, FunctionBodyPass
+from hidet.ir.func import Function
+from hidet.transforms.base import Pass, FunctionPass
 
 
 class CheckLaunchConfigurationRewriter(IRRewriter):
@@ -61,9 +62,9 @@ class CheckLaunchConfigurationRewriter(IRRewriter):
         return sb.finish()
 
 
-class CheckLaunchConfigurationPass(FunctionBodyPass):
-    def process_body(self, stmt: Stmt) -> Stmt:
-        return CheckLaunchConfigurationRewriter().rewrite(stmt)
+class CheckLaunchConfigurationPass(FunctionPass):
+    def process_func(self, func: Function) -> Function:
+        return CheckLaunchConfigurationRewriter().rewrite(func)
 
 
 def check_launch_configuration_pass() -> Pass:

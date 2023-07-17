@@ -13,9 +13,10 @@ from typing import List, Dict, Sequence, Union, Optional
 from hidet.ir import Var, ForMappingStmt, Stmt, ForStmt, Expr, SeqStmt
 from hidet.ir.expr import var
 from hidet.ir.mapping import TaskMapping, SpatialTaskMapping, RepeatTaskMapping, ComposedTaskMapping
-from hidet.transforms.base import Pass, FunctionBodyPass
+from hidet.ir.func import Function
 from hidet.ir.functors import IRRewriter
 from hidet.ir.tools import rewrite, simplify
+from hidet.transforms.base import Pass, FunctionPass
 from hidet.utils import prod
 
 Int = Union[Expr, int]
@@ -99,10 +100,10 @@ class LowerTaskMappingRewriter(IRRewriter):
         return expander.expand(mapping=stmt.mapping, worker=stmt.worker, loop_vars=stmt.loop_vars, body=body)
 
 
-class LowerTaskMappingPass(FunctionBodyPass):
-    def process_body(self, stmt: Stmt) -> Stmt:
+class LowerTaskMappingPass(FunctionPass):
+    def process_func(self, func: Function) -> Function:
         rewriter = LowerTaskMappingRewriter()
-        return rewriter.rewrite(stmt)
+        return rewriter.rewrite(func)
 
 
 def lower_task_mapping_pass() -> Pass:

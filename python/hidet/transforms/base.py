@@ -83,18 +83,6 @@ class FunctionPass(Pass):
         raise NotImplementedError()
 
 
-class FunctionBodyPass(FunctionPass):
-    def process_func(self, func: Function) -> Function:
-        body = self.process_body(func.body)
-        if body is func.body:
-            return func
-        else:
-            return Function(func.name, func.params, body, func.ret_type, kind=func.kind, attrs=func.attrs)
-
-    def process_body(self, stmt: Stmt) -> Stmt:
-        raise NotImplementedError()
-
-
 class RepeatFunctionPass(FunctionPass):
     def __init__(self, passes: List[FunctionPass], repeat_limit=10, name=None):
         super().__init__(name)

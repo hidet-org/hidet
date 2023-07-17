@@ -13,9 +13,10 @@ from typing import Sequence
 from hidet.ir import Stmt, Expr, TensorElement, BufferStoreStmt, IfStmt, convert
 from hidet.ir.expr import IfThenElse, tensor_element, logical_and
 from hidet.ir.type import TensorType, TensorPointerType
-from hidet.transforms.base import Pass, FunctionBodyPass
+from hidet.ir.func import Function
 from hidet.ir.functors import IRRewriter
 from hidet.ir.tools import infer_type
+from hidet.transforms.base import Pass, FunctionPass
 
 
 def bound_checking_condition(buf: Expr, indices: Sequence[Expr]) -> Expr:
@@ -62,10 +63,10 @@ class LowerProtectAccessRewriter(IRRewriter):
             return IRRewriter.visit_BufferStoreStmt(self, stmt)
 
 
-class LowerProtectAccessPass(FunctionBodyPass):
-    def process_body(self, stmt: Stmt) -> Stmt:
+class LowerProtectAccessPass(FunctionPass):
+    def process_func(self, func: Function) -> Function:
         rewriter = LowerProtectAccessRewriter()
-        return rewriter.rewrite(stmt)
+        return rewriter.rewrite(func)
 
 
 def lower_protect_access_pass() -> Pass:
