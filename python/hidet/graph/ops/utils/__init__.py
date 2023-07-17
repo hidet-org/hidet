@@ -12,4 +12,3 @@
 from hidet.ir.utils.broadcast_utils import *
 
 from .tensor_utils import *
-from . import tune

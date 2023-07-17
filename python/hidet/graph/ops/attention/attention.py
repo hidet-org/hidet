@@ -11,35 +11,47 @@
 # limitations under the License.
 from typing import List, Optional, Union
 import hidet
+from hidet import ir
 from hidet.ir import IRModule
 from hidet.ir.compute import reduce
-from hidet.ir.layout import DataLayout
 from hidet.ir.type import tensor_type
 from hidet.ir import primitives as prim
 from hidet.ir.primitives import active_mask, shfl_down_sync
-from hidet.graph.ops.utils import tune
-from hidet.lang import f16, f32, i32, u32, spatial, repeat, tensor
+from hidet.ir.library import tune
+from hidet.ir.layout import row_major, local_layout
+from hidet.lang import f16, f32, i32, u32, spatial, repeat
 from hidet.lang import attrs, grid, tensor_pointer, view, col_spatial
 from hidet.lang.cuda import blockIdx, threadIdx, syncthreads, dynamic_shared_memory, register_tensor
 from hidet.lang.cuda import MmaConfig, mma_sync, cp_async, ldmatrix, cp_async_wait_all
 from hidet.graph.ops.utils import Task, Operator, Tensor, TensorNode, compute, input_like
 from hidet.graph.ops.utils import broadcast_shape, broadcast_shapes, broadcast_indices
-from hidet.graph.ops.utils import can_broadcast, schedule_utils
+from hidet.graph.ops.utils import schedule_utils
 from hidet.utils.py import cdiv, prod
 from .attention_mask import AttnMaskAddOp
 
 
 class AttnTask(Task):
     def __init__(self, name: str, q: TensorNode, k: TensorNode, v: TensorNode, is_causal: bool):
-        q_shape = q.const_shape
-        k_shape = k.const_shape
-        v_shape = v.const_shape
+        q_shape = q.shape
+        k_shape = k.shape
+        v_shape = v.shape
         n_size = q_shape[-2]
         n_kv_size = k_shape[-1]
         d_size = q_shape[-1]
         o_shape = broadcast_shapes([q_shape[:-2], k_shape[:-2], v_shape[:-2]]) + [n_size, d_size]
         o_head, q_head, k_head, v_head = o_shape[:-2], q_shape[:-2], k_shape[:-2], v_shape[:-2]
         qk_head = broadcast_shape(q_head, k_head)
+
+        self._assert(
+            ir.logical_and(k.shape[-1] == v.shape[-2], q.shape[-1] == k.shape[-2] == v.shape[-1]),
+            msg=(
+                'Attention Operator expects same seqlen for k/v, and same hdim for q/k/v, got q: {}'
+                ', k: {}, v: {}'.format(q_shape, k_shape, v_shape)
+            ),
+        )
+        self._assert(
+            ir.logical_and(q.shape[-1] <= 160), msg='Attention Operator expects hdim <= 160, got {}'.format(q.shape[-1])
+        )
 
         # ToDo: Add causal mask to compute definition (Will not affect results since schedule template will be used)
         qk = compute(
@@ -53,7 +65,7 @@ class AttnTask(Task):
             ),
         )
 
-        qk_shape = qk.const_shape
+        qk_shape = qk.shape
         axis = len(qk_shape) - 1
         axis_extent = qk_shape[axis]
         reduced_shape = qk_shape[:axis] + qk_shape[axis + 1 :]
@@ -147,7 +159,7 @@ class AttnTask(Task):
                     return n, d // n
             return -1, -1
 
-        compute_capability = hidet.cuda.compute_capability()
+        compute_capability = hidet.option.cuda.get_arch_pair()
         compute_capability = compute_capability[0] * 10 + compute_capability[1]
         if compute_capability < 80:
             # hack: sm75 only supports m16n8k8, not m16n8k16
@@ -156,18 +168,16 @@ class AttnTask(Task):
         task = self
         is_causal = task.attrs['is_causal']
         node_q, node_k, node_v, node_o = task.inputs[0], task.inputs[1], task.inputs[2], task.outputs[0]
-        q_shape: List[int] = list(node_q.const_shape)
-        k_shape: List[int] = list(node_k.const_shape)
-        v_shape: List[int] = list(node_v.const_shape)
-        o_shape: List[int] = list(node_o.const_shape)
+        q_shape: List[int] = list(node_q.shape)
+        k_shape: List[int] = list(node_k.shape)
+        v_shape: List[int] = list(node_v.shape)
+        o_shape: List[int] = list(node_o.shape)
         q_head, k_head, v_head, o_head = q_shape[:-2], k_shape[:-2], v_shape[:-2], o_shape[:-2]
         qk_head = broadcast_shape(q_head, k_head)
         bs_qk = prod(qk_head)
         bs = prod(o_head)
         assert bs == bs_qk
 
-        local_layout = DataLayout.local
-        row_major = DataLayout.row_major
         n_size = q_shape[-2]
         d_size = q_shape[-1]
         n_kv_size = k_shape[-1]
@@ -286,28 +296,24 @@ class AttnTask(Task):
         smem_mij_type = tensor_type(sm_dtype, shape=[block_i])
 
         smem_q_layout = (
-            row_major((1, swizzle_repeat)) * row_major((block_i, swizzle_unit // 8)).swizzle(1) * row_major((1, 8))
+            row_major(1, swizzle_repeat) * row_major(block_i, swizzle_unit // 8).swizzle(1) * row_major(1, 8)
         )
 
-        smem_k_layout = row_major((block_k // 8, block_j // 64)) * row_major((8, 8)).swizzle(1) * row_major((1, 8))
-        smem_qk_layout = row_major((block_i, block_j // 8)).swizzle(1) * row_major((1, 8))
+        smem_k_layout = row_major(block_k // 8, block_j // 64) * row_major(8, 8).swizzle(1) * row_major(1, 8)
+        smem_qk_layout = row_major(block_i, block_j // 8).swizzle(1) * row_major(1, 8)
         if block_j_o % 64 == 0:
-            smem_v_layout = (
-                row_major((block_k_o // 8, block_j_o // 64)) * row_major((8, 8)).swizzle(1) * row_major((1, 8))
-            )
+            smem_v_layout = row_major(block_k_o // 8, block_j_o // 64) * row_major(8, 8).swizzle(1) * row_major(1, 8)
         else:
             smem_v_layout = (
-                row_major((1, swizzle_repeat))
-                * row_major((block_k_o, swizzle_unit // 8)).swizzle(1)
-                * row_major((1, 8))
+                row_major(1, swizzle_repeat) * row_major(block_k_o, swizzle_unit // 8).swizzle(1) * row_major(1, 8)
             )
 
         smem_q_type = tensor_type('float16', shape=[block_i, dpad_size], layout=smem_q_layout)
         smem_k_type = tensor_type('float16', shape=[block_k, block_j], layout=smem_k_layout)
-        smem_k_db_type = tensor_type('float16', shape=[2, block_k, block_j], layout=row_major([2]) + smem_k_layout)
+        smem_k_db_type = tensor_type('float16', shape=[2, block_k, block_j], layout=row_major(2) + smem_k_layout)
         smem_qk_type = tensor_type('float16', shape=[block_i, block_j], layout=smem_qk_layout)
         smem_v_type = tensor_type('float16', shape=[block_k_o, block_j_o], layout=smem_v_layout)
-        smem_v_db_type = tensor_type('float16', shape=[2, block_k_o, block_j_o], layout=row_major([2]) + smem_v_layout)
+        smem_v_db_type = tensor_type('float16', shape=[2, block_k_o, block_j_o], layout=row_major(2) + smem_v_layout)
         regs_o_type = tensor_type(acc_dtype, shape=[mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements])
 
         n_size_per_thread = cdiv(i_rows_per_tb, block_size)
@@ -315,7 +321,7 @@ class AttnTask(Task):
 
         rows_per_thread_per_mma = 2
         rows_per_thread_mma_o = rows_per_thread_per_mma * mmas_per_warp_m_o
-        regs_li_new_layout = row_major((rows_per_thread_mma_o, 1)) * local_layout((mma_m // rows_per_thread_per_mma, 1))
+        regs_li_new_layout = row_major(rows_per_thread_mma_o, 1) * local_layout(mma_m // rows_per_thread_per_mma, 1)
         regs_mi_new_layout = regs_li_new_layout
         regs_exp_mij_layout = regs_li_new_layout
 
@@ -671,20 +677,20 @@ class AttnTask(Task):
                 smem_lij = dynamic_shared_memory(byte_offset=smem_bytes_offsets['lij'], dtype=smem_lij_type.dtype)
                 smem_mij = dynamic_shared_memory(byte_offset=smem_bytes_offsets['mij'], dtype=smem_mij_type.dtype)
 
-                regs_q = tensor('register', dtype='float16', shape=[2, mmas_per_warp_m, mma_config.a_elements])
-                regs_k = tensor('register', dtype='float16', shape=[2, mmas_per_warp_n, mma_config.b_elements])
-                regs_acc = tensor(
-                    'register', dtype=acc_dtype, shape=[mmas_per_warp_m, mmas_per_warp_n, mma_config.c_elements]
+                regs_q = register_tensor(dtype='float16', shape=[2, mmas_per_warp_m, mma_config.a_elements])
+                regs_k = register_tensor(dtype='float16', shape=[2, mmas_per_warp_n, mma_config.b_elements])
+                regs_acc = register_tensor(
+                    dtype=acc_dtype, shape=[mmas_per_warp_m, mmas_per_warp_n, mma_config.c_elements]
                 )
-                regs_qk = tensor('register', dtype='float16', shape=[2, mmas_per_warp_m_o, mma_config.a_elements])
-                regs_v = tensor('register', dtype='float16', shape=[2, mmas_per_warp_n_o, mma_config.b_elements])
-                regs_acc_o = tensor(
-                    'register', dtype=acc_dtype, shape=[mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements]
+                regs_qk = register_tensor(dtype='float16', shape=[2, mmas_per_warp_m_o, mma_config.a_elements])
+                regs_v = register_tensor(dtype='float16', shape=[2, mmas_per_warp_n_o, mma_config.b_elements])
+                regs_acc_o = register_tensor(
+                    dtype=acc_dtype, shape=[mmas_per_warp_m_o, mmas_per_warp_n_o, mma_config.c_elements]
                 )
-                regs_o = tensor('register', dtype=acc_dtype, shape=regs_o_type.shape)
-                regs_li_new = tensor('register', dtype=smem_l_type.dtype, layout=regs_li_new_layout)
-                regs_mi_new = tensor('register', dtype=smem_m_type.dtype, layout=regs_mi_new_layout)
-                regs_exp_mij = tensor('register', dtype=smem_mij_type.dtype, layout=regs_exp_mij_layout)
+                regs_o = register_tensor(dtype=acc_dtype, shape=regs_o_type.shape)
+                regs_li_new = register_tensor(dtype=smem_l_type.dtype, layout=regs_li_new_layout)
+                regs_mi_new = register_tensor(dtype=smem_m_type.dtype, layout=regs_mi_new_layout)
+                regs_exp_mij = register_tensor(dtype=smem_mij_type.dtype, layout=regs_exp_mij_layout)
 
                 init_lm_smem(smem_l, smem_m)
                 # Load Qi into Smem, it stays there forever
@@ -859,29 +865,13 @@ def attention(q: Tensor, k: Tensor, v: Tensor, mask: Optional[Tensor] = None, is
     if not q.dtype == k.dtype == v.dtype == f16:
         raise ValueError("Attention only supports float16 inputs")
 
-    if not (
-        len(q.shape) == len(k.shape) == len(v.shape)
-        and k.shape[-1] == v.shape[-2]
-        and q.shape[-1] == k.shape[-2] == v.shape[-1]
-    ):
+    if not len(q.shape) == len(k.shape) == len(v.shape):
         raise ValueError(
-            'Attention expect tensor Q[..., S_q, D], K[..., D, S_kv], V[..., S_kv, D]'
-            + ', got Q {}, K {}, V {}'.format(q.shape, k.shape, v.shape)
+            "Attention Operator got different dimension sizes for q/k/v:"
+            " q {} k {} v {}".format(len(q.shape), len(k.shape), len(v.shape))
         )
 
-    if q.shape[-1] > 160:
-        raise ValueError('Attention only supports head dim <= 160, got {}'.format(q.shape[-1]))
-
     if mask is None:
-        return AttnOp(q, k, v, is_causal).get_output(0)
+        return AttnOp(q, k, v, is_causal).outputs[0]
 
-    mask_shape = mask.shape
-    seq_len_q = q.shape[-2]
-    seq_len_kv = v.shape[-2]
-    q_head, k_head = (q.shape[:-2], k.shape[:-2])
-    qk_head = broadcast_shape(q_head, k_head)
-    qk_shape = qk_head + [seq_len_q, seq_len_kv]
-    if not can_broadcast(mask_shape, qk_shape):
-        raise ValueError("Invalid mask dimension: {}".format(mask_shape))
-
-    return AttnMaskAddOp(q, k, v, mask).get_output(0)
+    return AttnMaskAddOp(q, k, v, mask).outputs[0]

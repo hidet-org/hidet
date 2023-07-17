@@ -102,9 +102,9 @@ def test_softmax(shape: List[int], axis: int):
             spatial_shape = shape[:axis] + shape[axis + 1 :]
             reduce_extent = shape[axis]
 
-            max_value = tensor('default', f32, shape=spatial_shape)  # max(x, axis)
-            exp_value = tensor('default', f32, shape=shape)  # exp(x - max)
-            sum_value = tensor('default', f32, shape=spatial_shape)  # sum(exp(x - max), axis)
+            max_value = tensor(f32, shape=spatial_shape)  # max(x, axis)
+            exp_value = tensor(f32, shape=shape)  # exp(x - max)
+            sum_value = tensor(f32, shape=spatial_shape)  # sum(exp(x - max), axis)
 
             # max value
             for indices in grid(spatial_shape):

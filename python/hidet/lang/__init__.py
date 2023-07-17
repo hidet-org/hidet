@@ -28,7 +28,7 @@ from hidet.ir.dtypes import i8, i16, i32, i64, u8, u16, u32, u64, f16, f32, f64
 from hidet.ir.dtypes import bfloat16, tfloat32, bf16, tf32
 
 from hidet.lang.constructs.loops import range, grid
-from hidet.lang.constructs.type import tensor, tensor_pointer, as_tensor_pointer, register_tensor, shared_tensor
+from hidet.lang.constructs.declare import tensor, tensor_pointer, as_tensor_pointer, register_tensor, shared_tensor
 
 
 ref_u32 = ReferenceType(u32)

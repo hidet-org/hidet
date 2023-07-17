@@ -36,7 +36,7 @@ def generate(model, text, num_hidden_layers, num_heads, head_dim, device, tokens
 
 @pytest.mark.parametrize('device,opt', [('cpu', False), ('cpu', True), ('cuda', False), ('cuda', True)])
 def test_gpt2(device: str, opt: bool):
-    gpt2_module = hidet.testing.models.gpt2.model()
+    gpt2_module = hidet.testing.models.gpt2.model(disable_cache=True)
 
     if device == 'cuda':
         gpt2_module.cuda()

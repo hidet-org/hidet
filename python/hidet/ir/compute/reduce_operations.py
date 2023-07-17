@@ -140,6 +140,36 @@ class ReduceOperation:
         """
         return acc
 
+    def has_atomic(self, dtype: Union[DataType, str]):
+        """
+        Whether the reduction has atomic reduction support
+
+        For some reduction, cuda natively supports atomic operations (min, max, sum)
+
+        Returns
+        -------
+        result: bool
+            True if the reduction requires has an atomic operation associated
+        """
+        return False
+
+    def atomic_combine(self, acc: Expr, rhs_value: Expr):
+        """
+        Performs atomic combine to the acc variable by including the rhs value
+
+        Parameters
+        ----------
+        acc: Expr
+            a memory address in shared or global memory
+        rhs_value: Expr
+            new value to be atomically combined
+
+        Returns
+        -------
+            None, the combine is inplace to acc
+        """
+        raise NotImplementedError()
+
 
 class MinReduce(ReduceOperation):
     def initial_value(self, dtype: Union[DataType, str]) -> Expr:
@@ -156,6 +186,16 @@ class MinReduce(ReduceOperation):
         from hidet.ir.expr import LessThan  # pylint: disable=import-outside-toplevel
 
         return LessThan(lhs_value, rhs_value)
+
+    def has_atomic(self, dtype: Union[DataType, str]):
+        if isinstance(dtype, str):
+            dtype = data_type(dtype)
+        return dtype.is_integer()
+
+    def atomic_combine(self, acc: Expr, rhs_value: Expr):
+        from hidet.lang.cuda import atomic_min
+
+        return atomic_min(acc, rhs_value)
 
 
 class MaxReduce(ReduceOperation):
@@ -174,6 +214,16 @@ class MaxReduce(ReduceOperation):
 
         return LessThan(rhs_value, lhs_value)
 
+    def has_atomic(self, dtype: Union[DataType, str]):
+        if isinstance(dtype, str):
+            dtype = data_type(dtype)
+        return dtype.is_integer()
+
+    def atomic_combine(self, acc: Expr, rhs_value: Expr):
+        from hidet.lang.cuda import atomic_max
+
+        return atomic_max(acc, rhs_value)
+
 
 class SumReduce(ReduceOperation):
     def initial_value(self, dtype: Union[DataType, str]) -> Constant:
@@ -183,6 +233,14 @@ class SumReduce(ReduceOperation):
 
     def combine(self, lhs: Expr, rhs: Expr) -> Expr:
         return lhs + rhs
+
+    def has_atomic(self, dtype: Union[DataType, str]):
+        return True
+
+    def atomic_combine(self, acc: Expr, rhs_value: Expr):
+        from hidet.lang.cuda import atomic_add
+
+        return atomic_add(acc, rhs_value)
 
 
 class AverageReduce(ReduceOperation):
@@ -199,6 +257,14 @@ class AverageReduce(ReduceOperation):
 
     def finalize(self, acc: Expr, size: Expr) -> Expr:
         return acc / size
+
+    def has_atomic(self, dtype: Union[DataType, str]):
+        return True
+
+    def atomic_combine(self, acc: Expr, rhs_value: Expr):
+        from hidet.lang.cuda import atomic_add
+
+        return atomic_add(acc, rhs_value)
 
 
 class AndReduce(ReduceOperation):

@@ -9,6 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# pylint: disable=protected-access, c-extension-no-member
 from typing import Optional, Union, Sequence, Any, Tuple, List
 import operator
 import functools
@@ -50,8 +51,7 @@ def conv1d_transpose(
 
 @register_function(torch.nn.functional.conv2d)
 def conv2d(x: Tensor, weight: Tensor, bias: Optional[Tensor], stride, padding, dilation, groups):
-    x = ops.conv_pad(x, padding)
-    y = ops.conv2d(x, weight, stride, dilation, groups)
+    y = ops.conv2d(x, weight, stride, dilation, groups, padding=padding)
     if bias is not None:
         y = y + ops.unsqueeze(bias, [0, 2, 3])
     return y
@@ -146,12 +146,12 @@ def bilinear(x_1: Tensor, x_2: Tensor, weight: Tensor, bias: Optional[Tensor]):
 @register_function(operator.add)
 @register_function(torch.ops.aten.add.Tensor)
 def add(x: Tensor, y: Tensor):
-    return ops.add(x, y)
+    return x + y
 
 
 @register_function(operator.iadd)
 def iadd(x: Tensor, y: Tensor):
-    return ops.add(x, y)
+    return x + y
 
 
 @register_function(torch.sin)
@@ -363,7 +363,7 @@ def zeros(*size, out=None, dtype=None, layout=None, device=None, pin_memory=Fals
 
 @register_function(torch.ones)
 def ones(
-    *size: Union[int, Sequence[int]],
+    *size: Union[Int, Sequence[Int]],
     out: Optional[Tensor] = None,
     dtype: Optional[torch.dtype] = None,
     layout: Optional[torch.layout] = None,
@@ -382,7 +382,7 @@ def ones(
         if isinstance(size[0], (list, tuple)):
             size = size[0]
 
-    shape = [int(v) for v in size]
+    shape = [v if isinstance(v, hidet.ir.Expr) else int(v) for v in size]
     if dtype is None:
         dtype = torch.get_default_dtype()
 
@@ -991,3 +991,8 @@ def torch_conj(x: Tensor) -> Tensor:
         return ops.conj(x)
     else:
         return x
+
+
+@register_function(torch._C._log_api_usage_once)
+def torch_noop(self):
+    return

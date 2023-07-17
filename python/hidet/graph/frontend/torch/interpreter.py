@@ -149,6 +149,22 @@ def tensor_from_torch(tensor: torch.Tensor) -> Tensor:
     return hidet.graph.tensor.from_torch(tensor)
 
 
+def is_torch_path(name: str) -> bool:
+    name = name.split(".")
+    if len(name) > 0:
+        return name[0] == "torch"
+    return False
+
+
+def belong_to_torch(code_obj) -> bool:
+    belongs = False
+    if hasattr(code_obj, "__module__") and code_obj.__module__ is not None:
+        belongs |= is_torch_path(code_obj.__module__)
+    if not belongs and hasattr(code_obj, "__package__") and code_obj.__package__ is not None:
+        belongs |= is_torch_path(code_obj.__package__)
+    return belongs
+
+
 class HidetModule:
     def __init__(self, torch_module: torch.nn.Module):
         self.mod: torch.nn.Module = torch_module
@@ -160,17 +176,44 @@ class HidetModule:
     def __call__(self, *args, **kwargs):
         raise NotImplementedError()
 
-    def param(self, name: str, optional=False) -> Optional[Tensor]:
+    def _get_weight_norm_hook(self, name: str):
+        from torch.nn.utils.weight_norm import WeightNorm
+
+        for hook in self.mod._forward_pre_hooks.values():  # pylint: disable=protected-access
+            if isinstance(hook, WeightNorm) and hook.name == name:
+                return hook
+        return None
+
+    def _used_weight_norm(self, name: str) -> bool:
+        return self._get_weight_norm_hook(name) is not None
+
+    def _compute_weight_norm(self, name: str) -> Tensor:
+        hook = self._get_weight_norm_hook(name)
+        return hook.compute_weight(self.mod)
+
+    def param(self, name: str, optional=False, steal=False) -> Optional[Tensor]:
         if name not in self.torch_params:
+            # see https://pytorch.org/docs/stable/generated/torch.nn.utils.weight_norm.html
+            # to learn more about weight norm.
+            if self._used_weight_norm(name):
+                self.torch_params[name] = self._compute_weight_norm(name)
+                return self.param(name, optional)
+
             if optional:
                 return None
             raise RuntimeError(f"hidet: {self.mod} has no parameter/buffer {name}")
+
         if name not in self.hidet_params:
             if self.torch_params[name] is None:
                 self.hidet_params[name] = None
             else:
                 torch_param: torch.Tensor = self.torch_params[name]
+                if steal:
+                    del self.torch_params[name]
+                    setattr(self.mod, name, None)
                 self.hidet_params[name] = tensor_from_torch(torch_param)
+                del torch_param
+                torch.cuda.empty_cache()
         return self.hidet_params[name]
 
 
@@ -181,6 +224,15 @@ class Interpreter:
         self.graph: torch.fx.Graph = graph_module.graph
         self.torch_modules: Dict[str, torch.nn.Module] = dict(graph_module.named_modules())
         self.hidet_modules: Dict[str, HidetModule] = {}
+
+        # basically dynamo further wraps some builtin functions with annoying locals functions
+        #   which gets dispatched incorrectly
+        self.ignore_funcs: Dict[str, Callable] = {
+            # see torch._dynamo.variables.lists.SizeVariable.get_item_dyn
+            #   this signifies that the target of getitem is a torch.Size, we overload torch.Tensor.size by
+            #   returning a list, so this method needs to be overloaded in the interpreter as well
+            '_dynamo_get_item_lambda': lambda target, index: target[index]
+        }
 
         self._check_support()
 
@@ -210,8 +262,10 @@ class Interpreter:
                 if torch_cls not in Registry.registered_modules:
                     not_supported.add(torch_cls)
             elif node.op == "call_function":
-                if node.target not in Registry.registered_functions:
+                target_fn = self._lookup_function(node.target)
+                if target_fn is None:
                     not_supported.add(node.target)
+
         if len(not_supported) > 0:
             lines = []
             lines.append("The following modules/functions are not supported by hidet yet:")
@@ -232,6 +286,20 @@ class Interpreter:
             method_name = self._get_callable_name(torch_method)
             raise NotImplementedError(f"hidet: method {method_name} is not supported yet.")
         return Registry.registered_methods[torch_method]
+
+    def _lookup_function(self, code_obj):
+        if code_obj.__name__ in self.ignore_funcs:
+            return self.ignore_funcs[code_obj.__name__]
+        if belong_to_torch(code_obj):
+            if code_obj in Registry.registered_functions:
+                return Registry.registered_functions[code_obj]
+            else:
+                return None
+        else:
+            # this branch handles all the other cases, such as getitem, operator.add, etc.
+            #   since the inputs are all hidet tensors, applying this function should resolve to
+            #   the actual traced implementation
+            return code_obj
 
     @staticmethod
     def _callable_info(f: Callable) -> Tuple[str, str, int]:
@@ -315,13 +383,13 @@ class Interpreter:
                     attr = getattr(attr, atom)
                 hidet_env[node.name] = tensor_from_torch(attr) if isinstance(attr, torch.Tensor) else attr
             elif node.op == "call_function":
-                hidet_func = Registry.registered_functions[node.target]
+                exec_func = self._lookup_function(node.target)
                 hidet_args = load_arg(node.args, hidet_env)
                 hidet_kwargs = load_arg(node.kwargs, hidet_env)
                 try:
-                    hidet_env[node.name] = hidet_func(*hidet_args, **hidet_kwargs)
+                    hidet_env[node.name] = exec_func(*hidet_args, **hidet_kwargs)
                 except Exception as e:
-                    self._raise_exception(e, node.target, hidet_func, hidet_args, hidet_kwargs)
+                    self._raise_exception(e, node.target, exec_func, hidet_args, hidet_kwargs)
             elif node.op == "call_method":
                 args = load_arg(node.args, hidet_env)
                 kwargs = load_arg(node.kwargs, hidet_env)
@@ -403,7 +471,7 @@ class Interpreter:
                 torch_kwargs = load_arg(node.kwargs, torch_env)
                 torch_env[node.name] = torch_func(*torch_args, **torch_kwargs)
 
-                hidet_func = Registry.registered_functions[torch_func]
+                hidet_func = self._lookup_function(node.target)
                 hidet_args = load_arg(node.args, hidet_env)
                 hidet_kwargs = load_arg(node.kwargs, hidet_env)
 

@@ -128,9 +128,9 @@ class AddExplicitCastRewriter(IRRewriter):
                 op = e.__class__
                 c_dtype = numeric_promotion(a_dtype, b_dtype)
                 if a_dtype.name == c_dtype.name:
-                    return op(a, cast(b, a_dtype))
+                    return op(a, self.convert(b_dtype, a_dtype, b))
                 else:
-                    return op(cast(a, b_dtype), b)
+                    return op(self.convert(a_dtype, b_dtype, a), b)
             else:
                 return IRRewriter.visit_Binary(self, e)
         else:

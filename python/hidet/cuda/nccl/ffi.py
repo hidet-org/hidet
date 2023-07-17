@@ -12,11 +12,12 @@
 
 from typing import Optional
 import ctypes
-from ctypes import c_void_p, c_int, pointer, Structure, c_byte, POINTER
+from ctypes import c_void_p, c_int, pointer, Structure, c_byte, POINTER, c_uint64
 import glob
 import os
 
 from hidet.ffi.ffi import get_func
+from hidet.cuda import Stream
 from .libinfo import get_nccl_library_search_dirs
 
 _LIB_NCCL: Optional[ctypes.CDLL] = None
@@ -49,8 +50,6 @@ def load_nccl_library():
         _LIB_NCCL = ctypes.cdll.LoadLibrary(lib_nccl_paths[0])
         nccl_library_path = lib_nccl_paths[0]
         break
-    if _LIB_NCCL is None:
-        raise OSError('Can not find nccl library in the following directory: \n' + '\n'.join(library_dirs))
 
 
 load_nccl_library()
@@ -60,49 +59,152 @@ def nccl_library_filename():
     return os.path.basename(nccl_library_path)
 
 
-if not nccl_available():
-    raise RuntimeError("NCCL Library not found.")
+if nccl_available():
 
-
-class NCCLRuntimeAPI:
-    """
-    Runtime APIs regarding NCCL
-    TODO: Exception handling
-    """
-
-    _get_version = get_func('ncclGetVersion', [c_void_p], c_int, lib=_LIB_NCCL)
-    _get_unique_id = get_func('ncclGetUniqueId', [c_void_p], c_int, lib=_LIB_NCCL)
-    _comm_init_rank = get_func('ncclCommInitRank', [c_void_p, c_int, NcclUniqueId, c_int], c_int, lib=_LIB_NCCL)
-    _comm_destroy = get_func('ncclCommDestroy', [c_void_p], c_int, lib=_LIB_NCCL)
-
-    _comm_user_rank = get_func('ncclCommUserRank', [c_void_p, POINTER(c_int)], c_int, lib=_LIB_NCCL)
-    _comm_count = get_func('ncclCommCount', [c_void_p, POINTER(c_int)], c_int, lib=_LIB_NCCL)
-
-    @staticmethod
-    def get_version() -> int:
-        version = c_int(0)
-        NCCLRuntimeAPI._get_version(pointer(version))
-        return version.value
-
-    @staticmethod
-    def get_unique_id(comm_id: NcclUniqueId) -> None:
+    class NCCLRuntimeAPI:
         """
-        In-place initialization of the NcclUniqueId object
+        Runtime APIs regarding NCCL
+        TODO: Exception handling
         """
-        ret = NCCLRuntimeAPI._get_unique_id(pointer(comm_id))
-        assert ret == 0, ret
 
-    @staticmethod
-    def comm_init_rank(ndev: int, comm_id: NcclUniqueId, rank: int) -> int:
-        comm = c_void_p()
-        ret = NCCLRuntimeAPI._comm_init_rank(pointer(comm), ndev, comm_id, rank)
-        assert ret == 0, ret
-        return comm.value
+        _get_version = get_func('ncclGetVersion', [c_void_p], c_int, lib=_LIB_NCCL)
+        _get_unique_id = get_func('ncclGetUniqueId', [c_void_p], c_int, lib=_LIB_NCCL)
+        _comm_init_rank = get_func('ncclCommInitRank', [c_void_p, c_int, NcclUniqueId, c_int], c_int, lib=_LIB_NCCL)
+        _comm_destroy = get_func('ncclCommDestroy', [c_void_p], c_int, lib=_LIB_NCCL)
 
-    @staticmethod
-    def comm_destroy(comm_handle) -> None:
-        ret = NCCLRuntimeAPI._comm_destroy(comm_handle)
-        assert ret == 0
+        _comm_user_rank = get_func('ncclCommUserRank', [c_void_p, POINTER(c_int)], c_int, lib=_LIB_NCCL)
+        _comm_count = get_func('ncclCommCount', [c_void_p, POINTER(c_int)], c_int, lib=_LIB_NCCL)
+
+        _all_reduce = get_func(
+            'ncclAllReduce', [c_void_p, c_void_p, c_uint64, c_int, c_int, c_void_p, c_void_p], c_int, lib=_LIB_NCCL
+        )
+        _broadcast = get_func(
+            'ncclBroadcast', [c_void_p, c_void_p, c_uint64, c_int, c_int, c_void_p, c_void_p], c_int, lib=_LIB_NCCL
+        )
+        _reduce = get_func(
+            'ncclReduce', [c_void_p, c_void_p, c_uint64, c_int, c_int, c_int, c_void_p, c_void_p], c_int, lib=_LIB_NCCL
+        )
+        _all_gather = get_func(
+            'ncclAllGather', [c_void_p, c_void_p, c_uint64, c_int, c_void_p, c_void_p], c_int, lib=_LIB_NCCL
+        )
+        _reduce_scatter = get_func(
+            'ncclReduceScatter', [c_void_p, c_void_p, c_uint64, c_int, c_int, c_void_p, c_void_p], c_int, lib=_LIB_NCCL
+        )
+
+        _send = get_func('ncclSend', [c_void_p, c_uint64, c_int, c_int, c_void_p, c_void_p], c_int, lib=_LIB_NCCL)
+        _recv = get_func('ncclRecv', [c_void_p, c_uint64, c_int, c_int, c_void_p, c_void_p], c_int, lib=_LIB_NCCL)
+
+        _group_start = get_func('ncclGroupStart', [], c_int, lib=_LIB_NCCL)
+        _group_end = get_func('ncclGroupEnd', [], c_int, lib=_LIB_NCCL)
+
+        # Early versions of NCCL do not have split
+        try:
+            _comm_split = get_func('ncclCommSplit', [c_void_p, c_int, c_int, c_void_p, c_void_p], c_int, lib=_LIB_NCCL)
+        except ValueError:
+            _comm_split = None
+
+        @staticmethod
+        def get_version() -> int:
+            version = c_int(0)
+            NCCLRuntimeAPI._get_version(pointer(version))
+            return version.value
+
+        @staticmethod
+        def get_unique_id(comm_id: NcclUniqueId) -> None:
+            """
+            In-place initialization of the NcclUniqueId object
+            """
+            ret = NCCLRuntimeAPI._get_unique_id(pointer(comm_id))
+            assert ret == 0, ret
+
+        @staticmethod
+        def comm_init_rank(ndev: int, comm_id: NcclUniqueId, rank: int) -> int:
+            comm = c_void_p()
+            ret = NCCLRuntimeAPI._comm_init_rank(pointer(comm), ndev, comm_id, rank)
+            assert ret == 0, ret
+            return comm.value
+
+        @staticmethod
+        def comm_destroy(comm_handle) -> None:
+            ret = NCCLRuntimeAPI._comm_destroy(comm_handle)
+            assert ret == 0
+
+        @staticmethod
+        def comm_split(comm_handle: int, color: int, key: int) -> int:
+            if NCCLRuntimeAPI._comm_split is None:
+                raise RuntimeError("split is not supported on this version of NCCL. Please install a newer version.")
+            comm = c_void_p()
+            ret = NCCLRuntimeAPI._comm_split(comm_handle, color, key, pointer(comm), None)
+            assert ret == 0
+            return comm.value
+
+        @staticmethod
+        def all_reduce(
+            sendbuff: int, recvbuff: int, count: int, datatype: int, op: int, comm_handle: int, s: Stream
+        ) -> None:
+            ret = NCCLRuntimeAPI._all_reduce(sendbuff, recvbuff, count, datatype, op, comm_handle, c_void_p(int(s)))
+            assert ret == 0
+
+        @staticmethod
+        def broadcast(
+            sendbuff: int, recvbuff: int, count: int, datatype: int, root: int, comm_handle: int, s: Stream
+        ) -> None:
+            ret = NCCLRuntimeAPI._broadcast(sendbuff, recvbuff, count, datatype, root, comm_handle, c_void_p(int(s)))
+            assert ret == 0
+
+        @staticmethod
+        def reduce(
+            sendbuff: int, recvbuff: int, count: int, datatype: int, op: int, root: int, comm_handle: int, s: Stream
+        ) -> None:
+            ret = NCCLRuntimeAPI._reduce(sendbuff, recvbuff, count, datatype, op, root, comm_handle, c_void_p(int(s)))
+            assert ret == 0
+
+        @staticmethod
+        def all_gather(
+            sendbuff: int, recvbuff: int, sendcount: int, datatype: int, comm_handle: int, s: Stream
+        ) -> None:
+            ret = NCCLRuntimeAPI._all_gather(sendbuff, recvbuff, sendcount, datatype, comm_handle, c_void_p(int(s)))
+            assert ret == 0
+
+        @staticmethod
+        def reduce_scatter(
+            sendbuff: int, recvbuff: int, recvcount: int, datatype: int, op: int, comm_handle: int, s: Stream
+        ) -> None:
+            ret = NCCLRuntimeAPI._reduce_scatter(
+                sendbuff, recvbuff, recvcount, datatype, op, comm_handle, c_void_p(int(s))
+            )
+            assert ret == 0
+
+        @staticmethod
+        def send(sendbuff: int, count: int, datatype: int, peer: int, comm_handle: int, s: Stream) -> None:
+            ret = NCCLRuntimeAPI._send(sendbuff, count, datatype, peer, comm_handle, c_void_p(int(s)))
+            assert ret == 0, ret
+
+        @staticmethod
+        def recv(recvbuff: int, count: int, datatype: int, peer: int, comm_handle: int, s: Stream) -> None:
+            ret = NCCLRuntimeAPI._recv(recvbuff, count, datatype, peer, comm_handle, c_void_p(int(s)))
+            assert ret == 0, ret
+
+        @staticmethod
+        def group_start() -> None:
+            ret = NCCLRuntimeAPI._group_start()
+            assert ret == 0
+
+        @staticmethod
+        def group_end() -> None:
+            ret = NCCLRuntimeAPI._group_end()
+            assert ret == 0
+
+    nccl_runtime_api = NCCLRuntimeAPI()
 
 
-nccl_runtime_api = NCCLRuntimeAPI()
+def group_start():
+    if not nccl_available():
+        raise RuntimeError("NCCL is not found.")
+    nccl_runtime_api.group_start()
+
+
+def group_end():
+    if not nccl_available():
+        raise RuntimeError("NCCL is not found.")
+    nccl_runtime_api.group_end()

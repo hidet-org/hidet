@@ -21,7 +21,7 @@ from .utils import Task, Operator, Tensor, compute
 
 class FullTask(Task):
     def __init__(
-        self, shape: Sequence[int], value: Union[int, float, bool, Constant, Expr], dtype: Union[DataType, str]
+        self, shape: Sequence[Int], value: Union[int, float, bool, Constant, Expr], dtype: Union[DataType, str]
     ):
         dtype: DataType = data_type(dtype)
         value: Constant = dtype(value) if isinstance(value, (int, float, bool)) else value
@@ -123,12 +123,12 @@ class ArangeOp(Operator):
 class FullOp(Operator):
     def __init__(
         self,
-        shape: Sequence[int],
+        shape: Sequence[Int],
         value: Union[float, int, bool, Constant, Tensor],
         dtype: Optional[DataType] = None,
         device: Union[Device, str] = 'cpu',
     ):
-        shape = [int(v) for v in shape]
+        shape = list(shape)
         device: Device = instantiate_device(device)
 
         if isinstance(value, Tensor):
@@ -183,11 +183,11 @@ def full(
     dtype: Optional[Union[DataType, str]] = None,
     device: Union[Device, str] = 'cpu',
 ) -> Tensor:
-    return FullOp(shape, value, data_type(dtype) if dtype is not None else dtype, device).get_output(0)
+    return FullOp(shape, value, data_type(dtype) if dtype is not None else dtype, device).outputs[0]
 
 
 def arange(start, /, stop=None, step=1, *, dtype=None, device='cpu') -> Tensor:
-    return ArangeOp(start, stop, step, dtype=dtype, device=device).get_output(0)
+    return ArangeOp(start, stop, step, dtype=dtype, device=device).outputs[0]
 
 
 def linspace(start, stop, /, num, *, dtype=None, device='cpu', endpoint=True) -> Tensor:
@@ -197,7 +197,7 @@ def linspace(start, stop, /, num, *, dtype=None, device='cpu', endpoint=True) ->
     if dtype.is_integer():
         warnings.warn('linspace with integer dtype is not supported, changed to float32')
         dtype = dtypes.float32
-    return LinSpaceOp(start, stop, num, dtype=dtype, device=device, endpoint=endpoint).get_output(0)
+    return LinSpaceOp(start, stop, num, dtype=dtype, device=device, endpoint=endpoint).outputs[0]
 
 
 def tri(

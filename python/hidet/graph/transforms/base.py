@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import List, Optional, Dict, Any
 import logging
 
+import hidet.option
 from hidet.graph.flow_graph import FlowGraph
 from .instruments import GraphPassInstrument
 
@@ -91,7 +92,7 @@ class PassContext:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        from ..transforms.graph_patterns import deregister_attn_patterns
+        from ..transforms.graph_patterns.attn_patterns import deregister_attn_patterns
 
         deregister_attn_patterns()
         popped = self._stack.pop()
@@ -160,13 +161,11 @@ class PassContext:
 
         """
         # fmha requires sm75+
-        from hidet.cuda import compute_capability
-
-        cc = compute_capability()
+        cc = hidet.option.cuda.get_arch_pair()
         if cc < (7, 5):
             return self
 
-        from ..transforms.graph_patterns import register_attn_patterns, deregister_attn_patterns
+        from ..transforms.graph_patterns.attn_patterns import register_attn_patterns, deregister_attn_patterns
 
         self.configs['use_attention'] = flag
         if flag:
@@ -261,6 +260,19 @@ class PassContext:
 
         self.instruments.append(ProfileInstrument(log_file, print_stdout))
         return self
+
+    def reduce_cuda_compile_mem(self, enable: Optional[bool] = None):
+        """
+        Reduce CUDA memory used during compilation by using vcuda tensors, might incur compile time cost
+        Parameters
+        ----------
+        enable: Optional[bool]
+            When given, will always enable or disable this instrument.
+            If no argument is given, the compiler will decide to enable this with some heuristics
+        """
+        from .instruments import ConvertGraphToVCuda  # pylint: disable=import-outside-toplevel
+
+        self.instruments.append(ConvertGraphToVCuda(enable))
 
 
 class GraphPass:

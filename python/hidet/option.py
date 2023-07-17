@@ -35,26 +35,20 @@ class OptionRegistry:
         self.choices = choices
         self.checker = checker
 
-    @staticmethod
-    def register_option(
-        name: str,
-        type_hint: str,
-        description: str,
-        default_value: Any,
-        normalizer: Optional[Callable[[Any], Any]] = None,
-        choices: Optional[Iterable[Any]] = None,
-        checker: Optional[Callable[[Any], bool]] = None,
-    ):
-        registered_options = OptionRegistry.registered_options
-        if name in registered_options:
-            raise KeyError(f'Option {name} has already been registered.')
-        registered_options[name] = OptionRegistry(
-            name, type_hint, description, default_value, normalizer, choices, checker
-        )
-        return OptionRegistry
 
-
-register_option = OptionRegistry.register_option
+def register_option(
+    name: str,
+    type_hint: str,
+    description: str,
+    default_value: Any,
+    normalizer: Optional[Callable[[Any], Any]] = None,
+    choices: Optional[Iterable[Any]] = None,
+    checker: Optional[Callable[[Any], bool]] = None,
+):
+    registered_options = OptionRegistry.registered_options
+    if name in registered_options:
+        raise KeyError(f'Option {name} has already been registered.')
+    registered_options[name] = OptionRegistry(name, type_hint, description, default_value, normalizer, choices, checker)
 
 
 def register_hidet_options():
@@ -88,7 +82,7 @@ def register_hidet_options():
         default_value=os.path.abspath(
             os.path.join(git_utils.git_repo_root(), '.hidet_cache')  # developer mode
             if git_utils.in_git_repo()
-            else os.path.join(os.path.expanduser('~'), '.hidet', 'cache')  # user mode
+            else os.path.join(os.path.expanduser('~'), '.cache', 'hidet')  # user mode
         ),
         normalizer=os.path.abspath,
     )
@@ -141,6 +135,52 @@ def register_hidet_options():
         description='Whether to show the verbose flow graph.',
         choices=[True, False],
     )
+    register_option(
+        name='compile_server.addr',
+        type_hint='str',
+        default_value='localhost',
+        description='The address of the compile server. Can be an IP address or a domain name.',
+    )
+    register_option(
+        name='compile_server.port', type_hint='int', default_value=8329, description='The port of the compile server.'
+    )
+    register_option(
+        name='compile_server.enabled',
+        type_hint='bool',
+        default_value=False,
+        description='Whether to enable the compile server.',
+        choices=[True, False],
+    )
+    register_option(
+        name='compile_server.username',
+        type_hint='str',
+        default_value='admin',
+        description='The user name to access the compile server.',
+    )
+    register_option(
+        name='compile_server.password',
+        type_hint='str',
+        default_value='admin_password',
+        description='The password to access the compile server.',
+    )
+    register_option(
+        name='compile_server.repo_url',
+        type_hint='str',
+        default_value='https://github.com/hidet-org/hidet',
+        description='The URL of the repository that the remote server will use.',
+    )
+    register_option(
+        name='compile_server.repo_version',
+        type_hint='str',
+        default_value='main',
+        description='The version (e.g., branch, commit, or tag) that the remote server will use.',
+    )
+    register_option(
+        name='cuda.arch',
+        type_hint='Optional[str]',
+        default_value=None,
+        description='The CUDA architecture to compile the kernels for (e.g., "sm_70"). None for auto-detect.',
+    )
 
 
 register_hidet_options()
@@ -180,6 +220,21 @@ class OptionContext:
     @staticmethod
     def current() -> OptionContext:
         return OptionContext.stack[-1]
+
+    def load_from_file(self, config_path: str):
+        import configparser
+
+        config = configparser.ConfigParser()
+        config.read(config_path)
+        for section in config.sections():
+            for option in config.options(section):
+                value = config.get(section, option)
+                entry_name = '{}.{}'.format(section, option)
+                if entry_name not in OptionRegistry.registered_options:
+                    raise KeyError(
+                        'Option {} found in config file {} is not registered.'.format(entry_name, config_path)
+                    )
+                self.set_option(entry_name, value)
 
     def set_option(self, name: str, value: Any):
         if name not in OptionRegistry.registered_options:
@@ -603,3 +658,87 @@ def debug_show_verbose_flow_graph(enable: bool = True):
         Whether to show verbose information when we convert flow graph in to human-readable text.
     """
     OptionContext.current().set_option('debug_show_verbose_flow_graph', enable)
+
+
+class cuda:
+    @staticmethod
+    def arch(arch: Optional[str] = None):
+        """
+        Set the CUDA architecture to use when building CUDA kernels.
+
+        Parameters
+        ----------
+        arch: Optional[str]
+            The CUDA architecture, e.g., 'sm_35', 'sm_70', 'sm_80', etc. None means using the architecture of the first
+            CUDA GPU on the current machine. Default None.
+        """
+        OptionContext.current().set_option('cuda.arch', arch)
+
+    @staticmethod
+    def get_arch() -> str:
+        """
+        Get the CUDA architecture to use when building CUDA kernels.
+
+        Returns
+        -------
+        ret: str
+            The CUDA architecture, e.g., 'sm_35', 'sm_70', 'sm_80', etc.
+        """
+        arch: Optional[str] = OptionContext.current().get_option('cuda.arch')
+        if arch is None:
+            import hidet.cuda
+
+            # get the architecture of the first CUDA GPU
+            properties = hidet.cuda.properties(0)
+            arch = 'sm_{}{}'.format(properties.major, properties.minor)
+        return arch
+
+    @staticmethod
+    def get_arch_pair() -> Tuple[int, int]:
+        """
+        Get the CUDA architecture to use when building CUDA kernels, with major and minor version as a tuple.
+
+        Returns
+        -------
+        ret: Tuple[int, int]
+            The CUDA architecture, e.g., (3, 5), (7, 0), (8, 0), etc.
+        """
+        arch = cuda.get_arch()
+        return int(arch[3]), int(arch[4])
+
+
+class compile_server:
+    @staticmethod
+    def addr(addr: str):
+        OptionContext.current().set_option('compile_server.addr', addr)
+
+    @staticmethod
+    def port(port: int):
+        OptionContext.current().set_option('compile_server.port', port)
+
+    @staticmethod
+    def enable(flag: bool = True):
+        OptionContext.current().set_option('compile_server.enabled', flag)
+
+    @staticmethod
+    def enabled() -> bool:
+        return OptionContext.current().get_option('compile_server.enabled')
+
+    @staticmethod
+    def username(username: str):
+        OptionContext.current().set_option('compile_server.username', username)
+
+    @staticmethod
+    def password(password: str):
+        OptionContext.current().set_option('compile_server.password', password)
+
+    @staticmethod
+    def repo(repo_url: str, version: str = 'main'):
+        OptionContext.current().set_option('compile_server.repo_url', repo_url)
+        OptionContext.current().set_option('compile_server.repo_version', version)
+
+
+# load the options from config file (e.g., ~/.config/hidet.config) if exists
+_config_path = os.path.join(os.path.expanduser('~'), '.config', 'hidet.config')
+if os.path.exists(_config_path):
+    OptionContext.current().load_from_file(_config_path)

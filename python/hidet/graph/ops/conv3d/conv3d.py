@@ -86,4 +86,4 @@ def conv3d(
     dilations: Union[int, Sequence[int]] = (1, 1, 1),
     groups: int = 1,
 ) -> Tensor:
-    return Conv3dOp(data, weight, stride, dilations, groups).get_output(0)
+    return Conv3dOp(data, weight, stride, dilations, groups).outputs[0]

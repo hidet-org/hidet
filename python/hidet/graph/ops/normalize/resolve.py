@@ -11,16 +11,12 @@
 # limitations under the License.
 from typing import List, Optional, Callable, Any
 
-from hidet.ir import dtypes
+from hidet.utils import prod
 from hidet.ir.expr import is_constant
 from hidet.graph.operator import Operator, Tensor
 from hidet.graph.transforms import ResolveRule, register_resolve_rule
-from hidet.graph.ops.utils import is_contiguous_norm
-from hidet.utils import prod
-
-
-from .norm import NormalizeOp
-from .norm_f16 import normalize_f16
+from hidet.graph.ops.utils import is_contiguous_dims
+from .norm import NormalizeOp, normalize
 
 
 @register_resolve_rule(NormalizeOp)
@@ -32,32 +28,33 @@ class NormalizeResolveRule(ResolveRule):
     2) resolve_generic: Default case, return the output of the regular f32 reduce schedule.
     """
 
-    def resolve_f16(self, op: Operator) -> Optional[List[Tensor]]:
-        dims = op.attrs['dims']
-        x: Tensor = op.inputs[0]
-        if not is_contiguous_norm(dims, len(x.shape)):
-            return None
-        if x.dtype != dtypes.float16 or prod([x.shape[dd] for dd in dims]) % 2 != 0:
-            return None
-        return [normalize_f16(x, dims)]
-
     def resolve_generic(self, op: Operator) -> Optional[List[Tensor]]:
         dims = op.attrs['dims']
         x: Tensor = op.inputs[0]
-        if not is_contiguous_norm(dims, len(x.shape)):
+
+        if not is_contiguous_dims(dims, len(x.shape)):
             from hidet.graph.ops import square, rsqrt
 
             epsilon = op.attrs['epsilon']
             x = x - x.mean(dims, keep_dim=True)
             variance = square(x).mean(dims, keep_dim=True)
             return [x * rsqrt(variance + epsilon)]
-        return op.outputs
+        elif len(dims) > 1:
+            shape = x.shape
+            spatial = prod(shape[i] for i in range(len(shape)) if i not in dims)
+            reduce = prod(shape[i] for i in dims)
+            x = x.reshape((spatial, reduce))
+            x = normalize(x, [-1], op.attrs['epsilon'], op.attrs['accumulate_dtype'])
+            x = x.reshape(shape)
+            return [x]
+
+        return None
 
     def resolve(self, op: Operator) -> Optional[List[Tensor]]:
         assert isinstance(op, NormalizeOp)
         if not is_constant(*op.inputs[0].shape):
             return None
-        resolve_funcs: List[Callable[[Operator], Any]] = [self.resolve_f16, self.resolve_generic]
+        resolve_funcs: List[Callable[[Operator], Any]] = [self.resolve_generic]
         for resolve_func in resolve_funcs:
             outs = resolve_func(op)
             if outs is not None:

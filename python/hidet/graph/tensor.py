@@ -74,7 +74,7 @@ class Tensor:
         self._dtype: DataType = data_type(dtype)
         self._device: Device = instantiate_device(device)
         self._storage: Optional[Storage] = storage
-        self._layout: DataLayout = layout if layout else DataLayout.row_major(self._shape)
+        self._layout: Optional[DataLayout] = layout
         self._trace: Optional[Tuple[Operator, int]] = trace
 
     @property
@@ -166,8 +166,8 @@ class Tensor:
 
         Returns
         -------
-        layout: DataLayout
-            The data layout of the tensor.
+        layout: Optional[DataLayout]
+            The data layout of the tensor. None indicates the compact row major layout.
         """
         return self._layout
 
@@ -569,7 +569,7 @@ class Tensor:
         ret: Tensor
             The tensor with contiguous row-major layout.
         """
-        if isinstance(self.layout, RowMajorLayout):
+        if self.layout is None or isinstance(self.layout, RowMajorLayout):
             return self
         return self.reshape(self.shape)
 
@@ -788,6 +788,45 @@ class Tensor:
                 return Tensor(self.shape, self.dtype, device, self.storage.cuda(device.id), self.layout)
             else:
                 return transfer(self, device)
+
+    def vcuda_(self):
+        """Cast the tensor to vcuda device in place.
+
+        If the current tensor is already on vcuda device, nothing is performed
+
+        Returns
+        -------
+        ret: None
+            This operation is in-place
+        """
+
+        if self.device.is_vcuda():
+            return
+        if not self.device.is_cuda():
+            raise ValueError("Tensor must be on cuda device, got {}".format(self.device))
+        # if the tensor has no storage, there is no need to cast
+        if self.storage is not None:
+            self._storage = self.storage.vcuda(self.device.id)
+        self._device = Device('vcuda', self.device.id)
+
+    def cuda_(self):
+        """Cast the tensor from vcuda device in place.
+
+        If the current tensor is already on cuda device, nothing is performed
+
+        Returns
+        -------
+        ret: None
+            This operation is in-place
+        """
+        if self.device.is_cuda():
+            return
+        if not self.device.is_vcuda():
+            raise ValueError("Tensor must be on vcuda device, got {}".format(self.device))
+
+        if self.storage is not None:
+            self._storage = self.storage.cuda(self.device.id)
+        self._device = Device('cuda', self.device.id)
 
     def copy(self) -> Tensor:
         """Create a copy of current tensor.

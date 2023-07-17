@@ -31,6 +31,7 @@ setup(
         "astunparse",
         "click",
         "packaging",
+        "requests",
         "cuda-python>=11.6.1; platform_system=='Linux'",
     ],
     platforms=["linux"],

@@ -11,12 +11,11 @@
 # limitations under the License.
 from typing import List, Optional, Callable, Any
 
-from hidet.ir import dtypes, Expr
 from hidet.graph.operator import Operator, Tensor
 from hidet.graph.transforms import ResolveRule, register_resolve_rule
-
+from hidet.graph.ops.utils import is_contiguous_dims
+from hidet.utils import prod
 from .reduce import ReduceBaseOp
-from .reduce_f16 import reduce_f16
 
 
 @register_resolve_rule(ReduceBaseOp)
@@ -35,25 +34,31 @@ class ReduceResolveRule(ResolveRule):
         keepdims = op.attrs['keepdims']
         x: Tensor = op.inputs[0]
         shape = x.shape
-        if not all(shape[d] == 1 for d in dims):
-            return None
-        if keepdims:
-            return [x]
-        return [x.squeeze(dims)]
 
-    def resolve_f16(self, op: Operator) -> Optional[List[Tensor]]:
-        dims = op.attrs['dims']
-        keepdims = op.attrs['keepdims']
-        reduce_type = op.task.attrs['reduce_type']
-        x: Tensor = op.inputs[0]
-        last_dim = x.shape[-1]
-        if x.dtype != dtypes.float16 or any(isinstance(d, Expr) for d in x.shape) or last_dim % 2 != 0:
-            return None
-        return [reduce_f16(x, dims, keepdims, reduce_type)]
+        if is_contiguous_dims(dims, len(shape)) and len(dims) > 1:
+            # for some key models, the reduction dimension spans over multiple dims
+            # e.g. 40 x 32 x 32. In this case, it is best to map the reduction as
+            # a 2-D tensor so the warp reduction implementation does not need to
+            # handle this special case and fusion can still work
+            out_shape = op.outputs[0].shape
+            spatial = prod(shape[i] for i in range(len(shape)) if i not in dims)
+            reduce = prod(shape[i] for i in dims)
+            x = x.reshape((spatial, reduce))
+            x = op.reforward([x], {'dims': [-1]})[0]
+            x = x.reshape(out_shape)
+            return [x]
+
+        if all(shape[d] == 1 for d in dims):
+            if keepdims:
+                return [x]
+            else:
+                return [x.squeeze(dims)]
+
+        return None
 
     def resolve(self, op: Operator) -> Optional[List[Tensor]]:
         assert isinstance(op, ReduceBaseOp)
-        resolve_funcs: List[Callable[[Operator], Any]] = [self.resolve_simplify, self.resolve_f16]
+        resolve_funcs: List[Callable[[Operator], Any]] = [self.resolve_simplify]
         for resolve_func in resolve_funcs:
             outs = resolve_func(op)
             if outs is not None:

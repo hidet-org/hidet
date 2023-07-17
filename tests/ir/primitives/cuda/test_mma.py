@@ -69,7 +69,7 @@ def matmul_mma_tensor_core(config: MmaConfig) -> IRModule:
     ],
 )
 def test_mma(config: MmaConfig):
-    if hidet.cuda.compute_capability() < (8, 0):
+    if hidet.option.cuda.get_arch_pair() < (8, 0):
         if 'tf32' in [config.input_dtype, config.output_dtype]:
             pytest.skip('tfloat32 tensor core is supported on device with sm80 or higher')
         if 'bf16' in [config.input_dtype, config.output_dtype]:

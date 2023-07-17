@@ -100,13 +100,13 @@ class IRModule(Node):
         ret: hidet.runtime.CompiledModule
             The compiled module.
         """
-        import os
+        from hashlib import sha256
         from hidet.drivers import build_ir_module
         from hidet.runtime import load_compiled_module
-        from hashlib import sha256
+        import hidet.utils
 
         hash_dir = sha256(str(self).encode()).hexdigest()[:16]
-        output_dir = os.path.join('./outs/ir_modules', hash_dir)
+        output_dir = hidet.utils.cache_dir('ir_modules', hash_dir)
 
         if any(func.kind in ['cuda_kernel', 'cuda_internal'] for func in self.functions.values()):
             target = 'cuda'

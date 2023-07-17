@@ -461,6 +461,7 @@ disable=raw-checker-failed,
         invalid-name,                       # todo: enable this later
         global-statement,                   # todo: enable this later
         no-name-in-module,                  # some modules are not installed in the CI, or the version is too low
+        abstract-method,                    # it is a common case that we don't implement all abstract methods
 
 # Enable the message, report, category or checker with the given id(s). You can
 # either give multiple identifier separated by comma (,) or put this option

@@ -10,12 +10,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List, Optional, Dict, Any
-from hidet.ir.type import TensorType, DataType
-from hidet.ir.expr import Var, Constant
+from hidet.ir.type import TensorType
 from hidet.ir.task import Task
 from hidet.runtime.compiled_task import CompiledTask
-from hidet.graph.tensor import empty, Tensor, SymbolVar
-from hidet.ffi.ffi import get_last_error, BackendException
+from hidet.graph.tensor import Tensor, SymbolVar
 from hidet.runtime.device import Device, instantiate_device
 
 
@@ -42,7 +40,7 @@ class Operator:
         # cache
         self._compiled_task: Optional[CompiledTask] = None
 
-        self.outputs = self._run()
+        self.outputs = self.run()
 
     def __str__(self):
         arguments = ['{}: {}{}'.format(i, t.dtype.name, t.shape) for i, t in enumerate(self.inputs)]
@@ -58,6 +56,17 @@ class Operator:
         ret: Device
             The device of the output tensor of this operator.
         """
+        # Some notes about self.device:
+        #
+        #    Each hidet operator has a device property, which is the device of the output tensor of this operator.
+        #    For common operators, the device property is inferred from the device of the input tensors. For these
+        #    operators, the device for all input tensors and output tensor must be the same.
+        #    There are two exceptions:
+        #    1. for the operators that create a tensor (e.g., hidet.full), they do not have input tensors.
+        #    2. for the transfer operators (e.g., hidet.ops.transfer), the output device is different from the input's
+        #    For these operators, they must explicitly set the 'device' attribute, which is used determine the device
+        #    of the output tensor.
+        #
         if 'device' in self.attrs:
             # this is an operator that create a tensor like hidet.full, or transfer operator
             # get the device from the operator attributes
@@ -66,7 +75,7 @@ class Operator:
             if len(self.inputs) == 0:
                 raise ValueError('Cannot infer device from an operator with no inputs and "device" attribute')
             # when the operator has inputs, get the device from the inputs
-            if not all(t.device == self.inputs[0].device for t in self.inputs):
+            if not all(t.device.target == self.inputs[0].device.target for t in self.inputs):
                 raise ValueError('All inputs of an operator must be on the same device')
             return self.inputs[0].device
 
@@ -82,10 +91,24 @@ class Operator:
         """
         from hidet.graph.ops.transfer import TransferOp
 
+        # Some notes about self.build_target:
+        #
+        #    Each hidet operator has a build_target property, which is the build target of this operator and determines
+        #    the scheduling of task and compilation target of the scheduled tensor program.
+        #    For common operators, the build_target property is inferred from the device of the output tensor.
+        #    There is one exception:
+        #    1. for the transfer operators (e.g., hidet.ops.transfer), the build target is always 'cuda' because the
+        #    current transfer operators are always between cpu and cuda. Even the output tensor is on cpu (in this case,
+        #    the transfer operator copy a tensor from cuda to cpu), the build target is still 'cuda'.
+
         if isinstance(self, TransferOp):
             return 'cuda'
+        if self.device.kind in ["cuda", "vcuda"]:
+            return "cuda"
+        elif self.device.kind == "cpu":
+            return "cpu"
         else:
-            return self.device.kind
+            raise NotImplementedError()
 
     @property
     def compiled_task(self) -> CompiledTask:
@@ -93,73 +116,31 @@ class Operator:
             self._compiled_task = self.task.build(target=self.build_target)
         return self._compiled_task
 
-    def _run(self) -> List[Tensor]:
-        from hidet.ir.tools import rewrite, simplify, collect
+    def run(self) -> List[Tensor]:
+        from hidet.ir.tools import collect
 
-        if all(t.storage is not None for t in self.inputs) and len(collect(self.task, SymbolVar)) == 0:
-            return self.imperative_run(self.inputs)
+        # we imperatively run the operator if
+        # 1. all inputs are concrete tensors (i.e., t.storage is not None)
+        # 2. there is no symbol variable in the task
+        could_imperative_run = (
+            all(t.storage is not None for t in self.inputs) and len(collect(self.task, SymbolVar)) == 0
+        )
+
+        if could_imperative_run:
+            return self.compiled_task.run_async(self.inputs)
         else:
-            output_types: List[TensorType] = [output_node.type for output_node in self.task.outputs]
-            outputs: List[Tensor] = []
-            remap: Dict[Var, Constant] = {}
-            for i, (a, b) in enumerate(zip(self.task.inputs, self.inputs)):
-                for d1, d2 in zip(a.type.shape, b.shape):
-                    if isinstance(d1, Var) and not (d1 in remap and isinstance(remap[d1], Constant)):
-                        remap[d1] = d2
-            for i, output_type in enumerate(output_types):
-                shape = [simplify(rewrite(d, remap)) for d in output_type.shape]
-                outputs.append(
-                    Tensor(shape=shape, dtype=output_type.dtype.name, device=self.device, storage=None, trace=(self, i))
-                )
-            return outputs
+            return self.symbolic_run()
 
-    def get_output(self, idx: int) -> Tensor:
-        if self.outputs is None:
-            outputs = self._run()
-        else:
-            outputs = self.outputs
-        return outputs[idx]
+    def symbolic_run(self) -> List[Tensor]:
+        from hidet.ir.tools import simplify
 
-    def _imperative_run_prepare_outputs(self) -> List[Tensor]:
-        from hidet.ir.tools import simplify, collect, rewrite
-        from hidet.ffi import runtime_api
-
-        # get the mapping from size var to the actual size
-        symbolic_shapes = tuple(tuple(d for d in output.type.shape) for output in self.task.outputs)
-        used_symbols: List[SymbolVar] = collect(symbolic_shapes, SymbolVar)
-        remap: Dict[SymbolVar, Constant] = {}
-        for used_symbol in used_symbols:
-            try:
-                dtype: DataType = used_symbol.type.as_data_type()
-                remap[used_symbol] = dtype(runtime_api.get_symbol_value(used_symbol.name))
-            except BackendException as e:
-                raise RuntimeError('Failed to get the symbol value of "{}"'.format(used_symbol)) from e
-        output_shapes = simplify(rewrite(symbolic_shapes, remap))
-
-        # check if all the output shapes are constant
-        for shape in output_shapes:
-            for d in shape:
-                if not isinstance(d, Constant):
-                    raise RuntimeError(
-                        'The output shape "{}" of "{}" can not be reduced to a constant'.format(d, self.name)
-                    )
-
-        # create the output tensors
-        output_dtypes: List[DataType] = [output.type.dtype for output in self.task.outputs]
-        outputs: List[Tensor] = [
-            empty(shape=shape, dtype=dtype, device=self.device) for shape, dtype in zip(output_shapes, output_dtypes)
-        ]
-
-        return outputs
-
-    def imperative_run(self, inputs: List[Tensor]) -> List[Tensor]:
-        outputs = self.compiled_task.run_async(inputs)
-
-        status = get_last_error()
-        if status is not None:
-            msg = 'Kernel for operator {} failed. Error:\n{}'.format(self.name, status)
-            raise BackendException(msg)
-
+        output_types: List[TensorType] = [output_node.type for output_node in self.task.outputs]
+        outputs: List[Tensor] = []
+        for i, output_type in enumerate(output_types):
+            shape = [simplify(d) for d in output_type.shape]
+            outputs.append(
+                Tensor(shape=shape, dtype=output_type.dtype.name, device=self.device, storage=None, trace=(self, i))
+            )
         return outputs
 
     def reforward(self, inputs: List[Tensor], update_attributes: Optional[Dict[str, Any]] = None) -> List[Tensor]:

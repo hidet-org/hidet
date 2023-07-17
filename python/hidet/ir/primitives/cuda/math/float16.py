@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Callable
+from typing import Callable, Tuple
 from hidet.ir.expr import Expr, ExprInt64, ExprFloat16, ExprInt16
 from hidet.ir.type import FuncType, DataType
 from hidet.ir.func import Function
@@ -17,6 +17,7 @@ from hidet.ir.dtypes import int16, float16, float32, int64
 from hidet.ir.primitives.func import register_primitive_function, primitive_func_pool, call_primitive_func
 from hidet.ir.primitives.math import MathFunctionSet, register_math_function_set
 from hidet.utils import initialize
+import hidet.option
 
 
 @initialize()
@@ -179,17 +180,17 @@ class CUDAFloat16MathFunctionSet(MathFunctionSet):
         return self.call('cuda_f16_floor', a)
 
     def min(self, a: Expr, b: Expr) -> Expr:
-        from hidet.cuda import compute_capability
+        arch_pair: Tuple[int, int] = hidet.option.cuda.get_arch_pair()
 
-        if compute_capability() >= (8, 0):
+        if arch_pair >= (8, 0):
             return self.call('cuda_f16_min_sm80', a, b)
         else:
             return self.call('cuda_f16_min', a, b)
 
     def max(self, a: Expr, b: Expr) -> Expr:
-        from hidet.cuda import compute_capability
+        arch_pair: Tuple[int, int] = hidet.option.cuda.get_arch_pair()
 
-        if compute_capability() >= (8, 0):
+        if arch_pair >= (8, 0):
             return self.call('cuda_f16_max_sm80', a, b)
         else:
             return self.call('cuda_f16_max', a, b)

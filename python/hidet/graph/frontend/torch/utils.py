@@ -112,8 +112,19 @@ def device_from_torch(torch_device) -> Device:
 def symbol_like_torch(tensor) -> Tensor:
     import hidet
     import torch
+    from torch._subclasses.fake_tensor import FakeTensor
 
-    if isinstance(tensor, torch.Tensor):
+    if isinstance(tensor, FakeTensor):
+        # this should be fine for now; torch wraps around the sympy library
+        symbolic_shape = []
+        for s in tensor.shape:
+            try:
+                i = int(s)
+            except Exception:  # pylint: disable=broad-except
+                i = str(s)
+            symbolic_shape.append(i)
+        return hidet.symbol(shape=symbolic_shape, dtype=dtype_from_torch(tensor.dtype).name, device=tensor.device.type)
+    elif isinstance(tensor, torch.Tensor):
         return hidet.symbol(
             shape=list(tensor.shape), dtype=dtype_from_torch(tensor.dtype).name, device=tensor.device.type
         )

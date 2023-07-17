@@ -193,6 +193,7 @@ class FlowGraph:
         output: List[Tensor]
             The output tensors of the computation graph.
         """
+
         from hidet.ffi import runtime_api
 
         inputs: List[Tensor] = list(inputs)
@@ -250,7 +251,7 @@ class FlowGraph:
             GraphForwardContext._before_operator(node, node_inputs)
             logger.debug('[%4d/%d] run operator %s, %s', idx, len(self.nodes), node.name, node.task)
             logger.debug('   inputs: %s', [x.signature() for x in node_inputs])
-            node_outputs = node.imperative_run(node_inputs)
+            node_outputs = node.compiled_task.run_async(node_inputs)
             logger.debug('  outputs: %s', [x.signature() for x in node_outputs])
             GraphForwardContext._after_operator(node, node_inputs, node_outputs)
 
@@ -526,6 +527,54 @@ class FlowGraph:
             usage_count[graph_output] += 1
 
         return free_vars, nodes, usage_count
+
+    def vcuda_(self) -> None:
+        """
+        casts the flow graph object to vcuda device in place
+        """
+        from hidet.runtime.device import instantiate_device, Device
+
+        for x in self.inputs:
+            if not x.device.is_cuda():
+                raise ValueError("Inputs must be on cuda device")
+            x.vcuda_()
+
+        for node in self.nodes:
+            if 'device' in node.attrs:
+                dev = instantiate_device(node.attrs['device'])
+                if dev.is_cuda():
+                    dev = Device('vcuda', dev.id)
+                node.attrs['device'] = dev
+            for inp in node.inputs:
+                if inp.device.is_cuda():
+                    inp.vcuda_()
+            for outp in node.outputs:
+                if outp.device.is_cuda():
+                    outp.vcuda_()
+
+    def cuda_(self) -> None:
+        """
+        casts the flow graph object from vcuda device in place
+        """
+        from hidet.runtime.device import instantiate_device, Device
+
+        for x in self.inputs:
+            if not x.device.is_vcuda():
+                raise ValueError("Inputs must be on vcuda device")
+            x.cuda_()
+
+        for node in self.nodes:
+            if 'device' in node.attrs:
+                dev = instantiate_device(node.attrs['device'])
+                if dev.is_vcuda():
+                    dev = Device('cuda', dev.id)
+                node.attrs['device'] = dev
+            for inp in node.inputs:
+                if inp.device.is_vcuda():
+                    inp.cuda_()
+            for outp in node.outputs:
+                if outp.device.is_vcuda():
+                    outp.cuda_()
 
 
 def trace_from(tensor: Union[Tensor, List[Tensor]], inputs: Optional[Union[Tensor, List[Tensor]]] = None) -> FlowGraph:

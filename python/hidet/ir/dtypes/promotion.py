@@ -12,6 +12,7 @@
 from hidet.ir.type import DataType
 from .integer import u8, u16, u32, u64, i8, i16, i32, i64
 from .floats import f16, bf16, tf32, f32, f64
+from .vector import f16x2, i8x4
 from .complex import c64, c128
 
 
@@ -116,12 +117,15 @@ _promotion_table = {
     (u64, i16): i64,
     (u64, i32): i64,
     (u64, i64): i64,
+    # vector type promotion
+    (f16x2, f16x2): f16x2,
+    (i8x4, i8x4): i8x4,
 }
 
 
 def promote_type(t1: DataType, t2: DataType) -> DataType:
-    if t1.is_vector() or t2.is_vector():
-        raise NotImplementedError("vector type promotion is not implemented")
+    # if t1.is_vector() or t2.is_vector():
+    #     raise NotImplementedError("vector type promotion is not implemented")
 
     if t1.is_integer() and t2.is_float():
         return t2

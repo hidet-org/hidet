@@ -12,7 +12,7 @@
 # pylint: disable=import-outside-toplevel
 import itertools
 from collections import OrderedDict
-from typing import Sequence, Union, List, Mapping, Dict, Tuple, Optional
+from typing import Sequence, Union, List, Dict, Tuple, Optional
 
 from hidet.ir.node import Node
 from hidet.utils import prod
@@ -57,8 +57,7 @@ def concat_let_expr(var2value, body: Expr):
 
 def to_data_layout(obj):
     if isinstance(obj, (tuple, list)):
-        assert all(isinstance(v, int) for v in obj)
-        return DataLayout.row_major(obj)
+        return row_major(*obj)
     elif isinstance(obj, DataLayout):
         return obj
     else:
@@ -74,18 +73,19 @@ class DataLayout(Node):
             shape = []
         self.shape: Tuple[Int] = tuple(int(v) if isinstance(v, ir.Constant) else v for v in shape)
         self.size: Int = size
+        assert all(isinstance(v, (ir.Expr, int)) for v in self.shape)
 
     def __call__(self, *args: Int):
         return self.serialize(*args)
 
     def __add__(self, other):
-        return DataLayout.concat(lhs=self, rhs=other)
+        return concat(lhs=self, rhs=other)
 
     def __radd__(self, other):
-        return DataLayout.concat(lhs=other, rhs=self)
+        return concat(lhs=other, rhs=self)
 
     def __mul__(self, other):
-        return DataLayout.product(outer=self, inner=other)
+        return compose(outer=self, inner=other)
 
     def __str__(self):
         import numpy as np
@@ -116,10 +116,6 @@ class DataLayout(Node):
             # support usage such as within_bound([1, 2, 3])
             args = args[0]
         assert len(args) == len(self.shape)
-        # var2value = OrderedDict()
-        # arg_vars = variablize(args, var2value)
-        # scalar_index = self.global2local(*arg_vars)
-        # scalar_index = concat_let_expr(var2value=var2value, body=scalar_index)
         scalar_index = self.global2local(*args)
         return scalar_index
 
@@ -134,42 +130,26 @@ class DataLayout(Node):
         cond = concat_let_expr(var2value=var2value, body=cond)
         return cond
 
-    # def tile(self, inner_shape: Sequence[Int]):
-    #     return TiledDataLayout(base=self, inner_shape=inner_shape)
-
-    # def split(self, dim2factor: Mapping[int, Int]):
-    #     return SplitDataLayout(base=self, dim2factor=dim2factor)
-
-    # def reorder(self, order: Sequence[int]):
-    #     return self.fuse(order)
-
     def swizzle(self, dim: int, regards_dim: Optional[int] = None, log_step: int = 0):
         return SwizzleLayout(base=self, dim=dim, regards_dim=regards_dim, log_step=log_step)
 
-    # def fuse(self, dim2fuse: Sequence[Union[Sequence[int], int]]):
-    #     return FusedDataLayout(base=self, dim2fuse=dim2fuse)
+    def local(self, *shape: Int):
+        if len(shape) == 1 and isinstance(shape[0], (list, tuple)):
+            shape = shape[0]
+        inner = LocalLayout(shape=shape)
+        return compose(self, inner)
 
-    @staticmethod
-    def product(outer, inner):
-        return ComposedLayout(outer, inner)
+    def row_major(self, *shape: Int):
+        if len(shape) == 1 and isinstance(shape[0], (list, tuple)):
+            shape = shape[0]
+        inner = RowMajorLayout(shape)
+        return compose(self, inner)
 
-    @staticmethod
-    def concat(lhs, rhs):
-        lhs = to_data_layout(lhs)
-        rhs = to_data_layout(rhs)
-        return ConcatLayout(lhs, rhs)
-
-    @staticmethod
-    def local(shape: Sequence[Int]):
-        return LocalLayout(shape=shape)
-
-    @staticmethod
-    def row_major(shape: Sequence[Int]):
-        return RowMajorLayout(shape)
-
-    @staticmethod
-    def column_major(shape: Sequence[Int]):
-        return ColumnMajorLayout(shape)
+    def column_major(self, *shape: Int):
+        if len(shape) == 1 and isinstance(shape[0], (list, tuple)):
+            shape = shape[0]
+        inner = ColumnMajorLayout(shape)
+        return compose(self, inner)
 
 
 class StridesLayout(DataLayout):
@@ -294,109 +274,6 @@ class SwizzleLayout(DataLayout):
         return self.base.global2cond(*args)
 
 
-class TiledDataLayout(DataLayout):
-    def __init__(self, base: DataLayout, inner_shape: Sequence[Int]):
-        assert len(inner_shape) == len(base.shape)
-        assert all(b % a == 0 for a, b in zip(inner_shape, base.shape) if isinstance(a, int) and isinstance(b, int))
-        self.base = base
-        self.inner_shape = inner_shape
-        super().__init__(shape=[b // a for a, b in zip(inner_shape, self.shape)] + list(inner_shape), size=base.size)
-
-    def base_args(self, *args):
-        outer_args, inner_args = args[: len(args) // 2], args[len(args) // 2 :]
-        return [o * factor + i for factor, o, i in zip(self.inner_shape, outer_args, inner_args)]
-
-    def global2local(self, *args):
-        return self.base(*self.base_args(args))
-
-    def global2cond(self, *args):
-        return self.base.within_bound(*self.base_args(args))
-
-
-class SplitDataLayout(DataLayout):
-    """
-    3-dimension tensor with shape [a, b, c]
-    after split(dim2factor={0: 2, 1: 3}) got
-    5-dimension tensor with shape [(a + 1) // 2, 2, (b + 2) // 3, 3, c]
-    """
-
-    def __init__(self, base: DataLayout, dim2factor: Mapping[int, Int]):
-        self.base = base
-        self.dim2factor = dim2factor
-        shape = []
-        for i, s in enumerate(base.shape):
-            if i in dim2factor:
-                factor = dim2factor[i]
-                outer = (s + factor - 1) // factor
-                shape.extend([outer, factor])
-            else:
-                shape.append(s)
-        super().__init__(shape=shape, size=base.size)
-
-    def base_args(self, *args):
-        merged_args = []
-        c = 0
-        for i in range(len(self.base.shape)):
-            if i in self.dim2factor:
-                outer_idx = args[c]
-                inner_idx = args[c + 1]
-                merged_args.append(outer_idx * self.dim2factor[i] + inner_idx)
-                c += 2
-            else:
-                merged_args.append(args[c])
-                c += 1
-        return merged_args
-
-    def global2local(self, *args):
-        return self.base(*self.base_args(*args))
-
-    def global2cond(self, *args: Int) -> Bool:
-        return self.base.within_bound(*self.base_args(*args))
-
-
-class FusedDataLayout(DataLayout):
-    """
-    3-dimension tensor with shape [a, b, c]
-    after fuse([2, [1, 0]]) got
-    3-dimension tensor with shape [c, b * a]
-    (i, j, k) of the result data layout will be mapped to (k, j * I + i) of the original data layout
-    """
-
-    def __init__(self, base: DataLayout, dim2fuse: Sequence[Union[Sequence[int], int]]):
-        self.base = base
-        self.dim2fuse = dim2fuse
-        covered = []
-        shape = []
-        self.dims = []
-        for i, item in enumerate(dim2fuse):
-            if isinstance(item, int):
-                item = [item]
-            else:
-                item = list(item)
-            self.dims.append(item)
-            covered.extend(item)
-            shape.append(prod([base.shape[i] for i in item]))
-
-        msg = "missing some dimension or duplicated dimension"
-        assert len(covered) == len(base.shape) and len(set(covered)) == len(covered), msg
-
-        super().__init__(shape=shape, size=base.size)
-
-    def base_args(self, *args: Int):
-        original_args = [None] * len(self.base.shape)
-        for i in range(len(self.dims)):  # pylint: disable=consider-using-enumerate
-            dim_sizes = [self.base.shape[v] for v in self.dims[i]]
-            for j, dim in enumerate(self.dims[i]):
-                original_args[dim] = args[i] // prod(dim_sizes[j + 1 :]) % dim_sizes[j]
-        return original_args
-
-    def global2local(self, *args: Int) -> Int:
-        return self.base(*self.base_args(*args))
-
-    def global2cond(self, *args: Int) -> Bool:
-        return self.base.within_bound(*self.base_args(*args))
-
-
 class ComposedLayout(DataLayout):
     def __init__(self, outer: DataLayout, inner: DataLayout):
         assert len(outer.shape) == len(inner.shape)
@@ -436,19 +313,29 @@ class ConcatLayout(DataLayout):
         return LogicalAnd(self.lhs.within_bound(*lhs_args), self.rhs.within_bound(*rhs_args))
 
 
-def row_layout(*shape: int):
-    return DataLayout.row_major(shape)
+def row_major(*shape: Int):
+    return RowMajorLayout(shape)
 
 
-def col_layout(*shape: int):
-    return DataLayout.column_major(shape)
+def column_major(*shape: Int):
+    return ColumnMajorLayout(shape)
 
 
-def local_layout(*shape: int):
-    return DataLayout.local(shape)
+def local_layout(*shape: Int):
+    return LocalLayout(shape)
 
 
-def data_layout(shape: List[int], ranks: Optional[List[int]] = None):
+def data_layout(shape: Sequence[Int], ranks: Optional[List[int]] = None):
     if ranks is None:
         ranks = list(range(len(shape)))
     return StridesLayout.from_shape(shape, ranks)
+
+
+def compose(outer: DataLayout, inner: DataLayout) -> DataLayout:
+    return ComposedLayout(outer, inner)
+
+
+def concat(lhs: Union[DataLayout, List[int]], rhs: Union[DataLayout, List[int]]) -> DataLayout:
+    lhs = to_data_layout(lhs)
+    rhs = to_data_layout(rhs)
+    return ConcatLayout(lhs, rhs)

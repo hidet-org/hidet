@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Optional, List, Sequence
+from typing import Optional, List, Sequence, Union
 import functools
 import warnings
 import os
@@ -21,6 +21,7 @@ from subprocess import PIPE
 import hidet.cuda
 from hidet.libinfo import get_include_dirs
 from hidet.ffi.ffi import library_paths
+from hidet.ir.target import Target
 
 
 class CompilationFailed(Exception):
@@ -43,9 +44,10 @@ class SourceCompiler:
         self,
         src_path: str,
         out_lib_path: str,
+        target: Target,
         include_dirs: Sequence[str] = (),
         linking_dirs: Sequence[str] = (),
-        linking_libraries: Sequence[str] = (),
+        linking_libs: Sequence[str] = (),
         object_files: Sequence[str] = (),
     ) -> None:
         raise NotImplementedError()
@@ -116,16 +118,19 @@ class NVCC(SourceCompiler):
         self,
         src_path: str,
         out_lib_path: str,
+        target: Target,
         include_dirs: Sequence[str] = (),
         linking_dirs: Sequence[str] = (),
-        linking_libraries: Sequence[str] = (),
+        linking_libs: Sequence[str] = (),
         object_files: Sequence[str] = (),
     ) -> None:
         if len(object_files) > 0 and out_lib_path.endswith('.o'):
             raise ValueError('Can not compile multiple objects into a single object file.')
 
-        cc = hidet.cuda.compute_capability()
-        cc_code = '{}{}'.format(cc[0], cc[1])
+        if 'arch' in target.attrs:
+            arch = target.attrs['arch']
+        else:
+            arch = hidet.option.cuda.get_arch()
 
         # The following command compiles the cuda source code to a shared library
         # See https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html
@@ -137,13 +142,13 @@ class NVCC(SourceCompiler):
             *['-I{}'.format(include_dir) for include_dir in self.include_dirs + list(include_dirs)],
             # the library directories.
             *['-L{}'.format(library_dir) for library_dir in self.library_dirs + list(linking_dirs)],
-            *['-l{}'.format(library) for library in linking_libraries],
+            *['-l{}'.format(library) for library in linking_libs],
             # optimize host side code via -O3
             '-O3',
             # host compiler options: enable openmp, avx2, unroll loops and fast math
-            '-Xcompiler -fopenmp,-fPIC,-m64,-mavx2,-march=native,-O3,-funroll-loops,-ffast-math',
+            '-Xcompiler -fPIC,-m64,-O3,-funroll-loops,-ffast-math',
             # the target PTX and SASS version.
-            '-gencode arch=compute_{cc},code=sm_{cc}'.format(cc=cc_code),
+            '-gencode arch=compute_{cc},code=sm_{cc}'.format(cc=arch[len('sm_') :]),
             # allow ptxas (PTX assembler) to output information like register/smem usage.
             '--ptxas-options=-v',
             # compile into position independent code.
@@ -200,9 +205,10 @@ class GCC(SourceCompiler):
         self,
         src_path: str,
         out_lib_path: str,
+        target: Target,
         include_dirs: Sequence[str] = (),
         linking_dirs: Sequence[str] = (),
-        linking_libraries: Sequence[str] = (),
+        linking_libs: Sequence[str] = (),
         object_files: Sequence[str] = (),
     ) -> None:
         if len(object_files) > 0 and out_lib_path.endswith('.o'):
@@ -214,7 +220,7 @@ class GCC(SourceCompiler):
             *['-I{}'.format(include_dir) for include_dir in self.include_dirs + list(include_dirs)],
             # the library directories.
             *['-L{}'.format(library_dir) for library_dir in self.library_dirs + list(linking_dirs)],
-            *['-l{}'.format(library) for library in linking_libraries],
+            *['-l{}'.format(library) for library in linking_libs],
             # apply -O3 optimization.
             '-O3',
             # support avx intrinsics
@@ -244,7 +250,7 @@ class GCC(SourceCompiler):
 def compile_source(
     source_file: str,
     output_library_file: str,
-    target: str,
+    target: Union[str, Target],
     include_dirs: Sequence[str] = (),
     linking_dirs: Sequence[str] = (),
     linking_libraries: Sequence[str] = (),
@@ -259,15 +265,15 @@ def compile_source(
         The path to source code.
     output_library_file: str
         The path to output library.
-    target: str
+    target: str or Target
         The target platform. Currently only support 'cpu' and 'gpu'.
-    include_dirs: Optional[Sequence[str]]
+    include_dirs: Sequence[str]
         The include directories.
-    linking_dirs: Optional[Sequence[str]]
+    linking_dirs: Sequence[str]
         The library directories.
     linking_libraries:
         The libraries to link to the output library.
-    object_files: Optional[Sequence[str]]
+    object_files: Sequence[str]
         The path to object files. If not None, the object files will be linked to the output library.
     """
     source_file = os.path.abspath(source_file)
@@ -275,11 +281,14 @@ def compile_source(
     if object_files is not None:
         object_files = [os.path.abspath(object_file) for object_file in object_files]
 
-    if target == 'cuda':
+    if isinstance(target, str):
+        target = Target.from_string(target)
+
+    if target.name == 'cuda':
         if not hidet.cuda.available():
             raise RuntimeError('CUDA is not available.')
         compiler = NVCC()
-    elif target == 'cpu':
+    elif target.name == 'cpu':
         compiler = GCC()
     else:
         raise ValueError('Unknown target platform: {}'.format(target))
@@ -288,8 +297,9 @@ def compile_source(
     compiler.compile(
         source_file,
         output_library_file,
+        target,
         include_dirs=include_dirs,
         linking_dirs=linking_dirs,
-        linking_libraries=linking_libraries,
+        linking_libs=linking_libraries,
         object_files=object_files,
     )

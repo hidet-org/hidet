@@ -14,11 +14,10 @@ from hidet.ir.dtypes import float32, int32
 from hidet.ir.expr import cast
 from hidet.ir.module import IRModule
 from hidet.ir.compute import TensorNode
-from hidet.ir.stmt import DeclareScope
 from hidet.ir.task import Task
 from hidet.ir.compute import compute, reduce
 from hidet.graph.ops.utils import input_like, broadcast_shape, can_mutually_broadcast
-from hidet.graph.ops.utils import tune
+from hidet.ir.library import tune
 from hidet.graph.operator import Operator, Tensor
 from hidet.graph.ops.utils import broadcast_indices
 
@@ -94,7 +93,7 @@ class MatmulF32Taskx86(Task):
         import hidet
         from hidet.ir.type import tensor_type
         from hidet.lang import tensor, grid, as_tensor_pointer
-        from hidet.lang.layout import row_layout, col_layout
+        from hidet.lang.layout import row_major, column_major
         from hidet.lang.cpu import avx_f32x8_store, avx_f32x8_fmadd, avx_f32x8_load, avx_f32x8_broadcast
         from hidet.lang.cpu import avx_f32x4_broadcast, avx_f32x4_fmadd, avx_f32x4_load, avx_f32x4_store
 
@@ -110,8 +109,8 @@ class MatmulF32Taskx86(Task):
 
         tune.check(block_m % tile_m == block_n % tile_n == 0, 'Tile size must divide the corresponding block size')
 
-        packed_a_type = tensor_type('float32', layout=row_layout(block_m // tile_m, 1) * col_layout(tile_m, block_k))
-        packed_b_type = tensor_type('float32', layout=row_layout(1, block_n // tile_n) * row_layout(block_k, tile_n))
+        packed_a_type = tensor_type('float32', layout=row_major(block_m // tile_m, 1) * column_major(tile_m, block_k))
+        packed_b_type = tensor_type('float32', layout=row_major(1, block_n // tile_n) * row_major(block_k, tile_n))
 
         aip_outer_rows = block_m // tile_m
         bip_outer_cols = block_n // tile_n
@@ -307,9 +306,7 @@ class MatmulF32Taskx86(Task):
                         if mr == tile_m and nr == tile_n:
                             micro_kernel(~a[ii, 0], ~b[0, jj], ~c_in_macro[ii, jj], pb, m_size, n_size)
                         else:
-                            temp_c = tensor(
-                                scope=DeclareScope.Default, dtype='float32', layout=row_layout(tile_m, tile_n)
-                            )
+                            temp_c = tensor(dtype='float32', layout=row_major(tile_m, tile_n))
                             for tempi in range(tile_m):
                                 for tempj in range(tile_n):
                                     temp_c[tempi, tempj] = 0.0
@@ -323,17 +320,8 @@ class MatmulF32Taskx86(Task):
                 nbs = (n_size + block_n - 1) // block_n
                 kbs = (k_size + block_k - 1) // block_k
 
-                packed_a = tensor(
-                    scope=DeclareScope.Default,
-                    dtype=float32,
-                    layout=row_layout(aip_outer_rows, 1) * col_layout(tile_m, block_k),
-                )
-
-                packed_b = tensor(
-                    scope=DeclareScope.Default,
-                    dtype=float32,
-                    layout=row_layout(1, bip_outer_cols) * row_layout(block_k, tile_n),
-                )
+                packed_a = tensor(dtype=float32, layout=row_major(aip_outer_rows, 1) * column_major(tile_m, block_k))
+                packed_b = tensor(dtype=float32, layout=row_major(1, bip_outer_cols) * row_major(block_k, tile_n))
 
                 for mb in range(mbs):
                     i = mb * block_m
@@ -418,4 +406,4 @@ class Matmulx86Op(Operator):
 
 
 def matmul_x86(a: Tensor, b: Tensor) -> Tensor:
-    return Matmulx86Op(a, b).get_output(0)
+    return Matmulx86Op(a, b).outputs[0]

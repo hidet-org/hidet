@@ -19,10 +19,11 @@ from hidet.graph.flow_graph import FlowGraph, Operator, Tensor, GraphForwardInst
 class GraphForwardDebugInstrument(GraphForwardInstrument):
     _template = '{:>5} {:>30} {:>3}   {:<25} {:>8} {:>8} {:>8} {:>10} {:>10} {:>10} {:>10}'
 
-    def __init__(self, output_dir='./outs/debug', print_summary=False, dump_outputs=False):
+    def __init__(self, output_dir='./outs/debug', print_summary=False, dump_outputs=False, dump_op=False):
         self.output_dir: str = output_dir
         self.print_summary: bool = print_summary
         self.dump_outputs: bool = dump_outputs
+        self.dump_op: bool = dump_op
 
         self.debugging: bool = False
         self.summary_file: Optional[str] = None
@@ -141,6 +142,13 @@ class GraphForwardDebugInstrument(GraphForwardInstrument):
                 with open(array_path, 'w') as f:
                     with np.printoptions(precision=8, edgeitems=30, linewidth=512):
                         f.write(str(array))
+            if self.dump_op:
+                op_path = os.path.join(
+                    self.output_dir, '{}_{}{}.txt'.format(self.operator_idx, op.name, f'_def{idx}' if idx > 0 else '')
+                )
+                with open(op_path, 'w') as f:
+                    f.write('Operator:\n{}\n'.format(op))
+                    f.write('Task:\n{}\n'.format(op.task))
 
         with open(self.summary_file, 'a') as f:
             f.write('\n'.join(lines) + '\n')

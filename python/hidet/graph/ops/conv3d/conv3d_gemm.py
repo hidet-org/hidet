@@ -62,7 +62,7 @@ class Conv3dGemmImageTransformOp(Operator):
 def conv3d_gemm_image_transform(
     x: Tensor, kernel: List[int], stride: List[int], dilations: List[int], groups: int = 1
 ) -> Tensor:
-    return Conv3dGemmImageTransformOp(x, kernel, stride, dilations, groups).get_output(0)
+    return Conv3dGemmImageTransformOp(x, kernel, stride, dilations, groups).outputs[0]
 
 
 def conv3d_gemm_filter_transform(w: Tensor, groups: int = 1) -> Tensor:

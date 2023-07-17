@@ -14,6 +14,7 @@ import zipfile
 import os
 import json
 from dataclasses import dataclass
+import warnings
 
 from tabulate import tabulate
 import numpy
@@ -28,7 +29,6 @@ from hidet.runtime.compiled_task import CompiledTask, TensorSignature, _check_in
 from hidet.runtime.storage import Storage
 from hidet.ffi import runtime_api
 from hidet.utils import prod
-
 
 ModelExecutionHook = Callable[[int, List['Tensor'], List['Tensor']], None]
 
@@ -297,7 +297,7 @@ class CompiledGraph:
             The CUDA graph.
         """
         from hidet.cuda.graph import CudaGraph, CudaGraphCreationError
-        from hidet.graph.tensor import Tensor, empty
+        from hidet.graph.tensor import Tensor, randn, zeros, empty
 
         for x in self.meta.inputs:
             if x.device == 'cpu':
@@ -309,7 +309,19 @@ class CompiledGraph:
             raise CudaGraphCreationError('Cannot create CUDA graph for a model with CPU tensors.')
 
         def f_create_inputs() -> List[Tensor]:
-            return [empty(shape=x.shape, dtype=x.dtype, device=x.device) for x in self.meta.inputs]
+            dummy_inputs = []
+            for meta_input in self.meta.inputs:
+                dtype = hidet.ir.data_type(meta_input.dtype)
+                if dtype.is_float():
+                    inp = randn(shape=meta_input.shape, dtype=dtype, device=meta_input.device)
+                elif dtype.is_integer():
+                    inp = zeros(shape=meta_input.shape, dtype=dtype, device=meta_input.device)
+                else:
+                    warnings.warn('Creating dummy input with "empty" for data type {}'.format(dtype))
+                    inp = empty(shape=meta_input.shape, dtype=dtype, device=meta_input.device)
+                dummy_inputs.append(inp)
+
+            return dummy_inputs
 
         def f_run(inputs: List[Tensor]) -> List[Tensor]:
             return self.run_async(inputs)
@@ -325,6 +337,9 @@ class CompiledGraph:
 
 def save_compiled_graph(model: CompiledGraph, path: str):
     from hidet.utils.dataclass import asdict
+
+    dirname = os.path.dirname(path)
+    os.makedirs(dirname, exist_ok=True)
 
     with zipfile.ZipFile(path, 'w') as zf:
 

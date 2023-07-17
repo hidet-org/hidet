@@ -326,4 +326,4 @@ def resize2d(
         cubic_exclude=cubic_exclude,
         extrapolation_value=extrapolation_value,
         recompute_scale_factor=recompute_scale_factor,
-    ).get_output(0)
+    ).outputs[0]

@@ -11,6 +11,7 @@
 # limitations under the License.
 from hidet.graph import ops
 from hidet.ir.dtypes import f16
+from hidet.ir.expr import is_true
 from hidet.graph.transforms.graph_patterns import MatchDict
 from hidet.graph.transforms.graph_patterns import op_pattern, register_rewrite_rule, deregister_rewrite_rule
 from hidet.graph.transforms.graph_patterns import TensorPattern, SubgraphRewriteRule
@@ -34,7 +35,7 @@ class ReorderMulScaleRewriteRule(SubgraphRewriteRule):
     def target(self, matched: MatchDict):
         q, k, prod = [matched[t] for t in [self.q, self.k, self.prod]]
         c1 = prod.op.attrs['scalar']
-        qc = MultiplyScalarOp(q, c1).get_output(0)
+        qc = MultiplyScalarOp(q, c1).outputs[0]
         return [ops.matmul(qc, k)]
 
 
@@ -52,7 +53,7 @@ class ReorderDivScaleRewriteRule(SubgraphRewriteRule):
     def target(self, matched: MatchDict):
         q, k, div = [matched[t] for t in [self.q, self.k, self.div]]
         c1 = div.op.attrs['scalar']
-        qc = DivideScalarOp(q, c1).get_output(0)
+        qc = DivideScalarOp(q, c1).outputs[0]
         return [ops.matmul(qc, k)]
 
 
@@ -74,9 +75,7 @@ class AttentionRewriteRule(SubgraphRewriteRule):
         if (
             q.dtype == k.dtype == v.dtype == f16
             and len(q.shape) == len(k.shape) == len(v.shape)
-            and k.shape[-1] == v.shape[-2]
-            and q.shape[-1] == k.shape[-2] == v.shape[-1]
-            and q.shape[-1] <= 160
+            and is_true(q.shape[-1] == v.shape[-1] and q.shape[-1] <= 160)
         ):
             return [attention(q, k, v)]
         else:
@@ -103,9 +102,7 @@ class AttentionMaskAddRewriteRule(SubgraphRewriteRule):
         if (
             q.dtype == k.dtype == v.dtype == f16
             and len(q.shape) == len(k.shape) == len(v.shape)
-            and k.shape[-1] == v.shape[-2]
-            and q.shape[-1] == k.shape[-2] == v.shape[-1]
-            and q.shape[-1] <= 160
+            and is_true(q.shape[-1] == v.shape[-1] and q.shape[-1] <= 160)
         ):
             return [attention(q, k, v, mask)]
         else:

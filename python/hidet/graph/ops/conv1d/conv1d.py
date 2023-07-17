@@ -73,4 +73,4 @@ def conv1d(
     dilations: Union[int, Sequence[int]] = (1),
     groups: int = 1,
 ) -> Tensor:
-    return Conv1dOp(data, weight, stride, dilations, groups).get_output(0)
+    return Conv1dOp(data, weight, stride, dilations, groups).outputs[0]
