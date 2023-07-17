@@ -9,6 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from typing import List
 from hidet.graph.flow_graph import FlowGraph
 
 from .base import GraphPass, PassContext, logger
@@ -18,10 +19,13 @@ from .automatic_mix_precision import automatic_mix_precision_pass
 from .resolve_variant import resolve_variant_pass
 from .fuse_operator import fuse_operator_pass
 from .eliminate_barrier import eliminate_barrier_pass
+from .selective_quantize import selective_quantize_pass
 
 from .resolve_variant import ResolveRule, register_resolve_rule, get_resolve_chain
 from .graph_patterns import TensorPattern, OperatorPattern, SubgraphRewriteRule, register_rewrite_rule, op_pattern
 from .graph_patterns import registered_rewrite_rules, clear_registered_rewrite_rules
+
+from .graph_patterns import quant
 
 
 def optimize(graph: FlowGraph) -> FlowGraph:
@@ -49,6 +53,7 @@ def optimize(graph: FlowGraph) -> FlowGraph:
         subgraph_rewrite_pass(),
         automatic_mix_precision_pass(),
         subgraph_rewrite_pass(),
+        selective_quantize_pass(),
         resolve_variant_pass(),
         fuse_operator_pass(),
         eliminate_barrier_pass(),
