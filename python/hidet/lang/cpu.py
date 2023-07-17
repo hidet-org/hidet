@@ -26,3 +26,5 @@ from hidet.ir.primitives.cpu import (
     avx_f32x8_setzero,
 )
 from hidet.ir.primitives.cpu import avx_free, avx_malloc, x86_memcpy, x86_memset, aligned_alloc
+
+from hidet.ir.primitives.cpu import openmp_get_thread_num, openmp_get_num_threads
