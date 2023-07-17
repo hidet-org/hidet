@@ -202,34 +202,67 @@ class Tensor:
         return negative(self)
 
     def __add__(self, other) -> Tensor:
-        from .ops import add
+        from .ops import add, utils
 
-        return add(self, other)
+        if isinstance(other, Tensor):
+            s = utils.convert_to_tensor(self, other)
+        else:
+            s = self
+        return add(s, other)
 
     def __sub__(self, other) -> Tensor:
-        from .ops import subtract
+        from .ops import subtract, utils
 
-        return subtract(self, other)
+        if isinstance(other, Tensor):
+            s = utils.convert_to_tensor(self, other)
+        else:
+            s = self
+        return subtract(s, other)
 
     def __mul__(self, other) -> Tensor:
         from .ops import multiply, utils
-
-        return multiply(self, utils.convert_to_tensor(other, self))
+        
+        if isinstance(other, Tensor):
+            s = utils.convert_to_tensor(self, other)
+        else:
+            s = self
+        return multiply(s, utils.convert_to_tensor(other, self))
 
     def __truediv__(self, other) -> Tensor:
         from .ops import divide, utils
 
-        return divide(self, utils.convert_to_tensor(other, self))
+        if isinstance(other, Tensor):
+            s = utils.convert_to_tensor(self, other)
+        else:
+            s = self
+        return divide(s, utils.convert_to_tensor(other, self))
+
+    def __floordiv__(self, other) -> Tensor:
+        from .ops import divide, floor, utils
+
+        if isinstance(other, Tensor):
+            s = utils.convert_to_tensor(self, other)
+        else:
+            s = self
+        return floor(divide(s, utils.convert_to_tensor(other, self)))
 
     def __mod__(self, other) -> Tensor:
         from .ops import mod, utils
 
-        return mod(self, utils.convert_to_tensor(other, self))
+        if isinstance(other, Tensor):
+            s = utils.convert_to_tensor(self, other)
+        else:
+            s = self
+        return mod(s, utils.convert_to_tensor(other, self))
 
     def __pow__(self, power, modulo=None) -> Tensor:
         from .ops import pow, utils
 
-        return pow(self, utils.convert_to_tensor(power, self))
+        if isinstance(power, Tensor):
+            s = utils.convert_to_tensor(self, power)
+        else:
+            s = self
+        return pow(s, utils.convert_to_tensor(power, self))
 
     def __matmul__(self, other) -> Tensor:
         from .ops import utils, matmul
@@ -244,42 +277,74 @@ class Tensor:
     def __and__(self, other) -> Tensor:
         from .ops import bitwise_and, utils
 
-        return bitwise_and(self, utils.convert_to_tensor(other, self))
+        if isinstance(other, Tensor):
+            s = utils.convert_to_tensor(self, other)
+        else:
+            s = self
+        return bitwise_and(s, utils.convert_to_tensor(other, self))
 
     def __or__(self, other):
         from .ops import bitwise_or, utils
 
-        return bitwise_or(self, utils.convert_to_tensor(other, self))
+        if isinstance(other, Tensor):
+            s = utils.convert_to_tensor(self, other)
+        else:
+            s = self
+        return bitwise_or(s, utils.convert_to_tensor(other, self))
 
     def __xor__(self, other):
         from .ops import bitwise_xor, utils
 
-        return bitwise_xor(self, utils.convert_to_tensor(other, self))
+        if isinstance(other, Tensor):
+            s = utils.convert_to_tensor(self, other)
+        else:
+            s = self
+        return bitwise_xor(s, utils.convert_to_tensor(other, self))
 
     def __lshift__(self, other):
         from .ops import bitwise_left_shift, utils
 
-        return bitwise_left_shift(self, utils.convert_to_tensor(other, self))
+        if isinstance(other, Tensor):
+            s = utils.convert_to_tensor(self, other)
+        else:
+            s = self
+        return bitwise_left_shift(s, utils.convert_to_tensor(other, self))
 
     def __rshift__(self, other):
         from .ops import bitwise_right_shift, utils
 
-        return bitwise_right_shift(self, utils.convert_to_tensor(other, self))
+        if isinstance(other, Tensor):
+            s = utils.convert_to_tensor(self, other)
+        else:
+            s = self
+        return bitwise_right_shift(s, utils.convert_to_tensor(other, self))
 
     def __lt__(self, other):
         from .ops import less, utils
 
-        return less(self, utils.convert_to_tensor(other, self))
+        if isinstance(other, Tensor):
+            s = utils.convert_to_tensor(self, other)
+        else:
+            s = self
+        return less(s, utils.convert_to_tensor(other, self))
 
     def __le__(self, other):
         from .ops import less_equal, utils
 
-        return less_equal(self, utils.convert_to_tensor(other, self))
+        if isinstance(other, Tensor):
+            s = utils.convert_to_tensor(self, other)
+        else:
+            s = self
+        return less_equal(s, utils.convert_to_tensor(other, self))
 
     def __gt__(self, other):
         from .ops import greater, utils
 
-        return greater(self, utils.convert_to_tensor(other, self))
+        if isinstance(other, Tensor):
+            s = utils.convert_to_tensor(self, other)
+        else:
+            s = self
+        return greater(s, utils.convert_to_tensor(other, self))
 
     # we do not define __eq__ method for Tensor
 

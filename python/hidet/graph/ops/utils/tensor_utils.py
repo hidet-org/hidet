@@ -14,7 +14,7 @@ from typing import Tuple, List, Union, Sequence, Optional
 import builtins
 from hidet.ir.layout import DataLayout
 from hidet.ir.type import Int
-from hidet.ir.expr import Var, Expr, Constant, is_constant
+from hidet.ir.expr import Var, SymbolVar, Expr, Constant, is_constant
 from hidet.ir.type import TensorType, tensor_type, DataType
 from hidet.ir.task import Task, InverseMap
 from hidet.ir.module import IRModule
@@ -143,7 +143,10 @@ def convert_to_tensor(value: Union[int, float, bool, complex, Tensor], involved_
     from hidet.graph.tensor import full_like
 
     if isinstance(value, Tensor):
-        return value
+        if value.shape == () and value.device.is_cpu():
+            return value.to(device=involved_tensor.device)
+        else:
+            return value
 
     if involved_tensor.dtype.is_complex():
         return full_like(involved_tensor, fill_value=value, shape=[], dtype=involved_tensor.dtype)

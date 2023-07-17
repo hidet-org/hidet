@@ -15,7 +15,7 @@ import logging
 import torch
 import hidet.option
 from hidet.ir.type import data_type
-from hidet.ir.expr import is_constant
+from hidet.ir.expr import is_constant, unique_symbol_var, SymbolVar
 from hidet.graph.flow_graph import FlowGraph
 from hidet.graph.transforms import PassContext, optimize
 from hidet.runtime import CompiledGraph
@@ -104,7 +104,7 @@ def hidet_backend(graph_module, example_inputs):
     interpreter: Interpreter = hidet.frontend.from_torch(graph_module)
 
     # prepare dummy and symbolic inputs for correctness and flow graph construction
-    inputs: List[Union[Tensor, int, bool, float]] = []  # for flow graph construction
+    inputs: List[Union[Tensor, int, bool, float, SymbolVar]] = []  # for flow graph construction
     for example_input in example_inputs:
         if isinstance(example_input, torch.Tensor):
             symbolic_input = symbol_like_torch(example_input)
@@ -114,8 +114,9 @@ def hidet_backend(graph_module, example_inputs):
         elif isinstance(example_input, torch.SymInt):
             try:
                 inputs.append(int(example_input))
-            except Exception as e:
-                raise ValueError(f"hidet_backend: free symbolic example input {example_input}") from e
+            except Exception:  # pylint: disable=broad-except
+                # raise ValueError(f"hidet_backend: free symbolic example input {example_input}") from e
+                inputs.append(unique_symbol_var(root=str(example_input), dtype='int32'))
         else:
             raise ValueError(f'hidet_backend: unexpected example input {example_input}, type {type(example_input)}')
 
@@ -151,14 +152,17 @@ def hidet_backend(graph_module, example_inputs):
     # symbolic run to get flow graph
     output = interpreter(*inputs)
     output_format, output_tensors = serialize_output(output)
-    input_tensors = [x for x in inputs if isinstance(x, hidet.Tensor)]
-    input_tensor_indices = [i for (i, x) in enumerate(inputs) if isinstance(x, hidet.Tensor)]
-    flow_graph: FlowGraph = hidet.trace_from(output_tensors, inputs=input_tensors)
-
-    executor = generate_executor(flow_graph)
+    input_traceables = [x for x in inputs if isinstance(x, (hidet.Tensor, SymbolVar))]
+    input_traceable_indices = [i for (i, x) in enumerate(inputs) if isinstance(x, (hidet.Tensor, SymbolVar))]
+    flow_graph: FlowGraph = hidet.trace_from(output_tensors, inputs=input_traceables)
+    if len(input_traceables) != 0:
+        executor = generate_executor(flow_graph)
+    else:
+        # for now, the constant folding prevents generating an executor with zero inputs
+        executor = lambda *x: list(t.torch() for t in flow_graph.outputs)
 
     def wrapper(*args: Tensor):
-        args = [args[i] for i in input_tensor_indices]
+        args = [args[i] for i in input_traceable_indices]
         outputs: Sequence[torch.Tensor] = executor(*args)
         ret = deserialize_output(output_format, outputs)
         return ret

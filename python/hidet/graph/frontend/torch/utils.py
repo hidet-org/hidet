@@ -11,9 +11,9 @@
 # limitations under the License.
 from typing import Tuple, Any, List, Union, Dict, Optional
 from pathlib import Path
-from hidet.graph.tensor import Tensor
+from hidet.graph.tensor import Tensor, full
 from hidet.ir.type import DataType
-from hidet.ir import dtypes
+from hidet.ir import dtypes, Expr
 from hidet.runtime.device import Device
 from .availability import available
 
@@ -140,6 +140,14 @@ class Placeholder:
         return '<{}>'.format(self.index)
 
 
+class ExprOutput:
+    def __init__(self, index) -> None:
+        self.index = index
+
+    def __str__(self):
+        return '%<{}>'.format(self.index)
+
+
 class Serializer:
     def __init__(self, obj: Any):
         self.obj = obj
@@ -161,6 +169,8 @@ class Serializer:
             return self.visit_tuple(obj)
         elif isinstance(obj, (str, int, float)):
             return self.visit_atomic(obj)
+        elif isinstance(obj, Expr):
+            return self.visit_expr(obj)
         else:
             raise RuntimeError('Failed to serialize object of type {}'.format(type(obj)))
 
@@ -181,6 +191,13 @@ class Serializer:
 
     def visit_atomic(self, a: Union[str, int, float]):
         return a
+
+    def visit_expr(self, a: Expr):
+        traced_tensor = full([], a)
+        expr_output = ExprOutput(self.current_index)
+        self.current_index += 1
+        self.tensors.append(traced_tensor)
+        return expr_output
 
 
 class Deserializer:
@@ -206,6 +223,8 @@ class Deserializer:
             return self.visit_atomic(obj)
         elif isinstance(obj, Tensor):
             return self.visit_tensor(obj)
+        elif isinstance(obj, ExprOutput):
+            return self.visit_expr(obj)
         else:
             raise RuntimeError('Failed to serialize object of type {}'.format(type(obj)))
 
@@ -220,6 +239,19 @@ class Deserializer:
 
     def visit_placeholder(self, p: Placeholder):
         return self.tensors[p.index]
+
+    def visit_expr(self, e: ExprOutput):
+        from torch import float64, float32, int32, int64, bool
+
+        val = self.tensors[e.index]
+        if val.dtype == bool:
+            return bool(val)
+        elif val.dtype in (int32, int64):
+            return int(val)
+        elif val.dtype in (float32, float64):
+            return float(val)
+
+        raise RuntimeError(f"Unable to convert dtype {val.dtype} to python object for ExprOutput")
 
     def visit_tensor(self, t: Tensor):
         raise RuntimeError('Tensors should not be present in the serialized object')

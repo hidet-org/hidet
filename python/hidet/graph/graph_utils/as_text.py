@@ -70,15 +70,19 @@ def flow_graph_as_text(graph: FlowGraph) -> str:
     param_docs = []
     for x in graph.inputs:
         name = printer.namer(x)
-        param_docs.append(Text(name) + ': ' + get_tensor_sig(x))
+        if isinstance(x, Tensor):
+            param_docs.append(Text(name) + ': ' + get_tensor_sig(x))
+        else:
+            param_docs.append(Text(name) + f': Symbol[{x.type}]')
 
     # head
     head_doc = 'Graph(' + doc_join(param_docs, ', ') + ')'
 
     for graph_input in graph.inputs:
-        for dim in graph_input.shape:
-            if isinstance(dim, SymbolVar):
-                size_var_equivalence[dim] = dim
+        if isinstance(graph_input, Tensor):
+            for dim in graph_input.shape:
+                if isinstance(dim, SymbolVar):
+                    size_var_equivalence[dim] = dim
 
     # body
     body_doc = Doc()

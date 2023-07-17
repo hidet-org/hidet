@@ -107,9 +107,11 @@ def forward_context() -> GraphForwardContext:
 class FlowGraph:
     """The computation graph representation."""
 
-    def __init__(self, outputs: Sequence[Tensor], inputs: Optional[Sequence[Tensor]] = None, nodes=None):
+    def __init__(
+        self, outputs: Sequence[Tensor], inputs: Optional[Sequence[Union[Tensor, SymbolVar]]] = None, nodes=None
+    ):
         self.outputs: List[Tensor] = list(outputs)
-        self.inputs: Optional[List[Tensor]] = list(inputs) if inputs is not None else None
+        self.inputs: Optional[List[Union[Tensor, SymbolVar]]] = list(inputs) if inputs is not None else None
         self._nodes: Optional[List[Operator]] = nodes
         self._usage_count: Optional[Dict[Tensor, int]] = None
         self.update_nodes()
@@ -179,13 +181,13 @@ class FlowGraph:
             hidet.option.parallel_build(False)
             hidet.drivers.build_task_batch(tunable_tasks)  # build tunable tasks one by one
 
-    def forward(self, inputs: List[Tensor]) -> List[Tensor]:
+    def forward(self, inputs: List[Union[Tensor, int, float, bool]]) -> List[Tensor]:
         """Run the computation graph.
 
         Parameters
         ----------
-        inputs: List[Tensor]
-            The input tensors. They should be consistent with the symbolic inputs
+        inputs: List[Union[Tensor, int, float, bool]]
+            The input tensors or scalars. They should be consistent with the symbolic inputs
             of the computation graph.
 
         Returns
@@ -199,27 +201,51 @@ class FlowGraph:
         inputs: List[Tensor] = list(inputs)
 
         # the input tensors should be non-symbolic
-        for idx, tensor in enumerate(inputs):
-            if tensor.storage is None:
-                msg = 'Expect non-symbolic input tensors, got symbolic input {} ({}).'.format(idx, tensor.signature())
-                raise ValueError(msg)
+        for idx, (concrete, symbolic) in enumerate(zip(inputs, self.inputs)):
+            if isinstance(symbolic, Tensor):
+                assert isinstance(concrete, Tensor)
+                if concrete.storage is None:
+                    msg = 'Expect non-symbolic input tensors, got symbolic input {} ({}).'.format(
+                        idx, concrete.signature()
+                    )
+                    raise ValueError(msg)
+            elif isinstance(symbolic, SymbolVar):
+                if isinstance(concrete, Tensor):
+                    # we treat a zero dimensional tensor on the cpu like a scalar
+                    assert (
+                        concrete.storage is not None and concrete.device.is_cpu() and len(concrete.shape) == 0
+                    ), f"expect a scalar concrete tensor, got {concrete} at index {idx}"
+                else:
+                    assert isinstance(
+                        concrete, (int, float, bool)
+                    ), f'expected a scalar python value, got {concrete} as index {idx}'
+            else:
+                raise ValueError(
+                    f'Unknown value, expected one of Tensor, int, float or bool, got {concrete} at index {idx}'
+                )
 
         # build the kernel for each operator in the graph
         self._build_nodes()
 
         # set the symbol values
         for expect_input, actual_input in zip(self.inputs, inputs):
-            if expect_input.device != actual_input.device:
-                raise ValueError(
-                    'Expect input {} to have device {}, got {}.'.format(
-                        expect_input, expect_input.device, actual_input.device
+            if isinstance(expect_input, Tensor):
+                if expect_input.device != actual_input.device:
+                    raise ValueError(
+                        'Expect input {} to have device {}, got {}.'.format(
+                            expect_input, expect_input.device, actual_input.device
+                        )
                     )
-                )
-            for expect_dim, actual_dim in zip(expect_input.shape, actual_input.shape):
-                if isinstance(expect_dim, SymbolVar):
-                    runtime_api.set_symbol_value(expect_dim.name, int(actual_dim))
+                for expect_dim, actual_dim in zip(expect_input.shape, actual_input.shape):
+                    if isinstance(expect_dim, SymbolVar):
+                        runtime_api.set_symbol_value(expect_dim.name, int(actual_dim))
+                    else:
+                        assert is_constant(actual_dim, expect_dim) and expect_dim == actual_dim
+            else:  # a symbolic variable
+                if isinstance(actual_input, Tensor):
+                    runtime_api.set_symbol_value(expect_input.name, actual_input.item())
                 else:
-                    assert is_constant(actual_dim, expect_dim) and expect_dim == actual_dim
+                    runtime_api.set_symbol_value(expect_input.name, actual_input)
 
         GraphForwardContext._before_graph(self, inputs)
 
@@ -228,7 +254,8 @@ class FlowGraph:
         usage_count = self.usage_count.copy()
         tensor_map: Dict[Tensor, Tensor] = {}  # symbolic tensor -> actual tensor during the forward process
         for st, at in zip(self.inputs, inputs):
-            tensor_map[st] = at
+            if isinstance(at, Tensor):
+                tensor_map[st] = at
 
         # run each operator in the graph in a topological order
         for idx, node in enumerate(self.nodes):
@@ -274,12 +301,15 @@ class FlowGraph:
     def dummy_inputs(self) -> List[Tensor]:
         inputs = []
         for symbolic_input in self.inputs:
-            if symbolic_input.dtype.is_integer():
-                inputs.append(zeros_like(symbolic_input))
-            elif symbolic_input.dtype.is_float():
-                inputs.append(randn_like(symbolic_input))
+            if not isinstance(symbolic_input, SymbolVar):
+                if symbolic_input.dtype.is_integer():
+                    inputs.append(zeros_like(symbolic_input))
+                elif symbolic_input.dtype.is_float():
+                    inputs.append(randn_like(symbolic_input))
+                else:
+                    assert False
             else:
-                assert False
+                raise RuntimeError("Can not generate dummy inputs for any SymbolVar inputs.")
         return inputs
 
     def save(self, model_file: str):

@@ -19,6 +19,7 @@ import itertools
 import tabulate
 import torch
 
+from hidet.ir.expr import logical_not
 from hidet.ir.type import data_type
 from hidet.graph.tensor import Tensor
 from .utils import relative_absolute_error
@@ -272,7 +273,12 @@ class Interpreter:
             # this branch handles all the other cases, such as getitem, operator.add, etc.
             #   since the inputs are all hidet tensors, applying this function should resolve to
             #   the actual traced implementation
-            return code_obj
+
+            # unfortunately, there is no way to overload not operator in python
+            if code_obj is operator.not_:
+                return logical_not
+            else:
+                return code_obj
 
     @staticmethod
     def _callable_info(f: Callable) -> Tuple[str, str, int]:
@@ -339,6 +345,7 @@ class Interpreter:
         graph_hidet_output: Optional[Any] = None
 
         for idx, node in enumerate(self.graph.nodes):
+            # print(node.op)
             assert isinstance(node, torch.fx.Node)
             logger.debug(f"interpreting node {idx}: {node.format_node()}")
 
@@ -346,6 +353,8 @@ class Interpreter:
                 arg = next(args_iter)
                 if isinstance(arg, torch.Tensor):
                     raise RuntimeError('input tensor must be hidet Tensor, got torch.Tensor')
+                # print(arg)
+                # print(node.name)
                 hidet_env[node.name] = arg
             elif node.op == "get_attr":
                 target_atoms = node.target.split(".")
@@ -359,6 +368,7 @@ class Interpreter:
                 exec_func = self._lookup_function(node.target)
                 hidet_args = load_arg(node.args, hidet_env)
                 hidet_kwargs = load_arg(node.kwargs, hidet_env)
+                # print('function: ', node)
                 try:
                     hidet_env[node.name] = exec_func(*hidet_args, **hidet_kwargs)
                 except Exception as e:

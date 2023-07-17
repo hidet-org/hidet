@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Optional, Tuple, Dict, Any, Callable
+from typing import List, Optional, Tuple, Dict, Any, Callable, Union
 import zipfile
 import os
 import json
@@ -25,7 +25,7 @@ from hidet.ir.type import void_p, data_type
 from hidet.ir.dtypes import i32, i64
 from hidet.runtime.device import Device
 from hidet.runtime.compiled_module import CompiledModule
-from hidet.runtime.compiled_task import CompiledTask, TensorSignature, _check_inputs
+from hidet.runtime.compiled_task import CompiledTask, TensorSignature, SymbolSignature, _check_inputs
 from hidet.runtime.storage import Storage
 from hidet.ffi import runtime_api
 from hidet.utils import prod
@@ -40,7 +40,7 @@ class ExternalStorage(Storage):
 
 @dataclass
 class GraphMetaData:
-    inputs: List[TensorSignature]
+    inputs: List[Union[TensorSignature, SymbolSignature]]
     outputs: List[TensorSignature]
     hidet_version: str
     num_kernels: int
@@ -93,11 +93,18 @@ class CompiledGraph:
 
         # derived properties
         self.dynamic_dims: List[Tuple[str, Tuple[int, int]]] = []  # [(name, (tensor_index, dim_index))]
+        self.is_dynamic: bool = False
+
         for tensor_index, sig in enumerate(self.meta.inputs):
-            for dim_index, dim in enumerate(sig.shape):
-                if isinstance(dim, str) and dim not in [v for v, _ in self.dynamic_dims]:
-                    self.dynamic_dims.append((dim, (tensor_index, dim_index)))
-        self.is_dynamic: bool = len(self.dynamic_dims) > 0
+            if isinstance(sig, TensorSignature):
+                for dim_index, dim in enumerate(sig.shape):
+                    if isinstance(dim, str) and dim not in [v for v, _ in self.dynamic_dims]:
+                        self.dynamic_dims.append((dim, (tensor_index, dim_index)))
+            else:
+                assert isinstance(sig, SymbolSignature)
+                self.is_dynamic = True
+
+        self.is_dynamic |= len(self.dynamic_dims) > 0
 
         # runtime state
         self.dispatch_table_path = hidet.utils.cache_file('graphs', self.meta.graph_hash, 'dispatch_table.txt')
@@ -116,6 +123,7 @@ class CompiledGraph:
             else:
                 head = ''
             rows.append([head, dtype.short_name + str(sig.shape)])
+
         for i, sig in enumerate(self.meta.outputs):
             dtype = data_type(sig.dtype)
             if i == 0:
@@ -189,10 +197,19 @@ class CompiledGraph:
             f.write('\n')
 
     def _update_symbol_dims(self, inputs) -> Tuple[int, ...]:
+        from hidet import Tensor
+
         symbol_dims = []
         for name, (tensor_index, dim_index) in self.dynamic_dims:
             symbol_dims.append(inputs[tensor_index].shape[dim_index])
             runtime_api.set_symbol_value(name, symbol_dims[-1])
+        for sym, val in zip(self.meta.inputs, inputs):
+            if isinstance(sym, SymbolSignature):
+                if isinstance(val, Tensor):
+                    runtime_api.set_symbol_value(sym.name, val.item())
+                else:
+                    runtime_api.set_symbol_value(sym.name, val)
+
         return tuple(symbol_dims)
 
     def _create_outputs(self):
@@ -240,6 +257,7 @@ class CompiledGraph:
 
         index2tensor: Dict[int, Tensor] = {}
         exe = self.graph_execution
+        # exe.inputs_index only
         for i in range(len(inputs)):
             index2tensor[exe.inputs_index[i]] = inputs[i]
         for i in range(len(self.weights)):
@@ -269,8 +287,8 @@ class CompiledGraph:
 
         Parameters
         ----------
-        inputs: Sequence[hidet.Tensor]
-            The input tensors.
+        inputs: Sequence[Union[hidet.Tensor, int, float, bool]]
+            The input tensors, or scalars.
 
         Returns
         -------
@@ -282,10 +300,13 @@ class CompiledGraph:
 
         symbol_dims = self._update_symbol_dims(inputs)
 
+        # only include TensorSignatures, which indicates that the input is a tensor,
+        # and not set through the symbol table, which it would be if it were a scalar.
+        tensor_only = [i for (i, meta) in zip(inputs, self.meta.inputs) if isinstance(meta, TensorSignature)]
         if symbol_dims in self.dispatch_table:
-            return self._run_fast_path(inputs, symbol_dims)
+            return self._run_fast_path(tensor_only, symbol_dims)
         else:
-            return self._run_slow_path(inputs, symbol_dims)
+            return self._run_slow_path(tensor_only, symbol_dims)
 
     def cuda_graph(self):
         """
@@ -300,26 +321,34 @@ class CompiledGraph:
         from hidet.graph.tensor import Tensor, randn, zeros, empty
 
         for x in self.meta.inputs:
-            if x.device == 'cpu':
-                raise CudaGraphCreationError(f'Cannot create CUDA graph for a model with CPU inputs:\n {x}')
-            for d in x.shape:
-                if not isinstance(d, int):
-                    raise CudaGraphCreationError(f'Cannot create CUDA graph for a model with dynamic inputs:\n {x}')
+            if isinstance(x, TensorSignature):
+                if x.device == 'cpu':
+                    raise CudaGraphCreationError(f'Cannot create CUDA graph for a model with CPU inputs:\n {x}')
+                for d in x.shape:
+                    if not isinstance(d, int):
+                        raise CudaGraphCreationError(f'Cannot create CUDA graph for a model with dynamic inputs:\n {x}')
+            else:
+                assert isinstance(x, SymbolSignature)
+                raise CudaGraphCreationError(f'Cannot create CUDA graph for a model with symbolic inputs:\n {x}')
+
         if any(device == 'cpu' for device in self.graph_execution.tensor_device):
             raise CudaGraphCreationError('Cannot create CUDA graph for a model with CPU tensors.')
 
         def f_create_inputs() -> List[Tensor]:
             dummy_inputs = []
             for meta_input in self.meta.inputs:
-                dtype = hidet.ir.data_type(meta_input.dtype)
-                if dtype.is_float():
-                    inp = randn(shape=meta_input.shape, dtype=dtype, device=meta_input.device)
-                elif dtype.is_integer():
-                    inp = zeros(shape=meta_input.shape, dtype=dtype, device=meta_input.device)
+                if isinstance(meta_input, TensorSignature):
+                    dtype = hidet.ir.data_type(meta_input.dtype)
+                    if dtype.is_float():
+                        inp = randn(shape=meta_input.shape, dtype=dtype, device=meta_input.device)
+                    elif dtype.is_integer():
+                        inp = zeros(shape=meta_input.shape, dtype=dtype, device=meta_input.device)
+                    else:
+                        warnings.warn('Creating dummy input with "empty" for data type {}'.format(dtype))
+                        inp = empty(shape=meta_input.shape, dtype=dtype, device=meta_input.device)
+                    dummy_inputs.append(inp)
                 else:
-                    warnings.warn('Creating dummy input with "empty" for data type {}'.format(dtype))
-                    inp = empty(shape=meta_input.shape, dtype=dtype, device=meta_input.device)
-                dummy_inputs.append(inp)
+                    raise RuntimeError(f'Unable to create dummy input for {meta_input}')
 
             return dummy_inputs
 

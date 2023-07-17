@@ -23,7 +23,7 @@ from hidet.graph.tensor import Tensor
 from hidet.graph.flow_graph import FlowGraph
 from hidet.runtime.compiled_module import CompiledModule
 from hidet.runtime.compiled_graph import CompiledGraph, GraphMetaData, GraphExecution, GraphExecutionInstruction
-from hidet.runtime.compiled_task import CompiledTask, TensorSignature
+from hidet.runtime.compiled_task import CompiledTask, TensorSignature, SymbolSignature
 from hidet.graph.operator import Operator
 from hidet.ir import primitives
 from hidet.utils.dataclass import asdict
@@ -51,12 +51,13 @@ def get_graph_intermediates(graph):
 def create_graph_execution(graph: FlowGraph, weights: List[Tensor], node2kernel: List[int]) -> GraphExecution:
     usage_count: Dict[Tensor, int] = graph.usage_count
 
+    graph_input_tensors = [x for x in graph.inputs if isinstance(x, Tensor)]
     tensor_index: Dict[Tensor, int] = {}
     index_tensor: Dict[int, Tensor] = {}
     tensor_device: List[str] = []
     index_count = 0
 
-    for x in graph.inputs:
+    for x in graph_input_tensors:
         tensor_index[x] = index_count
         index_tensor[index_count] = x
         tensor_device.append(x.device.kind)
@@ -69,7 +70,7 @@ def create_graph_execution(graph: FlowGraph, weights: List[Tensor], node2kernel:
         index_count += 1
 
     weights_index = [tensor_index[x] for x in weights]
-    inputs_index = [tensor_index[x] for x in graph.inputs]
+    inputs_index = [tensor_index[x] for x in graph_input_tensors]
     instructions: List[GraphExecutionInstruction] = []
 
     for node_idx, node in enumerate(graph.nodes):
@@ -107,15 +108,19 @@ def get_graph_meta_data(graph: FlowGraph, num_kernels, space: int) -> GraphMetaD
     # input tensor signature
     inputs = []
     for x in graph.inputs:
-        shape = []
-        for d in x.shape:
-            if isinstance(d, int):
-                shape.append(d)
-            elif isinstance(d, SymbolVar):
-                shape.append(d.name)
-            else:
-                raise RuntimeError('Graph input shape must be either int or symbolic var, but got {}'.format(d))
-        inputs.append(TensorSignature(device=x.device.kind, dtype=x.dtype.name, shape=shape))
+        if isinstance(x, Tensor):
+            shape = []
+            for d in x.shape:
+                if isinstance(d, int):
+                    shape.append(d)
+                elif isinstance(d, SymbolVar):
+                    shape.append(d.name)
+                else:
+                    raise RuntimeError('Graph input shape must be either int or symbolic var, but got {}'.format(d))
+            inputs.append(TensorSignature(device=x.device.kind, dtype=x.dtype.name, shape=shape))
+        else:
+            assert isinstance(x, SymbolVar)
+            inputs.append(SymbolSignature(name=x.name, dtype=x.type.name))  # SymbolVar always has type datatype
 
     # output tensor signature
     outputs = []
@@ -147,8 +152,9 @@ def build_graph_module(graph: FlowGraph, graph_weights: List[Tensor], node2kerne
     from hidet.ir.primitives.runtime import memory_planner_init, memory_planner_allocate, memory_planner_free
     from hidet.ir.primitives.runtime import memory_planner_used
 
+    graph_input_tensors: List[Tensor] = [x for x in graph.inputs if isinstance(x, Tensor)]
     graph_intermediates: List[Tensor] = get_graph_intermediates(graph)
-    graph_tensors: List[Tensor] = list(set(graph_weights + graph_intermediates + graph.inputs + graph.outputs))
+    graph_tensors: List[Tensor] = list(set(graph_weights + graph_intermediates + graph_input_tensors + graph.outputs))
     tensor_size: Dict[Tensor, Expr] = {x: int64(x.nbytes) for x in graph_tensors}
 
     graph_nodes: List[Operator] = graph.nodes
@@ -230,8 +236,8 @@ def build_graph_module(graph: FlowGraph, graph_weights: List[Tensor], node2kerne
             for idx, node in enumerate(graph_nodes):
                 node_params = []
                 for x in node.inputs:
-                    if x in graph.inputs:
-                        node_params.append(inputs[graph.inputs.index(x)])
+                    if x in graph_input_tensors:
+                        node_params.append(inputs[graph_input_tensors.index(x)])
                     elif x in graph_weights:
                         node_params.append(weights[graph_weights.index(x)])
                     elif x in graph.outputs:
@@ -264,7 +270,7 @@ def build_graph_module(graph: FlowGraph, graph_weights: List[Tensor], node2kerne
 
         @hidet.script
         def launch(
-            inputs: meta.types([void_p for _ in graph.inputs]),
+            inputs: meta.types([void_p for _ in graph_input_tensors]),
             outputs: meta.types([void_p for _ in graph.outputs]),
             p_kernels: ~void_p,
         ):

@@ -96,6 +96,27 @@ def same_type(a: BaseType, b: BaseType) -> bool:
         return False
 
 
+def get_element_type(node: BaseType) -> BaseType:
+    if isinstance(node, DataType):
+        return None
+    elif isinstance(node, TensorType):
+        return node.dtype
+    elif isinstance(node, PointerType):
+        return node.base_type
+    elif isinstance(node, TensorPointerType):
+        return node.tensor_type.dtype
+    elif isinstance(node, ReferenceType):
+        return node.base_type
+    elif isinstance(node, StringType):
+        return None
+    elif isinstance(node, ArrayType):
+        return node.base_type
+    elif isinstance(node, VoidType):
+        return None
+    else:
+        return None
+
+
 class AddExplicitCastRewriter(IRRewriter):
     def __init__(self):
         super().__init__()
@@ -151,7 +172,12 @@ class AddExplicitCastRewriter(IRRewriter):
 
     def visit_BufferStoreStmt(self, stmt: BufferStoreStmt):
         value = self(stmt.value)
-        buf = self(stmt.buf)
+        buf_type = get_element_type(stmt.buf.type)
+        if buf_type is not None and same_type(self.type_infer(value), buf_type):
+            buf = stmt.buf
+        else:
+            buf = self(stmt.buf)  # this is the original behavior, but its probably wrong
+
         indices = self(stmt.indices)
         source_type = self.type_infer(value)
         buffer_type = self.type_infer(buf)

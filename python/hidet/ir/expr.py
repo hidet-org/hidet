@@ -579,6 +579,9 @@ class SymbolVar(Var):
     def __init__(self, name: str, dtype: DataType):
         super().__init__(hint=None, type=dtype, name=name)
 
+    def signature(self):
+        return f'SymbolVar(name={self.name}, type={self.type})'
+
 
 # the following are used as type hints
 # if a primitive function expect an int8 expression, we should use ExprInt8 instead of Expr
@@ -972,3 +975,13 @@ def symbol_var(name: str, dtype='int32') -> SymbolVar:
                 )
             )
     return SymbolVar.name2symbol[name]
+
+
+def unique_symbol_var(root: Optional[str] = None, dtype='int32') -> SymbolVar:
+    if root is None:
+        root = 's'
+    idx = 0
+    while root + str(idx) in SymbolVar.name2symbol:
+        idx += 1
+    root = root + str(idx)
+    return symbol_var(root, dtype)
