@@ -13,8 +13,8 @@ from .core import api_url, access_token
 def remote_build(ir_module: IRModule, output_dir: str, *, target: str, output_kind: str = '.so'):
     # upload the IRModule
     if 'cuda' in target and 'arch' not in target:
-        cc = hidet.cuda.compute_capability()
-        target = '{} --arch=sm_{}{}'.format(target, cc[0], cc[1])
+        arch = hidet.option.cuda.get_arch()
+        target = '{} --arch={}'.format(target, arch)
     job_data = pickle.dumps(
         {
             'workload': pickle.dumps({'ir_module': ir_module, 'target': target, 'output_kind': output_kind}),

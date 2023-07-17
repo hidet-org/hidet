@@ -11,6 +11,7 @@
 # limitations under the License.
 from typing import List, Union
 import hidet
+from hidet import ir
 from hidet.ir import IRModule
 from hidet.ir.compute import reduce
 from hidet.ir.type import tensor_type
@@ -24,23 +25,45 @@ from hidet.lang.cuda import blockIdx, threadIdx, syncthreads, dynamic_shared_mem
 from hidet.lang.cuda import MmaConfig, mma_sync, cp_async, ldmatrix, cp_async_wait_all
 from hidet.graph.ops.utils import Task, Operator, Tensor, TensorNode, compute, input_like
 from hidet.graph.ops.utils import broadcast_shape, broadcast_shapes, broadcast_indices
-from hidet.graph.ops.utils import schedule_utils
+from hidet.graph.ops.utils import can_broadcast, schedule_utils
 from hidet.utils.py import cdiv, prod
 
 
 class AttnMaskAddTask(Task):
     def __init__(self, name: str, q: TensorNode, k: TensorNode, v: TensorNode, mask: TensorNode):
-        q_shape = q.const_shape
-        k_shape = k.const_shape
-        v_shape = v.const_shape
-        mask_shape = mask.const_shape
+        q_shape = q.shape
+        k_shape = k.shape
+        v_shape = v.shape
+        mask_shape = mask.shape
         n_size = q_shape[-2]
         n_kv_size = k_shape[-1]
         d_size = q_shape[-1]
         o_shape = broadcast_shapes([q_shape[:-2], k_shape[:-2], v_shape[:-2]]) + [n_size, d_size]
         o_head, q_head, k_head, v_head = o_shape[:-2], q_shape[:-2], k_shape[:-2], v_shape[:-2]
         qk_head = broadcast_shape(q_head, k_head)
-        mask_shape = mask.const_shape
+
+        self._assert(
+            ir.logical_and(k.shape[-1] == v.shape[-2], q.shape[-1] == k.shape[-2] == v.shape[-1]),
+            msg=(
+                'Attention Operator expects same seqlen for k/v, and same hdim for q/k/v, got q: {}'
+                ', k: {}, v: {}'.format(q_shape, k_shape, v_shape)
+            ),
+        )
+        self._assert(
+            ir.logical_and(q.shape[-1] <= 160), msg='Attention Operator expects hdim <= 160, got {}'.format(q.shape[-1])
+        )
+
+        mask_shape = mask.shape
+        seq_len_q = q.shape[-2]
+        seq_len_kv = v.shape[-2]
+        q_head, k_head = (q.shape[:-2], k.shape[:-2])
+        qk_head = broadcast_shape(q_head, k_head)
+        qk_shape = qk_head + [seq_len_q, seq_len_kv]
+        self._assert(
+            can_broadcast(mask_shape, qk_shape),
+            msg='Attention Operator expects mask shape to be broadcastable with'
+            'attention matrix, got {} and {}'.format(mask_shape, qk_shape),
+        )
 
         qk = compute(
             name='qk',
@@ -53,7 +76,7 @@ class AttnMaskAddTask(Task):
             ),
         )
 
-        qk_shape = qk.const_shape
+        qk_shape = qk.shape
 
         qk_masked = compute(
             name='qk_masked',
@@ -157,7 +180,7 @@ class AttnMaskAddTask(Task):
                     return n, d // n
             return -1, -1
 
-        compute_capability = hidet.cuda.compute_capability()
+        compute_capability = hidet.option.cuda.get_arch_pair()
         compute_capability = compute_capability[0] * 10 + compute_capability[1]
         if compute_capability < 80:
             # hack: sm75 only supports m16n8k8, not m16n8k16
@@ -171,11 +194,11 @@ class AttnMaskAddTask(Task):
             task.inputs[3],
             task.outputs[0],
         )
-        q_shape: List[int] = list(node_q.const_shape)
-        k_shape: List[int] = list(node_k.const_shape)
-        v_shape: List[int] = list(node_v.const_shape)
-        o_shape: List[int] = list(node_o.const_shape)
-        mask_shape: List[int] = list(node_mask.const_shape)
+        q_shape: List[int] = list(node_q.shape)
+        k_shape: List[int] = list(node_k.shape)
+        v_shape: List[int] = list(node_v.shape)
+        o_shape: List[int] = list(node_o.shape)
+        mask_shape: List[int] = list(node_mask.shape)
         q_head, k_head, v_head, o_head = q_shape[:-2], k_shape[:-2], v_shape[:-2], o_shape[:-2]
         qk_head = broadcast_shape(q_head, k_head)
         bs_qk = prod(qk_head)

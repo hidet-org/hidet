@@ -26,7 +26,12 @@ class CpuAutoScheduler(AutoScheduler):
 
         params, param_map, call_args = self.grid_compute_params_and_args(node, tensor_map)
 
-        with FunctionBuilder(name=f'compute_{node.name}', kind='cpu_kernel') as fb:
+        if self.task is not None:
+            name = f'{self.task.name}_compute_{node.name}'
+        else:
+            name = f'compute_{node.name}'
+
+        with FunctionBuilder(name=name, kind='cpu_kernel') as fb:
             # set function parameters
             fb.extend_params(params)
 

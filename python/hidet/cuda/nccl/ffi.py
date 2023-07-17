@@ -91,6 +91,12 @@ if nccl_available():
             'ncclReduceScatter', [c_void_p, c_void_p, c_uint64, c_int, c_int, c_void_p, c_void_p], c_int, lib=_LIB_NCCL
         )
 
+        _send = get_func('ncclSend', [c_void_p, c_uint64, c_int, c_int, c_void_p, c_void_p], c_int, lib=_LIB_NCCL)
+        _recv = get_func('ncclRecv', [c_void_p, c_uint64, c_int, c_int, c_void_p, c_void_p], c_int, lib=_LIB_NCCL)
+
+        _group_start = get_func('ncclGroupStart', [], c_int, lib=_LIB_NCCL)
+        _group_end = get_func('ncclGroupEnd', [], c_int, lib=_LIB_NCCL)
+
         # Early versions of NCCL do not have split
         try:
             _comm_split = get_func('ncclCommSplit', [c_void_p, c_int, c_int, c_void_p, c_void_p], c_int, lib=_LIB_NCCL)
@@ -132,7 +138,6 @@ if nccl_available():
             assert ret == 0
             return comm.value
 
-        # TODO: Currently only support all_reduce
         @staticmethod
         def all_reduce(
             sendbuff: int, recvbuff: int, count: int, datatype: int, op: int, comm_handle: int, s: Stream
@@ -140,4 +145,66 @@ if nccl_available():
             ret = NCCLRuntimeAPI._all_reduce(sendbuff, recvbuff, count, datatype, op, comm_handle, c_void_p(int(s)))
             assert ret == 0
 
+        @staticmethod
+        def broadcast(
+            sendbuff: int, recvbuff: int, count: int, datatype: int, root: int, comm_handle: int, s: Stream
+        ) -> None:
+            ret = NCCLRuntimeAPI._broadcast(sendbuff, recvbuff, count, datatype, root, comm_handle, c_void_p(int(s)))
+            assert ret == 0
+
+        @staticmethod
+        def reduce(
+            sendbuff: int, recvbuff: int, count: int, datatype: int, op: int, root: int, comm_handle: int, s: Stream
+        ) -> None:
+            ret = NCCLRuntimeAPI._reduce(sendbuff, recvbuff, count, datatype, op, root, comm_handle, c_void_p(int(s)))
+            assert ret == 0
+
+        @staticmethod
+        def all_gather(
+            sendbuff: int, recvbuff: int, sendcount: int, datatype: int, comm_handle: int, s: Stream
+        ) -> None:
+            ret = NCCLRuntimeAPI._all_gather(sendbuff, recvbuff, sendcount, datatype, comm_handle, c_void_p(int(s)))
+            assert ret == 0
+
+        @staticmethod
+        def reduce_scatter(
+            sendbuff: int, recvbuff: int, recvcount: int, datatype: int, op: int, comm_handle: int, s: Stream
+        ) -> None:
+            ret = NCCLRuntimeAPI._reduce_scatter(
+                sendbuff, recvbuff, recvcount, datatype, op, comm_handle, c_void_p(int(s))
+            )
+            assert ret == 0
+
+        @staticmethod
+        def send(sendbuff: int, count: int, datatype: int, peer: int, comm_handle: int, s: Stream) -> None:
+            ret = NCCLRuntimeAPI._send(sendbuff, count, datatype, peer, comm_handle, c_void_p(int(s)))
+            assert ret == 0, ret
+
+        @staticmethod
+        def recv(recvbuff: int, count: int, datatype: int, peer: int, comm_handle: int, s: Stream) -> None:
+            ret = NCCLRuntimeAPI._recv(recvbuff, count, datatype, peer, comm_handle, c_void_p(int(s)))
+            assert ret == 0, ret
+
+        @staticmethod
+        def group_start() -> None:
+            ret = NCCLRuntimeAPI._group_start()
+            assert ret == 0
+
+        @staticmethod
+        def group_end() -> None:
+            ret = NCCLRuntimeAPI._group_end()
+            assert ret == 0
+
     nccl_runtime_api = NCCLRuntimeAPI()
+
+
+def group_start():
+    if not nccl_available():
+        raise RuntimeError("NCCL is not found.")
+    nccl_runtime_api.group_start()
+
+
+def group_end():
+    if not nccl_available():
+        raise RuntimeError("NCCL is not found.")
+    nccl_runtime_api.group_end()

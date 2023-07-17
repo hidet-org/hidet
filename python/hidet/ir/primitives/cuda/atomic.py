@@ -22,6 +22,8 @@ def register_functions():
     i32 = data_type('int32')
     register_primitive_function('cuda_atomic_add', func_or_type=FuncType([~i32, i32], i32), codegen_name='atomicAdd')
     register_primitive_function('cuda_atomic_sub', func_or_type=FuncType([~i32, i32], i32), codegen_name='atomicSub')
+    register_primitive_function('cuda_atomic_min', func_or_type=FuncType([~i32, i32], i32), codegen_name='atomicMin')
+    register_primitive_function('cuda_atomic_max', func_or_type=FuncType([~i32, i32], i32), codegen_name='atomicMax')
     register_primitive_function(
         'cuda_atomic_exchange', func_or_type=FuncType([~i32, i32], i32), codegen_name='atomicExch'
     )
@@ -36,6 +38,14 @@ def atomic_add(addr: Expr, value: Expr):
 
 def atomic_sub(addr: Expr, value: Expr):
     return call_primitive_func('cuda_atomic_sub', [addr, value])
+
+
+def atomic_min(addr: Expr, value: Expr):
+    return call_primitive_func('cuda_atomic_min', [addr, value])
+
+
+def atomic_max(addr: Expr, value: Expr):
+    return call_primitive_func('cuda_atomic_max', [addr, value])
 
 
 def atomic_exchange(addr: Expr, value: Expr):

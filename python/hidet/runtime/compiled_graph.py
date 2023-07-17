@@ -367,6 +367,9 @@ class CompiledGraph:
 def save_compiled_graph(model: CompiledGraph, path: str):
     from hidet.utils.dataclass import asdict
 
+    dirname = os.path.dirname(path)
+    os.makedirs(dirname, exist_ok=True)
+
     with zipfile.ZipFile(path, 'w') as zf:
 
         def _save_under(dir_path: str, dir_in_zip: str, exclude: Optional[List[str]] = None):

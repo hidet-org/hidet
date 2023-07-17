@@ -35,26 +35,20 @@ class OptionRegistry:
         self.choices = choices
         self.checker = checker
 
-    @staticmethod
-    def register_option(
-        name: str,
-        type_hint: str,
-        description: str,
-        default_value: Any,
-        normalizer: Optional[Callable[[Any], Any]] = None,
-        choices: Optional[Iterable[Any]] = None,
-        checker: Optional[Callable[[Any], bool]] = None,
-    ):
-        registered_options = OptionRegistry.registered_options
-        if name in registered_options:
-            raise KeyError(f'Option {name} has already been registered.')
-        registered_options[name] = OptionRegistry(
-            name, type_hint, description, default_value, normalizer, choices, checker
-        )
-        return OptionRegistry
 
-
-register_option = OptionRegistry.register_option
+def register_option(
+    name: str,
+    type_hint: str,
+    description: str,
+    default_value: Any,
+    normalizer: Optional[Callable[[Any], Any]] = None,
+    choices: Optional[Iterable[Any]] = None,
+    checker: Optional[Callable[[Any], bool]] = None,
+):
+    registered_options = OptionRegistry.registered_options
+    if name in registered_options:
+        raise KeyError(f'Option {name} has already been registered.')
+    registered_options[name] = OptionRegistry(name, type_hint, description, default_value, normalizer, choices, checker)
 
 
 def register_hidet_options():
@@ -180,6 +174,12 @@ def register_hidet_options():
         type_hint='str',
         default_value='main',
         description='The version (e.g., branch, commit, or tag) that the remote server will use.',
+    )
+    register_option(
+        name='cuda.arch',
+        type_hint='Optional[str]',
+        default_value=None,
+        description='The CUDA architecture to compile the kernels for (e.g., "sm_70"). None for auto-detect.',
     )
 
 
@@ -658,6 +658,53 @@ def debug_show_verbose_flow_graph(enable: bool = True):
         Whether to show verbose information when we convert flow graph in to human-readable text.
     """
     OptionContext.current().set_option('debug_show_verbose_flow_graph', enable)
+
+
+class cuda:
+    @staticmethod
+    def arch(arch: Optional[str] = None):
+        """
+        Set the CUDA architecture to use when building CUDA kernels.
+
+        Parameters
+        ----------
+        arch: Optional[str]
+            The CUDA architecture, e.g., 'sm_35', 'sm_70', 'sm_80', etc. None means using the architecture of the first
+            CUDA GPU on the current machine. Default None.
+        """
+        OptionContext.current().set_option('cuda.arch', arch)
+
+    @staticmethod
+    def get_arch() -> str:
+        """
+        Get the CUDA architecture to use when building CUDA kernels.
+
+        Returns
+        -------
+        ret: str
+            The CUDA architecture, e.g., 'sm_35', 'sm_70', 'sm_80', etc.
+        """
+        arch: Optional[str] = OptionContext.current().get_option('cuda.arch')
+        if arch is None:
+            import hidet.cuda
+
+            # get the architecture of the first CUDA GPU
+            properties = hidet.cuda.properties(0)
+            arch = 'sm_{}{}'.format(properties.major, properties.minor)
+        return arch
+
+    @staticmethod
+    def get_arch_pair() -> Tuple[int, int]:
+        """
+        Get the CUDA architecture to use when building CUDA kernels, with major and minor version as a tuple.
+
+        Returns
+        -------
+        ret: Tuple[int, int]
+            The CUDA architecture, e.g., (3, 5), (7, 0), (8, 0), etc.
+        """
+        arch = cuda.get_arch()
+        return int(arch[3]), int(arch[4])
 
 
 class compile_server:

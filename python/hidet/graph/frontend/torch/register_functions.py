@@ -9,6 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# pylint: disable=protected-access, c-extension-no-member
 from typing import Optional, Union, Sequence, Any, Tuple, List
 import operator
 import functools
@@ -990,3 +991,8 @@ def torch_conj(x: Tensor) -> Tensor:
         return ops.conj(x)
     else:
         return x
+
+
+@register_function(torch._C._log_api_usage_once)
+def torch_noop(self):
+    return

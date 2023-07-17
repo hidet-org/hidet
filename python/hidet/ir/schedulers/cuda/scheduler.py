@@ -34,9 +34,12 @@ class CudaAutoScheduler(AutoScheduler):
         block_dim = 512
         grid_dim: Expr = (prod(node.shape) + block_dim - 1) // block_dim
 
-        with FunctionBuilder(
-            name=f'compute_{node.name}', kind='cuda_kernel', grid_dim=grid_dim, block_dim=block_dim
-        ) as fb:
+        if self.task is not None:
+            name = f'{self.task.name}_compute_{node.name}'
+        else:
+            name = f'compute_{node.name}'
+
+        with FunctionBuilder(name=name, kind='cuda_kernel', grid_dim=grid_dim, block_dim=block_dim) as fb:
             # set function parameters
             fb.extend_params(params)
 

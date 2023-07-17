@@ -130,8 +130,7 @@ class NVCC(SourceCompiler):
         if 'arch' in target.attrs:
             arch = target.attrs['arch']
         else:
-            cc = hidet.cuda.compute_capability()
-            arch = 'sm_{}{}'.format(cc[0], cc[1])
+            arch = hidet.option.cuda.get_arch()
 
         # The following command compiles the cuda source code to a shared library
         # See https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html
@@ -147,7 +146,7 @@ class NVCC(SourceCompiler):
             # optimize host side code via -O3
             '-O3',
             # host compiler options: enable openmp, avx2, unroll loops and fast math
-            '-Xcompiler -fopenmp,-fPIC,-m64,-mavx2,-march=native,-O3,-funroll-loops,-ffast-math',
+            '-Xcompiler -fPIC,-m64,-O3,-funroll-loops,-ffast-math',
             # the target PTX and SASS version.
             '-gencode arch=compute_{cc},code=sm_{cc}'.format(cc=arch[len('sm_') :]),
             # allow ptxas (PTX assembler) to output information like register/smem usage.

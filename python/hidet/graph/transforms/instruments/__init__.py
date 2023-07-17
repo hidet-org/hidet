@@ -12,3 +12,4 @@
 from .base import GraphPassInstrument
 from .profile_instrument import ProfileInstrument
 from .save_graph_instrument import SaveGraphInstrument
+from .convert_flowgraph_to_vcuda import ConvertGraphToVCuda

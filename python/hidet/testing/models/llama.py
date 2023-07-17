@@ -395,7 +395,7 @@ def generate(text: str, model, tokenizer, config, num_tokens=20, device='cuda', 
     outputs = []
     for _ in range(num_tokens):
         y = model(input_ids, position_ids, *past_keys_values)
-        input_ids = y[0][:, -1:]
+        input_ids = y[0][:, -1:].to(dtype=hidet.int32)
         outputs.append(input_ids[0, -1].item())
         past_keys_values = y[1:]
 
@@ -440,6 +440,7 @@ def get_compiled_model(name='decapoda-research/llama-7b-hf', device='cuda', opt=
 
     with torch.device("cuda"):  # reduce the time to load the model
         model = hfLm.from_pretrained(name, torch_dtype=torch.float16)
+
     model.cpu()
     torch.cuda.empty_cache()
 
@@ -450,7 +451,9 @@ def get_compiled_model(name='decapoda-research/llama-7b-hf', device='cuda', opt=
     flow_graph = build_flow_graph(model, device=device)
 
     if opt:
-        flow_graph = hidet.graph.optimize(flow_graph)
+        with hidet.graph.PassContext() as ctx:
+            ctx.reduce_cuda_compile_mem()
+            flow_graph = hidet.graph.optimize(flow_graph)
 
     compiled = flow_graph.build()
     return compiled, config, tok
