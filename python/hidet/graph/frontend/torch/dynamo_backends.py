@@ -129,25 +129,12 @@ def hidet_backend(graph_module, example_inputs):
 
     if dynamo_config['correctness_report']:
         # check correctness using random inputs
-        logger.info('start to check correctness')
-        # there exist some symbolic shapes, currently we don't support this option
-        #   as there is no way to principly get concrete shapes at this stage from symbolic shapes
-        #   since some models like resnet requires the image to be above a certain size.
-        if any(not all(is_constant(s) for s in t.shape) for t in inputs if isinstance(t, hidet.Tensor)):
-            raise ValueError("hidet_backend: cannot print correctness report with dynamic=True")
-        dummy_inputs = []  # for correctness check
-        for arg in inputs:
-            if isinstance(arg, hidet.Tensor):
-                if data_type(arg.dtype).is_integer():
-                    dummy_input = hidet.zeros_like(arg)
-                else:
-                    dummy_input = hidet.randn_like(arg)
-            else:
-                dummy_input = arg
-            dummy_inputs.append(dummy_input)
-        report: str = interpreter.forward_with_check(*dummy_inputs)
-        logger.info('finish checking correctness')
-        print(report)
+        def wrapper(*args):
+            report, output = interpreter.forward_with_check(*args)
+            logger.info('finish checking correctness')
+            print(report)
+            return output
+        return wrapper
 
     logger.info('hidet:   inputs: ')
     for arg in inputs:

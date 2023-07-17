@@ -25,7 +25,7 @@ from hidet.ir.expr import Int
 from hidet.runtime.device import Device
 from .interpreter import register_function, register_method
 from .interpreter import warnings
-from .utils import dtype_from_torch, device_from_torch
+from .utils import dtype_from_torch, device_from_torch, normalize_to_scalar
 
 Number = Union[int, float, bool]
 
@@ -564,6 +564,9 @@ def arange(
     _ = pin_memory  # ignore here, as hidet's default cpu memory is always pinned
     hidet_device: Device = device_from_torch(torch_device=device)
     hidet_dtype: DataType = dtype_from_torch(torch_dtype=dtype)
+    start = normalize_to_scalar(start)
+    end = normalize_to_scalar(end)
+    step = normalize_to_scalar(step)
     return ops.arange(start, end, step, dtype=hidet_dtype, device=hidet_device)
 
 

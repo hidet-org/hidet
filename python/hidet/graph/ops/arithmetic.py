@@ -15,7 +15,7 @@ from typing import List, Callable, Any, Union, Optional, Dict
 from hidet.ir import primitives
 from hidet.ir import expr, dtypes
 from hidet.ir.type import DataType
-from hidet.ir.expr import Constant, if_then_else
+from hidet.ir.expr import Constant, Expr, if_then_else
 from hidet.utils import prod, same_list
 from .utils import Task, Operator, Tensor, TensorNode, InverseMap, compute, input_like
 from .utils import broadcast_shape, broadcast_shapes, broadcast_indices
@@ -141,37 +141,37 @@ def resolve_dtype(tensor_dtype: DataType, scalar_dtype: DataType) -> DataType:
 
 
 class AddScalarOp(UnaryElementwiseOp):
-    def __init__(self, x: Tensor, scalar: Constant):
+    def __init__(self, x: Tensor, scalar: Expr):
         dtype = resolve_dtype(x.dtype, scalar.type)
         super().__init__(x, op=lambda v: v + dtype(scalar), attributes={'scalar': scalar}, name='adds')
 
 
 class SubScalarOp(UnaryElementwiseOp):
-    def __init__(self, x: Tensor, scalar: Constant):
+    def __init__(self, x: Tensor, scalar: Expr):
         dtype = resolve_dtype(x.dtype, scalar.type)
         super().__init__(x, op=lambda v: v - dtype(scalar), attributes={'scalar': scalar}, name='subs')
 
 
 class RSubScalarOp(UnaryElementwiseOp):
-    def __init__(self, x: Tensor, scalar: Constant):
+    def __init__(self, x: Tensor, scalar: Expr):
         dtype = resolve_dtype(x.dtype, scalar.type)
         super().__init__(x, op=lambda v: dtype(scalar) - v, attributes={'scalar': scalar}, name='rsubs')
 
 
 class MultiplyScalarOp(UnaryElementwiseOp):
-    def __init__(self, x: Tensor, scalar: Constant):
+    def __init__(self, x: Tensor, scalar: Expr):
         dtype = resolve_dtype(x.dtype, scalar.type)
         super().__init__(x, op=lambda v: v * dtype(scalar), attributes={'scalar': scalar}, name='muls')
 
 
 class DivideScalarOp(UnaryElementwiseOp):
-    def __init__(self, x: Tensor, scalar: Constant):
+    def __init__(self, x: Tensor, scalar: Expr):
         dtype = resolve_dtype(x.dtype, scalar.type)
         super().__init__(x, op=lambda v: v / dtype(scalar), attributes={'scalar': scalar}, name='divs')
 
 
 class RDivideScalarOp(UnaryElementwiseOp):
-    def __init__(self, x: Tensor, scalar: Constant):
+    def __init__(self, x: Tensor, scalar: Expr):
         dtype = resolve_dtype(x.dtype, scalar.type)
         super().__init__(x, op=lambda v: dtype(scalar) / v, attributes={'scalar': scalar}, name='rdivs')
 
@@ -463,61 +463,66 @@ class MinOp(Operator):
             ),
         )
 
+Scalar = Union[Expr, float, int, complex]
 
 def binary_arithmetic(
-    x: Union[Tensor, Constant, complex, float, int],
-    y: Union[Tensor, Constant, complex, float, int],
-    tensor_scalar_op: Callable[[Tensor, Constant], Tensor],
-    scalar_tensor_op: Callable[[Constant, Tensor], Tensor],
+    x: Union[Tensor, Scalar],
+    y: Union[Tensor, Scalar],
+    tensor_scalar_op: Callable[[Tensor, Scalar], Tensor],
+    scalar_tensor_op: Callable[[Scalar, Tensor], Tensor],
     tensor_tensor_op: Callable[[Tensor, Tensor], Tensor],
+    scalar_scalar_op: Callable[[Scalar, Scalar], Scalar]
 ) -> Union[Tensor, float, int]:
     if not (
-        isinstance(x, (Tensor, complex, float, int, Constant))
-        and isinstance(y, (Tensor, complex, float, int, Constant))
+        isinstance(x, (Tensor, Expr, complex, float, int))
+        and isinstance(y, (Tensor, Expr, complex, float, int))
     ):
         raise ValueError(
-            'Only support add/sub/mul/div between hidet.Tensor, float, int, and Constant. got {} and {}'.format(
+            'Only support add/sub/mul/div between hidet.Tensor, float, int, and Expr. got {} and {}'.format(
                 type(x), type(y)
             )
         )
-    if not isinstance(x, Tensor) and not isinstance(y, Tensor):
-        raise ValueError('One of x and y must be a Tensor')
 
-    if isinstance(x, Tensor) and isinstance(y, Tensor) and len(x.shape) == len(y.shape) == 0:
-        return tensor_tensor_op(x, y)
-
-    if isinstance(x, int):
-        x = dtypes.int32(x)
-    elif isinstance(x, float):
-        x = dtypes.float32(x)
-    elif isinstance(x, complex):
-        x = dtypes.complex64(x)
-    elif isinstance(x, Tensor) and len(x.shape) == 0:
-        if x.trace is None and x.storage is not None:
-            x = x.dtype(x.item())
-        elif x.device.is_cpu() and y.device.is_cuda():
-            x = x.cuda(y.device)
-
-    if isinstance(y, int):
-        y = dtypes.int32(y)
-    elif isinstance(y, float):
-        y = dtypes.float32(y)
-    elif isinstance(y, complex):
-        y = dtypes.complex64(y)
-    elif isinstance(y, Tensor) and len(y.shape) == 0:
-        if y.trace is None and y.storage is not None:
-            y = y.dtype(y.item())
-        elif y.device.is_cpu() and x.device.is_cuda():
-            y = y.cuda(x.device)
+    def normalize_scalar(v):
+        if isinstance(v, Expr):
+            return v
+        elif isinstance(v, bool):
+            return dtypes.boolean(v)
+        elif isinstance(v, int):
+            return dtypes.int32(v)
+        elif isinstance(v, float):
+            return dtypes.float32(v)
+        elif isinstance(v, complex):
+            return dtypes.complex64(v)
+        else:
+            raise RuntimeError('Unsupported type {}'.format(type(v)))
 
     if isinstance(x, Tensor) and isinstance(y, Tensor):
+        if x.device != y.device:
+            # normalize to the same device
+            if x.device.is_cpu() and len(x.shape) == 0:
+                x = x.to(device=y.device)
+                return binary_arithmetic(x, y, tensor_scalar_op, scalar_tensor_op, tensor_tensor_op, scalar_scalar_op)
+            if y.device.is_cpu() and len(y.shape) == 0:
+                y = y.to(device=x.device)
+                return binary_arithmetic(x, y, tensor_scalar_op, scalar_tensor_op, tensor_tensor_op, scalar_scalar_op)
+        # simplify the tensor vs tensor case where one tensor is a scalar
+        if len(x.shape) == 0 and x.storage:
+            x = x.dtype(x.item())
+            return binary_arithmetic(x, y, tensor_scalar_op, scalar_tensor_op, tensor_tensor_op, scalar_scalar_op)
+        if len(y.shape) == 0 and y.storage:
+            y = y.dtype(y.item())
+            return binary_arithmetic(x, y, tensor_scalar_op, scalar_tensor_op, tensor_tensor_op, scalar_scalar_op)
         return tensor_tensor_op(x, y)
     elif isinstance(x, Tensor):
-        return tensor_scalar_op(x, y)
+        return tensor_scalar_op(x, normalize_scalar(y))
     elif isinstance(y, Tensor):
-        return scalar_tensor_op(x, y)
+        return scalar_tensor_op(normalize_scalar(x), y)
     else:
-        assert False
+        if isinstance(x, Expr) or isinstance(y, Expr):
+            return scalar_scalar_op(normalize_scalar(x), normalize_scalar(y))
+        else:
+            return scalar_scalar_op(x, y)
 
 
 def add(x: Union[Tensor, float, int], y: Union[Tensor, float, int]) -> Tensor:
@@ -527,6 +532,7 @@ def add(x: Union[Tensor, float, int], y: Union[Tensor, float, int]) -> Tensor:
         lambda a, b: AddScalarOp(a, b).outputs[0],
         lambda a, b: AddScalarOp(b, a).outputs[0],
         lambda a, b: AddOp(a, b).outputs[0],
+        lambda a, b: a + b
     )
 
 
@@ -537,6 +543,7 @@ def subtract(x: Union[Tensor, float, int], y: Union[Tensor, float, int]) -> Tens
         lambda a, b: SubScalarOp(a, b).outputs[0],
         lambda a, b: RSubScalarOp(b, a).outputs[0],
         lambda a, b: SubtractOp(a, b).outputs[0],
+        lambda a, b: a - b
     )
 
 
@@ -547,6 +554,7 @@ def multiply(x: Union[Tensor, float, int], y: Union[Tensor, float, int]) -> Tens
         lambda a, b: MultiplyScalarOp(a, b).outputs[0],
         lambda a, b: MultiplyScalarOp(b, a).outputs[0],
         lambda a, b: MultiplyOp(a, b).outputs[0],
+        lambda a, b: a * b
     )
 
 
@@ -557,6 +565,7 @@ def divide(x: Union[Tensor, float, int], y: Union[Tensor, float, int]) -> Tensor
         lambda a, b: DivideScalarOp(a, b).outputs[0],
         lambda a, b: RDivideScalarOp(b, a).outputs[0],
         lambda a, b: DivideOp(a, b).outputs[0],
+        lambda a, b: a / b
     )
 
 

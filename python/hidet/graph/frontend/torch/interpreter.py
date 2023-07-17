@@ -528,6 +528,7 @@ class Interpreter:
             elif node.op == "output":
                 torch_env[node.name] = load_arg(node.args[0], torch_env)
                 hidet_env[node.name] = load_arg(node.args[0], hidet_env)
+                torch_graph_output = torch_env[node.name]
             else:
                 assert False
 
@@ -564,4 +565,4 @@ class Interpreter:
             floatfmt='.3e',
             showindex=True,
             disable_numparse=True,
-        )
+        ), torch_graph_output

@@ -301,7 +301,7 @@ class CompiledGraph:
         from hidet.cuda.graph import CudaGraph, CudaGraphCreationError
         from hidet.graph.tensor import Tensor, randn, zeros, empty
 
-        for x in self.meta.inputs:
+        for x in self.meta.inputs + self.meta.outputs:
             if x.device == 'cpu':
                 raise CudaGraphCreationError(f'Cannot create CUDA graph for a model with CPU inputs:\n {x}')
             for d in x.shape:
@@ -309,6 +309,9 @@ class CompiledGraph:
                     raise CudaGraphCreationError(f'Cannot create CUDA graph for a model with dynamic inputs:\n {x}')
         if any(device == 'cpu' for device in self.graph_execution.tensor_device):
             raise CudaGraphCreationError('Cannot create CUDA graph for a model with CPU tensors.')
+        for ctask in self.compiled_tasks:
+            if len(ctask.meta_data.symbols) > 0:
+                raise CudaGraphCreationError('Cannot create CUDA graph for a model with dynamic symbols.')
 
         def f_create_inputs() -> List[Tensor]:
             dummy_inputs = []
