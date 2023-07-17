@@ -71,14 +71,11 @@ class SoftmaxTask(Task):
         return softmax_cuda_schedule(self)
 
     def implement_cpu(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
-        if not all(is_constant(dim) for dim in self.inputs[0].shape):
+        if not all(is_constant(dim) for dim in self.inputs[0].shape) or (self.axis != len(self.x_shape) - 1 and
+                                                                         self.axis != -2):  # not row-major, avx no good
             return NotImplemented  # use auto-scheduler
-        print(self.__dict__)
-        print(type(self.outputs[0]), self.outputs[0])
-        print(self.x_shape)
         return self.schedule_softmax_cpu()
-        return NotImplemented
-        return tune.extract_ir_modules(self.schedule_softmax_cpu)
+        # return tune.extract_ir_modules(self.schedule_softmax_cpu)
 
     # @tune.space(2, 'nthreads', [4, 8, 16, 32, 64, 96])
     # @tune.space(1, 'nthreads', [8, 16])
@@ -92,7 +89,7 @@ class SoftmaxTask(Task):
         from hidet.lang.constructs.type import tensor
         from hidet.ir.stmt import DeclareScope
         from hidet.lang import grid
-        assert len(self.x_shape) == 2, "only test with 2d arr"
+        axes = self.x_shape
         row_size, col_size = self.x_shape[-2], self.x_shape[-1]
         with hidet.script_module() as module:
             @hidet.script
@@ -125,9 +122,8 @@ class SoftmaxTask(Task):
                 return avx_f32x8_load(arr)
 
             @hidet.script
-            def softmax_cpu(x: float32[row_size, col_size], out: float32[row_size, col_size]):
+            def softmax_2d_kernel(x: float32[row_size, col_size], out: float32[row_size, col_size]):
                 para = 'p' + str(nthreads)
-                # x_ptr = x
                 for i in grid(row_size, attrs=para):
                     # find max
                     max_val = x[i, 0]
@@ -181,10 +177,13 @@ class SoftmaxTask(Task):
                     for j in range(col_size % 8):
                         out[i, col_size + j - 8] = out[i, col_size + j - 8] / sum_value
 
-                # for i in range(row_size):
-                #     max_val = x[i, 0]
-                #     for j in range(col_size):
-                #         max_val = x[i, j] if max_val < x[i, j] else max_val
+            @hidet.script
+            def softmax_cpu(x: ~float32, out: ~float32, depth: int = 0):
+                for i in axes[depth]:
+                    if depth == 2:
+                        softmax_2d_kernel(x, out)  # point to matrix loc not start
+                    softmax_cpu(x, out, depth=depth - 1)
+
             softmax_cpu.kind = "cpu_kernel"
             find_max.kind = "cpu_internal"
             find_sum.kind = "cpu_internal"
