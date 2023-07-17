@@ -101,7 +101,9 @@ class CompiledGraph:
                     if isinstance(dim, str) and dim not in [v for v, _ in self.dynamic_dims]:
                         self.dynamic_dims.append((dim, (tensor_index, dim_index)))
             else:
-                assert isinstance(sig, SymbolSignature)
+                assert isinstance(
+                    sig, SymbolSignature
+                ), f"expected TensorSignature or SymbolSignature, got {sig} with type {type(sig)}"
                 self.is_dynamic = True
 
         self.is_dynamic |= len(self.dynamic_dims) > 0
@@ -419,6 +421,12 @@ def load_compiled_graph(path: str) -> CompiledGraph:
         # load meta data
         with zf.open('meta.json', 'r') as f:
             meta_data: GraphMetaData = from_dict(GraphMetaData, json.load(f))
+            for i, sig in enumerate(meta_data.inputs):
+                if isinstance(sig, dict):  # TODO: better way of detecting TensorSignature vs SymbolSignature
+                    if 'shape' in sig:
+                        meta_data.inputs[i] = TensorSignature(**sig)
+                    else:
+                        meta_data.inputs[i] = SymbolSignature(**sig)
 
         # load graph execution
         with zf.open('graph_execution.json', 'r') as f:
