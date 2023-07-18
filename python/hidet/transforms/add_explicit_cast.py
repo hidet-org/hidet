@@ -11,7 +11,7 @@
 # limitations under the License.
 from hidet.ir.functors import IRRewriter
 from hidet.ir.tools import TypeInfer
-from hidet.ir.stmt import Stmt, AssignStmt, BufferStoreStmt
+from hidet.ir.stmt import AssignStmt, BufferStoreStmt
 from hidet.ir.expr import Expr, Cast, Add, Sub, Multiply, Div, BinaryExpr, cast
 from hidet.ir.type import DataType, BaseType, TensorType, TensorPointerType, PointerType, ReferenceType, VoidType
 from hidet.ir.type import ArrayType, StringType

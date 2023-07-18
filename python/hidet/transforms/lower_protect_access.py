@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import Sequence
-from hidet.ir import Stmt, Expr, TensorElement, BufferStoreStmt, IfStmt, convert
+from hidet.ir import Expr, TensorElement, BufferStoreStmt, IfStmt, convert
 from hidet.ir.expr import IfThenElse, tensor_element, logical_and
 from hidet.ir.type import TensorType, TensorPointerType
 from hidet.ir.func import Function

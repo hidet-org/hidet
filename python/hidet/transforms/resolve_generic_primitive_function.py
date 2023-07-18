@@ -12,7 +12,6 @@
 from typing import List, Optional, Tuple
 
 from hidet.ir.type import DataType
-from hidet.ir.stmt import Stmt
 from hidet.ir.expr import Call, Expr, BinaryExpr, cast
 from hidet.ir.func import Function
 from hidet.ir.functors import IRRewriter

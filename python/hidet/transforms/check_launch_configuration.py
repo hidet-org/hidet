@@ -15,7 +15,7 @@ from hidet.ir.stmt import BlackBoxStmt
 from hidet.ir.functors import IRRewriter
 from hidet.ir.primitives import printf
 from hidet.ir.primitives.cuda import check_cuda_error
-from hidet.ir.stmt import Stmt, LaunchKernelStmt, AssertStmt
+from hidet.ir.stmt import LaunchKernelStmt, AssertStmt
 from hidet.ir.func import Function
 from hidet.transforms.base import Pass, FunctionPass
 

@@ -42,7 +42,6 @@ to
 """
 from typing import Optional
 from hidet.ir.type import DataType
-from hidet.ir.stmt import Stmt
 from hidet.ir.expr import Cast, Expr
 from hidet.ir.func import Function
 from hidet.ir.functors import IRRewriter

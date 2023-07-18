@@ -14,7 +14,7 @@ from collections import defaultdict
 from hidet.ir.type import TensorPointerType, TensorType, ArrayType, FuncType
 from hidet.ir.expr import Var, Expr, Constant, Add, Sub, Call
 from hidet.ir.functors import IRRewriter, IRVisitor
-from hidet.ir.stmt import Stmt, LetStmt
+from hidet.ir.stmt import LetStmt
 from hidet.ir.func import Function
 from hidet.transforms import Pass, FunctionPass, RepeatFunctionPass
 from hidet.utils import same_list

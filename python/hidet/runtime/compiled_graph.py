@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Optional, Tuple, Dict, Any, Callable
+from typing import List, Optional, Tuple, Dict, Any, Callable, Union
 import zipfile
 import os
 import json
@@ -91,15 +91,10 @@ class CompiledGraph:
         self.graph_execution: GraphExecution = graph_execution
         self.graph_string: str = graph_string
 
-        # derived properties
+        # derived properties (will be initialized in _init_compiled_graph at the end of this constructor)
         self.dynamic_dims: List[Tuple[str, Tuple[int, int]]] = []  # [(name, (tensor_index, dim_index))]
-        for tensor_index, sig in enumerate(self.meta.inputs):
-            for dim_index, dim in enumerate(sig.shape):
-                if isinstance(dim, str) and dim not in [v for v, _ in self.dynamic_dims]:
-                    self.dynamic_dims.append((dim, (tensor_index, dim_index)))
-        self.is_dynamic: bool = len(self.dynamic_dims) > 0 or any(
-            isinstance(dim, str) for sig in self.meta.outputs for dim in sig.shape
-        )
+        self.is_dynamic: bool = False
+        self.constant_outputs: List[Union[None, Tensor]] = []
 
         # runtime state
         self.dispatch_table_path = hidet.utils.cache_file('graphs', self.meta.graph_hash, 'dispatch_table.txt')
@@ -139,6 +134,21 @@ class CompiledGraph:
             return outs
 
     def _init_compiled_graph(self):
+        # initialize the derived properties
+        for tensor_index, sig in enumerate(self.meta.inputs):
+            for dim_index, dim in enumerate(sig.shape):
+                if isinstance(dim, str) and dim not in [v for v, _ in self.dynamic_dims]:
+                    self.dynamic_dims.append((dim, (tensor_index, dim_index)))
+        if len(self.dynamic_dims) > 0 or any(isinstance(dim, str) for sig in self.meta.outputs for dim in sig.shape):
+            self.is_dynamic = True
+        else:
+            self.is_dynamic = False
+        for out_idx in self.graph_execution.outputs_index:
+            if out_idx in self.graph_execution.weights_index:
+                self.constant_outputs.append(self.weights[self.graph_execution.weights_index.index(out_idx)])
+            else:
+                self.constant_outputs.append(None)
+
         # initialize weights
         weights_buffer = Array(void_p, len(self.weights))
         for i in range(len(self.weights)):
@@ -201,14 +211,16 @@ class CompiledGraph:
         from hidet.graph.tensor import empty
 
         outputs = []
-        if self.is_dynamic:
-            for output_index, sig in enumerate(self.meta.outputs):
-                shape_buffer = Array(i32, len(sig.shape))
-                self._get_output_shape(output_index, shape_buffer)
-                outputs.append(empty(shape=list(shape_buffer), dtype=sig.dtype, device=sig.device))
-        else:
-            for sig in self.meta.outputs:
-                outputs.append(empty(shape=sig.shape, dtype=sig.dtype, device=sig.device))
+        for output_index, (sig, const_out) in enumerate(zip(self.meta.outputs, self.constant_outputs)):
+            if const_out is not None:
+                outputs.append(const_out)
+            else:
+                if self.is_dynamic:
+                    shape_buffer = Array(i32, len(sig.shape))
+                    self._get_output_shape(output_index, shape_buffer)
+                    outputs.append(empty(shape=list(shape_buffer), dtype=sig.dtype, device=sig.device))
+                else:
+                    outputs.append(empty(shape=sig.shape, dtype=sig.dtype, device=sig.device))
         return outputs
 
     def _prepare_workspace(self):

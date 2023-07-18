@@ -9,7 +9,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from hidet.ir import Stmt
 from hidet.ir.expr import is_one, is_zero, is_true, is_false, convert
 from hidet.ir.stmt import IfStmt, ForStmt, SeqStmt
 from hidet.ir.func import Function

@@ -15,7 +15,7 @@ from typing import List, Callable, Any, Union, Optional, Dict
 from hidet.ir import primitives
 from hidet.ir import expr, dtypes
 from hidet.ir.type import DataType
-from hidet.ir.expr import Constant, Expr, if_then_else
+from hidet.ir.expr import Expr, if_then_else
 from hidet.utils import prod, same_list
 from .utils import Task, Operator, Tensor, TensorNode, InverseMap, compute, input_like
 from .utils import broadcast_shape, broadcast_shapes, broadcast_indices
@@ -463,7 +463,9 @@ class MinOp(Operator):
             ),
         )
 
+
 Scalar = Union[Expr, float, int, complex]
+
 
 def binary_arithmetic(
     x: Union[Tensor, Scalar],
@@ -471,12 +473,9 @@ def binary_arithmetic(
     tensor_scalar_op: Callable[[Tensor, Scalar], Tensor],
     scalar_tensor_op: Callable[[Scalar, Tensor], Tensor],
     tensor_tensor_op: Callable[[Tensor, Tensor], Tensor],
-    scalar_scalar_op: Callable[[Scalar, Scalar], Scalar]
+    scalar_scalar_op: Callable[[Scalar, Scalar], Scalar],
 ) -> Union[Tensor, float, int]:
-    if not (
-        isinstance(x, (Tensor, Expr, complex, float, int))
-        and isinstance(y, (Tensor, Expr, complex, float, int))
-    ):
+    if not (isinstance(x, (Tensor, Expr, complex, float, int)) and isinstance(y, (Tensor, Expr, complex, float, int))):
         raise ValueError(
             'Only support add/sub/mul/div between hidet.Tensor, float, int, and Expr. got {} and {}'.format(
                 type(x), type(y)
@@ -532,7 +531,7 @@ def add(x: Union[Tensor, float, int], y: Union[Tensor, float, int]) -> Tensor:
         lambda a, b: AddScalarOp(a, b).outputs[0],
         lambda a, b: AddScalarOp(b, a).outputs[0],
         lambda a, b: AddOp(a, b).outputs[0],
-        lambda a, b: a + b
+        lambda a, b: a + b,
     )
 
 
@@ -543,7 +542,7 @@ def subtract(x: Union[Tensor, float, int], y: Union[Tensor, float, int]) -> Tens
         lambda a, b: SubScalarOp(a, b).outputs[0],
         lambda a, b: RSubScalarOp(b, a).outputs[0],
         lambda a, b: SubtractOp(a, b).outputs[0],
-        lambda a, b: a - b
+        lambda a, b: a - b,
     )
 
 
@@ -554,7 +553,7 @@ def multiply(x: Union[Tensor, float, int], y: Union[Tensor, float, int]) -> Tens
         lambda a, b: MultiplyScalarOp(a, b).outputs[0],
         lambda a, b: MultiplyScalarOp(b, a).outputs[0],
         lambda a, b: MultiplyOp(a, b).outputs[0],
-        lambda a, b: a * b
+        lambda a, b: a * b,
     )
 
 
@@ -565,7 +564,7 @@ def divide(x: Union[Tensor, float, int], y: Union[Tensor, float, int]) -> Tensor
         lambda a, b: DivideScalarOp(a, b).outputs[0],
         lambda a, b: RDivideScalarOp(b, a).outputs[0],
         lambda a, b: DivideOp(a, b).outputs[0],
-        lambda a, b: a / b
+        lambda a, b: a / b,
     )
 
 

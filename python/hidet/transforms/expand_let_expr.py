@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from hidet.ir.expr import Let
-from hidet.ir.stmt import Stmt, LetStmt, EvaluateStmt, BufferStoreStmt, AssignStmt, ForStmt, IfStmt, AssertStmt, AsmStmt
+from hidet.ir.stmt import LetStmt, EvaluateStmt, BufferStoreStmt, AssignStmt, ForStmt, IfStmt, AssertStmt, AsmStmt
 from hidet.ir.stmt import BlackBoxStmt
 from hidet.ir.func import Function
 from hidet.ir.functors import IRRewriter

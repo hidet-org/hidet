@@ -285,4 +285,3 @@ def normalize_to_scalar(value: Union[Tensor, Expr, float, int, bool]) -> Union[E
             raise RuntimeError(f'Cannot convert tensor {value.signature()} to scalar')
     else:
         return value
-

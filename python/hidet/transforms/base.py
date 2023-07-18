@@ -10,7 +10,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List, Optional
-from hidet.ir.stmt import Stmt
 from hidet.ir.func import Function
 from hidet.ir.module import IRModule
 
