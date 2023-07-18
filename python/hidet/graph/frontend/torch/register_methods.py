@@ -15,6 +15,7 @@ from typing import List, Union
 import torch
 
 from hidet.ir.type import DataType, Int
+from hidet.ir.expr import Expr
 from hidet.graph.tensor import Tensor
 from hidet.graph import ops
 from hidet.runtime.device import instantiate_device
@@ -130,7 +131,16 @@ def tensor_view(self: Tensor, *args) -> Tensor:
     else:
         if len(args) == 1 and isinstance(args[0], (list, tuple)):
             args = args[0]
-        dst_shape = list(args)
+        dst_shape = []
+        for v in args:
+            if isinstance(v, torch.Tensor):
+                v = v.item()
+            elif isinstance(v, Expr):
+                # do nothing
+                pass
+            else:
+                v = int(v)
+            dst_shape.append(v)
         return ops.reshape(self, dst_shape)
 
 

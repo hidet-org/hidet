@@ -18,12 +18,14 @@ from hidet.graph.tensor import Tensor, full_like, from_torch
 from hidet.graph import ops
 from hidet.utils import same_list
 from hidet.ir.type import DataType
+from hidet.ir.expr import Expr
+from hidet.ir import expr
 from hidet.ir.dtypes import promote_type
 from hidet.ir.expr import Int
 from hidet.runtime.device import Device
 from .interpreter import register_function, register_method
 from .interpreter import warnings
-from .utils import dtype_from_torch, device_from_torch
+from .utils import dtype_from_torch, device_from_torch, normalize_to_scalar
 
 Number = Union[int, float, bool]
 
@@ -164,6 +166,24 @@ def sin(x: Tensor):
 @register_function(torch.ops.aten.cos.default)
 def cos(x: Tensor):
     return ops.cos(x)
+
+
+@register_function(operator.not_)
+def not_(x: Union[Tensor, Expr]):
+    if isinstance(x, Tensor):
+        return ops.logical_not(x)
+    elif isinstance(x, Expr):
+        return expr.logical_not(x)
+    else:
+        return not x
+
+
+@register_function(operator.and_)
+def and_(x: Union[Tensor, Expr], y: Union[Tensor, Expr]):
+    if isinstance(x, Tensor) and isinstance(y, Tensor):
+        return ops.logical_and(x, y)
+    else:
+        return expr.logical_and(x, y)
 
 
 @register_function(torch.nn.functional.batch_norm)
@@ -544,6 +564,9 @@ def arange(
     _ = pin_memory  # ignore here, as hidet's default cpu memory is always pinned
     hidet_device: Device = device_from_torch(torch_device=device)
     hidet_dtype: DataType = dtype_from_torch(torch_dtype=dtype)
+    start = normalize_to_scalar(start)
+    end = normalize_to_scalar(end)
+    step = normalize_to_scalar(step)
     return ops.arange(start, end, step, dtype=hidet_dtype, device=hidet_device)
 
 
@@ -884,33 +907,33 @@ def torch_min_v3(
 
 
 @register_function(operator.lt)
-def lt(a: Tensor, b: Tensor) -> Tensor:
-    return ops.less(a, b)
+def lt(a: Union[Tensor, Expr, Number], b: Union[Tensor, Expr, Number]) -> Tensor:
+    return a < b
 
 
 @register_function(operator.le)
-def le(a: Tensor, b: Tensor) -> Tensor:
-    return ops.less_equal(a, b)
+def le(a: Union[Tensor, Expr, Number], b: Union[Tensor, Expr, Number]) -> Tensor:
+    return a <= b
 
 
 @register_function(operator.gt)
-def gt(a: Tensor, b: Tensor) -> Tensor:
-    return ops.greater(a, b)
+def gt(a: Union[Tensor, Expr, Number], b: Union[Tensor, Expr, Number]) -> Tensor:
+    return a > b
 
 
 @register_function(operator.ge)
-def ge(a: Tensor, b: Tensor) -> Tensor:
-    return ops.greater_equal(a, b)
+def ge(a: Union[Tensor, Expr, Number], b: Union[Tensor, Expr, Number]) -> Tensor:
+    return a >= b
 
 
 @register_function(operator.eq)
-def eq(a: Tensor, b: Tensor) -> Tensor:
-    return ops.equal(a, b)
+def eq(a: Union[Tensor, Expr, Number], b: Union[Tensor, Expr, Number]) -> Tensor:
+    return a == b
 
 
 @register_function(operator.ne)
-def ne(a: Tensor, b: Tensor) -> Tensor:
-    return ops.not_equal(a, b)
+def ne(a: Union[Tensor, Expr, Number], b: Union[Tensor, Expr, Number]) -> Tensor:
+    return a != b
 
 
 @register_function(torch.rsqrt)

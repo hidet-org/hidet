@@ -10,7 +10,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from typing import List, Optional
-from hidet.ir.stmt import Stmt
 from hidet.ir.func import Function
 from hidet.ir.module import IRModule
 
@@ -80,18 +79,6 @@ class SequencePass(Pass):
 
 class FunctionPass(Pass):
     def process_func(self, func: Function) -> Function:
-        raise NotImplementedError()
-
-
-class FunctionBodyPass(FunctionPass):
-    def process_func(self, func: Function) -> Function:
-        body = self.process_body(func.body)
-        if body is func.body:
-            return func
-        else:
-            return Function(func.name, func.params, body, func.ret_type, kind=func.kind, attrs=func.attrs)
-
-    def process_body(self, stmt: Stmt) -> Stmt:
         raise NotImplementedError()
 
 

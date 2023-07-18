@@ -16,7 +16,8 @@ from hidet.ir.expr import Constant
 from hidet.ir.functors import IRRewriter
 from hidet.ir.stmt import Stmt, ForStmt, Expr, SeqStmt
 from hidet.ir.tools import simplify, rewrite
-from hidet.transforms.base import Pass, FunctionBodyPass
+from hidet.ir.func import Function
+from hidet.transforms.base import Pass, FunctionPass
 
 Int = Union[Expr, int]
 TaskIndex = List[Int]
@@ -45,10 +46,10 @@ class ExplicitUnrollRewriter(IRRewriter):
         return IRRewriter.visit_ForStmt(self, stmt)
 
 
-class ExplicitUnrollPass(FunctionBodyPass):
-    def process_body(self, stmt: Stmt) -> Stmt:
+class ExplicitUnrollPass(FunctionPass):
+    def process_func(self, func: Function) -> Function:
         rewriter = ExplicitUnrollRewriter()
-        return rewriter.rewrite(stmt)
+        return rewriter.rewrite(func)
 
 
 def explicit_unroll_pass() -> Pass:

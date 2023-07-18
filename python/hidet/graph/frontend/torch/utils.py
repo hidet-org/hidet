@@ -13,8 +13,10 @@ from typing import Tuple, Any, List, Union, Dict, Optional
 from pathlib import Path
 from hidet.graph.tensor import Tensor
 from hidet.ir.type import DataType
+from hidet.ir.expr import Expr, is_true
 from hidet.ir import dtypes
 from hidet.runtime.device import Device
+from hidet.utils import prod
 from .availability import available
 
 
@@ -159,7 +161,7 @@ class Serializer:
             return self.visit_list(obj)
         elif isinstance(obj, tuple):
             return self.visit_tuple(obj)
-        elif isinstance(obj, (str, int, float)):
+        elif isinstance(obj, (str, int, float, Expr)):
             return self.visit_atomic(obj)
         else:
             raise RuntimeError('Failed to serialize object of type {}'.format(type(obj)))
@@ -179,7 +181,7 @@ class Serializer:
         self.tensors.append(t)
         return placeholder
 
-    def visit_atomic(self, a: Union[str, int, float]):
+    def visit_atomic(self, a: Union[str, int, float, Expr]):
         return a
 
 
@@ -202,7 +204,7 @@ class Deserializer:
             return self.visit_list(obj)
         elif isinstance(obj, tuple):
             return self.visit_tuple(obj)
-        elif isinstance(obj, (str, int, float)):
+        elif isinstance(obj, (str, int, float, Expr)):
             return self.visit_atomic(obj)
         elif isinstance(obj, Tensor):
             return self.visit_tensor(obj)
@@ -224,8 +226,14 @@ class Deserializer:
     def visit_tensor(self, t: Tensor):
         raise RuntimeError('Tensors should not be present in the serialized object')
 
-    def visit_atomic(self, a: Union[str, int, float]):
-        return a
+    def visit_atomic(self, a: Union[str, int, float, Expr]):
+        if isinstance(a, Expr):
+            from hidet.ir.tools import simplify_to_int
+
+            # todo: support other types of symbolic vars
+            return simplify_to_int(a, instantiate_symbols=True)
+        else:
+            return a
 
 
 def serialize_output(obj: Union[Dict, List, Tuple, Tensor, Any]) -> Tuple[Any, List[Tensor]]:
@@ -256,8 +264,8 @@ def relative_absolute_error(actual, expected) -> float:
     """
     import torch
 
-    actual: torch.Tensor = actual.detach()
-    expected: torch.Tensor = expected.detach()
+    actual: torch.Tensor = actual.detach().to(torch.float32)
+    expected: torch.Tensor = expected.detach().to(torch.float32)
     return float(torch.max(torch.abs(actual - expected) / (torch.abs(expected) + 1.0)))
 
 
@@ -267,3 +275,13 @@ def resolve_save_dir_multigraph(save_dir: str) -> str:
         func.counter = {}
     func.counter[save_dir] = func.counter.get(save_dir, 0) + 1
     return str(Path(save_dir) / "graph_{}".format(func.counter[save_dir]))
+
+
+def normalize_to_scalar(value: Union[Tensor, Expr, float, int, bool]) -> Union[Expr, int, float, bool]:
+    if isinstance(value, Tensor):
+        if is_true(prod(value.shape) == 1) and value.storage:
+            return value.dtype(value.item())
+        else:
+            raise RuntimeError(f'Cannot convert tensor {value.signature()} to scalar')
+    else:
+        return value

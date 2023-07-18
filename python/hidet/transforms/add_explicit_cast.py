@@ -11,11 +11,12 @@
 # limitations under the License.
 from hidet.ir.functors import IRRewriter
 from hidet.ir.tools import TypeInfer
-from hidet.ir.stmt import Stmt, AssignStmt, BufferStoreStmt
+from hidet.ir.stmt import AssignStmt, BufferStoreStmt
 from hidet.ir.expr import Expr, Cast, Add, Sub, Multiply, Div, BinaryExpr, cast
 from hidet.ir.type import DataType, BaseType, TensorType, TensorPointerType, PointerType, ReferenceType, VoidType
 from hidet.ir.type import ArrayType, StringType
-from .base import FunctionBodyPass, Pass
+from hidet.ir.func import Function
+from .base import FunctionPass, Pass
 
 
 class TypeNotMatch(Exception):
@@ -168,10 +169,10 @@ class AddExplicitCastRewriter(IRRewriter):
         return BufferStoreStmt(buf, indices, self.convert(source_type, target_type, source_value=value))
 
 
-class AddExplicitCastPass(FunctionBodyPass):
-    def process_body(self, stmt: Stmt) -> Stmt:
+class AddExplicitCastPass(FunctionPass):
+    def process_func(self, func: Function) -> Function:
         rewriter = AddExplicitCastRewriter()
-        return rewriter(stmt)
+        return rewriter.rewrite(func)
 
 
 def add_explicit_cast_pass() -> Pass:

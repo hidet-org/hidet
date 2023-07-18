@@ -14,8 +14,9 @@ from collections import defaultdict
 from hidet.ir.type import TensorPointerType, TensorType, ArrayType, FuncType
 from hidet.ir.expr import Var, Expr, Constant, Add, Sub, Call
 from hidet.ir.functors import IRRewriter, IRVisitor
-from hidet.ir.stmt import Stmt, LetStmt
-from hidet.transforms import Pass, FunctionBodyPass, RepeatFunctionPass
+from hidet.ir.stmt import LetStmt
+from hidet.ir.func import Function
+from hidet.transforms import Pass, FunctionPass, RepeatFunctionPass
 from hidet.utils import same_list
 
 
@@ -50,14 +51,14 @@ class NaiveLetStmtInlineRewriter(IRRewriter):
         self.usage_count = None
         self.var2value = None
 
-    def eliminate(self, stmt):
+    def eliminate(self, node):
         self.memo.clear()
         # count the usage number and let var to its value
         analyzer = LetVarRefAnalyzer()
-        analyzer.analyze(stmt)
+        analyzer.analyze(node)
         self.usage_count, self.var2value = analyzer.usage_count, analyzer.var2value
         # inline
-        return self.visit(stmt)
+        return self.visit(node)
 
     def has_side_effect(self, expr):
         from hidet.ir.tools import collect
@@ -111,15 +112,15 @@ class NaiveLetStmtInlineRewriter(IRRewriter):
                 return body
 
 
-class InlineNaiveLetStmtPass(FunctionBodyPass):
+class InlineNaiveLetStmtPass(FunctionPass):
     def __init__(self, inline_factor=1, inline_all=False):
         super().__init__()
         self.inline_factor = inline_factor
         self.inline_all = inline_all
 
-    def process_body(self, stmt: Stmt) -> Stmt:
+    def process_func(self, func: Function) -> Function:
         eliminator = NaiveLetStmtInlineRewriter(self.inline_factor, self.inline_all)
-        return eliminator.eliminate(stmt)
+        return eliminator.eliminate(func)
 
 
 def inline_let_stmt_pass(inline_factor=1, inline_all=False) -> Pass:

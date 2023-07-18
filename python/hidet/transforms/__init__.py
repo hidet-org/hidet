@@ -12,7 +12,7 @@
 from typing import Sequence
 from hidet.ir.module import IRModule
 
-from .base import Pass, FunctionPass, FunctionBodyPass, SequencePass, RepeatFunctionPass, PassContext
+from .base import Pass, FunctionPass, SequencePass, RepeatFunctionPass, PassContext
 from .instruments import PassInstrument, SaveIRInstrument, ProfileInstrument
 
 from .unify_global_objects import unify_global_objects_pass
