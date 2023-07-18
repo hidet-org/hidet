@@ -43,6 +43,8 @@ def register_primitive_functions():
                                                                                'float32x8')),
         ('avx_x86_float32x8_extract_last', '_mm256_cvtss_f32', FuncType(['float32x8'], 'float32')),
         ('avx_x86_float32x8_extract_half', '_mm256_extractf128_ps', FuncType(['float32x8', 'uint8'], 'float32x4')),
+        ('avx_x86_float32x8_to_uint32x8', 'as_v8_u32_f32', FuncType(['float32x8'], 'uint32x8')),
+        ('avx_x86_uint32x8_to_float32x8', 'as_v8_f32_u32', FuncType(['uint32x8'], 'float32x8')),
         ('avx_x86_malloc', '_mm_malloc', FuncType(['uint64', 'uint64'], PointerType(VoidType()))),
         ('avx_x86_free', '_mm_free', FuncType([PointerType(VoidType())], VoidType())),
         ('x86_memset', 'memset', FuncType([PointerType(VoidType()), 'int32', 'uint64'], PointerType(VoidType()))),
@@ -142,6 +144,14 @@ def avx_f32x4_fmadd(a: Expr, b: Expr, c: Expr) -> Call:
 
 def avx_f32x8_fmadd(a: Expr, b: Expr, c: Expr) -> Call:
     return call_primitive_func('avx_x86_float32x8_fmadd', [a, b, c])
+
+
+def avx_f32x8_to_u32x8(a: Expr) -> Call:
+    return call_primitive_func('avx_x86_float32x8_to_uint32x8', [a])
+
+
+def avx_u32x8_to_f32x8(a: Expr) -> Call:
+    return call_primitive_func('avx_x86_uint32x8_to_float32x8', [a])
 
 
 def avx_f32x4_load(addr: Expr) -> Call:

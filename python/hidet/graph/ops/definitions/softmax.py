@@ -84,46 +84,47 @@ class SoftmaxTask(Task):
         from hidet.ir.primitives.cpu.avx import avx_f32x8_subtract, avx_f32x8_load, avx_f32x8_setzero, avx_f32x8_store,\
             avx_f32x8_add, avx_f32x8_max, avx_f32x8_permute, avx_f32x8_permute_2f128, avx_f32x8_extract_last,\
             avx_f32x8_extract_half, avx_f32x4_add, avx_f32x4_hadd, avx_f32x4_extract_last, avx_f32x8_broadcast,\
-            avx_f32x8_divide
+            avx_f32x8_divide, avx_f32x8_to_u32x8, avx_u32x8_to_f32x8
         from hidet.ir.dtypes import float32x8
         from hidet.lang.constructs.type import tensor
         from hidet.ir.stmt import DeclareScope
         from hidet.lang import grid
-        # axes, axes_size = self.x_shape, len(self.x_shape)
-        # row_size, col_size = 1, self.x_shape[-1]  # for 1d vector
-        # if axes_size > 1:
-        #     row_size = self.x_shape[-2]
         row_size, col_size = self.x_shape[-2], self.x_shape[-1]
 
         with hidet.script_module() as module:
             @hidet.script
             def find_max(max_vec: float32x8) -> float32:
-                y = avx_f32x8_permute_2f128(max_vec, max_vec, 1)
+                y = avx_f32x8_permute_2f128(max_vec, max_vec, 1)   # swap first and last 4
                 m1 = avx_f32x8_max(max_vec, y)
-                m2 = avx_f32x8_permute(m1, 0b01001110)
+                m2 = avx_f32x8_permute(m1, 0b01001110)  # reshuffle to 2 elems per vec and compare
                 m3 = avx_f32x8_max(m1, m2)
-                m4 = avx_f32x8_permute(m3, 0b10110001)
-                m = avx_f32x8_max(m3, m4)
+                m4 = avx_f32x8_permute(m3, 0b10110001)  # reshuffle to 1 elem per vec and compare
+                m = avx_f32x8_max(m3, m4)  # max val
                 return avx_f32x8_extract_last(m)
 
             @hidet.script
-            def find_sum(sum_vec: float32x8) -> float32:
-                sum_vec = avx_f32x4_add(avx_f32x8_extract_half(sum_vec, 0b0), avx_f32x8_extract_half(sum_vec, 0b1))
+            def find_sum(x: float32x8) -> float32:
+                sum_vec = avx_f32x4_add(avx_f32x8_extract_half(x, 0b0), avx_f32x8_extract_half(x, 0b1))
                 sum_vec = avx_f32x4_hadd(sum_vec, sum_vec)
                 sum_vec = avx_f32x4_hadd(sum_vec, sum_vec)
                 return avx_f32x4_extract_last(sum_vec)
 
             # @hidet.script
-            # def avx_exp(arg_vec: float32x8) -> float32x8:
-            #     # TODO: reference aocl code and implement exponent for avx vector
+            # def avx_exp(x: float32x8) -> float32x8:
+            #     vx = avx_f32x8_to_u32x8(x)
+            #     vx = vx & MASK
+            #     cond = vx > ARG_MAX  # I think all these operations should be avx?
+            #     z = x * TBL_LN2
+            #     dn = z + EXP_HUGE
+            #     r1 = x - (dn * LN2_TBL_H)
+            #     r2 = dn * LN2_TBL_T
+            #     r = r1 - r2
+            #     m = (n + EXPF_BIAS) << 23
+            #     poly = POLY_EVAL_7()  # how can i call the macro? idk...
+            #     result = poly * avx_u32x8_to_f32x8(m)
             #
-
-            @hidet.script
-            def avx_exp_dumb(arg_vec: float32x8):
-                arr = tensor(scope=DeclareScope.Default, dtype=float32, shape=[8])
-                avx_f32x8_store(arr, arg_vec)
-                arr = prim.exp(arr)
-                return avx_f32x8_load(arr)
+            #     # if cond is not satisfied, resort to regular scalar expf
+            #     return result
 
             @hidet.script
             def softmax_cpu(x: float32[row_size, col_size], out: float32[row_size, col_size]):
@@ -136,13 +137,7 @@ class SoftmaxTask(Task):
                         for j in range(col_size//8):
                             data_vec = avx_f32x8_load(x + i * col_size + j * 8)
                             max_vec = avx_f32x8_max(max_vec, data_vec)
-                        y = avx_f32x8_permute_2f128(max_vec, max_vec, 1)
-                        m1 = avx_f32x8_max(max_vec, y)
-                        m2 = avx_f32x8_permute(m1, 0b01001110)
-                        m3 = avx_f32x8_max(m1, m2)
-                        m4 = avx_f32x8_permute(m3, 0b10110001)
-                        m = avx_f32x8_max(m3, m4)
-                        max_val = avx_f32x8_extract_last(m)
+                        max_val = find_max(max_vec)
                     for j in range(col_size % 8):
                         max_val = max_val if max_val > x[i, col_size + j - 8] else x[i, col_size + j - 8]
 
@@ -160,13 +155,10 @@ class SoftmaxTask(Task):
                             for k in range(8):
                                 arr[k] = prim.exp(arr[k])
                             val_vec = avx_f32x8_load(arr)
+                            # val_vec = avx_exp(val_vec)
                             avx_f32x8_store(out + i * col_size + j * 8, val_vec)
                             sum_exp_vec = avx_f32x8_add(sum_exp_vec, val_vec)
-                        sum_vec = avx_f32x4_add(avx_f32x8_extract_half(sum_exp_vec, 0b0),
-                                                avx_f32x8_extract_half(sum_exp_vec, 0b1))
-                        sum_vec = avx_f32x4_hadd(sum_vec, sum_vec)
-                        sum_vec = avx_f32x4_hadd(sum_vec, sum_vec)
-                        sum_value = avx_f32x4_extract_last(sum_vec)
+                        sum_value = find_sum(sum_exp_vec)
                     for j in range(col_size % 8):
                         out[i, col_size + j - 8] = prim.exp(x[i, col_size + j - 8] - max_val)
                         sum_value += out[i, col_size + j - 8]
@@ -185,7 +177,7 @@ class SoftmaxTask(Task):
             find_max.kind = "cpu_internal"
             find_sum.kind = "cpu_internal"
             # avx_exp.kind = "cpu_internal"
-            avx_exp_dumb.kind = "cpu_internal"
+            # avx_exp_dumb.kind = "cpu_internal"
             ir_module = module.ir_module()
             return ir_module
 
