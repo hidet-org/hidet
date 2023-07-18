@@ -41,7 +41,6 @@ for gpu in devices:
         data[gpu]['matmul_shapes'][shape]['float32'] = lat
     for shape in data[gpu]['fmha_shapes']:
         data[gpu]['fmha_shapes'][shape]['float16'] = lat
-        data[gpu]['fmha_shapes'][shape]['float32'] = lat
 
 with open('regression_data.json', 'w') as f:
     json.dump(data, f, indent=2)

@@ -427,7 +427,7 @@ class FlowGraph:
         if dummy_inputs is None:
             dummy_inputs = self.dummy_inputs()
         for _ in range(warmup):
-            self.forward(*dummy_inputs)
+            self.forward(dummy_inputs)
         results = []
         for _ in range(repeat):
             hidet.cuda.synchronize()

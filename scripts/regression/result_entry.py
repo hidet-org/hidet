@@ -9,7 +9,7 @@ class ResultEntry:
         self.attrs = attrs
     
     def __str__(self) -> str:
-        s = f"{f'Shape: {self.shape}': <30}{f'dtype: {self.dtype}': <20}{f'latency: {self.latency}ms': <15}"
+        s = f"{f'Shape: {self.shape}': <30}{f'dtype: {self.dtype}': <20}{f'latency: {self.latency:.5f}ms': <15}"
         return s
 
 
@@ -29,10 +29,14 @@ class ResultGroup:
         self.result_entries.append(entry)
 
 def load_regression_data() -> dict:
-    if os.path.exists('./scripts/regression/regression_data.json'):
-        data_file = './scripts/regression/regression_data.json'
-    elif os.path.exists('./regression_data.json'):
-        data_file = './regression_data.json'
+    # if os.path.exists('./scripts/regression/regression_data.json'):
+    #     data_file = './scripts/regression/regression_data.json'
+    # elif os.path.exists('./regression_data.json'):
+    #     data_file = './regression_data.json'
+    if os.path.exists('./scripts/regression/regression_data_dev.json'):
+        data_file = './scripts/regression/regression_data_dev.json'
+    elif os.path.exists('./regression_data_dev.json'):
+        data_file = './regression_data_dev.json'
     else:
         raise FileNotFoundError("regression_data.json not found. Please run "
                     "this script from the root directory of the repository "
