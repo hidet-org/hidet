@@ -88,15 +88,6 @@ class ReduceTask(Task):
             # last dimension has not been reduced
             return cuda_schedule_reduce_by_default(self)
 
-    def implement_cpu(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
-        print("implementing on cpu")
-        from ...schedules import cpu_schedule_reduce
-        from hidet.graph.ops.definitions.utils import tune
-        if self.inputs[0].type.dtype.name == 'float32':
-            return cpu_schedule_reduce(self)
-            # return tune.extract_ir_modules(cpu_schedule_reduce(self))
-        return NotImplemented
-
 
 class ArgReduceTask(Task):
     def __init__(self, x: TensorNode, dim: int, keep_dim: bool, reduce_type: str):

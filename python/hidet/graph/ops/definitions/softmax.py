@@ -79,7 +79,7 @@ class SoftmaxTask(Task):
 
     # @tune.space(2, 'nthreads', [4, 8, 16, 32, 64, 96])
     # @tune.space(1, 'nthreads', [8, 16])
-    def schedule_softmax_cpu(self, nthreads=16) -> IRModule:
+    def schedule_softmax_cpu(self, nthreads=4) -> IRModule:
         import hidet
         from hidet.ir.primitives.cpu.avx import avx_f32x8_subtract, avx_f32x8_load, avx_f32x8_setzero, avx_f32x8_store,\
             avx_f32x8_add, avx_f32x8_max, avx_f32x8_permute, avx_f32x8_permute_2f128, avx_f32x8_extract_last,\
@@ -89,8 +89,12 @@ class SoftmaxTask(Task):
         from hidet.lang.constructs.type import tensor
         from hidet.ir.stmt import DeclareScope
         from hidet.lang import grid
-        axes = self.x_shape
+        # axes, axes_size = self.x_shape, len(self.x_shape)
+        # row_size, col_size = 1, self.x_shape[-1]  # for 1d vector
+        # if axes_size > 1:
+        #     row_size = self.x_shape[-2]
         row_size, col_size = self.x_shape[-2], self.x_shape[-1]
+
         with hidet.script_module() as module:
             @hidet.script
             def find_max(max_vec: float32x8) -> float32:
@@ -112,7 +116,7 @@ class SoftmaxTask(Task):
             # @hidet.script
             # def avx_exp(arg_vec: float32x8) -> float32x8:
             #     # TODO: reference aocl code and implement exponent for avx vector
-            #     pass
+            #
 
             @hidet.script
             def avx_exp_dumb(arg_vec: float32x8):
@@ -122,7 +126,7 @@ class SoftmaxTask(Task):
                 return avx_f32x8_load(arr)
 
             @hidet.script
-            def softmax_2d_kernel(x: float32[row_size, col_size], out: float32[row_size, col_size]):
+            def softmax_cpu(x: float32[row_size, col_size], out: float32[row_size, col_size]):
                 para = 'p' + str(nthreads)
                 for i in grid(row_size, attrs=para):
                     # find max
@@ -150,7 +154,7 @@ class SoftmaxTask(Task):
                         for j in range(col_size//8):
                             val_vec = avx_f32x8_load(x + i * col_size + j * 8)
                             val_vec = avx_f32x8_subtract(val_vec, max_vec)
-                            #apply exponent val_vec = avxexponent
+                            # apply exponent val_vec = avxexponent
                             arr = tensor(scope=DeclareScope.Default, dtype=float32, shape=[8])
                             avx_f32x8_store(arr, val_vec)
                             for k in range(8):
@@ -176,13 +180,6 @@ class SoftmaxTask(Task):
                                             avx_f32x8_divide(avx_f32x8_load(out + i * col_size + j * 8), sum_vec8))
                     for j in range(col_size % 8):
                         out[i, col_size + j - 8] = out[i, col_size + j - 8] / sum_value
-
-            @hidet.script
-            def softmax_cpu(x: ~float32, out: ~float32, depth: int = 0):
-                for i in axes[depth]:
-                    if depth == 2:
-                        softmax_2d_kernel(x, out)  # point to matrix loc not start
-                    softmax_cpu(x, out, depth=depth - 1)
 
             softmax_cpu.kind = "cpu_kernel"
             find_max.kind = "cpu_internal"
