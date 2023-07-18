@@ -1,7 +1,9 @@
+import pytest
 import torch
 from transformers import PegasusForConditionalGeneration, PegasusTokenizer
 
 
+@pytest.mark.slow
 def test_pegasus():
     src_text = [
         "The tower is 324 metres (1,063 ft) tall, about the same height as an 81-storey building, and the tallest "
