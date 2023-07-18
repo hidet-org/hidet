@@ -57,10 +57,12 @@ def fmha_regression() -> ResultGroup:
     return result_group
 
 def conv2d_regression() -> ResultGroup:
-    pass
+    # ToDo
+    return None
 
 def reduce_regression() -> ResultGroup:
-    pass
+    # ToDo
+    return None
 
 
 def op_performance_regression(report_file):
