@@ -13,7 +13,7 @@ logging.set_verbosity_error()
 
 device_name = str(hidet.cuda.properties().name, 'UTF-8')
 
-def bench_torch_model(model, torch_inputs, bench_iters=10, warmup_iters=5):
+def bench_torch_model(model, torch_inputs, bench_iters=100, warmup_iters=10):
     for _ in range(warmup_iters):
         torch_out = model(*torch_inputs)
     torch.cuda.empty_cache()
@@ -38,6 +38,7 @@ def bench_hf_transformers(model_name, seqlen, dtype):
     hidet.torch.dynamo_config.use_fp16_reduction(use_fp16)
     hidet.torch.dynamo_config.use_attention(True)
     hidet.torch.dynamo_config.use_tensor_core(True)
+    hidet.torch.dynamo_config.use_cuda_graph(True)
     dtype = getattr(torch, dtype)
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForMaskedLM.from_pretrained(model_name,
@@ -60,6 +61,7 @@ def bench_torchvision(model_cls, shape, dtype):
     hidet.torch.dynamo_config.use_fp16_reduction(use_fp16)
     hidet.torch.dynamo_config.use_attention(True)
     hidet.torch.dynamo_config.use_tensor_core(True)
+    hidet.torch.dynamo_config.use_cuda_graph(True)
     dtype = getattr(torch, dtype)
     model = model_cls(weights=None)
     model = model.eval().to(dtype).cuda()

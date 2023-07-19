@@ -49,6 +49,8 @@ def run_regression(report_file, keep_cache=False):
         command = f'hidet cache clear'
         subprocess.run(command.split(), check=True)
 
+    commit = subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode('utf-8').strip()
+
     model_report_file = './scripts/regression/report_model_performance.txt'
     op_report_file = './scripts/regression/report_op_performance.txt'
 
@@ -63,7 +65,8 @@ def run_regression(report_file, keep_cache=False):
         model_report = f.read()
     with open(op_report_file, 'r') as f:
         op_report = f.read()
-    report = model_report + '\n' + op_report
+    report = 'COMMIT ' + commit + '\n'
+    report += model_report + '\n' + op_report
     with open(report_file, 'w') as f:
         f.write(report)
     

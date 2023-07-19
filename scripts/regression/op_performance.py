@@ -15,7 +15,7 @@ def bench_matmul(m, n, k, dtype):
     c = hidet.ops.matmul(a, b)
     g = hidet.trace_from(c, [a, b])
     g = hidet.graph.optimize(g)
-    return g.latency()
+    return g.latency(warmup=3, number=3, repeat=10)
 
 def bench_fmha(sq, skv, d):
     hidet.option.search_space(2)
@@ -25,7 +25,7 @@ def bench_fmha(sq, skv, d):
     o = hidet.ops.attention(q, k, v)
     g = hidet.trace_from(o, [q, k, v])
     g = hidet.graph.optimize(g)
-    return g.latency()
+    return g.latency(warmup=3, number=3, repeat=10)
 
 def matmul_regression() -> ResultGroup:
     regression_data = load_regression_data()
