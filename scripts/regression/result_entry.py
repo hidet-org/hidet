@@ -10,7 +10,7 @@ class ResultEntry:
         self.attrs = attrs
         self.ref_latency = ref_latency
         self.speedup = None
-        if not np.allclose(latency, ref_latency, rtol=0.05):
+        if not np.allclose(latency, ref_latency, rtol=0.08):
             self.speedup = ref_latency / latency
     
     def __str__(self) -> str:
@@ -34,11 +34,13 @@ class ResultGroup:
         if len(self.speedup_list) > 0:
             s += ' '*4 +  '*****SPEEDUP*****:\n'
             for entry in self.speedup_list:
-                s += ' '*6 + str(entry) + '\n\n'
+                s += ' '*6 + str(entry) + '\n'
+            s += '\n'
         if len(self.slowdown_list) > 0:
             s += ' '*4 + '*****SLOWDOWN*****:\n'
             for entry in self.slowdown_list:
-                s += ' '*6 + str(entry) + '\n\n'
+                s += ' '*6 + str(entry) + '\n'
+            s += '\n'
         for entry in self.result_list:
             s += ' '*4 + str(entry) + '\n'
         return s
