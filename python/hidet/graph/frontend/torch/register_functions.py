@@ -1019,3 +1019,51 @@ def torch_conj(x: Tensor) -> Tensor:
 @register_function(torch._C._log_api_usage_once)
 def torch_noop(self):
     return
+
+
+@register_function(torch.abs)
+def abs(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.abs(..., out=...)")
+    return ops.abs(x)
+
+
+@register_function(torch.log)
+def log(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.log(..., out=...)")
+    return ops.log(x)
+
+
+@register_function(torch.full_like)
+def full_like(x: Tensor, fill_value, *, dtype=None, layout=torch.strided, device=None, requires_grad=False,
+              memory_format=torch.preserve_format):
+    if layout not in [None, torch.strided]:
+        raise NotImplementedError("hidet: does not support torch.full(..., layout=..., ...)")
+    if requires_grad and torch.is_grad_enabled():
+        warnings.warn_once("hidet: requires_grad=True when torch.is_grad_enabled(), treating as requires_grad=False")
+    hidet_device: Device = device_from_torch(torch_device=device)
+    hidet_dtype: DataType = dtype_from_torch(torch_dtype=dtype)
+    return ops.full(x.shape, fill_value, dtype=hidet_dtype, device=hidet_device)
+
+
+@register_function(torch.zeros_like)
+def zeros_like(x: Tensor, *, dtype=None, layout=None, device=None, requires_grad=False,
+               memory_format=torch.preserve_format):
+    import hidet
+
+    if layout is not None:
+        raise NotImplementedError("layout is not None")
+
+    shape = x.shape
+    if len(shape) == 1:
+        if isinstance(shape[0], (list, tuple)):
+            shape = shape[0]
+    shape = [int(v) for v in shape]
+
+    if dtype is None:
+        dtype = torch.get_default_dtype()
+
+    _ = requires_grad
+
+    return hidet.zeros(shape, dtype=dtype_from_torch(dtype), device=device_from_torch(device))
