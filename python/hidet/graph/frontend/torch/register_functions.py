@@ -1036,14 +1036,14 @@ def log(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
 
 
 @register_function(torch.full_like)
-def full_like(x: Tensor, fill_value, *, dtype=None, layout=torch.strided, device=None, requires_grad=False,
+def full_like(x: Tensor, fill_value, *, dtype=None, layout=None, device=None, requires_grad=False,
               memory_format=torch.preserve_format):
-    if layout not in [None, torch.strided]:
+    if layout is not None:
         raise NotImplementedError("hidet: does not support torch.full(..., layout=..., ...)")
-    if requires_grad and torch.is_grad_enabled():
-        warnings.warn_once("hidet: requires_grad=True when torch.is_grad_enabled(), treating as requires_grad=False")
-    hidet_device: Device = device_from_torch(torch_device=device)
-    hidet_dtype: DataType = dtype_from_torch(torch_dtype=dtype)
+
+    hidet_device: Device = device_from_torch(torch_device=device) if device else x.device
+    hidet_dtype: DataType = dtype_from_torch(torch_dtype=dtype) if dtype else x.dtype
+
     return ops.full(x.shape, fill_value, dtype=hidet_dtype, device=hidet_device)
 
 
@@ -1051,19 +1051,10 @@ def full_like(x: Tensor, fill_value, *, dtype=None, layout=torch.strided, device
 def zeros_like(x: Tensor, *, dtype=None, layout=None, device=None, requires_grad=False,
                memory_format=torch.preserve_format):
     import hidet
-
     if layout is not None:
         raise NotImplementedError("layout is not None")
 
-    shape = x.shape
-    if len(shape) == 1:
-        if isinstance(shape[0], (list, tuple)):
-            shape = shape[0]
-    shape = [int(v) for v in shape]
+    hidet_device: Device = device_from_torch(torch_device=device) if device else x.device
+    hidet_dtype: DataType = dtype_from_torch(torch_dtype=dtype) if dtype else x.dtype
 
-    if dtype is None:
-        dtype = torch.get_default_dtype()
-
-    _ = requires_grad
-
-    return hidet.zeros(shape, dtype=dtype_from_torch(dtype), device=device_from_torch(device))
+    return hidet.zeros(x.shape, dtype=hidet_dtype, device=hidet_device)
