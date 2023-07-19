@@ -78,10 +78,7 @@ def bert_regression():
         for dtype, ref_latency in perf.items():
             [seqlen] = [int(s.strip()) for s in shape.split(',')]
             latency = bench_hf_transformers('bert-base-uncased', seqlen, dtype)
-            if not np.allclose(latency, ref_latency, rtol=0.05):
-                # ToDo: deal with slowdown/speedup
-                pass
-            result_group.add_entry(ResultEntry(shape, dtype, latency))
+            result_group.add_entry(ResultEntry(shape, dtype, latency, ref_latency))
     return result_group
 
 def resnet_regression():
@@ -93,10 +90,7 @@ def resnet_regression():
         for dtype, ref_latency in perf.items():
             _shape = [int(s.strip()) for s in shape.split(',')]
             latency = bench_torchvision(model_cls, _shape, dtype)
-            if not np.allclose(latency, ref_latency, rtol=0.05):
-                # ToDo: deal with slowdown/speedup
-                pass
-            result_group.add_entry(ResultEntry(shape, dtype, latency))
+            result_group.add_entry(ResultEntry(shape, dtype, latency, ref_latency))
     return result_group
 
 

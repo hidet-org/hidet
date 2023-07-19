@@ -18,6 +18,11 @@ parser.add_argument(
     action='store_true',
     help='Send results to email. Requires Gmail login via app password.'
 )
+parser.add_argument(
+    '--keep',
+    action='store_true',
+    help='Keep operator cache.'
+)
 
 
 def install_dependencies():
@@ -39,9 +44,10 @@ def reinstall_hidet():
     subprocess.run(['pip', 'install', '-e', '.'], check=True)
 
 
-def run_regression(report_file):
-    # command = f'hidet cache clear'
-    # subprocess.run(command.split(), check=True)
+def run_regression(report_file, keep_cache=False):
+    if not keep_cache:
+        command = f'hidet cache clear'
+        subprocess.run(command.split(), check=True)
 
     model_report_file = './scripts/regression/report_model_performance.txt'
     op_report_file = './scripts/regression/report_op_performance.txt'
@@ -62,12 +68,12 @@ def run_regression(report_file):
         f.write(report)
     
 
-def bench_job(sender):
+def bench_job(sender, keep_cache=False):
     report_file = './scripts/regression/report.txt'
     try:
         pull_repo()
         reinstall_hidet()
-        run_regression(report_file)
+        run_regression(report_file, keep_cache=keep_cache)
         with open(report_file, 'r') as f:
             report = f.read()
             print(report)
@@ -90,11 +96,12 @@ def main():
     print("Waiting for next scheduled run.")
 
     now = args.now
+    keep_cache = args.keep
     if now:
-        bench_job(sender)
+        bench_job(sender, keep_cache=keep_cache)
         return
 
-    schedule.every().friday.at("22:00").do(bench_job, sender)
+    schedule.every().friday.at("22:00").do(bench_job, sender, keep_cache)
 
     while True:
         schedule.run_pending()

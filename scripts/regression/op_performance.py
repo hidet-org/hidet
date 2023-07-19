@@ -35,10 +35,7 @@ def matmul_regression() -> ResultGroup:
         for dtype, ref_latency in perf.items():
             (m, n, k) = [int(s.strip()) for s in shape.split(',')]
             latency = bench_matmul(m, n, k, dtype)
-            if not np.allclose(latency, ref_latency, rtol=0.05):
-                # ToDo: deal with slowdown/speedup
-                pass
-            result_group.add_entry(ResultEntry(shape, dtype, latency))
+            result_group.add_entry(ResultEntry(shape, dtype, latency, ref_latency))
     return result_group
 
 
@@ -50,10 +47,7 @@ def fmha_regression() -> ResultGroup:
         for dtype, ref_latency in perf.items():
             (sq, skv, d) = [int(s.strip()) for s in shape.split(',')]
             latency = bench_fmha(sq, skv, d)
-            if not np.allclose(latency, ref_latency, rtol=0.05):
-                # ToDo: deal with slowdown/speedup
-                pass
-            result_group.add_entry(ResultEntry(shape, dtype, latency))
+            result_group.add_entry(ResultEntry(shape, dtype, latency, ref_latency))
     return result_group
 
 def conv2d_regression() -> ResultGroup:
