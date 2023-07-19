@@ -9,7 +9,7 @@ from result_entry import ResultEntry, ResultGroup, load_regression_data
 device_name = str(hidet.cuda.properties().name, 'UTF-8')
 
 def bench_matmul(m, n, k, dtype):
-    # hidet.option.search_space(2)
+    hidet.option.search_space(2)
     a = hidet.symbol([m, k], dtype=dtype, device='cuda')
     b = hidet.symbol([k, n], dtype=dtype, device='cuda')
     c = hidet.ops.matmul(a, b)
@@ -18,7 +18,7 @@ def bench_matmul(m, n, k, dtype):
     return g.latency()
 
 def bench_fmha(sq, skv, d):
-    # hidet.option.search_space(2)
+    hidet.option.search_space(2)
     q = hidet.symbol([sq, d], dtype='float16', device='cuda')
     k = hidet.symbol([d, skv], dtype='float16', device='cuda')
     v = hidet.symbol([skv, d], dtype='float16', device='cuda')

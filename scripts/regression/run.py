@@ -40,8 +40,8 @@ def reinstall_hidet():
 
 
 def run_regression(report_file):
-    command = f'hidet cache clear'
-    subprocess.run(command.split(), check=True)
+    # command = f'hidet cache clear'
+    # subprocess.run(command.split(), check=True)
 
     model_report_file = './scripts/regression/report_model_performance.txt'
     op_report_file = './scripts/regression/report_op_performance.txt'

@@ -29,14 +29,14 @@ class ResultGroup:
         self.result_entries.append(entry)
 
 def load_regression_data() -> dict:
-    # if os.path.exists('./scripts/regression/regression_data.json'):
-    #     data_file = './scripts/regression/regression_data.json'
-    # elif os.path.exists('./regression_data.json'):
-    #     data_file = './regression_data.json'
-    if os.path.exists('./scripts/regression/regression_data_dev.json'):
-        data_file = './scripts/regression/regression_data_dev.json'
-    elif os.path.exists('./regression_data_dev.json'):
-        data_file = './regression_data_dev.json'
+    if os.path.exists('./scripts/regression/regression_data.json'):
+        data_file = './scripts/regression/regression_data.json'
+    elif os.path.exists('./regression_data.json'):
+        data_file = './regression_data.json'
+    # if os.path.exists('./scripts/regression/regression_data_dev.json'):
+    #     data_file = './scripts/regression/regression_data_dev.json'
+    # elif os.path.exists('./regression_data_dev.json'):
+    #     data_file = './regression_data_dev.json'
     else:
         raise FileNotFoundError("regression_data.json not found. Please run "
                     "this script from the root directory of the repository "
