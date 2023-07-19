@@ -963,6 +963,8 @@ def constant(value, const_type: Union[str, BaseType]) -> Constant:
 def symbol_var(name: str, dtype='int32') -> SymbolVar:
     dtype = data_type(dtype)
     if name not in SymbolVar.name2symbol:
+        if not name.isidentifier():
+            raise ValueError('Invalid symbol name "{}", must be a valid identifier'.format(name))
         SymbolVar.name2symbol[name] = SymbolVar(name, dtype)
     else:
         if SymbolVar.name2symbol[name].type != dtype:
