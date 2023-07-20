@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# pylint: disable=protected-access, c-extension-no-member
+# pylint: disable=protected-access, c-extension-no-member, function-redefined
 from typing import Optional, Union, Sequence, Any, Tuple, List
 import operator
 import functools
@@ -236,6 +236,13 @@ def cat(tensors: List[Tensor], dim: int):
     return ops.concat(tensors, dim)
 
 
+@register_function(torch.cat)
+def cat(tensors: List[Tensor], axis: int):  # PyTorch supports axis as well as the argument name
+    dtype = functools.reduce(promote_type, [t.dtype for t in tensors])
+    tensors = [ops.cast(t, dtype) for t in tensors]
+    return ops.concat(tensors, axis)
+
+
 @register_function(torch.unsqueeze)
 def unsqueeze(x: Tensor, dim: int):
     return ops.unsqueeze(x, [dim])
@@ -362,8 +369,6 @@ def matmul(x: Tensor, y: Tensor):
 
 @register_function(torch.zeros)
 def zeros(*size, out=None, dtype=None, layout=None, device=None, pin_memory=False, requires_grad=False):
-    import hidet
-
     if out is not None:
         raise NotImplementedError("out is not None")
     if layout is not None:
@@ -371,14 +376,17 @@ def zeros(*size, out=None, dtype=None, layout=None, device=None, pin_memory=Fals
     if len(size) == 1:
         if isinstance(size[0], (list, tuple)):
             size = size[0]
-    shape = [int(v) for v in size]
+    shape = size
     if dtype is None:
         dtype = torch.get_default_dtype()
 
     _ = pin_memory
     _ = requires_grad
 
-    return hidet.zeros(shape, dtype=dtype_from_torch(dtype), device=device_from_torch(device))
+    device = device_from_torch(device)
+    dtype = dtype_from_torch(dtype)
+
+    return ops.full(shape, dtype=dtype, device=device, value=dtype.zero)
 
 
 @register_function(torch.ones)
@@ -391,8 +399,6 @@ def ones(
     pin_memory: Optional[bool] = False,
     requires_grad: Optional[bool] = False,
 ):
-    import hidet
-
     if out is not None:
         raise NotImplementedError("out is not None")
     if layout is not None:
@@ -402,18 +408,17 @@ def ones(
         if isinstance(size[0], (list, tuple)):
             size = size[0]
 
-    shape = [v if isinstance(v, hidet.ir.Expr) else int(v) for v in size]
+    shape = [v if isinstance(v, Expr) else int(v) for v in size]
     if dtype is None:
         dtype = torch.get_default_dtype()
 
-    # currently, hidet's default cpu memory is always pinned.
-    # todo: fix here when hidet supports non-pinned memory
     _ = pin_memory
     _ = requires_grad
 
-    return hidet.ones(
-        shape=shape, dtype=dtype_from_torch(torch_dtype=dtype).name, device=device_from_torch(torch_device=device)
-    )
+    dtype = dtype_from_torch(dtype)
+    device = device_from_torch(device)
+
+    return ops.full(shape=shape, dtype=dtype, device=device, value=dtype.one)
 
 
 @register_function(torch.nn.functional.gelu)
@@ -620,8 +625,6 @@ def empty(
     pin_memory=False,
     memory_format=torch.contiguous_format,
 ):
-    import hidet
-
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.empty(..., out=..., ...)")
     if layout not in [None, torch.strided]:
@@ -637,7 +640,7 @@ def empty(
     hidet_dtype: DataType = dtype_from_torch(torch_dtype=dtype)
     if len(size) == 1 and isinstance(size[0], (tuple, list)):
         size = size[0]
-    return hidet.empty(size, dtype=hidet_dtype, device=hidet_device)
+    return ops.full(size, dtype=hidet_dtype, device=hidet_device, value=hidet_dtype.zero)
 
 
 @register_function(torch.bmm)
@@ -847,14 +850,14 @@ def minimum(x: Tensor, other: Tensor, *, out: Optional[Tensor] = None) -> Tensor
 
 
 @register_function(torch.max)
-def torch_max_v1(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
+def torch_max(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.max(..., out=...)")
     return ops.max(x, dims=list(range(len(x.shape))), keep_dim=True)
 
 
 @register_function(torch.max)
-def torch_max_v2(
+def torch_max(
     x: Tensor, other: Union[Tensor, int], *, out: Optional[Tensor] = None
 ) -> Union[Tensor, Tuple[Tensor, Tensor]]:
     if out is not None:
@@ -877,14 +880,14 @@ def torch_max_v3(
 
 
 @register_function(torch.min)
-def torch_min_v1(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
+def torch_min(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
     if out is not None:
         raise NotImplementedError("hidet: does not support torch.min(..., out=...)")
     return ops.min(x, dims=list(range(len(x.shape))), keep_dim=True)
 
 
 @register_function(torch.min)
-def torch_min_v2(
+def torch_min(
     x: Tensor, other: Union[Tensor, int], *, out: Optional[Tensor] = None
 ) -> Union[Tensor, Tuple[Tensor, Tensor]]:
     if out is not None:
@@ -958,7 +961,7 @@ def tensor_pow(self: Union[Tensor, Number], exponent: Union[Tensor, Number]) -> 
 
 @register_function(torch.mean)
 @register_method(torch.Tensor.mean)
-def torch_mean_v1(x: Tensor, *, dtype: Optional[DataType] = None) -> Tensor:
+def torch_mean(x: Tensor, *, dtype: Optional[DataType] = None) -> Tensor:
     if dtype:
         x = x.astype(dtype_from_torch(dtype))
     output = ops.mean(x, dims=list(range(len(x.shape))), keep_dim=True)
@@ -967,7 +970,7 @@ def torch_mean_v1(x: Tensor, *, dtype: Optional[DataType] = None) -> Tensor:
 
 @register_function(torch.mean)
 @register_method(torch.Tensor.mean)
-def torch_mean_v2(
+def torch_mean(
     x: Tensor, dim, keepdim=False, *, dtype: Optional[DataType] = None, out: Optional[Tensor] = None
 ) -> Tensor:
     if out is not None:
@@ -1019,3 +1022,50 @@ def torch_conj(x: Tensor) -> Tensor:
 @register_function(torch._C._log_api_usage_once)
 def torch_noop(self):
     return
+
+
+@register_function(torch.abs)
+def abs(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.abs(..., out=...)")
+    return ops.abs(x)
+
+
+@register_function(torch.log)
+def log(x: Tensor, *, out: Optional[Tensor] = None) -> Tensor:
+    if out is not None:
+        raise NotImplementedError("hidet: does not support torch.log(..., out=...)")
+    return ops.log(x)
+
+
+@register_function(torch.full_like)
+def full_like(
+    x: Tensor,
+    fill_value,
+    *,
+    dtype=None,
+    layout=None,
+    device=None,
+    requires_grad=False,
+    memory_format=torch.preserve_format,
+):
+    if layout is not None:
+        raise NotImplementedError("hidet: does not support torch.full(..., layout=..., ...)")
+
+    hidet_device: Device = device_from_torch(torch_device=device) if device else x.device
+    hidet_dtype: DataType = dtype_from_torch(torch_dtype=dtype) if dtype else x.dtype
+
+    return ops.full(x.shape, fill_value, dtype=hidet_dtype, device=hidet_device)
+
+
+@register_function(torch.zeros_like)
+def zeros_like(
+    x: Tensor, *, dtype=None, layout=None, device=None, requires_grad=False, memory_format=torch.preserve_format
+):
+    if layout is not None:
+        raise NotImplementedError("layout is not None")
+
+    hidet_device: Device = device_from_torch(torch_device=device) if device else x.device
+    hidet_dtype: DataType = dtype_from_torch(torch_dtype=dtype) if dtype else x.dtype
+
+    return ops.full(x.shape, dtype=hidet_dtype, device=hidet_device, value=hidet_dtype.zero)
