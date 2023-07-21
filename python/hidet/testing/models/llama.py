@@ -186,7 +186,7 @@ class LlamaAttention(nn.Module):
 
         if self.config.pretraining_tp > 1:
             raise RuntimeError("Pretraining TP > 1 is not supported yet")
-        
+
         query_states = self.q_proj(hidden_states).reshape([bsz, q_len, self.num_heads, self.head_dim]).transpose(1, 2)
         key_states = self.k_proj(hidden_states).reshape([bsz, q_len, self.num_heads, self.head_dim]).transpose(1, 2)
         value_states = self.v_proj(hidden_states).reshape([bsz, q_len, self.num_heads, self.head_dim]).transpose(1, 2)
