@@ -9,6 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# %%
 import pytest
 from hidet.testing.models.llama import get_compiled_model, generate
 from hidet.runtime.storage import current_memory_pool
@@ -32,6 +33,29 @@ def test_llama(device, opt):
         ' except where such orders would conflict with the First Law. A robot must protect its own'
         ' existence as long as such protection does not conflict with the First or Second Laws.'
     )
+
+    print(text)
+    assert text == expected
+
+    print(current_memory_pool("cuda"))
+    print(current_memory_pool("cpu"))
+    print(current_memory_pool("vcuda"))
+
+
+# @pytest.mark.parametrize('device,opt', [('cuda', True)])
+@pytest.mark.skip(reason='This test requires a lot of CPU memory > 32GB, plus you need to sign up for the weights')
+def test_llama2(device, opt):
+    model, config, tokenizer = get_compiled_model(device=device, opt=opt, name="meta-llama/Llama-2-7b-hf")
+
+    text = generate('In the beginning was the Word.', model, tokenizer, config, num_tokens=12)
+    print(text)
+    expected = '\nThe Word was with God, and the Word was God'
+    assert text == expected
+
+    text = generate(
+        "A robot may not injure a human being or, through inaction", model, tokenizer, config, num_tokens=55
+    )
+    expected = ', allow a human being to come to harm.\nA robot must obey orders given it by human beings except where such orders would conflict with the First Law.\nA robot must protect its own existence as long as such protection does not conflict with the First or Second Law'
 
     print(text)
     assert text == expected
