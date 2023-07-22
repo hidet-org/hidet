@@ -168,6 +168,8 @@ class ReduceTask(Task):
                 rv = shfl_sync(mask, rv, 0, 32)
 
                 # write to staging area
+                if perform_atomic_reduce:
+                    syncthreads()
                 if threadIdx.x % 32 == 0:
                     if perform_atomic_reduce:
                         ro.atomic_combine(~smem_staging[0], cast(rv, accumulate_dtype))
