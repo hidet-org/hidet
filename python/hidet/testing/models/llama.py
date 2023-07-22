@@ -36,6 +36,8 @@ def copy_weights(torch_model, hidet_model):
 
         found_tensors.append(mod)
         mod.copy_(hidet.from_torch(tensor).to(mod.dtype, mod.device))
+        if mod.shape != tensor.shape:
+            print(f"hidet/hf shape mismatch at {name}, hidet: {mod.shape}, torch: {tensor.shape}")
 
     buffer_names = set(name for name, _ in torch_model.named_buffers())
 
@@ -121,15 +123,29 @@ def apply_rotary_pos_emb(q, k, cos, sin, position_ids):
 
 
 class LlamaMLP(nn.Module):
-    def __init__(self, hidden_size: int, intermediate_size: int):
+    def __init__(self, config: LlamaConfig):
         super().__init__()
-        self.gate_proj = nn.Linear(hidden_size, intermediate_size, bias=False)
-        self.down_proj = nn.Linear(intermediate_size, hidden_size, bias=False)
-        self.up_proj = nn.Linear(hidden_size, intermediate_size, bias=False)
+        self.pretraining_tp = config.pretraining_tp
+        self.gate_proj = nn.Linear(config.hidden_size, config.intermediate_size, bias=False)
+        self.down_proj = nn.Linear(config.intermediate_size, config.hidden_size, bias=False)
+        self.up_proj = nn.Linear(config.hidden_size, config.intermediate_size, bias=False)
+        if config.hidden_act != "silu":
+            raise NotImplementedError("Only silu activation is supported currently in LlamaMLP")
         self.act_fn = hidet.ops.silu
 
     def forward(self, x):
+        if self.pretraining_tp > 1:
+            # I think this is only for training, so we can skip it
+            raise RuntimeError("Pretraining TP > 1 is not supported yet")
         return self.down_proj(self.act_fn(self.gate_proj(x)) * self.up_proj(x))
+
+
+def repeat_kv(hidden_states: hidet.Tensor, n_rep: int) -> hidet.Tensor:
+    batch, num_key_value_heads, slen, head_dim = hidden_states.shape
+    if n_rep == 1:
+        return hidden_states
+    hidden_states = hidden_states[:, :, None, :, :].expand(batch, num_key_value_heads, n_rep, slen, head_dim)
+    return hidden_states.reshape(batch, num_key_value_heads * n_rep, slen, head_dim)
 
 
 class LlamaAttention(nn.Module):
@@ -141,6 +157,9 @@ class LlamaAttention(nn.Module):
         self.hidden_size = config.hidden_size
         self.num_heads = config.num_attention_heads
         self.head_dim = self.hidden_size // self.num_heads
+        self.num_key_value_heads = config.num_key_value_heads
+        self.num_key_value_groups = self.num_heads // self.num_key_value_heads
+        self.pretraining_tp = config.pretraining_tp
         self.max_position_embeddings = config.max_position_embeddings
 
         if (self.head_dim * self.num_heads) != self.hidden_size:
@@ -149,9 +168,11 @@ class LlamaAttention(nn.Module):
                 f" and `num_heads`: {self.num_heads})."
             )
         self.q_proj = nn.Linear(self.hidden_size, self.num_heads * self.head_dim, bias=False)
-        self.k_proj = nn.Linear(self.hidden_size, self.num_heads * self.head_dim, bias=False)
-        self.v_proj = nn.Linear(self.hidden_size, self.num_heads * self.head_dim, bias=False)
+        self.k_proj = nn.Linear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=False)
+        self.v_proj = nn.Linear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=False)
         self.o_proj = nn.Linear(self.num_heads * self.head_dim, self.hidden_size, bias=False)
+        if config.rope_scaling is not None:
+            raise NotImplementedError("Rotary Scaling is not supported yet.")
         self.rotary_emb = LlamaRotaryEmbedding(self.head_dim, max_position_embeddings=self.max_position_embeddings)
 
     def forward(
@@ -162,6 +183,9 @@ class LlamaAttention(nn.Module):
         past_key_value: Optional[Tuple[hidet.Tensor]] = None,
     ) -> Tuple[hidet.Tensor, Tuple[hidet.Tensor, hidet.Tensor]]:
         bsz, q_len, _ = hidden_states.shape
+
+        if self.config.pretraining_tp > 1:
+            raise RuntimeError("Pretraining TP > 1 is not supported yet")
 
         query_states = self.q_proj(hidden_states).reshape([bsz, q_len, self.num_heads, self.head_dim]).transpose(1, 2)
         key_states = self.k_proj(hidden_states).reshape([bsz, q_len, self.num_heads, self.head_dim]).transpose(1, 2)
@@ -180,6 +204,9 @@ class LlamaAttention(nn.Module):
             value_states = hidet.ops.concat([past_key_value[1], value_states], axis=2)
 
         past_key_value = (key_states, value_states)
+
+        key_states = repeat_kv(key_states, self.num_key_value_groups)
+        value_states = repeat_kv(value_states, self.num_key_value_groups)
 
         attn_weights = hidet.ops.matmul(query_states, key_states.transpose(2, 3)) / math.sqrt(self.head_dim)
 
@@ -203,7 +230,7 @@ class LlamaDecoderLayer(nn.Module):
         super().__init__()
         self.hidden_size = config.hidden_size
         self.self_attn = LlamaAttention(config=config)
-        self.mlp = LlamaMLP(hidden_size=self.hidden_size, intermediate_size=config.intermediate_size)
+        self.mlp = LlamaMLP(config)
         self.input_layernorm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.post_attention_layernorm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 
