@@ -108,9 +108,9 @@ class CompiledModule:
         self.functions: Dict[str, CompiledFunction] = self._load_functions()
 
     def __call__(self, *args):
-        if 'launch_0' not in self.functions:
+        if 'launch' not in self.functions:
             raise RuntimeError('Launch function not found.')
-        return self.functions['launch_0'](*args)
+        return self.functions['launch'](*args)
 
     def __getitem__(self, item: str) -> CompiledFunction:
         return self.functions[item]
