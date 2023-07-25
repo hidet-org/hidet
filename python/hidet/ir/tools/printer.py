@@ -75,6 +75,8 @@ class IRPrinter(IRFunctor):
             else:
                 head_doc += NewLine()
         head_doc += ')'
+        if not func.ret_type.is_void():
+            head_doc += ' -> ' + self(func.ret_type) + ':'
 
         # attributes
         attr_doc = Doc()
