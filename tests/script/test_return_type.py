@@ -13,7 +13,7 @@ import pytest
 import hidet
 
 
-def test_unroll():
+def test_return_type():
     from hidet.lang import printf, attrs
     from hidet.ir.dtypes import float32x8, float32
     from hidet.ir import primitives
