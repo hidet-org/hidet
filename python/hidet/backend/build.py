@@ -231,6 +231,7 @@ class GCC(SourceCompiler):
             '-mavx2',
             '-m64',
             '-march=native',
+            '-ffast-math',
             # compile into position independent code.
             '-fPIC',
             # enable OpenMP.

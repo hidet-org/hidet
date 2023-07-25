@@ -4,8 +4,8 @@ import torch
 import hidet
 from hidet.graph.ops import softmax
 import torch.nn as nn
-shape = [50, 1005]
-# hidet.option.search_space(0)
+shape = [4, 4, 8, 1000]
+hidet.option.search_space(0)
 # hidet.option.runtime_check(False)
 a = hidet.randn(shape, device="cpu")
 # a = hidet.randn([2, 8, 8], device="cpu")
@@ -16,17 +16,17 @@ print(a)
 #                     setup='from __main__ import a_np, np'))
 # start_time = time.time()
 x1 = hidet.symbol_like(a)
-y = softmax(x1)
+y = softmax(x1, axis=-1)
 
 graph: hidet.FlowGraph = hidet.trace_from(y, inputs=[x1])
 opt_graph = hidet.graph.optimize(graph)
-compiled_func = opt_graph.nodes[0].compiled_task.task_module
+compiled_func = opt_graph.nodes[0].compiled_task.candidates[0]
 b = hidet.zeros(shape, device="cpu")
 
 compiled_func(a, b)
 
 device = torch.device("cpu")
-m = nn.Softmax(dim=1)
+m = nn.Softmax(dim=-1)
 a_torch = torch.from_numpy(np.array(a.numpy(), copy=True, dtype=float))
 print(np.allclose(b.numpy(), m(a_torch)))
 
