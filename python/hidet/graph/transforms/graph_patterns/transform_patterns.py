@@ -168,6 +168,21 @@ class DoubleCast(SubgraphRewriteRule):
             return None
         return [x]
 
+class CompositeElementwiseRewriteRule(SubgraphRewriteRule):
+    def __init__(self):
+        super().__init__('binaryOp(unaryOp1(x), unaryOp2(x)) => compositeOp(x)')
+        self.x = TensorPattern.tensor(is_symbolic=True)
+        self.c1 = op_pattern(CastOp, [self.x])
+        self.c2 = op_pattern(CastOp, [self.c1])
+
+    def source(self) -> List[TensorPattern]:
+        return [self.c2]
+
+    def target(self, matched: MatchDict) -> Optional[List[Tensor]]:
+        x, _, c2 = [matched[v] for v in [self.x, self.c1, self.c2]]
+        if not c2.dtype == x.dtype:
+            return None
+        return [x]
 
 @initialize()
 def transform_patterns():

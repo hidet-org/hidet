@@ -81,6 +81,29 @@ class VariadicElementwiseTask(Task):
             },
         )
 
+class CompositeElementwiseTask(Task):
+    def __init__(self, name: str, x: TensorNode, unaryOp1: Callable[[Any], Any],
+                 unaryOp2: Callable[[Any], Any], binaryOp: Callable[[Any, Any], Any], attrs=None):
+        shape = x.shape
+        y1 = compute(name='y1', shape=shape, fcompute=lambda *indices: unaryOp1(x.__getitem__(indices)))
+        y2 = compute(name='y2', shape=shape, fcompute=lambda *indices: unaryOp2(x.__getitem__(indices)))
+
+        z = compute(
+            name='z',
+            shape=shape,
+            fcompute=lambda *indices: binaryOp(
+                y1.__getitem__(indices), y2.__getitem__(indices)
+            ),
+        )
+
+        super().__init__(
+            name=name,
+            inputs=[x],
+            outputs=[z],
+            inverse_map={x: InverseMap.from_lambda(lambda *indices: list(indices), num_args=len(x.type.shape))},
+            attributes={} if attrs is None else attrs,
+        )
+
 
 class WhereTask(Task):
     def __init__(self, cond: TensorNode, x: TensorNode, y: TensorNode):
@@ -128,6 +151,17 @@ class BinaryElementwiseOp(Operator):
             inputs=[x, y],
             attributes={},
             task=BinaryElementwiseTask(name, input_like(x, 'x'), input_like(y, 'y'), op=op),
+        )
+
+class CompositeElementwiseOp(Operator):
+    def __init__(self, x: Tensor, unaryOp1, unaryOp2, binaryOp, name: str, attributes: Optional[Dict[str, Any]] = None, task_attributes=None):
+        if attributes is None:
+            attributes = {}
+        super().__init__(
+            inputs=[x],
+            attributes=attributes,
+            task=CompositeElementwiseTask(name, input_like(
+                x, 'x'), unaryOp1, unaryOp2, binaryOp, attrs=task_attributes),
         )
 
 
