@@ -128,7 +128,7 @@ def grid(*dim_extents, attrs: Optional[str] = None, bind_tuple=False):
 
     Parameters
     ----------
-    dim_extents: Sequence[Expr or int or list or tuple or str]
+    dim_extents: Expr or int or list or tuple or str
         The length of each dimension. The last one can be the attrs.
 
     attrs: Optional[str]

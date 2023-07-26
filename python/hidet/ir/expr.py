@@ -814,6 +814,10 @@ def logical_not(a: Union[Expr, PyScalar]):
     a = convert(a)
     return Expr._unary(LogicalNot, a)
 
+def bitwise_not(a: Union[Expr, PyScalar]):
+    a = convert(a)
+    return Expr._unary(BitwiseNot, a)
+
 
 def equal(a: Union[Expr, PyScalar], b: Union[Expr, PyScalar]):
     a = convert(a)
