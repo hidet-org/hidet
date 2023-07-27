@@ -501,7 +501,8 @@ class PythonToHidetTranslator(PythonAstFunctor):
                 # the default return type is void
                 ret_type = ir.VoidType()
             else:
-                ret_type = self.visit(func_def.returns)
+                # ret_type = self.visit(func_def.returns)
+                ret_type = self.func_annotations['return']
                 if not isinstance(ret_type, ir.BaseType):
                     if ret_type is bool:
                         ret_type = ir.data_type('bool')

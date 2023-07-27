@@ -147,6 +147,8 @@ class NVCC(SourceCompiler):
             '-O3',
             # host compiler options: enable openmp, avx2, unroll loops and fast math
             '-Xcompiler -fPIC,-m64,-O3,-funroll-loops,-ffast-math',
+            # use c++11 standard
+            '-std=c++11',
             # the target PTX and SASS version.
             '-gencode arch=compute_{cc},code=sm_{cc}'.format(cc=arch[len('sm_') :]),
             # allow ptxas (PTX assembler) to output information like register/smem usage.
@@ -223,6 +225,8 @@ class GCC(SourceCompiler):
             *['-l{}'.format(library) for library in linking_libs],
             # apply -O3 optimization.
             '-O3',
+            # use c++11 standard
+            '-std=c++11',
             # support avx intrinsics
             '-mavx2',
             '-m64',
