@@ -32,6 +32,7 @@ setup(
         "click",
         "packaging",
         "requests",
+        "filelock",
         "cuda-python>=11.6.1; platform_system=='Linux'",
     ],
     platforms=["linux"],
