@@ -392,7 +392,7 @@ def build_flow_graph(model, batch_size=1, device='cuda', dtype='float16'):
     position_ids = hidet.symbol([batch_size, config.max_position_embeddings], dtype=hidet.int32, device=device)
 
     get_sym = lambda: hidet.symbol(
-        [batch_size, config.num_key_value_heads, "prev_seq_len", config.hidden_size // config.num_attention_heads],
+        [batch_size, config.num_key_value_heads, "prev_seq_len", config.hidden_size // config.num_key_value_heads],
         device=device,
         dtype=dtype,
     )
@@ -419,7 +419,7 @@ def generate(text: str, model, tokenizer, config, num_tokens=20, device='cuda', 
     position_ids = hidet.arange(0, config.max_position_embeddings, dtype=hidet.int32, device=device).unsqueeze(0)
 
     make_past = lambda: hidet.zeros(
-        [1, config.num_attention_heads, 0, config.hidden_size // config.num_attention_heads], device=device, dtype=dtype
+        [1, config.num_key_value_heads, 0, config.hidden_size // config.num_key_value_heads], device=device, dtype=dtype
     )
     past_keys_values = [make_past() for _ in range(config.num_hidden_layers * 2)]
 
@@ -442,7 +442,7 @@ def generate_torch(input_ids: str, tokenizer, torch_model, num_tokens, device='c
     attention_mask = torch.ones([1, config.max_position_embeddings]).to(device=device, dtype=dtype)
     # position_ids = torch.arange(0, config.max_position_embeddings, device='cuda').unsqueeze(0)
     make_past = lambda: torch.zeros(
-        [1, config.num_attention_heads, 0, config.hidden_size // config.num_attention_heads]
+        [1, config.num_key_value_heads, 0, config.hidden_size // config.num_key_value_heads]
     ).to(device=device, dtype=dtype)
     key_value_cache = [(make_past(), make_past()) for _ in range(config.num_hidden_layers)]
     outputs = []
