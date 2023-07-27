@@ -34,10 +34,11 @@ def copy_weights(torch_model, hidet_model):
             print(type(mod))
             raise ValueError(f"hidet/hf mismatch at {name}")
 
+        src = hidet.from_torch(tensor).to(mod.dtype, mod.device)
+        if len(src.shape) != len(mod.shape) or any(a != b for a, b in zip(src.shape, mod.shape)):
+            print(f"hidet/hf shape mismatch at {name}, hidet: {mod.shape}, torch: {src.shape}")
         found_tensors.append(mod)
-        mod.copy_(hidet.from_torch(tensor).to(mod.dtype, mod.device))
-        if mod.shape != tensor.shape:
-            print(f"hidet/hf shape mismatch at {name}, hidet: {mod.shape}, torch: {tensor.shape}")
+        mod.copy_(src)
 
     buffer_names = set(name for name, _ in torch_model.named_buffers())
 
