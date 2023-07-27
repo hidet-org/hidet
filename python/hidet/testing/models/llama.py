@@ -145,7 +145,7 @@ def repeat_kv(hidden_states: hidet.Tensor, n_rep: int) -> hidet.Tensor:
     if n_rep == 1:
         return hidden_states
     hidden_states = hidden_states[:, :, None, :, :].expand(batch, num_key_value_heads, n_rep, slen, head_dim)
-    return hidden_states.reshape(batch, num_key_value_heads * n_rep, slen, head_dim)
+    return hidden_states.reshape((batch, num_key_value_heads * n_rep, slen, head_dim))
 
 
 class LlamaAttention(nn.Module):
@@ -188,8 +188,12 @@ class LlamaAttention(nn.Module):
             raise RuntimeError("Pretraining TP > 1 is not supported yet")
 
         query_states = self.q_proj(hidden_states).reshape([bsz, q_len, self.num_heads, self.head_dim]).transpose(1, 2)
-        key_states = self.k_proj(hidden_states).reshape([bsz, q_len, self.num_heads, self.head_dim]).transpose(1, 2)
-        value_states = self.v_proj(hidden_states).reshape([bsz, q_len, self.num_heads, self.head_dim]).transpose(1, 2)
+        key_states = (
+            self.k_proj(hidden_states).reshape([bsz, q_len, self.num_key_value_heads, self.head_dim]).transpose(1, 2)
+        )
+        value_states = (
+            self.v_proj(hidden_states).reshape([bsz, q_len, self.num_key_value_heads, self.head_dim]).transpose(1, 2)
+        )
 
         kv_seq_len = key_states.shape[-2]
         if past_key_value is not None:
@@ -388,7 +392,7 @@ def build_flow_graph(model, batch_size=1, device='cuda', dtype='float16'):
     position_ids = hidet.symbol([batch_size, config.max_position_embeddings], dtype=hidet.int32, device=device)
 
     get_sym = lambda: hidet.symbol(
-        [batch_size, config.num_attention_heads, "prev_seq_len", config.hidden_size // config.num_attention_heads],
+        [batch_size, config.num_key_value_heads, "prev_seq_len", config.hidden_size // config.num_attention_heads],
         device=device,
         dtype=dtype,
     )
