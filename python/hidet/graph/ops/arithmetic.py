@@ -15,11 +15,49 @@ from typing import List, Callable, Any, Union, Optional, Dict
 from hidet.ir import primitives
 from hidet.ir import expr, dtypes
 from hidet.ir.type import DataType
-from hidet.ir.expr import Expr, if_then_else
+from hidet.ir.expr import Expr, Var, if_then_else
+from hidet.ir.tools import rewrite
 from hidet.utils import prod, same_list
 from .utils import Task, Operator, Tensor, TensorNode, InverseMap, compute, input_like
 from .utils import broadcast_shape, broadcast_shapes, broadcast_indices
 
+# In order for the subgraph rewrite of Composite Elementwise Operator to work,
+# we need to store the callable in an Operator object. But lambda cannot be pickled,
+# so we define auxiliary classes UnaryElementwiseOperation and BinaryElementwiseOperation
+# below which can be saved to disk and can act as a callable to construct the task.
+class UnaryElementwiseOperation:
+    def __init__(self, x, y, name, attributes, task_attributes):
+        self.x: Var = x
+        self.y: Expr = y
+        self.attributes = attributes
+        self.task_attributes = task_attributes
+        self.name = name
+
+    def __call__(self, x):
+        return rewrite(self.y, {self.x: x})
+    
+    @staticmethod
+    def from_callable(op: Callable[[Any], Any], name, attributes, task_attributes):
+        x = expr.var('x')
+        y = op(x)
+        return UnaryElementwiseOperation(x, y, name, attributes, task_attributes)
+
+class BinaryElementwiseOperation:
+    def __init__(self, lhs, rhs, out, name):
+        self.lhs = lhs
+        self.rhs = rhs
+        self.out = out
+        self.name = name
+    
+    def __call__(self, lhs, rhs):
+        return rewrite(self.out, {self.lhs: lhs, self.rhs: rhs})
+    
+    @staticmethod
+    def from_callable(op: Callable[[Any, Any], Any], name):
+        lhs = expr.var('lhs')
+        rhs = expr.var('rhs')
+        out = op(lhs, rhs)
+        return BinaryElementwiseOperation(lhs, rhs, out, name)
 
 class UnaryElementwiseTask(Task):
     def __init__(self, name: str, x: TensorNode, op: Callable[[Any], Any], attrs=None):
@@ -82,18 +120,22 @@ class VariadicElementwiseTask(Task):
         )
 
 class CompositeElementwiseTask(Task):
-    def __init__(self, name: str, x: TensorNode, unaryOp1: Callable[[Any], Any],
-                 unaryOp2: Callable[[Any], Any], binaryOp: Callable[[Any, Any], Any], attrs=None):
+    def __init__(self, name: str, x: TensorNode, left_unary_op: Callable[[Any], Any],
+                 right_unary_op: Callable[[Any], Any], binary_op: Callable[[Any, Any], Any], attrs=None):
+
+        def composite_op(binary_op, left_unary_op, right_unary_op, x):
+            if left_unary_op is None:
+                left_unary_op = lambda x: x
+            if right_unary_op is None:
+                right_unary_op = lambda x: x
+            return binary_op(left_unary_op(x), right_unary_op(x))
+
         shape = x.shape
-        y1 = compute(name='y1', shape=shape, fcompute=lambda *indices: unaryOp1(x.__getitem__(indices)))
-        y2 = compute(name='y2', shape=shape, fcompute=lambda *indices: unaryOp2(x.__getitem__(indices)))
 
         z = compute(
             name='z',
             shape=shape,
-            fcompute=lambda *indices: binaryOp(
-                y1.__getitem__(indices), y2.__getitem__(indices)
-            ),
+            fcompute=lambda *indices: composite_op(binary_op, left_unary_op, right_unary_op, x.__getitem__(indices))
         )
 
         super().__init__(
@@ -138,6 +180,7 @@ class UnaryElementwiseOp(Operator):
     def __init__(self, x: Tensor, op, name: str, attributes: Optional[Dict[str, Any]] = None, task_attributes=None):
         if attributes is None:
             attributes = {}
+        self.op = UnaryElementwiseOperation.from_callable(op, name, attributes, task_attributes)
         super().__init__(
             inputs=[x],
             attributes=attributes,
@@ -147,6 +190,7 @@ class UnaryElementwiseOp(Operator):
 
 class BinaryElementwiseOp(Operator):
     def __init__(self, x: Tensor, y: Tensor, op, name: str):
+        self.op = BinaryElementwiseOperation.from_callable(op, name)
         super().__init__(
             inputs=[x, y],
             attributes={},
@@ -154,14 +198,18 @@ class BinaryElementwiseOp(Operator):
         )
 
 class CompositeElementwiseOp(Operator):
-    def __init__(self, x: Tensor, unaryOp1, unaryOp2, binaryOp, name: str, attributes: Optional[Dict[str, Any]] = None, task_attributes=None):
-        if attributes is None:
-            attributes = {}
+    def __init__(self, x: Tensor, left_unary_op: UnaryElementwiseOperation,
+                 right_unary_op: UnaryElementwiseOperation, binary_op: BinaryElementwiseOperation):
+        name = 'composite'
+        for op in [left_unary_op, right_unary_op, binary_op]:
+            if op is not None:
+                name += '_' + op.name
+        attributes = {'left_unary_op': left_unary_op, 'right_unary_op': right_unary_op, 'binary_op': binary_op}
         super().__init__(
             inputs=[x],
             attributes=attributes,
             task=CompositeElementwiseTask(name, input_like(
-                x, 'x'), unaryOp1, unaryOp2, binaryOp, attrs=task_attributes),
+                x, 'x'), left_unary_op, right_unary_op, binary_op),
         )
 
 
@@ -800,3 +848,9 @@ def trunc(x: Tensor) -> Tensor:
 def logaddexp(x: Tensor, y: Tensor) -> Tensor:
     max_val = maximum(x, y)
     return log(exp(x - max_val) + exp(y - max_val)) + max_val
+
+# out = binary_op(left_unary_op(x), right_unary_op(x)); This allows more fusion opportunity.
+def composite_elementwise(x: Tensor, left_unary_op: UnaryElementwiseOperation,
+                          right_unary_op: UnaryElementwiseOperation,
+                          binary_op: BinaryElementwiseOperation) -> Tensor:
+    return CompositeElementwiseOp(x, left_unary_op, right_unary_op, binary_op).outputs[0]

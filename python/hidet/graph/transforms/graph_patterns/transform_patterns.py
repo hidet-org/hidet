@@ -14,6 +14,8 @@ from typing import List, Optional
 from hidet.graph import ops
 from hidet.graph.flow_graph import Tensor
 from hidet.graph.ops.transform import ReshapeOp, SqueezeOp, CastOp
+from hidet.graph.ops.arithmetic import UnaryElementwiseOp, BinaryElementwiseOp
+from hidet.graph.ops.arithmetic import UnaryElementwiseOperation, BinaryElementwiseOperation
 from hidet.utils import prod, initialize
 from hidet.ir.expr import is_true
 from .base import SubgraphRewriteRule, TensorPattern, MatchDict, op_pattern, register_rewrite_rule
@@ -168,21 +170,29 @@ class DoubleCast(SubgraphRewriteRule):
             return None
         return [x]
 
-class CompositeElementwiseRewriteRule(SubgraphRewriteRule):
+class CompositeElementwiseLeftRightRewriteRule(SubgraphRewriteRule):
     def __init__(self):
+        from hidet.graph.ops.arithmetic import SinOp,MultiplyOp
+        from hidet.graph.ops.activation import SigmoidOp
         super().__init__('binaryOp(unaryOp1(x), unaryOp2(x)) => compositeOp(x)')
-        self.x = TensorPattern.tensor(is_symbolic=True)
-        self.c1 = op_pattern(CastOp, [self.x])
-        self.c2 = op_pattern(CastOp, [self.c1])
+        self.x = TensorPattern()
+        self.y1 = op_pattern(UnaryElementwiseOp, [self.x])
+        self.y2 = op_pattern(UnaryElementwiseOp, [self.x])
+        self.z = op_pattern(BinaryElementwiseOp, [self.y1, self.y2])
+        # self.y1 = op_pattern(SigmoidOp, [self.x])
+        # self.y2 = op_pattern(SinOp, [self.x])
+        # self.z = op_pattern(MultiplyOp, [self.y1, self.y2])
 
     def source(self) -> List[TensorPattern]:
-        return [self.c2]
+        return [self.z]
 
     def target(self, matched: MatchDict) -> Optional[List[Tensor]]:
-        x, _, c2 = [matched[v] for v in [self.x, self.c1, self.c2]]
-        if not c2.dtype == x.dtype:
-            return None
-        return [x]
+        x, y1, y2, z = [matched[v] for v in [self.x, self.y1, self.y2, self.z]]
+        left_unary_op: UnaryElementwiseOperation = y1.op.op
+        right_unary_op: UnaryElementwiseOperation = y2.op.op
+        binary_op: BinaryElementwiseOperation = z.op.op
+        out = ops.arithmetic.composite_elementwise(x, left_unary_op, right_unary_op, binary_op)
+        return [out]
 
 @initialize()
 def transform_patterns():
@@ -192,3 +202,4 @@ def transform_patterns():
     register_rewrite_rule(FanoutTwoCast())
     register_rewrite_rule(FanoutThreeCast())
     register_rewrite_rule(DoubleCast())
+    register_rewrite_rule(CompositeElementwiseLeftRightRewriteRule())
