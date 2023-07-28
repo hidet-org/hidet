@@ -249,7 +249,7 @@ class PatternMatcher:
                 if actual_operator in self.reverse_matched:
                     # this actual operator has been matched
                     continue
-                if type(actual_operator) != desire_operator.op_cls:  # pylint: disable=unidiomatic-typecheck
+                if not issubclass(type(actual_operator), desire_operator.op_cls):  # pylint: disable=unidiomatic-typecheck
                     continue
                 self.match(desire_operator, actual_operator)
                 spanned = True
@@ -258,7 +258,7 @@ class PatternMatcher:
 
     def match_OperatorPattern(self, pattern: OperatorPattern, target: Operator):
         self.check(isinstance(target, pattern.op_cls), "expect target with type 'Operator'")
-        self.check(pattern.op_cls is target.__class__, 'operator cls does not match')
+        self.check(issubclass(target.__class__, pattern.op_cls))
         assert len(pattern.inputs) == len(target.inputs) and len(pattern.outputs) == len(target.outputs)
         for a, b in zip(pattern.inputs, target.inputs):
             self.match(a, b)
@@ -274,7 +274,7 @@ def graph_pattern_match(pattern: TensorPattern, target: Tensor, usage: Usage) ->
         if (pattern.is_const and target.storage is None) or (pattern.is_symbolic and target.storage is not None):
             return None
         return {pattern: target}
-    if pattern.trace and target.trace and pattern.trace[0].op_cls is not target.trace[0].__class__:
+    if pattern.trace and target.trace and not issubclass(target.trace[0].__class__, pattern.trace[0].op_cls):
         return None
 
     # formal match

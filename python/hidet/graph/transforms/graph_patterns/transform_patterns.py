@@ -174,14 +174,11 @@ class CompositeElementwiseLeftRightRewriteRule(SubgraphRewriteRule):
     def __init__(self):
         from hidet.graph.ops.arithmetic import SinOp,MultiplyOp
         from hidet.graph.ops.activation import SigmoidOp
-        super().__init__('binaryOp(unaryOp1(x), unaryOp2(x)) => compositeOp(x)')
+        super().__init__('binaryOp(unaryOp_left(x), unaryOp_right(x)) => compositeOp(x)')
         self.x = TensorPattern()
         self.y1 = op_pattern(UnaryElementwiseOp, [self.x])
         self.y2 = op_pattern(UnaryElementwiseOp, [self.x])
         self.z = op_pattern(BinaryElementwiseOp, [self.y1, self.y2])
-        # self.y1 = op_pattern(SigmoidOp, [self.x])
-        # self.y2 = op_pattern(SinOp, [self.x])
-        # self.z = op_pattern(MultiplyOp, [self.y1, self.y2])
 
     def source(self) -> List[TensorPattern]:
         return [self.z]
@@ -194,6 +191,44 @@ class CompositeElementwiseLeftRightRewriteRule(SubgraphRewriteRule):
         out = ops.arithmetic.composite_elementwise(x, left_unary_op, right_unary_op, binary_op)
         return [out]
 
+class CompositeElementwiseLeftRewriteRule(SubgraphRewriteRule):
+    def __init__(self):
+        from hidet.graph.ops.arithmetic import SinOp,MultiplyOp
+        from hidet.graph.ops.activation import SigmoidOp
+        super().__init__('binaryOp(unaryOp(x), x) => compositeOp(x)')
+        self.x = TensorPattern()
+        self.y1 = op_pattern(UnaryElementwiseOp, [self.x])
+        self.z = op_pattern(BinaryElementwiseOp, [self.y1, self.x])
+
+    def source(self) -> List[TensorPattern]:
+        return [self.z]
+
+    def target(self, matched: MatchDict) -> Optional[List[Tensor]]:
+        x, y1, z = [matched[v] for v in [self.x, self.y1, self.z]]
+        left_unary_op: UnaryElementwiseOperation = y1.op.op
+        binary_op: BinaryElementwiseOperation = z.op.op
+        out = ops.arithmetic.composite_elementwise(x, left_unary_op, None, binary_op)
+        return [out]
+
+class CompositeElementwiseRightRewriteRule(SubgraphRewriteRule):
+    def __init__(self):
+        from hidet.graph.ops.arithmetic import SinOp,MultiplyOp
+        from hidet.graph.ops.activation import SigmoidOp
+        super().__init__('binaryOp(x, unaryOp(x)) => compositeOp(x)')
+        self.x = TensorPattern()
+        self.y2 = op_pattern(UnaryElementwiseOp, [self.x])
+        self.z = op_pattern(BinaryElementwiseOp, [self.x, self.y2])
+
+    def source(self) -> List[TensorPattern]:
+        return [self.z]
+
+    def target(self, matched: MatchDict) -> Optional[List[Tensor]]:
+        x, y2, z = [matched[v] for v in [self.x, self.y2, self.z]]
+        right_unary_op: UnaryElementwiseOperation = y2.op.op
+        binary_op: BinaryElementwiseOperation = z.op.op
+        out = ops.arithmetic.composite_elementwise(x, None, right_unary_op, binary_op)
+        return [out]
+
 @initialize()
 def transform_patterns():
     register_rewrite_rule(ReshapeScalePattern())
@@ -203,3 +238,5 @@ def transform_patterns():
     register_rewrite_rule(FanoutThreeCast())
     register_rewrite_rule(DoubleCast())
     register_rewrite_rule(CompositeElementwiseLeftRightRewriteRule())
+    register_rewrite_rule(CompositeElementwiseLeftRewriteRule())
+    register_rewrite_rule(CompositeElementwiseRightRewriteRule())
