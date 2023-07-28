@@ -70,6 +70,7 @@ def layer_norm(x: Tensor, num_last_dims: int = 1, epsilon: float = 1e-5, accumul
         The normalized tensor.
     """
     dims = list(range(len(x.shape) - num_last_dims, len(x.shape)))
+    print(dims)
     return normalize(x, axis=dims, epsilon=epsilon, accumulate_dtype=accumulate_dtype)
 
 

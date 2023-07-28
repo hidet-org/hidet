@@ -9,7 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List
+from typing import List, Union
 from hidet.ir import primitives as prim
 from hidet.ir.library import tune
 from hidet.ir.module import IRModule
@@ -349,6 +349,28 @@ class NormalizeTask(Task):
                         y.write(write_idx, normed)
                         k_write += 1
 
+        ir_module = module.ir_module()
+        return ir_module
+
+    def implement_cpu(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
+        if self.dims[-1] != len(self.inputs[0].shape) - 1:  # not layernorm
+            return NotImplemented
+        return tune.extract_ir_modules(self.schedule_layer_norm_cpu)
+
+    @tune.space(2, nthreads=[4, 8, 16, 32, 64, 96])
+    @tune.space(1, nthreads=[8, 16])
+    def schedule_layer_norm_cpu(self, nthreads=16) -> IRModule:
+        import hidet
+        from hidet.ir.dtypes import float32
+
+        shape = self.inputs[0].shape
+        with hidet.script_module() as module:
+            @hidet.script
+            def layer_norm_cpu_kernel(x: float32[shape], out: float32[shape]):
+                offset = k * head_size
+
+        layer_norm_cpu_kernel.kind = "cpu_kernel"
+        assert isinstance(layer_norm_cpu_kernel, hidet.ir.Function)
         ir_module = module.ir_module()
         return ir_module
 
