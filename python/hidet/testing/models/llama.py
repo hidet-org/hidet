@@ -16,7 +16,6 @@ from collections import OrderedDict
 from tqdm import tqdm
 
 import torch
-import transformers
 from transformers import LlamaConfig, LlamaTokenizer
 from transformers import LlamaForCausalLM as hfLm
 
