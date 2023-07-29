@@ -37,8 +37,6 @@ def copy_weights(torch_model, hidet_model):
 
         src = hidet.from_torch(tensor).to(mod.dtype, mod.device)
         if len(src.shape) != len(mod.shape) or any(a != b for a, b in zip(src.shape, mod.shape)):
-            print(transformers.__version__)
-            print(LlamaConfig())
             raise RuntimeError(f"hidet/hf shape mismatch at {name}, hidet: {mod.shape}, torch: {src.shape}")
         found_tensors.append(mod)
         mod.copy_(src)
