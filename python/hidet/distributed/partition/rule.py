@@ -2,7 +2,7 @@ from typing import List
 from itertools import product
 from collections import OrderedDict
 
-from z3 import Int, And, Or, Not, Solver
+from z3 import Int, And, Or, Not, Solver, Const, IntSort
 
 from .shard import TensorShardSpec, OpShardSpec
 
@@ -12,6 +12,7 @@ from hidet.ir import TensorElement, TensorNode
 from hidet.ir.tools import collect
 from hidet.ir.compute import GridCompute, ReduceCompute, TensorInput
 from hidet.ir.functors import ExprVisitor, ComputeVisitor
+
 
 class IndexExprBuilder(ExprVisitor):
     def process_expr(self, e, axis_z3):
@@ -37,7 +38,7 @@ class IndexExprBuilder(ExprVisitor):
     def visit_Constant(self, e):
         val = e.value
         assert isinstance(val, int)
-        return val
+        return Const(val, IntSort())
     
     def visit_Div(self, e):
         a, b = self.visit(e.a), self.visit(e.b)
@@ -61,9 +62,9 @@ class DataDependencyAnalyzer:
     def __init__(self, op: Operator, num_shards: int):
         self.op = op
         self.num_shards = num_shards
-        self._build_bound_expr()
+        self.valid = self._build_bound_expr()
 
-    def _build_bound_expr(self):
+    def _build_bound_expr(self) -> bool:
         task = self.op.task
         outputs = task.outputs
         index_builder = IndexExprBuilder()
@@ -98,13 +99,15 @@ class DataDependencyAnalyzer:
         
         self.grid_z3_vars = {}
         for o in outputs:
-            assert isinstance(o, GridCompute)
+            if not isinstance(o, GridCompute):
+                return False# we don't support scalar output
             axis_map = {}
             for axis in o.axes:
                 axis_map[axis] = Int(f'i_{len(self.grid_z3_vars)}')
                 self.grid_z3_vars[axis] = axis_map[axis]
             axis_map.update(self.reduce_z3_vars)
             _build_grid_bound(o, axis_map)
+        return True
 
     def check(self, in_shard_dim: List[int], out_shard_dim: List[int]):
         # Now only supports 1D partition
@@ -164,6 +167,8 @@ def op_shard_rule_search(op: Operator, num_shards: int) -> List[OpShardSpec]:
     found_rules = []
     # enumerate all possible input shardings. -1 means duplicate
     data_dependency_analyzer = DataDependencyAnalyzer(op, num_shards)
+    if not data_dependency_analyzer.valid:
+        return []
     for in_shard_dims in product(*(range(-1, len(i.shape)) for i in inputs)):
         if all((shard_dim == -1 for shard_dim in in_shard_dims)):
             continue
@@ -206,13 +211,21 @@ def op_shard_rule_search(op: Operator, num_shards: int) -> List[OpShardSpec]:
             # data dependency analysis
     for r in found_rules:
         print(r)
+    return found_rules
 
 
 
 if __name__ == '__main__':
-    a = hidet.symbol([4,8])
-    b = hidet.symbol([8,4])
-    ab = a @ b
-    a_softmax = hidet.ops.softmax(a)
-    op_shard_rule_search(a_softmax.op, 4)
-    op_shard_rule_search(ab.op, 4)
+    import hidet.testing
+    model = hidet.testing.models.resnet.resnet18()
+    x = hidet.symbol([8, 3, 224, 224])
+    flow_graph = hidet.trace_from(model(x))
+
+    cache = {}
+    for op in flow_graph.nodes:
+        print(op)
+        if str(op) not in cache:
+            shard_plans = op_shard_rule_search(op, 2)
+            cache[str(op)] = shard_plans
+        for sp in cache[str(op)]:
+            print(sp)
