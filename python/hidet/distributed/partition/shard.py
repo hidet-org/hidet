@@ -55,11 +55,12 @@ class TensorShardSpec:
         return f"({', '.join(str_per_dim)})"
 
 class ReduceFunction(Enum):
+    NO_REDUCE = 0,
     REDUCE_SCATTER = 1,
     ALL_REDUCE = 2
 
 class OpShardSpec:
-    def __init__(self, input_specs: Sequence[TensorShardSpec], output_specs: Sequence[TensorShardSpec], reduce_fn: Optional[ReduceFunction]=None):
+    def __init__(self, input_specs: Sequence[TensorShardSpec], output_specs: Sequence[TensorShardSpec], reduce_fn: Optional[List[ReduceFunction]]=None):
         self.input_specs = input_specs
         self.output_specs = output_specs
         self.reduce_fn = reduce_fn
@@ -68,9 +69,3 @@ class OpShardSpec:
         in_str = ', '.join(map(str, self.input_specs))
         out_str = ', '.join(map(str, self.input_specs))
         return in_str + " -> " + out_str
-    
-if __name__ == '__main__':
-    s = TensorShardSpec(3, sharded_dim=0)
-    print(s)
-    s = TensorShardSpec(3, mesh_axes_per_dim=[[0], [1]])
-    print(s)
