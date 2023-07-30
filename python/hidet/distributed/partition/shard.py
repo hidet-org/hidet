@@ -12,6 +12,8 @@
 from typing import Sequence, Set, Optional, Union, List
 from enum import Enum
 
+from hidet.ir.compute import ReduceOperation
+
 class TensorShardSpec:
     """
     For disambiguation, we adopt a convention that 'dim' refers to the dimension or axis of the
@@ -35,7 +37,7 @@ class TensorShardSpec:
         # Sanity check and build mesh_axes to dim map
         self.mesh_axes_per_dim: List[List[int]] = [[] for _ in range(self.ndim)]
         for mesh_axis, dim in enumerate(sharded_dim):
-            if dim is None:
+            if dim is None or dim < 0:
                 continue
             if dim >= self.ndim:
                 raise ValueError("Sharded dim should be less than the number of dimensions")
@@ -54,18 +56,30 @@ class TensorShardSpec:
                         for axes in self.mesh_axes_per_dim]
         return f"({', '.join(str_per_dim)})"
 
-class ReduceFunction(Enum):
-    NO_REDUCE = 0,
-    REDUCE_SCATTER = 1,
-    ALL_REDUCE = 2
+class ReduceFunction:
+    def __init__(self, op: ReduceOperation, kind: str='all_reduce'):
+        self.op = op
+        assert kind in ('all_reduce', 'reduce_scatter')
+        self.kind = kind
+    
+    def __str__(self):
+        return self.kind + '_' + str(self.op)
 
 class OpShardSpec:
     def __init__(self, input_specs: Sequence[TensorShardSpec], output_specs: Sequence[TensorShardSpec], reduce_fn: Optional[List[ReduceFunction]]=None):
         self.input_specs = input_specs
         self.output_specs = output_specs
+        if reduce_fn is None:
+            reduce_fn = [None] * len(output_specs)
         self.reduce_fn = reduce_fn
 
     def __str__(self):
         in_str = ', '.join(map(str, self.input_specs))
-        out_str = ', '.join(map(str, self.input_specs))
+        o_list = []
+        for o, r in zip(self.output_specs, self.reduce_fn):
+            s = str(o)
+            if r is not None:
+                s += f'[{str(r)}]'
+            o_list.append(s)
+        out_str = ', '.join(o_list)
         return in_str + " -> " + out_str
