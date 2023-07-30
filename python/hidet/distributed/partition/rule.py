@@ -4,7 +4,7 @@ from collections import OrderedDict
 
 from z3 import Int, And, Or, Not, Solver, IntVal
 
-from .shard import TensorShardSpec, OpShardSpec
+from .shard import TensorShardSpec, OpShardSpec, ReduceFunction
 
 import hidet
 from hidet.graph import Operator
@@ -132,17 +132,6 @@ class DataDependencyAnalyzer:
                 shape = self.reduce_axis_shapes[axis]
                 c = And(axis_z3 >= 0, axis_z3 < shape)
                 out_and_reduce_constraints.append(c) # it's not correct
-        
-        if shard_reduce:
-            # We only analyze sharding reduction axis for single-output op
-            if len(out_shard_dim) > 1:
-                return False
-            
-            o = task.outputs[0]
-            # We only consider the outer most reduction axis
-            if not isinstance(o.value, ReduceCompute):
-                return False
-            axes = o.value.axes
 
         in_constraints = []
         for inp, shard_dim in zip(task.inputs, in_shard_dim):
@@ -153,16 +142,38 @@ class DataDependencyAnalyzer:
                     if i == shard_dim:
                         shard_size = shape // self.num_shards
                         c = And(axis_z3 >= rank_z3 * shard_size, axis_z3 < (rank_z3 + 1) * shard_size)
-                    else:
-                        c = And(axis_z3 >= 0, axis_z3 < shape)
                     in_constraints.append(Not(c))
-        
+
+        if shard_reduce:
+            # We only analyze sharding reduction axis for single-output op
+            if len(out_shard_dim) > 1:
+                return False
+            
+            o = task.outputs[0]
+            # We only consider the outer most reduction axis
+            if not isinstance(o.value, ReduceCompute):
+                return False
+
+            if str(o.value.reduce_operation) not in ('sum', 'prod', 'max', 'min', 'avg'):
+                # other reduce ops are not supported by NCCL
+                return False
+            for shard_axis in o.value.axes:
+                axis_z3 = self.reduce_z3_vars[shard_axis]
+                shape = self.reduce_axis_shapes[shard_axis]
+                shard_size = shape // self.num_shards
+                c = And(axis_z3 >= rank_z3 * shard_size, axis_z3 < rank_z3 * (shard_size + 1))
+                if self._check(rank_constraint, in_constraints, out_and_reduce_constraints + [c]):
+                    return True
+            return False
+        else:
+            return self._check(rank_constraint, in_constraints, out_and_reduce_constraints)
+    
+    @staticmethod
+    def _check(rank_constraint, in_constraints, out_and_reduce_constraints):
         constraints = [rank_constraint, Or(*in_constraints)] + out_and_reduce_constraints
-        print(constraints)
         s = Solver()
         s.check(*constraints)
-        print(s.model())
-        return len(s.model()) == 0
+        return len(s.model()) == 0 
 
 def _get_first_tile(tensor, nshards, shard_dim):
     # Only works for 1-D partition
@@ -221,12 +232,12 @@ def op_shard_rule_search(op: Operator, num_shards: int) -> List[OpShardSpec]:
             # data dependency analysis
             in_specs = [TensorShardSpec(len(i.shape), shard_dim) for i, shard_dim in zip(inputs, in_shard_dims)]
             out_specs = [TensorShardSpec(len(o.shape), shard_dim) for o, shard_dim in zip(outputs, out_shard_dims)]
-            print(', '.join(map(str, in_specs)), '->', ', '.join(map(str, out_specs)))
             if data_dependency_analyzer.check(in_shard_dims, out_shard_dims):
                 found_rules.append(OpShardSpec(in_specs, out_specs))
             else:
-                # try reduce axis sharding
-                valid = data_dependency_analyzer.check(in_shard_dims, out_shard_dims, shard_reduce=True)
+                if data_dependency_analyzer.check(in_shard_dims, out_shard_dims, shard_reduce=True):
+                    reduce_op = op.task.outputs[0].value.reduce_operation
+                    found_rules.append(OpShardSpec(in_specs, out_specs, reduce_fn=[ReduceFunction(reduce_op, 'all_reduce')])) 
     return found_rules
 
 
@@ -239,11 +250,8 @@ if __name__ == '__main__':
 
     cache = {}
     for op in flow_graph.nodes:
-        if not isinstance(op, hidet.graph.ops.transform.PadOp):
-            continue
         print(op)
         if str(op) not in cache:
-            print(op.task)
             shard_plans = op_shard_rule_search(op, 2)
             cache[str(op)] = shard_plans
         for sp in cache[str(op)]:
