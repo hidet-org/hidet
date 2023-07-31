@@ -181,15 +181,10 @@ class SoftmaxTask(Task):
         from hidet.lang import grid
         from hidet.lang.mapping import spatial
         import numpy as np
-        row_size, col_size = 1, self.x_shape[-1]
-        head = []
-        head_size = 1
         shape = self.inputs[0].shape
-        if len(self.x_shape) != 1:
-            row_size, col_size = self.x_shape[-2], self.x_shape[-1]
-            head = shape[:-2]
-            head_size = np.prod(np.array(head))
-        matrix_size = row_size * col_size
+        col_size = self.x_shape[-1]
+        head = shape[:-1]
+        head_size = np.prod(np.array(head))
 
         with hidet.script_module() as module:
 
@@ -270,58 +265,59 @@ class SoftmaxTask(Task):
             @hidet.script
             def softmax_cpu_kernel(x: float32[shape], out: float32[shape]):
                 # can pass shape = x.shape, float32[shape]
-                for k in range(head_size):
-                    offset = matrix_size * k
+                para = 'p' + str(nthreads)
+                for k in grid(head_size, attrs=para):
+                    offset = col_size * k
                     head_idx = spatial(*head).map(k)
-                    para = 'p' + str(nthreads)
-                    for i in grid(row_size, attrs=para):
-                        # find max
-                        max_val = x[head_idx][i][0]
-                        if col_size >= 8:
-                            max_vec = avx_f32x8_load(x + offset + i * col_size)
-                            for j in range(col_size // 8):
-                                data_vec = avx_f32x8_load(x + offset + i * col_size + j * 8)
-                                max_vec = avx_f32x8_max(max_vec, data_vec)
-                            max_val = find_max(max_vec)
-                        for j in range(col_size % 8):
-                            max_val = max_val if max_val > x[head_idx][i][col_size - col_size % 8 + j] \
-                                else x[head_idx][i][col_size - col_size % 8 + j]
+                    # para = 'p' + str(nthreads)
+                    # for i in grid(row_size, attrs=para):
+                    # find max
+                    max_val = x[head_idx][0]
+                    if col_size >= 8:
+                        max_vec = avx_f32x8_load(x + offset)
+                        for j in range(col_size // 8):
+                            data_vec = avx_f32x8_load(x + offset + j * 8)
+                            max_vec = avx_f32x8_max(max_vec, data_vec)
+                        max_val = find_max(max_vec)
+                    for j in range(col_size % 8):
+                        max_val = max_val if max_val > x[head_idx][col_size - col_size % 8 + j] \
+                            else x[head_idx][col_size - col_size % 8 + j]
 
-                        # subtract max, take exp and find exp sum
-                        sum_value = 0.0
-                        if col_size >= 8:
-                            sum_exp_vec = avx_f32x8_setzero()
-                            max_vec = avx_f32x8_broadcast(~max_val)
-                            for j in range(col_size // 8):
-                                val_vec = avx_f32x8_load(x + offset + i * col_size + j * 8)
-                                val_vec = avx_f32x8_subtract(val_vec, max_vec)
-                                # apply exponent val_vec = avxexponent
-                                arr = tensor(scope=DeclareScope.Default, dtype=float32, shape=[8])
-                                avx_f32x8_store(arr, val_vec)
-                                for n in range(8):
-                                    arr[n] = prim.exp(arr[n])
-                                val_vec = avx_f32x8_load(arr)
-                                # val_vec = avx_exp(val_vec)
-                                avx_f32x8_store(out + offset + i * col_size + j * 8, val_vec)
-                                sum_exp_vec = avx_f32x8_add(sum_exp_vec, val_vec)
-                            sum_value = find_sum(sum_exp_vec)
-                        for j in range(col_size % 8):
-                            out[head_idx][i][col_size - col_size % 8 + j] = \
-                                prim.exp(x[head_idx][i][col_size - col_size % 8 + j] - max_val)
-                            sum_value += out[head_idx][i][col_size - col_size % 8 + j]
+                    # subtract max, take exp and find exp sum
+                    sum_value = 0.0
+                    if col_size >= 8:
+                        sum_exp_vec = avx_f32x8_setzero()
+                        max_vec = avx_f32x8_broadcast(~max_val)
+                        for j in range(col_size // 8):
+                            val_vec = avx_f32x8_load(x + offset + j * 8)
+                            val_vec = avx_f32x8_subtract(val_vec, max_vec)
+                            # apply exponent val_vec = avxexponent
+                            arr = tensor(scope=DeclareScope.Default, dtype=float32, shape=[8])
+                            avx_f32x8_store(arr, val_vec)
+                            for n in range(8):
+                                arr[n] = prim.exp(arr[n])
+                            val_vec = avx_f32x8_load(arr)
+                            # val_vec = avx_exp(val_vec)
+                            avx_f32x8_store(out + offset + j * 8, val_vec)
+                            sum_exp_vec = avx_f32x8_add(sum_exp_vec, val_vec)
+                        sum_value = find_sum(sum_exp_vec)
+                    for j in range(col_size % 8):
+                        out[head_idx][col_size - col_size % 8 + j] = \
+                            prim.exp(x[head_idx][col_size - col_size % 8 + j] - max_val)
+                        sum_value += out[head_idx][col_size - col_size % 8 + j]
 
-                        # divide by exp sum
-                        if col_size >= 8:
-                            # divide
-                            sum_vec8 = avx_f32x8_broadcast(~sum_value)
-                            # avx_exp(sum_vec8)
-                            for j in range(col_size // 8):
-                                avx_f32x8_store(out + offset + i * col_size + j * 8,
-                                                avx_f32x8_divide(avx_f32x8_load(out + offset + i * col_size + j * 8),
-                                                                 sum_vec8))
-                        for j in range(col_size % 8):
-                            out[head_idx][i][col_size - col_size % 8 + j] = \
-                                out[head_idx][i][col_size - col_size % 8 + j] / sum_value
+                    # divide by exp sum
+                    if col_size >= 8:
+                        # divide
+                        sum_vec8 = avx_f32x8_broadcast(~sum_value)
+                        # avx_exp(sum_vec8)
+                        for j in range(col_size // 8):
+                            avx_f32x8_store(out + offset + j * 8,
+                                            avx_f32x8_divide(avx_f32x8_load(out + offset + j * 8),
+                                                             sum_vec8))
+                    for j in range(col_size % 8):
+                        out[head_idx][col_size - col_size % 8 + j] = \
+                            out[head_idx][col_size - col_size % 8 + j] / sum_value
 
             softmax_cpu_kernel.kind = "cpu_kernel"
             find_max.kind = "cpu_internal"

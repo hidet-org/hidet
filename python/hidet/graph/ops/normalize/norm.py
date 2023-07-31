@@ -388,7 +388,7 @@ class NormalizeTask(Task):
             @hidet.script
             def layer_norm_cpu_kernel(x: float32[shape], out: float32[shape]):
                 for k in range(head_size):
-                    offset = k * head_size
+                    offset = k * shape[-1]
                     head_idx = spatial(*head).map(k)
                     mean_vec = avx_f32x8_setzero()
                     M2_vec = avx_f32x8_setzero()
