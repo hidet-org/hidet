@@ -132,7 +132,7 @@ class DataDependencyAnalyzer:
                         shard_size = shape // self.num_shards
                         lower, upper = rank * shard_size, (rank + 1) * shard_size
                         bound = infer_bound(idx, out_and_reduce_bound)[idx]
-                        if not bound.has_determent_range():
+                        if bound.possible_min_value() is None or bound.possible_max_value() is None:
                             return False
                         if bound.possible_min_value() < lower or bound.possible_max_value() >= upper:
                             return False
@@ -255,7 +255,7 @@ if __name__ == '__main__':
         for op in flow_graph.nodes:
             print(op)
             if str(op) not in cache:
-                shard_plans = op_shard_rule_search(op, 2)
+                shard_plans = op_shard_rule_search(op, 4)
                 cache[str(op)] = shard_plans
             for sp in cache[str(op)]:
                 print(sp)
