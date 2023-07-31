@@ -13,188 +13,128 @@
 from typing import List
 from itertools import product
 
-from z3 import Int, And, Or, Not, Solver, IntVal, If
-
 import hidet
 from hidet.graph import Operator
-from hidet.ir import TensorElement
+from hidet.ir import TensorElement, Var
 from hidet.ir.tools import collect
 from hidet.ir.compute import GridCompute, ReduceCompute, TensorInput
-from hidet.ir.functors import ExprVisitor
+from hidet.ir.functors import ExprRewriter, ComputeRewriter
+from hidet.ir.analyzers.bound_analyzer import infer_bound, BoundInfo
 
 from .shard import TensorShardSpec, OpShardSpec, ReduceFunction
 
 
-class Z3ExprBuilder(ExprVisitor):
-    # Translate Hidet expression to z3
+class IndexRewriter(ExprRewriter, ComputeRewriter):
     def __init__(self):
         super().__init__()
-        self.var_table = {}
+        self.var2idx = None
+        self.root = None
 
-    def process_expr(self, e, var_table):
-        self.var_table = var_table
+    def process_expr(self, e, var2idx):
+        self.var2idx = var2idx
+        self.root = e
         return self.visit(e)
 
-    def visit_Var(self, e):
-        assert e in self.var_table
-        return self.var_table[e]
+    def visit_Var(self, e: Var):
+        if e in self.var2idx:
+            return self.var2idx[e]
 
-    def visit_Add(self, e):
-        a, b = self.visit(e.a), self.visit(e.b)
-        if a is None or b is None:
-            return None
-        return a + b
-
-    def visit_Multiply(self, e):
-        a, b = self.visit(e.a), self.visit(e.b)
-        if a is None or b is None:
-            return None
-        return a * b
-
-    def visit_Constant(self, e):
-        val = e.value
-        assert isinstance(val, int)
-        return IntVal(val)
-
-    def visit_Div(self, e):
-        a, b = self.visit(e.a), self.visit(e.b)
-        if a is None or b is None:
-            return None
-        return a / b
-
-    def visit_Mod(self, e):
-        a, b = self.visit(e.a), self.visit(e.b)
-        if a is None or b is None:
-            return None
-        return a % b
-
-    def visit_Sub(self, e):
-        a, b = self.visit(e.a), self.visit(e.b)
-        if a is None or b is None:
-            return None
-        return a - b
-
-    def visit_LessThan(self, e):
-        a, b = self.visit(e.a), self.visit(e.b)
-        if a is None or b is None:
-            return None
-        return a < b
-
-    def visit_LessEqual(self, e):
-        a, b = self.visit(e.a), self.visit(e.b)
-        if a is None or b is None:
-            return None
-        return a <= b
-
-    def visit_Equal(self, e):
-        a, b = self.visit(e.a), self.visit(e.b)
-        if a is None or b is None:
-            return None
-        return a == b
-
-    def visit_IfThenElse(self, e):
-        cond, then_expr, else_expr = self.visit(e.cond), self.visit(e.then_expr), self.visit(e.else_expr)
-        if cond is None or then_expr is None or else_expr is None:
-            return None
-        return If(cond, then_expr, else_expr)
+    def visit_GridCompute(self, node: GridCompute):
+        if self.root is node:
+            return super().visit_GridCompute(node)
+        else:
+            # do not go deeper
+            return node
 
 
 class DataDependencyAnalyzer:
-    def __init__(self, op: Operator, num_shards: int, symbol_table: dict = None):
+    def __init__(self, op: Operator, num_shards: int):
         self.op = op
         self.num_shards = num_shards
-        self.symbol_table = {} if symbol_table is None else symbol_table
         self.valid = self._build_bound_expr()
 
     def _build_bound_expr(self) -> bool:
         task = self.op.task
         outputs = task.outputs
-        index_builder = Z3ExprBuilder()
+
+        index_rewriter = IndexRewriter()
 
         # collect all reduction axes.
         reductions = set.union(*(set(collect(o, ReduceCompute)) for o in outputs))
         self.reduce_axis_shapes = {}
-        self.reduce_z3_vars = {}
         for reduction in reductions:
-            for i, (axis, axis_len) in enumerate(zip(reduction.axes, reduction.shape)):
+            for axis, axis_len in zip(reduction.axes, reduction.shape):
                 self.reduce_axis_shapes[axis] = axis_len
-                self.reduce_z3_vars[axis] = Int(f'r_{i}')
-        self.input_boundaries = {}
+        self.input_accessed_indices = {}
 
         def _build_grid_bound(grid, axis_map):
             tensor_element_exprs = collect(grid, TensorElement, stop_when_found=True)
             for te in tensor_element_exprs:
                 # note that one grid compute might appear in multiple items in a expression
                 tensor = te.base
-                indices_z3 = [index_builder.process_expr(idx, axis_map) for idx in te.indices]
                 if isinstance(tensor, GridCompute):
                     # passing the indices to the dependending grids's axes
                     new_axis_map = {}
-                    new_axis_map.update(self.symbol_table)
                     new_axis_map.update(axis_map)
-                    for axis, index_z3 in zip(tensor.axes, indices_z3):
-                        new_axis_map[axis] = index_z3
+                    for axis, index in zip(tensor.axes, te.indices):
+                        new_axis_map[axis] = index
+                    tensor = index_rewriter.process_expr(tensor, new_axis_map)
                     _build_grid_bound(tensor, new_axis_map)
                 elif isinstance(tensor, TensorInput):
-                    if tensor not in self.input_boundaries:
-                        self.input_boundaries[tensor] = []
-                    self.input_boundaries[tensor].append(indices_z3)
+                    if tensor not in self.input_accessed_indices:
+                        self.input_accessed_indices[tensor] = []
+                    self.input_accessed_indices[tensor].append(te.indices)
 
-        self.grid_z3_vars = {}
         for o in outputs:
             if not isinstance(o, GridCompute):
                 return False  # we don't support scalar output
-            axis_map = {}
-            for axis in o.axes:
-                axis_map[axis] = Int(f'i_{len(self.grid_z3_vars)}')
-                self.grid_z3_vars[axis] = axis_map[axis]
-            axis_map.update(self.symbol_table)
-            axis_map.update(self.reduce_z3_vars)
-            _build_grid_bound(o, axis_map)
+            _build_grid_bound(o, {})
         return True
 
     def check(self, in_shard_dim: List[int], out_shard_dim: List[int], shard_reduce: bool = False):
         # Now only supports 1D partition
         task = self.op.task
-        rank_z3 = Int('rank')
-        rank_constraint = And(rank_z3 >= 0, rank_z3 < self.num_shards)
-        out_and_reduce_constraints = []
-        index_builder = Z3ExprBuilder()
 
-        def _boundary_constraint(axis_z3, shape, sharded):
-            # auxiliary function to generate boundary constraints
-            if not isinstance(shape, int):
-                shape = index_builder.process_expr(shape, self.symbol_table)
-                shard_size = shape / self.num_shards
-            else:
+        def _bound_info(rank, shape, is_shard=False):
+            shape = int(shape)
+            if is_shard:
                 shard_size = shape // self.num_shards
-            if sharded:
-                return And(axis_z3 >= rank_z3 * shard_size, axis_z3 < (rank_z3 + 1) * shard_size)
+                return BoundInfo(min_value=rank * shard_size, max_value=(rank + 1) * shard_size - 1)
             else:
-                return And(axis_z3 >= 0, axis_z3 < shape)
+                return BoundInfo(min_value=0, max_value=shape - 1)
 
-        # Generate the premises of output indices
-        for o, shard_dim in zip(task.outputs, out_shard_dim):
-            if not isinstance(o, GridCompute):
-                return False
-            for i, (axis, shape) in enumerate(zip(o.axes, o.shape)):
-                axis_z3 = self.grid_z3_vars[axis]
-                out_and_reduce_constraints.append(_boundary_constraint(axis_z3, shape, i == shard_dim))
+        def _check(sharded_reduce_axes=None):
+            if sharded_reduce_axes is None:
+                sharded_reduce_axes = []
+            # Enumerate all ranks
+            for rank in range(self.num_shards):
+                out_and_reduce_bound = {}
+                # Generate the premises of output indices
+                for o, shard_dim in zip(task.outputs, out_shard_dim):
+                    if not isinstance(o, GridCompute):
+                        return False
+                    for i, (axis, shape) in enumerate(zip(o.axes, o.shape)):
+                        out_and_reduce_bound[axis] = _bound_info(rank, shape, i == shard_dim)
 
-            for axis, axis_z3 in self.reduce_z3_vars.items():
-                shape = self.reduce_axis_shapes[axis]
-                out_and_reduce_constraints.append(_boundary_constraint(axis_z3, shape, False))
-                # here we assume reduction axis won't be reused
+                    for axis, shape in self.reduce_axis_shapes.items():
+                        out_and_reduce_bound[axis] = _bound_info(rank, shape, axis in sharded_reduce_axes)
+                        # here we assume reduction axis won't be reused
 
-        # Generate the constraints of inputs indices (Is any input index out of boundary?)
-        in_constraints = []
-        for inp, shard_dim in zip(task.inputs, in_shard_dim):
-            if inp not in self.input_boundaries:
-                continue
-            for indices in self.input_boundaries[inp]:
-                for i, (axis_z3, shape) in enumerate(zip(indices, inp.shape)):
-                    if i == shard_dim:
-                        in_constraints.append(Not(_boundary_constraint(axis_z3, shape, True)))
+                for input_tensor, accessed_indices in self.input_accessed_indices.items():
+                    shard_dim = in_shard_dim[task.inputs.index(input_tensor)]
+                    if shard_dim < 0:
+                        continue
+                    for indices in accessed_indices:
+                        idx = indices[shard_dim]
+                        shape = int(input_tensor.shape[shard_dim])
+                        shard_size = shape // self.num_shards
+                        lower, upper = rank * shard_size, (rank + 1) * shard_size
+                        bound = infer_bound(idx, out_and_reduce_bound)[idx]
+                        if not bound.has_determent_range():
+                            return False
+                        if bound.possible_min_value() < lower or bound.possible_max_value() >= upper:
+                            return False
+            return True
 
         if shard_reduce:
             # We only analyze sharding reduction axis for single-output op
@@ -212,20 +152,11 @@ class DataDependencyAnalyzer:
 
             # Try reduction on each axis to see if the result can be fixed.
             for shard_axis in o.value.axes:
-                axis_z3 = self.reduce_z3_vars[shard_axis]
-                shape = self.reduce_axis_shapes[shard_axis]
-                c = _boundary_constraint(axis_z3, shape, True)
-                if self._check(rank_constraint, in_constraints, out_and_reduce_constraints + [c]):
+                if _check([shard_axis]):
                     return True
             return False
         else:
-            return self._check(rank_constraint, in_constraints, out_and_reduce_constraints)
-
-    @staticmethod
-    def _check(rank_constraint, in_constraints, out_and_reduce_constraints):
-        constraints = [rank_constraint, Or(*in_constraints)] + out_and_reduce_constraints
-        s = Solver()
-        return str(s.check(*constraints)) == 'unsat'
+            return _check()
 
 
 def _get_first_tile(tensor, nshards, shard_dim):
@@ -246,46 +177,18 @@ def op_shard_rule_search(op: Operator, num_shards: int) -> List[OpShardSpec]:
     outputs = op.outputs
     found_rules = []
 
-    # Initialize the mapping from dynamic shape symbol to Z3 symbol
-    symbols = op.task.symbols
-    symbol_table = {sym: Int(sym.name) for sym in symbols}
-    symbol_positive = [sym >= num_shards for sym in symbol_table.values()]
+    # We do not allow dynamic shapes
+    assert len(op.task.symbols) == 0
 
     # Initialize data dependency analyzer
     # If it is not valid, it means we meet some scenarios we cannot analyze
     # And we won't shard this op
-    data_dependency_analyzer = DataDependencyAnalyzer(op, num_shards, symbol_table)
+    data_dependency_analyzer = DataDependencyAnalyzer(op, num_shards)
     if not data_dependency_analyzer.valid:
         return []
 
-    # auxiliary function to check two values that might involve symbols
-    def _symbol_eq(a, b):
-        if isinstance(a, int) and isinstance(b, int):
-            return a == b
-
-        if str(a) == str(b):  # shortcut for identical expressions
-            return True
-
-        expr_builder = Z3ExprBuilder()
-        if isinstance(a, int):
-            a_z3 = IntVal(a)
-        else:
-            a_z3 = expr_builder.process_expr(a, symbol_table)
-
-        if isinstance(b, int):
-            b_z3 = IntVal(b)
-        else:
-            b_z3 = expr_builder.process_expr(b, symbol_table)
-
-        neq = a_z3 != b_z3
-        s = Solver()
-        return str(s.check(And(neq, *symbol_positive))) == 'unsat'
-
     # enumerate all possible input shardings. -1 means duplicate
     for in_shard_dims in product(*(range(-1, len(i.shape)) for i in inputs)):
-        if all((shard_dim == -1 for shard_dim in in_shard_dims)):
-            continue
-
         # Get a tile of each input tensor according to the input sharding
         # And compute the output shape
         try:
@@ -304,13 +207,13 @@ def op_shard_rule_search(op: Operator, num_shards: int) -> List[OpShardSpec]:
             shard_dim = -1
             origin_shape = op.outputs[i].shape
             for dim in range(len(out.shape)):
-                if _symbol_eq(out.shape[dim], origin_shape[dim] // num_shards):
+                if out.shape[dim] == origin_shape[dim] // num_shards:
                     if shard_dim != -1:
                         shard_dim = None  # invalid output shape
                         # Because there should be at most one sharded dimension
                     else:
                         shard_dim = dim
-                elif not _symbol_eq(out.shape[dim], origin_shape[dim]):
+                elif out.shape[dim] != origin_shape[dim]:
                     shard_dim = None  # invalid output shape
             if shard_dim is not None:  # output is invalid result of a sharding
                 out_shard_dims.append(shard_dim)
@@ -343,7 +246,7 @@ if __name__ == '__main__':
 
     def resnet_test():
         model = hidet.testing.models.resnet.resnet18()
-        x = hidet.symbol(['batch_size', 3, 224, 224])
+        x = hidet.symbol([8, 3, 224, 224])
         flow_graph = hidet.trace_from(model(x))
 
         cache = {}
