@@ -9,10 +9,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Sequence, Set, Optional, Union, List
-from enum import Enum
+from typing import Sequence, Optional, Union, List
 
 from hidet.ir.compute import ReduceOperation
+
 
 class TensorShardSpec:
     """
@@ -25,15 +25,16 @@ class TensorShardSpec:
     duplicated along that mesh axis), its corresponding value is None.  We assume that each mesh
     axis can shard at most one dimension, and each dimension can be sharded by multiple mesh axes.
 
-    It also accept a single-value parameter, which will be viewed as a single-layer mesh hierarchy. 
+    It also accept a single-value parameter, which will be viewed as a single-layer mesh hierarchy.
     """
-    def __init__(self, ndim: int, sharded_dim: Union[Optional[int], Sequence[Optional[int]]]=None):
+
+    def __init__(self, ndim: int, sharded_dim: Union[Optional[int], Sequence[Optional[int]]] = None):
         self.ndim: int = ndim
         if not isinstance(sharded_dim, Sequence):
             sharded_dim = [sharded_dim]
         self._sharded_dim: Sequence[Optional[int]] = sharded_dim
         self.num_mesh_axis: int = len(sharded_dim)
-        
+
         # Sanity check and build mesh_axes to dim map
         self.mesh_axes_per_dim: List[List[int]] = [[] for _ in range(self.ndim)]
         for mesh_axis, dim in enumerate(sharded_dim):
@@ -41,7 +42,7 @@ class TensorShardSpec:
                 continue
             if dim >= self.ndim:
                 raise ValueError("Sharded dim should be less than the number of dimensions")
-            self.mesh_axes_per_dim[dim].append(mesh_axis) 
+            self.mesh_axes_per_dim[dim].append(mesh_axis)
 
     def is_single_layer_hierarchy(self) -> bool:
         return self.num_mesh_axis
@@ -50,23 +51,31 @@ class TensorShardSpec:
         if not self.is_single_layer_hierarchy():
             raise ValueError("Only single layer hierarchy supports directly querying the sharded axis.")
         return self.sharded_dim[0]
-        
+
     def __str__(self) -> str:
-        str_per_dim = ['R' if len(axes) == 0 else ''.join([f'S{axis}' for axis in axes])
-                        for axes in self.mesh_axes_per_dim]
+        str_per_dim = [
+            'R' if len(axes) == 0 else ''.join([f'S{axis}' for axis in axes]) for axes in self.mesh_axes_per_dim
+        ]
         return f"({', '.join(str_per_dim)})"
 
+
 class ReduceFunction:
-    def __init__(self, op: ReduceOperation, kind: str='all_reduce'):
+    def __init__(self, op: ReduceOperation, kind: str = 'all_reduce'):
         self.op = op
         assert kind in ('all_reduce', 'reduce_scatter')
         self.kind = kind
-    
+
     def __str__(self):
         return self.kind + '_' + str(self.op)
 
+
 class OpShardSpec:
-    def __init__(self, input_specs: Sequence[TensorShardSpec], output_specs: Sequence[TensorShardSpec], reduce_fn: Optional[List[ReduceFunction]]=None):
+    def __init__(
+        self,
+        input_specs: Sequence[TensorShardSpec],
+        output_specs: Sequence[TensorShardSpec],
+        reduce_fn: Optional[List[ReduceFunction]] = None,
+    ):
         self.input_specs = input_specs
         self.output_specs = output_specs
         if reduce_fn is None:
