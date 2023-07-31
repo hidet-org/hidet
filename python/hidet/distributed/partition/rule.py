@@ -38,6 +38,8 @@ class IndexRewriter(ExprRewriter, ComputeRewriter):
     def visit_Var(self, e: Var):
         if e in self.var2idx:
             return self.var2idx[e]
+        else:
+            return super().visit_GridCompute(e)
 
     def visit_GridCompute(self, node: GridCompute):
         if self.root is node:
