@@ -13,6 +13,15 @@ logging.set_verbosity_error()
 
 device_name = str(hidet.cuda.properties().name, 'UTF-8')
 
+def setup_hidet_flags(dtype):
+    use_fp16 = dtype == 'float16'
+    hidet.torch.dynamo_config.search_space(2)
+    hidet.torch.dynamo_config.use_fp16(use_fp16)
+    hidet.torch.dynamo_config.use_fp16_reduction(use_fp16)
+    hidet.torch.dynamo_config.use_attention(True)
+    hidet.torch.dynamo_config.use_tensor_core(True)
+    hidet.torch.dynamo_config.use_cuda_graph(True)
+
 def bench_torch_model(model, torch_inputs, bench_iters=100, warmup_iters=10):
     for _ in range(warmup_iters):
         torch_out = model(*torch_inputs)
@@ -32,13 +41,7 @@ def bench_torch_model(model, torch_inputs, bench_iters=100, warmup_iters=10):
     return latency
 
 def bench_hf_transformers(model_name, seqlen, dtype):
-    use_fp16 = dtype == 'float16'
-    hidet.torch.dynamo_config.search_space(2)
-    hidet.torch.dynamo_config.use_fp16(use_fp16)
-    hidet.torch.dynamo_config.use_fp16_reduction(use_fp16)
-    hidet.torch.dynamo_config.use_attention(True)
-    hidet.torch.dynamo_config.use_tensor_core(True)
-    hidet.torch.dynamo_config.use_cuda_graph(True)
+    setup_hidet_flags(dtype)
     dtype = getattr(torch, dtype)
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForMaskedLM.from_pretrained(model_name,
@@ -55,13 +58,7 @@ def bench_hf_transformers(model_name, seqlen, dtype):
     return latency
 
 def bench_torchvision(model_cls, shape, dtype):
-    use_fp16 = dtype == 'float16'
-    hidet.torch.dynamo_config.search_space(2)
-    hidet.torch.dynamo_config.use_fp16(use_fp16)
-    hidet.torch.dynamo_config.use_fp16_reduction(use_fp16)
-    hidet.torch.dynamo_config.use_attention(True)
-    hidet.torch.dynamo_config.use_tensor_core(True)
-    hidet.torch.dynamo_config.use_cuda_graph(True)
+    setup_hidet_flags(dtype)
     dtype = getattr(torch, dtype)
     model = model_cls(weights=None)
     model = model.eval().to(dtype).cuda()
@@ -72,7 +69,20 @@ def bench_torchvision(model_cls, shape, dtype):
         del model
     return latency
 
+def bench_torchhub(repo_name, model_name, shape, dtype):
+    setup_hidet_flags(dtype)
+    dtype = getattr(torch, dtype)
+    model = torch.hub.load(repo_name, model_name, pretrained=True)
+    model = model.eval().to(dtype).cuda()
+    torch_inputs = [torch.randn(shape, device='cuda', dtype=dtype)]
+    with torch.no_grad(), torch.autocast("cuda"):
+        model = torch.compile(model, backend='hidet')
+        latency = bench_torch_model(model, torch_inputs)
+        del model
+    return latency
+
 def bert_regression():
+    print("Running regression for bert-base")
     regression_data = load_regression_data()
     result_group = ResultGroup(name='bert-base Regression', device_name=device_name)
     bert_data = regression_data[device_name]['bert_base_shapes']
@@ -83,22 +93,33 @@ def bert_regression():
             result_group.add_entry(ResultEntry(shape, dtype, latency, ref_latency))
     return result_group
 
-def resnet_regression():
+def torchvision_regression(model_name):
+    print("Running regression for", model_name)
     regression_data = load_regression_data()
-    result_group = ResultGroup(name='resnet50 Regression', device_name=device_name)
-    resnet50_data = regression_data[device_name]['resnet50_shapes']
-    model_cls = torchvision.models.resnet50
-    for shape, perf in resnet50_data.items():
+    result_group = ResultGroup(name=model_name + ' Regression', device_name=device_name)
+    perf_data = regression_data[device_name][model_name + '_shapes']
+    if any(name in model_name for name in ['deeplab', 'fcn', 'lraspp']):
+        model_cls = getattr(torchvision.models.segmentation, model_name)
+    else:
+        model_cls = getattr(torchvision.models, model_name)
+    for shape, perf in perf_data.items():
         for dtype, ref_latency in perf.items():
             _shape = [int(s.strip()) for s in shape.split(',')]
             latency = bench_torchvision(model_cls, _shape, dtype)
             result_group.add_entry(ResultEntry(shape, dtype, latency, ref_latency))
     return result_group
 
-
-def efficientnet_regression():
-    # ToDo
-    return None
+def torchhub_regression(repo_name, model_name):
+    print("Running regression for", model_name)
+    regression_data = load_regression_data()
+    result_group = ResultGroup(name=model_name + ' Regression', device_name=device_name)
+    perf_data = regression_data[device_name][model_name + '_shapes']
+    for shape, perf in perf_data.items():
+        for dtype, ref_latency in perf.items():
+            _shape = [int(s.strip()) for s in shape.split(',')]
+            latency = bench_torchhub(repo_name, model_name, _shape, dtype)
+            result_group.add_entry(ResultEntry(shape, dtype, latency, ref_latency))
+    return result_group
 
 def llama_regression():
     # ToDo
@@ -106,9 +127,13 @@ def llama_regression():
 
 def model_performance_regression(report_file):
     result_groups = []
+    result_groups.append(torchvision_regression('densenet121'))
+    result_groups.append(torchvision_regression('deeplabv3_resnet50'))
+    result_groups.append(torchvision_regression('mobilenet_v2'))
+    result_groups.append(torchvision_regression('efficientnet_b0'))
+    result_groups.append(torchvision_regression('resnet50'))
+    result_groups.append(torchhub_regression('ultralytics/yolov5','yolov5s'))
     result_groups.append(bert_regression())
-    result_groups.append(resnet_regression())
-    result_groups.append(efficientnet_regression())
     result_groups.append(llama_regression())
     with open(report_file, 'w') as f:
         f.write("---------------- Model Performance Regression -----------------\n")

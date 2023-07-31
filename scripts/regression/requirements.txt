@@ -1,2 +1,5 @@
 schedule
 importlib_metadata
+opencv-python
+pandas
+ultralytics

@@ -93,6 +93,36 @@
         "float16": 0.879,
         "float32": 1.19593
       }
+    },
+    "deeplabv3_resnet50_shapes": {
+      "1, 3, 224, 224": {
+        "float16": 999,
+        "float32": 999
+      }
+    },
+    "densenet121_shapes": {
+      "1, 3, 224, 224": {
+        "float16": 999,
+        "float32": 999
+      }
+    },
+    "mobilenet_v2_shapes": {
+      "1, 3, 224, 224": {
+        "float16": 999,
+        "float32": 999
+      }
+    },
+    "efficientnet_b0_shapes": {
+      "1, 3, 224, 224": {
+        "float16": 999,
+        "float32": 999
+      }
+    },
+    "yolov5s_shapes": {
+      "1, 3, 720, 1280": {
+        "float16": 999,
+        "float32": 999
+      }
     }
   },
   "NVIDIA A100": {
