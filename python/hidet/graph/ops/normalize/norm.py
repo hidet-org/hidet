@@ -176,12 +176,12 @@ class NormalizeTask(Task):
 
             @hidet.script
             def welford_combine(
-                mean_a: TensorType(dtype=accumulate_dtype, shape=[1]),
-                m2_a: TensorType(dtype=accumulate_dtype, shape=[1]),
-                count_a: TensorType(dtype=i32, shape=[1]),
-                mean_b: TensorType(dtype=accumulate_dtype, shape=[1]),
-                m2_b: TensorType(dtype=accumulate_dtype, shape=[1]),
-                count_b: TensorType(dtype=i32, shape=[1]),
+                    mean_a: TensorType(dtype=accumulate_dtype, shape=[1]),
+                    m2_a: TensorType(dtype=accumulate_dtype, shape=[1]),
+                    count_a: TensorType(dtype=i32, shape=[1]),
+                    mean_b: TensorType(dtype=accumulate_dtype, shape=[1]),
+                    m2_b: TensorType(dtype=accumulate_dtype, shape=[1]),
+                    count_b: TensorType(dtype=i32, shape=[1]),
             ):
                 count = count_a[0] + count_b[0]
                 if count == 0:
@@ -190,13 +190,13 @@ class NormalizeTask(Task):
 
                 mean_a[0] = mean_a[0] + delta * cast(count_b[0], accumulate_dtype) / cast(count, accumulate_dtype)
                 m2_a[0] = (
-                    m2_a[0]
-                    + m2_b[0]
-                    + delta
-                    * delta
-                    * cast(count_a[0], accumulate_dtype)
-                    * cast(count_b[0], accumulate_dtype)
-                    / cast(count, accumulate_dtype)
+                        m2_a[0]
+                        + m2_b[0]
+                        + delta
+                        * delta
+                        * cast(count_a[0], accumulate_dtype)
+                        * cast(count_b[0], accumulate_dtype)
+                        / cast(count, accumulate_dtype)
                 )
                 count_a[0] = count
 
@@ -354,22 +354,91 @@ class NormalizeTask(Task):
 
     def implement_cpu(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
         if self.dims[-1] != len(self.inputs[0].shape) - 1:  # not layernorm
-            return NotImplemented
+            if len(self.dims) != 1:  # work on last dim only 4 now
+                return NotImplemented
         return tune.extract_ir_modules(self.schedule_layer_norm_cpu)
 
     @tune.space(2, nthreads=[4, 8, 16, 32, 64, 96])
     @tune.space(1, nthreads=[8, 16])
     def schedule_layer_norm_cpu(self, nthreads=16) -> IRModule:
         import hidet
-        from hidet.ir.dtypes import float32
+        from hidet.ir.primitives.cpu.avx import avx_f32x8_subtract, avx_f32x8_load, avx_f32x8_setzero, avx_f32x8_store, \
+            avx_f32x8_add, avx_f32x8_max, avx_f32x8_permute, avx_f32x8_permute_2f128, avx_f32x8_extract_last, \
+            avx_f32x8_extract_half, avx_f32x4_add, avx_f32x4_hadd, avx_f32x4_extract_last, avx_f32x8_broadcast, \
+            avx_f32x8_divide, avx_f32x8_to_i32x8, avx_i32x8_to_f32x8, avx_i32x8_broadcast, avx_i32x8_add, \
+            avx_i32x8_bitwiseand, avx_f32x8_fmadd, avx_f32x8_multiply, avx_i32x8_greaterthan, avx_i32x8_leftshift_imm, \
+            avx_f32x8_rsqrt
+        from hidet.ir.dtypes import float32, float32x8
+        from hidet.lang import tensor
+        from hidet.ir.stmt import DeclareScope
+        import numpy as np
 
         shape = self.inputs[0].shape
+        head = shape[:-len(self.dims)]
+        head_size = np.prod(np.array(head))
+        tail_size = np.prod(np.array(shape[-len(self.dims):]))
         with hidet.script_module() as module:
             @hidet.script
+            def find_sum(x: float32x8) -> float32:
+                sum_vec = avx_f32x4_add(avx_f32x8_extract_half(x, 0b0), avx_f32x8_extract_half(x, 0b1))
+                sum_vec = avx_f32x4_hadd(sum_vec, sum_vec)
+                sum_vec = avx_f32x4_hadd(sum_vec, sum_vec)
+                return avx_f32x4_extract_last(sum_vec)
+
+            @hidet.script
             def layer_norm_cpu_kernel(x: float32[shape], out: float32[shape]):
-                offset = k * head_size
+                for k in range(head_size):
+                    offset = k * head_size
+                    head_idx = spatial(*head).map(k)
+                    mean_vec = avx_f32x8_setzero()
+                    M2_vec = avx_f32x8_setzero()
+                    eps = self.attrs['epsilon']
+                    epsilon_vec = avx_f32x8_broadcast(~eps)
+
+                    mean_combined = 0.0
+                    M2_combined = 0.0
+                    if tail_size >= 8:
+                        for i in range(tail_size // 8):  # TODO: parallelize
+                            # welford algorithm
+                            i_float = cast(i + 1, float32)
+                            n_vec = avx_f32x8_broadcast(~i_float)
+                            data_vec = avx_f32x8_load(x + offset + i * 8)
+                            delta = avx_f32x8_subtract(data_vec, mean_vec)
+                            mean_vec = avx_f32x8_add(mean_vec, avx_f32x8_divide(delta, n_vec))
+                            delta2 = avx_f32x8_subtract(data_vec, mean_vec)
+                            M2_vec = avx_f32x8_add(M2_vec, avx_f32x8_multiply(delta, delta2))
+                        # welford combine
+                        # TODO: case for numerical stability? (number too high for large matrix)
+                        mean_combined = find_sum(mean_vec) / 8
+                        mean_combined_vec = avx_f32x8_broadcast(~mean_combined)
+                        delta_vec = avx_f32x8_subtract(mean_vec, mean_combined_vec)
+                        M2_combined = find_sum(M2_vec) + find_sum(avx_f32x8_multiply(delta_vec, delta_vec)) \
+                            * (tail_size // 8)
+                    mean_tail = 0.0
+                    M2_tail = 0.0
+                    for i in range(tail_size % 8):
+                        delta_tail = x[head_idx][tail_size - tail_size % 8 + i] - mean_tail
+                        mean_tail += delta_tail / i
+                        delta_tail2 = x[head_idx][tail_size - tail_size % 8 + i] - mean_tail
+                        M2_tail += delta_tail * delta_tail2
+                    delta_end = mean_tail - mean_combined
+                    mean = (mean_combined * (tail_size - tail_size % 8) + delta_end * (tail_size % 8)) / tail_size
+                    var = (M2_combined + M2_tail + delta_end * delta_end * (tail_size - tail_size % 8) * (tail_size % 8)
+                           / tail_size) / tail_size
+                    mean_vec = avx_f32x8_broadcast(~mean)
+                    var_vec = avx_f32x8_broadcast(~var)
+                    if tail_size >= 8:
+                        for i in range(tail_size // 8):
+                            avx_f32x8_store(out + offset + i * 8,
+                                            avx_f32x8_multiply(avx_f32x8_subtract(avx_f32x8_load(
+                                                x + offset + i * 8), mean_vec),
+                                                avx_f32x8_rsqrt(avx_f32x8_add(var_vec, epsilon_vec))))
+                    for i in range(tail_size % 8):
+                        out[head_idx][tail_size - tail_size % 8 + i] = (x[head_idx][tail_size - tail_size % 8 + i] -
+                                                                        mean) * prim.rsqrt(var + self.attrs['epsilon'])
 
         layer_norm_cpu_kernel.kind = "cpu_kernel"
+        find_sum.kind = "cpu_internal"
         assert isinstance(layer_norm_cpu_kernel, hidet.ir.Function)
         ir_module = module.ir_module()
         return ir_module

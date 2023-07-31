@@ -4,9 +4,9 @@ from hidet import nn
 import hidet
 import torch
 from hidet.graph.ops.normalize import layer_norm
+torch.set_printoptions(8)
 
-
-shapes = [[2, 2, 30, 30]]
+shapes = [[1, 8], [2, 2, 2, 16], [2, 2, 45, 45], [2, 2, 1, 1]]
 for shape in shapes:
     a = hidet.randn(shape, device="cpu")
     print(a.dtype)
@@ -20,7 +20,8 @@ for shape in shapes:
 
     compiled_func(a, b)
     # b = y(a)
-
+    # a = a.to(device="cpu")
+    # b = b.to(device="cpu")
     a_torch = torch.from_numpy(np.array(a.numpy(), copy=True, dtype='float32'))
     m = torch.nn.LayerNorm(shape[-1:], eps=1e-5)
     print(b, m(a_torch))
