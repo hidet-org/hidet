@@ -12,7 +12,6 @@
 
 from typing import List
 from itertools import product
-from python.hidet.ir.expr import IfThenElse
 
 from z3 import Int, And, Or, Not, Solver, IntVal, If
 
@@ -21,7 +20,6 @@ from hidet.graph import Operator
 from hidet.ir import TensorElement
 from hidet.ir.tools import collect
 from hidet.ir.compute import GridCompute, ReduceCompute, TensorInput
-from hidet.ir.expr import SymbolVar
 from hidet.ir.functors import ExprVisitor
 
 from .shard import TensorShardSpec, OpShardSpec, ReduceFunction
@@ -80,33 +78,32 @@ class Z3ExprBuilder(ExprVisitor):
         a, b = self.visit(e.a), self.visit(e.b)
         if a is None or b is None:
             return None
-        return a < b 
+        return a < b
 
     def visit_LessEqual(self, e):
         a, b = self.visit(e.a), self.visit(e.b)
         if a is None or b is None:
             return None
-        return a <= b 
-    
+        return a <= b
+
     def visit_Equal(self, e):
         a, b = self.visit(e.a), self.visit(e.b)
         if a is None or b is None:
             return None
         return a == b
-    
+
     def visit_IfThenElse(self, e):
         cond, then_expr, else_expr = self.visit(e.cond), self.visit(e.then_expr), self.visit(e.else_expr)
         if cond is None or then_expr is None or else_expr is None:
             return None
         return If(cond, then_expr, else_expr)
-    
 
 
 class DataDependencyAnalyzer:
-    def __init__(self, op: Operator, num_shards: int, symbol_table: dict={}):
+    def __init__(self, op: Operator, num_shards: int, symbol_table: dict = None):
         self.op = op
         self.num_shards = num_shards
-        self.symbol_table = symbol_table
+        self.symbol_table = {} if symbol_table is None else symbol_table
         self.valid = self._build_bound_expr()
 
     def _build_bound_expr(self) -> bool:
@@ -170,12 +167,13 @@ class DataDependencyAnalyzer:
                 shape = index_builder.process_expr(shape, self.symbol_table)
                 shard_size = shape / self.num_shards
             else:
-                shard_size = shape // self.num_shards 
+                shard_size = shape // self.num_shards
             if sharded:
                 return And(axis_z3 >= rank_z3 * shard_size, axis_z3 < (rank_z3 + 1) * shard_size)
             else:
                 return And(axis_z3 >= 0, axis_z3 < shape)
-    
+
+        # Generate the premises of output indices
         for o, shard_dim in zip(task.outputs, out_shard_dim):
             if not isinstance(o, GridCompute):
                 return False
@@ -185,9 +183,10 @@ class DataDependencyAnalyzer:
 
             for axis, axis_z3 in self.reduce_z3_vars.items():
                 shape = self.reduce_axis_shapes[axis]
-                out_and_reduce_constraints.append(_boundary_constraint(axis_z3, shape, i == shard_dim))
+                out_and_reduce_constraints.append(_boundary_constraint(axis_z3, shape, False))
                 # here we assume reduction axis won't be reused
 
+        # Generate the constraints of inputs indices (Is any input index out of boundary?)
         in_constraints = []
         for inp, shard_dim in zip(task.inputs, in_shard_dim):
             if inp not in self.input_boundaries:
@@ -210,6 +209,8 @@ class DataDependencyAnalyzer:
             if str(o.value.reduce_operation) not in ('sum', 'prod', 'max', 'min', 'avg'):
                 # other reduce ops are not supported by NCCL
                 return False
+
+            # Try reduction on each axis to see if the result can be fixed.
             for shard_axis in o.value.axes:
                 axis_z3 = self.reduce_z3_vars[shard_axis]
                 shape = self.reduce_axis_shapes[shard_axis]
@@ -238,24 +239,31 @@ def _get_first_tile(tensor, nshards, shard_dim):
             slice_list.append(slice(shard_size))
     return tensor[slice_list]
 
+
 def op_shard_rule_search(op: Operator, num_shards: int) -> List[OpShardSpec]:
     # Now we only search for 1D partition
     inputs = op.inputs
     outputs = op.outputs
     found_rules = []
 
+    # Initialize the mapping from dynamic shape symbol to Z3 symbol
     symbols = op.task.symbols
     symbol_table = {sym: Int(sym.name) for sym in symbols}
     symbol_positive = [sym >= num_shards for sym in symbol_table.values()]
+
+    # Initialize data dependency analyzer
+    # If it is not valid, it means we meet some scenarios we cannot analyze
+    # And we won't shard this op
     data_dependency_analyzer = DataDependencyAnalyzer(op, num_shards, symbol_table)
     if not data_dependency_analyzer.valid:
         return []
 
-    def _symbol_eq(a, b): # auxiliary function to check two values that might involve symbols
+    # auxiliary function to check two values that might involve symbols
+    def _symbol_eq(a, b):  
         if isinstance(a, int) and isinstance(b, int):
             return a == b
-        
-        if str(a) == str(b): # shortcut for identical expressions
+
+        if str(a) == str(b):  # shortcut for identical expressions
             return True
 
         expr_builder = Z3ExprBuilder()
@@ -263,7 +271,7 @@ def op_shard_rule_search(op: Operator, num_shards: int) -> List[OpShardSpec]:
             a_z3 = IntVal(a)
         else:
             a_z3 = expr_builder.process_expr(a, symbol_table)
-        
+
         if isinstance(b, int):
             b_z3 = IntVal(b)
         else:
@@ -278,7 +286,8 @@ def op_shard_rule_search(op: Operator, num_shards: int) -> List[OpShardSpec]:
         if all((shard_dim == -1 for shard_dim in in_shard_dims)):
             continue
 
-        # compute the output shape
+        # Get a tile of each input tensor according to the input sharding
+        # And compute the output shape
         try:
             new_inputs = inputs.copy()
             for i, shard_dim in enumerate(in_shard_dims):
@@ -298,6 +307,7 @@ def op_shard_rule_search(op: Operator, num_shards: int) -> List[OpShardSpec]:
                 if _symbol_eq(out.shape[dim], origin_shape[dim] // num_shards):
                     if shard_dim != -1:
                         shard_dim = None  # invalid output shape
+                        # Because there should be at most one sharded dimension
                     else:
                         shard_dim = dim
                 elif not _symbol_eq(out.shape[dim], origin_shape[dim]):
@@ -313,7 +323,7 @@ def op_shard_rule_search(op: Operator, num_shards: int) -> List[OpShardSpec]:
             out_specs = [TensorShardSpec(len(o.shape), shard_dim) for o, shard_dim in zip(outputs, out_shard_dims)]
             if data_dependency_analyzer.check(in_shard_dims, out_shard_dims):
                 found_rules.append(OpShardSpec(in_specs, out_specs))
-            else:
+            else: # Failed, but it still can be partial results. Try to fix it with reduction.
                 if data_dependency_analyzer.check(in_shard_dims, out_shard_dims, shard_reduce=True):
                     reduce_op = op.task.outputs[0].value.reduce_operation
                     found_rules.append(
@@ -330,6 +340,7 @@ def op_shard_rule_search(op: Operator, num_shards: int) -> List[OpShardSpec]:
 
 if __name__ == '__main__':
     import hidet.testing
+
     def resnet_test():
         model = hidet.testing.models.resnet.resnet18()
         x = hidet.symbol(['batch_size', 3, 224, 224])
