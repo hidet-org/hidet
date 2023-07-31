@@ -259,7 +259,7 @@ def op_shard_rule_search(op: Operator, num_shards: int) -> List[OpShardSpec]:
         return []
 
     # auxiliary function to check two values that might involve symbols
-    def _symbol_eq(a, b):  
+    def _symbol_eq(a, b):
         if isinstance(a, int) and isinstance(b, int):
             return a == b
 
@@ -323,7 +323,7 @@ def op_shard_rule_search(op: Operator, num_shards: int) -> List[OpShardSpec]:
             out_specs = [TensorShardSpec(len(o.shape), shard_dim) for o, shard_dim in zip(outputs, out_shard_dims)]
             if data_dependency_analyzer.check(in_shard_dims, out_shard_dims):
                 found_rules.append(OpShardSpec(in_specs, out_specs))
-            else: # Failed, but it still can be partial results. Try to fix it with reduction.
+            else:  # Failed, but it still can be partial results. Try to fix it with reduction.
                 if data_dependency_analyzer.check(in_shard_dims, out_shard_dims, shard_reduce=True):
                     reduce_op = op.task.outputs[0].value.reduce_operation
                     found_rules.append(
