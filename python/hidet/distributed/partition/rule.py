@@ -161,7 +161,7 @@ class DataDependencyAnalyzer:
             return _check()
 
 
-def _get_first_tile(tensor, nshards, shard_dim):
+def get_tile(tensor, nshards, shard_dim, rank=0):
     # Only works for 1-D partition
     slice_list = []
     for i in range(len(tensor.shape)):
@@ -169,7 +169,7 @@ def _get_first_tile(tensor, nshards, shard_dim):
             slice_list.append(slice(tensor.shape[i]))
         else:
             shard_size = tensor.shape[i] // nshards
-            slice_list.append(slice(shard_size))
+            slice_list.append(slice(shard_size * rank, shard_size * (rank + 1)))
     return tensor[slice_list]
 
 
@@ -194,12 +194,18 @@ def op_shard_rule_search(op: Operator, num_shards: int) -> List[OpShardSpec]:
         # Get a tile of each input tensor according to the input sharding
         # And compute the output shape
         try:
-            new_inputs = inputs.copy()
+            new_inputs = []
             for i, shard_dim in enumerate(in_shard_dims):
                 if shard_dim >= 0:
-                    new_inputs[i] = _get_first_tile(new_inputs[i], num_shards, shard_dim)
+                    if inputs[i].shape[shard_dim] % num_shards != 0:
+                        break
+                    new_inputs.append(get_tile(inputs[i], num_shards, shard_dim))
+                else:
+                    new_inputs.append(inputs[i])
+            if len(new_inputs) < len(inputs):
+                continue
             outputs = op.reforward(new_inputs)
-        except (ValueError, RuntimeError, AssertionError):
+        except (ValueError, RuntimeError, AssertionError, IndexError):
             continue
 
         # find the sharded output dimension
@@ -236,10 +242,11 @@ def op_shard_rule_search(op: Operator, num_shards: int) -> List[OpShardSpec]:
                     )
                     # if all_reduce is valid, then reduce_scatter is also valid
                     output = op.task.outputs[0]
-                    out_spec = TensorShardSpec(len(output.shape), 0)
-                    found_rules.append(
-                        OpShardSpec(in_specs, [out_spec], reduce_fn=[ReduceFunction(reduce_op, 'reduce_scatter')])
-                    )
+                    if output.shape[0] % num_shards == 0:
+                        out_spec = TensorShardSpec(len(output.shape), 0)
+                        found_rules.append(
+                            OpShardSpec(in_specs, [out_spec], reduce_fn=[ReduceFunction(reduce_op, 'reduce_scatter')])
+                        )
     return found_rules
 
 
