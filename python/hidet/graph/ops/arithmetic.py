@@ -35,12 +35,13 @@ class UnaryElementwiseOperation:
 
     def __call__(self, x):
         return rewrite(self.y, {self.x: x})
-    
+
     @staticmethod
     def from_callable(op: Callable[[Any], Any], name, attributes, task_attributes):
         x = expr.var('x')
         y = op(x)
         return UnaryElementwiseOperation(x, y, name, attributes, task_attributes)
+
 
 class BinaryElementwiseOperation:
     def __init__(self, lhs, rhs, out, name):
@@ -48,16 +49,17 @@ class BinaryElementwiseOperation:
         self.rhs = rhs
         self.out = out
         self.name = name
-    
+
     def __call__(self, lhs, rhs):
         return rewrite(self.out, {self.lhs: lhs, self.rhs: rhs})
-    
+
     @staticmethod
     def from_callable(op: Callable[[Any, Any], Any], name):
         lhs = expr.var('lhs')
         rhs = expr.var('rhs')
         out = op(lhs, rhs)
         return BinaryElementwiseOperation(lhs, rhs, out, name)
+
 
 class UnaryElementwiseTask(Task):
     def __init__(self, name: str, x: TensorNode, op: Callable[[Any], Any], attrs=None):
@@ -119,10 +121,17 @@ class VariadicElementwiseTask(Task):
             },
         )
 
-class CompositeElementwiseTask(Task):
-    def __init__(self, name: str, x: TensorNode, left_unary_op: Callable[[Any], Any],
-                 right_unary_op: Callable[[Any], Any], binary_op: Callable[[Any, Any], Any], attrs=None):
 
+class CompositeElementwiseTask(Task):
+    def __init__(
+        self,
+        name: str,
+        x: TensorNode,
+        left_unary_op: Callable[[Any], Any],
+        right_unary_op: Callable[[Any], Any],
+        binary_op: Callable[[Any, Any], Any],
+        attrs=None,
+    ):
         def composite_op(binary_op, left_unary_op, right_unary_op, x):
             if left_unary_op is None:
                 left_unary_op = lambda x: x
@@ -135,7 +144,7 @@ class CompositeElementwiseTask(Task):
         z = compute(
             name='z',
             shape=shape,
-            fcompute=lambda *indices: composite_op(binary_op, left_unary_op, right_unary_op, x.__getitem__(indices))
+            fcompute=lambda *indices: composite_op(binary_op, left_unary_op, right_unary_op, x.__getitem__(indices)),
         )
 
         super().__init__(
@@ -197,9 +206,15 @@ class BinaryElementwiseOp(Operator):
             task=BinaryElementwiseTask(name, input_like(x, 'x'), input_like(y, 'y'), op=op),
         )
 
+
 class CompositeElementwiseOp(Operator):
-    def __init__(self, x: Tensor, left_unary_op: UnaryElementwiseOperation,
-                 right_unary_op: UnaryElementwiseOperation, binary_op: BinaryElementwiseOperation):
+    def __init__(
+        self,
+        x: Tensor,
+        left_unary_op: UnaryElementwiseOperation,
+        right_unary_op: UnaryElementwiseOperation,
+        binary_op: BinaryElementwiseOperation,
+    ):
         name = 'composite'
         for op in [left_unary_op, right_unary_op, binary_op]:
             if op is not None:
@@ -208,8 +223,7 @@ class CompositeElementwiseOp(Operator):
         super().__init__(
             inputs=[x],
             attributes=attributes,
-            task=CompositeElementwiseTask(name, input_like(
-                x, 'x'), left_unary_op, right_unary_op, binary_op),
+            task=CompositeElementwiseTask(name, input_like(x, 'x'), left_unary_op, right_unary_op, binary_op),
         )
 
 
@@ -849,8 +863,12 @@ def logaddexp(x: Tensor, y: Tensor) -> Tensor:
     max_val = maximum(x, y)
     return log(exp(x - max_val) + exp(y - max_val)) + max_val
 
+
 # out = binary_op(left_unary_op(x), right_unary_op(x)); This allows more fusion opportunity.
-def composite_elementwise(x: Tensor, left_unary_op: UnaryElementwiseOperation,
-                          right_unary_op: UnaryElementwiseOperation,
-                          binary_op: BinaryElementwiseOperation) -> Tensor:
+def composite_elementwise(
+    x: Tensor,
+    left_unary_op: UnaryElementwiseOperation,
+    right_unary_op: UnaryElementwiseOperation,
+    binary_op: BinaryElementwiseOperation,
+) -> Tensor:
     return CompositeElementwiseOp(x, left_unary_op, right_unary_op, binary_op).outputs[0]

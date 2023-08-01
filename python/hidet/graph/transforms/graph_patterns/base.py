@@ -249,7 +249,9 @@ class PatternMatcher:
                 if actual_operator in self.reverse_matched:
                     # this actual operator has been matched
                     continue
-                if not issubclass(type(actual_operator), desire_operator.op_cls):  # pylint: disable=unidiomatic-typecheck
+                if not issubclass(
+                    type(actual_operator), desire_operator.op_cls
+                ):  # pylint: disable=unidiomatic-typecheck
                     continue
                 self.match(desire_operator, actual_operator)
                 spanned = True
