@@ -25,6 +25,7 @@ for shape, axis in shapes:
     a_torch = torch.from_numpy(np.array(a.numpy(), copy=True, dtype='float32'))
 
     np.testing.assert_allclose(b.numpy(), m(a_torch), rtol=1e-05, atol=1e-08)
+    print("hidet and pytorch tensors match")
 
     def numpy_softmax(data, axis_):
         data = np.exp(data - np.max(data, axis_, keepdims=True))
