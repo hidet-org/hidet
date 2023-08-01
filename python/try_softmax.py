@@ -22,7 +22,7 @@ for shape, axis in shapes:
 
     device = torch.device("cpu")
     m = nn.Softmax(dim=axis)
-    a_torch = torch.from_numpy(np.array(a.numpy(), copy=True, dtype=float))
+    a_torch = torch.from_numpy(np.array(a.numpy(), copy=True, dtype='float32'))
 
     np.testing.assert_allclose(b.numpy(), m(a_torch), rtol=1e-05, atol=1e-08)
 
@@ -32,11 +32,11 @@ for shape, axis in shapes:
         return data
 
     hidet_latency = hidet.utils.benchmark_func(lambda: compiled_func(a, b), warmup=10, repeat=50)
-    pt_latency = hidet.utils.benchmark_func(lambda: torch.nn.functional.softmax(a_torch, dim=axis), warmup=10, repeat=50)
+    pt_latency = hidet.utils.benchmark_func(lambda: m(a_torch), warmup=10, repeat=50)
     np_latency = hidet.utils.benchmark_func(lambda: numpy_softmax(a.numpy(), axis_=axis), warmup=10, repeat=50)
     print("for shape of", shape, ":", "hidet:", hidet_latency, "pytorch:", pt_latency, "numpy:", np_latency)
     print("fastest is:", ["hidet", "pytorch", "numpy"][np.argmin([hidet_latency, pt_latency, np_latency])])
-
+    # print(b, m(a_torch))
 # softmax([bs, 1000], axis=1)  # bs = 1, 2, 4, 8
 # softmax([heads, seq, seq], axis=2)  # heads=32, seq = 128, 512, 1024
 

@@ -387,7 +387,8 @@ class NormalizeTask(Task):
 
             @hidet.script
             def layer_norm_cpu_kernel(x: float32[shape], out: float32[shape]):
-                for k in range(head_size):
+                para = "p" + str(nthreads)
+                for k in grid(head_size, attrs=para):
                     offset = k * shape[-1]
                     head_idx = spatial(*head).map(k)
                     mean_vec = avx_f32x8_setzero()
@@ -418,11 +419,11 @@ class NormalizeTask(Task):
                     M2_tail = 0.0
                     for i in range(tail_size % 8):
                         delta_tail = x[head_idx][tail_size - tail_size % 8 + i] - mean_tail
-                        mean_tail += delta_tail / i
+                        mean_tail += delta_tail / cast(i+1, float32)
                         delta_tail2 = x[head_idx][tail_size - tail_size % 8 + i] - mean_tail
                         M2_tail += delta_tail * delta_tail2
                     delta_end = mean_tail - mean_combined
-                    mean = (mean_combined * (tail_size - tail_size % 8) + delta_end * (tail_size % 8)) / tail_size
+                    mean = (mean_combined * (tail_size - tail_size % 8) + mean_tail * (tail_size % 8)) / tail_size
                     var = (M2_combined + M2_tail + delta_end * delta_end * (tail_size - tail_size % 8) * (tail_size % 8)
                            / tail_size) / tail_size
                     mean_vec = avx_f32x8_broadcast(~mean)
@@ -433,6 +434,7 @@ class NormalizeTask(Task):
                                             avx_f32x8_multiply(avx_f32x8_subtract(avx_f32x8_load(
                                                 x + offset + i * 8), mean_vec),
                                                 avx_f32x8_rsqrt(avx_f32x8_add(var_vec, epsilon_vec))))
+                            # TODO: div, sqrt for accuracy
                     for i in range(tail_size % 8):
                         out[head_idx][tail_size - tail_size % 8 + i] = (x[head_idx][tail_size - tail_size % 8 + i] -
                                                                         mean) * prim.rsqrt(var + self.attrs['epsilon'])
