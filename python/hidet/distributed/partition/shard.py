@@ -9,9 +9,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Sequence, Optional, Union, List
+from typing import Sequence, Optional, Union, List, Tuple
 
 from hidet.ir.compute import ReduceOperation
+from hidet.graph import Tensor
 
 
 class TensorShardSpec:
@@ -32,17 +33,19 @@ class TensorShardSpec:
         self.ndim: int = ndim
         if not isinstance(sharded_dim, Sequence):
             sharded_dim = [sharded_dim]
+        for i in range(len(sharded_dim)):
+            if sharded_dim[i] is not None and sharded_dim[i] < 0:
+                sharded_dim[i] = None
         self._sharded_dim: Sequence[Optional[int]] = sharded_dim
         self.num_mesh_axis: int = len(sharded_dim)
 
         # Sanity check and build mesh_axes to dim map
         self.mesh_axes_per_dim: List[List[int]] = [[] for _ in range(self.ndim)]
         for mesh_axis, dim in enumerate(sharded_dim):
-            if dim is None or dim < 0:
-                continue
-            if dim >= self.ndim:
-                raise ValueError("Sharded dim should be less than the number of dimensions")
-            self.mesh_axes_per_dim[dim].append(mesh_axis)
+            if dim is not None:
+                if dim >= self.ndim:
+                    raise ValueError("Sharded dim should be less than the number of dimensions")
+                self.mesh_axes_per_dim[dim].append(mesh_axis)
 
     def is_single_layer_hierarchy(self) -> bool:
         return self.num_mesh_axis
@@ -50,13 +53,23 @@ class TensorShardSpec:
     def sharded_dim(self) -> int:
         if not self.is_single_layer_hierarchy():
             raise ValueError("Only single layer hierarchy supports directly querying the sharded axis.")
-        return self.sharded_dim[0]
+        return self._sharded_dim[0]
 
     def __str__(self) -> str:
         str_per_dim = [
             'R' if len(axes) == 0 else ''.join([f'S{axis}' for axis in axes]) for axes in self.mesh_axes_per_dim
         ]
         return f"({', '.join(str_per_dim)})"
+
+    def is_full(self) -> bool:
+        return all((len(mesh_axes) == 0 for mesh_axes in self.mesh_axes_per_dim))
+
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, TensorShardSpec):
+            return False
+        if self.ndim != other.ndim:
+            return False
+        return self._sharded_dim == other._sharded_dim
 
 
 class ReduceFunction:
@@ -80,6 +93,7 @@ class OpShardSpec:
         self.output_specs = output_specs
         if reduce_fn is None:
             reduce_fn = [None] * len(output_specs)
+        assert len(reduce_fn) == len(output_specs)
         self.reduce_fn = reduce_fn
 
     def __str__(self):
@@ -92,3 +106,35 @@ class OpShardSpec:
             o_list.append(s)
         out_str = ', '.join(o_list)
         return in_str + " -> " + out_str
+
+
+def node_comm_cost(output_tensors, spec):
+    # The cost needs to be re-considered
+    assert len(output_tensors) == len(spec.output_specs)
+    cost = 0
+    for tensor, spec, reduce_fn in zip(output_tensors, spec.output_specs, spec.reduce_fn):
+        if reduce_fn is None:
+            continue
+        if reduce_fn.kind == 'all_reduce':
+            cost += 2 * tensor.nbytes
+        elif reduce_fn.kind == 'reduce_scatter':
+            cost += tensor.nbytes
+        else:
+            raise ValueError("Unsupported reduction function")
+    return cost
+
+
+def connect(tensor: Tensor, produce_spec: TensorShardSpec, consume_spec: TensorShardSpec) -> Tuple[ReduceFunction, int]:
+    # Only supports 1D partition now
+    # The cost needs to be re-considered
+    if produce_spec.is_full():
+        if consume_spec.is_full():
+            return (None, 0)
+        else:
+            return ('slice', 0)
+    if consume_spec.is_full():
+        return ('gather', tensor.nbytes)
+    elif produce_spec.sharded_dim() == consume_spec.sharded_dim():
+        return (None, 0)
+    else:
+        return ('gather_and_slice', tensor.nbytes)
