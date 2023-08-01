@@ -244,7 +244,6 @@ class Task(Node):
             'cuda': (self.implement_cuda, CudaAutoScheduler),
             'cpu': (self.implement_cpu, CpuAutoScheduler),
         }[target.name]
-
         ir_modules: Union[IRModule, List[IRModule]] = implement_target(working_dir)
         if ir_modules is NotImplemented:
             auto_scheduler = scheduler()

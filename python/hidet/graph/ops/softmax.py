@@ -174,7 +174,8 @@ class SoftmaxTask(Task):
             avx_f32x8_add, avx_f32x8_max, avx_f32x8_permute, avx_f32x8_permute_2f128, avx_f32x8_extract_last, \
             avx_f32x8_extract_half, avx_f32x4_add, avx_f32x4_hadd, avx_f32x4_extract_last, avx_f32x8_broadcast, \
             avx_f32x8_divide, avx_f32x8_to_i32x8, avx_i32x8_to_f32x8, avx_i32x8_broadcast, avx_i32x8_add, \
-            avx_i32x8_bitwiseand, avx_f32x8_fmadd, avx_f32x8_multiply, avx_i32x8_greaterthan, avx_i32x8_leftshift_imm
+            avx_i32x8_bitwiseand, avx_f32x8_fmadd, avx_f32x8_multiply, avx_i32x8_greaterthan, avx_i32x8_leftshift_imm, \
+            avx_f32x8_find_sum
         from hidet.ir.dtypes import float32x8
         from hidet.lang import tensor
         from hidet.ir.stmt import DeclareScope
@@ -256,13 +257,6 @@ class SoftmaxTask(Task):
                 return avx_f32x8_extract_last(m)
 
             @hidet.script
-            def find_sum(x: float32x8) -> float32:
-                sum_vec = avx_f32x4_add(avx_f32x8_extract_half(x, 0b0), avx_f32x8_extract_half(x, 0b1))
-                sum_vec = avx_f32x4_hadd(sum_vec, sum_vec)
-                sum_vec = avx_f32x4_hadd(sum_vec, sum_vec)
-                return avx_f32x4_extract_last(sum_vec)
-
-            @hidet.script
             def softmax_cpu_kernel(x: float32[shape], out: float32[shape]):
                 # can pass shape = x.shape, float32[shape]
                 para = 'p' + str(nthreads)
@@ -300,7 +294,7 @@ class SoftmaxTask(Task):
                             # val_vec = avx_exp(val_vec)
                             avx_f32x8_store(out + offset + j * 8, val_vec)
                             sum_exp_vec = avx_f32x8_add(sum_exp_vec, val_vec)
-                        sum_value = find_sum(sum_exp_vec)
+                        sum_value = avx_f32x8_find_sum(sum_exp_vec)
                     for j in range(col_size % 8):
                         out[head_idx][col_size - col_size % 8 + j] = \
                             prim.exp(x[head_idx][col_size - col_size % 8 + j] - max_val)

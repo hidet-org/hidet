@@ -64,18 +64,27 @@ def register_primitive_functions():
     for name, codegen_name, func_type in functions:
         register_primitive_function(name=name, func_or_type=func_type, codegen_name=codegen_name)
 
-    # from hidet.lang import script, attrs
-    # from hidet.ir.dtypes import f32x8
-    # from hidet.ir.func import Function
-    #
-    # @script
-    # def avx_x86_f32x8_exp(vec: f32x8):
-    #     attrs.func_kind = "cpu_internal"
-    #     attrs.func_name = "avx_x86_float32x8_exp"
-    #     return call_primitive_func('avx_x86_float32x8_add', [vec, vec])
-    #
-    # assert isinstance(avx_x86_f32x8_exp, Function)
-    # register_primitive_function(avx_x86_f32x8_exp.name, avx_x86_f32x8_exp)
+    from hidet.lang import script, attrs
+    from hidet.ir.dtypes import f32x8, f32
+    from hidet.ir.func import Function
+
+    @script
+    def avx_x86_f32x8_find_sum(x: f32x8) -> f32:
+        attrs.func_kind = "cpu_internal"
+        attrs.func_name = "avx_x86_float32x8_find_sum"
+        sum_vec = call_primitive_func('avx_x86_float32x4_add',
+                                      [call_primitive_func('avx_x86_float32x8_extract_half', [x, 0b0]),
+                                       call_primitive_func('avx_x86_float32x8_extract_half', [x, 0b1])])
+        sum_vec = call_primitive_func('avx_x86_float32x4_hadd', [sum_vec, sum_vec])
+        sum_vec = call_primitive_func('avx_x86_float32x4_hadd', [sum_vec, sum_vec])
+        return call_primitive_func('avx_x86_float32x4_extract_last', [sum_vec])
+
+    assert isinstance(avx_x86_f32x8_find_sum, Function)
+    register_primitive_function(avx_x86_f32x8_find_sum.name, avx_x86_f32x8_find_sum)
+
+
+def avx_f32x8_find_sum(x: Expr) -> Call:
+    return call_primitive_func('avx_x86_float32x8_find_sum', [x])
 
 
 def aligned_alloc(alignment: Union[int, Expr], size: Union[int, Expr]):
