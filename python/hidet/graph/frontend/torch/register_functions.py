@@ -96,6 +96,9 @@ def conv3d_transpose(
 def adaptive_avg_pool2d(x: Tensor, output_size):
     return ops.adaptive_avg_pool2d(x, output_size)
 
+@register_function(torch.nn.functional.adaptive_avg_pool3d)
+def adaptive_avg_pool3d(x: Tensor, output_size):
+    return ops.adaptive_avg_pool3d(x, output_size)
 
 @register_function(torch.nn.functional.relu)
 def relu(x: Tensor, inplace: bool):
@@ -205,10 +208,18 @@ def batch_norm(
         )
     y = ops.batch_norm_infer(x, running_mean, running_var, epsilon=eps)
     _ = momentum  # unused
+    if len(x.shape) == 3:
+        dims = [0, 2]
+    if len(x.shape) == 4:
+        dims = [0, 2, 3]
+    elif len(x.shape) == 5:
+        dims = [0, 2, 3, 4]
+    else:
+        raise NotImplementedError("batch_norm only accepts 3D, 4D, 5D input")
     if weight is not None:
-        y = y * weight.unsqueeze([0, 2, 3])
+        y = y * weight.unsqueeze(dims)
     if bias is not None:
-        y = y + bias.unsqueeze([0, 2, 3])
+        y = y + bias.unsqueeze(dims)
     return y
 
 

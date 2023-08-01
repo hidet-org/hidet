@@ -116,6 +116,11 @@ class HidetAdaptiveAvgPool2d(HidetModule):
         assert isinstance(self.mod, torch.nn.AdaptiveAvgPool2d)
         return regs.adaptive_avg_pool2d(x, self.mod.output_size)
 
+@register_module(torch.nn.AdaptiveAvgPool3d)
+class HidetAdaptiveAvgPool3d(HidetModule):
+    def __call__(self, x: Tensor) -> Tensor:
+        assert isinstance(self.mod, torch.nn.AdaptiveAvgPool3d)
+        return regs.adaptive_avg_pool3d(x, self.mod.output_size)
 
 @register_module(torch.nn.ReLU)
 class HidetReLU(HidetModule):
@@ -170,9 +175,10 @@ class HidetLinear(HidetModule):
 
 
 @register_module(torch.nn.BatchNorm2d)
+@register_module(torch.nn.BatchNorm3d)
 class HidetBatchNorm2d(HidetModule):
     def __call__(self, x: Tensor) -> Tensor:
-        assert isinstance(self.mod, torch.nn.BatchNorm2d)
+        assert isinstance(self.mod, (torch.nn.BatchNorm2d, torch.nn.BatchNorm3d))
         return regs.batch_norm(
             x=x,
             running_mean=self.param('running_mean'),
