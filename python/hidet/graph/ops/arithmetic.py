@@ -31,7 +31,7 @@ class UnaryElementwiseOperation:
         self.y: Expr = y
         self.attributes = attributes
         self.task_attributes = task_attributes
-        self.name = name
+        self.name: str = name
 
     def __call__(self, x):
         return rewrite(self.y, {self.x: x})
@@ -44,21 +44,21 @@ class UnaryElementwiseOperation:
 
 
 class BinaryElementwiseOperation:
-    def __init__(self, lhs, rhs, out, name):
-        self.lhs = lhs
-        self.rhs = rhs
-        self.out = out
-        self.name = name
+    def __init__(self, left_operand, right_operand, out, name):
+        self.left_operand: Var = left_operand
+        self.right_operand: Var = right_operand
+        self.out: Expr = out
+        self.name: str = name
 
-    def __call__(self, lhs, rhs):
-        return rewrite(self.out, {self.lhs: lhs, self.rhs: rhs})
+    def __call__(self, left_operand, right_operand):
+        return rewrite(self.out, {self.left_operand: left_operand, self.right_operand: right_operand})
 
     @staticmethod
     def from_callable(op: Callable[[Any, Any], Any], name):
-        lhs = expr.var('lhs')
-        rhs = expr.var('rhs')
-        out = op(lhs, rhs)
-        return BinaryElementwiseOperation(lhs, rhs, out, name)
+        left_operand = expr.var('left_operand')
+        right_operand = expr.var('right_operand')
+        out = op(left_operand, right_operand)
+        return BinaryElementwiseOperation(left_operand, right_operand, out, name)
 
 
 class UnaryElementwiseTask(Task):
