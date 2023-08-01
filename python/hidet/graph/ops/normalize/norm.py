@@ -354,8 +354,7 @@ class NormalizeTask(Task):
 
     def implement_cpu(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
         if self.dims[-1] != len(self.inputs[0].shape) - 1:  # not layernorm
-            if len(self.dims) != 1:  # work on last dim only 4 now
-                return NotImplemented
+            return NotImplemented
         return tune.extract_ir_modules(self.schedule_layer_norm_cpu)
 
     @tune.space(2, nthreads=[4, 8, 16, 32, 64, 96])
@@ -367,7 +366,7 @@ class NormalizeTask(Task):
             avx_f32x8_extract_half, avx_f32x4_add, avx_f32x4_hadd, avx_f32x4_extract_last, avx_f32x8_broadcast, \
             avx_f32x8_divide, avx_f32x8_to_i32x8, avx_i32x8_to_f32x8, avx_i32x8_broadcast, avx_i32x8_add, \
             avx_i32x8_bitwiseand, avx_f32x8_fmadd, avx_f32x8_multiply, avx_i32x8_greaterthan, avx_i32x8_leftshift_imm, \
-            avx_f32x8_rsqrt
+            avx_f32x8_rsqrt, avx_f32x8_find_sum
         from hidet.ir.dtypes import float32, float32x8
         from hidet.lang import tensor
         from hidet.ir.stmt import DeclareScope
@@ -378,12 +377,6 @@ class NormalizeTask(Task):
         head_size = np.prod(np.array(head))
         tail_size = np.prod(np.array(shape[-len(self.dims):]))
         with hidet.script_module() as module:
-            @hidet.script
-            def find_sum(x: float32x8) -> float32:
-                sum_vec = avx_f32x4_add(avx_f32x8_extract_half(x, 0b0), avx_f32x8_extract_half(x, 0b1))
-                sum_vec = avx_f32x4_hadd(sum_vec, sum_vec)
-                sum_vec = avx_f32x4_hadd(sum_vec, sum_vec)
-                return avx_f32x4_extract_last(sum_vec)
 
             @hidet.script
             def layer_norm_cpu_kernel(x: float32[shape], out: float32[shape]):
@@ -410,10 +403,10 @@ class NormalizeTask(Task):
                             M2_vec = avx_f32x8_add(M2_vec, avx_f32x8_multiply(delta, delta2))
                         # welford combine
                         # TODO: case for numerical stability? (number too high for large matrix)
-                        mean_combined = find_sum(mean_vec) / 8
+                        mean_combined = avx_f32x8_find_sum(mean_vec) / 8
                         mean_combined_vec = avx_f32x8_broadcast(~mean_combined)
                         delta_vec = avx_f32x8_subtract(mean_vec, mean_combined_vec)
-                        M2_combined = find_sum(M2_vec) + find_sum(avx_f32x8_multiply(delta_vec, delta_vec)) \
+                        M2_combined = avx_f32x8_find_sum(M2_vec) + avx_f32x8_find_sum(avx_f32x8_multiply(delta_vec, delta_vec)) \
                             * (tail_size // 8)
                     mean_tail = 0.0
                     M2_tail = 0.0
@@ -440,7 +433,7 @@ class NormalizeTask(Task):
                                                                         mean) * prim.rsqrt(var + self.attrs['epsilon'])
 
         layer_norm_cpu_kernel.kind = "cpu_kernel"
-        find_sum.kind = "cpu_internal"
+        avx_f32x8_find_sum.kind = "cpu_internal"
         assert isinstance(layer_norm_cpu_kernel, hidet.ir.Function)
         ir_module = module.ir_module()
         return ir_module
