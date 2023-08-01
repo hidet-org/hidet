@@ -175,7 +175,7 @@ class SoftmaxTask(Task):
             avx_f32x8_extract_half, avx_f32x4_add, avx_f32x4_hadd, avx_f32x4_extract_last, avx_f32x8_broadcast, \
             avx_f32x8_divide, avx_f32x8_to_i32x8, avx_i32x8_to_f32x8, avx_i32x8_broadcast, avx_i32x8_add, \
             avx_i32x8_bitwiseand, avx_f32x8_fmadd, avx_f32x8_multiply, avx_i32x8_greaterthan, avx_i32x8_leftshift_imm, \
-            avx_f32x8_find_sum
+            avx_f32x8_find_sum, avx_f32x8_find_max
         from hidet.ir.dtypes import float32x8
         from hidet.lang import tensor
         from hidet.ir.stmt import DeclareScope
@@ -247,16 +247,6 @@ class SoftmaxTask(Task):
                 return result
 
             @hidet.script
-            def find_max(max_vec: float32x8) -> float32:
-                y = avx_f32x8_permute_2f128(max_vec, max_vec, 1)  # swap first and last 4
-                m1 = avx_f32x8_max(max_vec, y)
-                m2 = avx_f32x8_permute(m1, 0b01001110)  # reshuffle to 2 elems per vec and compare
-                m3 = avx_f32x8_max(m1, m2)
-                m4 = avx_f32x8_permute(m3, 0b10110001)  # reshuffle to 1 elem per vec and compare
-                m = avx_f32x8_max(m3, m4)  # max val
-                return avx_f32x8_extract_last(m)
-
-            @hidet.script
             def softmax_cpu_kernel(x: float32[shape], out: float32[shape]):
                 # can pass shape = x.shape, float32[shape]
                 para = 'p' + str(nthreads)
@@ -272,7 +262,7 @@ class SoftmaxTask(Task):
                         for j in range(col_size // 8):
                             data_vec = avx_f32x8_load(x + offset + j * 8)
                             max_vec = avx_f32x8_max(max_vec, data_vec)
-                        max_val = find_max(max_vec)
+                        max_val = avx_f32x8_find_max(max_vec)
                     for j in range(col_size % 8):
                         max_val = max_val if max_val > x[head_idx][col_size - col_size % 8 + j] \
                             else x[head_idx][col_size - col_size % 8 + j]
@@ -314,8 +304,6 @@ class SoftmaxTask(Task):
                             out[head_idx][col_size - col_size % 8 + j] / sum_value
 
             softmax_cpu_kernel.kind = "cpu_kernel"
-            find_max.kind = "cpu_internal"
-            find_sum.kind = "cpu_internal"
             # avx_exp.kind = "cpu_internal"
             # avx_poly_eval_7.kind = "cpu_internal"
             assert isinstance(softmax_cpu_kernel, hidet.ir.Function)
