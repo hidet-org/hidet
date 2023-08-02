@@ -11,8 +11,9 @@
 # limitations under the License.
 from __future__ import annotations
 import torch
+from hidet.graph import ops
 from hidet.graph.tensor import Tensor
-from .interpreter import HidetModule, register_module
+from .interpreter import HidetModule, register_module, warnings
 from . import register_functions as regs
 from .dynamo_config import dynamo_config
 
@@ -410,3 +411,61 @@ class HidetUpsample(HidetModule):
             align_corners=self.mod.align_corners,
             recompute_scale_factor=self.mod.recompute_scale_factor,
         )
+
+@register_module(torch.nn.MultiheadAttention)
+class HidetMultiheadAttention(HidetModule):
+    def __init__(self, torch_module: torch.nn.Module):
+        super().__init__(torch_module)
+        from hidet import ops
+
+        steal = dynamo_config['steal_weights']
+        self.in_proj_weight = self.param('in_proj_weight', steal=steal)
+        self.out_proj_weight = self.param('out_proj.weight', steal=steal)
+
+    def __call__(self, query: Tensor, key: Tensor, value: Tensor, key_padding_mask=None,
+                 need_weights=True, attn_mask=None, average_attn_weights=True,
+                 is_causal=False) -> Tensor:
+        assert isinstance(self.mod, torch.nn.MultiheadAttention)
+        supported = (
+            self.mod._qkv_same_embed_dim and
+            self.mod.bias_k is None and
+            self.mod.bias_v is None and
+            not self.mod.add_zero_attn and
+            self.mod.batch_first and
+            key_padding_mask is None and
+            not need_weights
+        )
+        if not supported:
+            raise NotImplementedError(
+                "Hidet Multihead Attention currently only supports "
+                "kdim=vdim=embed_dim, add_bias_kv=False, add_zero_attn=False, "
+                "batch_first=True, forward(key_padding_mask=None, need_weights=False)."
+                )
+        
+        # Input feed forward
+        wq, wk, wv = ops.split(self.in_proj_weight, parts_or_sections=3, axis=0)
+        query = ops.matmul(query, wq)
+        key = ops.matmul(key, wk)
+        value = ops.matmul(value, wv)
+        if self.mod.in_proj_bias is not None:
+            bq, bk, bv = ops.split(self.param('in_proj_bias'), parts_or_sections=3, axis=0)
+            query = ops.add(query, bq)
+            key = ops.add(key, bk)
+            value = ops.add(value, bv)
+        
+        # Split heads
+        split_head_dims = [query.shape[0], -1, query.shape[1], query.shape[2] // self.mod.num_heads]
+        query = query.reshape(split_head_dims)
+        key = key.reshape(split_head_dims)
+        value = value.reshape(split_head_dims)
+
+        # fmha
+        out = regs.scaled_dot_product_attention(query, key, value, attn_mask=attn_mask,
+                                                 dropout_p=self.mod.dropout, is_causal=is_causal)
+        
+        # Output feed forward
+        out = out.reshape([out.shape[0], out.shape[2], self.mod.embed_dim])
+        out = ops.matmul(out, self.out_proj_weight)
+        if self.mod.out_proj.bias is not None:
+            out = ops.add(out, self.param('out_proj.bias'))
+        return out
