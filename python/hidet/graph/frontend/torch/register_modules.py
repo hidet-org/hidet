@@ -444,9 +444,9 @@ class HidetMultiheadAttention(HidetModule):
         
         # Input feed forward
         wq, wk, wv = ops.split(self.in_proj_weight, parts_or_sections=3, axis=0)
-        query = ops.matmul(query, wq)
-        key = ops.matmul(key, wk)
-        value = ops.matmul(value, wv)
+        query = ops.matmul(query, wq.transpose(0, 1))
+        key = ops.matmul(key, wk.transpose(0, 1))
+        value = ops.matmul(value, wv.transpose(0, 1))
         if self.mod.in_proj_bias is not None:
             bq, bk, bv = ops.split(self.param('in_proj_bias'), parts_or_sections=3, axis=0)
             query = ops.add(query, bq)
@@ -454,18 +454,20 @@ class HidetMultiheadAttention(HidetModule):
             value = ops.add(value, bv)
         
         # Split heads
-        split_head_dims = [query.shape[0], -1, query.shape[1], query.shape[2] // self.mod.num_heads]
-        query = query.reshape(split_head_dims)
-        key = key.reshape(split_head_dims)
-        value = value.reshape(split_head_dims)
+        split_head_dims = [query.shape[0], query.shape[1],
+                           self.mod.num_heads, query.shape[2] // self.mod.num_heads]
+        query = ops.transpose(query.reshape(split_head_dims), [0, 2, 1, 3])
+        key = ops.transpose(key.reshape(split_head_dims), [0, 2, 1, 3])
+        value = ops.transpose(value.reshape(split_head_dims), [0, 2, 1, 3])
 
         # fmha
         out = regs.scaled_dot_product_attention(query, key, value, attn_mask=attn_mask,
                                                  dropout_p=self.mod.dropout, is_causal=is_causal)
         
         # Output feed forward
-        out = out.reshape([out.shape[0], out.shape[2], self.mod.embed_dim])
-        out = ops.matmul(out, self.out_proj_weight)
+        merge_head_dims = [out.shape[0], out.shape[2], self.mod.embed_dim]
+        out = ops.transpose(out, [0, 2, 1, 3]).reshape(merge_head_dims)
+        out = ops.matmul(out, self.out_proj_weight.transpose(0, 1))
         if self.mod.out_proj.bias is not None:
             out = ops.add(out, self.param('out_proj.bias'))
         return out
