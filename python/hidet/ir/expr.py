@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # pylint: disable=import-outside-toplevel, useless-parent-delegation, redefined-outer-name, redefined-builtin
-# pylint: disable=useless-super-delegation
+# pylint: disable=useless-super-delegation, protected-access
 from __future__ import annotations
 from typing import Optional, Union, Sequence, Tuple, Dict, Type, Callable
 import string
@@ -813,6 +813,7 @@ def logical_not(a: Union[Expr, PyScalar]):
     # pylint: disable=protected-access
     a = convert(a)
     return Expr._unary(LogicalNot, a)
+
 
 def bitwise_not(a: Union[Expr, PyScalar]):
     a = convert(a)
