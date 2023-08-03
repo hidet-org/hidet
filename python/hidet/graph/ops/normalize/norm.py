@@ -371,11 +371,12 @@ class NormalizeTask(Task):
         from hidet.lang import tensor
         from hidet.ir.stmt import DeclareScope
         import numpy as np
+        from hidet.utils import prod
 
         shape = self.inputs[0].shape
         head = shape[:-len(self.dims)]
-        head_size = np.prod(np.array(head))
-        tail_size = np.prod(np.array(shape[-len(self.dims):]))
+        head_size = prod(head)
+        tail_size = prod(shape[-len(self.dims):])
         with hidet.script_module() as module:
 
             @hidet.script
@@ -427,7 +428,7 @@ class NormalizeTask(Task):
                                             avx_f32x8_multiply(avx_f32x8_subtract(avx_f32x8_load(
                                                 x + offset + i * 8), mean_vec),
                                                 avx_f32x8_rsqrt(avx_f32x8_add(var_vec, epsilon_vec))))
-                            # TODO: div, sqrt for accuracy
+                            # TODO: try doing div,sqrt for accuracy
                     for i in range(tail_size % 8):
                         out[head_idx][tail_size - tail_size % 8 + i] = (x[head_idx][tail_size - tail_size % 8 + i] -
                                                                         mean) * prim.rsqrt(var + self.attrs['epsilon'])

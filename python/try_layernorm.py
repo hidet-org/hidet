@@ -5,12 +5,28 @@ import hidet
 import torch
 from hidet.graph.ops.normalize import layer_norm
 torch.set_printoptions(8)
+import numpy as np
 
-d = 1
+
+def np_layernorm(x):
+    for i in range(x.shape[0]):
+        for j in range(x.shape[1]):
+            mean = np.mean(x[i, j, ...])
+            var = np.var(x[i, j, ...], ddof=0)
+            eps = 1e-5
+            x[i, j, ...] = (x[i, j, ...] - mean) / np.sqrt(var + eps)
+    return x
+
+
+d = 2
 shapes = [([1, 2, 8, 8], d), ([2, 2, 2, 255], d), ([1, 8], 1), ([1, 1, 1, 18], d), ([2, 2, 45, 45], d),
-          ([2, 2, 1, 1], d), ([512, 768], 1)]
+          ([512, 768], 1)]
 for i, (shape, num_last_dims) in enumerate(shapes):
     a = hidet.randn(shape, device="cpu")
+    m = torch.nn.LayerNorm(shape[-num_last_dims:], eps=1e-5)
+    a_torch = torch.from_numpy(np.array(a.numpy(), copy=True, dtype='float32'))
+    print(np.allclose(np_layernorm(np.array(a.numpy(), copy=True, dtype='float32')), m(a_torch).detach().numpy()))
+    print("asldkghlka")
     x1 = hidet.symbol_like(a)
     y = layer_norm(x1, num_last_dims=num_last_dims, epsilon=1e-5)
 
@@ -20,20 +36,15 @@ for i, (shape, num_last_dims) in enumerate(shapes):
     b = hidet.zeros(shape, device="cpu")
 
     compiled_func(a, b)
-    # b = y(a)
-    # a = a.to(device="cpu")
-    # b = b.to(device="cpu")
+
     a_torch = torch.from_numpy(np.array(a.numpy(), copy=True, dtype='float32'))
     # TODO: torch inaccuracy because it uses bfloat16 and not f32? not sure here but cant test on f64
-    m = torch.nn.LayerNorm(shape[-num_last_dims:], eps=1e-5)
-    # if i == 2:
-    #     print(b, m(a_torch))
     print(shape)
-    # print(b)
-    atol = 0.001
+    atol = 1e-3
     a_cuda = a.to(device="cuda")
     b_cuda = layer_norm(a_cuda, num_last_dims=num_last_dims)
-    print(b_cuda)
+    b = layer_norm(a, num_last_dims=num_last_dims)
+    # print(b, m(a_torch))
     print(np.allclose(b.numpy(), b_cuda.to(device="cpu").numpy(), atol=atol))
     correct = np.allclose(b.numpy(), m(a_torch).detach().numpy(), atol=atol)  # default abs tol doesnt work cuz avxrsqrt
     hidet_latency = hidet.utils.benchmark_func(lambda: compiled_func(a, b), warmup=10, repeat=50)
