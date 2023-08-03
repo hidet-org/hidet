@@ -37,6 +37,14 @@ def prod(seq: Iterable):
         return c
 
 
+def median(seq: Iterable):
+    seq = list(seq)
+    if len(seq) == 0:
+        return None
+    else:
+        return sorted(seq)[len(seq) // 2]
+
+
 def clip(
     x: Union[int, float], low: Optional[Union[int, float]], high: Optional[Union[int, float]]
 ) -> Union[int, float]:

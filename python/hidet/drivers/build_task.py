@@ -188,8 +188,17 @@ def generate_meta_data(task: Task, task_dir: str, build_target: str, num_candida
             device=device, dtype=t.type.dtype.name, shape=[int(v) if is_constant(v) else str(v) for v in t.shape]
         )
 
+    # extract the task name
+    from hidet.graph.ops.fusion.fused_operator import FusedTask
+
+    if isinstance(task, FusedTask):
+        task_name = 'fused_{}'.format(task.attrs['fused_ops'].replace(' ', '_'))
+    else:
+        task_name = task.name
+
     # generate meta data
     meta = TaskMetaData(
+        name=task_name,
         symbols=[v.name for v in task.symbols],
         inputs=[get_signature(t, input_device) for t in task.inputs],
         outputs=[get_signature(t, output_device) for t in task.outputs],
