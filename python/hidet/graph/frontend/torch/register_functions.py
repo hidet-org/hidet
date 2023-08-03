@@ -133,7 +133,9 @@ def max_pool3d(x: Tensor, kernel_size, stride, padding=0, dilation=1, ceil_mode=
 
 
 @register_function(torch.nn.functional.linear)
-def linear(x: Tensor, weight: Tensor, bias: Optional[Tensor]):
+def linear(x: Tensor, weight: Tensor, bias: Optional[Tensor], weight_is_transposed=False):
+    if len(weight.shape) > 1 and not weight_is_transposed:
+        weight = ops.transpose(weight, [1, 0])
     y = ops.matmul(x, weight)
     if bias is not None:
         y = y + bias
@@ -1115,3 +1117,8 @@ def clamp(
 @register_function(torch.isinf)
 def isinf(x: Tensor) -> Tensor:
     return ops.isinf(x)
+@register_function(torch.nn.functional.pad)
+def pad(x: Tensor, pad: Union[Tuple[int], List[int]], mode: str = 'constant', value=0):
+    if isinstance(pad, tuple):
+        pad = list(pad)
+    return ops.pad(x, pads=pad, mode=mode, value=value)

@@ -265,3 +265,6 @@ def tensor_any(self: Tensor, dim=None, keepdim=False) -> Tensor:
 @register_method(torch.Tensor.all)
 def tensor_all(self: Tensor, dim=None, keepdim=False) -> Tensor:
     return ops.all(self, axis=dim, keepdims=keepdim)
+@register_method(torch.Tensor.matmul)
+def tensor_detach(self: Tensor, other: Tensor) -> Tensor:
+    return ops.matmul(self, other)

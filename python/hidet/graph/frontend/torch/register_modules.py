@@ -172,7 +172,8 @@ class HidetLinear(HidetModule):
 
     def __call__(self, x: Tensor) -> Tensor:
         assert isinstance(self.mod, torch.nn.Linear)
-        return regs.linear(x=x, weight=self.transposed_weight, bias=self.param('bias', optional=True))
+        return regs.linear(x=x, weight=self.transposed_weight,
+                           bias=self.param('bias', optional=True), weight_is_transposed=True)
 
 
 @register_module(torch.nn.BatchNorm2d)
