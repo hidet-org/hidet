@@ -44,6 +44,7 @@ def register_primitive_functions():
         ('avx_x86_float32x8_multiply', '_mm256_mul_ps', FuncType(['float32x8', 'float32x8'], 'float32x8')),
         ('avx_x86_float32x8_divide', '_mm256_div_ps', FuncType(['float32x8', 'float32x8'], 'float32x8')),
         ('avx_x86_float32x8_rsqrt', '_mm256_rsqrt_ps', FuncType(['float32x8'], 'float32x8')),
+        ('avx_x86_float32x8_sqrt', '_mm256_sqrt_ps', FuncType(['float32x8'], 'float32x8')),
         ('avx_x86_float32x8_max', '_mm256_max_ps', FuncType(['float32x8', 'float32x8'], 'float32x8')),
         ('avx_x86_float32x8_permute', '_mm256_permute_ps', FuncType(['float32x8', 'int8'], 'float32x8')),
         ('avx_x86_float32x8_permute_2f128', '_mm256_permute2f128_ps', FuncType(['float32x8', 'float32x8', 'int8'],
@@ -188,6 +189,10 @@ def avx_f32x8_exp(a: Expr) -> Call:
 
 def avx_f32x8_rsqrt(a: Expr) -> Call:
     return call_primitive_func('avx_x86_float32x8_rsqrt', [a])
+
+
+def avx_f32x8_sqrt(a: Expr) -> Call:
+    return call_primitive_func('avx_x86_float32x8_sqrt', [a])
 
 
 def avx_f32x4_hadd(a: Expr, b: Expr) -> Call:
