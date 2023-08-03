@@ -16,11 +16,11 @@ from itertools import product
 import hidet
 from hidet.graph import Operator
 from hidet.ir import TensorElement, Var
-from hidet.ir.tools import collect
-from hidet.ir.compute import GridCompute, ReduceCompute, TensorInput
+from hidet.ir.compute import GridCompute, ReduceCompute, ArgReduceCompute, TensorInput
 from hidet.ir.functors import ExprRewriter, ComputeRewriter
 from hidet.ir.analyzers.bound_analyzer import infer_bound, BoundInfo
 from hidet.graph.ops.matmul import MatmulOp
+
 
 from .shard import TensorShardSpec, OpShardSpec, get_tile, AllReduce, ReduceScatter
 
@@ -28,13 +28,9 @@ from .shard import TensorShardSpec, OpShardSpec, get_tile, AllReduce, ReduceScat
 class IndexRewriter(ExprRewriter, ComputeRewriter):
     def __init__(self):
         super().__init__()
-        self.var2idx = None
-        self.root = None
-
-    def process_expr(self, e, var2idx):
-        self.var2idx = var2idx
-        self.root = e
-        return self.visit(e)
+        self.var2idx = {}
+        self.input_accessed_indices = {}
+        self.reduce_axis_shapes = {}
 
     def visit_Var(self, e: Var):
         if e in self.var2idx:
@@ -42,12 +38,30 @@ class IndexRewriter(ExprRewriter, ComputeRewriter):
         else:
             return super().visit_Var(e)
 
-    def visit_GridCompute(self, node: GridCompute):
-        if self.root is node:
-            return super().visit_GridCompute(node)
+    def visit_TensorElement(self, e: TensorElement):
+        tensor = e.base
+        indices = tuple((self.visit(idx) for idx in e.indices))
+        if isinstance(tensor, GridCompute):
+            # passing the indices to the dependending grids's axes
+            for axis, index in zip(tensor.axes, e.indices):
+                self.var2idx[axis] = self.visit(index)
+        elif isinstance(tensor, TensorInput):
+            if tensor not in self.input_accessed_indices:
+                self.input_accessed_indices[tensor] = []
+            self.input_accessed_indices[tensor].append(indices)
         else:
-            # do not go deeper
-            return node
+            raise ValueError()
+        tensor = self.visit(tensor)
+        return TensorElement(tensor, indices)
+
+    def visit_ReduceCompute(self, node: ReduceCompute):
+        for axis, axis_len in zip(node.axes, node.shape):
+            self.reduce_axis_shapes[axis] = axis_len
+        return super().visit_ReduceCompute(node)
+
+    def visit_ArgReduceCompute(self, node: ArgReduceCompute):
+        self.reduce_axis_shapes[node.axis] = node.extent
+        return super().visit_ArgReduceCompute(node)
 
 
 class DataDependencyAnalyzer:
@@ -61,37 +75,12 @@ class DataDependencyAnalyzer:
         outputs = task.outputs
 
         index_rewriter = IndexRewriter()
-
-        # collect all reduction axes.
-        reductions = set.union(*(set(collect(o, ReduceCompute)) for o in outputs))
-        self.reduce_axis_shapes = {}
-        for reduction in reductions:
-            for axis, axis_len in zip(reduction.axes, reduction.shape):
-                self.reduce_axis_shapes[axis] = axis_len
-        self.input_accessed_indices = {}
-
-        def _build_grid_bound(grid, axis_map):
-            tensor_element_exprs = collect(grid, TensorElement, stop_when_found=True)
-            for te in tensor_element_exprs:
-                # note that one grid compute might appear in multiple items in a expression
-                tensor = te.base
-                if isinstance(tensor, GridCompute):
-                    # passing the indices to the dependending grids's axes
-                    new_axis_map = {}
-                    new_axis_map.update(axis_map)
-                    for axis, index in zip(tensor.axes, te.indices):
-                        new_axis_map[axis] = index
-                    tensor = index_rewriter.process_expr(tensor, new_axis_map)
-                    _build_grid_bound(tensor, new_axis_map)
-                elif isinstance(tensor, TensorInput):
-                    if tensor not in self.input_accessed_indices:
-                        self.input_accessed_indices[tensor] = []
-                    self.input_accessed_indices[tensor].append(te.indices)
-
         for o in outputs:
             if not isinstance(o, GridCompute):
                 return False  # we don't support scalar output
-            _build_grid_bound(o, {})
+            index_rewriter.visit(o)
+        self.input_accessed_indices = index_rewriter.input_accessed_indices
+        self.reduce_axis_shapes = index_rewriter.reduce_axis_shapes
         return True
 
     def check(self, in_shard_dim: List[int], out_shard_dim: List[int], shard_reduce: bool = False):
