@@ -259,7 +259,7 @@ if __name__ == '__main__':
         for op in flow_graph.nodes:
             print(op)
             if str(op) not in cache:
-                shard_plans = op_shard_rule_search(op, 1)
+                shard_plans = op_shard_rule_search(op, 4)
                 cache[str(op)] = shard_plans
             for sp in cache[str(op)]:
                 print(sp)
