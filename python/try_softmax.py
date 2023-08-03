@@ -4,7 +4,8 @@ import torch
 import hidet
 from hidet.graph.ops import softmax
 import torch.nn as nn
-shapes = [([8, 1000], -1), ([32, 512, 512], -1), ([32, 512, 512], 1), ([8, 3, 224, 224], -1), ([32, 128, 768], 1)]
+shapes = [([8, 8, 8], 1), ([8, 1000], -1), ([32, 512, 512], -1), ([32, 512, 512], 1), ([8, 3, 224, 224], -1),
+          ([32, 128, 768], 1)]
 # shapes = [([4, 100], -1)]
 hidet.option.search_space(0)
 # hidet.option.runtime_check(False)

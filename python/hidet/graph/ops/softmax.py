@@ -159,8 +159,9 @@ class SoftmaxTask(Task):
 
     def implement_cpu(self, working_dir: str) -> Union[IRModule, List[IRModule]]:
         if not all(is_constant(dim) for dim in self.inputs[0].shape)\
-                or (self.axis != len(self.x_shape) - 1 and self.axis != -1)\
-                or self.inputs[0].type.dtype != float32:  # not row-major, avx no good not fp32, need diff intrinsics
+                or self.inputs[0].type.dtype != float32\
+                or (self.axis != len(self.x_shape) - 1 and self.axis != -1):
+                # not row-major, avx no good not fp32, need diff intrinsics
             return NotImplemented  # use auto-scheduler
         # return NotImplemented
         # return self.schedule_softmax_cpu()
@@ -181,11 +182,14 @@ class SoftmaxTask(Task):
         from hidet.ir.stmt import DeclareScope
         from hidet.lang import grid
         from hidet.lang.mapping import spatial
-        import numpy as np
+        from hidet.utils import prod
         shape = self.inputs[0].shape
-        col_size = self.x_shape[-1]
-        head = shape[:-1]
-        head_size = np.prod(np.array(head))
+        # axis = self.axis if self.axis > 0 else len(shape) + self.axis
+        head = shape[:self.axis]
+        tail = shape[self.axis:] if self.axis == -1 or self.axis == len(shape) - 1 else shape[self.axis + 1:]
+        head_size = prod(head)
+        tail_size = prod(tail)
+        axis_size = int(shape[self.axis])
 
         with hidet.script_module() as module:
 
@@ -251,29 +255,27 @@ class SoftmaxTask(Task):
                 # can pass shape = x.shape, float32[shape]
                 para = 'p' + str(nthreads)
                 for k in grid(head_size, attrs=para):
-                    offset = col_size * k
+                    offset = tail_size * k
                     head_idx = spatial(*head).map(k)
-                    # para = 'p' + str(nthreads)
-                    # for i in grid(row_size, attrs=para):
-                    # find max
+                    # if self.axis == -1 or self.axis == len(shape) + self.axis:
                     max_val = x[head_idx][0]
-                    if col_size >= 8:
+                    if tail_size >= 8:
                         max_vec = avx_f32x8_load(x + offset)
-                        for j in range(col_size // 8):
-                            data_vec = avx_f32x8_load(x + offset + j * 8)
+                        for i in range(tail_size // 8):
+                            data_vec = avx_f32x8_load(x + offset + i * 8)
                             max_vec = avx_f32x8_max(max_vec, data_vec)
                         max_val = avx_f32x8_find_max(max_vec)
-                    for j in range(col_size % 8):
-                        max_val = max_val if max_val > x[head_idx][col_size - col_size % 8 + j] \
-                            else x[head_idx][col_size - col_size % 8 + j]
+                    for i in range(tail_size % 8):
+                        max_val = max_val if max_val > x[head_idx][tail_size - tail_size % 8 + i] \
+                            else x[head_idx][tail_size - tail_size % 8 + i]
 
                     # subtract max, take exp and find exp sum
                     sum_value = 0.0
-                    if col_size >= 8:
+                    if tail_size >= 8:
                         sum_exp_vec = avx_f32x8_setzero()
                         max_vec = avx_f32x8_broadcast(~max_val)
-                        for j in range(col_size // 8):
-                            val_vec = avx_f32x8_load(x + offset + j * 8)
+                        for i in range(tail_size // 8):
+                            val_vec = avx_f32x8_load(x + offset + i * 8)
                             val_vec = avx_f32x8_subtract(val_vec, max_vec)
                             # apply exponent val_vec = avxexponent
                             arr = tensor(scope=DeclareScope.Default, dtype=float32, shape=[8])
@@ -282,26 +284,54 @@ class SoftmaxTask(Task):
                                 arr[n] = prim.exp(arr[n])
                             val_vec = avx_f32x8_load(arr)
                             # val_vec = avx_exp(val_vec)
-                            avx_f32x8_store(out + offset + j * 8, val_vec)
+                            avx_f32x8_store(out + offset + i * 8, val_vec)
                             sum_exp_vec = avx_f32x8_add(sum_exp_vec, val_vec)
                         sum_value = avx_f32x8_find_sum(sum_exp_vec)
-                    for j in range(col_size % 8):
-                        out[head_idx][col_size - col_size % 8 + j] = \
-                            prim.exp(x[head_idx][col_size - col_size % 8 + j] - max_val)
-                        sum_value += out[head_idx][col_size - col_size % 8 + j]
+                    for i in range(tail_size % 8):
+                        out[head_idx][tail_size - tail_size % 8 + i] = \
+                            prim.exp(x[head_idx][tail_size - tail_size % 8 + i] - max_val)
+                        sum_value += out[head_idx][tail_size - tail_size % 8 + i]
 
                     # divide by exp sum
-                    if col_size >= 8:
+                    if tail_size >= 8:
                         # divide
                         sum_vec8 = avx_f32x8_broadcast(~sum_value)
                         # avx_exp(sum_vec8)
-                        for j in range(col_size // 8):
-                            avx_f32x8_store(out + offset + j * 8,
-                                            avx_f32x8_divide(avx_f32x8_load(out + offset + j * 8),
+                        for i in range(tail_size // 8):
+                            avx_f32x8_store(out + offset + i * 8,
+                                            avx_f32x8_divide(avx_f32x8_load(out + offset + i * 8),
                                                              sum_vec8))
-                    for j in range(col_size % 8):
-                        out[head_idx][col_size - col_size % 8 + j] = \
-                            out[head_idx][col_size - col_size % 8 + j] / sum_value
+                    for i in range(tail_size % 8):
+                        out[head_idx][tail_size - tail_size % 8 + i] = \
+                            out[head_idx][tail_size - tail_size % 8 + i] / sum_value
+                    # else:
+                    #     for kk in range(tail_size):  # leftovers should be dealt with here
+                    #         tail_idx = spatial(*tail).map(kk)
+                    #         tail_offset = kk * tail_size
+                    #         # TODO: need to check for leftover/cannot fit 8
+                    #         max_vec = avx_f32x8_load(x + offset + tail_offset)
+                    #         for i in range(axis_size):  # softmax over this guy
+                    #             data_vec = avx_f32x8_load(x + offset + tail_offset * i)  # TODO: prob not right
+                    #             max_vec = avx_f32x8_max(max_vec, data_vec)
+                    #         max_val = avx_f32x8_find_max(max_vec)
+                    #         sum_exp_vec = avx_f32x8_setzero()
+                    #         max_vec = avx_f32x8_broadcast(~max_val)
+                    #         for i in range(axis_size):
+                    #             val_vec = avx_f32x8_load(x + offset + tail_offset * i)
+                    #             val_vec = avx_f32x8_subtract(val_vec, max_vec)
+                    #             arr = tensor(scope=DeclareScope.Default, dtype=float32, shape=[8])
+                    #             avx_f32x8_store(arr, val_vec)
+                    #             for n in range(8):
+                    #                 arr[n] = prim.exp(arr[n])
+                    #             val_vec = avx_f32x8_load(arr)
+                    #             avx_f32x8_store(out + offset + tail_offset * i, val_vec)
+                    #             sum_exp_vec = avx_f32x8_add(sum_exp_vec, val_vec)
+                    #         sum_value = avx_f32x8_find_sum(sum_exp_vec)
+                    #         sum_vec8 = avx_f32x8_broadcast(~sum_value)
+                    #         for i in range(axis_size):
+                    #             avx_f32x8_store(out + offset + tail_offset * i,
+                    #                             avx_f32x8_divide(avx_f32x8_load(out + offset + tail_offset * i),
+                    #                                              sum_vec8))
 
             softmax_cpu_kernel.kind = "cpu_kernel"
             # avx_exp.kind = "cpu_internal"
